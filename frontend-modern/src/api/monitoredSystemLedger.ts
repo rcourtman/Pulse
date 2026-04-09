@@ -78,6 +78,7 @@ export interface MonitoredSystemLedgerPreviewCandidate {
   agent_id?: string;
   machine_id?: string;
   resource_id?: string;
+  active?: boolean;
 }
 
 export interface MonitoredSystemLedgerPreviewReplacement {
@@ -96,10 +97,16 @@ export interface MonitoredSystemLedgerPreviewRequest {
 }
 
 export type MonitoredSystemLedgerPreviewEffect =
+  | 'no_change'
   | 'creates_new'
   | 'attaches_existing'
+  | 'mixed_existing_and_new'
+  | 'creates_multiple'
   | 'replaces_existing'
-  | 'splits_existing';
+  | 'replaces_multiple'
+  | 'splits_existing'
+  | 'removes_existing'
+  | 'removes_multiple';
 
 export interface MonitoredSystemLedgerPreviewResponse {
   current_count: number;
@@ -280,12 +287,13 @@ function normalizeMonitoredSystemLedgerEntry(
 function normalizeMonitoredSystemLedgerStatus(
   status: MonitoredSystemLedgerStatus | string | null | undefined,
 ): MonitoredSystemLedgerStatus {
-  switch ((status ?? '').trim().toLowerCase()) {
+  const normalizedStatus = (status ?? '').trim().toLowerCase();
+  switch (normalizedStatus) {
     case 'online':
     case 'warning':
     case 'offline':
     case 'unknown':
-      return status.trim().toLowerCase() as MonitoredSystemLedgerStatus;
+      return normalizedStatus as MonitoredSystemLedgerStatus;
     default:
       return 'unknown';
   }
@@ -308,12 +316,13 @@ function normalizeMonitoredSystemLedgerStatusReason(
 function normalizeMonitoredSystemLedgerStatusReasonStatus(
   status: MonitoredSystemLedgerStatusReasonStatus | string | null | undefined,
 ): MonitoredSystemLedgerStatusReasonStatus {
-  switch ((status ?? '').trim().toLowerCase()) {
+  const normalizedStatus = (status ?? '').trim().toLowerCase();
+  switch (normalizedStatus) {
     case 'online':
     case 'stale':
     case 'offline':
     case 'unknown':
-      return status.trim().toLowerCase() as MonitoredSystemLedgerStatusReasonStatus;
+      return normalizedStatus as MonitoredSystemLedgerStatusReasonStatus;
     default:
       return 'unknown';
   }

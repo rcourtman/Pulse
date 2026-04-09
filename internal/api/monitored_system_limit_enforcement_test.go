@@ -111,6 +111,51 @@ func TestMonitoredSystemLimitDecisionOnlyBlocksNetNewSystems(t *testing.T) {
 	}
 }
 
+func TestMonitoredSystemLimitDecisionForInactiveCandidateBypassesUsageAvailability(t *testing.T) {
+	ctx := context.Background()
+	setMaxMonitoredSystemsLicenseForTests(t, 1)
+
+	decision := monitoredSystemLimitDecisionForCandidate(ctx, nil, unifiedresources.MonitoredSystemCandidate{
+		Source:   unifiedresources.SourceTrueNAS,
+		Type:     unifiedresources.ResourceTypeAgent,
+		Name:     "tower",
+		Hostname: "tower.local",
+		HostURL:  "https://tower.local",
+		State:    unifiedresources.MonitoredSystemCandidateStateInactive,
+	})
+	if !decision.usageAvailable {
+		t.Fatalf("inactive candidate should not require usage availability: %+v", decision)
+	}
+	if decision.exceeded {
+		t.Fatalf("inactive candidate must not exceed the limit: %+v", decision)
+	}
+
+	replacementDecision := monitoredSystemLimitDecisionForCandidateReplacement(
+		ctx,
+		nil,
+		unifiedresources.MonitoredSystemReplacement{
+			Source: unifiedresources.SourceTrueNAS,
+			Selector: unifiedresources.MonitoredSystemReplacementSelector{
+				Hostname: "tower.local",
+			},
+		},
+		unifiedresources.MonitoredSystemCandidate{
+			Source:   unifiedresources.SourceTrueNAS,
+			Type:     unifiedresources.ResourceTypeAgent,
+			Name:     "tower",
+			Hostname: "tower.local",
+			HostURL:  "https://tower.local",
+			State:    unifiedresources.MonitoredSystemCandidateStateInactive,
+		},
+	)
+	if !replacementDecision.usageAvailable {
+		t.Fatalf("inactive replacement candidate should not require usage availability: %+v", replacementDecision)
+	}
+	if replacementDecision.exceeded {
+		t.Fatalf("inactive replacement candidate must not exceed the limit: %+v", replacementDecision)
+	}
+}
+
 func TestMonitoredSystemAdmissionSurfacesStayBehindSharedLimitGate(t *testing.T) {
 	router := readAPIPackageFile(t, "router_routes_registration.go")
 
@@ -428,6 +473,18 @@ func TestVMwareAdmissionEnforcementChecksUsageBeforeExternalInventory(t *testing
 	requireSnippetBefore(
 		t,
 		replacementEnforcement,
+		"candidate := vmwareMonitoredSystemCandidate(next)",
+		"usage := monitoredSystemUsage(monitor)",
+	)
+	requireSnippetBefore(
+		t,
+		replacementEnforcement,
+		"if !candidate.CountsTowardMonitoredSystems()",
+		"usage := monitoredSystemUsage(monitor)",
+	)
+	requireSnippetBefore(
+		t,
+		replacementEnforcement,
 		"usage := monitoredSystemUsage(monitor)",
 		"records, invalidConfig, err := h.previewMonitoredSystemRecords(r.Context(), next)",
 	)
@@ -435,6 +492,60 @@ func TestVMwareAdmissionEnforcementChecksUsageBeforeExternalInventory(t *testing
 		t,
 		replacementEnforcement,
 		"if !usage.available",
+		"records, invalidConfig, err := h.previewMonitoredSystemRecords(r.Context(), next)",
+	)
+}
+
+func TestVMwareAdmissionEnforcementSkipsUsageAndInventoryForDisabledConnections(t *testing.T) {
+	source := readAPIPackageFile(t, "vmware_handlers.go")
+
+	addEnforcement := requireSourceSegment(
+		t,
+		source,
+		"func (h *VMwareHandlers) enforceMonitoredSystemLimit(",
+		"func (h *VMwareHandlers) enforceMonitoredSystemLimitReplacement(",
+	)
+	requireSnippetBefore(
+		t,
+		addEnforcement,
+		"candidate := vmwareMonitoredSystemCandidate(instance)",
+		"usage := monitoredSystemUsage(monitor)",
+	)
+	requireSnippetBefore(
+		t,
+		addEnforcement,
+		"if !candidate.CountsTowardMonitoredSystems()",
+		"usage := monitoredSystemUsage(monitor)",
+	)
+	requireSnippetBefore(
+		t,
+		addEnforcement,
+		"if !candidate.CountsTowardMonitoredSystems()",
+		"records, invalidConfig, err := h.previewMonitoredSystemRecords(r.Context(), instance)",
+	)
+
+	replacementEnforcement := requireSourceSegment(
+		t,
+		source,
+		"func (h *VMwareHandlers) enforceMonitoredSystemLimitReplacement(",
+		"func (h *VMwareHandlers) previewMonitoredSystemRecords(",
+	)
+	requireSnippetBefore(
+		t,
+		replacementEnforcement,
+		"candidate := vmwareMonitoredSystemCandidate(next)",
+		"usage := monitoredSystemUsage(monitor)",
+	)
+	requireSnippetBefore(
+		t,
+		replacementEnforcement,
+		"if !candidate.CountsTowardMonitoredSystems()",
+		"usage := monitoredSystemUsage(monitor)",
+	)
+	requireSnippetBefore(
+		t,
+		replacementEnforcement,
+		"if !candidate.CountsTowardMonitoredSystems()",
 		"records, invalidConfig, err := h.previewMonitoredSystemRecords(r.Context(), next)",
 	)
 }

@@ -88,6 +88,11 @@ querying, and the operator-facing storage health presentation layer.
 11. Preserve the canonical setup-script `source="script"` marker through those same shared auto-register helpers, and reject non-canonical source labels there, so later canonical reruns can keep treating script-confirmed tokens differently from agent-created tokens without reviving arbitrary caller-label compatibility.
 12. Preserve the canonical auto-register node-type boundary in those same shared helpers so only supported `pve` and `pbs` registrations can complete, and unsupported runtime labels cannot bleed fake node identities into adjacent transport or recovery-adjacent state.
 13. Preserve the canonical auto-register token-identity boundary in those same shared helpers so only Pulse-managed `pulse-monitor@{pve|pbs}!pulse-<canonical-scope-slug>` token IDs matching the requested node type can complete, and arbitrary, cross-type, or non-Pulse-managed token identities cannot bleed into adjacent transport or recovery-adjacent state.
+    That same adjacent transport boundary must also preserve disabled
+    provider-connection admission truth. Storage- and recovery-adjacent setup
+    surfaces may reflect zero-delta or removal-only monitored-system previews
+    for disabled TrueNAS and VMware connections, but they must not reinterpret
+    those responses as active counted storage capacity.
 14. Preserve canonical /api/auto-register DHCP continuity in those shared helpers so a PVE or PBS node that reruns registration from a new IP with the same canonical node name and deterministic Pulse-managed token identity updates in place instead of duplicating the inventory record.
     That same shared helper boundary now also owns runtime-side Proxmox
     `candidateHosts` selection from Pulse's network view: storage and

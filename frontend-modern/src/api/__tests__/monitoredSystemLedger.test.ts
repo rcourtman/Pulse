@@ -87,6 +87,50 @@ describe('MonitoredSystemLedgerAPI', () => {
     expect(result.effect).toBe('attaches_existing');
   });
 
+  it('preserves inactive candidate preview responses with no projected systems', async () => {
+    vi.mocked(apiFetchJSON).mockResolvedValueOnce({
+      current_count: 4,
+      projected_count: 3,
+      additional_count: 0,
+      limit: 10,
+      would_exceed_limit: false,
+      effect: 'removes_existing',
+      current_systems: [
+        {
+          name: 'esxi-01',
+          type: 'host',
+          status: 'online',
+          source: 'vmware',
+        },
+      ],
+      projected_systems: [],
+      current_system: null,
+      projected_system: null,
+    });
+
+    const request = {
+      candidate: {
+        source: 'vmware',
+        hostname: 'vcsa.lab.local',
+        resource_id: 'vc-1',
+        active: false,
+      },
+      replacement: {
+        resource_id: 'vc-1',
+      },
+    };
+    const result = await MonitoredSystemLedgerAPI.preview(request);
+
+    expect(apiFetchJSON).toHaveBeenCalledWith('/api/license/monitored-system-ledger/preview', {
+      method: 'POST',
+      body: JSON.stringify(request),
+    });
+    expect(result.effect).toBe('removes_existing');
+    expect(result.current_system?.source).toBe('vmware');
+    expect(result.projected_system).toBeNull();
+    expect(result.projected_systems).toEqual([]);
+  });
+
   it('fetches the canonical monitored-system explanation endpoint', async () => {
     vi.mocked(apiFetchJSON).mockResolvedValueOnce({
       ledger: {

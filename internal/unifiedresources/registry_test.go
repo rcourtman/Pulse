@@ -2472,6 +2472,97 @@ func TestPreviewMonitoredSystemRecordsReplacementScopesVMwareResourceIDToConnect
 	}
 }
 
+func TestPreviewMonitoredSystemCandidateInactiveKeepsRegistryCountUnchanged(t *testing.T) {
+	rr := NewRegistry(nil)
+	rr.IngestRecords(SourceAgent, []IngestRecord{
+		{
+			SourceID: "host-1",
+			Resource: Resource{
+				ID:     "host-1",
+				Type:   ResourceTypeAgent,
+				Name:   "tower.local",
+				Status: StatusOnline,
+				Agent: &AgentData{
+					AgentID:   "agent-1",
+					Hostname:  "tower.local",
+					MachineID: "machine-1",
+				},
+				Identity: ResourceIdentity{
+					MachineID: "machine-1",
+					Hostnames: []string{"tower.local"},
+				},
+			},
+		},
+	})
+
+	preview := PreviewMonitoredSystemCandidate(rr, MonitoredSystemCandidate{
+		Source:   SourceTrueNAS,
+		Type:     ResourceTypeAgent,
+		Name:     "tower",
+		Hostname: "tower.local",
+		HostURL:  "https://tower.local",
+		State:    MonitoredSystemCandidateStateInactive,
+	})
+
+	if preview.CurrentCount != 1 || preview.ProjectedCount != 1 || preview.AdditionalCount != 0 {
+		t.Fatalf("unexpected inactive candidate counts: %+v", preview)
+	}
+	if len(preview.CurrentSystems) != 0 || len(preview.ProjectedSystems) != 0 {
+		t.Fatalf("inactive candidate should not materialize preview systems: %+v", preview)
+	}
+}
+
+func TestPreviewMonitoredSystemCandidateReplacementInactiveRemovesVMwareConnectionFromRegistry(t *testing.T) {
+	rr := NewRegistry(nil)
+	rr.IngestRecords(SourceVMware, []IngestRecord{
+		{
+			SourceID: "vc-1:host:host-101",
+			Resource: Resource{
+				ID:     "vmware-host-101",
+				Type:   ResourceTypeAgent,
+				Name:   "esxi-01.lab.local",
+				Status: StatusOnline,
+				VMware: &VMwareData{
+					ConnectionID:    "vc-1",
+					ConnectionName:  "Lab VC",
+					VCenterHost:     "vcsa.lab.local",
+					ManagedObjectID: "host-101",
+					EntityType:      "host",
+					HostUUID:        "host-uuid-101",
+				},
+			},
+			Identity: ResourceIdentity{
+				DMIUUID:   "host-uuid-101",
+				Hostnames: []string{"esxi-01.lab.local"},
+			},
+		},
+	})
+
+	preview := PreviewMonitoredSystemCandidateReplacement(rr, MonitoredSystemReplacement{
+		Source: SourceVMware,
+		Selector: MonitoredSystemReplacementSelector{
+			ResourceID: "vc-1",
+		},
+	}, MonitoredSystemCandidate{
+		Source:   SourceVMware,
+		Type:     ResourceTypeAgent,
+		Name:     "Lab VC",
+		Hostname: "vcsa.lab.local",
+		HostURL:  "https://vcsa.lab.local",
+		State:    MonitoredSystemCandidateStateInactive,
+	})
+
+	if preview.CurrentCount != 1 || preview.ProjectedCount != 0 || preview.AdditionalCount != 0 {
+		t.Fatalf("unexpected inactive replacement counts: %+v", preview)
+	}
+	if preview.CurrentSystem == nil {
+		t.Fatal("expected current monitored system preview")
+	}
+	if preview.ProjectedSystem != nil {
+		t.Fatalf("inactive replacement should not leave a projected system: %+v", preview.ProjectedSystem)
+	}
+}
+
 func TestResourceRegistry_WorkloadsIncludeCanonicalAppContainers(t *testing.T) {
 	rr := NewRegistry(nil)
 	now := time.Date(2026, 3, 29, 12, 0, 0, 0, time.UTC)

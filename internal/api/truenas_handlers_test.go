@@ -235,6 +235,97 @@ func TestTrueNASHandlers_HandleAdd_ReturnsUnavailableWhenSupplementalInventoryNo
 	}
 }
 
+func TestTrueNASHandlers_HandleAdd_DoesNotCountDisabledConnectionAtLimit(t *testing.T) {
+	setTrueNASFeatureForTest(t, true)
+	setMockModeForTrueNASTest(t, false)
+	setMaxMonitoredSystemsLicenseForTests(t, 1)
+
+	handler, persistence, monitor := newTrueNASHandlersForTest(t, nil)
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestRecords(unifiedresources.SourceAgent, []unifiedresources.IngestRecord{
+		{
+			SourceID: "host-1",
+			Resource: unifiedresources.Resource{
+				ID:     "host-1",
+				Type:   unifiedresources.ResourceTypeAgent,
+				Name:   "existing.local",
+				Status: unifiedresources.StatusOnline,
+				Agent: &unifiedresources.AgentData{
+					AgentID:   "agent-1",
+					Hostname:  "existing.local",
+					MachineID: "machine-1",
+				},
+				Identity: unifiedresources.ResourceIdentity{
+					MachineID: "machine-1",
+					Hostnames: []string{"existing.local"},
+				},
+			},
+		},
+	})
+	setUnexportedField(t, monitor, "resourceStore", monitoring.ResourceStoreInterface(unifiedresources.NewMonitorAdapter(registry)))
+
+	body := marshalTrueNASRequest(t, map[string]any{
+		"name":    "tower",
+		"host":    "tower.local",
+		"apiKey":  "super-secret",
+		"enabled": false,
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/truenas/connections", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler.HandleAdd(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("expected 201 for disabled connection at the limit, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	stored, err := persistence.LoadTrueNASConfig()
+	if err != nil {
+		t.Fatalf("load saved config: %v", err)
+	}
+	if len(stored) != 1 {
+		t.Fatalf("expected 1 saved instance, got %d", len(stored))
+	}
+	if stored[0].Enabled {
+		t.Fatalf("expected disabled connection to persist as disabled, got %+v", stored[0])
+	}
+}
+
+func TestTrueNASHandlers_HandleAdd_AllowsDisabledConnectionWhenUsageUnavailable(t *testing.T) {
+	setTrueNASFeatureForTest(t, true)
+	setMockModeForTrueNASTest(t, false)
+	setMaxMonitoredSystemsLicenseForTests(t, 1)
+
+	handler, persistence, monitor := newTrueNASHandlersForTest(t, nil)
+	bindUnavailableSupplementalUsageProviderForTest(
+		t,
+		monitor,
+		unifiedresources.SourceTrueNAS,
+		monitoring.MonitoredSystemUsageUnavailableSupplementalInventoryUnsettled,
+	)
+
+	body := marshalTrueNASRequest(t, map[string]any{
+		"name":    "tower",
+		"host":    "tower.local",
+		"apiKey":  "super-secret",
+		"enabled": false,
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/truenas/connections", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler.HandleAdd(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("expected 201 for disabled connection while usage is unavailable, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	stored, err := persistence.LoadTrueNASConfig()
+	if err != nil {
+		t.Fatalf("load truenas config: %v", err)
+	}
+	if len(stored) != 1 || stored[0].Enabled {
+		t.Fatalf("expected disabled connection to persist while usage is unavailable, got %+v", stored)
+	}
+}
+
 func TestTrueNASHandlers_HandleAdd_AllowsCanonicalOverlapAtLimit(t *testing.T) {
 	setTrueNASFeatureForTest(t, true)
 	setMockModeForTrueNASTest(t, false)
@@ -712,6 +803,61 @@ func TestTrueNASHandlers_HandleUpdate_ReturnsUnavailableWhenSupplementalInventor
 	}
 }
 
+func TestTrueNASHandlers_HandleUpdate_AllowsDisablingConnectionWhenUsageUnavailable(t *testing.T) {
+	setTrueNASFeatureForTest(t, true)
+	setMockModeForTrueNASTest(t, false)
+	setMaxMonitoredSystemsLicenseForTests(t, 1)
+
+	handler, persistence, monitor := newTrueNASHandlersForTest(t, nil)
+	bindUnavailableSupplementalUsageProviderForTest(
+		t,
+		monitor,
+		unifiedresources.SourceTrueNAS,
+		monitoring.MonitoredSystemUsageUnavailableSupplementalInventoryRebuildPending,
+	)
+	if err := persistence.SaveTrueNASConfig([]config.TrueNASInstance{
+		{
+			ID:       "alpha",
+			Name:     "archive",
+			Host:     "archive.local",
+			APIKey:   "super-secret",
+			UseHTTPS: true,
+			Enabled:  true,
+		},
+	}); err != nil {
+		t.Fatalf("seed truenas config: %v", err)
+	}
+
+	body := marshalTrueNASRequest(t, map[string]any{
+		"name":     "archive",
+		"host":     "backup.local",
+		"apiKey":   "********",
+		"useHttps": true,
+		"enabled":  false,
+	})
+	req := httptest.NewRequest(http.MethodPut, "/api/truenas/connections/alpha", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler.HandleUpdate(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 while disabling with unavailable usage, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	stored, err := persistence.LoadTrueNASConfig()
+	if err != nil {
+		t.Fatalf("load truenas config: %v", err)
+	}
+	if len(stored) != 1 {
+		t.Fatalf("expected 1 stored connection, got %d", len(stored))
+	}
+	if stored[0].Enabled {
+		t.Fatalf("expected stored connection to become disabled, got %+v", stored[0])
+	}
+	if stored[0].Host != "backup.local" {
+		t.Fatalf("expected disabled update to persist other edits, got %+v", stored[0])
+	}
+}
+
 func TestTrueNASHandlers_HandleUpdate_UnknownID(t *testing.T) {
 	setTrueNASFeatureForTest(t, true)
 	setMockModeForTrueNASTest(t, false)
@@ -899,6 +1045,62 @@ func TestTrueNASHandlers_HandlePreviewConnection_ReturnsCanonicalImpact(t *testi
 	}
 }
 
+func TestTrueNASHandlers_HandlePreviewConnection_ReturnsNoChangeForDisabledConnection(t *testing.T) {
+	setTrueNASFeatureForTest(t, true)
+
+	handler, _, monitor := newTrueNASHandlersForTest(t, nil)
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestRecords(unifiedresources.SourceAgent, []unifiedresources.IngestRecord{
+		{
+			SourceID: "host-1",
+			Resource: unifiedresources.Resource{
+				ID:     "host-1",
+				Type:   unifiedresources.ResourceTypeAgent,
+				Name:   "tower.local",
+				Status: unifiedresources.StatusOnline,
+				Agent: &unifiedresources.AgentData{
+					AgentID:   "agent-1",
+					Hostname:  "tower.local",
+					MachineID: "machine-1",
+				},
+				Identity: unifiedresources.ResourceIdentity{
+					MachineID: "machine-1",
+					Hostnames: []string{"tower.local"},
+				},
+			},
+		},
+	})
+	setUnexportedField(t, monitor, "resourceStore", monitoring.ResourceStoreInterface(unifiedresources.NewMonitorAdapter(registry)))
+
+	body := marshalTrueNASRequest(t, map[string]any{
+		"name":    "tower",
+		"host":    "tower.local",
+		"apiKey":  "super-secret",
+		"enabled": false,
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/truenas/connections/preview", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler.HandlePreviewConnection(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var preview MonitoredSystemLedgerPreviewResponse
+	if err := json.NewDecoder(rec.Body).Decode(&preview); err != nil {
+		t.Fatalf("decode preview response: %v", err)
+	}
+	if preview.CurrentCount != 1 || preview.ProjectedCount != 1 || preview.AdditionalCount != 0 {
+		t.Fatalf("unexpected preview counts: %+v", preview)
+	}
+	if preview.Effect != "no_change" {
+		t.Fatalf("Effect = %q, want no_change", preview.Effect)
+	}
+	if len(preview.CurrentSystems) != 0 || len(preview.ProjectedSystems) != 0 {
+		t.Fatalf("disabled add should not surface affected systems, got %+v", preview)
+	}
+}
+
 func TestTrueNASHandlers_HandlePreviewConnection_ReturnsUnavailableWhenSupplementalInventoryUnsettled(t *testing.T) {
 	setTrueNASFeatureForTest(t, true)
 
@@ -1017,6 +1219,74 @@ func TestTrueNASHandlers_HandlePreviewSavedConnection_UsesReplacementProjection(
 	}
 	if preview.Effect != "splits_existing" {
 		t.Fatalf("Effect = %q, want splits_existing", preview.Effect)
+	}
+}
+
+func TestTrueNASHandlers_HandlePreviewSavedConnection_ReturnsRemovalForDisabledConnection(t *testing.T) {
+	setTrueNASFeatureForTest(t, true)
+
+	handler, persistence, monitor := newTrueNASHandlersForTest(t, nil)
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestRecords(unifiedresources.SourceTrueNAS, []unifiedresources.IngestRecord{
+		{
+			SourceID: "system:archive.local",
+			Resource: unifiedresources.Resource{
+				ID:     "truenas-1",
+				Type:   unifiedresources.ResourceTypeAgent,
+				Name:   "archive",
+				Status: unifiedresources.StatusOnline,
+				TrueNAS: &unifiedresources.TrueNASData{
+					Hostname: "archive.local",
+				},
+			},
+			Identity: unifiedresources.ResourceIdentity{
+				Hostnames: []string{"archive.local"},
+			},
+		},
+	})
+	setUnexportedField(t, monitor, "resourceStore", monitoring.ResourceStoreInterface(unifiedresources.NewMonitorAdapter(registry)))
+	if err := persistence.SaveTrueNASConfig([]config.TrueNASInstance{
+		{
+			ID:       "conn-1",
+			Name:     "archive",
+			Host:     "archive.local",
+			APIKey:   "super-secret",
+			Enabled:  true,
+			UseHTTPS: true,
+		},
+	}); err != nil {
+		t.Fatalf("seed truenas config: %v", err)
+	}
+
+	body := marshalTrueNASRequest(t, map[string]any{
+		"name":    "archive",
+		"host":    "archive.local",
+		"apiKey":  "********",
+		"enabled": false,
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/truenas/connections/conn-1/preview", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler.HandlePreviewSavedConnection(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var preview MonitoredSystemLedgerPreviewResponse
+	if err := json.NewDecoder(rec.Body).Decode(&preview); err != nil {
+		t.Fatalf("decode preview response: %v", err)
+	}
+	if preview.CurrentCount != 1 || preview.ProjectedCount != 0 || preview.AdditionalCount != 0 {
+		t.Fatalf("unexpected preview counts: %+v", preview)
+	}
+	if preview.Effect != "removes_existing" {
+		t.Fatalf("Effect = %q, want removes_existing", preview.Effect)
+	}
+	if len(preview.CurrentSystems) != 1 {
+		t.Fatalf("len(CurrentSystems) = %d, want 1", len(preview.CurrentSystems))
+	}
+	if len(preview.ProjectedSystems) != 0 {
+		t.Fatalf("len(ProjectedSystems) = %d, want 0", len(preview.ProjectedSystems))
 	}
 }
 

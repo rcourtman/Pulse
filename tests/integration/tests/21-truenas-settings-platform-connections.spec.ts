@@ -694,6 +694,100 @@ test.describe("TrueNAS platform connections settings", () => {
     expect(createCalls).toBe(0);
   });
 
+  test("shows no monitored-system increase when adding a disabled TrueNAS connection", async ({
+    page,
+  }) => {
+    let previewPayload: Record<string, unknown> | null = null;
+
+    await page.route("**/api/truenas/connections**", async (route) => {
+      const request = route.request();
+      const method = request.method();
+      const pathname = new URL(request.url()).pathname;
+
+      if (pathname === "/api/truenas/connections" && method === "GET") {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify([]),
+        });
+        return;
+      }
+
+      if (
+        pathname === "/api/truenas/connections/preview" &&
+        method === "POST"
+      ) {
+        previewPayload = JSON.parse(request.postData() || "{}");
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            current_count: 3,
+            projected_count: 3,
+            additional_count: 0,
+            limit: 10,
+            would_exceed_limit: false,
+            effect: "no_change",
+            current_systems: [],
+            projected_systems: [],
+            current_system: null,
+            projected_system: null,
+          }),
+        });
+        return;
+      }
+
+      await route.continue();
+    });
+
+    await page.goto("/settings/infrastructure/platforms/truenas", {
+      waitUntil: "domcontentloaded",
+    });
+    await page.waitForURL(/\/settings\/infrastructure\/platforms\/truenas/, {
+      timeout: 15_000,
+    });
+
+    await page.getByRole("button", { name: "Add TrueNAS connection" }).click();
+    const dialog = page.getByRole("dialog", { name: "Add TrueNAS connection" });
+    await expect(dialog).toBeVisible();
+
+    await dialog.getByPlaceholder("tower").fill("Archive NAS");
+    await dialog.getByPlaceholder("truenas.local").fill("archive.local");
+    await dialog
+      .locator('input[type="password"]')
+      .first()
+      .fill("secret-api-key");
+    await dialog.getByLabel("Enable polling immediately").uncheck();
+
+    await expect(
+      dialog.getByRole("button", { name: "Add connection" }),
+    ).toBeDisabled();
+    await dialog.getByRole("button", { name: "Preview impact" }).click();
+
+    await expect
+      .poll(() => previewPayload)
+      .toMatchObject({
+        name: "Archive NAS",
+        host: "archive.local",
+        apiKey: "secret-api-key",
+        useHttps: true,
+        enabled: false,
+      });
+    await expect(
+      dialog.getByText(
+        "This change reuses your current monitored-system capacity",
+      ),
+    ).toBeVisible();
+    await expect(
+      dialog.getByText(
+        "Current usage 3 / 10. Saving this change keeps usage at 3 / 10.",
+      ),
+    ).toBeVisible();
+    await expect(
+      dialog.getByRole("button", { name: "Add connection" }),
+    ).toBeEnabled();
+  });
+
   test("reuses the canonical monitored-system explanation when a TrueNAS save is denied", async ({
     page,
   }) => {

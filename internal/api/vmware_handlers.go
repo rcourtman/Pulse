@@ -61,9 +61,8 @@ func (h *VMwareHandlers) HandleAdd(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, 32*1024)
 	defer r.Body.Close()
 
-	var instance config.VMwareVCenterInstance
-	if err := json.NewDecoder(r.Body).Decode(&instance); err != nil {
-		writeErrorResponse(w, http.StatusBadRequest, "invalid_request", "Invalid request body", map[string]string{"error": err.Error()})
+	instance, ok := decodeVMwareInstanceRequest(w, r, config.NewVMwareVCenterInstance())
+	if !ok {
 		return
 	}
 
@@ -222,18 +221,6 @@ func (h *VMwareHandlers) HandleUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	r.Body = http.MaxBytesReader(w, r.Body, 32*1024)
-	defer r.Body.Close()
-
-	var instance config.VMwareVCenterInstance
-	if err := json.NewDecoder(r.Body).Decode(&instance); err != nil {
-		writeErrorResponse(w, http.StatusBadRequest, "invalid_request", "Invalid request body", map[string]string{"error": err.Error()})
-		return
-	}
-
-	instance.ID = connectionID
-	normalizeVMwareInstance(&instance)
-
 	persistence := h.persistenceForRequest(w, r.Context())
 	if persistence == nil {
 		return
@@ -257,6 +244,12 @@ func (h *VMwareHandlers) HandleUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	instance, ok := decodeVMwareInstanceRequest(w, r, instances[index])
+	if !ok {
+		return
+	}
+	instance.ID = connectionID
+	normalizeVMwareInstance(&instance)
 	instance.PreserveMaskedSecrets(instances[index])
 	if err := instance.Validate(); err != nil {
 		writeErrorResponse(w, http.StatusBadRequest, "validation_error", err.Error(), nil)
@@ -282,12 +275,8 @@ func (h *VMwareHandlers) HandlePreviewConnection(w http.ResponseWriter, r *http.
 		return
 	}
 
-	r.Body = http.MaxBytesReader(w, r.Body, 32*1024)
-	defer r.Body.Close()
-
-	var instance config.VMwareVCenterInstance
-	if err := json.NewDecoder(r.Body).Decode(&instance); err != nil {
-		writeErrorResponse(w, http.StatusBadRequest, "invalid_request", "Invalid request body", map[string]string{"error": err.Error()})
+	instance, ok := decodeVMwareInstanceRequest(w, r, config.NewVMwareVCenterInstance())
+	if !ok {
 		return
 	}
 
@@ -301,6 +290,13 @@ func (h *VMwareHandlers) HandlePreviewConnection(w http.ResponseWriter, r *http.
 	usage := monitoredSystemUsage(monitor)
 	if !usage.available {
 		writeMonitoredSystemUsageUnavailable(w, usage.unavailableReason)
+		return
+	}
+
+	candidate := vmwareMonitoredSystemCandidate(instance)
+	if !candidate.CountsTowardMonitoredSystems() {
+		preview := unifiedresources.PreviewMonitoredSystemCandidate(usage.readState, candidate)
+		writeJSON(w, http.StatusOK, monitoredSystemLedgerPreviewResponse(r.Context(), false, preview).NormalizeCollections())
 		return
 	}
 
@@ -352,7 +348,7 @@ func (h *VMwareHandlers) HandlePreviewSavedConnection(w http.ResponseWriter, r *
 			continue
 		}
 
-		payload, hasPayload, ok := decodeOptionalVMwareInstanceRequest(w, r)
+		payload, hasPayload, ok := decodeOptionalVMwareInstanceRequest(w, r, current)
 		if !ok {
 			return
 		}
@@ -375,6 +371,23 @@ func (h *VMwareHandlers) HandlePreviewSavedConnection(w http.ResponseWriter, r *
 			return
 		}
 
+		candidate := vmwareMonitoredSystemCandidate(next)
+		replacement := unifiedresources.MonitoredSystemReplacement{
+			Source: unifiedresources.SourceVMware,
+			Selector: unifiedresources.MonitoredSystemReplacementSelector{
+				ResourceID: connectionID,
+			},
+		}
+		if !candidate.CountsTowardMonitoredSystems() {
+			preview := unifiedresources.PreviewMonitoredSystemCandidateReplacement(
+				usage.readState,
+				replacement,
+				candidate,
+			)
+			writeJSON(w, http.StatusOK, monitoredSystemLedgerPreviewResponse(r.Context(), true, preview).NormalizeCollections())
+			return
+		}
+
 		records, invalidConfig, err := h.previewMonitoredSystemRecords(r.Context(), next)
 		if err != nil {
 			h.writeConnectionFailure(w, invalidConfig, err)
@@ -383,12 +396,7 @@ func (h *VMwareHandlers) HandlePreviewSavedConnection(w http.ResponseWriter, r *
 
 		preview := unifiedresources.PreviewMonitoredSystemRecordsReplacement(
 			usage.readState,
-			unifiedresources.MonitoredSystemReplacement{
-				Source: unifiedresources.SourceVMware,
-				Selector: unifiedresources.MonitoredSystemReplacementSelector{
-					ResourceID: connectionID,
-				},
-			},
+			replacement,
 			map[unifiedresources.DataSource][]unifiedresources.IngestRecord{
 				unifiedresources.SourceVMware: records,
 			},
@@ -411,12 +419,8 @@ func (h *VMwareHandlers) HandleTestConnection(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	r.Body = http.MaxBytesReader(w, r.Body, 32*1024)
-	defer r.Body.Close()
-
-	var instance config.VMwareVCenterInstance
-	if err := json.NewDecoder(r.Body).Decode(&instance); err != nil {
-		writeErrorResponse(w, http.StatusBadRequest, "invalid_request", "Invalid request body", map[string]string{"error": err.Error()})
+	instance, ok := decodeVMwareInstanceRequest(w, r, config.NewVMwareVCenterInstance())
+	if !ok {
 		return
 	}
 
@@ -460,7 +464,7 @@ func (h *VMwareHandlers) HandleTestSavedConnection(w http.ResponseWriter, r *htt
 			continue
 		}
 		normalizeVMwareInstance(&instance)
-		payload, hasPayload, ok := decodeOptionalVMwareInstanceRequest(w, r)
+		payload, hasPayload, ok := decodeOptionalVMwareInstanceRequest(w, r, instance)
 		if !ok {
 			return
 		}
@@ -588,9 +592,27 @@ func normalizeVMwareInstance(instance *config.VMwareVCenterInstance) {
 	instance.ApplyDefaults()
 }
 
+func decodeVMwareInstanceRequest(
+	w http.ResponseWriter,
+	r *http.Request,
+	base config.VMwareVCenterInstance,
+) (config.VMwareVCenterInstance, bool) {
+	r.Body = http.MaxBytesReader(w, r.Body, 32*1024)
+	defer r.Body.Close()
+
+	instance := base
+	if err := json.NewDecoder(r.Body).Decode(&instance); err != nil {
+		writeErrorResponse(w, http.StatusBadRequest, "invalid_request", "Invalid request body", map[string]string{"error": err.Error()})
+		return config.VMwareVCenterInstance{}, false
+	}
+
+	return instance, true
+}
+
 func decodeOptionalVMwareInstanceRequest(
 	w http.ResponseWriter,
 	r *http.Request,
+	base config.VMwareVCenterInstance,
 ) (config.VMwareVCenterInstance, bool, bool) {
 	r.Body = http.MaxBytesReader(w, r.Body, 32*1024)
 	defer r.Body.Close()
@@ -601,10 +623,10 @@ func decodeOptionalVMwareInstanceRequest(
 		return config.VMwareVCenterInstance{}, false, false
 	}
 	if len(bytes.TrimSpace(body)) == 0 {
-		return config.VMwareVCenterInstance{}, false, true
+		return base, false, true
 	}
 
-	var instance config.VMwareVCenterInstance
+	instance := base
 	if err := json.Unmarshal(body, &instance); err != nil {
 		writeErrorResponse(w, http.StatusBadRequest, "invalid_request", "Invalid request body", map[string]string{"error": err.Error()})
 		return config.VMwareVCenterInstance{}, false, false
@@ -653,6 +675,11 @@ func (h *VMwareHandlers) enforceMonitoredSystemLimit(
 	r *http.Request,
 	instance config.VMwareVCenterInstance,
 ) bool {
+	candidate := vmwareMonitoredSystemCandidate(instance)
+	if !candidate.CountsTowardMonitoredSystems() {
+		return false
+	}
+
 	limit := maxMonitoredSystemsLimitForContext(r.Context())
 	if limit <= 0 {
 		return false
@@ -693,6 +720,11 @@ func (h *VMwareHandlers) enforceMonitoredSystemLimitReplacement(
 	current config.VMwareVCenterInstance,
 	next config.VMwareVCenterInstance,
 ) bool {
+	candidate := vmwareMonitoredSystemCandidate(next)
+	if !candidate.CountsTowardMonitoredSystems() {
+		return false
+	}
+
 	limit := maxMonitoredSystemsLimitForContext(r.Context())
 	if limit <= 0 {
 		return false
@@ -768,6 +800,20 @@ func (h *VMwareHandlers) previewMonitoredSystemRecords(
 		return nil, false, err
 	}
 	return provider.Records(), false, nil
+}
+
+func vmwareMonitoredSystemCandidate(
+	instance config.VMwareVCenterInstance,
+) unifiedresources.MonitoredSystemCandidate {
+	return unifiedresources.MonitoredSystemCandidate{
+		Source:     unifiedresources.SourceVMware,
+		Type:       unifiedresources.ResourceTypeAgent,
+		Name:       strings.TrimSpace(instance.Name),
+		Hostname:   pulseTokenHostCandidate(instance.Host),
+		HostURL:    strings.TrimSpace(instance.Host),
+		ResourceID: strings.TrimSpace(instance.ID),
+		State:      monitoredSystemCandidateStateFromEnabled(instance.Enabled),
+	}
 }
 
 func (h *VMwareHandlers) runtimeStatus(connectionID string) vmwareConnectionRuntimeStatus {

@@ -122,6 +122,12 @@ management, and fleet control surfaces.
 24. `scripts/install.ps1` shared with `deployment-installability`: the Windows installer is both a deployment installability entry point and a canonical agent lifecycle runtime continuity boundary.
 25. `scripts/install.sh` shared with `deployment-installability`: the shell installer is both a deployment installability entry point and a canonical agent lifecycle runtime continuity boundary.
 
+That shared monitored-system admission preview boundary also owns the disabled
+platform-connection lifecycle state. Once a TrueNAS or VMware setup form marks
+the connection disabled, lifecycle surfaces must treat a canonical zero-delta
+or removal-only preview as a valid save path instead of holding the dialog in
+an add-only capacity posture.
+
 ## Extension Points
 
 1. Add or change install-command generation, canonical /api/auto-register behavior, or installer download behavior through the owned `internal/api/` files above.

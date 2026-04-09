@@ -21,6 +21,9 @@ const formatDelta = (count: number): string => {
   return `${count}`;
 };
 
+const previewUsageDelta = (preview: MonitoredSystemLedgerPreviewResponse): number =>
+  preview.projected_count - preview.current_count;
+
 const previewTone = (preview: MonitoredSystemLedgerPreviewResponse | null) =>
   preview?.would_exceed_limit ? 'warning' : 'info';
 
@@ -29,8 +32,12 @@ const previewTitle = (preview: MonitoredSystemLedgerPreviewResponse | null) => {
   if (preview.would_exceed_limit) {
     return 'This change exceeds your monitored-system limit';
   }
-  if (preview.additional_count > 0) {
+  const delta = previewUsageDelta(preview);
+  if (delta > 0) {
     return 'This change adds monitored systems';
+  }
+  if (delta < 0) {
+    return 'This change frees monitored-system capacity';
   }
   return 'This change reuses your current monitored-system capacity';
 };
@@ -38,9 +45,15 @@ const previewTitle = (preview: MonitoredSystemLedgerPreviewResponse | null) => {
 const previewSummary = (preview: MonitoredSystemLedgerPreviewResponse): string => {
   const before = formatUsage(preview.current_count, preview.limit);
   const after = formatUsage(preview.projected_count, preview.limit);
-  if (preview.additional_count > 0) {
+  const delta = previewUsageDelta(preview);
+  if (delta > 0) {
     return `Current usage ${before}. Saving this change would move usage to ${after} (${formatDelta(
-      preview.additional_count,
+      delta,
+    )}).`;
+  }
+  if (delta < 0) {
+    return `Current usage ${before}. Saving this change would move usage to ${after} (${formatDelta(
+      delta,
     )}).`;
   }
   return `Current usage ${before}. Saving this change keeps usage at ${after}.`;

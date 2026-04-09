@@ -5506,6 +5506,283 @@ func TestContract_PlatformConnectionWritesFailClosedWhenUsageUnavailable(t *test
 	})
 }
 
+func TestContract_DisabledPlatformConnectionWritesBypassUnavailableUsageGate(t *testing.T) {
+	t.Run("truenas add", func(t *testing.T) {
+		setTrueNASFeatureForTest(t, true)
+		setMockModeForTrueNASTest(t, false)
+		setMaxMonitoredSystemsLicenseForTests(t, 1)
+
+		handler, _, monitor := newTrueNASHandlersForTest(t, nil)
+		bindUnavailableSupplementalUsageProviderForTest(
+			t,
+			monitor,
+			unifiedresources.SourceTrueNAS,
+			monitoring.MonitoredSystemUsageUnavailableSupplementalInventoryUnsettled,
+		)
+
+		body := marshalTrueNASRequest(t, map[string]any{
+			"name":    "tower",
+			"host":    "tower.local",
+			"apiKey":  "super-secret",
+			"enabled": false,
+		})
+		req := httptest.NewRequest(http.MethodPost, "/api/truenas/connections", bytes.NewReader(body))
+		rec := httptest.NewRecorder()
+		handler.HandleAdd(rec, req)
+
+		if rec.Code != http.StatusCreated {
+			t.Fatalf("status=%d, want %d: %s", rec.Code, http.StatusCreated, rec.Body.String())
+		}
+	})
+
+	t.Run("truenas update", func(t *testing.T) {
+		setTrueNASFeatureForTest(t, true)
+		setMockModeForTrueNASTest(t, false)
+		setMaxMonitoredSystemsLicenseForTests(t, 1)
+
+		handler, persistence, monitor := newTrueNASHandlersForTest(t, nil)
+		bindUnavailableSupplementalUsageProviderForTest(
+			t,
+			monitor,
+			unifiedresources.SourceTrueNAS,
+			monitoring.MonitoredSystemUsageUnavailableSupplementalInventoryRebuildPending,
+		)
+		if err := persistence.SaveTrueNASConfig([]config.TrueNASInstance{{
+			ID:       "alpha",
+			Name:     "archive",
+			Host:     "archive.local",
+			APIKey:   "super-secret",
+			UseHTTPS: true,
+			Enabled:  true,
+		}}); err != nil {
+			t.Fatalf("seed truenas config: %v", err)
+		}
+
+		body := marshalTrueNASRequest(t, map[string]any{
+			"name":     "archive",
+			"host":     "archive.local",
+			"apiKey":   "********",
+			"useHttps": true,
+			"enabled":  false,
+		})
+		req := httptest.NewRequest(http.MethodPut, "/api/truenas/connections/alpha", bytes.NewReader(body))
+		rec := httptest.NewRecorder()
+		handler.HandleUpdate(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d, want %d: %s", rec.Code, http.StatusOK, rec.Body.String())
+		}
+	})
+
+	t.Run("vmware add", func(t *testing.T) {
+		setVMwareFeatureForTest(t, true)
+		setMockModeForVMwareTest(t, false)
+		setMaxMonitoredSystemsLicenseForTests(t, 1)
+
+		handler, _ := newVMwareHandlersForTest(t)
+		monitor, _, _ := newTestMonitor(t)
+		handler.getMonitor = func(context.Context) *monitoring.Monitor { return monitor }
+		bindUnavailableSupplementalUsageProviderForTest(
+			t,
+			monitor,
+			unifiedresources.SourceVMware,
+			monitoring.MonitoredSystemUsageUnavailableSupplementalInventoryUnsettled,
+		)
+
+		previewRecordsCalled := false
+		handler.previewRecords = func(context.Context, config.VMwareVCenterInstance) ([]unifiedresources.IngestRecord, error) {
+			previewRecordsCalled = true
+			return nil, nil
+		}
+
+		body := marshalVMwareRequest(t, map[string]any{
+			"name":     "lab-vcenter",
+			"host":     "vcsa.lab.local",
+			"port":     443,
+			"username": "administrator@vsphere.local",
+			"password": "super-secret",
+			"enabled":  false,
+		})
+		req := httptest.NewRequest(http.MethodPost, "/api/vmware/connections", bytes.NewReader(body))
+		rec := httptest.NewRecorder()
+		handler.HandleAdd(rec, req)
+
+		if rec.Code != http.StatusCreated {
+			t.Fatalf("status=%d, want %d: %s", rec.Code, http.StatusCreated, rec.Body.String())
+		}
+		if previewRecordsCalled {
+			t.Fatal("expected disabled VMware add to bypass external inventory preview")
+		}
+	})
+
+	t.Run("vmware update", func(t *testing.T) {
+		setVMwareFeatureForTest(t, true)
+		setMockModeForVMwareTest(t, false)
+		setMaxMonitoredSystemsLicenseForTests(t, 1)
+
+		handler, persistence := newVMwareHandlersForTest(t)
+		monitor, _, _ := newTestMonitor(t)
+		handler.getMonitor = func(context.Context) *monitoring.Monitor { return monitor }
+		bindUnavailableSupplementalUsageProviderForTest(
+			t,
+			monitor,
+			unifiedresources.SourceVMware,
+			monitoring.MonitoredSystemUsageUnavailableSupplementalInventoryRebuildPending,
+		)
+		if err := persistence.SaveVMwareConfig([]config.VMwareVCenterInstance{{
+			ID:                 "alpha",
+			Name:               "vc-a",
+			Host:               "vc-a.lab.local",
+			Port:               443,
+			Username:           "administrator@vsphere.local",
+			Password:           "super-secret",
+			InsecureSkipVerify: true,
+			Enabled:            true,
+		}}); err != nil {
+			t.Fatalf("seed vmware config: %v", err)
+		}
+
+		previewRecordsCalled := false
+		handler.previewRecords = func(context.Context, config.VMwareVCenterInstance) ([]unifiedresources.IngestRecord, error) {
+			previewRecordsCalled = true
+			return nil, nil
+		}
+
+		body := marshalVMwareRequest(t, map[string]any{
+			"name":               "vc-a",
+			"host":               "vc-b.lab.local",
+			"port":               443,
+			"username":           "administrator@vsphere.local",
+			"password":           "********",
+			"insecureSkipVerify": true,
+			"enabled":            false,
+		})
+		req := httptest.NewRequest(http.MethodPut, "/api/vmware/connections/alpha", bytes.NewReader(body))
+		rec := httptest.NewRecorder()
+		handler.HandleUpdate(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d, want %d: %s", rec.Code, http.StatusOK, rec.Body.String())
+		}
+		if previewRecordsCalled {
+			t.Fatal("expected disabled VMware update to bypass external inventory preview")
+		}
+	})
+}
+
+func TestContract_PlatformConnectionPreviewPreservesCanonicalEnabledDefaults(t *testing.T) {
+	t.Run("truenas new preview defaults omitted enabled to active", func(t *testing.T) {
+		setTrueNASFeatureForTest(t, true)
+
+		handler, _, monitor := newTrueNASHandlersForTest(t, nil)
+		registry := unifiedresources.NewRegistry(nil)
+		registry.IngestRecords(unifiedresources.SourceAgent, []unifiedresources.IngestRecord{
+			{
+				SourceID: "host-1",
+				Resource: unifiedresources.Resource{
+					ID:     "host-1",
+					Type:   unifiedresources.ResourceTypeAgent,
+					Name:   "tower.local",
+					Status: unifiedresources.StatusOnline,
+					Agent: &unifiedresources.AgentData{
+						AgentID:   "agent-1",
+						Hostname:  "tower.local",
+						MachineID: "machine-1",
+					},
+					Identity: unifiedresources.ResourceIdentity{
+						MachineID: "machine-1",
+						Hostnames: []string{"tower.local"},
+					},
+				},
+			},
+		})
+		setUnexportedField(t, monitor, "resourceStore", monitoring.ResourceStoreInterface(unifiedresources.NewMonitorAdapter(registry)))
+
+		body := marshalTrueNASRequest(t, map[string]any{
+			"name":   "tower",
+			"host":   "tower.local",
+			"apiKey": "super-secret",
+		})
+		req := httptest.NewRequest(http.MethodPost, "/api/truenas/connections/preview", bytes.NewReader(body))
+		rec := httptest.NewRecorder()
+		handler.HandlePreviewConnection(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+		}
+
+		var preview MonitoredSystemLedgerPreviewResponse
+		if err := json.NewDecoder(rec.Body).Decode(&preview); err != nil {
+			t.Fatalf("decode preview response: %v", err)
+		}
+		if preview.Effect != "attaches_existing" {
+			t.Fatalf("Effect = %q, want attaches_existing", preview.Effect)
+		}
+	})
+
+	t.Run("vmware saved preview preserves stored enabled when omitted", func(t *testing.T) {
+		setVMwareFeatureForTest(t, true)
+
+		handler, persistence := newVMwareHandlersForTest(t)
+		monitor, _, _ := newTestMonitor(t)
+		handler.getMonitor = func(context.Context) *monitoring.Monitor { return monitor }
+		if err := persistence.SaveVMwareConfig([]config.VMwareVCenterInstance{
+			{
+				ID:       "conn-1",
+				Name:     "lab-vcenter",
+				Host:     "vcsa.lab.local",
+				Username: "administrator@vsphere.local",
+				Password: "super-secret",
+				Enabled:  true,
+			},
+		}); err != nil {
+			t.Fatalf("seed vmware config: %v", err)
+		}
+
+		previewRecordsCalled := false
+		handler.previewRecords = func(context.Context, config.VMwareVCenterInstance) ([]unifiedresources.IngestRecord, error) {
+			previewRecordsCalled = true
+			return []unifiedresources.IngestRecord{
+				{
+					SourceID: "vc-1:host:host-101",
+					Resource: unifiedresources.Resource{
+						Type:   unifiedresources.ResourceTypeAgent,
+						Name:   "esxi-01.lab.local",
+						Status: unifiedresources.StatusOnline,
+						VMware: &unifiedresources.VMwareData{
+							ConnectionID:    "conn-1",
+							ConnectionName:  "lab-vcenter",
+							ManagedObjectID: "host-101",
+							EntityType:      "host",
+							HostUUID:        "uuid-host-1",
+						},
+					},
+					Identity: unifiedresources.ResourceIdentity{
+						DMIUUID:   "uuid-host-1",
+						Hostnames: []string{"esxi-01.lab.local"},
+					},
+				},
+			}, nil
+		}
+
+		body := marshalVMwareRequest(t, map[string]any{
+			"host":     "edited.lab.local",
+			"username": "operator@vsphere.local",
+			"password": "********",
+		})
+		req := httptest.NewRequest(http.MethodPost, "/api/vmware/connections/conn-1/preview", bytes.NewReader(body))
+		rec := httptest.NewRecorder()
+		handler.HandlePreviewSavedConnection(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+		}
+		if !previewRecordsCalled {
+			t.Fatal("expected saved VMware preview with omitted enabled to stay on the active preview path")
+		}
+	})
+}
+
 func TestContract_ConfiguredNodeReplacementsUseCanonicalSelectors(t *testing.T) {
 	testCases := []struct {
 		name        string

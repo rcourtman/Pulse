@@ -727,6 +727,10 @@ func monitoredSystemResourceIDs(resourceSets ...[]Resource) []string {
 }
 
 func monitoredSystemCandidateResource(candidate MonitoredSystemCandidate) *Resource {
+	if !candidate.CountsTowardMonitoredSystems() {
+		return nil
+	}
+
 	source := normalizeMonitoredSystemCandidateSource(candidate)
 
 	host := firstTrimmed(candidate.Hostname, extractHostname(candidate.HostURL))

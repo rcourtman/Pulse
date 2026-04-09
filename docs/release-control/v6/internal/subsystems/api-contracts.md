@@ -137,6 +137,14 @@ Own canonical runtime payload shapes between backend and frontend.
 50. `internal/api/system_settings.go` shared with `security-privacy`: the system settings telemetry and auth controls are both a security/privacy control surface and a canonical API payload contract boundary.
 51. `internal/api/unified_agent.go` shared with `agent-lifecycle`: unified agent download and installer handlers are both an agent lifecycle control surface and a canonical API payload contract boundary.
 52. `internal/api/updates.go` shared with `deployment-installability`: update handlers are both a deployment-installability control surface and a canonical API payload contract boundary.
+
+The platform-connections API contract also owns inactive monitored-system
+candidate semantics end to end. `enabled=false` on TrueNAS or VMware preview,
+test, add, and update payloads must serialize through the shared ledger client
+as `active:false`, and preview responses may legitimately return `no_change`,
+`removes_existing`, or `removes_multiple` with empty projected-system lists
+when the disabled candidate no longer counts toward monitored-system capacity.
+
 ## Extension Points
 
 1. Add or change payload fields through handler + contract tests together

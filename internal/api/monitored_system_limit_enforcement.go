@@ -124,6 +124,15 @@ func monitoredSystemCount(monitor *monitoring.Monitor) int {
 	return monitoredSystemUsage(monitor).count
 }
 
+func monitoredSystemCandidateStateFromEnabled(
+	enabled bool,
+) unifiedresources.MonitoredSystemCandidateState {
+	if enabled {
+		return unifiedresources.MonitoredSystemCandidateStateActive
+	}
+	return unifiedresources.MonitoredSystemCandidateStateInactive
+}
+
 type monitoredSystemUsageSnapshot struct {
 	count             int
 	readState         unifiedresources.ReadState
@@ -237,6 +246,12 @@ func monitoredSystemLimitDecisionForCandidate(
 	candidate unifiedresources.MonitoredSystemCandidate,
 ) monitoredSystemLimitDecision {
 	limit := maxMonitoredSystemsLimitForContext(ctx)
+	if !candidate.CountsTowardMonitoredSystems() {
+		return monitoredSystemLimitDecision{
+			limit:          limit,
+			usageAvailable: true,
+		}
+	}
 	if limit <= 0 {
 		return monitoredSystemLimitDecision{
 			limit:          limit,
@@ -263,6 +278,12 @@ func monitoredSystemLimitDecisionForCandidateReplacement(
 	candidate unifiedresources.MonitoredSystemCandidate,
 ) monitoredSystemLimitDecision {
 	limit := maxMonitoredSystemsLimitForContext(ctx)
+	if !candidate.CountsTowardMonitoredSystems() {
+		return monitoredSystemLimitDecision{
+			limit:          limit,
+			usageAvailable: true,
+		}
+	}
 	if limit <= 0 {
 		return monitoredSystemLimitDecision{
 			limit:          limit,

@@ -972,6 +972,135 @@ test.describe("VMware platform connections settings", () => {
     expect(createCalls).toBe(0);
   });
 
+  test("shows freed monitored-system capacity when disabling a VMware connection", async ({
+    page,
+  }) => {
+    const syncedAt = new Date(Date.now() - 60_000).toISOString();
+    let previewPayload: Record<string, unknown> | null = null;
+
+    await page.route("**/api/vmware/connections**", async (route) => {
+      const request = route.request();
+      const method = request.method();
+      const pathname = new URL(request.url()).pathname;
+
+      if (pathname === "/api/vmware/connections" && method === "GET") {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify([
+            {
+              id: "conn-1",
+              name: "Lab VC",
+              host: "vcsa.lab.local",
+              port: 443,
+              username: "administrator@vsphere.local",
+              password: "********",
+              insecureSkipVerify: false,
+              enabled: true,
+              poll: {
+                lastSuccessAt: syncedAt,
+              },
+              observed: {
+                collectedAt: syncedAt,
+                hosts: 4,
+                vms: 48,
+                datastores: 8,
+                viRelease: "8.0.3",
+              },
+            },
+          ]),
+        });
+        return;
+      }
+
+      if (
+        pathname === "/api/vmware/connections/conn-1/preview" &&
+        method === "POST"
+      ) {
+        previewPayload = JSON.parse(request.postData() || "{}");
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            current_count: 4,
+            projected_count: 3,
+            additional_count: 0,
+            limit: 10,
+            would_exceed_limit: false,
+            effect: "removes_existing",
+            current_systems: [
+              {
+                name: "esxi-01",
+                type: "host",
+                status: "online",
+                status_explanation: { summary: "", reasons: [] },
+                latest_included_signal: {
+                  name: "esxi-01",
+                  type: "host",
+                  source: "vmware",
+                  at: new Date(Date.now() - 60_000).toISOString(),
+                },
+                source: "vmware",
+                explanation: { summary: "", reasons: [], surfaces: [] },
+              },
+            ],
+            projected_systems: [],
+            current_system: null,
+            projected_system: null,
+          }),
+        });
+        return;
+      }
+
+      await route.continue();
+    });
+
+    await page.goto("/settings/infrastructure/platforms/vmware", {
+      waitUntil: "domcontentloaded",
+    });
+    await page.waitForURL(/\/settings\/infrastructure\/platforms\/vmware/, {
+      timeout: 15_000,
+    });
+
+    const connectionCard = page.getByTestId("vmware-connection-conn-1");
+    await expect(connectionCard).toBeVisible();
+    await connectionCard.getByRole("button", { name: "Edit" }).click();
+
+    const dialog = page.getByRole("dialog", {
+      name: "Edit VMware connection",
+    });
+    await expect(dialog).toBeVisible();
+
+    await dialog.getByLabel("Enable this vCenter connection").uncheck();
+    await expect(
+      dialog.getByRole("button", { name: "Save connection" }),
+    ).toBeDisabled();
+    await dialog.getByRole("button", { name: "Preview impact" }).click();
+
+    await expect
+      .poll(() => previewPayload)
+      .toMatchObject({
+        name: "Lab VC",
+        host: "vcsa.lab.local",
+        username: "administrator@vsphere.local",
+        password: "********",
+        enabled: false,
+      });
+    await expect(
+      dialog.getByText("This change frees monitored-system capacity"),
+    ).toBeVisible();
+    await expect(
+      dialog.getByText(
+        "Current usage 4 / 10. Saving this change would move usage to 3 / 10 (-1).",
+      ),
+    ).toBeVisible();
+    await expect(dialog.getByText("Current matched systems")).toBeVisible();
+    await expect(dialog.getByText("esxi-01 (Host via VMware)")).toBeVisible();
+    await expect(
+      dialog.getByRole("button", { name: "Save connection" }),
+    ).toBeEnabled();
+  });
+
   test("reuses the canonical monitored-system explanation when a VMware save is denied", async ({
     page,
   }) => {

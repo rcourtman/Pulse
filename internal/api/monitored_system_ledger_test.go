@@ -404,6 +404,57 @@ func TestHandleMonitoredSystemLedgerPreviewHTTP(t *testing.T) {
 	}
 }
 
+func TestHandleMonitoredSystemLedgerPreviewAllowsInactiveCandidate(t *testing.T) {
+	setMaxMonitoredSystemsLicenseForTests(t, 1)
+
+	monitor, state, _ := newTestMonitor(t)
+	state.Hosts = []models.Host{
+		{
+			ID:           "host-1",
+			Hostname:     "tower.local",
+			DisplayName:  "Tower",
+			Status:       "online",
+			LastSeen:     time.Date(2026, 4, 8, 10, 0, 0, 0, time.UTC),
+			MachineID:    "machine-1",
+			AgentVersion: "1.0.0",
+		},
+	}
+	syncTestResourceStore(t, monitor, state)
+
+	body := bytes.NewBufferString(`{
+		"candidate":{
+			"source":"truenas",
+			"name":"tower",
+			"hostname":"tower.local",
+			"host_url":"https://tower.local",
+			"active":false
+		}
+	}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/license/monitored-system-ledger/preview", body)
+	rec := httptest.NewRecorder()
+
+	router := &Router{monitor: monitor}
+	router.handleMonitoredSystemLedgerPreview(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var decoded MonitoredSystemLedgerPreviewResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &decoded); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if decoded.CurrentCount != 1 || decoded.ProjectedCount != 1 || decoded.AdditionalCount != 0 {
+		t.Fatalf("unexpected counts: %+v", decoded)
+	}
+	if decoded.Effect != "no_change" {
+		t.Fatalf("Effect = %q, want no_change", decoded.Effect)
+	}
+	if len(decoded.CurrentSystems) != 0 || len(decoded.ProjectedSystems) != 0 {
+		t.Fatalf("inactive candidate should not surface affected systems, got %+v", decoded)
+	}
+}
+
 func TestHandleMonitoredSystemLedgerPreviewUnavailableUsage(t *testing.T) {
 	setMaxMonitoredSystemsLicenseForTests(t, 1)
 
@@ -554,5 +605,70 @@ func TestHandleMonitoredSystemLedgerExplainCurrentOnly(t *testing.T) {
 	}
 	if decoded.Ledger.Total != 1 || decoded.Ledger.Limit != 2 {
 		t.Fatalf("unexpected ledger payload: %+v", decoded.Ledger)
+	}
+}
+
+func TestHandleMonitoredSystemLedgerExplainAllowsInactiveReplacementPreview(t *testing.T) {
+	setMaxMonitoredSystemsLicenseForTests(t, 2)
+
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestRecords(unifiedresources.SourceTrueNAS, []unifiedresources.IngestRecord{
+		{
+			SourceID: "system:archive.local",
+			Resource: unifiedresources.Resource{
+				ID:     "truenas-1",
+				Type:   unifiedresources.ResourceTypeAgent,
+				Name:   "archive",
+				Status: unifiedresources.StatusOnline,
+				TrueNAS: &unifiedresources.TrueNASData{
+					Hostname: "archive.local",
+				},
+			},
+			Identity: unifiedresources.ResourceIdentity{
+				Hostnames: []string{"archive.local"},
+			},
+		},
+	})
+	monitor := &monitoring.Monitor{}
+	monitor.SetResourceStore(unifiedresources.NewMonitorAdapter(registry))
+
+	body := bytes.NewBufferString(`{
+		"candidate":{
+			"source":"truenas",
+			"name":"archive",
+			"hostname":"archive.local",
+			"host_url":"https://archive.local",
+			"active":false
+		},
+		"replacement":{
+			"source":"truenas",
+			"hostname":"archive.local"
+		}
+	}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/license/monitored-system-ledger/explain", body)
+	rec := httptest.NewRecorder()
+
+	router := &Router{monitor: monitor}
+	router.handleMonitoredSystemLedgerExplain(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var decoded MonitoredSystemLedgerExplainResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &decoded); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if decoded.Preview == nil {
+		t.Fatal("expected preview payload")
+	}
+	if decoded.Preview.CurrentCount != 1 || decoded.Preview.ProjectedCount != 0 || decoded.Preview.AdditionalCount != 0 {
+		t.Fatalf("unexpected preview counts: %+v", decoded.Preview)
+	}
+	if decoded.Preview.Effect != "removes_existing" {
+		t.Fatalf("Preview.Effect = %q, want removes_existing", decoded.Preview.Effect)
+	}
+	if len(decoded.Preview.CurrentSystems) != 1 || len(decoded.Preview.ProjectedSystems) != 0 {
+		t.Fatalf("unexpected inactive replacement preview payload: %+v", decoded.Preview)
 	}
 }

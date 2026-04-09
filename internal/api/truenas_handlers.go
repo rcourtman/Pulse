@@ -52,9 +52,8 @@ func (h *TrueNASHandlers) HandleAdd(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, 32*1024)
 	defer r.Body.Close()
 
-	var instance config.TrueNASInstance
-	if err := json.NewDecoder(r.Body).Decode(&instance); err != nil {
-		writeErrorResponse(w, http.StatusBadRequest, "invalid_request", "Invalid request body", map[string]string{"error": err.Error()})
+	instance, ok := decodeTrueNASInstanceRequest(w, r, config.NewTrueNASInstance())
+	if !ok {
 		return
 	}
 
@@ -208,18 +207,6 @@ func (h *TrueNASHandlers) HandleUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	r.Body = http.MaxBytesReader(w, r.Body, 32*1024)
-	defer r.Body.Close()
-
-	var instance config.TrueNASInstance
-	if err := json.NewDecoder(r.Body).Decode(&instance); err != nil {
-		writeErrorResponse(w, http.StatusBadRequest, "invalid_request", "Invalid request body", map[string]string{"error": err.Error()})
-		return
-	}
-
-	instance.ID = connectionID
-	normalizeTrueNASInstance(&instance)
-
 	persistence := h.persistenceForRequest(w, r.Context())
 	if persistence == nil {
 		return
@@ -243,6 +230,12 @@ func (h *TrueNASHandlers) HandleUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	instance, ok := decodeTrueNASInstanceRequest(w, r, instances[index])
+	if !ok {
+		return
+	}
+	instance.ID = connectionID
+	normalizeTrueNASInstance(&instance)
 	instance.PreserveMaskedSecrets(instances[index])
 	if err := instance.Validate(); err != nil {
 		writeErrorResponse(w, http.StatusBadRequest, "validation_error", err.Error(), nil)
@@ -268,12 +261,8 @@ func (h *TrueNASHandlers) HandlePreviewConnection(w http.ResponseWriter, r *http
 		return
 	}
 
-	r.Body = http.MaxBytesReader(w, r.Body, 32*1024)
-	defer r.Body.Close()
-
-	var instance config.TrueNASInstance
-	if err := json.NewDecoder(r.Body).Decode(&instance); err != nil {
-		writeErrorResponse(w, http.StatusBadRequest, "invalid_request", "Invalid request body", map[string]string{"error": err.Error()})
+	instance, ok := decodeTrueNASInstanceRequest(w, r, config.NewTrueNASInstance())
+	if !ok {
 		return
 	}
 
@@ -290,8 +279,9 @@ func (h *TrueNASHandlers) HandlePreviewConnection(w http.ResponseWriter, r *http
 		return
 	}
 
-	preview := unifiedresources.PreviewMonitoredSystemCandidate(usage.readState, trueNASMonitoredSystemCandidate(instance))
-	if len(preview.ProjectedSystems) == 0 {
+	candidate := trueNASMonitoredSystemCandidate(instance)
+	preview := unifiedresources.PreviewMonitoredSystemCandidate(usage.readState, candidate)
+	if candidate.CountsTowardMonitoredSystems() && len(preview.ProjectedSystems) == 0 {
 		writeErrorResponse(w, http.StatusBadRequest, "validation_error", "TrueNAS connection did not resolve to a canonical monitored system preview", nil)
 		return
 	}
@@ -330,7 +320,7 @@ func (h *TrueNASHandlers) HandlePreviewSavedConnection(w http.ResponseWriter, r 
 			continue
 		}
 
-		payload, hasPayload, ok := decodeOptionalTrueNASInstanceRequest(w, r)
+		payload, hasPayload, ok := decodeOptionalTrueNASInstanceRequest(w, r, current)
 		if !ok {
 			return
 		}
@@ -353,6 +343,7 @@ func (h *TrueNASHandlers) HandlePreviewSavedConnection(w http.ResponseWriter, r 
 			return
 		}
 
+		candidate := trueNASMonitoredSystemCandidate(next)
 		replacementHost := pulseTokenHostCandidate(current.Host)
 		preview := unifiedresources.PreviewMonitoredSystemCandidateReplacement(
 			usage.readState,
@@ -362,9 +353,9 @@ func (h *TrueNASHandlers) HandlePreviewSavedConnection(w http.ResponseWriter, r 
 					Hostname: replacementHost,
 				},
 			},
-			trueNASMonitoredSystemCandidate(next),
+			candidate,
 		)
-		if len(preview.ProjectedSystems) == 0 {
+		if candidate.CountsTowardMonitoredSystems() && len(preview.ProjectedSystems) == 0 {
 			writeErrorResponse(w, http.StatusBadRequest, "validation_error", "TrueNAS connection did not resolve to a canonical monitored system preview", nil)
 			return
 		}
@@ -382,12 +373,8 @@ func (h *TrueNASHandlers) HandleTestConnection(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	r.Body = http.MaxBytesReader(w, r.Body, 32*1024)
-	defer r.Body.Close()
-
-	var instance config.TrueNASInstance
-	if err := json.NewDecoder(r.Body).Decode(&instance); err != nil {
-		writeErrorResponse(w, http.StatusBadRequest, "invalid_request", "Invalid request body", map[string]string{"error": err.Error()})
+	instance, ok := decodeTrueNASInstanceRequest(w, r, config.NewTrueNASInstance())
+	if !ok {
 		return
 	}
 
@@ -431,7 +418,7 @@ func (h *TrueNASHandlers) HandleTestSavedConnection(w http.ResponseWriter, r *ht
 			continue
 		}
 		normalizeTrueNASInstance(&instance)
-		payload, hasPayload, ok := decodeOptionalTrueNASInstanceRequest(w, r)
+		payload, hasPayload, ok := decodeOptionalTrueNASInstanceRequest(w, r, instance)
 		if !ok {
 			return
 		} else if hasPayload {
@@ -534,9 +521,27 @@ func normalizeTrueNASInstance(instance *config.TrueNASInstance) {
 	instance.ApplyDefaults()
 }
 
+func decodeTrueNASInstanceRequest(
+	w http.ResponseWriter,
+	r *http.Request,
+	base config.TrueNASInstance,
+) (config.TrueNASInstance, bool) {
+	r.Body = http.MaxBytesReader(w, r.Body, 32*1024)
+	defer r.Body.Close()
+
+	instance := base
+	if err := json.NewDecoder(r.Body).Decode(&instance); err != nil {
+		writeErrorResponse(w, http.StatusBadRequest, "invalid_request", "Invalid request body", map[string]string{"error": err.Error()})
+		return config.TrueNASInstance{}, false
+	}
+
+	return instance, true
+}
+
 func decodeOptionalTrueNASInstanceRequest(
 	w http.ResponseWriter,
 	r *http.Request,
+	base config.TrueNASInstance,
 ) (config.TrueNASInstance, bool, bool) {
 	r.Body = http.MaxBytesReader(w, r.Body, 32*1024)
 	defer r.Body.Close()
@@ -547,10 +552,10 @@ func decodeOptionalTrueNASInstanceRequest(
 		return config.TrueNASInstance{}, false, false
 	}
 	if len(bytes.TrimSpace(body)) == 0 {
-		return config.TrueNASInstance{}, false, true
+		return base, false, true
 	}
 
-	var instance config.TrueNASInstance
+	instance := base
 	if err := json.Unmarshal(body, &instance); err != nil {
 		writeErrorResponse(w, http.StatusBadRequest, "invalid_request", "Invalid request body", map[string]string{"error": err.Error()})
 		return config.TrueNASInstance{}, false, false
@@ -649,6 +654,7 @@ func trueNASMonitoredSystemCandidate(instance config.TrueNASInstance) unifiedres
 		Name:     instance.Name,
 		Hostname: pulseTokenHostCandidate(instance.Host),
 		HostURL:  instance.Host,
+		State:    monitoredSystemCandidateStateFromEnabled(instance.Enabled),
 	}
 }
 

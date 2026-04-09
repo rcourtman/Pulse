@@ -93,6 +93,12 @@ agreement, and cloud-specific enforcement rules.
 4. `internal/api/payments_webhook_handlers.go` shared with `api-contracts`: commercial payment webhook handlers carry both API payload contract and cloud-paid billing boundary ownership.
 5. `internal/api/public_signup_handlers.go` shared with `api-contracts`: hosted signup handlers carry both API payload contract and cloud-paid hosted provisioning boundary ownership.
 
+That shared monitored-system presentation boundary also owns disabled
+provider-connection copy. Commercial entitlement surfaces must treat canonical
+zero-delta and removal-only TrueNAS or VMware previews as non-consuming or
+capacity-freeing changes rather than warning users that a disabled connection
+still grows monitored-system usage.
+
 ## Extension Points
 
 1. Add or change limits through `pkg/licensing/`

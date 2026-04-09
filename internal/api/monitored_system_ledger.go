@@ -100,6 +100,7 @@ type MonitoredSystemLedgerPreviewCandidate struct {
 	AgentID    string `json:"agent_id"`
 	MachineID  string `json:"machine_id"`
 	ResourceID string `json:"resource_id"`
+	Active     *bool  `json:"active,omitempty"`
 }
 
 type MonitoredSystemLedgerPreviewReplacement struct {
@@ -215,7 +216,7 @@ func (r *Router) handleMonitoredSystemLedgerPreview(w http.ResponseWriter, req *
 		preview = unifiedresources.PreviewMonitoredSystemCandidate(usage.readState, candidate)
 	}
 
-	if len(preview.ProjectedSystems) == 0 {
+	if candidate.CountsTowardMonitoredSystems() && len(preview.ProjectedSystems) == 0 {
 		writeErrorResponse(w, http.StatusBadRequest, "validation_error", "Candidate did not resolve to a canonical monitored system preview", nil)
 		return
 	}
@@ -271,7 +272,7 @@ func (r *Router) handleMonitoredSystemLedgerExplain(w http.ResponseWriter, req *
 			preview = unifiedresources.PreviewMonitoredSystemCandidate(usage.readState, candidate)
 		}
 
-		if len(preview.ProjectedSystems) == 0 {
+		if candidate.CountsTowardMonitoredSystems() && len(preview.ProjectedSystems) == 0 {
 			writeErrorResponse(w, http.StatusBadRequest, "validation_error", "Candidate did not resolve to a canonical monitored system preview", nil)
 			return
 		}
@@ -532,7 +533,17 @@ func (c MonitoredSystemLedgerPreviewCandidate) toUnifiedCandidate() (unifiedreso
 		AgentID:    strings.TrimSpace(c.AgentID),
 		MachineID:  strings.TrimSpace(c.MachineID),
 		ResourceID: strings.TrimSpace(c.ResourceID),
+		State:      monitoredSystemLedgerCandidateState(c.Active),
 	}, nil
+}
+
+func monitoredSystemLedgerCandidateState(
+	active *bool,
+) unifiedresources.MonitoredSystemCandidateState {
+	if active != nil && !*active {
+		return unifiedresources.MonitoredSystemCandidateStateInactive
+	}
+	return unifiedresources.MonitoredSystemCandidateStateActive
 }
 
 func (r MonitoredSystemLedgerPreviewReplacement) toUnifiedReplacement(
@@ -583,6 +594,9 @@ func monitoredSystemLedgerPreviewEffect(
 	projectedCount := len(preview.ProjectedSystems)
 
 	if !hasReplacement {
+		if currentCount == 0 && projectedCount == 0 {
+			return "no_change"
+		}
 		if preview.AdditionalCount == 0 && currentCount > 0 {
 			return "attaches_existing"
 		}
@@ -594,7 +608,16 @@ func monitoredSystemLedgerPreviewEffect(
 		}
 		return "creates_new"
 	}
+	if currentCount > 0 && projectedCount == 0 {
+		if currentCount > 1 {
+			return "removes_multiple"
+		}
+		return "removes_existing"
+	}
 	if currentCount == 0 {
+		if projectedCount == 0 {
+			return "no_change"
+		}
 		if projectedCount > 1 {
 			return "creates_multiple"
 		}

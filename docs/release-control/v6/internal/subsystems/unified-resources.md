@@ -276,6 +276,12 @@ and update consumers must ask the unified-resource layer whether candidate or
 preview records change the deduped top-level monitored-system count, including
 replacement-aware projection and VMware host-UUID identity, instead of
 rebuilding handler-local counting heuristics.
+That same current-state contract now also treats candidate activity as
+canonical unified-resource ownership. Inactive candidates must not materialize
+projected monitored-system resources at all, new-candidate previews must fall
+back to zero-delta/no-change when only an inactive candidate is proposed, and
+replacement previews may remove only the replaced source while preserving any
+remaining grouped monitored-system evidence.
 Candidate matching must fail closed when the prospective monitored-system
 candidate cannot resolve to a canonical top-level resource; malformed or
 whitespace-only inputs are not allowed to masquerade as an already-counted
@@ -1409,6 +1415,13 @@ fields such as hostname, host URL, machine or agent identity, and source-owned
 resource identifiers, but they must not invent preview-only matcher logic or
 hide source replacement behind handler-local closures once the request crosses
 into unified-resource ownership.
+Candidate activity is part of that same canonical projection contract.
+`MonitoredSystemCandidate.State` decides whether a candidate contributes a
+counted top-level monitored system at all: inactive candidates must not
+materialize a projected resource, new-candidate previews must resolve to a
+zero-delta/no-change result when only an inactive candidate is proposed, and
+replacement previews must remove only the replaced source while preserving any
+remaining grouped monitored-system evidence.
 Source-native record-set preview is required for provider-backed onboarding
 that can discover multiple top-level systems from one saved connection, so
 TrueNAS, VMware, and future multi-record providers stay on the same canonical

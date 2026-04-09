@@ -8,6 +8,13 @@ import (
 
 // MonitoredSystemCandidate describes a prospective top-level monitored system
 // that may be added through an agent report or API-backed registration.
+type MonitoredSystemCandidateState string
+
+const (
+	MonitoredSystemCandidateStateActive   MonitoredSystemCandidateState = "active"
+	MonitoredSystemCandidateStateInactive MonitoredSystemCandidateState = "inactive"
+)
+
 type MonitoredSystemCandidate struct {
 	Source     DataSource
 	Type       ResourceType
@@ -17,6 +24,26 @@ type MonitoredSystemCandidate struct {
 	AgentID    string
 	MachineID  string
 	ResourceID string
+	State      MonitoredSystemCandidateState
+}
+
+// CountsTowardMonitoredSystems reports whether this candidate is expected to
+// contribute an active monitored-system surface if admitted.
+func (c MonitoredSystemCandidate) CountsTowardMonitoredSystems() bool {
+	return normalizedMonitoredSystemCandidateState(c.State) != MonitoredSystemCandidateStateInactive
+}
+
+func normalizedMonitoredSystemCandidateState(
+	state MonitoredSystemCandidateState,
+) MonitoredSystemCandidateState {
+	switch strings.ToLower(strings.TrimSpace(string(state))) {
+	case "", string(MonitoredSystemCandidateStateActive):
+		return MonitoredSystemCandidateStateActive
+	case string(MonitoredSystemCandidateStateInactive):
+		return MonitoredSystemCandidateStateInactive
+	default:
+		return MonitoredSystemCandidateStateActive
+	}
 }
 
 // MonitoredSystemGroupingExplanation explains why Pulse counted one or more

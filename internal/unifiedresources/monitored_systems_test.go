@@ -449,6 +449,61 @@ func TestPreviewMonitoredSystemCandidateReturnsCurrentAndProjectedSystems(t *tes
 	}
 }
 
+func TestPreviewMonitoredSystemCandidateInactiveKeepsCountUnchanged(t *testing.T) {
+	registry := NewRegistry(nil)
+	registry.IngestRecords(SourceAgent, []IngestRecord{
+		{
+			SourceID: "host-1",
+			Resource: Resource{
+				ID:     "host-1",
+				Type:   ResourceTypeAgent,
+				Name:   "tower.local",
+				Status: StatusOnline,
+				Agent: &AgentData{
+					AgentID:   "agent-1",
+					Hostname:  "tower.local",
+					MachineID: "machine-1",
+				},
+				Identity: ResourceIdentity{
+					MachineID: "machine-1",
+					Hostnames: []string{"tower.local"},
+				},
+			},
+		},
+	})
+
+	preview := PreviewMonitoredSystemCandidate(registry, MonitoredSystemCandidate{
+		Source:   SourceTrueNAS,
+		Type:     ResourceTypeAgent,
+		Name:     "tower storage",
+		Hostname: "tower.local",
+		HostURL:  "https://tower.local",
+		State:    MonitoredSystemCandidateStateInactive,
+	})
+
+	if preview.CurrentCount != 1 {
+		t.Fatalf("CurrentCount = %d, want 1", preview.CurrentCount)
+	}
+	if preview.ProjectedCount != 1 {
+		t.Fatalf("ProjectedCount = %d, want 1", preview.ProjectedCount)
+	}
+	if preview.AdditionalCount != 0 {
+		t.Fatalf("AdditionalCount = %d, want 0", preview.AdditionalCount)
+	}
+	if preview.CurrentSystem != nil {
+		t.Fatalf("CurrentSystem = %+v, want nil", preview.CurrentSystem)
+	}
+	if preview.ProjectedSystem != nil {
+		t.Fatalf("ProjectedSystem = %+v, want nil", preview.ProjectedSystem)
+	}
+	if len(preview.CurrentSystems) != 0 {
+		t.Fatalf("len(CurrentSystems) = %d, want 0", len(preview.CurrentSystems))
+	}
+	if len(preview.ProjectedSystems) != 0 {
+		t.Fatalf("len(ProjectedSystems) = %d, want 0", len(preview.ProjectedSystems))
+	}
+}
+
 func TestPreviewMonitoredSystemCandidateReplacementReturnsAffectedSystems(t *testing.T) {
 	registry := NewRegistry(nil)
 	registry.IngestRecords(SourceAgent, []IngestRecord{
@@ -532,6 +587,72 @@ func TestPreviewMonitoredSystemCandidateReplacementReturnsAffectedSystems(t *tes
 	}
 	if preview.ProjectedSystem.Name != "backup" {
 		t.Fatalf("ProjectedSystem.Name = %q, want backup", preview.ProjectedSystem.Name)
+	}
+}
+
+func TestPreviewMonitoredSystemCandidateReplacementInactiveRemovesVMwareConnection(t *testing.T) {
+	registry := NewRegistry(nil)
+	registry.IngestRecords(SourceVMware, []IngestRecord{
+		{
+			SourceID: "vc-1:host:host-101",
+			Resource: Resource{
+				ID:     "vmware-host-101",
+				Type:   ResourceTypeAgent,
+				Name:   "esxi-01.lab.local",
+				Status: StatusOnline,
+				VMware: &VMwareData{
+					ConnectionID:    "vc-1",
+					ConnectionName:  "Lab VC",
+					VCenterHost:     "vcsa.lab.local",
+					ManagedObjectID: "host-101",
+					EntityType:      "host",
+					HostUUID:        "host-uuid-101",
+				},
+			},
+			Identity: ResourceIdentity{
+				DMIUUID:   "host-uuid-101",
+				Hostnames: []string{"esxi-01.lab.local"},
+			},
+		},
+	})
+
+	preview := PreviewMonitoredSystemCandidateReplacement(registry, MonitoredSystemReplacement{
+		Source: SourceVMware,
+		Selector: MonitoredSystemReplacementSelector{
+			ResourceID: "vc-1",
+		},
+	}, MonitoredSystemCandidate{
+		Source:   SourceVMware,
+		Type:     ResourceTypeAgent,
+		Name:     "Lab VC",
+		Hostname: "vcsa.lab.local",
+		HostURL:  "vcsa.lab.local",
+		State:    MonitoredSystemCandidateStateInactive,
+	})
+
+	if preview.CurrentCount != 1 {
+		t.Fatalf("CurrentCount = %d, want 1", preview.CurrentCount)
+	}
+	if preview.ProjectedCount != 0 {
+		t.Fatalf("ProjectedCount = %d, want 0", preview.ProjectedCount)
+	}
+	if preview.AdditionalCount != 0 {
+		t.Fatalf("AdditionalCount = %d, want 0", preview.AdditionalCount)
+	}
+	if preview.CurrentSystem == nil {
+		t.Fatal("expected current system preview")
+	}
+	if preview.ProjectedSystem != nil {
+		t.Fatalf("ProjectedSystem = %+v, want nil", preview.ProjectedSystem)
+	}
+	if len(preview.CurrentSystems) != 1 {
+		t.Fatalf("len(CurrentSystems) = %d, want 1", len(preview.CurrentSystems))
+	}
+	if len(preview.ProjectedSystems) != 0 {
+		t.Fatalf("len(ProjectedSystems) = %d, want 0", len(preview.ProjectedSystems))
+	}
+	if preview.CurrentSystem.Source != "vmware" {
+		t.Fatalf("CurrentSystem.Source = %q, want vmware", preview.CurrentSystem.Source)
 	}
 }
 

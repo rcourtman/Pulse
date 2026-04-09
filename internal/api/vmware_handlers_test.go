@@ -13,6 +13,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/internal/vmware"
@@ -273,6 +274,121 @@ func TestVMwareHandlers_HandleAdd_ReturnsUnavailableBeforePreviewingInventory(t 
 				t.Fatalf("expected unavailable monitored-system usage not to persist add, got %d connections", len(stored))
 			}
 		})
+	}
+}
+
+func TestVMwareHandlers_HandleAdd_DoesNotCountDisabledConnectionAtLimit(t *testing.T) {
+	setVMwareFeatureForTest(t, true)
+	setMockModeForVMwareTest(t, false)
+	setMaxMonitoredSystemsLicenseForTests(t, 1)
+
+	handler, persistence := newVMwareHandlersForTest(t)
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestRecords(unifiedresources.SourceAgent, []unifiedresources.IngestRecord{
+		{
+			SourceID: "host-1",
+			Resource: unifiedresources.Resource{
+				ID:     "host-1",
+				Type:   unifiedresources.ResourceTypeAgent,
+				Name:   "existing.local",
+				Status: unifiedresources.StatusOnline,
+				Agent: &unifiedresources.AgentData{
+					AgentID:   "agent-1",
+					Hostname:  "existing.local",
+					MachineID: "machine-1",
+				},
+				Identity: unifiedresources.ResourceIdentity{
+					MachineID: "machine-1",
+					Hostnames: []string{"existing.local"},
+				},
+			},
+		},
+	})
+	monitor := &monitoring.Monitor{}
+	monitor.SetResourceStore(unifiedresources.NewMonitorAdapter(registry))
+	handler.getMonitor = func(context.Context) *monitoring.Monitor { return monitor }
+
+	previewRecordsCalled := false
+	handler.previewRecords = func(context.Context, config.VMwareVCenterInstance) ([]unifiedresources.IngestRecord, error) {
+		previewRecordsCalled = true
+		return nil, errors.New("preview records should not run for disabled connections")
+	}
+
+	body := marshalVMwareRequest(t, map[string]any{
+		"id":       "vc-1",
+		"name":     "lab-vcenter",
+		"host":     "vcsa.lab.local",
+		"port":     443,
+		"username": "administrator@vsphere.local",
+		"password": "super-secret",
+		"enabled":  false,
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/vmware/connections", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler.HandleAdd(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("expected 201 for disabled connection at the limit, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if previewRecordsCalled {
+		t.Fatal("expected disabled VMware add not to preview inventory")
+	}
+
+	stored, err := persistence.LoadVMwareConfig()
+	if err != nil {
+		t.Fatalf("load vmware config: %v", err)
+	}
+	if len(stored) != 1 || stored[0].Enabled {
+		t.Fatalf("expected disabled VMware connection to persist without counting, got %+v", stored)
+	}
+}
+
+func TestVMwareHandlers_HandleAdd_AllowsDisabledConnectionWhenUsageUnavailable(t *testing.T) {
+	setVMwareFeatureForTest(t, true)
+	setMockModeForVMwareTest(t, false)
+	setMaxMonitoredSystemsLicenseForTests(t, 1)
+
+	handler, persistence := newVMwareHandlersForTest(t)
+	monitor, _, _ := newTestMonitor(t)
+	handler.getMonitor = func(context.Context) *monitoring.Monitor { return monitor }
+	bindUnavailableSupplementalUsageProviderForTest(
+		t,
+		monitor,
+		unifiedresources.SourceVMware,
+		monitoring.MonitoredSystemUsageUnavailableSupplementalInventoryUnsettled,
+	)
+
+	previewRecordsCalled := false
+	handler.previewRecords = func(context.Context, config.VMwareVCenterInstance) ([]unifiedresources.IngestRecord, error) {
+		previewRecordsCalled = true
+		return nil, errors.New("preview records should not run for disabled connections")
+	}
+
+	body := marshalVMwareRequest(t, map[string]any{
+		"name":     "lab-vcenter",
+		"host":     "vcsa.lab.local",
+		"port":     443,
+		"username": "administrator@vsphere.local",
+		"password": "super-secret",
+		"enabled":  false,
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/vmware/connections", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler.HandleAdd(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("expected 201 for disabled connection while usage is unavailable, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if previewRecordsCalled {
+		t.Fatal("expected disabled VMware add not to preview inventory")
+	}
+
+	stored, err := persistence.LoadVMwareConfig()
+	if err != nil {
+		t.Fatalf("load vmware config: %v", err)
+	}
+	if len(stored) != 1 || stored[0].Enabled {
+		t.Fatalf("expected disabled VMware connection to persist while usage is unavailable, got %+v", stored)
 	}
 }
 
@@ -822,6 +938,74 @@ func TestVMwareHandlers_HandleUpdate_ReturnsUnavailableBeforePreviewingInventory
 	}
 }
 
+func TestVMwareHandlers_HandleUpdate_AllowsDisablingConnectionWhenUsageUnavailable(t *testing.T) {
+	setVMwareFeatureForTest(t, true)
+	setMockModeForVMwareTest(t, false)
+	setMaxMonitoredSystemsLicenseForTests(t, 1)
+
+	handler, persistence := newVMwareHandlersForTest(t)
+	monitor, _, _ := newTestMonitor(t)
+	handler.getMonitor = func(context.Context) *monitoring.Monitor { return monitor }
+	bindUnavailableSupplementalUsageProviderForTest(
+		t,
+		monitor,
+		unifiedresources.SourceVMware,
+		monitoring.MonitoredSystemUsageUnavailableSupplementalInventoryRebuildPending,
+	)
+	if err := persistence.SaveVMwareConfig([]config.VMwareVCenterInstance{{
+		ID:                 "alpha",
+		Name:               "vc-a",
+		Host:               "vc-a.lab.local",
+		Port:               443,
+		Username:           "administrator@vsphere.local",
+		Password:           "super-secret",
+		InsecureSkipVerify: true,
+		Enabled:            true,
+	}}); err != nil {
+		t.Fatalf("seed vmware config: %v", err)
+	}
+
+	previewRecordsCalled := false
+	handler.previewRecords = func(context.Context, config.VMwareVCenterInstance) ([]unifiedresources.IngestRecord, error) {
+		previewRecordsCalled = true
+		return nil, errors.New("preview records should not run for disabled connections")
+	}
+
+	body := marshalVMwareRequest(t, map[string]any{
+		"name":               "vc-a",
+		"host":               "vc-b.lab.local",
+		"port":               443,
+		"username":           "administrator@vsphere.local",
+		"password":           "********",
+		"insecureSkipVerify": true,
+		"enabled":            false,
+	})
+	req := httptest.NewRequest(http.MethodPut, "/api/vmware/connections/alpha", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler.HandleUpdate(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 while disabling with unavailable usage, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if previewRecordsCalled {
+		t.Fatal("expected disabled VMware update not to preview inventory")
+	}
+
+	stored, err := persistence.LoadVMwareConfig()
+	if err != nil {
+		t.Fatalf("load vmware config: %v", err)
+	}
+	if len(stored) != 1 {
+		t.Fatalf("expected 1 stored connection, got %d", len(stored))
+	}
+	if stored[0].Enabled {
+		t.Fatalf("expected stored VMware connection to become disabled, got %+v", stored[0])
+	}
+	if stored[0].Host != "vc-b.lab.local" {
+		t.Fatalf("expected disabled update to persist other edits, got %+v", stored[0])
+	}
+}
+
 func TestVMwareHandlers_HandleTestConnection_SuccessAndFailure(t *testing.T) {
 	setVMwareFeatureForTest(t, true)
 
@@ -1029,6 +1213,65 @@ func TestVMwareHandlers_HandlePreviewConnection_ReturnsCanonicalMultiSystemImpac
 	}
 }
 
+func TestVMwareHandlers_HandlePreviewConnection_ReturnsNoChangeForDisabledConnection(t *testing.T) {
+	setVMwareFeatureForTest(t, true)
+	setMaxMonitoredSystemsLicenseForTests(t, 1)
+
+	handler, _ := newVMwareHandlersForTest(t)
+	monitor, state, _ := newTestMonitor(t)
+	state.Hosts = []models.Host{
+		{
+			ID:           "host-1",
+			Hostname:     "tower.local",
+			DisplayName:  "Tower",
+			Status:       "online",
+			LastSeen:     time.Now().UTC(),
+			MachineID:    "machine-1",
+			AgentVersion: "1.0.0",
+		},
+	}
+	syncTestResourceStore(t, monitor, state)
+	handler.getMonitor = func(context.Context) *monitoring.Monitor { return monitor }
+
+	previewRecordsCalled := false
+	handler.previewRecords = func(context.Context, config.VMwareVCenterInstance) ([]unifiedresources.IngestRecord, error) {
+		previewRecordsCalled = true
+		return nil, errors.New("preview records should not run for disabled connections")
+	}
+
+	body := marshalVMwareRequest(t, map[string]any{
+		"name":     "lab-vcenter",
+		"host":     "vcsa.lab.local",
+		"username": "administrator@vsphere.local",
+		"password": "super-secret",
+		"enabled":  false,
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/vmware/connections/preview", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler.HandlePreviewConnection(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if previewRecordsCalled {
+		t.Fatal("expected disabled VMware preview not to fetch inventory")
+	}
+
+	var preview MonitoredSystemLedgerPreviewResponse
+	if err := json.NewDecoder(rec.Body).Decode(&preview); err != nil {
+		t.Fatalf("decode preview response: %v", err)
+	}
+	if preview.CurrentCount != 1 || preview.ProjectedCount != 1 || preview.AdditionalCount != 0 {
+		t.Fatalf("unexpected preview counts: %+v", preview)
+	}
+	if preview.Effect != "no_change" {
+		t.Fatalf("Effect = %q, want no_change", preview.Effect)
+	}
+	if len(preview.CurrentSystems) != 0 || len(preview.ProjectedSystems) != 0 {
+		t.Fatalf("disabled preview should not surface affected systems, got %+v", preview)
+	}
+}
+
 func TestVMwareHandlers_HandlePreviewConnection_ReturnsUnavailableWhenSupplementalInventoryUnsettled(t *testing.T) {
 	setVMwareFeatureForTest(t, true)
 
@@ -1136,6 +1379,91 @@ func TestVMwareHandlers_HandlePreviewSavedConnection_PreservesStoredSecrets(t *t
 	}
 	if previewed.Host != "edited.lab.local" {
 		t.Fatalf("expected edited host to be previewed, got %+v", previewed)
+	}
+}
+
+func TestVMwareHandlers_HandlePreviewSavedConnection_ReturnsRemovalForDisabledConnection(t *testing.T) {
+	setVMwareFeatureForTest(t, true)
+
+	handler, persistence := newVMwareHandlersForTest(t)
+	monitor := &monitoring.Monitor{}
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestRecords(unifiedresources.SourceVMware, []unifiedresources.IngestRecord{
+		{
+			SourceID: "vc-edit:host:host-101",
+			Resource: unifiedresources.Resource{
+				ID:     "vmware-host-101",
+				Type:   unifiedresources.ResourceTypeAgent,
+				Name:   "esxi-01.lab.local",
+				Status: unifiedresources.StatusOnline,
+				VMware: &unifiedresources.VMwareData{
+					ConnectionID:    "conn-1",
+					ConnectionName:  "lab-vcenter",
+					VCenterHost:     "vcsa.lab.local",
+					ManagedObjectID: "host-101",
+					EntityType:      "host",
+					HostUUID:        "uuid-host-1",
+				},
+			},
+			Identity: unifiedresources.ResourceIdentity{
+				DMIUUID:   "uuid-host-1",
+				Hostnames: []string{"esxi-01.lab.local"},
+			},
+		},
+	})
+	monitor.SetResourceStore(unifiedresources.NewMonitorAdapter(registry))
+	handler.getMonitor = func(context.Context) *monitoring.Monitor { return monitor }
+	if err := persistence.SaveVMwareConfig([]config.VMwareVCenterInstance{
+		{
+			ID:       "conn-1",
+			Name:     "lab-vcenter",
+			Host:     "vcsa.lab.local",
+			Username: "administrator@vsphere.local",
+			Password: "super-secret",
+			Enabled:  true,
+		},
+	}); err != nil {
+		t.Fatalf("seed vmware config: %v", err)
+	}
+
+	previewRecordsCalled := false
+	handler.previewRecords = func(context.Context, config.VMwareVCenterInstance) ([]unifiedresources.IngestRecord, error) {
+		previewRecordsCalled = true
+		return nil, errors.New("preview records should not run for disabled connections")
+	}
+
+	body := marshalVMwareRequest(t, map[string]any{
+		"host":     "vcsa.lab.local",
+		"username": "administrator@vsphere.local",
+		"password": "********",
+		"enabled":  false,
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/vmware/connections/conn-1/preview", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler.HandlePreviewSavedConnection(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if previewRecordsCalled {
+		t.Fatal("expected disabled VMware saved preview not to fetch inventory")
+	}
+
+	var preview MonitoredSystemLedgerPreviewResponse
+	if err := json.NewDecoder(rec.Body).Decode(&preview); err != nil {
+		t.Fatalf("decode preview response: %v", err)
+	}
+	if preview.CurrentCount != 1 || preview.ProjectedCount != 0 || preview.AdditionalCount != 0 {
+		t.Fatalf("unexpected preview counts: %+v", preview)
+	}
+	if preview.Effect != "removes_existing" {
+		t.Fatalf("Effect = %q, want removes_existing", preview.Effect)
+	}
+	if len(preview.CurrentSystems) != 1 {
+		t.Fatalf("len(CurrentSystems) = %d, want 1", len(preview.CurrentSystems))
+	}
+	if len(preview.ProjectedSystems) != 0 {
+		t.Fatalf("len(ProjectedSystems) = %d, want 0", len(preview.ProjectedSystems))
 	}
 }
 
