@@ -4225,7 +4225,7 @@
   "open_decisions": [
     {
       "id": "rc-publication-judgment",
-      "summary": "Pulse v6 prerelease publication remains an explicit product judgment: the 2026-04-09 packet records that the current active-target proof is blocked by the parallel pulse-enterprise approval-handler mod-tidy state, so `rc_ready` stays blocked until that proof passes and the owner explicitly approves a real governed RC.",
+      "summary": "Pulse v6 prerelease publication remains an explicit product judgment: the 2026-04-09 packet records that the enterprise module drift was repaired, but the current active-target proof still blocks in Pulse because `internal/api/vmware_handlers.go` references pre-rename monitored-system helper names instead of the canonical `...FromUsage` helpers, so `rc_ready` stays blocked until that proof passes and the owner explicitly approves a real governed RC.",
       "owner": "project-owner",
       "blocking_level": "rc-ready",
       "status": "blocked",

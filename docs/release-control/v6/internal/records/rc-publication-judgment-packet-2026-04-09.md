@@ -72,7 +72,7 @@ Result:
 3. `frontend-grandfathered-license-presentation`: pass.
 4. `pulse-pro-public-checkout-reentry-guard`: pass.
 
-## Current Blocker
+## Enterprise Follow-Up
 
 After the `RA16` proof repair, the full active-target guard was rerun. It
 progressed through the earlier RC proof slices and then blocked at `RA17`:
@@ -100,7 +100,15 @@ go: updates to go.mod needed; to update it:
 The `pulse-enterprise` repo already had unrelated dirty files in
 `cmd/pulse-enterprise/main.go` and `cmd/pulse-enterprise/main_test.go` before
 this packet was written. Those changes appear to belong to another parallel
-slice, so this packet does not run `go mod tidy` or edit `pulse-enterprise`.
+slice, so the dependency fix stayed limited to the module graph only.
+
+`pulse-enterprise` was repaired with:
+
+```text
+abdcd2d chore(deps): tidy enterprise module graph
+```
+
+That commit touched only `go.mod` and `go.sum`.
 
 The mobile portions of the `RA17` proof passed:
 
@@ -117,19 +125,58 @@ python3 scripts/release_control/readiness_assertion_guard.py --assertion RA18
 
 Result: pass.
 
+The isolated `RA17` proof was then rerun:
+
+```bash
+python3 scripts/release_control/internal/mobile_relay_auth_approvals_proof.py --json
+```
+
+Result: all subchecks passed, including `enterprise-approval-handlers`.
+
+## Current Blocker
+
+With the enterprise module graph repaired, the full active-target guard was
+rerun outside the sandbox so the loopback test server could bind normally. That
+run progressed past `RA17` and then blocked earlier in the Pulse runtime at
+`RA3`/`RA4`:
+
+```text
+BLOCKED: readiness assertion proof failed for RA3,RA4:entitlement-gating-api-tests (exit 1)
+```
+
+The concrete failure is now a Pulse API build break:
+
+```text
+internal/api/vmware_handlers.go:672:14: undefined: monitoredSystemLimitDecisionForRecords
+internal/api/vmware_handlers.go:712:14: undefined: monitoredSystemLimitDecisionForRecordsReplacement
+```
+
+The canonical helpers currently present in the repo are:
+
+```text
+internal/api/monitored_system_limit_enforcement.go:289: monitoredSystemLimitDecisionForRecordsFromUsage
+internal/api/monitored_system_limit_enforcement.go:313: monitoredSystemLimitDecisionForRecordsReplacementFromUsage
+```
+
+That means the RC blocker is no longer the enterprise repo. The current blocker
+is an in-progress Pulse monitored-system enforcement/admission slice where
+`vmware_handlers.go` still references the pre-rename helper names while the
+shared contract has already moved to the `...FromUsage` helpers.
+
 ## Judgment Outcome
 
 Do not clear `rc-publication-judgment` from this packet.
 
 The release-control metadata is close to the RC floor, but the current
-workspace cannot complete the active-target proof while the enterprise approval
-handler slice requires `go mod tidy`. Publishing an RC from this state would
-turn a parallel worktree hygiene problem into an ambiguous release decision.
+workspace still cannot complete the active-target proof. Publishing an RC from
+this state would let an incomplete Pulse monitored-system slice masquerade as a
+governed release judgment.
 
 ## Required Unblock Steps
 
-1. Resolve the `pulse-enterprise` mod-tidy requirement in the owning
-   enterprise slice.
+1. Finish the Pulse monitored-system enforcement/admission slice so
+   `internal/api/vmware_handlers.go` uses the canonical helper names that
+   currently exist in `monitored_system_limit_enforcement.go`.
 2. Return all active repos needed for the RC proof to a clean, intentional
    state.
 3. Rerun:
