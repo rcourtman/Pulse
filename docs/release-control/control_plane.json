@@ -6,7 +6,7 @@
   "control_plane_doc": "docs/release-control/internal/CONTROL_PLANE.md",
   "control_plane_schema": "docs/release-control/control_plane.schema.json",
   "active_profile_id": "v6",
-  "active_target_id": "v6-rc-cut",
+  "active_target_id": "v6-rc-stabilization",
   "profiles": [
     {
       "id": "v6",
@@ -30,7 +30,7 @@
       "id": "v6-rc-cut",
       "profile_id": "v6",
       "kind": "release",
-      "status": "active",
+      "status": "completed",
       "summary": "Hold Pulse v6 on the governed prerelease-cut target until RC publication is explicitly judged ready, while continuing to clear prerelease blockers, prove migration safety, and exercise the pre-RC high-risk gates.",
       "completion_rule": "rc_ready"
     },
@@ -38,7 +38,7 @@
       "id": "v6-rc-stabilization",
       "profile_id": "v6",
       "kind": "stabilization",
-      "status": "planned",
+      "status": "active",
       "summary": "Once a real governed RC exists, keep Pulse v6 simple, accurate, and cleanly readable around that proven monitoring-first floor while broader control-plane expansion stays out of the default target until it is proven.",
       "completion_rule": "manual",
       "proof_scope": "none"

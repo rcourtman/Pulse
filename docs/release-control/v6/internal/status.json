@@ -4222,23 +4222,7 @@
     }
   ],
   "work_claims": [],
-  "open_decisions": [
-    {
-      "id": "rc-publication-judgment",
-      "summary": "Pulse v6 prerelease publication remains an explicit product judgment: the 2026-04-09 packet now records that the enterprise module drift was repaired and the full active-target proof passes, so `rc_ready` remains blocked only until the owner explicitly approves or declines a real governed RC.",
-      "owner": "project-owner",
-      "blocking_level": "rc-ready",
-      "status": "blocked",
-      "opened_at": "2026-04-04",
-      "lane_ids": [
-        "L1",
-        "L8",
-        "L9",
-        "L12"
-      ],
-      "subsystem_ids": []
-    }
-  ],
+  "open_decisions": [],
   "source_of_truth_file": "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md",
   "resolved_decisions": [
     {
@@ -4658,6 +4642,19 @@
         "L13",
         "L15",
         "L16"
+      ]
+    },
+    {
+      "id": "rc-publication-judgment",
+      "summary": "Pulse v6 current `pulse/v6-release` candidate is approved for the first governed RC publication after the 2026-04-09 packet recorded a passing full active-target proof; `rc-publication-judgment` is resolved and prerelease publication may proceed on the governed v6 release line.",
+      "kind": "release-policy",
+      "decided_at": "2026-04-09",
+      "subsystem_ids": [],
+      "lane_ids": [
+        "L1",
+        "L8",
+        "L9",
+        "L12"
       ]
     }
   ]

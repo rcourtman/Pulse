@@ -4,12 +4,12 @@
 - Decision: `rc-publication-judgment`
 - Active target: `v6-rc-cut`
 - Active branch: `pulse/v6-release`
-- Result: `blocked`
+- Result: `approved`
 
 ## Scope
 
-This packet prepares the explicit owner judgment for publishing a governed Pulse
-v6 RC. It does not make the product approval decision.
+This packet records the explicit owner judgment for publishing the first
+governed Pulse v6 RC from the current `pulse/v6-release` candidate.
 
 The current release-control target still uses the `rc_ready` completion rule.
 GA or stable promotion remains out of scope until a real prerelease has shipped
@@ -159,23 +159,33 @@ rc-ready assertion set.
 4. All rc-ready release gates passed.
 5. `rc-publication-judgment` as the only remaining rc-ready blocker.
 
+## Owner Decision
+
+On `2026-04-09`, the owner explicitly judged the current `pulse/v6-release`
+candidate ready for the first real governed Pulse v6 release candidate.
+
+This resolves `rc-publication-judgment`. The technical RC floor is already
+proved; the remaining work is operational release execution on the governed
+branch. With that approval recorded, the control plane should promote from
+`v6-rc-cut` to `v6-rc-stabilization`.
+
 ## Judgment Outcome
 
-Do not clear `rc-publication-judgment` from this packet.
+Clear `rc-publication-judgment` from this packet.
 
-The release-control proof floor is now satisfied, but prerelease publication is
-still an explicit owner product decision rather than an automatic consequence of
-passing proof. This packet is now ready for that judgment; it does not make the
-judgment itself.
+The release-control proof floor is satisfied and the owner has approved the
+first governed Pulse v6 RC publication. This packet now serves as the decision
+record for that approval; it does not change the later GA/stable policy.
 
-## Required Unblock Steps
+## Required Release Actions
 
-1. Review this packet as the explicit RC publication decision input.
-2. If the owner judges the current candidate ready for a real governed RC,
-   resolve `rc-publication-judgment` explicitly instead of treating proof
-   completion as implicit approval.
-3. If the owner does not approve publication yet, keep
-   `rc-publication-judgment` open and record the reason as a product decision,
-   not a missing proof.
+1. Bump `VERSION` on `pulse/v6-release` to `6.0.0-rc.2` and commit that change.
+   `v6.0.0-rc.1` remains reserved in governance as the accidental unpublished
+   prerelease tag and must not be reused for the first real governed RC.
+2. Push the governed `pulse/v6-release` branch so `origin` carries the approved
+   RC candidate and the current release-control records.
+3. Run `Pulse Release Pipeline` on `pulse/v6-release` for `6.0.0-rc.2` with the
+   prepared v6 prerelease notes and rollback input `5.1.27`; create the draft
+   prerelease first, validate the draft outputs, then publish the prerelease.
 4. Keep `rc-to-ga-promotion-readiness` blocked until a real prerelease has
    shipped and the later GA promotion rehearsal exists.

@@ -1,6 +1,6 @@
-# Pulse v6.0.0-rc.1 Pre-Release Notes
+# Pulse v6.0.0-rc.2 Pre-Release Notes
 
-`v6.0.0-rc.1` is an early Pulse v6 pre-release for users who want to test before the stable `v6.0.0` release.
+`v6.0.0-rc.2` is an early Pulse v6 pre-release for users who want to test before the stable `v6.0.0` release.
 
 Expect bugs, rough edges, and migration issues. This build is for early testing, not for normal production use.
 
