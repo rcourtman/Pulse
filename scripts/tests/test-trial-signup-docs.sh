@@ -3,6 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 RUNBOOK="${ROOT_DIR}/docs/operations/TRIAL_E2E_LXC_SNAPSHOT_RUNBOOK.md"
+PRICING_DOC="${ROOT_DIR}/docs/architecture/v6-pricing-and-tiering.md"
 
 failures=0
 
@@ -40,22 +41,30 @@ assert_not_contains() {
 }
 
 main() {
-  local output
-  output="$(
+  local runbook_output pricing_output
+  runbook_output="$(
     awk '
       /^## Contract Probe Script$/ { capture=1 }
       capture { print }
       /^## Full Sandbox E2E \(Playwright\)$/ { exit }
     ' "${RUNBOOK}"
   )"
+  pricing_output="$(
+    sed -n '368,386p' "${PRICING_DOC}"
+  )"
 
-  assert_contains "runbook references hosted trial probe script" "${output}" "tests/integration/scripts/trial-signup-contract.sh"
-  assert_contains "runbook documents initial hosted-signup redirect" "${output}" "returns \`409\` with \`trial_signup_required\`"
-  assert_contains "runbook documents hosted-signup retry burst" "${output}" "hosted-signup retry burst"
-  assert_contains "runbook documents retry-after backoff metadata" "${output}" "\`Retry-After\` backoff metadata"
-  assert_contains "runbook documents limiter transition output" "${output}" "retry_limiter_attempt=..."
-  assert_contains "runbook documents final trial-rate-limited output" "${output}" "final_trial_start_code=429"
-  assert_not_contains "runbook no longer hardcodes second-attempt rejection" "${output}" "Second immediate trial start is rejected with \`429\`"
+  assert_contains "runbook references hosted trial probe script" "${runbook_output}" "tests/integration/scripts/trial-signup-contract.sh"
+  assert_contains "runbook documents initial hosted-signup redirect" "${runbook_output}" "returns \`409\` with \`trial_signup_required\`"
+  assert_contains "runbook documents hosted-signup retry burst" "${runbook_output}" "hosted-signup retry burst"
+  assert_contains "runbook documents retry-after backoff metadata" "${runbook_output}" "\`Retry-After\` backoff metadata"
+  assert_contains "runbook documents limiter transition output" "${runbook_output}" "retry_limiter_attempt=..."
+  assert_contains "runbook documents final trial-rate-limited output" "${runbook_output}" "final_trial_start_code=429"
+  assert_not_contains "runbook no longer hardcodes second-attempt rejection" "${runbook_output}" "Second immediate trial start is rejected with \`429\`"
+
+  assert_contains "pricing doc documents retry burst" "${pricing_output}" "retry burst"
+  assert_contains "pricing doc documents trial-rate-limited response" "${pricing_output}" "\`429 trial_rate_limited\`"
+  assert_contains "pricing doc documents retry-after metadata" "${pricing_output}" "\`Retry-After\`"
+  assert_not_contains "pricing doc no longer claims 24 hour limiter" "${pricing_output}" "24 hours"
 
   if (( failures > 0 )); then
     echo "trial-signup docs smoke tests failed: ${failures}" >&2

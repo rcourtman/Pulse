@@ -375,7 +375,9 @@ want to self-host.
   - Cloud: Stripe checkout with trial period
 - **Restrictions:**
   - One trial per workspace
-  - Rate limited: 1 trial initiation attempt per org per 24 hours
+  - Rate limited: a short per-org retry burst is allowed so operators can
+    revisit the hosted handoff; once that burst is exhausted the local runtime
+    returns `429 trial_rate_limited` with `Retry-After` backoff metadata
   - Cannot start if already has active Pro license
 
 ---
