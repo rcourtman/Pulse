@@ -1,7 +1,8 @@
-import { batch, createEffect, createRoot, createSignal } from 'solid-js';
+import { batch, createRoot, createSignal } from 'solid-js';
 import { createStore, reconcile, type SetStoreFunction } from 'solid-js/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { State } from '@/types/api';
+import type { Resource } from '@/types/resource';
 import useUnifiedResourcesSource from '../useUnifiedResources.ts?raw';
 import stringUtilsSource from '@/utils/stringUtils.ts?raw';
 
@@ -32,8 +33,39 @@ const v2Resource = {
   },
 };
 
-const asWsResource = <T extends object>(resource: T): State['resources'][number] =>
-  resource as unknown as State['resources'][number];
+const wsResource: Resource = {
+  id: 'node-1',
+  type: 'agent',
+  name: 'node-1',
+  displayName: 'node-1',
+  platformId: 'node-1',
+  platformType: 'agent',
+  sourceType: 'agent',
+  status: 'online',
+  lastSeen: Date.parse('2026-02-06T12:00:00Z'),
+  cpu: { current: 15 },
+  memory: { current: 50, used: 4 * 1024 * 1024, total: 8 * 1024 * 1024, free: 4 * 1024 * 1024 },
+  disk: {
+    current: 30,
+    used: 30 * 1024 * 1024,
+    total: 100 * 1024 * 1024,
+    free: 70 * 1024 * 1024,
+  },
+  discoveryTarget: {
+    resourceType: 'agent',
+    agentId: 'host-1',
+    resourceId: 'host-1',
+    hostname: 'pve1',
+  },
+  facetCounts: {
+    recentChanges: 1,
+  },
+};
+
+const createWsResource = (overrides: Partial<Resource> = {}): Resource => ({
+  ...wsResource,
+  ...overrides,
+});
 
 const flushAsync = async () => {
   await Promise.resolve();
@@ -101,7 +133,7 @@ describe('useUnifiedResources', () => {
       },
       activeAlerts: [],
       recentlyResolved: [],
-      resources: [asWsResource(v2Resource)],
+      resources: [wsResource],
       lastUpdate: 0,
     });
     setWsState = _setWsState;
@@ -131,19 +163,12 @@ describe('useUnifiedResources', () => {
     vi.resetModules();
   });
 
-  it('refetches when lastUpdate changes even if resources are reconciled in place', async () => {
+  it('uses canonical websocket resource updates without a REST refetch for supported queries', async () => {
     let dispose = () => {};
     let result: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']> | undefined;
-    let firstResourceEffectRuns = 0;
     createRoot((d) => {
       dispose = d;
       result = useUnifiedResources();
-      createEffect(() => {
-        const first = result!.resources()[0];
-        if (first) {
-          firstResourceEffectRuns += 1;
-        }
-      });
     });
 
     await flushAsync();
@@ -154,12 +179,8 @@ describe('useUnifiedResources', () => {
       '/api/resources?type=agent%2Cdocker-host%2Cpbs%2Cpmg%2Ck8s-cluster%2Ck8s-node&page=1&limit=100',
       { cache: 'no-store' },
     );
-    const originalResourceRef = result!.resources()[0];
-    const effectsAfterInitialFetch = firstResourceEffectRuns;
-
-    vi.advanceTimersByTime(800);
     await flushAsync();
-    expect(apiFetchMock).toHaveBeenCalledTimes(1);
+    await flushAsync();
 
     // Simulate a metric update where reconcile keeps array identity stable.
     batch(() => {
@@ -167,12 +188,8 @@ describe('useUnifiedResources', () => {
         'resources',
         reconcile(
           [
-            asWsResource({
-              ...v2Resource,
-              metrics: {
-                ...v2Resource.metrics,
-                cpu: { percent: 42 },
-              },
+            createWsResource({
+              cpu: { current: 42 },
             }),
           ],
           { key: 'id' },
@@ -181,15 +198,9 @@ describe('useUnifiedResources', () => {
       setWsState('lastUpdate', 1738843201000);
     });
 
-    vi.advanceTimersByTime(799);
     await flushAsync();
     expect(apiFetchMock).toHaveBeenCalledTimes(1);
-
-    vi.advanceTimersByTime(2000);
-    await flushAsync();
-    expect(apiFetchMock).toHaveBeenCalledTimes(2);
-    expect(result!.resources()[0]).toBe(originalResourceRef);
-    expect(firstResourceEffectRuns).toBe(effectsAfterInitialFetch);
+    expect(result!.resources()[0]?.cpu?.current).toBe(42);
     expect(result!.resources()[0].discoveryTarget).toEqual({
       resourceType: 'agent',
       agentId: 'host-1',
@@ -204,7 +215,7 @@ describe('useUnifiedResources', () => {
   });
 
   it('projects kubernetes clusterId from the canonical context prefix', async () => {
-    apiFetchMock.mockResolvedValueOnce({
+    apiFetchMock.mockResolvedValue({
       ok: true,
       json: async () => ({
         data: [
@@ -226,11 +237,10 @@ describe('useUnifiedResources', () => {
     let result: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']> | undefined;
     createRoot((d) => {
       dispose = d;
-      result = useUnifiedResources();
+      result = useUnifiedResources({ query: 'type=pod', cacheKey: 'pods' });
     });
 
-    await flushAsync();
-    await waitForResourceCount(() => result!.resources().length);
+    await result!.refetch();
 
     expect(result!.resources()[0]?.clusterId).toBe('cluster-a');
 
@@ -258,11 +268,10 @@ describe('useUnifiedResources', () => {
     let result: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']> | undefined;
     createRoot((d) => {
       dispose = d;
-      result = useUnifiedResources();
+      result = useUnifiedResources({ query: 'type=vm', cacheKey: 'vms' });
     });
 
-    await flushAsync();
-    await waitForResourceCount(() => result!.resources().length);
+    await result!.refetch();
 
     expect(result!.resources()[0]?.clusterId).toBe('cluster-b');
 
@@ -452,10 +461,10 @@ describe('useUnifiedResources', () => {
     let result: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']> | undefined;
     createRoot((d) => {
       dispose = d;
-      result = useUnifiedResources();
+      result = useUnifiedResources({ query: 'type=pod', cacheKey: 'pods' });
     });
 
-    await waitForResourceCount(() => result!.resources().length);
+    await result!.refetch();
     expect(result!.resources()[0].discoveryTarget).toEqual({
       resourceType: 'pod',
       agentId: 'cluster-agent-1',
@@ -704,12 +713,14 @@ describe('useUnifiedResources', () => {
     let first: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']> | undefined;
     createRoot((d) => {
       disposeFirst = d;
-      first = useUnifiedResources();
+      first = useUnifiedResources({ query: '', cacheKey: 'all-resources' });
     });
 
     await flushAsync();
     await waitForResourceCount(() => first!.resources().length);
     expect(apiFetchMock).toHaveBeenCalledTimes(1);
+    await flushAsync();
+    await flushAsync();
 
     disposeFirst();
 
@@ -717,10 +728,10 @@ describe('useUnifiedResources', () => {
     let second: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']> | undefined;
     createRoot((d) => {
       disposeSecond = d;
-      second = useUnifiedResources();
+      second = useUnifiedResources({ query: '', cacheKey: 'all-resources' });
     });
 
-    await flushAsync();
+    await waitForResourceCount(() => second!.resources().length);
     expect(apiFetchMock).toHaveBeenCalledTimes(1);
     expect(second!.resources().length).toBeGreaterThan(0);
 
@@ -753,6 +764,20 @@ describe('useUnifiedResources', () => {
     await flushAsync();
     await waitForResourceCount(() => allResources!.resources().length, 2);
     expect(apiFetchMock).toHaveBeenCalledTimes(1);
+    batch(() => {
+      setWsState('resources', [
+        wsResource,
+        createWsResource({
+          id: 'disk-1',
+          type: 'physical_disk',
+          name: 'nvme0n1',
+          displayName: 'nvme0n1',
+          platformId: 'disk-1',
+        }),
+      ]);
+      setWsState('lastUpdate', 1738843202500);
+    });
+    await flushAsync();
 
     disposeAll();
 
@@ -797,6 +822,21 @@ describe('useUnifiedResources', () => {
     await flushAsync();
     await waitForResourceCount(() => allResources!.resources().length, 2);
     expect(apiFetchMock).toHaveBeenCalledTimes(1);
+    batch(() => {
+      setWsState('resources', [
+        wsResource,
+        createWsResource({
+          id: 'disk-1',
+          type: 'physical_disk',
+          name: 'nvme0n1',
+          displayName: 'nvme0n1',
+          platformId: 'disk-1',
+        }),
+      ]);
+      setWsState('lastUpdate', 1738843202501);
+    });
+    await flushAsync();
+    await flushAsync();
 
     disposeAll();
 
@@ -807,7 +847,7 @@ describe('useUnifiedResources', () => {
       filtered = useUnifiedResources({ query: 'type=physical_disk' });
     });
 
-    await flushAsync();
+    await waitForValue(() => filtered!.resources().length, 1);
     expect(apiFetchMock).toHaveBeenCalledTimes(1);
     expect(filtered!.loading()).toBe(false);
     expect(filtered!.resources().map((resource) => resource.id)).toEqual(['disk-1']);
@@ -819,6 +859,10 @@ describe('useUnifiedResources', () => {
     apiFetchMock.mockResolvedValueOnce({
       ok: true,
       json: async () => ({ data: [] }),
+    });
+    batch(() => {
+      setWsState('resources', []);
+      setWsState('lastUpdate', 1738843202600);
     });
 
     let disposeFirst = () => {};
@@ -850,11 +894,11 @@ describe('useUnifiedResources', () => {
     disposeSecond();
   });
 
-  it('coalesces burst websocket updates into a single delayed refetch', async () => {
+  it('coalesces burst websocket updates into a single delayed refetch for unsupported queries', async () => {
     let dispose = () => {};
     createRoot((d) => {
       dispose = d;
-      useUnifiedResources();
+      useUnifiedResources({ query: 'status=online', cacheKey: 'status-online' });
     });
 
     await flushAsync();
@@ -882,7 +926,7 @@ describe('useUnifiedResources', () => {
     dispose();
   });
 
-  it('replaces stale canonical resources when websocket lastUpdate triggers a refetch', async () => {
+  it('replaces stale canonical resources through fallback refetches for unsupported queries', async () => {
     apiFetchMock
       .mockResolvedValueOnce({
         ok: true,
@@ -914,7 +958,7 @@ describe('useUnifiedResources', () => {
     let result: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']> | undefined;
     createRoot((d) => {
       dispose = d;
-      result = useUnifiedResources();
+      result = useUnifiedResources({ query: 'status=online', cacheKey: 'status-online' });
     });
 
     await flushAsync();
@@ -980,8 +1024,7 @@ describe('useUnifiedResources', () => {
       result = useUnifiedResources();
     });
 
-    await flushAsync();
-    await waitForResourceCount(() => result!.resources().length);
+    await waitForValue(() => result!.resources()[0]?.platformType, 'truenas');
 
     expect(result!.resources()[0]?.type).toBe('agent');
     expect(result!.resources()[0]?.platformType).toBe('truenas');
@@ -1046,8 +1089,7 @@ describe('useUnifiedResources', () => {
       result = useUnifiedResources();
     });
 
-    await flushAsync();
-    await waitForResourceCount(() => result!.resources().length);
+    await waitForValue(() => result!.resources()[0]?.recentChanges?.[0]?.id, 'change-1');
 
     expect(result!.resources()[0]?.recentChanges).toEqual([
       {
@@ -1089,8 +1131,7 @@ describe('useUnifiedResources', () => {
       result = useUnifiedResources();
     });
 
-    await flushAsync();
-    await waitForResourceCount(() => result!.resources().length);
+    await waitForValue(() => result!.resources()[0]?.platformType, 'proxmox-pve');
     expect(apiFetchMock).toHaveBeenCalledTimes(1);
     expect(result!.resources()[0]?.id).toBe('node-1');
     expect(result!.resources()[0]?.platformType).toBe('proxmox-pve');
@@ -1109,8 +1150,7 @@ describe('useUnifiedResources', () => {
     });
 
     eventBus.emit('org_switched', 'tenant-b');
-    await flushAsync();
-    await waitForResourceCount(() => result!.resources().length);
+    await waitForValue(() => result!.resources()[0]?.id, 'node-2');
 
     expect(apiFetchMock).toHaveBeenCalledTimes(2);
     expect(result!.resources()[0]?.id).toBe('node-2');
@@ -1156,6 +1196,8 @@ describe('useUnifiedResources', () => {
 
   it('uses the shared org scope helper for cache and fetch state', () => {
     expect(useUnifiedResourcesSource).toContain('normalizeOrgScope(getOrgID())');
+    expect(useUnifiedResourcesSource).toContain('supportsCanonicalWsHydration');
+    expect(useUnifiedResourcesSource).toContain('wsStore.state.resources');
     expect(useUnifiedResourcesSource).not.toContain('const DEFAULT_ORG_SCOPE = \'default\'');
     expect(useUnifiedResourcesSource).not.toContain('const normalizeOrgScope =');
     expect(useUnifiedResourcesSource).toContain('asTrimmedString');

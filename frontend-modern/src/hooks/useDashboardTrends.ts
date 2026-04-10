@@ -1,6 +1,6 @@
-import { createEffect, createMemo, createSignal, type Accessor } from 'solid-js';
+import { createEffect, createMemo, createSignal, onCleanup, type Accessor } from 'solid-js';
 import {
-  ChartsAPI as ChartService,
+  type ChartData,
   type HistoryTimeRange,
   type StorageSummaryChartsResponse,
   type TimeRange,
@@ -9,9 +9,18 @@ import {
   buildInfrastructureEmptyHistoryLabel,
   buildInfrastructureSummarySeries,
 } from '@/components/Infrastructure/infrastructureSummaryModel';
-import type { DashboardOverview } from '@/hooks/useDashboardOverview';
+import { eventBus } from '@/stores/events';
 import { isAgentFacetInfrastructureResource } from '@/utils/agentResources';
-import { fetchInfrastructureSummaryAndCache } from '@/utils/infrastructureSummaryCache';
+import { getOrgID } from '@/utils/apiClient';
+import {
+  fetchInfrastructureSummaryAndCache,
+  readInfrastructureSummaryCache,
+} from '@/utils/infrastructureSummaryCache';
+import { normalizeOrgScope } from '@/utils/orgScope';
+import {
+  fetchStorageSummaryAndCache,
+  readStorageSummaryCache,
+} from '@/utils/storageSummaryCache';
 import { isInfrastructure, isStorage, type Resource } from '@/types/resource';
 
 export type TrendPoint = {
@@ -38,18 +47,6 @@ export interface DashboardTrends {
   error: string | null;
 }
 
-interface DashboardTrendRequest {
-  infrastructure: string[];
-  storage: string[];
-  infrastructureRange: HistoryTimeRange;
-}
-
-interface DashboardTrendSnapshot {
-  infrastructure: DashboardTrends['infrastructure'];
-  storage: DashboardTrends['storage'];
-  error: string | null;
-}
-
 const INFRASTRUCTURE_RANGE: HistoryTimeRange = '1h';
 const STORAGE_RANGE: TimeRange = '24h';
 
@@ -61,17 +58,17 @@ function createEmptyTrendData(): TrendData {
   };
 }
 
-function createEmptyTrendSnapshot(): DashboardTrendSnapshot {
+function createEmptyInfrastructureTrends(): DashboardTrends['infrastructure'] {
   return {
-    infrastructure: {
-      cpu: new Map<string, TrendData>(),
-      memory: new Map<string, TrendData>(),
-      emptyMessage: null,
-    },
-    storage: {
-      capacity: null,
-    },
-    error: null,
+    cpu: new Map<string, TrendData>(),
+    memory: new Map<string, TrendData>(),
+    emptyMessage: null,
+  };
+}
+
+function createEmptyStorageTrends(): DashboardTrends['storage'] {
+  return {
+    capacity: null,
   };
 }
 
@@ -95,10 +92,6 @@ function averagePoints(points: TrendPoint[]): number {
   return points.reduce((sum, point) => sum + point.value, 0) / points.length;
 }
 
-function dedupeValues(values: string[]): string[] {
-  return Array.from(new Set(values));
-}
-
 function toInfrastructureSummaryRange(range: HistoryTimeRange): TimeRange {
   switch (range) {
     case '1h':
@@ -118,26 +111,18 @@ function toInfrastructureSummaryRange(range: HistoryTimeRange): TimeRange {
   }
 }
 
-async function fetchInfrastructureTrendSnapshot(
+function buildInfrastructureTrendSnapshot(
   resources: Resource[],
-  range: HistoryTimeRange,
-): Promise<DashboardTrends['infrastructure']> {
+  map: Map<string, ChartData>,
+  oldestDataTimestamp: number | null,
+): DashboardTrends['infrastructure'] {
   const infrastructureResources = resources.filter((resource) => isInfrastructure(resource));
   if (infrastructureResources.length === 0) {
-    return {
-      cpu: new Map<string, TrendData>(),
-      memory: new Map<string, TrendData>(),
-      emptyMessage: null,
-    };
+    return createEmptyInfrastructureTrends();
   }
 
   const agentFacetResources = resources.filter((resource) =>
     isAgentFacetInfrastructureResource(resource),
-  );
-
-  const { map, oldestDataTimestamp } = await fetchInfrastructureSummaryAndCache(
-    toInfrastructureSummaryRange(range),
-    { caller: 'useDashboardTrends' },
   );
   const summarySeries = buildInfrastructureSummarySeries(
     infrastructureResources,
@@ -257,140 +242,171 @@ export function extractTrendData(points: Array<{ timestamp: number; value: numbe
   };
 }
 
-async function fetchDashboardTrendSnapshot(
-  request: DashboardTrendRequest,
-  resources: Resource[],
-): Promise<DashboardTrendSnapshot> {
-  let firstError: string | null = null;
-  const captureError = (error: unknown) => {
-    if (firstError === null) {
-      firstError = toErrorMessage(error);
-    }
-  };
-
-  const [infrastructure, storageCapacity] = await Promise.all([
-    (async () => {
-      try {
-        return await fetchInfrastructureTrendSnapshot(resources, request.infrastructureRange);
-      } catch (error) {
-        captureError(error);
-        return createEmptyTrendSnapshot().infrastructure;
-      }
-    })(),
-    (async () => {
-      if (request.storage.length === 0) {
-        return null;
-      }
-      try {
-        const storageSummary = await ChartService.getStorageSummaryCharts(STORAGE_RANGE);
-        return extractTrendData(buildStorageCapacityTrendPoints(storageSummary.pools));
-      } catch (error) {
-        captureError(error);
-        return null;
-      }
-    })(),
-  ]);
-
+function buildStorageTrendSnapshot(
+  storageSummary: StorageSummaryChartsResponse | null,
+): DashboardTrends['storage'] {
+  if (!storageSummary) {
+    return createEmptyStorageTrends();
+  }
   return {
-    infrastructure,
-    storage: {
-      capacity: storageCapacity,
-    },
-    error: firstError,
+    capacity: extractTrendData(buildStorageCapacityTrendPoints(storageSummary.pools)),
   };
 }
 
 export function useDashboardTrends(
-  overview: Accessor<DashboardOverview>,
   resources: Accessor<Resource[]>,
   infrastructureRange?: Accessor<HistoryTimeRange>,
 ): Accessor<DashboardTrends> {
-  const [error, setError] = createSignal<string | null>(null);
+  const [infrastructureError, setInfrastructureError] = createSignal<string | null>(null);
+  const [storageError, setStorageError] = createSignal<string | null>(null);
+  const [infrastructureCharts, setInfrastructureCharts] = createSignal<Map<string, ChartData>>(
+    new Map(),
+  );
+  const [oldestDataTimestamp, setOldestDataTimestamp] = createSignal<number | null>(null);
+  const [storageSummary, setStorageSummary] = createSignal<StorageSummaryChartsResponse | null>(
+    null,
+  );
+  const [infrastructureLoading, setInfrastructureLoading] = createSignal(false);
+  const [storageLoading, setStorageLoading] = createSignal(false);
+  const [orgVersion, setOrgVersion] = createSignal(0);
 
-  const trendRequest = createMemo<DashboardTrendRequest>(() => {
-    const currentOverview = overview();
-    const currentResources = resources();
-    const infrastructureTargets = dedupeValues([
-      ...currentOverview.infrastructure.topCPU.map((item) => item.id),
-      ...currentOverview.infrastructure.topMemory.map((item) => item.id),
-    ]).sort();
-    const storageTargets = dedupeValues(
-      currentResources
-        .filter((resource) => isStorage(resource))
-        .map((resource) => {
-          const mt = resource.metricsTarget;
-          return mt ? mt.resourceId : resource.id;
-        }),
-    ).sort();
-
-    return {
-      infrastructure: infrastructureTargets,
-      storage: storageTargets,
-      infrastructureRange: infrastructureRange ? infrastructureRange() : INFRASTRUCTURE_RANGE,
-    };
+  const unsubscribeOrgSwitch = eventBus.on('org_switched', () => {
+    setOrgVersion((value) => value + 1);
   });
 
-  // Stabilize the request key: sort targets by ID so that metric-value
-  // fluctuations don't shuffle the ordering and trigger unnecessary refetches.
-  const requestKey = createMemo(() => {
-    const req = trendRequest();
-    const stableReq = {
-      infrastructure: [...req.infrastructure].sort(),
-      storage: [...req.storage].sort(),
-      infrastructureRange: req.infrastructureRange,
-    };
-    return JSON.stringify(stableReq);
+  onCleanup(() => {
+    unsubscribeOrgSwitch();
   });
 
-  const initialSnapshot = createEmptyTrendSnapshot();
-  const [snapshot, setSnapshot] = createSignal<DashboardTrendSnapshot>(initialSnapshot);
-  const [trendLoading, setTrendLoading] = createSignal(false);
+  const hasInfrastructureResources = createMemo(() =>
+    resources().some((resource) => isInfrastructure(resource)),
+  );
+  const hasStorageResources = createMemo(() => resources().some((resource) => isStorage(resource)));
 
-  // Track the latest request to discard stale responses.
-  let latestRequestId = 0;
+  const infrastructureScopeKey = createMemo(() => {
+    const version = orgVersion();
+    const orgScope = normalizeOrgScope(getOrgID());
+    const range = infrastructureRange ? infrastructureRange() : INFRASTRUCTURE_RANGE;
+    return JSON.stringify({
+      orgScope,
+      version,
+      hasInfrastructure: hasInfrastructureResources(),
+      infrastructureRange: range,
+    });
+  });
 
-  // Use manual async fetching instead of createResource so that refetches
-  // never trigger the app-level <Suspense> boundary (which would unmount
-  // the entire page and reset scroll position).
+  const storageScopeKey = createMemo(() => {
+    const version = orgVersion();
+    const orgScope = normalizeOrgScope(getOrgID());
+    return JSON.stringify({
+      orgScope,
+      version,
+      hasStorage: hasStorageResources(),
+      storageRange: STORAGE_RANGE,
+    });
+  });
+
+  let latestInfrastructureRequestId = 0;
+  let latestStorageRequestId = 0;
+
   createEffect(() => {
-    requestKey(); // track dependency — re-run effect when key changes
-    const request = trendRequest();
-    const currentResources = resources();
+    infrastructureScopeKey();
+    const range = infrastructureRange ? infrastructureRange() : INFRASTRUCTURE_RANGE;
+    const summaryRange = toInfrastructureSummaryRange(range);
 
-    // Skip empty requests (no targets yet).
-    if (request.infrastructure.length === 0 && request.storage.length === 0) return;
+    if (!hasInfrastructureResources()) {
+      setInfrastructureCharts(new Map());
+      setOldestDataTimestamp(null);
+      setInfrastructureError(null);
+      setInfrastructureLoading(false);
+      return;
+    }
 
-    const requestId = ++latestRequestId;
-    setTrendLoading(true);
+    const cached = readInfrastructureSummaryCache(summaryRange);
+    if (cached) {
+      setInfrastructureCharts(cached.map);
+      setOldestDataTimestamp(cached.oldestDataTimestamp);
+      setInfrastructureError(null);
+      setInfrastructureLoading(false);
+      return;
+    }
 
-    fetchDashboardTrendSnapshot(request, currentResources)
+    const requestId = ++latestInfrastructureRequestId;
+    setInfrastructureLoading(true);
+
+    fetchInfrastructureSummaryAndCache(summaryRange, {
+      caller: 'useDashboardTrends',
+    })
       .then((result) => {
-        if (requestId !== latestRequestId) return; // stale
-        setSnapshot(result);
-        if (result.error) {
-          setError(result.error);
-        } else {
-          setError(null);
-        }
+        if (requestId !== latestInfrastructureRequestId) return;
+        setInfrastructureCharts(result.map);
+        setOldestDataTimestamp(result.oldestDataTimestamp);
+        setInfrastructureError(null);
       })
       .catch((err) => {
-        if (requestId !== latestRequestId) return;
-        setError(toErrorMessage(err));
+        if (requestId !== latestInfrastructureRequestId) return;
+        if (!cached) {
+          setInfrastructureCharts(new Map());
+          setOldestDataTimestamp(null);
+        }
+        setInfrastructureError(toErrorMessage(err));
       })
       .finally(() => {
-        if (requestId === latestRequestId) {
-          setTrendLoading(false);
+        if (requestId === latestInfrastructureRequestId) {
+          setInfrastructureLoading(false);
         }
       });
   });
 
+  createEffect(() => {
+    storageScopeKey();
+
+    if (!hasStorageResources()) {
+      setStorageSummary(null);
+      setStorageError(null);
+      setStorageLoading(false);
+      return;
+    }
+
+    const cached = readStorageSummaryCache(STORAGE_RANGE);
+    if (cached) {
+      setStorageSummary(cached);
+    }
+
+    const requestId = ++latestStorageRequestId;
+    setStorageLoading(true);
+
+    fetchStorageSummaryAndCache(STORAGE_RANGE, { caller: 'useDashboardTrends' })
+      .then((result) => {
+        if (requestId !== latestStorageRequestId) return;
+        setStorageSummary(result);
+        setStorageError(null);
+      })
+      .catch((err) => {
+        if (requestId !== latestStorageRequestId) return;
+        if (!cached) {
+          setStorageSummary(null);
+        }
+        setStorageError(toErrorMessage(err));
+      })
+      .finally(() => {
+        if (requestId === latestStorageRequestId) {
+          setStorageLoading(false);
+        }
+      });
+  });
+
+  const infrastructureSnapshot = createMemo(() =>
+    buildInfrastructureTrendSnapshot(resources(), infrastructureCharts(), oldestDataTimestamp()),
+  );
+  const storageSnapshot = createMemo(() => buildStorageTrendSnapshot(storageSummary()));
+
   return createMemo<DashboardTrends>(() => {
-    const current = snapshot();
     return {
-      infrastructure: current.infrastructure,
-      storage: current.storage,
-      loading: trendLoading(),
-      error: error(),
+      infrastructure: infrastructureSnapshot(),
+      storage: storageSnapshot(),
+      loading: infrastructureLoading() || storageLoading(),
+      error: infrastructureError() ?? storageError(),
     };
   });
 }

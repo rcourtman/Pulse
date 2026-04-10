@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChartsAPI } from '@/api/charts';
 import StorageSummary from '@/components/Storage/StorageSummary';
 import storageSummarySource from '@/components/Storage/StorageSummary.tsx?raw';
+import storageSummaryCacheSource from '@/utils/storageSummaryCache.ts?raw';
 import type { Alert } from '@/types/api';
 import type { Resource, ResourceType } from '@/types/resource';
 import Storage from '@/components/Storage/Storage';
@@ -1715,10 +1716,13 @@ describe('Storage', () => {
     expect(params.get('status')).toBe('warning');
   });
 
-  it('versions same-tab storage summary cache keys with the summary contract', () => {
-    expect(storageSummarySource).toContain('const STORAGE_SUMMARY_IN_MEMORY_CACHE_VERSION = 1;');
-    expect(storageSummarySource).toContain(
-      "return `${STORAGE_SUMMARY_IN_MEMORY_CACHE_VERSION}::${normalizeOrgScope(getOrgID())}::${range}::${nodeId || '__all__'}`;",
+  it('routes storage summary fetches through the shared storage summary cache owner', () => {
+    expect(storageSummarySource).toContain('readStorageSummaryCache(range, nodeId)');
+    expect(storageSummarySource).toContain('fetchStorageSummaryAndCache(requestedRange, {');
+    expect(storageSummarySource).not.toContain('ChartsAPI.getStorageSummaryCharts(');
+    expect(storageSummaryCacheSource).toContain('const STORAGE_SUMMARY_CACHE_VERSION = 1;');
+    expect(storageSummaryCacheSource).toContain(
+      "return `${STORAGE_SUMMARY_CACHE_VERSION}::${orgScope}::${range}::${nodeId || '__all__'}`;",
     );
   });
 });

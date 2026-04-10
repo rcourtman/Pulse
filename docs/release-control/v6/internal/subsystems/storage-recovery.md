@@ -55,6 +55,8 @@ querying, and the operator-facing storage health presentation layer.
 28. `frontend-modern/src/utils/recoverySummaryPresentation.ts`
 29. `frontend-modern/src/utils/recoveryTablePresentation.ts`
 30. `frontend-modern/src/utils/textPresentation.ts`
+31. `frontend-modern/src/components/Storage/StorageSummary.tsx`
+32. `frontend-modern/src/utils/storageSummaryCache.ts`
 
 ## Shared Boundaries
 
@@ -204,6 +206,14 @@ querying, and the operator-facing storage health presentation layer.
     runtime as populated mock inventory, but they must not expose
     `demo_fixtures`, billing identity, or alternate entitlement semantics as
     recovery-local transport or operator-facing storage metadata.
+37. Keep dashboard storage summary fetches scope-owned on the shared storage
+    summary cache. `frontend-modern/src/components/Storage/StorageSummary.tsx`,
+    `frontend-modern/src/utils/storageSummaryCache.ts`, and
+    `frontend-modern/src/pages/Dashboard.tsx` may reuse cached org/range
+    storage summaries for first paint, but they must not refetch
+    `/api/storage-charts` once per additional dashboard resource page or invent
+    a dashboard-only storage summary transport path outside the canonical cache
+    owner.
 
 ## Forbidden Paths
 

@@ -51,7 +51,7 @@ export default function Dashboard() {
 
   const overview = useDashboardOverview(resources, alertsList);
   const [trendRange, setTrendRange] = createSignal<HistoryTimeRange>('1h');
-  const trends = useDashboardTrends(overview, resources, trendRange);
+  const trends = useDashboardTrends(resources, trendRange);
   const layout = useDashboardLayout();
   const actions = useDashboardActions(alertsList);
   const recoverySummary = useDashboardRecovery();

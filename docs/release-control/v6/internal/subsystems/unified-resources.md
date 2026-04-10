@@ -146,6 +146,12 @@ assembly branch.
 6. Add canonical governed name-resolution or policy-aware resource lookup behavior through `internal/unifiedresources/resolve.go` and `internal/unifiedresources/resolve_context.go`
 7. Add or change resource drawer timeline/facet presentation through `frontend-modern/src/components/Infrastructure/ResourceDetailDrawer.tsx`, `frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx`, `frontend-modern/src/components/Infrastructure/ResourceDetailDrawerDebugTab.tsx`, `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerState.ts`, `frontend-modern/src/components/Infrastructure/ResourceFacetSummary.tsx`, `frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts`, and the governed `internal/api/resources.go` facet/timeline contract together
 8. Add or change discovery-support runtime under the resource drawer through `frontend-modern/src/components/Discovery/DiscoveryTab.tsx` for shell/presentation ownership and `frontend-modern/src/components/Discovery/useDiscoveryTabState.ts` for fetch, websocket-progress, and notes-mutation ownership
+9. Keep dashboard and infrastructure freshness on the canonical unified-resource
+   ownership path. `frontend-modern/src/hooks/useUnifiedResources.ts` may use
+   REST for initial hydration and unsupported filtered queries, but supported
+   snapshot freshness must come from websocket `state.resources` instead of
+   layering confirmatory dashboard/infrastructure REST refetch loops over
+   already-owned resource updates.
 
 ## Forbidden Paths
 
@@ -1669,8 +1675,11 @@ rebuilding resource-change labels locally.
 That frontend consumer rule now applies on the canonical decode path too:
 `frontend-modern/src/hooks/useUnifiedResources.ts` must preserve backend-owned
 policy metadata, AI-safe summaries, recent changes, and facet counts as
-first-class `Resource` fields, and it must treat the backend refresh path as
-the source of truth instead of re-normalizing those values locally.
+first-class `Resource` fields. It may use the backend refresh path for initial
+hydration and unsupported filtered queries, but canonical live freshness for
+supported resource snapshots must flow from websocket `state.resources`
+instead of layering confirmatory REST refresh loops on top of already-owned
+resource updates.
 Shared infrastructure consumers such as the unified resource table and detail
 drawer must present that owned metadata through shared helpers instead of
 reconstructing privacy posture from display names, source types, or other

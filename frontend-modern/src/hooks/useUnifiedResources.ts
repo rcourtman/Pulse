@@ -789,6 +789,21 @@ const parseUnifiedResourcesTypeFilter = (query: string): Set<ResourceType> | nul
   return types.size > 0 ? types : null;
 };
 
+const filterCanonicalUnifiedResources = (
+  resources: Resource[],
+  query: string,
+  typeFilter: Set<ResourceType> | null,
+): Resource[] | null => {
+  const normalizedQuery = normalizeUnifiedResourcesQuery(query);
+  if (normalizedQuery === '') {
+    return resources;
+  }
+  if (!typeFilter) {
+    return null;
+  }
+  return resources.filter((resource) => typeFilter.has(resolveType(resource.type)));
+};
+
 const seedUnifiedResourcesCacheFromAllResources = (
   entry: UnifiedResourcesCacheEntry,
   cacheKey: string,
@@ -906,6 +921,8 @@ type UseUnifiedResourcesOptions = {
 export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
   const query = normalizeUnifiedResourcesQuery(options?.query ?? DEFAULT_UNIFIED_RESOURCES_QUERY);
   const cacheKey = (options?.cacheKey || query || 'all').trim();
+  const typeFilter = parseUnifiedResourcesTypeFilter(query);
+  const supportsCanonicalWsHydration = query === '' || typeFilter !== null;
   const [orgScope, setOrgScope] = createSignal(normalizeOrgScope(getOrgID()));
   const resolveScopedCacheKey = () => buildScopedUnifiedResourcesCacheKey(cacheKey, orgScope());
   let cacheEntry = seedUnifiedResourcesCacheFromAllResources(
@@ -925,6 +942,7 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
   let inFlightRefetch: Promise<Resource[]> | null = null;
   let wsInitialized = false;
   let lastWsUpdateToken = '';
+  let blockedWsHydrationToken: string | null = null;
   let scopeVersion = 0;
 
   const applyResources = (
@@ -1028,6 +1046,49 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
   };
 
   createEffect(() => {
+    const currentOrgScope = orgScope();
+    if (!supportsCanonicalWsHydration) {
+      return;
+    }
+    if (!wsStore.connected() || !wsStore.initialDataReceived()) {
+      return;
+    }
+
+    const lastUpdateToken = String(wsStore.state.lastUpdate ?? '');
+    if (blockedWsHydrationToken !== null) {
+      if (
+        lastUpdateToken.length === 0 ||
+        lastUpdateToken === '0' ||
+        lastUpdateToken === blockedWsHydrationToken
+      ) {
+        return;
+      }
+      blockedWsHydrationToken = null;
+    }
+
+    const wsResources = Array.isArray(wsStore.state.resources) ? wsStore.state.resources : [];
+    const projectedResources = filterCanonicalUnifiedResources(wsResources, query, typeFilter);
+    const now = Date.now();
+    const allResourcesEntry = getUnifiedResourcesCacheEntry(
+      buildScopedUnifiedResourcesCacheKey(ALL_RESOURCES_CACHE_KEY, currentOrgScope),
+    );
+    setUnifiedResourcesCache(allResourcesEntry, wsResources, now);
+    allResourcesEntry.lastFetchAt = now;
+
+    if (projectedResources === null) {
+      return;
+    }
+
+    setUnifiedResourcesCache(cacheEntry, projectedResources, now);
+    cacheEntry.lastFetchAt = now;
+    batch(() => {
+      setResources(reconcile(projectedResources, { key: 'id' }));
+      setError(undefined);
+      setLoading(false);
+    });
+  });
+
+  createEffect(() => {
     orgScope();
 
     if (!wsStore.connected() || !wsStore.initialDataReceived()) {
@@ -1041,7 +1102,9 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
     if (!wsInitialized) {
       wsInitialized = true;
       lastWsUpdateToken = lastUpdateToken;
-      scheduleRefetch();
+      if (!supportsCanonicalWsHydration) {
+        scheduleRefetch();
+      }
       return;
     }
 
@@ -1050,7 +1113,9 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
     }
 
     lastWsUpdateToken = lastUpdateToken;
-    scheduleRefetch();
+    if (!supportsCanonicalWsHydration) {
+      scheduleRefetch();
+    }
   });
 
   const unsubscribeOrgSwitch = eventBus.on('org_switched', (nextOrgID?: string) => {
@@ -1060,6 +1125,9 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
     }
 
     scopeVersion += 1;
+    blockedWsHydrationToken = supportsCanonicalWsHydration
+      ? String(wsStore.state.lastUpdate ?? '')
+      : null;
     setOrgScope(nextOrgScope);
     cacheEntry = seedUnifiedResourcesCacheFromAllResources(
       getUnifiedResourcesCacheEntry(resolveScopedCacheKey()),

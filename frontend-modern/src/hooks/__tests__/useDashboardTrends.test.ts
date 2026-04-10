@@ -1,11 +1,79 @@
-import { describe, expect, it } from 'vitest';
+import { createRoot, createSignal } from 'solid-js';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { Resource } from '@/types/resource';
+
+vi.mock('@/utils/apiClient', () => ({
+  getOrgID: () => 'test-org',
+}));
+
+vi.mock('@/stores/events', () => ({
+  eventBus: {
+    on: vi.fn(() => () => {}),
+  },
+}));
+
+vi.mock('@/utils/infrastructureSummaryCache', () => ({
+  fetchInfrastructureSummaryAndCache: vi.fn(),
+  readInfrastructureSummaryCache: vi.fn(),
+}));
+
+vi.mock('@/utils/storageSummaryCache', () => ({
+  fetchStorageSummaryAndCache: vi.fn(),
+  readStorageSummaryCache: vi.fn(),
+}));
+
+vi.mock('@/components/Infrastructure/infrastructureSummaryModel', () => ({
+  buildInfrastructureEmptyHistoryLabel: vi.fn(() => null),
+  buildInfrastructureSummarySeries: vi.fn((resources: Resource[]) =>
+    resources
+      .filter((resource) =>
+        ['agent', 'docker-host', 'k8s-cluster', 'k8s-node'].includes(resource.type),
+      )
+      .map((resource) => ({
+        id: resource.id,
+        cpu: [
+          { timestamp: 1_700_000_000_000, value: 20 },
+          { timestamp: 1_700_000_060_000, value: 30 },
+        ],
+        memory: [
+          { timestamp: 1_700_000_000_000, value: 40 },
+          { timestamp: 1_700_000_060_000, value: 50 },
+        ],
+      })),
+  ),
+}));
+
 import useDashboardTrendsSource from '@/hooks/useDashboardTrends.ts?raw';
 import {
   buildStorageCapacityTrendPoints,
   computeTrendDelta,
   extractTrendData,
+  useDashboardTrends,
   type TrendPoint,
 } from '@/hooks/useDashboardTrends';
+import {
+  fetchInfrastructureSummaryAndCache,
+  readInfrastructureSummaryCache,
+} from '@/utils/infrastructureSummaryCache';
+import {
+  fetchStorageSummaryAndCache,
+  readStorageSummaryCache,
+} from '@/utils/storageSummaryCache';
+
+function createResource(partial: Partial<Resource> & Pick<Resource, 'id' | 'type'>): Resource {
+  return {
+    ...partial,
+    id: partial.id,
+    type: partial.type,
+    name: partial.name ?? partial.id,
+    displayName: partial.displayName ?? partial.name ?? partial.id,
+    platformId: partial.platformId ?? 'platform-1',
+    platformType: partial.platformType ?? 'proxmox',
+    sourceType: partial.sourceType ?? 'proxmox',
+    status: partial.status ?? 'online',
+    lastSeen: partial.lastSeen ?? 1_700_000_000_000,
+  } as Resource;
+}
 
 function createPoints(values: number[]): TrendPoint[] {
   const start = 1_700_000_000_000;
@@ -122,16 +190,139 @@ describe('buildStorageCapacityTrendPoints', () => {
   });
 });
 
+describe('useDashboardTrends fetch scoping', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(readInfrastructureSummaryCache).mockReturnValue(null);
+    vi.mocked(fetchInfrastructureSummaryAndCache).mockResolvedValue({
+      map: new Map(),
+      oldestDataTimestamp: null,
+    });
+    vi.mocked(readStorageSummaryCache).mockReturnValue(null);
+    vi.mocked(fetchStorageSummaryAndCache).mockResolvedValue({
+      pools: {
+        'pool-a': {
+          name: 'Pool A',
+          usage: [],
+          used: createPoints([400, 500]),
+          avail: createPoints([600, 500]),
+        },
+      },
+      disks: {},
+      stats: {} as never,
+    });
+  });
+
+  it('does not refetch dashboard summary charts as paginated resources expand within the same scope', async () => {
+    const infrastructureA = createResource({ id: 'infra-a', type: 'agent' });
+    const infrastructureB = createResource({ id: 'infra-b', type: 'agent' });
+    const storageA = createResource({ id: 'storage-a', type: 'storage' });
+    const storageB = createResource({ id: 'storage-b', type: 'storage' });
+
+    let dispose!: () => void;
+    let trends!: ReturnType<typeof useDashboardTrends>;
+    let setResources!: (value: Resource[]) => void;
+
+    createRoot((d) => {
+      dispose = d;
+      const [resources, setResourcesSignal] = createSignal<Resource[]>([infrastructureA, storageA]);
+      setResources = setResourcesSignal;
+      const [range] = createSignal<'1h'>('1h');
+      trends = useDashboardTrends(resources, range);
+    });
+
+    await vi.waitFor(() => {
+      expect(vi.mocked(fetchInfrastructureSummaryAndCache)).toHaveBeenCalledTimes(1);
+      expect(vi.mocked(fetchStorageSummaryAndCache)).toHaveBeenCalledTimes(1);
+    });
+
+    setResources([infrastructureA, infrastructureB, storageA, storageB]);
+
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(vi.mocked(fetchInfrastructureSummaryAndCache)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(fetchStorageSummaryAndCache)).toHaveBeenCalledTimes(1);
+    expect(Array.from(trends().infrastructure.cpu.keys())).toEqual(['infra-a', 'infra-b']);
+
+    dispose();
+  });
+
+  it('refetches infrastructure charts when the dashboard trend range changes without refetching storage charts', async () => {
+    const infrastructureA = createResource({ id: 'infra-a', type: 'agent' });
+    const storageA = createResource({ id: 'storage-a', type: 'storage' });
+
+    let dispose!: () => void;
+    let setRange!: (value: '1h' | '12h') => void;
+
+    createRoot((d) => {
+      dispose = d;
+      const [resources] = createSignal<Resource[]>([infrastructureA, storageA]);
+      const [range, setRangeSignal] = createSignal<'1h' | '12h'>('1h');
+      setRange = setRangeSignal;
+      useDashboardTrends(resources, range);
+    });
+
+    await vi.waitFor(() => {
+      expect(vi.mocked(fetchInfrastructureSummaryAndCache)).toHaveBeenCalledTimes(1);
+      expect(vi.mocked(fetchStorageSummaryAndCache)).toHaveBeenCalledTimes(1);
+    });
+
+    setRange('12h');
+
+    await vi.waitFor(() => {
+      expect(vi.mocked(fetchInfrastructureSummaryAndCache)).toHaveBeenCalledTimes(2);
+    });
+
+    expect(vi.mocked(fetchStorageSummaryAndCache)).toHaveBeenCalledTimes(1);
+
+    dispose();
+  });
+
+  it('reuses a fresh infrastructure summary cache instead of immediately refetching the same scope', async () => {
+    const infrastructureA = createResource({ id: 'infra-a', type: 'agent' });
+    const storageA = createResource({ id: 'storage-a', type: 'storage' });
+
+    vi.mocked(readInfrastructureSummaryCache).mockReturnValue({
+      map: new Map(),
+      oldestDataTimestamp: null,
+      cachedAt: Date.now(),
+    });
+
+    let dispose!: () => void;
+
+    createRoot((d) => {
+      dispose = d;
+      const [resources] = createSignal<Resource[]>([infrastructureA, storageA]);
+      const [range] = createSignal<'1h'>('1h');
+      useDashboardTrends(resources, range);
+    });
+
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(vi.mocked(fetchInfrastructureSummaryAndCache)).not.toHaveBeenCalled();
+    expect(vi.mocked(fetchStorageSummaryAndCache)).toHaveBeenCalledTimes(1);
+
+    dispose();
+  });
+});
+
 describe('useDashboardTrends infrastructure routing', () => {
   it('routes dashboard infrastructure sparklines through the infrastructure summary chart cache', () => {
+    expect(useDashboardTrendsSource).toContain('readInfrastructureSummaryCache');
     expect(useDashboardTrendsSource).toContain('fetchInfrastructureSummaryAndCache');
     expect(useDashboardTrendsSource).toContain("caller: 'useDashboardTrends'");
+    expect(useDashboardTrendsSource).toContain('const infrastructureScopeKey');
+    expect(useDashboardTrendsSource).toContain('const hasInfrastructureResources');
     expect(useDashboardTrendsSource).not.toContain('request.cpu.map(async');
     expect(useDashboardTrendsSource).not.toContain('request.memory.map(async');
   });
 
   it('routes storage trends through the storage summary charts endpoint', () => {
-    expect(useDashboardTrendsSource).toContain('ChartService.getStorageSummaryCharts(STORAGE_RANGE)');
+    expect(useDashboardTrendsSource).toContain('readStorageSummaryCache');
+    expect(useDashboardTrendsSource).toContain('fetchStorageSummaryAndCache(STORAGE_RANGE');
+    expect(useDashboardTrendsSource).toContain('const storageScopeKey');
     expect(useDashboardTrendsSource).toContain('buildStorageCapacityTrendPoints(storageSummary.pools)');
     expect(useDashboardTrendsSource).not.toContain('metrics-store/history');
     expect(useDashboardTrendsSource).not.toContain('request.storage.map(async');

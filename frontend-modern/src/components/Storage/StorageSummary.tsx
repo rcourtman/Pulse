@@ -12,7 +12,6 @@ import { SummaryMetricCard } from '@/components/shared/SummaryMetricCard';
 import { SummarySynchronizedReadout } from '@/components/shared/SummarySynchronizedReadout';
 import { buildInteractiveSparklineSynchronizedReadout } from '@/components/shared/interactiveSparklineModel';
 import {
-  ChartsAPI,
   type MetricPoint,
   type TimeRange,
   type StorageSummaryChartsResponse,
@@ -22,33 +21,14 @@ import {
   type SummaryTimeRange,
 } from '@/components/shared/summaryTimeRange';
 import { formatBytes } from '@/utils/format';
-import { getOrgID } from '@/utils/apiClient';
-import { normalizeOrgScope } from '@/utils/orgScope';
 import { eventBus } from '@/stores/events';
 import { getChartSeriesColor } from '@/utils/chartSeriesPresentation';
-
-// ---------------------------------------------------------------------------
-// Cache (org-scoped to prevent cross-tenant data leakage)
-// ---------------------------------------------------------------------------
+import {
+  fetchStorageSummaryAndCache,
+  readStorageSummaryCache,
+} from '@/utils/storageSummaryCache';
 
 const POLL_INTERVAL_MS = 30_000;
-const STORAGE_SUMMARY_IN_MEMORY_CACHE_VERSION = 1;
-const inMemoryCache = new Map<string, StorageSummaryChartsResponse>();
-
-function inMemoryCacheKey(range: TimeRange, nodeId?: string): string {
-  return `${STORAGE_SUMMARY_IN_MEMORY_CACHE_VERSION}::${normalizeOrgScope(getOrgID())}::${range}::${nodeId || '__all__'}`;
-}
-
-// Clear in-memory cache on org switch to prevent cross-org data leakage.
-const unsubscribeStorageOrgSwitch = eventBus.on('org_switched', () => {
-  inMemoryCache.clear();
-});
-
-if (import.meta.hot) {
-  import.meta.hot.dispose(() => {
-    unsubscribeStorageOrgSwitch();
-  });
-}
 
 // ---------------------------------------------------------------------------
 // Props
@@ -105,6 +85,26 @@ const StorageSummary: Component<StorageSummaryProps> = (props) => {
     return id && id !== 'all' ? id : undefined;
   });
 
+  const awaitAbortable = <T,>(promise: Promise<T>, signal: AbortSignal): Promise<T> => {
+    if (signal.aborted) {
+      return Promise.reject(new DOMException('Aborted', 'AbortError'));
+    }
+    return new Promise<T>((resolve, reject) => {
+      const onAbort = () => reject(new DOMException('Aborted', 'AbortError'));
+      signal.addEventListener('abort', onAbort, { once: true });
+      promise.then(
+        (value) => {
+          signal.removeEventListener('abort', onAbort);
+          resolve(value);
+        },
+        (error) => {
+          signal.removeEventListener('abort', onAbort);
+          reject(error);
+        },
+      );
+    });
+  };
+
   // Fetch data with race-condition prevention via request ID
   const fetchData = async (options?: { prioritize?: boolean }) => {
     const prioritize = options?.prioritize === true;
@@ -115,18 +115,19 @@ const StorageSummary: Component<StorageSummaryProps> = (props) => {
 
     const requestedRange = selectedRange();
     const requestedNodeId = selectedNodeId();
-    // Capture scope before async gap to prevent cross-org/scope cache writes
-    const capturedCacheKey = inMemoryCacheKey(requestedRange, requestedNodeId);
     const controller = new AbortController();
     const requestId = ++activeFetchRequest;
     activeFetchController = controller;
 
     try {
-      const response = await ChartsAPI.getStorageSummaryCharts(requestedRange, controller.signal, {
-        nodeId: requestedNodeId,
-      });
+      const response = await awaitAbortable(
+        fetchStorageSummaryAndCache(requestedRange, {
+          caller: 'StorageSummary',
+          nodeId: requestedNodeId,
+        }),
+        controller.signal,
+      );
       if (requestId !== activeFetchRequest) return; // stale response
-      inMemoryCache.set(capturedCacheKey, response);
       setData(response);
       setFetchFailed(false);
     } catch (err: unknown) {
@@ -134,7 +135,7 @@ const StorageSummary: Component<StorageSummaryProps> = (props) => {
       if (requestId !== activeFetchRequest) return; // stale error
       setFetchFailed(true);
       // Fall back to cache
-      const cached = inMemoryCache.get(capturedCacheKey);
+      const cached = readStorageSummaryCache(requestedRange, requestedNodeId);
       if (cached) setData(cached);
     } finally {
       if (activeFetchController === controller) {
@@ -160,7 +161,7 @@ const StorageSummary: Component<StorageSummaryProps> = (props) => {
     }
 
     // Try cache first for instant display
-    const cached = inMemoryCache.get(inMemoryCacheKey(range, nodeId));
+    const cached = readStorageSummaryCache(range, nodeId);
     if (cached) {
       setData(cached);
       setLoaded(true);

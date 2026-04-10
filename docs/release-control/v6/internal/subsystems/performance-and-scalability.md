@@ -9,7 +9,7 @@
   "contract_file": "docs/release-control/v6/internal/subsystems/performance-and-scalability.md",
   "status_file": "docs/release-control/v6/internal/status.json",
   "registry_file": "docs/release-control/v6/internal/subsystems/registry.json",
-  "dependency_subsystem_ids": ["api-contracts", "frontend-primitives"]
+  "dependency_subsystem_ids": ["api-contracts", "frontend-primitives", "unified-resources"]
 }
 ```
 
@@ -119,6 +119,11 @@ regression protection.
 97. `frontend-modern/src/components/Infrastructure/InfrastructureSummary.tsx`
 98. `frontend-modern/src/components/Infrastructure/useInfrastructureSummaryState.ts`
 99. `frontend-modern/src/components/Infrastructure/infrastructureSummaryModel.ts`
+100. `frontend-modern/src/hooks/useDashboardTrends.ts`
+101. `frontend-modern/src/hooks/__tests__/useDashboardTrends.test.ts`
+102. `frontend-modern/src/components/Storage/DashboardStoragePanel.tsx`
+103. `frontend-modern/src/components/Storage/StorageSummary.tsx`
+104. `frontend-modern/src/utils/storageSummaryCache.ts`
 
 ## Shared Boundaries
 
@@ -193,6 +198,7 @@ regression protection.
     chart-transport hot paths, fold summary-card caching into commercial
     callback behavior, or reuse those public auth endpoints as a justification
     for relaxing the protected history payload budgets that belong elsewhere.
+30. Keep dashboard summary-chart fetches scope-owned rather than pagination-owned: `frontend-modern/src/hooks/useDashboardTrends.ts` must hydrate infrastructure and storage summaries once per org/range scope from the canonical summary caches and recompute card presentation locally as additional resource pages arrive, rather than refetching the infrastructure-summary transport in `frontend-modern/src/components/Infrastructure/useInfrastructureSummaryState.ts` or the storage-summary transport in `frontend-modern/src/utils/storageSummaryCache.ts` for every resource-id expansion on the same dashboard load.
 
 ## Forbidden Paths
 
@@ -258,6 +264,14 @@ chart.
 Infrastructure cluster-header hover now belongs to that same bounded hot path:
 hovering a grouped infrastructure header must scope the top cards to that
 cluster's unified-resource members through the shared group/entity interaction
+That same hot path now also owns dashboard freshness discipline. Supported
+unified-resource dashboard reads may hydrate from REST for first paint, but
+once websocket `state.resources` is available they must consume that canonical
+live snapshot directly instead of turning each websocket update into a second
+REST fetch. Dashboard trend loading must also key off stable target identity
+and selected range only; reconciled resource snapshots that do not change the
+effective target set must not trigger duplicate infrastructure or storage
+chart requests.
 contract instead of inventing an infrastructure-local summary filter branch.
 For shared line charts on that hot path, the shared sparkline primitive may
 isolate the selected series inside the existing render budget, but that

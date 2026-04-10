@@ -158,6 +158,11 @@ describe('Dashboard page module contract', () => {
     expect(dashboardPageSource).toContain("cacheKey: 'all-resources'");
   });
 
+  it('routes dashboard trend hydration through the shared dashboard resources snapshot', () => {
+    expect(dashboardPageSource).toContain('const trends = useDashboardTrends(resources, trendRange);');
+    expect(dashboardPageSource).not.toContain('useDashboardTrends(overview, resources, trendRange)');
+  });
+
   it('renders loading skeleton blocks when resources are loading', () => {
     unifiedLoading = true;
 
