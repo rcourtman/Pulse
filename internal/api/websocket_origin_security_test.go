@@ -17,7 +17,7 @@ func resetTrustedProxyCIDRsForTests() {
 	trustedProxyOnce = sync.Once{}
 }
 
-func newWebSocketRouter(t *testing.T, allowedOrigins []string, tokenRecord config.APITokenRecord) (*httptest.Server, func()) {
+func newWebSocketRouterWithServer(t *testing.T, allowedOrigins []string, tokenRecord config.APITokenRecord, serverFactory func(*testing.T, http.Handler) *httptest.Server) (*httptest.Server, func()) {
 	t.Helper()
 
 	cfg := newTestConfigWithTokens(t, tokenRecord)
@@ -27,7 +27,7 @@ func newWebSocketRouter(t *testing.T, allowedOrigins []string, tokenRecord confi
 	go hub.Run()
 
 	router := NewRouter(cfg, nil, nil, hub, nil, "1.0.0")
-	server := newIPv4HTTPServer(t, router.Handler())
+	server := serverFactory(t, router.Handler())
 
 	cleanup := func() {
 		server.Close()
@@ -35,6 +35,16 @@ func newWebSocketRouter(t *testing.T, allowedOrigins []string, tokenRecord confi
 	}
 
 	return server, cleanup
+}
+
+func newWebSocketRouter(t *testing.T, allowedOrigins []string, tokenRecord config.APITokenRecord) (*httptest.Server, func()) {
+	t.Helper()
+	return newWebSocketRouterWithServer(t, allowedOrigins, tokenRecord, newIPv4HTTPServer)
+}
+
+func newWebSocketRouterIPv6(t *testing.T, allowedOrigins []string, tokenRecord config.APITokenRecord) (*httptest.Server, func()) {
+	t.Helper()
+	return newWebSocketRouterWithServer(t, allowedOrigins, tokenRecord, newIPv6HTTPServer)
 }
 
 func TestWebSocketOriginRejectedWhenNotAllowed(t *testing.T) {
@@ -151,6 +161,34 @@ func TestWebSocketOriginAllowsTrustedForwardedHostedOrigin(t *testing.T) {
 	conn, resp, err := websocket.DefaultDialer.Dial(wsURL, headers)
 	if err != nil {
 		t.Fatalf("expected websocket connection behind trusted proxy, got %v", err)
+	}
+	if resp == nil || resp.StatusCode != http.StatusSwitchingProtocols {
+		conn.Close()
+		t.Fatalf("expected 101 switching protocols, got %v", resp)
+	}
+	conn.Close()
+}
+
+func TestWebSocketOriginAllowsTrustedForwardedHostedOriginIPv6Loopback(t *testing.T) {
+	t.Setenv("PULSE_TRUSTED_PROXY_CIDRS", "::1/128")
+	resetTrustedProxyCIDRsForTests()
+
+	rawToken := "ws-origin-forwarded-ipv6-allow-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeMonitoringRead}, nil)
+
+	server, cleanup := newWebSocketRouterIPv6(t, []string{}, record)
+	defer cleanup()
+
+	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/ws?org_id=default"
+	headers := http.Header{}
+	headers.Set("X-API-Token", rawToken)
+	headers.Set("Origin", "https://tenant.example.com")
+	headers.Set("X-Forwarded-Proto", "https")
+	headers.Set("X-Forwarded-Host", "tenant.example.com")
+
+	conn, resp, err := websocket.DefaultDialer.Dial(wsURL, headers)
+	if err != nil {
+		t.Fatalf("expected websocket connection behind trusted IPv6 loopback proxy, got %v", err)
 	}
 	if resp == nil || resp.StatusCode != http.StatusSwitchingProtocols {
 		conn.Close()
