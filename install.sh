@@ -91,6 +91,7 @@ SKIP_DOWNLOAD=false
 IN_CONTAINER=false
 IN_DOCKER=false
 ENABLE_AUTO_UPDATES=false
+AUTO_UPDATE_CHOICE_EXPLICIT=false
 FORCE_VERSION=""
 FORCE_CHANNEL=""
 ARCHIVE_OVERRIDE="${PULSE_ARCHIVE_PATH:-}"
@@ -914,10 +915,17 @@ create_lxc_container() {
         fi
         
         auto_updates_flag=""
+        if [[ "$AUTO_UPDATE_CHOICE_EXPLICIT" == "true" ]]; then
+            if [[ "$ENABLE_AUTO_UPDATES" == "true" ]]; then
+                auto_updates_flag="--enable-auto-updates"
+            else
+                auto_updates_flag="--disable-auto-updates"
+            fi
+        fi
         if [[ "$BUILD_FROM_SOURCE" == "true" ]]; then
             echo
             print_info "Skipping auto-update configuration: source builds don't support automatic release updates."
-        else
+        elif [[ "$AUTO_UPDATE_CHOICE_EXPLICIT" != "true" ]]; then
             echo
             # Ask about auto-updates
             echo "Enable automatic updates?"
@@ -1038,10 +1046,17 @@ create_lxc_container() {
             frontend_port=7655
         fi
         auto_updates_flag=""
+        if [[ "$AUTO_UPDATE_CHOICE_EXPLICIT" == "true" ]]; then
+            if [[ "$ENABLE_AUTO_UPDATES" == "true" ]]; then
+                auto_updates_flag="--enable-auto-updates"
+            else
+                auto_updates_flag="--disable-auto-updates"
+            fi
+        fi
         if [[ "$BUILD_FROM_SOURCE" == "true" ]]; then
             echo
             print_info "Skipping auto-update configuration: source builds don't support automatic release updates."
-        else
+        elif [[ "$AUTO_UPDATE_CHOICE_EXPLICIT" != "true" ]]; then
             # Quick mode should ask about auto-updates too
             echo
             echo "Enable automatic updates?"
@@ -3832,7 +3847,7 @@ main() {
             
             # Check if auto-updates should be offered when using --version
             # Same logic as update/reinstall paths
-            if [[ "$ENABLE_AUTO_UPDATES" != "true" ]] && [[ "$IN_DOCKER" != "true" ]]; then
+            if [[ "$AUTO_UPDATE_CHOICE_EXPLICIT" != "true" ]] && [[ "$ENABLE_AUTO_UPDATES" != "true" ]] && [[ "$IN_DOCKER" != "true" ]]; then
                 local should_ask_about_updates=false
                 local prompt_reason=""
                 
@@ -4045,7 +4060,7 @@ main() {
                 # Offer if: not already forced by flag, not in Docker, and either:
                 # 1. Timer doesn't exist (new feature), OR
                 # 2. Timer exists but autoUpdateEnabled is false (misconfigured)
-                if [[ "$ENABLE_AUTO_UPDATES" != "true" ]] && [[ "$IN_DOCKER" != "true" ]]; then
+                if [[ "$AUTO_UPDATE_CHOICE_EXPLICIT" != "true" ]] && [[ "$ENABLE_AUTO_UPDATES" != "true" ]] && [[ "$IN_DOCKER" != "true" ]]; then
                     local should_ask_about_updates=false
                     local prompt_reason=""
                     
@@ -4100,7 +4115,7 @@ main() {
                 # Offer if: not already forced by flag, not in Docker, and either:
                 # 1. Timer doesn't exist (new feature), OR
                 # 2. Timer exists but autoUpdateEnabled is false (misconfigured)
-                if [[ "$ENABLE_AUTO_UPDATES" != "true" ]] && [[ "$IN_DOCKER" != "true" ]]; then
+                if [[ "$AUTO_UPDATE_CHOICE_EXPLICIT" != "true" ]] && [[ "$ENABLE_AUTO_UPDATES" != "true" ]] && [[ "$IN_DOCKER" != "true" ]]; then
                     local should_ask_about_updates=false
                     local prompt_reason=""
                     
@@ -4243,7 +4258,7 @@ main() {
             
             # Ask about auto-updates for fresh installation
             # Skip if: already set by flag, in Docker, or being installed from host (IN_CONTAINER=true)
-            if [[ "$ENABLE_AUTO_UPDATES" != "true" ]] && [[ "$IN_DOCKER" != "true" ]] && [[ "$IN_CONTAINER" != "true" ]]; then
+            if [[ "$AUTO_UPDATE_CHOICE_EXPLICIT" != "true" ]] && [[ "$ENABLE_AUTO_UPDATES" != "true" ]] && [[ "$IN_DOCKER" != "true" ]] && [[ "$IN_CONTAINER" != "true" ]]; then
                 echo
                 echo "Enable automatic updates?"
                 echo "Pulse can automatically install stable updates daily (between 2-6 AM)"
@@ -4420,6 +4435,12 @@ while [[ $# -gt 0 ]]; do
             ;;
         --enable-auto-updates)
             ENABLE_AUTO_UPDATES=true
+            AUTO_UPDATE_CHOICE_EXPLICIT=true
+            shift
+            ;;
+        --disable-auto-updates)
+            ENABLE_AUTO_UPDATES=false
+            AUTO_UPDATE_CHOICE_EXPLICIT=true
             shift
             ;;
         --source|--from-source|--branch)
@@ -4442,7 +4463,8 @@ while [[ $# -gt 0 ]]; do
             echo "  --version VERSION  Install specific version (e.g., v4.4.0-rc.1)"
             echo "  --archive PATH     Install from a local Pulse release tarball"
             echo "  --source [BRANCH]  Build and install from source (default: main)"
-            echo "  --enable-auto-updates  Enable automatic stable updates (via systemd timer)"
+            echo "  --enable-auto-updates   Enable automatic stable updates (via systemd timer)"
+            echo "  --disable-auto-updates  Explicitly keep automatic updates disabled"
             echo ""
             echo "Management options:"
             echo "  --reset            Reset Pulse to fresh configuration"

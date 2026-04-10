@@ -1245,6 +1245,33 @@ func TestBuildContainerInstallCommandPreservesForcedVersion(t *testing.T) {
 	}
 }
 
+func TestBuildContainerInstallCommandPreservesExplicitAutoUpdateDisable(t *testing.T) {
+	script := `
+		FORCE_VERSION="v1.2.3"
+		FORCE_CHANNEL=""
+		UPDATE_CHANNEL=""
+		auto_updates_flag="--disable-auto-updates"
+		BUILD_FROM_SOURCE="false"
+		SOURCE_BRANCH="main"
+		frontend_port="7655"
+		CONFIG_DIR="` + t.TempDir() + `"
+` + extractRootInstallShellFunction(t, "selected_update_channel") + `
+` + extractRootInstallShellFunction(t, "build_container_install_command") + `
+		build_container_install_command
+	`
+
+	out, err := exec.Command("bash", "-c", script).CombinedOutput()
+	if err != nil {
+		t.Fatalf("bash: %v\n%s", err, out)
+	}
+
+	got := strings.TrimSpace(string(out))
+	want := "bash /tmp/install.sh --in-container --version 'v1.2.3' --disable-auto-updates"
+	if got != want {
+		t.Fatalf("install cmd = %q, want %q", got, want)
+	}
+}
+
 func TestBuildContainerInstallCommandPassesArchiveToContainer(t *testing.T) {
 	script := `
 		FORCE_VERSION=""
@@ -1352,6 +1379,35 @@ func TestPrintContainerRecoveryCommandPreservesForcedVersion(t *testing.T) {
 
 	got := strings.TrimSpace(string(out))
 	want := "bash /tmp/install.sh --in-container --version 'v1.2.3' --enable-auto-updates"
+	if got != want {
+		t.Fatalf("recovery command = %q, want %q", got, want)
+	}
+}
+
+func TestPrintContainerRecoveryCommandPreservesExplicitAutoUpdateDisable(t *testing.T) {
+	script := `
+		FORCE_VERSION="v1.2.3"
+		FORCE_CHANNEL=""
+		UPDATE_CHANNEL=""
+		auto_updates_flag="--disable-auto-updates"
+		BUILD_FROM_SOURCE="false"
+		SOURCE_BRANCH="main"
+		frontend_port="7655"
+		CONFIG_DIR="` + t.TempDir() + `"
+		print_info() { printf '%s\n' "$1"; }
+` + extractRootInstallShellFunction(t, "selected_update_channel") + `
+` + extractRootInstallShellFunction(t, "build_container_install_command") + `
+` + extractRootInstallShellFunction(t, "print_container_recovery_command") + `
+		print_container_recovery_command
+	`
+
+	out, err := exec.Command("bash", "-c", script).CombinedOutput()
+	if err != nil {
+		t.Fatalf("bash: %v\n%s", err, out)
+	}
+
+	got := strings.TrimSpace(string(out))
+	want := "bash /tmp/install.sh --in-container --version 'v1.2.3' --disable-auto-updates"
 	if got != want {
 		t.Fatalf("recovery command = %q, want %q", got, want)
 	}
