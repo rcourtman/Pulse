@@ -11,7 +11,6 @@ import {
 import { useNavigate } from '@solidjs/router';
 import { useWebSocket } from '@/contexts/appRuntime';
 import { buildInfrastructureWorkspacePath } from '@/components/Settings/infrastructureWorkspaceModel';
-import { useUnifiedResources } from '@/hooks/useUnifiedResources';
 import { useDashboardOverview } from '@/hooks/useDashboardOverview';
 import { useDashboardTrends } from '@/hooks/useDashboardTrends';
 import { useDashboardLayout } from '@/hooks/useDashboardLayout';
@@ -39,23 +38,16 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const { connected, reconnecting, reconnect, activeAlerts } = useWebSocket();
 
-  // REST-backed resources: instant first paint, no WebSocket wait.
-  const dashboardResources = useUnifiedResources({
-    query: '',
-    cacheKey: 'all-resources',
-    initialHydration: 'prefer-ws',
-  });
-  const resources = createMemo(() => dashboardResources.resources?.() ?? []);
-
   const alertsList = createMemo<Alert[]>(() =>
     Object.values(activeAlerts as Record<string, Alert | undefined>).filter(
       (a): a is Alert => a !== undefined,
     ),
   );
 
-  const overview = useDashboardOverview(resources, alertsList);
+  const overviewState = useDashboardOverview(alertsList);
+  const overview = overviewState.overview;
   const [trendRange, setTrendRange] = createSignal<HistoryTimeRange>('1h');
-  const trends = useDashboardTrends(resources, trendRange);
+  const trends = useDashboardTrends(overview, trendRange);
   const layout = useDashboardLayout();
   const actions = useDashboardActions(alertsList);
   const recoverySummary = useDashboardRecovery();
@@ -64,14 +56,14 @@ export default function Dashboard() {
   const [loadingTimedOut, setLoadingTimedOut] = createSignal(false);
   let loadingTimeout: number | undefined;
 
-  const isLoading = createMemo(() => dashboardResources.loading());
+  const isLoading = createMemo(() => overviewState.loading());
 
   // Track whether we've completed the initial load successfully so that subsequent
   // background refetches don't tear down the content tree (which causes
   // flickering and scroll-position resets). Only set on successful load (not errors).
   const [initialLoadComplete, setInitialLoadComplete] = createSignal(false);
   createEffect(() => {
-    if (!isLoading() && !initialLoadComplete() && !dashboardResources.error()) {
+    if (!isLoading() && !initialLoadComplete() && !overviewState.error()) {
       setInitialLoadComplete(true);
     }
   });
@@ -96,12 +88,12 @@ export default function Dashboard() {
 
   const hasConnectionError = createMemo(() => {
     if (loadingTimedOut()) return true;
-    if (dashboardResources.error()) return true;
+    if (overviewState.error()) return true;
     return !isLoading() && !connected() && !reconnecting();
   });
 
   // True when we have renderable cached data (even if connection is now lost)
-  const hasCachedData = createMemo(() => (resources()?.length ?? 0) > 0);
+  const hasCachedData = createMemo(() => overview().health.totalResources > 0);
   const dashboardDisconnectedBannerState = createMemo(() =>
     getDashboardDisconnectedBannerState(reconnecting()),
   );

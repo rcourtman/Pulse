@@ -1,6 +1,6 @@
 import { createRoot, createSignal } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Resource } from '@/types/resource';
+import type { DashboardOverviewSummary } from '@/hooks/useDashboardOverview';
 
 vi.mock('@/utils/apiClient', () => ({
   getOrgID: () => 'test-org',
@@ -22,27 +22,6 @@ vi.mock('@/utils/storageSummaryTrendCache', () => ({
   readStorageSummaryTrendCache: vi.fn(),
 }));
 
-vi.mock('@/components/Infrastructure/infrastructureSummaryModel', () => ({
-  buildInfrastructureEmptyHistoryLabel: vi.fn(() => null),
-  buildInfrastructureSummarySeries: vi.fn((resources: Resource[]) =>
-    resources
-      .filter((resource) =>
-        ['agent', 'docker-host', 'k8s-cluster', 'k8s-node'].includes(resource.type),
-      )
-      .map((resource) => ({
-        id: resource.id,
-        cpu: [
-          { timestamp: 1_700_000_000_000, value: 20 },
-          { timestamp: 1_700_000_060_000, value: 30 },
-        ],
-        memory: [
-          { timestamp: 1_700_000_000_000, value: 40 },
-          { timestamp: 1_700_000_060_000, value: 50 },
-        ],
-      })),
-  ),
-}));
-
 import useDashboardTrendsSource from '@/hooks/useDashboardTrends.ts?raw';
 import {
   buildStorageCapacityTrendPoints,
@@ -60,19 +39,41 @@ import {
   readStorageSummaryTrendCache,
 } from '@/utils/storageSummaryTrendCache';
 
-function createResource(partial: Partial<Resource> & Pick<Resource, 'id' | 'type'>): Resource {
+function createOverviewSummary(
+  overrides: Partial<DashboardOverviewSummary> = {},
+): DashboardOverviewSummary {
   return {
-    ...partial,
-    id: partial.id,
-    type: partial.type,
-    name: partial.name ?? partial.id,
-    displayName: partial.displayName ?? partial.name ?? partial.id,
-    platformId: partial.platformId ?? 'platform-1',
-    platformType: partial.platformType ?? 'proxmox',
-    sourceType: partial.sourceType ?? 'proxmox',
-    status: partial.status ?? 'online',
-    lastSeen: partial.lastSeen ?? 1_700_000_000_000,
-  } as Resource;
+    health: {
+      totalResources: 0,
+      byStatus: {},
+      ...overrides.health,
+    },
+    infrastructure: {
+      total: 0,
+      byStatus: {},
+      byType: {},
+      topCPU: [],
+      topMemory: [],
+      ...overrides.infrastructure,
+    },
+    workloads: {
+      total: 0,
+      running: 0,
+      stopped: 0,
+      byType: {},
+      ...overrides.workloads,
+    },
+    storage: {
+      total: 0,
+      totalCapacity: 0,
+      totalUsed: 0,
+      warningCount: 0,
+      criticalCount: 0,
+      ...overrides.storage,
+    },
+    problemResources: [],
+    ...overrides,
+  };
 }
 
 function createPoints(values: number[]): TrendPoint[] {
@@ -195,7 +196,22 @@ describe('useDashboardTrends fetch scoping', () => {
     vi.clearAllMocks();
     vi.mocked(readInfrastructureSummaryCache).mockReturnValue(null);
     vi.mocked(fetchInfrastructureSummaryAndCache).mockResolvedValue({
-      map: new Map(),
+      map: new Map([
+        [
+          'infra-a',
+          {
+            cpu: createPoints([20, 30]),
+            memory: createPoints([40, 50]),
+          },
+        ],
+        [
+          'infra-b',
+          {
+            cpu: createPoints([45, 55]),
+            memory: createPoints([65, 75]),
+          },
+        ],
+      ]),
       oldestDataTimestamp: null,
     });
     vi.mocked(readStorageSummaryTrendCache).mockReturnValue(null);
@@ -206,22 +222,52 @@ describe('useDashboardTrends fetch scoping', () => {
     });
   });
 
-  it('does not refetch dashboard summary charts as paginated resources expand within the same scope', async () => {
-    const infrastructureA = createResource({ id: 'infra-a', type: 'agent' });
-    const infrastructureB = createResource({ id: 'infra-b', type: 'agent' });
-    const storageA = createResource({ id: 'storage-a', type: 'storage' });
-    const storageB = createResource({ id: 'storage-b', type: 'storage' });
+  it('does not refetch dashboard summary charts as the compact overview expands within the same scope', async () => {
+    const initialOverview = createOverviewSummary({
+      health: { totalResources: 2, byStatus: { online: 2 } },
+      infrastructure: {
+        total: 1,
+        byStatus: { online: 1 },
+        byType: { agent: 1 },
+        topCPU: [{ id: 'infra-a', name: 'Infra A', percent: 55 }],
+        topMemory: [{ id: 'infra-a', name: 'Infra A', percent: 75 }],
+      },
+      storage: {
+        total: 1,
+        totalCapacity: 1000,
+        totalUsed: 500,
+        warningCount: 0,
+        criticalCount: 0,
+      },
+    });
+    const expandedOverview = createOverviewSummary({
+      ...initialOverview,
+      health: { totalResources: 4, byStatus: { online: 4 } },
+      infrastructure: {
+        total: 2,
+        byStatus: { online: 2 },
+        byType: { agent: 2 },
+        topCPU: [
+          { id: 'infra-a', name: 'Infra A', percent: 55 },
+          { id: 'infra-b', name: 'Infra B', percent: 45 },
+        ],
+        topMemory: [
+          { id: 'infra-a', name: 'Infra A', percent: 75 },
+          { id: 'infra-b', name: 'Infra B', percent: 65 },
+        ],
+      },
+    });
 
     let dispose!: () => void;
     let trends!: ReturnType<typeof useDashboardTrends>;
-    let setResources!: (value: Resource[]) => void;
+    let setOverview!: (value: DashboardOverviewSummary) => void;
 
     createRoot((d) => {
       dispose = d;
-      const [resources, setResourcesSignal] = createSignal<Resource[]>([infrastructureA, storageA]);
-      setResources = setResourcesSignal;
+      const [overview, setOverviewSignal] = createSignal(initialOverview);
+      setOverview = setOverviewSignal;
       const [range] = createSignal<'1h'>('1h');
-      trends = useDashboardTrends(resources, range);
+      trends = useDashboardTrends(overview, range);
     });
 
     await vi.waitFor(() => {
@@ -233,7 +279,7 @@ describe('useDashboardTrends fetch scoping', () => {
       });
     });
 
-    setResources([infrastructureA, infrastructureB, storageA, storageB]);
+    setOverview(expandedOverview);
 
     await Promise.resolve();
     await Promise.resolve();
@@ -245,19 +291,82 @@ describe('useDashboardTrends fetch scoping', () => {
     dispose();
   });
 
+  it('joins dashboard sparkline rankings through canonical metrics targets instead of unified resource ids', async () => {
+    const overview = createOverviewSummary({
+      health: { totalResources: 2, byStatus: { online: 2 } },
+      infrastructure: {
+        total: 1,
+        byStatus: { online: 1 },
+        byType: { agent: 1 },
+        topCPU: [
+          {
+            id: 'agent-a',
+            name: 'Infra A',
+            percent: 55,
+            metricsTarget: { resourceType: 'agent', resourceId: 'infra-a' },
+          },
+        ],
+        topMemory: [
+          {
+            id: 'agent-a',
+            name: 'Infra A',
+            percent: 75,
+            metricsTarget: { resourceType: 'agent', resourceId: 'infra-a' },
+          },
+        ],
+      },
+    });
+
+    let dispose!: () => void;
+    let trends!: ReturnType<typeof useDashboardTrends>;
+
+    createRoot((d) => {
+      dispose = d;
+      const [summary] = createSignal(overview);
+      const [range] = createSignal<'1h'>('1h');
+      trends = useDashboardTrends(summary, range);
+    });
+
+    await vi.waitFor(() => {
+      expect(vi.mocked(fetchInfrastructureSummaryAndCache)).toHaveBeenCalledTimes(1);
+    });
+
+    expect(Array.from(trends().infrastructure.cpu.keys())).toEqual(['agent-a']);
+    expect(trends().infrastructure.cpu.get('agent-a')?.points).toEqual(createPoints([20, 30]));
+    expect(Array.from(trends().infrastructure.memory.keys())).toEqual(['agent-a']);
+    expect(trends().infrastructure.memory.get('agent-a')?.points).toEqual(createPoints([40, 50]));
+
+    dispose();
+  });
+
   it('refetches infrastructure charts when the dashboard trend range changes without refetching storage charts', async () => {
-    const infrastructureA = createResource({ id: 'infra-a', type: 'agent' });
-    const storageA = createResource({ id: 'storage-a', type: 'storage' });
+    const overview = createOverviewSummary({
+      health: { totalResources: 2, byStatus: { online: 2 } },
+      infrastructure: {
+        total: 1,
+        byStatus: { online: 1 },
+        byType: { agent: 1 },
+        topCPU: [{ id: 'infra-a', name: 'Infra A', percent: 55 }],
+        topMemory: [{ id: 'infra-a', name: 'Infra A', percent: 75 }],
+      },
+      storage: {
+        total: 1,
+        totalCapacity: 1000,
+        totalUsed: 500,
+        warningCount: 0,
+        criticalCount: 0,
+      },
+    });
 
     let dispose!: () => void;
     let setRange!: (value: '1h' | '12h') => void;
 
     createRoot((d) => {
       dispose = d;
-      const [resources] = createSignal<Resource[]>([infrastructureA, storageA]);
+      const [summary] = createSignal(overview);
       const [range, setRangeSignal] = createSignal<'1h' | '12h'>('1h');
       setRange = setRangeSignal;
-      useDashboardTrends(resources, range);
+      useDashboardTrends(summary, range);
     });
 
     await vi.waitFor(() => {
@@ -278,15 +387,29 @@ describe('useDashboardTrends fetch scoping', () => {
       caller: 'useDashboardTrends',
       metrics: ['cpu', 'memory'],
     });
-
     expect(vi.mocked(fetchStorageSummaryTrendAndCache)).toHaveBeenCalledTimes(1);
 
     dispose();
   });
 
   it('reuses a fresh infrastructure summary cache instead of immediately refetching the same scope', async () => {
-    const infrastructureA = createResource({ id: 'infra-a', type: 'agent' });
-    const storageA = createResource({ id: 'storage-a', type: 'storage' });
+    const overview = createOverviewSummary({
+      health: { totalResources: 2, byStatus: { online: 2 } },
+      infrastructure: {
+        total: 1,
+        byStatus: { online: 1 },
+        byType: { agent: 1 },
+        topCPU: [{ id: 'infra-a', name: 'Infra A', percent: 55 }],
+        topMemory: [{ id: 'infra-a', name: 'Infra A', percent: 75 }],
+      },
+      storage: {
+        total: 1,
+        totalCapacity: 1000,
+        totalUsed: 500,
+        warningCount: 0,
+        criticalCount: 0,
+      },
+    });
 
     vi.mocked(readInfrastructureSummaryCache).mockReturnValue({
       map: new Map(),
@@ -298,9 +421,9 @@ describe('useDashboardTrends fetch scoping', () => {
 
     createRoot((d) => {
       dispose = d;
-      const [resources] = createSignal<Resource[]>([infrastructureA, storageA]);
+      const [summary] = createSignal(overview);
       const [range] = createSignal<'1h'>('1h');
-      useDashboardTrends(resources, range);
+      useDashboardTrends(summary, range);
     });
 
     await Promise.resolve();
@@ -318,10 +441,12 @@ describe('useDashboardTrends infrastructure routing', () => {
     expect(useDashboardTrendsSource).toContain('readInfrastructureSummaryCache');
     expect(useDashboardTrendsSource).toContain('fetchInfrastructureSummaryAndCache');
     expect(useDashboardTrendsSource).toContain("caller: 'useDashboardTrends'");
-    expect(useDashboardTrendsSource).toContain("const DASHBOARD_INFRASTRUCTURE_METRICS");
-    expect(useDashboardTrendsSource).toContain("metrics: DASHBOARD_INFRASTRUCTURE_METRICS");
+    expect(useDashboardTrendsSource).toContain('const DASHBOARD_INFRASTRUCTURE_METRICS');
+    expect(useDashboardTrendsSource).toContain('metrics: DASHBOARD_INFRASTRUCTURE_METRICS');
     expect(useDashboardTrendsSource).toContain('const infrastructureScopeKey');
     expect(useDashboardTrendsSource).toContain('const hasInfrastructureResources');
+    expect(useDashboardTrendsSource).toContain('buildMetricTrendMap');
+    expect(useDashboardTrendsSource).not.toContain('buildInfrastructureSummarySeries');
     expect(useDashboardTrendsSource).not.toContain('request.cpu.map(async');
     expect(useDashboardTrendsSource).not.toContain('request.memory.map(async');
   });

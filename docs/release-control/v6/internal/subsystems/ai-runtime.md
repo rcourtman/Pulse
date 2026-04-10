@@ -60,6 +60,12 @@ runtime cost control, and shared AI transport surfaces.
 6. Add or change AI provider, control-level, chat/session, or explore-state presentation through `frontend-modern/src/components/AI/Chat/`, `frontend-modern/src/utils/aiProviderPresentation.ts`, `frontend-modern/src/utils/aiProviderHealthPresentation.ts`, `frontend-modern/src/utils/aiControlLevelPresentation.ts`, `frontend-modern/src/utils/aiChatPresentation.ts`, `frontend-modern/src/utils/aiSessionDiffPresentation.ts`, and `frontend-modern/src/utils/aiExplorePresentation.ts`
 7. Keep AI chat presentation helpers aligned through `frontend-modern/src/components/AI/Chat/` and the shared `frontend-modern/src/utils/textPresentation.ts`
 8. Keep assistant drawer context, session, and org-switch reset state aligned through the shared `frontend-modern/src/stores/aiChat.ts` boundary instead of letting `frontend-modern/src/App.tsx`, `frontend-modern/src/AppLayout.tsx`, or feature callers fork their own assistant shell state
+   That shared drawer ownership also covers passive resource reads while the
+   shell is mounted but closed. `frontend-modern/src/components/AI/Chat/`
+   may consume the live websocket snapshot or the existing unified-resource
+   cache for assistant context and suggestions, but it must not reopen
+   `useResources()` or trigger a second unfiltered `all-resources` REST fetch
+   just because the drawer component is present in the app shell.
 
 ## Forbidden Paths
 

@@ -29,7 +29,7 @@ import {
   normalizeAIControlLevel,
   type AIControlLevel,
 } from '@/utils/aiControlLevelPresentation';
-import { useResources } from '@/hooks/useResources';
+import { getCachedUnifiedResources } from '@/hooks/useUnifiedResources';
 import type { Resource } from '@/types/resource';
 import { isAppContainerDiscoveryResourceType } from '@/utils/discoveryTarget';
 import {
@@ -37,6 +37,7 @@ import {
   isAgentFacetInfrastructureResource,
 } from '@/utils/agentResources';
 import { normalizeChatMentionKeyPart } from '@/utils/chatIdentifiers';
+import { getGlobalWebSocketStore } from '@/stores/websocket-global';
 import {
   getPreferredResourceDisplayName,
   getPreferredResourceHostname,
@@ -77,7 +78,16 @@ export const AIChat: Component<AIChatProps> = (props) => {
   const [discoveryEnabled, setDiscoveryEnabled] = createSignal<boolean | null>(null); // null = loading
   const [discoveryHintDismissed, setDiscoveryHintDismissed] = createSignal(false);
   const [autonomousBannerDismissed, setAutonomousBannerDismissed] = createSignal(false);
-  const { byType, resources: allResources } = useResources();
+  const wsStore = getGlobalWebSocketStore();
+  const allResources = createMemo<Resource[]>(() => {
+    const liveResources = wsStore.state.resources ?? [];
+    if (Array.isArray(liveResources) && liveResources.length > 0) {
+      return liveResources;
+    }
+    return getCachedUnifiedResources({ cacheKey: 'all-resources' });
+  });
+  const byType = (type: Resource['type']) =>
+    allResources().filter((resource) => resource.type === type);
   const isCluster = createMemo(() => byType('agent').length > 1);
 
   // @ mention autocomplete state

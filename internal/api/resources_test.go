@@ -2884,6 +2884,144 @@ func TestResourceStorageSummaryRollsUpIncidents(t *testing.T) {
 	}
 }
 
+func TestResourceDashboardSummaryUsesCompactGovernedPayload(t *testing.T) {
+	now := time.Now().UTC()
+	criticalDiskTotal := int64(1_000)
+	criticalDiskUsed := int64(850)
+	restrictedResource := unified.Resource{
+		ID:        "agent:restricted-1",
+		Type:      unified.ResourceTypeAgent,
+		Name:      "restricted-host",
+		Status:    unified.StatusOnline,
+		LastSeen:  now,
+		UpdatedAt: now,
+		Tags:      []string{"restricted"},
+		Sources:   []unified.DataSource{unified.SourceAgent},
+		MetricsTarget: &unified.MetricsTarget{
+			ResourceType: "agent",
+			ResourceID:   "metrics-restricted-1",
+		},
+		Metrics: &unified.ResourceMetrics{
+			CPU:    &unified.MetricValue{Percent: 95},
+			Memory: &unified.MetricValue{Percent: 88},
+		},
+	}
+	expectedRestricted := unified.RefreshCanonicalMetadataSlice([]unified.Resource{restrictedResource})[0]
+	expectedRestrictedLabel := unified.ResourcePolicyLabel(
+		unified.ResourceDisplayName(expectedRestricted),
+		expectedRestricted.AISafeSummary,
+		expectedRestricted.Policy,
+	)
+
+	cfg := &config.Config{DataPath: t.TempDir()}
+	h := NewResourceHandlers(cfg)
+	h.SetStateProvider(resourceUnifiedSeedProvider{
+		snapshot: models.StateSnapshot{LastUpdate: now},
+		resources: []unified.Resource{
+			restrictedResource,
+			{
+				ID:        "docker-host:preview-1",
+				Type:      unified.ResourceTypeAgent,
+				Name:      "preview-docker-host",
+				Status:    unified.StatusOffline,
+				LastSeen:  now,
+				UpdatedAt: now,
+				Sources:   []unified.DataSource{unified.SourceDocker},
+				Docker:    &unified.DockerData{Hostname: "preview-docker-host"},
+				Metrics: &unified.ResourceMetrics{
+					CPU:    &unified.MetricValue{Percent: 70},
+					Memory: &unified.MetricValue{Percent: 40},
+				},
+			},
+			{
+				ID:        "vm:101",
+				Type:      unified.ResourceTypeVM,
+				Name:      "vm-101",
+				Status:    unified.ResourceStatus("running"),
+				LastSeen:  now,
+				UpdatedAt: now,
+				Sources:   []unified.DataSource{unified.SourceProxmox},
+			},
+			{
+				ID:        "dataset:critical-1",
+				Type:      "dataset",
+				Name:      "tank/apps",
+				Status:    unified.ResourceStatus("degraded"),
+				LastSeen:  now,
+				UpdatedAt: now,
+				Sources:   []unified.DataSource{unified.SourceTrueNAS},
+				Metrics: &unified.ResourceMetrics{
+					Disk: &unified.MetricValue{Used: &criticalDiskUsed, Total: &criticalDiskTotal, Percent: 85},
+				},
+			},
+		},
+	})
+	registry, err := h.buildRegistry("")
+	if err != nil {
+		t.Fatalf("buildRegistry: %v", err)
+	}
+	expectedTopCPUMetricsTarget := registry.MetricsTarget("agent:restricted-1")
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/resources/dashboard-summary", nil)
+	h.HandleDashboardSummary(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+
+	var resp DashboardOverviewSummaryResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	if resp.Health.TotalResources != 4 {
+		t.Fatalf("totalResources = %d, want 4", resp.Health.TotalResources)
+	}
+	if resp.Infrastructure.Total != 2 {
+		t.Fatalf("infrastructure.total = %d, want 2", resp.Infrastructure.Total)
+	}
+	if resp.Infrastructure.ByType["agent"] != 1 || resp.Infrastructure.ByType["docker-host"] != 1 {
+		t.Fatalf("unexpected infrastructure.byType = %+v", resp.Infrastructure.ByType)
+	}
+	if len(resp.Infrastructure.TopCPU) == 0 || resp.Infrastructure.TopCPU[0].Name != expectedRestrictedLabel {
+		t.Fatalf("topCPU = %+v, want governed summary label first", resp.Infrastructure.TopCPU)
+	}
+	if expectedTopCPUMetricsTarget == nil {
+		t.Fatal("expected restricted top CPU resource to expose a metrics target")
+	}
+	if resp.Infrastructure.TopCPU[0].MetricsTarget == nil || *resp.Infrastructure.TopCPU[0].MetricsTarget != *expectedTopCPUMetricsTarget {
+		t.Fatalf("topCPU[0].metricsTarget = %+v, want %+v", resp.Infrastructure.TopCPU[0].MetricsTarget, expectedTopCPUMetricsTarget)
+	}
+	if resp.Infrastructure.TopCPU[0].Name == "restricted-host" {
+		t.Fatalf("expected governed label, got raw restricted hostname")
+	}
+	if resp.Workloads.Total != 1 || resp.Workloads.Running != 1 || resp.Workloads.Stopped != 0 {
+		t.Fatalf("unexpected workloads summary = %+v", resp.Workloads)
+	}
+	if resp.Storage.Total != 1 || resp.Storage.TotalCapacity != 1_000 || resp.Storage.TotalUsed != 850 {
+		t.Fatalf("unexpected storage summary = %+v", resp.Storage)
+	}
+	if resp.Storage.WarningCount != 1 || resp.Storage.CriticalCount != 0 {
+		t.Fatalf("unexpected storage warning counts = %+v", resp.Storage)
+	}
+	if len(resp.ProblemResources) != 3 {
+		t.Fatalf("problemResources len = %d, want 3", len(resp.ProblemResources))
+	}
+	if resp.ProblemResources[0].ID != "docker-host:preview-1" || len(resp.ProblemResources[0].Problems) == 0 || resp.ProblemResources[0].Problems[0] != "Offline" {
+		t.Fatalf("expected offline docker host first, got %+v", resp.ProblemResources[0])
+	}
+	if resp.ProblemResources[1].ID != "dataset:critical-1" || len(resp.ProblemResources[1].Problems) == 0 || resp.ProblemResources[1].Problems[0] != "Degraded" {
+		t.Fatalf("expected degraded storage row second, got %+v", resp.ProblemResources[1])
+	}
+	if resp.ProblemResources[2].ID != "agent:restricted-1" || resp.ProblemResources[2].Name != expectedRestrictedLabel {
+		t.Fatalf("expected governed restricted host third, got %+v", resp.ProblemResources[2])
+	}
+	if resp.ProblemResources[2].CanonicalIdentity == nil || resp.ProblemResources[2].Policy == nil {
+		t.Fatalf("expected governed problem resource to include canonical identity and policy, got %+v", resp.ProblemResources[2])
+	}
+}
+
 func TestResourceListIncludesTrueNASPhysicalDiskTemperature(t *testing.T) {
 	previous := truenas.IsFeatureEnabled()
 	truenas.SetFeatureEnabled(true)

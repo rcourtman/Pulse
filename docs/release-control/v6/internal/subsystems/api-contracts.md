@@ -252,6 +252,16 @@ when the disabled candidate no longer counts toward monitored-system capacity.
     transport contract, so dashboard-specific consumers can request only CPU
     and memory without inventing a second summary endpoint or silently widening
     back to disk/network payloads.
+36. Keep the compact dashboard overview route canonical on that same shared API
+    surface. `internal/api/resources.go`,
+    `internal/api/router_routes_monitoring.go`,
+    `frontend-modern/src/api/resources.ts`,
+    `frontend-modern/src/hooks/useDashboardOverview.ts`, and frontend dashboard
+    consumers must route KPI cards, problem-resource rows, governed resource
+    labels, top-infrastructure identity, and canonical metrics-target join keys
+    through `/api/resources/dashboard-summary` instead of reconstructing that
+    shell from the paginated `/api/resources` list payload or guessing how
+    dashboard trend identities map onto infrastructure chart series.
 
 ## Forbidden Paths
 

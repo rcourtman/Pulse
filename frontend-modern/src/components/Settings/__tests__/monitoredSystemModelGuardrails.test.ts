@@ -1058,6 +1058,9 @@ describe('monitored-system model guardrails', () => {
 
   it('keeps AI chat mention resources aware of agent facets beyond host type', () => {
     expect(aiChatSource).toContain('isAgentFacetInfrastructureResource');
+    expect(aiChatSource).toContain('getGlobalWebSocketStore');
+    expect(aiChatSource).toContain('getCachedUnifiedResources');
+    expect(aiChatSource).not.toContain('useResources()');
     expect(aiChatSource).toContain('const agentResources = allResources().filter((resource) =>');
     expect(aiChatSource).toContain('getActionableAgentIdFromResource(resource) || resource.id;');
     expect(aiChatSource).not.toContain("resource.type === 'truenas'");

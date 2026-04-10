@@ -6,12 +6,9 @@ import {
   type StorageSummaryTrendResponse,
   type TimeRange,
 } from '@/api/charts';
-import {
-  buildInfrastructureEmptyHistoryLabel,
-  buildInfrastructureSummarySeries,
-} from '@/components/Infrastructure/infrastructureSummaryModel';
+import { buildInfrastructureEmptyHistoryLabel } from '@/components/Infrastructure/infrastructureSummaryModel';
+import type { DashboardOverviewSummary } from '@/hooks/useDashboardOverview';
 import { eventBus } from '@/stores/events';
-import { isAgentFacetInfrastructureResource } from '@/utils/agentResources';
 import { getOrgID } from '@/utils/apiClient';
 import {
   fetchInfrastructureSummaryAndCache,
@@ -22,7 +19,6 @@ import {
   fetchStorageSummaryTrendAndCache,
   readStorageSummaryTrendCache,
 } from '@/utils/storageSummaryTrendCache';
-import { isInfrastructure, isStorage, type Resource } from '@/types/resource';
 
 export type TrendPoint = {
   timestamp: number;
@@ -113,38 +109,43 @@ function toInfrastructureSummaryRange(range: HistoryTimeRange): TimeRange {
   }
 }
 
+type DashboardTrendResourceRef = DashboardOverviewSummary['infrastructure']['topCPU'][number];
+
+function buildMetricTrendMap(
+  resources: DashboardTrendResourceRef[],
+  map: Map<string, ChartData>,
+  metric: 'cpu' | 'memory',
+): Map<string, TrendData> {
+  const result = new Map<string, TrendData>();
+
+  for (const resource of resources.slice(0, 5)) {
+    const historyKey = resource.metricsTarget?.resourceId || resource.id;
+    const history = map.get(historyKey);
+    if (!history) {
+      continue;
+    }
+
+    const points = metric === 'cpu' ? history.cpu ?? [] : history.memory ?? [];
+    result.set(resource.id, extractTrendData(points));
+  }
+
+  return result;
+}
+
 function buildInfrastructureTrendSnapshot(
-  resources: Resource[],
+  overview: DashboardOverviewSummary,
   map: Map<string, ChartData>,
   oldestDataTimestamp: number | null,
 ): DashboardTrends['infrastructure'] {
-  const infrastructureResources = resources.filter((resource) => isInfrastructure(resource));
-  if (infrastructureResources.length === 0) {
+  if (overview.infrastructure.total === 0) {
     return createEmptyInfrastructureTrends();
   }
 
-  const agentFacetResources = resources.filter((resource) =>
-    isAgentFacetInfrastructureResource(resource),
+  const cpu = buildMetricTrendMap(overview.infrastructure.topCPU, map, 'cpu');
+  const memory = buildMetricTrendMap(overview.infrastructure.topMemory, map, 'memory');
+  const hasRenderableHistory = [...cpu.values(), ...memory.values()].some(
+    (trend) => trend.points.length >= 2,
   );
-  const summarySeries = buildInfrastructureSummarySeries(
-    infrastructureResources,
-    map,
-    agentFacetResources,
-  );
-
-  const cpu = new Map<string, TrendData>();
-  const memory = new Map<string, TrendData>();
-  let hasRenderableHistory = false;
-
-  for (const series of summarySeries) {
-    const cpuTrend = extractTrendData(series.cpu);
-    const memoryTrend = extractTrendData(series.memory);
-    if (cpuTrend.points.length >= 2 || memoryTrend.points.length >= 2) {
-      hasRenderableHistory = true;
-    }
-    cpu.set(series.id, cpuTrend);
-    memory.set(series.id, memoryTrend);
-  }
 
   return {
     cpu,
@@ -264,7 +265,7 @@ function buildStorageTrendSnapshot(
 }
 
 export function useDashboardTrends(
-  resources: Accessor<Resource[]>,
+  overview: Accessor<DashboardOverviewSummary>,
   infrastructureRange?: Accessor<HistoryTimeRange>,
 ): Accessor<DashboardTrends> {
   const [infrastructureError, setInfrastructureError] = createSignal<string | null>(null);
@@ -289,9 +290,9 @@ export function useDashboardTrends(
   });
 
   const hasInfrastructureResources = createMemo(() =>
-    resources().some((resource) => isInfrastructure(resource)),
+    overview().infrastructure.total > 0,
   );
-  const hasStorageResources = createMemo(() => resources().some((resource) => isStorage(resource)));
+  const hasStorageResources = createMemo(() => overview().storage.total > 0);
 
   const infrastructureScopeKey = createMemo(() => {
     const version = orgVersion();
@@ -413,7 +414,7 @@ export function useDashboardTrends(
   });
 
   const infrastructureSnapshot = createMemo(() =>
-    buildInfrastructureTrendSnapshot(resources(), infrastructureCharts(), oldestDataTimestamp()),
+    buildInfrastructureTrendSnapshot(overview(), infrastructureCharts(), oldestDataTimestamp()),
   );
   const storageSnapshot = createMemo(() => buildStorageTrendSnapshot(storageSummary()));
 

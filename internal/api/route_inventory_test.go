@@ -396,6 +396,7 @@ var allRouteAllowlist = []string{
 	"/api/resources",
 	"/api/resources/storage-incidents",
 	"/api/resources/storage-summary",
+	"/api/resources/dashboard-summary",
 	"/api/resources/k8s/namespaces",
 	"/api/resources/stats",
 	"/api/resources/",

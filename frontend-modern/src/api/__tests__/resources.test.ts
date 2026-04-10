@@ -11,6 +11,54 @@ describe('ResourceAPI', () => {
     vi.clearAllMocks();
   });
 
+  it('fetches the compact dashboard summary payload from the dashboard-summary endpoint', async () => {
+    vi.mocked(apiFetchJSON).mockResolvedValueOnce({
+      health: { totalResources: 4, byStatus: { online: 3, degraded: 1 } },
+      infrastructure: {
+        total: 2,
+        byStatus: { online: 2 },
+        byType: { agent: 1, 'docker-host': 1 },
+        topCPU: [
+          {
+            id: 'infra-a',
+            name: 'Infra A',
+            percent: 91,
+            metricsTarget: { resourceType: 'agent', resourceId: 'host-a' },
+          },
+        ],
+        topMemory: [
+          {
+            id: 'infra-a',
+            name: 'Infra A',
+            percent: 82,
+            metricsTarget: { resourceType: 'agent', resourceId: 'host-a' },
+          },
+        ],
+      },
+      workloads: { total: 1, running: 1, stopped: 0, byType: { vm: 1 } },
+      storage: {
+        total: 1,
+        totalCapacity: 1_000,
+        totalUsed: 850,
+        warningCount: 1,
+        criticalCount: 0,
+      },
+      problemResources: [],
+    } as any);
+
+    const result = await ResourceAPI.getDashboardSummary();
+
+    expect(apiFetchJSON).toHaveBeenCalledWith('/api/resources/dashboard-summary', {
+      cache: 'no-store',
+    });
+    expect(result.health.totalResources).toBe(4);
+    expect(result.infrastructure.topCPU[0]?.id).toBe('infra-a');
+    expect(result.infrastructure.topCPU[0]?.metricsTarget).toEqual({
+      resourceType: 'agent',
+      resourceId: 'host-a',
+    });
+  });
+
   it('fetches the resource history bundle from the facet endpoint', async () => {
     vi.mocked(apiFetchJSON).mockResolvedValueOnce({
       resourceId: 'vm:42',

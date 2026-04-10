@@ -203,6 +203,11 @@ an add-only capacity posture.
     presentation hot paths, but lifecycle surfaces must not reinterpret
     omitted disk or network series as missing lifecycle telemetry, missing
     agent capabilities, or reduced fleet freshness truth.
+    The same rule now applies to compact dashboard summary payloads. Shared
+    `internal/api/resources.go` summary routes may collapse resource counts,
+    problem rows, and top-resource rankings for dashboard hot paths, but
+    lifecycle surfaces must not treat `/api/resources/dashboard-summary` as
+    install inventory authority, enrollment proof, or fleet freshness truth.
     Dashboard storage trend consumers on that shared router boundary must now reuse the single `/api/storage-charts` summary response instead of fanning out per-pool `/api/metrics-store/history` reads, and lifecycle surfaces still must treat that batched storage summary transport as presentation context only rather than install, enrollment, or freshness truth.
 12. Keep lifecycle installer fallback pinned to published release lineage only.
     When `internal/api/unified_agent.go` has to proxy `/install.sh` or

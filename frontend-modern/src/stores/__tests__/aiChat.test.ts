@@ -1,6 +1,10 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { describe, expect, it, beforeEach } from 'vitest';
 import { aiChatStore } from '@/stores/aiChat';
 import { eventBus } from '@/stores/events';
+
+const aiChatSource = readFileSync(resolve(process.cwd(), 'src/components/AI/Chat/index.tsx'), 'utf8');
 
 describe('aiChatStore', () => {
   beforeEach(() => {
@@ -133,5 +137,11 @@ describe('aiChatStore', () => {
     expect(aiChatStore.title).toBe('');
     expect(aiChatStore.sessionId).not.toBe(previousSessionId);
     expect(localStorage.getItem('pulse:ai_chat_session_id')).toBe(aiChatStore.sessionId);
+  });
+
+  it('keeps closed assistant resource reads on the websocket/cache path', () => {
+    expect(aiChatSource).toContain('getGlobalWebSocketStore');
+    expect(aiChatSource).toContain('getCachedUnifiedResources');
+    expect(aiChatSource).not.toContain('useResources()');
   });
 });

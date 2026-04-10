@@ -5,9 +5,8 @@ import type { DashboardRecoverySummary } from '@/hooks/useDashboardRecovery';
 import DashboardPage from '@/pages/Dashboard';
 import dashboardPageSource from '@/pages/Dashboard.tsx?raw';
 
-let unifiedLoading = false;
-let unifiedResources: any[] = [];
-let unifiedError: unknown = undefined;
+let overviewLoading = false;
+let overviewError: unknown = undefined;
 let wsConnected = true;
 let wsReconnecting = false;
 const reconnectSpy = vi.fn();
@@ -73,18 +72,13 @@ vi.mock('@solidjs/router', async () => {
   };
 });
 
-vi.mock('@/hooks/useUnifiedResources', () => ({
-  useUnifiedResources: () => ({
-    resources: () => unifiedResources,
-    loading: () => unifiedLoading,
-    error: () => unifiedError,
-    refetch: vi.fn(),
-    mutate: vi.fn(),
-  }),
-}));
-
 vi.mock('@/hooks/useDashboardOverview', () => ({
-  useDashboardOverview: () => () => overviewMock,
+  useDashboardOverview: () => ({
+    overview: () => overviewMock,
+    loading: () => overviewLoading,
+    error: () => overviewError,
+    refetch: vi.fn(),
+  }),
 }));
 
 vi.mock('@/hooks/useDashboardTrends', () => ({
@@ -118,13 +112,13 @@ vi.mock('@/hooks/useDashboardRecovery', () => ({
 
 describe('Dashboard page module contract', () => {
   beforeEach(() => {
-    unifiedLoading = false;
-    unifiedResources = [];
-    unifiedError = undefined;
+    overviewLoading = false;
+    overviewError = undefined;
     wsConnected = true;
     wsReconnecting = false;
     reconnectSpy.mockReset();
     navigateSpy.mockReset();
+    overviewMock.health.totalResources = 0;
     overviewMock.storage.total = 0;
     overviewMock.storage.totalCapacity = 0;
     overviewMock.storage.totalUsed = 0;
@@ -155,17 +149,17 @@ describe('Dashboard page module contract', () => {
       "from '@/components/Recovery/DashboardRecoveryStatusPanel'",
     );
     expect(dashboardPageSource).toContain("from '@/components/Storage/DashboardStoragePanel'");
-    expect(dashboardPageSource).toContain("cacheKey: 'all-resources'");
-    expect(dashboardPageSource).toContain("initialHydration: 'prefer-ws'");
+    expect(dashboardPageSource).toContain('const overviewState = useDashboardOverview(alertsList);');
+    expect(dashboardPageSource).not.toContain("cacheKey: 'all-resources'");
   });
 
   it('routes dashboard trend hydration through the shared dashboard resources snapshot', () => {
-    expect(dashboardPageSource).toContain('const trends = useDashboardTrends(resources, trendRange);');
-    expect(dashboardPageSource).not.toContain('useDashboardTrends(overview, resources, trendRange)');
+    expect(dashboardPageSource).toContain('const trends = useDashboardTrends(overview, trendRange);');
+    expect(dashboardPageSource).not.toContain('const dashboardResources = useUnifiedResources');
   });
 
   it('renders loading skeleton blocks when resources are loading', () => {
-    unifiedLoading = true;
+    overviewLoading = true;
 
     render(() => <DashboardPage />);
 
@@ -189,7 +183,7 @@ describe('Dashboard page module contract', () => {
   });
 
   it('renders the governed storage and recovery dashboard panels', () => {
-    unifiedResources = [{ id: 'resource-1' }];
+    overviewMock.health.totalResources = 4;
     overviewMock.storage.total = 4;
     overviewMock.storage.totalCapacity = 4000;
     overviewMock.storage.totalUsed = 2000;

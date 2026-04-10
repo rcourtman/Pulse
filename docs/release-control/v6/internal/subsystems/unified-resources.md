@@ -152,18 +152,20 @@ assembly branch.
    snapshot freshness must come from websocket `state.resources` instead of
    layering confirmatory dashboard/infrastructure REST refetch loops over
    already-owned resource updates.
-10. Keep websocket-first initial hydration bounded and canonical. When
-    `frontend-modern/src/pages/Dashboard.tsx` opts the unfiltered dashboard
-    surface into `initialHydration: 'prefer-ws'`, the wait must stay short,
-    must apply only to supported websocket-owned snapshots, and must fall back
-    to the canonical paginated unified-resource transport in
-    `frontend-modern/src/hooks/useUnifiedResources.ts` instead of inventing a
-    dashboard-only resource bootstrap path.
-11. Keep summary consumers on the resource snapshot they were already given.
+10. Keep the dashboard overview shell on the compact governed summary route
+    rather than the unfiltered list transport. `frontend-modern/src/pages/Dashboard.tsx`
+    and `frontend-modern/src/hooks/useDashboardOverview.ts` may consume the
+    canonical `/api/resources/dashboard-summary` payload for KPI cards,
+    problem-resource rows, and top-resource identity, but they must not
+    recreate those summaries by mounting `useUnifiedResources()` just to count
+    or rank resources on the dashboard shell.
+11. Keep summary consumers on the payload they were already given.
+    `frontend-modern/src/hooks/useDashboardTrends.ts` and
     `frontend-modern/src/components/Infrastructure/useInfrastructureSummaryState.ts`
-    may derive workload and infrastructure rollups from `props.resources`, but
-    it must not reopen `useResources()` or start a second unfiltered
-    unified-resource fetch path under the infrastructure summary surface.
+    may derive chart identity, storage presence, and infrastructure rollups
+    from the compact dashboard overview or resource snapshot they already own,
+    but they must not reopen `useResources()` or start a second unfiltered
+    unified-resource fetch path under the dashboard summary surface.
 
 ## Forbidden Paths
 

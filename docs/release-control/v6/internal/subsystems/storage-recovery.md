@@ -181,6 +181,13 @@ querying, and the operator-facing storage health presentation layer.
 32. Keep infrastructure summary chart bucketing presentation-only on the adjacent shared API boundary. When `internal/api/router.go` normalizes mixed-cadence infrastructure history into equal-time summary buckets for operator-facing summary cards, storage and recovery may consume the resulting visual context only; they must not reinterpret those normalized chart samples as recovery freshness windows, backup cadence, or restore evidence.
 33. Keep workload chart downsampling presentation-only on that same adjacent shared API boundary. When `internal/api/router.go` caps mixed-cadence workload history into equal-time buckets for operator-facing workload cards, storage and recovery may consume the resulting visual context only; they must not reinterpret those shaped chart samples as recovery freshness windows, backup cadence, or restore evidence.
 34. Keep storage and recovery websocket reads on the neutral app-runtime boundary. `frontend-modern/src/components/Recovery/RecoveryPointDetails.tsx`, `frontend-modern/src/components/Storage/useStoragePageResources.ts`, and storage/recovery-adjacent dashboard composition may consume live websocket state only through `frontend-modern/src/contexts/appRuntime.ts`, not by importing `frontend-modern/src/App.tsx` or rebuilding shell-local providers.
+    That same dashboard composition boundary also owns compact summary reads.
+    When `frontend-modern/src/pages/Dashboard.tsx` renders storage and
+    recovery-adjacent cards from `/api/resources/dashboard-summary` and
+    `/api/charts/storage-summary`, those cards may reuse the compact payloads
+    they were already given, but they must not reopen paginated
+    `useUnifiedResources()` transport or reintroduce per-pool
+    `/api/metrics-store/history` fan-out under the dashboard hot path.
 35. Keep shared `frontend-modern/src/App.tsx` public-route ownership explicit by
     surface. Storage/recovery preview entrypoints such as
     `/preview/setup-complete` may remain public app-shell routes, but unrelated

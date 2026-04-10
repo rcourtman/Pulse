@@ -185,6 +185,30 @@ func (h *ResourceHandlers) HandleStorageSummary(w http.ResponseWriter, r *http.R
 	json.NewEncoder(w).Encode(response)
 }
 
+// HandleDashboardSummary handles GET /api/resources/dashboard-summary.
+func (h *ResourceHandlers) HandleDashboardSummary(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	orgID := GetOrgID(r.Context())
+	registry, err := h.buildRegistry(orgID)
+	if err != nil {
+		http.Error(w, sanitizeErrorForClient(err, "Internal server error"), http.StatusInternalServerError)
+		return
+	}
+
+	resources := unified.RefreshCanonicalMetadataSlice(registry.List())
+	attachMetricsTargets(resources, registry)
+	applyResourceContractTypes(resources)
+
+	response := buildDashboardOverviewSummaryResponse(resources)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}
+
 // HandleStorageIncidents handles GET /api/resources/storage-incidents.
 func (h *ResourceHandlers) HandleStorageIncidents(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
@@ -1114,6 +1138,92 @@ type StorageSummaryResponse struct {
 	TopIncidents           []StorageSummaryIncident `json:"topIncidents"`
 }
 
+type DashboardOverviewSummaryResponse struct {
+	Health           DashboardOverviewHealthSummary         `json:"health"`
+	Infrastructure   DashboardOverviewInfrastructureSummary `json:"infrastructure"`
+	Workloads        DashboardOverviewWorkloadsSummary      `json:"workloads"`
+	Storage          DashboardOverviewStorageSummary        `json:"storage"`
+	ProblemResources []DashboardOverviewProblemResourceRow  `json:"problemResources"`
+}
+
+type DashboardOverviewHealthSummary struct {
+	TotalResources int            `json:"totalResources"`
+	ByStatus       map[string]int `json:"byStatus"`
+}
+
+type DashboardOverviewInfrastructureSummary struct {
+	Total     int                            `json:"total"`
+	ByStatus  map[string]int                 `json:"byStatus"`
+	ByType    map[string]int                 `json:"byType"`
+	TopCPU    []DashboardOverviewTopResource `json:"topCPU"`
+	TopMemory []DashboardOverviewTopResource `json:"topMemory"`
+}
+
+type DashboardOverviewTopResource struct {
+	ID            string                 `json:"id"`
+	Name          string                 `json:"name"`
+	Percent       float64                `json:"percent"`
+	MetricsTarget *unified.MetricsTarget `json:"metricsTarget,omitempty"`
+}
+
+type DashboardOverviewWorkloadsSummary struct {
+	Total   int            `json:"total"`
+	Running int            `json:"running"`
+	Stopped int            `json:"stopped"`
+	ByType  map[string]int `json:"byType"`
+}
+
+type DashboardOverviewStorageSummary struct {
+	Total         int   `json:"total"`
+	TotalCapacity int64 `json:"totalCapacity"`
+	TotalUsed     int64 `json:"totalUsed"`
+	WarningCount  int   `json:"warningCount"`
+	CriticalCount int   `json:"criticalCount"`
+}
+
+type DashboardOverviewProblemResourceRow struct {
+	ID                string                     `json:"id"`
+	Type              string                     `json:"type"`
+	Name              string                     `json:"name"`
+	Status            string                     `json:"status"`
+	LastSeen          string                     `json:"lastSeen,omitempty"`
+	Sources           []unified.DataSource       `json:"sources,omitempty"`
+	AISafeSummary     string                     `json:"aiSafeSummary,omitempty"`
+	Policy            *unified.ResourcePolicy    `json:"policy,omitempty"`
+	CanonicalIdentity *unified.CanonicalIdentity `json:"canonicalIdentity,omitempty"`
+	Problems          []string                   `json:"problems"`
+	WorstValue        float64                    `json:"worstValue"`
+}
+
+func EmptyDashboardOverviewSummaryResponse() DashboardOverviewSummaryResponse {
+	return DashboardOverviewSummaryResponse{}.NormalizeCollections()
+}
+
+func (r DashboardOverviewSummaryResponse) NormalizeCollections() DashboardOverviewSummaryResponse {
+	if r.Health.ByStatus == nil {
+		r.Health.ByStatus = map[string]int{}
+	}
+	if r.Infrastructure.ByStatus == nil {
+		r.Infrastructure.ByStatus = map[string]int{}
+	}
+	if r.Infrastructure.ByType == nil {
+		r.Infrastructure.ByType = map[string]int{}
+	}
+	if r.Infrastructure.TopCPU == nil {
+		r.Infrastructure.TopCPU = []DashboardOverviewTopResource{}
+	}
+	if r.Infrastructure.TopMemory == nil {
+		r.Infrastructure.TopMemory = []DashboardOverviewTopResource{}
+	}
+	if r.Workloads.ByType == nil {
+		r.Workloads.ByType = map[string]int{}
+	}
+	if r.ProblemResources == nil {
+		r.ProblemResources = []DashboardOverviewProblemResourceRow{}
+	}
+	return r
+}
+
 func EmptyStorageSummaryResponse() StorageSummaryResponse {
 	return StorageSummaryResponse{}.NormalizeCollections()
 }
@@ -1203,6 +1313,286 @@ type StorageIncidentSection struct {
 type registryCacheEntry struct {
 	registry   *unified.ResourceRegistry
 	lastUpdate time.Time
+}
+
+func buildDashboardOverviewSummaryResponse(resources []unified.Resource) DashboardOverviewSummaryResponse {
+	response := EmptyDashboardOverviewSummaryResponse()
+	if len(resources) == 0 {
+		return response
+	}
+
+	infrastructureResources := make([]unified.Resource, 0, len(resources))
+	problemResources := make([]DashboardOverviewProblemResourceRow, 0, len(resources))
+
+	for _, resource := range resources {
+		resourceType := strings.TrimSpace(string(resource.Type))
+		status := strings.TrimSpace(string(resource.Status))
+		if status == "" {
+			status = "unknown"
+		}
+
+		response.Health.TotalResources++
+		response.Health.ByStatus[status]++
+
+		if isDashboardInfrastructureResourceType(resource.Type) {
+			infrastructureResources = append(infrastructureResources, resource)
+			response.Infrastructure.Total++
+			response.Infrastructure.ByStatus[status]++
+			response.Infrastructure.ByType[resourceType]++
+		}
+
+		if isDashboardWorkloadResourceType(resource.Type) {
+			response.Workloads.Total++
+			response.Workloads.ByType[resourceType]++
+			switch status {
+			case "online", "running":
+				response.Workloads.Running++
+			case "offline", "stopped":
+				response.Workloads.Stopped++
+			}
+		}
+
+		if isDashboardStorageResourceType(resource.Type) {
+			response.Storage.Total++
+			if total := dashboardMetricTotal(resource.Metrics, func(m *unified.ResourceMetrics) *unified.MetricValue { return m.Disk }); total > 0 {
+				response.Storage.TotalCapacity += total
+			}
+			if used := dashboardMetricUsed(resource.Metrics, func(m *unified.ResourceMetrics) *unified.MetricValue { return m.Disk }); used > 0 {
+				response.Storage.TotalUsed += used
+			}
+			diskPercent := dashboardMetricPercent(nilSafeMetric(resource.Metrics, func(m *unified.ResourceMetrics) *unified.MetricValue { return m.Disk }))
+			switch {
+			case diskPercent > 90:
+				response.Storage.CriticalCount++
+			case diskPercent > 80:
+				response.Storage.WarningCount++
+			}
+		}
+
+		if row, ok := buildDashboardProblemResourceRow(resource); ok {
+			problemResources = append(problemResources, row)
+		}
+	}
+
+	response.Infrastructure.TopCPU = buildDashboardTopInfrastructureResources(
+		infrastructureResources,
+		func(resource unified.Resource) float64 {
+			return dashboardMetricPercent(nilSafeMetric(resource.Metrics, func(m *unified.ResourceMetrics) *unified.MetricValue { return m.CPU }))
+		},
+	)
+	response.Infrastructure.TopMemory = buildDashboardTopInfrastructureResources(
+		infrastructureResources,
+		func(resource unified.Resource) float64 {
+			return dashboardMetricPercent(nilSafeMetric(resource.Metrics, func(m *unified.ResourceMetrics) *unified.MetricValue { return m.Memory }))
+		},
+	)
+
+	sort.Slice(problemResources, func(i, j int) bool {
+		if problemResources[i].WorstValue == problemResources[j].WorstValue {
+			return strings.ToLower(problemResources[i].Name) < strings.ToLower(problemResources[j].Name)
+		}
+		return problemResources[i].WorstValue > problemResources[j].WorstValue
+	})
+	if len(problemResources) > 8 {
+		problemResources = problemResources[:8]
+	}
+	response.ProblemResources = problemResources
+
+	return response.NormalizeCollections()
+}
+
+func buildDashboardTopInfrastructureResources(
+	resources []unified.Resource,
+	metric func(unified.Resource) float64,
+) []DashboardOverviewTopResource {
+	rows := make([]DashboardOverviewTopResource, 0, len(resources))
+	for _, resource := range resources {
+		percent := metric(resource)
+		if percent <= 0 {
+			continue
+		}
+		rows = append(rows, DashboardOverviewTopResource{
+			ID:            resource.ID,
+			Name:          dashboardResourceLabel(resource),
+			Percent:       percent,
+			MetricsTarget: cloneDashboardMetricsTarget(resource.MetricsTarget),
+		})
+	}
+
+	sort.Slice(rows, func(i, j int) bool {
+		if rows[i].Percent == rows[j].Percent {
+			return strings.ToLower(rows[i].Name) < strings.ToLower(rows[j].Name)
+		}
+		return rows[i].Percent > rows[j].Percent
+	})
+	if len(rows) > 5 {
+		rows = rows[:5]
+	}
+	return rows
+}
+
+func cloneDashboardMetricsTarget(target *unified.MetricsTarget) *unified.MetricsTarget {
+	if target == nil {
+		return nil
+	}
+	cloned := *target
+	return &cloned
+}
+
+func buildDashboardProblemResourceRow(resource unified.Resource) (DashboardOverviewProblemResourceRow, bool) {
+	problems := make([]string, 0, 4)
+	worstValue := 0.0
+	status := strings.TrimSpace(strings.ToLower(string(resource.Status)))
+
+	switch status {
+	case "offline", "error", "failed", "down", "unreachable", "disconnected", "timeout", "stopped", "inactive":
+		problems = append(problems, "Offline")
+		worstValue = 200
+	case "degraded", "warning", "maintenance", "syncing", "initializing", "starting", "pending", "partial", "unknown", "recovering", "pausing", "restarting":
+		problems = append(problems, "Degraded")
+		worstValue = maxDashboardProblemValue(worstValue, 150)
+	}
+
+	cpuPercent := dashboardMetricPercent(nilSafeMetric(resource.Metrics, func(m *unified.ResourceMetrics) *unified.MetricValue { return m.CPU }))
+	if cpuPercent >= 90 {
+		problems = append(problems, "CPU "+strconv.Itoa(int(cpuPercent+0.5))+"%")
+		worstValue = maxDashboardProblemValue(worstValue, cpuPercent)
+	}
+
+	memoryPercent := dashboardMetricPercent(nilSafeMetric(resource.Metrics, func(m *unified.ResourceMetrics) *unified.MetricValue { return m.Memory }))
+	if memoryPercent >= 85 {
+		problems = append(problems, "Memory "+strconv.Itoa(int(memoryPercent+0.5))+"%")
+		worstValue = maxDashboardProblemValue(worstValue, memoryPercent)
+	}
+
+	diskPercent := dashboardMetricPercent(nilSafeMetric(resource.Metrics, func(m *unified.ResourceMetrics) *unified.MetricValue { return m.Disk }))
+	if diskPercent >= 90 {
+		problems = append(problems, "Disk "+strconv.Itoa(int(diskPercent+0.5))+"%")
+		worstValue = maxDashboardProblemValue(worstValue, diskPercent)
+	}
+
+	if len(problems) == 0 {
+		return DashboardOverviewProblemResourceRow{}, false
+	}
+
+	row := DashboardOverviewProblemResourceRow{
+		ID:                resource.ID,
+		Type:              string(resource.Type),
+		Name:              dashboardResourceLabel(resource),
+		Status:            status,
+		Sources:           append([]unified.DataSource(nil), resource.Sources...),
+		AISafeSummary:     strings.TrimSpace(resource.AISafeSummary),
+		CanonicalIdentity: cloneDashboardCanonicalIdentity(resource.Canonical),
+		Policy:            unified.CloneResourcePolicy(resource.Policy),
+		Problems:          problems,
+		WorstValue:        worstValue,
+	}
+	if !resource.LastSeen.IsZero() {
+		row.LastSeen = resource.LastSeen.UTC().Format(time.RFC3339Nano)
+	}
+
+	return row, true
+}
+
+func dashboardResourceLabel(resource unified.Resource) string {
+	return unified.ResourcePolicyLabel(
+		unified.ResourceDisplayName(resource),
+		resource.AISafeSummary,
+		resource.Policy,
+	)
+}
+
+func cloneDashboardCanonicalIdentity(identity *unified.CanonicalIdentity) *unified.CanonicalIdentity {
+	if identity == nil {
+		return nil
+	}
+	cloned := *identity
+	if len(identity.Aliases) > 0 {
+		cloned.Aliases = append([]string(nil), identity.Aliases...)
+	}
+	return &cloned
+}
+
+func isDashboardInfrastructureResourceType(resourceType unified.ResourceType) bool {
+	switch strings.TrimSpace(string(resourceType)) {
+	case "agent", "docker-host", "k8s-cluster", "k8s-node":
+		return true
+	default:
+		return false
+	}
+}
+
+func isDashboardWorkloadResourceType(resourceType unified.ResourceType) bool {
+	switch strings.TrimSpace(string(resourceType)) {
+	case "vm", "system-container", "app-container", "oci-container", "pod", "jail":
+		return true
+	default:
+		return false
+	}
+}
+
+func isDashboardStorageResourceType(resourceType unified.ResourceType) bool {
+	switch strings.TrimSpace(string(resourceType)) {
+	case "storage", "datastore", "pool", "dataset", "physical_disk", "ceph":
+		return true
+	default:
+		return false
+	}
+}
+
+func nilSafeMetric(
+	metrics *unified.ResourceMetrics,
+	pick func(*unified.ResourceMetrics) *unified.MetricValue,
+) *unified.MetricValue {
+	if metrics == nil {
+		return nil
+	}
+	return pick(metrics)
+}
+
+func dashboardMetricPercent(metric *unified.MetricValue) float64 {
+	if metric == nil {
+		return 0
+	}
+	if metric.Percent > 0 {
+		return metric.Percent
+	}
+	if metric.Value > 0 {
+		return metric.Value
+	}
+	if metric.Total != nil && metric.Used != nil && *metric.Total > 0 {
+		return (float64(*metric.Used) / float64(*metric.Total)) * 100
+	}
+	return 0
+}
+
+func dashboardMetricTotal(
+	metrics *unified.ResourceMetrics,
+	pick func(*unified.ResourceMetrics) *unified.MetricValue,
+) int64 {
+	metric := nilSafeMetric(metrics, pick)
+	if metric == nil || metric.Total == nil {
+		return 0
+	}
+	return *metric.Total
+}
+
+func dashboardMetricUsed(
+	metrics *unified.ResourceMetrics,
+	pick func(*unified.ResourceMetrics) *unified.MetricValue,
+) int64 {
+	metric := nilSafeMetric(metrics, pick)
+	if metric == nil || metric.Used == nil {
+		return 0
+	}
+	return *metric.Used
+}
+
+func maxDashboardProblemValue(left, right float64) float64 {
+	if right > left {
+		return right
+	}
+	return left
 }
 
 func buildStorageSummaryResponse(resources []unified.Resource) StorageSummaryResponse {
