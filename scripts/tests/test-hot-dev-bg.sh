@@ -718,6 +718,9 @@ test_integration_readme_documents_trial_retry_burst_contract() {
     ' "${INTEGRATION_README}"
   )"
 
+  assert_contains "integration readme names trial-start route" "${output}" "POST /api/license/trial/start"
+  assert_contains "integration readme names hosted-signup redirect code" "${output}" "409 trial_signup_required"
+  assert_contains "integration readme names rate-limited code" "${output}" "429 trial_rate_limited"
   assert_contains "integration readme documents hosted-signup retry burst" "${output}" "retry-burst"
   assert_contains "integration readme documents retry contract wording" "${output}" "contract:"
   assert_contains "integration readme keeps hosted-signup wording" "${output}" "hosted-signup"

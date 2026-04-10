@@ -28,8 +28,8 @@ End-to-end Playwright tests that validate critical user flows against a running 
   - Logged-out login page (full page + form card)
   - Authenticated Settings → Authentication page
 - `tests/07-trial-signup-return.spec.ts` — trial workflow contract:
-  - Start hosted Pro trial initiation via API and verify the reused-instance contract
-  - Verify the response either points to hosted `/start-pro-trial` or returns canonical `Retry-After` backoff when the local retry bucket is already exhausted
+  - Start hosted Pro trial initiation via `POST /api/license/trial/start` and verify the reused-instance contract
+  - Verify the response either returns `409 trial_signup_required` with hosted `/start-pro-trial` handoff or `429 trial_rate_limited` with canonical `Retry-After` backoff when the local retry bucket is already exhausted
   - Verify local entitlements remain unchanged until activation
   - Verify duplicate initiation stays on the hosted-signup retry-burst contract
 - `tests/08-cloud-hosting.spec.ts` — hosted cloud signup contract:
@@ -181,9 +181,12 @@ For hosted trial initiation validation against a fresh LXC each run:
 
 - Runbook: `docs/operations/TRIAL_E2E_LXC_SNAPSHOT_RUNBOOK.md`
 - Probe script: `tests/integration/scripts/trial-signup-contract.sh`
-  - Confirms repeated local trial starts stay on the hosted-signup retry-burst
-    contract: duplicate attempts keep returning hosted-signup redirects until
-    the retry burst is exhausted, then return `Retry-After` backoff metadata
+  - Exercises `POST /api/license/trial/start` from a clean snapshot and proves
+    the hosted-signup retry-burst contract: duplicate attempts keep returning
+    `409 trial_signup_required` with hosted redirects while the burst remains
+    open, then transition to `429 trial_rate_limited` plus `Retry-After`
+    backoff metadata once the retry burst is exhausted and the limiter
+    actually engages
 - Full sandbox orchestration (multi-tenant + trial + cloud, with per-scenario snapshot reset):
   - `tests/integration/scripts/run-lxc-sandbox-evals.sh`
   - Includes hosted trial initiation validation and cloud subscription cancellation lifecycle verification

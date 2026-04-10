@@ -601,7 +601,11 @@ That active-doc hygiene is guarded directly in
 trial-start reference across `docs/` and `tests/integration/`, requires the
 operator/pricing/upgrade/integration surfaces to keep the hosted-only /
 retry-burst story aligned, and rejects the obsolete 24-hour or automatic
-second-attempt phrasing anywhere in that tracked reference set.
+second-attempt phrasing anywhere in that tracked reference set. The integration
+README now carries the same `POST /api/license/trial/start`,
+`trial_signup_required`, and `trial_rate_limited` anchors as the other
+operator-facing docs so it stays inside the discovered set instead of relying
+on a special-case assertion path.
 Hosted tenant organization seeding and hosted handoff role mapping now belong
 to the same cloud-paid truth too. `internal/cloudcp/stripe/provisioner.go`
 must seed tenant org members from the shared account-role-to-organization-role

@@ -458,7 +458,12 @@ local `/api/license/trial/start` requests as staying on the hosted-signup
 redirect contract until the configured retry burst is exhausted; they may only
 teach `429 trial_rate_limited` plus `Retry-After` backoff once the limiter
 actually engages, rather than claiming the second duplicate attempt is always
-rate limited.
+rate limited. The reused-instance browser-proof entry in
+`tests/integration/README.md` must carry those same canonical anchors by name:
+`POST /api/license/trial/start`, `409 trial_signup_required`, `429
+trial_rate_limited`, and `Retry-After`, so the shared trial-start docs guard
+can auto-discover that README alongside the rest of the governed trial-start
+surface instead of relying on README-only fallback checks.
 Playwright-driven public/commercial specs that support scenario-specific
 endpoint overrides such as `PULSE_CLOUD_BASE_URL` or
 `PULSE_COMMERCIAL_BASE_URL` must layer those values through that same shared

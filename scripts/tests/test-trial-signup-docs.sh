@@ -111,15 +111,15 @@ assert_forbidden_patterns_absent() {
 main() {
   local runbook_output pricing_output upgrade_output integration_output eval_task_output
   local source_of_truth_output migration_audit_output
+  local operator_doc
 
   discover_tracked_reference_docs
 
   assert_doc_discovered "source of truth is in tracked reference discovery" "${SOURCE_OF_TRUTH_DOC}"
   assert_doc_discovered "migration audit is in tracked reference discovery" "${MIGRATION_AUDIT_DOC}"
-  assert_doc_discovered "runbook is in tracked reference discovery" "${RUNBOOK}"
-  assert_doc_discovered "pricing doc is in tracked reference discovery" "${PRICING_DOC}"
-  assert_doc_discovered "upgrade guide is in tracked reference discovery" "${UPGRADE_DOC}"
-  assert_doc_discovered "trial eval task is in tracked reference discovery" "${EVAL_TASK_DOC}"
+  for operator_doc in "${OPERATOR_DOCS[@]}"; do
+    assert_doc_discovered "${operator_doc#${ROOT_DIR}/} is in tracked reference discovery" "${operator_doc}"
+  done
 
   runbook_output="$(
     awk '
@@ -165,6 +165,9 @@ main() {
   assert_contains "upgrade guide documents trial-rate-limited response" "${upgrade_output}" "\`429 trial_rate_limited\`"
   assert_contains "upgrade guide documents retry-after metadata" "${upgrade_output}" "\`Retry-After\`"
 
+  assert_contains "integration readme documents trial-start route" "${integration_output}" "POST /api/license/trial/start"
+  assert_contains "integration readme documents hosted-signup redirect code" "${integration_output}" "\`409 trial_signup_required\`"
+  assert_contains "integration readme documents canonical trial-rate-limited response" "${integration_output}" "\`429 trial_rate_limited\`"
   assert_contains "integration readme documents reused-instance retry-after branch" "${integration_output}" "Retry-After"
   assert_contains "integration readme documents hosted-signup retry burst" "${integration_output}" "hosted-signup retry-burst contract"
 
