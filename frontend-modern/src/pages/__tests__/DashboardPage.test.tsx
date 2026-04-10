@@ -156,6 +156,7 @@ describe('Dashboard page module contract', () => {
     );
     expect(dashboardPageSource).toContain("from '@/components/Storage/DashboardStoragePanel'");
     expect(dashboardPageSource).toContain("cacheKey: 'all-resources'");
+    expect(dashboardPageSource).toContain("initialHydration: 'prefer-ws'");
   });
 
   it('routes dashboard trend hydration through the shared dashboard resources snapshot', () => {

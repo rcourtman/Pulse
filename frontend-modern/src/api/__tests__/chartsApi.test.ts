@@ -50,6 +50,19 @@ describe('ChartsAPI', () => {
     );
   });
 
+  it('builds infrastructure summary chart requests with explicit metric filters', async () => {
+    apiFetchJSONMock.mockResolvedValueOnce({} as any);
+
+    await ChartsAPI.getInfrastructureSummaryCharts('1h', undefined, {
+      metrics: ['cpu', 'memory'],
+    });
+
+    expect(apiFetchJSONMock).toHaveBeenCalledWith(
+      '/api/charts/infrastructure?range=1h&metrics=cpu%2Cmemory',
+      { signal: undefined },
+    );
+  });
+
   it('calls workload-only charts endpoint with node and maxPoints', async () => {
     apiFetchJSONMock.mockResolvedValueOnce({} as any);
 

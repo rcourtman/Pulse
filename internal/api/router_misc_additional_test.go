@@ -583,6 +583,69 @@ func TestHandleInfrastructureCharts_Lightweight(t *testing.T) {
 	}
 }
 
+func TestHandleInfrastructureCharts_MetricFilter(t *testing.T) {
+	monitor, state, _ := newTestMonitor(t)
+	state.Nodes = []models.Node{{
+		ID:     "node-1",
+		Name:   "node-one",
+		Status: "online",
+		CPU:    0.1,
+		Memory: models.Memory{Usage: 12.0},
+		Disk:   models.Disk{Usage: 34.0},
+	}}
+	state.DockerHosts = []models.DockerHost{{
+		ID:       "docker-host-1",
+		Runtime:  "docker",
+		CPUUsage: 23.0,
+		Memory:   models.Memory{Usage: 45.0},
+		Disks:    []models.Disk{{Usage: 67.0}},
+		Status:   "online",
+	}}
+	state.Hosts = []models.Host{{
+		ID:       "host-1",
+		Hostname: "host-one",
+		CPUUsage: 11.0,
+		Memory:   models.Memory{Usage: 22.0},
+		Disks:    []models.Disk{{Usage: 33.0}},
+		Status:   "online",
+	}}
+	syncTestResourceStore(t, monitor, state)
+	router := &Router{monitor: monitor}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/charts/infrastructure?range=5m&metrics=cpu,memory", nil)
+	rec := httptest.NewRecorder()
+
+	router.handleInfrastructureCharts(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+
+	var decoded InfrastructureChartsResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &decoded); err != nil {
+		t.Fatalf("unmarshal InfrastructureChartsResponse: %v", err)
+	}
+
+	if decoded.Stats.PointCounts.Nodes != 2 {
+		t.Fatalf("expected stats.pointCounts.nodes=2, got %d", decoded.Stats.PointCounts.Nodes)
+	}
+	if decoded.Stats.PointCounts.DockerHosts != 2 {
+		t.Fatalf("expected stats.pointCounts.dockerHosts=2, got %d", decoded.Stats.PointCounts.DockerHosts)
+	}
+	if decoded.Stats.PointCounts.Agents != 2 {
+		t.Fatalf("expected stats.pointCounts.agents=2, got %d", decoded.Stats.PointCounts.Agents)
+	}
+	if _, ok := decoded.NodeData["node-1"]["disk"]; ok {
+		t.Fatalf("expected disk series to be filtered out of node payload")
+	}
+	if _, ok := decoded.DockerHostData["docker-host-1"]["disk"]; ok {
+		t.Fatalf("expected disk series to be filtered out of docker host payload")
+	}
+	if _, ok := decoded.AgentData["host-1"]["disk"]; ok {
+		t.Fatalf("expected disk series to be filtered out of agent payload")
+	}
+}
+
 func TestHandleWorkloadsSummaryCharts_AggregatesAndCounts(t *testing.T) {
 	monitor, state, _ := newTestMonitor(t)
 	state.Nodes = []models.Node{{
@@ -1388,6 +1451,47 @@ func TestHandleStorageCharts_IncludesSupplementalStorageAndResolvesUnifiedNodeFi
 	}
 	if _, ok := decoded.Pools["pool:archive"]; ok {
 		t.Fatalf("expected TrueNAS pool to be filtered out by VMware host selection, got %v", decoded.Pools)
+	}
+}
+
+func TestHandleStorageSummaryCharts_AggregatesCapacityAcrossPools(t *testing.T) {
+	monitor, state, metricsHistory := newTestMonitor(t)
+	now := time.Now()
+	state.Storage = []models.Storage{
+		{ID: "store-1", Name: "Store One"},
+		{ID: "store-2", Name: "Store Two"},
+	}
+	metricsHistory.AddStorageMetric("store-1", "used", 400, now)
+	metricsHistory.AddStorageMetric("store-1", "avail", 600, now)
+	metricsHistory.AddStorageMetric("store-2", "used", 100, now)
+	metricsHistory.AddStorageMetric("store-2", "avail", 900, now)
+	syncTestResourceStore(t, monitor, state)
+
+	router := &Router{monitor: monitor}
+	req := httptest.NewRequest(http.MethodGet, "/api/charts/storage-summary?range=1h", nil)
+	rec := httptest.NewRecorder()
+
+	router.handleStorageSummaryCharts(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+	if ct := rec.Header().Get("Content-Type"); ct != "application/json" {
+		t.Fatalf("expected application/json, got %q", ct)
+	}
+
+	var decoded StorageSummaryTrendResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &decoded); err != nil {
+		t.Fatalf("unmarshal StorageSummaryTrendResponse: %v", err)
+	}
+	if len(decoded.Capacity) != 1 {
+		t.Fatalf("expected 1 aggregate capacity point, got %d (%+v)", len(decoded.Capacity), decoded.Capacity)
+	}
+	if decoded.Capacity[0].Value != 25 {
+		t.Fatalf("expected aggregate capacity of 25%%, got %+v", decoded.Capacity[0])
+	}
+	if decoded.Stats.PointCounts.Total != 1 {
+		t.Fatalf("expected summary point count 1, got %+v", decoded.Stats.PointCounts)
 	}
 }
 

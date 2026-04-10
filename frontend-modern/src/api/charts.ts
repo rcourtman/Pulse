@@ -70,6 +70,15 @@ export interface InfrastructureChartsResponse {
   stats: ChartStats;
 }
 
+export type InfrastructureSummaryMetric =
+  | 'cpu'
+  | 'memory'
+  | 'disk'
+  | 'diskread'
+  | 'diskwrite'
+  | 'netin'
+  | 'netout';
+
 export interface WorkloadChartsResponse {
   data: Record<string, ChartData>;
   dockerData?: Record<string, ChartData>;
@@ -123,6 +132,12 @@ export interface WorkloadsSummaryChartsResponse {
   guestCounts: WorkloadsGuestCounts;
   topContributors: WorkloadsSummaryContributors;
   blastRadius: WorkloadsSummaryBlastRadiusGroup;
+  timestamp: number;
+  stats: ChartStats;
+}
+
+export interface StorageSummaryTrendResponse {
+  capacity: MetricPoint[];
   timestamp: number;
   stats: ChartStats;
 }
@@ -272,11 +287,18 @@ export class ChartsAPI {
 
   private static buildChartsUrl(
     path: string,
-    params: { range: TimeRange; nodeId?: string | null },
+    params: {
+      range: TimeRange;
+      nodeId?: string | null;
+      metrics?: readonly InfrastructureSummaryMetric[] | null;
+    },
   ): string {
     const searchParams = new URLSearchParams({ range: params.range });
     if (params.nodeId) {
       searchParams.set('node', params.nodeId);
+    }
+    if (Array.isArray(params.metrics) && params.metrics.length > 0) {
+      searchParams.set('metrics', Array.from(new Set(params.metrics)).join(','));
     }
     return `${this.baseUrl}${path}?${searchParams.toString()}`;
   }
@@ -301,11 +323,12 @@ export class ChartsAPI {
   static async getInfrastructureSummaryCharts(
     range: TimeRange = '1h',
     signal?: AbortSignal,
-    options?: { nodeId?: string | null },
+    options?: { nodeId?: string | null; metrics?: readonly InfrastructureSummaryMetric[] | null },
   ): Promise<InfrastructureChartsResponse> {
     const url = this.buildChartsUrl('/charts/infrastructure', {
       range,
       nodeId: options?.nodeId,
+      metrics: options?.metrics,
     });
     return apiFetchJSON(url, { signal });
   }
@@ -404,6 +427,15 @@ export class ChartsAPI {
       params.set('node', options.nodeId);
     }
     const url = `${this.baseUrl}/storage-charts?${params.toString()}`;
+    return apiFetchJSON(url, { signal });
+  }
+
+  static async getStorageSummaryTrend(
+    range_: TimeRange = '24h',
+    signal?: AbortSignal,
+  ): Promise<StorageSummaryTrendResponse> {
+    const params = new URLSearchParams({ range: range_ });
+    const url = `${this.baseUrl}/charts/storage-summary?${params.toString()}`;
     return apiFetchJSON(url, { signal });
   }
 }

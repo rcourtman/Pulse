@@ -16,13 +16,6 @@ const {
   mockReadInfrastructureSummaryCache: vi.fn(() => null),
 }));
 
-vi.mock('@/hooks/useResources', () => ({
-  useResources: () => ({
-    workloads: () => [],
-    resources: () => [],
-  }),
-}));
-
 vi.mock('@/utils/infrastructureSummaryCache', () => ({
   fetchInfrastructureSummaryAndCache: mockFetchInfrastructureSummaryAndCache,
   readInfrastructureSummaryCache: mockReadInfrastructureSummaryCache,
@@ -117,6 +110,16 @@ describe('useInfrastructureSummaryState', () => {
       expect(result.networkSeries()).toHaveLength(2);
     });
     expect(result.hasInteractiveResourceId('host-1')).toBe(true);
+  });
+
+  it('derives infrastructure and workload scope from the passed resource snapshot', async () => {
+    const stateSource = await import('../useInfrastructureSummaryState.ts?raw');
+
+    expect(stateSource.default).not.toContain('useResources(');
+    expect(stateSource.default).toContain('props.resources.filter((resource) => isWorkload(resource))');
+    expect(stateSource.default).toContain(
+      'props.resources.filter((resource) => isAgentFacetInfrastructureResource(resource))',
+    );
   });
 
 });

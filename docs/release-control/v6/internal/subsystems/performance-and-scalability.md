@@ -9,7 +9,7 @@
   "contract_file": "docs/release-control/v6/internal/subsystems/performance-and-scalability.md",
   "status_file": "docs/release-control/v6/internal/status.json",
   "registry_file": "docs/release-control/v6/internal/subsystems/registry.json",
-  "dependency_subsystem_ids": ["api-contracts", "frontend-primitives", "unified-resources"]
+  "dependency_subsystem_ids": ["api-contracts", "cloud-paid", "frontend-primitives", "storage-recovery", "unified-resources"]
 }
 ```
 
@@ -198,7 +198,9 @@ regression protection.
     chart-transport hot paths, fold summary-card caching into commercial
     callback behavior, or reuse those public auth endpoints as a justification
     for relaxing the protected history payload budgets that belong elsewhere.
-30. Keep dashboard summary-chart fetches scope-owned rather than pagination-owned: `frontend-modern/src/hooks/useDashboardTrends.ts` must hydrate infrastructure and storage summaries once per org/range scope from the canonical summary caches and recompute card presentation locally as additional resource pages arrive, rather than refetching the infrastructure-summary transport in `frontend-modern/src/components/Infrastructure/useInfrastructureSummaryState.ts` or the storage-summary transport in `frontend-modern/src/utils/storageSummaryCache.ts` for every resource-id expansion on the same dashboard load.
+30. Keep dashboard summary-chart fetches scope-owned rather than pagination-owned: `frontend-modern/src/hooks/useDashboardTrends.ts` must hydrate infrastructure and storage summaries once per org/range scope from the canonical summary caches and recompute card presentation locally as additional resource pages arrive, rather than refetching the infrastructure-summary transport in `frontend-modern/src/components/Infrastructure/useInfrastructureSummaryState.ts`, the dashboard storage-summary trend transport in `frontend-modern/src/utils/storageSummaryTrendCache.ts`, or the storage-page summary transport in `frontend-modern/src/utils/storageSummaryCache.ts` for every resource-id expansion on the same dashboard load. That dashboard infrastructure path must also request only the metrics it renders through the canonical infrastructure-summary route owned by `internal/api/router_routes_monitoring.go` and `internal/api/router.go`; the dashboard may not pay for disk or network summary series when it only renders CPU and memory. App-shell prewarm in `frontend-modern/src/useAppRuntimeState.ts` must not front-run that dashboard-specific route while the operator is already on the root dashboard route owned by `frontend-modern/src/App.tsx`.
+31. Keep the dashboard all-resources hot path websocket-first when the canonical snapshot is already imminent: `frontend-modern/src/pages/Dashboard.tsx` may request `initialHydration: 'prefer-ws'` from `frontend-modern/src/hooks/useUnifiedResources.ts` for the unfiltered dashboard resource surface, but that delay must stay bounded to one short initial-hydration window, remain limited to supported websocket-owned snapshots, and fall back to the canonical paginated unified-resource transport in `frontend-modern/src/hooks/useUnifiedResources.ts` when the websocket snapshot does not arrive in time.
+32. Keep infrastructure summary consumers on the passed dashboard snapshot rather than reopening the all-resources hook. `frontend-modern/src/components/Infrastructure/useInfrastructureSummaryState.ts` may derive infrastructure and workload rollups from `props.resources`, but it must not call `useResources()` or mount a second unfiltered unified-resource fetch path inside the summary hot path.
 
 ## Forbidden Paths
 
@@ -344,11 +346,12 @@ the shared `isAgentFacetInfrastructureResource(...)` helper instead of a local
 infrastructure selector contract.
 That same protected dashboard hot path now includes storage trend loading too.
 `frontend-modern/src/hooks/useDashboardTrends.ts` and
-`internal/api/router.go` must keep dashboard storage trends on one
-`/api/storage-charts` request backed by
-`GetStorageMetricsForChartBatch(...)`, so the dashboard does not reopen an
-N+1 per-pool `/api/metrics-store/history` fan-out just to compute the shared
-24-hour storage capacity delta.
+`internal/api/router.go` must keep dashboard storage trends on one compact
+`/api/charts/storage-summary` request backed by
+`GetStorageMetricsForChartBatch(...)`, so the dashboard does not pull the full
+storage-page `/api/storage-charts` payload or reopen an N+1 per-pool
+`/api/metrics-store/history` fan-out just to compute the shared 24-hour
+storage capacity delta.
 That same dashboard shell boundary also owns empty-state action routing in
 `frontend-modern/src/components/Dashboard/DashboardStateCards.tsx`. When the
 dashboard has no connected infrastructure, the CTA must hand operators

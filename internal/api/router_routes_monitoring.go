@@ -19,6 +19,7 @@ func (r *Router) registerMonitoringResourceRoutes(
 	r.mux.HandleFunc("/api/charts", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.handleCharts)))
 	r.mux.HandleFunc("/api/charts/workloads", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.handleWorkloadCharts)))
 	r.mux.HandleFunc("/api/charts/infrastructure", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.handleInfrastructureCharts)))
+	r.mux.HandleFunc("/api/charts/storage-summary", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.handleStorageSummaryCharts)))
 	r.mux.HandleFunc("/api/charts/workloads-summary", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.handleWorkloadsSummaryCharts)))
 	r.mux.HandleFunc("/api/metrics-store/stats", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.handleMetricsStoreStats)))
 	r.mux.HandleFunc("/api/metrics-store/history", RequireAuth(r.config, RequireScope(config.ScopeMonitoringRead, r.handleMetricsHistory)))

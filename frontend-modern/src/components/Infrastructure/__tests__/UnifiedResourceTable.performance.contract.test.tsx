@@ -248,6 +248,10 @@ describe('UnifiedResourceTable performance contract', () => {
       expect(infrastructureSummaryStateSource).toContain('buildInfrastructureDisplaySeries');
       expect(infrastructureSummaryStateSource).toContain('buildInfrastructureMetricSeries');
       expect(infrastructureSummaryStateSource).toContain('buildInfrastructureEmptyMessage');
+      expect(infrastructureSummaryStateSource).not.toContain('useResources(');
+      expect(infrastructureSummaryStateSource).toContain(
+        'props.resources.filter((resource) => isWorkload(resource))',
+      );
       expect(infrastructureSummaryStateSource).not.toContain(
         'const match = allSeries.find((series) => series.id === focused);',
       );

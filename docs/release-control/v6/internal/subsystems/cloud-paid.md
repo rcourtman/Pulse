@@ -144,6 +144,14 @@ still grows monitored-system usage.
     `/settings/system/billing/usage?details=counting-rules` for explanation and
     `/settings/system/billing/plan?intent=max_monitored_systems` for upgrade
     intent.
+24. Keep public-demo dashboard bootstrap route-owned on the adjacent
+    commercial/runtime boundary. `frontend-modern/src/useAppRuntimeState.ts`
+    may prewarm shared infrastructure summary caches for non-dashboard routes,
+    but public-demo dashboard arrival must not front-run a broader
+    infrastructure-summary fetch than the route actually renders. Commercial
+    posture on `v6-demo` therefore stays governed by the route-owned
+    presentation policy and summary scope rather than by app-shell-wide
+    bootstrap heuristics.
 
 ## Forbidden Paths
 

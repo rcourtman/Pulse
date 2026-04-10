@@ -54,8 +54,11 @@ const makeMetricSeries = (count: number, start = Date.now() - count * 30_000) =>
     value: i % 100,
   }));
 
-const cacheKeyForRange = (range: TimeRange, orgScope = 'default') =>
-  `pulse.infrastructureSummaryCharts.${encodeURIComponent(orgScope)}::${range}`;
+const cacheKeyForRange = (
+  range: TimeRange,
+  orgScope = 'default',
+  metrics = 'cpu,memory,disk,diskread,diskwrite,netin,netout',
+) => `pulse.infrastructureSummaryCharts.${encodeURIComponent(orgScope)}::${range}::${metrics}`;
 
 describe('infrastructureSummaryCache fetch dedupe', () => {
   beforeEach(() => {
@@ -78,7 +81,9 @@ describe('infrastructureSummaryCache fetch dedupe', () => {
     const second = fetchInfrastructureSummaryAndCache('1h');
 
     expect(mockGetCharts).toHaveBeenCalledTimes(1);
-    expect(mockGetCharts).toHaveBeenCalledWith('1h');
+    expect(mockGetCharts).toHaveBeenCalledWith('1h', undefined, {
+      metrics: ['cpu', 'memory', 'disk', 'diskread', 'diskwrite', 'netin', 'netout'],
+    });
 
     resolveFetch?.(makeResponse());
 
@@ -96,6 +101,23 @@ describe('infrastructureSummaryCache fetch dedupe', () => {
     expect(mockGetCharts).toHaveBeenCalledTimes(2);
     expect(readInfrastructureSummaryCache('1h')).not.toBeNull();
     expect(readInfrastructureSummaryCache('24h')).not.toBeNull();
+  });
+
+  it('separates dashboard metric-filter fetches from the full infrastructure cache', async () => {
+    mockGetCharts.mockImplementation((_range: TimeRange) => Promise.resolve(makeResponse()));
+
+    await fetchInfrastructureSummaryAndCache('1h', { metrics: ['cpu', 'memory'] });
+    await fetchInfrastructureSummaryAndCache('1h');
+
+    expect(mockGetCharts).toHaveBeenCalledTimes(2);
+    expect(mockGetCharts).toHaveBeenNthCalledWith(1, '1h', undefined, {
+      metrics: ['cpu', 'memory'],
+    });
+    expect(mockGetCharts).toHaveBeenNthCalledWith(2, '1h', undefined, {
+      metrics: ['cpu', 'memory', 'disk', 'diskread', 'diskwrite', 'netin', 'netout'],
+    });
+    expect(readInfrastructureSummaryCache('1h', undefined, undefined, ['cpu', 'memory'])).not.toBeNull();
+    expect(readInfrastructureSummaryCache('1h')).not.toBeNull();
   });
 
   it('merges overlapping agentData and dockerHostData keys without dropping richer network series', () => {

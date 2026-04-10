@@ -41,6 +41,7 @@ const UNIFIED_RESOURCES_MAX_PAGES = 20;
 const UNIFIED_RESOURCES_CACHE_MAX_AGE_MS = 15_000;
 const UNIFIED_RESOURCES_WS_DEBOUNCE_MS = 800;
 const UNIFIED_RESOURCES_WS_MIN_REFETCH_INTERVAL_MS = 2_500;
+const UNIFIED_RESOURCES_WS_INITIAL_HYDRATION_WAIT_MS = 1_200;
 
 type APIMetricValue = {
   value?: number;
@@ -916,13 +917,17 @@ export const getCachedUnifiedResources = (options?: {
 type UseUnifiedResourcesOptions = {
   query?: string;
   cacheKey?: string;
+  initialHydration?: 'immediate' | 'prefer-ws';
 };
 
 export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
   const query = normalizeUnifiedResourcesQuery(options?.query ?? DEFAULT_UNIFIED_RESOURCES_QUERY);
   const cacheKey = (options?.cacheKey || query || 'all').trim();
+  const initialHydration = options?.initialHydration ?? 'immediate';
   const typeFilter = parseUnifiedResourcesTypeFilter(query);
   const supportsCanonicalWsHydration = query === '' || typeFilter !== null;
+  const prefersWsInitialHydration =
+    initialHydration === 'prefer-ws' && supportsCanonicalWsHydration;
   const [orgScope, setOrgScope] = createSignal(normalizeOrgScope(getOrgID()));
   const resolveScopedCacheKey = () => buildScopedUnifiedResourcesCacheKey(cacheKey, orgScope());
   let cacheEntry = seedUnifiedResourcesCacheFromAllResources(
@@ -939,6 +944,7 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
   const [error, setError] = createSignal<unknown>(undefined);
   const wsStore = getGlobalWebSocketStore();
   let refreshHandle: ReturnType<typeof setTimeout> | undefined;
+  let initialHydrationHandle: ReturnType<typeof setTimeout> | undefined;
   let inFlightRefetch: Promise<Resource[]> | null = null;
   let wsInitialized = false;
   let lastWsUpdateToken = '';
@@ -1018,11 +1024,43 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
     return resources as unknown as Resource[];
   };
 
+  const clearInitialHydrationTimeout = () => {
+    if (initialHydrationHandle !== undefined) {
+      clearTimeout(initialHydrationHandle);
+      initialHydrationHandle = undefined;
+    }
+  };
+
+  const shouldPreferWsInitialHydration = () =>
+    prefersWsInitialHydration &&
+    !cacheEntry.hasSnapshot &&
+    !wsStore.initialDataReceived() &&
+    (!Array.isArray(wsStore.state.resources) || wsStore.state.resources.length === 0);
+
+  const scheduleInitialHydrationFallback = () => {
+    if (initialHydrationHandle !== undefined) {
+      return;
+    }
+    initialHydrationHandle = setTimeout(() => {
+      initialHydrationHandle = undefined;
+      if (cacheEntry.hasSnapshot || wsStore.initialDataReceived()) {
+        return;
+      }
+      void runRefetch({ source: 'initial' }).catch((err) => {
+        logger.warn('[useUnifiedResources] Failed deferred initial refresh', err);
+      });
+    }, UNIFIED_RESOURCES_WS_INITIAL_HYDRATION_WAIT_MS);
+  };
+
   // If cache is stale, refresh it in the background without blocking initial render.
   if (!hasFreshUnifiedResourcesCache(cacheEntry)) {
-    void runRefetch({ source: 'initial' }).catch((err) => {
-      logger.warn('[useUnifiedResources] Failed background refresh for stale cache', err);
-    });
+    if (shouldPreferWsInitialHydration()) {
+      scheduleInitialHydrationFallback();
+    } else {
+      void runRefetch({ source: 'initial' }).catch((err) => {
+        logger.warn('[useUnifiedResources] Failed background refresh for stale cache', err);
+      });
+    }
   }
 
   const scheduleRefetch = () => {
@@ -1069,6 +1107,7 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
     const wsResources = Array.isArray(wsStore.state.resources) ? wsStore.state.resources : [];
     const projectedResources = filterCanonicalUnifiedResources(wsResources, query, typeFilter);
     const now = Date.now();
+    clearInitialHydrationTimeout();
     const allResourcesEntry = getUnifiedResourcesCacheEntry(
       buildScopedUnifiedResourcesCacheKey(ALL_RESOURCES_CACHE_KEY, currentOrgScope),
     );
@@ -1138,6 +1177,7 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
     inFlightRefetch = null;
     wsInitialized = false;
     lastWsUpdateToken = '';
+    clearInitialHydrationTimeout();
 
     const scopedResources = cacheEntry.resources;
     batch(() => {
@@ -1147,12 +1187,17 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
     });
 
     if (!hasFreshUnifiedResourcesCache(cacheEntry)) {
-      void runRefetch({ force: true, source: 'initial' }).catch(() => undefined);
+      if (shouldPreferWsInitialHydration()) {
+        scheduleInitialHydrationFallback();
+      } else {
+        void runRefetch({ force: true, source: 'initial' }).catch(() => undefined);
+      }
     }
   });
 
   onCleanup(() => {
     unsubscribeOrgSwitch();
+    clearInitialHydrationTimeout();
     if (refreshHandle !== undefined) {
       clearTimeout(refreshHandle);
     }

@@ -244,6 +244,14 @@ when the disabled candidate no longer counts toward monitored-system capacity.
     metrics-target IDs, preserve millisecond chart timestamps, and avoid
     reconstructing storage summary behavior from per-pool
     `/api/metrics-store/history` fan-out.
+35. Keep infrastructure summary metric filtering canonical on that same shared
+    API surface. `frontend-modern/src/api/charts.ts`,
+    `internal/api/router_routes_monitoring.go`, `internal/api/router.go`,
+    `internal/api/types.go`, and `internal/api/contract_test.go` must route
+    optional infrastructure-summary `metrics` filters through one governed
+    transport contract, so dashboard-specific consumers can request only CPU
+    and memory without inventing a second summary endpoint or silently widening
+    back to disk/network payloads.
 
 ## Forbidden Paths
 

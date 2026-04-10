@@ -95,6 +95,8 @@ const waitForValue = async <T>(readValue: () => T, expected: T) => {
 describe('useUnifiedResources', () => {
   let apiFetchMock: ReturnType<typeof vi.fn>;
   let setWsState: SetStoreFunction<TestWsState>;
+  let setWsConnected: (value: boolean) => boolean;
+  let setWsInitialDataReceived: (value: boolean) => boolean;
   let useUnifiedResources: UseUnifiedResourcesModule['useUnifiedResources'];
   let useStorageRecoveryResources: UseUnifiedResourcesModule['useStorageRecoveryResources'];
   let resetUnifiedResourcesCacheForTests: UseUnifiedResourcesModule['__resetUnifiedResourcesCacheForTests'];
@@ -109,8 +111,10 @@ describe('useUnifiedResources', () => {
       json: async () => ({ data: [v2Resource] }),
     });
 
-    const [connected] = createSignal(true);
-    const [initialDataReceived] = createSignal(true);
+    const [connected, _setConnected] = createSignal(true);
+    const [initialDataReceived, _setInitialDataReceived] = createSignal(true);
+    setWsConnected = _setConnected;
+    setWsInitialDataReceived = _setInitialDataReceived;
     const [state, _setWsState] = createStore<TestWsState>({
       connectedInfrastructure: [],
       metrics: [],
@@ -210,6 +214,80 @@ describe('useUnifiedResources', () => {
     expect(result!.resources()[0].facetCounts).toEqual({
       recentChanges: 1,
     });
+
+    dispose();
+  });
+
+  it('prefers websocket initial hydration over an immediate REST fetch for dashboard snapshots', async () => {
+    setWsConnected(false);
+    setWsInitialDataReceived(false);
+    setWsState('resources', []);
+
+    let dispose = () => {};
+    let result: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']> | undefined;
+    createRoot((d) => {
+      dispose = d;
+      result = useUnifiedResources({
+        query: '',
+        cacheKey: 'all-resources',
+        initialHydration: 'prefer-ws',
+      });
+    });
+
+    await flushAsync();
+    expect(apiFetchMock).not.toHaveBeenCalled();
+    expect(result!.loading()).toBe(true);
+
+    batch(() => {
+      setWsConnected(true);
+      setWsState(
+        'resources',
+        reconcile(
+          [
+            createWsResource({ id: 'node-1', type: 'agent' }),
+            createWsResource({ id: 'storage-1', type: 'storage', name: 'storage-1' }),
+          ],
+          { key: 'id' },
+        ),
+      );
+      setWsState('lastUpdate', 1738843202000);
+      setWsInitialDataReceived(true);
+    });
+
+    await waitForResourceCount(() => result!.resources().length, 2);
+    expect(apiFetchMock).not.toHaveBeenCalled();
+    expect(result!.loading()).toBe(false);
+
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(apiFetchMock).not.toHaveBeenCalled();
+
+    dispose();
+  });
+
+  it('falls back to REST when websocket initial hydration does not arrive in time', async () => {
+    setWsConnected(false);
+    setWsInitialDataReceived(false);
+    setWsState('resources', []);
+
+    let dispose = () => {};
+    let result: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']> | undefined;
+    createRoot((d) => {
+      dispose = d;
+      result = useUnifiedResources({
+        query: '',
+        cacheKey: 'all-resources',
+        initialHydration: 'prefer-ws',
+      });
+    });
+
+    await flushAsync();
+    expect(apiFetchMock).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(1_250);
+    await flushAsync();
+
+    expect(apiFetchMock).toHaveBeenCalledTimes(1);
+    expect(result!.resources().length).toBeGreaterThanOrEqual(1);
 
     dispose();
   });
@@ -1197,6 +1275,7 @@ describe('useUnifiedResources', () => {
   it('uses the shared org scope helper for cache and fetch state', () => {
     expect(useUnifiedResourcesSource).toContain('normalizeOrgScope(getOrgID())');
     expect(useUnifiedResourcesSource).toContain('supportsCanonicalWsHydration');
+    expect(useUnifiedResourcesSource).toContain("initialHydration === 'prefer-ws'");
     expect(useUnifiedResourcesSource).toContain('wsStore.state.resources');
     expect(useUnifiedResourcesSource).not.toContain('const DEFAULT_ORG_SCOPE = \'default\'');
     expect(useUnifiedResourcesSource).not.toContain('const normalizeOrgScope =');

@@ -1,6 +1,6 @@
 import { createEffect, createMemo, createSignal, onCleanup } from 'solid-js';
 import type { ChartData, TimeRange } from '@/api/charts';
-import { useResources } from '@/hooks/useResources';
+import { isWorkload } from '@/types/resource';
 import {
   useSummaryContextualFocusState,
   type SummaryChartHoverSync,
@@ -76,10 +76,11 @@ export function useInfrastructureSummaryState(props: InfrastructureSummaryProps)
   const selectedRange = createMemo<TimeRange>(() => props.timeRange || '1h');
   const hasCurrentRangeCharts = createMemo(() => chartRange() === selectedRange());
   const isCurrentRangeLoaded = createMemo(() => loadedRange() === selectedRange());
-
-  const { workloads, resources } = useResources();
   const agentResources = createMemo(() =>
-    resources().filter((resource) => isAgentFacetInfrastructureResource(resource)),
+    props.resources.filter((resource) => isAgentFacetInfrastructureResource(resource)),
+  );
+  const workloadResources = createMemo(() =>
+    props.resources.filter((resource) => isWorkload(resource)),
   );
 
   const [orgVersion, setOrgVersion] = createSignal(0);
@@ -310,7 +311,7 @@ export function useInfrastructureSummaryState(props: InfrastructureSummaryProps)
   const shouldShowNetworkCard = createMemo(() =>
     shouldShowInfrastructureNetworkCard(hasNetData(), props.resources),
   );
-  const workloadStats = createMemo(() => buildInfrastructureWorkloadStats(workloads()));
+  const workloadStats = createMemo(() => buildInfrastructureWorkloadStats(workloadResources()));
   const resourceCounts = createMemo(() => buildInfrastructureResourceCounts(props.resources));
   const emptyMessage = createMemo(() =>
     buildInfrastructureEmptyMessage(fetchFailed(), emptyHistoryLabel()),

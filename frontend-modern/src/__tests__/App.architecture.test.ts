@@ -106,6 +106,8 @@ describe('App architecture', () => {
     expect(appRuntimeStateSource).toContain(
       "eventBus.on('websocket_reconnected', handleWebSocketReconnected);",
     );
+    expect(appRuntimeStateSource).toContain("const ROOT_DASHBOARD_PATH = '/dashboard';");
+    expect(appRuntimeStateSource).toContain('if (pathname === ROOT_DASHBOARD_PATH) return false;');
     expect(appRuntimeStateSource).not.toContain("import { startMetricsCollector } from '@/stores/metricsCollector';");
     expect(appRuntimeStateSource).not.toContain('startMetricsCollector();');
     expect(appRuntimeStateSource).not.toContain('function AppLayout(');

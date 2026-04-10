@@ -152,6 +152,18 @@ assembly branch.
    snapshot freshness must come from websocket `state.resources` instead of
    layering confirmatory dashboard/infrastructure REST refetch loops over
    already-owned resource updates.
+10. Keep websocket-first initial hydration bounded and canonical. When
+    `frontend-modern/src/pages/Dashboard.tsx` opts the unfiltered dashboard
+    surface into `initialHydration: 'prefer-ws'`, the wait must stay short,
+    must apply only to supported websocket-owned snapshots, and must fall back
+    to the canonical paginated unified-resource transport in
+    `frontend-modern/src/hooks/useUnifiedResources.ts` instead of inventing a
+    dashboard-only resource bootstrap path.
+11. Keep summary consumers on the resource snapshot they were already given.
+    `frontend-modern/src/components/Infrastructure/useInfrastructureSummaryState.ts`
+    may derive workload and infrastructure rollups from `props.resources`, but
+    it must not reopen `useResources()` or start a second unfiltered
+    unified-resource fetch path under the infrastructure summary surface.
 
 ## Forbidden Paths
 
@@ -283,8 +295,9 @@ assembly branch.
     truth. `frontend-modern/src/hooks/useDashboardTrends.ts` may detect
     storage presence from canonical `isStorage(...)` resources and their
     shared metrics-target IDs, but once storage exists it must reuse the owned
-    `/api/storage-charts` summary contract instead of rebuilding page-local
-    per-resource storage history fetches or storage-type aliases.
+    compact `/api/charts/storage-summary` contract instead of rebuilding
+    page-local per-resource storage history fetches, storage-type aliases, or
+    full storage-page `/api/storage-charts` fetches.
 
 ## Current State
 
@@ -410,7 +423,8 @@ That same registry/view boundary now also applies to provider-backed storage.
 `internal/unifiedresources/registry.go` must attach the resolved
 `MetricsTarget` onto cached view clones before `ReadState` exposes
 `StoragePoolView` or `PhysicalDiskView`, so `/api/resources`, storage summary
-selection, and `/api/storage-charts` all see the same canonical history
+selection, `/api/storage-charts`, and `/api/charts/storage-summary` all see
+the same canonical history
 identity instead of splitting between view-cache resource IDs and API
 serialization-time metric IDs.
 That same VMware contract now also includes the identity rule. VMware managed

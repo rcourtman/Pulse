@@ -5897,6 +5897,59 @@ var sparklineMetrics = map[string]bool{
 	"netout":    true,
 }
 
+var infrastructureSummaryMetricOrder = []string{
+	"cpu",
+	"memory",
+	"disk",
+	"diskread",
+	"diskwrite",
+	"netin",
+	"netout",
+}
+
+func parseInfrastructureSummaryRequestedMetrics(
+	query url.Values,
+) ([]string, map[string]bool, error) {
+	rawValues, ok := query["metrics"]
+	if !ok || len(rawValues) == 0 {
+		requested := make(map[string]bool, len(infrastructureSummaryMetricOrder))
+		for _, metricType := range infrastructureSummaryMetricOrder {
+			requested[metricType] = true
+		}
+		return append([]string(nil), infrastructureSummaryMetricOrder...), requested, nil
+	}
+
+	requestedList := make([]string, 0, len(infrastructureSummaryMetricOrder))
+	requestedSet := make(map[string]bool, len(infrastructureSummaryMetricOrder))
+	invalid := make([]string, 0)
+
+	for _, rawValue := range rawValues {
+		for _, part := range strings.Split(rawValue, ",") {
+			metricType := strings.TrimSpace(strings.ToLower(part))
+			if metricType == "" {
+				continue
+			}
+			if !sparklineMetrics[metricType] {
+				invalid = append(invalid, metricType)
+				continue
+			}
+			if requestedSet[metricType] {
+				continue
+			}
+			requestedSet[metricType] = true
+			requestedList = append(requestedList, metricType)
+		}
+	}
+
+	if len(invalid) > 0 {
+		return nil, nil, fmt.Errorf("invalid infrastructure metrics filter: %s", strings.Join(invalid, ", "))
+	}
+	if len(requestedList) == 0 {
+		return nil, nil, fmt.Errorf("infrastructure metrics filter must include at least one valid metric")
+	}
+	return requestedList, requestedSet, nil
+}
+
 func convertMetricsForChart(
 	metrics map[string][]monitoring.MetricPoint,
 	oldestTimestamp *int64,
@@ -6494,6 +6547,11 @@ func (r *Router) handleInfrastructureCharts(w http.ResponseWriter, req *http.Req
 	if timeRange == "" {
 		timeRange = "1h"
 	}
+	requestedMetricNames, requestedMetrics, err := parseInfrastructureSummaryRequestedMetrics(query)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 	// Convert time range to duration.
 	duration := parseChartsRangeDuration(timeRange)
 
@@ -6517,7 +6575,12 @@ func (r *Router) handleInfrastructureCharts(w http.ResponseWriter, req *http.Req
 	oldestTimestamp := currentTime
 
 	// Process Nodes - batch-load historical data (1-2 SQL calls instead of N×5).
-	nodeMetricTypes := []string{"cpu", "memory", "disk", "netin", "netout"}
+	nodeMetricTypes := make([]string, 0, 5)
+	for _, metricType := range []string{"cpu", "memory", "disk", "netin", "netout"} {
+		if requestedMetrics[metricType] {
+			nodeMetricTypes = append(nodeMetricTypes, metricType)
+		}
+	}
 	nodeData := make(map[string]NodeChartData)
 	nodeList := readState.Nodes()
 	nodeIDs := make([]string, 0, len(nodeList))
@@ -6529,7 +6592,10 @@ func (r *Router) handleInfrastructureCharts(w http.ResponseWriter, req *http.Req
 			nodeIDs = append(nodeIDs, nid)
 		}
 	}
-	nodeBatchMetrics := monitor.GetNodeMetricsForChartBatch(nodeIDs, nodeMetricTypes, duration)
+	nodeBatchMetrics := map[string]map[string][]monitoring.MetricPoint{}
+	if len(nodeMetricTypes) > 0 {
+		nodeBatchMetrics = monitor.GetNodeMetricsForChartBatch(nodeIDs, nodeMetricTypes, duration)
+	}
 	for _, node := range nodeList {
 		if node == nil {
 			continue
@@ -6559,23 +6625,24 @@ func (r *Router) handleInfrastructureCharts(w http.ResponseWriter, req *http.Req
 			}
 		}
 		for _, metricType := range nodeMetricTypes {
-			if len(nodeData[nid][metricType]) == 0 {
-				var value float64
-				hasFallbackValue := true
-				switch metricType {
-				case "cpu":
-					value = node.CPUPercent()
-				case "memory":
-					value = node.MemoryPercent()
-				case "disk":
-					value = node.DiskPercent()
-				default:
-					hasFallbackValue = false
-				}
-				if hasFallbackValue {
-					nodeData[nid][metricType] = []MetricPoint{
-						{Timestamp: currentTime, Value: value},
-					}
+			if len(nodeData[nid][metricType]) > 0 {
+				continue
+			}
+			var value float64
+			hasFallbackValue := true
+			switch metricType {
+			case "cpu":
+				value = node.CPUPercent()
+			case "memory":
+				value = node.MemoryPercent()
+			case "disk":
+				value = node.DiskPercent()
+			default:
+				hasFallbackValue = false
+			}
+			if hasFallbackValue {
+				nodeData[nid][metricType] = []MetricPoint{
+					{Timestamp: currentTime, Value: value},
 				}
 			}
 		}
@@ -6609,7 +6676,7 @@ func (r *Router) handleInfrastructureCharts(w http.ResponseWriter, req *http.Req
 		dockerHostData[dhID] = make(VMChartData)
 		if batchMetrics, ok := dhBatchMetrics[dhID]; ok {
 			for metricType, points := range batchMetrics {
-				if !sparklineMetrics[metricType] {
+				if !requestedMetrics[metricType] {
 					continue
 				}
 				dockerHostData[dhID][metricType] = make([]MetricPoint, len(points))
@@ -6625,14 +6692,27 @@ func (r *Router) handleInfrastructureCharts(w http.ResponseWriter, req *http.Req
 				}
 			}
 		}
-		if len(dockerHostData[dhID]["cpu"]) == 0 {
-			dockerHostData[dhID]["cpu"] = []MetricPoint{{Timestamp: currentTime, Value: dh.CPUPercent()}}
-			dockerHostData[dhID]["memory"] = []MetricPoint{{Timestamp: currentTime, Value: dh.MemoryPercent()}}
-			var diskPercent float64
-			if disks := dh.Disks(); len(disks) > 0 {
-				diskPercent = disks[0].Usage
+		for _, metricType := range requestedMetricNames {
+			if len(dockerHostData[dhID][metricType]) > 0 {
+				continue
 			}
-			dockerHostData[dhID]["disk"] = []MetricPoint{{Timestamp: currentTime, Value: diskPercent}}
+			var value float64
+			hasFallbackValue := true
+			switch metricType {
+			case "cpu":
+				value = dh.CPUPercent()
+			case "memory":
+				value = dh.MemoryPercent()
+			case "disk":
+				if disks := dh.Disks(); len(disks) > 0 {
+					value = disks[0].Usage
+				}
+			default:
+				hasFallbackValue = false
+			}
+			if hasFallbackValue {
+				dockerHostData[dhID][metricType] = []MetricPoint{{Timestamp: currentTime, Value: value}}
+			}
 		}
 		normalizeInfrastructureSummaryChartSeries(dockerHostData[dhID], duration, currentTime)
 	}
@@ -6657,7 +6737,7 @@ func (r *Router) handleInfrastructureCharts(w http.ResponseWriter, req *http.Req
 		agentData[hID] = make(VMChartData)
 		if batchMetrics, ok := agentBatchMetrics[request.SQLResourceID]; ok {
 			for metricType, points := range batchMetrics {
-				if !sparklineMetrics[metricType] {
+				if !requestedMetrics[metricType] {
 					continue
 				}
 				agentData[hID][metricType] = make([]MetricPoint, len(points))
@@ -6673,10 +6753,25 @@ func (r *Router) handleInfrastructureCharts(w http.ResponseWriter, req *http.Req
 				}
 			}
 		}
-		if len(agentData[hID]["cpu"]) == 0 {
-			agentData[hID]["cpu"] = []MetricPoint{{Timestamp: currentTime, Value: h.CPUPercent()}}
-			agentData[hID]["memory"] = []MetricPoint{{Timestamp: currentTime, Value: h.MemoryPercent()}}
-			agentData[hID]["disk"] = []MetricPoint{{Timestamp: currentTime, Value: h.DiskPercent()}}
+		for _, metricType := range requestedMetricNames {
+			if len(agentData[hID][metricType]) > 0 {
+				continue
+			}
+			var value float64
+			hasFallbackValue := true
+			switch metricType {
+			case "cpu":
+				value = h.CPUPercent()
+			case "memory":
+				value = h.MemoryPercent()
+			case "disk":
+				value = h.DiskPercent()
+			default:
+				hasFallbackValue = false
+			}
+			if hasFallbackValue {
+				agentData[hID][metricType] = []MetricPoint{{Timestamp: currentTime, Value: value}}
+			}
 		}
 		normalizeInfrastructureSummaryChartSeries(agentData[hID], duration, currentTime)
 	}
@@ -7833,6 +7928,85 @@ func (r *Router) handleStorageCharts(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
+// handleStorageSummaryCharts serves a compact aggregate capacity trend for the
+// dashboard storage card. It intentionally avoids returning per-pool and
+// per-disk series so the dashboard does not overfetch the full storage page
+// payload.
+func (r *Router) handleStorageSummaryCharts(w http.ResponseWriter, req *http.Request) {
+	const inMemoryChartThreshold = 2 * time.Hour
+
+	if req.Method != http.MethodGet && req.Method != http.MethodHead {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	query := req.URL.Query()
+	timeRange := query.Get("range")
+	if timeRange == "" {
+		timeRange = "24h"
+	}
+	duration := parseChartsRangeDuration(timeRange)
+
+	monitor := r.getTenantMonitor(req.Context())
+	if monitor == nil {
+		http.Error(w, "Tenant monitor is not available", http.StatusInternalServerError)
+		return
+	}
+	readState := monitor.GetUnifiedReadStateOrSnapshot()
+	if readState == nil {
+		http.Error(w, "State unavailable", http.StatusInternalServerError)
+		return
+	}
+
+	storageIDs := make([]string, 0, len(readState.StoragePools()))
+	for _, pool := range readState.StoragePools() {
+		if pool == nil {
+			continue
+		}
+		storageID := strings.TrimSpace(pool.SourceID())
+		if storageID == "" {
+			continue
+		}
+		storageIDs = append(storageIDs, storageID)
+	}
+
+	currentTime := time.Now().UnixMilli()
+	capacity, oldestTimestamp := buildStorageSummaryCapacityTrend(
+		monitor.GetStorageMetricsForChartBatch(storageIDs, duration),
+	)
+	if oldestTimestamp == 0 {
+		oldestTimestamp = currentTime
+	}
+
+	metricsStoreEnabled := monitor.GetMetricsStore() != nil
+	primarySourceHint := "memory"
+	if metricsStoreEnabled && duration > inMemoryChartThreshold {
+		primarySourceHint = "store_or_memory_fallback"
+	}
+
+	resp := EmptyStorageSummaryTrendResponse()
+	resp.Capacity = capacity
+	resp.Timestamp = currentTime
+	resp.Stats = ChartStats{
+		OldestDataTimestamp:   oldestTimestamp,
+		Range:                 timeRange,
+		RangeSeconds:          int64(duration / time.Second),
+		MetricsStoreEnabled:   metricsStoreEnabled,
+		PrimarySourceHint:     primarySourceHint,
+		InMemoryThresholdSecs: int64(inMemoryChartThreshold / time.Second),
+		PointCounts: ChartPointCounts{
+			Total:   len(capacity),
+			Storage: len(capacity),
+		},
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(resp.NormalizeCollections()); err != nil {
+		log.Error().Err(err).Msg("Failed to encode storage summary chart data")
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+	}
+}
+
 // monitorPointsToAPI converts monitoring MetricPoints (time.Time timestamps)
 // to API MetricPoints (Unix millisecond timestamps) for JSON serialization.
 func monitorPointsToAPI(points []monitoring.MetricPoint) []MetricPoint {
@@ -7844,6 +8018,78 @@ func monitorPointsToAPI(points []monitoring.MetricPoint) []MetricPoint {
 		out[i] = MetricPoint{Timestamp: p.Timestamp.UnixMilli(), Value: p.Value}
 	}
 	return out
+}
+
+func buildStorageSummaryCapacityTrend(
+	poolMetrics map[string]map[string][]monitoring.MetricPoint,
+) ([]MetricPoint, int64) {
+	type aggregateBucket struct {
+		used     float64
+		avail    float64
+		hasUsed  bool
+		hasAvail bool
+	}
+
+	buckets := make(map[int64]*aggregateBucket)
+	var oldestTimestamp int64
+	for _, metrics := range poolMetrics {
+		for _, point := range metrics["used"] {
+			timestamp := point.Timestamp.UnixMilli()
+			bucket := buckets[timestamp]
+			if bucket == nil {
+				bucket = &aggregateBucket{}
+				buckets[timestamp] = bucket
+			}
+			bucket.used += point.Value
+			bucket.hasUsed = true
+			if oldestTimestamp == 0 || timestamp < oldestTimestamp {
+				oldestTimestamp = timestamp
+			}
+		}
+		for _, point := range metrics["avail"] {
+			timestamp := point.Timestamp.UnixMilli()
+			bucket := buckets[timestamp]
+			if bucket == nil {
+				bucket = &aggregateBucket{}
+				buckets[timestamp] = bucket
+			}
+			bucket.avail += point.Value
+			bucket.hasAvail = true
+			if oldestTimestamp == 0 || timestamp < oldestTimestamp {
+				oldestTimestamp = timestamp
+			}
+		}
+	}
+
+	if len(buckets) == 0 {
+		return nil, oldestTimestamp
+	}
+
+	timestamps := make([]int64, 0, len(buckets))
+	for timestamp := range buckets {
+		timestamps = append(timestamps, timestamp)
+	}
+	sort.Slice(timestamps, func(i, j int) bool {
+		return timestamps[i] < timestamps[j]
+	})
+
+	out := make([]MetricPoint, 0, len(timestamps))
+	for _, timestamp := range timestamps {
+		bucket := buckets[timestamp]
+		if bucket == nil || !bucket.hasUsed || !bucket.hasAvail {
+			continue
+		}
+		total := bucket.used + bucket.avail
+		if math.IsNaN(total) || math.IsInf(total, 0) || total <= 0 {
+			continue
+		}
+		out = append(out, MetricPoint{
+			Timestamp: timestamp,
+			Value:     (bucket.used / total) * 100,
+		})
+	}
+
+	return out, oldestTimestamp
 }
 
 // handleMetricsStoreStats returns statistics about the persistent metrics store

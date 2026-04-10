@@ -216,14 +216,15 @@ querying, and the operator-facing storage health presentation layer.
     runtime as populated mock inventory, but they must not expose
     `demo_fixtures`, billing identity, or alternate entitlement semantics as
     recovery-local transport or operator-facing storage metadata.
-37. Keep dashboard storage summary fetches scope-owned on the shared storage
-    summary cache. `frontend-modern/src/components/Storage/StorageSummary.tsx`,
-    `frontend-modern/src/utils/storageSummaryCache.ts`, and
+37. Keep dashboard storage summary fetches scope-owned on the shared summary
+    caches. `frontend-modern/src/components/Storage/StorageSummary.tsx`,
+    `frontend-modern/src/utils/storageSummaryCache.ts`,
+    `frontend-modern/src/utils/storageSummaryTrendCache.ts`, and
     `frontend-modern/src/pages/Dashboard.tsx` may reuse cached org/range
-    storage summaries for first paint, but they must not refetch
-    `/api/storage-charts` once per additional dashboard resource page or invent
-    a dashboard-only storage summary transport path outside the canonical cache
-    owner.
+    storage summaries for first paint, but they must not refetch the full
+    `/api/storage-charts` payload once per additional dashboard resource page
+    or invent a dashboard-only storage summary transport path outside the
+    canonical cache owners.
 
 ## Forbidden Paths
 
@@ -312,9 +313,10 @@ querying, and the operator-facing storage health presentation layer.
     shared sticky summary primitive instead of a storage-local scroll wrapper.
     Dashboard storage trends belong to that same owned summary contract: the
     dashboard may derive a 24-hour storage capacity delta from
-    `/api/storage-charts`, but it must not rebuild storage summary behavior by
-    fanning out per-pool `/api/metrics-store/history` reads or by inventing a
-    dashboard-only storage history transport.
+    `/api/charts/storage-summary`, but it must not rebuild storage summary
+    behavior by fanning out per-pool `/api/metrics-store/history` reads, by
+    pulling the full storage-page `/api/storage-charts` payload, or by
+    inventing a dashboard-only storage history transport.
 16. Keep storage summary interaction scoped through the same canonical IDs.
 17. Keep adjacent AI settings persistence vendor-neutral on the shared
     `internal/api/` boundary. When storage- or recovery-adjacent hosted flows

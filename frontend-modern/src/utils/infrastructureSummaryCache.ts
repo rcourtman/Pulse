@@ -2,6 +2,7 @@ import {
   ChartsAPI,
   type ChartData,
   type ChartsResponse,
+  type InfrastructureSummaryMetric,
   type InfrastructureChartsResponse,
   type TimeRange,
 } from '@/api/charts';
@@ -11,9 +12,11 @@ import { eventBus } from '@/stores/events';
 
 export const INFRA_SUMMARY_CACHE_PREFIX = 'pulse.infrastructureSummaryCharts.';
 export const INFRA_SUMMARY_CACHE_MAX_AGE_MS = 5 * 60_000;
-const INFRA_SUMMARY_CACHE_VERSION = 4;
+const INFRA_SUMMARY_CACHE_VERSION = 5;
 const INFRA_SUMMARY_CACHE_MAX_CHARS = 900_000;
 const INFRA_SUMMARY_CACHE_MAX_POINTS_PER_SERIES = 360;
+const DEFAULT_INFRA_SUMMARY_METRICS = ['cpu', 'memory', 'disk', 'diskread', 'diskwrite', 'netin', 'netout'] as const;
+type NormalizedInfrastructureSummaryMetrics = readonly InfrastructureSummaryMetric[];
 
 const INFRA_SUMMARY_PERF_LOG_PREFIX = '[InfraSummaryPerf]';
 
@@ -82,6 +85,7 @@ interface CachedInfrastructureSummary {
   version: number;
   range: TimeRange;
   cachedAt: number;
+  metrics: InfrastructureSummaryMetric[];
   oldestDataTimestamp: number | null;
   charts: Record<string, CachedChartData>;
 }
@@ -94,6 +98,7 @@ export interface InfrastructureSummaryCacheHit {
 
 export interface InfrastructureSummaryFetchOptions {
   caller?: string;
+  metrics?: readonly InfrastructureSummaryMetric[] | null;
 }
 
 export interface InfrastructureSummaryFetchResult {
@@ -111,11 +116,33 @@ const toCachedChartData = (data: ChartData): CachedChartData => ({
   netout: trimPoints(data.netout ?? [], INFRA_SUMMARY_CACHE_MAX_POINTS_PER_SERIES),
 });
 
-const inFlightKeyFor = (range: TimeRange, orgScope: string) =>
-  `${encodeURIComponent(orgScope)}::${range}`;
+function normalizeInfrastructureSummaryMetrics(
+  metrics?: readonly InfrastructureSummaryMetric[] | null,
+): NormalizedInfrastructureSummaryMetrics {
+  if (!Array.isArray(metrics) || metrics.length === 0) {
+    return DEFAULT_INFRA_SUMMARY_METRICS;
+  }
+  return Array.from(new Set(metrics)) as NormalizedInfrastructureSummaryMetrics;
+}
 
-const cacheKeyForRange = (range: TimeRange, orgScope: string = normalizeOrgScope(getOrgID())) =>
-  `${INFRA_SUMMARY_CACHE_PREFIX}${encodeURIComponent(orgScope)}::${range}`;
+function infrastructureSummaryMetricsKey(
+  metrics?: readonly InfrastructureSummaryMetric[] | null,
+): string {
+  return normalizeInfrastructureSummaryMetrics(metrics).join(',');
+}
+
+const inFlightKeyFor = (
+  range: TimeRange,
+  orgScope: string,
+  metrics?: readonly InfrastructureSummaryMetric[] | null,
+) => `${encodeURIComponent(orgScope)}::${range}::${infrastructureSummaryMetricsKey(metrics)}`;
+
+const cacheKeyForRange = (
+  range: TimeRange,
+  orgScope: string = normalizeOrgScope(getOrgID()),
+  metrics?: readonly InfrastructureSummaryMetric[] | null,
+) =>
+  `${INFRA_SUMMARY_CACHE_PREFIX}${encodeURIComponent(orgScope)}::${range}::${infrastructureSummaryMetricsKey(metrics)}`;
 
 function trimPoints<T>(points: T[], max: number): T[] {
   if (points.length <= max) return points;
@@ -184,11 +211,13 @@ export function persistInfrastructureSummaryCache(
   map: Map<string, ChartData>,
   oldestDataTimestamp: number | null,
   orgScope?: string,
+  metrics?: readonly InfrastructureSummaryMetric[] | null,
 ): void {
   if (typeof window === 'undefined') return;
 
   try {
     const scopedOrg = normalizeOrgScope(orgScope ?? getOrgID());
+    const normalizedMetrics = normalizeInfrastructureSummaryMetrics(metrics);
     const charts: Record<string, CachedChartData> = {};
     for (const [key, value] of map.entries()) {
       charts[key] = toCachedChartData(value);
@@ -197,6 +226,7 @@ export function persistInfrastructureSummaryCache(
       version: INFRA_SUMMARY_CACHE_VERSION,
       range,
       cachedAt: Date.now(),
+      metrics: [...normalizedMetrics],
       oldestDataTimestamp,
       charts,
     };
@@ -204,11 +234,11 @@ export function persistInfrastructureSummaryCache(
     const serialized = JSON.stringify(payload);
     if (serialized.length > INFRA_SUMMARY_CACHE_MAX_CHARS) {
       // Avoid blowing past localStorage limits (and evicting unrelated app state).
-      window.localStorage.removeItem(cacheKeyForRange(range, scopedOrg));
+      window.localStorage.removeItem(cacheKeyForRange(range, scopedOrg, normalizedMetrics));
       return;
     }
 
-    window.localStorage.setItem(cacheKeyForRange(range, scopedOrg), serialized);
+    window.localStorage.setItem(cacheKeyForRange(range, scopedOrg, normalizedMetrics), serialized);
   } catch {
     // Ignore storage write failures.
   }
@@ -218,12 +248,14 @@ export function readInfrastructureSummaryCache(
   range: TimeRange,
   maxAgeMs: number = INFRA_SUMMARY_CACHE_MAX_AGE_MS,
   orgScope?: string,
+  metrics?: readonly InfrastructureSummaryMetric[] | null,
 ): InfrastructureSummaryCacheHit | null {
   if (typeof window === 'undefined') return null;
 
   try {
     const scopedOrg = normalizeOrgScope(orgScope ?? getOrgID());
-    const cacheKey = cacheKeyForRange(range, scopedOrg);
+    const normalizedMetrics = normalizeInfrastructureSummaryMetrics(metrics);
+    const cacheKey = cacheKeyForRange(range, scopedOrg, normalizedMetrics);
     const raw = window.localStorage.getItem(cacheKey);
     if (!raw) return null;
 
@@ -231,9 +263,11 @@ export function readInfrastructureSummaryCache(
     if (
       parsed?.version !== INFRA_SUMMARY_CACHE_VERSION ||
       parsed.range !== range ||
+      infrastructureSummaryMetricsKey(parsed.metrics) !==
+        infrastructureSummaryMetricsKey(normalizedMetrics) ||
       typeof parsed.cachedAt !== 'number'
     ) {
-      window.localStorage.removeItem(cacheKeyForRange(range, scopedOrg));
+      window.localStorage.removeItem(cacheKeyForRange(range, scopedOrg, normalizedMetrics));
       return null;
     }
 
@@ -276,8 +310,9 @@ export function readInfrastructureSummaryCache(
 export function hasFreshInfrastructureSummaryCache(
   range: TimeRange,
   maxAgeMs: number = INFRA_SUMMARY_CACHE_MAX_AGE_MS,
+  metrics?: readonly InfrastructureSummaryMetric[] | null,
 ): boolean {
-  return readInfrastructureSummaryCache(range, maxAgeMs) !== null;
+  return readInfrastructureSummaryCache(range, maxAgeMs, undefined, metrics) !== null;
 }
 
 const inFlightFetches = new Map<string, Promise<InfrastructureSummaryFetchResult>>();
@@ -293,7 +328,8 @@ export function fetchInfrastructureSummaryAndCache(
 ): Promise<InfrastructureSummaryFetchResult> {
   const caller = options?.caller || 'unknown';
   const orgScope = normalizeOrgScope(getOrgID());
-  const inFlightKey = inFlightKeyFor(range, orgScope);
+  const normalizedMetrics = normalizeInfrastructureSummaryMetrics(options?.metrics);
+  const inFlightKey = inFlightKeyFor(range, orgScope, normalizedMetrics);
 
   const existing = inFlightFetches.get(inFlightKey);
   if (existing) {
@@ -303,9 +339,11 @@ export function fetchInfrastructureSummaryAndCache(
 
   const requestId = ++infraSummaryFetchSeq;
   const startedAt = infraSummaryPerfNow();
-  infraSummaryPerfLog('fetch start', { caller, range, orgScope, requestId });
+    infraSummaryPerfLog('fetch start', { caller, range, orgScope, requestId });
 
-  const request = ChartsAPI.getInfrastructureSummaryCharts(range)
+  const request = ChartsAPI.getInfrastructureSummaryCharts(range, undefined, {
+    metrics: [...normalizedMetrics],
+  })
     .then((response) => {
       const map = extractInfrastructureSummaryChartMapFromInfrastructureResponse(response);
       const oldestDataTimestamp =
@@ -313,12 +351,13 @@ export function fetchInfrastructureSummaryAndCache(
         Number.isFinite(response.stats.oldestDataTimestamp)
           ? response.stats.oldestDataTimestamp
           : null;
-      persistInfrastructureSummaryCache(range, map, oldestDataTimestamp, orgScope);
+      persistInfrastructureSummaryCache(range, map, oldestDataTimestamp, orgScope, normalizedMetrics);
 
       infraSummaryPerfLog('fetch done', {
         caller,
         range,
         orgScope,
+        metrics: normalizedMetrics,
         requestId,
         ms: Math.round(infraSummaryPerfNow() - startedAt),
         series: map.size,
@@ -336,6 +375,7 @@ export function fetchInfrastructureSummaryAndCache(
         caller,
         range,
         orgScope,
+        metrics: normalizedMetrics,
         requestId,
         ms: Math.round(infraSummaryPerfNow() - startedAt),
         error: error instanceof Error ? error.message : String(error),

@@ -17,9 +17,9 @@ vi.mock('@/utils/infrastructureSummaryCache', () => ({
   readInfrastructureSummaryCache: vi.fn(),
 }));
 
-vi.mock('@/utils/storageSummaryCache', () => ({
-  fetchStorageSummaryAndCache: vi.fn(),
-  readStorageSummaryCache: vi.fn(),
+vi.mock('@/utils/storageSummaryTrendCache', () => ({
+  fetchStorageSummaryTrendAndCache: vi.fn(),
+  readStorageSummaryTrendCache: vi.fn(),
 }));
 
 vi.mock('@/components/Infrastructure/infrastructureSummaryModel', () => ({
@@ -56,9 +56,9 @@ import {
   readInfrastructureSummaryCache,
 } from '@/utils/infrastructureSummaryCache';
 import {
-  fetchStorageSummaryAndCache,
-  readStorageSummaryCache,
-} from '@/utils/storageSummaryCache';
+  fetchStorageSummaryTrendAndCache,
+  readStorageSummaryTrendCache,
+} from '@/utils/storageSummaryTrendCache';
 
 function createResource(partial: Partial<Resource> & Pick<Resource, 'id' | 'type'>): Resource {
   return {
@@ -198,17 +198,10 @@ describe('useDashboardTrends fetch scoping', () => {
       map: new Map(),
       oldestDataTimestamp: null,
     });
-    vi.mocked(readStorageSummaryCache).mockReturnValue(null);
-    vi.mocked(fetchStorageSummaryAndCache).mockResolvedValue({
-      pools: {
-        'pool-a': {
-          name: 'Pool A',
-          usage: [],
-          used: createPoints([400, 500]),
-          avail: createPoints([600, 500]),
-        },
-      },
-      disks: {},
+    vi.mocked(readStorageSummaryTrendCache).mockReturnValue(null);
+    vi.mocked(fetchStorageSummaryTrendAndCache).mockResolvedValue({
+      capacity: createPoints([40, 50]),
+      timestamp: 1_700_000_060_000,
       stats: {} as never,
     });
   });
@@ -233,7 +226,11 @@ describe('useDashboardTrends fetch scoping', () => {
 
     await vi.waitFor(() => {
       expect(vi.mocked(fetchInfrastructureSummaryAndCache)).toHaveBeenCalledTimes(1);
-      expect(vi.mocked(fetchStorageSummaryAndCache)).toHaveBeenCalledTimes(1);
+      expect(vi.mocked(fetchStorageSummaryTrendAndCache)).toHaveBeenCalledTimes(1);
+      expect(vi.mocked(fetchInfrastructureSummaryAndCache)).toHaveBeenCalledWith('1h', {
+        caller: 'useDashboardTrends',
+        metrics: ['cpu', 'memory'],
+      });
     });
 
     setResources([infrastructureA, infrastructureB, storageA, storageB]);
@@ -242,7 +239,7 @@ describe('useDashboardTrends fetch scoping', () => {
     await Promise.resolve();
 
     expect(vi.mocked(fetchInfrastructureSummaryAndCache)).toHaveBeenCalledTimes(1);
-    expect(vi.mocked(fetchStorageSummaryAndCache)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(fetchStorageSummaryTrendAndCache)).toHaveBeenCalledTimes(1);
     expect(Array.from(trends().infrastructure.cpu.keys())).toEqual(['infra-a', 'infra-b']);
 
     dispose();
@@ -265,7 +262,11 @@ describe('useDashboardTrends fetch scoping', () => {
 
     await vi.waitFor(() => {
       expect(vi.mocked(fetchInfrastructureSummaryAndCache)).toHaveBeenCalledTimes(1);
-      expect(vi.mocked(fetchStorageSummaryAndCache)).toHaveBeenCalledTimes(1);
+      expect(vi.mocked(fetchStorageSummaryTrendAndCache)).toHaveBeenCalledTimes(1);
+      expect(vi.mocked(fetchInfrastructureSummaryAndCache)).toHaveBeenCalledWith('1h', {
+        caller: 'useDashboardTrends',
+        metrics: ['cpu', 'memory'],
+      });
     });
 
     setRange('12h');
@@ -273,8 +274,12 @@ describe('useDashboardTrends fetch scoping', () => {
     await vi.waitFor(() => {
       expect(vi.mocked(fetchInfrastructureSummaryAndCache)).toHaveBeenCalledTimes(2);
     });
+    expect(vi.mocked(fetchInfrastructureSummaryAndCache)).toHaveBeenLastCalledWith('12h', {
+      caller: 'useDashboardTrends',
+      metrics: ['cpu', 'memory'],
+    });
 
-    expect(vi.mocked(fetchStorageSummaryAndCache)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(fetchStorageSummaryTrendAndCache)).toHaveBeenCalledTimes(1);
 
     dispose();
   });
@@ -302,7 +307,7 @@ describe('useDashboardTrends fetch scoping', () => {
     await Promise.resolve();
 
     expect(vi.mocked(fetchInfrastructureSummaryAndCache)).not.toHaveBeenCalled();
-    expect(vi.mocked(fetchStorageSummaryAndCache)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(fetchStorageSummaryTrendAndCache)).toHaveBeenCalledTimes(1);
 
     dispose();
   });
@@ -313,6 +318,8 @@ describe('useDashboardTrends infrastructure routing', () => {
     expect(useDashboardTrendsSource).toContain('readInfrastructureSummaryCache');
     expect(useDashboardTrendsSource).toContain('fetchInfrastructureSummaryAndCache');
     expect(useDashboardTrendsSource).toContain("caller: 'useDashboardTrends'");
+    expect(useDashboardTrendsSource).toContain("const DASHBOARD_INFRASTRUCTURE_METRICS");
+    expect(useDashboardTrendsSource).toContain("metrics: DASHBOARD_INFRASTRUCTURE_METRICS");
     expect(useDashboardTrendsSource).toContain('const infrastructureScopeKey');
     expect(useDashboardTrendsSource).toContain('const hasInfrastructureResources');
     expect(useDashboardTrendsSource).not.toContain('request.cpu.map(async');
@@ -320,11 +327,11 @@ describe('useDashboardTrends infrastructure routing', () => {
   });
 
   it('routes storage trends through the storage summary charts endpoint', () => {
-    expect(useDashboardTrendsSource).toContain('readStorageSummaryCache');
-    expect(useDashboardTrendsSource).toContain('fetchStorageSummaryAndCache(STORAGE_RANGE');
+    expect(useDashboardTrendsSource).toContain('readStorageSummaryTrendCache');
+    expect(useDashboardTrendsSource).toContain('fetchStorageSummaryTrendAndCache(STORAGE_RANGE');
     expect(useDashboardTrendsSource).toContain('const storageScopeKey');
-    expect(useDashboardTrendsSource).toContain('buildStorageCapacityTrendPoints(storageSummary.pools)');
-    expect(useDashboardTrendsSource).not.toContain('metrics-store/history');
+    expect(useDashboardTrendsSource).toContain('extractTrendData(storageSummary.capacity)');
+    expect(useDashboardTrendsSource).not.toContain('/api/storage-charts');
     expect(useDashboardTrendsSource).not.toContain('request.storage.map(async');
   });
 });

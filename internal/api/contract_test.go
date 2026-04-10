@@ -914,6 +914,76 @@ func TestContract_InfrastructureChartsNormalizeLongRangeMixedCadence(t *testing.
 	}
 }
 
+func TestContract_InfrastructureChartsHonorExplicitMetricFilters(t *testing.T) {
+	monitor, state, _ := newTestMonitor(t)
+	state.Nodes = []models.Node{{
+		ID:     "node-contract-1",
+		Name:   "node-contract-1",
+		Status: "online",
+		CPU:    0.1,
+		Memory: models.Memory{Usage: 12.0},
+		Disk:   models.Disk{Usage: 34.0},
+	}}
+	state.DockerHosts = []models.DockerHost{{
+		ID:       "docker-host-contract-1",
+		Runtime:  "docker",
+		CPUUsage: 23.0,
+		Memory:   models.Memory{Usage: 45.0},
+		Disks:    []models.Disk{{Usage: 67.0}},
+		Status:   "online",
+	}}
+	state.Hosts = []models.Host{{
+		ID:       "agent-contract-1",
+		Hostname: "agent-contract-1",
+		CPUUsage: 11.0,
+		Memory:   models.Memory{Usage: 22.0},
+		Disks:    []models.Disk{{Usage: 33.0}},
+		Status:   "online",
+	}}
+	syncTestResourceStore(t, monitor, state)
+
+	router := &Router{monitor: monitor}
+	req := httptest.NewRequest(
+		http.MethodGet,
+		"/api/charts/infrastructure?range=5m&metrics=cpu,memory",
+		nil,
+	)
+	rec := httptest.NewRecorder()
+
+	router.handleInfrastructureCharts(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var decoded InfrastructureChartsResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &decoded); err != nil {
+		t.Fatalf("unmarshal infrastructure charts response: %v", err)
+	}
+
+	if decoded.Stats.PointCounts.Nodes != 2 {
+		t.Fatalf("expected stats.pointCounts.nodes=2, got %d", decoded.Stats.PointCounts.Nodes)
+	}
+	if decoded.Stats.PointCounts.DockerHosts != 2 {
+		t.Fatalf(
+			"expected stats.pointCounts.dockerHosts=2, got %d",
+			decoded.Stats.PointCounts.DockerHosts,
+		)
+	}
+	if decoded.Stats.PointCounts.Agents != 2 {
+		t.Fatalf("expected stats.pointCounts.agents=2, got %d", decoded.Stats.PointCounts.Agents)
+	}
+	if _, ok := decoded.NodeData["node-contract-1"]["disk"]; ok {
+		t.Fatal("expected node disk series to be filtered out of infrastructure summary payload")
+	}
+	if _, ok := decoded.DockerHostData["docker-host-contract-1"]["disk"]; ok {
+		t.Fatal("expected docker-host disk series to be filtered out of infrastructure summary payload")
+	}
+	if _, ok := decoded.AgentData["agent-contract-1"]["disk"]; ok {
+		t.Fatal("expected agent disk series to be filtered out of infrastructure summary payload")
+	}
+}
+
 func TestContract_WorkloadChartsCapLongRangeMixedCadenceByTime(t *testing.T) {
 	store := newTestMetricsStore(t)
 	monitor, state, _ := newTestMonitor(t)

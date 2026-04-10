@@ -2,7 +2,8 @@ import { createEffect, createMemo, createSignal, onCleanup, type Accessor } from
 import {
   type ChartData,
   type HistoryTimeRange,
-  type StorageSummaryChartsResponse,
+  type InfrastructureSummaryMetric,
+  type StorageSummaryTrendResponse,
   type TimeRange,
 } from '@/api/charts';
 import {
@@ -18,9 +19,9 @@ import {
 } from '@/utils/infrastructureSummaryCache';
 import { normalizeOrgScope } from '@/utils/orgScope';
 import {
-  fetchStorageSummaryAndCache,
-  readStorageSummaryCache,
-} from '@/utils/storageSummaryCache';
+  fetchStorageSummaryTrendAndCache,
+  readStorageSummaryTrendCache,
+} from '@/utils/storageSummaryTrendCache';
 import { isInfrastructure, isStorage, type Resource } from '@/types/resource';
 
 export type TrendPoint = {
@@ -49,6 +50,7 @@ export interface DashboardTrends {
 
 const INFRASTRUCTURE_RANGE: HistoryTimeRange = '1h';
 const STORAGE_RANGE: TimeRange = '24h';
+const DASHBOARD_INFRASTRUCTURE_METRICS: InfrastructureSummaryMetric[] = ['cpu', 'memory'];
 
 function createEmptyTrendData(): TrendData {
   return {
@@ -154,7 +156,15 @@ function buildInfrastructureTrendSnapshot(
 }
 
 export function buildStorageCapacityTrendPoints(
-  pools: StorageSummaryChartsResponse['pools'],
+  pools: Record<
+    string,
+    {
+      name?: string;
+      usage?: TrendPoint[];
+      used?: TrendPoint[];
+      avail?: TrendPoint[];
+    }
+  >,
 ): TrendPoint[] {
   const buckets = new Map<
     number,
@@ -243,13 +253,13 @@ export function extractTrendData(points: Array<{ timestamp: number; value: numbe
 }
 
 function buildStorageTrendSnapshot(
-  storageSummary: StorageSummaryChartsResponse | null,
+  storageSummary: StorageSummaryTrendResponse | null,
 ): DashboardTrends['storage'] {
   if (!storageSummary) {
     return createEmptyStorageTrends();
   }
   return {
-    capacity: extractTrendData(buildStorageCapacityTrendPoints(storageSummary.pools)),
+    capacity: extractTrendData(storageSummary.capacity),
   };
 }
 
@@ -263,7 +273,7 @@ export function useDashboardTrends(
     new Map(),
   );
   const [oldestDataTimestamp, setOldestDataTimestamp] = createSignal<number | null>(null);
-  const [storageSummary, setStorageSummary] = createSignal<StorageSummaryChartsResponse | null>(
+  const [storageSummary, setStorageSummary] = createSignal<StorageSummaryTrendResponse | null>(
     null,
   );
   const [infrastructureLoading, setInfrastructureLoading] = createSignal(false);
@@ -322,7 +332,12 @@ export function useDashboardTrends(
       return;
     }
 
-    const cached = readInfrastructureSummaryCache(summaryRange);
+    const cached = readInfrastructureSummaryCache(
+      summaryRange,
+      undefined,
+      undefined,
+      DASHBOARD_INFRASTRUCTURE_METRICS,
+    );
     if (cached) {
       setInfrastructureCharts(cached.map);
       setOldestDataTimestamp(cached.oldestDataTimestamp);
@@ -336,6 +351,7 @@ export function useDashboardTrends(
 
     fetchInfrastructureSummaryAndCache(summaryRange, {
       caller: 'useDashboardTrends',
+      metrics: DASHBOARD_INFRASTRUCTURE_METRICS,
     })
       .then((result) => {
         if (requestId !== latestInfrastructureRequestId) return;
@@ -368,7 +384,7 @@ export function useDashboardTrends(
       return;
     }
 
-    const cached = readStorageSummaryCache(STORAGE_RANGE);
+    const cached = readStorageSummaryTrendCache(STORAGE_RANGE);
     if (cached) {
       setStorageSummary(cached);
     }
@@ -376,7 +392,7 @@ export function useDashboardTrends(
     const requestId = ++latestStorageRequestId;
     setStorageLoading(true);
 
-    fetchStorageSummaryAndCache(STORAGE_RANGE, { caller: 'useDashboardTrends' })
+    fetchStorageSummaryTrendAndCache(STORAGE_RANGE, { caller: 'useDashboardTrends' })
       .then((result) => {
         if (requestId !== latestStorageRequestId) return;
         setStorageSummary(result);

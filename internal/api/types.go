@@ -240,6 +240,26 @@ func (r WorkloadsSummaryChartsResponse) NormalizeCollections() WorkloadsSummaryC
 	return r
 }
 
+// StorageSummaryTrendResponse is a compact response for the dashboard storage
+// card. It intentionally avoids returning per-pool and per-disk series.
+type StorageSummaryTrendResponse struct {
+	Capacity  []MetricPoint `json:"capacity"`
+	Timestamp int64         `json:"timestamp"`
+	Stats     ChartStats    `json:"stats"`
+}
+
+func EmptyStorageSummaryTrendResponse() StorageSummaryTrendResponse {
+	return StorageSummaryTrendResponse{}.NormalizeCollections()
+}
+
+func (r StorageSummaryTrendResponse) NormalizeCollections() StorageSummaryTrendResponse {
+	if r.Capacity == nil {
+		r.Capacity = []MetricPoint{}
+	}
+	r.Stats = r.Stats.NormalizeCollections()
+	return r
+}
+
 // ChartStats represents chart statistics
 type ChartStats struct {
 	OldestDataTimestamp   int64            `json:"oldestDataTimestamp"`

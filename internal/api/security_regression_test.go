@@ -2578,6 +2578,7 @@ func TestMonitoringReadEndpointsRequireMonitoringReadScope(t *testing.T) {
 		"/api/storage-charts",
 		"/api/charts",
 		"/api/charts/workloads",
+		"/api/charts/storage-summary",
 		"/api/metrics-store/stats",
 		"/api/metrics-store/history",
 		"/api/guests/metadata",

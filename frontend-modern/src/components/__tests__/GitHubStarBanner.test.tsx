@@ -1,5 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import gitHubStarBannerSource from '../GitHubStarBanner.tsx?raw';
 
 /* ------------------------------------------------------------------ */
 /*  Mocks                                                              */
@@ -7,11 +8,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 type BannerResource = { id: string; name: string };
 
-const mockResources = vi.hoisted(() => vi.fn<() => BannerResource[]>(() => []));
+const wsState = vi.hoisted(() => ({ resources: [] as BannerResource[] }));
+const mockInitialDataReceived = vi.hoisted(() => vi.fn<() => boolean>(() => true));
 
-vi.mock('@/hooks/useResources', () => ({
-  useResources: () => ({
-    resources: mockResources,
+vi.mock('@/contexts/appRuntime', () => ({
+  useWebSocket: () => ({
+    state: wsState,
+    initialDataReceived: mockInitialDataReceived,
   }),
 }));
 
@@ -32,13 +35,12 @@ async function renderBanner() {
   render(() => <mod.GitHubStarBanner />);
 }
 
-/** Set mockResources to return N fake resources. */
+/** Seed N fake websocket resources into runtime state. */
 function setResourceCount(n: number) {
-  const resources = Array.from({ length: n }, (_, i) => ({
+  wsState.resources = Array.from({ length: n }, (_, i) => ({
     id: `res-${i}`,
     name: `Resource ${i}`,
   }));
-  mockResources.mockReturnValue(resources);
 }
 
 /* ------------------------------------------------------------------ */
@@ -48,7 +50,8 @@ function setResourceCount(n: number) {
 describe('GitHubStarBanner', () => {
   beforeEach(() => {
     vi.useFakeTimers();
-    mockResources.mockReturnValue([]);
+    wsState.resources = [];
+    mockInitialDataReceived.mockReturnValue(true);
     localStorage.clear();
   });
 
@@ -61,11 +64,17 @@ describe('GitHubStarBanner', () => {
   /* ---------- Visibility: not shown scenarios ---------- */
 
   it('does not render when there are no resources', async () => {
-    mockResources.mockReturnValue([]);
+    wsState.resources = [];
 
     await renderBanner();
 
     expect(screen.queryByText('Enjoying Pulse?')).not.toBeInTheDocument();
+  });
+
+  it('keeps the shell banner on websocket runtime state instead of reopening unified resources', () => {
+    expect(gitHubStarBannerSource).toContain('useWebSocket');
+    expect(gitHubStarBannerSource).toContain('initialDataReceived');
+    expect(gitHubStarBannerSource).not.toContain('useResources');
   });
 
   it('does not render on the first day infrastructure is seen (records first-seen date)', async () => {
@@ -79,6 +88,17 @@ describe('GitHubStarBanner', () => {
 
     // Should have recorded today as first-seen date
     expect(localStorage.getItem(FIRST_SEEN_KEY)).toBe('2026-03-01');
+  });
+
+  it('does not render before websocket initial data is available', async () => {
+    mockInitialDataReceived.mockReturnValue(false);
+    setResourceCount(3);
+
+    await renderBanner();
+
+    expect(screen.queryByText('Enjoying Pulse?')).not.toBeInTheDocument();
+    const stored = localStorage.getItem(FIRST_SEEN_KEY);
+    expect(stored === null || stored === '').toBe(true);
   });
 
   it('does not render when first-seen date is today (same day)', async () => {
@@ -275,7 +295,7 @@ describe('GitHubStarBanner', () => {
 
   it('does not write first-seen date when there are no resources', async () => {
     vi.setSystemTime(new Date('2026-03-01T12:00:00Z'));
-    mockResources.mockReturnValue([]);
+    wsState.resources = [];
 
     await renderBanner();
 
