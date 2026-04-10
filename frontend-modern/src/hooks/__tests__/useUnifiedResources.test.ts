@@ -264,6 +264,32 @@ describe('useUnifiedResources', () => {
     dispose();
   });
 
+  it('skips unified resource hydration while disabled and resumes when enabled', async () => {
+    let dispose = () => {};
+    let result: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']> | undefined;
+    const [enabled, setEnabled] = createSignal(false);
+
+    createRoot((d) => {
+      dispose = d;
+      result = useUnifiedResources({
+        query: '',
+        cacheKey: 'all-resources',
+        enabled,
+      });
+    });
+
+    await flushAsync();
+    expect(apiFetchMock).not.toHaveBeenCalled();
+    expect(result!.loading()).toBe(false);
+
+    setEnabled(true);
+    await flushAsync();
+    expect(apiFetchMock).toHaveBeenCalledTimes(1);
+    await waitForResourceCount(() => result!.resources().length);
+
+    dispose();
+  });
+
   it('falls back to REST when websocket initial hydration does not arrive in time', async () => {
     setWsConnected(false);
     setWsInitialDataReceived(false);

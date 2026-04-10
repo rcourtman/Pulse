@@ -1,6 +1,6 @@
 import { createEffect, createMemo, createSignal, onCleanup } from 'solid-js';
 import { useRecoveryRollups } from '@/hooks/useRecoveryRollups';
-import { useResources } from '@/hooks/useResources';
+import { useUnifiedResources } from '@/hooks/useUnifiedResources';
 import {
   buildInfrastructureSelectorAgents,
   buildInfrastructureSelectorBackupCounts,
@@ -13,8 +13,14 @@ import {
 export type { InfrastructureSelectorProps } from './infrastructureSelectorModel';
 
 export function useInfrastructureSelectorState(props: InfrastructureSelectorProps) {
-  const { resources } = useResources();
-  const recovery = useRecoveryRollups();
+  const showNodeSummary = createMemo(() => props.showNodeSummary ?? true);
+  const unifiedResources = useUnifiedResources({
+    query: '',
+    cacheKey: 'all-resources',
+    enabled: showNodeSummary,
+  });
+  const resources = createMemo(() => (showNodeSummary() ? unifiedResources.resources() : []));
+  const recovery = useRecoveryRollups(() => (showNodeSummary() ? {} : null));
   const [selectedNode, setSelectedNode] = createSignal<string | null>(null);
 
   const unifiedNodes = createMemo(() => buildInfrastructureSelectorUnifiedNodes(resources()));
@@ -70,9 +76,6 @@ export function useInfrastructureSelectorState(props: InfrastructureSelectorProp
     document.addEventListener('keydown', handleKeyDown);
     onCleanup(() => document.removeEventListener('keydown', handleKeyDown));
   });
-
-  const showNodeSummary = () => props.showNodeSummary ?? true;
-
   return {
     agentsForNodeSummary,
     backupCounts,
@@ -82,7 +85,7 @@ export function useInfrastructureSelectorState(props: InfrastructureSelectorProp
     nodes,
     pbsInstances,
     selectedNode,
-    showNodeSummary,
+    showNodeSummary: () => showNodeSummary(),
     storageCounts,
     vmCounts,
   };

@@ -166,6 +166,11 @@ assembly branch.
     from the compact dashboard overview or resource snapshot they already own,
     but they must not reopen `useResources()` or start a second unfiltered
     unified-resource fetch path under the dashboard summary surface.
+12. Keep shared selector hydration visibility-bound. Reusable shells such as
+    `frontend-modern/src/components/shared/useInfrastructureSelectorState.ts`
+    may consume `frontend-modern/src/hooks/useUnifiedResources.ts`, but hidden
+    selectors must pass an explicit `enabled` gate instead of booting the
+    `all-resources` transport behind a collapsed or non-rendered summary shell.
 
 ## Forbidden Paths
 

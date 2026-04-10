@@ -284,6 +284,7 @@ import useStoragePageBannerModelSource from '@/components/Storage/useStoragePage
 import storagePageBannersSource from '@/components/Storage/StoragePageBanners.tsx?raw';
 import useStoragePageBannersModelSource from '@/components/Storage/useStoragePageBannersModel.ts?raw';
 import storageSummarySource from '@/components/Storage/StorageSummary.tsx?raw';
+import storageSummaryCacheSource from '@/utils/storageSummaryCache.ts?raw';
 import storagePageSummarySource from '@/components/Storage/StoragePageSummary.tsx?raw';
 import storageCephSummaryCardSource from '@/components/Storage/StorageCephSummaryCard.tsx?raw';
 import useStorageCephSummaryCardModelSource from '@/components/Storage/useStorageCephSummaryCardModel.ts?raw';
@@ -980,7 +981,7 @@ describe('frontend resource type boundaries', () => {
       "isAwaitingFirstSample() ? 'Waiting for first sample' : 'No history yet'",
     );
     expect(infrastructureSummaryStateSource).not.toContain("getOrgID() || 'default'");
-    expect(storageSummarySource).toContain('normalizeOrgScope(getOrgID())');
+    expect(storageSummaryCacheSource).toContain('normalizeOrgScope(getOrgID())');
     expect(storageSummarySource).not.toContain("getOrgID() || 'default'");
     expect(guestRowSource).toContain('useGuestRowState');
     expect(guestRowSource).toContain("from './GuestRowCells'");
@@ -3131,7 +3132,8 @@ describe('frontend resource type boundaries', () => {
     expect(infrastructureSelectorSource).not.toContain('useResources');
     expect(infrastructureSelectorSource).not.toContain('createSignal');
     expect(infrastructureSelectorSource).not.toContain("resource.type === 'truenas'");
-    expect(infrastructureSelectorStateSource).toContain('useResources');
+    expect(infrastructureSelectorStateSource).toContain('useUnifiedResources');
+    expect(infrastructureSelectorStateSource).toContain('enabled: showNodeSummary');
     expect(infrastructureSelectorStateSource).toContain('useRecoveryRollups');
     expect(infrastructureSelectorStateSource).toContain('createSignal');
     expect(infrastructureSelectorStateSource).toContain('document.addEventListener');

@@ -762,7 +762,8 @@ describe('shared primitive guardrails', () => {
     expect(infrastructureSelectorSource).not.toContain('createSignal');
     expect(infrastructureSelectorSource).not.toContain("resource.type === 'truenas'");
 
-    expect(infrastructureSelectorStateSource).toContain('useResources');
+    expect(infrastructureSelectorStateSource).toContain('useUnifiedResources');
+    expect(infrastructureSelectorStateSource).toContain('enabled: showNodeSummary');
     expect(infrastructureSelectorStateSource).toContain('useRecoveryRollups');
     expect(infrastructureSelectorStateSource).toContain('createSignal');
     expect(infrastructureSelectorStateSource).toContain('document.addEventListener');

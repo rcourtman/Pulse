@@ -7,6 +7,52 @@ import { InfrastructureSelector } from '@/components/shared/InfrastructureSelect
 import { buildInfrastructureSelectorAgents } from '@/components/shared/infrastructureSelectorModel';
 import type { Resource } from '@/types/resource';
 
+const useUnifiedResourcesMock = vi.fn(
+  (options?: { enabled?: () => boolean }) => ({
+    resources: () =>
+      options?.enabled?.() === false
+        ? []
+        : [
+            {
+              id: 'node-1',
+              type: 'agent',
+              name: 'pve1',
+              status: 'online',
+              instance: 'main',
+              uptime: 120,
+              platformData: {
+                type: 'node',
+                node: 'pve1',
+                instance: 'main',
+                pveVersion: '8.0',
+                cpu: 0.2,
+                memory: { total: 8, used: 4, free: 4, usage: 50 },
+                disk: { total: 100, used: 25, free: 75, usage: 25 },
+                loadAverage: [0.1, 0.2, 0.3],
+              },
+              memory: { total: 8, used: 4, free: 4, current: 50 },
+              agent: {
+                platform: 'linux',
+                memory: { total: 8, used: 4, free: 4, usage: 50 },
+                disks: [],
+                networkInterfaces: [],
+                raid: [],
+              },
+            },
+          ],
+    refetch: vi.fn(),
+    mutate: vi.fn(),
+    loading: () => false,
+    error: () => null,
+  }),
+);
+
+const useRecoveryRollupsMock = vi.fn(
+  (_query?: (() => unknown) | undefined) => ({
+    rollups: () => [],
+  }),
+);
+
 const infrastructureSummaryTableMock = vi.fn(
   (props: { onNodeClick: (nodeId: string, nodeType: 'pve' | 'pbs') => void; selectedNode: string | null }) => (
     <button
@@ -26,43 +72,12 @@ vi.mock('@/components/shared/InfrastructureSummaryTable', () => ({
   }) => infrastructureSummaryTableMock(props),
 }));
 
-vi.mock('@/hooks/useResources', () => ({
-  useResources: () => ({
-    resources: () => [
-      {
-        id: 'node-1',
-        type: 'agent',
-        name: 'pve1',
-        status: 'online',
-        instance: 'main',
-        uptime: 120,
-        platformData: {
-          type: 'node',
-          node: 'pve1',
-          instance: 'main',
-          pveVersion: '8.0',
-          cpu: 0.2,
-          memory: { total: 8, used: 4, free: 4, usage: 50 },
-          disk: { total: 100, used: 25, free: 75, usage: 25 },
-          loadAverage: [0.1, 0.2, 0.3],
-        },
-        memory: { total: 8, used: 4, free: 4, current: 50 },
-        agent: {
-          platform: 'linux',
-          memory: { total: 8, used: 4, free: 4, usage: 50 },
-          disks: [],
-          networkInterfaces: [],
-          raid: [],
-        },
-      },
-    ],
-  }),
+vi.mock('@/hooks/useUnifiedResources', () => ({
+  useUnifiedResources: (options?: { enabled?: () => boolean }) => useUnifiedResourcesMock(options),
 }));
 
 vi.mock('@/hooks/useRecoveryRollups', () => ({
-  useRecoveryRollups: () => ({
-    rollups: () => [],
-  }),
+  useRecoveryRollups: (query?: (() => unknown) | undefined) => useRecoveryRollupsMock(query),
 }));
 
 describe('InfrastructureSelector', () => {
@@ -73,7 +88,8 @@ describe('InfrastructureSelector', () => {
     expect(infrastructureSelectorSource).not.toContain('createSignal');
     expect(infrastructureSelectorSource).not.toContain("resource.type === 'truenas'");
 
-    expect(infrastructureSelectorStateSource).toContain('useResources');
+    expect(infrastructureSelectorStateSource).toContain('useUnifiedResources');
+    expect(infrastructureSelectorStateSource).toContain('enabled: showNodeSummary');
     expect(infrastructureSelectorStateSource).toContain('useRecoveryRollups');
     expect(infrastructureSelectorStateSource).toContain('createSignal');
     expect(infrastructureSelectorStateSource).toContain('document.addEventListener');
@@ -91,6 +107,26 @@ describe('InfrastructureSelector', () => {
       'buildInfrastructureSelectorUnifiedNodes',
     );
     expect(infrastructureSelectorModelSource).toContain('isAgentFacetInfrastructureResource');
+  });
+
+  it('disables selector data hooks when the node summary is hidden', () => {
+    render(() => <InfrastructureSelector currentTab="dashboard" showNodeSummary={false} />);
+
+    expect(screen.queryByTestId('infrastructure-selector-table')).not.toBeInTheDocument();
+    expect(useUnifiedResourcesMock).toHaveBeenCalledTimes(1);
+    expect(useRecoveryRollupsMock).toHaveBeenCalledTimes(1);
+
+    const unifiedOptions = useUnifiedResourcesMock.mock.calls[0]?.[0] as
+      | { enabled?: () => boolean; query?: string; cacheKey?: string }
+      | undefined;
+    expect(unifiedOptions?.query).toBe('');
+    expect(unifiedOptions?.cacheKey).toBe('all-resources');
+    expect(unifiedOptions?.enabled?.()).toBe(false);
+
+    const recoveryQuery = useRecoveryRollupsMock.mock.calls[0]?.[0] as
+      | (() => unknown)
+      | undefined;
+    expect(recoveryQuery?.()).toBeNull();
   });
 
   it('toggles node selection and clears it on escape', async () => {

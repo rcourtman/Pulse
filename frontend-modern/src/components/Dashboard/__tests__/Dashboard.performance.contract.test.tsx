@@ -76,15 +76,22 @@ if (typeof globalThis.ResizeObserver === 'undefined') {
 let mockLocationSearch = '';
 let mockWorkloads: Array<Record<string, unknown>> = [];
 let setMockWorkloadsSignal: ((next: Array<Record<string, unknown>>) => void) | null = null;
+const workloadsRefetchMock = vi.fn();
 let guestRowMountCount = 0;
 let guestRowUnmountCount = 0;
 let wsConnected = true;
 let wsInitialDataReceived = true;
 let wsReconnecting = false;
+let setWsConnectedSignal: ((next: boolean) => void) | null = null;
 
 const pushMockWorkloads = (next: Array<Record<string, unknown>>) => {
   mockWorkloads = next;
   setMockWorkloadsSignal?.(next);
+};
+
+const pushWsConnected = (next: boolean) => {
+  wsConnected = next;
+  setWsConnectedSignal?.(next);
 };
 
 vi.mock('@solidjs/router', async () => {
@@ -97,39 +104,43 @@ vi.mock('@solidjs/router', async () => {
 });
 
 vi.mock('@/contexts/appRuntime', () => ({
-  useWebSocket: () => ({
-    connected: () => wsConnected,
-    activeAlerts: () => ({}),
-    initialDataReceived: () => wsInitialDataReceived,
-    reconnecting: () => wsReconnecting,
-    reconnect: vi.fn(),
-    state: {
-      connectedInfrastructure: [],
-      metrics: [],
-      performance: {
-        apiCallDuration: {},
-        lastPollDuration: 0,
-        pollingStartTime: '',
-        totalApiCalls: 0,
-        failedApiCalls: 0,
-        cacheHits: 0,
-        cacheMisses: 0,
+  useWebSocket: () => {
+    const [connected, setConnected] = createSignal(wsConnected);
+    setWsConnectedSignal = setConnected;
+    return {
+      connected,
+      activeAlerts: () => ({}),
+      initialDataReceived: () => wsInitialDataReceived,
+      reconnecting: () => wsReconnecting,
+      reconnect: vi.fn(),
+      state: {
+        connectedInfrastructure: [],
+        metrics: [],
+        performance: {
+          apiCallDuration: {},
+          lastPollDuration: 0,
+          pollingStartTime: '',
+          totalApiCalls: 0,
+          failedApiCalls: 0,
+          cacheHits: 0,
+          cacheMisses: 0,
+        },
+        connectionHealth: {},
+        stats: {
+          startTime: '',
+          uptime: 0,
+          pollingCycles: 0,
+          webSocketClients: 0,
+          version: 'dev',
+        },
+        activeAlerts: [],
+        recentlyResolved: [],
+        lastUpdate: 0,
+        resources: [],
+        temperatureMonitoringEnabled: false,
       },
-      connectionHealth: {},
-      stats: {
-        startTime: '',
-        uptime: 0,
-        pollingCycles: 0,
-        webSocketClients: 0,
-        version: 'dev',
-      },
-      activeAlerts: [],
-      recentlyResolved: [],
-      lastUpdate: 0,
-      resources: [],
-      temperatureMonitoringEnabled: false,
-    },
-  }),
+    };
+  },
 }));
 
 vi.mock('@/hooks/useWorkloads', () => ({
@@ -138,7 +149,7 @@ vi.mock('@/hooks/useWorkloads', () => ({
     setMockWorkloadsSignal = (next) => setWorkloads(next as any);
     return {
       workloads,
-      refetch: vi.fn(),
+      refetch: (...args: unknown[]) => workloadsRefetchMock(...args),
       mutate: vi.fn(),
       loading: () => false,
       error: () => null,
@@ -297,6 +308,11 @@ const expectedTypeDistribution = (count: number) => {
 const getGuestRowCount = (container: HTMLElement) =>
   container.querySelectorAll('tr[data-testid^="guest-row-"]').length;
 
+const flushEffects = async () => {
+  await Promise.resolve();
+  await Promise.resolve();
+};
+
 describe('Dashboard performance contract', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -304,6 +320,8 @@ describe('Dashboard performance contract', () => {
     mockLocationSearch = '';
     mockWorkloads = [];
     setMockWorkloadsSignal = null;
+    setWsConnectedSignal = null;
+    workloadsRefetchMock.mockReset();
     guestRowMountCount = 0;
     guestRowUnmountCount = 0;
     wsConnected = true;
@@ -386,6 +404,48 @@ describe('Dashboard performance contract', () => {
       });
 
       expect(getKubernetesContextKey(guest as any)).toBe('cluster-a');
+    });
+
+    it('does not treat the first websocket connection as a workload reconnect', async () => {
+      mockLocationSearch = '?type=all';
+      wsConnected = false;
+      mockWorkloads = [makeGuest(1, { name: 'first-connect-workload' })];
+
+      const { container } = render(() => (
+        <Dashboard vms={[]} containers={[]} nodes={[]} useWorkloads />
+      ));
+
+      await waitFor(() => {
+        expect(container.querySelector('table')).toBeInTheDocument();
+      });
+      expect(workloadsRefetchMock).not.toHaveBeenCalled();
+
+      pushWsConnected(true);
+      await flushEffects();
+
+      expect(workloadsRefetchMock).not.toHaveBeenCalled();
+    });
+
+    it('refetches workloads only after a real websocket reconnect', async () => {
+      mockLocationSearch = '?type=all';
+      mockWorkloads = [makeGuest(1, { name: 'reconnect-workload' })];
+
+      const { container } = render(() => (
+        <Dashboard vms={[]} containers={[]} nodes={[]} useWorkloads />
+      ));
+
+      await waitFor(() => {
+        expect(container.querySelector('table')).toBeInTheDocument();
+      });
+      workloadsRefetchMock.mockClear();
+
+      pushWsConnected(false);
+      await flushEffects();
+      pushWsConnected(true);
+
+      await waitFor(() => {
+        expect(workloadsRefetchMock).toHaveBeenCalledTimes(1);
+      });
     });
   });
 

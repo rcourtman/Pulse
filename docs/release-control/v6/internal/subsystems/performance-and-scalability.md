@@ -201,6 +201,12 @@ regression protection.
 30. Keep dashboard summary-chart fetches scope-owned rather than page-churn-owned: `frontend-modern/src/hooks/useDashboardTrends.ts` must hydrate infrastructure and storage summaries once per org/range scope from the canonical summary caches and recompute card presentation locally as the compact dashboard overview changes, rather than refetching the infrastructure-summary transport in `frontend-modern/src/components/Infrastructure/useInfrastructureSummaryState.ts`, the dashboard storage-summary trend transport in `frontend-modern/src/utils/storageSummaryTrendCache.ts`, or the storage-page summary transport in `frontend-modern/src/utils/storageSummaryCache.ts` for every top-resource or card reshuffle on the same dashboard load. That dashboard infrastructure path must also request only the metrics it renders through the canonical infrastructure-summary route owned by `internal/api/router_routes_monitoring.go` and `internal/api/router.go`; the dashboard may not pay for disk or network summary series when it only renders CPU and memory. App-shell prewarm in `frontend-modern/src/useAppRuntimeState.ts` must not front-run that dashboard-specific route while the operator is already on the root dashboard route owned by `frontend-modern/src/App.tsx`.
 31. Keep the dashboard overview hot path compact and route-owned. `frontend-modern/src/pages/Dashboard.tsx`, `frontend-modern/src/api/resources.ts`, and `frontend-modern/src/hooks/useDashboardOverview.ts` must hydrate KPI cards, problem-resource rows, and top-infrastructure identities through the compact dashboard-summary API contract owned by the adjacent `api-contracts` and `unified-resources` surfaces, rather than booting the full unfiltered paginated unified-resource list just to derive summary cards.
 32. Keep infrastructure summary consumers on the compact dashboard overview rather than reopening the all-resources hook. `frontend-modern/src/hooks/useDashboardTrends.ts`, `frontend-modern/src/components/Infrastructure/useInfrastructureSummaryState.ts`, and adjacent dashboard summary consumers may derive chart identity and storage presence from the overview payload they were already given, but they must not call `useResources()` or mount a second unfiltered unified-resource fetch path inside the dashboard hot path. That rule also applies to globally mounted helpers such as `frontend-modern/src/components/AI/Chat/index.tsx`: closed assistant surfaces must read the live websocket snapshot or existing unified-resource cache rather than forcing the dashboard to pay for `all-resources` just because the shell component is mounted.
+33. Keep hidden workload-route selector shells off the hot path. When the
+    workloads route keeps `frontend-modern/src/components/shared/InfrastructureSelector.tsx`
+    mounted only for layout parity, `frontend-modern/src/components/shared/useInfrastructureSelectorState.ts`
+    must not hydrate `all-resources` or recovery rollups behind a hidden node
+    summary; selector-owned data hooks must be explicitly visibility-gated so
+    `/workloads` only pays for workload-owned transports.
 
 ## Forbidden Paths
 
@@ -372,7 +378,10 @@ of a raw websocket proxy signal: `frontend-modern/src/components/Dashboard/Dashb
 and `frontend-modern/src/components/Dashboard/useDashboardState.ts` must keep
 filters, stats, and table visibility driven by the workload route's own
 REST-backed health so websocket churn does not hide already-fetched workloads
-or swap the protected hot path into a false disconnected shell.
+or swap the protected hot path into a false disconnected shell. The first
+websocket connect on that route is not a reconnect and must not trigger an
+extra workload REST refetch; only later false-to-true recoveries may pay that
+refresh cost.
 The same performance ownership now applies to the downsampled
 `pkg/metrics/store.go` batched query path. `QueryAllBatch` may drop the global
 SQLite `ORDER BY resource_id, metric_type, bucket_ts` sort from the grouped

@@ -165,10 +165,14 @@ export function useDashboardState(props: DashboardProps) {
   };
 
   let lastConnected = connected();
+  let hasSeenConnectedState = connected();
   createEffect(() => {
     const isConnected = connected();
-    if (workloadsEnabled() && isConnected && !lastConnected) {
-      void workloads.refetch();
+    if (isConnected) {
+      if (workloadsEnabled() && !lastConnected && hasSeenConnectedState) {
+        void workloads.refetch();
+      }
+      hasSeenConnectedState = true;
     }
     lastConnected = isConnected;
   });

@@ -1,4 +1,4 @@
-import { batch, createEffect, createSignal, onCleanup } from 'solid-js';
+import { batch, createEffect, createSignal, onCleanup, type Accessor } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
 import { canonicalizeMetricsHistoryTargetType } from '@/api/charts';
 import { readAPIErrorMessage } from '@/api/responseUtils';
@@ -918,12 +918,14 @@ type UseUnifiedResourcesOptions = {
   query?: string;
   cacheKey?: string;
   initialHydration?: 'immediate' | 'prefer-ws';
+  enabled?: Accessor<boolean>;
 };
 
 export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
   const query = normalizeUnifiedResourcesQuery(options?.query ?? DEFAULT_UNIFIED_RESOURCES_QUERY);
   const cacheKey = (options?.cacheKey || query || 'all').trim();
   const initialHydration = options?.initialHydration ?? 'immediate';
+  const enabled = options?.enabled ?? (() => true);
   const typeFilter = parseUnifiedResourcesTypeFilter(query);
   const supportsCanonicalWsHydration = query === '' || typeFilter !== null;
   const prefersWsInitialHydration =
@@ -966,6 +968,9 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
     force?: boolean;
     source?: 'initial' | 'ws' | 'manual';
   }) => {
+    if (!enabled()) {
+      return resources as unknown as Resource[];
+    }
     if (inFlightRefetch) {
       return inFlightRefetch;
     }
@@ -1015,7 +1020,12 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
     return request;
   };
 
-  const refetch = async () => runRefetch({ force: true, source: 'manual' });
+  const refetch = async () => {
+    if (!enabled()) {
+      return resources as unknown as Resource[];
+    }
+    return runRefetch({ force: true, source: 'manual' });
+  };
 
   const mutate = (value: Resource[] | ((prev: Resource[]) => Resource[])) => {
     const current = resources as unknown as Resource[];
@@ -1028,6 +1038,13 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
     if (initialHydrationHandle !== undefined) {
       clearTimeout(initialHydrationHandle);
       initialHydrationHandle = undefined;
+    }
+  };
+
+  const clearRefreshTimeout = () => {
+    if (refreshHandle !== undefined) {
+      clearTimeout(refreshHandle);
+      refreshHandle = undefined;
     }
   };
 
@@ -1052,21 +1069,8 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
     }, UNIFIED_RESOURCES_WS_INITIAL_HYDRATION_WAIT_MS);
   };
 
-  // If cache is stale, refresh it in the background without blocking initial render.
-  if (!hasFreshUnifiedResourcesCache(cacheEntry)) {
-    if (shouldPreferWsInitialHydration()) {
-      scheduleInitialHydrationFallback();
-    } else {
-      void runRefetch({ source: 'initial' }).catch((err) => {
-        logger.warn('[useUnifiedResources] Failed background refresh for stale cache', err);
-      });
-    }
-  }
-
   const scheduleRefetch = () => {
-    if (refreshHandle !== undefined) {
-      clearTimeout(refreshHandle);
-    }
+    clearRefreshTimeout();
 
     const elapsedSinceFetch = Date.now() - cacheEntry.lastFetchAt;
     const minIntervalDelay = Math.max(
@@ -1084,7 +1088,35 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
   };
 
   createEffect(() => {
+    orgScope();
+
+    if (!enabled()) {
+      clearInitialHydrationTimeout();
+      clearRefreshTimeout();
+      setLoading(false);
+      return;
+    }
+
+    if (hasFreshUnifiedResourcesCache(cacheEntry)) {
+      clearInitialHydrationTimeout();
+      return;
+    }
+
+    if (shouldPreferWsInitialHydration()) {
+      scheduleInitialHydrationFallback();
+      return;
+    }
+
+    void runRefetch({ source: 'initial' }).catch((err) => {
+      logger.warn('[useUnifiedResources] Failed background refresh for stale cache', err);
+    });
+  });
+
+  createEffect(() => {
     const currentOrgScope = orgScope();
+    if (!enabled()) {
+      return;
+    }
     if (!supportsCanonicalWsHydration) {
       return;
     }
@@ -1129,6 +1161,14 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
 
   createEffect(() => {
     orgScope();
+
+    if (!enabled()) {
+      wsInitialized = false;
+      lastWsUpdateToken = '';
+      clearInitialHydrationTimeout();
+      clearRefreshTimeout();
+      return;
+    }
 
     if (!wsStore.connected() || !wsStore.initialDataReceived()) {
       wsInitialized = false;
@@ -1183,10 +1223,10 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
     batch(() => {
       setError(undefined);
       setResources(reconcile(scopedResources, { key: 'id' }));
-      setLoading(!cacheEntry.hasSnapshot);
+      setLoading(enabled() && !cacheEntry.hasSnapshot);
     });
 
-    if (!hasFreshUnifiedResourcesCache(cacheEntry)) {
+    if (enabled() && !hasFreshUnifiedResourcesCache(cacheEntry)) {
       if (shouldPreferWsInitialHydration()) {
         scheduleInitialHydrationFallback();
       } else {
@@ -1198,9 +1238,7 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
   onCleanup(() => {
     unsubscribeOrgSwitch();
     clearInitialHydrationTimeout();
-    if (refreshHandle !== undefined) {
-      clearTimeout(refreshHandle);
-    }
+    clearRefreshTimeout();
   });
 
   return {

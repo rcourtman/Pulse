@@ -86,6 +86,10 @@ querying, and the operator-facing storage health presentation layer.
    `ResourceType` normalization for route/query filters, so storage subtypes
    such as `physical_disk` stay on the same cache-backed snapshot instead of
    relying on storage-local filter aliases.
+   Optional selector shells that only surface storage/recovery counts when they
+   are visible must now pass an explicit enabled gate into that shared hook and
+   any adjacent recovery-rollup query, so hidden workload-route selectors do
+   not hydrate storage/recovery transport on the protected hot path.
 6. Preserve API-owned node identity continuity in shared `internal/api/` helpers so storage and recovery transport attachments do not fork by hostname-versus-IP drift across the same runtime.
 7. Preserve fail-closed API assignment and lookup behavior in shared `internal/api/` helpers so storage and recovery surfaces do not inherit orphaned profile or resource references from unrelated transport mutations.
 8. Preserve canonical configured public endpoint selection in shared `internal/api/` helpers so recovery and storage links do not inherit loopback-local scheme drift from admin-originated setup/install flows.

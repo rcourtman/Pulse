@@ -244,6 +244,12 @@ work extends shared components instead of creating new local variants.
     must stay on the app-shell assistant-availability fact instead of
     re-reading raw AI settings just to decide whether assistant affordances
     should render.
+17. Keep optional shared selectors honest about data ownership. Reusable
+    shells such as `frontend-modern/src/components/shared/InfrastructureSelector.tsx`
+    must gate their runtime data hooks on actual surface visibility, passing
+    explicit disabled/null inputs to shared data owners when the selector is
+    hidden instead of hydrating background summary data for chrome the page is
+    not rendering.
 
 ## Forbidden Paths
 
