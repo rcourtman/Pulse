@@ -2,6 +2,10 @@
 
 This guide covers practical upgrade steps for existing Pulse installs moving to v6.
 
+For launch-time rollout answers and canned support responses, see:
+
+- `docs/releases/V6_RC_OPERATOR_SUPPORT_PACK.md`
+
 ## Before You Upgrade
 
 - Create an encrypted config backup: **Settings → System → Recovery → Create Backup** (older versions labeled this **Backups**)

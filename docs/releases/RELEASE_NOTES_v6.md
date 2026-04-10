@@ -4,6 +4,10 @@
 
 This build is intended for evaluation and early deployment testing before the stable `v6.0.0` release. Pulse v5 remains the current stable line. If you rely on Pulse in production today, start with a staging or non-critical environment first and keep a rollback path available.
 
+If you are handling rollout questions or want the launch-time canned answers for current v5 users, use:
+
+- `docs/releases/V6_RC_OPERATOR_SUPPORT_PACK.md`
+
 ## Before You Try It
 
 - Do not make your first v6 test on a production Pulse v5 installation.
