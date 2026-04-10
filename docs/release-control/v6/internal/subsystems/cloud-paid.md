@@ -597,10 +597,11 @@ must describe duplicate attempts as staying on the hosted-signup retry burst
 until exhaustion rather than teaching a universal "second attempt is `429`"
 rule.
 That active-doc hygiene is guarded directly in
-`scripts/tests/test-trial-signup-docs.sh`: the tracked operator, pricing,
-upgrade, and integration-trial docs must keep the hosted-only/retry-burst
-story aligned and must not reintroduce the obsolete 24-hour or automatic
-second-attempt phrasing.
+`scripts/tests/test-trial-signup-docs.sh`: it auto-discovers every tracked
+trial-start reference across `docs/` and `tests/integration/`, requires the
+operator/pricing/upgrade/integration surfaces to keep the hosted-only /
+retry-burst story aligned, and rejects the obsolete 24-hour or automatic
+second-attempt phrasing anywhere in that tracked reference set.
 Hosted tenant organization seeding and hosted handoff role mapping now belong
 to the same cloud-paid truth too. `internal/cloudcp/stripe/provisioner.go`
 must seed tenant org members from the shared account-role-to-organization-role

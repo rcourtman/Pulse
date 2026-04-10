@@ -7,14 +7,20 @@ PRICING_DOC="${ROOT_DIR}/docs/architecture/v6-pricing-and-tiering.md"
 UPGRADE_DOC="${ROOT_DIR}/docs/UPGRADE_v6.md"
 INTEGRATION_README="${ROOT_DIR}/tests/integration/README.md"
 EVAL_TASK_DOC="${ROOT_DIR}/tests/integration/evals/tasks/trial-signup.md"
+SOURCE_OF_TRUTH_DOC="${ROOT_DIR}/docs/release-control/v6/internal/SOURCE_OF_TRUTH.md"
+MIGRATION_AUDIT_DOC="${ROOT_DIR}/docs/release-control/v6/internal/V5_TO_V6_COMMERCIAL_MIGRATION_AUDIT_2026-03-07.md"
 
-ACTIVE_DOCS=(
+TRIAL_SIGNUP_REFERENCE_PATTERN='(/api/license/trial/start|trial_signup_required|trial_rate_limited)'
+
+OPERATOR_DOCS=(
   "${RUNBOOK}"
   "${PRICING_DOC}"
   "${UPGRADE_DOC}"
   "${INTEGRATION_README}"
   "${EVAL_TASK_DOC}"
 )
+
+TRACKED_REFERENCE_DOCS=()
 
 FORBIDDEN_PATTERNS=(
   "1 trial initiation attempt per org per 24 hours"
@@ -32,6 +38,24 @@ record_failure() {
 
 record_pass() {
   echo "[PASS] $1"
+}
+
+discover_tracked_reference_docs() {
+  local discovered_doc
+
+  TRACKED_REFERENCE_DOCS=()
+  while IFS= read -r discovered_doc; do
+    TRACKED_REFERENCE_DOCS+=("${ROOT_DIR}/${discovered_doc}")
+  done < <(
+    git -C "${ROOT_DIR}" grep -lE "${TRIAL_SIGNUP_REFERENCE_PATTERN}" -- docs tests/integration
+  )
+
+  if (( ${#TRACKED_REFERENCE_DOCS[@]} == 0 )); then
+    record_failure "discovered tracked trial-start reference files"
+    echo "Expected tracked trial-start reference docs/tests from git grep discovery." >&2
+  else
+    record_pass "discovered tracked trial-start reference files (${#TRACKED_REFERENCE_DOCS[@]})"
+  fi
 }
 
 assert_contains() {
@@ -58,10 +82,24 @@ assert_not_contains() {
   fi
 }
 
+assert_doc_discovered() {
+  local label="$1"
+  local doc="$2"
+  local candidate
+  for candidate in "${TRACKED_REFERENCE_DOCS[@]}"; do
+    if [[ "${candidate}" == "${doc}" ]]; then
+      record_pass "${label}"
+      return
+    fi
+  done
+  record_failure "${label}"
+  echo "Expected discovered reference set to include: ${doc#${ROOT_DIR}/}" >&2
+}
+
 assert_forbidden_patterns_absent() {
   local doc file_content needle label
 
-  for doc in "${ACTIVE_DOCS[@]}"; do
+  for doc in "${TRACKED_REFERENCE_DOCS[@]}"; do
     file_content="$(cat "${doc}")"
     for needle in "${FORBIDDEN_PATTERNS[@]}"; do
       label="${doc#${ROOT_DIR}/} excludes stale pattern: ${needle}"
@@ -72,6 +110,17 @@ assert_forbidden_patterns_absent() {
 
 main() {
   local runbook_output pricing_output upgrade_output integration_output eval_task_output
+  local source_of_truth_output migration_audit_output
+
+  discover_tracked_reference_docs
+
+  assert_doc_discovered "source of truth is in tracked reference discovery" "${SOURCE_OF_TRUTH_DOC}"
+  assert_doc_discovered "migration audit is in tracked reference discovery" "${MIGRATION_AUDIT_DOC}"
+  assert_doc_discovered "runbook is in tracked reference discovery" "${RUNBOOK}"
+  assert_doc_discovered "pricing doc is in tracked reference discovery" "${PRICING_DOC}"
+  assert_doc_discovered "upgrade guide is in tracked reference discovery" "${UPGRADE_DOC}"
+  assert_doc_discovered "trial eval task is in tracked reference discovery" "${EVAL_TASK_DOC}"
+
   runbook_output="$(
     awk '
       /^## Contract Probe Script$/ { capture=1 }
@@ -90,6 +139,12 @@ main() {
   )"
   eval_task_output="$(
     sed -n '1,24p' "${EVAL_TASK_DOC}"
+  )"
+  source_of_truth_output="$(
+    sed -n '412,420p' "${SOURCE_OF_TRUTH_DOC}"
+  )"
+  migration_audit_output="$(
+    sed -n '10,22p' "${MIGRATION_AUDIT_DOC}"
   )"
 
   assert_contains "runbook references hosted trial probe script" "${runbook_output}" "tests/integration/scripts/trial-signup-contract.sh"
@@ -116,6 +171,12 @@ main() {
   assert_contains "eval task documents retry-burst contract" "${eval_task_output}" "retry-burst contract"
   assert_contains "eval task documents canonical trial-rate-limited response" "${eval_task_output}" "\`429 trial_rate_limited\`"
   assert_contains "eval task documents retry-after metadata" "${eval_task_output}" "\`Retry-After\`"
+
+  assert_contains "source of truth keeps hosted-signup-only contract" "${source_of_truth_output}" "must initiate hosted signup only"
+  assert_contains "source of truth forbids local trial minting" "${source_of_truth_output}" "must not mint local trial"
+
+  assert_contains "migration audit keeps hosted-signup-only contract" "${migration_audit_output}" "must initiate hosted signup only"
+  assert_contains "migration audit forbids local trial minting" "${migration_audit_output}" "may only redeem signed hosted trial activation tokens"
 
   assert_forbidden_patterns_absent
 
