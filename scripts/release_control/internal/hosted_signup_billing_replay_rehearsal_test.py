@@ -91,6 +91,10 @@ class HostedSignupBillingReplayRehearsalTest(unittest.TestCase):
                 results = mod.run_rehearsal(args)
 
             self.assertTrue(all(result.ok for result in results), [r.detail for r in results])
+            redirect_result = next(result for result in results if result.name == "self-hosted-trial-redirect-to-hosted")
+            self.assertIn("trial_signup_required", redirect_result.detail)
+            self.assertIn("trial_rate_limited", redirect_result.detail)
+            self.assertIn("Retry-After", redirect_result.detail)
             trial_headers = next(headers for _method, url, headers in fetch_json_calls if url.endswith("/api/license/trial/start"))
             self.assertEqual(trial_headers["X-API-Token"], "token")
             webhook_headers = next(headers for _method, url, headers, _body in fetch_calls if url.endswith("/api/stripe/webhook"))

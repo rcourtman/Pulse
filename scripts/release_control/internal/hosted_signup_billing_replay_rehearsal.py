@@ -282,7 +282,12 @@ def check_trial_start_redirect(args: argparse.Namespace, auth_headers: dict[str,
     return CheckResult(
         name="self-hosted-trial-redirect-to-hosted",
         ok=True,
-        detail=f"returned action_url={action_url}",
+        detail=(
+            "returned hosted handoff action_url="
+            f"{action_url}; this rehearsal covers the `409 trial_signup_required` "
+            "branch only, while the later `429 trial_rate_limited` plus "
+            "`Retry-After` branch stays owned by the local trial-start proofs"
+        ),
     )
 
 
