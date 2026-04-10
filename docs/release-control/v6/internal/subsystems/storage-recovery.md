@@ -80,6 +80,10 @@ querying, and the operator-facing storage health presentation layer.
    That same adjacent API boundary now also owns SSO outbound discovery and metadata fetch trust: storage- and recovery-adjacent surfaces may share `internal/api/sso_outbound.go`, `internal/api/saml_service.go`, and `internal/api/oidc_service.go`, but they must not fork separate metadata/discovery HTTP clients, redirect policies, or credential-file read rules when they depend on shared backend auth helpers.
 5. Route canonical storage/recovery resource selection through `frontend-modern/src/hooks/useUnifiedResources.ts` and the owning `unified-resources` contract
    That shared hook now also projects resource `clusterId` through the shared cluster-name helper, so storage and recovery links keep the same cluster-context label as other unified-resource consumers instead of rebuilding a local fallback chain.
+   Storage and recovery consumers must also inherit the hook's canonical
+   `ResourceType` normalization for route/query filters, so storage subtypes
+   such as `physical_disk` stay on the same cache-backed snapshot instead of
+   relying on storage-local filter aliases.
 6. Preserve API-owned node identity continuity in shared `internal/api/` helpers so storage and recovery transport attachments do not fork by hostname-versus-IP drift across the same runtime.
 7. Preserve fail-closed API assignment and lookup behavior in shared `internal/api/` helpers so storage and recovery surfaces do not inherit orphaned profile or resource references from unrelated transport mutations.
 8. Preserve canonical configured public endpoint selection in shared `internal/api/` helpers so recovery and storage links do not inherit loopback-local scheme drift from admin-originated setup/install flows.

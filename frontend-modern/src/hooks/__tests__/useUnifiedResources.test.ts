@@ -771,6 +771,50 @@ describe('useUnifiedResources', () => {
     disposeFiltered();
   });
 
+  it('seeds a physical-disk filtered cache from a fresh all-resources snapshot', async () => {
+    apiFetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        data: [
+          v2Resource,
+          {
+            ...v2Resource,
+            id: 'disk-1',
+            type: 'physical_disk',
+            name: 'nvme0n1',
+          },
+        ],
+      }),
+    });
+
+    let disposeAll = () => {};
+    let allResources: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']> | undefined;
+    createRoot((d) => {
+      disposeAll = d;
+      allResources = useUnifiedResources({ query: '', cacheKey: 'all-resources' });
+    });
+
+    await flushAsync();
+    await waitForResourceCount(() => allResources!.resources().length, 2);
+    expect(apiFetchMock).toHaveBeenCalledTimes(1);
+
+    disposeAll();
+
+    let disposeFiltered = () => {};
+    let filtered: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']> | undefined;
+    createRoot((d) => {
+      disposeFiltered = d;
+      filtered = useUnifiedResources({ query: 'type=physical_disk' });
+    });
+
+    await flushAsync();
+    expect(apiFetchMock).toHaveBeenCalledTimes(1);
+    expect(filtered!.loading()).toBe(false);
+    expect(filtered!.resources().map((resource) => resource.id)).toEqual(['disk-1']);
+
+    disposeFiltered();
+  });
+
   it('treats an empty fresh snapshot as cacheable on remount', async () => {
     apiFetchMock.mockResolvedValueOnce({
       ok: true,

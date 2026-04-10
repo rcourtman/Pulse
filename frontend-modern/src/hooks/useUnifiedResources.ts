@@ -472,9 +472,12 @@ const resolveType = (value?: string): ResourceType => {
   const canonicalFrontendType = canonicalizeFrontendResourceType(normalized);
   switch (canonicalFrontendType) {
     case 'agent':
+    case 'storage':
     case 'docker-host':
     case 'k8s-cluster':
     case 'k8s-node':
+    case 'k8s-deployment':
+    case 'k8s-service':
     case 'vm':
     case 'system-container':
     case 'oci-container':
@@ -484,6 +487,8 @@ const resolveType = (value?: string): ResourceType => {
     case 'pmg':
     case 'ceph':
       return canonicalFrontendType;
+    case 'disk':
+      return 'physical_disk';
     default:
       break;
   }
@@ -777,7 +782,7 @@ const parseUnifiedResourcesTypeFilter = (query: string): Set<ResourceType> | nul
       .map((candidate) => asTrimmedString(candidate))
       .filter((candidate): candidate is string => candidate !== undefined)
       .forEach((candidate) => {
-        types.add(canonicalizeFrontendResourceType(candidate));
+        types.add(resolveType(candidate));
       });
   }
 
@@ -807,7 +812,7 @@ const seedUnifiedResourcesCacheFromAllResources = (
   }
 
   entry.resources = allResourcesEntry.resources.filter((resource) =>
-    typeFilter.has(canonicalizeFrontendResourceType(resource.type)),
+    typeFilter.has(resolveType(resource.type)),
   );
   entry.hasSnapshot = true;
   entry.cachedAt = allResourcesEntry.cachedAt;

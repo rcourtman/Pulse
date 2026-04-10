@@ -269,6 +269,10 @@ assembly branch.
     broader cache already reflects canonical resource truth, and fresh empty
     snapshots must remain cacheable instead of regressing route handoffs back
     to transient full-page loading shells.
+    That same shared cache boundary must normalize route/query type filters
+    through the canonical frontend-to-`ResourceType` resolver before slicing
+    the snapshot, so compatibility values such as `disk` / `physical_disk`
+    stay on one cache truth instead of falling back to ad hoc filter aliases.
 
 ## Current State
 
