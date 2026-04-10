@@ -1,9 +1,8 @@
 import { createEffect, createMemo, createSignal, type Accessor } from 'solid-js';
 import {
   ChartsAPI as ChartService,
-  type AggregatedMetricPoint,
   type HistoryTimeRange,
-  type ResourceType as HistoryResourceType,
+  type StorageSummaryChartsResponse,
   type TimeRange,
 } from '@/api/charts';
 import {
@@ -51,9 +50,8 @@ interface DashboardTrendSnapshot {
   error: string | null;
 }
 
-const SPARKLINE_POINTS = 30;
 const INFRASTRUCTURE_RANGE: HistoryTimeRange = '1h';
-const STORAGE_RANGE: HistoryTimeRange = '24h';
+const STORAGE_RANGE: TimeRange = '24h';
 
 function createEmptyTrendData(): TrendData {
   return {
@@ -170,46 +168,62 @@ async function fetchInfrastructureTrendSnapshot(
   };
 }
 
-export function aggregateStoragePoints(allSeries: TrendPoint[][]): TrendPoint[] {
-  const buckets = new Map<number, { sum: number; count: number }>();
+export function buildStorageCapacityTrendPoints(
+  pools: StorageSummaryChartsResponse['pools'],
+): TrendPoint[] {
+  const buckets = new Map<
+    number,
+    { used: number; avail: number; hasUsed: boolean; hasAvail: boolean }
+  >();
 
-  for (const series of allSeries) {
-    for (const point of series) {
-      const bucket = buckets.get(point.timestamp) ?? { sum: 0, count: 0 };
-      bucket.sum += point.value;
-      bucket.count += 1;
+  for (const pool of Object.values(pools)) {
+    for (const point of pool.used ?? []) {
+      if (!Number.isFinite(point.timestamp) || !Number.isFinite(point.value)) {
+        continue;
+      }
+      const bucket = buckets.get(point.timestamp) ?? {
+        used: 0,
+        avail: 0,
+        hasUsed: false,
+        hasAvail: false,
+      };
+      bucket.used += point.value;
+      bucket.hasUsed = true;
+      buckets.set(point.timestamp, bucket);
+    }
+    for (const point of pool.avail ?? []) {
+      if (!Number.isFinite(point.timestamp) || !Number.isFinite(point.value)) {
+        continue;
+      }
+      const bucket = buckets.get(point.timestamp) ?? {
+        used: 0,
+        avail: 0,
+        hasUsed: false,
+        hasAvail: false,
+      };
+      bucket.avail += point.value;
+      bucket.hasAvail = true;
       buckets.set(point.timestamp, bucket);
     }
   }
 
   return Array.from(buckets.entries())
     .sort((a, b) => a[0] - b[0])
-    .map(([timestamp, bucket]) => ({
-      timestamp,
-      value: bucket.sum / bucket.count,
-    }));
-}
-
-async function fetchMetricPoints(
-  resourceType: HistoryResourceType,
-  resourceId: string,
-  metric: 'cpu' | 'memory' | 'disk',
-  range: HistoryTimeRange,
-  maxPoints: number,
-): Promise<TrendPoint[]> {
-  const result = await ChartService.getMetricsHistory({
-    resourceType,
-    resourceId,
-    metric,
-    range,
-    maxPoints,
-  });
-
-  if (!('points' in result) || !Array.isArray(result.points)) {
-    return [];
-  }
-
-  return normalizeTrendPoints(result.points as AggregatedMetricPoint[]);
+    .flatMap(([timestamp, bucket]) => {
+      if (!bucket.hasUsed || !bucket.hasAvail) {
+        return [];
+      }
+      const total = bucket.used + bucket.avail;
+      if (!Number.isFinite(total) || total <= 0) {
+        return [];
+      }
+      return [
+        {
+          timestamp,
+          value: (bucket.used / total) * 100,
+        },
+      ];
+    });
 }
 
 export function computeTrendDelta(points: TrendPoint[]): number | null {
@@ -254,7 +268,7 @@ async function fetchDashboardTrendSnapshot(
     }
   };
 
-  const [infrastructure, storageSeries] = await Promise.all([
+  const [infrastructure, storageCapacity] = await Promise.all([
     (async () => {
       try {
         return await fetchInfrastructureTrendSnapshot(resources, request.infrastructureRange);
@@ -263,26 +277,19 @@ async function fetchDashboardTrendSnapshot(
         return createEmptyTrendSnapshot().infrastructure;
       }
     })(),
-    Promise.all(
-      request.storage.map(async (resourceId) => {
-        try {
-          return await fetchMetricPoints(
-            'storage',
-            resourceId,
-            'disk',
-            STORAGE_RANGE,
-            SPARKLINE_POINTS,
-          );
-        } catch (error) {
-          captureError(error);
-          return [];
-        }
-      }),
-    ),
+    (async () => {
+      if (request.storage.length === 0) {
+        return null;
+      }
+      try {
+        const storageSummary = await ChartService.getStorageSummaryCharts(STORAGE_RANGE);
+        return extractTrendData(buildStorageCapacityTrendPoints(storageSummary.pools));
+      } catch (error) {
+        captureError(error);
+        return null;
+      }
+    })(),
   ]);
-
-  const storageCapacity =
-    request.storage.length > 0 ? extractTrendData(aggregateStoragePoints(storageSeries)) : null;
 
   return {
     infrastructure,

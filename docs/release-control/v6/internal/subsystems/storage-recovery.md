@@ -290,6 +290,11 @@ querying, and the operator-facing storage health presentation layer.
     storage detail charts must all address history through the canonical
     unified-resource metrics-target IDs, and the storage page must reuse the
     shared sticky summary primitive instead of a storage-local scroll wrapper.
+    Dashboard storage trends belong to that same owned summary contract: the
+    dashboard may derive a 24-hour storage capacity delta from
+    `/api/storage-charts`, but it must not rebuild storage summary behavior by
+    fanning out per-pool `/api/metrics-store/history` reads or by inventing a
+    dashboard-only storage history transport.
 13. Keep storage summary interaction scoped through the same canonical IDs.
 14. Keep adjacent AI settings persistence vendor-neutral on the shared
     `internal/api/` boundary. When storage- or recovery-adjacent hosted flows

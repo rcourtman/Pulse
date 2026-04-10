@@ -328,6 +328,13 @@ must include API-backed systems such as top-level TrueNAS appliances through
 the shared `isAgentFacetInfrastructureResource(...)` helper instead of a local
 `resource.type` branch, so the summary poll/cache path stays on one canonical
 infrastructure selector contract.
+That same protected dashboard hot path now includes storage trend loading too.
+`frontend-modern/src/hooks/useDashboardTrends.ts` and
+`internal/api/router.go` must keep dashboard storage trends on one
+`/api/storage-charts` request backed by
+`GetStorageMetricsForChartBatch(...)`, so the dashboard does not reopen an
+N+1 per-pool `/api/metrics-store/history` fan-out just to compute the shared
+24-hour storage capacity delta.
 That same dashboard shell boundary also owns empty-state action routing in
 `frontend-modern/src/components/Dashboard/DashboardStateCards.tsx`. When the
 dashboard has no connected infrastructure, the CTA must hand operators

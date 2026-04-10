@@ -7777,10 +7777,10 @@ func (r *Router) handleStorageCharts(w http.ResponseWriter, req *http.Request) {
 		return true
 	}
 
-	// Build pool chart data — convert monitoring MetricPoints (time.Time) to
-	// API MetricPoints (Unix milliseconds) matching the infrastructure/workloads
-	// chart endpoints.
-	pools := make(map[string]StoragePoolChartData, len(readState.StoragePools()))
+	// Build pool chart data from the canonical storage summary batch path so
+	// the dashboard and storage page share one efficient history retrieval model.
+	poolNames := make(map[string]string, len(readState.StoragePools()))
+	storageIDs := make([]string, 0, len(readState.StoragePools()))
 	for _, sp := range readState.StoragePools() {
 		if sp == nil {
 			continue
@@ -7792,9 +7792,16 @@ func (r *Router) handleStorageCharts(w http.ResponseWriter, req *http.Request) {
 		if sid == "" {
 			continue
 		}
-		metrics := monitor.GetStorageMetricsForChart(sid, duration)
+		poolNames[sid] = sp.Name()
+		storageIDs = append(storageIDs, sid)
+	}
+
+	poolMetrics := monitor.GetStorageMetricsForChartBatch(storageIDs, duration)
+	pools := make(map[string]StoragePoolChartData, len(storageIDs))
+	for _, sid := range storageIDs {
+		metrics := poolMetrics[sid]
 		pools[sid] = StoragePoolChartData{
-			Name:  sp.Name(),
+			Name:  poolNames[sid],
 			Usage: monitorPointsToAPI(metrics["usage"]),
 			Used:  monitorPointsToAPI(metrics["used"]),
 			Avail: monitorPointsToAPI(metrics["avail"]),

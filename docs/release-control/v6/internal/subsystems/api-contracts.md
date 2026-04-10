@@ -236,6 +236,14 @@ when the disabled candidate no longer counts toward monitored-system capacity.
     hidden. Upgrade prompts, trial nudges, monitored-system migration guidance,
     usage counts, billing identity, and plan metadata must therefore not depend
     on hidden commercial routes surviving the public demo boundary.
+34. Keep the storage summary route in `internal/api/router.go` as the
+    canonical storage summary contract across dashboard and storage consumers.
+    `internal/api/router.go`,
+    `internal/api/contract_test.go`, and shared frontend consumers must expose
+    pooled storage history through one response keyed by canonical
+    metrics-target IDs, preserve millisecond chart timestamps, and avoid
+    reconstructing storage summary behavior from per-pool
+    `/api/metrics-store/history` fan-out.
 
 ## Forbidden Paths
 

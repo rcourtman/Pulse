@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import useDashboardTrendsSource from '@/hooks/useDashboardTrends.ts?raw';
-import { computeTrendDelta, extractTrendData, type TrendPoint } from '@/hooks/useDashboardTrends';
+import {
+  buildStorageCapacityTrendPoints,
+  computeTrendDelta,
+  extractTrendData,
+  type TrendPoint,
+} from '@/hooks/useDashboardTrends';
 
 function createPoints(values: number[]): TrendPoint[] {
   const start = 1_700_000_000_000;
@@ -80,11 +85,55 @@ describe('extractTrendData', () => {
   });
 });
 
+describe('buildStorageCapacityTrendPoints', () => {
+  it('aggregates used and available bytes into total capacity percentages', () => {
+    const points = buildStorageCapacityTrendPoints({
+      'pool-a': {
+        name: 'Pool A',
+        usage: [],
+        used: createPoints([400, 600]),
+        avail: createPoints([600, 400]),
+      },
+      'pool-b': {
+        name: 'Pool B',
+        usage: [],
+        used: createPoints([100, 300]),
+        avail: createPoints([900, 700]),
+      },
+    });
+
+    expect(points).toEqual([
+      { timestamp: 1_700_000_000_000, value: 25 },
+      { timestamp: 1_700_000_060_000, value: 45 },
+    ]);
+  });
+
+  it('drops timestamps without both used and available capacity', () => {
+    const points = buildStorageCapacityTrendPoints({
+      'pool-a': {
+        name: 'Pool A',
+        usage: [],
+        used: createPoints([400, 600]),
+        avail: [{ timestamp: 1_700_000_000_000, value: 600 }],
+      },
+    });
+
+    expect(points).toEqual([{ timestamp: 1_700_000_000_000, value: 40 }]);
+  });
+});
+
 describe('useDashboardTrends infrastructure routing', () => {
   it('routes dashboard infrastructure sparklines through the infrastructure summary chart cache', () => {
     expect(useDashboardTrendsSource).toContain('fetchInfrastructureSummaryAndCache');
     expect(useDashboardTrendsSource).toContain("caller: 'useDashboardTrends'");
     expect(useDashboardTrendsSource).not.toContain('request.cpu.map(async');
     expect(useDashboardTrendsSource).not.toContain('request.memory.map(async');
+  });
+
+  it('routes storage trends through the storage summary charts endpoint', () => {
+    expect(useDashboardTrendsSource).toContain('ChartService.getStorageSummaryCharts(STORAGE_RANGE)');
+    expect(useDashboardTrendsSource).toContain('buildStorageCapacityTrendPoints(storageSummary.pools)');
+    expect(useDashboardTrendsSource).not.toContain('metrics-store/history');
+    expect(useDashboardTrendsSource).not.toContain('request.storage.map(async');
   });
 });

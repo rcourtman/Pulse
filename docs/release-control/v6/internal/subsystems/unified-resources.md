@@ -273,6 +273,12 @@ assembly branch.
     through the canonical frontend-to-`ResourceType` resolver before slicing
     the snapshot, so compatibility values such as `disk` / `physical_disk`
     stay on one cache truth instead of falling back to ad hoc filter aliases.
+18. Keep dashboard storage trend target selection on canonical unified-resource
+    truth. `frontend-modern/src/hooks/useDashboardTrends.ts` may detect
+    storage presence from canonical `isStorage(...)` resources and their
+    shared metrics-target IDs, but once storage exists it must reuse the owned
+    `/api/storage-charts` summary contract instead of rebuilding page-local
+    per-resource storage history fetches or storage-type aliases.
 
 ## Current State
 

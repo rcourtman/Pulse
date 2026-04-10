@@ -559,7 +559,7 @@ func TestContract_ChartMetricPointsPreserveMillisecondPrecision(t *testing.T) {
 
 func TestContract_StorageChartsUseCanonicalMetricsTargetIDs(t *testing.T) {
 	monitor, state, metricsHistory := newTestMonitor(t)
-	now := time.Date(2026, time.April, 1, 12, 0, 0, 0, time.UTC)
+	now := time.Now().UTC().Add(-5 * time.Minute).Truncate(time.Millisecond)
 
 	metricsHistory.AddStorageMetric("vc-1:datastore:datastore-202", "usage", 0.25, now)
 	metricsHistory.AddStorageMetric("vc-1:datastore:datastore-202", "used", 3.57*1024*1024*1024*1024, now)
@@ -639,6 +639,17 @@ func TestContract_StorageChartsUseCanonicalMetricsTargetIDs(t *testing.T) {
 	}
 	if _, ok := decoded.Pools["storage-truenas-1"]; ok {
 		t.Fatalf("expected raw TrueNAS resource id to stay out of chart payload, got %v", decoded.Pools)
+	}
+	vmwarePool := decoded.Pools["vc-1:datastore:datastore-202"]
+	if len(vmwarePool.Used) != 1 || len(vmwarePool.Avail) != 1 {
+		t.Fatalf("expected canonical storage summary payload to preserve used/avail series, got %+v", vmwarePool)
+	}
+	if vmwarePool.Used[0].Timestamp != now.UnixMilli() || vmwarePool.Avail[0].Timestamp != now.UnixMilli() {
+		t.Fatalf(
+			"expected storage summary series to preserve millisecond timestamps, got used=%v avail=%v",
+			vmwarePool.Used,
+			vmwarePool.Avail,
+		)
 	}
 }
 
