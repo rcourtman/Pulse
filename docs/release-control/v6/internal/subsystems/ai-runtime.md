@@ -223,6 +223,11 @@ other header-adjacent notices must not fork assistant open state, gate on AI
 runtime fetches, or move assistant availability logic out of
 `frontend-modern/src/stores/aiChat.ts` and `frontend-modern/src/useAppRuntimeState.ts`
 just because they share the same authenticated shell.
+That same shared shell rule applies when presentation policy suppresses hosted
+organization chrome: `frontend-modern/src/App.tsx` and
+`frontend-modern/src/AppLayout.tsx` may hide org switchers or demo-only org
+labels, but they must not couple assistant visibility, session reset, or
+drawer-open behavior to that organization presentation state.
 `docs/release-control/v6/internal/subsystems/registry.json` must therefore keep
 `frontend-modern/src/stores/aiRuntimeState.ts` and
 `frontend-modern/src/components/AI/Chat/` on the explicit AI runtime proof

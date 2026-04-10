@@ -1464,6 +1464,19 @@ describe('Settings architecture guardrails', () => {
     expect(getSettingsNavItem('organization-billing-admin')?.hideWhenCommercialHidden).toBe(true);
   });
 
+  it('keeps demo-mode organization visibility on the shared settings shell owner', () => {
+    expect(settingsNavigationModelSource).toContain('hideWhenOrganizationHidden?: boolean;');
+    expect(settingsNavVisibilitySource).toContain('if (item.hideWhenOrganizationHidden)');
+    expect(settingsNavVisibilitySource).toContain('context.presentationPolicyHidesOrganizations');
+    expect(getSettingsNavItem('organization-overview')?.hideWhenOrganizationHidden).toBe(true);
+    expect(getSettingsNavItem('organization-access')?.hideWhenOrganizationHidden).toBe(true);
+    expect(getSettingsNavItem('organization-sharing')?.hideWhenOrganizationHidden).toBe(true);
+    expect(getSettingsNavItem('organization-billing')?.hideWhenOrganizationHidden).toBe(true);
+    expect(getSettingsNavItem('organization-billing-admin')?.hideWhenOrganizationHidden).toBe(
+      true,
+    );
+  });
+
   it('keeps relay shell copy on the shared relay presentation owner', () => {
     expect(settingsHeaderMetaSource).toContain('RELAY_SETTINGS_DESCRIPTION');
     expect(relaySettingsPanelSource).toContain('description={RELAY_SETTINGS_DESCRIPTION}');

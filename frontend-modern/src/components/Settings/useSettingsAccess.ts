@@ -1,6 +1,7 @@
 import { Accessor, createEffect, createMemo, createSignal } from 'solid-js';
 import {
   presentationPolicyHidesCommercialSurfaces,
+  presentationPolicyHidesOrganizationSurfaces,
   sessionPresentationPolicyResolved,
   syncSessionPresentationPolicy,
 } from '@/stores/sessionPresentationPolicy';
@@ -39,6 +40,16 @@ export function useSettingsAccess({
   const presentationPolicyResolved = createMemo(
     () => securityStatus() !== null || sessionPresentationPolicyResolved(),
   );
+  const organizationSurfacesHidden = createMemo(() => {
+    const resolvedSecurityStatus = securityStatus();
+    if (resolvedSecurityStatus) {
+      return (
+        resolvedSecurityStatus.presentationPolicy?.demoMode === true ||
+        resolvedSecurityStatus.sessionCapabilities?.demoMode === true
+      );
+    }
+    return presentationPolicyHidesOrganizationSurfaces();
+  });
 
   const visibleTabGroups = createMemo(() => {
     const hostedModeEnabled = isHostedModeEnabled();
@@ -54,6 +65,7 @@ export function useSettingsAccess({
               hasFeature,
               runtimeCapabilitiesLoaded,
               presentationPolicyHidesCommercial: commercialSurfacesHidden(),
+              presentationPolicyHidesOrganizations: organizationSurfacesHidden(),
               presentationPolicyResolved: presentationPolicyResolved(),
               hostedModeEnabled,
               settingsCapabilities,
@@ -91,7 +103,8 @@ export function useSettingsAccess({
     const requiresFeatureResolution = Boolean(tabFeatureRequirements[current]?.length);
     const requiresCapabilityResolution = Boolean(getSettingsNavItem(current)?.requiredCapability);
     const requiresPresentationPolicyResolution = Boolean(
-      getSettingsNavItem(current)?.hideWhenCommercialHidden,
+      getSettingsNavItem(current)?.hideWhenCommercialHidden ||
+        getSettingsNavItem(current)?.hideWhenOrganizationHidden,
     );
     if (
       (requiresFeatureResolution && !runtimeCapabilitiesLoaded()) ||

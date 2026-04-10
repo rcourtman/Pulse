@@ -485,6 +485,16 @@ payload, but the browser-owned shared primitive is now the resolved
 monitored-system warning banners, dashboard upsells, Patrol upgrade CTAs,
 history-lock paywalls, and other public-demo commercial affordances when the
 browser is rendering a public demo runtime.
+That same shared settings-shell boundary also owns demo-mode organization
+suppression. `frontend-modern/src/components/Settings/settingsNavigationModel.ts`,
+`frontend-modern/src/components/Settings/settingsNavCatalog.ts`,
+`frontend-modern/src/components/Settings/settingsNavVisibility.ts`,
+`frontend-modern/src/stores/sessionPresentationPolicy.ts`, and
+`frontend-modern/src/useAppRuntimeState.ts` must fail closed on organization
+navigation and app-shell org chrome until the resolved presentation policy is
+known, then keep org switchers, visible `Default Organization` labels, and
+organization-scoped settings groups hidden when the browser is rendering a
+public demo runtime.
 Shared primitives must not perform their own ad hoc `/api/health` polling,
 response-header inference, hostname heuristics, or per-banner demo branching;
 the runtime bootstrap, shared presentation-policy store, and shared banner

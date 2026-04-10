@@ -326,6 +326,8 @@ base.describe('Demo mode commercial boundary', () => {
     await expect(page.getByRole('heading', { level: 1, name: 'Infrastructure Operations' })).toBeVisible();
     const settingsNavigation = page.locator('[aria-label="Settings navigation"]');
     await expect(settingsNavigation).toBeVisible();
+    await expect(page.getByText('Default Organization', { exact: true })).toHaveCount(0);
+    await expect(settingsNavigation.getByText('Organization', { exact: true })).toHaveCount(0);
     await expect(
       settingsNavigation.getByText('Pulse Pro', { exact: true }),
     ).toHaveCount(0);
@@ -447,6 +449,8 @@ base.describe('Managed demo runtime commercial boundary', () => {
         await expect(page.getByRole('heading', { level: 1, name: 'Infrastructure Operations' })).toBeVisible();
         const settingsNavigation = page.locator('[aria-label="Settings navigation"]');
         await expect(settingsNavigation).toBeVisible();
+        await expect(page.getByText('Default Organization', { exact: true })).toHaveCount(0);
+        await expect(settingsNavigation.getByText('Organization', { exact: true })).toHaveCount(0);
         await expect(settingsNavigation.getByText('Pulse Pro', { exact: true })).toHaveCount(0);
         await expect(page.getByText('Pro Trial:', { exact: false })).toHaveCount(0);
         await expect(page.getByText(/Monitored systems:\s*\d+\/\d+/)).toHaveCount(0);

@@ -45,6 +45,7 @@ describe('App architecture', () => {
     expect(appSource).not.toContain('AIAPI.getSettings()');
     expect(appSource).toContain("if (e.key === 'Escape' && aiChatStore.isOpen) {");
     expect(appSource).toContain('<AIChat onClose={() => aiChatStore.close()} />');
+    expect(appSource).toContain('showOrgSwitcher={runtime.showOrgSwitcher}');
   });
 
   it('keeps authenticated chrome in AppLayout and hosted bootstrap in useAppRuntimeState', () => {
@@ -66,12 +67,13 @@ describe('App architecture', () => {
     );
     expect(appLayoutSource).not.toContain('props.connected()');
     expect(appLayoutSource).toContain('const utilityTabs = createMemo(() =>');
-    expect(appLayoutSource).toContain("import { isMultiTenantEnabled } from '@/stores/license';");
+    expect(appLayoutSource).not.toContain("import { isMultiTenantEnabled } from '@/stores/license';");
     expect(appLayoutSource).not.toContain('loadCommercialPosture');
     expect(appLayoutSource).not.toContain('buildReleaseNotesUrl');
     expect(appLayoutSource).not.toContain('buildV6RcFeedbackUrl');
     expect(appLayoutSource).not.toContain('sessionPresentationPolicyResolved');
     expect(appLayoutSource).not.toContain('presentationPolicyHidesCommercialSurfaces');
+    expect(appLayoutSource).not.toContain('presentationPolicyHidesOrganizationSurfaces');
     expect(appLayoutSource).toContain(
       'aiChatStore.enabled === true && !aiChatStore.isOpenSignal() && !kioskMode()',
     );
@@ -84,6 +86,7 @@ describe('App architecture', () => {
     expect(appRuntimeStateSource).toContain('export const useAppRuntimeState = () =>');
     expect(appRuntimeStateSource).toContain("import { aiChatStore } from '@/stores/aiChat';");
     expect(appRuntimeStateSource).toContain('const connectionStatus = createMemo<AppConnectionStatus>(() => {');
+    expect(appRuntimeStateSource).toContain('const showOrgSwitcher = createMemo(() => {');
     expect(appRuntimeStateSource).toContain('const beginAuthenticatedRuntime = async () =>');
     expect(appRuntimeStateSource).toContain("const [backendHealthy, setBackendHealthy] = createSignal(false);");
     expect(appRuntimeStateSource).toContain("const checkBackendHealth = async () => {");
@@ -95,6 +98,7 @@ describe('App architecture', () => {
     expect(appRuntimeStateSource).toContain(
       "import { loadCommercialPosture } from '@/stores/licenseCommercial';",
     );
+    expect(appRuntimeStateSource).toContain('presentationPolicyHidesOrganizationSurfaces');
     expect(appRuntimeStateSource).toContain(
       'const [activeOrgID, setActiveOrgID] = createSignal(',
     );

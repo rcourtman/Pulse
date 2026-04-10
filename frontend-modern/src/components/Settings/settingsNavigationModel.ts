@@ -50,6 +50,7 @@ export interface SettingsNavItem {
   hideWhenUnavailable?: boolean;
   hostedOnly?: boolean;
   hideWhenCommercialHidden?: boolean;
+  hideWhenOrganizationHidden?: boolean;
   requiredCapability?: keyof SecurityStatusSettingsCapabilities;
   badge?: string;
   features?: string[];

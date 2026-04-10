@@ -7,6 +7,7 @@ export interface SettingsNavVisibilityContext {
   hasFeature: (feature: string) => boolean;
   runtimeCapabilitiesLoaded: () => boolean;
   presentationPolicyHidesCommercial?: boolean;
+  presentationPolicyHidesOrganizations?: boolean;
   presentationPolicyResolved?: boolean;
   hostedModeEnabled?: boolean;
   settingsCapabilities?: Partial<SecurityStatusSettingsCapabilities> | null;
@@ -30,6 +31,16 @@ export function shouldHideSettingsNavItem(
 
   if (item.hostedOnly && !context.hostedModeEnabled) {
     return true;
+  }
+
+  if (item.hideWhenOrganizationHidden) {
+    if (context.presentationPolicyResolved === false) {
+      return true;
+    }
+
+    if (context.presentationPolicyHidesOrganizations) {
+      return true;
+    }
   }
 
   if (item.hideWhenCommercialHidden) {

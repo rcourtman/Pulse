@@ -1,6 +1,7 @@
 import { Component, Show } from 'solid-js';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import { isMultiTenantEnabled } from '@/stores/license';
+import { presentationPolicyHidesOrganizationSurfaces } from '@/stores/sessionPresentationPolicy';
 import {
   ORGANIZATION_SETTINGS_UNAVAILABLE_CLASS,
   ORGANIZATION_SETTINGS_UNAVAILABLE_MESSAGE,
@@ -17,10 +18,12 @@ export interface OrganizationAccessPanelProps {
 
 export const OrganizationAccessPanel: Component<OrganizationAccessPanelProps> = (props) => {
   const state = useOrganizationAccessPanelState(props);
+  const showOrganizationSurface = () =>
+    isMultiTenantEnabled() && !presentationPolicyHidesOrganizationSurfaces();
 
   return (
     <Show
-      when={isMultiTenantEnabled()}
+      when={showOrganizationSurface()}
       fallback={
         <div class={ORGANIZATION_SETTINGS_UNAVAILABLE_CLASS}>
           {ORGANIZATION_SETTINGS_UNAVAILABLE_MESSAGE}

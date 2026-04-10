@@ -54,7 +54,10 @@ import {
 } from '@/stores/license';
 import { aiChatStore } from '@/stores/aiChat';
 import { loadCommercialPosture } from '@/stores/licenseCommercial';
-import { syncSessionPresentationPolicy } from '@/stores/sessionPresentationPolicy';
+import {
+  presentationPolicyHidesOrganizationSurfaces,
+  syncSessionPresentationPolicy,
+} from '@/stores/sessionPresentationPolicy';
 import { layoutStore } from '@/utils/layout';
 import {
   markSystemSettingsLoadedWithDefaults,
@@ -244,6 +247,12 @@ export const useAppRuntimeState = () => {
       tone: 'offline',
     };
   });
+  const showOrgSwitcher = createMemo(() => {
+    if (!isMultiTenantEnabled()) {
+      return false;
+    }
+    return !presentationPolicyHidesOrganizationSurfaces();
+  });
 
   const initialThemePreference = getStoredThemePreference();
   const [themePreference, setThemePreference] =
@@ -313,6 +322,23 @@ export const useAppRuntimeState = () => {
     try {
       if (!runtimeCapabilitiesLoaded()) {
         await loadRuntimeCapabilities();
+      }
+
+      if (presentationPolicyHidesOrganizationSurfaces()) {
+        const storedOrgID = getSelectedOrgID();
+        const hiddenOrgID =
+          isHostedModeEnabled() && storedOrgID && storedOrgID !== 'default'
+            ? storedOrgID
+            : 'default';
+        setOrganizations([
+          {
+            id: hiddenOrgID,
+            displayName: hiddenOrgID === 'default' ? 'Default Organization' : hiddenOrgID,
+          },
+        ]);
+        setSelectedOrgID(hiddenOrgID);
+        setActiveOrgID(hiddenOrgID);
+        return;
       }
 
       if (!isMultiTenantEnabled()) {
@@ -744,6 +770,7 @@ export const useAppRuntimeState = () => {
     dataUpdated,
     lastUpdateText,
     versionInfo,
+    showOrgSwitcher,
     themePreference,
     darkMode,
     handleThemeChange,

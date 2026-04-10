@@ -47,6 +47,7 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
         icon: Building2,
         iconProps: { strokeWidth: 2 },
         features: ['multi_tenant'],
+        hideWhenOrganizationHidden: true,
         hideWhenUnavailable: true,
       },
       {
@@ -55,6 +56,7 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
         icon: Users,
         iconProps: { strokeWidth: 2 },
         features: ['multi_tenant'],
+        hideWhenOrganizationHidden: true,
         hideWhenUnavailable: true,
       },
       {
@@ -63,6 +65,7 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
         icon: Share2,
         iconProps: { strokeWidth: 2 },
         features: ['multi_tenant'],
+        hideWhenOrganizationHidden: true,
         hideWhenUnavailable: true,
       },
       {
@@ -71,6 +74,7 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
         icon: CreditCard,
         iconProps: { strokeWidth: 2 },
         features: ['multi_tenant'],
+        hideWhenOrganizationHidden: true,
         hideWhenUnavailable: true,
         hideWhenCommercialHidden: true,
       },
@@ -80,6 +84,7 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
         icon: CreditCard,
         iconProps: { strokeWidth: 2 },
         features: ['multi_tenant'],
+        hideWhenOrganizationHidden: true,
         hideWhenUnavailable: true,
         hostedOnly: true,
         hideWhenCommercialHidden: true,

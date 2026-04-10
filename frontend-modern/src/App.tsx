@@ -375,6 +375,7 @@ function App() {
                             organizations={runtime.organizations}
                             activeOrgID={runtime.activeOrgID}
                             orgsLoading={runtime.orgsLoading}
+                            showOrgSwitcher={runtime.showOrgSwitcher}
                             onSwitchOrg={runtime.handleOrgSwitch}
                           >
                             {props.children}

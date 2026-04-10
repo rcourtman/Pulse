@@ -7,6 +7,7 @@ const orgGetMock = vi.fn();
 const listMembersMock = vi.fn();
 const updateOrgMock = vi.fn();
 const isMultiTenantEnabledMock = vi.fn();
+const presentationPolicyHidesOrganizationSurfacesMock = vi.fn();
 const getOrgIDMock = vi.fn();
 const notificationSuccessMock = vi.fn();
 const notificationErrorMock = vi.fn();
@@ -23,6 +24,11 @@ vi.mock('@/api/orgs', () => ({
 
 vi.mock('@/stores/license', () => ({
   isMultiTenantEnabled: (...args: unknown[]) => isMultiTenantEnabledMock(...args),
+}));
+
+vi.mock('@/stores/sessionPresentationPolicy', () => ({
+  presentationPolicyHidesOrganizationSurfaces: (...args: unknown[]) =>
+    presentationPolicyHidesOrganizationSurfacesMock(...args),
 }));
 
 vi.mock('@/utils/apiClient', () => ({
@@ -85,6 +91,7 @@ beforeEach(() => {
   listMembersMock.mockReset();
   updateOrgMock.mockReset();
   isMultiTenantEnabledMock.mockReset();
+  presentationPolicyHidesOrganizationSurfacesMock.mockReset();
   getOrgIDMock.mockReset();
   notificationSuccessMock.mockReset();
   notificationErrorMock.mockReset();
@@ -92,6 +99,7 @@ beforeEach(() => {
   loggerErrorMock.mockReset();
 
   isMultiTenantEnabledMock.mockReturnValue(true);
+  presentationPolicyHidesOrganizationSurfacesMock.mockReturnValue(false);
   getOrgIDMock.mockReturnValue('org-a');
   eventBusOnMock.mockReturnValue(() => undefined);
   orgGetMock.mockResolvedValue(baseOrg);
@@ -123,5 +131,15 @@ describe('OrganizationOverviewPanel', () => {
   it('normalizes org scope through the shared helper', () => {
     expect(organizationOverviewStateSource).toContain('normalizeOrgScope(getOrgID())');
     expect(organizationOverviewStateSource).not.toContain("getOrgID() || 'default'");
+  });
+
+  it('stays unavailable in demo mode without loading organization data', () => {
+    presentationPolicyHidesOrganizationSurfacesMock.mockReturnValue(true);
+
+    renderPanel();
+
+    expect(screen.getByText('Organization settings are not available on this server.')).toBeInTheDocument();
+    expect(orgGetMock).not.toHaveBeenCalled();
+    expect(listMembersMock).not.toHaveBeenCalled();
   });
 });

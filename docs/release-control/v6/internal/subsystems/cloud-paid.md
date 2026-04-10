@@ -184,6 +184,13 @@ That same cloud-paid/browser boundary now also governs public demo posture.
 surfaces must not reveal self-hosted license metadata, hosted billing state,
 monitored-system ledgers, upgrade nudges, or activation controls just because
 the underlying runtime is commercially enabled.
+That same resolved presentation policy also governs hosted organization chrome
+inside the demo/browser shell: app bootstrap may retain an internal default
+org context for hosted API routing, but `frontend-modern/src/useAppRuntimeState.ts`,
+`frontend-modern/src/App.tsx`, and `frontend-modern/src/AppLayout.tsx` must
+not render visible org switchers, `Default Organization` labels, or
+organization-scoped navigation just because a seeded hosted org still exists
+behind the session.
 `internal/api/router_routes_auth_security.go`,
 `internal/api/security_status_capabilities.go`,
 `frontend-modern/src/useAppRuntimeState.ts`, and

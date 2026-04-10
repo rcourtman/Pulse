@@ -39,7 +39,6 @@ import { buildStorageRecoveryTabSpecs } from '@/routing/platformTabs';
 import { getKioskModePreference, setKioskMode } from '@/utils/url';
 import { updateStore } from '@/stores/updates';
 import { aiChatStore } from '@/stores/aiChat';
-import { isMultiTenantEnabled } from '@/stores/license';
 import { isPro } from '@/stores/licenseCommercial';
 import { presentationPolicyHidesUpgradePrompts } from '@/stores/sessionPresentationPolicy';
 import type { AppConnectionStatus } from '@/useAppRuntimeState';
@@ -85,6 +84,7 @@ export interface AppLayoutProps {
   organizations: () => Organization[];
   activeOrgID: () => string;
   orgsLoading: () => boolean;
+  showOrgSwitcher: () => boolean;
   onSwitchOrg: (orgID: string) => void;
   children?: JSX.Element;
 }
@@ -552,7 +552,7 @@ export function AppLayout(props: AppLayoutProps) {
         >
           <Show when={props.hasAuth() && !props.needsAuth()}>
             <div class="flex items-center gap-2">
-              <Show when={isMultiTenantEnabled()}>
+              <Show when={props.showOrgSwitcher()}>
                 <OrgSwitcher
                   orgs={props.organizations()}
                   selectedOrgId={props.activeOrgID()}

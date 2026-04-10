@@ -255,6 +255,7 @@ describe('useAppRuntimeState', () => {
       { id: 'default', displayName: 'Default Organization' },
     ]);
     expect(hookState.activeOrgID()).toBe('default');
+    expect(hookState.showOrgSwitcher()).toBe(false);
     expect(showToastMock).not.toHaveBeenCalledWith(
       'error',
       'Failed to load organizations. Using default.',
@@ -275,11 +276,13 @@ describe('useAppRuntimeState', () => {
     expect(setOrgIDMock).toHaveBeenCalledWith('acme');
     expect(hookState.organizations()).toEqual([{ id: 'acme', displayName: 'Acme' }]);
     expect(hookState.activeOrgID()).toBe('acme');
+    expect(hookState.showOrgSwitcher()).toBe(true);
 
     dispose();
   });
 
   it('syncs demo mode from security status session capabilities during bootstrap', async () => {
+    isMultiTenantEnabledMock.mockReturnValue(true);
     apiFetchMock.mockImplementation(async (url: string) => {
       if (url === '/api/security/status') {
         return new Response(
@@ -297,7 +300,7 @@ describe('useAppRuntimeState', () => {
     });
 
     const demoModeModule = await import('@/stores/demoMode');
-    const { dispose } = mountHook();
+    const { hookState, dispose } = mountHook();
 
     await flushAsync();
     await flushAsync();
@@ -305,6 +308,11 @@ describe('useAppRuntimeState', () => {
     expect(demoModeModule.demoModeResolved()).toBe(true);
     expect(demoModeModule.demoModeEnabled()).toBe(true);
     expect(aiChatSetEnabledMock).toHaveBeenCalledWith(true);
+    expect(orgsListMock).not.toHaveBeenCalled();
+    expect(hookState.organizations()).toEqual([
+      { id: 'default', displayName: 'Default Organization' },
+    ]);
+    expect(hookState.showOrgSwitcher()).toBe(false);
 
     dispose();
   });

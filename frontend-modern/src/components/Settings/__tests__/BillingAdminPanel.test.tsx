@@ -11,6 +11,7 @@ const getBillingStateMock = vi.fn();
 const putBillingStateMock = vi.fn();
 const successMock = vi.fn();
 const errorMock = vi.fn();
+const presentationPolicyHidesOrganizationSurfacesMock = vi.fn();
 
 vi.mock('@/api/billingAdmin', () => ({
   BillingAdminAPI: {
@@ -32,6 +33,11 @@ vi.mock('@/stores/notifications', () => ({
   },
 }));
 
+vi.mock('@/stores/sessionPresentationPolicy', () => ({
+  presentationPolicyHidesOrganizationSurfaces: (...args: unknown[]) =>
+    presentationPolicyHidesOrganizationSurfacesMock(...args),
+}));
+
 vi.mock('@/utils/logger', () => ({
   logger: {
     error: vi.fn(),
@@ -45,6 +51,8 @@ describe('BillingAdminPanel', () => {
     putBillingStateMock.mockReset();
     successMock.mockReset();
     errorMock.mockReset();
+    presentationPolicyHidesOrganizationSurfacesMock.mockReset();
+    presentationPolicyHidesOrganizationSurfacesMock.mockReturnValue(false);
 
     listOrganizationsMock.mockResolvedValue([
       {
@@ -129,5 +137,17 @@ describe('BillingAdminPanel', () => {
     expect(billingAdminPanelStateSource).toContain('promisePool');
     expect(billingAdminOrganizationsTableSource).toContain('PulseDataGrid');
     expect(billingAdminOrganizationsTableSource).toContain('Billing state JSON');
+  });
+
+  it('stays unavailable in demo mode without loading hosted billing admin data', () => {
+    presentationPolicyHidesOrganizationSurfacesMock.mockReturnValue(true);
+
+    render(() => <BillingAdminPanel />);
+
+    expect(
+      screen.getByText('Organization settings are not available on this server.'),
+    ).toBeInTheDocument();
+    expect(listOrganizationsMock).not.toHaveBeenCalled();
+    expect(getBillingStateMock).not.toHaveBeenCalled();
   });
 });

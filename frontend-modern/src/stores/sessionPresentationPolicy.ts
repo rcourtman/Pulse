@@ -58,6 +58,10 @@ export function presentationPolicyHidesCommercialSurfaces(): boolean {
   return sessionPresentationPolicy().hideCommercial;
 }
 
+export function presentationPolicyHidesOrganizationSurfaces(): boolean {
+  return sessionPresentationPolicy().demoMode;
+}
+
 export function presentationPolicyHidesUpgradePrompts(): boolean {
   return sessionPresentationPolicy().hideUpgrade;
 }

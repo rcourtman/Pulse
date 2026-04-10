@@ -207,6 +207,10 @@ querying, and the operator-facing storage health presentation layer.
     commercial compatibility handoffs like `/pricing` must stay separate thin
     route exits rather than borrowing storage/recovery preview framing,
     first-session copy, or page-state assumptions.
+    Authenticated-shell demo organization suppression on `frontend-modern/src/App.tsx`
+    may hide top-bar org chrome for public demo posture, but it must not leak
+    into storage/recovery preview route ownership, first-session recovery copy,
+    or route-level framing decisions.
 36. Keep public self-hosted purchase handoff and activation routes on the
     adjacent commercial/auth boundary. When `internal/api/router.go`,
     `internal/api/router_routes_cloud.go`, `internal/api/licensing_handlers.go`,

@@ -6,6 +6,7 @@ import {
 } from '@/api/billingAdmin';
 import { isHostedModeEnabled, isMultiTenantEnabled } from '@/stores/license';
 import { notificationStore } from '@/stores/notifications';
+import { presentationPolicyHidesOrganizationSurfaces } from '@/stores/sessionPresentationPolicy';
 import { logger } from '@/utils/logger';
 import {
   getBillingAdminStateUpdateSuccessMessage,
@@ -42,7 +43,12 @@ export function useBillingAdminPanelState() {
   const [savingByOrgID, setSavingByOrgID] = createSignal<Record<string, boolean>>({});
   const [expandedOrgID, setExpandedOrgID] = createSignal<string | null>(null);
 
-  const hostedEnabled = createMemo(() => isMultiTenantEnabled() && isHostedModeEnabled());
+  const hostedEnabled = createMemo(
+    () =>
+      isMultiTenantEnabled() &&
+      isHostedModeEnabled() &&
+      !presentationPolicyHidesOrganizationSurfaces(),
+  );
 
   const setBillingLoading = (orgID: string, value: boolean) => {
     setBillingLoadingByOrgID((prev) => ({ ...prev, [orgID]: value }));

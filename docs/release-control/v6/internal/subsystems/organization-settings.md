@@ -140,6 +140,13 @@ upgrade posture stay outside this subsystem on the dedicated commercial
 surfaces, and any public-demo suppression must come from the shared resolved
 `presentationPolicy` rather than settings-local demo checks or billing
 entitlement probes.
+That resolved policy also governs organization settings discoverability and
+bootstrap. `frontend-modern/src/components/Settings/useSettingsAccess.ts`,
+`frontend-modern/src/components/Settings/settingsNavCatalog.ts`, and the
+owned organization overview/access/sharing panel states must fail closed until
+presentation policy resolves, then stay hidden in public-demo posture even if
+the hosted runtime still carries a seeded default organization for transport
+scope.
 The organization sharing surface now also sources resource quick-pick labels
 from the shared preferred resource display helper, so governed resources do
 not fall back to raw names inside share creation.

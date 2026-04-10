@@ -3,6 +3,7 @@ import { OrgsAPI, type Organization, type OrganizationMember } from '@/api/orgs'
 import { eventBus } from '@/stores/events';
 import { isMultiTenantEnabled } from '@/stores/license';
 import { notificationStore } from '@/stores/notifications';
+import { presentationPolicyHidesOrganizationSurfaces } from '@/stores/sessionPresentationPolicy';
 import { getOrgID } from '@/utils/apiClient';
 import { logger } from '@/utils/logger';
 import { normalizeOrgScope } from '@/utils/orgScope';
@@ -77,7 +78,10 @@ export function useOrganizationOverviewPanelState(props: OrganizationOverviewPan
   };
 
   onMount(() => {
-    if (!isMultiTenantEnabled()) return;
+    if (!isMultiTenantEnabled() || presentationPolicyHidesOrganizationSurfaces()) {
+      setLoading(false);
+      return;
+    }
     void loadOrganization();
 
     const unsubscribe = eventBus.on('org_switched', () => {

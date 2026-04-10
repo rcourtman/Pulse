@@ -12,6 +12,7 @@ const listMembersMock = vi.hoisted(() => vi.fn());
 const errorMock = vi.hoisted(() => vi.fn());
 const eventBusOnMock = vi.hoisted(() => vi.fn());
 const eventBusHandlers = vi.hoisted(() => [] as Array<() => void>);
+const presentationPolicyHidesOrganizationSurfacesMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@/api/license', () => ({
   LicenseAPI: {
@@ -46,6 +47,10 @@ vi.mock('@/stores/notifications', () => ({
   },
 }));
 
+vi.mock('@/stores/sessionPresentationPolicy', () => ({
+  presentationPolicyHidesOrganizationSurfaces: presentationPolicyHidesOrganizationSurfacesMock,
+}));
+
 vi.mock('@/utils/logger', () => ({
   logger: {
     error: vi.fn(),
@@ -59,11 +64,13 @@ describe('OrganizationBillingPanel', () => {
     listMembersMock.mockReset();
     errorMock.mockReset();
     eventBusOnMock.mockReset();
+    presentationPolicyHidesOrganizationSurfacesMock.mockReset();
     eventBusHandlers.length = 0;
     eventBusOnMock.mockImplementation((_event: string, handler: () => void) => {
       eventBusHandlers.push(handler);
       return () => {};
     });
+    presentationPolicyHidesOrganizationSurfacesMock.mockReturnValue(false);
 
     getStatusMock.mockResolvedValue({
       valid: true,
@@ -126,5 +133,18 @@ describe('OrganizationBillingPanel', () => {
     expect(organizationBillingStateSource).toContain("eventBus.on('org_switched'");
     expect(organizationBillingStateSource).not.toContain("getOrgID() || 'default'");
     expect(organizationBillingLoadingStateSource).toContain('animate-pulse');
+  });
+
+  it('stays unavailable in demo mode without loading organization billing data', () => {
+    presentationPolicyHidesOrganizationSurfacesMock.mockReturnValue(true);
+
+    render(() => <OrganizationBillingPanel nodeUsage={5} guestUsage={2} />);
+
+    expect(
+      screen.getByText('Organization settings are not available on this server.'),
+    ).toBeInTheDocument();
+    expect(getStatusMock).not.toHaveBeenCalled();
+    expect(listOrgsMock).not.toHaveBeenCalled();
+    expect(listMembersMock).not.toHaveBeenCalled();
   });
 });

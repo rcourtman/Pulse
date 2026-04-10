@@ -6,6 +6,7 @@ import { normalizeOrgScope } from '@/utils/orgScope';
 import { isMultiTenantEnabled } from '@/stores/license';
 import { eventBus } from '@/stores/events';
 import { notificationStore } from '@/stores/notifications';
+import { presentationPolicyHidesOrganizationSurfaces } from '@/stores/sessionPresentationPolicy';
 import { logger } from '@/utils/logger';
 import {
   getLicenseTierLabel,
@@ -38,7 +39,8 @@ export function useOrganizationBillingPanelState(props: OrganizationBillingPanel
   const [memberCount, setMemberCount] = createSignal(0);
 
   const activeOrgID = () => normalizeOrgScope(getOrgID());
-  const isBillingAvailable = () => isMultiTenantEnabled();
+  const isBillingAvailable = () =>
+    isMultiTenantEnabled() && !presentationPolicyHidesOrganizationSurfaces();
 
   const commercialPlanModel = createMemo(() =>
     buildHostedCommercialPlanModel({

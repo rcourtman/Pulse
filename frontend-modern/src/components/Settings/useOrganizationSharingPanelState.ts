@@ -9,6 +9,7 @@ import { useResources } from '@/hooks/useResources';
 import { eventBus } from '@/stores/events';
 import { isMultiTenantEnabled } from '@/stores/license';
 import { notificationStore } from '@/stores/notifications';
+import { presentationPolicyHidesOrganizationSurfaces } from '@/stores/sessionPresentationPolicy';
 import { getOrgID } from '@/utils/apiClient';
 import {
   INVALID_RESOURCE_TYPE_ERROR,
@@ -282,7 +283,10 @@ export function useOrganizationSharingPanelState(props: OrganizationSharingPanel
   };
 
   onMount(() => {
-    if (!isMultiTenantEnabled()) return;
+    if (!isMultiTenantEnabled() || presentationPolicyHidesOrganizationSurfaces()) {
+      setLoading(false);
+      return;
+    }
     void loadSharingData();
 
     const unsubscribe = eventBus.on('org_switched', () => {

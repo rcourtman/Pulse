@@ -116,6 +116,28 @@ describe('settingsNavigation integration scaffold', () => {
     ).toBe(true);
   });
 
+  it('hides organization tabs in demo mode even when multi-tenant is enabled', () => {
+    expect(
+      shouldHideSettingsNavItem('organization-overview', {
+        hasFeature: hasFeatures(['multi_tenant']),
+        runtimeCapabilitiesLoaded: () => true,
+        presentationPolicyHidesOrganizations: true,
+        presentationPolicyResolved: true,
+        hostedModeEnabled: false,
+      }),
+    ).toBe(true);
+
+    expect(
+      shouldHideSettingsNavItem('organization-sharing', {
+        hasFeature: hasFeatures(['multi_tenant']),
+        runtimeCapabilitiesLoaded: () => true,
+        presentationPolicyHidesOrganizations: true,
+        presentationPolicyResolved: true,
+        hostedModeEnabled: false,
+      }),
+    ).toBe(true);
+  });
+
   it('fails closed for demo-hidden tabs until demo mode is resolved', () => {
     expect(
       shouldHideSettingsNavItem('system-billing', {
@@ -132,6 +154,15 @@ describe('settingsNavigation integration scaffold', () => {
         runtimeCapabilitiesLoaded: () => true,
         presentationPolicyResolved: false,
         hostedModeEnabled: true,
+      }),
+    ).toBe(true);
+
+    expect(
+      shouldHideSettingsNavItem('organization-overview', {
+        hasFeature: hasFeatures(['multi_tenant']),
+        runtimeCapabilitiesLoaded: () => true,
+        presentationPolicyResolved: false,
+        hostedModeEnabled: false,
       }),
     ).toBe(true);
   });
