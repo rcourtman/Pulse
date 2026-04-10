@@ -208,6 +208,12 @@ an add-only capacity posture.
     problem rows, and top-resource rankings for dashboard hot paths, but
     lifecycle surfaces must not treat `/api/resources/dashboard-summary` as
     install inventory authority, enrollment proof, or fleet freshness truth.
+    The same presentation-only boundary now covers compact storage summary
+    chart reads as well. Shared `/api/charts/storage-summary` transport may
+    request only the canonical `used` and `avail` storage series needed for the
+    dashboard capacity sparkline, and lifecycle surfaces must not reinterpret
+    the omitted `usage` or `total` series as missing lifecycle telemetry or
+    enrollment-state evidence.
     Dashboard storage trend consumers on that shared router boundary must now reuse the single `/api/storage-charts` summary response instead of fanning out per-pool `/api/metrics-store/history` reads, and lifecycle surfaces still must treat that batched storage summary transport as presentation context only rather than install, enrollment, or freshness truth.
 12. Keep lifecycle installer fallback pinned to published release lineage only.
     When `internal/api/unified_agent.go` has to proxy `/install.sh` or

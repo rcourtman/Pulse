@@ -184,6 +184,66 @@ func (m *Monitor) mockStorageMetricsForChart(storageID string, duration time.Dur
 	}
 }
 
+func (m *Monitor) mockStorageSummaryCapacityTrend(duration time.Duration) []MetricPoint {
+	if m == nil {
+		return nil
+	}
+
+	readState := m.GetUnifiedReadStateOrSnapshot()
+	if readState == nil {
+		return nil
+	}
+
+	timestamps := mockChartTimestamps(duration)
+	if len(timestamps) == 0 {
+		return nil
+	}
+
+	usedTotals := make([]float64, len(timestamps))
+	capacityTotals := make([]float64, len(timestamps))
+
+	for _, pool := range readState.StoragePools() {
+		if pool == nil {
+			continue
+		}
+
+		storageID := strings.TrimSpace(pool.SourceID())
+		if storageID == "" {
+			continue
+		}
+
+		total := m.resolveMockStorageTotal(storageID, nil)
+		if total <= 0 {
+			continue
+		}
+
+		usageValues := canonicalMetricSeries("storage", storageID, "usage", timestamps)
+		if len(usageValues) != len(timestamps) {
+			continue
+		}
+
+		for i, usage := range usageValues {
+			usedTotals[i] += total * (clampFloat(usage, 0, 100) / 100.0)
+			capacityTotals[i] += total
+		}
+	}
+
+	points := make([]MetricPoint, 0, len(timestamps))
+	for i, ts := range timestamps {
+		total := capacityTotals[i]
+		if math.IsNaN(total) || math.IsInf(total, 0) || total <= 0 {
+			continue
+		}
+
+		points = append(points, MetricPoint{
+			Timestamp: ts,
+			Value:     (usedTotals[i] / total) * 100,
+		})
+	}
+
+	return lttb(points, chartDownsampleTarget)
+}
+
 func (m *Monitor) mockPhysicalDiskTemperatureCharts(duration time.Duration) map[string]DiskChartEntry {
 	if m == nil {
 		return nil

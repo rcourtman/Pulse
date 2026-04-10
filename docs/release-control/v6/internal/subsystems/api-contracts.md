@@ -197,6 +197,15 @@ when the disabled candidate no longer counts toward monitored-system capacity.
 25. Keep chart timestamp precision canonical on that same shared API surface: when `internal/api/router.go` serializes monitoring history into infrastructure or workload chart payloads, it must preserve canonical millisecond timestamps from the shared monitoring timeline instead of rounding through whole-second conversion, so seeded mock history and live appends collapse onto one operator-visible timeline instead of appearing as duplicated tail samples.
 26. Keep storage chart identity canonical on that same shared API surface: the shared storage charts endpoint must key pool and physical-disk series by the resolved unified-resource `MetricsTarget.ResourceID`, not by canonical resource IDs or page-local aliases, so storage rows, focused summary cards, sticky summary shells, and detail charts all address the same history series in live and mock mode.
 27. Keep synthetic summary-chart fallback identity canonical on that same shared API surface: when `internal/api/router.go` has to synthesize mock summary history for infrastructure, workloads, or storage cards, it must derive the fallback from canonical `resourceType`, `resourceID`, and `metricType` ownership instead of raw min/max seed-prefix helpers, so range changes and runtime mock updates stay on one governed timeline.
+    The same compact chart boundary also owns aggregate-only storage summary
+    transport. `/api/charts/storage-summary` may batch only the canonical
+    `used` and `avail` storage series required for the aggregate capacity
+    sparkline, and it must not regress into the full per-pool storage payload
+    or a fetch-all-metrics backend path just because the storage page carries a
+    broader chart surface.
+    When mock mode is active, that same endpoint must come from the
+    monitor-owned aggregate summary cache rather than rehydrating each pool
+    chart on request.
 28. Keep workload-chart response identity canonical on that same shared API surface: `internal/api/router.go`, `internal/api/contract_test.go`, and workload summary consumers must emit provider-backed VM and system-container series under the same canonical workload IDs that workloads page rows use, while resolving history through the unified `MetricsTarget.ResourceID`, so hover and focus selection do not fall off for provider-backed rows.
 29. Keep the hosted account portal bootstrap intelligible without duplicate
     chrome. `internal/cloudcp/portal/page.go`, the maintained portal frontend

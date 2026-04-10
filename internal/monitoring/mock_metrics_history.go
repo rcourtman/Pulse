@@ -1569,6 +1569,7 @@ func (m *Monitor) startMockMetricsSampler(ctx context.Context) {
 	// persistent metrics store remains untouched while mock mode is active.
 	seedMockMetricsHistory(m.metricsHistory, nil, graph, normalizeMockMetricTimestamp(time.Now(), cfg.SampleInterval), seedDuration, cfg.SampleInterval)
 	m.invalidateMockChartCaches()
+	m.prewarmMockDashboardChartCaches()
 
 	m.mockMetricsWg.Add(1)
 	go func() {
@@ -1587,6 +1588,7 @@ func (m *Monitor) startMockMetricsSampler(ctx context.Context) {
 				}
 				recordMockStateToMetricsHistory(m.metricsHistory, nil, mock.CurrentFixtureGraph(), normalizeMockMetricTimestamp(time.Now(), cfg.SampleInterval))
 				m.invalidateMockChartCaches()
+				m.prewarmMockDashboardChartCaches()
 			}
 		}
 	}()

@@ -653,6 +653,46 @@ func TestContract_StorageChartsUseCanonicalMetricsTargetIDs(t *testing.T) {
 	}
 }
 
+func TestContract_StorageSummaryChartsStayAggregateOnly(t *testing.T) {
+	monitor, state, metricsHistory := newTestMonitor(t)
+	now := time.Now().UTC().Truncate(time.Second)
+	state.Storage = []models.Storage{
+		{ID: "store-1", Name: "Store One"},
+		{ID: "store-2", Name: "Store Two"},
+	}
+	metricsHistory.AddStorageMetric("store-1", "used", 400, now)
+	metricsHistory.AddStorageMetric("store-1", "avail", 600, now)
+	metricsHistory.AddStorageMetric("store-1", "total", 1000, now)
+	metricsHistory.AddStorageMetric("store-2", "used", 100, now)
+	metricsHistory.AddStorageMetric("store-2", "avail", 900, now)
+	metricsHistory.AddStorageMetric("store-2", "total", 1000, now)
+	syncTestResourceStore(t, monitor, state)
+
+	router := &Router{monitor: monitor}
+	req := httptest.NewRequest(http.MethodGet, "/api/charts/storage-summary?range=24h", nil)
+	rec := httptest.NewRecorder()
+
+	router.handleStorageSummaryCharts(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var decoded StorageSummaryTrendResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &decoded); err != nil {
+		t.Fatalf("unmarshal storage summary response: %v", err)
+	}
+	if len(decoded.Capacity) != 1 {
+		t.Fatalf("expected one aggregate capacity point, got %+v", decoded.Capacity)
+	}
+	if decoded.Capacity[0].Value != 25 {
+		t.Fatalf("expected aggregate capacity of 25%%, got %+v", decoded.Capacity[0])
+	}
+	if decoded.Stats.PointCounts.Total != 1 || decoded.Stats.PointCounts.Storage != 1 {
+		t.Fatalf("expected aggregate-only point counts, got %+v", decoded.Stats.PointCounts)
+	}
+}
+
 func TestContract_TrueNASConnectionsDisabledMessageIsExplicit(t *testing.T) {
 	setTrueNASFeatureForTest(t, false)
 	handler, _, _ := newTrueNASHandlersForTest(t, nil)

@@ -242,6 +242,103 @@ func TestSLO_GetNodeMetricsForChartBatch(t *testing.T) {
 	}
 }
 
+func TestGetNodeMetricsForChartBatch_FiltersStoreReadsToRequestedMetricTypes(t *testing.T) {
+	suppressMonitoringTestLogs(t)
+
+	monitor := newChartBatchSLOMonitor(t)
+	now := time.Now().UTC().Truncate(time.Second)
+	duration := 4 * time.Hour
+	writeBatch := []metrics.WriteMetric{
+		{ResourceType: "node", ResourceID: "node-filter-1", MetricType: "cpu", Value: 41, Timestamp: now.Add(-2 * time.Hour), Tier: metrics.TierMinute},
+		{ResourceType: "node", ResourceID: "node-filter-1", MetricType: "cpu", Value: 43, Timestamp: now.Add(-1 * time.Hour), Tier: metrics.TierMinute},
+		{ResourceType: "node", ResourceID: "node-filter-1", MetricType: "memory", Value: 62, Timestamp: now.Add(-2 * time.Hour), Tier: metrics.TierMinute},
+		{ResourceType: "node", ResourceID: "node-filter-1", MetricType: "memory", Value: 64, Timestamp: now.Add(-1 * time.Hour), Tier: metrics.TierMinute},
+		{ResourceType: "node", ResourceID: "node-filter-1", MetricType: "disk", Value: 83, Timestamp: now.Add(-2 * time.Hour), Tier: metrics.TierMinute},
+		{ResourceType: "node", ResourceID: "node-filter-1", MetricType: "disk", Value: 84, Timestamp: now.Add(-1 * time.Hour), Tier: metrics.TierMinute},
+	}
+	monitor.metricsStore.WriteBatchSync(writeBatch)
+
+	result := monitor.GetNodeMetricsForChartBatch([]string{"node-filter-1"}, []string{"cpu", "memory"}, duration)
+	if got := len(result["node-filter-1"]["cpu"]); got == 0 {
+		t.Fatalf("expected cpu series, got %+v", result["node-filter-1"])
+	}
+	if got := len(result["node-filter-1"]["memory"]); got == 0 {
+		t.Fatalf("expected memory series, got %+v", result["node-filter-1"])
+	}
+	if _, ok := result["node-filter-1"]["disk"]; ok {
+		t.Fatalf("expected filtered batch query to omit disk series, got %+v", result["node-filter-1"])
+	}
+}
+
+func TestGetStorageCapacityMetricsForSummaryBatch_FiltersStoreReadsToCapacitySeries(t *testing.T) {
+	suppressMonitoringTestLogs(t)
+
+	monitor := newChartBatchSLOMonitor(t)
+	now := time.Now().UTC().Truncate(time.Second)
+	duration := 24 * time.Hour
+	monitor.metricsStore.WriteBatchSync([]metrics.WriteMetric{
+		{ResourceType: "storage", ResourceID: "storage-summary-1", MetricType: "used", Value: 400, Timestamp: now.Add(-2 * time.Hour), Tier: metrics.TierMinute},
+		{ResourceType: "storage", ResourceID: "storage-summary-1", MetricType: "avail", Value: 600, Timestamp: now.Add(-2 * time.Hour), Tier: metrics.TierMinute},
+		{ResourceType: "storage", ResourceID: "storage-summary-1", MetricType: "usage", Value: 40, Timestamp: now.Add(-2 * time.Hour), Tier: metrics.TierMinute},
+		{ResourceType: "storage", ResourceID: "storage-summary-1", MetricType: "total", Value: 1000, Timestamp: now.Add(-2 * time.Hour), Tier: metrics.TierMinute},
+	})
+
+	result := monitor.GetStorageCapacityMetricsForSummaryBatch([]string{"storage-summary-1"}, duration)
+	if got := len(result["storage-summary-1"]["used"]); got != 1 {
+		t.Fatalf("expected used series, got %+v", result["storage-summary-1"])
+	}
+	if got := len(result["storage-summary-1"]["avail"]); got != 1 {
+		t.Fatalf("expected avail series, got %+v", result["storage-summary-1"])
+	}
+	if _, ok := result["storage-summary-1"]["usage"]; ok {
+		t.Fatalf("expected compact summary batch to omit usage, got %+v", result["storage-summary-1"])
+	}
+	if _, ok := result["storage-summary-1"]["total"]; ok {
+		t.Fatalf("expected compact summary batch to omit total, got %+v", result["storage-summary-1"])
+	}
+}
+
+func TestGetStorageSummaryCapacityTrend_MockAvoidsPerPoolChartCacheFanout(t *testing.T) {
+	previousEnabled := mock.IsMockEnabled()
+	previousConfig := mock.GetConfig()
+	t.Cleanup(func() {
+		mock.SetEnabled(false)
+		mock.SetMockConfig(previousConfig)
+		if previousEnabled {
+			mock.SetEnabled(true)
+			mock.SetMockConfig(previousConfig)
+		}
+	})
+
+	mock.SetEnabled(false)
+	mock.SetMockConfig(previousConfig)
+	mock.SetEnabled(true)
+
+	monitor := newChartFallbackTestMonitor(t)
+	points, oldestTimestamp := monitor.GetStorageSummaryCapacityTrend(24 * time.Hour)
+	if len(points) == 0 {
+		t.Fatal("expected aggregate mock storage summary capacity trend")
+	}
+	if oldestTimestamp == 0 {
+		t.Fatal("expected aggregate mock storage summary oldest timestamp")
+	}
+
+	summaryKey := mockChartMetricMapCacheKey{
+		kind:         "storage-summary",
+		resourceType: "storage",
+		resourceID:   "__aggregate__",
+		duration:     24 * time.Hour,
+	}
+	if _, ok := monitor.mockChartMapCache[summaryKey]; !ok {
+		t.Fatalf("expected summary cache entry, got %+v", monitor.mockChartMapCache)
+	}
+	for key := range monitor.mockChartMapCache {
+		if key.kind == "storage" {
+			t.Fatalf("expected aggregate summary cache without per-pool storage fanout, found %+v", key)
+		}
+	}
+}
+
 func TestSLO_GetPhysicalDiskTemperatureCharts_WithNativeHistoryFallback(t *testing.T) {
 	skipMonitoringSLOUnderRace(t)
 	suppressMonitoringTestLogs(t)

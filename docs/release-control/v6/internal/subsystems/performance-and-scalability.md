@@ -274,6 +274,15 @@ REST fetch. Dashboard trend loading must also key off stable target identity
 and selected range only; reconciled resource snapshots that do not change the
 effective target set must not trigger duplicate infrastructure or storage
 chart requests.
+That same protected metrics-store boundary now also owns selected-series batch
+queries. Compact dashboard routes that request only CPU/memory or only
+storage `used`/`avail` capacity must keep that metric-type filter all the way
+through `pkg/metrics/store.go` instead of fetching every series for every
+resource and discarding the extra payload in higher layers.
+That same hot path now also covers mock-mode cache warmth. The canonical
+24-hour `/api/charts/storage-summary` dashboard transport must stay prewarmed
+across live mock sampler ticks so the first dashboard request after a refresh
+does not pay the full aggregate-storage synthesis cost on the operator path.
 contract instead of inventing an infrastructure-local summary filter branch.
 For shared line charts on that hot path, the shared sparkline primitive may
 isolate the selected series inside the existing render budget, but that

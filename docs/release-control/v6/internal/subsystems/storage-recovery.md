@@ -180,6 +180,15 @@ querying, and the operator-facing storage health presentation layer.
     storage-local hard-coded provider arrays.
 32. Keep infrastructure summary chart bucketing presentation-only on the adjacent shared API boundary. When `internal/api/router.go` normalizes mixed-cadence infrastructure history into equal-time summary buckets for operator-facing summary cards, storage and recovery may consume the resulting visual context only; they must not reinterpret those normalized chart samples as recovery freshness windows, backup cadence, or restore evidence.
 33. Keep workload chart downsampling presentation-only on that same adjacent shared API boundary. When `internal/api/router.go` caps mixed-cadence workload history into equal-time buckets for operator-facing workload cards, storage and recovery may consume the resulting visual context only; they must not reinterpret those shaped chart samples as recovery freshness windows, backup cadence, or restore evidence.
+    The same adjacent chart boundary now covers compact storage capacity
+    transport. `internal/api/router.go` may batch only the canonical `used`
+    and `avail` storage series for `/api/charts/storage-summary`, but storage
+    and recovery must not treat the omitted `usage` or `total` series as lost
+    recovery truth or widen that compact route back into the full storage-page
+    payload.
+    In mock mode, that same compact route must stay aggregate-only and
+    sampler-prewarmed; storage and recovery must not trigger per-pool chart
+    reconstruction on the first dashboard request after each mock refresh.
 34. Keep storage and recovery websocket reads on the neutral app-runtime boundary. `frontend-modern/src/components/Recovery/RecoveryPointDetails.tsx`, `frontend-modern/src/components/Storage/useStoragePageResources.ts`, and storage/recovery-adjacent dashboard composition may consume live websocket state only through `frontend-modern/src/contexts/appRuntime.ts`, not by importing `frontend-modern/src/App.tsx` or rebuilding shell-local providers.
     That same dashboard composition boundary also owns compact summary reads.
     When `frontend-modern/src/pages/Dashboard.tsx` renders storage and

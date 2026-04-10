@@ -1,6 +1,7 @@
 package monitoring
 
 import (
+	"math"
 	"sort"
 	"strings"
 	"time"
@@ -45,6 +46,7 @@ const (
 )
 
 var storageChartMetricTypes = []string{"usage", "used", "avail", "total"}
+var storageSummaryChartMetricTypes = []string{"used", "avail"}
 
 type mockChartMetricMapCacheKey struct {
 	kind         string
@@ -300,7 +302,7 @@ func (m *Monitor) GetPhysicalDiskTemperatureCharts(duration time.Duration) map[s
 	var batchMetrics map[string]map[string][]MetricPoint
 	var nativeHistory map[string][]MetricPoint
 	if !mockEnabled {
-		batchMetrics = m.queryStoreBatchMetricMapWithGapFill("disk", resourceIDs, duration)
+		batchMetrics = m.queryStoreBatchMetricMapWithGapFill("disk", resourceIDs, duration, []string{"smart_temp"})
 		nativeHistory = m.nativePhysicalDiskTemperatureHistory(duration)
 	}
 
@@ -406,7 +408,7 @@ func (m *Monitor) currentMetricsTargetStore() MetricsTargetResourceStore {
 // of the same type in a single batch. If some resources have no data in the
 // primary window, re-queries those with a broader lookback window.
 // Returns map[resourceID]map[metricType][]MetricPoint (already downsampled).
-func (m *Monitor) queryStoreBatchMetricMapWithGapFill(resourceType string, resourceIDs []string, duration time.Duration) map[string]map[string][]MetricPoint {
+func (m *Monitor) queryStoreBatchMetricMapWithGapFill(resourceType string, resourceIDs []string, duration time.Duration, metricTypes []string) map[string]map[string][]MetricPoint {
 	if m == nil || m.metricsStore == nil || len(resourceIDs) == 0 {
 		return nil
 	}
@@ -416,7 +418,7 @@ func (m *Monitor) queryStoreBatchMetricMapWithGapFill(resourceType string, resou
 
 	// queryBatch fetches and downsamples metrics for the given IDs.
 	queryBatch := func(ids []string, from time.Time) map[string]map[string][]MetricPoint {
-		sqlResult, err := m.metricsStore.QueryAllBatch(resourceType, ids, from, end, 0)
+		sqlResult, err := m.metricsStore.QueryMetricTypesBatch(resourceType, ids, metricTypes, from, end, 0)
 		if err != nil || len(sqlResult) == 0 {
 			return nil
 		}
@@ -510,7 +512,7 @@ func (m *Monitor) GetGuestMetricsForChartBatch(
 	storeResults := make(map[string]map[string][]MetricPoint)
 	if m.metricsStore != nil {
 		for _, candidate := range monitorStoreResourceTypeCandidates(sqlResourceType) {
-			batch := m.queryStoreBatchMetricMapWithGapFill(candidate, needFallback, duration)
+			batch := m.queryStoreBatchMetricMapWithGapFill(candidate, needFallback, duration, nil)
 			for id, metricMap := range batch {
 				if existing, ok := storeResults[id]; ok {
 					newSpan := chartMapCoverageSpan(metricMap)
@@ -596,7 +598,7 @@ func (m *Monitor) GetNodeMetricsForChartBatch(
 	}
 
 	// Phase 2: Batch-query store for all nodes that need it.
-	batchResult := m.queryStoreBatchMetricMapWithGapFill("node", needStore, duration)
+	batchResult := m.queryStoreBatchMetricMapWithGapFill("node", needStore, duration, metricTypes)
 
 	// Phase 3: Merge — per metric type, use store data if better coverage.
 	for _, nid := range needStore {
@@ -668,7 +670,7 @@ func (m *Monitor) GetStorageMetricsForChartBatch(
 	}
 
 	// Phase 2: Batch-query store.
-	batchResult := m.queryStoreBatchMetricMapWithGapFill("storage", needStore, duration)
+	batchResult := m.queryStoreBatchMetricMapWithGapFill("storage", needStore, duration, storageChartMetricTypes)
 
 	// Phase 3: Merge — use store data if better coverage.
 	for _, id := range needStore {
@@ -680,6 +682,107 @@ func (m *Monitor) GetStorageMetricsForChartBatch(
 	}
 
 	return result
+}
+
+// GetStorageCapacityMetricsForSummaryBatch returns only the canonical capacity
+// metrics required for the compact dashboard storage summary card.
+func (m *Monitor) GetStorageCapacityMetricsForSummaryBatch(
+	storageIDs []string,
+	duration time.Duration,
+) map[string]map[string][]MetricPoint {
+	if m == nil || len(storageIDs) == 0 {
+		return nil
+	}
+
+	result := make(map[string]map[string][]MetricPoint, len(storageIDs))
+
+	if mock.IsMockEnabled() {
+		for _, sid := range storageIDs {
+			inMemory := map[string][]MetricPoint{}
+			if m.metricsHistory != nil {
+				inMemory = filterMetricPointMap(
+					m.metricsHistory.GetAllStorageMetrics(sid, duration),
+					storageSummaryChartMetricTypes,
+				)
+			}
+			fullMetrics := m.mockStorageMetricsForChartCached(sid, duration, inMemory)
+			result[sid] = filterMetricPointMap(fullMetrics, storageSummaryChartMetricTypes)
+		}
+		return result
+	}
+
+	var needStore []string
+	for _, sid := range storageIDs {
+		inMemory := map[string][]MetricPoint{}
+		if m.metricsHistory != nil {
+			inMemory = filterMetricPointMap(
+				m.metricsHistory.GetAllStorageMetrics(sid, duration),
+				storageSummaryChartMetricTypes,
+			)
+		}
+		if m.metricsStore == nil {
+			result[sid] = inMemory
+			continue
+		}
+		if hasSufficientChartMapCoverageForMetrics(inMemory, duration, storageSummaryChartMetricTypes) {
+			result[sid] = inMemory
+			continue
+		}
+		needStore = append(needStore, sid)
+		result[sid] = inMemory
+	}
+
+	if len(needStore) == 0 {
+		return result
+	}
+
+	batchResult := m.queryStoreBatchMetricMapWithGapFill(
+		"storage",
+		needStore,
+		duration,
+		storageSummaryChartMetricTypes,
+	)
+	for _, sid := range needStore {
+		storeData, ok := batchResult[sid]
+		if !ok {
+			continue
+		}
+		result[sid] = mergeMetricHistory(result[sid], storeData, duration)
+	}
+
+	return result
+}
+
+func (m *Monitor) GetStorageSummaryCapacityTrend(duration time.Duration) ([]MetricPoint, int64) {
+	if m == nil {
+		return nil, 0
+	}
+
+	if mock.IsMockEnabled() {
+		return m.mockStorageSummaryCapacityTrendCached(duration)
+	}
+
+	readState := m.GetUnifiedReadStateOrSnapshot()
+	if readState == nil {
+		return nil, 0
+	}
+
+	storageIDs := make([]string, 0, len(readState.StoragePools()))
+	for _, pool := range readState.StoragePools() {
+		if pool == nil {
+			continue
+		}
+
+		storageID := strings.TrimSpace(pool.SourceID())
+		if storageID == "" {
+			continue
+		}
+		storageIDs = append(storageIDs, storageID)
+	}
+
+	return buildStorageSummaryCapacityTrend(
+		m.GetStorageCapacityMetricsForSummaryBatch(storageIDs, duration),
+	)
 }
 
 func (m *Monitor) nativeGuestMetricHistory(resourceType string, duration time.Duration) map[string]map[string][]MetricPoint {
@@ -942,6 +1045,14 @@ func (m *Monitor) invalidateMockChartCaches() {
 	}
 }
 
+func (m *Monitor) prewarmMockDashboardChartCaches() {
+	if m == nil || !mock.IsMockEnabled() {
+		return
+	}
+
+	_, _ = m.mockStorageSummaryCapacityTrendCached(24 * time.Hour)
+}
+
 func (m *Monitor) mockGuestMetricsForChart(
 	inMemoryKey,
 	sqlResourceType,
@@ -1060,6 +1171,24 @@ func (m *Monitor) mockStorageMetricsForChartCached(
 	return m.writeMockChartMetricMapCache(cacheKey, computed)
 }
 
+func (m *Monitor) mockStorageSummaryCapacityTrendCached(duration time.Duration) ([]MetricPoint, int64) {
+	cacheKey := mockChartMetricMapCacheKey{
+		kind:         "storage-summary",
+		resourceType: "storage",
+		resourceID:   "__aggregate__",
+		duration:     duration,
+	}
+	if cached, ok := m.readMockChartMetricMapCache(cacheKey); ok {
+		return cached["capacity"], oldestMetricSeriesTimestamp(cached["capacity"])
+	}
+
+	computed := m.mockStorageSummaryCapacityTrend(duration)
+	cached := m.writeMockChartMetricMapCache(cacheKey, map[string][]MetricPoint{
+		"capacity": computed,
+	})
+	return cached["capacity"], oldestMetricSeriesTimestamp(cached["capacity"])
+}
+
 func mergeGuestMetricHistory(base, candidate map[string][]MetricPoint, duration time.Duration) map[string][]MetricPoint {
 	return mergeMetricHistory(base, candidate, duration)
 }
@@ -1077,6 +1206,103 @@ func mergeMetricHistory(base, candidate map[string][]MetricPoint, duration time.
 		merged[metricType] = cloneMetricSeries(candidateSeries)
 	}
 	return merged
+}
+
+func filterMetricPointMap(metricMap map[string][]MetricPoint, metricTypes []string) map[string][]MetricPoint {
+	if len(metricTypes) == 0 {
+		return cloneMetricPointMap(metricMap)
+	}
+	filtered := make(map[string][]MetricPoint, len(metricTypes))
+	for _, metricType := range metricTypes {
+		if len(metricMap[metricType]) == 0 {
+			continue
+		}
+		filtered[metricType] = cloneMetricSeries(metricMap[metricType])
+	}
+	return filtered
+}
+
+func buildStorageSummaryCapacityTrend(
+	poolMetrics map[string]map[string][]MetricPoint,
+) ([]MetricPoint, int64) {
+	type aggregateBucket struct {
+		used     float64
+		avail    float64
+		hasUsed  bool
+		hasAvail bool
+	}
+
+	buckets := make(map[int64]*aggregateBucket)
+	var oldestTimestamp int64
+	for _, metrics := range poolMetrics {
+		for _, point := range metrics["used"] {
+			timestamp := point.Timestamp.UnixMilli()
+			bucket := buckets[timestamp]
+			if bucket == nil {
+				bucket = &aggregateBucket{}
+				buckets[timestamp] = bucket
+			}
+			bucket.used += point.Value
+			bucket.hasUsed = true
+			if oldestTimestamp == 0 || timestamp < oldestTimestamp {
+				oldestTimestamp = timestamp
+			}
+		}
+		for _, point := range metrics["avail"] {
+			timestamp := point.Timestamp.UnixMilli()
+			bucket := buckets[timestamp]
+			if bucket == nil {
+				bucket = &aggregateBucket{}
+				buckets[timestamp] = bucket
+			}
+			bucket.avail += point.Value
+			bucket.hasAvail = true
+			if oldestTimestamp == 0 || timestamp < oldestTimestamp {
+				oldestTimestamp = timestamp
+			}
+		}
+	}
+
+	if len(buckets) == 0 {
+		return nil, oldestTimestamp
+	}
+
+	timestamps := make([]int64, 0, len(buckets))
+	for timestamp := range buckets {
+		timestamps = append(timestamps, timestamp)
+	}
+	sort.Slice(timestamps, func(i, j int) bool {
+		return timestamps[i] < timestamps[j]
+	})
+
+	out := make([]MetricPoint, 0, len(timestamps))
+	for _, timestamp := range timestamps {
+		bucket := buckets[timestamp]
+		if bucket == nil || !bucket.hasUsed || !bucket.hasAvail {
+			continue
+		}
+		total := bucket.used + bucket.avail
+		if math.IsNaN(total) || math.IsInf(total, 0) || total <= 0 {
+			continue
+		}
+		out = append(out, MetricPoint{
+			Timestamp: time.UnixMilli(timestamp),
+			Value:     (bucket.used / total) * 100,
+		})
+	}
+
+	return out, oldestTimestamp
+}
+
+func oldestMetricSeriesTimestamp(points []MetricPoint) int64 {
+	var oldest int64
+	for _, point := range points {
+		timestamp := point.Timestamp.UnixMilli()
+		if oldest == 0 || timestamp < oldest {
+			oldest = timestamp
+		}
+	}
+	return oldest
 }
 
 func shouldPreferMetricSeries(current, candidate []MetricPoint, duration time.Duration) bool {

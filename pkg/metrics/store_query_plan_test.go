@@ -131,6 +131,15 @@ func TestQueryPlansUseIndexes(t *testing.T) {
 			args: []any{int64(60), int64(60), int64(60), "vm", "vm-1", "vm-2", "vm-3", "raw", int64(0), farFuture},
 		},
 		{
+			name: "multi-resource filtered-metric lookup (QueryMetricTypesBatch)",
+			query: `SELECT resource_id, metric_type, timestamp, value, COALESCE(min_value, value), COALESCE(max_value, value)
+				FROM metrics
+				WHERE resource_type = ? AND resource_id IN (?, ?, ?) AND metric_type IN (?, ?) AND tier = ?
+				AND timestamp >= ? AND timestamp <= ?
+				ORDER BY resource_id, metric_type, timestamp ASC`,
+			args: []any{"vm", "vm-1", "vm-2", "vm-3", "cpu", "memory", "raw", int64(0), farFuture},
+		},
+		{
 			name:      "retention delete by tier+time",
 			query:     `DELETE FROM metrics WHERE tier = ? AND timestamp < ?`,
 			args:      []any{"raw", farFuture},

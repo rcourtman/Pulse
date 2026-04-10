@@ -7952,28 +7952,9 @@ func (r *Router) handleStorageSummaryCharts(w http.ResponseWriter, req *http.Req
 		http.Error(w, "Tenant monitor is not available", http.StatusInternalServerError)
 		return
 	}
-	readState := monitor.GetUnifiedReadStateOrSnapshot()
-	if readState == nil {
-		http.Error(w, "State unavailable", http.StatusInternalServerError)
-		return
-	}
-
-	storageIDs := make([]string, 0, len(readState.StoragePools()))
-	for _, pool := range readState.StoragePools() {
-		if pool == nil {
-			continue
-		}
-		storageID := strings.TrimSpace(pool.SourceID())
-		if storageID == "" {
-			continue
-		}
-		storageIDs = append(storageIDs, storageID)
-	}
 
 	currentTime := time.Now().UnixMilli()
-	capacity, oldestTimestamp := buildStorageSummaryCapacityTrend(
-		monitor.GetStorageMetricsForChartBatch(storageIDs, duration),
-	)
+	capacity, oldestTimestamp := monitor.GetStorageSummaryCapacityTrend(duration)
 	if oldestTimestamp == 0 {
 		oldestTimestamp = currentTime
 	}
@@ -7985,7 +7966,7 @@ func (r *Router) handleStorageSummaryCharts(w http.ResponseWriter, req *http.Req
 	}
 
 	resp := EmptyStorageSummaryTrendResponse()
-	resp.Capacity = capacity
+	resp.Capacity = monitorPointsToAPI(capacity)
 	resp.Timestamp = currentTime
 	resp.Stats = ChartStats{
 		OldestDataTimestamp:   oldestTimestamp,
@@ -7995,8 +7976,8 @@ func (r *Router) handleStorageSummaryCharts(w http.ResponseWriter, req *http.Req
 		PrimarySourceHint:     primarySourceHint,
 		InMemoryThresholdSecs: int64(inMemoryChartThreshold / time.Second),
 		PointCounts: ChartPointCounts{
-			Total:   len(capacity),
-			Storage: len(capacity),
+			Total:   len(resp.Capacity),
+			Storage: len(resp.Capacity),
 		},
 	}
 
@@ -8018,78 +7999,6 @@ func monitorPointsToAPI(points []monitoring.MetricPoint) []MetricPoint {
 		out[i] = MetricPoint{Timestamp: p.Timestamp.UnixMilli(), Value: p.Value}
 	}
 	return out
-}
-
-func buildStorageSummaryCapacityTrend(
-	poolMetrics map[string]map[string][]monitoring.MetricPoint,
-) ([]MetricPoint, int64) {
-	type aggregateBucket struct {
-		used     float64
-		avail    float64
-		hasUsed  bool
-		hasAvail bool
-	}
-
-	buckets := make(map[int64]*aggregateBucket)
-	var oldestTimestamp int64
-	for _, metrics := range poolMetrics {
-		for _, point := range metrics["used"] {
-			timestamp := point.Timestamp.UnixMilli()
-			bucket := buckets[timestamp]
-			if bucket == nil {
-				bucket = &aggregateBucket{}
-				buckets[timestamp] = bucket
-			}
-			bucket.used += point.Value
-			bucket.hasUsed = true
-			if oldestTimestamp == 0 || timestamp < oldestTimestamp {
-				oldestTimestamp = timestamp
-			}
-		}
-		for _, point := range metrics["avail"] {
-			timestamp := point.Timestamp.UnixMilli()
-			bucket := buckets[timestamp]
-			if bucket == nil {
-				bucket = &aggregateBucket{}
-				buckets[timestamp] = bucket
-			}
-			bucket.avail += point.Value
-			bucket.hasAvail = true
-			if oldestTimestamp == 0 || timestamp < oldestTimestamp {
-				oldestTimestamp = timestamp
-			}
-		}
-	}
-
-	if len(buckets) == 0 {
-		return nil, oldestTimestamp
-	}
-
-	timestamps := make([]int64, 0, len(buckets))
-	for timestamp := range buckets {
-		timestamps = append(timestamps, timestamp)
-	}
-	sort.Slice(timestamps, func(i, j int) bool {
-		return timestamps[i] < timestamps[j]
-	})
-
-	out := make([]MetricPoint, 0, len(timestamps))
-	for _, timestamp := range timestamps {
-		bucket := buckets[timestamp]
-		if bucket == nil || !bucket.hasUsed || !bucket.hasAvail {
-			continue
-		}
-		total := bucket.used + bucket.avail
-		if math.IsNaN(total) || math.IsInf(total, 0) || total <= 0 {
-			continue
-		}
-		out = append(out, MetricPoint{
-			Timestamp: timestamp,
-			Value:     (bucket.used / total) * 100,
-		})
-	}
-
-	return out, oldestTimestamp
 }
 
 // handleMetricsStoreStats returns statistics about the persistent metrics store

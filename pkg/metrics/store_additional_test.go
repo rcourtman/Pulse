@@ -519,3 +519,47 @@ func TestStoreQueryAllBatchCanonicalizesAndDeduplicatesIdentifiers(t *testing.T)
 		t.Fatalf("expected agent-2 cpu metric after normalization, got %+v", result["agent-2"])
 	}
 }
+
+func TestStoreQueryMetricTypesBatchFiltersMetricTypes(t *testing.T) {
+	dir := t.TempDir()
+	store, err := NewStore(DefaultConfig(dir))
+	if err != nil {
+		t.Fatalf("NewStore returned error: %v", err)
+	}
+	defer store.Close()
+	ts := time.Now().UTC().Truncate(time.Second)
+
+	store.WriteBatchSync([]WriteMetric{
+		{ResourceType: "agent", ResourceID: "agent-1", MetricType: "cpu", Value: 11.0, Timestamp: ts, Tier: TierRaw},
+		{ResourceType: "agent", ResourceID: "agent-1", MetricType: "memory", Value: 21.0, Timestamp: ts, Tier: TierRaw},
+		{ResourceType: "agent", ResourceID: "agent-2", MetricType: "cpu", Value: 12.0, Timestamp: ts, Tier: TierRaw},
+		{ResourceType: "agent", ResourceID: "agent-2", MetricType: "memory", Value: 22.0, Timestamp: ts, Tier: TierRaw},
+	})
+
+	result, err := store.QueryMetricTypesBatch(
+		" agent ",
+		[]string{" agent-1 ", "agent-2", "agent-2"},
+		[]string{" CPU ", "cpu"},
+		ts.Add(-time.Second),
+		ts.Add(time.Second),
+		0,
+	)
+	if err != nil {
+		t.Fatalf("query metric types batch failed: %v", err)
+	}
+	if len(result) != 2 {
+		t.Fatalf("expected 2 resources after normalization, got %+v", result)
+	}
+	if got := len(result["agent-1"]["cpu"]); got != 1 {
+		t.Fatalf("expected agent-1 cpu metric, got %+v", result["agent-1"])
+	}
+	if got := len(result["agent-2"]["cpu"]); got != 1 {
+		t.Fatalf("expected agent-2 cpu metric, got %+v", result["agent-2"])
+	}
+	if _, ok := result["agent-1"]["memory"]; ok {
+		t.Fatalf("expected metric filter to exclude memory for agent-1, got %+v", result["agent-1"])
+	}
+	if _, ok := result["agent-2"]["memory"]; ok {
+		t.Fatalf("expected metric filter to exclude memory for agent-2, got %+v", result["agent-2"])
+	}
+}
