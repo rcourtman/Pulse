@@ -60,7 +60,10 @@ describe('SetupCompletionPanel guardrails', () => {
     expect(setupCompletionModelSource).toContain('isAgentFacetInfrastructureResource');
     expect(setupCompletionModelSource).toContain('getPreferredInfrastructureDisplayName');
     expect(setupCompletionModelSource).toContain('getPreferredResourceHostname');
-    expect(setupCompletionModelSource).toContain('PLATFORM_CONNECTION_PLATFORM_TYPES');
+    expect(setupCompletionModelSource).toContain('getSourcePlatformManifestEntry');
+    expect(setupCompletionModelSource).toContain("sourcePlatformSupportsOnboardingPath");
+    expect(setupCompletionModelSource).toContain("displayTokens[displayTokens.length - 1]");
+    expect(setupCompletionModelSource).not.toContain('PLATFORM_CONNECTION_PLATFORM_TYPES');
     expect(setupCompletionModelSource).not.toContain("resource.type === 'truenas'");
     expect(setupCompletionModelSource).not.toContain('getPreferredResourceDisplayName(resource)');
   });

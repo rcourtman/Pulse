@@ -21,6 +21,7 @@ DEFAULT_GENERIC_PRESENTATION = {
 }
 VALID_GOVERNANCE_STATES = {"supported", "admitted", "presentation-only"}
 VALID_STORAGE_FAMILIES = {"onprem", "container", "virtualization", "cloud"}
+VALID_ONBOARDING_PATHS = {"install-workspace", "platform-connections"}
 
 
 def require_dict(value: Any, label: str) -> dict[str, Any]:
@@ -100,6 +101,28 @@ def normalize_manifest(raw_manifest: dict[str, Any]) -> dict[str, Any]:
                 f"expected platforms[{index}].storage_family to be one of "
                 f"{sorted(VALID_STORAGE_FAMILIES)}"
             )
+        onboarding_paths = unique_preserve_order(
+            require_string_list(
+                record.get("onboarding_paths"),
+                f"platforms[{index}].onboarding_paths",
+            )
+        )
+        invalid_onboarding_paths = sorted(
+            path for path in onboarding_paths if path not in VALID_ONBOARDING_PATHS
+        )
+        if invalid_onboarding_paths:
+            raise ValueError(
+                f"expected platforms[{index}].onboarding_paths to contain only "
+                f"{sorted(VALID_ONBOARDING_PATHS)}; got {invalid_onboarding_paths}"
+            )
+        if governance_state == "presentation-only" and onboarding_paths:
+            raise ValueError(
+                f"presentation-only platform {platform_id} must not declare onboarding paths"
+            )
+        if governance_state != "presentation-only" and not onboarding_paths:
+            raise ValueError(
+                f"{governance_state} platform {platform_id} must declare at least one onboarding path"
+            )
 
         aliases = unique_preserve_order(
             [
@@ -122,6 +145,7 @@ def normalize_manifest(raw_manifest: dict[str, Any]) -> dict[str, Any]:
             {
                 "id": platform_id,
                 "governanceState": governance_state,
+                "onboardingPaths": onboarding_paths,
                 "uiLabel": require_string(record.get("ui_label"), f"platforms[{index}].ui_label"),
                 "uiTone": require_string(record.get("ui_tone"), f"platforms[{index}].ui_tone"),
                 "aliases": aliases,
@@ -171,6 +195,9 @@ def normalize_manifest(raw_manifest: dict[str, Any]) -> dict[str, Any]:
         platform["id"]: {"label": platform["uiLabel"], "tone": platform["uiTone"]}
         for platform in platforms
     }
+    onboarding_paths_by_id = {
+        platform["id"]: platform["onboardingPaths"] for platform in platforms
+    }
     storage_family_by_id = {
         platform["id"]: platform["storageFamily"] for platform in platforms
     }
@@ -184,6 +211,13 @@ def normalize_manifest(raw_manifest: dict[str, Any]) -> dict[str, Any]:
     ]
     platform_type_keys = [*supported_ids, *admitted_ids]
     known_source_platform_keys = [*platform_type_keys, *presentation_only_ids, "generic"]
+    onboarding_path_keys = unique_preserve_order(
+        [
+            path
+            for platform in platforms
+            for path in platform["onboardingPaths"]
+        ]
+    )
 
     return {
         "schemaVersion": schema_version,
@@ -197,6 +231,8 @@ def normalize_manifest(raw_manifest: dict[str, Any]) -> dict[str, Any]:
         "aliasMap": alias_map,
         "auditTokens": audit_tokens,
         "displayTokens": display_tokens,
+        "onboardingPathKeys": onboarding_path_keys,
+        "onboardingPathsById": onboarding_paths_by_id,
         "presentation": {**presentation, "generic": DEFAULT_GENERIC_PRESENTATION},
         "storageFamilyById": storage_family_by_id,
     }
@@ -241,10 +277,14 @@ def render_module(normalized: dict[str, Any], manifest_hash: str) -> str:
         render_const("SOURCE_PLATFORM_ALIAS_MAP", normalized["aliasMap"]),
         render_const("SOURCE_PLATFORM_AUDIT_TOKENS", normalized["auditTokens"]),
         render_const("SOURCE_PLATFORM_DISPLAY_TOKENS", normalized["displayTokens"]),
+        render_const("SOURCE_PLATFORM_ONBOARDING_PATH_KEYS", normalized["onboardingPathKeys"]),
+        render_const("SOURCE_PLATFORM_ONBOARDING_PATHS", normalized["onboardingPathsById"]),
         render_const("SOURCE_PLATFORM_PRESENTATION", normalized["presentation"]),
         render_const("SOURCE_PLATFORM_STORAGE_FAMILY", normalized["storageFamilyById"]),
         "export type PlatformGovernanceState =\n"
         "  (typeof SOURCE_PLATFORM_MANIFEST_ENTRIES)[number]['governanceState'];\n",
+        "export type GeneratedSourcePlatformOnboardingPath =\n"
+        "  (typeof SOURCE_PLATFORM_ONBOARDING_PATH_KEYS)[number];\n",
         "export type SourcePlatformStorageFamily =\n"
         "  (typeof SOURCE_PLATFORM_MANIFEST_ENTRIES)[number]['storageFamily'];\n",
         "export type GeneratedPlatformType = (typeof PLATFORM_TYPE_KEYS)[number];\n",

@@ -6,6 +6,8 @@ import {
   PLATFORM_SUPPORT_MANIFEST_SOURCE,
   PRESENTATION_ONLY_PLATFORM_IDS,
   PLATFORM_SUPPORT_MANIFEST,
+  SOURCE_PLATFORM_ONBOARDING_PATH_KEYS,
+  SOURCE_PLATFORM_ONBOARDING_PATHS,
   SOURCE_PLATFORM_PRESENTATION,
   SOURCE_PLATFORM_ALIAS_MAP,
   SOURCE_PLATFORM_AUDIT_TOKENS,
@@ -14,17 +16,24 @@ import {
   SOURCE_PLATFORM_STORAGE_FAMILY,
   SUPPORTED_PLATFORM_IDS,
   type GeneratedKnownSourcePlatform,
+  type GeneratedSourcePlatformOnboardingPath,
   type GeneratedSourcePlatformManifestEntry,
   type PlatformGovernanceState,
   type SourcePlatformStorageFamily,
 } from '@/utils/platformSupportManifest.generated';
 
 export type SourcePlatformManifestEntry = GeneratedSourcePlatformManifestEntry;
-export type { GeneratedKnownSourcePlatform, PlatformGovernanceState, SourcePlatformStorageFamily };
+export type {
+  GeneratedKnownSourcePlatform,
+  GeneratedSourcePlatformOnboardingPath as SourcePlatformOnboardingPath,
+  PlatformGovernanceState,
+  SourcePlatformStorageFamily,
+};
 
 const entriesById = new Map<string, SourcePlatformManifestEntry>(
   SOURCE_PLATFORM_MANIFEST_ENTRIES.map((platform) => [platform.id, platform] as const),
 );
+const EMPTY_ONBOARDING_PATHS: readonly GeneratedSourcePlatformOnboardingPath[] = [];
 
 export {
   ADMITTED_PLATFORM_IDS,
@@ -34,6 +43,8 @@ export {
   PLATFORM_TYPE_KEYS,
   PRESENTATION_ONLY_PLATFORM_IDS,
   PLATFORM_SUPPORT_MANIFEST,
+  SOURCE_PLATFORM_ONBOARDING_PATH_KEYS,
+  SOURCE_PLATFORM_ONBOARDING_PATHS,
   SOURCE_PLATFORM_PRESENTATION,
   SOURCE_PLATFORM_ALIAS_MAP,
   SOURCE_PLATFORM_AUDIT_TOKENS,
@@ -60,3 +71,16 @@ export const getSourcePlatformStorageFamily = (
   if (!manifestPlatform) return null;
   return SOURCE_PLATFORM_STORAGE_FAMILY[manifestPlatform.id];
 };
+
+export const getSourcePlatformOnboardingPaths = (
+  value: string | null | undefined,
+): readonly GeneratedSourcePlatformOnboardingPath[] => {
+  const manifestPlatform = getSourcePlatformManifestEntry(value);
+  if (!manifestPlatform) return EMPTY_ONBOARDING_PATHS;
+  return SOURCE_PLATFORM_ONBOARDING_PATHS[manifestPlatform.id];
+};
+
+export const sourcePlatformSupportsOnboardingPath = (
+  value: string | null | undefined,
+  onboardingPath: GeneratedSourcePlatformOnboardingPath,
+): boolean => getSourcePlatformOnboardingPaths(value).includes(onboardingPath);

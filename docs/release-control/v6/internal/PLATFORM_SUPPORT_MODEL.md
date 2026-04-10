@@ -224,12 +224,13 @@ Rules:
 ### Machine-readable projection
 
 `PLATFORM_SUPPORT_MANIFEST.json` is the machine-readable projection of the
-supported, admitted, and presentation-only platform vocabulary declared here.
-Tests and shared frontend vocabulary may consume that manifest, and the tracked
-frontend projection in
+supported, admitted, and presentation-only platform vocabulary declared here,
+plus the canonical onboarding-path classification for supported and admitted
+platforms. Tests and shared frontend vocabulary may consume that manifest, and
+the tracked frontend projection in
 `frontend-modern/src/utils/platformSupportManifest.generated.ts` must be
 generated from it, but neither projection may introduce platform ids or
-governance states that are not declared in this document.
+governance states or onboarding paths that are not declared in this document.
 
 ### Runtime variants
 

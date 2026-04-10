@@ -1,10 +1,14 @@
-import type { PlatformType, Resource } from '@/types/resource';
+import type { Resource } from '@/types/resource';
 import {
   getActionableAgentIdFromResource,
   getPlatformDataRecord,
   isAgentFacetInfrastructureResource,
   isTrueNASSystemResource,
 } from '@/utils/agentResources';
+import {
+  getSourcePlatformManifestEntry,
+  sourcePlatformSupportsOnboardingPath,
+} from '@/utils/platformSupportManifest';
 import {
   getPreferredInfrastructureDisplayName,
   getPreferredResourceHostname,
@@ -37,14 +41,6 @@ export interface SetupCompletionViewModel {
   showPlatformConnectionsAction: boolean;
 }
 
-const PLATFORM_CONNECTION_PLATFORM_TYPES = new Set<PlatformType>([
-  'proxmox-pve',
-  'proxmox-pbs',
-  'proxmox-pmg',
-  'truenas',
-  'vmware-vsphere',
-]);
-
 const asRecord = (value: unknown): Record<string, unknown> | undefined =>
   value && typeof value === 'object' ? (value as Record<string, unknown>) : undefined;
 
@@ -54,32 +50,32 @@ const asString = (value: unknown): string | undefined =>
 const isSetupCompletionInfrastructureResource = (resource: Resource): boolean =>
   resource.type === 'agent' || resource.type === 'pbs' || resource.type === 'pmg';
 
+const getSetupCompletionPlatformKey = (resource: Resource): string | null => {
+  if (resource.type === 'pbs') return 'proxmox-pbs';
+  if (resource.type === 'pmg') return 'proxmox-pmg';
+  if (isTrueNASSystemResource(resource)) return 'truenas';
+  return resource.platformType || null;
+};
+
+const getSetupCompletionPlatformLabel = (resource: Resource): string | null => {
+  const manifestPlatform = getSourcePlatformManifestEntry(getSetupCompletionPlatformKey(resource));
+  if (!manifestPlatform) return null;
+
+  const displayTokens = manifestPlatform.displayTokens as readonly string[];
+  return displayTokens[displayTokens.length - 1] || manifestPlatform.uiLabel;
+};
+
 const isPlatformConnectedSetupResource = (resource: Resource): boolean =>
-  resource.type === 'pbs' ||
-  resource.type === 'pmg' ||
-  PLATFORM_CONNECTION_PLATFORM_TYPES.has(resource.platformType) ||
-  isTrueNASSystemResource(resource);
+  sourcePlatformSupportsOnboardingPath(
+    getSetupCompletionPlatformKey(resource),
+    'platform-connections',
+  );
 
 const isInstallConnectedSetupResource = (resource: Resource): boolean =>
   isAgentFacetInfrastructureResource(resource) && !isPlatformConnectedSetupResource(resource);
 
 const getConnectedSetupSystemTypeLabel = (resource: Resource): string => {
-  if (resource.type === 'pbs' || resource.platformType === 'proxmox-pbs') {
-    return 'Proxmox Backup Server';
-  }
-  if (resource.type === 'pmg' || resource.platformType === 'proxmox-pmg') {
-    return 'Proxmox Mail Gateway';
-  }
-  if (resource.platformType === 'proxmox-pve') {
-    return 'Proxmox VE';
-  }
-  if (resource.platformType === 'truenas' || isTrueNASSystemResource(resource)) {
-    return 'TrueNAS';
-  }
-  if (resource.platformType === 'vmware-vsphere') {
-    return 'VMware vSphere';
-  }
-  return 'Agent';
+  return getSetupCompletionPlatformLabel(resource) || 'Agent';
 };
 
 const getConnectedSetupSystemHost = (resource: Resource): string => {

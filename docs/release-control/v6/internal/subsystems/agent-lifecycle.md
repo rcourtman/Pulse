@@ -270,7 +270,11 @@ an add-only capacity posture.
    hiding `Infrastructure Install` when the next system should run the unified
    agent, and install-managed first-session states must not suppress the
    explicit API-backed alternative when the runtime has already connected
-   platform-owned systems.
+   platform-owned systems. The API-backed versus install-workspace split must
+   come from the governed onboarding paths in
+   `docs/release-control/v6/internal/PLATFORM_SUPPORT_MANIFEST.json` through
+   the shared frontend manifest helper, not from a Setup Wizard-local platform
+   allowlist.
 6. Keep `frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx`
    oriented around the first monitored host. Install-token generation,
    governed command copy, and install instructions belong to the canonical

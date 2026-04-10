@@ -14,8 +14,9 @@ import (
 )
 
 var (
-	numberedPlatformListRE = regexp.MustCompile("^\\d+\\.\\s+`([^`]+)`")
-	currentSupportMatrixRE = regexp.MustCompile("^\\|\\s+`([^`]+)`\\s+\\|")
+	numberedPlatformListRE   = regexp.MustCompile("^\\d+\\.\\s+`([^`]+)`")
+	currentSupportMatrixRE   = regexp.MustCompile("^\\|\\s+`([^`]+)`\\s+\\|")
+	currentSupportSetupRowRE = regexp.MustCompile("^\\|\\s+`([^`]+)`\\s+\\|\\s+([^|]+?)\\s+\\|")
 )
 
 type platformSupportManifest struct {
@@ -27,6 +28,7 @@ type platformSupportManifest struct {
 type platformSupportManifestEntry struct {
 	ID              string   `json:"id"`
 	GovernanceState string   `json:"governance_state"`
+	OnboardingPaths []string `json:"onboarding_paths"`
 	UILabel         string   `json:"ui_label"`
 	UITone          string   `json:"ui_tone"`
 	Aliases         []string `json:"aliases"`
@@ -58,6 +60,12 @@ func TestPlatformSupportManifestMatchesSupportModel(t *testing.T) {
 		manifestPlatformsByState(t, manifest, "presentation-only"),
 	); diff != "" {
 		t.Fatalf("presentation-only platform manifest drifted from the canonical support model:\n%s", diff)
+	}
+	if diff := diffPlatformFieldMap(
+		parseCurrentSupportMatrixOnboardingPaths(t, model),
+		manifestPlatformOnboardingPathsByState(t, manifest, "supported"),
+	); diff != "" {
+		t.Fatalf("supported onboarding-path manifest drifted from the canonical support model:\n%s", diff)
 	}
 	if diff := diffPlatformSets(classified, manifest.DefaultInfrastructureSourceOrder); diff != "" {
 		t.Fatalf("default infrastructure source ordering drifted from the canonical supported platform set:\n%s", diff)
@@ -107,6 +115,16 @@ func TestVMwareFixturesRemainAdmittedButNotSupported(t *testing.T) {
 	}
 	if !strings.Contains(model, "| `vmware-vsphere` |") {
 		t.Fatal("expected platform support model to keep the vmware-vsphere admission row")
+	}
+	vmwareOnboardingPaths, ok := manifestPlatformOnboardingPaths(manifest)["vmware-vsphere"]
+	if !ok {
+		t.Fatal("expected vmware-vsphere onboarding-path manifest entry")
+	}
+	if diff := diffPlatformSets([]string{"platform-connections"}, vmwareOnboardingPaths); diff != "" {
+		t.Fatalf("vmware-vsphere onboarding path drifted from the admission model:\n%s", diff)
+	}
+	if !strings.Contains(model, "| `vmware-vsphere` | platform connections to `vCenter` only |") {
+		t.Fatal("expected platform support model to keep the vmware-vsphere platform-connections admission floor")
 	}
 
 	graph := buildFixtureGraph(DefaultConfig, time.Date(2026, time.April, 10, 12, 0, 0, 0, time.UTC))
@@ -374,6 +392,36 @@ func parseCurrentSupportMatrixPlatforms(t *testing.T, model string) []string {
 	return requireNonEmptyPlatformList(t, platforms, "current support matrix")
 }
 
+func parseCurrentSupportMatrixOnboardingPaths(t *testing.T, model string) map[string][]string {
+	t.Helper()
+
+	rows := make(map[string][]string)
+	inSetupTable := false
+
+	for _, raw := range strings.Split(model, "\n") {
+		line := strings.TrimSpace(raw)
+		switch {
+		case strings.HasPrefix(line, "| Platform") && strings.Contains(line, "| Setup"):
+			inSetupTable = true
+			continue
+		case !inSetupTable:
+			continue
+		case strings.HasPrefix(line, "## "):
+			return requireNonEmptyPlatformFieldMap(t, rows, "current support matrix onboarding paths")
+		case line == "" || strings.HasPrefix(line, "| ---"):
+			continue
+		}
+
+		matches := currentSupportSetupRowRE.FindStringSubmatch(line)
+		if len(matches) != 3 {
+			continue
+		}
+		rows[matches[1]] = parseSetupCellOnboardingPaths(t, matches[2])
+	}
+
+	return requireNonEmptyPlatformFieldMap(t, rows, "current support matrix onboarding paths")
+}
+
 func manifestPlatformsByState(
 	t *testing.T,
 	manifest platformSupportManifest,
@@ -397,6 +445,36 @@ func manifestPlatformsByState(
 	return requireNonEmptyPlatformList(t, platforms, fmt.Sprintf("manifest platforms with state %s", governanceState))
 }
 
+func manifestPlatformOnboardingPathsByState(
+	t *testing.T,
+	manifest platformSupportManifest,
+	governanceState string,
+) map[string][]string {
+	t.Helper()
+
+	rows := make(map[string][]string)
+	for _, platform := range manifest.Platforms {
+		if platform.GovernanceState != governanceState {
+			continue
+		}
+		rows[platform.ID] = validateManifestOnboardingPaths(t, platform)
+	}
+
+	return requireNonEmptyPlatformFieldMap(
+		t,
+		rows,
+		fmt.Sprintf("manifest onboarding paths with state %s", governanceState),
+	)
+}
+
+func manifestPlatformOnboardingPaths(manifest platformSupportManifest) map[string][]string {
+	rows := make(map[string][]string, len(manifest.Platforms))
+	for _, platform := range manifest.Platforms {
+		rows[platform.ID] = append([]string(nil), platform.OnboardingPaths...)
+	}
+	return rows
+}
+
 func requireNonEmptyPlatformList(t *testing.T, platforms []string, label string) []string {
 	t.Helper()
 
@@ -405,6 +483,19 @@ func requireNonEmptyPlatformList(t *testing.T, platforms []string, label string)
 		t.Fatalf("expected %s to declare at least one platform", label)
 	}
 	return unique
+}
+
+func requireNonEmptyPlatformFieldMap(
+	t *testing.T,
+	values map[string][]string,
+	label string,
+) map[string][]string {
+	t.Helper()
+
+	if len(values) == 0 {
+		t.Fatalf("expected %s to declare at least one platform", label)
+	}
+	return values
 }
 
 func uniqueSortedPlatforms(platforms []string) []string {
@@ -480,4 +571,88 @@ func diffPlatformSets(want []string, got []string) string {
 		parts = append(parts, fmt.Sprintf("extra: %s", strings.Join(extra, ", ")))
 	}
 	return strings.Join(parts, "\n")
+}
+
+func diffPlatformFieldMap(want map[string][]string, got map[string][]string) string {
+	platforms := make(map[string]struct{}, len(want)+len(got))
+	for platform := range want {
+		platforms[platform] = struct{}{}
+	}
+	for platform := range got {
+		platforms[platform] = struct{}{}
+	}
+
+	keys := make([]string, 0, len(platforms))
+	for platform := range platforms {
+		keys = append(keys, platform)
+	}
+	sort.Strings(keys)
+
+	messages := make([]string, 0)
+	for _, platform := range keys {
+		wantValue, wantOK := want[platform]
+		gotValue, gotOK := got[platform]
+		switch {
+		case !wantOK:
+			messages = append(messages, fmt.Sprintf("unexpected platform %s", platform))
+		case !gotOK:
+			messages = append(messages, fmt.Sprintf("missing platform %s", platform))
+		default:
+			if diff := diffPlatformSets(wantValue, gotValue); diff != "" {
+				messages = append(
+					messages,
+					fmt.Sprintf("%s onboarding paths drifted:\n%s", platform, indentDiff(diff)),
+				)
+			}
+		}
+	}
+
+	return strings.Join(messages, "\n")
+}
+
+func parseSetupCellOnboardingPaths(t *testing.T, value string) []string {
+	t.Helper()
+
+	normalized := strings.ToLower(strings.TrimSpace(value))
+	paths := make([]string, 0, 2)
+	if strings.Contains(normalized, "install workspace") {
+		paths = append(paths, "install-workspace")
+	}
+	if strings.Contains(normalized, "platform connections") {
+		paths = append(paths, "platform-connections")
+	}
+	return requireNonEmptyPlatformList(t, paths, fmt.Sprintf("setup cell %q", value))
+}
+
+func validateManifestOnboardingPaths(t *testing.T, platform platformSupportManifestEntry) []string {
+	t.Helper()
+
+	switch platform.GovernanceState {
+	case "supported", "admitted":
+		return requireNonEmptyPlatformList(
+			t,
+			platform.OnboardingPaths,
+			fmt.Sprintf("manifest onboarding paths for %s", platform.ID),
+		)
+	case "presentation-only":
+		if len(platform.OnboardingPaths) != 0 {
+			t.Fatalf(
+				"presentation-only platform %s must not declare onboarding paths, got %v",
+				platform.ID,
+				platform.OnboardingPaths,
+			)
+		}
+		return []string{}
+	default:
+		t.Fatalf("unexpected governance state %s for %s", platform.GovernanceState, platform.ID)
+		return nil
+	}
+}
+
+func indentDiff(diff string) string {
+	lines := strings.Split(diff, "\n")
+	for i, line := range lines {
+		lines[i] = "  " + line
+	}
+	return strings.Join(lines, "\n")
 }

@@ -326,6 +326,46 @@ describe('SetupCompletionPanel', () => {
     expect(onComplete).toHaveBeenCalledWith('/settings/infrastructure/platforms');
   });
 
+  it('derives admitted VMware onboarding from the governed platform manifest', async () => {
+    const onComplete = vi.fn();
+    apiFetchJSONMock.mockResolvedValue({
+      resources: [
+        {
+          id: 'vmware-1',
+          type: 'agent',
+          name: 'vcsa-prod',
+          displayName: 'vCenter Prod',
+          platformId: 'vmware-prod',
+          platformType: 'vmware-vsphere',
+          sourceType: 'api',
+          status: 'online',
+          lastSeen: 123,
+          platformData: {
+            vmware: { hostname: 'vcenter.example.local' },
+          },
+        },
+      ],
+    });
+
+    render(() => <SetupCompletionPanel state={baseState} onComplete={onComplete} />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Connected (1 system)')).toBeInTheDocument();
+    });
+
+    expect(screen.getByText('vCenter Prod')).toBeInTheDocument();
+    expect(screen.getByText('VMware vSphere')).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Your admin account is ready and Pulse is already receiving telemetry. Open the dashboard to verify the first overview, then return to Platform connections when you want to add more API-backed systems.',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Open Platform connections' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open Platform connections' }));
+    expect(onComplete).toHaveBeenCalledWith('/settings/infrastructure/platforms');
+  });
+
   it('keeps both continuation paths visible when install-managed and API-backed systems are already present', async () => {
     apiFetchJSONMock.mockResolvedValue({
       resources: [
