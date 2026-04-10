@@ -498,6 +498,13 @@ internal-vs-external destination helper, while
 paywall surfaces navigate those destinations. Feature shells may request a
 commercial destination, but they must not re-decide whether that destination
 opens in-app or in a new tab once the shared primitive exists.
+That same shared-primitive floor now also owns prerelease shell guidance.
+`frontend-modern/src/components/shared/ReleaseCandidateBanner.tsx` is the
+canonical low-key release-candidate callout for authenticated chrome, and
+`frontend-modern/src/AppLayout.tsx` may mount it only from resolved release
+metadata. Feature pages, settings panels, and route-local shells must not add
+duplicate RC modals, hardcoded GitHub release or feedback links, or page-local
+prerelease banners once that shared primitive exists.
 
 The subsystem registry now also requires explicit proof-policy coverage for all
 shared runtime files, and shared-component guardrails fail if raw table

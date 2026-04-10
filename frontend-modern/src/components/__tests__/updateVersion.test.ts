@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
+  buildIssueTemplateUrl,
   buildDockerImageTag,
   buildLinuxAmd64DownloadCommand,
   buildLinuxAmd64TarballName,
   buildReleaseNotesUrl,
+  buildV6RcFeedbackUrl,
   formatReleaseTag,
   normalizeReleaseVersion,
 } from '@/components/updateVersion';
@@ -38,6 +40,15 @@ describe('updateVersion helpers', () => {
     );
     expect(command).toContain(
       'sudo tar -xzf pulse-v5.1.0-linux-amd64.tar.gz -C /usr/local/bin pulse',
+    );
+  });
+
+  it('builds GitHub issue template links for prerelease feedback', () => {
+    expect(buildIssueTemplateUrl('v6_rc_feedback.yml')).toBe(
+      'https://github.com/rcourtman/Pulse/issues/new?template=v6_rc_feedback.yml',
+    );
+    expect(buildV6RcFeedbackUrl()).toBe(
+      'https://github.com/rcourtman/Pulse/issues/new?template=v6_rc_feedback.yml',
     );
   });
 });

@@ -48,6 +48,47 @@ helm upgrade pulse pulse/pulse -n pulse
 - Confirm notifications still send (send a test)
 - Confirm agents are connected (if used)
 
+## v5 to v6 Operator FAQ
+
+### Do I need to uninstall Pulse v5 first?
+
+No. Upgrade the existing Pulse server installation in place.
+
+### Do I need to uninstall my existing Pulse Unified Agents first?
+
+No. Use the unified installer to upgrade existing agent deployments in place.
+
+### Does upgrading the Pulse server to v6 automatically upgrade my agents?
+
+No. The server upgrade and the Unified Agent upgrade are separate operations.
+After the server is on v6, use the generated install or upgrade command from
+**Settings → Unified Agents → Installation commands** when you want to move
+agents to v6.
+
+### Will an upgraded v5 agent keep the same identity in v6?
+
+Yes. The v5-to-v6 agent path is expected to preserve one canonical agent
+identity rather than creating a duplicate record during the upgrade.
+
+### Do I need new agent tokens just because the server moved to v6?
+
+No. Existing installed agents are expected to continue through the v6
+compatibility boundary for legacy persisted agent scopes.
+
+### Can one installed Pulse Unified Agent report to both a Pulse v5 instance and a Pulse v6 instance at the same time?
+
+Not as a supported in-place setup. A running Unified Agent installation is
+configured against one Pulse URL and one token, and it fetches remote config
+from that one Pulse server. If you need side-by-side evaluation, use a
+separate test host or VM, a cloned lab machine, or a separate isolated agent
+installation instead of trying to point one running agent service at two Pulse
+servers.
+
+### Can I keep Pulse v5 stable while I test Pulse v6?
+
+Yes. That is the recommended RC posture. Keep v5 as your stable line and test
+v6 first on a staging or non-critical install with a rollback path available.
+
 ## Migration Notes (v6)
 
 ### Unified Navigation (Bookmarks and Deep Links)

@@ -1,17 +1,23 @@
-# Pulse v6.0.0-rc.1 Pre-Release Notes
+# Pulse v6.0.0-rc.1 Release Candidate Notes
 
-`v6.0.0-rc.1` is an early Pulse v6 pre-release for users who want to test before the stable `v6.0.0` release.
+`v6.0.0-rc.1` is the first public release candidate for Pulse v6.
 
-Expect bugs, rough edges, and migration issues. This build is for early testing, not for normal production use.
-
-This note is intentionally brief. I will publish the fuller Pulse v6 release notes with the final GA release.
+This build is intended for evaluation and early deployment testing before the stable `v6.0.0` release. Pulse v5 remains the current stable line. If you rely on Pulse in production today, start with a staging or non-critical environment first and keep a rollback path available.
 
 ## Before You Try It
 
-- I do not recommend upgrading a production Pulse v5 installation yet.
-- Pulse v5 remains the current stable line during the v6 pre-release period.
-- If you want to test v6, use a staging instance, lab environment, or separate non-production install first.
-- Keep console access and a current backup available before upgrading.
+- Do not make your first v6 test on a production Pulse v5 installation.
+- Prefer a lab, staging instance, or separate non-critical install for your first RC pass.
+- Keep current backups and direct console access available before upgrading.
+- Treat this RC as real release-candidate software: suitable for evaluation, but not yet the default recommendation for broad production rollout.
+
+## What This RC Is For
+
+- validating the v5 to v6 upgrade path
+- checking first-session navigation and onboarding
+- testing unified-agent continuity after the server upgrade
+- exercising Pulse Pro activation and v5 Pro or Lifetime migration
+- surfacing regressions, broken flows, and rough edges before GA
 
 ## Upgrade FAQ
 
@@ -37,6 +43,14 @@ That is the supported v5-to-v6 crossover path for agent testing.
 
 No. Existing v5 unified agents should be upgraded in place when testing them against a v6 server.
 
+### Will an upgraded v5 agent keep the same identity in v6?
+
+Yes. The supported v5-to-v6 agent path is intended to preserve one canonical agent identity rather than duplicating the machine during upgrade.
+
+### Can one installed Pulse Unified Agent report to both a Pulse v5 instance and a Pulse v6 instance at the same time?
+
+Not as a supported in-place setup. A running Unified Agent installation is configured against one Pulse URL and one token. If you need side-by-side evaluation, use a separate test host or VM, a cloned lab machine, or a separate isolated agent installation instead of trying to point one running agent service at two Pulse servers.
+
 ### What about Pulse Pro licensing?
 
 If you already have a valid Pulse v5 Pro or Lifetime license, Pulse v6 can migrate it into the v6 activation model.
@@ -52,13 +66,22 @@ Not necessarily. v6 reorganizes the product around Dashboard, Infrastructure, Wo
 
 If you rely on old bookmarks or runbooks, expect to update them.
 
-## What Feedback Is Most Useful
+## Feedback
 
-- v5 to v6 upgrade friction
-- first-session onboarding and navigation
-- unified-agent update experience after server upgrade
-- Pulse Pro activation or v5 license migration
-- regressions, broken flows, or anything that feels unreliable
+Use the `Pulse v6 pre-release feedback` issue template for bugs, regressions, upgrade failures, performance issues, or actionable UX friction:
+
+- `https://github.com/rcourtman/Pulse/issues/new?template=v6_rc_feedback.yml`
+
+When you report something, include:
+
+- Pulse version
+- install path
+- installation type
+- OS or environment
+- license tier
+- what you expected
+- what happened instead
+- sanitized logs, screenshots, or diagnostics if they help
 
 ## More Detail
 

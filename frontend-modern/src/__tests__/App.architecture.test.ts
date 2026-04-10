@@ -50,6 +50,9 @@ describe('App architecture', () => {
   it('keeps authenticated chrome in AppLayout and hosted bootstrap in useAppRuntimeState', () => {
     expect(appLayoutSource).toContain('export function AppLayout(props: AppLayoutProps)');
     expect(appLayoutSource).toContain("import { aiChatStore } from '@/stores/aiChat';");
+    expect(appLayoutSource).toContain(
+      "import { ReleaseCandidateBanner } from '@/components/shared/ReleaseCandidateBanner';",
+    );
     expect(appLayoutSource).toContain('<OrgSwitcher');
     expect(appLayoutSource).toContain('const status = () => props.connectionStatus();');
     expect(appLayoutSource).toContain("status().kind === 'sync-reconnecting' || status().kind === 'reconnecting'");
@@ -58,10 +61,15 @@ describe('App architecture', () => {
     );
     expect(appLayoutSource).toContain("props.versionInfo()?.channel === 'rc'");
     expect(appLayoutSource).toContain('Preview');
+    expect(appLayoutSource).toContain(
+      '<ReleaseCandidateBanner version={props.versionInfo()?.version} />',
+    );
     expect(appLayoutSource).not.toContain('props.connected()');
     expect(appLayoutSource).toContain('const utilityTabs = createMemo(() =>');
     expect(appLayoutSource).toContain("import { isMultiTenantEnabled } from '@/stores/license';");
     expect(appLayoutSource).not.toContain('loadCommercialPosture');
+    expect(appLayoutSource).not.toContain('buildReleaseNotesUrl');
+    expect(appLayoutSource).not.toContain('buildV6RcFeedbackUrl');
     expect(appLayoutSource).not.toContain('sessionPresentationPolicyResolved');
     expect(appLayoutSource).not.toContain('presentationPolicyHidesCommercialSurfaces');
     expect(appLayoutSource).toContain(

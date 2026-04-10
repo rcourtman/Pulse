@@ -1,4 +1,5 @@
 const GITHUB_RELEASES_BASE_URL = 'https://github.com/rcourtman/Pulse/releases';
+const GITHUB_ISSUES_BASE_URL = 'https://github.com/rcourtman/Pulse/issues/new';
 
 export const normalizeReleaseVersion = (version?: string | null): string => {
   const trimmed = (version ?? '').trim();
@@ -17,6 +18,16 @@ export const buildReleaseNotesUrl = (version?: string | null): string => {
   const tag = formatReleaseTag(version);
   return tag ? `${GITHUB_RELEASES_BASE_URL}/tag/${tag}` : GITHUB_RELEASES_BASE_URL;
 };
+
+export const buildIssueTemplateUrl = (template?: string | null): string => {
+  const trimmed = (template ?? '').trim();
+  if (!trimmed) {
+    return GITHUB_ISSUES_BASE_URL;
+  }
+  return `${GITHUB_ISSUES_BASE_URL}?template=${encodeURIComponent(trimmed)}`;
+};
+
+export const buildV6RcFeedbackUrl = (): string => buildIssueTemplateUrl('v6_rc_feedback.yml');
 
 export const buildDockerImageTag = (version?: string | null): string => {
   const normalized = normalizeReleaseVersion(version);

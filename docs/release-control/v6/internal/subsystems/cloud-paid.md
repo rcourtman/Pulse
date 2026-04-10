@@ -238,6 +238,13 @@ the governed browser proof in
 `tests/integration/tests/journeys/01-smoke-bootstrap-login-dashboard.spec.ts`,
 and `tests/integration/tests/journeys/03-relay-pairing.spec.ts` must continue
 to assert zero browser-shell entitlement requests outside owned billing flows.
+That same authenticated-shell commercial boundary may surface prerelease
+guidance only as a thin release-metadata consumer. `frontend-modern/src/AppLayout.tsx`
+may mount a shared release-candidate callout when the resolved version channel
+is `rc`, but that shell copy must stay non-billing: it may link to release
+notes and feedback, yet it must not probe billing endpoints, expose licensed
+identity, or infer upgrade pressure from plan state just to explain the
+current prerelease.
 That same browser/store boundary also owns typed non-billing commercial
 selectors. `frontend-modern/src/stores/licenseCommercial.ts` may interpret the
 commercial-posture payload once for browser consumers, but relay, Patrol,

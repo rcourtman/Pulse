@@ -211,6 +211,12 @@ context accumulation, and org-switch clearing for the assistant drawer, while
 settings and model catalog reads. AI runtime consumers must not move drawer
 shell state into page-local signals or teach `aiChat.ts` to bootstrap its own
 `/api/settings/ai` or `/api/ai/models` reads.
+Non-AI shell notices may coexist in `frontend-modern/src/AppLayout.tsx`, but
+they must remain presentation-only. Prerelease banners, billing callouts, or
+other header-adjacent notices must not fork assistant open state, gate on AI
+runtime fetches, or move assistant availability logic out of
+`frontend-modern/src/stores/aiChat.ts` and `frontend-modern/src/useAppRuntimeState.ts`
+just because they share the same authenticated shell.
 `docs/release-control/v6/internal/subsystems/registry.json` must therefore keep
 `frontend-modern/src/stores/aiRuntimeState.ts` and
 `frontend-modern/src/components/AI/Chat/` on the explicit AI runtime proof

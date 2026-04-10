@@ -73,6 +73,7 @@ import infrastructureSummaryTableModelSource from '@/components/shared/infrastru
 import infrastructureSummaryTableStateSource from '@/components/shared/useInfrastructureSummaryTableState.ts?raw';
 import monitoredSystemLimitWarningBannerSource from '@/components/shared/MonitoredSystemLimitWarningBanner.tsx?raw';
 import monitoredSystemLimitWarningBannerModelSource from '@/components/shared/monitoredSystemLimitWarningBannerModel.ts?raw';
+import releaseCandidateBannerSource from '@/components/shared/ReleaseCandidateBanner.tsx?raw';
 import selectionCardGroupSource from '@/components/shared/SelectionCardGroup.tsx?raw';
 import selectionCardGroupModelSource from '@/components/shared/selectionCardGroupModel.ts?raw';
 import summaryMetricCardSource from '@/components/shared/SummaryMetricCard.tsx?raw';
@@ -710,6 +711,17 @@ describe('shared primitive guardrails', () => {
     expect(resourceDetailDrawerOverviewSource).not.toContain(
       "from '@/components/Dashboard/TagBadges'",
     );
+  });
+
+  it('keeps release-candidate shell guidance on shared link helpers', () => {
+    expect(releaseCandidateBannerSource).toContain('buildReleaseNotesUrl');
+    expect(releaseCandidateBannerSource).toContain('buildV6RcFeedbackUrl');
+    expect(releaseCandidateBannerSource).toContain('normalizeReleaseVersion');
+    expect(releaseCandidateBannerSource).not.toContain('useNavigate');
+    expect(releaseCandidateBannerSource).not.toContain('createSignal');
+    expect(releaseCandidateBannerSource).not.toContain('loadCommercialPosture');
+    expect(releaseCandidateBannerSource).not.toContain('/api/license/');
+    expect(releaseCandidateBannerSource).not.toContain('window.location');
   });
 
   it('keeps infrastructure summary table on shell, runtime, and model owners', () => {
