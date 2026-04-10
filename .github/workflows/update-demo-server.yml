@@ -237,6 +237,32 @@ jobs:
           ssh-keyscan -H "$DEMO_SERVER_HOST" >> ~/.ssh/known_hosts
           chmod 600 ~/.ssh/known_hosts
 
+      - name: Resolve demo service identity
+        id: config
+        run: |
+          set -euo pipefail
+          TARGET="${{ needs.resolve.outputs.target }}"
+          SERVICE_NAME="${DEMO_SERVICE_NAME:-}"
+          if [ -z "$SERVICE_NAME" ]; then
+            case "$TARGET" in
+              stable)
+                SERVICE_NAME="pulse"
+                ;;
+              preview-v6)
+                SERVICE_NAME="pulse-v6-preview"
+                ;;
+              *)
+                echo "::error::Unsupported demo target: ${TARGET}"
+                exit 1
+                ;;
+            esac
+          fi
+          if [ "$TARGET" = "preview-v6" ] && [ "$SERVICE_NAME" = "pulse" ]; then
+            echo "::error::Preview demo updates must not target the stable pulse service."
+            exit 1
+          fi
+          echo "service_name=$SERVICE_NAME" >> "$GITHUB_OUTPUT"
+
       - name: Check current demo version
         id: current
         env:
@@ -273,7 +299,7 @@ jobs:
         run: |
           set -euo pipefail
           TAG="${{ needs.resolve.outputs.tag }}"
-          SERVICE_NAME="${DEMO_SERVICE_NAME:-}"
+          SERVICE_NAME="${{ steps.config.outputs.service_name }}"
           REMOTE_SCRIPT=$(cat <<'EOF'
           set -euo pipefail
           TAG="$1"
@@ -331,6 +357,36 @@ jobs:
             echo "::error::Demo server updated but mock mode may not be active"
             exit 1
           fi
+
+      - name: Verify frontend parity
+        if: steps.current.outputs.skip_current != 'true'
+        env:
+          DEMO_SERVER_HOST: ${{ secrets.DEMO_SERVER_HOST }}
+          DEMO_SERVER_USER: ${{ secrets.DEMO_SERVER_USER }}
+        run: |
+          set -euo pipefail
+          case "$DEMO_PUBLIC_HEALTH_URL" in
+            */api/health)
+              PUBLIC_ROOT_URL="${DEMO_PUBLIC_HEALTH_URL%/api/health}/"
+              ;;
+            *)
+              echo "::error::DEMO_PUBLIC_HEALTH_URL must end with /api/health for frontend verification."
+              exit 1
+              ;;
+          esac
+
+          REMOTE_ASSET="$(
+            ssh -i ~/.ssh/id_ed25519 "$DEMO_SERVER_USER@$DEMO_SERVER_HOST" \
+              "curl -fsS ${DEMO_LOCAL_BASE_URL}/ | grep -o '/assets/index-[^\\\" ]*\\\\.js' | head -n 1"
+          )"
+          PUBLIC_ASSET="$(curl -fsS "$PUBLIC_ROOT_URL" | grep -o '/assets/index-[^\" ]*\.js' | head -n 1)"
+
+          [ -n "$REMOTE_ASSET" ] || { echo "::error::Failed to resolve the remote frontend entry asset."; exit 1; }
+          [ -n "$PUBLIC_ASSET" ] || { echo "::error::Failed to resolve the public frontend entry asset."; exit 1; }
+          [ "$PUBLIC_ASSET" = "$REMOTE_ASSET" ] || {
+            echo "::error::Public demo is serving $PUBLIC_ASSET but the target service is serving $REMOTE_ASSET."
+            exit 1
+          }
 
       - name: Verify public health
         run: |

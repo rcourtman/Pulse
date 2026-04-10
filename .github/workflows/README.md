@@ -59,11 +59,12 @@ Optional environment variables:
 
 1. **Trigger**: Runs automatically when a GitHub release is published
 2. **Target selection**: Stable tags deploy to `demo-stable`; prerelease tags deploy to `demo-preview-v6`
-3. **Governance check**: Validates the selected tag is reachable from the governed release branch for that version
-4. **Latest check**: Refuses to update a target unless the published tag is the latest release for that target channel
-5. **Update**: SSHs to the selected demo host and runs the tag-matched root installer from that exact git tag
-6. **Verify**: Checks that the new version is running and mock mode is active
-7. **Cleanup**: Removes SSH key from runner
+3. **Service identity guard**: Preview runs default to `pulse-v6-preview` and refuse to target the stable `pulse` service identity
+4. **Governance check**: Validates the selected tag is reachable from the governed release branch for that version
+5. **Latest check**: Refuses to update a target unless the published tag is the latest release for that target channel
+6. **Update**: SSHs to the selected demo host and runs the tag-matched root installer from that exact git tag
+7. **Verify**: Checks that the new version is running, mock mode is active, and the public demo HTML serves the same frontend entry asset as the target service
+8. **Cleanup**: Removes SSH key from runner
 
 ### Testing
 
@@ -95,10 +96,14 @@ environment without changing the governed release workflow.
 
 - Uses the same `demo-stable` / `demo-preview-v6` environment contract as the
   release-driven updater
-- Requires `DEMO_PUBLIC_HEALTH_URL`
+- Requires `DEMO_LOCAL_BASE_URL` and `DEMO_PUBLIC_HEALTH_URL`
 - Supports optional `DEMO_SERVICE_NAME`, `DEMO_INSTALL_DIR`, `DEMO_TEST_PORT`,
   `DEMO_AUTH_USER`, and `DEMO_AUTH_PASS`
 - Assumes the target service and install directory already exist on the host
+- Defaults preview runs to `pulse-v6-preview` and refuses to target the stable
+  `pulse` service identity
+- Verifies that the public demo shell serves the same frontend entry asset that
+  was built and deployed
 
 ## Helm CI
 

@@ -109,6 +109,30 @@ func TestDockerAndDemoBuildsUseCanonicalReleaseLdflags(t *testing.T) {
 	}
 }
 
+func TestDeployDemoWorkflowFailsClosedForPreviewAndVerifiesFrontendParity(t *testing.T) {
+	workflowBytes, err := os.ReadFile(repoFile(".github", "workflows", "deploy-demo-server.yml"))
+	if err != nil {
+		t.Fatalf("read deploy-demo-server workflow: %v", err)
+	}
+
+	workflow := string(workflowBytes)
+	required := []string{
+		`DEMO_LOCAL_BASE_URL: ${{ vars.DEMO_LOCAL_BASE_URL }}`,
+		`[ -n "$DEMO_LOCAL_BASE_URL" ] || { echo "::error::DEMO_LOCAL_BASE_URL is required in the selected demo environment."; exit 1; }`,
+		`Capture expected frontend entry asset`,
+		`SERVICE_NAME="pulse-v6-preview"`,
+		`Preview demo deployments must not target the stable pulse service.`,
+		`Verify frontend parity`,
+		`Remote service is serving $REMOTE_ASSET but the build expected $EXPECTED_ASSET.`,
+		`Public demo is serving $PUBLIC_ASSET but the build expected $EXPECTED_ASSET.`,
+	}
+	for _, needle := range required {
+		if !strings.Contains(workflow, needle) {
+			t.Fatalf("deploy-demo-server workflow missing preview isolation or frontend parity proof: %s", needle)
+		}
+	}
+}
+
 func TestDockerfileStagesShippedDocsForEmbeddedFrontendBuild(t *testing.T) {
 	dockerfileBytes, err := os.ReadFile(repoFile("Dockerfile"))
 	if err != nil {

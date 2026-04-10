@@ -213,6 +213,7 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         publish = read(".github/workflows/publish-docker.yml")
         promote = read(".github/workflows/promote-floating-tags.yml")
         demo = read(".github/workflows/update-demo-server.yml")
+        preview_deploy = read(".github/workflows/deploy-demo-server.yml")
         release_workflow = read(".github/workflows/create-release.yml")
         helm = read(".github/workflows/publish-helm-chart.yml")
         helm_pages = read(".github/workflows/helm-pages.yml")
@@ -228,6 +229,14 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("Refusing prerelease tag", demo)
         self.assertIn("Refusing stable tag", demo)
         self.assertIn("latest published release for target", demo)
+        self.assertIn('SERVICE_NAME="pulse-v6-preview"', demo)
+        self.assertIn("Preview demo updates must not target the stable pulse service.", demo)
+        self.assertIn("Verify frontend parity", demo)
+        self.assertIn("Public demo is serving $PUBLIC_ASSET but the target service is serving $REMOTE_ASSET.", demo)
+        self.assertIn('SERVICE_NAME="pulse-v6-preview"', preview_deploy)
+        self.assertIn("Preview demo deployments must not target the stable pulse service.", preview_deploy)
+        self.assertIn("Verify frontend parity", preview_deploy)
+        self.assertIn("Public demo is serving $PUBLIC_ASSET but the build expected $EXPECTED_ASSET.", preview_deploy)
         self.assertIn("control_plane.py --branch-for-version", helm)
         self.assertIn("control_plane.py --branch-for-version", helm_pages)
         self.assertIn("does not descend from any matching prerelease tag", publish)
@@ -251,6 +260,15 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn(promotion_metadata_envelope(), normalize_ws(runbook))
 
     def test_blocked_record_tracks_current_target_and_candidate_version(self) -> None:
+        blocked_record_surface = {
+            "VERSION",
+            "docs/release-control/control_plane.json",
+            "docs/release-control/v6/internal/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
+            "docs/release-control/v6/internal/records/rc-to-ga-promotion-readiness-blocked-2026-04-04.md",
+            "scripts/release_control/record_rc_to_ga_blocked.py",
+        }
+        if USE_STAGED_GOVERNANCE and not any(path in blocked_record_surface for path in STAGED_FILES):
+            self.skipTest("staged slice does not touch the blocked-record promotion surface")
         blocked = read("docs/release-control/v6/internal/records/rc-to-ga-promotion-readiness-blocked-2026-04-04.md")
         current_version = read("VERSION").strip()
         active_target_id = read_json("docs/release-control/control_plane.json")["active_target_id"]

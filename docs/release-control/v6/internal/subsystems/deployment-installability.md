@@ -179,6 +179,13 @@ the public stable demo and the opt-in v6 preview demo. `.github/workflows/create
 must route stable tags to the stable demo environment and prerelease tags to a
 separate preview environment instead of skipping prerelease demo updates or
 reusing the stable runtime in place.
+That same preview deployment boundary also owns service-identity isolation and
+public-shell parity proof. Preview demo runs must fail closed onto the
+dedicated preview service identity instead of defaulting back to the stable
+`pulse` instance, and demo deploy/update verification must prove that the
+public demo HTML serves the same frontend entry asset as the target service or
+freshly built preview artifact rather than treating a passing `/api/health`
+response as enough evidence that the public shell actually updated.
 Those same governed release workflows also own the operator-facing wording for
 that promotion metadata. Human-visible workflow inputs, summaries, and error
 messages must describe the path as a prerelease or preview flow rather than
