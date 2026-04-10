@@ -394,6 +394,48 @@ describe('license stores', () => {
       });
     });
 
+    it('startProTrial parses Retry-After headers on rate-limited responses', async () => {
+      vi.mocked(LicenseAPI.startTrial).mockResolvedValue({
+        ok: false,
+        status: 429,
+        headers: new Headers({ 'Retry-After': '120' }),
+        json: vi.fn().mockResolvedValue({
+          code: 'trial_rate_limited',
+          error: 'Trial start rate limit exceeded',
+          details: { retry_after_seconds: '45' },
+        }),
+      } as unknown as Response);
+
+      await expect(startProTrial()).rejects.toMatchObject({
+        status: 429,
+        code: 'trial_rate_limited',
+        message: 'Trial start rate limit exceeded',
+        retryAfterSeconds: 120,
+        details: { retry_after_seconds: '45' },
+      });
+    });
+
+    it('startProTrial falls back to payload retry_after_seconds when headers are absent', async () => {
+      vi.mocked(LicenseAPI.startTrial).mockResolvedValue({
+        ok: false,
+        status: 429,
+        headers: new Headers(),
+        json: vi.fn().mockResolvedValue({
+          code: 'trial_rate_limited',
+          error: 'Trial start rate limit exceeded',
+          details: { retry_after_seconds: '75' },
+        }),
+      } as unknown as Response);
+
+      await expect(startProTrial()).rejects.toMatchObject({
+        status: 429,
+        code: 'trial_rate_limited',
+        message: 'Trial start rate limit exceeded',
+        retryAfterSeconds: 75,
+        details: { retry_after_seconds: '75' },
+      });
+    });
+
     it('startProTrial refreshes commercial and runtime state when local activation succeeds', async () => {
       vi.mocked(LicenseAPI.startTrial).mockResolvedValue({ ok: true } as Response);
       vi.mocked(LicenseAPI.getCommercialPosture).mockResolvedValue(mockCommercialPosture);
