@@ -4,6 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 RUNBOOK="${ROOT_DIR}/docs/operations/TRIAL_E2E_LXC_SNAPSHOT_RUNBOOK.md"
 PRICING_DOC="${ROOT_DIR}/docs/architecture/v6-pricing-and-tiering.md"
+UPGRADE_DOC="${ROOT_DIR}/docs/UPGRADE_v6.md"
 
 failures=0
 
@@ -41,7 +42,7 @@ assert_not_contains() {
 }
 
 main() {
-  local runbook_output pricing_output
+  local runbook_output pricing_output upgrade_output
   runbook_output="$(
     awk '
       /^## Contract Probe Script$/ { capture=1 }
@@ -51,6 +52,9 @@ main() {
   )"
   pricing_output="$(
     sed -n '368,386p' "${PRICING_DOC}"
+  )"
+  upgrade_output="$(
+    sed -n '112,128p' "${UPGRADE_DOC}"
   )"
 
   assert_contains "runbook references hosted trial probe script" "${runbook_output}" "tests/integration/scripts/trial-signup-contract.sh"
@@ -65,6 +69,11 @@ main() {
   assert_contains "pricing doc documents trial-rate-limited response" "${pricing_output}" "\`429 trial_rate_limited\`"
   assert_contains "pricing doc documents retry-after metadata" "${pricing_output}" "\`Retry-After\`"
   assert_not_contains "pricing doc no longer claims 24 hour limiter" "${pricing_output}" "24 hours"
+
+  assert_contains "upgrade guide keeps hosted-signup-only wording" "${upgrade_output}" "initiates hosted signup rather than minting a local trial directly"
+  assert_contains "upgrade guide documents retry burst" "${upgrade_output}" "retry burst"
+  assert_contains "upgrade guide documents trial-rate-limited response" "${upgrade_output}" "\`429 trial_rate_limited\`"
+  assert_contains "upgrade guide documents retry-after metadata" "${upgrade_output}" "\`Retry-After\`"
 
   if (( failures > 0 )); then
     echo "trial-signup docs smoke tests failed: ${failures}" >&2
