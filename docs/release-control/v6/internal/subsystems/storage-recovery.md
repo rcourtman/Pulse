@@ -230,30 +230,39 @@ querying, and the operator-facing storage health presentation layer.
    handoff. `frontend-modern/src/pages/Dashboard.tsx` may stay storage/recovery-
    owned for dashboard composition, but when no resources have reported yet it
    must route operators to `/settings/infrastructure/install` instead of
-8. Keep shared OIDC/SAML callback redirects on the canonical local-target helper
-   contract when storage- or recovery-adjacent routes inherit shared auth
-   browser handoff through `internal/api/`, so adjacent surfaces do not revive
-   per-handler absolute-target acceptance or raw `returnTo` concatenation.
    leaving the dashboard as a passive dead end.
-8. Keep dependent first-session reset behavior honest on the shared `internal/api/`
+8. Keep dashboard storage/recovery composition on the shared all-resources
+   snapshot. `frontend-modern/src/pages/Dashboard.tsx` may stay
+   storage/recovery-owned for dashboard widget composition, but it must reuse
+   the canonical `all-resources` cache key from
+   `frontend-modern/src/hooks/useUnifiedResources.ts` so storage/recovery
+   widgets do not fork a dashboard-only resource snapshot and force adjacent
+   infrastructure handoffs back through transient loading shells once the
+   broader dashboard data is already warm.
+9. Keep shared OIDC/SAML callback redirects on the canonical local-target
+   helper contract when storage- or recovery-adjacent routes inherit shared
+   auth browser handoff through `internal/api/`, so adjacent surfaces do not
+   revive per-handler absolute-target acceptance or raw `returnTo`
+   concatenation.
+10. Keep dependent first-session reset behavior honest on the shared `internal/api/`
    boundary: when `/api/security/dev/reset-first-run` is used to reopen the
    setup wizard in browser proof, the resulting status payload must genuinely
    expose unauthenticated setup so storage/recovery-owned empty-state and
    dashboard handoff proof does not silently fall back to an authenticated
    dashboard path.
-9. Keep recovery support claims aligned with
+11. Keep recovery support claims aligned with
    `docs/release-control/v6/internal/PLATFORM_SUPPORT_MODEL.md`. Forward-
    compatible provider strings are not support declarations by themselves, and
    a platform should be treated as recovery-capable only when that model marks
    recovery as part of its support floor and the owning ingest/projection path
    exists in the same governed slice.
-10. Keep runtime mock inventory on the same bounded support contract. When
+12. Keep runtime mock inventory on the same bounded support contract. When
     `/api/system/mock-mode` surfaces mock TrueNAS pools/datasets or mock
     VMware datastores through shared storage/recovery-adjacent pages, that
     data remains inventory-only context and must not be treated as proof of
     restore capability, recovery artifacts, or widened platform recovery
     support.
-11. Keep runtime mock platform context derived from one shared fixture graph.
+13. Keep runtime mock platform context derived from one shared fixture graph.
     When shared `internal/api/` and monitoring wiring surface mock
     storage/recovery-adjacent inventory or recovery artifacts, that data must
     come from the canonical `internal/mock/fixture_graph.go` owner so legacy

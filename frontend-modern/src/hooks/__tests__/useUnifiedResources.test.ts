@@ -727,6 +727,85 @@ describe('useUnifiedResources', () => {
     disposeSecond();
   });
 
+  it('seeds a narrower type-filtered cache from a fresh all-resources snapshot', async () => {
+    apiFetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        data: [
+          v2Resource,
+          {
+            ...v2Resource,
+            id: 'storage-1',
+            type: 'storage',
+            name: 'tank',
+          },
+        ],
+      }),
+    });
+
+    let disposeAll = () => {};
+    let allResources: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']> | undefined;
+    createRoot((d) => {
+      disposeAll = d;
+      allResources = useUnifiedResources({ query: '', cacheKey: 'all-resources' });
+    });
+
+    await flushAsync();
+    await waitForResourceCount(() => allResources!.resources().length, 2);
+    expect(apiFetchMock).toHaveBeenCalledTimes(1);
+
+    disposeAll();
+
+    let disposeFiltered = () => {};
+    let filtered: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']> | undefined;
+    createRoot((d) => {
+      disposeFiltered = d;
+      filtered = useUnifiedResources();
+    });
+
+    await flushAsync();
+    expect(apiFetchMock).toHaveBeenCalledTimes(1);
+    expect(filtered!.loading()).toBe(false);
+    expect(filtered!.resources().map((resource) => resource.id)).toEqual(['node-1']);
+
+    disposeFiltered();
+  });
+
+  it('treats an empty fresh snapshot as cacheable on remount', async () => {
+    apiFetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ data: [] }),
+    });
+
+    let disposeFirst = () => {};
+    let first: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']> | undefined;
+    createRoot((d) => {
+      disposeFirst = d;
+      first = useUnifiedResources();
+    });
+
+    await flushAsync();
+    await waitForValue(() => first!.loading(), false);
+    expect(apiFetchMock).toHaveBeenCalledTimes(1);
+    expect(first!.resources()).toEqual([]);
+
+    disposeFirst();
+
+    let disposeSecond = () => {};
+    let second: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']> | undefined;
+    createRoot((d) => {
+      disposeSecond = d;
+      second = useUnifiedResources();
+    });
+
+    await flushAsync();
+    expect(apiFetchMock).toHaveBeenCalledTimes(1);
+    expect(second!.loading()).toBe(false);
+    expect(second!.resources()).toEqual([]);
+
+    disposeSecond();
+  });
+
   it('coalesces burst websocket updates into a single delayed refetch', async () => {
     let dispose = () => {};
     createRoot((d) => {

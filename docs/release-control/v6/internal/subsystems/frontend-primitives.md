@@ -423,6 +423,13 @@ connections` visible as the API-backed alternative for Proxmox and
     `frontend-modern/src/components/shared/useUpgradeNavigation.ts` instead of
     guessing from labels, hardcoding `target="_blank"`, or calling
     `window.open(...)` from each feature surface.
+32. Keep same-shell infrastructure route transitions on retained shared state.
+    `frontend-modern/src/features/infrastructure/InfrastructurePageSurface.tsx`
+    may show its full-page loading shell only before the first compatible
+    resource snapshot exists; once a fresh canonical snapshot is already
+    present in the shared app shell, top-level tab switches must reuse that
+    state boundary instead of flashing a transient infrastructure page
+    takeover between tabs.
 
 ## Current State
 

@@ -263,6 +263,12 @@ assembly branch.
     provider-reported storage `pool` metadata alongside path and ZFS health so
     storage consumers do not have to recover backing-pool identity from names
     or path heuristics.
+17. Keep compatible unified-resource consumers on one shared snapshot truth.
+    `frontend-modern/src/hooks/useUnifiedResources.ts` may seed narrower
+    type-filtered consumers from a fresh `all-resources` snapshot when the
+    broader cache already reflects canonical resource truth, and fresh empty
+    snapshots must remain cacheable instead of regressing route handoffs back
+    to transient full-page loading shells.
 
 ## Current State
 

@@ -89,7 +89,10 @@ export function InfrastructurePageSurface() {
       <Show
         when={!loading() || initialLoadComplete()}
         fallback={
-          <div class="space-y-3 animate-pulse pointer-events-none select-none">
+          <div
+            data-testid="infrastructure-loading"
+            class="space-y-3 animate-pulse pointer-events-none select-none"
+          >
             <div class="hidden lg:block h-[124px] w-full bg-surface-alt rounded-md border border-border"></div>
             <Card padding="sm" class="h-[52px] bg-surface-alt"></Card>
             <Card padding="none" tone="card" class="h-[600px] overflow-hidden">

@@ -446,12 +446,14 @@ type APIListResponse = {
 
 type UnifiedResourcesCacheEntry = {
   resources: Resource[];
+  hasSnapshot: boolean;
   cachedAt: number;
   lastFetchAt: number;
   sharedFetch: Promise<Resource[]> | null;
 };
 
 const unifiedResourcesCaches = new Map<string, UnifiedResourcesCacheEntry>();
+const ALL_RESOURCES_CACHE_KEY = 'all-resources';
 
 const buildScopedUnifiedResourcesCacheKey = (cacheKey: string, orgScope: string): string =>
   `${encodeURIComponent(orgScope)}::${cacheKey}`;
@@ -734,6 +736,7 @@ const getUnifiedResourcesCacheEntry = (cacheKey: string): UnifiedResourcesCacheE
   }
   const created: UnifiedResourcesCacheEntry = {
     resources: [],
+    hasSnapshot: false,
     cachedAt: 0,
     lastFetchAt: 0,
     sharedFetch: null,
@@ -743,7 +746,7 @@ const getUnifiedResourcesCacheEntry = (cacheKey: string): UnifiedResourcesCacheE
 };
 
 const hasFreshUnifiedResourcesCache = (entry: UnifiedResourcesCacheEntry) =>
-  entry.resources.length > 0 && Date.now() - entry.cachedAt <= UNIFIED_RESOURCES_CACHE_MAX_AGE_MS;
+  entry.hasSnapshot && Date.now() - entry.cachedAt <= UNIFIED_RESOURCES_CACHE_MAX_AGE_MS;
 
 const setUnifiedResourcesCache = (
   entry: UnifiedResourcesCacheEntry,
@@ -751,7 +754,66 @@ const setUnifiedResourcesCache = (
   at = Date.now(),
 ) => {
   entry.resources = resources;
+  entry.hasSnapshot = true;
   entry.cachedAt = at;
+};
+
+const parseUnifiedResourcesTypeFilter = (query: string): Set<ResourceType> | null => {
+  const normalizedQuery = normalizeUnifiedResourcesQuery(query);
+  if (normalizedQuery === '') {
+    return null;
+  }
+
+  const params = new URLSearchParams(normalizedQuery);
+  const types = new Set<ResourceType>();
+
+  for (const [key, value] of params.entries()) {
+    if (key !== 'type') {
+      return null;
+    }
+
+    value
+      .split(',')
+      .map((candidate) => asTrimmedString(candidate))
+      .filter((candidate): candidate is string => candidate !== undefined)
+      .forEach((candidate) => {
+        types.add(canonicalizeFrontendResourceType(candidate));
+      });
+  }
+
+  return types.size > 0 ? types : null;
+};
+
+const seedUnifiedResourcesCacheFromAllResources = (
+  entry: UnifiedResourcesCacheEntry,
+  cacheKey: string,
+  query: string,
+  orgScope: string,
+) => {
+  if (entry.hasSnapshot || cacheKey === ALL_RESOURCES_CACHE_KEY) {
+    return entry;
+  }
+
+  const typeFilter = parseUnifiedResourcesTypeFilter(query);
+  if (!typeFilter) {
+    return entry;
+  }
+
+  const allResourcesEntry = getUnifiedResourcesCacheEntry(
+    buildScopedUnifiedResourcesCacheKey(ALL_RESOURCES_CACHE_KEY, orgScope),
+  );
+  if (!hasFreshUnifiedResourcesCache(allResourcesEntry)) {
+    return entry;
+  }
+
+  entry.resources = allResourcesEntry.resources.filter((resource) =>
+    typeFilter.has(canonicalizeFrontendResourceType(resource.type)),
+  );
+  entry.hasSnapshot = true;
+  entry.cachedAt = allResourcesEntry.cachedAt;
+  entry.lastFetchAt = allResourcesEntry.lastFetchAt;
+
+  return entry;
 };
 
 async function fetchUnifiedResources(query: string): Promise<Resource[]> {
@@ -823,7 +885,7 @@ export const getCachedUnifiedResources = (options?: {
   cacheKey?: string;
   orgID?: string | null;
 }): Resource[] => {
-  const cacheKey = (options?.cacheKey || 'all-resources').trim();
+  const cacheKey = (options?.cacheKey || ALL_RESOURCES_CACHE_KEY).trim();
   const scopedCacheKey = buildScopedUnifiedResourcesCacheKey(
     cacheKey,
     normalizeOrgScope(options?.orgID ?? getOrgID()),
@@ -841,9 +903,14 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
   const cacheKey = (options?.cacheKey || query || 'all').trim();
   const [orgScope, setOrgScope] = createSignal(normalizeOrgScope(getOrgID()));
   const resolveScopedCacheKey = () => buildScopedUnifiedResourcesCacheKey(cacheKey, orgScope());
-  let cacheEntry = getUnifiedResourcesCacheEntry(resolveScopedCacheKey());
+  let cacheEntry = seedUnifiedResourcesCacheFromAllResources(
+    getUnifiedResourcesCacheEntry(resolveScopedCacheKey()),
+    cacheKey,
+    query,
+    orgScope(),
+  );
   const initialResources = cacheEntry.resources;
-  const hasCachedResources = initialResources.length > 0;
+  const hasCachedResources = cacheEntry.hasSnapshot;
 
   const [resources, setResources] = createStore<Resource[]>(initialResources);
   const [loading, setLoading] = createSignal(!hasCachedResources);
@@ -882,7 +949,7 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
     }
 
     const shouldForceNetwork = force || source === 'ws';
-    const shouldShowLoading = force || (resources as unknown as Resource[]).length === 0;
+    const shouldShowLoading = force || !cacheEntry.hasSnapshot;
     if (shouldShowLoading) {
       setLoading(true);
     }
@@ -989,7 +1056,12 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
 
     scopeVersion += 1;
     setOrgScope(nextOrgScope);
-    cacheEntry = getUnifiedResourcesCacheEntry(resolveScopedCacheKey());
+    cacheEntry = seedUnifiedResourcesCacheFromAllResources(
+      getUnifiedResourcesCacheEntry(resolveScopedCacheKey()),
+      cacheKey,
+      query,
+      nextOrgScope,
+    );
     inFlightRefetch = null;
     wsInitialized = false;
     lastWsUpdateToken = '';
@@ -998,7 +1070,7 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
     batch(() => {
       setError(undefined);
       setResources(reconcile(scopedResources, { key: 'id' }));
-      setLoading(scopedResources.length === 0);
+      setLoading(!cacheEntry.hasSnapshot);
     });
 
     if (!hasFreshUnifiedResourcesCache(cacheEntry)) {

@@ -155,6 +155,7 @@ describe('Dashboard page module contract', () => {
       "from '@/components/Recovery/DashboardRecoveryStatusPanel'",
     );
     expect(dashboardPageSource).toContain("from '@/components/Storage/DashboardStoragePanel'");
+    expect(dashboardPageSource).toContain("cacheKey: 'all-resources'");
   });
 
   it('renders loading skeleton blocks when resources are loading', () => {

@@ -40,7 +40,7 @@ export default function Dashboard() {
   const { connected, reconnecting, reconnect, activeAlerts } = useWebSocket();
 
   // REST-backed resources: instant first paint, no WebSocket wait.
-  const dashboardResources = useUnifiedResources({ query: '', cacheKey: 'dashboard-all' });
+  const dashboardResources = useUnifiedResources({ query: '', cacheKey: 'all-resources' });
   const resources = createMemo(() => dashboardResources.resources?.() ?? []);
 
   const alertsList = createMemo<Alert[]>(() =>
