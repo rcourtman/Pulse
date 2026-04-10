@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
+	"github.com/rcourtman/pulse-go-rewrite/internal/mockruntime"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rs/zerolog/log"
 )
@@ -34,11 +35,13 @@ func init() {
 	mockConfig = loadedConfig
 	dataMu.Unlock()
 
-	initialEnabled := mockModeFromEnv()
+	initialEnabled := mockruntime.IsEnabled()
 	if initialEnabled {
 		log.Info().Msg("mock mode enabled at startup")
 	}
-	setEnabled(initialEnabled, true)
+	if err := setEnabled(initialEnabled, true); err != nil {
+		log.Warn().Err(err).Msg("failed to enable mock mode at startup")
+	}
 }
 
 // IsMockEnabled returns whether mock mode is enabled.
@@ -46,22 +49,43 @@ func IsMockEnabled() bool {
 	return enabled.Load()
 }
 
-// SetEnabled enables or disables mock mode.
-func SetEnabled(enable bool) {
-	setEnabled(enable, false)
+// ErrReleaseFixturesUnauthorized is returned when a release build attempts to
+// enable mock fixtures without an explicit entitled runtime authorization.
+var ErrReleaseFixturesUnauthorized = mockruntime.ErrReleaseFixturesUnauthorized
+
+// SetReleaseFixturesAuthorized sets whether the current runtime may enable mock
+// fixtures in a release build.
+func SetReleaseFixturesAuthorized(authorized bool) {
+	mockruntime.SetReleaseFixturesAuthorized(authorized)
 }
 
-func setEnabled(enable bool, fromInit bool) {
+// ValidateEnablement checks whether the current build/runtime may enter the
+// requested mock mode state.
+func ValidateEnablement(enable bool) error {
+	return mockruntime.ValidateEnablement(enable)
+}
+
+// SetEnabled enables or disables mock mode.
+func SetEnabled(enable bool) error {
+	return setEnabled(enable, false)
+}
+
+func setEnabled(enable bool, fromInit bool) error {
 	setEnabledMu.Lock()
 	defer setEnabledMu.Unlock()
 
 	current := enabled.Load()
 	if current == enable {
 		// Still update env so other processes see the latest value when not invoked from init.
-		if !fromInit {
+		if !fromInit && shouldSyncEnvFlag() {
 			setEnvFlag(enable)
 		}
-		return
+		mockruntime.SetEnabled(enable)
+		return nil
+	}
+
+	if err := mockruntime.ValidateEnablement(enable); err != nil {
+		return err
 	}
 
 	dataMu.RLock()
@@ -74,9 +98,13 @@ func setEnabled(enable bool, fromInit bool) {
 		disableMockMode()
 	}
 
-	if !fromInit {
+	mockruntime.SetEnabled(enable)
+
+	if !fromInit && shouldSyncEnvFlag() {
 		setEnvFlag(enable)
 	}
+
+	return nil
 }
 
 func setEnvFlag(enable bool) {

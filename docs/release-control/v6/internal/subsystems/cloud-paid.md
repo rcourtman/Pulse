@@ -245,6 +245,11 @@ is `rc`, but that shell copy must stay non-billing: it may link to release
 notes and feedback, yet it must not probe billing endpoints, expose licensed
 identity, or infer upgrade pressure from plan state just to explain the
 current prerelease.
+That same entitlement boundary also owns internal demo-fixture grants.
+`FeatureDemoFixtures` may be issued only for governed internal demo runtimes,
+must never join public tier defaults or pricing contracts, and must be
+filtered back out of browser-facing capability and entitlement payloads even
+when the runtime uses it to authorize release-build mock fixtures.
 That same browser/store boundary also owns typed non-billing commercial
 selectors. `frontend-modern/src/stores/licenseCommercial.ts` may interpret the
 commercial-posture payload once for browser consumers, but relay, Patrol,

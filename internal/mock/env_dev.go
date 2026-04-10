@@ -9,3 +9,5 @@ import "os"
 func mockModeFromEnv() bool {
 	return os.Getenv("PULSE_MOCK_MODE") == "true"
 }
+
+func shouldSyncEnvFlag() bool { return true }

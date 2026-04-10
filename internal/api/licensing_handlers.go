@@ -18,6 +18,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/crypto"
+	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rs/zerolog/log"
 )
@@ -47,6 +48,10 @@ const (
 // Empty string means revocation polling is disabled.
 func revocationFeedToken() string {
 	return os.Getenv("PULSE_REVOCATION_FEED_TOKEN")
+}
+
+func wantsMockFixturesFromEnv() bool {
+	return strings.EqualFold(strings.TrimSpace(os.Getenv("PULSE_MOCK_MODE")), "true")
 }
 
 // LicenseHandlers handles license management API endpoints.
@@ -506,6 +511,7 @@ func (h *LicenseHandlers) getTenantComponents(ctx context.Context) (*licenseServ
 		// But let's recreate it to be safe and stateless here.
 		// Actually, we need the EXACT persistence object if it holds state, but license.Persistence seems stateless (file I/O).
 		p, err := h.getPersistenceForOrg(orgID)
+		h.syncReleaseDemoFixtureRuntime(orgID, svc)
 		return svc, p, err
 	}
 
@@ -599,13 +605,61 @@ func (h *LicenseHandlers) getTenantComponents(ctx context.Context) (*licenseServ
 		h.syncLegacyGrandfatherReconcileOwnership(orgID, svc)
 		h.ensureHostedEntitlementRefreshForOrg(orgID, svc)
 		p, pErr := h.getPersistenceForOrg(orgID)
+		h.syncReleaseDemoFixtureRuntime(orgID, svc)
 		return svc, p, pErr
 	}
 
 	h.syncLegacyGrandfatherReconcileOwnership(orgID, service)
 	h.ensureHostedEntitlementRefreshForOrg(orgID, service)
+	h.syncReleaseDemoFixtureRuntime(orgID, service)
 
 	return service, persistence, nil
+}
+
+func (h *LicenseHandlers) demoFixturesAuthorized(service *licenseService) bool {
+	return h != nil &&
+		h.cfg != nil &&
+		h.cfg.DemoMode &&
+		service != nil &&
+		service.HasFeature(featureDemoFixturesValue)
+}
+
+func (h *LicenseHandlers) syncReleaseDemoFixtureRuntime(orgID string, service *licenseService) {
+	if strings.TrimSpace(orgID) == "" {
+		orgID = "default"
+	}
+	if orgID != "default" {
+		return
+	}
+
+	authorized := h.demoFixturesAuthorized(service)
+	mock.SetReleaseFixturesAuthorized(authorized)
+
+	if !authorized {
+		if h.monitor != nil {
+			if err := h.monitor.SetMockMode(false); err != nil {
+				log.Warn().Err(err).Str("org_id", orgID).Msg("Failed to disable unauthorized demo fixtures")
+			}
+		} else if err := mock.SetEnabled(false); err != nil {
+			log.Warn().Err(err).Str("org_id", orgID).Msg("Failed to disable unauthorized demo fixtures")
+		}
+		return
+	}
+
+	if !wantsMockFixturesFromEnv() {
+		return
+	}
+
+	if h.monitor != nil {
+		if err := h.monitor.SetMockMode(true); err != nil {
+			log.Warn().Err(err).Str("org_id", orgID).Msg("Failed to enable entitled demo fixtures")
+		}
+		return
+	}
+
+	if err := mock.SetEnabled(true); err != nil {
+		log.Warn().Err(err).Str("org_id", orgID).Msg("Failed to enable entitled demo fixtures")
+	}
 }
 
 func (h *LicenseHandlers) canonicalMonitoredSystemGrandfatherFloor(ctx context.Context) (int, bool) {
@@ -1347,6 +1401,8 @@ func (h *LicenseHandlers) activateLicenseKey(ctx context.Context, licenseKey str
 			Msg("Pulse license activated in development JWT mode")
 	}
 
+	h.syncReleaseDemoFixtureRuntime(orgID, service)
+
 	h.emitConversionEvent(orgID, conversionEvent{
 		Type:    conversionEventLicenseActivated,
 		Surface: "license_api",
@@ -1738,6 +1794,7 @@ func (h *LicenseHandlers) HandleClearLicense(w http.ResponseWriter, r *http.Requ
 	}
 
 	service.Clear()
+	h.syncReleaseDemoFixtureRuntime(GetOrgID(r.Context()), service)
 
 	orgID := GetOrgID(r.Context())
 	if orgID == "" {

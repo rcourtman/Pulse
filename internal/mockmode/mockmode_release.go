@@ -2,6 +2,8 @@
 
 package mockmode
 
-// IsEnabled always returns false in release builds.
-// The PULSE_MOCK_MODE env var is ignored to prevent mock behavior in production.
-func IsEnabled() bool { return false }
+import "github.com/rcourtman/pulse-go-rewrite/internal/mockruntime"
+
+// IsEnabled reports the canonical in-process mock runtime state. Release builds
+// still fail closed because only entitled demo runtimes may enable it.
+func IsEnabled() bool { return mockruntime.IsEnabled() }

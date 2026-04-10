@@ -352,6 +352,33 @@ func TestTierFeatureInheritance(t *testing.T) {
 	}
 }
 
+func TestPublicTierDefaultsNeverIncludeInternalCapabilities(t *testing.T) {
+	for tier, features := range TierFeatures {
+		for _, feature := range features {
+			if !CapabilityVisibleInPublicPayload(feature) {
+				t.Fatalf("TierFeatures[%q] leaked internal capability %q", tier, feature)
+			}
+		}
+	}
+}
+
+func TestFilterPublicCapabilitiesStripsInternalOnlyFeatures(t *testing.T) {
+	got := FilterPublicCapabilities([]string{
+		FeatureRelay,
+		FeatureDemoFixtures,
+		FeatureAIPatrol,
+	})
+	want := []string{FeatureRelay, FeatureAIPatrol}
+	if len(got) != len(want) {
+		t.Fatalf("FilterPublicCapabilities() len=%d, want %d (%v)", len(got), len(want), got)
+	}
+	for i, feature := range want {
+		if got[i] != feature {
+			t.Fatalf("FilterPublicCapabilities()[%d]=%q, want %q", i, got[i], feature)
+		}
+	}
+}
+
 func TestLimitsForCloudPlan_KnownPlans(t *testing.T) {
 	tests := []struct {
 		plan      string

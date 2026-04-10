@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -239,9 +240,25 @@ func (h *ConfigHandlers) handleUpdateMockMode(w http.ResponseWriter, r *http.Req
 
 	if req.Enabled != nil {
 		if h.getMonitor(r.Context()) != nil {
-			h.getMonitor(r.Context()).SetMockMode(*req.Enabled)
+			if err := h.getMonitor(r.Context()).SetMockMode(*req.Enabled); err != nil {
+				if errors.Is(err, mock.ErrReleaseFixturesUnauthorized) {
+					http.Error(w, "Mock fixtures require a demo-enabled entitlement on this release build", http.StatusForbidden)
+					return
+				}
+				log.Error().Err(err).Msg("Failed to update monitor mock mode")
+				http.Error(w, "Failed to update mock mode", http.StatusInternalServerError)
+				return
+			}
 		} else {
-			mock.SetEnabled(*req.Enabled)
+			if err := mock.SetEnabled(*req.Enabled); err != nil {
+				if errors.Is(err, mock.ErrReleaseFixturesUnauthorized) {
+					http.Error(w, "Mock fixtures require a demo-enabled entitlement on this release build", http.StatusForbidden)
+					return
+				}
+				log.Error().Err(err).Msg("Failed to update mock mode")
+				http.Error(w, "Failed to update mock mode", http.StatusInternalServerError)
+				return
+			}
 		}
 
 		h.stateMu.RLock()

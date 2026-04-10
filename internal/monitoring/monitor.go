@@ -3786,16 +3786,18 @@ func (m *Monitor) broadcastEscalatedAlert(hub *websocket.Hub, alert *alerts.Aler
 }
 
 // SetMockMode switches between mock data and real infrastructure data at runtime.
-func (m *Monitor) SetMockMode(enable bool) {
+func (m *Monitor) SetMockMode(enable bool) error {
 	current := mock.IsMockEnabled()
 	if current == enable {
 		log.Info().Bool("mockMode", enable).Msg("mock mode already in desired state")
-		return
+		return nil
 	}
 
 	if enable {
 		m.stopMockMetricsSampler()
-		mock.SetEnabled(true)
+		if err := mock.SetEnabled(true); err != nil {
+			return err
+		}
 		m.alertManager.ClearActiveAlerts()
 		m.mu.Lock()
 		m.resetStateLocked()
@@ -3811,7 +3813,9 @@ func (m *Monitor) SetMockMode(enable bool) {
 		log.Info().Msg("switched monitor to mock mode")
 	} else {
 		m.stopMockMetricsSampler()
-		mock.SetEnabled(false)
+		if err := mock.SetEnabled(false); err != nil {
+			return err
+		}
 		m.alertManager.ClearActiveAlerts()
 		m.mu.Lock()
 		m.resetStateLocked()
@@ -3843,6 +3847,8 @@ func (m *Monitor) SetMockMode(enable bool) {
 			go m.StartDiscoveryService(ctx, hub, m.config.DiscoverySubnet)
 		}
 	}
+
+	return nil
 }
 
 func (m *Monitor) resetStateLocked() {

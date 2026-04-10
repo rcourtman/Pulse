@@ -527,6 +527,12 @@ contract for real customer workspaces, and `/api/license/entitlements`
 remains billing-only. New callers must extend one of those owned shapes
 instead of reviving a combined entitlement payload for mixed runtime,
 commercial, and billing concerns.
+That same shared licensing contract also owns internal runtime-only
+capabilities. Release demo runtimes may use the internal `demo_fixtures`
+entitlement to authorize mock fixture data and `/api/system/mock-mode`
+transitions, but browser-facing entitlement and runtime payloads must filter
+that capability back out so public callers never learn or depend on internal
+demo-fixture grants.
 That same shared API contract now also owns browser-proofed read separation.
 Non-billing browser journeys such as
 `tests/integration/tests/11-first-session.spec.ts`,

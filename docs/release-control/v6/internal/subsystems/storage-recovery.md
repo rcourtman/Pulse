@@ -195,6 +195,11 @@ querying, and the operator-facing storage health presentation layer.
     must treat the resulting activation-state callback as commercial ownership
     cleanup only, not as protected-inventory proof or recovery entitlement
     state.
+    That same adjacent commercial boundary also owns internal demo-fixture
+    capability handling: storage and recovery may render the resulting demo
+    runtime as populated mock inventory, but they must not expose
+    `demo_fixtures`, billing identity, or alternate entitlement semantics as
+    recovery-local transport or operator-facing storage metadata.
 
 ## Forbidden Paths
 

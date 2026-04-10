@@ -152,6 +152,12 @@ running server, the live TrueNAS and VMware provider bindings must swap to the
 mock-backed supplemental records and refresh canonical read-state immediately
 instead of waiting for a process restart before shared resource consumers can
 see the platform inventory.
+That same runtime boundary also owns authorization order for demo toggles.
+`internal/monitoring/monitor.go` must not clear alerts, reset runtime state,
+or restart discovery until the canonical mock runtime has accepted the
+requested mode change; rejected release-demo fixture enables must fail before
+any monitoring reset so the live preview does not blank itself on an
+unauthorized toggle.
 That same mock-runtime boundary also owns freshness while demos are running.
 The mock update loop must keep provider-backed TrueNAS and VMware records plus
 legacy PBS and PMG summaries on current `LastSeen` and health state each tick,

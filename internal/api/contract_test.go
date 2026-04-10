@@ -5990,6 +5990,9 @@ func TestContract_DemoModeCommercialSurfacePolicy(t *testing.T) {
 		if len(payload.Capabilities) == 0 {
 			t.Fatalf("expected sanitized runtime capabilities to preserve capabilities, got %+v", payload)
 		}
+		if sliceContainsString(payload.Capabilities, pkglicensing.FeatureDemoFixtures) {
+			t.Fatalf("public demo runtime capabilities leaked internal feature %q: %v", pkglicensing.FeatureDemoFixtures, payload.Capabilities)
+		}
 		for _, limit := range payload.Limits {
 			if limit.Limit != 0 || limit.Current != 0 || limit.State != "ok" {
 				t.Fatalf("sanitized limit=%+v, want limit=0 current=0 state=ok", limit)

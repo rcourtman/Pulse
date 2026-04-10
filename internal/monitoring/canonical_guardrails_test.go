@@ -355,6 +355,24 @@ func TestMockOwnedUnifiedMetricSyncDefersToCanonicalSamplerInMockMode(t *testing
 	}
 }
 
+func TestMonitorSetMockModeAuthorizesBeforeResettingRuntimeState(t *testing.T) {
+	data, err := os.ReadFile("monitor.go")
+	if err != nil {
+		t.Fatalf("failed to read monitor.go: %v", err)
+	}
+	source := string(data)
+	requiredSnippets := []string{
+		"if err := mock.SetEnabled(true); err != nil {",
+		"if err := mock.SetEnabled(false); err != nil {",
+		"return err",
+	}
+	for _, snippet := range requiredSnippets {
+		if !strings.Contains(source, snippet) {
+			t.Fatalf("monitor.go must contain %q", snippet)
+		}
+	}
+}
+
 func TestConnectedInfrastructureUsesSharedTopLevelSystemResolver(t *testing.T) {
 	data, err := os.ReadFile("connected_infrastructure.go")
 	if err != nil {

@@ -38,6 +38,10 @@ const (
 	FeatureWhiteLabel  = "white_label"  // Custom branding - NOT IMPLEMENTED YET
 	FeatureMultiTenant = "multi_tenant" // Multi-tenant organizations
 	FeatureUnlimited   = "unlimited"    // Unlimited instances (for MSP/volume deals)
+
+	// Internal-only runtime capabilities. These must never be added to public
+	// tier defaults or public pricing contracts.
+	FeatureDemoFixtures = "demo_fixtures" // Allows release builds in DEMO_MODE to render mock fixture data
 )
 
 // Tier represents a license tier.
@@ -355,6 +359,33 @@ func TierHasFeature(tier Tier, feature string) bool {
 	return false
 }
 
+// CapabilityVisibleInPublicPayload reports whether a capability key belongs in
+// browser-facing entitlement and runtime payload contracts.
+func CapabilityVisibleInPublicPayload(feature string) bool {
+	switch feature {
+	case FeatureDemoFixtures:
+		return false
+	default:
+		return true
+	}
+}
+
+// FilterPublicCapabilities strips internal-only capability keys from public API
+// payload contracts while preserving caller order for visible features.
+func FilterPublicCapabilities(features []string) []string {
+	if len(features) == 0 {
+		return []string{}
+	}
+
+	filtered := make([]string, 0, len(features))
+	for _, feature := range features {
+		if CapabilityVisibleInPublicPayload(feature) {
+			filtered = append(filtered, feature)
+		}
+	}
+	return filtered
+}
+
 // GetTierDisplayName returns a human-readable name for the tier.
 func GetTierDisplayName(tier Tier) string {
 	switch tier {
@@ -417,6 +448,8 @@ func GetFeatureDisplayName(feature string) string {
 		return "Multi-Tenant Mode"
 	case FeatureUnlimited:
 		return "Unlimited Instances"
+	case FeatureDemoFixtures:
+		return "Demo Fixtures (Internal)"
 	case FeatureAgentProfiles:
 		return "Centralized Agent Profiles"
 	case FeatureAuditLogging:

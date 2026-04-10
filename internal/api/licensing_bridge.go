@@ -71,6 +71,7 @@ const (
 	featureRBACValue                  = pkglicensing.FeatureRBAC
 	featureAdvancedReportingValue     = pkglicensing.FeatureAdvancedReporting
 	featureLongTermMetricsValue       = pkglicensing.FeatureLongTermMetrics
+	featureDemoFixturesValue          = pkglicensing.FeatureDemoFixtures
 	maxMonitoredSystemsLicenseGateKey = pkglicensing.MaxMonitoredSystemsLicenseGateKey
 	maxUsersLicenseGateKey            = pkglicensing.MaxUsersLicenseGateKey
 	subscriptionStateActiveValue      = pkglicensing.SubStateActive

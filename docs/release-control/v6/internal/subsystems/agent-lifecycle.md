@@ -228,6 +228,11 @@ an add-only capacity posture.
     code must treat the resulting activation-state callback as commercial
     ownership cleanup only, not as install inventory proof or fleet enrollment
     state.
+    That same adjacent commercial boundary also owns internal demo-fixture
+    grants: lifecycle surfaces may observe that a governed demo runtime is
+    fixture-backed, but they must not mint, echo, or infer the internal
+    `demo_fixtures` capability through install/setup payloads or installer
+    heuristics.
     The same lifecycle-adjacent platform-connections boundary also assumes
     direct TrueNAS and VMware connection writes fail closed when canonical
     monitored-system usage is unavailable. Shared `internal/api/` admission

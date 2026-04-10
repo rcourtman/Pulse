@@ -8,6 +8,15 @@ import (
 	"time"
 )
 
+func containsString(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
+}
+
 func TestBuildEntitlementPayload_ActiveLicense(t *testing.T) {
 	status := &LicenseStatus{
 		Valid:               true,
@@ -40,6 +49,29 @@ func TestBuildEntitlementPayload_ActiveLicense(t *testing.T) {
 	}
 	if len(payload.UpgradeReasons) != 0 {
 		t.Fatalf("expected no upgrade reasons for pro tier, got %d", len(payload.UpgradeReasons))
+	}
+}
+
+func TestBuildEntitlementPayload_StripsInternalOnlyCapabilities(t *testing.T) {
+	status := &LicenseStatus{
+		Valid: true,
+		Tier:  TierEnterprise,
+		Features: []string{
+			FeatureRelay,
+			FeatureDemoFixtures,
+			FeatureMultiTenant,
+		},
+	}
+
+	payload := BuildEntitlementPayload(status, "")
+	if reflect.DeepEqual(payload.Capabilities, status.Features) {
+		t.Fatalf("expected payload capabilities to filter internal-only features, got %v", payload.Capabilities)
+	}
+	if containsString(payload.Capabilities, FeatureDemoFixtures) {
+		t.Fatalf("payload capabilities leaked internal feature %q: %v", FeatureDemoFixtures, payload.Capabilities)
+	}
+	if !containsString(payload.Capabilities, FeatureRelay) || !containsString(payload.Capabilities, FeatureMultiTenant) {
+		t.Fatalf("payload capabilities lost public features: %v", payload.Capabilities)
 	}
 }
 
@@ -452,6 +484,26 @@ func TestBuildRuntimeCapabilitiesPayloadWithUsage_CurrentValues(t *testing.T) {
 	}
 	if payload.Limits[0].CurrentAvailable == nil || !*payload.Limits[0].CurrentAvailable {
 		t.Fatalf("expected runtime current availability true, got %+v", payload.Limits[0].CurrentAvailable)
+	}
+}
+
+func TestBuildRuntimeCapabilitiesPayloadWithUsage_StripsInternalOnlyCapabilities(t *testing.T) {
+	status := &LicenseStatus{
+		Valid: true,
+		Tier:  TierEnterprise,
+		Features: []string{
+			FeatureRelay,
+			FeatureDemoFixtures,
+		},
+		MaxMonitoredSystems: 12,
+	}
+
+	payload := BuildRuntimeCapabilitiesPayloadWithUsage(status, "", EntitlementUsageSnapshot{})
+	if containsString(payload.Capabilities, FeatureDemoFixtures) {
+		t.Fatalf("runtime capabilities leaked internal feature %q: %v", FeatureDemoFixtures, payload.Capabilities)
+	}
+	if !containsString(payload.Capabilities, FeatureRelay) {
+		t.Fatalf("runtime capabilities lost public feature %q: %v", FeatureRelay, payload.Capabilities)
 	}
 }
 

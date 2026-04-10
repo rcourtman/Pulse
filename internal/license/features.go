@@ -25,6 +25,7 @@ const (
 	FeatureWhiteLabel        = licensing.FeatureWhiteLabel
 	FeatureMultiTenant       = licensing.FeatureMultiTenant
 	FeatureUnlimited         = licensing.FeatureUnlimited
+	FeatureDemoFixtures      = licensing.FeatureDemoFixtures
 )
 
 // Tier represents a license tier.
