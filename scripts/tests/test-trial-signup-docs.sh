@@ -10,6 +10,7 @@ EVAL_TASK_DOC="${ROOT_DIR}/tests/integration/evals/tasks/trial-signup.md"
 EVAL_SCENARIOS_DOC="${ROOT_DIR}/tests/integration/evals/scenarios.json"
 SOURCE_OF_TRUTH_DOC="${ROOT_DIR}/docs/release-control/v6/internal/SOURCE_OF_TRUTH.md"
 MIGRATION_AUDIT_DOC="${ROOT_DIR}/docs/release-control/v6/internal/V5_TO_V6_COMMERCIAL_MIGRATION_AUDIT_2026-03-07.md"
+HIGH_RISK_MATRIX_DOC="${ROOT_DIR}/docs/release-control/v6/internal/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md"
 
 TRIAL_SIGNUP_REFERENCE_PATTERN='(/api/license/trial/start|trial_signup_required|trial_rate_limited)'
 
@@ -20,6 +21,7 @@ OPERATOR_DOCS=(
   "${INTEGRATION_README}"
   "${EVAL_TASK_DOC}"
   "${EVAL_SCENARIOS_DOC}"
+  "${HIGH_RISK_MATRIX_DOC}"
 )
 
 TRACKED_REFERENCE_DOCS=()
@@ -112,7 +114,7 @@ assert_forbidden_patterns_absent() {
 
 main() {
   local runbook_output pricing_output upgrade_output integration_output eval_task_output
-  local eval_scenarios_output
+  local eval_scenarios_output high_risk_matrix_output
   local source_of_truth_output migration_audit_output
   local operator_doc
 
@@ -145,6 +147,9 @@ main() {
   )"
   eval_scenarios_output="$(
     sed -n '24,34p' "${EVAL_SCENARIOS_DOC}"
+  )"
+  high_risk_matrix_output="$(
+    sed -n '44,54p' "${HIGH_RISK_MATRIX_DOC}"
   )"
   source_of_truth_output="$(
     sed -n '412,420p' "${SOURCE_OF_TRUTH_DOC}"
@@ -185,6 +190,11 @@ main() {
   assert_contains "eval scenario documents hosted-signup redirect code" "${eval_scenarios_output}" "409 trial_signup_required"
   assert_contains "eval scenario documents canonical trial-rate-limited response" "${eval_scenarios_output}" "429 trial_rate_limited"
   assert_contains "eval scenario documents retry-after metadata" "${eval_scenarios_output}" "Retry-After"
+
+  assert_contains "high-risk matrix documents trial-start route" "${high_risk_matrix_output}" "POST /api/license/trial/start"
+  assert_contains "high-risk matrix documents hosted-signup redirect code" "${high_risk_matrix_output}" "trial_signup_required"
+  assert_contains "high-risk matrix documents canonical trial-rate-limited response" "${high_risk_matrix_output}" "trial_rate_limited"
+  assert_contains "high-risk matrix documents retry-after metadata" "${high_risk_matrix_output}" "Retry-After"
 
   assert_contains "source of truth keeps hosted-signup-only contract" "${source_of_truth_output}" "must initiate hosted signup only"
   assert_contains "source of truth forbids local trial minting" "${source_of_truth_output}" "must not mint local trial"

@@ -608,7 +608,10 @@ operator-facing docs so it stays inside the discovered set instead of relying
 on a special-case assertion path. The `trial-signup` entry in
 `tests/integration/evals/scenarios.json` must now carry those same anchors too,
 so eval-pack metadata cannot silently drift away from the canonical hosted
-handoff contract while the task file stays correct.
+handoff contract while the task file stays correct. The release-control
+high-risk verification matrix must carry those same anchors for the
+`tests/07-trial-signup-return.spec.ts` browser proof, so the RC packet cannot
+describe trial-start verification through an unanchored summary path.
 Hosted tenant organization seeding and hosted handoff role mapping now belong
 to the same cloud-paid truth too. `internal/cloudcp/stripe/provisioner.go`
 must seed tenant org members from the shared account-role-to-organization-role
