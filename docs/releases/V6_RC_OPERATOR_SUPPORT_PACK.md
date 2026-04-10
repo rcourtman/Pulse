@@ -129,10 +129,13 @@ RC:
 
 That posture lets users explore v6 without confusing the stable story or
 creating the impression that the v5 demo silently changed underneath them.
+Use `docs/releases/V6_RC_DEMO_SITE_COPY.md` as the canonical public wording for
+that switch, the preview helper text, and the in-demo banner.
 
 ## Canonical References
 
 - `docs/UPGRADE_v6.md`
 - `docs/releases/RELEASE_NOTES_v6.md`
+- `docs/releases/V6_RC_DEMO_SITE_COPY.md`
 - `docs/MIGRATION_UNIFIED_NAV.md`
 - `docs/PULSE_PRO.md`
