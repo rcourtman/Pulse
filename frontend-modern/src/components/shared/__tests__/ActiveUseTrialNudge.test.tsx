@@ -52,13 +52,6 @@ vi.mock('@/utils/snooze', () => ({
   snoozeUpsell: (...args: unknown[]) => snoozeUpsellMock(...args),
 }));
 
-vi.mock('@/utils/upgradePresentation', () => ({
-  getProTrialStartedMessage: () => 'Pro trial started',
-  getTrialAlreadyUsedMessage: () => 'Trial already used',
-  getTrialStartErrorMessage: () => 'Trial start failed',
-  getTrialTryAgainLaterMessage: () => 'Try again later',
-}));
-
 import { ActiveUseTrialNudge } from '@/components/shared/ActiveUseTrialNudge';
 
 function setEligibleFreeLicense() {
@@ -167,5 +160,28 @@ describe('ActiveUseTrialNudge', () => {
       expect(startProTrialMock).toHaveBeenCalledTimes(1);
     });
     expect(showSuccessMock).toHaveBeenCalledWith('Pro trial started');
+  });
+
+  it('shows retry-after guidance when trial start is rate limited', async () => {
+    setEligibleFreeLicense();
+    startProTrialMock.mockRejectedValue(
+      Object.assign(new Error('rate limited'), {
+        status: 429,
+        retryAfterSeconds: 120,
+      }),
+    );
+    localStorage.setItem(
+      ACTIVE_USE_TRIAL_NUDGE_FIRST_SEEN_KEY,
+      String(Date.now() - ACTIVE_USE_TRIAL_NUDGE_MIN_AGE_MS - 1),
+    );
+
+    render(() => <ActiveUseTrialNudge />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Start 14-day trial' }));
+
+    await waitFor(() => {
+      expect(startProTrialMock).toHaveBeenCalledTimes(1);
+    });
+    expect(showErrorMock).toHaveBeenCalledWith('Try again in about 2 minutes');
   });
 });

@@ -427,6 +427,43 @@ describe('RelayOnboardingCard', () => {
       }
     });
 
+    it('shows retry-after guidance and does not redirect when trial is rate limited', async () => {
+      setupWithoutRelayFeature();
+      startProTrialMock.mockRejectedValue(
+        Object.assign(new Error('rate limited'), {
+          status: 429,
+          retryAfterSeconds: 120,
+        }),
+      );
+
+      const originalLocation = window.location;
+      Object.defineProperty(window, 'location', {
+        writable: true,
+        value: { ...originalLocation, href: '' },
+      });
+
+      try {
+        render(() => <RelayOnboardingCard />);
+
+        await waitFor(() => {
+          expect(screen.getByText(/or start a Pro trial/)).toBeInTheDocument();
+        });
+
+        fireEvent.click(screen.getByText(/or start a Pro trial/));
+
+        await waitFor(() => {
+          expect(showErrorMock).toHaveBeenCalledWith('Try again in about 2 minutes');
+        });
+
+        expect(window.location.href).toBe('');
+      } finally {
+        Object.defineProperty(window, 'location', {
+          writable: true,
+          value: originalLocation,
+        });
+      }
+    });
+
     it('prevents duplicate trial starts on rapid double-click', async () => {
       setupWithoutRelayFeature();
       // Never-resolving promise to keep trial in progress
