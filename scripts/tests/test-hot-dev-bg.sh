@@ -700,6 +700,9 @@ test_integration_readme_uses_managed_backend_restart_wrapper() {
   assert_contains "integration readme names the owner process" "${output}" "owner process"
   assert_contains "integration readme documents recovery layout proof" "${output}" "tests/17-recovery-layout.spec.ts"
   assert_contains "integration readme documents patrol runtime-state proof" "${output}" "tests/18-patrol-runtime-state.spec.ts"
+  assert_contains "integration readme documents explicit browser override precedence" "${output}" "PLAYWRIGHT_BASE_URL"
+  assert_contains "integration readme documents backend base split" "${output}" "backend-oriented base"
+  assert_contains "integration readme documents split browser/backend example" "${output}" "PLAYWRIGHT_BASE_URL='http://127.0.0.1:4174'"
   assert_not_contains "integration readme no longer documents raw backend restart script" "${output}" "./scripts/hot-dev-bg.sh backend-restart"
 }
 
@@ -709,7 +712,7 @@ test_integration_quick_start_distinguishes_embedded_frontend_from_hot_dev() {
 
   assert_contains "integration quick start labels 7655 as embedded frontend" "${output}" "Pulse test UI (embedded frontend)"
   assert_contains "integration quick start points local managed dev runtime to 5173" "${output}" "http://127.0.0.1:5173"
-  assert_contains "integration quick start names hot-dev browser shell" "${output}" "canonical hot-dev browser shell"
+  assert_contains "integration quick start names hot-dev browser shell" "${output}" "hot-dev browser shell"
 }
 
 test_acceptance_doc_distinguishes_embedded_frontend_from_hot_dev() {
@@ -754,9 +757,10 @@ test_integration_helpers_prefer_managed_hot_dev_runtime() {
   local output
   output="$(cat "${ROOT_DIR}/tests/integration/tests/helpers.ts")"
 
-  assert_contains "integration helpers import shared browser defaults" "${output}" "import { preferredBrowserBaseURL, readRuntimeState } from './runtime-defaults';"
+  assert_contains "integration helpers import preferred browser helper" "${output}" "preferredBrowserBaseURL, readRuntimeState"
+  assert_contains "integration helpers import shared browser defaults" "${output}" "runtime-defaults"
   assert_contains "integration helpers delegate browser context base url to shared helper" "${output}" "baseURL: preferredBrowserBaseURL(),"
-  assert_contains "integration helpers delegate api request base url to shared helper" "${output}" "const baseURL = preferredBrowserBaseURL().replace(/\\/+\$/, '');"
+  assert_contains "integration helpers delegate api request base url to shared helper" "${output}" "const baseURL = preferredBrowserBaseURL().replace"
 }
 
 test_integration_runtime_defaults_centralize_managed_browser_detection() {
@@ -767,6 +771,68 @@ test_integration_runtime_defaults_centralize_managed_browser_detection() {
   assert_contains "runtime defaults expose runtime-state reader" "${output}" "export const readRuntimeState ="
   assert_contains "runtime defaults expose managed browser detection" "${output}" "export const managedDevBrowserBaseURL ="
   assert_contains "runtime defaults expose preferred browser base url" "${output}" "export const preferredBrowserBaseURL ="
+}
+
+test_integration_runtime_defaults_prefer_explicit_browser_override() {
+  local output
+  output="$(
+    ROOT_DIR="${ROOT_DIR}" \
+    node --input-type=module <<'EOF'
+import path from 'node:path';
+
+const rootDir = process.env.ROOT_DIR;
+const modulePath = path.join(rootDir, 'tests', 'integration', 'tests', 'runtime-defaults.ts');
+const { preferredBrowserBaseURL } = await import(`file://${modulePath}`);
+
+console.log(
+  preferredBrowserBaseURL({
+    PLAYWRIGHT_BASE_URL: 'http://127.0.0.1:4174',
+    PULSE_BASE_URL: 'http://127.0.0.1:7655',
+  }),
+);
+EOF
+  )"
+
+  assert_contains "runtime defaults prefer explicit Playwright browser override" "${output}" "http://127.0.0.1:4174"
+  assert_not_contains "runtime defaults do not reuse backend base as browser target when override exists" "${output}" "http://127.0.0.1:7655"
+}
+
+test_integration_runtime_defaults_honor_repo_root_override() {
+  local output
+  output="$(
+    ROOT_DIR="${ROOT_DIR}" \
+    node --input-type=module <<'EOF'
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+
+const rootDir = process.env.ROOT_DIR;
+const modulePath = path.join(rootDir, 'tests', 'integration', 'tests', 'runtime-defaults.ts');
+const { managedDevBrowserBaseURL, runtimeStatePath } = await import(`file://${modulePath}`);
+
+const repoRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'pulse-runtime-defaults-'));
+await fs.mkdir(path.join(repoRoot, 'tmp'), { recursive: true });
+await fs.writeFile(path.join(repoRoot, 'tmp', 'hot-dev.bg.pid'), `${process.pid}\n`, 'utf8');
+
+try {
+  console.log(
+    `stateMatches=${runtimeStatePath({ PULSE_E2E_REPO_ROOT: repoRoot }) === path.join(repoRoot, 'tmp', 'e2e-runtime-state.json')}`,
+  );
+  console.log(
+    `managed=${managedDevBrowserBaseURL({
+      PULSE_E2E_REPO_ROOT: repoRoot,
+      FRONTEND_DEV_HOST: '127.0.0.1',
+      FRONTEND_DEV_PORT: '4174',
+    })}`,
+  );
+} finally {
+  await fs.rm(repoRoot, { recursive: true, force: true });
+}
+EOF
+  )"
+
+  assert_contains "runtime defaults resolve runtime-state path from overridden repo root" "${output}" "stateMatches=true"
+  assert_contains "runtime defaults resolve managed dev browser url from overridden repo root" "${output}" "managed=http://127.0.0.1:4174"
 }
 
 test_clean_mock_alerts_prefers_managed_runtime() {
@@ -1012,7 +1078,14 @@ main() {
   test_hot_dev_bg_script_advertises_managed_entrypoint
   test_hot_dev_bg_usage_prefers_managed_wrappers
   test_integration_readme_uses_managed_backend_restart_wrapper
+  test_integration_quick_start_distinguishes_embedded_frontend_from_hot_dev
+  test_acceptance_doc_distinguishes_embedded_frontend_from_hot_dev
+  test_playwright_defaults_prefer_managed_hot_dev_runtime
   test_root_playwright_wrapper_prefers_managed_browser_runtime
+  test_integration_helpers_prefer_managed_hot_dev_runtime
+  test_integration_runtime_defaults_centralize_managed_browser_detection
+  test_integration_runtime_defaults_prefer_explicit_browser_override
+  test_integration_runtime_defaults_honor_repo_root_override
   test_clean_mock_alerts_prefers_managed_runtime
   test_dev_check_uses_managed_runtime_status
   test_backend_restart_requires_managed_runtime

@@ -3,8 +3,6 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const repoRoot = path.resolve(__dirname, '..', '..', '..');
-const managedHotDevPidPath = path.join(repoRoot, 'tmp', 'hot-dev.bg.pid');
 
 export type RuntimeState = {
   baseURL?: string;
@@ -13,12 +11,20 @@ export type RuntimeState = {
 
 const trim = (value: unknown): string => String(value ?? '').trim();
 
+const repoRootFromEnv = (env: NodeJS.ProcessEnv = process.env): string =>
+  trim(env.PULSE_E2E_REPO_ROOT) || path.resolve(__dirname, '..', '..', '..');
+
+const managedHotDevPidPath = (env: NodeJS.ProcessEnv = process.env): string =>
+  path.join(repoRootFromEnv(env), 'tmp', 'hot-dev.bg.pid');
+
 export const runtimeStatePath = (env: NodeJS.ProcessEnv = process.env): string => {
   const configuredPath = trim(env.PULSE_E2E_RUNTIME_STATE_PATH);
   if (configuredPath === '') {
-    return path.resolve(repoRoot, 'tmp', 'e2e-runtime-state.json');
+    return path.resolve(repoRootFromEnv(env), 'tmp', 'e2e-runtime-state.json');
   }
-  return path.isAbsolute(configuredPath) ? configuredPath : path.resolve(repoRoot, configuredPath);
+  return path.isAbsolute(configuredPath)
+    ? configuredPath
+    : path.resolve(repoRootFromEnv(env), configuredPath);
 };
 
 export const readRuntimeState = (
@@ -45,7 +51,7 @@ export const managedDevBrowserBaseURL = (
   env: NodeJS.ProcessEnv = process.env,
 ): string | null => {
   try {
-    const pid = Number.parseInt(fs.readFileSync(managedHotDevPidPath, 'utf8').trim(), 10);
+    const pid = Number.parseInt(fs.readFileSync(managedHotDevPidPath(env), 'utf8').trim(), 10);
     if (!Number.isInteger(pid) || pid <= 0) {
       return null;
     }
@@ -61,8 +67,8 @@ export const managedDevBrowserBaseURL = (
 export const preferredBrowserBaseURL = (
   env: NodeJS.ProcessEnv = process.env,
 ): string =>
-  trim(env.PULSE_BASE_URL) ||
   trim(env.PLAYWRIGHT_BASE_URL) ||
+  trim(env.PULSE_BASE_URL) ||
   loadRuntimeBaseURL(env) ||
   managedDevBrowserBaseURL(env) ||
   'http://localhost:7655';

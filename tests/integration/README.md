@@ -149,6 +149,20 @@ npm test -- tests/16-dev-runtime-recovery.spec.ts tests/17-recovery-layout.spec.
 This mode attaches Playwright to the canonical dev browser entrypoint on `http://127.0.0.1:5173`, uses the repo-root managed runtime wrappers as the control surface, and writes browser runtime connection state for Playwright instead of targeting the backend port directly. Those wrappers are backed by `scripts/hot-dev-bg.sh`, but the wrapper surface is the canonical operator contract.
 When you run the wrapper as `npm run dev:verify`, the managed launcher hands a verification-lock path into the integration runner, and the runner holds that lock for the actual pretest, Playwright, and posttest lifetime so unrelated backend source churn does not invalidate the recovery proofs mid-run.
 When no explicit `PULSE_BASE_URL`, `PLAYWRIGHT_BASE_URL`, or runtime-state file is present, the shared integration browser-default helper now prefers the managed hot-dev browser shell on `http://127.0.0.1:5173` whenever `hot-dev-bg` is already running, and only falls back to the embedded frontend on `:7655` when there is no managed dev session to attach to.
+When both are set, `PLAYWRIGHT_BASE_URL` now wins for the browser target while
+`PULSE_BASE_URL` remains the backend-oriented base for pretest health checks,
+explicit API helpers, and non-browser setup work. Use that split when you need
+Playwright on fresh frontend code but still want backend provisioning or
+health checks against the canonical Pulse API port.
+
+Example:
+```bash
+cd tests/integration
+PULSE_E2E_SKIP_DOCKER=1 \
+PULSE_BASE_URL='http://127.0.0.1:7655' \
+PLAYWRIGHT_BASE_URL='http://127.0.0.1:4174' \
+npm test -- tests/30-setup-platform-connections-handoff.spec.ts --project=chromium
+```
 
 If the managed runtime is not already running, the harness starts it. If you need the harness to reclaim existing unmanaged `5173`/`7655` listeners first, add `PULSE_E2E_HOT_DEV_TAKEOVER=1`.
 

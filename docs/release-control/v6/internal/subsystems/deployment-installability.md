@@ -109,7 +109,13 @@ server-side update execution surfaces.
    browser base URL precedence so repo-root browser proofs attach to the live
    managed hot-dev shell or runtime-state browser URL instead of silently
    falling back to the embedded `:7655` frontend when a managed browser shell
-   is already the active truth.
+   is already the active truth. When both `PLAYWRIGHT_BASE_URL` and
+   `PULSE_BASE_URL` are present, browser attachment must prefer
+   `PLAYWRIGHT_BASE_URL` while backend-oriented setup and health helpers may
+   still use `PULSE_BASE_URL`. That shared helper must also honor
+   `PULSE_E2E_REPO_ROOT` for runtime-state and managed-session discovery so
+   isolated verification harnesses can relocate managed runtime state without
+   mutating the live repo root.
 
 ## Current State
 
@@ -440,6 +446,11 @@ explicit base URL, runtime-state file, and any active managed `hot-dev`
 session. If `hot-dev-bg` is already running, ad hoc Playwright/browser helpers
 must prefer the managed shell on `http://127.0.0.1:5173` instead of silently
 teaching the backend port as the default local browser target.
+When both `PLAYWRIGHT_BASE_URL` and `PULSE_BASE_URL` are set, the shared
+browser helper must treat `PLAYWRIGHT_BASE_URL` as the browser truth and leave
+`PULSE_BASE_URL` available for backend-oriented health checks and setup
+traffic, so split browser/backend proof can target fresh frontend code without
+rewiring the API-side contract.
 That defaulting rule must live in one shared integration helper rather than
 being duplicated between config and helper files, so future browser-target
 changes cannot leave Playwright navigation and browser/API helper calls
