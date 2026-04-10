@@ -14,7 +14,7 @@ HIGH_RISK_MATRIX_DOC="${ROOT_DIR}/docs/release-control/v6/internal/HIGH_RISK_REL
 
 TRIAL_SIGNUP_REFERENCE_PATTERN='(/api/license/trial/start|trial_signup_required|trial_rate_limited)'
 
-OPERATOR_DOCS=(
+REQUIRED_CONTRACT_DOCS=(
   "${RUNBOOK}"
   "${PRICING_DOC}"
   "${UPGRADE_DOC}"
@@ -46,17 +46,22 @@ record_pass() {
 
 discover_tracked_reference_docs() {
   local discovered_doc
+  local tracked_doc
 
   TRACKED_REFERENCE_DOCS=()
   while IFS= read -r discovered_doc; do
     TRACKED_REFERENCE_DOCS+=("${ROOT_DIR}/${discovered_doc}")
   done < <(
-    git -C "${ROOT_DIR}" grep -lE "${TRIAL_SIGNUP_REFERENCE_PATTERN}" -- docs tests/integration
+    while IFS= read -r tracked_doc; do
+      if rg -q "${TRIAL_SIGNUP_REFERENCE_PATTERN}" "${ROOT_DIR}/${tracked_doc}"; then
+        printf '%s\n' "${tracked_doc}"
+      fi
+    done < <(git -C "${ROOT_DIR}" ls-files docs tests/integration)
   )
 
   if (( ${#TRACKED_REFERENCE_DOCS[@]} == 0 )); then
     record_failure "discovered tracked trial-start reference files"
-    echo "Expected tracked trial-start reference docs/tests from git grep discovery." >&2
+    echo "Expected tracked trial-start reference docs/tests from tracked worktree discovery." >&2
   else
     record_pass "discovered tracked trial-start reference files (${#TRACKED_REFERENCE_DOCS[@]})"
   fi
@@ -116,14 +121,14 @@ main() {
   local runbook_output pricing_output upgrade_output integration_output eval_task_output
   local eval_scenarios_output high_risk_matrix_output
   local source_of_truth_output migration_audit_output
-  local operator_doc
+  local contract_doc
 
   discover_tracked_reference_docs
 
   assert_doc_discovered "source of truth is in tracked reference discovery" "${SOURCE_OF_TRUTH_DOC}"
   assert_doc_discovered "migration audit is in tracked reference discovery" "${MIGRATION_AUDIT_DOC}"
-  for operator_doc in "${OPERATOR_DOCS[@]}"; do
-    assert_doc_discovered "${operator_doc#${ROOT_DIR}/} is in tracked reference discovery" "${operator_doc}"
+  for contract_doc in "${REQUIRED_CONTRACT_DOCS[@]}"; do
+    assert_doc_discovered "${contract_doc#${ROOT_DIR}/} is in tracked reference discovery" "${contract_doc}"
   done
 
   runbook_output="$(
@@ -166,12 +171,15 @@ main() {
   assert_contains "runbook documents final trial-rate-limited output" "${runbook_output}" "final_trial_start_code=429"
   assert_not_contains "runbook no longer hardcodes second-attempt rejection" "${runbook_output}" "Second immediate trial start is rejected with \`429\`"
 
+  assert_contains "pricing doc documents trial-start route" "${pricing_output}" "POST \`/api/license/trial/start\`"
+  assert_contains "pricing doc documents hosted-signup redirect code" "${pricing_output}" "\`409 trial_signup_required\`"
   assert_contains "pricing doc documents retry burst" "${pricing_output}" "retry burst"
   assert_contains "pricing doc documents trial-rate-limited response" "${pricing_output}" "\`429 trial_rate_limited\`"
   assert_contains "pricing doc documents retry-after metadata" "${pricing_output}" "\`Retry-After\`"
   assert_not_contains "pricing doc no longer claims 24 hour limiter" "${pricing_output}" "24 hours"
 
-  assert_contains "upgrade guide keeps hosted-signup-only wording" "${upgrade_output}" "initiates hosted signup rather than minting a local trial directly"
+  assert_contains "upgrade guide keeps hosted-signup-only wording" "${upgrade_output}" "rather than minting a local trial directly"
+  assert_contains "upgrade guide documents hosted-signup redirect code" "${upgrade_output}" "\`409 trial_signup_required\`"
   assert_contains "upgrade guide documents retry burst" "${upgrade_output}" "retry burst"
   assert_contains "upgrade guide documents trial-rate-limited response" "${upgrade_output}" "\`429 trial_rate_limited\`"
   assert_contains "upgrade guide documents retry-after metadata" "${upgrade_output}" "\`Retry-After\`"

@@ -370,14 +370,16 @@ want to self-host.
 - **Not available on:** Relay (cheap enough to just buy)
 - **Features during trial:** Full Pro capabilities
 - **Activation paths:**
-  - Self-hosted: POST `/api/license/trial/start` initiates hosted signup and returns a control-plane `action_url`
+  - Self-hosted: POST `/api/license/trial/start` returns `409 trial_signup_required` with a hosted control-plane `action_url`
   - Self-hosted completion: hosted control plane returns a signed token to `/auth/trial-activate`
   - Cloud: Stripe checkout with trial period
 - **Restrictions:**
   - One trial per workspace
   - Rate limited: a short per-org retry burst is allowed so operators can
-    revisit the hosted handoff; once that burst is exhausted the local runtime
-    returns `429 trial_rate_limited` with `Retry-After` backoff metadata
+    revisit the hosted handoff; duplicate immediate starts may continue to
+    return `409 trial_signup_required` while that burst remains open, then the
+    local runtime returns `429 trial_rate_limited` with `Retry-After` backoff
+    metadata once it is exhausted
   - Cannot start if already has active Pro license
 
 ---

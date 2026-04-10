@@ -117,7 +117,7 @@ Pulse v6 feature gating is driven by the entitlements endpoint:
 
 For self-hosted v6, Pulse now sells monitored coverage by monitored system rather than by installed agent. Community includes 5 monitored systems, Relay includes 8, Pro includes 15, and Pro+ includes 50. Relay also raises history to 14 days, while Pro and Pro+ raise it to 90 days.
 
-For self-hosted v6, `POST /api/license/trial/start` initiates hosted signup rather than minting a local trial directly. Duplicate start attempts stay on the hosted-signup retry burst until it is exhausted, then return canonical `429 trial_rate_limited` plus `Retry-After` backoff metadata. Pulse only reflects trial lifecycle entitlements after the hosted control plane returns a signed activation token to `/auth/trial-activate`.
+For self-hosted v6, `POST /api/license/trial/start` initiates hosted signup by returning `409 trial_signup_required` with a hosted `action_url` rather than minting a local trial directly. Duplicate start attempts stay on the hosted-signup retry burst until it is exhausted, then return canonical `429 trial_rate_limited` plus `Retry-After` backoff metadata. Pulse only reflects trial lifecycle entitlements after the hosted control plane returns a signed activation token to `/auth/trial-activate`.
 
 If you are upgrading an existing free instance that already exceeds the new Community cap, Pulse should not hard-break monitoring on rollout day. During grace, existing monitoring continues and only newly added counted systems are blocked until you remove systems or upgrade.
 
