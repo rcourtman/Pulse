@@ -5,6 +5,23 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 RUNBOOK="${ROOT_DIR}/docs/operations/TRIAL_E2E_LXC_SNAPSHOT_RUNBOOK.md"
 PRICING_DOC="${ROOT_DIR}/docs/architecture/v6-pricing-and-tiering.md"
 UPGRADE_DOC="${ROOT_DIR}/docs/UPGRADE_v6.md"
+INTEGRATION_README="${ROOT_DIR}/tests/integration/README.md"
+EVAL_TASK_DOC="${ROOT_DIR}/tests/integration/evals/tasks/trial-signup.md"
+
+ACTIVE_DOCS=(
+  "${RUNBOOK}"
+  "${PRICING_DOC}"
+  "${UPGRADE_DOC}"
+  "${INTEGRATION_README}"
+  "${EVAL_TASK_DOC}"
+)
+
+FORBIDDEN_PATTERNS=(
+  "1 trial initiation attempt per org per 24 hours"
+  "1 initiation attempt per org per 24h"
+  "A second immediate initiation attempt is rate limited."
+  "Second immediate trial start is rejected with \`429\`"
+)
 
 failures=0
 
@@ -41,8 +58,20 @@ assert_not_contains() {
   fi
 }
 
+assert_forbidden_patterns_absent() {
+  local doc file_content needle label
+
+  for doc in "${ACTIVE_DOCS[@]}"; do
+    file_content="$(cat "${doc}")"
+    for needle in "${FORBIDDEN_PATTERNS[@]}"; do
+      label="${doc#${ROOT_DIR}/} excludes stale pattern: ${needle}"
+      assert_not_contains "${label}" "${file_content}" "${needle}"
+    done
+  done
+}
+
 main() {
-  local runbook_output pricing_output upgrade_output
+  local runbook_output pricing_output upgrade_output integration_output eval_task_output
   runbook_output="$(
     awk '
       /^## Contract Probe Script$/ { capture=1 }
@@ -55,6 +84,12 @@ main() {
   )"
   upgrade_output="$(
     sed -n '112,128p' "${UPGRADE_DOC}"
+  )"
+  integration_output="$(
+    sed -n '28,40p' "${INTEGRATION_README}"
+  )"
+  eval_task_output="$(
+    sed -n '1,24p' "${EVAL_TASK_DOC}"
   )"
 
   assert_contains "runbook references hosted trial probe script" "${runbook_output}" "tests/integration/scripts/trial-signup-contract.sh"
@@ -74,6 +109,15 @@ main() {
   assert_contains "upgrade guide documents retry burst" "${upgrade_output}" "retry burst"
   assert_contains "upgrade guide documents trial-rate-limited response" "${upgrade_output}" "\`429 trial_rate_limited\`"
   assert_contains "upgrade guide documents retry-after metadata" "${upgrade_output}" "\`Retry-After\`"
+
+  assert_contains "integration readme documents reused-instance retry-after branch" "${integration_output}" "Retry-After"
+  assert_contains "integration readme documents hosted-signup retry burst" "${integration_output}" "hosted-signup retry-burst contract"
+
+  assert_contains "eval task documents retry-burst contract" "${eval_task_output}" "retry-burst contract"
+  assert_contains "eval task documents canonical trial-rate-limited response" "${eval_task_output}" "\`429 trial_rate_limited\`"
+  assert_contains "eval task documents retry-after metadata" "${eval_task_output}" "\`Retry-After\`"
+
+  assert_forbidden_patterns_absent
 
   if (( failures > 0 )); then
     echo "trial-signup docs smoke tests failed: ${failures}" >&2
