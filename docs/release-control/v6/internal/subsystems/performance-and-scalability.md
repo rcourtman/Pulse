@@ -206,6 +206,12 @@ regression protection.
     list hydration and must not turn dashboard landing on `frontend-modern/src/App.tsx`
     into another summary-fetch or org-bootstrap hot path.
 31. Keep the dashboard overview hot path compact and route-owned. `frontend-modern/src/pages/Dashboard.tsx`, `frontend-modern/src/api/resources.ts`, and `frontend-modern/src/hooks/useDashboardOverview.ts` must hydrate KPI cards, problem-resource rows, and top-infrastructure identities through the compact dashboard-summary API contract owned by the adjacent `api-contracts` and `unified-resources` surfaces, rather than booting the full unfiltered paginated unified-resource list just to derive summary cards.
+    Commercial or relay-owned dashboard affordances such as
+    `frontend-modern/src/components/Dashboard/RelayOnboardingCard.tsx` may be
+    composed into that route, but they must remain additive shells on top of
+    the same compact summary payload instead of reintroducing route-local
+    `all-resources` fetches, summary recomputation, or page-level layout churn
+    that displaces the protected overview widgets.
 32. Keep infrastructure summary consumers on the compact dashboard overview rather than reopening the all-resources hook. `frontend-modern/src/hooks/useDashboardTrends.ts`, `frontend-modern/src/components/Infrastructure/useInfrastructureSummaryState.ts`, and adjacent dashboard summary consumers may derive chart identity and storage presence from the overview payload they were already given, but they must not call `useResources()` or mount a second unfiltered unified-resource fetch path inside the dashboard hot path. That rule also applies to globally mounted helpers such as `frontend-modern/src/components/AI/Chat/index.tsx`: closed assistant surfaces must read the live websocket snapshot or existing unified-resource cache rather than forcing the dashboard to pay for `all-resources` just because the shell component is mounted.
 33. Keep hidden workload-route selector shells off the hot path. When the
     workloads route keeps `frontend-modern/src/components/shared/InfrastructureSelector.tsx`

@@ -1090,7 +1090,10 @@ dashboard shell, while
 `frontend-modern/src/components/Dashboard/useRelayOnboardingCardState.ts`
 owns license readiness, relay status polling, snooze state, and trial start
 runtime. Future onboarding changes must extend that split instead of pulling
-license and relay runtime back into the card shell.
+license and relay runtime back into the card shell. Live-route regressions in
+that dashboard composition must be caught by
+`tests/integration/tests/59-dashboard-relay-onboarding-trial-rate-limit.spec.ts`
+instead of relying only on isolated component tests.
 That relay pairing boundary now also includes backend-owned mobile credential
 lifecycle: when the settings surface generates a mobile pairing QR, it must ask
 the server for a fresh scoped Pulse Mobile relay access token, fetch the

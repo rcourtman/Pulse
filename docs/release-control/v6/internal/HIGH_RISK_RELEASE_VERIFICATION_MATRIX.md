@@ -368,6 +368,7 @@ Companion drill:
   `go test ./internal/relay -run 'TestClient_E2E_MultiMobileClientRelay|TestClient_AbruptDisconnectCancelsInFlightHandlers|TestClient_AbruptDisconnectMultipleChannelCleanup|TestClient_DrainDuringInFlightData|TestClient_DrainWithMultipleInFlightChannels|TestClientRegister_SessionResumeRejectionClearsCachedSession|TestRunLoop_SessionResumeRejectionFallsBackToFreshRegister' -count=1`
   `go test ./internal/api -run 'TestRelayEndpointsRequireLicenseFeature|TestRelayOnboardingEndpointsRequireLicenseFeature|TestRelayLicenseGatingResponseFormat|TestOnboardingQRPayloadStructure|TestOnboardingValidateSuccessAndFailure|TestOnboardingDeepLinkFormat' -count=1`
   `cd frontend-modern && npx vitest run src/components/Dashboard/__tests__/RelayOnboardingCard.test.tsx src/components/Settings/__tests__/RelaySettingsPanel.runtime.test.tsx src/components/Settings/__tests__/settingsReadOnlyPanels.test.tsx`
+  `cd tests/integration && PULSE_E2E_SKIP_DOCKER=1 PULSE_BASE_URL=http://127.0.0.1:7655 PLAYWRIGHT_BASE_URL=http://127.0.0.1:4174 npm test -- tests/59-dashboard-relay-onboarding-trial-rate-limit.spec.ts --project=chromium`
   `cd /Volumes/Development/pulse/repos/pulse-mobile && npm test -- --runTestsByPath src/relay/__tests__/client.test.ts src/relay/__tests__/client-hardening.test.ts src/relay/__tests__/protocol-contract.test.ts`
 - Manual scenario:
   1. Register a fresh relay client.

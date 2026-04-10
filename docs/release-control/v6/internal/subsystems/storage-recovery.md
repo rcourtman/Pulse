@@ -201,6 +201,12 @@ querying, and the operator-facing storage health presentation layer.
     they were already given, but they must not reopen paginated
     `useUnifiedResources()` transport or reintroduce per-pool
     `/api/metrics-store/history` fan-out under the dashboard hot path.
+    Route-owned dashboard additions such as
+    `frontend-modern/src/components/Dashboard/RelayOnboardingCard.tsx` may sit
+    above those cards, but they must remain adjacent composition only: the
+    relay surface must not replace the recovery/storage dashboard panels,
+    suppress the governed no-resources handoff, or move storage/recovery
+    summary ownership out of the compact dashboard route.
 35. Keep shared `frontend-modern/src/App.tsx` public-route ownership explicit by
     surface. Storage/recovery preview entrypoints such as
     `/preview/setup-complete` may remain public app-shell routes, but unrelated

@@ -11,6 +11,7 @@ let wsConnected = true;
 let wsReconnecting = false;
 const reconnectSpy = vi.fn();
 const navigateSpy = vi.hoisted(() => vi.fn());
+const relayOnboardingCardSpy = vi.hoisted(() => vi.fn(() => <div data-testid="relay-onboarding-card" />));
 const recoverySummaryMock: DashboardRecoverySummary = {
   totalProtected: 3,
   byOutcome: { success: 2, failed: 1 },
@@ -110,6 +111,10 @@ vi.mock('@/hooks/useDashboardRecovery', () => ({
   useDashboardRecovery: () => () => recoverySummaryMock,
 }));
 
+vi.mock('@/components/Dashboard/RelayOnboardingCard', () => ({
+  RelayOnboardingCard: relayOnboardingCardSpy,
+}));
+
 describe('Dashboard page module contract', () => {
   beforeEach(() => {
     overviewLoading = false;
@@ -118,6 +123,7 @@ describe('Dashboard page module contract', () => {
     wsReconnecting = false;
     reconnectSpy.mockReset();
     navigateSpy.mockReset();
+    relayOnboardingCardSpy.mockClear();
     overviewMock.health.totalResources = 0;
     overviewMock.storage.total = 0;
     overviewMock.storage.totalCapacity = 0;
@@ -139,6 +145,8 @@ describe('Dashboard page module contract', () => {
 
   it('routes dashboard overview panels through the dashboard overview feature owner', () => {
     expect(dashboardPageSource).toContain("from '@/features/dashboardOverview'");
+    expect(dashboardPageSource).toContain("from '@/components/Dashboard/RelayOnboardingCard'");
+    expect(dashboardPageSource).toContain('<RelayOnboardingCard />');
     expect(dashboardPageSource).toContain(
       'ActionRequiredPanel,\n  DashboardCustomizer,\n  KPIStrip,\n  ProblemResourcesTable,\n  TrendCharts,',
     );
@@ -171,6 +179,7 @@ describe('Dashboard page module contract', () => {
     render(() => <DashboardPage />);
 
     expect(screen.getByRole('heading', { name: 'No resources yet' })).toBeInTheDocument();
+    expect(screen.queryByTestId('relay-onboarding-card')).toBeNull();
     expect(
       screen.getByText(
         'Start by opening Settings → Infrastructure → Install on a host and connecting the first system you want Pulse to monitor. Your dashboard overview will appear here once that system starts reporting.',
@@ -192,6 +201,7 @@ describe('Dashboard page module contract', () => {
 
     render(() => <DashboardPage />);
 
+    expect(screen.getByTestId('relay-onboarding-card')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Recovery Status' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /Storage/ })).toBeInTheDocument();
     expect(screen.getByText('Last recovery point over 24 hours ago')).toBeInTheDocument();
