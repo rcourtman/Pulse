@@ -81,7 +81,7 @@ This script asserts:
 2. Pre-trial entitlements are fetched and trial is eligible.
 3. `POST /api/license/trial/start` returns `409` with `trial_signup_required` and a hosted `action_url`.
 4. Post-initiation entitlements remain locally unactivated (`trial_eligible=true`, `subscription_state=expired`).
-5. Second immediate trial start is rejected with `429` (rate limited).
+5. Duplicate immediate trial starts stay on the hosted-signup retry burst until it is exhausted, then return `429 trial_rate_limited` plus `Retry-After` backoff metadata.
 
 Run inside container:
 
@@ -102,6 +102,7 @@ done
 ```
 
 If each run prints `PASS: hosted trial signup initiation contract validated`, state pollution between runs is eliminated.
+On a fresh rollback the probe should show `trial_start_code=409 (code=trial_signup_required)` first, then report which later duplicate attempt first hit the limiter via `retry_limiter_attempt=...` and `final_trial_start_code=429 (...)`.
 
 ## Full Sandbox E2E (Playwright)
 

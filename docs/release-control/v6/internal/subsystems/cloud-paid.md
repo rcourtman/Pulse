@@ -590,6 +590,12 @@ local instance whose retry bucket is already exhausted and therefore must
 accept an immediate canonical `429` backoff response, while the snapshot-clean
 shell probe remains the fresh-state contract that proves an initial hosted
 redirect and the later transition into `trial_rate_limited`.
+Operator docs must describe that same split. The snapshot-clean runbook in
+`docs/operations/TRIAL_E2E_LXC_SNAPSHOT_RUNBOOK.md` may require the first trial
+start to return `409 trial_signup_required` on a rolled-back container, but it
+must describe duplicate attempts as staying on the hosted-signup retry burst
+until exhaustion rather than teaching a universal "second attempt is `429`"
+rule.
 Hosted tenant organization seeding and hosted handoff role mapping now belong
 to the same cloud-paid truth too. `internal/cloudcp/stripe/provisioner.go`
 must seed tenant org members from the shared account-role-to-organization-role
