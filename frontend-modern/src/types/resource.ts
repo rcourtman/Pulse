@@ -14,6 +14,10 @@ import type {
   HostRAIDArray,
   Memory,
 } from '@/types/api';
+import {
+  PLATFORM_TYPE_KEYS as GENERATED_PLATFORM_TYPE_KEYS,
+  type GeneratedPlatformType,
+} from '@/utils/platformSupportManifest.generated';
 
 // Resource types - what kind of entity is being monitored
 export type ResourceType =
@@ -40,15 +44,8 @@ export type ResourceType =
   | 'ceph'; // Ceph cluster
 
 // Platform types - which system the resource comes from
-export type PlatformType =
-  | 'proxmox-pve'
-  | 'proxmox-pbs'
-  | 'proxmox-pmg'
-  | 'docker'
-  | 'kubernetes'
-  | 'truenas'
-  | 'vmware-vsphere'
-  | 'agent';
+export const PLATFORM_TYPES = GENERATED_PLATFORM_TYPE_KEYS;
+export type PlatformType = GeneratedPlatformType;
 
 // Source types - how data is collected
 export type SourceType =

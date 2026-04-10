@@ -358,6 +358,14 @@ floor. `internal/unifiedresources/types.go`, `internal/unifiedresources/registry
 single source onto the canonical platform vocabulary, but they must not invent
 separate `vcenter` or `esxi` filter keys or a VMware-only top-level resource
 family to make the phase-1 slice render.
+That same frontend/runtime adapter floor now also owns the typed platform
+projection. `frontend-modern/src/utils/platformSupportManifest.generated.ts`
+must stay generated from
+`docs/release-control/v6/internal/PLATFORM_SUPPORT_MANIFEST.json`, and
+`frontend-modern/src/types/resource.ts` must derive `PlatformType` from that
+generated supported-plus-admitted projection rather than hand-maintaining a
+second platform union that can drift from the governed manifest or re-admit
+presentation-only labels by mistake.
 That same shared source boundary also applies when unified seeds and
 supplemental providers coexist. If a canonical unified-resource seed omits an
 owned supplemental source such as TrueNAS or VMware, the shared resource API

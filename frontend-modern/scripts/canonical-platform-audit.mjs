@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -13,6 +14,12 @@ const PLATFORM_SUPPORT_MANIFEST_PATH = path.join(
   'v6',
   'internal',
   'PLATFORM_SUPPORT_MANIFEST.json',
+);
+const GENERATED_PLATFORM_SUPPORT_MODULE_PATH = path.join(
+  ROOT,
+  'src',
+  'utils',
+  'platformSupportManifest.generated.ts',
 );
 const ALLOWLIST = new Set([
   'src/components/shared/sourcePlatformBadges.ts',
@@ -31,6 +38,7 @@ const ALLOWLIST = new Set([
   'src/utils/resourceTypePresentation.ts',
   'src/utils/resourceBadgePresentation.ts',
   'src/utils/workloadTypePresentation.ts',
+  'src/utils/platformSupportManifest.generated.ts',
   'src/features/storageBackups/diskPresentation.ts',
   'src/features/storageBackups/diskDetailPresentation.ts',
   'src/features/storageBackups/cephRecordPresentation.ts',
@@ -252,6 +260,27 @@ const RESOURCE_TYPE_LABEL_TOKENS = [
 const STORAGE_HEALTH_TOKENS = ['healthy', 'warning', 'critical', 'offline', 'unknown'];
 
 const findings = [];
+
+function requireGeneratedPlatformSupportProjectionSync() {
+  const manifestBytes = fs.readFileSync(PLATFORM_SUPPORT_MANIFEST_PATH);
+  const expectedHash = crypto.createHash('sha256').update(manifestBytes).digest('hex');
+  const generatedSource = fs.readFileSync(GENERATED_PLATFORM_SUPPORT_MODULE_PATH, 'utf8');
+  const hashMatch = generatedSource.match(/^\/\/ Source SHA256: ([a-f0-9]{64})$/m);
+
+  if (!hashMatch) {
+    console.error(
+      'Canonical platform audit failed: generated platform support module is missing its source hash header.',
+    );
+    process.exit(1);
+  }
+
+  if (hashMatch[1] !== expectedHash) {
+    console.error(
+      'Canonical platform audit failed: frontend platform support projection is stale. Run `python3 scripts/release_control/generate_platform_support_frontend_module.py`.',
+    );
+    process.exit(1);
+  }
+}
 
 function toRelative(absPath) {
   return path.relative(ROOT, absPath).replaceAll(path.sep, '/');
@@ -1680,6 +1709,8 @@ const MAP_RULES = [
       containsAny(snippet, RESOURCE_TYPE_LABEL_TOKENS),
   },
 ];
+
+requireGeneratedPlatformSupportProjectionSync();
 
 for (const dir of TARGET_DIRS) {
   for (const filePath of collectFiles(dir)) {

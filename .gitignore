@@ -228,6 +228,7 @@ scripts/release_control/*
 !scripts/release_control/contract_audit.py
 !scripts/release_control/contract_audit_test.py
 !scripts/release_control/control_plane.py
+!scripts/release_control/generate_platform_support_frontend_module.py
 !scripts/release_control/control_plane_audit.py
 !scripts/release_control/control_plane_audit_test.py
 !scripts/release_control/documentation_currentness_test.py

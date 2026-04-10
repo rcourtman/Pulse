@@ -1,20 +1,16 @@
 import type { PlatformType, SourceType } from '@/types/resource';
 import {
+  KNOWN_SOURCE_PLATFORM_KEYS as GENERATED_KNOWN_SOURCE_PLATFORM_KEYS,
+  PRESENTATION_ONLY_PLATFORM_IDS,
+  SOURCE_PLATFORM_PRESENTATION as GENERATED_SOURCE_PLATFORM_PRESENTATION,
+  type GeneratedKnownSourcePlatform,
   getSourcePlatformManifestEntry,
   SOURCE_PLATFORM_ALIAS_MAP,
-  SOURCE_PLATFORM_MANIFEST_ENTRIES,
 } from '@/utils/platformSupportManifest';
 import { titleCaseDelimitedLabel } from '@/utils/textPresentation';
 
-export type PresentationOnlySourcePlatform =
-  | 'unraid'
-  | 'synology-dsm'
-  | 'microsoft-hyperv'
-  | 'aws'
-  | 'azure'
-  | 'gcp';
-
-export type KnownSourcePlatform = PlatformType | PresentationOnlySourcePlatform | 'generic';
+export type PresentationOnlySourcePlatform = (typeof PRESENTATION_ONLY_PLATFORM_IDS)[number];
+export type KnownSourcePlatform = GeneratedKnownSourcePlatform;
 
 export interface SourcePlatformPresentation {
   label: string;
@@ -32,32 +28,11 @@ export interface SourcePlatformFlags {
   hasVMware: boolean;
 }
 
-const MANIFEST_SOURCE_PLATFORM_PRESENTATION = Object.fromEntries(
-  SOURCE_PLATFORM_MANIFEST_ENTRIES.map((platform) => [
-    platform.id,
-    {
-      label: platform.uiLabel,
-      tone: platform.uiTone,
-    },
-  ]),
-) as Record<Exclude<KnownSourcePlatform, 'generic'>, SourcePlatformPresentation>;
-
 export const SOURCE_PLATFORM_PRESENTATION: Record<KnownSourcePlatform, SourcePlatformPresentation> =
-  {
-    ...MANIFEST_SOURCE_PLATFORM_PRESENTATION,
-    generic: {
-      label: 'Generic',
-      tone: 'bg-surface-alt text-base-content',
-    },
-  };
+  GENERATED_SOURCE_PLATFORM_PRESENTATION as Record<KnownSourcePlatform, SourcePlatformPresentation>;
 
-export const KNOWN_SOURCE_PLATFORM_KEYS = Object.freeze([
-  ...(SOURCE_PLATFORM_MANIFEST_ENTRIES.map((platform) => platform.id) as Exclude<
-    KnownSourcePlatform,
-    'generic'
-  >[]),
-  'generic',
-]) as readonly KnownSourcePlatform[];
+export const KNOWN_SOURCE_PLATFORM_KEYS =
+  GENERATED_KNOWN_SOURCE_PLATFORM_KEYS as readonly KnownSourcePlatform[];
 
 const PLATFORM_ALIASES = SOURCE_PLATFORM_ALIAS_MAP as Record<
   string,

@@ -3,6 +3,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import {
+  PLATFORM_TYPES,
   isInfrastructure,
   isWorkload,
   isStorage,
@@ -15,6 +16,11 @@ import {
   type Resource,
   type ResourceType,
 } from '@/types/resource';
+import {
+  ADMITTED_PLATFORM_IDS,
+  PRESENTATION_ONLY_PLATFORM_IDS,
+  SUPPORTED_PLATFORM_IDS,
+} from '@/utils/platformSupportManifest.generated';
 import { getPreferredResourceDisplayName } from '@/utils/resourceIdentity';
 
 // Helper to create a minimal resource for testing
@@ -34,6 +40,13 @@ function createResource(overrides: Partial<Resource> = {}): Resource {
 }
 
 describe('Resource Type Guards', () => {
+  it('keeps platform types aligned with the governed platform manifest projection', () => {
+    expect(PLATFORM_TYPES).toEqual([...SUPPORTED_PLATFORM_IDS, ...ADMITTED_PLATFORM_IDS]);
+    for (const platform of PRESENTATION_ONLY_PLATFORM_IDS) {
+      expect(PLATFORM_TYPES).not.toContain(platform as any);
+    }
+  });
+
   describe('isInfrastructure', () => {
     const infrastructureTypes: ResourceType[] = ['agent', 'docker-host', 'k8s-node', 'k8s-cluster'];
     const nonInfrastructureTypes: ResourceType[] = [
