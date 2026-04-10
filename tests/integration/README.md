@@ -28,10 +28,10 @@ End-to-end Playwright tests that validate critical user flows against a running 
   - Logged-out login page (full page + form card)
   - Authenticated Settings → Authentication page
 - `tests/07-trial-signup-return.spec.ts` — trial workflow contract:
-  - Start hosted Pro trial initiation via API
-  - Verify response points to hosted `/start-pro-trial`
+  - Start hosted Pro trial initiation via API and verify the reused-instance contract
+  - Verify the response either points to hosted `/start-pro-trial` or returns canonical `Retry-After` backoff when the local retry bucket is already exhausted
   - Verify local entitlements remain unchanged until activation
-  - Verify duplicate initiation is rate limited
+  - Verify duplicate initiation stays on the hosted-signup retry-burst contract
 - `tests/08-cloud-hosting.spec.ts` — hosted cloud signup contract:
   - Public `/cloud/signup` form creates a real Stripe sandbox checkout session
   - Checkout completes and returns to hosted signup completion page
@@ -181,6 +181,9 @@ For hosted trial initiation validation against a fresh LXC each run:
 
 - Runbook: `docs/operations/TRIAL_E2E_LXC_SNAPSHOT_RUNBOOK.md`
 - Probe script: `tests/integration/scripts/trial-signup-contract.sh`
+  - Confirms repeated local trial starts stay on the hosted-signup retry-burst
+    contract: duplicate attempts keep returning hosted-signup redirects until
+    the retry burst is exhausted, then return `Retry-After` backoff metadata
 - Full sandbox orchestration (multi-tenant + trial + cloud, with per-scenario snapshot reset):
   - `tests/integration/scripts/run-lxc-sandbox-evals.sh`
   - Includes hosted trial initiation validation and cloud subscription cancellation lifecycle verification

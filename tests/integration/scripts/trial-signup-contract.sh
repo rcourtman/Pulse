@@ -8,6 +8,7 @@ PULSE_BASE_URL="${PULSE_BASE_URL:-http://127.0.0.1:7655}"
 PULSE_E2E_USERNAME="${PULSE_E2E_USERNAME:-admin}"
 PULSE_E2E_PASSWORD="${PULSE_E2E_PASSWORD:-admin}"
 WAIT_TIMEOUT_SECONDS="${WAIT_TIMEOUT_SECONDS:-60}"
+MAX_DUPLICATE_TRIAL_ATTEMPTS="${MAX_DUPLICATE_TRIAL_ATTEMPTS:-10}"
 
 if ! command -v curl >/dev/null 2>&1; then
   echo "ERROR: curl is required"
@@ -26,6 +27,7 @@ login_body="${tmp_dir}/login.json"
 entitlements_body="${tmp_dir}/entitlements.json"
 start_body="${tmp_dir}/trial_start.json"
 second_start_body="${tmp_dir}/trial_start_second.json"
+second_start_headers="${tmp_dir}/trial_start_second.headers"
 
 wait_for_http() {
   local url="$1"
@@ -127,18 +129,63 @@ if [ "${post_sub_state}" != "expired" ]; then
   exit 1
 fi
 
-echo "[6/6] Verify duplicate initiation is rate limited"
-second_start_code="$(
-  curl -sS -o "${second_start_body}" -w '%{http_code}' \
-    -X POST \
-    -b "${cookies_file}" \
-    -H "X-CSRF-Token: ${csrf_token}" \
-    "${PULSE_BASE_URL}/api/license/trial/start"
-)"
-assert_code "429" "${second_start_code}" "POST /api/license/trial/start (second attempt)"
-second_code_name="$(jq -r '.code // empty' "${second_start_body}")"
-if [ "${second_code_name}" != "trial_rate_limited" ]; then
-  echo "ERROR: expected code=trial_rate_limited on second attempt, got ${second_code_name:-<empty>}"
+echo "[6/6] Verify duplicate initiation stays on the retry-burst contract until the limiter engages"
+rate_limited_attempt=""
+second_start_code=""
+second_code_name=""
+retry_after_header=""
+retry_after_seconds=""
+
+for attempt in $(seq 2 "${MAX_DUPLICATE_TRIAL_ATTEMPTS}"); do
+  second_start_code="$(
+    curl -sS -D "${second_start_headers}" -o "${second_start_body}" -w '%{http_code}' \
+      -X POST \
+      -b "${cookies_file}" \
+      -H "X-CSRF-Token: ${csrf_token}" \
+      "${PULSE_BASE_URL}/api/license/trial/start"
+  )"
+  second_code_name="$(jq -r '.code // empty' "${second_start_body}")"
+
+  if [ "${second_start_code}" = "409" ]; then
+    if [ "${second_code_name}" != "trial_signup_required" ]; then
+      echo "ERROR: expected code=trial_signup_required within retry burst, got ${second_code_name:-<empty>}"
+      exit 1
+    fi
+    action_url="$(jq -r '.details.action_url // empty' "${second_start_body}")"
+    if [ -z "${action_url}" ]; then
+      echo "ERROR: expected action_url while retry burst still allows hosted signup"
+      exit 1
+    fi
+    continue
+  fi
+
+  if [ "${second_start_code}" = "429" ]; then
+    if [ "${second_code_name}" != "trial_rate_limited" ]; then
+      echo "ERROR: expected code=trial_rate_limited once retry burst is exceeded, got ${second_code_name:-<empty>}"
+      exit 1
+    fi
+    retry_after_header="$(
+      awk 'tolower($1)=="retry-after:" {print $2}' "${second_start_headers}" | tr -d '\r' | tail -n1
+    )"
+    retry_after_seconds="$(jq -r '.details.retry_after_seconds // empty' "${second_start_body}")"
+    if [ -z "${retry_after_header}" ]; then
+      echo "ERROR: expected Retry-After header once retry burst is exceeded"
+      exit 1
+    fi
+    if [ "${retry_after_seconds}" != "${retry_after_header}" ]; then
+      echo "ERROR: expected details.retry_after_seconds=${retry_after_header}, got ${retry_after_seconds:-<empty>}"
+      exit 1
+    fi
+    rate_limited_attempt="${attempt}"
+    break
+  fi
+
+  echo "ERROR: expected HTTP 409 within retry burst or HTTP 429 once the limiter engages, got ${second_start_code}"
+  exit 1
+done
+
+if [ -z "${rate_limited_attempt}" ]; then
+  echo "ERROR: duplicate trial initiation never hit the retry limiter within ${MAX_DUPLICATE_TRIAL_ATTEMPTS} attempts"
   exit 1
 fi
 
@@ -147,4 +194,5 @@ echo "  login_code=${login_code}"
 echo "  entitlements_before_code=${entitlements_code}"
 echo "  trial_start_code=${start_code} (code=${start_code_name})"
 echo "  post_trial_entitlements_code=${post_entitlements_code}"
-echo "  second_trial_start_code=${second_start_code} (code=${second_code_name})"
+echo "  retry_limiter_attempt=${rate_limited_attempt}"
+echo "  final_trial_start_code=${second_start_code} (code=${second_code_name}, retry_after=${retry_after_header})"

@@ -706,6 +706,26 @@ test_integration_readme_uses_managed_backend_restart_wrapper() {
   assert_not_contains "integration readme no longer documents raw backend restart script" "${output}" "./scripts/hot-dev-bg.sh backend-restart"
 }
 
+test_integration_readme_documents_trial_retry_burst_contract() {
+  local output
+  output="$(
+    awk '
+      /^### Snapshot-Clean Proxmox LXC Trial SAT$/ { capture=1 }
+      capture { print }
+      /^### Run Theme Visual Regression Suite$/ {
+        exit
+      }
+    ' "${INTEGRATION_README}"
+  )"
+
+  assert_contains "integration readme documents hosted-signup retry burst" "${output}" "retry-burst"
+  assert_contains "integration readme documents retry contract wording" "${output}" "contract:"
+  assert_contains "integration readme keeps hosted-signup wording" "${output}" "hosted-signup"
+  assert_contains "integration readme documents retry burst exhaustion" "${output}" "retry burst is exhausted"
+  assert_contains "integration readme documents retry-after backoff" "${output}" "Retry-After"
+  assert_contains "integration readme references hosted trial probe script" "${output}" "tests/integration/scripts/trial-signup-contract.sh"
+}
+
 test_integration_quick_start_distinguishes_embedded_frontend_from_hot_dev() {
   local output
   output="$(sed -n '82,102p' "${ROOT_DIR}/tests/integration/QUICK_START.md")"
@@ -1099,6 +1119,7 @@ main() {
   test_hot_dev_bg_script_advertises_managed_entrypoint
   test_hot_dev_bg_usage_prefers_managed_wrappers
   test_integration_readme_uses_managed_backend_restart_wrapper
+  test_integration_readme_documents_trial_retry_burst_contract
   test_integration_quick_start_distinguishes_embedded_frontend_from_hot_dev
   test_acceptance_doc_distinguishes_embedded_frontend_from_hot_dev
   test_playwright_defaults_prefer_managed_hot_dev_runtime

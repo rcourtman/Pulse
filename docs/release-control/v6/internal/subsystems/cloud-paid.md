@@ -579,6 +579,17 @@ actual remaining backoff through `Retry-After` and
 `details.retry_after_seconds` rather than a coarse full-window guess. Shared
 trial-start presentation must treat that backoff as canonical and surface it
 consistently instead of flattening every `429` into generic copy.
+That proof must stay aligned in browser and shell coverage too:
+`tests/integration/tests/07-trial-signup-return.spec.ts` and
+`tests/integration/scripts/trial-signup-contract.sh` must treat duplicate
+starts inside the allowed burst as the same hosted-signup redirect contract and
+only require `trial_rate_limited` plus backoff metadata once the limiter
+actually engages, rather than assuming the second attempt is already denied.
+That proof split is also intentional: the browser spec may attach to a reused
+local instance whose retry bucket is already exhausted and therefore must
+accept an immediate canonical `429` backoff response, while the snapshot-clean
+shell probe remains the fresh-state contract that proves an initial hosted
+redirect and the later transition into `trial_rate_limited`.
 Hosted tenant organization seeding and hosted handoff role mapping now belong
 to the same cloud-paid truth too. `internal/cloudcp/stripe/provisioner.go`
 must seed tenant org members from the shared account-role-to-organization-role

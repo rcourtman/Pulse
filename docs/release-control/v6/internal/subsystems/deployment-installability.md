@@ -451,6 +451,14 @@ browser helper must treat `PLAYWRIGHT_BASE_URL` as the browser truth and leave
 `PULSE_BASE_URL` available for backend-oriented health checks and setup
 traffic, so split browser/backend proof can target fresh frontend code without
 rewiring the API-side contract.
+That same integration-README ownership includes the local commercial trial
+probe guidance. The snapshot-clean trial instructions for
+`tests/integration/scripts/trial-signup-contract.sh` must describe duplicate
+local `/api/license/trial/start` requests as staying on the hosted-signup
+redirect contract until the configured retry burst is exhausted; they may only
+teach `429 trial_rate_limited` plus `Retry-After` backoff once the limiter
+actually engages, rather than claiming the second duplicate attempt is always
+rate limited.
 Playwright-driven public/commercial specs that support scenario-specific
 endpoint overrides such as `PULSE_CLOUD_BASE_URL` or
 `PULSE_COMMERCIAL_BASE_URL` must layer those values through that same shared

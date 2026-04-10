@@ -26,7 +26,7 @@
     {
       "id": "trial-signup",
       "name": "Pro Trial Signup Return",
-      "description": "Ensures self-hosted Pulse initiates hosted trial signup, preserves local entitlements until activation, and rate-limits duplicate initiation attempts.",
+      "description": "Ensures self-hosted Pulse initiates hosted trial signup, preserves local entitlements until activation, and enforces the hosted-signup retry-burst contract for duplicate initiation attempts.",
       "deterministic": {
         "command": [
           "npx",

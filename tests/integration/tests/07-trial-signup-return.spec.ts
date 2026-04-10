@@ -15,6 +15,25 @@ type TrialStartPayload = {
   details?: Record<string, string>;
 };
 
+function expectTrialRateLimited(payload: TrialStartPayload, retryAfterHeader?: string | null) {
+  expect(payload.code).toBe('trial_rate_limited');
+  const retryAfterSeconds = Number.parseInt(payload.details?.retry_after_seconds || '', 10);
+  expect(retryAfterSeconds).toBeGreaterThan(0);
+  if (retryAfterHeader) {
+    expect(String(retryAfterSeconds)).toBe(retryAfterHeader);
+  }
+}
+
+function expectHostedTrialRedirect(payload: TrialStartPayload) {
+  expect(payload.code).toBe('trial_signup_required');
+
+  const actionUrl = payload.details?.action_url ?? '';
+  expect(actionUrl).toContain('/start-pro-trial');
+  const parsedActionUrl = new URL(actionUrl);
+  expect(parsedActionUrl.searchParams.get('org_id')).toBe('default');
+  expect(parsedActionUrl.searchParams.get('return_url')).toContain('/auth/trial-activate');
+}
+
 test.describe.serial('Trial signup return flow', () => {
   test('initiates hosted trial signup and preserves local entitlements until activation', async ({ page }, testInfo) => {
     test.skip(testInfo.project.name.startsWith('mobile-'), 'Desktop-only trial workflow coverage');
@@ -38,16 +57,17 @@ test.describe.serial('Trial signup return flow', () => {
     const startRes = await apiRequest(page, '/api/license/trial/start', {
       method: 'POST',
     });
-    expect(startRes.status(), `trial start failed: HTTP ${startRes.status()}`).toBe(409);
+    expect(
+      [409, 429],
+      `trial start failed: expected 409 or 429, got HTTP ${startRes.status()}`,
+    ).toContain(startRes.status());
 
     const startPayload = (await startRes.json()) as TrialStartPayload;
-    expect(startPayload.code).toBe('trial_signup_required');
-
-    const actionUrl = startPayload.details?.action_url ?? '';
-    expect(actionUrl).toContain('/start-pro-trial');
-    const parsedActionUrl = new URL(actionUrl);
-    expect(parsedActionUrl.searchParams.get('org_id')).toBe('default');
-    expect(parsedActionUrl.searchParams.get('return_url')).toContain('/auth/trial-activate');
+    if (startRes.status() === 409) {
+      expectHostedTrialRedirect(startPayload);
+    } else {
+      expectTrialRateLimited(startPayload, startRes.headers()['retry-after'] ?? null);
+    }
 
     // Verify entitlements remain unchanged until the hosted flow returns.
     const postRes = await apiRequest(page, '/api/license/entitlements');
@@ -62,15 +82,22 @@ test.describe.serial('Trial signup return flow', () => {
     // Verify UI still reflects the unactivated local state.
     await page.goto('/settings');
     await page.getByRole('button', { name: /pulse pro/i }).first().click();
-    await expect(page.getByRole('heading', { name: 'Current License' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Pulse Pro' }).first()).toBeVisible();
     await expect(page.getByText(/No Pro license is active/i)).toBeVisible();
 
-    // Verify duplicate initiation is rate limited.
+    // Verify duplicate initiation stays on the owned retry-burst contract.
     const secondRes = await apiRequest(page, '/api/license/trial/start', {
       method: 'POST',
     });
-    expect(secondRes.status()).toBe(429);
     const secondPayload = (await secondRes.json()) as TrialStartPayload;
-    expect(secondPayload.code).toBe('trial_rate_limited');
+    if (startRes.status() === 429) {
+      expect(secondRes.status()).toBe(429);
+      expectTrialRateLimited(secondPayload, secondRes.headers()['retry-after'] ?? null);
+    } else if (secondRes.status() === 409) {
+      expectHostedTrialRedirect(secondPayload);
+    } else {
+      expect(secondRes.status()).toBe(429);
+      expectTrialRateLimited(secondPayload, secondRes.headers()['retry-after'] ?? null);
+    }
   });
 });
