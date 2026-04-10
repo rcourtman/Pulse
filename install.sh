@@ -12,10 +12,78 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
+# Configuration helpers
+default_install_dir_for_service() {
+    local service_name="${1:-pulse}"
+    if [[ "$service_name" == "pulse" ]]; then
+        printf '/opt/pulse\n'
+    else
+        printf '/opt/%s\n' "$service_name"
+    fi
+}
+
+default_config_dir_for_service() {
+    local service_name="${1:-pulse}"
+    if [[ "$service_name" == "pulse" ]]; then
+        printf '/etc/pulse\n'
+    else
+        printf '/etc/%s\n' "$service_name"
+    fi
+}
+
+default_binary_link_path_for_service() {
+    local service_name="${1:-pulse}"
+    if [[ "$service_name" == "pulse" ]]; then
+        printf '/usr/local/bin/pulse\n'
+    else
+        printf '/usr/local/bin/%s\n' "$service_name"
+    fi
+}
+
+default_update_helper_path_for_service() {
+    local service_name="${1:-pulse}"
+    if [[ "$service_name" == "pulse" ]]; then
+        printf '/bin/update\n'
+    else
+        printf '/usr/local/bin/update-%s\n' "$service_name"
+    fi
+}
+
+default_auto_update_dest_for_service() {
+    local service_name="${1:-pulse}"
+    if [[ "$service_name" == "pulse" ]]; then
+        printf '/usr/local/bin/pulse-auto-update.sh\n'
+    else
+        printf '/usr/local/bin/%s-auto-update.sh\n' "$service_name"
+    fi
+}
+
+default_update_service_path_for_service() {
+    local service_name="${1:-pulse}"
+    printf '/etc/systemd/system/%s-update.service\n' "$service_name"
+}
+
+default_update_timer_path_for_service() {
+    local service_name="${1:-pulse}"
+    printf '/etc/systemd/system/%s-update.timer\n' "$service_name"
+}
+
 # Configuration
-INSTALL_DIR="/opt/pulse"
-CONFIG_DIR="/etc/pulse"  # All config and data goes here for manual installs
-SERVICE_NAME="pulse"
+DEFAULT_SERVICE_NAME="pulse"
+SERVICE_NAME_EXPLICIT="false"
+if [[ -n "${PULSE_SERVICE_NAME:-}" ]]; then
+    SERVICE_NAME_EXPLICIT="true"
+fi
+SERVICE_NAME="${PULSE_SERVICE_NAME:-$DEFAULT_SERVICE_NAME}"
+INSTALL_DIR="${PULSE_INSTALL_DIR:-$(default_install_dir_for_service "$SERVICE_NAME")}"
+CONFIG_DIR="${PULSE_CONFIG_DIR:-$(default_config_dir_for_service "$SERVICE_NAME")}"  # All config and data goes here for manual installs
+BINARY_LINK_PATH="${PULSE_BINARY_LINK_PATH:-$(default_binary_link_path_for_service "$SERVICE_NAME")}"
+UPDATE_HELPER_PATH="${PULSE_UPDATE_HELPER_PATH:-$(default_update_helper_path_for_service "$SERVICE_NAME")}"
+AUTO_UPDATE_DEST="${PULSE_AUTO_UPDATE_DEST:-$(default_auto_update_dest_for_service "$SERVICE_NAME")}"
+UPDATE_SERVICE_PATH="${PULSE_UPDATE_SERVICE_PATH:-$(default_update_service_path_for_service "$SERVICE_NAME")}"
+UPDATE_TIMER_PATH="${PULSE_UPDATE_TIMER_PATH:-$(default_update_timer_path_for_service "$SERVICE_NAME")}"
+UPDATE_SERVICE_UNIT="$(basename "$UPDATE_SERVICE_PATH")"
+UPDATE_TIMER_UNIT="$(basename "$UPDATE_TIMER_PATH")"
 GITHUB_REPO="rcourtman/Pulse"
 DOCKER_IMAGE_REPO="${DOCKER_IMAGE_REPO:-rcourtman/pulse}"
 BUILD_FROM_SOURCE=false
@@ -286,8 +354,13 @@ safe_systemctl() {
 
 # Detect existing service name (pulse or pulse-backend)
 detect_service_name() {
+    if [[ "$SERVICE_NAME_EXPLICIT" == "true" ]]; then
+        echo "$SERVICE_NAME"
+        return
+    fi
+
     if ! command -v systemctl >/dev/null 2>&1; then
-        echo "pulse"
+        echo "$DEFAULT_SERVICE_NAME"
         return
     fi
 
@@ -298,6 +371,22 @@ detect_service_name() {
     else
         echo "pulse"  # Default for new installations
     fi
+}
+
+update_timer_exists() {
+    command -v systemctl >/dev/null 2>&1 && systemctl list-unit-files --no-legend 2>/dev/null | grep -q "^${UPDATE_TIMER_UNIT}$"
+}
+
+update_timer_enabled() {
+    command -v systemctl >/dev/null 2>&1 && systemctl is-enabled --quiet "$UPDATE_TIMER_UNIT" 2>/dev/null
+}
+
+current_frontend_port() {
+    local port="${FRONTEND_PORT:-7655}"
+    if [[ -z "${FRONTEND_PORT:-}" ]] && [[ -f "/etc/systemd/system/$SERVICE_NAME.service" ]]; then
+        port=$(grep -oP 'FRONTEND_PORT=\K\d+' "/etc/systemd/system/$SERVICE_NAME.service" 2>/dev/null || echo "7655")
+    fi
+    printf '%s\n' "${port:-7655}"
 }
 
 # Functions
@@ -475,14 +564,14 @@ restore_selinux_contexts() {
     if command -v restorecon >/dev/null 2>&1; then
         print_info "Restoring SELinux contexts for installed binaries..."
         restorecon -Rv "$INSTALL_DIR/bin/" >/dev/null 2>&1 || true
-        restorecon -v /usr/local/bin/pulse* >/dev/null 2>&1 || true
+        restorecon -v "$BINARY_LINK_PATH" >/dev/null 2>&1 || true
         print_success "SELinux contexts restored"
     else
         # Fallback to chcon if restorecon isn't available
         if command -v chcon >/dev/null 2>&1; then
             print_info "Setting SELinux contexts for installed binaries..."
             find "$INSTALL_DIR/bin/" -type f -executable -exec chcon -t bin_t {} \; 2>/dev/null || true
-            find /usr/local/bin/ -name 'pulse*' -exec chcon -h -t bin_t {} \; 2>/dev/null || true
+            chcon -h -t bin_t "$BINARY_LINK_PATH" 2>/dev/null || true
         fi
     fi
 }
@@ -1695,11 +1784,11 @@ create_lxc_container() {
     fi
     echo
     echo "  First-time setup:"
-    echo "    pct exec $CTID -- cat /etc/pulse/.bootstrap_token  # Get bootstrap token"
+    echo "    pct exec $CTID -- cat $CONFIG_DIR/.bootstrap_token  # Get bootstrap token"
     echo
     echo "  Common commands:"
     echo "    pct enter $CTID              # Enter container"
-    echo "    pct exec $CTID -- update     # Update Pulse"
+    echo "    pct exec $CTID -- $(basename "$UPDATE_HELPER_PATH")     # Update Pulse"
     echo
     
     CONTAINER_CREATED_FOR_CLEANUP=false
@@ -2159,8 +2248,10 @@ check_existing_installation() {
 
     # Detect actual service name if systemd is available
     if command -v systemctl >/dev/null 2>&1; then
-        detected_service=$(detect_service_name)
-        SERVICE_NAME="$detected_service"
+        if [[ "$SERVICE_NAME_EXPLICIT" != "true" ]]; then
+            detected_service=$(detect_service_name)
+            SERVICE_NAME="$detected_service"
+        fi
         service_available=true
     fi
 
@@ -2591,9 +2682,10 @@ install_pulse_archive() {
     chown -R pulse:pulse "$INSTALL_DIR"
 
     rm -f "$INSTALL_DIR/bin/pulse.old"
-    ln -sf "$INSTALL_DIR/bin/pulse" /usr/local/bin/pulse
+    mkdir -p "$(dirname "$BINARY_LINK_PATH")"
+    ln -sf "$INSTALL_DIR/bin/pulse" "$BINARY_LINK_PATH"
     print_success "Pulse binary installed to $INSTALL_DIR/bin/pulse"
-    print_success "Symlink created at /usr/local/bin/pulse"
+    print_success "Symlink created at $BINARY_LINK_PATH"
 
     if [[ -f "$temp_extract/VERSION" ]]; then
         cp "$temp_extract/VERSION" "$INSTALL_DIR/VERSION"
@@ -3066,7 +3158,8 @@ build_from_source() {
         fi
     done
 
-    ln -sf "$INSTALL_DIR/bin/pulse" /usr/local/bin/pulse
+    mkdir -p "$(dirname "$BINARY_LINK_PATH")"
+    ln -sf "$INSTALL_DIR/bin/pulse" "$BINARY_LINK_PATH"
 
     echo "$branch-$(git rev-parse --short HEAD)" > "$INSTALL_DIR/VERSION"
     echo "$branch" > "$BUILD_FROM_SOURCE_MARKER"
@@ -3141,7 +3234,14 @@ EOF
 setup_update_command() {
     # Create update command at /bin/update for ProxmoxVE LXC detection
     # This allows the backend to detect ProxmoxVE installations
-    local update_helper_path="${PULSE_UPDATE_HELPER_PATH:-/bin/update}"
+    local service_name="${SERVICE_NAME:-${PULSE_SERVICE_NAME:-pulse}}"
+    local install_dir="${INSTALL_DIR:-${PULSE_INSTALL_DIR:-/opt/pulse}}"
+    local config_dir="${CONFIG_DIR:-${PULSE_CONFIG_DIR:-/etc/pulse}}"
+    local binary_link_path="${BINARY_LINK_PATH:-${PULSE_BINARY_LINK_PATH:-/usr/local/bin/pulse}}"
+    local update_helper_path="${UPDATE_HELPER_PATH:-${PULSE_UPDATE_HELPER_PATH:-/bin/update}}"
+    local auto_update_dest="${AUTO_UPDATE_DEST:-${PULSE_AUTO_UPDATE_DEST:-/usr/local/bin/pulse-auto-update.sh}}"
+    local update_service_path="${UPDATE_SERVICE_PATH:-${PULSE_UPDATE_SERVICE_PATH:-/etc/systemd/system/${service_name}-update.service}}"
+    local update_timer_path="${UPDATE_TIMER_PATH:-${PULSE_UPDATE_TIMER_PATH:-/etc/systemd/system/${service_name}-update.timer}}"
     local profile_path="${PULSE_PROFILE_PATH:-/etc/profile}"
     local bashrc_path="${PULSE_BASHRC_PATH:-/etc/bash.bashrc}"
     cat > "$update_helper_path" <<EOF
@@ -3151,12 +3251,30 @@ setup_update_command() {
 
 set -euo pipefail
 
-INSTALL_ROOT="/opt/pulse"
+INSTALL_ROOT=$(printf '%q' "$install_dir")
 MARKER_FILE="\${INSTALL_ROOT}/BUILD_FROM_SOURCE"
-CONFIG_DIR="/etc/pulse"
+CONFIG_DIR=$(printf '%q' "$config_dir")
 INSTALLER_URL="https://github.com/${GITHUB_REPO}/releases/latest/download/install.sh"
+PULSE_SERVICE_NAME=$(printf '%q' "$service_name")
+PULSE_INSTALL_DIR=$(printf '%q' "$install_dir")
+PULSE_CONFIG_DIR=$(printf '%q' "$config_dir")
+PULSE_BINARY_LINK_PATH=$(printf '%q' "$binary_link_path")
+PULSE_UPDATE_HELPER_PATH=$(printf '%q' "$update_helper_path")
+PULSE_AUTO_UPDATE_DEST=$(printf '%q' "$auto_update_dest")
+PULSE_UPDATE_SERVICE_PATH=$(printf '%q' "$update_service_path")
+PULSE_UPDATE_TIMER_PATH=$(printf '%q' "$update_timer_path")
 
 extra_args=()
+installer_env=(
+    "PULSE_SERVICE_NAME=\$PULSE_SERVICE_NAME"
+    "PULSE_INSTALL_DIR=\$PULSE_INSTALL_DIR"
+    "PULSE_CONFIG_DIR=\$PULSE_CONFIG_DIR"
+    "PULSE_BINARY_LINK_PATH=\$PULSE_BINARY_LINK_PATH"
+    "PULSE_UPDATE_HELPER_PATH=\$PULSE_UPDATE_HELPER_PATH"
+    "PULSE_AUTO_UPDATE_DEST=\$PULSE_AUTO_UPDATE_DEST"
+    "PULSE_UPDATE_SERVICE_PATH=\$PULSE_UPDATE_SERVICE_PATH"
+    "PULSE_UPDATE_TIMER_PATH=\$PULSE_UPDATE_TIMER_PATH"
+)
 if [[ -f "\$MARKER_FILE" ]]; then
     branch=\$(tr -d '\r\n' <"\$MARKER_FILE" 2>/dev/null || true)
     if [[ -n "\$branch" ]]; then
@@ -3171,9 +3289,9 @@ fi
 
 echo "Updating Pulse..."
 if [[ \${#extra_args[@]} -gt 0 ]]; then
-    curl -fsSL "\$INSTALLER_URL" | bash -s -- "\${extra_args[@]}"
+    curl -fsSL "\$INSTALLER_URL" | env "\${installer_env[@]}" bash -s -- "\${extra_args[@]}"
 else
-    curl -fsSL "\$INSTALLER_URL" | bash
+    curl -fsSL "\$INSTALLER_URL" | env "\${installer_env[@]}" bash
 fi
 
 echo ""
@@ -3199,7 +3317,7 @@ download_auto_update_script() {
     local url="${asset_base_url}/pulse-auto-update.sh"
     local checksums_url="${asset_base_url}/checksums.txt"
     local legacy_checksum_url="${url}.sha256"
-    local dest="${PULSE_AUTO_UPDATE_DEST:-/usr/local/bin/pulse-auto-update.sh}"
+    local dest="${AUTO_UPDATE_DEST:-${PULSE_AUTO_UPDATE_DEST:-/usr/local/bin/pulse-auto-update.sh}}"
     local attempts=0
     local max_attempts=3
     local connect_timeout=15
@@ -3287,7 +3405,7 @@ download_auto_update_script() {
 }
 
 configure_auto_update_script_repo() {
-    local dest="${1:-${PULSE_AUTO_UPDATE_DEST:-/usr/local/bin/pulse-auto-update.sh}}"
+    local dest="${1:-${AUTO_UPDATE_DEST:-${PULSE_AUTO_UPDATE_DEST:-/usr/local/bin/pulse-auto-update.sh}}}"
     if [[ ! -f "$dest" ]]; then
         return 1
     fi
@@ -3330,13 +3448,18 @@ setup_auto_updates() {
     print_info "Setting up automatic updates..."
     local desired_channel
     desired_channel=$(selected_update_channel)
-    local auto_update_dest="${PULSE_AUTO_UPDATE_DEST:-/usr/local/bin/pulse-auto-update.sh}"
-    local update_service_path="${PULSE_UPDATE_SERVICE_PATH:-/etc/systemd/system/pulse-update.service}"
-    local update_timer_path="${PULSE_UPDATE_TIMER_PATH:-/etc/systemd/system/pulse-update.timer}"
+    local service_name="${SERVICE_NAME:-${PULSE_SERVICE_NAME:-pulse}}"
+    local install_dir="${INSTALL_DIR:-${PULSE_INSTALL_DIR:-/opt/pulse}}"
+    local config_dir="${CONFIG_DIR:-${PULSE_CONFIG_DIR:-/etc/pulse}}"
+    local auto_update_dest="${AUTO_UPDATE_DEST:-${PULSE_AUTO_UPDATE_DEST:-/usr/local/bin/pulse-auto-update.sh}}"
+    local update_service_path="${UPDATE_SERVICE_PATH:-${PULSE_UPDATE_SERVICE_PATH:-/etc/systemd/system/${service_name}-update.service}}"
+    local update_timer_path="${UPDATE_TIMER_PATH:-${PULSE_UPDATE_TIMER_PATH:-/etc/systemd/system/${service_name}-update.timer}}"
+    local update_timer_unit
+    update_timer_unit="$(basename "$update_timer_path")"
 
     # Copy auto-update script if it exists in the release
-    if [[ -f "$INSTALL_DIR/scripts/pulse-auto-update.sh" ]]; then
-        cp "$INSTALL_DIR/scripts/pulse-auto-update.sh" "$auto_update_dest"
+    if [[ -f "$install_dir/scripts/pulse-auto-update.sh" ]]; then
+        cp "$install_dir/scripts/pulse-auto-update.sh" "$auto_update_dest"
         chmod +x "$auto_update_dest"
     else
         print_info "Downloading auto-update script..."
@@ -3369,17 +3492,21 @@ Type=oneshot
 User=root
 Group=root
 # Skip auto-update run unless a supported Pulse service is active
-ExecCondition=/bin/sh -c 'systemctl is-active --quiet pulse || systemctl is-active --quiet pulse-backend'
+ExecCondition=/bin/sh -c 'systemctl is-active --quiet "$${PULSE_SERVICE_NAME}"'
 ExecStart=${auto_update_dest}
 Restart=no
 TimeoutStartSec=600
 StandardOutput=journal
 StandardError=journal
-SyslogIdentifier=pulse-update
+SyslogIdentifier=${service_name}-update
+Environment="PULSE_SERVICE_NAME=$service_name"
+Environment="PULSE_INSTALL_DIR=$install_dir"
+Environment="PULSE_CONFIG_DIR=$config_dir"
+Environment="PULSE_UPDATE_TIMER_UNIT=$update_timer_unit"
 PrivateTmp=yes
 ProtectHome=yes
 ProtectSystem=strict
-ReadWritePaths=/opt/pulse /etc/pulse /tmp
+ReadWritePaths=$install_dir $config_dir /tmp
 PrivateNetwork=no
 Nice=10
 
@@ -3409,39 +3536,39 @@ EOF
     safe_systemctl daemon-reload
     
     # Enable timer but don't start it yet  
-    safe_systemctl enable pulse-update.timer || true
+    safe_systemctl enable "$update_timer_unit" || true
     
     # Update system.json to enable auto-updates
-    if [[ -f "$CONFIG_DIR/system.json" ]]; then
+    if [[ -f "$config_dir/system.json" ]]; then
         # Update existing file
         local temp_file="/tmp/system_$$.json"
         if command -v jq &> /dev/null; then
-            jq --arg channel "$desired_channel" '.autoUpdateEnabled = true | .updateChannel = $channel' "$CONFIG_DIR/system.json" > "$temp_file" && mv "$temp_file" "$CONFIG_DIR/system.json"
+            jq --arg channel "$desired_channel" '.autoUpdateEnabled = true | .updateChannel = $channel' "$config_dir/system.json" > "$temp_file" && mv "$temp_file" "$config_dir/system.json"
         else
             # Fallback to sed if jq not available
             # First check if autoUpdateEnabled already exists in the file
-            if grep -q '"autoUpdateEnabled"' "$CONFIG_DIR/system.json"; then
+            if grep -q '"autoUpdateEnabled"' "$config_dir/system.json"; then
                 # Field exists, update its value
-                sed -i 's/"autoUpdateEnabled":[^,}]*/"autoUpdateEnabled":true/' "$CONFIG_DIR/system.json"
+                sed -i 's/"autoUpdateEnabled":[^,}]*/"autoUpdateEnabled":true/' "$config_dir/system.json"
             else
                 # Field doesn't exist, add it after the opening brace
-                sed -i 's/^{/{\"autoUpdateEnabled\":true,/' "$CONFIG_DIR/system.json"
+                sed -i 's/^{/{\"autoUpdateEnabled\":true,/' "$config_dir/system.json"
             fi
-            if grep -q '"updateChannel"' "$CONFIG_DIR/system.json"; then
-                sed -i "s/\"updateChannel\":[^,}]*/\"updateChannel\":\"$desired_channel\"/" "$CONFIG_DIR/system.json"
+            if grep -q '"updateChannel"' "$config_dir/system.json"; then
+                sed -i "s/\"updateChannel\":[^,}]*/\"updateChannel\":\"$desired_channel\"/" "$config_dir/system.json"
             else
-                sed -i "s/^{/{\"updateChannel\":\"$desired_channel\",/" "$CONFIG_DIR/system.json"
+                sed -i "s/^{/{\"updateChannel\":\"$desired_channel\",/" "$config_dir/system.json"
             fi
         fi
     else
         # Create new file with auto-updates enabled
-        printf '{"autoUpdateEnabled":true,"updateChannel":"%s","pollingInterval":5}\n' "$desired_channel" > "$CONFIG_DIR/system.json"
+        printf '{"autoUpdateEnabled":true,"updateChannel":"%s","pollingInterval":5}\n' "$desired_channel" > "$config_dir/system.json"
     fi
     
-    chown pulse:pulse "$CONFIG_DIR/system.json" 2>/dev/null || true
+    chown pulse:pulse "$config_dir/system.json" 2>/dev/null || true
     
     # Start the timer
-    safe_systemctl start pulse-update.timer || true
+    safe_systemctl start "$update_timer_unit" || true
     
     print_success "Automatic updates enabled (daily check with 2-6 hour random delay)"
 }
@@ -3450,8 +3577,11 @@ install_systemd_service() {
     print_info "Installing systemd service..."
     
     # Use existing service name if found, otherwise use default
-    EXISTING_SERVICE=$(detect_service_name)
-    if [[ "$EXISTING_SERVICE" == "pulse-backend" ]] && [[ -f "/etc/systemd/system/pulse-backend.service" ]]; then
+    local existing_service="$SERVICE_NAME"
+    if [[ "$SERVICE_NAME_EXPLICIT" != "true" ]]; then
+        existing_service=$(detect_service_name)
+    fi
+    if [[ "$existing_service" == "pulse-backend" ]] && [[ -f "/etc/systemd/system/pulse-backend.service" ]]; then
         # Keep using pulse-backend for compatibility (ProxmoxVE)
         SERVICE_NAME="pulse-backend"
         print_info "Using existing service name: pulse-backend"
@@ -3537,11 +3667,8 @@ print_completion() {
     local IP=$(hostname -I | awk '{print $1}')
     
     # Get the port from the service file or use default
-    local PORT="${FRONTEND_PORT:-7655}"
-    if [[ -z "${FRONTEND_PORT:-}" ]] && [[ -f "/etc/systemd/system/$SERVICE_NAME.service" ]]; then
-        # Try to extract port from service file
-        PORT=$(grep -oP 'FRONTEND_PORT=\K\d+' "/etc/systemd/system/$SERVICE_NAME.service" 2>/dev/null || echo "7655")
-    fi
+    local PORT
+    PORT=$(current_frontend_port)
     
     echo
     print_header
@@ -3562,15 +3689,15 @@ print_completion() {
     echo "  Uninstall:  $(build_printed_management_command uninstall)"
 
     # Show auto-update status if timer exists
-    if systemctl list-unit-files --no-legend | grep -q "^pulse-update.timer"; then
+    if update_timer_exists; then
         echo
         echo -e "${YELLOW}Auto-updates:${NC}"
-        if systemctl is-enabled --quiet pulse-update.timer 2>/dev/null; then
+        if update_timer_enabled; then
             echo -e "  Status:     ${GREEN}Enabled${NC} (daily check between 2-6 AM)"
-            echo "  Disable:    systemctl disable --now pulse-update.timer"
+            echo "  Disable:    systemctl disable --now $UPDATE_TIMER_UNIT"
         else
             echo -e "  Status:     ${YELLOW}Disabled${NC}"
-            echo "  Enable:     systemctl enable --now pulse-update.timer"
+            echo "  Enable:     systemctl enable --now $UPDATE_TIMER_UNIT"
         fi
     fi
 
@@ -3598,8 +3725,9 @@ print_completion() {
 
 build_printed_management_command() {
     local action=$1
-    local base="curl -sSL https://github.com/$GITHUB_REPO/releases/latest/download/install.sh | bash"
+    local download_cmd="curl -sSL https://github.com/$GITHUB_REPO/releases/latest/download/install.sh |"
     local -a args=()
+    local -a env_vars=()
 
     case "$action" in
         update)
@@ -3621,12 +3749,28 @@ build_printed_management_command() {
         args=(--rc "${args[@]}")
     fi
 
+    if [[ "$SERVICE_NAME_EXPLICIT" == "true" ]]; then
+        env_vars+=("PULSE_SERVICE_NAME=$SERVICE_NAME")
+    fi
+
+    printf '%s' "$download_cmd"
+    local env_var
+    if [[ ${#env_vars[@]} -gt 0 ]]; then
+        printf ' env'
+        for env_var in "${env_vars[@]}"; do
+            printf ' %q' "$env_var"
+        done
+        printf ' bash'
+    else
+        printf ' bash'
+    fi
+
     if [[ ${#args[@]} -eq 0 ]]; then
-        printf '%s\n' "$base"
+        printf '\n'
         return 0
     fi
 
-    printf '%s -s --' "$base"
+    printf ' -s --'
     local arg
     for arg in "${args[@]}"; do
         printf ' %q' "$arg"
@@ -3692,7 +3836,7 @@ main() {
                 local should_ask_about_updates=false
                 local prompt_reason=""
                 
-                if ! systemctl list-unit-files --no-legend 2>/dev/null | grep -q "^pulse-update.timer"; then
+                if ! update_timer_exists; then
                     # Timer doesn't exist - new feature
                     should_ask_about_updates=true
                     prompt_reason="new"
@@ -3905,7 +4049,7 @@ main() {
                     local should_ask_about_updates=false
                     local prompt_reason=""
                     
-                    if ! systemctl list-unit-files --no-legend 2>/dev/null | grep -q "^pulse-update.timer"; then
+                    if ! update_timer_exists; then
                         # Timer doesn't exist - new feature
                         should_ask_about_updates=true
                         prompt_reason="new"
@@ -3960,7 +4104,7 @@ main() {
                     local should_ask_about_updates=false
                     local prompt_reason=""
                     
-                    if ! systemctl list-unit-files --no-legend 2>/dev/null | grep -q "^pulse-update.timer"; then
+                    if ! update_timer_exists; then
                         # Timer doesn't exist - new feature
                         should_ask_about_updates=true
                         prompt_reason="new"
@@ -4010,21 +4154,29 @@ main() {
                 ;;
             remove)
                 # Stop and disable service
-                systemctl stop $SERVICE_NAME 2>/dev/null || true
-                systemctl disable $SERVICE_NAME 2>/dev/null || true
+                systemctl stop "$SERVICE_NAME" 2>/dev/null || true
+                systemctl disable "$SERVICE_NAME" 2>/dev/null || true
                 
                 # Remove service files
-                rm -f /etc/systemd/system/$SERVICE_NAME.service
-                rm -f /etc/systemd/system/pulse.service
-                rm -f /etc/systemd/system/pulse-backend.service
+                rm -f "/etc/systemd/system/$SERVICE_NAME.service"
+                if [[ "$SERVICE_NAME_EXPLICIT" != "true" ]]; then
+                    rm -f /etc/systemd/system/pulse.service
+                    rm -f /etc/systemd/system/pulse-backend.service
+                fi
+                rm -f "$UPDATE_SERVICE_PATH"
+                rm -f "$UPDATE_TIMER_PATH"
                 # Reload systemd daemon
-    safe_systemctl daemon-reload
+                safe_systemctl daemon-reload
                 
                 # Remove installation directory
                 rm -rf "$INSTALL_DIR"
                 
                 # Remove symlink
-                rm -f /usr/local/bin/pulse
+                rm -f "$BINARY_LINK_PATH"
+                rm -f "$AUTO_UPDATE_DEST"
+                if [[ "$UPDATE_HELPER_PATH" != "/bin/update" ]]; then
+                    rm -f "$UPDATE_HELPER_PATH"
+                fi
                 
                 # Ask about config/data removal
                 echo
@@ -4050,7 +4202,9 @@ main() {
                 
                 # Remove any log files
                 rm -f /var/log/pulse*.log 2>/dev/null || true
-                rm -f /opt/pulse.log 2>/dev/null || true
+                if [[ "$SERVICE_NAME_EXPLICIT" != "true" ]]; then
+                    rm -f /opt/pulse.log 2>/dev/null || true
+                fi
                 
                 print_success "Pulse removed successfully"
                 ;;
@@ -4126,37 +4280,42 @@ uninstall_pulse() {
     echo
 
     # Detect service name
-    local SERVICE_NAME=$(detect_service_name)
+    local service_name
+    service_name=$(detect_service_name)
     
     # Stop and disable service
-    if systemctl is-active --quiet $SERVICE_NAME 2>/dev/null; then
-        echo "Stopping $SERVICE_NAME..."
-        systemctl stop $SERVICE_NAME
+    if systemctl is-active --quiet "$service_name" 2>/dev/null; then
+        echo "Stopping $service_name..."
+        systemctl stop "$service_name"
     fi
     
-    if systemctl is-enabled --quiet $SERVICE_NAME 2>/dev/null; then
-        echo "Disabling $SERVICE_NAME..."
-        systemctl disable $SERVICE_NAME
+    if systemctl is-enabled --quiet "$service_name" 2>/dev/null; then
+        echo "Disabling $service_name..."
+        systemctl disable "$service_name"
     fi
     
     # Stop and disable auto-update timer if it exists
-    if systemctl is-enabled --quiet pulse-update.timer 2>/dev/null; then
+    if update_timer_enabled; then
         echo "Disabling auto-update timer..."
-        systemctl disable --now pulse-update.timer
+        systemctl disable --now "$UPDATE_TIMER_UNIT"
     fi
     
     # Remove files
     echo "Removing Pulse files..."
-    rm -rf /opt/pulse
-    rm -rf /etc/pulse
-    rm -f /etc/systemd/system/pulse.service
-    rm -f /etc/systemd/system/pulse-backend.service
-    rm -f /etc/systemd/system/pulse-update.service
-    rm -f /etc/systemd/system/pulse-update.timer
-    rm -f /usr/local/bin/pulse
-    rm -f /usr/local/bin/pulse-auto-update.sh
-    # Don't remove update commands - might be from community scripts
-    # rm -f /usr/local/bin/update
+    rm -rf "$INSTALL_DIR"
+    rm -rf "$CONFIG_DIR"
+    rm -f "/etc/systemd/system/$service_name.service"
+    if [[ "$SERVICE_NAME_EXPLICIT" != "true" ]]; then
+        rm -f /etc/systemd/system/pulse.service
+        rm -f /etc/systemd/system/pulse-backend.service
+    fi
+    rm -f "$UPDATE_SERVICE_PATH"
+    rm -f "$UPDATE_TIMER_PATH"
+    rm -f "$BINARY_LINK_PATH"
+    rm -f "$AUTO_UPDATE_DEST"
+    if [[ "$UPDATE_HELPER_PATH" != "/bin/update" ]]; then
+        rm -f "$UPDATE_HELPER_PATH"
+    fi
     
     # Remove user (if it exists and isn't being used by other services)
     if id "pulse" &>/dev/null; then
@@ -4180,25 +4339,26 @@ reset_pulse() {
     echo
     
     # Detect service name
-    local SERVICE_NAME=$(detect_service_name)
+    local service_name
+    service_name=$(detect_service_name)
     
     # Stop service
-    if systemctl is-active --quiet $SERVICE_NAME 2>/dev/null; then
-        echo "Stopping $SERVICE_NAME..."
-        systemctl stop $SERVICE_NAME
+    if systemctl is-active --quiet "$service_name" 2>/dev/null; then
+        echo "Stopping $service_name..."
+        systemctl stop "$service_name"
     fi
     
     # Remove config but keep binary
     echo "Removing configuration and data..."
-    rm -rf /etc/pulse/*
+    rm -rf "$CONFIG_DIR"/*
     
     # Restart service
-    echo "Starting $SERVICE_NAME with fresh configuration..."
-    systemctl start $SERVICE_NAME
+    echo "Starting $service_name with fresh configuration..."
+    systemctl start "$service_name"
     
     echo
     echo -e "\033[0;32m✓ Pulse has been reset to fresh configuration\033[0m"
-    echo "Access Pulse at: http://$(hostname -I | awk '{print $1}'):7655"
+    echo "Access Pulse at: http://$(hostname -I | awk '{print $1}'):$(current_frontend_port)"
     exit 0
 }
 

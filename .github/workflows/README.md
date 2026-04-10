@@ -4,11 +4,21 @@
 
 **File**: `update-demo-server.yml`
 
-Automatically updates the public demo server when a new stable release is published.
+Automatically updates the governed demo target after a release is published.
+Stable releases update the stable public demo. Prerelease tags update the
+separate v6 preview demo.
 
 ### Configuration Required
 
-Add these secrets to your GitHub repository settings (`Settings` → `Secrets and variables` → `Actions`):
+Create two GitHub Environments:
+
+1. `demo-stable`
+2. `demo-preview-v6`
+
+Each environment must define the same secret names so the workflow can select
+the target by environment instead of hardcoding separate workflows.
+
+Required environment secrets:
 
 1. **DEMO_SERVER_SSH_KEY**
    - The private SSH key for accessing the demo server
@@ -21,27 +31,74 @@ Add these secrets to your GitHub repository settings (`Settings` → `Secrets an
 3. **DEMO_SERVER_USER**
    - The SSH username for the demo server (e.g. `root` or a deploy user with sudo access)
 
+Required environment variables:
+
+1. **DEMO_LOCAL_BASE_URL**
+   - Local URL used on the target host for version and mock-mode verification
+   - Example stable value: `http://localhost:7655`
+   - Example preview value: `http://localhost:8665`
+
+2. **DEMO_PUBLIC_HEALTH_URL**
+   - Public health endpoint for the selected demo target
+   - Example stable value: `https://demo.pulserelay.pro/api/health`
+   - Example preview value: `https://v6-demo.pulserelay.pro/api/health`
+
+Optional environment variables:
+
+1. **DEMO_SERVICE_NAME**
+   - Stable default: `pulse`
+   - Preview example: `pulse-v6-preview`
+   - When set, the server installer derives the instance-specific install dir,
+     config dir, update helper, and update timer from this service identity.
+
+2. **DEMO_AUTH_USER** / **DEMO_AUTH_PASS**
+   - Demo credentials used for post-update mock verification
+   - Defaults to `demo` / `demo` when omitted
+
 ### How It Works
 
 1. **Trigger**: Runs automatically when a GitHub release is published
-2. **Filter**: Only runs for stable releases (skips prereleases)
-3. **Update**: SSHs to demo server and runs the install script
-4. **Verify**: Checks that the new version is running and mock mode is active
-5. **Cleanup**: Removes SSH key from runner
+2. **Target selection**: Stable tags deploy to `demo-stable`; prerelease tags deploy to `demo-preview-v6`
+3. **Governance check**: Validates the selected tag is reachable from the governed release branch for that version
+4. **Latest check**: Refuses to update a target unless the published tag is the latest release for that target channel
+5. **Update**: SSHs to the selected demo host and runs the tag-matched root installer from that exact git tag
+6. **Verify**: Checks that the new version is running and mock mode is active
+7. **Cleanup**: Removes SSH key from runner
 
 ### Testing
 
 To test without publishing a release:
 1. Go to `Actions` tab in GitHub
 2. Select `Update Demo Server` workflow
-3. Click `Run workflow` (if manual trigger is enabled)
+3. Provide a tag and choose `stable`, `preview-v6`, or `auto`
 
 ### Benefits
 
-- ✅ Demo server always showcases latest stable release
-- ✅ Validates install script works on real server
-- ✅ Removes manual step from release process
-- ✅ Free to run (public repos get unlimited GitHub Actions minutes)
+- ✅ Stable and preview demos stay on separate governed targets
+- ✅ Prereleases no longer require a stable demo overwrite or a manual skip
+- ✅ Validates the real server installer path on the selected target
+- ✅ Removes release-operator guesswork about which demo should move
+
+### Preview Bootstrap Note
+
+The preview environment must be bootstrapped once on the host before the update
+workflow can keep it current. The supported path is a separate service identity
+such as `pulse-v6-preview` plus a separate public route such as
+`v6-demo.pulserelay.pro`; do not reuse the stable `pulse.service` instance.
+
+## Deploy Demo Server
+
+**File**: `deploy-demo-server.yml`
+
+Manually deploys the current branch build to either the stable or preview demo
+environment without changing the governed release workflow.
+
+- Uses the same `demo-stable` / `demo-preview-v6` environment contract as the
+  release-driven updater
+- Requires `DEMO_PUBLIC_HEALTH_URL`
+- Supports optional `DEMO_SERVICE_NAME`, `DEMO_INSTALL_DIR`, `DEMO_TEST_PORT`,
+  `DEMO_AUTH_USER`, and `DEMO_AUTH_PASS`
+- Assumes the target service and install directory already exist on the host
 
 ## Helm CI
 

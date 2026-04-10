@@ -214,3 +214,64 @@ func TestPrereleaseUpdateCopyUsesPreviewFraming(t *testing.T) {
 		t.Fatalf("pulse-auto-update.sh preserved stale release-candidate channel log message")
 	}
 }
+
+func TestRootInstallScriptSupportsInstanceScopedServerInstalls(t *testing.T) {
+	content, err := os.ReadFile(filepath.Join("..", "..", "install.sh"))
+	if err != nil {
+		t.Fatalf("read root install.sh: %v", err)
+	}
+
+	script := string(content)
+	required := []string{
+		`SERVICE_NAME_EXPLICIT="false"`,
+		`SERVICE_NAME="${PULSE_SERVICE_NAME:-$DEFAULT_SERVICE_NAME}"`,
+		`INSTALL_DIR="${PULSE_INSTALL_DIR:-$(default_install_dir_for_service "$SERVICE_NAME")}"`,
+		`CONFIG_DIR="${PULSE_CONFIG_DIR:-$(default_config_dir_for_service "$SERVICE_NAME")}"`,
+		`BINARY_LINK_PATH="${PULSE_BINARY_LINK_PATH:-$(default_binary_link_path_for_service "$SERVICE_NAME")}"`,
+		`UPDATE_HELPER_PATH="${PULSE_UPDATE_HELPER_PATH:-$(default_update_helper_path_for_service "$SERVICE_NAME")}"`,
+		`AUTO_UPDATE_DEST="${PULSE_AUTO_UPDATE_DEST:-$(default_auto_update_dest_for_service "$SERVICE_NAME")}"`,
+		`UPDATE_SERVICE_PATH="${PULSE_UPDATE_SERVICE_PATH:-$(default_update_service_path_for_service "$SERVICE_NAME")}"`,
+		`UPDATE_TIMER_PATH="${PULSE_UPDATE_TIMER_PATH:-$(default_update_timer_path_for_service "$SERVICE_NAME")}"`,
+		`if [[ "$SERVICE_NAME_EXPLICIT" == "true" ]]; then`,
+		`mkdir -p "$(dirname "$BINARY_LINK_PATH")"`,
+		`ln -sf "$INSTALL_DIR/bin/pulse" "$BINARY_LINK_PATH"`,
+		`safe_systemctl enable "$update_timer_unit" || true`,
+		`safe_systemctl start "$update_timer_unit" || true`,
+		`Environment="PULSE_SERVICE_NAME=$service_name"`,
+		`Environment="PULSE_INSTALL_DIR=$install_dir"`,
+		`Environment="PULSE_CONFIG_DIR=$config_dir"`,
+		`Environment="PULSE_UPDATE_TIMER_UNIT=$update_timer_unit"`,
+		`printf ' env'`,
+		`env_vars+=("PULSE_SERVICE_NAME=$SERVICE_NAME")`,
+	}
+	for _, needle := range required {
+		if !strings.Contains(script, needle) {
+			t.Fatalf("root install.sh missing instance-scoped install contract fragment: %s", needle)
+		}
+	}
+}
+
+func TestPulseAutoUpdateScriptSupportsInstanceScopedServerInstalls(t *testing.T) {
+	content, err := os.ReadFile(filepath.Join("..", "..", "scripts", "pulse-auto-update.sh"))
+	if err != nil {
+		t.Fatalf("read pulse-auto-update.sh: %v", err)
+	}
+
+	script := string(content)
+	required := []string{
+		`SERVICE_NAME="${PULSE_SERVICE_NAME:-pulse}"`,
+		`INSTALL_DIR="${PULSE_INSTALL_DIR:-/opt/pulse}"`,
+		`CONFIG_DIR="${PULSE_CONFIG_DIR:-/etc/pulse}"`,
+		`UPDATE_TIMER_UNIT="${PULSE_UPDATE_TIMER_UNIT:-${SERVICE_NAME}-update.timer}"`,
+		`if [[ -n "${PULSE_SERVICE_NAME:-}" ]]; then`,
+		`"PULSE_SERVICE_NAME=$service_name"`,
+		`"PULSE_INSTALL_DIR=$INSTALL_DIR"`,
+		`"PULSE_CONFIG_DIR=$CONFIG_DIR"`,
+		`systemctl is-enabled --quiet "$UPDATE_TIMER_UNIT"`,
+	}
+	for _, needle := range required {
+		if !strings.Contains(script, needle) {
+			t.Fatalf("pulse-auto-update.sh missing instance-scoped install contract fragment: %s", needle)
+		}
+	}
+}

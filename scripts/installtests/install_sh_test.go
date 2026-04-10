@@ -1052,7 +1052,7 @@ func TestSetupUpdateCommandHonorsRCChannelAndCustomPaths(t *testing.T) {
 		t.Fatalf("read update helper: %v", err)
 	}
 	got := string(content)
-	if !strings.Contains(got, `CONFIG_DIR="/etc/pulse"`) {
+	if !strings.Contains(got, `CONFIG_DIR=/etc/pulse`) {
 		t.Fatalf("update helper missing config dir logic:\n%s", got)
 	}
 	if !strings.Contains(got, `extra_args+=(--rc)`) {

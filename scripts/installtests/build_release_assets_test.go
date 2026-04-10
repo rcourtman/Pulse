@@ -97,6 +97,10 @@ func TestDockerAndDemoBuildsUseCanonicalReleaseLdflags(t *testing.T) {
 	workflow := string(workflowBytes)
 	workflowRequired := []string{
 		`./scripts/release_ldflags.sh server --version "${VERSION}" --build-time "${BUILD_TIME}" --git-commit "${GIT_COMMIT}"`,
+		`demo-preview-v6`,
+		`demo-stable`,
+		`workflow_dispatch:`,
+		`target:`,
 	}
 	for _, needle := range workflowRequired {
 		if !strings.Contains(workflow, needle) {

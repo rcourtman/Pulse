@@ -167,6 +167,12 @@ the manual `trigger-release*.sh` entrypoints must all derive their governed
 release line from control-plane metadata before they touch public artifacts or
 deployment targets, rather than treating tag names or workflow triggers as
 enough proof on their own.
+That same governed demo-deployment boundary now owns target separation between
+the public stable demo and the opt-in v6 preview demo. `.github/workflows/create-release.yml`,
+`.github/workflows/update-demo-server.yml`, and `.github/workflows/deploy-demo-server.yml`
+must route stable tags to the stable demo environment and prerelease tags to a
+separate preview environment instead of skipping prerelease demo updates or
+reusing the stable runtime in place.
 Those same governed release workflows also own the operator-facing wording for
 that promotion metadata. Human-visible workflow inputs, summaries, and error
 messages must describe the path as a prerelease or preview flow rather than
@@ -249,6 +255,12 @@ release artifacts. `scripts/install.sh`, `scripts/install.ps1`,
 `scripts/install-container-agent.sh`, and `scripts/pulse-auto-update.sh`
 define supported deployment entry points and update behavior, even when the
 shell and Windows installers also sit on the shared agent-lifecycle boundary.
+That same installer boundary now owns instance identity for side-by-side server
+installs too: the root `install.sh`, generated update helper, and
+`scripts/pulse-auto-update.sh` must preserve an explicitly selected service
+identity across install, update, reset, uninstall, and timer/service wiring so
+stable and preview Pulse runtimes can coexist on one host without drifting back
+onto the default `pulse.service` paths.
 The local dev-runtime launcher and dependency manifest floor now sit on that
 same installability boundary.
 `scripts/hot-dev.sh` and `scripts/hot-dev-bg.sh` are the canonical owned entry

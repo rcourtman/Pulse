@@ -670,17 +670,18 @@ jobs:
           echo "[OK] Docker publish workflow dispatched"
 
       - name: Trigger demo server update
-        if: ${{ github.event.inputs.draft_only != 'true' && needs.prepare.outputs.is_prerelease != 'true' }}
+        if: ${{ github.event.inputs.draft_only != 'true' }}
         continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.WORKFLOW_PAT }}
         run: |
-          gh workflow run update-demo-server.yml -f tag="${{ needs.prepare.outputs.tag }}"
-          echo "[OK] Demo server update dispatched"
-
-      - name: Skip demo server update for prerelease
-        if: ${{ github.event.inputs.draft_only != 'true' && needs.prepare.outputs.is_prerelease == 'true' }}
-        run: echo "Skipping demo server update for prerelease tag ${{ needs.prepare.outputs.tag }}"
+          if [ "${{ needs.prepare.outputs.is_prerelease }}" = "true" ]; then
+            TARGET="preview-v6"
+          else
+            TARGET="stable"
+          fi
+          gh workflow run update-demo-server.yml -f tag="${{ needs.prepare.outputs.tag }}" -f target="${TARGET}"
+          echo "[OK] Demo server update dispatched for ${TARGET}"
 
       - name: Summary
         run: |

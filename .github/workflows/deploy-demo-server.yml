@@ -2,15 +2,74 @@ name: Deploy Demo Server
 
 on:
   workflow_dispatch:
+    inputs:
+      target:
+        description: 'Demo target to deploy'
+        required: true
+        default: stable
+        type: choice
+        options:
+          - stable
+          - preview-v6
   # schedule:
   #   - cron: '0 0 * * *' # Nightly at midnight
 
 jobs:
-  deploy:
+  resolve:
     runs-on: ubuntu-latest
+    outputs:
+      target: ${{ steps.target.outputs.target }}
+      environment_name: ${{ steps.target.outputs.environment_name }}
+
     steps:
+      - name: Resolve demo target environment
+        id: target
+        run: |
+          set -euo pipefail
+          TARGET="${{ inputs.target }}"
+          case "$TARGET" in
+            stable)
+              ENVIRONMENT_NAME="demo-stable"
+              ;;
+            preview-v6)
+              ENVIRONMENT_NAME="demo-preview-v6"
+              ;;
+            *)
+              echo "::error::Unsupported demo target: ${TARGET}"
+              exit 1
+              ;;
+          esac
+
+          echo "target=$TARGET" >> "$GITHUB_OUTPUT"
+          echo "environment_name=$ENVIRONMENT_NAME" >> "$GITHUB_OUTPUT"
+
+  deploy:
+    needs: resolve
+    runs-on: ubuntu-latest
+    environment: ${{ needs.resolve.outputs.environment_name }}
+    env:
+      DEMO_SERVICE_NAME: ${{ vars.DEMO_SERVICE_NAME }}
+      DEMO_INSTALL_DIR: ${{ vars.DEMO_INSTALL_DIR }}
+      DEMO_PUBLIC_HEALTH_URL: ${{ vars.DEMO_PUBLIC_HEALTH_URL }}
+      DEMO_TEST_PORT: ${{ vars.DEMO_TEST_PORT }}
+      DEMO_AUTH_USER: ${{ vars.DEMO_AUTH_USER }}
+      DEMO_AUTH_PASS: ${{ vars.DEMO_AUTH_PASS }}
+
+    steps:
+      - name: Validate demo environment configuration
+        env:
+          DEMO_SERVER_HOST: ${{ secrets.DEMO_SERVER_HOST }}
+          DEMO_SERVER_USER: ${{ secrets.DEMO_SERVER_USER }}
+          DEMO_SERVER_SSH_KEY: ${{ secrets.DEMO_SERVER_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          [ -n "$DEMO_SERVER_HOST" ] || { echo "::error::DEMO_SERVER_HOST is required in the selected demo environment."; exit 1; }
+          [ -n "$DEMO_SERVER_USER" ] || { echo "::error::DEMO_SERVER_USER is required in the selected demo environment."; exit 1; }
+          [ -n "$DEMO_SERVER_SSH_KEY" ] || { echo "::error::DEMO_SERVER_SSH_KEY is required in the selected demo environment."; exit 1; }
+          [ -n "$DEMO_PUBLIC_HEALTH_URL" ] || { echo "::error::DEMO_PUBLIC_HEALTH_URL is required in the selected demo environment."; exit 1; }
+
       - uses: actions/checkout@v4
-      
+
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
@@ -36,12 +95,11 @@ jobs:
       - name: Build frontend
         run: |
           if [ -d "frontend-modern/dist" ] && [ -f "frontend-modern/dist/index.html" ]; then
-            echo "Using cached frontend build";
+            echo "Using cached frontend build"
           else
-            npm --prefix frontend-modern run build;
+            npm --prefix frontend-modern run build
           fi
-          
-          # Prepare embedding directory
+
           rm -rf internal/api/frontend-modern
           mkdir -p internal/api/frontend-modern
           cp -r frontend-modern/dist internal/api/frontend-modern/
@@ -50,6 +108,7 @@ jobs:
         env:
           PULSE_LICENSE_PUBLIC_KEY: ${{ secrets.PULSE_LICENSE_PUBLIC_KEY }}
         run: |
+          set -euo pipefail
           VERSION="v$(cat VERSION | tr -d '\n')"
           BUILD_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
           GIT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
@@ -58,26 +117,54 @@ jobs:
             -ldflags="${SERVER_LDFLAGS}" \
             -trimpath \
             -o pulse ./cmd/pulse/
-      
+
       - name: Tailscale
         uses: tailscale/github-action@v2
         with:
           authkey: ${{ secrets.TS_AUTHKEY }}
 
       - name: Setup SSH
+        env:
+          DEMO_SERVER_HOST: ${{ secrets.DEMO_SERVER_HOST }}
+          DEMO_SERVER_SSH_KEY: ${{ secrets.DEMO_SERVER_SSH_KEY }}
         run: |
+          set -euo pipefail
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
-          echo "${{ secrets.DEMO_SERVER_SSH_KEY }}" > ~/.ssh/id_ed25519
+          echo "$DEMO_SERVER_SSH_KEY" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
-          ssh-keyscan -H ${{ secrets.DEMO_SERVER_HOST }} >> ~/.ssh/known_hosts
+          ssh-keyscan -H "$DEMO_SERVER_HOST" >> ~/.ssh/known_hosts
           chmod 600 ~/.ssh/known_hosts
+
+      - name: Resolve deploy paths
+        id: config
+        run: |
+          set -euo pipefail
+          SERVICE_NAME="${DEMO_SERVICE_NAME:-pulse}"
+          INSTALL_DIR="${DEMO_INSTALL_DIR:-}"
+          if [ -z "$INSTALL_DIR" ]; then
+            if [ "$SERVICE_NAME" = "pulse" ]; then
+              INSTALL_DIR="/opt/pulse"
+            else
+              INSTALL_DIR="/opt/$SERVICE_NAME"
+            fi
+          fi
+          TEST_PORT="${DEMO_TEST_PORT:-8082}"
+          AUTH_USER="${DEMO_AUTH_USER:-demo}"
+          AUTH_PASS="${DEMO_AUTH_PASS:-demo}"
+
+          echo "service_name=$SERVICE_NAME" >> "$GITHUB_OUTPUT"
+          echo "install_dir=$INSTALL_DIR" >> "$GITHUB_OUTPUT"
+          echo "test_port=$TEST_PORT" >> "$GITHUB_OUTPUT"
+          echo "auth_user=$AUTH_USER" >> "$GITHUB_OUTPUT"
+          echo "auth_pass=$AUTH_PASS" >> "$GITHUB_OUTPUT"
 
       - name: Deploy to server
         env:
           DEPLOY_HOST: ${{ secrets.DEMO_SERVER_HOST }}
           DEPLOY_USER: ${{ secrets.DEMO_SERVER_USER }}
         run: |
+          set -euo pipefail
           SSH_OPTS=(
             -i ~/.ssh/id_ed25519
             -o IdentitiesOnly=yes
@@ -85,49 +172,51 @@ jobs:
             -o UserKnownHostsFile=~/.ssh/known_hosts
           )
 
-          # Clean up any stale files from previous runs
+          TARGET_SERVICE="${{ steps.config.outputs.service_name }}"
+          INSTALL_DIR="${{ steps.config.outputs.install_dir }}"
+          TEST_PORT="${{ steps.config.outputs.test_port }}"
+          AUTH_USER="${{ steps.config.outputs.auth_user }}"
+          AUTH_PASS="${{ steps.config.outputs.auth_pass }}"
+
           ssh "${SSH_OPTS[@]}" "${DEPLOY_USER}@${DEPLOY_HOST}" "rm -f /tmp/pulse-new; rm -rf /tmp/pulse-demo-test" || true
-          
-          # Upload new binary
           scp "${SSH_OPTS[@]}" pulse "${DEPLOY_USER}@${DEPLOY_HOST}:/tmp/pulse-new"
-          
-          # Health check: Run on test port 8082 and verify
-          # We use a subshell to background the process and then kill it after the check
-          ssh "${SSH_OPTS[@]}" "${DEPLOY_USER}@${DEPLOY_HOST}" "
-            chmod +x /tmp/pulse-new &&
-            PULSE_DATA_DIR=/tmp/pulse-demo-test \
-            FRONTEND_PORT=8082 \
-            PULSE_MOCK_MODE=true \
-            PULSE_AUTH_USER=test \
-            PULSE_AUTH_PASS=test \
-            nohup /tmp/pulse-new > /tmp/demo-deploy-test.log 2>&1 &
-            PID=\$!
-            sleep 5
-            if curl -f http://127.0.0.1:8082/api/health; then
-              echo 'Health check passed!'
-              kill \$PID
-              rm -rf /tmp/pulse-demo-test
-              rm /tmp/demo-deploy-test.log
-            else
-              echo 'Health check failed! Error log:'
-              cat /tmp/demo-deploy-test.log
-              kill \$PID
-              rm -rf /tmp/pulse-demo-test
-              exit 1
-            fi
-          "
-          
-          # Swap and restart production service
-          ssh "${SSH_OPTS[@]}" "${DEPLOY_USER}@${DEPLOY_HOST}" "
-            sudo systemctl stop pulse &&
-            sudo mv /tmp/pulse-new /opt/pulse/bin/pulse &&
-            sudo systemctl start pulse
-          "
-      
+
+          ssh "${SSH_OPTS[@]}" "${DEPLOY_USER}@${DEPLOY_HOST}" \
+            "TARGET_SERVICE=$(printf '%q' "$TARGET_SERVICE") INSTALL_DIR=$(printf '%q' "$INSTALL_DIR") TEST_PORT=$(printf '%q' "$TEST_PORT") AUTH_USER=$(printf '%q' "$AUTH_USER") AUTH_PASS=$(printf '%q' "$AUTH_PASS") bash -s" <<'EOF'
+          set -euo pipefail
+          chmod +x /tmp/pulse-new
+          PULSE_DATA_DIR=/tmp/pulse-demo-test \
+          FRONTEND_PORT="$TEST_PORT" \
+          PULSE_MOCK_MODE=true \
+          PULSE_AUTH_USER="$AUTH_USER" \
+          PULSE_AUTH_PASS="$AUTH_PASS" \
+          nohup /tmp/pulse-new > /tmp/demo-deploy-test.log 2>&1 &
+          PID=$!
+          sleep 5
+          if curl -fsS "http://127.0.0.1:${TEST_PORT}/api/health"; then
+            echo 'Health check passed'
+            kill "$PID"
+            rm -rf /tmp/pulse-demo-test
+            rm -f /tmp/demo-deploy-test.log
+          else
+            echo 'Health check failed'
+            cat /tmp/demo-deploy-test.log || true
+            kill "$PID" || true
+            rm -rf /tmp/pulse-demo-test
+            exit 1
+          fi
+
+          sudo test -d "$INSTALL_DIR/bin"
+          sudo systemctl stop "$TARGET_SERVICE"
+          sudo mv /tmp/pulse-new "$INSTALL_DIR/bin/pulse"
+          sudo systemctl start "$TARGET_SERVICE"
+          EOF
+
       - name: Verify production
         run: |
+          set -euo pipefail
           sleep 5
-          curl -f https://demo.pulserelay.pro/api/health
+          curl -fsS "$DEMO_PUBLIC_HEALTH_URL"
 
       - name: Cleanup SSH material
         if: always()

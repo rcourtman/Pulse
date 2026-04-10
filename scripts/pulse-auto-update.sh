@@ -8,9 +8,11 @@ set -euo pipefail
 
 # Configuration
 GITHUB_REPO="${GITHUB_REPO:-rcourtman/Pulse}"
-INSTALL_DIR="/opt/pulse"
-CONFIG_DIR="/etc/pulse"
-LOG_TAG="pulse-auto-update"
+SERVICE_NAME="${PULSE_SERVICE_NAME:-pulse}"
+INSTALL_DIR="${PULSE_INSTALL_DIR:-/opt/pulse}"
+CONFIG_DIR="${PULSE_CONFIG_DIR:-/etc/pulse}"
+UPDATE_TIMER_UNIT="${PULSE_UPDATE_TIMER_UNIT:-${SERVICE_NAME}-update.timer}"
+LOG_TAG="${PULSE_AUTO_UPDATE_LOG_TAG:-${SERVICE_NAME}-auto-update}"
 MAX_LOG_SIZE=10485760  # 10MB
 
 # Logging function
@@ -38,7 +40,7 @@ check_auto_updates_enabled() {
     fi
     
     # Also check if timer is enabled (belt and suspenders)
-    if ! systemctl is-enabled --quiet pulse-update.timer 2>/dev/null; then
+    if ! systemctl is-enabled --quiet "$UPDATE_TIMER_UNIT" 2>/dev/null; then
         log info "Auto-update timer is disabled"
         exit 0
     fi
@@ -136,7 +138,9 @@ version_greater_than() {
 
 # Detect service name (could be pulse or pulse-backend)
 detect_service_name() {
-    if systemctl list-unit-files --no-legend | grep -q "^pulse-backend.service"; then
+    if [[ -n "${PULSE_SERVICE_NAME:-}" ]]; then
+        echo "$SERVICE_NAME"
+    elif systemctl list-unit-files --no-legend | grep -q "^pulse-backend.service"; then
         echo "pulse-backend"
     elif systemctl list-unit-files --no-legend | grep -q "^pulse.service"; then
         echo "pulse"
@@ -191,7 +195,11 @@ perform_update() {
     fi
 
     if curl -sSL "$install_script_url" | \
-       bash -s -- "${installer_args[@]}" 2>&1 | \
+       env \
+           "PULSE_SERVICE_NAME=$service_name" \
+           "PULSE_INSTALL_DIR=$INSTALL_DIR" \
+           "PULSE_CONFIG_DIR=$CONFIG_DIR" \
+           bash -s -- "${installer_args[@]}" 2>&1 | \
        while IFS= read -r line; do
            log info "installer: $line"
        done; then

@@ -116,8 +116,8 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
                 re.compile(r"existing v5 users until `(?:\[v5-eos-date\]|\d{4}-\d{2}-\d{2})`\.")
             )
         else:
-            self.assertIn("Pre-Release Notes", release_notes)
-            self.assertIn("final GA release", release_notes)
+            self.assertRegex(release_notes, re.compile(r"(Pre-Release Notes|Release Candidate Notes)"))
+            self.assertRegex(release_notes, re.compile(r"(final GA release|stable `v6\.0\.0` release)"))
             self.assertNotIn("Pulse v5 Support Transition", release_notes)
 
     def test_rehearsal_template_and_workflow_capture_ga_rehearsal_record(self) -> None:
@@ -213,6 +213,7 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         publish = read(".github/workflows/publish-docker.yml")
         promote = read(".github/workflows/promote-floating-tags.yml")
         demo = read(".github/workflows/update-demo-server.yml")
+        release_workflow = read(".github/workflows/create-release.yml")
         helm = read(".github/workflows/publish-helm-chart.yml")
         helm_pages = read(".github/workflows/helm-pages.yml")
         chart = read("deploy/helm/pulse/Chart.yaml")
@@ -221,11 +222,20 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("control_plane.py --branch-for-version", publish)
         self.assertIn("control_plane.py --branch-for-version", promote)
         self.assertIn("control_plane.py --branch-for-version", demo)
+        self.assertIn("preview-v6", demo)
+        self.assertIn("demo-preview-v6", demo)
+        self.assertIn("demo-stable", demo)
+        self.assertIn("Refusing prerelease tag", demo)
+        self.assertIn("Refusing stable tag", demo)
+        self.assertIn("latest published release for target", demo)
         self.assertIn("control_plane.py --branch-for-version", helm)
         self.assertIn("control_plane.py --branch-for-version", helm_pages)
         self.assertIn("does not descend from any matching prerelease tag", publish)
         self.assertIn("does not descend from any matching prerelease tag", promote)
         self.assertIn("Refusing cross-line Helm pages release", helm_pages)
+        self.assertIn('TARGET="preview-v6"', release_workflow)
+        self.assertIn('TARGET="stable"', release_workflow)
+        self.assertIn('gh workflow run update-demo-server.yml -f tag="${{ needs.prepare.outputs.tag }}" -f target="${TARGET}"', release_workflow)
         self.assertIn("sync_chart_release_metadata.py", helm)
         self.assertIn("sync_chart_release_metadata.py", helm_pages)
         self.assertIn("--chart deploy/helm/pulse/Chart.yaml", helm)
@@ -236,6 +246,8 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("raw.githubusercontent.com/{repo}/{tag}/docs/images/pulse-logo.svg", chart_sync)
         self.assertIn("both stable and prerelease releases dispatch", runbook)
         self.assertIn("Release `6.0.0` from `pulse/v6-release`", runbook)
+        self.assertIn("separate v6 preview demo environment", runbook)
+        self.assertIn("preview-v6", runbook)
         self.assertIn(promotion_metadata_envelope(), normalize_ws(runbook))
 
     def test_blocked_record_tracks_current_target_and_candidate_version(self) -> None:

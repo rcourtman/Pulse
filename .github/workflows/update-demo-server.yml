@@ -6,26 +6,82 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Release tag to deploy (e.g., v4.29.0)'
+        description: 'Release tag to deploy (e.g., v6.0.0-rc.1)'
         required: true
         type: string
+      target:
+        description: 'Demo target to deploy'
+        required: false
+        default: auto
+        type: choice
+        options:
+          - auto
+          - stable
+          - preview-v6
 
 jobs:
-  update-demo:
-    # Only run for stable releases (not pre-releases) or manual dispatch
-    if: github.event_name == 'workflow_dispatch' || github.event.release.prerelease == false
+  resolve:
     runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.target.outputs.tag }}
+      target: ${{ steps.target.outputs.target }}
+      environment_name: ${{ steps.target.outputs.environment_name }}
+      skip: ${{ steps.latest.outputs.skip || 'false' }}
 
     steps:
-      - name: Resolve target tag
+      - name: Resolve target tag and demo environment
         id: target
         run: |
+          set -euo pipefail
+
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             TAG="${{ inputs.tag }}"
+            REQUESTED_TARGET="${{ inputs.target }}"
           else
             TAG="${{ github.event.release.tag_name }}"
+            REQUESTED_TARGET="auto"
           fi
+
+          VERSION="${TAG#v}"
+          IS_PRERELEASE=false
+          if [[ "$VERSION" =~ -(rc|alpha|beta)\.[0-9]+$ ]]; then
+            IS_PRERELEASE=true
+          fi
+
+          TARGET="${REQUESTED_TARGET:-auto}"
+          if [ -z "$TARGET" ] || [ "$TARGET" = "auto" ]; then
+            if [ "$IS_PRERELEASE" = "true" ]; then
+              TARGET="preview-v6"
+            else
+              TARGET="stable"
+            fi
+          fi
+
+          case "$TARGET" in
+            stable)
+              if [ "$IS_PRERELEASE" = "true" ]; then
+                echo "::error::Stable demo target only accepts stable tags. Refusing prerelease tag ${TAG}."
+                exit 1
+              fi
+              ENVIRONMENT_NAME="demo-stable"
+              ;;
+            preview-v6)
+              if [ "$IS_PRERELEASE" != "true" ]; then
+                echo "::error::Preview demo target only accepts prerelease tags. Refusing stable tag ${TAG}."
+                exit 1
+              fi
+              ENVIRONMENT_NAME="demo-preview-v6"
+              ;;
+            *)
+              echo "::error::Unsupported demo target: ${TARGET}"
+              exit 1
+              ;;
+          esac
+
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "target=$TARGET" >> "$GITHUB_OUTPUT"
+          echo "environment_name=$ENVIRONMENT_NAME" >> "$GITHUB_OUTPUT"
+          echo "Resolved demo deployment: tag=${TAG}, target=${TARGET}, environment=${ENVIRONMENT_NAME}"
 
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -33,16 +89,11 @@ jobs:
           fetch-depth: 0
           fetch-tags: true
 
-      - name: Validate stable release line policy
+      - name: Validate governed release line for selected tag
         run: |
           set -euo pipefail
           TAG="${{ steps.target.outputs.tag }}"
           VERSION="${TAG#v}"
-
-          if [[ "$VERSION" =~ -rc\.[0-9]+$ ]] || [[ "$VERSION" =~ -alpha\.[0-9]+$ ]] || [[ "$VERSION" =~ -beta\.[0-9]+$ ]]; then
-            echo "::error::Demo server updates only support stable releases. Refusing prerelease tag ${TAG}."
-            exit 1
-          fi
 
           if [ "$(git rev-parse --is-shallow-repository)" = "true" ]; then
             git fetch --prune --unshallow origin
@@ -61,40 +112,81 @@ jobs:
             exit 1
           fi
 
-          echo "[OK] ${TAG} validated for stable demo deployment on ${REQUIRED_BRANCH}"
+          echo "[OK] ${TAG} validated for governed demo deployment on ${REQUIRED_BRANCH}"
 
-      - name: Skip if not latest published release
-        id: gate
+      - name: Skip if not latest published release for target
+        id: latest
         if: github.event_name == 'release'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TARGET="${{ steps.target.outputs.tag }}"
-          LATEST=$(gh api "repos/${{ github.repository }}/releases/latest" --jq '.tag_name')
-          echo "Target tag: $TARGET"
-          echo "Latest published tag: $LATEST"
-          if [ "$TARGET" != "$LATEST" ]; then
+          set -euo pipefail
+          TARGET="${{ steps.target.outputs.target }}"
+          TAG="${{ steps.target.outputs.tag }}"
+
+          if [ "$TARGET" = "stable" ]; then
+            LATEST=$(gh api "repos/${{ github.repository }}/releases/latest" --jq '.tag_name')
+          else
+            LATEST=$(gh api "repos/${{ github.repository }}/releases?per_page=100" --jq '[.[] | select(.draft == false and .prerelease == true)][0].tag_name')
+          fi
+
+          echo "Target tag: $TAG"
+          echo "Latest published tag for $TARGET: $LATEST"
+
+          if [ -z "$LATEST" ] || [ "$LATEST" = "null" ]; then
+            echo "::error::Could not determine the latest published release for demo target $TARGET."
+            exit 1
+          fi
+
+          if [ "$TAG" != "$LATEST" ]; then
             echo "skip=true" >> "$GITHUB_OUTPUT"
-            echo "Release is not the latest; skipping demo update."
+            echo "Release is not the latest published tag for ${TARGET}; skipping demo update."
           else
             echo "skip=false" >> "$GITHUB_OUTPUT"
           fi
 
+  update-demo:
+    needs: resolve
+    if: needs.resolve.outputs.skip != 'true'
+    runs-on: ubuntu-latest
+    environment: ${{ needs.resolve.outputs.environment_name }}
+    env:
+      DEMO_LOCAL_BASE_URL: ${{ vars.DEMO_LOCAL_BASE_URL }}
+      DEMO_PUBLIC_HEALTH_URL: ${{ vars.DEMO_PUBLIC_HEALTH_URL }}
+      DEMO_SERVICE_NAME: ${{ vars.DEMO_SERVICE_NAME }}
+      DEMO_AUTH_USER: ${{ vars.DEMO_AUTH_USER }}
+      DEMO_AUTH_PASS: ${{ vars.DEMO_AUTH_PASS }}
+
+    steps:
       - name: Check release type
-        if: steps.gate.outputs.skip != 'true'
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "Manual deployment triggered for: ${{ inputs.tag }}"
-          else
-            echo "Release: ${{ github.event.release.tag_name }}"
-            echo "Prerelease: ${{ github.event.release.prerelease }}"
-            echo "Updating demo server to latest stable release..."
-          fi
+          echo "Tag: ${{ needs.resolve.outputs.tag }}"
+          echo "Target: ${{ needs.resolve.outputs.target }}"
+          echo "Environment: ${{ needs.resolve.outputs.environment_name }}"
+
+      - name: Validate demo environment configuration
+        env:
+          DEMO_SERVER_HOST: ${{ secrets.DEMO_SERVER_HOST }}
+          DEMO_SERVER_USER: ${{ secrets.DEMO_SERVER_USER }}
+          DEMO_SERVER_SSH_KEY: ${{ secrets.DEMO_SERVER_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          [ -n "$DEMO_SERVER_HOST" ] || { echo "::error::DEMO_SERVER_HOST is required in the selected demo environment."; exit 1; }
+          [ -n "$DEMO_SERVER_USER" ] || { echo "::error::DEMO_SERVER_USER is required in the selected demo environment."; exit 1; }
+          [ -n "$DEMO_SERVER_SSH_KEY" ] || { echo "::error::DEMO_SERVER_SSH_KEY is required in the selected demo environment."; exit 1; }
+          [ -n "$DEMO_LOCAL_BASE_URL" ] || { echo "::error::DEMO_LOCAL_BASE_URL is required in the selected demo environment."; exit 1; }
+          [ -n "$DEMO_PUBLIC_HEALTH_URL" ] || { echo "::error::DEMO_PUBLIC_HEALTH_URL is required in the selected demo environment."; exit 1; }
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
 
       - name: Wait for release assets
-        if: steps.gate.outputs.skip != 'true'
         run: |
-          TAG="${{ steps.target.outputs.tag }}"
+          set -euo pipefail
+          TAG="${{ needs.resolve.outputs.tag }}"
           echo "Waiting for release assets to be available..."
 
           MAX_ATTEMPTS=30
@@ -103,7 +195,6 @@ jobs:
           while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
             echo "Checking for assets (attempt $((ATTEMPT + 1))/$MAX_ATTEMPTS)..."
 
-            # Check if checksums.txt and linux-amd64 tarball exist
             CHECKSUMS_STATUS=$(curl -sL -o /dev/null -w "%{http_code}" \
               "https://github.com/rcourtman/Pulse/releases/download/${TAG}/checksums.txt")
             TARBALL_STATUS=$(curl -sL -o /dev/null -w "%{http_code}" \
@@ -112,7 +203,7 @@ jobs:
             echo "checksums.txt: $CHECKSUMS_STATUS, tarball: $TARBALL_STATUS"
 
             if [ "$CHECKSUMS_STATUS" = "200" ] && [ "$TARBALL_STATUS" = "200" ]; then
-              echo "✅ Release assets are available!"
+              echo "Release assets are available."
               exit 0
             fi
 
@@ -123,75 +214,129 @@ jobs:
             fi
           done
 
-          echo "❌ Timeout waiting for release assets"
+          echo "::error::Timeout waiting for release assets"
           exit 1
 
-      - name: Setup SSH
-        if: steps.gate.outputs.skip != 'true'
+      - name: Materialize tagged installer
         run: |
+          set -euo pipefail
+          TAG="${{ needs.resolve.outputs.tag }}"
+          git show "refs/tags/${TAG}:install.sh" > /tmp/pulse-install.sh
+          chmod +x /tmp/pulse-install.sh
+
+      - name: Setup SSH
+        env:
+          DEMO_SERVER_HOST: ${{ secrets.DEMO_SERVER_HOST }}
+          DEMO_SERVER_SSH_KEY: ${{ secrets.DEMO_SERVER_SSH_KEY }}
+        run: |
+          set -euo pipefail
           mkdir -p ~/.ssh
-          echo "${{ secrets.DEMO_SERVER_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 700 ~/.ssh
+          echo "$DEMO_SERVER_SSH_KEY" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
-          ssh-keyscan -H ${{ secrets.DEMO_SERVER_HOST }} >> ~/.ssh/known_hosts
+          ssh-keyscan -H "$DEMO_SERVER_HOST" >> ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
 
       - name: Check current demo version
-        if: steps.gate.outputs.skip != 'true'
         id: current
+        env:
+          DEMO_SERVER_HOST: ${{ secrets.DEMO_SERVER_HOST }}
+          DEMO_SERVER_USER: ${{ secrets.DEMO_SERVER_USER }}
         run: |
-          TARGET="${{ steps.target.outputs.tag }}"
+          set -euo pipefail
+          TARGET="${{ needs.resolve.outputs.tag }}"
           TARGET_STRIPPED="${TARGET#v}"
-          CURRENT=$(ssh -i ~/.ssh/id_ed25519 ${{ secrets.DEMO_SERVER_USER }}@${{ secrets.DEMO_SERVER_HOST }} \
-            "curl -s http://localhost:7655/api/version | jq -r .version")
+          CURRENT=$(ssh -i ~/.ssh/id_ed25519 "$DEMO_SERVER_USER@$DEMO_SERVER_HOST" \
+            "curl -fsS ${DEMO_LOCAL_BASE_URL}/api/version | jq -r .version")
           echo "Current demo version: ${CURRENT}"
           if [ "$CURRENT" = "$TARGET" ] || [ "$CURRENT" = "$TARGET_STRIPPED" ] || [ "v${CURRENT}" = "$TARGET" ]; then
             echo "skip_current=true" >> "$GITHUB_OUTPUT"
-            echo "Demo server already on target version; skipping update."
+            echo "Demo target already on the requested version; skipping update."
           else
             echo "skip_current=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Update demo server
-        if: steps.gate.outputs.skip != 'true' && steps.current.outputs.skip_current != 'true'
+      - name: Upload tagged installer
+        if: steps.current.outputs.skip_current != 'true'
+        env:
+          DEMO_SERVER_HOST: ${{ secrets.DEMO_SERVER_HOST }}
+          DEMO_SERVER_USER: ${{ secrets.DEMO_SERVER_USER }}
         run: |
-          TAG="${{ steps.target.outputs.tag }}"
-          # Use set -o pipefail to ensure curl errors aren't masked by bash
-          ssh -i ~/.ssh/id_ed25519 ${{ secrets.DEMO_SERVER_USER }}@${{ secrets.DEMO_SERVER_HOST }} \
-            "set -o pipefail && curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/install.sh | sudo bash -s -- --version $TAG"
+          set -euo pipefail
+          scp -i ~/.ssh/id_ed25519 /tmp/pulse-install.sh "$DEMO_SERVER_USER@$DEMO_SERVER_HOST:/tmp/pulse-install.sh"
+
+      - name: Update demo server
+        if: steps.current.outputs.skip_current != 'true'
+        env:
+          DEMO_SERVER_HOST: ${{ secrets.DEMO_SERVER_HOST }}
+          DEMO_SERVER_USER: ${{ secrets.DEMO_SERVER_USER }}
+        run: |
+          set -euo pipefail
+          TAG="${{ needs.resolve.outputs.tag }}"
+          SERVICE_NAME="${DEMO_SERVICE_NAME:-}"
+          REMOTE_SCRIPT=$(cat <<'EOF'
+          set -euo pipefail
+          TAG="$1"
+          SERVICE_NAME="$2"
+          INSTALLER_ENV=()
+          if [ -n "$SERVICE_NAME" ]; then
+            INSTALLER_ENV+=("PULSE_SERVICE_NAME=$SERVICE_NAME")
+          fi
+          sudo env "${INSTALLER_ENV[@]}" bash /tmp/pulse-install.sh --version "$TAG"
+          rm -f /tmp/pulse-install.sh
+          EOF
+          )
+          ssh -i ~/.ssh/id_ed25519 "$DEMO_SERVER_USER@$DEMO_SERVER_HOST" "bash -s -- $(printf '%q ' "$TAG" "$SERVICE_NAME")" <<<"$REMOTE_SCRIPT"
 
       - name: Verify update
-        if: steps.gate.outputs.skip != 'true' && steps.current.outputs.skip_current != 'true'
+        if: steps.current.outputs.skip_current != 'true'
+        env:
+          DEMO_SERVER_HOST: ${{ secrets.DEMO_SERVER_HOST }}
+          DEMO_SERVER_USER: ${{ secrets.DEMO_SERVER_USER }}
         run: |
-          # Wait a moment for service to restart
+          set -euo pipefail
           sleep 5
 
-          # Check version endpoint
-          VERSION=$(ssh -i ~/.ssh/id_ed25519 ${{ secrets.DEMO_SERVER_USER }}@${{ secrets.DEMO_SERVER_HOST }} \
-            "curl -s http://localhost:7655/api/version | jq -r .version")
+          VERSION=$(ssh -i ~/.ssh/id_ed25519 "$DEMO_SERVER_USER@$DEMO_SERVER_HOST" \
+            "curl -fsS ${DEMO_LOCAL_BASE_URL}/api/version | jq -r .version")
 
           echo "Demo server is now running version: $VERSION"
 
-          # Verify version matches target
-          TAG="${{ steps.target.outputs.tag }}"
+          TAG="${{ needs.resolve.outputs.tag }}"
           TAG_STRIPPED="${TAG#v}"
           if [ "$VERSION" != "$TAG" ] && [ "$VERSION" != "$TAG_STRIPPED" ]; then
             echo "::error::Version mismatch! Expected $TAG but got $VERSION"
             exit 1
           fi
 
-          # Verify mock mode is active by authenticating and checking node count
-          # Uses $HOME for cookie file since /tmp may not be writable by all users
-          NODES=$(ssh -i ~/.ssh/id_ed25519 ${{ secrets.DEMO_SERVER_USER }}@${{ secrets.DEMO_SERVER_HOST }} \
-            'curl -s -c $HOME/.demo-cookies.txt http://localhost:7655/api/login -X POST -H "Content-Type: application/json" -d "{\"username\":\"demo\",\"password\":\"demo\"}" > /dev/null && curl -s -b $HOME/.demo-cookies.txt http://localhost:7655/api/state | jq -r ".nodes | length" && rm -f $HOME/.demo-cookies.txt')
+          AUTH_USER="${DEMO_AUTH_USER:-demo}"
+          AUTH_PASS="${DEMO_AUTH_PASS:-demo}"
+          NODES=$(ssh -i ~/.ssh/id_ed25519 "$DEMO_SERVER_USER@$DEMO_SERVER_HOST" \
+            'AUTH_USER='"$(printf '%q' "$AUTH_USER")"' AUTH_PASS='"$(printf '%q' "$AUTH_PASS")"' DEMO_LOCAL_BASE_URL='"$(printf '%q' "$DEMO_LOCAL_BASE_URL")"' bash -s' <<'EOF'
+          set -euo pipefail
+          COOKIE_FILE="$HOME/.demo-cookies.txt"
+          curl -fsS -c "$COOKIE_FILE" "${DEMO_LOCAL_BASE_URL}/api/login" -X POST \
+            -H "Content-Type: application/json" \
+            -d "{\"username\":\"${AUTH_USER}\",\"password\":\"${AUTH_PASS}\"}" > /dev/null
+          curl -fsS -b "$COOKIE_FILE" "${DEMO_LOCAL_BASE_URL}/api/state" | jq -r '.nodes | length'
+          rm -f "$COOKIE_FILE"
+          EOF
+          )
 
           echo "Mock nodes detected: $NODES"
 
           if [ "$NODES" -ge 1 ]; then
-            echo "✅ Demo server successfully updated and verified!"
+            echo "Demo server successfully updated and verified."
           else
-            echo "⚠️  Demo server updated but mock mode may not be active"
+            echo "::error::Demo server updated but mock mode may not be active"
             exit 1
           fi
 
-      - name: Cleanup SSH key
-        if: always() && steps.gate.outputs.skip != 'true'
-        run: rm -f ~/.ssh/id_ed25519
+      - name: Verify public health
+        run: |
+          set -euo pipefail
+          curl -fsS "$DEMO_PUBLIC_HEALTH_URL"
+
+      - name: Cleanup SSH material
+        if: always()
+        run: rm -f ~/.ssh/id_ed25519 ~/.ssh/known_hosts /tmp/pulse-install.sh
