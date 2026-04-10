@@ -7,6 +7,7 @@ PRICING_DOC="${ROOT_DIR}/docs/architecture/v6-pricing-and-tiering.md"
 UPGRADE_DOC="${ROOT_DIR}/docs/UPGRADE_v6.md"
 INTEGRATION_README="${ROOT_DIR}/tests/integration/README.md"
 EVAL_TASK_DOC="${ROOT_DIR}/tests/integration/evals/tasks/trial-signup.md"
+EVAL_SCENARIOS_DOC="${ROOT_DIR}/tests/integration/evals/scenarios.json"
 SOURCE_OF_TRUTH_DOC="${ROOT_DIR}/docs/release-control/v6/internal/SOURCE_OF_TRUTH.md"
 MIGRATION_AUDIT_DOC="${ROOT_DIR}/docs/release-control/v6/internal/V5_TO_V6_COMMERCIAL_MIGRATION_AUDIT_2026-03-07.md"
 
@@ -18,6 +19,7 @@ OPERATOR_DOCS=(
   "${UPGRADE_DOC}"
   "${INTEGRATION_README}"
   "${EVAL_TASK_DOC}"
+  "${EVAL_SCENARIOS_DOC}"
 )
 
 TRACKED_REFERENCE_DOCS=()
@@ -110,6 +112,7 @@ assert_forbidden_patterns_absent() {
 
 main() {
   local runbook_output pricing_output upgrade_output integration_output eval_task_output
+  local eval_scenarios_output
   local source_of_truth_output migration_audit_output
   local operator_doc
 
@@ -139,6 +142,9 @@ main() {
   )"
   eval_task_output="$(
     sed -n '1,24p' "${EVAL_TASK_DOC}"
+  )"
+  eval_scenarios_output="$(
+    sed -n '24,34p' "${EVAL_SCENARIOS_DOC}"
   )"
   source_of_truth_output="$(
     sed -n '412,420p' "${SOURCE_OF_TRUTH_DOC}"
@@ -174,6 +180,11 @@ main() {
   assert_contains "eval task documents retry-burst contract" "${eval_task_output}" "retry-burst contract"
   assert_contains "eval task documents canonical trial-rate-limited response" "${eval_task_output}" "\`429 trial_rate_limited\`"
   assert_contains "eval task documents retry-after metadata" "${eval_task_output}" "\`Retry-After\`"
+
+  assert_contains "eval scenario documents trial-start route" "${eval_scenarios_output}" "POST /api/license/trial/start"
+  assert_contains "eval scenario documents hosted-signup redirect code" "${eval_scenarios_output}" "409 trial_signup_required"
+  assert_contains "eval scenario documents canonical trial-rate-limited response" "${eval_scenarios_output}" "429 trial_rate_limited"
+  assert_contains "eval scenario documents retry-after metadata" "${eval_scenarios_output}" "Retry-After"
 
   assert_contains "source of truth keeps hosted-signup-only contract" "${source_of_truth_output}" "must initiate hosted signup only"
   assert_contains "source of truth forbids local trial minting" "${source_of_truth_output}" "must not mint local trial"

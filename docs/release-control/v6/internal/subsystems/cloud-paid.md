@@ -605,7 +605,10 @@ second-attempt phrasing anywhere in that tracked reference set. The integration
 README now carries the same `POST /api/license/trial/start`,
 `trial_signup_required`, and `trial_rate_limited` anchors as the other
 operator-facing docs so it stays inside the discovered set instead of relying
-on a special-case assertion path.
+on a special-case assertion path. The `trial-signup` entry in
+`tests/integration/evals/scenarios.json` must now carry those same anchors too,
+so eval-pack metadata cannot silently drift away from the canonical hosted
+handoff contract while the task file stays correct.
 Hosted tenant organization seeding and hosted handoff role mapping now belong
 to the same cloud-paid truth too. `internal/cloudcp/stripe/provisioner.go`
 must seed tenant org members from the shared account-role-to-organization-role

@@ -19,6 +19,7 @@ GO_SUM="${ROOT_DIR}/go.sum"
 DEV_LAUNCHD_WRAPPER="${ROOT_DIR}/scripts/dev-launchd-wrapper.sh"
 DEV_LAUNCHD_SETUP="${ROOT_DIR}/scripts/dev-launchd-setup.sh"
 INTEGRATION_README="${ROOT_DIR}/tests/integration/README.md"
+INTEGRATION_EVAL_SCENARIOS="${ROOT_DIR}/tests/integration/evals/scenarios.json"
 DEPLOYMENT_INSTALLABILITY_CONTRACT="${ROOT_DIR}/docs/release-control/v6/internal/subsystems/deployment-installability.md"
 SUBSYSTEM_REGISTRY="${ROOT_DIR}/docs/release-control/v6/internal/subsystems/registry.json"
 
@@ -727,6 +728,16 @@ test_integration_readme_documents_trial_retry_burst_contract() {
   assert_contains "integration readme documents retry burst exhaustion" "${output}" "retry burst is exhausted"
   assert_contains "integration readme documents retry-after backoff" "${output}" "Retry-After"
   assert_contains "integration readme references hosted trial probe script" "${output}" "tests/integration/scripts/trial-signup-contract.sh"
+}
+
+test_integration_eval_scenario_documents_trial_retry_burst_contract() {
+  local output
+  output="$(sed -n '24,34p' "${INTEGRATION_EVAL_SCENARIOS}")"
+
+  assert_contains "integration eval scenario names trial-start route" "${output}" "POST /api/license/trial/start"
+  assert_contains "integration eval scenario names hosted-signup redirect code" "${output}" "409 trial_signup_required"
+  assert_contains "integration eval scenario names rate-limited code" "${output}" "429 trial_rate_limited"
+  assert_contains "integration eval scenario names retry-after metadata" "${output}" "Retry-After"
 }
 
 test_integration_quick_start_distinguishes_embedded_frontend_from_hot_dev() {
