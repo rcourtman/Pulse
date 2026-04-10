@@ -451,6 +451,11 @@ browser helper must treat `PLAYWRIGHT_BASE_URL` as the browser truth and leave
 `PULSE_BASE_URL` available for backend-oriented health checks and setup
 traffic, so split browser/backend proof can target fresh frontend code without
 rewiring the API-side contract.
+Playwright-driven public/commercial specs that support scenario-specific
+endpoint overrides such as `PULSE_CLOUD_BASE_URL` or
+`PULSE_COMMERCIAL_BASE_URL` must layer those values through that same shared
+route helper instead of duplicating `PLAYWRIGHT_BASE_URL` versus
+`PULSE_BASE_URL` precedence locally.
 That defaulting rule must live in one shared integration helper rather than
 being duplicated between config and helper files, so future browser-target
 changes cannot leave Playwright navigation and browser/API helper calls

@@ -6,6 +6,7 @@ import { expect, test, type APIRequestContext, type Page } from '@playwright/tes
 import { apiRequest, ensureAuthenticated, navigateToSettings } from './helpers';
 import { completeStripeSandboxCheckout } from './stripe-sandbox';
 import { sendStripeWebhook } from './stripe-webhooks';
+import { preferredPlaywrightRouteBaseURL } from './runtime-defaults';
 
 type StripeSubscription = {
   id: string;
@@ -75,12 +76,9 @@ function requiredEnv(name: string): string {
 }
 
 function commercialBaseURL(): string {
-  const base =
-    process.env.PULSE_COMMERCIAL_BASE_URL ||
-    process.env.PULSE_BASE_URL ||
-    process.env.PLAYWRIGHT_BASE_URL ||
-    'http://localhost:7655';
-  return base.replace(/\/+$/, '');
+  return preferredPlaywrightRouteBaseURL(process.env, [
+    process.env.PULSE_COMMERCIAL_BASE_URL,
+  ]);
 }
 
 function commercialWebhookBaseURL(): string {

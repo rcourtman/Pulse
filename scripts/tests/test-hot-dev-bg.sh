@@ -757,10 +757,11 @@ test_integration_helpers_prefer_managed_hot_dev_runtime() {
   local output
   output="$(cat "${ROOT_DIR}/tests/integration/tests/helpers.ts")"
 
-  assert_contains "integration helpers import preferred browser helper" "${output}" "preferredBrowserBaseURL, readRuntimeState"
+  assert_contains "integration helpers import preferred browser helper" "${output}" "preferredBrowserBaseURL"
+  assert_contains "integration helpers import shared route helper" "${output}" "preferredPlaywrightRouteBaseURL"
   assert_contains "integration helpers import shared browser defaults" "${output}" "runtime-defaults"
   assert_contains "integration helpers delegate browser context base url to shared helper" "${output}" "baseURL: preferredBrowserBaseURL(),"
-  assert_contains "integration helpers delegate api request base url to shared helper" "${output}" "const baseURL = preferredBrowserBaseURL().replace"
+  assert_contains "integration helpers delegate api request base url to shared route helper" "${output}" "const baseURL = preferredPlaywrightRouteBaseURL()"
 }
 
 test_integration_runtime_defaults_centralize_managed_browser_detection() {
@@ -771,6 +772,7 @@ test_integration_runtime_defaults_centralize_managed_browser_detection() {
   assert_contains "runtime defaults expose runtime-state reader" "${output}" "export const readRuntimeState ="
   assert_contains "runtime defaults expose managed browser detection" "${output}" "export const managedDevBrowserBaseURL ="
   assert_contains "runtime defaults expose preferred browser base url" "${output}" "export const preferredBrowserBaseURL ="
+  assert_contains "runtime defaults expose normalized Playwright route helper" "${output}" "export const preferredPlaywrightRouteBaseURL ="
 }
 
 test_integration_runtime_defaults_prefer_explicit_browser_override() {
@@ -833,6 +835,25 @@ EOF
 
   assert_contains "runtime defaults resolve runtime-state path from overridden repo root" "${output}" "stateMatches=true"
   assert_contains "runtime defaults resolve managed dev browser url from overridden repo root" "${output}" "managed=http://127.0.0.1:4174"
+}
+
+test_cloud_and_commercial_specs_use_shared_route_defaults() {
+  local output
+
+  output="$(cat "${ROOT_DIR}/tests/integration/tests/08-cloud-hosting.spec.ts")"
+  assert_contains "cloud hosting spec imports shared route helper" "${output}" "preferredPlaywrightRouteBaseURL"
+  assert_contains "cloud hosting spec uses cloud override through shared route helper" "${output}" "process.env.PULSE_CLOUD_BASE_URL"
+  assert_not_contains "cloud hosting spec no longer duplicates Pulse-vs-Playwright precedence" "${output}" "process.env.PULSE_BASE_URL ||"
+
+  output="$(cat "${ROOT_DIR}/tests/integration/tests/09-cloud-billing-lifecycle.spec.ts")"
+  assert_contains "cloud billing spec imports shared route helper" "${output}" "preferredPlaywrightRouteBaseURL"
+  assert_contains "cloud billing spec uses cloud override through shared route helper" "${output}" "process.env.PULSE_CLOUD_BASE_URL"
+  assert_not_contains "cloud billing spec no longer duplicates Pulse-vs-Playwright precedence" "${output}" "process.env.PULSE_BASE_URL ||"
+
+  output="$(cat "${ROOT_DIR}/tests/integration/tests/14-commercial-cancellation-reactivation.spec.ts")"
+  assert_contains "commercial cancellation spec imports shared route helper" "${output}" "preferredPlaywrightRouteBaseURL"
+  assert_contains "commercial cancellation spec uses commercial override through shared route helper" "${output}" "process.env.PULSE_COMMERCIAL_BASE_URL"
+  assert_not_contains "commercial cancellation spec no longer duplicates Pulse-vs-Playwright precedence" "${output}" "process.env.PULSE_BASE_URL ||"
 }
 
 test_clean_mock_alerts_prefers_managed_runtime() {
@@ -1086,6 +1107,7 @@ main() {
   test_integration_runtime_defaults_centralize_managed_browser_detection
   test_integration_runtime_defaults_prefer_explicit_browser_override
   test_integration_runtime_defaults_honor_repo_root_override
+  test_cloud_and_commercial_specs_use_shared_route_defaults
   test_clean_mock_alerts_prefers_managed_runtime
   test_dev_check_uses_managed_runtime_status
   test_backend_restart_requires_managed_runtime

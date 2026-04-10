@@ -7,6 +7,7 @@ import test from 'node:test';
 import {
   managedDevBrowserBaseURL,
   preferredBrowserBaseURL,
+  preferredPlaywrightRouteBaseURL,
   runtimeStatePath,
 } from '../tests/runtime-defaults.ts';
 
@@ -25,6 +26,26 @@ test('preferredBrowserBaseURL still falls back to PULSE_BASE_URL when no browser
   });
 
   assert.equal(resolved, 'http://127.0.0.1:7655');
+});
+
+test('preferredPlaywrightRouteBaseURL honors explicit per-scenario overrides before shared browser defaults', () => {
+  const resolved = preferredPlaywrightRouteBaseURL(
+    {
+      PLAYWRIGHT_BASE_URL: 'http://127.0.0.1:4174',
+      PULSE_BASE_URL: 'http://127.0.0.1:7655',
+    },
+    ['https://cloud.example.test///'],
+  );
+
+  assert.equal(resolved, 'https://cloud.example.test');
+});
+
+test('preferredPlaywrightRouteBaseURL normalizes the selected browser target for route concatenation', () => {
+  const resolved = preferredPlaywrightRouteBaseURL({
+    PLAYWRIGHT_BASE_URL: 'http://127.0.0.1:4174///',
+  });
+
+  assert.equal(resolved, 'http://127.0.0.1:4174');
 });
 
 test('runtimeStatePath resolves the default path from an overridden integration repo root', () => {

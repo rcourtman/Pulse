@@ -10,6 +10,8 @@ export type RuntimeState = {
 };
 
 const trim = (value: unknown): string => String(value ?? '').trim();
+const firstNonEmpty = (...values: readonly unknown[]): string =>
+  values.map(trim).find((value) => value !== '') || '';
 
 const repoRootFromEnv = (env: NodeJS.ProcessEnv = process.env): string =>
   trim(env.PULSE_E2E_REPO_ROOT) || path.resolve(__dirname, '..', '..', '..');
@@ -66,9 +68,18 @@ export const managedDevBrowserBaseURL = (
 
 export const preferredBrowserBaseURL = (
   env: NodeJS.ProcessEnv = process.env,
+  overrides: readonly unknown[] = [],
 ): string =>
-  trim(env.PLAYWRIGHT_BASE_URL) ||
-  trim(env.PULSE_BASE_URL) ||
-  loadRuntimeBaseURL(env) ||
-  managedDevBrowserBaseURL(env) ||
-  'http://localhost:7655';
+  firstNonEmpty(
+    ...overrides,
+    env.PLAYWRIGHT_BASE_URL,
+    env.PULSE_BASE_URL,
+    loadRuntimeBaseURL(env),
+    managedDevBrowserBaseURL(env),
+    'http://localhost:7655',
+  );
+
+export const preferredPlaywrightRouteBaseURL = (
+  env: NodeJS.ProcessEnv = process.env,
+  overrides: readonly unknown[] = [],
+): string => preferredBrowserBaseURL(env, overrides).replace(/\/+$/, '');

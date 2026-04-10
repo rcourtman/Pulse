@@ -1,13 +1,11 @@
 import { expect, test } from '@playwright/test';
 import { completeStripeSandboxCheckout } from './stripe-sandbox';
+import { preferredPlaywrightRouteBaseURL } from './runtime-defaults';
 
 function cloudBaseURL(): string {
-  const base =
-    process.env.PULSE_CLOUD_BASE_URL ||
-    process.env.PULSE_BASE_URL ||
-    process.env.PLAYWRIGHT_BASE_URL ||
-    'http://localhost:7655';
-  return base.replace(/\/+$/, '');
+  return preferredPlaywrightRouteBaseURL(process.env, [
+    process.env.PULSE_CLOUD_BASE_URL,
+  ]);
 }
 
 function signupIdentity() {

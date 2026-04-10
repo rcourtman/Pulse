@@ -1,5 +1,9 @@
 import { Browser, Page, Request, expect } from "@playwright/test";
-import { preferredBrowserBaseURL, readRuntimeState } from "./runtime-defaults";
+import {
+  preferredBrowserBaseURL,
+  preferredPlaywrightRouteBaseURL,
+  readRuntimeState,
+} from "./runtime-defaults";
 
 const runtimePrimaryAPIToken = (): string => {
   const parsed = readRuntimeState();
@@ -812,7 +816,7 @@ export async function apiRequest(
   endpoint: string,
   options: any = {},
 ) {
-  const baseURL = preferredBrowserBaseURL().replace(/\/+$/, "");
+  const baseURL = preferredPlaywrightRouteBaseURL();
 
   const method = String(options.method || "GET").toUpperCase();
   const headers = { ...(options.headers || {}) } as Record<string, string>;
