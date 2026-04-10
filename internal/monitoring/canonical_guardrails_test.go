@@ -874,6 +874,23 @@ func TestMockNativePollersDeferToCanonicalMockSampler(t *testing.T) {
 	}
 }
 
+func TestMockChartCacheRemainsMonitorOwned(t *testing.T) {
+	data, err := os.ReadFile("monitor.go")
+	if err != nil {
+		t.Fatalf("failed to read monitor.go: %v", err)
+	}
+	source := string(data)
+
+	for _, snippet := range []string{
+		"mockChartCacheMu    sync.RWMutex",
+		"mockChartMapCache   map[mockChartMetricMapCacheKey]map[string][]MetricPoint",
+	} {
+		if !strings.Contains(source, snippet) {
+			t.Fatalf("monitor.go must contain %q", snippet)
+		}
+	}
+}
+
 func TestUnifiedPhysicalDiskMetricsUseCanonicalDiskHistoryPath(t *testing.T) {
 	data, err := os.ReadFile("monitor.go")
 	if err != nil {

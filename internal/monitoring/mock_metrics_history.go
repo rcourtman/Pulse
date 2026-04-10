@@ -1568,6 +1568,7 @@ func (m *Monitor) startMockMetricsSampler(ctx context.Context) {
 	// Keep mock trend generation in-memory only so production history in the
 	// persistent metrics store remains untouched while mock mode is active.
 	seedMockMetricsHistory(m.metricsHistory, nil, graph, normalizeMockMetricTimestamp(time.Now(), cfg.SampleInterval), seedDuration, cfg.SampleInterval)
+	m.invalidateMockChartCaches()
 
 	m.mockMetricsWg.Add(1)
 	go func() {
@@ -1585,6 +1586,7 @@ func (m *Monitor) startMockMetricsSampler(ctx context.Context) {
 					continue
 				}
 				recordMockStateToMetricsHistory(m.metricsHistory, nil, mock.CurrentFixtureGraph(), normalizeMockMetricTimestamp(time.Now(), cfg.SampleInterval))
+				m.invalidateMockChartCaches()
 			}
 		}
 	}()
@@ -1608,6 +1610,7 @@ func (m *Monitor) stopMockMetricsSampler() {
 	if cancel != nil {
 		cancel()
 		m.mockMetricsWg.Wait()
+		m.invalidateMockChartCaches()
 		log.Info().Msg("mock metrics history sampler stopped")
 	}
 }

@@ -998,6 +998,8 @@ type Monitor struct {
 	// cluster node via SSH to its siblings. Keyed by lowercase node name.
 	clusterSensorsMu    sync.RWMutex
 	clusterSensorsCache map[string]clusterSensorsCacheEntry
+	mockChartCacheMu    sync.RWMutex
+	mockChartMapCache   map[mockChartMetricMapCacheKey]map[string][]MetricPoint
 }
 
 // clusterSensorsCacheEntry stores temperature data collected by a sibling agent via SSH.

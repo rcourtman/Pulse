@@ -476,7 +476,7 @@ func TestGetPhysicalDiskTemperatureCharts_UsesNativeHistoryWhenStoreCoverageShal
 	}
 }
 
-func TestGetPhysicalDiskTemperatureCharts_SkipsNativeHistoryInMockMode(t *testing.T) {
+func TestGetPhysicalDiskTemperatureCharts_PrefersSeededMockHistoryInMockMode(t *testing.T) {
 	previous := mock.IsMockEnabled()
 	mock.SetEnabled(true)
 	defer mock.SetEnabled(previous)
@@ -510,9 +510,9 @@ func TestGetPhysicalDiskTemperatureCharts_SkipsNativeHistoryInMockMode(t *testin
 		offset time.Duration
 		value  float64
 	}{
-		{-4 * time.Minute, 32},
-		{-2 * time.Minute, 33},
-		{0, 34},
+		{-58 * time.Minute, 32},
+		{-30 * time.Minute, 33},
+		{-1 * time.Minute, 34},
 	} {
 		monitor.metricsHistory.AddDiskMetric(resourceID, "smart_temp", sample.value, now.Add(sample.offset))
 	}
@@ -522,7 +522,12 @@ func TestGetPhysicalDiskTemperatureCharts_SkipsNativeHistoryInMockMode(t *testin
 	if !ok {
 		t.Fatalf("expected chart entry for canonical disk metric id, got %#v", charts)
 	}
-	assertFollowsCanonicalMockSeries(t, entry.Temperature, "disk", resourceID, "smart_temp")
+	if len(entry.Temperature) != 3 {
+		t.Fatalf("expected seeded in-memory history to win, got %+v", entry.Temperature)
+	}
+	if entry.Temperature[0].Value != 32 || entry.Temperature[len(entry.Temperature)-1].Value != 34 {
+		t.Fatalf("expected seeded mock history values to win, got %+v", entry.Temperature)
+	}
 }
 
 func TestGetGuestMetricsForChart_UsesCanonicalMockSamplerInMockMode(t *testing.T) {
@@ -541,6 +546,96 @@ func TestGetGuestMetricsForChart_UsesCanonicalMockSamplerInMockMode(t *testing.T
 
 	result := monitor.GetGuestMetricsForChart("vm-1", "vm", "vm-1", duration)
 	assertFollowsCanonicalMockSeries(t, result["memory"], "vm", "vm-1", "memory")
+}
+
+func TestGetGuestMetricsForChart_PrefersSeededMockHistoryInMockMode(t *testing.T) {
+	previous := mock.IsMockEnabled()
+	mock.SetEnabled(true)
+	defer mock.SetEnabled(previous)
+
+	monitor := newChartFallbackTestMonitor(t)
+	now := time.Now().UTC().Truncate(time.Second)
+	duration := time.Hour
+
+	for _, sample := range []struct {
+		offset time.Duration
+		value  float64
+	}{
+		{-58 * time.Minute, 12.5},
+		{-30 * time.Minute, 37.25},
+		{-1 * time.Minute, 81.75},
+	} {
+		monitor.metricsHistory.AddGuestMetric("vm-1", "memory", sample.value, now.Add(sample.offset))
+	}
+
+	result := monitor.GetGuestMetricsForChart("vm-1", "vm", "vm-1", duration)
+	if len(result["memory"]) != 3 {
+		t.Fatalf("expected seeded in-memory guest history to win, got %+v", result["memory"])
+	}
+	if result["memory"][0].Value != 12.5 || result["memory"][len(result["memory"])-1].Value != 81.75 {
+		t.Fatalf("expected seeded guest values to win, got %+v", result["memory"])
+	}
+}
+
+func TestGetGuestMetricsForChartBatch_PrefersSeededMockHistoryInMockMode(t *testing.T) {
+	previous := mock.IsMockEnabled()
+	mock.SetEnabled(true)
+	defer mock.SetEnabled(previous)
+
+	monitor := newChartFallbackTestMonitor(t)
+	now := time.Now().UTC().Truncate(time.Second)
+	duration := time.Hour
+
+	for _, sample := range []struct {
+		offset time.Duration
+		value  float64
+	}{
+		{-58 * time.Minute, 9.5},
+		{-30 * time.Minute, 26.0},
+		{-1 * time.Minute, 64.25},
+	} {
+		monitor.metricsHistory.AddGuestMetric("vm-1", "cpu", sample.value, now.Add(sample.offset))
+	}
+
+	result := monitor.GetGuestMetricsForChartBatch("vm", []GuestChartRequest{{
+		InMemoryKey:   "vm-1",
+		SQLResourceID: "vm-1",
+	}}, duration)
+	if len(result["vm-1"]["cpu"]) != 3 {
+		t.Fatalf("expected seeded in-memory guest batch history to win, got %+v", result["vm-1"]["cpu"])
+	}
+	if result["vm-1"]["cpu"][0].Value != 9.5 || result["vm-1"]["cpu"][len(result["vm-1"]["cpu"])-1].Value != 64.25 {
+		t.Fatalf("expected seeded guest batch values to win, got %+v", result["vm-1"]["cpu"])
+	}
+}
+
+func TestGetGuestMetricsForChartBatch_DownsamplesDenseSeededMockHistory(t *testing.T) {
+	previous := mock.IsMockEnabled()
+	mock.SetEnabled(true)
+	defer mock.SetEnabled(previous)
+
+	monitor := newChartFallbackTestMonitor(t)
+	now := time.Now().UTC().Truncate(time.Minute)
+	duration := time.Hour
+
+	for i := 0; i < 61; i++ {
+		monitor.metricsHistory.AddGuestMetric("vm-1", "cpu", float64(i), now.Add(-time.Duration(60-i)*time.Minute))
+	}
+
+	result := monitor.GetGuestMetricsForChartBatch("vm", []GuestChartRequest{{
+		InMemoryKey:   "vm-1",
+		SQLResourceID: "vm-1",
+	}}, duration)
+	cpu := result["vm-1"]["cpu"]
+	if len(cpu) == 0 {
+		t.Fatal("expected downsampled seeded mock history")
+	}
+	if len(cpu) >= 61 {
+		t.Fatalf("expected dense seeded mock history to be downsampled, got %d points", len(cpu))
+	}
+	if len(cpu) > 20 {
+		t.Fatalf("expected 1h mock guest history to cap at 20 points, got %d", len(cpu))
+	}
 }
 
 func TestGetStorageMetricsForChart_UsesCanonicalMockSamplerInMockMode(t *testing.T) {
@@ -570,6 +665,72 @@ func TestGetStorageMetricsForChart_UsesCanonicalMockSamplerInMockMode(t *testing
 	total := result["total"][len(result["total"])-1].Value
 	if total <= 0 {
 		t.Fatalf("expected positive storage total, got %+v", result["total"])
+	}
+}
+
+func TestGetStorageMetricsForChart_PrefersSeededMockHistoryInMockMode(t *testing.T) {
+	previous := mock.IsMockEnabled()
+	mock.SetEnabled(true)
+	defer mock.SetEnabled(previous)
+
+	monitor := newChartFallbackTestMonitor(t)
+	now := time.Now().UTC().Truncate(time.Second)
+	duration := time.Hour
+
+	type sample struct {
+		offset time.Duration
+		value  float64
+	}
+	metricsByType := map[string][]sample{
+		"usage": {{-58 * time.Minute, 40}, {-30 * time.Minute, 41}, {-1 * time.Minute, 42}},
+		"used":  {{-58 * time.Minute, 400}, {-30 * time.Minute, 410}, {-1 * time.Minute, 420}},
+		"avail": {{-58 * time.Minute, 600}, {-30 * time.Minute, 590}, {-1 * time.Minute, 580}},
+		"total": {{-58 * time.Minute, 1000}, {-30 * time.Minute, 1000}, {-1 * time.Minute, 1000}},
+	}
+	for metricType, samples := range metricsByType {
+		for _, sample := range samples {
+			monitor.metricsHistory.AddStorageMetric("storage-1", metricType, sample.value, now.Add(sample.offset))
+		}
+	}
+
+	result := monitor.GetStorageMetricsForChart("storage-1", duration)
+	if len(result["usage"]) != 3 {
+		t.Fatalf("expected seeded in-memory storage history to win, got %+v", result["usage"])
+	}
+	if result["usage"][0].Value != 40 || result["usage"][len(result["usage"])-1].Value != 42 {
+		t.Fatalf("expected seeded storage values to win, got %+v", result["usage"])
+	}
+	if len(result["used"]) != 3 || len(result["avail"]) != 3 || len(result["total"]) != 3 {
+		t.Fatalf("expected complete seeded storage metrics, got %+v", result)
+	}
+}
+
+func TestGetStorageMetricsForChart_DownsamplesDenseSeededMockHistory(t *testing.T) {
+	previous := mock.IsMockEnabled()
+	mock.SetEnabled(true)
+	defer mock.SetEnabled(previous)
+
+	monitor := newChartFallbackTestMonitor(t)
+	now := time.Now().UTC().Truncate(time.Minute)
+	duration := time.Hour
+
+	for i := 0; i < 61; i++ {
+		ts := now.Add(-time.Duration(60-i) * time.Minute)
+		monitor.metricsHistory.AddStorageMetric("storage-1", "usage", float64(40+i%5), ts)
+		monitor.metricsHistory.AddStorageMetric("storage-1", "used", float64(400+i), ts)
+		monitor.metricsHistory.AddStorageMetric("storage-1", "avail", float64(600-i), ts)
+		monitor.metricsHistory.AddStorageMetric("storage-1", "total", 1000, ts)
+	}
+
+	result := monitor.GetStorageMetricsForChart("storage-1", duration)
+	if len(result["usage"]) == 0 {
+		t.Fatal("expected downsampled seeded storage history")
+	}
+	if len(result["usage"]) >= 61 {
+		t.Fatalf("expected dense seeded storage history to be downsampled, got %d points", len(result["usage"]))
+	}
+	if len(result["usage"]) > 20 {
+		t.Fatalf("expected 1h mock storage history to cap at 20 points, got %d", len(result["usage"]))
 	}
 }
 

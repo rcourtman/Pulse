@@ -204,6 +204,12 @@ and curve shape from the same canonical resource-role registry, so database,
 cache, backup, web, and storage workloads keep believable long-range behavior
 instead of switching from one generic seeded pattern to a different recent
 runtime pattern.
+That same mock chart boundary also owns request-path efficiency. Demo chart
+reads must reuse monitor-owned downsampled mock history for the current mock
+sampler generation instead of regenerating or re-downsampling the same seeded
+timeline on every endpoint hit. When seeded mock history is rebuilt or a live
+mock tick advances, monitoring must invalidate that cache so preview charts
+stay current without paying repeated per-request synthesis cost.
 That same mock-runtime owner now also owns demo-scenario curation. The
 canonical `internal/mock/fixture_graph.go` path may project an authored demo
 estate over generic fixture synthesis, but that authored layer must stay

@@ -699,6 +699,71 @@ func TestStartMockMetricsSampler_DoesNotClearExistingMetricsStoreData(t *testing
 	}
 }
 
+func TestStartAndStopMockMetricsSampler_ClearStaleMockChartCaches(t *testing.T) {
+	previousEnabled := mock.IsMockEnabled()
+	previousConfig := mock.GetConfig()
+	t.Cleanup(func() {
+		mock.SetEnabled(false)
+		mock.SetMockConfig(previousConfig)
+		if previousEnabled {
+			mock.SetEnabled(true)
+			mock.SetMockConfig(previousConfig)
+		}
+	})
+
+	cfg := mock.DefaultConfig
+	cfg.NodeCount = 1
+	cfg.VMsPerNode = 0
+	cfg.LXCsPerNode = 0
+	cfg.DockerHostCount = 0
+	cfg.DockerContainersPerHost = 0
+	cfg.GenericHostCount = 0
+	cfg.K8sClusterCount = 0
+	cfg.K8sNodesPerCluster = 0
+	cfg.K8sPodsPerCluster = 0
+	cfg.K8sDeploymentsPerCluster = 0
+
+	mock.SetEnabled(false)
+	mock.SetMockConfig(cfg)
+	mock.SetEnabled(true)
+
+	monitor := &Monitor{
+		metricsHistory: NewMetricsHistory(128, 24*time.Hour),
+		mockChartMapCache: map[mockChartMetricMapCacheKey]map[string][]MetricPoint{
+			{
+				kind:         "guest",
+				resourceType: "vm",
+				resourceID:   "vm-stale",
+				duration:     time.Hour,
+			}: {
+				"cpu": {{Timestamp: time.Now().UTC().Add(-time.Minute), Value: 42}},
+			},
+		},
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	monitor.startMockMetricsSampler(ctx)
+	if got := len(monitor.mockChartMapCache); got != 0 {
+		t.Fatalf("expected mock sampler start to clear stale chart caches, got %d entries", got)
+	}
+
+	monitor.mockChartMapCache[mockChartMetricMapCacheKey{
+		kind:         "storage",
+		resourceType: "storage",
+		resourceID:   "pool-stale",
+		duration:     time.Hour,
+	}] = map[string][]MetricPoint{
+		"usage": {{Timestamp: time.Now().UTC(), Value: 88}},
+	}
+
+	monitor.stopMockMetricsSampler()
+	if got := len(monitor.mockChartMapCache); got != 0 {
+		t.Fatalf("expected mock sampler stop to clear chart caches, got %d entries", got)
+	}
+}
+
 func TestStartMockMetricsSampler_SeedsCanonicalMockResourceHistory(t *testing.T) {
 	previousEnabled := mock.IsMockEnabled()
 	previousConfig := mock.GetConfig()

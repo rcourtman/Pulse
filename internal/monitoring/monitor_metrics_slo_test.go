@@ -416,7 +416,8 @@ func TestSLO_GetGuestMetricsForChartBatch_DoesNotStitchSparseStoreTailOntoCovere
 
 	// This sparse late store point models the old stitched-tail behavior. In
 	// mock mode the batch chart path must ignore persisted history entirely and
-	// serve the canonical sampler timeline instead.
+	// reuse the seeded in-memory mock history instead of synthesizing or
+	// stitching a different tail.
 	writeRawMetricBatch(t, monitor.metricsStore, "vm", "vm-1", "memory", []MetricPoint{
 		{Timestamp: now.Add(-1 * time.Minute), Value: 21},
 	})
@@ -427,20 +428,68 @@ func TestSLO_GetGuestMetricsForChartBatch_DoesNotStitchSparseStoreTailOntoCovere
 	}}, duration)
 
 	memoryPoints := result["vm-1"]["memory"]
-	if len(memoryPoints) < 2 {
-		t.Fatalf("expected canonical mock memory series, got %+v", memoryPoints)
+	if len(memoryPoints) != len(inMemorySeries) {
+		t.Fatalf("expected seeded mock memory series, got %+v", memoryPoints)
 	}
-	checkIndices := []int{0, len(memoryPoints) / 2, len(memoryPoints) - 1}
-	seen := map[int]struct{}{}
-	for _, idx := range checkIndices {
-		if _, ok := seen[idx]; ok {
-			continue
+	for idx, want := range inMemorySeries {
+		if memoryPoints[idx].Timestamp != want.Timestamp || memoryPoints[idx].Value != want.Value {
+			t.Fatalf("memoryPoints[%d] = %+v, want seeded %+v", idx, memoryPoints[idx], want)
 		}
-		seen[idx] = struct{}{}
+	}
+}
 
-		want := mock.SampleMetric("vm", "vm-1", "memory", memoryPoints[idx].Timestamp)
-		if memoryPoints[idx].Value != want {
-			t.Fatalf("memoryPoints[%d] = %+v, want canonical %.12f", idx, memoryPoints[idx], want)
-		}
+func TestMockChartCacheInvalidatesAfterMockHistoryRefresh(t *testing.T) {
+	previous := mock.IsMockEnabled()
+	mock.SetEnabled(true)
+	t.Cleanup(func() { mock.SetEnabled(previous) })
+
+	monitor := newChartFallbackTestMonitor(t)
+	now := time.Now().UTC().Truncate(time.Second)
+	duration := time.Hour
+
+	for _, point := range []MetricPoint{
+		{Timestamp: now.Add(-58 * time.Minute), Value: 41},
+		{Timestamp: now.Add(-36 * time.Minute), Value: 43},
+		{Timestamp: now.Add(-14 * time.Minute), Value: 47},
+		{Timestamp: now.Add(-2 * time.Minute), Value: 49},
+	} {
+		monitor.metricsHistory.AddGuestMetric("vm-1", "cpu", point.Value, point.Timestamp)
+	}
+
+	first := monitor.GetGuestMetricsForChartBatch("vm", []GuestChartRequest{{
+		InMemoryKey:   "vm-1",
+		SQLResourceID: "vm-1",
+	}}, duration)
+	firstCPU := first["vm-1"]["cpu"]
+	if len(firstCPU) == 0 {
+		t.Fatal("expected cached mock guest chart series")
+	}
+	if got := len(monitor.mockChartMapCache); got == 0 {
+		t.Fatal("expected mock chart cache to populate after chart read")
+	}
+
+	newestTimestamp := now.Add(-30 * time.Second)
+	monitor.metricsHistory.AddGuestMetric("vm-1", "cpu", 99, newestTimestamp)
+
+	monitor.invalidateMockChartCaches()
+	if got := len(monitor.mockChartMapCache); got != 0 {
+		t.Fatalf("expected mock chart cache to clear after invalidation, got %d entries", got)
+	}
+
+	refreshed := monitor.GetGuestMetricsForChartBatch("vm", []GuestChartRequest{{
+		InMemoryKey:   "vm-1",
+		SQLResourceID: "vm-1",
+	}}, duration)
+	refreshedCPU := refreshed["vm-1"]["cpu"]
+	if len(refreshedCPU) == 0 {
+		t.Fatal("expected refreshed mock guest chart series")
+	}
+
+	lastPoint := refreshedCPU[len(refreshedCPU)-1]
+	if !lastPoint.Timestamp.Equal(newestTimestamp) || lastPoint.Value != 99 {
+		t.Fatalf("expected refreshed mock chart tail %+v, got %+v", MetricPoint{
+			Timestamp: newestTimestamp,
+			Value:     99,
+		}, lastPoint)
 	}
 }

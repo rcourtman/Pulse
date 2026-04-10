@@ -1,6 +1,7 @@
 package monitoring
 
 import (
+	"sort"
 	"strings"
 	"time"
 
@@ -36,7 +37,22 @@ const (
 	shortRangeCoverageMaxSlack = 2 * time.Minute
 )
 
+const (
+	mockChartPointTargetShortRange = 20
+	mockChartPointTargetMedium     = 32
+	mockChartPointTargetLong       = 48
+	mockChartPointTargetExtended   = 64
+)
+
 var storageChartMetricTypes = []string{"usage", "used", "avail", "total"}
+
+type mockChartMetricMapCacheKey struct {
+	kind         string
+	resourceType string
+	resourceID   string
+	aux          string
+	duration     time.Duration
+}
 
 // MonitorGuestMetricHistoryProvider optionally exposes source-native guest
 // metric history through the canonical chart boundary when local Pulse history
@@ -80,14 +96,11 @@ func (m *Monitor) GetGuestMetrics(guestID string, duration time.Duration) map[st
 // sqlResourceType/sqlResourceID are the type/id used in the SQLite store
 // (e.g. "dockerContainer"/"abc123").
 func (m *Monitor) GetGuestMetricsForChart(inMemoryKey, sqlResourceType, sqlResourceID string, duration time.Duration) map[string][]MetricPoint {
+	inMemoryResult := m.GetGuestMetrics(inMemoryKey, duration)
 	if mock.IsMockEnabled() {
-		if synthetic := mockGuestMetricsForChart(sqlResourceType, sqlResourceID, duration); len(synthetic) > 0 {
-			return synthetic
-		}
-		return m.GetGuestMetrics(inMemoryKey, duration)
+		return m.mockGuestMetricsForChart(inMemoryKey, sqlResourceType, sqlResourceID, duration, inMemoryResult)
 	}
 
-	inMemoryResult := m.GetGuestMetrics(inMemoryKey, duration)
 	if hasSufficientChartMapCoverage(inMemoryResult, duration) {
 		return inMemoryResult
 	}
@@ -114,11 +127,15 @@ func (m *Monitor) GetNodeMetrics(nodeID string, metricType string, duration time
 // GetNodeMetricsForChart returns node metrics for a single metric type,
 // falling back to SQLite + LTTB for longer ranges.
 func (m *Monitor) GetNodeMetricsForChart(nodeID, metricType string, duration time.Duration) []MetricPoint {
-	if mock.IsMockEnabled() {
-		return mockNodeMetricsForChart(nodeID, []string{metricType}, duration)[metricType]
+	var inMemoryPoints []MetricPoint
+	if m != nil && m.metricsHistory != nil {
+		inMemoryPoints = m.metricsHistory.GetNodeMetrics(nodeID, metricType, duration)
 	}
 
-	inMemoryPoints := m.metricsHistory.GetNodeMetrics(nodeID, metricType, duration)
+	if mock.IsMockEnabled() {
+		return m.mockNodeMetricsForChart(nodeID, metricType, duration, inMemoryPoints)
+	}
+
 	if m.metricsStore == nil {
 		return inMemoryPoints
 	}
@@ -156,14 +173,11 @@ func (m *Monitor) GetDiskMetrics(resourceID string, metricType string, duration 
 // display, preferring in-memory data for freshness and falling back to the
 // persistent store when coverage is shallow.
 func (m *Monitor) GetDiskMetricsForChart(resourceID string, metricType string, duration time.Duration) []MetricPoint {
+	inMemoryPoints := m.GetDiskMetrics(resourceID, metricType, duration)
 	if mock.IsMockEnabled() {
-		if synthetic := mockDiskMetricsForChart(resourceID, []string{metricType}, duration); len(synthetic) > 0 {
-			return synthetic[metricType]
-		}
-		return m.GetDiskMetrics(resourceID, metricType, duration)
+		return m.mockDiskMetricsForChart(resourceID, metricType, duration, inMemoryPoints)
 	}
 
-	inMemoryPoints := m.GetDiskMetrics(resourceID, metricType, duration)
 	if hasSufficientChartSeriesCoverage(inMemoryPoints, duration) {
 		return inMemoryPoints
 	}
@@ -186,7 +200,7 @@ func (m *Monitor) GetStorageMetricsForChart(storageID string, duration time.Dura
 		inMemoryResult = m.metricsHistory.GetAllStorageMetrics(storageID, duration)
 	}
 	if mock.IsMockEnabled() {
-		return m.mockStorageMetricsForChart(storageID, duration, inMemoryResult)
+		return m.mockStorageMetricsForChartCached(storageID, duration, inMemoryResult)
 	}
 	if m.metricsStore == nil {
 		return inMemoryResult
@@ -222,10 +236,7 @@ func (m *Monitor) GetPhysicalDiskTemperatureCharts(duration time.Duration) map[s
 	if m == nil {
 		return nil
 	}
-
-	if mock.IsMockEnabled() {
-		return m.mockPhysicalDiskTemperatureCharts(duration)
-	}
+	mockEnabled := mock.IsMockEnabled()
 
 	readState := m.GetUnifiedReadStateOrSnapshot()
 	if readState == nil {
@@ -286,24 +297,32 @@ func (m *Monitor) GetPhysicalDiskTemperatureCharts(duration time.Duration) map[s
 			inMemoryHistory[d.resourceID] = m.metricsHistory.GetDiskMetrics(d.resourceID, "smart_temp", duration)
 		}
 	}
-	batchMetrics := m.queryStoreBatchMetricMapWithGapFill("disk", resourceIDs, duration)
-	nativeHistory := m.nativePhysicalDiskTemperatureHistory(duration)
+	var batchMetrics map[string]map[string][]MetricPoint
+	var nativeHistory map[string][]MetricPoint
+	if !mockEnabled {
+		batchMetrics = m.queryStoreBatchMetricMapWithGapFill("disk", resourceIDs, duration)
+		nativeHistory = m.nativePhysicalDiskTemperatureHistory(duration)
+	}
 
 	// Phase 3: Build result entries.
 	result := make(map[string]DiskChartEntry, len(disks))
 	for _, d := range disks {
 		tempPoints := cloneMetricSeries(inMemoryHistory[d.resourceID])
-		if resMetrics, ok := batchMetrics[d.resourceID]; ok {
-			if pts, found := resMetrics["smart_temp"]; found {
-				if shouldPreferMetricSeries(tempPoints, pts, duration) {
-					tempPoints = cloneMetricSeries(pts)
+		if mockEnabled {
+			tempPoints = m.mockDiskMetricsForChart(d.resourceID, "smart_temp", duration, tempPoints)
+		} else {
+			if resMetrics, ok := batchMetrics[d.resourceID]; ok {
+				if pts, found := resMetrics["smart_temp"]; found {
+					if shouldPreferMetricSeries(tempPoints, pts, duration) {
+						tempPoints = cloneMetricSeries(pts)
+					}
 				}
 			}
-		}
-		if nativePoints, ok := nativeHistory[d.resourceID]; ok {
-			nativePoints = lttb(nativePoints, chartDownsampleTarget)
-			if shouldPreferMetricSeries(tempPoints, nativePoints, duration) {
-				tempPoints = cloneMetricSeries(nativePoints)
+			if nativePoints, ok := nativeHistory[d.resourceID]; ok {
+				nativePoints = lttb(nativePoints, chartDownsampleTarget)
+				if shouldPreferMetricSeries(tempPoints, nativePoints, duration) {
+					tempPoints = cloneMetricSeries(nativePoints)
+				}
 			}
 		}
 
@@ -455,11 +474,14 @@ func (m *Monitor) GetGuestMetricsForChartBatch(
 	if mock.IsMockEnabled() {
 		result := make(map[string]map[string][]MetricPoint, len(requests))
 		for _, req := range requests {
-			if synthetic := mockGuestMetricsForChart(sqlResourceType, req.SQLResourceID, duration); len(synthetic) > 0 {
-				result[req.SQLResourceID] = synthetic
-				continue
-			}
-			result[req.SQLResourceID] = m.GetGuestMetrics(req.InMemoryKey, duration)
+			inMemory := m.GetGuestMetrics(req.InMemoryKey, duration)
+			result[req.SQLResourceID] = m.mockGuestMetricsForChart(
+				req.InMemoryKey,
+				sqlResourceType,
+				req.SQLResourceID,
+				duration,
+				inMemory,
+			)
 		}
 		return result
 	}
@@ -536,7 +558,15 @@ func (m *Monitor) GetNodeMetricsForChartBatch(
 	if mock.IsMockEnabled() {
 		result := make(map[string]map[string][]MetricPoint, len(nodeIDs))
 		for _, nodeID := range nodeIDs {
-			result[nodeID] = mockNodeMetricsForChart(nodeID, metricTypes, duration)
+			nodeResult := make(map[string][]MetricPoint, len(metricTypes))
+			for _, metricType := range metricTypes {
+				var inMemoryPoints []MetricPoint
+				if m != nil && m.metricsHistory != nil {
+					inMemoryPoints = m.metricsHistory.GetNodeMetrics(nodeID, metricType, duration)
+				}
+				nodeResult[metricType] = m.mockNodeMetricsForChart(nodeID, metricType, duration, inMemoryPoints)
+			}
+			result[nodeID] = nodeResult
 		}
 		return result
 	}
@@ -609,7 +639,7 @@ func (m *Monitor) GetStorageMetricsForChartBatch(
 			if m.metricsHistory != nil {
 				inMemory = m.metricsHistory.GetAllStorageMetrics(sid, duration)
 			}
-			result[sid] = m.mockStorageMetricsForChart(sid, duration, inMemory)
+			result[sid] = m.mockStorageMetricsForChartCached(sid, duration, inMemory)
 		}
 		return result
 	}
@@ -810,6 +840,224 @@ func cloneMetricPointMap(metrics map[string][]MetricPoint) map[string][]MetricPo
 		cloned[metricType] = cloneMetricSeries(points)
 	}
 	return cloned
+}
+
+func mockChartPointTarget(duration time.Duration) int {
+	switch {
+	case duration <= time.Hour:
+		return mockChartPointTargetShortRange
+	case duration <= 6*time.Hour:
+		return mockChartPointTargetMedium
+	case duration <= 24*time.Hour:
+		return mockChartPointTargetLong
+	default:
+		return mockChartPointTargetExtended
+	}
+}
+
+func downsampleMetricSeriesForMockChart(points []MetricPoint, duration time.Duration) []MetricPoint {
+	target := mockChartPointTarget(duration)
+	return lttb(cloneMetricSeries(points), target)
+}
+
+func downsampleMetricMapForMockChart(metrics map[string][]MetricPoint, duration time.Duration) map[string][]MetricPoint {
+	if len(metrics) == 0 {
+		return map[string][]MetricPoint{}
+	}
+	downsampled := make(map[string][]MetricPoint, len(metrics))
+	for metricType, points := range metrics {
+		downsampled[metricType] = downsampleMetricSeriesForMockChart(points, duration)
+	}
+	return downsampled
+}
+
+func normalizeMockChartMetricTypes(metricTypes []string) string {
+	if len(metricTypes) == 0 {
+		return ""
+	}
+	normalized := make([]string, 0, len(metricTypes))
+	for _, metricType := range metricTypes {
+		trimmed := strings.TrimSpace(metricType)
+		if trimmed == "" {
+			continue
+		}
+		normalized = append(normalized, trimmed)
+	}
+	if len(normalized) == 0 {
+		return ""
+	}
+	sort.Strings(normalized)
+	return strings.Join(normalized, ",")
+}
+
+func (m *Monitor) readMockChartMetricMapCache(
+	key mockChartMetricMapCacheKey,
+) (map[string][]MetricPoint, bool) {
+	if m == nil {
+		return nil, false
+	}
+
+	m.mockChartCacheMu.RLock()
+	defer m.mockChartCacheMu.RUnlock()
+
+	if m.mockChartMapCache == nil {
+		return nil, false
+	}
+	cached, ok := m.mockChartMapCache[key]
+	if !ok {
+		return nil, false
+	}
+	return cloneMetricPointMap(cached), true
+}
+
+func (m *Monitor) writeMockChartMetricMapCache(
+	key mockChartMetricMapCacheKey,
+	metrics map[string][]MetricPoint,
+) map[string][]MetricPoint {
+	cloned := cloneMetricPointMap(metrics)
+	if m == nil {
+		return cloned
+	}
+
+	m.mockChartCacheMu.Lock()
+	defer m.mockChartCacheMu.Unlock()
+
+	if m.mockChartMapCache == nil {
+		m.mockChartMapCache = make(map[mockChartMetricMapCacheKey]map[string][]MetricPoint)
+	}
+	m.mockChartMapCache[key] = cloneMetricPointMap(cloned)
+	return cloned
+}
+
+func (m *Monitor) invalidateMockChartCaches() {
+	if m == nil {
+		return
+	}
+
+	m.mockChartCacheMu.Lock()
+	defer m.mockChartCacheMu.Unlock()
+
+	if m.mockChartMapCache != nil {
+		clear(m.mockChartMapCache)
+	}
+}
+
+func (m *Monitor) mockGuestMetricsForChart(
+	inMemoryKey,
+	sqlResourceType,
+	sqlResourceID string,
+	duration time.Duration,
+	inMemoryResult map[string][]MetricPoint,
+) map[string][]MetricPoint {
+	key := mockChartMetricMapCacheKey{
+		kind:         "guest",
+		resourceType: strings.TrimSpace(sqlResourceType),
+		resourceID:   strings.TrimSpace(sqlResourceID),
+		aux:          strings.TrimSpace(inMemoryKey),
+		duration:     duration,
+	}
+	if cached, ok := m.readMockChartMetricMapCache(key); ok {
+		return cached
+	}
+
+	var computed map[string][]MetricPoint
+	switch {
+	case hasSufficientChartMapCoverage(inMemoryResult, duration):
+		computed = downsampleMetricMapForMockChart(inMemoryResult, duration)
+	case len(sqlResourceID) > 0:
+		if synthetic := mockGuestMetricsForChart(sqlResourceType, sqlResourceID, duration); len(synthetic) > 0 {
+			computed = downsampleMetricMapForMockChart(synthetic, duration)
+		}
+	}
+	if computed == nil {
+		computed = downsampleMetricMapForMockChart(inMemoryResult, duration)
+	}
+	return m.writeMockChartMetricMapCache(key, computed)
+}
+
+func (m *Monitor) mockNodeMetricsForChart(
+	nodeID string,
+	metricType string,
+	duration time.Duration,
+	inMemoryPoints []MetricPoint,
+) []MetricPoint {
+	cacheKey := mockChartMetricMapCacheKey{
+		kind:         "node",
+		resourceType: "node",
+		resourceID:   strings.TrimSpace(nodeID),
+		aux:          normalizeMockChartMetricTypes([]string{metricType}),
+		duration:     duration,
+	}
+	if cached, ok := m.readMockChartMetricMapCache(cacheKey); ok {
+		return cloneMetricSeries(cached[metricType])
+	}
+
+	computed := map[string][]MetricPoint{}
+	if hasSufficientChartSeriesCoverage(inMemoryPoints, duration) {
+		computed[metricType] = downsampleMetricSeriesForMockChart(inMemoryPoints, duration)
+	} else {
+		computed[metricType] = downsampleMetricSeriesForMockChart(
+			mockNodeMetricsForChart(nodeID, []string{metricType}, duration)[metricType],
+			duration,
+		)
+	}
+	return cloneMetricSeries(m.writeMockChartMetricMapCache(cacheKey, computed)[metricType])
+}
+
+func (m *Monitor) mockDiskMetricsForChart(
+	resourceID string,
+	metricType string,
+	duration time.Duration,
+	inMemoryPoints []MetricPoint,
+) []MetricPoint {
+	cacheKey := mockChartMetricMapCacheKey{
+		kind:         "disk",
+		resourceType: "disk",
+		resourceID:   strings.TrimSpace(resourceID),
+		aux:          normalizeMockChartMetricTypes([]string{metricType}),
+		duration:     duration,
+	}
+	if cached, ok := m.readMockChartMetricMapCache(cacheKey); ok {
+		return cloneMetricSeries(cached[metricType])
+	}
+
+	computed := map[string][]MetricPoint{}
+	if hasSufficientChartSeriesCoverage(inMemoryPoints, duration) {
+		computed[metricType] = downsampleMetricSeriesForMockChart(inMemoryPoints, duration)
+	} else {
+		computed[metricType] = downsampleMetricSeriesForMockChart(
+			mockDiskMetricsForChart(resourceID, []string{metricType}, duration)[metricType],
+			duration,
+		)
+	}
+	return cloneMetricSeries(m.writeMockChartMetricMapCache(cacheKey, computed)[metricType])
+}
+
+func (m *Monitor) mockStorageMetricsForChartCached(
+	storageID string,
+	duration time.Duration,
+	inMemoryResult map[string][]MetricPoint,
+) map[string][]MetricPoint {
+	cacheKey := mockChartMetricMapCacheKey{
+		kind:         "storage",
+		resourceType: "storage",
+		resourceID:   strings.TrimSpace(storageID),
+		duration:     duration,
+	}
+	if cached, ok := m.readMockChartMetricMapCache(cacheKey); ok {
+		return cached
+	}
+
+	var computed map[string][]MetricPoint
+	if hasSufficientChartMapCoverageForMetrics(inMemoryResult, duration, storageChartMetricTypes) {
+		computed = downsampleMetricMapForMockChart(inMemoryResult, duration)
+	} else {
+		computed = downsampleMetricMapForMockChart(
+			m.mockStorageMetricsForChart(storageID, duration, inMemoryResult),
+			duration,
+		)
+	}
+	return m.writeMockChartMetricMapCache(cacheKey, computed)
 }
 
 func mergeGuestMetricHistory(base, candidate map[string][]MetricPoint, duration time.Duration) map[string][]MetricPoint {
