@@ -773,6 +773,8 @@ describe('monitored-system model guardrails', () => {
     expect(upgradePresentationSource).toContain('export const UPGRADE_ACTION_LABEL');
     expect(upgradePresentationSource).toContain('export const UPGRADE_TRIAL_LABEL');
     expect(upgradePresentationSource).toContain('export const UPGRADE_TRIAL_LINK_CLASS');
+    expect(upgradePresentationSource).toContain('export function getTrialTryAgainLaterMessage');
+    expect(upgradePresentationSource).toContain('export function getTrialStartErrorMessage');
     expect(upgradePresentationSource).toContain('export function getUpgradeActionButtonClass');
   });
 

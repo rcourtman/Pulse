@@ -757,6 +757,13 @@ handoff itself is now centralized in
 onboarding surfaces must use that owner for redirect, success-notification, and
 canonical denial handling instead of open-coding local `startProTrial()`
 branches or re-interpreting backend status codes.
+That same shared presentation owner also holds the canonical trial
+rate-limit copy. When the shared commercial store provides
+`retryAfterSeconds`, `upgradePresentation.ts` must render human guidance from
+that canonical backoff instead of flattening the UI to a generic "try again
+later" message; user-facing CTA surfaces must therefore inherit
+`Retry-After`-backed copy through the shared helper path rather than
+inventing lane-local 429 wording.
 That same shared primitive boundary now also owns intent-level commercial
 selectors for non-billing surfaces. Leaf/shared state such as
 `useTrialBannerState.ts`, `useActiveUseTrialNudgeState.ts`,
