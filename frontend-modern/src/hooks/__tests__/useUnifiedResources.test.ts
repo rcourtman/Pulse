@@ -406,7 +406,7 @@ describe('useUnifiedResources', () => {
     let result: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']> | undefined;
     createRoot((d) => {
       dispose = d;
-      result = useUnifiedResources();
+      result = useUnifiedResources({ query: 'type=k8s-deployment', cacheKey: 'k8s-deployments' });
     });
 
     await result!.refetch();
@@ -606,6 +606,41 @@ describe('useUnifiedResources', () => {
     expect(result!.resources()[0].metricsTarget).toEqual({
       resourceType: 'agent',
       resourceId: 'pve-node-1',
+    });
+
+    dispose();
+  });
+
+  it('preserves kubernetes deployment metrics targets at the API load boundary', async () => {
+    apiFetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        data: [
+          {
+            ...v2Resource,
+            type: 'k8s-deployment',
+            metricsTarget: {
+              resourceType: 'k8s-deployment',
+              resourceId: 'cluster-1:deployment:default/api',
+            },
+          },
+        ],
+      }),
+    });
+    setWsInitialDataReceived(false);
+
+    let dispose = () => {};
+    let result: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']> | undefined;
+    createRoot((d) => {
+      dispose = d;
+      result = useUnifiedResources();
+    });
+
+    await result!.refetch();
+    await waitForResourceCount(() => result!.resources().length);
+    expect(result!.resources()[0].metricsTarget).toEqual({
+      resourceType: 'k8s-deployment',
+      resourceId: 'cluster-1:deployment:default/api',
     });
 
     dispose();

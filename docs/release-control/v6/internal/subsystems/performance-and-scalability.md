@@ -289,6 +289,12 @@ That same hot path now also covers mock-mode cache warmth. The canonical
 24-hour `/api/charts/storage-summary` dashboard transport must stay prewarmed
 across live mock sampler ticks so the first dashboard request after a refresh
 does not pay the full aggregate-storage synthesis cost on the operator path.
+That same chart-client hot path also owns canonical Kubernetes target typing.
+`frontend-modern/src/api/charts.ts` may normalize Kubernetes history requests
+onto the shared backend `resourceType=k8s` transport, but it must preserve the
+canonical frontend target types for clusters, nodes, pods, and deployments so
+the workloads and drawer hot paths do not silently drop deployment history or
+split Kubernetes charts across incompatible cache keys.
 contract instead of inventing an infrastructure-local summary filter branch.
 For shared line charts on that hot path, the shared sparkline primitive may
 isolate the selected series inside the existing render budget, but that

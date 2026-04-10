@@ -221,6 +221,62 @@ func TestBuildMetricsTarget_RejectsEmptyCanonicalSourceID(t *testing.T) {
 	}
 }
 
+func TestBuildMetricsTarget_UsesCanonicalKubernetesTargets(t *testing.T) {
+	tests := []struct {
+		name          string
+		resource      Resource
+		sourceTargets []SourceTarget
+		wantType      string
+		wantID        string
+	}{
+		{
+			name:     "kubernetes cluster",
+			resource: Resource{Type: ResourceTypeK8sCluster},
+			sourceTargets: []SourceTarget{{
+				Source:   SourceK8s,
+				SourceID: " cluster-1 ",
+			}},
+			wantType: string(ResourceTypeK8sCluster),
+			wantID:   "cluster-1",
+		},
+		{
+			name:     "kubernetes node",
+			resource: Resource{Type: ResourceTypeK8sNode},
+			sourceTargets: []SourceTarget{{
+				Source:   SourceK8s,
+				SourceID: " cluster-1:node:node-1 ",
+			}},
+			wantType: string(ResourceTypeK8sNode),
+			wantID:   "cluster-1:node:node-1",
+		},
+		{
+			name:     "kubernetes deployment",
+			resource: Resource{Type: ResourceTypeK8sDeployment},
+			sourceTargets: []SourceTarget{{
+				Source:   SourceK8s,
+				SourceID: " cluster-1:deployment:default/api ",
+			}},
+			wantType: string(ResourceTypeK8sDeployment),
+			wantID:   "cluster-1:deployment:default/api",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			target := BuildMetricsTarget(tt.resource, tt.sourceTargets)
+			if target == nil {
+				t.Fatal("BuildMetricsTarget() returned nil")
+			}
+			if target.ResourceType != tt.wantType {
+				t.Fatalf("ResourceType = %q, want %q", target.ResourceType, tt.wantType)
+			}
+			if target.ResourceID != tt.wantID {
+				t.Fatalf("ResourceID = %q, want %q", target.ResourceID, tt.wantID)
+			}
+		})
+	}
+}
+
 func TestBuildMetricsTarget_UsesCanonicalPhysicalDiskMetricIDForTrueNAS(t *testing.T) {
 	target := BuildMetricsTarget(
 		Resource{

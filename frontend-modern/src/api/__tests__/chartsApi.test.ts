@@ -138,6 +138,7 @@ describe('ChartsAPI', () => {
     );
     expect(toMetricsHistoryAPIResourceType('k8s-cluster')).toBe('k8s');
     expect(toMetricsHistoryAPIResourceType('k8s-node')).toBe('k8s');
+    expect(toMetricsHistoryAPIResourceType('k8s-deployment')).toBe('k8s');
     expect(toMetricsHistoryAPIResourceType('pod')).toBe('k8s');
   });
 
@@ -148,13 +149,18 @@ describe('ChartsAPI', () => {
 
     expect(mapUnifiedTypeToHistoryResourceType('truenas')).toBe('agent');
     expect(mapUnifiedTypeToHistoryResourceType('node')).toBe('agent');
+    expect(mapUnifiedTypeToHistoryResourceType('k8s-deployment')).toBe('k8s-deployment');
     expect(mapUnifiedTypeToHistoryResourceType('pod')).toBe('pod');
     expect(mapUnifiedTypeToHistoryResourceType('container')).toBeNull();
 
     expect(canonicalizeMetricsHistoryTargetType('node', 'agent')).toBe('agent');
     expect(canonicalizeMetricsHistoryTargetType('k8s', 'k8s-node')).toBe('k8s-node');
+    expect(canonicalizeMetricsHistoryTargetType('k8s', 'k8s-deployment')).toBe('k8s-deployment');
     expect(canonicalizeMetricsHistoryTargetType('k8s', 'pod')).toBe('pod');
     expect(canonicalizeMetricsHistoryTargetType('k8s', 'agent')).toBeNull();
+    expect(canonicalizeMetricsHistoryTargetType('k8s-deployment', 'k8s-deployment')).toBe(
+      'k8s-deployment',
+    );
     expect(canonicalizeMetricsHistoryTargetType('agent', 'agent')).toBe('agent');
   });
 });

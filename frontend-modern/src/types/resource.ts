@@ -209,6 +209,7 @@ export type MetricsHistoryTargetResourceType =
   | 'docker-host'
   | 'k8s-cluster'
   | 'k8s-node'
+  | 'k8s-deployment'
   | 'pod'
   | 'disk';
 

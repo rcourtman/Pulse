@@ -510,6 +510,17 @@ canonical key. When store-backed history is absent, the handler must fall back
 to the same in-memory guest metrics cache that workload charts use for pods,
 so demo and mock Kubernetes charts do not go blank while aggregate workload
 charts still render.
+That same metrics-history contract also owns canonical Kubernetes type
+coverage across the shared chart clients. `/api/resources`,
+`frontend-modern/src/api/charts.ts`, and `/api/metrics-store/history` must
+preserve the shared metrics-target family for clusters, nodes, pods, and
+deployments rather than treating prefixed pod IDs as a special case and
+dropping `k8s-deployment` onto an untyped fallback. Cluster history stays on
+the canonical cluster source key, node history on
+`<cluster>:node:<uid-or-name>`, pod history on
+`k8s:<cluster>:pod:<uid-or-namespace/name>`, and deployment history on
+`<cluster>:deployment:<uid-or-namespace/name>`, so demo and live workload
+detail charts all resolve through one governed identity contract.
 The Pulse Account commercial shell now also owns a dedicated bootstrap
 contract in `internal/cloudcp/portal/page.go`, `internal/cloudcp/portal/handlers.go`,
 and `internal/cloudcp/portal/handlers_test.go`. `/api/portal/bootstrap` and

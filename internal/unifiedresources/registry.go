@@ -655,6 +655,9 @@ func (rr *ResourceRegistry) ingestDockerService(service models.DockerService, ho
 func (rr *ResourceRegistry) ingestKubernetesCluster(cluster models.KubernetesCluster, linkedHosts []*models.Host, capabilities *K8sMetricCapabilities) string {
 	resource, identity := resourceFromKubernetesCluster(cluster, linkedHosts, capabilities)
 	sourceID := kubernetesClusterSourceID(cluster)
+	if sourceID == "" {
+		return ""
+	}
 	return rr.ingest(SourceK8s, sourceID, resource, identity)
 }
 
@@ -664,6 +667,9 @@ func (rr *ResourceRegistry) ingestKubernetesNode(cluster models.KubernetesCluste
 		resource.ParentID = &clusterResourceID
 	}
 	sourceID := kubernetesNodeSourceID(kubernetesClusterSourceID(cluster), node)
+	if sourceID == "" {
+		return
+	}
 	rr.ingest(SourceK8s, sourceID, resource, identity)
 }
 
@@ -673,6 +679,9 @@ func (rr *ResourceRegistry) ingestKubernetesPod(cluster models.KubernetesCluster
 		resource.ParentID = &clusterResourceID
 	}
 	sourceID := kubernetesPodSourceID(kubernetesClusterSourceID(cluster), pod)
+	if sourceID == "" {
+		return
+	}
 	rr.ingest(SourceK8s, sourceID, resource, identity)
 }
 
@@ -682,6 +691,9 @@ func (rr *ResourceRegistry) ingestKubernetesDeployment(cluster models.Kubernetes
 		resource.ParentID = &clusterResourceID
 	}
 	sourceID := kubernetesDeploymentSourceID(kubernetesClusterSourceID(cluster), deployment)
+	if sourceID == "" {
+		return
+	}
 	rr.ingest(SourceK8s, sourceID, resource, identity)
 }
 
@@ -1534,43 +1546,19 @@ func proxmoxGuestFallbackSourceID(kind, instance, node string, vmid int) string 
 }
 
 func kubernetesClusterSourceID(cluster models.KubernetesCluster) string {
-	if v := strings.TrimSpace(cluster.ID); v != "" {
-		return v
-	}
-	if v := strings.TrimSpace(cluster.AgentID); v != "" {
-		return v
-	}
-	if v := strings.TrimSpace(cluster.Name); v != "" {
-		return v
-	}
-	if v := strings.TrimSpace(cluster.DisplayName); v != "" {
-		return v
-	}
-	return strings.TrimSpace(cluster.Context)
+	return CanonicalKubernetesClusterSourceID(cluster)
 }
 
 func kubernetesNodeSourceID(clusterSourceID string, node models.KubernetesNode) string {
-	nodeID := strings.TrimSpace(node.UID)
-	if nodeID == "" {
-		nodeID = strings.TrimSpace(node.Name)
-	}
-	return fmt.Sprintf("%s:node:%s", clusterSourceID, nodeID)
+	return CanonicalKubernetesNodeSourceID(clusterSourceID, node)
 }
 
 func kubernetesPodSourceID(clusterSourceID string, pod models.KubernetesPod) string {
-	podID := strings.TrimSpace(pod.UID)
-	if podID == "" {
-		podID = fmt.Sprintf("%s/%s", strings.TrimSpace(pod.Namespace), strings.TrimSpace(pod.Name))
-	}
-	return fmt.Sprintf("%s:pod:%s", clusterSourceID, podID)
+	return CanonicalKubernetesPodSourceID(clusterSourceID, pod)
 }
 
 func kubernetesDeploymentSourceID(clusterSourceID string, deployment models.KubernetesDeployment) string {
-	deploymentID := strings.TrimSpace(deployment.UID)
-	if deploymentID == "" {
-		deploymentID = fmt.Sprintf("%s/%s", strings.TrimSpace(deployment.Namespace), strings.TrimSpace(deployment.Name))
-	}
-	return fmt.Sprintf("%s:deployment:%s", clusterSourceID, deploymentID)
+	return CanonicalKubernetesDeploymentSourceID(clusterSourceID, deployment)
 }
 
 func buildKubernetesNodeHostLookup(hosts []models.Host) map[string]*models.Host {

@@ -165,6 +165,7 @@ export type ResourceType =
   | 'docker-host'
   | 'k8s-cluster'
   | 'k8s-node'
+  | 'k8s-deployment'
   | 'pod'
   | 'agent'
   | 'disk';
@@ -183,6 +184,7 @@ export function toMetricsHistoryAPIResourceType(
   switch (resourceType) {
     case 'k8s-cluster':
     case 'k8s-node':
+    case 'k8s-deployment':
     case 'pod':
       return 'k8s';
     default:
@@ -202,6 +204,7 @@ export function asMetricsHistoryResourceType(type: string): ResourceType | null 
     'docker-host',
     'k8s-cluster',
     'k8s-node',
+    'k8s-deployment',
     'pod',
     'disk',
   ];
@@ -221,6 +224,8 @@ export function mapUnifiedTypeToHistoryResourceType(type: string): ResourceType 
       return 'k8s-node';
     case 'k8s-cluster':
       return 'k8s-cluster';
+    case 'k8s-deployment':
+      return 'k8s-deployment';
     case 'vm':
       return 'vm';
     case 'system-container':
@@ -250,6 +255,8 @@ export function canonicalizeMetricsHistoryTargetType(
         return 'k8s-cluster';
       case 'k8s-node':
         return 'k8s-node';
+      case 'k8s-deployment':
+        return 'k8s-deployment';
       case 'pod':
         return 'pod';
       default:

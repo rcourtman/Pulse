@@ -98,6 +98,7 @@ cross-source deduplication.
 75. `frontend-modern/src/hooks/useUnifiedResources.ts`
 76. `frontend-modern/src/types/resource.ts`
 77. `frontend-modern/src/utils/sourcePlatforms.ts`
+78. `internal/unifiedresources/kubernetes_metric_ids.go`
 
 ## Shared Boundaries
 
@@ -1185,6 +1186,13 @@ as bare `<cluster>:pod:<uid>`. `/api/resources`, workload charts, and
 `/api/metrics-store/history` must therefore collapse onto that prefixed pod
 target instead of letting pod rows and pod charts drift onto separate metric
 series.
+Kubernetes clusters, nodes, and deployments are governed by that same shared
+identity family. The registry must derive those metric targets through one
+canonical helper boundary in `internal/unifiedresources/kubernetes_metric_ids.go`
+and publish them unchanged through `/api/resources`, chart clients, and
+mock-history paths, so cluster, node, pod, and deployment charts all bind to
+one runtime key family instead of each layer rebuilding Kubernetes IDs from
+cluster name, namespace, or surface-local aliases.
 The drawer's discovery mapper also reuses that helper for pod fallback agent
 IDs, so the resource-detail path and the dashboard path stay aligned on the
 same cluster-name source of truth.

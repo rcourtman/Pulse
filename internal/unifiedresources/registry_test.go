@@ -2059,6 +2059,62 @@ func TestRegistryHasMatchingMonitoredSystemUsesCanonicalHostIdentity(t *testing.
 	}
 }
 
+func TestRegistryIngestSnapshotPublishesCanonicalKubernetesMetricsTargets(t *testing.T) {
+	rr := NewRegistry(nil)
+
+	rr.IngestSnapshot(models.StateSnapshot{
+		KubernetesClusters: []models.KubernetesCluster{
+			{
+				ID:          "cluster-1",
+				Name:        "cluster-a",
+				DisplayName: "Cluster A",
+				AgentID:     "agent-cluster-1",
+				Context:     "cluster-a",
+				Nodes: []models.KubernetesNode{
+					{
+						UID:  "node-1",
+						Name: "worker-1",
+					},
+				},
+				Pods: []models.KubernetesPod{
+					{
+						UID:       "pod-1",
+						Namespace: "default",
+						Name:      "api-7dd5f6c7f9-jx2ql",
+					},
+				},
+				Deployments: []models.KubernetesDeployment{
+					{
+						UID:       "deploy-1",
+						Namespace: "default",
+						Name:      "api",
+					},
+				},
+			},
+		},
+	})
+
+	assertMetricsTarget := func(resourceType ResourceType, want string) {
+		t.Helper()
+		resources := rr.ListByType(resourceType)
+		if len(resources) != 1 {
+			t.Fatalf("ListByType(%q) len = %d, want 1", resourceType, len(resources))
+		}
+		target := BuildMetricsTargetForRegistry(rr, resources[0].ID)
+		if target == nil {
+			t.Fatalf("BuildMetricsTargetForRegistry(%q) returned nil MetricsTarget", resources[0].ID)
+		}
+		if target.ResourceID != want {
+			t.Fatalf("ListByType(%q) metrics target = %q, want %q", resourceType, target.ResourceID, want)
+		}
+	}
+
+	assertMetricsTarget(ResourceTypeK8sCluster, "cluster-1")
+	assertMetricsTarget(ResourceTypeK8sNode, "cluster-1:node:node-1")
+	assertMetricsTarget(ResourceTypePod, "k8s:cluster-1:pod:pod-1")
+	assertMetricsTarget(ResourceTypeK8sDeployment, "cluster-1:deployment:deploy-1")
+}
+
 func TestRegistryHasMatchingMonitoredSystemRejectsInvalidCandidate(t *testing.T) {
 	rr := NewRegistry(nil)
 	rr.IngestRecords(SourceAgent, []IngestRecord{

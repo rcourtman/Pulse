@@ -282,6 +282,66 @@ func TestSeedMockMetricsHistory_PopulatesKubernetesPodSeries(t *testing.T) {
 	}
 }
 
+func TestSeedMockMetricsHistory_PopulatesKubernetesClusterNodeAndDeploymentSeries(t *testing.T) {
+	const interval = 30 * time.Second
+	now := time.Now()
+
+	state := models.StateSnapshot{
+		KubernetesClusters: []models.KubernetesCluster{
+			{
+				ID:     "cluster-1",
+				Name:   "cluster-1",
+				Status: "online",
+				Nodes: []models.KubernetesNode{
+					{
+						UID:              "node-1",
+						Name:             "worker-1",
+						Ready:            true,
+						Roles:            []string{"worker"},
+						AllocCPU:         4,
+						AllocMemoryBytes: 8 * 1024 * 1024 * 1024,
+					},
+				},
+				Deployments: []models.KubernetesDeployment{
+					{
+						UID:               "deploy-1",
+						Name:              "api",
+						Namespace:         "default",
+						DesiredReplicas:   3,
+						UpdatedReplicas:   3,
+						ReadyReplicas:     3,
+						AvailableReplicas: 3,
+					},
+				},
+			},
+		},
+	}
+
+	mh := NewMetricsHistory(1000, 24*time.Hour)
+	seedMockMetricsHistory(mh, nil, fixtureGraphWithState(state), now, time.Hour, interval)
+
+	clusterMetricID := kubernetesClusterMetricID(state.KubernetesClusters[0])
+	nodeMetricID := kubernetesNodeMetricID(state.KubernetesClusters[0], state.KubernetesClusters[0].Nodes[0])
+	deploymentMetricID := kubernetesDeploymentMetricID(state.KubernetesClusters[0], state.KubernetesClusters[0].Deployments[0])
+
+	for name, metricID := range map[string]string{
+		"cluster":    clusterMetricID,
+		"node":       nodeMetricID,
+		"deployment": deploymentMetricID,
+	} {
+		if metricID == "" {
+			t.Fatalf("expected kubernetes %s metric id", name)
+		}
+		cpuSeries := mh.GetGuestMetrics(metricID, "cpu", time.Hour)
+		if len(cpuSeries) < 10 {
+			t.Fatalf("expected seeded kubernetes %s cpu points, got %d", name, len(cpuSeries))
+		}
+		if got, want := cpuSeries[len(cpuSeries)-1].Value, mock.SampleMetric("k8s", metricID, "cpu", cpuSeries[len(cpuSeries)-1].Timestamp); math.Abs(got-want) > 1e-9 {
+			t.Fatalf("expected last kubernetes %s cpu point to match canonical sampler, got=%v want=%v", name, got, want)
+		}
+	}
+}
+
 func TestSeedMockMetricsHistory_SeedsMetricsStore(t *testing.T) {
 	now := time.Now()
 
@@ -1245,6 +1305,72 @@ func TestSeedMockMetricsHistory_StaysContinuousWithSubsequentLiveMockTicks(t *te
 	}
 	if got := k8sMemoryAfterTick[len(k8sMemoryAfterTick)-2].Timestamp; !got.Equal(now) {
 		t.Fatalf("expected penultimate k8s memory point to remain anchored at seed now %v, got %v", now, got)
+	}
+}
+
+func TestRecordMockStateToMetricsHistory_ContinuesCanonicalKubernetesClusterNodeAndDeploymentTimeline(t *testing.T) {
+	now := time.Now().UTC().Truncate(time.Minute)
+	next := now.Add(time.Minute)
+
+	seedState := models.StateSnapshot{
+		KubernetesClusters: []models.KubernetesCluster{
+			{
+				ID:          "k8s-tail",
+				Name:        "k8s-tail",
+				DisplayName: "Tail Cluster",
+				Nodes: []models.KubernetesNode{
+					{
+						UID:                "node-tail",
+						Name:               "worker-tail",
+						Ready:              true,
+						AllocCPU:           4,
+						AllocMemoryBytes:   16 * 1024 * 1024 * 1024,
+						UsageCPUPercent:    24,
+						UsageMemoryBytes:   8 * 1024 * 1024 * 1024,
+						UsageMemoryPercent: 50,
+					},
+				},
+				Deployments: []models.KubernetesDeployment{
+					{
+						UID:               "services/api-tail",
+						Namespace:         "services",
+						Name:              "api-tail",
+						DesiredReplicas:   3,
+						UpdatedReplicas:   3,
+						ReadyReplicas:     3,
+						AvailableReplicas: 3,
+					},
+				},
+			},
+		},
+	}
+
+	clusterMetricID := kubernetesClusterMetricID(seedState.KubernetesClusters[0])
+	nodeMetricID := kubernetesNodeMetricID(seedState.KubernetesClusters[0], seedState.KubernetesClusters[0].Nodes[0])
+	deploymentMetricID := kubernetesDeploymentMetricID(seedState.KubernetesClusters[0], seedState.KubernetesClusters[0].Deployments[0])
+
+	mh := NewMetricsHistory(5000, 7*24*time.Hour)
+	seedMockMetricsHistory(mh, nil, fixtureGraphWithState(seedState), now, 7*24*time.Hour, time.Minute)
+	recordMockStateToMetricsHistory(mh, nil, fixtureGraphWithState(seedState), next)
+
+	for name, metricID := range map[string]string{
+		"cluster":    clusterMetricID,
+		"node":       nodeMetricID,
+		"deployment": deploymentMetricID,
+	} {
+		series := mh.GetGuestMetrics(metricID, "memory", 7*24*time.Hour)
+		if len(series) < 2 {
+			t.Fatalf("expected kubernetes %s memory history, got %d points", name, len(series))
+		}
+		if got := series[len(series)-1].Timestamp; !got.Equal(next) {
+			t.Fatalf("expected latest kubernetes %s memory point at %v, got %v", name, next, got)
+		}
+		if got, want := series[len(series)-1].Value, mock.SampleMetric("k8s", metricID, "memory", next); math.Abs(got-want) > 1e-9 {
+			t.Fatalf("expected kubernetes %s memory tick to continue canonical runtime timeline: got=%f want=%f", name, got, want)
+		}
+		if got := series[len(series)-2].Timestamp; !got.Equal(now) {
+			t.Fatalf("expected penultimate kubernetes %s memory point to remain anchored at seed now %v, got %v", name, now, got)
+		}
 	}
 }
 

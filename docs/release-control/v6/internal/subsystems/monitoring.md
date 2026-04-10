@@ -240,6 +240,14 @@ resolved unified-resource metrics target, but the emitted series identity must
 stay on the canonical workload row ID, so VMware-backed workloads participate
 in summary hover and focus without leaking provider-native metric IDs into the
 UI contract.
+That same chart boundary also owns Kubernetes mock-history completeness.
+Seeded mock history and live mock appends must project Kubernetes clusters,
+nodes, pods, and deployments onto the same canonical unified-resource metrics
+targets that the registry exposes, instead of seeding only pod timelines and
+leaving cluster, node, or deployment charts blank on the demo path. When the
+mock sampler records a Kubernetes series, it must write the canonical cluster,
+node, pod, or deployment key directly and preserve the same identity across
+seeded history, in-memory continuation, and metrics-store fallback reads.
 That same summary owner also owns VMware partial-success classification.
 Optional VI JSON or Automation enrichment reads that fail after base
 host/VM/datastore inventory succeeds must not collapse the whole poll into a

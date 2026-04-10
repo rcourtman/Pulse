@@ -13,6 +13,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/mockmodel"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/truenas"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/internal/vmware"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
 	"github.com/rs/zerolog/log"
@@ -68,37 +69,20 @@ func HashSeed(parts ...string) uint64 {
 }
 
 func kubernetesClusterMetricID(cluster models.KubernetesCluster) string {
-	if value := strings.TrimSpace(cluster.ID); value != "" {
-		return value
-	}
-	if value := strings.TrimSpace(cluster.Name); value != "" {
-		return value
-	}
-	if value := strings.TrimSpace(cluster.DisplayName); value != "" {
-		return value
-	}
-	return "k8s-cluster"
+	return unifiedresources.CanonicalKubernetesClusterSourceID(cluster)
+}
+
+func kubernetesNodeMetricID(cluster models.KubernetesCluster, node models.KubernetesNode) string {
+	return unifiedresources.CanonicalKubernetesNodeSourceID(kubernetesClusterMetricID(cluster), node)
 }
 
 func kubernetesPodMetricID(cluster models.KubernetesCluster, pod models.KubernetesPod) string {
-	clusterKey := kubernetesClusterMetricID(cluster)
-	podKey := strings.TrimSpace(pod.UID)
-	if podKey == "" {
-		namespace := strings.TrimSpace(pod.Namespace)
-		name := strings.TrimSpace(pod.Name)
-		switch {
-		case namespace != "" && name != "":
-			podKey = namespace + "/" + name
-		case name != "":
-			podKey = name
-		default:
-			podKey = "pod"
-		}
-	}
-	if clusterKey == "" || podKey == "" {
-		return ""
-	}
-	return fmt.Sprintf("k8s:%s:pod:%s", clusterKey, podKey)
+	sourceID := unifiedresources.CanonicalKubernetesPodSourceID(kubernetesClusterMetricID(cluster), pod)
+	return unifiedresources.CanonicalKubernetesPodMetricID(sourceID)
+}
+
+func kubernetesDeploymentMetricID(cluster models.KubernetesCluster, deployment models.KubernetesDeployment) string {
+	return unifiedresources.CanonicalKubernetesDeploymentSourceID(kubernetesClusterMetricID(cluster), deployment)
 }
 
 // SeriesStyle controls the visual character of generated metric series.
@@ -634,17 +618,37 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, graph mock.Fi
 		time.Sleep(50 * time.Millisecond) // Reduced from 200ms for faster startup
 	}
 
+	k8sNodeCount := 0
 	k8sPodCount := 0
+	k8sDeploymentCount := 0
 	for _, cluster := range state.KubernetesClusters {
 		if cluster.Hidden {
 			continue
 		}
+		k8sNodeCount += len(cluster.Nodes)
 		k8sPodCount += len(cluster.Pods)
+		k8sDeploymentCount += len(cluster.Deployments)
 	}
-	log.Debug().Int("clusters", len(state.KubernetesClusters)).Int("pods", k8sPodCount).Msg("mock seeding: processing kubernetes pods")
+	log.Debug().
+		Int("clusters", len(state.KubernetesClusters)).
+		Int("nodes", k8sNodeCount).
+		Int("pods", k8sPodCount).
+		Int("deployments", k8sDeploymentCount).
+		Msg("mock seeding: processing kubernetes resources")
 	for _, cluster := range state.KubernetesClusters {
 		if cluster.Hidden {
 			continue
+		}
+		clusterMetricID := kubernetesClusterMetricID(cluster)
+		if clusterMetricID != "" {
+			recordGuest([]string{clusterMetricID}, "k8s", clusterMetricID, true, true, true)
+		}
+		for _, node := range cluster.Nodes {
+			metricID := kubernetesNodeMetricID(cluster, node)
+			if metricID == "" {
+				continue
+			}
+			recordGuest([]string{metricID}, "k8s", metricID, true, true, true)
 		}
 		for _, pod := range cluster.Pods {
 			metricID := kubernetesPodMetricID(cluster, pod)
@@ -659,6 +663,13 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, graph mock.Fi
 				false,
 				true,
 			)
+		}
+		for _, deployment := range cluster.Deployments {
+			metricID := kubernetesDeploymentMetricID(cluster, deployment)
+			if metricID == "" {
+				continue
+			}
+			recordGuest([]string{metricID}, "k8s", metricID, true, true, true)
 		}
 		time.Sleep(30 * time.Millisecond)
 	}
@@ -1289,34 +1300,57 @@ func recordMockStateToMetricsHistory(mh *MetricsHistory, ms *metrics.Store, grap
 	recordGuestMetrics(mh, ms, adaptVMs(state.VMs), "vm", ts)
 	recordGuestMetrics(mh, ms, adaptContainers(state.Containers), "container", ts)
 
+	recordKubernetesMetric := func(metricID string, includeDiskIO bool) {
+		if metricID == "" {
+			return
+		}
+		cpu := mock.SampleMetric("k8s", metricID, "cpu", ts)
+		memory := mock.SampleMetric("k8s", metricID, "memory", ts)
+		disk := mock.SampleMetric("k8s", metricID, "disk", ts)
+		netIn := mock.SampleMetric("k8s", metricID, "netin", ts)
+		netOut := mock.SampleMetric("k8s", metricID, "netout", ts)
+
+		mh.AddGuestMetric(metricID, "cpu", cpu, ts)
+		mh.AddGuestMetric(metricID, "memory", memory, ts)
+		mh.AddGuestMetric(metricID, "disk", disk, ts)
+		mh.AddGuestMetric(metricID, "netin", netIn, ts)
+		mh.AddGuestMetric(metricID, "netout", netOut, ts)
+
+		if ms != nil {
+			ms.Write("k8s", metricID, "cpu", cpu, ts)
+			ms.Write("k8s", metricID, "memory", memory, ts)
+			ms.Write("k8s", metricID, "disk", disk, ts)
+			ms.Write("k8s", metricID, "netin", netIn, ts)
+			ms.Write("k8s", metricID, "netout", netOut, ts)
+		}
+
+		if !includeDiskIO {
+			return
+		}
+
+		diskRead := mock.SampleMetric("k8s", metricID, "diskread", ts)
+		diskWrite := mock.SampleMetric("k8s", metricID, "diskwrite", ts)
+		mh.AddGuestMetric(metricID, "diskread", diskRead, ts)
+		mh.AddGuestMetric(metricID, "diskwrite", diskWrite, ts)
+		if ms != nil {
+			ms.Write("k8s", metricID, "diskread", diskRead, ts)
+			ms.Write("k8s", metricID, "diskwrite", diskWrite, ts)
+		}
+	}
+
 	for _, cluster := range state.KubernetesClusters {
 		if cluster.Hidden {
 			continue
 		}
+		recordKubernetesMetric(kubernetesClusterMetricID(cluster), true)
+		for _, node := range cluster.Nodes {
+			recordKubernetesMetric(kubernetesNodeMetricID(cluster, node), true)
+		}
 		for _, pod := range cluster.Pods {
-			metricID := kubernetesPodMetricID(cluster, pod)
-			if metricID == "" {
-				continue
-			}
-			cpu := mock.SampleMetric("k8s", metricID, "cpu", ts)
-			memory := mock.SampleMetric("k8s", metricID, "memory", ts)
-			disk := mock.SampleMetric("k8s", metricID, "disk", ts)
-			netIn := mock.SampleMetric("k8s", metricID, "netin", ts)
-			netOut := mock.SampleMetric("k8s", metricID, "netout", ts)
-
-			mh.AddGuestMetric(metricID, "cpu", cpu, ts)
-			mh.AddGuestMetric(metricID, "memory", memory, ts)
-			mh.AddGuestMetric(metricID, "disk", disk, ts)
-			mh.AddGuestMetric(metricID, "netin", netIn, ts)
-			mh.AddGuestMetric(metricID, "netout", netOut, ts)
-
-			if ms != nil {
-				ms.Write("k8s", metricID, "cpu", cpu, ts)
-				ms.Write("k8s", metricID, "memory", memory, ts)
-				ms.Write("k8s", metricID, "disk", disk, ts)
-				ms.Write("k8s", metricID, "netin", netIn, ts)
-				ms.Write("k8s", metricID, "netout", netOut, ts)
-			}
+			recordKubernetesMetric(kubernetesPodMetricID(cluster, pod), false)
+		}
+		for _, deployment := range cluster.Deployments {
+			recordKubernetesMetric(kubernetesDeploymentMetricID(cluster, deployment), true)
 		}
 	}
 

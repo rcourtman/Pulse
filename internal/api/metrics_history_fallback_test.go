@@ -228,6 +228,63 @@ func TestMetricsHistoryKubernetesPodUsesMemoryFallback(t *testing.T) {
 	}
 }
 
+func TestMetricsHistoryKubernetesClusterNodeAndDeploymentUseMemoryFallback(t *testing.T) {
+	mh := monitoring.NewMetricsHistory(1000, time.Hour)
+	now := time.Now().UTC().Truncate(time.Second)
+	targets := []struct {
+		name       string
+		resourceID string
+	}{
+		{name: "cluster", resourceID: "cluster-1"},
+		{name: "node", resourceID: "cluster-1:node:node-1"},
+		{name: "deployment", resourceID: "cluster-1:deployment:default/api"},
+	}
+	for _, target := range targets {
+		for i, value := range []float64{18.5, 22.0, 19.0, 24.2} {
+			mh.AddGuestMetric(target.resourceID, "cpu", value, now.Add(time.Duration(i-3)*10*time.Minute))
+		}
+	}
+
+	monitor := &monitoring.Monitor{}
+	setUnexportedField(t, monitor, "metricsHistory", mh)
+
+	router := &Router{monitor: monitor}
+
+	for _, target := range targets {
+		t.Run(target.name, func(t *testing.T) {
+			req := httptest.NewRequest(
+				http.MethodGet,
+				"/api/metrics-store/history?resourceType=k8s&resourceId="+target.resourceID+"&metric=cpu&range=30m",
+				nil,
+			)
+			rec := httptest.NewRecorder()
+			router.handleMetricsHistory(rec, req)
+
+			if rec.Code != http.StatusOK {
+				t.Fatalf("expected status 200, got %d", rec.Code)
+			}
+
+			var resp metricsHistoryResponse
+			if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+				t.Fatalf("failed to unmarshal response: %v", err)
+			}
+
+			if resp.Source != "memory" {
+				t.Fatalf("expected source memory, got %q", resp.Source)
+			}
+			if resp.ResourceId != target.resourceID {
+				t.Fatalf("expected resourceId %q, got %q", target.resourceID, resp.ResourceId)
+			}
+			if resp.Metric != "cpu" {
+				t.Fatalf("expected metric cpu, got %q", resp.Metric)
+			}
+			if len(resp.Points) < 2 {
+				t.Fatalf("expected kubernetes %s history points, got %d", target.name, len(resp.Points))
+			}
+		})
+	}
+}
+
 func TestMetricsHistoryStorageDiskAliasUsesMemory(t *testing.T) {
 	state := models.NewState()
 	state.UpdateStorageForInstance("pve1", []models.Storage{
