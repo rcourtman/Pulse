@@ -143,6 +143,11 @@ assembly branch.
    `internal/unifiedresources/pbs_rollups.go`,
    `internal/unifiedresources/monitored_systems.go`,
    `internal/unifiedresources/monitored_system_projection.go`, and
+   the shared list-order helpers consumed by `internal/api/resources.go`;
+   canonical unified-resource lists must preserve one deterministic
+   `name -> type -> id` order across registry reads, REST pagination, and
+   websocket-backed refreshes so equal-name resources do not silently reshuffle
+   between cold hydrate and later runtime updates
    `internal/unifiedresources/top_level_systems.go`
 6. Add canonical governed name-resolution or policy-aware resource lookup behavior through `internal/unifiedresources/resolve.go` and `internal/unifiedresources/resolve_context.go`
 7. Add or change resource drawer timeline/facet presentation through `frontend-modern/src/components/Infrastructure/ResourceDetailDrawer.tsx`, `frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx`, `frontend-modern/src/components/Infrastructure/ResourceDetailDrawerDebugTab.tsx`, `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerState.ts`, `frontend-modern/src/components/Infrastructure/ResourceFacetSummary.tsx`, `frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts`, and the governed `internal/api/resources.go` facet/timeline contract together

@@ -100,6 +100,26 @@ func TestResourceRegistry_ListByType_Empty(t *testing.T) {
 	}
 }
 
+func TestResourceRegistry_ListUsesDeterministicNameTieBreakers(t *testing.T) {
+	rr := NewRegistry(nil)
+	now := time.Date(2026, 4, 11, 0, 0, 0, 0, time.UTC)
+
+	rr.IngestResources([]Resource{
+		{ID: "storage-z", Type: ResourceTypeStorage, Name: "backup-vault-a", Status: StatusOnline, LastSeen: now},
+		{ID: "storage-b", Type: ResourceTypeStorage, Name: "backup-vault-a", Status: StatusOnline, LastSeen: now},
+		{ID: "agent-1", Type: ResourceTypeAgent, Name: "alpha-host", Status: StatusOnline, LastSeen: now},
+		{ID: "storage-a", Type: ResourceTypeStorage, Name: "backup-vault-a", Status: StatusOnline, LastSeen: now},
+	})
+
+	got := rr.List()
+	gotIDs := make([]string, 0, len(got))
+	for _, resource := range got {
+		gotIDs = append(gotIDs, resource.ID)
+	}
+
+	assertStringSlice(t, gotIDs, []string{"agent-1", "storage-a", "storage-b", "storage-z"})
+}
+
 func TestResourceRegistry_MergesPhysicalDiskTemperatureAggregate(t *testing.T) {
 	rr := NewRegistry(nil)
 	now := time.Date(2026, 3, 29, 12, 0, 0, 0, time.UTC)

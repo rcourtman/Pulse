@@ -79,6 +79,10 @@ querying, and the operator-facing storage health presentation layer.
    current/projected grouped systems plus enforced limit verdicts for setup and
    support clarity, but storage and recovery must not reinterpret those routes
    as recovery-local onboarding or restore APIs.
+   Any adjacent list surfaces that reuse `internal/api/resources.go` must also
+   preserve the canonical unified-resource `name -> type -> id` order so
+   duplicate-name storage and recovery resources do not reshuffle between cold
+   hydrate, paginated reads, and later live runtime updates.
    That same adjacent API boundary now also owns SSO outbound discovery and metadata fetch trust: storage- and recovery-adjacent surfaces may share `internal/api/sso_outbound.go`, `internal/api/saml_service.go`, and `internal/api/oidc_service.go`, but they must not fork separate metadata/discovery HTTP clients, redirect policies, or credential-file read rules when they depend on shared backend auth helpers.
 5. Route canonical storage/recovery resource selection through `frontend-modern/src/hooks/useUnifiedResources.ts` and the owning `unified-resources` contract
    That shared hook now also projects resource `clusterId` through the shared cluster-name helper, so storage and recovery links keep the same cluster-context label as other unified-resource consumers instead of rebuilding a local fallback chain.

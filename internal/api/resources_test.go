@@ -252,6 +252,49 @@ func TestResourceListUsesUnifiedSeedProvider(t *testing.T) {
 	}
 }
 
+func TestResourceListUsesDeterministicNameTieBreakers(t *testing.T) {
+	now := time.Date(2026, 4, 11, 0, 0, 0, 0, time.UTC)
+	cfg := &config.Config{DataPath: t.TempDir()}
+	h := NewResourceHandlers(cfg)
+	h.SetStateProvider(resourceUnifiedSeedProvider{
+		snapshot: models.StateSnapshot{LastUpdate: now},
+		resources: []unified.Resource{
+			{ID: "storage-c", Type: unified.ResourceTypeStorage, Name: "backup-vault-a", Status: unified.StatusOnline, LastSeen: now},
+			{ID: "storage-a", Type: unified.ResourceTypeStorage, Name: "backup-vault-a", Status: unified.StatusOnline, LastSeen: now},
+			{ID: "storage-b", Type: unified.ResourceTypeStorage, Name: "backup-vault-a", Status: unified.StatusOnline, LastSeen: now},
+		},
+	})
+
+	for attempt := 0; attempt < 2; attempt++ {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/api/resources?type=storage&page=1&limit=100", nil)
+		h.HandleListResources(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("attempt %d: status = %d, body=%s", attempt+1, rec.Code, rec.Body.String())
+		}
+
+		var resp ResourcesResponse
+		if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+			t.Fatalf("attempt %d: decode response: %v", attempt+1, err)
+		}
+
+		gotIDs := make([]string, 0, len(resp.Data))
+		for _, resource := range resp.Data {
+			gotIDs = append(gotIDs, resource.ID)
+		}
+		wantIDs := []string{"storage-a", "storage-b", "storage-c"}
+		if len(gotIDs) != len(wantIDs) {
+			t.Fatalf("attempt %d: expected %d resources, got %d (%v)", attempt+1, len(wantIDs), len(gotIDs), gotIDs)
+		}
+		for index := range wantIDs {
+			if gotIDs[index] != wantIDs[index] {
+				t.Fatalf("attempt %d: position %d = %q, want %q (got=%v)", attempt+1, index, gotIDs[index], wantIDs[index], gotIDs)
+			}
+		}
+	}
+}
+
 func TestResourceListInvalidatesUnifiedSeedCacheOnFreshnessChange(t *testing.T) {
 	now := time.Now().UTC()
 	provider := &mutableResourceUnifiedSeedProvider{

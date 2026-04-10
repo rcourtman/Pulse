@@ -149,6 +149,11 @@ an add-only capacity posture.
    `quickstart:pulse-hosted` alias in AI settings payloads, but they must not
    bake vendor model IDs or provider-model fallback rules into install or
    activation flows just because those routes share the backend API tree.
+   Lifecycle-adjacent resource reads that traverse `internal/api/resources.go`
+   must also preserve the canonical unified-resource `name -> type -> id`
+   order instead of inheriting map order or page-local re-sorts, so install
+   and runtime hydration do not present one resource ordering at first load and
+   a different ordering after the first live refresh.
    Persisted legacy hosted quickstart model IDs are therefore not lifecycle
    truth either: when shared settings helpers load or save historical
    quickstart values, they must normalize them back to

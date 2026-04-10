@@ -2059,24 +2059,31 @@ func applyFilters(resources []unified.Resource, filters listFilters) []unified.R
 }
 
 func applySorting(resources []unified.Resource, field, order string) {
-	sort.Slice(resources, func(i, j int) bool {
+	sort.SliceStable(resources, func(i, j int) bool {
 		a := resources[i]
 		b := resources[j]
-		less := false
+		comparison := 0
 		switch field {
 		case "status":
-			less = a.Status < b.Status
+			comparison = strings.Compare(string(a.Status), string(b.Status))
 		case "type":
-			less = a.Type < b.Type
+			comparison = strings.Compare(string(a.Type), string(b.Type))
 		case "lastSeen":
-			less = a.LastSeen.Before(b.LastSeen)
+			if a.LastSeen.Before(b.LastSeen) {
+				comparison = -1
+			} else if b.LastSeen.Before(a.LastSeen) {
+				comparison = 1
+			}
 		default:
-			less = strings.ToLower(a.Name) < strings.ToLower(b.Name)
+			comparison = unified.CompareResourcesByCanonicalName(a, b)
+		}
+		if comparison == 0 {
+			comparison = unified.CompareResourcesByCanonicalName(a, b)
 		}
 		if order == "desc" {
-			return !less
+			return comparison > 0
 		}
-		return less
+		return comparison < 0
 	})
 }
 

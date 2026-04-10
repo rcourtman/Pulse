@@ -1742,3 +1742,28 @@ func TestResourceAPIHotPathUsesSingleRegistryListSnapshot(t *testing.T) {
 		t.Fatalf("%s: duplicate registry.List() hot-path aggregation detected", normalizedPath)
 	}
 }
+
+func TestCanonicalResourceOrderingContractsStayShared(t *testing.T) {
+	repoRoot := filepath.Join("..", "..")
+	resourcesPath := filepath.Join(repoRoot, "internal", "api", "resources.go")
+	registryPath := filepath.Join(repoRoot, "internal", "unifiedresources", "registry.go")
+
+	resourcesSource, err := os.ReadFile(resourcesPath)
+	if err != nil {
+		t.Fatalf("failed to read %s: %v", resourcesPath, err)
+	}
+	registrySource, err := os.ReadFile(registryPath)
+	if err != nil {
+		t.Fatalf("failed to read %s: %v", registryPath, err)
+	}
+
+	if !strings.Contains(string(resourcesSource), "unified.CompareResourcesByCanonicalName") {
+		t.Fatalf("%s: /api/resources must route deterministic list ordering through unified.CompareResourcesByCanonicalName", filepath.ToSlash(resourcesPath))
+	}
+	if !strings.Contains(string(registrySource), "sortResourcesByName(out)") {
+		t.Fatalf("%s: ResourceRegistry.List() must normalize map iteration through sortResourcesByName(out)", filepath.ToSlash(registryPath))
+	}
+	if !strings.Contains(string(registrySource), "sortNamedResourceViewsByName(rr.cachedStorage)") {
+		t.Fatalf("%s: cached unified resource views must share the canonical deterministic name ordering helper", filepath.ToSlash(registryPath))
+	}
+}

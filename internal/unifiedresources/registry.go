@@ -323,6 +323,7 @@ func (rr *ResourceRegistry) List() []Resource {
 	for _, r := range rr.resources {
 		out = append(out, cloneResource(r))
 	}
+	sortResourcesByName(out)
 	return out
 }
 
@@ -1847,8 +1848,19 @@ func exclusionKey(a, b string) string {
 
 // Stable ordering helper for deterministic output.
 func sortResourcesByName(resources []Resource) {
-	sort.Slice(resources, func(i, j int) bool {
-		return strings.ToLower(resources[i].Name) < strings.ToLower(resources[j].Name)
+	sort.SliceStable(resources, func(i, j int) bool {
+		return CompareResourcesByCanonicalName(resources[i], resources[j]) < 0
+	})
+}
+
+type namedResourceView interface {
+	ID() string
+	Name() string
+}
+
+func sortNamedResourceViewsByName[T namedResourceView](views []T) {
+	sort.SliceStable(views, func(i, j int) bool {
+		return compareResourceNameIdentity(views[i].Name(), "", views[i].ID(), views[j].Name(), "", views[j].ID()) < 0
 	})
 }
 
@@ -1957,23 +1969,22 @@ func (rr *ResourceRegistry) rebuildViews() {
 		}
 	}
 
-	// Sort all caches by name for deterministic output.
-	sort.Slice(rr.cachedVMs, func(i, j int) bool { return rr.cachedVMs[i].Name() < rr.cachedVMs[j].Name() })
-	sort.Slice(rr.cachedLXC, func(i, j int) bool { return rr.cachedLXC[i].Name() < rr.cachedLXC[j].Name() })
-	sort.Slice(rr.cachedNodes, func(i, j int) bool { return rr.cachedNodes[i].Name() < rr.cachedNodes[j].Name() })
-	sort.Slice(rr.cachedHosts, func(i, j int) bool { return rr.cachedHosts[i].Name() < rr.cachedHosts[j].Name() })
-	sort.Slice(rr.cachedDocker, func(i, j int) bool { return rr.cachedDocker[i].Name() < rr.cachedDocker[j].Name() })
-	sort.Slice(rr.cachedDockerContainers, func(i, j int) bool { return rr.cachedDockerContainers[i].Name() < rr.cachedDockerContainers[j].Name() })
-	sort.Slice(rr.cachedStorage, func(i, j int) bool { return rr.cachedStorage[i].Name() < rr.cachedStorage[j].Name() })
-	sort.Slice(rr.cachedPhysicalDisks, func(i, j int) bool { return rr.cachedPhysicalDisks[i].Name() < rr.cachedPhysicalDisks[j].Name() })
-	sort.Slice(rr.cachedPBS, func(i, j int) bool { return rr.cachedPBS[i].Name() < rr.cachedPBS[j].Name() })
-	sort.Slice(rr.cachedPMG, func(i, j int) bool { return rr.cachedPMG[i].Name() < rr.cachedPMG[j].Name() })
-	sort.Slice(rr.cachedK8s, func(i, j int) bool { return rr.cachedK8s[i].Name() < rr.cachedK8s[j].Name() })
-	sort.Slice(rr.cachedK8sNodes, func(i, j int) bool { return rr.cachedK8sNodes[i].Name() < rr.cachedK8sNodes[j].Name() })
-	sort.Slice(rr.cachedPods, func(i, j int) bool { return rr.cachedPods[i].Name() < rr.cachedPods[j].Name() })
-	sort.Slice(rr.cachedK8sDeployments, func(i, j int) bool { return rr.cachedK8sDeployments[i].Name() < rr.cachedK8sDeployments[j].Name() })
-	sort.Slice(rr.cachedWorkload, func(i, j int) bool { return rr.cachedWorkload[i].Name() < rr.cachedWorkload[j].Name() })
-	sort.Slice(rr.cachedInfra, func(i, j int) bool { return rr.cachedInfra[i].Name() < rr.cachedInfra[j].Name() })
+	sortNamedResourceViewsByName(rr.cachedVMs)
+	sortNamedResourceViewsByName(rr.cachedLXC)
+	sortNamedResourceViewsByName(rr.cachedNodes)
+	sortNamedResourceViewsByName(rr.cachedHosts)
+	sortNamedResourceViewsByName(rr.cachedDocker)
+	sortNamedResourceViewsByName(rr.cachedDockerContainers)
+	sortNamedResourceViewsByName(rr.cachedStorage)
+	sortNamedResourceViewsByName(rr.cachedPhysicalDisks)
+	sortNamedResourceViewsByName(rr.cachedPBS)
+	sortNamedResourceViewsByName(rr.cachedPMG)
+	sortNamedResourceViewsByName(rr.cachedK8s)
+	sortNamedResourceViewsByName(rr.cachedK8sNodes)
+	sortNamedResourceViewsByName(rr.cachedPods)
+	sortNamedResourceViewsByName(rr.cachedK8sDeployments)
+	sortNamedResourceViewsByName(rr.cachedWorkload)
+	sortNamedResourceViewsByName(rr.cachedInfra)
 
 	rr.viewsDirty = false
 }
