@@ -28,6 +28,7 @@
    - `code=trial_signup_required`
    - `details.action_url` pointed at the hosted checkout origin with `org_id=default` and `return_url=http://127.0.0.1:17765/auth/trial-activate`
    - `GET /api/license/entitlements` stayed `tier=free` and `subscription_state=expired` before and after the redirect handoff
+   - this live hosted replay exercised only the canonical handoff branch; the later `429 trial_rate_limited` plus `Retry-After` limiter branch stays covered by the owned local trial-start contract proof in `tests/integration/scripts/trial-signup-contract.sh` and `tests/integration/tests/07-trial-signup-return.spec.ts`
 3. Exercised real hosted signup on the live HTTP surface via `POST /api/public/signup` and confirmed:
    - `201 Created`
    - returned `org_id=0147dd50-38db-4316-8d46-0e1f0d754bf6`

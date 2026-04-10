@@ -393,6 +393,9 @@ base.describe('Demo mode commercial boundary', () => {
       await hiddenNotFound('**/api/license/entitlements');
       await hiddenNotFound('**/api/license/activate');
       await hiddenNotFound('**/api/license/clear');
+      // Demo mode must fail closed on the trial-start route before either
+      // `trial_signup_required` or `trial_rate_limited` plus `Retry-After`
+      // can surface.
       await hiddenNotFound('**/api/license/trial/start');
       await hiddenNotFound('**/api/license/monitored-system-ledger**');
       await hiddenNotFound('**/api/admin/orgs/**/billing-state');

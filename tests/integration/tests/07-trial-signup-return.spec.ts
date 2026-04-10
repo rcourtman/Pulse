@@ -63,10 +63,12 @@ test.describe.serial('Trial signup return flow', () => {
     ).toContain(startRes.status());
 
     const startPayload = (await startRes.json()) as TrialStartPayload;
+    // Playwright lowercases response header keys; this still reads the canonical Retry-After header.
+    const startRetryAfterHeader = startRes.headers()['retry-after'] ?? null;
     if (startRes.status() === 409) {
       expectHostedTrialRedirect(startPayload);
     } else {
-      expectTrialRateLimited(startPayload, startRes.headers()['retry-after'] ?? null);
+      expectTrialRateLimited(startPayload, startRetryAfterHeader);
     }
 
     // Verify entitlements remain unchanged until the hosted flow returns.
@@ -90,14 +92,16 @@ test.describe.serial('Trial signup return flow', () => {
       method: 'POST',
     });
     const secondPayload = (await secondRes.json()) as TrialStartPayload;
+    // Playwright lowercases response header keys; this still reads the canonical Retry-After header.
+    const secondRetryAfterHeader = secondRes.headers()['retry-after'] ?? null;
     if (startRes.status() === 429) {
       expect(secondRes.status()).toBe(429);
-      expectTrialRateLimited(secondPayload, secondRes.headers()['retry-after'] ?? null);
+      expectTrialRateLimited(secondPayload, secondRetryAfterHeader);
     } else if (secondRes.status() === 409) {
       expectHostedTrialRedirect(secondPayload);
     } else {
       expect(secondRes.status()).toBe(429);
-      expectTrialRateLimited(secondPayload, secondRes.headers()['retry-after'] ?? null);
+      expectTrialRateLimited(secondPayload, secondRetryAfterHeader);
     }
   });
 });
