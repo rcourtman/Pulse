@@ -32,6 +32,10 @@ End-to-end Playwright tests that validate critical user flows against a running 
   - Verify the response either returns `409 trial_signup_required` with hosted `/start-pro-trial` handoff or `429 trial_rate_limited` with canonical `Retry-After` backoff when the local retry bucket is already exhausted
   - Verify local entitlements remain unchanged until activation
   - Verify duplicate initiation stays on the hosted-signup retry-burst contract
+- `tests/58-self-hosted-trial-rate-limit-ui.spec.ts` — Pulse Pro trial CTA retry-after UI contract:
+  - Open `/settings/system/billing` on the real browser shell with free-tier entitlements
+  - Stub `429 trial_rate_limited` on `POST /api/license/trial/start`
+  - Verify the Pulse Pro CTA surfaces canonical `Retry-After` guidance even if `details.retry_after_seconds` disagrees
 - `tests/08-cloud-hosting.spec.ts` — hosted cloud signup contract:
   - Public `/cloud/signup` form creates a real Stripe sandbox checkout session
   - Checkout completes and returns to hosted signup completion page
@@ -187,6 +191,11 @@ For hosted trial initiation validation against a fresh LXC each run:
     open, then transition to `429 trial_rate_limited` plus `Retry-After`
     backoff metadata once the retry burst is exhausted and the limiter
     actually engages
+- Pulse Pro browser proof: `tests/58-self-hosted-trial-rate-limit-ui.spec.ts`
+  - Exercises `/settings/system/billing` on the real browser shell and proves
+    the rendered CTA surfaces canonical `Retry-After` guidance when
+    `trial_rate_limited` is returned, including header precedence over a
+    conflicting `details.retry_after_seconds` payload
 - Full sandbox orchestration (multi-tenant + trial + cloud, with per-scenario snapshot reset):
   - `tests/integration/scripts/run-lxc-sandbox-evals.sh`
   - Includes hosted trial initiation validation and cloud subscription cancellation lifecycle verification

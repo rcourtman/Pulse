@@ -147,7 +147,7 @@ main() {
     sed -n '112,128p' "${UPGRADE_DOC}"
   )"
   integration_output="$(
-    sed -n '28,40p' "${INTEGRATION_README}"
+    sed -n '28,48p' "${INTEGRATION_README}"
   )"
   eval_task_output="$(
     sed -n '1,24p' "${EVAL_TASK_DOC}"
@@ -156,10 +156,10 @@ main() {
     sed -n '24,34p' "${EVAL_SCENARIOS_DOC}"
   )"
   high_risk_matrix_output="$(
-    sed -n '44,54p' "${HIGH_RISK_MATRIX_DOC}"
+    sed -n '44,58p' "${HIGH_RISK_MATRIX_DOC}"
   )"
   api_contracts_output="$(
-    sed -n '440,448p' "${API_CONTRACTS_DOC}"
+    sed -n '447,453p' "${API_CONTRACTS_DOC}"
   )"
   source_of_truth_output="$(
     sed -n '412,420p' "${SOURCE_OF_TRUTH_DOC}"
@@ -194,6 +194,8 @@ main() {
   assert_contains "integration readme documents canonical trial-rate-limited response" "${integration_output}" "\`429 trial_rate_limited\`"
   assert_contains "integration readme documents reused-instance retry-after branch" "${integration_output}" "Retry-After"
   assert_contains "integration readme documents hosted-signup retry burst" "${integration_output}" "hosted-signup retry-burst contract"
+  assert_contains "integration readme names pulse pro retry-after ui proof" "${integration_output}" "tests/58-self-hosted-trial-rate-limit-ui.spec.ts"
+  assert_contains "integration readme documents pulse pro billing route proof" "${integration_output}" "/settings/system/billing"
 
   assert_contains "eval task documents retry-burst contract" "${eval_task_output}" "retry-burst contract"
   assert_contains "eval task documents canonical trial-rate-limited response" "${eval_task_output}" "\`429 trial_rate_limited\`"
@@ -208,6 +210,7 @@ main() {
   assert_contains "high-risk matrix documents hosted-signup redirect code" "${high_risk_matrix_output}" "trial_signup_required"
   assert_contains "high-risk matrix documents canonical trial-rate-limited response" "${high_risk_matrix_output}" "trial_rate_limited"
   assert_contains "high-risk matrix documents retry-after metadata" "${high_risk_matrix_output}" "Retry-After"
+  assert_contains "high-risk matrix names pulse pro retry-after ui proof" "${high_risk_matrix_output}" "tests/58-self-hosted-trial-rate-limit-ui.spec.ts"
 
   assert_contains "api contracts document trial-start route" "${api_contracts_output}" "/api/license/trial/start"
   assert_contains "api contracts document hosted-signup redirect code" "${api_contracts_output}" "trial_signup_required"

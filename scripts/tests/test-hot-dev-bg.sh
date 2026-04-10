@@ -728,6 +728,7 @@ test_integration_readme_documents_trial_retry_burst_contract() {
   assert_contains "integration readme documents retry burst exhaustion" "${output}" "retry burst is exhausted"
   assert_contains "integration readme documents retry-after backoff" "${output}" "Retry-After"
   assert_contains "integration readme references hosted trial probe script" "${output}" "tests/integration/scripts/trial-signup-contract.sh"
+  assert_contains "integration readme references pulse pro retry-after ui proof" "${output}" "tests/58-self-hosted-trial-rate-limit-ui.spec.ts"
 }
 
 test_integration_eval_scenario_documents_trial_retry_burst_contract() {

@@ -592,6 +592,11 @@ That proof must stay aligned in browser and shell coverage too:
 starts inside the allowed burst as the same hosted-signup redirect contract and
 only require `trial_rate_limited` plus backoff metadata once the limiter
 actually engages, rather than assuming the second attempt is already denied.
+`tests/integration/tests/58-self-hosted-trial-rate-limit-ui.spec.ts` must then
+prove the rendered Pulse Pro CTA on `/settings/system/billing` surfaces the
+same canonical `Retry-After` backoff when the backend returns
+`trial_rate_limited`, including header precedence over a conflicting
+`details.retry_after_seconds` payload.
 That proof split is also intentional: the browser spec may attach to a reused
 local instance whose retry bucket is already exhausted and therefore must
 accept an immediate canonical `429` backoff response, while the snapshot-clean
@@ -617,8 +622,10 @@ on a special-case assertion path. The `trial-signup` entry in
 so eval-pack metadata cannot silently drift away from the canonical hosted
 handoff contract while the task file stays correct. The release-control
 high-risk verification matrix must carry those same anchors for the
-`tests/07-trial-signup-return.spec.ts` browser proof, so the RC packet cannot
-describe trial-start verification through an unanchored summary path. The
+`tests/07-trial-signup-return.spec.ts` transport proof and the
+`tests/58-self-hosted-trial-rate-limit-ui.spec.ts` Pulse Pro CTA proof, so the
+RC packet cannot describe trial-start verification through an unanchored
+summary path. The
 canonical release-control summaries in `docs/release-control/v6/internal/
 SOURCE_OF_TRUTH.md` and
 `docs/release-control/v6/internal/V5_TO_V6_COMMERCIAL_MIGRATION_AUDIT_2026-03-07.md`

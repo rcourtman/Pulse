@@ -45,11 +45,14 @@ Companion drill:
   `go test ./internal/hosted/... -count=1`
   `cd frontend-modern && npx vitest run src/pages/__tests__/HostedSignup.test.tsx src/components/Settings/__tests__/BillingAdminPanel.test.tsx`
   `cd tests/integration && PULSE_E2E_USE_LOCAL_BACKEND=1 PULSE_E2E_SKIP_PLAYWRIGHT_INSTALL=1 npm test -- tests/07-trial-signup-return.spec.ts --project=chromium`
+  `cd tests/integration && PULSE_E2E_USE_LOCAL_BACKEND=1 PULSE_E2E_SKIP_PLAYWRIGHT_INSTALL=1 npm test -- tests/58-self-hosted-trial-rate-limit-ui.spec.ts --project=chromium`
   The self-hosted handoff proof must keep the canonical trial-start transport
   contract: `POST /api/license/trial/start` returns `409
   trial_signup_required` while the hosted-signup retry burst remains open,
   then transitions to `429 trial_rate_limited` plus `Retry-After` backoff once
-  the limiter actually engages.
+  the limiter actually engages. The Pulse Pro browser CTA proof on
+  `/settings/system/billing` must surface that same canonical `Retry-After`
+  backoff even when `details.retry_after_seconds` disagrees.
 - Live rehearsal helper:
   `python3 scripts/release_control/hosted_signup_billing_replay_rehearsal.py --base-url <hosted-url> --signup-email <email> --org-name <org> ...`
 - Manual scenario:

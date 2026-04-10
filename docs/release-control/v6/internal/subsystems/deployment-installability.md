@@ -463,11 +463,15 @@ rate limited. The reused-instance browser-proof entry in
 `POST /api/license/trial/start`, `409 trial_signup_required`, `429
 trial_rate_limited`, and `Retry-After`, so the shared trial-start docs guard
 can auto-discover that README alongside the rest of the governed trial-start
-surface instead of relying on README-only fallback checks. The eval-pack
-metadata in `tests/integration/evals/scenarios.json` must carry those same
-anchors for the `trial-signup` scenario description, so deterministic and
-agentic trial runs inherit the same canonical contract wording instead of
-teaching a drifted summary path.
+surface instead of relying on README-only fallback checks. That README must
+also keep the named Pulse Pro browser proof,
+`tests/58-self-hosted-trial-rate-limit-ui.spec.ts`, on the owned trial-start
+surface so the user-facing retry-after proof does not drift into an orphaned
+integration spec. The eval-pack metadata in
+`tests/integration/evals/scenarios.json` must carry those same anchors for the
+`trial-signup` scenario description, so deterministic and agentic trial runs
+inherit the same canonical contract wording instead of teaching a drifted
+summary path.
 Playwright-driven public/commercial specs that support scenario-specific
 endpoint overrides such as `PULSE_CLOUD_BASE_URL` or
 `PULSE_COMMERCIAL_BASE_URL` must layer those values through that same shared
