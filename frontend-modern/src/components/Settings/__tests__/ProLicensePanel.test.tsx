@@ -756,10 +756,11 @@ describe('ProLicensePanel', () => {
     });
   });
 
-  it('maps rate-limited trial starts to the canonical retry message', async () => {
+  it('maps rate-limited trial starts to the retry-after guidance when available', async () => {
     startProTrialMock.mockRejectedValue(
       Object.assign(new Error('rate limited'), {
         status: 429,
+        retryAfterSeconds: 120,
       }),
     );
 
@@ -768,7 +769,7 @@ describe('ProLicensePanel', () => {
     fireEvent.click(screen.getByRole('button', { name: /start 14-day pro trial/i }));
 
     await waitFor(() => {
-      expect(notificationErrorMock).toHaveBeenCalledWith('Try again later');
+      expect(notificationErrorMock).toHaveBeenCalledWith('Try again in about 2 minutes');
     });
   });
 
