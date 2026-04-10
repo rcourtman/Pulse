@@ -1,4 +1,5 @@
 import type { Resource } from '@/types/resource';
+import { getSourcePlatformStorageFamily } from '@/utils/platformSupportManifest';
 import type {
   CapacitySnapshot,
   NormalizedHealth,
@@ -35,10 +36,11 @@ export const canonicalStorageIdentityKey = (record: StorageRecord): string => {
   return [platform, location || 'unknown-location', name || 'unknown-name', category].join('|');
 };
 
-export const resolveStoragePlatformFamily = (
-  platform: StorageBackupPlatform,
-): PlatformFamily => {
+export const resolveStoragePlatformFamily = (platform: StorageBackupPlatform): PlatformFamily => {
   const value = String(platform).toLowerCase();
+  const manifestFamily = getSourcePlatformStorageFamily(value);
+  if (manifestFamily) return manifestFamily;
+
   if (value.includes('kubernetes') || value.includes('docker')) return 'container';
   if (value.includes('cloud') || value === 'aws' || value === 'azure' || value === 'gcp') {
     return 'cloud';

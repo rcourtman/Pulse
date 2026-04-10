@@ -208,6 +208,27 @@ Rules:
 6. `proxmox-pmg`
 7. `truenas`
 
+### Admitted platforms (not yet supported)
+
+1. `vmware-vsphere`
+
+### Presentation-only platform vocabulary
+
+1. `unraid`
+2. `synology-dsm`
+3. `microsoft-hyperv`
+4. `aws`
+5. `azure`
+6. `gcp`
+
+### Machine-readable projection
+
+`PLATFORM_SUPPORT_MANIFEST.json` is the machine-readable projection of the
+supported, admitted, and presentation-only platform vocabulary declared here.
+Tests and shared frontend vocabulary may consume that manifest, but it must not
+introduce platform ids or governance states that are not declared in this
+document.
+
 ### Runtime variants
 
 1. `podman` is a runtime variant inside `docker`, surfaced through runtime
@@ -234,32 +255,33 @@ Rules:
 
 ## Current Support Matrix
 
-| Platform | Family | Primary mode | Optional augmentation | Canonical projections |
-| --- | --- | --- | --- | --- |
-| `agent` | Pulse-managed host | agent-backed | none | `agent`, `storage`, `physical-disk` |
-| `docker` | container runtime | agent-backed | none | `agent`, `app-container`, `docker-service` |
-| `kubernetes` | cluster runtime | agent-backed | none | `k8s-cluster`, `k8s-node`, `pod`, `k8s-deployment` |
-| `proxmox-pve` | Proxmox | api-backed | host agent may augment into hybrid | `agent`, `vm`, `system-container`, `storage`, `ceph`, `physical-disk` |
-| `proxmox-pbs` | Proxmox | api-backed | host agent may augment into hybrid | `pbs`, `storage` |
-| `proxmox-pmg` | Proxmox | api-backed | none today | `pmg` |
-| `truenas` | TrueNAS | api-backed | host agent may augment into hybrid | `agent`, `app-container`, `storage`, `physical-disk` |
+| Platform      | Family             | Primary mode | Optional augmentation              | Canonical projections                                                 |
+| ------------- | ------------------ | ------------ | ---------------------------------- | --------------------------------------------------------------------- |
+| `agent`       | Pulse-managed host | agent-backed | none                               | `agent`, `storage`, `physical-disk`                                   |
+| `docker`      | container runtime  | agent-backed | none                               | `agent`, `app-container`, `docker-service`                            |
+| `kubernetes`  | cluster runtime    | agent-backed | none                               | `k8s-cluster`, `k8s-node`, `pod`, `k8s-deployment`                    |
+| `proxmox-pve` | Proxmox            | api-backed   | host agent may augment into hybrid | `agent`, `vm`, `system-container`, `storage`, `ceph`, `physical-disk` |
+| `proxmox-pbs` | Proxmox            | api-backed   | host agent may augment into hybrid | `pbs`, `storage`                                                      |
+| `proxmox-pmg` | Proxmox            | api-backed   | none today                         | `pmg`                                                                 |
+| `truenas`     | TrueNAS            | api-backed   | host agent may augment into hybrid | `agent`, `app-container`, `storage`, `physical-disk`                  |
 
-| Platform | Setup | Visibility | Workloads | Storage | Recovery | Alerts | Assistant read | Assistant control |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `agent` | install workspace | supported | `n/a` | supported | `n/a` | supported | supported | supported |
-| `docker` | install workspace / runtime enablement | supported | supported | `n/a` | `n/a` | supported | supported | supported |
-| `kubernetes` | install workspace / runtime enablement | supported | supported | `n/a` | supported | supported | supported | supported |
-| `proxmox-pve` | platform connections | supported | supported | supported | supported | supported | supported | augmentation-only |
-| `proxmox-pbs` | platform connections | supported | `n/a` | supported | supported | supported | supported | read-only |
-| `proxmox-pmg` | platform connections | supported | `n/a` | `n/a` | `n/a` | supported | supported | read-only |
-| `truenas` | platform connections | supported | supported | supported | supported | supported | supported | supported |
+| Platform      | Setup                                  | Visibility | Workloads | Storage   | Recovery  | Alerts    | Assistant read | Assistant control |
+| ------------- | -------------------------------------- | ---------- | --------- | --------- | --------- | --------- | -------------- | ----------------- |
+| `agent`       | install workspace                      | supported  | `n/a`     | supported | `n/a`     | supported | supported      | supported         |
+| `docker`      | install workspace / runtime enablement | supported  | supported | `n/a`     | `n/a`     | supported | supported      | supported         |
+| `kubernetes`  | install workspace / runtime enablement | supported  | supported | `n/a`     | supported | supported | supported      | supported         |
+| `proxmox-pve` | platform connections                   | supported  | supported | supported | supported | supported | supported      | augmentation-only |
+| `proxmox-pbs` | platform connections                   | supported  | `n/a`     | supported | supported | supported | supported      | read-only         |
+| `proxmox-pmg` | platform connections                   | supported  | `n/a`     | `n/a`     | `n/a`     | supported | supported      | read-only         |
+| `truenas`     | platform connections                   | supported  | supported | supported | supported | supported | supported      | supported         |
 
 ## Current Inconsistencies To Treat Explicitly
 
-1. `frontend-modern/src/utils/sourcePlatforms.ts` already carries future labels
-   such as `vmware-vsphere`, `microsoft-hyperv`, `aws`, `azure`, `gcp`,
-   `unraid`, and `synology-dsm`. Those are presentation vocabulary only. They
-   are not admitted first-class platforms until governance says so here.
+1. `PLATFORM_SUPPORT_MANIFEST.json` intentionally carries admitted and
+   presentation-only ids such as `vmware-vsphere`, `microsoft-hyperv`, `aws`,
+   `azure`, `gcp`, `unraid`, and `synology-dsm` so shared tests and frontend
+   vocabulary can normalize them consistently. Those ids must not be
+   interpreted as current support unless the classifications above say so.
 2. Recovery provider strings are intentionally forward-compatible and already
    include values such as `docker`, `agent`, and `proxmox-pmg`. Those strings
    do not mean recovery support exists until the platform matrix above marks
@@ -323,8 +345,8 @@ starts.
    artifacts out of the phase-1 projection contract unless a later governed
    slice proves they belong on the shared path
 
-| Platform | Family | Entry point | Primary mode | Optional augmentation | Canonical projections | Admission state | Readiness stage |
-| --- | --- | --- | --- | --- | --- | --- | --- |
+| Platform         | Family | Entry point               | Primary mode | Optional augmentation                  | Canonical projections    | Admission state                                | Readiness stage   |
+| ---------------- | ------ | ------------------------- | ------------ | -------------------------------------- | ------------------------ | ---------------------------------------------- | ----------------- |
 | `vmware-vsphere` | VMware | `vCenter` only in phase 1 | `api-backed` | host or guest agent later, not phase 1 | `agent`, `vm`, `storage` | architecture locked, not yet in support matrix | `first-lab-ready` |
 
 ## VMware vSphere Proposed Phase-1 Floor
@@ -332,9 +354,9 @@ starts.
 This is the proposed phase-1 support floor once implementation and proof land.
 It is not a claim that VMware is currently supported in Pulse.
 
-| Platform | Setup | Visibility | Workloads | Storage | Recovery | Alerts | Assistant read | Assistant control |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `vmware-vsphere` | platform connections to `vCenter` only | supported | supported | supported | `n/a` | supported | supported | read-only |
+| Platform         | Setup                                  | Visibility | Workloads | Storage   | Recovery | Alerts    | Assistant read | Assistant control |
+| ---------------- | -------------------------------------- | ---------- | --------- | --------- | -------- | --------- | -------------- | ----------------- |
+| `vmware-vsphere` | platform connections to `vCenter` only | supported  | supported | supported | `n/a`    | supported | supported      | read-only         |
 
 Phase-1 floor details:
 

@@ -1,29 +1,29 @@
 import { describe, expect, it } from 'vitest';
 import type { State } from '@/types/api';
 import type { Resource } from '@/types/resource';
+import { resolveStoragePlatformFamily } from '@/features/storageBackups/storageAdapterCore';
 import { buildStorageRecords } from '@/features/storageBackups/storageAdapters';
 
-const baseState = (overrides: Partial<State> = {}): State =>
-  ({
-    connectedInfrastructure: [],
-    metrics: [],
-    performance: {
-      apiCallDuration: {},
-      lastPollDuration: 0,
-      pollingStartTime: '',
-      totalApiCalls: 0,
-      failedApiCalls: 0,
-      cacheHits: 0,
-      cacheMisses: 0,
-    },
-    connectionHealth: {},
-    stats: { startTime: '', uptime: 0, pollingCycles: 0, webSocketClients: 0, version: 'dev' },
-    activeAlerts: [],
-    recentlyResolved: [],
-    lastUpdate: 0,
-    resources: [],
-    ...overrides,
-  });
+const baseState = (overrides: Partial<State> = {}): State => ({
+  connectedInfrastructure: [],
+  metrics: [],
+  performance: {
+    apiCallDuration: {},
+    lastPollDuration: 0,
+    pollingStartTime: '',
+    totalApiCalls: 0,
+    failedApiCalls: 0,
+    cacheHits: 0,
+    cacheMisses: 0,
+  },
+  connectionHealth: {},
+  stats: { startTime: '', uptime: 0, pollingCycles: 0, webSocketClients: 0, version: 'dev' },
+  activeAlerts: [],
+  recentlyResolved: [],
+  lastUpdate: 0,
+  resources: [],
+  ...overrides,
+});
 
 const makeResourceStorage = (overrides: Partial<Resource> = {}): Resource =>
   ({
@@ -47,6 +47,12 @@ const makeResourceStorage = (overrides: Partial<Resource> = {}): Resource =>
   }) as Resource;
 
 describe('storageAdapters', () => {
+  it('derives storage platform families from the governed platform manifest', () => {
+    expect(resolveStoragePlatformFamily('docker')).toBe('container');
+    expect(resolveStoragePlatformFamily('vmware-vsphere')).toBe('virtualization');
+    expect(resolveStoragePlatformFamily('aws')).toBe('cloud');
+  });
+
   it('returns no records when unified resources are absent', () => {
     const state = baseState();
     const records = buildStorageRecords({ state, resources: [] });

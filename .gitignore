@@ -209,6 +209,7 @@ docs/release-control/v6/*
 !docs/release-control/v6/internal/
 docs/release-control/v6/internal/*
 !docs/release-control/v6/internal/*.md
+!docs/release-control/v6/internal/PLATFORM_SUPPORT_MANIFEST.json
 !docs/release-control/v6/internal/subsystems/
 !docs/release-control/v6/internal/subsystems/*.json
 !docs/release-control/v6/internal/subsystems/*.schema.json

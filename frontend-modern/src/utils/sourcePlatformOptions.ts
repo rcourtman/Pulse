@@ -1,3 +1,4 @@
+import { DEFAULT_INFRASTRUCTURE_SOURCE_ORDER } from '@/utils/platformSupportManifest';
 import { getSourcePlatformLabel, normalizeSourcePlatformQueryValue } from '@/utils/sourcePlatforms';
 
 export interface SourcePlatformOption {
@@ -5,15 +6,7 @@ export interface SourcePlatformOption {
   label: string;
 }
 
-const DEFAULT_SOURCE_PLATFORM_ORDER = [
-  'proxmox-pve',
-  'agent',
-  'docker',
-  'proxmox-pbs',
-  'proxmox-pmg',
-  'kubernetes',
-  'truenas',
-] as const;
+const DEFAULT_SOURCE_PLATFORM_ORDER = DEFAULT_INFRASTRUCTURE_SOURCE_ORDER;
 
 export const orderSourcePlatformKeys = (
   keys: Iterable<string>,

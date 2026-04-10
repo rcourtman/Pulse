@@ -1,6 +1,7 @@
 package mock
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -13,24 +14,59 @@ import (
 )
 
 var (
-	currentFirstClassPlatformRE = regexp.MustCompile("^\\d+\\.\\s+`([^`]+)`")
-	currentSupportMatrixRowRE   = regexp.MustCompile("^\\|\\s+`([^`]+)`\\s+\\|")
+	numberedPlatformListRE = regexp.MustCompile("^\\d+\\.\\s+`([^`]+)`")
+	currentSupportMatrixRE = regexp.MustCompile("^\\|\\s+`([^`]+)`\\s+\\|")
 )
 
-func TestPlatformSupportModelCurrentClassificationMatchesSupportMatrix(t *testing.T) {
-	model := loadPlatformSupportModel(t)
+type platformSupportManifest struct {
+	SchemaVersion                    int                            `json:"schema_version"`
+	DefaultInfrastructureSourceOrder []string                       `json:"default_infrastructure_source_order"`
+	Platforms                        []platformSupportManifestEntry `json:"platforms"`
+}
 
-	classified := parseCurrentFirstClassPlatforms(t, model)
+type platformSupportManifestEntry struct {
+	ID              string   `json:"id"`
+	GovernanceState string   `json:"governance_state"`
+	UILabel         string   `json:"ui_label"`
+	UITone          string   `json:"ui_tone"`
+	Aliases         []string `json:"aliases"`
+	DisplayTokens   []string `json:"display_tokens"`
+	StorageFamily   string   `json:"storage_family"`
+}
+
+func TestPlatformSupportManifestMatchesSupportModel(t *testing.T) {
+	model := loadPlatformSupportModel(t)
+	manifest := loadPlatformSupportManifest(t)
+
+	classified := parsePlatformListSection(t, model, "### First-class platforms")
+	admitted := parsePlatformListSection(t, model, "### Admitted platforms (not yet supported)")
+	presentationOnly := parsePlatformListSection(t, model, "### Presentation-only platform vocabulary")
 	matrix := parseCurrentSupportMatrixPlatforms(t, model)
 
 	if diff := diffPlatformSets(classified, matrix); diff != "" {
 		t.Fatalf("current supported platform definitions drifted between classification and support matrix:\n%s", diff)
 	}
+
+	if diff := diffPlatformSets(classified, manifestPlatformsByState(t, manifest, "supported")); diff != "" {
+		t.Fatalf("supported platform manifest drifted from the canonical support model:\n%s", diff)
+	}
+	if diff := diffPlatformSets(admitted, manifestPlatformsByState(t, manifest, "admitted")); diff != "" {
+		t.Fatalf("admitted platform manifest drifted from the canonical support model:\n%s", diff)
+	}
+	if diff := diffPlatformSets(
+		presentationOnly,
+		manifestPlatformsByState(t, manifest, "presentation-only"),
+	); diff != "" {
+		t.Fatalf("presentation-only platform manifest drifted from the canonical support model:\n%s", diff)
+	}
+	if diff := diffPlatformSets(classified, manifest.DefaultInfrastructureSourceOrder); diff != "" {
+		t.Fatalf("default infrastructure source ordering drifted from the canonical supported platform set:\n%s", diff)
+	}
 }
 
 func TestMockCoverageMatchesCurrentSupportedPlatformSet(t *testing.T) {
-	model := loadPlatformSupportModel(t)
-	supported := parseCurrentFirstClassPlatforms(t, model)
+	manifest := loadPlatformSupportManifest(t)
+	supported := manifestPlatformsByState(t, manifest, "supported")
 
 	checkers := map[string]func(*testing.T, FixtureGraph){
 		"agent":       assertAgentMockCoverage,
@@ -55,10 +91,19 @@ func TestMockCoverageMatchesCurrentSupportedPlatformSet(t *testing.T) {
 
 func TestVMwareFixturesRemainAdmittedButNotSupported(t *testing.T) {
 	model := loadPlatformSupportModel(t)
-	supported := parseCurrentFirstClassPlatforms(t, model)
+	manifest := loadPlatformSupportManifest(t)
+	supported := manifestPlatformsByState(t, manifest, "supported")
+	admitted := manifestPlatformsByState(t, manifest, "admitted")
+	presentationOnly := manifestPlatformsByState(t, manifest, "presentation-only")
 
 	if containsPlatform(supported, "vmware-vsphere") {
 		t.Fatal("vmware-vsphere must not appear in the current supported platform set before live proof admits it")
+	}
+	if !containsPlatform(admitted, "vmware-vsphere") {
+		t.Fatal("expected vmware-vsphere to remain admitted while it is outside the supported platform set")
+	}
+	if containsPlatform(presentationOnly, "vmware-vsphere") {
+		t.Fatal("vmware-vsphere must not regress into presentation-only vocabulary once admitted")
 	}
 	if !strings.Contains(model, "| `vmware-vsphere` |") {
 		t.Fatal("expected platform support model to keep the vmware-vsphere admission row")
@@ -210,6 +255,46 @@ func assertTrueNASMockCoverage(t *testing.T, graph FixtureGraph) {
 	}
 }
 
+func loadPlatformSupportManifest(t *testing.T) platformSupportManifest {
+	t.Helper()
+
+	_, currentFile, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("failed to locate current test file for platform support manifest lookup")
+	}
+
+	manifestPath := filepath.Join(
+		filepath.Dir(currentFile),
+		"..",
+		"..",
+		"docs",
+		"release-control",
+		"v6",
+		"internal",
+		"PLATFORM_SUPPORT_MANIFEST.json",
+	)
+	manifestBytes, err := os.ReadFile(manifestPath)
+	if err != nil {
+		t.Fatalf("read platform support manifest: %v", err)
+	}
+
+	var manifest platformSupportManifest
+	if err := json.Unmarshal(manifestBytes, &manifest); err != nil {
+		t.Fatalf("unmarshal platform support manifest: %v", err)
+	}
+	if manifest.SchemaVersion < 1 {
+		t.Fatalf("expected positive platform support manifest schema version, got %d", manifest.SchemaVersion)
+	}
+	if len(manifest.Platforms) == 0 {
+		t.Fatal("expected platform support manifest to declare at least one platform")
+	}
+	if len(manifest.DefaultInfrastructureSourceOrder) == 0 {
+		t.Fatal("expected platform support manifest to declare a default infrastructure source order")
+	}
+
+	return manifest
+}
+
 func loadPlatformSupportModel(t *testing.T) string {
 	t.Helper()
 
@@ -235,7 +320,7 @@ func loadPlatformSupportModel(t *testing.T) string {
 	return string(modelBytes)
 }
 
-func parseCurrentFirstClassPlatforms(t *testing.T, model string) []string {
+func parsePlatformListSection(t *testing.T, model string, heading string) []string {
 	t.Helper()
 
 	var platforms []string
@@ -244,22 +329,22 @@ func parseCurrentFirstClassPlatforms(t *testing.T, model string) []string {
 	for _, raw := range strings.Split(model, "\n") {
 		line := strings.TrimSpace(raw)
 		switch {
-		case line == "### First-class platforms":
+		case line == heading:
 			inSection = true
 			continue
 		case !inSection:
 			continue
 		case strings.HasPrefix(line, "### ") || strings.HasPrefix(line, "## "):
-			return requireNonEmptyPlatformList(t, platforms, "current first-class platform section")
+			return requireNonEmptyPlatformList(t, platforms, heading)
 		}
 
-		matches := currentFirstClassPlatformRE.FindStringSubmatch(line)
+		matches := numberedPlatformListRE.FindStringSubmatch(line)
 		if len(matches) == 2 {
 			platforms = append(platforms, matches[1])
 		}
 	}
 
-	return requireNonEmptyPlatformList(t, platforms, "current first-class platform section")
+	return requireNonEmptyPlatformList(t, platforms, heading)
 }
 
 func parseCurrentSupportMatrixPlatforms(t *testing.T, model string) []string {
@@ -280,13 +365,36 @@ func parseCurrentSupportMatrixPlatforms(t *testing.T, model string) []string {
 			return requireNonEmptyPlatformList(t, platforms, "current support matrix")
 		}
 
-		matches := currentSupportMatrixRowRE.FindStringSubmatch(line)
+		matches := currentSupportMatrixRE.FindStringSubmatch(line)
 		if len(matches) == 2 {
 			platforms = append(platforms, matches[1])
 		}
 	}
 
 	return requireNonEmptyPlatformList(t, platforms, "current support matrix")
+}
+
+func manifestPlatformsByState(
+	t *testing.T,
+	manifest platformSupportManifest,
+	governanceState string,
+) []string {
+	t.Helper()
+
+	platforms := make([]string, 0)
+	for _, platform := range manifest.Platforms {
+		if strings.TrimSpace(platform.ID) == "" {
+			t.Fatal("expected platform support manifest platform ids to be non-empty")
+		}
+		if strings.TrimSpace(platform.GovernanceState) == "" {
+			t.Fatalf("expected platform support manifest to classify %s", platform.ID)
+		}
+		if platform.GovernanceState == governanceState {
+			platforms = append(platforms, platform.ID)
+		}
+	}
+
+	return requireNonEmptyPlatformList(t, platforms, fmt.Sprintf("manifest platforms with state %s", governanceState))
 }
 
 func requireNonEmptyPlatformList(t *testing.T, platforms []string, label string) []string {

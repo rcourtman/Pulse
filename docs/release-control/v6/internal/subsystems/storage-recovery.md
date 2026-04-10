@@ -168,6 +168,16 @@ querying, and the operator-facing storage health presentation layer.
 29. Keep VMware datastore projection on the shared unified-resource and storage-source contracts. When `frontend-modern/src/hooks/useUnifiedResources.ts` or shared `internal/api/router.go` wiring starts surfacing VMware-backed canonical `storage` resources, storage and recovery may expose those datastores through the owned `vmware-vsphere` source/platform vocabulary for inventory, capacity, and handoff flows only; they must not reinterpret that projection as VMware recovery support, restore semantics, or a provider-local protection surface.
 30. Keep VMware placement and guest-detail enrichment descriptive on that same shared unified-resource contract. When `internal/vmware/provider.go`, `internal/unifiedresources/types.go`, and `frontend-modern/src/hooks/useUnifiedResources.ts` project datacenter, cluster, folder, runtime-host, datastore-attachment, guest-hostname, or guest-IP metadata onto canonical VMware `agent` / `vm` / `storage` resources, storage and recovery may use that detail for labeling and navigation only; they must not promote those topology or guest fields into recovery ownership, restore targeting, protection grouping, or a VMware-local recovery taxonomy without a separately governed slice.
 31. Keep VMware datastore classification neutral on the shared storage adapter contract. When `frontend-modern/src/features/storageBackups/resourceStorageMapping.ts`, `frontend-modern/src/features/storageBackups/resourceStoragePresentation.ts`, and `frontend-modern/src/features/storageBackups/storageAdapters.ts` evolve canonical storage-record mapping, VMware-backed datastores must continue to land on the shared storage route as inventory-only datastores with neutral protection fallback, not as backup repositories, backup targets, or recovery-protected resources.
+    That same shared storage adapter boundary also owns canonical platform
+    family vocabulary through the governed platform manifest.
+    `frontend-modern/src/features/storageBackups/models.ts`,
+    `frontend-modern/src/features/storageBackups/storageAdapterCore.ts`, and
+    adjacent shared storage presenters that need known provider ids or
+    `onprem` / `container` / `virtualization` / `cloud` family mapping must
+    derive that truth from
+    `docs/release-control/v6/internal/PLATFORM_SUPPORT_MANIFEST.json` through
+    `frontend-modern/src/utils/platformSupportManifest.ts`, not from
+    storage-local hard-coded provider arrays.
 32. Keep infrastructure summary chart bucketing presentation-only on the adjacent shared API boundary. When `internal/api/router.go` normalizes mixed-cadence infrastructure history into equal-time summary buckets for operator-facing summary cards, storage and recovery may consume the resulting visual context only; they must not reinterpret those normalized chart samples as recovery freshness windows, backup cadence, or restore evidence.
 33. Keep workload chart downsampling presentation-only on that same adjacent shared API boundary. When `internal/api/router.go` caps mixed-cadence workload history into equal-time buckets for operator-facing workload cards, storage and recovery may consume the resulting visual context only; they must not reinterpret those shaped chart samples as recovery freshness windows, backup cadence, or restore evidence.
 34. Keep storage and recovery websocket reads on the neutral app-runtime boundary. `frontend-modern/src/components/Recovery/RecoveryPointDetails.tsx`, `frontend-modern/src/components/Storage/useStoragePageResources.ts`, and storage/recovery-adjacent dashboard composition may consume live websocket state only through `frontend-modern/src/contexts/appRuntime.ts`, not by importing `frontend-modern/src/App.tsx` or rebuilding shell-local providers.
@@ -264,17 +274,17 @@ querying, and the operator-facing storage health presentation layer.
    revive per-handler absolute-target acceptance or raw `returnTo`
    concatenation.
 10. Keep dependent first-session reset behavior honest on the shared `internal/api/`
-   boundary: when `/api/security/dev/reset-first-run` is used to reopen the
-   setup wizard in browser proof, the resulting status payload must genuinely
-   expose unauthenticated setup so storage/recovery-owned empty-state and
-   dashboard handoff proof does not silently fall back to an authenticated
-   dashboard path.
+    boundary: when `/api/security/dev/reset-first-run` is used to reopen the
+    setup wizard in browser proof, the resulting status payload must genuinely
+    expose unauthenticated setup so storage/recovery-owned empty-state and
+    dashboard handoff proof does not silently fall back to an authenticated
+    dashboard path.
 11. Keep recovery support claims aligned with
-   `docs/release-control/v6/internal/PLATFORM_SUPPORT_MODEL.md`. Forward-
-   compatible provider strings are not support declarations by themselves, and
-   a platform should be treated as recovery-capable only when that model marks
-   recovery as part of its support floor and the owning ingest/projection path
-   exists in the same governed slice.
+    `docs/release-control/v6/internal/PLATFORM_SUPPORT_MODEL.md`. Forward-
+    compatible provider strings are not support declarations by themselves, and
+    a platform should be treated as recovery-capable only when that model marks
+    recovery as part of its support floor and the owning ingest/projection path
+    exists in the same governed slice.
 12. Keep runtime mock inventory on the same bounded support contract. When
     `/api/system/mock-mode` surfaces mock TrueNAS pools/datasets or mock
     VMware datastores through shared storage/recovery-adjacent pages, that
@@ -288,14 +298,14 @@ querying, and the operator-facing storage health presentation layer.
     snapshot-backed platforms, provider-backed fixtures, unified inventory,
     and recovery/storage context stay aligned instead of drifting through
     recovery-local fixture assembly or partial mock helper APIs.
-12. Keep adjacent shared install-script fallback semantics honest on the
+14. Keep adjacent shared install-script fallback semantics honest on the
     `internal/api/` boundary. When storage- or recovery-adjacent routes reuse
     shared public endpoint or installer helpers, dev prerelease runtime
     versions such as `v6.0.0-dev` and build-metadata versions must not be
     treated as published GitHub release assets; only stable or explicit RC
     tags may back the shared installer fallback that those adjacent surfaces
     inherit.
-12. Keep storage summary chart identity and sticky-shell behavior on the
+15. Keep storage summary chart identity and sticky-shell behavior on the
     shared storage path. Pool rows, disk rows, storage summary cards, and
     storage detail charts must all address history through the canonical
     unified-resource metrics-target IDs, and the storage page must reuse the
@@ -305,8 +315,8 @@ querying, and the operator-facing storage health presentation layer.
     `/api/storage-charts`, but it must not rebuild storage summary behavior by
     fanning out per-pool `/api/metrics-store/history` reads or by inventing a
     dashboard-only storage history transport.
-13. Keep storage summary interaction scoped through the same canonical IDs.
-14. Keep adjacent AI settings persistence vendor-neutral on the shared
+16. Keep storage summary interaction scoped through the same canonical IDs.
+17. Keep adjacent AI settings persistence vendor-neutral on the shared
     `internal/api/` boundary. When storage- or recovery-adjacent hosted flows
     load or save AI settings through shared helpers, any historical hosted
     quickstart model IDs must be normalized back to the governed alias
@@ -329,18 +339,18 @@ querying, and the operator-facing storage health presentation layer.
     `data-summary-group-member-active="preview|pinned"` state so the grouped
     block reads as one scoped set without adding storage-local outlines, pill
     buttons, or heavy full-row fills.
-14. Keep storage summary remount caches versioned with the chart contract.
+18. Keep storage summary remount caches versioned with the chart contract.
     `frontend-modern/src/components/Storage/StorageSummary.tsx` may keep a
     bounded in-memory cache for same-tab remounts, but its cache key must carry
     an explicit summary contract version so long-lived demo sessions do not
     rehydrate stale pool or disk sparkline shapes after the storage summary
     chart model changes.
-15. Keep cross-surface workload handoffs on canonical IDs too. Shared workload
+19. Keep cross-surface workload handoffs on canonical IDs too. Shared workload
     chart transport may look up provider-backed VM history through unified
     metrics targets, but infrastructure/workloads/storage/recovery navigation
     and focus handoffs must stay on canonical workload IDs instead of
     provider-native metric keys.
-16. Keep storage row emphasis on the shared frontend primitive contract. Pool
+20. Keep storage row emphasis on the shared frontend primitive contract. Pool
     rows and physical-disk rows that mirror the active summary entity must
     expose that state through `data-summary-row-active` and let the shared row
     presentation owned by `frontend-modern/src/index.css` render the emphasis,
@@ -356,7 +366,7 @@ querying, and the operator-facing storage health presentation layer.
     users still must not inherit synthetic hover branches, and storage must
     not keep a special trailing expand column once the shared leading action
     contract exists.
-17. Keep recovery transport refreshes inside the recovery-owned feature state.
+21. Keep recovery transport refreshes inside the recovery-owned feature state.
     `frontend-modern/src/features/recovery/useRecoverySurfaceState.ts` and the
     recovery data hooks may retain the last fulfilled rollups, points, facets,
     and series while the next request is in flight through
@@ -364,20 +374,20 @@ querying, and the operator-facing storage health presentation layer.
     that retained-value behavior must stay route-owned and filter-owned through
     the canonical recovery state model instead of recreating page-local
     suspense escape hatches in `Recovery.tsx` or the recovery sections.
-18. Keep storage/recovery-adjacent resource metadata on the shared unified
+22. Keep storage/recovery-adjacent resource metadata on the shared unified
     resource contract. When canonical storage resources expose provider-backed
     identity such as Proxmox storage `pool`, storage and recovery consumers
     must inherit that field through `frontend-modern/src/hooks/useUnifiedResources.ts`
     and `frontend-modern/src/types/resource.ts` instead of rebuilding backing
     pool identity from labels, paths, or storage-row-local heuristics.
-19. Keep storage route writes on the shared route-state scheduler. Storage page
+23. Keep storage route writes on the shared route-state scheduler. Storage page
     filter and tab updates may still own their query keys locally, but
     `frontend-modern/src/components/Storage/useStorageRouteState.ts` must route
     same-route replace navigation through the shared
     `createRouteStateNavigateScheduler` helper so back-to-back storage filter
     changes coalesce against the current location instead of reintroducing a
     storage-local timeout queue.
-20. Keep storage/recovery-adjacent config-import reload safety on the shared
+24. Keep storage/recovery-adjacent config-import reload safety on the shared
     `internal/api/` boundary. When storage or recovery setup flows depend on
     `internal/api/config_export_import_handlers.go`, post-import reloads must
     tolerate absent notification managers and other optional runtime managers

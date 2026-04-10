@@ -5,6 +5,15 @@ import path from 'node:path';
 const ROOT = process.cwd();
 const TARGET_DIRS = [path.join(ROOT, 'src')];
 const IGNORE_DIRS = new Set(['__tests__']);
+const PLATFORM_SUPPORT_MANIFEST_PATH = path.join(
+  ROOT,
+  '..',
+  'docs',
+  'release-control',
+  'v6',
+  'internal',
+  'PLATFORM_SUPPORT_MANIFEST.json',
+);
 const ALLOWLIST = new Set([
   'src/components/shared/sourcePlatformBadges.ts',
   'src/components/shared/workloadTypeBadges.ts',
@@ -133,40 +142,28 @@ const ALLOWLIST = new Set([
   'src/utils/infrastructureEmptyStatePresentation.ts',
 ]);
 
-const PLATFORM_TOKENS = [
-  'pve',
-  'proxmox',
-  'pbs',
-  'pmg',
-  'k8s',
-  'kubernetes',
-  'docker',
-  'truenas',
-  'unraid',
-  'synology-dsm',
-  'vmware-vsphere',
-  'microsoft-hyperv',
-  'aws',
-  'azure',
-  'gcp',
-];
+const platformSupportManifest = JSON.parse(fs.readFileSync(PLATFORM_SUPPORT_MANIFEST_PATH, 'utf8'));
+const manifestPlatforms = Array.isArray(platformSupportManifest.platforms)
+  ? platformSupportManifest.platforms
+  : [];
 
-const DISPLAY_LABEL_TOKENS = [
-  'PVE',
-  'PBS',
-  'PMG',
-  'K8s',
-  'Kubernetes',
-  'Containers',
-  'TrueNAS',
-  'Unraid',
-  'Synology',
-  'vSphere',
-  'Hyper-V',
-  'AWS',
-  'Azure',
-  'GCP',
-];
+const PLATFORM_TOKENS = Array.from(
+  new Set(
+    manifestPlatforms.flatMap((platform) => [
+      platform.id,
+      ...(Array.isArray(platform.aliases) ? platform.aliases : []),
+    ]),
+  ),
+);
+
+const DISPLAY_LABEL_TOKENS = Array.from(
+  new Set(
+    manifestPlatforms.flatMap((platform) => [
+      platform.ui_label,
+      ...(Array.isArray(platform.display_tokens) ? platform.display_tokens : []),
+    ]),
+  ),
+);
 
 const AI_FINDING_SOURCE_TOKENS = [
   'threshold',
@@ -355,8 +352,7 @@ const HELPER_RULES = [
   },
   {
     rule: 'canonical-source/no-imports-from-storage-component-shim',
-    regex:
-      /import\s*\{[\s\S]*?\}\s*from\s*['"]@\/components\/Storage\/storageSourceOptions['"]/g,
+    regex: /import\s*\{[\s\S]*?\}\s*from\s*['"]@\/components\/Storage\/storageSourceOptions['"]/g,
     message:
       'Do not import storage source normalization from the Storage component shim. Use @/utils/storageSources instead.',
   },
@@ -506,8 +502,7 @@ const HELPER_RULES = [
   },
   {
     rule: 'canonical-dashboard/no-local-trend-range-selected-classes',
-    regex:
-      /\bselectedRange\(\)\s*===\s*range\b[\s\S]{0,260}bg-blue-600\s+text-white/g,
+    regex: /\bselectedRange\(\)\s*===\s*range\b[\s\S]{0,260}bg-blue-600\s+text-white/g,
     message:
       'Do not define local dashboard trend range selected-button classes in page code. Use the shared segmented button contract instead.',
   },
@@ -561,8 +556,7 @@ const HELPER_RULES = [
   },
   {
     rule: 'canonical-patrol/no-local-remediation-presentation',
-    regex:
-      /\bprops\.result\.success\b[\s\S]{0,900}bg-green-50[\s\S]{0,900}bg-red-50/g,
+    regex: /\bprops\.result\.success\b[\s\S]{0,900}bg-green-50[\s\S]{0,900}bg-red-50/g,
     message:
       'Do not define local remediation success/failure presentation in component code. Use @/utils/remediationPresentation instead.',
   },
@@ -622,8 +616,7 @@ const HELPER_RULES = [
   },
   {
     rule: 'canonical-dashboard/no-local-problem-status-variant',
-    regex:
-      /\b(?:const|function)\s+statusVariant\s*\(\s*pr\s*:\s*ProblemResource\s*\)/g,
+    regex: /\b(?:const|function)\s+statusVariant\s*\(\s*pr\s*:\s*ProblemResource\s*\)/g,
     message:
       'Do not define local dashboard problem-resource status helpers in page code. Use @/utils/problemResourcePresentation instead.',
   },
@@ -748,8 +741,7 @@ const HELPER_RULES = [
   },
   {
     rule: 'canonical-alerts/no-local-alert-compact-severity-labels',
-    regex:
-      /\balert\.level\s*===\s*['"]critical['"]\s*\?\s*['"]CRIT['"]\s*:\s*['"]WARN['"]/g,
+    regex: /\balert\.level\s*===\s*['"]critical['"]\s*\?\s*['"]CRIT['"]\s*:\s*['"]WARN['"]/g,
     message:
       'Do not define local alert compact severity labels in component code. Use @/utils/alertSeverityPresentation instead.',
   },
@@ -822,7 +814,8 @@ const HELPER_RULES = [
   },
   {
     rule: 'canonical-settings/no-local-agent-profiles-empty-copy',
-    regex: /No profiles yet\. Create one to get started\.|No agents connected\. Install an agent to assign profiles\./g,
+    regex:
+      /No profiles yet\. Create one to get started\.|No agents connected\. Install an agent to assign profiles\./g,
     message:
       'Do not define local agent profile or assignment empty-state copy in component code. Use @/utils/agentProfilesPresentation instead.',
   },
@@ -918,15 +911,13 @@ const HELPER_RULES = [
   },
   {
     rule: 'canonical-settings/no-inline-sso-test-result-tone-ternary',
-    regex:
-      /testResult\(\)\?\.(?:success)[\s\S]{0,260}bg-green-50[\s\S]{0,260}bg-red-50/g,
+    regex: /testResult\(\)\?\.(?:success)[\s\S]{0,260}bg-green-50[\s\S]{0,260}bg-red-50/g,
     message:
       'Do not inline SSO test-result tone ternaries in component code. Use @/utils/ssoProviderPresentation instead.',
   },
   {
     rule: 'canonical-settings/no-inline-sso-certificate-tone-ternary',
-    regex:
-      /cert\.isExpired\s*\?[\s\S]{0,220}bg-red-100[\s\S]{0,220}bg-surface-hover/g,
+    regex: /cert\.isExpired\s*\?[\s\S]{0,220}bg-red-100[\s\S]{0,220}bg-surface-hover/g,
     message:
       'Do not inline SSO certificate tone ternaries in component code. Use @/utils/ssoProviderPresentation instead.',
   },
@@ -1202,7 +1193,8 @@ const HELPER_RULES = [
   },
   {
     rule: 'canonical-pmg/no-local-service-health-badge',
-    regex: /\bconst\s+StatusBadge:\s*Component<\{\s*status:\s*string;\s*health\?:\s*string\s*\}>\b/g,
+    regex:
+      /\bconst\s+StatusBadge:\s*Component<\{\s*status:\s*string;\s*health\?:\s*string\s*\}>\b/g,
     message:
       'Do not define local PMG service health badge components in page code. Use the shared PMG ServiceHealthBadge component instead.',
   },
@@ -1338,8 +1330,7 @@ const MAP_RULES = [
       /\b(?:const|let|var)\s+(?:sourceClasses|platformClasses|sourcePlatformClasses)\s*=\s*\{([\s\S]*?)\n\};?/g,
     message:
       'Do not define local source/platform style maps in component code. Use shared sourcePlatformBadges helpers.',
-    validate: (snippet) =>
-      containsAny(snippet, PLATFORM_TOKENS) && /(?:bg-|text-)/.test(snippet),
+    validate: (snippet) => containsAny(snippet, PLATFORM_TOKENS) && /(?:bg-|text-)/.test(snippet),
   },
   {
     rule: 'canonical-source/no-local-storage-source-preset-map',
@@ -1347,8 +1338,7 @@ const MAP_RULES = [
       /\b(?:const|let|var)\s+(?:STORAGE_SOURCE_PRESETS|storageSourcePresets|sourceFilterPresets)\s*=\s*\{([\s\S]*?)\n\};?/g,
     message:
       'Do not define local storage source presentation maps in component code. Use @/utils/storageSources instead.',
-    validate: (snippet) =>
-      containsAny(snippet, PLATFORM_TOKENS) && /tone\s*:/.test(snippet),
+    validate: (snippet) => containsAny(snippet, PLATFORM_TOKENS) && /tone\s*:/.test(snippet),
   },
   {
     rule: 'canonical-storage/no-local-health-presentation-map',
@@ -1462,8 +1452,7 @@ const MAP_RULES = [
   },
   {
     rule: 'canonical-storage/no-local-storage-deeplink-helpers',
-    regex:
-      /\bconst\s+\{\s*resource\s*\}\s*=\s*parseStorageLinkSearch\(/g,
+    regex: /\bconst\s+\{\s*resource\s*\}\s*=\s*parseStorageLinkSearch\(/g,
     message:
       'Do not define storage deep-link highlight state inline. Use ./useStorageResourceHighlight instead.',
     validate: () => true,
@@ -1478,8 +1467,7 @@ const MAP_RULES = [
   },
   {
     rule: 'canonical-source/no-local-source-option-array',
-    regex:
-      /\b(?:const|let|var)\s+(?:sourceOptions|providerOptions)\s*=\s*\[([\s\S]*?)\];?/g,
+    regex: /\b(?:const|let|var)\s+(?:sourceOptions|providerOptions)\s*=\s*\[([\s\S]*?)\];?/g,
     message:
       'Do not define local canonical source/provider option arrays in page code. Use @/utils/sourcePlatformOptions instead.',
     validate: (snippet) => containsAny(snippet, PLATFORM_TOKENS),
@@ -1535,8 +1523,7 @@ const MAP_RULES = [
   },
   {
     rule: 'canonical-ai/no-local-provider-health-presentation-helper',
-    regex:
-      /\b(?:const|function)\s+(?:getProviderHealthBadgeClass|getProviderHealthLabel)\b/g,
+    regex: /\b(?:const|function)\s+(?:getProviderHealthBadgeClass|getProviderHealthLabel)\b/g,
     message:
       'Do not define local AI provider health presentation helpers in component code. Use @/utils/aiProviderHealthPresentation instead.',
     validate: () => true,
@@ -1608,16 +1595,14 @@ const MAP_RULES = [
   },
   {
     rule: 'canonical-status/no-inline-offline-degraded-badge-ternary',
-    regex:
-      /problem\s*===\s*['"]Offline['"][\s\S]{0,220}problem\s*===\s*['"]Degraded['"]/g,
+    regex: /problem\s*===\s*['"]Offline['"][\s\S]{0,220}problem\s*===\s*['"]Degraded['"]/g,
     message:
       'Do not inline Offline/Degraded badge ternaries in component or page code. Use the shared status presentation helpers instead.',
     validate: () => true,
   },
   {
     rule: 'canonical-ai/no-inline-finding-severity-count-badge-ternary',
-    regex:
-      /criticalFindings\s*>\s*0[\s\S]{0,200}bg-red-100[\s\S]{0,200}bg-amber-100/g,
+    regex: /criticalFindings\s*>\s*0[\s\S]{0,200}bg-red-100[\s\S]{0,200}bg-amber-100/g,
     message:
       'Do not inline finding severity count badge ternaries in page code. Use shared AI finding severity presentation helpers instead.',
     validate: () => true,
@@ -1648,8 +1633,7 @@ const MAP_RULES = [
   },
   {
     rule: 'canonical-license/no-local-subscription-status-presentation',
-    regex:
-      /\b(?:const|function)\s+(?:statusLabel|statusTone)\b[\s\S]{0,900}subscriptionState\(\)/g,
+    regex: /\b(?:const|function)\s+(?:statusLabel|statusTone)\b[\s\S]{0,900}subscriptionState\(\)/g,
     message:
       'Do not define local subscription status label/tone helpers in component code. Use @/utils/licensePresentation instead.',
     validate: () => true,
@@ -1664,8 +1648,7 @@ const MAP_RULES = [
   },
   {
     rule: 'canonical-security/no-local-security-score-presentation',
-    regex:
-      /\b(?:const|function)\s+(?:scoreTone|scoreLabel)\b[\s\S]{0,1200}securityScore\(\)/g,
+    regex: /\b(?:const|function)\s+(?:scoreTone|scoreLabel)\b[\s\S]{0,1200}securityScore\(\)/g,
     message:
       'Do not define local security score tone/label helpers in component code. Use @/utils/securityScorePresentation instead.',
     validate: () => true,
@@ -1693,7 +1676,8 @@ const MAP_RULES = [
     message:
       'Do not define local resource or subject type label maps in component or page code. Use shared resourceTypePresentation helpers.',
     validate: (snippet) =>
-      containsAny(snippet, RESOURCE_TYPE_TOKENS) && containsAny(snippet, RESOURCE_TYPE_LABEL_TOKENS),
+      containsAny(snippet, RESOURCE_TYPE_TOKENS) &&
+      containsAny(snippet, RESOURCE_TYPE_LABEL_TOKENS),
   },
 ];
 

@@ -1,25 +1,10 @@
 import type { State } from '@/types/api';
 import type { Resource } from '@/types/resource';
+import { KNOWN_SOURCE_PLATFORM_KEYS, type KnownSourcePlatform } from '@/utils/sourcePlatforms';
 
-export const KNOWN_STORAGE_BACKUP_PLATFORMS = [
-  'proxmox-pve',
-  'proxmox-pbs',
-  'proxmox-pmg',
-  'kubernetes',
-  'docker',
-  'agent',
-  'truenas',
-  'unraid',
-  'synology-dsm',
-  'vmware-vsphere',
-  'microsoft-hyperv',
-  'aws',
-  'azure',
-  'gcp',
-  'generic',
-] as const;
+export const KNOWN_STORAGE_BACKUP_PLATFORMS = KNOWN_SOURCE_PLATFORM_KEYS;
 
-export type KnownStorageBackupPlatform = (typeof KNOWN_STORAGE_BACKUP_PLATFORMS)[number];
+export type KnownStorageBackupPlatform = KnownSourcePlatform;
 export type StorageBackupPlatform = KnownStorageBackupPlatform | (string & {});
 
 export type PlatformFamily = 'onprem' | 'container' | 'virtualization' | 'cloud' | 'generic';
