@@ -1177,6 +1177,14 @@ surface `MetricsTarget` only as the history lookup target, while workload
 chart transport and hover/focus selection must keep using the canonical
 workload row ID so provider-backed workloads such as VMware VMs stay aligned
 with `/workloads` rows and summary cards.
+Kubernetes pods follow that same split. Pod rows may surface
+`MetricsTarget.ResourceID` only as the history lookup target, but that target
+must stay on the canonical prefixed runtime key
+`k8s:<cluster>:pod:<uid>` even when the underlying source-owned pod ID arrives
+as bare `<cluster>:pod:<uid>`. `/api/resources`, workload charts, and
+`/api/metrics-store/history` must therefore collapse onto that prefixed pod
+target instead of letting pod rows and pod charts drift onto separate metric
+series.
 The drawer's discovery mapper also reuses that helper for pod fallback agent
 IDs, so the resource-detail path and the dashboard path stay aligned on the
 same cluster-name source of truth.
@@ -1505,6 +1513,12 @@ series just because one ingest path emitted `" host-1 "` and another emitted
 `"host-1"`.
 If the canonicalized target ID is empty after that normalization, the metrics
 target must fail closed to `nil` instead of emitting an empty query coordinate.
+Kubernetes pod metrics targets must also canonicalize onto the shared
+`k8s:` runtime namespace before they become query coordinates. Bare pod source
+IDs such as `cluster-1:pod:pod-1` are discovery keys, not public history IDs;
+unified resources and history consumers must expose and query them as
+`k8s:cluster-1:pod:pod-1` so pod charts, drawer history, and workload summary
+cards stay on one owned series.
 
 ReadState resource-resolution lookups must also normalize surrounding
 whitespace on the incoming name before matching canonical resources. A valid

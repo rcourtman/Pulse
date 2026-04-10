@@ -1402,6 +1402,9 @@ func TestResourceListIncludesKubernetesPods(t *testing.T) {
 	if resource.MetricsTarget.ResourceType != string(unified.ResourceTypePod) {
 		t.Fatalf("metrics target type = %q, want %q", resource.MetricsTarget.ResourceType, unified.ResourceTypePod)
 	}
+	if resource.MetricsTarget.ResourceID != "k8s:cluster-1:pod:pod-1" {
+		t.Fatalf("metrics target resourceID = %q, want %q", resource.MetricsTarget.ResourceID, "k8s:cluster-1:pod:pod-1")
+	}
 }
 
 func TestResourceListFiltersCanonicalKubernetesNamespace(t *testing.T) {

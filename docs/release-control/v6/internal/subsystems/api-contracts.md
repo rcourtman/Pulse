@@ -207,6 +207,11 @@ when the disabled candidate no longer counts toward monitored-system capacity.
     monitor-owned aggregate summary cache rather than rehydrating each pool
     chart on request.
 28. Keep workload-chart response identity canonical on that same shared API surface: `internal/api/router.go`, `internal/api/contract_test.go`, and workload summary consumers must emit provider-backed VM and system-container series under the same canonical workload IDs that workloads page rows use, while resolving history through the unified `MetricsTarget.ResourceID`, so hover and focus selection do not fall off for provider-backed rows.
+    Kubernetes pod workload rows follow that same contract through their
+    metrics target. `/api/resources` may expose pod history only through the
+    unified `MetricsTarget.ResourceID`, but that target must be the canonical
+    prefixed runtime key `k8s:<cluster>:pod:<uid>` and not the bare source pod
+    ID, so pod workload rows and pod chart payloads stay on one history series.
 29. Keep the hosted account portal bootstrap intelligible without duplicate
     chrome. `internal/cloudcp/portal/page.go`, the maintained portal frontend
     bundle, and the shared portal styles may refine layout density, but the
@@ -497,6 +502,14 @@ windows. `/api/metrics-store/history` must accept `resourceType=disk`, keep
 `MetricsTarget.ResourceID` that unified resources already expose, instead of
 leaving storage drawers or other callers to fork a disk-local history route or
 invent an alternate disk identity.
+That same metrics-history contract also owns Kubernetes pod identity
+normalization. `/api/metrics-store/history` must accept legacy bare pod IDs
+such as `cluster-1:pod:pod-1`, canonicalize them onto the unified pod metrics
+target `k8s:cluster-1:pod:pod-1`, and keep the response `resourceId` on that
+canonical key. When store-backed history is absent, the handler must fall back
+to the same in-memory guest metrics cache that workload charts use for pods,
+so demo and mock Kubernetes charts do not go blank while aggregate workload
+charts still render.
 The Pulse Account commercial shell now also owns a dedicated bootstrap
 contract in `internal/cloudcp/portal/page.go`, `internal/cloudcp/portal/handlers.go`,
 and `internal/cloudcp/portal/handlers_test.go`. `/api/portal/bootstrap` and

@@ -91,7 +91,9 @@ func BuildMetricsTarget(resource Resource, sourceTargets []SourceTarget) *Metric
 		}
 	case ResourceTypePod:
 		if st, ok := bySource[SourceK8s]; ok {
-			return &MetricsTarget{ResourceType: string(ResourceTypePod), ResourceID: st.SourceID}
+			if resourceID := CanonicalKubernetesPodMetricID(st.SourceID); resourceID != "" {
+				return &MetricsTarget{ResourceType: string(ResourceTypePod), ResourceID: resourceID}
+			}
 		}
 	case ResourceTypeK8sCluster:
 		if st, ok := bySource[SourceK8s]; ok {
@@ -116,6 +118,17 @@ func BuildMetricsTarget(resource Resource, sourceTargets []SourceTarget) *Metric
 	}
 
 	return nil
+}
+
+func CanonicalKubernetesPodMetricID(sourceID string) string {
+	trimmed := strings.TrimSpace(sourceID)
+	if trimmed == "" {
+		return ""
+	}
+	if strings.HasPrefix(trimmed, "k8s:") {
+		return trimmed
+	}
+	return "k8s:" + trimmed
 }
 
 func canonicalAppContainerMetricID(sourceID string) string {

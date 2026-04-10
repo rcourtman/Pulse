@@ -110,10 +110,10 @@ func TestBuildMetricsTarget_CanonicalizesSourceIDWhitespace(t *testing.T) {
 			},
 			sourceTargets: []SourceTarget{{
 				Source:   SourceK8s,
-				SourceID: " ns/pod-1 ",
+				SourceID: " cluster-1:pod:pod-1 ",
 			}},
 			wantType: string(ResourceTypePod),
-			wantID:   "ns/pod-1",
+			wantID:   "k8s:cluster-1:pod:pod-1",
 		},
 	}
 

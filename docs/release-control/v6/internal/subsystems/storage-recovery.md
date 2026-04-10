@@ -372,6 +372,12 @@ querying, and the operator-facing storage health presentation layer.
     metrics targets, but infrastructure/workloads/storage/recovery navigation
     and focus handoffs must stay on canonical workload IDs instead of
     provider-native metric keys.
+    The same cross-surface rule applies when recovery-adjacent drawers or
+    summaries hand off Kubernetes pod history. Those surfaces may request pod
+    metrics only through the unified prefixed target
+    `k8s:<cluster>:pod:<uid>` and must rely on API-side canonicalization for
+    any legacy bare pod ID instead of inventing a recovery-local pod history
+    key.
 20. Keep storage row emphasis on the shared frontend primitive contract. Pool
     rows and physical-disk rows that mirror the active summary entity must
     expose that state through `data-summary-row-active` and let the shared row

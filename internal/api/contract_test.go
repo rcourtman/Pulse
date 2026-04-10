@@ -7945,6 +7945,57 @@ func TestContract_MetricsHistoryLiveFallbackJSONSnapshot(t *testing.T) {
 	assertJSONSnapshot(t, got, want)
 }
 
+func TestContract_MetricsHistoryCanonicalizesLegacyKubernetesPodIDs(t *testing.T) {
+	mh := monitoring.NewMetricsHistory(1000, time.Hour)
+	now := time.Now().UTC().Truncate(time.Second)
+	legacyID := "cluster-1:pod:pod-1"
+	canonicalID := "k8s:" + legacyID
+	for i, value := range []float64{21, 34, 29} {
+		mh.AddGuestMetric(canonicalID, "cpu", value, now.Add(time.Duration(i-2)*10*time.Minute))
+	}
+
+	router := &Router{
+		monitor: &monitoring.Monitor{},
+	}
+	setUnexportedField(t, router.monitor, "metricsHistory", mh)
+
+	req := httptest.NewRequest(
+		http.MethodGet,
+		"/api/metrics-store/history?resourceType=k8s&resourceId="+legacyID+"&metric=cpu&range=30m",
+		nil,
+	)
+	rec := httptest.NewRecorder()
+	router.handleMetricsHistory(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+
+	var resp metricsHistoryResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
+
+	if resp.ResourceType != "k8s" {
+		t.Fatalf("expected resourceType k8s, got %q", resp.ResourceType)
+	}
+	if resp.ResourceId != canonicalID {
+		t.Fatalf("expected canonical pod resource id %q, got %q", canonicalID, resp.ResourceId)
+	}
+	if resp.Metric != "cpu" {
+		t.Fatalf("expected metric cpu, got %q", resp.Metric)
+	}
+	if resp.Range != "30m" {
+		t.Fatalf("expected range 30m, got %q", resp.Range)
+	}
+	if resp.Source != "memory" {
+		t.Fatalf("expected source memory, got %q", resp.Source)
+	}
+	if len(resp.Points) != 3 {
+		t.Fatalf("expected 3 cpu points, got %d", len(resp.Points))
+	}
+}
+
 func TestContract_MetricsHistoryPhysicalDiskIOLiveWindowUsesCanonicalDiskTarget(t *testing.T) {
 	mh := monitoring.NewMetricsHistory(1000, time.Hour)
 	now := time.Now().UTC().Truncate(time.Second)

@@ -8081,6 +8081,7 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	resourceID = canonicalizeMetricsHistoryResourceID(runtimeResourceType, resourceID)
 
 	// Parse time range
 	var duration time.Duration
@@ -8644,6 +8645,17 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 				return nil, "", false
 			}
 			return buildHistoryPoints(points, stepSecs), historySourceMemory, true
+		case "k8s":
+			metrics := monitor.GetGuestMetrics(resourceID, duration)
+			points := metrics[metricType]
+			if len(points) == 0 {
+				livePoints := liveMetricPoints(runtimeResourceType, resourceID)
+				if live, ok := livePoints[metricType]; ok {
+					return buildHistoryPoints([]monitoring.MetricPoint{live}, 0), historySourceLive, true
+				}
+				return nil, "", false
+			}
+			return buildHistoryPoints(points, stepSecs), historySourceMemory, true
 		case "node":
 			points := monitor.GetNodeMetrics(resourceID, metricType, duration)
 			if len(points) == 0 {
@@ -8692,6 +8704,8 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 		var metrics map[string][]monitoring.MetricPoint
 		switch runtimeResourceType {
 		case "vm", "system-container", "oci-container":
+			metrics = monitor.GetGuestMetrics(resourceID, duration)
+		case "k8s":
 			metrics = monitor.GetGuestMetrics(resourceID, duration)
 		case "docker-host":
 			metrics = monitor.GetGuestMetrics(fmt.Sprintf("dockerHost:%s", resourceID), duration)
@@ -8998,6 +9012,17 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 		log.Error().Err(err).Msg("Failed to encode metrics history response")
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 	}
+}
+
+func canonicalizeMetricsHistoryResourceID(runtimeResourceType, resourceID string) string {
+	trimmed := strings.TrimSpace(resourceID)
+	if runtimeResourceType != "k8s" {
+		return trimmed
+	}
+	if strings.Contains(trimmed, ":pod:") {
+		return unifiedresources.CanonicalKubernetesPodMetricID(trimmed)
+	}
+	return trimmed
 }
 
 func normalizeMetricsHistoryResourceType(input string) (responseType string, runtimeType string, storeTypes []string, err error) {

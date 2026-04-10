@@ -624,6 +624,12 @@ surfaces that deep-link into recovery may still depend on those handlers, but
 they must treat response `platform` / `platforms` as API-owned fields and use
 legacy `provider` aliases only as compatibility fallback rather than reviving
 provider-shaped transport assumptions in fleet flows.
+That same lifecycle boundary also relies on canonical Kubernetes pod metrics
+targets. Pod-facing drawers may expose `MetricsTarget.ResourceID` only as the
+history lookup coordinate, but they must keep the prefixed
+`k8s:<cluster>:pod:<uid>` contract and let metrics-history handlers
+canonicalize any legacy bare pod ID back onto that key, otherwise pod detail
+history and workload summary cards split onto different timelines.
 The router now wires the tenant resource state provider during initial setup
 when a multi-tenant monitor is present, so tenant-scoped fleet pages do not
 trip a missing-provider 500 before the monitor has finished initializing.

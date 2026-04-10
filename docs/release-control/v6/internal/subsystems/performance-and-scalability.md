@@ -688,6 +688,11 @@ The aggregate `/api/charts/workloads-summary` endpoint now also has its own
 explicit API p95 budget constant, aligned with the per-workload charts budget,
 and `internal/api/slo_bench_test.go` must fail if that aggregate budget or its
 store-backed mixed-workload benchmark coverage drifts.
+Those budgets also assume Kubernetes pod history lookups hit one canonical
+series key. Pod chart and history consumers must normalize bare pod IDs onto
+`k8s:<cluster>:pod:<uid>` before lookup; otherwise demo and mock workloads pay
+repeated empty-store misses and redundant refetch churn even while the shared
+workload charts already hold the same pod metrics in memory.
 The infrastructure and workload summary cards now share a canonical
 throughput-rate formatter in `frontend-modern/src/utils/throughputPresentation.ts`,
 so bytes-per-second labels stay consistent between the two summary surfaces

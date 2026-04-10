@@ -184,6 +184,50 @@ func TestMetricsHistoryDiskIOMetricsUseMemoryFallback(t *testing.T) {
 	}
 }
 
+func TestMetricsHistoryKubernetesPodUsesMemoryFallback(t *testing.T) {
+	mh := monitoring.NewMetricsHistory(1000, time.Hour)
+	now := time.Now().UTC().Truncate(time.Second)
+	resourceID := "k8s:cluster-1:pod:pod-1"
+	for i, value := range []float64{18.5, 22.0, 19.0, 24.2} {
+		mh.AddGuestMetric(resourceID, "cpu", value, now.Add(time.Duration(i-3)*10*time.Minute))
+	}
+
+	monitor := &monitoring.Monitor{}
+	setUnexportedField(t, monitor, "metricsHistory", mh)
+
+	router := &Router{monitor: monitor}
+
+	req := httptest.NewRequest(
+		http.MethodGet,
+		"/api/metrics-store/history?resourceType=k8s&resourceId=cluster-1:pod:pod-1&metric=cpu&range=30m",
+		nil,
+	)
+	rec := httptest.NewRecorder()
+	router.handleMetricsHistory(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rec.Code)
+	}
+
+	var resp metricsHistoryResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
+
+	if resp.Source != "memory" {
+		t.Fatalf("expected source memory, got %q", resp.Source)
+	}
+	if resp.ResourceId != resourceID {
+		t.Fatalf("expected canonical resourceId %q, got %q", resourceID, resp.ResourceId)
+	}
+	if resp.Metric != "cpu" {
+		t.Fatalf("expected metric cpu, got %q", resp.Metric)
+	}
+	if len(resp.Points) < 2 {
+		t.Fatalf("expected kubernetes pod history points, got %d", len(resp.Points))
+	}
+}
+
 func TestMetricsHistoryStorageDiskAliasUsesMemory(t *testing.T) {
 	state := models.NewState()
 	state.UpdateStorageForInstance("pve1", []models.Storage{
