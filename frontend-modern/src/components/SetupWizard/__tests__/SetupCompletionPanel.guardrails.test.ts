@@ -57,6 +57,8 @@ describe('SetupCompletionPanel guardrails', () => {
   it('keeps connected infrastructure classification on the canonical setup model', () => {
     expect(setupCompletionPanelSource).toContain('buildSetupCompletionConnectedSystems');
     expect(setupCompletionPanelSource).toContain('buildSetupCompletionViewModel');
+    expect(setupCompletionPanelSource).toContain("props.connectedResourcesOverride !== undefined");
+    expect(setupCompletionPanelSource).toContain("setConnectedSystems(buildSetupCompletionConnectedSystems(props.connectedResourcesOverride));");
     expect(setupCompletionModelSource).toContain('isAgentFacetInfrastructureResource');
     expect(setupCompletionModelSource).toContain('getPreferredInfrastructureDisplayName');
     expect(setupCompletionModelSource).toContain('getPreferredResourceHostname');

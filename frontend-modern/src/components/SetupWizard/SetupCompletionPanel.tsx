@@ -14,6 +14,7 @@ import { logger } from '@/utils/logger';
 import { apiFetchJSON } from '@/utils/apiClient';
 import { getPulseBaseUrl } from '@/utils/url';
 import type { State } from '@/types/api';
+import type { Resource } from '@/types/resource';
 import { showSuccess, showError } from '@/utils/toast';
 import {
   trackAgentFirstConnected,
@@ -40,6 +41,7 @@ import {
 interface CompleteStepProps {
   state: WizardState;
   onComplete: (nextPath?: string) => void;
+  connectedResourcesOverride?: readonly Resource[];
 }
 
 const UNIFIED_RESOURCE_GUIDANCE = {
@@ -99,6 +101,13 @@ export const SetupCompletionPanel: Component<CompleteStepProps> = (props) => {
   });
 
   createEffect(() => {
+    if (props.connectedResourcesOverride !== undefined) {
+      // Preview scenarios provide a static resource snapshot so browser proof
+      // stays deterministic without depending on live runtime state.
+      setConnectedSystems(buildSetupCompletionConnectedSystems(props.connectedResourcesOverride));
+      return;
+    }
+
     let pollInterval: number | undefined;
     let previousCount = 0;
 

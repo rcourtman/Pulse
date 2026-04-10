@@ -274,7 +274,11 @@ an add-only capacity posture.
    come from the governed onboarding paths in
    `docs/release-control/v6/internal/PLATFORM_SUPPORT_MANIFEST.json` through
    the shared frontend manifest helper, not from a Setup Wizard-local platform
-   allowlist.
+   allowlist. When preview-only browser proof needs a deterministic connected
+   snapshot, `frontend-modern/src/components/SetupWizard/SetupCompletionPanel.tsx`
+   may accept a preview-provided connected-resource override, but the live
+   first-session runtime path must keep `/api/state` polling as the sole
+   source of connected-system truth when no override is supplied.
 6. Keep `frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx`
    oriented around the first monitored host. Install-token generation,
    governed command copy, and install instructions belong to the canonical

@@ -290,7 +290,12 @@ work extends shared components instead of creating new local variants.
    (`Welcome`, `Security`, then `Install`), and keep the step indicator plus
    completion CTA language aligned with the governed infrastructure install
    workspace instead of regressing to a route jump that leaves the next action
-   implicit.
+   implicit. Preview-only follow-up surfaces such as
+   `frontend-modern/src/components/SetupWizard/SetupCompletionPreview.tsx`
+   must stay deterministic and scenario-driven: they may not poll the live
+   `/api/state` runtime or inherit whatever connected systems happen to exist
+   on the current backend, and browser proof for `/preview/setup-complete`
+   must select explicit preview scenarios instead of ambient runtime state.
 10. Keep AI settings setup UI backend-driven:
     `frontend-modern/src/components/Settings/useAISettingsState.ts` and
     `frontend-modern/src/components/Settings/AISettingsDialogs.tsx` may collect
