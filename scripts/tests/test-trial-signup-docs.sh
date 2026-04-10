@@ -11,6 +11,7 @@ EVAL_SCENARIOS_DOC="${ROOT_DIR}/tests/integration/evals/scenarios.json"
 SOURCE_OF_TRUTH_DOC="${ROOT_DIR}/docs/release-control/v6/internal/SOURCE_OF_TRUTH.md"
 MIGRATION_AUDIT_DOC="${ROOT_DIR}/docs/release-control/v6/internal/V5_TO_V6_COMMERCIAL_MIGRATION_AUDIT_2026-03-07.md"
 HIGH_RISK_MATRIX_DOC="${ROOT_DIR}/docs/release-control/v6/internal/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md"
+API_CONTRACTS_DOC="${ROOT_DIR}/docs/release-control/v6/internal/subsystems/api-contracts.md"
 
 TRIAL_SIGNUP_REFERENCE_PATTERN='(/api/license/trial/start|trial_signup_required|trial_rate_limited)'
 
@@ -22,6 +23,7 @@ REQUIRED_CONTRACT_DOCS=(
   "${EVAL_TASK_DOC}"
   "${EVAL_SCENARIOS_DOC}"
   "${HIGH_RISK_MATRIX_DOC}"
+  "${API_CONTRACTS_DOC}"
 )
 
 TRACKED_REFERENCE_DOCS=()
@@ -119,7 +121,7 @@ assert_forbidden_patterns_absent() {
 
 main() {
   local runbook_output pricing_output upgrade_output integration_output eval_task_output
-  local eval_scenarios_output high_risk_matrix_output
+  local eval_scenarios_output high_risk_matrix_output api_contracts_output
   local source_of_truth_output migration_audit_output
   local contract_doc
 
@@ -155,6 +157,9 @@ main() {
   )"
   high_risk_matrix_output="$(
     sed -n '44,54p' "${HIGH_RISK_MATRIX_DOC}"
+  )"
+  api_contracts_output="$(
+    sed -n '440,448p' "${API_CONTRACTS_DOC}"
   )"
   source_of_truth_output="$(
     sed -n '412,420p' "${SOURCE_OF_TRUTH_DOC}"
@@ -204,10 +209,23 @@ main() {
   assert_contains "high-risk matrix documents canonical trial-rate-limited response" "${high_risk_matrix_output}" "trial_rate_limited"
   assert_contains "high-risk matrix documents retry-after metadata" "${high_risk_matrix_output}" "Retry-After"
 
+  assert_contains "api contracts document trial-start route" "${api_contracts_output}" "/api/license/trial/start"
+  assert_contains "api contracts document hosted-signup redirect code" "${api_contracts_output}" "trial_signup_required"
+  assert_contains "api contracts document canonical trial-rate-limited response" "${api_contracts_output}" "trial_rate_limited"
+  assert_contains "api contracts document retry-after metadata" "${api_contracts_output}" "Retry-After"
+
+  assert_contains "source of truth documents trial-start route" "${source_of_truth_output}" "POST /api/license/trial/start"
   assert_contains "source of truth keeps hosted-signup-only contract" "${source_of_truth_output}" "must initiate hosted signup only"
+  assert_contains "source of truth documents hosted-signup redirect code" "${source_of_truth_output}" "trial_signup_required"
+  assert_contains "source of truth documents canonical trial-rate-limited response" "${source_of_truth_output}" "trial_rate_limited"
+  assert_contains "source of truth documents retry-after metadata" "${source_of_truth_output}" "Retry-After"
   assert_contains "source of truth forbids local trial minting" "${source_of_truth_output}" "must not mint local trial"
 
+  assert_contains "migration audit documents trial-start route" "${migration_audit_output}" "POST /api/license/trial/start"
   assert_contains "migration audit keeps hosted-signup-only contract" "${migration_audit_output}" "must initiate hosted signup only"
+  assert_contains "migration audit documents hosted-signup redirect code" "${migration_audit_output}" "trial_signup_required"
+  assert_contains "migration audit documents canonical trial-rate-limited response" "${migration_audit_output}" "trial_rate_limited"
+  assert_contains "migration audit documents retry-after metadata" "${migration_audit_output}" "Retry-After"
   assert_contains "migration audit forbids local trial minting" "${migration_audit_output}" "may only redeem signed hosted trial activation tokens"
 
   assert_forbidden_patterns_absent

@@ -11,8 +11,8 @@ Scope: Self-hosted v5 -> v6 commercial and licensing bridge in `pulse`
 
 Locked v6 contract from those sources:
 
-1. Trial authority in v6 is SaaS-controlled. `POST /api/license/trial/start` must initiate hosted signup only.
-2. The local runtime may only redeem signed hosted trial activation tokens via `/auth/trial-activate`.
+1. Trial authority in v6 is SaaS-controlled. `POST /api/license/trial/start` must initiate hosted signup only by returning `409 trial_signup_required` while the hosted-signup retry burst remains open, then `429 trial_rate_limited` plus `Retry-After` backoff once the limiter engages.
+2. The local runtime may only redeem signed hosted trial activation tokens via `/auth/trial-activate`; it may not mint local trial state directly.
 3. v6 may auto-exchange persisted v5 Pro/Lifetime licenses on upgrade startup.
 4. v6 may accept valid v5 Pro/Lifetime keys in the activation flow.
 5. Paid Pulse Pro v5 recurring customers keep their existing recurring price after migration until they cancel; any return after cancellation uses current v6 pricing.
@@ -55,7 +55,7 @@ These are not incoming paid-license migration states, but they are part of the s
 1. Startup auto-exchange exists for persisted legacy JWT-style licenses and preserves the old key for downgrade fallback.
 2. Manual activation accepts v6 activation keys and also exchanges v5 JWT-style keys outside dev mode.
 3. Migrated `plan_version` survives into `status` and `entitlements`, and the Pro panel renders migrated plan terms without repricing recurring v5 customers.
-4. `POST /api/license/trial/start` does not mint local trial state; it returns `trial_signup_required` with a hosted action URL.
+4. `POST /api/license/trial/start` does not mint local trial state; it returns `409 trial_signup_required` with a hosted action URL while the retry burst remains open, then `429 trial_rate_limited` plus `Retry-After` once the limiter engages.
 5. `/auth/trial-activate` redeems a signed hosted token, stores lease-backed billing state, and redirects with an explicit result code.
 
 ### Highest-risk gaps

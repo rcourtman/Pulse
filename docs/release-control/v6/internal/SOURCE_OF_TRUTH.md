@@ -413,9 +413,11 @@ Assertion design rules:
    `L11`, and `L12`. `L4` remains post-GA track work and is not a GA floor
    gate.
 3. Trial authority for v6 is SaaS-controlled.
-   `POST /api/license/trial/start` must initiate hosted signup only; the local
-   runtime may redeem signed trial activations but must not mint local trial
-   state directly.
+   `POST /api/license/trial/start` must initiate hosted signup only by
+   returning `409 trial_signup_required` while the hosted-signup retry burst
+   remains open, then `429 trial_rate_limited` plus `Retry-After` backoff once
+   that limiter engages; the local runtime may redeem signed trial activations
+   but must not mint local trial state directly.
 4. v5 to v6 commercial migration must preserve unresolved paid-license state
    and downgrade safety.
 5. Cloud and MSP Stripe `price_*` IDs are operational fill-in items, not

@@ -611,7 +611,13 @@ so eval-pack metadata cannot silently drift away from the canonical hosted
 handoff contract while the task file stays correct. The release-control
 high-risk verification matrix must carry those same anchors for the
 `tests/07-trial-signup-return.spec.ts` browser proof, so the RC packet cannot
-describe trial-start verification through an unanchored summary path.
+describe trial-start verification through an unanchored summary path. The
+canonical release-control summaries in `docs/release-control/v6/internal/
+SOURCE_OF_TRUTH.md` and
+`docs/release-control/v6/internal/V5_TO_V6_COMMERCIAL_MIGRATION_AUDIT_2026-03-07.md`
+must carry that same explicit `409 trial_signup_required` to `429
+trial_rate_limited` plus `Retry-After` transition, so the governing release
+packet cannot collapse the hosted handoff into a vague "hosted-only" statement.
 Hosted tenant organization seeding and hosted handoff role mapping now belong
 to the same cloud-paid truth too. `internal/cloudcp/stripe/provisioner.go`
 must seed tenant org members from the shared account-role-to-organization-role

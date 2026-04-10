@@ -441,8 +441,9 @@ when the disabled candidate no longer counts toward monitored-system capacity.
     a local runtime version string.
 23. Keep local trial-start transport explicit on the shared commercial API
     boundary: `/api/license/trial/start` must preserve the hosted-signup
-    redirect contract during the allowed retry burst, then return the actual
-    remaining backoff in both `Retry-After` and
+    redirect contract as `409 trial_signup_required` during the allowed retry
+    burst, then return `429 trial_rate_limited` with the actual remaining
+    backoff in both `Retry-After` and
     `details.retry_after_seconds` once the burst is exceeded. Hosted
     self-serve verification failures may render owned HTML, but they must
     preserve originating Pulse context instead of collapsing into generic
@@ -2473,7 +2474,8 @@ security-side surface proof.
 That same shared commercial API boundary now also owns the local trial-start
 transport contract. `/api/license/trial/start` may allow a short human-scale
 burst of retries while the hosted redirect handoff remains canonical, but once
-that burst is exceeded it must return the actual remaining backoff in both the
+that burst is exceeded it must transition from `409 trial_signup_required` to
+`429 trial_rate_limited` and return the actual remaining backoff in both the
 `Retry-After` header and the JSON `details.retry_after_seconds` payload instead
 of a fixed window guess or a text-only error. `internal/api/contract_test.go`
 must pin both the hosted-signup redirect response and the rate-limited response
