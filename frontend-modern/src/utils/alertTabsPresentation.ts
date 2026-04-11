@@ -1,7 +1,15 @@
+import type { AlertTab } from '@/features/alerts/types';
+
 export interface AlertTabPresentationOptions {
   isActive: boolean;
   isDisabled: boolean;
   collapsed?: boolean;
+}
+
+export interface AlertTabGroup {
+  id: 'status' | 'configuration';
+  label: string;
+  items: { id: AlertTab; label: string }[];
 }
 
 export const ALERT_TAB_GROUP_STATUS_LABEL = 'Status';
@@ -12,26 +20,41 @@ export const ALERT_TAB_THRESHOLDS_LABEL = 'Thresholds';
 export const ALERT_TAB_DESTINATIONS_LABEL = 'Notifications';
 export const ALERT_TAB_SCHEDULE_LABEL = 'Schedule';
 
-export function getAlertsTabGroups() {
-  return [
-    {
-      id: 'status',
-      label: ALERT_TAB_GROUP_STATUS_LABEL,
-      items: [
-        { id: 'overview', label: ALERT_TAB_OVERVIEW_LABEL },
-        { id: 'history', label: ALERT_TAB_HISTORY_LABEL },
-      ],
-    },
-    {
-      id: 'configuration',
-      label: ALERT_TAB_GROUP_CONFIGURATION_LABEL,
-      items: [
-        { id: 'thresholds', label: ALERT_TAB_THRESHOLDS_LABEL },
-        { id: 'destinations', label: ALERT_TAB_DESTINATIONS_LABEL },
-        { id: 'schedule', label: ALERT_TAB_SCHEDULE_LABEL },
-      ],
-    },
-  ] as const;
+const ALERT_TAB_GROUPS: AlertTabGroup[] = [
+  {
+    id: 'status',
+    label: ALERT_TAB_GROUP_STATUS_LABEL,
+    items: [
+      { id: 'overview', label: ALERT_TAB_OVERVIEW_LABEL },
+      { id: 'history', label: ALERT_TAB_HISTORY_LABEL },
+    ],
+  },
+  {
+    id: 'configuration',
+    label: ALERT_TAB_GROUP_CONFIGURATION_LABEL,
+    items: [
+      { id: 'thresholds', label: ALERT_TAB_THRESHOLDS_LABEL },
+      { id: 'destinations', label: ALERT_TAB_DESTINATIONS_LABEL },
+      { id: 'schedule', label: ALERT_TAB_SCHEDULE_LABEL },
+    ],
+  },
+];
+
+export function isAlertsConfigurationTab(tab: AlertTab): boolean {
+  return tab === 'thresholds' || tab === 'destinations' || tab === 'schedule';
+}
+
+export function getAlertsTabGroups(options?: { readOnly?: boolean }): AlertTabGroup[] {
+  if (options?.readOnly) {
+    return ALERT_TAB_GROUPS.filter((group) => group.id === 'status').map((group) => ({
+      ...group,
+      items: [...group.items],
+    }));
+  }
+  return ALERT_TAB_GROUPS.map((group) => ({
+    ...group,
+    items: [...group.items],
+  }));
 }
 
 export function getAlertsSidebarTabClass({

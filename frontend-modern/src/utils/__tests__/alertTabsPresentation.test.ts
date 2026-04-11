@@ -11,6 +11,7 @@ import {
   getAlertsMobileTabClass,
   getAlertsSidebarTabClass,
   getAlertsTabTitle,
+  isAlertsConfigurationTab,
 } from '@/utils/alertTabsPresentation';
 
 describe('alertTabsPresentation', () => {
@@ -65,5 +66,26 @@ describe('alertTabsPresentation', () => {
         ],
       },
     ]);
+  });
+
+  it('limits read-only sessions to reporting tabs', () => {
+    expect(getAlertsTabGroups({ readOnly: true })).toEqual([
+      {
+        id: 'status',
+        label: 'Status',
+        items: [
+          { id: 'overview', label: 'Overview' },
+          { id: 'history', label: 'History' },
+        ],
+      },
+    ]);
+  });
+
+  it('classifies configuration tabs through the shared helper', () => {
+    expect(isAlertsConfigurationTab('overview')).toBe(false);
+    expect(isAlertsConfigurationTab('history')).toBe(false);
+    expect(isAlertsConfigurationTab('thresholds')).toBe(true);
+    expect(isAlertsConfigurationTab('destinations')).toBe(true);
+    expect(isAlertsConfigurationTab('schedule')).toBe(true);
   });
 });

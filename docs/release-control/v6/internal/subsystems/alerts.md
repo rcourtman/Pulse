@@ -129,6 +129,12 @@ upgrade/trial posture must come from the dedicated commercial-posture
 contract, and public-demo suppression must flow from the shared resolved
 `presentationPolicy` contract instead of alert-local demo checks or
 entitlement reads.
+That same shared read-only presentation contract now also owns the public-demo
+alerts shell posture. When `presentationPolicy.readOnly` is true, the alerts
+page must behave as a reporting surface: overview/history remain available,
+alert activation controls stay hidden, configuration tabs must not render or
+remain navigable, and the overview empty state must not tell public demo users
+to toggle alerting back on when demo mode already blocks write requests.
 That shared alert presentation boundary now also has explicit alerts ownership.
 `frontend-modern/src/utils/alertWebhookPresentation.ts` is the canonical owner
 for webhook setup copy, service labels, mention-help phrasing, custom-field

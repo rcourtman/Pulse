@@ -175,6 +175,10 @@ work extends shared components instead of creating new local variants.
    session presentation policy says the operator cannot manage setup, `/settings`
    and sidebar navigation must land on the canonical reporting/control surface
    instead of setup-oriented install routes.
+   That same shared session-presentation boundary also owns alerts read-only
+   posture: `/alerts` may continue exposing reporting tabs such as overview and
+   history, but activation controls plus configuration routes must collapse out
+   of the public-demo shell instead of advertising blocked management actions.
 3. Add feature-specific presentation only when no shared primitive should own it
 4. Add guardrail tests when a new shared pattern is introduced
 5. Keep shared platform-connections shell state on the reusable settings boundary: `frontend-modern/src/components/Settings/useSettingsInfrastructurePanelProps.ts`, `frontend-modern/src/components/Settings/InfrastructurePlatformConnectionsSummaryCard.tsx`, and `frontend-modern/src/components/Settings/PlatformConnectionsWorkspace.tsx` must continue to derive provider counts, availability, and shared subtab copy from one infrastructure-settings source instead of creating provider-local summary fetches or VMware-only shell vocabulary.

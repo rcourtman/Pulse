@@ -32,6 +32,7 @@ import {
   getAlertsMobileTabClass,
   getAlertsSidebarTabClass,
   getAlertsTabTitle,
+  isAlertsConfigurationTab,
 } from '@/utils/alertTabsPresentation';
 import {
   getAlertsPageHeaderMeta,
@@ -44,6 +45,7 @@ import LayoutDashboard from 'lucide-solid/icons/layout-dashboard';
 import History from 'lucide-solid/icons/history';
 import Gauge from 'lucide-solid/icons/gauge';
 import Send from 'lucide-solid/icons/send';
+import { presentationPolicyIsReadOnly } from '@/stores/sessionPresentationPolicy';
 import { AlertsConfigurationSurface } from '@/features/alerts/AlertsConfigurationSurface';
 import { OverviewTab } from '@/features/alerts/OverviewTab';
 import { HistoryTab } from '@/features/alerts/tabs/HistoryTab';
@@ -61,8 +63,12 @@ export function Alerts() {
   const location = useLocation();
   const alertsActivation = useAlertsActivation();
   const [isSwitchingActivation, setIsSwitchingActivation] = createSignal(false);
+  const readOnlySession = createMemo(() => presentationPolicyIsReadOnly());
   const isAlertsActive = createMemo(() => alertsActivation.activationState() === 'active');
   const areAlertsDisabled = createMemo(() => !isAlertsActive());
+  const alertsConfigurationLocked = createMemo(
+    () => !readOnlySession() && areAlertsDisabled(),
+  );
   const alertActivationPresentation = createMemo(() =>
     getAlertActivationPresentation({
       isActive: isAlertsActive(),
@@ -126,7 +132,9 @@ export function Alerts() {
 
   createEffect(() => {
     const currentPath = location.pathname;
-    const tab = tabFromPath(currentPath);
+    const requestedTab = tabFromPath(currentPath);
+    const tab =
+      readOnlySession() && isAlertsConfigurationTab(requestedTab) ? 'overview' : requestedTab;
 
     if (tab !== activeTab()) {
       setActiveTab(tab);
@@ -145,7 +153,7 @@ export function Alerts() {
 
   createEffect(() => {
     const activation = alertsActivation.activationState();
-    if (activation === null) {
+    if (activation === null || readOnlySession()) {
       return;
     }
     if (activation !== 'active' && activeTab() !== 'overview') {
@@ -212,30 +220,34 @@ export function Alerts() {
     }
   });
 
-  const tabGroups = getAlertsTabGroups().map((group) => ({
-    ...group,
-    items: group.items.map((item) => ({
-      ...item,
-      icon:
-        item.id === 'overview' ? (
-          <LayoutDashboard class="w-4 h-4" strokeWidth={2} />
-        ) : item.id === 'history' ? (
-          <History class="w-4 h-4" strokeWidth={2} />
-        ) : item.id === 'thresholds' ? (
-          <Gauge class="w-4 h-4" strokeWidth={2} />
-        ) : item.id === 'destinations' ? (
-          <Send class="w-4 h-4" strokeWidth={2} />
-        ) : (
-          <Calendar class="w-4 h-4" strokeWidth={2} />
-        ),
+  const tabGroups = createMemo<
+    {
+      id: 'status' | 'configuration';
+      label: string;
+      items: { id: AlertTab; label: string; icon: JSX.Element }[];
+    }[]
+  >(() =>
+    getAlertsTabGroups({ readOnly: readOnlySession() }).map((group) => ({
+      ...group,
+      items: group.items.map((item) => ({
+        ...item,
+        icon:
+          item.id === 'overview' ? (
+            <LayoutDashboard class="w-4 h-4" strokeWidth={2} />
+          ) : item.id === 'history' ? (
+            <History class="w-4 h-4" strokeWidth={2} />
+          ) : item.id === 'thresholds' ? (
+            <Gauge class="w-4 h-4" strokeWidth={2} />
+          ) : item.id === 'destinations' ? (
+            <Send class="w-4 h-4" strokeWidth={2} />
+          ) : (
+            <Calendar class="w-4 h-4" strokeWidth={2} />
+          ),
+      })),
     })),
-  })) satisfies {
-    id: 'status' | 'configuration';
-    label: string;
-    items: { id: AlertTab; label: string; icon: JSX.Element }[];
-  }[];
+  );
 
-  const flatTabs = tabGroups.flatMap((group) => group.items);
+  const flatTabs = createMemo(() => tabGroups().flatMap((group) => group.items));
   // Sidebar always starts expanded for discoverability (consistent with Settings)
   // Users can collapse during session but it resets on page reload
   const [sidebarCollapsed, setSidebarCollapsed] = createSignal(false);
@@ -250,7 +262,7 @@ export function Alerts() {
             description={headerMeta().description}
             size="lg"
           />
-          <Show when={activeTab() === 'overview'}>
+          <Show when={activeTab() === 'overview' && !readOnlySession()}>
             <div class="flex items-center gap-3">
               <span class={`text-sm font-medium ${alertActivationPresentation().labelClass}`}>
                 {alertActivationPresentation().label}
@@ -332,7 +344,7 @@ export function Alerts() {
                 </button>
               </Show>
               <div id="alerts-sidebar-menu" class="space-y-5">
-                <For each={tabGroups}>
+                <For each={tabGroups()}>
                   {(group) => (
                     <div class="space-y-2">
                       <Show when={!sidebarCollapsed()}>
@@ -346,16 +358,16 @@ export function Alerts() {
                             <button
                               type="button"
                               aria-current={activeTab() === item.id ? 'page' : undefined}
-                              aria-disabled={areAlertsDisabled()}
-                              disabled={areAlertsDisabled()}
+                              aria-disabled={alertsConfigurationLocked()}
+                              disabled={alertsConfigurationLocked()}
                               class={getAlertsSidebarTabClass({
                                 isActive: activeTab() === item.id,
-                                isDisabled: areAlertsDisabled(),
+                                isDisabled: alertsConfigurationLocked(),
                                 collapsed: sidebarCollapsed(),
                               })}
                               onClick={() => handleTabChange(item.id)}
                               title={getAlertsTabTitle({
-                                isDisabled: areAlertsDisabled(),
+                                isDisabled: alertsConfigurationLocked(),
                                 collapsed: sidebarCollapsed(),
                                 label: item.label,
                               })}
@@ -376,26 +388,26 @@ export function Alerts() {
           </div>
 
           <div class="flex-1 overflow-hidden">
-            <Show when={flatTabs.length > 0}>
+            <Show when={flatTabs().length > 0}>
               <div class="lg:hidden border-b border-border">
                 <div class="p-1">
                   <div
                     class="flex rounded-md bg-surface-hover p-0.5 w-full overflow-x-auto"
                     style="-webkit-overflow-scrolling: touch;"
                   >
-                    <For each={flatTabs}>
+                    <For each={flatTabs()}>
                       {(tab) => (
                         <button
                           type="button"
-                          aria-disabled={areAlertsDisabled()}
-                          disabled={areAlertsDisabled()}
+                          aria-disabled={alertsConfigurationLocked()}
+                          disabled={alertsConfigurationLocked()}
                           class={getAlertsMobileTabClass({
                             isActive: activeTab() === tab.id,
-                            isDisabled: areAlertsDisabled(),
+                            isDisabled: alertsConfigurationLocked(),
                           })}
                           onClick={() => handleTabChange(tab.id)}
                           title={getAlertsTabTitle({
-                            isDisabled: areAlertsDisabled(),
+                            isDisabled: alertsConfigurationLocked(),
                             label: tab.label,
                           })}
                         >
@@ -419,25 +431,27 @@ export function Alerts() {
                   dismissQuickTip={dismissQuickTip}
                   showAcknowledged={showAcknowledged}
                   setShowAcknowledged={setShowAcknowledged}
-                  alertsDisabled={areAlertsDisabled}
+                  alertsDisabled={alertsConfigurationLocked}
                   hasAIAlertsFeature={hasAIAlertsFeature}
                   runtimeCapabilitiesLoading={runtimeCapabilitiesLoading}
                 />
               </Show>
 
-              <AlertsConfigurationSurface
-                activeTab={activeTab}
-                allResources={allResources}
-                byType={byType}
-                children={children}
-                activeAlerts={activeAlerts}
-                removeAlerts={removeAlerts}
-                setOverviewOverrides={setOverviewOverrides}
-                hasUnsavedChanges={hasUnsavedChanges}
-                setHasUnsavedChanges={setHasUnsavedChanges}
-                alertsActivationState={alertsActivation.activationState}
-                alertsActivationConfig={alertsActivation.config}
-              />
+              <Show when={!readOnlySession()}>
+                <AlertsConfigurationSurface
+                  activeTab={activeTab}
+                  allResources={allResources}
+                  byType={byType}
+                  children={children}
+                  activeAlerts={activeAlerts}
+                  removeAlerts={removeAlerts}
+                  setOverviewOverrides={setOverviewOverrides}
+                  hasUnsavedChanges={hasUnsavedChanges}
+                  setHasUnsavedChanges={setHasUnsavedChanges}
+                  alertsActivationState={alertsActivation.activationState}
+                  alertsActivationConfig={alertsActivation.config}
+                />
+              </Show>
 
               <Show when={activeTab() === 'history'}>
                 <HistoryTab

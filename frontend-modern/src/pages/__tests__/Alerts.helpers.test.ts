@@ -221,8 +221,12 @@ describe('tab path helpers', () => {
       "import { AlertsConfigurationSurface } from '@/features/alerts/AlertsConfigurationSurface';",
     );
     expect(alertsPageSource).toContain(
+      "import { presentationPolicyIsReadOnly } from '@/stores/sessionPresentationPolicy';",
+    );
+    expect(alertsPageSource).toContain(
       "import { HistoryTab } from '@/features/alerts/tabs/HistoryTab';",
     );
+    expect(alertsPageSource).toContain('getAlertsTabGroups({ readOnly: readOnlySession() })');
     expect(alertsPageSource).not.toContain('const loadAlertConfiguration = async');
     expect(alertsPageSource).not.toContain('const FACTORY_GUEST_DEFAULTS =');
     expect(alertsConfigurationSurfaceSource).toContain(
