@@ -210,12 +210,12 @@ regression protection.
     chrome, `frontend-modern/src/useAppRuntimeState.ts` may retain a hidden
     default org scope for route-safe API calls, but it must skip browser org
     list hydration and must not turn dashboard landing on `frontend-modern/src/App.tsx`
-    into protected pre-auth churn. On the explicit `/login` route, if auth is
-    configured but the browser has no local auth hint yet, the app shell must
-    stop at the login-needed state instead of probing `/api/state` and paying
-    an avoidable `401`; once a local-login hint exists or the operator is on a
-    protected route, that shared state probe remains the canonical runtime
-    detector.
+    into protected pre-auth churn. On public login entrypoints (`/` and
+    `/login`), if auth is configured but the browser has no local auth hint
+    yet, the app shell must stop at the login-needed state instead of probing
+    `/api/state` and paying an avoidable `401`; once a local-login hint exists
+    or the operator is on a protected route, that shared state probe remains
+    the canonical runtime detector.
     into another summary-fetch or org-bootstrap hot path.
     Authenticated `/login` recovery belongs to that same app-shell boundary:
     `frontend-modern/src/App.tsx` must redirect that route back to the

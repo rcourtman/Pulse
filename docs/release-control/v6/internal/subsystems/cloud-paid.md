@@ -155,8 +155,8 @@ still grows monitored-system usage.
     posture on `v6-demo` therefore stays governed by the route-owned
     presentation policy and summary scope rather than by app-shell-wide
     bootstrap heuristics. That same app-shell boundary must also keep the
-    explicit `/login` route quiet before a session exists: when auth is
-    configured but no local auth hint has been established yet,
+    public login entrypoints (`/` and `/login`) quiet before a session exists:
+    when auth is configured but no local auth hint has been established yet,
     `frontend-modern/src/useAppRuntimeState.ts` must stop at the shared
     login-needed state and skip `/api/state`, while protected-route arrivals
     and post-login reloads still keep the canonical state probe for runtime
@@ -1480,13 +1480,13 @@ and monitored-system/trial nudges, dashboard relay paywalls, Patrol upgrade
 CTAs, and history-lock upsells. Demo readiness therefore means presentation
 isolation, not a license exemption.
 That same bootstrap owner must also avoid protected pre-auth noise. When auth
-is configured but the browser is still on the explicit `/login` route with no
-local auth hint yet, `frontend-modern/src/useAppRuntimeState.ts` must stop at
-the shared login-needed state and skip the `/api/state` probe, so public demos
-and other browser-first login surfaces do not emit avoidable `401` traffic
-before a session exists. Once the local login flow has written its bootstrap
-hint or the operator is landing on a protected route, the canonical state
-probe still owns authenticated runtime detection.
+is configured but the browser is still on a public login entrypoint (`/` or
+`/login`) with no local auth hint yet, `frontend-modern/src/useAppRuntimeState.ts`
+must stop at the shared login-needed state and skip the `/api/state` probe, so
+public demos and other browser-first login surfaces do not emit avoidable
+`401` traffic before a session exists. Once the local login flow has written
+its bootstrap hint or the operator is landing on a protected route, the
+canonical state probe still owns authenticated runtime detection.
 That public-demo commercial boundary also owns monitored-system preview
 unavailability wording. Browser presentation may keep the unavailable reason
 nullable until the formatting edge, but it must normalize the message through

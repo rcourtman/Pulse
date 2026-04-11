@@ -110,7 +110,10 @@ describe('App architecture', () => {
     expect(appRuntimeStateSource).toContain('void loadCommercialPosture();');
     expect(appRuntimeStateSource).toContain('const hasLocalAuthBootstrapHint = (): boolean => {');
     expect(appRuntimeStateSource).toContain(
-      "if (window.location.pathname === '/login' && !hasLocalAuthBootstrapHint()) {",
+      "const isPreAuthLoginBootstrapPath = (pathname: string): boolean =>",
+    );
+    expect(appRuntimeStateSource).toContain(
+      "if (isPreAuthLoginBootstrapPath(window.location.pathname) && !hasLocalAuthBootstrapHint()) {",
     );
     expect(appRuntimeStateSource).toContain('aiChatStore.setEnabled(');
     expect(appRuntimeStateSource).toContain("eventBus.on('theme_changed', handleRemoteThemeChange);");

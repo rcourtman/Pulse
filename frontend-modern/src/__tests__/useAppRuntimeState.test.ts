@@ -339,6 +339,23 @@ describe('useAppRuntimeState', () => {
     dispose();
   });
 
+  it('skips the protected state bootstrap probe on the root login entrypoint until a local auth hint exists', async () => {
+    window.history.replaceState({}, '', '/');
+    hasStoredAuthSessionMock.mockReturnValue(false);
+
+    const { hookState, dispose } = mountHook();
+
+    await flushAsync();
+    await flushAsync();
+
+    expect(
+      apiFetchMock.mock.calls.some(([url]) => url === '/api/state'),
+    ).toBe(false);
+    expect(hookState.needsAuth()).toBe(true);
+
+    dispose();
+  });
+
   it('keeps the protected state bootstrap probe on the login route once a local auth hint exists', async () => {
     window.history.replaceState({}, '', '/login');
     hasStoredAuthSessionMock.mockReturnValue(false);

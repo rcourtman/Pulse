@@ -82,6 +82,9 @@ export type AppConnectionStatus = {
 const ROOT_INFRASTRUCTURE_PATH = buildInfrastructurePath();
 const ROOT_DASHBOARD_PATH = '/dashboard';
 
+const isPreAuthLoginBootstrapPath = (pathname: string): boolean =>
+  pathname === '/' || pathname === '/login';
+
 export const useAppRuntimeState = () => {
   initKioskMode();
   syncKioskMode();
@@ -697,8 +700,10 @@ export const useAppRuntimeState = () => {
         return;
       }
 
-      if (window.location.pathname === '/login' && !hasLocalAuthBootstrapHint()) {
-        logger.debug('[App] Login route bootstrap has no local auth hint yet');
+      if (isPreAuthLoginBootstrapPath(window.location.pathname) && !hasLocalAuthBootstrapHint()) {
+        logger.debug('[App] Public login bootstrap has no local auth hint yet', {
+          pathname: window.location.pathname,
+        });
         setNeedsAuth(true);
         return;
       }
