@@ -153,8 +153,10 @@ func applyDemoScenarioGraph(graph *FixtureGraph, now time.Time) {
 	containerNames := applyDemoContainerScenario(graph.State.Containers, demoContainerProfiles, now)
 	applyDemoDockerScenario(&graph.State, now)
 	applyDemoKubernetesScenario(&graph.State, now)
-	applyDemoStorageScenario(&graph.State)
+	applyDemoHostScenario(&graph.State, now)
+	applyDemoStorageScenario(&graph.State, now)
 	applyDemoBackupScenario(&graph.State, vmNames, containerNames, now)
+	syncDemoConnectionHealth(&graph.State)
 }
 
 func applyDemoPlatformScenario(fixtures *PlatformFixtures) {
@@ -514,7 +516,27 @@ func applyDemoKubernetesScenario(state *models.StateSnapshot, now time.Time) {
 	syncMockKubernetesNodeHosts(state)
 }
 
-func applyDemoStorageScenario(state *models.StateSnapshot) {
+func applyDemoHostScenario(state *models.StateSnapshot, now time.Time) {
+	if state == nil {
+		return
+	}
+
+	for i := range state.Hosts {
+		host := &state.Hosts[i]
+		host.Status = "online"
+		if strings.TrimSpace(host.DisplayName) == "" {
+			host.DisplayName = humanizeHostDisplayName(host.Hostname)
+		}
+		if now.IsZero() {
+			continue
+		}
+		if host.LastSeen.IsZero() || host.LastSeen.Before(now.Add(-2*time.Minute)) || host.LastSeen.After(now) {
+			host.LastSeen = demoRecentSeenAt(now, "host", host.ID, host.Hostname)
+		}
+	}
+}
+
+func applyDemoStorageScenario(state *models.StateSnapshot, now time.Time) {
 	if state == nil {
 		return
 	}
@@ -529,6 +551,9 @@ func applyDemoStorageScenario(state *models.StateSnapshot) {
 
 	for i := range state.PBSInstances {
 		state.PBSInstances[i].Name = []string{"backup-vault", "dr-vault"}[minInt(i, 1)]
+		state.PBSInstances[i].Status = "online"
+		state.PBSInstances[i].ConnectionHealth = "healthy"
+		state.PBSInstances[i].LastSeen = demoRecentSeenAt(now, "pbs", state.PBSInstances[i].ID, state.PBSInstances[i].Name)
 		if len(state.PBSInstances[i].Datastores) > 0 {
 			datastoreNames := []string{"primary-vault", "offsite-vault", "replica-vault"}
 			for j := range state.PBSInstances[i].Datastores {
@@ -546,7 +571,70 @@ func applyDemoStorageScenario(state *models.StateSnapshot) {
 		} else {
 			state.PMGInstances[i].Name = "mail-gateway-us"
 		}
+		state.PMGInstances[i].Status = "online"
+		state.PMGInstances[i].ConnectionHealth = "healthy"
+		state.PMGInstances[i].LastSeen = demoRecentSeenAt(now, "pmg", state.PMGInstances[i].ID, state.PMGInstances[i].Name)
 	}
+}
+
+func syncDemoConnectionHealth(state *models.StateSnapshot) {
+	if state == nil {
+		return
+	}
+	if state.ConnectionHealth == nil {
+		state.ConnectionHealth = make(map[string]bool)
+	}
+
+	for key := range state.ConnectionHealth {
+		switch {
+		case strings.HasPrefix(key, "docker-"),
+			strings.HasPrefix(key, "kubernetes-"),
+			strings.HasPrefix(key, "host-"),
+			strings.HasPrefix(key, "pbs-"),
+			strings.HasPrefix(key, "pmg-"),
+			strings.HasPrefix(key, "pve-"):
+			delete(state.ConnectionHealth, key)
+		}
+	}
+
+	for _, node := range state.Nodes {
+		if name := strings.TrimSpace(node.Name); name != "" {
+			state.ConnectionHealth["pve-"+name] = !strings.EqualFold(strings.TrimSpace(node.Status), "offline")
+		}
+	}
+	for _, host := range state.DockerHosts {
+		if id := strings.TrimSpace(host.ID); id != "" {
+			state.ConnectionHealth[dockerConnectionPrefix+id] = !strings.EqualFold(strings.TrimSpace(host.Status), "offline")
+		}
+	}
+	for _, cluster := range state.KubernetesClusters {
+		if id := strings.TrimSpace(cluster.ID); id != "" {
+			state.ConnectionHealth[kubernetesConnectionPrefix+id] = !strings.EqualFold(strings.TrimSpace(cluster.Status), "offline")
+		}
+	}
+	for _, host := range state.Hosts {
+		if id := strings.TrimSpace(host.ID); id != "" {
+			state.ConnectionHealth[hostConnectionPrefix+id] = !strings.EqualFold(strings.TrimSpace(host.Status), "offline")
+		}
+	}
+	for _, inst := range state.PBSInstances {
+		if name := strings.TrimSpace(inst.Name); name != "" {
+			state.ConnectionHealth["pbs-"+name] = !strings.EqualFold(strings.TrimSpace(inst.Status), "offline")
+		}
+	}
+	for _, inst := range state.PMGInstances {
+		if name := strings.TrimSpace(inst.Name); name != "" {
+			state.ConnectionHealth["pmg-"+name] = !strings.EqualFold(strings.TrimSpace(inst.Status), "offline")
+		}
+	}
+}
+
+func demoRecentSeenAt(now time.Time, parts ...string) time.Time {
+	if now.IsZero() {
+		now = time.Now().UTC()
+	}
+	offsetSeconds := 4 + mockStableChoice(15, parts...)
+	return now.UTC().Add(-time.Duration(offsetSeconds) * time.Second)
 }
 
 func applyDemoBackupScenario(

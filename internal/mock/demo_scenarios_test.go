@@ -112,6 +112,91 @@ func TestFixtureGraphUpdateMetricsPreservesCuratedDemoScenario(t *testing.T) {
 	}
 }
 
+func TestFixtureGraphUpdateMetricsRestoresStableDemoInfrastructurePosture(t *testing.T) {
+	cfg := DefaultConfig
+	cfg.RandomMetrics = true
+
+	start := time.Date(2026, time.April, 1, 12, 0, 0, 0, time.UTC)
+	later := start.Add(45 * time.Minute)
+
+	graph := buildFixtureGraph(cfg, start)
+
+	for i := range graph.State.Hosts {
+		graph.State.Hosts[i].Status = "offline"
+		graph.State.Hosts[i].LastSeen = time.Time{}
+	}
+	for i := range graph.State.DockerHosts {
+		graph.State.DockerHosts[i].Status = "offline"
+	}
+	for i := range graph.State.KubernetesClusters {
+		graph.State.KubernetesClusters[i].Status = "offline"
+		for j := range graph.State.KubernetesClusters[i].Nodes {
+			graph.State.KubernetesClusters[i].Nodes[j].Ready = false
+			graph.State.KubernetesClusters[i].Nodes[j].Unschedulable = true
+		}
+	}
+	for i := range graph.State.PBSInstances {
+		graph.State.PBSInstances[i].Status = "offline"
+		graph.State.PBSInstances[i].ConnectionHealth = "error"
+		graph.State.PBSInstances[i].LastSeen = time.Time{}
+	}
+	for i := range graph.State.PMGInstances {
+		graph.State.PMGInstances[i].Status = "offline"
+		graph.State.PMGInstances[i].ConnectionHealth = "error"
+		graph.State.PMGInstances[i].LastSeen = time.Time{}
+	}
+	graph.State.ConnectionHealth = map[string]bool{
+		"docker-stale":     false,
+		"kubernetes-stale": false,
+		"host-stale":       false,
+		"pbs-stale":        false,
+		"pmg-stale":        false,
+		"pve-stale":        false,
+	}
+
+	graph.UpdateMetrics(cfg, later)
+
+	if !allHostsOnline(graph) {
+		t.Fatal("expected demo host agents to restore online status after metric refresh")
+	}
+	if !allDockerHostsOnline(graph) {
+		t.Fatal("expected curated docker hosts to restore online status after metric refresh")
+	}
+	if !allKubernetesClustersOnline(graph) {
+		t.Fatal("expected curated kubernetes clusters to restore online status after metric refresh")
+	}
+	if !allKubernetesNodesReady(graph) {
+		t.Fatal("expected curated kubernetes nodes to restore ready status after metric refresh")
+	}
+	if !allPBSInstancesOnlineHealthy(graph) {
+		t.Fatal("expected curated PBS posture to restore healthy online status after metric refresh")
+	}
+	if !allPMGInstancesOnlineHealthy(graph) {
+		t.Fatal("expected curated PMG posture to restore healthy online status after metric refresh")
+	}
+	if !connectionHealthMatchesCuratedDemoState(graph) {
+		t.Fatal("expected connection-health map to match the final curated demo state after metric refresh")
+	}
+	if _, ok := graph.State.ConnectionHealth["docker-stale"]; ok {
+		t.Fatal("expected stale docker connection-health keys to be cleared")
+	}
+	if _, ok := graph.State.ConnectionHealth["kubernetes-stale"]; ok {
+		t.Fatal("expected stale kubernetes connection-health keys to be cleared")
+	}
+	if _, ok := graph.State.ConnectionHealth["host-stale"]; ok {
+		t.Fatal("expected stale host-agent connection-health keys to be cleared")
+	}
+	if _, ok := graph.State.ConnectionHealth["pbs-stale"]; ok {
+		t.Fatal("expected stale PBS connection-health keys to be cleared")
+	}
+	if _, ok := graph.State.ConnectionHealth["pmg-stale"]; ok {
+		t.Fatal("expected stale PMG connection-health keys to be cleared")
+	}
+	if _, ok := graph.State.ConnectionHealth["pve-stale"]; ok {
+		t.Fatal("expected stale PVE connection-health keys to be cleared")
+	}
+}
+
 func vmNameExists(graph FixtureGraph, want string) bool {
 	for _, vm := range graph.State.VMs {
 		if vm.Name == want {
@@ -235,6 +320,114 @@ func pmgInstanceExists(graph FixtureGraph, want string) bool {
 		}
 	}
 	return false
+}
+
+func allHostsOnline(graph FixtureGraph) bool {
+	for _, host := range graph.State.Hosts {
+		if host.Status != "online" {
+			return false
+		}
+	}
+	return true
+}
+
+func allDockerHostsOnline(graph FixtureGraph) bool {
+	for _, host := range graph.State.DockerHosts {
+		if host.Status != "online" {
+			return false
+		}
+	}
+	return true
+}
+
+func allKubernetesClustersOnline(graph FixtureGraph) bool {
+	for _, cluster := range graph.State.KubernetesClusters {
+		if cluster.Status != "online" {
+			return false
+		}
+	}
+	return true
+}
+
+func allKubernetesNodesReady(graph FixtureGraph) bool {
+	for _, cluster := range graph.State.KubernetesClusters {
+		for _, node := range cluster.Nodes {
+			if !node.Ready || node.Unschedulable {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func allPBSInstancesOnlineHealthy(graph FixtureGraph) bool {
+	for _, instance := range graph.State.PBSInstances {
+		if instance.Status != "online" || instance.ConnectionHealth != "healthy" {
+			return false
+		}
+	}
+	return true
+}
+
+func allPMGInstancesOnlineHealthy(graph FixtureGraph) bool {
+	for _, instance := range graph.State.PMGInstances {
+		if instance.Status != "online" || instance.ConnectionHealth != "healthy" {
+			return false
+		}
+	}
+	return true
+}
+
+func connectionHealthMatchesCuratedDemoState(graph FixtureGraph) bool {
+	for _, node := range graph.State.Nodes {
+		key := "pve-" + strings.TrimSpace(node.Name)
+		expected := !strings.EqualFold(strings.TrimSpace(node.Status), "offline")
+		healthy, ok := graph.State.ConnectionHealth[key]
+		if key == "pve-" || !ok || healthy != expected {
+			return false
+		}
+	}
+	for _, host := range graph.State.DockerHosts {
+		key := "docker-" + strings.TrimSpace(host.ID)
+		expected := !strings.EqualFold(strings.TrimSpace(host.Status), "offline")
+		healthy, ok := graph.State.ConnectionHealth[key]
+		if key == "docker-" || !ok || healthy != expected {
+			return false
+		}
+	}
+	for _, cluster := range graph.State.KubernetesClusters {
+		key := "kubernetes-" + strings.TrimSpace(cluster.ID)
+		expected := !strings.EqualFold(strings.TrimSpace(cluster.Status), "offline")
+		healthy, ok := graph.State.ConnectionHealth[key]
+		if key == "kubernetes-" || !ok || healthy != expected {
+			return false
+		}
+	}
+	for _, host := range graph.State.Hosts {
+		key := "host-" + strings.TrimSpace(host.ID)
+		expected := !strings.EqualFold(strings.TrimSpace(host.Status), "offline")
+		healthy, ok := graph.State.ConnectionHealth[key]
+		if key == "host-" || !ok || healthy != expected {
+			return false
+		}
+	}
+	for _, instance := range graph.State.PBSInstances {
+		key := "pbs-" + strings.TrimSpace(instance.Name)
+		expected := !strings.EqualFold(strings.TrimSpace(instance.Status), "offline")
+		healthy, ok := graph.State.ConnectionHealth[key]
+		if key == "pbs-" || !ok || healthy != expected {
+			return false
+		}
+	}
+	for _, instance := range graph.State.PMGInstances {
+		key := "pmg-" + strings.TrimSpace(instance.Name)
+		expected := !strings.EqualFold(strings.TrimSpace(instance.Status), "offline")
+		healthy, ok := graph.State.ConnectionHealth[key]
+		if key == "pmg-" || !ok || healthy != expected {
+			return false
+		}
+	}
+	return true
 }
 
 func firstLegacyMockClusterLeak(graph FixtureGraph) string {
