@@ -123,6 +123,7 @@ func TestDeployDemoWorkflowFailsClosedForPreviewAndVerifiesFrontendParity(t *tes
 		`SERVICE_NAME="pulse-v6-preview"`,
 		`Preview demo deployments must not target the stable pulse service.`,
 		`Verify frontend parity`,
+		`extract_entry_asset()`,
 		`Remote service is serving $REMOTE_ASSET but the build expected $EXPECTED_ASSET.`,
 		`Public demo is serving $PUBLIC_ASSET but the build expected $EXPECTED_ASSET.`,
 	}

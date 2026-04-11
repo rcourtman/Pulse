@@ -270,15 +270,22 @@ jobs:
             -o UserKnownHostsFile=~/.ssh/known_hosts
           )
 
-          EXPECTED_ASSET="${{ steps.frontend.outputs.entry_asset }}"
-          REMOTE_ASSET="$(
-            ssh "${SSH_OPTS[@]}" "${DEPLOY_USER}@${DEPLOY_HOST}" \
-              "curl -fsS ${DEMO_LOCAL_BASE_URL}/ | grep -o '/assets/index-[^\\\" ]*\\\\.js' | head -n 1"
-          )"
-          PUBLIC_ASSET="$(curl -fsS "$PUBLIC_ROOT_URL" | grep -o '/assets/index-[^\" ]*\.js' | head -n 1)"
+          extract_entry_asset() {
+            python3 -c 'import re, sys; html = sys.stdin.read(); match = re.search(r"/assets/index-[^\" ]*\\.js", html); sys.exit(1) if match is None else sys.stdout.write(match.group(0))'
+          }
 
-          [ -n "$REMOTE_ASSET" ] || { echo "::error::Failed to resolve the remote frontend entry asset."; exit 1; }
-          [ -n "$PUBLIC_ASSET" ] || { echo "::error::Failed to resolve the public frontend entry asset."; exit 1; }
+          EXPECTED_ASSET="${{ steps.frontend.outputs.entry_asset }}"
+          if ! REMOTE_ASSET="$(
+            ssh "${SSH_OPTS[@]}" "${DEPLOY_USER}@${DEPLOY_HOST}" \
+              "curl -fsS ${DEMO_LOCAL_BASE_URL}/" | extract_entry_asset
+          )"; then
+            echo "::error::Failed to resolve the remote frontend entry asset."
+            exit 1
+          fi
+          if ! PUBLIC_ASSET="$(curl -fsS "$PUBLIC_ROOT_URL" | extract_entry_asset)"; then
+            echo "::error::Failed to resolve the public frontend entry asset."
+            exit 1
+          fi
           [ "$REMOTE_ASSET" = "$EXPECTED_ASSET" ] || {
             echo "::error::Remote service is serving $REMOTE_ASSET but the build expected $EXPECTED_ASSET."
             exit 1
