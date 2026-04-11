@@ -898,6 +898,10 @@ shell first, so existing operators land on the overview route and first-time
 operators hit the governed dashboard empty state that forwards them into
 Infrastructure Install, instead of carrying a root-only redirect to the
 infrastructure route that bypasses the shared landing contract.
+That same landing contract also owns authenticated `/login`: once the browser
+has a valid session, `frontend-modern/src/App.tsx` must redirect `/login` to
+the governed dashboard landing route instead of leaving the authenticated app
+shell on a not-found compatibility path.
 The Pro license settings surface now follows the same rule as well. Changes to
 `frontend-modern/src/components/Settings/ProLicensePanel.tsx` must carry this
 contract and the dedicated Pro-license proof file instead of remaining an

@@ -22,6 +22,7 @@ describe('App architecture', () => {
     expect(appSource).toContain('clearPendingAppShellRestoreTop');
     expect(appSource).toContain('const ROOT_DASHBOARD_PATH = DASHBOARD_PATH;');
     expect(appSource).toContain('<Route path={ROOT_DASHBOARD_PATH} component={DashboardPage} />');
+    expect(appSource).toContain('<Route path="/login" component={() => <Navigate href={ROOT_DASHBOARD_PATH} />} />');
     expect(appSource).toContain('<Route path="/" component={() => <Navigate href={ROOT_DASHBOARD_PATH} />} />');
     expect(appSource).toContain(
       "const PricingHandoffPage = lazy(() => import('./pages/PricingHandoff'));",

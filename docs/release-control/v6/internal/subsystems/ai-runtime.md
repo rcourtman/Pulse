@@ -228,6 +228,11 @@ organization chrome: `frontend-modern/src/App.tsx` and
 `frontend-modern/src/AppLayout.tsx` may hide org switchers or demo-only org
 labels, but they must not couple assistant visibility, session reset, or
 drawer-open behavior to that organization presentation state.
+Authenticated `/login` recovery belongs to that same route shell boundary:
+once login succeeds, `frontend-modern/src/App.tsx` must resolve `/login`
+through the canonical post-auth landing route instead of leaving the
+assistant-capable authenticated shell stranded on a route that only exists for
+logged-out presentation.
 `docs/release-control/v6/internal/subsystems/registry.json` must therefore keep
 `frontend-modern/src/stores/aiRuntimeState.ts` and
 `frontend-modern/src/components/AI/Chat/` on the explicit AI runtime proof

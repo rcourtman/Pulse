@@ -419,6 +419,7 @@ function App() {
       <Route path="/cloud/signup" component={HostedSignupPage} />
       <Route path="/preview/setup-complete" component={SetupCompletionPreviewPage} />
       <Route path={ROOT_DASHBOARD_PATH} component={DashboardPage} />
+      <Route path="/login" component={() => <Navigate href={ROOT_DASHBOARD_PATH} />} />
       <Route path="/" component={() => <Navigate href={ROOT_DASHBOARD_PATH} />} />
       <Route path={ROOT_WORKLOADS_PATH} component={WorkloadsView} />
       <Route path={STORAGE_PATH} component={StoragePage} />

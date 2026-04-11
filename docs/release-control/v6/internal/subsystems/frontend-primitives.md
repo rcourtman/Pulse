@@ -373,6 +373,10 @@ connections` visible as the API-backed alternative for Proxmox and
     the governed dashboard empty state route first-time operators into
     Infrastructure Install, instead of preserving a separate root-only jump to
     `/infrastructure` that drifts from the rest of the onboarding contract.
+    The same entry-shell contract must also canonicalize authenticated
+    `/login`: once auth succeeds, the shared shell must resolve that route back
+    onto the governed dashboard landing path instead of rendering a page-local
+    not-found state inside the authenticated chrome.
 24. Keep relay settings shell copy on the shared presentation owner in
     `frontend-modern/src/utils/relayPresentation.ts`. The route metadata in
     `settingsHeaderMeta.ts` and the leading `SettingsPanel` in
