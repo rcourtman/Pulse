@@ -71,6 +71,18 @@ export const getPulseDataGridAlignClass = (align?: 'left' | 'center' | 'right') 
   }
 };
 
+export const getPulseDataGridWidthAttr = (width?: string): string | undefined => {
+  const trimmed = width?.trim();
+  if (!trimmed) return undefined;
+  if (/^\d+(\.\d+)?px$/.test(trimmed)) {
+    return trimmed.slice(0, -2);
+  }
+  if (/^\d+(\.\d+)?%$/.test(trimmed) || /^\d+(\.\d+)?$/.test(trimmed)) {
+    return trimmed;
+  }
+  return undefined;
+};
+
 export const isPulseDataGridInteractiveTarget = (target: EventTarget | null) =>
   target instanceof Element &&
   Boolean(

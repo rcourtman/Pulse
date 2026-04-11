@@ -20,7 +20,11 @@ describe('PulseDataGrid', () => {
   it('keeps the shared pulse data grid on shell, runtime, and model owners', () => {
     expect(pulseDataGridSource).toContain('usePulseDataGridState');
     expect(pulseDataGridSource).toContain('getPulseDataGridAlignClass');
+    expect(pulseDataGridSource).toContain('getPulseDataGridWidthAttr');
     expect(pulseDataGridSource).toContain('isPulseDataGridInteractiveTarget');
+    expect(pulseDataGridSource).toContain('scrollbar-hide');
+    expect(pulseDataGridSource).not.toContain('style={{');
+    expect(pulseDataGridSource).not.toContain('style={');
     expect(pulseDataGridSource).not.toContain('useBreakpoint');
     expect(pulseDataGridSource).not.toContain('createStore');
     expect(pulseDataGridSource).not.toContain('target.closest(');
@@ -31,6 +35,7 @@ describe('PulseDataGrid', () => {
     expect(pulseDataGridStateSource).toContain('reconcile(');
 
     expect(pulseDataGridModelSource).toContain('export const getPulseDataGridAlignClass');
+    expect(pulseDataGridModelSource).toContain('export const getPulseDataGridWidthAttr');
     expect(pulseDataGridModelSource).toContain('export const isPulseDataGridInteractiveTarget');
     expect(pulseDataGridModelSource).toContain('target.closest(');
     expect(tableSource).toContain('customDividePattern');

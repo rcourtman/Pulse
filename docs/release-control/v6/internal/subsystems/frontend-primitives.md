@@ -194,7 +194,10 @@ work extends shared components instead of creating new local variants.
    `frontend-modern/src/components/shared/Table.tsx` must keep touch-scroll
    behavior on classes and shared CSS in `frontend-modern/src/index.css`
    instead of reintroducing inline `style=` attributes for overflow or mobile
-   scroll behavior.
+   scroll behavior. `frontend-modern/src/components/shared/PulseDataGrid.tsx`
+   inherits that same boundary: shared data-grid shells must route scrollbar
+   hiding and table-width sizing through shared classes plus HTML attributes,
+   not inline overflow or min-width styles.
 3. Add feature-specific presentation only when no shared primitive should own it
 4. Add guardrail tests when a new shared pattern is introduced
 5. Keep shared platform-connections shell state on the reusable settings boundary: `frontend-modern/src/components/Settings/useSettingsInfrastructurePanelProps.ts`, `frontend-modern/src/components/Settings/InfrastructurePlatformConnectionsSummaryCard.tsx`, and `frontend-modern/src/components/Settings/PlatformConnectionsWorkspace.tsx` must continue to derive provider counts, availability, and shared subtab copy from one infrastructure-settings source instead of creating provider-local summary fetches or VMware-only shell vocabulary.

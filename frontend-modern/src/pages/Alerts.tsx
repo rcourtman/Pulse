@@ -391,10 +391,7 @@ export function Alerts() {
             <Show when={flatTabs().length > 0}>
               <div class="lg:hidden border-b border-border">
                 <div class="p-1">
-                  <div
-                    class="flex rounded-md bg-surface-hover p-0.5 w-full overflow-x-auto"
-                    style="-webkit-overflow-scrolling: touch;"
-                  >
+                  <div class="flex w-full overflow-x-auto rounded-md bg-surface-hover p-0.5 touch-scroll scrollbar-hide">
                     <For each={flatTabs()}>
                       {(tab) => (
                         <button

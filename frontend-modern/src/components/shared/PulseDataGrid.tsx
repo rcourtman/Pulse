@@ -9,6 +9,7 @@ import {
 } from '@/components/shared/Table';
 import {
   getPulseDataGridAlignClass,
+  getPulseDataGridWidthAttr,
   isPulseDataGridInteractiveTarget,
   type PulseDataGridProps,
 } from './pulseDataGridModel';
@@ -41,17 +42,8 @@ export function PulseDataGrid<T>(props: PulseDataGridProps<T>) {
 
   return (
     <div class={`overflow-hidden rounded-md border border-border bg-surface ${local.class || ''}`}>
-      <div
-        class="overflow-x-auto"
-        style={{
-          '-webkit-overflow-scrolling': 'touch',
-          'scrollbar-width': 'none', // Firefox
-          '-ms-overflow-style': 'none', // IE 10+
-        }}
-      >
-        <style>{`.overflow-x-auto::-webkit-scrollbar { display: none; }`}</style>
-
-        <Table class="w-full border-collapse" style={{ 'min-width': grid.effectiveMinWidth() }}>
+      <div class="overflow-x-auto touch-scroll scrollbar-hide">
+        <Table class="w-full border-collapse" width={grid.effectiveWidthAttr()}>
           <TableHeader class="bg-surface-alt border-b border-border">
             <TableRow>
               <For each={local.columns}>
@@ -63,7 +55,7 @@ export function PulseDataGrid<T>(props: PulseDataGridProps<T>) {
                                             ${getPulseDataGridAlignClass(col.align)}
                                             ${col.hiddenOnMobile ? 'hidden sm:table-cell' : ''}
                                         `}
-                    style={col.width ? { width: col.width } : {}}
+                    width={getPulseDataGridWidthAttr(col.width)}
                   >
                     {col.label}
                   </TableHead>

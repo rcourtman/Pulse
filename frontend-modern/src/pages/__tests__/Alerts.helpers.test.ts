@@ -227,6 +227,9 @@ describe('tab path helpers', () => {
       "import { HistoryTab } from '@/features/alerts/tabs/HistoryTab';",
     );
     expect(alertsPageSource).toContain('getAlertsTabGroups({ readOnly: readOnlySession() })');
+    expect(alertsPageSource).toContain('touch-scroll');
+    expect(alertsPageSource).toContain('scrollbar-hide');
+    expect(alertsPageSource).not.toContain('style="-webkit-overflow-scrolling: touch;"');
     expect(alertsPageSource).not.toContain('const loadAlertConfiguration = async');
     expect(alertsPageSource).not.toContain('const FACTORY_GUEST_DEFAULTS =');
     expect(alertsConfigurationSurfaceSource).toContain(

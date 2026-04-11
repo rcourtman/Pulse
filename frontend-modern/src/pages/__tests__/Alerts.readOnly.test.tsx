@@ -2,6 +2,7 @@ import { cleanup, render, screen, waitFor } from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { Alerts } from '@/pages/Alerts';
+import alertsPageSource from '@/pages/Alerts.tsx?raw';
 
 const navigateSpy = vi.hoisted(() => vi.fn());
 const presentationPolicyIsReadOnlyMock = vi.hoisted(() => vi.fn(() => false));
@@ -117,6 +118,12 @@ describe('Alerts read-only presentation', () => {
   });
 
   afterEach(() => cleanup());
+
+  it('keeps the mobile tab shell on shared scroll classes instead of inline styles', () => {
+    expect(alertsPageSource).toContain('touch-scroll');
+    expect(alertsPageSource).toContain('scrollbar-hide');
+    expect(alertsPageSource).not.toContain('style="-webkit-overflow-scrolling: touch;"');
+  });
 
   it('hides alerts management affordances in read-only sessions', async () => {
     presentationPolicyIsReadOnlyMock.mockReturnValue(true);

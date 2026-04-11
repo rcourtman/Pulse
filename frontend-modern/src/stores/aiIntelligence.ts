@@ -339,6 +339,11 @@ export const aiIntelligenceStore = {
   async loadRemediationPlans() {
     setPlansLoading(true);
     setPlansError(null);
+    if (presentationPolicyIsDemoMode()) {
+      setRemediationPlans([]);
+      setPlansLoading(false);
+      return;
+    }
     try {
       const resp = await AIAPI.getRemediationPlans();
       setRemediationPlans(resp?.plans || []);

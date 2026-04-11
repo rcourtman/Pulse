@@ -1,7 +1,11 @@
 import { createEffect, createMemo } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
-import type { PulseDataGridProps, PulseDataGridStableRow } from './pulseDataGridModel';
+import {
+  getPulseDataGridWidthAttr,
+  type PulseDataGridProps,
+  type PulseDataGridStableRow,
+} from './pulseDataGridModel';
 
 type PulseDataGridStateOptions<T> = Pick<
   PulseDataGridProps<T>,
@@ -19,6 +23,8 @@ export function usePulseDataGridState<T>(options: PulseDataGridStateOptions<T>) 
     return options.desktopMinWidth ?? '800px';
   });
 
+  const effectiveWidthAttr = createMemo(() => getPulseDataGridWidthAttr(effectiveMinWidth()));
+
   createEffect(() => {
     setStableRows(
       reconcile(
@@ -33,6 +39,7 @@ export function usePulseDataGridState<T>(options: PulseDataGridStateOptions<T>) 
 
   return {
     effectiveMinWidth,
+    effectiveWidthAttr,
     stableRows,
   };
 }

@@ -135,6 +135,11 @@ page must behave as a reporting surface: overview/history remain available,
 alert activation controls stay hidden, configuration tabs must not render or
 remain navigable, and the overview empty state must not tell public demo users
 to toggle alerting back on when demo mode already blocks write requests.
+The alerts page also owns its mobile tab-shell presentation directly.
+`frontend-modern/src/pages/Alerts.tsx` may keep alert-specific active and
+disabled tab styling, but horizontal tab scrolling must route through the
+shared `touch-scroll` / `scrollbar-hide` class contract instead of writing
+inline overflow styles that break CSP on the public shell.
 That shared alert presentation boundary now also has explicit alerts ownership.
 `frontend-modern/src/utils/alertWebhookPresentation.ts` is the canonical owner
 for webhook setup copy, service labels, mention-help phrasing, custom-field

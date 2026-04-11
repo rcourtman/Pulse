@@ -4,6 +4,7 @@ export interface TableProps extends JSX.HTMLAttributes<HTMLTableElement> {
   wrapperClass?: string;
   wrapperProps?: JSX.HTMLAttributes<HTMLDivElement>;
   wrapperRef?: (el: HTMLDivElement) => void;
+  width?: string | number;
 }
 
 export function Table(props: TableProps) {
@@ -75,6 +76,7 @@ export function TableRow(props: TableRowProps) {
 export type TableHeadProps = JSX.HTMLAttributes<HTMLTableCellElement> & {
   colSpan?: number;
   colspan?: number;
+  width?: string | number;
 };
 
 export function TableHead(props: TableHeadProps) {
@@ -92,6 +94,7 @@ export function TableHead(props: TableHeadProps) {
 export type TableCellProps = JSX.HTMLAttributes<HTMLTableCellElement> & {
   colSpan?: number;
   colspan?: number;
+  width?: string | number;
 };
 
 export function TableCell(props: TableCellProps) {

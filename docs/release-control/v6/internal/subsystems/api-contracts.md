@@ -242,7 +242,8 @@ when the disabled candidate no longer counts toward monitored-system capacity.
     probes, or hostname heuristics. Shared browser stores that consume
     Patrol approvals must also fail closed from that resolved demo policy at
     the store boundary, so public demo shells do not probe `/api/ai/approvals`
-    after the read-only demo posture is already known.
+    or `/api/ai/remediation/plans` after the read-only demo posture is already
+    known.
 33. Keep public demo commercial posture middleware-owned on that same shared
     API contract. `internal/api/demo_middleware.go`,
     `internal/api/demo_mode_commercial.go`,

@@ -474,6 +474,12 @@ describe('aiFindingPresentation', () => {
       expect(findingsPanelSource).toContain('manualControls.dismiss');
     });
 
+    it('loads remediation artifacts through the shared Patrol store instead of probing the API directly', () => {
+      expect(findingsPanelSource).toContain('aiIntelligenceStore.loadRemediationPlans()');
+      expect(findingsPanelSource).toContain('aiIntelligenceStore.remediationPlans');
+      expect(findingsPanelSource).not.toContain('AIAPI.getRemediationPlans()');
+    });
+
     it('routes same-severity ordering through the shared patrol runtime sort helper', () => {
       expect(findingsPanelSource).toContain('getFindingActiveRuntimeSortOrder(a)');
       expect(findingsPanelSource).toContain('getFindingActiveRuntimeSortOrder(b)');

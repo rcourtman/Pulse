@@ -155,6 +155,13 @@ That same shared policy now also owns Patrol approval polling posture.
 empty queue from the shared store boundary itself, so dashboard and Patrol
 shells do not probe `/api/ai/approvals` after the read-only demo policy has
 resolved.
+That same store-owned demo boundary also covers remediation artifacts.
+`frontend-modern/src/stores/aiIntelligence.ts` must fail
+`loadRemediationPlans()` closed in public demo mode and
+`frontend-modern/src/components/AI/FindingsPanel.tsx` must consume
+`aiIntelligenceStore.remediationPlans` instead of issuing its own
+`AIAPI.getRemediationPlans()` read, so the public Patrol page does not trigger
+`/api/ai/remediation/plans` paywall probes after demo posture has resolved.
 That same posture split now also centralizes Patrol commercial bootstrap.
 `frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts` and
 `frontend-modern/src/components/patrol/ApprovalSection.tsx` may consume the
