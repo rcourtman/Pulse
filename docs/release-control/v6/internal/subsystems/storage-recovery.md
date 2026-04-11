@@ -99,6 +99,11 @@ querying, and the operator-facing storage health presentation layer.
    recovery consumers must also wait for the first canonical REST snapshot
    instead of painting thinner websocket transport rows first and then
    rehydrating into a richer canonical shape a moment later.
+   Shared chart transports in `internal/api/router.go` must follow the same
+   rule in mock mode: `/api/storage-charts` and adjacent infrastructure chart
+   payloads must read through `GetUnifiedReadStateOrSnapshot()` so storage and
+   recovery consumers stay aligned with the canonical mock unified snapshot
+   instead of slipping onto the live store graph.
    Storage and recovery consumers must also inherit the hook's canonical
    `ResourceType` normalization for route/query filters, so storage subtypes
    such as `physical_disk` stay on the same cache-backed snapshot instead of

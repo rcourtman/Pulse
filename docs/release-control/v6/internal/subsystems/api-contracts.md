@@ -281,6 +281,14 @@ when the disabled candidate no longer counts toward monitored-system capacity.
     through `/api/resources/dashboard-summary` instead of reconstructing that
     shell from the paginated `/api/resources` list payload or guessing how
     dashboard trend identities map onto infrastructure chart series.
+37. Keep mock and demo chart reads on the same canonical unified snapshot as
+    the rest of the API surface. `internal/api/router.go`,
+    `internal/api/contract_test.go`, and chart consumers must route
+    `/api/charts`, `/api/charts/infrastructure`, and `/api/storage-charts`
+    through `GetUnifiedReadStateOrSnapshot()` whenever mock or demo
+    presentation is active, so VMware, storage, and infrastructure series stay
+    aligned with `/api/resources` and `/api/state` instead of drifting onto the
+    live store-backed graph.
 
 ## Forbidden Paths
 
@@ -2592,6 +2600,12 @@ That same resource-handler seed contract must also stay on canonical unified
 resource ownership for tenant-scoped requests: once a tenant state provider
 implements `UnifiedResourceSnapshotForTenant`, `/api/resources` may not fall
 back to raw tenant `StateSnapshot` seeding when that unified seed is empty.
+That same mock/runtime contract now also governs chart payloads under
+`internal/api/router.go`: when demo or mock presentation is enabled,
+`/api/charts`, `/api/charts/infrastructure`, and `/api/storage-charts` must
+read through `GetUnifiedReadStateOrSnapshot()` so chart payloads use the same
+canonical mock unified-resource snapshot as `/api/resources` and `/api/state`
+instead of drifting onto the live store-backed graph.
 Tenant AI service wiring now follows that same canonical ownership rule:
 `internal/api/ai_handlers.go` may provide tenant `ReadState` and
 tenant-scoped unified-resource providers, but it must not mint tenant snapshot

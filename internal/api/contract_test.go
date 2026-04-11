@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -48,6 +49,15 @@ type resourceContractSnapshot struct {
 	ID   string
 	Name string
 	Type string
+}
+
+func sortedVMChartKeys(values map[string]VMChartData) []string {
+	keys := make([]string, 0, len(values))
+	for key := range values {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
 }
 
 type contractCapturingStreamingProvider struct {
@@ -1036,6 +1046,74 @@ func TestContract_InfrastructureChartsHonorExplicitMetricFilters(t *testing.T) {
 	}
 	if got := len(decoded.AgentData["agent-contract-1"]); got != 2 {
 		t.Fatalf("expected agent payload to contain only requested metrics, got %d entries", got)
+	}
+}
+
+func TestContract_MockChartRoutesUseCanonicalMockUnifiedReadStateForVMwareHosts(t *testing.T) {
+	prevMock := mock.IsMockEnabled()
+	mock.SetEnabled(true)
+	t.Cleanup(func() { mock.SetEnabled(prevMock) })
+
+	fixtures := vmware.DefaultFixtures()
+	if len(fixtures.Hosts) == 0 {
+		t.Fatal("expected default VMware fixtures to include at least one host")
+	}
+	expectedHostID := vmware.SourceID(fixtures.ConnectionID, "host", fixtures.Hosts[0].Host)
+
+	monitor, state, _ := newTestMonitor(t)
+	state.Hosts = []models.Host{{
+		ID:       "live-store-host-1",
+		Hostname: "live-store-host-1",
+		CPUUsage: 11.0,
+		Memory:   models.Memory{Usage: 22.0},
+		Disks:    []models.Disk{{Usage: 33.0}},
+		Status:   "online",
+	}}
+	syncTestResourceStore(t, monitor, state)
+
+	router := &Router{monitor: monitor}
+	for _, path := range []string{"/api/charts?range=5m", "/api/charts/infrastructure?range=5m"} {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		rec := httptest.NewRecorder()
+
+		switch path {
+		case "/api/charts?range=5m":
+			router.handleCharts(rec, req)
+		case "/api/charts/infrastructure?range=5m":
+			router.handleInfrastructureCharts(rec, req)
+		default:
+			t.Fatalf("unexpected path %q", path)
+		}
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("%s status = %d, body=%s", path, rec.Code, rec.Body.String())
+		}
+
+		agentData := map[string]VMChartData{}
+		if path == "/api/charts?range=5m" {
+			var decoded ChartResponse
+			if err := json.Unmarshal(rec.Body.Bytes(), &decoded); err != nil {
+				t.Fatalf("decode %s: %v", path, err)
+			}
+			agentData = decoded.AgentData
+		} else {
+			var decoded InfrastructureChartsResponse
+			if err := json.Unmarshal(rec.Body.Bytes(), &decoded); err != nil {
+				t.Fatalf("decode %s: %v", path, err)
+			}
+			agentData = decoded.AgentData
+		}
+
+		series, ok := agentData[expectedHostID]
+		if !ok {
+			t.Fatalf("%s missing VMware host %q; got keys=%v", path, expectedHostID, sortedVMChartKeys(agentData))
+		}
+		if len(series["cpu"]) == 0 {
+			t.Fatalf("%s expected VMware host %q cpu series", path, expectedHostID)
+		}
+		if _, ok := agentData["live-store-host-1"]; ok {
+			t.Fatalf("%s unexpectedly used live store-only host instead of canonical mock snapshot; keys=%v", path, sortedVMChartKeys(agentData))
+		}
 	}
 }
 

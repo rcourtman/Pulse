@@ -158,6 +158,12 @@ an add-only capacity posture.
    snapshot must carry the same canonical resource types and display names as
    `/api/resources` instead of briefly showing legacy host aliases before the
    first websocket-backed refresh lands.
+   Chart-adjacent lifecycle reads in shared `internal/api/router.go` must obey
+   that same mock-aware unified snapshot boundary: demo `/api/charts` and
+   `/api/charts/infrastructure` payloads may not bypass
+   `GetUnifiedReadStateOrSnapshot()` and silently drop VMware-backed host rows
+   that the canonical mock estate already published through `/api/state` and
+   `/api/resources`.
    Persisted legacy hosted quickstart model IDs are therefore not lifecycle
    truth either: when shared settings helpers load or save historical
    quickstart values, they must normalize them back to

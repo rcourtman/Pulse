@@ -4973,7 +4973,7 @@ func (r *Router) handleCharts(w http.ResponseWriter, req *http.Request) {
 		http.Error(w, "Tenant monitor is not available", http.StatusInternalServerError)
 		return
 	}
-	readState := monitor.GetUnifiedReadState()
+	readState := monitor.GetUnifiedReadStateOrSnapshot()
 	if readState == nil {
 		http.Error(w, "State unavailable", http.StatusInternalServerError)
 		return
@@ -6560,7 +6560,7 @@ func (r *Router) handleInfrastructureCharts(w http.ResponseWriter, req *http.Req
 		http.Error(w, "Tenant monitor is not available", http.StatusInternalServerError)
 		return
 	}
-	readState := monitor.GetUnifiedReadState()
+	readState := monitor.GetUnifiedReadStateOrSnapshot()
 	if readState == nil {
 		http.Error(w, "State unavailable", http.StatusInternalServerError)
 		return
@@ -7821,7 +7821,7 @@ func (r *Router) handleStorageCharts(w http.ResponseWriter, req *http.Request) {
 		http.Error(w, "Monitor not available", http.StatusInternalServerError)
 		return
 	}
-	readState := monitor.GetUnifiedReadState()
+	readState := monitor.GetUnifiedReadStateOrSnapshot()
 	if readState == nil {
 		http.Error(w, "State unavailable", http.StatusInternalServerError)
 		return

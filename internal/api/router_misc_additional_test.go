@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -14,6 +15,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+	"github.com/rcourtman/pulse-go-rewrite/internal/vmware"
 )
 
 func newTestMonitor(t *testing.T) (*monitoring.Monitor, *models.State, *monitoring.MetricsHistory) {
@@ -37,6 +39,15 @@ func syncTestResourceStore(t *testing.T, monitor *monitoring.Monitor, state *mod
 	adapter := unifiedresources.NewMonitorAdapter(nil)
 	adapter.PopulateFromSnapshot(state.GetSnapshot())
 	setUnexportedField(t, monitor, "resourceStore", monitoring.ResourceStoreInterface(adapter))
+}
+
+func mapKeys[V any](values map[string]V) []string {
+	keys := make([]string, 0, len(values))
+	for key := range values {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
 }
 
 func TestNormalizeMetricsHistoryResourceType_ContainerCanonicalTypes(t *testing.T) {
@@ -500,6 +511,55 @@ func TestHandleCharts_StatsDebugMetadata(t *testing.T) {
 	}
 }
 
+func TestHandleCharts_UsesCanonicalMockUnifiedReadStateForVMwareHosts(t *testing.T) {
+	prevMock := mock.IsMockEnabled()
+	mock.SetEnabled(true)
+	t.Cleanup(func() { mock.SetEnabled(prevMock) })
+
+	fixtures := vmware.DefaultFixtures()
+	if len(fixtures.Hosts) == 0 {
+		t.Fatal("expected default VMware fixtures to include at least one host")
+	}
+	expectedHostID := vmware.SourceID(fixtures.ConnectionID, "host", fixtures.Hosts[0].Host)
+
+	monitor, state, _ := newTestMonitor(t)
+	state.Hosts = []models.Host{{
+		ID:       "live-store-host-1",
+		Hostname: "live-store-host-1",
+		CPUUsage: 11.0,
+		Memory:   models.Memory{Usage: 22.0},
+		Disks:    []models.Disk{{Usage: 33.0}},
+		Status:   "online",
+	}}
+	syncTestResourceStore(t, monitor, state)
+
+	router := &Router{monitor: monitor}
+	req := httptest.NewRequest(http.MethodGet, "/api/charts?range=5m", nil)
+	rec := httptest.NewRecorder()
+
+	router.handleCharts(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusOK, rec.Code, rec.Body.String())
+	}
+
+	var decoded ChartResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &decoded); err != nil {
+		t.Fatalf("unmarshal ChartResponse: %v", err)
+	}
+
+	vmwareSeries, ok := decoded.AgentData[expectedHostID]
+	if !ok {
+		t.Fatalf("expected VMware host %q in full charts payload, got keys=%v", expectedHostID, mapKeys(decoded.AgentData))
+	}
+	if len(vmwareSeries["cpu"]) == 0 {
+		t.Fatalf("expected VMware host %q cpu series", expectedHostID)
+	}
+	if _, ok := decoded.AgentData["live-store-host-1"]; ok {
+		t.Fatalf("expected mock-aware full charts to ignore live store-only host, got keys=%v", mapKeys(decoded.AgentData))
+	}
+}
+
 func TestHandleInfrastructureCharts_Lightweight(t *testing.T) {
 	monitor, state, _ := newTestMonitor(t)
 	state.Nodes = []models.Node{{
@@ -643,6 +703,55 @@ func TestHandleInfrastructureCharts_MetricFilter(t *testing.T) {
 	}
 	if _, ok := decoded.AgentData["host-1"]["disk"]; ok {
 		t.Fatalf("expected disk series to be filtered out of agent payload")
+	}
+}
+
+func TestHandleInfrastructureCharts_UsesCanonicalMockUnifiedReadStateForVMwareHosts(t *testing.T) {
+	prevMock := mock.IsMockEnabled()
+	mock.SetEnabled(true)
+	t.Cleanup(func() { mock.SetEnabled(prevMock) })
+
+	fixtures := vmware.DefaultFixtures()
+	if len(fixtures.Hosts) == 0 {
+		t.Fatal("expected default VMware fixtures to include at least one host")
+	}
+	expectedHostID := vmware.SourceID(fixtures.ConnectionID, "host", fixtures.Hosts[0].Host)
+
+	monitor, state, _ := newTestMonitor(t)
+	state.Hosts = []models.Host{{
+		ID:       "live-store-host-1",
+		Hostname: "live-store-host-1",
+		CPUUsage: 11.0,
+		Memory:   models.Memory{Usage: 22.0},
+		Disks:    []models.Disk{{Usage: 33.0}},
+		Status:   "online",
+	}}
+	syncTestResourceStore(t, monitor, state)
+
+	router := &Router{monitor: monitor}
+	req := httptest.NewRequest(http.MethodGet, "/api/charts/infrastructure?range=5m", nil)
+	rec := httptest.NewRecorder()
+
+	router.handleInfrastructureCharts(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusOK, rec.Code, rec.Body.String())
+	}
+
+	var decoded InfrastructureChartsResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &decoded); err != nil {
+		t.Fatalf("unmarshal InfrastructureChartsResponse: %v", err)
+	}
+
+	vmwareSeries, ok := decoded.AgentData[expectedHostID]
+	if !ok {
+		t.Fatalf("expected VMware host %q in infrastructure charts, got keys=%v", expectedHostID, mapKeys(decoded.AgentData))
+	}
+	if len(vmwareSeries["cpu"]) == 0 {
+		t.Fatalf("expected VMware host %q cpu series", expectedHostID)
+	}
+	if _, ok := decoded.AgentData["live-store-host-1"]; ok {
+		t.Fatalf("expected mock-aware infrastructure charts to ignore live store-only host, got keys=%v", mapKeys(decoded.AgentData))
 	}
 }
 
