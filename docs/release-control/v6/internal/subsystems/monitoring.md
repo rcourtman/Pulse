@@ -170,6 +170,11 @@ The mock update loop must keep provider-backed TrueNAS and VMware records plus
 legacy PBS and PMG summaries on current `LastSeen` and health state each tick,
 so long-lived infrastructure, workloads, storage, and recovery demos do not
 decay into synthetic stale-state warnings while mock mode remains enabled.
+That same mock-runtime boundary also owns update cadence. Demo and preview
+environments may slow the configured tick interval to reduce visual churn, but
+that cadence must flow through the shared mock update loop and smoothing model
+rather than through page-local polling suppression or demo-only frontend
+special cases.
 That same demo-owned mock boundary also owns chart continuity. Seeded mock
 history and runtime mock sampling must be projections of the same canonical
 metric timeline, so changing chart ranges feels like zooming one history

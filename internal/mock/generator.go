@@ -50,7 +50,10 @@ type MockConfig struct {
 	RandomMetrics            bool
 	HighLoadNodes            []string // Specific nodes to simulate high load
 	StoppedPercent           float64  // Fraction of guests that should be stopped (0.0-1.0)
+	UpdateInterval           time.Duration
 }
+
+const defaultMockUpdateInterval = 2 * time.Second
 
 const (
 	dockerConnectionPrefix     = "docker-"
@@ -71,6 +74,7 @@ var DefaultConfig = MockConfig{
 	K8sDeploymentsPerCluster: 4,
 	RandomMetrics:            true,
 	StoppedPercent:           0.06,
+	UpdateInterval:           defaultMockUpdateInterval,
 }
 
 var appNames = []string{
@@ -1584,10 +1588,7 @@ func updateMockKubernetesPodUsage(
 	pod.NetInRate = clampFloat(smoothMetricToward(pod.NetInRate, targetNetIn, 0.36), 4*1024, 180*1024*1024)
 	pod.NetOutRate = clampFloat(smoothMetricToward(pod.NetOutRate, targetNetOut, 0.36), 4*1024, 150*1024*1024)
 
-	seconds := updateInterval.Seconds()
-	if seconds <= 0 {
-		seconds = 2
-	}
+	seconds := currentMockUpdateStepSeconds()
 	if pod.NetworkRxBytes <= 0 {
 		seedSeconds := int64(180 + (mockStableHash64(seedID, "rx-seed") % 1800))
 		pod.NetworkRxBytes = int64(pod.NetInRate * float64(seedSeconds))
@@ -1787,7 +1788,7 @@ func smoothMetricToward(current, target, weight float64) float64 {
 	if weight <= 0 || weight > 1 {
 		weight = 0.25
 	}
-	weight = normalizeMockBlendWeight(weight, updateInterval, time.Minute)
+	weight = normalizeMockBlendWeight(weight, currentMockUpdateInterval(), time.Minute)
 	if current <= 0 {
 		current = target * (0.68 + rand.Float64()*0.22)
 	}
@@ -3504,7 +3505,7 @@ func naturalMetricUpdate(current, min, max float64, resourceClass, resourceID, m
 	if alpha > 0.5 {
 		alpha = 0.5
 	}
-	alpha = normalizeMockBlendWeight(alpha, updateInterval, time.Minute)
+	alpha = normalizeMockBlendWeight(alpha, currentMockUpdateInterval(), time.Minute)
 	newValue := current + alpha*(ideal-current)
 
 	return clampFloat(newValue, min, max)
@@ -4732,10 +4733,7 @@ func updateFixtureStateMetricsAt(data *models.StateSnapshot, config MockConfig, 
 	updateHosts(data, config, refreshNow)
 	syncMockKubernetesNodeHosts(data)
 
-	step := int64(updateInterval.Seconds())
-	if step <= 0 {
-		step = 2
-	}
+	step := currentMockUpdateStepInt64()
 
 	for i := range data.PBSInstances {
 		inst := &data.PBSInstances[i]
@@ -4932,7 +4930,7 @@ func updateFixtureStateMetricsAt(data *models.StateSnapshot, config MockConfig, 
 		if len(inst.Nodes) > 0 {
 			for j := range inst.Nodes {
 				if inst.Nodes[j].Status == "online" {
-					inst.Nodes[j].Uptime += int64(updateInterval.Seconds())
+					inst.Nodes[j].Uptime += currentMockUpdateStepInt64()
 				}
 			}
 		}
@@ -5016,10 +5014,7 @@ func updateDockerHosts(data *models.StateSnapshot, config MockConfig, now time.T
 	if len(data.DockerHosts) == 0 {
 		return
 	}
-	step := int64(updateInterval.Seconds())
-	if step <= 0 {
-		step = 2
-	}
+	step := currentMockUpdateStepInt64()
 
 	for i := range data.DockerHosts {
 		host := &data.DockerHosts[i]
@@ -5353,10 +5348,7 @@ func updateHosts(data *models.StateSnapshot, config MockConfig, now time.Time) {
 	if len(data.Hosts) == 0 {
 		return
 	}
-	step := int64(updateInterval.Seconds())
-	if step <= 0 {
-		step = 2
-	}
+	step := currentMockUpdateStepInt64()
 
 	for i := range data.Hosts {
 		host := &data.Hosts[i]

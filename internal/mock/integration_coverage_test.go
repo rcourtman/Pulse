@@ -23,6 +23,7 @@ var mockEnvKeys = []string{
 	"PULSE_MOCK_K8S_DEPLOYMENTS",
 	"PULSE_MOCK_RANDOM_METRICS",
 	"PULSE_MOCK_STOPPED_PERCENT",
+	"PULSE_MOCK_UPDATE_INTERVAL",
 }
 
 func resetMockIntegrationState(t *testing.T) {
@@ -33,6 +34,7 @@ func resetMockIntegrationState(t *testing.T) {
 	mockGraph = emptyFixtureGraph()
 	mockConfig = DefaultConfig
 	dataMu.Unlock()
+	setMockUpdateInterval(DefaultConfig.UpdateInterval)
 	enabled.Store(false)
 
 	for _, key := range mockEnvKeys {
@@ -45,6 +47,7 @@ func resetMockIntegrationState(t *testing.T) {
 		mockGraph = emptyFixtureGraph()
 		mockConfig = DefaultConfig
 		dataMu.Unlock()
+		setMockUpdateInterval(DefaultConfig.UpdateInterval)
 		enabled.Store(false)
 		for _, key := range mockEnvKeys {
 			_ = os.Unsetenv(key)
@@ -67,6 +70,7 @@ func TestLoadMockConfigAppliesValidEnvironmentOverrides(t *testing.T) {
 	t.Setenv("PULSE_MOCK_K8S_DEPLOYMENTS", "9")
 	t.Setenv("PULSE_MOCK_RANDOM_METRICS", "false")
 	t.Setenv("PULSE_MOCK_STOPPED_PERCENT", "35")
+	t.Setenv("PULSE_MOCK_UPDATE_INTERVAL", "15s")
 
 	cfg := LoadMockConfig()
 
@@ -106,6 +110,9 @@ func TestLoadMockConfigAppliesValidEnvironmentOverrides(t *testing.T) {
 	if cfg.StoppedPercent != 0.35 {
 		t.Fatalf("expected stopped percent 0.35, got %f", cfg.StoppedPercent)
 	}
+	if cfg.UpdateInterval != 15*time.Second {
+		t.Fatalf("expected update interval 15s, got %s", cfg.UpdateInterval)
+	}
 }
 
 func TestLoadMockConfigIgnoresInvalidOrOutOfRangeValues(t *testing.T) {
@@ -122,6 +129,7 @@ func TestLoadMockConfigIgnoresInvalidOrOutOfRangeValues(t *testing.T) {
 	t.Setenv("PULSE_MOCK_K8S_PODS", "bad")
 	t.Setenv("PULSE_MOCK_K8S_DEPLOYMENTS", "-5")
 	t.Setenv("PULSE_MOCK_STOPPED_PERCENT", "not-a-number")
+	t.Setenv("PULSE_MOCK_UPDATE_INTERVAL", "bad")
 
 	cfg := LoadMockConfig()
 
@@ -157,6 +165,9 @@ func TestLoadMockConfigIgnoresInvalidOrOutOfRangeValues(t *testing.T) {
 	}
 	if cfg.StoppedPercent != DefaultConfig.StoppedPercent {
 		t.Fatalf("expected default stopped percent, got %f", cfg.StoppedPercent)
+	}
+	if cfg.UpdateInterval != DefaultConfig.UpdateInterval {
+		t.Fatalf("expected default update interval %s, got %s", DefaultConfig.UpdateInterval, cfg.UpdateInterval)
 	}
 }
 

@@ -17,7 +17,7 @@ func TestSetEnabledDisableDoesNotDeadlockWhenUpdateIsBlocked(t *testing.T) {
 	SetEnabled(true)
 
 	dataMu.Lock()
-	time.Sleep(updateInterval + 250*time.Millisecond)
+	time.Sleep(currentMockUpdateInterval() + 250*time.Millisecond)
 
 	done := make(chan struct{})
 	go func() {

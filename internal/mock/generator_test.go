@@ -164,8 +164,8 @@ func TestGenerateContainerStoppedPreservesConfiguredCapacity(t *testing.T) {
 
 func TestNormalizeMockBlendWeight_ComposesAcrossUpdateInterval(t *testing.T) {
 	perMinuteWeight := 0.22
-	perTickWeight := normalizeMockBlendWeight(perMinuteWeight, updateInterval, time.Minute)
-	compounded := 1 - math.Pow(1-perTickWeight, float64(time.Minute/updateInterval))
+	perTickWeight := normalizeMockBlendWeight(perMinuteWeight, defaultMockUpdateInterval, time.Minute)
+	compounded := 1 - math.Pow(1-perTickWeight, float64(time.Minute/defaultMockUpdateInterval))
 
 	if perTickWeight >= perMinuteWeight {
 		t.Fatalf("expected per-tick weight %.6f to be less than per-minute weight %.6f", perTickWeight, perMinuteWeight)

@@ -22,15 +22,15 @@ var (
 	mockGraph     = emptyFixtureGraph()
 	mockConfig    = DefaultConfig
 	enabled       atomic.Bool
+	updateEveryNS atomic.Int64
 	updateTicker  *time.Ticker
 	stopUpdatesCh chan struct{}
 	updateLoopWg  sync.WaitGroup
 )
 
-const updateInterval = 2 * time.Second
-
 func init() {
 	loadedConfig := normalizeMockConfig(LoadMockConfig())
+	setMockUpdateInterval(loadedConfig.UpdateInterval)
 	dataMu.Lock()
 	mockConfig = loadedConfig
 	dataMu.Unlock()
@@ -42,6 +42,33 @@ func init() {
 	if err := setEnabled(initialEnabled, true); err != nil {
 		log.Warn().Err(err).Msg("failed to enable mock mode at startup")
 	}
+}
+
+func setMockUpdateInterval(interval time.Duration) {
+	updateEveryNS.Store(int64(normalizeMockUpdateInterval(interval)))
+}
+
+func currentMockUpdateInterval() time.Duration {
+	if interval := time.Duration(updateEveryNS.Load()); interval > 0 {
+		return interval
+	}
+	return defaultMockUpdateInterval
+}
+
+func currentMockUpdateStepSeconds() float64 {
+	seconds := currentMockUpdateInterval().Seconds()
+	if seconds <= 0 {
+		return defaultMockUpdateInterval.Seconds()
+	}
+	return seconds
+}
+
+func currentMockUpdateStepInt64() int64 {
+	step := int64(currentMockUpdateStepSeconds())
+	if step <= 0 {
+		return int64(defaultMockUpdateInterval.Seconds())
+	}
+	return step
 }
 
 // IsMockEnabled returns whether mock mode is enabled.
@@ -142,6 +169,7 @@ func readMockEnv(name string) (string, bool) {
 func enableMockMode(config MockConfig, fromInit bool) {
 	config = normalizeMockConfig(config)
 	now := time.Now()
+	setMockUpdateInterval(config.UpdateInterval)
 
 	dataMu.Lock()
 	mockConfig = config
@@ -163,6 +191,7 @@ func enableMockMode(config MockConfig, fromInit bool) {
 		Int("k8s_deployments_per_cluster", config.K8sDeploymentsPerCluster).
 		Bool("random_metrics", config.RandomMetrics).
 		Float64("stopped_percent", config.StoppedPercent).
+		Str("update_interval", config.UpdateInterval.String()).
 		Msg("mock mode enabled")
 
 	if !fromInit {
@@ -190,7 +219,7 @@ func startUpdateLoop() {
 
 	stopUpdateLoopLocked()
 	stopCh := make(chan struct{})
-	ticker := time.NewTicker(updateInterval)
+	ticker := time.NewTicker(currentMockUpdateInterval())
 	stopUpdatesCh = stopCh
 	updateTicker = ticker
 
@@ -388,6 +417,17 @@ func LoadMockConfig() MockConfig {
 		}
 	}
 
+	if raw, ok := readMockEnv("PULSE_MOCK_UPDATE_INTERVAL"); ok {
+		interval, err := time.ParseDuration(raw)
+		if err != nil {
+			log.Warn().Err(err).Str("env", "PULSE_MOCK_UPDATE_INTERVAL").Str("value", raw).Msg("Invalid mock config value, using default")
+		} else if interval <= 0 {
+			log.Warn().Str("env", "PULSE_MOCK_UPDATE_INTERVAL").Str("value", raw).Msg("Invalid mock config value, expected duration > 0")
+		} else {
+			config.UpdateInterval = interval
+		}
+	}
+
 	return normalizeMockConfig(config)
 }
 
@@ -441,11 +481,17 @@ func SetMockConfig(cfg MockConfig) {
 	if normalized.StoppedPercent != cfg.StoppedPercent {
 		log.Warn().Float64("provided", cfg.StoppedPercent).Float64("applied", normalized.StoppedPercent).Msg("Normalized invalid mock StoppedPercent")
 	}
+	if normalized.UpdateInterval != cfg.UpdateInterval {
+		log.Warn().Str("provided", cfg.UpdateInterval.String()).Str("applied", normalized.UpdateInterval.String()).Msg("Normalized invalid mock UpdateInterval")
+	}
 
 	var configChanged bool
+	var restartTicker bool
 	dataMu.Lock()
 	configChanged = !mockConfigsEqual(mockConfig, normalized)
+	restartTicker = enabled.Load() && mockConfig.UpdateInterval != normalized.UpdateInterval
 	mockConfig = normalized
+	setMockUpdateInterval(normalized.UpdateInterval)
 	if configChanged && enabled.Load() {
 		mockGraph = buildFixtureGraph(normalized, time.Now())
 	}
@@ -469,7 +515,12 @@ func SetMockConfig(cfg MockConfig) {
 		Int("k8s_deployments_per_cluster", normalized.K8sDeploymentsPerCluster).
 		Bool("random_metrics", normalized.RandomMetrics).
 		Float64("stopped_percent", normalized.StoppedPercent).
+		Str("update_interval", normalized.UpdateInterval.String()).
 		Msg("Mock configuration updated")
+
+	if restartTicker {
+		startUpdateLoop()
+	}
 }
 
 // UpdateAlertSnapshots replaces the active and recently resolved alert lists used for mock mode.

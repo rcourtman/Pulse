@@ -3,6 +3,7 @@ package mock
 import (
 	"math"
 	"strings"
+	"time"
 	"unicode"
 )
 
@@ -22,6 +23,8 @@ const (
 
 	maxMockHighLoadNodes     = 256
 	maxMockHighLoadNodeChars = 128
+	minMockUpdateInterval    = time.Second
+	maxMockUpdateInterval    = 5 * time.Minute
 )
 
 func normalizeMockConfig(cfg MockConfig) MockConfig {
@@ -36,6 +39,7 @@ func normalizeMockConfig(cfg MockConfig) MockConfig {
 	cfg.K8sPodsPerCluster = clampInt(cfg.K8sPodsPerCluster, 0, maxMockK8sPodsPerCluster)
 	cfg.K8sDeploymentsPerCluster = clampInt(cfg.K8sDeploymentsPerCluster, 0, maxMockK8sDeploymentsPerCluster)
 	cfg.StoppedPercent = normalizeStoppedPercent(cfg.StoppedPercent)
+	cfg.UpdateInterval = normalizeMockUpdateInterval(cfg.UpdateInterval)
 	cfg.HighLoadNodes = normalizeHighLoadNodes(cfg.HighLoadNodes)
 
 	return cfg
@@ -53,7 +57,8 @@ func mockConfigsEqual(a, b MockConfig) bool {
 		a.K8sPodsPerCluster != b.K8sPodsPerCluster ||
 		a.K8sDeploymentsPerCluster != b.K8sDeploymentsPerCluster ||
 		a.RandomMetrics != b.RandomMetrics ||
-		a.StoppedPercent != b.StoppedPercent {
+		a.StoppedPercent != b.StoppedPercent ||
+		a.UpdateInterval != b.UpdateInterval {
 		return false
 	}
 	if len(a.HighLoadNodes) != len(b.HighLoadNodes) {
@@ -76,6 +81,19 @@ func normalizeStoppedPercent(v float64) float64 {
 	}
 	if v > 1 {
 		return 1
+	}
+	return v
+}
+
+func normalizeMockUpdateInterval(v time.Duration) time.Duration {
+	if v <= 0 {
+		return DefaultConfig.UpdateInterval
+	}
+	if v < minMockUpdateInterval {
+		return minMockUpdateInterval
+	}
+	if v > maxMockUpdateInterval {
+		return maxMockUpdateInterval
 	}
 	return v
 }

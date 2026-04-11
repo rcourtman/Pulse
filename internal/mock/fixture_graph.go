@@ -25,6 +25,7 @@ func emptyFixtureGraph() FixtureGraph {
 }
 
 func buildFixtureGraph(cfg MockConfig, now time.Time) FixtureGraph {
+	setMockUpdateInterval(cfg.UpdateInterval)
 	graph := FixtureGraph{
 		State:            buildFixtureState(cfg),
 		PlatformFixtures: defaultPlatformFixtures(),
@@ -50,6 +51,7 @@ func (g *FixtureGraph) UpdateMetrics(cfg MockConfig, now time.Time) {
 		return
 	}
 
+	setMockUpdateInterval(cfg.UpdateInterval)
 	applyDemoScenarioGraph(g, now)
 	syncMetricRoleRegistryFromGraph(*g)
 	updateFixtureStateMetricsAt(&g.State, cfg, now)

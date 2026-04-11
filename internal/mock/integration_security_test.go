@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestSetMockConfigNormalizesInvalidAndOversizedValues(t *testing.T) {
@@ -31,6 +32,7 @@ func TestSetMockConfigNormalizesInvalidAndOversizedValues(t *testing.T) {
 		K8sPodsPerCluster:        maxMockK8sPodsPerCluster + 1,
 		K8sDeploymentsPerCluster: maxMockK8sDeploymentsPerCluster + 1,
 		StoppedPercent:           10,
+		UpdateInterval:           10 * time.Minute,
 		HighLoadNodes:            []string{" pve1 ", "pve1", "", "pve2\n", overlong, "standalone1"},
 	})
 
@@ -84,6 +86,9 @@ func TestSetMockConfigNormalizesInvalidAndOversizedValues(t *testing.T) {
 	if cfg.StoppedPercent != 1 {
 		t.Fatalf("expected stopped percent to normalize to 1, got %f", cfg.StoppedPercent)
 	}
+	if cfg.UpdateInterval != maxMockUpdateInterval {
+		t.Fatalf("expected update interval to normalize to %s, got %s", maxMockUpdateInterval, cfg.UpdateInterval)
+	}
 
 	expectedHighLoadNodes := []string{"pve1", "pve2", "standalone1"}
 	if !reflect.DeepEqual(cfg.HighLoadNodes, expectedHighLoadNodes) {
@@ -103,6 +108,7 @@ func TestLoadMockConfigEnforcesUpperBoundsFromEnvironment(t *testing.T) {
 	t.Setenv("PULSE_MOCK_K8S_PODS", strconv.Itoa(maxMockK8sPodsPerCluster+500))
 	t.Setenv("PULSE_MOCK_K8S_DEPLOYMENTS", strconv.Itoa(maxMockK8sDeploymentsPerCluster+500))
 	t.Setenv("PULSE_MOCK_STOPPED_PERCENT", "250")
+	t.Setenv("PULSE_MOCK_UPDATE_INTERVAL", "10m")
 
 	cfg := LoadMockConfig()
 	if cfg.NodeCount != maxMockNodeCount {
@@ -141,6 +147,9 @@ func TestLoadMockConfigEnforcesUpperBoundsFromEnvironment(t *testing.T) {
 	}
 	if cfg.StoppedPercent != 1 {
 		t.Fatalf("expected stopped percent 1, got %f", cfg.StoppedPercent)
+	}
+	if cfg.UpdateInterval != maxMockUpdateInterval {
+		t.Fatalf("expected update interval %s, got %s", maxMockUpdateInterval, cfg.UpdateInterval)
 	}
 }
 

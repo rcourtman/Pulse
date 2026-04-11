@@ -1,6 +1,9 @@
 package mock
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 func TestLoadMockConfigInvalidValuesFallbackToDefaults(t *testing.T) {
 	t.Setenv("PULSE_MOCK_NODES", "-1")
@@ -15,6 +18,7 @@ func TestLoadMockConfigInvalidValuesFallbackToDefaults(t *testing.T) {
 	t.Setenv("PULSE_MOCK_K8S_DEPLOYMENTS", "nope")
 	t.Setenv("PULSE_MOCK_RANDOM_METRICS", "definitely")
 	t.Setenv("PULSE_MOCK_STOPPED_PERCENT", "nan%")
+	t.Setenv("PULSE_MOCK_UPDATE_INTERVAL", "later")
 
 	cfg := LoadMockConfig()
 
@@ -54,6 +58,9 @@ func TestLoadMockConfigInvalidValuesFallbackToDefaults(t *testing.T) {
 	if cfg.StoppedPercent != DefaultConfig.StoppedPercent {
 		t.Fatalf("StoppedPercent = %f, want default %f", cfg.StoppedPercent, DefaultConfig.StoppedPercent)
 	}
+	if cfg.UpdateInterval != DefaultConfig.UpdateInterval {
+		t.Fatalf("UpdateInterval = %s, want default %s", cfg.UpdateInterval, DefaultConfig.UpdateInterval)
+	}
 }
 
 func TestLoadMockConfigValidValuesOverrideDefaults(t *testing.T) {
@@ -69,6 +76,7 @@ func TestLoadMockConfigValidValuesOverrideDefaults(t *testing.T) {
 	t.Setenv("PULSE_MOCK_K8S_DEPLOYMENTS", "6")
 	t.Setenv("PULSE_MOCK_RANDOM_METRICS", "false")
 	t.Setenv("PULSE_MOCK_STOPPED_PERCENT", "35")
+	t.Setenv("PULSE_MOCK_UPDATE_INTERVAL", "15s")
 
 	cfg := LoadMockConfig()
 
@@ -107,5 +115,8 @@ func TestLoadMockConfigValidValuesOverrideDefaults(t *testing.T) {
 	}
 	if cfg.StoppedPercent != 0.35 {
 		t.Fatalf("StoppedPercent = %f, want 0.35", cfg.StoppedPercent)
+	}
+	if cfg.UpdateInterval != 15*time.Second {
+		t.Fatalf("UpdateInterval = %s, want 15s", cfg.UpdateInterval)
 	}
 }

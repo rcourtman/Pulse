@@ -1,6 +1,9 @@
 package mock
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 func TestLoadMockConfigRejectsInvalidValues(t *testing.T) {
 	t.Setenv("PULSE_MOCK_NODES", "0")
@@ -8,6 +11,7 @@ func TestLoadMockConfigRejectsInvalidValues(t *testing.T) {
 	t.Setenv("PULSE_MOCK_RANDOM_METRICS", "definitely")
 	t.Setenv("PULSE_MOCK_STOPPED_PERCENT", "150")
 	t.Setenv("PULSE_MOCK_DOCKER_HOSTS", "0")
+	t.Setenv("PULSE_MOCK_UPDATE_INTERVAL", "0s")
 
 	cfg := LoadMockConfig()
 
@@ -26,6 +30,9 @@ func TestLoadMockConfigRejectsInvalidValues(t *testing.T) {
 	}
 	if cfg.DockerHostCount != 0 {
 		t.Fatalf("expected DockerHostCount=0 from valid env override, got %d", cfg.DockerHostCount)
+	}
+	if cfg.UpdateInterval != DefaultConfig.UpdateInterval {
+		t.Fatalf("expected default UpdateInterval=%s, got %s", DefaultConfig.UpdateInterval, cfg.UpdateInterval)
 	}
 }
 
@@ -48,6 +55,7 @@ func TestSetMockConfigNormalizesInvalidValues(t *testing.T) {
 		K8sPodsPerCluster:        -8,
 		K8sDeploymentsPerCluster: -9,
 		StoppedPercent:           1.5,
+		UpdateInterval:           10 * time.Minute,
 	})
 
 	cfg := GetConfig()
@@ -62,6 +70,9 @@ func TestSetMockConfigNormalizesInvalidValues(t *testing.T) {
 	}
 	if cfg.StoppedPercent != 1.0 {
 		t.Fatalf("expected clamped StoppedPercent=1.0, got %f", cfg.StoppedPercent)
+	}
+	if cfg.UpdateInterval != maxMockUpdateInterval {
+		t.Fatalf("expected clamped UpdateInterval=%s, got %s", maxMockUpdateInterval, cfg.UpdateInterval)
 	}
 }
 

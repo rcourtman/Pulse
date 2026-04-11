@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -22,6 +23,7 @@ var mockConfigEnvKeys = []string{
 	"PULSE_MOCK_K8S_DEPLOYMENTS",
 	"PULSE_MOCK_RANDOM_METRICS",
 	"PULSE_MOCK_STOPPED_PERCENT",
+	"PULSE_MOCK_UPDATE_INTERVAL",
 }
 
 func TestLoadMockConfigLogsInvalidOverridesAndKeepsLegacyFallbacks(t *testing.T) {
@@ -30,6 +32,7 @@ func TestLoadMockConfigLogsInvalidOverridesAndKeepsLegacyFallbacks(t *testing.T)
 	t.Setenv("PULSE_MOCK_VMS_PER_NODE", "-2")
 	t.Setenv("PULSE_MOCK_RANDOM_METRICS", "sometimes")
 	t.Setenv("PULSE_MOCK_STOPPED_PERCENT", "not-a-percent")
+	t.Setenv("PULSE_MOCK_UPDATE_INTERVAL", "not-a-duration")
 
 	var buf bytes.Buffer
 	origLogger := log.Logger
@@ -52,6 +55,9 @@ func TestLoadMockConfigLogsInvalidOverridesAndKeepsLegacyFallbacks(t *testing.T)
 	if cfg.StoppedPercent != DefaultConfig.StoppedPercent {
 		t.Fatalf("expected StoppedPercent default %f, got %f", DefaultConfig.StoppedPercent, cfg.StoppedPercent)
 	}
+	if cfg.UpdateInterval != DefaultConfig.UpdateInterval {
+		t.Fatalf("expected UpdateInterval default %s, got %s", DefaultConfig.UpdateInterval, cfg.UpdateInterval)
+	}
 
 	logOutput := buf.String()
 	for _, envKey := range []string{
@@ -59,6 +65,7 @@ func TestLoadMockConfigLogsInvalidOverridesAndKeepsLegacyFallbacks(t *testing.T)
 		`"env":"PULSE_MOCK_VMS_PER_NODE"`,
 		`"env":"PULSE_MOCK_RANDOM_METRICS"`,
 		`"env":"PULSE_MOCK_STOPPED_PERCENT"`,
+		`"env":"PULSE_MOCK_UPDATE_INTERVAL"`,
 	} {
 		if !strings.Contains(logOutput, envKey) {
 			t.Fatalf("expected warning log to include %s, got %q", envKey, logOutput)
@@ -71,6 +78,7 @@ func TestLoadMockConfigAppliesValidOverrides(t *testing.T) {
 	t.Setenv("PULSE_MOCK_NODES", "7")
 	t.Setenv("PULSE_MOCK_RANDOM_METRICS", "true")
 	t.Setenv("PULSE_MOCK_STOPPED_PERCENT", "25")
+	t.Setenv("PULSE_MOCK_UPDATE_INTERVAL", "15s")
 
 	cfg := LoadMockConfig()
 
@@ -82,6 +90,9 @@ func TestLoadMockConfigAppliesValidOverrides(t *testing.T) {
 	}
 	if cfg.StoppedPercent != 0.25 {
 		t.Fatalf("expected StoppedPercent=0.25, got %f", cfg.StoppedPercent)
+	}
+	if cfg.UpdateInterval != 15*time.Second {
+		t.Fatalf("expected UpdateInterval=15s, got %s", cfg.UpdateInterval)
 	}
 }
 
