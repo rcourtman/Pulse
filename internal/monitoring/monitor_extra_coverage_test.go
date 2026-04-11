@@ -21,6 +21,8 @@ import (
 )
 
 func TestMonitor_GetConnectionStatuses_MockMode_Extra(t *testing.T) {
+	setMockSamplerTestEnv(t, time.Hour, 5*time.Minute)
+
 	m := &Monitor{
 		state:          models.NewState(),
 		alertManager:   alerts.NewManager(),
@@ -140,6 +142,8 @@ func TestMonitor_Cleanup_Extra(t *testing.T) {
 }
 
 func TestMonitor_SetMockMode_Advanced_Extra(t *testing.T) {
+	setMockSamplerTestEnv(t, time.Hour, 5*time.Minute)
+
 	m := &Monitor{
 		config: &config.Config{
 			DiscoveryEnabled: true,

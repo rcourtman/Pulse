@@ -360,6 +360,7 @@ func buildFixtureState(config MockConfig) models.StateSnapshot {
 
 	ensureMockNodeHostLinks(&data)
 	ensureMockKubernetesNodeHostLinks(&data)
+	ensureMockFixtureHostIORates(&data)
 
 	// Generate physical disks for each node
 	for _, node := range data.Nodes {
@@ -2808,6 +2809,58 @@ func syncMockKubernetesNodeHosts(data *models.StateSnapshot) {
 				host.Sensors.TemperatureCelsius = make(map[string]float64)
 			}
 			host.Sensors.TemperatureCelsius["cpu_package"] = SampleMetric("agent", host.ID, "temperature", time.Now())
+		}
+	}
+}
+
+func ensureMockFixtureHostIORates(data *models.StateSnapshot) {
+	if data == nil {
+		return
+	}
+
+	for i := range data.Hosts {
+		host := &data.Hosts[i]
+		if strings.EqualFold(host.Status, "offline") {
+			host.NetInRate = 0
+			host.NetOutRate = 0
+			host.DiskReadRate = 0
+			host.DiskWriteRate = 0
+			continue
+		}
+		if host.NetInRate <= 0 {
+			host.NetInRate = generateMockHostRate("network-in")
+		}
+		if host.NetOutRate <= 0 {
+			host.NetOutRate = generateMockHostRate("network-out")
+		}
+		if host.DiskReadRate <= 0 {
+			host.DiskReadRate = generateMockHostRate("disk-read")
+		}
+		if host.DiskWriteRate <= 0 {
+			host.DiskWriteRate = generateMockHostRate("disk-write")
+		}
+	}
+
+	for i := range data.DockerHosts {
+		host := &data.DockerHosts[i]
+		if strings.EqualFold(host.Status, "offline") {
+			host.NetInRate = 0
+			host.NetOutRate = 0
+			host.DiskReadRate = 0
+			host.DiskWriteRate = 0
+			continue
+		}
+		if host.NetInRate <= 0 {
+			host.NetInRate = generateMockHostRate("network-in")
+		}
+		if host.NetOutRate <= 0 {
+			host.NetOutRate = generateMockHostRate("network-out")
+		}
+		if host.DiskReadRate <= 0 {
+			host.DiskReadRate = generateMockHostRate("disk-read")
+		}
+		if host.DiskWriteRate <= 0 {
+			host.DiskWriteRate = generateMockHostRate("disk-write")
 		}
 	}
 }
