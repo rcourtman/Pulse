@@ -168,6 +168,15 @@ assembly branch.
    snapshot freshness must come from websocket `state.resources` instead of
    layering confirmatory dashboard/infrastructure REST refetch loops over
    already-owned resource updates.
+   That shared hook must also preserve canonical row shape across transport
+   boundaries: thinner realtime `state.resources` payloads must merge into the
+   existing canonical resource snapshot instead of downgrading richer REST-only
+   infrastructure details such as disk I/O, source metadata, or platform
+   summary fields after first hydrate.
+   Canonical cluster membership in that shared hook must come only from
+   explicit cluster identity such as Kubernetes context or platform cluster
+   labels; standalone resource names must never be repurposed as synthetic
+   `clusterId` values.
 10. Keep the dashboard overview shell on the compact governed summary route
     rather than the unfiltered list transport. `frontend-modern/src/pages/Dashboard.tsx`
     and `frontend-modern/src/hooks/useDashboardOverview.ts` may consume the

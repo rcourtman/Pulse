@@ -150,14 +150,17 @@ export const getPreferredResourceKubernetesContext = (
   );
 };
 
-export const getPreferredResourceClusterName = (
+export const getExplicitResourceClusterName = (
   resource: ResourceClusterNameLike,
 ): string | undefined =>
   getPreferredResourceKubernetesContext(resource) ||
   asTrimmedString(resource.identity?.clusterName) ||
   asTrimmedString(resource.proxmox?.clusterName) ||
-  asTrimmedString(resource.platformData?.proxmox?.clusterName) ||
-  asTrimmedString(resource.name);
+  asTrimmedString(resource.platformData?.proxmox?.clusterName);
+
+export const getPreferredResourceClusterName = (
+  resource: ResourceClusterNameLike,
+): string | undefined => getExplicitResourceClusterName(resource) || asTrimmedString(resource.name);
 
 export const getMetricsChartKeyCandidatesFromResource = (resource: Resource): string[] => {
   const candidates = [

@@ -5,6 +5,7 @@ import {
   getActionableDockerRuntimeIdFromResource,
   getActionableKubernetesClusterIdFromResource,
   getExplicitAgentIdFromResource,
+  getExplicitResourceClusterName,
   getMetricsChartKeyCandidatesFromResource,
   getPreferredResourceClusterName,
   hasDockerWorkloadsScope,
@@ -182,6 +183,28 @@ describe('agentResources', () => {
         }),
       ),
     ).toBe('proxmox-cluster');
+  });
+
+  it('keeps explicit cluster membership separate from display-name fallback', () => {
+    expect(
+      getExplicitResourceClusterName(
+        makeResource({
+          type: 'docker-host',
+          name: 'ops-services-01',
+        }),
+      ),
+    ).toBeUndefined();
+
+    expect(
+      getExplicitResourceClusterName(
+        makeResource({
+          type: 'agent',
+          identity: {
+            clusterName: 'Core Fabric',
+          },
+        }),
+      ),
+    ).toBe('Core Fabric');
   });
 
   it('detects docker workloads scope from explicit docker facets instead of source lists', () => {

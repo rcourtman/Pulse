@@ -23,10 +23,8 @@ import { logger } from '@/utils/logger';
 import { eventBus } from '@/stores/events';
 import { canonicalDiscoveryResourceType } from '@/utils/discoveryTarget';
 import { canonicalizeFrontendResourceType } from '@/utils/resourceTypeCompat';
-import {
-  getPreferredNormalizedPlatformId,
-  getPreferredResourceClusterName,
-} from '@/utils/resourceIdentity';
+import { getPreferredNormalizedPlatformId } from '@/utils/resourceIdentity';
+import { getExplicitResourceClusterName } from '@/utils/agentResources';
 import {
   resolvePlatformTypeFromSources,
   resolveSourceTypeFromSources,
@@ -107,6 +105,8 @@ type APIHostRAIDArray = {
   rebuildPercent: number;
   rebuildSpeed?: string;
 };
+
+type JsonRecord = Record<string, unknown>;
 
 type APIKubernetesData = {
   clusterId?: string;
@@ -570,6 +570,332 @@ const metricToResourceMetric = (metric?: APIMetricValue) => {
   };
 };
 
+const asRecord = (value: unknown): JsonRecord | undefined =>
+  value && typeof value === 'object' && !Array.isArray(value) ? (value as JsonRecord) : undefined;
+
+const mergeStringArrays = (
+  incoming?: string[],
+  existing?: string[],
+): string[] | undefined => {
+  const merged = [...(incoming ?? []), ...(existing ?? [])]
+    .map((value) => asTrimmedString(value))
+    .filter((value): value is string => Boolean(value));
+  return merged.length > 0 ? Array.from(new Set(merged)) : undefined;
+};
+
+const mergeRecord = <T extends JsonRecord>(incoming?: T, existing?: T): T | undefined => {
+  if (!incoming) return existing;
+  if (!existing) return incoming;
+  return { ...existing, ...incoming };
+};
+
+const mergePlatformData = (
+  incomingValue: Resource['platformData'],
+  existingValue: Resource['platformData'],
+): Resource['platformData'] => {
+  const incoming = asRecord(incomingValue);
+  const existing = asRecord(existingValue);
+  if (!incoming) return existingValue;
+  if (!existing) return incomingValue;
+
+  const merged: JsonRecord = { ...existing, ...incoming };
+  for (const key of [
+    'agent',
+    'docker',
+    'proxmox',
+    'pbs',
+    'pmg',
+    'kubernetes',
+    'vmware',
+    'storage',
+    'physicalDisk',
+    'ceph',
+    'metrics',
+    'discoveryTarget',
+  ]) {
+    const nested = mergeRecord(asRecord(incoming[key]), asRecord(existing[key]));
+    if (nested) {
+      merged[key] = nested;
+    }
+  }
+
+  const sourceStatus = mergeRecord(
+    asRecord(incoming.sourceStatus),
+    asRecord(existing.sourceStatus),
+  );
+  if (sourceStatus) {
+    merged.sourceStatus = sourceStatus;
+  }
+
+  const sources = mergeStringArrays(
+    Array.isArray(incoming.sources) ? (incoming.sources as string[]) : undefined,
+    Array.isArray(existing.sources) ? (existing.sources as string[]) : undefined,
+  );
+  if (sources) {
+    merged.sources = sources;
+  }
+
+  return merged;
+};
+
+const deriveLegacySourceList = (resource: Resource): string[] | undefined => {
+  switch (resource.platformType) {
+    case 'proxmox-pve':
+      return resource.sourceType === 'hybrid' ? ['proxmox', 'agent'] : ['proxmox'];
+    case 'docker':
+      return ['docker'];
+    case 'kubernetes':
+      return resource.sourceType === 'hybrid' ? ['agent', 'kubernetes'] : ['kubernetes'];
+    case 'proxmox-pbs':
+      return ['pbs'];
+    case 'proxmox-pmg':
+      return ['pmg'];
+    case 'truenas':
+      return ['truenas'];
+    case 'vmware-vsphere':
+      return ['vmware'];
+    default:
+      return resource.sourceType === 'agent' ? ['agent'] : undefined;
+  }
+};
+
+const canonicalizeLegacyPlatformData = (resource: Resource): Resource['platformData'] => {
+  const platformData = asRecord(resource.platformData);
+  if (!platformData) {
+    return resource.platformData;
+  }
+
+  const normalized: JsonRecord = { ...platformData };
+  const normalizedSources =
+    Array.isArray(platformData.sources) && platformData.sources.length > 0
+      ? (platformData.sources as string[])
+      : deriveLegacySourceList(resource);
+  if (normalizedSources && normalizedSources.length > 0) {
+    normalized.sources = normalizedSources;
+  }
+
+  if (!asRecord(platformData.agent)) {
+    const agentPayload: JsonRecord = {};
+    for (const [legacyKey, nextKey] of [
+      ['agentId', 'agentId'],
+      ['agentVersion', 'agentVersion'],
+      ['hostname', 'hostname'],
+      ['platform', 'platform'],
+      ['osName', 'osName'],
+      ['osVersion', 'osVersion'],
+      ['kernelVersion', 'kernelVersion'],
+      ['architecture', 'architecture'],
+      ['commandsEnabled', 'commandsEnabled'],
+    ] as const) {
+      if (platformData[legacyKey] !== undefined) {
+        agentPayload[nextKey] = platformData[legacyKey];
+      }
+    }
+    if (platformData.memory !== undefined) agentPayload.memory = platformData.memory;
+    if (platformData.interfaces !== undefined) agentPayload.networkInterfaces = platformData.interfaces;
+    if (platformData.disks !== undefined) agentPayload.disks = platformData.disks;
+    if (Object.keys(agentPayload).length > 0) {
+      normalized.agent = agentPayload;
+    }
+  }
+
+  if (!asRecord(platformData.docker)) {
+    const dockerPayload: JsonRecord = {};
+    for (const [legacyKey, nextKey] of [
+      ['agentId', 'agentId'],
+      ['runtime', 'runtime'],
+      ['runtimeVersion', 'runtimeVersion'],
+      ['dockerVersion', 'dockerVersion'],
+      ['os', 'os'],
+      ['kernelVersion', 'kernelVersion'],
+      ['architecture', 'architecture'],
+      ['agentVersion', 'agentVersion'],
+      ['hostname', 'hostname'],
+      ['displayName', 'displayName'],
+      ['machineId', 'machineId'],
+      ['containerCount', 'containerCount'],
+      ['uptimeSeconds', 'uptimeSeconds'],
+      ['intervalSeconds', 'intervalSeconds'],
+      ['temperature', 'temperature'],
+      ['hostSourceId', 'hostSourceId'],
+    ] as const) {
+      if (platformData[legacyKey] !== undefined) {
+        dockerPayload[nextKey] = platformData[legacyKey];
+      }
+    }
+    if (platformData.swarm !== undefined) dockerPayload.swarm = platformData.swarm;
+    if (platformData.interfaces !== undefined) dockerPayload.networkInterfaces = platformData.interfaces;
+    if (platformData.disks !== undefined) dockerPayload.disks = platformData.disks;
+    if (Object.keys(dockerPayload).length > 0) {
+      normalized.docker = dockerPayload;
+    }
+  }
+
+  if (!asRecord(platformData.proxmox)) {
+    const proxmoxPayload: JsonRecord = {};
+    for (const [legacyKey, nextKey] of [
+      ['instance', 'instance'],
+      ['node', 'nodeName'],
+      ['clusterName', 'clusterName'],
+      ['vmid', 'vmid'],
+      ['cpus', 'cpus'],
+      ['template', 'template'],
+      ['swapUsed', 'swapUsed'],
+      ['swapTotal', 'swapTotal'],
+      ['balloon', 'balloon'],
+    ] as const) {
+      if (platformData[legacyKey] !== undefined) {
+        proxmoxPayload[nextKey] = platformData[legacyKey];
+      }
+    }
+    if (platformData.disks !== undefined) proxmoxPayload.disks = platformData.disks;
+    if (Object.keys(proxmoxPayload).length > 0) {
+      normalized.proxmox = proxmoxPayload;
+    }
+  }
+
+  if (!asRecord(platformData.pbs)) {
+    const pbsPayload: JsonRecord = {};
+    if (platformData.host !== undefined) pbsPayload.hostname = platformData.host;
+    if (platformData.version !== undefined) pbsPayload.version = platformData.version;
+    if (platformData.connectionHealth !== undefined) {
+      pbsPayload.connectionHealth = platformData.connectionHealth;
+    }
+    if (platformData.numDatastores !== undefined) {
+      pbsPayload.datastoreCount = platformData.numDatastores;
+    }
+    if (Object.keys(pbsPayload).length > 0) {
+      normalized.pbs = pbsPayload;
+    }
+  }
+
+  if (!asRecord(platformData.pmg)) {
+    const pmgPayload: JsonRecord = {};
+    if (platformData.host !== undefined) pmgPayload.hostname = platformData.host;
+    if (platformData.version !== undefined) pmgPayload.version = platformData.version;
+    if (platformData.connectionHealth !== undefined) {
+      pmgPayload.connectionHealth = platformData.connectionHealth;
+    }
+    for (const [legacyKey, nextKey] of [
+      ['nodeCount', 'nodeCount'],
+      ['queueActive', 'queueActive'],
+      ['queueDeferred', 'queueDeferred'],
+      ['queueHold', 'queueHold'],
+      ['queueIncoming', 'queueIncoming'],
+      ['queueTotal', 'queueTotal'],
+    ] as const) {
+      if (platformData[legacyKey] !== undefined) {
+        pmgPayload[nextKey] = platformData[legacyKey];
+      }
+    }
+    if (Object.keys(pmgPayload).length > 0) {
+      normalized.pmg = pmgPayload;
+    }
+  }
+
+  if (!asRecord(platformData.kubernetes)) {
+    const kubernetesPayload: JsonRecord = {};
+    for (const [legacyKey, nextKey] of [
+      ['agentId', 'agentId'],
+      ['clusterId', 'clusterId'],
+      ['context', 'context'],
+      ['nodeName', 'nodeName'],
+      ['namespace', 'namespace'],
+      ['clusterName', 'clusterName'],
+      ['pendingUninstall', 'pendingUninstall'],
+    ] as const) {
+      if (platformData[legacyKey] !== undefined) {
+        kubernetesPayload[nextKey] = platformData[legacyKey];
+      }
+    }
+    if (Object.keys(kubernetesPayload).length > 0) {
+      normalized.kubernetes = kubernetesPayload;
+    }
+  }
+
+  return normalized;
+};
+
+const canonicalizeRealtimeResource = (resource: Resource): Resource => {
+  const platformData = canonicalizeLegacyPlatformData(resource);
+  const platformRecord = asRecord(platformData);
+  const normalizedBase = {
+    ...resource,
+    platformData,
+  };
+  return {
+    ...normalizedBase,
+    clusterId: resource.clusterId ?? getExplicitResourceClusterName(normalizedBase),
+    platformData,
+    agent: resource.agent ?? (platformRecord?.agent as Resource['agent']),
+    proxmox: resource.proxmox ?? (platformRecord?.proxmox as Resource['proxmox']),
+    pbs: resource.pbs ?? (platformRecord?.pbs as Resource['pbs']),
+    kubernetes: resource.kubernetes ?? (platformRecord?.kubernetes as Resource['kubernetes']),
+    vmware: resource.vmware ?? (platformRecord?.vmware as Resource['vmware']),
+    storage: resource.storage ?? (platformRecord?.storage as Resource['storage']),
+    physicalDisk:
+      resource.physicalDisk ?? (platformRecord?.physicalDisk as Resource['physicalDisk']),
+  };
+};
+
+const mergeCanonicalIdentity = (
+  incoming?: Resource['canonicalIdentity'],
+  existing?: Resource['canonicalIdentity'],
+): Resource['canonicalIdentity'] => {
+  if (!incoming) return existing;
+  if (!existing) return incoming;
+  const aliases = mergeStringArrays(incoming.aliases, existing.aliases);
+  return {
+    ...existing,
+    ...incoming,
+    aliases,
+  };
+};
+
+const mergeCanonicalResource = (incoming: Resource, existing?: Resource): Resource => {
+  if (!existing) {
+    return incoming;
+  }
+  return {
+    ...existing,
+    ...incoming,
+    clusterId: incoming.clusterId ?? existing.clusterId,
+    discoveryTarget: incoming.discoveryTarget ?? existing.discoveryTarget,
+    metricsTarget: incoming.metricsTarget ?? existing.metricsTarget,
+    canonicalIdentity: mergeCanonicalIdentity(incoming.canonicalIdentity, existing.canonicalIdentity),
+    policy: incoming.policy ?? existing.policy,
+    aiSafeSummary: incoming.aiSafeSummary ?? existing.aiSafeSummary,
+    recentChanges: incoming.recentChanges ?? existing.recentChanges,
+    facetCounts: incoming.facetCounts ?? existing.facetCounts,
+    diskIO: incoming.diskIO ?? existing.diskIO,
+    agent: mergeRecord(incoming.agent as JsonRecord | undefined, existing.agent as JsonRecord | undefined) as Resource['agent'],
+    proxmox: mergeRecord(incoming.proxmox as JsonRecord | undefined, existing.proxmox as JsonRecord | undefined) as Resource['proxmox'],
+    pbs: mergeRecord(incoming.pbs as JsonRecord | undefined, existing.pbs as JsonRecord | undefined) as Resource['pbs'],
+    kubernetes: mergeRecord(incoming.kubernetes as JsonRecord | undefined, existing.kubernetes as JsonRecord | undefined) as Resource['kubernetes'],
+    vmware: mergeRecord(incoming.vmware as JsonRecord | undefined, existing.vmware as JsonRecord | undefined) as Resource['vmware'],
+    storage: mergeRecord(incoming.storage as JsonRecord | undefined, existing.storage as JsonRecord | undefined) as Resource['storage'],
+    physicalDisk: mergeRecord(incoming.physicalDisk as JsonRecord | undefined, existing.physicalDisk as JsonRecord | undefined) as Resource['physicalDisk'],
+    identity: mergeRecord(incoming.identity as JsonRecord | undefined, existing.identity as JsonRecord | undefined) as Resource['identity'],
+    platformData: mergePlatformData(incoming.platformData, existing.platformData),
+    tags: incoming.tags && incoming.tags.length > 0 ? incoming.tags : existing.tags,
+    labels:
+      incoming.labels && Object.keys(incoming.labels).length > 0 ? incoming.labels : existing.labels,
+  };
+};
+
+const mergeCanonicalResourceSnapshot = (
+  incoming: Resource[],
+  existing: Resource[],
+): Resource[] => {
+  if (incoming.length === 0) {
+    return [];
+  }
+  const existingById = new Map(existing.map((resource) => [resource.id, resource] as const));
+  return incoming.map((resource) =>
+    mergeCanonicalResource(canonicalizeRealtimeResource(resource), existingById.get(resource.id)),
+  );
+};
+
 const toResource = (v2: APIResource): Resource => {
   const sources = (v2.sources || []).filter(
     (s): s is string => typeof s === 'string' && s.trim().length > 0,
@@ -602,7 +928,7 @@ const toResource = (v2: APIResource): Resource => {
     sourceType: resolveSourceTypeFromSources(sources),
     parentId: v2.parentId,
     parentName: v2.parentName,
-    clusterId: getPreferredResourceClusterName(v2),
+    clusterId: getExplicitResourceClusterName(v2),
     status: resolveStatus(v2.status),
     incidentCount: v2.incidentCount,
     incidentCode: v2.incidentCode,
@@ -1137,23 +1463,31 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
     }
 
     const wsResources = Array.isArray(wsStore.state.resources) ? wsStore.state.resources : [];
-    const projectedResources = filterCanonicalUnifiedResources(wsResources, query, typeFilter);
-    const now = Date.now();
-    clearInitialHydrationTimeout();
     const allResourcesEntry = getUnifiedResourcesCacheEntry(
       buildScopedUnifiedResourcesCacheKey(ALL_RESOURCES_CACHE_KEY, currentOrgScope),
     );
-    setUnifiedResourcesCache(allResourcesEntry, wsResources, now);
+    const mergedWsResources = mergeCanonicalResourceSnapshot(
+      wsResources,
+      allResourcesEntry.resources,
+    );
+    const projectedResources = filterCanonicalUnifiedResources(mergedWsResources, query, typeFilter);
+    const now = Date.now();
+    clearInitialHydrationTimeout();
+    setUnifiedResourcesCache(allResourcesEntry, mergedWsResources, now);
     allResourcesEntry.lastFetchAt = now;
 
     if (projectedResources === null) {
       return;
     }
 
-    setUnifiedResourcesCache(cacheEntry, projectedResources, now);
+    const mergedProjectedResources = mergeCanonicalResourceSnapshot(
+      projectedResources,
+      cacheEntry.resources,
+    );
+    setUnifiedResourcesCache(cacheEntry, mergedProjectedResources, now);
     cacheEntry.lastFetchAt = now;
     batch(() => {
-      setResources(reconcile(projectedResources, { key: 'id' }));
+      setResources(reconcile(mergedProjectedResources, { key: 'id' }));
       setError(undefined);
       setLoading(false);
     });

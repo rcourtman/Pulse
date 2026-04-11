@@ -67,6 +67,33 @@ const createWsResource = (overrides: Partial<Resource> = {}): Resource => ({
   ...overrides,
 });
 
+const createThinWsPBSResource = (overrides: Partial<Resource> = {}): Resource =>
+  ({
+    id: 'pbs-1',
+    type: 'pbs',
+    name: 'backup-vault',
+    displayName: 'backup-vault',
+    platformId: 'pbs-main',
+    platformType: 'proxmox-pbs',
+    sourceType: 'api',
+    status: 'online',
+    lastSeen: Date.parse('2026-02-06T12:00:00Z'),
+    cpu: { current: 9 },
+    memory: {
+      current: 36,
+      used: 6 * 1024 * 1024,
+      total: 16 * 1024 * 1024,
+      free: 10 * 1024 * 1024,
+    },
+    platformData: {
+      host: '198.51.100.10',
+      version: '3.2.1',
+      connectionHealth: 'healthy',
+      numDatastores: 2,
+    },
+    ...overrides,
+  }) as Resource;
+
 const flushAsync = async () => {
   await Promise.resolve();
   await Promise.resolve();
@@ -378,6 +405,156 @@ describe('useUnifiedResources', () => {
     await result!.refetch();
 
     expect(result!.resources()[0]?.clusterId).toBe('cluster-b');
+
+    dispose();
+  });
+
+  it('does not invent standalone cluster ids from resource names', async () => {
+    apiFetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        data: [
+          {
+            ...v2Resource,
+            id: 'docker-host-1',
+            type: 'docker-host',
+            name: 'Ops Services 01',
+            canonicalIdentity: {
+              displayName: 'Ops Services 01',
+              hostname: 'ops-services-01',
+              platformId: 'ops-services-01',
+            },
+            sources: ['docker'],
+            identity: {
+              hostnames: ['ops-services-01'],
+            },
+            docker: {
+              hostSourceId: 'orion-2-mock',
+              hostname: 'ops-services-01',
+              runtime: 'docker',
+              runtimeVersion: '27.3.1',
+              dockerVersion: '27.3.1',
+              os: 'Alpine Linux 3.19',
+              kernelVersion: '6.6.32-1-lts',
+              architecture: 'aarch64',
+              agentVersion: '0.1.0-dev',
+            },
+          },
+        ],
+      }),
+    });
+
+    let dispose = () => {};
+    let result: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']> | undefined;
+    createRoot((d) => {
+      dispose = d;
+      result = useUnifiedResources();
+    });
+
+    await result!.refetch();
+
+    expect(result!.resources()[0]?.clusterId).toBeUndefined();
+
+    dispose();
+  });
+
+  it('preserves richer REST resource details across thinner websocket updates', async () => {
+    setWsConnected(false);
+    setWsInitialDataReceived(false);
+    setWsState('resources', []);
+    apiFetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        data: [
+          {
+            ...v2Resource,
+            metrics: {
+              ...v2Resource.metrics,
+              diskRead: { value: 1_250_000 },
+              diskWrite: { value: 640_000 },
+            },
+          },
+          {
+            id: 'pbs-1',
+            type: 'pbs',
+            name: 'backup-vault',
+            status: 'online',
+            lastSeen: '2026-02-06T12:00:00Z',
+            sources: ['pbs'],
+            canonicalIdentity: {
+              displayName: 'backup-vault',
+              hostname: 'backup-vault',
+              platformId: '198.51.100.10',
+            },
+            metrics: {
+              cpu: { percent: 9 },
+              memory: { used: 6 * 1024 * 1024, total: 16 * 1024 * 1024, percent: 36 },
+            },
+            pbs: {
+              instanceId: 'pbs-main',
+              hostname: '198.51.100.10',
+              version: '3.2.1',
+              datastoreCount: 2,
+              backupJobCount: 4,
+              connectionHealth: 'healthy',
+            },
+          },
+        ],
+      }),
+    });
+
+    let dispose = () => {};
+    let result: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']> | undefined;
+    createRoot((d) => {
+      dispose = d;
+      result = useUnifiedResources();
+    });
+
+    await result!.refetch();
+    expect(result!.resources().find((resource) => resource.id === 'node-1')?.diskIO).toEqual({
+      readRate: 1_250_000,
+      writeRate: 640_000,
+    });
+    expect(result!.resources().find((resource) => resource.id === 'pbs-1')?.platformData?.pbs).toEqual(
+      expect.objectContaining({
+        datastoreCount: 2,
+        backupJobCount: 4,
+        connectionHealth: 'healthy',
+      }),
+    );
+
+    batch(() => {
+      setWsState(
+        'resources',
+        reconcile(
+          [
+            createWsResource({
+              cpu: { current: 42 },
+            }),
+            createThinWsPBSResource(),
+          ],
+          { key: 'id' },
+        ),
+      );
+      setWsState('lastUpdate', 1738843203000);
+      setWsConnected(true);
+      setWsInitialDataReceived(true);
+    });
+
+    await flushAsync();
+
+    expect(result!.resources().find((resource) => resource.id === 'node-1')?.cpu?.current).toBe(42);
+    expect(result!.resources().find((resource) => resource.id === 'node-1')?.diskIO).toEqual({
+      readRate: 1_250_000,
+      writeRate: 640_000,
+    });
+    expect(result!.resources().find((resource) => resource.id === 'pbs-1')?.platformData?.pbs).toEqual(
+      expect.objectContaining({
+        datastoreCount: 2,
+        backupJobCount: 4,
+        connectionHealth: 'healthy',
+      }),
+    );
 
     dispose();
   });
