@@ -131,6 +131,27 @@ func CanonicalResourceType(rt ResourceType) ResourceType {
 	return normalized
 }
 
+// ContractResourceType maps an internal unified resource onto the canonical
+// external transport type used by REST and websocket/state payloads.
+func ContractResourceType(resource Resource) ResourceType {
+	switch CanonicalResourceType(resource.Type) {
+	case ResourceTypeAgent:
+		if resource.Proxmox != nil || resource.Agent != nil || resource.TrueNAS != nil || resource.VMware != nil {
+			return ResourceTypeAgent
+		}
+		if resource.Docker != nil {
+			return ResourceType("docker-host")
+		}
+		return ResourceTypeAgent
+	case ResourceTypeSystemContainer:
+		return ResourceTypeSystemContainer
+	case ResourceTypeAppContainer:
+		return ResourceTypeAppContainer
+	default:
+		return CanonicalResourceType(resource.Type)
+	}
+}
+
 // ResourceStatus represents the high-level status of a resource.
 type ResourceStatus string
 

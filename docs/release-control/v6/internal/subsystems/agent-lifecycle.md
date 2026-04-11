@@ -154,6 +154,10 @@ an add-only capacity posture.
    order instead of inheriting map order or page-local re-sorts, so install
    and runtime hydration do not present one resource ordering at first load and
    a different ordering after the first live refresh.
+   When lifecycle surfaces also hydrate from `/api/state`, that first-session
+   snapshot must carry the same canonical resource types and display names as
+   `/api/resources` instead of briefly showing legacy host aliases before the
+   first websocket-backed refresh lands.
    Persisted legacy hosted quickstart model IDs are therefore not lifecycle
    truth either: when shared settings helpers load or save historical
    quickstart values, they must normalize them back to

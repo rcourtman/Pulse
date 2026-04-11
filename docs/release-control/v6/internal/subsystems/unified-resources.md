@@ -148,6 +148,11 @@ assembly branch.
    `name -> type -> id` order across registry reads, REST pagination, and
    websocket-backed refreshes so equal-name resources do not silently reshuffle
    between cold hydrate and later runtime updates
+   That same unified-resource owner also defines the canonical transport
+   projection for operator-facing resources: `/api/resources` and websocket
+   `state.resources` must share `ContractResourceType`, canonical display
+   names, and canonical cluster labels instead of publishing separate REST and
+   broadcast aliases for the same machine.
    `internal/unifiedresources/top_level_systems.go`
    Explicit linked-host correlation is canonical here: when Kubernetes node
    ingest has a resolved backing host agent, the registry must merge that node

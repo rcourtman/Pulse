@@ -1767,3 +1767,42 @@ func TestCanonicalResourceOrderingContractsStayShared(t *testing.T) {
 		t.Fatalf("%s: cached unified resource views must share the canonical deterministic name ordering helper", filepath.ToSlash(registryPath))
 	}
 }
+
+func TestBroadcastStateUsesSharedCanonicalResourceContract(t *testing.T) {
+	repoRoot := filepath.Join("..", "..")
+	typesPath := filepath.Join(repoRoot, "internal", "unifiedresources", "types.go")
+	resourcesPath := filepath.Join(repoRoot, "internal", "api", "resources.go")
+	monitorPath := filepath.Join(repoRoot, "internal", "monitoring", "monitor.go")
+
+	typesSource, err := os.ReadFile(typesPath)
+	if err != nil {
+		t.Fatalf("failed to read %s: %v", typesPath, err)
+	}
+	resourcesSource, err := os.ReadFile(resourcesPath)
+	if err != nil {
+		t.Fatalf("failed to read %s: %v", resourcesPath, err)
+	}
+	monitorSource, err := os.ReadFile(monitorPath)
+	if err != nil {
+		t.Fatalf("failed to read %s: %v", monitorPath, err)
+	}
+
+	if !strings.Contains(string(typesSource), "func ContractResourceType(resource Resource) ResourceType {") {
+		t.Fatalf("%s: unified resource contract type helper must remain canonical", filepath.ToSlash(typesPath))
+	}
+	if !strings.Contains(string(resourcesSource), "return unified.ContractResourceType(r)") {
+		t.Fatalf("%s: /api/resources must derive external resource types from unified.ContractResourceType", filepath.ToSlash(resourcesPath))
+	}
+
+	requiredMonitorSnippets := []string{
+		"unifiedView := m.currentUnifiedStateView()",
+		"return string(unifiedresources.ContractResourceType(resource))",
+		"unifiedresources.ResourceDisplayName(resource)",
+		"unifiedresources.ResourceClusterName(resource)",
+	}
+	for _, snippet := range requiredMonitorSnippets {
+		if !strings.Contains(string(monitorSource), snippet) {
+			t.Fatalf("%s: websocket/state broadcast must contain %q", filepath.ToSlash(monitorPath), snippet)
+		}
+	}
+}

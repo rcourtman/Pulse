@@ -2258,24 +2258,7 @@ func attachMetricsTarget(resource *unified.Resource, registry *unified.ResourceR
 // resourceContractType maps internal unified resource shapes onto the canonical
 // REST resource-type contract without exposing legacy aliases.
 func resourceContractType(r unified.Resource) unified.ResourceType {
-	canonicalType := unified.CanonicalResourceType(r.Type)
-	switch canonicalType {
-	case unified.ResourceTypeAgent:
-		if r.Proxmox != nil || r.Agent != nil {
-			return "agent"
-		}
-		if r.Docker != nil {
-			return "docker-host"
-		}
-		return "agent"
-	case unified.ResourceTypeSystemContainer:
-		return "system-container"
-	case unified.ResourceTypeAppContainer:
-		return "app-container"
-	default:
-		// Other resource types already match their canonical API names.
-		return canonicalType
-	}
+	return unified.ContractResourceType(r)
 }
 
 // applyResourceContractTypes rewrites Type fields on the response slice so the

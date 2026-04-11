@@ -3712,11 +3712,11 @@ func (m *Monitor) buildBroadcastFrontendStateFromSnapshot(snapshot models.StateS
 			frontendState.ActiveAlerts = liveAlerts
 		}
 	}
-	unifiedResources := m.getUnifiedResourcesForBroadcast()
-	frontendState.Resources = convertResourcesForBroadcast(unifiedResources)
-	frontendState.ConnectedInfrastructure = buildConnectedInfrastructure(unifiedResources, snapshot)
-	if freshness := m.currentUnifiedResourceFreshness(); !freshness.IsZero() {
-		frontendState.LastUpdate = freshness.UnixMilli()
+	unifiedView := m.currentUnifiedStateView()
+	frontendState.Resources = convertResourcesForBroadcast(unifiedView.resources)
+	frontendState.ConnectedInfrastructure = buildConnectedInfrastructure(unifiedView.resources, snapshot)
+	if !unifiedView.freshness.IsZero() {
+		frontendState.LastUpdate = unifiedView.freshness.UnixMilli()
 	}
 	return frontendState
 }
@@ -4854,6 +4854,7 @@ func convertResourcesForBroadcast(allResources []unifiedresources.Resource) []mo
 }
 
 func monitorResourceToConvertInput(resource unifiedresources.Resource) models.ResourceConvertInput {
+	unifiedresources.RefreshCanonicalMetadata(&resource)
 	resourceType := monitorFrontendResourceType(resource)
 	name, displayName := monitorFrontendNames(resource, resourceType)
 	platformID := monitorPlatformID(resource, resourceType)
@@ -4890,73 +4891,29 @@ func monitorResourceToConvertInput(resource unifiedresources.Resource) models.Re
 }
 
 func monitorFrontendResourceType(resource unifiedresources.Resource) string {
-	switch resource.Type {
-	case unifiedresources.ResourceTypeVM:
-		return "vm"
-	case unifiedresources.ResourceTypeSystemContainer:
-		return "system-container"
-	case unifiedresources.ResourceTypeAppContainer:
-		return "app-container"
-	case unifiedresources.ResourceTypeK8sCluster:
-		return "k8s-cluster"
-	case unifiedresources.ResourceTypeK8sNode:
-		return "k8s-node"
-	case unifiedresources.ResourceTypePod:
-		return "pod"
-	case unifiedresources.ResourceTypeK8sDeployment:
-		return "k8s-deployment"
-	case unifiedresources.ResourceTypePBS:
-		return "pbs"
-	case unifiedresources.ResourceTypePMG:
-		return "pmg"
-	case unifiedresources.ResourceTypeStorage:
-		return "storage"
-	case unifiedresources.ResourceTypeCeph:
-		return "pool"
-	case unifiedresources.ResourceTypeAgent:
-		if resource.Proxmox != nil {
-			return "node"
-		}
-		if resource.Docker != nil {
-			return "docker-host"
-		}
-		return "agent"
-	default:
-		return string(resource.Type)
-	}
+	return string(unifiedresources.ContractResourceType(resource))
 }
 
 func monitorFrontendNames(resource unifiedresources.Resource, resourceType string) (string, string) {
-	name := strings.TrimSpace(resource.Name)
-	displayName := ""
-
-	switch resourceType {
-	case "node":
-		if resource.Proxmox != nil && resource.Proxmox.NodeName != "" && !strings.EqualFold(resource.Proxmox.NodeName, name) {
-			displayName = name
-			name = resource.Proxmox.NodeName
-		}
-	case "agent":
-		if resource.Agent != nil && resource.Agent.Hostname != "" && !strings.EqualFold(resource.Agent.Hostname, name) {
-			displayName = name
-			name = resource.Agent.Hostname
-		}
-	case "docker-host":
-		if resource.Docker != nil && resource.Docker.Hostname != "" && !strings.EqualFold(resource.Docker.Hostname, name) {
-			displayName = name
-			name = resource.Docker.Hostname
-		}
-	}
-
+	name := strings.TrimSpace(unifiedresources.ResourceDisplayName(resource))
 	if name == "" {
 		name = resource.ID
 	}
-	return name, strings.TrimSpace(displayName)
+	return name, name
 }
 
 func monitorPlatformType(resource unifiedresources.Resource, resourceType string) string {
+	if resource.Proxmox != nil {
+		return "proxmox-pve"
+	}
+	if resource.VMware != nil {
+		return "vmware-vsphere"
+	}
+	if resource.TrueNAS != nil {
+		return "truenas"
+	}
 	switch resourceType {
-	case "node", "vm", "system-container", "storage", "pool":
+	case "vm", "system-container", "storage", "pool":
 		return "proxmox-pve"
 	case "docker-host", "app-container":
 		return "docker"
@@ -5086,6 +5043,10 @@ func monitorIsWorkloadType(resourceType string) bool {
 }
 
 func monitorClusterID(resource unifiedresources.Resource) string {
+	if clusterID := strings.TrimSpace(unifiedresources.ResourceClusterName(resource)); clusterID != "" {
+		return clusterID
+	}
+
 	if resource.Docker != nil && resource.Docker.Swarm != nil {
 		if name := strings.TrimSpace(resource.Docker.Swarm.ClusterName); name != "" {
 			return name
@@ -5095,17 +5056,7 @@ func monitorClusterID(resource unifiedresources.Resource) string {
 		}
 	}
 
-	clusterID := strings.TrimSpace(resource.Identity.ClusterName)
-	if clusterID == "" && resource.Proxmox != nil {
-		clusterID = strings.TrimSpace(resource.Proxmox.ClusterName)
-	}
-	if clusterID == "" && resource.Kubernetes != nil {
-		clusterID = strings.TrimSpace(resource.Kubernetes.ClusterID)
-	}
-	if clusterID == "" && resource.Kubernetes != nil {
-		clusterID = strings.TrimSpace(resource.Kubernetes.ClusterName)
-	}
-	return clusterID
+	return ""
 }
 
 func monitorMetricInput(metric *unifiedresources.MetricValue) *models.ResourceMetricInput {
@@ -5284,7 +5235,20 @@ func monitorPlatformData(resource unifiedresources.Resource, resourceType string
 	case "system-container", "oci-container":
 		payload = buildProxmoxVMPayload(resource)
 	case "agent":
-		if resource.Agent != nil {
+		if resource.Proxmox != nil {
+			payload = map[string]interface{}{
+				"instance":         resource.Proxmox.Instance,
+				"host":             "",
+				"guestURL":         "",
+				"pveVersion":       resource.Proxmox.PVEVersion,
+				"kernelVersion":    resource.Proxmox.KernelVersion,
+				"cpuInfo":          resource.Proxmox.CPUInfo,
+				"loadAverage":      []float64{},
+				"isClusterMember":  resource.Proxmox.ClusterName != "",
+				"clusterName":      resource.Proxmox.ClusterName,
+				"connectionHealth": monitorSourceStatus(resource.SourceStatus, unifiedresources.SourceProxmox),
+			}
+		} else if resource.Agent != nil {
 			payload = map[string]interface{}{
 				"platform":      resource.Agent.Platform,
 				"osName":        resource.Agent.OSName,

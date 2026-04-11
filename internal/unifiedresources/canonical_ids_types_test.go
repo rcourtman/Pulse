@@ -16,6 +16,62 @@ func TestCanonicalResourceTypeDoesNotAliasHost(t *testing.T) {
 	}
 }
 
+func TestContractResourceType(t *testing.T) {
+	tests := []struct {
+		name     string
+		resource Resource
+		want     ResourceType
+	}{
+		{
+			name: "proxmox agent uses canonical agent contract type",
+			resource: Resource{
+				Type:    ResourceTypeAgent,
+				Proxmox: &ProxmoxData{},
+			},
+			want: ResourceTypeAgent,
+		},
+		{
+			name: "docker host uses docker-host contract type",
+			resource: Resource{
+				Type:   ResourceTypeAgent,
+				Docker: &DockerData{},
+			},
+			want: ResourceType("docker-host"),
+		},
+		{
+			name: "vmware host stays agent",
+			resource: Resource{
+				Type:   ResourceTypeAgent,
+				VMware: &VMwareData{},
+			},
+			want: ResourceTypeAgent,
+		},
+		{
+			name: "truenas host stays agent",
+			resource: Resource{
+				Type:    ResourceTypeAgent,
+				TrueNAS: &TrueNASData{},
+			},
+			want: ResourceTypeAgent,
+		},
+		{
+			name: "workload passthrough remains canonical",
+			resource: Resource{
+				Type: ResourceTypeVM,
+			},
+			want: ResourceTypeVM,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := ContractResourceType(tt.resource); got != tt.want {
+				t.Fatalf("ContractResourceType(%+v) = %q, want %q", tt.resource, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestCanonicalResourceIDDoesNotAliasLegacyHostPrefixes(t *testing.T) {
 	cases := []struct {
 		name string

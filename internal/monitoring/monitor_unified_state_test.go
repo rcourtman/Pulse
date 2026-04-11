@@ -81,6 +81,15 @@ func hasUnifiedResourceName(resources []unifiedresources.Resource, name string) 
 	return false
 }
 
+func hasFrontendResourceName(resources []models.ResourceFrontend, name string) bool {
+	for _, resource := range resources {
+		if resource.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
 func TestMonitorGetUnifiedReadStateOrSnapshotUsesStoreResourcesWithoutSnapshotFallback(t *testing.T) {
 	now := time.Date(2026, 3, 6, 12, 0, 0, 0, time.UTC)
 	store := &resourceOnlyStore{
@@ -231,6 +240,7 @@ func TestMonitorGetUnifiedReadStateOrSnapshotUsesCanonicalMockUnifiedResources(t
 	}
 
 	m := &Monitor{
+		state:         models.NewState(),
 		resourceStore: store,
 		alertManager:  alerts.NewManager(),
 	}
@@ -254,6 +264,85 @@ func TestMonitorGetUnifiedReadStateOrSnapshotUsesCanonicalMockUnifiedResources(t
 	}
 	if !hasUnifiedResourceName(resources, legacyName) {
 		t.Fatalf("expected mock-mode read-state to include legacy mock resource %q, got %#v", legacyName, resources)
+	}
+}
+
+func TestMonitorBuildBroadcastFrontendStateUsesCanonicalMockUnifiedResources(t *testing.T) {
+	mock.SetEnabled(true)
+	t.Cleanup(func() { mock.SetEnabled(false) })
+
+	graph := mock.CurrentFixtureGraph()
+	legacyName := ""
+	if len(graph.State.VMs) > 0 {
+		legacyName = graph.State.VMs[0].Name
+	} else if len(graph.State.Containers) > 0 {
+		legacyName = graph.State.Containers[0].Name
+	}
+	if legacyName == "" {
+		t.Fatal("expected canonical mock graph to include at least one legacy resource")
+	}
+
+	store := &resourceOnlyStore{
+		resources: []unifiedresources.Resource{
+			{
+				ID:       "store-only-resource",
+				Type:     unifiedresources.ResourceTypeAgent,
+				Name:     "store-only-resource",
+				Status:   unifiedresources.StatusOnline,
+				LastSeen: time.Date(2026, 3, 6, 14, 0, 0, 0, time.UTC),
+				Sources:  []unifiedresources.DataSource{unifiedresources.SourceAgent},
+				Identity: unifiedresources.ResourceIdentity{Hostnames: []string{"store-only-resource"}},
+			},
+		},
+	}
+
+	m := &Monitor{
+		state:         models.NewState(),
+		resourceStore: store,
+		alertManager:  alerts.NewManager(),
+	}
+	defer m.alertManager.Stop()
+
+	expectedResources, freshness := m.UnifiedResourceSnapshot()
+	frontend := m.BuildBroadcastFrontendState()
+
+	if hasFrontendResourceName(frontend.Resources, "store-only-resource") {
+		t.Fatal("expected mock-mode broadcast state to ignore live resource store data")
+	}
+	if !hasFrontendResourceName(frontend.Resources, "truenas-main") {
+		t.Fatalf("expected mock-mode broadcast state to include TrueNAS mock resources, got %#v", frontend.Resources)
+	}
+	if hasFrontendResourceName(frontend.Resources, "pve1") {
+		t.Fatalf("expected mock-mode broadcast state to stop publishing legacy proxmox node labels, got %#v", frontend.Resources)
+	}
+	if hasFrontendResourceName(frontend.Resources, "edge-apps-01") {
+		t.Fatalf("expected mock-mode broadcast state to stop publishing legacy docker host labels, got %#v", frontend.Resources)
+	}
+	if !hasFrontendResourceName(frontend.Resources, "esxi-01.lab.local") {
+		t.Fatalf("expected mock-mode broadcast state to include VMware mock resources, got %#v", frontend.Resources)
+	}
+	if !hasFrontendResourceName(frontend.Resources, "West Production A") {
+		t.Fatalf("expected mock-mode broadcast state to include canonical proxmox host label, got %#v", frontend.Resources)
+	}
+	if !hasFrontendResourceName(frontend.Resources, "Edge Apps 01") {
+		t.Fatalf("expected mock-mode broadcast state to include canonical docker host label, got %#v", frontend.Resources)
+	}
+	if !hasFrontendResourceName(frontend.Resources, legacyName) {
+		t.Fatalf("expected mock-mode broadcast state to include legacy mock resource %q, got %#v", legacyName, frontend.Resources)
+	}
+	if len(frontend.Resources) != len(expectedResources) {
+		t.Fatalf("expected mock-mode broadcast state to mirror canonical unified resource count %d, got %d", len(expectedResources), len(frontend.Resources))
+	}
+	if freshness.IsZero() {
+		t.Fatal("expected canonical mock unified snapshot freshness")
+	}
+	if frontend.LastUpdate != freshness.UnixMilli() {
+		t.Fatalf("expected broadcast lastUpdate %d from canonical mock freshness, got %d", freshness.UnixMilli(), frontend.LastUpdate)
+	}
+	for _, resource := range frontend.Resources {
+		if resource.Type == "node" {
+			t.Fatalf("expected canonical broadcast resource types only, got legacy node resource %#v", resource)
+		}
 	}
 }
 

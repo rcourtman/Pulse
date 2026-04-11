@@ -158,6 +158,13 @@ or restart discovery until the canonical mock runtime has accepted the
 requested mode change; rejected release-demo fixture enables must fail before
 any monitoring reset so the live preview does not blank itself on an
 unauthorized toggle.
+That same monitoring owner also owns canonical unified-resource publication on
+`/api/state` and the websocket `state.resources` hydrate path. Monitoring must
+publish those resources from the same canonical unified snapshot that
+`/api/resources` seeds in mock and live mode, rather than projecting a second
+raw store-only inventory for broadcast. Otherwise cold hydrate and later
+registry-backed refreshes can swap the operator-visible infrastructure set
+under one running session.
 That same mock-runtime boundary also owns freshness while demos are running.
 The mock update loop must keep provider-backed TrueNAS and VMware records plus
 legacy PBS and PMG summaries on current `LastSeen` and health state each tick,

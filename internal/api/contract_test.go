@@ -44,6 +44,12 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/pkg/reporting"
 )
 
+type resourceContractSnapshot struct {
+	ID   string
+	Name string
+	Type string
+}
+
 type contractCapturingStreamingProvider struct {
 	lastRequest providers.ChatRequest
 }
@@ -8971,6 +8977,120 @@ func TestContract_ResourceListUsesDeterministicNameTieBreakers(t *testing.T) {
 				t.Fatalf("attempt %d: position %d = %q, want %q (got=%v)", attempt+1, index, gotIDs[index], wantIDs[index], gotIDs)
 			}
 		}
+	}
+}
+
+func TestContract_StateAndResourceListShareCanonicalMockResourceContract(t *testing.T) {
+	t.Setenv("PULSE_MOCK_MODE", "true")
+	mock.SetEnabled(true)
+	t.Cleanup(func() { mock.SetEnabled(false) })
+
+	dataPath := t.TempDir()
+	hashedPassword, err := authpkg.HashPassword("password")
+	if err != nil {
+		t.Fatalf("hash password: %v", err)
+	}
+
+	cfg := &config.Config{
+		DataPath:           dataPath,
+		MultiTenantEnabled: true,
+		AuthUser:           "admin",
+		AuthPass:           hashedPassword,
+	}
+
+	InitSessionStore(dataPath)
+	InitCSRFStore(dataPath)
+
+	monitor, err := monitoring.New(cfg)
+	if err != nil {
+		t.Fatalf("new monitor: %v", err)
+	}
+	t.Cleanup(func() { monitor.Stop() })
+
+	router := &Router{
+		config:      cfg,
+		monitor:     monitor,
+		persistence: config.NewConfigPersistence(dataPath),
+	}
+	handlers := NewResourceHandlers(cfg)
+	handlers.SetStateProvider(monitor)
+
+	stateReq := httptest.NewRequest(http.MethodGet, "/api/state", nil)
+	stateReq.SetBasicAuth("admin", "password")
+	stateRec := httptest.NewRecorder()
+	router.handleState(stateRec, stateReq)
+	if stateRec.Code != http.StatusOK {
+		t.Fatalf("/api/state status = %d, body=%s", stateRec.Code, stateRec.Body.String())
+	}
+
+	var state models.StateFrontend
+	if err := json.NewDecoder(stateRec.Body).Decode(&state); err != nil {
+		t.Fatalf("decode /api/state: %v", err)
+	}
+
+	listReq := httptest.NewRequest(http.MethodGet, "/api/resources?type=agent,docker-host,pbs,pmg,k8s-cluster,k8s-node&page=1&limit=100", nil)
+	listRec := httptest.NewRecorder()
+	handlers.HandleListResources(listRec, listReq)
+	if listRec.Code != http.StatusOK {
+		t.Fatalf("/api/resources status = %d, body=%s", listRec.Code, listRec.Body.String())
+	}
+
+	var listResp ResourcesResponse
+	if err := json.NewDecoder(listRec.Body).Decode(&listResp); err != nil {
+		t.Fatalf("decode /api/resources: %v", err)
+	}
+
+	allowedTypes := map[string]bool{
+		"agent":       true,
+		"docker-host": true,
+		"k8s-cluster": true,
+		"k8s-node":    true,
+		"pbs":         true,
+		"pmg":         true,
+	}
+
+	stateContracts := make(map[string]resourceContractSnapshot)
+	for _, resource := range state.Resources {
+		if !allowedTypes[resource.Type] {
+			continue
+		}
+		if resource.Type == "node" {
+			t.Fatalf("/api/state published legacy resource type %#v", resource)
+		}
+		if resource.Name == "pve1" || resource.Name == "edge-apps-01" {
+			t.Fatalf("/api/state published legacy display name %#v", resource)
+		}
+		stateContracts[resource.ID] = resourceContractSnapshot{
+			ID:   resource.ID,
+			Name: resource.Name,
+			Type: resource.Type,
+		}
+	}
+
+	listContracts := make(map[string]resourceContractSnapshot)
+	for _, resource := range listResp.Data {
+		if !allowedTypes[string(resource.Type)] {
+			continue
+		}
+		listContracts[resource.ID] = resourceContractSnapshot{
+			ID:   resource.ID,
+			Name: resource.Name,
+			Type: string(resource.Type),
+		}
+	}
+
+	if !reflect.DeepEqual(stateContracts, listContracts) {
+		t.Fatalf("/api/state and /api/resources resource contracts diverged: state=%#v resources=%#v", stateContracts, listContracts)
+	}
+	foundCanonicalProxmoxName := false
+	for _, resource := range stateContracts {
+		if resource.Name == "West Production A" && resource.Type == "agent" {
+			foundCanonicalProxmoxName = true
+			break
+		}
+	}
+	if !foundCanonicalProxmoxName {
+		t.Fatalf("expected canonical proxmox resource contract in /api/state, got %#v", stateContracts)
 	}
 }
 
