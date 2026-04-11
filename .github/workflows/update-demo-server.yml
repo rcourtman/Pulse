@@ -385,7 +385,6 @@ jobs:
           fi
 
       - name: Verify frontend parity
-        if: steps.current.outputs.skip_current != 'true'
         env:
           DEMO_SERVER_HOST: ${{ secrets.DEMO_SERVER_HOST }}
           DEMO_SERVER_USER: ${{ secrets.DEMO_SERVER_USER }}
@@ -425,6 +424,20 @@ jobs:
         run: |
           set -euo pipefail
           curl -fsS "$DEMO_PUBLIC_HEALTH_URL"
+
+      - name: Verify public browser smoke
+        run: |
+          set -euo pipefail
+          case "$DEMO_PUBLIC_HEALTH_URL" in
+            */api/health)
+              export PULSE_PUBLIC_SITE_URL="${DEMO_PUBLIC_HEALTH_URL%/api/health}/"
+              ;;
+            *)
+              echo "::error::DEMO_PUBLIC_HEALTH_URL must end with /api/health for browser verification."
+              exit 1
+              ;;
+          esac
+          ./scripts/run_demo_public_browser_smoke.sh
 
       - name: Cleanup SSH material
         if: always()

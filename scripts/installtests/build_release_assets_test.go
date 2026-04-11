@@ -127,6 +127,8 @@ func TestDeployDemoWorkflowFailsClosedForPreviewAndVerifiesFrontendParity(t *tes
 		`Preview demo deployments must not target the stable pulse service.`,
 		`Demo environment points at host $REMOTE_HOSTNAME but expected $DEMO_EXPECTED_HOSTNAME.`,
 		`Verify frontend parity`,
+		`Verify public browser smoke`,
+		`./scripts/run_demo_public_browser_smoke.sh`,
 		`extract_entry_asset()`,
 		`<script\b[^>]*\bsrc=\"(/assets/index-[^\"]*\.js)\"`,
 		`Remote service is serving $REMOTE_ASSET but the build expected $EXPECTED_ASSET.`,
@@ -152,6 +154,8 @@ func TestUpdateDemoWorkflowUsesGovernedNetworkPath(t *testing.T) {
 		`authkey: ${{ secrets.TS_AUTHKEY }}`,
 		`Verify target host identity`,
 		`Demo environment points at host $REMOTE_HOSTNAME but expected $DEMO_EXPECTED_HOSTNAME.`,
+		`Verify public browser smoke`,
+		`./scripts/run_demo_public_browser_smoke.sh`,
 	}
 	for _, needle := range required {
 		if !strings.Contains(workflow, needle) {

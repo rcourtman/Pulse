@@ -79,7 +79,8 @@ Optional environment variables:
 7. **Update**: SSHs to the selected demo host and runs the tag-matched root installer from that exact git tag
 8. **Host identity check**: Verifies the SSH target reports the governed expected hostname before running installer or deploy steps
 9. **Verify**: Checks that the new version is running, mock mode is active, and the public demo HTML serves the same frontend entry asset as the target service
-10. **Cleanup**: Removes SSH key from runner
+10. **Browser smoke**: Uses the governed Playwright helper to prove the public demo still renders the login shell in a real browser
+11. **Cleanup**: Removes SSH key from runner
 
 ### Testing
 
@@ -122,6 +123,8 @@ environment without changing the governed release workflow.
 - Verifies the SSH target reports the governed expected hostname before deploy
 - Verifies that the public demo shell serves the same frontend entry asset that
   was built and deployed
+- Uses `scripts/run_demo_public_browser_smoke.sh` to prove the public demo
+  still renders the login shell in Chromium after deploy/update verification
 
 ## Helm CI
 

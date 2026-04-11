@@ -2355,6 +2355,7 @@
         "scripts/check-workflow-dispatch-inputs.py",
         "scripts/clean-mock-alerts.sh",
         "scripts/com.pulse.hot-dev.plist.template",
+        "scripts/demo_public_browser_smoke.cjs",
         "scripts/dev-check.sh",
         "scripts/dev-launchd-setup.sh",
         "scripts/dev-launchd-wrapper.sh",
@@ -2366,6 +2367,7 @@
         "scripts/pulse-auto-update.sh",
         "scripts/release_control/resolve_release_promotion.py",
         "scripts/release_ldflags.sh",
+        "scripts/run_demo_public_browser_smoke.sh",
         "scripts/toggle-mock.sh",
         "scripts/trigger-release-dry-run.sh",
         "scripts/trigger-release.sh",
@@ -2451,6 +2453,21 @@
             "exact_files": [
               "scripts/installtests/build_release_assets_test.go",
               "scripts/installtests/release_ldflags_test.go"
+            ]
+          },
+          {
+            "id": "demo-public-browser-smoke-runtime",
+            "label": "demo public browser smoke proof",
+            "match_prefixes": [],
+            "match_files": [
+              "scripts/demo_public_browser_smoke.cjs",
+              "scripts/run_demo_public_browser_smoke.sh"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "scripts/installtests/build_release_assets_test.go",
+              "scripts/release_control/release_promotion_policy_test.py"
             ]
           },
           {
