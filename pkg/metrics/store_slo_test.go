@@ -25,7 +25,8 @@ import (
 // Baseline measurements (Apple M4, March 2026):
 //   - WriteBatchSync(100): ~2ms locally; ~20.3ms p95 on the April 9, 2026 v6 RC dry run
 //     → local SLO 20ms, GH Actions SLO 25ms
-//   - Query(1000 pts):     ~400µs → SLO 5ms
+//   - Query(1000 pts):     ~400µs locally; ~8.2ms p95 on the April 11, 2026 governed RC dry run
+//     → local SLO 5ms, GH Actions SLO 10ms
 //   - QueryAll(4×500 pts): ~1.8ms locally; ~15.6ms p95 on the April 9, 2026 v6 RC dry run
 //     → local SLO 15ms, GH Actions SLO 25ms
 //   - QueryAllBatch(50×4×100): ~57ms p95 observed locally in March 2026; up to
@@ -58,9 +59,10 @@ const (
 	// SLOQuerySingleP95 is the p95 target for Query (single metric, 1000 raw
 	// points, no downsampling) — the most common dashboard chart query.
 	SLOQuerySingleP95 = 5 * time.Millisecond
-	// SLOQuerySingleGitHubActionsP95 absorbs minor shared-runner jitter while
-	// still flagging obvious single-query regressions.
-	SLOQuerySingleGitHubActionsP95 = 7 * time.Millisecond
+	// SLOQuerySingleGitHubActionsP95 absorbs the slower shared-runner envelope
+	// observed on the April 11, 2026 governed RC dry run while still flagging
+	// obvious single-query regressions.
+	SLOQuerySingleGitHubActionsP95 = 10 * time.Millisecond
 
 	// SLOQueryAllP95 is the p95 target for QueryAll (4 metric types × 500
 	// points each) — dashboard loading all metrics for one resource.
