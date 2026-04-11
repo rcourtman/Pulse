@@ -18,8 +18,7 @@ export function Table(props: TableProps) {
     <div
       {...local.wrapperProps}
       ref={local.wrapperRef}
-      class={`w-full overflow-x-auto ${local.wrapperClass || ''}`}
-      style={{ '-webkit-overflow-scrolling': 'touch' }}
+      class={`w-full overflow-x-auto touch-scroll ${local.wrapperClass || ''}`}
     >
       <table
         class={`w-full border-collapse text-left whitespace-nowrap ${local.class || ''}`}

@@ -6,6 +6,12 @@ import { useStackedDiskBarState } from './useStackedDiskBarState';
 export function StackedDiskBar(props: StackedDiskBarProps) {
   const state = useStackedDiskBarState(props);
   const presentation = state.presentation;
+  const clampPercent = (value: number) => String(Math.max(0, Math.min(value, 100)));
+  const parsePercent = (value: string) => {
+    const parsed = Number.parseFloat(value);
+    if (!Number.isFinite(parsed)) return '0';
+    return String(Math.max(0, Math.min(parsed, 100)));
+  };
 
   return (
     <div ref={state.setContainerRef} class={presentation().containerClass}>
@@ -19,34 +25,70 @@ export function StackedDiskBar(props: StackedDiskBarProps) {
           >
             {/* Stacked segments for multiple disks */}
             <Show when={presentation().useStackedSegments}>
-              <div class="absolute top-0 left-0 h-full w-full flex">
+              <svg
+                aria-hidden="true"
+                class="absolute inset-0 h-full w-full"
+                viewBox="0 0 100 100"
+                preserveAspectRatio="none"
+              >
                 <For each={presentation().segments}>
                   {(segment, idx) => (
-                    <div
-                      class="h-full"
-                      style={{
-                        width: `${segment.widthPercent}%`,
-                        'background-color': segment.color,
-                        'border-right':
-                          idx() < presentation().segments.length - 1
-                            ? '1px solid rgba(255,255,255,0.3)'
-                            : 'none',
-                      }}
-                    />
+                    <>
+                      <rect
+                        data-stacked-disk-fill="segment"
+                        x={String(
+                          presentation()
+                            .segments.slice(0, idx())
+                            .reduce((sum, item) => sum + item.widthPercent, 0),
+                        )}
+                        y="0"
+                        width={clampPercent(segment.widthPercent)}
+                        height="100"
+                        rx="3"
+                        fill={segment.color}
+                      />
+                      <Show when={idx() < presentation().segments.length - 1}>
+                        <line
+                          x1={String(
+                            presentation()
+                              .segments.slice(0, idx() + 1)
+                              .reduce((sum, item) => sum + item.widthPercent, 0),
+                          )}
+                          x2={String(
+                            presentation()
+                              .segments.slice(0, idx() + 1)
+                              .reduce((sum, item) => sum + item.widthPercent, 0),
+                          )}
+                          y1="0"
+                          y2="100"
+                          stroke="rgba(255,255,255,0.3)"
+                          stroke-width="1"
+                        />
+                      </Show>
+                    </>
                   )}
                 </For>
-              </div>
+              </svg>
             </Show>
 
             {/* Single bar for aggregate or single disk */}
             <Show when={!presentation().useStackedSegments}>
-              <div
-                class="absolute top-0 left-0 h-full"
-                style={{
-                  width: `${presentation().barPercent}%`,
-                  'background-color': presentation().barColor,
-                }}
-              />
+              <svg
+                aria-hidden="true"
+                class="absolute inset-0 h-full w-full"
+                viewBox="0 0 100 100"
+                preserveAspectRatio="none"
+              >
+                <rect
+                  data-stacked-disk-fill="single"
+                  x="0"
+                  y="0"
+                  width={clampPercent(presentation().barPercent)}
+                  height="100"
+                  rx="3"
+                  fill={presentation().barColor}
+                />
+              </svg>
             </Show>
 
             {/* Label overlay */}
@@ -83,26 +125,30 @@ export function StackedDiskBar(props: StackedDiskBarProps) {
         }
       >
         <div class="w-full" onMouseEnter={state.handleMouseEnter} onMouseLeave={state.handleMouseLeave}>
-          <div
-            class="grid gap-1"
-            style={{
-              'grid-template-columns': `repeat(${presentation().miniDisks.length}, minmax(0, 1fr))`,
-            }}
-          >
+          <div class="flex items-stretch gap-1">
             <For each={presentation().miniDisks}>
               {(disk) => (
-                <div class="flex flex-col items-stretch gap-0.5">
+                <div class="flex min-w-0 flex-1 flex-col items-stretch gap-0.5">
                   <span class="text-[8px] text-muted truncate" title={disk.label}>
                     {disk.label}
                   </span>
                   <div class="relative h-2.5 rounded-sm bg-surface-alt overflow-hidden">
-                    <div
-                      class="h-full"
-                      style={{
-                        width: `${Math.min(disk.percent, 100)}%`,
-                        'background-color': disk.color,
-                      }}
-                    />
+                    <svg
+                      aria-hidden="true"
+                      class="absolute inset-0 h-full w-full"
+                      viewBox="0 0 100 100"
+                      preserveAspectRatio="none"
+                    >
+                      <rect
+                        data-stacked-disk-fill="mini"
+                        x="0"
+                        y="0"
+                        width={clampPercent(disk.percent)}
+                        height="100"
+                        rx="2"
+                        fill={disk.color}
+                      />
+                    </svg>
                   </div>
                 </div>
               )}
@@ -128,21 +174,33 @@ export function StackedDiskBar(props: StackedDiskBarProps) {
                 classList={{ 'border-t border-border': idx() > 0 }}
               >
                 <div class="flex justify-between gap-3">
-                  <span class="truncate max-w-[100px]" style={{ color: item.color }}>
-                    {item.label}
+                  <span class="flex max-w-[100px] items-center gap-1 truncate text-slate-300">
+                    <svg aria-hidden="true" class="h-2 w-2 shrink-0" viewBox="0 0 8 8">
+                      <circle cx="4" cy="4" r="4" fill={item.color} />
+                    </svg>
+                    <span class="truncate">{item.label}</span>
                   </span>
                   <span class="whitespace-nowrap text-slate-300">
                     {item.percent} ({item.used}/{item.total})
                   </span>
                 </div>
-                <div class="h-1.5 w-full rounded bg-surface-hover overflow-hidden">
-                  <div
-                    class="h-full"
-                    style={{
-                      width: item.percent,
-                      'background-color': item.color,
-                    }}
-                  />
+                <div class="relative h-1.5 w-full overflow-hidden rounded bg-surface-hover">
+                  <svg
+                    aria-hidden="true"
+                    class="absolute inset-0 h-full w-full"
+                    viewBox="0 0 100 100"
+                    preserveAspectRatio="none"
+                  >
+                    <rect
+                      data-stacked-disk-fill="tooltip"
+                      x="0"
+                      y="0"
+                      width={parsePercent(item.percent)}
+                      height="100"
+                      rx="2"
+                      fill={item.color}
+                    />
+                  </svg>
                 </div>
               </div>
             )}

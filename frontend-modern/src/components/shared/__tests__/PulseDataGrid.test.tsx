@@ -35,6 +35,9 @@ describe('PulseDataGrid', () => {
     expect(pulseDataGridModelSource).toContain('target.closest(');
     expect(tableSource).toContain('customDividePattern');
     expect(tableSource).toContain('customBorderPattern');
+    expect(tableSource).toContain('touch-scroll');
+    expect(tableSource).not.toContain('style={{');
+    expect(tableSource).not.toContain('style={');
   });
 
   it('triggers the row handler when a non-interactive cell is clicked', () => {

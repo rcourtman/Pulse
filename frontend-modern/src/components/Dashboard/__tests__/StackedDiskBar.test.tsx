@@ -53,23 +53,15 @@ function getBarTrigger(container: HTMLElement): HTMLElement {
 }
 
 /** Get single-bar fill elements (non-stacked mode). */
-function getSingleBarFill(container: HTMLElement): HTMLElement | null {
-  // Single bar is .absolute.top-0.left-0.h-full that is a direct child (not inside a flex container)
-  const fills = container.querySelectorAll<HTMLElement>('.absolute.top-0.left-0.h-full');
-  // In non-stacked mode, the single bar is not inside a .flex container
-  for (const fill of fills) {
-    if (!fill.parentElement?.classList.contains('flex')) {
-      return fill;
-    }
-  }
-  return fills[0] ?? null;
+function getSingleBarFill(container: HTMLElement): SVGRectElement | null {
+  return container.querySelector('rect[data-stacked-disk-fill="single"]');
 }
 
 /** Get stacked segment elements. */
-function getStackedSegments(container: HTMLElement): HTMLElement[] {
-  const flexContainer = container.querySelector('.absolute.top-0.left-0.h-full.w-full.flex');
-  if (!flexContainer) return [];
-  return Array.from(flexContainer.children) as HTMLElement[];
+function getStackedSegments(container: HTMLElement): SVGRectElement[] {
+  return Array.from(
+    container.querySelectorAll<SVGRectElement>('rect[data-stacked-disk-fill="segment"]'),
+  );
 }
 
 afterEach(() => {
@@ -105,7 +97,7 @@ describe('StackedDiskBar', () => {
       const { container } = render(() => <StackedDiskBar disks={[disk]} />);
       const bar = getSingleBarFill(container);
       expect(bar).toBeInTheDocument();
-      expect(bar).toHaveStyle({ width: '50%' });
+      expect(bar).toHaveAttribute('width', '50');
     });
 
     it('does not show stacked segments for a single disk', () => {
@@ -179,18 +171,15 @@ describe('StackedDiskBar', () => {
       // Total capacity = 150 GiB
       // disk1 used = 20 GiB → 20/150 ≈ 13.33%
       // disk2 used = 50 GiB → 50/150 ≈ 33.33%
-      const width1 = parseFloat(segments[0].style.width);
-      const width2 = parseFloat(segments[1].style.width);
+      const width1 = parseFloat(segments[0].getAttribute('width') ?? '0');
+      const width2 = parseFloat(segments[1].getAttribute('width') ?? '0');
       expect(width1).toBeCloseTo(13.33, 0);
       expect(width2).toBeCloseTo(33.33, 0);
     });
 
-    it('adds border-right separator between segments', () => {
+    it('adds separators between stacked segments', () => {
       const { container } = render(() => <StackedDiskBar disks={[disk1, disk2]} />);
-      const segments = getStackedSegments(container);
-      expect(segments[0].style.borderRight).toContain('1px solid');
-      // Last segment has border-right: 'none' in source, which jsdom omits from style
-      expect(segments[1].style.borderRight).not.toContain('1px solid');
+      expect(container.querySelectorAll('line')).toHaveLength(1);
     });
   });
 
@@ -240,26 +229,23 @@ describe('StackedDiskBar', () => {
       expect(screen.getByText('Disk 1')).toBeInTheDocument();
     });
 
-    it('renders grid layout with correct column count', () => {
+    it('renders one equal-width mini column per disk', () => {
       const disk1 = makeDisk({ mountpoint: '/boot' });
       const disk2 = makeDisk({ mountpoint: '/data' });
       const disk3 = makeDisk({ mountpoint: '/var' });
       const { container } = render(() => (
         <StackedDiskBar disks={[disk1, disk2, disk3]} mode="mini" />
       ));
-      const grid = container.querySelector('.grid');
-      expect(grid).toBeInTheDocument();
-      expect(grid).toHaveStyle({
-        'grid-template-columns': 'repeat(3, minmax(0, 1fr))',
-      });
+      const columns = container.querySelectorAll('.flex.min-w-0.flex-1.flex-col.items-stretch.gap-0\\.5');
+      expect(columns).toHaveLength(3);
     });
 
     it('clamps mini bar fill width to exactly 100% when used exceeds total', () => {
       const disk = makeDisk({ used: 200000000000, total: 107374182400, mountpoint: '/full' });
       const { container } = render(() => <StackedDiskBar disks={[disk]} mode="mini" />);
-      const miniBars = container.querySelectorAll('.h-full');
-      const barFill = miniBars[miniBars.length - 1] as HTMLElement;
-      expect(barFill.style.width).toBe('100%');
+      const miniBars = container.querySelectorAll<SVGRectElement>('rect[data-stacked-disk-fill="mini"]');
+      const barFill = miniBars[miniBars.length - 1];
+      expect(barFill).toHaveAttribute('width', '100');
     });
   });
 
@@ -325,7 +311,7 @@ describe('StackedDiskBar', () => {
       const bar = getSingleBarFill(container);
       expect(bar).toBeInTheDocument();
       // Normal green: rgba(34, 197, 94, 0.6)
-      expect(bar!.style.backgroundColor).toContain('34, 197, 94');
+      expect(bar?.getAttribute('fill')).toContain('34, 197, 94');
     });
 
     it('uses warning color for disk at 80-89%', () => {
@@ -337,7 +323,7 @@ describe('StackedDiskBar', () => {
       const bar = getSingleBarFill(container);
       expect(bar).toBeInTheDocument();
       // Warning yellow: rgba(234, 179, 8, 0.6)
-      expect(bar!.style.backgroundColor).toContain('234, 179, 8');
+      expect(bar?.getAttribute('fill')).toContain('234, 179, 8');
     });
 
     it('uses critical color for disk at 90%+', () => {
@@ -349,7 +335,7 @@ describe('StackedDiskBar', () => {
       const bar = getSingleBarFill(container);
       expect(bar).toBeInTheDocument();
       // Critical red: rgba(239, 68, 68, 0.6)
-      expect(bar!.style.backgroundColor).toContain('239, 68, 68');
+      expect(bar?.getAttribute('fill')).toContain('239, 68, 68');
     });
 
     it('uses warning color for stacked segment at 80-89%', () => {
@@ -367,9 +353,9 @@ describe('StackedDiskBar', () => {
       const segments = getStackedSegments(container);
       expect(segments.length).toBe(2);
       // First segment: normal → palette color (green)
-      expect(segments[0].style.backgroundColor).toContain('34, 197, 94');
+      expect(segments[0].getAttribute('fill')).toContain('34, 197, 94');
       // Second segment: warning → yellow
-      expect(segments[1].style.backgroundColor).toContain('234, 179, 8');
+      expect(segments[1].getAttribute('fill')).toContain('234, 179, 8');
     });
 
     it('uses critical color for stacked segment at 90%+', () => {
@@ -387,9 +373,9 @@ describe('StackedDiskBar', () => {
       const segments = getStackedSegments(container);
       expect(segments.length).toBe(2);
       // First segment: normal → palette color
-      expect(segments[0].style.backgroundColor).not.toContain('239, 68, 68');
+      expect(segments[0].getAttribute('fill')).not.toContain('239, 68, 68');
       // Second segment: critical → red
-      expect(segments[1].style.backgroundColor).toContain('239, 68, 68');
+      expect(segments[1].getAttribute('fill')).toContain('239, 68, 68');
     });
   });
 
@@ -404,7 +390,7 @@ describe('StackedDiskBar', () => {
       const { container } = render(() => <StackedDiskBar disks={[disk]} />);
       const bar = getSingleBarFill(container);
       expect(bar).toBeInTheDocument();
-      expect(bar!.style.width).toBe('100%');
+      expect(bar).toHaveAttribute('width', '100');
     });
   });
 
@@ -493,7 +479,7 @@ describe('StackedDiskBar', () => {
       const bar = getSingleBarFill(container);
       expect(bar).toBeInTheDocument();
       // Bar color should be critical (based on max disk at 92%)
-      expect(bar!.style.backgroundColor).toContain('239, 68, 68');
+      expect(bar?.getAttribute('fill')).toContain('239, 68, 68');
     });
   });
 });

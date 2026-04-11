@@ -836,6 +836,8 @@ describe('Dashboard performance contract', () => {
 
     it('keeps stacked disk bar runtime and derivations in canonical owners', () => {
       expect(stackedDiskBarSource).toContain('useStackedDiskBarState');
+      expect(stackedDiskBarSource).not.toContain('style={{');
+      expect(stackedDiskBarSource).not.toContain('style={');
       expect(stackedDiskBarSource).not.toContain('const [containerWidth, setContainerWidth] =');
       expect(stackedDiskBarSource).not.toContain('const tooltipContent = createMemo(() => {');
       expect(stackedDiskBarSource).not.toContain('const SEGMENT_COLORS =');
@@ -848,6 +850,8 @@ describe('Dashboard performance contract', () => {
 
     it('keeps stacked memory bar runtime and derivations in canonical owners', () => {
       expect(stackedMemoryBarSource).toContain('useStackedMemoryBarState');
+      expect(stackedMemoryBarSource).not.toContain('style={{');
+      expect(stackedMemoryBarSource).not.toContain('style={');
       expect(stackedMemoryBarSource).not.toContain('const [containerWidth, setContainerWidth] =');
       expect(stackedMemoryBarSource).not.toContain('const segments = createMemo(() => {');
       expect(stackedMemoryBarSource).not.toContain('const MEMORY_COLORS =');
@@ -873,6 +877,8 @@ describe('Dashboard performance contract', () => {
 
     it('keeps enhanced CPU bar runtime and derivations in canonical owners', () => {
       expect(enhancedCpuBarSource).toContain('useEnhancedCPUBarState');
+      expect(enhancedCpuBarSource).not.toContain('style={{');
+      expect(enhancedCpuBarSource).not.toContain('style={');
       expect(enhancedCpuBarSource).not.toContain('const tip = useTooltip()');
       expect(enhancedCpuBarSource).not.toContain('const barColor = createMemo(() =>');
       expect(enhancedCpuBarSource).not.toContain('const anomalyRatio = createMemo(() =>');
@@ -887,6 +893,8 @@ describe('Dashboard performance contract', () => {
     it('keeps guest row contract and hot-path state in canonical row owners', () => {
       expect(guestRowSource).toContain('useGuestRowState');
       expect(guestRowSource).toContain("from './GuestRowCells'");
+      expect(guestRowSource).not.toContain('style={{');
+      expect(guestRowSource).not.toContain('style={');
       expect(guestRowSource).not.toContain('export const GUEST_COLUMNS');
       expect(guestRowSource).not.toContain('const guestId = createMemo(');
       expect(guestRowSource).not.toContain('function NetworkInfoCell(');
@@ -899,6 +907,8 @@ describe('Dashboard performance contract', () => {
       expect(guestRowStateSource).toContain("from '@/routing/resourceLinks'");
       expect(guestRowStateSource).toContain("from './workloadTopology'");
       expect(guestRowStateSource).not.toContain("./infrastructureLink");
+      expect(guestRowStateSource).not.toContain('rowStyle');
+      expect(guestRowStateSource).not.toContain('box-shadow');
       expect(guestRowStateSource).toContain('getWorkloadTypeBadge');
       expect(guestRowCellsSource).toContain('export { BackupIndicator');
       expect(guestRowCellsSource).toContain('function NetworkInfoCell(');
@@ -941,17 +951,23 @@ describe('Dashboard performance contract', () => {
       expect(dashboardSource).not.toContain('NodeGroupHeader');
       expect(dashboardWorkloadTableSource).toContain('WorkloadTableHeader');
       expect(dashboardWorkloadTableSource).toContain('WorkloadPanel');
+      expect(dashboardWorkloadTableSource).not.toContain('style={{');
+      expect(dashboardWorkloadTableSource).not.toContain('style={');
       expect(dashboardWorkloadTableSource).not.toContain('<TableHead');
       expect(dashboardWorkloadTableSource).not.toContain('NodeGroupHeader');
       expect(dashboardWorkloadTableSource).not.toContain('GuestDrawer');
       expect(workloadTableHeaderSource).toContain('TableHead');
       expect(workloadTableHeaderSource).toContain("col.sortKey as WorkloadSortKey");
+      expect(workloadTableHeaderSource).not.toContain('style={{');
+      expect(workloadTableHeaderSource).not.toContain('style={');
       expect(workloadTableHeaderSource).not.toContain('NodeGroupHeader');
       expect(workloadPanelSource).toContain('NodeGroupHeader');
       expect(workloadPanelSource).toContain('GuestDrawer');
       expect(workloadPanelSource).toContain('createMemo(() => getCanonicalWorkloadId(guest()))');
       expect(workloadPanelSource).toContain('createSummaryInteractiveRowPreviewHandlers');
       expect(workloadPanelSource).toContain('resolveSummaryGroupMemberInteractionState');
+      expect(workloadPanelSource).not.toContain('style={{');
+      expect(workloadPanelSource).not.toContain('style={');
       expect(workloadPanelSource).not.toContain('kind="scope"');
       expect(workloadPanelSource).not.toContain('leadingAction={');
       expect(dashboardSelectionStateSource).toContain('activeSummaryWorkloadGroupScope');

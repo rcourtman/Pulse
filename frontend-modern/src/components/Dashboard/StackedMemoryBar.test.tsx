@@ -15,6 +15,16 @@ global.ResizeObserver = class ResizeObserver {
   unobserve = vi.fn();
 };
 
+function getSegments(container: HTMLElement): SVGRectElement[] {
+  return Array.from(
+    container.querySelectorAll<SVGRectElement>('rect[data-stacked-memory-segment="true"]'),
+  );
+}
+
+function getSwapBar(container: HTMLElement): SVGRectElement | null {
+  return container.querySelector('rect[data-stacked-memory-swap="true"]');
+}
+
 describe('StackedMemoryBar', () => {
   beforeEach(() => {
     Object.defineProperty(HTMLElement.prototype, 'offsetWidth', { configurable: true, value: 200 });
@@ -65,9 +75,9 @@ describe('StackedMemoryBar', () => {
       <StackedMemoryBar used={10 * 1024 ** 3} total={8 * 1024 ** 3} />
     ));
     expect(screen.getByText('125%')).toBeInTheDocument();
-    // Segment width also exceeds 100% (CSS overflow:hidden on parent clips visually)
-    const segment = container.querySelector('.absolute.top-0.h-full') as HTMLElement;
-    expect(segment.style.width).toBe('125%');
+    // Segment width also exceeds 100% (the SVG viewBox clips visually)
+    const segment = getSegments(container)[0];
+    expect(segment).toHaveAttribute('width', '125');
   });
 
   // ---- Segments ----
@@ -77,10 +87,10 @@ describe('StackedMemoryBar', () => {
       <StackedMemoryBar used={2 * 1024 ** 3} total={8 * 1024 ** 3} />
     ));
     // The bar fills 25%
-    const segments = container.querySelectorAll('.absolute.top-0.h-full');
+    const segments = getSegments(container);
     expect(segments.length).toBe(1);
-    expect((segments[0] as HTMLElement).style.width).toBe('25%');
-    expect((segments[0] as HTMLElement).style.left).toBe('0%');
+    expect(segments[0]).toHaveAttribute('width', '25');
+    expect(segments[0]).toHaveAttribute('x', '0');
   });
 
   it('renders balloon segment when active ballooning is in effect', () => {
@@ -88,14 +98,14 @@ describe('StackedMemoryBar', () => {
     const { container } = render(() => (
       <StackedMemoryBar used={2 * 1024 ** 3} total={8 * 1024 ** 3} balloon={4 * 1024 ** 3} />
     ));
-    const segments = container.querySelectorAll('.absolute.top-0.h-full');
+    const segments = getSegments(container);
     // Active segment + Balloon segment
     expect(segments.length).toBe(2);
     // Active: 2/8 = 25%
-    expect((segments[0] as HTMLElement).style.width).toBe('25%');
+    expect(segments[0]).toHaveAttribute('width', '25');
     // Balloon: (4/8)*100 - 25 = 25%
-    expect((segments[1] as HTMLElement).style.width).toBe('25%');
-    expect((segments[1] as HTMLElement).style.left).toBe('25%');
+    expect(segments[1]).toHaveAttribute('width', '25');
+    expect(segments[1]).toHaveAttribute('x', '25');
   });
 
   it('does not render balloon segment when balloon equals total', () => {
@@ -103,7 +113,7 @@ describe('StackedMemoryBar', () => {
     const { container } = render(() => (
       <StackedMemoryBar used={2 * 1024 ** 3} total={8 * 1024 ** 3} balloon={8 * 1024 ** 3} />
     ));
-    const segments = container.querySelectorAll('.absolute.top-0.h-full');
+    const segments = getSegments(container);
     expect(segments.length).toBe(1);
   });
 
@@ -111,7 +121,7 @@ describe('StackedMemoryBar', () => {
     const { container } = render(() => (
       <StackedMemoryBar used={2 * 1024 ** 3} total={8 * 1024 ** 3} balloon={0} />
     ));
-    const segments = container.querySelectorAll('.absolute.top-0.h-full');
+    const segments = getSegments(container);
     expect(segments.length).toBe(1);
   });
 
@@ -120,23 +130,23 @@ describe('StackedMemoryBar', () => {
     const { container } = render(() => (
       <StackedMemoryBar used={5 * 1024 ** 3} total={8 * 1024 ** 3} balloon={4 * 1024 ** 3} />
     ));
-    const segments = container.querySelectorAll('.absolute.top-0.h-full');
+    const segments = getSegments(container);
     // Only active segment (balloon filtered out because used > balloon)
     expect(segments.length).toBe(1);
   });
 
   it('renders no segments when used is 0 and total > 0', () => {
     const { container } = render(() => <StackedMemoryBar used={0} total={8 * 1024 ** 3} />);
-    const segments = container.querySelectorAll('.absolute.top-0.h-full');
+    const segments = getSegments(container);
     // bytes=0 is filtered out
     expect(segments.length).toBe(0);
   });
 
   it('renders percent-only segment (no bytes) when total is 0 but percentOnly > 0', () => {
     const { container } = render(() => <StackedMemoryBar used={0} total={0} percentOnly={60} />);
-    const segments = container.querySelectorAll('.absolute.top-0.h-full');
+    const segments = getSegments(container);
     expect(segments.length).toBe(1);
-    expect((segments[0] as HTMLElement).style.width).toBe('60%');
+    expect(segments[0]).toHaveAttribute('width', '60');
   });
 
   // ---- Swap ----
@@ -151,10 +161,10 @@ describe('StackedMemoryBar', () => {
       />
     ));
     // Swap indicator is the 3px bar at the bottom
-    const swapBar = container.querySelector('.h-\\[3px\\]');
+    const swapBar = getSwapBar(container);
     expect(swapBar).toBeInTheDocument();
     // 1/2 = 50%
-    expect((swapBar as HTMLElement).style.width).toBe('50%');
+    expect(swapBar).toHaveAttribute('width', '50');
   });
 
   it('does not render swap indicator when swapUsed is 0', () => {
@@ -166,7 +176,7 @@ describe('StackedMemoryBar', () => {
         swapTotal={2 * 1024 ** 3}
       />
     ));
-    const swapBar = container.querySelector('.h-\\[3px\\]');
+    const swapBar = getSwapBar(container);
     expect(swapBar).not.toBeInTheDocument();
   });
 
@@ -174,7 +184,7 @@ describe('StackedMemoryBar', () => {
     const { container } = render(() => (
       <StackedMemoryBar used={4 * 1024 ** 3} total={8 * 1024 ** 3} swapTotal={0} />
     ));
-    const swapBar = container.querySelector('.h-\\[3px\\]');
+    const swapBar = getSwapBar(container);
     expect(swapBar).not.toBeInTheDocument();
   });
 
@@ -187,10 +197,10 @@ describe('StackedMemoryBar', () => {
         swapTotal={2 * 1024 ** 3}
       />
     ));
-    const swapBar = container.querySelector('.h-\\[3px\\]');
+    const swapBar = getSwapBar(container);
     expect(swapBar).toBeInTheDocument();
     // Math.min(150, 100) = 100%
-    expect((swapBar as HTMLElement).style.width).toBe('100%');
+    expect(swapBar).toHaveAttribute('width', '100');
   });
 
   // ---- Sublabel (bytes display) ----
@@ -281,27 +291,27 @@ describe('StackedMemoryBar', () => {
     const { container } = render(() => (
       <StackedMemoryBar used={2 * 1024 ** 3} total={8 * 1024 ** 3} />
     ));
-    const segment = container.querySelector('.absolute.top-0.h-full') as HTMLElement;
+    const segment = getSegments(container)[0];
     // 25% → normal → green
-    expect(segment.style.backgroundColor).toContain('34, 197, 94');
+    expect(segment.getAttribute('fill')).toContain('34, 197, 94');
   });
 
   it('uses yellow color for warning-level memory usage', () => {
     const { container } = render(() => (
       <StackedMemoryBar used={6 * 1024 ** 3} total={8 * 1024 ** 3} />
     ));
-    const segment = container.querySelector('.absolute.top-0.h-full') as HTMLElement;
+    const segment = getSegments(container)[0];
     // 75% → warning → yellow
-    expect(segment.style.backgroundColor).toContain('234, 179, 8');
+    expect(segment.getAttribute('fill')).toContain('234, 179, 8');
   });
 
   it('uses red color for critical memory usage', () => {
     const { container } = render(() => (
       <StackedMemoryBar used={7 * 1024 ** 3} total={8 * 1024 ** 3} />
     ));
-    const segment = container.querySelector('.absolute.top-0.h-full') as HTMLElement;
+    const segment = getSegments(container)[0];
     // 87.5% → critical → red
-    expect(segment.style.backgroundColor).toContain('239, 68, 68');
+    expect(segment.getAttribute('fill')).toContain('239, 68, 68');
   });
 
   // ---- ResizeObserver lifecycle ----

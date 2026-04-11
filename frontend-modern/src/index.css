@@ -173,6 +173,131 @@
     @apply border-b border-border hover:bg-surface-hover;
   }
 
+  .workload-table {
+    table-layout: fixed;
+    min-width: max-content;
+  }
+
+  .workload-table--mobile {
+    min-width: 100%;
+  }
+
+  .workload-table [data-workload-col='name'] {
+    width: 200px;
+    min-width: 200px;
+    max-width: 200px;
+  }
+
+  .workload-table [data-workload-col='info'] {
+    width: 100px;
+    min-width: 100px;
+    max-width: 100px;
+  }
+
+  .workload-table [data-workload-col='vmid'],
+  .workload-table [data-workload-col='ip'],
+  .workload-table [data-workload-col='os'] {
+    width: 45px;
+    min-width: 45px;
+    max-width: 45px;
+  }
+
+  .workload-table [data-workload-col='cpu'],
+  .workload-table [data-workload-col='memory'],
+  .workload-table [data-workload-col='disk'] {
+    width: 140px;
+    min-width: 140px;
+    max-width: 140px;
+  }
+
+  .workload-table [data-workload-col='uptime'],
+  .workload-table [data-workload-col='tags'],
+  .workload-table [data-workload-col='update'] {
+    width: 60px;
+    min-width: 60px;
+    max-width: 60px;
+  }
+
+  .workload-table [data-workload-col='node'] {
+    width: 70px;
+    min-width: 70px;
+    max-width: 70px;
+  }
+
+  .workload-table [data-workload-col='image'] {
+    width: 140px;
+    min-width: 120px;
+    max-width: 140px;
+  }
+
+  .workload-table [data-workload-col='namespace'] {
+    width: 110px;
+    min-width: 90px;
+    max-width: 110px;
+  }
+
+  .workload-table [data-workload-col='context'] {
+    width: 120px;
+    min-width: 100px;
+    max-width: 120px;
+  }
+
+  .workload-table [data-workload-col='backup'] {
+    width: 50px;
+    min-width: 50px;
+    max-width: 50px;
+  }
+
+  .workload-table [data-workload-col='netIo'],
+  .workload-table [data-workload-col='diskIo'] {
+    width: 130px;
+    min-width: 120px;
+    max-width: 130px;
+  }
+
+  .workload-table [data-workload-col='link'] {
+    width: 28px;
+    min-width: 28px;
+    max-width: 28px;
+  }
+
+  .workload-table--mobile [data-workload-col='name'] {
+    width: auto;
+    min-width: 120px;
+    max-width: none;
+  }
+
+  .workload-table--mobile [data-workload-col='cpu'],
+  .workload-table--mobile [data-workload-col='memory'],
+  .workload-table--mobile [data-workload-col='disk'] {
+    width: 70px;
+    min-width: 60px;
+    max-width: 70px;
+  }
+
+  .workload-table--mobile [data-workload-col='netIo'],
+  .workload-table--mobile [data-workload-col='diskIo'] {
+    width: 170px;
+    min-width: 170px;
+    max-width: 170px;
+  }
+
+  .workload-row {
+    min-height: 32px;
+  }
+
+  .workload-row[data-workload-alert-accent='critical'] > td:first-child {
+    box-shadow: inset 4px 0 0 0 #ef4444;
+  }
+
+  .workload-row[data-workload-alert-accent='warning'] > td:first-child {
+    box-shadow: inset 4px 0 0 0 #eab308;
+  }
+
+  .workload-row[data-workload-alert-accent='acknowledged'] > td:first-child {
+    box-shadow: inset 4px 0 0 0 #9ca3af;
+  }
+
   tr[data-summary-group-member-active='preview'] > td,
   tr[data-summary-group-member-active='preview'] > th {
     background-color: var(--color-summary-group-member-preview-bg);

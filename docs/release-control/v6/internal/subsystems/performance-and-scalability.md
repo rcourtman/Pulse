@@ -250,6 +250,17 @@ regression protection.
     second dashboard data load, widen suspense ownership, or force dashboard
     summaries back through full-resource fetch paths just to satisfy page
     chrome.
+35. Keep the dashboard workloads table CSP-safe on the hot path. The renderers
+    in `frontend-modern/src/components/Dashboard/DashboardWorkloadTable.tsx`,
+    `frontend-modern/src/components/Dashboard/WorkloadTableHeader.tsx`,
+    `frontend-modern/src/components/Dashboard/GuestRow.tsx`,
+    `frontend-modern/src/components/Dashboard/EnhancedCPUBar.tsx`,
+    `frontend-modern/src/components/Dashboard/StackedMemoryBar.tsx`, and
+    `frontend-modern/src/components/Dashboard/StackedDiskBar.tsx` may still
+    use shared models plus SVG or HTML attributes for widths, offsets, and
+    colors, but they must not fall back to inline `style=` attributes on the
+    public shell just to express virtualization spacers, alert accents, or
+    workload metric bars.
 
 ## Forbidden Paths
 

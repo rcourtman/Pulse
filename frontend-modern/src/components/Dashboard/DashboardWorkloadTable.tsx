@@ -71,11 +71,7 @@ export function DashboardWorkloadTable(props: DashboardWorkloadTableProps) {
         />
         <Table
           wrapperRef={props.setTableWrapperRef}
-          class="whitespace-nowrap min-w-[max-content]"
-          style={{
-            'table-layout': 'fixed',
-            'min-width': props.isMobile() ? '100%' : 'max-content',
-          }}
+          class={`workload-table ${props.isMobile() ? 'workload-table--mobile' : 'workload-table--desktop'}`}
         >
           <WorkloadTableHeader
             handleSort={props.handleSort}

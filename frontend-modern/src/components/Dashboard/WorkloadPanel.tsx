@@ -59,10 +59,14 @@ export function WorkloadPanel(props: WorkloadPanelProps) {
     <TableBody ref={props.setTableBodyRef} class="divide-y divide-border">
       <Show when={props.groupedWindowing.isWindowed() && props.topSpacerHeight() > 0}>
         <TableRow aria-hidden="true">
-          <TableCell
-            colspan={props.totalColumns()}
-            style={{ height: `${props.topSpacerHeight()}px`, padding: '0', border: '0' }}
-          />
+          <TableCell colspan={props.totalColumns()} class="p-0 border-0">
+            <svg
+              aria-hidden="true"
+              width="1"
+              height={String(props.topSpacerHeight())}
+              class="block w-px pointer-events-none"
+            />
+          </TableCell>
         </TableRow>
       </Show>
       <Index each={props.visibleGroupKeys()} fallback={<></>}>
@@ -226,10 +230,14 @@ export function WorkloadPanel(props: WorkloadPanelProps) {
       </Index>
       <Show when={props.groupedWindowing.isWindowed() && props.bottomSpacerHeight() > 0}>
         <TableRow aria-hidden="true">
-          <TableCell
-            colspan={props.totalColumns()}
-            style={{ height: `${props.bottomSpacerHeight()}px`, padding: '0', border: '0' }}
-          />
+          <TableCell colspan={props.totalColumns()} class="p-0 border-0">
+            <svg
+              aria-hidden="true"
+              width="1"
+              height={String(props.bottomSpacerHeight())}
+              class="block w-px pointer-events-none"
+            />
+          </TableCell>
         </TableRow>
       </Show>
     </TableBody>

@@ -1,6 +1,6 @@
 import type { AnomalyReport } from '@/types/aiIntelligence';
 import { ANOMALY_SEVERITY_CLASS, formatAnomalyRatio, formatPercent } from '@/utils/format';
-import { getMetricColorClass } from '@/utils/metricThresholds';
+import { getMetricColorClass, getMetricColorRgba } from '@/utils/metricThresholds';
 
 export interface EnhancedCPUBarProps {
   usage: number;
@@ -16,6 +16,7 @@ export interface EnhancedCPUBarPresentation {
   anomalyDescription?: string;
   anomalyRatio: string;
   barClass: string;
+  barFill: string;
   barWidth: string;
   displayLoadAverage?: string;
   displayUsage: string;
@@ -35,6 +36,7 @@ export function buildEnhancedCPUBarPresentation(
     anomalyDescription: props.anomaly?.description,
     anomalyRatio,
     barClass: getMetricColorClass(props.usage, 'cpu'),
+    barFill: getMetricColorRgba(props.usage, 'cpu'),
     barWidth: `${Math.min(props.usage, 100)}%`,
     displayLoadAverage:
       props.loadAverage !== undefined ? props.loadAverage.toFixed(2) : undefined,

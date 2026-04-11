@@ -79,8 +79,8 @@ export function GuestRow(props: GuestRowProps) {
     ociImage,
     osName,
     osVersion,
+    alertAccentTone,
     rowClass,
-    rowStyle,
     supportsBackup,
     typeInfo,
     workloadType,
@@ -106,9 +106,9 @@ export function GuestRow(props: GuestRowProps) {
   return (
     <>
       <tr
-        class={`${rowClass()} ${props.onClick ? 'cursor-pointer group' : ''}`.trim()}
-        style={rowStyle()}
+        class={`${rowClass()} workload-row ${props.onClick ? 'cursor-pointer group' : ''}`.trim()}
         data-guest-id={guestId()}
+        data-workload-alert-accent={alertAccentTone()}
         data-summary-series-id={guestId()}
         data-summary-group-member-active={
           props.summaryGroupMemberState && props.summaryGroupMemberState !== 'default'
@@ -211,14 +211,7 @@ export function GuestRow(props: GuestRowProps) {
 
         {/* CPU */}
         <Show when={isColVisible('cpu')}>
-          <td
-            class="px-1.5 sm:px-2 py-0.5 align-middle"
-            style={
-              isMobile()
-                ? { 'min-width': '60px' }
-                : { width: '140px', 'min-width': '140px', 'max-width': '140px' }
-            }
-          >
+          <td class="px-1.5 sm:px-2 py-0.5 align-middle" data-workload-col="cpu">
             <div class="h-4">
               <EnhancedCPUBar
                 usage={cpuPercent()}
@@ -232,14 +225,7 @@ export function GuestRow(props: GuestRowProps) {
 
         {/* Memory */}
         <Show when={isColVisible('memory')}>
-          <td
-            class="px-1.5 sm:px-2 py-0.5 align-middle"
-            style={
-              isMobile()
-                ? { 'min-width': '60px' }
-                : { width: '140px', 'min-width': '140px', 'max-width': '140px' }
-            }
-          >
+          <td class="px-1.5 sm:px-2 py-0.5 align-middle" data-workload-col="memory">
             <div title={memoryTooltip() ?? undefined}>
               <StackedMemoryBar
                 used={props.guest.memory?.used || 0}
@@ -257,14 +243,7 @@ export function GuestRow(props: GuestRowProps) {
 
         {/* Disk */}
         <Show when={isColVisible('disk')}>
-          <td
-            class="px-1.5 sm:px-2 py-0.5 align-middle"
-            style={
-              isMobile()
-                ? { 'min-width': '60px' }
-                : { width: '140px', 'min-width': '140px', 'max-width': '140px' }
-            }
-          >
+          <td class="px-1.5 sm:px-2 py-0.5 align-middle" data-workload-col="disk">
             <Show
               when={hasDiskUsage()}
               fallback={

@@ -216,12 +216,12 @@ export function useGuestRowState(props: GuestRowProps) {
     () => hasUnacknowledgedAlert() || hasAcknowledgedOnlyAlert(),
   );
 
-  const alertAccentColor = createMemo(() => {
+  const alertAccentTone = createMemo<'critical' | 'warning' | 'acknowledged' | undefined>(() => {
     if (!showAlertHighlight()) return undefined;
     if (hasUnacknowledgedAlert()) {
-      return props.alertStyles?.severity === 'critical' ? '#ef4444' : '#eab308';
+      return props.alertStyles?.severity === 'critical' ? 'critical' : 'warning';
     }
-    return '#9ca3af';
+    return 'acknowledged';
   });
 
   const rowClass = createMemo(() => {
@@ -241,17 +241,6 @@ export function useGuestRowState(props: GuestRowProps) {
     const stoppedDimming = !isRunning() ? 'opacity-60' : '';
 
     return [base, hover, defaultHover, alertBg, stoppedDimming].filter(Boolean).join(' ');
-  });
-
-  const rowStyle = createMemo(() => {
-    const styles: Record<string, string> = { 'min-height': '32px' };
-    if (showAlertHighlight()) {
-      const color = alertAccentColor();
-      if (color) {
-        styles['box-shadow'] = `inset 4px 0 0 0 ${color}`;
-      }
-    }
-    return styles;
   });
 
   const firstCellIndent = createMemo(() =>
@@ -301,6 +290,7 @@ export function useGuestRowState(props: GuestRowProps) {
     ociImage,
     osName,
     osVersion,
+    alertAccentTone,
     supportsBackup,
     typeInfo,
     workloadType,
@@ -308,6 +298,5 @@ export function useGuestRowState(props: GuestRowProps) {
     clusterName,
     agentVersion,
     rowClass,
-    rowStyle,
   };
 }

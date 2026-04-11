@@ -1,9 +1,16 @@
 import { render, screen } from '@solidjs/testing-library';
 import { describe, expect, it } from 'vitest';
+import tableSource from '@/components/shared/Table.tsx?raw';
 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/shared/Table';
 
 describe('TableBody', () => {
+  it('keeps the shared table wrapper CSP-safe', () => {
+    expect(tableSource).toContain('touch-scroll');
+    expect(tableSource).not.toContain('style={{');
+    expect(tableSource).not.toContain('style={');
+  });
+
   it('keeps default dividers when no custom divider classes are provided', () => {
     render(() => (
       <Table>

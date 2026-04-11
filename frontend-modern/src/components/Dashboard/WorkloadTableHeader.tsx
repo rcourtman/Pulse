@@ -28,26 +28,14 @@ export function WorkloadTableHeader(props: WorkloadTableHeaderProps) {
             return (
               <TableHead
                 class={`py-0.5 text-[11px] sm:text-xs font-medium uppercase tracking-wider whitespace-nowrap
- ${isFirst() ? 'pl-2 sm:pl-3 pr-1.5 sm:pr-2 text-left' : 'px-1.5 sm:px-2 text-center'}
+ ${isFirst() ? 'pl-2 sm:pl-3 pr-1.5 sm:pr-2 text-left' : 'px-1.5 sm:px-2 text-center'} align-middle
  ${isSortable ? 'cursor-pointer hover:bg-surface-hover' : ''}`}
-                style={{
-                  ...(['cpu', 'memory', 'disk'].includes(col.id)
-                    ? { width: props.isMobile() ? '70px' : '140px' }
-                    : ['netIo', 'diskIo'].includes(col.id)
-                      ? { width: '170px' }
-                      : props.isMobile() && col.id === 'name'
-                        ? { width: '100%', 'min-width': '120px' }
-                        : col.width
-                          ? { width: col.width }
-                          : {}),
-                  'vertical-align': 'middle',
-                }}
+                data-workload-col={col.id}
                 onClick={() => isSortable && props.handleSort(sortKeyForCol!)}
                 title={col.icon ? col.label : undefined}
               >
                 <div
-                  class={`flex items-center gap-0.5 ${isFirst() ? 'justify-start' : 'justify-center'}`}
-                  style={{ 'min-height': '14px' }}
+                  class={`flex min-h-[14px] items-center gap-0.5 ${isFirst() ? 'justify-start' : 'justify-center'}`}
                 >
                   {col.icon ? <span class="flex items-center">{col.icon}</span> : col.label}
                   {isSorted() && (props.sortDirection() === 'asc' ? ' ▲' : ' ▼')}

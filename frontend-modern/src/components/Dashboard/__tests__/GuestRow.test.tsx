@@ -392,7 +392,7 @@ describe('GuestRow', () => {
       expect(tr?.className).toContain('bg-yellow-50');
     });
 
-    it('applies box-shadow for alert accent on unacknowledged alerts', () => {
+    it('marks unacknowledged critical alerts with the canonical alert accent tone', () => {
       const { container } = renderGuestRow({
         guest: makeGuest(),
         alertStyles: {
@@ -406,12 +406,11 @@ describe('GuestRow', () => {
         },
       });
       const tr = container.querySelector('tr');
-      const style = tr?.getAttribute('style') ?? '';
-      expect(style).toContain('box-shadow');
-      expect(style).toContain('#ef4444');
+      expect(tr).toHaveAttribute('data-workload-alert-accent', 'critical');
+      expect(tr?.getAttribute('style')).toBeNull();
     });
 
-    it('applies grey accent for acknowledged-only alerts', () => {
+    it('marks acknowledged-only alerts with the canonical alert accent tone', () => {
       const { container } = renderGuestRow({
         guest: makeGuest(),
         alertStyles: {
@@ -425,8 +424,8 @@ describe('GuestRow', () => {
         },
       });
       const tr = container.querySelector('tr');
-      const style = tr?.getAttribute('style') ?? '';
-      expect(style).toContain('#9ca3af');
+      expect(tr).toHaveAttribute('data-workload-alert-accent', 'acknowledged');
+      expect(tr?.getAttribute('style')).toBeNull();
     });
   });
 

@@ -6,6 +6,9 @@ import { useStackedMemoryBarState } from './useStackedMemoryBarState';
 export function StackedMemoryBar(props: StackedMemoryBarProps) {
   const state = useStackedMemoryBarState(props);
   const presentation = state.presentation;
+  const swapBarWidth = () => String(Math.max(0, Math.min(presentation().swapBarPercent, 100)));
+  const segmentEdge = (leftPercent: number, widthPercent: number) =>
+    String(Math.max(0, Math.min(leftPercent + widthPercent, 100)));
 
   return (
     <div ref={state.setContainerRef} class="metric-text w-full h-4 flex items-center justify-center">
@@ -14,29 +17,49 @@ export function StackedMemoryBar(props: StackedMemoryBarProps) {
         onMouseEnter={state.handleMouseEnter}
         onMouseLeave={state.handleMouseLeave}
       >
-        <For each={presentation().segments}>
-          {(segment, idx) => (
-            <div
-              class="absolute top-0 h-full transition-all duration-300"
-              style={{
-                left: `${segment.leftPercent}%`,
-                width: `${segment.widthPercent}%`,
-                'background-color': segment.color,
-                'border-right':
-                  idx() < presentation().segments.length - 1
-                    ? '1px solid rgba(255,255,255,0.3)'
-                    : 'none',
-              }}
+        <svg
+          aria-hidden="true"
+          class="absolute inset-0 h-full w-full"
+          viewBox="0 0 100 100"
+          preserveAspectRatio="none"
+        >
+          <For each={presentation().segments}>
+            {(segment, idx) => (
+              <>
+                <rect
+                  data-stacked-memory-segment="true"
+                  x={String(Math.max(0, Math.min(segment.leftPercent, 100)))}
+                  y="0"
+                  width={String(Math.max(0, segment.widthPercent))}
+                  height="100"
+                  rx="3"
+                  fill={segment.color}
+                />
+                <Show when={idx() < presentation().segments.length - 1}>
+                  <line
+                    x1={segmentEdge(segment.leftPercent, segment.widthPercent)}
+                    x2={segmentEdge(segment.leftPercent, segment.widthPercent)}
+                    y1="0"
+                    y2="100"
+                    stroke="rgba(255,255,255,0.3)"
+                    stroke-width="1"
+                  />
+                </Show>
+              </>
+            )}
+          </For>
+          <Show when={presentation().showSwapBar}>
+            <rect
+              data-stacked-memory-swap="true"
+              x="0"
+              y="82"
+              width={swapBarWidth()}
+              height="18"
+              rx="2"
+              fill="rgb(168 85 247)"
             />
-          )}
-        </For>
-
-        <Show when={presentation().showSwapBar}>
-          <div
-            class="absolute bottom-0 left-0 h-[3px] w-full bg-purple-500"
-            style={{ width: `${presentation().swapBarPercent}%` }}
-          />
-        </Show>
+          </Show>
+        </svg>
 
         <span class="absolute inset-0 flex items-center justify-center text-[10px] font-semibold text-base-content leading-none pointer-events-none min-w-0 overflow-hidden">
           <span class="max-w-full min-w-0 whitespace-nowrap overflow-hidden text-ellipsis px-0.5 text-center">

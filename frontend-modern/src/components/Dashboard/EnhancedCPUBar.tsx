@@ -6,6 +6,11 @@ import { useEnhancedCPUBarState } from './useEnhancedCPUBarState';
 export function EnhancedCPUBar(props: EnhancedCPUBarProps) {
   const state = useEnhancedCPUBarState(props);
   const presentation = state.presentation;
+  const barPercent = () => {
+    const parsed = Number.parseFloat(presentation().barWidth);
+    if (!Number.isFinite(parsed)) return '0';
+    return String(Math.max(0, Math.min(parsed, 100)));
+  };
 
   return (
     <div class="metric-text w-full h-4 flex items-center justify-center">
@@ -14,10 +19,22 @@ export function EnhancedCPUBar(props: EnhancedCPUBarProps) {
         onMouseEnter={state.handleMouseEnter}
         onMouseLeave={state.handleMouseLeave}
       >
-        <div
-          class={`absolute top-0 left-0 h-full transition-all duration-300 ${presentation().barClass}`}
-          style={{ width: presentation().barWidth }}
-        />
+        <svg
+          aria-hidden="true"
+          class="absolute inset-0 h-full w-full"
+          viewBox="0 0 100 100"
+          preserveAspectRatio="none"
+        >
+          <rect
+            data-enhanced-cpu-fill="true"
+            x="0"
+            y="0"
+            width={barPercent()}
+            height="100"
+            rx="3"
+            fill={presentation().barFill}
+          />
+        </svg>
 
         <span class="absolute inset-0 flex items-center justify-center text-[10px] font-semibold text-base-content leading-none pointer-events-none">
           {presentation().displayUsage}

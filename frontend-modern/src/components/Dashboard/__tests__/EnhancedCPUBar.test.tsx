@@ -19,9 +19,9 @@ function makeAnomaly(overrides: Partial<AnomalyReport> = {}): AnomalyReport {
   };
 }
 
-/** Select the bar fill element (absolutely-positioned div with inline width style). */
-function getBarFill(container: HTMLElement): HTMLElement | null {
-  return container.querySelector('.absolute.top-0.left-0[style]');
+/** Select the bar fill element. */
+function getBarFill(container: HTMLElement): SVGRectElement | null {
+  return container.querySelector('rect[data-enhanced-cpu-fill="true"]');
 }
 
 /** Find the tooltip bar trigger element within the render container. */
@@ -77,19 +77,19 @@ describe('EnhancedCPUBar', () => {
   it('sets bar width to usage percentage', () => {
     const { container } = render(() => <EnhancedCPUBar usage={65} />);
     const bar = getBarFill(container);
-    expect(bar).toHaveStyle({ width: '65%' });
+    expect(bar).toHaveAttribute('width', '65');
   });
 
   it('caps bar width at 100% when usage exceeds 100', () => {
     const { container } = render(() => <EnhancedCPUBar usage={150} />);
     const bar = getBarFill(container);
-    expect(bar).toHaveStyle({ width: '100%' });
+    expect(bar).toHaveAttribute('width', '100');
   });
 
   it('sets bar width to 0% for zero usage', () => {
     const { container } = render(() => <EnhancedCPUBar usage={0} />);
     const bar = getBarFill(container);
-    expect(bar).toHaveStyle({ width: '0%' });
+    expect(bar).toHaveAttribute('width', '0');
   });
 
   // ── Bar color classes (exact boundary tests: cpu warning=80, critical=90) ──
@@ -97,31 +97,31 @@ describe('EnhancedCPUBar', () => {
   it('uses normal color class for usage below warning threshold', () => {
     const { container } = render(() => <EnhancedCPUBar usage={79} />);
     const bar = getBarFill(container);
-    expect(bar?.className).toContain('bg-metric-normal-bg');
+    expect(bar?.getAttribute('fill')).toContain('34, 197, 94');
   });
 
   it('uses warning color class at exactly the warning threshold (80)', () => {
     const { container } = render(() => <EnhancedCPUBar usage={80} />);
     const bar = getBarFill(container);
-    expect(bar?.className).toContain('bg-metric-warning-bg');
+    expect(bar?.getAttribute('fill')).toContain('234, 179, 8');
   });
 
   it('uses warning color class between warning and critical thresholds', () => {
     const { container } = render(() => <EnhancedCPUBar usage={89} />);
     const bar = getBarFill(container);
-    expect(bar?.className).toContain('bg-metric-warning-bg');
+    expect(bar?.getAttribute('fill')).toContain('234, 179, 8');
   });
 
   it('uses critical color class at exactly the critical threshold (90)', () => {
     const { container } = render(() => <EnhancedCPUBar usage={90} />);
     const bar = getBarFill(container);
-    expect(bar?.className).toContain('bg-metric-critical-bg');
+    expect(bar?.getAttribute('fill')).toContain('239, 68, 68');
   });
 
   it('uses critical color class well above critical threshold', () => {
     const { container } = render(() => <EnhancedCPUBar usage={99} />);
     const bar = getBarFill(container);
-    expect(bar?.className).toContain('bg-metric-critical-bg');
+    expect(bar?.getAttribute('fill')).toContain('239, 68, 68');
   });
 
   // ── Cores display ────────────────────────────────────────────────
