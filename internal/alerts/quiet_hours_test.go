@@ -73,6 +73,31 @@ func TestShouldSuppressNotificationQuietHours(t *testing.T) {
 	})
 }
 
+func TestShouldSuppressNotificationPublic(t *testing.T) {
+	t.Run("nil alert returns false", func(t *testing.T) {
+		m := newManagerWithQuietHoursSuppress(QuietHoursSuppression{Offline: true})
+		if m.ShouldSuppressNotification(nil) {
+			t.Fatal("expected false for nil alert")
+		}
+	})
+
+	t.Run("suppresses offline alert during quiet hours", func(t *testing.T) {
+		m := newManagerWithQuietHoursSuppress(QuietHoursSuppression{Offline: true})
+		alert := &Alert{ID: "offline-esc", Type: "connectivity", Level: AlertLevelCritical}
+		if !m.ShouldSuppressNotification(alert) {
+			t.Fatal("expected offline escalation to be suppressed during quiet hours")
+		}
+	})
+
+	t.Run("does not suppress when offline suppression disabled", func(t *testing.T) {
+		m := newManagerWithQuietHoursSuppress(QuietHoursSuppression{Offline: false})
+		alert := &Alert{ID: "offline-esc2", Type: "connectivity", Level: AlertLevelCritical}
+		if m.ShouldSuppressNotification(alert) {
+			t.Fatal("expected offline escalation not to be suppressed when offline suppression is off")
+		}
+	})
+}
+
 func TestIsInQuietHours(t *testing.T) {
 	// t.Parallel()
 

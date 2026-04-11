@@ -4837,6 +4837,10 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 
 		escalationLevel := config.Schedule.Escalation.Levels[level-1]
 
+		if m.alertManager.ShouldSuppressNotification(alert) {
+			return
+		}
+
 		// Send notifications only to the channels specified in the escalation level
 		m.notificationMgr.SendAlertToChannels(alert, escalationLevel.Notify)
 

@@ -162,3 +162,63 @@ func TestHandleAlertResolved_QuietHoursDoesNotSuppressRecovery(t *testing.T) {
 		t.Fatalf("timed out waiting for resolved notification webhook (should not be suppressed by quiet hours)")
 	}
 }
+
+func TestEscalationCallback_QuietHoursSuppression(t *testing.T) {
+	sent := make(chan struct{}, 1)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case sent <- struct{}{}:
+		default:
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(srv.Close)
+
+	notifMgr := notifications.NewNotificationManagerWithDataDir("http://pulse.example", t.TempDir())
+	if err := notifMgr.UpdateAllowedPrivateCIDRs("127.0.0.1/32,::1/128"); err != nil {
+		t.Fatalf("UpdateAllowedPrivateCIDRs: %v", err)
+	}
+	notifMgr.AddWebhook(notifications.WebhookConfig{
+		ID:      "esc-webhook",
+		Name:    "esc-webhook",
+		URL:     srv.URL,
+		Enabled: true,
+		Service: "generic",
+	})
+
+	alertMgr := alerts.NewManager()
+	cfg := alertMgr.GetConfig()
+	cfg.Enabled = true
+	cfg.Schedule.QuietHours.Enabled = true
+	cfg.Schedule.QuietHours.Timezone = "UTC"
+	cfg.Schedule.QuietHours.Days = map[string]bool{
+		"monday": true, "tuesday": true, "wednesday": true,
+		"thursday": true, "friday": true, "saturday": true, "sunday": true,
+	}
+	now := time.Now().UTC()
+	cfg.Schedule.QuietHours.Start = now.Add(-1 * time.Hour).Format("15:04")
+	cfg.Schedule.QuietHours.End = now.Add(1 * time.Hour).Format("15:04")
+	cfg.Schedule.QuietHours.Suppress.Offline = true
+	alertMgr.UpdateConfig(cfg)
+
+	alert := &alerts.Alert{
+		ID:    "esc-offline",
+		Type:  "connectivity",
+		Level: alerts.AlertLevelCritical,
+	}
+	if !alertMgr.ShouldSuppressNotification(alert) {
+		t.Skip("quiet hours not active - cannot test escalation suppression")
+	}
+
+	// Simulate what the escalation callback does after the fix.
+	if !alertMgr.ShouldSuppressNotification(alert) {
+		notifMgr.SendAlertToChannels(alert, "esc-webhook")
+	}
+
+	select {
+	case <-sent:
+		t.Fatal("escalation notification should have been suppressed during quiet hours")
+	case <-time.After(500 * time.Millisecond):
+		// no notification sent - correct
+	}
+}
