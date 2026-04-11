@@ -662,6 +662,14 @@ and viewport-sync plus selected-row reveal behavior now live in
 so future hot-path table-state changes must not fold selector derivation,
 layout policy, and scroll coordination back into one mixed owner or the render
 shell.
+That same hot-path boundary now also owns CSP-safe table sizing. Infrastructure
+host, PBS, and PMG table shells must take their layout and column sizing from
+the shared presentation owner in
+`frontend-modern/src/components/Infrastructure/unifiedResourceTableStateModel.ts`
+and apply those values through classes and width/height attributes, not inline
+`style=` maps on the live table DOM. Future hot-path table work must not
+reintroduce inline width, min/max width, or row-height styles into the render
+shell just to land a local layout tweak.
 That hot-path contract now includes policy badge rendering on resource rows.
 The infrastructure summary hot path is now explicit shared ownership too:
 `InfrastructureSummary.tsx` stays a render shell,
@@ -687,6 +695,11 @@ forking separate table-only presentation logic. That component now also
 consumes the shared `frontend-modern/src/utils/resourceChangePresentation.ts`
 label helper for canonical change kinds, source types, and adapter provenance
 so the chip wording stays consistent without adding extra hot-path branching.
+The same infrastructure hot path now also depends on the shared
+`frontend-modern/src/components/shared/ProgressBar.tsx` primitive for metric
+fill rendering. Performance-sensitive metric bars may vary by value and color,
+but they must render width through shared attribute-driven progress geometry
+instead of per-row inline width styles that break the hosted demo CSP.
 The default table hot path now scopes those summary chips to timeline and
 change-provenance badges only. Generic capability and relationship badges are
 removed from the default row surface entirely until the underlying data is

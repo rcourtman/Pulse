@@ -34,6 +34,7 @@ import mobileNavBarModelSource from '@/components/shared/mobileNavBarModel.ts?ra
 import infrastructureSelectorSource from '@/components/shared/InfrastructureSelector.tsx?raw';
 import pulseDataGridSource from '@/components/shared/PulseDataGrid.tsx?raw';
 import pulseDataGridModelSource from '@/components/shared/pulseDataGridModel.ts?raw';
+import progressBarSource from '@/components/shared/ProgressBar.tsx?raw';
 import whatsNewModalSource from '@/components/shared/WhatsNewModal.tsx?raw';
 import whatsNewModalModelSource from '@/components/shared/whatsNewModalModel.ts?raw';
 import searchFieldSource from '@/components/shared/SearchField.tsx?raw';
@@ -1052,6 +1053,13 @@ describe('shared primitive guardrails', () => {
     expect(pulseDataGridModelSource).toContain('export const getPulseDataGridWidthAttr');
     expect(pulseDataGridModelSource).toContain('export const isPulseDataGridInteractiveTarget');
     expect(pulseDataGridModelSource).toContain('target.closest(');
+  });
+
+  it('keeps progress bars CSP-safe in the shared primitive owner', () => {
+    expect(progressBarSource).toContain('data-progress-fill');
+    expect(progressBarSource).toContain('foreignObject');
+    expect(progressBarSource).not.toContain('style={{');
+    expect(progressBarSource).not.toContain('style={');
   });
 
   it('keeps search field on shell, runtime, and model owners', () => {

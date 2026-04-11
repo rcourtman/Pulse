@@ -826,6 +826,12 @@ and viewport reveal plus scroll synchronization now route through
 `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableViewportSync.ts`,
 so the shared consumer model is no longer interleaving selector derivation,
 layout policy, and DOM viewport coordination inside one mixed state boundary.
+That same unified-resource consumer contract now also owns CSP-safe table
+presentation for infrastructure rows. Host, PBS, and PMG table sections must
+consume the shared column presentation owner and render canonical table sizing
+through classes plus DOM width/height attributes rather than lane-local inline
+style objects, so the same unified-resource dataset can reach the public demo
+without transport-specific DOM drift.
 The canonical unified-resource change and relationship presenters now also
 share the same elapsed-time and "ago" wording utilities, so `observed`,
 `last seen`, and `ago` fragments stay consistent without each formatter

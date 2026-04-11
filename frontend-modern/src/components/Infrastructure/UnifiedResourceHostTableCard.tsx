@@ -66,71 +66,73 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
           onClear={tableProps.clearPinnedSummaryScope}
         />
         <div class="overflow-x-auto">
-          <Table
-            class="whitespace-nowrap min-w-[max-content]"
-            style={{
-              'table-layout': 'fixed',
-              'min-width': table.isMobile() ? '100%' : 'max-content',
-            }}
-          >
+          <Table class={`whitespace-nowrap ${table.tableShellClass()}`}>
             <TableHeader>
               <TableRow class="bg-surface-alt text-muted border-b border-border">
                 <TableHead
-                  class="text-left pl-2 sm:pl-3"
-                  style={table.resourceColumnStyle()}
+                  class={`text-left pl-2 sm:pl-3 ${table.resourceColumn().className}`}
+                  width={table.resourceColumn().width}
                   onClick={() => table.handleSort('name')}
                 >
                   Resource {table.renderSortIndicator('name')}
                 </TableHead>
                 <TableHead
-                  style={table.metricColumnStyle()}
+                  class={table.metricColumn().className}
+                  width={table.metricColumn().width}
                   onClick={() => table.handleSort('cpu')}
                 >
                   CPU {table.renderSortIndicator('cpu')}
                 </TableHead>
                 <TableHead
-                  style={table.metricColumnStyle()}
+                  class={table.metricColumn().className}
+                  width={table.metricColumn().width}
                   onClick={() => table.handleSort('memory')}
                 >
                   Memory {table.renderSortIndicator('memory')}
                 </TableHead>
                 <TableHead
-                  style={table.metricColumnStyle()}
+                  class={table.metricColumn().className}
+                  width={table.metricColumn().width}
                   onClick={() => table.handleSort('disk')}
                 >
                   Disk {table.renderSortIndicator('disk')}
                 </TableHead>
                 <TableHead
                   classList={{ hidden: table.isMobile() || !table.isVisible('secondary') }}
-                  style={table.ioColumnStyle()}
+                  class={table.ioColumn().className}
+                  width={table.ioColumn().width}
                   onClick={() => table.handleSort('network')}
                 >
                   Net I/O {table.renderSortIndicator('network')}
                 </TableHead>
                 <TableHead
                   classList={{ hidden: table.isMobile() || !table.isVisible('supplementary') }}
-                  style={table.ioColumnStyle()}
+                  class={table.ioColumn().className}
+                  width={table.ioColumn().width}
                   onClick={() => table.handleSort('diskio')}
                 >
                   Disk I/O {table.renderSortIndicator('diskio')}
                 </TableHead>
                 <TableHead
                   classList={{ hidden: table.isMobile() || !table.isVisible('secondary') }}
-                  style={table.sourceColumnStyle()}
+                  class={table.sourceColumn().className}
+                  width={table.sourceColumn().width}
                   onClick={() => table.handleSort('source')}
                 >
                   Source {table.renderSortIndicator('source')}
                 </TableHead>
                 <TableHead
                   classList={{ hidden: table.isMobile() || !table.isVisible('supplementary') }}
-                  style={table.uptimeColumnStyle()}
+                  class={table.uptimeColumn().className}
+                  width={table.uptimeColumn().width}
                   onClick={() => table.handleSort('uptime')}
                 >
                   Uptime {table.renderSortIndicator('uptime')}
                 </TableHead>
                 <TableHead
                   classList={{ hidden: table.isMobile() || !table.isVisible('supplementary') }}
-                  style={table.tempColumnStyle()}
+                  class={table.tempColumn().className}
+                  width={table.tempColumn().width}
                   onClick={() => table.handleSort('temp')}
                 >
                   Temp {table.renderSortIndicator('temp')}
@@ -142,11 +144,8 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                 <TableRow aria-hidden="true">
                   <TableCell
                     colspan={9}
-                    style={{
-                      height: `${table.hostTopSpacerHeight()}px`,
-                      padding: '0',
-                      border: '0',
-                    }}
+                    class="border-0 p-0"
+                    height={table.hostTopSpacerHeight()}
                   />
                 </TableRow>
               </Show>
@@ -328,8 +327,7 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                             ? 'true'
                             : 'false'
                         }
-                        class={rowClass()}
-                        style={{ 'min-height': '32px' }}
+                        class={`${rowClass()} h-8`}
                         onClick={() => table.toggleExpand(resource.id)}
                         {...resourceRowInteraction}
                       >
@@ -669,11 +667,8 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                 <TableRow aria-hidden="true">
                   <TableCell
                     colspan={9}
-                    style={{
-                      height: `${table.hostBottomSpacerHeight()}px`,
-                      padding: '0',
-                      border: '0',
-                    }}
+                    class="border-0 p-0"
+                    height={table.hostBottomSpacerHeight()}
                   />
                 </TableRow>
               </Show>

@@ -1258,6 +1258,16 @@ styling. `TableHeader` and `TableBody` may provide canonical default borders
 and dividers, but when a caller supplies explicit border or divide classes the
 shared primitive must defer to that local contract instead of silently forcing
 the default separator treatment back into the rendered DOM.
+That same shared table boundary now owns CSP-safe sizing for infrastructure
+tables and metric bars. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts`
+and `frontend-modern/src/components/Infrastructure/unifiedResourceTableStateModel.ts`
+must express table layout and column sizing as shared class/attribute
+presentation instead of inline `style=` maps, and
+`frontend-modern/src/components/shared/ProgressBar.tsx` must render fill width
+through DOM attributes rather than inline width styles. Infrastructure host and
+service tables may still vary by breakpoint and column family, but they must do
+so through the shared presentation owner instead of lane-local style objects
+that break the public demo CSP.
 That same shared-boundary rule applies to summary density. The shared compact
 mode on `SummaryPanel.tsx` and `SummaryMetricCard.tsx` exists for genuinely
 dense monitoring surfaces, but pages that are trying to align with the normal

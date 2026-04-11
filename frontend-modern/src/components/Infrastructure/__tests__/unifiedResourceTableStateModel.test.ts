@@ -8,7 +8,8 @@ import {
   getHostRevealTargetIndex,
   getHostSpacerHeights,
   getNextUnifiedResourceTableSortState,
-  getUnifiedResourceTableColumnStyles,
+  getUnifiedResourceTableColumnPresentations,
+  getUnifiedResourceTableShellClass,
   getUnifiedResourceTableSortIndicator,
   getUnifiedSources,
   getVisibleHostTableItems,
@@ -103,12 +104,16 @@ describe('unifiedResourceTableStateModel', () => {
     expect(getUnifiedResourceTableSortIndicator('default', 'asc', 'cpu')).toBeNull();
   });
 
-  it('derives responsive column styles and host-table visibility as pure layout policy', () => {
-    const mobileStyles = getUnifiedResourceTableColumnStyles(true);
-    const desktopStyles = getUnifiedResourceTableColumnStyles(false);
+  it('derives responsive column presentations and host-table visibility as pure layout policy', () => {
+    const mobileColumns = getUnifiedResourceTableColumnPresentations(true);
+    const desktopColumns = getUnifiedResourceTableColumnPresentations(false);
 
-    expect(mobileStyles.resourceColumnStyle.width).toBe('100%');
-    expect(desktopStyles.resourceColumnStyle['min-width']).toBe('220px');
+    expect(getUnifiedResourceTableShellClass(true)).toContain('table-fixed');
+    expect(getUnifiedResourceTableShellClass(false)).toContain('min-w-[max-content]');
+    expect(mobileColumns.resourceColumn.width).toBe('100%');
+    expect(mobileColumns.metricColumn.width).toBe(70);
+    expect(desktopColumns.resourceColumn.className).toContain('min-w-[220px]');
+    expect(desktopColumns.ioColumn.width).toBe(160);
     expect(shouldShowUnifiedResourceHostTable(0, 0)).toBe(true);
     expect(shouldShowUnifiedResourceHostTable(0, 2)).toBe(false);
     expect(shouldShowUnifiedResourceHostTable(3, 2)).toBe(true);

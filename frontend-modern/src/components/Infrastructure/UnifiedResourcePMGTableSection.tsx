@@ -48,57 +48,70 @@ export const UnifiedResourcePMGTableSection: Component<UnifiedResourcePMGTableSe
       <div class="border-b border-border bg-surface-hover px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted">
         PMG Services
       </div>
-          <div class="overflow-x-auto">
-        <Table
-          class="whitespace-nowrap min-w-[max-content]"
-          style={{
-            'table-layout': 'fixed',
-            'min-width': table.isMobile() ? '100%' : 'max-content',
-          }}
-        >
+      <div class="overflow-x-auto">
+        <Table class={`whitespace-nowrap ${table.tableShellClass()}`}>
           <TableHeader>
             <TableRow class="bg-surface-alt text-muted border-b border-border">
-              <TableHead class="text-left pl-2 sm:pl-3" style={table.resourceColumnStyle()}>
+              <TableHead
+                class={`text-left pl-2 sm:pl-3 ${table.resourceColumn().className}`}
+                width={table.resourceColumn().width}
+              >
                 Resource
               </TableHead>
               <TableHead
                 classList={{ hidden: !table.isVisible('primary') && !table.isMobile() }}
-                style={table.serviceQueueColumnStyle()}
+                class={table.serviceQueueColumn().className}
+                width={table.serviceQueueColumn().width}
               >
                 Queue
               </TableHead>
               <TableHead
                 classList={{ hidden: !table.isVisible('secondary') && !table.isMobile() }}
-                style={table.serviceQueueColumnStyle()}
+                class={table.serviceQueueColumn().className}
+                width={table.serviceQueueColumn().width}
               >
                 Deferred
               </TableHead>
               <TableHead
                 classList={{ hidden: !table.isVisible('supplementary') && !table.isMobile() }}
-                style={table.serviceQueueColumnStyle()}
+                class={table.serviceQueueColumn().className}
+                width={table.serviceQueueColumn().width}
               >
                 Hold
               </TableHead>
               <TableHead
                 classList={{ hidden: !table.isVisible('secondary') && !table.isMobile() }}
-                style={table.serviceCountColumnStyle()}
+                class={table.serviceCountColumn().className}
+                width={table.serviceCountColumn().width}
               >
                 Nodes
               </TableHead>
-              <TableHead style={table.serviceHealthColumnStyle()}>Health</TableHead>
+              <TableHead
+                class={table.serviceHealthColumn().className}
+                width={table.serviceHealthColumn().width}
+              >
+                Health
+              </TableHead>
               <TableHead
                 classList={{ hidden: !table.isVisible('secondary') && !table.isMobile() }}
-                style={table.sourceColumnStyle()}
+                class={table.sourceColumn().className}
+                width={table.sourceColumn().width}
               >
                 Source
               </TableHead>
               <TableHead
                 classList={{ hidden: !table.isVisible('supplementary') && !table.isMobile() }}
-                style={table.uptimeColumnStyle()}
+                class={table.uptimeColumn().className}
+                width={table.uptimeColumn().width}
               >
                 Uptime
               </TableHead>
-              <TableHead style={table.serviceActionColumnStyle()}>Action</TableHead>
+              <TableHead
+                class={table.serviceActionColumn().className}
+                width={table.serviceActionColumn().width}
+              >
+                Action
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -168,8 +181,7 @@ export const UnifiedResourcePMGTableSection: Component<UnifiedResourcePMGTableSe
                           ? 'true'
                           : 'false'
                       }
-                      class={rowClass()}
-                      style={{ 'min-height': '32px' }}
+                      class={`${rowClass()} h-8`}
                       onClick={() => table.toggleExpand(resource.id)}
                       {...resourceRowInteraction}
                     >

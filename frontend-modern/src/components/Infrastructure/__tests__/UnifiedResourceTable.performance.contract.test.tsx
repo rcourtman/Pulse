@@ -154,6 +154,29 @@ describe('UnifiedResourceTable performance contract', () => {
       });
     });
 
+    it('keeps the infrastructure table shell CSP-safe without inline style attributes', async () => {
+      const resources = [
+        makeResource(1),
+        makeResource(2, { type: 'pbs', platformType: 'proxmox-pbs' }),
+        makeResource(3, { type: 'pmg', platformType: 'proxmox-pmg' }),
+      ];
+
+      const { container } = render(() => (
+        <UnifiedResourceTable
+          resources={resources}
+          expandedResourceId={null}
+          onExpandedResourceChange={vi.fn()}
+          groupingMode="flat"
+        />
+      ));
+
+      await waitFor(() => {
+        expect(container.querySelector('table')).toBeInTheDocument();
+      });
+
+      expect(container.querySelector('[style]')).toBeNull();
+    });
+
     it('renders the shared facet summary component in timeline-only mode for canonical resource counts', async () => {
       const { getByText, queryByText } = render(() => (
       <ResourceFacetSummary
@@ -207,13 +230,17 @@ describe('UnifiedResourceTable performance contract', () => {
       expect(unifiedResourceTableSource).not.toContain('const getPBSTableRow =');
       expect(unifiedResourceTableStateSource).toContain("from './unifiedResourceTableStateModel'");
       expect(unifiedResourceTableStateSource).toContain('buildHostTableItems');
-      expect(unifiedResourceTableStateSource).toContain('getUnifiedResourceTableColumnStyles');
+      expect(unifiedResourceTableStateSource).toContain('getUnifiedResourceTableColumnPresentations');
+      expect(unifiedResourceTableStateSource).toContain('getUnifiedResourceTableShellClass');
       expect(unifiedResourceTableStateSource).toContain('useTableWindowing');
       expect(unifiedResourceTableStateSource).toContain('useUnifiedResourceTableViewportSync');
       expect(unifiedResourceTableStateSource).toContain('clearPinnedSummaryScope?: () => void;');
       expect(unifiedResourceTableStateSource).toContain('showHostClearAction');
       expect(unifiedResourceTableStateSource).toContain('showServiceClearAction');
       expect(unifiedResourceTableStateSource).not.toContain('const resourceColumnStyle = createMemo(() =>');
+      expect(unifiedResourceHostTableCardSource).not.toContain('style={');
+      expect(unifiedResourcePBSTableSectionSource).not.toContain('style={');
+      expect(unifiedResourcePMGTableSectionSource).not.toContain('style={');
       expect(unifiedResourceTableStateSource).not.toContain("const showGroupHeaders = props.groupingMode === 'grouped'");
       expect(unifiedResourceTableStateSource).not.toContain('const items: HostTableItem[] = [];');
       expect(unifiedResourceTableStateSource).not.toContain('window.addEventListener');
@@ -227,7 +254,10 @@ describe('UnifiedResourceTable performance contract', () => {
       expect(unifiedResourceTableModelSource).toContain('export const getOutlierEmphasis');
       expect(unifiedResourceTableStateModelSource).toContain('export const buildHostTableItems');
       expect(unifiedResourceTableStateModelSource).toContain(
-        'export const getUnifiedResourceTableColumnStyles',
+        'export const getUnifiedResourceTableColumnPresentations',
+      );
+      expect(unifiedResourceTableStateModelSource).toContain(
+        'export const getUnifiedResourceTableShellClass',
       );
       expect(unifiedResourceTableStateModelSource).toContain(
         'export const getNextUnifiedResourceTableSortState',

@@ -160,50 +160,66 @@ export const getUnifiedSources = (resource: Resource): string[] => {
   return platformData?.sources ?? [];
 };
 
-type UnifiedResourceTableColumnStyle = Record<string, string>;
+export interface UnifiedResourceTableColumnPresentation {
+  className: string;
+  width?: string | number;
+}
 
-export type UnifiedResourceTableColumnStyles = {
-  resourceColumnStyle: UnifiedResourceTableColumnStyle;
-  metricColumnStyle: UnifiedResourceTableColumnStyle;
-  ioColumnStyle: UnifiedResourceTableColumnStyle;
-  sourceColumnStyle: UnifiedResourceTableColumnStyle;
-  uptimeColumnStyle: UnifiedResourceTableColumnStyle;
-  tempColumnStyle: UnifiedResourceTableColumnStyle;
-  serviceCountColumnStyle: UnifiedResourceTableColumnStyle;
-  serviceQueueColumnStyle: UnifiedResourceTableColumnStyle;
-  serviceHealthColumnStyle: UnifiedResourceTableColumnStyle;
-  serviceActionColumnStyle: UnifiedResourceTableColumnStyle;
+export type UnifiedResourceTableColumnPresentations = {
+  resourceColumn: UnifiedResourceTableColumnPresentation;
+  metricColumn: UnifiedResourceTableColumnPresentation;
+  ioColumn: UnifiedResourceTableColumnPresentation;
+  sourceColumn: UnifiedResourceTableColumnPresentation;
+  uptimeColumn: UnifiedResourceTableColumnPresentation;
+  tempColumn: UnifiedResourceTableColumnPresentation;
+  serviceCountColumn: UnifiedResourceTableColumnPresentation;
+  serviceQueueColumn: UnifiedResourceTableColumnPresentation;
+  serviceHealthColumn: UnifiedResourceTableColumnPresentation;
+  serviceActionColumn: UnifiedResourceTableColumnPresentation;
 };
 
-export const getUnifiedResourceTableColumnStyles = (
+const buildUnifiedResourceTableColumnPresentation = (
+  className: string,
+  width?: string | number,
+): UnifiedResourceTableColumnPresentation => ({
+  className,
+  width,
+});
+
+export const getUnifiedResourceTableShellClass = (isMobile: boolean): string =>
+  `table-fixed ${isMobile ? 'min-w-full' : 'min-w-[max-content]'}`;
+
+export const getUnifiedResourceTableColumnPresentations = (
   isMobile: boolean,
-): UnifiedResourceTableColumnStyles => ({
-  resourceColumnStyle: isMobile ? { width: '100%', 'min-width': '120px' } : { 'min-width': '220px' },
-  metricColumnStyle: isMobile
-    ? { width: '70px', 'min-width': '65px' }
-    : { 'min-width': '140px', 'max-width': '180px' },
-  ioColumnStyle: isMobile
-    ? { width: '180px', 'min-width': '180px' }
-    : { width: '160px', 'min-width': '160px', 'max-width': '180px' },
-  sourceColumnStyle: isMobile
-    ? { width: '140px', 'min-width': '140px' }
-    : { width: '160px', 'min-width': '160px' },
-  uptimeColumnStyle: isMobile
-    ? { width: '70px', 'min-width': '70px', 'max-width': '80px' }
-    : { width: '80px', 'min-width': '80px', 'max-width': '80px' },
-  tempColumnStyle: isMobile
-    ? { width: '50px', 'min-width': '50px', 'max-width': '60px' }
-    : { width: '60px', 'min-width': '60px', 'max-width': '70px' },
-  serviceCountColumnStyle: isMobile
-    ? { width: '80px', 'min-width': '80px', 'max-width': '90px' }
-    : { width: '110px', 'min-width': '110px', 'max-width': '130px' },
-  serviceQueueColumnStyle: isMobile
-    ? { width: '88px', 'min-width': '88px', 'max-width': '104px' }
-    : { width: '120px', 'min-width': '120px', 'max-width': '140px' },
-  serviceHealthColumnStyle: isMobile
-    ? { width: '100px', 'min-width': '100px', 'max-width': '120px' }
-    : { width: '140px', 'min-width': '140px', 'max-width': '170px' },
-  serviceActionColumnStyle: isMobile
-    ? { width: '82px', 'min-width': '82px', 'max-width': '96px' }
-    : { width: '120px', 'min-width': '120px', 'max-width': '140px' },
+): UnifiedResourceTableColumnPresentations => ({
+  resourceColumn: isMobile
+    ? buildUnifiedResourceTableColumnPresentation('w-full min-w-[120px]', '100%')
+    : buildUnifiedResourceTableColumnPresentation('min-w-[220px]'),
+  metricColumn: isMobile
+    ? buildUnifiedResourceTableColumnPresentation('min-w-[65px]', 70)
+    : buildUnifiedResourceTableColumnPresentation('min-w-[140px] max-w-[180px]'),
+  ioColumn: isMobile
+    ? buildUnifiedResourceTableColumnPresentation('min-w-[180px]', 180)
+    : buildUnifiedResourceTableColumnPresentation('min-w-[160px] max-w-[180px]', 160),
+  sourceColumn: isMobile
+    ? buildUnifiedResourceTableColumnPresentation('min-w-[140px]', 140)
+    : buildUnifiedResourceTableColumnPresentation('min-w-[160px]', 160),
+  uptimeColumn: isMobile
+    ? buildUnifiedResourceTableColumnPresentation('min-w-[70px] max-w-[80px]', 70)
+    : buildUnifiedResourceTableColumnPresentation('min-w-[80px] max-w-[80px]', 80),
+  tempColumn: isMobile
+    ? buildUnifiedResourceTableColumnPresentation('min-w-[50px] max-w-[60px]', 50)
+    : buildUnifiedResourceTableColumnPresentation('min-w-[60px] max-w-[70px]', 60),
+  serviceCountColumn: isMobile
+    ? buildUnifiedResourceTableColumnPresentation('min-w-[80px] max-w-[90px]', 80)
+    : buildUnifiedResourceTableColumnPresentation('min-w-[110px] max-w-[130px]', 110),
+  serviceQueueColumn: isMobile
+    ? buildUnifiedResourceTableColumnPresentation('min-w-[88px] max-w-[104px]', 88)
+    : buildUnifiedResourceTableColumnPresentation('min-w-[120px] max-w-[140px]', 120),
+  serviceHealthColumn: isMobile
+    ? buildUnifiedResourceTableColumnPresentation('min-w-[100px] max-w-[120px]', 100)
+    : buildUnifiedResourceTableColumnPresentation('min-w-[140px] max-w-[170px]', 140),
+  serviceActionColumn: isMobile
+    ? buildUnifiedResourceTableColumnPresentation('min-w-[82px] max-w-[96px]', 82)
+    : buildUnifiedResourceTableColumnPresentation('min-w-[120px] max-w-[140px]', 120),
 });

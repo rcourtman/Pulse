@@ -18,7 +18,8 @@ import {
   getHostRevealTargetIndex,
   getHostSpacerHeights,
   getNextUnifiedResourceTableSortState,
-  getUnifiedResourceTableColumnStyles,
+  getUnifiedResourceTableColumnPresentations,
+  getUnifiedResourceTableShellClass,
   getUnifiedResourceTableSortIndicator,
   getUnifiedSources,
   getVisibleHostTableItems,
@@ -129,7 +130,8 @@ export function useUnifiedResourceTableState(props: UnifiedResourceTableProps) {
     props.onExpandedResourceChange(props.expandedResourceId === resourceId ? null : resourceId);
   };
 
-  const columnStyles = createMemo(() => getUnifiedResourceTableColumnStyles(isMobile()));
+  const tableShellClass = createMemo(() => getUnifiedResourceTableShellClass(isMobile()));
+  const columnPresentations = createMemo(() => getUnifiedResourceTableColumnPresentations(isMobile()));
   const showHostTable = createMemo(() =>
     shouldShowUnifiedResourceHostTable(primaryResources().length, serviceResources().length),
   );
@@ -157,19 +159,20 @@ export function useUnifiedResourceTableState(props: UnifiedResourceTableProps) {
     sortedPMGResources,
     ioScale,
     ...viewportSync,
-    resourceColumnStyle: () => columnStyles().resourceColumnStyle,
-    metricColumnStyle: () => columnStyles().metricColumnStyle,
-    ioColumnStyle: () => columnStyles().ioColumnStyle,
-    sourceColumnStyle: () => columnStyles().sourceColumnStyle,
-    uptimeColumnStyle: () => columnStyles().uptimeColumnStyle,
-    tempColumnStyle: () => columnStyles().tempColumnStyle,
+    tableShellClass,
+    resourceColumn: () => columnPresentations().resourceColumn,
+    metricColumn: () => columnPresentations().metricColumn,
+    ioColumn: () => columnPresentations().ioColumn,
+    sourceColumn: () => columnPresentations().sourceColumn,
+    uptimeColumn: () => columnPresentations().uptimeColumn,
+    tempColumn: () => columnPresentations().tempColumn,
     showHostTable,
     showHostClearAction,
     showServiceClearAction,
-    serviceCountColumnStyle: () => columnStyles().serviceCountColumnStyle,
-    serviceQueueColumnStyle: () => columnStyles().serviceQueueColumnStyle,
-    serviceHealthColumnStyle: () => columnStyles().serviceHealthColumnStyle,
-    serviceActionColumnStyle: () => columnStyles().serviceActionColumnStyle,
+    serviceCountColumn: () => columnPresentations().serviceCountColumn,
+    serviceQueueColumn: () => columnPresentations().serviceQueueColumn,
+    serviceHealthColumn: () => columnPresentations().serviceHealthColumn,
+    serviceActionColumn: () => columnPresentations().serviceActionColumn,
     toggleExpand,
     buildHostSummaryGroupScope: buildInfrastructureSummaryGroupScope,
     getUnifiedSources,

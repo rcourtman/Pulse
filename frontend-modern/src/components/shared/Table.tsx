@@ -94,6 +94,7 @@ export function TableHead(props: TableHeadProps) {
 export type TableCellProps = JSX.HTMLAttributes<HTMLTableCellElement> & {
   colSpan?: number;
   colspan?: number;
+  height?: string | number;
   width?: string | number;
 };
 

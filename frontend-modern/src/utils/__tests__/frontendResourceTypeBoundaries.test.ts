@@ -3269,7 +3269,8 @@ describe('frontend resource type boundaries', () => {
     expect(unifiedResourceTableStateSource).toContain('export function useUnifiedResourceTableState');
     expect(unifiedResourceTableStateSource).toContain("from './unifiedResourceTableStateModel'");
     expect(unifiedResourceTableStateSource).toContain('buildHostTableItems');
-    expect(unifiedResourceTableStateSource).toContain('getUnifiedResourceTableColumnStyles');
+    expect(unifiedResourceTableStateSource).toContain('getUnifiedResourceTableColumnPresentations');
+    expect(unifiedResourceTableStateSource).toContain('getUnifiedResourceTableShellClass');
     expect(unifiedResourceTableStateSource).toContain('useTableWindowing');
     expect(unifiedResourceTableStateSource).toContain('useUnifiedResourceTableViewportSync');
     expect(unifiedResourceTableStateSource).not.toContain('const resourceColumnStyle = createMemo(() =>');
@@ -3279,7 +3280,10 @@ describe('frontend resource type boundaries', () => {
     expect(unifiedResourceTableStateSource).not.toContain('getBoundingClientRect');
     expect(unifiedResourceTableStateModelSource).toContain('export const buildHostTableItems');
     expect(unifiedResourceTableStateModelSource).toContain(
-      'export const getUnifiedResourceTableColumnStyles',
+      'export const getUnifiedResourceTableColumnPresentations',
+    );
+    expect(unifiedResourceTableStateModelSource).toContain(
+      'export const getUnifiedResourceTableShellClass',
     );
     expect(unifiedResourceTableStateModelSource).toContain(
       'export const getNextUnifiedResourceTableSortState',

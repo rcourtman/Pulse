@@ -31,8 +31,9 @@ describe('MetricBar', () => {
     expect(screen.getByText('50%')).toBeInTheDocument();
     const textEl = screen.getByText('50%');
     const container = textEl.closest('.relative') as HTMLElement;
-    const bar = container.firstElementChild as HTMLElement;
-    expect(bar).toHaveStyle({ width: '50%' });
+    const fill = container.querySelector('[data-progress-fill="true"]');
+    expect(fill).toHaveAttribute('width', '50');
+    expect(container.querySelector('[style]')).toBeNull();
   });
 
   it('renders correct color classes for CPU', () => {

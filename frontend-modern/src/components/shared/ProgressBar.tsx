@@ -16,7 +16,7 @@ const clampPercent = (value: number): number => {
 };
 
 export const ProgressBar: Component<ProgressBarProps> = (props) => {
-  const width = () => `${clampPercent(props.value)}%`;
+  const width = () => clampPercent(props.value);
 
   return (
     <div
@@ -24,10 +24,16 @@ export const ProgressBar: Component<ProgressBarProps> = (props) => {
       onMouseEnter={props.onMouseEnter}
       onMouseLeave={props.onMouseLeave}
     >
-      <div
-        class={`progress-fill absolute inset-y-0 left-0 ${props.fillClass ?? ''}`}
-        style={{ width: width() }}
-      />
+      <svg
+        class="absolute inset-0 h-full w-full overflow-visible pointer-events-none"
+        viewBox="0 0 100 100"
+        preserveAspectRatio="none"
+        aria-hidden="true"
+      >
+        <foreignObject data-progress-fill="true" x="0" y="0" width={width()} height="100">
+          <div class={`progress-fill h-full w-full ${props.fillClass ?? ''}`} />
+        </foreignObject>
+      </svg>
       {props.overlays}
       {props.label}
     </div>

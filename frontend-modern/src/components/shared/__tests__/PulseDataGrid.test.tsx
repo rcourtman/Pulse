@@ -5,6 +5,7 @@ import pulseDataGridSource from '@/components/shared/PulseDataGrid.tsx?raw';
 import pulseDataGridModelSource from '@/components/shared/pulseDataGridModel.ts?raw';
 import pulseDataGridStateSource from '@/components/shared/usePulseDataGridState.ts?raw';
 import { PulseDataGrid } from '@/components/shared/PulseDataGrid';
+import { TableCell } from '@/components/shared/Table';
 import tableSource from '@/components/shared/Table.tsx?raw';
 
 type TestRow = {
@@ -41,8 +42,26 @@ describe('PulseDataGrid', () => {
     expect(tableSource).toContain('customDividePattern');
     expect(tableSource).toContain('customBorderPattern');
     expect(tableSource).toContain('touch-scroll');
+    expect(tableSource).toContain('height?: string | number;');
     expect(tableSource).not.toContain('style={{');
     expect(tableSource).not.toContain('style={');
+  });
+
+  it('preserves caller-owned table cell height attributes without inline styles', () => {
+    render(() => (
+      <table>
+        <tbody>
+          <tr>
+            <TableCell height={64}>spacer</TableCell>
+          </tr>
+        </tbody>
+      </table>
+    ));
+
+    const cell = screen.getByText('spacer').closest('td');
+    expect(cell).not.toBeNull();
+    expect(cell).toHaveAttribute('height', '64');
+    expect(cell).not.toHaveAttribute('style');
   });
 
   it('triggers the row handler when a non-interactive cell is clicked', () => {
