@@ -33,12 +33,18 @@ Required environment secrets:
 
 Required environment variables:
 
-1. **DEMO_LOCAL_BASE_URL**
+1. **DEMO_EXPECTED_HOSTNAME**
+   - The remote `hostname` value the selected environment is expected to report
+   - Stable example: `pulse-cloud`
+   - Preview example: `pulse-v6-preview`
+   - This is a host-identity guard: the workflow fails closed if the SSH secret points at the wrong machine
+
+2. **DEMO_LOCAL_BASE_URL**
    - Local URL used on the target host for version and mock-mode verification
    - Example stable value: `http://localhost:7655`
    - Example preview value: `http://localhost:8665`
 
-2. **DEMO_PUBLIC_HEALTH_URL**
+3. **DEMO_PUBLIC_HEALTH_URL**
    - Public health endpoint for the selected demo target
    - Example stable value: `https://demo.pulserelay.pro/api/health`
    - Example preview value: `https://v6-demo.pulserelay.pro/api/health`
@@ -63,8 +69,9 @@ Optional environment variables:
 4. **Governance check**: Validates the selected tag is reachable from the governed release branch for that version
 5. **Latest check**: Refuses to update a target unless the published tag is the latest release for that target channel
 6. **Update**: SSHs to the selected demo host and runs the tag-matched root installer from that exact git tag
-7. **Verify**: Checks that the new version is running, mock mode is active, and the public demo HTML serves the same frontend entry asset as the target service
-8. **Cleanup**: Removes SSH key from runner
+7. **Host identity check**: Verifies the SSH target reports the governed expected hostname before running installer or deploy steps
+8. **Verify**: Checks that the new version is running, mock mode is active, and the public demo HTML serves the same frontend entry asset as the target service
+9. **Cleanup**: Removes SSH key from runner
 
 ### Testing
 
@@ -96,12 +103,13 @@ environment without changing the governed release workflow.
 
 - Uses the same `demo-stable` / `demo-preview-v6` environment contract as the
   release-driven updater
-- Requires `DEMO_LOCAL_BASE_URL` and `DEMO_PUBLIC_HEALTH_URL`
+- Requires `DEMO_EXPECTED_HOSTNAME`, `DEMO_LOCAL_BASE_URL`, and `DEMO_PUBLIC_HEALTH_URL`
 - Supports optional `DEMO_SERVICE_NAME`, `DEMO_INSTALL_DIR`, `DEMO_TEST_PORT`,
   `DEMO_AUTH_USER`, and `DEMO_AUTH_PASS`
 - Assumes the target service and install directory already exist on the host
 - Defaults preview runs to `pulse-v6-preview` and refuses to target the stable
   `pulse` service identity
+- Verifies the SSH target reports the governed expected hostname before deploy
 - Verifies that the public demo shell serves the same frontend entry asset that
   was built and deployed
 

@@ -182,10 +182,12 @@ reusing the stable runtime in place.
 That same preview deployment boundary also owns service-identity isolation and
 public-shell parity proof. Preview demo runs must fail closed onto the
 dedicated preview service identity instead of defaulting back to the stable
-`pulse` instance, and demo deploy/update verification must prove that the
-public demo HTML serves the same frontend entry asset as the target service or
-freshly built preview artifact rather than treating a passing `/api/health`
-response as enough evidence that the public shell actually updated. That proof
+`pulse` instance, must prove that the SSH target reports the governed expected
+hostname before any installer or binary copy runs, and demo deploy/update
+verification must prove that the public demo HTML serves the same frontend
+entry asset as the target service or freshly built preview artifact rather than
+treating a passing `/api/health` response as enough evidence that the public
+shell actually updated. That proof
 must use a deterministic HTML parser for the actual module entry script rather
 than brittle escaped shell regex or a first-match asset scrape that can fail
 differently over SSH or select the wrong preloaded chunk.

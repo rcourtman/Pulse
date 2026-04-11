@@ -48,6 +48,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: ${{ needs.resolve.outputs.environment_name }}
     env:
+      DEMO_EXPECTED_HOSTNAME: ${{ vars.DEMO_EXPECTED_HOSTNAME }}
       DEMO_LOCAL_BASE_URL: ${{ vars.DEMO_LOCAL_BASE_URL }}
       DEMO_SERVICE_NAME: ${{ vars.DEMO_SERVICE_NAME }}
       DEMO_INSTALL_DIR: ${{ vars.DEMO_INSTALL_DIR }}
@@ -67,6 +68,7 @@ jobs:
           [ -n "$DEMO_SERVER_HOST" ] || { echo "::error::DEMO_SERVER_HOST is required in the selected demo environment."; exit 1; }
           [ -n "$DEMO_SERVER_USER" ] || { echo "::error::DEMO_SERVER_USER is required in the selected demo environment."; exit 1; }
           [ -n "$DEMO_SERVER_SSH_KEY" ] || { echo "::error::DEMO_SERVER_SSH_KEY is required in the selected demo environment."; exit 1; }
+          [ -n "$DEMO_EXPECTED_HOSTNAME" ] || { echo "::error::DEMO_EXPECTED_HOSTNAME is required in the selected demo environment."; exit 1; }
           [ -n "$DEMO_LOCAL_BASE_URL" ] || { echo "::error::DEMO_LOCAL_BASE_URL is required in the selected demo environment."; exit 1; }
           [ -n "$DEMO_PUBLIC_HEALTH_URL" ] || { echo "::error::DEMO_PUBLIC_HEALTH_URL is required in the selected demo environment."; exit 1; }
 
@@ -145,6 +147,25 @@ jobs:
           chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan -H "$DEMO_SERVER_HOST" >> ~/.ssh/known_hosts
           chmod 600 ~/.ssh/known_hosts
+
+      - name: Verify target host identity
+        env:
+          DEMO_SERVER_HOST: ${{ secrets.DEMO_SERVER_HOST }}
+          DEMO_SERVER_USER: ${{ secrets.DEMO_SERVER_USER }}
+        run: |
+          set -euo pipefail
+          REMOTE_HOSTNAME="$(
+            ssh -i ~/.ssh/id_ed25519 \
+              -o IdentitiesOnly=yes \
+              -o StrictHostKeyChecking=yes \
+              -o UserKnownHostsFile=~/.ssh/known_hosts \
+              "$DEMO_SERVER_USER@$DEMO_SERVER_HOST" \
+              "hostname"
+          )"
+          [ "$REMOTE_HOSTNAME" = "$DEMO_EXPECTED_HOSTNAME" ] || {
+            echo "::error::Demo environment points at host $REMOTE_HOSTNAME but expected $DEMO_EXPECTED_HOSTNAME."
+            exit 1
+          }
 
       - name: Resolve deploy paths
         id: config

@@ -117,11 +117,15 @@ func TestDeployDemoWorkflowFailsClosedForPreviewAndVerifiesFrontendParity(t *tes
 
 	workflow := string(workflowBytes)
 	required := []string{
+		`DEMO_EXPECTED_HOSTNAME: ${{ vars.DEMO_EXPECTED_HOSTNAME }}`,
 		`DEMO_LOCAL_BASE_URL: ${{ vars.DEMO_LOCAL_BASE_URL }}`,
+		`[ -n "$DEMO_EXPECTED_HOSTNAME" ] || { echo "::error::DEMO_EXPECTED_HOSTNAME is required in the selected demo environment."; exit 1; }`,
 		`[ -n "$DEMO_LOCAL_BASE_URL" ] || { echo "::error::DEMO_LOCAL_BASE_URL is required in the selected demo environment."; exit 1; }`,
 		`Capture expected frontend entry asset`,
+		`Verify target host identity`,
 		`SERVICE_NAME="pulse-v6-preview"`,
 		`Preview demo deployments must not target the stable pulse service.`,
+		`Demo environment points at host $REMOTE_HOSTNAME but expected $DEMO_EXPECTED_HOSTNAME.`,
 		`Verify frontend parity`,
 		`extract_entry_asset()`,
 		`<script\b[^>]*\bsrc=\"(/assets/index-[^\"]*\.js)\"`,
