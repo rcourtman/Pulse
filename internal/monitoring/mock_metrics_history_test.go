@@ -19,6 +19,12 @@ func fixtureGraphWithState(state models.StateSnapshot) mock.FixtureGraph {
 	return mock.FixtureGraph{State: state}
 }
 
+func setMockSamplerTestEnv(t *testing.T, seedDuration, sampleInterval time.Duration) {
+	t.Helper()
+	t.Setenv("PULSE_MOCK_TRENDS_SEED_DURATION", seedDuration.String())
+	t.Setenv("PULSE_MOCK_TRENDS_SAMPLE_INTERVAL", sampleInterval.String())
+}
+
 func TestBuildTieredTimestamps_IncludesCanonicalTerminalNow(t *testing.T) {
 	now := time.Date(2026, time.March, 31, 12, 0, 0, 0, time.UTC)
 
@@ -707,8 +713,7 @@ func TestStartMockMetricsSampler_DoesNotClearExistingMetricsStoreData(t *testing
 	t.Setenv("PULSE_MOCK_K8S_NODES", "0")
 	t.Setenv("PULSE_MOCK_K8S_PODS", "0")
 	t.Setenv("PULSE_MOCK_K8S_DEPLOYMENTS", "0")
-	t.Setenv("PULSE_MOCK_TRENDS_SEED_DURATION", "1h")
-	t.Setenv("PULSE_MOCK_TRENDS_SAMPLE_INTERVAL", "5m")
+	setMockSamplerTestEnv(t, time.Hour, 5*time.Minute)
 
 	cfg := metrics.DefaultConfig(t.TempDir())
 	cfg.RetentionRaw = 90 * 24 * time.Hour
@@ -770,6 +775,8 @@ func TestStartMockMetricsSampler_DoesNotClearExistingMetricsStoreData(t *testing
 }
 
 func TestStartAndStopMockMetricsSampler_ClearStaleMockChartCaches(t *testing.T) {
+	setMockSamplerTestEnv(t, time.Hour, 5*time.Minute)
+
 	previousEnabled := mock.IsMockEnabled()
 	previousConfig := mock.GetConfig()
 	t.Cleanup(func() {
@@ -849,6 +856,8 @@ func TestStartAndStopMockMetricsSampler_ClearStaleMockChartCaches(t *testing.T) 
 }
 
 func TestStartMockMetricsSampler_SeedsCanonicalMockResourceHistory(t *testing.T) {
+	setMockSamplerTestEnv(t, 7*24*time.Hour, 5*time.Minute)
+
 	previousEnabled := mock.IsMockEnabled()
 	previousConfig := mock.GetConfig()
 	t.Cleanup(func() {
