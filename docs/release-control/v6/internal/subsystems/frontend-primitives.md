@@ -1130,6 +1130,10 @@ product copy, or external links back into the shared shell. Internal product
 navigation from that shell should still route through canonical shared helpers
 such as `frontend-modern/src/routing/resourceLinks.ts` rather than freezing raw
 `/recovery?...` route strings into the modal itself.
+That state owner now also owns public-demo suppression: the modal must stay
+closed until `sessionPresentationPolicyResolved()` is true and must fail closed
+when `presentationPolicyIsDemoMode()` resolves true, so the public demo does
+not front-load product migration onboarding ahead of the actual surface.
 Canonical customer disclosures inside those shared shells now route through
 `frontend-modern/src/utils/docsLinks.ts`, so settings and what's-new privacy
 links resolve to shipped `/docs/...` assets instead of hard-coded GitHub

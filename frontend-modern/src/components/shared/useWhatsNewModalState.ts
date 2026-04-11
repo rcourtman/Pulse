@@ -1,5 +1,9 @@
 import { createSignal } from 'solid-js';
 import { createLocalStorageBooleanSignal, STORAGE_KEYS } from '@/utils/localStorage';
+import {
+  presentationPolicyIsDemoMode,
+  sessionPresentationPolicyResolved,
+} from '@/stores/sessionPresentationPolicy';
 
 export function useWhatsNewModalState() {
   const [hasSeen, setHasSeen] = createLocalStorageBooleanSignal(
@@ -9,7 +13,11 @@ export function useWhatsNewModalState() {
   const [dontShowAgain, setDontShowAgain] = createSignal(true);
   const [dismissedForSession, setDismissedForSession] = createSignal(false);
 
-  const isOpen = () => !hasSeen() && !dismissedForSession();
+  const isOpen = () =>
+    sessionPresentationPolicyResolved() &&
+    !presentationPolicyIsDemoMode() &&
+    !hasSeen() &&
+    !dismissedForSession();
 
   const handleClose = () => {
     if (dontShowAgain()) {

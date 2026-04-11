@@ -1134,6 +1134,8 @@ describe('shared primitive guardrails', () => {
     expect(whatsNewModalStateSource).toContain('createLocalStorageBooleanSignal');
     expect(whatsNewModalStateSource).toContain('createSignal');
     expect(whatsNewModalStateSource).toContain('STORAGE_KEYS.WHATS_NEW_NAV_V2_SHOWN');
+    expect(whatsNewModalStateSource).toContain('sessionPresentationPolicyResolved');
+    expect(whatsNewModalStateSource).toContain('presentationPolicyIsDemoMode');
     expect(whatsNewModalStateSource).toContain('handleClose');
 
     expect(whatsNewModalModelSource).toContain('WHATS_NEW_FEATURE_CARDS');

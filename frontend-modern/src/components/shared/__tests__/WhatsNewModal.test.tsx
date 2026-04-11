@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { WhatsNewModal } from '@/components/shared/WhatsNewModal';
 import whatsNewModalSource from '@/components/shared/WhatsNewModal.tsx?raw';
@@ -6,9 +6,19 @@ import whatsNewModalModelSource from '@/components/shared/whatsNewModalModel.ts?
 import whatsNewModalStateSource from '@/components/shared/useWhatsNewModalState.ts?raw';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 
+const presentationPolicyIsDemoModeMock = vi.hoisted(() => vi.fn(() => false));
+const sessionPresentationPolicyResolvedMock = vi.hoisted(() => vi.fn(() => true));
+
+vi.mock('@/stores/sessionPresentationPolicy', () => ({
+  presentationPolicyIsDemoMode: presentationPolicyIsDemoModeMock,
+  sessionPresentationPolicyResolved: sessionPresentationPolicyResolvedMock,
+}));
+
 describe('WhatsNewModal', () => {
   beforeEach(() => {
     localStorage.clear();
+    presentationPolicyIsDemoModeMock.mockReturnValue(false);
+    sessionPresentationPolicyResolvedMock.mockReturnValue(true);
   });
 
   afterEach(() => {
@@ -31,6 +41,8 @@ describe('WhatsNewModal', () => {
     expect(whatsNewModalStateSource).toContain('createLocalStorageBooleanSignal');
     expect(whatsNewModalStateSource).toContain('createSignal');
     expect(whatsNewModalStateSource).toContain('STORAGE_KEYS.WHATS_NEW_NAV_V2_SHOWN');
+    expect(whatsNewModalStateSource).toContain('sessionPresentationPolicyResolved');
+    expect(whatsNewModalStateSource).toContain('presentationPolicyIsDemoMode');
     expect(whatsNewModalStateSource).toContain('handleClose');
 
     expect(whatsNewModalModelSource).toContain('WHATS_NEW_FEATURE_CARDS');
@@ -54,6 +66,16 @@ describe('WhatsNewModal', () => {
       expect(screen.getByRole('dialog')).toBeInTheDocument();
     });
     expect(screen.getByText('Welcome to the New Navigation!')).toBeInTheDocument();
+  });
+
+  it('stays hidden for public demo sessions', async () => {
+    presentationPolicyIsDemoModeMock.mockReturnValue(true);
+
+    render(() => <WhatsNewModal />);
+
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
   });
 
   it('closes on backdrop click and records the modal as seen by default', async () => {
