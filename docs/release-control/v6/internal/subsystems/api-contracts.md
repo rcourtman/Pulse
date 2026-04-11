@@ -267,7 +267,10 @@ when the disabled candidate no longer counts toward monitored-system capacity.
     optional infrastructure-summary `metrics` filters through one governed
     transport contract, so dashboard-specific consumers can request only CPU
     and memory without inventing a second summary endpoint or silently widening
-    back to disk/network payloads.
+    back to disk/network payloads. The same contract must carry those requested
+    metric filters through the shared guest-chart batch loader in
+    `internal/monitoring/monitor_metrics.go` instead of fetching the full guest
+    metric set and trimming after the API payload is already assembled.
 36. Keep the compact dashboard overview route canonical on that same shared API
     surface. `internal/api/resources.go`,
     `internal/api/router_routes_monitoring.go`,

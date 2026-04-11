@@ -509,6 +509,10 @@ Lifecycle-adjacent summary chart consumers may still depend on shared
 must resolve through canonical `resourceType` and `resourceID` identities
 rather than lifecycle-local seed prefixes, so platform handoff surfaces do not
 see a different recent tail than the runtime mock inventory they describe.
+When those lifecycle-adjacent surfaces call `/api/charts/infrastructure`, the
+shared `metrics` filter contract must stay authoritative through the backend
+batch loader as well, so quickstart or install readouts that only render CPU
+and memory do not silently pay for disk/network guest fan-out.
 That same hosted continuity contract also applies to the older direct tenant
 magic-link path. Lifecycle-adjacent control-plane redirects through
 `/auth/cloud-handoff` must preserve canonical account/user/role identity in the

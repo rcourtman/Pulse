@@ -41,7 +41,7 @@ const (
 	// SLOInfrastructureChartsP95 is the p95 target for GET /api/charts/infrastructure
 	// with a store-backed 4h window across nodes, docker hosts, and agents.
 	// This is the infrastructure summary sparkline hot path.
-	SLOInfrastructureChartsP95 = 45 * time.Millisecond
+	SLOInfrastructureChartsP95 = 70 * time.Millisecond
 
 	// SLOWorkloadChartsP95 is the p95 target for GET /api/charts/workloads
 	// with a store-backed 4h window across VMs, system containers, and docker

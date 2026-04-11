@@ -461,6 +461,44 @@ type GuestChartRequest struct {
 	SQLResourceID string // resource_id in the SQLite store
 }
 
+func normalizeChartMetricTypes(metricTypes []string) []string {
+	if len(metricTypes) == 0 {
+		return nil
+	}
+
+	seen := make(map[string]struct{}, len(metricTypes))
+	normalized := make([]string, 0, len(metricTypes))
+	for _, metricType := range metricTypes {
+		canonical := strings.ToLower(strings.TrimSpace(metricType))
+		if canonical == "" {
+			continue
+		}
+		if _, ok := seen[canonical]; ok {
+			continue
+		}
+		seen[canonical] = struct{}{}
+		normalized = append(normalized, canonical)
+	}
+	if len(normalized) == 0 {
+		return nil
+	}
+	return normalized
+}
+
+func filterChartMetricMap(metricMap map[string][]MetricPoint, metricTypes []string) map[string][]MetricPoint {
+	if len(metricTypes) == 0 || len(metricMap) == 0 {
+		return metricMap
+	}
+
+	filtered := make(map[string][]MetricPoint, len(metricTypes))
+	for _, metricType := range metricTypes {
+		if points, ok := metricMap[metricType]; ok {
+			filtered[metricType] = points
+		}
+	}
+	return filtered
+}
+
 // GetGuestMetricsForChartBatch returns chart metrics for multiple guests of the
 // same SQL resource type, using batch SQL queries instead of N individual
 // queries. Results are keyed by SQLResourceID.
@@ -468,22 +506,25 @@ func (m *Monitor) GetGuestMetricsForChartBatch(
 	sqlResourceType string,
 	requests []GuestChartRequest,
 	duration time.Duration,
+	metricTypes ...string,
 ) map[string]map[string][]MetricPoint {
 	if m == nil || len(requests) == 0 {
 		return nil
 	}
 
+	requestedMetricTypes := normalizeChartMetricTypes(metricTypes)
+
 	if mock.IsMockEnabled() {
 		result := make(map[string]map[string][]MetricPoint, len(requests))
 		for _, req := range requests {
 			inMemory := m.GetGuestMetrics(req.InMemoryKey, duration)
-			result[req.SQLResourceID] = m.mockGuestMetricsForChart(
+			result[req.SQLResourceID] = filterChartMetricMap(m.mockGuestMetricsForChart(
 				req.InMemoryKey,
 				sqlResourceType,
 				req.SQLResourceID,
 				duration,
 				inMemory,
-			)
+			), requestedMetricTypes)
 		}
 		return result
 	}
@@ -492,11 +533,17 @@ func (m *Monitor) GetGuestMetricsForChartBatch(
 
 	// Phase 1: Check in-memory for all guests and identify which need fallback.
 	var needFallback []string
+	useInMemory := duration <= inMemoryChartThreshold || m.metricsStore == nil
 	for _, req := range requests {
-		inMemory := m.GetGuestMetrics(req.InMemoryKey, duration)
+		if !useInMemory {
+			result[req.SQLResourceID] = map[string][]MetricPoint{}
+			needFallback = append(needFallback, req.SQLResourceID)
+			continue
+		}
+
+		inMemory := filterChartMetricMap(m.GetGuestMetrics(req.InMemoryKey, duration), requestedMetricTypes)
 		result[req.SQLResourceID] = inMemory
 		if hasSufficientChartMapCoverage(inMemory, duration) {
-			result[req.SQLResourceID] = inMemory
 			continue
 		}
 		needFallback = append(needFallback, req.SQLResourceID)
@@ -512,7 +559,7 @@ func (m *Monitor) GetGuestMetricsForChartBatch(
 	storeResults := make(map[string]map[string][]MetricPoint)
 	if m.metricsStore != nil {
 		for _, candidate := range monitorStoreResourceTypeCandidates(sqlResourceType) {
-			batch := m.queryStoreBatchMetricMapWithGapFill(candidate, needFallback, duration, nil)
+			batch := m.queryStoreBatchMetricMapWithGapFill(candidate, needFallback, duration, requestedMetricTypes)
 			for id, metricMap := range batch {
 				if existing, ok := storeResults[id]; ok {
 					newSpan := chartMapCoverageSpan(metricMap)
@@ -532,14 +579,14 @@ func (m *Monitor) GetGuestMetricsForChartBatch(
 		best := cloneMetricPointMap(result[id])
 		storeData, ok := storeResults[id]
 		if ok {
-			best = mergeGuestMetricHistory(best, storeData, duration)
+			best = mergeGuestMetricHistory(best, filterChartMetricMap(storeData, requestedMetricTypes), duration)
 		}
 		nativeData, ok := nativeResults[id]
 		if !ok {
 			result[id] = best
 			continue
 		}
-		result[id] = mergeGuestMetricHistory(best, nativeData, duration)
+		result[id] = mergeGuestMetricHistory(best, filterChartMetricMap(nativeData, requestedMetricTypes), duration)
 	}
 
 	return result
@@ -577,8 +624,15 @@ func (m *Monitor) GetNodeMetricsForChartBatch(
 
 	// Phase 1: Check in-memory for all nodes and identify which need store.
 	var needStore []string
+	useInMemory := duration <= inMemoryChartThreshold || m.metricsStore == nil
 	for _, nid := range nodeIDs {
 		nodeResult := make(map[string][]MetricPoint, len(metricTypes))
+		if !useInMemory {
+			result[nid] = nodeResult
+			needStore = append(needStore, nid)
+			continue
+		}
+
 		allSufficient := true
 		for _, mt := range metricTypes {
 			points := m.metricsHistory.GetNodeMetrics(nid, mt, duration)

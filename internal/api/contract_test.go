@@ -1022,11 +1022,20 @@ func TestContract_InfrastructureChartsHonorExplicitMetricFilters(t *testing.T) {
 	if _, ok := decoded.NodeData["node-contract-1"]["disk"]; ok {
 		t.Fatal("expected node disk series to be filtered out of infrastructure summary payload")
 	}
+	if got := len(decoded.NodeData["node-contract-1"]); got != 2 {
+		t.Fatalf("expected node payload to contain only requested metrics, got %d entries", got)
+	}
 	if _, ok := decoded.DockerHostData["docker-host-contract-1"]["disk"]; ok {
 		t.Fatal("expected docker-host disk series to be filtered out of infrastructure summary payload")
 	}
+	if got := len(decoded.DockerHostData["docker-host-contract-1"]); got != 2 {
+		t.Fatalf("expected docker-host payload to contain only requested metrics, got %d entries", got)
+	}
 	if _, ok := decoded.AgentData["agent-contract-1"]["disk"]; ok {
 		t.Fatal("expected agent disk series to be filtered out of infrastructure summary payload")
+	}
+	if got := len(decoded.AgentData["agent-contract-1"]); got != 2 {
+		t.Fatalf("expected agent payload to contain only requested metrics, got %d entries", got)
 	}
 }
 

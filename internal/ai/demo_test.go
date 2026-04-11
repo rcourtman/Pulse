@@ -3,17 +3,22 @@ package ai
 import (
 	"strings"
 	"testing"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/mockruntime"
 )
 
 func TestIsDemoMode(t *testing.T) {
-	t.Setenv("PULSE_MOCK_MODE", "true")
+	original := mockruntime.IsEnabled()
+	t.Cleanup(func() { mockruntime.SetEnabled(original) })
+
+	mockruntime.SetEnabled(true)
 	if !IsDemoMode() {
-		t.Fatal("expected demo mode true when PULSE_MOCK_MODE=true")
+		t.Fatal("expected demo mode true when runtime mock mode is enabled")
 	}
 
-	t.Setenv("PULSE_MOCK_MODE", "false")
+	mockruntime.SetEnabled(false)
 	if IsDemoMode() {
-		t.Fatal("expected demo mode false when PULSE_MOCK_MODE=false")
+		t.Fatal("expected demo mode false when runtime mock mode is disabled")
 	}
 }
 

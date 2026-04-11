@@ -32,6 +32,9 @@ func newChartBatchBenchMonitor(b *testing.B) *Monitor {
 	if err != nil {
 		b.Fatalf("failed to create metrics store: %v", err)
 	}
+	if err := store.WaitForMaintenance(5 * time.Second); err != nil {
+		b.Fatalf("WaitForMaintenance: %v", err)
+	}
 	b.Cleanup(func() { _ = store.Close() })
 
 	return &Monitor{

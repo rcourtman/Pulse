@@ -5002,7 +5002,7 @@ func (r *Router) handleCharts(w http.ResponseWriter, req *http.Request) {
 			vmRequests = append(vmRequests, monitoring.GuestChartRequest{InMemoryKey: vid, SQLResourceID: vid})
 		}
 	}
-	vmBatchMetrics := monitor.GetGuestMetricsForChartBatch("vm", vmRequests, duration)
+	vmBatchMetrics := monitor.GetGuestMetricsForChartBatch("vm", vmRequests, duration, infrastructureSummaryMetricOrder...)
 	for _, vm := range vmList {
 		if vm == nil {
 			continue
@@ -5050,7 +5050,7 @@ func (r *Router) handleCharts(w http.ResponseWriter, req *http.Request) {
 			ctRequests = append(ctRequests, monitoring.GuestChartRequest{InMemoryKey: cid, SQLResourceID: cid})
 		}
 	}
-	ctBatchMetrics := monitor.GetGuestMetricsForChartBatch("container", ctRequests, duration)
+	ctBatchMetrics := monitor.GetGuestMetricsForChartBatch("container", ctRequests, duration, infrastructureSummaryMetricOrder...)
 	for _, ct := range ctList {
 		if ct == nil {
 			continue
@@ -5233,7 +5233,7 @@ func (r *Router) handleCharts(w http.ResponseWriter, req *http.Request) {
 		}
 		dcRequests = append(dcRequests, request)
 	}
-	dcBatchMetrics := monitor.GetGuestMetricsForChartBatch("dockerContainer", dcRequests, duration)
+	dcBatchMetrics := monitor.GetGuestMetricsForChartBatch("dockerContainer", dcRequests, duration, infrastructureSummaryMetricOrder...)
 	for _, dc := range dcList {
 		responseKey, request, ok := appContainerChartRequest(dc)
 		if !ok {
@@ -5280,7 +5280,7 @@ func (r *Router) handleCharts(w http.ResponseWriter, req *http.Request) {
 			})
 		}
 	}
-	dhBatchMetrics := monitor.GetGuestMetricsForChartBatch("dockerHost", dhRequests, duration)
+	dhBatchMetrics := monitor.GetGuestMetricsForChartBatch("dockerHost", dhRequests, duration, infrastructureSummaryMetricOrder...)
 	for _, dh := range dhList {
 		if dh == nil {
 			continue
@@ -5330,7 +5330,7 @@ func (r *Router) handleCharts(w http.ResponseWriter, req *http.Request) {
 		}
 		agentRequests = append(agentRequests, request)
 	}
-	agentBatchMetrics := monitor.GetGuestMetricsForChartBatch("agent", agentRequests, duration)
+	agentBatchMetrics := monitor.GetGuestMetricsForChartBatch("agent", agentRequests, duration, infrastructureSummaryMetricOrder...)
 	for _, h := range hostList {
 		hID, request, ok := hostAgentChartRequest(h)
 		if !ok {
@@ -6305,7 +6305,7 @@ func (r *Router) handleWorkloadCharts(w http.ResponseWriter, req *http.Request) 
 		vmResponseKeys = append(vmResponseKeys, responseKey)
 		vmRequests = append(vmRequests, request)
 	}
-	vmBatchMetrics := monitor.GetGuestMetricsForChartBatch("vm", vmRequests, duration)
+	vmBatchMetrics := monitor.GetGuestMetricsForChartBatch("vm", vmRequests, duration, infrastructureSummaryMetricOrder...)
 	for idx, vm := range vmList {
 		responseKey := vmResponseKeys[idx]
 		metricID := vmRequests[idx].SQLResourceID
@@ -6343,7 +6343,7 @@ func (r *Router) handleWorkloadCharts(w http.ResponseWriter, req *http.Request) 
 		containerResponseKeys = append(containerResponseKeys, responseKey)
 		containerRequests = append(containerRequests, request)
 	}
-	containerBatchMetrics := monitor.GetGuestMetricsForChartBatch("container", containerRequests, duration)
+	containerBatchMetrics := monitor.GetGuestMetricsForChartBatch("container", containerRequests, duration, infrastructureSummaryMetricOrder...)
 	for idx, ct := range containerList {
 		responseKey := containerResponseKeys[idx]
 		metricID := containerRequests[idx].SQLResourceID
@@ -6379,7 +6379,7 @@ func (r *Router) handleWorkloadCharts(w http.ResponseWriter, req *http.Request) 
 		podList = append(podList, pod)
 		podRequests = append(podRequests, monitoring.GuestChartRequest{InMemoryKey: metricKey, SQLResourceID: metricKey})
 	}
-	podBatchMetrics := monitor.GetGuestMetricsForChartBatch("k8s", podRequests, duration)
+	podBatchMetrics := monitor.GetGuestMetricsForChartBatch("k8s", podRequests, duration, infrastructureSummaryMetricOrder...)
 	for _, pod := range podList {
 		metricKey := kubernetesPodMetricIDFromView(pod)
 		series := convertMetricsForChart(podBatchMetrics[metricKey], &oldestTimestamp, maxPoints)
@@ -6442,7 +6442,7 @@ func (r *Router) handleWorkloadCharts(w http.ResponseWriter, req *http.Request) 
 		dockerContainerRequests = append(dockerContainerRequests, request)
 		guestTypes[responseKey] = "app-container"
 	}
-	dockerContainerBatchMetrics := monitor.GetGuestMetricsForChartBatch("dockerContainer", dockerContainerRequests, duration)
+	dockerContainerBatchMetrics := monitor.GetGuestMetricsForChartBatch("dockerContainer", dockerContainerRequests, duration, infrastructureSummaryMetricOrder...)
 	for idx, container := range dockerContainerList {
 		responseKey := dockerContainerKeys[idx]
 		metricID := dockerContainerRequests[idx].SQLResourceID
@@ -6664,7 +6664,7 @@ func (r *Router) handleInfrastructureCharts(w http.ResponseWriter, req *http.Req
 			})
 		}
 	}
-	dhBatchMetrics := monitor.GetGuestMetricsForChartBatch("dockerHost", dhRequests, duration)
+	dhBatchMetrics := monitor.GetGuestMetricsForChartBatch("dockerHost", dhRequests, duration, requestedMetricNames...)
 	for _, dh := range dhList {
 		if dh == nil {
 			continue
@@ -6728,7 +6728,7 @@ func (r *Router) handleInfrastructureCharts(w http.ResponseWriter, req *http.Req
 		}
 		agentRequests = append(agentRequests, request)
 	}
-	agentBatchMetrics := monitor.GetGuestMetricsForChartBatch("agent", agentRequests, duration)
+	agentBatchMetrics := monitor.GetGuestMetricsForChartBatch("agent", agentRequests, duration, requestedMetricNames...)
 	for _, h := range hostList {
 		hID, request, ok := hostAgentChartRequest(h)
 		if !ok {
@@ -7372,7 +7372,7 @@ func (r *Router) handleWorkloadsSummaryCharts(w http.ResponseWriter, req *http.R
 		vmResponseKeys = append(vmResponseKeys, responseKey)
 		vmRequests = append(vmRequests, request)
 	}
-	vmBatchMetrics := monitor.GetGuestMetricsForChartBatch("vm", vmRequests, duration)
+	vmBatchMetrics := monitor.GetGuestMetricsForChartBatch("vm", vmRequests, duration, infrastructureSummaryMetricOrder...)
 	for idx, vm := range vmList {
 		responseKey := vmResponseKeys[idx]
 		metricID := vmRequests[idx].SQLResourceID
@@ -7447,7 +7447,7 @@ func (r *Router) handleWorkloadsSummaryCharts(w http.ResponseWriter, req *http.R
 		containerResponseKeys = append(containerResponseKeys, responseKey)
 		containerRequests = append(containerRequests, request)
 	}
-	containerBatchMetrics := monitor.GetGuestMetricsForChartBatch("container", containerRequests, duration)
+	containerBatchMetrics := monitor.GetGuestMetricsForChartBatch("container", containerRequests, duration, infrastructureSummaryMetricOrder...)
 	for idx, ct := range containerList {
 		responseKey := containerResponseKeys[idx]
 		metricID := containerRequests[idx].SQLResourceID
@@ -7521,7 +7521,7 @@ func (r *Router) handleWorkloadsSummaryCharts(w http.ResponseWriter, req *http.R
 		podList = append(podList, pod)
 		podRequests = append(podRequests, monitoring.GuestChartRequest{InMemoryKey: metricKey, SQLResourceID: metricKey})
 	}
-	podBatchMetrics := monitor.GetGuestMetricsForChartBatch("k8s", podRequests, duration)
+	podBatchMetrics := monitor.GetGuestMetricsForChartBatch("k8s", podRequests, duration, infrastructureSummaryMetricOrder...)
 	for _, pod := range podList {
 		metricKey := kubernetesPodMetricIDFromView(pod)
 
@@ -7635,7 +7635,7 @@ func (r *Router) handleWorkloadsSummaryCharts(w http.ResponseWriter, req *http.R
 			SQLResourceID: containerID,
 		})
 	}
-	dockerContainerBatchMetrics := monitor.GetGuestMetricsForChartBatch("dockerContainer", dockerContainerRequests, duration)
+	dockerContainerBatchMetrics := monitor.GetGuestMetricsForChartBatch("dockerContainer", dockerContainerRequests, duration, infrastructureSummaryMetricOrder...)
 	for _, container := range dockerContainerList {
 		containerID := strings.TrimSpace(container.ContainerID())
 		guestCounts.Total++

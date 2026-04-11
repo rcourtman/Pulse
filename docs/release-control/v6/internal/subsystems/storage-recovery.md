@@ -204,6 +204,11 @@ querying, and the operator-facing storage health presentation layer.
     and recovery must not treat the omitted `usage` or `total` series as lost
     recovery truth or widen that compact route back into the full storage-page
     payload.
+    That same adjacent API boundary also owns summary-request minimization:
+    storage/recovery-adjacent consumers may rely on filtered infrastructure or
+    guest summary payloads, but they must not widen a scoped chart request back
+    into full guest metric fan-out just because adjacent pages carry richer
+    detail charts elsewhere.
     In mock mode, that same compact route must stay aggregate-only and
     sampler-prewarmed; storage and recovery must not trigger per-pool chart
     reconstruction on the first dashboard request after each mock refresh.

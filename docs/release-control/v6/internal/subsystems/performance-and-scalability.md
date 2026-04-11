@@ -205,6 +205,12 @@ regression protection.
     default org scope for route-safe API calls, but it must skip browser org
     list hydration and must not turn dashboard landing on `frontend-modern/src/App.tsx`
     into another summary-fetch or org-bootstrap hot path.
+    The same protected hot path now also owns proof harness steadiness.
+    Store-backed chart SLO and benchmark helpers in `pkg/metrics/store_slo_test.go`,
+    `internal/api/slo_bench_test.go`, and `internal/monitoring/monitor_metrics_slo_test.go`
+    must wait for deferred metrics-store startup maintenance to quiesce before
+    timing steady-state reads, so one-time retention or auto-vacuum cleanup does
+    not masquerade as summary-route or chart-batch regression latency.
 31. Keep the dashboard overview hot path compact and route-owned. `frontend-modern/src/pages/Dashboard.tsx`, `frontend-modern/src/api/resources.ts`, and `frontend-modern/src/hooks/useDashboardOverview.ts` must hydrate KPI cards, problem-resource rows, and top-infrastructure identities through the compact dashboard-summary API contract owned by the adjacent `api-contracts` and `unified-resources` surfaces, rather than booting the full unfiltered paginated unified-resource list just to derive summary cards.
     Commercial or relay-owned dashboard affordances such as
     `frontend-modern/src/components/Dashboard/RelayOnboardingCard.tsx` may be

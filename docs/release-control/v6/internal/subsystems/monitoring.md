@@ -634,7 +634,12 @@ TrueNAS systems. `internal/truenas/client.go`,
 `reporting.get_data` system history through the shared `agent` guest-chart
 path, so canonical host charts can show real provider-backed CPU, memory,
 network, and disk throughput history when Pulse's own local history is still
-shallow.
+shallow. That same guest-chart boundary must treat windows beyond the
+in-memory chart threshold as store-backed hot paths: batch helpers may merge
+native/provider history afterward, but they must not spend the steady-state
+latency budget on full in-memory pre-scans that can never satisfy long-range
+coverage, and any caller-supplied metric filters must flow into the shared
+batch store query instead of being trimmed only after retrieval.
 That same monitoring boundary now also owns canonical TrueNAS app control
 refresh semantics. `internal/truenas/provider.go` and
 `internal/monitoring/truenas_poller.go` must execute native app start/stop

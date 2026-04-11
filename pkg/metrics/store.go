@@ -109,7 +109,8 @@ type WriteMetric struct {
 }
 
 type maintenanceRequest struct {
-	run func()
+	run  func()
+	done chan struct{}
 }
 
 var startupMaintenanceHook func()
@@ -523,6 +524,46 @@ func (s *Store) enqueueMaintenance(run func()) {
 	case s.maintenanceCh <- maintenanceRequest{run: run}:
 	default:
 		log.Debug().Msg("Metrics maintenance queue full, skipping duplicate request")
+	}
+}
+
+// WaitForMaintenance blocks until all queued maintenance work has completed.
+// Tests and benchmarks use this to measure steady-state hot paths without
+// asynchronous startup maintenance distorting the results.
+func (s *Store) WaitForMaintenance(timeout time.Duration) error {
+	if s == nil {
+		return nil
+	}
+	if s.stopping.Load() {
+		return fmt.Errorf("metrics store is stopping")
+	}
+
+	done := make(chan struct{})
+	barrier := maintenanceRequest{done: done}
+
+	if timeout <= 0 {
+		s.maintenanceCh <- barrier
+		<-done
+		return nil
+	}
+
+	queueTimer := time.NewTimer(timeout)
+	defer queueTimer.Stop()
+
+	select {
+	case s.maintenanceCh <- barrier:
+	case <-queueTimer.C:
+		return fmt.Errorf("timed out queueing metrics maintenance barrier after %v", timeout)
+	}
+
+	waitTimer := time.NewTimer(timeout)
+	defer waitTimer.Stop()
+
+	select {
+	case <-done:
+		return nil
+	case <-waitTimer.C:
+		return fmt.Errorf("timed out waiting for metrics maintenance after %v", timeout)
 	}
 }
 
@@ -1249,6 +1290,9 @@ func (s *Store) backgroundWorker() {
 		case maintenance := <-s.maintenanceCh:
 			if maintenance.run != nil {
 				maintenance.run()
+			}
+			if maintenance.done != nil {
+				close(maintenance.done)
 			}
 
 		case <-flushTicker.C:

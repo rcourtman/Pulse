@@ -259,6 +259,58 @@ func TestNewStoreDefersStartupMaintenance(t *testing.T) {
 	defer store.Close()
 }
 
+func TestStoreWaitForMaintenanceWaitsForQueuedStartupWork(t *testing.T) {
+	previousHook := startupMaintenanceHook
+	defer func() {
+		startupMaintenanceHook = previousHook
+	}()
+
+	started := make(chan struct{})
+	release := make(chan struct{})
+	startupMaintenanceHook = func() {
+		close(started)
+		<-release
+	}
+
+	dir := t.TempDir()
+	cfg := DefaultConfig(dir)
+	cfg.FlushInterval = time.Hour
+
+	store, err := NewStore(cfg)
+	if err != nil {
+		t.Fatalf("NewStore returned error: %v", err)
+	}
+	defer store.Close()
+
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		t.Fatal("startup maintenance did not start")
+	}
+
+	waitDone := make(chan error, 1)
+	go func() {
+		waitDone <- store.WaitForMaintenance(time.Second)
+	}()
+
+	select {
+	case err := <-waitDone:
+		t.Fatalf("WaitForMaintenance returned before startup maintenance completed: %v", err)
+	case <-time.After(100 * time.Millisecond):
+	}
+
+	close(release)
+
+	select {
+	case err := <-waitDone:
+		if err != nil {
+			t.Fatalf("WaitForMaintenance returned error: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("WaitForMaintenance did not return after startup maintenance completed")
+	}
+}
+
 func TestStoreMigratesLegacyHostResourceTypeToAgent(t *testing.T) {
 	dir := t.TempDir()
 	cfg := DefaultConfig(dir)
