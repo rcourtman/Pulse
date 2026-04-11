@@ -32,6 +32,7 @@ import type {
   IntelligenceSummary,
 } from '@/types/aiIntelligence';
 import { normalizeIntelligenceSummary } from './aiIntelligenceSummaryModel';
+import { presentationPolicyIsDemoMode } from './sessionPresentationPolicy';
 
 // ============================================
 // Enum validation helpers
@@ -473,6 +474,10 @@ export const aiIntelligenceStore = {
 
   async loadPendingApprovals() {
     setApprovalsError(null);
+    if (presentationPolicyIsDemoMode()) {
+      setPendingApprovalsWithExpiryTracking([]);
+      return;
+    }
     try {
       const approvals = (await AIAPI.getPendingApprovals()).filter(isPatrolInvestigationFixApproval);
       setPendingApprovalsWithExpiryTracking(approvals);

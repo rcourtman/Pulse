@@ -108,6 +108,10 @@ describe('App architecture', () => {
     expect(appRuntimeStateSource).toContain('onMount(() => {');
     expect(appRuntimeStateSource).toContain('onMount(async () => {');
     expect(appRuntimeStateSource).toContain('void loadCommercialPosture();');
+    expect(appRuntimeStateSource).toContain('const hasLocalAuthBootstrapHint = (): boolean => {');
+    expect(appRuntimeStateSource).toContain(
+      "if (window.location.pathname === '/login' && !hasLocalAuthBootstrapHint()) {",
+    );
     expect(appRuntimeStateSource).toContain('aiChatStore.setEnabled(');
     expect(appRuntimeStateSource).toContain("eventBus.on('theme_changed', handleRemoteThemeChange);");
     expect(appRuntimeStateSource).toContain(

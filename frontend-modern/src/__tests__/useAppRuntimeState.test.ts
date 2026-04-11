@@ -17,12 +17,15 @@ describe('useAppRuntimeState', () => {
   let isMultiTenantEnabledMock: ReturnType<typeof vi.fn>;
   let isHostedModeEnabledMock: ReturnType<typeof vi.fn>;
   let getOrgIDMock: ReturnType<typeof vi.fn>;
+  let hasStoredAuthSessionMock: ReturnType<typeof vi.fn>;
   let setOrgIDMock: ReturnType<typeof vi.fn>;
   let showToastMock: ReturnType<typeof vi.fn>;
   let aiChatSetEnabledMock: ReturnType<typeof vi.fn>;
 
   beforeEach(async () => {
     vi.resetModules();
+    window.history.replaceState({}, '', '/');
+    window.sessionStorage.clear();
 
     Object.defineProperty(window, 'matchMedia', {
       writable: true,
@@ -66,6 +69,7 @@ describe('useAppRuntimeState', () => {
     isMultiTenantEnabledMock = vi.fn().mockReturnValue(false);
     isHostedModeEnabledMock = vi.fn().mockReturnValue(false);
     getOrgIDMock = vi.fn().mockReturnValue('default');
+    hasStoredAuthSessionMock = vi.fn().mockReturnValue(true);
     setOrgIDMock = vi.fn();
     showToastMock = vi.fn();
     aiChatSetEnabledMock = vi.fn();
@@ -142,6 +146,7 @@ describe('useAppRuntimeState', () => {
     vi.doMock('@/utils/apiClient', () => ({
       apiFetch: apiFetchMock,
       getOrgID: getOrgIDMock,
+      hasAuth: hasStoredAuthSessionMock,
       setOrgID: setOrgIDMock,
     }));
 
@@ -313,6 +318,40 @@ describe('useAppRuntimeState', () => {
       { id: 'default', displayName: 'Default Organization' },
     ]);
     expect(hookState.showOrgSwitcher()).toBe(false);
+
+    dispose();
+  });
+
+  it('skips the protected state bootstrap probe on the login route until a local auth hint exists', async () => {
+    window.history.replaceState({}, '', '/login');
+    hasStoredAuthSessionMock.mockReturnValue(false);
+
+    const { hookState, dispose } = mountHook();
+
+    await flushAsync();
+    await flushAsync();
+
+    expect(
+      apiFetchMock.mock.calls.some(([url]) => url === '/api/state'),
+    ).toBe(false);
+    expect(hookState.needsAuth()).toBe(true);
+
+    dispose();
+  });
+
+  it('keeps the protected state bootstrap probe on the login route once a local auth hint exists', async () => {
+    window.history.replaceState({}, '', '/login');
+    hasStoredAuthSessionMock.mockReturnValue(false);
+    window.sessionStorage.setItem('pulse_auth_user', 'demo');
+
+    const { dispose } = mountHook();
+
+    await flushAsync();
+    await flushAsync();
+
+    expect(
+      apiFetchMock.mock.calls.some(([url]) => url === '/api/state'),
+    ).toBe(true);
 
     dispose();
   });

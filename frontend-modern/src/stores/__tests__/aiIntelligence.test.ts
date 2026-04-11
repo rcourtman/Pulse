@@ -25,13 +25,23 @@ vi.mock('@/utils/logger', () => ({
   },
 }));
 
+vi.mock('@/stores/sessionPresentationPolicy', () => ({
+  presentationPolicyIsDemoMode: vi.fn(() => false),
+}));
+
 import { AIAPI } from '@/api/ai';
 import { aiIntelligenceStore } from '@/stores/aiIntelligence';
+import { presentationPolicyIsDemoMode } from '@/stores/sessionPresentationPolicy';
+
+function approvalExpiryInMinutes(minutesFromNow: number): string {
+  return new Date(Date.now() + minutesFromNow * 60_000).toISOString();
+}
 
 describe('aiIntelligenceStore', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.useRealTimers();
+    vi.mocked(presentationPolicyIsDemoMode).mockReturnValue(false);
   });
 
   it('loads unified findings with canonical alert identity first', async () => {
@@ -316,7 +326,7 @@ describe('aiIntelligenceStore', () => {
         riskLevel: 'medium',
         status: 'pending',
         requestedAt: '2026-03-01T00:01:00Z',
-        expiresAt: '2026-04-01T00:06:00Z',
+        expiresAt: approvalExpiryInMinutes(6),
       },
     ]);
 
@@ -341,7 +351,7 @@ describe('aiIntelligenceStore', () => {
         riskLevel: 'high',
         status: 'pending',
         requestedAt: '2026-03-01T00:01:00Z',
-        expiresAt: '2026-04-01T00:06:00Z',
+        expiresAt: approvalExpiryInMinutes(6),
       },
       {
         id: 'approval-fix',
@@ -354,7 +364,7 @@ describe('aiIntelligenceStore', () => {
         riskLevel: 'medium',
         status: 'pending',
         requestedAt: '2026-03-01T00:01:00Z',
-        expiresAt: '2026-04-01T00:06:00Z',
+        expiresAt: approvalExpiryInMinutes(6),
       },
     ]);
 
@@ -364,6 +374,17 @@ describe('aiIntelligenceStore', () => {
       'approval-fix',
     ]);
     expect(aiIntelligenceStore.pendingApprovalCount).toBe(1);
+  });
+
+  it('fails Patrol approval polling closed in public demo mode', async () => {
+    vi.mocked(presentationPolicyIsDemoMode).mockReturnValue(true);
+
+    await aiIntelligenceStore.loadPendingApprovals();
+
+    expect(AIAPI.getPendingApprovals).not.toHaveBeenCalled();
+    expect(aiIntelligenceStore.pendingApprovals).toEqual([]);
+    expect(aiIntelligenceStore.pendingApprovalCount).toBe(0);
+    expect(aiIntelligenceStore.approvalsError).toBeNull();
   });
 
   it('drops expired approvals from Patrol counts and restores needs-attention immediately', async () => {
@@ -522,7 +543,7 @@ describe('aiIntelligenceStore', () => {
         riskLevel: 'low',
         status: 'pending',
         requestedAt: '2026-03-01T00:01:00Z',
-        expiresAt: '2026-04-01T00:10:00Z',
+        expiresAt: approvalExpiryInMinutes(10),
       },
       {
         id: 'approval-sooner',
@@ -535,7 +556,7 @@ describe('aiIntelligenceStore', () => {
         riskLevel: 'high',
         status: 'pending',
         requestedAt: '2026-03-01T00:02:00Z',
-        expiresAt: '2026-04-01T00:06:00Z',
+        expiresAt: approvalExpiryInMinutes(6),
       },
     ]);
 

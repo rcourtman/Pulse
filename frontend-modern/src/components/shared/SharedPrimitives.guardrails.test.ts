@@ -784,6 +784,8 @@ describe('shared primitive guardrails', () => {
     expect(interactiveSparklineSource).toContain('data-sparkline-tooltip="true"');
     expect(interactiveSparklineSource).toContain('x1={sparkline.activeHoverCursorX() ?? 0}');
     expect(interactiveSparklineSource).toContain('y1={0}');
+    expect(interactiveSparklineSource).not.toContain('style={{');
+    expect(interactiveSparklineSource).not.toContain('style={');
     expect(interactiveSparklineSource).not.toContain('{(cursorX) => (');
     expect(interactiveSparklineSource).toContain('data-rendered-series-count');
     expect(interactiveSparklineSource).not.toContain('createEffect');
@@ -808,7 +810,9 @@ describe('shared primitive guardrails', () => {
     expect(interactiveSparklineModelSource).toContain('buildInteractiveSparklineChartData');
     expect(interactiveSparklineModelSource).toContain('computeInteractiveSparklineHoverState');
     expect(interactiveSparklineModelSource).toContain('getInteractiveSparklineCursorXForTimestamp');
-    expect(interactiveSparklineModelSource).toContain('let tooltipY = clientY - 10;');
+    expect(interactiveSparklineModelSource).toContain(
+      'let tooltipY = (mouseY / chartRect.height) * vbH - 6;',
+    );
     expect(interactiveSparklineModelSource).not.toContain('let tooltipY = chartRect.top - 6;');
     expect(interactiveSparklineModelSource).toContain('downsampleLTTB');
     expect(interactiveSparklineModelSource).toContain('findNearestMetricPoint');

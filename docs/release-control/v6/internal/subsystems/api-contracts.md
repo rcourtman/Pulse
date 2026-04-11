@@ -239,7 +239,10 @@ when the disabled candidate no longer counts toward monitored-system capacity.
     `/api/security/status.sessionCapabilities.demoMode` as the canonical
     browser bootstrap signal for public demo posture instead of asking
     frontend callers to infer demo state from response headers, `/api/health`
-    probes, or hostname heuristics.
+    probes, or hostname heuristics. Shared browser stores that consume
+    Patrol approvals must also fail closed from that resolved demo policy at
+    the store boundary, so public demo shells do not probe `/api/ai/approvals`
+    after the read-only demo posture is already known.
 33. Keep public demo commercial posture middleware-owned on that same shared
     API contract. `internal/api/demo_middleware.go`,
     `internal/api/demo_mode_commercial.go`,

@@ -21,6 +21,7 @@ import { SettingsAPI } from '@/api/settings';
 import {
   apiFetch,
   getOrgID as getSelectedOrgID,
+  hasAuth as hasStoredAuthSession,
   setOrgID as setSelectedOrgID,
 } from '@/utils/apiClient';
 import { eventBus } from '@/stores/events';
@@ -99,6 +100,22 @@ export const useAppRuntimeState = () => {
   let hasPrewarmedInfrastructureCharts = false;
 
   const getInfrastructureTrendRangeForPrewarm = (): TimeRange => '1h';
+
+  const hasLocalAuthBootstrapHint = (): boolean => {
+    if (hasStoredAuthSession()) {
+      return true;
+    }
+
+    if (typeof window === 'undefined') {
+      return false;
+    }
+
+    try {
+      return Boolean(window.sessionStorage.getItem('pulse_auth_user'));
+    } catch {
+      return false;
+    }
+  };
 
   const shouldPrewarmInfrastructure = (): boolean => {
     if (typeof window === 'undefined') return false;
@@ -677,6 +694,12 @@ export const useAppRuntimeState = () => {
         logger.info('[App] No auth configured, showing Login/FirstRunSetup');
         setNeedsAuth(true);
         setIsLoading(false);
+        return;
+      }
+
+      if (window.location.pathname === '/login' && !hasLocalAuthBootstrapHint()) {
+        logger.debug('[App] Login route bootstrap has no local auth hint yet');
+        setNeedsAuth(true);
         return;
       }
 

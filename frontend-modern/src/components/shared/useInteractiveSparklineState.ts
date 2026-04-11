@@ -166,7 +166,7 @@ export function useInteractiveSparklineState(
     }),
   );
 
-  const axisTicks = createMemo(() => buildInteractiveSparklineAxisTicks(yMode(), topLabel()));
+  const axisTicks = createMemo(() => buildInteractiveSparklineAxisTicks(yMode(), topLabel(), vbH));
   const gridLineY = createMemo(() => buildInteractiveSparklineGridLineY(yMode(), vbH));
   const gridLineX = createMemo(() => buildInteractiveSparklineGridLineX(vbW));
   const xAxisTicks = createMemo(() =>
@@ -174,6 +174,7 @@ export function useInteractiveSparklineState(
       rangeMs: chartData().rangeMs,
       rangeLabel: props.rangeLabel,
       timeRange: props.timeRange || '1h',
+      vbW,
     }),
   );
 

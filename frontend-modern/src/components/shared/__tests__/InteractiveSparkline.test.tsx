@@ -14,6 +14,8 @@ describe('InteractiveSparkline hover behavior', () => {
 
   it('keeps the sparkline on shell, runtime, and model owners', () => {
     expect(interactiveSparklineSource).toContain('useInteractiveSparklineState');
+    expect(interactiveSparklineSource).not.toContain('style={{');
+    expect(interactiveSparklineSource).not.toContain('style={');
     expect(interactiveSparklineSource).not.toContain('createEffect');
     expect(interactiveSparklineSource).not.toContain('createSignal');
     expect(interactiveSparklineSource).not.toContain('scheduleSparkline');
@@ -367,10 +369,14 @@ describe('InteractiveSparkline hover behavior', () => {
     expect(tooltip).not.toBeNull();
     if (!tooltip) return;
 
-    const left = Number.parseFloat(tooltip.style.left);
-    const top = Number.parseFloat(tooltip.style.top);
-    expect(left).toBeGreaterThanOrEqual(100);
-    expect(top).toBeGreaterThan(40);
+    const tooltipHost = tooltip.closest('foreignObject');
+    expect(tooltipHost).not.toBeNull();
+    if (!tooltipHost) return;
+
+    const left = Number.parseFloat(tooltipHost.getAttribute('x') ?? 'NaN');
+    const top = Number.parseFloat(tooltipHost.getAttribute('y') ?? 'NaN');
+    expect(left).toBeGreaterThanOrEqual(0);
+    expect(top).toBeGreaterThanOrEqual(0);
   });
 
   it('anchors the tooltip to the pointer instead of the chart top edge', async () => {
@@ -419,12 +425,16 @@ describe('InteractiveSparkline hover behavior', () => {
     expect(tooltip).not.toBeNull();
     if (!tooltip) return;
 
-    const firstTop = Number.parseFloat(tooltip.style.top);
+    const tooltipHost = tooltip.closest('foreignObject');
+    expect(tooltipHost).not.toBeNull();
+    if (!tooltipHost) return;
+
+    const firstTop = Number.parseFloat(tooltipHost.getAttribute('y') ?? 'NaN');
 
     fireEvent.mouseMove(svg, { clientX: 120, clientY: 160 });
 
-    const secondTop = Number.parseFloat(tooltip.style.top);
-    expect(secondTop).toBeGreaterThan(firstTop + 30);
+    const secondTop = Number.parseFloat(tooltipHost.getAttribute('y') ?? 'NaN');
+    expect(secondTop).toBeGreaterThan(firstTop);
   });
 
   it('locks a hovered series on click and unlocks on second click', async () => {

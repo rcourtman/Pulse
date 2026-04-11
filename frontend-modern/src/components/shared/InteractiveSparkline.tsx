@@ -1,7 +1,7 @@
 import { Component, For, Show } from 'solid-js';
-import { Portal } from 'solid-js/web';
 import {
   formatInteractiveSparklineHoverTime,
+  type InteractiveSparklineHoverState,
   type InteractiveSparklineProps,
 } from './interactiveSparklineModel';
 import { useInteractiveSparklineState } from './useInteractiveSparklineState';
@@ -10,6 +10,16 @@ export type {
   InteractiveSparklineProps,
   InteractiveSparklineSeries,
 } from './interactiveSparklineModel';
+
+const verticalTextBaseline = (anchor: 'top' | 'middle' | 'bottom') =>
+  anchor === 'top' ? 'hanging' : anchor === 'bottom' ? 'text-bottom' : 'middle';
+
+const horizontalTextAnchor = (anchor: 'start' | 'middle' | 'end') => anchor;
+
+const tooltipWidth = (hover: InteractiveSparklineHoverState) => (hover.focusedTooltip ? 112 : 138);
+
+const tooltipHeight = (hover: InteractiveSparklineHoverState) =>
+  22 + hover.values.length * 16 + (hover.totalValues > hover.values.length ? 14 : 0);
 
 export const InteractiveSparkline: Component<InteractiveSparklineProps> = (props) => {
   let chartSurfaceRef: Element | undefined;
@@ -41,26 +51,6 @@ export const InteractiveSparkline: Component<InteractiveSparklineProps> = (props
       data-summary-chart-state={interactionState()}
     >
       <div class="relative flex-1 min-h-0">
-        <div class="absolute inset-y-0 left-0 w-7 pointer-events-none">
-          <For each={sparkline.axisTicks()}>
-            {(tick) => (
-              <span
-                class="absolute left-0 text-[8px] leading-none text-muted transition-all duration-300 ease-out"
-                style={{
-                  top: tick.top,
-                  transform:
-                    tick.anchor === 'top'
-                      ? 'translateY(0)'
-                      : tick.anchor === 'bottom'
-                        ? 'translateY(-100%)'
-                        : 'translateY(-50%)',
-                }}
-              >
-                {tick.label}
-              </span>
-            )}
-          </For>
-        </div>
         <div class="h-full ml-7 mr-3" ref={canvasHostRef}>
           <Show
             when={sparkline.shouldUseCanvas()}
@@ -159,7 +149,7 @@ export const InteractiveSparkline: Component<InteractiveSparklineProps> = (props
                           stroke-linecap="round"
                           stroke-linejoin="round"
                           opacity={sparkline.opacityForSeries(pathData.seriesIndex)}
-                          style={{ transition: 'opacity 90ms linear, stroke-width 90ms linear' }}
+                          class="transition-all duration-100 ease-linear"
                           vector-effect="non-scaling-stroke"
                         />
                       </g>
@@ -180,85 +170,109 @@ export const InteractiveSparkline: Component<InteractiveSparklineProps> = (props
               onClick={sparkline.handleClick}
             />
           </Show>
+          <svg
+            class="pointer-events-none absolute inset-0 h-full w-full overflow-visible"
+            viewBox={`0 0 ${sparkline.vbW} ${sparkline.vbH}`}
+            preserveAspectRatio="none"
+            aria-hidden="true"
+          >
+            <Show when={sparkline.hoveredState()}>
+              {(hover) => (
+                <foreignObject
+                  x={hover().tooltipX - tooltipWidth(hover()) / 2}
+                  y={hover().tooltipY - tooltipHeight(hover())}
+                  width={tooltipWidth(hover())}
+                  height={tooltipHeight(hover())}
+                  overflow="visible"
+                >
+                  <div
+                    data-sparkline-tooltip="true"
+                    class="h-full w-full rounded-md border border-border bg-surface px-2 py-1.5 text-[10px] text-base-content shadow-lg"
+                  >
+                    <div class="mb-1 text-center font-medium text-base-content">
+                      {formatInteractiveSparklineHoverTime(hover().timestamp)}
+                    </div>
+                    <For each={hover().values}>
+                      {(entry) => (
+                        <div
+                          class={`flex items-center gap-1.5 leading-tight ${
+                            props.highlightNearestSeriesOnHover &&
+                            hover().focusedTooltip &&
+                            hover().highlightedSeriesIndex === entry.seriesIndex
+                              ? 'rounded px-1 bg-slate-400/15'
+                              : ''
+                          }`}
+                        >
+                          <svg class="h-2 w-2 shrink-0" viewBox="0 0 8 8" aria-hidden="true">
+                            <circle cx="4" cy="4" r="4" fill={entry.color} />
+                          </svg>
+                          <span class="text-muted">{entry.name}</span>
+                          <span class="ml-auto font-medium text-base-content">
+                            {sparkline.formatValue(entry.value)}
+                          </span>
+                        </div>
+                      )}
+                    </For>
+                    <Show when={hover().totalValues > hover().values.length}>
+                      <div class="mt-0.5 text-[10px] text-muted">
+                        +{hover().totalValues - hover().values.length} more series
+                      </div>
+                    </Show>
+                  </div>
+                </foreignObject>
+              )}
+            </Show>
+          </svg>
+        </div>
+        <div class="absolute inset-y-0 left-0 w-7 pointer-events-none">
+          <svg
+            class="h-full w-full overflow-visible text-muted"
+            viewBox={`0 0 28 ${sparkline.vbH}`}
+            preserveAspectRatio="none"
+            aria-hidden="true"
+          >
+            <For each={sparkline.axisTicks()}>
+              {(tick) => (
+                <text
+                  x="0"
+                  y={tick.y}
+                  fill="currentColor"
+                  font-size="8"
+                  class="transition-all duration-300 ease-out"
+                  dominant-baseline={verticalTextBaseline(tick.anchor)}
+                >
+                  {tick.label}
+                </text>
+              )}
+            </For>
+          </svg>
         </div>
       </div>
-      <div
-        class="relative pointer-events-none ml-7 mr-3"
-        style={{ height: `${sparkline.xAxisBandPx}px` }}
-      >
-        <For each={sparkline.xAxisTicks()}>
-          {(tick) => (
-            <span
-              class="absolute top-[2px] text-[9px] font-medium leading-none text-muted transition-all duration-300 ease-out"
-              style={{
-                left: `${tick.left}%`,
-                transform:
-                  tick.anchor === 'start'
-                    ? 'translateX(0)'
-                    : tick.anchor === 'end'
-                      ? 'translateX(-100%)'
-                      : 'translateX(-50%)',
-              }}
-            >
-              {tick.label}
-            </span>
-          )}
-        </For>
+      <div class="relative pointer-events-none ml-7 mr-3 h-4">
+        <svg
+          class="h-full w-full overflow-visible text-muted"
+          viewBox={`0 0 ${sparkline.vbW} ${sparkline.xAxisBandPx}`}
+          preserveAspectRatio="none"
+          aria-hidden="true"
+        >
+          <For each={sparkline.xAxisTicks()}>
+            {(tick) => (
+              <text
+                x={tick.x}
+                y="2"
+                fill="currentColor"
+                font-size="9"
+                font-weight="500"
+                class="transition-all duration-300 ease-out"
+                text-anchor={horizontalTextAnchor(tick.anchor)}
+                dominant-baseline="hanging"
+              >
+                {tick.label}
+              </text>
+            )}
+          </For>
+        </svg>
       </div>
-
-      <Portal>
-        <Show when={sparkline.hoveredState()}>
-          {(hover) => (
-            <div
-              data-sparkline-tooltip="true"
-              class="fixed pointer-events-none rounded-md border border-border bg-surface px-2 py-1.5 text-xs text-base-content shadow-lg"
-              style={{
-                left: `${hover().tooltipX}px`,
-                top: `${hover().tooltipY}px`,
-                transform: 'translate(-50%, -100%)',
-                'z-index': '9999',
-              }}
-            >
-              <div class="mb-1 text-center font-medium text-base-content">
-                {formatInteractiveSparklineHoverTime(hover().timestamp)}
-              </div>
-              <For each={hover().values}>
-                {(entry) => (
-                  <div
-                    class={`flex items-center gap-1.5 leading-tight ${
-                      props.highlightNearestSeriesOnHover &&
-                      hover().focusedTooltip &&
-                      hover().highlightedSeriesIndex !== null
-                        ? hover().highlightedSeriesIndex === entry.seriesIndex
-                          ? 'rounded px-1'
-                          : 'opacity-40'
-                        : ''
-                    }`}
-                    style={
-                      props.highlightNearestSeriesOnHover &&
-                      hover().focusedTooltip &&
-                      hover().highlightedSeriesIndex === entry.seriesIndex
-                        ? { 'background-color': 'rgba(148, 163, 184, 0.14)' }
-                        : {}
-                    }
-                  >
-                    <span class="w-1.5 h-1.5 rounded-full" style={{ background: entry.color }} />
-                    <span class="text-muted">{entry.name}</span>
-                    <span class="ml-auto font-medium text-base-content">
-                      {sparkline.formatValue(entry.value)}
-                    </span>
-                  </div>
-                )}
-              </For>
-              <Show when={hover().totalValues > hover().values.length}>
-                <div class="mt-0.5 text-[10px] text-muted">
-                  +{hover().totalValues - hover().values.length} more series
-                </div>
-              </Show>
-            </div>
-          )}
-        </Show>
-      </Portal>
     </div>
   );
 };

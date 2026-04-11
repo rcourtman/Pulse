@@ -149,6 +149,12 @@ suppression is now the shared resolved `presentationPolicy` from
 upgrade CTAs, trial nudges, and Pro-only helper copy only from that shared
 policy instead of reviving local demo heuristics or issuing early commercial
 reads before the policy resolves.
+That same shared policy now also owns Patrol approval polling posture.
+`frontend-modern/src/stores/aiIntelligence.ts` must fail
+`loadPendingApprovals()` closed in public demo mode and return the canonical
+empty queue from the shared store boundary itself, so dashboard and Patrol
+shells do not probe `/api/ai/approvals` after the read-only demo policy has
+resolved.
 That same posture split now also centralizes Patrol commercial bootstrap.
 `frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts` and
 `frontend-modern/src/components/patrol/ApprovalSection.tsx` may consume the

@@ -374,21 +374,25 @@ export const buildInteractiveSparklineTopLabel = ({
   return formatTopLabel ? formatTopLabel(scaleMax) : scaleMax.toFixed(1);
 };
 
-export const buildInteractiveSparklineAxisTicks = (yMode: 'percent' | 'auto', topLabel: string) => {
+export const buildInteractiveSparklineAxisTicks = (
+  yMode: 'percent' | 'auto',
+  topLabel: string,
+  vbH: number,
+) => {
   if (yMode === 'percent') {
     return [
-      { label: '100%', top: '0%', anchor: 'top' as const },
-      { label: '80%', top: '20%', anchor: 'middle' as const },
-      { label: '60%', top: '40%', anchor: 'middle' as const },
-      { label: '40%', top: '60%', anchor: 'middle' as const },
-      { label: '20%', top: '80%', anchor: 'middle' as const },
-      { label: '0%', top: '100%', anchor: 'bottom' as const },
+      { label: '100%', y: 0, anchor: 'top' as const },
+      { label: '80%', y: vbH * 0.2, anchor: 'middle' as const },
+      { label: '60%', y: vbH * 0.4, anchor: 'middle' as const },
+      { label: '40%', y: vbH * 0.6, anchor: 'middle' as const },
+      { label: '20%', y: vbH * 0.8, anchor: 'middle' as const },
+      { label: '0%', y: vbH, anchor: 'bottom' as const },
     ];
   }
 
   return [
-    { label: topLabel, top: '0%', anchor: 'top' as const },
-    { label: '0', top: '100%', anchor: 'bottom' as const },
+    { label: topLabel, y: 0, anchor: 'top' as const },
+    { label: '0', y: vbH, anchor: 'bottom' as const },
   ];
 };
 
@@ -405,20 +409,22 @@ export const buildInteractiveSparklineXAxisTicks = ({
   rangeMs,
   rangeLabel,
   timeRange,
+  vbW,
 }: {
   rangeMs: number;
   rangeLabel?: string;
   timeRange: TimeRange;
+  vbW: number;
 }) => {
   const rangeToken = rangeLabel || timeRange;
   return [
-    { left: 0, label: `-${rangeToken}`, anchor: 'start' as const },
+    { x: 0, label: `-${rangeToken}`, anchor: 'start' as const },
     {
-      left: 50,
+      x: vbW * 0.5,
       label: formatInteractiveSparklineRelativeOffset(rangeMs / 2),
       anchor: 'middle' as const,
     },
-    { left: 100, label: 'now', anchor: 'end' as const },
+    { x: vbW, label: 'now', anchor: 'end' as const },
   ];
 };
 
@@ -612,11 +618,12 @@ export const computeInteractiveSparklineHoverState = ({
   }
 
   const mouseX = Math.max(0, Math.min(clientX - chartRect.left, chartRect.width));
+  const mouseY = Math.max(0, Math.min(clientY - chartRect.top, chartRect.height));
   const chartX = (mouseX / chartRect.width) * vbW;
   const targetTimestamp = chartData.windowStart + (chartX / vbW) * chartData.rangeMs;
   const shouldTrackNearest = highlightNearestSeriesOnHover === true;
   const chartY = shouldTrackNearest
-    ? (Math.max(0, Math.min(clientY - chartRect.top, chartRect.height)) / chartRect.height) * vbH
+    ? (mouseY / chartRect.height) * vbH
     : 0;
   const valueToChartY = createInteractiveSparklineValueToY(yMode, chartData.scaleMax, vbH);
 
@@ -699,23 +706,23 @@ export const computeInteractiveSparklineHoverState = ({
   }
 
   const totalValues = focusedTooltip ? tooltipValues.length : values.length;
-  let tooltipX = clientX;
-  let tooltipY = clientY - 10;
+  let tooltipX = chartX;
+  let tooltipY = (mouseY / chartRect.height) * vbH - 6;
 
-  if (typeof window !== 'undefined') {
-    const activeTooltipWidth = focusedTooltip ? 150 : tooltipEstimatedWidth;
-    const minTooltipX = tooltipPadding + activeTooltipWidth / 2;
-    const maxTooltipX = Math.max(
-      minTooltipX,
-      window.innerWidth - tooltipPadding - activeTooltipWidth / 2,
-    );
-    tooltipX = clampInteractiveSparklineValue(tooltipX, minTooltipX, maxTooltipX);
+  const shownRows = tooltipValues.length;
+  const tooltipWidth =
+    (focusedTooltip ? tooltipEstimatedWidth * 0.78 : tooltipEstimatedWidth) *
+    (vbW / Math.max(chartRect.width, 1));
+  const tooltipHeight =
+    (22 + shownRows * 16 + (totalValues > shownRows ? 14 : 0)) *
+    (vbH / Math.max(chartRect.height, 1));
+  const minTooltipX = tooltipPadding + tooltipWidth / 2;
+  const maxTooltipX = Math.max(minTooltipX, vbW - tooltipPadding - tooltipWidth / 2);
+  tooltipX = clampInteractiveSparklineValue(tooltipX, minTooltipX, maxTooltipX);
 
-    const shownRows = tooltipValues.length;
-    const tooltipEstimatedHeight = 22 + shownRows * 16 + (totalValues > shownRows ? 14 : 0);
-    const minTooltipY = tooltipEstimatedHeight + tooltipPadding;
-    tooltipY = Math.max(tooltipY, minTooltipY);
-  }
+  const minTooltipY = tooltipHeight + tooltipPadding;
+  const maxTooltipY = Math.max(minTooltipY, vbH - tooltipPadding);
+  tooltipY = clampInteractiveSparklineValue(tooltipY, minTooltipY, maxTooltipY);
 
   return {
     x: chartX,
