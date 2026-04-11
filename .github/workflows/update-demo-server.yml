@@ -226,6 +226,11 @@ jobs:
           git show "refs/tags/${TAG}:install.sh" > /tmp/pulse-install.sh
           chmod +x /tmp/pulse-install.sh
 
+      - name: Tailscale
+        uses: tailscale/github-action@v2
+        with:
+          authkey: ${{ secrets.TS_AUTHKEY }}
+
       - name: Setup SSH
         env:
           DEMO_SERVER_HOST: ${{ secrets.DEMO_SERVER_HOST }}

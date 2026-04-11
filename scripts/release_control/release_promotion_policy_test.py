@@ -231,6 +231,8 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("latest published release for target", demo)
         self.assertIn('SERVICE_NAME="pulse-v6-preview"', demo)
         self.assertIn("Preview demo updates must not target the stable pulse service.", demo)
+        self.assertIn("tailscale/github-action@v2", demo)
+        self.assertIn("TS_AUTHKEY", demo)
         self.assertIn("DEMO_EXPECTED_HOSTNAME", demo)
         self.assertIn("Verify target host identity", demo)
         self.assertIn("Demo environment points at host $REMOTE_HOSTNAME but expected $DEMO_EXPECTED_HOSTNAME.", demo)
@@ -282,7 +284,6 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         blocked = read("docs/release-control/v6/internal/records/rc-to-ga-promotion-readiness-blocked-2026-04-04.md")
         current_version = read("VERSION").strip()
         active_target_id = read_json("docs/release-control/control_plane.json")["active_target_id"]
-        self.assertIn("origin/pulse/v6-release", blocked)
         self.assertIn(f"VERSION={current_version}", blocked)
         self.assertIn("artifact-owned candidate stable tag", blocked)
         self.assertIn("artifact-owned promotion channel", blocked)

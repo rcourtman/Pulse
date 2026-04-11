@@ -139,6 +139,27 @@ func TestDeployDemoWorkflowFailsClosedForPreviewAndVerifiesFrontendParity(t *tes
 	}
 }
 
+func TestUpdateDemoWorkflowUsesGovernedNetworkPath(t *testing.T) {
+	workflowBytes, err := os.ReadFile(repoFile(".github", "workflows", "update-demo-server.yml"))
+	if err != nil {
+		t.Fatalf("read update-demo-server workflow: %v", err)
+	}
+
+	workflow := string(workflowBytes)
+	required := []string{
+		`- name: Tailscale`,
+		`uses: tailscale/github-action@v2`,
+		`authkey: ${{ secrets.TS_AUTHKEY }}`,
+		`Verify target host identity`,
+		`Demo environment points at host $REMOTE_HOSTNAME but expected $DEMO_EXPECTED_HOSTNAME.`,
+	}
+	for _, needle := range required {
+		if !strings.Contains(workflow, needle) {
+			t.Fatalf("update-demo-server workflow missing governed network path: %s", needle)
+		}
+	}
+}
+
 func TestDockerfileStagesShippedDocsForEmbeddedFrontendBuild(t *testing.T) {
 	dockerfileBytes, err := os.ReadFile(repoFile("Dockerfile"))
 	if err != nil {

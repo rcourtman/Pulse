@@ -191,6 +191,11 @@ shell actually updated. That proof
 must use a deterministic HTML parser for the actual module entry script rather
 than brittle escaped shell regex or a first-match asset scrape that can fail
 differently over SSH or select the wrong preloaded chunk.
+Those same governed demo deploy/update workflows also own the runner-to-host
+network path. They must establish the canonical Tailscale connectivity step
+before SSH setup so stable or preview targets may stay on governed private
+hostnames or Tailscale IPs, rather than silently depending on public SSH
+reachability from GitHub-hosted runners.
 Those same governed release workflows also own the operator-facing wording for
 that promotion metadata. Human-visible workflow inputs, summaries, and error
 messages must describe the path as a prerelease or preview flow rather than

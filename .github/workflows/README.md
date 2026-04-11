@@ -31,6 +31,13 @@ Required environment secrets:
 3. **DEMO_SERVER_USER**
    - The SSH username for the demo server (e.g. `root` or a deploy user with sudo access)
 
+Required shared secret:
+
+1. **TS_AUTHKEY**
+   - Tailscale auth key used by the governed demo deploy/update workflows before SSH
+   - Allows GitHub-hosted runners to reach private demo targets such as the stable `pulse-relay` Tailscale host
+   - May be stored as a repository secret or repeated in the selected environment if desired
+
 Required environment variables:
 
 1. **DEMO_EXPECTED_HOSTNAME**
@@ -68,10 +75,11 @@ Optional environment variables:
 3. **Service identity guard**: Preview runs default to `pulse-v6-preview` and refuse to target the stable `pulse` service identity
 4. **Governance check**: Validates the selected tag is reachable from the governed release branch for that version
 5. **Latest check**: Refuses to update a target unless the published tag is the latest release for that target channel
-6. **Update**: SSHs to the selected demo host and runs the tag-matched root installer from that exact git tag
-7. **Host identity check**: Verifies the SSH target reports the governed expected hostname before running installer or deploy steps
-8. **Verify**: Checks that the new version is running, mock mode is active, and the public demo HTML serves the same frontend entry asset as the target service
-9. **Cleanup**: Removes SSH key from runner
+6. **Network attach**: Joins Tailscale before any SSH step so governed demo targets can stay on private hostnames or Tailscale IPs
+7. **Update**: SSHs to the selected demo host and runs the tag-matched root installer from that exact git tag
+8. **Host identity check**: Verifies the SSH target reports the governed expected hostname before running installer or deploy steps
+9. **Verify**: Checks that the new version is running, mock mode is active, and the public demo HTML serves the same frontend entry asset as the target service
+10. **Cleanup**: Removes SSH key from runner
 
 ### Testing
 
@@ -103,6 +111,8 @@ environment without changing the governed release workflow.
 
 - Uses the same `demo-stable` / `demo-preview-v6` environment contract as the
   release-driven updater
+- Joins Tailscale before SSH so governed demo targets can stay on private
+  addresses instead of requiring public runner reachability
 - Requires `DEMO_EXPECTED_HOSTNAME`, `DEMO_LOCAL_BASE_URL`, and `DEMO_PUBLIC_HEALTH_URL`
 - Supports optional `DEMO_SERVICE_NAME`, `DEMO_INSTALL_DIR`, `DEMO_TEST_PORT`,
   `DEMO_AUTH_USER`, and `DEMO_AUTH_PASS`
