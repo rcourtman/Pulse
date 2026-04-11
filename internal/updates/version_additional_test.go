@@ -4,9 +4,23 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/mockruntime"
 )
 
+func setMockRuntime(t *testing.T, enabled bool) {
+	t.Helper()
+
+	original := mockruntime.IsEnabled()
+	mockruntime.SetEnabled(enabled)
+	t.Cleanup(func() {
+		mockruntime.SetEnabled(original)
+	})
+}
+
 func TestGetCurrentVersion_UsesBuildVersion(t *testing.T) {
+	setMockRuntime(t, false)
+
 	oldBuildVersion := BuildVersion
 	BuildVersion = "6.0.0-rc.1"
 	defer func() {
@@ -36,6 +50,8 @@ func TestGetCurrentVersion_UsesBuildVersion(t *testing.T) {
 }
 
 func TestGetCurrentVersion_UsesVersionFile(t *testing.T) {
+	setMockRuntime(t, false)
+
 	oldwd, err := os.Getwd()
 	if err != nil {
 		t.Fatalf("getwd: %v", err)
@@ -77,6 +93,8 @@ func TestGetCurrentVersion_UsesVersionFile(t *testing.T) {
 }
 
 func TestGetCurrentVersion_UsesVersionFileAsDevelopmentBase(t *testing.T) {
+	setMockRuntime(t, false)
+
 	oldwd, err := os.Getwd()
 	if err != nil {
 		t.Fatalf("getwd: %v", err)
@@ -128,6 +146,7 @@ func TestGetCurrentVersion_UsesVersionFileAsDevelopmentBase(t *testing.T) {
 }
 
 func TestGetDeploymentType_Mock(t *testing.T) {
+	setMockRuntime(t, true)
 	t.Setenv("PULSE_MOCK_MODE", "true")
 	if got := GetDeploymentType(); got != "mock" {
 		t.Fatalf("GetDeploymentType = %q, want mock", got)
@@ -135,6 +154,8 @@ func TestGetDeploymentType_Mock(t *testing.T) {
 }
 
 func TestGetDeploymentType_Manual(t *testing.T) {
+	setMockRuntime(t, false)
+
 	oldwd, err := os.Getwd()
 	if err != nil {
 		t.Fatalf("getwd: %v", err)
