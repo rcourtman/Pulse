@@ -4295,6 +4295,20 @@ func (m *Monitor) syncUnifiedAgentMetrics(store ResourceStoreInterface) {
 	}
 
 	now := time.Now()
+	storeWrites := make([]metrics.WriteMetric, 0)
+	appendStoreWrite := func(resourceType, resourceID, metricType string, value float64) {
+		if m.metricsStore == nil {
+			return
+		}
+		storeWrites = append(storeWrites, metrics.WriteMetric{
+			ResourceType: resourceType,
+			ResourceID:   resourceID,
+			MetricType:   metricType,
+			Value:        value,
+			Timestamp:    now,
+			Tier:         metrics.TierRaw,
+		})
+	}
 	seenTargets := make(map[string]struct{})
 	for _, resource := range store.GetAll() {
 		if resource.Type != unifiedresources.ResourceTypeAgent || resource.Metrics == nil {
@@ -4328,9 +4342,7 @@ func (m *Monitor) syncUnifiedAgentMetrics(store ResourceStoreInterface) {
 			if m.metricsHistory != nil {
 				m.metricsHistory.AddGuestMetric(metricKey, "cpu", value, now)
 			}
-			if m.metricsStore != nil {
-				m.metricsStore.Write("agent", targetID, "cpu", value, now)
-			}
+			appendStoreWrite("agent", targetID, "cpu", value)
 		}
 
 		if metric := resource.Metrics.Memory; metric != nil && (metric.Total != nil || metric.Percent > 0 || metric.Used != nil) {
@@ -4338,9 +4350,7 @@ func (m *Monitor) syncUnifiedAgentMetrics(store ResourceStoreInterface) {
 			if m.metricsHistory != nil {
 				m.metricsHistory.AddGuestMetric(metricKey, "memory", value, now)
 			}
-			if m.metricsStore != nil {
-				m.metricsStore.Write("agent", targetID, "memory", value, now)
-			}
+			appendStoreWrite("agent", targetID, "memory", value)
 		}
 
 		if metric := resource.Metrics.Disk; metric != nil && (metric.Total != nil || metric.Percent > 0 || metric.Used != nil) {
@@ -4348,46 +4358,39 @@ func (m *Monitor) syncUnifiedAgentMetrics(store ResourceStoreInterface) {
 			if m.metricsHistory != nil {
 				m.metricsHistory.AddGuestMetric(metricKey, "disk", value, now)
 			}
-			if m.metricsStore != nil {
-				m.metricsStore.Write("agent", targetID, "disk", value, now)
-			}
+			appendStoreWrite("agent", targetID, "disk", value)
 		}
 
 		if metric := resource.Metrics.NetIn; metric != nil {
 			if m.metricsHistory != nil {
 				m.metricsHistory.AddGuestMetric(metricKey, "netin", metric.Value, now)
 			}
-			if m.metricsStore != nil {
-				m.metricsStore.Write("agent", targetID, "netin", metric.Value, now)
-			}
+			appendStoreWrite("agent", targetID, "netin", metric.Value)
 		}
 
 		if metric := resource.Metrics.NetOut; metric != nil {
 			if m.metricsHistory != nil {
 				m.metricsHistory.AddGuestMetric(metricKey, "netout", metric.Value, now)
 			}
-			if m.metricsStore != nil {
-				m.metricsStore.Write("agent", targetID, "netout", metric.Value, now)
-			}
+			appendStoreWrite("agent", targetID, "netout", metric.Value)
 		}
 
 		if metric := resource.Metrics.DiskRead; metric != nil {
 			if m.metricsHistory != nil {
 				m.metricsHistory.AddGuestMetric(metricKey, "diskread", metric.Value, now)
 			}
-			if m.metricsStore != nil {
-				m.metricsStore.Write("agent", targetID, "diskread", metric.Value, now)
-			}
+			appendStoreWrite("agent", targetID, "diskread", metric.Value)
 		}
 
 		if metric := resource.Metrics.DiskWrite; metric != nil {
 			if m.metricsHistory != nil {
 				m.metricsHistory.AddGuestMetric(metricKey, "diskwrite", metric.Value, now)
 			}
-			if m.metricsStore != nil {
-				m.metricsStore.Write("agent", targetID, "diskwrite", metric.Value, now)
-			}
+			appendStoreWrite("agent", targetID, "diskwrite", metric.Value)
 		}
+	}
+	if len(storeWrites) > 0 {
+		m.metricsStore.WriteBatchSync(storeWrites)
 	}
 }
 
@@ -4402,6 +4405,20 @@ func (m *Monitor) syncUnifiedVMMetrics(store ResourceStoreInterface) {
 	}
 
 	now := time.Now()
+	storeWrites := make([]metrics.WriteMetric, 0)
+	appendStoreWrite := func(resourceType, resourceID, metricType string, value float64) {
+		if m.metricsStore == nil {
+			return
+		}
+		storeWrites = append(storeWrites, metrics.WriteMetric{
+			ResourceType: resourceType,
+			ResourceID:   resourceID,
+			MetricType:   metricType,
+			Value:        value,
+			Timestamp:    now,
+			Tier:         metrics.TierRaw,
+		})
+	}
 	seenTargets := make(map[string]struct{})
 	for _, resource := range store.GetAll() {
 		if resource.Type != unifiedresources.ResourceTypeVM || resource.Metrics == nil {
@@ -4440,9 +4457,7 @@ func (m *Monitor) syncUnifiedVMMetrics(store ResourceStoreInterface) {
 			if m.metricsHistory != nil {
 				m.metricsHistory.AddGuestMetric(targetID, "cpu", value, now)
 			}
-			if m.metricsStore != nil {
-				m.metricsStore.Write("vm", targetID, "cpu", value, now)
-			}
+			appendStoreWrite("vm", targetID, "cpu", value)
 		}
 
 		if metric := resource.Metrics.Memory; metric != nil && (metric.Total != nil || metric.Percent > 0 || metric.Used != nil) {
@@ -4450,9 +4465,7 @@ func (m *Monitor) syncUnifiedVMMetrics(store ResourceStoreInterface) {
 			if m.metricsHistory != nil {
 				m.metricsHistory.AddGuestMetric(targetID, "memory", value, now)
 			}
-			if m.metricsStore != nil {
-				m.metricsStore.Write("vm", targetID, "memory", value, now)
-			}
+			appendStoreWrite("vm", targetID, "memory", value)
 		}
 
 		if metric := resource.Metrics.Disk; metric != nil && (metric.Total != nil || metric.Percent > 0 || metric.Used != nil) {
@@ -4460,46 +4473,39 @@ func (m *Monitor) syncUnifiedVMMetrics(store ResourceStoreInterface) {
 			if m.metricsHistory != nil {
 				m.metricsHistory.AddGuestMetric(targetID, "disk", value, now)
 			}
-			if m.metricsStore != nil {
-				m.metricsStore.Write("vm", targetID, "disk", value, now)
-			}
+			appendStoreWrite("vm", targetID, "disk", value)
 		}
 
 		if metric := resource.Metrics.NetIn; metric != nil {
 			if m.metricsHistory != nil {
 				m.metricsHistory.AddGuestMetric(targetID, "netin", metric.Value, now)
 			}
-			if m.metricsStore != nil {
-				m.metricsStore.Write("vm", targetID, "netin", metric.Value, now)
-			}
+			appendStoreWrite("vm", targetID, "netin", metric.Value)
 		}
 
 		if metric := resource.Metrics.NetOut; metric != nil {
 			if m.metricsHistory != nil {
 				m.metricsHistory.AddGuestMetric(targetID, "netout", metric.Value, now)
 			}
-			if m.metricsStore != nil {
-				m.metricsStore.Write("vm", targetID, "netout", metric.Value, now)
-			}
+			appendStoreWrite("vm", targetID, "netout", metric.Value)
 		}
 
 		if metric := resource.Metrics.DiskRead; metric != nil {
 			if m.metricsHistory != nil {
 				m.metricsHistory.AddGuestMetric(targetID, "diskread", metric.Value, now)
 			}
-			if m.metricsStore != nil {
-				m.metricsStore.Write("vm", targetID, "diskread", metric.Value, now)
-			}
+			appendStoreWrite("vm", targetID, "diskread", metric.Value)
 		}
 
 		if metric := resource.Metrics.DiskWrite; metric != nil {
 			if m.metricsHistory != nil {
 				m.metricsHistory.AddGuestMetric(targetID, "diskwrite", metric.Value, now)
 			}
-			if m.metricsStore != nil {
-				m.metricsStore.Write("vm", targetID, "diskwrite", metric.Value, now)
-			}
+			appendStoreWrite("vm", targetID, "diskwrite", metric.Value)
 		}
+	}
+	if len(storeWrites) > 0 {
+		m.metricsStore.WriteBatchSync(storeWrites)
 	}
 }
 
@@ -4514,6 +4520,20 @@ func (m *Monitor) syncUnifiedStorageMetrics(store ResourceStoreInterface) {
 	}
 
 	now := time.Now()
+	storeWrites := make([]metrics.WriteMetric, 0)
+	appendStoreWrite := func(resourceType, resourceID, metricType string, value float64) {
+		if m.metricsStore == nil {
+			return
+		}
+		storeWrites = append(storeWrites, metrics.WriteMetric{
+			ResourceType: resourceType,
+			ResourceID:   resourceID,
+			MetricType:   metricType,
+			Value:        value,
+			Timestamp:    now,
+			Tier:         metrics.TierRaw,
+		})
+	}
 	seenTargets := make(map[string]struct{})
 	for _, resource := range store.GetAll() {
 		if resource.Type != unifiedresources.ResourceTypeStorage || resource.Metrics == nil || resource.Metrics.Disk == nil {
@@ -4573,14 +4593,15 @@ func (m *Monitor) syncUnifiedStorageMetrics(store ResourceStoreInterface) {
 				m.metricsHistory.AddStorageMetric(targetID, "avail", float64(free), now)
 			}
 		}
-		if m.metricsStore != nil {
-			m.metricsStore.Write("storage", targetID, "usage", usage, now)
-			if total > 0 {
-				m.metricsStore.Write("storage", targetID, "used", float64(used), now)
-				m.metricsStore.Write("storage", targetID, "total", float64(total), now)
-				m.metricsStore.Write("storage", targetID, "avail", float64(free), now)
-			}
+		appendStoreWrite("storage", targetID, "usage", usage)
+		if total > 0 {
+			appendStoreWrite("storage", targetID, "used", float64(used))
+			appendStoreWrite("storage", targetID, "total", float64(total))
+			appendStoreWrite("storage", targetID, "avail", float64(free))
 		}
+	}
+	if len(storeWrites) > 0 {
+		m.metricsStore.WriteBatchSync(storeWrites)
 	}
 }
 
@@ -4671,6 +4692,20 @@ func (m *Monitor) syncUnifiedAppContainerMetrics(store ResourceStoreInterface) {
 	}
 
 	now := time.Now()
+	storeWrites := make([]metrics.WriteMetric, 0)
+	appendStoreWrite := func(resourceType, resourceID, metricType string, value float64) {
+		if m.metricsStore == nil {
+			return
+		}
+		storeWrites = append(storeWrites, metrics.WriteMetric{
+			ResourceType: resourceType,
+			ResourceID:   resourceID,
+			MetricType:   metricType,
+			Value:        value,
+			Timestamp:    now,
+			Tier:         metrics.TierRaw,
+		})
+	}
 	seenTargets := make(map[string]struct{})
 	for _, resource := range store.GetAll() {
 		if resource.Type != unifiedresources.ResourceTypeAppContainer || resource.Metrics == nil {
@@ -4709,9 +4744,7 @@ func (m *Monitor) syncUnifiedAppContainerMetrics(store ResourceStoreInterface) {
 			if m.metricsHistory != nil {
 				m.metricsHistory.AddGuestMetric(metricKey, "cpu", value, now)
 			}
-			if m.metricsStore != nil {
-				m.metricsStore.Write("dockerContainer", targetID, "cpu", value, now)
-			}
+			appendStoreWrite("dockerContainer", targetID, "cpu", value)
 		}
 
 		if metric := resource.Metrics.Memory; metric != nil && (metric.Total != nil || metric.Percent > 0) {
@@ -4719,9 +4752,7 @@ func (m *Monitor) syncUnifiedAppContainerMetrics(store ResourceStoreInterface) {
 			if m.metricsHistory != nil {
 				m.metricsHistory.AddGuestMetric(metricKey, "memory", value, now)
 			}
-			if m.metricsStore != nil {
-				m.metricsStore.Write("dockerContainer", targetID, "memory", value, now)
-			}
+			appendStoreWrite("dockerContainer", targetID, "memory", value)
 		}
 
 		if metric := resource.Metrics.Disk; metric != nil && (metric.Total != nil || metric.Percent > 0) {
@@ -4729,46 +4760,39 @@ func (m *Monitor) syncUnifiedAppContainerMetrics(store ResourceStoreInterface) {
 			if m.metricsHistory != nil {
 				m.metricsHistory.AddGuestMetric(metricKey, "disk", value, now)
 			}
-			if m.metricsStore != nil {
-				m.metricsStore.Write("dockerContainer", targetID, "disk", value, now)
-			}
+			appendStoreWrite("dockerContainer", targetID, "disk", value)
 		}
 
 		if metric := resource.Metrics.NetIn; metric != nil {
 			if m.metricsHistory != nil {
 				m.metricsHistory.AddGuestMetric(metricKey, "netin", metric.Value, now)
 			}
-			if m.metricsStore != nil {
-				m.metricsStore.Write("dockerContainer", targetID, "netin", metric.Value, now)
-			}
+			appendStoreWrite("dockerContainer", targetID, "netin", metric.Value)
 		}
 
 		if metric := resource.Metrics.NetOut; metric != nil {
 			if m.metricsHistory != nil {
 				m.metricsHistory.AddGuestMetric(metricKey, "netout", metric.Value, now)
 			}
-			if m.metricsStore != nil {
-				m.metricsStore.Write("dockerContainer", targetID, "netout", metric.Value, now)
-			}
+			appendStoreWrite("dockerContainer", targetID, "netout", metric.Value)
 		}
 
 		if metric := resource.Metrics.DiskRead; metric != nil {
 			if m.metricsHistory != nil {
 				m.metricsHistory.AddGuestMetric(metricKey, "diskread", metric.Value, now)
 			}
-			if m.metricsStore != nil {
-				m.metricsStore.Write("dockerContainer", targetID, "diskread", metric.Value, now)
-			}
+			appendStoreWrite("dockerContainer", targetID, "diskread", metric.Value)
 		}
 
 		if metric := resource.Metrics.DiskWrite; metric != nil {
 			if m.metricsHistory != nil {
 				m.metricsHistory.AddGuestMetric(metricKey, "diskwrite", metric.Value, now)
 			}
-			if m.metricsStore != nil {
-				m.metricsStore.Write("dockerContainer", targetID, "diskwrite", metric.Value, now)
-			}
+			appendStoreWrite("dockerContainer", targetID, "diskwrite", metric.Value)
 		}
+	}
+	if len(storeWrites) > 0 {
+		m.metricsStore.WriteBatchSync(storeWrites)
 	}
 }
 

@@ -314,6 +314,18 @@ queries. Compact dashboard routes that request only CPU/memory or only
 storage `used`/`avail` capacity must keep that metric-type filter all the way
 through `pkg/metrics/store.go` instead of fetching every series for every
 resource and discarding the extra payload in higher layers.
+That same protected workload-chart hot path now also owns rendered-metric
+budgeting. `internal/api/router.go` may parallelize VM, container, pod, and
+docker-container workload batch reads, but `/api/charts/workloads` and
+`/api/charts/workloads-summary` must request only the canonical five workload
+metrics they actually render instead of widening back to disk read/write or
+fetch-all history queries.
+That same chart-batch hot path now also owns long-range in-memory coverage.
+`internal/monitoring/monitor_metrics.go` may skip SQLite for guest and node
+chart batches when `metrics_history` can prove the requested window is
+already covered in memory, and performance work must preserve that
+coverage-gated fast path rather than treating every long-duration request as
+store-backed by default.
 That same hot path now also covers mock-mode cache warmth. The canonical
 24-hour `/api/charts/storage-summary` dashboard transport must stay prewarmed
 across live mock sampler ticks so the first dashboard request after a refresh

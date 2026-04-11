@@ -462,6 +462,17 @@ must flow through the canonical `/api/metrics-store/history` boundary and the
 disk `MetricsTarget.ResourceID` that monitoring projects for the resource,
 rather than reviving a browser-local collector or a lifecycle-only
 agent/device identity.
+That same adjacent API boundary now also owns internal demo-fixture runtime
+gating. Lifecycle-adjacent install, reporting, and demo-facing flows may
+share mock-mode handlers in dev and test, but release builds must authorize
+runtime mock rewiring only through the internal `demo_fixtures` entitlement,
+and browser-facing lifecycle surfaces must not infer or persist that internal
+grant from public runtime-capabilities or presentation-policy payloads.
+Shared workload-chart reads that lifecycle surfaces reuse must stay
+presentation-only on that same boundary: `internal/api/router.go` may batch
+those reads in parallel, but it must request only the canonical rendered
+metric set for workload cards instead of widening the hot path back to
+fetch-all metrics on behalf of install or reporting callers.
 That shared `internal/api/` dependency now also assumes hosted tenant AI and
 relay bootstrap reads use one effective hosted billing lease before
 lifecycle-adjacent flows inspect runtime readiness, so install and setup

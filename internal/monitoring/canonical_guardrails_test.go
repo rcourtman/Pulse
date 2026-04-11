@@ -666,8 +666,10 @@ func TestUnifiedAppContainerMetricsUseCanonicalGuestHistoryPath(t *testing.T) {
 		"m.syncUnifiedAppContainerMetrics(store)",
 		`if target == nil || target.ResourceType != "app-container" || strings.TrimSpace(target.ResourceID) == "" {`,
 		`metricKey := fmt.Sprintf("docker:%s", targetID)`,
-		`m.metricsStore.Write("dockerContainer", targetID, "cpu", value, now)`,
-		`m.metricsStore.Write("dockerContainer", targetID, "diskwrite", metric.Value, now)`,
+		`storeWrites := make([]metrics.WriteMetric, 0)`,
+		`appendStoreWrite("dockerContainer", targetID, "cpu", value)`,
+		`appendStoreWrite("dockerContainer", targetID, "diskwrite", metric.Value)`,
+		`m.metricsStore.WriteBatchSync(storeWrites)`,
 	}
 	for _, snippet := range requiredSnippets {
 		if !strings.Contains(source, snippet) {
@@ -703,8 +705,10 @@ func TestUnifiedAgentMetricsUseCanonicalHostHistoryPath(t *testing.T) {
 		"m.syncUnifiedAgentMetrics(store)",
 		`if target == nil || target.ResourceType != "agent" || strings.TrimSpace(target.ResourceID) == "" {`,
 		`metricKey := fmt.Sprintf("agent:%s", targetID)`,
-		`m.metricsStore.Write("agent", targetID, "cpu", value, now)`,
-		`m.metricsStore.Write("agent", targetID, "diskwrite", metric.Value, now)`,
+		`storeWrites := make([]metrics.WriteMetric, 0)`,
+		`appendStoreWrite("agent", targetID, "cpu", value)`,
+		`appendStoreWrite("agent", targetID, "diskwrite", metric.Value)`,
+		`m.metricsStore.WriteBatchSync(storeWrites)`,
 	}
 	for _, snippet := range requiredSnippets {
 		if !strings.Contains(source, snippet) {
@@ -723,8 +727,10 @@ func TestUnifiedVMMetricsUseCanonicalVMHistoryPath(t *testing.T) {
 		"m.syncUnifiedVMMetrics(store)",
 		`if target == nil || target.ResourceType != "vm" || strings.TrimSpace(target.ResourceID) == "" {`,
 		`if source == unifiedresources.SourceProxmox {`,
-		`m.metricsStore.Write("vm", targetID, "cpu", value, now)`,
-		`m.metricsStore.Write("vm", targetID, "diskwrite", metric.Value, now)`,
+		`storeWrites := make([]metrics.WriteMetric, 0)`,
+		`appendStoreWrite("vm", targetID, "cpu", value)`,
+		`appendStoreWrite("vm", targetID, "diskwrite", metric.Value)`,
+		`m.metricsStore.WriteBatchSync(storeWrites)`,
 	}
 	for _, snippet := range requiredSnippets {
 		if !strings.Contains(source, snippet) {

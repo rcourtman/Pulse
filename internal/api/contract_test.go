@@ -1444,6 +1444,36 @@ func TestContract_WorkloadsSummaryChartsNormalizeLongRangeMixedCadence(t *testin
 	}
 }
 
+func TestContract_WorkloadChartMetricBudgetGuardrailsRemainCanonical(t *testing.T) {
+	data, err := os.ReadFile("router.go")
+	if err != nil {
+		t.Fatalf("failed to read router.go: %v", err)
+	}
+	source := string(data)
+
+	requiredSnippets := []string{
+		`var workloadSummaryMetricOrder = []string{`,
+		`"cpu",`,
+		`"memory",`,
+		`"disk",`,
+		`"netin",`,
+		`"netout",`,
+		`var workloadChartsBatchWG sync.WaitGroup`,
+		`workloadChartsBatchWG.Add(4)`,
+		`podBatchMetrics = monitor.GetGuestMetricsForChartBatch("k8s", podRequests, duration, workloadSummaryMetricOrder...)`,
+		`var workloadsSummaryBatchWG sync.WaitGroup`,
+		`workloadsSummaryBatchWG.Add(4)`,
+		`vmBatchMetrics = monitor.GetGuestMetricsForChartBatch("vm", vmRequests, duration, workloadSummaryMetricOrder...)`,
+		`containerBatchMetrics = monitor.GetGuestMetricsForChartBatch("container", containerRequests, duration, workloadSummaryMetricOrder...)`,
+		`dockerContainerBatchMetrics = monitor.GetGuestMetricsForChartBatch("dockerContainer", dockerContainerRequests, duration, workloadSummaryMetricOrder...)`,
+	}
+	for _, snippet := range requiredSnippets {
+		if !strings.Contains(source, snippet) {
+			t.Fatalf("router.go must contain %q", snippet)
+		}
+	}
+}
+
 func TestContract_GenerateStyledMockSeries_UsesTimestampBasedCurve(t *testing.T) {
 	now := time.Date(2026, time.March, 31, 12, 0, 0, 0, time.UTC).UnixMilli()
 
@@ -6213,6 +6243,39 @@ func TestContract_DemoModeCommercialSurfacePolicy(t *testing.T) {
 			}
 		}
 	})
+}
+
+func TestContract_ReleaseDemoFixtureRuntimeGuardrailsRemainCanonical(t *testing.T) {
+	requiredSnippets := map[string][]string{
+		"licensing_handlers.go": {
+			"func (h *LicenseHandlers) syncReleaseDemoFixtureRuntime(orgID string, service *licenseService) {",
+			"if !shouldEnforceReleaseDemoFixtureRuntime() {",
+			"authorized := h.demoFixturesAuthorized(service)",
+			"mock.SetReleaseFixturesAuthorized(authorized)",
+			"if !wantsMockFixturesFromEnv() {",
+		},
+		"release_demo_fixtures_dev.go": {
+			"//go:build !release",
+			"return false",
+		},
+		"release_demo_fixtures_release.go": {
+			"//go:build release",
+			"return true",
+		},
+	}
+
+	for file, snippets := range requiredSnippets {
+		data, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatalf("failed to read %s: %v", file, err)
+		}
+		source := string(data)
+		for _, snippet := range snippets {
+			if !strings.Contains(source, snippet) {
+				t.Fatalf("%s must contain %q", file, snippet)
+			}
+		}
+	}
 }
 
 func TestContract_SelfHostedPurchaseHandoffJSONSnapshot(t *testing.T) {

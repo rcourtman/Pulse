@@ -79,13 +79,7 @@ func newIntegrationServerWithRuntimeMode(
 ) *integrationServer {
 	t.Helper()
 
-	if mockMode {
-		t.Setenv("PULSE_MOCK_MODE", "true")
-		mock.SetEnabled(true)
-	} else {
-		t.Setenv("PULSE_MOCK_MODE", "false")
-		mock.SetEnabled(false)
-	}
+	setMockModeForTest(t, mockMode)
 
 	if customize != nil {
 		customize(cfg)
@@ -132,7 +126,6 @@ func newIntegrationServerWithRuntimeMode(
 		if hub != nil {
 			hub.Stop()
 		}
-		mock.SetEnabled(false)
 	})
 
 	return &integrationServer{

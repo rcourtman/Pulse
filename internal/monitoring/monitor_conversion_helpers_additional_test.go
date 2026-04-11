@@ -10,7 +10,7 @@ import (
 func ptrF64Coverage(v float64) *float64 { return &v }
 
 func TestMonitorFrontendNamesAdditional(t *testing.T) {
-	t.Run("node prefers proxmox node name and preserves display name", func(t *testing.T) {
+	t.Run("frontend names use canonical display name", func(t *testing.T) {
 		name, display := monitorFrontendNames(unifiedresources.Resource{
 			ID:   "node-1",
 			Name: "Node Friendly",
@@ -19,15 +19,15 @@ func TestMonitorFrontendNamesAdditional(t *testing.T) {
 			},
 		}, "node")
 
-		if name != "pve-node-1" {
-			t.Fatalf("name = %q, want %q", name, "pve-node-1")
+		if name != "Node Friendly" {
+			t.Fatalf("name = %q, want %q", name, "Node Friendly")
 		}
 		if display != "Node Friendly" {
 			t.Fatalf("display = %q, want %q", display, "Node Friendly")
 		}
 	})
 
-	t.Run("agent and docker host use source hostnames", func(t *testing.T) {
+	t.Run("frontend names ignore source hostnames when a display name exists", func(t *testing.T) {
 		hostName, hostDisplay := monitorFrontendNames(unifiedresources.Resource{
 			ID:   "host-1",
 			Name: "Friendly Host",
@@ -35,7 +35,7 @@ func TestMonitorFrontendNamesAdditional(t *testing.T) {
 				Hostname: "agent-host",
 			},
 		}, "agent")
-		if hostName != "agent-host" || hostDisplay != "Friendly Host" {
+		if hostName != "Friendly Host" || hostDisplay != "Friendly Host" {
 			t.Fatalf("agent branch mismatch: name=%q display=%q", hostName, hostDisplay)
 		}
 
@@ -46,12 +46,12 @@ func TestMonitorFrontendNamesAdditional(t *testing.T) {
 				Hostname: "docker-host",
 			},
 		}, "docker-host")
-		if dockerName != "docker-host" || dockerDisplay != "Friendly Docker" {
+		if dockerName != "Friendly Docker" || dockerDisplay != "Friendly Docker" {
 			t.Fatalf("docker branch mismatch: name=%q display=%q", dockerName, dockerDisplay)
 		}
 	})
 
-	t.Run("falls back to id when name is empty", func(t *testing.T) {
+	t.Run("falls back to id when display name is empty", func(t *testing.T) {
 		name, display := monitorFrontendNames(unifiedresources.Resource{
 			ID:   "fallback-id",
 			Name: "   ",
@@ -59,8 +59,8 @@ func TestMonitorFrontendNamesAdditional(t *testing.T) {
 		if name != "fallback-id" {
 			t.Fatalf("name = %q, want fallback id", name)
 		}
-		if display != "" {
-			t.Fatalf("display = %q, want empty", display)
+		if display != "fallback-id" {
+			t.Fatalf("display = %q, want fallback id", display)
 		}
 	})
 }

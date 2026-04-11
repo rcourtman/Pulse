@@ -9,15 +9,12 @@ import (
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
-	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/stretchr/testify/require"
 )
 
 func TestHostedTenantAgentInstallCommand_GeneratesOrgBoundTokenAndCommand(t *testing.T) {
-	t.Setenv("PULSE_MOCK_MODE", "true")
-	mock.SetEnabled(true)
-	t.Cleanup(func() { mock.SetEnabled(false) })
+	setMockModeForTest(t, true)
 
 	dataDir := t.TempDir()
 	cfg := &config.Config{

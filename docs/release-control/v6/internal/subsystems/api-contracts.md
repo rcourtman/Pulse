@@ -508,6 +508,13 @@ readiness. API contracts must not serialize a live monitored-system count from
 the first store-backed read-state when provider-owned inventories such as
 TrueNAS or VMware have not yet completed an initial baseline and been rebuilt
 into the canonical monitor store.
+That same workload-chart boundary now also owns the rendered-metric budget on
+the shared monitoring routes. `/api/charts/workloads` and
+`/api/charts/workloads-summary` may batch provider-backed reads in parallel,
+but they must request only the canonical workload metrics they actually
+serialize (`cpu`, `memory`, `disk`, `netin`, `netout`), with Kubernetes pods
+staying on that same five-metric set, instead of widening back to disk
+read/write or fetch-all backend batches that the browser never renders.
 The shared metrics-history contract now also owns physical-disk live I/O
 windows. `/api/metrics-store/history` must accept `resourceType=disk`, keep
 `30m` as a valid compact live range, and resolve `disk`, `diskread`,
@@ -606,6 +613,14 @@ entitlement to authorize mock fixture data and `/api/system/mock-mode`
 transitions, but browser-facing entitlement and runtime payloads must filter
 that capability back out so public callers never learn or depend on internal
 demo-fixture grants.
+That same shared licensing boundary now also owns release-build enforcement of
+that internal demo-fixture capability. Dev and test builds may keep local
+fixture proof tolerant so mock-backed demos can be exercised without a paid
+grant, but release builds must gate runtime mock rewiring through the
+build-tagged `shouldEnforceReleaseDemoFixtureRuntime()` contract before
+`syncReleaseDemoFixtureRuntime()` can enable fixtures on a live server.
+Browser payloads and public-demo callers must still never see or depend on
+that internal grant.
 That same shared API contract now also owns browser-proofed read separation.
 Non-billing browser journeys such as
 `tests/integration/tests/11-first-session.spec.ts`,

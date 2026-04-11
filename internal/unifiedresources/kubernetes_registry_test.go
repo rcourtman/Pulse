@@ -221,45 +221,48 @@ func TestIngestSnapshotLinksKubernetesNodesToHostAgentMetrics(t *testing.T) {
 	registry.IngestSnapshot(snapshot)
 
 	resources := registry.List()
-	if len(resources) != 3 {
-		t.Fatalf("expected 3 resources (host + cluster + node), got %d", len(resources))
+	if len(resources) != 2 {
+		t.Fatalf("expected 2 resources (cluster + merged agent), got %d", len(resources))
 	}
 
 	var clusterResource *Resource
-	var nodeResource *Resource
+	var agentResource *Resource
 	for i := range resources {
 		resource := resources[i]
 		switch resource.Type {
 		case ResourceTypeK8sCluster:
 			clusterResource = &resource
-		case ResourceTypeK8sNode:
-			nodeResource = &resource
+		case ResourceTypeAgent:
+			agentResource = &resource
 		}
 	}
 
-	if nodeResource == nil {
-		t.Fatal("expected kubernetes node resource")
+	if agentResource == nil {
+		t.Fatal("expected linked kubernetes node to merge into agent resource")
 	}
-	if nodeResource.Metrics == nil || nodeResource.Metrics.CPU == nil || nodeResource.Metrics.CPU.Value <= 0 {
-		t.Fatalf("expected kubernetes node cpu metric from linked host, got %+v", nodeResource.Metrics)
+	if agentResource.Metrics == nil || agentResource.Metrics.CPU == nil || agentResource.Metrics.CPU.Value <= 0 {
+		t.Fatalf("expected merged agent cpu metric from linked host, got %+v", agentResource.Metrics)
 	}
-	if nodeResource.Metrics.NetIn == nil || nodeResource.Metrics.NetIn.Value != 1200 {
-		t.Fatalf("expected kubernetes node netIn metric from linked host, got %+v", nodeResource.Metrics)
+	if agentResource.Metrics.NetIn == nil || agentResource.Metrics.NetIn.Value != 1200 {
+		t.Fatalf("expected merged agent netIn metric from linked host, got %+v", agentResource.Metrics)
 	}
-	if nodeResource.Kubernetes == nil || nodeResource.Kubernetes.UptimeSeconds != 7200 {
-		t.Fatalf("expected kubernetes node uptime from linked host, got %+v", nodeResource.Kubernetes)
+	if agentResource.Kubernetes == nil || agentResource.Kubernetes.UptimeSeconds != 7200 {
+		t.Fatalf("expected kubernetes node payload to retain linked host uptime, got %+v", agentResource.Kubernetes)
 	}
-	if nodeResource.Kubernetes.Temperature == nil || *nodeResource.Kubernetes.Temperature <= 0 {
-		t.Fatalf("expected kubernetes node temperature from linked host, got %+v", nodeResource.Kubernetes)
+	if agentResource.Kubernetes.Temperature == nil || *agentResource.Kubernetes.Temperature <= 0 {
+		t.Fatalf("expected kubernetes node payload to retain linked host temperature, got %+v", agentResource.Kubernetes)
 	}
-	if nodeResource.Kubernetes.MetricCapabilities == nil {
+	if agentResource.Kubernetes.MetricCapabilities == nil {
 		t.Fatalf("expected kubernetes metric capabilities on node resource, got nil")
 	}
-	if !nodeResource.Kubernetes.MetricCapabilities.NodeCPUMemory {
-		t.Fatalf("expected node CPU/memory capability from linked host, got %+v", nodeResource.Kubernetes.MetricCapabilities)
+	if !agentResource.Kubernetes.MetricCapabilities.NodeCPUMemory {
+		t.Fatalf("expected node CPU/memory capability from linked host, got %+v", agentResource.Kubernetes.MetricCapabilities)
 	}
-	if !nodeResource.Kubernetes.MetricCapabilities.NodeTelemetry {
-		t.Fatalf("expected node telemetry capability from linked host, got %+v", nodeResource.Kubernetes.MetricCapabilities)
+	if !agentResource.Kubernetes.MetricCapabilities.NodeTelemetry {
+		t.Fatalf("expected node telemetry capability from linked host, got %+v", agentResource.Kubernetes.MetricCapabilities)
+	}
+	if !hasDataSource(agentResource.Sources, SourceAgent) || !hasDataSource(agentResource.Sources, SourceK8s) {
+		t.Fatalf("expected merged agent sources to include agent+kubernetes, got %+v", agentResource.Sources)
 	}
 
 	if clusterResource == nil {

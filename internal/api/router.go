@@ -5907,6 +5907,14 @@ var infrastructureSummaryMetricOrder = []string{
 	"netout",
 }
 
+var workloadSummaryMetricOrder = []string{
+	"cpu",
+	"memory",
+	"disk",
+	"netin",
+	"netout",
+}
+
 func parseInfrastructureSummaryRequestedMetrics(
 	query url.Values,
 ) ([]string, map[string]bool, error) {
@@ -6305,24 +6313,6 @@ func (r *Router) handleWorkloadCharts(w http.ResponseWriter, req *http.Request) 
 		vmResponseKeys = append(vmResponseKeys, responseKey)
 		vmRequests = append(vmRequests, request)
 	}
-	vmBatchMetrics := monitor.GetGuestMetricsForChartBatch("vm", vmRequests, duration, infrastructureSummaryMetricOrder...)
-	for idx, vm := range vmList {
-		responseKey := vmResponseKeys[idx]
-		metricID := vmRequests[idx].SQLResourceID
-		series := convertMetricsForChart(vmBatchMetrics[metricID], &oldestTimestamp, maxPoints)
-		guestTypes[responseKey] = "vm"
-
-		if len(series["cpu"]) == 0 {
-			series["cpu"] = []MetricPoint{{Timestamp: currentTime, Value: vm.CPUPercent()}}
-			series["memory"] = []MetricPoint{{Timestamp: currentTime, Value: vm.MemoryPercent()}}
-			series["disk"] = []MetricPoint{{Timestamp: currentTime, Value: vm.DiskPercent()}}
-			series["netin"] = []MetricPoint{{Timestamp: currentTime, Value: vm.NetIn()}}
-			series["netout"] = []MetricPoint{{Timestamp: currentTime, Value: vm.NetOut()}}
-		}
-		updateOldestTimestampFromSeries(series, &oldestTimestamp)
-		chartData[responseKey] = series
-	}
-
 	containerList := make([]*unifiedresources.ContainerView, 0)
 	containerResponseKeys := make([]string, 0)
 	containerRequests := make([]monitoring.GuestChartRequest, 0)
@@ -6343,24 +6333,6 @@ func (r *Router) handleWorkloadCharts(w http.ResponseWriter, req *http.Request) 
 		containerResponseKeys = append(containerResponseKeys, responseKey)
 		containerRequests = append(containerRequests, request)
 	}
-	containerBatchMetrics := monitor.GetGuestMetricsForChartBatch("container", containerRequests, duration, infrastructureSummaryMetricOrder...)
-	for idx, ct := range containerList {
-		responseKey := containerResponseKeys[idx]
-		metricID := containerRequests[idx].SQLResourceID
-		series := convertMetricsForChart(containerBatchMetrics[metricID], &oldestTimestamp, maxPoints)
-		guestTypes[responseKey] = "system-container"
-
-		if len(series["cpu"]) == 0 {
-			series["cpu"] = []MetricPoint{{Timestamp: currentTime, Value: ct.CPUPercent()}}
-			series["memory"] = []MetricPoint{{Timestamp: currentTime, Value: ct.MemoryPercent()}}
-			series["disk"] = []MetricPoint{{Timestamp: currentTime, Value: ct.DiskPercent()}}
-			series["netin"] = []MetricPoint{{Timestamp: currentTime, Value: ct.NetIn()}}
-			series["netout"] = []MetricPoint{{Timestamp: currentTime, Value: ct.NetOut()}}
-		}
-		updateOldestTimestampFromSeries(series, &oldestTimestamp)
-		chartData[responseKey] = series
-	}
-
 	podList := make([]*unifiedresources.PodView, 0)
 	podRequests := make([]monitoring.GuestChartRequest, 0)
 	for _, pod := range readState.Pods() {
@@ -6379,23 +6351,6 @@ func (r *Router) handleWorkloadCharts(w http.ResponseWriter, req *http.Request) 
 		podList = append(podList, pod)
 		podRequests = append(podRequests, monitoring.GuestChartRequest{InMemoryKey: metricKey, SQLResourceID: metricKey})
 	}
-	podBatchMetrics := monitor.GetGuestMetricsForChartBatch("k8s", podRequests, duration, infrastructureSummaryMetricOrder...)
-	for _, pod := range podList {
-		metricKey := kubernetesPodMetricIDFromView(pod)
-		series := convertMetricsForChart(podBatchMetrics[metricKey], &oldestTimestamp, maxPoints)
-		guestTypes[metricKey] = "k8s"
-
-		if len(series["cpu"]) == 0 {
-			series["cpu"] = []MetricPoint{{Timestamp: currentTime, Value: pod.CPUPercent()}}
-			series["memory"] = []MetricPoint{{Timestamp: currentTime, Value: pod.MemoryPercent()}}
-			series["disk"] = []MetricPoint{{Timestamp: currentTime, Value: pod.DiskPercent()}}
-			series["netin"] = []MetricPoint{{Timestamp: currentTime, Value: pod.NetInRate()}}
-			series["netout"] = []MetricPoint{{Timestamp: currentTime, Value: pod.NetOutRate()}}
-		}
-		updateOldestTimestampFromSeries(series, &oldestTimestamp)
-		chartData[metricKey] = series
-	}
-
 	dockerHostsByID := make(map[string]*unifiedresources.DockerHostView, len(readState.DockerHosts()))
 	for _, host := range readState.DockerHosts() {
 		if host == nil {
@@ -6440,13 +6395,85 @@ func (r *Router) handleWorkloadCharts(w http.ResponseWriter, req *http.Request) 
 		dockerContainerList = append(dockerContainerList, container)
 		dockerContainerKeys = append(dockerContainerKeys, responseKey)
 		dockerContainerRequests = append(dockerContainerRequests, request)
-		guestTypes[responseKey] = "app-container"
 	}
-	dockerContainerBatchMetrics := monitor.GetGuestMetricsForChartBatch("dockerContainer", dockerContainerRequests, duration, infrastructureSummaryMetricOrder...)
+	var (
+		vmBatchMetrics              map[string]map[string][]monitoring.MetricPoint
+		containerBatchMetrics       map[string]map[string][]monitoring.MetricPoint
+		podBatchMetrics             map[string]map[string][]monitoring.MetricPoint
+		dockerContainerBatchMetrics map[string]map[string][]monitoring.MetricPoint
+	)
+	var workloadChartsBatchWG sync.WaitGroup
+	workloadChartsBatchWG.Add(4)
+	go func() {
+		defer workloadChartsBatchWG.Done()
+		vmBatchMetrics = monitor.GetGuestMetricsForChartBatch("vm", vmRequests, duration, infrastructureSummaryMetricOrder...)
+	}()
+	go func() {
+		defer workloadChartsBatchWG.Done()
+		containerBatchMetrics = monitor.GetGuestMetricsForChartBatch("container", containerRequests, duration, infrastructureSummaryMetricOrder...)
+	}()
+	go func() {
+		defer workloadChartsBatchWG.Done()
+		podBatchMetrics = monitor.GetGuestMetricsForChartBatch("k8s", podRequests, duration, workloadSummaryMetricOrder...)
+	}()
+	go func() {
+		defer workloadChartsBatchWG.Done()
+		dockerContainerBatchMetrics = monitor.GetGuestMetricsForChartBatch("dockerContainer", dockerContainerRequests, duration, infrastructureSummaryMetricOrder...)
+	}()
+	workloadChartsBatchWG.Wait()
+
+	for idx, vm := range vmList {
+		responseKey := vmResponseKeys[idx]
+		metricID := vmRequests[idx].SQLResourceID
+		series := convertMetricsForChart(vmBatchMetrics[metricID], &oldestTimestamp, maxPoints)
+		guestTypes[responseKey] = "vm"
+
+		if len(series["cpu"]) == 0 {
+			series["cpu"] = []MetricPoint{{Timestamp: currentTime, Value: vm.CPUPercent()}}
+			series["memory"] = []MetricPoint{{Timestamp: currentTime, Value: vm.MemoryPercent()}}
+			series["disk"] = []MetricPoint{{Timestamp: currentTime, Value: vm.DiskPercent()}}
+			series["netin"] = []MetricPoint{{Timestamp: currentTime, Value: vm.NetIn()}}
+			series["netout"] = []MetricPoint{{Timestamp: currentTime, Value: vm.NetOut()}}
+		}
+		chartData[responseKey] = series
+	}
+
+	for idx, ct := range containerList {
+		responseKey := containerResponseKeys[idx]
+		metricID := containerRequests[idx].SQLResourceID
+		series := convertMetricsForChart(containerBatchMetrics[metricID], &oldestTimestamp, maxPoints)
+		guestTypes[responseKey] = "system-container"
+
+		if len(series["cpu"]) == 0 {
+			series["cpu"] = []MetricPoint{{Timestamp: currentTime, Value: ct.CPUPercent()}}
+			series["memory"] = []MetricPoint{{Timestamp: currentTime, Value: ct.MemoryPercent()}}
+			series["disk"] = []MetricPoint{{Timestamp: currentTime, Value: ct.DiskPercent()}}
+			series["netin"] = []MetricPoint{{Timestamp: currentTime, Value: ct.NetIn()}}
+			series["netout"] = []MetricPoint{{Timestamp: currentTime, Value: ct.NetOut()}}
+		}
+		chartData[responseKey] = series
+	}
+
+	for _, pod := range podList {
+		metricKey := kubernetesPodMetricIDFromView(pod)
+		series := convertMetricsForChart(podBatchMetrics[metricKey], &oldestTimestamp, maxPoints)
+		guestTypes[metricKey] = "k8s"
+
+		if len(series["cpu"]) == 0 {
+			series["cpu"] = []MetricPoint{{Timestamp: currentTime, Value: pod.CPUPercent()}}
+			series["memory"] = []MetricPoint{{Timestamp: currentTime, Value: pod.MemoryPercent()}}
+			series["disk"] = []MetricPoint{{Timestamp: currentTime, Value: pod.DiskPercent()}}
+			series["netin"] = []MetricPoint{{Timestamp: currentTime, Value: pod.NetInRate()}}
+			series["netout"] = []MetricPoint{{Timestamp: currentTime, Value: pod.NetOutRate()}}
+		}
+		chartData[metricKey] = series
+	}
+
 	for idx, container := range dockerContainerList {
 		responseKey := dockerContainerKeys[idx]
 		metricID := dockerContainerRequests[idx].SQLResourceID
 		series := convertMetricsForChart(dockerContainerBatchMetrics[metricID], &oldestTimestamp, maxPoints)
+		guestTypes[responseKey] = "app-container"
 
 		if len(series["cpu"]) == 0 {
 			series["cpu"] = []MetricPoint{{Timestamp: currentTime, Value: container.CPUPercent()}}
@@ -6455,7 +6482,6 @@ func (r *Router) handleWorkloadCharts(w http.ResponseWriter, req *http.Request) 
 			series["netin"] = []MetricPoint{{Timestamp: currentTime, Value: container.NetInRate()}}
 			series["netout"] = []MetricPoint{{Timestamp: currentTime, Value: container.NetOutRate()}}
 		}
-		updateOldestTimestampFromSeries(series, &oldestTimestamp)
 		dockerData[responseKey] = series
 	}
 
@@ -7372,7 +7398,97 @@ func (r *Router) handleWorkloadsSummaryCharts(w http.ResponseWriter, req *http.R
 		vmResponseKeys = append(vmResponseKeys, responseKey)
 		vmRequests = append(vmRequests, request)
 	}
-	vmBatchMetrics := monitor.GetGuestMetricsForChartBatch("vm", vmRequests, duration, infrastructureSummaryMetricOrder...)
+	containerList := make([]*unifiedresources.ContainerView, 0)
+	containerResponseKeys := make([]string, 0)
+	containerRequests := make([]monitoring.GuestChartRequest, 0)
+	for _, ct := range readState.Containers() {
+		if ct == nil {
+			continue
+		}
+		if !matchesSelectedNode(ct.Instance(), ct.Node()) {
+			continue
+		}
+		responseKey, request, ok := systemContainerChartRequest(ct)
+		if !ok {
+			continue
+		}
+		containerList = append(containerList, ct)
+		containerResponseKeys = append(containerResponseKeys, responseKey)
+		containerRequests = append(containerRequests, request)
+	}
+	podList := make([]*unifiedresources.PodView, 0)
+	podRequests := make([]monitoring.GuestChartRequest, 0)
+	for _, pod := range readState.Pods() {
+		if pod == nil {
+			continue
+		}
+		if !matchesSelectedKubernetesPodView(pod) {
+			continue
+		}
+
+		metricKey := kubernetesPodMetricIDFromView(pod)
+		if metricKey == "" {
+			continue
+		}
+		podList = append(podList, pod)
+		podRequests = append(podRequests, monitoring.GuestChartRequest{InMemoryKey: metricKey, SQLResourceID: metricKey})
+	}
+	dockerHostsByID := make(map[string]*unifiedresources.DockerHostView, len(readState.DockerHosts()))
+	for _, host := range readState.DockerHosts() {
+		if host == nil {
+			continue
+		}
+		dockerHostsByID[host.ID()] = host
+	}
+
+	dockerContainerList := make([]*unifiedresources.DockerContainerView, 0)
+	dockerContainerRequests := make([]monitoring.GuestChartRequest, 0)
+	for _, container := range readState.DockerContainers() {
+		if container == nil {
+			continue
+		}
+		if selectedNodeID != "" && selectedNode != nil {
+			host := dockerHostsByID[container.ParentID()]
+			if host == nil || !matchesSelectedDockerHostView(host) {
+				continue
+			}
+		}
+		containerID := strings.TrimSpace(container.ContainerID())
+		if containerID == "" {
+			continue
+		}
+		dockerContainerList = append(dockerContainerList, container)
+		dockerContainerRequests = append(dockerContainerRequests, monitoring.GuestChartRequest{
+			InMemoryKey:   fmt.Sprintf("docker:%s", containerID),
+			SQLResourceID: containerID,
+		})
+	}
+	var (
+		vmBatchMetrics              map[string]map[string][]monitoring.MetricPoint
+		containerBatchMetrics       map[string]map[string][]monitoring.MetricPoint
+		podBatchMetrics             map[string]map[string][]monitoring.MetricPoint
+		dockerContainerBatchMetrics map[string]map[string][]monitoring.MetricPoint
+	)
+	var workloadsSummaryBatchWG sync.WaitGroup
+	workloadsSummaryBatchWG.Add(4)
+	go func() {
+		defer workloadsSummaryBatchWG.Done()
+		vmBatchMetrics = monitor.GetGuestMetricsForChartBatch("vm", vmRequests, duration, workloadSummaryMetricOrder...)
+	}()
+	go func() {
+		defer workloadsSummaryBatchWG.Done()
+		containerBatchMetrics = monitor.GetGuestMetricsForChartBatch("container", containerRequests, duration, workloadSummaryMetricOrder...)
+	}()
+	go func() {
+		defer workloadsSummaryBatchWG.Done()
+		podBatchMetrics = monitor.GetGuestMetricsForChartBatch("k8s", podRequests, duration, workloadSummaryMetricOrder...)
+	}()
+	go func() {
+		defer workloadsSummaryBatchWG.Done()
+		dockerContainerBatchMetrics = monitor.GetGuestMetricsForChartBatch("dockerContainer", dockerContainerRequests, duration, workloadSummaryMetricOrder...)
+	}()
+	workloadsSummaryBatchWG.Wait()
+
 	for idx, vm := range vmList {
 		responseKey := vmResponseKeys[idx]
 		metricID := vmRequests[idx].SQLResourceID
@@ -7429,25 +7545,6 @@ func (r *Router) handleWorkloadsSummaryCharts(w http.ResponseWriter, req *http.R
 		snapshots = append(snapshots, snapshot)
 	}
 
-	containerList := make([]*unifiedresources.ContainerView, 0)
-	containerResponseKeys := make([]string, 0)
-	containerRequests := make([]monitoring.GuestChartRequest, 0)
-	for _, ct := range readState.Containers() {
-		if ct == nil {
-			continue
-		}
-		if !matchesSelectedNode(ct.Instance(), ct.Node()) {
-			continue
-		}
-		responseKey, request, ok := systemContainerChartRequest(ct)
-		if !ok {
-			continue
-		}
-		containerList = append(containerList, ct)
-		containerResponseKeys = append(containerResponseKeys, responseKey)
-		containerRequests = append(containerRequests, request)
-	}
-	containerBatchMetrics := monitor.GetGuestMetricsForChartBatch("container", containerRequests, duration, infrastructureSummaryMetricOrder...)
 	for idx, ct := range containerList {
 		responseKey := containerResponseKeys[idx]
 		metricID := containerRequests[idx].SQLResourceID
@@ -7504,24 +7601,6 @@ func (r *Router) handleWorkloadsSummaryCharts(w http.ResponseWriter, req *http.R
 		snapshots = append(snapshots, snapshot)
 	}
 
-	podList := make([]*unifiedresources.PodView, 0)
-	podRequests := make([]monitoring.GuestChartRequest, 0)
-	for _, pod := range readState.Pods() {
-		if pod == nil {
-			continue
-		}
-		if !matchesSelectedKubernetesPodView(pod) {
-			continue
-		}
-
-		metricKey := kubernetesPodMetricIDFromView(pod)
-		if metricKey == "" {
-			continue
-		}
-		podList = append(podList, pod)
-		podRequests = append(podRequests, monitoring.GuestChartRequest{InMemoryKey: metricKey, SQLResourceID: metricKey})
-	}
-	podBatchMetrics := monitor.GetGuestMetricsForChartBatch("k8s", podRequests, duration, infrastructureSummaryMetricOrder...)
 	for _, pod := range podList {
 		metricKey := kubernetesPodMetricIDFromView(pod)
 
@@ -7605,37 +7684,6 @@ func (r *Router) handleWorkloadsSummaryCharts(w http.ResponseWriter, req *http.R
 		snapshots = append(snapshots, snapshot)
 	}
 
-	dockerHostsByID := make(map[string]*unifiedresources.DockerHostView, len(readState.DockerHosts()))
-	for _, host := range readState.DockerHosts() {
-		if host == nil {
-			continue
-		}
-		dockerHostsByID[host.ID()] = host
-	}
-
-	dockerContainerList := make([]*unifiedresources.DockerContainerView, 0)
-	dockerContainerRequests := make([]monitoring.GuestChartRequest, 0)
-	for _, container := range readState.DockerContainers() {
-		if container == nil {
-			continue
-		}
-		if selectedNodeID != "" && selectedNode != nil {
-			host := dockerHostsByID[container.ParentID()]
-			if host == nil || !matchesSelectedDockerHostView(host) {
-				continue
-			}
-		}
-		containerID := strings.TrimSpace(container.ContainerID())
-		if containerID == "" {
-			continue
-		}
-		dockerContainerList = append(dockerContainerList, container)
-		dockerContainerRequests = append(dockerContainerRequests, monitoring.GuestChartRequest{
-			InMemoryKey:   fmt.Sprintf("docker:%s", containerID),
-			SQLResourceID: containerID,
-		})
-	}
-	dockerContainerBatchMetrics := monitor.GetGuestMetricsForChartBatch("dockerContainer", dockerContainerRequests, duration, infrastructureSummaryMetricOrder...)
 	for _, container := range dockerContainerList {
 		containerID := strings.TrimSpace(container.ContainerID())
 		guestCounts.Total++

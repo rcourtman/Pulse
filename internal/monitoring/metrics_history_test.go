@@ -980,6 +980,48 @@ func TestGetAllGuestMetrics(t *testing.T) {
 	}
 }
 
+func TestGuestMetricCoverageSpan(t *testing.T) {
+	now := time.Now().UTC().Truncate(time.Second)
+	mh := NewMetricsHistory(100, 24*time.Hour)
+
+	mh.AddGuestMetric("vm-coverage", "cpu", 10, now.Add(-5*time.Hour))
+	mh.AddGuestMetric("vm-coverage", "cpu", 20, now.Add(-2*time.Hour))
+	mh.AddGuestMetric("vm-coverage", "cpu", 30, now.Add(-5*time.Minute))
+	mh.AddGuestMetric("vm-coverage", "memory", 40, now.Add(-25*time.Minute))
+	mh.AddGuestMetric("vm-coverage", "memory", 50, now.Add(-10*time.Minute))
+
+	if span := mh.GuestMetricCoverageSpan("vm-coverage", []string{"cpu", "memory"}, 6*time.Hour); span < 4*time.Hour {
+		t.Fatalf("expected guest coverage span >= 4h, got %s", span)
+	}
+	if span := mh.GuestMetricCoverageSpan("vm-coverage", []string{"memory"}, time.Hour); span < 10*time.Minute {
+		t.Fatalf("expected memory coverage span >= 10m, got %s", span)
+	}
+	if span := mh.GuestMetricCoverageSpan("missing-guest", []string{"cpu"}, 6*time.Hour); span != 0 {
+		t.Fatalf("expected missing guest coverage span 0, got %s", span)
+	}
+}
+
+func TestNodeMetricCoverageSpan(t *testing.T) {
+	now := time.Now().UTC().Truncate(time.Second)
+	mh := NewMetricsHistory(100, 24*time.Hour)
+
+	mh.AddNodeMetric("node-coverage", "cpu", 10, now.Add(-4*time.Hour))
+	mh.AddNodeMetric("node-coverage", "cpu", 20, now.Add(-90*time.Minute))
+	mh.AddNodeMetric("node-coverage", "cpu", 30, now.Add(-5*time.Minute))
+	mh.AddNodeMetric("node-coverage", "memory", 40, now.Add(-20*time.Minute))
+	mh.AddNodeMetric("node-coverage", "memory", 50, now.Add(-5*time.Minute))
+
+	if span := mh.NodeMetricCoverageSpan("node-coverage", []string{"cpu", "memory"}, 5*time.Hour); span < 3*time.Hour {
+		t.Fatalf("expected node coverage span >= 3h, got %s", span)
+	}
+	if span := mh.NodeMetricCoverageSpan("node-coverage", []string{"memory"}, time.Hour); span < 10*time.Minute {
+		t.Fatalf("expected memory node coverage span >= 10m, got %s", span)
+	}
+	if span := mh.NodeMetricCoverageSpan("missing-node", []string{"cpu"}, 5*time.Hour); span != 0 {
+		t.Fatalf("expected missing node coverage span 0, got %s", span)
+	}
+}
+
 func TestGetAllStorageMetrics(t *testing.T) {
 	now := time.Now()
 	mh := NewMetricsHistory(100, time.Hour)

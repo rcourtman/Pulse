@@ -1,6 +1,7 @@
 package monitoring
 
 import (
+	"sort"
 	"sync"
 	"time"
 
@@ -256,6 +257,105 @@ func filterMetricsByTime(data []MetricPoint, cutoffTime time.Time) []MetricPoint
 		}
 	}
 	return filtered
+}
+
+func metricsSeriesCoverageSpanAfter(data []MetricPoint, cutoffTime time.Time) time.Duration {
+	if len(data) < 2 {
+		return 0
+	}
+
+	first := sort.Search(len(data), func(i int) bool {
+		return data[i].Timestamp.After(cutoffTime)
+	})
+	if first >= len(data)-1 {
+		return 0
+	}
+
+	oldest := data[first].Timestamp
+	newest := data[len(data)-1].Timestamp
+	if !newest.After(oldest) {
+		return 0
+	}
+	return newest.Sub(oldest)
+}
+
+func guestMetricSeries(metrics *GuestMetrics, metricType string) []MetricPoint {
+	if metrics == nil {
+		return nil
+	}
+
+	switch metricType {
+	case "cpu":
+		return metrics.CPU
+	case "memory":
+		return metrics.Memory
+	case "disk":
+		return metrics.Disk
+	case "diskread":
+		return metrics.DiskRead
+	case "diskwrite":
+		return metrics.DiskWrite
+	case "netin":
+		return metrics.NetworkIn
+	case "netout":
+		return metrics.NetworkOut
+	default:
+		return nil
+	}
+}
+
+func guestMetricsCoverageSpan(metrics *GuestMetrics, metricTypes []string, cutoffTime time.Time) time.Duration {
+	if metrics == nil {
+		return 0
+	}
+
+	if len(metricTypes) == 0 {
+		metricTypes = []string{"cpu", "memory", "disk", "diskread", "diskwrite", "netin", "netout"}
+	}
+
+	var best time.Duration
+	for _, metricType := range metricTypes {
+		if span := metricsSeriesCoverageSpanAfter(guestMetricSeries(metrics, metricType), cutoffTime); span > best {
+			best = span
+		}
+	}
+	return best
+}
+
+// GuestMetricCoverageSpan returns the best in-memory coverage span across the
+// requested guest metric types after applying the requested duration window.
+func (mh *MetricsHistory) GuestMetricCoverageSpan(guestID string, metricTypes []string, duration time.Duration) time.Duration {
+	if mh == nil {
+		return 0
+	}
+
+	mh.mu.RLock()
+	defer mh.mu.RUnlock()
+
+	metrics, exists := mh.guestMetrics[guestID]
+	if !exists {
+		return 0
+	}
+
+	return guestMetricsCoverageSpan(metrics, metricTypes, time.Now().Add(-duration))
+}
+
+// NodeMetricCoverageSpan returns the best in-memory coverage span across the
+// requested node metric types after applying the requested duration window.
+func (mh *MetricsHistory) NodeMetricCoverageSpan(nodeID string, metricTypes []string, duration time.Duration) time.Duration {
+	if mh == nil {
+		return 0
+	}
+
+	mh.mu.RLock()
+	defer mh.mu.RUnlock()
+
+	metrics, exists := mh.nodeMetrics[nodeID]
+	if !exists {
+		return 0
+	}
+
+	return guestMetricsCoverageSpan(metrics, metricTypes, time.Now().Add(-duration))
 }
 
 // GetAllGuestMetrics returns all metrics for a guest within a duration

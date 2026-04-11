@@ -625,6 +625,10 @@ func (h *LicenseHandlers) demoFixturesAuthorized(service *licenseService) bool {
 }
 
 func (h *LicenseHandlers) syncReleaseDemoFixtureRuntime(orgID string, service *licenseService) {
+	if !shouldEnforceReleaseDemoFixtureRuntime() {
+		return
+	}
+
 	if strings.TrimSpace(orgID) == "" {
 		orgID = "default"
 	}

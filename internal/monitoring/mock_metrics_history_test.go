@@ -905,8 +905,8 @@ func TestStartMockMetricsSampler_SeedsCanonicalMockResourceHistory(t *testing.T)
 	if !ok {
 		t.Fatalf("expected disk chart for %q, got keys=%v", proxmoxDiskID, keysDiskCharts(diskCharts))
 	}
-	if got := len(diskChart.Temperature); got < 300 {
-		t.Fatalf("expected seeded proxmox disk chart history, got %d points for %q", got, proxmoxDiskID)
+	if got, want := len(diskChart.Temperature), mockChartPointTarget(7*24*time.Hour); got != want {
+		t.Fatalf("expected downsampled proxmox disk chart history to match target %d, got %d points for %q", want, got, proxmoxDiskID)
 	}
 
 	dockerMetricID := strings.TrimSpace(graph.State.DockerHosts[0].Containers[0].ID)
@@ -924,11 +924,11 @@ func TestStartMockMetricsSampler_SeedsCanonicalMockResourceHistory(t *testing.T)
 	)
 	cpuPoints := workloadMetrics[dockerMetricID]["cpu"]
 	memoryPoints := workloadMetrics[dockerMetricID]["memory"]
-	if got := len(cpuPoints); got < 300 {
-		t.Fatalf("expected seeded docker app cpu history, got %d points for %q", got, dockerMetricID)
+	if got, want := len(cpuPoints), mockChartPointTarget(7*24*time.Hour); got != want {
+		t.Fatalf("expected downsampled docker app cpu history to match target %d, got %d points for %q", want, got, dockerMetricID)
 	}
-	if got := len(memoryPoints); got < 300 {
-		t.Fatalf("expected seeded docker app memory history, got %d points for %q", got, dockerMetricID)
+	if got, want := len(memoryPoints), mockChartPointTarget(7*24*time.Hour); got != want {
+		t.Fatalf("expected downsampled docker app memory history to match target %d, got %d points for %q", want, got, dockerMetricID)
 	}
 }
 

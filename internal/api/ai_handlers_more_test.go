@@ -443,7 +443,7 @@ func TestAISettingsHandler_GetPersistence_NonDefaultInvalidOrgFailsClosedWhenMul
 }
 
 func TestAISettingsHandler_GetAIService_NonDefaultInvalidOrgReturnsFailClosedTenantService(t *testing.T) {
-	t.Setenv("PULSE_MOCK_MODE", "false")
+	setMockModeForTest(t, false)
 
 	mtp := config.NewMultiTenantPersistence(t.TempDir())
 	mtm := monitoring.NewMultiTenantMonitor(&config.Config{}, mtp, nil)
@@ -475,7 +475,7 @@ func TestAISettingsHandler_GetAIService_NonDefaultInvalidOrgReturnsFailClosedTen
 }
 
 func TestNewAISettingsHandler_DefaultServiceAlwaysInitialized(t *testing.T) {
-	t.Setenv("PULSE_MOCK_MODE", "false")
+	setMockModeForTest(t, false)
 
 	handler := NewAISettingsHandler(nil, nil, nil)
 	svc := handler.GetAIService(context.Background())
@@ -488,7 +488,7 @@ func TestNewAISettingsHandler_DefaultServiceAlwaysInitialized(t *testing.T) {
 }
 
 func TestAISettingsHandler_GetAIService_NonDefaultWithTenantMonitorWithoutPersistenceFailsClosed(t *testing.T) {
-	t.Setenv("PULSE_MOCK_MODE", "false")
+	setMockModeForTest(t, false)
 
 	mtp := config.NewMultiTenantPersistence(t.TempDir())
 	mtm := monitoring.NewMultiTenantMonitor(&config.Config{}, mtp, nil)

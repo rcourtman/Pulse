@@ -350,7 +350,7 @@ func TestRouterStopPatrol_ClearsAllLifecycleMarkers(t *testing.T) {
 }
 
 func TestStartPatrolForContext_DoesNotOverwriteOtherTenantPatrolComponents(t *testing.T) {
-	t.Setenv("PULSE_MOCK_MODE", "true")
+	setMockModeForTest(t, true)
 
 	tempDir := t.TempDir()
 	mtp := config.NewMultiTenantPersistence(tempDir)
@@ -415,7 +415,7 @@ func TestStartPatrolForContext_DoesNotOverwriteOtherTenantPatrolComponents(t *te
 }
 
 func TestStartPatrolForContext_RejectsMismatchedAIServiceOrg(t *testing.T) {
-	t.Setenv("PULSE_MOCK_MODE", "true")
+	setMockModeForTest(t, true)
 
 	mtp := config.NewMultiTenantPersistence(t.TempDir())
 

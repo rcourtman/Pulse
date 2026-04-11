@@ -199,8 +199,8 @@ func TestMonitorFrontendAndMetricHelpers(t *testing.T) {
 			{name: "pbs", resource: unifiedresources.Resource{Type: unifiedresources.ResourceTypePBS}, want: "pbs"},
 			{name: "pmg", resource: unifiedresources.Resource{Type: unifiedresources.ResourceTypePMG}, want: "pmg"},
 			{name: "storage", resource: unifiedresources.Resource{Type: unifiedresources.ResourceTypeStorage}, want: "storage"},
-			{name: "ceph", resource: unifiedresources.Resource{Type: unifiedresources.ResourceTypeCeph}, want: "pool"},
-			{name: "host proxmox", resource: unifiedresources.Resource{Type: unifiedresources.ResourceTypeAgent, Proxmox: &unifiedresources.ProxmoxData{}}, want: "node"},
+			{name: "ceph", resource: unifiedresources.Resource{Type: unifiedresources.ResourceTypeCeph}, want: "ceph"},
+			{name: "host proxmox", resource: unifiedresources.Resource{Type: unifiedresources.ResourceTypeAgent, Proxmox: &unifiedresources.ProxmoxData{}}, want: "agent"},
 			{name: "host docker", resource: unifiedresources.Resource{Type: unifiedresources.ResourceTypeAgent, Docker: &unifiedresources.DockerData{}}, want: "docker-host"},
 			{name: "host agent", resource: unifiedresources.Resource{Type: unifiedresources.ResourceTypeAgent}, want: "agent"},
 			{name: "unknown passthrough", resource: unifiedresources.Resource{Type: unifiedresources.ResourceType("custom")}, want: "custom"},
@@ -222,7 +222,7 @@ func TestMonitorFrontendAndMetricHelpers(t *testing.T) {
 			resource     unifiedresources.Resource
 			want         string
 		}{
-			{name: "node explicit", resourceType: "node", want: "proxmox-pve"},
+			{name: "node explicit", resourceType: "node", want: "unknown"},
 			{name: "docker explicit", resourceType: "app-container", want: "docker"},
 			{name: "k8s explicit", resourceType: "k8s-node", want: "kubernetes"},
 			{name: "pbs explicit", resourceType: "pbs", want: "proxmox-pbs"},

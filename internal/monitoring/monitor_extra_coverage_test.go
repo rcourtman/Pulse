@@ -961,7 +961,7 @@ func TestMonitor_ResourcesForBroadcast_Extra(t *testing.T) {
 	if len(res) != 1 {
 		t.Errorf("Expected 1 resource, got %d", len(res))
 	}
-	if res[0].ID != "node-1" || res[0].Type != "node" || res[0].DisplayName != "Node One" {
+	if res[0].ID != "node-1" || res[0].Type != "agent" || res[0].DisplayName != "Node One" {
 		t.Fatalf("unexpected resource identity payload: %#v", res[0])
 	}
 	if res[0].PlatformType != "proxmox-pve" || res[0].SourceType != "api" || res[0].Status != "online" {

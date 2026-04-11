@@ -158,6 +158,20 @@ or restart discovery until the canonical mock runtime has accepted the
 requested mode change; rejected release-demo fixture enables must fail before
 any monitoring reset so the live preview does not blank itself on an
 unauthorized toggle.
+That same monitoring boundary now also owns atomic unified-metric persistence.
+When unified resource sync projects agent, VM, app-container, or storage
+metrics into persisted history, it must append in-memory history first and
+flush the backing store through one `metrics.WriteBatchSync` batch per sync
+sweep instead of per-metric async writes, so canonical chart history cannot
+race itself into partial persisted windows.
+That same chart boundary now also owns long-range in-memory coverage
+selection. `internal/monitoring/metrics_history.go` must expose guest and node
+coverage spans for the requested metric families, and
+`internal/monitoring/monitor_metrics.go` must prefer the in-memory history
+when that span already covers the requested chart window before falling back
+to SQLite, so long-range chart batches do not pay an unnecessary store round
+trip just because the request is larger than the old fixed in-memory
+threshold.
 That same monitoring owner also owns canonical unified-resource publication on
 `/api/state` and the websocket `state.resources` hydrate path. Monitoring must
 publish those resources from the same canonical unified snapshot that

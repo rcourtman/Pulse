@@ -3,7 +3,6 @@ package api
 import (
 	"bytes"
 	"encoding/json"
-	"os"
 	"strings"
 	"testing"
 
@@ -30,18 +29,6 @@ func (s stubLicenseChecker) GetLicenseStateString() (string, bool) {
 	return "expired", false
 }
 
-func withEnv(t *testing.T, key, value string, fn func()) {
-	t.Helper()
-	old := os.Getenv(key)
-	if err := os.Setenv(key, value); err != nil {
-		t.Fatalf("setenv failed: %v", err)
-	}
-	defer func() {
-		_ = os.Setenv(key, old)
-	}()
-	fn()
-}
-
 func newTestAISettingsHandlerWithService(t *testing.T) *AISettingsHandler {
 	t.Helper()
 	tmp := t.TempDir()
@@ -56,58 +43,58 @@ func newTestAISettingsHandlerWithService(t *testing.T) *AISettingsHandler {
 }
 
 func TestHandleExecuteStream_LicenseRequired(t *testing.T) {
-	withEnv(t, "PULSE_MOCK_MODE", "true", func() {
-		handler := newTestAISettingsHandlerWithService(t)
-		handler.defaultAIService.SetLicenseChecker(stubLicenseChecker{allow: false})
+	setMockModeForTest(t, true)
 
-		body := `{"prompt":"hi","use_case":"autofix"}`
-		req := httptest.NewRequest(http.MethodPost, "/api/ai/execute/stream", strings.NewReader(body))
-		rec := httptest.NewRecorder()
-		handler.HandleExecuteStream(rec, req)
+	handler := newTestAISettingsHandlerWithService(t)
+	handler.defaultAIService.SetLicenseChecker(stubLicenseChecker{allow: false})
 
-		if rec.Code != http.StatusPaymentRequired {
-			t.Fatalf("expected payment required, got %d", rec.Code)
-		}
-		if !strings.Contains(rec.Body.String(), "license_required") {
-			t.Fatalf("expected license error body")
-		}
-	})
+	body := `{"prompt":"hi","use_case":"autofix"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/execute/stream", strings.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler.HandleExecuteStream(rec, req)
+
+	if rec.Code != http.StatusPaymentRequired {
+		t.Fatalf("expected payment required, got %d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), "license_required") {
+		t.Fatalf("expected license error body")
+	}
 }
 
 func TestHandleExecuteStream_PromptRequired(t *testing.T) {
-	withEnv(t, "PULSE_MOCK_MODE", "true", func() {
-		handler := newTestAISettingsHandlerWithService(t)
+	setMockModeForTest(t, true)
 
-		body := `{"prompt":""}`
-		req := httptest.NewRequest(http.MethodPost, "/api/ai/execute/stream", strings.NewReader(body))
-		rec := httptest.NewRecorder()
-		handler.HandleExecuteStream(rec, req)
+	handler := newTestAISettingsHandlerWithService(t)
 
-		if rec.Code != http.StatusBadRequest {
-			t.Fatalf("expected bad request, got %d", rec.Code)
-		}
-	})
+	body := `{"prompt":""}`
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/execute/stream", strings.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler.HandleExecuteStream(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected bad request, got %d", rec.Code)
+	}
 }
 
 func TestHandleExecuteStream_Success(t *testing.T) {
-	withEnv(t, "PULSE_MOCK_MODE", "true", func() {
-		handler := newTestAISettingsHandlerWithService(t)
+	setMockModeForTest(t, true)
 
-		body := `{"prompt":"hello"}`
-		req := httptest.NewRequest(http.MethodPost, "/api/ai/execute/stream", strings.NewReader(body))
-		rec := httptest.NewRecorder()
-		handler.HandleExecuteStream(rec, req)
+	handler := newTestAISettingsHandlerWithService(t)
 
-		if rec.Code != http.StatusOK {
-			t.Fatalf("expected OK, got %d", rec.Code)
-		}
-		if !strings.Contains(rec.Header().Get("Content-Type"), "text/event-stream") {
-			t.Fatalf("expected SSE content type")
-		}
-		if !strings.Contains(rec.Body.String(), `"tool_calls":[]`) {
-			t.Fatalf("expected stream completion event to retain tool_calls array, got %s", rec.Body.String())
-		}
-	})
+	body := `{"prompt":"hello"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/execute/stream", strings.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler.HandleExecuteStream(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected OK, got %d", rec.Code)
+	}
+	if !strings.Contains(rec.Header().Get("Content-Type"), "text/event-stream") {
+		t.Fatalf("expected SSE content type")
+	}
+	if !strings.Contains(rec.Body.String(), `"tool_calls":[]`) {
+		t.Fatalf("expected stream completion event to retain tool_calls array, got %s", rec.Body.String())
+	}
 }
 
 func TestAIExecuteStreamCompleteEvent_UsesCanonicalEmptyCollections(t *testing.T) {

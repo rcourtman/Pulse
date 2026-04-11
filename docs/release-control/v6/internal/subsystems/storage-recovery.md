@@ -514,6 +514,13 @@ in the app shell, but they must not cache, derive, or replay the
 server-resolved portal checkout state or owned billing purchase-arrival state
 as recovery route state, restore evidence, or storage-local navigation
 context.
+That same adjacent licensing boundary now also owns internal demo-fixture
+runtime gating for storage- and recovery-adjacent surfaces. Release builds may
+authorize mock fixture rewiring only through the backend-owned
+`demo_fixtures` entitlement, but storage and recovery browsers must continue
+to consume the redacted public runtime/commercial contracts and must not infer
+internal fixture grants or persisted mock state from those shared licensing
+routes.
 Storage- or recovery-adjacent commercial helpers must therefore wait for the
 shared presentation policy to resolve before attempting any read that could
 otherwise hit a hidden commercial route during bootstrap.
@@ -524,6 +531,12 @@ resource's canonical history target. Storage must not keep a drawer-local live
 metrics collector, agent-id/device fallback stream, or separate real-time
 history store once monitoring and `/api/metrics-store/history` already own the
 disk timeline.
+Shared chart transport that storage and recovery coexist with must also stay
+on rendered-metric budgets. When `internal/api/router.go` batches workload
+history for adjacent overview or shared summary cards, it may parallelize the
+provider reads, but it must not widen the shared hot path to disk read/write
+or fetch-all metrics just because storage or recovery also mount nearby chart
+shells.
 
 Storage and recovery still consume the shared unified-resource contract, but
 they do not own the timeline store itself. The canonical resource-change

@@ -6,15 +6,12 @@ import (
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
-	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 )
 
 func TestExtractAndStoreAuthContext_UsesTenantConfigForToken(t *testing.T) {
-	t.Setenv("PULSE_MOCK_MODE", "true")
-	mock.SetEnabled(true)
-	t.Cleanup(func() { mock.SetEnabled(false) })
+	setMockModeForTest(t, true)
 
 	baseCfg := &config.Config{
 		DataPath:   t.TempDir(),

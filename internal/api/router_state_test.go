@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
-	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
@@ -16,9 +15,7 @@ import (
 
 func TestRouter_HandleState_MockIsolation(t *testing.T) {
 	// Enable mock mode to control GetState output
-	t.Setenv("PULSE_MOCK_MODE", "true")
-	mock.SetEnabled(true)
-	defer mock.SetEnabled(false)
+	setMockModeForTest(t, true)
 
 	dataPath := t.TempDir()
 	hp, _ := auth.HashPassword("password")

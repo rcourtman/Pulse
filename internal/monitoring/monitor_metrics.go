@@ -98,9 +98,13 @@ func (m *Monitor) GetGuestMetrics(guestID string, duration time.Duration) map[st
 // sqlResourceType/sqlResourceID are the type/id used in the SQLite store
 // (e.g. "dockerContainer"/"abc123").
 func (m *Monitor) GetGuestMetricsForChart(inMemoryKey, sqlResourceType, sqlResourceID string, duration time.Duration) map[string][]MetricPoint {
-	inMemoryResult := m.GetGuestMetrics(inMemoryKey, duration)
 	if mock.IsMockEnabled() {
-		return m.mockGuestMetricsForChart(inMemoryKey, sqlResourceType, sqlResourceID, duration, inMemoryResult)
+		return m.mockGuestMetricsForChart(inMemoryKey, sqlResourceType, sqlResourceID, duration, m.GetGuestMetrics(inMemoryKey, duration))
+	}
+
+	inMemoryResult := map[string][]MetricPoint{}
+	if m.shouldLoadGuestChartInMemory(inMemoryKey, nil, duration) {
+		inMemoryResult = m.GetGuestMetrics(inMemoryKey, duration)
 	}
 
 	if hasSufficientChartMapCoverage(inMemoryResult, duration) {
@@ -130,12 +134,14 @@ func (m *Monitor) GetNodeMetrics(nodeID string, metricType string, duration time
 // falling back to SQLite + LTTB for longer ranges.
 func (m *Monitor) GetNodeMetricsForChart(nodeID, metricType string, duration time.Duration) []MetricPoint {
 	var inMemoryPoints []MetricPoint
-	if m != nil && m.metricsHistory != nil {
-		inMemoryPoints = m.metricsHistory.GetNodeMetrics(nodeID, metricType, duration)
-	}
-
 	if mock.IsMockEnabled() {
+		if m != nil && m.metricsHistory != nil {
+			inMemoryPoints = m.metricsHistory.GetNodeMetrics(nodeID, metricType, duration)
+		}
 		return m.mockNodeMetricsForChart(nodeID, metricType, duration, inMemoryPoints)
+	}
+	if m != nil && m.shouldLoadNodeChartInMemory(nodeID, []string{metricType}, duration) {
+		inMemoryPoints = m.metricsHistory.GetNodeMetrics(nodeID, metricType, duration)
 	}
 
 	if m.metricsStore == nil {
@@ -499,6 +505,26 @@ func filterChartMetricMap(metricMap map[string][]MetricPoint, metricTypes []stri
 	return filtered
 }
 
+func (m *Monitor) shouldLoadGuestChartInMemory(inMemoryKey string, metricTypes []string, duration time.Duration) bool {
+	if m == nil || m.metricsHistory == nil {
+		return false
+	}
+	if m.metricsStore == nil || duration <= inMemoryChartThreshold {
+		return true
+	}
+	return m.metricsHistory.GuestMetricCoverageSpan(inMemoryKey, metricTypes, duration) >= chartCoverageRequiredSpan(duration)
+}
+
+func (m *Monitor) shouldLoadNodeChartInMemory(nodeID string, metricTypes []string, duration time.Duration) bool {
+	if m == nil || m.metricsHistory == nil {
+		return false
+	}
+	if m.metricsStore == nil || duration <= inMemoryChartThreshold {
+		return true
+	}
+	return m.metricsHistory.NodeMetricCoverageSpan(nodeID, metricTypes, duration) >= chartCoverageRequiredSpan(duration)
+}
+
 // GetGuestMetricsForChartBatch returns chart metrics for multiple guests of the
 // same SQL resource type, using batch SQL queries instead of N individual
 // queries. Results are keyed by SQLResourceID.
@@ -533,15 +559,11 @@ func (m *Monitor) GetGuestMetricsForChartBatch(
 
 	// Phase 1: Check in-memory for all guests and identify which need fallback.
 	var needFallback []string
-	useInMemory := duration <= inMemoryChartThreshold || m.metricsStore == nil
 	for _, req := range requests {
-		if !useInMemory {
-			result[req.SQLResourceID] = map[string][]MetricPoint{}
-			needFallback = append(needFallback, req.SQLResourceID)
-			continue
+		inMemory := map[string][]MetricPoint{}
+		if m.shouldLoadGuestChartInMemory(req.InMemoryKey, requestedMetricTypes, duration) {
+			inMemory = filterChartMetricMap(m.GetGuestMetrics(req.InMemoryKey, duration), requestedMetricTypes)
 		}
-
-		inMemory := filterChartMetricMap(m.GetGuestMetrics(req.InMemoryKey, duration), requestedMetricTypes)
 		result[req.SQLResourceID] = inMemory
 		if hasSufficientChartMapCoverage(inMemory, duration) {
 			continue
@@ -624,17 +646,18 @@ func (m *Monitor) GetNodeMetricsForChartBatch(
 
 	// Phase 1: Check in-memory for all nodes and identify which need store.
 	var needStore []string
-	useInMemory := duration <= inMemoryChartThreshold || m.metricsStore == nil
 	for _, nid := range nodeIDs {
 		nodeResult := make(map[string][]MetricPoint, len(metricTypes))
-		if !useInMemory {
-			result[nid] = nodeResult
-			needStore = append(needStore, nid)
-			continue
-		}
 
 		allSufficient := true
+		loadInMemory := m.shouldLoadNodeChartInMemory(nid, metricTypes, duration)
 		for _, mt := range metricTypes {
+			if !loadInMemory {
+				nodeResult[mt] = nil
+				allSufficient = false
+				continue
+			}
+
 			points := m.metricsHistory.GetNodeMetrics(nid, mt, duration)
 			nodeResult[mt] = points
 			if m.metricsStore != nil && !hasSufficientChartSeriesCoverage(points, duration) {

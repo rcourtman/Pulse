@@ -80,7 +80,7 @@ func seedCorrelationDetector(now time.Time) *ai.CorrelationDetector {
 func TestHandleGetPatterns_UnlockedWithData(t *testing.T) {
 	// License gates were removed from intelligence endpoints (9279358c).
 	// Even with allow=false, data is returned without redaction.
-	t.Setenv("PULSE_MOCK_MODE", "true")
+	setMockModeForTest(t, true)
 	handler, _ := setupAIHandlerWithIntelligence(t)
 
 	handler.defaultAIService.SetPatternDetector(seedPatternDetector(time.Now()))
@@ -118,7 +118,7 @@ func TestHandleGetPatterns_UnlockedWithData(t *testing.T) {
 }
 
 func TestHandleGetPredictions_WithData(t *testing.T) {
-	t.Setenv("PULSE_MOCK_MODE", "true")
+	setMockModeForTest(t, true)
 	handler, _ := setupAIHandlerWithIntelligence(t)
 
 	handler.defaultAIService.SetPatternDetector(seedPatternDetector(time.Now()))
@@ -154,7 +154,7 @@ func TestHandleGetPredictions_WithData(t *testing.T) {
 }
 
 func TestHandleGetCorrelations_WithData(t *testing.T) {
-	t.Setenv("PULSE_MOCK_MODE", "true")
+	setMockModeForTest(t, true)
 	handler, _ := setupAIHandlerWithIntelligence(t)
 
 	handler.defaultAIService.SetCorrelationDetector(seedCorrelationDetector(time.Now()))

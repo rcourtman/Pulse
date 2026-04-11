@@ -233,7 +233,7 @@ func TestHandleGetCorrelations_ResourceIDFilter(t *testing.T) {
 }
 
 func TestHandleGetCorrelations_UsesCanonicalIntelligenceFacade(t *testing.T) {
-	t.Setenv("PULSE_MOCK_MODE", "true")
+	setMockModeForTest(t, true)
 	handler, _ := setupAIHandlerWithIntelligence(t)
 
 	handler.defaultAIService.SetCorrelationDetector(seedCorrelationDetector(time.Now()))

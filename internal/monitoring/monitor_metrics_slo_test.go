@@ -171,6 +171,64 @@ func seedSLONodeMetrics(t *testing.T, store *metrics.Store, numNodes, numPoints 
 	return ids
 }
 
+func seedInMemorySLOGuestMetrics(t *testing.T, history *MetricsHistory, resourceType string, numResources, numPoints int, duration time.Duration) []GuestChartRequest {
+	t.Helper()
+
+	metricTypes := []string{"cpu", "memory", "disk", "netin", "netout"}
+	now := time.Now().UTC().Truncate(time.Second)
+	step := duration / time.Duration(numPoints-1)
+	if step <= 0 {
+		step = time.Minute
+	}
+
+	requests := make([]GuestChartRequest, numResources)
+	for r := 0; r < numResources; r++ {
+		id := fmt.Sprintf("%s-inmem-slo-%d", resourceType, r)
+		requests[r] = GuestChartRequest{InMemoryKey: id, SQLResourceID: id}
+		for _, mt := range metricTypes {
+			for p := 0; p < numPoints; p++ {
+				history.AddGuestMetric(
+					id,
+					mt,
+					float64((p%100)+(r%10)),
+					now.Add(-duration).Add(time.Duration(p)*step),
+				)
+			}
+		}
+	}
+
+	return requests
+}
+
+func seedInMemorySLONodeMetrics(t *testing.T, history *MetricsHistory, numNodes, numPoints int, duration time.Duration) []string {
+	t.Helper()
+
+	metricTypes := []string{"cpu", "memory", "disk", "netin", "netout"}
+	now := time.Now().UTC().Truncate(time.Second)
+	step := duration / time.Duration(numPoints-1)
+	if step <= 0 {
+		step = time.Minute
+	}
+
+	ids := make([]string, numNodes)
+	for n := 0; n < numNodes; n++ {
+		id := fmt.Sprintf("node-inmem-slo-%d", n)
+		ids[n] = id
+		for _, mt := range metricTypes {
+			for p := 0; p < numPoints; p++ {
+				history.AddNodeMetric(
+					id,
+					mt,
+					float64((p%100)+(n%10)),
+					now.Add(-duration).Add(time.Duration(p)*step),
+				)
+			}
+		}
+	}
+
+	return ids
+}
+
 func TestSLO_GetGuestMetricsForChartBatch(t *testing.T) {
 	skipMonitoringSLOUnderRace(t)
 	suppressMonitoringTestLogs(t)
@@ -210,6 +268,44 @@ func TestSLO_GetGuestMetricsForChartBatch(t *testing.T) {
 	}
 }
 
+func TestSLO_GetGuestMetricsForChartBatch_LongRangeCoveredInMemory(t *testing.T) {
+	skipMonitoringSLOUnderRace(t)
+	suppressMonitoringTestLogs(t)
+
+	duration := 7 * 24 * time.Hour
+	metricTypes := []string{"cpu", "memory", "disk", "netin", "netout"}
+	monitor := &Monitor{
+		metricsHistory: NewMetricsHistory(4096, 30*24*time.Hour),
+	}
+	requests := seedInMemorySLOGuestMetrics(t, monitor.metricsHistory, "container", 24, 240, duration)
+
+	sanity := monitor.GetGuestMetricsForChartBatch("container", requests, duration, metricTypes...)
+	if len(sanity) != len(requests) {
+		t.Fatalf("sanity: expected %d guests, got %d", len(requests), len(sanity))
+	}
+	for _, req := range requests {
+		if cpuPts := sanity[req.SQLResourceID]["cpu"]; len(cpuPts) == 0 {
+			t.Fatalf("sanity: guest %s has no cpu points", req.SQLResourceID)
+		}
+	}
+
+	latencies := measureMonitoringLatencies(t, func() {
+		result := monitor.GetGuestMetricsForChartBatch("container", requests, duration, metricTypes...)
+		if len(result) != len(requests) {
+			t.Fatalf("expected %d guests, got %d", len(requests), len(result))
+		}
+	})
+
+	target := effectiveMonitoringSLOTarget(SLOGuestChartBatchP95, SLOGuestChartBatchGitHubActionsP95)
+	p95 := monitoringPercentile(latencies, 0.95)
+	t.Logf("GetGuestMetricsForChartBatch(24×5×240, 7d in-memory) p50=%v p95=%v p99=%v SLO=%v",
+		monitoringPercentile(latencies, 0.50), p95, monitoringPercentile(latencies, 0.99), target)
+
+	if p95 > target {
+		t.Errorf("SLO VIOLATION: p95=%v exceeds target %v", p95, target)
+	}
+}
+
 func TestSLO_GetNodeMetricsForChartBatch(t *testing.T) {
 	skipMonitoringSLOUnderRace(t)
 	suppressMonitoringTestLogs(t)
@@ -239,6 +335,44 @@ func TestSLO_GetNodeMetricsForChartBatch(t *testing.T) {
 	target := effectiveMonitoringSLOTarget(SLONodeChartBatchP95, SLONodeChartBatchGitHubActionsP95)
 	p95 := monitoringPercentile(latencies, 0.95)
 	t.Logf("GetNodeMetricsForChartBatch(20×5×240) p50=%v p95=%v p99=%v SLO=%v",
+		monitoringPercentile(latencies, 0.50), p95, monitoringPercentile(latencies, 0.99), target)
+
+	if p95 > target {
+		t.Errorf("SLO VIOLATION: p95=%v exceeds target %v", p95, target)
+	}
+}
+
+func TestSLO_GetNodeMetricsForChartBatch_LongRangeCoveredInMemory(t *testing.T) {
+	skipMonitoringSLOUnderRace(t)
+	suppressMonitoringTestLogs(t)
+
+	duration := 7 * 24 * time.Hour
+	metricTypes := []string{"cpu", "memory", "disk", "netin", "netout"}
+	monitor := &Monitor{
+		metricsHistory: NewMetricsHistory(4096, 30*24*time.Hour),
+	}
+	ids := seedInMemorySLONodeMetrics(t, monitor.metricsHistory, 20, 240, duration)
+
+	sanity := monitor.GetNodeMetricsForChartBatch(ids, metricTypes, duration)
+	if len(sanity) != len(ids) {
+		t.Fatalf("sanity: expected %d nodes, got %d", len(ids), len(sanity))
+	}
+	for _, id := range ids {
+		if cpuPts := sanity[id]["cpu"]; len(cpuPts) == 0 {
+			t.Fatalf("sanity: node %s has no cpu points", id)
+		}
+	}
+
+	latencies := measureMonitoringLatencies(t, func() {
+		result := monitor.GetNodeMetricsForChartBatch(ids, metricTypes, duration)
+		if len(result) != len(ids) {
+			t.Fatalf("expected %d nodes, got %d", len(ids), len(result))
+		}
+	})
+
+	target := effectiveMonitoringSLOTarget(SLONodeChartBatchP95, SLONodeChartBatchGitHubActionsP95)
+	p95 := monitoringPercentile(latencies, 0.95)
+	t.Logf("GetNodeMetricsForChartBatch(20×5×240, 7d in-memory) p50=%v p95=%v p99=%v SLO=%v",
 		monitoringPercentile(latencies, 0.50), p95, monitoringPercentile(latencies, 0.99), target)
 
 	if p95 > target {

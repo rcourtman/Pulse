@@ -187,6 +187,12 @@ That same cloud-paid/browser boundary now also governs public demo posture.
 surfaces must not reveal self-hosted license metadata, hosted billing state,
 monitored-system ledgers, upgrade nudges, or activation controls just because
 the underlying runtime is commercially enabled.
+That same cloud-paid boundary now also owns release-demo fixture secrecy.
+Release builds may enforce the internal `demo_fixtures` entitlement before
+enabling mock fixture runtime state, but browser-visible licensing and
+commercial payloads must still filter that capability back out and must not
+let cloud-paid surfaces treat dev/test fixture toggles as plan, billing, or
+upgrade truth.
 That same resolved presentation policy also governs hosted organization chrome
 inside the demo/browser shell: app bootstrap may retain an internal default
 org context for hosted API routing, but `frontend-modern/src/useAppRuntimeState.ts`,

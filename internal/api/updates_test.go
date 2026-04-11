@@ -542,7 +542,7 @@ func (m *mockUpdater) PrepareUpdate(ctx context.Context, req updates.UpdateReque
 
 func TestHandleGetUpdatePlan(t *testing.T) {
 	// Set mock mode so GetCurrentVersion returns "mock"
-	t.Setenv("PULSE_MOCK_MODE", "true")
+	setMockModeForTest(t, true)
 
 	mu := &mockUpdater{
 		prepareFunc: func(ctx context.Context, req updates.UpdateRequest) (*updates.UpdatePlan, error) {
@@ -583,7 +583,7 @@ func TestHandleGetUpdatePlan(t *testing.T) {
 }
 
 func TestHandleGetUpdatePlan_InvalidChannel(t *testing.T) {
-	t.Setenv("PULSE_MOCK_MODE", "true")
+	setMockModeForTest(t, true)
 
 	h := NewUpdateHandlers(nil, nil)
 	h.registry.Register("mock", &mockUpdater{
@@ -603,7 +603,7 @@ func TestHandleGetUpdatePlan_InvalidChannel(t *testing.T) {
 }
 
 func TestHandleGetUpdatePlan_PrepareError(t *testing.T) {
-	t.Setenv("PULSE_MOCK_MODE", "true")
+	setMockModeForTest(t, true)
 
 	h := NewUpdateHandlers(nil, nil)
 	h.registry.Register("mock", &mockUpdater{
