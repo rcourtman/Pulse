@@ -313,6 +313,13 @@ jobs:
               echo ""
               echo "This run exercised the non-publish release path and validated the current promotion contract on the selected branch."
               echo "Record this run URL in the release ticket when clearing \`rc-to-ga-promotion-readiness\`."
+              echo ""
+              echo "## Governed Record"
+              echo ""
+              echo "Materialize the dated rehearsal record from this exact run with:"
+              echo "\`python3 scripts/release_control/record_rc_to_ga_rehearsal.py --run-id ${{ github.run_id }}\`"
+              echo ""
+              echo "If you do not pass \`--output\`, the recorder writes to \`docs/release-control/v6/internal/records/rc-to-ga-promotion-readiness-rehearsal-<record-date>.md\`."
             } > "$SUMMARY_FILE"
           fi
 

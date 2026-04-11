@@ -145,9 +145,13 @@ git pull --ff-only
    - `ga_date`: exact published v6 GA date
    - `v5_eos_date`: exact published v5 end-of-support date
    - optional `hotfix_exception` and `hotfix_reason`
-   Attach the `rc-to-ga-rehearsal-summary` artifact and run URL to the release
-   ticket, and confirm the artifact carries the canonical promotion metadata
-   envelope for that candidate: candidate stable tag, promotion channel,
+   After the run passes, materialize the governed dated rehearsal record with
+   `python3 scripts/release_control/record_rc_to_ga_rehearsal.py --run-id <run-id>`.
+   If `--output` is omitted, that recorder writes to
+   `docs/release-control/v6/internal/records/rc-to-ga-promotion-readiness-rehearsal-<record-date>.md`.
+   Attach that record, the `rc-to-ga-rehearsal-summary` artifact, and the run URL
+   to the release ticket, and confirm the artifact carries the canonical promotion
+   metadata envelope for that candidate: candidate stable tag, promotion channel,
    promoted prerelease tag, rollback target, exact rollback command, planned GA date,
    and planned v5 end-of-support date.
 

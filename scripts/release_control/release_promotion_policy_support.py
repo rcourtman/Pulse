@@ -14,9 +14,13 @@ PROMOTION_PROOF_TRIGGER_PATHS: tuple[str, ...] = (
     "docs/release-control/v6/internal/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
     "docs/release-control/v6/internal/PRE_RELEASE_CHECKLIST.md",
     "docs/release-control/v6/internal/RC_TO_GA_REHEARSAL_TEMPLATE.md",
+    "docs/release-control/v6/internal/RELEASE_PROMOTION_POLICY.md",
     "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md",
+    "docs/release-control/v6/internal/V5_MAINTENANCE_SUPPORT_POLICY.md",
     "docs/releases/V6_PRERELEASE_RUNBOOK.md",
     "scripts/check-workflow-dispatch-inputs.py",
+    "scripts/release_control/internal/record_rc_to_ga_rehearsal.py",
+    "scripts/release_control/record_rc_to_ga_rehearsal.py",
     "scripts/trigger-release.sh",
     "scripts/trigger-release-dry-run.sh",
 )

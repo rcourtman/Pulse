@@ -32,6 +32,7 @@ normalize_summary_command = _INTERNAL.normalize_summary_command
 validate_required_summary_metadata = _INTERNAL.validate_required_summary_metadata
 normalize_output_path = _INTERNAL.normalize_output_path
 normalize_input_path = _INTERNAL.normalize_input_path
+default_output_path = _INTERNAL.default_output_path
 render_record = _INTERNAL.render_record
 main = _INTERNAL.main
 
@@ -39,6 +40,6 @@ main = _INTERNAL.main
 if __name__ == "__main__":
     try:
         raise SystemExit(main())
-    except (FileNotFoundError, ValueError) as exc:
+    except (FileExistsError, FileNotFoundError, ValueError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         raise SystemExit(1)

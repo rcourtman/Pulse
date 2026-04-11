@@ -84,6 +84,13 @@ on:
                 ]
             )
         )
+        self.assertTrue(
+            slice_requires_staged_governance_inputs(
+                [
+                    "scripts/release_control/record_rc_to_ga_rehearsal.py",
+                ]
+            )
+        )
 
     def test_slice_skips_staged_governance_inputs_for_unrelated_paths(self) -> None:
         self.assertFalse(

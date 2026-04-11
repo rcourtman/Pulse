@@ -2337,6 +2337,9 @@
         ".github/workflows/update-demo-server.yml",
         "cmd/pulse-control-plane/main.go",
         "Dockerfile",
+        "docs/release-control/v6/internal/PRE_RELEASE_CHECKLIST.md",
+        "docs/release-control/v6/internal/RC_TO_GA_REHEARSAL_TEMPLATE.md",
+        "docs/release-control/v6/internal/RELEASE_PROMOTION_POLICY.md",
         "docs/releases/V6_PRERELEASE_RUNBOOK.md",
         "frontend-modern/package-lock.json",
         "frontend-modern/package.json",
@@ -2365,6 +2368,9 @@
         "scripts/install.ps1",
         "scripts/install.sh",
         "scripts/pulse-auto-update.sh",
+        "scripts/release_control/internal/record_rc_to_ga_rehearsal.py",
+        "scripts/release_control/record_rc_to_ga_rehearsal.py",
+        "scripts/release_control/release_promotion_policy_support.py",
         "scripts/release_control/resolve_release_promotion.py",
         "scripts/release_ldflags.sh",
         "scripts/run_demo_public_browser_smoke.sh",
@@ -2424,8 +2430,14 @@
               ".github/workflows/publish-helm-chart.yml",
               ".github/workflows/release-dry-run.yml",
               ".github/workflows/update-demo-server.yml",
+              "docs/release-control/v6/internal/PRE_RELEASE_CHECKLIST.md",
+              "docs/release-control/v6/internal/RC_TO_GA_REHEARSAL_TEMPLATE.md",
+              "docs/release-control/v6/internal/RELEASE_PROMOTION_POLICY.md",
               "docs/releases/V6_PRERELEASE_RUNBOOK.md",
               "scripts/check-workflow-dispatch-inputs.py",
+              "scripts/release_control/internal/record_rc_to_ga_rehearsal.py",
+              "scripts/release_control/record_rc_to_ga_rehearsal.py",
+              "scripts/release_control/release_promotion_policy_support.py",
               "scripts/release_control/resolve_release_promotion.py",
               "scripts/trigger-release-dry-run.sh",
               "scripts/trigger-release.sh"
@@ -2433,6 +2445,8 @@
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
+              "scripts/release_control/internal/record_rc_to_ga_rehearsal_test.py",
+              "scripts/release_control/release_promotion_policy_support_test.py",
               "scripts/release_control/release_promotion_policy_test.py",
               "scripts/release_control/resolve_release_promotion_test.py"
             ]

@@ -144,7 +144,9 @@ Cloud, and self-hosted production users.
    for the non-publish dry run and the canonical promotion metadata envelope:
    candidate stable tag, promotion channel, promoted prerelease tag, rollback target,
    exact rollback command, planned GA date, and planned v5 end-of-support
-   date.
+   date. Materialize that dated record with
+   `python3 scripts/release_control/record_rc_to_ga_rehearsal.py --run-id <run-id>`
+   unless an explicitly different output path is needed.
 8. The pushed governed release-branch copy of `.github/workflows/release-dry-run.yml`
    must already accept that stable rehearsal metadata envelope through
    `workflow_dispatch`, and the local release branch must match `origin` before

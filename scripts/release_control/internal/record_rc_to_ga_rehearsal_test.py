@@ -10,7 +10,9 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-import record_rc_to_ga_rehearsal as mod
+import record_rc_to_ga_rehearsal as wrapper_mod
+
+mod = wrapper_mod._INTERNAL
 
 
 SUMMARY = """# Prerelease-to-GA Rehearsal Summary
@@ -89,6 +91,66 @@ class RecordRcToGaRehearsalTest(unittest.TestCase):
             self.assertIn("Promotion channel: stable", content)
             self.assertIn("2026-03-15", content)
             self.assertIn("Exact rollback or reinstall command: `./scripts/install.sh --version v5.1.23`", content)
+
+    def test_main_defaults_output_to_canonical_record_path(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            summary_path = tmp_path / "summary.md"
+            summary_path.write_text(SUMMARY, encoding="utf-8")
+
+            with mock.patch.object(mod, "REPO_ROOT", tmp_path):
+                exit_code = mod.main(
+                    [
+                        "--summary-file",
+                        str(summary_path),
+                        "--record-date",
+                        "2026-03-12",
+                    ]
+                )
+
+            self.assertEqual(exit_code, 0)
+            output_path = tmp_path / "docs/release-control/v6/internal/records/rc-to-ga-promotion-readiness-rehearsal-2026-03-12.md"
+            self.assertTrue(output_path.is_file())
+            self.assertIn("Prerelease-to-GA Rehearsal Record", output_path.read_text(encoding="utf-8"))
+
+    def test_main_refuses_to_overwrite_existing_record_without_force(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            summary_path = tmp_path / "summary.md"
+            summary_path.write_text(SUMMARY, encoding="utf-8")
+            output_path = tmp_path / "record.md"
+            output_path.write_text("existing\n", encoding="utf-8")
+
+            with self.assertRaisesRegex(FileExistsError, "output path already exists"):
+                mod.main(
+                    [
+                        "--summary-file",
+                        str(summary_path),
+                        "--output",
+                        str(output_path),
+                    ]
+                )
+
+    def test_main_force_overwrites_existing_record(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            summary_path = tmp_path / "summary.md"
+            summary_path.write_text(SUMMARY, encoding="utf-8")
+            output_path = tmp_path / "record.md"
+            output_path.write_text("existing\n", encoding="utf-8")
+
+            exit_code = mod.main(
+                [
+                    "--summary-file",
+                    str(summary_path),
+                    "--output",
+                    str(output_path),
+                    "--force",
+                ]
+            )
+
+            self.assertEqual(exit_code, 0)
+            self.assertIn("Prerelease-to-GA Rehearsal Record", output_path.read_text(encoding="utf-8"))
 
     def test_download_summary_artifact_reads_named_artifact(self) -> None:
         artifact_text = "# summary\n"
@@ -266,6 +328,31 @@ class RecordRcToGaRehearsalTest(unittest.TestCase):
             "rehearsal summary artifact missing required promotion metadata: candidate stable tag",
             result.stderr,
         )
+
+    def test_public_wrapper_reports_existing_output_path(self) -> None:
+        wrapper = Path(__file__).resolve().parent.parent / "record_rc_to_ga_rehearsal.py"
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            summary_path = tmp_path / "summary.md"
+            summary_path.write_text(SUMMARY, encoding="utf-8")
+            output_path = tmp_path / "record.md"
+            output_path.write_text("existing\n", encoding="utf-8")
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(wrapper),
+                    "--summary-file",
+                    str(summary_path),
+                    "--output",
+                    str(output_path),
+                ],
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("output path already exists", result.stderr)
 
     def test_parse_summary_markdown_accepts_legacy_artifact_labels(self) -> None:
         legacy_summary = (

@@ -15,6 +15,9 @@ from typing import Any
 from repo_file_io import REPO_ROOT, git_env
 from release_promotion_policy_support import PROMOTION_METADATA_FIELDS
 
+DEFAULT_RECORDS_DIR = Path("docs/release-control/v6/internal/records")
+DEFAULT_RECORD_PREFIX = "rc-to-ga-promotion-readiness-rehearsal"
+
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
@@ -25,8 +28,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     source.add_argument("--summary-file", help="Existing rc-to-ga-rehearsal-summary.md file.")
     parser.add_argument(
         "--output",
-        required=True,
-        help="Repo-relative or absolute path for the generated record markdown.",
+        help=(
+            "Repo-relative or absolute path for the generated record markdown. "
+            "Defaults to docs/release-control/v6/internal/records/"
+            "rc-to-ga-promotion-readiness-rehearsal-<record-date>.md."
+        ),
     )
     parser.add_argument(
         "--record-date",
@@ -62,6 +68,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="append",
         default=[],
         help="Additional operator note to include in the record. Repeatable.",
+    )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Overwrite the output path if it already exists.",
     )
     return parser.parse_args(argv)
 
@@ -174,6 +185,10 @@ def normalize_input_path(path_text: str) -> Path:
     if path.is_absolute():
         return path
     return REPO_ROOT / path
+
+
+def default_output_path(record_date: str) -> Path:
+    return REPO_ROOT / DEFAULT_RECORDS_DIR / f"{DEFAULT_RECORD_PREFIX}-{record_date}.md"
 
 
 def render_record(
@@ -296,7 +311,16 @@ def main(argv: list[str] | None = None) -> int:
     summary_metadata = parse_summary_markdown(summary_markdown)
     validate_required_summary_metadata(summary_metadata)
     rollback_command = args.rollback_command or normalize_summary_command(summary_metadata["rollback_command"])
-    output_path = normalize_output_path(args.output)
+    output_path = (
+        normalize_output_path(args.output)
+        if args.output
+        else default_output_path(args.record_date)
+    )
+    if output_path.exists() and not args.force:
+        raise FileExistsError(
+            f"output path already exists: {output_path}. "
+            "Pass --force to overwrite or choose a different --output."
+        )
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(
         render_record(

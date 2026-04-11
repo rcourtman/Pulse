@@ -36,39 +36,45 @@ server-side update execution surfaces.
 14. `.github/workflows/release-dry-run.yml`
 15. `.github/workflows/update-demo-server.yml`
 16. `docs/releases/V6_PRERELEASE_RUNBOOK.md`
-17. `package.json`
-18. `package-lock.json`
-19. `frontend-modern/package.json`
-20. `frontend-modern/package-lock.json`
-21. `frontend-modern/vite.config.ts`
-22. `go.mod`
-23. `go.sum`
-24. `scripts/build-release.sh`
-25. `scripts/check-workflow-dispatch-inputs.py`
-26. `scripts/clean-mock-alerts.sh`
-27. `scripts/com.pulse.hot-dev.plist.template`
-28. `scripts/dev-check.sh`
-29. `scripts/dev-launchd-setup.sh`
-30. `scripts/dev-launchd-wrapper.sh`
-31. `scripts/hot-dev-bg.sh`
-32. `scripts/hot-dev.sh`
-33. `scripts/install-container-agent.sh`
-34. `scripts/install.ps1`
-35. `scripts/install.sh`
-36. `scripts/pulse-auto-update.sh`
-37. `scripts/release_control/resolve_release_promotion.py`
-38. `scripts/release_ldflags.sh`
-39. `scripts/run_demo_public_browser_smoke.sh`
-40. `scripts/demo_public_browser_smoke.cjs`
-41. `scripts/trigger-release-dry-run.sh`
-42. `scripts/trigger-release.sh`
-43. `scripts/toggle-mock.sh`
-44. `tests/integration/playwright.config.ts`
-45. `tests/integration/QUICK_START.md`
-46. `tests/integration/README.md`
-47. `tests/integration/scripts/managed-dev-runtime.mjs`
-48. `tests/integration/tests/helpers.ts`
-49. `tests/integration/tests/runtime-defaults.ts`
+17. `docs/release-control/v6/internal/PRE_RELEASE_CHECKLIST.md`
+18. `docs/release-control/v6/internal/RC_TO_GA_REHEARSAL_TEMPLATE.md`
+19. `docs/release-control/v6/internal/RELEASE_PROMOTION_POLICY.md`
+20. `package.json`
+21. `package-lock.json`
+22. `frontend-modern/package.json`
+23. `frontend-modern/package-lock.json`
+24. `frontend-modern/vite.config.ts`
+25. `go.mod`
+26. `go.sum`
+27. `scripts/build-release.sh`
+28. `scripts/check-workflow-dispatch-inputs.py`
+29. `scripts/clean-mock-alerts.sh`
+30. `scripts/com.pulse.hot-dev.plist.template`
+31. `scripts/dev-check.sh`
+32. `scripts/dev-launchd-setup.sh`
+33. `scripts/dev-launchd-wrapper.sh`
+34. `scripts/hot-dev-bg.sh`
+35. `scripts/hot-dev.sh`
+36. `scripts/install-container-agent.sh`
+37. `scripts/install.ps1`
+38. `scripts/install.sh`
+39. `scripts/pulse-auto-update.sh`
+40. `scripts/release_control/internal/record_rc_to_ga_rehearsal.py`
+41. `scripts/release_control/record_rc_to_ga_rehearsal.py`
+42. `scripts/release_control/release_promotion_policy_support.py`
+43. `scripts/release_control/resolve_release_promotion.py`
+44. `scripts/release_ldflags.sh`
+45. `scripts/run_demo_public_browser_smoke.sh`
+46. `scripts/demo_public_browser_smoke.cjs`
+47. `scripts/trigger-release-dry-run.sh`
+48. `scripts/trigger-release.sh`
+49. `scripts/toggle-mock.sh`
+50. `tests/integration/playwright.config.ts`
+51. `tests/integration/QUICK_START.md`
+52. `tests/integration/README.md`
+53. `tests/integration/scripts/managed-dev-runtime.mjs`
+54. `tests/integration/tests/helpers.ts`
+55. `tests/integration/tests/runtime-defaults.ts`
 
 ## Shared Boundaries
 
@@ -80,11 +86,11 @@ server-side update execution surfaces.
 ## Extension Points
 
 1. Add or change deployment-type detection, update planning, or apply behavior through `internal/updates/`
-2. Add or change release-build metadata injection, Docker build-context allowlists, release artifact assembly, or governed promotion metadata resolution through `scripts/build-release.sh`, `scripts/release_ldflags.sh`, `scripts/check-workflow-dispatch-inputs.py`, `scripts/release_control/resolve_release_promotion.py`, `.dockerignore`, `Dockerfile`, `docs/releases/V6_PRERELEASE_RUNBOOK.md`, the operator dispatch helpers `scripts/trigger-release.sh` and `scripts/trigger-release-dry-run.sh`, and the governed release workflows `.github/workflows/create-release.yml`, `.github/workflows/deploy-demo-server.yml`, `.github/workflows/helm-pages.yml`, `.github/workflows/publish-docker.yml`, `.github/workflows/publish-helm-chart.yml`, `.github/workflows/promote-floating-tags.yml`, `.github/workflows/release-dry-run.yml`, and `.github/workflows/update-demo-server.yml`
+2. Add or change release-build metadata injection, Docker build-context allowlists, release artifact assembly, or governed promotion metadata resolution through `scripts/build-release.sh`, `scripts/release_ldflags.sh`, `scripts/check-workflow-dispatch-inputs.py`, `scripts/release_control/resolve_release_promotion.py`, `scripts/release_control/record_rc_to_ga_rehearsal.py`, `scripts/release_control/internal/record_rc_to_ga_rehearsal.py`, `scripts/release_control/release_promotion_policy_support.py`, `.dockerignore`, `Dockerfile`, `docs/releases/V6_PRERELEASE_RUNBOOK.md`, `docs/release-control/v6/internal/RELEASE_PROMOTION_POLICY.md`, `docs/release-control/v6/internal/PRE_RELEASE_CHECKLIST.md`, `docs/release-control/v6/internal/RC_TO_GA_REHEARSAL_TEMPLATE.md`, the operator dispatch helpers `scripts/trigger-release.sh` and `scripts/trigger-release-dry-run.sh`, and the governed release workflows `.github/workflows/create-release.yml`, `.github/workflows/deploy-demo-server.yml`, `.github/workflows/helm-pages.yml`, `.github/workflows/publish-docker.yml`, `.github/workflows/publish-helm-chart.yml`, `.github/workflows/promote-floating-tags.yml`, `.github/workflows/release-dry-run.yml`, and `.github/workflows/update-demo-server.yml`
 3. Add or change shell installer, Windows installer, container-agent installer, or auto-update script behavior through `scripts/install.sh`, `scripts/install.ps1`, `scripts/install-container-agent.sh`, and `scripts/pulse-auto-update.sh`
 4. Add or change server update transport through `internal/api/updates.go` and `frontend-modern/src/api/updates.ts`
 5. Add or change local dev-runtime orchestration, managed ownership, browser-runtime proof wiring, frontend/backend coherence diagnostics, canonical developer entry wrappers, dependency manifest floors, frontend build chunking, or dev-runtime helper control surfaces through `scripts/hot-dev.sh`, `scripts/hot-dev-bg.sh`, `Makefile`, `package.json`, `package-lock.json`, `frontend-modern/package.json`, `frontend-modern/package-lock.json`, `frontend-modern/vite.config.ts`, `go.mod`, `go.sum`, `scripts/dev-check.sh`, `scripts/toggle-mock.sh`, `scripts/clean-mock-alerts.sh`, `scripts/dev-launchd-setup.sh`, `scripts/dev-launchd-wrapper.sh`, `scripts/run_demo_public_browser_smoke.sh`, `scripts/demo_public_browser_smoke.cjs`, `scripts/com.pulse.hot-dev.plist.template`, `tests/integration/scripts/managed-dev-runtime.mjs`, `tests/integration/playwright.config.ts`, `tests/integration/tests/helpers.ts`, `tests/integration/tests/runtime-defaults.ts`, `tests/integration/README.md`, and `tests/integration/QUICK_START.md`
-6. Add or change governed release-promotion workflow inputs, operator-facing promotion metadata, artifact publication lineage enforcement, or stable-promotion rehearsal summaries through `.github/workflows/create-release.yml`, `.github/workflows/helm-pages.yml`, `.github/workflows/publish-docker.yml`, `.github/workflows/publish-helm-chart.yml`, `.github/workflows/promote-floating-tags.yml`, `.github/workflows/release-dry-run.yml`, `.github/workflows/update-demo-server.yml`, `docs/releases/V6_PRERELEASE_RUNBOOK.md`, `scripts/check-workflow-dispatch-inputs.py`, `scripts/trigger-release.sh`, and `scripts/trigger-release-dry-run.sh`
+6. Add or change governed release-promotion workflow inputs, operator-facing promotion metadata, artifact publication lineage enforcement, or stable-promotion rehearsal summaries through `.github/workflows/create-release.yml`, `.github/workflows/helm-pages.yml`, `.github/workflows/publish-docker.yml`, `.github/workflows/publish-helm-chart.yml`, `.github/workflows/promote-floating-tags.yml`, `.github/workflows/release-dry-run.yml`, `.github/workflows/update-demo-server.yml`, `docs/releases/V6_PRERELEASE_RUNBOOK.md`, `docs/release-control/v6/internal/RELEASE_PROMOTION_POLICY.md`, `docs/release-control/v6/internal/PRE_RELEASE_CHECKLIST.md`, `docs/release-control/v6/internal/RC_TO_GA_REHEARSAL_TEMPLATE.md`, `scripts/check-workflow-dispatch-inputs.py`, `scripts/release_control/record_rc_to_ga_rehearsal.py`, `scripts/release_control/internal/record_rc_to_ga_rehearsal.py`, `scripts/release_control/release_promotion_policy_support.py`, `scripts/trigger-release.sh`, and `scripts/trigger-release-dry-run.sh`
 7. Preserve release-matched installer and Helm operator documentation links through `scripts/install.sh`, `.github/workflows/helm-pages.yml`, `.github/workflows/publish-helm-chart.yml`, and the chart metadata itself so deployment guidance and packaged chart metadata do not drift back to branch-tip `main` docs when a release line or promoted tag already exists.
 8. Add or change operator-facing hosted tenant runtime canary rollout, batch runtime contract reconciliation, canonical hosted route/public URL generation, or control-plane runtime-registry reconciliation through `cmd/pulse-control-plane/main.go`, `internal/cloudcp/docker/manager.go`, `internal/cloudcp/docker/labels.go`, and `internal/cloudcp/tenant_runtime_rollout.go`
 
@@ -210,6 +216,13 @@ that promotion metadata. Human-visible workflow inputs, summaries, and error
 messages must describe the path as a prerelease or preview flow rather than
 implying a near-ready release candidate, while machine-owned identifiers such
 as `rc`, `rc-to-ga-*`, and `v6.0.0-rc.1` remain the canonical internal keys.
+That same promotion-governance package also owns the dated rehearsal-record
+materialization path. The public recorder
+`scripts/release_control/record_rc_to_ga_rehearsal.py` and its internal module
+must remain the canonical route from a `Release Dry Run` run ID or summary
+artifact to `docs/release-control/v6/internal/records/`, and they must fail
+closed on missing artifact metadata or silent record overwrites rather than
+encouraging hand-written repair of governed promotion fields.
 That same prerelease framing requirement also applies to installer and update
 runtime copy: `install.sh`, `scripts/pulse-auto-update.sh`, and
 `internal/updates/manager.go` must present `rc`-tagged builds as prerelease or
