@@ -292,6 +292,13 @@ querying, and the operator-facing storage health presentation layer.
     `/api/storage-charts` payload once per additional dashboard resource page
     or invent a dashboard-only storage summary transport path outside the
     canonical cache owners.
+38. Keep storage and recovery route framing additive and owner-neutral.
+    `frontend-modern/src/components/Storage/Storage.tsx` and storage/recovery-
+    adjacent dashboard composition may use the shared `PageHeader` shell for
+    top-level route framing, but that header must stay additive on top of the
+    canonical storage page model, recovery presenters, and shared summary
+    caches. Header chrome must not become a second owner for storage filters,
+    recovery posture, commercial purchase state, or transport selection.
 
 ## Forbidden Paths
 

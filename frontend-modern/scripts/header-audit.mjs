@@ -11,8 +11,7 @@ const REQUIRED_PAGE_HEADERS = new Map([
   ['src/pages/Infrastructure.tsx', 'PageHeader'],
   ['src/pages/Operations.tsx', 'PageHeader'],
   ['src/pages/NotFound.tsx', 'PageHeader'],
-  ['src/pages/Pricing.tsx', 'PageHeader'],
-  ['src/pages/MigrationGuide.tsx', 'PageHeader'],
+  ['src/pages/PricingHandoff.tsx', 'PageHeader'],
   ['src/components/Settings/Settings.tsx', 'PageHeader'],
 ]);
 
@@ -41,6 +40,75 @@ function hasPrimitive(content, primitive) {
   return new RegExp(`<${primitive}\\b`).test(content);
 }
 
+function resolveImport(specifier, fromFile) {
+  let basePath = null;
+  if (specifier.startsWith('@/')) {
+    basePath = path.join(ROOT, 'src', specifier.slice(2));
+  } else if (specifier.startsWith('.')) {
+    basePath = path.resolve(path.dirname(path.join(ROOT, fromFile)), specifier);
+  }
+
+  if (!basePath) {
+    return null;
+  }
+
+  const candidates = [
+    basePath,
+    `${basePath}.tsx`,
+    `${basePath}.ts`,
+    path.join(basePath, 'index.tsx'),
+    path.join(basePath, 'index.ts'),
+  ];
+
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate) && fs.statSync(candidate).isFile()) {
+      return path.relative(ROOT, candidate);
+    }
+  }
+
+  return null;
+}
+
+function getImportedLocalFiles(relPath) {
+  const content = readFileSafe(relPath);
+  if (!content) {
+    return [];
+  }
+
+  const imports = new Set();
+  const importPattern = /from\s+['"]([^'"]+)['"]|import\(\s*['"]([^'"]+)['"]\s*\)/g;
+  let match;
+  while ((match = importPattern.exec(content)) !== null) {
+    const specifier = match[1] ?? match[2];
+    const resolved = resolveImport(specifier, relPath);
+    if (resolved) {
+      imports.add(resolved);
+    }
+  }
+
+  return Array.from(imports);
+}
+
+function collectPrimitiveUsage(relPath, visited = new Set()) {
+  if (visited.has(relPath)) {
+    return new Set();
+  }
+  visited.add(relPath);
+
+  const content = readFileSafe(relPath);
+  const primitives = new Set(
+    HEADER_PRIMITIVES.filter((primitive) => hasPrimitive(content, primitive)),
+  );
+
+  for (const importedFile of getImportedLocalFiles(relPath)) {
+    for (const primitive of collectPrimitiveUsage(importedFile, visited)) {
+      primitives.add(primitive);
+    }
+  }
+
+  return primitives;
+}
+
 function listTopLevelPages() {
   const dir = path.join(ROOT, 'src/pages');
   return fs
@@ -50,13 +118,20 @@ function listTopLevelPages() {
     .sort();
 }
 
-function listSettingsPanels() {
-  const dir = path.join(ROOT, 'src/components/Settings');
-  return fs
-    .readdirSync(dir, { withFileTypes: true })
-    .filter((entry) => entry.isFile() && entry.name.endsWith('Panel.tsx'))
-    .map((entry) => `src/components/Settings/${entry.name}`)
-    .sort();
+function listTopLevelSettingsPanels() {
+  const registryFile = 'src/components/Settings/settingsPanelRegistryLoaders.ts';
+  const content = readFileSafe(registryFile);
+  const panels = new Set();
+  const importPattern = /import\('\.\/([^']+)'\)/g;
+  let match;
+  while ((match = importPattern.exec(content)) !== null) {
+    const moduleName = match[1];
+    if (!moduleName.endsWith('Panel')) {
+      continue;
+    }
+    panels.add(`src/components/Settings/${moduleName}.tsx`);
+  }
+  return Array.from(panels).sort();
 }
 
 const failures = [];
@@ -67,7 +142,8 @@ for (const [file, requiredPrimitive] of REQUIRED_PAGE_HEADERS.entries()) {
     failures.push(`${file}: missing file`);
     continue;
   }
-  if (!hasPrimitive(content, requiredPrimitive)) {
+  const primitives = collectPrimitiveUsage(file);
+  if (!primitives.has(requiredPrimitive)) {
     failures.push(`${file}: must use <${requiredPrimitive}>`);
   }
 }
@@ -86,7 +162,7 @@ for (const [file, requiredPrimitive] of REQUIRED_OPERATIONS_WRAPPERS.entries()) 
 const pageInventory = [];
 for (const pageFile of listTopLevelPages()) {
   const content = readFileSafe(pageFile);
-  const primitives = HEADER_PRIMITIVES.filter((primitive) => hasPrimitive(content, primitive));
+  const primitives = Array.from(collectPrimitiveUsage(pageFile));
   const hasRawH1 = /<h1\b/.test(content);
 
   pageInventory.push({
@@ -108,13 +184,11 @@ for (const pageFile of listTopLevelPages()) {
   }
 }
 
-for (const panelFile of listSettingsPanels()) {
-  if (panelFile === 'src/components/Settings/OperationsPanel.tsx') continue;
+for (const panelFile of listTopLevelSettingsPanels()) {
   if (SETTINGS_PANEL_SHIMS.has(panelFile)) continue;
 
-  const content = readFileSafe(panelFile);
-  const hasSharedWrapper =
-    hasPrimitive(content, 'SettingsPanel') || hasPrimitive(content, 'OperationsPanel');
+  const primitives = collectPrimitiveUsage(panelFile);
+  const hasSharedWrapper = primitives.has('SettingsPanel') || primitives.has('OperationsPanel');
 
   if (!hasSharedWrapper) {
     failures.push(`${panelFile}: must use <SettingsPanel> or <OperationsPanel>`);

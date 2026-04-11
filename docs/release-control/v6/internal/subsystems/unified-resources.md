@@ -337,6 +337,13 @@ assembly branch.
     compact `/api/charts/storage-summary` contract instead of rebuilding
     page-local per-resource storage history fetches, storage-type aliases, or
     full storage-page `/api/storage-charts` fetches.
+19. Keep infrastructure page-header framing presentation-only on the page
+    shell. `frontend-modern/src/features/infrastructure/InfrastructurePageSurface.tsx`
+    may render the shared `PageHeader`, but canonical source/status/search
+    state, summary scope, and row selection must remain on
+    `frontend-modern/src/features/infrastructure/useInfrastructurePageState.ts`
+    and the unified-resource selectors it composes. The header must not become
+    a second state owner, scope banner, or provider-local filter surface.
 
 ## Current State
 

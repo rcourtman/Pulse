@@ -186,6 +186,11 @@ state. When `.github/workflows/create-release.yml` runs in `draft_only` mode,
 it must pass the real draft state into `.github/workflows/validate-release-assets.yml`
 so validation blocks or annotates the draft release as a draft, rather than
 misclassifying the run as post-publish revalidation.
+That same frontend-release boundary also owns shared header-composition proof.
+`.github/workflows/release-dry-run.yml` and `.github/workflows/create-release.yml`
+must both run the same `lint:headers` audit so a branch that would be rejected
+by the real publish workflow cannot pass the governed dry run only because the
+rehearsal skipped that header-composition gate.
 That same governed demo-deployment boundary now owns target separation between
 the public stable demo and the opt-in v6 preview demo. `.github/workflows/create-release.yml`,
 `.github/workflows/update-demo-server.yml`, and `.github/workflows/deploy-demo-server.yml`

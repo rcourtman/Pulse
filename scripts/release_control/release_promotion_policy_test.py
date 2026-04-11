@@ -211,6 +211,8 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn('--ref "$CURRENT_BRANCH"', helper)
         self.assertIn("Release automation executes the selected remote ref", helper)
         self.assertNotIn("Continue anyway?", helper)
+        self.assertIn("Audit header composition", content)
+        self.assertIn("run: npm --prefix frontend-modern run lint:headers", content)
         self.assertIn("pushed governed release-branch copy of `.github/workflows/release-dry-run.yml`", policy)
         self.assertIn("GitHub executes the selected remote ref", normalize_ws(policy))
         checklist = read("docs/release-control/v6/internal/PRE_RELEASE_CHECKLIST.md")

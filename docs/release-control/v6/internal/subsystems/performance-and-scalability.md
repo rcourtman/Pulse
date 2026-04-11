@@ -236,6 +236,14 @@ regression protection.
     must not hydrate `all-resources` or recovery rollups behind a hidden node
     summary; selector-owned data hooks must be explicitly visibility-gated so
     `/workloads` only pays for workload-owned transports.
+34. Keep dashboard page-header framing additive on the compact hot path.
+    `frontend-modern/src/pages/Dashboard.tsx` may render the shared
+    `PageHeader` for route-level shell consistency, but that header must stay
+    pure presentation on top of the existing compact overview, trends,
+    actions, and recovery/storage widget hydration. It must not introduce a
+    second dashboard data load, widen suspense ownership, or force dashboard
+    summaries back through full-resource fetch paths just to satisfy page
+    chrome.
 
 ## Forbidden Paths
 

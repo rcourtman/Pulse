@@ -11,6 +11,9 @@ describe('InfrastructurePageSurface guardrails', () => {
   it('keeps the feature shell separate from route-sync and page-model ownership', () => {
     expect(infrastructurePageSurfaceSource).toContain('useInfrastructurePageState');
     expect(infrastructurePageSurfaceSource).toContain('useNavigate');
+    expect(infrastructurePageSurfaceSource).toContain("import { PageHeader } from '@/components/shared/PageHeader';");
+    expect(infrastructurePageSurfaceSource).toContain('<PageHeader');
+    expect(infrastructurePageSurfaceSource).toContain('title="Infrastructure"');
     expect(infrastructurePageSurfaceSource).not.toContain('useLocation(');
     expect(infrastructurePageSurfaceSource).not.toContain('buildInfrastructurePath(');
 

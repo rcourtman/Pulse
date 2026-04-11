@@ -6,6 +6,7 @@ import TerminalIcon from 'lucide-solid/icons/terminal';
 import { DiagnosticsPanel } from '@/components/Settings/DiagnosticsPanel';
 import { ReportingPanel } from '@/components/Settings/ReportingPanel';
 import { SystemLogsPanel } from '@/components/Settings/SystemLogsPanel';
+import { PageHeader } from '@/components/shared/PageHeader';
 import { Subtabs, type SubtabOption } from '@/components/shared/Subtabs';
 import { DASHBOARD_PATH } from '@/routing/resourceLinks';
 import { presentationPolicyIsDemoMode } from '@/stores/sessionPresentationPolicy';
@@ -62,6 +63,11 @@ export function OperationsPageSurface() {
   return (
     <Show when={!hiddenInDemoMode()}>
       <div class="space-y-6">
+        <PageHeader
+          title="Operations"
+          description="Run diagnostics, review generated reports, and inspect system logs without leaving the app."
+        />
+
         <div class="mb-6">
           <Subtabs
             value={activeTab()}

@@ -15,6 +15,9 @@ describe('operations page route shell', () => {
     expect(operationsPageRouteSource).not.toContain('useNavigate');
     expect(operationsPageRouteSource).not.toContain('createSignal');
     expect(operationsPageSurfaceSource).toContain('@/components/shared/Subtabs');
+    expect(operationsPageSurfaceSource).toContain("import { PageHeader } from '@/components/shared/PageHeader';");
+    expect(operationsPageSurfaceSource).toContain('<PageHeader');
+    expect(operationsPageSurfaceSource).toContain('title="Operations"');
     expect(operationsPageSurfaceSource).toContain('getOperationsTabFromPath');
     expect(operationsPageSurfaceSource).toContain('buildOperationsPath');
     expect(operationsPageSurfaceSource).toContain('operationsSurfaceHiddenInDemoMode');

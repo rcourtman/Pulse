@@ -373,6 +373,17 @@ connections` visible as the API-backed alternative for Proxmox and
     such as `truenas_checked` instead of letting feature-local fixtures or
     fallback objects collapse API-backed TrueNAS systems back into generic
     agent-host presentation.
+    That same shared route-shell boundary also owns header-composition audit.
+    `frontend-modern/scripts/header-audit.mjs`,
+    `.github/workflows/release-dry-run.yml`, and
+    `.github/workflows/create-release.yml` must prove the same shared
+    top-level page-header contract before publication. The audit may follow
+    local imports when a route shell composes `PageHeader` through a nested
+    surface, and settings coverage must stay limited to top-level registry
+    panels rather than every helper `*Panel.tsx` file. Route shells such as
+    `frontend-modern/src/features/operations/OperationsPageSurface.tsx` must
+    therefore keep the shared `PageHeader` above owned subtabs instead of
+    drifting back to page-local `<h1>` framing.
 23. Keep the authenticated app root aligned with that same first-session path.
     That same shared-primitive ownership now includes contextual row focus.
     `frontend-modern/src/components/shared/contextualFocus.ts` is the canonical

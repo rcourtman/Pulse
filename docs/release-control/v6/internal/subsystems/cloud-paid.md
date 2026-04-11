@@ -241,6 +241,15 @@ ledger reads until that policy resolves and suppress them while commercial
 surfaces are hidden. Public demo mode therefore renders a redacted
 presentation-policy state instead of creating a fake entitlement, probing
 hidden commercial endpoints, or showing monitored-system usage pressure.
+That same commercial/public browser boundary also owns pricing-handoff
+framing. `frontend-modern/src/pages/PricingHandoff.tsx` may keep the
+operator-visible handoff on `/pricing`, but it must render the shared
+`PageHeader` shell while `frontend-modern/src/utils/pricingHandoff.ts`
+continues to own destination resolution, self-hosted Pulse Account handoff,
+and public-pricing fallback truth. The route must not fork a raw top-level
+heading, duplicate destination logic in the page shell, or let commercial
+handoff framing drift away from the same shared browser chrome used by the
+rest of the product.
 The governed browser proof for that posture lives in
 `tests/integration/tests/53-demo-mode-commercial-boundary.spec.ts` and is
 expected to stay runnable through

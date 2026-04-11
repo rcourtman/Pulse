@@ -1,5 +1,6 @@
 import { Navigate, useLocation } from '@solidjs/router';
 import { Show, createMemo, onMount } from 'solid-js';
+import { PageHeader } from '@/components/shared/PageHeader';
 import { trackPaywallViewed } from '@/utils/upgradeMetrics';
 import {
   getPricingRouteDestination,
@@ -36,17 +37,22 @@ export default function PricingHandoff() {
       fallback={<Navigate href={destination()} />}
     >
       <div class="flex min-h-[50vh] items-center justify-center">
-        <div class="space-y-2 text-center">
-          <h1 class="text-lg font-semibold text-base-content">
-            Redirecting to {handoffLabel()}
-          </h1>
-          <p class="text-sm text-muted">
-            If the handoff does not start automatically,{' '}
-            <a href={destination()} class="text-blue-600 hover:underline dark:text-blue-400">
-              {handoffLinkLabel()}
-            </a>
-            .
-          </p>
+        <div class="max-w-xl space-y-2 text-center">
+          <PageHeader
+            title={`Redirecting to ${handoffLabel()}`}
+            description={
+              <>
+                If the handoff does not start automatically,{' '}
+                <a href={destination()} class="text-blue-600 hover:underline dark:text-blue-400">
+                  {handoffLinkLabel()}
+                </a>
+                .
+              </>
+            }
+            class="items-center text-center"
+            titleClass="text-lg"
+            descriptionClass="text-sm"
+          />
         </div>
       </div>
     </Show>

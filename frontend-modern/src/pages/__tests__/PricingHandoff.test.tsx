@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen, waitFor } from '@solidjs/testing-library';
 import { Route, Router } from '@solidjs/router';
 import PricingHandoff from '@/pages/PricingHandoff';
+import pricingHandoffSource from '@/pages/PricingHandoff.tsx?raw';
 import { getSelfHostedPurchaseStartUrl } from '@/utils/pricingHandoff';
 
 const trackPaywallViewedMock = vi.fn();
@@ -57,6 +58,12 @@ describe('PricingHandoff', () => {
       'href',
       expectedDestination,
     );
+  });
+
+  it('keeps the pricing handoff on the shared page-header shell', () => {
+    expect(pricingHandoffSource).toContain("import { PageHeader } from '@/components/shared/PageHeader';");
+    expect(pricingHandoffSource).toContain('<PageHeader');
+    expect(pricingHandoffSource).not.toContain('<h1');
   });
 
   it('keeps monitored-system pricing handoffs inside the product', async () => {

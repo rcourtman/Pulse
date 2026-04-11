@@ -146,6 +146,9 @@ describe('Dashboard page module contract', () => {
   it('routes dashboard overview panels through the dashboard overview feature owner', () => {
     expect(dashboardPageSource).toContain("from '@/features/dashboardOverview'");
     expect(dashboardPageSource).toContain("from '@/components/Dashboard/RelayOnboardingCard'");
+    expect(dashboardPageSource).toContain("from '@/components/shared/PageHeader'");
+    expect(dashboardPageSource).toContain('<PageHeader');
+    expect(dashboardPageSource).toContain('title="Dashboard"');
     expect(dashboardPageSource).toContain('<RelayOnboardingCard />');
     expect(dashboardPageSource).toContain(
       'ActionRequiredPanel,\n  DashboardCustomizer,\n  KPIStrip,\n  ProblemResourcesTable,\n  TrendCharts,',
@@ -178,6 +181,7 @@ describe('Dashboard page module contract', () => {
   it('routes the empty dashboard state to infrastructure install', () => {
     render(() => <DashboardPage />);
 
+    expect(screen.getByRole('heading', { name: 'Dashboard' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'No resources yet' })).toBeInTheDocument();
     expect(screen.queryByTestId('relay-onboarding-card')).toBeNull();
     expect(

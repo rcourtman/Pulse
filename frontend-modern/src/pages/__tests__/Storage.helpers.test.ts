@@ -14,6 +14,9 @@ describe('storage page route shell', () => {
     );
     expect(storagePageRouteSource).toContain('<StorageSurface />');
     expect(storagePageRouteSource).not.toContain('useStoragePageModel');
+    expect(storageSurfaceSource).toContain("import { PageHeader } from '@/components/shared/PageHeader';");
+    expect(storageSurfaceSource).toContain('<PageHeader');
+    expect(storageSurfaceSource).toContain('title="Storage"');
     expect(storageSurfaceSource).toContain('useStoragePageModel');
   });
 });
