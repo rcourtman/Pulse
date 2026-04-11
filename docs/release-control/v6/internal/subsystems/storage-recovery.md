@@ -95,7 +95,10 @@ querying, and the operator-facing storage health presentation layer.
    thinner websocket `state.resources` payloads may refresh status and metrics,
    but they must not downgrade richer REST-hydrated platform summary fields or
    synthesize standalone `clusterId` values from resource names while the same
-   session is open.
+   session is open. For the default immediate-hydration path, storage and
+   recovery consumers must also wait for the first canonical REST snapshot
+   instead of painting thinner websocket transport rows first and then
+   rehydrating into a richer canonical shape a moment later.
    Storage and recovery consumers must also inherit the hook's canonical
    `ResourceType` normalization for route/query filters, so storage subtypes
    such as `physical_disk` stay on the same cache-backed snapshot instead of

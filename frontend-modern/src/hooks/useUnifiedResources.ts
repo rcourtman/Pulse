@@ -1136,6 +1136,12 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
     }
 
     const wsResources = Array.isArray(wsStore.state.resources) ? wsStore.state.resources : [];
+    // For normal page loads, keep the first paint on the canonical REST contract.
+    // Only `prefer-ws` consumers are allowed to render directly from the thinner
+    // realtime transport before a canonical snapshot exists.
+    if (!cacheEntry.hasSnapshot && !prefersWsInitialHydration) {
+      return;
+    }
     const allResourcesEntry = getUnifiedResourcesCacheEntry(
       buildScopedUnifiedResourcesCacheKey(ALL_RESOURCES_CACHE_KEY, currentOrgScope),
     );

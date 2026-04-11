@@ -175,7 +175,11 @@ assembly branch.
    across transport boundaries: thinner realtime `state.resources` payloads
    must merge into the existing canonical resource snapshot instead of
    downgrading richer REST-only infrastructure details such as disk I/O, source
-   metadata, or platform summary fields after first hydrate.
+   metadata, or platform summary fields after first hydrate. For default
+   `initialHydration: 'immediate'` consumers, that same path must not paint the
+   thinner websocket transport before the first canonical REST snapshot exists;
+   only explicit `prefer-ws` consumers may render directly from the realtime
+   transport before canonical hydrate completes.
    Canonical cluster membership in that shared path must come only from
    explicit cluster identity such as Kubernetes context or platform cluster
    labels; standalone resource names must never be repurposed as synthetic

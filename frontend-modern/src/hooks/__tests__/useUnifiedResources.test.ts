@@ -291,6 +291,44 @@ describe('useUnifiedResources', () => {
     dispose();
   });
 
+  it('waits for the first canonical REST snapshot before painting immediate hydration screens', async () => {
+    let resolveFetch:
+      | ((value: { ok: true; json: () => Promise<{ data: Array<typeof v2Resource> }> }) => void)
+      | undefined;
+    apiFetchMock.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveFetch = resolve;
+        }),
+    );
+
+    let dispose = () => {};
+    let result: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']> | undefined;
+    createRoot((d) => {
+      dispose = d;
+      result = useUnifiedResources();
+    });
+
+    await flushAsync();
+
+    expect(apiFetchMock).toHaveBeenCalledTimes(1);
+    expect(result!.loading()).toBe(true);
+    expect(result!.resources()).toHaveLength(0);
+
+    resolveFetch?.({
+      ok: true,
+      json: async () => ({ data: [v2Resource] }),
+    });
+
+    await waitForResourceCount(() => result!.resources().length);
+    await waitForValue(() => result!.loading(), false);
+
+    expect(result!.resources()[0]?.id).toBe(v2Resource.id);
+    expect(result!.resources()[0]?.displayName).toBe(v2Resource.name);
+
+    dispose();
+  });
+
   it('skips unified resource hydration while disabled and resumes when enabled', async () => {
     let dispose = () => {};
     let result: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']> | undefined;
