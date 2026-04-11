@@ -179,6 +179,11 @@ work extends shared components instead of creating new local variants.
    posture: `/alerts` may continue exposing reporting tabs such as overview and
    history, but activation controls plus configuration routes must collapse out
    of the public-demo shell instead of advertising blocked management actions.
+   That same public-demo presentation boundary also owns top-level Operations
+   posture: the authenticated demo shell must not advertise the Operations
+   utility tab, and `/operations` deep links must hand back to the dashboard
+   instead of surfacing diagnostics or system-log chrome that the backend hides
+   for demo sessions.
 3. Add feature-specific presentation only when no shared primitive should own it
 4. Add guardrail tests when a new shared pattern is introduced
 5. Keep shared platform-connections shell state on the reusable settings boundary: `frontend-modern/src/components/Settings/useSettingsInfrastructurePanelProps.ts`, `frontend-modern/src/components/Settings/InfrastructurePlatformConnectionsSummaryCard.tsx`, and `frontend-modern/src/components/Settings/PlatformConnectionsWorkspace.tsx` must continue to derive provider counts, availability, and shared subtab copy from one infrastructure-settings source instead of creating provider-local summary fetches or VMware-only shell vocabulary.
@@ -1183,7 +1188,11 @@ the tabbed operations surface, and
 `frontend-modern/src/features/operations/operationsPageModel.ts` owns the tab
 and path contract. The operations route must keep its navigation routed through
 the shared `frontend-modern/src/components/shared/Subtabs.tsx` primitive rather
-than rebuilding a bespoke page-local tab bar.
+than rebuilding a bespoke page-local tab bar. When the session presentation
+policy marks the operator as a public demo viewer, that same route owner must
+suppress the surface entirely and hand the browser back to the canonical
+dashboard route instead of rendering diagnostics, reporting, or logs shells
+that are unavailable in demo mode.
 
 The dashboard overview route now follows that same feature-owner pattern for
 its dashboard-specific summary surfaces. `frontend-modern/src/pages/Dashboard.tsx`

@@ -432,6 +432,11 @@ needs them, but `/api/license/commercial-posture`,
 public demo mode and those lifecycle flows must not depend on licensed
 identity, plan labels, upgrade reasons, checkout handoff state, or observed
 usage counts surviving the public-demo contract.
+That same demo-hidden API boundary also keeps runtime-admin operations out of
+public lifecycle flows: `/api/diagnostics`,
+`/api/diagnostics/docker/prepare-token`, and `/api/logs/*` must return `404`
+in demo mode instead of exposing runtime bundles, log streams, or diagnostics
+payloads through a nominally read-only preview account.
 Lifecycle-owned browser shells must also defer any commercial helper reads
 until that presentation policy resolves so demo suppression stays fail-closed
 during first render instead of racing hidden commercial endpoints from shared

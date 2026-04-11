@@ -24,6 +24,10 @@ export const OPERATIONS_TABS: readonly OperationsTabDefinition[] = [
   },
 ];
 
+export function operationsSurfaceHiddenInDemoMode(demoMode: boolean): boolean {
+  return demoMode;
+}
+
 export function getOperationsTabFromPath(pathname: string): OperationsTabId {
   const lastPathSegment = pathname.split('/').pop() || '';
   if (lastPathSegment === 'reporting') return 'reporting';

@@ -228,6 +228,10 @@ trial urgency, observed usage counts, or checkout handoff state. The
 commercial posture store and billing-entitlements store must also fail closed
 locally until the shared presentation policy resolves, then stay fail-closed
 in demo mode so hidden routes are not probed from the browser shell.
+That same browser-shell boundary also owns utility-nav suppression:
+`frontend-modern/src/AppLayout.tsx` must drop the top-level Operations tab in
+public demo mode instead of leaving diagnostics or system-log shells
+discoverable after commercial surfaces are hidden.
 Deep-linkable commercial panels must consume the same resolved presentation
 policy directly, not rely only on settings navigation to keep public-demo
 browsers away from commercial routes. `ProLicensePanel` may instantiate its

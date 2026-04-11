@@ -75,6 +75,8 @@ describe('App architecture', () => {
     expect(appLayoutSource).not.toContain('sessionPresentationPolicyResolved');
     expect(appLayoutSource).not.toContain('presentationPolicyHidesCommercialSurfaces');
     expect(appLayoutSource).not.toContain('presentationPolicyHidesOrganizationSurfaces');
+    expect(appLayoutSource).toContain('presentationPolicyIsDemoMode');
+    expect(appLayoutSource).toContain("if (!presentationPolicyIsDemoMode()) {");
     expect(appLayoutSource).toContain(
       'aiChatStore.enabled === true && !aiChatStore.isOpenSignal() && !kioskMode()',
     );

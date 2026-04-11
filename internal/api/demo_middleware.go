@@ -26,6 +26,12 @@ func DemoModeMiddleware(cfg *config.Config, next http.Handler) http.Handler {
 				return
 			}
 		}
+		if exposure, ok := publicDemoAdminOperationsPolicyForRequest(r); ok {
+			if exposure == publicDemoCommercialExposureHidden {
+				http.NotFound(w, r)
+				return
+			}
+		}
 
 		// Allow GET and HEAD requests (read-only)
 		if r.Method == http.MethodGet || r.Method == http.MethodHead || r.Method == http.MethodOptions {

@@ -17,8 +17,10 @@ describe('operations page route shell', () => {
     expect(operationsPageSurfaceSource).toContain('@/components/shared/Subtabs');
     expect(operationsPageSurfaceSource).toContain('getOperationsTabFromPath');
     expect(operationsPageSurfaceSource).toContain('buildOperationsPath');
+    expect(operationsPageSurfaceSource).toContain('operationsSurfaceHiddenInDemoMode');
     expect(operationsPageSurfaceSource).not.toContain('-webkit-overflow-scrolling');
     expect(operationsPageModelSource).toContain('export const OPERATIONS_TABS');
+    expect(operationsPageModelSource).toContain('export function operationsSurfaceHiddenInDemoMode');
     expect(operationsPageModelSource).toContain('export function getOperationsTabFromPath');
     expect(operationsPageModelSource).toContain('export function buildOperationsPath');
   });

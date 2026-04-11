@@ -6193,6 +6193,12 @@ func TestContract_DemoModeCommercialSurfacePolicy(t *testing.T) {
 			{method: http.MethodPut, path: "/api/admin/orgs/t-tenant/billing-state"},
 			{method: http.MethodGet, path: "/api/upgrade-metrics/stats"},
 			{method: http.MethodPost, path: "/api/upgrade-metrics/events"},
+			{method: http.MethodGet, path: "/api/diagnostics"},
+			{method: http.MethodPost, path: "/api/diagnostics/docker/prepare-token"},
+			{method: http.MethodGet, path: "/api/logs/stream"},
+			{method: http.MethodGet, path: "/api/logs/download"},
+			{method: http.MethodGet, path: "/api/logs/level"},
+			{method: http.MethodPost, path: "/api/logs/level"},
 			{method: http.MethodGet, path: licensePurchaseStartPath},
 			{method: http.MethodGet, path: "/auth/trial-activate"},
 		}

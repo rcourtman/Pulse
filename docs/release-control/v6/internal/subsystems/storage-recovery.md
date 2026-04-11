@@ -104,6 +104,11 @@ querying, and the operator-facing storage health presentation layer.
    payloads must read through `GetUnifiedReadStateOrSnapshot()` so storage and
    recovery consumers stay aligned with the canonical mock unified snapshot
    instead of slipping onto the live store graph.
+   That same `internal/api/` demo boundary must keep runtime-admin operations
+   hidden from public preview sessions: `/api/diagnostics`,
+   `/api/diagnostics/docker/prepare-token`, and `/api/logs/*` must not remain
+   readable side channels while storage or recovery demo routes are otherwise
+   presented as read-only product surfaces.
    Storage and recovery consumers must also inherit the hook's canonical
    `ResourceType` normalization for route/query filters, so storage subtypes
    such as `physical_disk` stay on the same cache-backed snapshot instead of

@@ -1348,6 +1348,12 @@ That same diagnostics boundary must also backfill canonical fallback reasons
 when a raw snapshot reaches the API layer without one, so
 `buildMemorySourceDiagnostics` stays self-consistent even if a caller bypasses
 `GetDiagnosticSnapshots()` and hands diagnostics a legacy alias directly.
+That same public-demo API boundary must also hide runtime-admin operations
+surfaces instead of treating them as harmless reads. Demo sessions must receive
+`404` for `/api/diagnostics`, `/api/diagnostics/docker/prepare-token`, and the
+shared `/api/logs/*` endpoints, so the preview shell cannot expose runtime
+diagnostics, log streams, or downloadable log bundles behind a supposedly
+read-only demo account.
 That shared `InfrastructureOperationsController.tsx` boundary now also preserves copied shell
 command payload continuity: any privilege-escalation wrapper applied at the
 settings surface must keep the full canonical installer argument list intact

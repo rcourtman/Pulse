@@ -40,7 +40,10 @@ import { getKioskModePreference, setKioskMode } from '@/utils/url';
 import { updateStore } from '@/stores/updates';
 import { aiChatStore } from '@/stores/aiChat';
 import { isPro } from '@/stores/licenseCommercial';
-import { presentationPolicyHidesUpgradePrompts } from '@/stores/sessionPresentationPolicy';
+import {
+  presentationPolicyHidesUpgradePrompts,
+  presentationPolicyIsDemoMode,
+} from '@/stores/sessionPresentationPolicy';
 import type { AppConnectionStatus } from '@/useAppRuntimeState';
 
 const ROOT_INFRASTRUCTURE_PATH = buildInfrastructurePath();
@@ -422,7 +425,10 @@ export function AppLayout(props: AppLayoutProps) {
         breakdown: undefined,
         icon: <PulsePatrolLogo class="w-4 h-4 shrink-0" />,
       },
-      {
+    ];
+
+    if (!presentationPolicyIsDemoMode()) {
+      tabs.push({
         id: 'operations',
         label: 'Operations',
         route: '/operations',
@@ -431,8 +437,8 @@ export function AppLayout(props: AppLayoutProps) {
         count: undefined,
         breakdown: undefined,
         icon: <ActivityIcon class="w-4 h-4 shrink-0" />,
-      },
-    ];
+      });
+    }
 
     if (hasSettingsAccess) {
       tabs.push({
