@@ -2,6 +2,7 @@ package unifiedresources
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -2133,6 +2134,72 @@ func TestRegistryIngestSnapshotPublishesCanonicalKubernetesMetricsTargets(t *tes
 	assertMetricsTarget(ResourceTypeK8sNode, "cluster-1:node:node-1")
 	assertMetricsTarget(ResourceTypePod, "k8s:cluster-1:pod:pod-1")
 	assertMetricsTarget(ResourceTypeK8sDeployment, "cluster-1:deployment:deploy-1")
+}
+
+func TestRegistryIngestSnapshotMergesLinkedKubernetesNodeIntoAgentResource(t *testing.T) {
+	rr := NewRegistry(nil)
+
+	rr.IngestSnapshot(models.StateSnapshot{
+		Hosts: []models.Host{
+			{
+				ID:        "host-1",
+				Hostname:  "prod-euw1-k8s-01",
+				MachineID: "machine-k8s-1",
+				Status:    "online",
+			},
+		},
+		KubernetesClusters: []models.KubernetesCluster{
+			{
+				ID:      "cluster-1",
+				Name:    "production",
+				AgentID: "agent-cluster-1",
+				Nodes: []models.KubernetesNode{
+					{
+						UID:   "node-1",
+						Name:  "prod-euw1-k8s-01",
+						Ready: true,
+					},
+				},
+			},
+		},
+	})
+
+	resources := rr.List()
+	if got := len(resources); got != 2 {
+		t.Fatalf("expected cluster + merged agent resource, got %d resources", got)
+	}
+
+	var cluster *Resource
+	var host *Resource
+	for i := range resources {
+		switch resources[i].Type {
+		case ResourceTypeK8sCluster:
+			cluster = &resources[i]
+		case ResourceTypeAgent:
+			host = &resources[i]
+		case ResourceTypeK8sNode:
+			t.Fatalf("expected linked kubernetes node to merge into backing agent, got standalone node %+v", resources[i])
+		}
+	}
+
+	if cluster == nil {
+		t.Fatal("expected kubernetes cluster resource")
+	}
+	if host == nil {
+		t.Fatal("expected merged agent resource")
+	}
+	if !hasDataSource(host.Sources, SourceAgent) || !hasDataSource(host.Sources, SourceK8s) {
+		t.Fatalf("expected merged host sources to include agent+kubernetes, got %+v", host.Sources)
+	}
+	if host.Kubernetes == nil {
+		t.Fatal("expected merged host to retain kubernetes node payload")
+	}
+	if got := strings.TrimSpace(host.Kubernetes.NodeName); got != "prod-euw1-k8s-01" {
+		t.Fatalf("kubernetes node name = %q, want prod-euw1-k8s-01", got)
+	}
+	if host.ParentID == nil || strings.TrimSpace(*host.ParentID) != cluster.ID {
+		t.Fatalf("expected merged host parent to point at kubernetes cluster %q, got %+v", cluster.ID, host.ParentID)
+	}
 }
 
 func TestRegistryHasMatchingMonitoredSystemRejectsInvalidCandidate(t *testing.T) {

@@ -149,6 +149,11 @@ assembly branch.
    websocket-backed refreshes so equal-name resources do not silently reshuffle
    between cold hydrate and later runtime updates
    `internal/unifiedresources/top_level_systems.go`
+   Explicit linked-host correlation is canonical here: when Kubernetes node
+   ingest has a resolved backing host agent, the registry must merge that node
+   into the agent resource instead of publishing duplicate top-level
+   infrastructure rows for the same machine under both `agent` and `k8s-node`
+   identities.
 6. Add canonical governed name-resolution or policy-aware resource lookup behavior through `internal/unifiedresources/resolve.go` and `internal/unifiedresources/resolve_context.go`
 7. Add or change resource drawer timeline/facet presentation through `frontend-modern/src/components/Infrastructure/ResourceDetailDrawer.tsx`, `frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx`, `frontend-modern/src/components/Infrastructure/ResourceDetailDrawerDebugTab.tsx`, `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerState.ts`, `frontend-modern/src/components/Infrastructure/ResourceFacetSummary.tsx`, `frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts`, and the governed `internal/api/resources.go` facet/timeline contract together
 8. Add or change discovery-support runtime under the resource drawer through `frontend-modern/src/components/Discovery/DiscoveryTab.tsx` for shell/presentation ownership and `frontend-modern/src/components/Discovery/useDiscoveryTabState.ts` for fetch, websocket-progress, and notes-mutation ownership

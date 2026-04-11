@@ -671,6 +671,9 @@ func (rr *ResourceRegistry) ingestKubernetesNode(cluster models.KubernetesCluste
 	if sourceID == "" {
 		return
 	}
+	if rr.mergeLinkedKubernetesNode(sourceID, resource, identity, linkedHost) {
+		return
+	}
 	rr.ingest(SourceK8s, sourceID, resource, identity)
 }
 
@@ -763,6 +766,42 @@ func (rr *ResourceRegistry) ingest(source DataSource, sourceID string, resource 
 	rr.matcher.Add(resource.ID, identity)
 
 	return resource.ID
+}
+
+func (rr *ResourceRegistry) mergeLinkedKubernetesNode(
+	sourceID string,
+	resource Resource,
+	identity ResourceIdentity,
+	linkedHost *models.Host,
+) bool {
+	if linkedHost == nil {
+		return false
+	}
+
+	linkedAgentSourceID := normalizeSourceID(strings.TrimSpace(linkedHost.ID))
+	if linkedAgentSourceID == "" {
+		return false
+	}
+
+	rr.mu.Lock()
+	defer rr.mu.Unlock()
+
+	existingID := rr.bySource[SourceAgent][linkedAgentSourceID]
+	existing := rr.resources[existingID]
+	if existing == nil || existing.Agent == nil {
+		return false
+	}
+
+	resource.Identity = identity
+	resource.Type = CanonicalResourceType(resource.Type)
+	if resource.LastSeen.IsZero() {
+		resource.LastSeen = time.Now().UTC()
+	}
+
+	rr.mergeInto(existing, resource, SourceK8s)
+	rr.bySource[SourceK8s][sourceID] = existing.ID
+	rr.matcher.Add(existing.ID, existing.Identity)
+	return true
 }
 
 func (rr *ResourceRegistry) findMatch(identity ResourceIdentity, resourceType ResourceType, candidateID string) (*MatchResult, bool) {
