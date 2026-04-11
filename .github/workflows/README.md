@@ -35,7 +35,7 @@ Required environment variables:
 
 1. **DEMO_EXPECTED_HOSTNAME**
    - The remote `hostname` value the selected environment is expected to report
-   - Stable example: `pulse-cloud`
+   - Stable example: `pulse-relay`
    - Preview example: `pulse-v6-preview`
    - This is a host-identity guard: the workflow fails closed if the SSH secret points at the wrong machine
 
