@@ -121,6 +121,9 @@ still grows monitored-system usage.
 16. Add or change self-hosted Pro plan, trial, recovery, and entitlement actions through `frontend-modern/src/components/Settings/ProLicensePanel.tsx`, `frontend-modern/src/components/Settings/ProLicensePlanSection.tsx`, `frontend-modern/src/components/Settings/SelfHostedCommercialRecoverySection.tsx`, and `frontend-modern/src/components/Settings/useProLicensePanelState.ts`
 17. Add or change monitored-system ledger, disclosure, or admission-preview presentation through `frontend-modern/src/components/Settings/MonitoredSystemLedgerPanel.tsx`, `frontend-modern/src/components/Settings/MonitoredSystemAdmissionPreview.tsx`, `frontend-modern/src/components/Commercial/MonitoredSystemDefinitionDisclosure.tsx`, and `frontend-modern/src/utils/monitoredSystemPresentation.ts`
 18. Add or change paid relay settings and onboarding presentation through `frontend-modern/src/components/Settings/RelaySettingsPanel.tsx`, `frontend-modern/src/components/Settings/RelayPairingSection.tsx`, `frontend-modern/src/components/Settings/useRelaySettingsPanelState.ts`, `frontend-modern/src/components/Dashboard/RelayOnboardingCard.tsx`, and `frontend-modern/src/components/Dashboard/useRelayOnboardingCardState.ts`
+    Public demo and other read-only presentation policy states must suppress
+    relay setup and upsell onboarding instead of inviting pairing or commercial
+    action from a governed non-manageable surface.
 19. Add or change cloud plan presentation through `frontend-modern/src/pages/CloudPricing.tsx`
 20. Add contract tests where runtime and pricing need to stay aligned
 21. Add or change hosted browser org-context bootstrap through `frontend-modern/src/App.tsx`, `frontend-modern/src/AppLayout.tsx`, `frontend-modern/src/useAppRuntimeState.ts`, and `frontend-modern/src/utils/apiClient.ts`

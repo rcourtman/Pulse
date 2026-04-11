@@ -5,6 +5,7 @@ import { InfrastructureWorkspace } from '../InfrastructureWorkspace';
 
 let mockPathname = '/settings';
 const navigateSpy = vi.hoisted(() => vi.fn());
+const presentationPolicyIsReadOnlyMock = vi.hoisted(() => vi.fn(() => false));
 
 vi.mock('@solidjs/router', async () => {
   const actual = await vi.importActual<typeof import('@solidjs/router')>('@solidjs/router');
@@ -14,6 +15,10 @@ vi.mock('@solidjs/router', async () => {
     useNavigate: () => navigateSpy,
   };
 });
+
+vi.mock('@/stores/sessionPresentationPolicy', () => ({
+  presentationPolicyIsReadOnly: () => presentationPolicyIsReadOnlyMock(),
+}));
 
 vi.mock('../InfrastructureInstallPanel', () => ({
   InfrastructureInstallPanel: () => <div data-testid="unified-agents">install</div>,
@@ -30,6 +35,8 @@ vi.mock('../PlatformConnectionsWorkspace', () => ({
 describe('InfrastructureWorkspace', () => {
   beforeEach(() => {
     navigateSpy.mockReset();
+    presentationPolicyIsReadOnlyMock.mockReset();
+    presentationPolicyIsReadOnlyMock.mockReturnValue(false);
     mockPathname = '/settings/infrastructure';
   });
 
@@ -130,5 +137,22 @@ describe('InfrastructureWorkspace', () => {
     fireEvent.click(screen.getByRole('tab', { name: 'Install on a host' }));
 
     expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure/install');
+  });
+
+  it('collapses the workspace to reporting and redirects install routes in read-only mode', () => {
+    presentationPolicyIsReadOnlyMock.mockReturnValue(true);
+    mockPathname = '/settings/infrastructure/install';
+    renderWorkspace();
+
+    expect(screen.queryByText('Connect your first system')).not.toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'Install on a host' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'Platform connections' })).not.toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Reporting & control' })).toHaveAttribute(
+      'aria-selected',
+      'false',
+    );
+    expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure/operations', {
+      replace: true,
+    });
   });
 });

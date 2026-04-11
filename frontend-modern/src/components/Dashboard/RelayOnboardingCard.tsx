@@ -4,7 +4,10 @@ import X from 'lucide-solid/icons/x';
 import { Card } from '@/components/shared/Card';
 import { UpgradeLink } from '@/components/shared/UpgradeLink';
 import { getUpgradeActionDestination } from '@/stores/licenseCommercial';
-import { presentationPolicyHidesCommercialSurfaces } from '@/stores/sessionPresentationPolicy';
+import {
+  presentationPolicyHidesCommercialSurfaces,
+  presentationPolicyIsReadOnly,
+} from '@/stores/sessionPresentationPolicy';
 import {
   RELAY_ONBOARDING_DESCRIPTION,
   RELAY_ONBOARDING_DISCONNECTED_LABEL,
@@ -21,7 +24,11 @@ export const RelayOnboardingCard: Component = () => {
 
   return (
     <Show
-      when={state.shouldShow() && (!presentationPolicyHidesCommercialSurfaces() || state.hasRelay())}
+      when={
+        !presentationPolicyIsReadOnly() &&
+        state.shouldShow() &&
+        (!presentationPolicyHidesCommercialSurfaces() || state.hasRelay())
+      }
     >
       <Card padding="lg" class="relative overflow-hidden">
         <div class="absolute -right-10 -top-10 h-32 w-32 rounded-full bg-blue-100 dark:bg-blue-900" />

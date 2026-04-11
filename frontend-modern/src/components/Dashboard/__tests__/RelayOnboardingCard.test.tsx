@@ -21,6 +21,7 @@ const {
   licenseLoadedMock,
   getUpgradeActionUrlOrFallbackMock,
   presentationPolicyHidesCommercialSurfacesMock,
+  presentationPolicyIsReadOnlyMock,
 } = vi.hoisted(() => ({
   getUpgradeActionDestinationMock: vi.fn(),
   mockNavigate: vi.fn(),
@@ -37,6 +38,7 @@ const {
   licenseLoadedMock: vi.fn(),
   getUpgradeActionUrlOrFallbackMock: vi.fn(),
   presentationPolicyHidesCommercialSurfacesMock: vi.fn(),
+  presentationPolicyIsReadOnlyMock: vi.fn(),
 }));
 
 vi.mock('@solidjs/router', () => ({
@@ -58,6 +60,7 @@ vi.mock('@/stores/licenseCommercial', () => ({
 vi.mock('@/stores/sessionPresentationPolicy', () => ({
   presentationPolicyHidesCommercialSurfaces: () =>
     presentationPolicyHidesCommercialSurfacesMock(),
+  presentationPolicyIsReadOnly: () => presentationPolicyIsReadOnlyMock(),
 }));
 
 vi.mock('@/api/relay', () => ({
@@ -113,6 +116,8 @@ function resetAllMocks() {
   getUpgradeActionUrlOrFallbackMock.mockReset();
   presentationPolicyHidesCommercialSurfacesMock.mockReset();
   presentationPolicyHidesCommercialSurfacesMock.mockReturnValue(false);
+  presentationPolicyIsReadOnlyMock.mockReset();
+  presentationPolicyIsReadOnlyMock.mockReturnValue(false);
 }
 
 /**
@@ -276,6 +281,20 @@ describe('RelayOnboardingCard', () => {
 
       expect(screen.queryByText(/Get Relay/)).not.toBeInTheDocument();
       expect(screen.queryByText(/or start a Pro trial/)).not.toBeInTheDocument();
+    });
+
+    it('hides relay onboarding entirely in read-only demo mode', async () => {
+      setupWithRelayFeature({ connected: false, active_channels: 0 });
+      presentationPolicyIsReadOnlyMock.mockReturnValue(true);
+      render(() => <RelayOnboardingCard />);
+
+      await waitFor(() => {
+        expect(loadLicenseStatusMock).toHaveBeenCalled();
+      });
+
+      expect(screen.queryByTestId('card')).not.toBeInTheDocument();
+      expect(screen.queryByText('Set Up Relay')).not.toBeInTheDocument();
+      expect(screen.queryByText('Pair Your Mobile Device')).not.toBeInTheDocument();
     });
   });
 

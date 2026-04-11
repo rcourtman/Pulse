@@ -1,5 +1,7 @@
 import { createEffect, createSignal, on } from 'solid-js';
+import { presentationPolicyIsReadOnly } from '@/stores/sessionPresentationPolicy';
 import { resolveCanonicalSelfHostedBillingHref } from '@/utils/pricingHandoff';
+import { buildInfrastructureWorkspacePath } from './infrastructureWorkspaceModel';
 import {
   DEFAULT_SETTINGS_TAB,
   deriveAgentFromPath,
@@ -37,6 +39,10 @@ export function useSettingsNavigation({ navigate, location }: UseSettingsNavigat
   const [currentTab, setCurrentTab] = createSignal<SettingsTab>(
     deriveTabFromPath(location.pathname),
   );
+  const resolveTabPath = (tab: SettingsTab): string =>
+    tab === 'infrastructure-operations' && presentationPolicyIsReadOnly()
+      ? buildInfrastructureWorkspacePath('inventory')
+      : settingsTabPath(tab);
   const activeTab = (): SettingsDispatchableTab => {
     const tab = currentTab();
     return tab === 'proxmox' ? 'infrastructure-operations' : tab;
@@ -64,7 +70,7 @@ export function useSettingsNavigation({ navigate, location }: UseSettingsNavigat
     if (currentTab() !== tab) {
       setCurrentTab(tab);
     }
-    const targetPath = settingsTabPath(tab);
+    const targetPath = resolveTabPath(tab);
     if (location.pathname !== targetPath) {
       navigate(targetPath, { scroll: false });
     }
@@ -78,7 +84,7 @@ export function useSettingsNavigation({ navigate, location }: UseSettingsNavigat
         if (path === '/settings' || path === '/settings/') {
           const queryTab = deriveTabFromQuery(search);
           const resolvedTab = queryTab ?? DEFAULT_SETTINGS_TAB;
-          const target = settingsTabPath(resolvedTab);
+          const target = resolveTabPath(resolvedTab);
 
           if (target !== path) {
             navigate(target, { replace: true, scroll: false });
@@ -99,6 +105,19 @@ export function useSettingsNavigation({ navigate, location }: UseSettingsNavigat
         const canonicalBillingHref = resolveCanonicalSelfHostedBillingHref(path, search, hash);
         if (canonicalBillingHref && canonicalBillingHref !== currentHref) {
           navigate(canonicalBillingHref, {
+            replace: true,
+            scroll: false,
+          });
+          return;
+        }
+
+        if (
+          presentationPolicyIsReadOnly() &&
+          (path === '/settings/infrastructure' ||
+            path === '/settings/workloads' ||
+            path === '/settings/workloads/docker')
+        ) {
+          navigate(buildInfrastructureWorkspacePath('inventory'), {
             replace: true,
             scroll: false,
           });

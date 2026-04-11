@@ -171,6 +171,10 @@ work extends shared components instead of creating new local variants.
    minimal handoff shells that defer destination truth to the owning subsystem
    instead of embedding a second copy of public marketing or checkout UI inside
    the product runtime.
+   The same settings-shell boundary owns read-only landing posture: when the
+   session presentation policy says the operator cannot manage setup, `/settings`
+   and sidebar navigation must land on the canonical reporting/control surface
+   instead of setup-oriented install routes.
 3. Add feature-specific presentation only when no shared primitive should own it
 4. Add guardrail tests when a new shared pattern is introduced
 5. Keep shared platform-connections shell state on the reusable settings boundary: `frontend-modern/src/components/Settings/useSettingsInfrastructurePanelProps.ts`, `frontend-modern/src/components/Settings/InfrastructurePlatformConnectionsSummaryCard.tsx`, and `frontend-modern/src/components/Settings/PlatformConnectionsWorkspace.tsx` must continue to derive provider counts, availability, and shared subtab copy from one infrastructure-settings source instead of creating provider-local summary fetches or VMware-only shell vocabulary.

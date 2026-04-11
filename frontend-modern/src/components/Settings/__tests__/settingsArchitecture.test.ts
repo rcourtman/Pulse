@@ -523,6 +523,8 @@ describe('Settings architecture guardrails', () => {
     expect(settingsNavigationHookSource).toContain('resolveCanonicalSettingsPath');
     expect(settingsNavigationHookSource).toContain('resolveCanonicalSelfHostedBillingHref');
     expect(settingsNavigationHookSource).toContain('settingsTabPath');
+    expect(settingsNavigationHookSource).toContain('presentationPolicyIsReadOnly');
+    expect(settingsNavigationHookSource).toContain("buildInfrastructureWorkspacePath('inventory')");
     expect(settingsRoutingSource).toContain("from './settingsNavigationModel'");
     expect(settingsTypesSource).toContain("from './settingsNavigationModel'");
     expect(settingsDialogsSource).toContain('UpdateConfirmationModal');
@@ -887,7 +889,10 @@ describe('Settings architecture guardrails', () => {
     expect(infrastructureWorkspaceSource).not.toContain(
       'createSignal<InfrastructureWorkspaceView>',
     );
-    expect(infrastructureWorkspaceSource).not.toContain('createEffect(() =>');
+    expect(infrastructureWorkspaceSource).toContain('createEffect(() =>');
+    expect(infrastructureWorkspaceSource).toContain(
+      "if (readOnlyWorkspace() && activeView() !== 'inventory')",
+    );
     expect(infrastructureWorkspaceSource).toContain('InfrastructureInstallPanel');
     expect(infrastructureWorkspaceSource).toContain('PlatformConnectionsWorkspace');
     expect(infrastructureWorkspaceSource).toContain('InfrastructureReportingPanel');
@@ -1475,6 +1480,17 @@ describe('Settings architecture guardrails', () => {
     expect(getSettingsNavItem('organization-billing-admin')?.hideWhenOrganizationHidden).toBe(
       true,
     );
+  });
+
+  it('keeps read-only infrastructure landing and shell copy on the shared settings owner', () => {
+    expect(settingsNavigationHookSource).toContain('presentationPolicyIsReadOnly');
+    expect(settingsNavigationHookSource).toContain("buildInfrastructureWorkspacePath('inventory')");
+    expect(settingsShellStateSource).toContain('presentationPolicyIsReadOnly');
+    expect(settingsShellStateSource).toContain(
+      'Setup changes stay unavailable in this read-only session.',
+    );
+    expect(infrastructureWorkspaceSource).toContain('presentationPolicyIsReadOnly');
+    expect(infrastructureWorkspaceSource).toContain("tab.id === 'inventory'");
   });
 
   it('keeps relay shell copy on the shared relay presentation owner', () => {
