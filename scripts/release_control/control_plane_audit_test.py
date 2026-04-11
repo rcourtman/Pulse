@@ -13,6 +13,13 @@ VALID_PAYLOAD = {
     "control_plane_schema": "docs/release-control/control_plane.schema.json",
     "active_profile_id": "v6",
     "active_target_id": "v6-rc-cut",
+    "legacy_release_lines": [
+        {
+            "version_prefix": "5.1.",
+            "prerelease_branch": "main",
+            "stable_branch": "main",
+        }
+    ],
     "profiles": [
         {
             "id": "v6",
@@ -167,9 +174,30 @@ class ControlPlaneAuditTest(unittest.TestCase):
         self.assertFalse(report["summary"]["active_target_completion_met"])
 
     def test_release_branch_for_version_uses_profile_branch_policy(self) -> None:
+        self.assertEqual(release_branch_for_version("5.1.27", control_plane=VALID_PAYLOAD), "main")
+        self.assertEqual(release_branch_for_version("5.1.27-rc.3", control_plane=VALID_PAYLOAD), "main")
         self.assertEqual(release_branch_for_version("6.0.0-rc.1", control_plane=VALID_PAYLOAD), "pulse/v6-release")
         self.assertEqual(release_branch_for_version("6.0.0-dev", control_plane=VALID_PAYLOAD), "pulse/v6-release")
         self.assertEqual(release_branch_for_version("6.0.0", control_plane=VALID_PAYLOAD), "pulse/v6-release")
+
+    def test_release_branch_for_version_prefers_longest_legacy_prefix(self) -> None:
+        payload = dict(VALID_PAYLOAD)
+        payload["legacy_release_lines"] = [
+            {
+                "version_prefix": "5.",
+                "prerelease_branch": "main",
+                "stable_branch": "main",
+            },
+            {
+                "version_prefix": "5.1.",
+                "prerelease_branch": "pulse/release-5.1.25",
+                "stable_branch": "pulse/release-5.1.25",
+            },
+        ]
+        self.assertEqual(
+            release_branch_for_version("5.1.27", control_plane=payload),
+            "pulse/release-5.1.25",
+        )
 
     def test_audit_flags_stale_active_target(self) -> None:
         report = audit_control_plane_payload(

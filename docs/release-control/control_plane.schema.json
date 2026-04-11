@@ -49,6 +49,12 @@
       "type": "string",
       "minLength": 1
     },
+    "legacy_release_lines": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/legacy_release_line"
+      }
+    },
     "profiles": {
       "type": "array",
       "minItems": 1,
@@ -65,6 +71,29 @@
     }
   },
   "$defs": {
+    "legacy_release_line": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "version_prefix",
+        "prerelease_branch",
+        "stable_branch"
+      ],
+      "properties": {
+        "version_prefix": {
+          "type": "string",
+          "minLength": 1
+        },
+        "prerelease_branch": {
+          "type": "string",
+          "minLength": 1
+        },
+        "stable_branch": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
     "profile": {
       "type": "object",
       "additionalProperties": false,

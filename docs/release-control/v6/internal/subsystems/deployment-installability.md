@@ -203,7 +203,10 @@ preview paths in menus, CLI help text, operator diagnostics, and runtime logs
 rather than as release-candidate promises.
 Those same workflows must also fetch and dispatch the governed release branch
 derived from release-control metadata instead of hardcoding `pulse/v6`,
-`pulse/v6-release`, or any later branch literal inline.
+`pulse/v6-release`, `main`, or any later branch literal inline; when a stable
+maintenance line such as `5.1.x` remains live after the active profile has
+moved on, that branch routing must come from an explicit control-plane release
+line override instead of being guessed inside the workflow.
 That same branch-policy contract must survive step boundaries inside the
 workflows themselves: `.github/workflows/create-release.yml` and
 `.github/workflows/release-dry-run.yml` must pass the resolved

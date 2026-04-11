@@ -30,6 +30,11 @@ REQUIRED_CONTROL_PLANE_FIELDS = (
     "profiles",
     "targets",
 )
+REQUIRED_LEGACY_RELEASE_LINE_FIELDS = (
+    "version_prefix",
+    "prerelease_branch",
+    "stable_branch",
+)
 REQUIRED_PROFILE_FIELDS = (
     "id",
     "lifecycle",
@@ -144,6 +149,40 @@ def validate_control_plane_payload(payload: dict[str, Any]) -> dict[str, Any]:
     active_target_id = payload.get("active_target_id")
     if not isinstance(active_target_id, str) or not active_target_id.strip():
         raise ValueError("control plane active_target_id must be a non-empty string")
+
+    legacy_release_lines: list[dict[str, str]] = []
+    raw_legacy_release_lines = payload.get("legacy_release_lines", [])
+    if not isinstance(raw_legacy_release_lines, list):
+        raise ValueError("control plane legacy_release_lines must be a list when declared")
+    seen_version_prefixes: set[str] = set()
+    for index, raw in enumerate(raw_legacy_release_lines):
+        if not isinstance(raw, dict):
+            raise ValueError(f"control plane legacy_release_lines[{index}] must be an object")
+        line: dict[str, str] = {}
+        for field in REQUIRED_LEGACY_RELEASE_LINE_FIELDS:
+            if field not in raw:
+                raise ValueError(f"control plane legacy_release_lines[{index}] missing {field!r}")
+            value = raw[field]
+            if not isinstance(value, str) or not value.strip():
+                raise ValueError(
+                    f"control plane legacy_release_lines[{index}].{field} must be a non-empty string"
+                )
+            line[field] = str(value)
+        version_prefix = line["version_prefix"]
+        if version_prefix in seen_version_prefixes:
+            raise ValueError(
+                f"control plane legacy_release_lines duplicates version_prefix {version_prefix!r}"
+            )
+        seen_version_prefixes.add(version_prefix)
+        _clean_branch_name(
+            line["prerelease_branch"],
+            context=f"legacy_release_line {version_prefix}.prerelease_branch",
+        )
+        _clean_branch_name(
+            line["stable_branch"],
+            context=f"legacy_release_line {version_prefix}.stable_branch",
+        )
+        legacy_release_lines.append(line)
 
     raw_profiles = payload.get("profiles")
     if not isinstance(raw_profiles, list) or not raw_profiles:
@@ -261,6 +300,7 @@ def validate_control_plane_payload(payload: dict[str, Any]) -> dict[str, Any]:
         "agent_values_doc_path": REPO_ROOT / AGENT_VALUES_DOC_REL,
         "control_plane_doc_path": REPO_ROOT / CONTROL_PLANE_DOC_REL,
         "control_plane_schema_path": REPO_ROOT / CONTROL_PLANE_SCHEMA_REL,
+        "legacy_release_lines": legacy_release_lines,
         "profiles": profiles,
         "profiles_by_id": profiles_by_id,
         "targets": targets,
@@ -383,6 +423,30 @@ def is_prerelease_version(version: str) -> bool:
     return bool(PRERELEASE_VERSION_PATTERN.search(version))
 
 
+def legacy_release_line_for_version(
+    version: str,
+    *,
+    control_plane: dict[str, Any] | None = None,
+    staged: bool = False,
+) -> dict[str, str] | None:
+    resolved = control_plane
+    if resolved is None:
+        resolved = active_control_plane(staged=staged)
+    elif "profiles_by_id" not in resolved:
+        resolved = validate_control_plane_payload(control_plane)
+
+    normalized_version = version[1:] if version.startswith("v") else version
+    legacy_release_lines = sorted(
+        resolved.get("legacy_release_lines", []),
+        key=lambda line: len(line["version_prefix"]),
+        reverse=True,
+    )
+    for line in legacy_release_lines:
+        if normalized_version.startswith(line["version_prefix"]):
+            return line
+    return None
+
+
 def release_branch_for_version(
     version: str,
     *,
@@ -394,6 +458,13 @@ def release_branch_for_version(
         resolved = active_control_plane(staged=staged)
     elif "profiles_by_id" not in resolved:
         resolved = validate_control_plane_payload(control_plane)
+    legacy_release_line = legacy_release_line_for_version(version, control_plane=resolved)
+    if legacy_release_line is not None:
+        return (
+            legacy_release_line["prerelease_branch"]
+            if is_prerelease_version(version)
+            else legacy_release_line["stable_branch"]
+        )
     return resolved["prerelease_branch"] if is_prerelease_version(version) else resolved["stable_branch"]
 
 

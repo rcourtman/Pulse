@@ -32,6 +32,10 @@ model that active and future release profiles reuse.
    The active profile also owns the governed prerelease and stable release
    branches for that line, so workflows and local release tooling must resolve
    branch requirements from the control plane instead of hard-coding `main`.
+   When an older maintenance line still needs governed release or demo-routing
+   support after the active profile has moved on, that branch mapping must stay
+   explicit in `control_plane.json` as a legacy release-line override rather
+   than being inferred from the active profile or smuggled into one workflow.
 4. Profile changes must reuse the same control-plane machinery.
    Future releases should switch or add profiles rather than fork the guardrail
    system.
@@ -250,10 +254,16 @@ user language should update the control plane.
    long-term system.
 8. Until the explicit post-GA branch cutover happens, both prerelease and
    stable v6 promotions resolve to `pulse/v6-release` via `control_plane.json`.
-9. `AGENT_VALUES.md` is the evergreen values-only entry point; prompts should
+9. Legacy maintenance releases that still feed governed automation outside the
+   active v6 line must also resolve through `control_plane.json`.
+   Right now the remaining `5.1.x` stable maintenance line resolves to `main`
+   via an explicit legacy release-line override, so stable demo automation can
+   validate the real shipped stable tag without pretending that v5 tags belong
+   to `pulse/v6-release`.
+10. `AGENT_VALUES.md` is the evergreen values-only entry point; prompts should
    stay close to that layer and delegate detailed behavior to the governed
    control-plane and profile-specific files.
-10. `python3 scripts/release_control/control_plane.py --agent-entrypoint --pretty`
+11. `python3 scripts/release_control/control_plane.py --agent-entrypoint --pretty`
     is the executable entrypoint for that ordered guidance bundle; agents
     should prefer it over reconstructing the bundle ad hoc.
     That entrypoint should lead with lightweight startup files plus derived

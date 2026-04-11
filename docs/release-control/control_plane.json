@@ -7,6 +7,13 @@
   "control_plane_schema": "docs/release-control/control_plane.schema.json",
   "active_profile_id": "v6",
   "active_target_id": "v6-rc-stabilization",
+  "legacy_release_lines": [
+    {
+      "version_prefix": "5.1.",
+      "prerelease_branch": "main",
+      "stable_branch": "main"
+    }
+  ],
   "profiles": [
     {
       "id": "v6",
