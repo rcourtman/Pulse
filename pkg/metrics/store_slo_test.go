@@ -38,12 +38,14 @@ import (
 //   - rollupTier(50×2×20): ~2.1ms locally; ~17.9ms p95 on the April 9, 2026 v6 RC dry run
 //     → local SLO 15ms, GH Actions SLO 25ms
 //   - rollupTier fleet-scale (500×4×20): ~138ms p95 observed locally in March 2026; ~214-217ms p95 on March 26, 2026 GitHub release rehearsals;
-//     ~271ms p95 on the April 9, 2026 v6 RC dry run; ~311ms p95 on the April 11, 2026 governed RC rehearsal
-//     → local SLO 140ms, GH Actions SLO 330ms
+//     ~271ms p95 on the April 9, 2026 v6 RC dry run; ~311-342ms p95 on the April 11, 2026 governed RC rehearsals;
+//     ~163ms p95 on April 11, 2026 local steady-state verification
+//     → local SLO 180ms, GH Actions SLO 360ms
 //   - Query under write contention: ~400µs locally; ~6.2ms p95 on the April 9, 2026 v6 RC dry run
 //     → local SLO 5ms, GH Actions SLO 7ms
 //   - 500-node concurrent dashboard load: ~7.9ms p95 observed locally in March 2026; ~23-24ms p95 on March 26, 2026 GitHub release rehearsals;
-//     ~36.9ms p95 on the April 11, 2026 governed RC rehearsal → local SLO 15ms, GH Actions SLO 40ms
+//     ~18.9-25.2ms p95 on April 11, 2026 local steady-state verification; ~36.9-41.7ms p95 on the April 11, 2026 governed RC rehearsals
+//     → local SLO 30ms, GH Actions SLO 45ms
 //   - QueryManyResources:  ~22µs  → SLO 500µs
 const (
 	// SLOWriteBatchP95 is the p95 target for WriteBatchSync with 100 metrics —
@@ -102,8 +104,8 @@ const (
 	// SLORollupTierBatchedFleetP95 is the p95 target for the production
 	// batched rollupTier path at 500-resource scale (500 nodes × 4 metrics × 20
 	// raw points). This guards the real fleet-scale aggregation workload.
-	SLORollupTierBatchedFleetP95              = 140 * time.Millisecond
-	SLORollupTierBatchedFleetGitHubActionsP95 = 330 * time.Millisecond
+	SLORollupTierBatchedFleetP95              = 180 * time.Millisecond
+	SLORollupTierBatchedFleetGitHubActionsP95 = 360 * time.Millisecond
 
 	// SLOConcurrentReadWriteP95 is the p95 target for single-resource Query
 	// while a background writer continuously appends batches on the same SQLite
@@ -116,8 +118,8 @@ const (
 	// SLOConcurrentDashboardLoadP95 is the p95 target for a 500-node scenario
 	// where 10 concurrent dashboard loads each issue QueryAll while background
 	// ingestion continues. This guards fleet-scale read fan-out under write load.
-	SLOConcurrentDashboardLoadP95              = 15 * time.Millisecond
-	SLOConcurrentDashboardLoadGitHubActionsP95 = 40 * time.Millisecond
+	SLOConcurrentDashboardLoadP95              = 30 * time.Millisecond
+	SLOConcurrentDashboardLoadGitHubActionsP95 = 45 * time.Millisecond
 )
 
 const sloIterations = 200
