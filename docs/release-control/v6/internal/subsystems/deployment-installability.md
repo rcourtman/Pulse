@@ -186,8 +186,9 @@ dedicated preview service identity instead of defaulting back to the stable
 public demo HTML serves the same frontend entry asset as the target service or
 freshly built preview artifact rather than treating a passing `/api/health`
 response as enough evidence that the public shell actually updated. That proof
-must use a deterministic HTML asset parser rather than brittle escaped shell
-regex that can fail differently over SSH than it does on the local runner.
+must use a deterministic HTML parser for the actual module entry script rather
+than brittle escaped shell regex or a first-match asset scrape that can fail
+differently over SSH or select the wrong preloaded chunk.
 Those same governed release workflows also own the operator-facing wording for
 that promotion metadata. Human-visible workflow inputs, summaries, and error
 messages must describe the path as a prerelease or preview flow rather than

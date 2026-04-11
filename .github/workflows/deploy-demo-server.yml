@@ -271,7 +271,7 @@ jobs:
           )
 
           extract_entry_asset() {
-            python3 -c 'import re, sys; html = sys.stdin.read(); match = re.search(r"/assets/index-[^\" ]*\\.js", html); sys.exit(1) if match is None else sys.stdout.write(match.group(0))'
+            python3 -c 'import re, sys; html = sys.stdin.read(); match = re.search(r"<script\b[^>]*\bsrc=\"(/assets/index-[^\"]*\.js)\"", html); sys.exit(1) if match is None else sys.stdout.write(match.group(1))'
           }
 
           EXPECTED_ASSET="${{ steps.frontend.outputs.entry_asset }}"
