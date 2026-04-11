@@ -141,9 +141,11 @@ func TestGrantRefreshLoop_401ClearsActivation(t *testing.T) {
 	svc := NewService()
 	svc.SetLicenseServerClient(NewLicenseServerClient(server.URL))
 	svc.SetPersistence(p)
-	var callbackState *ActivationState
+	var callbackState atomic.Pointer[ActivationState]
+	var callbackCalled atomic.Bool
 	svc.SetActivationStateChangeCallback(func(state *ActivationState) {
-		callbackState = state
+		callbackCalled.Store(true)
+		callbackState.Store(state)
 	})
 
 	state := &ActivationState{
@@ -202,8 +204,11 @@ func TestGrantRefreshLoop_401ClearsActivation(t *testing.T) {
 	if svc.IsActivated() {
 		t.Error("expected activation cleared after 401 revocation")
 	}
-	if callbackState != nil {
-		t.Fatalf("expected nil activation-state callback after 401 revocation, got %+v", callbackState)
+	if !callbackCalled.Load() {
+		t.Fatal("expected activation-state callback after 401 revocation")
+	}
+	if state := callbackState.Load(); state != nil {
+		t.Fatalf("expected nil activation-state callback after 401 revocation, got %+v", state)
 	}
 
 	// Verify the persisted state was also cleared.
