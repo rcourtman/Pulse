@@ -1,7 +1,6 @@
 package monitoring
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"strings"
@@ -11,8 +10,6 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/internal/vmware"
-	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 )
 
 func TestVMwarePollerPollsConfiguredConnections(t *testing.T) {
@@ -441,15 +438,7 @@ func TestVMwarePollerLogsDegradedTransitionsOnlyWhenStateChanges(t *testing.T) {
 	}
 }
 
-func captureVMwarePollerLogs(t *testing.T) *bytes.Buffer {
+func captureVMwarePollerLogs(t *testing.T) *monitoringLogCapture {
 	t.Helper()
-
-	var buf bytes.Buffer
-	origLogger := log.Logger
-	log.Logger = zerolog.New(&buf).Level(zerolog.DebugLevel).With().Timestamp().Logger()
-	t.Cleanup(func() {
-		log.Logger = origLogger
-	})
-
-	return &buf
+	return newMonitoringLogCapture(t)
 }

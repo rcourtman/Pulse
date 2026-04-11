@@ -84,6 +84,7 @@ var (
 )
 
 func init() {
+	baseWriter = io.MultiWriter(baseWriter, GetBroadcaster())
 	baseLogger = zerolog.New(baseWriter).With().Timestamp().Logger()
 	log.Logger = baseLogger
 }

@@ -663,8 +663,19 @@ func parsePollingIntervalEnv(envName string, minDuration time.Duration) (time.Du
 	return 0, false
 }
 
-// Load reads configuration from encrypted persistence files
+// Load reads configuration from encrypted persistence files.
 func Load() (*Config, error) {
+	return load(true)
+}
+
+// LoadWithoutLoggingInit reads configuration without reinitializing the global logger.
+// Reload paths use this to avoid racing with long-lived background goroutines that are
+// still emitting through zerolog/log while the new config is being loaded.
+func LoadWithoutLoggingInit() (*Config, error) {
+	return load(false)
+}
+
+func load(initLogging bool) (*Config, error) {
 	// Get data directory from environment
 	dataDir := ResolveRuntimeDataDir("")
 
@@ -1549,16 +1560,18 @@ func Load() (*Config, error) {
 		}
 	}
 
-	// Initialize logging with configuration values
-	logging.Init(logging.Config{
-		Format:     cfg.LogFormat,
-		Level:      cfg.LogLevel,
-		Component:  "pulse-config",
-		FilePath:   cfg.LogFile,
-		MaxSizeMB:  cfg.LogMaxSize,
-		MaxAgeDays: cfg.LogMaxAge,
-		Compress:   cfg.LogCompress,
-	})
+	if initLogging {
+		// Initialize logging with configuration values
+		logging.Init(logging.Config{
+			Format:     cfg.LogFormat,
+			Level:      cfg.LogLevel,
+			Component:  "pulse-config",
+			FilePath:   cfg.LogFile,
+			MaxSizeMB:  cfg.LogMaxSize,
+			MaxAgeDays: cfg.LogMaxAge,
+			Compress:   cfg.LogCompress,
+		})
+	}
 
 	// Initialize DNS cache with configured timeout
 	// This must be done before any HTTP clients are created

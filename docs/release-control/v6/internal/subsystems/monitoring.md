@@ -738,3 +738,10 @@ disk history model, and mock seeding plus live mock ticks in
 `internal/monitoring/mock_metrics_history.go` must append to that same disk
 timeline instead of creating a second drawer-only or mock-only disk history
 path.
+That same monitoring runtime boundary also owns logger-safe reload behavior.
+`internal/monitoring/reload.go` may refresh runtime config, but it must do so
+through the no-logging-init config loader so an in-process monitoring reload
+does not reinitialize the global logger while pollers, websocket writers, or
+tests are still emitting logs. Runtime context access in the monitor-owned
+pollers must likewise route through the monitor's synchronized accessor instead
+of reading mutable shared fields directly from concurrent goroutines.

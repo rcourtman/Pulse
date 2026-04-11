@@ -717,7 +717,7 @@ func (m *Monitor) maybePollPhysicalDisksAsync(
 		// Use a generous timeout for disk polling
 		diskTimeout := 60 * time.Second
 		// Use monitor lifecycle context so shutdown can interrupt detached async polling.
-		parentCtx := m.runtimeCtx
+		parentCtx := m.getRuntimeContext()
 		if parentCtx == nil {
 			parentCtx = ctx
 		}

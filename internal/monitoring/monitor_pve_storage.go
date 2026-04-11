@@ -52,7 +52,7 @@ func (m *Monitor) startStorageFallback(
 		// Use a short timeout for storage fallback - it's an optimization, not critical
 		storageFallbackTimeout := 10 * time.Second
 		// Derive timeout from monitor lifecycle context so shutdown can cancel this work.
-		parentCtx := m.runtimeCtx
+		parentCtx := m.getRuntimeContext()
 		if parentCtx == nil {
 			parentCtx = ctx
 		}
@@ -272,7 +272,7 @@ func (m *Monitor) pollStorageAsync(
 			// Use a generous timeout for storage polling - it's not blocking the main task
 			storageTimeout := 60 * time.Second
 			// Use monitor lifecycle context so shutdown can interrupt detached async polling.
-			parentCtx := m.runtimeCtx
+			parentCtx := m.getRuntimeContext()
 			if parentCtx == nil {
 				parentCtx = ctx
 			}

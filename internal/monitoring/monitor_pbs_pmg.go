@@ -419,7 +419,7 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 
 						// The per-cycle ctx is canceled as soon as the main polling loop finishes,
 						// so derive the backup poll context from the long-lived runtime context instead.
-						parentCtx := m.runtimeCtx
+						parentCtx := m.getRuntimeContext()
 						if parentCtx == nil {
 							parentCtx = context.Background()
 						}

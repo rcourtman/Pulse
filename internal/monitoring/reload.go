@@ -102,7 +102,7 @@ func (rm *ReloadableMonitor) doReload() error {
 	defer rm.mu.Unlock()
 
 	// Load fresh configuration
-	cfg, err := config.Load()
+	cfg, err := config.LoadWithoutLoggingInit()
 	if err != nil {
 		return fmt.Errorf("reloadable monitor reload config: %w", err)
 	}

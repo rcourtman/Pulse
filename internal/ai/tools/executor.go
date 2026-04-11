@@ -645,6 +645,56 @@ func NewPulseToolExecutor(cfg ExecutorConfig) *PulseToolExecutor {
 	return e
 }
 
+// Clone returns an executor instance with shared immutable providers and fresh
+// session-scoped mutable state. This prevents concurrent sessions from
+// overwriting each other's routing and approval context.
+func (e *PulseToolExecutor) Clone() *PulseToolExecutor {
+	if e == nil {
+		return nil
+	}
+
+	clone := &PulseToolExecutor{
+		stateProvider:              e.stateProvider,
+		policy:                     e.policy,
+		agentServer:                e.agentServer,
+		metricsHistory:             e.metricsHistory,
+		baselineProvider:           e.baselineProvider,
+		patternProvider:            e.patternProvider,
+		alertProvider:              e.alertProvider,
+		findingsProvider:           e.findingsProvider,
+		backupProvider:             e.backupProvider,
+		replicationProvider:        e.replicationProvider,
+		connectionHealth:           e.connectionHealth,
+		recoveryPointsProvider:     e.recoveryPointsProvider,
+		guestConfigProvider:        e.guestConfigProvider,
+		appContainerConfigProvider: e.appContainerConfigProvider,
+		diskHealthProvider:         e.diskHealthProvider,
+		updatesProvider:            e.updatesProvider,
+		metadataUpdater:            e.metadataUpdater,
+		findingsManager:            e.findingsManager,
+		agentProfileManager:        e.agentProfileManager,
+		incidentRecorderProvider:   e.incidentRecorderProvider,
+		eventCorrelatorProvider:    e.eventCorrelatorProvider,
+		knowledgeStoreProvider:     e.knowledgeStoreProvider,
+		discoveryProvider:          e.discoveryProvider,
+		unifiedResourceProvider:    e.unifiedResourceProvider,
+		appContainerActionProvider: e.appContainerActionProvider,
+		appContainerReadProvider:   e.appContainerReadProvider,
+		actionAuditStore:           e.actionAuditStore,
+		readState:                  e.readState,
+		controlLevel:               e.controlLevel,
+		protectedGuests:            append([]string(nil), e.protectedGuests...),
+		targetType:                 e.targetType,
+		targetID:                   e.targetID,
+		isAutonomous:               e.isAutonomous,
+		orgID:                      e.orgID,
+		telemetryCallback:          e.telemetryCallback,
+		registry:                   e.registry,
+	}
+	clone.patrolFindingCreator = e.GetPatrolFindingCreator()
+	return clone
+}
+
 func normalizeExecutorOrgID(orgID string) string {
 	normalized := strings.TrimSpace(orgID)
 	if normalized == "" {

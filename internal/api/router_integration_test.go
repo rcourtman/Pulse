@@ -1526,9 +1526,15 @@ func TestWebSocketSendsInitialState(t *testing.T) {
 	state := srv.monitor.BuildFrontendState()
 	srv.hub.BroadcastState(state)
 
-	msgType, payload = readMsg()
-	if msgType != "rawData" {
-		t.Fatalf("expected rawData broadcast, got %q", msgType)
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		msgType, payload = readMsg()
+		if msgType == "rawData" {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("expected rawData broadcast before deadline, got %q", msgType)
+		}
 	}
 	for _, key := range legacyKeys {
 		if _, ok := payload[key]; ok {

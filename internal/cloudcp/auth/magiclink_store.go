@@ -173,8 +173,9 @@ func (s *Store) Put(tokenHash []byte, rec *TokenRecord) error {
 	if rec == nil || rec.Email == "" || rec.ExpiresAt.IsZero() {
 		return fmt.Errorf("token record is required")
 	}
-	if strings.TrimSpace(rec.Target) == "" {
-		rec.Target = string(MagicLinkTargetTenant)
+	target := strings.TrimSpace(rec.Target)
+	if target == "" {
+		target = string(MagicLinkTargetTenant)
 	}
 
 	key := hex.EncodeToString(tokenHash)
@@ -190,7 +191,7 @@ func (s *Store) Put(tokenHash []byte, rec *TokenRecord) error {
 	_, err := db.Exec(
 		`INSERT OR REPLACE INTO magic_link_tokens (token_hash, email, tenant_id, target, expires_at, used, created_at, used_at)
 		 VALUES (?, ?, ?, ?, ?, 0, ?, NULL)`,
-		key, rec.Email, rec.TenantID, rec.Target, rec.ExpiresAt.UTC().Unix(), now,
+		key, rec.Email, rec.TenantID, target, rec.ExpiresAt.UTC().Unix(), now,
 	)
 	if err != nil {
 		return fmt.Errorf("put magic link token: %w", err)

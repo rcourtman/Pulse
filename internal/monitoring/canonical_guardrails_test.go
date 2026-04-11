@@ -1175,3 +1175,45 @@ func TestTelemetrySnapshotAggregationUsesProvisionedTenantSet(t *testing.T) {
 		t.Fatalf("ActiveAlerts = %d, want 3 across provisioned tenants", counts.ActiveAlerts)
 	}
 }
+
+func TestReloadAndRuntimeContextStayOnCanonicalMonitoringPath(t *testing.T) {
+	requiredSnippets := map[string][]string{
+		"reload.go": {
+			"config.LoadWithoutLoggingInit()",
+		},
+		"monitor.go": {
+			"func (m *Monitor) setRuntimeContext(ctx context.Context, hub *websocket.Hub) {",
+			"func (m *Monitor) getRuntimeContext() context.Context {",
+			"m.setRuntimeContext(ctx, wsHub)",
+		},
+		"monitor_backups.go": {
+			"parentCtx := m.getRuntimeContext()",
+		},
+		"monitor_pve.go": {
+			"parentCtx := m.getRuntimeContext()",
+		},
+		"monitor_pve_storage.go": {
+			"parentCtx := m.getRuntimeContext()",
+		},
+		"monitor_pbs_pmg.go": {
+			"parentCtx := m.getRuntimeContext()",
+		},
+		"../config/config.go": {
+			"func LoadWithoutLoggingInit() (*Config, error) {",
+			"return load(false)",
+		},
+	}
+
+	for file, snippets := range requiredSnippets {
+		data, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatalf("failed to read %s: %v", file, err)
+		}
+		source := string(data)
+		for _, snippet := range snippets {
+			if !strings.Contains(source, snippet) {
+				t.Fatalf("%s must contain %q", file, snippet)
+			}
+		}
+	}
+}

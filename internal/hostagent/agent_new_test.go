@@ -204,11 +204,6 @@ func TestNew_UsesCustomCABundleForHTTPTransport(t *testing.T) {
 }
 
 func TestNew_CarriesUpdatedFromIntoFirstV6Report(t *testing.T) {
-	origGetUpdatedFromVersion := getUpdatedFromVersion
-	t.Cleanup(func() { getUpdatedFromVersion = origGetUpdatedFromVersion })
-
-	getUpdatedFromVersion = func() string { return "5.1.14" }
-
 	fixedTime := time.Date(2026, time.March, 12, 9, 10, 11, 0, time.UTC)
 	mc := &mockCollector{
 		nowFn: func() time.Time { return fixedTime },
@@ -235,12 +230,13 @@ func TestNew_CarriesUpdatedFromIntoFirstV6Report(t *testing.T) {
 	}
 
 	agent, err := New(Config{
-		APIToken:     "token",
-		AgentID:      "agent-1",
-		AgentType:    "unified",
-		AgentVersion: "6.0.0-rc.1",
-		LogLevel:     zerolog.InfoLevel,
-		Collector:    mc,
+		APIToken:             "token",
+		AgentID:              "agent-1",
+		AgentType:            "unified",
+		AgentVersion:         "6.0.0-rc.1",
+		LogLevel:             zerolog.InfoLevel,
+		Collector:            mc,
+		updatedFromVersionFn: func() string { return "5.1.14" },
 	})
 	if err != nil {
 		t.Fatalf("New: %v", err)

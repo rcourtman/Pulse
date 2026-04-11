@@ -1,7 +1,6 @@
 package monitoring
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -18,8 +17,6 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/truenas"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
-	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 )
 
 func TestTrueNASPollerPollsConfiguredConnections(t *testing.T) {
@@ -1682,17 +1679,9 @@ func injectTrueNASProviderTimeout(t *testing.T, poller *TrueNASPoller, instance 
 	poller.providersByOrg["default"][instance.ID] = truenas.NewLiveProvider(&truenas.APIFetcher{Client: client})
 }
 
-func captureTrueNASPollerLogs(t *testing.T) *bytes.Buffer {
+func captureTrueNASPollerLogs(t *testing.T) *monitoringLogCapture {
 	t.Helper()
-
-	var buf bytes.Buffer
-	origLogger := log.Logger
-	log.Logger = zerolog.New(&buf).Level(zerolog.DebugLevel).With().Timestamp().Logger()
-	t.Cleanup(func() {
-		log.Logger = origLogger
-	})
-
-	return &buf
+	return newMonitoringLogCapture(t)
 }
 
 type failingTrueNASFetcher struct {

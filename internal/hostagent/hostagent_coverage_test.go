@@ -110,15 +110,7 @@ func TestAgent_RunProxmoxSetup(t *testing.T) {
 }
 
 func TestAgent_ApplyRemoteConfig_DefersCommandStartWithoutRunContext(t *testing.T) {
-	originalRun := runCommandClient
-	defer func() { runCommandClient = originalRun }()
-
 	started := make(chan struct{}, 1)
-	runCommandClient = func(_ *CommandClient, ctx context.Context) error {
-		started <- struct{}{}
-		<-ctx.Done()
-		return ctx.Err()
-	}
 
 	mc := &mockCollector{}
 	logger := zerolog.Nop()
@@ -127,6 +119,11 @@ func TestAgent_ApplyRemoteConfig_DefersCommandStartWithoutRunContext(t *testing.
 		PulseURL:  "https://pulse",
 		Collector: mc,
 		Logger:    &logger,
+		runCommandClientFn: func(_ *CommandClient, ctx context.Context) error {
+			started <- struct{}{}
+			<-ctx.Done()
+			return ctx.Err()
+		},
 	})
 	if a == nil {
 		t.Fatal("expected agent")
@@ -157,17 +154,8 @@ func TestAgent_ApplyRemoteConfig_DefersCommandStartWithoutRunContext(t *testing.
 }
 
 func TestAgent_CommandClientLifecycle_StopCancelsContext(t *testing.T) {
-	originalRun := runCommandClient
-	defer func() { runCommandClient = originalRun }()
-
 	started := make(chan struct{})
 	stopped := make(chan struct{})
-	runCommandClient = func(_ *CommandClient, ctx context.Context) error {
-		close(started)
-		<-ctx.Done()
-		close(stopped)
-		return ctx.Err()
-	}
 
 	mc := &mockCollector{}
 	logger := zerolog.Nop()
@@ -177,6 +165,12 @@ func TestAgent_CommandClientLifecycle_StopCancelsContext(t *testing.T) {
 		EnableCommands: true,
 		Collector:      mc,
 		Logger:         &logger,
+		runCommandClientFn: func(_ *CommandClient, ctx context.Context) error {
+			close(started)
+			<-ctx.Done()
+			close(stopped)
+			return ctx.Err()
+		},
 	})
 	if a == nil {
 		t.Fatal("expected agent")

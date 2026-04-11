@@ -17336,3 +17336,93 @@ func TestNamespaceMatchesInstance(t *testing.T) {
 		})
 	}
 }
+
+func TestSaveActiveAlertsBackfillsCanonicalIdentityOnDiskWithoutMutatingLiveAlert(t *testing.T) {
+	m := newTestManager(t)
+
+	liveAlert := &Alert{
+		ID:        "node-offline-pve-a",
+		Type:      "connectivity",
+		Level:     AlertLevelWarning,
+		Node:      "pve-a",
+		Message:   "node offline",
+		StartTime: time.Now().Add(-time.Minute),
+		LastSeen:  time.Now(),
+	}
+
+	m.mu.Lock()
+	m.activeAlerts[liveAlert.ID] = liveAlert
+	m.mu.Unlock()
+
+	if err := m.SaveActiveAlerts(); err != nil {
+		t.Fatalf("SaveActiveAlerts() error = %v", err)
+	}
+
+	if liveAlert.ResourceID != "" || liveAlert.CanonicalSpecID != "" || liveAlert.CanonicalState != "" || liveAlert.CanonicalKind != "" {
+		t.Fatalf("SaveActiveAlerts mutated the live alert: %+v", liveAlert)
+	}
+
+	data, err := os.ReadFile(filepath.Join(m.getAlertsDir(), "active-alerts.json"))
+	if err != nil {
+		t.Fatalf("ReadFile(active-alerts.json) error = %v", err)
+	}
+
+	var persisted []*Alert
+	if err := json.Unmarshal(data, &persisted); err != nil {
+		t.Fatalf("unmarshal persisted alerts: %v", err)
+	}
+	if len(persisted) != 1 {
+		t.Fatalf("persisted alerts length = %d, want 1", len(persisted))
+	}
+
+	wantState := "pve-a::pve-a-connectivity"
+	if persisted[0].ResourceID != "pve-a" {
+		t.Fatalf("persisted ResourceID = %q, want %q", persisted[0].ResourceID, "pve-a")
+	}
+	if persisted[0].CanonicalSpecID != "pve-a-connectivity" {
+		t.Fatalf("persisted CanonicalSpecID = %q, want %q", persisted[0].CanonicalSpecID, "pve-a-connectivity")
+	}
+	if persisted[0].CanonicalState != wantState {
+		t.Fatalf("persisted CanonicalState = %q, want %q", persisted[0].CanonicalState, wantState)
+	}
+	if persisted[0].CanonicalKind != "connectivity" {
+		t.Fatalf("persisted CanonicalKind = %q, want %q", persisted[0].CanonicalKind, "connectivity")
+	}
+}
+
+func TestSetAckRecordUsesCanonicalKeyWithoutMutatingLiveAlert(t *testing.T) {
+	m := newTestManager(t)
+
+	alert := &Alert{
+		ID:        "node-offline-pve-a",
+		Type:      "connectivity",
+		Level:     AlertLevelWarning,
+		Node:      "pve-a",
+		Message:   "node offline",
+		StartTime: time.Now().Add(-time.Minute),
+		LastSeen:  time.Now(),
+	}
+
+	m.mu.Lock()
+	m.setAckRecordNoLock(alert, alert.ID, ackRecord{
+		acknowledged: true,
+		user:         "tester",
+		time:         time.Now(),
+	})
+	m.mu.Unlock()
+
+	if alert.ResourceID != "" || alert.CanonicalSpecID != "" || alert.CanonicalKind != "" || alert.CanonicalState != "" {
+		t.Fatalf("setAckRecordNoLock mutated the live alert: %+v", alert)
+	}
+
+	canonicalKey := "pve-a::pve-a-connectivity"
+
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if _, ok := m.ackStateByCanonical[canonicalKey]; !ok {
+		t.Fatalf("expected canonical ack record for %q", canonicalKey)
+	}
+	if _, ok := m.ackState[alert.ID]; ok {
+		t.Fatalf("legacy ack record for %q should have been removed in favor of canonical state", alert.ID)
+	}
+}

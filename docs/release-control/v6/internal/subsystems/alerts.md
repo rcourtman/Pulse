@@ -565,3 +565,14 @@ cloned into mutable feature props before crossing section boundaries, quiet-day
 callbacks must preserve the canonical weekday key union, and incident timeline
 expansion/note-saving state must remain `Set<string>`-owned instead of drifting
 to untyped browser-local collections.
+That same alerts runtime boundary also owns canonical identity derivation and
+active-alert persistence. Shared canonical identity helpers may infer resource,
+spec, and state ids from legacy alerts, but they must do so without mutating
+live in-memory alert instances unless the caller explicitly backfills that
+state. Persisted active-alert snapshots must therefore clone alerts under lock,
+backfill canonical identity on the clone, and serialize that snapshot instead
+of mutating the live alert map during async saves or incident rebuilds.
+That same ownership also governs acknowledgement and manual-clear cleanup.
+Clearing an alert through the canonical alerts runtime must remove both legacy
+public-id tracking and canonical-state acknowledgement records so old aliases
+cannot keep an alert acknowledged after the canonical alert has been removed.

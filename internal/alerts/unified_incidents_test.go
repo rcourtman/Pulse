@@ -854,3 +854,31 @@ func TestSyncUnifiedResourceIncidentsRespectsDisableAllStorage(t *testing.T) {
 	alertID := "unified-incident-disk-ada0-truenas-alert-2-truenas-smart"
 	assertAlertMissing(t, m, alertID)
 }
+
+func TestDeriveCanonicalIdentityDoesNotMutateLegacyAlert(t *testing.T) {
+	alert := &Alert{
+		ID:      "node-offline-pve-a",
+		Type:    "connectivity",
+		Node:    "pve-a",
+		Message: "node offline",
+	}
+
+	identity := deriveCanonicalIdentity(alert)
+
+	if identity.ResourceID != "pve-a" {
+		t.Fatalf("ResourceID = %q, want %q", identity.ResourceID, "pve-a")
+	}
+	if identity.SpecID != "pve-a-connectivity" {
+		t.Fatalf("SpecID = %q, want %q", identity.SpecID, "pve-a-connectivity")
+	}
+	if identity.Kind != "connectivity" {
+		t.Fatalf("Kind = %q, want %q", identity.Kind, "connectivity")
+	}
+	if identity.State != "pve-a::pve-a-connectivity" {
+		t.Fatalf("State = %q, want %q", identity.State, "pve-a::pve-a-connectivity")
+	}
+
+	if alert.ResourceID != "" || alert.CanonicalSpecID != "" || alert.CanonicalKind != "" || alert.CanonicalState != "" {
+		t.Fatalf("deriveCanonicalIdentity mutated legacy alert: %+v", alert)
+	}
+}

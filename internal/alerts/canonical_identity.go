@@ -99,6 +99,56 @@ func backfillCanonicalIdentity(alert *Alert) {
 	}
 }
 
+type canonicalIdentity struct {
+	ResourceID string
+	SpecID     string
+	Kind       string
+	State      string
+}
+
+func deriveCanonicalIdentity(alert *Alert) canonicalIdentity {
+	if alert == nil {
+		return canonicalIdentity{}
+	}
+
+	resourceID := alert.ResourceID
+	if resourceID == "" {
+		resourceID = inferCanonicalResourceIDFromLegacyAlert(alert)
+	}
+
+	specID := alert.CanonicalSpecID
+	if specID == "" && alert.Metadata != nil {
+		if value, ok := alert.Metadata["canonicalSpecID"].(string); ok {
+			specID = value
+		}
+	}
+	if specID == "" {
+		specID = inferCanonicalSpecIDFromLegacyAlert(alert)
+	}
+
+	kind := alert.CanonicalKind
+	if kind == "" && alert.Metadata != nil {
+		if value, ok := alert.Metadata["canonicalAlertKind"].(string); ok {
+			kind = value
+		}
+	}
+	if kind == "" {
+		kind = inferCanonicalKindFromLegacyAlert(alert)
+	}
+
+	state := alert.CanonicalState
+	if state == "" {
+		state = buildCanonicalStateID(resourceID, specID)
+	}
+
+	return canonicalIdentity{
+		ResourceID: resourceID,
+		SpecID:     specID,
+		Kind:       kind,
+		State:      state,
+	}
+}
+
 func inferCanonicalResourceIDFromLegacyAlert(alert *Alert) string {
 	if alert == nil {
 		return ""
@@ -300,9 +350,8 @@ func applyCanonicalIdentity(alert *Alert, specID, kind string) {
 
 func exportedAlertID(alert *Alert, fallback string) string {
 	if alert != nil {
-		backfillCanonicalIdentity(alert)
-		if alert.CanonicalState != "" {
-			return alert.CanonicalState
+		if identity := deriveCanonicalIdentity(alert); identity.State != "" {
+			return identity.State
 		}
 		if alert.ID != "" {
 			return alert.ID
@@ -348,9 +397,8 @@ func canonicalTrackingKeyForAlert(alert *Alert) string {
 	if alert == nil {
 		return ""
 	}
-	backfillCanonicalIdentity(alert)
-	if alert.CanonicalState != "" {
-		return alert.CanonicalState
+	if identity := deriveCanonicalIdentity(alert); identity.State != "" {
+		return identity.State
 	}
 	return alert.ID
 }

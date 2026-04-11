@@ -1379,3 +1379,91 @@ func TestNotificationQueueStopIsIdempotent(t *testing.T) {
 		}
 	}
 }
+
+func TestProcessBatchWithoutProcessorLeavesNotificationPending(t *testing.T) {
+	nq, err := NewNotificationQueue(t.TempDir())
+	if err != nil {
+		t.Fatalf("Failed to create notification queue: %v", err)
+	}
+	defer func() { _ = nq.Stop() }()
+
+	notif := &QueuedNotification{
+		ID:          "pending-without-processor",
+		Type:        "email",
+		Status:      QueueStatusPending,
+		Config:      []byte(`{}`),
+		Alerts:      []*alerts.Alert{{ID: "alert-1"}},
+		MaxAttempts: 3,
+	}
+	if err := nq.Enqueue(notif); err != nil {
+		t.Fatalf("Enqueue() error = %v", err)
+	}
+
+	nq.processBatch()
+
+	var status string
+	var attempts int
+	if err := nq.db.QueryRow(`SELECT status, attempts FROM notification_queue WHERE id = ?`, notif.ID).Scan(&status, &attempts); err != nil {
+		t.Fatalf("query notification: %v", err)
+	}
+	if status != string(QueueStatusPending) {
+		t.Fatalf("status = %q, want %q", status, QueueStatusPending)
+	}
+	if attempts != 0 {
+		t.Fatalf("attempts = %d, want 0", attempts)
+	}
+}
+
+func TestSetProcessorTriggersPendingDelivery(t *testing.T) {
+	nq, err := NewNotificationQueue(t.TempDir())
+	if err != nil {
+		t.Fatalf("Failed to create notification queue: %v", err)
+	}
+	defer func() { _ = nq.Stop() }()
+
+	notif := &QueuedNotification{
+		ID:          "process-after-set-processor",
+		Type:        "email",
+		Status:      QueueStatusPending,
+		Config:      []byte(`{}`),
+		Alerts:      []*alerts.Alert{{ID: "alert-1"}},
+		MaxAttempts: 3,
+	}
+	if err := nq.Enqueue(notif); err != nil {
+		t.Fatalf("Enqueue() error = %v", err)
+	}
+
+	processed := make(chan string, 1)
+	nq.SetProcessor(func(notif *QueuedNotification) error {
+		processed <- notif.ID
+		return nil
+	})
+
+	select {
+	case got := <-processed:
+		if got != notif.ID {
+			t.Fatalf("processed notification id = %q, want %q", got, notif.ID)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("SetProcessor did not trigger pending notification delivery")
+	}
+
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		var status string
+		var attempts int
+		if err := nq.db.QueryRow(`SELECT status, attempts FROM notification_queue WHERE id = ?`, notif.ID).Scan(&status, &attempts); err != nil {
+			t.Fatalf("query notification: %v", err)
+		}
+		if status == string(QueueStatusSent) {
+			if attempts != 1 {
+				t.Fatalf("attempts = %d, want 1 after successful delivery", attempts)
+			}
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("notification status = %q after processor wakeup, want %q", status, QueueStatusSent)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}

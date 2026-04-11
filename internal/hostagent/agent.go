@@ -66,6 +66,10 @@ type Config struct {
 	DisableCeph bool   // If true, disables local Ceph status polling
 
 	Collector SystemCollector // Optional: override default system information collector (for testing)
+
+	newCommandClientFn   func(Config, string, string, string, string) *CommandClient
+	runCommandClientFn   func(*CommandClient, context.Context) error
+	updatedFromVersionFn func() string
 }
 
 // Agent is responsible for collecting host metrics and shipping them to Pulse.
@@ -96,6 +100,8 @@ type Agent struct {
 	commandClientRunCancel context.CancelFunc
 	commandClientParentCtx context.Context
 	collector              SystemCollector
+	newCommandClient       func(Config, string, string, string, string) *CommandClient
+	runCommandClient       func(*CommandClient, context.Context) error
 }
 
 const defaultInterval = 30 * time.Second
@@ -111,12 +117,6 @@ type reportHTTPStatusError struct {
 func (e *reportHTTPStatusError) Error() string {
 	return fmt.Sprintf("pulse responded with status %s", e.Status)
 }
-
-var newCommandClient = NewCommandClient
-var runCommandClient = func(client *CommandClient, ctx context.Context) error {
-	return client.Run(ctx)
-}
-var getUpdatedFromVersion = agentupdate.GetUpdatedFromVersion
 
 // New constructs a fully initialised runtime-side Unified Agent.
 func New(cfg Config) (*Agent, error) {
@@ -174,6 +174,20 @@ func New(cfg Config) (*Agent, error) {
 	collector := cfg.Collector
 	if collector == nil {
 		collector = &defaultCollector{}
+	}
+	newCommandClientFn := cfg.newCommandClientFn
+	if newCommandClientFn == nil {
+		newCommandClientFn = NewCommandClient
+	}
+	runCommandClientFn := cfg.runCommandClientFn
+	if runCommandClientFn == nil {
+		runCommandClientFn = func(client *CommandClient, ctx context.Context) error {
+			return client.Run(ctx)
+		}
+	}
+	updatedFromVersionFn := cfg.updatedFromVersionFn
+	if updatedFromVersionFn == nil {
+		updatedFromVersionFn = agentupdate.GetUpdatedFromVersion
 	}
 
 	info, err := collector.HostInfo(ctx)
@@ -257,7 +271,7 @@ func New(cfg Config) (*Agent, error) {
 	const bufferCapacity = 60
 
 	// Check if agent was recently auto-updated (only reported once per restart)
-	updatedFrom := getUpdatedFromVersion()
+	updatedFrom := updatedFromVersionFn()
 	if updatedFrom != "" {
 		logger.Info().
 			Str("previousVersion", updatedFrom).
@@ -266,32 +280,34 @@ func New(cfg Config) (*Agent, error) {
 	}
 
 	agent := &Agent{
-		cfg:             cfg,
-		logger:          logger,
-		httpClient:      client,
-		hostInfo:        info,
-		hostname:        hostname,
-		displayName:     displayName,
-		platform:        platform,
-		osName:          osName,
-		osVersion:       osVersion,
-		kernelVersion:   kernelVersion,
-		architecture:    arch,
-		machineID:       machineID,
-		agentID:         agentID,
-		agentVersion:    agentVersion,
-		updatedFrom:     updatedFrom,
-		reportIP:        cfg.ReportIP,
-		stateDir:        cfg.StateDir,
-		interval:        cfg.Interval,
-		trimmedPulseURL: pulseURL,
-		reportBuffer:    utils.New[agentshost.Report](bufferCapacity),
-		collector:       collector,
+		cfg:              cfg,
+		logger:           logger,
+		httpClient:       client,
+		hostInfo:         info,
+		hostname:         hostname,
+		displayName:      displayName,
+		platform:         platform,
+		osName:           osName,
+		osVersion:        osVersion,
+		kernelVersion:    kernelVersion,
+		architecture:     arch,
+		machineID:        machineID,
+		agentID:          agentID,
+		agentVersion:     agentVersion,
+		updatedFrom:      updatedFrom,
+		reportIP:         cfg.ReportIP,
+		stateDir:         cfg.StateDir,
+		interval:         cfg.Interval,
+		trimmedPulseURL:  pulseURL,
+		reportBuffer:     utils.New[agentshost.Report](bufferCapacity),
+		collector:        collector,
+		newCommandClient: newCommandClientFn,
+		runCommandClient: runCommandClientFn,
 	}
 
 	// Create command client for AI command execution (only if enabled)
 	if cfg.EnableCommands {
-		agent.commandClient = newCommandClient(cfg, agentID, hostname, platform, agentVersion)
+		agent.commandClient = newCommandClientFn(cfg, agentID, hostname, platform, agentVersion)
 		cfg.Logger.Info().Msg("Command execution enabled via --enable-commands flag")
 	} else {
 		cfg.Logger.Info().Msg("Command execution disabled (use --enable-commands to enable)")
@@ -356,7 +372,7 @@ func (a *Agent) Run(ctx context.Context) error {
 		// original was built with the bootstrap token during New().
 		if a.cfg.EnableCommands {
 			a.commandClientMu.Lock()
-			a.commandClient = newCommandClient(a.cfg, a.agentID, a.hostname, a.platform, a.agentVersion)
+			a.commandClient = a.newCommandClient(a.cfg, a.agentID, a.hostname, a.platform, a.agentVersion)
 			commandClient = a.commandClient
 			a.commandClientMu.Unlock()
 		}
@@ -424,7 +440,7 @@ func (a *Agent) startCommandClient(client *CommandClient) {
 	a.commandClientMu.Unlock()
 
 	go func() {
-		if err := runCommandClient(client, runCtx); err != nil && !errors.Is(err, context.Canceled) {
+		if err := a.runCommandClient(client, runCtx); err != nil && !errors.Is(err, context.Canceled) {
 			a.logger.Error().Err(err).Msg("Command client stopped with error")
 		}
 	}()
@@ -799,7 +815,7 @@ func (a *Agent) applyRemoteConfig(commandsEnabled bool) {
 	currentlyEnabled := a.commandClient != nil
 	switch {
 	case commandsEnabled && !currentlyEnabled:
-		clientToStart = NewCommandClient(a.cfg, a.agentID, a.hostname, a.platform, a.agentVersion)
+		clientToStart = a.newCommandClient(a.cfg, a.agentID, a.hostname, a.platform, a.agentVersion)
 		a.commandClient = clientToStart
 	case !commandsEnabled && currentlyEnabled:
 		shouldStop = true

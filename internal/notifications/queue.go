@@ -694,13 +694,28 @@ func (nq *NotificationQueue) processQueue() {
 // SetProcessor sets the notification processor function
 func (nq *NotificationQueue) SetProcessor(processor func(*QueuedNotification) error) {
 	nq.mu.Lock()
-	defer nq.mu.Unlock()
 	nq.processor = processor
+	nq.mu.Unlock()
+
+	if processor != nil {
+		select {
+		case nq.notifyChan <- struct{}{}:
+		default:
+		}
+	}
 }
 
 // processBatch processes a batch of pending notifications concurrently
 func (nq *NotificationQueue) processBatch() {
 	const batchLimit = 20
+
+	nq.mu.RLock()
+	processorConfigured := nq.processor != nil
+	nq.mu.RUnlock()
+	if !processorConfigured {
+		return
+	}
+
 	pending, err := nq.GetPending(batchLimit) // Increased batch size for concurrency
 	if err != nil {
 		log.Error().
@@ -771,13 +786,11 @@ func (nq *NotificationQueue) processNotification(notif *QueuedNotification) {
 	nq.mu.RLock()
 	processor := nq.processor
 	nq.mu.RUnlock()
-
-	var err error
-	if processor != nil {
-		err = processor(notif)
-	} else {
-		err = fmt.Errorf("no processor configured")
+	if processor == nil {
+		return
 	}
+
+	err := processor(notif)
 
 	// Record audit
 	success := err == nil

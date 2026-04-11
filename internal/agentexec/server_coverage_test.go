@@ -381,11 +381,8 @@ func TestReadLoopAgentPingPongSendFailure(t *testing.T) {
 }
 
 func TestPingLoopSuccessAndStop(t *testing.T) {
-	origInterval := pingInterval
-	t.Cleanup(func() { pingInterval = origInterval })
-	pingInterval = 5 * time.Millisecond
-
 	s := NewServer(nil)
+	s.pingInterval = 5 * time.Millisecond
 	serverConn, _, cleanup := newConnPair(t)
 	defer cleanup()
 
@@ -402,7 +399,7 @@ func TestPingLoopSuccessAndStop(t *testing.T) {
 		close(exited)
 	}()
 
-	time.Sleep(2 * pingInterval)
+	time.Sleep(2 * s.pingInterval)
 	close(stop)
 
 	select {
@@ -413,11 +410,8 @@ func TestPingLoopSuccessAndStop(t *testing.T) {
 }
 
 func TestPingLoopFailuresClose(t *testing.T) {
-	origInterval := pingInterval
-	t.Cleanup(func() { pingInterval = origInterval })
-	pingInterval = 5 * time.Millisecond
-
 	s := NewServer(nil)
+	s.pingInterval = 5 * time.Millisecond
 	serverConn, _, cleanup := newConnPair(t)
 	defer cleanup()
 

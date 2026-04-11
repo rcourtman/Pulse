@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -25,9 +26,26 @@ import (
 
 type managedRelayServer struct {
 	cmd     *exec.Cmd
-	logBuf  *bytes.Buffer
+	logBuf  *safeBuffer
 	addr    string
 	dataDir string
+}
+
+type safeBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (b *safeBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *safeBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
 }
 
 func TestManagedRuntimeRelayRegistrationReconnectDrain(t *testing.T) {
@@ -85,7 +103,7 @@ func TestManagedRuntimeRelayRegistrationReconnectDrain(t *testing.T) {
 	server1 := startManagedRelayServer(t, relayBinary, relayAddr, t.TempDir(), publicKeyB64)
 	defer server1.stopKill()
 
-	logBuffer := &bytes.Buffer{}
+	logBuffer := &safeBuffer{}
 	logger := zerolog.New(logBuffer).With().Timestamp().Logger()
 
 	client := NewClient(
@@ -246,7 +264,7 @@ func startManagedRelayServer(
 	publicKeyB64 string,
 ) *managedRelayServer {
 	t.Helper()
-	logBuf := &bytes.Buffer{}
+	logBuf := &safeBuffer{}
 	cmd := exec.Command(binaryPath)
 	cmd.Env = append(os.Environ(),
 		"PULSE_RELAY_ADDR="+addr,
@@ -305,7 +323,7 @@ func (s *managedRelayServer) stopTerm() {
 	}
 }
 
-func waitForManagedRelayHealth(t *testing.T, addr string, logBuf *bytes.Buffer, timeout time.Duration) {
+func waitForManagedRelayHealth(t *testing.T, addr string, logBuf *safeBuffer, timeout time.Duration) {
 	t.Helper()
 	deadline := time.Now().Add(timeout)
 	url := "http://" + addr + "/healthz"
@@ -350,7 +368,7 @@ func waitForManagedRelayIdle(t *testing.T, client *Client, timeout time.Duration
 	t.Fatalf("timed out waiting for managed relay client idle status; final status=%+v", client.Status())
 }
 
-func waitForManagedRelayLog(t *testing.T, logBuf *bytes.Buffer, needle string, timeout time.Duration) {
+func waitForManagedRelayLog(t *testing.T, logBuf *safeBuffer, needle string, timeout time.Duration) {
 	t.Helper()
 	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {

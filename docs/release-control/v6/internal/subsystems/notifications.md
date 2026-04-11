@@ -148,6 +148,12 @@ Cancelling queued work by alert identifier must remove outstanding firing
 deliveries for that alert, but it must preserve already-queued resolved
 notifications so recovery deliveries cannot be dropped just because the alert
 was resolved before the queue drained.
+That same queue boundary also owns processor attachment semantics. The
+canonical queue may persist pending notifications before a delivery processor is
+configured, but it must not mark those entries sending, failed, or sent until a
+processor exists. When a processor is attached, the queue owner must wake the
+pending backlog through the same canonical batch path instead of relying on a
+separate direct-send shortcut or waiting for an unrelated timer tick.
 
 `internal/api/notifications.go` and
 `frontend-modern/src/api/notifications.ts` are shared boundaries with

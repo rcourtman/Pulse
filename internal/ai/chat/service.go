@@ -450,12 +450,15 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 	var executor *tools.PulseToolExecutor
 	autonomousMode := false
 	s.mu.RLock()
-	executor = s.executor
+	baseExecutor := s.executor
 	autonomousMode = s.autonomousMode
 	if s.cfg != nil {
 		configuredModel = strings.TrimSpace(s.cfg.GetChatModel())
 	}
 	s.mu.RUnlock()
+	if baseExecutor != nil {
+		executor = baseExecutor.Clone()
+	}
 
 	// Per-request autonomous mode override (used by investigation to avoid
 	// mutating shared service state from concurrent goroutines).
@@ -759,9 +762,13 @@ func (s *Service) ExecutePatrolStream(ctx context.Context, req PatrolRequest, ca
 		return nil, fmt.Errorf("service not started")
 	}
 	sessions := s.sessions
-	executor := s.executor
+	baseExecutor := s.executor
 	cfg := s.cfg
 	s.mu.RUnlock()
+	executor := baseExecutor
+	if baseExecutor != nil {
+		executor = baseExecutor.Clone()
+	}
 
 	// Determine model: use patrol model or fall back to chat model
 	patrolModel := ""

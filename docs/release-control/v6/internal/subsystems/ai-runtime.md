@@ -905,3 +905,8 @@ driven. Assistant shells may still derive legacy VM identifiers or display
 labels for read-only targeting, but they must do so through shared helpers and
 store context precedence instead of passing component-local resource objects or
 duplicating naming fallbacks inline.
+That same runtime boundary also owns executor session isolation. Shared AI
+runtime services may reuse one canonical executor configuration, but each chat
+or Patrol run must clone that executor before attaching resolved-context,
+approval-routing, or patrol-finding state so concurrent sessions cannot
+overwrite one another's mutable runtime context.

@@ -47,14 +47,15 @@ func TestMultiTenantMonitorRemoveTenantCancelsTenantRuntime(t *testing.T) {
 	}
 
 	deadline := time.Now().Add(2 * time.Second)
-	for monitor.runtimeCtx == nil && time.Now().Before(deadline) {
+	for monitor.getRuntimeContext() == nil && time.Now().Before(deadline) {
 		time.Sleep(10 * time.Millisecond)
 	}
-	if monitor.runtimeCtx == nil {
+	runtimeCtx := monitor.getRuntimeContext()
+	if runtimeCtx == nil {
 		t.Fatal("expected tenant monitor runtime context to be initialized")
 	}
 
-	runtimeDone := monitor.runtimeCtx.Done()
+	runtimeDone := runtimeCtx.Done()
 	select {
 	case <-runtimeDone:
 		t.Fatal("expected tenant runtime context to be active before removal")

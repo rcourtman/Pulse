@@ -5,9 +5,8 @@ func activeAlertStorageKey(alert *Alert, fallback string) string {
 		return ""
 	}
 	if alert != nil {
-		backfillCanonicalIdentity(alert)
-		if alert.CanonicalState != "" {
-			return alert.CanonicalState
+		if identity := deriveCanonicalIdentity(alert); identity.State != "" {
+			return identity.State
 		}
 		if alert.ID != "" {
 			return alert.ID
@@ -18,9 +17,8 @@ func activeAlertStorageKey(alert *Alert, fallback string) string {
 
 func effectiveAlertID(alert *Alert, fallback string) string {
 	if alert != nil {
-		backfillCanonicalIdentity(alert)
-		if alert.CanonicalState != "" {
-			return alert.CanonicalState
+		if identity := deriveCanonicalIdentity(alert); identity.State != "" {
+			return identity.State
 		}
 		if alert.ID != "" {
 			return alert.ID
@@ -65,8 +63,7 @@ func (m *Manager) resolveActiveAlertKeyByCanonicalStateNoLock(id string) (string
 		if alert == nil {
 			continue
 		}
-		backfillCanonicalIdentity(alert)
-		if alert.CanonicalState != id {
+		if deriveCanonicalIdentity(alert).State != id {
 			continue
 		}
 		if m.activeAlertAlias == nil {
@@ -90,7 +87,6 @@ func (m *Manager) getActiveAlertNoLock(id string) (*Alert, bool) {
 	if alert == nil {
 		return nil, false
 	}
-	backfillCanonicalIdentity(alert)
 	return alert, true
 }
 

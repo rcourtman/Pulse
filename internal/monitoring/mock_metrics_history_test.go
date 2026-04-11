@@ -644,6 +644,15 @@ func TestSeedMockMetricsHistory_UsesCanonicalMockFixtureGraphForLegacyAndProvide
 	}
 
 	now := time.Now()
+	seedDuration := 7 * 24 * time.Hour
+	sampleInterval := time.Minute
+	historyRetention := 7 * 24 * time.Hour
+	if raceEnabled {
+		seedDuration = 2 * time.Hour
+		sampleInterval = 30 * time.Minute
+		historyRetention = 2 * time.Hour
+	}
+
 	cfg := metrics.DefaultConfig(t.TempDir())
 	cfg.RetentionRaw = 90 * 24 * time.Hour
 	cfg.RetentionMinute = 90 * 24 * time.Hour
@@ -657,10 +666,10 @@ func TestSeedMockMetricsHistory_UsesCanonicalMockFixtureGraphForLegacyAndProvide
 	}
 	defer store.Close()
 
-	mh := NewMetricsHistory(1000, 7*24*time.Hour)
-	seedMockMetricsHistory(mh, store, graph, now, 7*24*time.Hour, time.Minute)
+	mh := NewMetricsHistory(1000, historyRetention)
+	seedMockMetricsHistory(mh, store, graph, now, seedDuration, sampleInterval)
 
-	nodePoints, err := store.Query("node", graph.State.Nodes[0].ID, "cpu", now.Add(-7*24*time.Hour), now, 3600)
+	nodePoints, err := store.Query("node", graph.State.Nodes[0].ID, "cpu", now.Add(-seedDuration), now, 3600)
 	if err != nil {
 		t.Fatalf("failed to query legacy mock node cpu metrics: %v", err)
 	}
@@ -668,7 +677,7 @@ func TestSeedMockMetricsHistory_UsesCanonicalMockFixtureGraphForLegacyAndProvide
 		t.Fatal("expected seeded legacy mock node cpu metrics from canonical graph state")
 	}
 
-	truenasPoints, err := store.Query("agent", graph.PlatformFixtures.TrueNAS.System.Hostname, "disk", now.Add(-7*24*time.Hour), now, 3600)
+	truenasPoints, err := store.Query("agent", graph.PlatformFixtures.TrueNAS.System.Hostname, "disk", now.Add(-seedDuration), now, 3600)
 	if err != nil {
 		t.Fatalf("failed to query canonical TrueNAS agent disk metrics: %v", err)
 	}
@@ -677,7 +686,7 @@ func TestSeedMockMetricsHistory_UsesCanonicalMockFixtureGraphForLegacyAndProvide
 	}
 
 	vmwareHostID := "vc-mock-1:host:host-101"
-	vmwarePoints, err := store.Query("agent", vmwareHostID, "cpu", now.Add(-7*24*time.Hour), now, 3600)
+	vmwarePoints, err := store.Query("agent", vmwareHostID, "cpu", now.Add(-seedDuration), now, 3600)
 	if err != nil {
 		t.Fatalf("failed to query VMware mock host cpu metrics: %v", err)
 	}

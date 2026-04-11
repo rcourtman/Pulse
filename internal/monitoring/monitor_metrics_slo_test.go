@@ -11,8 +11,6 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
-	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 )
 
 // Monitoring-layer SLO targets for batched chart retrieval.
@@ -51,9 +49,6 @@ func skipMonitoringSLOUnderRace(t *testing.T) {
 
 func suppressMonitoringTestLogs(t *testing.T) {
 	t.Helper()
-	orig := log.Logger
-	log.Logger = zerolog.Nop()
-	t.Cleanup(func() { log.Logger = orig })
 }
 
 func newChartBatchSLOMonitor(t *testing.T) *Monitor {

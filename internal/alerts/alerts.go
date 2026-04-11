@@ -9736,7 +9736,16 @@ func (m *Manager) SaveActiveAlerts() error {
 	defer m.saveMu.Unlock()
 
 	m.mu.RLock()
-	defer m.mu.RUnlock()
+	alerts := make([]*Alert, 0, len(m.activeAlerts))
+	for _, alert := range m.activeAlerts {
+		if alert == nil {
+			continue
+		}
+		clone := alert.Clone()
+		backfillCanonicalIdentity(clone)
+		alerts = append(alerts, clone)
+	}
+	m.mu.RUnlock()
 
 	// Create directory if it doesn't exist
 	alertsDir := m.getAlertsDir()
@@ -9745,12 +9754,6 @@ func (m *Manager) SaveActiveAlerts() error {
 	}
 	if err := os.Chmod(alertsDir, alertsDirPerm); err != nil {
 		return fmt.Errorf("failed to set alerts directory permissions: %w", err)
-	}
-
-	// Convert map to slice for JSON encoding
-	alerts := make([]*Alert, 0, len(m.activeAlerts))
-	for _, alert := range m.activeAlerts {
-		alerts = append(alerts, alert)
 	}
 
 	data, err := json.Marshal(alerts)
@@ -10384,10 +10387,27 @@ func (m *Manager) cleanupStaleMaps() {
 func (m *Manager) CheckDiskHealth(instance, node string, disk proxmox.Disk) {
 	// Create unique alert ID for this disk
 	alertID := fmt.Sprintf("disk-health-%s-%s-%s", instance, node, disk.DevPath)
+	wearoutAlertID := fmt.Sprintf("disk-wearout-%s-%s-%s", instance, node, disk.DevPath)
 	resourceID := fmt.Sprintf("%s-%s", node, disk.DevPath)
 	resourceName := fmt.Sprintf("%s (%s)", disk.Model, disk.DevPath)
 	canonicalResourceID := proxmoxDiskCanonicalResourceID(instance, node, disk.DevPath)
 	resourceType := unifiedresources.ResourceType("proxmox-disk")
+	canonicalHealthAlertID := buildCanonicalStateID(canonicalResourceID, canonicalResourceID+"-health")
+	canonicalWearoutAlertID := buildCanonicalStateID(canonicalResourceID, canonicalResourceID+"-wearout")
+
+	clearDiskAlert := func(ids ...string) {
+		seen := make(map[string]struct{}, len(ids))
+		for _, id := range ids {
+			if id == "" {
+				continue
+			}
+			if _, exists := seen[id]; exists {
+				continue
+			}
+			seen[id] = struct{}{}
+			m.clearAlert(id)
+		}
+	}
 
 	// Check if disk health is not PASSED
 	normalizedHealth := strings.ToUpper(strings.TrimSpace(disk.Health))
@@ -10404,8 +10424,9 @@ func (m *Manager) CheckDiskHealth(instance, node string, disk proxmox.Disk) {
 			Str("health", disk.Health).
 			Msg("Skipping health alert for drive with known firmware bug - health status unreliable")
 
-		// Clear any existing health alert since we now recognize this is a false positive
-		m.clearAlert(buildCanonicalStateID(canonicalResourceID, canonicalResourceID+"-health"))
+		// Clear any existing health alert since we now recognize this is a false positive.
+		// Older installs may still have the legacy alert key persisted on disk.
+		clearDiskAlert(alertID, canonicalHealthAlertID)
 		healthCheckNeeded = false // Skip to wearout check
 	}
 
@@ -10452,12 +10473,11 @@ func (m *Manager) CheckDiskHealth(instance, node string, disk proxmox.Disk) {
 		}
 	} else {
 		// Disk is healthy, clear alert if it exists
-		m.clearAlert(buildCanonicalStateID(canonicalResourceID, canonicalResourceID+"-health"))
+		clearDiskAlert(alertID, canonicalHealthAlertID)
 	}
 
 	// Check for low wearout (SSD life remaining)
 	if disk.Wearout > 0 && disk.Wearout < 10 {
-		wearoutAlertID := fmt.Sprintf("disk-wearout-%s-%s-%s", instance, node, disk.DevPath)
 		message := fmt.Sprintf("SSD has less than 10%% life remaining (%d%% wearout)", disk.Wearout)
 		spec, err := buildCanonicalSeverityThresholdSpecWithDirection(canonicalResourceID+"-wearout", canonicalResourceID, resourceName, resourceType, "wearout-remaining", alertspecs.ThresholdDirectionBelow, 10, 0, false)
 		if err != nil {
@@ -10503,7 +10523,7 @@ func (m *Manager) CheckDiskHealth(instance, node string, disk proxmox.Disk) {
 		}
 	} else if disk.Wearout >= 10 {
 		// Wearout is acceptable, clear alert if it exists
-		m.clearAlert(buildCanonicalStateID(canonicalResourceID, canonicalResourceID+"-wearout"))
+		clearDiskAlert(wearoutAlertID, canonicalWearoutAlertID)
 	}
 }
 

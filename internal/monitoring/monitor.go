@@ -1002,6 +1002,19 @@ type Monitor struct {
 	mockChartMapCache   map[mockChartMetricMapCacheKey]map[string][]MetricPoint
 }
 
+func (m *Monitor) setRuntimeContext(ctx context.Context, hub *websocket.Hub) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.runtimeCtx = ctx
+	m.wsHub = hub
+}
+
+func (m *Monitor) getRuntimeContext() context.Context {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.runtimeCtx
+}
+
 // clusterSensorsCacheEntry stores temperature data collected by a sibling agent via SSH.
 type clusterSensorsCacheEntry struct {
 	sensors   models.HostSensorSummary
@@ -1691,10 +1704,7 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 		Dur("pollingInterval", pollingInterval).
 		Msg("Starting monitoring loop")
 
-	m.mu.Lock()
-	m.runtimeCtx = ctx
-	m.wsHub = wsHub
-	m.mu.Unlock()
+	m.setRuntimeContext(ctx, wsHub)
 	defer m.stopMockMetricsSampler()
 
 	// Best-effort startup cleanup: when direct PBS is configured, remove legacy

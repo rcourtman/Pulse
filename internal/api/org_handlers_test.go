@@ -12,13 +12,45 @@ import (
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/logging"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
-	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 )
+
+type testLogCapture struct {
+	id    string
+	lines chan string
+	buf   strings.Builder
+}
+
+func newTestLogCapture(t *testing.T) *testLogCapture {
+	t.Helper()
+	id, lines, _ := logging.GetBroadcaster().Subscribe()
+	capture := &testLogCapture{id: id, lines: lines}
+	t.Cleanup(func() {
+		logging.GetBroadcaster().Unsubscribe(id)
+	})
+	return capture
+}
+
+func (c *testLogCapture) String() string {
+	for {
+		select {
+		case line, ok := <-c.lines:
+			if !ok {
+				return c.buf.String()
+			}
+			c.buf.WriteString(line)
+			if !strings.HasSuffix(line, "\n") {
+				c.buf.WriteByte('\n')
+			}
+		default:
+			return c.buf.String()
+		}
+	}
+}
 
 func TestOrgHandlersRequireMultiTenantGate_HostedModeBypassesFeatureLicense(t *testing.T) {
 	defer SetMultiTenantEnabled(false)
@@ -96,12 +128,7 @@ func TestOrgHandlersDeleteStopsTenantMonitorBeforeDeletingOrgDir(t *testing.T) {
 	defer SetMultiTenantEnabled(false)
 	SetMultiTenantEnabled(true)
 
-	var logOutput bytes.Buffer
-	origLogger := log.Logger
-	log.Logger = zerolog.New(&logOutput).Level(zerolog.DebugLevel).With().Timestamp().Logger()
-	t.Cleanup(func() {
-		log.Logger = origLogger
-	})
+	logOutput := newTestLogCapture(t)
 
 	baseDir := t.TempDir()
 	persistence := config.NewMultiTenantPersistence(baseDir)

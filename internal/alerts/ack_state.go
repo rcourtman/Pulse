@@ -6,9 +6,8 @@ func canonicalAckKey(alert *Alert, fallback string) string {
 	if alert == nil {
 		return fallback
 	}
-	backfillCanonicalIdentity(alert)
-	if alert.CanonicalState != "" {
-		return alert.CanonicalState
+	if identity := deriveCanonicalIdentity(alert); identity.State != "" {
+		return identity.State
 	}
 	return fallback
 }

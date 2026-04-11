@@ -31,9 +31,9 @@ var (
 	writeTextMessage = func(conn *websocket.Conn, data []byte) error {
 		return conn.WriteMessage(websocket.TextMessage, data)
 	}
-	pingInterval    = 5 * time.Second
-	pingWriteWait   = 5 * time.Second
-	readFileTimeout = 30 * time.Second
+	defaultPingInterval = 5 * time.Second
+	pingWriteWait       = 5 * time.Second
+	readFileTimeout     = 30 * time.Second
 
 	errServerShuttingDown = errors.New("agent execution server is shutting down")
 )
@@ -62,6 +62,7 @@ type Server struct {
 	validateToken func(token string, agentID string) bool
 	shutdown      chan struct{}
 	shutdownOnce  sync.Once
+	pingInterval  time.Duration
 }
 
 type agentConn struct {
@@ -90,6 +91,7 @@ func NewServer(validateToken func(token string, agentID string) bool) *Server {
 		deploySubs:    make(map[string]chan DeployProgressPayload),
 		validateToken: validateToken,
 		shutdown:      make(chan struct{}),
+		pingInterval:  defaultPingInterval,
 	}
 }
 
@@ -664,7 +666,7 @@ func (s *Server) readLoop(ac *agentConn) {
 }
 
 func (s *Server) pingLoop(ac *agentConn, done chan struct{}) {
-	ticker := time.NewTicker(pingInterval)
+	ticker := time.NewTicker(s.pingInterval)
 	defer ticker.Stop()
 
 	// Track consecutive ping failures to detect dead connections faster

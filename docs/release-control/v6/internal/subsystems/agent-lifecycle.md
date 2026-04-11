@@ -290,6 +290,10 @@ an add-only capacity posture.
 1. Update this contract when agent lifecycle ownership changes.
 2. Keep shared API proof routing aligned whenever install, register, or profile payloads change.
 3. Update runtime and settings tests in the same slice when lifecycle behavior changes.
+4. Keep host-agent test hooks, command-client factories, and timing overrides
+   instance-scoped under `internal/hostagent/agent.go`; lifecycle-owned
+   registration and update paths must not depend on package-global mutable test
+   seams that can leak between concurrent agent sessions or tests.
 4. Preserve canonical /api/auto-register node identity continuity when canonical hosts shift between hostname and IP forms for the same node.
 5. Keep Proxmox registration continuity self-healing: stale local registration markers must be verified against Pulse before the host agent skips setup, and a missing matching node on the Pulse side must drive canonical re-registration instead of asking operators to delete marker files manually.
 5. Keep first-session lifecycle handoff explicit: the live setup completion
@@ -2075,3 +2079,9 @@ optional optimistic hostnames. Shared row models may fall back to the row name
 when staging a removal state, but they must not resurrect legacy
 `policy.display` shims or require platform-managed surfaces to synthesize a
 second hostname contract.
+That same lifecycle boundary also owns host-agent runtime test seams. Shared
+agent lifecycle code such as `internal/hostagent/agent.go` must keep mutable
+test hooks, command-client factories, and timing overrides on the per-config or
+per-agent instance instead of package-global variables, so concurrent
+lifecycle-owned update and registration paths cannot leak one test or runtime
+override into another agent session.
