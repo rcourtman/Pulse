@@ -23,9 +23,33 @@ func TestCurrentFixtureGraphReturnsDefensiveCopies(t *testing.T) {
 
 	originalNodeName := graph.State.Nodes[0].Name
 	originalHostName := graph.PlatformFixtures.VMware.Hosts[0].Name
+	var (
+		originalDockerLabelKey string
+		originalDockerLabel    string
+		originalDockerMount    string
+	)
+	if len(graph.State.DockerHosts) > 0 && len(graph.State.DockerHosts[0].Containers) > 0 {
+		for key, value := range graph.State.DockerHosts[0].Containers[0].Labels {
+			originalDockerLabelKey = key
+			originalDockerLabel = value
+			break
+		}
+		if len(graph.State.DockerHosts[0].Containers[0].Mounts) > 0 {
+			originalDockerMount = graph.State.DockerHosts[0].Containers[0].Mounts[0].Destination
+		}
+	}
 
 	graph.State.Nodes[0].Name = "mutated-node"
 	graph.PlatformFixtures.VMware.Hosts[0].Name = "mutated-host"
+	if len(graph.State.DockerHosts) > 0 && len(graph.State.DockerHosts[0].Containers) > 0 {
+		for key := range graph.State.DockerHosts[0].Containers[0].Labels {
+			graph.State.DockerHosts[0].Containers[0].Labels[key] = "mutated-container"
+			break
+		}
+		if len(graph.State.DockerHosts[0].Containers[0].Mounts) > 0 {
+			graph.State.DockerHosts[0].Containers[0].Mounts[0].Destination = "/mutated"
+		}
+	}
 	if len(graph.AlertHistory) > 0 {
 		graph.AlertHistory[0].ID = "mutated-alert"
 	}
@@ -36,6 +60,15 @@ func TestCurrentFixtureGraphReturnsDefensiveCopies(t *testing.T) {
 	}
 	if current.PlatformFixtures.VMware.Hosts[0].Name != originalHostName {
 		t.Fatalf("expected canonical graph to protect platform fixtures, got %q", current.PlatformFixtures.VMware.Hosts[0].Name)
+	}
+	if originalDockerLabelKey != "" && current.State.DockerHosts[0].Containers[0].Labels[originalDockerLabelKey] != originalDockerLabel {
+		t.Fatalf(
+			"expected canonical graph to protect nested docker container labels, got %q",
+			current.State.DockerHosts[0].Containers[0].Labels[originalDockerLabelKey],
+		)
+	}
+	if originalDockerMount != "" && current.State.DockerHosts[0].Containers[0].Mounts[0].Destination != originalDockerMount {
+		t.Fatalf("expected canonical graph to protect nested docker container mounts, got %q", current.State.DockerHosts[0].Containers[0].Mounts[0].Destination)
 	}
 	if len(graph.AlertHistory) > 0 && len(current.AlertHistory) > 0 && current.AlertHistory[0].ID == "mutated-alert" {
 		t.Fatal("expected canonical graph to protect alert history")

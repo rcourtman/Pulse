@@ -310,6 +310,66 @@ func TestEmptyStateSnapshotReturnsNormalizedZeroSnapshot(t *testing.T) {
 	}
 }
 
+func TestStateSnapshotCloneDeepCopiesNestedCollections(t *testing.T) {
+	snapshot := StateSnapshot{
+		DockerHosts: []DockerHost{{
+			ID:                "docker-1",
+			LoadAverage:       []float64{0.1, 0.2, 0.3},
+			NetworkInterfaces: []HostNetworkInterface{{Name: "eth0", Addresses: []string{"10.0.0.10"}}},
+			Containers: []DockerContainer{{
+				ID:       "container-1",
+				Labels:   map[string]string{"app": "api"},
+				Networks: []DockerContainerNetworkLink{{Name: "default"}},
+				Mounts:   []DockerContainerMount{{Source: "/data", Destination: "/srv/data"}},
+			}},
+		}},
+		KubernetesClusters: []KubernetesCluster{{
+			ID: "cluster-1",
+			Pods: []KubernetesPod{{
+				UID:        "pod-1",
+				Labels:     map[string]string{"tier": "backend"},
+				Containers: []KubernetesPodContainer{{Name: "api"}},
+			}},
+		}},
+		ConnectionHealth: map[string]bool{"vmware": true},
+	}
+
+	cloned := snapshot.Clone()
+	cloned.DockerHosts[0].LoadAverage[0] = 9.9
+	cloned.DockerHosts[0].NetworkInterfaces[0].Addresses[0] = "10.0.0.99"
+	cloned.DockerHosts[0].Containers[0].Labels["app"] = "mutated"
+	cloned.DockerHosts[0].Containers[0].Networks[0].Name = "mutated"
+	cloned.DockerHosts[0].Containers[0].Mounts[0].Destination = "/mutated"
+	cloned.KubernetesClusters[0].Pods[0].Labels["tier"] = "mutated"
+	cloned.KubernetesClusters[0].Pods[0].Containers[0].Name = "mutated"
+	cloned.ConnectionHealth["vmware"] = false
+
+	if snapshot.DockerHosts[0].LoadAverage[0] != 0.1 {
+		t.Fatal("expected Clone to deep-copy docker host load averages")
+	}
+	if snapshot.DockerHosts[0].NetworkInterfaces[0].Addresses[0] != "10.0.0.10" {
+		t.Fatal("expected Clone to deep-copy docker host network addresses")
+	}
+	if snapshot.DockerHosts[0].Containers[0].Labels["app"] != "api" {
+		t.Fatal("expected Clone to deep-copy docker container labels")
+	}
+	if snapshot.DockerHosts[0].Containers[0].Networks[0].Name != "default" {
+		t.Fatal("expected Clone to deep-copy docker container networks")
+	}
+	if snapshot.DockerHosts[0].Containers[0].Mounts[0].Destination != "/srv/data" {
+		t.Fatal("expected Clone to deep-copy docker container mounts")
+	}
+	if snapshot.KubernetesClusters[0].Pods[0].Labels["tier"] != "backend" {
+		t.Fatal("expected Clone to deep-copy kubernetes pod labels")
+	}
+	if snapshot.KubernetesClusters[0].Pods[0].Containers[0].Name != "api" {
+		t.Fatal("expected Clone to deep-copy kubernetes pod containers")
+	}
+	if !snapshot.ConnectionHealth["vmware"] {
+		t.Fatal("expected Clone to deep-copy connection health")
+	}
+}
+
 func TestStateSnapshotNormalizeCollectionsNormalizesNestedResourceCollections(t *testing.T) {
 	snapshot := StateSnapshot{
 		Nodes: []Node{{

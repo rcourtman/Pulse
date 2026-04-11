@@ -149,6 +149,49 @@ func (s *StateSnapshot) NormalizeCollections() {
 	s.Performance = s.Performance.NormalizeCollections()
 }
 
+// Clone returns a deep copy of the snapshot so callers can safely hold a
+// detached view without sharing nested collection state.
+func (s StateSnapshot) Clone() StateSnapshot {
+	pbsBackups := clonePBSBackups(s.PBSBackups)
+	pmgBackups := clonePMGBackups(s.PMGBackups)
+	pveBackups := clonePVEBackups(s.PVEBackups)
+
+	snapshot := StateSnapshot{
+		Nodes:                        cloneNodes(s.Nodes),
+		VMs:                          cloneVMs(s.VMs),
+		Containers:                   cloneContainers(s.Containers),
+		DockerHosts:                  cloneDockerHosts(s.DockerHosts),
+		RemovedDockerHosts:           append([]RemovedDockerHost(nil), s.RemovedDockerHosts...),
+		KubernetesClusters:           cloneKubernetesClusters(s.KubernetesClusters),
+		RemovedKubernetesClusters:    append([]RemovedKubernetesCluster(nil), s.RemovedKubernetesClusters...),
+		Hosts:                        cloneHosts(s.Hosts),
+		RemovedHostAgents:            append([]RemovedHostAgent(nil), s.RemovedHostAgents...),
+		Storage:                      cloneStorages(s.Storage),
+		CephClusters:                 cloneCephClusters(s.CephClusters),
+		PhysicalDisks:                clonePhysicalDisks(s.PhysicalDisks),
+		PBSInstances:                 clonePBSInstances(s.PBSInstances),
+		PMGInstances:                 clonePMGInstances(s.PMGInstances),
+		PBSBackups:                   pbsBackups,
+		PMGBackups:                   pmgBackups,
+		Backups:                      Backups{PVE: pveBackups, PBS: pbsBackups, PMG: pmgBackups},
+		ReplicationJobs:              cloneReplicationJobs(s.ReplicationJobs),
+		Metrics:                      cloneMetrics(s.Metrics),
+		PVEBackups:                   pveBackups,
+		Performance:                  clonePerformance(s.Performance),
+		ConnectionHealth:             make(map[string]bool, len(s.ConnectionHealth)),
+		Stats:                        s.Stats,
+		ActiveAlerts:                 cloneAlerts(s.ActiveAlerts),
+		RecentlyResolved:             cloneResolvedAlerts(s.RecentlyResolved),
+		LastUpdate:                   s.LastUpdate,
+		TemperatureMonitoringEnabled: s.TemperatureMonitoringEnabled,
+	}
+	for key, healthy := range s.ConnectionHealth {
+		snapshot.ConnectionHealth[key] = healthy
+	}
+	snapshot.NormalizeCollections()
+	return snapshot
+}
+
 // GetSnapshot returns a snapshot of the current state without mutex
 func (s *State) GetSnapshot() StateSnapshot {
 	s.mu.RLock()

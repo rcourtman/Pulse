@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -968,7 +969,7 @@ func TestClient_EncryptedChannelLifecycle(t *testing.T) {
 }
 
 func TestClient_HandleDataDecryptsBeforeReturning(t *testing.T) {
-	logger := zerolog.New(zerolog.NewTestWriter(t))
+	logger := zerolog.New(io.Discard)
 
 	mockAPI := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)

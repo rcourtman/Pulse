@@ -642,15 +642,16 @@ func TestSeedMockMetricsHistory_UsesCanonicalMockFixtureGraphForLegacyAndProvide
 	if len(graph.PlatformFixtures.VMware.Hosts) == 0 {
 		t.Fatal("expected canonical mock graph to include VMware fixtures")
 	}
+	mock.SetEnabled(false)
 
 	now := time.Now()
 	seedDuration := 7 * 24 * time.Hour
 	sampleInterval := time.Minute
 	historyRetention := 7 * 24 * time.Hour
 	if raceEnabled {
-		seedDuration = 2 * time.Hour
-		sampleInterval = 30 * time.Minute
-		historyRetention = 2 * time.Hour
+		seedDuration = 5 * time.Minute
+		sampleInterval = time.Minute
+		historyRetention = 10 * time.Minute
 	}
 
 	cfg := metrics.DefaultConfig(t.TempDir())
