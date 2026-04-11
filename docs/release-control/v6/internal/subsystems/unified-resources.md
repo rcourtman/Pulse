@@ -163,17 +163,20 @@ assembly branch.
 7. Add or change resource drawer timeline/facet presentation through `frontend-modern/src/components/Infrastructure/ResourceDetailDrawer.tsx`, `frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx`, `frontend-modern/src/components/Infrastructure/ResourceDetailDrawerDebugTab.tsx`, `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerState.ts`, `frontend-modern/src/components/Infrastructure/ResourceFacetSummary.tsx`, `frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts`, and the governed `internal/api/resources.go` facet/timeline contract together
 8. Add or change discovery-support runtime under the resource drawer through `frontend-modern/src/components/Discovery/DiscoveryTab.tsx` for shell/presentation ownership and `frontend-modern/src/components/Discovery/useDiscoveryTabState.ts` for fetch, websocket-progress, and notes-mutation ownership
 9. Keep dashboard and infrastructure freshness on the canonical unified-resource
-   ownership path. `frontend-modern/src/hooks/useUnifiedResources.ts` may use
-   REST for initial hydration and unsupported filtered queries, but supported
-   snapshot freshness must come from websocket `state.resources` instead of
-   layering confirmatory dashboard/infrastructure REST refetch loops over
-   already-owned resource updates.
-   That shared hook must also preserve canonical row shape across transport
-   boundaries: thinner realtime `state.resources` payloads must merge into the
-   existing canonical resource snapshot instead of downgrading richer REST-only
-   infrastructure details such as disk I/O, source metadata, or platform
-   summary fields after first hydrate.
-   Canonical cluster membership in that shared hook must come only from
+   ownership path. `frontend-modern/src/stores/websocket.ts`,
+   `frontend-modern/src/utils/resourceStateAdapters.ts`, and
+   `frontend-modern/src/hooks/useUnifiedResources.ts` together own the frontend
+   canonicalization boundary: REST may hydrate the initial snapshot and
+   unsupported filtered queries, but supported snapshot freshness must come
+   from websocket `state.resources` instead of layering confirmatory
+   dashboard/infrastructure REST refetch loops over already-owned resource
+   updates.
+   That shared store/adapter/hook path must also preserve canonical row shape
+   across transport boundaries: thinner realtime `state.resources` payloads
+   must merge into the existing canonical resource snapshot instead of
+   downgrading richer REST-only infrastructure details such as disk I/O, source
+   metadata, or platform summary fields after first hydrate.
+   Canonical cluster membership in that shared path must come only from
    explicit cluster identity such as Kubernetes context or platform cluster
    labels; standalone resource names must never be repurposed as synthetic
    `clusterId` values.

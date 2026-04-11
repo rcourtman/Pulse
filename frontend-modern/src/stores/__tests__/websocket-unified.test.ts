@@ -181,6 +181,118 @@ describe('websocket store unified resource contract', () => {
     }
   });
 
+  it('preserves canonical resource details when realtime payloads are thinner', async () => {
+    const { store, dispose } = await createStoreHarness();
+    try {
+      await waitForOpenTick();
+
+      emitMessage({
+        type: 'initialState',
+        data: {
+          connectedInfrastructure: [],
+          resources: [
+            {
+              id: 'node-1',
+              type: 'agent',
+              name: 'West Production A',
+              displayName: 'West Production A',
+              platformId: 'west-production-a',
+              platformType: 'proxmox-pve',
+              sourceType: 'hybrid',
+              status: 'online',
+              lastSeen: Date.now(),
+              cpu: { current: 10 },
+              diskIO: { readRate: 1250000, writeRate: 640000 },
+              platformData: {
+                proxmox: {
+                  clusterName: 'Core Fabric',
+                },
+              },
+            },
+            {
+              id: 'pbs-1',
+              type: 'pbs',
+              name: 'backup-vault',
+              displayName: 'backup-vault',
+              platformId: 'pbs-main',
+              platformType: 'proxmox-pbs',
+              sourceType: 'api',
+              status: 'online',
+              lastSeen: Date.now(),
+              platformData: {
+                pbs: {
+                  hostname: '198.51.100.10',
+                  version: '3.2.1',
+                  connectionHealth: 'healthy',
+                  datastoreCount: 2,
+                },
+              },
+            },
+          ],
+          lastUpdate: 1739059200000,
+          activeAlerts: [],
+          recentlyResolved: [],
+        },
+      });
+
+      emitMessage({
+        type: 'rawData',
+        data: {
+          connectedInfrastructure: [],
+          resources: [
+            {
+              id: 'node-1',
+              type: 'agent',
+              name: 'West Production A',
+              displayName: 'West Production A',
+              platformId: 'west-production-a',
+              platformType: 'proxmox-pve',
+              sourceType: 'hybrid',
+              status: 'online',
+              lastSeen: Date.now(),
+              cpu: { current: 42 },
+              platformData: {},
+            },
+            {
+              id: 'pbs-1',
+              type: 'pbs',
+              name: 'backup-vault',
+              displayName: 'backup-vault',
+              platformId: 'pbs-main',
+              platformType: 'proxmox-pbs',
+              sourceType: 'api',
+              status: 'online',
+              lastSeen: Date.now(),
+              platformData: {
+                host: '198.51.100.10',
+                version: '3.2.1',
+                connectionHealth: 'healthy',
+                numDatastores: 2,
+              },
+            },
+          ],
+          lastUpdate: 1739059260000,
+          activeAlerts: [],
+          recentlyResolved: [],
+        },
+      });
+
+      const agent = store.state.resources.find((resource) => resource.id === 'node-1');
+      const pbs = store.state.resources.find((resource) => resource.id === 'pbs-1');
+      expect(agent?.cpu?.current).toBe(42);
+      expect(agent?.diskIO).toEqual({ readRate: 1250000, writeRate: 640000 });
+      expect(agent?.clusterId).toBe('Core Fabric');
+      expect((pbs?.platformData as Record<string, unknown>)?.pbs).toMatchObject({
+        hostname: '198.51.100.10',
+        version: '3.2.1',
+        connectionHealth: 'healthy',
+        datastoreCount: 2,
+      });
+    } finally {
+      dispose();
+    }
+  });
+
   it('accepts canonical alertResolved websocket payloads', async () => {
     const { store, dispose } = await createStoreHarness();
     try {

@@ -18,6 +18,7 @@ import {
   getAgentDiscoveryResourceId,
   isAppContainerDiscoveryResourceType,
 } from '@/utils/discoveryTarget';
+import { mergeCanonicalResourceSnapshot } from '@/utils/resourceStateAdapters';
 
 const MAX_INBOUND_WEBSOCKET_MESSAGE_BYTES = 8 * 1024 * 1024; // 8 MiB
 
@@ -368,17 +369,17 @@ export function createWebSocketStore(url: string) {
               if (message.data.stats !== undefined) setState('stats', message.data.stats);
               // Handle unified resources
               if (message.data.resources !== undefined) {
+                const nextResources = Array.isArray(message.data.resources)
+                  ? mergeCanonicalResourceSnapshot(message.data.resources, state.resources)
+                  : [];
                 logger.debug('[WebSocket] Updating resources', {
-                  count: message.data.resources?.length || 0,
-                  types: [...new Set(message.data.resources?.map((r: any) => r.type) || [])],
+                  count: nextResources.length,
+                  types: [...new Set(nextResources.map((resource) => resource.type) || [])],
                 });
-                setState('resources', reconcile(message.data.resources, { key: 'id' }));
+                setState('resources', reconcile(nextResources, { key: 'id' }));
 
                 // Sync container update states with docker host command status payloads.
-                const resources = Array.isArray(message.data.resources)
-                  ? message.data.resources
-                  : [];
-                resources.forEach((resource: any) => {
+                nextResources.forEach((resource: any) => {
                   if (resource?.type !== 'docker-host') return;
                   const platformData = asRecord(resource.platformData);
                   const dockerData = asRecord(platformData?.docker);

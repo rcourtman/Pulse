@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  mergeCanonicalResourceSnapshot,
   nodeFromResource,
   pbsInstanceFromResource,
   pmgInstanceFromResource,
@@ -192,5 +193,124 @@ describe('resourceStateAdapters nodeFromResource', () => {
     );
 
     expect(instance?.name).toBe('PMG Main');
+  });
+
+  it('canonicalizes thin realtime resource platform data without inventing standalone clusters', () => {
+    const [resource] = mergeCanonicalResourceSnapshot(
+      [
+        {
+          id: 'docker-host-1',
+          type: 'docker-host',
+          name: 'Ops Services 01',
+          displayName: 'Ops Services 01',
+          platformId: 'ops-services-01',
+          platformType: 'docker',
+          sourceType: 'api',
+          status: 'online',
+          lastSeen: Date.now(),
+          platformData: {
+            hostname: 'ops-services-01',
+            hostSourceId: 'ops-services-01',
+            runtime: 'docker',
+          },
+        } as Resource,
+        {
+          id: 'pbs-1',
+          type: 'pbs',
+          name: 'backup-vault',
+          displayName: 'backup-vault',
+          platformId: 'pbs-1',
+          platformType: 'proxmox-pbs',
+          sourceType: 'api',
+          status: 'online',
+          lastSeen: Date.now(),
+          platformData: {
+            host: '198.51.100.10',
+            version: '3.2.1',
+            connectionHealth: 'healthy',
+            numDatastores: 2,
+          },
+        } as Resource,
+      ],
+      [],
+    );
+
+    expect(resource.clusterId).toBeUndefined();
+    const pbs = mergeCanonicalResourceSnapshot(
+      [
+        {
+          id: 'pbs-1',
+          type: 'pbs',
+          name: 'backup-vault',
+          displayName: 'backup-vault',
+          platformId: 'pbs-1',
+          platformType: 'proxmox-pbs',
+          sourceType: 'api',
+          status: 'online',
+          lastSeen: Date.now(),
+          platformData: {
+            host: '198.51.100.10',
+            version: '3.2.1',
+            connectionHealth: 'healthy',
+            numDatastores: 2,
+          },
+        } as Resource,
+      ],
+      [],
+    )[0];
+
+    expect((pbs.platformData as Record<string, unknown>)?.pbs).toMatchObject({
+      hostname: '198.51.100.10',
+      version: '3.2.1',
+      connectionHealth: 'healthy',
+      datastoreCount: 2,
+    });
+  });
+
+  it('preserves richer existing resource details when realtime updates are thinner', () => {
+    const existing: Resource = {
+      id: 'node-1',
+      type: 'agent',
+      name: 'West Production A',
+      displayName: 'West Production A',
+      platformId: 'west-production-a',
+      platformType: 'proxmox-pve',
+      sourceType: 'hybrid',
+      status: 'online',
+      lastSeen: Date.now(),
+      cpu: { current: 10 },
+      diskIO: { readRate: 1_250_000, writeRate: 640_000 },
+      platformData: {
+        proxmox: {
+          clusterName: 'Core Fabric',
+        },
+      },
+    } as Resource;
+
+    const [merged] = mergeCanonicalResourceSnapshot(
+      [
+        {
+          id: 'node-1',
+          type: 'agent',
+          name: 'West Production A',
+          displayName: 'West Production A',
+          platformId: 'west-production-a',
+          platformType: 'proxmox-pve',
+          sourceType: 'hybrid',
+          status: 'online',
+          lastSeen: Date.now(),
+          cpu: { current: 42 },
+          platformData: {},
+        } as Resource,
+      ],
+      [existing],
+    );
+
+    expect(merged.cpu?.current).toBe(42);
+    expect(merged.diskIO).toEqual({
+      readRate: 1_250_000,
+      writeRate: 640_000,
+    });
+    expect(merged.clusterId).toBe('Core Fabric');
   });
 });
