@@ -33,9 +33,13 @@ export const HistoryChart: Component<HistoryChartProps> = (props) => {
           onMouseLeave={chart.handleMouseLeave}
         />
         <HistoryChartOverlay chart={chart} hideLock={props.hideLock} />
+        <HistoryChartTooltip
+          hoveredPoint={chart.hoveredPoint()}
+          chartWidth={chart.chartWidth()}
+          chartHeight={chart.chartHeight()}
+          unit={props.unit}
+        />
       </div>
-
-      <HistoryChartTooltip hoveredPoint={chart.hoveredPoint()} unit={props.unit} />
     </div>
   );
 };

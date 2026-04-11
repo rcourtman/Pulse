@@ -28,6 +28,13 @@ export interface HistoryChartHoverPoint {
   y: number;
 }
 
+export interface HistoryChartTooltipLayout {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 export const HISTORY_CHART_RANGES: HistoryTimeRange[] = ['24h', '7d', '30d', '90d'];
 
 export function formatHistoryChartTooltipValue(value: number, unit?: string): string {
@@ -171,4 +178,28 @@ export function findHistoryChartClosestPoint(
     }
   }
   return closest;
+}
+
+export function getHistoryChartTooltipLayout({
+  hoveredPoint,
+  chartWidth,
+  chartHeight,
+}: {
+  hoveredPoint: HistoryChartHoverPoint;
+  chartWidth: number;
+  chartHeight: number;
+}): HistoryChartTooltipLayout {
+  const width = 156;
+  const height = 46;
+  const margin = 8;
+  const minX = margin;
+  const maxX = Math.max(minX, chartWidth - width - margin);
+  const x = Math.min(Math.max(hoveredPoint.x - width / 2, minX), maxX);
+  const showBelow = hoveredPoint.y < height + margin;
+  const minY = margin;
+  const maxY = Math.max(minY, chartHeight - height - margin);
+  const y = showBelow
+    ? Math.min(Math.max(hoveredPoint.y + 12, minY), maxY)
+    : Math.min(Math.max(hoveredPoint.y - height - 12, minY), maxY);
+  return { x, y, width, height };
 }

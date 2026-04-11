@@ -236,7 +236,8 @@ describe('shared primitive guardrails', () => {
   });
 
   it('keeps shared tooltip shells on semantic theme tokens', () => {
-    expect(tooltipSource).toContain('bg-surface text-base-content border-border');
+    expect(tooltipSource).toContain('border border-border bg-surface');
+    expect(tooltipSource).toContain('text-base-content');
     expect(tooltipSource).not.toContain("'background-color': 'rgb(15, 23, 42)'");
     expect(tooltipPortalSource).toContain('bg-surface');
     expect(tooltipPortalSource).toContain('text-base-content');
@@ -895,6 +896,7 @@ describe('shared primitive guardrails', () => {
     expect(historyChartStateSource).toContain('HISTORY_CHART_RANGES');
 
     expect(historyChartModelSource).toContain('formatHistoryChartTooltipValue');
+    expect(historyChartModelSource).toContain('getHistoryChartTooltipLayout');
     expect(historyChartModelSource).toContain('HISTORY_CHART_RANGES');
     expect(historyChartModelSource).toContain('getHistoryChartScale');
     expect(historyChartModelSource).toContain('findHistoryChartClosestPoint');
@@ -909,8 +911,21 @@ describe('shared primitive guardrails', () => {
     expect(historyChartOverlaySource).not.toContain('setupCanvasDPR');
 
     expect(historyChartTooltipSource).toContain('formatHistoryChartTooltipValue');
+    expect(historyChartTooltipSource).toContain('getHistoryChartTooltipLayout');
+    expect(historyChartTooltipSource).toContain('foreignObject');
     expect(historyChartTooltipSource).toContain('new Date(point().timestamp).toLocaleString()');
+    expect(historyChartTooltipSource).not.toContain('<Portal>');
+    expect(historyChartTooltipSource).not.toContain('style={');
     expect(historyChartTooltipSource).not.toContain('ChartsAPI.getMetricsHistory');
+  });
+
+  it('keeps tag badges CSP-safe', () => {
+    expect(tagBadgesSource).toContain('data-tag-dot="true"');
+    expect(tagBadgesSource).toContain('data-tag-dot-fill="true"');
+    expect(tagBadgesSource).toContain('data-tag-dot-ring="true"');
+    expect(tagBadgesSource).not.toContain('style={');
+    expect(tagBadgesSource).not.toContain('box-shadow');
+    expect(tagBadgesSource).not.toContain('background-color');
   });
 
   it('keeps container update badge on shell, runtime, and model owners', () => {
@@ -1166,12 +1181,21 @@ describe('shared primitive guardrails', () => {
   it('keeps tooltip on shell, runtime, and model owners', () => {
     expect(tooltipSource).toContain('useTooltipState');
     expect(tooltipSource).toContain('createTooltipSystemState');
+    expect(tooltipSource).toContain('foreignObject');
     expect(tooltipSource).not.toContain('createSignal');
     expect(tooltipSource).not.toContain('requestAnimationFrame');
     expect(tooltipSource).not.toContain('sanitizeTooltipContent');
     expect(tooltipSource).not.toContain('resolveTooltipPosition');
+    expect(tooltipSource).not.toContain('style={');
+
+    expect(tooltipPortalSource).toContain('useTooltipPortalState');
+    expect(tooltipPortalSource).toContain('foreignObject');
+    expect(tooltipPortalSource).not.toContain('createSignal');
+    expect(tooltipPortalSource).not.toContain('resolveTooltipPosition');
+    expect(tooltipPortalSource).not.toContain('style={');
 
     expect(tooltipStateSource).toContain('export function useTooltipState');
+    expect(tooltipStateSource).toContain('export function useTooltipPortalState');
     expect(tooltipStateSource).toContain('export function createTooltipSystemState');
     expect(tooltipStateSource).toContain('createSignal');
     expect(tooltipStateSource).toContain('requestAnimationFrame');

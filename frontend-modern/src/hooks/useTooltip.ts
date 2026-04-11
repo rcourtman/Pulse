@@ -25,7 +25,11 @@ export function useTooltip() {
 
   const onMouseEnter = (e: MouseEvent) => {
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    setPos({ x: rect.left + rect.width / 2, y: rect.top });
+    const hasPointerPosition = Number.isFinite(e.clientX) && Number.isFinite(e.clientY);
+    setPos({
+      x: hasPointerPosition ? e.clientX : rect.left + rect.width / 2,
+      y: hasPointerPosition ? e.clientY : rect.top,
+    });
     setShow(true);
   };
 

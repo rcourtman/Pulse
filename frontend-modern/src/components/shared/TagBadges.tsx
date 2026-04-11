@@ -23,6 +23,8 @@ export const TagBadges: Component<TagBadgesProps> = (props) => {
   const TagDot: Component<{ tag: string }> = (dotProps) => {
     const colors = () => getTagColorWithSpecial(dotProps.tag, isDark());
     const isActive = () => props.activeSearch?.includes(`tags:${dotProps.tag}`) || false;
+    const ringClass = () =>
+      isActive() ? (isDark() ? 'text-white/90' : 'text-black/80') : 'text-transparent';
 
     return (
       <div
@@ -42,17 +44,24 @@ export const TagBadges: Component<TagBadgesProps> = (props) => {
           props.onTagClick?.(dotProps.tag);
         }}
       >
-        <div
-          class="w-2 h-2 rounded-full hover:scale-150 transition-transform duration-200 ease-out cursor-pointer"
-          style={{
-            'background-color': colors().bg,
-            'box-shadow': isActive()
-              ? isDark()
-                ? `0 0 0 2.5px rgba(255, 255, 255, 0.9)`
-                : `0 0 0 2.5px rgba(0, 0, 0, 0.8)`
-              : 'none',
-          }}
-        />
+        <svg
+          data-tag-dot="true"
+          data-active={isActive() ? 'true' : 'false'}
+          viewBox="0 0 10 10"
+          aria-hidden="true"
+          class={`h-2 w-2 overflow-visible hover:scale-150 transition-transform duration-200 ease-out cursor-pointer ${ringClass()}`}
+        >
+          <circle
+            data-tag-dot-ring="true"
+            cx="5"
+            cy="5"
+            r="4"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          />
+          <circle data-tag-dot-fill="true" cx="5" cy="5" r="3" fill={colors().bg} />
+        </svg>
       </div>
     );
   };

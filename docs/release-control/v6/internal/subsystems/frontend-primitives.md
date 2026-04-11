@@ -773,6 +773,10 @@ canonical tag-badge primitive. Dashboard workload rows and the unified-resource
 detail drawer must import that shared owner instead of keeping a dashboard-local
 tag badge variant or importing a feature-local path into infrastructure
 surfaces.
+That same owner now also holds the CSP-safe tag-dot rendering contract: tag
+color and active-state emphasis must travel through SVG fill/stroke attributes
+or stable classes, not inline `background-color`, `box-shadow`, or other
+`style=` mutations that break the hosted demo CSP.
 `frontend-modern/src/components/Settings/OperationsPanel.tsx` is now also the
 canonical shared settings wrapper for operations-style panels such as
 diagnostics, reporting, and system logs. Those surfaces must extend that owner
@@ -1016,6 +1020,10 @@ The remaining header, overlay, and tooltip render surfaces now live in
 `frontend-modern/src/components/shared/HistoryChartOverlay.tsx`, and
 `frontend-modern/src/components/shared/HistoryChartTooltip.tsx` instead of
 re-accumulating those sections inline in the shell.
+That tooltip owner now also holds the CSP-safe hover contract: chart tooltips
+must render inside the chart surface with model-owned layout and SVG/attribute
+positioning, not through fixed portals or inline `left`/`top` style attributes
+that violate the public demo CSP.
 The shared container update badge now follows that same owner split.
 `frontend-modern/src/components/shared/ContainerUpdateBadge.tsx` stays the
 render surface for the badge, icon, and update button shells,
@@ -1157,6 +1165,9 @@ sanitization logic back into the shared shell. Shared portal-mounted tooltip
 shells such as `frontend-modern/src/components/shared/TooltipPortal.tsx` must
 use the same semantic surface tokens as the canonical tooltip instead of
 introducing light-mode-inverted palettes.
+That same tooltip owner now also holds the CSP-safe portal contract: shared
+tooltip shells must render through SVG/attribute positioning and viewport-
+clamped layout helpers rather than fixed inline `left`/`top` style attributes.
 The shared collapsible search input now follows that same owner split.
 `frontend-modern/src/components/shared/CollapsibleSearchInput.tsx` stays the
 render shell, `frontend-modern/src/components/shared/useCollapsibleSearchInputState.ts`

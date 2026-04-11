@@ -83,6 +83,7 @@ describe('HistoryChart', () => {
     expect(historyChartStateSource).not.toContain('getTrialTryAgainLaterMessage()');
 
     expect(historyChartModelSource).toContain('formatHistoryChartTooltipValue');
+    expect(historyChartModelSource).toContain('getHistoryChartTooltipLayout');
     expect(historyChartModelSource).toContain('HISTORY_CHART_RANGES');
     expect(historyChartModelSource).toContain('getHistoryChartScale');
     expect(historyChartModelSource).toContain('findHistoryChartClosestPoint');
@@ -99,7 +100,11 @@ describe('HistoryChart', () => {
     expect(historyChartOverlaySource).not.toContain('setupCanvasDPR');
 
     expect(historyChartTooltipSource).toContain('formatHistoryChartTooltipValue');
+    expect(historyChartTooltipSource).toContain('getHistoryChartTooltipLayout');
+    expect(historyChartTooltipSource).toContain('foreignObject');
     expect(historyChartTooltipSource).toContain('new Date(point().timestamp).toLocaleString()');
+    expect(historyChartTooltipSource).not.toContain('<Portal>');
+    expect(historyChartTooltipSource).not.toContain('style={');
     expect(historyChartTooltipSource).not.toContain('ChartsAPI.getMetricsHistory');
   });
 

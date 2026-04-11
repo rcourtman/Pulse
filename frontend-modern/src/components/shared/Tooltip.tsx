@@ -19,18 +19,28 @@ export const Tooltip: Component<TooltipProps> = (props) => {
   return (
     <Show when={props.visible}>
       <Portal mount={document.body}>
-        <div
-          ref={state.setTooltipRef}
-          class="fixed z-[9999] px-3 py-2 text-xs whitespace-pre-line rounded-md border shadow-sm pointer-events-none bg-surface text-base-content border-border leading-tight"
-          style={{
-            left: `${state.position().left}px`,
-            top: `${state.position().top}px`,
-            'max-width': `${props.maxWidth ?? 240}px`,
-            opacity: props.visible ? '1' : '0',
-            transition: 'opacity 120ms ease-out',
-          }}
-          textContent={state.sanitizedContent()}
-        />
+        <svg
+          class="fixed inset-0 z-[9999] h-screen w-screen overflow-visible pointer-events-none"
+          viewBox={`0 0 ${state.viewport().width} ${state.viewport().height}`}
+          preserveAspectRatio="none"
+          aria-hidden="true"
+        >
+          <foreignObject
+            x={state.position().left}
+            y={state.position().top}
+            width={state.maxWidth()}
+            height={state.viewport().height}
+            overflow="visible"
+          >
+            <div
+              ref={state.setTooltipRef}
+              data-tooltip="true"
+              class="inline-block max-w-full whitespace-pre-line rounded-md border border-border bg-surface px-3 py-2 text-xs leading-tight text-base-content shadow-sm"
+            >
+              {state.sanitizedContent()}
+            </div>
+          </foreignObject>
+        </svg>
       </Portal>
     </Show>
   );

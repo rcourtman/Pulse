@@ -38,7 +38,15 @@ import { TagBadges } from '../TagBadges';
 
 /** Return all tag dot elements (the colored circles) scoped to the test container. */
 function getTagDots(container?: HTMLElement) {
-  return (container ?? document).querySelectorAll('.rounded-full');
+  return (container ?? document).querySelectorAll('[data-tag-dot="true"]');
+}
+
+function getTagDotFill(dot: Element) {
+  return dot.querySelector('[data-tag-dot-fill="true"]')?.getAttribute('fill');
+}
+
+function getTagDotRing(dot: Element) {
+  return dot.querySelector('[data-tag-dot-ring="true"]');
 }
 
 afterEach(() => {
@@ -134,68 +142,69 @@ describe('TagBadges', () => {
       darkModeMock.mockReturnValue(false);
       render(() => <TagBadges tags={['web']} />);
       expect(getTagColorWithSpecialMock).toHaveBeenCalledWith('web', false);
-      const dot = getTagDots()[0] as HTMLElement;
-      expect(dot.style.backgroundColor).toBe('rgb(200, 200, 200)');
+      const dot = getTagDots()[0];
+      expect(getTagDotFill(dot)).toBe('rgb(200, 200, 200)');
     });
 
     it('calls getTagColorWithSpecial with isDark=true when isDarkMode prop is true', () => {
       render(() => <TagBadges tags={['web']} isDarkMode={true} />);
       expect(getTagColorWithSpecialMock).toHaveBeenCalledWith('web', true);
-      const dot = getTagDots()[0] as HTMLElement;
-      expect(dot.style.backgroundColor).toBe('rgb(30, 30, 30)');
+      const dot = getTagDots()[0];
+      expect(getTagDotFill(dot)).toBe('rgb(30, 30, 30)');
     });
 
     it('uses dark mode signal when isDarkMode prop is not set', () => {
       darkModeMock.mockReturnValue(true);
       render(() => <TagBadges tags={['db']} />);
       expect(getTagColorWithSpecialMock).toHaveBeenCalledWith('db', true);
-      const dot = getTagDots()[0] as HTMLElement;
-      expect(dot.style.backgroundColor).toBe('rgb(30, 30, 30)');
+      const dot = getTagDots()[0];
+      expect(getTagDotFill(dot)).toBe('rgb(30, 30, 30)');
     });
 
     it('isDarkMode=false overrides dark mode signal', () => {
       darkModeMock.mockReturnValue(true);
       render(() => <TagBadges tags={['web']} isDarkMode={false} />);
       expect(getTagColorWithSpecialMock).toHaveBeenCalledWith('web', false);
-      const dot = getTagDots()[0] as HTMLElement;
-      expect(dot.style.backgroundColor).toBe('rgb(200, 200, 200)');
+      const dot = getTagDots()[0];
+      expect(getTagDotFill(dot)).toBe('rgb(200, 200, 200)');
     });
   });
 
   describe('activeSearch highlighting', () => {
-    it('applies box-shadow when tag is in activeSearch', () => {
+    it('marks the tag as active when it is in activeSearch', () => {
       render(() => <TagBadges tags={['web']} activeSearch="tags:web" />);
       const dot = getTagDots()[0] as HTMLElement;
-      expect(dot.style.boxShadow).not.toBe('none');
+      expect(dot.dataset.active).toBe('true');
+      expect(getTagDotRing(dot)).toBeInTheDocument();
     });
 
-    it('does not apply box-shadow when tag is not in activeSearch', () => {
+    it('keeps the tag inactive when it is not in activeSearch', () => {
       render(() => <TagBadges tags={['web']} activeSearch="tags:db" />);
       const dot = getTagDots()[0] as HTMLElement;
-      expect(dot.style.boxShadow).toBe('none');
+      expect(dot.dataset.active).toBe('false');
     });
 
-    it('uses light-mode shadow color when not dark', () => {
+    it('uses light-mode ring color when not dark', () => {
       darkModeMock.mockReturnValue(false);
       render(() => <TagBadges tags={['web']} activeSearch="tags:web" />);
       const dot = getTagDots()[0] as HTMLElement;
-      expect(dot.style.boxShadow).toContain('rgba(0, 0, 0');
+      expect(dot.getAttribute('class')).toContain('text-black/80');
     });
 
-    it('uses dark-mode shadow color when dark', () => {
+    it('uses dark-mode ring color when dark', () => {
       darkModeMock.mockReturnValue(true);
       render(() => <TagBadges tags={['web']} activeSearch="tags:web" />);
       const dot = getTagDots()[0] as HTMLElement;
-      expect(dot.style.boxShadow).toContain('rgba(255, 255, 255');
+      expect(dot.getAttribute('class')).toContain('text-white/90');
     });
 
     it('substring match: "web" highlights when activeSearch contains "tags:webapp" (documents current behavior)', () => {
       // Documents that the component uses .includes() for matching, which
       // means substring matches occur. If exact-token matching is added later,
-      // update this test to expect boxShadow === 'none'.
+      // update this test to expect data-active === 'false'.
       render(() => <TagBadges tags={['web']} activeSearch="tags:webapp" />);
       const dot = getTagDots()[0] as HTMLElement;
-      expect(dot.style.boxShadow).not.toBe('none');
+      expect(dot.dataset.active).toBe('true');
     });
   });
 

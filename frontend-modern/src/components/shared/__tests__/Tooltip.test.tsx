@@ -7,6 +7,7 @@ import {
   hideTooltip,
 } from '@/components/shared/Tooltip';
 import tooltipSource from '@/components/shared/Tooltip.tsx?raw';
+import tooltipPortalSource from '@/components/shared/TooltipPortal.tsx?raw';
 import tooltipModelSource from '@/components/shared/tooltipModel.ts?raw';
 import tooltipStateSource from '@/components/shared/useTooltipState.ts?raw';
 
@@ -19,12 +20,21 @@ describe('Tooltip', () => {
   it('keeps tooltip on shell, runtime, and model owners', () => {
     expect(tooltipSource).toContain('useTooltipState');
     expect(tooltipSource).toContain('createTooltipSystemState');
+    expect(tooltipSource).toContain('foreignObject');
     expect(tooltipSource).not.toContain('createSignal');
     expect(tooltipSource).not.toContain('requestAnimationFrame');
     expect(tooltipSource).not.toContain('sanitizeTooltipContent');
     expect(tooltipSource).not.toContain('resolveTooltipPosition');
+    expect(tooltipSource).not.toContain('style={');
+
+    expect(tooltipPortalSource).toContain('useTooltipPortalState');
+    expect(tooltipPortalSource).toContain('foreignObject');
+    expect(tooltipPortalSource).not.toContain('createSignal');
+    expect(tooltipPortalSource).not.toContain('resolveTooltipPosition');
+    expect(tooltipPortalSource).not.toContain('style={');
 
     expect(tooltipStateSource).toContain('export function useTooltipState');
+    expect(tooltipStateSource).toContain('export function useTooltipPortalState');
     expect(tooltipStateSource).toContain('export function createTooltipSystemState');
     expect(tooltipStateSource).toContain('createSignal');
     expect(tooltipStateSource).toContain('requestAnimationFrame');
@@ -41,7 +51,7 @@ describe('Tooltip', () => {
   it('sanitizes tooltip content through the model owner', async () => {
     render(() => <Tooltip content={`<b>"unsafe"</b> & 'quoted'`} x={24} y={24} visible />);
 
-    const tooltip = document.body.querySelector('div[style*="opacity: 1"]') as HTMLDivElement | null;
+    const tooltip = document.body.querySelector('[data-tooltip="true"]') as HTMLDivElement | null;
     expect(tooltip).not.toBeNull();
     if (!tooltip) return;
 
@@ -75,13 +85,15 @@ describe('Tooltip', () => {
 
     render(() => <Tooltip content="CPU" x={2} y={2} visible />);
 
-    const tooltip = document.body.querySelector('div[style*="opacity: 1"]') as HTMLDivElement | null;
+    const tooltip = document.body.querySelector('[data-tooltip="true"]') as HTMLDivElement | null;
     expect(tooltip).not.toBeNull();
     if (!tooltip) return;
 
     await waitFor(() => {
-      expect(Number.parseFloat(tooltip.style.left)).toBeGreaterThanOrEqual(4);
-      expect(Number.parseFloat(tooltip.style.top)).toBeGreaterThanOrEqual(4);
+      const portal = tooltip.closest('foreignObject');
+      expect(portal).not.toBeNull();
+      expect(Number.parseFloat(portal?.getAttribute('x') ?? '0')).toBeGreaterThanOrEqual(4);
+      expect(Number.parseFloat(portal?.getAttribute('y') ?? '0')).toBeGreaterThanOrEqual(4);
     });
 
     expect(raf).toHaveBeenCalled();

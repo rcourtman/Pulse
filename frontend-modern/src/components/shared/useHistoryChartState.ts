@@ -52,6 +52,8 @@ export function useHistoryChartState(props: HistoryChartProps, refs: HistoryChar
   const [cursorX, setCursorX] = createSignal<number | null>(null);
   const [startingTrial, setStartingTrial] = createSignal(false);
   const [hoveredPoint, setHoveredPoint] = createSignal<HistoryChartHoverPoint | null>(null);
+  const [chartWidth, setChartWidth] = createSignal(300);
+  const chartHeight = createMemo(() => props.height || 200);
 
   const canStartTrial = createMemo(() => canStartCommercialTrial());
 
@@ -200,7 +202,7 @@ export function useHistoryChartState(props: HistoryChartProps, refs: HistoryChar
 
     const points = data();
     const width = canvas.parentElement?.clientWidth || 300;
-    const height = props.height || 200;
+    const height = chartHeight();
 
     setupCanvasDPR(canvas, ctx, width, height);
     ctx.clearRect(0, 0, width, height);
@@ -322,6 +324,7 @@ export function useHistoryChartState(props: HistoryChartProps, refs: HistoryChar
     const updateMaxPoints = () => {
       const width = container.clientWidth || 0;
       if (width <= 0) return;
+      setChartWidth(width);
       const next = calculateOptimalPoints(width, 'history');
       if (next !== maxPoints()) {
         setMaxPoints(next);
@@ -347,7 +350,7 @@ export function useHistoryChartState(props: HistoryChartProps, refs: HistoryChar
     const width = rect.width;
     const geometry = createHistoryChartGeometry({
       width,
-      height: props.height || 200,
+      height: chartHeight(),
       startTime: points[0].timestamp,
       endTime: points[points.length - 1].timestamp,
       minValue: getHistoryChartScale(points, props.unit).minValue,
@@ -364,12 +367,14 @@ export function useHistoryChartState(props: HistoryChartProps, refs: HistoryChar
     const ratio = (x - 40) / (width - 40);
     const hoverTimestamp = points[0].timestamp + ratio * geometry.timeSpan;
     const closest = findHistoryChartClosestPoint(points, hoverTimestamp);
+    const pointX = geometry.getX(closest.timestamp);
+    const pointY = geometry.getY(closest.value);
 
     setHoveredPoint({
       value: closest.value,
       timestamp: closest.timestamp,
-      x: rect.left + x,
-      y: rect.top + 20,
+      x: pointX,
+      y: pointY,
     });
   };
 
@@ -388,6 +393,8 @@ export function useHistoryChartState(props: HistoryChartProps, refs: HistoryChar
     handleMouseLeave,
     handleMouseMove,
     handleStartTrial,
+    chartHeight,
+    chartWidth,
     hoveredPoint,
     isLocked,
     loading,
