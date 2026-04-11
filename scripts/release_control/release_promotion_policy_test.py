@@ -191,6 +191,7 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("- Promoted prerelease tag:", content)
         self.assertIn("ga_date", content)
         self.assertIn("v5_eos_date", content)
+        self.assertIn("draft: ${{ github.event.inputs.draft_only == 'true' }}", content)
         self.assertIn("Derived rollback command:", helper)
         self.assertIn("./scripts/install.sh --version", helper)
         self.assertIn("v6 GA date to publish with GA", helper)

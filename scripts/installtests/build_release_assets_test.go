@@ -71,6 +71,10 @@ func TestCreateReleaseUploadsPowerShellInstaller(t *testing.T) {
 			t.Fatalf("create-release.yml missing required installer upload step: %s", needle)
 		}
 	}
+
+	if !strings.Contains(workflow, `draft: ${{ github.event.inputs.draft_only == 'true' }}`) {
+		t.Fatal("create-release.yml must pass the actual draft_only state into validate-release-assets")
+	}
 }
 
 func TestDockerAndDemoBuildsUseCanonicalReleaseLdflags(t *testing.T) {

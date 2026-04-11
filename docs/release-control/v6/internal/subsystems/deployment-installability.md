@@ -181,6 +181,11 @@ the manual `trigger-release*.sh` entrypoints must all derive their governed
 release line from control-plane metadata before they touch public artifacts or
 deployment targets, rather than treating tag names or workflow triggers as
 enough proof on their own.
+That same release-validation boundary also owns draft-versus-published asset
+state. When `.github/workflows/create-release.yml` runs in `draft_only` mode,
+it must pass the real draft state into `.github/workflows/validate-release-assets.yml`
+so validation blocks or annotates the draft release as a draft, rather than
+misclassifying the run as post-publish revalidation.
 That same governed demo-deployment boundary now owns target separation between
 the public stable demo and the opt-in v6 preview demo. `.github/workflows/create-release.yml`,
 `.github/workflows/update-demo-server.yml`, and `.github/workflows/deploy-demo-server.yml`

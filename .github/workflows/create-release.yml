@@ -699,5 +699,5 @@ jobs:
       tag: ${{ needs.prepare.outputs.tag }}
       version: ${{ needs.prepare.outputs.version }}
       release_id: ${{ needs.create_release.outputs.release_id }}
-      draft: false
+      draft: ${{ github.event.inputs.draft_only == 'true' }}
       target_commitish: ${{ needs.create_release.outputs.target_commitish }}
