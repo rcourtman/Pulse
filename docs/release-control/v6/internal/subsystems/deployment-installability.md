@@ -186,6 +186,12 @@ state. When `.github/workflows/create-release.yml` runs in `draft_only` mode,
 it must pass the real draft state into `.github/workflows/validate-release-assets.yml`
 so validation blocks or annotates the draft release as a draft, rather than
 misclassifying the run as post-publish revalidation.
+That same governed release boundary also owns unpublished draft retry
+reconciliation. Re-running `.github/workflows/create-release.yml` for the same
+unpublished tag must locate the existing draft release, retarget its git tag
+and release `target_commitish` to the current governed release-line head, and
+continue publication without requiring an operator to delete the tag manually;
+published tags remain immutable and must still fail closed.
 That same frontend-release boundary also owns shared header-composition proof.
 `.github/workflows/release-dry-run.yml` and `.github/workflows/create-release.yml`
 must both run the same `lint:headers` audit so a branch that would be rejected

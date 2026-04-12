@@ -65,6 +65,9 @@ func TestCreateReleaseUploadsPowerShellInstaller(t *testing.T) {
 		`gh release upload "${TAG}" release/install.sh --clobber`,
 		`if [ -f release/install.ps1 ]; then`,
 		`gh release upload "${TAG}" release/install.ps1 --clobber`,
+		`gh api "repos/${{ github.repository }}/releases?per_page=100" --paginate`,
+		`git push origin "refs/tags/${TAG}" --force`,
+		`-F target_commitish="${HEAD_SHA}"`,
 	}
 	for _, needle := range required {
 		if !strings.Contains(workflow, needle) {

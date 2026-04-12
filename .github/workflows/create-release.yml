@@ -524,12 +524,32 @@ jobs:
 
           echo "notes_file=${NOTES_FILE}" >> $GITHUB_OUTPUT
 
+      - name: Locate existing release
+        id: existing_release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ needs.prepare.outputs.tag }}"
+          EXISTING_RELEASE=$(gh api "repos/${{ github.repository }}/releases?per_page=100" --paginate | jq -sc --arg tag "$TAG" 'add | map(select(.tag_name == $tag)) | first // empty')
+          RELEASE_ID=$(echo "$EXISTING_RELEASE" | jq -r '.id // empty')
+          RELEASE_URL=$(echo "$EXISTING_RELEASE" | jq -r '.html_url // empty')
+          RELEASE_IS_DRAFT=$(echo "$EXISTING_RELEASE" | jq -r '.draft // false')
+          RELEASE_PUBLISHED_AT=$(echo "$EXISTING_RELEASE" | jq -r '.published_at // empty')
+
+          echo "release_id=${RELEASE_ID}" >> $GITHUB_OUTPUT
+          echo "release_url=${RELEASE_URL}" >> $GITHUB_OUTPUT
+          echo "release_is_draft=${RELEASE_IS_DRAFT}" >> $GITHUB_OUTPUT
+          echo "release_published_at=${RELEASE_PUBLISHED_AT}" >> $GITHUB_OUTPUT
+
       - name: Create tag
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           TAG="${{ needs.prepare.outputs.tag }}"
           HEAD_SHA=$(git rev-parse HEAD)
+          EXISTING_RELEASE_ID="${{ steps.existing_release.outputs.release_id }}"
+          EXISTING_RELEASE_DRAFT="${{ steps.existing_release.outputs.release_is_draft }}"
+          EXISTING_RELEASE_PUBLISHED_AT="${{ steps.existing_release.outputs.release_published_at }}"
 
           REMOTE_TAG_SHA=$(git ls-remote --tags origin "refs/tags/${TAG}" | awk '{print $1}')
 
@@ -539,6 +559,12 @@ jobs:
 
             if [ "$REMOTE_COMMIT_SHA" = "$HEAD_SHA" ]; then
               echo "Tag ${TAG} already exists and points to HEAD - continuing"
+            elif [ -n "$EXISTING_RELEASE_ID" ] && [ "$EXISTING_RELEASE_DRAFT" = "true" ] && [ -z "$EXISTING_RELEASE_PUBLISHED_AT" ]; then
+              echo "Retargeting existing draft tag ${TAG} from ${REMOTE_COMMIT_SHA} to ${HEAD_SHA}"
+              git config user.name "github-actions[bot]"
+              git config user.email "github-actions[bot]@users.noreply.github.com"
+              git tag -fa "${TAG}" -m "Release ${TAG}" "${HEAD_SHA}"
+              git push origin "refs/tags/${TAG}" --force
             else
               echo "::error::Tag ${TAG} already exists but points to ${REMOTE_COMMIT_SHA}, not HEAD (${HEAD_SHA}). Delete the tag first: git push origin --delete ${TAG}"
               exit 1
@@ -559,19 +585,23 @@ jobs:
           TAG="${{ needs.prepare.outputs.tag }}"
           NOTES_FILE="${{ steps.generate_notes.outputs.notes_file }}"
           IS_PRERELEASE="${{ needs.prepare.outputs.is_prerelease }}"
+          HEAD_SHA=$(git rev-parse HEAD)
 
-          EXISTING_RELEASE=$(gh api "repos/${{ github.repository }}/releases/tags/${TAG}" 2>/dev/null || echo "")
-          RELEASE_ID=$(echo "$EXISTING_RELEASE" | jq -r '.id // empty')
+          RELEASE_ID="${{ steps.existing_release.outputs.release_id }}"
+          RELEASE_URL="${{ steps.existing_release.outputs.release_url }}"
+          IS_DRAFT="${{ steps.existing_release.outputs.release_is_draft }}"
+          PUBLISHED_AT="${{ steps.existing_release.outputs.release_published_at }}"
 
           if [ -n "$RELEASE_ID" ]; then
-            RELEASE_URL=$(echo "$EXISTING_RELEASE" | jq -r '.html_url')
-            IS_DRAFT=$(echo "$EXISTING_RELEASE" | jq -r '.draft')
-
-            if [ "$IS_DRAFT" = "true" ]; then
+            if [ "$IS_DRAFT" = "true" ] && [ -z "$PUBLISHED_AT" ]; then
               echo "Updating existing draft release for ${TAG}"
               gh api "repos/${{ github.repository }}/releases/${RELEASE_ID}" \
                 -X PATCH \
-                -F body="$(cat $NOTES_FILE)" \
+                -F tag_name="${TAG}" \
+                -F target_commitish="${HEAD_SHA}" \
+                -F name="Pulse ${TAG}" \
+                -F body="$(cat "$NOTES_FILE")" \
+                -F draft=true \
                 -F prerelease=${IS_PRERELEASE} > /dev/null
             else
               echo "::error::Published release already exists for ${TAG}."
@@ -582,8 +612,9 @@ jobs:
             RELEASE_JSON=$(gh api "repos/${{ github.repository }}/releases" \
               -X POST \
               -F tag_name="${TAG}" \
+              -F target_commitish="${HEAD_SHA}" \
               -F name="Pulse ${TAG}" \
-              -F body="$(cat $NOTES_FILE)" \
+              -F body="$(cat "$NOTES_FILE")" \
               -F draft=true \
               -F prerelease=${IS_PRERELEASE})
 

@@ -192,6 +192,10 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("ga_date", content)
         self.assertIn("v5_eos_date", content)
         self.assertIn("draft: ${{ github.event.inputs.draft_only == 'true' }}", content)
+        self.assertIn('gh api "repos/${{ github.repository }}/releases?per_page=100" --paginate', content)
+        self.assertIn('git push origin "refs/tags/${TAG}" --force', content)
+        self.assertIn('Retargeting existing draft tag ${TAG}', content)
+        self.assertIn('-F target_commitish="${HEAD_SHA}"', content)
         self.assertIn("Derived rollback command:", helper)
         self.assertIn("./scripts/install.sh --version", helper)
         self.assertIn("v6 GA date to publish with GA", helper)
@@ -226,6 +230,7 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("pulse/v6-release", template)
         self.assertIn("record_rc_to_ga_rehearsal.py --run-id <run-id>", runbook)
         self.assertIn("rc-to-ga-promotion-readiness-rehearsal-<record-date>.md", runbook)
+        self.assertIn("Existing unpublished draft releases for the same tag are updated in place", runbook)
 
     def test_release_artifact_workflows_refuse_stable_without_matching_rc(self) -> None:
         publish = read(".github/workflows/publish-docker.yml")

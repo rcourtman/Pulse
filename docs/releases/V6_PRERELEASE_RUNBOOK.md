@@ -98,6 +98,9 @@ git push origin pulse/v6-release
    - Re-run `Pulse Release Pipeline` on `pulse/v6-release`
    - Same `version` and notes
    - `draft_only`: `false`
+   - Existing unpublished draft releases for the same tag are updated in place
+     and their tag is retargeted to the current governed `pulse/v6-release`
+     head automatically. Do not delete the tag manually just to retry publish.
    - The release workflow dispatches `update-demo-server.yml` against the
      `preview-v6` demo target automatically.
    - Keep the public stable demo on v5/stable; prereleases must land only on
