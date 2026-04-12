@@ -351,6 +351,10 @@ the managed local stack: `scripts/hot-dev.sh` may only rebuild the backend for
 runtime Go sources, not `*_test.go` churn, and it must suppress `pulse` binary
 change events produced by its own successful managed rebuilds, managed backend
 restarts, or startup build.
+That same watcher boundary also owns backend-served demo coherence:
+`internal/api/frontend-modern/dist` changes must trigger a managed backend
+rebuild so the `go:embed` frontend on `:7655` cannot drift behind a freshly
+synced embedded frontend bundle.
 Otherwise unrelated parallel test edits or hot-dev's own binary output can
 tear down `7655`, produce transient `5173` proxy failures, and undermine the
 canonical browser-runtime proof path.

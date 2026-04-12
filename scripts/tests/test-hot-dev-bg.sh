@@ -656,10 +656,40 @@ test_hot_dev_script_ignores_test_only_backend_churn() {
 
   assert_contains "hot-dev watcher ignores Go test files" "${output}" '[[ "${changed_file}" == *_test.go ]] && return 1'
   assert_contains "hot-dev watcher routes rebuild decisions through shared helper" "${output}" 'should_rebuild_backend_for_change "$changed_file"'
+  assert_contains "hot-dev watcher rebuilds for embedded frontend demo dist changes" "${output}" '[[ "${changed_file}" == "${EMBEDDED_FRONTEND_DIST_DIR}" ]] || [[ "${changed_file}" == "${EMBEDDED_FRONTEND_DIST_DIR}/"* ]]'
+  assert_contains "hot-dev fswatch covers the embedded frontend parent dir" "${output}" '"${ROOT_DIR}/pulse" "${HOT_DEV_RESTART_SENTINEL}" "${EMBEDDED_FRONTEND_DIR}"'
+  assert_contains "hot-dev fswatch only treats the pulse binary path as a manual build trigger" "${output}" 'elif [[ "$changed_file" == "${ROOT_DIR}/pulse" ]]; then'
+  assert_contains "hot-dev watcher declares a managed build lock path" "${output}" 'HOT_DEV_BUILD_LOCK="${HOT_DEV_BUILD_LOCK_FILE:-${ROOT_DIR}/tmp/hot-dev.build.lock}"'
+  assert_contains "hot-dev watcher suppresses manual binary restarts while a managed build is active" "${output}" 'if build_lock_active; then'
   assert_contains "hot-dev watcher suppresses self-build binary restart loops" "${output}" 'if manual_build_event_suppressed; then'
   assert_contains "hot-dev watcher suppresses startup self-build pulse events" "${output}" 'SELF_BUILD_IGNORE_UNTIL=$((WATCHER_READY_AT + HOT_DEV_WATCHER_STARTUP_GRACE_SECONDS + 5))'
   assert_contains "hot-dev watcher seeds the startup pulse marker" "${output}" 'LAST_PULSE_BINARY_MARKER="$(file_event_marker "${ROOT_DIR}/pulse" || true)"'
   assert_contains "hot-dev watcher suppresses source churn during managed verification" "${output}" 'verify_lock_active'
+}
+
+test_hot_dev_script_marks_managed_rebuild_output_before_build() {
+  local rebuild_block mark_line build_line
+  rebuild_block="$(
+    awk '
+      /rebuild_backend\(\)/ { capture=1 }
+      capture { print }
+      capture && /^    if command -v inotifywait/ { exit }
+    ' "${HOT_DEV}"
+  )"
+
+  assert_contains "hot-dev rebuild path suppresses self-build binary churn" "${rebuild_block}" 'mark_self_build_output'
+  assert_contains "hot-dev rebuild path raises the managed build lock" "${rebuild_block}" 'set_build_lock'
+  assert_contains "hot-dev rebuild path clears the managed build lock" "${rebuild_block}" 'clear_build_lock'
+
+  mark_line="$(printf '%s\n' "${rebuild_block}" | awk '/mark_self_build_output/ { print NR; exit }')"
+  build_line="$(printf '%s\n' "${rebuild_block}" | awk '/if build_backend_binary; then/ { print NR; exit }')"
+
+  if [[ -n "${mark_line}" && -n "${build_line}" && "${mark_line}" -lt "${build_line}" ]]; then
+    echo "[PASS] hot-dev rebuild path marks self-build output before compiling pulse"
+  else
+    echo "[FAIL] hot-dev rebuild path marks self-build output before compiling pulse" >&2
+    ((failures++))
+  fi
 }
 
 test_hot_dev_bg_script_advertises_managed_entrypoint() {
