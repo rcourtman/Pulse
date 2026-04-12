@@ -383,18 +383,25 @@ func TestTrueNASPollerHonorsConfiguredPollInterval(t *testing.T) {
 	poller.Start(context.Background())
 	t.Cleanup(poller.Stop)
 
+	var firstPollSuccessAt time.Time
 	waitForCondition(t, 2*time.Second, func() bool {
-		return mock.RequestCount() >= 5
+		summaries := poller.ConnectionSummaries("default", []config.TrueNASInstance{connection})
+		summary, ok := summaries[connection.ID]
+		if !ok || summary.Poll == nil || summary.Poll.LastSuccessAt == nil {
+			return false
+		}
+		firstPollSuccessAt = *summary.Poll.LastSuccessAt
+		return true
 	}, "expected initial immediate poll for configured TrueNAS connection")
 
-	requestCountAfterFirstPoll := mock.RequestCount()
 	time.Sleep(400 * time.Millisecond)
-	if got := mock.RequestCount(); got != requestCountAfterFirstPoll {
-		t.Fatalf("expected configured 1s poll interval to avoid an early repoll, got before=%d after=%d", requestCountAfterFirstPoll, got)
+	if summary := poller.ConnectionSummaries("default", []config.TrueNASInstance{connection})[connection.ID]; summary.Poll == nil || summary.Poll.LastSuccessAt == nil || !summary.Poll.LastSuccessAt.Equal(firstPollSuccessAt) {
+		t.Fatalf("expected configured 1s poll interval to avoid an early repoll, got first=%s current=%v", firstPollSuccessAt.Format(time.RFC3339Nano), summary.Poll.LastSuccessAt)
 	}
 
 	waitForCondition(t, 2*time.Second, func() bool {
-		return mock.RequestCount() > requestCountAfterFirstPoll
+		summary := poller.ConnectionSummaries("default", []config.TrueNASInstance{connection})[connection.ID]
+		return summary.Poll != nil && summary.Poll.LastSuccessAt != nil && summary.Poll.LastSuccessAt.After(firstPollSuccessAt)
 	}, "expected configured 1s poll interval to trigger the next poll without waiting for the 60s default")
 }
 
