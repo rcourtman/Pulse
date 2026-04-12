@@ -592,6 +592,7 @@ type Manager struct {
 
 	// Cached timezone for quiet hours
 	quietHoursLoc *time.Location
+	now           func() time.Time
 	stopOnce      sync.Once
 }
 
@@ -657,6 +658,7 @@ func NewManagerWithDataDir(dataDir string) *Manager {
 		hostAgentHostnames:              make(map[string]struct{}),
 		nodeDisplayNames:                make(map[string]string),
 		instanceNodeDisplayNames:        make(map[string]string),
+		now:                             time.Now,
 		config: AlertConfig{
 			Enabled:                true,
 			ActivationState:        ActivationPending,
@@ -2393,7 +2395,11 @@ func (m *Manager) isInQuietHours() bool {
 		m.quietHoursLoc = loc
 	}
 
-	now := time.Now().In(loc)
+	nowFn := m.now
+	if nowFn == nil {
+		nowFn = time.Now
+	}
+	now := nowFn().In(loc).Truncate(time.Minute)
 	dayName := strings.ToLower(now.Format("Monday"))
 
 	// Check if today is enabled for quiet hours
@@ -2418,15 +2424,17 @@ func (m *Manager) isInQuietHours() bool {
 	startTime = time.Date(now.Year(), now.Month(), now.Day(), startTime.Hour(), startTime.Minute(), 0, 0, loc)
 	endTime = time.Date(now.Year(), now.Month(), now.Day(), endTime.Hour(), endTime.Minute(), 0, 0, loc)
 
+	// Quiet hours are configured with minute precision, so treat the start and
+	// end minute as inclusive for user-facing schedules such as 00:00-23:59.
+	endExclusive := endTime.Add(time.Minute)
+
 	// Handle overnight quiet hours (e.g., 22:00 to 08:00)
 	if endTime.Before(startTime) {
-		// If we're past the start time or before the end time
-		if now.After(startTime) || now.Before(endTime) {
+		if !now.Before(startTime) || now.Before(endExclusive) {
 			return true
 		}
 	} else {
-		// Normal case (e.g., 08:00 to 17:00)
-		if now.After(startTime) && now.Before(endTime) {
+		if !now.Before(startTime) && now.Before(endExclusive) {
 			return true
 		}
 	}

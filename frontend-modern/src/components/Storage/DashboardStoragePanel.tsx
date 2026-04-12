@@ -1,4 +1,5 @@
 import { Match, Switch } from 'solid-js';
+import { ProgressBar } from '@/components/shared/ProgressBar';
 import { Card } from '@/components/shared/Card';
 import { buildStoragePath } from '@/routing/resourceLinks';
 import {
@@ -57,12 +58,11 @@ export function DashboardStoragePanel(props: DashboardStoragePanelProps) {
               </span>
             </div>
 
-            <div class="h-2 overflow-hidden rounded bg-surface-alt">
-              <div
-                class={`h-full rounded ${getDashboardStorageCapacityBarClass(capacityPercent())}`}
-                style={{ width: `${capacityPercent()}%` }}
-              />
-            </div>
+            <ProgressBar
+              value={capacityPercent()}
+              class="h-2"
+              fillClass={getDashboardStorageCapacityBarClass(capacityPercent())}
+            />
 
             <div class="flex flex-wrap items-center gap-3 text-xs">
               {getDashboardStorageIssueBadges(props.storage).map((badge) => (

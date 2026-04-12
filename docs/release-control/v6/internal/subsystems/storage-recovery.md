@@ -1190,6 +1190,11 @@ side: `frontend-modern/src/pages/Dashboard.tsx`,
 explicit direct dashboard/storage proof routing instead of borrowing release-
 control coverage only from the broader storage page, component, and model
 surfaces.
+That same dashboard storage surface must also render its capacity meter through
+the shared `frontend-modern/src/components/shared/ProgressBar.tsx` primitive
+and attribute-driven fill geometry instead of owner-local inline width styles,
+so the live dashboard remains CSP-safe while still reporting the canonical
+storage summary.
 That route shell now also composes the recent-alerts widget directly from the
 alert-owned `frontend-modern/src/components/Alerts/RecentAlertsPanel.tsx`
 surface instead of via a dashboard-panels-local alert implementation, so the

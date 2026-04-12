@@ -279,6 +279,31 @@ func TestQuietHoursCategoryForResourceIncidentUsesIncidentCategoryMetadata(t *te
 	}
 }
 
+func TestShouldSuppressNotificationTreatsQuietHoursEndMinuteAsInclusive(t *testing.T) {
+	m := fixedQuietHoursTestManager(
+		time.Date(2026, time.April, 12, 23, 59, 31, 0, time.UTC),
+		QuietHours{
+			Enabled:  true,
+			Start:    "00:00",
+			End:      "23:59",
+			Timezone: "UTC",
+			Days: map[string]bool{
+				"monday": true, "tuesday": true, "wednesday": true,
+				"thursday": true, "friday": true, "saturday": true, "sunday": true,
+			},
+		},
+	)
+
+	suppressed, reason := m.shouldSuppressNotification(&Alert{
+		ID:    "warn",
+		Type:  "cpu",
+		Level: AlertLevelWarning,
+	})
+	if !suppressed || reason != "non-critical" {
+		t.Fatalf("expected warning alert to stay inside quiet hours through 23:59, got suppressed=%t reason=%q", suppressed, reason)
+	}
+}
+
 func TestCheckGuestSkipsAlertsWhenMetricDisabled(t *testing.T) {
 	m := newTestManager(t)
 

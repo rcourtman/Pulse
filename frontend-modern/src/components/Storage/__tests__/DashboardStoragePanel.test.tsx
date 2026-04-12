@@ -46,4 +46,22 @@ describe('DashboardStoragePanel', () => {
     expect(screen.getByText('1 critical')).toBeInTheDocument();
     expect(screen.getByText('24h: +10.0%')).toBeInTheDocument();
   });
+
+  it('renders the capacity bar through the shared progress primitive without inline styles', () => {
+    const storage: DashboardOverview['storage'] = {
+      total: 1,
+      totalCapacity: 4000,
+      totalUsed: 1540,
+      warningCount: 0,
+      criticalCount: 0,
+    };
+
+    const result = render(() => (
+      <DashboardStoragePanel storage={storage} storageTrend={null} loading={false} />
+    ));
+
+    const fill = result.container.querySelector('[data-progress-fill="true"]');
+    expect(fill).toHaveAttribute('width', '38.5');
+    expect(result.container.querySelector('[style]')).toBeNull();
+  });
 });

@@ -17,8 +17,6 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
-	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 )
 
 const (
@@ -47,12 +45,11 @@ const (
 	sloWorkloadsSummaryChartsGitHubActionsP95 = sloWorkloadChartsGitHubActionsP95
 )
 
-// suppressTestLogs disables zerolog for the duration of a test.
+// suppressTestLogs is kept as a call-site marker for noisy integration-style
+// proofs. TestMain installs a package-wide nop logger so -race does not trip
+// over concurrent mutations of the global zerolog logger.
 func suppressTestLogs(t *testing.T) {
 	t.Helper()
-	orig := log.Logger
-	log.Logger = zerolog.Nop()
-	t.Cleanup(func() { log.Logger = orig })
 }
 
 // setTestUnexportedField sets an unexported field on a struct via reflection.

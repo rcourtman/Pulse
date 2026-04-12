@@ -591,7 +591,6 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, graph mock.Fi
 	log.Debug().Int("count", len(state.Nodes)).Msg("mock seeding: processing nodes")
 	for _, node := range state.Nodes {
 		recordNode(node)
-		time.Sleep(50 * time.Millisecond) // Reduced from 200ms for faster startup
 	}
 
 	runningVMs := 0
@@ -603,7 +602,6 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, graph mock.Fi
 	log.Debug().Int("total", len(state.VMs)).Int("running", runningVMs).Msg("mock seeding: processing VMs (including stopped)")
 	for _, vm := range state.VMs {
 		recordGuest([]string{vm.ID}, "vm", vm.ID, true, true, true)
-		time.Sleep(50 * time.Millisecond) // Reduced from 200ms for faster startup
 	}
 
 	runningContainers := 0
@@ -615,7 +613,6 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, graph mock.Fi
 	log.Debug().Int("total", len(state.Containers)).Int("running", runningContainers).Msg("mock seeding: processing containers (including stopped)")
 	for _, ct := range state.Containers {
 		recordGuest([]string{ct.ID}, "container", ct.ID, true, true, true)
-		time.Sleep(50 * time.Millisecond) // Reduced from 200ms for faster startup
 	}
 
 	k8sNodeCount := 0
@@ -671,7 +668,6 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, graph mock.Fi
 			}
 			recordGuest([]string{metricID}, "k8s", metricID, true, true, true)
 		}
-		time.Sleep(30 * time.Millisecond)
 	}
 
 	log.Debug().Int("count", len(state.Storage)).Msg("mock seeding: processing storage")
@@ -681,7 +677,6 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, graph mock.Fi
 		}
 		_, _, total, _ := normalizedStorageCapacityMetrics(storage.Total, storage.Used, storage.Free, storage.Usage)
 		recordStorageTimeline(storage.ID, total)
-		time.Sleep(50 * time.Millisecond) // Reduced from 200ms for faster startup
 	}
 
 	log.Debug().Int("count", len(state.PhysicalDisks)).Msg("mock seeding: processing physical disks")
@@ -761,7 +756,6 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, graph mock.Fi
 				false,
 			)
 		}
-		time.Sleep(50 * time.Millisecond) // Add delay for docker hosts
 	}
 
 	log.Debug().Int("count", len(state.Hosts)).Msg("mock seeding: processing host agents")
@@ -778,7 +772,6 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, graph mock.Fi
 			true,
 			true,
 		)
-		time.Sleep(50 * time.Millisecond)
 	}
 
 	platformFixtures := graph.PlatformFixtures

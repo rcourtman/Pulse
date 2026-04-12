@@ -204,6 +204,13 @@ The alerts schedule surface now also routes quiet-hour suppress-category card
 styling through `frontend-modern/src/utils/alertSchedulePresentation.ts`
 instead of leaving that selectable-card presentation inline in
 `frontend-modern/src/pages/Alerts.tsx`.
+That same schedule/runtime boundary also owns quiet-hours clock semantics.
+Backend quiet hours are minute-granular user input, so runtime evaluation must
+treat the configured start minute and end minute as inclusive and therefore
+keep schedules such as `00:00` to `23:59` active through the full final
+minute instead of expiring at `23:59:00`. Alert quiet-hours proofs should
+control time through the alert manager clock hook instead of depending on wall
+clock execution at whatever second the test runner happens to hit.
 That schedule surface now also follows the same shell/runtime split as the
 other feature tabs: `frontend-modern/src/features/alerts/tabs/ScheduleTab.tsx`
 stays the render shell, while

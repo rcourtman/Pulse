@@ -25,6 +25,22 @@ func setMockSamplerTestEnv(t *testing.T, seedDuration, sampleInterval time.Durat
 	t.Setenv("PULSE_MOCK_TRENDS_SAMPLE_INTERVAL", sampleInterval.String())
 }
 
+func compactMockFixtureConfig() mock.MockConfig {
+	cfg := mock.DefaultConfig
+	cfg.NodeCount = 1
+	cfg.VMsPerNode = 0
+	cfg.LXCsPerNode = 0
+	cfg.DockerHostCount = 0
+	cfg.DockerContainersPerHost = 0
+	cfg.GenericHostCount = 0
+	cfg.K8sClusterCount = 0
+	cfg.K8sNodesPerCluster = 0
+	cfg.K8sPodsPerCluster = 0
+	cfg.K8sDeploymentsPerCluster = 0
+	cfg.RandomMetrics = false
+	return cfg
+}
+
 func TestBuildTieredTimestamps_IncludesCanonicalTerminalNow(t *testing.T) {
 	now := time.Date(2026, time.March, 31, 12, 0, 0, 0, time.UTC)
 
@@ -624,18 +640,8 @@ func TestSeedMockMetricsHistory_UsesCanonicalMockFixtureGraphForLegacyAndProvide
 		}
 	})
 
-	t.Setenv("PULSE_MOCK_NODES", "1")
-	t.Setenv("PULSE_MOCK_VMS_PER_NODE", "0")
-	t.Setenv("PULSE_MOCK_LXCS_PER_NODE", "0")
-	t.Setenv("PULSE_MOCK_DOCKER_HOSTS", "0")
-	t.Setenv("PULSE_MOCK_DOCKER_CONTAINERS", "0")
-	t.Setenv("PULSE_MOCK_GENERIC_HOSTS", "0")
-	t.Setenv("PULSE_MOCK_K8S_CLUSTERS", "0")
-	t.Setenv("PULSE_MOCK_K8S_NODES", "0")
-	t.Setenv("PULSE_MOCK_K8S_PODS", "0")
-	t.Setenv("PULSE_MOCK_K8S_DEPLOYMENTS", "0")
-
 	mock.SetEnabled(false)
+	mock.SetMockConfig(compactMockFixtureConfig())
 	mock.SetEnabled(true)
 
 	graph := mock.CurrentFixtureGraph()
@@ -703,17 +709,18 @@ func TestSeedMockMetricsHistory_UsesCanonicalMockFixtureGraphForLegacyAndProvide
 }
 
 func TestStartMockMetricsSampler_DoesNotClearExistingMetricsStoreData(t *testing.T) {
-	t.Setenv("PULSE_MOCK_NODES", "1")
-	t.Setenv("PULSE_MOCK_VMS_PER_NODE", "0")
-	t.Setenv("PULSE_MOCK_LXCS_PER_NODE", "0")
-	t.Setenv("PULSE_MOCK_DOCKER_HOSTS", "0")
-	t.Setenv("PULSE_MOCK_DOCKER_CONTAINERS", "0")
-	t.Setenv("PULSE_MOCK_GENERIC_HOSTS", "0")
-	t.Setenv("PULSE_MOCK_K8S_CLUSTERS", "0")
-	t.Setenv("PULSE_MOCK_K8S_NODES", "0")
-	t.Setenv("PULSE_MOCK_K8S_PODS", "0")
-	t.Setenv("PULSE_MOCK_K8S_DEPLOYMENTS", "0")
 	setMockSamplerTestEnv(t, time.Hour, 5*time.Minute)
+
+	previousEnabled := mock.IsMockEnabled()
+	previousConfig := mock.GetConfig()
+	t.Cleanup(func() {
+		mock.SetEnabled(false)
+		mock.SetMockConfig(previousConfig)
+		if previousEnabled {
+			mock.SetEnabled(true)
+			mock.SetMockConfig(previousConfig)
+		}
+	})
 
 	cfg := metrics.DefaultConfig(t.TempDir())
 	cfg.RetentionRaw = 90 * 24 * time.Hour
@@ -740,8 +747,9 @@ func TestStartMockMetricsSampler_DoesNotClearExistingMetricsStoreData(t *testing
 		},
 	})
 
+	mock.SetEnabled(false)
+	mock.SetMockConfig(compactMockFixtureConfig())
 	mock.SetEnabled(true)
-	t.Cleanup(func() { mock.SetEnabled(false) })
 
 	monitor := &Monitor{
 		metricsHistory: NewMetricsHistory(1000, 24*time.Hour),

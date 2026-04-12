@@ -196,6 +196,12 @@ window instead of stitching a second live tail onto the end of seeded
 sparklines. Monitoring must not let any mock-owned resource receive a
 duplicate generic unified-resource writer that appends a divergent recent tail
 after the canonical mock sampler has already seeded and extended that series.
+That same sampler-owned boundary also owns seeding cost. Historical mock
+seeding runs synchronously on monitor startup and in package proofs, so it
+must stay deterministic and bounded by fixture size instead of carrying
+per-resource pacing sleeps or other wall-clock throttles that can exhaust the
+package-level `go test -race -timeout 10m` budget on hosted runners before
+canonical mock history has even finished initializing.
 The seed path must therefore include the canonical terminal `now` sample on
 its tiered timeline and anchor seeded series to the canonical metric model at
 that timestamp instead of to mutable state fields, so historical charts match
