@@ -242,6 +242,7 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         helm_pages = read(".github/workflows/helm-pages.yml")
         chart = read("deploy/helm/pulse/Chart.yaml")
         chart_sync = read("scripts/sync_chart_release_metadata.py")
+        demo_smoke = read("scripts/demo_public_browser_smoke.cjs")
         runbook = read("docs/releases/V6_PRERELEASE_RUNBOOK.md")
         self.assertIn("control_plane.py --branch-for-version", publish)
         self.assertIn("control_plane.py --branch-for-version", promote)
@@ -297,6 +298,11 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("separate v6 preview demo environment", runbook)
         self.assertIn("preview-v6", runbook)
         self.assertIn(promotion_metadata_envelope(), normalize_ws(runbook))
+        self.assertIn("waitUntil: 'domcontentloaded'", demo_smoke)
+        self.assertIn("getByLabel('Username').waitFor({ state: 'visible', timeout: 120000 })", demo_smoke)
+        self.assertIn("getByLabel('Password').waitFor({ state: 'visible', timeout: 120000 })", demo_smoke)
+        self.assertIn("getByRole('button', { name: 'Sign in to Pulse' }).waitFor({ state: 'visible', timeout: 120000 })", demo_smoke)
+        self.assertNotIn("waitUntil: 'networkidle'", demo_smoke)
 
     def test_blocked_record_tracks_current_target_and_candidate_version(self) -> None:
         blocked_record_surface = {

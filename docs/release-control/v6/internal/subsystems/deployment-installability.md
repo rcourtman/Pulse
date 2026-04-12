@@ -226,7 +226,10 @@ sufficient; after those checks pass, the governed helpers
 `scripts/run_demo_public_browser_smoke.sh` and
 `scripts/demo_public_browser_smoke.cjs` must exercise the public demo in a real
 Chromium session and prove the login shell actually renders instead of failing
-open on API-only reachability.
+open on API-only reachability. That proof must treat the visible login controls
+as the readiness signal and must not block on Playwright `networkidle`, because
+the public demo shell can keep background activity alive after the page is
+already usable.
 Those same governed release workflows also own the operator-facing wording for
 that promotion metadata. Human-visible workflow inputs, summaries, and error
 messages must describe the path as a prerelease or preview flow rather than

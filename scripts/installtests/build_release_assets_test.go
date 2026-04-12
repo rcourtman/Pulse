@@ -171,6 +171,30 @@ func TestUpdateDemoWorkflowUsesGovernedNetworkPath(t *testing.T) {
 	}
 }
 
+func TestDemoPublicBrowserSmokeWaitsForVisibleLoginUI(t *testing.T) {
+	scriptBytes, err := os.ReadFile(repoFile("scripts", "demo_public_browser_smoke.cjs"))
+	if err != nil {
+		t.Fatalf("read demo public browser smoke script: %v", err)
+	}
+
+	script := string(scriptBytes)
+	required := []string{
+		`waitUntil: 'domcontentloaded'`,
+		`getByLabel('Username').waitFor({ state: 'visible', timeout: 120000 })`,
+		`getByLabel('Password').waitFor({ state: 'visible', timeout: 120000 })`,
+		`getByRole('button', { name: 'Sign in to Pulse' }).waitFor({ state: 'visible', timeout: 120000 })`,
+	}
+	for _, needle := range required {
+		if !strings.Contains(script, needle) {
+			t.Fatalf("demo public browser smoke missing visible-login readiness proof: %s", needle)
+		}
+	}
+
+	if strings.Contains(script, `waitUntil: 'networkidle'`) {
+		t.Fatal("demo public browser smoke still depends on networkidle instead of visible login readiness")
+	}
+}
+
 func TestDockerfileStagesShippedDocsForEmbeddedFrontendBuild(t *testing.T) {
 	dockerfileBytes, err := os.ReadFile(repoFile("Dockerfile"))
 	if err != nil {
