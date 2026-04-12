@@ -145,17 +145,13 @@ func TestConfigWatcher_ReloadAPITokens(t *testing.T) {
 	tempDir := t.TempDir()
 	p := NewConfigPersistence(tempDir)
 
-	// Save globalPersistence to restore later
-	originalPersistence := globalPersistence
-	globalPersistence = p
-	defer func() { globalPersistence = originalPersistence }()
-
 	// Setup Watcher
 	apiTokensPath := filepath.Join(tempDir, "api_tokens.json")
 	cfg := &Config{}
 	cw := &ConfigWatcher{
 		config:        cfg,
 		apiTokensPath: apiTokensPath,
+		persistence:   p,
 	}
 
 	var callbackCalled atomic.Bool
@@ -261,11 +257,7 @@ func TestConfigWatcher_PollForChanges(t *testing.T) {
 	cw.SetMockReloadCallback(func() { mockCalled.Store(true) })
 	cw.SetAPITokenReloadCallback(func() { tokenCalled.Store(true) })
 
-	// Mock global persistence for API token reloads
-	p := NewConfigPersistence(tempDir)
-	originalPersistence := globalPersistence
-	globalPersistence = p
-	defer func() { globalPersistence = originalPersistence }()
+	require.NotNil(t, cw.persistence)
 
 	// Run pollForChanges in background
 	go cw.pollForChanges()
@@ -293,10 +285,9 @@ func TestConfigWatcher_PollForChanges(t *testing.T) {
 
 	// 3. Update api_tokens.json
 	// Write valid JSON
-	// We need to write to file that Persistence reads.
-	// ReloadAPITokens uses globalPersistence to load.
+	// Write to the watcher-owned persistence so reload reads the same installation scope.
 	tokens := []APITokenRecord{{ID: "new", Hash: "hash", Name: "New"}}
-	require.NoError(t, p.SaveAPITokens(tokens))
+	require.NoError(t, cw.persistence.SaveAPITokens(tokens))
 	future = future.Add(2 * time.Second)
 	require.NoError(t, os.Chtimes(apiTokensPath, future, future))
 
@@ -418,10 +409,6 @@ func TestConfigWatcher_ReloadAPITokens_Retries(t *testing.T) {
 	tempDir := t.TempDir()
 	p := NewConfigPersistence(tempDir)
 
-	originalPersistence := globalPersistence
-	globalPersistence = p
-	defer func() { globalPersistence = originalPersistence }()
-
 	apiTokensPath := filepath.Join(tempDir, "api_tokens.json")
 	require.NoError(t, os.WriteFile(apiTokensPath, []byte("{invalid-json"), 0644))
 
@@ -429,6 +416,7 @@ func TestConfigWatcher_ReloadAPITokens_Retries(t *testing.T) {
 	cw := &ConfigWatcher{
 		config:        cfg,
 		apiTokensPath: apiTokensPath,
+		persistence:   p,
 	}
 
 	// Should attempt retries and log errors but continue

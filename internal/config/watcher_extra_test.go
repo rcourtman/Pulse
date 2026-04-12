@@ -28,6 +28,7 @@ func TestConfigWatcher_WatchForChanges_Live(t *testing.T) {
 	require.NoError(t, os.WriteFile(apiTokensPath, []byte("[]"), 0o644))
 
 	t.Setenv("PULSE_AUTH_CONFIG_DIR", tempDir)
+	t.Setenv("PULSE_MOCK_TEST", "before")
 
 	cfg := &Config{}
 	cw, err := NewConfigWatcher(cfg)
@@ -38,15 +39,10 @@ func TestConfigWatcher_WatchForChanges_Live(t *testing.T) {
 	cw.SetMockReloadCallback(func() { mockReloaded <- true })
 	cw.SetAPITokenReloadCallback(func() { tokensReloaded <- true })
 
-	p := NewConfigPersistence(tempDir)
-	originalPersistence := globalPersistence
-	globalPersistence = p
-
 	err = cw.Start()
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		cw.Stop()
-		globalPersistence = originalPersistence
 	})
 
 	require.NoError(t, os.WriteFile(envPath, []byte("PULSE_AUTH_USER=something-different\nPULSE_MOCK_TEST=2"), 0o644))

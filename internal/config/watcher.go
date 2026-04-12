@@ -31,6 +31,7 @@ type ConfigWatcher struct {
 	config               *Config
 	envPath              string
 	apiTokensPath        string
+	persistence          *ConfigPersistence
 	watcher              *fsnotify.Watcher
 	stopChan             chan struct{}
 	stopOnce             sync.Once // Ensures Stop() can only close channel once
@@ -81,11 +82,19 @@ func NewConfigWatcher(config *Config) (*ConfigWatcher, error) {
 	}
 
 	apiTokensPath := filepath.Join(filepath.Dir(envPath), "api_tokens.json")
+	persistence, persistenceErr := newConfigPersistence(persistentDataDir)
+	if persistenceErr != nil {
+		log.Warn().
+			Err(persistenceErr).
+			Str("configDir", persistentDataDir).
+			Msg("Config watcher persistence unavailable; API token reloads will be disabled")
+	}
 
 	cw := &ConfigWatcher{
 		config:        config,
 		envPath:       envPath,
 		apiTokensPath: apiTokensPath,
+		persistence:   persistence,
 		watcher:       watcher,
 		stopChan:      make(chan struct{}),
 		pollInterval:  5 * time.Second,
@@ -412,7 +421,7 @@ func (cw *ConfigWatcher) reloadAPITokens() {
 	cw.mu.Lock()
 	defer cw.mu.Unlock()
 
-	if globalPersistence == nil {
+	if cw.persistence == nil {
 		log.Warn().Str("api_tokens_path", cw.apiTokensPath).Msg("Config persistence unavailable; cannot reload API tokens")
 		return
 	}
@@ -428,7 +437,7 @@ func (cw *ConfigWatcher) reloadAPITokens() {
 	retryDelay := 50 * time.Millisecond
 
 	for attempt := 1; attempt <= maxRetries; attempt++ {
-		tokens, err = globalPersistence.LoadAPITokens()
+		tokens, err = cw.persistence.LoadAPITokens()
 		if err == nil {
 			break
 		}
@@ -476,7 +485,7 @@ func (cw *ConfigWatcher) reloadAPITokens() {
 	}
 
 	if persistMutations {
-		if err := globalPersistence.SaveAPITokens(tokens); err != nil {
+		if err := cw.persistence.SaveAPITokens(tokens); err != nil {
 			log.Error().
 				Err(err).
 				Str("api_tokens_path", cw.apiTokensPath).
