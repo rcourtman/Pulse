@@ -3,9 +3,13 @@ package monitoring
 import (
 	"os"
 	"testing"
+
+	"github.com/rs/zerolog"
 )
 
 func TestMain(m *testing.M) {
+	zerolog.SetGlobalLevel(zerolog.InfoLevel)
+
 	dataDir, err := os.MkdirTemp("", "monitoring-test-data-*")
 	if err != nil {
 		panic(err)

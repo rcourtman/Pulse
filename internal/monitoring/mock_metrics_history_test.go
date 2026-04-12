@@ -41,6 +41,15 @@ func compactMockFixtureConfig() mock.MockConfig {
 	return cfg
 }
 
+const boundedMockHistoryProofWindow = 4 * time.Hour
+
+func compactMockChartFixtureConfig() mock.MockConfig {
+	cfg := compactMockFixtureConfig()
+	cfg.DockerHostCount = 1
+	cfg.DockerContainersPerHost = 1
+	return cfg
+}
+
 func TestBuildTieredTimestamps_IncludesCanonicalTerminalNow(t *testing.T) {
 	now := time.Date(2026, time.March, 31, 12, 0, 0, 0, time.UTC)
 
@@ -366,6 +375,7 @@ func TestSeedMockMetricsHistory_PopulatesKubernetesClusterNodeAndDeploymentSerie
 
 func TestSeedMockMetricsHistory_SeedsMetricsStore(t *testing.T) {
 	now := time.Now()
+	seedDuration := boundedMockHistoryProofWindow
 
 	state := models.StateSnapshot{
 		Nodes: []models.Node{
@@ -419,10 +429,10 @@ func TestSeedMockMetricsHistory_SeedsMetricsStore(t *testing.T) {
 	}
 	defer store.Close()
 
-	mh := NewMetricsHistory(1000, 7*24*time.Hour)
-	seedMockMetricsHistory(mh, store, fixtureGraphWithState(state), now, 7*24*time.Hour, time.Minute)
+	mh := NewMetricsHistory(1000, seedDuration)
+	seedMockMetricsHistory(mh, store, fixtureGraphWithState(state), now, seedDuration, time.Minute)
 
-	points, err := store.Query("vm", "vm-100", "cpu", now.Add(-7*24*time.Hour), now, 3600)
+	points, err := store.Query("vm", "vm-100", "cpu", now.Add(-seedDuration), now, 3600)
 	if err != nil {
 		t.Fatalf("failed to query metrics store: %v", err)
 	}
@@ -433,7 +443,7 @@ func TestSeedMockMetricsHistory_SeedsMetricsStore(t *testing.T) {
 	if metricID == "" {
 		t.Fatal("expected kubernetes pod metric id")
 	}
-	k8sPoints, err := store.Query("k8s", metricID, "cpu", now.Add(-7*24*time.Hour), now, 3600)
+	k8sPoints, err := store.Query("k8s", metricID, "cpu", now.Add(-seedDuration), now, 3600)
 	if err != nil {
 		t.Fatalf("failed to query kubernetes pod metrics store: %v", err)
 	}
@@ -444,6 +454,7 @@ func TestSeedMockMetricsHistory_SeedsMetricsStore(t *testing.T) {
 
 func TestSeedMockMetricsHistory_SeedsDiskTemperatureMetricsStore(t *testing.T) {
 	now := time.Now()
+	seedDuration := boundedMockHistoryProofWindow
 
 	state := models.StateSnapshot{
 		PhysicalDisks: []models.PhysicalDisk{
@@ -471,10 +482,10 @@ func TestSeedMockMetricsHistory_SeedsDiskTemperatureMetricsStore(t *testing.T) {
 	}
 	defer store.Close()
 
-	mh := NewMetricsHistory(1000, 7*24*time.Hour)
-	seedMockMetricsHistory(mh, store, fixtureGraphWithState(state), now, 7*24*time.Hour, time.Minute)
+	mh := NewMetricsHistory(1000, seedDuration)
+	seedMockMetricsHistory(mh, store, fixtureGraphWithState(state), now, seedDuration, time.Minute)
 
-	points, err := store.Query("disk", "SERIAL-001", "smart_temp", now.Add(-7*24*time.Hour), now, 3600)
+	points, err := store.Query("disk", "SERIAL-001", "smart_temp", now.Add(-seedDuration), now, 3600)
 	if err != nil {
 		t.Fatalf("failed to query disk smart_temp metrics: %v", err)
 	}
@@ -486,6 +497,7 @@ func TestSeedMockMetricsHistory_SeedsDiskTemperatureMetricsStore(t *testing.T) {
 func TestSeedMockMetricsHistory_SeedsVMwareMetricsStore(t *testing.T) {
 	now := time.Now()
 	state := models.StateSnapshot{}
+	seedDuration := boundedMockHistoryProofWindow
 
 	cfg := metrics.DefaultConfig(t.TempDir())
 	cfg.RetentionRaw = 90 * 24 * time.Hour
@@ -500,15 +512,15 @@ func TestSeedMockMetricsHistory_SeedsVMwareMetricsStore(t *testing.T) {
 	}
 	defer store.Close()
 
-	mh := NewMetricsHistory(1000, 7*24*time.Hour)
+	mh := NewMetricsHistory(1000, seedDuration)
 	seedMockMetricsHistory(mh, store, mock.FixtureGraph{
 		State: state,
 		PlatformFixtures: mock.PlatformFixtures{
 			VMware: vmware.DefaultFixtures(),
 		},
-	}, now, 7*24*time.Hour, time.Minute)
+	}, now, seedDuration, time.Minute)
 
-	hostPoints, err := store.Query("agent", "vc-mock-1:host:host-101", "cpu", now.Add(-7*24*time.Hour), now, 3600)
+	hostPoints, err := store.Query("agent", "vc-mock-1:host:host-101", "cpu", now.Add(-seedDuration), now, 3600)
 	if err != nil {
 		t.Fatalf("failed to query VMware host cpu metrics: %v", err)
 	}
@@ -516,7 +528,7 @@ func TestSeedMockMetricsHistory_SeedsVMwareMetricsStore(t *testing.T) {
 		t.Fatal("expected metrics store to have seeded VMware host cpu points")
 	}
 
-	vmPoints, err := store.Query("vm", "vc-mock-1:vm:vm-201", "cpu", now.Add(-7*24*time.Hour), now, 3600)
+	vmPoints, err := store.Query("vm", "vc-mock-1:vm:vm-201", "cpu", now.Add(-seedDuration), now, 3600)
 	if err != nil {
 		t.Fatalf("failed to query VMware VM cpu metrics: %v", err)
 	}
@@ -524,7 +536,7 @@ func TestSeedMockMetricsHistory_SeedsVMwareMetricsStore(t *testing.T) {
 		t.Fatal("expected metrics store to have seeded VMware VM cpu points")
 	}
 
-	storagePoints, err := store.Query("storage", "vc-mock-1:datastore:datastore-201", "usage", now.Add(-7*24*time.Hour), now, 3600)
+	storagePoints, err := store.Query("storage", "vc-mock-1:datastore:datastore-201", "usage", now.Add(-seedDuration), now, 3600)
 	if err != nil {
 		t.Fatalf("failed to query VMware datastore usage metrics: %v", err)
 	}
@@ -536,7 +548,7 @@ func TestSeedMockMetricsHistory_SeedsVMwareMetricsStore(t *testing.T) {
 		t.Fatalf("expected VMware datastore usage seed at %s to match canonical sampler, got=%v want=%v", lastStoragePoint.Timestamp.Format(time.RFC3339), got, want)
 	}
 
-	storageUsedPoints, err := store.Query("storage", "vc-mock-1:datastore:datastore-201", "used", now.Add(-7*24*time.Hour), now, 3600)
+	storageUsedPoints, err := store.Query("storage", "vc-mock-1:datastore:datastore-201", "used", now.Add(-seedDuration), now, 3600)
 	if err != nil {
 		t.Fatalf("failed to query VMware datastore used metrics: %v", err)
 	}
@@ -549,6 +561,7 @@ func TestSeedMockMetricsHistory_SeedsTrueNASMetricsStore(t *testing.T) {
 	now := time.Now()
 	state := models.StateSnapshot{}
 	fixtures := truenas.DefaultFixtures()
+	seedDuration := boundedMockHistoryProofWindow
 
 	if strings.TrimSpace(fixtures.System.Hostname) == "" {
 		t.Fatal("expected canonical truenas system hostname fixture")
@@ -570,15 +583,15 @@ func TestSeedMockMetricsHistory_SeedsTrueNASMetricsStore(t *testing.T) {
 	}
 	defer store.Close()
 
-	mh := NewMetricsHistory(1000, 7*24*time.Hour)
+	mh := NewMetricsHistory(1000, seedDuration)
 	seedMockMetricsHistory(mh, store, mock.FixtureGraph{
 		State: state,
 		PlatformFixtures: mock.PlatformFixtures{
 			TrueNAS: fixtures,
 		},
-	}, now, 7*24*time.Hour, time.Minute)
+	}, now, seedDuration, time.Minute)
 
-	systemPoints, err := store.Query("agent", fixtures.System.Hostname, "disk", now.Add(-7*24*time.Hour), now, 3600)
+	systemPoints, err := store.Query("agent", fixtures.System.Hostname, "disk", now.Add(-seedDuration), now, 3600)
 	if err != nil {
 		t.Fatalf("failed to query TrueNAS system disk metrics via canonical agent target: %v", err)
 	}
@@ -586,7 +599,7 @@ func TestSeedMockMetricsHistory_SeedsTrueNASMetricsStore(t *testing.T) {
 		t.Fatal("expected metrics store to have seeded canonical TrueNAS system disk points")
 	}
 
-	agentPoints, err := store.Query("agent", fixtures.System.Hostname, "cpu", now.Add(-7*24*time.Hour), now, 3600)
+	agentPoints, err := store.Query("agent", fixtures.System.Hostname, "cpu", now.Add(-seedDuration), now, 3600)
 	if err != nil {
 		t.Fatalf("failed to query TrueNAS agent cpu metrics: %v", err)
 	}
@@ -594,7 +607,7 @@ func TestSeedMockMetricsHistory_SeedsTrueNASMetricsStore(t *testing.T) {
 		t.Fatal("expected metrics store to have seeded canonical TrueNAS agent cpu points")
 	}
 
-	datasetPoints, err := store.Query("storage", "dataset:"+fixtures.Datasets[0].Name, "usage", now.Add(-7*24*time.Hour), now, 3600)
+	datasetPoints, err := store.Query("storage", "dataset:"+fixtures.Datasets[0].Name, "usage", now.Add(-seedDuration), now, 3600)
 	if err != nil {
 		t.Fatalf("failed to query canonical TrueNAS dataset usage metrics: %v", err)
 	}
@@ -606,7 +619,7 @@ func TestSeedMockMetricsHistory_SeedsTrueNASMetricsStore(t *testing.T) {
 		t.Fatalf("expected TrueNAS dataset usage seed at %s to match canonical sampler, got=%v want=%v", lastDatasetPoint.Timestamp.Format(time.RFC3339), got, want)
 	}
 
-	poolUsedPoints, err := store.Query("storage", "pool:"+fixtures.Pools[0].Name, "used", now.Add(-7*24*time.Hour), now, 3600)
+	poolUsedPoints, err := store.Query("storage", "pool:"+fixtures.Pools[0].Name, "used", now.Add(-seedDuration), now, 3600)
 	if err != nil {
 		t.Fatalf("failed to query TrueNAS pool used metrics: %v", err)
 	}
@@ -614,12 +627,12 @@ func TestSeedMockMetricsHistory_SeedsTrueNASMetricsStore(t *testing.T) {
 		t.Fatal("expected metrics store to have seeded TrueNAS pool used points")
 	}
 
-	diskTempPoints := mh.GetDiskMetrics(fixtures.Disks[0].Serial, "smart_temp", 7*24*time.Hour)
+	diskTempPoints := mh.GetDiskMetrics(fixtures.Disks[0].Serial, "smart_temp", seedDuration)
 	if len(diskTempPoints) == 0 {
 		t.Fatal("expected in-memory history to have seeded TrueNAS disk temperature points")
 	}
 
-	appPoints, err := store.Query("dockerContainer", "nextcloud", "cpu", now.Add(-7*24*time.Hour), now, 3600)
+	appPoints, err := store.Query("dockerContainer", "nextcloud", "cpu", now.Add(-seedDuration), now, 3600)
 	if err != nil {
 		t.Fatalf("failed to query TrueNAS app cpu metrics: %v", err)
 	}
@@ -657,9 +670,9 @@ func TestSeedMockMetricsHistory_UsesCanonicalMockFixtureGraphForLegacyAndProvide
 	mock.SetEnabled(false)
 
 	now := time.Now()
-	seedDuration := 7 * 24 * time.Hour
+	seedDuration := boundedMockHistoryProofWindow
 	sampleInterval := time.Minute
-	historyRetention := 7 * 24 * time.Hour
+	historyRetention := boundedMockHistoryProofWindow
 	if raceEnabled {
 		seedDuration = 5 * time.Minute
 		sampleInterval = time.Minute
@@ -877,11 +890,7 @@ func TestStartMockMetricsSampler_SeedsCanonicalMockResourceHistory(t *testing.T)
 		}
 	})
 
-	cfg := mock.DefaultConfig
-	cfg.NodeCount = 3
-	cfg.DockerHostCount = 2
-	cfg.DockerContainersPerHost = 5
-	cfg.RandomMetrics = true
+	cfg := compactMockChartFixtureConfig()
 
 	mock.SetEnabled(false)
 	mock.SetMockConfig(cfg)
@@ -1133,6 +1142,7 @@ func TestGenerateSeededMetricSeriesForTimestamps_UsesSameTimelineAsMockRuntime(t
 func TestSeedMockMetricsHistory_StaysContinuousWithSubsequentLiveMockTicks(t *testing.T) {
 	now := time.Now().UTC().Add(-10 * time.Minute).Truncate(time.Minute)
 	next := now.Add(time.Minute)
+	seedDuration := boundedMockHistoryProofWindow
 	const storageTotal = int64(2 * 1024 * 1024 * 1024 * 1024)
 	const k8sMetricID = "k8s:k8s-tail:pod:workloads/api-tail"
 
@@ -1206,10 +1216,10 @@ func TestSeedMockMetricsHistory_StaysContinuousWithSubsequentLiveMockTicks(t *te
 		},
 	}
 
-	mh := NewMetricsHistory(5000, 7*24*time.Hour)
-	seedMockMetricsHistory(mh, nil, fixtureGraphWithState(seedState), now, 7*24*time.Hour, time.Minute)
+	mh := NewMetricsHistory(5000, seedDuration)
+	seedMockMetricsHistory(mh, nil, fixtureGraphWithState(seedState), now, seedDuration, time.Minute)
 
-	vmCPUSeeded := mh.GetGuestMetrics("vm-tail", "cpu", 7*24*time.Hour)
+	vmCPUSeeded := mh.GetGuestMetrics("vm-tail", "cpu", seedDuration)
 	if len(vmCPUSeeded) == 0 {
 		t.Fatal("expected seeded vm cpu history")
 	}
@@ -1220,7 +1230,7 @@ func TestSeedMockMetricsHistory_StaysContinuousWithSubsequentLiveMockTicks(t *te
 		}
 	}
 
-	storageSeeded := mh.GetAllStorageMetrics("storage-tail", 7*24*time.Hour)["usage"]
+	storageSeeded := mh.GetAllStorageMetrics("storage-tail", seedDuration)["usage"]
 	if len(storageSeeded) == 0 {
 		t.Fatal("expected seeded storage usage history")
 	}
@@ -1231,7 +1241,7 @@ func TestSeedMockMetricsHistory_StaysContinuousWithSubsequentLiveMockTicks(t *te
 		}
 	}
 
-	k8sSeeded := mh.GetGuestMetrics(k8sMetricID, "memory", 7*24*time.Hour)
+	k8sSeeded := mh.GetGuestMetrics(k8sMetricID, "memory", seedDuration)
 	if len(k8sSeeded) == 0 {
 		t.Fatal("expected seeded kubernetes pod memory history")
 	}
@@ -1301,7 +1311,7 @@ func TestSeedMockMetricsHistory_StaysContinuousWithSubsequentLiveMockTicks(t *te
 
 	recordMockStateToMetricsHistory(mh, nil, fixtureGraphWithState(liveState), next)
 
-	vmCPUAfterTick := mh.GetGuestMetrics("vm-tail", "cpu", 7*24*time.Hour)
+	vmCPUAfterTick := mh.GetGuestMetrics("vm-tail", "cpu", seedDuration)
 	if got := vmCPUAfterTick[len(vmCPUAfterTick)-1].Timestamp; !got.Equal(next) {
 		t.Fatalf("expected latest vm cpu point at %v, got %v", next, got)
 	}
@@ -1312,7 +1322,7 @@ func TestSeedMockMetricsHistory_StaysContinuousWithSubsequentLiveMockTicks(t *te
 		t.Fatalf("expected penultimate vm cpu point to remain anchored at seed now %v, got %v", now, got)
 	}
 
-	storageAfterTick := mh.GetAllStorageMetrics("storage-tail", 7*24*time.Hour)["usage"]
+	storageAfterTick := mh.GetAllStorageMetrics("storage-tail", seedDuration)["usage"]
 	if got := storageAfterTick[len(storageAfterTick)-1].Timestamp; !got.Equal(next) {
 		t.Fatalf("expected latest storage usage point at %v, got %v", next, got)
 	}
@@ -1323,7 +1333,7 @@ func TestSeedMockMetricsHistory_StaysContinuousWithSubsequentLiveMockTicks(t *te
 		t.Fatalf("expected penultimate storage point to remain anchored at seed now %v, got %v", now, got)
 	}
 
-	k8sMemoryAfterTick := mh.GetGuestMetrics(k8sMetricID, "memory", 7*24*time.Hour)
+	k8sMemoryAfterTick := mh.GetGuestMetrics(k8sMetricID, "memory", seedDuration)
 	if got := k8sMemoryAfterTick[len(k8sMemoryAfterTick)-1].Timestamp; !got.Equal(next) {
 		t.Fatalf("expected latest k8s memory point at %v, got %v", next, got)
 	}
@@ -1338,6 +1348,7 @@ func TestSeedMockMetricsHistory_StaysContinuousWithSubsequentLiveMockTicks(t *te
 func TestRecordMockStateToMetricsHistory_ContinuesCanonicalKubernetesClusterNodeAndDeploymentTimeline(t *testing.T) {
 	now := time.Now().UTC().Truncate(time.Minute)
 	next := now.Add(time.Minute)
+	seedDuration := boundedMockHistoryProofWindow
 
 	seedState := models.StateSnapshot{
 		KubernetesClusters: []models.KubernetesCluster{
@@ -1376,8 +1387,8 @@ func TestRecordMockStateToMetricsHistory_ContinuesCanonicalKubernetesClusterNode
 	nodeMetricID := kubernetesNodeMetricID(seedState.KubernetesClusters[0], seedState.KubernetesClusters[0].Nodes[0])
 	deploymentMetricID := kubernetesDeploymentMetricID(seedState.KubernetesClusters[0], seedState.KubernetesClusters[0].Deployments[0])
 
-	mh := NewMetricsHistory(5000, 7*24*time.Hour)
-	seedMockMetricsHistory(mh, nil, fixtureGraphWithState(seedState), now, 7*24*time.Hour, time.Minute)
+	mh := NewMetricsHistory(5000, seedDuration)
+	seedMockMetricsHistory(mh, nil, fixtureGraphWithState(seedState), now, seedDuration, time.Minute)
 	recordMockStateToMetricsHistory(mh, nil, fixtureGraphWithState(seedState), next)
 
 	for name, metricID := range map[string]string{
@@ -1385,7 +1396,7 @@ func TestRecordMockStateToMetricsHistory_ContinuesCanonicalKubernetesClusterNode
 		"node":       nodeMetricID,
 		"deployment": deploymentMetricID,
 	} {
-		series := mh.GetGuestMetrics(metricID, "memory", 7*24*time.Hour)
+		series := mh.GetGuestMetrics(metricID, "memory", seedDuration)
 		if len(series) < 2 {
 			t.Fatalf("expected kubernetes %s memory history, got %d points", name, len(series))
 		}
