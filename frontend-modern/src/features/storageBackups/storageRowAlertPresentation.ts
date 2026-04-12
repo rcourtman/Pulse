@@ -2,13 +2,16 @@ import type { StorageAlertRowState } from './storageAlertState';
 
 export interface StorageRowAlertPresentation {
   rowClass: string;
-  rowStyle: Record<string, string>;
   dataAlertState: 'unacknowledged' | 'acknowledged' | 'none';
   dataAlertSeverity: string;
   dataResourceHighlighted: 'true' | 'false';
 }
 
 const BASE_ROW_CLASSES = ['transition-all duration-200', 'hover:bg-surface-hover'];
+const STORAGE_ROW_CRITICAL_ALERT_ACCENT_CLASS = 'shadow-[inset_4px_0_0_0_#ef4444]';
+const STORAGE_ROW_WARNING_ALERT_ACCENT_CLASS = 'shadow-[inset_4px_0_0_0_#eab308]';
+const STORAGE_ROW_ACKNOWLEDGED_ALERT_ACCENT_CLASS =
+  'shadow-[inset_4px_0_0_0_rgba(156,163,175,0.8)]';
 
 export const getStorageRowAlertPresentation = (options: {
   alertState: StorageAlertRowState;
@@ -28,32 +31,23 @@ export const getStorageRowAlertPresentation = (options: {
         ? 'bg-red-50 dark:bg-red-950'
         : 'bg-yellow-50 dark:bg-yellow-950',
     );
+    classes.push(
+      options.alertState.severity === 'critical'
+        ? STORAGE_ROW_CRITICAL_ALERT_ACCENT_CLASS
+        : STORAGE_ROW_WARNING_ALERT_ACCENT_CLASS,
+    );
   } else if (options.isResourceHighlighted) {
     classes.push('bg-blue-50 dark:bg-blue-900 ring-1 ring-blue-300 dark:ring-blue-600');
   } else if (hasAcknowledgedOnlyAlert) {
-    classes.push('bg-surface-alt');
+    classes.push('bg-surface-alt', STORAGE_ROW_ACKNOWLEDGED_ALERT_ACCENT_CLASS);
   }
 
   if (options.isExpanded) {
     classes.push('bg-surface-alt');
   }
 
-  let rowStyle: Record<string, string> = {};
-  if (showAlertHighlight) {
-    rowStyle = {
-      'box-shadow': `inset 4px 0 0 0 ${
-        options.alertState.severity === 'critical' ? '#ef4444' : '#eab308'
-      }`,
-    };
-  } else if (hasAcknowledgedOnlyAlert) {
-    rowStyle = {
-      'box-shadow': 'inset 4px 0 0 0 rgba(156, 163, 175, 0.8)',
-    };
-  }
-
   return {
     rowClass: classes.join(' '),
-    rowStyle,
     dataAlertState: showAlertHighlight
       ? 'unacknowledged'
       : hasAcknowledgedOnlyAlert

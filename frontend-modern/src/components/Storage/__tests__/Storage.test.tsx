@@ -1004,7 +1004,8 @@ describe('Storage', () => {
       const row = screen.getByText('Alerted-Store').closest('tr');
       expect(row).toHaveAttribute('data-alert-state', 'unacknowledged');
       expect(row).toHaveAttribute('data-alert-severity', 'critical');
-      expect(row?.getAttribute('style')).toContain('#ef4444');
+      expect(row).not.toHaveAttribute('style');
+      expect(row?.className).toContain('shadow-[inset_4px_0_0_0_#ef4444]');
     });
   });
 
@@ -1020,7 +1021,8 @@ describe('Storage', () => {
       const row = screen.getByText('Acknowledged-Store').closest('tr');
       expect(row).toHaveAttribute('data-alert-state', 'acknowledged');
       expect(row).toHaveAttribute('data-alert-severity', 'none');
-      expect(row?.getAttribute('style')).toContain('156, 163, 175');
+      expect(row).not.toHaveAttribute('style');
+      expect(row?.className).toContain('shadow-[inset_4px_0_0_0_rgba(156,163,175,0.8)]');
     });
   });
 

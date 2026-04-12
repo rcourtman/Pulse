@@ -448,6 +448,10 @@ querying, and the operator-facing storage health presentation layer.
     users still must not inherit synthetic hover branches, and storage must
     not keep a special trailing expand column once the shared leading action
     contract exists.
+    Storage pool rows must also keep sizing and alert accents on canonical
+    class/data-attribute presentation rather than row-local inline style maps,
+    so the public storage page stays CSP-safe under both normal and
+    alert-highlighted demo/runtime states.
 21. Keep recovery transport refreshes inside the recovery-owned feature state.
     `frontend-modern/src/features/recovery/useRecoverySurfaceState.ts` and the
     recovery data hooks may retain the last fulfilled rollups, points, facets,

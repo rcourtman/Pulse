@@ -13,7 +13,6 @@ export type StoragePoolsTableRowModel = {
   expanded: boolean;
   parentNodeOnline: boolean;
   rowClass: string;
-  rowStyle: Record<string, string>;
   alertDataAttrs: {
     'data-row-id': string;
     'data-alert-state': string;
@@ -57,7 +56,6 @@ export const buildStoragePoolsTableRowModel = (
     expanded,
     parentNodeOnline,
     rowClass: rowAlertPresentation.rowClass,
-    rowStyle: rowAlertPresentation.rowStyle,
     alertDataAttrs: {
       'data-row-id': record.id,
       'data-alert-state': rowAlertPresentation.dataAlertState,

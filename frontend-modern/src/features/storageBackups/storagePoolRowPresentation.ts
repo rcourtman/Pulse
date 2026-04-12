@@ -31,8 +31,8 @@ export interface StoragePoolRowModel {
 }
 
 export const STORAGE_POOL_ROW_CLASS = 'group cursor-pointer';
+export const STORAGE_POOL_ROW_HEIGHT_CLASS = 'h-[38px]';
 export const STORAGE_POOL_ROW_EXPANDED_CLASS = 'bg-surface-alt';
-export const STORAGE_POOL_ROW_STYLE = { height: '38px' } as const;
 export const STORAGE_POOL_ROW_NAME_CELL_CLASS = 'px-2 py-1 align-middle text-base-content';
 export const STORAGE_POOL_ROW_NAME_TEXT_CLASS = 'block truncate text-[12px] font-semibold';
 export const STORAGE_POOL_ROW_SOURCE_CELL_CLASS = 'px-2 py-1 align-middle text-[11px]';

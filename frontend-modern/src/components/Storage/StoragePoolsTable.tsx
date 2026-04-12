@@ -119,7 +119,6 @@ export const StoragePoolsTable: Component<StoragePoolsTableProps> = (props) => {
                                 onToggleExpand={() => model.togglePool(record().id)}
                                 onHoverChange={props.onHoverChange}
                                 rowClass={rowModel().rowClass}
-                                rowStyle={rowModel().rowStyle}
                                 physicalDisks={props.physicalDisks}
                                 alertDataAttrs={rowModel().alertDataAttrs}
                               />

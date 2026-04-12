@@ -9,6 +9,7 @@ import {
   getStoragePoolImpactTextClass,
   STORAGE_POOL_ROW_CLASS,
   STORAGE_POOL_ROW_EXPANDED_CLASS,
+  STORAGE_POOL_ROW_HEIGHT_CLASS,
   STORAGE_POOL_ROW_PLACEHOLDER_CLASS,
   STORAGE_POOL_ROW_HOST_CELL_CLASS,
   STORAGE_POOL_ROW_IMPACT_CELL_CLASS,
@@ -20,7 +21,6 @@ import {
   STORAGE_POOL_ROW_PROTECTION_TEXT_CLASS,
   STORAGE_POOL_ROW_SOURCE_BADGE_CLASS,
   STORAGE_POOL_ROW_SOURCE_CELL_CLASS,
-  STORAGE_POOL_ROW_STYLE,
   STORAGE_POOL_ROW_TEXT_TRUNCATE_CLASS,
   STORAGE_POOL_ROW_TYPE_CELL_CLASS,
   STORAGE_POOL_ROW_USAGE_FALLBACK_CLASS,
@@ -47,7 +47,6 @@ interface StoragePoolRowProps {
   onToggleExpand: () => void;
   onHoverChange?: (recordId: string | null) => void;
   rowClass: string;
-  rowStyle: Record<string, string>;
   physicalDisks: Resource[];
   alertDataAttrs: {
     'data-row-id': string;
@@ -70,8 +69,7 @@ export const StoragePoolRow: Component<StoragePoolRowProps> = (props) => {
   return (
     <>
       <tr
-        class={`${STORAGE_POOL_ROW_CLASS} ${props.rowClass} ${props.expanded ? STORAGE_POOL_ROW_EXPANDED_CLASS : ''}`.trim()}
-        style={{ ...props.rowStyle, ...STORAGE_POOL_ROW_STYLE }}
+        class={`${STORAGE_POOL_ROW_CLASS} ${STORAGE_POOL_ROW_HEIGHT_CLASS} ${props.rowClass} ${props.expanded ? STORAGE_POOL_ROW_EXPANDED_CLASS : ''}`.trim()}
         onClick={props.onToggleExpand}
         {...interactiveRowHandlers}
         data-summary-series-id={props.summarySeriesId}

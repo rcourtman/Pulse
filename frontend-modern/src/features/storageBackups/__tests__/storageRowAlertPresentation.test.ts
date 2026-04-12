@@ -21,7 +21,7 @@ describe('storageRowAlertPresentation', () => {
     });
 
     expect(result.rowClass).toContain('bg-red-50');
-    expect(result.rowStyle['box-shadow']).toContain('#ef4444');
+    expect(result.rowClass).toContain('shadow-[inset_4px_0_0_0_#ef4444]');
     expect(result.dataAlertState).toBe('unacknowledged');
   });
 
@@ -42,7 +42,7 @@ describe('storageRowAlertPresentation', () => {
     });
 
     expect(result.rowClass).toContain('bg-surface-alt');
-    expect(result.rowStyle['box-shadow']).toContain('rgba(156, 163, 175, 0.8)');
+    expect(result.rowClass).toContain('shadow-[inset_4px_0_0_0_rgba(156,163,175,0.8)]');
     expect(result.dataAlertState).toBe('acknowledged');
   });
 });

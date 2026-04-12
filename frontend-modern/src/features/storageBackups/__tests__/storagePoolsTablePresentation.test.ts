@@ -92,5 +92,6 @@ describe('storage pools table presentation', () => {
       'data-resource-highlighted': 'false',
     });
     expect(row.rowClass).toContain('bg-surface-alt');
+    expect(Object.prototype.hasOwnProperty.call(row, 'rowStyle')).toBe(false);
   });
 });

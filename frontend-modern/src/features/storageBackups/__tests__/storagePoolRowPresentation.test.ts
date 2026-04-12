@@ -5,6 +5,7 @@ import {
   getStoragePoolImpactTextClass,
   STORAGE_POOL_ROW_CLASS,
   STORAGE_POOL_ROW_EXPANDED_CLASS,
+  STORAGE_POOL_ROW_HEIGHT_CLASS,
   STORAGE_POOL_ROW_NAME_TEXT_CLASS,
   STORAGE_POOL_ROW_PLACEHOLDER_CLASS,
   STORAGE_POOL_ROW_SOURCE_BADGE_CLASS,
@@ -41,6 +42,7 @@ const baseRecord = (overrides: Partial<StorageRecord> = {}): StorageRecord =>
 describe('storage pool row presentation', () => {
   it('builds canonical row identity and summary fields', () => {
     expect(STORAGE_POOL_ROW_CLASS).toContain('cursor-pointer');
+    expect(STORAGE_POOL_ROW_HEIGHT_CLASS).toBe('h-[38px]');
     expect(STORAGE_POOL_ROW_NAME_TEXT_CLASS).toContain('font-semibold');
     expect(STORAGE_POOL_ROW_SOURCE_BADGE_CLASS).toContain('text-[9px]');
     expect(STORAGE_POOL_ROW_EXPANDED_CLASS).toBe('bg-surface-alt');
