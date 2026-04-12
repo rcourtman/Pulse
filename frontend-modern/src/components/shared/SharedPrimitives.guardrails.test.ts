@@ -368,13 +368,9 @@ describe('shared primitive guardrails', () => {
     expect(summaryMetricCardSource).toContain('props.headerValue');
     expect(summaryMetricCardSource).not.toContain('data-summary-sync-readout');
 
-    expect(summarySynchronizedReadoutSource).toContain(
-      'export const SummarySynchronizedReadout',
-    );
+    expect(summarySynchronizedReadoutSource).toContain('export const SummarySynchronizedReadout');
     expect(summarySynchronizedReadoutSource).toContain('data-summary-sync-readout="true"');
-    expect(summarySynchronizedReadoutSource).toContain(
-      'formatSummarySynchronizedReadoutTime',
-    );
+    expect(summarySynchronizedReadoutSource).toContain('formatSummarySynchronizedReadoutTime');
     expect(summarySynchronizedReadoutSource).not.toContain('Portal');
 
     expect(interactiveSparklineModelSource).toContain(
@@ -784,8 +780,16 @@ describe('shared primitive guardrails', () => {
     expect(interactiveSparklineSource).toContain('data-active-series-display');
     expect(interactiveSparklineSource).toContain('data-active-hover-cursor-x');
     expect(interactiveSparklineSource).toContain('data-sparkline-tooltip="true"');
+    expect(interactiveSparklineSource).toContain('data-sparkline-y-axis="true"');
+    expect(interactiveSparklineSource).toContain('data-sparkline-x-axis="true"');
+    expect(interactiveSparklineSource).toContain('axisPositionPercent(tick.y, sparkline.vbH)');
+    expect(interactiveSparklineSource).toContain('axisPositionPercent(tick.x, sparkline.vbW)');
     expect(interactiveSparklineSource).toContain('x1={sparkline.activeHoverCursorX() ?? 0}');
     expect(interactiveSparklineSource).toContain('y1={0}');
+    expect(interactiveSparklineSource).not.toContain('viewBox={`0 0 28 ${sparkline.vbH}`}');
+    expect(interactiveSparklineSource).not.toContain(
+      'viewBox={`0 0 ${sparkline.vbW} ${sparkline.xAxisBandPx}`}',
+    );
     expect(interactiveSparklineSource).not.toContain('style={{');
     expect(interactiveSparklineSource).not.toContain('style={');
     expect(interactiveSparklineSource).not.toContain('{(cursorX) => (');
@@ -829,8 +833,12 @@ describe('shared primitive guardrails', () => {
     expect(densityMapSource).not.toContain('data-density-map-tooltip-sparkline="true"');
     expect(densityMapSource).toContain('grid-cols-[auto_minmax(0,1fr)_auto]');
     expect(densityMapSource).not.toContain('max-w-[94px]');
-    expect(densityMapSource).toContain('whitespace-nowrap text-[11px] font-semibold text-emerald-400');
-    expect(densityMapSource).toContain('whitespace-nowrap text-[11px] font-semibold text-base-content');
+    expect(densityMapSource).toContain(
+      'whitespace-nowrap text-[11px] font-semibold text-emerald-400',
+    );
+    expect(densityMapSource).toContain(
+      'whitespace-nowrap text-[11px] font-semibold text-base-content',
+    );
     expect(densityMapSource).not.toContain('timeRangeToMs');
     expect(densityMapSource).not.toContain('createSignal');
     expect(densityMapSource).not.toContain('ctx.fillRect');
@@ -1179,8 +1187,12 @@ describe('shared primitive guardrails', () => {
     expect(summaryMetricCardSource).toContain("density?: 'default' | 'compact'");
     expect(summaryMetricCardSource).toContain("props.density === 'compact'");
     expect(summaryMetricCardSource).toContain("props.bodyLayout ?? 'chart'");
-    expect(summaryMetricCardSource).toContain("isCompact() ? 'mb-1 min-h-[20px]' : 'mb-1.5 min-h-[24px]'");
-    expect(summaryMetricCardSource).toContain("isCompact() ? 'h-[108px] sm:h-[120px]' : 'h-[136px] sm:h-[150px]'");
+    expect(summaryMetricCardSource).toContain(
+      "isCompact() ? 'mb-1 min-h-[20px]' : 'mb-1.5 min-h-[24px]'",
+    );
+    expect(summaryMetricCardSource).toContain(
+      "isCompact() ? 'h-[108px] sm:h-[120px]' : 'h-[136px] sm:h-[150px]'",
+    );
     expect(summaryMetricCardSource).toContain('!p-1.5 sm:!p-2');
     expect(summaryMetricCardSource).not.toContain('Recovery Posture');
     expect(summaryMetricCardSource).not.toContain('Freshness');

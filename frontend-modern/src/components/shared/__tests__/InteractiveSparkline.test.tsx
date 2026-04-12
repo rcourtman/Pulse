@@ -25,6 +25,38 @@ describe('InteractiveSparkline hover behavior', () => {
     expect(interactiveSparklineModelSource).toContain('computeInteractiveSparklineHoverState');
   });
 
+  it('renders axis labels in fixed-size SVG shells so tick text does not stretch', () => {
+    const now = Date.now();
+    const { container } = render(() => (
+      <InteractiveSparkline
+        size="lg"
+        timeRange="1h"
+        rangeLabel="1h"
+        series={[
+          {
+            name: 'CPU',
+            color: '#ff0000',
+            data: [
+              { timestamp: now - 30_000, value: 40 },
+              { timestamp: now - 10_000, value: 50 },
+            ],
+          },
+        ]}
+      />
+    ));
+
+    const yAxis = container.querySelector('svg[data-sparkline-y-axis="true"]');
+    const xAxis = container.querySelector('svg[data-sparkline-x-axis="true"]');
+    expect(yAxis).toBeInTheDocument();
+    expect(xAxis).toBeInTheDocument();
+    expect(yAxis?.hasAttribute('viewBox')).toBe(false);
+    expect(yAxis?.hasAttribute('preserveAspectRatio')).toBe(false);
+    expect(xAxis?.hasAttribute('viewBox')).toBe(false);
+    expect(xAxis?.hasAttribute('preserveAspectRatio')).toBe(false);
+    expect(yAxis?.querySelector('text')?.getAttribute('y')).toBe('0%');
+    expect(xAxis?.querySelectorAll('text')[1]?.getAttribute('x')).toBe('50%');
+  });
+
   it('shows a vertical dashed hover line and a tooltip', async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2024-01-01T12:00:00Z'));

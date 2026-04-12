@@ -189,7 +189,10 @@ work extends shared components instead of creating new local variants.
    attributes and shared state/model helpers for cursor, axis-label, and
    tooltip positioning, but it must not write inline `style=` attributes for
    tick labels, tooltip placement, or per-series transitions on the public
-   shell.
+   shell. Axis labels must render in fixed-size SVG shells or another
+   non-scaled primitive boundary; the shared sparkline must not put axis glyphs
+   inside `preserveAspectRatio="none"` label viewBoxes that stretch text as the
+   chart resizes.
    The same shared presentation boundary also owns reusable scroll containers:
    `frontend-modern/src/components/shared/Table.tsx` must keep touch-scroll
    behavior on classes and shared CSS in `frontend-modern/src/index.css`

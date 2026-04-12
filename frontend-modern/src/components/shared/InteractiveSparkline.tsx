@@ -15,6 +15,17 @@ const verticalTextBaseline = (anchor: 'top' | 'middle' | 'bottom') =>
   anchor === 'top' ? 'hanging' : anchor === 'bottom' ? 'text-bottom' : 'middle';
 
 const horizontalTextAnchor = (anchor: 'start' | 'middle' | 'end') => anchor;
+const axisPositionPercent = (value: number, total: number) => `${(value / total) * 100}%`;
+const sparklineLeftInsetClass = (size?: InteractiveSparklineProps['size']) =>
+  size === 'lg' ? 'ml-10' : 'ml-8';
+const sparklineYAxisWidthClass = (size?: InteractiveSparklineProps['size']) =>
+  size === 'lg' ? 'w-10' : 'w-8';
+const sparklineXAxisHeightClass = (size?: InteractiveSparklineProps['size']) =>
+  size === 'lg' ? 'h-5' : 'h-4';
+const sparklineYAxisFontSize = (size?: InteractiveSparklineProps['size']) =>
+  size === 'lg' ? '12' : '10';
+const sparklineXAxisFontSize = (size?: InteractiveSparklineProps['size']) =>
+  size === 'lg' ? '12' : '10';
 
 const tooltipWidth = (hover: InteractiveSparklineHoverState) => (hover.focusedTooltip ? 112 : 138);
 
@@ -51,7 +62,7 @@ export const InteractiveSparkline: Component<InteractiveSparklineProps> = (props
       data-summary-chart-state={interactionState()}
     >
       <div class="relative flex-1 min-h-0">
-        <div class="h-full ml-7 mr-3" ref={canvasHostRef}>
+        <div class={`h-full mr-3 ${sparklineLeftInsetClass(props.size)}`} ref={canvasHostRef}>
           <Show
             when={sparkline.shouldUseCanvas()}
             fallback={
@@ -224,20 +235,21 @@ export const InteractiveSparkline: Component<InteractiveSparklineProps> = (props
             </Show>
           </svg>
         </div>
-        <div class="absolute inset-y-0 left-0 w-7 pointer-events-none">
+        <div
+          class={`absolute inset-y-0 left-0 pointer-events-none ${sparklineYAxisWidthClass(props.size)}`}
+        >
           <svg
-            class="h-full w-full overflow-visible text-muted"
-            viewBox={`0 0 28 ${sparkline.vbH}`}
-            preserveAspectRatio="none"
+            data-sparkline-y-axis="true"
+            class="h-full w-full overflow-visible text-muted tabular-nums"
             aria-hidden="true"
           >
             <For each={sparkline.axisTicks()}>
               {(tick) => (
                 <text
                   x="0"
-                  y={tick.y}
+                  y={axisPositionPercent(tick.y, sparkline.vbH)}
                   fill="currentColor"
-                  font-size="8"
+                  font-size={sparklineYAxisFontSize(props.size)}
                   class="transition-all duration-300 ease-out"
                   dominant-baseline={verticalTextBaseline(tick.anchor)}
                 >
@@ -248,20 +260,21 @@ export const InteractiveSparkline: Component<InteractiveSparklineProps> = (props
           </svg>
         </div>
       </div>
-      <div class="relative pointer-events-none ml-7 mr-3 h-4">
+      <div
+        class={`relative pointer-events-none mr-3 ${sparklineLeftInsetClass(props.size)} ${sparklineXAxisHeightClass(props.size)}`}
+      >
         <svg
-          class="h-full w-full overflow-visible text-muted"
-          viewBox={`0 0 ${sparkline.vbW} ${sparkline.xAxisBandPx}`}
-          preserveAspectRatio="none"
+          data-sparkline-x-axis="true"
+          class="h-full w-full overflow-visible text-muted tabular-nums"
           aria-hidden="true"
         >
           <For each={sparkline.xAxisTicks()}>
             {(tick) => (
               <text
-                x={tick.x}
+                x={axisPositionPercent(tick.x, sparkline.vbW)}
                 y="2"
                 fill="currentColor"
-                font-size="9"
+                font-size={sparklineXAxisFontSize(props.size)}
                 font-weight="500"
                 class="transition-all duration-300 ease-out"
                 text-anchor={horizontalTextAnchor(tick.anchor)}
