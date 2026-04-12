@@ -339,8 +339,9 @@ export const RecoveryProtectedInventorySection: Component<
         <Show when={props.filteredRollups().length > 0}>
           <div class="overflow-x-auto bg-surface">
           <Table
-            class="w-full border-collapse whitespace-nowrap"
-            style={{ 'table-layout': 'fixed', 'min-width': props.isMobile ? '100%' : '640px' }}
+            class={`w-full border-collapse whitespace-nowrap table-fixed ${
+              props.isMobile ? 'min-w-full' : 'min-w-[640px]'
+            }`}
           >
             <TableHeader>
               <TableRow class="bg-surface-alt/95 text-muted">

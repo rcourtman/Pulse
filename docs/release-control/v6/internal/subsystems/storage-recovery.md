@@ -1224,6 +1224,10 @@ That same direct proof rule also applies to the shared recovery summary helper:
 `frontend-modern/src/utils/recoverySummaryPresentation.ts` must stay on the
 explicit `recovery-product-surface` proof path instead of inheriting coverage
 only through pages or higher-level recovery components.
+The default protected-inventory recovery route must also keep its primary
+table shell on class-driven sizing (`table-fixed` plus owned width classes)
+instead of inline `table-layout` / `min-width` styles, so the public recovery
+surface stays CSP-safe without drifting from the shared table contract.
 That same direct proof rule also applies to the shared recovery record helper:
 `frontend-modern/src/utils/recoveryRecordPresentation.ts` must stay on the
 explicit `recovery-product-surface` proof path instead of inheriting coverage

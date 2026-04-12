@@ -742,6 +742,15 @@ describe('Recovery', () => {
     expect(historyTable).toHaveStyle({ 'min-width': '980px', 'table-layout': 'fixed' });
   });
 
+  it('keeps the protected inventory table CSP-safe on the default recovery route', async () => {
+    render(() => <Recovery />);
+
+    const protectedInventoryTable = await screen.findByRole('table');
+    expect(protectedInventoryTable).not.toHaveAttribute('style');
+    expect(protectedInventoryTable.className).toContain('table-fixed');
+    expect(protectedInventoryTable.className).toContain('min-w-[640px]');
+  });
+
   it('keeps canonical item and platform columns visible when legacy hidden-column ids exist', async () => {
     facetsPayload.clusters = ['lab-cluster'];
     localStorage.setItem(
