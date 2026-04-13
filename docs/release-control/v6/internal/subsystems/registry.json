@@ -3125,6 +3125,7 @@
       "contract": "docs/release-control/v6/internal/subsystems/monitoring.md",
       "owned_prefixes": [
         "internal/monitoring/",
+        "internal/storagehealth/",
         "internal/truenas/"
       ],
       "owned_files": [
@@ -3212,6 +3213,21 @@
               "internal/monitoring/metrics_history_test.go",
               "internal/monitoring/metrics_test.go",
               "internal/monitoring/mock_metrics_history_test.go"
+            ]
+          },
+          {
+            "id": "storage-risk-runtime",
+            "label": "monitoring storage-risk proof",
+            "match_prefixes": [
+              "internal/storagehealth/"
+            ],
+            "match_files": [],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/api/resources_test.go",
+              "internal/storagehealth/risk_test.go",
+              "internal/storagehealth/topology_test.go"
             ]
           },
           {

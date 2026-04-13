@@ -70,7 +70,14 @@ func TestAssessUnraidStorageParityUnavailable(t *testing.T) {
 	if assessment.Level != RiskCritical {
 		t.Fatalf("Level = %q, want %q", assessment.Level, RiskCritical)
 	}
-	if len(assessment.Reasons) == 0 || assessment.Reasons[0].Code != "unraid_parity_unavailable" {
+	foundParity := false
+	for _, reason := range assessment.Reasons {
+		if reason.Code == "unraid_parity_unavailable" {
+			foundParity = true
+			break
+		}
+	}
+	if !foundParity {
 		t.Fatalf("unexpected reasons %+v", assessment.Reasons)
 	}
 }
@@ -90,6 +97,53 @@ func TestAssessUnraidStorageSyncInProgress(t *testing.T) {
 		t.Fatalf("Level = %q, want %q", assessment.Level, RiskWarning)
 	}
 	if len(assessment.Reasons) == 0 || assessment.Reasons[0].Code != "unraid_sync_active" {
+		t.Fatalf("unexpected reasons %+v", assessment.Reasons)
+	}
+}
+
+func TestAssessUnraidStorageUsesDiskStatusesOverAggregateCounters(t *testing.T) {
+	assessment := AssessUnraidStorage(models.HostUnraidStorage{
+		ArrayStarted: true,
+		SyncAction:   "check",
+		NumDisabled:  1,
+		NumInvalid:   1,
+		Disks: []models.HostUnraidDisk{
+			{Name: "parity", Role: "parity", Status: "online"},
+			{Name: "disk1", Role: "data", Status: "online"},
+		},
+	})
+
+	if assessment.Level != RiskWarning {
+		t.Fatalf("Level = %q, want %q", assessment.Level, RiskWarning)
+	}
+	for _, reason := range assessment.Reasons {
+		if reason.Code == "unraid_disabled_disks" || reason.Code == "unraid_invalid_disks" {
+			t.Fatalf("unexpected aggregate-count reason when structured disk state is healthy: %+v", assessment.Reasons)
+		}
+	}
+}
+
+func TestAssessUnraidStorageFallsBackToAggregateCountersWithoutDiskStatuses(t *testing.T) {
+	assessment := AssessUnraidStorage(models.HostUnraidStorage{
+		ArrayStarted: true,
+		NumDisabled:  1,
+		NumInvalid:   1,
+	})
+
+	if assessment.Level != RiskCritical {
+		t.Fatalf("Level = %q, want %q", assessment.Level, RiskCritical)
+	}
+	foundDisabled := false
+	foundInvalid := false
+	for _, reason := range assessment.Reasons {
+		if reason.Code == "unraid_disabled_disks" {
+			foundDisabled = true
+		}
+		if reason.Code == "unraid_invalid_disks" {
+			foundInvalid = true
+		}
+	}
+	if !foundDisabled || !foundInvalid {
 		t.Fatalf("unexpected reasons %+v", assessment.Reasons)
 	}
 }

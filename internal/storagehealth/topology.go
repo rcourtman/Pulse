@@ -109,14 +109,16 @@ func AssessUnraidStorage(storage models.HostUnraidStorage) Assessment {
 		}
 	}
 
-	if storage.NumInvalid > 0 {
-		addReason("unraid_invalid_disks", RiskCritical, fmt.Sprintf("Unraid array reports %d invalid disk(s)", storage.NumInvalid))
+	disabledCount, invalidCount, missingCount := unraidDiskStateCounts(storage)
+
+	if invalidCount > 0 {
+		addReason("unraid_invalid_disks", RiskCritical, fmt.Sprintf("Unraid array reports %d invalid disk(s)", invalidCount))
 	}
-	if storage.NumDisabled > 0 {
-		addReason("unraid_disabled_disks", RiskCritical, fmt.Sprintf("Unraid array reports %d disabled disk(s)", storage.NumDisabled))
+	if disabledCount > 0 {
+		addReason("unraid_disabled_disks", RiskCritical, fmt.Sprintf("Unraid array reports %d disabled disk(s)", disabledCount))
 	}
-	if storage.NumMissing > 0 {
-		addReason("unraid_missing_disks", RiskCritical, fmt.Sprintf("Unraid array reports %d missing disk(s)", storage.NumMissing))
+	if missingCount > 0 {
+		addReason("unraid_missing_disks", RiskCritical, fmt.Sprintf("Unraid array reports %d missing disk(s)", missingCount))
 	}
 
 	parityConfigured := false
@@ -154,6 +156,29 @@ func AssessUnraidStorage(storage models.HostUnraidStorage) Assessment {
 
 	sortReasons(&assessment)
 	return assessment
+}
+
+func unraidDiskStateCounts(storage models.HostUnraidStorage) (disabled, invalid, missing int) {
+	hasStructuredStatus := false
+	for _, disk := range storage.Disks {
+		status := strings.ToLower(strings.TrimSpace(disk.Status))
+		if status == "" {
+			continue
+		}
+		hasStructuredStatus = true
+		switch status {
+		case "disabled":
+			disabled++
+		case "invalid":
+			invalid++
+		case "missing":
+			missing++
+		}
+	}
+	if hasStructuredStatus {
+		return disabled, invalid, missing
+	}
+	return storage.NumDisabled, storage.NumInvalid, storage.NumMissing
 }
 
 func AssessPBSDatastore(datastore models.PBSDatastore) Assessment {

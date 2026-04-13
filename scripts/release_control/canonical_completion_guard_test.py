@@ -211,6 +211,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                 "truenas-runtime",
                 "metrics-hot-path",
                 "metrics-history-runtime",
+                "storage-risk-runtime",
                 "memory-source-runtime",
                 "docker-swarm-runtime",
                 "container-entrypoint-runtime",
@@ -229,6 +230,37 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                     "exact_files": [
                         "internal/monitoring/canonical_guardrails_test.go",
                         "internal/unifiedresources/code_standards_test.go",
+                    ],
+                }
+            ],
+        )
+
+    def test_storage_risk_runtime_change_requires_monitoring_contract(self):
+        required = infer_impacted_subsystems(["internal/storagehealth/topology.go"])
+        self.assertEqual(set(required), {"monitoring"})
+
+        monitoring = required["monitoring"]
+        self.assertEqual(
+            monitoring["contract"],
+            "docs/release-control/v6/internal/subsystems/monitoring.md",
+        )
+        self.assertEqual(
+            monitoring["touched_runtime_files"],
+            ["internal/storagehealth/topology.go"],
+        )
+        self.assertEqual(
+            monitoring["verification_requirements"],
+            [
+                {
+                    "id": "storage-risk-runtime",
+                    "label": "monitoring storage-risk proof",
+                    "touched_runtime_files": ["internal/storagehealth/topology.go"],
+                    "allow_same_subsystem_tests": False,
+                    "test_prefixes": [],
+                    "exact_files": [
+                        "internal/api/resources_test.go",
+                        "internal/storagehealth/risk_test.go",
+                        "internal/storagehealth/topology_test.go",
                     ],
                 }
             ],

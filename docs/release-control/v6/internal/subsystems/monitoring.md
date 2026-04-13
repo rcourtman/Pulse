@@ -744,6 +744,12 @@ disk history model, and mock seeding plus live mock ticks in
 `internal/monitoring/mock_metrics_history.go` must append to that same disk
 timeline instead of creating a second drawer-only or mock-only disk history
 path.
+That same monitoring-owned disk-health boundary also includes shared storage
+risk assessment in `internal/storagehealth/`. When providers or host agents
+emit structured storage topology such as Unraid per-disk state, the shared
+assessment layer must derive canonical risk and alert severity from that
+richer disk topology instead of letting coarser aggregate counters override it
+and flap the operator-facing storage alert surface.
 That same monitoring runtime boundary also owns logger-safe reload behavior.
 `internal/monitoring/reload.go` may refresh runtime config, but it must do so
 through the no-logging-init config loader so an in-process monitoring reload
