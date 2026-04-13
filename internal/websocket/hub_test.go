@@ -724,6 +724,18 @@ func TestHub_CheckOrigin(t *testing.T) {
 			expected: true,
 		},
 		{
+			name:     "same host allowed when proxy preserves host but terminates tls upstream",
+			origin:   "https://tenant.example.com",
+			host:     "tenant.example.com",
+			expected: true,
+		},
+		{
+			name:     "same host with non-default port allowed when proxy preserves host",
+			origin:   "https://tenant.example.com:8443",
+			host:     "tenant.example.com:8443",
+			expected: true,
+		},
+		{
 			name:           "same origin with forwarded proto https",
 			origin:         "https://example.com",
 			host:           "example.com",

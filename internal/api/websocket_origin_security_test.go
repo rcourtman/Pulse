@@ -1,6 +1,8 @@
 package api
 
 import (
+	"context"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -136,6 +138,35 @@ func TestWebSocketOriginAllowsPrivateWhenNoAllowedOrigins(t *testing.T) {
 		t.Fatalf("expected websocket connection, got %v", err)
 	}
 	if resp == nil || resp.StatusCode != http.StatusSwitchingProtocols {
+		t.Fatalf("expected 101 switching protocols, got %v", resp)
+	}
+	conn.Close()
+}
+
+func TestWebSocketOriginAllowsSameHostTLSTerminationWithoutTrustedProxy(t *testing.T) {
+	rawToken := "ws-origin-same-host-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeMonitoringRead}, nil)
+
+	server, cleanup := newWebSocketRouter(t, []string{}, record)
+	defer cleanup()
+
+	dialer := websocket.Dialer{
+		NetDialContext: func(ctx context.Context, network, _ string) (net.Conn, error) {
+			var dialer net.Dialer
+			return dialer.DialContext(ctx, network, server.Listener.Addr().String())
+		},
+	}
+
+	headers := http.Header{}
+	headers.Set("X-API-Token", rawToken)
+	headers.Set("Origin", "https://tenant.example.com")
+
+	conn, resp, err := dialer.Dial("ws://tenant.example.com/ws?org_id=default", headers)
+	if err != nil {
+		t.Fatalf("expected websocket connection when proxy preserves host but terminates tls upstream, got %v", err)
+	}
+	if resp == nil || resp.StatusCode != http.StatusSwitchingProtocols {
+		conn.Close()
 		t.Fatalf("expected 101 switching protocols, got %v", resp)
 	}
 	conn.Close()

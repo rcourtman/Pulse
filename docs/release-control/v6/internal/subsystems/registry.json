@@ -1382,7 +1382,8 @@
         "frontend-modern/src/types/api.ts",
         "frontend-modern/src/utils/agentInstallCommand.ts",
         "frontend-modern/src/utils/apiTokenPresentation.ts",
-        "frontend-modern/src/utils/infrastructureSettingsPresentation.ts"
+        "frontend-modern/src/utils/infrastructureSettingsPresentation.ts",
+        "internal/websocket/hub.go"
       ],
       "verification": {
         "allow_same_subsystem_tests": false,
@@ -1455,7 +1456,8 @@
               "frontend-modern/src/api/security.ts",
               "internal/api/security.go",
               "internal/api/security_tokens.go",
-              "internal/api/system_settings.go"
+              "internal/api/system_settings.go",
+              "internal/websocket/hub.go"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
@@ -1467,7 +1469,9 @@
               "internal/api/security_tokens_lifecycle_test.go",
               "internal/api/security_tokens_owner_binding_test.go",
               "internal/api/security_tokens_test.go",
-              "internal/api/system_settings_telemetry_test.go"
+              "internal/api/system_settings_telemetry_test.go",
+              "internal/api/websocket_origin_security_test.go",
+              "internal/websocket/hub_test.go"
             ]
           },
           {

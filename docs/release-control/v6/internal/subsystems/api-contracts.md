@@ -556,12 +556,15 @@ path, signup path, and stable workspace summary fields such as `created_at`.
 That workspace summary contract must expose explicit health semantics: `healthy`
 for passing health checks, `checking` only when no completed health check
 exists yet, and `unhealthy` for a failed latest health check.
-That same shared `internal/api/` boundary also owns trusted-proxy websocket
-origin continuity for hosted runtimes. When a hosted tenant is opened through
-the cloud proxy, the runtime must derive the effective same-origin
-`https://<tenant-host>` boundary from trusted forwarded host/proto headers
-only after the hosted container contract has injected explicit proxy CIDRs, so
-live updates stay connected without weakening cross-site websocket checks.
+That same shared `internal/api/` plus `internal/websocket/hub.go` boundary also
+owns browser websocket origin continuity for reverse-proxied runtimes. Same-host
+browser origins must continue to connect when a reverse proxy preserves the
+external host but terminates TLS upstream, so live updates do not fail merely
+because the backend hop is plain HTTP. Forwarded host/proto headers may extend
+that same-origin boundary only after explicit trusted proxy CIDRs are injected,
+so hosted tenants and proxies that rewrite hostnames still fail closed onto the
+trusted forwarded-origin contract instead of weakening cross-site websocket
+checks.
 That same shared boundary now also owns outbound SSO metadata and discovery
 URL handling. SAML test/preview metadata fetches and OIDC issuer discovery
 must normalize absolute HTTP(S) inputs through shared helpers, reject

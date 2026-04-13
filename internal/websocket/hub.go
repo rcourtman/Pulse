@@ -8,6 +8,7 @@ import (
 	"math"
 	"net"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -171,6 +172,9 @@ func (h *Hub) checkOrigin(r *http.Request) bool {
 	if origin == requestOrigin {
 		return true
 	}
+	if sameHostOrigin(origin, host) {
+		return true
+	}
 
 	// Check if wildcard is allowed
 	for _, allowed := range allowedOrigins {
@@ -240,6 +244,34 @@ func (h *Hub) checkOrigin(r *http.Request) bool {
 		Msg("WebSocket connection rejected due to CORS")
 
 	return false
+}
+
+func sameHostOrigin(origin, requestHost string) bool {
+	parsed, err := url.Parse(origin)
+	if err != nil || parsed.Host == "" {
+		return false
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return false
+	}
+
+	return normalizeOriginHost(parsed.Host) == normalizeOriginHost(requestHost)
+}
+
+func normalizeOriginHost(host string) string {
+	normalized := strings.TrimSpace(strings.ToLower(host))
+	if normalized == "" {
+		return normalized
+	}
+
+	parsedHost, parsedPort, err := net.SplitHostPort(normalized)
+	if err != nil {
+		return normalized
+	}
+	if parsedPort == "80" || parsedPort == "443" {
+		return parsedHost
+	}
+	return net.JoinHostPort(parsedHost, parsedPort)
 }
 
 // Client represents a WebSocket client
