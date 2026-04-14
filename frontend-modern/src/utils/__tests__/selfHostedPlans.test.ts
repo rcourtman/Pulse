@@ -36,7 +36,7 @@ describe('selfHostedPlans', () => {
     expect(SELF_HOSTED_COMMERCIAL_PRESENTATION).toEqual({
       pageTitle: 'Pricing',
       pageDescription:
-        'Core monitoring stays free. Relay adds remote access, and Pro unlocks AI operations.',
+        'Core monitoring stays free. Relay adds remote access, and Pro unlocks Pulse Patrol, alert analysis, and auto-fix.',
       mostPopularBadge: 'Most Popular',
       currentPlanLabel: 'Current Plan',
       includedLabel: 'Included',
@@ -69,7 +69,7 @@ describe('selfHostedPlans', () => {
   it('keeps Community quickstart copy scoped to Patrol activation support', () => {
     expect(SELF_HOSTED_PLAN_BY_TIER.community.highlights).toEqual(
       expect.arrayContaining([
-        'AI Patrol (BYOK)',
+        'Pulse Patrol (BYOK)',
         'Patrol quickstart after activation or trial: 25 runs, no API key',
       ]),
     );

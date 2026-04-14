@@ -51,7 +51,7 @@ export const SELF_HOSTED_PLAN_DEFINITIONS: readonly SelfHostedPlanDefinition[] =
     highlights: [
       'Real-time monitoring',
       '7-day metric history',
-      'AI Patrol (BYOK)',
+      'Pulse Patrol (BYOK)',
       'Patrol quickstart after activation or trial: 25 runs, no API key',
       'Update alerts',
       'Basic SSO (OIDC)',
@@ -83,9 +83,9 @@ export const SELF_HOSTED_PLAN_DEFINITIONS: readonly SelfHostedPlanDefinition[] =
     metricHistoryDays: 90,
     highlights: [
       'Everything in Relay',
-      'AI Auto-Fix & investigation',
-      'AI alert analysis',
-      'Kubernetes AI analysis',
+      'Patrol Auto-Fix & investigation',
+      'Pulse Alert Analysis',
+      'Kubernetes Insights',
       '90-day metric history',
       'RBAC, audit logging, SAML SSO',
       'Agent profiles · PDF/CSV reports',
@@ -112,7 +112,8 @@ export const SELF_HOSTED_PLAN_BY_TIER: Record<SelfHostedTierKey, SelfHostedPlanD
 
 export const SELF_HOSTED_COMMERCIAL_PRESENTATION: SelfHostedCommercialPresentation = {
   pageTitle: 'Pricing',
-  pageDescription: 'Core monitoring stays free. Relay adds remote access, and Pro unlocks AI operations.',
+  pageDescription:
+    'Core monitoring stays free. Relay adds remote access, and Pro unlocks Pulse Patrol, alert analysis, and auto-fix.',
   mostPopularBadge: 'Most Popular',
   currentPlanLabel: 'Current Plan',
   includedLabel: 'Included',
@@ -208,7 +209,7 @@ export const SELF_HOSTED_FEATURE_ROWS: readonly SelfHostedFeatureRow[] = [
   },
   {
     key: 'ai_patrol',
-    name: 'AI Patrol (Background Health Checks)',
+    name: 'Pulse Patrol',
     community: true,
     relay: true,
     pro: true,
@@ -216,7 +217,7 @@ export const SELF_HOSTED_FEATURE_ROWS: readonly SelfHostedFeatureRow[] = [
   },
   {
     key: 'ai_autofix',
-    name: 'AI Patrol Auto-Fix',
+    name: 'Patrol Auto-Fix',
     community: false,
     relay: false,
     pro: true,
@@ -224,7 +225,7 @@ export const SELF_HOSTED_FEATURE_ROWS: readonly SelfHostedFeatureRow[] = [
   },
   {
     key: 'ai_alerts',
-    name: 'AI Alert Analysis',
+    name: 'Pulse Alert Analysis',
     community: false,
     relay: false,
     pro: true,
@@ -232,7 +233,7 @@ export const SELF_HOSTED_FEATURE_ROWS: readonly SelfHostedFeatureRow[] = [
   },
   {
     key: 'kubernetes_ai',
-    name: 'Kubernetes AI Analysis',
+    name: 'Kubernetes Insights',
     community: false,
     relay: false,
     pro: true,

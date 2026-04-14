@@ -172,6 +172,15 @@ still grows monitored-system usage.
     browser entrypoint must remain only a thin authenticated redirect rather
     than a second public handoff or a route that invites separate commercial
     posture logic.
+25. Keep self-hosted commercial plan copy aligned with the product-first
+    commercial feature labels. `frontend-modern/src/utils/selfHostedPlans.ts`
+    may still map onto internal entitlement keys such as `ai_patrol`,
+    `ai_alerts`, `ai_autofix`, and `kubernetes_ai`, but the customer-facing
+    plan cards, highlights, and comparison rows must use the canonical product
+    vocabulary already exposed elsewhere in the commercial shell: `Pulse
+    Patrol`, `Pulse Alert Analysis`, `Patrol Auto-Fix`, and `Kubernetes
+    Insights`, rather than reviving generic `AI Patrol` or `AI ... analysis`
+    branding inside self-hosted pricing surfaces.
 
 ## Forbidden Paths
 
