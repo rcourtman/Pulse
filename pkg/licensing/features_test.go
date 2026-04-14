@@ -265,7 +265,7 @@ func TestTierMonitoredSystemLimits(t *testing.T) {
 		{TierPro, 15},
 		{TierProPlus, 50},
 		{TierProAnnual, 15},
-		{TierLifetime, 15},
+		{TierLifetime, 0},
 	}
 
 	for _, tt := range tests {

@@ -325,6 +325,26 @@ func TestBuildEntitlementPayload_CopiesStatusDisplayFields(t *testing.T) {
 	}
 }
 
+func TestBuildEntitlementPayload_LifetimeOmitsCommercialCaps(t *testing.T) {
+	payload := BuildEntitlementPayloadWithUsage(&LicenseStatus{
+		Valid:               true,
+		Tier:                TierLifetime,
+		PlanVersion:         "v5_lifetime_grandfathered",
+		IsLifetime:          true,
+		Features:            append([]string(nil), TierFeatures[TierLifetime]...),
+		MaxMonitoredSystems: 0,
+		MaxGuests:           0,
+	}, string(SubStateActive), EntitlementUsageSnapshot{
+		MonitoredSystems:          15,
+		MonitoredSystemsAvailable: true,
+		Guests:                    4,
+	}, nil)
+
+	if len(payload.Limits) != 0 {
+		t.Fatalf("expected lifetime entitlements to omit commercial caps, got %+v", payload.Limits)
+	}
+}
+
 func TestBuildEntitlementPayload_MaxHistoryDays(t *testing.T) {
 	tests := []struct {
 		name     string

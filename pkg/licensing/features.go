@@ -67,7 +67,7 @@ var TierMonitoredSystemLimits = map[Tier]int{
 	TierPro:        15,
 	TierProPlus:    50,
 	TierProAnnual:  15, // Legacy: same as Pro
-	TierLifetime:   15, // Legacy: same as Pro
+	TierLifetime:   0,  // Grandfathered lifetime entitlements remain uncapped
 	TierCloud:      0,  // Cloud tiers have per-plan limits set in license claims
 	TierMSP:        0,  // MSP tiers have per-plan pool limits set in license claims
 	TierEnterprise: 0,  // Custom

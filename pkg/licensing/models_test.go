@@ -96,6 +96,16 @@ func TestClaims_EffectiveLimits(t *testing.T) {
 			claims:   Claims{},
 			expected: map[string]int64{},
 		},
+		{
+			name: "lifetime_strips_legacy_caps",
+			claims: Claims{
+				Tier:                TierLifetime,
+				Limits:              map[string]int64{"max_monitored_systems": 15, "max_guests": 5},
+				MaxMonitoredSystems: 15,
+				MaxGuests:           5,
+			},
+			expected: map[string]int64{},
+		},
 	}
 
 	for _, tt := range tests {

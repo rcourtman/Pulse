@@ -7,7 +7,7 @@ For the canonical, code-aligned entitlement table (including internal tier names
 
 ## Plan Mapping (User-Facing -> Code Tiers)
 
-Pulse uses capability keys (for example, `ai_autofix`) to gate features at runtime. Those capabilities are bundled into internal tiers in `internal/license/features.go`.
+Pulse uses capability keys (for example, `ai_autofix`) to gate features at runtime. Those capabilities are bundled into internal tiers in `pkg/licensing/features.go`.
 
 User-facing plans map to internal tiers as follows:
 - **Community**: `free`
@@ -17,7 +17,7 @@ User-facing plans map to internal tiers as follows:
 - **Cloud**: `msp` or `enterprise`
 
 Notes:
-- `lifetime` keeps the same runtime entitlements as Pro.
+- `lifetime` keeps the same runtime feature set as Pro, but grandfathered lifetime entitlements are uncapped for monitored systems and guest access.
 - Items marked **Cloud*** require the `enterprise` tier rather than the base `msp` tier.
 - If you are self-hosting, you can use capability keys and `GET /api/license/features` to discover exactly what is active in your instance.
 

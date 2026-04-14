@@ -157,10 +157,12 @@ test.describe.serial('v5 commercial migration notice', () => {
       expect(entitlements.licensed_email).toBe(expectedLicensedEmail);
       expect(entitlements.is_lifetime).toBe(expectedIsLifetime === 'true');
       expect(entitlements.trial_eligible).toBe(false);
-      if (expectedMaxMonitoredSystems > 0) {
-        const monitoredSystemLimit = entitlements.limits?.find(
-          (limit) => limit.key === 'max_monitored_systems',
-        );
+      const monitoredSystemLimit = entitlements.limits?.find(
+        (limit) => limit.key === 'max_monitored_systems',
+      );
+      if (expectedIsLifetime === 'true') {
+        expect(monitoredSystemLimit).toBeUndefined();
+      } else if (expectedMaxMonitoredSystems > 0) {
         expect(monitoredSystemLimit?.limit).toBe(expectedMaxMonitoredSystems);
       }
       return;
@@ -192,8 +194,8 @@ test.describe.serial('v5 commercial migration notice', () => {
       await expectFieldValue(expectFieldLocator(page, 'Plan Terms'), formatTitleCase(expectedPlanVersion));
       if (expectedIsLifetime === 'true') {
         await expectFieldValue(expectFieldLocator(page, 'Expires'), 'Never (Lifetime)');
-      }
-      if (expectedMaxMonitoredSystems > 0) {
+        await expectFieldValue(expectFieldLocator(page, 'Included Monitored Systems'), 'Unlimited');
+      } else if (expectedMaxMonitoredSystems > 0) {
         await expectFieldValue(
           expectFieldLocator(page, 'Included Monitored Systems'),
           String(expectedMaxMonitoredSystems),

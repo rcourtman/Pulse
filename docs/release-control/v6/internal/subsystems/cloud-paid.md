@@ -184,6 +184,10 @@ still grows monitored-system usage.
    Patrol quickstart may be presented only as Patrol-only first-run activation
    support backed by the license server, while Relay and Pro remain the
    canonical commercial story.
+5. Treat grandfathered `lifetime` licenses as uncapped commercial entitlements:
+   they keep the Pro feature set, but they must not inherit monitored-system or
+   guest caps from recurring Pro contracts anywhere in runtime, issuance, or
+   migrated-license storage.
 
 ## Current State
 

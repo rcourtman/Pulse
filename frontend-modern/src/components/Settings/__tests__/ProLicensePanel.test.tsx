@@ -246,9 +246,9 @@ describe('ProLicensePanel', () => {
       subscription_state: 'active',
       upgrade_reasons: [],
       tier: 'pro',
-      plan_version: 'v5_lifetime_grandfathered',
+      plan_version: 'v5_pro_monthly_grandfathered',
       licensed_email: 'owner@example.com',
-      is_lifetime: true,
+      is_lifetime: false,
       trial_eligible: false,
     };
 
@@ -261,7 +261,7 @@ describe('ProLicensePanel', () => {
     expect(screen.getByText('5 / 12')).toBeInTheDocument();
     expect(screen.getByText('7')).toBeInTheDocument();
     expect(screen.getAllByText('Active').length).toBeGreaterThan(0);
-    expect(screen.getByText('V5 Lifetime Grandfathered')).toBeInTheDocument();
+    expect(screen.getByText('V5 Pro Monthly (Grandfathered)')).toBeInTheDocument();
     expect(screen.getByText('Included Monitored Systems')).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Plan' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByRole('tab', { name: 'Usage' })).toHaveAttribute('aria-selected', 'false');
@@ -272,6 +272,32 @@ describe('ProLicensePanel', () => {
       replace: false,
       scroll: false,
     });
+  });
+
+  it('shows lifetime grandfathered plans as uncapped', async () => {
+    mockEntitlements = {
+      capabilities: ['ai_patrol'],
+      limits: [],
+      subscription_state: 'active',
+      upgrade_reasons: [],
+      tier: 'lifetime',
+      plan_version: 'v5_lifetime_grandfathered',
+      licensed_email: 'owner@example.com',
+      is_lifetime: true,
+      trial_eligible: false,
+    };
+
+    renderPanel();
+
+    await waitFor(() => {
+      expect(screen.getByText('Plan Terms')).toBeInTheDocument();
+    });
+
+    expect(screen.getByText('V5 Lifetime Grandfathered')).toBeInTheDocument();
+    expect(screen.getByText('Included Monitored Systems')).toBeInTheDocument();
+    expect(screen.getByText('Max Guests')).toBeInTheDocument();
+    expect(screen.getAllByText('Unlimited').length).toBeGreaterThan(0);
+    expect(screen.queryByText('5 / 12')).not.toBeInTheDocument();
   });
 
   it('shows recurring grandfathered pricing continuity for migrated v5 Pro plans', async () => {
