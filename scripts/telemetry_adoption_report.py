@@ -23,6 +23,11 @@ from urllib.request import Request, urlopen
 
 DEFAULT_DB_PATH = "/var/lib/pulse-license/licenses.sqlite"
 DEFAULT_GITHUB_REPO = "rcourtman/Pulse"
+DEFAULT_LATEST_INSTALL_WINDOWS = (
+    ("24h", timedelta(hours=24)),
+    ("72h", timedelta(hours=72)),
+    ("7d", timedelta(days=7)),
+)
 GIT_DESCRIBE_RE = re.compile(
     r"^(?P<base>\d+\.\d+\.\d+(?:-[0-9A-Za-z\.-]+)?)-(?P<count>\d+)-g(?P<sha>[0-9a-fA-F]+)(?P<dirty>-dirty)?$"
 )
@@ -213,6 +218,51 @@ finally:
     return json.loads(result.stdout)
 
 
+def counter_entries(counter: Counter[str], key_name: str) -> list[dict[str, Any]]:
+    return [
+        {key_name: value, "installs": installs}
+        for value, installs in sorted(counter.items(), key=lambda item: (-item[1], item[0]))
+    ]
+
+
+def summarize_latest_install_windows(
+    latest_by_install: dict[str, dict[str, Any]],
+    published_versions: set[str],
+    *,
+    now: datetime | None = None,
+    windows: tuple[tuple[str, timedelta], ...] = DEFAULT_LATEST_INSTALL_WINDOWS,
+) -> dict[str, Any]:
+    current_time = now or datetime.now(timezone.utc)
+    summary: dict[str, Any] = {}
+
+    for label, limit in windows:
+        version_split: Counter[str] = Counter()
+        published_split: Counter[str] = Counter()
+        non_release_split: Counter[str] = Counter()
+        platform_split: Counter[str] = Counter()
+
+        for row in latest_by_install.values():
+            received_at = parse_received_at(str(row["received_at"]))
+            if current_time - received_at > limit:
+                continue
+            platform = str(row.get("platform") or "unknown").strip() or "unknown"
+            identity = classify_reported_version(str(row.get("version") or ""), published_versions)
+            version_split[identity.version] += 1
+            platform_split[platform] += 1
+            target = published_split if identity.is_published_release else non_release_split
+            target[identity.version] += 1
+
+        summary[label] = {
+            "active_installs": sum(version_split.values()),
+            "latest_versions": counter_entries(version_split, "version"),
+            "published_versions": counter_entries(published_split, "version"),
+            "non_release_versions": counter_entries(non_release_split, "version"),
+            "platforms": counter_entries(platform_split, "platform"),
+        }
+
+    return summary
+
+
 def summarize_rows(
     db_stats: dict[str, Any],
     rows: Iterable[dict[str, Any]],
@@ -225,50 +275,20 @@ def summarize_rows(
         if existing is None or str(row["received_at"]) > str(existing["received_at"]):
             latest_by_install[install_id] = row
 
-    now = datetime.now(timezone.utc)
-    active_24h = 0
-    active_72h = 0
-    platform_split = Counter()
-    version_split = Counter()
-    published_split = Counter()
-    non_release_split = Counter()
-
-    for row in latest_by_install.values():
-        received_at = parse_received_at(str(row["received_at"]))
-        age = now - received_at
-        if age <= timedelta(hours=24):
-            active_24h += 1
-        if age <= timedelta(hours=72):
-            active_72h += 1
-            platform = str(row.get("platform") or "unknown").strip() or "unknown"
-            platform_split[platform] += 1
-            identity = classify_reported_version(str(row.get("version") or ""), published_versions)
-            version_split[identity.version] += 1
-            target = published_split if identity.is_published_release else non_release_split
-            target[identity.version] += 1
+    latest_install_windows = summarize_latest_install_windows(latest_by_install, published_versions)
+    summary_72h = latest_install_windows["72h"]
 
     return {
         "db_stats": db_stats,
+        "latest_install_windows": latest_install_windows,
         "active_latest": {
-            "active_24h": active_24h,
-            "active_72h": active_72h,
+            "active_24h": latest_install_windows["24h"]["active_installs"],
+            "active_72h": summary_72h["active_installs"],
         },
-        "latest_version_split_72h": [
-            {"version": version, "installs": installs}
-            for version, installs in sorted(version_split.items(), key=lambda item: (-item[1], item[0]))
-        ],
-        "published_version_split_72h": [
-            {"version": version, "installs": installs}
-            for version, installs in sorted(published_split.items(), key=lambda item: (-item[1], item[0]))
-        ],
-        "non_release_version_split_72h": [
-            {"version": version, "installs": installs}
-            for version, installs in sorted(non_release_split.items(), key=lambda item: (-item[1], item[0]))
-        ],
-        "latest_platform_split_72h": [
-            {"platform": platform, "installs": installs}
-            for platform, installs in sorted(platform_split.items(), key=lambda item: (-item[1], item[0]))
-        ],
+        "latest_version_split_72h": summary_72h["latest_versions"],
+        "published_version_split_72h": summary_72h["published_versions"],
+        "non_release_version_split_72h": summary_72h["non_release_versions"],
+        "latest_platform_split_72h": summary_72h["platforms"],
     }
 
 
@@ -280,30 +300,34 @@ def format_text(summary: dict[str, Any], repo: str, since_days: int) -> str:
         f"latest ping: {summary['db_stats'].get('latest_ping') or 'unknown'}",
         f"total rows: {summary['db_stats'].get('total_rows', 0)}",
         f"total distinct installs: {summary['db_stats'].get('total_distinct_installs', 0)}",
-        f"active installs (24h): {summary['active_latest']['active_24h']}",
-        f"active installs (72h): {summary['active_latest']['active_72h']}",
-        "",
-        "Published versions (latest install state in last 72h):",
     ]
-    published = summary["published_version_split_72h"]
-    if published:
-        lines.extend(f"- {entry['version']}: {entry['installs']}" for entry in published)
-    else:
-        lines.append("- none")
-    lines.append("")
-    lines.append("Non-release or unpublished versions (latest install state in last 72h):")
-    non_release = summary["non_release_version_split_72h"]
-    if non_release:
-        lines.extend(f"- {entry['version']}: {entry['installs']}" for entry in non_release)
-    else:
-        lines.append("- none")
-    lines.append("")
-    lines.append("Platforms (latest install state in last 72h):")
-    platform_split = summary["latest_platform_split_72h"]
-    if platform_split:
-        lines.extend(f"- {entry['platform']}: {entry['installs']}" for entry in platform_split)
-    else:
-        lines.append("- none")
+
+    for label, _ in DEFAULT_LATEST_INSTALL_WINDOWS:
+        window_summary = summary["latest_install_windows"][label]
+        lines.extend(
+            [
+                "",
+                f"Latest install state ({label}):",
+                f"- active installs: {window_summary['active_installs']}",
+                "- published versions:",
+            ]
+        )
+        if window_summary["published_versions"]:
+            lines.extend(f"  - {entry['version']}: {entry['installs']}" for entry in window_summary["published_versions"])
+        else:
+            lines.append("  - none")
+        lines.append("- non-release or unpublished versions:")
+        if window_summary["non_release_versions"]:
+            lines.extend(
+                f"  - {entry['version']}: {entry['installs']}" for entry in window_summary["non_release_versions"]
+            )
+        else:
+            lines.append("  - none")
+        lines.append("- platforms:")
+        if window_summary["platforms"]:
+            lines.extend(f"  - {entry['platform']}: {entry['installs']}" for entry in window_summary["platforms"])
+        else:
+            lines.append("  - none")
     return "\n".join(lines)
 
 

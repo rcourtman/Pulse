@@ -96,6 +96,11 @@ evidence with no subsystem ownership.
 That same governed home now also owns the single "usage data" vocabulary for
 anonymous outbound telemetry and local-only upgrade events, so Pulse stops
 describing those two privacy scopes as unrelated systems.
+That same operator-reporting boundary now also owns reusable latest-install
+adoption baselines. `scripts/telemetry_adoption_report.py` must emit
+windowed 24h, 72h, and 7d latest-install snapshots that split published
+versions from unpublished or development builds, so RC adoption reads stop
+depending on ad hoc SQL or one-off local helper scripts.
 
 Security-facing settings remain intentionally shared with `frontend-primitives`
 because shell framing and presentation consistency still belong there, but the
