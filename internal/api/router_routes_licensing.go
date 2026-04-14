@@ -45,7 +45,7 @@ func (r *Router) registerOrgLicenseRoutesGroup(orgHandlers *OrgHandlers, rbacHan
 	r.mux.HandleFunc("POST /api/license/monitored-system-ledger/preview", RequireAuth(r.config, r.handleMonitoredSystemLedgerPreview))
 	r.mux.HandleFunc("POST /api/license/trial/start", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.licenseHandlers.HandleStartTrial)))
 
-	// Local upgrade metrics (formerly "conversion" telemetry). Canonical routes:
+	// Local-only upgrade events (legacy route names retain "upgrade-metrics" for compatibility).
 	// These are local-only signals used to improve in-app upgrade flows; no external export.
 	r.mux.HandleFunc("POST /api/upgrade-metrics/events", RequireAuth(r.config, conversionHandlers.HandleRecordEvent))
 	r.mux.HandleFunc("GET /api/upgrade-metrics/stats", RequireAuth(r.config, conversionHandlers.HandleGetStats))

@@ -62,7 +62,7 @@ Power-user shortcuts:
 - **One-Click Updates**: Easy upgrades for supported deployments
 - **OIDC/SSO/SAML**: Single sign-on with multi-provider support
 - **Mobile Remote Access**: Relay protocol with end-to-end encryption for supported Pulse Mobile clients (Relay and above)
-- **Privacy Focused**: Anonymous telemetry is enabled by default and [fully documented](docs/PRIVACY.md) — no hostnames, credentials, or personal data is ever sent. Disable any time in Settings or via `PULSE_TELEMETRY=false`.
+- **Privacy Focused**: Anonymous outbound telemetry is enabled by default and [fully documented](docs/PRIVACY.md) — no hostnames, credentials, or personal data is ever sent. Disable any time in Settings or via `PULSE_TELEMETRY=false`.
 
 ## ⚡ Quick Start
 

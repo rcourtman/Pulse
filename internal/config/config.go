@@ -172,8 +172,8 @@ type Config struct {
 	AllowedOrigins             string           `envconfig:"ALLOWED_ORIGINS" default:"*"`
 	HideLocalLogin             bool             `envconfig:"PULSE_AUTH_HIDE_LOCAL_LOGIN" default:"false"`
 	DisableDockerUpdateActions bool             `envconfig:"PULSE_DISABLE_DOCKER_UPDATE_ACTIONS" default:"false"` // Hide Docker update buttons (read-only mode for containers)
-	DisableLocalUpgradeMetrics bool             `envconfig:"PULSE_DISABLE_LOCAL_UPGRADE_METRICS" default:"false"` // Disable local-only upgrade UX metrics collection
-	TelemetryEnabled           bool             `envconfig:"PULSE_TELEMETRY" default:"true"`                      // Anonymous telemetry enabled by default (install ID, version, resource counts, feature flags — opt out any time)
+	DisableLocalUpgradeMetrics bool             `envconfig:"PULSE_DISABLE_LOCAL_UPGRADE_METRICS" default:"false"` // Disable local-only upgrade event collection
+	TelemetryEnabled           bool             `envconfig:"PULSE_TELEMETRY" default:"true"`                      // Anonymous outbound usage telemetry enabled by default (install ID, version, resource counts, feature flags — opt out any time)
 	MultiTenantEnabled         bool             `envconfig:"PULSE_MULTI_TENANT_ENABLED" default:"false"`          // Enable multi-tenant support
 	MetricsToken               string           `envconfig:"PULSE_METRICS_TOKEN" default:"" json:"-"`             // Bearer token for /metrics endpoint (empty = unauthenticated)
 	ProTrialSignupURL          string           `envconfig:"PULSE_PRO_TRIAL_SIGNUP_URL" default:""`               // Hosted signup/checkout URL for starting Pulse Pro trials
@@ -1010,7 +1010,7 @@ func load(initLogging bool) (*Config, error) {
 			cfg.DisableLocalUpgradeMetrics = disabled
 			cfg.EnvOverrides["PULSE_DISABLE_LOCAL_UPGRADE_METRICS"] = true
 			cfg.EnvOverrides["disableLocalUpgradeMetrics"] = true
-			log.Info().Bool("disabled", disabled).Msg("Overriding local upgrade metrics setting from environment")
+			log.Info().Bool("disabled", disabled).Msg("Overriding local-only upgrade events setting from environment")
 		} else {
 			log.Warn().Str("value", disableLocalUpgradeMetricsStr).Msg("Invalid PULSE_DISABLE_LOCAL_UPGRADE_METRICS value, ignoring")
 		}
@@ -1021,7 +1021,7 @@ func load(initLogging bool) (*Config, error) {
 			cfg.TelemetryEnabled = enabled
 			cfg.EnvOverrides["PULSE_TELEMETRY"] = true
 			cfg.EnvOverrides["telemetryEnabled"] = true
-			log.Info().Bool("enabled", enabled).Msg("Overriding telemetry setting from environment")
+			log.Info().Bool("enabled", enabled).Msg("Overriding anonymous outbound telemetry setting from environment")
 		} else {
 			log.Warn().Str("value", telemetryStr).Msg("Invalid PULSE_TELEMETRY value, ignoring")
 		}

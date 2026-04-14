@@ -4062,6 +4062,7 @@
         "internal/api/security_tokens.go",
         "internal/api/system_settings.go",
         "internal/telemetry/telemetry.go",
+        "scripts/telemetry_adoption_report.py",
         "SECURITY.md"
       ],
       "verification": {
@@ -4079,7 +4080,8 @@
           "internal/api/security_tokens_owner_binding_test.go",
           "internal/api/security_tokens_test.go",
           "internal/api/system_settings_telemetry_test.go",
-          "internal/telemetry/telemetry_test.go"
+          "internal/telemetry/telemetry_test.go",
+          "scripts/tests/test_telemetry_adoption_report.py"
         ],
         "require_explicit_path_policy_coverage": true,
         "path_policies": [
@@ -4091,6 +4093,7 @@
               "docs/PRIVACY.md",
               "frontend-modern/src/components/Settings/useSystemSettingsState.ts",
               "internal/telemetry/telemetry.go",
+              "scripts/telemetry_adoption_report.py",
               "SECURITY.md"
             ],
             "allow_same_subsystem_tests": false,
@@ -4098,7 +4101,8 @@
             "exact_files": [
               "frontend-modern/src/stores/__tests__/systemSettings.test.ts",
               "internal/api/system_settings_telemetry_test.go",
-              "internal/telemetry/telemetry_test.go"
+              "internal/telemetry/telemetry_test.go",
+              "scripts/tests/test_telemetry_adoption_report.py"
             ]
           },
           {

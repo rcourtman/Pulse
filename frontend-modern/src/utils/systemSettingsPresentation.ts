@@ -81,7 +81,7 @@ export function getReduceUpsellNoiseUpdateErrorMessage(message?: string): string
 }
 
 export function getLocalUpgradeMetricsUpdateErrorMessage(message?: string): string {
-  return message || 'Unable to update local upgrade metrics.';
+  return message || 'Unable to update local-only upgrade events.';
 }
 
 export function getTelemetryUpdateErrorMessage(message?: string): string {

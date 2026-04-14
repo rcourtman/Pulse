@@ -8,6 +8,11 @@ export interface SystemSettingsResponse extends SystemConfig {
 export interface TelemetryPingPreview {
   install_id: string;
   version: string;
+  version_raw?: string;
+  version_channel: string;
+  version_build?: string;
+  version_is_development: boolean;
+  version_is_published_release: boolean;
   platform: string;
   os: string;
   arch: string;

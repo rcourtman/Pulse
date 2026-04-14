@@ -8,7 +8,7 @@
 //
 // Identity:
 //   - A rotating install ID (UUID, generated locally and rotated periodically, not tied to any account)
-//   - Pulse version
+//   - Pulse version identity (normalized version plus raw build string when it differs)
 //   - Platform: "docker" or "binary"
 //   - OS and architecture (e.g. "linux/amd64")
 //
@@ -37,7 +37,7 @@
 // # How to disable
 //
 // Set the environment variable PULSE_TELEMETRY=false, or toggle off
-// "Anonymous telemetry" in Settings → System → General.
+// "Anonymous outbound telemetry" in Settings → System → General.
 package telemetry
 
 import (
@@ -54,6 +54,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/rcourtman/pulse-go-rewrite/internal/updates"
 	"github.com/rs/zerolog/log"
 )
 
@@ -96,12 +97,17 @@ type installIDRecord struct {
 // Every field is documented here so users can audit exactly what leaves their server.
 type Ping struct {
 	// Identity
-	InstallID string `json:"install_id"` // Rotating UUID, not tied to any account
-	Version   string `json:"version"`    // Pulse version (e.g. "6.0.0")
-	Platform  string `json:"platform"`   // "docker" or "binary"
-	OS        string `json:"os"`         // runtime.GOOS (e.g. "linux")
-	Arch      string `json:"arch"`       // runtime.GOARCH (e.g. "amd64")
-	Event     string `json:"event"`      // "startup" or "heartbeat"
+	InstallID          string `json:"install_id"`                   // Rotating UUID, not tied to any account
+	Version            string `json:"version"`                      // Normalized Pulse version (e.g. "6.0.0-rc.1")
+	VersionRaw         string `json:"version_raw,omitempty"`        // Original version/build string when it differs
+	VersionChannel     string `json:"version_channel"`              // "stable", "rc", "dev", or "prerelease"
+	VersionBuild       string `json:"version_build,omitempty"`      // Build metadata when present (e.g. git describe suffix)
+	VersionDevelopment bool   `json:"version_is_development"`       // True for development/manual builds
+	VersionPublished   bool   `json:"version_is_published_release"` // True for published stable/RC asset versions
+	Platform           string `json:"platform"`                     // "docker" or "binary"
+	OS                 string `json:"os"`                           // runtime.GOOS (e.g. "linux")
+	Arch               string `json:"arch"`                         // runtime.GOARCH (e.g. "amd64")
+	Event              string `json:"event"`                        // "startup" or "heartbeat"
 
 	// Scale (counts only — no names, IPs, or identifiers)
 	PVENodes           int `json:"pve_nodes"`
@@ -166,15 +172,15 @@ var (
 	current *runner
 )
 
-// Start begins anonymous telemetry if enabled.
+// Start begins anonymous outbound telemetry if enabled.
 // It reads or creates a rotating install ID in dataDir, waits for the monitor
 // to populate state, sends a startup ping, and schedules a daily heartbeat.
 // Call Stop() on shutdown.
 //
-// This is a no-op when telemetry is not opted in.
+// This is a no-op when anonymous outbound telemetry is not opted in.
 func Start(ctx context.Context, cfg Config) {
 	if !cfg.Enabled {
-		log.Info().Msg("Anonymous telemetry is disabled (enable via PULSE_TELEMETRY=true or Settings → System)")
+		log.Info().Msg("Anonymous outbound telemetry is disabled (enable via PULSE_TELEMETRY=true or Settings → System)")
 		return
 	}
 
@@ -198,7 +204,7 @@ func Start(ctx context.Context, cfg Config) {
 
 	log.Info().
 		Str("platform", base.Platform).
-		Msg("Anonymous telemetry enabled — sends a rotating install ID, version, platform, OS/arch, resource counts, and feature flags (nothing else)")
+		Msg("Anonymous outbound telemetry enabled — sends a rotating install ID, version identity, platform, OS/arch, resource counts, and feature flags (nothing else)")
 
 	r.wg.Add(1)
 	go func() {
@@ -282,12 +288,18 @@ func jitteredHeartbeat() time.Duration {
 }
 
 func basePing(cfg Config, installID string) Ping {
+	versionIdentity := updates.DescribeUsageDataVersion(cfg.Version)
 	return Ping{
-		InstallID: installID,
-		Version:   cfg.Version,
-		Platform:  platformName(cfg.IsDocker),
-		OS:        runtime.GOOS,
-		Arch:      runtime.GOARCH,
+		InstallID:          installID,
+		Version:            versionIdentity.Version,
+		VersionRaw:         versionIdentity.RawVersion,
+		VersionChannel:     versionIdentity.Channel,
+		VersionBuild:       versionIdentity.Build,
+		VersionDevelopment: versionIdentity.IsDevelopment,
+		VersionPublished:   versionIdentity.IsPublishedRelease,
+		Platform:           platformName(cfg.IsDocker),
+		OS:                 runtime.GOOS,
+		Arch:               runtime.GOARCH,
 	}
 }
 

@@ -199,7 +199,7 @@ func TestBuildPreview_UsesCurrentHeartbeatPayload(t *testing.T) {
 	dir := t.TempDir()
 
 	preview, err := BuildPreview(Config{
-		Version:  "6.0.0",
+		Version:  "v6.0.0-rc.1-45-gABCDEF",
 		DataDir:  dir,
 		IsDocker: true,
 		GetSnapshot: func() Snapshot {
@@ -220,6 +220,24 @@ func TestBuildPreview_UsesCurrentHeartbeatPayload(t *testing.T) {
 	}
 	if preview.Platform != "docker" {
 		t.Fatalf("preview platform = %q, want docker", preview.Platform)
+	}
+	if preview.Version != "6.0.0-rc.1+git.45.gabcdef" {
+		t.Fatalf("preview version = %q, want normalized development version", preview.Version)
+	}
+	if preview.VersionRaw != "v6.0.0-rc.1-45-gABCDEF" {
+		t.Fatalf("preview raw version = %q, want original version string", preview.VersionRaw)
+	}
+	if preview.VersionChannel != "dev" {
+		t.Fatalf("preview version channel = %q, want dev", preview.VersionChannel)
+	}
+	if preview.VersionBuild != "git.45.gabcdef" {
+		t.Fatalf("preview version build = %q, want git.45.gabcdef", preview.VersionBuild)
+	}
+	if !preview.VersionDevelopment {
+		t.Fatal("expected preview to mark development build")
+	}
+	if preview.VersionPublished {
+		t.Fatal("development preview must not be marked as published release")
 	}
 	if preview.PVENodes != 3 || preview.VMs != 10 || preview.ActiveAlerts != 2 {
 		t.Fatalf("preview snapshot = %#v", preview)
@@ -255,12 +273,16 @@ func TestSend_Success(t *testing.T) {
 	defer cancel()
 
 	ping := Ping{
-		InstallID: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-		Version:   "6.0.0",
-		Event:     "startup",
-		Platform:  "docker",
-		OS:        "linux",
-		Arch:      "amd64",
+		InstallID:          "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+		Version:            "6.0.0-rc.1",
+		VersionRaw:         "v6.0.0-rc.1",
+		VersionChannel:     "rc",
+		VersionDevelopment: false,
+		VersionPublished:   true,
+		Event:              "startup",
+		Platform:           "docker",
+		OS:                 "linux",
+		Arch:               "amd64",
 	}
 	send(ctx, ping)
 
@@ -273,8 +295,17 @@ func TestSend_Success(t *testing.T) {
 	if lastPing.Event != "startup" {
 		t.Errorf("event = %q, want %q", lastPing.Event, "startup")
 	}
-	if lastPing.Version != "6.0.0" {
-		t.Errorf("version = %q, want %q", lastPing.Version, "6.0.0")
+	if lastPing.Version != "6.0.0-rc.1" {
+		t.Errorf("version = %q, want %q", lastPing.Version, "6.0.0-rc.1")
+	}
+	if lastPing.VersionRaw != "v6.0.0-rc.1" {
+		t.Errorf("version_raw = %q, want %q", lastPing.VersionRaw, "v6.0.0-rc.1")
+	}
+	if lastPing.VersionChannel != "rc" {
+		t.Errorf("version_channel = %q, want rc", lastPing.VersionChannel)
+	}
+	if !lastPing.VersionPublished {
+		t.Error("expected version_is_published_release to be true")
 	}
 }
 

@@ -151,6 +151,12 @@ from `git describe`. Non-published prerelease bases such as `6.0.0-dev`
 therefore remain prerelease for branch policy, release-control blocked
 records, and future release promotion planning, but they must not be treated
 as shipped RC lineage or as published release-asset versions.
+That same version boundary now also owns the canonical usage-data release
+identity. `internal/updates/version.go` must classify raw runtime version
+strings into normalized release identity fields for browser preview payloads
+and operator telemetry reporting, so unpublished `git describe` / manual / dev
+builds cannot pollute published stable or RC adoption reads just because they
+share a semver-looking prefix.
 That release-build metadata path is now explicit too: `scripts/release_ldflags.sh`
 is the canonical owner for server and agent build ldflags, and release artifact
 assembly must route through it instead of hand-writing overlapping `main.Version`,

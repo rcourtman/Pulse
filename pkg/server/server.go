@@ -173,8 +173,8 @@ func Run(ctx context.Context, version string) error {
 		log.Warn().Err(err).Msg("Failed to ensure default organization owner membership")
 	}
 
-	// Local upgrade metrics must be durable and tenant-aware (P0-6).
-	// Renamed from conversion.db -> upgrade_metrics.db to reduce "marketing telemetry" optics.
+	// Local-only upgrade events must be durable and tenant-aware (P0-6).
+	// Renamed from conversion.db -> upgrade_metrics.db to reduce misleading telemetry optics.
 	upgradeMetricsDB := filepath.Join(baseDataDir, "upgrade_metrics.db")
 	legacyConversionDB := filepath.Join(baseDataDir, "conversion.db")
 	if _, err := os.Stat(upgradeMetricsDB); os.IsNotExist(err) {
@@ -184,19 +184,19 @@ func Run(ctx context.Context, version string) error {
 					return
 				}
 				if renameErr := os.Rename(from, to); renameErr != nil {
-					log.Warn().Err(renameErr).Str("from", from).Str("to", to).Msg("Failed to migrate legacy upgrade metrics db artifact")
+					log.Warn().Err(renameErr).Str("from", from).Str("to", to).Msg("Failed to migrate legacy local-only upgrade events DB artifact")
 				}
 			}
 			renameIfExists(legacyConversionDB, upgradeMetricsDB)
 			renameIfExists(legacyConversionDB+"-wal", upgradeMetricsDB+"-wal")
 			renameIfExists(legacyConversionDB+"-shm", upgradeMetricsDB+"-shm")
-			log.Info().Str("from", legacyConversionDB).Str("to", upgradeMetricsDB).Msg("Migrated legacy conversion db to upgrade metrics db")
+			log.Info().Str("from", legacyConversionDB).Str("to", upgradeMetricsDB).Msg("Migrated legacy conversion DB to local-only upgrade events DB")
 		}
 	}
 
 	conversionStore, err := pkglicensing.NewConversionStore(upgradeMetricsDB)
 	if err != nil {
-		return fmt.Errorf("failed to initialize local upgrade metrics store: %w", err)
+		return fmt.Errorf("failed to initialize local-only upgrade events store: %w", err)
 	}
 	conversionStoreClosed := false
 	closeConversionStore := func() {
@@ -205,7 +205,7 @@ func Run(ctx context.Context, version string) error {
 		}
 		conversionStoreClosed = true
 		if err := conversionStore.Close(); err != nil {
-			log.Error().Err(err).Msg("Failed to close conversion store")
+			log.Error().Err(err).Msg("Failed to close local-only upgrade events store")
 		}
 	}
 	defer closeConversionStore()

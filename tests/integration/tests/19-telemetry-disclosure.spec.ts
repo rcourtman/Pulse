@@ -69,7 +69,7 @@ test.describe('Telemetry disclosure', () => {
     await page.waitForURL(/\/settings/, { timeout: 15_000 });
 
     const telemetrySummary = page.getByText(
-      /rotating install ID, version, platform, resource counts, and feature flags/i,
+      /rotating install ID, normalized release identity, platform, resource counts, and feature flags/i,
     );
     await expect(telemetrySummary).toBeVisible();
     await expect(telemetrySummary).toContainText('Telemetry rows are retained for up to 90 days');
@@ -83,7 +83,7 @@ test.describe('Telemetry disclosure', () => {
       page,
       disclosureLink,
       '/docs/PRIVACY.md',
-      'Pulse includes anonymous telemetry',
+      'Pulse currently has two usage-data scopes',
     );
   });
 
@@ -124,7 +124,9 @@ test.describe('Telemetry disclosure', () => {
     const dialog = page.getByRole('dialog');
     await expect(dialog.getByText('Welcome to the New Navigation!')).toBeVisible();
     await expect(
-      dialog.getByText(/rotating install ID, version, platform, resource counts, and feature flags/i),
+      dialog.getByText(
+        /rotating install ID, normalized release identity, platform, resource counts, and feature flags/i,
+      ),
     ).toBeVisible();
     await expect(
       dialog.getByText(/IP addresses are not stored in telemetry rows/i),
@@ -136,7 +138,7 @@ test.describe('Telemetry disclosure', () => {
       page,
       privacyLink,
       '/docs/PRIVACY.md',
-      'Pulse includes anonymous telemetry',
+      'Pulse currently has two usage-data scopes',
     );
 
     const docsLink = dialog.getByRole('link', { name: 'Documentation' });

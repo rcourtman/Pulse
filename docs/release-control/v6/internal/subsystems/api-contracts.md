@@ -494,6 +494,15 @@ when the disabled candidate no longer counts toward monitored-system capacity.
 
 The API layer already uses contract tests in many places, but every major live
 contract should continue moving toward canonical-only runtime shapes.
+That same shared settings/licensing contract now also owns the split usage-data
+payload model. `frontend-modern/src/api/settings.ts`,
+`internal/api/router_routes_licensing.go`, and adjacent settings callers must
+keep anonymous outbound telemetry and local-only upgrade events as separate
+browser-visible scopes, and the telemetry preview payload must ship normalized
+version identity fields (`version`, `version_raw`, `version_channel`,
+`version_build`, `version_is_development`, and
+`version_is_published_release`) instead of leaving browser callers to infer
+published-release truth from raw build strings.
 That same browser-transport contract now tolerates sparse admission-preview
 payloads without changing the runtime truth. Patrol transport may omit
 `finding_ids`, and infrastructure removal previews may stage optimistic rows

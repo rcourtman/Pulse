@@ -364,11 +364,11 @@ export function useSystemSettingsState({
       await SettingsAPI.updateSystemSettings({ disableLocalUpgradeMetrics: disabled });
       updateDisableLocalUpgradeMetricsSetting(disabled);
       notificationStore.success(
-        disabled ? 'Local upgrade metrics disabled' : 'Local upgrade metrics enabled',
+        disabled ? 'Local-only upgrade events disabled' : 'Local-only upgrade events enabled',
         2000,
       );
     } catch (error) {
-      logger.error('Failed to update local upgrade metrics setting', error);
+      logger.error('Failed to update local-only upgrade events setting', error);
       notificationStore.error(
         getLocalUpgradeMetricsUpdateErrorMessage(
           error instanceof Error ? error.message : undefined,
@@ -392,7 +392,7 @@ export function useSystemSettingsState({
     try {
       await SettingsAPI.updateSystemSettings({ telemetryEnabled: enabled });
       notificationStore.success(
-        enabled ? 'Anonymous telemetry enabled' : 'Anonymous telemetry disabled',
+        enabled ? 'Anonymous outbound telemetry enabled' : 'Anonymous outbound telemetry disabled',
         3000,
       );
     } catch (error) {

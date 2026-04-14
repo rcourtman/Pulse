@@ -67,6 +67,7 @@ describe('systemSettings store', () => {
   it('documents telemetry retention and field-level rationale in the privacy doc', () => {
     const privacyDoc = readFileSync(path.join(repoRoot, 'docs', 'PRIVACY.md'), 'utf8');
 
+    expect(privacyDoc).toContain('## Usage Data');
     expect(privacyDoc).toContain('Every field is listed below with the reason it exists');
     expect(privacyDoc).toContain('rows older than **90 days** are purged automatically');
     expect(privacyDoc).toContain('uses client IP addresses transiently for abuse/rate limiting');

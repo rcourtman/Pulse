@@ -64,6 +64,18 @@ type VersionInfo struct {
 	DeploymentType string `json:"deploymentType"`
 }
 
+// UsageDataVersionIdentity is the canonical release/build identity that usage-data
+// surfaces should use when distinguishing published releases from development or
+// manual branch builds.
+type UsageDataVersionIdentity struct {
+	Version            string `json:"version"`
+	RawVersion         string `json:"version_raw,omitempty"`
+	Channel            string `json:"version_channel"`
+	Build              string `json:"version_build,omitempty"`
+	IsDevelopment      bool   `json:"version_is_development"`
+	IsPublishedRelease bool   `json:"version_is_published_release"`
+}
+
 // ParseVersion parses a version string into a Version struct
 func ParseVersion(versionStr string) (*Version, error) {
 	// Remove 'v' prefix if present
@@ -197,6 +209,32 @@ func GetCurrentVersion() (*VersionInfo, error) {
 	return buildInfo("4.26.0", "release", false), nil
 }
 
+// DescribeUsageDataVersion normalizes a reported version string into a stable
+// release/build identity for telemetry and operator-facing usage-data reports.
+func DescribeUsageDataVersion(raw string) UsageDataVersionIdentity {
+	trimmed := strings.TrimSpace(raw)
+	normalized := normalizeVersionString(trimmed)
+	identity := UsageDataVersionIdentity{
+		Version: normalized,
+		Channel: "unknown",
+	}
+	if trimmed != "" && trimmed != normalized {
+		identity.RawVersion = trimmed
+	}
+
+	parsed, err := ParseVersion(normalized)
+	if err != nil {
+		return identity
+	}
+
+	identity.Build = parsed.Build
+	identity.Channel = usageDataVersionChannel(parsed)
+	identity.IsDevelopment = identity.Channel == "dev"
+	identity.IsPublishedRelease = (identity.Channel == "stable" || identity.Channel == "rc") &&
+		parsed.IsPublishedReleaseAssetVersion()
+	return identity
+}
+
 // normalizeVersionString ensures any version string can be parsed as semantic version.
 // Release builds are returned unchanged, while git describe strings and branch names are
 // converted to a safe 0.0.0-based prerelease format.
@@ -326,6 +364,24 @@ func detectChannelFromVersion(version string) string {
 		return "stable"
 	}
 	return "stable"
+}
+
+func usageDataVersionChannel(version *Version) string {
+	if version == nil {
+		return "unknown"
+	}
+	switch {
+	case version.Build != "":
+		return "dev"
+	case version.IsRCPrerelease():
+		return "rc"
+	case version.Prerelease == "":
+		return "stable"
+	case strings.EqualFold(version.Prerelease, "dev"), strings.HasPrefix(strings.ToLower(version.Prerelease), "dev."):
+		return "dev"
+	default:
+		return "prerelease"
+	}
 }
 
 func readCurrentVersionFile() (string, bool) {

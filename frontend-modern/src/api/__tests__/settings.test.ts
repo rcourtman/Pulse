@@ -49,6 +49,9 @@ describe('SettingsAPI', () => {
         payload: {
           install_id: 'preview-install-id',
           version: '6.0.0',
+          version_channel: 'stable',
+          version_is_development: false,
+          version_is_published_release: true,
           platform: 'docker',
           os: 'linux',
           arch: 'amd64',

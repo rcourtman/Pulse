@@ -12,6 +12,8 @@ describe('GeneralSettingsPanel guardrails', () => {
   });
 
   it('keeps telemetry preview and reset controls in the general settings panel', () => {
+    expect(generalSettingsPanelSource).toContain('Usage data and privacy');
+    expect(generalSettingsPanelSource).toContain('Disable local-only upgrade events');
     expect(generalSettingsPanelSource).toContain('Preview payload');
     expect(generalSettingsPanelSource).toContain('Reset ID');
     expect(generalSettingsPanelSource).toContain('Telemetry payload preview');

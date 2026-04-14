@@ -175,10 +175,10 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
         </div>
       </SettingsPanel>
 
-      {/* Navigation + Privacy Card */}
+      {/* Usage Data + Privacy Card */}
       <SettingsPanel
-        title="Navigation and privacy"
-        description="Control local metrics and anonymous telemetry."
+        title="Usage data and privacy"
+        description="Control local-only usage events and anonymous outbound telemetry."
         icon={<Sliders class="w-5 h-5" strokeWidth={2} />}
         noPadding
         bodyClass="divide-y divide-border"
@@ -187,16 +187,16 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
           <div class="flex-1 min-w-0 space-y-1">
             <div class="flex items-center gap-2">
               <span class="text-sm font-medium text-base-content truncate">
-                Disable local upgrade metrics
+                Disable local-only upgrade events
               </span>
               <Show when={props.disableLocalUpgradeMetricsLocked()}>
                 <EnvironmentLockBadge envVar="PULSE_DISABLE_LOCAL_UPGRADE_METRICS" />
               </Show>
             </div>
             <p class="text-xs text-muted line-clamp-2">
-              Records local-only events like "paywall viewed" and "trial started" to help debug and
-              improve upgrade flows. These events are stored locally and are not exported to third
-              parties.
+              Records local-only upgrade events like "paywall viewed" and "trial started" to help
+              debug and improve upgrade flows. These events stay on this Pulse instance and are not
+              exported to third parties.
             </p>
           </div>
           <Toggle
@@ -214,17 +214,17 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
             <div class="flex-1 min-w-0 space-y-1">
               <div class="flex items-center gap-2">
                 <span class="text-sm font-medium text-base-content truncate">
-                  Anonymous telemetry
+                  Anonymous outbound telemetry
                 </span>
                 <Show when={props.telemetryEnabledLocked()}>
                   <EnvironmentLockBadge envVar="PULSE_TELEMETRY" />
                 </Show>
               </div>
               <p class="text-xs text-muted leading-relaxed">
-                Help improve Pulse by sharing anonymous usage data: a rotating install ID,
-                version, platform, resource counts, and feature flags. No hostnames,
-                credentials, or personal information are sent. Telemetry rows are retained for up
-                to 90 days, and IP addresses are not stored in telemetry rows.{' '}
+                Help improve Pulse by sharing anonymous outbound usage data: a rotating install ID,
+                normalized release identity, platform, resource counts, and feature flags. No
+                hostnames, credentials, or personal information are sent. Telemetry rows are
+                retained for up to 90 days, and IP addresses are not stored in telemetry rows.{' '}
                 <a
                   href={PRIVACY_DOC_URL}
                   target="_blank"

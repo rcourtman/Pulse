@@ -502,6 +502,15 @@ bounds, including provider-backed alert-history wording. `frontend-modern/src/fe
 backed host and VM incidents with the shared `resource-incident` vocabulary
 and existing alert-history shells instead of introducing VMware-only labels,
 badges, or panel copy just because the underlying signal came from vSphere.
+That same shared settings and modal boundary now also owns the public usage-data
+vocabulary. `frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx`,
+`frontend-modern/src/components/shared/whatsNewModalModel.ts`,
+`frontend-modern/src/components/Settings/useSystemSettingsState.ts`, and
+`frontend-modern/src/utils/systemSettingsPresentation.ts` must present one
+explicit `Usage data and privacy` model with the separate labels
+`Anonymous outbound telemetry` and `Disable local-only upgrade events`, and
+must describe telemetry with normalized release identity rather than falling
+back to ambiguous `telemetry`, `upgrade metrics`, or raw-version wording.
 Shared table, disclosure, and form primitives must also stay explicitly typed
 at the browser edge. Summary rows may memoize repeated pending-update reads,
 shared buttons must preserve discriminated disclosure props, toggle and a11y

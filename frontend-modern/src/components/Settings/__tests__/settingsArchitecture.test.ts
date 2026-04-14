@@ -1349,6 +1349,8 @@ describe('Settings architecture guardrails', () => {
     expect(generalSettingsPanelSource).toContain('@/utils/systemSettingsPresentation');
     expect(generalSettingsPanelSource).toContain('@/utils/docsLinks');
     expect(generalSettingsPanelSource).toContain('PRIVACY_DOC_URL');
+    expect(generalSettingsPanelSource).toContain('Usage data and privacy');
+    expect(generalSettingsPanelSource).toContain('Disable local-only upgrade events');
     expect(generalSettingsPanelSource).toContain('Preview payload');
     expect(generalSettingsPanelSource).toContain('Reset ID');
     expect(generalSettingsPanelSource).toContain('Telemetry payload preview');

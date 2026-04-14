@@ -415,6 +415,13 @@ optional optimistic hostnames. Shared row models may fall back to the row name
 when staging a removal state, but they must not resurrect legacy
 `policy.display` shims or require platform-managed surfaces to synthesize a
 second hostname contract.
+That same adjacent `internal/api/` router boundary now also keeps usage-data
+controls out of lifecycle truth. Agent install, reporting, and setup surfaces
+may coexist with `/api/upgrade-metrics/*` and telemetry preview routes under
+shared licensing/auth routing, but they must not reinterpret local-only
+upgrade-event state, telemetry preview payloads, or published-release
+classification fields as enrollment evidence, agent freshness, or setup
+progress truth.
 That same adjacent `internal/api/` boundary now also keeps public demos from
 leaking commercial state through lifecycle-adjacent surfaces. Agent install,
 reporting, and setup flows may share backend helpers with billing or license

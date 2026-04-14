@@ -276,6 +276,90 @@ func TestVersionString(t *testing.T) {
 	}
 }
 
+func TestDescribeUsageDataVersion(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name            string
+		input           string
+		wantVersion     string
+		wantRaw         string
+		wantChannel     string
+		wantBuild       string
+		wantDevelopment bool
+		wantPublished   bool
+	}{
+		{
+			name:          "published rc strips accidental v prefix",
+			input:         "v6.0.0-rc.1",
+			wantVersion:   "6.0.0-rc.1",
+			wantRaw:       "v6.0.0-rc.1",
+			wantChannel:   "rc",
+			wantPublished: true,
+		},
+		{
+			name:            "git describe rc is development not published release",
+			input:           "v6.0.0-rc.1-45-gABCDEF",
+			wantVersion:     "6.0.0-rc.1+git.45.gabcdef",
+			wantRaw:         "v6.0.0-rc.1-45-gABCDEF",
+			wantChannel:     "dev",
+			wantBuild:       "git.45.gabcdef",
+			wantDevelopment: true,
+			wantPublished:   false,
+		},
+		{
+			name:            "source branch falls back to prerelease dev identity",
+			input:           "feature/new-usage-report",
+			wantVersion:     "0.0.0-feature-new-usage-report",
+			wantRaw:         "feature/new-usage-report",
+			wantChannel:     "prerelease",
+			wantDevelopment: false,
+			wantPublished:   false,
+		},
+		{
+			name:          "stable release stays stable and published",
+			input:         "6.0.0",
+			wantVersion:   "6.0.0",
+			wantChannel:   "stable",
+			wantPublished: true,
+		},
+		{
+			name:            "explicit dev prerelease is not published",
+			input:           "6.0.0-dev",
+			wantVersion:     "6.0.0-dev",
+			wantChannel:     "dev",
+			wantDevelopment: true,
+			wantPublished:   false,
+		},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got := DescribeUsageDataVersion(tc.input)
+			if got.Version != tc.wantVersion {
+				t.Fatalf("DescribeUsageDataVersion(%q).Version = %q, want %q", tc.input, got.Version, tc.wantVersion)
+			}
+			if got.RawVersion != tc.wantRaw {
+				t.Fatalf("DescribeUsageDataVersion(%q).RawVersion = %q, want %q", tc.input, got.RawVersion, tc.wantRaw)
+			}
+			if got.Channel != tc.wantChannel {
+				t.Fatalf("DescribeUsageDataVersion(%q).Channel = %q, want %q", tc.input, got.Channel, tc.wantChannel)
+			}
+			if got.Build != tc.wantBuild {
+				t.Fatalf("DescribeUsageDataVersion(%q).Build = %q, want %q", tc.input, got.Build, tc.wantBuild)
+			}
+			if got.IsDevelopment != tc.wantDevelopment {
+				t.Fatalf("DescribeUsageDataVersion(%q).IsDevelopment = %v, want %v", tc.input, got.IsDevelopment, tc.wantDevelopment)
+			}
+			if got.IsPublishedRelease != tc.wantPublished {
+				t.Fatalf("DescribeUsageDataVersion(%q).IsPublishedRelease = %v, want %v", tc.input, got.IsPublishedRelease, tc.wantPublished)
+			}
+		})
+	}
+}
+
 func TestVersionCompare(t *testing.T) {
 	t.Parallel()
 

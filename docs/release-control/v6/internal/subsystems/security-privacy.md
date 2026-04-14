@@ -17,9 +17,10 @@
 
 ## Purpose
 
-Own Pulse's canonical privacy disclosures, anonymous telemetry boundary, and
-the security-facing settings surfaces that expose authentication posture,
-token-management visibility, and privacy controls to operators.
+Own Pulse's canonical privacy disclosures, usage-data boundary (anonymous
+outbound telemetry plus local-only upgrade events), and the security-facing
+settings surfaces that expose authentication posture, token-management
+visibility, and privacy controls to operators.
 
 ## Canonical Files
 
@@ -48,6 +49,7 @@ token-management visibility, and privacy controls to operators.
 23. `internal/api/system_settings.go`
 24. `internal/telemetry/telemetry.go`
 25. `internal/api/router_routes_auth_security.go`
+26. `scripts/telemetry_adoption_report.py`
 
 ## Shared Boundaries
 
@@ -65,11 +67,12 @@ token-management visibility, and privacy controls to operators.
 
 ## Extension Points
 
-1. Change privacy disclosures or outbound-data guarantees through `docs/PRIVACY.md` and `internal/telemetry/telemetry.go` together.
+1. Change privacy disclosures, usage-data vocabulary, or outbound-data guarantees through `docs/PRIVACY.md` and `internal/telemetry/telemetry.go` together.
 2. Change security policy, hardening guidance, or supported auth boundaries through `SECURITY.md`.
 3. Change telemetry/privacy settings state handling through `frontend-modern/src/components/Settings/useSystemSettingsState.ts`.
 4. Change security/auth/token transport behavior through the shared `frontend-modern/src/api/security.ts`, `frontend-modern/src/components/Settings/APITokenManager.tsx`, `frontend-modern/src/components/Settings/apiTokenManagerModel.ts`, `frontend-modern/src/components/Settings/useAPITokenManagerState.ts`, `internal/api/security.go`, `internal/api/security_tokens.go`, and `internal/api/system_settings.go` boundary.
 5. Change security/privacy settings presentation through the shared `frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx`, `frontend-modern/src/components/Settings/SecurityAuthPanel.tsx`, `frontend-modern/src/components/Settings/SecurityOverviewPanel.tsx`, `frontend-modern/src/components/Settings/QuickSecuritySetup.tsx`, `frontend-modern/src/components/Settings/SecurityPostureSummary.tsx`, `frontend-modern/src/components/Settings/SSOProviderTypeIcon.tsx`, `frontend-modern/src/utils/securityAuthPresentation.ts`, `frontend-modern/src/utils/securityScorePresentation.ts`, `frontend-modern/src/utils/auditLogPresentation.ts`, and `frontend-modern/src/utils/auditWebhookPresentation.ts` boundary.
+6. Change operator-facing telemetry/adoption reporting through `scripts/telemetry_adoption_report.py` together with the privacy disclosure whenever release-identity interpretation changes.
 
 ## Forbidden Paths
 
@@ -82,13 +85,17 @@ token-management visibility, and privacy controls to operators.
 1. Update privacy/security docs and the telemetry runtime together when outbound-data behavior changes.
 2. Keep shared API-contract proof routing aligned whenever auth, token, or telemetry settings payloads change.
 3. Keep shared frontend settings proof routing aligned whenever security/privacy presentation changes.
-4. Update this contract whenever a new canonical security, token, auth, or privacy surface becomes part of the governed trust boundary.
+4. Keep the checked-in telemetry adoption report aligned with the same release-identity rules used by the runtime telemetry payload.
+5. Update this contract whenever a new canonical security, token, auth, or privacy surface becomes part of the governed trust boundary.
 
 ## Current State
 
 This subsystem now gives `L14` an explicit governed home for privacy guidance
 and telemetry disclosures instead of leaving those trust surfaces as lane-level
 evidence with no subsystem ownership.
+That same governed home now also owns the single "usage data" vocabulary for
+anonymous outbound telemetry and local-only upgrade events, so Pulse stops
+describing those two privacy scopes as unrelated systems.
 
 Security-facing settings remain intentionally shared with `frontend-primitives`
 because shell framing and presentation consistency still belong there, but the

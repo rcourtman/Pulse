@@ -491,6 +491,13 @@ fields and nullable mode/kind metadata before presenting canonical item labels,
 while storage detail drawers and filter controls must route summary series IDs,
 source tones, and disk metrics through the shared storage helpers instead of
 reconstructing them from local table state.
+That same adjacent `internal/api/` router boundary now also keeps usage-data
+transport descriptive-only for storage and recovery. Shared storage/recovery
+surfaces may coexist with `/api/upgrade-metrics/*` config reads and telemetry
+preview routes under the licensing/settings router, but they must not treat
+local-only upgrade-event toggles, telemetry preview payloads, or normalized
+release-classification fields as storage freshness, recovery evidence, or
+operator-facing protection state.
 That same shared `internal/api/` dependency now also expects replacement-aware
 monitored-system admission and fail-closed usage availability. Storage- or
 recovery-adjacent setup, deploy, and API-backed update helpers may reuse the

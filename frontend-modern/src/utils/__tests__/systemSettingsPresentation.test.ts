@@ -86,7 +86,7 @@ describe('systemSettingsPresentation', () => {
       'Unable to update upgrade guidance preferences.',
     );
     expect(getLocalUpgradeMetricsUpdateErrorMessage()).toBe(
-      'Unable to update local upgrade metrics.',
+      'Unable to update local-only upgrade events.',
     );
     expect(getTelemetryUpdateErrorMessage()).toBe('Unable to update anonymous telemetry.');
     expect(getTemperatureMonitoringUpdateErrorMessage()).toBe(
