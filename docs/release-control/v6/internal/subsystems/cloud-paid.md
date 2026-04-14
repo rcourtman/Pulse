@@ -167,7 +167,11 @@ still grows monitored-system usage.
     `frontend-modern/src/useAppRuntimeState.ts` must stop at the shared
     login-needed state and skip `/api/state`, while protected-route arrivals
     and post-login reloads still keep the canonical state probe for runtime
-    detection.
+    detection. Protected Patrol entrypoints follow that same route-owned rule:
+    the canonical Patrol surface may live at `/patrol`, and any legacy `/ai`
+    browser entrypoint must remain only a thin authenticated redirect rather
+    than a second public handoff or a route that invites separate commercial
+    posture logic.
 
 ## Forbidden Paths
 

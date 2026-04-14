@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { WorkloadGuest } from '@/types/workloads';
 import {
+  AI_PATROL_PATH,
   PMG_THRESHOLDS_PATH,
+  PATROL_PATH,
   RECOVERY_QUERY_PARAMS,
   buildInfrastructureResourceLink,
   buildInfrastructureHrefForWorkload,
@@ -50,6 +52,11 @@ const baseGuest = (overrides: Partial<WorkloadGuest>): WorkloadGuest => ({
 });
 
 describe('resource link routing contract', () => {
+  it('keeps Patrol links on the canonical Patrol route', () => {
+    expect(PATROL_PATH).toBe('/patrol');
+    expect(AI_PATROL_PATH).toBe(PATROL_PATH);
+  });
+
   it('builds and parses workloads query params', () => {
     const href = buildWorkloadsPath({
       type: 'k8s',

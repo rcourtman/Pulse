@@ -367,7 +367,7 @@ test.describe.serial(
       );
       await ensureAuthenticated(page);
 
-      await page.goto('/ai');
+      await page.goto('/patrol');
       await page.waitForURL('**/ai**');
 
       // Wait for the AI/Intelligence page main content to render.

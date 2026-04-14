@@ -40,7 +40,9 @@ export const WORKLOADS_PATH = '/workloads';
 export const PMG_THRESHOLDS_PATH = '/alerts/thresholds/mail-gateway';
 export const DASHBOARD_PATH = '/dashboard';
 export const ALERTS_OVERVIEW_PATH = '/alerts/overview';
-export const AI_PATROL_PATH = '/ai';
+export const PATROL_PATH = '/patrol';
+// Deprecated compatibility alias while older callers migrate off `/ai`.
+export const AI_PATROL_PATH = PATROL_PATH;
 // Canonical "Recovery" surface (was historically called Backups).
 export const RECOVERY_PATH = '/recovery';
 

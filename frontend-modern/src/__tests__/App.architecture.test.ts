@@ -21,9 +21,12 @@ describe('App architecture', () => {
     expect(appSource).toContain('readPendingAppShellRestoreTop');
     expect(appSource).toContain('clearPendingAppShellRestoreTop');
     expect(appSource).toContain('const ROOT_DASHBOARD_PATH = DASHBOARD_PATH;');
+    expect(appSource).toContain('const ROOT_PATROL_PATH = PATROL_PATH;');
     expect(appSource).toContain('<Route path={ROOT_DASHBOARD_PATH} component={DashboardPage} />');
     expect(appSource).toContain('<Route path="/login" component={() => <Navigate href={ROOT_DASHBOARD_PATH} />} />');
     expect(appSource).toContain('<Route path="/" component={() => <Navigate href={ROOT_DASHBOARD_PATH} />} />');
+    expect(appSource).toContain('<Route path={`${ROOT_PATROL_PATH}/*`} component={AIIntelligencePage} />');
+    expect(appSource).toContain('<Route path="/ai/*" component={LegacyPatrolRouteRedirect} />');
     expect(appSource).toContain(
       "const PricingHandoffPage = lazy(() => import('./pages/PricingHandoff'));",
     );
@@ -66,6 +69,8 @@ describe('App architecture', () => {
     expect(appLayoutSource).toContain(
       '<ReleaseCandidateBanner version={props.versionInfo()?.version} />',
     );
+    expect(appLayoutSource).toContain("const blockedPrefixes = ['/settings', '/operations', '/patrol', '/ai'];");
+    expect(appLayoutSource).toContain("route: '/patrol',");
     expect(appLayoutSource).not.toContain('props.connected()');
     expect(appLayoutSource).toContain('const utilityTabs = createMemo(() =>');
     expect(appLayoutSource).not.toContain("import { isMultiTenantEnabled } from '@/stores/license';");

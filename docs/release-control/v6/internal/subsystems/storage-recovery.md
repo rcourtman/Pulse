@@ -244,7 +244,12 @@ querying, and the operator-facing storage health presentation layer.
     `/preview/setup-complete` may remain public app-shell routes, but unrelated
     commercial compatibility handoffs like `/pricing` must stay separate thin
     route exits rather than borrowing storage/recovery preview framing,
-    first-session copy, or page-state assumptions.
+    first-session copy, or page-state assumptions. The same route-ownership
+    rule applies to Patrol aliases on the shared app shell: `/patrol` may be
+    the authenticated canonical surface while `/ai` survives only as a thin
+    compatibility redirect, but storage/recovery route owners must not depend
+    on or borrow that Patrol redirect path for their own preview or
+    compatibility entrypoints.
     Authenticated `/login` must follow that same shared app-shell contract:
     once login succeeds, `frontend-modern/src/App.tsx` must hand the browser
     back to the governed dashboard landing route instead of leaving

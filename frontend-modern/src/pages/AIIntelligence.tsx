@@ -1,7 +1,9 @@
 import { PatrolIntelligenceSurface } from '@/features/patrol/PatrolIntelligenceSurface';
 
-export function AIIntelligence() {
+export function PatrolIntelligencePage() {
   return <PatrolIntelligenceSurface />;
 }
 
-export default AIIntelligence;
+export const AIIntelligence = PatrolIntelligencePage;
+
+export default PatrolIntelligencePage;

@@ -525,7 +525,7 @@ test.describe("Patrol runtime-state browser contract", () => {
     await ensureAuthenticated(page);
     await mockScopedTriggerPatrolRuntimeState(page);
 
-    await page.goto("/ai", { waitUntil: "domcontentloaded" });
+    await page.goto("/patrol", { waitUntil: "domcontentloaded" });
 
     await expect(
       page.getByText(

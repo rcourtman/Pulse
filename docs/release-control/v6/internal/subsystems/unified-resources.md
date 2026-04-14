@@ -883,6 +883,12 @@ workload-to-infrastructure href builder used by dashboard row and drawer
 consumers. Future workload-to-resource navigation changes must extend through
 that shared routing contract instead of reintroducing dashboard-local path
 builders.
+That same shared routing boundary now also owns the canonical Patrol
+destination used by cross-surface findings and drill-down links. Shared
+dashboard, alert, and settings referrals may target `/patrol` through
+`frontend-modern/src/routing/resourceLinks.ts`, but legacy `/ai` route shapes
+must remain compatibility-only redirects rather than forked primary
+destinations in local link builders.
 That same shared routing boundary now also owns storage deep links for unified
 resources. Infrastructure drawers and other cross-surface consumers must route
 storage-centric systems and exact storage resources through canonical

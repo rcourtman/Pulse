@@ -1,4 +1,4 @@
-import { INFRASTRUCTURE_PATH, WORKLOADS_PATH } from './resourceLinks';
+import { INFRASTRUCTURE_PATH, PATROL_PATH, WORKLOADS_PATH } from './resourceLinks';
 
 export type AppTabId =
   | 'dashboard'
@@ -19,7 +19,7 @@ export function getActiveTabForPath(path: string): AppTabId {
   if (path.startsWith('/ceph')) return 'storage';
   if (path.startsWith('/recovery')) return 'recovery';
   if (path.startsWith('/alerts')) return 'alerts';
-  if (path.startsWith('/ai')) return 'ai';
+  if (path.startsWith(PATROL_PATH) || path.startsWith('/ai')) return 'ai';
   if (path.startsWith('/settings')) return 'settings';
   if (path.startsWith('/operations')) return 'operations';
   return 'infrastructure';

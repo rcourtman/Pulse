@@ -230,7 +230,7 @@ export function AppLayout(props: AppLayoutProps) {
   createEffect(() => {
     if (!kioskMode()) return;
     const normalizedPath = location.pathname.replace(/\/+$/, '') || '/';
-    const blockedPrefixes = ['/settings', '/operations', '/ai'];
+    const blockedPrefixes = ['/settings', '/operations', '/patrol', '/ai'];
     const isBlocked = blockedPrefixes.some(
       (prefix) => normalizedPath === prefix || normalizedPath.startsWith(prefix + '/'),
     );
@@ -418,8 +418,8 @@ export function AppLayout(props: AppLayoutProps) {
       {
         id: 'ai',
         label: 'Patrol',
-        route: '/ai',
-        tooltip: 'Pulse Patrol monitoring and analysis',
+        route: '/patrol',
+        tooltip: 'Continuous verification and actionable findings',
         badge: null,
         count: undefined,
         breakdown: undefined,

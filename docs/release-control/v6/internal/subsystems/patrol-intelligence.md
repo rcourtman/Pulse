@@ -99,7 +99,9 @@ The route file `frontend-modern/src/pages/AIIntelligence.tsx` is now also a
 thin shell that delegates to the feature-owned
 `frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx`, so Patrol
 runtime state and presentation no longer accumulate directly in the route
-component itself.
+component itself. The governed customer-facing route for that shell is now
+`/patrol`, while legacy `/ai` entry points remain compatibility redirects
+instead of the canonical product path.
 That route-shell ownership does not make `AI` the customer-facing Patrol
 product name. Internal file, store, and transport names may still carry the
 shared AI-runtime boundary where that is the real technical ownership, but the
@@ -133,10 +135,12 @@ header chip should communicate that Patrol is enabled or available, not imply
 that infrastructure health is currently good merely because the runtime is on.
 That render rule now also has browser-level proof in
 `tests/integration/tests/18-patrol-runtime-state.spec.ts`: when the backend
-reports `runtime_state=blocked`, the real `/ai` route must show Patrol as
+reports `runtime_state=blocked`, the real `/patrol` route must show Patrol as
 paused, keep the blocked reason visible, disable manual Patrol runs, and
 suppress stale healthy summary headlines such as `Health A · 100/100` even if
-the last summary payload still looks healthy.
+the last summary payload still looks healthy. Legacy `/ai` entry points must
+redirect into that same Patrol-owned shell rather than preserving a second
+canonical route.
 That same Patrol-owned presentation rule also applies to the findings empty
 state: `frontend-modern/src/components/AI/FindingsPanel.tsx` must not treat
 `0 active findings` as equivalent to "your infrastructure looks healthy" when

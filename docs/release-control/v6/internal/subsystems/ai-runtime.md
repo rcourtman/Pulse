@@ -98,6 +98,10 @@ explicit inside the current architecture lane instead of leaving those
 surfaces implicit inside broad architecture or generic API ownership. A later
 lane split can still promote this area into its own product lane once the
 governed floor is ready.
+That backend/runtime ownership does not require the Patrol product surface to
+inherit `AI` as its canonical browser route: the customer-facing shell may use
+`/patrol` while shared AI transport, provider settings, and payload contracts
+remain the governed technical boundary behind it.
 
 `internal/ai/` is the live backend AI engine. It owns chat execution, Patrol
 orchestration, findings generation, investigation support, quickstart and

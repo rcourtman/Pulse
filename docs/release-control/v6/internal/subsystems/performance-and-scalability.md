@@ -223,6 +223,11 @@ regression protection.
     or the operator is on a protected route, that shared state probe remains
     the canonical runtime detector.
     into another summary-fetch or org-bootstrap hot path.
+    The same protected hot path also owns Patrol route compatibility: if
+    `frontend-modern/src/App.tsx` keeps `/ai` as a legacy alias while `/patrol`
+    is canonical, that alias must stay a thin redirect and must not mount a
+    second Patrol shell or duplicate app bootstrap work before navigation
+    settles on the canonical route.
     Authenticated `/login` recovery belongs to that same app-shell boundary:
     `frontend-modern/src/App.tsx` must redirect that route back to the
     canonical dashboard landing path instead of leaving the freshly

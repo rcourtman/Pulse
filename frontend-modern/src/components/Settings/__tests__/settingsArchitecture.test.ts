@@ -1101,6 +1101,8 @@ describe('Settings architecture guardrails', () => {
     expect(aiSettingsPanelSource).toContain('@/components/Settings/AISettingsStatusAndActions');
     expect(aiSettingsPanelSource).toContain('@/components/Settings/AISettingsDialogs');
     expect(aiSettingsPanelSource).toContain('@/components/Settings/useAISettingsState');
+    expect(aiSettingsPanelSource).toContain("@/routing/resourceLinks");
+    expect(aiSettingsPanelSource).toContain("navigate(PATROL_PATH)");
     expect(aiSettingsPanelSource).not.toContain(
       'const [loading, setLoading] = createSignal(false);',
     );

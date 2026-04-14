@@ -295,7 +295,11 @@ work extends shared components instead of creating new local variants.
     active findings, or selected-run investigation makes that evidence
     relevant; and use Patrol/provider wording for the shared provider settings,
     provider model, and provider circuit-breaker affordances instead of
-    generic AI labels inside Patrol-owned shells.
+    generic AI labels inside Patrol-owned shells. The shared app shell in
+    `frontend-modern/src/App.tsx` and `frontend-modern/src/AppLayout.tsx` must
+    likewise expose `/patrol` as the canonical route and navigation target,
+    keeping legacy `/ai` entry points as thin compatibility redirects rather
+    than a second Patrol-branded primary route.
 
 ## Forbidden Paths
 

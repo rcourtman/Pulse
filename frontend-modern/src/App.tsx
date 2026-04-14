@@ -32,6 +32,7 @@ import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { useKioskMode } from '@/hooks/useKioskMode';
 import {
   DASHBOARD_PATH,
+  PATROL_PATH,
   buildRecoveryPath,
   buildInfrastructurePath,
   buildStoragePath,
@@ -86,6 +87,7 @@ const INFRASTRUCTURE_ROUTE_PATH = buildInfrastructurePath();
 const ROOT_WORKLOADS_PATH = buildWorkloadsPath();
 const STORAGE_PATH = buildStoragePath();
 const RECOVERY_ROUTE_PATH = buildRecoveryPath();
+const ROOT_PATROL_PATH = PATROL_PATH;
 
 // Helper to detect if an update is actively in progress (not just checking for updates)
 function isUpdateInProgress(status: string | undefined): boolean {
@@ -180,6 +182,12 @@ function App() {
     const location = useLocation();
     const canonicalPath =
       location.pathname.replace(/^\/settings\/operations(?=\/|$)/, '/operations') || '/operations';
+    return <Navigate href={`${canonicalPath}${location.search ?? ''}`} />;
+  };
+  const LegacyPatrolRouteRedirect = () => {
+    const location = useLocation();
+    const canonicalPath =
+      location.pathname.replace(/^\/ai(?=\/|$)/, ROOT_PATROL_PATH) || ROOT_PATROL_PATH;
     return <Navigate href={`${canonicalPath}${location.search ?? ''}`} />;
   };
   const kioskMode = useKioskMode();
@@ -428,7 +436,8 @@ function App() {
       <Route path={INFRASTRUCTURE_ROUTE_PATH} component={InfrastructurePage} />
 
       <Route path="/alerts/*" component={AlertsPage} />
-      <Route path="/ai/*" component={AIIntelligencePage} />
+      <Route path={`${ROOT_PATROL_PATH}/*`} component={AIIntelligencePage} />
+      <Route path="/ai/*" component={LegacyPatrolRouteRedirect} />
       <Route path="/settings/operations/*" component={LegacyOperationsSettingsRedirect} />
       <Route path="/settings/*" component={SettingsRoute} />
       <Route path="/operations/*" component={OperationsPage} />

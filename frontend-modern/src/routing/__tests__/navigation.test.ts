@@ -10,6 +10,7 @@ describe('navigation routing helpers', () => {
     expect(getActiveTabForPath('/ceph')).toBe('storage');
     expect(getActiveTabForPath('/recovery')).toBe('recovery');
     expect(getActiveTabForPath('/alerts/open')).toBe('alerts');
+    expect(getActiveTabForPath('/patrol')).toBe('ai');
     expect(getActiveTabForPath('/ai')).toBe('ai');
     expect(getActiveTabForPath('/operations')).toBe('operations');
     expect(getActiveTabForPath('/operations/diagnostics')).toBe('operations');

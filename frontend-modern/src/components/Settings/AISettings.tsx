@@ -8,6 +8,7 @@ import { AISettingsStatusAndActions } from '@/components/Settings/AISettingsStat
 import { useAISettingsState } from '@/components/Settings/useAISettingsState';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import { Toggle } from '@/components/shared/Toggle';
+import { PATROL_PATH } from '@/routing/resourceLinks';
 import {
   getAISettingsLoadingState,
   getAISettingsLoadErrorMessage,
@@ -117,11 +118,11 @@ export const AISettings: Component = () => {
                     {state.form.patrolIntervalMinutes >= 60
                       ? `${Math.round(state.form.patrolIntervalMinutes / 60)} hour${Math.round(state.form.patrolIntervalMinutes / 60) === 1 ? '' : 's'}`
                       : `${state.form.patrolIntervalMinutes} minute${state.form.patrolIntervalMinutes === 1 ? '' : 's'}`}{' '}
-                    to monitor your infrastructure.{' '}
+                    to verify your infrastructure continuously.{' '}
                     <button
                       type="button"
                       class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-1 py-1 text-sm underline hover:text-blue-800 dark:hover:text-blue-300"
-                      onClick={() => navigate('/ai')}
+                      onClick={() => navigate(PATROL_PATH)}
                     >
                       Configure schedule & autonomy
                     </button>
