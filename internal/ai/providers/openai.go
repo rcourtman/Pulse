@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"sort"
 	"strings"
 	"time"
 
@@ -714,6 +715,47 @@ func (c *OpenAIClient) ChatStream(ctx context.Context, req ChatRequest, callback
 	var inputTokens, outputTokens int
 	var finishReason string
 
+	// emitFinalToolCalls builds ToolCall values from the accumulated stream
+	// deltas, determines the stop reason, and fires the "done" callback.
+	// Called from both the normal [DONE] path and the EOF fallback path.
+	emitFinalToolCalls := func() {
+		// Build tool calls from builders in deterministic index order
+		indices := make([]int, 0, len(toolCallBuilders))
+		for idx := range toolCallBuilders {
+			indices = append(indices, idx)
+		}
+		sort.Ints(indices)
+		for _, idx := range indices {
+			builder := toolCallBuilders[idx]
+			var input map[string]interface{}
+			if err := json.Unmarshal([]byte(builder.args.String()), &input); err != nil {
+				input = map[string]interface{}{"raw": builder.args.String()}
+			}
+			toolCalls = append(toolCalls, ToolCall{
+				ID:    builder.id,
+				Name:  builder.name,
+				Input: input,
+			})
+		}
+
+		stopReason := finishReason
+		if len(toolCalls) > 0 {
+			stopReason = "tool_use"
+		} else if stopReason == "" || stopReason == "stop" {
+			stopReason = "end_turn"
+		}
+
+		callback(StreamEvent{
+			Type: "done",
+			Data: DoneEvent{
+				StopReason:   stopReason,
+				ToolCalls:    toolCalls,
+				InputTokens:  inputTokens,
+				OutputTokens: outputTokens,
+			},
+		})
+	}
+
 	atEOF := false
 	for {
 		n, err := reader.Read(buf)
@@ -750,35 +792,7 @@ func (c *OpenAIClient) ChatStream(ctx context.Context, req ChatRequest, callback
 			data = strings.TrimSpace(data)
 
 			if data == "[DONE]" {
-				// Build final tool calls from builders
-				for _, builder := range toolCallBuilders {
-					var input map[string]interface{}
-					if err := json.Unmarshal([]byte(builder.args.String()), &input); err != nil {
-						input = map[string]interface{}{"raw": builder.args.String()}
-					}
-					toolCalls = append(toolCalls, ToolCall{
-						ID:    builder.id,
-						Name:  builder.name,
-						Input: input,
-					})
-				}
-
-				stopReason := finishReason
-				if len(toolCalls) > 0 {
-					stopReason = "tool_use"
-				} else if stopReason == "stop" {
-					stopReason = "end_turn"
-				}
-
-				callback(StreamEvent{
-					Type: "done",
-					Data: DoneEvent{
-						StopReason:   stopReason,
-						ToolCalls:    toolCalls,
-						InputTokens:  inputTokens,
-						OutputTokens: outputTokens,
-					},
-				})
+				emitFinalToolCalls()
 				return nil
 			}
 
@@ -857,32 +871,7 @@ func (c *OpenAIClient) ChatStream(ctx context.Context, req ChatRequest, callback
 	// If we exited the loop without hitting [DONE] (e.g. server closed connection),
 	// still build and emit any accumulated tool calls so they aren't silently dropped.
 	if len(toolCallBuilders) > 0 && len(toolCalls) == 0 {
-		for _, builder := range toolCallBuilders {
-			var input map[string]interface{}
-			if err := json.Unmarshal([]byte(builder.args.String()), &input); err != nil {
-				input = map[string]interface{}{"raw": builder.args.String()}
-			}
-			toolCalls = append(toolCalls, ToolCall{
-				ID:    builder.id,
-				Name:  builder.name,
-				Input: input,
-			})
-		}
-		stopReason := finishReason
-		if len(toolCalls) > 0 {
-			stopReason = "tool_use"
-		} else if stopReason == "stop" || stopReason == "" {
-			stopReason = "end_turn"
-		}
-		callback(StreamEvent{
-			Type: "done",
-			Data: DoneEvent{
-				StopReason:   stopReason,
-				ToolCalls:    toolCalls,
-				InputTokens:  inputTokens,
-				OutputTokens: outputTokens,
-			},
-		})
+		emitFinalToolCalls()
 	}
 
 	return nil

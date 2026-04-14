@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -125,6 +126,112 @@ func TestOpenAIClient_ChatStream_ToolCall(t *testing.T) {
 	assert.Equal(t, "call_123", toolCalls[0].ID)
 	assert.Equal(t, "get_weather", toolCalls[0].Name)
 	assert.Equal(t, map[string]interface{}{"location": "NYC"}, toolCalls[0].Input)
+}
+
+// eofReader wraps content in a reader that returns n>0 and io.EOF simultaneously
+// on the final Read, simulating servers that close the connection with buffered data.
+type eofReader struct {
+	data []byte
+	pos  int
+}
+
+func (r *eofReader) Read(p []byte) (int, error) {
+	if r.pos >= len(r.data) {
+		return 0, io.EOF
+	}
+	n := copy(p, r.data[r.pos:])
+	r.pos += n
+	if r.pos >= len(r.data) {
+		// Return data AND EOF in same call, per io.Reader contract
+		return n, io.EOF
+	}
+	return n, nil
+}
+
+func (r *eofReader) Close() error { return nil }
+
+func TestOpenAIClient_ChatStream_ToolCallWithSimultaneousEOF(t *testing.T) {
+	// Simulate a server that returns all SSE data and EOF in the same Read call.
+	// This tests that the parser processes pendingData before breaking on EOF.
+	ssePayload := "data: {\"id\":\"1\",\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call_eof\",\"type\":\"function\",\"function\":{\"name\":\"test_tool\",\"arguments\":\"{\\\"key\\\":\\\"value\\\"}\"}}]}}]}\n\n" +
+		"data: {\"id\":\"1\",\"choices\":[{\"delta\":{},\"finish_reason\":\"tool_calls\"}]}\n\n" +
+		"data: [DONE]\n\n"
+
+	client := &OpenAIClient{
+		apiKey:  "sk-test",
+		model:   "test-model",
+		baseURL: "http://unused",
+		client: &http.Client{
+			Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+				return &http.Response{
+					StatusCode: 200,
+					Body:       &eofReader{data: []byte(ssePayload)},
+					Header:     http.Header{"Content-Type": {"text/event-stream"}},
+				}, nil
+			}),
+		},
+	}
+
+	var toolCalls []ToolCall
+	callback := func(event StreamEvent) {
+		if event.Type == "done" {
+			if data, ok := event.Data.(DoneEvent); ok {
+				toolCalls = data.ToolCalls
+			}
+		}
+	}
+
+	err := client.ChatStream(context.Background(), ChatRequest{Messages: []Message{{Role: "user", Content: "test"}}}, callback)
+	require.NoError(t, err)
+
+	require.Len(t, toolCalls, 1, "Should have 1 tool call even when EOF arrives with data")
+	assert.Equal(t, "call_eof", toolCalls[0].ID)
+	assert.Equal(t, "test_tool", toolCalls[0].Name)
+	assert.Equal(t, map[string]interface{}{"key": "value"}, toolCalls[0].Input)
+}
+
+func TestOpenAIClient_ChatStream_ToolCallWithoutDONE(t *testing.T) {
+	// Simulate a server that sends tool call deltas but closes the connection
+	// without sending [DONE]. The fallback should still emit accumulated tool calls.
+	ssePayload := "data: {\"id\":\"1\",\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call_nodone\",\"type\":\"function\",\"function\":{\"name\":\"my_tool\",\"arguments\":\"\"}}]}}]}\n\n" +
+		"data: {\"id\":\"1\",\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"function\":{\"arguments\":\"{\\\"a\\\":1}\"}}]}}]}\n\n" +
+		"data: {\"id\":\"1\",\"choices\":[{\"delta\":{},\"finish_reason\":\"tool_calls\"}]}\n\n"
+	// Note: no [DONE] event
+
+	client := &OpenAIClient{
+		apiKey:  "sk-test",
+		model:   "test-model",
+		baseURL: "http://unused",
+		client: &http.Client{
+			Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+				return &http.Response{
+					StatusCode: 200,
+					Body:       &eofReader{data: []byte(ssePayload)},
+					Header:     http.Header{"Content-Type": {"text/event-stream"}},
+				}, nil
+			}),
+		},
+	}
+
+	var toolCalls []ToolCall
+	var stopReason string
+	callback := func(event StreamEvent) {
+		if event.Type == "done" {
+			if data, ok := event.Data.(DoneEvent); ok {
+				toolCalls = data.ToolCalls
+				stopReason = data.StopReason
+			}
+		}
+	}
+
+	err := client.ChatStream(context.Background(), ChatRequest{Messages: []Message{{Role: "user", Content: "test"}}}, callback)
+	require.NoError(t, err)
+
+	require.Len(t, toolCalls, 1, "Should have 1 tool call even without [DONE]")
+	assert.Equal(t, "call_nodone", toolCalls[0].ID)
+	assert.Equal(t, "my_tool", toolCalls[0].Name)
+	assert.Equal(t, map[string]interface{}{"a": float64(1)}, toolCalls[0].Input)
+	assert.Equal(t, "tool_use", stopReason)
 }
 
 func TestOpenAIClient_ChatStream_Errors(t *testing.T) {
