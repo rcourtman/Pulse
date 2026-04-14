@@ -4222,7 +4222,22 @@
     }
   ],
   "work_claims": [],
-  "open_decisions": [],
+  "open_decisions": [
+    {
+      "id": "patrol-product-language-ai-boundary",
+      "summary": "Customer-facing Patrol surfaces should lead with `Patrol` or `Pulse Patrol` product language rather than generic AI branding, but the exact migration boundary across URLs, settings affordances, and remaining runtime/support copy still needs to be carried through the governed Patrol surface before release-ready signoff.",
+      "owner": "project-owner",
+      "blocking_level": "release-ready",
+      "status": "open",
+      "opened_at": "2026-04-14",
+      "lane_ids": [
+        "L6"
+      ],
+      "subsystem_ids": [
+        "patrol-intelligence"
+      ]
+    }
+  ],
   "source_of_truth_file": "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md",
   "resolved_decisions": [
     {

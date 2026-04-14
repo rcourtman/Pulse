@@ -80,6 +80,12 @@ Patrol-specific presentation helpers.
    inventory, phrase availability as Patrol runs with no API key on activated
    or trial-backed installs, and avoid implying broader hosted chat, generic
    AI credits, or anonymous Community entitlement.
+5. Keep customer-facing Patrol naming product-first: page titles, route chrome,
+   summary copy, actions, and empty states should lead with `Patrol` or
+   `Pulse Patrol` rather than generic `AI` branding. Reserve `AI` terminology
+   for explicit provider/configuration settings, shared runtime internals, or
+   other technical capability boundaries where the underlying ownership really
+   is AI runtime rather than the Patrol product surface.
 
 ## Current State
 
@@ -94,6 +100,12 @@ thin shell that delegates to the feature-owned
 `frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx`, so Patrol
 runtime state and presentation no longer accumulate directly in the route
 component itself.
+That route-shell ownership does not make `AI` the customer-facing Patrol
+product name. Internal file, store, and transport names may still carry the
+shared AI-runtime boundary where that is the real technical ownership, but the
+operator-facing Patrol experience should present `Patrol` as the product and
+avoid drifting back to generic `AI Intelligence` branding outside explicit
+provider/settings affordances.
 The feature surface now also keeps the same shell/runtime split internally:
 `frontend-modern/src/features/patrol/PatrolIntelligenceSurface.tsx` owns feature
 composition, the Patrol-owned section files under
