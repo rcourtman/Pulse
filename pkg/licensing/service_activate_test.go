@@ -13,6 +13,7 @@ import (
 func TestServiceActivate_ExchangesLegacyJWTOutsideDevMode(t *testing.T) {
 	t.Setenv("PULSE_LICENSE_DEV_MODE", "false")
 	setupTestPublicKey(t)
+	const expectedClientVersion = "6.0.0-rc.1"
 
 	tests := []struct {
 		name    string
@@ -52,6 +53,9 @@ func TestServiceActivate_ExchangesLegacyJWTOutsideDevMode(t *testing.T) {
 				if req.LegacyLicenseKey != licenseKey {
 					t.Fatalf("LegacyLicenseKey = %q, want %q", req.LegacyLicenseKey, licenseKey)
 				}
+				if req.ClientVersion != expectedClientVersion {
+					t.Fatalf("ClientVersion = %q, want %q", req.ClientVersion, expectedClientVersion)
+				}
 
 				w.WriteHeader(http.StatusCreated)
 				_ = json.NewEncoder(w).Encode(ActivateInstallationResponse{
@@ -75,6 +79,7 @@ func TestServiceActivate_ExchangesLegacyJWTOutsideDevMode(t *testing.T) {
 			defer server.Close()
 
 			svc.SetLicenseServerClient(NewLicenseServerClient(server.URL))
+			svc.SetClientVersion(expectedClientVersion)
 
 			lic, err := svc.Activate(licenseKey)
 			if err != nil {
@@ -92,6 +97,65 @@ func TestServiceActivate_ExchangesLegacyJWTOutsideDevMode(t *testing.T) {
 				t.Fatalf("expected exchanged license plan_version to be preserved, got %q", got.Claims.PlanVersion)
 			}
 		})
+	}
+}
+
+func TestServiceActivateWithKey_SendsClientVersion(t *testing.T) {
+	t.Setenv("PULSE_LICENSE_DEV_MODE", "false")
+	setupTestPublicKey(t)
+	const expectedClientVersion = "6.0.0-rc.1"
+
+	grantJWT := makeTestGrantJWT(t, &GrantClaims{
+		LicenseID: "lic_native",
+		Tier:      "pro",
+		State:     "active",
+		IssuedAt:  time.Now().Unix(),
+		ExpiresAt: time.Now().Add(72 * time.Hour).Unix(),
+	})
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/activate" {
+			t.Fatalf("Path = %q, want /v1/activate", r.URL.Path)
+		}
+
+		var req ActivateInstallationRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		if req.ActivationKey != "ppk_live_native_test" {
+			t.Fatalf("ActivationKey = %q, want ppk_live_native_test", req.ActivationKey)
+		}
+		if req.ClientVersion != expectedClientVersion {
+			t.Fatalf("ClientVersion = %q, want %q", req.ClientVersion, expectedClientVersion)
+		}
+
+		w.WriteHeader(http.StatusCreated)
+		_ = json.NewEncoder(w).Encode(ActivateInstallationResponse{
+			License: ActivateResponseLicense{
+				LicenseID: "lic_native",
+				State:     "active",
+				Tier:      "pro",
+			},
+			Installation: ActivateResponseInstallation{
+				InstallationID:    "inst_native",
+				InstallationToken: "pit_live_native",
+				Status:            "active",
+			},
+			Grant: GrantEnvelope{
+				JWT:       grantJWT,
+				JTI:       "grant_native",
+				ExpiresAt: time.Now().Add(72 * time.Hour).UTC().Format(time.RFC3339),
+			},
+		})
+	}))
+	defer server.Close()
+
+	svc := NewService()
+	svc.SetLicenseServerClient(NewLicenseServerClient(server.URL))
+	svc.SetClientVersion(expectedClientVersion)
+
+	if _, err := svc.Activate("ppk_live_native_test"); err != nil {
+		t.Fatalf("Activate: %v", err)
 	}
 }
 

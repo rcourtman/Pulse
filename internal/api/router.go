@@ -421,6 +421,7 @@ func (r *Router) setupRoutes() {
 	}
 	r.configProfileHandler = NewConfigProfileHandler(r.multiTenant)
 	r.licenseHandlers = NewLicenseHandlers(r.multiTenant, r.hostedMode, r.config)
+	r.licenseHandlers.SetRuntimeVersion(r.serverVersion)
 	r.licenseHandlers.SetMonitors(r.monitor, r.mtMonitor)
 	rbacProvider := NewTenantRBACProvider(r.config.DataPath)
 	r.rbacProvider = rbacProvider

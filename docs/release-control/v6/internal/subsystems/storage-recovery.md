@@ -278,6 +278,13 @@ querying, and the operator-facing storage health presentation layer.
     must treat the resulting activation-state callback as commercial ownership
     cleanup only, not as protected-inventory proof or recovery entitlement
     state.
+    That same adjacent commercial boundary also owns authenticated
+    install-version attribution: storage and recovery may read the resulting
+    licensed build context as commercial metadata, but they must not cache a
+    second recovery-local version floor, derive restore eligibility from
+    activation-version payloads, or backfill release lineage from protected
+    inventory when the shared licensing runtime already sends the canonical
+    process version.
     That same adjacent commercial boundary also owns internal demo-fixture
     capability handling: storage and recovery may render the resulting demo
     runtime as populated mock inventory, but they must not expose

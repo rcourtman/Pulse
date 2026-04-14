@@ -124,6 +124,13 @@ Own canonical runtime payload shapes between backend and frontend.
 37. `internal/api/enterprise_extension_rbac_admin.go` shared with `organization-settings`: RBAC admin extension endpoints are both an organization settings control surface and a canonical API payload contract boundary.
 38. `internal/api/licensing_bridge.go` shared with `cloud-paid`: commercial licensing bridge handlers carry both API payload contract and cloud-paid entitlement boundary ownership.
 39. `internal/api/licensing_handlers.go` shared with `cloud-paid`: commercial licensing handlers carry both API payload contract and cloud-paid entitlement boundary ownership.
+    That same shared licensing boundary also owns authenticated
+    install-version attribution: `internal/api/router.go` must hand the
+    canonical process `serverVersion` into `internal/api/licensing_handlers.go`,
+    and the shared licensing runtime must carry that exact value through
+    `/v1/activate`, `/v1/licenses/exchange`, and `/v1/grants/refresh` so
+    migrated installs can be attributed to exact builds without inventing a
+    second version source or trusting browser-supplied version hints.
 40. `internal/api/notifications.go` shared with `notifications`: notification handlers are both a notification delivery control surface and a canonical API payload contract boundary.
 41. `internal/api/org_handlers.go` shared with `organization-settings`: organization management handlers are both an organization settings control surface and a canonical API payload contract boundary.
 42. `internal/api/org_lifecycle_handlers.go` shared with `organization-settings`: organization lifecycle handlers are both an organization settings control surface and a canonical API payload contract boundary.

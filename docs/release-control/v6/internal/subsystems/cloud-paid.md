@@ -90,6 +90,13 @@ agreement, and cloud-specific enforcement rules.
 1. `frontend-modern/src/components/Settings/MonitoredSystemAdmissionPreview.tsx` shared with `agent-lifecycle`: the monitored-system admission preview is both a platform-connections lifecycle surface and a canonical cloud-paid monitored-system presentation boundary.
 2. `internal/api/licensing_bridge.go` shared with `api-contracts`: commercial licensing bridge handlers carry both API payload contract and cloud-paid entitlement boundary ownership.
 3. `internal/api/licensing_handlers.go` shared with `api-contracts`: commercial licensing handlers carry both API payload contract and cloud-paid entitlement boundary ownership.
+   That same shared licensing boundary also owns installation-version
+   continuity for authenticated v6 installs: `internal/api/router.go` and
+   `internal/api/licensing_handlers.go` must hand the canonical process
+   version into `pkg/licensing/service.go` and `pkg/licensing/grant_refresh.go`,
+   and cloud-paid transport must send that value on activate, legacy exchange,
+   and grant refresh instead of inferring install version from browser state,
+   dev build metadata, or anonymous telemetry.
 4. `internal/api/payments_webhook_handlers.go` shared with `api-contracts`: commercial payment webhook handlers carry both API payload contract and cloud-paid billing boundary ownership.
 5. `internal/api/public_signup_handlers.go` shared with `api-contracts`: hosted signup handlers carry both API payload contract and cloud-paid hosted provisioning boundary ownership.
 

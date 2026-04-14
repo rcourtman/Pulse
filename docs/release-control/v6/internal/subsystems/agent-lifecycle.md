@@ -266,6 +266,13 @@ an add-only capacity posture.
     code must treat the resulting activation-state callback as commercial
     ownership cleanup only, not as install inventory proof or fleet enrollment
     state.
+    That same adjacent commercial boundary also owns authenticated
+    install-version attribution for migrated installs: lifecycle surfaces may
+    observe versioned commercial status, but they must not treat
+    activation/exchange/refresh version fields as installer enrollment state,
+    invent a second fleet-version cache, or backfill install lineage from
+    local host inventory when the shared licensing runtime already sends the
+    canonical process version.
     That same adjacent commercial boundary also owns internal demo-fixture
     grants: lifecycle surfaces may observe that a governed demo runtime is
     fixture-backed, but they must not mint, echo, or infer the internal

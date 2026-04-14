@@ -27,6 +27,7 @@ func TestGrantRefreshLoop_StartStop(t *testing.T) {
 
 func TestGrantRefreshLoop_RefreshesGrant(t *testing.T) {
 	setupTestPublicKey(t)
+	const expectedClientVersion = "6.0.0-rc.1"
 
 	// Set up a mock license server that serves a new grant on refresh.
 	var refreshCount atomic.Int32
@@ -40,6 +41,13 @@ func TestGrantRefreshLoop_RefreshesGrant(t *testing.T) {
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		refreshCount.Add(1)
+		var req RefreshGrantRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Fatalf("decode refresh request: %v", err)
+		}
+		if req.ClientVersion != expectedClientVersion {
+			t.Fatalf("ClientVersion = %q, want %q", req.ClientVersion, expectedClientVersion)
+		}
 		json.NewEncoder(w).Encode(RefreshGrantResponse{
 			Grant: GrantEnvelope{
 				JWT:       newGrantJWT,
@@ -61,6 +69,7 @@ func TestGrantRefreshLoop_RefreshesGrant(t *testing.T) {
 
 	svc := NewService()
 	svc.SetLicenseServerClient(NewLicenseServerClient(server.URL))
+	svc.SetClientVersion(expectedClientVersion)
 	svc.mu.Lock()
 	svc.activationState = &ActivationState{
 		InstallationID:      "inst_test",

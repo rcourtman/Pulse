@@ -5429,6 +5429,7 @@ func TestContract_EntitlementUsageSnapshotWaitsForSettledSupplementalInventory(t
 
 func TestContract_LegacyMigrationGrandfatherFloorJSONSnapshot(t *testing.T) {
 	t.Setenv("PULSE_LICENSE_DEV_MODE", "false")
+	const expectedClientVersion = "6.0.0-rc.1"
 
 	grantJWT, grantPublicKey, err := pkglicensing.GenerateGrantJWTForTesting(pkglicensing.GrantClaims{
 		LicenseID:           "lic_contract_floor",
@@ -5450,6 +5451,13 @@ func TestContract_LegacyMigrationGrandfatherFloorJSONSnapshot(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v1/licenses/exchange" {
 			t.Fatalf("path = %q, want /v1/licenses/exchange", r.URL.Path)
+		}
+		var exchangeReq pkglicensing.ExchangeLegacyLicenseRequest
+		if err := json.NewDecoder(r.Body).Decode(&exchangeReq); err != nil {
+			t.Fatalf("decode exchange request: %v", err)
+		}
+		if exchangeReq.ClientVersion != expectedClientVersion {
+			t.Fatalf("exchange client version=%q, want %q", exchangeReq.ClientVersion, expectedClientVersion)
 		}
 		w.WriteHeader(http.StatusCreated)
 		_ = json.NewEncoder(w).Encode(pkglicensing.ActivateInstallationResponse{
@@ -5494,6 +5502,7 @@ func TestContract_LegacyMigrationGrandfatherFloorJSONSnapshot(t *testing.T) {
 	}
 
 	handlers := NewLicenseHandlers(mtp, false)
+	handlers.SetRuntimeVersion(expectedClientVersion)
 	handlers.SetMonitors(buildGrandfatherFloorMonitor(23), nil)
 	t.Cleanup(handlers.StopAllBackgroundLoops)
 

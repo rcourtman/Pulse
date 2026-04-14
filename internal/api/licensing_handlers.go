@@ -71,6 +71,7 @@ type LicenseHandlers struct {
 	conversionHealth           *conversionPipelineHealth
 	hostedLeaseRefresh         sync.Map // map[string]*hostedEntitlementRefreshLoop
 	legacyGrandfatherReconcile sync.Map // map[string]*legacyGrandfatherReconcileLoop
+	runtimeVersion             string
 }
 
 // NewLicenseHandlers creates a new license handlers instance.
@@ -115,6 +116,13 @@ func (h *LicenseHandlers) SetConfig(cfg *config.Config) {
 		return
 	}
 	h.cfg = cfg
+}
+
+func (h *LicenseHandlers) SetRuntimeVersion(version string) {
+	if h == nil {
+		return
+	}
+	h.runtimeVersion = strings.TrimSpace(version)
 }
 
 // SetConversionRecorder wires the conversion event recorder for backend-emitted
@@ -502,6 +510,7 @@ func (h *LicenseHandlers) getTenantComponents(ctx context.Context) (*licenseServ
 	// Check if service already exists
 	if v, ok := h.services.Load(orgID); ok {
 		svc := v.(*licenseService)
+		svc.SetClientVersion(h.runtimeVersion)
 		if err := h.ensureEvaluatorForOrg(orgID, svc); err != nil {
 			log.Warn().Str("org_id", orgID).Err(err).Msg("Failed to refresh license evaluator for org")
 		}
@@ -522,6 +531,7 @@ func (h *LicenseHandlers) getTenantComponents(ctx context.Context) (*licenseServ
 	}
 
 	service := newLicenseService()
+	service.SetClientVersion(h.runtimeVersion)
 	h.bindLegacyGrandfatherReconcileOwnership(orgID, service)
 
 	// Wire license server client and persistence so activation / refresh can use them.

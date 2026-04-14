@@ -95,6 +95,10 @@ type Service struct {
 
 	// Persistence reference for activation state save/load. Set via SetPersistence.
 	persistence *Persistence
+
+	// Canonical runtime version supplied by the owning process. This is used for
+	// authenticated installation/version attribution on activation and refresh.
+	clientVersion string
 }
 
 // DefaultGracePeriod is the duration after license expiration during which
@@ -230,6 +234,7 @@ func (s *Service) ActivateWithKey(activationKey string) (*License, error) {
 	s.mu.RLock()
 	client := s.serverClient
 	persistence := s.persistence
+	clientVersion := s.clientVersion
 	s.mu.RUnlock()
 
 	if client == nil {
@@ -247,6 +252,7 @@ func (s *Service) ActivateWithKey(activationKey string) (*License, error) {
 		ActivationKey:       activationKey,
 		InstanceFingerprint: fingerprint,
 		InstanceName:        hostname,
+		ClientVersion:       clientVersion,
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
@@ -265,6 +271,7 @@ func (s *Service) ActivateLegacyLicense(legacyLicenseKey string) (*License, erro
 	s.mu.RLock()
 	client := s.serverClient
 	persistence := s.persistence
+	clientVersion := s.clientVersion
 	s.mu.RUnlock()
 
 	if client == nil {
@@ -281,6 +288,7 @@ func (s *Service) ActivateLegacyLicense(legacyLicenseKey string) (*License, erro
 		LegacyLicenseKey:    legacyLicenseKey,
 		InstanceFingerprint: fingerprint,
 		InstanceName:        hostname,
+		ClientVersion:       clientVersion,
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
@@ -381,6 +389,14 @@ func (s *Service) SetLicenseServerClient(client *LicenseServerClient) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.serverClient = client
+}
+
+// SetClientVersion records the canonical runtime version for authenticated
+// installation/version attribution on activation and grant refresh.
+func (s *Service) SetClientVersion(version string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.clientVersion = strings.TrimSpace(version)
 }
 
 // SetPersistence sets the persistence reference for activation state save/load.
