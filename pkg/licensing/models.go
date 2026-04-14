@@ -80,9 +80,10 @@ func (c Claims) EffectiveLimits() map[string]int64 {
 			limits["max_guests"] = int64(c.MaxGuests)
 		}
 	}
-	if c.Tier == TierLifetime {
-		// Grandfathered lifetime licenses must remain uncapped even if older
-		// tokens or migrated records still carry historical Pro-era limits.
+	if c.Tier == TierLifetime || IsGrandfatheredRecurringV5PlanVersion(c.PlanVersion) {
+		// Grandfathered lifetime licenses and active recurring v5 migrations
+		// must remain uncapped even if older tokens or migrated records still
+		// carry historical Pro-era limits.
 		delete(limits, MaxMonitoredSystemsLicenseGateKey)
 		delete(limits, "max_guests")
 	}

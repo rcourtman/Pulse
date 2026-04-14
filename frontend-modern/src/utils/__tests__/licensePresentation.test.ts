@@ -20,6 +20,8 @@ import {
   getTrialEndedProLicenseNotice,
   getTrialActivationNotice,
   isDisplayableLicenseFeature,
+  isGrandfatheredRecurringV5PlanVersion,
+  isUncappedGrandfatheredPlanVersion,
   SELF_HOSTED_RECOVERY_PRESENTATION,
 } from '@/utils/licensePresentation';
 import { SELF_HOSTED_PRO_BILLING_PRESENTATION } from '@/components/Settings/selfHostedBillingPresentation';
@@ -163,11 +165,19 @@ describe('licensePresentation', () => {
   });
 
   it('returns grandfathered recurring price continuity notices only for active recurring v5 plans', () => {
+    expect(isGrandfatheredRecurringV5PlanVersion('v5_pro_monthly_grandfathered')).toBe(true);
+    expect(isGrandfatheredRecurringV5PlanVersion('v5_pro_annual_grandfathered')).toBe(true);
+    expect(isGrandfatheredRecurringV5PlanVersion('v5_lifetime_grandfathered')).toBe(false);
+    expect(isUncappedGrandfatheredPlanVersion('v5_pro_monthly_grandfathered', false)).toBe(true);
+    expect(isUncappedGrandfatheredPlanVersion('v5_pro_annual_grandfathered', false)).toBe(true);
+    expect(isUncappedGrandfatheredPlanVersion(undefined, true)).toBe(true);
+    expect(isUncappedGrandfatheredPlanVersion('pro', false)).toBe(false);
     expect(
       getGrandfatheredPriceContinuityNotice('v5_pro_monthly_grandfathered', 'active'),
     ).toMatchObject({
       title: 'Grandfathered v5 pricing',
       tone: expect.stringContaining('green'),
+      body: expect.stringContaining('uncapped monitored-system and guest capacity'),
     });
     expect(
       getGrandfatheredPriceContinuityNotice('v5_pro_annual_grandfathered', 'grace'),

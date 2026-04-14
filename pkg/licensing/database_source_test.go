@@ -123,6 +123,31 @@ func TestDatabaseSourceCanonicalizesCloudPlanVersionAndLimits(t *testing.T) {
 	}
 }
 
+func TestDatabaseSourceGrandfatheredRecurringPlanStripsCappedLimits(t *testing.T) {
+	store := &mockBillingStore{
+		state: &BillingState{
+			PlanVersion: "v5_pro_monthly_grandfathered",
+			Limits: map[string]int64{
+				"max_monitored_systems": 10,
+				"max_guests":            50,
+			},
+			SubscriptionState: SubStateActive,
+		},
+	}
+
+	source := NewDatabaseSource(store, "org-1", time.Hour)
+
+	if got := source.PlanVersion(); got != "v5_pro_monthly_grandfathered" {
+		t.Fatalf("expected plan_version %q, got %q", "v5_pro_monthly_grandfathered", got)
+	}
+	if got := source.SubscriptionState(); got != SubStateActive {
+		t.Fatalf("expected subscription_state %q, got %q", SubStateActive, got)
+	}
+	if got := source.Limits(); len(got) != 0 {
+		t.Fatalf("expected grandfathered recurring plan to be uncapped, got limits %v", got)
+	}
+}
+
 func TestDatabaseSourcePreservesMissingPlanVersion(t *testing.T) {
 	store := &mockBillingStore{
 		state: &BillingState{

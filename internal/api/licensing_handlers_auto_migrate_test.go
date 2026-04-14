@@ -328,7 +328,7 @@ func TestGetTenantComponents_AutoExchangeGrandfathersObservedMonitoredSystems(t 
 	grantJWT, grantPublicKey, err := pkglicensing.GenerateGrantJWTForTesting(pkglicensing.GrantClaims{
 		LicenseID:           "lic_floor_auto",
 		Tier:                "pro",
-		PlanKey:             "v5_pro_monthly_grandfathered",
+		PlanKey:             "legacy_migration_fallback",
 		State:               "active",
 		Features:            []string{"relay"},
 		MaxMonitoredSystems: 10,
@@ -427,7 +427,7 @@ func TestGetTenantComponents_BackfillsGrandfatherFloorAfterRestoreWhenMonitorArr
 	grantJWT, grantPublicKey, err := pkglicensing.GenerateGrantJWTForTesting(pkglicensing.GrantClaims{
 		LicenseID:           "lic_floor_restore",
 		Tier:                "pro",
-		PlanKey:             "v5_pro_monthly_grandfathered",
+		PlanKey:             "legacy_migration_fallback",
 		State:               "active",
 		Features:            []string{"relay"},
 		MaxMonitoredSystems: 10,
@@ -524,7 +524,7 @@ func TestBillingReads_DoNotRestartLegacyGrandfatherReconcileLoop(t *testing.T) {
 	grantJWT, grantPublicKey, err := pkglicensing.GenerateGrantJWTForTesting(pkglicensing.GrantClaims{
 		LicenseID:           "lic_floor_read_only",
 		Tier:                "pro",
-		PlanKey:             "v5_pro_monthly_grandfathered",
+		PlanKey:             "legacy_migration_fallback",
 		State:               "active",
 		Features:            []string{"relay"},
 		MaxMonitoredSystems: 10,
@@ -622,7 +622,7 @@ func TestActivateLicenseKey_GrandfathersObservedMonitoredSystemsForLegacyMigrati
 	grantJWT, grantPublicKey, err := pkglicensing.GenerateGrantJWTForTesting(pkglicensing.GrantClaims{
 		LicenseID:           "lic_floor_manual",
 		Tier:                "pro",
-		PlanKey:             "v5_pro_annual_grandfathered",
+		PlanKey:             "legacy_migration_fallback",
 		State:               "active",
 		Features:            []string{"relay"},
 		MaxMonitoredSystems: 10,
@@ -697,7 +697,7 @@ func TestGetTenantComponents_DelaysGrandfatherFloorUntilSupplementalInventorySet
 	grantJWT, grantPublicKey, err := pkglicensing.GenerateGrantJWTForTesting(pkglicensing.GrantClaims{
 		LicenseID:           "lic_floor_supplemental",
 		Tier:                "pro",
-		PlanKey:             "v5_pro_monthly_grandfathered",
+		PlanKey:             "legacy_migration_fallback",
 		State:               "active",
 		Features:            []string{"relay"},
 		MaxMonitoredSystems: 10,

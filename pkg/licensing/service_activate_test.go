@@ -388,7 +388,7 @@ func TestServiceCaptureLegacyMonitoredSystemGrandfatherFloorPersistsAndUpdatesSt
 	initialGrantJWT := makeTestGrantJWT(t, &GrantClaims{
 		LicenseID:           "lic_floor",
 		Tier:                "pro",
-		PlanKey:             "v5_pro_monthly_grandfathered",
+		PlanKey:             "legacy_migration_fallback",
 		State:               "active",
 		MaxMonitoredSystems: 10,
 		IssuedAt:            time.Now().Unix(),
@@ -458,13 +458,13 @@ func TestServiceCaptureLegacyMonitoredSystemGrandfatherFloorPersistsAndUpdatesSt
 	}
 }
 
-func TestServiceStatus_ExposesMonitoredSystemContinuity(t *testing.T) {
+func TestServiceStatus_ExposesMonitoredSystemContinuityForFallbackMigrations(t *testing.T) {
 	setupTestPublicKey(t)
 
 	grantJWT := makeTestGrantJWT(t, &GrantClaims{
 		LicenseID:           "lic_continuity_status",
 		Tier:                "pro",
-		PlanKey:             "v5_pro_monthly_grandfathered",
+		PlanKey:             "legacy_migration_fallback",
 		State:               "active",
 		MaxMonitoredSystems: 10,
 		IssuedAt:            time.Now().Unix(),
@@ -541,6 +541,52 @@ func TestServiceStatus_ExposesMonitoredSystemContinuity(t *testing.T) {
 				t.Fatalf("CapturePending=%v, want %v", status.MonitoredSystemContinuity.CapturePending, tt.wantCapturePending)
 			}
 		})
+	}
+}
+
+func TestServiceStatus_GrandfatheredRecurringV5IsUncapped(t *testing.T) {
+	setupTestPublicKey(t)
+
+	grantJWT := makeTestGrantJWT(t, &GrantClaims{
+		LicenseID:           "lic_recurring_grandfathered",
+		Tier:                "pro",
+		PlanKey:             "v5_pro_monthly_grandfathered",
+		State:               "active",
+		MaxMonitoredSystems: 10,
+		MaxGuests:           5,
+		IssuedAt:            time.Now().Unix(),
+		ExpiresAt:           time.Now().Add(72 * time.Hour).Unix(),
+	})
+
+	svc := NewService()
+	if err := svc.RestoreActivation(&ActivationState{
+		InstallationID:      "inst_recurring_grandfathered",
+		InstallationToken:   "pit_live_recurring_grandfathered",
+		LicenseID:           "lic_recurring_grandfathered",
+		GrantJWT:            grantJWT,
+		GrantJTI:            "grant_recurring_grandfathered",
+		InstanceFingerprint: "fp-recurring-grandfathered",
+		Continuity: ActivationContinuity{
+			LegacyMigration: true,
+		},
+	}); err != nil {
+		t.Fatalf("RestoreActivation: %v", err)
+	}
+
+	status := svc.Status()
+	if status.MaxMonitoredSystems != 0 {
+		t.Fatalf("status.MaxMonitoredSystems=%d, want 0 for uncapped grandfathered recurring plan", status.MaxMonitoredSystems)
+	}
+	if status.MonitoredSystemContinuity != nil {
+		t.Fatalf("expected no monitored-system continuity banner for uncapped recurring v5 migration, got %+v", status.MonitoredSystemContinuity)
+	}
+
+	current := svc.Current()
+	if current == nil {
+		t.Fatal("expected current license")
+	}
+	if got := current.Claims.EffectiveLimits(); len(got) != 0 {
+		t.Fatalf("EffectiveLimits() = %v, want no capped commercial limits", got)
 	}
 }
 

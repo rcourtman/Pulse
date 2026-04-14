@@ -58,7 +58,7 @@ Runtime rules:
 - Deduplication follows canonical unified-resource identity rather than transport-specific state.
 
 Migration policy:
-- Existing paid v5 customers keep their grandfathered recurring continuity until cancellation.
+- Existing active recurring v5 customers keep their grandfathered recurring price and uncapped monitored-system and guest capacity until cancellation.
 - Existing free users above the new Community cap are not hard-broken on rollout day.
 - During grace, existing monitoring keeps working.
 - During grace, only new counted-system additions are blocked until the user removes systems or upgrades.

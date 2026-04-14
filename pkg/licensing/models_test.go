@@ -106,6 +106,17 @@ func TestClaims_EffectiveLimits(t *testing.T) {
 			},
 			expected: map[string]int64{},
 		},
+		{
+			name: "grandfathered_recurring_v5_strips_new_v6_caps",
+			claims: Claims{
+				Tier:                TierPro,
+				PlanVersion:         "v5_pro_annual_grandfathered",
+				Limits:              map[string]int64{"max_monitored_systems": 15, "max_guests": 5},
+				MaxMonitoredSystems: 15,
+				MaxGuests:           5,
+			},
+			expected: map[string]int64{},
+		},
 	}
 
 	for _, tt := range tests {

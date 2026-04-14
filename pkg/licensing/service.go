@@ -514,6 +514,9 @@ func (s *Service) needsLegacyMonitoredSystemCaptureLocked() bool {
 	if s == nil || s.activationState == nil {
 		return false
 	}
+	if s.legacyMigrationUsesUncappedRecurringPlanLocked() {
+		return false
+	}
 	return normalizeActivationContinuity(s.activationState.Continuity).needsLegacyMonitoredSystemCapture()
 }
 
@@ -535,6 +538,9 @@ func (s *Service) monitoredSystemContinuityStatusLocked() *MonitoredSystemContin
 
 	continuity := normalizeActivationContinuity(s.activationState.Continuity)
 	if !continuity.LegacyMigration {
+		return nil
+	}
+	if s.legacyMigrationUsesUncappedRecurringPlanLocked() {
 		return nil
 	}
 
@@ -824,7 +830,7 @@ func (s *Service) Status() *LicenseStatus {
 	// Apply the tier default monitored-system limit when claims don't specify one.
 	// For recognized tiers, use their defined limit (0 = unlimited for Cloud/MSP/Enterprise).
 	// For unrecognized tiers, fall back to free tier limit to prevent unlimited access.
-	if status.MaxMonitoredSystems == 0 {
+	if status.MaxMonitoredSystems == 0 && !IsGrandfatheredRecurringV5PlanVersion(status.PlanVersion) {
 		if defaultSystems, ok := TierMonitoredSystemLimits[status.Tier]; ok {
 			status.MaxMonitoredSystems = defaultSystems
 		} else {
@@ -969,6 +975,20 @@ func monitoredSystemLimitFromClaims(claims Claims) int {
 		return safeIntFromInt64(limit)
 	}
 	return 0
+}
+
+func (s *Service) legacyMigrationUsesUncappedRecurringPlanLocked() bool {
+	if s == nil || s.activationState == nil {
+		return false
+	}
+	if s.license != nil && IsGrandfatheredRecurringV5PlanVersion(s.license.Claims.PlanVersion) {
+		return true
+	}
+	gc, err := verifyAndParseGrantJWT(s.activationState.GrantJWT)
+	if err != nil || gc == nil {
+		return false
+	}
+	return IsGrandfatheredRecurringV5PlanVersion(gc.PlanKey)
 }
 
 func remainingDaysCeil(expiresAtUnix, nowUnix int64) int {

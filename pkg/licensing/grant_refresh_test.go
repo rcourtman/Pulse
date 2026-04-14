@@ -471,7 +471,7 @@ func TestRefreshGrantOnce_PreservesLegacyGrandfatherFloor(t *testing.T) {
 	newGrantJWT := makeTestGrantJWT(t, &GrantClaims{
 		LicenseID:           "lic_refreshed_floor",
 		Tier:                "pro",
-		PlanKey:             "v5_pro_monthly_grandfathered",
+		PlanKey:             "legacy_migration_fallback",
 		State:               "active",
 		MaxMonitoredSystems: 10,
 		IssuedAt:            time.Now().Unix(),
@@ -503,7 +503,7 @@ func TestRefreshGrantOnce_PreservesLegacyGrandfatherFloor(t *testing.T) {
 	initialGrantJWT := makeTestGrantJWT(t, &GrantClaims{
 		LicenseID:           "lic_initial_floor",
 		Tier:                "pro",
-		PlanKey:             "v5_pro_monthly_grandfathered",
+		PlanKey:             "legacy_migration_fallback",
 		State:               "active",
 		MaxMonitoredSystems: 10,
 		IssuedAt:            time.Now().Unix(),

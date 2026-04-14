@@ -200,6 +200,8 @@ test.describe.serial('v5 commercial migration notice', () => {
           expectFieldLocator(page, 'Included Monitored Systems'),
           String(expectedMaxMonitoredSystems),
         );
+      } else {
+        await expectFieldValue(expectFieldLocator(page, 'Included Monitored Systems'), 'Unlimited');
       }
       return;
     }

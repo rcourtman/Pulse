@@ -444,6 +444,57 @@ func TestEntitlementHandler_UsesEvaluatorWhenNoLicense(t *testing.T) {
 	}
 }
 
+func TestEntitlementHandler_GrandfatheredRecurringEvaluatorStateIsUncapped(t *testing.T) {
+	baseDir := t.TempDir()
+	mtp := config.NewMultiTenantPersistence(baseDir)
+
+	orgID := "test-grandfathered-recurring-entitlements"
+	if _, err := mtp.GetPersistence(orgID); err != nil {
+		t.Fatalf("GetPersistence(%s) failed: %v", orgID, err)
+	}
+
+	store := config.NewFileBillingStore(baseDir)
+	if err := store.SaveBillingState(orgID, &entitlements.BillingState{
+		Capabilities: []string{
+			license.FeatureAIPatrol,
+			license.FeatureAIAutoFix,
+		},
+		Limits: map[string]int64{
+			"max_monitored_systems": 10,
+			"max_guests":            50,
+		},
+		PlanVersion:       "v5_pro_monthly_grandfathered",
+		SubscriptionState: entitlements.SubStateActive,
+	}); err != nil {
+		t.Fatalf("SaveBillingState(%s) failed: %v", orgID, err)
+	}
+
+	h := NewLicenseHandlers(mtp, true)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/license/entitlements", nil)
+	req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, orgID))
+	rec := httptest.NewRecorder()
+	h.HandleEntitlements(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d, want %d", rec.Code, http.StatusOK)
+	}
+
+	var payload EntitlementPayload
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("unmarshal payload failed: %v", err)
+	}
+
+	if payload.PlanVersion != "v5_pro_monthly_grandfathered" {
+		t.Fatalf("plan_version=%q, want %q", payload.PlanVersion, "v5_pro_monthly_grandfathered")
+	}
+	for _, limit := range payload.Limits {
+		if limit.Key == "max_monitored_systems" || limit.Key == "max_guests" {
+			t.Fatalf("expected grandfathered recurring evaluator payload to omit capped limits, got %+v", payload.Limits)
+		}
+	}
+}
+
 func TestEntitlementHandler_TrialEligibility_FreshOrgAllowed(t *testing.T) {
 	baseDir := t.TempDir()
 	mtp := config.NewMultiTenantPersistence(baseDir)

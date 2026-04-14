@@ -243,6 +243,10 @@ func normalizeDatabaseSourceState(state BillingState) BillingState {
 	normalized.CommercialMigration = NormalizeCommercialMigrationStatus(normalized.CommercialMigration)
 
 	normalized.Limits = NormalizeMonitoredSystemLimits(normalized.Limits)
+	if IsGrandfatheredRecurringV5PlanVersion(normalized.PlanVersion) {
+		delete(normalized.Limits, MaxMonitoredSystemsLicenseGateKey)
+		delete(normalized.Limits, "max_guests")
+	}
 
 	switch normalized.SubscriptionState {
 	case SubStateExpired, SubStateSuspended, SubStateCanceled:
@@ -250,7 +254,7 @@ func normalizeDatabaseSourceState(state BillingState) BillingState {
 		normalized.Limits = nil
 		normalized.MetersEnabled = nil
 	default:
-		if limit, known := CloudPlanMonitoredSystemLimits[normalized.PlanVersion]; known {
+		if limit, known := CloudPlanMonitoredSystemLimits[normalized.PlanVersion]; known && limit > 0 {
 			if normalized.Limits == nil {
 				normalized.Limits = map[string]int64{}
 			}

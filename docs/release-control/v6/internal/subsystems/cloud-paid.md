@@ -192,6 +192,12 @@ still grows monitored-system usage.
    they keep the Pro feature set, but they must not inherit monitored-system or
    guest caps from recurring Pro contracts anywhere in runtime, issuance, or
    migrated-license storage.
+6. Treat active recurring v5 Pulse Pro customers as uncapped grandfathered
+   commercial entitlements until cancellation: migrated and renewing v5/v1
+   recurring plans keep their existing recurring price plus uncapped
+   monitored-system and guest capacity while the subscription remains
+   continuous, and only new v6 retail purchases or post-cancellation re-entry
+   may take the current Pro/Pro+ caps.
 
 ## Current State
 
@@ -990,32 +996,24 @@ hosted tenant settings routes.
 Paid Pulse Pro v5 grandfathering is now part of that same canonical boundary:
 when a recurring v5 customer migrates into v6, billing persistence,
 entitlement evaluation, renewal handling, and Pro-license presentation must
-preserve the customer's existing recurring price identity instead of silently
-rewriting them onto current v6 retail pricing.
-That same continuity boundary now also owns monitored-system capacity
-preservation for migrated self-hosted estates. Activation persistence and
-grant refresh must carry local-only legacy-migration continuity metadata, and
-when canonical deduped monitored-system usage first resolves on a migrated
-installation Pulse must persist a one-time grandfather floor so status,
-runtime entitlement evaluation, and later restore/refresh flows keep the
-existing estate admissible without silently grandfathering post-migration
-growth.
-That first resolved usage snapshot must be a settled canonical monitor view,
-not the first store-backed read-state seen during startup. When provider-owned
-supplemental inventories such as TrueNAS or VMware are still between initial
-provider wiring and the first canonical store rebuild after their baseline
-poll, cloud-paid continuity must keep usage unavailable and delay floor
-capture rather than sealing a lower count forever.
-That continuity capture is reconciler-owned rather than read-owned. Ordinary
-status or entitlement reads may expose pending continuity state, but they must
-not persist the grandfather floor directly from the request path once a
-migrated installation is running. The owning licensing reconciler may backfill
-the floor asynchronously after canonical monitored-system usage becomes
-settled. The reconcile loop itself is activation-state-owned as well:
-activation, restore, grant refresh, and revocation/clear transitions may
-start or stop continuity reconciliation, but ordinary billing reads must stay
-observer-only and must not bootstrap that background work on demand.
-The continuity capture path must notify through that same activation-state
+preserve the customer's existing recurring price identity and uncapped
+commercial capacity instead of silently rewriting them onto current v6 retail
+pricing or Pro-era caps. Activation persistence and grant refresh may still
+carry local-only legacy-migration continuity metadata as a defensive fallback
+for any bounded legacy grant that survives outside the canonical v5 recurring
+contracts, but active recurring v5/v1 customers must not rely on a captured
+floor to stay admissible in v6.
+That fallback continuity path is reconciler-owned rather than read-owned.
+Ordinary status or entitlement reads may expose pending continuity state for a
+bounded legacy fallback, but they must not persist the grandfather floor
+directly from the request path once a migrated installation is running. The
+owning licensing reconciler may backfill the floor asynchronously after
+canonical monitored-system usage becomes settled. The reconcile loop itself is
+activation-state-owned as well: activation, restore, grant refresh, and
+revocation/clear transitions may start or stop continuity reconciliation, but
+ordinary billing reads must stay observer-only and must not bootstrap that
+background work on demand.
+That fallback continuity path must notify through that same activation-state
 ownership boundary after it persists the grandfather floor, so the reconciler
 can stop because state changed rather than because a later status or
 entitlements read happened to observe the captured floor.
@@ -1034,7 +1032,8 @@ resolves to `v5_pro_monthly_grandfathered` or
 That Pro-license presentation rule is explicit UX, not only hidden metadata:
 when a migrated recurring v5 plan is active or in grace, the settings surface
 must render plan terms and a continuity notice that makes it clear the
-existing recurring price remains in force until cancellation.
+existing recurring price plus uncapped monitored-system and guest capacity
+remain in force until cancellation.
 The self-hosted commercial presentation on that same surface is now locked to
 the monitored-system model as well. `ProLicensePanel.tsx`,
 `CommercialBillingSections.tsx`, and
@@ -1042,11 +1041,14 @@ the monitored-system model as well. `ProLicensePanel.tsx`,
 retail capacity as monitored systems rather than agents for Community, Relay,
 Pro, and Pro+, while leaving Cloud/MSP pricing semantics unchanged and
 preserving grandfathered v5 continuity copy as an explicit boundary policy.
-That same settings-owned presentation must make monitored-system continuity
-explicit when migrated estates are involved: the plan surface must render the
-base plan limit, the effective monitored-system limit, any grandfathered
-floor, and whether continuity capture is still pending. When monitored-system
-usage is unavailable during continuity verification, the shell must present a
+That same settings-owned presentation must distinguish between active
+grandfathered recurring v5 continuity and bounded legacy fallbacks. Active
+grandfathered recurring v5 plans must render uncapped monitored-system and
+guest capacity directly and must not show a pending or captured floor banner.
+Only bounded legacy fallback migrations may render the base plan limit, the
+effective monitored-system limit, any grandfathered floor, and whether
+continuity capture is still pending. When monitored-system usage is
+unavailable during fallback continuity verification, the shell must present a
 verification state rather than implying `0 / limit`.
 That same pricing boundary now also owns the shared frontend plan-definition
 models. `frontend-modern/src/utils/cloudPlans.ts` and

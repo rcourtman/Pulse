@@ -5470,14 +5470,14 @@ func TestContract_EntitlementUsageSnapshotWaitsForSettledSupplementalInventory(t
 	}
 }
 
-func TestContract_LegacyMigrationGrandfatherFloorJSONSnapshot(t *testing.T) {
+func TestContract_LegacyMigrationGrandfatherFloorFallbackJSONSnapshot(t *testing.T) {
 	t.Setenv("PULSE_LICENSE_DEV_MODE", "false")
 	const expectedClientVersion = "6.0.0-rc.1"
 
 	grantJWT, grantPublicKey, err := pkglicensing.GenerateGrantJWTForTesting(pkglicensing.GrantClaims{
 		LicenseID:           "lic_contract_floor",
 		Tier:                "pro",
-		PlanKey:             "v5_pro_monthly_grandfathered",
+		PlanKey:             "legacy_migration_fallback",
 		State:               "active",
 		Features:            []string{"relay"},
 		MaxMonitoredSystems: 10,
@@ -5640,14 +5640,14 @@ func TestContract_LegacyMigrationGrandfatherFloorJSONSnapshot(t *testing.T) {
 	const want = `{
 		"status":{
 			"tier":"pro",
-			"plan_version":"v5_pro_monthly_grandfathered",
+			"plan_version":"legacy_migration_fallback",
 			"max_monitored_systems":23,
 			"valid":true,
 			"monitored_system_continuity":{"plan_limit":10,"grandfathered_floor":23,"effective_limit":23,"capture_pending":false,"captured_at":123}
 		},
 		"entitlements":{
 			"tier":"pro",
-			"plan_version":"v5_pro_monthly_grandfathered",
+			"plan_version":"legacy_migration_fallback",
 			"subscription_state":"active",
 			"limits":[{"key":"max_monitored_systems","limit":23,"current":23,"current_available":true,"state":"enforced"}],
 			"monitored_system_continuity":{"plan_limit":10,"grandfathered_floor":23,"effective_limit":23,"capture_pending":false,"captured_at":123}

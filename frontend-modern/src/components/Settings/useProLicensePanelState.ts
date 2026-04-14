@@ -21,6 +21,7 @@ import {
   getLicenseTierLabel,
   getTrialActivationNotice,
   isDisplayableLicenseFeature,
+  isUncappedGrandfatheredPlanVersion,
 } from '@/utils/licensePresentation';
 import {
   getSelfHostedBillingHref,
@@ -245,12 +246,23 @@ export function useProLicensePanelState() {
   const limitStatus = (key: string) => entitlements()?.limits?.find((entry) => entry.key === key);
 
   const monitoredSystemLimitStatus = createMemo(() => limitStatus('max_monitored_systems'));
-  const monitoredSystemUsageSummary = createMemo(() =>
-    getMonitoredSystemLimitUsageSummary(monitoredSystemLimitStatus()),
+  const uncappedGrandfatheredPlan = createMemo(() =>
+    isUncappedGrandfatheredPlanVersion(entitlements()?.plan_version, entitlements()?.is_lifetime),
   );
-  const remainingSystemCapacity = createMemo(() =>
-    getMonitoredSystemLimitRemainingCapacity(monitoredSystemLimitStatus()),
-  );
+  const monitoredSystemUsageSummary = createMemo(() => {
+    const limit = monitoredSystemLimitStatus();
+    if (!limit && uncappedGrandfatheredPlan()) {
+      return 'Unlimited';
+    }
+    return getMonitoredSystemLimitUsageSummary(limit);
+  });
+  const remainingSystemCapacity = createMemo(() => {
+    const limit = monitoredSystemLimitStatus();
+    if (!limit && uncappedGrandfatheredPlan()) {
+      return 'Unlimited';
+    }
+    return getMonitoredSystemLimitRemainingCapacity(limit);
+  });
   const monitoredSystemContinuity = createMemo(() => entitlements()?.monitored_system_continuity);
   const monitoredSystemContinuityNotice = createMemo(() =>
     getMonitoredSystemContinuityNotice(monitoredSystemContinuity(), monitoredSystemLimitStatus()),

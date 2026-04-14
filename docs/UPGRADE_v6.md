@@ -131,7 +131,7 @@ Pulse v6 uses the activation/grant model for active licensing, but it can migrat
   - a Pulse v6 activation key, or
   - a valid Pulse v5 Pro/Lifetime license key, which Pulse will try to exchange automatically
 - If the exchange service cannot complete the migration, retry from the v6 license panel or use the self-serve retrieval flow to fetch the current v6 activation key. Email is only a backup copy of that key.
-- Existing paid v5 customers keep their grandfathered recurring continuity until cancellation. If they cancel and later return, current v6 pricing applies.
+- Existing active recurring v5 customers keep their grandfathered recurring price and uncapped monitored-system and guest capacity until cancellation. If they cancel and later return, current v6 pricing and limits apply.
 
 Practical recommendation:
 

@@ -392,6 +392,8 @@ func TestLimitsForCloudPlan_KnownPlans(t *testing.T) {
 		{"msp_hosted_v1", 50},
 		{"msp_growth", 150},
 		{"msp_scale", 400},
+		{"v5_pro_monthly_grandfathered", 0},
+		{"v5_pro_annual_grandfathered", 0},
 	}
 
 	for _, tt := range tests {
@@ -571,6 +573,27 @@ func TestPlanVersionForPriceID_UnknownPrices(t *testing.T) {
 			_, ok := PlanVersionForPriceID(id)
 			if ok {
 				t.Errorf("PlanVersionForPriceID(%q): expected not found", id)
+			}
+		})
+	}
+}
+
+func TestIsGrandfatheredRecurringV5PlanVersion(t *testing.T) {
+	tests := []struct {
+		plan string
+		want bool
+	}{
+		{plan: "v5_pro_monthly_grandfathered", want: true},
+		{plan: "v5_pro_annual_grandfathered", want: true},
+		{plan: "price_1ShIsdBrHBocJIGH71yQusLG", want: false},
+		{plan: "cloud_starter", want: false},
+		{plan: "", want: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.plan, func(t *testing.T) {
+			if got := IsGrandfatheredRecurringV5PlanVersion(tt.plan); got != tt.want {
+				t.Fatalf("IsGrandfatheredRecurringV5PlanVersion(%q) = %v, want %v", tt.plan, got, tt.want)
 			}
 		})
 	}

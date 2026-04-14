@@ -106,6 +106,23 @@ const GRANDFATHERED_V5_PLAN_LABELS: Record<string, string> = {
   v5_pro_annual_grandfathered: 'V5 Pro Annual (Grandfathered)',
 };
 
+export const isGrandfatheredRecurringV5PlanVersion = (planVersion?: string | null): boolean => {
+  const normalized = (planVersion || '').trim().toLowerCase();
+  return (
+    normalized === 'v5_pro_monthly_grandfathered' || normalized === 'v5_pro_annual_grandfathered'
+  );
+};
+
+export const isUncappedGrandfatheredPlanVersion = (
+  planVersion?: string | null,
+  isLifetime?: boolean | null,
+): boolean => {
+  if (isLifetime) {
+    return true;
+  }
+  return isGrandfatheredRecurringV5PlanVersion(planVersion);
+};
+
 export const getLicenseTierLabel = (tier?: string | null): string => {
   const normalized = (tier || '').trim().toLowerCase();
   if (!normalized) return 'Unknown';
@@ -144,11 +161,7 @@ export const getGrandfatheredPriceContinuityNotice = (
   planVersion?: string | null,
   subscriptionState?: string | null,
 ): LicenseInlineNotice | null => {
-  const normalizedPlan = (planVersion || '').trim().toLowerCase();
-  if (
-    normalizedPlan !== 'v5_pro_monthly_grandfathered' &&
-    normalizedPlan !== 'v5_pro_annual_grandfathered'
-  ) {
+  if (!isGrandfatheredRecurringV5PlanVersion(planVersion)) {
     return null;
   }
 
@@ -160,7 +173,7 @@ export const getGrandfatheredPriceContinuityNotice = (
   return {
     tone: 'border-green-200 dark:border-green-900 bg-green-50 dark:bg-green-900 text-green-900 dark:text-green-100',
     title: 'Grandfathered v5 pricing',
-    body: 'This migrated v5 Pro subscription keeps its existing recurring price until you cancel. If you cancel and return later, current v6 pricing applies.',
+    body: 'This migrated v5 Pro subscription keeps its existing recurring price and uncapped monitored-system and guest capacity until you cancel. If you cancel and return later, current v6 pricing and limits apply.',
   };
 };
 

@@ -82,6 +82,7 @@ var TierMonitoredSystemLimits = map[Tier]int{
 // plans that still renew through Stripe. Those subscriptions are not "unknown"
 // just because they are no longer sold; they remain canonical paid states that
 // must preserve their plan identity during webhook-driven billing updates.
+// A value of 0 means uncapped continuity for active recurring v5 customers.
 var CloudPlanMonitoredSystemLimits = map[string]int{
 	// Individual Cloud tiers
 	"cloud_starter":  10,
@@ -89,9 +90,10 @@ var CloudPlanMonitoredSystemLimits = map[string]int{
 	"cloud_max":      75,
 	"cloud_founding": 10, // Founding rate = Starter limits
 
-	// Grandfathered recurring Pulse Pro continuity plans
-	"v5_pro_monthly_grandfathered": 10,
-	"v5_pro_annual_grandfathered":  10,
+	// Grandfathered recurring Pulse Pro continuity plans remain uncapped while
+	// the recurring subscription stays active.
+	"v5_pro_monthly_grandfathered": 0,
+	"v5_pro_annual_grandfathered":  0,
 
 	// MSP tiers — host pool limits from pricing spec
 	"msp_starter": 50,  // MSP Starter: 10 clients, 50 host pool
@@ -147,6 +149,15 @@ var PriceIDToPlanVersion = map[string]string{
 func PlanVersionForPriceID(priceID string) (string, bool) {
 	v, ok := PriceIDToPlanVersion[priceID]
 	return v, ok
+}
+
+func IsGrandfatheredRecurringV5PlanVersion(planVersion string) bool {
+	switch CanonicalizePlanVersion(planVersion) {
+	case "v5_pro_monthly_grandfathered", "v5_pro_annual_grandfathered":
+		return true
+	default:
+		return false
+	}
 }
 
 // UnknownPlanDefaultMonitoredSystemLimit is the safe-default monitored-system limit applied when a

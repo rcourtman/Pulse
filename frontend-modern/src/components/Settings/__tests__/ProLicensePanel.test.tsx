@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
 import { Route, Router } from '@solidjs/router';
 
 import type { LicenseEntitlements } from '@/api/license';
@@ -300,7 +300,7 @@ describe('ProLicensePanel', () => {
     expect(screen.queryByText('5 / 12')).not.toBeInTheDocument();
   });
 
-  it('shows recurring grandfathered pricing continuity for migrated v5 Pro plans', async () => {
+  it('shows recurring grandfathered v5 Pro plans as uncapped while they remain active', async () => {
     const tests = [
       {
         name: 'monthly',
@@ -336,14 +336,28 @@ describe('ProLicensePanel', () => {
       expect(screen.getByText(tc.expectedLabel)).toBeInTheDocument();
       expect(screen.getByText('Grandfathered v5 pricing')).toBeInTheDocument();
       expect(
-        screen.getByText(/keeps its existing recurring price until you cancel/i),
+        screen.getByText(/keeps its existing recurring price and uncapped monitored-system and guest capacity until you cancel/i),
       ).toBeInTheDocument();
+      expect(
+        within(screen.getByText('Monitored Systems').parentElement as HTMLElement).getByText(
+          'Unlimited',
+        ),
+      ).toBeInTheDocument();
+      expect(
+        within(screen.getByText('Remaining System Capacity').parentElement as HTMLElement).getByText(
+          'Unlimited',
+        ),
+      ).toBeInTheDocument();
+      expect(screen.getByText('Included Monitored Systems')).toBeInTheDocument();
+      expect(screen.getByText('Max Guests')).toBeInTheDocument();
+      expect(screen.getAllByText('Unlimited').length).toBeGreaterThan(0);
+      expect(screen.queryByText('Plan Monitored System Limit')).not.toBeInTheDocument();
 
       cleanup();
     }
   });
 
-  it('shows continuity verification while the migrated monitored-system floor is still pending', async () => {
+  it('shows continuity verification while a bounded fallback migration is still pending', async () => {
     mockEntitlements = {
       capabilities: ['relay'],
       limits: [
@@ -359,7 +373,7 @@ describe('ProLicensePanel', () => {
       subscription_state: 'active',
       upgrade_reasons: [],
       tier: 'pro',
-      plan_version: 'v5_pro_monthly_grandfathered',
+      plan_version: 'legacy_migration_fallback',
       licensed_email: 'owner@example.com',
       trial_eligible: false,
       monitored_system_continuity: {
@@ -387,7 +401,7 @@ describe('ProLicensePanel', () => {
     expect(screen.queryByText('0 / 10')).not.toBeInTheDocument();
   });
 
-  it('shows grandfathered monitored-system continuity once the migrated floor is captured', async () => {
+  it('shows monitored-system continuity once a bounded fallback migration floor is captured', async () => {
     mockEntitlements = {
       capabilities: ['relay'],
       limits: [
@@ -402,7 +416,7 @@ describe('ProLicensePanel', () => {
       subscription_state: 'active',
       upgrade_reasons: [],
       tier: 'pro',
-      plan_version: 'v5_pro_monthly_grandfathered',
+      plan_version: 'legacy_migration_fallback',
       licensed_email: 'owner@example.com',
       trial_eligible: false,
       monitored_system_continuity: {
