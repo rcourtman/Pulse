@@ -22,8 +22,8 @@ export const AISettings: Component = () => {
   return (
     <>
       <SettingsPanel
-        title="AI Services"
-        description="Configure AI providers, models, Pulse Assistant, and Patrol."
+        title="Assistant & Patrol"
+        description="Configure providers, models, Pulse Assistant, and Patrol."
         icon={
           <svg
             class="w-5 h-5 text-blue-600 dark:text-blue-300"
@@ -49,7 +49,7 @@ export const AISettings: Component = () => {
               }}
               disabled={state.loading() || state.saving() || state.loadError()}
               containerClass="items-center gap-2"
-              ariaLabel="Enable AI services"
+              ariaLabel="Enable Assistant and Patrol"
               label={
                 <span class="text-xs font-medium text-muted">
                   {state.form.enabled ? 'Enabled' : 'Disabled'}

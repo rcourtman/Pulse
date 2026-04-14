@@ -30,8 +30,8 @@ export const SETTINGS_HEADER_META: SettingsHeaderMetaMap = {
     description: 'Manage backup/snapshot polling plus configuration export and import workflows.',
   },
   'system-ai': {
-    title: 'AI Services',
-    description: 'Configure AI providers, models, Pulse Assistant, and Patrol.',
+    title: 'Assistant & Patrol',
+    description: 'Configure providers, models, Pulse Assistant, and Patrol.',
   },
   'system-relay': {
     title: 'Remote Access',

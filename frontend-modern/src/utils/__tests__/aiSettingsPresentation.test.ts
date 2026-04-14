@@ -89,7 +89,7 @@ describe('aiSettingsPresentation', () => {
     ).toEqual({
       containerClassName: 'bg-amber-50 dark:bg-amber-900 text-amber-800 dark:text-amber-200',
       dotClassName: 'bg-amber-400',
-      summary: 'Configure at least one provider above to enable Pulse Assistant features',
+      summary: 'Configure at least one provider above to enable Pulse Assistant and Patrol.',
     });
   });
 
@@ -114,10 +114,10 @@ describe('aiSettingsPresentation', () => {
 
   it('returns canonical ai settings loading and chat-session copy', () => {
     expect(getAISettingsLoadingState()).toEqual({
-      text: 'Loading Pulse Assistant settings...',
+      text: 'Loading Assistant & Patrol settings...',
     });
     expect(getAISettingsLoadErrorMessage()).toBe(
-      'Unable to load Pulse Assistant settings. Your configuration could not be retrieved.',
+      'Unable to load Assistant & Patrol settings. Your configuration could not be retrieved.',
     );
     expect(getAISettingsRetryLabel()).toBe('Retry');
     expect(getAIChatSessionsLoadingState()).toEqual({
@@ -139,11 +139,11 @@ describe('aiSettingsPresentation', () => {
     expect(getAISessionDiffErrorMessage('git unavailable')).toBe('git unavailable');
     expect(getAISessionRevertErrorMessage()).toBe('Unable to revert the session.');
     expect(getAISessionRevertErrorMessage('conflict')).toBe('conflict');
-    expect(getAISettingsSaveErrorMessage()).toBe('Unable to save Pulse Assistant settings.');
+    expect(getAISettingsSaveErrorMessage()).toBe('Unable to save Assistant & Patrol settings.');
     expect(getAISettingsSaveErrorMessage('bad request')).toBe('bad request');
     expect(getAICredentialsClearErrorMessage()).toBe('Unable to clear credentials.');
     expect(getAICredentialsClearErrorMessage('permission denied')).toBe('permission denied');
-    expect(getAISettingsToggleErrorMessage()).toBe('Unable to update Pulse Assistant settings.');
+    expect(getAISettingsToggleErrorMessage()).toBe('Unable to update Assistant & Patrol settings.');
     expect(getAISettingsToggleErrorMessage('rate limited')).toBe('rate limited');
   });
 });

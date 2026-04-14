@@ -300,6 +300,14 @@ work extends shared components instead of creating new local variants.
     likewise expose `/patrol` as the canonical route and navigation target,
     keeping legacy `/ai` entry points as thin compatibility redirects rather
     than a second Patrol-branded primary route.
+19. Keep the shared `system-ai` settings shell product-first.
+    `frontend-modern/src/components/Settings/AISettings.tsx`,
+    `frontend-modern/src/components/Settings/settingsHeaderMeta.ts`,
+    `frontend-modern/src/components/Settings/settingsNavCatalog.ts`,
+    `frontend-modern/src/components/Settings/useAISettingsState.ts`, and
+    `frontend-modern/src/utils/aiSettingsPresentation.ts` must present that
+    surface to operators as `Assistant & Patrol` plus provider/model
+    configuration rather than as a generic `AI Services` shell.
 
 ## Forbidden Paths
 
@@ -1586,6 +1594,14 @@ configuration controls may point at the shared provider settings route or model
 catalog, but they should describe those controls as Patrol/provider surfaces
 rather than falling back to generic `AI Settings`, `AI Model`, or `AI circuit
 breaker` copy inside the Patrol shell itself.
+That same product-first naming rule also applies to the shared `system-ai`
+settings shell: `frontend-modern/src/components/Settings/AISettings.tsx`,
+`frontend-modern/src/components/Settings/settingsHeaderMeta.ts`,
+`frontend-modern/src/components/Settings/settingsNavCatalog.ts`,
+`frontend-modern/src/components/Settings/useAISettingsState.ts`, and
+`frontend-modern/src/utils/aiSettingsPresentation.ts` must present that surface
+to operators as `Assistant & Patrol` plus provider/model configuration rather
+than as a generic `AI Services` shell.
 On the main Patrol page, though, that same governed activity context belongs
 inside `frontend-modern/src/features/patrol/PatrolIntelligenceSummary.tsx`
 alongside the verification readout rather than as a second full-width band

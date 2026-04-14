@@ -479,7 +479,7 @@ test.describe("Quickstart cross-surface browser contract", () => {
     });
 
     await page.goto("/settings/system-ai", { waitUntil: "domcontentloaded" });
-    await expect(page.getByRole("heading", { name: "AI Services", level: 1 })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Assistant & Patrol", level: 1 })).toBeVisible();
 
     const response = await browserApiRequest(page, "/api/settings/ai/update", "PUT", {
       enabled: true,
@@ -652,9 +652,9 @@ test.describe("Quickstart cross-surface browser contract", () => {
     });
 
     await page.goto("/settings/system-ai", { waitUntil: "domcontentloaded" });
-    await expect(page.getByRole("heading", { name: "AI Services", level: 1 })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Assistant & Patrol", level: 1 })).toBeVisible();
 
-    await page.getByRole("button", { name: "Enable AI services" }).click();
+    await page.getByRole("button", { name: "Enable Assistant and Patrol" }).click();
 
     await expect.poll(() => surface.updateRequests.length).toBe(1);
     expect(surface.updateRequests[0]).toMatchObject({ enabled: true });

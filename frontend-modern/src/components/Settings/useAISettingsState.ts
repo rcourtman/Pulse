@@ -701,7 +701,7 @@ export const useAISettingsState = () => {
       resetForm(updated);
       syncModelCatalogForSettings(updated);
       void runProviderPreflight(updated);
-      notificationStore.success('Pulse Assistant settings saved');
+      notificationStore.success('Assistant & Patrol settings saved');
     } catch (error) {
       logger.error('[AISettings] Failed to save settings:', error);
       notificationStore.error(getAISettingsSaveErrorMessage(error instanceof Error ? error.message : ''));

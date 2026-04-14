@@ -24,7 +24,7 @@ const AI_OAUTH_ERROR_MESSAGES: Record<string, string> = {
 export const AI_SETTINGS_LOAD_MODELS_ERROR = 'Unable to load models.';
 export const AI_SETTINGS_LOAD_CHAT_SESSIONS_ERROR = 'Unable to load chat sessions.';
 export const AI_SETTINGS_LOAD_FAILURE_MESSAGE =
-  'Unable to load Pulse Assistant settings. Your configuration could not be retrieved.';
+  'Unable to load Assistant & Patrol settings. Your configuration could not be retrieved.';
 export const AI_SETTINGS_LOAD_RETRY_LABEL = 'Retry';
 
 export function getAIProviderTestResultTextClass(success: boolean): string {
@@ -71,7 +71,7 @@ export function getAISettingsReadinessPresentation(
   return {
     containerClassName: 'bg-amber-50 dark:bg-amber-900 text-amber-800 dark:text-amber-200',
     dotClassName: 'bg-amber-400',
-    summary: 'Configure at least one provider above to enable Pulse Assistant features',
+    summary: 'Configure at least one provider above to enable Pulse Assistant and Patrol.',
   };
 }
 
@@ -81,7 +81,7 @@ export function getAIOAuthErrorMessage(errorCode: string): string {
 
 export function getAISettingsLoadingState() {
   return {
-    text: 'Loading Pulse Assistant settings...',
+    text: 'Loading Assistant & Patrol settings...',
   } as const;
 }
 
@@ -132,7 +132,7 @@ export function getAISessionRevertErrorMessage(message?: string | null) {
 
 export function getAISettingsSaveErrorMessage(message?: string | null) {
   const detail = (message || '').trim();
-  return detail || 'Unable to save Pulse Assistant settings.';
+  return detail || 'Unable to save Assistant & Patrol settings.';
 }
 
 export function getAICredentialsClearErrorMessage(message?: string | null) {
@@ -142,5 +142,5 @@ export function getAICredentialsClearErrorMessage(message?: string | null) {
 
 export function getAISettingsToggleErrorMessage(message?: string | null) {
   const detail = (message || '').trim();
-  return detail || 'Unable to update Pulse Assistant settings.';
+  return detail || 'Unable to update Assistant & Patrol settings.';
 }

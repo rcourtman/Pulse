@@ -352,7 +352,7 @@ const canonicalShellTitleExpectations = [
   },
   {
     tab: 'system-ai',
-    title: 'AI Services',
+    title: 'Assistant & Patrol',
     source: aiSettingsPanelSource,
   },
   {
@@ -394,7 +394,7 @@ const canonicalShellTitleExpectations = [
 
 describe('Settings architecture guardrails', () => {
   it('keeps the primary AI settings toggle explicitly addressable and runtime-backed', () => {
-    expect(aiSettingsPanelSource).toContain('ariaLabel="Enable AI services"');
+    expect(aiSettingsPanelSource).toContain('ariaLabel="Enable Assistant and Patrol"');
     expect(aiSettingsPanelSource).toContain('await state.handleEnableRequest(newValue)');
   });
 

@@ -126,7 +126,7 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
       },
       {
         id: 'system-ai',
-        label: 'AI Services',
+        label: 'Assistant & Patrol',
         icon: Sparkles,
         iconProps: { strokeWidth: 2 },
       },

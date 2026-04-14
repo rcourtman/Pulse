@@ -301,7 +301,7 @@ describe('AISettings load failure error state', () => {
     renderComponent();
 
     await waitFor(() => {
-      expect(screen.getByText(/Unable to load Pulse Assistant settings/)).toBeInTheDocument();
+      expect(screen.getByText(/Unable to load Assistant & Patrol settings/)).toBeInTheDocument();
     });
 
     // Retry button should be present
@@ -317,7 +317,7 @@ describe('AISettings load failure error state', () => {
     renderComponent();
 
     await waitFor(() => {
-      expect(screen.getByText(/Unable to load Pulse Assistant settings/)).toBeInTheDocument();
+      expect(screen.getByText(/Unable to load Assistant & Patrol settings/)).toBeInTheDocument();
     });
 
     // Now mock a successful response for retry
@@ -337,7 +337,7 @@ describe('AISettings load failure error state', () => {
     });
 
     // Error banner should be gone
-    expect(screen.queryByText(/Unable to load Pulse Assistant settings/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Unable to load Assistant & Patrol settings/)).not.toBeInTheDocument();
 
     // Verify retry actually called getSettings again
     expect(getSettingsMock).toHaveBeenCalledTimes(2);
@@ -471,7 +471,7 @@ describe('AISettings quickstart enablement flow', () => {
       expect(getSettingsMock).toHaveBeenCalledTimes(1);
     });
 
-    fireEvent.click(screen.getByRole('button', { name: /enable ai services/i }));
+    fireEvent.click(screen.getByRole('button', { name: /enable assistant and patrol/i }));
 
     await waitFor(() => {
       expect(updateSettingsMock).toHaveBeenCalledWith({ enabled: true });
@@ -499,7 +499,7 @@ describe('AISettings quickstart enablement flow', () => {
       expect(getSettingsMock).toHaveBeenCalledTimes(1);
     });
 
-    fireEvent.click(screen.getByRole('button', { name: /enable ai services/i }));
+    fireEvent.click(screen.getByRole('button', { name: /enable assistant and patrol/i }));
 
     expect(updateSettingsMock).not.toHaveBeenCalled();
     expect(

@@ -226,7 +226,7 @@ test.describe.serial('V6 license activation flow', () => {
     expect(ent.subscription_state).toBe('active');
 
     await page.goto('/settings/system-ai');
-    await expect(page.getByRole('heading', { name: 'AI Services' }).first()).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Assistant & Patrol' }).first()).toBeVisible();
 
     const preSettingsRes = await apiRequest(page, '/api/settings/ai');
     expect(preSettingsRes.ok(), `AI settings request failed: ${preSettingsRes.status()}`).toBeTruthy();
@@ -236,7 +236,7 @@ test.describe.serial('V6 license activation flow', () => {
     expect(preSettings.quickstart_credits_remaining).toBe(25);
     expect(preSettings.quickstart_blocked_reason || '').toBe('');
 
-    const enableAI = page.getByRole('button', { name: 'Enable AI services' });
+    const enableAI = page.getByRole('button', { name: 'Enable Assistant and Patrol' });
     await expect(enableAI).toBeVisible();
     if (await page.getByText(/^Disabled$/).isVisible()) {
       await enableAI.click();
