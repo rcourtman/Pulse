@@ -714,16 +714,25 @@ func (c *OpenAIClient) ChatStream(ctx context.Context, req ChatRequest, callback
 	var inputTokens, outputTokens int
 	var finishReason string
 
+	atEOF := false
 	for {
 		n, err := reader.Read(buf)
+		if n > 0 {
+			pendingData += string(buf[:n])
+		}
 		if err != nil {
-			if err == io.EOF {
+			if err != io.EOF {
+				return fmt.Errorf("stream read error: %w", err)
+			}
+			atEOF = true
+			// At EOF, process any remaining pendingData then break
+			if pendingData == "" {
 				break
 			}
-			return fmt.Errorf("stream read error: %w", err)
+			// Ensure trailing data is processed by appending a newline
+			pendingData += "\n"
 		}
 
-		pendingData += string(buf[:n])
 		lines := strings.Split(pendingData, "\n")
 
 		// Keep the last incomplete line for next iteration
@@ -839,6 +848,41 @@ func (c *OpenAIClient) ChatStream(ctx context.Context, req ChatRequest, callback
 				}
 			}
 		}
+
+		if atEOF {
+			break
+		}
+	}
+
+	// If we exited the loop without hitting [DONE] (e.g. server closed connection),
+	// still build and emit any accumulated tool calls so they aren't silently dropped.
+	if len(toolCallBuilders) > 0 && len(toolCalls) == 0 {
+		for _, builder := range toolCallBuilders {
+			var input map[string]interface{}
+			if err := json.Unmarshal([]byte(builder.args.String()), &input); err != nil {
+				input = map[string]interface{}{"raw": builder.args.String()}
+			}
+			toolCalls = append(toolCalls, ToolCall{
+				ID:    builder.id,
+				Name:  builder.name,
+				Input: input,
+			})
+		}
+		stopReason := finishReason
+		if len(toolCalls) > 0 {
+			stopReason = "tool_use"
+		} else if stopReason == "stop" || stopReason == "" {
+			stopReason = "end_turn"
+		}
+		callback(StreamEvent{
+			Type: "done",
+			Data: DoneEvent{
+				StopReason:   stopReason,
+				ToolCalls:    toolCalls,
+				InputTokens:  inputTokens,
+				OutputTokens: outputTokens,
+			},
+		})
 	}
 
 	return nil
