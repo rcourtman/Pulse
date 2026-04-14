@@ -34,12 +34,45 @@ class TelemetryAdoptionReportTest(unittest.TestCase):
         self.assertEqual(identity.channel, "rc")
         self.assertFalse(identity.is_published_release)
 
+    def test_classify_row_version_uses_stored_identity_fields(self) -> None:
+        identity = report.classify_row_version(
+            {
+                "version": "6.0.0-rc.1",
+                "version_raw": "v6.0.0-rc.1-45-gABCDEF",
+                "version_channel": "rc",
+                "version_build": "git.45.gabcdef",
+                "version_is_development": 0,
+                "version_is_published_release": 1,
+            },
+            published_versions={"6.0.0-rc.1"},
+        )
+        self.assertEqual(identity.version, "6.0.0-rc.1")
+        self.assertEqual(identity.raw_version, "v6.0.0-rc.1-45-gABCDEF")
+        self.assertEqual(identity.channel, "rc")
+        self.assertEqual(identity.build, "git.45.gabcdef")
+        self.assertFalse(identity.is_development)
+        self.assertTrue(identity.is_published_release)
+
+    def test_classify_row_version_still_requires_real_published_release(self) -> None:
+        identity = report.classify_row_version(
+            {
+                "version": "6.0.0-rc.2",
+                "version_channel": "rc",
+                "version_is_published_release": 1,
+            },
+            published_versions={"6.0.0-rc.1"},
+        )
+        self.assertEqual(identity.version, "6.0.0-rc.2")
+        self.assertFalse(identity.is_published_release)
+
     def test_summarize_rows_uses_latest_install_state_and_splits_release_validation(self) -> None:
         now = datetime.now(timezone.utc).replace(microsecond=0)
         rows = [
             {
                 "install_id": "install-a",
                 "version": "v6.0.0-rc.1",
+                "version_channel": "rc",
+                "version_is_published_release": 1,
                 "platform": "binary",
                 "received_at": (now - timedelta(hours=2)).strftime("%Y-%m-%d %H:%M:%S"),
                 "event": "heartbeat",
@@ -47,6 +80,8 @@ class TelemetryAdoptionReportTest(unittest.TestCase):
             {
                 "install_id": "install-b",
                 "version": "v6.0.0-rc.2",
+                "version_channel": "rc",
+                "version_is_published_release": 1,
                 "platform": "docker",
                 "received_at": (now - timedelta(hours=5)).strftime("%Y-%m-%d %H:%M:%S"),
                 "event": "heartbeat",

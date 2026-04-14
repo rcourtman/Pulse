@@ -155,6 +155,11 @@ such as whether a paid license is active or whether any API tokens exist.
 Exact license tiers and exact API-token counts are not part of the canonical
 anonymous telemetry contract and may not be reintroduced without updating this
 trust boundary and the governed privacy disclosure together.
+That same rule also applies at the license-server ingest and storage boundary:
+server-side telemetry rows may preserve the canonical normalized version
+identity plus those same coarse booleans, but they must not retain legacy
+exact commercial tier or exact API-token count fields as first-class analytics
+dimensions just because older clients once sent them.
 That same anonymous telemetry contract also treats `install_id` as a rotating
 pseudonymous identifier, not a lifetime install handle. The runtime may keep a
 local rotating UUID so startup and heartbeat pings can still represent an

@@ -63,6 +63,7 @@ Every field is listed below with the reason it exists — nothing else leaves yo
 #### Server-side handling and retention
 
 - Telemetry pings are stored on the Pulse license server only for aggregate install/use analysis.
+- The license server stores only the same coarse telemetry fields listed above; it does not expand them into exact commercial tiers or exact API-token counts.
 - Telemetry rows older than **90 days** are purged automatically.
 - The license server uses client IP addresses transiently for abuse/rate limiting, but it does **not** store IP addresses in telemetry rows.
 

@@ -113,6 +113,87 @@ def classify_reported_version(raw: str, published_versions: set[str]) -> Classif
     )
 
 
+def parse_optional_bool(value: Any) -> bool | None:
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return value != 0
+    normalized = str(value).strip().lower()
+    if normalized == "":
+        return None
+    if normalized in {"1", "true", "t", "yes", "y"}:
+        return True
+    if normalized in {"0", "false", "f", "no", "n"}:
+        return False
+    return None
+
+
+def classify_row_version(row: dict[str, Any], published_versions: set[str]) -> ClassifiedVersion:
+    raw_version = str(row.get("version") or "")
+    identity = classify_reported_version(raw_version, published_versions)
+
+    stored_raw = str(row.get("version_raw") or "").strip()
+    stored_channel = str(row.get("version_channel") or "").strip().lower()
+    stored_build = str(row.get("version_build") or "").strip()
+    stored_is_development = parse_optional_bool(row.get("version_is_development"))
+    stored_is_published = parse_optional_bool(row.get("version_is_published_release"))
+
+    if stored_raw:
+        identity = ClassifiedVersion(
+            raw_version=stored_raw,
+            version=identity.version,
+            channel=identity.channel,
+            build=identity.build,
+            is_development=identity.is_development,
+            is_published_release=identity.is_published_release,
+        )
+    if stored_channel:
+        identity = ClassifiedVersion(
+            raw_version=identity.raw_version,
+            version=identity.version,
+            channel=stored_channel,
+            build=identity.build,
+            is_development=identity.is_development,
+            is_published_release=identity.is_published_release,
+        )
+    if stored_build:
+        identity = ClassifiedVersion(
+            raw_version=identity.raw_version,
+            version=identity.version,
+            channel=identity.channel,
+            build=stored_build,
+            is_development=identity.is_development,
+            is_published_release=identity.is_published_release,
+        )
+    if stored_is_development is not None:
+        identity = ClassifiedVersion(
+            raw_version=identity.raw_version,
+            version=identity.version,
+            channel=identity.channel,
+            build=identity.build,
+            is_development=stored_is_development,
+            is_published_release=identity.is_published_release,
+        )
+
+    if published_versions:
+        is_published_release = identity.version in published_versions
+    elif stored_is_published is not None:
+        is_published_release = stored_is_published
+    else:
+        is_published_release = identity.is_published_release
+
+    return ClassifiedVersion(
+        raw_version=identity.raw_version,
+        version=identity.version,
+        channel=identity.channel,
+        build=identity.build,
+        is_development=identity.is_development,
+        is_published_release=is_published_release,
+    )
+
+
 def parse_received_at(raw: str) -> datetime:
     return datetime.strptime(raw, "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
 
@@ -163,7 +244,7 @@ def fetch_rows_local(db_path: str, since_days: int) -> dict[str, Any]:
             dict(row)
             for row in conn.execute(
                 """
-                SELECT install_id, version, platform, received_at, event
+                SELECT *
                 FROM telemetry_pings
                 WHERE julianday(received_at) >= julianday('now') - ?
                 ORDER BY received_at DESC
@@ -193,7 +274,7 @@ db_stats_sql = (
     "FROM telemetry_pings"
 )
 rows_sql = (
-    "SELECT install_id, version, platform, received_at, event "
+    "SELECT * "
     "FROM telemetry_pings "
     "WHERE julianday(received_at) >= julianday('now') - ? "
     "ORDER BY received_at DESC"
@@ -246,7 +327,7 @@ def summarize_latest_install_windows(
             if current_time - received_at > limit:
                 continue
             platform = str(row.get("platform") or "unknown").strip() or "unknown"
-            identity = classify_reported_version(str(row.get("version") or ""), published_versions)
+            identity = classify_row_version(row, published_versions)
             version_split[identity.version] += 1
             platform_split[platform] += 1
             target = published_split if identity.is_published_release else non_release_split
