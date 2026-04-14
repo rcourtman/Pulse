@@ -3,7 +3,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { ensureAuthenticated, trackBrowserRequests } from "./helpers";
 
 const PATROL_BLOCK_REASON =
-  "Quickstart credits exhausted. Connect your API key to continue using AI Patrol.";
+  "Quickstart credits exhausted. Connect your API key to continue using Patrol.";
 
 function todayAt(hours: number, minutes: number): string {
   const value = new Date();

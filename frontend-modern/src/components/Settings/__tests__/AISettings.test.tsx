@@ -490,7 +490,7 @@ describe('AISettings quickstart enablement flow', () => {
       quickstart_credits_remaining: 0,
       quickstart_credits_available: false,
       quickstart_blocked_reason:
-        'Activate this install or start a trial to use AI Patrol quickstart. Otherwise connect your API key.',
+        'Activate this install or start a trial to use Patrol quickstart. Otherwise connect your API key.',
     });
 
     renderComponent();
@@ -507,7 +507,7 @@ describe('AISettings quickstart enablement flow', () => {
     ).toBeInTheDocument();
     expect(
       screen.getAllByText(
-        'Activate this install or start a trial to use AI Patrol quickstart. Otherwise connect your API key.',
+        'Activate this install or start a trial to use Patrol quickstart. Otherwise connect your API key.',
       ),
     ).toHaveLength(2);
     expect(screen.getByRole('button', { name: /start trial/i })).toBeInTheDocument();

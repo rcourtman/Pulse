@@ -148,7 +148,7 @@ describe('PatrolStatusBar', () => {
       <PatrolStatusBar
         refreshTrigger={1}
         runtimeState="blocked"
-        blockedReason="Quickstart credits exhausted. Connect your API key to continue using AI Patrol."
+        blockedReason="Quickstart credits exhausted. Connect your API key to continue using Patrol."
       />
     ));
 

@@ -3,11 +3,11 @@ import { expect, test, type Page } from "@playwright/test";
 import { ensureAuthenticated } from "./helpers";
 
 const QUICKSTART_EXHAUSTED_REASON =
-  "Quickstart credits exhausted. Connect your API key to continue using AI Patrol.";
+  "Quickstart credits exhausted. Connect your API key to continue using Patrol.";
 const QUICKSTART_ACTIVATION_REQUIRED_REASON =
-  "Activate this install or start a trial to use AI Patrol quickstart. Otherwise connect your API key.";
+  "Activate this install or start a trial to use Patrol quickstart. Otherwise connect your API key.";
 const QUICKSTART_OFFLINE_REASON =
-  "Quickstart credits require internet access. Connect your API key for offline AI Patrol.";
+  "Quickstart credits require internet access. Connect your API key to use Patrol offline.";
 
 type AISettingsPayload = {
   enabled: boolean;

@@ -660,7 +660,7 @@ describe('AIIntelligence entitlement gating', () => {
         quickstart_credits_total: 25,
         quickstart_credits_remaining: 0,
         blocked_reason:
-          'Quickstart credits exhausted. Connect your API key to continue using AI Patrol.',
+          'Quickstart credits exhausted. Connect your API key to continue using Patrol.',
         last_patrol_at: '2026-03-12T09:57:00Z',
       }),
     );
@@ -703,7 +703,7 @@ describe('AIIntelligence entitlement gating', () => {
     expect(screen.getAllByText('Patrol paused').length).toBeGreaterThan(0);
     expect(
       screen.getAllByText(
-        'Quickstart credits exhausted. Connect your API key to continue using AI Patrol.',
+        'Quickstart credits exhausted. Connect your API key to continue using Patrol.',
       ).length,
     ).toBeGreaterThan(0);
     expect(screen.queryByText(/Health A · 100\/100/)).not.toBeInTheDocument();
@@ -770,7 +770,7 @@ describe('AIIntelligence entitlement gating', () => {
         quickstart_credits_total: 25,
         quickstart_credits_remaining: 0,
         blocked_reason:
-          'Activate this install or start a trial to use AI Patrol quickstart. Otherwise connect your API key.',
+          'Activate this install or start a trial to use Patrol quickstart. Otherwise connect your API key.',
       }),
     );
 
@@ -780,7 +780,7 @@ describe('AIIntelligence entitlement gating', () => {
       expect(getPatrolStatusMock).toHaveBeenCalled();
       expect(
         screen.getAllByText(
-          'Activate this install or start a trial to use AI Patrol quickstart. Otherwise connect your API key.',
+          'Activate this install or start a trial to use Patrol quickstart. Otherwise connect your API key.',
         ).length,
       ).toBeGreaterThan(0);
     });

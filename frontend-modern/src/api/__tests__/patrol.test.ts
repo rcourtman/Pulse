@@ -63,14 +63,14 @@ describe('patrol api', () => {
     apiFetchJSONMock.mockResolvedValueOnce({
       runtime_state: 'blocked',
       blocked_reason:
-        'Quickstart credits exhausted. Connect your API key to continue using AI Patrol.',
+        'Quickstart credits exhausted. Connect your API key to continue using Patrol.',
       healthy: false,
     } as any);
 
     await expect(getPatrolStatus()).resolves.toMatchObject({
       runtime_state: 'blocked',
       blocked_reason:
-        'Quickstart credits exhausted. Connect your API key to continue using AI Patrol.',
+        'Quickstart credits exhausted. Connect your API key to continue using Patrol.',
       healthy: false,
     });
   });
@@ -79,14 +79,14 @@ describe('patrol api', () => {
     apiFetchJSONMock.mockResolvedValueOnce({
       runtime_state: 'blocked',
       blocked_reason:
-        'Activate this install or start a trial to use AI Patrol quickstart. Otherwise connect your API key.',
+        'Activate this install or start a trial to use Patrol quickstart. Otherwise connect your API key.',
       healthy: false,
     } as any);
 
     await expect(getPatrolStatus()).resolves.toMatchObject({
       runtime_state: 'blocked',
       blocked_reason:
-        'Activate this install or start a trial to use AI Patrol quickstart. Otherwise connect your API key.',
+        'Activate this install or start a trial to use Patrol quickstart. Otherwise connect your API key.',
       healthy: false,
     });
   });
@@ -95,7 +95,7 @@ describe('patrol api', () => {
     apiFetchJSONMock.mockResolvedValueOnce({
       runtime_state: 'blocked',
       blocked_reason:
-        'Activate this install or start a trial to use AI Patrol quickstart. Otherwise connect your API key.',
+        'Activate this install or start a trial to use Patrol quickstart. Otherwise connect your API key.',
       healthy: false,
       quickstart_credits_total: 0,
       quickstart_credits_remaining: 0,
@@ -105,7 +105,7 @@ describe('patrol api', () => {
     await expect(getPatrolStatus()).resolves.toMatchObject({
       runtime_state: 'blocked',
       blocked_reason:
-        'Activate this install or start a trial to use AI Patrol quickstart. Otherwise connect your API key.',
+        'Activate this install or start a trial to use Patrol quickstart. Otherwise connect your API key.',
       healthy: false,
       quickstart_credits_total: 0,
       quickstart_credits_remaining: 0,

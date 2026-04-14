@@ -96,11 +96,11 @@ describe('patrolEmptyStatePresentation', () => {
       getPatrolFindingsEmptyState({
         filter: 'active',
         runtimeState: 'blocked',
-        blockedReason: 'Quickstart credits exhausted. Connect your API key to continue using AI Patrol.',
+        blockedReason: 'Quickstart credits exhausted. Connect your API key to continue using Patrol.',
       }),
     ).toEqual({
       title: 'Patrol paused',
-      body: 'Quickstart credits exhausted. Connect your API key to continue using AI Patrol.',
+      body: 'Quickstart credits exhausted. Connect your API key to continue using Patrol.',
       tone: 'warning',
     });
   });

@@ -65,13 +65,13 @@ describe('aiSettingsPresentation', () => {
         quickstartCreditsRemaining: 0,
         quickstartCreditsTotal: 0,
         quickstartBlockedReason:
-          'Activate this install or start a trial to use AI Patrol quickstart. Otherwise connect your API key.',
+          'Activate this install or start a trial to use Patrol quickstart. Otherwise connect your API key.',
       }),
     ).toEqual({
       containerClassName: 'bg-amber-50 dark:bg-amber-900 text-amber-800 dark:text-amber-200',
       dotClassName: 'bg-amber-400',
       summary:
-        'Activate this install or start a trial to use AI Patrol quickstart. Otherwise connect your API key.',
+        'Activate this install or start a trial to use Patrol quickstart. Otherwise connect your API key.',
     });
   });
 

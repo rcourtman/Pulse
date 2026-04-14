@@ -1,9 +1,9 @@
 /**
- * Journey 07: AI Patrol → Finding → Approval → Fix → Verify Resolved
+ * Journey 07: Patrol → Finding → Approval → Fix → Verify Resolved
  *
  * L12 score-7 criterion: closed-loop patrol lifecycle.
  *
- * Validates the full AI Patrol journey:
+ * Validates the full Patrol journey:
  *   1. Patrol status endpoint is healthy
  *   2. Patrol findings endpoint returns data
  *   3. Force patrol run triggers and completes
@@ -13,7 +13,7 @@
  *   7. Investigation endpoint responds for finding
  *   8. Finding lifecycle: acknowledge → resolve (closed-loop)
  *   9. Suppression and dismissed findings endpoints respond
- *  10. AI patrol page renders in UI
+ *  10. Patrol page renders in UI
  *
  * Environment: local dev (localhost:7655) with mock mode enabled.
  * Mock mode generates deterministic resources that patrol can inspect.
@@ -31,7 +31,7 @@ import {
 let mockModeWasEnabled: boolean | null = null;
 
 test.describe.serial(
-  'Journey: AI Patrol → Finding → Approval → Fix → Verify Resolved',
+  'Journey: Patrol → Finding → Approval → Fix → Verify Resolved',
   () => {
     test.beforeAll(async ({ browser }) => {
       const ctx = await browser.newContext();
@@ -360,7 +360,7 @@ test.describe.serial(
       // Returns JSON array of dismissed findings or null when empty
     });
 
-    test('AI patrol page renders in UI', async ({ page }, testInfo) => {
+    test('Patrol page renders in UI', async ({ page }, testInfo) => {
       test.skip(
         testInfo.project.name.startsWith('mobile-'),
         'Desktop journey',
@@ -368,9 +368,9 @@ test.describe.serial(
       await ensureAuthenticated(page);
 
       await page.goto('/patrol');
-      await page.waitForURL('**/ai**');
+      await page.waitForURL('**/patrol**');
 
-      // Wait for the AI/Intelligence page main content to render.
+      // Wait for the Patrol page main content to render.
       // Scope to <main> to avoid false positives from nav tab labels.
       // Use waitForFunction (browser-context) for reliability — Playwright
       // locator chains can miss deeply nested elements during hydration.
