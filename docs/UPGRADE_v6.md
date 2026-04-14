@@ -133,6 +133,17 @@ Pulse v6 uses the activation/grant model for active licensing, but it can migrat
 - If the exchange service cannot complete the migration, retry from the v6 license panel or use the self-serve retrieval flow to fetch the current v6 activation key. Email is only a backup copy of that key.
 - Existing active recurring v5 customers keep their grandfathered recurring price and uncapped monitored-system and guest capacity until cancellation. If they cancel and later return, current v6 pricing and limits apply.
 
+#### Paid Upgrade Truth Table
+
+When an existing paid user asks what changes for them specifically, use this rule set:
+
+- Existing active recurring Pulse Pro subscribers from v5 or earlier keep their current recurring price and uncapped monitored-system plus guest capacity while the subscription remains continuously active.
+- Existing lifetime customers remain permanently valid and uncapped.
+- Former recurring customers who already canceled, or who cancel and later return, do not resume the old grandfathered pricing or uncapped capacity automatically; they re-enter on current public v6 pricing and limits.
+- New self-hosted v6 purchases use the current Relay / Pro / Pro+ plan caps.
+
+If an active recurring subscriber or lifetime customer sees a new monitored-system or guest cap after moving to v6, treat that as a regression, not as expected upgrade behavior.
+
 Practical recommendation:
 
 - Before upgrading, keep console access available so you can retry activation from the v6 license panel if the exchange service is temporarily unavailable.

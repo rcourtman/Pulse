@@ -109,7 +109,7 @@ test.describe("AI settings provider setup", () => {
     await page.goto("/settings/system-ai", { waitUntil: "domcontentloaded" });
     await expect(page.getByRole("heading", { name: "Assistant & Patrol", level: 1 })).toBeVisible();
 
-    await page.getByRole("button", { name: /enable ai services/i }).click();
+    await page.getByRole("button", { name: /enable assistant and patrol/i }).click();
     const setupDialog = page.getByRole("dialog", { name: "Set up Pulse Assistant" });
     await expect(setupDialog.getByText("Set Up Pulse Assistant")).toBeVisible();
 

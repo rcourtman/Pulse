@@ -54,11 +54,28 @@ host or VM, a cloned lab machine, or a separate isolated agent installation.
 
 Yes. That is the recommended RC posture.
 
-### What happens to a Pulse v5 Pro or Lifetime license?
+### What happens to an existing paid Pulse Pro customer in v6?
 
 Pulse v6 can migrate valid Pulse v5 Pro or Lifetime licensing into the v6
 activation model. If the auto-exchange does not complete, retry from the v6
 license panel using the existing key.
+
+Use this cohort breakdown:
+
+- Existing active recurring monthly or annual subscribers from v5 or earlier:
+  keep the current recurring price and uncapped monitored-system plus guest
+  capacity while the subscription remains continuously active.
+- Existing lifetime customers:
+  remain permanently valid and uncapped.
+- Former recurring subscribers who already canceled or later lapse:
+  any later return uses current public v6 pricing and caps rather than
+  resuming the old grandfathered terms.
+- New self-hosted v6 purchasers:
+  take the current Relay / Pro / Pro+ caps.
+
+If a currently active recurring subscriber or a lifetime customer sees a
+bounded monitored-system or guest cap in v6, treat that as a product bug, not
+as intended policy.
 
 ### Will old bookmarks and familiar v5 pages still work?
 
@@ -112,6 +129,8 @@ Escalate without asking the user to keep experimenting when the report involves:
 - duplicate or missing agent identity after a v5-to-v6 upgrade
 - monitoring or reporting that stops entirely after upgrade
 - license migration failure that blocks paid functionality unexpectedly
+- an active recurring subscriber or lifetime customer seeing an unexpected
+  monitored-system or guest cap
 - rollback failure or inability to return to the previous stable state
 - data-loss, destructive behavior, or security-sensitive regressions
 
