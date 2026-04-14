@@ -257,7 +257,7 @@ export function getPatrolAssessmentAction(args: {
   const classified = classifyActiveFindings(args.activeFindings);
   if (classified.infrastructureTotal === 0 && classified.runtimeTotal > 0) {
     return {
-      label: 'Open AI Settings',
+      label: 'Open Patrol provider settings',
       href: '/settings/system-ai',
     };
   }

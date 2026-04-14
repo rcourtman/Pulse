@@ -108,7 +108,7 @@ export const PatrolStatusBar: Component<PatrolStatusBarProps> = (props) => {
           <div class="flex items-center gap-1.5 mb-1.5 pb-1.5 border-b border-red-200 dark:border-red-800">
             <AlertTriangleIcon class="w-3.5 h-3.5 text-red-500" />
             <span class="text-red-600 dark:text-red-400 font-medium text-xs">
-              AI circuit breaker tripped — Patrol paused after{' '}
+              Provider circuit breaker tripped — Patrol paused after{' '}
               {circuitBreaker()!.consecutive_failures} consecutive failures
             </span>
           </div>
@@ -117,7 +117,7 @@ export const PatrolStatusBar: Component<PatrolStatusBarProps> = (props) => {
           <div class="flex items-center gap-1.5 mb-1.5 pb-1.5 border-b border-amber-200 dark:border-amber-800">
             <AlertCircleIcon class="w-3.5 h-3.5 text-amber-500" />
             <span class="text-amber-600 dark:text-amber-400 font-medium text-xs">
-              AI circuit breaker recovering — testing with next patrol run
+              Provider circuit breaker recovering — testing with next patrol run
             </span>
           </div>
         </Show>

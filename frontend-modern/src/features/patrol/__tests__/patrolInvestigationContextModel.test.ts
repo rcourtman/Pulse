@@ -22,7 +22,7 @@ describe('patrolInvestigationContextModel', () => {
       correlationCount: 2,
       governedResourceCount: 4,
       hasContext: true,
-      summaryText: '1 recent change · 2 correlations · 4 governed resources',
+      summaryText: '1 recent change · 2 correlations · 4 policy-covered resources',
     });
   });
 

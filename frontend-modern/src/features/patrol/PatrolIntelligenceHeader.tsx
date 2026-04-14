@@ -185,7 +185,7 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
                 <div class="grid grid-cols-2 gap-4">
                   <div class="space-y-1.5">
                     <label class="text-xs font-semibold uppercase tracking-wider text-muted">
-                      AI Model
+                      Provider model
                     </label>
                     <select
                       ref={state.setPatrolModelSelectRef}

@@ -30,7 +30,7 @@ export function buildPatrolInvestigationContextSummary(
   }
   if (governedResourceCount > 0) {
     parts.push(
-      `${governedResourceCount} governed resource${governedResourceCount === 1 ? '' : 's'}`,
+      `${governedResourceCount} policy-covered resource${governedResourceCount === 1 ? '' : 's'}`,
     );
   }
 

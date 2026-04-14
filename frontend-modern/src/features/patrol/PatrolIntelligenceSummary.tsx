@@ -91,13 +91,13 @@ export function PatrolIntelligenceSummary(props: { state: PatrolIntelligenceStat
 
     if (circuitBreaker.state === 'open') {
       return {
-        message: `AI circuit breaker tripped after ${circuitBreaker.consecutive_failures} consecutive failures.`,
+        message: `Provider circuit breaker tripped after ${circuitBreaker.consecutive_failures} consecutive failures.`,
         toneClass: 'text-red-600 dark:text-red-400',
       };
     }
 
     return {
-      message: 'AI circuit breaker recovering; the next Patrol run is a live test.',
+      message: 'Provider circuit breaker recovering; the next Patrol run is a live test.',
       toneClass: 'text-amber-600 dark:text-amber-400',
     };
   });
@@ -300,7 +300,7 @@ export function PatrolIntelligenceSummary(props: { state: PatrolIntelligenceStat
 
                     <div class="p-3">
                       <p class="text-xs font-semibold uppercase tracking-[0.16em] text-muted">
-                        Activity
+                        Latest activity
                       </p>
                       <Show
                         when={latestRun()}

@@ -606,6 +606,26 @@ export function usePatrolIntelligenceState() {
 
   const activePatrolFindings = () =>
     allPatrolFindings().filter((finding) => finding.status === 'active');
+  const shouldSurfaceInvestigationContext = createMemo(() => {
+    if (!hasInvestigationContext()) {
+      return false;
+    }
+
+    if (selectedRun()) {
+      return true;
+    }
+
+    if (activePatrolFindings().length > 0) {
+      return true;
+    }
+
+    const overallHealth = intelligenceSummary()?.overall_health;
+    if (!overallHealth) {
+      return false;
+    }
+
+    return overallHealth.grade !== 'A' || overallHealth.factors.length > 0;
+  });
   const findingsTabBadgeFindings = createMemo(() => {
     const snapshotFindings = selectedRunPatrolFindings();
     if (snapshotFindings === null) {
@@ -738,6 +758,7 @@ export function usePatrolIntelligenceState() {
     showAdvancedSettings,
     showBlockedBanner,
     showInvestigationContext,
+    shouldSurfaceInvestigationContext,
     startingTrial,
     summaryStats,
     triggerPatrolDisabledReason,

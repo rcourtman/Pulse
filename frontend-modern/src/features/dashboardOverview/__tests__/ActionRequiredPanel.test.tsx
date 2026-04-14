@@ -62,7 +62,7 @@ describe('ActionRequiredPanel', () => {
     expect(actionRequiredPanelSource).toContain('{title}');
   });
 
-  it('uses Open AI Settings instead of rejected generic controls for Patrol runtime findings', () => {
+  it('uses the Patrol provider settings action instead of rejected generic controls for Patrol runtime findings', () => {
     expect(
       getFindingTitlePresentation({
         resourceId: 'ai-service',
@@ -79,7 +79,7 @@ describe('ActionRequiredPanel', () => {
         title: 'Pulse Patrol: Insufficient API credits',
       }),
     ).toEqual({
-      label: 'Open AI Settings',
+      label: 'Open Patrol provider settings',
       href: '/settings/system-ai',
     });
     expect(

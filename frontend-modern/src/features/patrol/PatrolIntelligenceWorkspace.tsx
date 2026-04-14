@@ -123,15 +123,16 @@ export function PatrolIntelligenceWorkspace(props: { state: PatrolIntelligenceSt
         />
       </Show>
 
-      <Show when={state.hasInvestigationContext()}>
-        <section class="rounded-md border border-border-subtle bg-base/90 p-3">
+      <Show when={state.shouldSurfaceInvestigationContext()}>
+        <section class="rounded-md border border-border-subtle bg-surface-alt/40 p-3">
           <div class="flex flex-wrap items-start justify-between gap-3">
             <div>
               <p class="text-xs font-semibold uppercase tracking-[0.16em] text-muted">
-                Investigation context
+                Supporting context
               </p>
               <p class="mt-1 text-sm text-muted">
-                Secondary change and policy signals for deeper investigation.
+                Recent changes, learned correlations, and policy coverage that may explain
+                findings or incomplete verification.
               </p>
               <Show when={state.investigationContextSummary()}>
                 <p class="mt-1 text-xs text-base-content">{state.investigationContextSummary()}</p>
@@ -143,7 +144,7 @@ export function PatrolIntelligenceWorkspace(props: { state: PatrolIntelligenceSt
               onClick={() => state.setShowInvestigationContext((value) => !value)}
               class="inline-flex items-center rounded-md border border-border bg-surface px-3 py-1.5 text-xs font-medium text-base-content transition-colors hover:bg-surface-hover"
             >
-              {state.showInvestigationContext() ? 'Hide context' : 'Show context'}
+              {state.showInvestigationContext() ? 'Hide supporting context' : 'View supporting context'}
             </button>
           </div>
 
@@ -163,13 +164,13 @@ export function PatrolIntelligenceWorkspace(props: { state: PatrolIntelligenceSt
               <div class="space-y-4">
                 <Show when={state.correlations().length > 0}>
                   <ResourceCorrelationSummary
-                    title="Correlations"
+                    title="Learned correlations"
                     correlations={state.correlations()}
                     summaryText={`${state.correlationTotal()} total`}
                   />
                 </Show>
 
-                <ResourcePolicySummary posture={state.policyPosture()} title="Policy posture" />
+                <ResourcePolicySummary posture={state.policyPosture()} title="Policy coverage" />
               </div>
             </div>
           </Show>

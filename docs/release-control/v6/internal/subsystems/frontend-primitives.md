@@ -280,6 +280,22 @@ work extends shared components instead of creating new local variants.
     explicit disabled/null inputs to shared data owners when the selector is
     hidden instead of hydrating background summary data for chrome the page is
     not rendering.
+18. Keep Patrol shell composition and product-first provider vocabulary on the
+    shared feature-presentation boundary.
+    `frontend-modern/src/features/patrol/PatrolIntelligenceSummary.tsx`,
+    `frontend-modern/src/features/patrol/PatrolIntelligenceWorkspace.tsx`,
+    `frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx`,
+    `frontend-modern/src/features/patrol/PatrolIntelligenceBanners.tsx`,
+    `frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts`,
+    `frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts`,
+    and `frontend-modern/src/components/patrol/PatrolStatusBar.tsx` must keep
+    Patrol assessment, verification, and findings primary; surface recent
+    changes, learned correlations, and policy coverage only as explicitly
+    secondary supporting context when degraded or incomplete verification,
+    active findings, or selected-run investigation makes that evidence
+    relevant; and use Patrol/provider wording for the shared provider settings,
+    provider model, and provider circuit-breaker affordances instead of
+    generic AI labels inside Patrol-owned shells.
 
 ## Forbidden Paths
 
@@ -1560,6 +1576,12 @@ should present alert-triggered and anomaly-triggered Patrol toggles as distinct
 controls, and `frontend-modern/src/components/patrol/PatrolStatusBar.tsx`
 should render compact activity breakdown and scoped-trigger-state copy from the
 shared transport rather than leaving busy Patrol periods as unexplained noise.
+That same Patrol-facing primitive vocabulary must stay product-first. Patrol
+summary actions, runtime banners, circuit-breaker copy, and Patrol
+configuration controls may point at the shared provider settings route or model
+catalog, but they should describe those controls as Patrol/provider surfaces
+rather than falling back to generic `AI Settings`, `AI Model`, or `AI circuit
+breaker` copy inside the Patrol shell itself.
 On the main Patrol page, though, that same governed activity context belongs
 inside `frontend-modern/src/features/patrol/PatrolIntelligenceSummary.tsx`
 alongside the verification readout rather than as a second full-width band
@@ -1570,6 +1592,12 @@ That same composition rule applies to `frontend-modern/src/features/patrol/Patro
 once the summary shell carries the operator-facing verification and activity
 story, the workspace should move directly into findings and run history instead
 of repeating that same runtime context through a second pre-tab status strip.
+Supporting context follows that same composition rule. Recent changes, learned
+correlations, and policy coverage belong behind an explicitly secondary
+supporting-context disclosure that only appears when Patrol has active
+findings, degraded or incomplete verification, or a selected run that needs
+explanation; healthy fully verified Patrol states must not advertise that
+supporting evidence as a peer workflow.
 
 Shared primitive consumers that split status-dot tone and status-text tone
 must now keep both values routed through the same exported presentation helper.

@@ -403,11 +403,20 @@ describe('AIIntelligence entitlement gating', () => {
     intelligenceState.summary = {
       timestamp: '2026-03-01T00:00:00Z',
       overall_health: {
-        score: 91,
-        grade: 'A',
+        score: 63,
+        grade: 'C',
         trend: 'stable',
-        factors: [],
-        prediction: 'Stable',
+        factors: [
+          {
+            name: 'Patrol coverage incomplete',
+            impact: -0.35,
+            description:
+              'Patrol coverage is incomplete: recent activity was limited to scoped runs and ended with errors, so overall health is not fully verified.',
+            category: 'coverage',
+          },
+        ],
+        prediction:
+          'Patrol coverage is incomplete: recent activity was limited to scoped runs and ended with errors, so overall health is not fully verified.',
       },
       findings_count: {
         critical: 0,
@@ -465,13 +474,13 @@ describe('AIIntelligence entitlement gating', () => {
     render(() => <AIIntelligence />);
 
     await waitFor(() => {
-      expect(screen.getByText('Investigation context')).toBeInTheDocument();
+      expect(screen.getByText('Supporting context')).toBeInTheDocument();
     });
 
-    expect(screen.queryByRole('heading', { name: 'Correlations' })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Show context' }));
+    expect(screen.queryByRole('heading', { name: 'Learned correlations' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'View supporting context' }));
     await waitFor(() => {
-      expect(screen.getByRole('heading', { name: 'Correlations' })).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Learned correlations' })).toBeInTheDocument();
     });
 
     expect(screen.getByText('2 total')).toBeInTheDocument();
@@ -635,46 +644,10 @@ describe('AIIntelligence entitlement gating', () => {
       expect(screen.getByText('No active issues detected')).toBeInTheDocument();
     });
 
-    const findingsPanel = screen.getByTestId('findings-panel');
-    const contextHeading = screen.getByText('Investigation context');
-    expect(
-      Boolean(
-        findingsPanel.compareDocumentPosition(contextHeading) & Node.DOCUMENT_POSITION_FOLLOWING,
-      ),
-    ).toBe(true);
-
     expect(screen.getByText(/Health A · 91\/100/)).toBeInTheDocument();
-    expect(screen.getByText('Investigation context')).toBeInTheDocument();
-    expect(screen.getByText('1 recent change · 4 governed resources')).toBeInTheDocument();
+    expect(screen.queryByText('Supporting context')).not.toBeInTheDocument();
+    expect(screen.queryByText('1 recent change · 4 policy-covered resources')).not.toBeInTheDocument();
     expect(screen.queryByText('Policy posture')).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Show context' }));
-
-    await waitFor(() => {
-      expect(screen.getByText('Policy posture')).toBeInTheDocument();
-    });
-
-    expect(screen.getByText('Config update: Updated guest configuration')).toBeInTheDocument();
-    expect(screen.getByText('Updated guest configuration')).toBeInTheDocument();
-    expect(
-      screen.getByRole('link', { name: 'Open resource vm-100 in Infrastructure' }),
-    ).toHaveAttribute('href', '/infrastructure?resource=vm-100');
-    expect(
-      screen.getByRole('link', { name: 'Open related resource agent-1 in Infrastructure' }),
-    ).toHaveAttribute('href', '/infrastructure?resource=agent-1');
-    expect(screen.queryByText('Derived signal coverage')).not.toBeInTheDocument();
-    expect(screen.queryByText(/baselined/)).not.toBeInTheDocument();
-    expect(screen.getByText('Recent changes')).toBeInTheDocument();
-    expect(screen.getByText('4 governed resources')).toBeInTheDocument();
-    expect(screen.getByText('Public')).toBeInTheDocument();
-    expect(screen.getByText('Internal')).toBeInTheDocument();
-    expect(screen.getByText('Sensitive')).toBeInTheDocument();
-    expect(screen.getByText('Restricted')).toBeInTheDocument();
-    expect(screen.getByText('Cloud Summary')).toBeInTheDocument();
-    expect(screen.getByText('Local First')).toBeInTheDocument();
-    expect(screen.getByText('Local Only')).toBeInTheDocument();
-    expect(screen.getByText('Hostname 2')).toBeInTheDocument();
-    expect(screen.getByText('IP Address 1')).toBeInTheDocument();
   });
 
   it('does not present a healthy patrol summary when patrol is blocked on exhausted quickstart credits', async () => {
@@ -1123,11 +1096,11 @@ describe('AIIntelligence entitlement gating', () => {
         ),
       ).toBeInTheDocument();
       expect(screen.getByText('Runtime issues')).toBeInTheDocument();
-      expect(screen.getByText('Activity')).toBeInTheDocument();
+      expect(screen.getByText('Latest activity')).toBeInTheDocument();
     });
 
     expect(screen.getByText(/Assessment C · 60\/100/)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Open AI Settings' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Open Patrol provider settings' })).toHaveAttribute(
       'href',
       '/settings/system-ai',
     );

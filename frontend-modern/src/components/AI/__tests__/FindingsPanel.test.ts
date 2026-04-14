@@ -308,7 +308,7 @@ describe('aiFindingPresentation', () => {
   });
 
   describe('findingPrimaryActionPresentation', () => {
-    it('offers AI settings as the primary action for Patrol runtime findings', () => {
+    it('offers Patrol provider settings as the primary action for Patrol runtime findings', () => {
       expect(
         getFindingPrimaryActionPresentation({
           resourceId: 'ai-service',
@@ -316,12 +316,12 @@ describe('aiFindingPresentation', () => {
           title: 'Pulse Patrol: Insufficient API credits',
         }),
       ).toEqual({
-        label: 'Open AI Settings',
+        label: 'Open Patrol provider settings',
         href: '/settings/system-ai',
       });
     });
 
-    it('does not expose AI settings as the primary action for infrastructure findings', () => {
+    it('does not expose Patrol provider settings as the primary action for infrastructure findings', () => {
       expect(
         getFindingPrimaryActionPresentation({
           resourceId: 'vm-101',
@@ -339,7 +339,7 @@ describe('aiFindingPresentation', () => {
           title: 'Insufficient API credits',
         }),
       ).toEqual({
-        label: 'Open AI Settings',
+        label: 'Open Patrol provider settings',
         href: '/settings/system-ai',
       });
     });

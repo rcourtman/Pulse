@@ -87,7 +87,7 @@ export function PatrolIntelligenceBanners(props: { state: PatrolIntelligenceStat
                 class="inline-flex items-center justify-center gap-2 px-3 py-1.5 text-xs font-semibold text-amber-900 dark:text-amber-100 bg-amber-100 dark:bg-amber-900 border border-amber-200 dark:border-amber-700 rounded-md hover:bg-amber-200 dark:hover:bg-amber-900 transition-colors"
               >
                 <SettingsIcon class="w-3.5 h-3.5" />
-                Open AI Settings
+                Open Patrol provider settings
               </a>
               <Show when={!presentationPolicyHidesUpgradePrompts() && state.licenseRequired()}>
                 <UpgradeLink

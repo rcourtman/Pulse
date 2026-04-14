@@ -221,9 +221,9 @@ assessment copy should name the concrete runtime failure, such as
 runtime findings.
 That same runtime-owned assessment must expose the fix path directly. When the
 primary Patrol issue is a Patrol runtime/provider problem rather than an
-infrastructure finding, the summary card should offer a direct `Open AI
-Settings` action instead of making the operator dig through the findings list
-to discover where to correct provider configuration.
+infrastructure finding, the summary card should offer a direct `Open Patrol
+provider settings` action instead of making the operator dig through the
+findings list to discover where to correct provider configuration.
 That same runtime-versus-infrastructure distinction should route through the
 shared finding-presentation helper instead of being re-inferred separately by
 the summary card and the findings list. The active finding row should surface
@@ -243,14 +243,14 @@ rather than repeating the product prefix as `Pulse Patrol: Insufficient API
 credits` once the surrounding UI already makes the Patrol context explicit.
 That same finding presentation contract should own the primary remediation path
 for Patrol-owned runtime findings as well. Expanded runtime-finding rows should
-offer the same direct `Open AI Settings` action that the top assessment uses,
-instead of falling back to only generic acknowledge, snooze, or dismiss
-controls.
+offer the same direct `Open Patrol provider settings` action that the top
+assessment uses, instead of falling back to only generic acknowledge, snooze,
+or dismiss controls.
 That same contract must fail closed on manual lifecycle controls too. Patrol
 runtime findings are Patrol-owned impairment signals, not ordinary estate
 findings, so the findings list must not offer generic acknowledge, snooze,
 dismiss, resolve, or suppress controls for them. The correct operator path is
-to fix AI/provider configuration and rerun Patrol, optionally adding context
+to fix Patrol provider configuration and rerun Patrol, optionally adding context
 notes, rather than hiding the runtime issue.
 That same runtime-versus-infrastructure split must carry through the summary
 metrics strip as well. When Patrol-owned runtime issues are active, the
@@ -306,10 +306,13 @@ recent activity mix explicitly instead of leaving operators to reconcile a
 `Recently verified` headline with a busy Patrol strip elsewhere on the page.
 Fix-verification checks belong to that same explanation layer as targeted
 activity, not as evidence of a fresh full-estate sweep.
-The same hierarchy applies to investigation context. Correlations, recent
+The same hierarchy applies to supporting context. Correlations, recent
 changes, and policy posture are secondary evidence for deeper investigation, so
-the `Investigation context` section belongs beneath the primary findings/history
+the supporting-context disclosure belongs beneath the primary findings/history
 workspace rather than inside the assessment card itself.
+When Patrol is healthy and fully verified, that supporting-context disclosure
+should stay out of the main page flow instead of advertising a second parallel
+Patrol workflow with nothing active to explain.
 That same operational context belongs inside the same secondary status area as
 verification, not as a separate full-width strip that competes with the
 findings workspace. `frontend-modern/src/features/patrol/PatrolIntelligenceSummary.tsx`
@@ -572,10 +575,10 @@ card, so the data-governance posture counts stay rendered from one governed
 frontend component on the page instead of being duplicated in the resource
 drawer.
 That same Patrol summary surface now keeps health and findings primary while
-rendering recent changes, learned correlations, and policy posture as
-secondary investigation context behind an explicit disclosure, so expansion
-lane concepts stay available for deeper investigation without reading as the
-headline Patrol product story.
+rendering recent changes, learned correlations, and policy posture only as
+supporting context behind an explicit disclosure, so expansion lane concepts
+stay available for deeper investigation without reading as the headline Patrol
+product story.
 That secondary investigation-context summary now also routes through the
 dedicated `frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts`
 owner, so the Patrol hook composes one canonical payload-to-summary derivation

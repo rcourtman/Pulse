@@ -180,7 +180,7 @@ describe('getPatrolSummaryPresentation', () => {
     ).toBe('Assessment');
   });
 
-  it('offers a direct AI settings action for Patrol runtime issues', () => {
+  it('offers a direct Patrol provider settings action for Patrol runtime issues', () => {
     expect(
       getPatrolAssessmentAction({
         activeFindings: [
@@ -194,7 +194,7 @@ describe('getPatrolSummaryPresentation', () => {
         ] as never,
       }),
     ).toEqual({
-      label: 'Open AI Settings',
+      label: 'Open Patrol provider settings',
       href: '/settings/system-ai',
     });
   });

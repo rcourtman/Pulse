@@ -410,7 +410,7 @@ export const getFindingPrimaryActionPresentation = (
 ): FindingPrimaryActionPresentation | undefined => {
   if (isPatrolRuntimeFinding(finding)) {
     return {
-      label: 'Open AI Settings',
+      label: 'Open Patrol provider settings',
       href: '/settings/system-ai',
     };
   }
