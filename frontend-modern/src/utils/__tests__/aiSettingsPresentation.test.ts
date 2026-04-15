@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  AI_SETTINGS_PANEL_DESCRIPTION,
+  AI_SETTINGS_PANEL_TITLE,
   getAICredentialsClearErrorMessage,
   getAIOAuthErrorMessage,
   getAIChatSessionsEmptyState,
@@ -16,9 +18,26 @@ import {
   getAISettingsRetryLabel,
   getAISettingsSaveErrorMessage,
   getAISettingsToggleErrorMessage,
+  getAISettingsWorkloadDiscoveryHelpContent,
+  getAISettingsWorkloadDiscoverySummary,
 } from '@/utils/aiSettingsPresentation';
 
 describe('aiSettingsPresentation', () => {
+  it('returns the canonical assistant and patrol shell framing copy', () => {
+    expect(AI_SETTINGS_PANEL_TITLE).toBe('Assistant & Patrol');
+    expect(AI_SETTINGS_PANEL_DESCRIPTION).toBe(
+      'Configure providers and models for Pulse Assistant and Patrol.',
+    );
+    expect(getAISettingsWorkloadDiscoveryHelpContent()).toEqual({
+      title: 'What is workload discovery?',
+      description:
+        'Workload discovery scans your VMs, containers, and container runtimes to identify running services, versions, and access details. Pulse Assistant uses that context for concrete troubleshooting guidance, and Patrol uses it to verify the right workloads continuously.',
+    });
+    expect(getAISettingsWorkloadDiscoverySummary()).toEqual({
+      text: 'Workload discovery gives Pulse Assistant and Patrol concrete service context, so chat responses and verification findings can reference real services and commands instead of generic advice.',
+    });
+  });
+
   it('returns the canonical provider-backed ready presentation', () => {
     expect(
       getAISettingsReadinessPresentation({

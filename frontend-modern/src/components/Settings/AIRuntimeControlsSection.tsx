@@ -10,6 +10,10 @@ import {
   getAIControlLevelDescription,
   getAIControlLevelPanelClass,
 } from '@/utils/aiControlLevelPresentation';
+import {
+  getAISettingsWorkloadDiscoveryHelpContent,
+  getAISettingsWorkloadDiscoverySummary,
+} from '@/utils/aiSettingsPresentation';
 import { trackUpgradeClicked } from '@/utils/upgradeMetrics';
 import {
   UPGRADE_ACTION_LABEL,
@@ -41,7 +45,7 @@ export const AIRuntimeControlsSection: Component<AIRuntimeControlsSectionProps> 
                 d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
               />
             </svg>
-            <span class="text-sm font-medium text-base-content">Discovery Settings</span>
+            <span class="text-sm font-medium text-base-content">Workload Discovery</span>
             <Show when={state.form.discoveryEnabled}>
               <span class="px-1.5 py-0.5 text-[10px] font-medium bg-blue-100 dark:bg-blue-800 text-blue-700 dark:text-blue-300 rounded">
                 {state.form.discoveryIntervalHours > 0
@@ -68,13 +72,9 @@ export const AIRuntimeControlsSection: Component<AIRuntimeControlsSectionProps> 
           <div class="px-3 py-3 bg-surface border-t border-border space-y-3">
             <div class="flex items-center justify-between gap-2">
               <label class="text-xs font-medium text-muted flex items-center gap-1.5">
-                Enable Discovery
+                Enable workload discovery
                 <HelpIcon
-                  inline={{
-                    title: 'What is Discovery?',
-                    description:
-                      'Discovery scans your VMs, containers, and container runtimes to identify what services are running (databases, web servers, etc.), their versions, and how to access them. This information helps Pulse AI give you accurate troubleshooting commands and understand your infrastructure.',
-                  }}
+                  inline={getAISettingsWorkloadDiscoveryHelpContent()}
                   size="xs"
                 />
               </label>
@@ -107,15 +107,14 @@ export const AIRuntimeControlsSection: Component<AIRuntimeControlsSectionProps> 
                 </div>
                 <p class="text-[10px] text-muted ml-32 pl-3">
                   {state.form.discoveryIntervalHours === 0
-                    ? 'Discovery runs only when you click "Update Discovery" on a resource'
-                    : 'Discovery will automatically re-scan resources at this interval'}
+                    ? 'Workload discovery runs only when you click "Update Discovery" on a resource'
+                    : 'Workload discovery will automatically re-scan resources at this interval'}
                 </p>
               </div>
             </Show>
 
             <p class="text-[10px] text-muted">
-              Discovery gives Pulse AI workload context, so responses can reference concrete
-              services and commands instead of generic advice.
+              {getAISettingsWorkloadDiscoverySummary().text}
             </p>
           </div>
         </Show>

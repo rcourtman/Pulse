@@ -10,6 +10,8 @@ import SettingsPanel from '@/components/shared/SettingsPanel';
 import { Toggle } from '@/components/shared/Toggle';
 import { PATROL_PATH } from '@/routing/resourceLinks';
 import {
+  AI_SETTINGS_PANEL_DESCRIPTION,
+  AI_SETTINGS_PANEL_TITLE,
   getAISettingsLoadingState,
   getAISettingsLoadErrorMessage,
   getAISettingsRetryLabel,
@@ -22,8 +24,8 @@ export const AISettings: Component = () => {
   return (
     <>
       <SettingsPanel
-        title="Assistant & Patrol"
-        description="Configure providers, models, Pulse Assistant, and Patrol."
+        title={AI_SETTINGS_PANEL_TITLE}
+        description={AI_SETTINGS_PANEL_DESCRIPTION}
         icon={
           <svg
             class="w-5 h-5 text-blue-600 dark:text-blue-300"

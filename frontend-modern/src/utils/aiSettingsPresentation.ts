@@ -21,6 +21,9 @@ const AI_OAUTH_ERROR_MESSAGES: Record<string, string> = {
   save_failed: 'Unable to save OAuth credentials.',
 };
 
+export const AI_SETTINGS_PANEL_TITLE = 'Assistant & Patrol';
+export const AI_SETTINGS_PANEL_DESCRIPTION =
+  'Configure providers and models for Pulse Assistant and Patrol.';
 export const AI_SETTINGS_LOAD_MODELS_ERROR = 'Unable to load models.';
 export const AI_SETTINGS_LOAD_CHAT_SESSIONS_ERROR = 'Unable to load chat sessions.';
 export const AI_SETTINGS_LOAD_FAILURE_MESSAGE =
@@ -29,6 +32,20 @@ export const AI_SETTINGS_LOAD_RETRY_LABEL = 'Retry';
 
 export function getAIProviderTestResultTextClass(success: boolean): string {
   return success ? 'text-green-600' : 'text-red-600';
+}
+
+export function getAISettingsWorkloadDiscoveryHelpContent() {
+  return {
+    title: 'What is workload discovery?',
+    description:
+      'Workload discovery scans your VMs, containers, and container runtimes to identify running services, versions, and access details. Pulse Assistant uses that context for concrete troubleshooting guidance, and Patrol uses it to verify the right workloads continuously.',
+  } as const;
+}
+
+export function getAISettingsWorkloadDiscoverySummary() {
+  return {
+    text: 'Workload discovery gives Pulse Assistant and Patrol concrete service context, so chat responses and verification findings can reference real services and commands instead of generic advice.',
+  } as const;
 }
 
 export function getAISettingsReadinessPresentation(

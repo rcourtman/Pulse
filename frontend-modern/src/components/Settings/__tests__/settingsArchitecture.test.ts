@@ -1120,7 +1120,9 @@ describe('Settings architecture guardrails', () => {
     expect(aiRuntimeControlsSectionSource).toContain('@/utils/upgradePresentation');
     expect(aiRuntimeControlsSectionSource).toContain('UPGRADE_ACTION_LABEL');
     expect(aiRuntimeControlsSectionSource).toContain('UPGRADE_TRIAL_LABEL');
-    expect(aiRuntimeControlsSectionSource).toContain('Discovery Settings');
+    expect(aiRuntimeControlsSectionSource).toContain('Workload Discovery');
+    expect(aiRuntimeControlsSectionSource).toContain('getAISettingsWorkloadDiscoveryHelpContent');
+    expect(aiRuntimeControlsSectionSource).toContain('getAISettingsWorkloadDiscoverySummary');
     expect(aiRuntimeControlsSectionSource).toContain('Pulse Permission Level');
     expect(aiRuntimeControlsSectionSource).toContain('destination={state.upgradeAutofixDestination()}');
     expect(aiRuntimeControlsSectionSource).not.toContain('href={state.upgradeAutofixDestination().href}');
@@ -1519,6 +1521,8 @@ describe('Settings architecture guardrails', () => {
       const allowedTitleExpression =
         tab === 'system-updates'
           ? `title={UPDATES_PANEL_COPY.title}`
+          : tab === 'system-ai'
+            ? 'title={AI_SETTINGS_PANEL_TITLE}'
           : tab === 'system-billing'
             ? 'title={SELF_HOSTED_PRO_BILLING_PRESENTATION.shellTitle}'
             : `title="${title}"`;

@@ -1,6 +1,10 @@
 import type { SettingsHeaderMetaMap } from './settingsNavigationModel';
 import { SELF_HOSTED_PRO_BILLING_PRESENTATION } from './selfHostedBillingPresentation';
 import { RELAY_SETTINGS_DESCRIPTION } from '@/utils/relayPresentation';
+import {
+  AI_SETTINGS_PANEL_DESCRIPTION,
+  AI_SETTINGS_PANEL_TITLE,
+} from '@/utils/aiSettingsPresentation';
 
 export const SETTINGS_HEADER_META: SettingsHeaderMetaMap = {
   proxmox: {
@@ -30,8 +34,8 @@ export const SETTINGS_HEADER_META: SettingsHeaderMetaMap = {
     description: 'Manage backup/snapshot polling plus configuration export and import workflows.',
   },
   'system-ai': {
-    title: 'Assistant & Patrol',
-    description: 'Configure providers, models, Pulse Assistant, and Patrol.',
+    title: AI_SETTINGS_PANEL_TITLE,
+    description: AI_SETTINGS_PANEL_DESCRIPTION,
   },
   'system-relay': {
     title: 'Remote Access',

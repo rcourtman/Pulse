@@ -307,7 +307,11 @@ work extends shared components instead of creating new local variants.
     `frontend-modern/src/components/Settings/useAISettingsState.ts`, and
     `frontend-modern/src/utils/aiSettingsPresentation.ts` must present that
     surface to operators as `Assistant & Patrol` plus provider/model
-    configuration rather than as a generic `AI Services` shell.
+    configuration rather than as a generic `AI Services` shell. Runtime
+    controls inside `frontend-modern/src/components/Settings/AIRuntimeControlsSection.tsx`
+    must likewise describe discovery as workload discovery that supplies
+    concrete service context to Pulse Assistant and Patrol, not as a generic
+    AI context feature.
 
 ## Forbidden Paths
 
@@ -1925,8 +1929,9 @@ settings work must extend those section owners instead of re-inlining large
 runtime subsections into the shell.
 That same AI settings boundary now also owns
 `frontend-modern/src/utils/aiSettingsPresentation.ts`, so shared loading,
-empty, OAuth, and action/error copy for the settings shell stays on one
-governed helper instead of drifting back into section-local strings.
+empty, OAuth, action/error, shell-description, and workload-discovery copy
+for the settings shell stays on one governed helper instead of drifting back
+into section-local strings.
 `frontend-modern/src/components/Settings/AuditLogPanel.tsx`,
 `frontend-modern/src/components/Settings/AuditWebhookPanel.tsx`,
 `frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx`,

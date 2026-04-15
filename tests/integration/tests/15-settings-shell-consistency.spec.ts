@@ -38,8 +38,8 @@ const SETTINGS_SHELL_ROUTES = [
   },
   {
     route: '/settings/system-ai',
-    title: 'AI Settings',
-    description: 'Configure AI providers, model defaults, Pulse Assistant, and Patrol automation.',
+    title: 'Assistant & Patrol',
+    description: 'Configure providers and models for Pulse Assistant and Patrol.',
   },
   {
     route: '/settings/system-updates',

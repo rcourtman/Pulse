@@ -42,7 +42,7 @@ const baseSettings = (): MockAISettings => ({
   available_models: [],
 });
 
-test.describe("AI settings provider setup", () => {
+test.describe("Assistant & Patrol settings provider setup", () => {
   test("OpenRouter setup submits credentials without a hardcoded model and renders backend-selected state", async ({
     page,
   }, testInfo) => {
@@ -108,6 +108,9 @@ test.describe("AI settings provider setup", () => {
 
     await page.goto("/settings/system-ai", { waitUntil: "domcontentloaded" });
     await expect(page.getByRole("heading", { name: "Assistant & Patrol", level: 1 })).toBeVisible();
+    await expect(
+      page.getByText("Configure providers and models for Pulse Assistant and Patrol.", { exact: true }),
+    ).toBeVisible();
 
     await page.getByRole("button", { name: /enable assistant and patrol/i }).click();
     const setupDialog = page.getByRole("dialog", { name: "Set up Pulse Assistant" });
@@ -125,7 +128,17 @@ test.describe("AI settings provider setup", () => {
     expect(updateRequests[0]).not.toHaveProperty("model");
 
     await expect(page.getByText("Advanced Model Selection")).toBeVisible();
-    await expect(page.getByRole("button", { name: /enable ai services/i })).toHaveAttribute(
+    const workloadDiscoveryToggle = page.getByRole("button", { name: /workload discovery/i });
+    await expect(workloadDiscoveryToggle).toBeVisible();
+    await workloadDiscoveryToggle.click();
+    await expect(page.getByText("Enable workload discovery")).toBeVisible();
+    await expect(
+      page.getByText(
+        "Workload discovery gives Pulse Assistant and Patrol concrete service context, so chat responses and verification findings can reference real services and commands instead of generic advice.",
+        { exact: true },
+      ),
+    ).toBeVisible();
+    await expect(page.getByRole("button", { name: /enable assistant and patrol/i })).toHaveAttribute(
       "aria-pressed",
       "true",
     );
