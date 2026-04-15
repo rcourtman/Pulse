@@ -291,8 +291,10 @@ The governed browser proof for that posture lives in
 expected to stay runnable through
 `tests/integration/scripts/run-tests.sh demo-contract`.
 That same public-demo boundary also owns the governed `pulse-pro` operational
-path for the live v6 preview. `pulse-pro/scripts/bootstrap-v6-demo-preview.sh`
-is the canonical preview runtime bootstrap/update entrypoint and
+path for the live v6 preview. `pulse-pro/.github/workflows/deploy-v6-preview-demo.yml`
+is the canonical operator entrypoint, and it must drive
+`pulse-pro/scripts/bootstrap-v6-demo-preview.sh` as the canonical preview
+runtime bootstrap/update path.
 `pulse-pro/scripts/audit_v6_preview_demo.sh` is the canonical public smoke
 proof. The bootstrap must fail closed unless the dedicated preview host is
 already the live public target and that public smoke audit passes; any

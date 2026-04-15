@@ -1718,6 +1718,7 @@
         "internal/cloudcp/routes.go",
         "internal/cloudcp/stripe/provisioner.go",
         "internal/hosted/provisioner.go",
+        "pulse-pro:.github/workflows/deploy-v6-preview-demo.yml",
         "pulse-pro:scripts/audit_v6_preview_demo.sh",
         "pulse-pro:scripts/audit_v6_preview_demo_browser.cjs",
         "pulse-pro:scripts/bootstrap-v6-demo-preview.sh"
@@ -2327,6 +2328,7 @@
             "label": "public demo preview operations proof",
             "match_prefixes": [],
             "match_files": [
+              "pulse-pro:.github/workflows/deploy-v6-preview-demo.yml",
               "pulse-pro:scripts/audit_v6_preview_demo.sh",
               "pulse-pro:scripts/audit_v6_preview_demo_browser.cjs",
               "pulse-pro:scripts/bootstrap-v6-demo-preview.sh"
