@@ -612,13 +612,6 @@ manual logout URL drift out of the request model or bypass the governed URL
 normalization path.
 That same runtime SSO contract also owns the Pulse-side public URL that feeds
 SAML service-provider metadata and auth requests. `internal/api/saml_handlers.go`,
-`internal/api/saml_service.go`, and `internal/api/contract_test.go` must rebind
-previously initialized SAML providers to the current configured `PublicURL`
-before metadata or browser login flows emit SP entity, ACS, or metadata URLs,
-so a stale startup-time blank/relative base URL cannot leak back into runtime
-metadata or auth request generation once the canonical external URL is known.
-That same runtime SSO contract also owns the Pulse-side public URL that feeds
-SAML service-provider metadata and auth requests. `internal/api/saml_handlers.go`,
 `internal/api/saml_service.go`, and the SAML regression tests must rebind
 previously initialized SAML providers to the current configured `PublicURL`
 before metadata or browser login flows emit SP entity, ACS, or metadata URLs,

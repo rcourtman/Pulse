@@ -204,11 +204,6 @@ regression protection.
     performance work must not add filesystem reads, GitHub release lookups, or
     other per-request version discovery on activation, legacy exchange, or
     grant-refresh traffic just to stamp authenticated install metadata.
-    That same shared router boundary must keep SAML public URL synchronization
-    change-driven rather than request-driven: `internal/api/router.go` may rebind
-    shared SAML service providers when the canonical `PublicURL` changes, but it
-    must not rebuild that auth state on every dashboard, summary, or chart read
-    that passes through the protected router hot path.
 30. Keep dashboard summary-chart fetches scope-owned rather than page-churn-owned: `frontend-modern/src/hooks/useDashboardTrends.ts` must hydrate infrastructure and storage summaries once per org/range scope from the canonical summary caches and recompute card presentation locally as the compact dashboard overview changes, rather than refetching the infrastructure-summary transport in `frontend-modern/src/components/Infrastructure/useInfrastructureSummaryState.ts`, the dashboard storage-summary trend transport in `frontend-modern/src/utils/storageSummaryTrendCache.ts`, or the storage-page summary transport in `frontend-modern/src/utils/storageSummaryCache.ts` for every top-resource or card reshuffle on the same dashboard load. That dashboard infrastructure path must also request only the metrics it renders through the canonical infrastructure-summary route owned by `internal/api/router_routes_monitoring.go` and `internal/api/router.go`; the dashboard may not pay for disk or network summary series when it only renders CPU and memory. App-shell prewarm in `frontend-modern/src/useAppRuntimeState.ts` must not front-run that dashboard-specific route while the operator is already on the root dashboard route owned by `frontend-modern/src/App.tsx`.
     The same hot path must keep mock/demo chart identity on the canonical
     unified snapshot too: when mock mode is enabled, `internal/api/router.go`
