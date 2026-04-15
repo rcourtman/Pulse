@@ -68,12 +68,24 @@ func NormalizeBillingState(state *BillingState) *BillingState {
 		normalized.Limits = map[string]int64{}
 		normalized.MetersEnabled = []string{}
 	default:
-		if limit, known := CloudPlanMonitoredSystemLimits[normalized.PlanVersion]; known {
+		if limit, ok := billingStateStoredMonitoredSystemLimit(normalized.PlanVersion); ok {
 			normalized.Limits[MaxMonitoredSystemsLicenseGateKey] = int64(limit)
 		}
 	}
 
 	return normalized
+}
+
+func billingStateStoredMonitoredSystemLimit(planVersion string) (int, bool) {
+	planVersion = CanonicalizePlanVersion(planVersion)
+	if IsGrandfatheredRecurringV5PlanVersion(planVersion) {
+		return UnknownPlanDefaultMonitoredSystemLimit, true
+	}
+	limit, known := CloudPlanMonitoredSystemLimits[planVersion]
+	if !known || limit <= 0 {
+		return 0, false
+	}
+	return limit, true
 }
 
 func IsValidBillingSubscriptionState(state SubscriptionState) bool {

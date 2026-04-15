@@ -306,6 +306,32 @@ func TestNormalizeBillingState_CanonicalizesCloudPlanVersionAndLimits(t *testing
 	}
 }
 
+func TestNormalizeBillingState_GrandfatheredRecurringPlanUsesStoredBillingBaseline(t *testing.T) {
+	state := &BillingState{
+		PlanVersion: " v5_pro_monthly_grandfathered ",
+		Limits: map[string]int64{
+			"max_monitored_systems": 0,
+			"max_nodes":             99,
+			"max_guests":            50,
+		},
+		SubscriptionState: SubStateActive,
+	}
+
+	normalized := NormalizeBillingState(state)
+	if normalized.PlanVersion != "v5_pro_monthly_grandfathered" {
+		t.Fatalf("plan_version=%q, want %q", normalized.PlanVersion, "v5_pro_monthly_grandfathered")
+	}
+	if got := normalized.Limits["max_monitored_systems"]; got != UnknownPlanDefaultMonitoredSystemLimit {
+		t.Fatalf("limits[max_monitored_systems]=%d, want %d", got, UnknownPlanDefaultMonitoredSystemLimit)
+	}
+	if got := normalized.Limits["max_guests"]; got != 50 {
+		t.Fatalf("limits[max_guests]=%d, want %d", got, 50)
+	}
+	if _, hasOld := normalized.Limits["max_nodes"]; hasOld {
+		t.Fatal("expected max_nodes to be deleted during normalization")
+	}
+}
+
 func TestNormalizeBillingState_PreservesNonCloudPlanLimits(t *testing.T) {
 	state := &BillingState{
 		PlanVersion: "pro-v2",

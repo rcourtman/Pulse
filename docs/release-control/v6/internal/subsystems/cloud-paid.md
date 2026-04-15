@@ -216,6 +216,14 @@ Insights`, rather than reviving generic `AI Patrol` or `AI ... analysis`
    monitored-system and guest capacity while the subscription remains
    continuous, and only new v6 retail purchases or post-cancellation re-entry
    may take the current Pro/Pro+ caps.
+7. Keep persisted billing baselines and live recurring continuity distinct:
+   `pkg/licensing/billing_state_normalization.go` must store the canonical
+   monitored-system billing baseline for recognized grandfathered recurring
+   v5/v1 Stripe plans so webhook persistence and admin-visible hosted billing
+   state stay deterministic, while `pkg/licensing/database_source.go`,
+   `pkg/licensing/models.go`, and downstream runtime entitlement evaluation
+   must strip that stored cap before enforcement so active recurring
+   grandfathered continuity remains uncapped until cancellation.
 
 ## Current State
 
@@ -1379,6 +1387,16 @@ canonical Cloud/MSP limit rule: when paid state is granted, billing-state
 writes must persist authoritative `limits.max_monitored_systems` derived from canonical
 plan resolution, and when paid state is revoked they must clear those stored
 limits instead of preserving stale paid capacity.
+Grandfathered recurring v5/v1 continuity is the explicit stored-state
+exception inside that same boundary. `pkg/licensing/billing_state_normalization.go`
+must persist the canonical billing baseline for recognized grandfathered
+recurring Stripe plans even though the live entitlement contract is uncapped,
+so webhook persistence, hosted billing state, and admin inspection stay
+deterministic instead of leaking an internal `0 == unlimited` convention into
+saved billing records. `pkg/licensing/database_source.go`,
+`pkg/licensing/models.go`, and downstream entitlement evaluation must then
+strip that stored monitored-system cap back out before runtime enforcement, so
+continuous grandfathered recurring customers stay uncapped until cancellation.
 That same monitored-system entitlement boundary also owns the shared operator
 warning copy: the limit banner and migration guidance must present the counted
 surface as monitored systems, not drift back into agent-install language while
