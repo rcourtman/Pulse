@@ -1719,6 +1719,9 @@
         "internal/cloudcp/stripe/provisioner.go",
         "internal/hosted/provisioner.go",
         "pulse-pro:.github/workflows/deploy-v6-preview-demo.yml",
+        "pulse-pro:license-server/grandfathering.go",
+        "pulse-pro:license-server/main.go",
+        "pulse-pro:license-server/v6_handlers.go",
         "pulse-pro:scripts/audit_v6_preview_demo.sh",
         "pulse-pro:scripts/audit_v6_preview_demo_browser.cjs",
         "pulse-pro:scripts/bootstrap-v6-demo-preview.sh"
@@ -2321,6 +2324,22 @@
               "frontend-modern/src/pages/__tests__/HostedSignup.test.tsx",
               "frontend-modern/src/pages/__tests__/PricingHandoff.test.tsx",
               "frontend-modern/src/utils/__tests__/pricingHandoff.test.ts"
+            ]
+          },
+          {
+            "id": "legacy-grandfathering-cutover",
+            "label": "legacy recurring grandfathering cutover proof",
+            "match_prefixes": [],
+            "match_files": [
+              "pulse-pro:license-server/grandfathering.go",
+              "pulse-pro:license-server/main.go",
+              "pulse-pro:license-server/v6_handlers.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "pulse-pro:license-server/grandfathering_test.go",
+              "pulse-pro:license-server/main_test.go"
             ]
           },
           {

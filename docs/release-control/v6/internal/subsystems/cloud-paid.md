@@ -99,12 +99,17 @@ agreement, and cloud-specific enforcement rules.
    dev build metadata, or anonymous telemetry.
 4. `internal/api/payments_webhook_handlers.go` shared with `api-contracts`: commercial payment webhook handlers carry both API payload contract and cloud-paid billing boundary ownership.
 5. `internal/api/public_signup_handlers.go` shared with `api-contracts`: hosted signup handlers carry both API payload contract and cloud-paid hosted provisioning boundary ownership.
-
 That shared monitored-system presentation boundary also owns disabled
 provider-connection copy. Commercial entitlement surfaces must treat canonical
 zero-delta and removal-only TrueNAS or VMware previews as non-consuming or
 capacity-freeing changes rather than warning users that a disabled connection
 still grows monitored-system usage.
+
+The real `pulse-pro` license-server legacy checkout issuance, recurring
+renewals, manual issue, and legacy exchange flows are part of that same
+cloud-paid continuity boundary as well. Those flows must resolve grandfathered
+recurring continuity from explicit active pre-cutover state, not from bare
+legacy plan IDs, stale historical tokens, or issue timestamps alone.
 
 ## Extension Points
 
