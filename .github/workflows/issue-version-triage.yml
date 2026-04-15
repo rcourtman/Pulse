@@ -22,17 +22,29 @@ jobs:
           script: |
             const issue = context.payload.issue;
             const labelNames = new Set((issue.labels || []).map((label) => label.name));
-
-            // Restrict automation to bug reports only.
-            if (!labelNames.has("bug")) {
-              core.info("Issue is not labeled bug. Skipping version triage.");
-              return;
-            }
-
             const VERSION_LABEL_PREFIX = "affects-";
             const NEEDS_VERSION_LABEL = "needs-version-info";
             const RETEST_LABEL = "needs-retest-on-latest";
             const RETEST_COMMENT_MARKER = "<!-- issue-version-triage:v1 -->";
+            const BUG_LABEL = "bug";
+            const DOCS_LABEL = "documentation";
+            const ENHANCEMENT_LABEL = "enhancement";
+
+            function escapeRegExp(value) {
+              return String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+            }
+
+            function extractSectionValue(body, heading) {
+              if (!body) return null;
+              const pattern = new RegExp(
+                `^#+\\s*${escapeRegExp(heading)}\\s*$\\n+([\\s\\S]*?)(?=^#+\\s+|$)`,
+                "im"
+              );
+              const match = body.match(pattern);
+              if (!match) return null;
+              const value = match[1].trim();
+              return value || null;
+            }
 
             function normalizeVersion(value) {
               if (!value) return null;
@@ -68,6 +80,31 @@ jobs:
               const legacyMatch = body.match(/pulse\s*\|?\s*version[^\n]*?(\bv?\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?\b)/i);
               if (legacyMatch) return normalizeVersion(legacyMatch[1]);
 
+              return null;
+            }
+
+            function classifyV6FeedbackType(body) {
+              const feedbackType = extractSectionValue(body, "Feedback type");
+              if (!feedbackType) return null;
+
+              const normalized = feedbackType.toLowerCase();
+              if (
+                normalized.includes("bug") ||
+                normalized.includes("regression") ||
+                normalized.includes("upgrade / migration issue") ||
+                normalized.includes("performance issue")
+              ) {
+                return BUG_LABEL;
+              }
+              if (normalized.includes("documentation issue")) {
+                return DOCS_LABEL;
+              }
+              if (
+                normalized.includes("ux / workflow friction") ||
+                normalized.includes("other actionable feedback")
+              ) {
+                return ENHANCEMENT_LABEL;
+              }
               return null;
             }
 
@@ -133,6 +170,25 @@ jobs:
             core.info(`Latest stable release: ${latestVersion || "unknown"}`);
 
             const nextLabels = new Set(labelNames);
+            const v6FeedbackClass = classifyV6FeedbackType(issue.body);
+            if (v6FeedbackClass) {
+              core.info(`Detected v6 feedback issue class: ${v6FeedbackClass}`);
+              nextLabels.add(v6FeedbackClass);
+            }
+
+            const isBugLike = nextLabels.has(BUG_LABEL);
+            if (!isBugLike) {
+              core.info("Issue is not bug-like after classification. Skipping version triage.");
+              if (v6FeedbackClass && !labelNames.has(v6FeedbackClass)) {
+                await github.rest.issues.setLabels({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issue.number,
+                  labels: [...nextLabels].sort(),
+                });
+              }
+              return;
+            }
 
             if (reportedVersion) {
               await ensureLabel(
