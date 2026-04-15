@@ -317,6 +317,27 @@ func TestStoragePollingUsesCanonicalPoolMetadataForZFSAttachment(t *testing.T) {
 	}
 }
 
+func TestStoragePollingKeepsSharedStorageClusterStatusCanonical(t *testing.T) {
+	data, err := os.ReadFile("monitor_polling_storage.go")
+	if err != nil {
+		t.Fatalf("failed to read monitor_polling_storage.go: %v", err)
+	}
+	source := string(data)
+
+	for _, snippet := range []string{
+		"storage.Status = normalizeSharedStorageStatus(storage)",
+		"entry.storage.Status = mergeSharedStorageStatus(entry.storage.Status, storage.Status)",
+		"entry.storage.Enabled = entry.storage.Enabled || storage.Enabled",
+		"entry.storage.Active = entry.storage.Active || storage.Active",
+		"func normalizeSharedStorageStatus(storage models.Storage) string {",
+		"func mergeSharedStorageStatus(current, candidate string) string {",
+	} {
+		if !strings.Contains(source, snippet) {
+			t.Fatalf("monitor_polling_storage.go must contain %q", snippet)
+		}
+	}
+}
+
 func TestMonitoringTemperatureFallbackUsesSMARTAwareSSHSkipRule(t *testing.T) {
 	requiredSnippets := map[string][]string{
 		"host_agent_temps.go": {

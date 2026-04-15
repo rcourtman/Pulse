@@ -301,6 +301,95 @@ func TestPollStorageWithNodesSynthesizesSharedClusterOnlyStorage(t *testing.T) {
 	}
 }
 
+func TestPollStorageWithNodesKeepsSharedStorageAvailableWhenAnyNodeIsActive(t *testing.T) {
+	monitor := &Monitor{
+		state: models.NewState(),
+		config: &config.Config{
+			PVEInstances: []config.PVEInstance{
+				{
+					Name:        "inst1",
+					IsCluster:   true,
+					ClusterName: "cluster-a",
+				},
+			},
+		},
+	}
+
+	client := &fakeStorageClient{
+		allStorage: []proxmox.Storage{
+			{
+				Storage:   "shared-nfs",
+				Type:      "nfs",
+				Content:   "images,backup",
+				Shared:    1,
+				Total:     1000,
+				Used:      900,
+				Available: 100,
+				Nodes:     "node1,node2",
+			},
+		},
+		storageByNode: map[string][]proxmox.Storage{
+			"node1": {
+				{
+					Storage:   "shared-nfs",
+					Type:      "nfs",
+					Content:   "images,backup",
+					Shared:    1,
+					Enabled:   1,
+					Active:    0,
+					Total:     1000,
+					Used:      900,
+					Available: 100,
+				},
+			},
+			"node2": {
+				{
+					Storage:   "shared-nfs",
+					Type:      "nfs",
+					Content:   "images,backup",
+					Shared:    1,
+					Enabled:   1,
+					Active:    1,
+					Total:     1000,
+					Used:      800,
+					Available: 200,
+				},
+			},
+		},
+	}
+
+	nodes := []proxmox.Node{
+		{Node: "node1", Status: "online"},
+		{Node: "node2", Status: "online"},
+	}
+
+	monitor.pollStorageWithNodes(context.Background(), "inst1", client, nodes)
+
+	var shared *models.Storage
+	for _, storage := range monitor.state.GetSnapshot().Storage {
+		if storage.Name == "shared-nfs" {
+			storageCopy := storage
+			shared = &storageCopy
+			break
+		}
+	}
+	if shared == nil {
+		t.Fatalf("expected shared storage in state, got %+v", monitor.state.GetSnapshot().Storage)
+	}
+	if shared.Node != "cluster" || !shared.Shared {
+		t.Fatalf("expected cluster-scoped shared storage, got %+v", *shared)
+	}
+	if !shared.Enabled || !shared.Active {
+		t.Fatalf("expected shared storage to remain enabled and active when any node is active, got %+v", *shared)
+	}
+	if shared.Status != "available" {
+		t.Fatalf("expected shared storage status to stay available when any node is active, got %+v", *shared)
+	}
+	if shared.Total != 1000 || shared.Used != 900 || shared.Free != 100 {
+		t.Fatalf("expected shared storage to retain best capacity sample, got %+v", *shared)
+	}
+}
+
 func TestPollStorageWithNodesAttachesZFSPoolFromExplicitPoolField(t *testing.T) {
 	t.Setenv("PULSE_DATA_DIR", t.TempDir())
 

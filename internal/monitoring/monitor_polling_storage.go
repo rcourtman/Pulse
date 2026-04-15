@@ -500,10 +500,14 @@ func (m *Monitor) pollStorageWithNodes(ctx context.Context, instanceName string,
 					// reporting nodes but never merge across different Proxmox instances.
 					key := storage.Instance + "/" + storage.Name
 					nodeIdentifier := fmt.Sprintf("%s-%s", storage.Instance, storage.Node)
+					storage.Status = normalizeSharedStorageStatus(storage)
 
 					if entry, exists := sharedStorageMap[key]; exists {
 						entry.nodes[storage.Node] = struct{}{}
 						entry.nodeIDs[nodeIdentifier] = struct{}{}
+						entry.storage.Status = mergeSharedStorageStatus(entry.storage.Status, storage.Status)
+						entry.storage.Enabled = entry.storage.Enabled || storage.Enabled
+						entry.storage.Active = entry.storage.Active || storage.Active
 
 						// Prefer the entry with the most up-to-date utilization data
 						if storage.Used > entry.storage.Used || (storage.Total > entry.storage.Total && storage.Used == entry.storage.Used) {
@@ -512,9 +516,6 @@ func (m *Monitor) pollStorageWithNodes(ctx context.Context, instanceName string,
 							entry.storage.Free = storage.Free
 							entry.storage.Usage = storage.Usage
 							entry.storage.ZFSPool = storage.ZFSPool
-							entry.storage.Status = storage.Status
-							entry.storage.Enabled = storage.Enabled
-							entry.storage.Active = storage.Active
 							entry.storage.Content = storage.Content
 							entry.storage.Type = storage.Type
 						}
@@ -737,6 +738,54 @@ func (m *Monitor) fetchNodeStorageFallback(ctx context.Context, instanceCfg *con
 	}
 
 	return directClient.GetStorage(ctx, nodeName)
+}
+
+func normalizeSharedStorageStatus(storage models.Storage) string {
+	status := strings.ToLower(strings.TrimSpace(storage.Status))
+	switch status {
+	case "online", "running", "available", "active", "ok":
+		return "available"
+	case "warning", "degraded":
+		return "warning"
+	case "offline", "down", "unavailable", "error":
+		return "unavailable"
+	case "disabled", "inactive":
+		return status
+	case "":
+		if !storage.Enabled {
+			return "disabled"
+		}
+		if storage.Active {
+			return "available"
+		}
+		return "inactive"
+	default:
+		return status
+	}
+}
+
+func mergeSharedStorageStatus(current, candidate string) string {
+	if sharedStorageStatusRank(candidate) > sharedStorageStatusRank(current) {
+		return candidate
+	}
+	return current
+}
+
+func sharedStorageStatusRank(status string) int {
+	switch strings.ToLower(strings.TrimSpace(status)) {
+	case "warning":
+		return 5
+	case "available":
+		return 4
+	case "unavailable":
+		return 3
+	case "inactive":
+		return 2
+	case "disabled":
+		return 1
+	default:
+		return 0
+	}
 }
 
 // pollPVENode polls a single PVE node and returns the result

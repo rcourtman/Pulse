@@ -788,6 +788,13 @@ emit structured storage topology such as Unraid per-disk state, the shared
 assessment layer must derive canonical risk and alert severity from that
 richer disk topology instead of letting coarser aggregate counters override it
 and flap the operator-facing storage alert surface.
+That same monitoring-owned storage polling boundary also owns cluster-shared
+Proxmox storage status coherence. `internal/monitoring/monitor_polling_storage.go`
+must merge shared storage observations across nodes into one cluster-scoped
+record whose canonical status remains `available` whenever any reporting node
+still has the shared target active; node-local inactive copies may expand node
+affinity, but they must not downgrade the cluster record into an offline
+projection just because that node won the capacity sample.
 That same monitoring-owned host-agent ingest boundary now also owns
 vendor-managed NAS RAID normalization. `internal/monitoring/monitor_agents.go`
 must filter vendor-managed system arrays through the shared
