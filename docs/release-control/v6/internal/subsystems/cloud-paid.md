@@ -1143,16 +1143,21 @@ When a self-hosted billing arrival is explicitly about monitored-system
 capacity, `ProLicensePlanSection.tsx` may still open that disclosure by
 default, but the same top-level-root definition must remain the canonical
 counted-unit explanation rather than introducing a second plan-local wording.
-The same boundary also owns the warning-banner shorthand: customer-facing
-monitored-system warnings should describe the current admission posture in
-plain language, not just raw `current / limit` math. When a plan is full, copy
-must explain that existing monitoring continues while new monitored systems are
-blocked; when an installation is already above the current plan, copy must
-explain that Pulse is in an over-plan frozen state rather than implying a hard
-runtime blackout. Community overflow/setup-slot messaging must still explain
-the included monitored systems plus the temporary setup slot in customer terms
-rather than compressing the contract into slash-style quota strings that imply
-Pulse is counting every child device.
+The same boundary also owns where monitored-system capacity truth lives. The
+canonical persistent explanation belongs in the self-hosted Pro plan surface:
+`ProLicensePanel.tsx`, `ProLicensePlanSection.tsx`, and
+`useProLicensePanelState.ts` must render a dedicated capacity section with the
+current monitored count, included plan limit, status posture, and any
+over-plan or continuity explanation. Customer-facing copy there should
+describe the current admission posture in plain language, not raw
+`current / limit` math. When a plan is full, the section must explain that
+existing monitoring continues while new monitored systems are blocked; when an
+installation is already above the current plan, it must explain that Pulse is
+in an over-plan frozen state rather than implying a hard runtime blackout.
+Community overflow/setup-slot messaging must still explain the included
+monitored systems plus the temporary setup slot in customer terms rather than
+compressing the contract into slash-style quota strings that imply Pulse is
+counting every child device.
 That same billing-facing boundary also owns why an installation can be above
 plan at all. When the monitored-system posture is `over_limit_frozen`, customer
 copy must explain whether the installation was already above the current plan

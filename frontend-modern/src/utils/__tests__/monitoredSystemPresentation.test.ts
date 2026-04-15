@@ -6,6 +6,7 @@ import monitoredSystemLimitWarningBannerModelSource from '@/components/shared/mo
 import licensePresentationSource from '@/utils/licensePresentation.ts?raw';
 import monitoredSystemPresentationSource from '@/utils/monitoredSystemPresentation.ts?raw';
 import {
+  buildMonitoredSystemCapacitySectionModel,
   buildMonitoredSystemAdmissionPreviewUnavailableState,
   formatMonitoredSystemAdmissionPreviewUnavailableMessage,
   formatMonitoredSystemGroupedSourcesLabel,
@@ -35,7 +36,7 @@ import {
   getMonitoredSystemLedgerPolicyLoadingState,
   getMonitoredSystemLedgerUnavailableState,
   getMonitoredSystemLimitInstallCollectorsLabel,
-  getMonitoredSystemLimitLearnMoreLabel,
+  getMonitoredSystemLimitViewCapacityLabel,
   getMonitoredSystemLimitUnavailableReason,
   getMonitoredSystemLimitUpgradeLabel,
   getMonitoredSystemLimitUsageSummary,
@@ -122,7 +123,7 @@ describe('monitoredSystemPresentation', () => {
         unknown: 'Pulse cannot determine a canonical runtime status for this monitored system yet.',
       },
       limitBanner: {
-        learnMoreLabel: 'Learn more',
+        viewCapacityLabel: 'View capacity',
         installCollectorsLabel: 'Install v6 collectors',
         upgradeLabel: 'Upgrade to add more',
         overflowSummaryPrefix:
@@ -228,14 +229,14 @@ describe('monitoredSystemPresentation', () => {
   });
 
   it('returns canonical monitored-system limit warning copy', () => {
-    expect(getMonitoredSystemLimitLearnMoreLabel()).toBe('Learn more');
+    expect(getMonitoredSystemLimitViewCapacityLabel()).toBe('View capacity');
     expect(getMonitoredSystemLimitInstallCollectorsLabel()).toBe('Install v6 collectors');
     expect(getMonitoredSystemLimitUpgradeLabel()).toBe('Upgrade to add more');
     expect(formatMonitoredSystemLimitSummary({ current: 5, limit: 6 })).toBe(
-      '5 of 6 included monitored systems are in use.',
+      '1 remaining. 5 monitored, 6 included.',
     );
     expect(formatMonitoredSystemLimitSummary({ current: 16, limit: 5, state: 'enforced' })).toBe(
-      '16 monitored systems active. Current plan includes 5, and this installation is already over plan by 11 because it exceeded the limit before new monitored systems were blocked. Existing monitoring continues, but new monitored systems are blocked until usage is reduced or the plan is upgraded.',
+      'Over plan by 11. 16 monitored, 5 included.',
     );
     expect(
       formatMonitoredSystemLimitSummary(
@@ -254,7 +255,7 @@ describe('monitoredSystemPresentation', () => {
         },
       ),
     ).toBe(
-      '16 monitored systems active. Current plan includes 5, and Pulse is still verifying the migrated v5 continuity floor for this installation. Existing monitoring continues while new monitored systems are temporarily blocked against the current plan limit until continuity capture finishes.',
+      'Continuity verification pending. 16 monitored, 5 included.',
     );
     expect(
       formatMonitoredSystemLegacyConnectionBreakdown({
@@ -276,6 +277,29 @@ describe('monitoredSystemPresentation', () => {
       'Community includes 5 monitored systems. 1 temporary setup slot is active (14d remaining)',
     );
     expect(formatMonitoredSystemOverflowSummary(undefined)).toBe('');
+  });
+
+  it('builds a monitored-system capacity section model for the plan surface', () => {
+    expect(
+      buildMonitoredSystemCapacitySectionModel({
+        current: 16,
+        limit: 5,
+        current_available: true,
+        state: 'enforced',
+      }),
+    ).toEqual({
+      stats: [
+        { label: 'Monitored', value: '16 monitored systems' },
+        { label: 'Included', value: '5' },
+        { label: 'Status', value: 'Over plan by 11' },
+      ],
+      statusMessage: 'Existing monitoring continues. New monitored systems are blocked.',
+      detailMessage: 'Reduce usage or upgrade to add another monitored system.',
+      explanation: {
+        label: 'Why am I over plan?',
+        body: 'This installation was already monitoring 16 monitored systems before Pulse started blocking net-new monitored systems at the current plan boundary. Pulse keeps those existing systems visible, but it blocks any additional monitored systems until usage is reduced or the plan is upgraded.',
+      },
+    });
   });
 
   it('centralizes monitored-system limit availability and capacity presentation', () => {

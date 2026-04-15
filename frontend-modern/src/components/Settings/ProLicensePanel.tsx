@@ -105,7 +105,7 @@ const ProLicensePanelContent: Component = () => {
                   hasLicenseDetails={state.hasLicenseDetails()}
                   hasPaidFeatures={state.hasPaidFeatures()}
                   loading={state.loading()}
-                  monitoredSystemCapacityNotice={state.monitoredSystemCapacityNotice()}
+                  monitoredSystemCapacitySection={state.monitoredSystemCapacitySection()}
                   monitoredSystemContinuityNotice={state.monitoredSystemContinuityNotice()}
                   onReload={() => void state.loadPanelData()}
                   purchaseActivationAction={state.purchaseActivationAction()}

@@ -6,10 +6,8 @@ import {
   loadRuntimeCapabilities,
 } from '@/stores/license';
 import {
-  commercialOverflowDaysRemaining,
   getUpgradeActionDestination,
   hasMigrationGap,
-  legacyConnections,
 } from '@/stores/licenseCommercial';
 import { resolveUpgradeDestination } from '@/utils/upgradeNavigation';
 import {
@@ -23,14 +21,11 @@ import {
 } from '@/utils/upgradeMetrics';
 import {
   getMonitoredSystemBannerToneClass,
-  getMonitoredSystemMigrationMessage,
-  getMonitoredSystemMigrationTextClass,
-  getMonitoredSystemOverflowSummary,
   getMonitoredSystemSummary,
   isMonitoredSystemLimitUrgent,
   MONITORED_SYSTEM_LIMIT_INSTALL_COLLECTORS_HREF,
   MONITORED_SYSTEM_LIMIT_KEY,
-  MONITORED_SYSTEM_LIMIT_LEARN_MORE_HREF,
+  MONITORED_SYSTEM_LIMIT_VIEW_CAPACITY_HREF,
   shouldShowMonitoredSystemLimitBanner,
 } from './monitoredSystemLimitWarningBannerModel';
 
@@ -50,30 +45,31 @@ export function useMonitoredSystemLimitWarningBannerState() {
       shouldShowMonitoredSystemLimitBanner(monitoredSystemLimit(), monitoredSystemCapacity()),
   );
   const migrationGap = createMemo(() => hasMigrationGap());
-  const migrationCounts = createMemo(() => legacyConnections());
   const monitoredSystemSummary = createMemo(() =>
     getMonitoredSystemSummary(monitoredSystemLimit(), monitoredSystemCapacity()),
   );
-  const migrationMessage = createMemo(() => getMonitoredSystemMigrationMessage(migrationCounts()));
-  const overflowSummary = createMemo(() =>
-    getMonitoredSystemOverflowSummary(commercialOverflowDaysRemaining()),
-  );
   const toneClass = createMemo(() => getMonitoredSystemBannerToneClass(isUrgent()));
-  const migrationTextClass = createMemo(() => getMonitoredSystemMigrationTextClass(isUrgent()));
-  const learnMoreDestination = createMemo(() =>
-    resolveUpgradeDestination(MONITORED_SYSTEM_LIMIT_LEARN_MORE_HREF),
+  const suppressUpgrade = createMemo(
+    () =>
+      monitoredSystemCapacity()?.reason?.trim().toLowerCase() ===
+      'legacy_migration_capture_pending',
+  );
+  const viewCapacityDestination = createMemo(() =>
+    resolveUpgradeDestination(MONITORED_SYSTEM_LIMIT_VIEW_CAPACITY_HREF),
   );
   const installCollectorsDestination = createMemo(() =>
     resolveUpgradeDestination(MONITORED_SYSTEM_LIMIT_INSTALL_COLLECTORS_HREF),
   );
   const upgradeDestination = createMemo(() =>
-    scopeSelfHostedBillingDestination(
-      getUpgradeActionDestination(MONITORED_SYSTEM_LIMIT_KEY),
-      'plan',
-      {
-        intent: SELF_HOSTED_PRO_BILLING_MONITORED_SYSTEM_INTENT,
-      },
-    ),
+    suppressUpgrade()
+      ? null
+      : scopeSelfHostedBillingDestination(
+          getUpgradeActionDestination(MONITORED_SYSTEM_LIMIT_KEY),
+          'plan',
+          {
+            intent: SELF_HOSTED_PRO_BILLING_MONITORED_SYSTEM_INTENT,
+          },
+        ),
   );
 
   let wasUrgent = false;
@@ -109,12 +105,9 @@ export function useMonitoredSystemLimitWarningBannerState() {
     handleUpgradeClick,
     installCollectorsDestination,
     isUrgent,
-    learnMoreDestination,
+    viewCapacityDestination,
     migrationGap,
-    migrationMessage,
-    migrationTextClass,
     monitoredSystemSummary,
-    overflowSummary,
     showBanner,
     toneClass,
     upgradeDestination,

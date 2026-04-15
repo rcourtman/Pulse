@@ -159,6 +159,12 @@ work extends shared components instead of creating new local variants.
 ## Extension Points
 
 1. Add shared primitives in `frontend-modern/src/components/shared/`
+   Shared monitored-system warning primitives under that path must stay compact
+   app-shell pointers into the owned Pulse Pro billing surface. The shared
+   banner may announce posture and route to the relevant billing tab, but
+   durable plan-capacity explanation, over-plan reasoning, and upgrade/review
+   actions belong in the `cloud-paid` plan surface rather than permanent
+   banner-local prose.
 2. Route new top-level settings surfaces through the canonical settings shell
    instead of introducing page-local framing.
    Shared shells and primitives that need websocket or dark-mode context must
@@ -1721,9 +1727,11 @@ policy while sourcing customer-facing monitored-system copy from the canonical
 `frontend-modern/src/utils/monitoredSystemPresentation.ts` helper. Future
 warning-banner work should extend those owners instead of pushing entitlement
 state or route selection back into the render shell. When the warning points at
-Pulse Pro billing, the shared primitive must preserve distinct route-owned
-arrivals for usage explanation vs upgrade intent instead of re-collapsing both
-CTAs onto one generic billing href.
+Pulse Pro billing, the shared primitive must stay a compact pointer rather
+than re-expanding into a full policy explainer. The banner may signal the
+current monitored-system posture and link into the owned billing surface, but
+the longer over-plan or continuity explanation belongs in the plan-surface
+capacity section owned by `cloud-paid`, not in permanent app-shell banner copy.
 That same shared warning boundary now also owns the monitored-system capacity
 posture vocabulary. Shared banners, plan summaries, and ledger headers must
 describe the canonical admission-freeze model from

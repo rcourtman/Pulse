@@ -2992,7 +2992,7 @@ describe('frontend resource type boundaries', () => {
       'useMonitoredSystemLimitWarningBannerState',
     );
     expect(monitoredSystemLimitWarningBannerSource).toContain(
-      'MONITORED_SYSTEM_LIMIT_LEARN_MORE_LABEL',
+      'MONITORED_SYSTEM_LIMIT_VIEW_CAPACITY_LABEL',
     );
     expect(monitoredSystemLimitWarningBannerSource).not.toContain('createEffect');
     expect(monitoredSystemLimitWarningBannerSource).not.toContain('createMemo');
@@ -3003,11 +3003,9 @@ describe('frontend resource type boundaries', () => {
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('createMemo');
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('loadRuntimeCapabilities');
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('trackUpgradeMetricEvent');
-    expect(monitoredSystemLimitWarningBannerStateSource).toContain('legacyConnections');
+    expect(monitoredSystemLimitWarningBannerStateSource).toContain('hasMigrationGap');
+    expect(monitoredSystemLimitWarningBannerStateSource).toContain('viewCapacityDestination');
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('handleUpgradeClick');
-    expect(monitoredSystemLimitWarningBannerModelSource).toContain(
-      'getMonitoredSystemMigrationMessage',
-    );
     expect(monitoredSystemLimitWarningBannerModelSource).toContain(
       'getMonitoredSystemBannerToneClass',
     );

@@ -107,7 +107,7 @@ describe('MonitoredSystemLimitWarningBanner', () => {
       'useMonitoredSystemLimitWarningBannerState',
     );
     expect(monitoredSystemLimitWarningBannerSource).toContain(
-      'MONITORED_SYSTEM_LIMIT_LEARN_MORE_LABEL',
+      'MONITORED_SYSTEM_LIMIT_VIEW_CAPACITY_LABEL',
     );
     expect(monitoredSystemLimitWarningBannerSource).not.toContain('createEffect');
     expect(monitoredSystemLimitWarningBannerSource).not.toContain('createMemo');
@@ -125,27 +125,19 @@ describe('MonitoredSystemLimitWarningBanner', () => {
     expect(monitoredSystemLimitWarningBannerStateSource).toContain(
       'presentationPolicyHidesCommercialSurfaces',
     );
-    expect(monitoredSystemLimitWarningBannerStateSource).toContain(
-      'commercialOverflowDaysRemaining',
-    );
-    expect(monitoredSystemLimitWarningBannerStateSource).not.toContain(
-      'commercialPosture()?.overflow_days_remaining',
-    );
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('trackUpgradeMetricEvent');
-    expect(monitoredSystemLimitWarningBannerStateSource).toContain('legacyConnections');
+    expect(monitoredSystemLimitWarningBannerStateSource).toContain('hasMigrationGap');
     expect(monitoredSystemLimitWarningBannerStateSource).toContain(
       'scopeSelfHostedBillingDestination',
     );
     expect(monitoredSystemLimitWarningBannerStateSource).toContain(
       'SELF_HOSTED_PRO_BILLING_MONITORED_SYSTEM_INTENT',
     );
+    expect(monitoredSystemLimitWarningBannerStateSource).toContain('viewCapacityDestination');
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('handleUpgradeClick');
 
     expect(monitoredSystemLimitWarningBannerModelSource).toContain(
       '@/utils/monitoredSystemPresentation',
-    );
-    expect(monitoredSystemLimitWarningBannerModelSource).toContain(
-      'getMonitoredSystemMigrationMessage',
     );
     expect(monitoredSystemLimitWarningBannerModelSource).toContain(
       'getMonitoredSystemBannerToneClass',
@@ -211,10 +203,10 @@ describe('MonitoredSystemLimitWarningBanner', () => {
       </Router>
     ));
 
-    expect(screen.getByText('5 of 6 included monitored systems are in use.')).toBeInTheDocument();
-    expect(screen.getByText('Learn more')).toHaveAttribute(
+    expect(screen.getByText('1 remaining. 5 monitored, 6 included.')).toBeInTheDocument();
+    expect(screen.getByText('View capacity')).toHaveAttribute(
       'href',
-      '/settings/system/billing/usage?details=counting-rules',
+      '/settings/system/billing/plan',
     );
     expect(screen.getByText('Upgrade to add more')).toBeInTheDocument();
     expect(screen.getByText('Upgrade to add more')).toHaveAttribute(
@@ -268,24 +260,11 @@ describe('MonitoredSystemLimitWarningBanner', () => {
       </Router>
     ));
 
-    expect(screen.getByText('5 of 6 included monitored systems are in use.')).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        /You also have 3 resources connected via API or legacy collectors \(2 Proxmox nodes, 1 Docker host\) that count once toward your monitored-system cap when the same top-level system is discovered canonically\./i,
-      ),
-    ).toBeInTheDocument();
+    expect(screen.getByText('1 remaining. 5 monitored, 6 included.')).toBeInTheDocument();
     expect(screen.getByText('Install v6 collectors')).toHaveAttribute('href', '/settings');
-    expect(
-      screen.getByText(
-        'Community includes 5 monitored systems. 1 temporary setup slot is active (14d remaining)',
-        {
-          exact: false,
-        },
-      ),
-    ).toBeInTheDocument();
-    expect(screen.getByText('Learn more')).toHaveAttribute(
+    expect(screen.getByText('View capacity')).toHaveAttribute(
       'href',
-      '/settings/system/billing/usage?details=counting-rules',
+      '/settings/system/billing/plan',
     );
     expect(screen.getByText('Upgrade to add more')).toHaveAttribute(
       'href',
@@ -310,7 +289,7 @@ describe('MonitoredSystemLimitWarningBanner', () => {
     ));
 
     expect(
-      screen.queryByText('5 of 6 included monitored systems are in use.'),
+      screen.queryByText('1 remaining. 5 monitored, 6 included.'),
     ).not.toBeInTheDocument();
     expect(mockTrackUpgradeMetricEvent).not.toHaveBeenCalled();
   });

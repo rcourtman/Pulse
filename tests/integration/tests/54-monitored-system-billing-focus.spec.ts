@@ -253,17 +253,12 @@ async function openPageWithUrgentMonitoredSystemBanner(page: Page) {
     waitUntil: "domcontentloaded",
   });
   await expect(
-    page.getByRole("status").filter({ hasText: "over plan by 11" }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("status").filter({
-      hasText: "exceeded the limit before new monitored systems were blocked",
-    }),
+    page.getByRole("status").filter({ hasText: "Over plan by 11. 16 monitored, 5 included." }),
   ).toBeVisible();
 }
 
 test.describe("Monitored-system billing focus", () => {
-  test("keeps Learn more and Upgrade arrivals distinct on the billing surface", async ({
+test("keeps capacity and upgrade arrivals distinct on the billing surface", async ({
     page,
   }, testInfo) => {
     test.skip(
@@ -276,31 +271,33 @@ test.describe("Monitored-system billing focus", () => {
 
     const banner = page
       .getByRole("status")
-      .filter({ hasText: "over plan by 11" });
+      .filter({ hasText: "Over plan by 11. 16 monitored, 5 included." });
 
-    await banner.getByRole("link", { name: "Learn more" }).click();
-    await page.waitForURL(
-      "**/settings/system/billing/usage?details=counting-rules",
-    );
-    await expect(page.getByRole("tab", { name: "Usage" })).toHaveAttribute(
+    await banner.getByRole("link", { name: "View capacity" }).click();
+    await page.waitForURL("**/settings/system/billing/plan");
+    await expect(page.getByRole("tab", { name: "Plan" })).toHaveAttribute(
       "aria-selected",
       "true",
     );
     await expect(
-      page.getByRole("button", { name: "Hide counting rules" }),
+      page
+        .getByText("Existing monitoring continues. New monitored systems are blocked."),
     ).toBeVisible();
+    await expect(page.getByText("Why am I over plan?")).toBeVisible();
+    await expect(page.getByRole("link", { name: "Review monitored systems" })).toHaveAttribute(
+      "href",
+      "/settings/system/billing/usage",
+    );
+
+    await page.getByRole("link", { name: "Review monitored systems" }).click();
+    await page.waitForURL("**/settings/system/billing/usage");
+    await expect(page.getByRole("tab", { name: "Usage" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    await expect(page.getByRole("button", { name: "View counting rules" })).toBeVisible();
     await expect(page.getByText("Counts as 1 monitored system")).toBeVisible();
     await expect(page.getByText("1 grouped source")).toBeVisible();
-    await expect(
-      page
-        .getByText(
-          "Counts as one monitored system because Pulse merged multiple top-level views into one canonical cluster.",
-        )
-        .first(),
-    ).toBeVisible();
-    await expect(
-      page.getByText("edge-cluster (Cluster via Kubernetes)").first(),
-    ).toBeVisible();
 
     await openPageWithUrgentMonitoredSystemBanner(page);
 

@@ -48,8 +48,8 @@ import {
 } from '@/utils/pricingHandoff';
 import { buildSelfHostedCommercialPlanModel } from '@/utils/commercialBillingModel';
 import {
+  buildMonitoredSystemCapacitySectionModel,
   getMonitoredSystemLimitCapacityStatusSummary,
-  getMonitoredSystemLimitContextSummary,
   getMonitoredSystemLimitUsageSummary,
   resolveMonitoredSystemCapacityStatus,
 } from '@/utils/monitoredSystemPresentation';
@@ -280,40 +280,29 @@ export function useProLicensePanelState() {
       monitoredSystemCapacity(),
     ),
   );
-  const monitoredSystemCapacityNotice = createMemo(() => {
-    const posture = monitoredSystemCapacityPosture();
-    if (!posture?.current_available) {
+  const monitoredSystemCapacitySection = createMemo(() => {
+    const section = buildMonitoredSystemCapacitySectionModel(
+      monitoredSystemLimitStatus(),
+      monitoredSystemCapacity(),
+    );
+    if (!section) {
       return null;
     }
-    switch (posture.mode) {
-      case 'at_limit_blocking_new':
-        return {
-          title: 'Monitored-system limit reached',
-          body: `This installation is using all ${posture.limit} included monitored systems. Existing monitoring continues, but new monitored systems are blocked until capacity is freed or the plan is upgraded.`,
-          tone: 'border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-100',
-        };
-      case 'over_limit_frozen':
-        if (
-          posture.reason === 'legacy_migration_capture_pending' &&
-          monitoredSystemContinuityNotice()
-        ) {
-          return null;
-        }
-        return {
-          title: 'Monitoring continues above the current plan limit',
-          body:
-            posture.reason === 'preexisting_usage'
-              ? `This installation already exceeded the current plan limit before new monitored systems were blocked. It is currently monitoring ${posture.current} systems while the current plan includes ${posture.limit}. Existing monitoring continues, but new monitored systems are blocked until usage is reduced or the plan is upgraded.`
-              : `This installation is monitoring ${posture.current} systems while the current plan includes ${posture.limit}. Existing monitoring continues, but new monitored systems are blocked until usage is reduced or the plan is upgraded.`,
-          tone: 'border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-100',
-        };
-      default:
-        return null;
-    }
+    const posture = monitoredSystemCapacityPosture();
+    return {
+      ...section,
+      reviewUsageDestination: resolveUpgradeDestination(SELF_HOSTED_PRO_BILLING_USAGE_HREF),
+      upgradeDestination:
+        posture?.blocks_new_systems === true &&
+        posture.reason !== 'legacy_migration_capture_pending'
+          ? resolveUpgradeDestination(
+              getSelfHostedBillingHref('plan', {
+                intent: SELF_HOSTED_PRO_BILLING_MONITORED_SYSTEM_INTENT,
+              }),
+            )
+          : null,
+    };
   });
-  const monitoredSystemCapacityContext = createMemo(() =>
-    getMonitoredSystemLimitContextSummary(monitoredSystemLimitStatus(), monitoredSystemCapacity()),
-  );
   const continuityCapturedAt = createMemo(() => {
     const capturedAt = monitoredSystemContinuity()?.captured_at;
     return typeof capturedAt === 'number' && capturedAt > 0
@@ -474,8 +463,7 @@ export function useProLicensePanelState() {
     commercialMigrationNotice,
     commercialPlanModel,
     monitoredSystemCapacity,
-    monitoredSystemCapacityContext,
-    monitoredSystemCapacityNotice,
+    monitoredSystemCapacitySection,
     monitoredSystemContinuityNotice,
     entitlements,
     formattedFeatures,

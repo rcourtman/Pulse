@@ -259,8 +259,8 @@ describe('ProLicensePanel', () => {
       expect(screen.getByText('Plan Terms')).toBeInTheDocument();
     });
 
-    expect(screen.getByText('5 monitored systems')).toBeInTheDocument();
-    expect(screen.getByText('7 remaining')).toBeInTheDocument();
+    expect(screen.getAllByText('5 monitored systems').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('7 remaining').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Active').length).toBeGreaterThan(0);
     expect(screen.getByText('V5 Pro Monthly (Grandfathered)')).toBeInTheDocument();
     expect(screen.getByText('Included Monitored Systems')).toBeInTheDocument();
@@ -408,8 +408,8 @@ describe('ProLicensePanel', () => {
     expect(
       screen.getByText(/verifying the grandfathered monitored-system floor/i),
     ).toBeInTheDocument();
-    expect(screen.getByText('Verifying…')).toBeInTheDocument();
-    expect(screen.getByText('Unavailable')).toBeInTheDocument();
+    expect(screen.getAllByText('Verifying…').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Unavailable').length).toBeGreaterThan(0);
     expect(screen.getByText('Plan Monitored System Limit')).toBeInTheDocument();
     expect(screen.getByText('Effective Monitored System Limit')).toBeInTheDocument();
     expect(screen.getByText('Continuity Capture')).toBeInTheDocument();
@@ -460,9 +460,9 @@ describe('ProLicensePanel', () => {
       expect(screen.getByText('Migration continuity verification pending')).toBeInTheDocument();
     });
 
-    expect(
-      screen.getByText(/already monitoring 23/i),
-    ).toBeInTheDocument();
+    expect(screen.getAllByText(/already monitoring 23/i).length).toBeGreaterThan(0);
+    expect(screen.getByText('Monitoring capacity')).toBeInTheDocument();
+    expect(screen.getByText('Why is continuity still pending?')).toBeInTheDocument();
     expect(
       screen.queryByText('Monitoring continues above the current plan limit'),
     ).not.toBeInTheDocument();
@@ -516,8 +516,12 @@ describe('ProLicensePanel', () => {
     expect(
       screen.getByText(/keeps an effective monitored-system limit of 23/i),
     ).toBeInTheDocument();
-    expect(screen.getByText('23 monitored systems')).toBeInTheDocument();
-    expect(screen.getByText('Monitored-system limit reached')).toBeInTheDocument();
+    expect(screen.getAllByText('23 monitored systems').length).toBeGreaterThan(0);
+    expect(screen.getByText('Monitoring capacity')).toBeInTheDocument();
+    expect(
+      screen.getByText('Existing monitoring continues. New monitored systems are blocked.'),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Review monitored systems' })).toBeInTheDocument();
     expect(screen.getByText('Plan Monitored System Limit')).toBeInTheDocument();
     expect(screen.getByText('Effective Monitored System Limit')).toBeInTheDocument();
     expect(screen.getByText('Grandfathered Floor')).toBeInTheDocument();
