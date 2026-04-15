@@ -11,9 +11,16 @@ import (
 )
 
 func TestMain(m *testing.M) {
+	dataDir, err := os.MkdirTemp("", "pulse-internal-api-test-*")
+	if err != nil {
+		panic(err)
+	}
 	_ = os.Setenv("PULSE_TEST_BCRYPT_COST", strconv.Itoa(bcrypt.MinCost))
 	_ = os.Setenv("PULSE_UPDATE_SERVER", "http://127.0.0.1:1")
+	_ = os.Setenv("PULSE_DATA_DIR", dataDir)
 	allowLoopbackSSOFetch = true
 	log.Logger = zerolog.Nop()
-	os.Exit(m.Run())
+	code := m.Run()
+	_ = os.RemoveAll(dataDir)
+	os.Exit(code)
 }
