@@ -33,6 +33,47 @@ require_env() {
   fi
 }
 
+resolve_hosted_tenant_id() {
+  if [[ -n "${PULSE_E2E_HOSTED_TENANT_ID}" ]]; then
+    return 0
+  fi
+
+  local tenants_payload
+  if ! tenants_payload="$(
+    curl -fsS \
+      -H "X-Admin-Key: ${PULSE_CP_ADMIN_KEY}" \
+      -H 'Accept: application/json' \
+      "${PULSE_CLOUD_BASE_URL%/}/admin/tenants?state=active"
+  )"; then
+    echo "Failed to list active hosted tenants from ${PULSE_CLOUD_BASE_URL}" >&2
+    exit 1
+  fi
+
+  if ! PULSE_E2E_HOSTED_TENANT_ID="$(
+    printf '%s' "${tenants_payload}" | node -e '
+      let input = "";
+      process.stdin.setEncoding("utf8");
+      process.stdin.on("data", (chunk) => {
+        input += chunk;
+      });
+      process.stdin.on("end", () => {
+        const parsed = JSON.parse(input);
+        const tenants = Array.isArray(parsed?.tenants) ? parsed.tenants : [];
+        const selected = tenants.find((entry) => typeof entry?.id === "string" && entry.id.trim() !== "");
+        if (!selected) {
+          process.exit(2);
+        }
+        process.stdout.write(selected.id.trim());
+      });
+    '
+  )"; then
+    echo "No active hosted tenant found; set PULSE_E2E_HOSTED_TENANT_ID explicitly." >&2
+    exit 1
+  fi
+
+  echo "Auto-selected active hosted tenant ${PULSE_E2E_HOSTED_TENANT_ID}"
+}
+
 require_command curl
 require_command go
 require_command node
@@ -50,7 +91,6 @@ require_env "PULSE_CLOUD_SSH_TARGET" "${PULSE_CLOUD_SSH_TARGET}"
 require_env "PULSE_CP_ADMIN_KEY" "${PULSE_CP_ADMIN_KEY}"
 require_env "PULSE_E2E_STRIPE_API_KEY" "${PULSE_E2E_STRIPE_API_KEY}"
 require_env "PULSE_E2E_STRIPE_WEBHOOK_SECRET" "${PULSE_E2E_STRIPE_WEBHOOK_SECRET}"
-require_env "PULSE_E2E_HOSTED_TENANT_ID" "${PULSE_E2E_HOSTED_TENANT_ID}"
 
 echo "[1/2] Running hosted signup and billing smoke against ${PULSE_CLOUD_BASE_URL}"
 (
@@ -63,6 +103,8 @@ echo "[1/2] Running hosted signup and billing smoke against ${PULSE_CLOUD_BASE_U
   PULSE_E2E_STRIPE_WEBHOOK_SECRET="${PULSE_E2E_STRIPE_WEBHOOK_SECRET}" \
   node ./scripts/run-evals.mjs --mode deterministic --scenario "${HOSTED_SCENARIOS}"
 )
+
+resolve_hosted_tenant_id
 
 echo "[2/2] Running hosted mobile onboarding smoke against tenant ${PULSE_E2E_HOSTED_TENANT_ID}"
 bootstrap_args=(

@@ -79,8 +79,10 @@ async function listTenants(
   request: import('@playwright/test').APIRequestContext,
   baseURL: string,
   adminKey: string,
+  state?: string,
 ): Promise<Tenant[]> {
-  const response = await request.get(`${baseURL}/admin/tenants`, {
+  const suffix = state ? `?state=${encodeURIComponent(state)}` : '';
+  const response = await request.get(`${baseURL}/admin/tenants${suffix}`, {
     headers: {
       'X-Admin-Key': adminKey,
       Accept: 'application/json',
@@ -173,6 +175,11 @@ test.describe.serial('Cloud billing lifecycle (post-checkout)', () => {
       return tenant.state || '';
     }, { timeout: 60_000 }).toBe('active');
     expect(tenantID).toBeTruthy();
+
+    const activeTenants = await listTenants(page.request, baseURL, adminKey, 'active');
+    const activeTenant = activeTenants.find((entry) => entry.id === tenantID);
+    expect(activeTenant?.id).toBe(tenantID);
+    expect(activeTenant?.state).toBe('active');
 
     await stripeRequest<StripeSubscriptionResponse>(
       stripeSecretKey,

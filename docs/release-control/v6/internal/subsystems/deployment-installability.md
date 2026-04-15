@@ -254,7 +254,10 @@ repo-tracked operator command that composes the hosted signup/billing eval pack
 with the hosted mobile onboarding bootstrap helpers under
 `tests/integration/scripts/`, and those helpers must fail closed onto explicit
 target cloud host and control-plane URL input instead of silently defaulting to
-production infrastructure.
+production infrastructure. When the operator does not pin
+`PULSE_E2E_HOSTED_TENANT_ID`, that entrypoint may auto-select the newest active
+tenant exposed by the authenticated `/admin/tenants?state=active` control-plane
+view, but it must still fail closed when no active tenant is available.
 Those same governed release workflows also own the operator-facing wording for
 that promotion metadata. Human-visible workflow inputs, summaries, and error
 messages must describe the path as a prerelease or preview flow rather than
