@@ -2,6 +2,7 @@ import { Component, Show, For, createEffect, createMemo } from 'solid-js';
 import { MessageItem } from './MessageItem';
 import type { ChatSession } from '@/api/aiChat';
 import type { ChatMessage, PendingApproval, PendingQuestion } from './types';
+import { AI_CHAT_SUGGESTIONS_LABEL } from '@/utils/aiChatPresentation';
 
 interface ChatMessagesProps {
   messages: ChatMessage[];
@@ -102,7 +103,7 @@ export const ChatMessages: Component<ChatMessagesProps> = (props) => {
             <Show when={props.emptyState!.suggestions && props.emptyState!.suggestions!.length > 0}>
               <div class="space-y-2">
                 <div class="text-xs font-medium text-muted text-left uppercase tracking-wider pl-1">
-                  Or try asking
+                  {AI_CHAT_SUGGESTIONS_LABEL}
                 </div>
                 <For each={props.emptyState!.suggestions}>
                   {(suggestion) => (

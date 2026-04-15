@@ -6,6 +6,10 @@ import { ToolExecutionBlock } from './ToolExecutionBlock';
 import { ApprovalCard } from './ApprovalCard';
 import { QuestionCard } from './QuestionCard';
 import type { ChatMessage, PendingApproval, PendingQuestion, StreamDisplayEvent } from './types';
+import {
+  AI_CHAT_ASSISTANT_MESSAGE_LABEL,
+  AI_CHAT_CONTEXT_USED_LABEL,
+} from '@/utils/aiChatPresentation';
 import { formatIdentifierLabel } from '@/utils/textPresentation';
 
 interface MessageItemProps {
@@ -139,7 +143,9 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
                 </svg>
               </div>
               <div class="flex items-baseline gap-2">
-                <span class="text-xs font-semibold text-base-content">Assistant</span>
+                <span class="text-xs font-semibold text-base-content">
+                  {AI_CHAT_ASSISTANT_MESSAGE_LABEL}
+                </span>
                 <Show when={props.message.model && !props.message.isStreaming}>
                   <span class="text-[10px] text-muted font-mono">{props.message.model}</span>
                 </Show>
@@ -230,7 +236,7 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
               <Show when={!props.message.isStreaming && contextTools().length > 0}>
                 <div class="mt-4 pt-3 border-t border-border-subtle flex flex-wrap gap-2">
                   <span class="text-[10px] uppercase font-semibold text-muted tracking-wider">
-                    Context used
+                    {AI_CHAT_CONTEXT_USED_LABEL}
                   </span>
                   <div class="flex flex-wrap gap-1.5">
                     {contextTools().map((name) => (

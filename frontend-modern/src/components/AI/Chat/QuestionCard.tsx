@@ -1,5 +1,9 @@
 import { Component, Show, For, createSignal } from 'solid-js';
 import type { PendingQuestion } from './types';
+import {
+  AI_CHAT_QUESTION_CARD_PLACEHOLDER,
+  AI_CHAT_QUESTION_CARD_TITLE,
+} from '@/utils/aiChatPresentation';
 
 interface QuestionCardProps {
   question: PendingQuestion;
@@ -49,7 +53,7 @@ export const QuestionCard: Component<QuestionCardProps> = (props) => {
             />
           </svg>
         </div>
-        <span class="font-semibold">Question from Pulse Assistant</span>
+        <span class="font-semibold">{AI_CHAT_QUESTION_CARD_TITLE}</span>
       </div>
 
       {/* Questions */}
@@ -68,7 +72,7 @@ export const QuestionCard: Component<QuestionCardProps> = (props) => {
                   value={answers()[q.id] || ''}
                   onInput={(e) => handleInputChange(q.id, e.currentTarget.value)}
                   class="w-full px-3 py-2 text-sm border border-blue-200 dark:border-blue-700 rounded-md bg-surface text-base-content focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="Type your answer..."
+                  placeholder={AI_CHAT_QUESTION_CARD_PLACEHOLDER}
                   disabled={props.question.isAnswering}
                 />
               </Show>

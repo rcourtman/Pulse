@@ -24,7 +24,7 @@ export interface PendingApproval {
   approvalId?: string; // ID of the approval record for API calls
 }
 
-// Question from Pulse AI
+// Question from Pulse Assistant
 export interface QuestionOption {
   label: string;
   value: string;

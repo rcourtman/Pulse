@@ -116,7 +116,7 @@ describe('MessageItem', () => {
         />
       ));
 
-      expect(screen.queryByText('Assistant')).not.toBeInTheDocument();
+      expect(screen.queryByText('Pulse Assistant')).not.toBeInTheDocument();
     });
 
     it('renders user content directly (not via markdown)', () => {
@@ -139,7 +139,7 @@ describe('MessageItem', () => {
         <MessageItem message={makeMessage({ role: 'assistant' })} {...makeHandlers()} />
       ));
 
-      expect(screen.getByText('Assistant')).toBeInTheDocument();
+      expect(screen.getByText('Pulse Assistant')).toBeInTheDocument();
     });
 
     it('does not use right-alignment for assistant messages', () => {
@@ -212,7 +212,7 @@ describe('MessageItem', () => {
       ));
 
       // No model text should appear anywhere in the assistant header area
-      const assistantLabel = screen.getByText('Assistant');
+      const assistantLabel = screen.getByText('Pulse Assistant');
       const parent = assistantLabel.parentElement;
       expect(parent?.querySelector('.font-mono')).not.toBeInTheDocument();
     });

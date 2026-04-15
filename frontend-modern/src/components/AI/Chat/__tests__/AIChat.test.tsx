@@ -12,6 +12,7 @@ const {
   mockAiChatStore,
   mockByType,
   mockResources,
+  mockWebSocketState,
 } = vi.hoisted(() => {
   const mockChat = {
     messages: vi.fn((): ChatMessage[] => []),
@@ -83,6 +84,9 @@ const {
 
   const mockByType = vi.fn((_type: string): Array<{ name: string }> => []);
   const mockResources = vi.fn((): Array<{ id: string; type: string }> => []);
+  const mockWebSocketState = {
+    resources: [] as Array<{ id: string; type: string }> | undefined,
+  };
 
   return {
     mockChat,
@@ -92,6 +96,7 @@ const {
     mockAiChatStore,
     mockByType,
     mockResources,
+    mockWebSocketState,
   };
 });
 
@@ -167,6 +172,12 @@ vi.mock('@/stores/aiChat', () => ({ aiChatStore: mockAiChatStore }));
 vi.mock('@/utils/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
+vi.mock('@/hooks/useUnifiedResources', () => ({
+  getCachedUnifiedResources: mockResources,
+}));
+vi.mock('@/stores/websocket-global', () => ({
+  getGlobalWebSocketStore: () => ({ state: mockWebSocketState }),
+}));
 vi.mock('@/hooks/useResources', () => ({
   useResources: () => ({ byType: mockByType, resources: mockResources }),
 }));
@@ -205,6 +216,7 @@ beforeEach(() => {
   mockChat.sendMessage.mockResolvedValue(true);
   mockByType.mockReturnValue([]);
   mockResources.mockReturnValue([]);
+  mockWebSocketState.resources = [];
   mockAIAPI.getModels.mockResolvedValue({ models: [] });
   mockAIAPI.getSettings.mockResolvedValue({
     model: 'gpt-4',
@@ -230,7 +242,9 @@ describe('AIChat', () => {
     it('renders the header with title when open', () => {
       renderChat();
       expect(screen.getByText('Pulse Assistant')).toBeInTheDocument();
-      expect(screen.getByText('Infrastructure intelligence')).toBeInTheDocument();
+      expect(
+        screen.getByText('Observed context, provider-backed reasoning, and governed actions.'),
+      ).toBeInTheDocument();
     });
 
     it('renders the input textarea', () => {
@@ -418,13 +432,13 @@ describe('AIChat', () => {
     it('opens session picker on click', () => {
       renderChat();
       fireEvent.click(screen.getByTitle('Chat sessions'));
-      expect(screen.getByText('New conversation')).toBeInTheDocument();
+      expect(screen.getByText('New session')).toBeInTheDocument();
     });
 
-    it('shows "No previous conversations" when empty', () => {
+    it('shows "No previous assistant sessions" when empty', () => {
       renderChat();
       fireEvent.click(screen.getByTitle('Chat sessions'));
-      expect(screen.getByText('No previous conversations')).toBeInTheDocument();
+      expect(screen.getByText('No previous assistant sessions')).toBeInTheDocument();
     });
 
     it('lists sessions in the dropdown', async () => {
@@ -916,8 +930,13 @@ describe('AIChat', () => {
       });
       renderChat();
       await waitFor(() => {
-        expect(screen.getByText('Discovery is off.')).toBeInTheDocument();
+        expect(screen.getByText('Workload Discovery is off.')).toBeInTheDocument();
       });
+      expect(
+        screen.getByText(
+          /Enable it in Settings so Pulse Assistant can reference real services, versions, and commands instead of generic guidance\./,
+        ),
+      ).toBeInTheDocument();
     });
 
     it('does not show discovery hint when discovery is enabled', async () => {
@@ -925,7 +944,7 @@ describe('AIChat', () => {
       await waitFor(() => {
         expect(mockAIAPI.getSettings).toHaveBeenCalled();
       });
-      expect(screen.queryByText('Discovery is off.')).not.toBeInTheDocument();
+      expect(screen.queryByText('Workload Discovery is off.')).not.toBeInTheDocument();
     });
   });
 

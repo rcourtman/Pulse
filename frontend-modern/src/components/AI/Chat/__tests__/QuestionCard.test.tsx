@@ -23,12 +23,12 @@ function makePendingQuestion(overrides?: Partial<PendingQuestion>): PendingQuest
 }
 
 describe('QuestionCard', () => {
-  it('renders the header "Question from Pulse Assistant"', () => {
+  it('renders the header "Pulse Assistant needs your input"', () => {
     render(() => (
       <QuestionCard question={makePendingQuestion()} onAnswer={vi.fn()} onSkip={vi.fn()} />
     ));
 
-    expect(screen.getByText('Question from Pulse Assistant')).toBeInTheDocument();
+    expect(screen.getByText('Pulse Assistant needs your input')).toBeInTheDocument();
   });
 
   it('renders the question text', () => {

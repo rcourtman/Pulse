@@ -69,11 +69,11 @@ describe('ChatMessages', () => {
         <ChatMessages
           messages={[]}
           {...makeHandlers()}
-          emptyState={{ title: 'Welcome to Pulse AI' }}
+          emptyState={{ title: 'Ask about your infrastructure' }}
         />
       ));
 
-      expect(screen.getByText('Welcome to Pulse AI')).toBeInTheDocument();
+      expect(screen.getByText('Ask about your infrastructure')).toBeInTheDocument();
     });
 
     it('shows subtitle when provided in emptyState', () => {
@@ -165,10 +165,10 @@ describe('ChatMessages', () => {
         />
       ));
 
-      expect(screen.queryByText('Or try asking')).not.toBeInTheDocument();
+      expect(screen.queryByText('Try asking')).not.toBeInTheDocument();
     });
 
-    it('renders "Or try asking" label when suggestions exist', () => {
+    it('renders "Try asking" label when suggestions exist', () => {
       render(() => (
         <ChatMessages
           messages={[]}
@@ -180,7 +180,7 @@ describe('ChatMessages', () => {
         />
       ));
 
-      expect(screen.getByText('Or try asking')).toBeInTheDocument();
+      expect(screen.getByText('Try asking')).toBeInTheDocument();
     });
 
     it('does not show empty state when there are messages', () => {
@@ -188,18 +188,18 @@ describe('ChatMessages', () => {
         <ChatMessages
           messages={[makeMessage()]}
           {...makeHandlers()}
-          emptyState={{ title: 'Welcome to Pulse AI' }}
+          emptyState={{ title: 'Ask about your infrastructure' }}
         />
       ));
 
-      expect(screen.queryByText('Welcome to Pulse AI')).not.toBeInTheDocument();
+      expect(screen.queryByText('Ask about your infrastructure')).not.toBeInTheDocument();
     });
 
     it('does not show empty state when emptyState prop is not provided', () => {
       render(() => <ChatMessages messages={[]} {...makeHandlers()} />);
 
       expect(screen.queryByText('Welcome')).not.toBeInTheDocument();
-      expect(screen.queryByText('Or try asking')).not.toBeInTheDocument();
+      expect(screen.queryByText('Try asking')).not.toBeInTheDocument();
     });
 
     it('each suggestion button is individually clickable', () => {

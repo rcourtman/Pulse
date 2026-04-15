@@ -23,7 +23,21 @@ import {
   syncAIRuntimeSettings,
 } from '@/stores/aiRuntimeState';
 import { logger } from '@/utils/logger';
-import { AI_CHAT_SESSION_EMPTY_STATE } from '@/utils/aiChatPresentation';
+import {
+  AI_CHAT_COLLAPSE_TITLE,
+  AI_CHAT_DISCOVERY_HINT_BODY,
+  AI_CHAT_DISCOVERY_HINT_TITLE,
+  AI_CHAT_DRAWER_SUBTITLE,
+  AI_CHAT_DRAWER_TITLE,
+  AI_CHAT_EMPTY_STATE_SUBTITLE,
+  AI_CHAT_EMPTY_STATE_TITLE,
+  AI_CHAT_INPUT_PLACEHOLDER,
+  AI_CHAT_NEW_SESSION_BUTTON_TITLE,
+  AI_CHAT_NEW_SESSION_MENU_LABEL,
+  AI_CHAT_NEW_SESSION_SHORT_LABEL,
+  AI_CHAT_SESSION_EMPTY_STATE,
+  getAIChatEmptyStateSuggestions,
+} from '@/utils/aiChatPresentation';
 import {
   getAIChatControlLevelPresentation,
   normalizeAIControlLevel,
@@ -813,7 +827,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
         <button
           onClick={props.onClose}
           class="hidden sm:flex absolute left-0 top-1/2 -translate-x-full -translate-y-1/2 items-center justify-center w-8 py-3 rounded-l-xl bg-surface text-blue-600 dark:text-blue-400 shadow-sm border border-r-0 border-border hover:bg-surface-hover transition-colors z-50 cursor-pointer"
-          title="Collapse Pulse Assistant"
+          title={AI_CHAT_COLLAPSE_TITLE}
         >
           <svg
             class="h-5 w-5 flex-shrink-0"
@@ -848,8 +862,8 @@ export const AIChat: Component<AIChatProps> = (props) => {
               </svg>
             </div>
             <div>
-              <h2 class="text-sm font-semibold text-base-content">Pulse Assistant</h2>
-              <p class="text-[11px] text-muted">Infrastructure intelligence</p>
+              <h2 class="text-sm font-semibold text-base-content">{AI_CHAT_DRAWER_TITLE}</h2>
+              <p class="text-[11px] text-muted">{AI_CHAT_DRAWER_SUBTITLE}</p>
             </div>
           </div>
 
@@ -858,7 +872,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
             <button
               onClick={handleNewConversation}
               class="flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] text-muted hover:text-base-content rounded-md border border-border hover:border-border bg-surface transition-colors"
-              title="New chat"
+              title={AI_CHAT_NEW_SESSION_BUTTON_TITLE}
             >
               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path
@@ -868,7 +882,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
                   d="M12 4v16m8-8H4"
                 />
               </svg>
-              <span class="font-medium">New</span>
+              <span class="font-medium">{AI_CHAT_NEW_SESSION_SHORT_LABEL}</span>
             </button>
 
             {/* Model selector */}
@@ -996,7 +1010,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
                         d="M12 4v16m8-8H4"
                       />
                     </svg>
-                    <span class="font-medium">New conversation</span>
+                    <span class="font-medium">{AI_CHAT_NEW_SESSION_MENU_LABEL}</span>
                   </button>
 
                   <div class="max-h-64 overflow-y-auto">
@@ -1119,8 +1133,8 @@ export const AIChat: Component<AIChatProps> = (props) => {
                 />
               </svg>
               <span>
-                <span class="font-medium">Discovery is off.</span> Enable it in Settings for more
-                accurate answers about your infrastructure.
+                <span class="font-medium">{AI_CHAT_DISCOVERY_HINT_TITLE}</span>{' '}
+                {AI_CHAT_DISCOVERY_HINT_BODY}
               </span>
             </div>
             <button
@@ -1152,18 +1166,9 @@ export const AIChat: Component<AIChatProps> = (props) => {
             .slice(0, 3)}
           onLoadSession={handleLoadSession}
           emptyState={{
-            title: 'Pulse Assistant ready',
-            suggestions: isCluster()
-              ? [
-                  'Analyze overall cluster health',
-                  'Check node load balancing',
-                  'Find and fix failed services',
-                ]
-              : [
-                  'Analyze system health',
-                  'Check storage usage',
-                  'Scan for security vulnerabilities',
-                ],
+            title: AI_CHAT_EMPTY_STATE_TITLE,
+            subtitle: AI_CHAT_EMPTY_STATE_SUBTITLE,
+            suggestions: getAIChatEmptyStateSuggestions(isCluster()),
             onSuggestionClick: (s) => setInput(s),
           }}
         />
@@ -1265,7 +1270,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
                 value={input()}
                 onInput={handleInputChange}
                 onKeyDown={handleKeyDown}
-                placeholder="Ask about your infrastructure..."
+                placeholder={AI_CHAT_INPUT_PLACEHOLDER}
                 rows={2}
                 class="w-full px-4 py-3 text-sm rounded-md border border-border bg-surface text-base-content placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
               />

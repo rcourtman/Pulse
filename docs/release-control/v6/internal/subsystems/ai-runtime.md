@@ -284,7 +284,9 @@ helpers used across chat, settings, and usage surfaces.
 `frontend-modern/src/utils/aiSessionDiffPresentation.ts`, and
 `frontend-modern/src/utils/aiExplorePresentation.ts` are the canonical owners
 for provider naming, provider health labels, control-level semantics,
-chat/session empty states, session-diff badges, and explore-status labels.
+chat drawer title/subtitle, discovery hint framing, chat/session empty states,
+assistant message and question-card labels, session-diff badges, and explore-
+status labels.
 Settings and chat surfaces must consume those helpers instead of keeping local
 AI wording or model/provider inference branches.
 
