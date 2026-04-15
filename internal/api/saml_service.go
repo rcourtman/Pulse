@@ -33,6 +33,18 @@ type SAMLService struct {
 	lastRefresh time.Time
 }
 
+func normalizeSAMLBaseURL(baseURL string) (string, error) {
+	normalized := strings.TrimRight(strings.TrimSpace(baseURL), "/")
+	if normalized == "" {
+		return "", nil
+	}
+	parsed, err := securityutil.NormalizeAbsoluteHTTPURL(normalized)
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimRight(parsed.String(), "/"), nil
+}
+
 // SAMLAuthResult contains the result of a successful SAML authentication
 type SAMLAuthResult struct {
 	Username   string
@@ -51,10 +63,15 @@ func NewSAMLService(ctx context.Context, providerID string, cfg *config.SAMLProv
 		return nil, errors.New("saml configuration is nil")
 	}
 
+	normalizedBaseURL, err := normalizeSAMLBaseURL(baseURL)
+	if err != nil {
+		return nil, fmt.Errorf("invalid saml base url: %w", err)
+	}
+
 	service := &SAMLService{
 		providerID: providerID,
 		config:     cfg,
-		baseURL:    strings.TrimRight(baseURL, "/"),
+		baseURL:    normalizedBaseURL,
 		httpClient: newSAMLHTTPClient(),
 	}
 
@@ -265,6 +282,12 @@ func (s *SAMLService) addIDPCertificate(metadata *saml.EntityDescriptor) error {
 }
 
 func (s *SAMLService) initServiceProvider() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.initServiceProviderLocked()
+}
+
+func (s *SAMLService) initServiceProviderLocked() error {
 	// Build SP Entity ID
 	spEntityID := s.config.SPEntityID
 	if spEntityID == "" {
@@ -329,6 +352,32 @@ func (s *SAMLService) initServiceProvider() error {
 		Str("acs_url", acsURL.String()).
 		Bool("sign_requests", s.config.SignRequests).
 		Msg("Initialized SAML Service Provider")
+
+	return nil
+}
+
+func (s *SAMLService) SetBaseURL(baseURL string) error {
+	normalizedBaseURL, err := normalizeSAMLBaseURL(baseURL)
+	if err != nil {
+		return fmt.Errorf("invalid saml base url: %w", err)
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if normalizedBaseURL == s.baseURL {
+		return nil
+	}
+
+	previousBaseURL := s.baseURL
+	previousSP := s.sp
+
+	s.baseURL = normalizedBaseURL
+	if err := s.initServiceProviderLocked(); err != nil {
+		s.baseURL = previousBaseURL
+		s.sp = previousSP
+		return err
+	}
 
 	return nil
 }

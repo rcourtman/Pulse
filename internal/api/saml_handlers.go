@@ -29,6 +29,35 @@ func NewSAMLServiceManager(baseURL string) *SAMLServiceManager {
 	}
 }
 
+func (m *SAMLServiceManager) GetPublicURL() string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.baseURL
+}
+
+func (m *SAMLServiceManager) SetPublicURL(baseURL string) error {
+	normalizedBaseURL, err := normalizeSAMLBaseURL(baseURL)
+	if err != nil {
+		return fmt.Errorf("normalize SAML public URL: %w", err)
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if normalizedBaseURL == m.baseURL {
+		return nil
+	}
+
+	for providerID, service := range m.services {
+		if err := service.SetBaseURL(normalizedBaseURL); err != nil {
+			return fmt.Errorf("rebind SAML provider %q public URL: %w", providerID, err)
+		}
+	}
+
+	m.baseURL = normalizedBaseURL
+	return nil
+}
+
 // GetService returns a SAML service for the given provider ID
 func (m *SAMLServiceManager) GetService(providerID string) *SAMLService {
 	m.mu.RLock()
@@ -38,7 +67,11 @@ func (m *SAMLServiceManager) GetService(providerID string) *SAMLService {
 
 // InitializeProvider creates or updates a SAML service for a provider
 func (m *SAMLServiceManager) InitializeProvider(ctx context.Context, providerID string, cfg *config.SAMLProviderConfig) error {
-	service, err := NewSAMLService(ctx, providerID, cfg, m.baseURL)
+	m.mu.RLock()
+	baseURL := m.baseURL
+	m.mu.RUnlock()
+
+	service, err := NewSAMLService(ctx, providerID, cfg, baseURL)
 	if err != nil {
 		return fmt.Errorf("initialize SAML provider %q: %w", providerID, err)
 	}
@@ -61,6 +94,13 @@ func (m *SAMLServiceManager) RemoveProvider(providerID string) {
 	delete(m.services, providerID)
 }
 
+func (r *Router) syncSAMLPublicURL() error {
+	if r == nil || r.samlManager == nil || r.config == nil {
+		return nil
+	}
+	return r.samlManager.SetPublicURL(r.config.PublicURL)
+}
+
 // handleSAMLLogin initiates a SAML authentication flow
 func (r *Router) handleSAMLLogin(w http.ResponseWriter, req *http.Request) {
 	providerID := extractSAMLProviderID(req.URL.Path, "login")
@@ -78,6 +118,12 @@ func (r *Router) handleSAMLLogin(w http.ResponseWriter, req *http.Request) {
 	provider := r.getSSOProvider(providerID)
 	if provider == nil || provider.Type != config.SSOProviderTypeSAML || !provider.Enabled {
 		writeErrorResponse(w, http.StatusNotFound, "provider_not_found", "SAML provider not found or not enabled", nil)
+		return
+	}
+
+	if err := r.syncSAMLPublicURL(); err != nil {
+		log.Error().Err(err).Str("provider_id", providerID).Msg("Failed to synchronize SAML public URL")
+		writeErrorResponse(w, http.StatusInternalServerError, "saml_init_failed", "Failed to synchronize SAML provider", nil)
 		return
 	}
 
@@ -285,6 +331,12 @@ func (r *Router) handleSAMLMetadata(w http.ResponseWriter, req *http.Request) {
 	provider := r.getSSOProvider(providerID)
 	if provider == nil || provider.Type != config.SSOProviderTypeSAML {
 		writeErrorResponse(w, http.StatusNotFound, "provider_not_found", "SAML provider not found", nil)
+		return
+	}
+
+	if err := r.syncSAMLPublicURL(); err != nil {
+		log.Error().Err(err).Str("provider_id", providerID).Msg("Failed to synchronize SAML public URL for metadata")
+		writeErrorResponse(w, http.StatusInternalServerError, "saml_init_failed", "Failed to synchronize SAML provider", nil)
 		return
 	}
 
@@ -529,6 +581,9 @@ func (r *Router) InitializeSAMLProviders(ctx context.Context) error {
 	if r.ssoConfig == nil {
 		return nil
 	}
+	if err := r.syncSAMLPublicURL(); err != nil {
+		return fmt.Errorf("sync saml public url: %w", err)
+	}
 
 	for _, provider := range r.ssoConfig.Providers {
 		if provider.Type == config.SSOProviderTypeSAML && provider.Enabled && provider.SAML != nil {
@@ -547,6 +602,9 @@ func (r *Router) InitializeSAMLProviders(ctx context.Context) error {
 
 // RefreshSAMLProvider refreshes a SAML provider's IdP metadata
 func (r *Router) RefreshSAMLProvider(ctx context.Context, providerID string) error {
+	if err := r.syncSAMLPublicURL(); err != nil {
+		return fmt.Errorf("sync saml public url: %w", err)
+	}
 	service := r.samlManager.GetService(providerID)
 	if service == nil {
 		return nil

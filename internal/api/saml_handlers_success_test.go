@@ -54,6 +54,121 @@ func TestHandleSAMLMetadata_Success(t *testing.T) {
 	}
 }
 
+func TestHandleSAMLMetadata_SynchronizesConfiguredPublicURL(t *testing.T) {
+	router := &Router{
+		config:      &config.Config{PublicURL: "https://pulse.example.com"},
+		samlManager: NewSAMLServiceManager(""),
+		ssoConfig: &config.SSOConfig{
+			Providers: []config.SSOProvider{testSAMLProvider("okta", true)},
+		},
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/saml/okta/metadata", nil)
+	rr := httptest.NewRecorder()
+
+	router.handleSAMLMetadata(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rr.Code)
+	}
+	body := rr.Body.String()
+	if !strings.Contains(body, `entityID="https://pulse.example.com/saml/okta"`) {
+		t.Fatalf("expected absolute entityID in metadata, got %q", body)
+	}
+	if !strings.Contains(body, `Location="https://pulse.example.com/api/saml/okta/acs"`) {
+		t.Fatalf("expected absolute ACS URL in metadata, got %q", body)
+	}
+}
+
+func TestHandleSAMLMetadata_RebuildsPreviouslyInitializedRelativeMetadata(t *testing.T) {
+	provider := testSAMLProvider("okta", true)
+	router := &Router{
+		config:      &config.Config{PublicURL: "https://pulse.example.com"},
+		samlManager: NewSAMLServiceManager(""),
+		ssoConfig: &config.SSOConfig{
+			Providers: []config.SSOProvider{provider},
+		},
+	}
+
+	if err := router.samlManager.InitializeProvider(context.Background(), provider.ID, provider.SAML); err != nil {
+		t.Fatalf("InitializeProvider: %v", err)
+	}
+
+	service := router.samlManager.GetService(provider.ID)
+	if service == nil {
+		t.Fatal("expected initialized SAML service")
+	}
+
+	staleMetadata, err := service.GetMetadata()
+	if err != nil {
+		t.Fatalf("GetMetadata before sync: %v", err)
+	}
+	staleBody := string(staleMetadata)
+	if !strings.Contains(staleBody, `entityID="/saml/okta"`) {
+		t.Fatalf("expected pre-sync relative entityID, got %q", staleBody)
+	}
+	if !strings.Contains(staleBody, `Location="/api/saml/okta/acs"`) {
+		t.Fatalf("expected pre-sync relative ACS URL, got %q", staleBody)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/saml/okta/metadata", nil)
+	rr := httptest.NewRecorder()
+
+	router.handleSAMLMetadata(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rr.Code)
+	}
+	body := rr.Body.String()
+	if !strings.Contains(body, `entityID="https://pulse.example.com/saml/okta"`) {
+		t.Fatalf("expected absolute entityID after sync, got %q", body)
+	}
+	if !strings.Contains(body, `Location="https://pulse.example.com/api/saml/okta/acs"`) {
+		t.Fatalf("expected absolute ACS URL after sync, got %q", body)
+	}
+}
+
+func TestHandleSAMLLogin_RebuildsPreviouslyInitializedRelativeServiceProvider(t *testing.T) {
+	provider := testSAMLProvider("okta", true)
+	router := &Router{
+		config:      &config.Config{PublicURL: "https://pulse.example.com"},
+		samlManager: NewSAMLServiceManager(""),
+		ssoConfig: &config.SSOConfig{
+			Providers: []config.SSOProvider{provider},
+		},
+	}
+
+	if err := router.samlManager.InitializeProvider(context.Background(), provider.ID, provider.SAML); err != nil {
+		t.Fatalf("InitializeProvider: %v", err)
+	}
+
+	service := router.samlManager.GetService(provider.ID)
+	if service == nil {
+		t.Fatal("expected initialized SAML service")
+	}
+	if got := service.GetSPEntityID(); got != "/saml/okta" {
+		t.Fatalf("expected relative entity ID before login sync, got %q", got)
+	}
+	if got := service.sp.AcsURL.String(); got != "/api/saml/okta/acs" {
+		t.Fatalf("expected relative ACS URL before login sync, got %q", got)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/saml/okta/login", nil)
+	rr := httptest.NewRecorder()
+
+	router.handleSAMLLogin(rr, req)
+
+	if rr.Code != http.StatusFound {
+		t.Fatalf("expected status %d, got %d", http.StatusFound, rr.Code)
+	}
+	if got := service.GetSPEntityID(); got != "https://pulse.example.com/saml/okta" {
+		t.Fatalf("expected absolute entity ID after login sync, got %q", got)
+	}
+	if got := service.sp.AcsURL.String(); got != "https://pulse.example.com/api/saml/okta/acs" {
+		t.Fatalf("expected absolute ACS URL after login sync, got %q", got)
+	}
+}
+
 func TestHandleSAMLLogin_SuccessGetAndPost(t *testing.T) {
 	router := newSAMLRouter(t, testSAMLProvider("okta", true))
 

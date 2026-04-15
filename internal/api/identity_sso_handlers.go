@@ -365,6 +365,9 @@ func (r *Router) handleCreateSSOProvider(w http.ResponseWriter, req *http.Reques
 
 	// Initialize SAML provider if applicable
 	if provider.Type == config.SSOProviderTypeSAML && provider.Enabled && provider.SAML != nil {
+		if err := r.syncSAMLPublicURL(); err != nil {
+			log.Warn().Err(err).Str("provider_id", provider.ID).Msg("Failed to synchronize SAML public URL before provider init")
+		}
 		if err := r.samlManager.InitializeProvider(req.Context(), provider.ID, provider.SAML); err != nil {
 			log.Warn().Err(err).Str("provider_id", provider.ID).Msg("Failed to initialize SAML provider (will retry on first use)")
 		}
@@ -522,6 +525,9 @@ func (r *Router) handleUpdateSSOProvider(w http.ResponseWriter, req *http.Reques
 	// Re-initialize SAML provider if applicable
 	if updated.Type == config.SSOProviderTypeSAML && updated.SAML != nil {
 		if updated.Enabled {
+			if err := r.syncSAMLPublicURL(); err != nil {
+				log.Warn().Err(err).Str("provider_id", updated.ID).Msg("Failed to synchronize SAML public URL before provider re-init")
+			}
 			if err := r.samlManager.InitializeProvider(req.Context(), updated.ID, updated.SAML); err != nil {
 				log.Warn().Err(err).Str("provider_id", updated.ID).Msg("Failed to re-initialize SAML provider")
 			}

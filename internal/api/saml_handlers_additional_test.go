@@ -145,14 +145,17 @@ func TestInitializeSAMLProviders(t *testing.T) {
 	}
 
 	router := newSAMLRouter(t, provider)
-	if router.samlManager == nil {
-		router.samlManager = NewSAMLServiceManager("https://pulse.example.com")
-	}
+	router.samlManager = NewSAMLServiceManager("")
 
 	if err := router.InitializeSAMLProviders(reqContext(t)); err != nil {
 		t.Fatalf("InitializeSAMLProviders error: %v", err)
 	}
+	if actual := router.samlManager.GetPublicURL(); actual != "https://pulse.example.com" {
+		t.Fatalf("expected synchronized public URL, got %q", actual)
+	}
 	if svc := router.samlManager.GetService("okta"); svc == nil {
 		t.Fatalf("expected SAML service to be initialized")
+	} else if svc.GetSPEntityID() != "https://pulse.example.com/saml/okta" {
+		t.Fatalf("expected absolute entity ID after init, got %q", svc.GetSPEntityID())
 	}
 }

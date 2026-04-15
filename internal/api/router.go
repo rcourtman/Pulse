@@ -269,6 +269,9 @@ func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, mtMonitor *monit
 	// Initialize SSO service managers
 	r.oidcManager = NewOIDCServiceManager()
 	r.samlManager = NewSAMLServiceManager("")
+	if err := r.syncSAMLPublicURL(); err != nil {
+		log.Error().Err(err).Msg("Failed to initialize SAML public URL")
+	}
 
 	r.initializeBootstrapToken()
 
@@ -3821,6 +3824,9 @@ func (r *Router) capturePublicURLFromRequest(req *http.Request) {
 		if mgr := r.monitor.GetNotificationManager(); mgr != nil {
 			mgr.SetPublicURL(normalizedCandidate)
 		}
+	}
+	if err := r.syncSAMLPublicURL(); err != nil {
+		log.Error().Err(err).Str("publicURL", normalizedCandidate).Msg("Failed to synchronize SAML public URL from request")
 	}
 }
 
