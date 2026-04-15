@@ -221,6 +221,11 @@ type MonitoredSystemCapacityStatus struct {
 	// is while existing monitoring continues.
 	Overage int64 `json:"overage"`
 
+	// Reason explains why the current monitored-system posture is legitimate.
+	// Values: "limit_reached", "preexisting_usage",
+	// "legacy_migration_capture_pending"
+	Reason string `json:"reason,omitempty"`
+
 	// BlocksNewSystems indicates that Pulse will reject net-new monitored
 	// systems until capacity is freed or the plan changes.
 	BlocksNewSystems bool `json:"blocks_new_systems"`
@@ -420,6 +425,7 @@ func BuildEntitlementPayloadWithUsage(
 	payload.MonitoredSystemCapacity = buildMonitoredSystemCapacityStatus(
 		int64(status.MaxMonitoredSystems),
 		usage,
+		status.MonitoredSystemContinuity,
 	)
 
 	if payload.Capabilities == nil {
@@ -525,6 +531,7 @@ func boolPointer(value bool) *bool {
 func buildMonitoredSystemCapacityStatus(
 	limit int64,
 	usage EntitlementUsageSnapshot,
+	continuity *MonitoredSystemContinuityStatus,
 ) *MonitoredSystemCapacityStatus {
 	currentAvailable := usage.monitoredSystemCountAvailable()
 	if !currentAvailable {
@@ -574,11 +581,17 @@ func buildMonitoredSystemCapacityStatus(
 		status.AvailableSlots = limit - current
 	case current == limit:
 		status.Mode = "at_limit_blocking_new"
+		status.Reason = "limit_reached"
 		status.BlocksNewSystems = true
 	case current > limit:
 		status.Mode = "over_limit_frozen"
 		status.BlocksNewSystems = true
 		status.Overage = current - limit
+		if continuity != nil && continuity.CapturePending {
+			status.Reason = "legacy_migration_capture_pending"
+		} else {
+			status.Reason = "preexisting_usage"
+		}
 	default:
 		status.Mode = "within_limit"
 	}

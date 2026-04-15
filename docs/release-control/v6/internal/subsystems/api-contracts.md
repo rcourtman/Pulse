@@ -1471,6 +1471,12 @@ capacity posture. `/api/license/runtime-capabilities`,
 blocked and whether existing monitoring continues, so browser surfaces stop
 guessing from raw `current / limit` math or inventing a hard-cap model that
 the backend does not enforce.
+That same contract must also make over-limit legitimacy explicit. When
+`monitored_system_capacity` is at or above a capped plan boundary, the payload
+must expose `reason` as `limit_reached`, `preexisting_usage`, or
+`legacy_migration_capture_pending` so browser surfaces can distinguish a full
+plan boundary from a frozen above-plan carry-forward and from migrated legacy
+continuity that is still being verified.
 That same contract now also owns migrated legacy continuity. When a supported
 v5 license auto-exchanges or is activated manually in v6, `/api/license/status`
 and `/api/license/entitlements` must surface `max_monitored_systems` from the

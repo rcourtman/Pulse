@@ -129,6 +129,7 @@ export type MonitoredSystemCapacityStatus = {
   current_unavailable_reason?: string | null;
   available_slots?: number | null;
   overage?: number | null;
+  reason?: string | null;
   blocks_new_systems?: boolean | null;
   existing_monitoring_continues?: boolean | null;
 };
@@ -142,6 +143,7 @@ type ResolvedMonitoredSystemCapacityStatus = {
   current_unavailable_reason?: string;
   available_slots: number;
   overage: number;
+  reason?: string;
   blocks_new_systems: boolean;
   existing_monitoring_continues: boolean;
 };
@@ -262,6 +264,7 @@ function deriveMonitoredSystemCapacityStatus(
       current_unavailable_reason: limit.current_unavailable_reason?.trim() || undefined,
       available_slots: 0,
       overage: 0,
+      reason: undefined,
       blocks_new_systems: false,
       existing_monitoring_continues: false,
     };
@@ -276,6 +279,7 @@ function deriveMonitoredSystemCapacityStatus(
       current_available: true,
       available_slots: 0,
       overage: 0,
+      reason: undefined,
       blocks_new_systems: false,
       existing_monitoring_continues: true,
     };
@@ -290,6 +294,7 @@ function deriveMonitoredSystemCapacityStatus(
       current_available: true,
       available_slots: 0,
       overage: current - planLimit,
+      reason: 'preexisting_usage',
       blocks_new_systems: true,
       existing_monitoring_continues: true,
     };
@@ -304,6 +309,7 @@ function deriveMonitoredSystemCapacityStatus(
       current_available: true,
       available_slots: 0,
       overage: 0,
+      reason: 'limit_reached',
       blocks_new_systems: true,
       existing_monitoring_continues: true,
     };
@@ -317,6 +323,7 @@ function deriveMonitoredSystemCapacityStatus(
     current_available: true,
     available_slots: planLimit - current,
     overage: 0,
+    reason: undefined,
     blocks_new_systems: false,
     existing_monitoring_continues: true,
   };
@@ -346,6 +353,8 @@ export function resolveMonitoredSystemCapacityStatus(
     normalizeMonitoredSystemValue(capacity.urgency ?? undefined) ||
     fallback?.urgency ||
     deriveMonitoredSystemLimitUrgency(current, planLimit);
+  const reason =
+    normalizeMonitoredSystemValue(capacity.reason ?? undefined) || fallback?.reason || undefined;
 
   return {
     mode,
@@ -365,6 +374,7 @@ export function resolveMonitoredSystemCapacityStatus(
       typeof capacity.overage === 'number'
         ? capacity.overage
         : (fallback?.overage ?? Math.max(current - planLimit, 0)),
+    reason,
     blocks_new_systems:
       typeof capacity.blocks_new_systems === 'boolean'
         ? capacity.blocks_new_systems
@@ -428,7 +438,10 @@ export function getMonitoredSystemLimitContextSummary(
     case 'unlimited':
       return 'This plan does not cap monitored systems.';
     case 'over_limit_frozen':
-      return `Plan includes ${resolved.limit}. Over plan by ${resolved.overage}. Existing monitoring continues, but new monitored systems are blocked until usage is reduced or the plan is upgraded.`;
+      if (resolved.reason === 'legacy_migration_capture_pending') {
+        return `Plan includes ${resolved.limit}. Pulse is still verifying the migrated v5 continuity floor for this installation. Existing monitoring continues while new monitored systems are temporarily blocked against the current plan limit until continuity capture finishes.`;
+      }
+      return `Plan includes ${resolved.limit}. This installation is already over plan by ${resolved.overage} because it exceeded the current plan limit before new monitored systems were blocked. Existing monitoring continues, but new monitored systems are blocked until usage is reduced or the plan is upgraded.`;
     case 'at_limit_blocking_new':
       return `Plan includes ${resolved.limit}. Existing monitoring continues, but new monitored systems are blocked until capacity is freed or the plan is upgraded.`;
     default:
@@ -569,9 +582,12 @@ export function formatMonitoredSystemLimitSummary(
 
   switch (resolved.mode) {
     case 'over_limit_frozen':
-      return `${formatMonitoredSystemCount(resolved.current)} active. Plan includes ${
+      if (resolved.reason === 'legacy_migration_capture_pending') {
+        return `${formatMonitoredSystemCount(resolved.current)} active. Current plan includes ${resolved.limit}, and Pulse is still verifying the migrated v5 continuity floor for this installation. Existing monitoring continues while new monitored systems are temporarily blocked against the current plan limit until continuity capture finishes.`;
+      }
+      return `${formatMonitoredSystemCount(resolved.current)} active. Current plan includes ${
         resolved.limit
-      }, and you are over plan by ${resolved.overage}. Existing monitoring continues, but new monitored systems are blocked until usage is reduced or the plan is upgraded.`;
+      }, and this installation is already over plan by ${resolved.overage} because it exceeded the limit before new monitored systems were blocked. Existing monitoring continues, but new monitored systems are blocked until usage is reduced or the plan is upgraded.`;
     case 'at_limit_blocking_new':
       return `All ${resolved.limit} included monitored systems are in use. Existing monitoring continues, but new monitored systems are now blocked until capacity is freed or the plan is upgraded.`;
     case 'unlimited':

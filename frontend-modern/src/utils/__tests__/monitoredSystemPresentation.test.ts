@@ -235,7 +235,26 @@ describe('monitoredSystemPresentation', () => {
       '5 of 6 included monitored systems are in use.',
     );
     expect(formatMonitoredSystemLimitSummary({ current: 16, limit: 5, state: 'enforced' })).toBe(
-      '16 monitored systems active. Plan includes 5, and you are over plan by 11. Existing monitoring continues, but new monitored systems are blocked until usage is reduced or the plan is upgraded.',
+      '16 monitored systems active. Current plan includes 5, and this installation is already over plan by 11 because it exceeded the limit before new monitored systems were blocked. Existing monitoring continues, but new monitored systems are blocked until usage is reduced or the plan is upgraded.',
+    );
+    expect(
+      formatMonitoredSystemLimitSummary(
+        { current: 16, limit: 5, state: 'enforced' },
+        {
+          mode: 'over_limit_frozen',
+          urgency: 'enforced',
+          current: 16,
+          limit: 5,
+          current_available: true,
+          available_slots: 0,
+          overage: 11,
+          reason: 'legacy_migration_capture_pending',
+          blocks_new_systems: true,
+          existing_monitoring_continues: true,
+        },
+      ),
+    ).toBe(
+      '16 monitored systems active. Current plan includes 5, and Pulse is still verifying the migrated v5 continuity floor for this installation. Existing monitoring continues while new monitored systems are temporarily blocked against the current plan limit until continuity capture finishes.',
     );
     expect(
       formatMonitoredSystemLegacyConnectionBreakdown({
@@ -323,7 +342,31 @@ describe('monitoredSystemPresentation', () => {
         state: 'enforced',
       }),
     ).toBe(
-      'Plan includes 5. Over plan by 11. Existing monitoring continues, but new monitored systems are blocked until usage is reduced or the plan is upgraded.',
+      'Plan includes 5. This installation is already over plan by 11 because it exceeded the current plan limit before new monitored systems were blocked. Existing monitoring continues, but new monitored systems are blocked until usage is reduced or the plan is upgraded.',
+    );
+    expect(
+      getMonitoredSystemLimitContextSummary(
+        {
+          current: 16,
+          limit: 5,
+          current_available: true,
+          state: 'enforced',
+        },
+        {
+          mode: 'over_limit_frozen',
+          urgency: 'enforced',
+          current: 16,
+          limit: 5,
+          current_available: true,
+          available_slots: 0,
+          overage: 11,
+          reason: 'legacy_migration_capture_pending',
+          blocks_new_systems: true,
+          existing_monitoring_continues: true,
+        },
+      ),
+    ).toBe(
+      'Plan includes 5. Pulse is still verifying the migrated v5 continuity floor for this installation. Existing monitoring continues while new monitored systems are temporarily blocked against the current plan limit until continuity capture finishes.',
     );
     expect(
       isMonitoredSystemLimitUrgent({
@@ -343,6 +386,7 @@ describe('monitoredSystemPresentation', () => {
     ).toMatchObject({
       mode: 'over_limit_frozen',
       overage: 11,
+      reason: 'preexisting_usage',
       blocks_new_systems: true,
       existing_monitoring_continues: true,
     });

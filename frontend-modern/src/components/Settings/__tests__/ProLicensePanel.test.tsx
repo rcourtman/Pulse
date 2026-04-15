@@ -384,6 +384,19 @@ describe('ProLicensePanel', () => {
         effective_limit: 10,
         capture_pending: true,
       },
+      monitored_system_capacity: {
+        mode: 'usage_unavailable',
+        urgency: 'ok',
+        current: 0,
+        limit: 10,
+        current_available: false,
+        current_unavailable_reason: 'supplemental_inventory_unsettled',
+        available_slots: 0,
+        overage: 0,
+        reason: 'legacy_migration_capture_pending',
+        blocks_new_systems: false,
+        existing_monitoring_continues: false,
+      },
     };
 
     renderPanel();
@@ -393,7 +406,7 @@ describe('ProLicensePanel', () => {
     });
 
     expect(
-      screen.getByText(/still collecting the first provider-owned inventory baseline/i),
+      screen.getByText(/verifying the grandfathered monitored-system floor/i),
     ).toBeInTheDocument();
     expect(screen.getByText('Verifying…')).toBeInTheDocument();
     expect(screen.getByText('Unavailable')).toBeInTheDocument();
@@ -402,6 +415,57 @@ describe('ProLicensePanel', () => {
     expect(screen.getByText('Continuity Capture')).toBeInTheDocument();
     expect(screen.getByText('Pending')).toBeInTheDocument();
     expect(screen.queryByText('0 / 10')).not.toBeInTheDocument();
+  });
+
+  it('explains why an over-plan migrated installation is still monitoring above the current plan limit', async () => {
+    mockEntitlements = {
+      capabilities: ['relay'],
+      limits: [
+        {
+          key: 'max_monitored_systems',
+          limit: 10,
+          current: 23,
+          current_available: true,
+          state: 'enforced',
+        },
+      ],
+      subscription_state: 'active',
+      upgrade_reasons: [],
+      tier: 'pro',
+      plan_version: 'legacy_migration_fallback',
+      licensed_email: 'owner@example.com',
+      trial_eligible: false,
+      monitored_system_continuity: {
+        plan_limit: 10,
+        effective_limit: 10,
+        capture_pending: true,
+      },
+      monitored_system_capacity: {
+        mode: 'over_limit_frozen',
+        urgency: 'enforced',
+        current: 23,
+        limit: 10,
+        current_available: true,
+        available_slots: 0,
+        overage: 13,
+        reason: 'legacy_migration_capture_pending',
+        blocks_new_systems: true,
+        existing_monitoring_continues: true,
+      },
+    };
+
+    renderPanel();
+
+    await waitFor(() => {
+      expect(screen.getByText('Migration continuity verification pending')).toBeInTheDocument();
+    });
+
+    expect(
+      screen.getByText(/already monitoring 23/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText('Monitoring continues above the current plan limit'),
+    ).not.toBeInTheDocument();
   });
 
   it('shows monitored-system continuity once a bounded fallback migration floor is captured', async () => {
@@ -428,6 +492,18 @@ describe('ProLicensePanel', () => {
         effective_limit: 23,
         capture_pending: false,
         captured_at: 1_768_000_000,
+      },
+      monitored_system_capacity: {
+        mode: 'at_limit_blocking_new',
+        urgency: 'enforced',
+        current: 23,
+        limit: 23,
+        current_available: true,
+        available_slots: 0,
+        overage: 0,
+        reason: 'limit_reached',
+        blocks_new_systems: true,
+        existing_monitoring_continues: true,
       },
     };
 

@@ -293,6 +293,9 @@ func TestBuildEntitlementPayloadWithUsage_CopiesMonitoredSystemContinuity(t *tes
 	if payload.MonitoredSystemCapacity.Mode != "at_limit_blocking_new" {
 		t.Fatalf("Mode=%q, want at_limit_blocking_new", payload.MonitoredSystemCapacity.Mode)
 	}
+	if payload.MonitoredSystemCapacity.Reason != "limit_reached" {
+		t.Fatalf("Reason=%q, want limit_reached", payload.MonitoredSystemCapacity.Reason)
+	}
 	if !payload.MonitoredSystemCapacity.BlocksNewSystems {
 		t.Fatal("expected at-limit posture to block new monitored systems")
 	}
@@ -461,6 +464,39 @@ func TestBuildCommercialPosturePayloadWithUsage_CurrentValues(t *testing.T) {
 	}
 	if payload.MonitoredSystemCapacity.Overage != 2 {
 		t.Fatalf("Overage=%d, want 2", payload.MonitoredSystemCapacity.Overage)
+	}
+	if payload.MonitoredSystemCapacity.Reason != "preexisting_usage" {
+		t.Fatalf("Reason=%q, want preexisting_usage", payload.MonitoredSystemCapacity.Reason)
+	}
+}
+
+func TestBuildEntitlementPayloadWithUsage_MarksLegacyContinuityCapturePendingOverage(t *testing.T) {
+	payload := BuildEntitlementPayloadWithUsage(&LicenseStatus{
+		Valid:               true,
+		Tier:                TierPro,
+		Features:            append([]string(nil), TierFeatures[TierPro]...),
+		MaxMonitoredSystems: 10,
+		MonitoredSystemContinuity: &MonitoredSystemContinuityStatus{
+			PlanLimit:      10,
+			EffectiveLimit: 10,
+			CapturePending: true,
+		},
+	}, string(SubStateActive), EntitlementUsageSnapshot{
+		MonitoredSystems:          23,
+		MonitoredSystemsAvailable: true,
+	}, nil)
+
+	if payload.MonitoredSystemCapacity == nil {
+		t.Fatal("expected monitored-system capacity posture")
+	}
+	if payload.MonitoredSystemCapacity.Mode != "over_limit_frozen" {
+		t.Fatalf("Mode=%q, want over_limit_frozen", payload.MonitoredSystemCapacity.Mode)
+	}
+	if payload.MonitoredSystemCapacity.Reason != "legacy_migration_capture_pending" {
+		t.Fatalf(
+			"Reason=%q, want legacy_migration_capture_pending",
+			payload.MonitoredSystemCapacity.Reason,
+		)
 	}
 }
 

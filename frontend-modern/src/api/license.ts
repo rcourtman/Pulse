@@ -63,6 +63,7 @@ export interface MonitoredSystemCapacityStatus {
   current_unavailable_reason?: string;
   available_slots: number;
   overage: number;
+  reason?: string;
   blocks_new_systems: boolean;
   existing_monitoring_continues: boolean;
 }

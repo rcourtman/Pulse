@@ -93,6 +93,7 @@ describe('LicenseAPI', () => {
         current_unavailable_reason: 'supplemental_inventory_unsettled',
         available_slots: 0,
         overage: 0,
+        reason: 'legacy_migration_capture_pending',
         blocks_new_systems: false,
         existing_monitoring_continues: false,
       },
@@ -107,6 +108,7 @@ describe('LicenseAPI', () => {
     });
     expect(result.monitored_system_capacity).toMatchObject({
       mode: 'usage_unavailable',
+      reason: 'legacy_migration_capture_pending',
       current_available: false,
     });
     expect(result.limits[0]).toMatchObject({

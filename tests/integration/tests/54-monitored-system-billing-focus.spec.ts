@@ -15,6 +15,7 @@ const MONITORED_SYSTEM_ENTITLEMENTS = {
     current_available: true,
     available_slots: 0,
     overage: 11,
+    reason: "preexisting_usage",
     blocks_new_systems: true,
     existing_monitoring_continues: true,
   },
@@ -45,6 +46,7 @@ const MONITORED_SYSTEM_RUNTIME_CAPABILITIES = {
     current_available: true,
     available_slots: 0,
     overage: 11,
+    reason: "preexisting_usage",
     blocks_new_systems: true,
     existing_monitoring_continues: true,
   },
@@ -108,6 +110,7 @@ const MONITORED_SYSTEM_COMMERCIAL_POSTURE = {
     current_available: true,
     available_slots: 0,
     overage: 11,
+    reason: "preexisting_usage",
     blocks_new_systems: true,
     existing_monitoring_continues: true,
   },
@@ -251,6 +254,11 @@ async function openPageWithUrgentMonitoredSystemBanner(page: Page) {
   });
   await expect(
     page.getByRole("status").filter({ hasText: "over plan by 11" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("status").filter({
+      hasText: "exceeded the limit before new monitored systems were blocked",
+    }),
   ).toBeVisible();
 }
 

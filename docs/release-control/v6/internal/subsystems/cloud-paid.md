@@ -1145,6 +1145,12 @@ runtime blackout. Community overflow/setup-slot messaging must still explain
 the included monitored systems plus the temporary setup slot in customer terms
 rather than compressing the contract into slash-style quota strings that imply
 Pulse is counting every child device.
+That same billing-facing boundary also owns why an installation can be above
+plan at all. When the monitored-system posture is `over_limit_frozen`, customer
+copy must explain whether the installation was already above the current plan
+before new admissions were blocked or whether migrated v5 continuity capture is
+still pending. Billing surfaces must not render an unexplained `15 monitored,
+plan includes 5` state that looks like Pulse is ignoring its own cap model.
 Those same billing-facing surfaces must also describe the commercial contract in
 customer terms: monitored systems, plan limits, subscription status, and
 license status. They must not revive legacy `installed-agent` wording or vague

@@ -274,7 +274,11 @@ export function useProLicensePanelState() {
   );
   const monitoredSystemContinuity = createMemo(() => entitlements()?.monitored_system_continuity);
   const monitoredSystemContinuityNotice = createMemo(() =>
-    getMonitoredSystemContinuityNotice(monitoredSystemContinuity(), monitoredSystemLimitStatus()),
+    getMonitoredSystemContinuityNotice(
+      monitoredSystemContinuity(),
+      monitoredSystemLimitStatus(),
+      monitoredSystemCapacity(),
+    ),
   );
   const monitoredSystemCapacityNotice = createMemo(() => {
     const posture = monitoredSystemCapacityPosture();
@@ -289,9 +293,18 @@ export function useProLicensePanelState() {
           tone: 'border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-100',
         };
       case 'over_limit_frozen':
+        if (
+          posture.reason === 'legacy_migration_capture_pending' &&
+          monitoredSystemContinuityNotice()
+        ) {
+          return null;
+        }
         return {
           title: 'Monitoring continues above the current plan limit',
-          body: `This installation is monitoring ${posture.current} systems while the current plan includes ${posture.limit}. Existing monitoring continues, but new monitored systems are blocked until usage is reduced or the plan is upgraded.`,
+          body:
+            posture.reason === 'preexisting_usage'
+              ? `This installation already exceeded the current plan limit before new monitored systems were blocked. It is currently monitoring ${posture.current} systems while the current plan includes ${posture.limit}. Existing monitoring continues, but new monitored systems are blocked until usage is reduced or the plan is upgraded.`
+              : `This installation is monitoring ${posture.current} systems while the current plan includes ${posture.limit}. Existing monitoring continues, but new monitored systems are blocked until usage is reduced or the plan is upgraded.`,
           tone: 'border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-100',
         };
       default:

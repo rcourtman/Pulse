@@ -9,6 +9,8 @@ import {
   formatMonitoredSystemUsageUnavailableMessage,
   getMonitoredSystemLimitUnavailableReason,
   isMonitoredSystemLimitUsageAvailable,
+  resolveMonitoredSystemCapacityStatus,
+  type MonitoredSystemCapacityStatus,
   type MonitoredSystemLimitUsageStatus,
 } from '@/utils/monitoredSystemPresentation';
 import { titleCaseDelimitedLabel } from '@/utils/textPresentation';
@@ -180,17 +182,42 @@ export const getGrandfatheredPriceContinuityNotice = (
 export const getMonitoredSystemContinuityNotice = (
   continuity?: MonitoredSystemContinuityStatus | null,
   limit?: MonitoredSystemLimitUsageStatus | null,
+  capacity?: MonitoredSystemCapacityStatus | null,
 ): LicenseInlineNotice | null => {
-  if (!isMonitoredSystemLimitUsageAvailable(limit)) {
-    const title =
-      continuity?.capture_pending === true
-        ? 'Migration continuity verification pending'
-        : 'Monitored-system usage unavailable';
+  const resolvedCapacity = resolveMonitoredSystemCapacityStatus(capacity, limit);
+
+  if (continuity?.capture_pending) {
+    if (!resolvedCapacity?.current_available) {
+      return {
+        tone: 'border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-900 text-amber-900 dark:text-amber-100',
+        title: 'Migration continuity verification pending',
+        body: `Pulse is still verifying the grandfathered monitored-system floor for this migrated v5 installation. ${formatMonitoredSystemUsageUnavailableMessage(
+          getMonitoredSystemLimitUnavailableReason(limit, capacity),
+        )}`,
+      };
+    }
+
+    if (resolvedCapacity.mode === 'over_limit_frozen') {
+      return {
+        tone: 'border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-900 text-amber-900 dark:text-amber-100',
+        title: 'Migration continuity verification pending',
+        body: `Pulse is still verifying the grandfathered monitored-system floor for this migrated v5 installation. The current plan includes ${continuity.plan_limit}, while this installation is already monitoring ${resolvedCapacity.current}. Existing monitoring continues, but new monitored systems are temporarily blocked against the current plan limit until continuity capture finishes.`,
+      };
+    }
+
     return {
       tone: 'border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-900 text-amber-900 dark:text-amber-100',
-      title,
+      title: 'Migration continuity verification pending',
+      body: 'Pulse is still verifying the grandfathered monitored-system floor for this migrated v5 installation. Existing monitoring continues while Pulse finalizes the effective monitored-system limit.',
+    };
+  }
+
+  if (!isMonitoredSystemLimitUsageAvailable(limit)) {
+    return {
+      tone: 'border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-900 text-amber-900 dark:text-amber-100',
+      title: 'Monitored-system usage unavailable',
       body: formatMonitoredSystemUsageUnavailableMessage(
-        getMonitoredSystemLimitUnavailableReason(limit),
+        getMonitoredSystemLimitUnavailableReason(limit, capacity),
       ),
     };
   }

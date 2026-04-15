@@ -5725,7 +5725,7 @@ func TestContract_LegacyMigrationGrandfatherFloorFallbackJSONSnapshot(t *testing
 			"subscription_state":"active",
 			"limits":[{"key":"max_monitored_systems","limit":23,"current":23,"current_available":true,"state":"enforced"}],
 			"monitored_system_continuity":{"plan_limit":10,"grandfathered_floor":23,"effective_limit":23,"capture_pending":false,"captured_at":123},
-			"monitored_system_capacity":{"mode":"at_limit_blocking_new","urgency":"enforced","current":23,"limit":23,"current_available":true,"available_slots":0,"overage":0,"blocks_new_systems":true,"existing_monitoring_continues":true}
+			"monitored_system_capacity":{"mode":"at_limit_blocking_new","urgency":"enforced","current":23,"limit":23,"current_available":true,"available_slots":0,"overage":0,"reason":"limit_reached","blocks_new_systems":true,"existing_monitoring_continues":true}
 		}
 	}`
 

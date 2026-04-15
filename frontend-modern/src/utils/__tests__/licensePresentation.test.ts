@@ -203,10 +203,53 @@ describe('licensePresentation', () => {
           current_available: false,
           current_unavailable_reason: 'supplemental_inventory_unsettled',
         },
+        {
+          mode: 'usage_unavailable',
+          urgency: 'ok',
+          current: 0,
+          limit: 10,
+          current_available: false,
+          current_unavailable_reason: 'supplemental_inventory_unsettled',
+          available_slots: 0,
+          overage: 0,
+          blocks_new_systems: false,
+          existing_monitoring_continues: false,
+        },
       ),
     ).toMatchObject({
       title: 'Migration continuity verification pending',
-      body: expect.stringContaining('first provider-owned inventory baseline'),
+      body: expect.stringContaining('grandfathered monitored-system floor'),
+      tone: expect.stringContaining('amber'),
+    });
+    expect(
+      getMonitoredSystemContinuityNotice(
+        {
+          plan_limit: 10,
+          effective_limit: 10,
+          capture_pending: true,
+        },
+        {
+          current: 23,
+          limit: 10,
+          current_available: true,
+          state: 'enforced',
+        },
+        {
+          mode: 'over_limit_frozen',
+          urgency: 'enforced',
+          current: 23,
+          limit: 10,
+          current_available: true,
+          available_slots: 0,
+          overage: 13,
+          reason: 'legacy_migration_capture_pending',
+          blocks_new_systems: true,
+          existing_monitoring_continues: true,
+        },
+      ),
+    ).toMatchObject({
+      title: 'Migration continuity verification pending',
+      body: expect.stringContaining('already monitoring 23'),
       tone: expect.stringContaining('amber'),
     });
     expect(
@@ -220,6 +263,18 @@ describe('licensePresentation', () => {
         },
         {
           current_available: true,
+        },
+        {
+          mode: 'at_limit_blocking_new',
+          urgency: 'enforced',
+          current: 23,
+          limit: 23,
+          current_available: true,
+          available_slots: 0,
+          overage: 0,
+          reason: 'limit_reached',
+          blocks_new_systems: true,
+          existing_monitoring_continues: true,
         },
       ),
     ).toMatchObject({
