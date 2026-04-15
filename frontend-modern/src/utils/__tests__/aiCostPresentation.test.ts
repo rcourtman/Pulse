@@ -1,10 +1,24 @@
 import { describe, expect, it } from 'vitest';
 import {
+  AI_COST_ASSISTANT_USE_CASE_LABEL,
+  AI_COST_BUDGET_LABEL,
   AI_COST_DAILY_TOKEN_EMPTY_STATE,
   AI_COST_DAILY_USD_EMPTY_STATE,
   AI_COST_EMPTY_STATE,
+  AI_COST_PANEL_DESCRIPTION,
+  AI_COST_PANEL_TITLE,
+  AI_COST_PATROL_USE_CASE_LABEL,
+  AI_COST_PROVIDER_MODEL_PAIR_LABEL,
+  AI_COST_RESET_HISTORY_LABEL,
+  buildAICostExportFilename,
+  getAICostBudgetNote,
+  getAICostExportHistoryErrorMessage,
   getAICostLoadingState,
+  getAICostRefreshErrorMessage,
   getAICostRangeButtonClass,
+  getAICostResetHistoryConfirmationMessage,
+  getAICostResetHistoryErrorMessage,
+  getAICostResetHistorySuccessMessage,
 } from '@/utils/aiCostPresentation';
 
 describe('aiCostPresentation', () => {
@@ -14,16 +28,43 @@ describe('aiCostPresentation', () => {
     expect(getAICostRangeButtonClass(false, true)).toContain('cursor-not-allowed');
   });
 
-  it('exports canonical AI cost empty-state copy', () => {
-    expect(AI_COST_EMPTY_STATE).toBe('Usage data will appear here once activity is recorded.');
+  it('exports canonical AI cost presentation copy', () => {
+    expect(AI_COST_PANEL_TITLE).toBe('Provider Usage & Spend');
+    expect(AI_COST_PANEL_DESCRIPTION).toBe(
+      'Token usage and estimated spend across providers backing Pulse Assistant and Patrol.',
+    );
+    expect(AI_COST_PROVIDER_MODEL_PAIR_LABEL).toBe('Provider/model pairs');
+    expect(AI_COST_ASSISTANT_USE_CASE_LABEL).toBe('Pulse Assistant');
+    expect(AI_COST_PATROL_USE_CASE_LABEL).toBe('Patrol');
+    expect(AI_COST_BUDGET_LABEL).toBe('30-day budget (USD)');
+    expect(AI_COST_RESET_HISTORY_LABEL).toBe('Reset usage history');
+    expect(AI_COST_EMPTY_STATE).toBe(
+      'Provider usage data will appear here once Pulse Assistant or Patrol activity is recorded.',
+    );
     expect(AI_COST_DAILY_USD_EMPTY_STATE).toBe(
-      'Daily cost trend will appear here once activity is recorded.',
+      'Daily spend trend will appear here once provider activity is recorded.',
     );
     expect(AI_COST_DAILY_TOKEN_EMPTY_STATE).toBe(
-      'Daily token trend will appear here once activity is recorded.',
+      'Daily token trend will appear here once provider activity is recorded.',
     );
     expect(getAICostLoadingState()).toEqual({
-      text: 'Loading usage data…',
+      text: 'Loading provider usage…',
     });
+    expect(getAICostRefreshErrorMessage()).toBe('Failed to refresh provider usage summary');
+    expect(getAICostBudgetNote(7)).toBe(
+      'Configured in Assistant & Patrol settings. Pro-rated for 7d:',
+    );
+    expect(getAICostResetHistoryConfirmationMessage()).toBe(
+      'Reset provider usage history? A backup will be created in the Pulse config directory.',
+    );
+    expect(getAICostResetHistorySuccessMessage('/tmp/backup.json')).toBe(
+      'Provider usage history reset (backup: /tmp/backup.json)',
+    );
+    expect(getAICostResetHistorySuccessMessage()).toBe('Provider usage history reset');
+    expect(getAICostResetHistoryErrorMessage()).toBe('Failed to reset provider usage history');
+    expect(getAICostExportHistoryErrorMessage()).toBe('Failed to export provider usage history');
+    expect(
+      buildAICostExportFilename(30, 'csv', new Date('2026-03-01T12:00:00Z')),
+    ).toBe('pulse-provider-usage-2026-03-01-30d.csv');
   });
 });

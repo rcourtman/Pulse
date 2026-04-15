@@ -752,9 +752,16 @@ describe('monitored-system model guardrails', () => {
     expect(patrolSummaryPresentationSource).toContain('export const PATROL_NO_ISSUES_LABEL');
     expect(aiCostDashboardSource).toContain('getAICostRangeButtonClass');
     expect(aiCostDashboardSource).toContain('getAICostLoadingState');
+    expect(aiCostDashboardSource).toContain('AI_COST_PANEL_TITLE');
+    expect(aiCostDashboardSource).toContain('AI_COST_PANEL_DESCRIPTION');
     expect(aiCostDashboardSource).toContain('AI_COST_EMPTY_STATE');
     expect(aiCostDashboardSource).toContain('AI_COST_DAILY_USD_EMPTY_STATE');
     expect(aiCostDashboardSource).toContain('AI_COST_DAILY_TOKEN_EMPTY_STATE');
+    expect(aiCostDashboardSource).toContain('getAICostRefreshErrorMessage');
+    expect(aiCostDashboardSource).toContain('getAICostResetHistoryConfirmationMessage');
+    expect(aiCostDashboardSource).toContain('getAICostResetHistorySuccessMessage');
+    expect(aiCostDashboardSource).toContain('getAICostResetHistoryErrorMessage');
+    expect(aiCostDashboardSource).toContain('getAICostExportHistoryErrorMessage');
     expect(aiCostDashboardSource).not.toContain('No usage data yet.');
     expect(aiCostDashboardSource).not.toContain('No daily USD trend yet.');
     expect(aiCostDashboardSource).not.toContain('No daily token trend yet.');
@@ -765,6 +772,13 @@ describe('monitored-system model guardrails', () => {
     expect(aiCostPresentationSource).toContain('export const AI_COST_EMPTY_STATE');
     expect(aiCostPresentationSource).toContain('export const AI_COST_DAILY_USD_EMPTY_STATE');
     expect(aiCostPresentationSource).toContain('export const AI_COST_DAILY_TOKEN_EMPTY_STATE');
+    expect(aiCostPresentationSource).toContain('export const AI_COST_PANEL_TITLE');
+    expect(aiCostPresentationSource).toContain('export const AI_COST_PANEL_DESCRIPTION');
+    expect(aiCostPresentationSource).toContain('export function getAICostRefreshErrorMessage');
+    expect(aiCostPresentationSource).toContain('export function getAICostResetHistoryConfirmationMessage');
+    expect(aiCostPresentationSource).toContain('export function getAICostResetHistorySuccessMessage');
+    expect(aiCostPresentationSource).toContain('export function getAICostResetHistoryErrorMessage');
+    expect(aiCostPresentationSource).toContain('export function getAICostExportHistoryErrorMessage');
     expect(rbacFeatureGateSectionSource).toContain('@/utils/upgradePresentation');
     expect(agentProfilesPanelStateSource).toContain('@/utils/upgradePresentation');
     expect(auditLogPanelSource).toContain('@/utils/upgradePresentation');
@@ -1013,7 +1027,7 @@ describe('monitored-system model guardrails', () => {
       'const hasAgentFacet = (resource: Resource): boolean =>',
     );
     expect(infrastructureSelectorSource).not.toContain("resource.type === 'truenas'");
-    expect(infrastructureSelectorStateSource).toContain('useResources');
+    expect(infrastructureSelectorStateSource).toContain('useUnifiedResources');
     expect(infrastructureSelectorModelSource).toContain('hasInfrastructureSelectorAgentFacet');
     expect(infrastructureSelectorModelSource).toContain('isAgentFacetInfrastructureResource');
     expect(infrastructureSelectorModelSource).not.toContain('if (hostLikeResources.length === 0');

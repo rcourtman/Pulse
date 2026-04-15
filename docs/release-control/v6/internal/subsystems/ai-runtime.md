@@ -102,6 +102,12 @@ That backend/runtime ownership does not require the Patrol product surface to
 inherit `AI` as its canonical browser route: the customer-facing shell may use
 `/patrol` while shared AI transport, provider settings, and payload contracts
 remain the governed technical boundary behind it.
+That same operator-facing vocabulary rule applies to the runtime usage surface:
+`frontend-modern/src/components/AI/AICostDashboard.tsx` must present provider
+usage and spend backing Pulse Assistant and Patrol rather than generic `AI`
+history, and `frontend-modern/src/utils/aiCostPresentation.ts` must own the
+title, empty/loading states, budget note, and reset/export history messaging so
+settings shells and runtime widgets do not fork their own usage wording.
 
 `internal/ai/` is the live backend AI engine. It owns chat execution, Patrol
 orchestration, findings generation, investigation support, quickstart and

@@ -17,11 +17,25 @@ import { notificationStore } from '@/stores/notifications';
 import type { AICostSummary } from '@/types/ai';
 import { getAIProviderDisplayName } from '@/utils/aiProviderPresentation';
 import {
+  AI_COST_ASSISTANT_USE_CASE_LABEL,
+  AI_COST_BUDGET_LABEL,
   AI_COST_DAILY_TOKEN_EMPTY_STATE,
   AI_COST_DAILY_USD_EMPTY_STATE,
   AI_COST_EMPTY_STATE,
+  AI_COST_PANEL_DESCRIPTION,
+  AI_COST_PANEL_TITLE,
+  AI_COST_PATROL_USE_CASE_LABEL,
+  AI_COST_PROVIDER_MODEL_PAIR_LABEL,
+  AI_COST_RESET_HISTORY_LABEL,
+  buildAICostExportFilename,
+  getAICostBudgetNote,
+  getAICostExportHistoryErrorMessage,
   getAICostLoadingState,
+  getAICostRefreshErrorMessage,
   getAICostRangeButtonClass,
+  getAICostResetHistoryConfirmationMessage,
+  getAICostResetHistoryErrorMessage,
+  getAICostResetHistorySuccessMessage,
 } from '@/utils/aiCostPresentation';
 
 const usdFormatter = new Intl.NumberFormat(undefined, {
@@ -154,7 +168,7 @@ export const AICostDashboard: Component = () => {
       logger.error('[AICostDashboard] Failed to load cost summary:', err);
       // Only show notification on refresh failures, not initial load
       if (!isInitialLoad) {
-        notificationStore.error('Failed to refresh Pulse Assistant usage summary');
+        notificationStore.error(getAICostRefreshErrorMessage());
       }
       const message =
         err instanceof Error && err.message ? err.message : 'Failed to load usage data';
@@ -202,25 +216,15 @@ export const AICostDashboard: Component = () => {
   });
 
   const resetHistory = async () => {
-    if (
-      !confirm(
-        'Reset Pulse Assistant usage history? A backup will be created in the Pulse config directory.',
-      )
-    )
+    if (!confirm(getAICostResetHistoryConfirmationMessage()))
       return;
     try {
       const result = await AIAPI.resetCostHistory();
-      if (result.backup_file) {
-        notificationStore.success(
-          `Pulse Assistant usage history reset (backup: ${result.backup_file})`,
-        );
-      } else {
-        notificationStore.success('Pulse Assistant usage history reset');
-      }
+      notificationStore.success(getAICostResetHistorySuccessMessage(result.backup_file));
       await loadSummary(days());
     } catch (err) {
       logger.error('[AICostDashboard] Failed to reset AI cost history:', err);
-      notificationStore.error('Failed to reset Pulse Assistant usage history');
+      notificationStore.error(getAICostResetHistoryErrorMessage());
     }
   };
 
@@ -234,14 +238,14 @@ export const AICostDashboard: Component = () => {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `pulse-ai-usage-${new Date().toISOString().split('T')[0]}-${days()}d.${format}`;
+      a.download = buildAICostExportFilename(days(), format);
       document.body.appendChild(a);
       a.click();
       a.remove();
       URL.revokeObjectURL(url);
     } catch (err) {
       logger.error('[AICostDashboard] Failed to export cost history:', err);
-      notificationStore.error('Failed to export Pulse Assistant usage history');
+      notificationStore.error(getAICostExportHistoryErrorMessage());
     }
   };
 
@@ -271,8 +275,8 @@ export const AICostDashboard: Component = () => {
             </svg>
           </div>
           <SectionHeader
-            title="Pulse Cost & Usage"
-            description="Token usage and estimated spend across providers"
+            title={AI_COST_PANEL_TITLE}
+            description={AI_COST_PANEL_DESCRIPTION}
             size="sm"
             class="flex-1"
           />
@@ -387,7 +391,7 @@ export const AICostDashboard: Component = () => {
                   </div>
                 </div>
                 <div class="p-3 rounded-md bg-surface-alt border border-border">
-                  <div class="text-xs text-muted">Model/provider pairs</div>
+                  <div class="text-xs text-muted">{AI_COST_PROVIDER_MODEL_PAIR_LABEL}</div>
                   <div class="text-lg font-semibold text-base-content">
                     {formatNumber(data().provider_models.length)}
                   </div>
@@ -396,7 +400,7 @@ export const AICostDashboard: Component = () => {
 
               <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div class="p-3 rounded-md bg-surface-alt border border-border">
-                  <div class="text-xs text-muted">Chat</div>
+                  <div class="text-xs text-muted">{AI_COST_ASSISTANT_USE_CASE_LABEL}</div>
                   <div class="text-sm font-semibold text-base-content">
                     {formatNumber(useCaseMap().get('chat')?.tokens ?? 0)} tokens
                   </div>
@@ -407,7 +411,7 @@ export const AICostDashboard: Component = () => {
                   </div>
                 </div>
                 <div class="p-3 rounded-md bg-surface-alt border border-border">
-                  <div class="text-xs text-muted">Patrol</div>
+                  <div class="text-xs text-muted">{AI_COST_PATROL_USE_CASE_LABEL}</div>
                   <div class="text-sm font-semibold text-base-content">
                     {formatNumber(useCaseMap().get('patrol')?.tokens ?? 0)} tokens
                   </div>
@@ -418,7 +422,7 @@ export const AICostDashboard: Component = () => {
                   </div>
                 </div>
                 <div class="p-3 rounded-md bg-surface-alt border border-border">
-                  <div class="text-xs text-muted">Budget alert (USD per 30d)</div>
+                  <div class="text-xs text-muted">{AI_COST_BUDGET_LABEL}</div>
                   <div class="text-sm font-semibold text-base-content mt-1">
                     <Show
                       when={parsedBudgetUSD30d() != null}
@@ -428,7 +432,7 @@ export const AICostDashboard: Component = () => {
                     </Show>
                   </div>
                   <div class="text-[11px] text-muted mt-1">
-                    Set in Pulse Assistant settings. Pro-rated for {days()}d:{' '}
+                    {getAICostBudgetNote(days())}{' '}
                     <Show when={budgetForRange() != null} fallback={<span>—</span>}>
                       {formatUSD(budgetForRange() ?? 0)}
                     </Show>
@@ -530,7 +534,7 @@ export const AICostDashboard: Component = () => {
                     onClick={resetHistory}
                     class={`min-h-10 sm:min-h-9 px-2.5 py-2 text-sm rounded border border-border hover:bg-surface-hover ${loading() ? 'opacity-60 cursor-not-allowed' : ''}`}
                   >
-                    Reset history
+                    {AI_COST_RESET_HISTORY_LABEL}
                   </button>
                 </div>
               </div>

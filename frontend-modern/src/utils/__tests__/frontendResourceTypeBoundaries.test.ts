@@ -4467,7 +4467,7 @@ describe('frontend resource type boundaries', () => {
     expect(patrolInvestigationContextModelSource).toContain(
       'export function buildPatrolInvestigationContextSummary',
     );
-    expect(patrolInvestigationContextModelSource).toContain('governed resource');
+    expect(patrolInvestigationContextModelSource).toContain('policy-covered resource');
     expect(patrolIntelligenceHeaderSource).toContain('buildPatrolScheduleOptions');
     expect(patrolIntelligenceHeaderSource).toContain('getAIQuickstartCreditsPresentation');
     expect(patrolIntelligenceSummarySource).toContain('getPatrolSummaryPresentation');
@@ -4559,9 +4559,16 @@ describe('frontend resource type boundaries', () => {
     );
     expect(aiCostDashboardSource).toContain('getAICostRangeButtonClass');
     expect(aiCostDashboardSource).toContain('getAICostLoadingState');
+    expect(aiCostDashboardSource).toContain('AI_COST_PANEL_TITLE');
+    expect(aiCostDashboardSource).toContain('AI_COST_PANEL_DESCRIPTION');
     expect(aiCostDashboardSource).toContain('AI_COST_EMPTY_STATE');
     expect(aiCostDashboardSource).toContain('AI_COST_DAILY_USD_EMPTY_STATE');
     expect(aiCostDashboardSource).toContain('AI_COST_DAILY_TOKEN_EMPTY_STATE');
+    expect(aiCostDashboardSource).toContain('getAICostRefreshErrorMessage');
+    expect(aiCostDashboardSource).toContain('getAICostResetHistoryConfirmationMessage');
+    expect(aiCostDashboardSource).toContain('getAICostResetHistorySuccessMessage');
+    expect(aiCostDashboardSource).toContain('getAICostResetHistoryErrorMessage');
+    expect(aiCostDashboardSource).toContain('getAICostExportHistoryErrorMessage');
     expect(aiCostDashboardSource).not.toContain('No usage data yet.');
     expect(aiCostDashboardSource).not.toContain('No daily USD trend yet.');
     expect(aiCostDashboardSource).not.toContain('No daily token trend yet.');
@@ -4573,6 +4580,13 @@ describe('frontend resource type boundaries', () => {
     expect(aiCostPresentationSource).toContain('export function getAICostLoadingState');
     expect(aiCostPresentationSource).toContain('export const AI_COST_DAILY_USD_EMPTY_STATE');
     expect(aiCostPresentationSource).toContain('export const AI_COST_DAILY_TOKEN_EMPTY_STATE');
+    expect(aiCostPresentationSource).toContain('export const AI_COST_PANEL_TITLE');
+    expect(aiCostPresentationSource).toContain('export const AI_COST_PANEL_DESCRIPTION');
+    expect(aiCostPresentationSource).toContain('export function getAICostRefreshErrorMessage');
+    expect(aiCostPresentationSource).toContain('export function getAICostResetHistoryConfirmationMessage');
+    expect(aiCostPresentationSource).toContain('export function getAICostResetHistorySuccessMessage');
+    expect(aiCostPresentationSource).toContain('export function getAICostResetHistoryErrorMessage');
+    expect(aiCostPresentationSource).toContain('export function getAICostExportHistoryErrorMessage');
     expect(modelSelectorSource).toContain('AI_CHAT_MODEL_SELECTOR_EMPTY_STATE');
     expect(modelSelectorSource).not.toContain('No matching models.');
     expect(aiChatPresentationSource).toContain('export const AI_CHAT_MODEL_SELECTOR_EMPTY_STATE');

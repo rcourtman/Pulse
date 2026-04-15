@@ -184,7 +184,7 @@ describe('AICostDashboard', () => {
   it('renders header with title', async () => {
     renderDashboard();
     await waitFor(() => {
-      expect(screen.getByText('Pulse Cost & Usage')).toBeInTheDocument();
+      expect(screen.getByText('Provider Usage & Spend')).toBeInTheDocument();
     });
   });
 
@@ -203,10 +203,10 @@ describe('AICostDashboard', () => {
   it('displays model/provider pair count', async () => {
     renderDashboard();
     await waitFor(() => {
-      expect(screen.getByText('Model/provider pairs')).toBeInTheDocument();
+      expect(screen.getByText('Provider/model pairs')).toBeInTheDocument();
     });
     // Verify the count is rendered in the same card container
-    const pairCard = screen.getByText('Model/provider pairs').closest('.p-3')!;
+    const pairCard = screen.getByText('Provider/model pairs').closest('.p-3')!;
     expect(pairCard.textContent).toContain('1');
   });
 
@@ -227,7 +227,7 @@ describe('AICostDashboard', () => {
   it('displays chat and patrol token breakdowns', async () => {
     renderDashboard();
     await waitFor(() => {
-      expect(screen.getByText('Chat')).toBeInTheDocument();
+      expect(screen.getByText('Pulse Assistant')).toBeInTheDocument();
     });
     expect(screen.getByText('36,000 tokens')).toBeInTheDocument();
     expect(screen.getByText('Patrol')).toBeInTheDocument();
@@ -294,10 +294,10 @@ describe('AICostDashboard', () => {
   it('displays budget info from AI settings', async () => {
     renderDashboard();
     await waitFor(() => {
-      expect(screen.getByText('Budget alert (USD per 30d)')).toBeInTheDocument();
+      expect(screen.getByText('30-day budget (USD)')).toBeInTheDocument();
     });
     // Budget is $10/30d — should show 10.00 formatted as currency
-    const budgetCard = screen.getByText('Budget alert (USD per 30d)').closest('.p-3')!;
+    const budgetCard = screen.getByText('30-day budget (USD)').closest('.p-3')!;
     expect(budgetCard.textContent).toMatch(/10\.00/);
   });
 
@@ -308,9 +308,9 @@ describe('AICostDashboard', () => {
 
     const firstMount = renderDashboard();
     await waitFor(() => {
-      expect(screen.getByText('Budget alert (USD per 30d)')).toBeInTheDocument();
+      expect(screen.getByText('30-day budget (USD)')).toBeInTheDocument();
     });
-    let budgetCard = screen.getByText('Budget alert (USD per 30d)').closest('.p-3')!;
+    let budgetCard = screen.getByText('30-day budget (USD)').closest('.p-3')!;
     expect(budgetCard.textContent).toMatch(/10\.00/);
 
     firstMount.unmount();
@@ -320,7 +320,7 @@ describe('AICostDashboard', () => {
     await waitFor(() => {
       expect(getSettingsMock).toHaveBeenCalledTimes(2);
     });
-    budgetCard = screen.getByText('Budget alert (USD per 30d)').closest('.p-3')!;
+    budgetCard = screen.getByText('30-day budget (USD)').closest('.p-3')!;
     expect(budgetCard.textContent).toMatch(/25\.00/);
   });
 
@@ -496,9 +496,7 @@ describe('AICostDashboard', () => {
       expect(screen.getByText(/Couldn.t refresh/)).toBeInTheDocument();
     });
     // Should show notification for refresh failure
-    expect(notificationErrorMock).toHaveBeenCalledWith(
-      'Failed to refresh Pulse Assistant usage summary',
-    );
+    expect(notificationErrorMock).toHaveBeenCalledWith('Failed to refresh provider usage summary');
     // Retry button is present
     expect(screen.getByText('Retry')).toBeInTheDocument();
   });
@@ -513,10 +511,12 @@ describe('AICostDashboard', () => {
     renderDashboard();
 
     // While loading, we see the shared usage-loading copy.
-    expect(screen.getByText('Loading usage data…')).toBeInTheDocument();
+    expect(screen.getByText('Loading provider usage…')).toBeInTheDocument();
     // The empty state should not appear while loading.
     expect(
-      screen.queryByText('Usage data will appear here once activity is recorded.'),
+      screen.queryByText(
+        'Provider usage data will appear here once Pulse Assistant or Patrol activity is recorded.',
+      ),
     ).not.toBeInTheDocument();
 
     // Now resolve — data appears
@@ -538,7 +538,7 @@ describe('AICostDashboard', () => {
       expect(screen.getByText('Estimated spend')).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByText('Reset history'));
+    fireEvent.click(screen.getByText('Reset usage history'));
 
     await waitFor(() => {
       expect(resetCostHistoryMock).toHaveBeenCalled();
@@ -559,10 +559,10 @@ describe('AICostDashboard', () => {
       expect(screen.getByText('Estimated spend')).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByText('Reset history'));
+    fireEvent.click(screen.getByText('Reset usage history'));
 
     await waitFor(() => {
-      expect(notificationSuccessMock).toHaveBeenCalledWith('Pulse Assistant usage history reset');
+      expect(notificationSuccessMock).toHaveBeenCalledWith('Provider usage history reset');
     });
   });
 
@@ -574,7 +574,7 @@ describe('AICostDashboard', () => {
       expect(screen.getByText('Estimated spend')).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByText('Reset history'));
+    fireEvent.click(screen.getByText('Reset usage history'));
 
     expect(resetCostHistoryMock).not.toHaveBeenCalled();
   });
@@ -588,12 +588,10 @@ describe('AICostDashboard', () => {
       expect(screen.getByText('Estimated spend')).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByText('Reset history'));
+    fireEvent.click(screen.getByText('Reset usage history'));
 
     await waitFor(() => {
-      expect(notificationErrorMock).toHaveBeenCalledWith(
-        'Failed to reset Pulse Assistant usage history',
-      );
+      expect(notificationErrorMock).toHaveBeenCalledWith('Failed to reset provider usage history');
     });
   });
 
@@ -668,9 +666,7 @@ describe('AICostDashboard', () => {
     fireEvent.click(screen.getByText('Export CSV'));
 
     await waitFor(() => {
-      expect(notificationErrorMock).toHaveBeenCalledWith(
-        'Failed to export Pulse Assistant usage history',
-      );
+      expect(notificationErrorMock).toHaveBeenCalledWith('Failed to export provider usage history');
     });
   });
 
@@ -685,9 +681,7 @@ describe('AICostDashboard', () => {
     fireEvent.click(screen.getByText('Export JSON'));
 
     await waitFor(() => {
-      expect(notificationErrorMock).toHaveBeenCalledWith(
-        'Failed to export Pulse Assistant usage history',
-      );
+      expect(notificationErrorMock).toHaveBeenCalledWith('Failed to export provider usage history');
     });
   });
 
@@ -743,7 +737,7 @@ describe('AICostDashboard', () => {
     renderDashboard();
     await waitFor(() => {
       expect(
-        screen.getByText('Daily token trend will appear here once activity is recorded.'),
+        screen.getByText('Daily token trend will appear here once provider activity is recorded.'),
       ).toBeInTheDocument();
     });
   });
@@ -782,10 +776,10 @@ describe('AICostDashboard', () => {
     getSettingsMock.mockResolvedValue(baseSettings({ cost_budget_usd_30d: 0 }));
     renderDashboard();
     await waitFor(() => {
-      expect(screen.getByText('Budget alert (USD per 30d)')).toBeInTheDocument();
+      expect(screen.getByText('30-day budget (USD)')).toBeInTheDocument();
     });
     // parsedBudgetUSD30d should return null for 0, so budget shows "—"
-    const budgetCard = screen.getByText('Budget alert (USD per 30d)').closest('.p-3')!;
+    const budgetCard = screen.getByText('30-day budget (USD)').closest('.p-3')!;
     expect(budgetCard.textContent).toContain('—');
   });
 
@@ -793,9 +787,9 @@ describe('AICostDashboard', () => {
     getSettingsMock.mockResolvedValue(baseSettings({ cost_budget_usd_30d: -5 }));
     renderDashboard();
     await waitFor(() => {
-      expect(screen.getByText('Budget alert (USD per 30d)')).toBeInTheDocument();
+      expect(screen.getByText('30-day budget (USD)')).toBeInTheDocument();
     });
-    const budgetCard = screen.getByText('Budget alert (USD per 30d)').closest('.p-3')!;
+    const budgetCard = screen.getByText('30-day budget (USD)').closest('.p-3')!;
     expect(budgetCard.textContent).toContain('—');
   });
 
@@ -805,9 +799,9 @@ describe('AICostDashboard', () => {
     getSettingsMock.mockRejectedValue(new Error('Auth error'));
     renderDashboard();
     await waitFor(() => {
-      expect(screen.getByText('Budget alert (USD per 30d)')).toBeInTheDocument();
+      expect(screen.getByText('30-day budget (USD)')).toBeInTheDocument();
     });
-    const budgetCard = screen.getByText('Budget alert (USD per 30d)').closest('.p-3')!;
+    const budgetCard = screen.getByText('30-day budget (USD)').closest('.p-3')!;
     expect(budgetCard.textContent).toContain('—');
   });
 });
