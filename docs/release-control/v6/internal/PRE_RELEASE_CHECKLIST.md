@@ -110,6 +110,22 @@ go test ./internal/cloudcp/... -count=1
 go test ./internal/hosted/... -count=1
 ```
 
+Canonical hosted staging smoke:
+
+```bash
+cd /Volumes/Development/pulse/repos/pulse
+PULSE_CLOUD_BASE_URL='https://cloud-staging.pulserelay.pro' \
+PULSE_CLOUD_SSH_TARGET='root@pulse-cloud-staging' \
+PULSE_CP_ADMIN_KEY='<admin-key>' \
+PULSE_E2E_STRIPE_API_KEY='<stripe-test-secret>' \
+PULSE_E2E_STRIPE_WEBHOOK_SECRET='<stripe-webhook-secret>' \
+./scripts/run_hosted_staging_smoke.sh
+```
+
+Notes:
+- Set `PULSE_E2E_HOSTED_TENANT_ID` only when the mobile onboarding proof must target a specific tenant; otherwise the smoke script auto-selects the newest active tenant from `/admin/tenants?state=active`.
+- This command covers the hosted signup, billing lifecycle, and hosted mobile onboarding proof pack. Environment-specific DNS/TLS/container preflight remains a separate operator step.
+
 Manual scenario:
 - Complete a hosted signup or replay a recorded checkout flow.
 - Verify webhook handling does not return success when org linkage is unresolved.
