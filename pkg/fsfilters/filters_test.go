@@ -165,6 +165,7 @@ func TestShouldSkipFilesystem(t *testing.T) {
 		{"cifs mount", "cifs", "/mnt/share", 1000000, 500000, true},
 		{"fuse.sshfs", "fuse.sshfs", "/mnt/remote", 1000000, 500000, true},
 		{"9p VM shared folder", "9p", "/mnt/host", 1000000, 500000, true},
+		{"fuse.mergerfs local pool", "fuse.mergerfs", "/mnt/storage", 1000000, 500000, false},
 
 		// Special mountpoint prefixes
 		{"/dev prefix", "ext4", "/dev/shm", 1024, 100, true},

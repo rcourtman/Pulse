@@ -803,6 +803,75 @@ func TestApplyHostReportFiltersVendorManagedSystemRAIDArrays(t *testing.T) {
 	}
 }
 
+func TestApplyHostReportKeepsLocalMergerFSMounts(t *testing.T) {
+	t.Helper()
+
+	monitor := &Monitor{
+		state:             models.NewState(),
+		alertManager:      alerts.NewManager(),
+		hostTokenBindings: make(map[string]string),
+		config:            &config.Config{},
+		rateTracker:       NewRateTracker(),
+	}
+	t.Cleanup(func() { monitor.alertManager.Stop() })
+
+	report := agentshost.Report{
+		Agent: agentshost.AgentInfo{
+			ID:              "agent-mergerfs-host",
+			Version:         "1.0.0",
+			IntervalSeconds: 30,
+		},
+		Host: agentshost.HostInfo{
+			ID:        "machine-mergerfs-host",
+			Hostname:  "mergerfs-host",
+			MachineID: "machine-mergerfs-host",
+		},
+		Disks: []agentshost.Disk{
+			{
+				Device:     "mergerfs",
+				Mountpoint: "/mnt/storage",
+				Type:       "fuse.mergerfs",
+				TotalBytes: 10_000,
+				UsedBytes:  4_000,
+				FreeBytes:  6_000,
+				Usage:      40,
+			},
+			{
+				Device:     "sshfs",
+				Mountpoint: "/mnt/remote",
+				Type:       "fuse.sshfs",
+				TotalBytes: 10_000,
+				UsedBytes:  4_000,
+				FreeBytes:  6_000,
+				Usage:      40,
+			},
+		},
+	}
+
+	host, err := monitor.ApplyHostReport(report, nil)
+	if err != nil {
+		t.Fatalf("ApplyHostReport: %v", err)
+	}
+
+	if len(host.Disks) != 1 {
+		t.Fatalf("host disk count = %d, want 1 (%+v)", len(host.Disks), host.Disks)
+	}
+	if host.Disks[0].Type != "fuse.mergerfs" || host.Disks[0].Mountpoint != "/mnt/storage" {
+		t.Fatalf("unexpected retained disk %+v", host.Disks[0])
+	}
+
+	snapshot := monitor.state.GetSnapshot()
+	if len(snapshot.Hosts) != 1 {
+		t.Fatalf("snapshot host count = %d, want 1", len(snapshot.Hosts))
+	}
+	if len(snapshot.Hosts[0].Disks) != 1 {
+		t.Fatalf("stored host disk count = %d, want 1 (%+v)", len(snapshot.Hosts[0].Disks), snapshot.Hosts[0].Disks)
+	}
+	if snapshot.Hosts[0].Disks[0].Type != "fuse.mergerfs" || snapshot.Hosts[0].Disks[0].Mountpoint != "/mnt/storage" {
+		t.Fatalf("unexpected stored retained disk %+v", snapshot.Hosts[0].Disks[0])
+	}
+}
+
 func TestApplyHostReportPersistsSMARTMetricsForAgentDisks(t *testing.T) {
 	t.Helper()
 

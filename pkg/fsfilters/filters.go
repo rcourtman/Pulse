@@ -84,7 +84,10 @@ var virtualFSTypes = map[string]bool{
 }
 
 // networkFSPatterns are substrings that indicate network/remote filesystems.
-var networkFSPatterns = []string{"fuse", "9p", "nfs", "cifs", "smb"}
+// Do not treat generic "fuse" as remote: some FUSE filesystems such as
+// mergerfs are local user-space filesystems and should participate in host
+// disk usage and alerting just like ext4/xfs mounts.
+var networkFSPatterns = []string{"sshfs", "9p", "nfs", "cifs", "smb"}
 
 // specialMountPrefixes are mountpoint prefixes that indicate system mounts.
 var specialMountPrefixes = []string{
