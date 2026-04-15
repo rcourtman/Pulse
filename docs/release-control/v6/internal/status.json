@@ -4236,6 +4236,22 @@
       "subsystem_ids": [
         "patrol-intelligence"
       ]
+    },
+    {
+      "id": "legacy-grandfathering-eligibility-cutoff",
+      "summary": "Commercial migration still needs an explicit eligibility cutoff for uncapped grandfathered recurring continuity: decide whether only subscriptions already active before the public v6 pricing cutover qualify, or whether subscriptions started during the RC/current-v5 checkout window also qualify, and keep public pricing copy from implying the broader interpretation until that policy is explicitly decided.",
+      "owner": "project-owner",
+      "blocking_level": "release-ready",
+      "status": "open",
+      "opened_at": "2026-04-15",
+      "lane_ids": [
+        "L2",
+        "L3",
+        "L9"
+      ],
+      "subsystem_ids": [
+        "cloud-paid"
+      ]
     }
   ],
   "source_of_truth_file": "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md",
