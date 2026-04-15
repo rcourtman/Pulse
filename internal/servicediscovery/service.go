@@ -2382,6 +2382,9 @@ Important:
 - List Docker containers, VMs, or other services as facts with category "service"
 - Include storage information (disks, pools, arrays) as facts with category "storage"
 - Include hardware info (CPU, RAM) as facts with category "hardware"
+- Keep the response concise: include only the most important facts
+- Limit output to at most 12 facts, 6 config_paths, 6 data_paths, 6 log_paths, and 12 ports
+- Do not enumerate every package, service, mount, or file when a summarized representative set is enough
 
 Respond with ONLY valid JSON.`, strings.Join(sections, "\n\n"))
 	}
@@ -2425,6 +2428,9 @@ Important:
 - Note any special hardware like Coral TPU, NVIDIA GPU
 - For LXC/VM, the CLI access should use pct exec or qm guest exec
 - For Docker, use docker exec
+- Keep the response concise: include only the most important facts
+- Limit output to at most 12 facts, 6 config_paths, 6 data_paths, 6 log_paths, and 12 ports
+- Do not enumerate every package, service, mount, or file when a summarized representative set is enough
 
 Respond with ONLY valid JSON.`, strings.Join(sections, "\n\n"))
 }

@@ -85,6 +85,9 @@ func TestService_AnalyzeForDiscovery(t *testing.T) {
 	// Case 3: Success with cost tracking
 	mockProv := &mockProvider{
 		chatFunc: func(ctx context.Context, req providers.ChatRequest) (*providers.ChatResponse, error) {
+			if req.MaxTokens != 8192 {
+				t.Fatalf("expected discovery max tokens 8192, got %d", req.MaxTokens)
+			}
 			return &providers.ChatResponse{
 				Content:      "Discovery Result",
 				InputTokens:  10,

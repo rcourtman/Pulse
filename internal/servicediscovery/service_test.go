@@ -883,6 +883,23 @@ func TestService_PromptsAndDiscoveryLoop(t *testing.T) {
 	if !strings.Contains(deepPrompt, "(truncated)") || !strings.Contains(deepPrompt, "Metadata:") {
 		t.Fatalf("unexpected deep prompt")
 	}
+	if !strings.Contains(deepPrompt, "Limit output to at most 12 facts") {
+		t.Fatalf("expected deep prompt to limit response size")
+	}
+
+	hostPrompt := service.buildDeepAnalysisPrompt(AIAnalysisRequest{
+		ResourceType: ResourceTypeAgent,
+		ResourceID:   "host1",
+		TargetID:     "host1",
+		Hostname:     "pve01",
+		Metadata:     map[string]any{"platform": "proxmox"},
+	})
+	if !strings.Contains(hostPrompt, "HOST OS") {
+		t.Fatalf("expected host prompt variant")
+	}
+	if !strings.Contains(hostPrompt, "Limit output to at most 12 facts") {
+		t.Fatalf("expected host prompt to limit response size")
+	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
