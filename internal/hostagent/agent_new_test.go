@@ -172,6 +172,86 @@ func TestNew_DefaultPulseURL(t *testing.T) {
 	}
 }
 
+func TestNew_ResolvesVendorNASIdentityFromPlatformFiles(t *testing.T) {
+	t.Run("synology dsm from version file", func(t *testing.T) {
+		mc := &mockCollector{
+			goos: "linux",
+			hostInfoFn: func(context.Context) (*gohost.InfoStat, error) {
+				return &gohost.InfoStat{
+					Hostname:        "nas",
+					HostID:          "hid",
+					Platform:        "linux",
+					PlatformFamily:  "linux",
+					PlatformVersion: "",
+					KernelArch:      runtime.GOARCH,
+				}, nil
+			},
+			readFileFn: func(name string) ([]byte, error) {
+				switch name {
+				case "/etc.defaults/VERSION":
+					return []byte(`majorversion="7"
+minorversion="2"
+productversion="7.2.2"
+buildnumber="72806"
+smallfixnumber="3"
+`), nil
+				default:
+					return nil, os.ErrNotExist
+				}
+			},
+		}
+
+		agent, err := New(Config{APIToken: "token", LogLevel: zerolog.InfoLevel, Collector: mc})
+		if err != nil {
+			t.Fatalf("New: %v", err)
+		}
+		if agent.osName != "Synology DSM" {
+			t.Fatalf("osName = %q, want %q", agent.osName, "Synology DSM")
+		}
+		if agent.osVersion != "7.2.2-72806 Update 3" {
+			t.Fatalf("osVersion = %q, want %q", agent.osVersion, "7.2.2-72806 Update 3")
+		}
+	})
+
+	t.Run("qnap quts from config file", func(t *testing.T) {
+		mc := &mockCollector{
+			goos: "linux",
+			hostInfoFn: func(context.Context) (*gohost.InfoStat, error) {
+				return &gohost.InfoStat{
+					Hostname:        "qnap",
+					HostID:          "hid",
+					Platform:        "linux",
+					PlatformFamily:  "linux",
+					PlatformVersion: "",
+					KernelArch:      runtime.GOARCH,
+				}, nil
+			},
+			readFileFn: func(name string) ([]byte, error) {
+				switch name {
+				case "/etc/config/uLinux.conf":
+					return []byte(`Version = 5.2.0
+Display_Name = QuTS hero
+Platform = QNAP
+`), nil
+				default:
+					return nil, os.ErrNotExist
+				}
+			},
+		}
+
+		agent, err := New(Config{APIToken: "token", LogLevel: zerolog.InfoLevel, Collector: mc})
+		if err != nil {
+			t.Fatalf("New: %v", err)
+		}
+		if agent.osName != "QNAP QuTS" {
+			t.Fatalf("osName = %q, want %q", agent.osName, "QNAP QuTS")
+		}
+		if agent.osVersion != "5.2.0" {
+			t.Fatalf("osVersion = %q, want %q", agent.osVersion, "5.2.0")
+		}
+	})
+}
+
 func TestNew_UsesCustomCABundleForHTTPTransport(t *testing.T) {
 	mc := &mockCollector{
 		hostInfoFn: func(context.Context) (*gohost.InfoStat, error) {

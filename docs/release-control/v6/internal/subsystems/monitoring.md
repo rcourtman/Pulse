@@ -80,7 +80,7 @@ truth for live infrastructure data.
 
 1. Update this contract when monitoring truth ownership changes
 2. Tighten guardrails when `GetState()`-centric paths are removed
-3. Keep discovery-provider, guest-memory trust, metrics-history, Docker/Podman container collection, Proxmox Ceph compatibility, Docker Swarm collection, and container bootstrap proof routes explicit in `registry.json`
+3. Keep discovery-provider, host-agent ingest, guest-memory trust, metrics-history, storage-risk, Docker/Podman container collection, Proxmox Ceph compatibility, Docker Swarm collection, and container bootstrap proof routes explicit in `registry.json`
 4. Update related read-state or monitor tests when new collector paths land
 5. Keep platform ingestion semantics aligned with
    `docs/release-control/v6/internal/PLATFORM_SUPPORT_MODEL.md`: hybrid is a
@@ -767,6 +767,13 @@ emit structured storage topology such as Unraid per-disk state, the shared
 assessment layer must derive canonical risk and alert severity from that
 richer disk topology instead of letting coarser aggregate counters override it
 and flap the operator-facing storage alert surface.
+That same monitoring-owned host-agent ingest boundary now also owns
+vendor-managed NAS RAID normalization. `internal/monitoring/monitor_agents.go`
+must filter vendor-managed system arrays through the shared
+`internal/storagehealth/` rules before host state sync so internal Synology
+`md0/md1` and QNAP `md9/md13` volumes do not leak into canonical APIs,
+resources, or alert inputs just because those hosts report Linux md arrays
+alongside customer-managed storage pools.
 That same monitoring runtime boundary also owns logger-safe reload behavior.
 `internal/monitoring/reload.go` may refresh runtime config, but it must do so
 through the no-logging-init config loader so an in-process monitoring reload

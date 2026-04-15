@@ -527,6 +527,124 @@ func TestApplyHostReportStoresUnraidTopology(t *testing.T) {
 	}
 }
 
+func TestApplyHostReportFiltersVendorManagedSystemRAIDArrays(t *testing.T) {
+	t.Helper()
+
+	monitor := &Monitor{
+		state:             models.NewState(),
+		alertManager:      alerts.NewManager(),
+		hostTokenBindings: make(map[string]string),
+		config:            &config.Config{},
+		rateTracker:       NewRateTracker(),
+	}
+	t.Cleanup(func() { monitor.alertManager.Stop() })
+
+	now := time.Now().UTC()
+	testCases := []struct {
+		name        string
+		hostInfo    agentshost.HostInfo
+		reportRAID  []agentshost.RAIDArray
+		wantDevices []string
+	}{
+		{
+			name: "synology suppresses md0 and md1",
+			hostInfo: agentshost.HostInfo{
+				ID:       "machine-synology",
+				Hostname: "synology.local",
+				Platform: "linux",
+				OSName:   "Synology DSM",
+			},
+			reportRAID: []agentshost.RAIDArray{
+				{Device: "/dev/md0", Level: "raid1", State: "degraded", FailedDevices: 1},
+				{Device: "/dev/md1", Level: "raid1", State: "resyncing", RebuildPercent: 42},
+				{Device: "/dev/md2", Level: "raid5", State: "clean"},
+			},
+			wantDevices: []string{"/dev/md2"},
+		},
+		{
+			name: "qnap suppresses md9 and md13",
+			hostInfo: agentshost.HostInfo{
+				ID:       "machine-qnap",
+				Hostname: "qnap.local",
+				Platform: "linux",
+				OSName:   "QNAP QTS",
+			},
+			reportRAID: []agentshost.RAIDArray{
+				{Device: "/dev/md9", Level: "raid1", State: "degraded", FailedDevices: 1},
+				{Device: "/dev/md13", Level: "raid1", State: "clean"},
+				{Device: "/dev/md2", Level: "raid5", State: "clean"},
+			},
+			wantDevices: []string{"/dev/md2"},
+		},
+		{
+			name: "generic hosts keep md0",
+			hostInfo: agentshost.HostInfo{
+				ID:       "machine-generic",
+				Hostname: "generic.local",
+				Platform: "linux",
+				OSName:   "Ubuntu",
+			},
+			reportRAID: []agentshost.RAIDArray{
+				{Device: "/dev/md0", Level: "raid1", State: "clean"},
+				{Device: "/dev/md2", Level: "raid5", State: "clean"},
+			},
+			wantDevices: []string{"/dev/md0", "/dev/md2"},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			report := agentshost.Report{
+				Agent: agentshost.AgentInfo{
+					ID:              "agent-" + tc.hostInfo.ID,
+					Version:         "1.0.0",
+					IntervalSeconds: 30,
+				},
+				Host:      tc.hostInfo,
+				Timestamp: now,
+				Metrics: agentshost.Metrics{
+					CPUUsagePercent: 5.5,
+				},
+				RAID: tc.reportRAID,
+			}
+
+			host, err := monitor.ApplyHostReport(report, nil)
+			if err != nil {
+				t.Fatalf("ApplyHostReport: %v", err)
+			}
+
+			if len(host.RAID) != len(tc.wantDevices) {
+				t.Fatalf("host RAID count = %d, want %d", len(host.RAID), len(tc.wantDevices))
+			}
+			for i, device := range tc.wantDevices {
+				if host.RAID[i].Device != device {
+					t.Fatalf("host RAID[%d] = %q, want %q", i, host.RAID[i].Device, device)
+				}
+			}
+
+			snapshot := monitor.state.GetSnapshot()
+			var stored *models.Host
+			for i := range snapshot.Hosts {
+				if snapshot.Hosts[i].ID == host.ID {
+					stored = &snapshot.Hosts[i]
+					break
+				}
+			}
+			if stored == nil {
+				t.Fatalf("stored host %q not found", host.ID)
+			}
+			if len(stored.RAID) != len(tc.wantDevices) {
+				t.Fatalf("stored RAID count = %d, want %d", len(stored.RAID), len(tc.wantDevices))
+			}
+			for i, device := range tc.wantDevices {
+				if stored.RAID[i].Device != device {
+					t.Fatalf("stored RAID[%d] = %q, want %q", i, stored.RAID[i].Device, device)
+				}
+			}
+		})
+	}
+}
+
 func TestApplyHostReportPersistsSMARTMetricsForAgentDisks(t *testing.T) {
 	t.Helper()
 

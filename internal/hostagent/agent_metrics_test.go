@@ -3,6 +3,7 @@ package hostagent
 import (
 	"context"
 	"errors"
+	"os"
 	"testing"
 	"time"
 
@@ -284,4 +285,74 @@ func TestBuildReport(t *testing.T) {
 		}
 		mc.smartLocalFn = nil
 	})
+}
+
+func TestBuildReportUsesResolvedNASOSIdentity(t *testing.T) {
+	fixedTime := time.Date(2026, time.April, 15, 12, 0, 0, 0, time.UTC)
+
+	mc := &mockCollector{
+		nowFn: func() time.Time { return fixedTime },
+		goos:  "linux",
+		hostInfoFn: func(ctx context.Context) (*gohost.InfoStat, error) {
+			return &gohost.InfoStat{
+				Hostname:        "nas",
+				HostID:          "machine-id-1",
+				Platform:        "linux",
+				PlatformFamily:  "linux",
+				PlatformVersion: "",
+				KernelVersion:   "4.4.302+",
+				KernelArch:      "x86_64",
+			}, nil
+		},
+		hostUptimeFn: func(context.Context) (uint64, error) {
+			return 3600, nil
+		},
+		readFileFn: func(name string) ([]byte, error) {
+			switch name {
+			case "/etc.defaults/VERSION":
+				return []byte(`majorversion="7"
+minorversion="2"
+productversion="7.2.2"
+buildnumber="72806"
+smallfixnumber="3"
+`), nil
+			case "/etc/machine-id":
+				return []byte("0123456789abcdef0123456789abcdef\n"), nil
+			default:
+				return nil, os.ErrNotExist
+			}
+		},
+		metricsFn: func(ctx context.Context, diskExclude []string) (hostmetrics.Snapshot, error) {
+			return hostmetrics.Snapshot{
+				Memory: agentshost.MemoryMetric{
+					TotalBytes: 1024,
+					UsedBytes:  512,
+					FreeBytes:  512,
+					Usage:      50,
+				},
+			}, nil
+		},
+	}
+
+	agent, err := New(Config{
+		APIToken:  "token",
+		AgentID:   "agent-1",
+		LogLevel:  -1,
+		Collector: mc,
+	})
+	if err != nil {
+		t.Fatalf("New() failed: %v", err)
+	}
+
+	report, err := agent.buildReport(context.Background())
+	if err != nil {
+		t.Fatalf("buildReport() failed: %v", err)
+	}
+
+	if report.Host.OSName != "Synology DSM" {
+		t.Fatalf("Host.OSName = %q, want %q", report.Host.OSName, "Synology DSM")
+	}
+	if report.Host.OSVersion != "7.2.2-72806 Update 3" {
+		t.Fatalf("Host.OSVersion = %q, want %q", report.Host.OSVersion, "7.2.2-72806 Update 3")
+	}
 }

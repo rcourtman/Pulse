@@ -52,6 +52,83 @@ func AssessHostRAIDArray(array models.HostRAIDArray) Assessment {
 	return assessment
 }
 
+// VendorManagedSystemRAIDDevices returns internal md arrays that should stay
+// out of customer-facing storage state for known NAS vendors.
+func VendorManagedSystemRAIDDevices(host models.Host) []string {
+	switch {
+	case hostMatchesVendorHint(host, "synology", "dsm"):
+		return []string{"md0", "md1"}
+	case hostMatchesVendorHint(host, "qnap", "qts", "quts"):
+		return []string{"md9", "md13"}
+	default:
+		return nil
+	}
+}
+
+// IsVendorManagedSystemRAIDArray reports whether the array is a vendor-managed
+// internal system volume that should be suppressed for this host.
+func IsVendorManagedSystemRAIDArray(host models.Host, array models.HostRAIDArray) bool {
+	device := normalizeHostRAIDDevice(array.Device)
+	if device == "" {
+		return false
+	}
+
+	for _, suppressed := range VendorManagedSystemRAIDDevices(host) {
+		if device == suppressed {
+			return true
+		}
+	}
+
+	return false
+}
+
+// FilterVendorManagedSystemRAIDArrays removes vendor-managed system arrays from
+// host state so every downstream consumer sees the same canonical storage view.
+func FilterVendorManagedSystemRAIDArrays(host models.Host, arrays []models.HostRAIDArray) []models.HostRAIDArray {
+	if len(arrays) == 0 {
+		return arrays
+	}
+
+	filtered := make([]models.HostRAIDArray, 0, len(arrays))
+	for _, array := range arrays {
+		if IsVendorManagedSystemRAIDArray(host, array) {
+			continue
+		}
+		filtered = append(filtered, array)
+	}
+
+	return filtered
+}
+
+func hostMatchesVendorHint(host models.Host, hints ...string) bool {
+	fields := []string{
+		host.Platform,
+		host.OSName,
+		host.OSVersion,
+		host.DisplayName,
+		host.Hostname,
+	}
+
+	for _, field := range fields {
+		value := strings.ToLower(strings.TrimSpace(field))
+		if value == "" {
+			continue
+		}
+		for _, hint := range hints {
+			if strings.Contains(value, hint) {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
+func normalizeHostRAIDDevice(device string) string {
+	device = strings.ToLower(strings.TrimSpace(device))
+	return strings.TrimPrefix(device, "/dev/")
+}
+
 func AssessZFSPool(pool models.ZFSPool) Assessment {
 	assessment := Assessment{Level: RiskHealthy}
 	addReason := func(code string, severity RiskLevel, summary string) {

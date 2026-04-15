@@ -116,6 +116,138 @@ func TestSynologyRAIDClearing(t *testing.T) {
 	}
 }
 
+func TestQNAPRAIDSuppression(t *testing.T) {
+	m := newTestManager(t)
+	m.ClearActiveAlerts()
+	m.mu.Lock()
+	m.config.TimeThresholds = map[string]int{}
+	m.mu.Unlock()
+
+	host := models.Host{
+		ID:          "qnap-1",
+		DisplayName: "QNAP NAS",
+		Hostname:    "qnap",
+		OSName:      "QNAP QTS",
+		Status:      "online",
+		LastSeen:    time.Now(),
+		RAID: []models.HostRAIDArray{
+			{
+				Device:        "/dev/md9",
+				Level:         "raid1",
+				State:         "degraded",
+				FailedDevices: 1,
+			},
+			{
+				Device:         "/dev/md13",
+				Level:          "raid1",
+				State:          "resyncing",
+				RebuildPercent: 50.0,
+			},
+			{
+				Device:        "/dev/md2",
+				Level:         "raid5",
+				State:         "degraded",
+				FailedDevices: 1,
+			},
+		},
+	}
+
+	m.CheckHost(host)
+
+	alerts := m.GetActiveAlerts()
+	var md9Found, md13Found, md2Found bool
+
+	for _, a := range alerts {
+		if strings.Contains(a.ID, "md9") {
+			md9Found = true
+		}
+		if strings.Contains(a.ID, "md13") {
+			md13Found = true
+		}
+		if strings.Contains(a.ID, "md2") {
+			md2Found = true
+		}
+	}
+
+	if md9Found {
+		t.Error("expected md9 alert to be suppressed")
+	}
+	if md13Found {
+		t.Error("expected md13 alert to be suppressed")
+	}
+	if !md2Found {
+		t.Error("expected md2 alert to be created")
+	}
+}
+
+func TestVendorManagedFilteredRAIDStateStillClearsAlerts(t *testing.T) {
+	testCases := []struct {
+		name        string
+		host        models.Host
+		alertDevice string
+	}{
+		{
+			name: "synology clears stale md0",
+			host: models.Host{
+				ID:          "syno-filtered",
+				DisplayName: "Synology NAS",
+				Hostname:    "synology",
+				OSName:      "Synology DSM",
+				Status:      "online",
+				LastSeen:    time.Now(),
+				RAID: []models.HostRAIDArray{
+					{Device: "/dev/md2", Level: "raid5", State: "clean"},
+				},
+			},
+			alertDevice: "md0",
+		},
+		{
+			name: "qnap clears stale md9",
+			host: models.Host{
+				ID:          "qnap-filtered",
+				DisplayName: "QNAP NAS",
+				Hostname:    "qnap",
+				OSName:      "QNAP QTS",
+				Status:      "online",
+				LastSeen:    time.Now(),
+				RAID: []models.HostRAIDArray{
+					{Device: "/dev/md2", Level: "raid5", State: "clean"},
+				},
+			},
+			alertDevice: "md9",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			m := newTestManager(t)
+			m.ClearActiveAlerts()
+			m.mu.Lock()
+			m.config.TimeThresholds = map[string]int{}
+			alertID := buildCanonicalStateID(
+				"agent:"+tc.host.ID+"/raid:"+tc.alertDevice,
+				"agent:"+tc.host.ID+"/raid:"+tc.alertDevice+"-health",
+			)
+			m.activeAlerts[alertID] = &Alert{
+				ID:           alertID,
+				ResourceID:   "agent:" + tc.host.ID + "/raid:" + tc.alertDevice,
+				ResourceName: tc.host.DisplayName + " - /dev/" + tc.alertDevice + " (raid1)",
+				Message:      "RAID array degraded",
+			}
+			m.mu.Unlock()
+
+			m.CheckHost(tc.host)
+
+			m.mu.RLock()
+			_, exists := testLookupActiveAlert(t, m, alertID)
+			m.mu.RUnlock()
+			if exists {
+				t.Fatalf("expected stale %s alert to be cleared", tc.alertDevice)
+			}
+		})
+	}
+}
+
 func TestHostDisableClearsRAID(t *testing.T) {
 	m := newTestManager(t)
 	m.ClearActiveAlerts()

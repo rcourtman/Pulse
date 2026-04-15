@@ -208,6 +208,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
             policy_ids,
             [
                 "discovery-provider-runtime",
+                "host-agent-ingest-runtime",
                 "truenas-runtime",
                 "metrics-hot-path",
                 "metrics-history-runtime",
@@ -293,6 +294,36 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                     "exact_files": [
                         "pkg/proxmox/ceph_test.go",
                         "pkg/proxmox/cluster_client_api_test.go",
+                    ],
+                }
+            ],
+        )
+
+    def test_host_agent_ingest_runtime_change_requires_monitoring_contract(self):
+        required = infer_impacted_subsystems(["internal/monitoring/monitor_agents.go"])
+        self.assertEqual(set(required), {"monitoring"})
+
+        monitoring = required["monitoring"]
+        self.assertEqual(
+            monitoring["contract"],
+            "docs/release-control/v6/internal/subsystems/monitoring.md",
+        )
+        self.assertEqual(
+            monitoring["touched_runtime_files"],
+            ["internal/monitoring/monitor_agents.go"],
+        )
+        self.assertEqual(
+            monitoring["verification_requirements"],
+            [
+                {
+                    "id": "host-agent-ingest-runtime",
+                    "label": "monitoring host-agent ingest proof",
+                    "touched_runtime_files": ["internal/monitoring/monitor_agents.go"],
+                    "allow_same_subsystem_tests": False,
+                    "test_prefixes": [],
+                    "exact_files": [
+                        "internal/monitoring/monitor_host_agents_test.go",
+                        "internal/unifiedresources/code_standards_test.go",
                     ],
                 }
             ],

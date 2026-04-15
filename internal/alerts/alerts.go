@@ -3542,13 +3542,15 @@ func (m *Manager) CheckHost(host models.Host) {
 		m.clearHostUnraidAlerts(host.ID)
 	}
 
+	// Clear vendor-managed system-array alerts even when host state has already
+	// been normalized to exclude them.
+	m.clearVendorManagedHostRAIDAlerts(host)
+
 	// Check RAID arrays for degraded or failed state
 	if len(host.RAID) > 0 {
 		for _, array := range host.RAID {
-			// Skip Synology internal system arrays (md0/md1) which often report false positives.
-			// DSM handles these differently and they're not user-facing storage arrays.
-			deviceLower := strings.ToLower(strings.TrimPrefix(array.Device, "/dev/"))
-			if deviceLower == "md0" || deviceLower == "md1" {
+			// Skip vendor-managed system arrays that are not customer-facing storage pools.
+			if storagehealth.IsVendorManagedSystemRAIDArray(host, array) {
 				// Still clear any existing alerts for these devices
 				raidSpecResourceID := fmt.Sprintf("%s/raid:%s", hostResourceID(host.ID), sanitizeRAIDDevice(array.Device))
 				m.clearAlert(buildCanonicalStateID(raidSpecResourceID, raidSpecResourceID+"-health"))
@@ -3920,6 +3922,17 @@ func (m *Manager) cleanupGuestDiskAlerts(guestID string, seen map[string]struct{
 	}
 
 	return cleared
+}
+
+func (m *Manager) clearVendorManagedHostRAIDAlerts(host models.Host) {
+	if host.ID == "" {
+		return
+	}
+
+	for _, device := range storagehealth.VendorManagedSystemRAIDDevices(host) {
+		raidSpecResourceID := fmt.Sprintf("%s/raid:%s", hostResourceID(host.ID), sanitizeRAIDDevice(device))
+		m.clearAlert(buildCanonicalStateID(raidSpecResourceID, raidSpecResourceID+"-health"))
+	}
 }
 
 func (m *Manager) cleanupHostDiskAlerts(host models.Host, seen map[string]struct{}) {

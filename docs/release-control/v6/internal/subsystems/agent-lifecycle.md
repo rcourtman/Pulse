@@ -1404,6 +1404,12 @@ The updater/runtime surfaces must preserve the one-shot `updated_from`
 continuity handoff and the non-TLS continuity path for supported self-hosted
 installs, so upgrade-safe agent behavior does not drift between install,
 restart, and reconnect paths.
+That same unified-agent runtime boundary also owns vendor-aware host identity.
+When gopsutil reports generic Linux platform fields on NAS appliances,
+`internal/hostagent/` must prefer canonical platform files such as Synology DSM
+or QNAP QTS/QuTS version manifests before the first report is built, so
+downstream monitoring and alerting do not depend on hostname or display-name
+heuristics to infer the real vendor OS.
 That same runtime continuity must stay on direct lifecycle proof routes too:
 changes under `internal/hostagent/` must continue to carry the explicit
 `unified-agent-runtime` proof, and changes under `internal/agentupdate/` must

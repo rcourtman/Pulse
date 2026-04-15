@@ -1345,6 +1345,7 @@
               "internal/alerts/guest_snapshot_test.go",
               "internal/alerts/history_concurrency_test.go",
               "internal/alerts/history_test.go",
+              "internal/alerts/synology_test.go",
               "internal/alerts/threshold_resolution_shared_test.go",
               "internal/alerts/update_alerts_test.go"
             ]
@@ -3229,6 +3230,20 @@
               "internal/monitoring/monitor_pmg_test.go",
               "internal/monitoring/monitor_polling_test.go",
               "internal/monitoring/truenas_poller_test.go"
+            ]
+          },
+          {
+            "id": "host-agent-ingest-runtime",
+            "label": "monitoring host-agent ingest proof",
+            "match_prefixes": [],
+            "match_files": [
+              "internal/monitoring/monitor_agents.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/monitoring/monitor_host_agents_test.go",
+              "internal/unifiedresources/code_standards_test.go"
             ]
           },
           {

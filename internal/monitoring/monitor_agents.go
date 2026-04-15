@@ -10,6 +10,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/logging"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
@@ -1677,6 +1678,10 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 		DiskExclude:     append([]string(nil), report.Agent.DiskExclude...),
 		IsLegacy:        isLegacyAgent(report.Agent.Type),
 	}
+
+	// Normalize vendor-managed internal RAID arrays out of host state so they do
+	// not surface as customer-facing degraded storage in APIs, resources, or alerts.
+	host.RAID = storagehealth.FilterVendorManagedSystemRAIDArrays(host, host.RAID)
 
 	// Apply any pending commands execution override from server config
 	// This ensures the UI remains stable when the user toggles this setting,

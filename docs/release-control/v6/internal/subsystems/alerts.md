@@ -94,6 +94,12 @@ infrastructure instances, so cached node display names must key on instance +
 node identity whenever the alert carries instance context. Alert updates,
 incident rebuilds, and guest-metric migrations may fall back to the legacy
 name-only cache only for instance-less resources like standalone host agents.
+That same host-alert boundary also owns vendor-managed NAS RAID suppression as
+an alert-lifecycle concern. Shared storagehealth rules decide which Synology
+or QNAP md arrays are vendor-managed system volumes rather than customer-facing
+storage, and alerts runtime must use those shared rules both to suppress new
+RAID incidents and to clear stale suppressed alert IDs even after monitoring
+has already normalized those arrays out of canonical host state.
 
 Alert history persistence is also part of that canonical boundary. The history
 manager may choose the owned runtime data directory, but it must normalize that

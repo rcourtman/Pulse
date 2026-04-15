@@ -4534,6 +4534,27 @@ class SubsystemLookupTest(unittest.TestCase):
             ],
         )
 
+    def test_lookup_paths_assigns_host_agent_ingest_runtime_to_monitoring(self) -> None:
+        result = lookup_paths(["internal/monitoring/monitor_agents.go"])
+        self.assertEqual(result["unowned_runtime_files"], [])
+
+        file_entry = result["files"][0]
+        self.assertEqual(file_entry["classification"], "runtime")
+        self.assertEqual(len(file_entry["matches"]), 1)
+
+        match = file_entry["matches"][0]
+        self.assertEqual(match["subsystem"], "monitoring")
+        self.assertEqual(match["contract"], "docs/release-control/v6/internal/subsystems/monitoring.md")
+        self.assertEqual(match["lane_context"]["lane_id"], "L13")
+        self.assertEqual(match["verification_requirement"]["id"], "host-agent-ingest-runtime")
+        self.assertEqual(
+            match["verification_requirement"]["exact_files"],
+            [
+                "internal/monitoring/monitor_host_agents_test.go",
+                "internal/unifiedresources/code_standards_test.go",
+            ],
+        )
+
     def test_lookup_paths_assigns_docker_swarm_runtime_to_monitoring(self) -> None:
         result = lookup_paths(["internal/dockeragent/swarm.go"])
         self.assertEqual(result["unowned_runtime_files"], [])

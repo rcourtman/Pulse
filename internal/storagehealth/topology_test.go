@@ -35,6 +35,68 @@ func TestAssessHostRAIDArrayRebuilding(t *testing.T) {
 	}
 }
 
+func TestFilterVendorManagedSystemRAIDArrays(t *testing.T) {
+	testCases := []struct {
+		name        string
+		host        models.Host
+		arrays      []models.HostRAIDArray
+		wantDevices []string
+	}{
+		{
+			name: "synology filters md0 and md1",
+			host: models.Host{
+				Hostname: "synology",
+				OSName:   "Synology DSM",
+			},
+			arrays: []models.HostRAIDArray{
+				{Device: "/dev/md0"},
+				{Device: "/dev/md1"},
+				{Device: "/dev/md2"},
+			},
+			wantDevices: []string{"/dev/md2"},
+		},
+		{
+			name: "qnap filters md9 and md13",
+			host: models.Host{
+				Hostname: "qnap",
+				OSName:   "QNAP QTS",
+			},
+			arrays: []models.HostRAIDArray{
+				{Device: "/dev/md9"},
+				{Device: "/dev/md13"},
+				{Device: "/dev/md2"},
+			},
+			wantDevices: []string{"/dev/md2"},
+		},
+		{
+			name: "generic host keeps md arrays",
+			host: models.Host{
+				Hostname: "ubuntu",
+				OSName:   "Ubuntu",
+			},
+			arrays: []models.HostRAIDArray{
+				{Device: "/dev/md0"},
+				{Device: "/dev/md2"},
+			},
+			wantDevices: []string{"/dev/md0", "/dev/md2"},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			filtered := FilterVendorManagedSystemRAIDArrays(tc.host, tc.arrays)
+			if len(filtered) != len(tc.wantDevices) {
+				t.Fatalf("filtered count = %d, want %d", len(filtered), len(tc.wantDevices))
+			}
+			for i, want := range tc.wantDevices {
+				if filtered[i].Device != want {
+					t.Fatalf("filtered[%d].Device = %q, want %q", i, filtered[i].Device, want)
+				}
+			}
+		})
+	}
+}
+
 func TestAssessZFSPoolCriticalState(t *testing.T) {
 	assessment := AssessZFSPool(models.ZFSPool{
 		Name:  "tank",
