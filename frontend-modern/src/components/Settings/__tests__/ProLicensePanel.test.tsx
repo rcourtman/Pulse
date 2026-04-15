@@ -660,10 +660,35 @@ describe('ProLicensePanel', () => {
     renderPanel();
 
     expect(screen.getByText('Need a higher monitored-system cap?')).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Pulse counts top-level monitored systems such as Docker hosts, Kubernetes clusters, Proxmox nodes, standalone hosts, and TrueNAS systems. Compare self-hosted plans in Pulse Account and return here with Pulse Pro activated automatically.',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Hide counting rules' })).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        /a monitored system is a top-level monitored root such as a docker host, kubernetes cluster, proxmox node/i,
+      ),
+    ).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Compare plans' })).toHaveAttribute(
       'href',
       getSelfHostedPurchaseStartUrl('max_monitored_systems'),
     );
+  });
+
+  it('keeps monitored-system counting guidance available on the plan surface', async () => {
+    renderPanel();
+
+    expect(
+      screen.getByText('Pulse counts top-level monitored systems. Child resources underneath them are included.'),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'View counting rules' })).toBeInTheDocument();
+    expect(
+      screen.queryByText(
+        /a monitored system is a top-level monitored root such as a docker host, kubernetes cluster, proxmox node/i,
+      ),
+    ).not.toBeInTheDocument();
   });
 
   it('navigates between plan and usage focus states through the billing subtabs', async () => {
@@ -848,6 +873,7 @@ describe('ProLicensePanel', () => {
     expect(proLicensePlanSectionSource).toContain('getNoActiveProLicenseState');
     expect(proLicensePlanSectionSource).toContain('getTrialEndedProLicenseNotice');
     expect(proLicensePlanSectionSource).toContain('getInactiveProUpsellNotice');
+    expect(proLicensePlanSectionSource).toContain('MonitoredSystemDefinitionDisclosure');
     expect(proLicensePlanSectionSource).toContain('trialStartTitle');
     expect(proLicensePlanSectionSource).toContain('trialStartIdleActionLabel');
     expect(proLicensePlanSectionSource).not.toContain(

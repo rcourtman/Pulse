@@ -87,7 +87,7 @@ describe('licensePresentation', () => {
         'Pulse waits for the session presentation policy before showing license, billing, or usage details.',
       monitoredSystemUpgradeArrivalTitle: 'Need a higher monitored-system cap?',
       monitoredSystemUpgradeArrivalBody:
-        'Open Pulse Account to compare self-hosted plans, complete checkout, and return here with Pulse Pro activated automatically.',
+        'Pulse counts top-level monitored systems such as Docker hosts, Kubernetes clusters, Proxmox nodes, standalone hosts, and TrueNAS systems. Compare self-hosted plans in Pulse Account and return here with Pulse Pro activated automatically.',
       monitoredSystemUpgradeArrivalActionLabel: 'Compare plans',
       purchaseActivatedUsageActionLabel: 'Review usage',
       purchaseCancelledActionLabel: 'Compare plans',

@@ -1,6 +1,7 @@
 import { Component, For, Show } from 'solid-js';
 import RefreshCw from 'lucide-solid/icons/refresh-cw';
 import { UpgradeLink } from '@/components/shared/UpgradeLink';
+import { MonitoredSystemDefinitionDisclosure } from '@/components/Commercial/MonitoredSystemDefinitionDisclosure';
 import { getUpgradeActionDestination } from '@/stores/licenseCommercial';
 import { licenseEntitlementsLoadError } from '@/stores/licenseEntitlements';
 import {
@@ -104,6 +105,12 @@ export const ProLicensePlanSection: Component<ProLicensePlanSectionProps> = (pro
           </UpgradeLink>
         </div>
       </Show>
+      <div class="mb-4 rounded-md border border-border bg-surface-alt p-3">
+        <MonitoredSystemDefinitionDisclosure
+          showSummary
+          defaultOpen={props.showMonitoredSystemUpgradeArrival}
+        />
+      </div>
       <Show when={props.trialActivationNotice}>
         {(notice) => (
           <div class={`mb-4 rounded-md border p-3 text-sm ${notice().tone}`}>

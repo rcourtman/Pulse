@@ -373,6 +373,17 @@ async function openMonitoredSystemUpgradeArrival(page: Page) {
     "aria-selected",
     "true",
   );
+  await expect(
+    page.getByText(
+      "Pulse counts top-level monitored systems such as Docker hosts, Kubernetes clusters, Proxmox nodes, standalone hosts, and TrueNAS systems. Compare self-hosted plans in Pulse Account and return here with Pulse Pro activated automatically.",
+    ),
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "Hide counting rules" })).toBeVisible();
+  await expect(
+    page.getByText(
+      "A monitored system is a top-level monitored root such as a Docker host, Kubernetes cluster, Proxmox node, standalone host, or TrueNAS system. Each root counts once no matter how Pulse collects it. Child resources like VMs, containers, pods, disks, backups, and services underneath that root are included.",
+    ),
+  ).toBeVisible();
 }
 
 test.describe("Self-hosted upgrade return flow", () => {

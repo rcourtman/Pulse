@@ -1122,6 +1122,10 @@ default billing and pricing surfaces should use concise monitored-system copy,
 while the full counted-unit definition appears only behind explicit disclosure
 such as `View counting rules` instead of sitting as always-visible explanatory
 chrome.
+When a self-hosted billing arrival is explicitly about monitored-system
+capacity, `ProLicensePlanSection.tsx` may still open that disclosure by
+default, but the same top-level-root definition must remain the canonical
+counted-unit explanation rather than introducing a second plan-local wording.
 The same boundary also owns the warning-banner shorthand: customer-facing
 monitored-system warnings should describe the current counted total in plain
 language such as `16 monitored systems currently counted`, and any Community
