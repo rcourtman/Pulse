@@ -428,6 +428,11 @@ describe('AIIntelligence entitlement gating', () => {
       predictions_count: 0,
       recent_changes_count: 0,
       recent_changes: [],
+      policy_posture: {
+        total_resources: 3,
+        sensitivity_counts: {},
+        routing_counts: {},
+      },
       learning: {
         resources_with_knowledge: 0,
         total_notes: 0,
@@ -483,7 +488,15 @@ describe('AIIntelligence entitlement gating', () => {
       expect(screen.getByRole('heading', { name: 'Learned correlations' })).toBeInTheDocument();
     });
 
-    expect(screen.getByText('2 total')).toBeInTheDocument();
+    expect(screen.getByText('How to read this')).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Findings and run history are Patrol verification evidence. The cards below add explanatory context and do not count as a fresh full patrol.',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText('2 learned patterns · explanatory context')).toBeInTheDocument();
+    expect(screen.getByText('Coverage posture for policy-covered resources.')).toBeInTheDocument();
+    expect(screen.getByText('3 policy-covered resources')).toBeInTheDocument();
     const storage2Link = screen.getByRole('link', {
       name: 'Open source resource Storage 2 in Infrastructure',
     });

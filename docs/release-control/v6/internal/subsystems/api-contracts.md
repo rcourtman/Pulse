@@ -380,7 +380,10 @@ when the disabled candidate no longer counts toward monitored-system capacity.
    Patrol workflow on otherwise healthy fully verified states, and the
    disclosure copy must explicitly tell operators that findings and run history
    are the Patrol verification evidence while those supporting cards only add
-   explanation from the same governed payload family
+   explanation from the same governed payload family, and the Patrol-owned
+   helper `frontend-modern/src/features/patrol/patrolSupportingContextPresentation.ts`
+   must keep that transport-derived trust copy aligned across the workspace
+   disclosure rather than letting page shells invent local wording
 9. Keep AI settings setup transport vendor-neutral: `/api/settings/ai/update`
    must accept provider credentials or base URLs without a baked vendor model
    ID, resolve the effective BYOK `model` through the canonical runtime

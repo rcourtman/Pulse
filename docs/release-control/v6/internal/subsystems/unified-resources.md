@@ -212,6 +212,12 @@ assembly branch.
     `Analysis`, `Analysis Reasoning`, and `Safe Summary` rather than reviving
     generic `AI` or `AI-Safe` branding inside the resource drawer or discovery
     shell.
+14. Keep shared policy-posture framing on the unified-resource card owner.
+    `frontend-modern/src/components/Infrastructure/ResourcePolicySummary.tsx`
+    may accept caller-owned subtitle or resource-count wording when Patrol or
+    another shared surface needs to explain how the same governed policy counts
+    should be read, but those framing lines must extend the shared card API
+    rather than spawning page-local policy summary shells.
 
 ## Forbidden Paths
 
@@ -1403,7 +1409,10 @@ sensitivity, routing, and redaction labels and aggregate count summaries.
 That shared policy card also owns caller-supplied framing lines such as
 subtitle and resource-count wording, so Patrol or other shared surfaces may
 clarify whether the same governed counts read as policy-covered-resource
-context without rebuilding their own policy-posture card shell.
+context without rebuilding their own policy-posture card shell. New
+shared-surface framing needs such as Patrol's `policy-covered resources`
+count label or explanatory subtitle should extend that card API instead of
+forking a second page-local policy summary.
 Future correlation or policy-posture wording changes should extend those
 unified-resource owners instead of drifting into page-local loops in AI,
 Patrol, or infrastructure surfaces.

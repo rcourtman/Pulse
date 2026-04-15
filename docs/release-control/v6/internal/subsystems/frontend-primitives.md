@@ -288,6 +288,7 @@ work extends shared components instead of creating new local variants.
     `frontend-modern/src/features/patrol/PatrolIntelligenceBanners.tsx`,
     `frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts`,
     `frontend-modern/src/features/patrol/patrolInvestigationContextModel.ts`,
+    `frontend-modern/src/features/patrol/patrolSupportingContextPresentation.ts`,
     and `frontend-modern/src/components/patrol/PatrolStatusBar.tsx` must keep
     Patrol assessment, verification, and findings primary; surface recent
     changes, learned correlations, and policy coverage only as explicitly
@@ -299,7 +300,10 @@ work extends shared components instead of creating new local variants.
     `frontend-modern/src/App.tsx` and `frontend-modern/src/AppLayout.tsx` must
     likewise expose `/patrol` as the canonical route and navigation target,
     keeping legacy `/ai` entry points as thin compatibility redirects rather
-    than a second Patrol-branded primary route.
+    than a second Patrol-branded primary route. The Patrol-owned supporting-context
+    presenter must also keep the disclosure toggle plus evidence-boundary copy
+    centralized instead of letting the workspace reintroduce inline shell-local
+    trust wording.
 19. Keep the shared `system-ai` settings shell product-first.
     `frontend-modern/src/components/Settings/AISettings.tsx`,
     `frontend-modern/src/components/Settings/settingsHeaderMeta.ts`,
@@ -1630,7 +1634,9 @@ explanation; healthy fully verified Patrol states must not advertise that
 supporting evidence as a peer workflow. When that disclosure expands, the
 workspace must explicitly label findings and run history as Patrol verification
 evidence and frame the supporting cards as explanatory context rather than as a
-fresh Patrol result.
+fresh Patrol result. `frontend-modern/src/features/patrol/patrolSupportingContextPresentation.ts`
+must own that disclosure copy and toggle wording so the Patrol workspace does
+not regress into inline shell-local trust language.
 
 Shared primitive consumers that split status-dot tone and status-text tone
 must now keep both values routed through the same exported presentation helper.

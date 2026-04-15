@@ -9,6 +9,8 @@ import {
 interface ResourcePolicySummaryProps {
   posture?: IntelligencePolicyPostureSummary | null;
   title?: string;
+  subtitle?: string;
+  resourceCountLabel?: string;
   class?: string;
 }
 
@@ -28,7 +30,12 @@ export const ResourcePolicySummary: Component<ResourcePolicySummaryProps> = (pro
               <h3 class="text-sm font-semibold text-base-content">
                 {props.title ?? 'Data Governance'}
               </h3>
-              <p class="mt-1 text-xs text-muted">{value().total_resources} governed resources</p>
+              <Show when={props.subtitle}>
+                {(subtitle) => <p class="mt-1 text-xs text-muted">{subtitle()}</p>}
+              </Show>
+              <p class="mt-1 text-xs text-muted">
+                {value().total_resources} {props.resourceCountLabel ?? 'governed resources'}
+              </p>
             </div>
           </div>
 

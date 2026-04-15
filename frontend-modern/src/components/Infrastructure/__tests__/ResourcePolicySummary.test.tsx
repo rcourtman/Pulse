@@ -35,4 +35,23 @@ describe('ResourcePolicySummary', () => {
     expect(screen.getByText('Hostname 3')).toBeInTheDocument();
     expect(screen.getByText('IP Address 1')).toBeInTheDocument();
   });
+
+  it('supports caller-owned subtitle and resource count wording', () => {
+    render(() => (
+      <ResourcePolicySummary
+        title="Policy coverage"
+        subtitle="Coverage posture for policy-covered resources."
+        resourceCountLabel="policy-covered resources"
+        posture={{
+          total_resources: 4,
+          sensitivity_counts: {},
+          routing_counts: {},
+        }}
+      />
+    ));
+
+    expect(screen.getByText('Policy coverage')).toBeInTheDocument();
+    expect(screen.getByText('Coverage posture for policy-covered resources.')).toBeInTheDocument();
+    expect(screen.getByText('4 policy-covered resources')).toBeInTheDocument();
+  });
 });

@@ -317,6 +317,10 @@ The same hierarchy applies to supporting context. Correlations, recent
 changes, and policy posture are secondary evidence for deeper investigation, so
 the supporting-context disclosure belongs beneath the primary findings/history
 workspace rather than inside the assessment card itself.
+When that disclosure is expanded, the page must explicitly tell operators that
+findings and run history are Patrol verification evidence, while recent
+changes, learned correlations, and policy posture are explanatory context and
+do not count as a fresh Patrol run.
 When Patrol is healthy and fully verified, that supporting-context disclosure
 should stay out of the main page flow instead of advertising a second parallel
 Patrol workflow with nothing active to explain.
