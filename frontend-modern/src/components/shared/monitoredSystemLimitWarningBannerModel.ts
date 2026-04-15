@@ -8,6 +8,7 @@ import {
   getMonitoredSystemLimitUpgradeLabel,
   isMonitoredSystemLimitUrgent as isCanonicalMonitoredSystemLimitUrgent,
   isMonitoredSystemLimitUsageAvailable as isCanonicalMonitoredSystemLimitUsageAvailable,
+  type MonitoredSystemCapacityStatus,
   type MonitoredSystemLimitUsageStatus,
   type MonitoredSystemLegacyConnectionCounts,
 } from '@/utils/monitoredSystemPresentation';
@@ -32,17 +33,36 @@ export function isMonitoredSystemLimitUsageAvailable(limit: LimitState | undefin
   return isCanonicalMonitoredSystemLimitUsageAvailable(limit);
 }
 
-export function isMonitoredSystemLimitUrgent(limit: LimitState | undefined): boolean {
-  return isCanonicalMonitoredSystemLimitUrgent(limit);
+export function isMonitoredSystemLimitUrgent(
+  limit: LimitState | undefined,
+  capacity?: MonitoredSystemCapacityStatus | null,
+): boolean {
+  return isCanonicalMonitoredSystemLimitUrgent(limit, capacity);
 }
 
-export function shouldShowMonitoredSystemLimitBanner(limit: LimitState | undefined): boolean {
-  return Boolean(limit) && isMonitoredSystemLimitUrgent(limit);
+export function shouldShowMonitoredSystemLimitBanner(
+  limit: LimitState | undefined,
+  capacity?: MonitoredSystemCapacityStatus | null,
+): boolean {
+  return Boolean(limit || capacity) && isMonitoredSystemLimitUrgent(limit, capacity);
 }
 
-export function getMonitoredSystemSummary(limit: LimitState | undefined): string {
-  if (!limit || !isMonitoredSystemLimitUsageAvailable(limit)) return '';
-  return formatMonitoredSystemLimitSummary(limit);
+export function getMonitoredSystemSummary(
+  limit: LimitState | undefined,
+  capacity?: MonitoredSystemCapacityStatus | null,
+): string {
+  if (!limit && !capacity) return '';
+  if (limit && !isMonitoredSystemLimitUsageAvailable(limit)) return '';
+  return formatMonitoredSystemLimitSummary(
+    limit ?? {
+      current: capacity?.current ?? 0,
+      limit: capacity?.limit ?? 0,
+      current_available: capacity?.current_available ?? true,
+      current_unavailable_reason: capacity?.current_unavailable_reason,
+      state: capacity?.urgency ?? 'ok',
+    },
+    capacity,
+  );
 }
 
 export function getMonitoredSystemLegacyConnectionTotal(

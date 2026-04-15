@@ -5,6 +5,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 )
 
 func TestPublicDemoCommercialRouteInventoryCoverage(t *testing.T) {
@@ -51,6 +53,17 @@ func TestSanitizeRuntimeCapabilitiesPayloadForPublicDemo(t *testing.T) {
 		},
 		HostedMode:     true,
 		MaxHistoryDays: 90,
+		MonitoredSystemCapacity: &pkglicensing.MonitoredSystemCapacityStatus{
+			Mode:                        "over_limit_frozen",
+			Urgency:                     "enforced",
+			Current:                     16,
+			Limit:                       5,
+			CurrentAvailable:            true,
+			AvailableSlots:              0,
+			Overage:                     11,
+			BlocksNewSystems:            true,
+			ExistingMonitoringContinues: true,
+		},
 	})
 
 	if len(sanitized.Capabilities) != 2 {
@@ -64,6 +77,9 @@ func TestSanitizeRuntimeCapabilitiesPayloadForPublicDemo(t *testing.T) {
 	}
 	if sanitized.MaxHistoryDays != 90 || !sanitized.HostedMode {
 		t.Fatalf("non-commercial runtime capability fields should be preserved, got max_history_days=%d hosted_mode=%v", sanitized.MaxHistoryDays, sanitized.HostedMode)
+	}
+	if sanitized.MonitoredSystemCapacity != nil {
+		t.Fatalf("monitored_system_capacity=%+v, want nil after public demo sanitization", sanitized.MonitoredSystemCapacity)
 	}
 }
 

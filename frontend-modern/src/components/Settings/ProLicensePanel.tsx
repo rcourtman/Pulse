@@ -105,6 +105,7 @@ const ProLicensePanelContent: Component = () => {
                   hasLicenseDetails={state.hasLicenseDetails()}
                   hasPaidFeatures={state.hasPaidFeatures()}
                   loading={state.loading()}
+                  monitoredSystemCapacityNotice={state.monitoredSystemCapacityNotice()}
                   monitoredSystemContinuityNotice={state.monitoredSystemContinuityNotice()}
                   onReload={() => void state.loadPanelData()}
                   purchaseActivationAction={state.purchaseActivationAction()}
@@ -143,6 +144,7 @@ const ProLicensePanelContent: Component = () => {
             >
               <MonitoredSystemLedgerPanel
                 embedded
+                monitoredSystemCapacity={state.entitlements()?.monitored_system_capacity}
                 monitoredSystemContinuity={state.entitlements()?.monitored_system_continuity}
                 monitoredSystemLimit={
                   state

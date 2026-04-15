@@ -259,8 +259,8 @@ describe('ProLicensePanel', () => {
       expect(screen.getByText('Plan Terms')).toBeInTheDocument();
     });
 
-    expect(screen.getByText('5 / 12')).toBeInTheDocument();
-    expect(screen.getByText('7')).toBeInTheDocument();
+    expect(screen.getByText('5 monitored systems')).toBeInTheDocument();
+    expect(screen.getByText('7 remaining')).toBeInTheDocument();
     expect(screen.getAllByText('Active').length).toBeGreaterThan(0);
     expect(screen.getByText('V5 Pro Monthly (Grandfathered)')).toBeInTheDocument();
     expect(screen.getByText('Included Monitored Systems')).toBeInTheDocument();
@@ -337,7 +337,9 @@ describe('ProLicensePanel', () => {
       expect(screen.getByText(tc.expectedLabel)).toBeInTheDocument();
       expect(screen.getByText('Grandfathered v5 pricing')).toBeInTheDocument();
       expect(
-        screen.getByText(/keeps its existing recurring price and uncapped monitored-system and guest capacity until you cancel/i),
+        screen.getByText(
+          /keeps its existing recurring price and uncapped monitored-system and guest capacity until you cancel/i,
+        ),
       ).toBeInTheDocument();
       expect(
         within(screen.getByText('Monitored Systems').parentElement as HTMLElement).getByText(
@@ -345,7 +347,7 @@ describe('ProLicensePanel', () => {
         ),
       ).toBeInTheDocument();
       expect(
-        within(screen.getByText('Remaining System Capacity').parentElement as HTMLElement).getByText(
+        within(screen.getByText('Capacity Status').parentElement as HTMLElement).getByText(
           'Unlimited',
         ),
       ).toBeInTheDocument();
@@ -438,7 +440,8 @@ describe('ProLicensePanel', () => {
     expect(
       screen.getByText(/keeps an effective monitored-system limit of 23/i),
     ).toBeInTheDocument();
-    expect(screen.getByText('23 / 23')).toBeInTheDocument();
+    expect(screen.getByText('23 monitored systems')).toBeInTheDocument();
+    expect(screen.getByText('Monitored-system limit reached')).toBeInTheDocument();
     expect(screen.getByText('Plan Monitored System Limit')).toBeInTheDocument();
     expect(screen.getByText('Effective Monitored System Limit')).toBeInTheDocument();
     expect(screen.getByText('Grandfathered Floor')).toBeInTheDocument();
@@ -579,26 +582,35 @@ describe('ProLicensePanel', () => {
       actionLabel: 'Try again',
       actionHref: getSelfHostedPurchaseStartUrl(),
     },
-  ])('shows the purchase arrival notice for $purchase', async ({ purchase, title, actionLabel, actionHref, redirectedHref = SELF_HOSTED_PRO_BILLING_PLAN_HREF }) => {
-    useLocationMock.mockReturnValue({
-      search: `?purchase=${purchase}`,
-      pathname: '/settings/system/billing/plan',
-      hash: '',
-    });
+  ])(
+    'shows the purchase arrival notice for $purchase',
+    async ({
+      purchase,
+      title,
+      actionLabel,
+      actionHref,
+      redirectedHref = SELF_HOSTED_PRO_BILLING_PLAN_HREF,
+    }) => {
+      useLocationMock.mockReturnValue({
+        search: `?purchase=${purchase}`,
+        pathname: '/settings/system/billing/plan',
+        hash: '',
+      });
 
-    renderPanel();
+      renderPanel();
 
-    expect(screen.getByText(title)).toBeInTheDocument();
-    if (actionLabel && actionHref) {
-      expect(screen.getByRole('link', { name: actionLabel })).toHaveAttribute('href', actionHref);
-    } else {
-      expect(screen.queryByRole('link', { name: 'Review usage' })).not.toBeInTheDocument();
-    }
-    expect(navigateMock).toHaveBeenCalledWith(redirectedHref, {
-      replace: true,
-      scroll: false,
-    });
-  });
+      expect(screen.getByText(title)).toBeInTheDocument();
+      if (actionLabel && actionHref) {
+        expect(screen.getByRole('link', { name: actionLabel })).toHaveAttribute('href', actionHref);
+      } else {
+        expect(screen.queryByRole('link', { name: 'Review usage' })).not.toBeInTheDocument();
+      }
+      expect(navigateMock).toHaveBeenCalledWith(redirectedHref, {
+        replace: true,
+        scroll: false,
+      });
+    },
+  );
 
   it('shows a monitored-system activation success action and suppresses the compare-plans arrival callout', async () => {
     useLocationMock.mockReturnValue({
@@ -626,9 +638,7 @@ describe('ProLicensePanel', () => {
 
     renderPanel();
 
-    const recoveryDisclosure = screen
-      .getByText('Redeem existing key')
-      .closest('details');
+    const recoveryDisclosure = screen.getByText('Redeem existing key').closest('details');
     expect(recoveryDisclosure).toHaveAttribute('open');
   });
 
@@ -681,7 +691,9 @@ describe('ProLicensePanel', () => {
     renderPanel();
 
     expect(
-      screen.getByText('Pulse counts top-level monitored systems. Child resources underneath them are included.'),
+      screen.getByText(
+        'Pulse counts top-level monitored systems. Child resources underneath them are included.',
+      ),
     ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'View counting rules' })).toBeInTheDocument();
     expect(

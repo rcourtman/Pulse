@@ -554,6 +554,11 @@ reads for capability and history-retention truth, but
 licensed identity, upgrade prompts, trial urgency, checkout handoff state, or
 observed usage counts to remain present once the public-demo contract is
 applied.
+That same runtime-safe exception now also redacts monitored-system capacity
+posture. Storage/recovery surfaces may keep demo-safe capability and retention
+truth from `/api/license/runtime-capabilities`, but they must not expect
+`monitored_system_capacity`, admission-freeze copy, or observed plan overage
+to survive the public-demo API boundary.
 That same adjacent commercial boundary also owns one-time checkout-return
 lookup. Storage and recovery may coexist with the shared purchase return routes
 in the app shell, but they must not cache, derive, or replay the

@@ -54,12 +54,26 @@ export interface MonitoredSystemContinuityStatus {
   captured_at?: number;
 }
 
+export interface MonitoredSystemCapacityStatus {
+  mode: string;
+  urgency: string;
+  current: number;
+  limit: number;
+  current_available: boolean;
+  current_unavailable_reason?: string;
+  available_slots: number;
+  overage: number;
+  blocks_new_systems: boolean;
+  existing_monitoring_continues: boolean;
+}
+
 // Mirrors internal/api/subscription_entitlements.go:RuntimeCapabilitiesPayload
 export interface LicenseRuntimeCapabilities {
   capabilities: string[];
   limits: EntitlementLimitStatus[];
   hosted_mode?: boolean;
   max_history_days?: number;
+  monitored_system_capacity?: MonitoredSystemCapacityStatus;
 }
 
 // Mirrors internal/api/subscription_entitlements.go:CommercialPosturePayload
@@ -75,6 +89,7 @@ export interface LicenseCommercialPosture {
   legacy_connections?: EntitlementLegacyConnections;
   has_migration_gap?: boolean;
   commercial_migration?: CommercialMigrationStatus;
+  monitored_system_capacity?: MonitoredSystemCapacityStatus;
 }
 
 // Mirrors internal/api/subscription_entitlements.go:EntitlementPayload

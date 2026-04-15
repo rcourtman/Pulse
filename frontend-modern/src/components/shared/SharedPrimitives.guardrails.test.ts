@@ -664,6 +664,9 @@ describe('shared primitive guardrails', () => {
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('createMemo');
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('loadRuntimeCapabilities');
     expect(monitoredSystemLimitWarningBannerStateSource).toContain(
+      'getRuntimeMonitoredSystemCapacity',
+    );
+    expect(monitoredSystemLimitWarningBannerStateSource).toContain(
       'presentationPolicyHidesCommercialSurfaces',
     );
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('trackUpgradeMetricEvent');
@@ -690,11 +693,19 @@ describe('shared primitive guardrails', () => {
       'getMonitoredSystemLimitInstallCollectorsLabel',
     );
     expect(monitoredSystemLimitWarningBannerModelSource).toContain(
+      'type MonitoredSystemCapacityStatus',
+    );
+    expect(monitoredSystemLimitWarningBannerModelSource).toContain(
       'isMonitoredSystemLimitUsageAvailable',
+    );
+    expect(monitoredSystemLimitWarningBannerModelSource).toContain(
+      'formatMonitoredSystemLimitSummary',
     );
     expect(monitoredSystemLimitWarningBannerModelSource).not.toContain(
       'current_available !== false',
     );
+    expect(monitoredSystemLimitWarningBannerModelSource).not.toContain('current / limit');
+    expect(monitoredSystemLimitWarningBannerModelSource).not.toContain('0 remaining');
     expect(monitoredSystemLimitWarningBannerModelSource).toContain(
       'SELF_HOSTED_PRO_BILLING_USAGE_COUNTING_RULES_HREF',
     );

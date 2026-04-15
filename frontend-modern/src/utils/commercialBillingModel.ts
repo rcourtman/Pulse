@@ -30,7 +30,7 @@ export interface SelfHostedCommercialModelInput {
   expires: string;
   daysRemaining: string | number;
   monitoredSystemsSummary: string | number;
-  remainingSystemCapacity: string | number;
+  capacityStatusSummary: string | number;
   maxMonitoredSystems: string | number;
   maxGuests: string | number;
   monitoredSystemContinuity?: MonitoredSystemContinuityStatus | null;
@@ -63,8 +63,8 @@ export const buildSelfHostedCommercialPlanModel = (
       value: input.monitoredSystemsSummary,
     },
     {
-      label: 'Remaining System Capacity',
-      value: input.remainingSystemCapacity,
+      label: 'Capacity Status',
+      value: input.capacityStatusSummary,
     },
     {
       label: 'Plan Status',

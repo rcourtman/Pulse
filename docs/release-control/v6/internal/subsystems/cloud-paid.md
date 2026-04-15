@@ -99,11 +99,11 @@ agreement, and cloud-specific enforcement rules.
    dev build metadata, or anonymous telemetry.
 4. `internal/api/payments_webhook_handlers.go` shared with `api-contracts`: commercial payment webhook handlers carry both API payload contract and cloud-paid billing boundary ownership.
 5. `internal/api/public_signup_handlers.go` shared with `api-contracts`: hosted signup handlers carry both API payload contract and cloud-paid hosted provisioning boundary ownership.
-That shared monitored-system presentation boundary also owns disabled
-provider-connection copy. Commercial entitlement surfaces must treat canonical
-zero-delta and removal-only TrueNAS or VMware previews as non-consuming or
-capacity-freeing changes rather than warning users that a disabled connection
-still grows monitored-system usage.
+   That shared monitored-system presentation boundary also owns disabled
+   provider-connection copy. Commercial entitlement surfaces must treat canonical
+   zero-delta and removal-only TrueNAS or VMware previews as non-consuming or
+   capacity-freeing changes rather than warning users that a disabled connection
+   still grows monitored-system usage.
 
 The real `pulse-pro` license-server legacy checkout issuance, recurring
 renewals, manual issue, and legacy exchange flows are part of that same
@@ -187,8 +187,8 @@ the same active-at-snapshot rule as the live server before anyone sets
     `ai_alerts`, `ai_autofix`, and `kubernetes_ai`, but the customer-facing
     plan cards, highlights, and comparison rows must use the canonical product
     vocabulary already exposed elsewhere in the commercial shell: `Pulse
-    Patrol`, `Pulse Alert Analysis`, `Patrol Auto-Fix`, and `Kubernetes
-    Insights`, rather than reviving generic `AI Patrol` or `AI ... analysis`
+Patrol`, `Pulse Alert Analysis`, `Patrol Auto-Fix`, and `Kubernetes
+Insights`, rather than reviving generic `AI Patrol` or `AI ... analysis`
     branding inside self-hosted pricing surfaces.
 
 ## Forbidden Paths
@@ -1136,11 +1136,15 @@ capacity, `ProLicensePlanSection.tsx` may still open that disclosure by
 default, but the same top-level-root definition must remain the canonical
 counted-unit explanation rather than introducing a second plan-local wording.
 The same boundary also owns the warning-banner shorthand: customer-facing
-monitored-system warnings should describe the current counted total in plain
-language such as `16 monitored systems currently counted`, and any Community
-overflow/setup-slot message must explain the included monitored systems plus the
-temporary setup slot in customer terms rather than compressing the contract
-into slash-style quota strings that imply Pulse is counting every child device.
+monitored-system warnings should describe the current admission posture in
+plain language, not just raw `current / limit` math. When a plan is full, copy
+must explain that existing monitoring continues while new monitored systems are
+blocked; when an installation is already above the current plan, copy must
+explain that Pulse is in an over-plan frozen state rather than implying a hard
+runtime blackout. Community overflow/setup-slot messaging must still explain
+the included monitored systems plus the temporary setup slot in customer terms
+rather than compressing the contract into slash-style quota strings that imply
+Pulse is counting every child device.
 Those same billing-facing surfaces must also describe the commercial contract in
 customer terms: monitored systems, plan limits, subscription status, and
 license status. They must not revive legacy `installed-agent` wording or vague

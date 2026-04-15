@@ -1,6 +1,7 @@
 import { createEffect, createMemo, onMount } from 'solid-js';
 import { presentationPolicyHidesCommercialSurfaces } from '@/stores/sessionPresentationPolicy';
 import {
+  getRuntimeMonitoredSystemCapacity,
   getRuntimeLimit,
   loadRuntimeCapabilities,
 } from '@/stores/license';
@@ -39,27 +40,26 @@ export function useMonitoredSystemLimitWarningBannerState() {
   });
 
   const monitoredSystemLimit = createMemo(() => getRuntimeLimit(MONITORED_SYSTEM_LIMIT_KEY));
-  const isUrgent = createMemo(() => isMonitoredSystemLimitUrgent(monitoredSystemLimit()));
+  const monitoredSystemCapacity = createMemo(() => getRuntimeMonitoredSystemCapacity());
+  const isUrgent = createMemo(() =>
+    isMonitoredSystemLimitUrgent(monitoredSystemLimit(), monitoredSystemCapacity()),
+  );
   const showBanner = createMemo(
     () =>
       !presentationPolicyHidesCommercialSurfaces() &&
-      shouldShowMonitoredSystemLimitBanner(monitoredSystemLimit()),
+      shouldShowMonitoredSystemLimitBanner(monitoredSystemLimit(), monitoredSystemCapacity()),
   );
   const migrationGap = createMemo(() => hasMigrationGap());
   const migrationCounts = createMemo(() => legacyConnections());
   const monitoredSystemSummary = createMemo(() =>
-    getMonitoredSystemSummary(monitoredSystemLimit()),
+    getMonitoredSystemSummary(monitoredSystemLimit(), monitoredSystemCapacity()),
   );
-  const migrationMessage = createMemo(() =>
-    getMonitoredSystemMigrationMessage(migrationCounts()),
-  );
+  const migrationMessage = createMemo(() => getMonitoredSystemMigrationMessage(migrationCounts()));
   const overflowSummary = createMemo(() =>
     getMonitoredSystemOverflowSummary(commercialOverflowDaysRemaining()),
   );
   const toneClass = createMemo(() => getMonitoredSystemBannerToneClass(isUrgent()));
-  const migrationTextClass = createMemo(() =>
-    getMonitoredSystemMigrationTextClass(isUrgent()),
-  );
+  const migrationTextClass = createMemo(() => getMonitoredSystemMigrationTextClass(isUrgent()));
   const learnMoreDestination = createMemo(() =>
     resolveUpgradeDestination(MONITORED_SYSTEM_LIMIT_LEARN_MORE_HREF),
   );

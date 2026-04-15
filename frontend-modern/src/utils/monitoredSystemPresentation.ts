@@ -83,7 +83,8 @@ const MONITORED_SYSTEM_LEDGER_PRESENTATION = {
     learnMoreLabel: 'Learn more',
     installCollectorsLabel: 'Install v6 collectors',
     upgradeLabel: 'Upgrade to add more',
-    overflowSummaryPrefix: 'Community includes 5 monitored systems. 1 temporary setup slot is active',
+    overflowSummaryPrefix:
+      'Community includes 5 monitored systems. 1 temporary setup slot is active',
     legacyConnectionSuffix:
       'that count once toward your monitored-system cap when the same top-level system is discovered canonically.',
   },
@@ -117,6 +118,32 @@ export type MonitoredSystemLimitUsageStatus = {
   current_available?: boolean | null;
   current_unavailable_reason?: string | null;
   state?: string | null;
+};
+
+export type MonitoredSystemCapacityStatus = {
+  mode?: string | null;
+  urgency?: string | null;
+  current?: number | null;
+  limit?: number | null;
+  current_available?: boolean | null;
+  current_unavailable_reason?: string | null;
+  available_slots?: number | null;
+  overage?: number | null;
+  blocks_new_systems?: boolean | null;
+  existing_monitoring_continues?: boolean | null;
+};
+
+type ResolvedMonitoredSystemCapacityStatus = {
+  mode: string;
+  urgency: string;
+  current: number;
+  limit: number;
+  current_available: boolean;
+  current_unavailable_reason?: string;
+  available_slots: number;
+  overage: number;
+  blocks_new_systems: boolean;
+  existing_monitoring_continues: boolean;
 };
 
 export type MonitoredSystemAdmissionPreviewUnavailableState = {
@@ -197,46 +224,225 @@ export function isMonitoredSystemLimitUsageAvailable(
 
 export function getMonitoredSystemLimitUnavailableReason(
   limit?: MonitoredSystemLimitUsageStatus | null,
+  capacity?: MonitoredSystemCapacityStatus | null,
 ): string | undefined {
-  if (isMonitoredSystemLimitUsageAvailable(limit)) return undefined;
-  return limit?.current_unavailable_reason?.trim() || undefined;
+  const resolved = resolveMonitoredSystemCapacityStatus(capacity, limit);
+  if (resolved?.current_available) return undefined;
+  return resolved?.current_unavailable_reason?.trim() || undefined;
+}
+
+function deriveMonitoredSystemLimitUrgency(current: number, limit: number): string {
+  if (limit <= 0) return 'ok';
+  if (current >= limit) return 'enforced';
+  if (limit > 1 && limit <= 10) {
+    return current >= limit - 1 ? 'warning' : 'ok';
+  }
+  return current * 10 >= limit * 9 ? 'warning' : 'ok';
+}
+
+function deriveMonitoredSystemCapacityStatus(
+  limit?: MonitoredSystemLimitUsageStatus | null,
+): ResolvedMonitoredSystemCapacityStatus | undefined {
+  if (!limit) return undefined;
+
+  const currentAvailable = isMonitoredSystemLimitUsageAvailable(limit);
+  const current = typeof limit.current === 'number' ? limit.current : 0;
+  const planLimit = typeof limit.limit === 'number' ? limit.limit : 0;
+  const urgency =
+    normalizeMonitoredSystemValue(limit.state ?? undefined) ||
+    deriveMonitoredSystemLimitUrgency(current, planLimit);
+
+  if (!currentAvailable) {
+    return {
+      mode: 'usage_unavailable',
+      urgency: 'ok',
+      current: 0,
+      limit: planLimit,
+      current_available: false,
+      current_unavailable_reason: limit.current_unavailable_reason?.trim() || undefined,
+      available_slots: 0,
+      overage: 0,
+      blocks_new_systems: false,
+      existing_monitoring_continues: false,
+    };
+  }
+
+  if (planLimit <= 0) {
+    return {
+      mode: 'unlimited',
+      urgency: 'ok',
+      current,
+      limit: 0,
+      current_available: true,
+      available_slots: 0,
+      overage: 0,
+      blocks_new_systems: false,
+      existing_monitoring_continues: true,
+    };
+  }
+
+  if (current > planLimit) {
+    return {
+      mode: 'over_limit_frozen',
+      urgency: 'enforced',
+      current,
+      limit: planLimit,
+      current_available: true,
+      available_slots: 0,
+      overage: current - planLimit,
+      blocks_new_systems: true,
+      existing_monitoring_continues: true,
+    };
+  }
+
+  if (current === planLimit) {
+    return {
+      mode: 'at_limit_blocking_new',
+      urgency: 'enforced',
+      current,
+      limit: planLimit,
+      current_available: true,
+      available_slots: 0,
+      overage: 0,
+      blocks_new_systems: true,
+      existing_monitoring_continues: true,
+    };
+  }
+
+  return {
+    mode: 'within_limit',
+    urgency,
+    current,
+    limit: planLimit,
+    current_available: true,
+    available_slots: planLimit - current,
+    overage: 0,
+    blocks_new_systems: false,
+    existing_monitoring_continues: true,
+  };
+}
+
+export function resolveMonitoredSystemCapacityStatus(
+  capacity?: MonitoredSystemCapacityStatus | null,
+  limit?: MonitoredSystemLimitUsageStatus | null,
+): ResolvedMonitoredSystemCapacityStatus | undefined {
+  const fallback = deriveMonitoredSystemCapacityStatus(limit);
+  if (!capacity) {
+    return fallback;
+  }
+
+  const current =
+    typeof capacity.current === 'number' ? capacity.current : (fallback?.current ?? 0);
+  const planLimit = typeof capacity.limit === 'number' ? capacity.limit : (fallback?.limit ?? 0);
+  const currentAvailable =
+    typeof capacity.current_available === 'boolean'
+      ? capacity.current_available
+      : (fallback?.current_available ?? true);
+  const mode =
+    normalizeMonitoredSystemValue(capacity.mode ?? undefined) ||
+    fallback?.mode ||
+    'usage_unavailable';
+  const urgency =
+    normalizeMonitoredSystemValue(capacity.urgency ?? undefined) ||
+    fallback?.urgency ||
+    deriveMonitoredSystemLimitUrgency(current, planLimit);
+
+  return {
+    mode,
+    urgency,
+    current,
+    limit: planLimit,
+    current_available: currentAvailable,
+    current_unavailable_reason:
+      capacity.current_unavailable_reason?.trim() ||
+      fallback?.current_unavailable_reason ||
+      undefined,
+    available_slots:
+      typeof capacity.available_slots === 'number'
+        ? capacity.available_slots
+        : (fallback?.available_slots ?? Math.max(planLimit - current, 0)),
+    overage:
+      typeof capacity.overage === 'number'
+        ? capacity.overage
+        : (fallback?.overage ?? Math.max(current - planLimit, 0)),
+    blocks_new_systems:
+      typeof capacity.blocks_new_systems === 'boolean'
+        ? capacity.blocks_new_systems
+        : (fallback?.blocks_new_systems ?? false),
+    existing_monitoring_continues:
+      typeof capacity.existing_monitoring_continues === 'boolean'
+        ? capacity.existing_monitoring_continues
+        : (fallback?.existing_monitoring_continues ?? currentAvailable),
+  };
+}
+
+function formatMonitoredSystemCount(value: number): string {
+  return `${value} monitored system${value === 1 ? '' : 's'}`;
 }
 
 export function getMonitoredSystemLimitUsageSummary(
   limit?: MonitoredSystemLimitUsageStatus | null,
-): string | number {
-  if (!isMonitoredSystemLimitUsageAvailable(limit)) {
+  capacity?: MonitoredSystemCapacityStatus | null,
+): string {
+  const resolved = resolveMonitoredSystemCapacityStatus(capacity, limit);
+  if (!resolved || !resolved.current_available) {
     return MONITORED_SYSTEM_LEDGER_PRESENTATION.usageVerifyingLabel;
   }
-
-  const current = typeof limit?.current === 'number' ? limit.current : 0;
-  const planLimit = typeof limit?.limit === 'number' ? limit.limit : 0;
-  if (planLimit > 0) {
-    return `${current} / ${planLimit}`;
-  }
-  return current;
+  return formatMonitoredSystemCount(resolved.current);
 }
 
-export function getMonitoredSystemLimitRemainingCapacity(
+export function getMonitoredSystemLimitCapacityStatusSummary(
   limit?: MonitoredSystemLimitUsageStatus | null,
-): string | number {
-  if (!isMonitoredSystemLimitUsageAvailable(limit)) {
+  capacity?: MonitoredSystemCapacityStatus | null,
+): string {
+  const resolved = resolveMonitoredSystemCapacityStatus(capacity, limit);
+  if (!resolved || !resolved.current_available) {
     return MONITORED_SYSTEM_LEDGER_PRESENTATION.remainingCapacityUnavailableLabel;
   }
 
-  const current = typeof limit?.current === 'number' ? limit.current : 0;
-  const planLimit = typeof limit?.limit === 'number' ? limit.limit : 0;
-  if (planLimit <= 0) {
-    return MONITORED_SYSTEM_LEDGER_PRESENTATION.unlimitedLimitLabel;
+  switch (resolved.mode) {
+    case 'unlimited':
+      return MONITORED_SYSTEM_LEDGER_PRESENTATION.unlimitedLimitLabel;
+    case 'over_limit_frozen':
+      return `Over plan by ${resolved.overage}`;
+    case 'at_limit_blocking_new':
+      return 'At plan limit';
+    default:
+      return `${resolved.available_slots} remaining`;
   }
-  return Math.max(planLimit - current, 0);
+}
+
+export function getMonitoredSystemLimitContextSummary(
+  limit?: MonitoredSystemLimitUsageStatus | null,
+  capacity?: MonitoredSystemCapacityStatus | null,
+): string {
+  const resolved = resolveMonitoredSystemCapacityStatus(capacity, limit);
+  if (!resolved) {
+    return '';
+  }
+  if (!resolved.current_available) {
+    return formatMonitoredSystemUsageUnavailableMessage(resolved.current_unavailable_reason);
+  }
+
+  switch (resolved.mode) {
+    case 'unlimited':
+      return 'This plan does not cap monitored systems.';
+    case 'over_limit_frozen':
+      return `Plan includes ${resolved.limit}. Over plan by ${resolved.overage}. Existing monitoring continues, but new monitored systems are blocked until usage is reduced or the plan is upgraded.`;
+    case 'at_limit_blocking_new':
+      return `Plan includes ${resolved.limit}. Existing monitoring continues, but new monitored systems are blocked until capacity is freed or the plan is upgraded.`;
+    default:
+      return `${resolved.available_slots} remaining before new monitored systems are blocked.`;
+  }
 }
 
 export function isMonitoredSystemLimitUrgent(
   limit?: MonitoredSystemLimitUsageStatus | null,
+  capacity?: MonitoredSystemCapacityStatus | null,
 ): boolean {
-  if (!limit || !isMonitoredSystemLimitUsageAvailable(limit)) return false;
-  const state = normalizeMonitoredSystemValue(limit.state ?? undefined);
+  const resolved = resolveMonitoredSystemCapacityStatus(capacity, limit);
+  if (!resolved?.current_available) return false;
+  const state = normalizeMonitoredSystemValue(resolved.urgency);
   return state === 'warning' || state === 'enforced';
 }
 
@@ -346,11 +552,33 @@ export function getMonitoredSystemAdmissionPreviewSaveBlockedMessage(
   return MONITORED_SYSTEM_LEDGER_PRESENTATION.admissionPreview.requiredMessage;
 }
 
-export function formatMonitoredSystemLimitSummary(limit: {
-  current: number;
-  limit: number;
-}): string {
-  return `${limit.current} monitored systems currently counted`;
+export function formatMonitoredSystemLimitSummary(
+  limit: {
+    current: number;
+    limit: number;
+    current_available?: boolean | null;
+    current_unavailable_reason?: string | null;
+    state?: string | null;
+  },
+  capacity?: MonitoredSystemCapacityStatus | null,
+): string {
+  const resolved = resolveMonitoredSystemCapacityStatus(capacity, limit);
+  if (!resolved || !resolved.current_available) {
+    return MONITORED_SYSTEM_LEDGER_PRESENTATION.usageVerifyingLabel;
+  }
+
+  switch (resolved.mode) {
+    case 'over_limit_frozen':
+      return `${formatMonitoredSystemCount(resolved.current)} active. Plan includes ${
+        resolved.limit
+      }, and you are over plan by ${resolved.overage}. Existing monitoring continues, but new monitored systems are blocked until usage is reduced or the plan is upgraded.`;
+    case 'at_limit_blocking_new':
+      return `All ${resolved.limit} included monitored systems are in use. Existing monitoring continues, but new monitored systems are now blocked until capacity is freed or the plan is upgraded.`;
+    case 'unlimited':
+      return `${formatMonitoredSystemCount(resolved.current)} active.`;
+    default:
+      return `${resolved.current} of ${resolved.limit} included monitored systems are in use.`;
+  }
 }
 
 export function formatMonitoredSystemLegacyConnectionBreakdown(

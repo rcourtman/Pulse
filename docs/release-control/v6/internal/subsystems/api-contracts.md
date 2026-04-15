@@ -187,27 +187,27 @@ when the disabled candidate no longer counts toward monitored-system capacity.
    and the shared `frontend-modern/src/components/Infrastructure/ResourceChangeSummary.tsx` and `frontend-modern/src/components/Infrastructure/ResourceCorrelationSummary.tsx` cards' infrastructure resource-link default, so the Patrol page, resource drawer, and problem-resource dashboard panels inherit the canonical resource-filter path construction instead of rebuilding infrastructure URLs inline
    and the Patrol runtime-remediation destination shared with `/api/settings/ai`, so summary actions and runtime-finding actions may reuse the governed provider-settings route while still presenting that destination to Patrol operators as Patrol provider configuration instead of generic `AI Settings` copy
    and the Patrol route-shell destination itself, so the thin page shell at `frontend-modern/src/pages/AIIntelligence.tsx` may continue to bridge the shared AI-runtime payload boundary while exposing `/patrol` as the canonical product route and preserving `/ai` only as a compatibility redirect
-8. Route frontend API-client parsed error propagation, API-error-status fallback handling, allowed-status handling, custom status-specific error handling, command-trigger success envelope handling, shared response parsing pipelines, missing-resource lookup handling, metadata CRUD routing, stream event consumption, response status, collection normalization, scalar payload coercion, and structured error normalization through canonical shared helpers under `frontend-modern/src/api/`
-9. Add or change API token scope, assignment, and revocation presentation through `frontend-modern/src/components/Settings/APITokenManager.tsx`, `frontend-modern/src/components/Settings/apiTokenManagerModel.ts`, and `frontend-modern/src/components/Settings/useAPITokenManagerState.ts`
-10. Add or change infrastructure operations token generation, lookup, assignment, the pure unified-agent inventory/install model, the split infrastructure install/reporting state owners, the split direct-node/discovery infrastructure settings owners, the shared infrastructure-operations state provider/context shell, and reporting/install presentation through `frontend-modern/src/components/Settings/InfrastructureOperationsController.tsx`, `frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx`, `frontend-modern/src/components/Settings/useInfrastructureConfiguredNodesState.ts`, `frontend-modern/src/components/Settings/useInfrastructureDiscoveryRuntimeState.ts`, `frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx`, `frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx`, and `frontend-modern/src/components/Settings/useInfrastructureReportingState.tsx`
-11. Keep `internal/api/session_store.go` on a fail-closed auth-persistence boundary: persisted OIDC refresh tokens may only round-trip through encrypted-at-rest session payloads, and any missing-crypto or invalid-ciphertext path must drop the token instead of preserving plaintext-at-rest session state.
-12. Keep tenant AI handler wiring on canonical provider ownership: `internal/api/ai_handlers.go` may wire tenant `ReadState` and tenant-scoped unified-resource providers into AI services, but it must not revive tenant snapshot-provider bridges once Patrol can initialize and verify from those canonical providers directly.
-13. Keep Patrol status transport semantics explicit in that same AI handler layer: the Patrol status endpoint must carry machine-readable runtime availability such as blocked, running, disabled, active, or unavailable rather than asking frontend consumers to infer operator state from stale summaries or run history.
-14. Keep Patrol quickstart transport semantics explicit as well: zero remaining quickstart credits are inventory data, not a standalone runtime-state override, so frontend consumers may only present the exhausted quickstart warning when the payload still reports `using_quickstart` or a runtime state that is blocked by quickstart exhaustion.
-15. Keep Patrol intelligence summary transport semantics single-voiced: the canonical overall-health payload and Patrol run-history payload together must support one primary assessment plus one explicit verification explanation, and frontend consumers must not need to derive a second compact assessment or verification verdict row from the same payloads beneath the primary summary card.
-16. Keep Pulse Mobile relay credential minting and permission ownership on backend ownership: `internal/api/router_routes_auth_security.go`, `internal/api/security_tokens.go`, `internal/api/auth.go`, `internal/api/relay_mobile_capability.go`, `internal/api/router_routes_ai_relay.go`, and `frontend-modern/src/api/security.ts` may expose the canonical mobile runtime token creator and governed route gates, but browser callers must only consume that route and must not define the mobile runtime scope, compatibility gate list, route inventory, or token-purpose metadata locally.
-17. Keep hosted tenant browser-session precedence on the shared auth boundary: `internal/api/auth.go`, `internal/api/contract_test.go`, and hosted tenant callers must treat a valid `pulse_session` as authoritative before any API-only token fallback or no-local-auth anonymous fallback, so cloud handoff can continue into protected hosted routes without flattening the operator back to `anonymous` or forcing a browser session through bearer-token-only mode after the tenant has minted API tokens.
-18. Keep tenant settings-scope authorization aligned with org management: `internal/api/security_setup_fix.go`, `internal/api/contract_test.go`, and settings-bound hosted callers must allow the current non-default org owner/admin membership to exercise privileged tenant routes, rather than requiring a separate configured local admin identity after hosted handoff.
-19. Keep mobile onboarding payload reads aligned with the server-owned relay-mobile credential: `internal/api/router_routes_ai_relay.go`, `internal/api/onboarding_handlers.go`, and `internal/api/contract_test.go` must allow the dedicated `relay:mobile:access` scope to reach the governed QR, deep-link, and connection-validation payloads without reintroducing a broader `settings:read` requirement for token-authenticated pairing clients.
-20. Keep hosted billing-state quickstart payload fields on the shared API contract: `internal/api/hosted_entitlement_refresh.go`, `internal/api/subscription_state_handlers.go`, and `internal/api/contract_test.go` must preserve `quickstart_credits_granted`, `quickstart_credits_used`, and `quickstart_credits_granted_at` through hosted signup, hosted lease refresh, and billing-state reads instead of letting lease rewrites silently erase seeded quickstart inventory.
-21. Keep hosted AI settings bootstrap on the shared API contract: `internal/api/ai_hosted_runtime.go`, `internal/api/ai_handlers.go`, `internal/api/ai_handler.go`, and `internal/api/contract_test.go` must treat a missing `ai.enc` in hosted mode as a canonical bootstrap condition, persist one machine-owned quickstart-backed AI config with the Pulse-owned alias `quickstart:pulse-hosted` when hosted entitlements grant AI capability, and preserve that configured settings payload as the same public contract that Chat, Patrol, and AI Settings consume instead of embedding a third-party model ID in the transport contract.
+9. Route frontend API-client parsed error propagation, API-error-status fallback handling, allowed-status handling, custom status-specific error handling, command-trigger success envelope handling, shared response parsing pipelines, missing-resource lookup handling, metadata CRUD routing, stream event consumption, response status, collection normalization, scalar payload coercion, and structured error normalization through canonical shared helpers under `frontend-modern/src/api/`
+10. Add or change API token scope, assignment, and revocation presentation through `frontend-modern/src/components/Settings/APITokenManager.tsx`, `frontend-modern/src/components/Settings/apiTokenManagerModel.ts`, and `frontend-modern/src/components/Settings/useAPITokenManagerState.ts`
+11. Add or change infrastructure operations token generation, lookup, assignment, the pure unified-agent inventory/install model, the split infrastructure install/reporting state owners, the split direct-node/discovery infrastructure settings owners, the shared infrastructure-operations state provider/context shell, and reporting/install presentation through `frontend-modern/src/components/Settings/InfrastructureOperationsController.tsx`, `frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx`, `frontend-modern/src/components/Settings/useInfrastructureConfiguredNodesState.ts`, `frontend-modern/src/components/Settings/useInfrastructureDiscoveryRuntimeState.ts`, `frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx`, `frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx`, and `frontend-modern/src/components/Settings/useInfrastructureReportingState.tsx`
+12. Keep `internal/api/session_store.go` on a fail-closed auth-persistence boundary: persisted OIDC refresh tokens may only round-trip through encrypted-at-rest session payloads, and any missing-crypto or invalid-ciphertext path must drop the token instead of preserving plaintext-at-rest session state.
+13. Keep tenant AI handler wiring on canonical provider ownership: `internal/api/ai_handlers.go` may wire tenant `ReadState` and tenant-scoped unified-resource providers into AI services, but it must not revive tenant snapshot-provider bridges once Patrol can initialize and verify from those canonical providers directly.
+14. Keep Patrol status transport semantics explicit in that same AI handler layer: the Patrol status endpoint must carry machine-readable runtime availability such as blocked, running, disabled, active, or unavailable rather than asking frontend consumers to infer operator state from stale summaries or run history.
+15. Keep Patrol quickstart transport semantics explicit as well: zero remaining quickstart credits are inventory data, not a standalone runtime-state override, so frontend consumers may only present the exhausted quickstart warning when the payload still reports `using_quickstart` or a runtime state that is blocked by quickstart exhaustion.
+16. Keep Patrol intelligence summary transport semantics single-voiced: the canonical overall-health payload and Patrol run-history payload together must support one primary assessment plus one explicit verification explanation, and frontend consumers must not need to derive a second compact assessment or verification verdict row from the same payloads beneath the primary summary card.
+17. Keep Pulse Mobile relay credential minting and permission ownership on backend ownership: `internal/api/router_routes_auth_security.go`, `internal/api/security_tokens.go`, `internal/api/auth.go`, `internal/api/relay_mobile_capability.go`, `internal/api/router_routes_ai_relay.go`, and `frontend-modern/src/api/security.ts` may expose the canonical mobile runtime token creator and governed route gates, but browser callers must only consume that route and must not define the mobile runtime scope, compatibility gate list, route inventory, or token-purpose metadata locally.
+18. Keep hosted tenant browser-session precedence on the shared auth boundary: `internal/api/auth.go`, `internal/api/contract_test.go`, and hosted tenant callers must treat a valid `pulse_session` as authoritative before any API-only token fallback or no-local-auth anonymous fallback, so cloud handoff can continue into protected hosted routes without flattening the operator back to `anonymous` or forcing a browser session through bearer-token-only mode after the tenant has minted API tokens.
+19. Keep tenant settings-scope authorization aligned with org management: `internal/api/security_setup_fix.go`, `internal/api/contract_test.go`, and settings-bound hosted callers must allow the current non-default org owner/admin membership to exercise privileged tenant routes, rather than requiring a separate configured local admin identity after hosted handoff.
+20. Keep mobile onboarding payload reads aligned with the server-owned relay-mobile credential: `internal/api/router_routes_ai_relay.go`, `internal/api/onboarding_handlers.go`, and `internal/api/contract_test.go` must allow the dedicated `relay:mobile:access` scope to reach the governed QR, deep-link, and connection-validation payloads without reintroducing a broader `settings:read` requirement for token-authenticated pairing clients.
+21. Keep hosted billing-state quickstart payload fields on the shared API contract: `internal/api/hosted_entitlement_refresh.go`, `internal/api/subscription_state_handlers.go`, and `internal/api/contract_test.go` must preserve `quickstart_credits_granted`, `quickstart_credits_used`, and `quickstart_credits_granted_at` through hosted signup, hosted lease refresh, and billing-state reads instead of letting lease rewrites silently erase seeded quickstart inventory.
+22. Keep hosted AI settings bootstrap on the shared API contract: `internal/api/ai_hosted_runtime.go`, `internal/api/ai_handlers.go`, `internal/api/ai_handler.go`, and `internal/api/contract_test.go` must treat a missing `ai.enc` in hosted mode as a canonical bootstrap condition, persist one machine-owned quickstart-backed AI config with the Pulse-owned alias `quickstart:pulse-hosted` when hosted entitlements grant AI capability, and preserve that configured settings payload as the same public contract that Chat, Patrol, and AI Settings consume instead of embedding a third-party model ID in the transport contract.
     That same hosted bootstrap surface must also preserve the secure quickstart-identity contract: hosted or trial-backed AI settings reads and enablement may bootstrap Patrol quickstart from the effective signed entitlement lease when no self-hosted installation token exists, but they must not fabricate installation-scoped activation state or anonymous client identity to satisfy `/v1/quickstart/bootstrap`.
-22. Keep post-boot AI enablement contract-backed on the shared AI/mobile approval surface: `internal/api/ai_handler.go`, `internal/api/ai_handlers.go`, `internal/api/router_routes_ai_relay.go`, and `internal/api/contract_test.go` must turn the governed approvals-list API into the canonical empty-list payload as soon as settings-driven AI enablement succeeds, rather than leaving that surface on `503 Approval store not initialized` until some separate startup-only side effect happens.
-23. Keep infrastructure summary chart transport contract-backed on the shared API surface: `internal/api/router.go`, `internal/api/contract_test.go`, and frontend infrastructure summary consumers must normalize long-range mixed-cadence history into equal-time summary buckets before shipping the infrastructure charts API payload, so 7-day and 30-day summary cards do not expose compressed right-edge tails just because recent samples arrive at a finer storage resolution.
-24. Keep long-range workload chart transport time-proportional on the shared API surface: `internal/api/router.go`, `internal/api/contract_test.go`, and workload chart consumers must cap mixed-cadence workload history by equal-time buckets rather than raw point index for the per-workload and aggregate workload chart APIs, so 7-day and 30-day workload cards do not bunch recent samples at the right edge just because recent telemetry is stored more densely.
-25. Keep chart timestamp precision canonical on that same shared API surface: when `internal/api/router.go` serializes monitoring history into infrastructure or workload chart payloads, it must preserve canonical millisecond timestamps from the shared monitoring timeline instead of rounding through whole-second conversion, so seeded mock history and live appends collapse onto one operator-visible timeline instead of appearing as duplicated tail samples.
-26. Keep storage chart identity canonical on that same shared API surface: the shared storage charts endpoint must key pool and physical-disk series by the resolved unified-resource `MetricsTarget.ResourceID`, not by canonical resource IDs or page-local aliases, so storage rows, focused summary cards, sticky summary shells, and detail charts all address the same history series in live and mock mode.
-27. Keep synthetic summary-chart fallback identity canonical on that same shared API surface: when `internal/api/router.go` has to synthesize mock summary history for infrastructure, workloads, or storage cards, it must derive the fallback from canonical `resourceType`, `resourceID`, and `metricType` ownership instead of raw min/max seed-prefix helpers, so range changes and runtime mock updates stay on one governed timeline.
+23. Keep post-boot AI enablement contract-backed on the shared AI/mobile approval surface: `internal/api/ai_handler.go`, `internal/api/ai_handlers.go`, `internal/api/router_routes_ai_relay.go`, and `internal/api/contract_test.go` must turn the governed approvals-list API into the canonical empty-list payload as soon as settings-driven AI enablement succeeds, rather than leaving that surface on `503 Approval store not initialized` until some separate startup-only side effect happens.
+24. Keep infrastructure summary chart transport contract-backed on the shared API surface: `internal/api/router.go`, `internal/api/contract_test.go`, and frontend infrastructure summary consumers must normalize long-range mixed-cadence history into equal-time summary buckets before shipping the infrastructure charts API payload, so 7-day and 30-day summary cards do not expose compressed right-edge tails just because recent samples arrive at a finer storage resolution.
+25. Keep long-range workload chart transport time-proportional on the shared API surface: `internal/api/router.go`, `internal/api/contract_test.go`, and workload chart consumers must cap mixed-cadence workload history by equal-time buckets rather than raw point index for the per-workload and aggregate workload chart APIs, so 7-day and 30-day workload cards do not bunch recent samples at the right edge just because recent telemetry is stored more densely.
+26. Keep chart timestamp precision canonical on that same shared API surface: when `internal/api/router.go` serializes monitoring history into infrastructure or workload chart payloads, it must preserve canonical millisecond timestamps from the shared monitoring timeline instead of rounding through whole-second conversion, so seeded mock history and live appends collapse onto one operator-visible timeline instead of appearing as duplicated tail samples.
+27. Keep storage chart identity canonical on that same shared API surface: the shared storage charts endpoint must key pool and physical-disk series by the resolved unified-resource `MetricsTarget.ResourceID`, not by canonical resource IDs or page-local aliases, so storage rows, focused summary cards, sticky summary shells, and detail charts all address the same history series in live and mock mode.
+28. Keep synthetic summary-chart fallback identity canonical on that same shared API surface: when `internal/api/router.go` has to synthesize mock summary history for infrastructure, workloads, or storage cards, it must derive the fallback from canonical `resourceType`, `resourceID`, and `metricType` ownership instead of raw min/max seed-prefix helpers, so range changes and runtime mock updates stay on one governed timeline.
     The same compact chart boundary also owns aggregate-only storage summary
     transport. `/api/charts/storage-summary` may batch only the canonical
     `used` and `avail` storage series required for the aggregate capacity
@@ -217,31 +217,31 @@ when the disabled candidate no longer counts toward monitored-system capacity.
     When mock mode is active, that same endpoint must come from the
     monitor-owned aggregate summary cache rather than rehydrating each pool
     chart on request.
-28. Keep workload-chart response identity canonical on that same shared API surface: `internal/api/router.go`, `internal/api/contract_test.go`, and workload summary consumers must emit provider-backed VM and system-container series under the same canonical workload IDs that workloads page rows use, while resolving history through the unified `MetricsTarget.ResourceID`, so hover and focus selection do not fall off for provider-backed rows.
+29. Keep workload-chart response identity canonical on that same shared API surface: `internal/api/router.go`, `internal/api/contract_test.go`, and workload summary consumers must emit provider-backed VM and system-container series under the same canonical workload IDs that workloads page rows use, while resolving history through the unified `MetricsTarget.ResourceID`, so hover and focus selection do not fall off for provider-backed rows.
     Kubernetes pod workload rows follow that same contract through their
     metrics target. `/api/resources` may expose pod history only through the
     unified `MetricsTarget.ResourceID`, but that target must be the canonical
     prefixed runtime key `k8s:<cluster>:pod:<uid>` and not the bare source pod
     ID, so pod workload rows and pod chart payloads stay on one history series.
-29. Keep the hosted account portal bootstrap intelligible without duplicate
+30. Keep the hosted account portal bootstrap intelligible without duplicate
     chrome. `internal/cloudcp/portal/page.go`, the maintained portal frontend
     bundle, and the shared portal styles may refine layout density, but the
     account/billing shell must remain understandable from the primary header,
     section title, and factual body content alone instead of depending on a
     second context-chip strip to restate the same scope.
-30. Keep storage wire metadata lossless across shared API payload types.
+31. Keep storage wire metadata lossless across shared API payload types.
     `frontend-modern/src/types/api.ts` must continue to expose provider-backed
     storage metadata such as Proxmox `pool` and `zfsPool` fields when the
     backend emits them, instead of silently dropping that detail from the
     shared runtime contract.
-31. Keep hosted entitlement refresh ownership on the same governed API contract
+32. Keep hosted entitlement refresh ownership on the same governed API contract
     as hosted status and entitlements reads. `internal/api/licensing_handlers.go`,
     `internal/api/hosted_entitlement_refresh.go`, and
     `internal/api/contract_test.go` must resolve the effective hosted billing
     target before refresh, persistence, and evaluator rewiring, so tenant-
     scoped hosted routes cannot refresh against an empty non-default org while
     the machine's real hosted lease still lives on `default`.
-32. Keep public demo bootstrap posture on the shared security-status contract.
+33. Keep public demo bootstrap posture on the shared security-status contract.
     `internal/api/router_routes_auth_security.go`,
     `internal/api/security_status_capabilities.go`, frontend security-status
     consumers, and shared demo-mode stores must treat
@@ -253,7 +253,7 @@ when the disabled candidate no longer counts toward monitored-system capacity.
     the store boundary, so public demo shells do not probe `/api/ai/approvals`
     or `/api/ai/remediation/plans` after the read-only demo posture is already
     known.
-33. Keep public demo commercial posture middleware-owned on that same shared
+34. Keep public demo commercial posture middleware-owned on that same shared
     API contract. `internal/api/demo_middleware.go`,
     `internal/api/demo_mode_commercial.go`,
     `internal/api/subscription_entitlements.go`, and
@@ -265,7 +265,7 @@ when the disabled candidate no longer counts toward monitored-system capacity.
     hidden. Upgrade prompts, trial nudges, monitored-system migration guidance,
     usage counts, billing identity, and plan metadata must therefore not depend
     on hidden commercial routes surviving the public demo boundary.
-34. Keep the storage summary route in `internal/api/router.go` as the
+35. Keep the storage summary route in `internal/api/router.go` as the
     canonical storage summary contract across dashboard and storage consumers.
     `internal/api/router.go`,
     `internal/api/contract_test.go`, and shared frontend consumers must expose
@@ -273,7 +273,7 @@ when the disabled candidate no longer counts toward monitored-system capacity.
     metrics-target IDs, preserve millisecond chart timestamps, and avoid
     reconstructing storage summary behavior from per-pool
     `/api/metrics-store/history` fan-out.
-35. Keep infrastructure summary metric filtering canonical on that same shared
+36. Keep infrastructure summary metric filtering canonical on that same shared
     API surface. `frontend-modern/src/api/charts.ts`,
     `internal/api/router_routes_monitoring.go`, `internal/api/router.go`,
     `internal/api/types.go`, and `internal/api/contract_test.go` must route
@@ -284,7 +284,7 @@ when the disabled candidate no longer counts toward monitored-system capacity.
     metric filters through the shared guest-chart batch loader in
     `internal/monitoring/monitor_metrics.go` instead of fetching the full guest
     metric set and trimming after the API payload is already assembled.
-36. Keep the compact dashboard overview route canonical on that same shared API
+37. Keep the compact dashboard overview route canonical on that same shared API
     surface. `internal/api/resources.go`,
     `internal/api/router_routes_monitoring.go`,
     `frontend-modern/src/api/resources.ts`,
@@ -294,7 +294,7 @@ when the disabled candidate no longer counts toward monitored-system capacity.
     through `/api/resources/dashboard-summary` instead of reconstructing that
     shell from the paginated `/api/resources` list payload or guessing how
     dashboard trend identities map onto infrastructure chart series.
-37. Keep mock and demo chart reads on the same canonical unified snapshot as
+38. Keep mock and demo chart reads on the same canonical unified snapshot as
     the rest of the API surface. `internal/api/router.go`,
     `internal/api/contract_test.go`, and chart consumers must route
     `/api/charts`, `/api/charts/infrastructure`, and `/api/storage-charts`
@@ -392,29 +392,29 @@ when the disabled candidate no longer counts toward monitored-system capacity.
    defaults.
 10. Treat Patrol summary supporting metrics as readouts, not reinterpretations: when frontend consumers derive cards such as active findings, criticals, warnings, or fixes from the canonical payloads, those cards must stay numeric and must not synthesize new assessment labels like `Issues detected` or verification labels like `Partial verification` beneath the primary summary contract
 11. Treat active Patrol runtime transport as compatible with factual activity surfaces: when the runtime is currently running, frontend consumers may surface in-progress activity context, but they must not replace the activity strip with a second assessment verdict derived from runtime state alone
-11. Treat Patrol recency as a singular transport-driven fact: once header metadata, verification copy, or the findings footer already present the governed Patrol timing context, frontend summary consumers must not derive an extra timing pill from the same payloads inside the primary summary card
-12. Treat Patrol findings counts as a singular supporting surface as well: when the summary shell already exposes count cards for active findings, warnings, criticals, and fixes, the primary assessment card must not repeat those same payload-derived counts as secondary badges
-13. Treat Patrol schedule and recency as header-owned metadata on the main Patrol page: findings empty-state consumers should not receive or restate `next_patrol_at`, `last_patrol_at`, `last_activity_at`, or interval timing once those transport fields are already presented by the primary header and verification shell
-14. Keep recovery payload filters canonical across `/api/recovery/rollups`, `/api/recovery/points`, `/api/recovery/series`, and `/api/recovery/facets`: when `internal/api/recovery_handlers.go` adds a governed recovery filter or display field such as provider-neutral `itemType`, the same normalized transport must land across all four endpoints and the contract tests must pin both outbound payload shape and accepted query aliases in the same slice
-15. Keep recovery platform-query vocabulary canonical across that same `/api/recovery/*` surface: operator-facing transport must emit `platform` as the canonical query field, accepted legacy `provider` aliases must remain compatibility-only input, and `internal/api/contract_test.go` must pin that fallback behavior in the same slice as any handler change
-16. Keep recovery payload platform vocabulary canonical across that same `/api/recovery/*` surface: point payloads must expose `platform`, rollup payloads must expose `platforms`, and any compatibility `provider` / `providers` aliases must remain secondary fallback fields rather than replacing the shared response model
-17. Keep recovery linked-resource vocabulary canonical across that same `/api/recovery/*` surface: points and rollups must expose `itemResourceId` as the canonical linked-resource field, accepted legacy `subjectResourceId` aliases must remain compatibility-only input or secondary payload fields, and the shared proof surface must pin that normalization in the same slice as any handler change
-18. Keep recovery external item-reference vocabulary canonical across that same `/api/recovery/*` surface: point and rollup payloads must expose `itemRef` as the canonical external item-reference field, accepted legacy `subjectRef` aliases must remain compatibility-only secondary payload fields, and the shared proof surface must pin that normalization in the same slice as any handler change
-19. Keep first-host lookup completion explicit on the shared install-state API
+12. Treat Patrol recency as a singular transport-driven fact: once header metadata, verification copy, or the findings footer already present the governed Patrol timing context, frontend summary consumers must not derive an extra timing pill from the same payloads inside the primary summary card
+13. Treat Patrol findings counts as a singular supporting surface as well: when the summary shell already exposes count cards for active findings, warnings, criticals, and fixes, the primary assessment card must not repeat those same payload-derived counts as secondary badges
+14. Treat Patrol schedule and recency as header-owned metadata on the main Patrol page: findings empty-state consumers should not receive or restate `next_patrol_at`, `last_patrol_at`, `last_activity_at`, or interval timing once those transport fields are already presented by the primary header and verification shell
+15. Keep recovery payload filters canonical across `/api/recovery/rollups`, `/api/recovery/points`, `/api/recovery/series`, and `/api/recovery/facets`: when `internal/api/recovery_handlers.go` adds a governed recovery filter or display field such as provider-neutral `itemType`, the same normalized transport must land across all four endpoints and the contract tests must pin both outbound payload shape and accepted query aliases in the same slice
+16. Keep recovery platform-query vocabulary canonical across that same `/api/recovery/*` surface: operator-facing transport must emit `platform` as the canonical query field, accepted legacy `provider` aliases must remain compatibility-only input, and `internal/api/contract_test.go` must pin that fallback behavior in the same slice as any handler change
+17. Keep recovery payload platform vocabulary canonical across that same `/api/recovery/*` surface: point payloads must expose `platform`, rollup payloads must expose `platforms`, and any compatibility `provider` / `providers` aliases must remain secondary fallback fields rather than replacing the shared response model
+18. Keep recovery linked-resource vocabulary canonical across that same `/api/recovery/*` surface: points and rollups must expose `itemResourceId` as the canonical linked-resource field, accepted legacy `subjectResourceId` aliases must remain compatibility-only input or secondary payload fields, and the shared proof surface must pin that normalization in the same slice as any handler change
+19. Keep recovery external item-reference vocabulary canonical across that same `/api/recovery/*` surface: point and rollup payloads must expose `itemRef` as the canonical external item-reference field, accepted legacy `subjectRef` aliases must remain compatibility-only secondary payload fields, and the shared proof surface must pin that normalization in the same slice as any handler change
+20. Keep first-host lookup completion explicit on the shared install-state API
     boundary: when
     `frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx`
     receives a successful connected-agent lookup result, the canonical install
     flow must expose direct navigation into `/dashboard` and
     `/settings/infrastructure/operations` rather than leaving the operator on a
     transport-only status readout.
-20. Keep the shared first-host detection contract explicit on `/api/state` as
+21. Keep the shared first-host detection contract explicit on `/api/state` as
     used by
     `frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx`:
     the canonical `connectedInfrastructure` projection must stay suitable for
     detecting the first active reporting system during install so brand-new
     operators can receive the first success handoff without typing a hostname
     or agent ID.
-21. Keep the shared first-run install-token transport explicit on
+22. Keep the shared first-run install-token transport explicit on
     `/api/security/tokens` as used by
     `frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx`:
     once quick setup has produced the setup handoff credentials, the canonical
@@ -425,7 +425,7 @@ when the disabled candidate no longer counts toward monitored-system capacity.
     install-state surface must describe that prepared token path consistently
     with the live runtime behavior rather than directing the operator to create
     another install token manually.
-22. Keep connected-infrastructure surface vocabulary canonical across the
+23. Keep connected-infrastructure surface vocabulary canonical across the
     shared `/api/state` and reporting/install consumers:
     `frontend-modern/src/types/api.ts` must treat `truenas` as a first-class
     connected-infrastructure surface kind, and connected-infrastructure
@@ -437,14 +437,14 @@ when the disabled candidate no longer counts toward monitored-system capacity.
     (`agent`, `docker`, `kubernetes`) and platform-connections-managed
     surfaces (`proxmox`, `pbs`, `pmg`, `truenas`) instead of collapsing them
     into one uninstall/stop-monitoring model.
-23. Keep AI settings payload continuity explicit on the shared `/api/settings/ai`
+24. Keep AI settings payload continuity explicit on the shared `/api/settings/ai`
     surface: `internal/api/ai_handlers.go` and `internal/api/contract_test.go`
     must expose masked provider-auth state such as `ollama_username` and
     `ollama_password_set` without echoing raw stored secrets, and the same
     backend contract must keep provider test routes bound to the selected
     provider's configured model instead of whichever other provider currently
     owns the default `model` field.
-24. Keep shared AI runtime reads centralized on that same governed contract:
+25. Keep shared AI runtime reads centralized on that same governed contract:
     `frontend-modern/src/stores/aiRuntimeState.ts` is the canonical frontend
     read owner for `/api/settings/ai` and `/api/ai/models`. AI-owned consumers
     such as `frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts`,
@@ -459,7 +459,7 @@ when the disabled candidate no longer counts toward monitored-system capacity.
     store after an owned settings mutation, but they must not reintroduce
     page-local mount loops that fetch `/api/settings/ai` or `/api/ai/models`
     separately for chat, Patrol, and cost/budget views.
-23. Keep API-backed first-target onboarding canonical on that same shared
+26. Keep API-backed first-target onboarding canonical on that same shared
     infrastructure-settings boundary:
     `frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx`,
     `frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx`,
@@ -473,7 +473,7 @@ when the disabled candidate no longer counts toward monitored-system capacity.
     route API-backed first systems to `/settings/infrastructure/platforms`
     instead of implying that a host install command is required before those
     platforms can report into Pulse.
-24. Keep shared install-script fallback transport pinned to published release
+27. Keep shared install-script fallback transport pinned to published release
     lineage. `internal/api/unified_agent.go` and
     `internal/api/contract_test.go` must only map stable tags or explicit RC
     prerelease tags without build metadata to GitHub install-script release
@@ -481,7 +481,7 @@ when the disabled candidate no longer counts toward monitored-system capacity.
     `+git...` builds, and other unpublished prerelease identifiers must fail
     closed on that API boundary instead of generating fake release URLs from
     a local runtime version string.
-23. Keep local trial-start transport explicit on the shared commercial API
+28. Keep local trial-start transport explicit on the shared commercial API
     boundary: `/api/license/trial/start` must preserve the hosted-signup
     redirect contract as `409 trial_signup_required` during the allowed retry
     burst, then return `429 trial_rate_limited` with the actual remaining
@@ -490,19 +490,19 @@ when the disabled candidate no longer counts toward monitored-system capacity.
     self-serve verification failures may render owned HTML, but they must
     preserve originating Pulse context instead of collapsing into generic
     control-plane failures.
-24. Keep `/api/security/dev/reset-first-run` transport-backed and genuinely
+29. Keep `/api/security/dev/reset-first-run` transport-backed and genuinely
     unauthenticated: when the dev reset route clears first-run auth it must
     also clear any env-backed auth state that feeds `/api/security/status`, so
     the status payload flips `hasAuthentication` to `false`, preserves
     `bootstrapTokenPath`, and allows browser-owned first-session proof to
     re-enter the real setup wizard instead of silently falling back to an
     authenticated dashboard state.
-22. Keep shared SSO test and metadata-preview transport fail-closed: SAML
+30. Keep shared SSO test and metadata-preview transport fail-closed: SAML
     metadata URLs and OIDC issuer URLs must reject non-HTTP or userinfo-bearing
     inputs before any outbound request is attempted, and OIDC discovery must
     append `/.well-known/openid-configuration` beneath the configured issuer
     base path instead of resetting to the origin root.
-25. Keep config-archive import reloads fail-closed on the shared API/runtime
+31. Keep config-archive import reloads fail-closed on the shared API/runtime
     boundary. `internal/api/config_export_import_handlers.go`,
     `internal/api/contract_test.go`, and adjacent config/runtime helpers must
     tolerate absent notification managers and other optional runtime managers
@@ -610,6 +610,13 @@ That same SSO boundary also owns manual SAML endpoint validation payloads.
 through the same validated absolute HTTP(S) helpers instead of letting the
 manual logout URL drift out of the request model or bypass the governed URL
 normalization path.
+That same runtime SSO contract also owns the Pulse-side public URL that feeds
+SAML service-provider metadata and auth requests. `internal/api/saml_handlers.go`,
+`internal/api/saml_service.go`, and the SAML regression tests must rebind
+previously initialized SAML providers to the current configured `PublicURL`
+before metadata or browser login flows emit SP entity, ACS, or metadata URLs,
+so a stale startup-time blank/relative base URL cannot leak back into runtime
+metadata or auth request generation once the canonical external URL is known.
 That same SSO API boundary also owns final browser redirect construction after
 local auth handoff. OIDC and SAML success/error handlers must build their
 local `returnTo` targets through one canonical local-path helper that rejects
@@ -1402,7 +1409,7 @@ and clipboard transport.
 That same shared `InfrastructureOperationsController.tsx` boundary now also consumes the canonical
 `connectedInfrastructure` projection from the backend state contract instead of
 reconstructing reporting rows by merging raw unified-resource facets and
-removed-* arrays in the browser. v6 clients no longer receive those removed-*
+removed-_ arrays in the browser. v6 clients no longer receive those removed-_
 arrays at all for this surface; Connected infrastructure row
 identity, reporting-surface labels, and ignore/reconnect scope must be owned
 by the backend payload contract, with frontend rendering limited to
@@ -1448,6 +1455,15 @@ resolved, those API contracts must fail closed for net-new admissions rather
 than serializing a fake zero. `/api/license/entitlements` therefore carries
 limit-level `current_available` truth so clients can distinguish unavailable
 monitored-system usage from a real `current: 0`.
+That same entitlement family now also owns the canonical monitored-system
+capacity posture. `/api/license/runtime-capabilities`,
+`/api/license/commercial-posture`, and `/api/license/entitlements` must expose
+`monitored_system_capacity` with one shared admission model:
+`usage_unavailable`, `unlimited`, `within_limit`, `at_limit_blocking_new`, or
+`over_limit_frozen`. That contract must state whether new monitored systems are
+blocked and whether existing monitoring continues, so browser surfaces stop
+guessing from raw `current / limit` math or inventing a hard-cap model that
+the backend does not enforce.
 That same contract now also owns migrated legacy continuity. When a supported
 v5 license auto-exchanges or is activated manually in v6, `/api/license/status`
 and `/api/license/entitlements` must surface `max_monitored_systems` from the

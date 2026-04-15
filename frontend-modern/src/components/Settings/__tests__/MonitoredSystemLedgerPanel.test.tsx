@@ -266,7 +266,7 @@ describe('MonitoredSystemLedgerPanel', () => {
     ));
 
     await waitFor(() => {
-      expect(screen.getByText('7 / 12')).toBeInTheDocument();
+      expect(screen.getByText('7 monitored systems')).toBeInTheDocument();
     });
 
     expect(screen.getByText('Plan continuity')).toBeInTheDocument();
@@ -390,7 +390,10 @@ describe('MonitoredSystemLedgerPanel', () => {
       ),
     ).toBeInTheDocument();
     expect(screen.getByText('server-b')).toBeInTheDocument();
-    expect(screen.getByText('2 / 10')).toBeInTheDocument();
+    expect(screen.getByText('2 monitored systems')).toBeInTheDocument();
+    expect(
+      screen.getByText('8 remaining before new monitored systems are blocked.'),
+    ).toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: 'View counting details' })).toHaveLength(2);
     fireEvent.click(screen.getAllByRole('button', { name: 'View counting details' })[1]!);
     expect(
@@ -572,7 +575,7 @@ describe('MonitoredSystemLedgerPanel', () => {
     render(() => <MonitoredSystemLedgerPanel showCountingRulesByDefault />);
 
     await waitFor(() => {
-      expect(screen.getByText('2 / 5')).toBeInTheDocument();
+      expect(screen.getByText('2 monitored systems')).toBeInTheDocument();
     });
 
     expect(screen.getByRole('button', { name: 'Hide counting rules' })).toHaveAttribute(

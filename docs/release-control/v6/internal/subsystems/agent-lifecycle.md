@@ -456,6 +456,11 @@ needs them, but `/api/license/commercial-posture`,
 public demo mode and those lifecycle flows must not depend on licensed
 identity, plan labels, upgrade reasons, checkout handoff state, or observed
 usage counts surviving the public-demo contract.
+That same demo-safe runtime contract now also redacts monitored-system
+capacity posture from public-preview runtime capabilities. Lifecycle-adjacent
+install or reporting surfaces may still depend on demo-safe capability flags,
+but they must not expect `monitored_system_capacity`, admission-freeze copy,
+or observed plan overage posture to survive the public-demo boundary.
 That same demo-hidden API boundary also keeps runtime-admin operations out of
 public lifecycle flows: `/api/diagnostics`,
 `/api/diagnostics/docker/prepare-token`, and `/api/logs/*` must return `404`

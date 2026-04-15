@@ -25,6 +25,8 @@ import {
   getMonitoredSystemDisclosureDefinition,
   getMonitoredSystemDisclosureToggleLabel,
   getMonitoredSystemExplanationFallbackSummary,
+  getMonitoredSystemLimitCapacityStatusSummary,
+  getMonitoredSystemLimitContextSummary,
   getMonitoredSystemLedgerDescription,
   getMonitoredSystemLedgerErrorState,
   getMonitoredSystemLedgerHiddenState,
@@ -33,12 +35,12 @@ import {
   getMonitoredSystemLedgerPolicyLoadingState,
   getMonitoredSystemLedgerUnavailableState,
   getMonitoredSystemLimitInstallCollectorsLabel,
-  getMonitoredSystemLimitRemainingCapacity,
   getMonitoredSystemLimitLearnMoreLabel,
   getMonitoredSystemLimitUnavailableReason,
   getMonitoredSystemLimitUpgradeLabel,
   getMonitoredSystemLimitUsageSummary,
   getMonitoredSystemSourceLabel,
+  resolveMonitoredSystemCapacityStatus,
   getMonitoredSystemStatusFallbackSummary,
   getMonitoredSystemSurfaceTypeLabel,
   isMonitoredSystemAdmissionPreviewResolvedSafely,
@@ -207,7 +209,10 @@ describe('monitoredSystemPresentation', () => {
       'export function getMonitoredSystemLimitUsageSummary',
     );
     expect(monitoredSystemPresentationSource).toContain(
-      'export function getMonitoredSystemLimitRemainingCapacity',
+      'export function getMonitoredSystemLimitCapacityStatusSummary',
+    );
+    expect(monitoredSystemPresentationSource).toContain(
+      'export function resolveMonitoredSystemCapacityStatus',
     );
 
     for (const source of [
@@ -227,7 +232,10 @@ describe('monitoredSystemPresentation', () => {
     expect(getMonitoredSystemLimitInstallCollectorsLabel()).toBe('Install v6 collectors');
     expect(getMonitoredSystemLimitUpgradeLabel()).toBe('Upgrade to add more');
     expect(formatMonitoredSystemLimitSummary({ current: 5, limit: 6 })).toBe(
-      '5 monitored systems currently counted',
+      '5 of 6 included monitored systems are in use.',
+    );
+    expect(formatMonitoredSystemLimitSummary({ current: 16, limit: 5, state: 'enforced' })).toBe(
+      '16 monitored systems active. Plan includes 5, and you are over plan by 11. Existing monitoring continues, but new monitored systems are blocked until usage is reduced or the plan is upgraded.',
     );
     expect(
       formatMonitoredSystemLegacyConnectionBreakdown({
@@ -265,7 +273,10 @@ describe('monitoredSystemPresentation', () => {
       'supplemental_inventory_unsettled',
     );
     expect(getMonitoredSystemLimitUsageSummary(unavailableLimit)).toBe('Verifying…');
-    expect(getMonitoredSystemLimitRemainingCapacity(unavailableLimit)).toBe('Unavailable');
+    expect(getMonitoredSystemLimitCapacityStatusSummary(unavailableLimit)).toBe('Unavailable');
+    expect(getMonitoredSystemLimitContextSummary(unavailableLimit)).toBe(
+      'Pulse is still collecting the first provider-owned inventory baseline. The monitored-system ledger will appear after that baseline completes.',
+    );
     expect(isMonitoredSystemLimitUrgent(unavailableLimit)).toBe(false);
     expect(
       formatMonitoredSystemUsageUnavailableMessage(unavailableLimit.current_unavailable_reason),
@@ -279,21 +290,41 @@ describe('monitoredSystemPresentation', () => {
         limit: 10,
         current_available: true,
       }),
-    ).toBe('7 / 10');
+    ).toBe('7 monitored systems');
     expect(
-      getMonitoredSystemLimitRemainingCapacity({
+      getMonitoredSystemLimitCapacityStatusSummary({
         current: 7,
         limit: 10,
         current_available: true,
       }),
-    ).toBe(3);
+    ).toBe('3 remaining');
     expect(
-      getMonitoredSystemLimitRemainingCapacity({
+      getMonitoredSystemLimitCapacityStatusSummary({
         current: 7,
         limit: 0,
         current_available: true,
       }),
     ).toBe('Unlimited');
+    expect(
+      getMonitoredSystemLimitContextSummary({
+        current: 10,
+        limit: 10,
+        current_available: true,
+        state: 'enforced',
+      }),
+    ).toBe(
+      'Plan includes 10. Existing monitoring continues, but new monitored systems are blocked until capacity is freed or the plan is upgraded.',
+    );
+    expect(
+      getMonitoredSystemLimitContextSummary({
+        current: 16,
+        limit: 5,
+        current_available: true,
+        state: 'enforced',
+      }),
+    ).toBe(
+      'Plan includes 5. Over plan by 11. Existing monitoring continues, but new monitored systems are blocked until usage is reduced or the plan is upgraded.',
+    );
     expect(
       isMonitoredSystemLimitUrgent({
         current: 9,
@@ -302,6 +333,19 @@ describe('monitoredSystemPresentation', () => {
         state: 'warning',
       }),
     ).toBe(true);
+    expect(
+      resolveMonitoredSystemCapacityStatus(undefined, {
+        current: 16,
+        limit: 5,
+        current_available: true,
+        state: 'enforced',
+      }),
+    ).toMatchObject({
+      mode: 'over_limit_frozen',
+      overage: 11,
+      blocks_new_systems: true,
+      existing_monitoring_continues: true,
+    });
   });
 
   it('returns canonical monitored-system admission unavailable copy', () => {

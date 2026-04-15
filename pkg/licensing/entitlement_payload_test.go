@@ -154,6 +154,15 @@ func TestBuildEntitlementPayloadWithUsage_CurrentValues(t *testing.T) {
 	if payload.HasMigrationGap {
 		t.Fatal("expected has_migration_gap=false under monitored-system counting")
 	}
+	if payload.MonitoredSystemCapacity == nil {
+		t.Fatal("expected monitored-system capacity posture")
+	}
+	if payload.MonitoredSystemCapacity.Mode != "within_limit" {
+		t.Fatalf("Mode=%q, want within_limit", payload.MonitoredSystemCapacity.Mode)
+	}
+	if payload.MonitoredSystemCapacity.AvailableSlots != 38 {
+		t.Fatalf("AvailableSlots=%d, want 38", payload.MonitoredSystemCapacity.AvailableSlots)
+	}
 }
 
 func TestBuildEntitlementPayload_TrialState(t *testing.T) {
@@ -232,6 +241,15 @@ func TestBuildEntitlementPayloadWithUsage_MonitoredSystemUsageUnavailable(t *tes
 	if payload.Limits[0].CurrentUnavailableReason != "supplemental_inventory_unsettled" {
 		t.Fatalf("CurrentUnavailableReason=%q, want %q", payload.Limits[0].CurrentUnavailableReason, "supplemental_inventory_unsettled")
 	}
+	if payload.MonitoredSystemCapacity == nil {
+		t.Fatal("expected monitored-system capacity posture")
+	}
+	if payload.MonitoredSystemCapacity.Mode != "usage_unavailable" {
+		t.Fatalf("Mode=%q, want usage_unavailable", payload.MonitoredSystemCapacity.Mode)
+	}
+	if payload.MonitoredSystemCapacity.CurrentAvailable {
+		t.Fatalf("CurrentAvailable=%v, want false", payload.MonitoredSystemCapacity.CurrentAvailable)
+	}
 }
 
 func TestBuildEntitlementPayloadWithUsage_CopiesMonitoredSystemContinuity(t *testing.T) {
@@ -268,6 +286,15 @@ func TestBuildEntitlementPayloadWithUsage_CopiesMonitoredSystemContinuity(t *tes
 	}
 	if payload.MonitoredSystemContinuity.CapturePending {
 		t.Fatal("expected continuity capture to be settled")
+	}
+	if payload.MonitoredSystemCapacity == nil {
+		t.Fatal("expected monitored-system capacity posture")
+	}
+	if payload.MonitoredSystemCapacity.Mode != "at_limit_blocking_new" {
+		t.Fatalf("Mode=%q, want at_limit_blocking_new", payload.MonitoredSystemCapacity.Mode)
+	}
+	if !payload.MonitoredSystemCapacity.BlocksNewSystems {
+		t.Fatal("expected at-limit posture to block new monitored systems")
 	}
 }
 
@@ -342,6 +369,12 @@ func TestBuildEntitlementPayload_LifetimeOmitsCommercialCaps(t *testing.T) {
 
 	if len(payload.Limits) != 0 {
 		t.Fatalf("expected lifetime entitlements to omit commercial caps, got %+v", payload.Limits)
+	}
+	if payload.MonitoredSystemCapacity == nil {
+		t.Fatal("expected lifetime payload to include monitored-system capacity posture")
+	}
+	if payload.MonitoredSystemCapacity.Mode != "unlimited" {
+		t.Fatalf("Mode=%q, want unlimited", payload.MonitoredSystemCapacity.Mode)
 	}
 }
 
@@ -420,6 +453,15 @@ func TestBuildCommercialPosturePayloadWithUsage_CurrentValues(t *testing.T) {
 	if payload.HasMigrationGap {
 		t.Fatal("expected has_migration_gap=false under canonical monitored-system counting")
 	}
+	if payload.MonitoredSystemCapacity == nil {
+		t.Fatal("expected commercial posture to preserve monitored-system capacity")
+	}
+	if payload.MonitoredSystemCapacity.Mode != "over_limit_frozen" {
+		t.Fatalf("Mode=%q, want over_limit_frozen", payload.MonitoredSystemCapacity.Mode)
+	}
+	if payload.MonitoredSystemCapacity.Overage != 2 {
+		t.Fatalf("Overage=%d, want 2", payload.MonitoredSystemCapacity.Overage)
+	}
 }
 
 func TestCommercialPosturePayloadFromEntitlementPayload_StripsBillingIdentityFields(t *testing.T) {
@@ -452,6 +494,12 @@ func TestCommercialPosturePayloadFromEntitlementPayload_StripsBillingIdentityFie
 	}
 	if posture.LegacyConnections.ProxmoxNodes != 1 {
 		t.Fatalf("expected proxmox_nodes=1, got %+v", posture.LegacyConnections)
+	}
+	if posture.MonitoredSystemCapacity == nil {
+		t.Fatal("expected commercial posture to preserve monitored-system capacity posture")
+	}
+	if posture.MonitoredSystemCapacity.Mode != "within_limit" {
+		t.Fatalf("Mode=%q, want within_limit", posture.MonitoredSystemCapacity.Mode)
 	}
 
 	body, err := json.Marshal(posture)
@@ -504,6 +552,12 @@ func TestBuildRuntimeCapabilitiesPayloadWithUsage_CurrentValues(t *testing.T) {
 	}
 	if payload.Limits[0].CurrentAvailable == nil || !*payload.Limits[0].CurrentAvailable {
 		t.Fatalf("expected runtime current availability true, got %+v", payload.Limits[0].CurrentAvailable)
+	}
+	if payload.MonitoredSystemCapacity == nil {
+		t.Fatal("expected runtime capabilities to include monitored-system capacity posture")
+	}
+	if payload.MonitoredSystemCapacity.Mode != "within_limit" {
+		t.Fatalf("Mode=%q, want within_limit", payload.MonitoredSystemCapacity.Mode)
 	}
 }
 

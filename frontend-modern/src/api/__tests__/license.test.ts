@@ -20,6 +20,17 @@ describe('LicenseAPI', () => {
       limits: [],
       hosted_mode: false,
       max_history_days: 14,
+      monitored_system_capacity: {
+        mode: 'within_limit',
+        urgency: 'ok',
+        current: 4,
+        limit: 10,
+        current_available: true,
+        available_slots: 6,
+        overage: 0,
+        blocks_new_systems: false,
+        existing_monitoring_continues: true,
+      },
     });
 
     const result = await LicenseAPI.getRuntimeCapabilities();
@@ -28,6 +39,9 @@ describe('LicenseAPI', () => {
     expect(result).toMatchObject({
       capabilities: ['relay'],
       max_history_days: 14,
+      monitored_system_capacity: {
+        mode: 'within_limit',
+      },
     });
   });
 
@@ -70,6 +84,18 @@ describe('LicenseAPI', () => {
         effective_limit: 10,
         capture_pending: true,
       },
+      monitored_system_capacity: {
+        mode: 'usage_unavailable',
+        urgency: 'ok',
+        current: 0,
+        limit: 10,
+        current_available: false,
+        current_unavailable_reason: 'supplemental_inventory_unsettled',
+        available_slots: 0,
+        overage: 0,
+        blocks_new_systems: false,
+        existing_monitoring_continues: false,
+      },
     });
 
     const result = await LicenseAPI.getCommercialEntitlements();
@@ -78,6 +104,10 @@ describe('LicenseAPI', () => {
       plan_limit: 10,
       effective_limit: 10,
       capture_pending: true,
+    });
+    expect(result.monitored_system_capacity).toMatchObject({
+      mode: 'usage_unavailable',
+      current_available: false,
     });
     expect(result.limits[0]).toMatchObject({
       current_available: false,

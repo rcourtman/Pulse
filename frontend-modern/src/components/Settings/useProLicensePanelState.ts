@@ -48,8 +48,10 @@ import {
 } from '@/utils/pricingHandoff';
 import { buildSelfHostedCommercialPlanModel } from '@/utils/commercialBillingModel';
 import {
-  getMonitoredSystemLimitRemainingCapacity,
+  getMonitoredSystemLimitCapacityStatusSummary,
+  getMonitoredSystemLimitContextSummary,
   getMonitoredSystemLimitUsageSummary,
+  resolveMonitoredSystemCapacityStatus,
 } from '@/utils/monitoredSystemPresentation';
 import { runStartProTrialAction } from '@/utils/trialStartAction';
 import { resolveUpgradeDestination, type UpgradeDestination } from '@/utils/upgradeNavigation';
@@ -247,26 +249,57 @@ export function useProLicensePanelState() {
   const limitStatus = (key: string) => entitlements()?.limits?.find((entry) => entry.key === key);
 
   const monitoredSystemLimitStatus = createMemo(() => limitStatus('max_monitored_systems'));
+  const monitoredSystemCapacity = createMemo(() => entitlements()?.monitored_system_capacity);
   const uncappedGrandfatheredPlan = createMemo(() =>
     isUncappedGrandfatheredPlanVersion(entitlements()?.plan_version, entitlements()?.is_lifetime),
   );
   const monitoredSystemUsageSummary = createMemo(() => {
     const limit = monitoredSystemLimitStatus();
-    if (!limit && uncappedGrandfatheredPlan()) {
+    const capacity = monitoredSystemCapacity();
+    if (!limit && !capacity && uncappedGrandfatheredPlan()) {
       return 'Unlimited';
     }
-    return getMonitoredSystemLimitUsageSummary(limit);
+    return getMonitoredSystemLimitUsageSummary(limit, capacity);
   });
-  const remainingSystemCapacity = createMemo(() => {
+  const monitoredSystemCapacityStatusSummary = createMemo(() => {
     const limit = monitoredSystemLimitStatus();
-    if (!limit && uncappedGrandfatheredPlan()) {
+    const capacity = monitoredSystemCapacity();
+    if (!limit && !capacity && uncappedGrandfatheredPlan()) {
       return 'Unlimited';
     }
-    return getMonitoredSystemLimitRemainingCapacity(limit);
+    return getMonitoredSystemLimitCapacityStatusSummary(limit, capacity);
   });
+  const monitoredSystemCapacityPosture = createMemo(() =>
+    resolveMonitoredSystemCapacityStatus(monitoredSystemCapacity(), monitoredSystemLimitStatus()),
+  );
   const monitoredSystemContinuity = createMemo(() => entitlements()?.monitored_system_continuity);
   const monitoredSystemContinuityNotice = createMemo(() =>
     getMonitoredSystemContinuityNotice(monitoredSystemContinuity(), monitoredSystemLimitStatus()),
+  );
+  const monitoredSystemCapacityNotice = createMemo(() => {
+    const posture = monitoredSystemCapacityPosture();
+    if (!posture?.current_available) {
+      return null;
+    }
+    switch (posture.mode) {
+      case 'at_limit_blocking_new':
+        return {
+          title: 'Monitored-system limit reached',
+          body: `This installation is using all ${posture.limit} included monitored systems. Existing monitoring continues, but new monitored systems are blocked until capacity is freed or the plan is upgraded.`,
+          tone: 'border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-100',
+        };
+      case 'over_limit_frozen':
+        return {
+          title: 'Monitoring continues above the current plan limit',
+          body: `This installation is monitoring ${posture.current} systems while the current plan includes ${posture.limit}. Existing monitoring continues, but new monitored systems are blocked until usage is reduced or the plan is upgraded.`,
+          tone: 'border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-100',
+        };
+      default:
+        return null;
+    }
+  });
+  const monitoredSystemCapacityContext = createMemo(() =>
+    getMonitoredSystemLimitContextSummary(monitoredSystemLimitStatus(), monitoredSystemCapacity()),
   );
   const continuityCapturedAt = createMemo(() => {
     const capturedAt = monitoredSystemContinuity()?.captured_at;
@@ -287,9 +320,10 @@ export function useProLicensePanelState() {
   const purchaseActivationNotice = createMemo(() => {
     return getPurchaseActivationNotice(purchaseActivationResult());
   });
-  const purchaseActivationAction = createMemo<
-    { label: string; destination: UpgradeDestination } | null
-  >(() => {
+  const purchaseActivationAction = createMemo<{
+    label: string;
+    destination: UpgradeDestination;
+  } | null>(() => {
     const purchase = purchaseActivationResult().trim().toLowerCase();
     const intent = getSelfHostedBillingPlanIntent(location.search);
     switch (purchase) {
@@ -356,7 +390,7 @@ export function useProLicensePanelState() {
       expires: displayedExpiry(),
       daysRemaining: displayedDaysRemaining() ?? 'Unknown',
       monitoredSystemsSummary: monitoredSystemUsageSummary(),
-      remainingSystemCapacity: remainingSystemCapacity(),
+      capacityStatusSummary: monitoredSystemCapacityStatusSummary(),
       maxMonitoredSystems:
         typeof limitStatus('max_monitored_systems')?.limit === 'number' &&
         limitStatus('max_monitored_systems')!.limit > 0
@@ -426,6 +460,9 @@ export function useProLicensePanelState() {
     clearing,
     commercialMigrationNotice,
     commercialPlanModel,
+    monitoredSystemCapacity,
+    monitoredSystemCapacityContext,
+    monitoredSystemCapacityNotice,
     monitoredSystemContinuityNotice,
     entitlements,
     formattedFeatures,

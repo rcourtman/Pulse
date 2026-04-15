@@ -36,6 +36,7 @@ interface ProLicensePlanSectionProps {
   hasLicenseDetails: boolean;
   hasPaidFeatures: boolean;
   loading: boolean;
+  monitoredSystemCapacityNotice: Notice | null;
   monitoredSystemContinuityNotice: Notice | null;
   onReload: () => void;
   onStartTrial: () => void;
@@ -156,6 +157,14 @@ export const ProLicensePlanSection: Component<ProLicensePlanSectionProps> = (pro
         )}
       </Show>
       <Show when={props.monitoredSystemContinuityNotice}>
+        {(notice) => (
+          <div class={`mb-4 rounded-md border p-3 text-sm ${notice().tone}`}>
+            <p class="font-medium">{notice().title}</p>
+            <p class="mt-1 text-xs opacity-90">{notice().body}</p>
+          </div>
+        )}
+      </Show>
+      <Show when={props.monitoredSystemCapacityNotice}>
         {(notice) => (
           <div class={`mb-4 rounded-md border p-3 text-sm ${notice().tone}`}>
             <p class="font-medium">{notice().title}</p>

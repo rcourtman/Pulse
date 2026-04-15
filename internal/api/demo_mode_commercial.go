@@ -164,6 +164,7 @@ func sanitizeRuntimeCapabilitiesPayloadForPublicDemo(
 ) RuntimeCapabilitiesPayload {
 	sanitized := payload
 	sanitized.Limits = sanitizeLimitStatusesForPublicDemo(payload.Limits)
+	sanitized.MonitoredSystemCapacity = nil
 	if sanitized.Capabilities == nil {
 		sanitized.Capabilities = []string{}
 	}

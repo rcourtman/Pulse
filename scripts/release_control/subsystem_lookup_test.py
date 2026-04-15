@@ -4792,12 +4792,12 @@ class SubsystemLookupTest(unittest.TestCase):
             ),
             _contract_reference(
                 "docs/release-control/v6/internal/subsystems/api-contracts.md",
-                "21. Keep hosted AI settings bootstrap on the shared API contract",
+                "22. Keep hosted AI settings bootstrap on the shared API contract",
                 "internal/api/ai_handler.go",
             ),
             _contract_reference(
                 "docs/release-control/v6/internal/subsystems/api-contracts.md",
-                "22. Keep post-boot AI enablement contract-backed on the shared AI/mobile approval surface",
+                "23. Keep post-boot AI enablement contract-backed on the shared AI/mobile approval surface",
                 "internal/api/ai_handler.go",
             ),
         ]
@@ -4836,12 +4836,12 @@ class SubsystemLookupTest(unittest.TestCase):
                 )["line"],
                 _contract_reference(
                     "docs/release-control/v6/internal/subsystems/api-contracts.md",
-                    "21. Keep hosted AI settings bootstrap on the shared API contract",
+                    "22. Keep hosted AI settings bootstrap on the shared API contract",
                     "internal/api/ai_handler.go",
                 )["line"],
                 _contract_reference(
                     "docs/release-control/v6/internal/subsystems/api-contracts.md",
-                    "22. Keep post-boot AI enablement contract-backed on the shared AI/mobile approval surface",
+                    "23. Keep post-boot AI enablement contract-backed on the shared AI/mobile approval surface",
                     "internal/api/ai_handler.go",
                 )["line"],
             ],

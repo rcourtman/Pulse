@@ -15,15 +15,21 @@ import type {
   MonitoredSystemLedgerEntry,
   MonitoredSystemLedgerExplanationSurface,
 } from '@/api/monitoredSystemLedger';
-import type { EntitlementLimitStatus, MonitoredSystemContinuityStatus } from '@/api/license';
+import type {
+  EntitlementLimitStatus,
+  MonitoredSystemCapacityStatus,
+  MonitoredSystemContinuityStatus,
+} from '@/api/license';
 import { apiErrorCode, apiErrorDetailField } from '@/api/responseUtils';
 import { getSimpleStatusIndicator } from '@/utils/status';
 import { PulseLogoIcon } from '@/components/icons/PulseLogoIcon';
 import {
   formatMonitoredSystemGroupedSourcesLabel,
   formatMonitoredSystemLedgerUnavailableMessage,
+  getMonitoredSystemLimitContextSummary,
   formatMonitoredSystemLatestIncludedSignalSentence,
   formatMonitoredSystemSurfaceAttribution,
+  getMonitoredSystemLimitUsageSummary,
   getMonitoredSystemLimitUnavailableReason,
   getMonitoredSystemLedgerErrorState,
   getMonitoredSystemLedgerDescription,
@@ -34,6 +40,7 @@ import {
   getMonitoredSystemCountingDetailsToggleLabel,
   getMonitoredSystemLedgerPresentation,
   isMonitoredSystemLimitUsageAvailable,
+  resolveMonitoredSystemCapacityStatus,
 } from '@/utils/monitoredSystemPresentation';
 import { MonitoredSystemDefinitionDisclosure } from '@/components/Commercial/MonitoredSystemDefinitionDisclosure';
 import {
@@ -43,6 +50,7 @@ import {
 
 interface MonitoredSystemLedgerPanelProps {
   embedded?: boolean;
+  monitoredSystemCapacity?: MonitoredSystemCapacityStatus | null;
   monitoredSystemContinuity?: MonitoredSystemContinuityStatus | null;
   monitoredSystemLimit?: EntitlementLimitStatus | null;
   showCountingRulesByDefault?: boolean;
@@ -120,19 +128,46 @@ export function MonitoredSystemLedgerPanel(props: MonitoredSystemLedgerPanelProp
   const hasLimit = () => limit() > 0;
   const overLimit = () => hasLimit() && total() > limit();
   const pct = () => usagePercent(total(), limit());
+  const displayLimit = createMemo<EntitlementLimitStatus | null>(() => {
+    if (ledger()) {
+      return {
+        key: 'max_monitored_systems',
+        limit: limit(),
+        current: total(),
+        current_available: true,
+        state: props.monitoredSystemCapacity?.urgency ?? props.monitoredSystemLimit?.state ?? '',
+      };
+    }
+    return props.monitoredSystemLimit ?? null;
+  });
+  const displayCapacity = createMemo(() =>
+    ledger()
+      ? resolveMonitoredSystemCapacityStatus(undefined, displayLimit())
+      : resolveMonitoredSystemCapacityStatus(props.monitoredSystemCapacity, displayLimit()),
+  );
+  const capacitySummary = createMemo(() =>
+    getMonitoredSystemLimitUsageSummary(displayLimit(), displayCapacity()),
+  );
+  const capacityContext = createMemo(() =>
+    getMonitoredSystemLimitContextSummary(displayLimit(), displayCapacity()),
+  );
   const usageUnavailableReason = () => {
     if (apiErrorCode(explanation.error) === 'monitored_system_usage_unavailable') {
       return apiErrorDetailField(explanation.error, 'reason') ?? undefined;
     }
     if (!ledger()) {
-      return getMonitoredSystemLimitUnavailableReason(props.monitoredSystemLimit);
+      return getMonitoredSystemLimitUnavailableReason(
+        props.monitoredSystemLimit,
+        props.monitoredSystemCapacity,
+      );
     }
     return undefined;
   };
   const usageUnavailable = () =>
     !ledger() &&
     (apiErrorCode(explanation.error) === 'monitored_system_usage_unavailable' ||
-      !isMonitoredSystemLimitUsageAvailable(props.monitoredSystemLimit));
+      !isMonitoredSystemLimitUsageAvailable(props.monitoredSystemLimit) ||
+      displayCapacity()?.current_available === false);
   const genericError = () => Boolean(explanation.error) && !usageUnavailable();
   const continuity = () => props.monitoredSystemContinuity ?? null;
   const hasContinuityContext = () => {
@@ -184,16 +219,25 @@ export function MonitoredSystemLedgerPanel(props: MonitoredSystemLedgerPanelProp
             />
           </div>
           <Show when={ledger()}>
-            <span
-              class="text-sm font-medium"
-              classList={{
-                'text-base-content': !overLimit(),
-                'text-red-600 dark:text-red-400': overLimit(),
-              }}
-            >
-              {total()}
-              <Show when={hasLimit()}>{` / ${limit()}`}</Show>
-            </span>
+            <div class="text-right">
+              <p
+                class="text-sm font-medium"
+                classList={{
+                  'text-base-content':
+                    displayCapacity()?.urgency !== 'warning' &&
+                    displayCapacity()?.mode !== 'over_limit_frozen',
+                  'text-amber-700 dark:text-amber-300':
+                    displayCapacity()?.urgency === 'warning' ||
+                    displayCapacity()?.mode === 'at_limit_blocking_new',
+                  'text-red-600 dark:text-red-400': displayCapacity()?.mode === 'over_limit_frozen',
+                }}
+              >
+                {capacitySummary()}
+              </p>
+              <Show when={capacityContext()}>
+                <p class="max-w-xs text-xs text-muted">{capacityContext()}</p>
+              </Show>
+            </div>
           </Show>
           <Show when={!ledger() && usageUnavailable()}>
             <span class="text-sm font-medium text-amber-700 dark:text-amber-300">

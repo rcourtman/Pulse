@@ -22,6 +22,7 @@ type MockLimitRecord = {
 const mockGetLimit = vi.hoisted(() =>
   vi.fn<(key: string) => MockLimitRecord | undefined>(() => undefined),
 );
+const mockGetMonitoredSystemCapacity = vi.hoisted(() => vi.fn(() => undefined));
 const mockHasMigrationGap = vi.hoisted(() => vi.fn(() => false));
 const mockLegacyConnections = vi.hoisted(() =>
   vi.fn(() => ({
@@ -39,6 +40,7 @@ const mockGetUpgradeActionUrlOrFallback = vi.hoisted(() => vi.fn());
 
 vi.mock('@/stores/license', () => ({
   getRuntimeLimit: (key: string) => mockGetLimit(key),
+  getRuntimeMonitoredSystemCapacity: () => mockGetMonitoredSystemCapacity(),
   loadRuntimeCapabilities: (force?: boolean) => mockLoadRuntimeLicenseStatus(force),
 }));
 
@@ -72,6 +74,8 @@ describe('MonitoredSystemLimitWarningBanner', () => {
       current: 0,
       state: 'ok',
     });
+    mockGetMonitoredSystemCapacity.mockReset();
+    mockGetMonitoredSystemCapacity.mockReturnValue(undefined);
     mockHasMigrationGap.mockReturnValue(false);
     mockLegacyConnections.mockReturnValue({
       proxmox_nodes: 0,
@@ -207,7 +211,7 @@ describe('MonitoredSystemLimitWarningBanner', () => {
       </Router>
     ));
 
-    expect(screen.getByText('5 monitored systems currently counted')).toBeInTheDocument();
+    expect(screen.getByText('5 of 6 included monitored systems are in use.')).toBeInTheDocument();
     expect(screen.getByText('Learn more')).toHaveAttribute(
       'href',
       '/settings/system/billing/usage?details=counting-rules',
@@ -264,7 +268,7 @@ describe('MonitoredSystemLimitWarningBanner', () => {
       </Router>
     ));
 
-    expect(screen.getByText('5 monitored systems currently counted')).toBeInTheDocument();
+    expect(screen.getByText('5 of 6 included monitored systems are in use.')).toBeInTheDocument();
     expect(
       screen.getByText(
         /You also have 3 resources connected via API or legacy collectors \(2 Proxmox nodes, 1 Docker host\) that count once toward your monitored-system cap when the same top-level system is discovered canonically\./i,
@@ -305,7 +309,9 @@ describe('MonitoredSystemLimitWarningBanner', () => {
       </Router>
     ));
 
-    expect(screen.queryByText('5 monitored systems currently counted')).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('5 of 6 included monitored systems are in use.'),
+    ).not.toBeInTheDocument();
     expect(mockTrackUpgradeMetricEvent).not.toHaveBeenCalled();
   });
 });

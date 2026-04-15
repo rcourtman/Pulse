@@ -5352,7 +5352,8 @@ func TestContract_EntitlementPayloadMonitoredSystemUsageJSONSnapshot(t *testing.
 		"trial_eligible":false,
 		"max_history_days":90,
 		"legacy_connections":{"proxmox_nodes":2,"docker_hosts":1,"kubernetes_clusters":1},
-		"has_migration_gap":false
+		"has_migration_gap":false,
+		"monitored_system_capacity":{"mode":"within_limit","urgency":"ok","current":7,"limit":15,"current_available":true,"available_slots":8,"overage":0,"blocks_new_systems":false,"existing_monitoring_continues":true}
 	}`
 
 	assertJSONSnapshot(t, got, want)
@@ -5392,7 +5393,8 @@ func TestContract_EntitlementPayloadMonitoredSystemUsageUnavailableJSONSnapshot(
 		"max_history_days":90,
 		"legacy_connections":{"proxmox_nodes":0,"docker_hosts":0,"kubernetes_clusters":0},
 		"has_migration_gap":false,
-		"monitored_system_continuity":{"plan_limit":15,"effective_limit":15,"capture_pending":true}
+		"monitored_system_continuity":{"plan_limit":15,"effective_limit":15,"capture_pending":true},
+		"monitored_system_capacity":{"mode":"usage_unavailable","urgency":"ok","current":0,"limit":15,"current_available":false,"current_unavailable_reason":"supplemental_inventory_unsettled","available_slots":0,"overage":0,"blocks_new_systems":false,"existing_monitoring_continues":false}
 	}`
 
 	assertJSONSnapshot(t, got, want)
@@ -5435,7 +5437,8 @@ func TestContract_EntitlementPayloadLifetimeJSONSnapshot(t *testing.T) {
 		"trial_eligible":false,
 		"max_history_days":90,
 		"legacy_connections":{"proxmox_nodes":1,"docker_hosts":1,"kubernetes_clusters":0},
-		"has_migration_gap":false
+		"has_migration_gap":false,
+		"monitored_system_capacity":{"mode":"unlimited","urgency":"ok","current":15,"limit":0,"current_available":true,"available_slots":0,"overage":0,"blocks_new_systems":false,"existing_monitoring_continues":true}
 	}`
 
 	assertJSONSnapshot(t, got, want)
@@ -5604,6 +5607,7 @@ func TestContract_LegacyMigrationGrandfatherFloorFallbackJSONSnapshot(t *testing
 			SubscriptionState         string                                        `json:"subscription_state"`
 			Limits                    []pkglicensing.LimitStatus                    `json:"limits"`
 			MonitoredSystemContinuity *pkglicensing.MonitoredSystemContinuityStatus `json:"monitored_system_continuity,omitempty"`
+			MonitoredSystemCapacity   *pkglicensing.MonitoredSystemCapacityStatus   `json:"monitored_system_capacity,omitempty"`
 		} `json:"entitlements"`
 	}{
 		Status: struct {
@@ -5625,12 +5629,14 @@ func TestContract_LegacyMigrationGrandfatherFloorFallbackJSONSnapshot(t *testing
 			SubscriptionState         string                                        `json:"subscription_state"`
 			Limits                    []pkglicensing.LimitStatus                    `json:"limits"`
 			MonitoredSystemContinuity *pkglicensing.MonitoredSystemContinuityStatus `json:"monitored_system_continuity,omitempty"`
+			MonitoredSystemCapacity   *pkglicensing.MonitoredSystemCapacityStatus   `json:"monitored_system_capacity,omitempty"`
 		}{
 			Tier:                      payload.Tier,
 			PlanVersion:               payload.PlanVersion,
 			SubscriptionState:         payload.SubscriptionState,
 			Limits:                    payload.Limits,
 			MonitoredSystemContinuity: payloadContinuity,
+			MonitoredSystemCapacity:   payload.MonitoredSystemCapacity,
 		},
 	})
 	if err != nil {
@@ -5650,7 +5656,8 @@ func TestContract_LegacyMigrationGrandfatherFloorFallbackJSONSnapshot(t *testing
 			"plan_version":"legacy_migration_fallback",
 			"subscription_state":"active",
 			"limits":[{"key":"max_monitored_systems","limit":23,"current":23,"current_available":true,"state":"enforced"}],
-			"monitored_system_continuity":{"plan_limit":10,"grandfathered_floor":23,"effective_limit":23,"capture_pending":false,"captured_at":123}
+			"monitored_system_continuity":{"plan_limit":10,"grandfathered_floor":23,"effective_limit":23,"capture_pending":false,"captured_at":123},
+			"monitored_system_capacity":{"mode":"at_limit_blocking_new","urgency":"enforced","current":23,"limit":23,"current_available":true,"available_slots":0,"overage":0,"blocks_new_systems":true,"existing_monitoring_continues":true}
 		}
 	}`
 
