@@ -203,6 +203,15 @@ assembly branch.
     may consume `frontend-modern/src/hooks/useUnifiedResources.ts`, but hidden
     selectors must pass an explicit `enabled` gate instead of booting the
     `all-resources` transport behind a collapsed or non-rendered summary shell.
+13. Keep operator-facing resource analysis vocabulary task-first on unified-resource
+    surfaces. `frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx`,
+    `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDerivedState.ts`,
+    and `frontend-modern/src/components/Discovery/DiscoveryTab.tsx` may expose
+    provider identity or governed safe-summary posture when that context helps
+    an operator, but the rendered labels must stay product-neutral and use
+    `Analysis`, `Analysis Reasoning`, and `Safe Summary` rather than reviving
+    generic `AI` or `AI-Safe` branding inside the resource drawer or discovery
+    shell.
 
 ## Forbidden Paths
 
@@ -906,6 +915,12 @@ back to generic agent or Docker-only semantics when host telemetry is also
 present. Runtime-local filters like `agent` or cluster context may still be
 added as secondary scope, but the canonical platform query must remain the
 first-class route boundary for shared workload navigation.
+That same shared workload-route contract also owns exact guest selection for
+node-scoped workloads. Proxmox VM and system-container links must emit the
+canonical workload identity (`<instance>:<node>:<vmid>`) in the shared
+`resource` query rather than an opaque unified-resource id, so direct route
+loads and cross-surface drill-downs reopen the correct workload drawer instead
+of landing on an unselected table state.
 That same routing contract now also owns recovery deep links for unified
 resources. Infrastructure drawers and other cross-surface consumers must route
 TrueNAS-backed top-level systems through canonical `/recovery` route state

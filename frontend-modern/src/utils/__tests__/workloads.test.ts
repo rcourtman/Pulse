@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  buildCanonicalNodeScopedWorkloadId,
   canonicalizeWorkloadFilterType,
   getDiscoveryResourceTypeForWorkload,
   normalizeWorkloadViewModeParam,
@@ -7,6 +8,7 @@ import {
   resolveWorkloadTypeFromString,
   getWorkloadMetricsKind,
   getCanonicalWorkloadId,
+  getCanonicalWorkloadIdForResource,
   isDockerManagedAppContainer,
   getWebInterfaceTargetLabelForWorkload,
 } from '@/utils/workloads';
@@ -203,6 +205,54 @@ describe('getCanonicalWorkloadId', () => {
   it('returns id when node is missing', () => {
     const guest = { id: 'test', type: 'vm', instance: 'homelab', node: '', vmid: 100 };
     expect(getCanonicalWorkloadId(guest)).toBe('test');
+  });
+});
+
+describe('buildCanonicalNodeScopedWorkloadId', () => {
+  it('builds canonical ids from instance, node, and vmid', () => {
+    expect(
+      buildCanonicalNodeScopedWorkloadId({
+        instance: 'Core Fabric',
+        node: 'pve2',
+        vmid: 112,
+      }),
+    ).toBe('Core Fabric:pve2:112');
+  });
+
+  it('returns null when any canonical part is missing', () => {
+    expect(buildCanonicalNodeScopedWorkloadId({ instance: 'Core Fabric', node: '', vmid: 112 })).toBeNull();
+    expect(buildCanonicalNodeScopedWorkloadId({ instance: '', node: 'pve2', vmid: 112 })).toBeNull();
+    expect(buildCanonicalNodeScopedWorkloadId({ instance: 'Core Fabric', node: 'pve2', vmid: 0 })).toBeNull();
+  });
+});
+
+describe('getCanonicalWorkloadIdForResource', () => {
+  it('uses proxmox guest identity for vm and system-container resources', () => {
+    expect(
+      getCanonicalWorkloadIdForResource({
+        id: 'system-container-45cf61f16a6e2c16',
+        type: 'system-container',
+        clusterId: 'Core Fabric',
+        proxmox: {
+          node: 'pve2',
+          vmid: 112,
+        },
+      } as any),
+    ).toBe('Core Fabric:pve2:112');
+  });
+
+  it('falls back to the resource id when canonical guest identity is incomplete', () => {
+    expect(
+      getCanonicalWorkloadIdForResource({
+        id: 'vm-123',
+        type: 'vm',
+        clusterId: '',
+        proxmox: {
+          node: 'pve1',
+          vmid: 0,
+        },
+      } as any),
+    ).toBe('vm-123');
   });
 });
 

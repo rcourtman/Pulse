@@ -7,6 +7,7 @@ import { normalizeStorageSourceKey } from '@/utils/storageSources';
 import { normalizeRecoveryItemTypeQueryValue } from '@/utils/recoveryItemTypePresentation';
 import {
   canonicalizeWorkloadFilterType,
+  getCanonicalWorkloadIdForResource,
   resolveWorkloadType,
 } from '@/utils/workloads';
 import type { WorkloadGuest } from '@/types/workloads';
@@ -354,7 +355,7 @@ export const buildWorkloadsHrefForResource = (resource: Resource): string | null
       type: resource.type,
       platform: resource.platformType,
       agent: firstNonEmpty([resource.parentId, resource.platformId]),
-      resource: resource.id,
+      resource: getCanonicalWorkloadIdForResource(resource),
     });
   }
 

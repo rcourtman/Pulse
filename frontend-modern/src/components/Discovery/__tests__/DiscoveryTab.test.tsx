@@ -15,7 +15,9 @@ vi.mock('@/api/discovery', () => {
   };
 });
 
+import * as discoveryApi from '@/api/discovery';
 import { DiscoveryTab } from '@/components/Discovery/DiscoveryTab';
+
 describe('DiscoveryTab', () => {
   afterEach(() => {
     cleanup();
@@ -28,5 +30,53 @@ describe('DiscoveryTab', () => {
     ));
 
     expect(await screen.findByRole('button', { name: 'Run Discovery Now' })).toBeInTheDocument();
+  });
+
+  it('renders task-first analysis copy for provider and reasoning context', async () => {
+    vi.mocked(discoveryApi.getDiscoveryInfo).mockResolvedValue({
+      ai_provider: {
+        provider: 'anthropic',
+        model: 'claude-haiku-4-5',
+        is_local: false,
+        label: 'Cloud (Anthropic)',
+      },
+      commands: [],
+      command_categories: [],
+    });
+    vi.mocked(discoveryApi.getDiscovery).mockResolvedValue({
+      id: 'discovery-1',
+      resource_type: 'agent',
+      resource_id: 'agent-1',
+      target_id: 'agent-1',
+      agent_id: 'agent-1',
+      hostname: 'pve1',
+      service_type: 'database',
+      service_name: 'postgresql',
+      service_version: '16.1',
+      category: 'database',
+      cli_access: 'psql',
+      facts: [],
+      config_paths: [],
+      data_paths: [],
+      log_paths: [],
+      ports: [],
+      user_notes: '',
+      user_secrets: {},
+      confidence: 0.72,
+      ai_reasoning: 'Mapped open ports and running processes to a PostgreSQL service.',
+      discovered_at: '2026-04-15T00:00:00Z',
+      updated_at: '2026-04-15T00:00:00Z',
+      scan_duration: 12,
+    });
+
+    render(() => (
+      <DiscoveryTab resourceType="agent" agentId="agent-1" resourceId="agent-1" hostname="pve1" />
+    ));
+
+    expect(await screen.findByText('Analysis: Cloud (Anthropic)')).toBeInTheDocument();
+    expect(await screen.findByText('Analysis Reasoning')).toBeInTheDocument();
+    expect(
+      await screen.findByText('Mapped open ports and running processes to a PostgreSQL service.'),
+    ).toBeInTheDocument();
   });
 });

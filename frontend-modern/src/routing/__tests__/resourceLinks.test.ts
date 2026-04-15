@@ -221,6 +221,30 @@ describe('resource link routing contract', () => {
     );
   });
 
+  it('builds exact workloads links for Proxmox system-container resources using canonical guest ids', () => {
+    expect(
+      buildWorkloadsHrefForResource({
+        id: 'system-container-45cf61f16a6e2c16',
+        type: 'system-container',
+        name: 'artifact-cache-01',
+        displayName: 'Artifact Cache 01',
+        platformId: 'pve2',
+        platformType: 'proxmox-pve',
+        sourceType: 'api',
+        status: 'online',
+        lastSeen: Date.now(),
+        clusterId: 'Core Fabric',
+        proxmox: {
+          node: 'pve2',
+          instance: 'Core Fabric',
+          vmid: 112,
+        },
+      } as any),
+    ).toBe(
+      '/workloads?type=system-container&platform=proxmox-pve&agent=pve2&resource=Core+Fabric%3Apve2%3A112',
+    );
+  });
+
   it('maps pod workloads to kubernetes infrastructure source with cluster query', () => {
     const href = buildInfrastructureHrefForWorkload(
       baseGuest({

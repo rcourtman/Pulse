@@ -1,6 +1,6 @@
 import type { WorkloadGuest, WorkloadType, ViewMode } from '@/types/workloads';
 import type { ResourceType as DiscoveryResourceType } from '@/types/discovery';
-import type { ResourceDiscoveryTarget } from '@/types/resource';
+import type { Resource, ResourceDiscoveryTarget } from '@/types/resource';
 import type { MetricResourceKind } from '@/utils/metricsKeys';
 import { canonicalizeFrontendResourceType } from '@/utils/resourceTypeCompat';
 import { canonicalDiscoveryResourceType } from '@/utils/discoveryTarget';
@@ -95,15 +95,56 @@ export const getCanonicalWorkloadId = (
   guest: Pick<WorkloadGuest, 'id' | 'workloadType' | 'type' | 'instance' | 'node' | 'vmid'>,
 ): string => {
   const type = resolveWorkloadType(guest);
-  if (
-    (type === 'vm' || type === 'system-container') &&
-    guest.instance &&
-    guest.node &&
-    guest.vmid > 0
-  ) {
-    return `${guest.instance}:${guest.node}:${guest.vmid}`;
+  if (type === 'vm' || type === 'system-container') {
+    const canonicalId = buildCanonicalNodeScopedWorkloadId({
+      instance: guest.instance,
+      node: guest.node,
+      vmid: guest.vmid,
+    });
+    if (canonicalId) {
+      return canonicalId;
+    }
   }
   return guest.id;
+};
+
+type NodeScopedWorkloadIdentity = {
+  instance?: string | null;
+  node?: string | null;
+  vmid?: number | null;
+};
+
+const normalizeNodeScopedWorkloadKeyPart = (value?: string | null): string =>
+  (value || '').trim();
+
+export const buildCanonicalNodeScopedWorkloadId = ({
+  instance,
+  node,
+  vmid,
+}: NodeScopedWorkloadIdentity): string | null => {
+  const normalizedInstance = normalizeNodeScopedWorkloadKeyPart(instance);
+  const normalizedNode = normalizeNodeScopedWorkloadKeyPart(node);
+  const normalizedVmid = Number.isFinite(vmid) ? Number(vmid) : 0;
+  if (!normalizedInstance || !normalizedNode || normalizedVmid <= 0) {
+    return null;
+  }
+  return `${normalizedInstance}:${normalizedNode}:${normalizedVmid}`;
+};
+
+export const getCanonicalWorkloadIdForResource = (
+  resource: Pick<Resource, 'id' | 'type' | 'clusterId' | 'proxmox'>,
+): string => {
+  if (resource.type === 'vm' || resource.type === 'system-container') {
+    const canonicalId = buildCanonicalNodeScopedWorkloadId({
+      instance: resource.proxmox?.instance || resource.clusterId,
+      node: resource.proxmox?.node || resource.proxmox?.nodeName,
+      vmid: resource.proxmox?.vmid,
+    });
+    if (canonicalId) {
+      return canonicalId;
+    }
+  }
+  return resource.id;
 };
 
 export const resolveDiscoveryTargetForWorkload = (

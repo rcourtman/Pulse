@@ -23,6 +23,7 @@ import {
   getResourceRoutingScopeLabel,
   hasDefaultResourcePolicyPosture,
 } from '@/utils/resourcePolicyPresentation';
+import { formatResourceAnalysisSummary } from '@/utils/resourceAnalysisPresentation';
 import type { ResourceIntelligence } from '@/types/aiIntelligence';
 import {
   buildTemperatureRows,
@@ -189,7 +190,7 @@ export const useResourceDetailDrawerDerivedState = (
     const summary: string[] = [];
 
     if (intel && hasMeaningfulResourceIntelligence()) {
-      summary.push(`AI ${intel.health.grade} · ${Math.round(intel.health.score)}/100`);
+      summary.push(formatResourceAnalysisSummary(intel.health.grade, intel.health.score));
     }
     if (resourceCorrelations().length > 0) {
       summary.push(

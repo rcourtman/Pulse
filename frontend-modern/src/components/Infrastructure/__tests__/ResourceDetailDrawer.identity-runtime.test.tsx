@@ -547,7 +547,7 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
     expect(overflowRender.container.querySelector('details')).toBeTruthy();
   });
 
-  it('surfaces policy governance details and AI-safe summary', () => {
+  it('surfaces policy governance details and the safe summary', () => {
     const resource = baseResource({
       id: 'sensitive-resource-1',
       name: 'sensitive-host',
@@ -560,7 +560,7 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
           redact: ['hostname', 'ip-address', 'alias'],
         },
       },
-      aiSafeSummary: 'restricted host summary safe for remote AI consumption',
+      aiSafeSummary: 'restricted host summary safe for remote provider consumption',
     });
 
     const { getAllByText, getByRole, getByText, queryByText } = render(() => (
@@ -569,17 +569,17 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
 
     expect(getByText('Context')).toBeInTheDocument();
     expect(queryByText('Governance')).toBeNull();
-    expect(queryByText('AI-Safe Summary')).toBeNull();
+    expect(queryByText('Safe Summary')).toBeNull();
     fireEvent.click(getByRole('button', { name: 'Show context' }));
     expect(getByText('Governance')).toBeInTheDocument();
     expect(getByText('Redactions')).toBeInTheDocument();
-    expect(getByText('AI-Safe Summary')).toBeInTheDocument();
+    expect(getByText('Safe Summary')).toBeInTheDocument();
     expect(getAllByText('Restricted').length).toBeGreaterThan(0);
     expect(getAllByText('Local Only').length).toBeGreaterThan(0);
     expect(getByText('Hostname')).toBeInTheDocument();
     expect(getByText('IP Address')).toBeInTheDocument();
     expect(
-      getAllByText('restricted host summary safe for remote AI consumption').length,
+      getAllByText('restricted host summary safe for remote provider consumption').length,
     ).toBeGreaterThan(0);
     expect(getByText('Sensitive Host')).toBeInTheDocument();
     expect(queryByText('sensitive-host')).toBeNull();
@@ -604,15 +604,15 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
     ));
 
     expect(getByText('Context')).toBeInTheDocument();
-    expect(queryByText('AI-Safe Summary')).toBeNull();
+    expect(queryByText('Safe Summary')).toBeNull();
     fireEvent.click(getByRole('button', { name: 'Show context' }));
-    expect(getByText('AI-Safe Summary')).toBeInTheDocument();
+    expect(getByText('Safe Summary')).toBeInTheDocument();
     expect(getAllByText('redacted by policy').length).toBeGreaterThan(0);
   });
 
-  it('surfaces canonical AI intelligence for the resource overview', async () => {
+  it('surfaces canonical analysis context for the resource overview', async () => {
     const resource = baseResource({});
-    const { getByRole, getByText, queryByText } = render(() => (
+    const { getByRole, getByTestId, getByText, queryByText } = render(() => (
       <ResourceDetailDrawer resource={resource} />
     ));
 
@@ -620,10 +620,12 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
       expect(getByText('Context')).toBeInTheDocument();
     });
 
-    expect(queryByText('AI')).toBeNull();
+    expect(queryByText('Analysis')).toBeNull();
     fireEvent.click(getByRole('button', { name: 'Show context' }));
     await waitFor(() => {
-      expect(getByText('AI')).toBeInTheDocument();
+      expect(
+        within(getByTestId('resource-investigation-context')).getByText('Analysis'),
+      ).toBeInTheDocument();
     });
     expect(getByText('Health')).toBeInTheDocument();
     expect(getByText('A · 92/100')).toBeInTheDocument();

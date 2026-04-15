@@ -14,6 +14,10 @@ import {
   getDiscoverySuggestedURLFallback,
   getDiscoveryURLSuggestionSourceLabel,
 } from '@/utils/discoveryPresentation';
+import {
+  DISCOVERY_ANALYSIS_EXPLANATION,
+  DISCOVERY_ANALYSIS_REASONING_LABEL,
+} from '@/utils/resourceAnalysisPresentation';
 import { useDiscoveryTabState } from './useDiscoveryTabState';
 
 interface DiscoveryTabProps {
@@ -92,7 +96,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
 
   return (
     <div class="space-y-4">
-      {/* AI Provider Badge - Always visible when AI is configured */}
+      {/* Analysis provider badge - shown when a provider is configured */}
       <Show when={!discoveryInfo.loading && discoveryInfo()?.ai_provider}>
         <div class="flex items-center gap-2">
           <Show
@@ -128,7 +132,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
         </div>
       </Show>
 
-      {/* "What Discovery Does" Explanation - Shown when no discovery yet */}
+      {/* "What Discovery Does" explanation - shown when no discovery exists yet */}
       <Show when={!discovery() && !isScanning() && !showLoadingSpinner() && showExplanation()}>
         <div class="rounded border border-amber-200 bg-amber-50 p-3 shadow-sm dark:border-amber-800 dark:bg-amber-900">
           <div class="flex items-start justify-between gap-3">
@@ -149,9 +153,7 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
               <div class="text-xs text-amber-800 dark:text-amber-200">
                 <p class="font-medium mb-1">What Discovery Does</p>
                 <p class="text-amber-700 dark:text-amber-300">
-                  Discovery runs read-only commands to gather system information (processes, ports,
-                  services), then uses AI to analyze and identify what's running. No data is stored
-                  externally - only the analysis result is saved locally.
+                  {DISCOVERY_ANALYSIS_EXPLANATION}
                 </p>
               </div>
             </div>
@@ -770,11 +772,11 @@ export const DiscoveryTab: Component<DiscoveryTabProps> = (props) => {
               </Show>
             </div>
 
-            {/* AI Reasoning (collapsible) */}
+            {/* Analysis reasoning (collapsible) */}
             <Show when={d().ai_reasoning}>
               <details class="rounded border shadow-sm">
                 <summary class="p-3 text-[11px] font-medium uppercase tracking-wide text-base-content cursor-pointer hover:bg-surface-hover">
-                  AI Reasoning
+                  {DISCOVERY_ANALYSIS_REASONING_LABEL}
                 </summary>
                 <div class="px-3 pb-3">
                   <p class="text-xs text-muted">{d().ai_reasoning}</p>

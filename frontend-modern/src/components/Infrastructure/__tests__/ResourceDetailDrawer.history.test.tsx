@@ -438,14 +438,14 @@ describe('ResourceDetailDrawer change history section', () => {
     expect(screen.queryByText('VM Child')).toBeNull();
     expect(screen.queryByText('Capabilities 1')).toBeNull();
     expect(screen.queryByText('Relationships 1')).toBeNull();
-    expect(screen.queryByText('AI')).toBeNull();
+    expect(screen.queryByText('Analysis')).toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: 'Show access' }));
     expect(screen.getByText('Analysis')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Open analysis' })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Show context' }));
-    await screen.findByText('AI');
+    await within(screen.getByTestId('resource-investigation-context')).findByText('Analysis');
     expect(
       screen
         .getByTestId('resource-investigation-context')
@@ -503,7 +503,7 @@ describe('ResourceDetailDrawer change history section', () => {
     await screen.findByText('Current state');
     expect(screen.queryByText('Context')).toBeNull();
     expect(screen.queryByText('Governance')).toBeNull();
-    expect(screen.queryByText('AI-Safe Summary')).toBeNull();
+    expect(screen.queryByText('Safe Summary')).toBeNull();
     expect(screen.queryByText('Routing Cloud Summary')).toBeNull();
   });
 

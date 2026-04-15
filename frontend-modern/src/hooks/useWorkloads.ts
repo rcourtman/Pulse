@@ -12,7 +12,11 @@ import { eventBus } from '@/stores/events';
 import { resolvePlatformTypeFromSources } from '@/utils/sourcePlatforms';
 import { canonicalDiscoveryResourceType } from '@/utils/discoveryTarget';
 import { normalizeDiskArray } from '@/utils/format';
-import { isDockerManagedAppContainer, resolveWorkloadTypeFromString } from '@/utils/workloads';
+import {
+  buildCanonicalNodeScopedWorkloadId,
+  isDockerManagedAppContainer,
+  resolveWorkloadTypeFromString,
+} from '@/utils/workloads';
 import {
   getPreferredResourceClusterName,
   getPreferredResourceKubernetesContext,
@@ -364,13 +368,15 @@ const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
   // routing, discovery, anomalies, and drawer selection align with the shared
   // resource model.
   const guestId = (() => {
-    if (
-      (workloadType === 'vm' || workloadType === 'system-container') &&
-      instance &&
-      node &&
-      vmid > 0
-    ) {
-      return `${instance}:${node}:${vmid}`;
+    if (workloadType === 'vm' || workloadType === 'system-container') {
+      const canonicalId = buildCanonicalNodeScopedWorkloadId({
+        instance,
+        node,
+        vmid,
+      });
+      if (canonicalId) {
+        return canonicalId;
+      }
     }
     if (workloadType === 'pod') {
       const clusterId = resource.kubernetes?.clusterId;

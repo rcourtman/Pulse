@@ -39,6 +39,10 @@ import { formatIdentifierLabel } from '@/utils/textPresentation';
 import { shouldShowResourcePlatformId } from '@/utils/resourceIdentity';
 import { buildInfrastructureResourceHref } from '@/routing/resourceLinks';
 import { getDiscoveryLoadingState } from '@/utils/discoveryPresentation';
+import {
+  RESOURCE_ANALYSIS_LABEL,
+  RESOURCE_SAFE_SUMMARY_LABEL,
+} from '@/utils/resourceAnalysisPresentation';
 import { formatInteger } from './resourceDetailMappers';
 import {
   ResourceDetailDrawerSupportDisclosure as SupportDisclosure,
@@ -637,7 +641,7 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
               {(intel) => (
                 <div class="space-y-1.5 text-[11px]">
                   <div class="flex items-center justify-between gap-2">
-                    <span class="text-muted uppercase tracking-wide">AI</span>
+                    <span class="text-muted uppercase tracking-wide">{RESOURCE_ANALYSIS_LABEL}</span>
                   </div>
                   <div class="flex items-center justify-between gap-2">
                     <span class="text-muted">Health</span>
@@ -739,7 +743,7 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
                 </Show>
                 <Show when={drawer.governanceSummary()}>
                   <div class="flex flex-col gap-1">
-                    <span class="text-muted">AI-Safe Summary</span>
+                    <span class="text-muted">{RESOURCE_SAFE_SUMMARY_LABEL}</span>
                     <div class="rounded border border-border bg-surface-hover px-2 py-1.5 text-[10px] text-base-content">
                       {drawer.governanceSummary()}
                     </div>
