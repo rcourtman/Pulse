@@ -159,6 +159,13 @@ assembly branch.
    into the agent resource instead of publishing duplicate top-level
    infrastructure rows for the same machine under both `agent` and `k8s-node`
    identities.
+   Canonical read-state overlays belong here as well: when monitoring or a
+   preview path needs to project extra source-native records onto an existing
+   settled read state, it must do so through
+   `internal/unifiedresources/monitor_adapter.go` and
+   `internal/unifiedresources/registry.go` so matcher seeding, manual links,
+   and merge semantics stay unified-resource-owned instead of being rebuilt in
+   consumers.
 6. Add canonical governed name-resolution or policy-aware resource lookup behavior through `internal/unifiedresources/resolve.go` and `internal/unifiedresources/resolve_context.go`
 7. Add or change resource drawer timeline/facet presentation through `frontend-modern/src/components/Infrastructure/ResourceDetailDrawer.tsx`, `frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx`, `frontend-modern/src/components/Infrastructure/ResourceDetailDrawerDebugTab.tsx`, `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerState.ts`, `frontend-modern/src/components/Infrastructure/ResourceFacetSummary.tsx`, `frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts`, and the governed `internal/api/resources.go` facet/timeline contract together
 8. Add or change discovery-support runtime under the resource drawer through `frontend-modern/src/components/Discovery/DiscoveryTab.tsx` for shell/presentation ownership and `frontend-modern/src/components/Discovery/useDiscoveryTabState.ts` for fetch, websocket-progress, and notes-mutation ownership

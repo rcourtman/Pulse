@@ -8,6 +8,7 @@ const (
 	maxGuestMetadataFileSizeBytes  int64 = 16 * 1024 * 1024
 	maxHostMetadataFileSizeBytes   int64 = 16 * 1024 * 1024
 	maxDockerMetadataFileSizeBytes int64 = 16 * 1024 * 1024
+	maxHostContinuityFileSizeBytes int64 = 16 * 1024 * 1024
 )
 
 // readLimitedRegularFileFS reads from the configured filesystem with a strict

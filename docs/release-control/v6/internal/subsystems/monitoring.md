@@ -196,6 +196,14 @@ publish those resources from the same canonical unified snapshot that
 raw store-only inventory for broadcast. Otherwise cold hydrate and later
 registry-backed refreshes can swap the operator-visible infrastructure set
 under one running session.
+That same monitoring owner now also governs restart-safe standalone host
+continuity for monitored-system usage and admission. `internal/monitoring/monitor_agents.go`
+must persist recent host identity at report time, and
+`internal/monitoring/monitored_system_usage.go` must project that continuity
+back into the canonical read state through the unified-resources-owned overlay
+path instead of rebuilding registry truth locally. A server restart or v6
+upgrade must not briefly forget an already admitted standalone host and
+misclassify its next report as a brand-new counted system.
 That same mock-runtime boundary also owns freshness while demos are running.
 The mock update loop must keep provider-backed TrueNAS and VMware records plus
 legacy PBS and PMG summaries on current `LastSeen` and health state each tick,

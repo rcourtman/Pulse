@@ -121,6 +121,60 @@ func TestResourceRegistry_ListUsesDeterministicNameTieBreakers(t *testing.T) {
 	assertStringSlice(t, gotIDs, []string{"agent-1", "storage-a", "storage-b", "storage-z"})
 }
 
+func TestResourceRegistry_IngestResourcesSeedsMatcherForOverlayRecords(t *testing.T) {
+	rr := NewRegistry(nil)
+	now := time.Date(2026, 4, 15, 12, 0, 0, 0, time.UTC)
+
+	rr.IngestResources([]Resource{
+		{
+			ID:       "node-1",
+			Type:     ResourceTypeAgent,
+			Name:     "tower",
+			Status:   StatusOnline,
+			LastSeen: now,
+			Sources:  []DataSource{SourceProxmox},
+			Identity: ResourceIdentity{
+				MachineID: "machine-1",
+				Hostnames: []string{"tower"},
+			},
+			Proxmox: &ProxmoxData{
+				NodeName: "tower",
+				Instance: "lab",
+			},
+		},
+	})
+
+	rr.IngestRecords(SourceAgent, []IngestRecord{
+		{
+			SourceID: "host-1",
+			Resource: Resource{
+				Type:     ResourceTypeAgent,
+				Name:     "tower",
+				Status:   StatusOnline,
+				LastSeen: now.Add(time.Minute),
+				Agent: &AgentData{
+					AgentID: "agent-1",
+				},
+			},
+			Identity: ResourceIdentity{
+				MachineID: "machine-1",
+				Hostnames: []string{"tower"},
+			},
+		},
+	})
+
+	resources := rr.List()
+	if len(resources) != 1 {
+		t.Fatalf("expected overlay record to merge into seeded resource, got %d resources", len(resources))
+	}
+	if resources[0].Proxmox == nil || resources[0].Agent == nil {
+		t.Fatalf("expected merged resource to keep seeded and overlay metadata, got %+v", resources[0])
+	}
+	if got := len(resources[0].Sources); got != 2 {
+		t.Fatalf("expected merged sources from seed and overlay, got %d (%+v)", got, resources[0].Sources)
+	}
+}
+
 func TestResourceRegistry_MergesPhysicalDiskTemperatureAggregate(t *testing.T) {
 	rr := NewRegistry(nil)
 	now := time.Date(2026, 3, 29, 12, 0, 0, 0, time.UTC)

@@ -55,11 +55,65 @@ func (m *Monitor) MonitoredSystemUsage() MonitoredSystemUsageSnapshot {
 		}
 	}
 
+	readState = m.monitoredSystemUsageReadStateWithHostContinuity(readState)
+
 	return MonitoredSystemUsageSnapshot{
 		Count:     unifiedresources.MonitoredSystemCount(readState),
 		ReadState: readState,
 		Available: true,
 	}
+}
+
+func (m *Monitor) monitoredSystemUsageReadStateWithHostContinuity(
+	readState unifiedresources.ReadState,
+) unifiedresources.ReadState {
+	if m == nil || readState == nil {
+		return readState
+	}
+
+	entries := m.recentStandaloneHostContinuityEntries()
+	if len(entries) == 0 {
+		return readState
+	}
+
+	liveHostIDs := make(map[string]struct{}, len(m.GetLiveHostsSnapshot()))
+	for _, host := range m.GetLiveHostsSnapshot() {
+		if id := strings.TrimSpace(host.ID); id != "" {
+			liveHostIDs[id] = struct{}{}
+		}
+	}
+
+	existingAgentIDs := make(map[string]struct{}, len(readState.Hosts()))
+	for _, host := range readState.Hosts() {
+		if host == nil {
+			continue
+		}
+		if agentID := strings.TrimSpace(host.AgentID()); agentID != "" {
+			existingAgentIDs[agentID] = struct{}{}
+		}
+		if resourceID := strings.TrimSpace(host.ID()); resourceID != "" {
+			existingAgentIDs[resourceID] = struct{}{}
+		}
+	}
+
+	records := make([]unifiedresources.IngestRecord, 0, len(entries))
+	for _, entry := range entries {
+		hostID := strings.TrimSpace(entry.HostID)
+		if hostID == "" {
+			continue
+		}
+		if _, ok := liveHostIDs[hostID]; ok {
+			continue
+		}
+		if _, ok := existingAgentIDs[hostID]; ok {
+			continue
+		}
+		records = append(records, unifiedresources.HostIngestRecord(hostFromContinuityEntry(entry)))
+	}
+	if len(records) == 0 {
+		return readState
+	}
+	return unifiedresources.ReadStateWithRecords(readState, unifiedresources.SourceAgent, records)
 }
 
 func normalizedMonitorUsageOrgID(m *Monitor) string {

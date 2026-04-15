@@ -150,6 +150,69 @@ func TestUnifiedAgentHandlers_HandleReport_EnforcesMaxMonitoredSystemsForNewHost
 	}
 }
 
+func TestUnifiedAgentHandlers_HandleReport_PreservesExistingHostLimitContinuityAcrossRestart(t *testing.T) {
+	setMaxMonitoredSystemsLicenseForTests(t, 1)
+
+	cfg := &config.Config{DataPath: t.TempDir()}
+	report := agentshost.Report{
+		Agent: agentshost.AgentInfo{
+			ID:      "agent-1",
+			Version: "6.0.0-rc.1",
+		},
+		Host: agentshost.HostInfo{
+			ID:        "machine-1",
+			MachineID: "machine-1",
+			Hostname:  "host-1.local",
+			Platform:  "linux",
+		},
+		Timestamp: time.Now().UTC(),
+	}
+
+	postReport := func(t *testing.T, handler *UnifiedAgentHandlers, input agentshost.Report) *httptest.ResponseRecorder {
+		t.Helper()
+		body, err := json.Marshal(input)
+		if err != nil {
+			t.Fatalf("marshal report: %v", err)
+		}
+		req := httptest.NewRequest(http.MethodPost, "/api/agents/agent/report", bytes.NewReader(body))
+		rec := httptest.NewRecorder()
+		handler.HandleReport(rec, req)
+		return rec
+	}
+
+	handler, _ := newUnifiedAgentHandlers(t, cfg)
+	rec := postReport(t, handler, report)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("initial host report should pass, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	restartedHandler, _ := newUnifiedAgentHandlers(t, cfg)
+	restartReport := report
+	restartReport.Timestamp = report.Timestamp.Add(30 * time.Second)
+	restartRec := postReport(t, restartedHandler, restartReport)
+	if restartRec.Code != http.StatusOK {
+		t.Fatalf("existing host should still report after restart at limit, got %d: %s", restartRec.Code, restartRec.Body.String())
+	}
+
+	newReport := agentshost.Report{
+		Agent: agentshost.AgentInfo{
+			ID:      "agent-2",
+			Version: "6.0.0-rc.1",
+		},
+		Host: agentshost.HostInfo{
+			ID:        "machine-2",
+			MachineID: "machine-2",
+			Hostname:  "host-2.local",
+			Platform:  "linux",
+		},
+		Timestamp: time.Now().UTC(),
+	}
+	newRec := postReport(t, restartedHandler, newReport)
+	if newRec.Code != http.StatusPaymentRequired {
+		t.Fatalf("new host should still be blocked at limit after restart, got %d: %s", newRec.Code, newRec.Body.String())
+	}
+}
+
 func TestUnifiedAgentHandlers_HandleDeleteHost(t *testing.T) {
 	for _, prefix := range []string{"/api/agents/agent/", "/api/agents/host/"} {
 		handler, monitor := newUnifiedAgentHandlers(t, nil)

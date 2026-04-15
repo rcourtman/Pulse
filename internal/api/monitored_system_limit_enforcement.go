@@ -436,7 +436,7 @@ func enforceMonitoredSystemLimitForHostReport(
 	report agentshost.Report,
 	tokenRecord *config.APITokenRecord,
 ) bool {
-	if monitor != nil && hostReportTargetsExistingHost(monitor.GetLiveHostsSnapshot(), report, tokenRecord) {
+	if monitor != nil && monitor.HostReportMatchesKnownIdentity(report, tokenRecord) {
 		return false
 	}
 

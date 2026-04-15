@@ -40,6 +40,14 @@ func TestMetadataStores_LoadRejectsOversizedFiles(t *testing.T) {
 				return NewDockerMetadataStore(dir, nil).Load()
 			},
 		},
+		{
+			name:     "host continuity",
+			fileName: "host_continuity.json",
+			maxBytes: maxHostContinuityFileSizeBytes,
+			load: func(dir string) error {
+				return NewHostContinuityStore(dir, nil).Load()
+			},
+		},
 	}
 
 	for _, tc := range testCases {
@@ -81,6 +89,13 @@ func TestMetadataStores_LoadRejectsNonRegularFiles(t *testing.T) {
 			fileName: "docker_metadata.json",
 			load: func(dir string) error {
 				return NewDockerMetadataStore(dir, nil).Load()
+			},
+		},
+		{
+			name:     "host continuity",
+			fileName: "host_continuity.json",
+			load: func(dir string) error {
+				return NewHostContinuityStore(dir, nil).Load()
 			},
 		},
 	}

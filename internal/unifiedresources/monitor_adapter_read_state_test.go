@@ -3,6 +3,8 @@ package unifiedresources
 import (
 	"testing"
 	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
 
 var _ ReadState = (*MonitorAdapter)(nil)
@@ -184,6 +186,36 @@ func TestMonitorAdapterStoragePoolViewsAttachCanonicalMetricsTarget(t *testing.T
 	}
 	if got := pools[0].SourceID(); got != "vc-1:datastore:datastore-202" {
 		t.Fatalf("expected canonical metrics target on storage pool view, got %q", got)
+	}
+}
+
+func TestReadStateWithRecordsClonesMonitorAdapterAndOverlaysRecords(t *testing.T) {
+	now := time.Date(2026, 4, 15, 12, 0, 0, 0, time.UTC)
+	registry := NewRegistry(nil)
+	registry.IngestRecords(SourceAgent, []IngestRecord{
+		HostIngestRecord(models.Host{
+			ID:       "host-1",
+			Hostname: "host-1.local",
+			Status:   "online",
+			LastSeen: now,
+		}),
+	})
+
+	base := NewMonitorAdapter(registry)
+	overlay := ReadStateWithRecords(base, SourceAgent, []IngestRecord{
+		HostIngestRecord(models.Host{
+			ID:       "host-2",
+			Hostname: "host-2.local",
+			Status:   "online",
+			LastSeen: now.Add(time.Minute),
+		}),
+	})
+
+	if got := len(base.Hosts()); got != 1 {
+		t.Fatalf("base host count = %d, want 1", got)
+	}
+	if got := len(overlay.Hosts()); got != 2 {
+		t.Fatalf("overlay host count = %d, want 2", got)
 	}
 }
 

@@ -151,6 +151,13 @@ test, add, and update payloads must serialize through the shared ledger client
 as `active:false`, and preview responses may legitimately return `no_change`,
 `removes_existing`, or `removes_multiple` with empty projected-system lists
 when the disabled candidate no longer counts toward monitored-system capacity.
+That same monitored-system admission contract now also owns restart-safe host
+report continuity at the API boundary. `internal/api/monitored_system_limit_enforcement.go`
+must treat a returning standalone host report as existing capacity when
+monitoring can match it to recent persisted host continuity, so a server
+restart or v6 upgrade does not emit a false over-limit `402` before the live
+inventory rebuild catches up. Genuinely new host identities must still return
+the canonical monitored-system blocked payload.
 
 ## Extension Points
 

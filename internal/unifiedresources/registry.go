@@ -299,6 +299,7 @@ func (rr *ResourceRegistry) IngestResources(resources []Resource) {
 
 		rr.mu.Lock()
 		rr.resources[resource.ID] = resource
+		rr.matcher.Add(resource.ID, resource.Identity)
 		rr.viewsDirty = true
 		rr.mu.Unlock()
 	}

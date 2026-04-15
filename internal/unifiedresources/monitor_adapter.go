@@ -30,6 +30,33 @@ func NewMonitorAdapter(registry *ResourceRegistry) *MonitorAdapter {
 	}
 }
 
+// ReadStateWithRecords clones a supported read state and overlays additional
+// source-native records without mutating the original live view.
+func ReadStateWithRecords(
+	readState ReadState,
+	source DataSource,
+	records []IngestRecord,
+) ReadState {
+	if readState == nil || len(records) == 0 || strings.TrimSpace(string(source)) == "" {
+		return readState
+	}
+
+	adapter, ok := readState.(*MonitorAdapter)
+	if !ok || adapter == nil {
+		return readState
+	}
+
+	registry := adapter.currentRegistry()
+	if registry == nil {
+		return readState
+	}
+
+	cloned := NewRegistry(registry.store)
+	cloned.IngestResources(registry.List())
+	cloned.IngestRecords(source, records)
+	return NewMonitorAdapter(cloned)
+}
+
 func (a *MonitorAdapter) currentRegistry() *ResourceRegistry {
 	if a == nil {
 		return nil

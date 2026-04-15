@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
@@ -388,6 +389,69 @@ func TestMonitorMonitoredSystemUsageWaitsForSupplementalReadinessAndStoreFreshne
 	usage := monitor.MonitoredSystemUsage()
 	if !usage.Available {
 		t.Fatalf("expected usage to become available after rebuild, got %+v", usage)
+	}
+	if usage.Count != 1 {
+		t.Fatalf("MonitoredSystemUsage().Count = %d, want 1", usage.Count)
+	}
+}
+
+func TestMonitorMonitoredSystemUsageIncludesRecentStandaloneHostContinuity(t *testing.T) {
+	now := time.Now().UTC()
+	store := config.NewHostContinuityStore(t.TempDir(), nil)
+	if err := store.Upsert(config.HostContinuityEntry{
+		HostID:       "host-1",
+		ReportHostID: "machine-1",
+		Hostname:     "host-1.local",
+		MachineID:    "machine-1",
+		LastSeen:     now,
+	}); err != nil {
+		t.Fatalf("Upsert continuity: %v", err)
+	}
+
+	monitor := &Monitor{
+		state:               models.NewState(),
+		hostContinuityStore: store,
+	}
+
+	usage := monitor.MonitoredSystemUsage()
+	if !usage.Available {
+		t.Fatalf("expected continuity-backed usage to be available, got %+v", usage)
+	}
+	if usage.Count != 1 {
+		t.Fatalf("MonitoredSystemUsage().Count = %d, want 1", usage.Count)
+	}
+}
+
+func TestMonitorMonitoredSystemUsageDoesNotDoubleCountLinkedProxmoxHostContinuity(t *testing.T) {
+	now := time.Now().UTC()
+	store := config.NewHostContinuityStore(t.TempDir(), nil)
+	if err := store.Upsert(config.HostContinuityEntry{
+		HostID:       "host-1",
+		ReportHostID: "machine-1",
+		Hostname:     "pve-1",
+		MachineID:    "machine-1",
+		LinkedNodeID: "node-1",
+		LastSeen:     now,
+	}); err != nil {
+		t.Fatalf("Upsert continuity: %v", err)
+	}
+
+	state := models.NewState()
+	state.UpdateNodes([]models.Node{{
+		ID:       "node-1",
+		Name:     "pve-1",
+		Status:   "online",
+		LastSeen: now,
+	}})
+
+	monitor := &Monitor{
+		state:               state,
+		hostContinuityStore: store,
+	}
+
+	usage := monitor.MonitoredSystemUsage()
+	if !usage.Available {
+		t.Fatalf("expected continuity-backed usage to be available, got %+v", usage)
 	}
 	if usage.Count != 1 {
 		t.Fatalf("MonitoredSystemUsage().Count = %d, want 1", usage.Count)

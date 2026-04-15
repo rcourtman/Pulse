@@ -920,6 +920,7 @@ type Monitor struct {
 	guestMetadataStore         *config.GuestMetadataStore
 	dockerMetadataStore        *config.DockerMetadataStore
 	hostMetadataStore          *config.HostMetadataStore
+	hostContinuityStore        *config.HostContinuityStore
 	mu                         sync.RWMutex
 	startTime                  time.Time
 	rateTracker                *RateTracker
@@ -1469,6 +1470,7 @@ func New(cfg *config.Config) (*Monitor, error) {
 		guestMetadataStore:         config.NewGuestMetadataStore(cfg.DataPath, nil),
 		dockerMetadataStore:        config.NewDockerMetadataStore(cfg.DataPath, nil),
 		hostMetadataStore:          config.NewHostMetadataStore(cfg.DataPath, nil),
+		hostContinuityStore:        config.NewHostContinuityStore(cfg.DataPath, nil),
 		startTime:                  time.Now(),
 		rateTracker:                NewRateTracker(),
 		metricsHistory:             NewMetricsHistory(1000, 24*time.Hour), // Keep up to 1000 points (~8h @ 30s)

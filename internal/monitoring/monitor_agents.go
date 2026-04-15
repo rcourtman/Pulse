@@ -15,9 +15,12 @@ import (
 	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/fsfilters"
+	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
+
+const hostContinuityRetention = 72 * time.Hour
 
 func (m *Monitor) RemoveDockerHost(hostID string) (models.DockerHost, error) {
 	hostID = strings.TrimSpace(hostID)
@@ -231,6 +234,7 @@ func (m *Monitor) RemoveHostAgent(hostID string) (models.Host, error) {
 	if m.alertManager != nil {
 		m.alertManager.HandleHostRemoved(host)
 	}
+	m.removeHostContinuity(hostID)
 
 	return host, nil
 }
@@ -714,6 +718,124 @@ func (m *Monitor) snapshotBackedUnifiedReadState() unifiedresources.ReadState {
 	registry := unifiedresources.NewRegistry(nil)
 	registry.IngestSnapshot(m.state.GetSnapshot())
 	return unifiedresources.NewMonitorAdapter(registry)
+}
+
+func (m *Monitor) hostContinuitySince(now time.Time) time.Time {
+	if now.IsZero() {
+		now = time.Now().UTC()
+	}
+	return now.Add(-hostContinuityRetention)
+}
+
+func (m *Monitor) matchPersistedHostContinuity(
+	report agentshost.Report,
+	tokenRecord *config.APITokenRecord,
+) (config.HostContinuityEntry, bool) {
+	if m == nil || m.hostContinuityStore == nil {
+		return config.HostContinuityEntry{}, false
+	}
+
+	tokenID := ""
+	if tokenRecord != nil {
+		tokenID = tokenRecord.ID
+	}
+
+	return m.hostContinuityStore.Match(
+		report.Host.ID,
+		report.Host.MachineID,
+		report.Agent.ID,
+		report.Host.Hostname,
+		tokenID,
+		m.hostContinuitySince(time.Now().UTC()),
+	)
+}
+
+func (m *Monitor) persistHostContinuity(host models.Host, report agentshost.Report) {
+	if m == nil || m.hostContinuityStore == nil {
+		return
+	}
+
+	entry := config.HostContinuityEntry{
+		HostID:            strings.TrimSpace(host.ID),
+		ReportHostID:      strings.TrimSpace(report.Host.ID),
+		AgentReportedID:   strings.TrimSpace(report.Agent.ID),
+		Hostname:          strings.TrimSpace(host.Hostname),
+		DisplayName:       strings.TrimSpace(host.DisplayName),
+		MachineID:         strings.TrimSpace(host.MachineID),
+		TokenID:           strings.TrimSpace(host.TokenID),
+		AgentVersion:      strings.TrimSpace(host.AgentVersion),
+		Platform:          strings.TrimSpace(host.Platform),
+		LinkedNodeID:      strings.TrimSpace(host.LinkedNodeID),
+		LinkedVMID:        strings.TrimSpace(host.LinkedVMID),
+		LinkedContainerID: strings.TrimSpace(host.LinkedContainerID),
+		IsLegacy:          host.IsLegacy,
+		LastSeen:          host.LastSeen.UTC(),
+	}
+	if err := m.hostContinuityStore.Upsert(entry); err != nil {
+		log.Warn().
+			Err(err).
+			Str("hostID", host.ID).
+			Msg("failed to persist host continuity state")
+	}
+}
+
+func (m *Monitor) removeHostContinuity(hostID string) {
+	if m == nil || m.hostContinuityStore == nil {
+		return
+	}
+	if err := m.hostContinuityStore.Delete(hostID); err != nil {
+		log.Warn().
+			Err(err).
+			Str("hostID", hostID).
+			Msg("failed to delete host continuity state")
+	}
+}
+
+// HostReportMatchesKnownIdentity returns true when a host report targets either
+// the live host snapshot or a recent persisted standalone-host continuity
+// record.
+func (m *Monitor) HostReportMatchesKnownIdentity(
+	report agentshost.Report,
+	tokenRecord *config.APITokenRecord,
+) bool {
+	if m == nil {
+		return false
+	}
+
+	tokenID := ""
+	if tokenRecord != nil {
+		tokenID = tokenRecord.ID
+	}
+	if pkglicensing.HostReportTargetsExistingHosts(m.GetLiveHostsSnapshot(), report, tokenID) {
+		return true
+	}
+	_, ok := m.matchPersistedHostContinuity(report, tokenRecord)
+	return ok
+}
+
+func hostFromContinuityEntry(entry config.HostContinuityEntry) models.Host {
+	return models.Host{
+		ID:                strings.TrimSpace(entry.HostID),
+		Hostname:          strings.TrimSpace(entry.Hostname),
+		DisplayName:       strings.TrimSpace(entry.DisplayName),
+		Status:            "online",
+		LastSeen:          entry.LastSeen,
+		AgentVersion:      strings.TrimSpace(entry.AgentVersion),
+		MachineID:         strings.TrimSpace(entry.MachineID),
+		TokenID:           strings.TrimSpace(entry.TokenID),
+		Platform:          strings.TrimSpace(entry.Platform),
+		IsLegacy:          entry.IsLegacy,
+		LinkedNodeID:      strings.TrimSpace(entry.LinkedNodeID),
+		LinkedVMID:        strings.TrimSpace(entry.LinkedVMID),
+		LinkedContainerID: strings.TrimSpace(entry.LinkedContainerID),
+	}
+}
+
+func (m *Monitor) recentStandaloneHostContinuityEntries() []config.HostContinuityEntry {
+	if m == nil || m.hostContinuityStore == nil {
+		return nil
+	}
+	return m.hostContinuityStore.RecentEntries(m.hostContinuitySince(time.Now().UTC()))
 }
 
 // RebuildTokenBindings reconstructs agent-to-token binding maps from the current
@@ -1410,6 +1532,9 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 		sum := sha1.Sum([]byte(seed))
 		baseIdentifier = fmt.Sprintf("agent-%s", hex.EncodeToString(sum[:6]))
 	}
+	if persisted, ok := m.matchPersistedHostContinuity(report, tokenRecord); ok {
+		baseIdentifier = strings.TrimSpace(persisted.HostID)
+	}
 
 	readState := m.snapshotBackedUnifiedReadState()
 	var existingHosts []*unifiedresources.HostView
@@ -1876,6 +2001,7 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 
 	// Store cluster peer sensor data if present and evict stale entries
 	m.applyClusterSensors(report.ClusterSensors, timestamp)
+	m.persistHostContinuity(host, report)
 
 	return host, nil
 }

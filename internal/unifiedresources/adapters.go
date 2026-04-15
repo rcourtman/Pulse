@@ -94,6 +94,17 @@ func identityFromHost(host models.Host) ResourceIdentity {
 	}
 }
 
+// HostIngestRecord converts a host snapshot into the canonical source-native
+// ingest shape used by monitored-system previews and continuity projections.
+func HostIngestRecord(host models.Host) IngestRecord {
+	resource, identity := resourceFromHost(host)
+	return IngestRecord{
+		SourceID: host.ID,
+		Resource: resource,
+		Identity: identity,
+	}
+}
+
 func resourceFromHost(host models.Host) (Resource, ResourceIdentity) {
 	name := host.Hostname
 	if host.DisplayName != "" {

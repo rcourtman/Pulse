@@ -123,6 +123,8 @@ func TestMonitoredSystemUsageReadinessGuardrailsRemainCanonical(t *testing.T) {
 		"monitor.go": {
 			"type MonitorSupplementalInventoryReadinessProvider interface {",
 			"SupplementalInventoryReadyAt(m *Monitor, orgID string) (time.Time, bool)",
+			"hostContinuityStore        *config.HostContinuityStore",
+			"hostContinuityStore:        config.NewHostContinuityStore(cfg.DataPath, nil),",
 		},
 		"monitored_system_usage.go": {
 			"MonitoredSystemUsageUnavailableMonitorState",
@@ -134,8 +136,11 @@ func TestMonitoredSystemUsageReadinessGuardrailsRemainCanonical(t *testing.T) {
 			"UnavailableReason: MonitoredSystemUsageUnavailableSupplementalInventoryUnsettled,",
 			"if freshness.IsZero() || freshness.Before(readyAt) {",
 			"UnavailableReason: MonitoredSystemUsageUnavailableSupplementalInventoryRebuildPending,",
+			"readState = m.monitoredSystemUsageReadStateWithHostContinuity(readState)",
 			"Count:     unifiedresources.MonitoredSystemCount(readState),",
 			"Available: true,",
+			"func (m *Monitor) monitoredSystemUsageReadStateWithHostContinuity(",
+			"return unifiedresources.ReadStateWithRecords(readState, unifiedresources.SourceAgent, records)",
 		},
 		"truenas_poller.go": {
 			"func (p *TrueNASPoller) SupplementalInventoryReadyAt(_ *Monitor, orgID string) (time.Time, bool) {",

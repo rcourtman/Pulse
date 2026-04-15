@@ -263,6 +263,97 @@ func TestApplyHostReportAllowsTokenReuseAcrossHosts(t *testing.T) {
 	}
 }
 
+func TestHostReportMatchesKnownIdentityUsesPersistedContinuity(t *testing.T) {
+	now := time.Now().UTC()
+	store := config.NewHostContinuityStore(t.TempDir(), nil)
+	if err := store.Upsert(config.HostContinuityEntry{
+		HostID:          "host-1",
+		ReportHostID:    "machine-1",
+		AgentReportedID: "agent-1",
+		Hostname:        "host-1.local",
+		MachineID:       "machine-1",
+		TokenID:         "token-1",
+		LastSeen:        now,
+	}); err != nil {
+		t.Fatalf("Upsert continuity: %v", err)
+	}
+
+	monitor := &Monitor{
+		state:               models.NewState(),
+		hostContinuityStore: store,
+	}
+
+	report := agentshost.Report{
+		Agent: agentshost.AgentInfo{
+			ID:      "agent-1",
+			Version: "6.0.0-rc.1",
+		},
+		Host: agentshost.HostInfo{
+			ID:        "machine-1",
+			MachineID: "machine-1",
+			Hostname:  "host-1.local",
+			Platform:  "linux",
+		},
+		Timestamp: now.Add(time.Minute),
+	}
+
+	if !monitor.HostReportMatchesKnownIdentity(report, &config.APITokenRecord{ID: "token-1"}) {
+		t.Fatal("expected persisted continuity to count as a known host identity")
+	}
+}
+
+func TestApplyHostReportReusesPersistedContinuityAcrossRestart(t *testing.T) {
+	dir := t.TempDir()
+	now := time.Now().UTC()
+
+	newMonitor := func() *Monitor {
+		monitor := &Monitor{
+			state:               models.NewState(),
+			alertManager:        alerts.NewManager(),
+			hostTokenBindings:   make(map[string]string),
+			config:              &config.Config{DataPath: dir},
+			rateTracker:         NewRateTracker(),
+			hostContinuityStore: config.NewHostContinuityStore(dir, nil),
+		}
+		t.Cleanup(func() { monitor.alertManager.Stop() })
+		return monitor
+	}
+
+	report := agentshost.Report{
+		Agent: agentshost.AgentInfo{
+			ID:              "agent-1",
+			Version:         "6.0.0-rc.1",
+			IntervalSeconds: 30,
+		},
+		Host: agentshost.HostInfo{
+			ID:        "machine-1",
+			MachineID: "machine-1",
+			Hostname:  "host-1.local",
+			Platform:  "linux",
+		},
+		Timestamp: now,
+	}
+	token := &config.APITokenRecord{ID: "token-1", Name: "Token One"}
+
+	firstMonitor := newMonitor()
+	firstHost, err := firstMonitor.ApplyHostReport(report, token)
+	if err != nil {
+		t.Fatalf("first ApplyHostReport: %v", err)
+	}
+
+	restartedMonitor := newMonitor()
+	restartReport := report
+	restartReport.Timestamp = now.Add(30 * time.Second)
+	restartedHost, err := restartedMonitor.ApplyHostReport(restartReport, token)
+	if err != nil {
+		t.Fatalf("restarted ApplyHostReport: %v", err)
+	}
+
+	if restartedHost.ID != firstHost.ID {
+		t.Fatalf("expected persisted continuity to preserve host ID %q, got %q", firstHost.ID, restartedHost.ID)
+	}
+}
+
 func TestApplyHostReportDisambiguatesCollidingIdentifiersAcrossTokens(t *testing.T) {
 	t.Helper()
 

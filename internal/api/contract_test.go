@@ -38,6 +38,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/internal/updates"
 	"github.com/rcourtman/pulse-go-rewrite/internal/vmware"
+	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 	authpkg "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/cloudauth"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/extensions"
@@ -5733,6 +5734,77 @@ func TestContract_MonitoredSystemUsageUnavailableIncludesReason(t *testing.T) {
 	}
 	if got := payload.Details["reason"]; got != monitoring.MonitoredSystemUsageUnavailableMonitorState {
 		t.Fatalf("details.reason=%q, want %q", got, monitoring.MonitoredSystemUsageUnavailableMonitorState)
+	}
+}
+
+func TestContract_HostReportAdmissionPreservesRestartContinuityAtLimit(t *testing.T) {
+	setMaxMonitoredSystemsLicenseForTests(t, 1)
+
+	cfg := &config.Config{DataPath: t.TempDir()}
+	report := agentshost.Report{
+		Agent: agentshost.AgentInfo{
+			ID:      "agent-1",
+			Version: "6.0.0-rc.1",
+		},
+		Host: agentshost.HostInfo{
+			ID:        "machine-1",
+			MachineID: "machine-1",
+			Hostname:  "host-1.local",
+			Platform:  "linux",
+		},
+		Timestamp: time.Now().UTC(),
+	}
+
+	postReport := func(t *testing.T, handler *UnifiedAgentHandlers, input agentshost.Report) *httptest.ResponseRecorder {
+		t.Helper()
+		body, err := json.Marshal(input)
+		if err != nil {
+			t.Fatalf("marshal host report: %v", err)
+		}
+		req := httptest.NewRequest(http.MethodPost, "/api/agents/agent/report", bytes.NewReader(body))
+		rec := httptest.NewRecorder()
+		handler.HandleReport(rec, req)
+		return rec
+	}
+
+	handler, _ := newUnifiedAgentHandlers(t, cfg)
+	initialRec := postReport(t, handler, report)
+	if initialRec.Code != http.StatusOK {
+		t.Fatalf("initial host report should pass, got %d: %s", initialRec.Code, initialRec.Body.String())
+	}
+
+	restartedHandler, _ := newUnifiedAgentHandlers(t, cfg)
+	restartReport := report
+	restartReport.Timestamp = report.Timestamp.Add(30 * time.Second)
+	restartRec := postReport(t, restartedHandler, restartReport)
+	if restartRec.Code != http.StatusOK {
+		t.Fatalf("restart continuity report should stay admitted, got %d: %s", restartRec.Code, restartRec.Body.String())
+	}
+
+	newHostReport := agentshost.Report{
+		Agent: agentshost.AgentInfo{
+			ID:      "agent-2",
+			Version: "6.0.0-rc.1",
+		},
+		Host: agentshost.HostInfo{
+			ID:        "machine-2",
+			MachineID: "machine-2",
+			Hostname:  "host-2.local",
+			Platform:  "linux",
+		},
+		Timestamp: report.Timestamp.Add(time.Minute),
+	}
+	blockedRec := postReport(t, restartedHandler, newHostReport)
+	if blockedRec.Code != http.StatusPaymentRequired {
+		t.Fatalf("new host should remain blocked at limit, got %d: %s", blockedRec.Code, blockedRec.Body.String())
+	}
+
+	payload := decodeMonitoredSystemLimitBlockedPayload(t, blockedRec.Body.Bytes())
+	if payload.Feature != maxMonitoredSystemsLicenseGateKey {
+		t.Fatalf("feature=%q, want %q", payload.Feature, maxMonitoredSystemsLicenseGateKey)
+	}
+	if !payload.MonitoredSystemPreview.WouldExceedLimit {
+		t.Fatalf("expected monitored_system_preview.would_exceed_limit=true, got %+v", payload.MonitoredSystemPreview)
 	}
 }
 

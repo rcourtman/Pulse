@@ -86,6 +86,12 @@ querying, and the operator-facing storage health presentation layer.
    provider-specific policy, infer a different over-cap rule, or bypass the
    canonical monitored-system preview/resolver contract when the private hook
    is absent.
+   That same adjacent monitored-system boundary also depends on restart-safe
+   standalone host continuity. Storage- and recovery-adjacent setup or support
+   flows may observe a returning host after server restart, but they must not
+   reinterpret that gap as a new counted system or invent a storage-local
+   grace rule when the shared API and monitoring boundary already carry recent
+   host continuity.
    Any adjacent list surfaces that reuse `internal/api/resources.go` must also
    preserve the canonical unified-resource `name -> type -> id` order so
    duplicate-name storage and recovery resources do not reshuffle between cold
