@@ -1105,6 +1105,12 @@ default billing and pricing surfaces should use concise monitored-system copy,
 while the full counted-unit definition appears only behind explicit disclosure
 such as `View counting rules` instead of sitting as always-visible explanatory
 chrome.
+The same boundary also owns the warning-banner shorthand: customer-facing
+monitored-system warnings should describe the current counted total in plain
+language such as `16 monitored systems currently counted`, and any Community
+overflow/setup-slot message must explain the included monitored systems plus the
+temporary setup slot in customer terms rather than compressing the contract
+into slash-style quota strings that imply Pulse is counting every child device.
 Those same billing-facing surfaces must also describe the commercial contract in
 customer terms: monitored systems, plan limits, subscription status, and
 license status. They must not revive legacy `installed-agent` wording or vague

@@ -346,11 +346,13 @@ async function openMonitoredSystemUpgradeArrival(page: Page) {
     waitUntil: "domcontentloaded",
   });
   await expect(
-    page.getByRole("status").filter({ hasText: "Monitored systems: 16/5" }),
+    page
+      .getByRole("status")
+      .filter({ hasText: "16 monitored systems currently counted" }),
   ).toBeVisible();
   await page
     .getByRole("status")
-    .filter({ hasText: "Monitored systems: 16/5" })
+    .filter({ hasText: "16 monitored systems currently counted" })
     .getByRole("link", { name: "Upgrade to add more" })
     .click();
   await page.waitForURL(

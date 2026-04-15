@@ -372,13 +372,13 @@ describe('MonitoredSystemLedgerPanel', () => {
     expect(screen.getAllByText('server-b (PBS Server via PBS)').length).toBeGreaterThan(0);
     expect(
       screen.getByText(
-        'Review the monitored systems currently counted against your Pulse Pro plan limit.',
+        'Review the top-level monitored systems currently counted against your plan limit.',
       ),
     ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'View counting rules' })).toBeInTheDocument();
     expect(
       screen.queryByText(
-        /a monitored system is a top-level machine or cluster pulse actively monitors/i,
+        /a monitored system is a top-level monitored root such as a docker host, kubernetes cluster, proxmox node/i,
       ),
     ).not.toBeInTheDocument();
 
@@ -386,7 +386,7 @@ describe('MonitoredSystemLedgerPanel', () => {
 
     expect(
       screen.getByText(
-        /a monitored system is a top-level machine or cluster pulse actively monitors/i,
+        /a monitored system is a top-level monitored root such as a docker host, kubernetes cluster, proxmox node/i,
       ),
     ).toBeInTheDocument();
     expect(screen.getByText('server-b')).toBeInTheDocument();
@@ -580,7 +580,9 @@ describe('MonitoredSystemLedgerPanel', () => {
       'true',
     );
     expect(
-      screen.getByText(/a monitored system is a top-level machine or cluster/i),
+      screen.getByText(
+        /a monitored system is a top-level monitored root such as a docker host, kubernetes cluster, proxmox node/i,
+      ),
     ).toBeInTheDocument();
   });
 });

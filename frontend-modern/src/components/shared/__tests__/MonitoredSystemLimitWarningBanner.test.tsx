@@ -207,7 +207,7 @@ describe('MonitoredSystemLimitWarningBanner', () => {
       </Router>
     ));
 
-    expect(screen.getByText('Monitored systems: 5/6')).toBeInTheDocument();
+    expect(screen.getByText('5 monitored systems currently counted')).toBeInTheDocument();
     expect(screen.getByText('Learn more')).toHaveAttribute(
       'href',
       '/settings/system/billing/usage?details=counting-rules',
@@ -264,7 +264,7 @@ describe('MonitoredSystemLimitWarningBanner', () => {
       </Router>
     ));
 
-    expect(screen.getByText('Monitored systems: 5/6')).toBeInTheDocument();
+    expect(screen.getByText('5 monitored systems currently counted')).toBeInTheDocument();
     expect(
       screen.getByText(
         /You also have 3 resources connected via API or legacy collectors \(2 Proxmox nodes, 1 Docker host\) that count once toward your monitored-system cap when the same top-level system is discovered canonically\./i,
@@ -272,7 +272,12 @@ describe('MonitoredSystemLimitWarningBanner', () => {
     ).toBeInTheDocument();
     expect(screen.getByText('Install v6 collectors')).toHaveAttribute('href', '/settings');
     expect(
-      screen.getByText('Includes 1 temporary onboarding slot \(14d remaining\)', { exact: false }),
+      screen.getByText(
+        'Community includes 5 monitored systems. 1 temporary setup slot is active (14d remaining)',
+        {
+          exact: false,
+        },
+      ),
     ).toBeInTheDocument();
     expect(screen.getByText('Learn more')).toHaveAttribute(
       'href',
@@ -300,7 +305,7 @@ describe('MonitoredSystemLimitWarningBanner', () => {
       </Router>
     ));
 
-    expect(screen.queryByText('Monitored systems: 5/6')).not.toBeInTheDocument();
+    expect(screen.queryByText('5 monitored systems currently counted')).not.toBeInTheDocument();
     expect(mockTrackUpgradeMetricEvent).not.toHaveBeenCalled();
   });
 });

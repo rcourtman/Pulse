@@ -193,7 +193,9 @@ async function openPageWithUrgentMonitoredSystemBanner(page: Page) {
     waitUntil: 'domcontentloaded',
   });
   await expect(
-    page.getByRole('status').filter({ hasText: 'Monitored systems: 16/5' }),
+    page
+      .getByRole('status')
+      .filter({ hasText: '16 monitored systems currently counted' }),
   ).toBeVisible();
 }
 
@@ -211,7 +213,7 @@ test.describe('Monitored-system billing focus', () => {
 
     const banner = page
       .getByRole('status')
-      .filter({ hasText: 'Monitored systems: 16/5' });
+      .filter({ hasText: '16 monitored systems currently counted' });
 
     await banner.getByRole('link', { name: 'Learn more' }).click();
     await page.waitForURL(
@@ -278,7 +280,9 @@ test.describe('Monitored-system billing focus', () => {
     });
 
     await expect(
-      page.getByRole('status').filter({ hasText: 'Monitored systems:' }),
+      page
+        .getByRole('status')
+        .filter({ hasText: 'monitored systems currently counted' }),
     ).toHaveCount(0);
     await expect(
       page.getByRole('link', { name: 'Upgrade to add more' }),

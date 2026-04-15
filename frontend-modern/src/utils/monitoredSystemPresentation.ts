@@ -9,15 +9,16 @@ const titleCaseWords = (value: string): string =>
     .join(' ');
 
 const MONITORED_SYSTEM_LEDGER_PRESENTATION = {
-  briefSummary: 'Billing is based on monitored systems. Child resources are included.',
+  briefSummary:
+    'Pulse counts top-level monitored systems. Child resources underneath them are included.',
   sectionTitle: 'Monitored Systems',
   panelTitle: 'Monitored System Ledger',
   disclosureButtonLabel: 'View counting rules',
   disclosureHideLabel: 'Hide counting rules',
   disclosureDefinition:
-    'A monitored system is a top-level machine or cluster Pulse actively monitors. Each system counts once no matter how Pulse collects it. Child resources like VMs, containers, pods, disks, backups, and services are included.',
+    'A monitored system is a top-level monitored root such as a Docker host, Kubernetes cluster, Proxmox node, standalone host, or TrueNAS system. Each root counts once no matter how Pulse collects it. Child resources like VMs, containers, pods, disks, backups, and services underneath that root are included.',
   ledgerDescription:
-    'Review the monitored systems currently counted against your Pulse Pro plan limit.',
+    'Review the top-level monitored systems currently counted against your plan limit.',
   tableNameLabel: 'Name',
   tableStatusLabel: 'Status',
   tableLatestIncludedSignalLabel: 'Latest Included Signal',
@@ -82,7 +83,7 @@ const MONITORED_SYSTEM_LEDGER_PRESENTATION = {
     learnMoreLabel: 'Learn more',
     installCollectorsLabel: 'Install v6 collectors',
     upgradeLabel: 'Upgrade to add more',
-    overflowSummaryPrefix: 'Includes 1 temporary onboarding slot',
+    overflowSummaryPrefix: 'Community includes 5 monitored systems. 1 temporary setup slot is active',
     legacyConnectionSuffix:
       'that count once toward your monitored-system cap when the same top-level system is discovered canonically.',
   },
@@ -349,7 +350,7 @@ export function formatMonitoredSystemLimitSummary(limit: {
   current: number;
   limit: number;
 }): string {
-  return `Monitored systems: ${limit.current}/${limit.limit}`;
+  return `${limit.current} monitored systems currently counted`;
 }
 
 export function formatMonitoredSystemLegacyConnectionBreakdown(
