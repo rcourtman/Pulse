@@ -596,8 +596,6 @@ export const computeInteractiveSparklineHoverState = ({
   sortTooltipByValue,
   highlightNearestSeriesOnHover,
   lockedSeriesIndex,
-  tooltipPadding,
-  tooltipEstimatedWidth,
 }: {
   chartData: InteractiveSparklineChartData;
   chartRect: DOMRect;
@@ -610,8 +608,6 @@ export const computeInteractiveSparklineHoverState = ({
   sortTooltipByValue?: boolean;
   highlightNearestSeriesOnHover?: boolean;
   lockedSeriesIndex: number | null;
-  tooltipPadding: number;
-  tooltipEstimatedWidth: number;
 }): InteractiveSparklineHoverState | null => {
   if (chartData.validSeries.length === 0 || chartData.rangeMs <= 0 || chartRect.width <= 0) {
     return null;
@@ -706,23 +702,8 @@ export const computeInteractiveSparklineHoverState = ({
   }
 
   const totalValues = focusedTooltip ? tooltipValues.length : values.length;
-  let tooltipX = chartX;
-  let tooltipY = (mouseY / chartRect.height) * vbH - 6;
-
-  const shownRows = tooltipValues.length;
-  const tooltipWidth =
-    (focusedTooltip ? tooltipEstimatedWidth * 0.78 : tooltipEstimatedWidth) *
-    (vbW / Math.max(chartRect.width, 1));
-  const tooltipHeight =
-    (22 + shownRows * 16 + (totalValues > shownRows ? 14 : 0)) *
-    (vbH / Math.max(chartRect.height, 1));
-  const minTooltipX = tooltipPadding + tooltipWidth / 2;
-  const maxTooltipX = Math.max(minTooltipX, vbW - tooltipPadding - tooltipWidth / 2);
-  tooltipX = clampInteractiveSparklineValue(tooltipX, minTooltipX, maxTooltipX);
-
-  const minTooltipY = tooltipHeight + tooltipPadding;
-  const maxTooltipY = Math.max(minTooltipY, vbH - tooltipPadding);
-  tooltipY = clampInteractiveSparklineValue(tooltipY, minTooltipY, maxTooltipY);
+  const tooltipX = chartRect.left + mouseX;
+  const tooltipY = chartRect.top + mouseY - 6;
 
   return {
     x: chartX,

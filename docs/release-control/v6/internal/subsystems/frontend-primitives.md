@@ -944,6 +944,13 @@ and `frontend-modern/src/components/shared/interactiveSparklineModel.ts` owns
 sparkline downsampling, gap segmentation, axis-tick math, and hover-selection
 policy. Future sparkline work should extend those owners instead of pushing
 canvas scheduling or chart-shape math back into the shared component shell.
+That same sparkline boundary now also owns floating tooltip shell routing:
+local hover tooltips must derive viewport anchor coordinates from the shared
+runtime/model path and render through
+`frontend-modern/src/components/shared/TooltipPortal.tsx`, not as HTML
+`foreignObject` shells inside the `preserveAspectRatio="none"` chart SVG where
+cross-browser scaling can stretch the tooltip surface or drop its semantic
+shell styling.
 That same shared sparkline boundary now also owns active-series isolation
 metadata. The shell may expose `data-active-series-display` and
 `data-rendered-series-count` for proof and inspection, but only the shared

@@ -244,9 +244,8 @@ describe('shared primitive guardrails', () => {
     expect(tooltipPortalSource).toContain('text-base-content');
     expect(tooltipPortalSource).toContain('border-border');
     expect(tooltipPortalSource).not.toContain("'background-color': 'rgb(15, 23, 42)'");
-    expect(interactiveSparklineSource).toContain('bg-surface');
+    expect(interactiveSparklineSource).toContain('TooltipPortal');
     expect(interactiveSparklineSource).toContain('text-base-content');
-    expect(interactiveSparklineSource).toContain('border-border');
     expect(interactiveSparklineSource).not.toContain("'background-color': 'rgb(15, 23, 42)'");
   });
 
@@ -780,6 +779,7 @@ describe('shared primitive guardrails', () => {
     expect(interactiveSparklineSource).toContain('data-active-series-display');
     expect(interactiveSparklineSource).toContain('data-active-hover-cursor-x');
     expect(interactiveSparklineSource).toContain('data-sparkline-tooltip="true"');
+    expect(interactiveSparklineSource).toContain('TooltipPortal');
     expect(interactiveSparklineSource).toContain('data-sparkline-y-axis="true"');
     expect(interactiveSparklineSource).toContain('data-sparkline-x-axis="true"');
     expect(interactiveSparklineSource).toContain('axisPositionPercent(tick.y, sparkline.vbH)');
@@ -816,10 +816,10 @@ describe('shared primitive guardrails', () => {
     expect(interactiveSparklineModelSource).toContain('buildInteractiveSparklineChartData');
     expect(interactiveSparklineModelSource).toContain('computeInteractiveSparklineHoverState');
     expect(interactiveSparklineModelSource).toContain('getInteractiveSparklineCursorXForTimestamp');
+    expect(interactiveSparklineModelSource).toContain('const tooltipX = chartRect.left + mouseX;');
     expect(interactiveSparklineModelSource).toContain(
-      'let tooltipY = (mouseY / chartRect.height) * vbH - 6;',
+      'const tooltipY = chartRect.top + mouseY - 6;',
     );
-    expect(interactiveSparklineModelSource).not.toContain('let tooltipY = chartRect.top - 6;');
     expect(interactiveSparklineModelSource).toContain('downsampleLTTB');
     expect(interactiveSparklineModelSource).toContain('findNearestMetricPoint');
   });

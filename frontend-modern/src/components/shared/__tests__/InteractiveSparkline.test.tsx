@@ -9,8 +9,15 @@ import { buildInteractiveSparklineSynchronizedReadout } from '@/components/share
 describe('InteractiveSparkline hover behavior', () => {
   afterEach(() => {
     vi.useRealTimers();
+    vi.restoreAllMocks();
     cleanup();
   });
+
+  const mockImmediateRaf = () =>
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback: FrameRequestCallback) => {
+      callback(0);
+      return 1;
+    });
 
   it('keeps the sparkline on shell, runtime, and model owners', () => {
     expect(interactiveSparklineSource).toContain('useInteractiveSparklineState');
@@ -60,6 +67,7 @@ describe('InteractiveSparkline hover behavior', () => {
   it('shows a vertical dashed hover line and a tooltip', async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2024-01-01T12:00:00Z'));
+    mockImmediateRaf();
     const now = Date.now();
 
     const { container } = render(() => (
@@ -311,6 +319,7 @@ describe('InteractiveSparkline hover behavior', () => {
   it('limits tooltip rows and shows the "+N more series" affordance', async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2024-01-01T12:00:00Z'));
+    mockImmediateRaf();
     const now = Date.now();
 
     const makeSeries = (i: number, value: number) => ({
@@ -358,6 +367,7 @@ describe('InteractiveSparkline hover behavior', () => {
   it('clamps tooltip position so it stays in the viewport', async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2024-01-01T12:00:00Z'));
+    mockImmediateRaf();
     const now = Date.now();
 
     const { container } = render(() => (
@@ -414,6 +424,7 @@ describe('InteractiveSparkline hover behavior', () => {
   it('anchors the tooltip to the pointer instead of the chart top edge', async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2024-01-01T12:00:00Z'));
+    mockImmediateRaf();
     const now = Date.now();
 
     const { container } = render(() => (

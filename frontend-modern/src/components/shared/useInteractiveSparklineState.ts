@@ -32,8 +32,6 @@ export function useInteractiveSparklineState(
   const vbH = 100;
   const vbW = 200;
   const xAxisBandPx = 16;
-  const tooltipPadding = 8;
-  const tooltipEstimatedWidth = 190;
   const maxRows = () => props.maxTooltipRows ?? 6;
   const yMode = () => props.yMode ?? 'percent';
   const activeSeriesDisplay = () => props.activeSeriesDisplay ?? 'emphasize';
@@ -78,8 +76,6 @@ export function useInteractiveSparklineState(
       sortTooltipByValue: props.sortTooltipByValue,
       highlightNearestSeriesOnHover: props.highlightNearestSeriesOnHover,
       lockedSeriesIndex: props.highlightNearestSeriesOnHover ? lockedSeriesIndex() : null,
-      tooltipPadding,
-      tooltipEstimatedWidth,
     });
     setHoveredState(computed);
     if (!props.onHoverSyncChange || !props.hoverSourceKey) {

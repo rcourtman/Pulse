@@ -1,9 +1,9 @@
 import { Component, For, Show } from 'solid-js';
 import {
   formatInteractiveSparklineHoverTime,
-  type InteractiveSparklineHoverState,
   type InteractiveSparklineProps,
 } from './interactiveSparklineModel';
+import { TooltipPortal } from './TooltipPortal';
 import { useInteractiveSparklineState } from './useInteractiveSparklineState';
 
 export type {
@@ -26,11 +26,6 @@ const sparklineYAxisFontSize = (size?: InteractiveSparklineProps['size']) =>
   size === 'lg' ? '12' : '10';
 const sparklineXAxisFontSize = (size?: InteractiveSparklineProps['size']) =>
   size === 'lg' ? '12' : '10';
-
-const tooltipWidth = (hover: InteractiveSparklineHoverState) => (hover.focusedTooltip ? 112 : 138);
-
-const tooltipHeight = (hover: InteractiveSparklineHoverState) =>
-  22 + hover.values.length * 16 + (hover.totalValues > hover.values.length ? 14 : 0);
 
 export const InteractiveSparkline: Component<InteractiveSparklineProps> = (props) => {
   let chartSurfaceRef: Element | undefined;
@@ -187,52 +182,6 @@ export const InteractiveSparkline: Component<InteractiveSparklineProps> = (props
             preserveAspectRatio="none"
             aria-hidden="true"
           >
-            <Show when={sparkline.hoveredState()}>
-              {(hover) => (
-                <foreignObject
-                  x={hover().tooltipX - tooltipWidth(hover()) / 2}
-                  y={hover().tooltipY - tooltipHeight(hover())}
-                  width={tooltipWidth(hover())}
-                  height={tooltipHeight(hover())}
-                  overflow="visible"
-                >
-                  <div
-                    data-sparkline-tooltip="true"
-                    class="h-full w-full rounded-md border border-border bg-surface px-2 py-1.5 text-[10px] text-base-content shadow-lg"
-                  >
-                    <div class="mb-1 text-center font-medium text-base-content">
-                      {formatInteractiveSparklineHoverTime(hover().timestamp)}
-                    </div>
-                    <For each={hover().values}>
-                      {(entry) => (
-                        <div
-                          class={`flex items-center gap-1.5 leading-tight ${
-                            props.highlightNearestSeriesOnHover &&
-                            hover().focusedTooltip &&
-                            hover().highlightedSeriesIndex === entry.seriesIndex
-                              ? 'rounded px-1 bg-slate-400/15'
-                              : ''
-                          }`}
-                        >
-                          <svg class="h-2 w-2 shrink-0" viewBox="0 0 8 8" aria-hidden="true">
-                            <circle cx="4" cy="4" r="4" fill={entry.color} />
-                          </svg>
-                          <span class="text-muted">{entry.name}</span>
-                          <span class="ml-auto font-medium text-base-content">
-                            {sparkline.formatValue(entry.value)}
-                          </span>
-                        </div>
-                      )}
-                    </For>
-                    <Show when={hover().totalValues > hover().values.length}>
-                      <div class="mt-0.5 text-[10px] text-muted">
-                        +{hover().totalValues - hover().values.length} more series
-                      </div>
-                    </Show>
-                  </div>
-                </foreignObject>
-              )}
-            </Show>
           </svg>
         </div>
         <div
@@ -286,6 +235,48 @@ export const InteractiveSparkline: Component<InteractiveSparklineProps> = (props
           </For>
         </svg>
       </div>
+      <Show when={sparkline.hoveredState()}>
+        {(hover) => (
+          <TooltipPortal when={true} x={hover().tooltipX} y={hover().tooltipY}>
+            <div
+              data-sparkline-tooltip="true"
+              class={`max-w-[220px] text-[10px] ${
+                hover().focusedTooltip ? 'min-w-[112px]' : 'min-w-[138px]'
+              }`}
+            >
+              <div class="mb-1 text-center font-medium text-base-content">
+                {formatInteractiveSparklineHoverTime(hover().timestamp)}
+              </div>
+              <For each={hover().values}>
+                {(entry) => (
+                  <div
+                    class={`flex items-center gap-1.5 leading-tight ${
+                      props.highlightNearestSeriesOnHover &&
+                      hover().focusedTooltip &&
+                      hover().highlightedSeriesIndex === entry.seriesIndex
+                        ? 'rounded px-1 bg-slate-400/15'
+                        : ''
+                    }`}
+                  >
+                    <svg class="h-2 w-2 shrink-0" viewBox="0 0 8 8" aria-hidden="true">
+                      <circle cx="4" cy="4" r="4" fill={entry.color} />
+                    </svg>
+                    <span class="text-muted">{entry.name}</span>
+                    <span class="ml-auto font-medium text-base-content">
+                      {sparkline.formatValue(entry.value)}
+                    </span>
+                  </div>
+                )}
+              </For>
+              <Show when={hover().totalValues > hover().values.length}>
+                <div class="mt-0.5 text-[10px] text-muted">
+                  +{hover().totalValues - hover().values.length} more series
+                </div>
+              </Show>
+            </div>
+          </TooltipPortal>
+        )}
+      </Show>
     </div>
   );
 };
