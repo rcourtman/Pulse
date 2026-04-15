@@ -162,6 +162,23 @@ func TestStorageRiskSemantics_UnraidCodes(t *testing.T) {
 	}
 }
 
+func TestStorageRiskSemantics_UnraidParitySummaryPreferredOverGenericDiskCounts(t *testing.T) {
+	risk := &StorageRisk{
+		Reasons: []StorageRiskReason{
+			{Code: "unraid_disabled_disks", Severity: storagehealth.RiskCritical, Summary: "Unraid array reports 1 disabled disk(s)"},
+			{Code: "unraid_parity_unavailable", Severity: storagehealth.RiskCritical, Summary: "Unraid parity protection is unavailable"},
+		},
+	}
+
+	_, protReduced, _, protSummary, _ := StorageRiskSemantics(risk)
+	if !protReduced {
+		t.Fatal("expected protectionReduced=true")
+	}
+	if protSummary != "Unraid parity protection is unavailable" {
+		t.Fatalf("expected parity summary to take precedence, got %q", protSummary)
+	}
+}
+
 func TestStorageRiskSemantics_ZFSPoolState(t *testing.T) {
 	risk := &StorageRisk{
 		Reasons: []StorageRiskReason{

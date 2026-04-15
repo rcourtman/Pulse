@@ -175,6 +175,23 @@ func TestResourceRegistry_IngestResourcesSeedsMatcherForOverlayRecords(t *testin
 	}
 }
 
+func TestStorageRiskSemanticsPrefersUnraidParitySummaryOverGenericDiskCounts(t *testing.T) {
+	risk := &StorageRisk{
+		Reasons: []StorageRiskReason{
+			{Code: "unraid_disabled_disks", Severity: storagehealth.RiskCritical, Summary: "Unraid array reports 1 disabled disk(s)"},
+			{Code: "unraid_parity_unavailable", Severity: storagehealth.RiskCritical, Summary: "Unraid parity protection is unavailable"},
+		},
+	}
+
+	_, protectionReduced, _, protectionSummary, _ := StorageRiskSemantics(risk)
+	if !protectionReduced {
+		t.Fatal("expected protectionReduced=true")
+	}
+	if protectionSummary != "Unraid parity protection is unavailable" {
+		t.Fatalf("protectionSummary = %q, want %q", protectionSummary, "Unraid parity protection is unavailable")
+	}
+}
+
 func TestResourceRegistry_MergesPhysicalDiskTemperatureAggregate(t *testing.T) {
 	rr := NewRegistry(nil)
 	now := time.Date(2026, 3, 29, 12, 0, 0, 0, time.UTC)

@@ -110,6 +110,7 @@ func StorageRiskSemantics(risk *StorageRisk) ([]string, bool, bool, string, stri
 	rebuildInProgress := false
 	protectionSummary := ""
 	rebuildSummary := ""
+	protectionPriority := -1
 	for _, reason := range risk.Reasons {
 		code := strings.TrimSpace(reason.Code)
 		if code != "" {
@@ -118,8 +119,9 @@ func StorageRiskSemantics(risk *StorageRisk) ([]string, bool, bool, string, stri
 		switch code {
 		case "raid_degraded", "raid_unavailable", "unraid_invalid_disks", "unraid_disabled_disks", "unraid_missing_disks", "unraid_parity_unavailable", "unraid_no_parity", "zfs_pool_state":
 			protectionReduced = true
-			if protectionSummary == "" {
+			if priority := protectionSummaryPriority(code); protectionSummary == "" || priority > protectionPriority {
 				protectionSummary = strings.TrimSpace(reason.Summary)
+				protectionPriority = priority
 			}
 		case "raid_rebuilding", "unraid_sync_active":
 			rebuildInProgress = true
@@ -130,6 +132,23 @@ func StorageRiskSemantics(risk *StorageRisk) ([]string, bool, bool, string, stri
 	}
 
 	return codes, protectionReduced, rebuildInProgress, protectionSummary, rebuildSummary
+}
+
+func protectionSummaryPriority(code string) int {
+	switch strings.TrimSpace(code) {
+	case "unraid_parity_unavailable":
+		return 100
+	case "unraid_no_parity":
+		return 90
+	case "raid_unavailable":
+		return 80
+	case "raid_degraded", "zfs_pool_state":
+		return 70
+	case "unraid_invalid_disks", "unraid_disabled_disks", "unraid_missing_disks":
+		return 60
+	default:
+		return 0
+	}
 }
 
 func summarizeDependentConsumerImpact(count int, names []string) string {
