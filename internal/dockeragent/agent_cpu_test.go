@@ -1,6 +1,7 @@
 package dockeragent
 
 import (
+	"math"
 	"testing"
 	"time"
 
@@ -323,4 +324,64 @@ func TestCalculateContainerCPUPercent(t *testing.T) {
 			t.Fatalf("expected 0 on first call (manual tracking), got %f", got)
 		}
 	})
+
+	t.Run("podman uses wall clock delta", func(t *testing.T) {
+		now := time.Now()
+		agent := &Agent{
+			logger:  logger,
+			runtime: RuntimePodman,
+			prevContainerCPU: map[string]cpuSample{
+				"container-123456": {
+					totalUsage:  1_000_000_000,
+					systemUsage: 1_000,
+					onlineCPUs:  16,
+					read:        now.Add(-time.Second),
+				},
+			},
+		}
+
+		stats := containertypes.StatsResponse{
+			Read: now,
+			CPUStats: containertypes.CPUStats{
+				CPUUsage:    containertypes.CPUUsage{TotalUsage: 1_250_000_000},
+				SystemUsage: 2_000,
+				OnlineCPUs:  16,
+			},
+		}
+
+		got := agent.calculateContainerCPUPercent("container-123456", stats)
+		if math.Abs(got-25.0) > 0.01 {
+			t.Fatalf("expected podman cpu percent near 25.0, got %f", got)
+		}
+	})
+}
+
+func TestDecodeContainerStatsPayloadExtractsPodmanCPU(t *testing.T) {
+	payload := []byte(`{
+		"read":"2026-04-09T12:00:00Z",
+		"cpu_stats":{
+			"cpu_usage":{"total_usage":123456789},
+			"system_cpu_usage":987654321,
+			"online_cpus":16,
+			"cpu":0.32,
+			"throttling_data":{}
+		},
+		"precpu_stats":{},
+		"memory_stats":{"usage":1000,"limit":2000,"stats":{"cache":100}},
+		"blkio_stats":{"io_service_bytes_recursive":[]}
+	}`)
+
+	stats, podmanCPU, err := decodeContainerStatsPayload(payload)
+	if err != nil {
+		t.Fatalf("unexpected decode error: %v", err)
+	}
+	if stats.CPUStats.CPUUsage.TotalUsage != 123456789 {
+		t.Fatalf("expected total usage 123456789, got %d", stats.CPUStats.CPUUsage.TotalUsage)
+	}
+	if podmanCPU == nil {
+		t.Fatal("expected podman cpu percent to be extracted")
+	}
+	if math.Abs(*podmanCPU-0.32) > 0.000001 {
+		t.Fatalf("expected podman cpu percent 0.32, got %f", *podmanCPU)
+	}
 }

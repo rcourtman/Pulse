@@ -3197,7 +3197,9 @@
       ],
       "owned_files": [
         "docker-entrypoint.sh",
-        "internal/dockeragent/swarm.go"
+        "internal/dockeragent/collect.go",
+        "internal/dockeragent/swarm.go",
+        "pkg/proxmox/ceph.go"
       ],
       "verification": {
         "allow_same_subsystem_tests": true,
@@ -3320,6 +3322,21 @@
             ]
           },
           {
+            "id": "docker-collect-runtime",
+            "label": "docker and podman container collection proof",
+            "match_prefixes": [],
+            "match_files": [
+              "internal/dockeragent/collect.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/dockeragent/agent_collect_test.go",
+              "internal/dockeragent/agent_cpu_test.go",
+              "internal/dockeragent/agent_internal_test.go"
+            ]
+          },
+          {
             "id": "docker-swarm-runtime",
             "label": "docker swarm runtime proof",
             "match_prefixes": [],
@@ -3331,6 +3348,20 @@
             "exact_files": [
               "internal/dockeragent/swarm_coverage_test.go",
               "internal/dockeragent/swarm_test.go"
+            ]
+          },
+          {
+            "id": "proxmox-ceph-runtime",
+            "label": "proxmox ceph compatibility proof",
+            "match_prefixes": [],
+            "match_files": [
+              "pkg/proxmox/ceph.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "pkg/proxmox/ceph_test.go",
+              "pkg/proxmox/cluster_client_api_test.go"
             ]
           },
           {

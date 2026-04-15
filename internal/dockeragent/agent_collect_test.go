@@ -126,6 +126,64 @@ func TestCollectContainer(t *testing.T) {
 		}
 	})
 
+	t.Run("podman uses reported cpu percent from compat stats payload", func(t *testing.T) {
+		inspect := baseInspect()
+		inspect.State = &containertypes.State{
+			Running:   true,
+			StartedAt: time.Now().Add(-time.Minute).Format(time.RFC3339Nano),
+		}
+
+		agent := &Agent{
+			runtime: RuntimePodman,
+			logger:  logger,
+			prevContainerCPU: map[string]cpuSample{
+				"container-123456": {
+					totalUsage:  100_000_000,
+					systemUsage: 1_000_000_000,
+					onlineCPUs:  16,
+					read:        time.Now().Add(-time.Second),
+				},
+			},
+			docker: &fakeDockerClient{
+				containerInspectWithRawFn: func(context.Context, string, bool) (containertypes.InspectResponse, []byte, error) {
+					return inspect, nil, nil
+				},
+				containerStatsOneShotFn: func(context.Context, string) (containertypes.StatsResponseReader, error) {
+					payload := `{
+						"read":"2026-04-09T12:00:00Z",
+						"cpu_stats":{
+							"cpu_usage":{"total_usage":130000000},
+							"system_cpu_usage":1010000000,
+							"online_cpus":16,
+							"cpu":0.32,
+							"throttling_data":{}
+						},
+						"precpu_stats":{},
+						"memory_stats":{"usage":1000000,"limit":4000000,"stats":{"cache":200000}},
+						"blkio_stats":{"io_service_bytes_recursive":[]}
+					}`
+					return containertypes.StatsResponseReader{Body: io.NopCloser(strings.NewReader(payload))}, nil
+				},
+			},
+		}
+
+		container, err := agent.collectContainer(context.Background(), containertypes.Summary{
+			ID:      "container-123456",
+			Names:   []string{"/app"},
+			Image:   "nginx:latest",
+			ImageID: "sha256:local",
+			Created: time.Now().Add(-time.Hour).Unix(),
+			State:   "running",
+			Status:  "Up",
+		})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if container.CPUPercent != 0.32 {
+			t.Fatalf("expected podman cpu percent 0.32 from payload, got %f", container.CPUPercent)
+		}
+	})
+
 	t.Run("stopped container clears sample", func(t *testing.T) {
 		agent := &Agent{
 			logger: logger,

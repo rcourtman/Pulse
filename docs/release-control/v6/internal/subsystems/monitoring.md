@@ -41,14 +41,16 @@ truth for live infrastructure data.
 17. `internal/monitoring/vmware_poller.go`
 18. `internal/monitoring/monitored_system_usage.go`
 19. `internal/dockeragent/swarm.go`
-20. `internal/monitoring/guest_memory_sources.go`
-21. `internal/monitoring/guest_memory_stability.go`
-22. `internal/monitoring/monitor_polling_vm.go`
-23. `internal/monitoring/monitor_pve_guest_builders.go`
-24. `internal/monitoring/monitor_pve_guest_poll.go`
-25. `internal/monitoring/guest_disk_stability.go`
-26. `internal/monitoring/mock_metrics_history.go`
-27. `internal/monitoring/mock_chart_history.go`
+20. `internal/dockeragent/collect.go`
+21. `pkg/proxmox/ceph.go`
+22. `internal/monitoring/guest_memory_sources.go`
+23. `internal/monitoring/guest_memory_stability.go`
+24. `internal/monitoring/monitor_polling_vm.go`
+25. `internal/monitoring/monitor_pve_guest_builders.go`
+26. `internal/monitoring/monitor_pve_guest_poll.go`
+27. `internal/monitoring/guest_disk_stability.go`
+28. `internal/monitoring/mock_metrics_history.go`
+29. `internal/monitoring/mock_chart_history.go`
 
 ## Shared Boundaries
 
@@ -62,7 +64,9 @@ truth for live infrastructure data.
 4. Add unified supplemental ingest through `internal/monitoring/poll_providers.go`
 5. Add or change container startup ownership/bootstrap behavior for hosted or managed Pulse runtime mounts through `docker-entrypoint.sh`
 6. Add or change Docker Swarm manager task/service runtime collection through `internal/dockeragent/swarm.go`
-7. Add or change mock chart synthesis, seeded history continuity, or mock-owned
+7. Add or change Docker or Podman container stats compatibility and runtime metric semantics through `internal/dockeragent/collect.go`
+8. Add or change Proxmox Ceph compatibility payload decoding through `pkg/proxmox/ceph.go`
+9. Add or change mock chart synthesis, seeded history continuity, or mock-owned
    chart fallbacks through `internal/monitoring/mock_metrics_history.go` and
    `internal/monitoring/mock_chart_history.go`
 
@@ -76,7 +80,7 @@ truth for live infrastructure data.
 
 1. Update this contract when monitoring truth ownership changes
 2. Tighten guardrails when `GetState()`-centric paths are removed
-3. Keep discovery-provider, guest-memory trust, metrics-history, Docker Swarm collection, and container bootstrap proof routes explicit in `registry.json`
+3. Keep discovery-provider, guest-memory trust, metrics-history, Docker/Podman container collection, Proxmox Ceph compatibility, Docker Swarm collection, and container bootstrap proof routes explicit in `registry.json`
 4. Update related read-state or monitor tests when new collector paths land
 5. Keep platform ingestion semantics aligned with
    `docs/release-control/v6/internal/PLATFORM_SUPPORT_MODEL.md`: hybrid is a
@@ -115,6 +119,13 @@ must emit canonical reason codes such as
 `supplemental_inventory_rebuild_pending` when usage cannot yet be resolved, so
 commercial surfaces can show verification or recovery state without inventing
 their own readiness heuristics or falling back to a fake `0 / limit`.
+That same monitoring owner also governs collector payload compatibility at the
+shared boundary. Podman container stats must honor Podman's compat payload when
+it exposes a direct CPU percentage and otherwise fall back to Podman's
+wall-clock delta semantics rather than Docker's multi-core normalization, and
+Proxmox Ceph status decoding must accept manager standby entries as either bare
+names or structured objects so collector payload variations do not break the
+canonical monitoring path.
 VMware vSphere now also has a locked phase-1 ingestion boundary under this
 lane. The admitted direction is vCenter-only in phase 1, and monitoring must
 stay API-first through the

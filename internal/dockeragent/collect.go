@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
+	"io"
 	"math"
 	"math/big"
 	"strconv"
@@ -267,12 +268,21 @@ func (a *Agent) collectContainer(ctx context.Context, summary containertypes.Sum
 			}
 		}()
 
-		var stats containertypes.StatsResponse
-		if err := json.NewDecoder(statsResp.Body).Decode(&stats); err != nil {
+		payload, err := io.ReadAll(statsResp.Body)
+		if err != nil {
+			return agentsdocker.Container{}, fmt.Errorf("read stats: %w", err)
+		}
+
+		stats, podmanCPUPercent, err := decodeContainerStatsPayload(payload)
+		if err != nil {
 			return agentsdocker.Container{}, fmt.Errorf("decode stats: %w", err)
 		}
 
-		cpuPercent = a.calculateContainerCPUPercent(summary.ID, stats)
+		if a.runtime == RuntimePodman && podmanCPUPercent != nil {
+			cpuPercent = safeFloat(*podmanCPUPercent)
+		} else {
+			cpuPercent = a.calculateContainerCPUPercent(summary.ID, stats)
+		}
 		memUsage, memLimit, memPercent = calculateMemoryUsage(stats)
 		blockIO = summarizeBlockIO(stats)
 		networkRX, networkTX = summarizeNetworkIO(stats)
@@ -601,6 +611,26 @@ func extractPodmanMetadata(labels map[string]string) *agentsdocker.PodmanContain
 	return meta
 }
 
+type podmanCompatStatsProbe struct {
+	CPUStats struct {
+		CPU *float64 `json:"cpu"`
+	} `json:"cpu_stats"`
+}
+
+func decodeContainerStatsPayload(payload []byte) (containertypes.StatsResponse, *float64, error) {
+	var stats containertypes.StatsResponse
+	if err := json.Unmarshal(payload, &stats); err != nil {
+		return containertypes.StatsResponse{}, nil, err
+	}
+
+	var probe podmanCompatStatsProbe
+	if err := json.Unmarshal(payload, &probe); err != nil {
+		return stats, nil, nil
+	}
+
+	return stats, probe.CPUStats.CPU, nil
+}
+
 func (a *Agent) calculateContainerCPUPercent(containerID string, stats containertypes.StatsResponse) float64 {
 	a.cpuMu.Lock()
 	defer a.cpuMu.Unlock()
@@ -642,6 +672,34 @@ func (a *Agent) calculateContainerCPUPercent(containerID string, stats container
 	}
 
 	if totalDelta <= 0 {
+		return 0
+	}
+
+	if a.runtime == RuntimePodman {
+		if !prev.read.IsZero() && !current.read.IsZero() {
+			elapsed := current.read.Sub(prev.read).Seconds()
+			if elapsed > 0 {
+				denominator := elapsed * 1e9
+				if denominator > 0 {
+					cpuPercent := (totalDelta / denominator) * 100.0
+					result := safeFloat(cpuPercent)
+					a.logger.Debug().
+						Str("container_id", containerID[:12]).
+						Float64("cpu_percent", result).
+						Float64("total_delta", totalDelta).
+						Float64("elapsed_seconds", elapsed).
+						Msg("CPU calculated from Podman wall-clock delta")
+					return result
+				}
+			}
+		}
+
+		a.logger.Debug().
+			Str("container_id", containerID[:12]).
+			Float64("total_delta", totalDelta).
+			Bool("prev_read_zero", prev.read.IsZero()).
+			Bool("current_read_zero", current.read.IsZero()).
+			Msg("Podman CPU calculation failed: no valid wall-clock delta available")
 		return 0
 	}
 

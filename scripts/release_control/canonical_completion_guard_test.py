@@ -213,7 +213,9 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                 "metrics-history-runtime",
                 "storage-risk-runtime",
                 "memory-source-runtime",
+                "docker-collect-runtime",
                 "docker-swarm-runtime",
+                "proxmox-ceph-runtime",
                 "container-entrypoint-runtime",
                 "monitoring-runtime",
             ],
@@ -230,6 +232,67 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                     "exact_files": [
                         "internal/monitoring/canonical_guardrails_test.go",
                         "internal/unifiedresources/code_standards_test.go",
+                    ],
+                }
+            ],
+        )
+
+    def test_docker_collect_runtime_change_requires_monitoring_contract(self):
+        required = infer_impacted_subsystems(["internal/dockeragent/collect.go"])
+        self.assertEqual(set(required), {"monitoring"})
+
+        monitoring = required["monitoring"]
+        self.assertEqual(
+            monitoring["contract"],
+            "docs/release-control/v6/internal/subsystems/monitoring.md",
+        )
+        self.assertEqual(
+            monitoring["touched_runtime_files"],
+            ["internal/dockeragent/collect.go"],
+        )
+        self.assertEqual(
+            monitoring["verification_requirements"],
+            [
+                {
+                    "id": "docker-collect-runtime",
+                    "label": "docker and podman container collection proof",
+                    "touched_runtime_files": ["internal/dockeragent/collect.go"],
+                    "allow_same_subsystem_tests": False,
+                    "test_prefixes": [],
+                    "exact_files": [
+                        "internal/dockeragent/agent_collect_test.go",
+                        "internal/dockeragent/agent_cpu_test.go",
+                        "internal/dockeragent/agent_internal_test.go",
+                    ],
+                }
+            ],
+        )
+
+    def test_proxmox_ceph_runtime_change_requires_monitoring_contract(self):
+        required = infer_impacted_subsystems(["pkg/proxmox/ceph.go"])
+        self.assertEqual(set(required), {"monitoring"})
+
+        monitoring = required["monitoring"]
+        self.assertEqual(
+            monitoring["contract"],
+            "docs/release-control/v6/internal/subsystems/monitoring.md",
+        )
+        self.assertEqual(
+            monitoring["touched_runtime_files"],
+            ["pkg/proxmox/ceph.go"],
+        )
+        self.assertEqual(
+            monitoring["verification_requirements"],
+            [
+                {
+                    "id": "proxmox-ceph-runtime",
+                    "label": "proxmox ceph compatibility proof",
+                    "touched_runtime_files": ["pkg/proxmox/ceph.go"],
+                    "allow_same_subsystem_tests": False,
+                    "test_prefixes": [],
+                    "exact_files": [
+                        "pkg/proxmox/ceph_test.go",
+                        "pkg/proxmox/cluster_client_api_test.go",
                     ],
                 }
             ],
