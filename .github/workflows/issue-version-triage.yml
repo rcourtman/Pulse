@@ -52,35 +52,36 @@ jobs:
               return match ? match[1] : null;
             }
 
-            function extractPulseVersion(body) {
-              if (!body) return null;
+            function extractPulseVersion(title, body) {
+              if (body) {
+                const lines = body.split(/\r?\n/);
+                for (let i = 0; i < lines.length; i += 1) {
+                  const line = lines[i] || "";
+                  if (/pulse\s*(\||-)?\s*version/i.test(line)) {
+                    const inlineVersion = normalizeVersion(line);
+                    if (inlineVersion) return inlineVersion;
 
-              const lines = body.split(/\r?\n/);
-              for (let i = 0; i < lines.length; i += 1) {
-                const line = lines[i] || "";
-                if (/pulse\s*(\||-)?\s*version/i.test(line)) {
-                  const inlineVersion = normalizeVersion(line);
-                  if (inlineVersion) return inlineVersion;
-
-                  // Check nearby lines because issue forms often put values on the next line.
-                  for (let j = i + 1; j < Math.min(i + 6, lines.length); j += 1) {
-                    const nearby = (lines[j] || "").trim();
-                    if (!nearby) continue;
-                    const nearbyVersion = normalizeVersion(nearby);
-                    if (nearbyVersion) return nearbyVersion;
+                    // Check nearby lines because issue forms often put values on the next line.
+                    for (let j = i + 1; j < Math.min(i + 6, lines.length); j += 1) {
+                      const nearby = (lines[j] || "").trim();
+                      if (!nearby) continue;
+                      const nearbyVersion = normalizeVersion(nearby);
+                      if (nearbyVersion) return nearbyVersion;
+                    }
                   }
                 }
+
+                // Fallback: issue-form block headed by "Pulse version".
+                const headingMatch = body.match(/#+\s*Pulse version[\s\S]{0,80}?(\bv?\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?\b)/i);
+                if (headingMatch) return normalizeVersion(headingMatch[1]);
+
+                // Final fallback for older templates with "Pulse | Version: [6.0.0]".
+                const legacyMatch = body.match(/pulse\s*\|?\s*version[^\n]*?(\bv?\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?\b)/i);
+                if (legacyMatch) return normalizeVersion(legacyMatch[1]);
               }
 
-              // Fallback: issue-form block headed by "Pulse version".
-              const headingMatch = body.match(/#+\s*Pulse version[\s\S]{0,80}?(\bv?\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?\b)/i);
-              if (headingMatch) return normalizeVersion(headingMatch[1]);
-
-              // Final fallback for older templates with "Pulse | Version: [6.0.0]".
-              const legacyMatch = body.match(/pulse\s*\|?\s*version[^\n]*?(\bv?\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?\b)/i);
-              if (legacyMatch) return normalizeVersion(legacyMatch[1]);
-
-              return null;
+              // Maintainer-created split issues often carry the exact version in the title.
+              return normalizeVersion(title);
             }
 
             function classifyV6FeedbackType(body) {
@@ -154,7 +155,7 @@ jobs:
               return comments.some((comment) => (comment.body || "").includes(RETEST_COMMENT_MARKER));
             }
 
-            const reportedVersion = extractPulseVersion(issue.body);
+            const reportedVersion = extractPulseVersion(issue.title, issue.body);
             core.info(`Reported Pulse version: ${reportedVersion || "not found"}`);
 
             let latestVersion = null;
