@@ -1115,7 +1115,8 @@ describe('Settings architecture guardrails', () => {
       '@/components/Settings/AIProviderConfigurationSection',
     );
     expect(aiModelSelectionSectionSource).toContain('@/components/Settings/aiSettingsModel');
-    expect(aiModelSelectionSectionSource).toContain('Advanced Model Selection');
+    expect(aiModelSelectionSectionSource).toContain('@/utils/aiSettingsPresentation');
+    expect(aiModelSelectionSectionSource).toContain('AI_SETTINGS_MODEL_OVERRIDES_TITLE');
     expect(aiRuntimeControlsSectionSource).toContain('@/components/shared/UpgradeLink');
     expect(aiRuntimeControlsSectionSource).toContain('@/utils/upgradePresentation');
     expect(aiRuntimeControlsSectionSource).toContain('UPGRADE_ACTION_LABEL');
@@ -1123,17 +1124,20 @@ describe('Settings architecture guardrails', () => {
     expect(aiRuntimeControlsSectionSource).toContain('Workload Discovery');
     expect(aiRuntimeControlsSectionSource).toContain('getAISettingsWorkloadDiscoveryHelpContent');
     expect(aiRuntimeControlsSectionSource).toContain('getAISettingsWorkloadDiscoverySummary');
-    expect(aiRuntimeControlsSectionSource).toContain('Pulse Permission Level');
+    expect(aiRuntimeControlsSectionSource).toContain('@/utils/aiSettingsPresentation');
+    expect(aiRuntimeControlsSectionSource).toContain('AI_SETTINGS_ASSISTANT_PERMISSIONS_TITLE');
     expect(aiRuntimeControlsSectionSource).toContain('destination={state.upgradeAutofixDestination()}');
     expect(aiRuntimeControlsSectionSource).not.toContain('href={state.upgradeAutofixDestination().href}');
     expect(aiRuntimeControlsSectionSource).not.toContain('window.open(state.upgradeAutofixDestination().href');
     expect(aiRuntimeControlsSectionSource).not.toContain('>Upgrade to Pro<');
     expect(aiRuntimeControlsSectionSource).not.toContain('>Start free trial<');
-    expect(aiChatMaintenanceSectionSource).toContain('Chat Session Maintenance');
+    expect(aiChatMaintenanceSectionSource).toContain('@/utils/aiSettingsPresentation');
+    expect(aiChatMaintenanceSectionSource).toContain('AI_SETTINGS_ASSISTANT_SESSIONS_TITLE');
     expect(aiSettingsStatusAndActionsSource).toContain('Save changes');
     expect(aiSettingsStatusAndActionsSource).toContain('Test Connection');
     expect(aiProviderConfigurationSectionSource).toContain('@/components/Settings/aiSettingsModel');
     expect(aiSettingsDialogsSource).toContain('@/components/Settings/aiSettingsModel');
+    expect(aiSettingsDialogsSource).toContain('getAISettingsSetupDialogPresentation');
     expect(aiSettingsModelSource).toContain('export const AI_PROVIDER_CONFIGS');
     expect(aiSettingsModelSource).toContain('export const AI_SETUP_PROVIDER_OPTIONS');
     expect(aiSettingsStateSource).toContain('export const useAISettingsState =');

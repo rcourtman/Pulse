@@ -2,6 +2,7 @@ import { For, Show, type Accessor, type Component, type Setter } from 'solid-js'
 import { Dialog } from '@/components/shared/Dialog';
 import { SelectionCardGroup } from '@/components/shared/SelectionCardGroup';
 import { getAISessionDiffStatusPresentation } from '@/utils/aiSessionDiffPresentation';
+import { getAISettingsSetupDialogPresentation } from '@/utils/aiSettingsPresentation';
 import { RELAY_ONBOARDING_TRIAL_STARTING_LABEL } from '@/utils/relayPresentation';
 import type { FileChange } from '@/api/aiChat';
 import type { AIProvider } from '@/types/ai';
@@ -36,26 +37,7 @@ export interface AISettingsDialogsProps {
 
 export const AISettingsDialogs: Component<AISettingsDialogsProps> = (props) => {
   const setupProviderConfig = () => getAIProviderConfig(props.setupProvider());
-  const setupTitle = () => {
-    switch (props.setupMode()) {
-      case 'activation-or-provider':
-        return 'Activate quickstart or connect a provider';
-      case 'provider-required':
-        return 'Connect a provider to continue';
-      default:
-        return 'Set Up Pulse Assistant';
-    }
-  };
-  const setupDescription = () => {
-    switch (props.setupMode()) {
-      case 'activation-or-provider':
-        return 'Start a trial to unlock Patrol quickstart, or connect your own provider below.';
-      case 'provider-required':
-        return 'Patrol quickstart is not currently available. Connect a provider to continue.';
-      default:
-        return 'Choose a provider to get started';
-    }
-  };
+  const setupPresentation = () => getAISettingsSetupDialogPresentation(props.setupMode());
 
   return (
     <>
@@ -120,12 +102,12 @@ export const AISettingsDialogs: Component<AISettingsDialogsProps> = (props) => {
           onClose={props.handleCloseSetupModal}
           panelClass="max-w-md"
           closeOnBackdrop={false}
-          ariaLabel="Set up Pulse Assistant"
+          ariaLabel={setupPresentation().ariaLabel}
         >
           <div class="w-full overflow-hidden">
             <div class="bg-blue-600 px-6 py-4">
-              <h3 class="text-lg font-semibold text-white">{setupTitle()}</h3>
-              <p class="text-blue-100 text-sm mt-1">{setupDescription()}</p>
+              <h3 class="text-lg font-semibold text-white">{setupPresentation().title}</h3>
+              <p class="text-blue-100 text-sm mt-1">{setupPresentation().description}</p>
             </div>
 
             <div class="p-6 space-y-4">
@@ -233,7 +215,7 @@ export const AISettingsDialogs: Component<AISettingsDialogsProps> = (props) => {
                 {props.setupSaving() && (
                   <span class="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                 )}
-                Enable Pulse Assistant
+                {setupPresentation().submitLabel}
               </button>
             </div>
           </div>

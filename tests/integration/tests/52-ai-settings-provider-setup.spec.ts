@@ -113,12 +113,12 @@ test.describe("Assistant & Patrol settings provider setup", () => {
     ).toBeVisible();
 
     await page.getByRole("button", { name: /enable assistant and patrol/i }).click();
-    const setupDialog = page.getByRole("dialog", { name: "Set up Pulse Assistant" });
-    await expect(setupDialog.getByText("Set Up Pulse Assistant")).toBeVisible();
+    const setupDialog = page.getByRole("dialog", { name: "Set up Assistant and Patrol" });
+    await expect(setupDialog.getByText("Set Up Assistant & Patrol")).toBeVisible();
 
     await setupDialog.getByRole("button", { name: /OpenRouter/i }).click();
     await setupDialog.getByPlaceholder("sk-or-...").fill("sk-or-runtime-selected");
-    await setupDialog.getByRole("button", { name: "Enable Pulse Assistant" }).click();
+    await setupDialog.getByRole("button", { name: "Enable Assistant & Patrol" }).click();
 
     await expect.poll(() => updateRequests.length).toBe(1);
     expect(updateRequests[0]).toEqual({
@@ -127,7 +127,7 @@ test.describe("Assistant & Patrol settings provider setup", () => {
     });
     expect(updateRequests[0]).not.toHaveProperty("model");
 
-    await expect(page.getByText("Advanced Model Selection")).toBeVisible();
+    await expect(page.getByText("Assistant & Patrol Model Overrides")).toBeVisible();
     const workloadDiscoveryToggle = page.getByRole("button", { name: /workload discovery/i });
     await expect(workloadDiscoveryToggle).toBeVisible();
     await workloadDiscoveryToggle.click();

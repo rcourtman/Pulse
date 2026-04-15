@@ -658,6 +658,8 @@ test.describe("Quickstart cross-surface browser contract", () => {
 
     await expect.poll(() => surface.updateRequests.length).toBe(1);
     expect(surface.updateRequests[0]).toMatchObject({ enabled: true });
-    await expect(page.getByText("Choose a provider to get started")).toHaveCount(0);
+    await expect(
+      page.getByText("Connect a provider to power Pulse Assistant and Patrol."),
+    ).toHaveCount(0);
   });
 });

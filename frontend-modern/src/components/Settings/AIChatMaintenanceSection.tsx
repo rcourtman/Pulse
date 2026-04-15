@@ -1,6 +1,7 @@
 import { Component, For, Show } from 'solid-js';
 import type { AISettingsState } from '@/components/Settings/useAISettingsState';
 import {
+  AI_SETTINGS_ASSISTANT_SESSIONS_TITLE,
   getAIChatSessionsEmptyState,
   getAIChatSessionsLoadingState,
 } from '@/utils/aiSettingsPresentation';
@@ -34,7 +35,9 @@ export const AIChatMaintenanceSection: Component<AIChatMaintenanceSectionProps> 
               d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"
             />
           </svg>
-          <span class="text-sm font-medium text-base-content">Chat Session Maintenance</span>
+          <span class="text-sm font-medium text-base-content">
+            {AI_SETTINGS_ASSISTANT_SESSIONS_TITLE}
+          </span>
         </div>
         <svg
           class={`w-4 h-4 transition-transform ${state.showChatMaintenance() ? 'rotate-180' : ''}`}
@@ -48,8 +51,8 @@ export const AIChatMaintenanceSection: Component<AIChatMaintenanceSectionProps> 
       <Show when={state.showChatMaintenance()}>
         <div class="px-3 py-3 bg-surface border-t border-border space-y-3">
           <p class="text-xs text-muted">
-            Use this panel to summarize, inspect, or revert a specific chat session. It does not
-            change your default Pulse Assistant settings.
+            Summarize, inspect, or revert a specific Pulse Assistant session. It does not change
+            Patrol settings or your shared provider and model defaults.
           </p>
           <div class="flex items-center justify-between">
             <label class="text-xs font-medium text-muted">Session</label>
@@ -101,7 +104,7 @@ export const AIChatMaintenanceSection: Component<AIChatMaintenanceSectionProps> 
               disabled={!state.selectedSessionId() || state.sessionActionLoading() !== null}
               class="w-full sm:w-auto min-h-10 sm:min-h-9 px-3 py-2 text-sm font-medium rounded border border-border bg-surface text-base-content hover:bg-surface-hover disabled:opacity-50"
             >
-              {state.sessionActionLoading() === 'summarize' ? 'Summarizing...' : 'Summarize context'}
+              {state.sessionActionLoading() === 'summarize' ? 'Summarizing...' : 'Summarize session'}
             </button>
             <button
               type="button"
@@ -109,7 +112,7 @@ export const AIChatMaintenanceSection: Component<AIChatMaintenanceSectionProps> 
               disabled={!state.selectedSessionId() || state.sessionActionLoading() !== null}
               class="w-full sm:w-auto min-h-10 sm:min-h-9 px-3 py-2 text-sm font-medium rounded border border-border bg-surface text-base-content hover:bg-surface-hover disabled:opacity-50"
             >
-              {state.sessionActionLoading() === 'diff' ? 'Loading...' : 'View file changes'}
+              {state.sessionActionLoading() === 'diff' ? 'Loading...' : 'View session changes'}
             </button>
             <button
               type="button"

@@ -24,11 +24,23 @@ const AI_OAUTH_ERROR_MESSAGES: Record<string, string> = {
 export const AI_SETTINGS_PANEL_TITLE = 'Assistant & Patrol';
 export const AI_SETTINGS_PANEL_DESCRIPTION =
   'Configure providers and models for Pulse Assistant and Patrol.';
+export const AI_SETTINGS_MODEL_OVERRIDES_TITLE = 'Assistant & Patrol Model Overrides';
+export const AI_SETTINGS_ASSISTANT_SESSIONS_TITLE = 'Pulse Assistant Sessions';
+export const AI_SETTINGS_ASSISTANT_PERMISSIONS_TITLE = 'Pulse Assistant Permissions';
 export const AI_SETTINGS_LOAD_MODELS_ERROR = 'Unable to load models.';
 export const AI_SETTINGS_LOAD_CHAT_SESSIONS_ERROR = 'Unable to load chat sessions.';
 export const AI_SETTINGS_LOAD_FAILURE_MESSAGE =
   'Unable to load Assistant & Patrol settings. Your configuration could not be retrieved.';
 export const AI_SETTINGS_LOAD_RETRY_LABEL = 'Retry';
+
+export type AISettingsSetupMode = 'provider' | 'activation-or-provider' | 'provider-required';
+
+export interface AISettingsSetupDialogPresentation {
+  ariaLabel: string;
+  description: string;
+  submitLabel: string;
+  title: string;
+}
 
 export function getAIProviderTestResultTextClass(success: boolean): string {
   return success ? 'text-green-600' : 'text-red-600';
@@ -46,6 +58,36 @@ export function getAISettingsWorkloadDiscoverySummary() {
   return {
     text: 'Workload discovery gives Pulse Assistant and Patrol concrete service context, so chat responses and verification findings can reference real services and commands instead of generic advice.',
   } as const;
+}
+
+export function getAISettingsSetupDialogPresentation(
+  mode: AISettingsSetupMode,
+): AISettingsSetupDialogPresentation {
+  switch (mode) {
+    case 'activation-or-provider':
+      return {
+        ariaLabel: 'Activate quickstart or connect a provider',
+        title: 'Activate quickstart or connect a provider',
+        description:
+          'Start a trial to unlock Patrol quickstart, or connect your own provider for Pulse Assistant and Patrol.',
+        submitLabel: 'Enable Assistant & Patrol',
+      };
+    case 'provider-required':
+      return {
+        ariaLabel: 'Connect a provider to continue',
+        title: 'Connect a provider to continue',
+        description:
+          'Patrol quickstart is not currently available. Connect a provider for Pulse Assistant and Patrol.',
+        submitLabel: 'Enable Assistant & Patrol',
+      };
+    default:
+      return {
+        ariaLabel: 'Set up Assistant and Patrol',
+        title: 'Set Up Assistant & Patrol',
+        description: 'Connect a provider to power Pulse Assistant and Patrol.',
+        submitLabel: 'Enable Assistant & Patrol',
+      };
+  }
 }
 
 export function getAISettingsReadinessPresentation(

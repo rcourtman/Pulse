@@ -477,8 +477,10 @@ describe('AISettings quickstart enablement flow', () => {
       expect(updateSettingsMock).toHaveBeenCalledWith({ enabled: true });
     });
 
-    expect(screen.queryByText('Choose a provider to get started')).not.toBeInTheDocument();
-    expect(notificationSuccessMock).toHaveBeenCalledWith('Pulse Assistant enabled');
+    expect(
+      screen.queryByText('Connect a provider to power Pulse Assistant and Patrol.'),
+    ).not.toBeInTheDocument();
+    expect(notificationSuccessMock).toHaveBeenCalledWith('Assistant & Patrol enabled');
   });
 
   it('shows activation-aware setup guidance instead of generic provider setup when quickstart is blocked', async () => {

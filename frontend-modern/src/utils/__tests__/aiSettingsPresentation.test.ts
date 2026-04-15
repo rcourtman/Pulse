@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+  AI_SETTINGS_ASSISTANT_PERMISSIONS_TITLE,
+  AI_SETTINGS_ASSISTANT_SESSIONS_TITLE,
+  AI_SETTINGS_MODEL_OVERRIDES_TITLE,
   AI_SETTINGS_PANEL_DESCRIPTION,
   AI_SETTINGS_PANEL_TITLE,
   getAICredentialsClearErrorMessage,
@@ -17,6 +20,7 @@ import {
   getAISettingsReadinessPresentation,
   getAISettingsRetryLabel,
   getAISettingsSaveErrorMessage,
+  getAISettingsSetupDialogPresentation,
   getAISettingsToggleErrorMessage,
   getAISettingsWorkloadDiscoveryHelpContent,
   getAISettingsWorkloadDiscoverySummary,
@@ -28,6 +32,9 @@ describe('aiSettingsPresentation', () => {
     expect(AI_SETTINGS_PANEL_DESCRIPTION).toBe(
       'Configure providers and models for Pulse Assistant and Patrol.',
     );
+    expect(AI_SETTINGS_MODEL_OVERRIDES_TITLE).toBe('Assistant & Patrol Model Overrides');
+    expect(AI_SETTINGS_ASSISTANT_SESSIONS_TITLE).toBe('Pulse Assistant Sessions');
+    expect(AI_SETTINGS_ASSISTANT_PERMISSIONS_TITLE).toBe('Pulse Assistant Permissions');
     expect(getAISettingsWorkloadDiscoveryHelpContent()).toEqual({
       title: 'What is workload discovery?',
       description:
@@ -35,6 +42,19 @@ describe('aiSettingsPresentation', () => {
     });
     expect(getAISettingsWorkloadDiscoverySummary()).toEqual({
       text: 'Workload discovery gives Pulse Assistant and Patrol concrete service context, so chat responses and verification findings can reference real services and commands instead of generic advice.',
+    });
+    expect(getAISettingsSetupDialogPresentation('provider')).toEqual({
+      ariaLabel: 'Set up Assistant and Patrol',
+      title: 'Set Up Assistant & Patrol',
+      description: 'Connect a provider to power Pulse Assistant and Patrol.',
+      submitLabel: 'Enable Assistant & Patrol',
+    });
+    expect(getAISettingsSetupDialogPresentation('activation-or-provider')).toEqual({
+      ariaLabel: 'Activate quickstart or connect a provider',
+      title: 'Activate quickstart or connect a provider',
+      description:
+        'Start a trial to unlock Patrol quickstart, or connect your own provider for Pulse Assistant and Patrol.',
+      submitLabel: 'Enable Assistant & Patrol',
     });
   });
 

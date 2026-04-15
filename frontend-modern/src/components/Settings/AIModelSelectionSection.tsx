@@ -7,6 +7,7 @@ import {
 } from '@/components/Settings/aiSettingsModel';
 import type { AISettingsState } from '@/components/Settings/useAISettingsState';
 import { formField, labelClass, controlClass } from '@/components/shared/Form';
+import { AI_SETTINGS_MODEL_OVERRIDES_TITLE } from '@/utils/aiSettingsPresentation';
 import { getAIProviderDisplayName, getProviderFromModelId } from '@/utils/aiProviderPresentation';
 
 interface AIModelSelectionSectionProps {
@@ -22,7 +23,7 @@ export const AIModelSelectionSection: Component<AIModelSelectionSectionProps> = 
       <div class={formField}>
         <div class="flex items-center justify-between mb-1">
           <label class={labelClass()}>
-            Default Model
+            Shared Default Model
             {state.modelsLoading() && <span class="ml-2 text-xs text-slate-500">(loading...)</span>}
           </label>
           <button
@@ -157,6 +158,9 @@ export const AIModelSelectionSection: Component<AIModelSelectionSectionProps> = 
             to be configured. Add an API key below or select a different model.
           </p>
         </Show>
+        <p class="text-[11px] text-muted mt-1">
+          Used by both Pulse Assistant and Patrol unless you set a section-specific override below.
+        </p>
       </div>
 
       <div class="border border-border rounded-md overflow-hidden">
@@ -174,7 +178,7 @@ export const AIModelSelectionSection: Component<AIModelSelectionSectionProps> = 
                 d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"
               />
             </svg>
-            <span class="text-sm font-medium text-base-content">Advanced Model Selection</span>
+            <span class="text-sm font-medium text-base-content">{AI_SETTINGS_MODEL_OVERRIDES_TITLE}</span>
             <Show when={state.form.chatModel || state.form.patrolModel}>
               <span class="px-1.5 py-0.5 text-[10px] font-semibold bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">
                 Customized
@@ -193,12 +197,13 @@ export const AIModelSelectionSection: Component<AIModelSelectionSectionProps> = 
         <Show when={state.showAdvancedModels()}>
           <div class="px-3 py-3 bg-surface border-t border-border space-y-3">
             <p class="text-xs text-muted">
-              Override the default model for specific tasks. Leave empty to use the default.
+              Override the shared default for Pulse Assistant or Patrol. Leave empty to use the
+              shared default model.
             </p>
             <div>
-              <label class="block text-xs font-medium text-muted mb-0.5">Chat Model (Interactive)</label>
+              <label class="block text-xs font-medium text-muted mb-0.5">Pulse Assistant Model</label>
               <p class="text-[11px] text-muted mb-1">
-                Used for chat and fix execution — a more capable model is recommended.
+                Used for live chat and approved fix execution — a more capable model is recommended.
               </p>
               <Show
                 when={state.availableModels().length > 0}
@@ -207,7 +212,7 @@ export const AIModelSelectionSection: Component<AIModelSelectionSectionProps> = 
                     type="text"
                     value={state.form.chatModel}
                     onInput={(e) => state.setForm('chatModel', e.currentTarget.value)}
-                    placeholder="Use default model"
+                    placeholder="Use shared default model"
                     class={controlClass()}
                     disabled={state.saving()}
                   />
@@ -220,7 +225,7 @@ export const AIModelSelectionSection: Component<AIModelSelectionSectionProps> = 
                   disabled={state.saving()}
                 >
                   <option value="">
-                    Use default ({state.form.model?.split(':').pop() || 'not set'})
+                    Use shared default ({state.form.model?.split(':').pop() || 'not set'})
                   </option>
                   <For each={groupedModels()}>
                     {([provider, models]) => (
@@ -237,9 +242,12 @@ export const AIModelSelectionSection: Component<AIModelSelectionSectionProps> = 
               </Show>
             </div>
             <div>
-              <label class="block text-xs font-medium text-muted mb-0.5">Patrol Model (Background)</label>
+              <label class="block text-xs font-medium text-muted mb-0.5">
+                Patrol Verification Model
+              </label>
               <p class="text-[11px] text-muted mb-1">
-                Runs frequently for detection — a smaller, cheaper model keeps costs low.
+                Used for recurring verification and finding generation — a smaller, cheaper model
+                keeps costs low.
               </p>
               <Show
                 when={state.availableModels().length > 0}
@@ -248,7 +256,7 @@ export const AIModelSelectionSection: Component<AIModelSelectionSectionProps> = 
                     type="text"
                     value={state.form.patrolModel}
                     onInput={(e) => state.setForm('patrolModel', e.currentTarget.value)}
-                    placeholder="Use default model"
+                    placeholder="Use shared default model"
                     class={controlClass()}
                     disabled={state.saving()}
                   />
@@ -261,7 +269,7 @@ export const AIModelSelectionSection: Component<AIModelSelectionSectionProps> = 
                   disabled={state.saving()}
                 >
                   <option value="">
-                    Use default ({state.form.model?.split(':').pop() || 'not set'})
+                    Use shared default ({state.form.model?.split(':').pop() || 'not set'})
                   </option>
                   <For each={groupedModels()}>
                     {([provider, models]) => (

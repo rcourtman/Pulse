@@ -311,7 +311,13 @@ work extends shared components instead of creating new local variants.
     controls inside `frontend-modern/src/components/Settings/AIRuntimeControlsSection.tsx`
     must likewise describe discovery as workload discovery that supplies
     concrete service context to Pulse Assistant and Patrol, not as a generic
-    AI context feature.
+    AI context feature. Assistant-only controls inside the shared shell, such
+    as execution permissions and session maintenance, must stay explicitly
+    labeled as Pulse Assistant controls, while Patrol schedule and autonomy
+    continue to live on Patrol-owned surfaces rather than drifting back into
+    the shared settings shell. Shared/default model choices may remain on the
+    combined shell only when Assistant and Patrol overrides are presented as
+    explicit per-surface overrides instead of a generic advanced AI bucket.
 
 ## Forbidden Paths
 

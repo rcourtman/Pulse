@@ -489,7 +489,7 @@ export const useAISettingsState = () => {
       syncModelCatalogForSettings(updated);
       void runProviderPreflight(updated);
       handleCloseSetupModal();
-      notificationStore.success('Pulse Assistant enabled! You can customize settings below.');
+      notificationStore.success('Assistant & Patrol enabled! You can customize settings below.');
     } catch (error) {
       logger.error('[AISettings] Setup failed:', error);
       notificationStore.error(error instanceof Error ? error.message : 'Setup failed');
@@ -811,7 +811,7 @@ export const useAISettingsState = () => {
       setSettings(updated);
       syncModelCatalogForSettings(updated);
       void runProviderPreflight(updated);
-      notificationStore.success(newValue ? 'Pulse Assistant enabled' : 'Pulse Assistant disabled');
+      notificationStore.success(newValue ? 'Assistant & Patrol enabled' : 'Assistant & Patrol disabled');
     } catch (error) {
       setForm('enabled', !newValue);
       logger.error('[AISettings] Failed to toggle AI:', error);

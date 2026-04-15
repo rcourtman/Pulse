@@ -11,6 +11,7 @@ import {
   getAIControlLevelPanelClass,
 } from '@/utils/aiControlLevelPresentation';
 import {
+  AI_SETTINGS_ASSISTANT_PERMISSIONS_TITLE,
   getAISettingsWorkloadDiscoveryHelpContent,
   getAISettingsWorkloadDiscoverySummary,
 } from '@/utils/aiSettingsPresentation';
@@ -198,7 +199,9 @@ export const AIRuntimeControlsSection: Component<AIRuntimeControlsSectionProps> 
               d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
             />
           </svg>
-          <span class="text-sm font-medium text-base-content">Pulse Permission Level</span>
+          <span class="text-sm font-medium text-base-content">
+            {AI_SETTINGS_ASSISTANT_PERMISSIONS_TITLE}
+          </span>
           <Show when={state.form.controlLevel !== 'read_only'}>
             <span class={`px-1.5 py-0.5 text-[10px] font-medium rounded ${getAIControlLevelBadgeClass(state.form.controlLevel)}`}>
               {state.form.controlLevel}
@@ -207,7 +210,7 @@ export const AIRuntimeControlsSection: Component<AIRuntimeControlsSectionProps> 
         </div>
 
         <div class="flex items-center gap-3">
-          <label class="text-xs font-medium text-muted w-28 flex-shrink-0">Permission</label>
+          <label class="text-xs font-medium text-muted w-28 flex-shrink-0">Control mode</label>
           <select
             value={state.form.controlLevel}
             onChange={(e) => state.setForm('controlLevel', e.currentTarget.value as AIControlLevel)}
@@ -263,7 +266,9 @@ export const AIRuntimeControlsSection: Component<AIRuntimeControlsSectionProps> 
 
         <Show when={state.form.controlLevel !== 'read_only'}>
           <div class="flex items-start gap-3 pt-2 border-t border-blue-200 dark:border-blue-700">
-            <label class="text-xs font-medium text-muted w-28 flex-shrink-0 pt-1">Protected</label>
+            <label class="text-xs font-medium text-muted w-28 flex-shrink-0 pt-1">
+              Protected guests
+            </label>
             <div class="flex-1">
               <input
                 type="text"
@@ -274,7 +279,8 @@ export const AIRuntimeControlsSection: Component<AIRuntimeControlsSectionProps> 
                 disabled={state.saving()}
               />
               <p class="text-[10px] text-muted mt-1">
-                Comma-separated VMIDs or names that Pulse Assistant cannot control
+                Comma-separated VMIDs or names that Pulse Assistant cannot control, even when
+                command execution is enabled.
               </p>
             </div>
           </div>
