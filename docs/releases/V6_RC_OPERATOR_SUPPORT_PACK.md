@@ -68,6 +68,10 @@ Use this cohort breakdown:
   capacity while the subscription remains continuously active.
 - Existing lifetime customers:
   remain permanently valid and uncapped.
+- Legacy paid v5 licenses migrated into v6 outside the recurring grandfathered
+  path:
+  can retain a monitored-system continuity floor for the migrated install where
+  needed, but that continuity path is not the same as an uncapped entitlement.
 - Former recurring subscribers who already canceled or later lapse:
   any later return uses current public v6 pricing and caps rather than
   resuming the old grandfathered terms.

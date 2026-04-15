@@ -17,7 +17,7 @@ User-facing plans map to internal tiers as follows:
 - **Cloud**: `msp` or `enterprise`
 
 Notes:
-- `lifetime` keeps the same runtime feature set as Pro, but lifetime and grandfathered recurring legacy entitlements remain uncapped for monitored systems and guest access.
+- `lifetime` keeps the same runtime feature set as Pro, but lifetime and grandfathered recurring legacy entitlements remain uncapped for monitored systems and guest access. Other migrated legacy paid installs can preserve monitored-system continuity without becoming uncapped.
 - Items marked **Cloud*** require the `enterprise` tier rather than the base `msp` tier.
 - If you are self-hosting, you can use capability keys and `GET /api/license/features` to discover exactly what is active in your instance.
 
@@ -59,6 +59,7 @@ Runtime rules:
 
 Migration policy:
 - Legacy recurring Pulse Pro subscriptions already active before the public v6 pricing cutover keep their grandfathered recurring price and uncapped monitored-system and guest capacity until cancellation.
+- Supported legacy paid v5 migrations outside that recurring grandfathered path can retain a monitored-system continuity floor for the migrated install where needed, but that continuity path is not the same as an uncapped entitlement.
 - Existing free users above the new Community cap are not hard-broken on rollout day.
 - During grace, existing monitoring keeps working.
 - During grace, only new counted-system additions are blocked until the user removes systems or upgrades.
@@ -69,6 +70,7 @@ Migration policy:
 |---|---|---|
 | Legacy recurring subscriber from a v5 or earlier Pulse Pro monthly/annual plan, already active before the public v6 pricing cutover | The install can migrate into the v6 activation model without forcing a repurchase. | The existing recurring price stays in place and monitored-system plus guest capacity remain uncapped while the subscription remains continuously active. |
 | Existing lifetime license holder | The license remains valid through the v6 licensing transition. | Lifetime remains permanently valid and monitored-system plus guest capacity stay uncapped. |
+| Legacy paid v5 license migrated into v6 outside the recurring grandfathered path | The install can still exchange into the v6 activation model. If its existing monitored estate exceeds the exchanged plan limit, the migrated install can retain a monitored-system continuity floor for that install. | The continuity floor preserves the existing migrated estate where needed, but it is not an uncapped entitlement. |
 | Former recurring subscriber who already canceled or later lapses/cancels | A later return is treated as a new paid purchase, not as a grandfathered renewal. | The old grandfathered price and uncapped capacity do not resume automatically; current public v6 pricing and caps apply. |
 | New self-hosted v6 purchase | The purchase uses the current Relay / Pro / Pro+ self-hosted plans. | Current public v6 monitored-system and guest caps apply. |
 

@@ -123,14 +123,15 @@ If you are upgrading an existing free instance that already exceeds the new Comm
 
 #### v5 License Migration
 
-Pulse v6 uses the activation/grant model for active licensing, but it can migrate valid Pulse v5 Pro and Lifetime JWT-style licenses.
+Pulse v6 uses the activation/grant model for active licensing, but it can migrate valid Pulse v5 paid JWT-style licenses, including legacy Pro and Lifetime licenses.
 
 - If you upgrade an existing v5 instance and Pulse finds a persisted v5 license with no v6 activation state yet, v6 will try to auto-exchange it on startup.
 - If auto-exchange cannot complete, your old key is left in place and the instance will prompt you to retry activation manually.
 - In the v6 license panel, you can paste either:
   - a Pulse v6 activation key, or
-  - a valid Pulse v5 Pro/Lifetime license key, which Pulse will try to exchange automatically
+  - a valid Pulse v5 paid license key, which Pulse will try to exchange automatically into the v6 activation model
 - If the exchange service cannot complete the migration, retry from the v6 license panel or use the self-serve retrieval flow to fetch the current v6 activation key. Email is only a backup copy of that key.
+- The exchanged v6 entitlement depends on the original cohort. Lifetime, active pre-cutover recurring Pro, and other migrated legacy paid installs do not all land on the same monitored-system policy.
 - Legacy recurring Pulse Pro subscriptions already active before the public v6 pricing cutover keep their grandfathered recurring price and uncapped monitored-system and guest capacity until cancellation. If they cancel and later return, current v6 pricing and limits apply.
 
 #### Paid Upgrade Truth Table
@@ -139,6 +140,7 @@ When an existing paid user asks what changes for them specifically, use this rul
 
 - Legacy recurring Pulse Pro subscriptions from v5 or earlier that were already active before the public v6 pricing cutover keep their current recurring price and uncapped monitored-system plus guest capacity while the subscription remains continuously active.
 - Existing lifetime customers remain permanently valid and uncapped.
+- Legacy paid v5 licenses migrated into v6 outside the recurring grandfathered path can retain a monitored-system continuity floor for the migrated install where needed, but that continuity path is not the same thing as an uncapped entitlement.
 - Former recurring customers who already canceled, or who cancel and later return, do not resume the old grandfathered pricing or uncapped capacity automatically; they re-enter on current public v6 pricing and limits.
 - New self-hosted v6 purchases use the current Relay / Pro / Pro+ plan caps.
 
