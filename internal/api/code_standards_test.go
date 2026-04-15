@@ -202,13 +202,14 @@ func TestPaidDomainBoundaryAudit(t *testing.T) {
 	// Use an exact allowlist to prevent new paid implementations from
 	// hiding behind the enterprise_extension_ prefix.
 	knownBinderFiles := map[string]bool{
-		"enterprise_extension_ai_alert_analysis.go": true,
-		"enterprise_extension_ai_autofix.go":        true,
-		"enterprise_extension_ai_investigation.go":  true,
-		"enterprise_extension_audit_admin.go":       true,
-		"enterprise_extension_rbac_admin.go":        true,
-		"enterprise_extension_reporting_admin.go":   true,
-		"enterprise_extension_sso_admin.go":         true,
+		"enterprise_extension_ai_alert_analysis.go":          true,
+		"enterprise_extension_ai_autofix.go":                 true,
+		"enterprise_extension_ai_investigation.go":           true,
+		"enterprise_extension_audit_admin.go":                true,
+		"enterprise_extension_monitored_system_admission.go": true,
+		"enterprise_extension_rbac_admin.go":                 true,
+		"enterprise_extension_reporting_admin.go":            true,
+		"enterprise_extension_sso_admin.go":                  true,
 	}
 
 	// These reporting files are intentionally public shared surfaces rather than

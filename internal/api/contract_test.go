@@ -40,6 +40,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/vmware"
 	authpkg "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/cloudauth"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/extensions"
 	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/reporting"
@@ -5732,6 +5733,57 @@ func TestContract_MonitoredSystemUsageUnavailableIncludesReason(t *testing.T) {
 	}
 	if got := payload.Details["reason"]; got != monitoring.MonitoredSystemUsageUnavailableMonitorState {
 		t.Fatalf("details.reason=%q, want %q", got, monitoring.MonitoredSystemUsageUnavailableMonitorState)
+	}
+}
+
+func TestContract_ResolveMonitoredSystemAdmissionPolicyHookUsesCanonicalInput(t *testing.T) {
+	SetResolveMonitoredSystemAdmissionPolicy(nil)
+	t.Cleanup(func() { SetResolveMonitoredSystemAdmissionPolicy(nil) })
+
+	if hook := getResolveMonitoredSystemAdmissionPolicy(); hook != nil {
+		t.Fatalf("expected no monitored-system admission hook by default, got %v", hook)
+	}
+
+	SetResolveMonitoredSystemAdmissionPolicy(func(_ context.Context, input extensions.MonitoredSystemAdmissionInput) extensions.MonitoredSystemAdmissionDecision {
+		return extensions.MonitoredSystemAdmissionDecision{
+			Current:                input.Current,
+			Additional:             input.Additional,
+			Limit:                  input.Limit,
+			UsageAvailable:         input.UsageAvailable,
+			UsageUnavailableReason: input.UsageUnavailableReason,
+			Exceeded: input.CandidateCountsTowardCap &&
+				input.UsageAvailable &&
+				input.Additional > 0 &&
+				input.Limit > 0 &&
+				input.Current+input.Additional > input.Limit,
+		}
+	})
+
+	hook := getResolveMonitoredSystemAdmissionPolicy()
+	if hook == nil {
+		t.Fatal("expected monitored-system admission hook to round-trip through the shared API boundary")
+	}
+
+	decision := hook(context.Background(), extensions.MonitoredSystemAdmissionInput{
+		Current:                  5,
+		Additional:               1,
+		Limit:                    5,
+		UsageAvailable:           true,
+		CandidateCountsTowardCap: true,
+	})
+	if !decision.Exceeded {
+		t.Fatalf("expected canonical counted-system input to preserve the exceeded verdict, got %+v", decision)
+	}
+
+	decision = hook(context.Background(), extensions.MonitoredSystemAdmissionInput{
+		Current:                  5,
+		Additional:               1,
+		Limit:                    5,
+		UsageAvailable:           true,
+		CandidateCountsTowardCap: false,
+	})
+	if decision.Exceeded {
+		t.Fatalf("expected non-counted candidate to stay outside the exceeded verdict, got %+v", decision)
 	}
 }
 

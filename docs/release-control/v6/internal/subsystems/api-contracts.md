@@ -1470,6 +1470,17 @@ must expose `reason` as `limit_reached`, `preexisting_usage`, or
 `legacy_migration_capture_pending` so browser surfaces can distinguish a full
 plan boundary from a frozen above-plan carry-forward and from migrated legacy
 continuity that is still being verified.
+That same admission family also owns the private monitored-system policy hook
+boundary. `internal/api/enterprise_extension_monitored_system_admission.go`
+may register one private `ResolveMonitoredSystemAdmissionPolicy` hook through
+`pkg/extensions/monitored_system_admission.go`, but that hook must consume the
+canonical counted-system input already resolved by shared API admission
+helpers. Private builds may not use that extension point to invent
+provider-local counters, replacement semantics, or usage-availability fallbacks
+that diverge from the shared monitored-system resolver. `pkg/server/server.go`
+may wire the hook during startup, but public runtime still owns counted-system
+projection unless and until a later governed enforcement slice actually routes
+live admission through that private decision boundary.
 That same contract now also owns migrated legacy continuity. When a supported
 v5 license auto-exchanges or is activated manually in v6, `/api/license/status`
 and `/api/license/entitlements` must surface `max_monitored_systems` from the

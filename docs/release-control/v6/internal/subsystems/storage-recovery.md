@@ -79,6 +79,13 @@ querying, and the operator-facing storage health presentation layer.
    current/projected grouped systems plus enforced limit verdicts for setup and
    support clarity, but storage and recovery must not reinterpret those routes
    as recovery-local onboarding or restore APIs.
+   That same adjacent API boundary also owns any private monitored-system
+   policy hook wired through `pkg/server/server.go`. Storage- or
+   recovery-adjacent writes may observe the shared verdict returned by
+   `ResolveMonitoredSystemAdmissionPolicy`, but they must not inject
+   provider-specific policy, infer a different over-cap rule, or bypass the
+   canonical monitored-system preview/resolver contract when the private hook
+   is absent.
    Any adjacent list surfaces that reuse `internal/api/resources.go` must also
    preserve the canonical unified-resource `name -> type -> id` order so
    duplicate-name storage and recovery resources do not reshuffle between cold

@@ -1175,6 +1175,13 @@ lifecycle-local counter, drift on source priority, or treat missing monitored-
 system usage as zero; when an active cap is present and usage cannot be
 resolved, the route must fail closed with retryable unavailable guidance
 instead of silently admitting a net-new monitored system.
+That same lifecycle boundary also assumes any private monitored-system
+admission policy hook stays backend-owned. Even when `pkg/server/server.go`
+wires `ResolveMonitoredSystemAdmissionPolicy` into shared `internal/api/`
+admission helpers, setup and install flows must continue to source candidate
+projection, replacement identity, and usage-availability truth from the
+canonical monitored-system preview/resolver path instead of adding a second
+lifecycle-local policy branch or exemption rule.
 When lifecycle-adjacent setup or support surfaces need to explain why a
 candidate would count or dedupe, they must consume the shared monitored-system
 ledger preview contract rather than rebuilding a second preview model from
