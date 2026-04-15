@@ -96,4 +96,57 @@ describe('TooltipPortal', () => {
     expect(raf).toHaveBeenCalled();
     expect(getBoundingClientRect).toHaveBeenCalled();
   });
+
+  it('repositions while the portal stays visible and coordinates keep changing', async () => {
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback: FrameRequestCallback) => {
+      callback(0);
+      return 1;
+    });
+
+    vi.spyOn(HTMLDivElement.prototype, 'getBoundingClientRect').mockReturnValue({
+      width: 180,
+      height: 40,
+      left: 0,
+      top: 0,
+      right: 180,
+      bottom: 40,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    } as DOMRect);
+
+    const [x, setX] = createSignal(180);
+    const [y, setY] = createSignal(120);
+
+    render(() => (
+      <TooltipPortal when x={x()} y={y()}>
+        <span>Memory Composition</span>
+      </TooltipPortal>
+    ));
+
+    const readPortalPosition = () => {
+      const portal = document.body.querySelector('foreignObject');
+      return {
+        x: Number.parseFloat(portal?.getAttribute('x') ?? 'NaN'),
+        y: Number.parseFloat(portal?.getAttribute('y') ?? 'NaN'),
+      };
+    };
+
+    await waitFor(() => {
+      const position = readPortalPosition();
+      expect(position.x).toBeGreaterThan(0);
+      expect(position.y).toBeGreaterThan(0);
+    });
+
+    const initialPosition = readPortalPosition();
+
+    setX(320);
+    setY(220);
+
+    await waitFor(() => {
+      const position = readPortalPosition();
+      expect(position.x).toBeGreaterThan(initialPosition.x + 100);
+      expect(position.y).toBeGreaterThan(initialPosition.y + 80);
+    });
+  });
 });

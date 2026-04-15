@@ -45,6 +45,7 @@ function useTooltipLayoutState(options: TooltipLayoutStateOptions): {
   viewport: Accessor<TooltipViewportRect>;
 } {
   let tooltipRef: HTMLDivElement | undefined;
+  let positionRafId: number | null = null;
   const [position, setPosition] = createSignal<TooltipPosition>({ left: 0, top: 0 });
   const [viewport, setViewport] = createSignal<TooltipViewportRect>({
     height: typeof window === 'undefined' ? 0 : window.innerHeight,
@@ -73,21 +74,59 @@ function useTooltipLayoutState(options: TooltipLayoutStateOptions): {
     );
   };
 
+  const schedulePositionUpdate = () => {
+    if (typeof window === 'undefined') return;
+    if (positionRafId !== null) {
+      window.cancelAnimationFrame(positionRafId);
+    }
+    positionRafId = window.requestAnimationFrame(() => {
+      positionRafId = null;
+      updatePosition();
+    });
+  };
+
   createEffect(() => {
     if (typeof window === 'undefined') return;
     updateViewport();
-    const handleResize = () => updateViewport();
+    const handleResize = () => {
+      updateViewport();
+      if (options.visible()) {
+        schedulePositionUpdate();
+      }
+    };
     window.addEventListener('resize', handleResize);
     onCleanup(() => window.removeEventListener('resize', handleResize));
   });
 
   createEffect(() => {
-    if (!options.visible()) {
-      setPosition({ left: options.x(), top: options.y() });
+    const visible = options.visible();
+    // Read the live layout inputs here so pointer-driven coordinate changes
+    // retrigger portal positioning while the tooltip remains visible.
+    const layoutInputs = {
+      align: options.align(),
+      direction: options.direction(),
+      maxWidth: options.maxWidth(),
+      x: options.x(),
+      y: options.y(),
+    };
+
+    if (!visible) {
+      if (typeof window !== 'undefined' && positionRafId !== null) {
+        window.cancelAnimationFrame(positionRafId);
+        positionRafId = null;
+      }
+      setPosition({ left: layoutInputs.x, top: layoutInputs.y });
       return;
     }
 
-    requestAnimationFrame(updatePosition);
+    schedulePositionUpdate();
+  });
+
+  onCleanup(() => {
+    if (typeof window !== 'undefined' && positionRafId !== null) {
+      window.cancelAnimationFrame(positionRafId);
+      positionRafId = null;
+    }
   });
 
   return {
@@ -97,7 +136,7 @@ function useTooltipLayoutState(options: TooltipLayoutStateOptions): {
     setTooltipRef: (el) => {
       tooltipRef = el;
       if (options.visible()) {
-        requestAnimationFrame(updatePosition);
+        schedulePositionUpdate();
       }
     },
     viewport,

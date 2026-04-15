@@ -1244,6 +1244,10 @@ introducing light-mode-inverted palettes.
 That same tooltip owner now also holds the CSP-safe portal contract: shared
 tooltip shells must render through SVG/attribute positioning and viewport-
 clamped layout helpers rather than fixed inline `left`/`top` style attributes.
+When a shared portal tooltip is already visible, that same owner must
+reschedule positioning on live coordinate and viewport changes so chart hover
+tooltips keep following the active pointer instead of sticking to their first
+anchor.
 The shared collapsible search input now follows that same owner split.
 `frontend-modern/src/components/shared/CollapsibleSearchInput.tsx` stays the
 render shell, `frontend-modern/src/components/shared/useCollapsibleSearchInputState.ts`

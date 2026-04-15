@@ -386,18 +386,18 @@ async function expectSparklineTooltipTracksPointer(
   }
 
   const tooltip = page.locator('[data-sparkline-tooltip="true"]').last();
+  const readTooltipTop = async () =>
+    tooltip.evaluate((node) =>
+      Number.parseFloat(node.closest("foreignObject")?.getAttribute("y") || "NaN"),
+    );
 
   await page.mouse.move(box.x + box.width * 0.45, box.y + box.height * 0.2);
   await expect(tooltip).toBeVisible();
-  const firstTop = await tooltip.evaluate((node) =>
-    Number.parseFloat((node as HTMLElement).style.top || "NaN"),
-  );
+  const firstTop = await readTooltipTop();
 
   await page.mouse.move(box.x + box.width * 0.45, box.y + box.height * 0.75);
   await expect(tooltip).toBeVisible();
-  const secondTop = await tooltip.evaluate((node) =>
-    Number.parseFloat((node as HTMLElement).style.top || "NaN"),
-  );
+  const secondTop = await readTooltipTop();
 
   expect(secondTop).toBeGreaterThan(firstTop + 40);
   await page.mouse.move(1, 1);

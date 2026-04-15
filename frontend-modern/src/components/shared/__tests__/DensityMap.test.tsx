@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@solidjs/testing-library';
+import { fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { describe, expect, it, vi } from 'vitest';
 import densityMapSource from '@/components/shared/DensityMap.tsx?raw';
 import densityMapModelSource from '@/components/shared/densityMapModel.ts?raw';
@@ -94,6 +94,77 @@ describe('DensityMap', () => {
     expect(screen.getByText('Peak')).toBeInTheDocument();
     expect(document.querySelector('[data-density-map-tooltip="true"]')).not.toBeNull();
     expect(document.querySelector('[data-density-map-tooltip-sparkline="true"]')).toBeNull();
+  });
+
+  it('repositions the shared tooltip portal while the density-map hover stays visible', async () => {
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback: FrameRequestCallback) => {
+      callback(0);
+      return 1;
+    });
+
+    const now = Date.now();
+    const { container } = render(() => (
+      <DensityMap
+        timeRange="1h"
+        series={[
+          {
+            id: 'cpu',
+            name: 'CPU',
+            color: '#10b981',
+            data: [
+              { timestamp: now - 30_000, value: 25 },
+              { timestamp: now - 10_000, value: 55 },
+            ],
+          },
+          {
+            id: 'memory',
+            name: 'Memory',
+            color: '#f59e0b',
+            data: [
+              { timestamp: now - 30_000, value: 45 },
+              { timestamp: now - 10_000, value: 65 },
+            ],
+          },
+        ]}
+      />
+    ));
+
+    const canvas = container.querySelector('canvas');
+    expect(canvas).not.toBeNull();
+    if (!canvas) return;
+
+    (canvas as unknown as { getBoundingClientRect: () => DOMRect }).getBoundingClientRect = () =>
+      ({
+        left: 0,
+        top: 0,
+        width: 180,
+        height: 80,
+        right: 180,
+        bottom: 80,
+        x: 0,
+        y: 0,
+        toJSON: () => ({}),
+      }) as unknown as DOMRect;
+
+    const readTooltipTop = () =>
+      Number.parseFloat(
+        document
+          .querySelector('[data-density-map-tooltip="true"]')
+          ?.closest('foreignObject')
+          ?.getAttribute('y') || 'NaN',
+      );
+
+    fireEvent.mouseMove(canvas, { clientX: 160, clientY: 10 });
+    await waitFor(() => {
+      expect(document.querySelector('[data-density-map-tooltip="true"]')).not.toBeNull();
+    });
+    const firstTop = readTooltipTop();
+
+    fireEvent.mouseMove(canvas, { clientX: 160, clientY: 70 });
+
+    await waitFor(() => {
+      expect(readTooltipTop()).toBeGreaterThan(firstTop + 20);
+    });
   });
 
   it('publishes synchronized hover identity and clears it on leave', () => {
