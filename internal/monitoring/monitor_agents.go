@@ -1740,12 +1740,18 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 	if report.Unraid != nil {
 		disks := make([]models.HostUnraidDisk, 0, len(report.Unraid.Disks))
 		for _, disk := range report.Unraid.Disks {
+			device := strings.TrimSpace(disk.Device)
+			rawStatus := strings.TrimSpace(disk.RawStatus)
+			status := strings.TrimSpace(disk.Status)
+			if status == "" {
+				status = normalizeLegacyUnraidDiskStatus(rawStatus, device)
+			}
 			disks = append(disks, models.HostUnraidDisk{
 				Name:       strings.TrimSpace(disk.Name),
-				Device:     strings.TrimSpace(disk.Device),
+				Device:     device,
 				Role:       strings.TrimSpace(disk.Role),
-				Status:     strings.TrimSpace(disk.Status),
-				RawStatus:  strings.TrimSpace(disk.RawStatus),
+				Status:     status,
+				RawStatus:  rawStatus,
 				Serial:     strings.TrimSpace(disk.Serial),
 				Filesystem: strings.TrimSpace(disk.Filesystem),
 				SizeBytes:  disk.SizeBytes,
@@ -2061,6 +2067,31 @@ func (m *Monitor) writeHostSMARTMetrics(host models.Host, now time.Time) {
 
 func normalizeHostDiskDevice(device string) string {
 	return strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(device), "/dev/"))
+}
+
+func normalizeLegacyUnraidDiskStatus(rawStatus, device string) string {
+	status := strings.ToUpper(strings.TrimSpace(rawStatus))
+	switch {
+	case status == "":
+		if strings.TrimSpace(device) != "" {
+			return "online"
+		}
+		return ""
+	case strings.Contains(status, "DISK_OK") || status == "OK":
+		return "online"
+	case strings.Contains(status, "DISK_DSBL") || strings.Contains(status, "DISABLED"):
+		return "disabled"
+	case strings.Contains(status, "DISK_NP") || strings.Contains(status, "MISSING") || strings.Contains(status, "NOT_INSTALLED"):
+		return "missing"
+	case strings.Contains(status, "DISK_INVALID") || strings.Contains(status, "INVALID"):
+		return "invalid"
+	case strings.Contains(status, "DISK_WRONG") || strings.Contains(status, "WRONG"):
+		return "wrong"
+	case strings.Contains(status, "DISK_ERROR") || strings.Contains(status, "ERROR"):
+		return "error"
+	default:
+		return strings.ToLower(status)
+	}
 }
 
 func hostDiskIOMetricResourceID(host models.Host, io models.DiskIO) string {

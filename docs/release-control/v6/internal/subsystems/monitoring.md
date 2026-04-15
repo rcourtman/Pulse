@@ -133,7 +133,12 @@ it exposes a direct CPU percentage and otherwise fall back to Podman's
 wall-clock delta semantics rather than Docker's multi-core normalization, and
 Proxmox Ceph status decoding must accept manager standby entries as either bare
 names or structured objects so collector payload variations do not break the
-canonical monitoring path.
+canonical monitoring path. That same compatibility boundary also owns legacy
+Unraid raw-status normalization at host-agent ingest: when older agents send
+`rawStatus` without the newer normalized `status`, `internal/monitoring/monitor_agents.go`
+must derive the canonical disk status before storage-risk assessment runs so
+v5 aggregate counters do not override clearly healthy per-disk state during v6
+compatibility operation.
 VMware vSphere now also has a locked phase-1 ingestion boundary under this
 lane. The admitted direction is vCenter-only in phase 1, and monitoring must
 stay API-first through the

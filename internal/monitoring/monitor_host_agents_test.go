@@ -8,6 +8,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
 )
@@ -615,6 +616,72 @@ func TestApplyHostReportStoresUnraidTopology(t *testing.T) {
 	}
 	if len(host.Unraid.Disks) != 2 || host.Unraid.Disks[0].Role != "parity" {
 		t.Fatalf("unexpected unraid disks %+v", host.Unraid.Disks)
+	}
+}
+
+func TestApplyHostReportNormalizesLegacyUnraidRawStatuses(t *testing.T) {
+	t.Helper()
+
+	monitor := &Monitor{
+		state:             models.NewState(),
+		alertManager:      alerts.NewManager(),
+		hostTokenBindings: make(map[string]string),
+		config:            &config.Config{},
+		rateTracker:       NewRateTracker(),
+	}
+	t.Cleanup(func() { monitor.alertManager.Stop() })
+
+	report := agentshost.Report{
+		Agent: agentshost.AgentInfo{
+			ID:              "agent-tower-legacy",
+			Version:         "5.1.27",
+			IntervalSeconds: 30,
+		},
+		Host: agentshost.HostInfo{
+			ID:        "machine-tower-legacy",
+			Hostname:  "tower",
+			MachineID: "machine-tower-legacy",
+		},
+		Metrics: agentshost.Metrics{
+			Memory: agentshost.MemoryMetric{TotalBytes: 1024, UsedBytes: 512, FreeBytes: 512, Usage: 50},
+		},
+		Unraid: &agentshost.UnraidStorage{
+			ArrayStarted: true,
+			ArrayState:   "STARTED",
+			SyncAction:   "check",
+			SyncProgress: 55,
+			NumDisabled:  1,
+			NumInvalid:   1,
+			Disks: []agentshost.UnraidDisk{
+				{Name: "parity", Device: "/dev/sdb", Role: "parity", RawStatus: "DISK_OK", Serial: "SERIAL-PARITY"},
+				{Name: "disk1", Device: "/dev/sdc", Role: "data", RawStatus: "DISK_OK", Serial: "SERIAL-DATA"},
+			},
+		},
+		Timestamp: time.Now().UTC(),
+	}
+
+	host, err := monitor.ApplyHostReport(report, nil)
+	if err != nil {
+		t.Fatalf("ApplyHostReport: %v", err)
+	}
+
+	if host.Unraid == nil {
+		t.Fatal("expected unraid topology on host")
+	}
+	for _, disk := range host.Unraid.Disks {
+		if disk.Status != "online" {
+			t.Fatalf("expected normalized online status from rawStatus, got %+v", host.Unraid.Disks)
+		}
+	}
+
+	assessment := storagehealth.AssessUnraidStorage(*host.Unraid)
+	if assessment.Level != storagehealth.RiskWarning {
+		t.Fatalf("assessment level = %q, want %q", assessment.Level, storagehealth.RiskWarning)
+	}
+	for _, reason := range assessment.Reasons {
+		if reason.Code == "unraid_disabled_disks" || reason.Code == "unraid_invalid_disks" {
+			t.Fatalf("unexpected aggregate-count reason after raw-status normalization: %+v", assessment.Reasons)
+		}
 	}
 }
 
