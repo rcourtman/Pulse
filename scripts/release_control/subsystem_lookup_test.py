@@ -127,6 +127,27 @@ class SubsystemLookupTest(unittest.TestCase):
         self.assertEqual(match["lane_context"]["lane_id"], "L7")
         self.assertEqual(match["verification_requirement"]["id"], "mobile-relay-runtime")
 
+    def test_lookup_paths_normalizes_workspace_relative_cross_repo_runtime_paths(self) -> None:
+        result = lookup_paths(["repos/pulse-pro/scripts/bootstrap-v6-demo-preview.sh"])
+        self.assertEqual(result["unowned_runtime_files"], [])
+        self.assertEqual(
+            {item["subsystem"] for item in result["impacted_subsystems"]},
+            {"cloud-paid"},
+        )
+        file_entry = result["files"][0]
+        self.assertEqual(file_entry["path"], "pulse-pro:scripts/bootstrap-v6-demo-preview.sh")
+        self.assertEqual(file_entry["classification"], "runtime")
+        self.assertEqual(
+            {match["subsystem"] for match in file_entry["matches"]},
+            {"cloud-paid"},
+        )
+        match = file_entry["matches"][0]
+        self.assertEqual(match["lane_context"]["lane_id"], "L3")
+        self.assertEqual(
+            match["verification_requirement"]["id"],
+            "public-demo-preview-operations",
+        )
+
     def test_lookup_paths_assigns_shared_tag_badges_to_frontend_primitives(self) -> None:
         result = lookup_paths(["frontend-modern/src/components/shared/TagBadges.tsx"])
         self.assertEqual(result["unowned_runtime_files"], [])

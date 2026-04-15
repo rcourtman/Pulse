@@ -290,6 +290,14 @@ The governed browser proof for that posture lives in
 `tests/integration/tests/53-demo-mode-commercial-boundary.spec.ts` and is
 expected to stay runnable through
 `tests/integration/scripts/run-tests.sh demo-contract`.
+That same public-demo boundary also owns the governed `pulse-pro` operational
+path for the live v6 preview. `pulse-pro/scripts/bootstrap-v6-demo-preview.sh`
+is the canonical preview runtime bootstrap/update entrypoint and
+`pulse-pro/scripts/audit_v6_preview_demo.sh` is the canonical public smoke
+proof. The bootstrap must fail closed unless the dedicated preview host is
+already the live public target and that public smoke audit passes; any
+`--skip-public-audit` escape hatch is only for pre-cutover replacement-host
+staging, never an ordinary live refresh.
 That same licensing/browser boundary now also owns authenticated commercial
 posture bootstrap and the prohibition on non-billing entitlement reads.
 `frontend-modern/src/useAppRuntimeState.ts` is the canonical authenticated

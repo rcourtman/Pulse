@@ -29,6 +29,13 @@ WORKSPACE_REPOS_ROOT = REPO_ROOT.parent
 
 def normalize_input_path(raw: str) -> str:
     candidate = Path(raw.strip())
+    parts = candidate.parts
+    if len(parts) >= 3 and parts[0] == "repos":
+        repo_id = parts[1]
+        rel = Path(*parts[2:]).as_posix()
+        if repo_id == REPO_ROOT.name:
+            return rel
+        return f"{repo_id}:{rel}"
     if candidate.is_absolute():
         candidate = candidate.resolve()
         try:
