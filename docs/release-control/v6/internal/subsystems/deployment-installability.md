@@ -66,15 +66,20 @@ server-side update execution surfaces.
 44. `scripts/release_ldflags.sh`
 45. `scripts/run_demo_public_browser_smoke.sh`
 46. `scripts/demo_public_browser_smoke.cjs`
-47. `scripts/trigger-release-dry-run.sh`
-48. `scripts/trigger-release.sh`
-49. `scripts/toggle-mock.sh`
-50. `tests/integration/playwright.config.ts`
-51. `tests/integration/QUICK_START.md`
-52. `tests/integration/README.md`
-53. `tests/integration/scripts/managed-dev-runtime.mjs`
-54. `tests/integration/tests/helpers.ts`
-55. `tests/integration/tests/runtime-defaults.ts`
+47. `scripts/run_hosted_staging_smoke.sh`
+48. `scripts/trigger-release-dry-run.sh`
+49. `scripts/trigger-release.sh`
+50. `scripts/toggle-mock.sh`
+51. `tests/integration/playwright.config.ts`
+52. `tests/integration/QUICK_START.md`
+53. `tests/integration/README.md`
+54. `tests/integration/scripts/bootstrap-hosted-mobile-onboarding.mjs`
+55. `tests/integration/scripts/hosted-mobile-token-runtime.mjs`
+56. `tests/integration/scripts/hosted-tenant-runtime.mjs`
+57. `tests/integration/scripts/managed-dev-runtime.mjs`
+58. `tests/integration/scripts/relay-mobile-token-helper.go`
+59. `tests/integration/tests/helpers.ts`
+60. `tests/integration/tests/runtime-defaults.ts`
 
 ## Shared Boundaries
 
@@ -93,6 +98,7 @@ server-side update execution surfaces.
 6. Add or change governed release-promotion workflow inputs, operator-facing promotion metadata, artifact publication lineage enforcement, or stable-promotion rehearsal summaries through `.github/workflows/create-release.yml`, `.github/workflows/helm-pages.yml`, `.github/workflows/publish-docker.yml`, `.github/workflows/publish-helm-chart.yml`, `.github/workflows/promote-floating-tags.yml`, `.github/workflows/release-dry-run.yml`, `.github/workflows/update-demo-server.yml`, `docs/releases/V6_PRERELEASE_RUNBOOK.md`, `docs/release-control/v6/internal/RELEASE_PROMOTION_POLICY.md`, `docs/release-control/v6/internal/PRE_RELEASE_CHECKLIST.md`, `docs/release-control/v6/internal/RC_TO_GA_REHEARSAL_TEMPLATE.md`, `scripts/check-workflow-dispatch-inputs.py`, `scripts/release_control/record_rc_to_ga_rehearsal.py`, `scripts/release_control/internal/record_rc_to_ga_rehearsal.py`, `scripts/release_control/release_promotion_policy_support.py`, `scripts/trigger-release.sh`, and `scripts/trigger-release-dry-run.sh`
 7. Preserve release-matched installer and Helm operator documentation links through `scripts/install.sh`, `.github/workflows/helm-pages.yml`, `.github/workflows/publish-helm-chart.yml`, and the chart metadata itself so deployment guidance and packaged chart metadata do not drift back to branch-tip `main` docs when a release line or promoted tag already exists.
 8. Add or change operator-facing hosted tenant runtime canary rollout, batch runtime contract reconciliation, canonical hosted route/public URL generation, or control-plane runtime-registry reconciliation through `cmd/pulse-control-plane/main.go`, `internal/cloudcp/docker/manager.go`, `internal/cloudcp/docker/labels.go`, and `internal/cloudcp/tenant_runtime_rollout.go`
+9. Add or change the canonical hosted staging smoke operator path through `scripts/run_hosted_staging_smoke.sh`, `tests/integration/scripts/bootstrap-hosted-mobile-onboarding.mjs`, `tests/integration/scripts/hosted-mobile-token-runtime.mjs`, `tests/integration/scripts/hosted-tenant-runtime.mjs`, and `tests/integration/scripts/relay-mobile-token-helper.go`
 
 ## Forbidden Paths
 
@@ -124,6 +130,12 @@ server-side update execution surfaces.
    `PULSE_E2E_REPO_ROOT` for runtime-state and managed-session discovery so
    isolated verification harnesses can relocate managed runtime state without
    mutating the live repo root.
+6. Keep hosted staging smoke fail-closed and repo-tracked. `scripts/run_hosted_staging_smoke.sh`
+   and the hosted onboarding helpers under `tests/integration/scripts/` must
+   require explicit target environment input, compose the canonical hosted
+   signup/billing Playwright evals with the hosted mobile onboarding proof, and
+   avoid implicit production defaults or lane-local shell fragments that bypass
+   the checked-in proof pack.
 
 ## Current State
 
@@ -236,6 +248,13 @@ open on API-only reachability. That proof must treat the visible login controls
 as the readiness signal and must not block on Playwright `networkidle`, because
 the public demo shell can keep background activity alive after the page is
 already usable.
+That same operator-proof boundary also now owns the canonical hosted staging
+smoke entrypoint. `scripts/run_hosted_staging_smoke.sh` must stay as the
+repo-tracked operator command that composes the hosted signup/billing eval pack
+with the hosted mobile onboarding bootstrap helpers under
+`tests/integration/scripts/`, and those helpers must fail closed onto explicit
+target cloud host and control-plane URL input instead of silently defaulting to
+production infrastructure.
 Those same governed release workflows also own the operator-facing wording for
 that promotion metadata. Human-visible workflow inputs, summaries, and error
 messages must describe the path as a prerelease or preview flow rather than

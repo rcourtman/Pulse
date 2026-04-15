@@ -29,9 +29,13 @@ type StripeSubscriptionResponse = {
   metadata?: Record<string, string>;
 };
 
+function explicitCloudBaseURL(): string {
+  return String(process.env.PULSE_CLOUD_BASE_URL || '').trim();
+}
+
 function cloudBaseURL(): string {
   return preferredPlaywrightRouteBaseURL(process.env, [
-    process.env.PULSE_CLOUD_BASE_URL,
+    explicitCloudBaseURL(),
   ]);
 }
 
@@ -92,6 +96,10 @@ test.describe.serial('Cloud billing lifecycle (post-checkout)', () => {
     test.skip(
       testInfo.project.name.startsWith('mobile-'),
       'Desktop-only cloud billing lifecycle coverage',
+    );
+    test.skip(
+      explicitCloudBaseURL() === '',
+      'Set PULSE_CLOUD_BASE_URL to run hosted cloud billing lifecycle coverage.',
     );
 
     const requiredVars = [

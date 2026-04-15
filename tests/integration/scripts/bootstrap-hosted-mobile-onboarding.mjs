@@ -11,8 +11,6 @@ import {
 } from './hosted-tenant-runtime.mjs';
 import { createHostedRelayMobileToken } from './hosted-mobile-token-runtime.mjs';
 
-const DEFAULT_CLOUD_HOST = 'root@pulse-cloud';
-const DEFAULT_CONTROL_PLANE_URL = 'https://cloud.pulserelay.pro';
 const DEFAULT_POLL_INTERVAL_MS = 500;
 const DEFAULT_POLL_TIMEOUT_MS = 15_000;
 const REPO_ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..', '..', '..');
@@ -24,15 +22,15 @@ function usage(message) {
   }
 
   console.error(
-    'usage: node ./tests/integration/scripts/bootstrap-hosted-mobile-onboarding.mjs --tenant-id <id> [--email <email>] [--cloud-host <user@host>] [--control-plane-url <url>] [--poll-timeout-ms <ms>] [--poll-interval-ms <ms>]',
+    'usage: node ./tests/integration/scripts/bootstrap-hosted-mobile-onboarding.mjs --tenant-id <id> --cloud-host <user@host> --control-plane-url <url> [--email <email>] [--poll-timeout-ms <ms>] [--poll-interval-ms <ms>]',
   );
   process.exit(1);
 }
 
 function parseArgs(argv) {
   const parsed = {
-    cloudHost: DEFAULT_CLOUD_HOST,
-    controlPlaneUrl: DEFAULT_CONTROL_PLANE_URL,
+    cloudHost: '',
+    controlPlaneUrl: '',
     email: '',
     pollIntervalMs: DEFAULT_POLL_INTERVAL_MS,
     pollTimeoutMs: DEFAULT_POLL_TIMEOUT_MS,
@@ -81,6 +79,9 @@ function parseArgs(argv) {
 
   if (!parsed.tenantId) {
     usage('--tenant-id is required');
+  }
+  if (!parsed.cloudHost) {
+    usage('--cloud-host is required');
   }
   if (!parsed.controlPlaneUrl) {
     usage('--control-plane-url is required');

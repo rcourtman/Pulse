@@ -2421,13 +2421,18 @@
         "scripts/release_control/resolve_release_promotion.py",
         "scripts/release_ldflags.sh",
         "scripts/run_demo_public_browser_smoke.sh",
+        "scripts/run_hosted_staging_smoke.sh",
         "scripts/toggle-mock.sh",
         "scripts/trigger-release-dry-run.sh",
         "scripts/trigger-release.sh",
         "tests/integration/playwright.config.ts",
         "tests/integration/QUICK_START.md",
         "tests/integration/README.md",
+        "tests/integration/scripts/bootstrap-hosted-mobile-onboarding.mjs",
+        "tests/integration/scripts/hosted-mobile-token-runtime.mjs",
+        "tests/integration/scripts/hosted-tenant-runtime.mjs",
         "tests/integration/scripts/managed-dev-runtime.mjs",
+        "tests/integration/scripts/relay-mobile-token-helper.go",
         "tests/integration/tests/helpers.ts",
         "tests/integration/tests/runtime-defaults.ts"
       ],
@@ -2529,6 +2534,25 @@
             "exact_files": [
               "scripts/installtests/build_release_assets_test.go",
               "scripts/release_control/release_promotion_policy_test.py"
+            ]
+          },
+          {
+            "id": "hosted-staging-smoke-runtime",
+            "label": "hosted staging smoke proof",
+            "match_prefixes": [],
+            "match_files": [
+              "scripts/run_hosted_staging_smoke.sh",
+              "tests/integration/scripts/bootstrap-hosted-mobile-onboarding.mjs",
+              "tests/integration/scripts/hosted-mobile-token-runtime.mjs",
+              "tests/integration/scripts/hosted-tenant-runtime.mjs",
+              "tests/integration/scripts/relay-mobile-token-helper.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/api/relay_hosted_runtime_test.go",
+              "tests/integration/tests/08-cloud-hosting.spec.ts",
+              "tests/integration/tests/09-cloud-billing-lifecycle.spec.ts"
             ]
           },
           {

@@ -2,9 +2,13 @@ import { expect, test } from '@playwright/test';
 import { completeStripeSandboxCheckout } from './stripe-sandbox';
 import { preferredPlaywrightRouteBaseURL } from './runtime-defaults';
 
+function explicitCloudBaseURL(): string {
+  return String(process.env.PULSE_CLOUD_BASE_URL || '').trim();
+}
+
 function cloudBaseURL(): string {
   return preferredPlaywrightRouteBaseURL(process.env, [
-    process.env.PULSE_CLOUD_BASE_URL,
+    explicitCloudBaseURL(),
   ]);
 }
 
@@ -23,6 +27,10 @@ test.describe.serial('Cloud hosting public signup flows', () => {
 
   test('completes hosted cloud signup checkout through Stripe sandbox', async ({ page }, testInfo) => {
     test.skip(testInfo.project.name.startsWith('mobile-'), 'Desktop-only cloud hosting workflow coverage');
+    test.skip(
+      explicitCloudBaseURL() === '',
+      'Set PULSE_CLOUD_BASE_URL to run hosted cloud signup coverage.',
+    );
 
     const baseURL = cloudBaseURL();
     const identity = signupIdentity();
@@ -66,6 +74,10 @@ test.describe.serial('Cloud hosting public signup flows', () => {
 
   test('accepts magic-link request via real public endpoint', async ({ page }, testInfo) => {
     test.skip(testInfo.project.name.startsWith('mobile-'), 'Desktop-only cloud hosting workflow coverage');
+    test.skip(
+      explicitCloudBaseURL() === '',
+      'Set PULSE_CLOUD_BASE_URL to run hosted cloud signup coverage.',
+    );
 
     const baseURL = cloudBaseURL();
     const email = createdEmail || signupIdentity().email;
