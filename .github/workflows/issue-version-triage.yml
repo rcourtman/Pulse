@@ -155,6 +155,11 @@ jobs:
               return comments.some((comment) => (comment.body || "").includes(RETEST_COMMENT_MARKER));
             }
 
+            const action = context.payload.action || "";
+            const authorAssociation = String(issue.author_association || "").toUpperCase();
+            const reporterIsMaintainer = ["OWNER", "MEMBER", "COLLABORATOR"].includes(authorAssociation);
+            const allowRetestComment = (action === "opened" || action === "reopened") && !reporterIsMaintainer;
+
             const reportedVersion = extractPulseVersion(issue.title, issue.body);
             core.info(`Reported Pulse version: ${reportedVersion || "not found"}`);
 
@@ -217,7 +222,7 @@ jobs:
               if (comparison !== null && comparison < 0) {
                 nextLabels.add(RETEST_LABEL);
 
-                if (!(await hasRetestComment(issue.number))) {
+                if (allowRetestComment && !(await hasRetestComment(issue.number))) {
                   const body = [
                     RETEST_COMMENT_MARKER,
                     "Thanks for the report.",
