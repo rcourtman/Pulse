@@ -110,6 +110,10 @@ renewals, manual issue, and legacy exchange flows are part of that same
 cloud-paid continuity boundary as well. Those flows must resolve grandfathered
 recurring continuity from explicit active pre-cutover state, not from bare
 legacy plan IDs, stale historical tokens, or issue timestamps alone.
+The canonical operator preview for that cutover now lives in
+`pulse-pro/scripts/grandfathered_recurring_cutover_preview.py`, and it must use
+the same active-at-snapshot rule as the live server before anyone sets
+`PULSE_LICENSE_GRANDFATHERED_RECURRING_SNAPSHOT_AT`.
 
 ## Extension Points
 

@@ -1724,7 +1724,8 @@
         "pulse-pro:license-server/v6_handlers.go",
         "pulse-pro:scripts/audit_v6_preview_demo.sh",
         "pulse-pro:scripts/audit_v6_preview_demo_browser.cjs",
-        "pulse-pro:scripts/bootstrap-v6-demo-preview.sh"
+        "pulse-pro:scripts/bootstrap-v6-demo-preview.sh",
+        "pulse-pro:scripts/grandfathered_recurring_cutover_preview.py"
       ],
       "verification": {
         "allow_same_subsystem_tests": true,
@@ -2333,13 +2334,15 @@
             "match_files": [
               "pulse-pro:license-server/grandfathering.go",
               "pulse-pro:license-server/main.go",
-              "pulse-pro:license-server/v6_handlers.go"
+              "pulse-pro:license-server/v6_handlers.go",
+              "pulse-pro:scripts/grandfathered_recurring_cutover_preview.py"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
               "pulse-pro:license-server/grandfathering_test.go",
-              "pulse-pro:license-server/main_test.go"
+              "pulse-pro:license-server/main_test.go",
+              "pulse-pro:scripts/tests/test_grandfathered_recurring_cutover_preview.py"
             ]
           },
           {
