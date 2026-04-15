@@ -79,6 +79,40 @@ func TestShouldSuppressNotificationQuietHours(t *testing.T) {
 			t.Fatalf("expected storage alert suppression, got suppressed=%t reason=%q", suppressed, reason)
 		}
 	})
+
+	t.Run("public suppression helper mirrors quiet hours policy", func(t *testing.T) {
+		m := newManagerWithQuietHoursSuppress(QuietHoursSuppression{Offline: true})
+		alert := &Alert{ID: "offline-public", Type: "connectivity", Level: AlertLevelCritical}
+		if !m.ShouldSuppressNotification(alert) {
+			t.Fatal("expected public quiet-hours suppression helper to return true")
+		}
+	})
+
+	t.Run("resolved notifications are suppressed for acknowledged alerts", func(t *testing.T) {
+		m := newManagerWithQuietHoursSuppress(QuietHoursSuppression{})
+		alert := &Alert{
+			ID:           "resolved-ack",
+			Type:         "cpu",
+			Level:        AlertLevelCritical,
+			Acknowledged: true,
+			LastNotified: ptrTime(time.Now().Add(-time.Minute)),
+		}
+		if !m.ShouldSuppressResolvedNotification(alert) {
+			t.Fatal("expected recovery notification to be suppressed for acknowledged alert")
+		}
+	})
+
+	t.Run("resolved notifications are suppressed when the firing alert was never notified", func(t *testing.T) {
+		m := newManagerWithQuietHoursSuppress(QuietHoursSuppression{})
+		alert := &Alert{
+			ID:    "resolved-unnotified",
+			Type:  "cpu",
+			Level: AlertLevelCritical,
+		}
+		if !m.ShouldSuppressResolvedNotification(alert) {
+			t.Fatal("expected recovery notification to be suppressed when LastNotified is nil")
+		}
+	})
 }
 
 func TestIsInQuietHours(t *testing.T) {

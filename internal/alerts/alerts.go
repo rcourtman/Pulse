@@ -45,10 +45,12 @@ const (
 
 // Cleanup intervals
 const (
-	StaleTrackingThreshold = 24 * time.Hour
-	RateLimitCleanupWindow = 1 * time.Hour
-	alertsDirPerm          = 0o700
-	alertsFilePerm         = 0o600
+	StaleTrackingThreshold              = 24 * time.Hour
+	RateLimitCleanupWindow              = 1 * time.Hour
+	alertsDirPerm                       = 0o700
+	alertsFilePerm                      = 0o600
+	offlineRecoveryConfirmationsDefault = 3
+	offlineRecoveryConfirmationsStorage = 2
 )
 
 func normalizePoweredOffSeverity(level AlertLevel) AlertLevel {
@@ -555,13 +557,14 @@ type Manager struct {
 	// Time threshold tracking
 	pendingAlerts map[string]time.Time // Track when thresholds were first exceeded
 	// Offline confirmation tracking
-	nodeOfflineCount      map[string]int                  // Track consecutive offline counts for nodes (legacy)
-	offlineConfirmations  map[string]int                  // Track consecutive offline counts for all resources
-	dockerOfflineCount    map[string]int                  // Track consecutive offline counts for Docker hosts
-	dockerStateConfirm    map[string]int                  // Track consecutive state confirmations for Docker containers
-	dockerRestartTracking map[string]*dockerRestartRecord // Track restart counts and times for restart loop detection
-	dockerLastExitCode    map[string]int                  // Track last exit code for OOM detection
-	dockerUpdateFirstSeen map[string]time.Time            // Track when image updates were first detected for alert delay
+	nodeOfflineCount             map[string]int                  // Track consecutive offline counts for nodes (legacy)
+	offlineConfirmations         map[string]int                  // Track consecutive offline counts for all resources
+	offlineRecoveryConfirmations map[string]int                  // Track consecutive healthy confirmations before clearing poll-driven offline alerts
+	dockerOfflineCount           map[string]int                  // Track consecutive offline counts for Docker hosts
+	dockerStateConfirm           map[string]int                  // Track consecutive state confirmations for Docker containers
+	dockerRestartTracking        map[string]*dockerRestartRecord // Track restart counts and times for restart loop detection
+	dockerLastExitCode           map[string]int                  // Track last exit code for OOM detection
+	dockerUpdateFirstSeen        map[string]time.Time            // Track when image updates were first detected for alert delay
 	// Stable identity tracking prevents update-delay resets when host IDs churn.
 	dockerUpdateFirstSeenByIdentity map[string]time.Time
 	// PMG quarantine growth tracking
@@ -642,6 +645,7 @@ func NewManagerWithDataDir(dataDir string) *Manager {
 		pendingAlerts:                   make(map[string]time.Time),
 		nodeOfflineCount:                make(map[string]int),
 		offlineConfirmations:            make(map[string]int),
+		offlineRecoveryConfirmations:    make(map[string]int),
 		dockerOfflineCount:              make(map[string]int),
 		dockerStateConfirm:              make(map[string]int),
 		dockerRestartTracking:           make(map[string]*dockerRestartRecord),
@@ -2046,10 +2050,7 @@ func (m *Manager) reevaluateActiveAlertsLocked() {
 				alertsToResolve = append(alertsToResolve, alertID)
 				continue
 			}
-			// Overrides are keyed by raw host ID (without the "agent:" prefix
-			// that hostResourceID adds to the resource ID used in alert IDs).
-			rawHostID := stripHostResourcePrefix(resourceID)
-			thresholds := m.resolveResourceThresholds("agent", rawHostID)
+			thresholds := m.resolveHostAlertThresholdsNoLock(alert, resourceID)
 			if thresholds.Disabled {
 				alertsToResolve = append(alertsToResolve, alertID)
 				continue
@@ -2507,6 +2508,28 @@ func (m *Manager) shouldSuppressNotification(alert *Alert) (bool, string) {
 	return false, ""
 }
 
+// ShouldSuppressNotification checks if a notification should be suppressed
+// during quiet hours. This is used by paths that bypass dispatchAlert, such as escalation.
+func (m *Manager) ShouldSuppressNotification(alert *Alert) bool {
+	if alert == nil {
+		return false
+	}
+
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	suppressed, reason := m.shouldSuppressNotification(alert)
+	if suppressed {
+		log.Debug().
+			Str("alertID", alert.ID).
+			Str("type", alert.Type).
+			Str("level", string(alert.Level)).
+			Str("quietHoursRule", reason).
+			Msg("Notification suppressed during quiet hours")
+	}
+	return suppressed
+}
+
 // ShouldSuppressResolvedNotification checks if a recovery notification should be suppressed
 // during quiet hours. Recovery notifications follow the same quiet hours rules as their
 // corresponding alerts - if the original alert would have been suppressed, so is the recovery.
@@ -2517,6 +2540,22 @@ func (m *Manager) ShouldSuppressResolvedNotification(alert *Alert) bool {
 
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+
+	if alert.Acknowledged {
+		log.Debug().
+			Str("alertID", alert.ID).
+			Str("type", alert.Type).
+			Msg("Recovery notification suppressed for acknowledged alert")
+		return true
+	}
+
+	if alert.LastNotified == nil {
+		log.Debug().
+			Str("alertID", alert.ID).
+			Str("type", alert.Type).
+			Msg("Recovery notification suppressed because firing notification was never sent")
+		return true
+	}
 
 	suppressed, reason := m.shouldSuppressNotification(alert)
 	if suppressed {
@@ -2698,23 +2737,7 @@ func (m *Manager) CheckGuest(guest any, instanceName string) {
 			m.clearGuestPoweredOffAlert(guestID, name)
 		}
 
-		// Clear all resource metric alerts (cpu, memory, disk, etc.) for non-running guests
-		m.mu.Lock()
-		alertsCleared := 0
-		for storageKey, alert := range m.activeAlerts {
-			alertID := effectiveAlertID(alert, storageKey)
-			// Only clear resource metric alerts, not powered-off alerts
-			if alert.ResourceID == guestID && alert.Type != "powered-off" {
-				m.clearAlertNoLock(alertID)
-				alertsCleared++
-				log.Debug().
-					Str("alertID", alertID).
-					Str("guest", name).
-					Str("status", status).
-					Msg("Cleared metric alert for non-running guest")
-			}
-		}
-		m.mu.Unlock()
+		alertsCleared := m.clearGuestMetricAlerts(guestID)
 
 		if alertsCleared > 0 {
 			log.Debug().
@@ -2722,6 +2745,7 @@ func (m *Manager) CheckGuest(guest any, instanceName string) {
 				Str("status", status).
 				Int("alertsCleared", alertsCleared).
 				Msg("Cleared metric alerts for non-running guest")
+			m.saveActiveAlertsAsync("guest-not-running")
 		}
 		return
 	}
@@ -2744,18 +2768,13 @@ func (m *Manager) CheckGuest(guest any, instanceName string) {
 
 	// If alerts are disabled for this guest, clear any existing alerts and return
 	if thresholds.Disabled {
-		m.mu.Lock()
-		for storageKey, alert := range m.activeAlerts {
-			alertID := effectiveAlertID(alert, storageKey)
-			if alert.ResourceID == guestID {
-				m.clearAlertNoLock(alertID)
-				log.Info().
-					Str("alertID", alertID).
-					Str("guest", name).
-					Msg("Cleared alert - guest has alerts disabled")
-			}
+		if alertsCleared := m.clearGuestMetricAlerts(guestID); alertsCleared > 0 {
+			log.Info().
+				Str("guest", name).
+				Int("alertsCleared", alertsCleared).
+				Msg("Cleared guest metric alerts because alerts are disabled")
+			m.saveActiveAlertsAsync("guest-alerts-disabled")
 		}
-		m.mu.Unlock()
 		return
 	}
 
@@ -2789,7 +2808,8 @@ func (m *Manager) CheckGuest(guest any, instanceName string) {
 	}, thresholds, evalOpts)
 
 	if thresholds.Disk != nil && thresholds.Disk.Trigger > 0 && len(disks) > 0 {
-		seenDisks := make(map[string]struct{})
+		seenDiskKeys := make(map[string]struct{})
+		seenDiskResources := make(map[string]struct{})
 		for idx, disk := range disks {
 			if disk.Total <= 0 {
 				continue
@@ -2816,12 +2836,13 @@ func (m *Manager) CheckGuest(guest any, instanceName string) {
 			}
 
 			// Avoid duplicate checks if two disks resolve to the same key
-			if _, exists := seenDisks[sanitizedKey]; exists {
+			if _, exists := seenDiskKeys[sanitizedKey]; exists {
 				continue
 			}
-			seenDisks[sanitizedKey] = struct{}{}
+			seenDiskKeys[sanitizedKey] = struct{}{}
 
 			perDiskResourceID := fmt.Sprintf("%s-disk-%s", guestID, sanitizedKey)
+			seenDiskResources[perDiskResourceID] = struct{}{}
 			message := fmt.Sprintf("%s disk (%s) at %.1f%%", guestType, label, disk.Usage)
 
 			log.Debug().
@@ -2867,6 +2888,11 @@ func (m *Manager) CheckGuest(guest any, instanceName string) {
 				MonitorOnly: monitorOnly,
 			})
 		}
+		if cleared := m.cleanupGuestDiskAlerts(guestID, seenDiskResources); cleared > 0 {
+			m.saveActiveAlertsAsync("guest-disk-set-changed")
+		}
+	} else if cleared := m.cleanupGuestDiskAlerts(guestID, nil); cleared > 0 {
+		m.saveActiveAlertsAsync("guest-disk-alerts-cleared")
 	}
 }
 
@@ -3131,6 +3157,64 @@ func hostInstanceName(host models.Host) string {
 	return "Agent"
 }
 
+// resolveHostThresholdsNoLock resolves the effective thresholds for a host agent.
+// Explicit host-agent overrides win. Otherwise, linked node/guest overrides are
+// inherited so the host agent follows the logical resource it augments.
+// Callers must hold m.mu when reading config through this helper.
+func (m *Manager) resolveHostThresholdsNoLock(hostID, linkedNodeID, linkedVMID, linkedContainerID string) ThresholdConfig {
+	base := m.defaultThresholdsForResourceType("agent")
+
+	if hostID = strings.TrimSpace(hostID); hostID != "" {
+		if override, exists := m.config.Overrides[hostID]; exists {
+			return m.applyThresholdOverride(base, override)
+		}
+	}
+
+	if linkedNodeID = strings.TrimSpace(linkedNodeID); linkedNodeID != "" {
+		if override, exists := m.config.Overrides[linkedNodeID]; exists {
+			return m.applyThresholdOverride(base, override)
+		}
+	}
+
+	if linkedVMID = strings.TrimSpace(linkedVMID); linkedVMID != "" {
+		if override, exists := lookupGuestOverride(m.config.Overrides, nil, linkedVMID); exists {
+			return m.applyThresholdOverride(base, override)
+		}
+	}
+
+	if linkedContainerID = strings.TrimSpace(linkedContainerID); linkedContainerID != "" {
+		if override, exists := lookupGuestOverride(m.config.Overrides, nil, linkedContainerID); exists {
+			return m.applyThresholdOverride(base, override)
+		}
+	}
+
+	return base
+}
+
+// resolveHostAlertThresholdsNoLock resolves thresholds for persisted host-agent alerts.
+// Alert metadata carries the link context needed to inherit node/guest overrides.
+// Callers must hold m.mu when reading config through this helper.
+func (m *Manager) resolveHostAlertThresholdsNoLock(alert *Alert, resourceID string) ThresholdConfig {
+	hostID := stripHostResourcePrefix(resourceID)
+	if idx := strings.Index(hostID, "/"); idx >= 0 {
+		hostID = hostID[:idx]
+	}
+
+	linkedNodeID := ""
+	linkedVMID := ""
+	linkedContainerID := ""
+	if alert != nil {
+		if metadataHostID := metadataStringValue(alert.Metadata, "hostId"); metadataHostID != "" {
+			hostID = metadataHostID
+		}
+		linkedNodeID = metadataStringValue(alert.Metadata, "linkedNodeId")
+		linkedVMID = metadataStringValue(alert.Metadata, "linkedVmId")
+		linkedContainerID = metadataStringValue(alert.Metadata, "linkedContainerId")
+	}
+
+	return m.resolveHostThresholdsNoLock(hostID, linkedNodeID, linkedVMID, linkedContainerID)
+}
+
 func sanitizeHostComponent(value string) string {
 	value = strings.TrimSpace(strings.ToLower(value))
 	if value == "" {
@@ -3227,7 +3311,7 @@ func (m *Manager) CheckHost(host models.Host) {
 	m.mu.RLock()
 	alertsEnabled := m.config.Enabled
 	disableAllAgents := m.config.DisableAllAgents
-	thresholds := m.resolveResourceThresholds("agent", host.ID)
+	thresholds := m.resolveHostThresholdsNoLock(host.ID, host.LinkedNodeID, host.LinkedVMID, host.LinkedContainerID)
 	m.mu.RUnlock()
 
 	if !alertsEnabled {
@@ -3266,6 +3350,15 @@ func (m *Manager) CheckHost(host models.Host) {
 		"osVersion":    host.OSVersion,
 		"agentVersion": host.AgentVersion,
 		"architecture": host.Architecture,
+	}
+	if linkedNodeID := strings.TrimSpace(host.LinkedNodeID); linkedNodeID != "" {
+		baseMetadata["linkedNodeId"] = linkedNodeID
+	}
+	if linkedVMID := strings.TrimSpace(host.LinkedVMID); linkedVMID != "" {
+		baseMetadata["linkedVmId"] = linkedVMID
+	}
+	if linkedContainerID := strings.TrimSpace(host.LinkedContainerID); linkedContainerID != "" {
+		baseMetadata["linkedContainerId"] = linkedContainerID
 	}
 	if len(host.Tags) > 0 {
 		baseMetadata["tags"] = append([]string(nil), host.Tags...)
@@ -3590,7 +3683,7 @@ func (m *Manager) HandleHostOffline(host models.Host) {
 		return
 	}
 	disableHostsOffline := m.config.DisableAllAgentsOffline
-	thresholds := m.resolveResourceThresholds("agent", host.ID)
+	thresholds := m.resolveHostThresholdsNoLock(host.ID, host.LinkedNodeID, host.LinkedVMID, host.LinkedContainerID)
 	m.mu.RUnlock()
 
 	resourceKey := hostResourceID(host.ID)
@@ -3644,13 +3737,16 @@ func (m *Manager) HandleHostOffline(host models.Host) {
 		Instance:     instanceName,
 		Message:      fmt.Sprintf("Host '%s' is offline", resourceName),
 		Metadata: map[string]interface{}{
-			"resourceType": "agent",
-			"hostId":       host.ID,
-			"hostname":     host.Hostname,
-			"displayName":  host.DisplayName,
-			"platform":     host.Platform,
-			"osName":       host.OSName,
-			"osVersion":    host.OSVersion,
+			"resourceType":      "agent",
+			"hostId":            host.ID,
+			"hostname":          host.Hostname,
+			"displayName":       host.DisplayName,
+			"platform":          host.Platform,
+			"osName":            host.OSName,
+			"osVersion":         host.OSVersion,
+			"linkedNodeId":      strings.TrimSpace(host.LinkedNodeID),
+			"linkedVmId":        strings.TrimSpace(host.LinkedVMID),
+			"linkedContainerId": strings.TrimSpace(host.LinkedContainerID),
 		},
 		AddToRecent:   true,
 		AddToHistory:  true,
@@ -3758,6 +3854,72 @@ func (m *Manager) clearHostDiskAlerts(hostID string) {
 		}
 		m.clearAlertNoLock(alertID)
 	}
+}
+
+func (m *Manager) clearGuestMetricAlerts(guestID string, metrics ...string) int {
+	if guestID == "" {
+		return 0
+	}
+
+	allowedMetrics := make(map[string]struct{}, len(metrics))
+	for _, metric := range metrics {
+		metric = strings.TrimSpace(metric)
+		if metric == "" {
+			continue
+		}
+		allowedMetrics[metric] = struct{}{}
+	}
+
+	perDiskPrefix := fmt.Sprintf("%s-disk-", guestID)
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	cleared := 0
+	for storageKey, alert := range m.activeAlerts {
+		if alert == nil || alert.Type == "powered-off" {
+			continue
+		}
+		if alert.ResourceID != guestID && !strings.HasPrefix(alert.ResourceID, perDiskPrefix) {
+			continue
+		}
+		if len(allowedMetrics) > 0 {
+			if _, ok := allowedMetrics[alert.Type]; !ok {
+				continue
+			}
+		}
+		m.clearAlertNoLock(storageKey)
+		cleared++
+	}
+
+	return cleared
+}
+
+func (m *Manager) cleanupGuestDiskAlerts(guestID string, seen map[string]struct{}) int {
+	if guestID == "" {
+		return 0
+	}
+
+	prefix := fmt.Sprintf("%s-disk-", guestID)
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	cleared := 0
+	for storageKey, alert := range m.activeAlerts {
+		if alert == nil || !strings.HasPrefix(alert.ResourceID, prefix) {
+			continue
+		}
+		if seen != nil {
+			if _, exists := seen[alert.ResourceID]; exists {
+				continue
+			}
+		}
+		m.clearAlertNoLock(storageKey)
+		cleared++
+	}
+
+	return cleared
 }
 
 func (m *Manager) cleanupHostDiskAlerts(host models.Host, seen map[string]struct{}) {
@@ -5502,9 +5664,19 @@ func (m *Manager) clearDockerContainerUpdateTracking(resourceID, trackingKey str
 	m.mu.Unlock()
 }
 
+func (m *Manager) touchDockerContainerUpdateAlert(alertID string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if alert, exists := m.getActiveAlertNoLock(alertID); exists && alert != nil {
+		alert.LastSeen = time.Now()
+	}
+}
+
 // checkDockerContainerImageUpdate checks if an image update has been pending for too long
 func (m *Manager) checkDockerContainerImageUpdate(host models.DockerHost, container models.DockerContainer, resourceID, containerName, instanceName, nodeName string) {
 	alertID := fmt.Sprintf("docker-container-update-%s", resourceID)
+	canonicalAlertID := buildCanonicalStateID(resourceID, resourceID+"-image-update")
 	updateTrackingKey := dockerUpdateTrackingKey(host, container)
 
 	// Check if update detection is enabled
@@ -5514,30 +5686,30 @@ func (m *Manager) checkDockerContainerImageUpdate(host models.DockerHost, contai
 
 	// Negative value means disabled
 	if delayHours < 0 {
-		m.clearAlert(buildCanonicalStateID(resourceID, resourceID+"-image-update"))
+		m.clearAlert(canonicalAlertID)
 		m.clearDockerContainerUpdateTracking(resourceID, updateTrackingKey)
 		return
 	}
 
 	// Check if this container has an update status reported
 	if container.UpdateStatus == nil {
-		// No update status - clear any tracking and alerts
-		m.clearAlert(buildCanonicalStateID(resourceID, resourceID+"-image-update"))
-		m.clearDockerContainerUpdateTracking(resourceID, updateTrackingKey)
+		// Missing update status means the condition is unknown, not resolved.
+		// Preserve any active alert and first-seen tracking until we see an affirmative clear.
+		m.touchDockerContainerUpdateAlert(canonicalAlertID)
 		return
 	}
 
 	// Check for errors in update detection (don't alert on errors)
 	if container.UpdateStatus.Error != "" {
-		// Update check failed - clear alert but keep tracking
-		m.clearAlert(buildCanonicalStateID(resourceID, resourceID+"-image-update"))
+		// A failed update check cannot confirm the pending update has been resolved.
+		m.touchDockerContainerUpdateAlert(canonicalAlertID)
 		return
 	}
 
 	// Check if an update is available
 	if !container.UpdateStatus.UpdateAvailable {
 		// No update available - clear tracking and alert
-		m.clearAlert(buildCanonicalStateID(resourceID, resourceID+"-image-update"))
+		m.clearAlert(canonicalAlertID)
 		m.clearDockerContainerUpdateTracking(resourceID, updateTrackingKey)
 		return
 	}
@@ -7495,8 +7667,10 @@ func (m *Manager) removeActiveAlertNoLock(alertID string) {
 		m.unregisterActiveAlertAliasNoLock(key, alert)
 	}
 	if exists {
+		delete(m.offlineRecoveryConfirmations, key)
 		delete(m.activeAlerts, key)
 	}
+	delete(m.offlineRecoveryConfirmations, alertID)
 	// NOTE: Don't delete ackState here - preserve it so if the same alert
 	// reappears (e.g., powered-off VM during backup), the acknowledgement
 	// is restored via preserveAlertState. ackState is cleaned up in Cleanup().
@@ -7504,6 +7678,27 @@ func (m *Manager) removeActiveAlertNoLock(alertID string) {
 	if exists {
 		m.markAckInactiveNoLock(currentAlert, publicID, time.Now())
 	}
+}
+
+func (m *Manager) confirmOfflineRecoveryNoLock(alertID string, required int) (int, bool) {
+	alertID = strings.TrimSpace(alertID)
+	if alertID == "" {
+		return 0, false
+	}
+
+	if required <= 1 {
+		delete(m.offlineRecoveryConfirmations, alertID)
+		return required, true
+	}
+
+	m.offlineRecoveryConfirmations[alertID]++
+	confirmations := m.offlineRecoveryConfirmations[alertID]
+	if confirmations < required {
+		return confirmations, false
+	}
+
+	delete(m.offlineRecoveryConfirmations, alertID)
+	return confirmations, true
 }
 
 // GetActiveAlerts returns all active alerts
@@ -7817,8 +8012,9 @@ func (m *Manager) OnAlertHistory(cb AlertCallback) {
 	}
 }
 
-// clearResourceOfflineAlert removes an offline alert when a resource comes back online.
-func (m *Manager) clearResourceOfflineAlert(alertPrefix, resourceID, resourceName, host, resourceKind string) {
+// clearResourceOfflineAlert removes an offline alert when a poll-driven resource
+// stays healthy for enough consecutive polls to confirm recovery.
+func (m *Manager) clearResourceOfflineAlert(resourceID, resourceName, host, resourceKind string, requiredRecoveryCount int) {
 	alertID := canonicalConnectivityStateID(resourceID)
 
 	m.mu.Lock()
@@ -7836,6 +8032,17 @@ func (m *Manager) clearResourceOfflineAlert(alertPrefix, resourceID, resourceNam
 	// Check if offline alert exists
 	alert, exists := m.getActiveAlertNoLock(alertID)
 	if !exists {
+		delete(m.offlineRecoveryConfirmations, alertID)
+		return
+	}
+
+	recoveryCount, confirmed := m.confirmOfflineRecoveryNoLock(alertID, requiredRecoveryCount)
+	if !confirmed {
+		log.Debug().
+			Str(strings.ToLower(resourceKind), resourceName).
+			Int("confirmations", recoveryCount).
+			Int("required", requiredRecoveryCount).
+			Msg(resourceKind + " appears back online, waiting for recovery confirmation")
 		return
 	}
 
@@ -7863,6 +8070,10 @@ func (m *Manager) clearResourceOfflineAlert(alertPrefix, resourceID, resourceNam
 // checkNodeOffline creates an alert for offline nodes after confirmation
 func (m *Manager) checkNodeOffline(node models.Node) {
 	alertID := fmt.Sprintf("node-offline-%s", node.ID)
+
+	m.mu.Lock()
+	delete(m.offlineRecoveryConfirmations, canonicalConnectivityStateID(node.ID))
+	m.mu.Unlock()
 
 	thresholds := m.resolveResourceThresholds("node", node.ID)
 	spec, err := buildCanonicalConnectivitySpec(node.ID, node.Name, unifiedresources.ResourceType("node"), AlertLevelCritical, 3, thresholds.Disabled || thresholds.DisableConnectivity)
@@ -7918,6 +8129,17 @@ func (m *Manager) clearNodeOfflineAlert(node models.Node) {
 	// Check if offline alert exists
 	alert, exists := m.getActiveAlertNoLock(alertID)
 	if !exists {
+		delete(m.offlineRecoveryConfirmations, alertID)
+		return
+	}
+
+	recoveryCount, confirmed := m.confirmOfflineRecoveryNoLock(alertID, offlineRecoveryConfirmationsDefault)
+	if !confirmed {
+		log.Debug().
+			Str("node", node.Name).
+			Int("confirmations", recoveryCount).
+			Int("required", offlineRecoveryConfirmationsDefault).
+			Msg("Node appears back online, waiting for recovery confirmation")
 		return
 	}
 
@@ -7944,6 +8166,10 @@ func (m *Manager) clearNodeOfflineAlert(node models.Node) {
 
 // checkPBSOffline creates an alert for offline PBS instances
 func (m *Manager) checkPBSOffline(pbs models.PBSInstance) {
+	m.mu.Lock()
+	delete(m.offlineRecoveryConfirmations, canonicalConnectivityStateID(pbs.ID))
+	m.mu.Unlock()
+
 	thresholds := m.resolveResourceThresholds("pbs", pbs.ID)
 	spec, err := buildCanonicalConnectivitySpec(pbs.ID, pbs.Name, unifiedresources.ResourceTypePBS, AlertLevelCritical, 3, thresholds.Disabled || thresholds.DisableConnectivity)
 	if err != nil {
@@ -7979,11 +8205,15 @@ func (m *Manager) checkPBSOffline(pbs models.PBSInstance) {
 
 // clearPBSOfflineAlert removes offline alert when PBS comes back online
 func (m *Manager) clearPBSOfflineAlert(pbs models.PBSInstance) {
-	m.clearResourceOfflineAlert("pbs-offline", pbs.ID, pbs.Name, pbs.Host, "PBS")
+	m.clearResourceOfflineAlert(pbs.ID, pbs.Name, pbs.Host, "PBS", offlineRecoveryConfirmationsDefault)
 }
 
 // checkPMGOffline creates an alert for offline PMG instances
 func (m *Manager) checkPMGOffline(pmg models.PMGInstance) {
+	m.mu.Lock()
+	delete(m.offlineRecoveryConfirmations, canonicalConnectivityStateID(pmg.ID))
+	m.mu.Unlock()
+
 	m.mu.RLock()
 	override, hasOverride := m.config.Overrides[pmg.ID]
 	m.mu.RUnlock()
@@ -8022,7 +8252,7 @@ func (m *Manager) checkPMGOffline(pmg models.PMGInstance) {
 
 // clearPMGOfflineAlert removes offline alert when PMG comes back online
 func (m *Manager) clearPMGOfflineAlert(pmg models.PMGInstance) {
-	m.clearResourceOfflineAlert("pmg-offline", pmg.ID, pmg.Name, pmg.Host, "PMG")
+	m.clearResourceOfflineAlert(pmg.ID, pmg.Name, pmg.Host, "PMG", offlineRecoveryConfirmationsDefault)
 }
 
 // checkPMGQueueDepths checks PMG mail queue depths and creates alerts
@@ -8936,6 +9166,10 @@ func (m *Manager) checkAnomalyMetric(pmg models.PMGInstance, tracker *pmgAnomaly
 func (m *Manager) checkStorageOffline(storage models.Storage) {
 	alertID := fmt.Sprintf("storage-offline-%s", storage.ID)
 
+	m.mu.Lock()
+	delete(m.offlineRecoveryConfirmations, canonicalConnectivityStateID(storage.ID))
+	m.mu.Unlock()
+
 	thresholds := m.resolveResourceThresholds("storage", storage.ID)
 	spec, err := buildCanonicalConnectivitySpec(storage.ID, storage.Name, unifiedresources.ResourceTypeStorage, AlertLevelWarning, 2, thresholds.Disabled || thresholds.DisableConnectivity)
 	if err != nil {
@@ -8970,7 +9204,7 @@ func (m *Manager) checkStorageOffline(storage models.Storage) {
 
 // clearStorageOfflineAlert removes offline alert when storage comes back online
 func (m *Manager) clearStorageOfflineAlert(storage models.Storage) {
-	m.clearResourceOfflineAlert("storage-offline", storage.ID, storage.Name, storage.Node, "Storage")
+	m.clearResourceOfflineAlert(storage.ID, storage.Name, storage.Node, "Storage", offlineRecoveryConfirmationsStorage)
 }
 
 // checkGuestPoweredOff creates an alert for powered-off guests
@@ -10095,6 +10329,7 @@ func (m *Manager) ClearActiveAlerts() {
 	m.alertRateLimit = make(map[string][]time.Time)
 	m.nodeOfflineCount = make(map[string]int)
 	m.offlineConfirmations = make(map[string]int)
+	m.offlineRecoveryConfirmations = make(map[string]int)
 	m.dockerOfflineCount = make(map[string]int)
 	m.dockerStateConfirm = make(map[string]int)
 	m.dockerRestartTracking = make(map[string]*dockerRestartRecord)
@@ -10211,6 +10446,13 @@ func (m *Manager) cleanupStaleMaps() {
 		}
 		if !hasRelatedAlert {
 			delete(m.offlineConfirmations, resourceID)
+			cleaned++
+		}
+	}
+
+	for alertID := range m.offlineRecoveryConfirmations {
+		if !m.hasActiveAlertNoLock(alertID) {
+			delete(m.offlineRecoveryConfirmations, alertID)
 			cleaned++
 		}
 	}

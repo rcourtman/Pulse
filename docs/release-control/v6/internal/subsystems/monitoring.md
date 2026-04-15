@@ -95,6 +95,12 @@ This subsystem now sits under the dedicated core monitoring runtime lane so
 discovery, metrics-history correctness, and platform-specific runtime coverage
 can be governed as first-class product work instead of staying diluted inside
 architecture coherence.
+That same monitoring boundary also owns the escalation callback bridge into the
+alerts delivery layer. Monitor-owned escalation handling may still publish
+canonical escalation state to websocket consumers, but notification fan-out
+must defer quiet-hours and resolved-notification suppression policy to the
+alerts manager instead of bypassing that shared routing contract when monitor
+plumbs escalations outward.
 That same monitoring owner now also governs monitored-system usage readiness
 for commercial boundaries. A non-nil unified read-state is not sufficient when
 provider-owned supplemental inventories such as TrueNAS or VMware are still

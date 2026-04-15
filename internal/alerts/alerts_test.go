@@ -5098,6 +5098,18 @@ func TestClearStorageOfflineAlert(t *testing.T) {
 		})
 
 		m.clearStorageOfflineAlert(storage)
+		m.mu.RLock()
+		_, existsAfterFirst := testLookupActiveAlert(t, m, alertID)
+		recoveryCountAfterFirst := m.offlineRecoveryConfirmations[canonicalConnectivityStateID(storage.ID)]
+		m.mu.RUnlock()
+		if !existsAfterFirst {
+			t.Fatal("expected storage alert to remain active until recovery confirmations are satisfied")
+		}
+		if recoveryCountAfterFirst != 1 {
+			t.Fatalf("expected first storage recovery confirmation to be tracked, got %d", recoveryCountAfterFirst)
+		}
+
+		m.clearStorageOfflineAlert(storage)
 
 		m.mu.RLock()
 		_, alertExists := testLookupActiveAlert(t, m, alertID)
@@ -6787,6 +6799,28 @@ func TestHandleHostOffline(t *testing.T) {
 		}
 	})
 
+	t.Run("linked node override DisableConnectivity clears alert and returns", func(t *testing.T) {
+		m := newTestManager(t)
+		m.config.Enabled = true
+		m.config.Overrides = map[string]ThresholdConfig{
+			"cluster-node1": {DisableConnectivity: true},
+		}
+
+		alertID := canonicalConnectivityStateID(hostResourceID("host1"))
+		m.activeAlerts[alertID] = &Alert{ID: alertID, Type: "host-offline"}
+		m.offlineConfirmations[hostResourceID("host1")] = 5
+
+		host := models.Host{ID: "host1", Hostname: "test-host", LinkedNodeID: "cluster-node1"}
+		m.HandleHostOffline(host)
+
+		if testHasActiveAlert(t, m, alertID) {
+			t.Error("expected alert to be cleared")
+		}
+		if _, exists := m.offlineConfirmations[hostResourceID("host1")]; exists {
+			t.Error("expected offlineConfirmations to be cleared")
+		}
+	})
+
 	t.Run("override Disabled clears alert and returns", func(t *testing.T) {
 		// t.Parallel()
 		m := newTestManager(t)
@@ -8119,6 +8153,30 @@ func TestClearNodeOfflineAlert(t *testing.T) {
 
 		node := models.Node{ID: "node1", Name: "Node 1", Instance: "pve1"}
 		m.clearNodeOfflineAlert(node)
+		m.mu.RLock()
+		_, existsAfterFirst := testLookupActiveAlert(t, m, state)
+		recoveryCountAfterFirst := m.offlineRecoveryConfirmations[state]
+		m.mu.RUnlock()
+		if !existsAfterFirst {
+			t.Fatal("expected node alert to remain active until recovery confirmations are satisfied")
+		}
+		if recoveryCountAfterFirst != 1 {
+			t.Fatalf("expected first node recovery confirmation to be tracked, got %d", recoveryCountAfterFirst)
+		}
+
+		m.clearNodeOfflineAlert(node)
+		m.mu.RLock()
+		_, existsAfterSecond := testLookupActiveAlert(t, m, state)
+		recoveryCountAfterSecond := m.offlineRecoveryConfirmations[state]
+		m.mu.RUnlock()
+		if !existsAfterSecond {
+			t.Fatal("expected node alert to remain active after second recovery confirmation")
+		}
+		if recoveryCountAfterSecond != 2 {
+			t.Fatalf("expected second node recovery confirmation to be tracked, got %d", recoveryCountAfterSecond)
+		}
+
+		m.clearNodeOfflineAlert(node)
 
 		m.mu.RLock()
 		_, alertExists := testLookupActiveAlert(t, m, state)
@@ -8174,7 +8232,10 @@ func TestClearOfflineAlertNoDeadlock(t *testing.T) {
 				m.mu.Unlock()
 			},
 			clearFn: func(m *Manager) {
-				m.clearNodeOfflineAlert(models.Node{ID: "node1", Name: "Node 1", Instance: "pve1"})
+				node := models.Node{ID: "node1", Name: "Node 1", Instance: "pve1"}
+				m.clearNodeOfflineAlert(node)
+				m.clearNodeOfflineAlert(node)
+				m.clearNodeOfflineAlert(node)
 			},
 		},
 		{
@@ -8189,7 +8250,10 @@ func TestClearOfflineAlertNoDeadlock(t *testing.T) {
 				m.mu.Unlock()
 			},
 			clearFn: func(m *Manager) {
-				m.clearPBSOfflineAlert(models.PBSInstance{ID: "pbs1", Name: "PBS 1", Host: "host1"})
+				pbs := models.PBSInstance{ID: "pbs1", Name: "PBS 1", Host: "host1"}
+				m.clearPBSOfflineAlert(pbs)
+				m.clearPBSOfflineAlert(pbs)
+				m.clearPBSOfflineAlert(pbs)
 			},
 		},
 		{
@@ -8204,7 +8268,10 @@ func TestClearOfflineAlertNoDeadlock(t *testing.T) {
 				m.mu.Unlock()
 			},
 			clearFn: func(m *Manager) {
-				m.clearPMGOfflineAlert(models.PMGInstance{ID: "pmg1", Name: "PMG 1", Host: "host1"})
+				pmg := models.PMGInstance{ID: "pmg1", Name: "PMG 1", Host: "host1"}
+				m.clearPMGOfflineAlert(pmg)
+				m.clearPMGOfflineAlert(pmg)
+				m.clearPMGOfflineAlert(pmg)
 			},
 		},
 		{
@@ -8219,7 +8286,9 @@ func TestClearOfflineAlertNoDeadlock(t *testing.T) {
 				m.mu.Unlock()
 			},
 			clearFn: func(m *Manager) {
-				m.clearStorageOfflineAlert(models.Storage{ID: "stor1", Name: "Storage 1", Node: "node1"})
+				storage := models.Storage{ID: "stor1", Name: "Storage 1", Node: "node1"}
+				m.clearStorageOfflineAlert(storage)
+				m.clearStorageOfflineAlert(storage)
 			},
 		},
 		{
@@ -8320,6 +8389,30 @@ func TestClearPBSOfflineAlert(t *testing.T) {
 
 		pbs := models.PBSInstance{ID: "pbs1", Name: "PBS 1", Host: "pbs.local"}
 		m.clearPBSOfflineAlert(pbs)
+		m.mu.RLock()
+		_, existsAfterFirst := testLookupActiveAlert(t, m, "pbs-offline-pbs1")
+		recoveryCountAfterFirst := m.offlineRecoveryConfirmations[canonicalConnectivityStateID("pbs1")]
+		m.mu.RUnlock()
+		if !existsAfterFirst {
+			t.Fatal("expected PBS alert to remain active until recovery confirmations are satisfied")
+		}
+		if recoveryCountAfterFirst != 1 {
+			t.Fatalf("expected first PBS recovery confirmation to be tracked, got %d", recoveryCountAfterFirst)
+		}
+
+		m.clearPBSOfflineAlert(pbs)
+		m.mu.RLock()
+		_, existsAfterSecond := testLookupActiveAlert(t, m, "pbs-offline-pbs1")
+		recoveryCountAfterSecond := m.offlineRecoveryConfirmations[canonicalConnectivityStateID("pbs1")]
+		m.mu.RUnlock()
+		if !existsAfterSecond {
+			t.Fatal("expected PBS alert to remain active after second recovery confirmation")
+		}
+		if recoveryCountAfterSecond != 2 {
+			t.Fatalf("expected second PBS recovery confirmation to be tracked, got %d", recoveryCountAfterSecond)
+		}
+
+		m.clearPBSOfflineAlert(pbs)
 
 		m.mu.RLock()
 		_, alertExists := testLookupActiveAlert(t, m, "pbs-offline-pbs1")
@@ -8402,6 +8495,30 @@ func TestClearPMGOfflineAlert(t *testing.T) {
 		m.mu.Unlock()
 
 		pmg := models.PMGInstance{ID: "pmg1", Name: "PMG 1", Host: "pmg.local"}
+		m.clearPMGOfflineAlert(pmg)
+		m.mu.RLock()
+		_, existsAfterFirst := testLookupActiveAlert(t, m, "pmg-offline-pmg1")
+		recoveryCountAfterFirst := m.offlineRecoveryConfirmations[canonicalConnectivityStateID("pmg1")]
+		m.mu.RUnlock()
+		if !existsAfterFirst {
+			t.Fatal("expected PMG alert to remain active until recovery confirmations are satisfied")
+		}
+		if recoveryCountAfterFirst != 1 {
+			t.Fatalf("expected first PMG recovery confirmation to be tracked, got %d", recoveryCountAfterFirst)
+		}
+
+		m.clearPMGOfflineAlert(pmg)
+		m.mu.RLock()
+		_, existsAfterSecond := testLookupActiveAlert(t, m, "pmg-offline-pmg1")
+		recoveryCountAfterSecond := m.offlineRecoveryConfirmations[canonicalConnectivityStateID("pmg1")]
+		m.mu.RUnlock()
+		if !existsAfterSecond {
+			t.Fatal("expected PMG alert to remain active after second recovery confirmation")
+		}
+		if recoveryCountAfterSecond != 2 {
+			t.Fatalf("expected second PMG recovery confirmation to be tracked, got %d", recoveryCountAfterSecond)
+		}
+
 		m.clearPMGOfflineAlert(pmg)
 
 		m.mu.RLock()
@@ -13217,6 +13334,7 @@ func TestCheckNode(t *testing.T) {
 	t.Run("online node clears offline alert", func(t *testing.T) {
 		// t.Parallel()
 		m := newTestManager(t)
+		state := canonicalConnectivityStateID("node1")
 
 		// Pre-create offline alert
 		m.mu.Lock()
@@ -13236,10 +13354,35 @@ func TestCheckNode(t *testing.T) {
 			ConnectionHealth: "connected",
 		}
 		m.CheckNode(node)
+		m.mu.RLock()
+		_, alertExistsAfterFirst := testLookupActiveAlert(t, m, "node-offline-node1")
+		recoveryCountAfterFirst := m.offlineRecoveryConfirmations[state]
+		m.mu.RUnlock()
+		if !alertExistsAfterFirst {
+			t.Fatal("expected offline alert to remain active until recovery confirmations are satisfied")
+		}
+		if recoveryCountAfterFirst != 1 {
+			t.Fatalf("expected first recovery confirmation to be tracked, got %d", recoveryCountAfterFirst)
+		}
+
+		m.CheckNode(node)
+		m.mu.RLock()
+		_, alertExistsAfterSecond := testLookupActiveAlert(t, m, "node-offline-node1")
+		recoveryCountAfterSecond := m.offlineRecoveryConfirmations[state]
+		m.mu.RUnlock()
+		if !alertExistsAfterSecond {
+			t.Fatal("expected offline alert to remain active after second recovery confirmation")
+		}
+		if recoveryCountAfterSecond != 2 {
+			t.Fatalf("expected second recovery confirmation to be tracked, got %d", recoveryCountAfterSecond)
+		}
+
+		m.CheckNode(node)
 
 		m.mu.RLock()
 		_, alertExists := testLookupActiveAlert(t, m, "node-offline-node1")
 		_, countExists := m.nodeOfflineCount["node1"]
+		_, recoveryExists := m.offlineRecoveryConfirmations[state]
 		m.mu.RUnlock()
 
 		if alertExists {
@@ -13247,6 +13390,9 @@ func TestCheckNode(t *testing.T) {
 		}
 		if countExists {
 			t.Error("expected offline count to be cleared")
+		}
+		if recoveryExists {
+			t.Error("expected offline recovery confirmations to be cleared")
 		}
 	})
 
@@ -14907,6 +15053,125 @@ func TestCheckHostComprehensive(t *testing.T) {
 			t.Error("expected tags in metadata")
 		}
 	})
+
+	t.Run("inherits linked node overrides for host agent metrics", func(t *testing.T) {
+		m := newTestManager(t)
+		m.ClearActiveAlerts()
+
+		m.mu.Lock()
+		m.config.TimeThresholds = map[string]int{}
+		m.config.AgentDefaults = ThresholdConfig{
+			Memory: &HysteresisThreshold{Trigger: 85.0, Clear: 80.0},
+		}
+		m.config.Overrides = map[string]ThresholdConfig{
+			"cluster-node1": {
+				Memory: &HysteresisThreshold{Trigger: 97.0, Clear: 92.0},
+			},
+		}
+		m.mu.Unlock()
+
+		host := models.Host{
+			ID:           "host-node1",
+			DisplayName:  "node1",
+			Hostname:     "node1",
+			LinkedNodeID: "cluster-node1",
+			Memory: models.Memory{
+				Usage: 90.6,
+				Total: 1024,
+				Used:  928,
+				Free:  96,
+			},
+			Status:   "online",
+			LastSeen: time.Now(),
+		}
+
+		m.CheckHost(host)
+
+		m.mu.RLock()
+		_, exists := m.activeAlerts[canonicalMetricStateID(hostResourceID(host.ID), "memory")]
+		m.mu.RUnlock()
+
+		if exists {
+			t.Fatal("expected linked node override to suppress host-agent memory alert")
+		}
+	})
+
+	t.Run("inherits linked guest overrides for host agent metrics", func(t *testing.T) {
+		m := newTestManager(t)
+		m.ClearActiveAlerts()
+
+		m.mu.Lock()
+		m.config.TimeThresholds = map[string]int{}
+		m.config.AgentDefaults = ThresholdConfig{
+			CPU: &HysteresisThreshold{Trigger: 80.0, Clear: 75.0},
+		}
+		m.config.Overrides = map[string]ThresholdConfig{
+			"guest:Main:101": {
+				CPU: &HysteresisThreshold{Trigger: 105.0, Clear: 100.0},
+			},
+		}
+		m.mu.Unlock()
+
+		host := models.Host{
+			ID:          "host-vm101",
+			DisplayName: "vm101",
+			Hostname:    "vm101.local",
+			LinkedVMID:  "Main:node3:101",
+			CPUUsage:    97.5,
+			Status:      "online",
+			LastSeen:    time.Now(),
+		}
+
+		m.CheckHost(host)
+
+		m.mu.RLock()
+		_, exists := m.activeAlerts[canonicalMetricStateID(hostResourceID(host.ID), "cpu")]
+		m.mu.RUnlock()
+
+		if exists {
+			t.Fatal("expected linked guest override to suppress host-agent cpu alert")
+		}
+	})
+
+	t.Run("prefers explicit host overrides over linked resource overrides", func(t *testing.T) {
+		m := newTestManager(t)
+		m.ClearActiveAlerts()
+
+		m.mu.Lock()
+		m.config.TimeThresholds = map[string]int{}
+		m.config.AgentDefaults = ThresholdConfig{
+			CPU: &HysteresisThreshold{Trigger: 80.0, Clear: 75.0},
+		}
+		m.config.Overrides = map[string]ThresholdConfig{
+			"guest:Main:101": {
+				CPU: &HysteresisThreshold{Trigger: 105.0, Clear: 100.0},
+			},
+			"host-vm101": {
+				CPU: &HysteresisThreshold{Trigger: 90.0, Clear: 85.0},
+			},
+		}
+		m.mu.Unlock()
+
+		host := models.Host{
+			ID:          "host-vm101",
+			DisplayName: "vm101",
+			Hostname:    "vm101.local",
+			LinkedVMID:  "Main:node3:101",
+			CPUUsage:    97.5,
+			Status:      "online",
+			LastSeen:    time.Now(),
+		}
+
+		m.CheckHost(host)
+
+		m.mu.RLock()
+		alert := m.activeAlerts[canonicalMetricStateID(hostResourceID(host.ID), "cpu")]
+		m.mu.RUnlock()
+
+		if alert == nil {
+			t.Fatal("expected explicit host override to take precedence and trigger alert")
+		}
+	})
 }
 
 func TestCheckPBSComprehensive(t *testing.T) {
@@ -15332,6 +15597,7 @@ func TestCheckPBSComprehensive(t *testing.T) {
 	t.Run("clears offline alert when back online", func(t *testing.T) {
 		// t.Parallel()
 		m := newTestManager(t)
+		state := canonicalConnectivityStateID("pbs1")
 
 		m.mu.Lock()
 		m.activeAlerts["pbs-offline-pbs1"] = &Alert{ID: "pbs-offline-pbs1", Type: "connectivity"}
@@ -15346,10 +15612,35 @@ func TestCheckPBSComprehensive(t *testing.T) {
 		}
 
 		m.CheckPBS(pbs)
+		m.mu.RLock()
+		_, offlineExistsAfterFirst := testLookupActiveAlert(t, m, "pbs-offline-pbs1")
+		recoveryCountAfterFirst := m.offlineRecoveryConfirmations[state]
+		m.mu.RUnlock()
+		if !offlineExistsAfterFirst {
+			t.Fatal("expected offline alert to remain active until recovery confirmations are satisfied")
+		}
+		if recoveryCountAfterFirst != 1 {
+			t.Fatalf("expected first PBS recovery confirmation to be tracked, got %d", recoveryCountAfterFirst)
+		}
+
+		m.CheckPBS(pbs)
+		m.mu.RLock()
+		_, offlineExistsAfterSecond := testLookupActiveAlert(t, m, "pbs-offline-pbs1")
+		recoveryCountAfterSecond := m.offlineRecoveryConfirmations[state]
+		m.mu.RUnlock()
+		if !offlineExistsAfterSecond {
+			t.Fatal("expected offline alert to remain active after second recovery confirmation")
+		}
+		if recoveryCountAfterSecond != 2 {
+			t.Fatalf("expected second PBS recovery confirmation to be tracked, got %d", recoveryCountAfterSecond)
+		}
+
+		m.CheckPBS(pbs)
 
 		m.mu.RLock()
 		_, offlineExists := testLookupActiveAlert(t, m, "pbs-offline-pbs1")
 		_, confirmExists := m.offlineConfirmations["pbs1"]
+		_, recoveryExists := m.offlineRecoveryConfirmations[state]
 		m.mu.RUnlock()
 
 		if offlineExists {
@@ -15357,6 +15648,9 @@ func TestCheckPBSComprehensive(t *testing.T) {
 		}
 		if confirmExists {
 			t.Error("expected offline confirmation to be cleared")
+		}
+		if recoveryExists {
+			t.Error("expected offline recovery confirmations to be cleared")
 		}
 	})
 }
@@ -15664,6 +15958,7 @@ func TestCheckPMGComprehensive(t *testing.T) {
 	t.Run("clears offline alert when back online", func(t *testing.T) {
 		// t.Parallel()
 		m := newTestManager(t)
+		state := canonicalConnectivityStateID("pmg1")
 
 		m.mu.Lock()
 		m.activeAlerts["pmg-offline-pmg1"] = &Alert{ID: "pmg-offline-pmg1", Type: "connectivity"}
@@ -15678,10 +15973,35 @@ func TestCheckPMGComprehensive(t *testing.T) {
 		}
 
 		m.CheckPMG(pmg)
+		m.mu.RLock()
+		_, offlineExistsAfterFirst := testLookupActiveAlert(t, m, "pmg-offline-pmg1")
+		recoveryCountAfterFirst := m.offlineRecoveryConfirmations[state]
+		m.mu.RUnlock()
+		if !offlineExistsAfterFirst {
+			t.Fatal("expected offline alert to remain active until recovery confirmations are satisfied")
+		}
+		if recoveryCountAfterFirst != 1 {
+			t.Fatalf("expected first PMG recovery confirmation to be tracked, got %d", recoveryCountAfterFirst)
+		}
+
+		m.CheckPMG(pmg)
+		m.mu.RLock()
+		_, offlineExistsAfterSecond := testLookupActiveAlert(t, m, "pmg-offline-pmg1")
+		recoveryCountAfterSecond := m.offlineRecoveryConfirmations[state]
+		m.mu.RUnlock()
+		if !offlineExistsAfterSecond {
+			t.Fatal("expected offline alert to remain active after second recovery confirmation")
+		}
+		if recoveryCountAfterSecond != 2 {
+			t.Fatalf("expected second PMG recovery confirmation to be tracked, got %d", recoveryCountAfterSecond)
+		}
+
+		m.CheckPMG(pmg)
 
 		m.mu.RLock()
 		_, offlineExists := testLookupActiveAlert(t, m, "pmg-offline-pmg1")
 		_, confirmExists := m.offlineConfirmations["pmg1"]
+		_, recoveryExists := m.offlineRecoveryConfirmations[state]
 		m.mu.RUnlock()
 
 		if offlineExists {
@@ -15689,6 +16009,9 @@ func TestCheckPMGComprehensive(t *testing.T) {
 		}
 		if confirmExists {
 			t.Error("expected offline confirmation to be cleared")
+		}
+		if recoveryExists {
+			t.Error("expected offline recovery confirmations to be cleared")
 		}
 	})
 
@@ -16008,6 +16331,7 @@ func TestCheckStorageComprehensive(t *testing.T) {
 	t.Run("clears offline alert when back online", func(t *testing.T) {
 		// t.Parallel()
 		m := newTestManager(t)
+		state := canonicalConnectivityStateID("storage1")
 
 		m.mu.Lock()
 		m.activeAlerts["storage-offline-storage1"] = &Alert{ID: "storage-offline-storage1", Type: "connectivity"}
@@ -16021,10 +16345,23 @@ func TestCheckStorageComprehensive(t *testing.T) {
 		}
 
 		m.CheckStorage(storage)
+		m.mu.RLock()
+		_, offlineExistsAfterFirst := testLookupActiveAlert(t, m, "storage-offline-storage1")
+		recoveryCountAfterFirst := m.offlineRecoveryConfirmations[state]
+		m.mu.RUnlock()
+		if !offlineExistsAfterFirst {
+			t.Fatal("expected offline alert to remain active until recovery confirmations are satisfied")
+		}
+		if recoveryCountAfterFirst != 1 {
+			t.Fatalf("expected first storage recovery confirmation to be tracked, got %d", recoveryCountAfterFirst)
+		}
+
+		m.CheckStorage(storage)
 
 		m.mu.RLock()
 		_, offlineExists := testLookupActiveAlert(t, m, "storage-offline-storage1")
 		_, confirmExists := m.offlineConfirmations["storage1"]
+		_, recoveryExists := m.offlineRecoveryConfirmations[state]
 		m.mu.RUnlock()
 
 		if offlineExists {
@@ -16032,6 +16369,9 @@ func TestCheckStorageComprehensive(t *testing.T) {
 		}
 		if confirmExists {
 			t.Error("expected offline confirmation to be cleared")
+		}
+		if recoveryExists {
+			t.Error("expected offline recovery confirmations to be cleared")
 		}
 	})
 

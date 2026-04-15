@@ -91,6 +91,33 @@ func TestGetStateRefreshesLiveAlertSnapshots(t *testing.T) {
 	}
 }
 
+func TestEscalationDeliveryDefersToCanonicalAlertSuppression(t *testing.T) {
+	requiredSnippets := map[string][]string{
+		"monitor.go": {
+			"m.alertManager.SetEscalateCallback(func(alert *alerts.Alert, level int) {",
+			"m.handleAlertEscalated(wsHub, alert, level)",
+		},
+		"monitor_alerts.go": {
+			"func (m *Monitor) handleAlertEscalated(hub *websocket.Hub, alert *alerts.Alert, level int) {",
+			"if m.alertManager.ShouldSuppressNotification(alert) {",
+			"m.broadcastEscalatedAlert(hub, alert)",
+		},
+	}
+
+	for file, snippets := range requiredSnippets {
+		data, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatalf("failed to read %s: %v", file, err)
+		}
+		source := string(data)
+		for _, snippet := range snippets {
+			if !strings.Contains(source, snippet) {
+				t.Fatalf("%s must contain %q", file, snippet)
+			}
+		}
+	}
+}
+
 func TestMonitoredSystemUsageReadinessGuardrailsRemainCanonical(t *testing.T) {
 	requiredSnippets := map[string][]string{
 		"monitor.go": {

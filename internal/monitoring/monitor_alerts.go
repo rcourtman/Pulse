@@ -8,6 +8,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
 	"github.com/rs/zerolog/log"
 )
 
@@ -138,6 +139,52 @@ func (m *Monitor) handleAlertResolved(alertID string) {
 				Msg("Resolved notification skipped - notifyOnResolve is disabled")
 		}
 	}
+}
+
+func (m *Monitor) handleAlertEscalated(hub *websocket.Hub, alert *alerts.Alert, level int) {
+	if alert == nil || m.alertManager == nil {
+		return
+	}
+
+	log.Info().
+		Str("alertID", alert.ID).
+		Int("level", level).
+		Msg("Alert escalated")
+
+	config := m.alertManager.GetConfig()
+	if level <= 0 || level > len(config.Schedule.Escalation.Levels) {
+		return
+	}
+
+	if m.alertManager.ShouldSuppressNotification(alert) {
+		log.Info().
+			Str("alertID", alert.ID).
+			Int("level", level).
+			Msg("Escalated notification suppressed during quiet hours")
+		m.broadcastEscalatedAlert(hub, alert)
+		return
+	}
+
+	if m.notificationMgr != nil {
+		escalationLevel := config.Schedule.Escalation.Levels[level-1]
+		switch escalationLevel.Notify {
+		case "email":
+			if emailConfig := m.notificationMgr.GetEmailConfig(); emailConfig.Enabled {
+				m.notificationMgr.SendAlert(alert)
+			}
+		case "webhook":
+			for _, webhook := range m.notificationMgr.GetWebhooks() {
+				if webhook.Enabled {
+					m.notificationMgr.SendAlert(alert)
+					break
+				}
+			}
+		case "all":
+			m.notificationMgr.SendAlert(alert)
+		}
+	}
+
+	m.broadcastEscalatedAlert(hub, alert)
 }
 
 func (m *Monitor) handleAlertAcknowledged(alert *alerts.Alert, user string) {

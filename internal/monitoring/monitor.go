@@ -1772,41 +1772,7 @@ func (m *Monitor) Start(ctx context.Context, wsHub *websocket.Hub) {
 		m.handleAlertUnacknowledged(alert, user)
 	})
 	m.alertManager.SetEscalateCallback(func(alert *alerts.Alert, level int) {
-		log.Info().
-			Str("alertID", alert.ID).
-			Int("level", level).
-			Msg("Alert escalated - sending notifications")
-
-		// Get escalation config
-		config := m.alertManager.GetConfig()
-		if level <= 0 || level > len(config.Schedule.Escalation.Levels) {
-			return
-		}
-
-		escalationLevel := config.Schedule.Escalation.Levels[level-1]
-
-		// Send notifications based on escalation level
-		switch escalationLevel.Notify {
-		case "email":
-			// Only send email
-			if emailConfig := m.notificationMgr.GetEmailConfig(); emailConfig.Enabled {
-				m.notificationMgr.SendAlert(alert)
-			}
-		case "webhook":
-			// Only send webhooks
-			for _, webhook := range m.notificationMgr.GetWebhooks() {
-				if webhook.Enabled {
-					m.notificationMgr.SendAlert(alert)
-					break
-				}
-			}
-		case "all":
-			// Send all notifications
-			m.notificationMgr.SendAlert(alert)
-		}
-
-		// Update WebSocket with escalation
-		m.broadcastEscalatedAlert(wsHub, alert)
+		m.handleAlertEscalated(wsHub, alert, level)
 	})
 
 	// Create separate tickers for polling and broadcasting using the configured cadence

@@ -1,6 +1,8 @@
 package monitoring
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -275,4 +277,126 @@ func TestMonitor_HandleAlertResolved_NoQuietHoursSendsNotification(t *testing.T)
 
 	// Should not crash, and notification should be dispatched (not suppressed)
 	m.handleAlertResolved(alertID)
+}
+
+func TestMonitor_HandleAlertEscalated_QuietHoursSuppressesNotification(t *testing.T) {
+	t.Setenv("PULSE_DATA_DIR", t.TempDir())
+
+	requests := make(chan struct{}, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests <- struct{}{}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	notifMgr := notifications.NewNotificationManager("https://pulse.local")
+	defer notifMgr.Stop()
+	notifMgr.SetGroupingWindow(0)
+	notifMgr.SetCooldown(0)
+	if err := notifMgr.UpdateAllowedPrivateCIDRs("127.0.0.1/32"); err != nil {
+		t.Fatalf("UpdateAllowedPrivateCIDRs: %v", err)
+	}
+	notifMgr.AddWebhook(notifications.WebhookConfig{
+		ID:      "quiet-hours-hook",
+		Name:    "quiet-hours",
+		URL:     server.URL,
+		Enabled: true,
+	})
+
+	mgr := alerts.NewManager()
+	cfg := mgr.GetConfig()
+	cfg.Schedule.Escalation.Levels = []alerts.EscalationLevel{{After: 1, Notify: "webhook"}}
+	cfg.Schedule.QuietHours = alerts.QuietHours{
+		Enabled:  true,
+		Start:    "00:00",
+		End:      "23:59",
+		Timezone: "UTC",
+		Days: map[string]bool{
+			"monday": true, "tuesday": true, "wednesday": true,
+			"thursday": true, "friday": true, "saturday": true, "sunday": true,
+		},
+		Suppress: alerts.QuietHoursSuppression{Offline: true},
+	}
+	mgr.UpdateConfig(cfg)
+
+	m := &Monitor{
+		notificationMgr: notifMgr,
+		alertManager:    mgr,
+	}
+
+	alert := &alerts.Alert{
+		ID:           "escalated-offline",
+		Type:         "connectivity",
+		Level:        alerts.AlertLevelCritical,
+		ResourceID:   "node/pve-1",
+		ResourceName: "pve-1",
+		Node:         "pve-1",
+		Instance:     "pve",
+		Message:      "Node offline",
+		StartTime:    time.Now(),
+	}
+
+	m.handleAlertEscalated(nil, alert, 1)
+
+	select {
+	case <-requests:
+		t.Fatal("expected quiet hours to suppress escalated notification delivery")
+	case <-time.After(500 * time.Millisecond):
+	}
+}
+
+func TestMonitor_HandleAlertEscalated_SendsNotificationWhenNotSuppressed(t *testing.T) {
+	t.Setenv("PULSE_DATA_DIR", t.TempDir())
+
+	requests := make(chan struct{}, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests <- struct{}{}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	notifMgr := notifications.NewNotificationManager("https://pulse.local")
+	defer notifMgr.Stop()
+	notifMgr.SetGroupingWindow(0)
+	notifMgr.SetCooldown(0)
+	if err := notifMgr.UpdateAllowedPrivateCIDRs("127.0.0.1/32"); err != nil {
+		t.Fatalf("UpdateAllowedPrivateCIDRs: %v", err)
+	}
+	notifMgr.AddWebhook(notifications.WebhookConfig{
+		ID:      "normal-hook",
+		Name:    "normal",
+		URL:     server.URL,
+		Enabled: true,
+	})
+
+	mgr := alerts.NewManager()
+	cfg := mgr.GetConfig()
+	cfg.Schedule.Escalation.Levels = []alerts.EscalationLevel{{After: 1, Notify: "webhook"}}
+	cfg.Schedule.QuietHours.Enabled = false
+	mgr.UpdateConfig(cfg)
+
+	m := &Monitor{
+		notificationMgr: notifMgr,
+		alertManager:    mgr,
+	}
+
+	alert := &alerts.Alert{
+		ID:           "escalated-normal",
+		Type:         "connectivity",
+		Level:        alerts.AlertLevelCritical,
+		ResourceID:   "node/pve-1",
+		ResourceName: "pve-1",
+		Node:         "pve-1",
+		Instance:     "pve",
+		Message:      "Node offline",
+		StartTime:    time.Now(),
+	}
+
+	m.handleAlertEscalated(nil, alert, 1)
+
+	select {
+	case <-requests:
+	case <-time.After(2 * time.Second):
+		t.Fatal("expected escalated notification delivery")
+	}
 }

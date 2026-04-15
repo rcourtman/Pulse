@@ -221,6 +221,122 @@ func TestCheckDockerContainerImageUpdate(t *testing.T) {
 		}
 	})
 
+	t.Run("missing update status preserves existing alert and tracking", func(t *testing.T) {
+		testResourceID := "docker:" + hostID + "/container-unknown-status"
+		container := models.DockerContainer{
+			ID:    "container-unknown-status",
+			Name:  "unknown-status-container",
+			Image: "nginx:latest",
+			UpdateStatus: &models.DockerContainerUpdateStatus{
+				UpdateAvailable: true,
+				CurrentDigest:   "sha256:old",
+				LatestDigest:    "sha256:new",
+				LastChecked:     time.Now(),
+			},
+		}
+		trackingKey := dockerUpdateTrackingKey(host, container)
+		firstSeen := time.Now().Add(-25 * time.Hour)
+
+		m.mu.Lock()
+		m.dockerUpdateFirstSeen[testResourceID] = firstSeen
+		m.dockerUpdateFirstSeenByIdentity[trackingKey] = firstSeen
+		m.mu.Unlock()
+
+		m.checkDockerContainerImageUpdate(host, container, testResourceID, "unknown-status-container", instanceName, nodeName)
+
+		canonicalAlertID := buildCanonicalStateID(testResourceID, testResourceID+"-image-update")
+		m.mu.RLock()
+		alert := testRequireActiveAlert(t, m, canonicalAlertID)
+		if alert == nil {
+			m.mu.RUnlock()
+			t.Fatalf("expected update alert %q to be active", canonicalAlertID)
+		}
+		beforeLastSeen := alert.LastSeen
+		m.mu.RUnlock()
+
+		time.Sleep(10 * time.Millisecond)
+		container.UpdateStatus = nil
+		m.checkDockerContainerImageUpdate(host, container, testResourceID, "unknown-status-container", instanceName, nodeName)
+
+		m.mu.RLock()
+		alert = testRequireActiveAlert(t, m, canonicalAlertID)
+		if alert == nil {
+			m.mu.RUnlock()
+			t.Fatalf("expected update alert %q to remain active", canonicalAlertID)
+		}
+		_, tracked := m.dockerUpdateFirstSeen[testResourceID]
+		_, trackedByIdentity := m.dockerUpdateFirstSeenByIdentity[trackingKey]
+		afterLastSeen := alert.LastSeen
+		m.mu.RUnlock()
+
+		if !tracked || !trackedByIdentity {
+			t.Fatal("expected update tracking to remain when update status is temporarily unavailable")
+		}
+		if !afterLastSeen.After(beforeLastSeen) {
+			t.Fatalf("expected LastSeen to refresh when update status is missing, before=%s after=%s", beforeLastSeen, afterLastSeen)
+		}
+	})
+
+	t.Run("update detection errors preserve existing alert and tracking", func(t *testing.T) {
+		testResourceID := "docker:" + hostID + "/container-error-status"
+		container := models.DockerContainer{
+			ID:    "container-error-status",
+			Name:  "error-status-container",
+			Image: "nginx:latest",
+			UpdateStatus: &models.DockerContainerUpdateStatus{
+				UpdateAvailable: true,
+				CurrentDigest:   "sha256:old",
+				LatestDigest:    "sha256:new",
+				LastChecked:     time.Now(),
+			},
+		}
+		trackingKey := dockerUpdateTrackingKey(host, container)
+		firstSeen := time.Now().Add(-25 * time.Hour)
+
+		m.mu.Lock()
+		m.dockerUpdateFirstSeen[testResourceID] = firstSeen
+		m.dockerUpdateFirstSeenByIdentity[trackingKey] = firstSeen
+		m.mu.Unlock()
+
+		m.checkDockerContainerImageUpdate(host, container, testResourceID, "error-status-container", instanceName, nodeName)
+
+		canonicalAlertID := buildCanonicalStateID(testResourceID, testResourceID+"-image-update")
+		m.mu.RLock()
+		alert := testRequireActiveAlert(t, m, canonicalAlertID)
+		if alert == nil {
+			m.mu.RUnlock()
+			t.Fatalf("expected update alert %q to be active", canonicalAlertID)
+		}
+		beforeLastSeen := alert.LastSeen
+		m.mu.RUnlock()
+
+		time.Sleep(10 * time.Millisecond)
+		container.UpdateStatus = &models.DockerContainerUpdateStatus{
+			UpdateAvailable: true,
+			Error:           "rate limited",
+			LastChecked:     time.Now(),
+		}
+		m.checkDockerContainerImageUpdate(host, container, testResourceID, "error-status-container", instanceName, nodeName)
+
+		m.mu.RLock()
+		alert = testRequireActiveAlert(t, m, canonicalAlertID)
+		if alert == nil {
+			m.mu.RUnlock()
+			t.Fatalf("expected update alert %q to remain active after check error", canonicalAlertID)
+		}
+		_, tracked := m.dockerUpdateFirstSeen[testResourceID]
+		_, trackedByIdentity := m.dockerUpdateFirstSeenByIdentity[trackingKey]
+		afterLastSeen := alert.LastSeen
+		m.mu.RUnlock()
+
+		if !tracked || !trackedByIdentity {
+			t.Fatal("expected update tracking to remain after update check error")
+		}
+		if !afterLastSeen.After(beforeLastSeen) {
+			t.Fatalf("expected LastSeen to refresh after update check error, before=%s after=%s", beforeLastSeen, afterLastSeen)
+		}
+	})
+
 	t.Run("disabled by negative delay hours", func(t *testing.T) {
 		// Create manager with disabled update alerts
 		m2 := NewManager()

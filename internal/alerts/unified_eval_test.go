@@ -369,6 +369,114 @@ func TestCheckGuestPerDiskAnnotatesCanonicalSpecMetadata(t *testing.T) {
 	}
 }
 
+func TestCheckGuestPerDiskCleansUpRemovedDiskAlerts(t *testing.T) {
+	m := newTestManager(t)
+	configureUnifiedEvalManager(t, m, unifiedEvalBaseConfig())
+
+	guestID := BuildGuestKey("pve1", "node1", 101)
+	baseGuest := models.VM{
+		ID:       guestID,
+		VMID:     101,
+		Name:     "app01",
+		Node:     "node1",
+		Instance: "pve1",
+		Status:   "running",
+		CPU:      0.20,
+		Memory:   models.Memory{Usage: 40},
+		Disk:     models.Disk{Usage: 40},
+	}
+
+	withDisk := baseGuest
+	withDisk.Disks = []models.Disk{
+		{
+			Mountpoint: "/",
+			Device:     "scsi0",
+			Usage:      95,
+			Total:      100,
+			Used:       95,
+			Free:       5,
+		},
+	}
+	m.CheckGuest(withDisk, "pve1")
+
+	originalAlertID := canonicalMetricStateID(guestID+"-disk-scsi0", "disk")
+	if activeAlert(t, m, originalAlertID) == nil {
+		t.Fatalf("expected guest disk alert %q", originalAlertID)
+	}
+
+	changedDisk := baseGuest
+	changedDisk.Disks = []models.Disk{
+		{
+			Mountpoint: "/data",
+			Device:     "scsi1",
+			Usage:      96,
+			Total:      100,
+			Used:       96,
+			Free:       4,
+		},
+	}
+	m.CheckGuest(changedDisk, "pve1")
+
+	newAlertID := canonicalMetricStateID(guestID+"-disk-data-scsi1", "disk")
+	m.mu.RLock()
+	_, oldExists := testLookupActiveAlert(t, m, originalAlertID)
+	_, newExists := testLookupActiveAlert(t, m, newAlertID)
+	m.mu.RUnlock()
+
+	if oldExists {
+		t.Fatalf("expected stale guest disk alert %q to be cleared", originalAlertID)
+	}
+	if !newExists {
+		t.Fatalf("expected replacement guest disk alert %q", newAlertID)
+	}
+}
+
+func TestCheckGuestClearsPerDiskAlertsWhenGuestStops(t *testing.T) {
+	m := newTestManager(t)
+	configureUnifiedEvalManager(t, m, unifiedEvalBaseConfig())
+
+	guestID := BuildGuestKey("pve1", "node1", 101)
+	guest := models.VM{
+		ID:       guestID,
+		VMID:     101,
+		Name:     "app01",
+		Node:     "node1",
+		Instance: "pve1",
+		Status:   "running",
+		CPU:      0.20,
+		Memory:   models.Memory{Usage: 40},
+		Disk:     models.Disk{Usage: 40},
+		Disks: []models.Disk{
+			{
+				Mountpoint: "/",
+				Device:     "scsi0",
+				Usage:      95,
+				Total:      100,
+				Used:       95,
+				Free:       5,
+			},
+		},
+	}
+
+	m.CheckGuest(guest, "pve1")
+
+	alertID := canonicalMetricStateID(guestID+"-disk-scsi0", "disk")
+	if activeAlert(t, m, alertID) == nil {
+		t.Fatalf("expected guest disk alert %q", alertID)
+	}
+
+	guest.Status = "stopped"
+	guest.Disks = nil
+	m.CheckGuest(guest, "pve1")
+
+	m.mu.RLock()
+	_, exists := testLookupActiveAlert(t, m, alertID)
+	m.mu.RUnlock()
+	if exists {
+		t.Fatalf("expected guest disk alert %q to clear when guest stops", alertID)
+	}
+}
+
 func TestCheckNodeTemperatureAnnotatesCanonicalSpecMetadata(t *testing.T) {
 	m := newTestManager(t)
 	configureUnifiedEvalManager(t, m, unifiedEvalBaseConfig())

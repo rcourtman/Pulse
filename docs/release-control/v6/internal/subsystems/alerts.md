@@ -82,6 +82,12 @@ runtime must migrate the active alert, history entry, acknowledgment record,
 suppression/rate-limit/flapping tracking, and guest per-disk metric identity
 to the current canonical state instead of reopening a duplicate alert or
 resolving only the stale node-scoped identity.
+That same guest-alert owner also has to retire per-disk guest alerts when the
+guest stops, disk alerting is disabled, or the reported disk set changes.
+Canonical guest disk identity is only valid while the guest still exposes that
+disk resource under the current thresholds, so runtime cleanup must remove
+stale `guestID-disk-*` state instead of leaving orphaned per-disk incidents in
+active alerts, resolved history, or later UI projections.
 That same alerts runtime also owns instance-scoped node display-name
 resolution. Raw node names are not globally unique across configured
 infrastructure instances, so cached node display names must key on instance +
@@ -211,6 +217,11 @@ keep schedules such as `00:00` to `23:59` active through the full final
 minute instead of expiring at `23:59:00`. Alert quiet-hours proofs should
 control time through the alert manager clock hook instead of depending on wall
 clock execution at whatever second the test runner happens to hit.
+Quiet-hours suppression also applies to alert delivery lifecycle, not only the
+initial raised notification. Resolved notifications must not fan out when the
+alert was never notified or was already acknowledged, and monitoring-driven
+escalation delivery must consult the same quiet-hours suppression path while
+still letting canonical escalation state reach websocket consumers.
 That schedule surface now also follows the same shell/runtime split as the
 other feature tabs: `frontend-modern/src/features/alerts/tabs/ScheduleTab.tsx`
 stays the render shell, while
@@ -230,6 +241,21 @@ Alert incident acknowledged badges, timeline event cards, and note-editor
 presentation now also route through
 `frontend-modern/src/utils/alertIncidentPresentation.ts` instead of remaining
 duplicated inline across the alerts page and overview timeline surfaces.
+
+Poll-driven connectivity recovery is also part of canonical alert truth.
+Resources that clear an offline alert from later healthy polls must require
+repeated healthy confirmations before resolving that alert instead of clearing
+on the first recovered sample; otherwise transient poll recovery reopens the
+same regression as false "back online" notifications and missing downtime
+signal. Nodes, PBS, and PMG require three healthy confirmations before
+resolution, while storage requires two.
+
+Host-agent threshold ownership now follows the linked resource model.
+Explicit agent overrides still win, but when no host-agent override exists the
+alerts runtime must inherit linked node or guest overrides for that agent so
+metric and connectivity behavior match the logical machine the agent augments.
+Persisted host alerts must carry enough linked-resource metadata for
+reevaluation after threshold changes to honor that same inheritance rule.
 
 Alert resource tables, grouped node headers, and alert override reconstruction
 now route resource-backed names through the shared policy-aware alerts helper
