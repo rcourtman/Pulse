@@ -131,18 +131,18 @@ Pulse v6 uses the activation/grant model for active licensing, but it can migrat
   - a Pulse v6 activation key, or
   - a valid Pulse v5 Pro/Lifetime license key, which Pulse will try to exchange automatically
 - If the exchange service cannot complete the migration, retry from the v6 license panel or use the self-serve retrieval flow to fetch the current v6 activation key. Email is only a backup copy of that key.
-- Existing active recurring v5 customers keep their grandfathered recurring price and uncapped monitored-system and guest capacity until cancellation. If they cancel and later return, current v6 pricing and limits apply.
+- Legacy recurring Pulse Pro subscriptions already active before the public v6 pricing cutover keep their grandfathered recurring price and uncapped monitored-system and guest capacity until cancellation. If they cancel and later return, current v6 pricing and limits apply.
 
 #### Paid Upgrade Truth Table
 
 When an existing paid user asks what changes for them specifically, use this rule set:
 
-- Existing active recurring Pulse Pro subscribers from v5 or earlier keep their current recurring price and uncapped monitored-system plus guest capacity while the subscription remains continuously active.
+- Legacy recurring Pulse Pro subscriptions from v5 or earlier that were already active before the public v6 pricing cutover keep their current recurring price and uncapped monitored-system plus guest capacity while the subscription remains continuously active.
 - Existing lifetime customers remain permanently valid and uncapped.
 - Former recurring customers who already canceled, or who cancel and later return, do not resume the old grandfathered pricing or uncapped capacity automatically; they re-enter on current public v6 pricing and limits.
 - New self-hosted v6 purchases use the current Relay / Pro / Pro+ plan caps.
 
-If an active recurring subscriber or lifetime customer sees a new monitored-system or guest cap after moving to v6, treat that as a regression, not as expected upgrade behavior.
+If a grandfathered recurring subscriber covered by the pre-cutover legacy policy, or a lifetime customer, sees a new monitored-system or guest cap after moving to v6, treat that as a regression, not as expected upgrade behavior.
 
 Practical recommendation:
 

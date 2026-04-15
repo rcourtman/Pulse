@@ -58,7 +58,7 @@ Runtime rules:
 - Deduplication follows canonical unified-resource identity rather than transport-specific state.
 
 Migration policy:
-- Existing active recurring v5 customers keep their grandfathered recurring price and uncapped monitored-system and guest capacity until cancellation.
+- Legacy recurring Pulse Pro subscriptions already active before the public v6 pricing cutover keep their grandfathered recurring price and uncapped monitored-system and guest capacity until cancellation.
 - Existing free users above the new Community cap are not hard-broken on rollout day.
 - During grace, existing monitoring keeps working.
 - During grace, only new counted-system additions are blocked until the user removes systems or upgrades.
@@ -67,13 +67,13 @@ Migration policy:
 
 | Customer cohort | What happens in v6 | Pricing and capacity outcome |
 |---|---|---|
-| Existing active recurring subscriber from a v5 or earlier Pulse Pro monthly/annual plan | The install can migrate into the v6 activation model without forcing a repurchase. | The existing recurring price stays in place and monitored-system plus guest capacity remain uncapped while the subscription remains continuously active. |
+| Legacy recurring subscriber from a v5 or earlier Pulse Pro monthly/annual plan, already active before the public v6 pricing cutover | The install can migrate into the v6 activation model without forcing a repurchase. | The existing recurring price stays in place and monitored-system plus guest capacity remain uncapped while the subscription remains continuously active. |
 | Existing lifetime license holder | The license remains valid through the v6 licensing transition. | Lifetime remains permanently valid and monitored-system plus guest capacity stay uncapped. |
 | Former recurring subscriber who already canceled or later lapses/cancels | A later return is treated as a new paid purchase, not as a grandfathered renewal. | The old grandfathered price and uncapped capacity do not resume automatically; current public v6 pricing and caps apply. |
 | New self-hosted v6 purchase | The purchase uses the current Relay / Pro / Pro+ self-hosted plans. | Current public v6 monitored-system and guest caps apply. |
 
 Support rule:
-- If a currently active recurring subscriber or a lifetime customer sees a bounded monitored-system or guest cap in v6, treat it as a bug rather than as intended policy.
+- If a grandfathered recurring subscriber covered by the pre-cutover legacy policy, or a lifetime customer, sees a bounded monitored-system or guest cap in v6, treat it as a bug rather than as intended policy.
 
 ## Feature Matrix
 

@@ -62,7 +62,8 @@ license panel using the existing key.
 
 Use this cohort breakdown:
 
-- Existing active recurring monthly or annual subscribers from v5 or earlier:
+- Legacy recurring monthly or annual subscribers from v5 or earlier who were
+  already active before the public v6 pricing cutover:
   keep the current recurring price and uncapped monitored-system plus guest
   capacity while the subscription remains continuously active.
 - Existing lifetime customers:
@@ -73,9 +74,9 @@ Use this cohort breakdown:
 - New self-hosted v6 purchasers:
   take the current Relay / Pro / Pro+ caps.
 
-If a currently active recurring subscriber or a lifetime customer sees a
-bounded monitored-system or guest cap in v6, treat that as a product bug, not
-as intended policy.
+If a grandfathered recurring subscriber covered by the pre-cutover legacy
+policy, or a lifetime customer, sees a bounded monitored-system or guest cap
+in v6, treat that as a product bug, not as intended policy.
 
 ### Will old bookmarks and familiar v5 pages still work?
 
