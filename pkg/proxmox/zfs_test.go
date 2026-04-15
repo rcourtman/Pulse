@@ -186,6 +186,46 @@ func TestConvertDeviceRecursive_SpareWithErrors(t *testing.T) {
 	}
 }
 
+func TestConvertDeviceRecursive_SpecialDevices(t *testing.T) {
+	specialVdev := ZFSPoolDevice{
+		Name:  "special",
+		State: "",
+		Leaf:  0,
+		Children: []ZFSPoolDevice{
+			{Name: "nvme0n1", State: "ONLINE", Leaf: 1, Read: 1},
+		},
+	}
+
+	devices := convertDeviceRecursive(specialVdev, "")
+
+	if len(devices) != 1 {
+		t.Fatalf("expected 1 device, got %d", len(devices))
+	}
+	if devices[0].Type != "special" {
+		t.Errorf("Type = %q, want special", devices[0].Type)
+	}
+	if devices[0].State != "ONLINE" {
+		t.Errorf("State = %q, want ONLINE", devices[0].State)
+	}
+}
+
+func TestConvertDeviceRecursive_SkipsHealthySpecialGroupWithBlankState(t *testing.T) {
+	specialVdev := ZFSPoolDevice{
+		Name:  "special",
+		State: "",
+		Leaf:  0,
+		Children: []ZFSPoolDevice{
+			{Name: "nvme0n1", State: "ONLINE", Leaf: 1},
+		},
+	}
+
+	devices := convertDeviceRecursive(specialVdev, "")
+
+	if len(devices) != 0 {
+		t.Fatalf("expected 0 devices for healthy special group, got %d", len(devices))
+	}
+}
+
 func TestConvertDeviceRecursive_NestedMirror(t *testing.T) {
 	// Nested structure: mirror with healthy children
 	mirror := ZFSPoolDevice{
@@ -262,6 +302,33 @@ func TestConvertDeviceRecursive_L2arcDevice(t *testing.T) {
 	}
 	if devices[0].Type != "cache" {
 		t.Errorf("Type = %q, want cache", devices[0].Type)
+	}
+}
+
+func TestConvertToModelZFSPool_OmitsHealthySpecialGroupingRows(t *testing.T) {
+	info := &ZFSPoolInfo{
+		Name:   "tank",
+		Health: "ONLINE",
+		State:  "ONLINE",
+		Status: "ok",
+		Devices: []ZFSPoolDevice{
+			{
+				Name:  "special",
+				State: "",
+				Leaf:  0,
+				Children: []ZFSPoolDevice{
+					{Name: "nvme0n1", State: "ONLINE", Leaf: 1},
+				},
+			},
+		},
+	}
+
+	pool := info.ConvertToModelZFSPool()
+	if pool == nil {
+		t.Fatal("expected pool")
+	}
+	if len(pool.Devices) != 0 {
+		t.Fatalf("expected healthy special grouping row to be omitted, got %+v", pool.Devices)
 	}
 }
 

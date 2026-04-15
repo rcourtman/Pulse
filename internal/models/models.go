@@ -1122,7 +1122,7 @@ func (p ZFSPool) NormalizeCollections() ZFSPool {
 // ZFSDevice represents a device in a ZFS pool
 type ZFSDevice struct {
 	Name           string `json:"name"`
-	Type           string `json:"type"`  // disk, mirror, raidz, raidz2, raidz3, spare, log, cache
+	Type           string `json:"type"`  // disk, mirror, raidz, raidz2, raidz3, spare, log, cache, special, special-group
 	State          string `json:"state"` // ONLINE, DEGRADED, FAULTED, OFFLINE, REMOVED, UNAVAIL
 	ReadErrors     int64  `json:"readErrors"`
 	WriteErrors    int64  `json:"writeErrors"`

@@ -43,14 +43,15 @@ truth for live infrastructure data.
 19. `internal/dockeragent/swarm.go`
 20. `internal/dockeragent/collect.go`
 21. `pkg/proxmox/ceph.go`
-22. `internal/monitoring/guest_memory_sources.go`
-23. `internal/monitoring/guest_memory_stability.go`
-24. `internal/monitoring/monitor_polling_vm.go`
-25. `internal/monitoring/monitor_pve_guest_builders.go`
-26. `internal/monitoring/monitor_pve_guest_poll.go`
-27. `internal/monitoring/guest_disk_stability.go`
-28. `internal/monitoring/mock_metrics_history.go`
-29. `internal/monitoring/mock_chart_history.go`
+22. `pkg/proxmox/zfs.go`
+23. `internal/monitoring/guest_memory_sources.go`
+24. `internal/monitoring/guest_memory_stability.go`
+25. `internal/monitoring/monitor_polling_vm.go`
+26. `internal/monitoring/monitor_pve_guest_builders.go`
+27. `internal/monitoring/monitor_pve_guest_poll.go`
+28. `internal/monitoring/guest_disk_stability.go`
+29. `internal/monitoring/mock_metrics_history.go`
+30. `internal/monitoring/mock_chart_history.go`
 
 ## Shared Boundaries
 
@@ -66,7 +67,8 @@ truth for live infrastructure data.
 6. Add or change Docker Swarm manager task/service runtime collection through `internal/dockeragent/swarm.go`
 7. Add or change Docker or Podman container stats compatibility and runtime metric semantics through `internal/dockeragent/collect.go`
 8. Add or change Proxmox Ceph compatibility payload decoding through `pkg/proxmox/ceph.go`
-9. Add or change mock chart synthesis, seeded history continuity, or mock-owned
+9. Add or change Proxmox ZFS compatibility payload decoding and vdev-role normalization through `pkg/proxmox/zfs.go`
+10. Add or change mock chart synthesis, seeded history continuity, or mock-owned
    chart fallbacks through `internal/monitoring/mock_metrics_history.go` and
    `internal/monitoring/mock_chart_history.go`
 
@@ -80,7 +82,7 @@ truth for live infrastructure data.
 
 1. Update this contract when monitoring truth ownership changes
 2. Tighten guardrails when `GetState()`-centric paths are removed
-3. Keep discovery-provider, host-agent ingest, guest-memory trust, metrics-history, storage-risk, Docker/Podman container collection, Proxmox Ceph compatibility, Docker Swarm collection, and container bootstrap proof routes explicit in `registry.json`
+3. Keep discovery-provider, host-agent ingest, guest-memory trust, metrics-history, storage-risk, Docker/Podman container collection, Proxmox Ceph and ZFS compatibility, Docker Swarm collection, and container bootstrap proof routes explicit in `registry.json`
 4. Update related read-state or monitor tests when new collector paths land
 5. Keep platform ingestion semantics aligned with
    `docs/release-control/v6/internal/PLATFORM_SUPPORT_MODEL.md`: hybrid is a
@@ -92,6 +94,12 @@ truth for live infrastructure data.
    and the attached ZFS health model must carry the provider-reported `pool`
    field through to runtime storage snapshots and use it before name/path
    heuristics when matching ZFS pool health on multi-storage hosts.
+   That same Proxmox compatibility boundary also owns top-level ZFS vdev-role
+   normalization. Provider payload buckets such as `special`, `log`, `cache`,
+   and `spares` may omit a concrete health state; `pkg/proxmox/zfs.go` must
+   treat those blank-state grouping rows as role metadata rather than projecting
+   operator-visible `UNKNOWN` failures unless the bucket or one of its children
+   carries an actual degraded state or error count.
 
 ## Current State
 

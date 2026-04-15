@@ -216,6 +216,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                 "memory-source-runtime",
                 "docker-collect-runtime",
                 "docker-swarm-runtime",
+                "proxmox-zfs-runtime",
                 "proxmox-ceph-runtime",
                 "container-entrypoint-runtime",
                 "monitoring-runtime",

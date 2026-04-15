@@ -151,6 +151,8 @@ func convertDeviceRecursive(dev ZFSPoolDevice, parentRole string) []ZFSDevice {
 			role = "cache"
 		case lowerName == "spares" || strings.HasPrefix(lowerName, "spare"):
 			role = "spare"
+		case lowerName == "special":
+			role = "special"
 		}
 	}
 
@@ -177,10 +179,14 @@ func convertDeviceRecursive(dev ZFSPoolDevice, parentRole string) []ZFSDevice {
 		deviceType = "cache"
 	case isVdev && role == "spare":
 		deviceType = "spare"
+	case isVdev && role == "special":
+		deviceType = "special-group"
 	case role == "log" && dev.Leaf == 1:
 		deviceType = "log"
 	case role == "cache" && dev.Leaf == 1:
 		deviceType = "cache"
+	case role == "special" && dev.Leaf == 1:
+		deviceType = "special"
 	}
 
 	isSpare := lowerName == "spares" || strings.HasPrefix(lowerName, "spare")
@@ -200,7 +206,7 @@ func convertDeviceRecursive(dev ZFSPoolDevice, parentRole string) []ZFSDevice {
 	}
 
 	if state == "UNKNOWN" {
-		if role == "log" || role == "cache" || role == "spare" || isSpare {
+		if role == "log" || role == "cache" || role == "spare" || role == "special" || isSpare {
 			healthyStates[state] = true
 		}
 	}

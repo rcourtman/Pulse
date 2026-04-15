@@ -3200,7 +3200,8 @@
         "docker-entrypoint.sh",
         "internal/dockeragent/collect.go",
         "internal/dockeragent/swarm.go",
-        "pkg/proxmox/ceph.go"
+        "pkg/proxmox/ceph.go",
+        "pkg/proxmox/zfs.go"
       ],
       "verification": {
         "allow_same_subsystem_tests": true,
@@ -3363,6 +3364,20 @@
             "exact_files": [
               "internal/dockeragent/swarm_coverage_test.go",
               "internal/dockeragent/swarm_test.go"
+            ]
+          },
+          {
+            "id": "proxmox-zfs-runtime",
+            "label": "proxmox zfs compatibility proof",
+            "match_prefixes": [],
+            "match_files": [
+              "pkg/proxmox/zfs.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "pkg/proxmox/zfs_details_test.go",
+              "pkg/proxmox/zfs_test.go"
             ]
           },
           {
