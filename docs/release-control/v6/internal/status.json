@@ -4236,6 +4236,22 @@
       "subsystem_ids": [
         "patrol-intelligence"
       ]
+    },
+    {
+      "id": "self-hosted-homelab-monetization-boundary",
+      "summary": "Pulse v6 should not monetize homelab users on core monitoring itself; before GA, decide whether that principle lands as a materially more generous self-hosted cap ladder or as a model where core monitoring stays free and optional extras plus business-grade workflow, convenience, and support features carry the paid value.",
+      "owner": "project-owner",
+      "blocking_level": "release-ready",
+      "status": "open",
+      "opened_at": "2026-04-16",
+      "lane_ids": [
+        "L2",
+        "L3",
+        "L9"
+      ],
+      "subsystem_ids": [
+        "cloud-paid"
+      ]
     }
   ],
   "source_of_truth_file": "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md",

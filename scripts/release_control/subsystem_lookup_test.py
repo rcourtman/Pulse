@@ -4406,7 +4406,10 @@ class SubsystemLookupTest(unittest.TestCase):
         )
         lane_context = match["lane_context"]
         self.assertEqual(lane_context["lane_id"], "L3")
-        self.assertEqual(lane_context["open_decisions"], [])
+        self.assertEqual(
+            {decision["id"] for decision in lane_context["open_decisions"]},
+            {"self-hosted-homelab-monetization-boundary"},
+        )
         self.assertEqual(
             {gate["id"] for gate in lane_context["release_gates"]},
             {
