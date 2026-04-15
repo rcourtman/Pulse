@@ -752,7 +752,11 @@ license/commercial API before returning the browser to the owned billing plan
 route. Stripe cancel must return directly to owned billing with
 `purchase=cancelled`; activation success, expiry, and failure must return to
 owned billing with explicit arrival states so the billing runtime can surface
-those results in-product. When the upgrade flow was opened in a secondary tab,
+those results in-product. If Pulse cannot create the initial Pulse Account
+portal handoff, `GET /auth/license-purchase-start` must still return the
+browser to owned billing with `purchase=unavailable` so the runtime can
+surface the failure in-product instead of leaving the operator on a raw
+service error. When the upgrade flow was opened in a secondary tab,
 the callback may refresh the originating billing tab and close itself; when no
 opener is available, the callback must still return the current tab to the
 owned billing route automatically instead of leaving the operator on a dead

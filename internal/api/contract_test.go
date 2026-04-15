@@ -6460,6 +6460,53 @@ func TestContract_SelfHostedPurchaseHandoffJSONSnapshot(t *testing.T) {
 	assertJSONSnapshot(t, got, want)
 }
 
+func TestContract_SelfHostedPurchaseHandoffUnavailableJSONSnapshot(t *testing.T) {
+	handler := createTestHandler(t)
+	handler.SetConfig(&config.Config{PublicURL: "https://pulse.example.com"})
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/checkout/portal-handoff" {
+			t.Fatalf("unexpected path %q", r.URL.Path)
+		}
+		http.Error(w, "portal handoff unavailable", http.StatusBadGateway)
+	}))
+	defer server.Close()
+	t.Setenv("PULSE_LICENSE_SERVER_URL", server.URL)
+
+	req := httptest.NewRequest(
+		http.MethodGet,
+		"https://pulse.example.com"+licensePurchaseStartPath+"?feature=max_monitored_systems",
+		nil,
+	)
+	rec := httptest.NewRecorder()
+
+	handler.HandleCheckoutStart(rec, req)
+
+	got, err := json.MarshalIndent(struct {
+		StatusCode          int  `json:"status_code"`
+		TitlePresent        bool `json:"title_present"`
+		RetryMessagePresent bool `json:"retry_message_present"`
+		OwnedRedirectPath   bool `json:"owned_redirect_path"`
+	}{
+		StatusCode:          rec.Code,
+		TitlePresent:        strings.Contains(rec.Body.String(), "Pulse Account unavailable"),
+		RetryMessagePresent: strings.Contains(rec.Body.String(), "Retry from this instance in a moment"),
+		OwnedRedirectPath:   strings.Contains(rec.Body.String(), "/settings/system/billing/plan?intent=max_monitored_systems&purchase=unavailable"),
+	}, "", "\t")
+	if err != nil {
+		t.Fatalf("marshal unavailable handoff snapshot: %v", err)
+	}
+
+	const want = `{
+		"status_code": 503,
+		"title_present": true,
+		"retry_message_present": true,
+		"owned_redirect_path": true
+	}`
+
+	assertJSONSnapshot(t, got, want)
+}
+
 func TestContract_HandoffExchangeJSONSnapshot(t *testing.T) {
 	key := []byte("test-handoff-key")
 	configDir := t.TempDir()

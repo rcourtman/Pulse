@@ -555,7 +555,11 @@ lookup. Storage and recovery may coexist with the shared purchase return routes
 in the app shell, but they must not cache, derive, or replay the
 server-resolved portal checkout state or owned billing purchase-arrival state
 as recovery route state, restore evidence, or storage-local navigation
-context.
+context. The same rule now also covers purchase-start failures: storage and
+recovery surfaces may coexist with the shared `/auth/license-purchase-start`
+route, but they must not absorb `purchase=unavailable` as recovery-local state
+or replace the owned billing retry/recovery notice with storage-specific error
+chrome.
 That same adjacent licensing boundary now also owns internal demo-fixture
 runtime gating for storage- and recovery-adjacent surfaces. Release builds may
 authorize mock fixture rewiring only through the backend-owned

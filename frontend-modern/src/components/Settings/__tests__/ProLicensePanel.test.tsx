@@ -17,6 +17,7 @@ import {
   SELF_HOSTED_PRO_BILLING_PURCHASE_CANCELLED,
   SELF_HOSTED_PRO_BILLING_PURCHASE_EXPIRED,
   SELF_HOSTED_PRO_BILLING_PURCHASE_FAILED,
+  SELF_HOSTED_PRO_BILLING_PURCHASE_UNAVAILABLE,
   SELF_HOSTED_PRO_BILLING_RECOVERY_DETAIL,
   SELF_HOSTED_PRO_BILLING_PLAN_SECTION_ID,
   SELF_HOSTED_PRO_BILLING_USAGE_HREF,
@@ -571,6 +572,12 @@ describe('ProLicensePanel', () => {
       redirectedHref: getSelfHostedBillingHref('plan', {
         detail: SELF_HOSTED_PRO_BILLING_RECOVERY_DETAIL,
       }),
+    },
+    {
+      purchase: SELF_HOSTED_PRO_BILLING_PURCHASE_UNAVAILABLE,
+      title: 'Pulse Account unavailable',
+      actionLabel: 'Try again',
+      actionHref: getSelfHostedPurchaseStartUrl(),
     },
   ])('shows the purchase arrival notice for $purchase', async ({ purchase, title, actionLabel, actionHref, redirectedHref = SELF_HOSTED_PRO_BILLING_PLAN_HREF }) => {
     useLocationMock.mockReturnValue({

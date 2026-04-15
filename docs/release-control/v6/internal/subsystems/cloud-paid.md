@@ -602,6 +602,11 @@ as `portal_handoff_id`, feature, handoff lifecycle state, resolve timestamp,
 and expiry; it must not disclose the bound `checkout_intent_id`, and browser
 checkout creation must post only `portal_handoff_id` so Pulse Account
 resolves the private checkout intent server-side before contacting Stripe.
+If Pulse cannot create or resolve that portal handoff locally, the Pulse-owned
+start route must still return the operator to the owned billing plan surface
+with an explicit `purchase=unavailable` arrival instead of leaving the browser
+on a raw error page, so the runtime can explain that Pulse Account is
+temporarily unavailable and offer a retry from the same instance.
 That portal handoff is now intentionally narrowly stateful rather than a bare
 lookup row: lookup must stamp a first `resolved_at`, and the reported handoff
 lifecycle must stay derived from the owned portal handoff plus the bound
@@ -636,8 +641,8 @@ directly to the owned Pulse billing plan route rather than back into the
 portal. The owned activation callback must accept the signed state, redeem the
 completed checkout, and return the operator to the canonical billing plan
 route with an explicit owned purchase arrival state (`purchase=activated`,
-`purchase=expired`, or `purchase=failed`) whether checkout completed in a
-secondary tab or in the current-tab fallback path.
+`purchase=expired`, `purchase=failed`, or `purchase=unavailable`) whether
+checkout completed in a secondary tab or in the current-tab fallback path.
 That destination split is canonical commercial truth, but navigation semantics
 are not owned here. `frontend-modern/src/utils/pricingHandoff.ts` and
 `frontend-modern/src/stores/license.ts` decide which href each commercial

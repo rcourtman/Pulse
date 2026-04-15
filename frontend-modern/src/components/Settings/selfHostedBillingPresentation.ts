@@ -23,6 +23,7 @@ export interface SelfHostedProBillingPresentation {
   purchaseCancelledActionLabel: string;
   purchaseExpiredActionLabel: string;
   purchaseFailedActionLabel: string;
+  purchaseUnavailableActionLabel: string;
   trialStartTitle: string;
   trialStartBody: string;
   trialStartIdleActionLabel: string;
@@ -61,6 +62,7 @@ export const SELF_HOSTED_PRO_BILLING_PRESENTATION: SelfHostedProBillingPresentat
   purchaseCancelledActionLabel: 'Compare plans',
   purchaseExpiredActionLabel: 'Restart upgrade',
   purchaseFailedActionLabel: 'Open recovery',
+  purchaseUnavailableActionLabel: 'Try again',
   trialStartTitle: 'Try Pro for free',
   trialStartBody: 'Start a 14-day Pro trial for this organization.',
   trialStartIdleActionLabel: 'Start 14-day Pro Trial',

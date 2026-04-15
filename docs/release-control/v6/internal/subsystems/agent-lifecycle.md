@@ -253,6 +253,12 @@ an add-only capacity posture.
     activation-bridge form state, owned billing purchase-arrival states, or
     demo-hidden commercial route policy as installer credentials,
     registration state, or fleet enrollment authority. The same adjacent
+    commercial boundary also owns purchase-start unavailability recovery:
+    lifecycle-adjacent surfaces may coexist with that shared browser route, but
+    they must not strand install or fleet flows on a raw Pulse Account error
+    tab, reinterpret `purchase=unavailable` as lifecycle repair state, or
+    bypass the owned billing retry/recovery path.
+    The same adjacent
     commercial boundary now also owns migrated-v5 monitored-system
     grandfathering: lifecycle surfaces may react to the resulting license or
     entitlements payloads, but they must not cache their own pre-activation

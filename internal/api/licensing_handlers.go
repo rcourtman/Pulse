@@ -41,6 +41,7 @@ const (
 	selfHostedBillingPurchaseCancelled      = "cancelled"
 	selfHostedBillingPurchaseExpired        = "expired"
 	selfHostedBillingPurchaseFailed         = "failed"
+	selfHostedBillingPurchaseUnavailable    = "unavailable"
 	purchaseReturnKeyPurpose                = "pulse-license-purchase-return"
 )
 
@@ -385,7 +386,8 @@ func licensePurchaseActivationRedirectPath(feature, purchaseResult string) strin
 	case selfHostedBillingPurchaseActivated,
 		selfHostedBillingPurchaseCancelled,
 		selfHostedBillingPurchaseExpired,
-		selfHostedBillingPurchaseFailed:
+		selfHostedBillingPurchaseFailed,
+		selfHostedBillingPurchaseUnavailable:
 		query.Set(selfHostedBillingPurchaseQueryParam, strings.TrimSpace(purchaseResult))
 	}
 	encoded := query.Encode()
@@ -420,6 +422,33 @@ func writeLicensePurchaseActivationFailurePage(
 		escapedLink,
 		redirectPath,
 		strings.TrimSpace(purchaseResult),
+	)
+}
+
+func writeLicensePurchaseStartFailurePage(
+	w http.ResponseWriter,
+	statusCode int,
+	feature string,
+	message string,
+) {
+	if statusCode < http.StatusBadRequest {
+		statusCode = http.StatusBadRequest
+	}
+	redirectPath := licensePurchaseActivationRedirectPath(feature, selfHostedBillingPurchaseUnavailable)
+	escapedMessage := html.EscapeString(strings.TrimSpace(message))
+	if escapedMessage == "" {
+		escapedMessage = "Pulse could not open Pulse Account right now."
+	}
+	escapedLink := html.EscapeString(redirectPath)
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(statusCode)
+	_, _ = fmt.Fprintf(
+		w,
+		"<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><title>Pulse Account unavailable</title></head><body><main style=\"max-width:32rem;margin:3rem auto;padding:0 1rem;font:16px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif\"><h1 style=\"margin-bottom:0.5rem\">Pulse Account unavailable</h1><p id=\"purchase-start-status\" style=\"margin-bottom:1rem\">%s</p><p><a href=\"%s\">Return to Pulse Pro billing</a></p></main><script>(function(){var redirectPath=%q;var statusEl=document.getElementById('purchase-start-status');var redirectedOriginalTab=false;try{if(window.opener&&!window.opener.closed){redirectedOriginalTab=true;window.opener.postMessage({type:'pulse-license-purchase-start-unavailable',redirectPath:redirectPath,result:%q},window.location.origin);window.opener.location.assign(redirectPath);}}catch(_){redirectedOriginalTab=false;}if(redirectedOriginalTab){setTimeout(function(){try{window.close();}catch(_){ }if(statusEl){statusEl.textContent='Pulse Pro billing has been reopened in the original tab. You can close this window if it stays open.';}},75);return;}if(statusEl){statusEl.textContent='Returning to Pulse Pro billing.';}setTimeout(function(){window.location.replace(redirectPath);},150);}());</script></body></html>",
+		escapedMessage,
+		escapedLink,
+		redirectPath,
+		selfHostedBillingPurchaseUnavailable,
 	)
 }
 
@@ -1486,17 +1515,28 @@ func (h *LicenseHandlers) HandleCheckoutStart(w http.ResponseWriter, r *http.Req
 		return
 	}
 
+	feature := strings.TrimSpace(r.URL.Query().Get(pulseAccountPortalFeatureQueryParam))
+	writeUnavailable := func(statusCode int, message string) {
+		writeLicensePurchaseStartFailurePage(w, statusCode, feature, message)
+	}
+
 	expectedHost := purchaseReturnExpectedHost(r, h.cfg)
 	returnURL := licensePurchaseCallbackURLForRequest(r, h.cfg)
 	if expectedHost == "" || returnURL == "" {
-		http.Error(w, "Pulse Account handoff unavailable", http.StatusServiceUnavailable)
+		writeUnavailable(
+			http.StatusServiceUnavailable,
+			"Pulse could not open Pulse Account from this instance right now. Retry from this instance in a moment, or use recovery below if you already have a key.",
+		)
 		return
 	}
 
 	signingKey, err := h.purchaseReturnSigningKey()
 	if err != nil {
 		log.Error().Err(err).Msg("Purchase return signing key unavailable")
-		http.Error(w, "Pulse Account handoff unavailable", http.StatusServiceUnavailable)
+		writeUnavailable(
+			http.StatusServiceUnavailable,
+			"Pulse could not prepare the secure Pulse Account handoff for this instance. Retry in a moment, or use recovery below if you already have a key.",
+		)
 		return
 	}
 
@@ -1504,7 +1544,6 @@ func (h *LicenseHandlers) HandleCheckoutStart(w http.ResponseWriter, r *http.Req
 	if orgID == "" {
 		orgID = "default"
 	}
-	feature := strings.TrimSpace(r.URL.Query().Get(pulseAccountPortalFeatureQueryParam))
 	returnToken, err := signPurchaseReturnTokenFromLicensing(signingKey, purchaseReturnClaimsModel{
 		OrgID:        orgID,
 		Feature:      feature,
@@ -1513,14 +1552,20 @@ func (h *LicenseHandlers) HandleCheckoutStart(w http.ResponseWriter, r *http.Req
 	})
 	if err != nil {
 		log.Error().Err(err).Str("org_id", orgID).Str("feature", feature).Msg("Failed to sign purchase return token")
-		http.Error(w, "Pulse Account handoff unavailable", http.StatusServiceUnavailable)
+		writeUnavailable(
+			http.StatusServiceUnavailable,
+			"Pulse could not prepare the secure Pulse Account handoff for this instance. Retry in a moment, or use recovery below if you already have a key.",
+		)
 		return
 	}
 
 	activationURLTemplate, err := licensePurchaseActivationTemplateURL(returnURL, returnToken)
 	if err != nil {
 		log.Error().Err(err).Str("feature", feature).Msg("Failed to build Pulse Account activation template")
-		http.Error(w, "Pulse Account handoff unavailable", http.StatusServiceUnavailable)
+		writeUnavailable(
+			http.StatusServiceUnavailable,
+			"Pulse could not prepare the secure Pulse Account handoff for this instance. Retry in a moment, or use recovery below if you already have a key.",
+		)
 		return
 	}
 
@@ -1531,13 +1576,19 @@ func (h *LicenseHandlers) HandleCheckoutStart(w http.ResponseWriter, r *http.Req
 	)
 	if err != nil {
 		log.Error().Err(err).Str("feature", feature).Msg("Failed to build Pulse Account cancellation return url")
-		http.Error(w, "Pulse Account handoff unavailable", http.StatusServiceUnavailable)
+		writeUnavailable(
+			http.StatusServiceUnavailable,
+			"Pulse could not prepare the secure Pulse Account handoff for this instance. Retry in a moment, or use recovery below if you already have a key.",
+		)
 		return
 	}
 
 	lsClient := newLicenseServerClientFromLicensing("")
 	if lsClient == nil {
-		http.Error(w, "Pulse Account handoff unavailable", http.StatusServiceUnavailable)
+		writeUnavailable(
+			http.StatusServiceUnavailable,
+			"Pulse could not contact the commercial service needed to open Pulse Account. Retry in a moment, or use recovery below if you already have a key.",
+		)
 		return
 	}
 
@@ -1547,7 +1598,10 @@ func (h *LicenseHandlers) HandleCheckoutStart(w http.ResponseWriter, r *http.Req
 	}
 	if purchaseReturnJTI == "" {
 		log.Error().Str("feature", feature).Msg("Pulse Account purchase return token omitted jti")
-		http.Error(w, "Pulse Account handoff unavailable", http.StatusServiceUnavailable)
+		writeUnavailable(
+			http.StatusServiceUnavailable,
+			"Pulse could not prepare the secure Pulse Account handoff for this instance. Retry in a moment, or use recovery below if you already have a key.",
+		)
 		return
 	}
 
@@ -1559,20 +1613,29 @@ func (h *LicenseHandlers) HandleCheckoutStart(w http.ResponseWriter, r *http.Req
 	})
 	if err != nil {
 		log.Error().Err(err).Str("feature", feature).Msg("Failed to create Pulse Account checkout portal handoff")
-		http.Error(w, "Pulse Account handoff unavailable", http.StatusServiceUnavailable)
+		writeUnavailable(
+			http.StatusServiceUnavailable,
+			"Pulse could not open Pulse Account right now. Retry from this instance in a moment, or use recovery below if you already have a key.",
+		)
 		return
 	}
 	portalHandoffID := strings.TrimSpace(portalHandoff.PortalHandoffID)
 	if portalHandoffID == "" {
 		log.Error().Str("feature", feature).Msg("Pulse Account checkout portal handoff response omitted id")
-		http.Error(w, "Pulse Account handoff unavailable", http.StatusServiceUnavailable)
+		writeUnavailable(
+			http.StatusServiceUnavailable,
+			"Pulse could not open Pulse Account right now. Retry from this instance in a moment, or use recovery below if you already have a key.",
+		)
 		return
 	}
 
 	destination, err := pulseAccountUpgradeURLForRequest(portalHandoffID, r.URL.Query())
 	if err != nil {
 		log.Error().Err(err).Str("feature", feature).Msg("Failed to build Pulse Account upgrade destination")
-		http.Error(w, "Pulse Account handoff unavailable", http.StatusServiceUnavailable)
+		writeUnavailable(
+			http.StatusServiceUnavailable,
+			"Pulse could not open Pulse Account right now. Retry from this instance in a moment, or use recovery below if you already have a key.",
+		)
 		return
 	}
 

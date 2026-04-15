@@ -38,6 +38,7 @@ import {
   SELF_HOSTED_PRO_BILLING_PURCHASE_CANCELLED,
   SELF_HOSTED_PRO_BILLING_PURCHASE_EXPIRED,
   SELF_HOSTED_PRO_BILLING_PURCHASE_FAILED,
+  SELF_HOSTED_PRO_BILLING_PURCHASE_UNAVAILABLE,
   SELF_HOSTED_PRO_BILLING_PLAN_DETAILS_QUERY_PARAM,
   SELF_HOSTED_PRO_BILLING_PLAN_ROUTE,
   SELF_HOSTED_PRO_BILLING_PURCHASE_QUERY_PARAM,
@@ -319,6 +320,11 @@ export function useProLicensePanelState() {
               detail: SELF_HOSTED_PRO_BILLING_RECOVERY_DETAIL,
             }),
           ),
+        };
+      case SELF_HOSTED_PRO_BILLING_PURCHASE_UNAVAILABLE:
+        return {
+          label: SELF_HOSTED_PRO_BILLING_PRESENTATION.purchaseUnavailableActionLabel,
+          destination: resolveSelfHostedPurchaseStartDestination(intent),
         };
       default:
         return null;

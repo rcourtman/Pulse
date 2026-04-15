@@ -1,117 +1,53 @@
 package api
 
 import (
-	"context"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
-	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 )
 
-func TestLicenseHandlersService_SelfHostedNonDefaultFallbackToDefaultBillingState(t *testing.T) {
-	baseDir := t.TempDir()
-	mtp := config.NewMultiTenantPersistence(baseDir)
+func TestHandleCheckoutStart_ReopensOwnedBillingWhenPulseAccountHandoffIsUnavailable(t *testing.T) {
+	handler := createTestHandler(t)
+	handler.SetConfig(&config.Config{PublicURL: "https://pulse.example.com"})
 
-	// Ensure persistence roots exist so billing store can read/write cleanly.
-	if _, err := mtp.GetPersistence("default"); err != nil {
-		t.Fatalf("init default persistence: %v", err)
-	}
-	if _, err := mtp.GetPersistence("acme"); err != nil {
-		t.Fatalf("init acme persistence: %v", err)
-	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/checkout/portal-handoff" {
+			t.Fatalf("unexpected path %q", r.URL.Path)
+		}
+		http.Error(w, "portal handoff unavailable", http.StatusBadGateway)
+	}))
+	defer server.Close()
+	t.Setenv("PULSE_LICENSE_SERVER_URL", server.URL)
 
-	store := config.NewFileBillingStore(baseDir)
-	err := store.SaveBillingState("default", &pkglicensing.BillingState{
-		Capabilities:      []string{pkglicensing.FeatureMultiTenant},
-		PlanVersion:       string(pkglicensing.TierEnterprise),
-		SubscriptionState: pkglicensing.SubStateActive,
-	})
-	if err != nil {
-		t.Fatalf("save default billing state: %v", err)
-	}
+	req := httptest.NewRequest(
+		http.MethodGet,
+		"https://pulse.example.com/auth/license-purchase-start?feature=max_monitored_systems",
+		nil,
+	)
+	rec := httptest.NewRecorder()
 
-	handlers := NewLicenseHandlers(mtp, false)
-	ctx := context.WithValue(context.Background(), OrgIDContextKey, "acme")
-	service := handlers.Service(ctx)
-	if service == nil {
-		t.Fatalf("service is nil")
-	}
+	handler.HandleCheckoutStart(rec, req)
 
-	if !service.HasFeature(pkglicensing.FeatureMultiTenant) {
-		t.Fatalf("expected non-default org to inherit default org multi_tenant entitlement in self-hosted mode")
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want %d (body=%q)", rec.Code, http.StatusServiceUnavailable, rec.Body.String())
 	}
-}
-
-func TestLicenseHandlersService_SelfHostedNonDefaultBillingStateOverridesDefaultFallback(t *testing.T) {
-	baseDir := t.TempDir()
-	mtp := config.NewMultiTenantPersistence(baseDir)
-
-	if _, err := mtp.GetPersistence("default"); err != nil {
-		t.Fatalf("init default persistence: %v", err)
+	body := rec.Body.String()
+	if !strings.Contains(body, "Pulse Account unavailable") {
+		t.Fatalf("body = %q, want unavailable title", body)
 	}
-	if _, err := mtp.GetPersistence("acme"); err != nil {
-		t.Fatalf("init acme persistence: %v", err)
+	if !strings.Contains(body, "window.opener.location.assign") {
+		t.Fatalf("body = %q, want opener billing redirect", body)
 	}
-
-	store := config.NewFileBillingStore(baseDir)
-	if err := store.SaveBillingState("default", &pkglicensing.BillingState{
-		Capabilities:      []string{pkglicensing.FeatureMultiTenant},
-		PlanVersion:       string(pkglicensing.TierEnterprise),
-		SubscriptionState: pkglicensing.SubStateActive,
-	}); err != nil {
-		t.Fatalf("save default billing state: %v", err)
+	if !strings.Contains(body, "window.location.replace(redirectPath)") {
+		t.Fatalf("body = %q, want same-tab billing fallback", body)
 	}
-	if err := store.SaveBillingState("acme", &pkglicensing.BillingState{
-		Capabilities:      []string{},
-		PlanVersion:       string(pkglicensing.TierFree),
-		SubscriptionState: pkglicensing.SubStateExpired,
-	}); err != nil {
-		t.Fatalf("save acme billing state: %v", err)
+	if !strings.Contains(body, "window.close()") {
+		t.Fatalf("body = %q, want popup close bridge", body)
 	}
-
-	handlers := NewLicenseHandlers(mtp, false)
-	ctx := context.WithValue(context.Background(), OrgIDContextKey, "acme")
-	service := handlers.Service(ctx)
-	if service == nil {
-		t.Fatalf("service is nil")
-	}
-
-	if service.HasFeature(pkglicensing.FeatureMultiTenant) {
-		t.Fatalf("expected explicit non-default billing state to take precedence over default fallback")
-	}
-}
-
-func TestLicenseHandlersService_HostedNonDefaultFallbackToDefaultBillingState(t *testing.T) {
-	baseDir := t.TempDir()
-	mtp := config.NewMultiTenantPersistence(baseDir)
-
-	if _, err := mtp.GetPersistence("default"); err != nil {
-		t.Fatalf("init default persistence: %v", err)
-	}
-	if _, err := mtp.GetPersistence("t-tenant"); err != nil {
-		t.Fatalf("init tenant persistence: %v", err)
-	}
-
-	store := config.NewFileBillingStore(baseDir)
-	if err := store.SaveBillingState("default", &pkglicensing.BillingState{
-		Capabilities:      []string{pkglicensing.FeatureRBAC, pkglicensing.FeatureRelay},
-		PlanVersion:       "msp_starter",
-		SubscriptionState: pkglicensing.SubStateActive,
-	}); err != nil {
-		t.Fatalf("save default billing state: %v", err)
-	}
-
-	handlers := NewLicenseHandlers(mtp, true)
-	ctx := context.WithValue(context.Background(), OrgIDContextKey, "t-tenant")
-	service := handlers.Service(ctx)
-	if service == nil {
-		t.Fatalf("service is nil")
-	}
-
-	if service.SubscriptionState() != string(pkglicensing.SubStateActive) {
-		t.Fatalf("subscription_state = %q, want %q", service.SubscriptionState(), pkglicensing.SubStateActive)
-	}
-	if !service.HasFeature(pkglicensing.FeatureRBAC) {
-		t.Fatalf("expected hosted tenant org to inherit default hosted billing state")
+	if !strings.Contains(body, "/settings/system/billing/plan?intent=max_monitored_systems&purchase=unavailable") {
+		t.Fatalf("body = %q, want owned billing unavailable route", body)
 	}
 }

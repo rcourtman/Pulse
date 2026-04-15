@@ -93,6 +93,7 @@ describe('licensePresentation', () => {
       purchaseCancelledActionLabel: 'Compare plans',
       purchaseExpiredActionLabel: 'Restart upgrade',
       purchaseFailedActionLabel: 'Open recovery',
+      purchaseUnavailableActionLabel: 'Try again',
       trialStartTitle: 'Try Pro for free',
       trialStartBody: 'Start a 14-day Pro trial for this organization.',
       trialStartIdleActionLabel: 'Start 14-day Pro Trial',
@@ -269,6 +270,11 @@ describe('licensePresentation', () => {
       title: 'Activation needs attention',
       body: expect.stringContaining('open recovery'),
       tone: expect.stringContaining('red'),
+    });
+    expect(getPurchaseActivationNotice('unavailable')).toMatchObject({
+      title: 'Pulse Account unavailable',
+      body: expect.stringContaining('Retry from this instance'),
+      tone: expect.stringContaining('amber'),
     });
     expect(getPurchaseActivationNotice('')).toBeNull();
   });

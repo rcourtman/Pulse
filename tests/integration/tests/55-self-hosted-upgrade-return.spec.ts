@@ -16,6 +16,7 @@ const ACTIVATED_BILLING_URL = `${DEV_SERVER_URL}/settings/system/billing/plan?in
 const CANCELLED_BILLING_URL = `${DEV_SERVER_URL}/settings/system/billing/plan?intent=max_monitored_systems&purchase=cancelled`;
 const EXPIRED_BILLING_URL = `${DEV_SERVER_URL}/settings/system/billing/plan?intent=max_monitored_systems&purchase=expired`;
 const FAILED_BILLING_URL = `${DEV_SERVER_URL}/settings/system/billing/plan?intent=max_monitored_systems&purchase=failed`;
+const UNAVAILABLE_BILLING_URL = `${DEV_SERVER_URL}/settings/system/billing/plan?intent=max_monitored_systems&purchase=unavailable`;
 const FINAL_BILLING_URL = `${DEV_SERVER_URL}/settings/system/billing/plan?intent=max_monitored_systems`;
 const USAGE_BILLING_URL = `${DEV_SERVER_URL}/settings/system/billing/usage`;
 const RECOVERY_BILLING_HREF =
@@ -182,6 +183,16 @@ function renderActivationCompletionPage(title: string, redirectUrl: string): str
     "<!doctype html><html><body>" +
     `<h1>${title}</h1>` +
     `<script>(function(){var redirectPath=${JSON.stringify(redirectUrl)};if(window.opener&&!window.opener.closed){window.opener.location.assign(redirectPath);window.close();return;}window.location.replace(redirectPath);}());</script>` +
+    "</body></html>"
+  );
+}
+
+function renderPurchaseStartFailurePage(message: string, redirectUrl: string): string {
+  return (
+    "<!doctype html><html><body>" +
+    "<h1>Pulse Account unavailable</h1>" +
+    `<p id="purchase-start-status">${message}</p>` +
+    `<script>(function(){var redirectPath=${JSON.stringify(redirectUrl)};var statusEl=document.getElementById('purchase-start-status');var redirectedOriginalTab=false;try{if(window.opener&&!window.opener.closed){redirectedOriginalTab=true;window.opener.location.assign(redirectPath);}}catch(_){redirectedOriginalTab=false;}if(redirectedOriginalTab){setTimeout(function(){try{window.close();}catch(_){ }if(statusEl){statusEl.textContent='Pulse Pro billing has been reopened in the original tab. You can close this window if it stays open.';}},75);return;}if(statusEl){statusEl.textContent='Returning to Pulse Pro billing.';}setTimeout(function(){window.location.replace(redirectPath);},150);}());</script>` +
     "</body></html>"
   );
 }
@@ -569,5 +580,65 @@ test.describe("Self-hosted upgrade return flow", () => {
     await recoveryLink.click();
     await expect(page).toHaveURL(RECOVERY_BILLING_URL);
     await expect(page.locator("#pulse-pro-recovery")).toBeVisible();
+  });
+
+  test("reopens owned billing when Pulse Account handoff is unavailable", async ({
+    page,
+  }, testInfo) => {
+    test.skip(
+      testInfo.project.name.startsWith("mobile-"),
+      "Desktop-only billing continuity",
+    );
+
+    const context = page.context();
+    await configureBillingFixtures(context, page);
+
+    await context.route(`${PURCHASE_START_URL}**`, async (route) => {
+      const requestUrl = new URL(route.request().url());
+      expect(requestUrl.searchParams.get("feature")).toBe(MONITORED_SYSTEM_FEATURE);
+      await route.fulfill({
+        status: 503,
+        contentType: "text/html",
+        body: renderPurchaseStartFailurePage(
+          "Pulse could not open the Pulse Account upgrade flow right now.",
+          UNAVAILABLE_BILLING_URL,
+        ),
+      });
+    });
+
+    await openMonitoredSystemUpgradeArrival(page);
+
+    const popupPromise = page.waitForEvent("popup");
+    await page.getByRole("link", { name: "Compare plans" }).click();
+    const popup = await popupPromise;
+
+    await expect
+      .poll(async () => {
+        if ((await page.getByText("Pulse Account unavailable", { exact: true }).count()) > 0) {
+          return "page";
+        }
+        if (
+          !popup.isClosed() &&
+          (await popup.getByText("Pulse Account unavailable", { exact: true }).count()) > 0
+        ) {
+          return "popup";
+        }
+        return "none";
+      })
+      .toMatch(/page|popup/);
+
+    const billingSurface =
+      (await page.getByText("Pulse Account unavailable", { exact: true }).count()) > 0
+        ? page
+        : popup;
+
+    await expect(billingSurface).toHaveURL(FINAL_BILLING_URL);
+    await expect(
+      billingSurface.getByText("Pulse Account unavailable", { exact: true }),
+    ).toBeVisible();
+    await expect(billingSurface.getByRole("link", { name: "Try again" })).toHaveAttribute(
+      "href",
+      `${PURCHASE_START_PATH}?feature=max_monitored_systems`,
+    );
   });
 });

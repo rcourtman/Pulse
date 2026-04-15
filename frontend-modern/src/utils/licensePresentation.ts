@@ -347,6 +347,12 @@ export const getPurchaseActivationNotice = (result?: string | null): LicenseInli
         title: 'Activation needs attention',
         body: 'Checkout completed, but Pulse could not finish local activation automatically. Review the plan state below, then open recovery if you already have a key from this purchase.',
       };
+    case 'unavailable':
+      return {
+        tone: 'border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-900 text-amber-900 dark:text-amber-100',
+        title: 'Pulse Account unavailable',
+        body: 'Pulse could not open the Pulse Account upgrade flow right now. The current plan state below is unchanged. Retry from this instance in a moment, or use recovery below if you already have a key.',
+      };
     default:
       return null;
   }
