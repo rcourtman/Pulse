@@ -82,6 +82,10 @@ If a grandfathered recurring subscriber covered by the pre-cutover legacy
 policy, or a lifetime customer, sees a bounded monitored-system or guest cap
 in v6, treat that as a product bug, not as intended policy.
 
+Canonical short reply:
+
+`Lifetime customers remain uncapped. Legacy recurring Pulse Pro subscribers who were already active before the public v6 pricing cutover remain uncapped while that subscription stays active. Other migrated legacy paid installs can preserve a monitored-system continuity floor for that install where needed, but that is not an uncapped entitlement. Former recurring subscribers who return later, and new/current public v6 purchases, use the current v6 plan caps.`
+
 ### Will old bookmarks and familiar v5 pages still work?
 
 Not necessarily. v6 reorganizes the product around Dashboard, Infrastructure,
