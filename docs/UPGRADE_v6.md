@@ -27,7 +27,7 @@ curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install.s
   sudo bash -s -- --version vX.Y.Z
 ```
 
-This installer updates the **Pulse server**. Agent updates use the `/install.sh` command generated in **Settings → Unified Agents → Installation commands**.
+This installer updates the **Pulse server**. Agent updates use the `/install.sh` command generated in **Settings → Infrastructure → Install on a host**.
 
 ### Docker
 
@@ -66,8 +66,8 @@ No. Use the unified installer to upgrade existing agent deployments in place.
 
 No. The server upgrade and the Unified Agent upgrade are separate operations.
 After the server is on v6, use the generated install or upgrade command from
-**Settings → Unified Agents → Installation commands** when you want to move
-agents to v6.
+**Settings → Infrastructure → Install on a host** when you want to move agents
+to v6.
 
 ### Will an upgraded v5 agent keep the same identity in v6?
 

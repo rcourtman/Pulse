@@ -13,7 +13,7 @@ Run this on your Proxmox host:
 curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install.sh | bash
 ```
 
-> **Note**: The GitHub `install.sh` is the **server** installer. The agent installer is served from your Pulse server at `/install.sh` (see **Settings → Unified Agents → Installation commands**).
+> **Note**: The GitHub `install.sh` is the **server** installer. The agent installer is served from your Pulse server at `/install.sh` (see **Settings → Infrastructure → Install on a host**).
 
 ### Docker
 Ideal for containerized environments or testing.
@@ -74,7 +74,7 @@ For Linux servers (VM or bare metal), use the official installer:
 curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install.sh | sudo bash
 ```
 
-> **Note**: This installs the Pulse server. Use the `/install.sh` endpoint from your Pulse UI for installing `pulse-agent` on monitored hosts.
+> **Note**: This installs the Pulse server. Use the `/install.sh` endpoint from **Settings → Infrastructure → Install on a host** for installing `pulse-agent` on monitored hosts.
 
 <details>
 <summary><strong>Manual systemd install (advanced)</strong></summary>
@@ -130,7 +130,7 @@ Pulse is secure by default. On first launch, you must retrieve a **Bootstrap Tok
    - Set your **Admin Username** and **Password** (or let Pulse generate one).
    - Pulse generates an **API token** for agents and automations.
    - Copy the credentials before leaving the page.
-4. Open **Settings → Unified Agents** and install the unified agent on each host you want monitored.
+4. Open **Settings → Infrastructure → Install on a host** and install the unified agent on each host you want monitored.
 
 > **Note**: If you configure authentication via environment variables (`PULSE_AUTH_USER`/`PULSE_AUTH_PASS`), the bootstrap token is automatically removed and this step is skipped.
 

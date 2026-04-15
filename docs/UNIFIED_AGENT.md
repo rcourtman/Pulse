@@ -8,7 +8,7 @@ Install it on each host you want Pulse to monitor. This is the primary monitorin
 ## Quick Start
 
 Generate an installation command in the UI:
-**Settings → Unified Agents → Installation commands**
+**Settings → Infrastructure → Install on a host**
 
 Choose a target profile in that screen when you want explicit install flags for Docker, Kubernetes, Proxmox VE, or Proxmox Backup Server.
 

@@ -51,11 +51,11 @@ curl -fsSL https://yourname.cloud.pulserelay.pro/install.sh | \
   bash -s -- --url https://yourname.cloud.pulserelay.pro --token <api-token>
 ```
 
-Generate installation commands from **Settings → Unified Agents → Installation commands** in your cloud dashboard.
+Generate installation commands from **Settings → Infrastructure → Install on a host** in your cloud dashboard.
 
 ### 3. Add Proxmox / TrueNAS Connections
 
-Add your Proxmox VE, PBS, PMG, or TrueNAS systems via **Settings → Infrastructure** or **Settings → TrueNAS**.
+Add your Proxmox VE, PBS, PMG, or TrueNAS systems via **Settings → Infrastructure → Platform connections**.
 
 ### 4. Set Up Mobile Access
 

@@ -9,7 +9,7 @@ If you run Proxmox VE, use the official LXC installer (recommended):
 curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install.sh | bash
 ```
 
-Note: this installs the Pulse **server**. Agent installs use the command from **Settings → Unified Agents → Installation commands** (served from `/install.sh` on your Pulse server).
+Note: this installs the Pulse **server**. Agent installs use the command from **Settings → Infrastructure → Install on a host** (served from `/install.sh` on your Pulse server).
 
 If you prefer Docker:
 
@@ -20,10 +20,11 @@ docker run -d --name pulse -p 7655:7655 -v pulse_data:/data rcourtman/pulse:late
 See [INSTALL.md](INSTALL.md) for all options (Docker Compose, Kubernetes, systemd).
 
 ### How do I add a node?
-Go to **Settings → Unified Agents**.
+Go to **Settings → Infrastructure → Install on a host** for systems that should
+run the unified agent directly.
 
-- **Recommended (Agent setup)**: select **Agent Install** and run the generated install command on the Proxmox host.
-- **Manual/API-only**: open **Advanced** in the add-node modal and use **API Only** or **Manual**.
+- **Recommended (agent setup)**: copy the generated install command and run it on the target host.
+- **Manual/API-backed platforms**: use **Settings → Infrastructure → Platform connections** for systems such as Proxmox, PBS, PMG, or TrueNAS that connect over an API instead of running the agent locally.
 
 If you want Pulse to find servers automatically, enable discovery in **Settings → System → Network** and then review discovered servers in **Settings → Infrastructure**.
 

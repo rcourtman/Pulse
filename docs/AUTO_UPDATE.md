@@ -88,7 +88,7 @@ If you use the legacy `docker-compose` binary, replace `docker compose` with `do
 curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install.sh | bash
 ```
 
-This script installs/updates the **Pulse server**. Agent updates use the `/install.sh` command generated in **Settings → Unified Agents → Installation commands**.
+This script installs/updates the **Pulse server**. Agent updates use the `/install.sh` command generated in **Settings → Infrastructure → Install on a host**.
 
 ### Systemd Service (Manual)
 
@@ -96,7 +96,7 @@ This script installs/updates the **Pulse server**. Agent updates use the `/insta
 curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install.sh | bash
 ```
 
-This script installs/updates the **Pulse server**. Agent updates use the `/install.sh` command generated in **Settings → Unified Agents → Installation commands**.
+This script installs/updates the **Pulse server**. Agent updates use the `/install.sh` command generated in **Settings → Infrastructure → Install on a host**.
 
 ### Source Build
 

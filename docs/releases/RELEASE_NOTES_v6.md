@@ -39,7 +39,7 @@ If you install Pulse v6, your existing agents do not all switch to v6 automatica
 
 After upgrading the server, update existing agents separately using the command generated from:
 
-`Settings -> Unified Agents -> Installation commands`
+`Settings -> Infrastructure -> Install on a host`
 
 That is the supported v5-to-v6 crossover path for agent testing.
 
