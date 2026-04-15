@@ -1400,6 +1400,10 @@ correlation ordering. `frontend-modern/src/components/Infrastructure/ResourcePol
 is the canonical shared card for governed policy-posture counts, while
 `frontend-modern/src/utils/resourcePolicyPresentation.ts` owns the canonical
 sensitivity, routing, and redaction labels and aggregate count summaries.
+That shared policy card also owns caller-supplied framing lines such as
+subtitle and resource-count wording, so Patrol or other shared surfaces may
+clarify whether the same governed counts read as policy-covered-resource
+context without rebuilding their own policy-posture card shell.
 Future correlation or policy-posture wording changes should extend those
 unified-resource owners instead of drifting into page-local loops in AI,
 Patrol, or infrastructure surfaces.

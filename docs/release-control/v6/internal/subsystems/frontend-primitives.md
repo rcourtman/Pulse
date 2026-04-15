@@ -1627,7 +1627,10 @@ correlations, and policy coverage belong behind an explicitly secondary
 supporting-context disclosure that only appears when Patrol has active
 findings, degraded or incomplete verification, or a selected run that needs
 explanation; healthy fully verified Patrol states must not advertise that
-supporting evidence as a peer workflow.
+supporting evidence as a peer workflow. When that disclosure expands, the
+workspace must explicitly label findings and run history as Patrol verification
+evidence and frame the supporting cards as explanatory context rather than as a
+fresh Patrol result.
 
 Shared primitive consumers that split status-dot tone and status-text tone
 must now keep both values routed through the same exported presentation helper.

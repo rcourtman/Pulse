@@ -45,7 +45,7 @@ export const SELF_HOSTED_PLAN_DEFINITIONS: readonly SelfHostedPlanDefinition[] =
     tier: 'community',
     name: 'Community',
     price: 'Free forever',
-    subline: 'Monitor up to 5 systems for free',
+    subline: 'Up to 5 top-level monitored systems',
     monitoredSystems: 5,
     metricHistoryDays: 7,
     highlights: [
@@ -71,7 +71,7 @@ export const SELF_HOSTED_PLAN_DEFINITIONS: readonly SelfHostedPlanDefinition[] =
       'Mobile app access',
       'Push notifications',
       'Custom URL (yourlab.pulserelay.pro)',
-      '8 monitored systems · 14-day history',
+      '8 top-level monitored systems · 14-day history',
     ],
   },
   {
@@ -89,7 +89,7 @@ export const SELF_HOSTED_PLAN_DEFINITIONS: readonly SelfHostedPlanDefinition[] =
       '90-day metric history',
       'RBAC, audit logging, SAML SSO',
       'Agent profiles · PDF/CSV reports',
-      '15 monitored systems',
+      '15 top-level monitored systems',
     ],
   },
   {
@@ -99,7 +99,7 @@ export const SELF_HOSTED_PLAN_DEFINITIONS: readonly SelfHostedPlanDefinition[] =
     subline: 'or $129/year',
     monitoredSystems: 50,
     metricHistoryDays: 90,
-    highlights: ['Everything in Pro', '50 monitored systems'],
+    highlights: ['Everything in Pro', '50 top-level monitored systems'],
   },
 ] as const;
 
@@ -113,7 +113,7 @@ export const SELF_HOSTED_PLAN_BY_TIER: Record<SelfHostedTierKey, SelfHostedPlanD
 export const SELF_HOSTED_COMMERCIAL_PRESENTATION: SelfHostedCommercialPresentation = {
   pageTitle: 'Pricing',
   pageDescription:
-    'Core monitoring stays free. Relay adds remote access, and Pro unlocks Pulse Patrol, alert analysis, and auto-fix.',
+    'Core monitoring stays free. Pulse counts top-level monitored systems, while child resources underneath them are included. Relay adds remote access, and Pro unlocks Pulse Patrol, alert analysis, and auto-fix.',
   mostPopularBadge: 'Most Popular',
   currentPlanLabel: 'Current Plan',
   includedLabel: 'Included',

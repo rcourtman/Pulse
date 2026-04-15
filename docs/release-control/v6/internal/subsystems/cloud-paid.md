@@ -1106,7 +1106,9 @@ those facts describe the canonical offer rather than one page's local layout.
 The same rule applies to self-hosted commercial framing inside product-owned
 billing and activation surfaces: plan names, counted-unit copy, and upgrade
 adjacency must come from the shared self-hosted plan-definition owner rather
-than page-local strings.
+than page-local strings. That owner must also keep Community, Relay, Pro, and
+Pro+ retail limit copy on top-level monitored systems rather than drifting back
+to vague `systems` or device-style language.
 The shared license presentation owner also holds self-hosted Pro settings
 upsell and trial-ended notice copy for `ProLicensePlanSection.tsx`; that
 surface must consume canonical helper notices instead of carrying inline

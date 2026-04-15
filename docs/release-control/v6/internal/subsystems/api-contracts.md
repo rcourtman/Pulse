@@ -377,7 +377,10 @@ when the disabled candidate no longer counts toward monitored-system capacity.
    learned correlations, and policy coverage stay secondary explanatory context
    that opens only when degraded verification, active findings, or selected-run
    investigation makes that evidence relevant instead of advertising a parallel
-   Patrol workflow on otherwise healthy fully verified states
+   Patrol workflow on otherwise healthy fully verified states, and the
+   disclosure copy must explicitly tell operators that findings and run history
+   are the Patrol verification evidence while those supporting cards only add
+   explanation from the same governed payload family
 9. Keep AI settings setup transport vendor-neutral: `/api/settings/ai/update`
    must accept provider credentials or base URLs without a baked vendor model
    ID, resolve the effective BYOK `model` through the canonical runtime

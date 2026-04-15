@@ -36,7 +36,7 @@ describe('selfHostedPlans', () => {
     expect(SELF_HOSTED_COMMERCIAL_PRESENTATION).toEqual({
       pageTitle: 'Pricing',
       pageDescription:
-        'Core monitoring stays free. Relay adds remote access, and Pro unlocks Pulse Patrol, alert analysis, and auto-fix.',
+        'Core monitoring stays free. Pulse counts top-level monitored systems, while child resources underneath them are included. Relay adds remote access, and Pro unlocks Pulse Patrol, alert analysis, and auto-fix.',
       mostPopularBadge: 'Most Popular',
       currentPlanLabel: 'Current Plan',
       includedLabel: 'Included',
@@ -67,11 +67,23 @@ describe('selfHostedPlans', () => {
   });
 
   it('keeps Community quickstart copy scoped to Patrol activation support', () => {
+    expect(SELF_HOSTED_PLAN_BY_TIER.community.subline).toBe(
+      'Up to 5 top-level monitored systems',
+    );
     expect(SELF_HOSTED_PLAN_BY_TIER.community.highlights).toEqual(
       expect.arrayContaining([
         'Pulse Patrol (BYOK)',
         'Patrol quickstart after activation or trial: 25 runs, no API key',
       ]),
+    );
+    expect(SELF_HOSTED_PLAN_BY_TIER.relay.highlights).toContain(
+      '8 top-level monitored systems · 14-day history',
+    );
+    expect(SELF_HOSTED_PLAN_BY_TIER.pro.highlights).toContain(
+      '15 top-level monitored systems',
+    );
+    expect(SELF_HOSTED_PLAN_BY_TIER.proPlus.highlights).toContain(
+      '50 top-level monitored systems',
     );
     expect(SELF_HOSTED_PLAN_BY_TIER.community.highlights).not.toContain(
       'Patrol quickstart: 25 runs, no API key',
