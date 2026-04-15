@@ -233,6 +233,12 @@ other header-adjacent notices must not fork assistant open state, gate on AI
 runtime fetches, or move assistant availability logic out of
 `frontend-modern/src/stores/aiChat.ts` and `frontend-modern/src/useAppRuntimeState.ts`
 just because they share the same authenticated shell.
+That same shared shell boundary must respect blocking modal ownership.
+`frontend-modern/src/App.tsx` and `frontend-modern/src/AppLayout.tsx` may use
+the shared dialog runtime to hide the closed assistant launcher and close the
+drawer while a blocking shared dialog is open, but they must not leave Pulse
+Assistant interactive behind a modal or fork a second assistant-open state
+model to do it.
 That same shared shell rule applies when presentation policy suppresses hosted
 organization chrome: `frontend-modern/src/App.tsx` and
 `frontend-modern/src/AppLayout.tsx` may hide org switchers or demo-only org
@@ -284,9 +290,9 @@ helpers used across chat, settings, and usage surfaces.
 `frontend-modern/src/utils/aiSessionDiffPresentation.ts`, and
 `frontend-modern/src/utils/aiExplorePresentation.ts` are the canonical owners
 for provider naming, provider health labels, control-level semantics,
-chat drawer title/subtitle, discovery hint framing, chat/session empty states,
-assistant message and question-card labels, session-diff badges, and explore-
-status labels.
+chat drawer title/subtitle, launcher title/aria copy, session-menu labeling,
+discovery hint framing, chat/session empty states, assistant message and
+question-card labels, session-diff badges, and explore-status labels.
 Settings and chat surfaces must consume those helpers instead of keeping local
 AI wording or model/provider inference branches.
 

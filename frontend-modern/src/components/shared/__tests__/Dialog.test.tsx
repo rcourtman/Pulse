@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { Dialog } from '@/components/shared/Dialog';
+import { dialogStackHasBlockingDialog } from '@/components/shared/useDialogState';
 import dialogSource from '@/components/shared/Dialog.tsx?raw';
 import dialogModelSource from '@/components/shared/dialogModel.ts?raw';
 import dialogStateSource from '@/components/shared/useDialogState.ts?raw';
@@ -27,6 +28,7 @@ describe('Dialog', () => {
     expect(dialogStateSource).toContain('onCleanup');
     expect(dialogStateSource).toContain('document.body.style.overflow');
     expect(dialogStateSource).toContain('openDialogCount');
+    expect(dialogStateSource).toContain('dialogStackHasBlockingDialog');
     expect(dialogStateSource).toContain('getDialogFocusableElements');
 
     expect(dialogModelSource).toContain('export function getDialogLayout');
@@ -69,6 +71,20 @@ describe('Dialog', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
     unmount();
     expect(document.body.style.overflow).toBe('');
+  });
+
+  it('publishes blocking dialog state while a modal is open', () => {
+    expect(dialogStackHasBlockingDialog()).toBe(false);
+
+    const { unmount } = render(() => (
+      <Dialog isOpen={true} onClose={() => undefined}>
+        <div class="p-4">Body</div>
+      </Dialog>
+    ));
+
+    expect(dialogStackHasBlockingDialog()).toBe(true);
+    unmount();
+    expect(dialogStackHasBlockingDialog()).toBe(false);
   });
 
   it('keeps keyboard focus trapped in the dialog', async () => {

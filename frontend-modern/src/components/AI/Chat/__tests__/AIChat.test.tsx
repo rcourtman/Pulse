@@ -431,13 +431,13 @@ describe('AIChat', () => {
 
     it('opens session picker on click', () => {
       renderChat();
-      fireEvent.click(screen.getByTitle('Chat sessions'));
+      fireEvent.click(screen.getByTitle('Pulse Assistant sessions'));
       expect(screen.getByText('New session')).toBeInTheDocument();
     });
 
     it('shows "No previous assistant sessions" when empty', () => {
       renderChat();
-      fireEvent.click(screen.getByTitle('Chat sessions'));
+      fireEvent.click(screen.getByTitle('Pulse Assistant sessions'));
       expect(screen.getByText('No previous assistant sessions')).toBeInTheDocument();
     });
 
@@ -450,7 +450,7 @@ describe('AIChat', () => {
       await waitFor(() => {
         expect(mockAIChatAPI.listSessions).toHaveBeenCalled();
       });
-      fireEvent.click(screen.getByTitle('Chat sessions'));
+      fireEvent.click(screen.getByTitle('Pulse Assistant sessions'));
       expect(screen.getByText('Session One')).toBeInTheDocument();
       expect(screen.getByText('Session Two')).toBeInTheDocument();
       expect(screen.getByText('5 messages')).toBeInTheDocument();
@@ -465,7 +465,7 @@ describe('AIChat', () => {
       await waitFor(() => {
         expect(mockAIChatAPI.listSessions).toHaveBeenCalled();
       });
-      fireEvent.click(screen.getByTitle('Chat sessions'));
+      fireEvent.click(screen.getByTitle('Pulse Assistant sessions'));
       fireEvent.click(screen.getByText('Session One'));
       expect(mockChat.loadSession).toHaveBeenCalledWith('s1');
     });
@@ -1026,7 +1026,7 @@ describe('AIChat', () => {
         await waitFor(() => {
           expect(mockAIChatAPI.listSessions).toHaveBeenCalled();
         });
-        fireEvent.click(screen.getByTitle('Chat sessions'));
+        fireEvent.click(screen.getByTitle('Pulse Assistant sessions'));
         expect(screen.getByText('Session One')).toBeInTheDocument();
 
         // Find the delete button inside the session row

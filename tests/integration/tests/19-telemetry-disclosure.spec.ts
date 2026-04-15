@@ -122,7 +122,9 @@ test.describe('Telemetry disclosure', () => {
     await page.goto('/dashboard', { waitUntil: 'domcontentloaded' });
 
     const dialog = page.getByRole('dialog');
+    const assistantLauncher = page.getByRole('button', { name: 'Expand Pulse Assistant' });
     await expect(dialog.getByText('Welcome to the New Navigation!')).toBeVisible();
+    await expect(assistantLauncher).toBeHidden();
     await expect(
       dialog.getByText(
         /rotating install ID, normalized release identity, platform, resource counts, and feature flags/i,
@@ -149,5 +151,18 @@ test.describe('Telemetry disclosure', () => {
       '/docs/README.md',
       'Welcome to the Pulse documentation portal.',
     );
+
+    await dialog.getByRole('button', { name: "Let's go" }).click();
+    await expect(dialog).not.toBeVisible();
+    await expect(assistantLauncher).toBeVisible();
+
+    await assistantLauncher.click();
+    await expect(page.getByRole('heading', { name: 'Pulse Assistant' })).toBeVisible();
+    await expect(
+      page.getByText('Observed context, provider-backed reasoning, and governed actions.'),
+    ).toBeVisible();
+
+    await page.getByTitle('Pulse Assistant sessions').click();
+    await expect(page.getByText('No previous assistant sessions')).toBeVisible();
   });
 });

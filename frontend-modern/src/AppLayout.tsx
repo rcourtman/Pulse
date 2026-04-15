@@ -21,6 +21,7 @@ import Minimize2Icon from 'lucide-solid/icons/minimize-2';
 import ActivityIcon from 'lucide-solid/icons/activity';
 import { MobileNavBar } from '@/components/shared/MobileNavBar';
 import { ReleaseCandidateBanner } from '@/components/shared/ReleaseCandidateBanner';
+import { dialogStackHasBlockingDialog } from '@/components/shared/useDialogState';
 import { OrgSwitcher } from '@/components/OrgSwitcher';
 import { PulsePatrolLogo } from '@/components/Brand/PulsePatrolLogo';
 import { MONITORING_READ_SCOPE } from '@/constants/apiScopes';
@@ -44,6 +45,10 @@ import {
   presentationPolicyHidesUpgradePrompts,
   presentationPolicyIsDemoMode,
 } from '@/stores/sessionPresentationPolicy';
+import {
+  AI_CHAT_LAUNCHER_ARIA_LABEL,
+  getAIChatLauncherTitle,
+} from '@/utils/aiChatPresentation';
 import type { AppConnectionStatus } from '@/useAppRuntimeState';
 
 const ROOT_INFRASTRUCTURE_PATH = buildInfrastructurePath();
@@ -812,17 +817,20 @@ export function AppLayout(props: AppLayoutProps) {
         </footer>
       </Show>
 
-      <Show when={aiChatStore.enabled === true && !aiChatStore.isOpenSignal() && !kioskMode()}>
+      <Show
+        when={
+          aiChatStore.enabled === true &&
+          !aiChatStore.isOpenSignal() &&
+          !kioskMode() &&
+          !dialogStackHasBlockingDialog()
+        }
+      >
         <button
           type="button"
           onClick={() => aiChatStore.toggle()}
           class="fixed right-0 top-1/2 -translate-y-1/2 z-40 flex min-h-10 sm:min-h-9 min-w-10 items-center justify-center px-2.5 py-2.5 rounded-l-xl bg-blue-600 text-white shadow-sm hover:bg-blue-700 transition-colors duration-200 group sm:top-1/2 sm:translate-y-[-50%] top-auto bottom-[calc(5rem+env(safe-area-inset-bottom,0px))] translate-y-0"
-          title={
-            aiChatStore.context.context?.name
-              ? `Pulse Assistant - ${aiChatStore.context.context.name}`
-              : 'Pulse Assistant (⌘K)'
-          }
-          aria-label="Expand Pulse Assistant"
+          title={getAIChatLauncherTitle(aiChatStore.context.context?.name)}
+          aria-label={AI_CHAT_LAUNCHER_ARIA_LABEL}
         >
           <svg
             class="h-5 w-5 flex-shrink-0"

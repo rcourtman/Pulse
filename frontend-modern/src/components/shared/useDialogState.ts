@@ -1,4 +1,4 @@
-import { createEffect, onCleanup } from 'solid-js';
+import { createEffect, createSignal, onCleanup } from 'solid-js';
 import type { Accessor } from 'solid-js';
 import {
   getDialogFocusableElements,
@@ -15,6 +15,11 @@ interface DialogStateOptions {
 
 let openDialogCount = 0;
 let previousBodyOverflow = '';
+const [dialogStackDepth, setDialogStackDepth] = createSignal(0);
+
+export function dialogStackHasBlockingDialog() {
+  return dialogStackDepth() > 0;
+}
 
 function lockBodyScroll() {
   if (typeof document === 'undefined') return;
@@ -23,11 +28,13 @@ function lockBodyScroll() {
     document.body.style.overflow = 'hidden';
   }
   openDialogCount += 1;
+  setDialogStackDepth(openDialogCount);
 }
 
 function unlockBodyScroll() {
   if (typeof document === 'undefined') return;
   openDialogCount = Math.max(0, openDialogCount - 1);
+  setDialogStackDepth(openDialogCount);
   if (openDialogCount === 0) {
     document.body.style.overflow = previousBodyOverflow;
   }

@@ -2,6 +2,8 @@ export const AI_CHAT_DRAWER_TITLE = 'Pulse Assistant';
 export const AI_CHAT_DRAWER_SUBTITLE =
   'Observed context, provider-backed reasoning, and governed actions.';
 export const AI_CHAT_COLLAPSE_TITLE = 'Collapse Pulse Assistant';
+export const AI_CHAT_LAUNCHER_ARIA_LABEL = 'Expand Pulse Assistant';
+export const AI_CHAT_SESSION_MENU_TITLE = 'Pulse Assistant sessions';
 export const AI_CHAT_NEW_SESSION_SHORT_LABEL = 'New';
 export const AI_CHAT_NEW_SESSION_BUTTON_TITLE = 'New assistant session';
 export const AI_CHAT_NEW_SESSION_MENU_LABEL = 'New session';
@@ -31,6 +33,14 @@ const AI_CHAT_SINGLE_SYSTEM_EMPTY_STATE_SUGGESTIONS = [
   'Check storage pressure',
   'Explain recent Patrol findings',
 ];
+
+export function getAIChatLauncherTitle(contextName?: unknown) {
+  if (typeof contextName === 'string' && contextName.trim().length > 0) {
+    return `Open Pulse Assistant for ${contextName}`;
+  }
+
+  return 'Open Pulse Assistant';
+}
 
 export function getAIChatEmptyStateSuggestions(isCluster: boolean) {
   return isCluster

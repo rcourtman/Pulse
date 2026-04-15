@@ -35,6 +35,7 @@ import {
   AI_CHAT_NEW_SESSION_BUTTON_TITLE,
   AI_CHAT_NEW_SESSION_MENU_LABEL,
   AI_CHAT_NEW_SESSION_SHORT_LABEL,
+  AI_CHAT_SESSION_MENU_TITLE,
   AI_CHAT_SESSION_EMPTY_STATE,
   getAIChatEmptyStateSuggestions,
 } from '@/utils/aiChatPresentation';
@@ -978,7 +979,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
                   setShowSessions(next);
                 }}
                 class="p-2 hover:text-base-content rounded-md hover:bg-surface-hover transition-colors"
-                title="Chat sessions"
+                title={AI_CHAT_SESSION_MENU_TITLE}
               >
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path

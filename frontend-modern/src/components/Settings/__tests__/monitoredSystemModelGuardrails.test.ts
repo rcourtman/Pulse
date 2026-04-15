@@ -1085,10 +1085,12 @@ describe('monitored-system model guardrails', () => {
     expect(aiChatSource).not.toContain("mention.type === 'agent'");
     expect(aiChatSource).toContain('@/utils/aiControlLevelPresentation');
     expect(aiChatSource).toContain('AI_CHAT_SESSION_EMPTY_STATE');
+    expect(aiChatSource).toContain('AI_CHAT_SESSION_MENU_TITLE');
     expect(aiChatSource).toContain('AI_CHAT_DRAWER_SUBTITLE');
     expect(aiChatSource).toContain('AI_CHAT_DISCOVERY_HINT_TITLE');
     expect(aiChatSource).toContain('getAIChatEmptyStateSuggestions');
     expect(aiChatSource).not.toContain('No previous assistant sessions');
+    expect(aiChatSource).not.toContain('Chat sessions');
     expect(aiChatSource).not.toContain('Infrastructure intelligence');
     expect(aiChatSource).not.toContain('Pulse Assistant ready');
     expect(aiChatSource).not.toContain('Discovery is off.');
@@ -1105,9 +1107,11 @@ describe('monitored-system model guardrails', () => {
       'const mentionsForAPI = mentions.length > 0 ? mentions : undefined;',
     );
     expect(aiChatPresentationSource).toContain('export const AI_CHAT_SESSION_EMPTY_STATE');
+    expect(aiChatPresentationSource).toContain('export const AI_CHAT_SESSION_MENU_TITLE');
     expect(aiChatPresentationSource).toContain('export const AI_CHAT_DRAWER_SUBTITLE');
     expect(aiChatPresentationSource).toContain('export const AI_CHAT_DISCOVERY_HINT_TITLE');
     expect(aiChatPresentationSource).toContain('export const AI_CHAT_QUESTION_CARD_TITLE');
+    expect(aiChatPresentationSource).toContain('export function getAIChatLauncherTitle');
     expect(aiChatPresentationSource).toContain('export function getAIChatEmptyStateSuggestions');
     expect(mentionAutocompleteSource).toContain("| 'agent'");
     expect(mentionAutocompleteSource).toContain('getSimpleStatusIndicator');

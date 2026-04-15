@@ -22,6 +22,7 @@ import { MonitoredSystemLimitWarningBanner } from './components/shared/Monitored
 import { WhatsNewModal } from './components/shared/WhatsNewModal';
 import { KeyboardShortcutsModal } from './components/shared/KeyboardShortcutsModal';
 import { CommandPaletteModal } from './components/shared/CommandPaletteModal';
+import { dialogStackHasBlockingDialog } from './components/shared/useDialogState';
 import { createTooltipSystem } from './components/shared/Tooltip';
 import { TokenRevealDialog } from './components/TokenRevealDialog';
 import { UpdateProgressModal } from './components/UpdateProgressModal';
@@ -302,6 +303,12 @@ function App() {
         setCommandPaletteOpen((prev) => !prev);
       },
       onCloseCommandPalette: () => setCommandPaletteOpen(false),
+    });
+
+    createEffect(() => {
+      if (dialogStackHasBlockingDialog() && aiChatStore.isOpenSignal()) {
+        aiChatStore.close();
+      }
     });
 
     // Setup escape handling for the assistant drawer.

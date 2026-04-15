@@ -1177,6 +1177,13 @@ describe('shared primitive guardrails', () => {
     expect(whatsNewModalModelSource).toContain("title: 'Infrastructure'");
   });
 
+  it('keeps dialog stack visibility in the shared dialog runtime', () => {
+    expect(dialogStateSource).toContain('export function dialogStackHasBlockingDialog');
+    expect(dialogStateSource).toContain('createSignal');
+    expect(dialogStateSource).toContain('openDialogCount');
+    expect(dialogStateSource).toContain('document.body.style.overflow');
+  });
+
   it('keeps summary density control inside the shared summary primitives', () => {
     expect(summaryPanelSource).toContain("density?: 'default' | 'compact'");
     expect(summaryPanelSource).toContain("props.density === 'compact'");

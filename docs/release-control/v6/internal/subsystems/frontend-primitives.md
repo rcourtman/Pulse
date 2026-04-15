@@ -265,6 +265,11 @@ work extends shared components instead of creating new local variants.
     shared drawer shell owner for assistant open/close state, focus handoff,
     and tenant-local context/session persistence; the app shell must not fork
     that state across `App.tsx`, `AppLayout.tsx`, or page-level helpers.
+    The same shared shell boundary must keep Pulse Assistant coherent while a
+    blocking shared dialog owns the viewport: closed launcher affordances must
+    hide until the dialog clears, and the shell must close any already-open
+    assistant drawer instead of leaving background assistant controls visibly
+    active behind the modal.
     AI-owned frontend surfaces that need shared settings or model-catalog
     truth must route those reads through
     `frontend-modern/src/stores/aiRuntimeState.ts` rather than each feature
@@ -1063,11 +1068,16 @@ pushing tone or active-card presentation logic back into the shell.
 The shared dialog now follows that same owner split.
 `frontend-modern/src/components/shared/Dialog.tsx` stays the render shell,
 `frontend-modern/src/components/shared/useDialogState.ts` owns focus trap,
-body-scroll lock, previous-focus restoration, and backdrop-close runtime, and
+body-scroll lock, previous-focus restoration, shared blocking-dialog
+visibility, and backdrop-close runtime, and
 `frontend-modern/src/components/shared/dialogModel.ts` owns focusable-element
 lookup plus layout and panel class policy. Future dialog work should extend
 those owners instead of pushing focus-trap lifecycle or layout policy back into
 the shared shell.
+App-shell consumers such as `frontend-modern/src/App.tsx` and
+`frontend-modern/src/AppLayout.tsx` may read that shared blocking-dialog state
+to suppress background affordances, but they must not reimplement their own
+parallel modal-stack bookkeeping.
 The shared history chart now follows the same owner shape.
 `frontend-modern/src/components/shared/HistoryChart.tsx` stays the render
 shell, `frontend-modern/src/components/shared/useHistoryChartState.ts` owns

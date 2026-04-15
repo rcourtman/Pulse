@@ -266,6 +266,10 @@ querying, and the operator-facing storage health presentation layer.
     may hide top-bar org chrome for public demo posture, but it must not leak
     into storage/recovery preview route ownership, first-session recovery copy,
     or route-level framing decisions.
+    That same shared app-shell boundary must also respect blocking shared
+    dialogs: background assistant affordances may hide while a modal owns the
+    viewport, but storage/recovery routes must not grow their own parallel
+    modal-stack bookkeeping just because they share `App.tsx`.
 36. Keep public self-hosted purchase handoff and activation routes on the
     adjacent commercial/auth boundary. When `internal/api/router.go`,
     `internal/api/router_routes_cloud.go`, `internal/api/licensing_handlers.go`,

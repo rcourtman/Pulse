@@ -13,6 +13,9 @@ describe('App architecture', () => {
       "import { DarkModeContext, WebSocketContext, useWebSocket } from '@/contexts/appRuntime';",
     );
     expect(appSource).toContain("import { useAppRuntimeState } from '@/useAppRuntimeState';");
+    expect(appSource).toContain(
+      "import { dialogStackHasBlockingDialog } from './components/shared/useDialogState';",
+    );
     expect(appSource).toContain("import {");
     expect(appSource).toContain("} from '@/utils/appShellScrollRestoration';");
     expect(appSource).toContain('const runtime = useAppRuntimeState();');
@@ -47,6 +50,7 @@ describe('App architecture', () => {
     expect(appSource).not.toContain('const [activeOrgID, setActiveOrgID] = createSignal(');
     expect(appSource).not.toContain("import('./api/ai')");
     expect(appSource).not.toContain('AIAPI.getSettings()');
+    expect(appSource).toContain('if (dialogStackHasBlockingDialog() && aiChatStore.isOpenSignal()) {');
     expect(appSource).toContain("if (e.key === 'Escape' && aiChatStore.isOpen) {");
     expect(appSource).toContain('<AIChat onClose={() => aiChatStore.close()} />');
     expect(appSource).toContain('showOrgSwitcher={runtime.showOrgSwitcher}');
@@ -55,6 +59,9 @@ describe('App architecture', () => {
   it('keeps authenticated chrome in AppLayout and hosted bootstrap in useAppRuntimeState', () => {
     expect(appLayoutSource).toContain('export function AppLayout(props: AppLayoutProps)');
     expect(appLayoutSource).toContain("import { aiChatStore } from '@/stores/aiChat';");
+    expect(appLayoutSource).toContain(
+      "import { dialogStackHasBlockingDialog } from '@/components/shared/useDialogState';",
+    );
     expect(appLayoutSource).toContain(
       "import { ReleaseCandidateBanner } from '@/components/shared/ReleaseCandidateBanner';",
     );
@@ -83,9 +90,12 @@ describe('App architecture', () => {
     expect(appLayoutSource).toContain('presentationPolicyIsDemoMode');
     expect(appLayoutSource).toContain("if (!presentationPolicyIsDemoMode()) {");
     expect(appLayoutSource).toContain(
-      'aiChatStore.enabled === true && !aiChatStore.isOpenSignal() && !kioskMode()',
+      'aiChatStore.enabled === true &&',
     );
+    expect(appLayoutSource).toContain('!dialogStackHasBlockingDialog()');
     expect(appLayoutSource).toContain('onClick={() => aiChatStore.toggle()}');
+    expect(appLayoutSource).toContain('getAIChatLauncherTitle');
+    expect(appLayoutSource).not.toContain('Pulse Assistant (⌘K)');
     expect(appSource).not.toContain("eventBus.on('theme_changed'");
     expect(appSource).not.toContain("eventBus.on('websocket_reconnected'");
     expect(appSource).not.toContain("apiFetch('/api/security/status')");

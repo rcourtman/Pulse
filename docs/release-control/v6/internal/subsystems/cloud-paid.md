@@ -950,6 +950,9 @@ theme synchronization, and authenticated runtime startup, and
 as org switching and kiosk-safe navigation. Future hosted browser bootstrap
 work must extend that split rather than pulling org bootstrap and app chrome
 back into one monolithic route component.
+That same authenticated shell split must also respect shared blocking dialogs:
+hosted chrome may not leave the Pulse Assistant launcher or an already-open
+assistant drawer interactive behind a modal that currently owns the viewport.
 That same authenticated shell contract now also has to distinguish backend
 availability from websocket-stream liveness. When hosted runtime health stays
 available during a stream reconnect or renegotiation window,
