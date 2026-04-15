@@ -923,6 +923,12 @@ AI chat stream matching and mention dedupe now route through the shared
 frontend chat identifier helper, so tool-name prefix stripping and mention-key
 normalization stay aligned across the chat runtime instead of being redefined
 inline in the stream processor or container component.
+That same provider-stream boundary also owns EOF-safe SSE finalization for
+OpenAI-compatible chat streams. Provider reads that return payload bytes with
+`io.EOF`, or close immediately after the final `data:` frame, must still
+process the buffered frame set and route tool-call assembly plus final done
+event emission through the same canonical finalizer used for `[DONE]` instead
+of dropping the last chunk or leaving tool calls unfinalized on clean close.
 That same browser-owned chat read model must keep target normalization helper-
 driven. Assistant shells may still derive legacy VM identifiers or display
 labels for read-only targeting, but they must do so through shared helpers and

@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"sort"
 	"strings"
 	"time"
 
@@ -585,6 +586,55 @@ type openaiToolCallDelta struct {
 	} `json:"function,omitempty"`
 }
 
+type openaiStreamToolCallBuilder struct {
+	id   string
+	name string
+	args strings.Builder
+}
+
+func finalizeOpenAIStreamToolCalls(builders map[int]*openaiStreamToolCallBuilder) []ToolCall {
+	if len(builders) == 0 {
+		return nil
+	}
+
+	indexes := make([]int, 0, len(builders))
+	for index := range builders {
+		indexes = append(indexes, index)
+	}
+	sort.Ints(indexes)
+
+	toolCalls := make([]ToolCall, 0, len(indexes))
+	for _, index := range indexes {
+		builder := builders[index]
+		if builder == nil {
+			continue
+		}
+
+		var input map[string]interface{}
+		if err := json.Unmarshal([]byte(builder.args.String()), &input); err != nil {
+			input = map[string]interface{}{"raw": builder.args.String()}
+		}
+		toolCalls = append(toolCalls, ToolCall{
+			ID:    builder.id,
+			Name:  builder.name,
+			Input: input,
+		})
+	}
+
+	return toolCalls
+}
+
+func normalizeOpenAIStreamStopReason(finishReason string, toolCalls []ToolCall) string {
+	stopReason := finishReason
+	if len(toolCalls) > 0 {
+		return "tool_use"
+	}
+	if stopReason == "" || stopReason == "stop" {
+		return "end_turn"
+	}
+	return stopReason
+}
+
 // ChatStream sends a chat request and streams the response via callback
 func (c *OpenAIClient) ChatStream(ctx context.Context, req ChatRequest, callback StreamCallback) error {
 	// Convert messages to OpenAI format (same as Chat)
@@ -732,142 +782,145 @@ func (c *OpenAIClient) ChatStream(ctx context.Context, req ChatRequest, callback
 	reader := resp.Body
 	buf := make([]byte, 4096)
 	var pendingData string
-	var toolCalls []ToolCall
-	toolCallBuilders := make(map[int]*struct {
-		id   string
-		name string
-		args strings.Builder
-	})
+	toolCallBuilders := make(map[int]*openaiStreamToolCallBuilder)
 	var inputTokens, outputTokens int
 	var finishReason string
 
+	emitDone := func() {
+		toolCalls := finalizeOpenAIStreamToolCalls(toolCallBuilders)
+		callback(StreamEvent{
+			Type: "done",
+			Data: DoneEvent{
+				StopReason:   normalizeOpenAIStreamStopReason(finishReason, toolCalls),
+				ToolCalls:    toolCalls,
+				InputTokens:  inputTokens,
+				OutputTokens: outputTokens,
+			},
+		})
+	}
+
+	processLine := func(line string) (bool, error) {
+		line = strings.TrimSpace(line)
+
+		if !strings.HasPrefix(line, "data:") {
+			return false, nil
+		}
+
+		data := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
+		if data == "" {
+			return false, nil
+		}
+
+		if data == "[DONE]" {
+			emitDone()
+			return true, nil
+		}
+
+		var event openaiStreamEvent
+		if err := json.Unmarshal([]byte(data), &event); err != nil {
+			log.Debug().Err(err).Str("data", data).Msg("failed to parse stream event")
+			return false, nil
+		}
+
+		// Handle usage info
+		if event.Usage != nil {
+			inputTokens = event.Usage.PromptTokens
+			outputTokens = event.Usage.CompletionTokens
+		}
+
+		for _, choice := range event.Choices {
+			if choice.FinishReason != "" {
+				finishReason = choice.FinishReason
+			}
+
+			delta := choice.Delta
+
+			// Regular content
+			if delta.Content != "" {
+				callback(StreamEvent{
+					Type: "content",
+					Data: ContentEvent{Text: delta.Content},
+				})
+			}
+
+			// Reasoning content (DeepSeek)
+			if delta.ReasoningContent != "" {
+				callback(StreamEvent{
+					Type: "thinking",
+					Data: ThinkingEvent{Text: delta.ReasoningContent},
+				})
+			}
+
+			// Tool calls
+			for _, tc := range delta.ToolCalls {
+				builder, exists := toolCallBuilders[tc.Index]
+				if !exists {
+					builder = &openaiStreamToolCallBuilder{}
+					toolCallBuilders[tc.Index] = builder
+				}
+
+				if tc.ID != "" {
+					builder.id = tc.ID
+				}
+				if tc.Function.Name != "" {
+					builder.name = tc.Function.Name
+					callback(StreamEvent{
+						Type: "tool_start",
+						Data: ToolStartEvent{
+							ID:   builder.id,
+							Name: builder.name,
+						},
+					})
+				}
+				if tc.Function.Arguments != "" {
+					builder.args.WriteString(tc.Function.Arguments)
+				}
+			}
+		}
+
+		return false, nil
+	}
+
 	for {
 		n, err := reader.Read(buf)
+		if n > 0 {
+			pendingData += string(buf[:n])
+			lines := strings.Split(pendingData, "\n")
+
+			// Keep the last incomplete line for next iteration
+			pendingData = lines[len(lines)-1]
+			lines = lines[:len(lines)-1]
+
+			for _, line := range lines {
+				done, lineErr := processLine(line)
+				if lineErr != nil {
+					return lineErr
+				}
+				if done {
+					return nil
+				}
+			}
+		}
+
 		if err != nil {
 			if err == io.EOF {
 				break
 			}
 			return fmt.Errorf("stream read error: %w", err)
 		}
+	}
 
-		pendingData += string(buf[:n])
-		lines := strings.Split(pendingData, "\n")
-
-		// Keep the last incomplete line for next iteration
-		pendingData = lines[len(lines)-1]
-		lines = lines[:len(lines)-1]
-
-		for _, line := range lines {
-			line = strings.TrimSpace(line)
-
-			if !strings.HasPrefix(line, "data:") {
-				continue
-			}
-
-			data := strings.TrimPrefix(line, "data:")
-			data = strings.TrimSpace(data)
-
-			if data == "[DONE]" {
-				// Build final tool calls from builders
-				for _, builder := range toolCallBuilders {
-					var input map[string]interface{}
-					if err := json.Unmarshal([]byte(builder.args.String()), &input); err != nil {
-						input = map[string]interface{}{"raw": builder.args.String()}
-					}
-					toolCalls = append(toolCalls, ToolCall{
-						ID:    builder.id,
-						Name:  builder.name,
-						Input: input,
-					})
-				}
-
-				stopReason := finishReason
-				if len(toolCalls) > 0 {
-					stopReason = "tool_use"
-				} else if stopReason == "stop" {
-					stopReason = "end_turn"
-				}
-
-				callback(StreamEvent{
-					Type: "done",
-					Data: DoneEvent{
-						StopReason:   stopReason,
-						ToolCalls:    toolCalls,
-						InputTokens:  inputTokens,
-						OutputTokens: outputTokens,
-					},
-				})
-				return nil
-			}
-
-			var event openaiStreamEvent
-			if err := json.Unmarshal([]byte(data), &event); err != nil {
-				log.Debug().Err(err).Str("data", data).Msg("failed to parse stream event")
-				continue
-			}
-
-			// Handle usage info
-			if event.Usage != nil {
-				inputTokens = event.Usage.PromptTokens
-				outputTokens = event.Usage.CompletionTokens
-			}
-
-			for _, choice := range event.Choices {
-				if choice.FinishReason != "" {
-					finishReason = choice.FinishReason
-				}
-
-				delta := choice.Delta
-
-				// Regular content
-				if delta.Content != "" {
-					callback(StreamEvent{
-						Type: "content",
-						Data: ContentEvent{Text: delta.Content},
-					})
-				}
-
-				// Reasoning content (DeepSeek)
-				if delta.ReasoningContent != "" {
-					callback(StreamEvent{
-						Type: "thinking",
-						Data: ThinkingEvent{Text: delta.ReasoningContent},
-					})
-				}
-
-				// Tool calls
-				for _, tc := range delta.ToolCalls {
-					builder, exists := toolCallBuilders[tc.Index]
-					if !exists {
-						builder = &struct {
-							id   string
-							name string
-							args strings.Builder
-						}{}
-						toolCallBuilders[tc.Index] = builder
-					}
-
-					if tc.ID != "" {
-						builder.id = tc.ID
-					}
-					if tc.Function.Name != "" {
-						builder.name = tc.Function.Name
-						callback(StreamEvent{
-							Type: "tool_start",
-							Data: ToolStartEvent{
-								ID:   builder.id,
-								Name: builder.name,
-							},
-						})
-					}
-					if tc.Function.Arguments != "" {
-						builder.args.WriteString(tc.Function.Arguments)
-					}
-				}
-			}
+	if strings.TrimSpace(pendingData) != "" {
+		done, err := processLine(pendingData)
+		if err != nil {
+			return err
+		}
+		if done {
+			return nil
 		}
 	}
 
+	emitDone()
 	return nil
 }
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -13,6 +14,30 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return f(req)
+}
+
+type readOnceEOFBody struct {
+	payload []byte
+	read    bool
+}
+
+func (b *readOnceEOFBody) Read(p []byte) (int, error) {
+	if b.read {
+		return 0, io.EOF
+	}
+	b.read = true
+	n := copy(p, b.payload)
+	return n, io.EOF
+}
+
+func (b *readOnceEOFBody) Close() error {
+	return nil
+}
 
 func TestOpenAIClient_ChatStream_Success(t *testing.T) {
 	// Mock OpenAI SSE stream
@@ -120,6 +145,91 @@ func TestOpenAIClient_ChatStream_ToolCall(t *testing.T) {
 	assert.Equal(t, "call_123", toolCalls[0].ID)
 	assert.Equal(t, "get_weather", toolCalls[0].Name)
 	assert.Equal(t, map[string]interface{}{"location": "NYC"}, toolCalls[0].Input)
+}
+
+func TestOpenAIClient_ChatStream_ToolCallEOFWithBufferedDone(t *testing.T) {
+	payload := strings.Join([]string{
+		`data: {"id":"chatcmpl-2","choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_123","type":"function","function":{"name":"get_weather","arguments":""}}]}}]}`,
+		``,
+		`data: {"id":"chatcmpl-2","choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{\"loc"}}]}}]}`,
+		``,
+		`data: {"id":"chatcmpl-2","choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"ation\":\"NYC\"}"}}]}}]}`,
+		``,
+		`data: [DONE]`,
+		``,
+	}, "\n")
+
+	client := NewOpenAIClient("sk-test", "gpt-4", "https://example.invalid/v1", 0)
+	client.client = &http.Client{
+		Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Header:     http.Header{"Content-Type": []string{"text/event-stream"}},
+				Body:       &readOnceEOFBody{payload: []byte(payload)},
+			}, nil
+		}),
+	}
+
+	var toolStarts int
+	var doneEvent DoneEvent
+	var doneCalled bool
+
+	err := client.ChatStream(context.Background(), ChatRequest{Messages: []Message{{Role: "user", Content: "Hi"}}}, func(event StreamEvent) {
+		switch event.Type {
+		case "tool_start":
+			toolStarts++
+		case "done":
+			doneCalled = true
+			doneEvent = event.Data.(DoneEvent)
+		}
+	})
+	require.NoError(t, err)
+	require.True(t, doneCalled)
+	assert.Equal(t, 1, toolStarts)
+	require.Len(t, doneEvent.ToolCalls, 1)
+	assert.Equal(t, "tool_use", doneEvent.StopReason)
+	assert.Equal(t, "call_123", doneEvent.ToolCalls[0].ID)
+	assert.Equal(t, "get_weather", doneEvent.ToolCalls[0].Name)
+	assert.Equal(t, map[string]interface{}{"location": "NYC"}, doneEvent.ToolCalls[0].Input)
+}
+
+func TestOpenAIClient_ChatStream_EOFWithoutDoneFinalizesToolCalls(t *testing.T) {
+	payload := strings.Join([]string{
+		`data: {"id":"chatcmpl-3","choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_999","type":"function","function":{"name":"lookup_host","arguments":"{\"host\":\"nas01\"}"}}]}}]}`,
+		``,
+		`data: {"id":"chatcmpl-3","choices":[{"delta":{},"finish_reason":"tool_calls"}],"usage":{"prompt_tokens":12,"completion_tokens":8}}`,
+		``,
+	}, "\n")
+
+	client := NewOpenAIClient("sk-test", "gpt-4", "https://example.invalid/v1", 0)
+	client.client = &http.Client{
+		Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Header:     http.Header{"Content-Type": []string{"text/event-stream"}},
+				Body:       &readOnceEOFBody{payload: []byte(payload)},
+			}, nil
+		}),
+	}
+
+	var doneEvent DoneEvent
+	var doneCalled bool
+
+	err := client.ChatStream(context.Background(), ChatRequest{Messages: []Message{{Role: "user", Content: "Hi"}}}, func(event StreamEvent) {
+		if event.Type == "done" {
+			doneCalled = true
+			doneEvent = event.Data.(DoneEvent)
+		}
+	})
+	require.NoError(t, err)
+	require.True(t, doneCalled)
+	require.Len(t, doneEvent.ToolCalls, 1)
+	assert.Equal(t, "tool_use", doneEvent.StopReason)
+	assert.Equal(t, 12, doneEvent.InputTokens)
+	assert.Equal(t, 8, doneEvent.OutputTokens)
+	assert.Equal(t, "call_999", doneEvent.ToolCalls[0].ID)
+	assert.Equal(t, "lookup_host", doneEvent.ToolCalls[0].Name)
+	assert.Equal(t, map[string]interface{}{"host": "nas01"}, doneEvent.ToolCalls[0].Input)
 }
 
 func TestOpenAIClient_Chat_ToolChoiceNone_DropsTools(t *testing.T) {
