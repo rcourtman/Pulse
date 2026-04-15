@@ -1,0 +1,31 @@
+name: Issue Version Label Sync
+
+on:
+  issues:
+    types:
+      - opened
+      - edited
+      - reopened
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  sync:
+    if: ${{ github.event.issue.pull_request == null }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out triage helper
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            .github/scripts/issue-version-triage.cjs
+          sparse-checkout-cone-mode: false
+
+      - name: Sync issue version metadata
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const triage = require(`${process.env.GITHUB_WORKSPACE}/.github/scripts/issue-version-triage.cjs`);
+            await triage.syncLabels({ github, context, core });
