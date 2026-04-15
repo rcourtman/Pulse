@@ -483,7 +483,8 @@ function routeCommercialAPI(request, response, url, scenario) {
     sendJSON(response, 200, {
       title: 'Simple self-hosted pricing for Pulse',
       description: 'Preview pricing contract',
-      explainer: 'Pulse counts <strong>monitored systems</strong>, not every child resource.',
+      explainer:
+        'Pulse counts <strong>top-level monitored systems</strong>. Child resources underneath them are included.',
       plans: [
         {
           badge: 'Recommended',

@@ -637,7 +637,14 @@ describe('shell view', function() {
 
     expect(html).toContain('Pulse Account owns the commercial handoff for self-hosted upgrades from the app.');
     expect(html).toContain('Upgrade monitored-system cap');
+    expect(html).toContain(
+      'Compare self-hosted plans by top-level monitored systems such as Docker hosts, Kubernetes clusters, Proxmox nodes, standalone hosts, and TrueNAS systems.',
+    );
+    expect(html).toContain('Top-level monitored systems');
     expect(html).toContain('id="upgrade-billing-root"');
+    expect(html).toContain(
+      'Choose the self-hosted tier that fits the top-level monitored systems you run. Child resources like VMs, containers, pods, disks, backups, and services underneath those roots are included. Pulse Account will send completed checkout directly back to Pulse Pro billing.',
+    );
     expect(html).toContain('Pulse Account owns self-hosted plan selection and checkout for Pulse Pro upgrades.');
     expect(html).not.toContain('id="open-manage-billing"');
     expect(html).not.toContain('id="open-retrieve-billing"');

@@ -80,6 +80,16 @@ test.describe("Pulse Account upgrade bootstrap", () => {
     ).toBeVisible();
     await expect(
       page.getByText(
+        "Pulse counts top-level monitored systems. Child resources underneath them are included.",
+      ),
+    ).toBeVisible();
+    await expect(
+      page.getByText(
+        "Pulse Account compares self-hosted tiers by top-level monitored systems, keeps child resources underneath those roots included, and sends completed checkout straight back to Pulse Pro billing.",
+      ),
+    ).toBeVisible();
+    await expect(
+      page.getByText(
         "Open this upgrade from Pulse Pro billing so Pulse Account can verify the secure upgrade handoff before checkout.",
       ),
     ).toHaveCount(0);

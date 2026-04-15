@@ -239,7 +239,8 @@ describe('services view', function() {
     billingState.upgradePricing.data = {
       title: 'Pricing',
       description: 'Canonical pricing model',
-      explainer: 'Pulse counts <strong>monitored systems</strong>.',
+      explainer:
+        'Pulse counts <strong>top-level monitored systems</strong>. Child resources underneath them are included.',
       plans: [
         {
           tierKicker: 'Pro+',
@@ -267,6 +268,12 @@ describe('services view', function() {
     expect(document.getElementById('upgrade-billing-root')?.innerHTML).toContain('Buy Annual');
     expect(document.getElementById('upgrade-billing-root')?.innerHTML).toContain(
       'Pulse Account will return completed checkout directly to Pulse Pro billing.',
+    );
+    expect(document.getElementById('upgrade-billing-root')?.innerHTML).toContain(
+      'Pulse counts <strong>top-level monitored systems</strong>. Child resources underneath them are included.',
+    );
+    expect(document.getElementById('upgrade-billing-root')?.innerHTML).toContain(
+      'Pulse Account compares self-hosted tiers by top-level monitored systems, keeps child resources underneath those roots included, and sends completed checkout straight back to Pulse Pro billing.',
     );
     expect(document.getElementById('upgrade-billing-root')?.innerHTML).not.toContain('Activate in Pulse Pro');
     expect(document.getElementById('upgrade-billing-root')?.innerHTML).not.toContain('ppk_live_preview');

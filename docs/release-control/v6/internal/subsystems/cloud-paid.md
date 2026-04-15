@@ -480,6 +480,13 @@ decode-only compatibility inputs at the storage or grant boundary. Runtime
 enforcement, entitlement payload `current` usage, checkout/activation flows,
 and upgrade messaging must all treat the cap as deduped top-level monitored
 systems across agent, API, and Kubernetes views.
+That same counted-unit contract also owns the Pulse Account monitored-system
+upgrade copy. Portal shell copy, pricing explainers, and monitored-system
+upgrade helper text must describe top-level monitored systems and included
+child resources directly, with concrete monitored roots such as Docker hosts,
+Kubernetes clusters, Proxmox nodes, standalone hosts, and TrueNAS systems,
+rather than drifting back to device-style language or generic allowance-only
+copy that hides what the counted unit actually is.
 That same counted-unit contract now also owns prospective API-backed
 admission. Proxmox/PBS/PMG config adds, TrueNAS adds, VMware inventory
 previews, and equivalent updates must ask the canonical monitored-system

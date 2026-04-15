@@ -142,13 +142,13 @@ function selfHostedUpgradeActionTitle(featureKey: string): string {
 
 function selfHostedUpgradeActionDescription(featureKey: string): string {
   return normalizeUpgradeFeatureKey(featureKey) === 'max_monitored_systems'
-    ? 'Compare self-hosted plans and choose a higher monitored-system allowance.'
+    ? 'Compare self-hosted plans by top-level monitored systems such as Docker hosts, Kubernetes clusters, Proxmox nodes, standalone hosts, and TrueNAS systems.'
     : 'Compare self-hosted plans and continue into the commercial checkout path.';
 }
 
 function selfHostedUpgradeActionHighlights(featureKey: string): string[] {
   return normalizeUpgradeFeatureKey(featureKey) === 'max_monitored_systems'
-    ? ['Monitored-system cap', 'Plan comparison']
+    ? ['Top-level monitored systems', 'Plan comparison']
     : ['Plan comparison', 'Checkout handoff'];
 }
 
@@ -168,7 +168,7 @@ function renderSelfHostedUpgradeActionRow(context: ShellViewContext): string {
 function renderSelfHostedUpgradeBillingPanel(context: ShellViewContext): string {
   var featureKey = normalizeUpgradeFeatureKey(context.billingState.upgradeFeatureKey);
   var helperCopy = featureKey === 'max_monitored_systems'
-    ? 'Choose the self-hosted tier that matches the monitored-system allowance you need. Pulse Account will send completed checkout directly back to Pulse Pro billing.'
+    ? 'Choose the self-hosted tier that fits the top-level monitored systems you run. Child resources like VMs, containers, pods, disks, backups, and services underneath those roots are included. Pulse Account will send completed checkout directly back to Pulse Pro billing.'
     : 'Choose the self-hosted tier that fits this upgrade. Pulse Account will send completed checkout directly back to Pulse Pro billing.';
   return renderBillingTaskPanel(
     selfHostedUpgradeActionTitle(featureKey),

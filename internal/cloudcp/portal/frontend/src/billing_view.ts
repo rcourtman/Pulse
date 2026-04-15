@@ -196,7 +196,7 @@ export function renderUpgradePanel(billingState: PortalBillingState, _bootstrap:
         : '') +
       '<div class="helper-text">' +
         (featureKey === 'max_monitored_systems'
-          ? 'Pulse Account compares self-hosted tiers and sends completed monitored-system upgrades straight back to Pulse Pro billing.'
+          ? 'Pulse Account compares self-hosted tiers by top-level monitored systems, keeps child resources underneath those roots included, and sends completed checkout straight back to Pulse Pro billing.'
           : 'Pulse Account compares self-hosted tiers and sends completed checkout straight back to Pulse Pro billing.') +
       '</div>' +
     '</div>';
