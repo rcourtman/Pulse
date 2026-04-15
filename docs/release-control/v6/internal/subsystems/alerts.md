@@ -82,6 +82,14 @@ runtime must migrate the active alert, history entry, acknowledgment record,
 suppression/rate-limit/flapping tracking, and guest per-disk metric identity
 to the current canonical state instead of reopening a duplicate alert or
 resolving only the stale node-scoped identity.
+That same guest-threshold owner also governs guest-derived lifecycle and
+posture alerts. Snapshot age, backup age, powered-off state, and
+configuration-change reevaluation must all construct a canonical lightweight
+guest snapshot and route threshold resolution through the shared
+guest-defaults → filter-driven custom rules → guest-override chain.
+Passing `nil` guest context or resolving only overrides/defaults is forbidden
+because it silently bypasses custom guest rules and makes guest lifecycle
+alerting diverge from running-guest metric truth.
 That same guest-alert owner also has to retire per-disk guest alerts when the
 guest stops, disk alerting is disabled, or the reported disk set changes.
 Canonical guest disk identity is only valid while the guest still exposes that

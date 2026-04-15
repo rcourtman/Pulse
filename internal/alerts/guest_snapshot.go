@@ -1,6 +1,10 @@
 package alerts
 
-import "github.com/rcourtman/pulse-go-rewrite/internal/models"
+import (
+	"strings"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+)
 
 type guestKind uint8
 
@@ -126,12 +130,124 @@ func guestSnapshotFromContainer(container models.Container) guestSnapshot {
 	}.normalizeCollections()
 }
 
+func guestKindFromType(guestType string) guestKind {
+	switch strings.ToLower(strings.TrimSpace(guestType)) {
+	case "qemu", "vm":
+		return guestKindVM
+	case "lxc", "container", "system-container":
+		return guestKindContainer
+	default:
+		return guestKindUnknown
+	}
+}
+
+func guestSnapshotFromIdentity(resourceID, name, node, instance, guestType, status string) guestSnapshot {
+	snapshot := guestSnapshot{
+		Kind:     guestKindFromType(guestType),
+		ID:       strings.TrimSpace(resourceID),
+		Name:     strings.TrimSpace(name),
+		Node:     strings.TrimSpace(node),
+		Instance: strings.TrimSpace(instance),
+		Status:   strings.TrimSpace(status),
+	}
+
+	if ident, ok := guestOverrideIdentityFromGuestOrID(nil, resourceID); ok {
+		if snapshot.VMID <= 0 {
+			snapshot.VMID = ident.vmid
+		}
+		if snapshot.Instance == "" {
+			snapshot.Instance = ident.instance
+		}
+		if snapshot.Node == "" {
+			snapshot.Node = ident.node
+		}
+	}
+
+	if snapshot.Instance == "" {
+		snapshot.Instance = snapshot.Node
+	}
+
+	return snapshot.normalizeCollections()
+}
+
+func guestSnapshotFromLookup(lookup GuestLookup, fallbackName string) guestSnapshot {
+	resourceID := strings.TrimSpace(lookup.ResourceID)
+	if resourceID == "" && lookup.Instance != "" && lookup.Node != "" && lookup.VMID > 0 {
+		resourceID = BuildGuestKey(lookup.Instance, lookup.Node, lookup.VMID)
+	}
+
+	name := strings.TrimSpace(lookup.Name)
+	if name == "" {
+		name = strings.TrimSpace(fallbackName)
+	}
+
+	snapshot := guestSnapshotFromIdentity(resourceID, name, lookup.Node, lookup.Instance, lookup.Type, "")
+	if snapshot.VMID <= 0 && lookup.VMID > 0 {
+		snapshot.VMID = lookup.VMID
+	}
+	return snapshot.normalizeCollections()
+}
+
+func guestSnapshotFromAlert(alert *Alert, resourceID string) guestSnapshot {
+	if alert == nil {
+		return guestSnapshotFromIdentity(resourceID, "", "", "", "", "")
+	}
+
+	name := metadataStringValue(alert.Metadata, "guestName")
+	if name == "" {
+		name = alert.ResourceName
+	}
+
+	node := metadataStringValue(alert.Metadata, "guestNode")
+	if node == "" {
+		node = alert.Node
+	}
+
+	instance := metadataStringValue(alert.Metadata, "guestInstance")
+	if instance == "" {
+		instance = alert.Instance
+	}
+
+	guestType := metadataStringValue(alert.Metadata, "guestType")
+	if guestType == "" {
+		guestType = metadataStringValue(alert.Metadata, "resourceType")
+	}
+
+	status := metadataStringValue(alert.Metadata, "guestStatus")
+	if status == "" {
+		status = metadataStringValue(alert.Metadata, "status")
+	}
+
+	snapshot := guestSnapshotFromIdentity(resourceID, name, node, instance, guestType, status)
+	if snapshot.VMID <= 0 {
+		snapshot.VMID = metadataIntValue(alert.Metadata["guestVmid"])
+	}
+	return snapshot.normalizeCollections()
+}
+
 func extractGuestSnapshot(guest any) (guestSnapshot, bool) {
 	switch g := guest.(type) {
 	case models.VM:
 		return guestSnapshotFromVM(g), true
+	case *models.VM:
+		if g == nil {
+			return emptyGuestSnapshot(), false
+		}
+		return guestSnapshotFromVM(*g), true
 	case models.Container:
 		return guestSnapshotFromContainer(g), true
+	case *models.Container:
+		if g == nil {
+			return emptyGuestSnapshot(), false
+		}
+		return guestSnapshotFromContainer(*g), true
+	case guestSnapshot:
+		return g.normalizeCollections(), true
+	case *guestSnapshot:
+		if g == nil {
+			return emptyGuestSnapshot(), false
+		}
+		return g.normalizeCollections(), true
 	default:
 		return emptyGuestSnapshot(), false
 	}

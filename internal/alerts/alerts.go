@@ -2162,22 +2162,34 @@ func (m *Manager) reevaluateActiveAlertsLocked() {
 				alertsToResolve = append(alertsToResolve, alertID)
 				continue
 			}
-			// We need to evaluate custom rules, but we don't have the guest object here.
-			// For now, we'll mark these alerts for re-evaluation by the monitor.
-			// The next poll cycle will properly evaluate them with custom rules.
 
-			thresholds := m.resolveGuestThresholdOverride(cloneThresholdConfig(m.config.GuestDefaults), nil, resourceID)
-			if thresholds.Disabled {
+			guestThresholds := m.getGuestThresholds(guestSnapshotFromAlert(alert, resourceID), resourceID)
+			if guestThresholds.Disabled {
 				alertsToResolve = append(alertsToResolve, alertID)
 				continue
 			}
 
-			// If no custom rule context is available, reevaluation still uses the
-			// shared default+override resolution path and waits for the next poll
-			// to apply filter-driven guest rules.
-			// Note: This doesn't consider custom rules - those will be evaluated
-			// on the next poll cycle when we have the full guest object
-			threshold = getThresholdForMetric(thresholds, metricType)
+			switch alert.Type {
+			case "snapshot-age":
+				if !snapshotAlertStillTriggered(alert, m.resolvedSnapshotAlertConfigNoLock(guestThresholds)) {
+					alertsToResolve = append(alertsToResolve, alertID)
+				}
+				continue
+			case "backup-age":
+				if !backupAlertStillTriggered(alert, m.resolvedBackupAlertConfigNoLock(guestThresholds)) {
+					alertsToResolve = append(alertsToResolve, alertID)
+				}
+				continue
+			case "powered-off":
+				if guestThresholds.DisableConnectivity {
+					alertsToResolve = append(alertsToResolve, alertID)
+					continue
+				}
+				alert.Level = normalizePoweredOffSeverity(guestThresholds.PoweredOffSeverity)
+				continue
+			}
+
+			threshold = getThresholdForMetric(guestThresholds, metricType)
 		}
 
 		// If no threshold found or threshold is disabled (trigger <= 0), resolve the alert
@@ -2258,6 +2270,83 @@ func (m *Manager) reevaluateActiveAlertsLocked() {
 			}
 		}()
 	}
+}
+
+func (m *Manager) resolvedSnapshotAlertConfigNoLock(thresholds ThresholdConfig) SnapshotAlertConfig {
+	cfg := m.config.SnapshotDefaults
+	if thresholds.Snapshot != nil {
+		cfg = *thresholds.Snapshot
+	}
+	return cfg
+}
+
+func (m *Manager) resolvedBackupAlertConfigNoLock(thresholds ThresholdConfig) BackupAlertConfig {
+	cfg := m.config.BackupDefaults
+	if thresholds.Backup != nil {
+		cfg = *thresholds.Backup
+	}
+	if cfg.AlertOrphaned == nil {
+		alertOrphaned := true
+		cfg.AlertOrphaned = &alertOrphaned
+	}
+	return cfg
+}
+
+func snapshotAlertStillTriggered(alert *Alert, cfg SnapshotAlertConfig) bool {
+	if alert == nil || !cfg.Enabled {
+		return false
+	}
+
+	ageValue, _ := metadataFloatValue(alert.Metadata, "snapshotAgeDays")
+	sizeValue, _ := metadataFloatValue(alert.Metadata, "snapshotSizeGiB")
+
+	if cfg.CriticalDays > 0 && ageValue >= float64(cfg.CriticalDays) {
+		return true
+	}
+	if cfg.WarningDays > 0 && ageValue >= float64(cfg.WarningDays) {
+		return true
+	}
+	if cfg.CriticalSizeGiB > 0 && sizeValue >= cfg.CriticalSizeGiB {
+		return true
+	}
+	if cfg.WarningSizeGiB > 0 && sizeValue >= cfg.WarningSizeGiB {
+		return true
+	}
+
+	return false
+}
+
+func backupAlertStillTriggered(alert *Alert, cfg BackupAlertConfig) bool {
+	if alert == nil || !cfg.Enabled {
+		return false
+	}
+
+	vmid := metadataStringValue(alert.Metadata, "guestVmid")
+	if vmid == "" {
+		if parsed := metadataIntValue(alert.Metadata["guestVmid"]); parsed > 0 {
+			vmid = strconv.Itoa(parsed)
+		}
+	}
+	if backupIgnoreVMID(vmid, cfg.IgnoreVMIDs) {
+		return false
+	}
+	if metadataBoolValue(alert.Metadata, "orphaned") && cfg.AlertOrphaned != nil && !*cfg.AlertOrphaned {
+		return false
+	}
+
+	ageValue, ok := metadataFloatValue(alert.Metadata, "ageDays")
+	if !ok {
+		ageValue = alert.Value
+	}
+
+	if cfg.CriticalDays > 0 && ageValue >= float64(cfg.CriticalDays) {
+		return true
+	}
+	if cfg.WarningDays > 0 && ageValue >= float64(cfg.WarningDays) {
+		return true
+	}
+
+	return false
 }
 
 // ReevaluateGuestAlert reevaluates a specific guest's alerts with full threshold resolution including custom rules
@@ -6094,8 +6183,10 @@ func (m *Manager) CheckSnapshotsForInstance(instanceName string, snapshots []mod
 
 		// Determine thresholds for this snapshot
 		resourceID := fmt.Sprintf("%s:%s:%d", snapshot.Instance, snapshot.Node, snapshot.VMID)
+		guestName := strings.TrimSpace(guestNames[BuildGuestKey(snapshot.Instance, snapshot.Node, snapshot.VMID)])
+		guestContext := guestSnapshotFromIdentity(resourceID, guestName, snapshot.Node, snapshot.Instance, snapshot.Type, "")
 		m.mu.RLock()
-		gh := m.getGuestThresholds(nil, resourceID)
+		gh := m.getGuestThresholds(guestContext, resourceID)
 		m.mu.RUnlock()
 
 		if gh.Disabled {
@@ -6153,7 +6244,6 @@ func (m *Manager) CheckSnapshotsForInstance(instanceName string, snapshots []mod
 		alertID := fmt.Sprintf("snapshot-age-%s", snapshot.ID)
 
 		guestKey := BuildGuestKey(snapshot.Instance, snapshot.Node, snapshot.VMID)
-		guestName := strings.TrimSpace(guestNames[guestKey])
 
 		guestType := "VM"
 		if strings.EqualFold(snapshot.Type, "lxc") {
@@ -6484,9 +6574,14 @@ func (m *Manager) CheckBackups(
 
 		// Determine thresholds for this backup
 		currentBackupCfg := backupCfg
-		if record.lookup.ResourceID != "" {
+		guestContext := guestSnapshotFromLookup(record.lookup, record.fallbackName)
+		guestResourceID := strings.TrimSpace(record.lookup.ResourceID)
+		if guestResourceID == "" {
+			guestResourceID = guestContext.ID
+		}
+		if guestResourceID != "" {
 			m.mu.RLock()
-			gh := m.getGuestThresholds(nil, record.lookup.ResourceID)
+			gh := m.getGuestThresholds(guestContext, guestResourceID)
 			m.mu.RUnlock()
 			if gh.Disabled {
 				continue
@@ -6576,6 +6671,12 @@ func (m *Manager) CheckBackups(
 			"lastBackupTime": record.lastTime,
 			"ageDays":        ageDays,
 			"thresholdDays":  threshold,
+			"guestName":      displayName,
+			"guestType":      record.lookup.Type,
+			"guestInstance":  instance,
+			"guestNode":      node,
+			"guestVmid":      metadataIntValue(record.vmID),
+			"orphaned":       record.vmID != "" && guestResourceID == "",
 		}
 		specResourceID := canonicalBackupSubjectResourceID(alertKey, *record)
 		specResourceType := canonicalBackupSubjectResourceType(*record)
@@ -7863,6 +7964,17 @@ func metadataIntValue(value interface{}) int {
 		}
 	}
 	return 0
+}
+
+func metadataFloatValue(metadata map[string]interface{}, key string) (float64, bool) {
+	if metadata == nil {
+		return 0, false
+	}
+	value, ok := metadata[key]
+	if !ok {
+		return 0, false
+	}
+	return numericConditionValue(value)
 }
 
 func metadataStringValue(metadata map[string]interface{}, key string) string {
@@ -9223,7 +9335,7 @@ func (m *Manager) clearStorageOfflineAlert(storage models.Storage) {
 // checkGuestPoweredOff creates an alert for powered-off guests
 func (m *Manager) checkGuestPoweredOff(guestID, name, node, instanceName, guestType string, monitorOnly bool) {
 	m.mu.RLock()
-	thresholds := m.resolveGuestThresholdOverride(cloneThresholdConfig(m.config.GuestDefaults), nil, guestID)
+	thresholds := m.getGuestThresholds(guestSnapshotFromIdentity(guestID, name, node, instanceName, guestType, "stopped"), guestID)
 	m.mu.RUnlock()
 	m.checkGuestPoweredOffWithThresholds(guestID, name, node, instanceName, guestType, thresholds, monitorOnly)
 }

@@ -2,9 +2,11 @@ package alerts
 
 import (
 	"testing"
+	"time"
 
 	alertspecs "github.com/rcourtman/pulse-go-rewrite/internal/alerts/specs"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
 )
 
 func boolPtr(v bool) *bool {
@@ -316,5 +318,335 @@ func TestCheckStorageOfflineUsesSharedThresholdResolution(t *testing.T) {
 	}
 	if confirmExists {
 		t.Fatalf("expected storage offline confirmations to clear when shared thresholds disable connectivity")
+	}
+}
+
+func TestCheckSnapshotsUsesGuestContextForCustomRules(t *testing.T) {
+	m := newTestManager(t)
+	m.ClearActiveAlerts()
+
+	cfg := AlertConfig{
+		Enabled: true,
+		SnapshotDefaults: SnapshotAlertConfig{
+			Enabled:      true,
+			WarningDays:  7,
+			CriticalDays: 14,
+		},
+		CustomRules: []CustomAlertRule{
+			{
+				Name:     "db-snapshots",
+				Enabled:  true,
+				Priority: 10,
+				FilterConditions: FilterStack{
+					LogicalOperator: "AND",
+					Filters: []FilterCondition{
+						{Type: "text", Field: "name", Value: "db"},
+					},
+				},
+				Thresholds: ThresholdConfig{
+					Snapshot: &SnapshotAlertConfig{
+						Enabled:      true,
+						WarningDays:  15,
+						CriticalDays: 20,
+					},
+				},
+			},
+		},
+	}
+	m.UpdateConfig(cfg)
+	m.mu.Lock()
+	m.config.TimeThresholds = map[string]int{}
+	m.mu.Unlock()
+
+	now := time.Now()
+	snapshots := []models.GuestSnapshot{
+		{
+			ID:       "inst-node-100-weekly",
+			Name:     "weekly",
+			Node:     "node",
+			Instance: "inst",
+			Type:     "qemu",
+			VMID:     100,
+			Time:     now.Add(-10 * 24 * time.Hour),
+		},
+		{
+			ID:       "inst-node-101-weekly",
+			Name:     "weekly",
+			Node:     "node",
+			Instance: "inst",
+			Type:     "qemu",
+			VMID:     101,
+			Time:     now.Add(-10 * 24 * time.Hour),
+		},
+	}
+	guestNames := map[string]string{
+		BuildGuestKey("inst", "node", 100): "db-server",
+		BuildGuestKey("inst", "node", 101): "web-server",
+	}
+
+	m.CheckSnapshotsForInstance("inst", snapshots, guestNames)
+
+	m.mu.RLock()
+	_, dbExists := testLookupActiveAlert(t, m, "snapshot-age-inst-node-100-weekly")
+	_, webExists := testLookupActiveAlert(t, m, "snapshot-age-inst-node-101-weekly")
+	m.mu.RUnlock()
+
+	if dbExists {
+		t.Fatalf("expected db snapshot alert to be suppressed by custom rule thresholds")
+	}
+	if !webExists {
+		t.Fatalf("expected non-matching snapshot alert to use default thresholds")
+	}
+}
+
+func TestCheckBackupsUsesGuestContextForCustomRules(t *testing.T) {
+	m := newTestManager(t)
+	m.ClearActiveAlerts()
+
+	cfg := AlertConfig{
+		Enabled: true,
+		BackupDefaults: BackupAlertConfig{
+			Enabled:      true,
+			WarningDays:  7,
+			CriticalDays: 14,
+		},
+		CustomRules: []CustomAlertRule{
+			{
+				Name:     "db-backups",
+				Enabled:  true,
+				Priority: 10,
+				FilterConditions: FilterStack{
+					LogicalOperator: "AND",
+					Filters: []FilterCondition{
+						{Type: "text", Field: "name", Value: "db"},
+					},
+				},
+				Thresholds: ThresholdConfig{
+					Backup: &BackupAlertConfig{
+						Enabled:      true,
+						WarningDays:  15,
+						CriticalDays: 20,
+					},
+				},
+			},
+		},
+	}
+	m.UpdateConfig(cfg)
+
+	now := time.Now()
+	rollups := []recovery.ProtectionRollup{
+		{
+			RollupID: "db-rollup",
+			SubjectRef: &recovery.ExternalRef{
+				Type:      "proxmox-vm",
+				Namespace: "inst",
+				Name:      "db-server",
+				ID:        BuildGuestKey("inst", "node", 100),
+				Class:     "node",
+			},
+			LastSuccessAt: ptrTime(now.Add(-10 * 24 * time.Hour)),
+			LastOutcome:   recovery.OutcomeSuccess,
+			Providers:     []recovery.Provider{recovery.ProviderProxmoxPVE},
+		},
+		{
+			RollupID: "web-rollup",
+			SubjectRef: &recovery.ExternalRef{
+				Type:      "proxmox-vm",
+				Namespace: "inst",
+				Name:      "web-server",
+				ID:        BuildGuestKey("inst", "node", 101),
+				Class:     "node",
+			},
+			LastSuccessAt: ptrTime(now.Add(-10 * 24 * time.Hour)),
+			LastOutcome:   recovery.OutcomeSuccess,
+			Providers:     []recovery.Provider{recovery.ProviderProxmoxPVE},
+		},
+	}
+
+	guest100 := GuestLookup{
+		ResourceID: BuildGuestKey("inst", "node", 100),
+		Name:       "db-server",
+		Instance:   "inst",
+		Node:       "node",
+		Type:       "qemu",
+		VMID:       100,
+	}
+	guest101 := GuestLookup{
+		ResourceID: BuildGuestKey("inst", "node", 101),
+		Name:       "web-server",
+		Instance:   "inst",
+		Node:       "node",
+		Type:       "qemu",
+		VMID:       101,
+	}
+	guestsByKey := map[string]GuestLookup{
+		guest100.ResourceID: guest100,
+		guest101.ResourceID: guest101,
+	}
+	guestsByVMID := map[string][]GuestLookup{
+		"100": {guest100},
+		"101": {guest101},
+	}
+
+	m.CheckBackups(rollups, guestsByKey, guestsByVMID)
+
+	m.mu.RLock()
+	_, dbExists := testLookupActiveAlert(t, m, "backup-age-"+sanitizeAlertKey(guest100.ResourceID))
+	_, webExists := testLookupActiveAlert(t, m, "backup-age-"+sanitizeAlertKey(guest101.ResourceID))
+	m.mu.RUnlock()
+
+	if dbExists {
+		t.Fatalf("expected db backup alert to be suppressed by custom rule thresholds")
+	}
+	if !webExists {
+		t.Fatalf("expected non-matching backup alert to use default thresholds")
+	}
+}
+
+func TestReevaluateActiveAlertsUsesGuestContextForMetricCustomRules(t *testing.T) {
+	m := newTestManager(t)
+	resourceID := BuildGuestKey("pve1", "node1", 100)
+
+	m.mu.Lock()
+	m.config.Enabled = true
+	m.config.GuestDefaults = ThresholdConfig{
+		CPU: &HysteresisThreshold{Trigger: 80, Clear: 75},
+	}
+	m.config.CustomRules = []CustomAlertRule{
+		{
+			Name:     "db-metrics",
+			Enabled:  true,
+			Priority: 10,
+			FilterConditions: FilterStack{
+				LogicalOperator: "AND",
+				Filters: []FilterCondition{
+					{Type: "text", Field: "name", Value: "db"},
+				},
+			},
+			Thresholds: ThresholdConfig{
+				CPU: &HysteresisThreshold{Trigger: 95, Clear: 90},
+			},
+		},
+	}
+	state, alert := testNewCanonicalAlert(resourceID, canonicalMetricSpecID(resourceID, "cpu"), string(alertspecs.AlertSpecKindMetricThreshold), "cpu")
+	alert.Value = 90
+	alert.Threshold = 80
+	alert.ResourceName = "db-server"
+	alert.Node = "node1"
+	alert.Instance = "pve1"
+	alert.Metadata = map[string]interface{}{
+		"resourceType": "vm",
+	}
+	m.setActiveAlertNoLock(state, alert)
+	m.reevaluateActiveAlertsLocked()
+	m.mu.Unlock()
+
+	m.mu.RLock()
+	_, exists := m.activeAlerts[state]
+	m.mu.RUnlock()
+
+	if exists {
+		t.Fatalf("expected guest metric alert to resolve when custom rule raises the trigger")
+	}
+}
+
+func TestReevaluateActiveAlertsUsesGuestContextForBackupCustomRules(t *testing.T) {
+	m := newTestManager(t)
+	resourceID := BuildGuestKey("pve1", "node1", 100)
+
+	m.mu.Lock()
+	m.config.Enabled = true
+	m.config.BackupDefaults = BackupAlertConfig{
+		Enabled:      true,
+		WarningDays:  7,
+		CriticalDays: 14,
+	}
+	m.config.CustomRules = []CustomAlertRule{
+		{
+			Name:     "db-backup-reeval",
+			Enabled:  true,
+			Priority: 10,
+			FilterConditions: FilterStack{
+				LogicalOperator: "AND",
+				Filters: []FilterCondition{
+					{Type: "text", Field: "name", Value: "db"},
+				},
+			},
+			Thresholds: ThresholdConfig{
+				Backup: &BackupAlertConfig{
+					Enabled:      true,
+					WarningDays:  15,
+					CriticalDays: 20,
+				},
+			},
+		},
+	}
+	state, alert := testNewCanonicalAlert(resourceID, resourceID+"-backup-age", string(alertspecs.AlertSpecKindPostureThreshold), "backup-age")
+	alert.Value = 10
+	alert.Threshold = 7
+	alert.ResourceName = "db-server backup"
+	alert.Node = "node1"
+	alert.Instance = "pve1"
+	alert.Metadata = map[string]interface{}{
+		"ageDays":       10.0,
+		"guestName":     "db-server",
+		"guestType":     "qemu",
+		"guestInstance": "pve1",
+		"guestNode":     "node1",
+		"guestVmid":     100,
+		"orphaned":      false,
+	}
+	m.setActiveAlertNoLock(state, alert)
+	m.reevaluateActiveAlertsLocked()
+	m.mu.Unlock()
+
+	m.mu.RLock()
+	_, exists := m.activeAlerts[state]
+	m.mu.RUnlock()
+
+	if exists {
+		t.Fatalf("expected guest backup alert to resolve when custom rule raises backup thresholds")
+	}
+}
+
+func TestReevaluateActiveAlertsUsesGuestContextForPoweredOffCustomRules(t *testing.T) {
+	m := newTestManager(t)
+	resourceID := BuildGuestKey("pve1", "node1", 100)
+
+	m.mu.Lock()
+	m.config.Enabled = true
+	m.config.CustomRules = []CustomAlertRule{
+		{
+			Name:     "db-no-powered-off",
+			Enabled:  true,
+			Priority: 10,
+			FilterConditions: FilterStack{
+				LogicalOperator: "AND",
+				Filters: []FilterCondition{
+					{Type: "text", Field: "name", Value: "db"},
+				},
+			},
+			Thresholds: ThresholdConfig{
+				DisableConnectivity: true,
+			},
+		},
+	}
+	state, alert := testNewCanonicalAlert(resourceID, canonicalPoweredStateSpecID(resourceID), string(alertspecs.AlertSpecKindPoweredState), "powered-off")
+	alert.ResourceName = "db-server"
+	alert.Node = "node1"
+	alert.Instance = "pve1"
+	alert.Metadata = map[string]interface{}{
+		"resourceType": "vm",
+	}
+	m.setActiveAlertNoLock(state, alert)
+	m.reevaluateActiveAlertsLocked()
+	m.mu.Unlock()
+
+	m.mu.RLock()
+	_, exists := m.activeAlerts[state]
+	m.mu.RUnlock()
+
+	if exists {
+		t.Fatalf("expected guest powered-off alert to resolve when custom rule disables connectivity")
 	}
 }
