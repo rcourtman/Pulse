@@ -320,6 +320,12 @@ Helm release workflows must derive the owning branch from the target version via
 must check out either that governed release branch or the validated release tag
 before touching chart contents, and must never hardcode `main` as the push or
 package source for prerelease Helm publication.
+Pre-publication release proof and post-publication chart publication have
+different trust jobs and must stay that way: `.github/workflows/create-release.yml`
+must smoke the Helm chart against a locally built release-line image before the
+tag is published, while `.github/workflows/helm-pages.yml` must continue
+smoking the immutable published tag image so chart publication cannot silently
+pass on branch-only fixes that never made it into the released artifact.
 That same promotion-governance package also owns the dated rehearsal-record
 materialization path. The public recorder
 `scripts/release_control/record_rc_to_ga_rehearsal.py` and its internal module
