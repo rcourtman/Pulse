@@ -198,7 +198,13 @@ test.describe.serial('Platform mock runtime', () => {
     await page.waitForURL(/\/workloads\?type=app-container&platform=truenas&agent=.*truenas-main/);
     await expect(page.locator('#dashboard-type-filter')).toHaveValue('app-container');
     await expect(page.locator('#workloads-platform-filter')).toHaveValue('truenas');
-    await expectFirstTableContains(page, ['Nextcloud', 'Immich', 'Paperless-ngx', 'Grafana', 'AdGuard Home']);
+    await expectFirstTableContains(page, [
+      'client-files',
+      'photo-archive',
+      'document-hub',
+      'ops-dashboards',
+      'edge-dns',
+    ]);
     await expect(page.getByText('No history yet')).toHaveCount(0);
 
     await page.goto('/storage?source=truenas&node=truenas-main', {

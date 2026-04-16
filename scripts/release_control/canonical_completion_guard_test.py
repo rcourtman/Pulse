@@ -219,6 +219,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                 "proxmox-zfs-runtime",
                 "proxmox-ceph-runtime",
                 "container-entrypoint-runtime",
+                "mock-runtime-fixtures",
                 "monitoring-runtime",
             ],
         )

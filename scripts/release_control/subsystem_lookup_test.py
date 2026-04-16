@@ -4552,6 +4552,45 @@ class SubsystemLookupTest(unittest.TestCase):
             ],
         )
 
+    def test_lookup_paths_assigns_mock_runtime_fixture_authority_to_monitoring(self) -> None:
+        result = lookup_paths(
+            [
+                "internal/mock/demo_scenarios.go",
+                "internal/mock/fixture_graph.go",
+                "internal/mock/platform_fixtures.go",
+            ]
+        )
+        self.assertEqual(result["unowned_runtime_files"], [])
+        self.assertEqual(
+            {item["subsystem"] for item in result["impacted_subsystems"]},
+            {"monitoring"},
+        )
+        for file_entry in result["files"]:
+            self.assertEqual(file_entry["classification"], "runtime")
+            self.assertEqual(
+                {match["subsystem"] for match in file_entry["matches"]},
+                {"monitoring"},
+            )
+            match = file_entry["matches"][0]
+            self.assertEqual(
+                match["contract"],
+                "docs/release-control/v6/internal/subsystems/monitoring.md",
+            )
+            self.assertEqual(match["lane_context"]["lane_id"], "L13")
+            self.assertEqual(
+                match["verification_requirement"]["id"],
+                "mock-runtime-fixtures",
+            )
+            self.assertEqual(
+                match["verification_requirement"]["exact_files"],
+                [
+                    "internal/mock/canonical_api_guardrails_test.go",
+                    "internal/mock/demo_scenarios_test.go",
+                    "internal/mock/platform_fixtures_test.go",
+                    "tests/integration/tests/43-platform-mock-runtime.spec.ts",
+                ],
+            )
+
     def test_lookup_paths_normalizes_absolute_repo_paths(self) -> None:
         absolute = str(Path(REPO_ROOT, "internal/api/resources.go"))
         result = lookup_paths([absolute])

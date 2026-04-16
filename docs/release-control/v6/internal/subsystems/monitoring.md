@@ -291,13 +291,13 @@ request only a subset of canonical chart series, `internal/monitoring/monitor_me
 must preserve that narrowed metric set through the batch store fallback path
 instead of querying every metric type for each resource and discarding most of
 the payload afterward.
-That same mock-runtime owner now also owns demo-scenario curation. The
-canonical `internal/mock/fixture_graph.go` path may project an authored demo
-estate over generic fixture synthesis, but that authored layer must stay
-graph-native and runtime-stable so infrastructure, workloads, storage, and
-recovery all present the same human-readable platform story instead of a lab
-of random names, legacy `mock-cluster` labels, or surface-specific mock
-overrides.
+That same mock-runtime owner now also owns demo-scenario curation.
+`internal/mock/fixture_graph.go`, `internal/mock/platform_fixtures.go`, and
+`internal/mock/demo_scenarios.go` may project an authored demo estate over
+generic fixture synthesis, but that authored layer must stay graph-native and
+runtime-stable so infrastructure, workloads, storage, and recovery all present
+the same human-readable platform story instead of a lab of random names,
+legacy `mock-cluster` labels, or surface-specific mock overrides.
 That same chart boundary also owns storage-series identity. Monitoring and
 `ReadState` consumers must address storage pool and physical-disk history
 through the resolved unified-resource metrics target, so seeded history,
@@ -653,14 +653,15 @@ supplemental ingest, unified read-state, and seeded charts cannot drift from
 each other when the v6 runtime runs in mock mode.
 That same fixture authority now also includes legacy snapshot-backed platforms.
 `internal/monitoring/monitor.go` and
-`internal/monitoring/mock_metrics_history.go` must treat the canonical
-`internal/mock/fixture_graph.go` runtime graph as the one mock owner for
-legacy Proxmox/Docker/Kubernetes/agent/PBS/PMG snapshot state plus
-provider-backed TrueNAS and VMware fixtures. Monitoring must not rebuild mock
-provider context from standalone defaults, consume partial legacy helper
-exports, or mix snapshot state with separate provider fixtures when seeding
-read-state or metrics history. The graph and its methods are the canonical
-mock runtime API.
+`internal/monitoring/mock_metrics_history.go` must treat
+`internal/mock/fixture_graph.go`, `internal/mock/platform_fixtures.go`, and
+`internal/mock/demo_scenarios.go` as the one canonical mock owner for legacy
+Proxmox/Docker/Kubernetes/agent/PBS/PMG snapshot state plus provider-backed
+TrueNAS and VMware fixtures. Monitoring must not rebuild mock provider context
+from standalone defaults, consume partial legacy helper exports, or mix
+snapshot state with separate provider fixtures when seeding read-state or
+metrics history. The graph, its platform projections, and its curated demo
+scenario layer are the canonical mock runtime API.
 That same boundary now also owns native disk-history fallback when Pulse's own
 history is shallow. `internal/truenas/client.go`,
 `internal/truenas/provider.go`, `internal/monitoring/truenas_poller.go`, and

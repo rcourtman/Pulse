@@ -3238,6 +3238,9 @@
         "docker-entrypoint.sh",
         "internal/dockeragent/collect.go",
         "internal/dockeragent/swarm.go",
+        "internal/mock/demo_scenarios.go",
+        "internal/mock/fixture_graph.go",
+        "internal/mock/platform_fixtures.go",
         "pkg/proxmox/ceph.go",
         "pkg/proxmox/zfs.go"
       ],
@@ -3443,6 +3446,24 @@
             "test_prefixes": [],
             "exact_files": [
               "scripts/installtests/docker_entrypoint_test.go"
+            ]
+          },
+          {
+            "id": "mock-runtime-fixtures",
+            "label": "monitoring mock runtime fixture proof",
+            "match_prefixes": [],
+            "match_files": [
+              "internal/mock/demo_scenarios.go",
+              "internal/mock/fixture_graph.go",
+              "internal/mock/platform_fixtures.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/mock/canonical_api_guardrails_test.go",
+              "internal/mock/demo_scenarios_test.go",
+              "internal/mock/platform_fixtures_test.go",
+              "tests/integration/tests/43-platform-mock-runtime.spec.ts"
             ]
           },
           {
