@@ -28,9 +28,7 @@ const MONITORED_SYSTEM_FEATURE = "self_hosted_plan";
 
 const MONITORED_SYSTEM_ENTITLEMENTS = {
   capabilities: [],
-  limits: [
-    { key: "max_monitored_systems", limit: 5, current: 16, state: "enforced" },
-  ],
+  limits: [],
   subscription_state: "expired",
   upgrade_reasons: [],
   tier: "free",
@@ -42,14 +40,11 @@ const MONITORED_SYSTEM_ENTITLEMENTS = {
     kubernetes_clusters: 0,
   },
   has_migration_gap: false,
-  overflow_days_remaining: 14,
 };
 
 const MONITORED_SYSTEM_RUNTIME_CAPABILITIES = {
   capabilities: [],
-  limits: [
-    { key: "max_monitored_systems", limit: 5, current: 16, state: "enforced" },
-  ],
+  limits: [],
   hosted_mode: false,
   max_history_days: 90,
 };
@@ -65,7 +60,6 @@ const MONITORED_SYSTEM_COMMERCIAL_POSTURE = {
     kubernetes_clusters: 0,
   },
   has_migration_gap: false,
-  overflow_days_remaining: 14,
 };
 
 const MONITORED_SYSTEM_LEDGER = {
@@ -97,7 +91,7 @@ const MONITORED_SYSTEM_LEDGER = {
     },
   ],
   total: 16,
-  limit: 5,
+  limit: 0,
 };
 
 function fulfillJSON(route: Route, payload: unknown, status = 200) {
@@ -365,12 +359,9 @@ async function openMonitoredSystemUpgradeArrival(page: Page) {
       "Community keeps core monitoring free. Compare Relay and Pro in Pulse Account, then return here with Pulse Pro activated automatically.",
     ),
   ).toBeVisible();
-  await expect(page.getByRole("button", { name: "Hide counting rules" })).toBeVisible();
-  await expect(
-    page.getByText(
-      "A monitored system is a top-level monitored root such as a Docker host, Kubernetes cluster, Proxmox node, standalone host, or TrueNAS system. Each root counts once no matter how Pulse collects it. Child resources like VMs, containers, pods, disks, backups, and services underneath that root are included.",
-    ),
-  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "Hide counting rules" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "View counting rules" })).toHaveCount(0);
+  await expect(page.getByText("Monitoring capacity")).toHaveCount(0);
 }
 
 test.describe("Self-hosted upgrade return flow", () => {

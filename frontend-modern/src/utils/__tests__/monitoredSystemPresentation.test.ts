@@ -302,6 +302,22 @@ describe('monitoredSystemPresentation', () => {
     });
   });
 
+  it('does not build a monitored-system capacity section for uncapped plans', () => {
+    expect(
+      buildMonitoredSystemCapacitySectionModel(undefined, {
+        mode: 'unlimited',
+        urgency: 'ok',
+        current: 12,
+        limit: 0,
+        current_available: true,
+        available_slots: 0,
+        overage: 0,
+        blocks_new_systems: false,
+        existing_monitoring_continues: true,
+      }),
+    ).toBeNull();
+  });
+
   it('centralizes monitored-system limit availability and capacity presentation', () => {
     const unavailableLimit = {
       current: 0,

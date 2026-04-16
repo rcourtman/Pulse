@@ -2190,6 +2190,7 @@
               "frontend-modern/src/components/Settings/MonitoredSystemLedgerPanel.tsx",
               "frontend-modern/src/components/Settings/ProLicensePanel.tsx",
               "frontend-modern/src/components/Settings/ProLicensePlanSection.tsx",
+              "frontend-modern/src/components/Settings/selfHostedBillingPresentation.ts",
               "frontend-modern/src/components/Settings/SelfHostedCommercialRecoverySection.tsx",
               "frontend-modern/src/components/Settings/useProLicensePanelState.ts"
             ],

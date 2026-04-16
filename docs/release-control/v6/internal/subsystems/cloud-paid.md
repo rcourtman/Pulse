@@ -1167,23 +1167,21 @@ mounts.
 That same counted-unit boundary also owns the disclosure rule for retail copy:
 default billing and pricing surfaces should use concise monitored-system copy,
 while the full counted-unit definition appears only behind explicit disclosure
-such as `View counting rules` instead of sitting as always-visible explanatory
-chrome.
-When a self-hosted billing arrival is explicitly about monitored-system
-capacity, `ProLicensePlanSection.tsx` may still open that disclosure by
-default, but the same top-level-root definition must remain the canonical
-counted-unit explanation rather than introducing a second plan-local wording.
-The same boundary also owns where monitored-system capacity truth lives. The
-canonical persistent explanation belongs in the self-hosted Pro plan surface:
-`ProLicensePanel.tsx`, `ProLicensePlanSection.tsx`, and
-`useProLicensePanelState.ts` must render a dedicated capacity section with the
-current monitored count, included plan limit, status posture, and any
-over-plan or continuity explanation. Customer-facing copy there should
-describe the current admission posture in plain language, not raw
-`current / limit` math. When a plan is full, the section must explain that
-existing monitoring continues while new monitored systems are blocked; when an
-installation is already above the current plan, it must explain that Pulse is
-in an over-plan frozen state rather than implying a hard runtime blackout.
+such as `View counting rules` on the usage-owned monitored-system surfaces
+instead of sitting as persistent plan-tab chrome.
+The same boundary also owns where monitored-system capacity truth lives. A
+dedicated self-hosted Pro plan-surface capacity section is only canonical
+when Pulse is reconciling or enforcing a finite monitored-system limit, such
+as bounded migration continuity, grandfathered floors, or other explicit
+carry-forward limits. Uncapped self-hosted plans should not keep a
+`Monitoring capacity` section alive just to restate that monitoring is
+unlimited; those plan surfaces should describe core monitoring as unlimited in
+their summary model and leave counted-unit explanation plus current usage
+inspection to the usage-owned ledger/disclosure path. When a finite plan is
+full, the section must explain that existing monitoring continues while new
+monitored systems are blocked; when an installation is already above the
+current plan, it must explain that Pulse is in an over-plan frozen state
+rather than implying a hard runtime blackout.
 Community overflow/setup-slot messaging must still explain the included
 monitored systems plus the temporary setup slot in customer terms rather than
 compressing the contract into slash-style quota strings that imply Pulse is

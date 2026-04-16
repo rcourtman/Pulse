@@ -60,20 +60,36 @@ const hasFiniteSelfHostedLimit = (value: string | number) =>
 export const buildSelfHostedCommercialPlanModel = (
   input: SelfHostedCommercialModelInput,
 ): CommercialPlanViewModel => ({
-  summary: [
-    {
-      label: 'Monitored Systems',
-      value: input.monitoredSystemsSummary,
-    },
-    {
-      label: 'Capacity Status',
-      value: input.capacityStatusSummary,
-    },
-    {
-      label: 'Plan Status',
-      value: input.statusLabel,
-    },
-  ],
+  summary:
+    !input.monitoredSystemContinuity && !hasFiniteSelfHostedLimit(input.maxMonitoredSystems)
+      ? [
+          {
+            label: 'Core Monitoring',
+            value: 'Unlimited',
+          },
+          {
+            label: 'Plan Status',
+            value: input.statusLabel,
+          },
+          {
+            label: 'Guests',
+            value: input.maxGuests,
+          },
+        ]
+      : [
+          {
+            label: 'Monitored Systems',
+            value: input.monitoredSystemsSummary,
+          },
+          {
+            label: 'Capacity Status',
+            value: input.capacityStatusSummary,
+          },
+          {
+            label: 'Plan Status',
+            value: input.statusLabel,
+          },
+        ],
   details: [
     {
       label: 'Tier',

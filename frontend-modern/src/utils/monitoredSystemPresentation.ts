@@ -467,13 +467,14 @@ export function buildMonitoredSystemCapacitySectionModel(
   if (!resolved) {
     return null;
   }
+  if (resolved.limit <= 0) {
+    return null;
+  }
 
   const includedValue =
-    resolved.mode === 'unlimited'
-      ? MONITORED_SYSTEM_LEDGER_PRESENTATION.unlimitedLimitLabel
-      : resolved.limit > 0
-        ? String(resolved.limit)
-        : MONITORED_SYSTEM_LEDGER_PRESENTATION.remainingCapacityUnavailableLabel;
+    resolved.limit > 0
+      ? String(resolved.limit)
+      : MONITORED_SYSTEM_LEDGER_PRESENTATION.remainingCapacityUnavailableLabel;
 
   const stats = [
     {
