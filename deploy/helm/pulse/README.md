@@ -1,6 +1,6 @@
 # pulse
 
-![Version: 5.1.6](https://img.shields.io/badge/Version-5.1.6-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 5.1.6](https://img.shields.io/badge/AppVersion-5.1.6-informational?style=flat-square)
+![Version: 5.1.7](https://img.shields.io/badge/Version-5.1.7-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 5.1.7](https://img.shields.io/badge/AppVersion-5.1.7-informational?style=flat-square)
 
 Helm chart for deploying the Pulse hub and optional Docker monitoring agent.
 
@@ -16,29 +16,13 @@ Helm chart for deploying the Pulse hub and optional Docker monitoring agent.
 
 * <https://github.com/rcourtman/Pulse>
 
-## Explore Monitoring
-
-Enable Explore recording rules and alerts with:
-
-```yaml
-monitoring:
-  prometheusRule:
-    enabled: true
-```
-
-This creates recording rules for:
-- `pulse_ai_explore_failure_rate`
-- `pulse_ai_explore_p95_duration_seconds`
-- `pulse_ai_explore_skipped_no_model_total`
-
-and optional alerts for sustained failure rate, latency, and missing model configuration.
-
 ## Values
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | agent.affinity | object | `{}` |  |
-| agent.args | list | `[]` |  |
+| agent.args[0] | string | `"--enable-docker"` |  |
+| agent.args[1] | string | `"--enable-host=false"` |  |
 | agent.dockerSocket.enabled | bool | `true` |  |
 | agent.dockerSocket.hostPathType | string | `"Socket"` |  |
 | agent.dockerSocket.path | string | `"/var/run/docker.sock"` |  |
@@ -100,6 +84,25 @@ and optional alerts for sustained failure rate, latency, and missing model confi
 | ingress.hosts[0].paths[0].path | string | `"/"` |  |
 | ingress.hosts[0].paths[0].pathType | string | `"Prefix"` |  |
 | ingress.tls | list | `[]` |  |
+| monitoring.prometheusRule.annotations | object | `{}` |  |
+| monitoring.prometheusRule.enabled | bool | `false` |  |
+| monitoring.prometheusRule.failureRate.enabled | bool | `true` |  |
+| monitoring.prometheusRule.failureRate.for | string | `"10m"` |  |
+| monitoring.prometheusRule.failureRate.minRuns | int | `20` |  |
+| monitoring.prometheusRule.failureRate.severity | string | `"warning"` |  |
+| monitoring.prometheusRule.failureRate.threshold | float | `0.25` |  |
+| monitoring.prometheusRule.failureRate.window | string | `"10m"` |  |
+| monitoring.prometheusRule.labels | object | `{}` |  |
+| monitoring.prometheusRule.p95Duration.enabled | bool | `true` |  |
+| monitoring.prometheusRule.p95Duration.for | string | `"15m"` |  |
+| monitoring.prometheusRule.p95Duration.severity | string | `"warning"` |  |
+| monitoring.prometheusRule.p95Duration.thresholdSeconds | int | `8` |  |
+| monitoring.prometheusRule.p95Duration.window | string | `"10m"` |  |
+| monitoring.prometheusRule.skippedNoModel.enabled | bool | `true` |  |
+| monitoring.prometheusRule.skippedNoModel.for | string | `"15m"` |  |
+| monitoring.prometheusRule.skippedNoModel.severity | string | `"warning"` |  |
+| monitoring.prometheusRule.skippedNoModel.threshold | int | `5` |  |
+| monitoring.prometheusRule.skippedNoModel.window | string | `"30m"` |  |
 | monitoring.serviceMonitor.enabled | bool | `false` |  |
 | monitoring.serviceMonitor.interval | string | `"30s"` |  |
 | monitoring.serviceMonitor.labels | object | `{}` |  |
