@@ -20,17 +20,6 @@ jobs:
       contents: write  # Required for gh release upload
       packages: write
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          fetch-tags: true
-
-      - name: Set up Helm
-        uses: azure/setup-helm@v4
-        with:
-          version: v3.15.2
-
       - name: Determine chart version
         id: versions
         run: |
@@ -65,7 +54,19 @@ jobs:
           echo "release_tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
           echo "is_prerelease=$IS_PRERELEASE" >> "$GITHUB_OUTPUT"
 
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.15.2
+
       - name: Validate release line policy
+        id: release_line
         env:
           RELEASE_TAG: ${{ steps.versions.outputs.release_tag }}
           APP_VERSION: ${{ steps.versions.outputs.app_version }}
@@ -90,7 +91,15 @@ jobs:
             exit 1
           fi
 
+          echo "required_branch=${REQUIRED_BRANCH}" >> "$GITHUB_OUTPUT"
           echo "[OK] ${RELEASE_TAG} validated against release line ${REQUIRED_BRANCH}"
+
+      - name: Check out validated release tag
+        env:
+          RELEASE_TAG: ${{ steps.versions.outputs.release_tag }}
+        run: |
+          set -euo pipefail
+          git checkout --detach "refs/tags/${RELEASE_TAG}"
 
       - name: Align chart metadata links
         run: |

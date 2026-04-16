@@ -22,75 +22,44 @@ jobs:
     # Only run if workflow_dispatch OR if workflow_run completed successfully
     if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Configure Git
-        run: |
-          git config user.name "$GITHUB_ACTOR"
-          git config user.email "$GITHUB_ACTOR@users.noreply.github.com"
-
-      - name: Install Helm
-        uses: azure/setup-helm@v4
-        with:
-          version: v3.15.2
-
-      - name: Install helm-docs
-        run: |
-          cd /tmp
-          wget https://github.com/norwoodj/helm-docs/releases/download/v1.14.2/helm-docs_1.14.2_Linux_x86_64.tar.gz
-          tar -xzf helm-docs_1.14.2_Linux_x86_64.tar.gz
-          sudo mv helm-docs /usr/local/bin/
-          helm-docs --version
-
-      - name: Generate chart documentation
-        run: |
-          cd deploy/helm/pulse
-          helm-docs
-
-          # Commit if README changed
-          if ! git diff --quiet README.md; then
-            git config user.name "$GITHUB_ACTOR"
-            git config user.email "$GITHUB_ACTOR@users.noreply.github.com"
-            git add README.md
-            git commit -m "Auto-update Helm chart documentation"
-            git pull --rebase origin main
-            git push origin main
-          fi
-          cd ../../..
-
       - name: Determine chart version
         id: version
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            # Manual dispatch - use input directly
             VERSION="${{ inputs.chart_version }}"
           else
-            # workflow_run trigger - extract version from the triggering workflow
             RUN_ID="${{ github.event.workflow_run.id }}"
             echo "Extracting version from workflow run ${RUN_ID}..."
-            
+
             WORKFLOW_DATA=$(gh api repos/${{ github.repository }}/actions/runs/${RUN_ID})
             TAG=$(echo "$WORKFLOW_DATA" | jq -r '.display_title' | grep -oP 'v?\d+\.\d+\.\d+(-[a-zA-Z]+\.\d+)?' || echo "")
-            
+
             if [ -z "$TAG" ]; then
               echo "::error::Could not extract version from workflow_run"
               exit 1
             fi
-            
-            # Remove leading 'v' if present
+
             VERSION="${TAG#v}"
           fi
-          
+
+          if [ -z "$VERSION" ]; then
+            echo "::error::chart_version input is required"
+            exit 1
+          fi
+
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "release_tag=v${VERSION}" >> "$GITHUB_OUTPUT"
           echo "Chart version: $VERSION"
 
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
       - name: Validate release line policy
+        id: release_line
         env:
           VERSION: ${{ steps.version.outputs.version }}
           RELEASE_TAG: ${{ steps.version.outputs.release_tag }}
@@ -115,10 +84,58 @@ jobs:
             exit 1
           fi
 
+          echo "required_branch=${REQUIRED_BRANCH}" >> "$GITHUB_OUTPUT"
           echo "[OK] ${RELEASE_TAG} validated against release line ${REQUIRED_BRANCH}"
 
-      - name: Update Chart.yaml version
+      - name: Check out governed release branch
+        env:
+          REQUIRED_BRANCH: ${{ steps.release_line.outputs.required_branch }}
         run: |
+          set -euo pipefail
+          git checkout -B "$REQUIRED_BRANCH" "origin/$REQUIRED_BRANCH"
+
+      - name: Configure Git
+        run: |
+          git config user.name "$GITHUB_ACTOR"
+          git config user.email "$GITHUB_ACTOR@users.noreply.github.com"
+
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.15.2
+
+      - name: Install helm-docs
+        run: |
+          cd /tmp
+          wget https://github.com/norwoodj/helm-docs/releases/download/v1.14.2/helm-docs_1.14.2_Linux_x86_64.tar.gz
+          tar -xzf helm-docs_1.14.2_Linux_x86_64.tar.gz
+          sudo mv helm-docs /usr/local/bin/
+          helm-docs --version
+
+      - name: Generate chart documentation
+        env:
+          REQUIRED_BRANCH: ${{ steps.release_line.outputs.required_branch }}
+        run: |
+          set -euo pipefail
+          cd deploy/helm/pulse
+          helm-docs
+
+          # Commit if README changed
+          if ! git diff --quiet README.md; then
+            git config user.name "$GITHUB_ACTOR"
+            git config user.email "$GITHUB_ACTOR@users.noreply.github.com"
+            git add README.md
+            git commit -m "Auto-update Helm chart documentation"
+            git pull --rebase origin "$REQUIRED_BRANCH"
+            git push origin HEAD:"$REQUIRED_BRANCH"
+          fi
+          cd ../../..
+
+      - name: Update Chart.yaml version
+        env:
+          REQUIRED_BRANCH: ${{ steps.release_line.outputs.required_branch }}
+        run: |
+          set -euo pipefail
           VERSION="${{ steps.version.outputs.version }}"
           python3 scripts/sync_chart_release_metadata.py \
             --chart deploy/helm/pulse/Chart.yaml \
@@ -131,8 +148,8 @@ jobs:
             git config user.email "$GITHUB_ACTOR@users.noreply.github.com"
             git add deploy/helm/pulse/Chart.yaml
             git commit -m "Auto-update Helm chart version to $VERSION"
-            git pull --rebase origin main
-            git push origin main
+            git pull --rebase origin "$REQUIRED_BRANCH"
+            git push origin HEAD:"$REQUIRED_BRANCH"
           fi
 
       - name: Validate Helm chart
@@ -153,6 +170,42 @@ jobs:
 
       - name: Smoke test with kind
         run: |
+          set -euo pipefail
+
+          cleanup() {
+            kind delete cluster --name pulse-test >/dev/null 2>&1 || true
+          }
+
+          diagnose() {
+            echo "::group::helm status"
+            helm status pulse || true
+            echo "::endgroup::"
+
+            echo "::group::kubectl get all"
+            kubectl get all -A || true
+            echo "::endgroup::"
+
+            echo "::group::kubectl describe pods"
+            kubectl describe pods -A || true
+            echo "::endgroup::"
+
+            echo "::group::pod logs"
+            pods=$(kubectl get pods -A -o name 2>/dev/null || true)
+            for pod in $pods; do
+              echo "### ${pod}"
+              kubectl logs --all-containers=true --tail=200 "$pod" || true
+            done
+            echo "::endgroup::"
+
+            echo "::group::events"
+            kubectl get events -A --sort-by=.lastTimestamp || kubectl get events -A || true
+            echo "::endgroup::"
+
+            cleanup
+          }
+
+          trap 'diagnose' ERR
+
           # Install kind
           curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.20.0/kind-linux-amd64
           chmod +x ./kind
@@ -166,7 +219,7 @@ jobs:
             --set persistence.enabled=false \
             --set server.secretEnv.create=true \
             --set server.secretEnv.data.API_TOKENS=test-token \
-            --wait --timeout 5m
+            --wait --timeout 5m --debug
 
           # Verify deployment
           kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=pulse --timeout=180s || (kubectl describe pods -l app.kubernetes.io/name=pulse && exit 1)
@@ -177,10 +230,11 @@ jobs:
             --set persistence.enabled=false \
             --set server.secretEnv.create=true \
             --set server.secretEnv.data.API_TOKENS=test-token \
-            --wait --timeout 5m
+            --wait --timeout 5m --debug
 
           # Cleanup
-          kind delete cluster --name pulse-test
+          trap - ERR
+          cleanup
 
           echo "✓ Smoke test passed"
 

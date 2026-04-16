@@ -304,6 +304,12 @@ workflows such as Docker publication or demo updates, it must dispatch those
 workflows on `needs.prepare.outputs.required_branch` rather than GitHub's
 default-branch workflow definition, so prerelease automation cannot silently
 fall back onto stale `main`-branch inputs or older demo verification logic.
+That same release-fidelity boundary also owns governed Helm publication. The
+Helm release workflows must derive the owning branch from the target version via
+`control_plane.py --branch-for-version` before any chart mutation or packaging,
+must check out either that governed release branch or the validated release tag
+before touching chart contents, and must never hardcode `main` as the push or
+package source for prerelease Helm publication.
 That same promotion-governance package also owns the dated rehearsal-record
 materialization path. The public recorder
 `scripts/release_control/record_rc_to_ga_rehearsal.py` and its internal module
