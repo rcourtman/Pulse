@@ -516,10 +516,12 @@ describe('Settings architecture guardrails', () => {
       "const INFRASTRUCTURE_INSTALL_PREFIX = '/settings/infrastructure/install';",
     );
     expect(settingsNavigationModelSource).toContain('export function resolveCanonicalSettingsPath');
+    expect(settingsNavigationModelSource).toContain('export function isProxmoxSettingsPath');
     expect(settingsNavigationModelSource).toContain('export function settingsTabPath');
     expect(settingsNavigationModelSource).toContain('return INFRASTRUCTURE_INSTALL_PREFIX;');
     expect(settingsNavigationModelSource).toContain('SELF_HOSTED_PRO_BILLING_PLAN_ROUTE');
     expect(settingsNavigationHookSource).toContain('deriveTabFromPath');
+    expect(settingsNavigationHookSource).toContain('isProxmoxSettingsPath');
     expect(settingsNavigationHookSource).toContain('resolveCanonicalSettingsPath');
     expect(settingsNavigationHookSource).toContain('resolveCanonicalSelfHostedBillingHref');
     expect(settingsNavigationHookSource).toContain('settingsTabPath');

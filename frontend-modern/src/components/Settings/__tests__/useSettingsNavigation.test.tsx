@@ -21,9 +21,12 @@ function renderHarness(pathname = '/settings', search = '', hash = '') {
     });
 
     return (
-      <button type="button" onClick={() => navigation.setActiveTab('infrastructure-operations')}>
-        open infrastructure settings
-      </button>
+      <>
+        <button type="button" onClick={() => navigation.setActiveTab('infrastructure-operations')}>
+          open infrastructure settings
+        </button>
+        <div data-testid="selected-agent">{navigation.selectedAgent()}</div>
+      </>
     );
   });
 }
@@ -56,6 +59,22 @@ describe('useSettingsNavigation', () => {
 
     expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure/operations', {
       scroll: false,
+    });
+  });
+
+  it('syncs the selected proxmox agent from canonical deep links on initial load', async () => {
+    renderHarness('/settings/infrastructure/platforms/proxmox/pbs');
+
+    await waitFor(() => {
+      expect(screen.getByTestId('selected-agent')).toHaveTextContent('pbs');
+    });
+  });
+
+  it('defaults the selected proxmox agent to pve on the base proxmox route', async () => {
+    renderHarness('/settings/infrastructure/platforms/proxmox');
+
+    await waitFor(() => {
+      expect(screen.getByTestId('selected-agent')).toHaveTextContent('pve');
     });
   });
 });

@@ -250,6 +250,16 @@ export function deriveAgentFromPath(path: string): AgentKey | null {
   return null;
 }
 
+export function isProxmoxSettingsPath(path: string): boolean {
+  const canonicalPath = resolveCanonicalSettingsPath(path) ?? normalizeSettingsPath(path);
+  return (
+    canonicalPath === PLATFORM_CONNECTIONS_PREFIX ||
+    canonicalPath.startsWith(PROXMOX_PREFIX) ||
+    canonicalPath.startsWith(LEGACY_PROXMOX_PREFIX) ||
+    canonicalPath.startsWith(LEGACY_PROXMOX_API_PREFIX)
+  );
+}
+
 export function settingsAgentPath(agent: AgentKey): string {
   return PROXMOX_AGENT_META[agent].path;
 }

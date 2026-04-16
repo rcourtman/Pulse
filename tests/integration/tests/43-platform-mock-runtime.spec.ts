@@ -127,6 +127,16 @@ async function expectFirstTableContains(
   }
 }
 
+async function expectFirstTableExcludes(
+  page: import('@playwright/test').Page,
+  texts: string[],
+): Promise<void> {
+  const table = page.locator('table').first();
+  for (const text of texts) {
+    await expect(table).not.toContainText(text);
+  }
+}
+
 test.describe.serial('Platform mock runtime', () => {
   test.setTimeout(180_000);
 
@@ -218,5 +228,52 @@ test.describe.serial('Platform mock runtime', () => {
     for (const [source, resourceName] of Object.entries(resourceNames)) {
       await expectInfrastructureSource(page, source, resourceName);
     }
+  });
+
+  test('keeps canonical Proxmox platform routes aligned with the selected platform table', async ({
+    page,
+  }, testInfo) => {
+    test.skip(testInfo.project.name.startsWith('mobile-'), 'Desktop runtime proof');
+
+    await ensureMockModeEnabled(page);
+    const resourceNames = await fetchMockResourceNames(page);
+
+    await page.goto('/settings/infrastructure/platforms/proxmox/pve', {
+      waitUntil: 'domcontentloaded',
+    });
+    await page.waitForURL(/\/settings\/infrastructure\/platforms\/proxmox\/pve/, {
+      timeout: 15_000,
+    });
+    await expect(page.getByRole('button', { name: 'Virtual Environment', exact: true })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    await expectFirstTableContains(page, [resourceNames['proxmox-pve']]);
+
+    await page.goto('/settings/infrastructure/platforms/proxmox/pbs', {
+      waitUntil: 'domcontentloaded',
+    });
+    await page.waitForURL(/\/settings\/infrastructure\/platforms\/proxmox\/pbs/, {
+      timeout: 15_000,
+    });
+    await expect(page.getByRole('button', { name: 'Backup Server', exact: true })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    await expectFirstTableContains(page, [resourceNames['proxmox-pbs']]);
+    await expectFirstTableExcludes(page, [resourceNames['proxmox-pve']]);
+
+    await page.goto('/settings/infrastructure/platforms/proxmox/pmg', {
+      waitUntil: 'domcontentloaded',
+    });
+    await page.waitForURL(/\/settings\/infrastructure\/platforms\/proxmox\/pmg/, {
+      timeout: 15_000,
+    });
+    await expect(page.getByRole('button', { name: 'Mail Gateway', exact: true })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    await expectFirstTableContains(page, [resourceNames['proxmox-pmg']]);
+    await expectFirstTableExcludes(page, [resourceNames['proxmox-pve']]);
   });
 });

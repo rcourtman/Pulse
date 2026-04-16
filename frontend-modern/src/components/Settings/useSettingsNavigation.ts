@@ -7,6 +7,7 @@ import {
   deriveAgentFromPath,
   deriveTabFromPath,
   deriveTabFromQuery,
+  isProxmoxSettingsPath,
   resolveCanonicalSettingsPath,
   settingsAgentPath,
   settingsTabPath,
@@ -139,9 +140,11 @@ export function useSettingsNavigation({ navigate, location }: UseSettingsNavigat
           setCurrentTab(resolved);
         }
 
-        if (resolved === 'proxmox') {
-          const agentFromPath = deriveAgentFromPath(effectivePath);
-          setSelectedAgent(agentFromPath ?? 'pve');
+        if (isProxmoxSettingsPath(effectivePath)) {
+          const agentFromPath = deriveAgentFromPath(effectivePath) ?? 'pve';
+          if (selectedAgent() !== agentFromPath) {
+            setSelectedAgent(agentFromPath);
+          }
         }
       },
     ),
