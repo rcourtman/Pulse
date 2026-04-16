@@ -13,7 +13,7 @@ export const ReleaseCandidateBanner: Component<ReleaseCandidateBannerProps> = (p
   const versionLabel = () => normalizeReleaseVersion(props.version);
   const title = () =>
     versionLabel()
-      ? `Pulse ${versionLabel()} is the first public v6 RC.`
+      ? `Pulse ${versionLabel()} is a public v6 release candidate.`
       : 'You’re running a Pulse v6 release candidate build.';
 
   return (

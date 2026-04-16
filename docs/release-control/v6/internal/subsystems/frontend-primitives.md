@@ -650,7 +650,10 @@ canonical low-key release-candidate callout for authenticated chrome, and
 `frontend-modern/src/AppLayout.tsx` may mount it only from resolved release
 metadata. Feature pages, settings panels, and route-local shells must not add
 duplicate RC modals, hardcoded GitHub release or feedback links, or page-local
-prerelease banners once that shared primitive exists.
+prerelease banners once that shared primitive exists. The shared banner copy
+must stay version-aware but RC-order-agnostic: later builds like `rc.2` and
+beyond may identify the current version, but they must not keep claiming to be
+the first public v6 RC once the release line has moved on.
 
 The subsystem registry now also requires explicit proof-policy coverage for all
 shared runtime files, and shared-component guardrails fail if raw table

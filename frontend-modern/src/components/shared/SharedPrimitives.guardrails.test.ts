@@ -723,6 +723,8 @@ describe('shared primitive guardrails', () => {
     expect(releaseCandidateBannerSource).toContain('buildReleaseNotesUrl');
     expect(releaseCandidateBannerSource).toContain('buildV6RcFeedbackUrl');
     expect(releaseCandidateBannerSource).toContain('normalizeReleaseVersion');
+    expect(releaseCandidateBannerSource).toContain('public v6 release candidate');
+    expect(releaseCandidateBannerSource).not.toContain('first public v6 RC');
     expect(releaseCandidateBannerSource).not.toContain('useNavigate');
     expect(releaseCandidateBannerSource).not.toContain('createSignal');
     expect(releaseCandidateBannerSource).not.toContain('loadCommercialPosture');
