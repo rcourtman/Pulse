@@ -650,6 +650,12 @@ as `portal_handoff_id`, feature, handoff lifecycle state, resolve timestamp,
 and expiry; it must not disclose the bound `checkout_intent_id`, and browser
 checkout creation must post only `portal_handoff_id` so Pulse Account
 resolves the private checkout intent server-side before contacting Stripe.
+For self-hosted upgrades, that browser-facing feature metadata is now
+canonically `self_hosted_plan`. Pulse Account may continue normalizing the
+legacy `max_monitored_systems` alias so older handoff links do not break, but
+the portal proxy contract, checked-in embedded bundle, and rendered upgrade
+copy must treat self-hosted commerce as plan selection and paid extras rather
+than monitored-system-cap expansion.
 If Pulse cannot create or resolve that portal handoff locally, the Pulse-owned
 start route must still return the operator to the owned billing plan surface
 with an explicit `purchase=unavailable` arrival instead of leaving the browser
