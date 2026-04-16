@@ -3,6 +3,7 @@ package licensing
 import (
 	"database/sql"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -100,6 +101,38 @@ func TestConversionStoreQueryPlansUseIndexes(t *testing.T) {
 				t.Fatalf("unexpected temp B-tree group-by spill\nPlan:\n%s", plan)
 			}
 		})
+	}
+}
+
+func TestNewConversionStore_SecuresOwnedDirectoryAndArtifacts(t *testing.T) {
+	t.Parallel()
+
+	baseDir := t.TempDir()
+	if err := os.Chmod(baseDir, 0o755); err != nil {
+		t.Fatalf("failed to loosen base dir perms: %v", err)
+	}
+
+	dbPath := filepath.Join(baseDir, "conversion.db")
+	store, err := NewConversionStore(dbPath)
+	if err != nil {
+		t.Fatalf("NewConversionStore() error = %v", err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+
+	dirInfo, err := os.Stat(baseDir)
+	if err != nil {
+		t.Fatalf("stat base dir: %v", err)
+	}
+	if got := dirInfo.Mode().Perm(); got != 0o700 {
+		t.Fatalf("base dir perms = %o, want 700", got)
+	}
+
+	dbInfo, err := os.Stat(dbPath)
+	if err != nil {
+		t.Fatalf("stat db path: %v", err)
+	}
+	if got := dbInfo.Mode().Perm(); got != 0o600 {
+		t.Fatalf("db perms = %o, want 600", got)
 	}
 }
 

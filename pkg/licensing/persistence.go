@@ -64,10 +64,7 @@ func resolvePersistencePath(configDir string, leaf string) (string, error) {
 }
 
 func ensurePersistenceOwnerOnlyDir(dir string) error {
-	if err := os.MkdirAll(dir, persistencePrivateDirPerm); err != nil {
-		return err
-	}
-	return os.Chmod(dir, persistencePrivateDirPerm)
+	return securityutil.EnsureSecureStorageDir(dir, persistencePrivateDirPerm)
 }
 
 func validatePersistenceRegularFile(path string, info os.FileInfo) error {

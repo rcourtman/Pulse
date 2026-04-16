@@ -43,10 +43,7 @@ var errInvalidKeyMaterial = errors.New("invalid encryption key material")
 var errUnsafeKeyPath = errors.New("unsafe encryption key path")
 
 func ensureOwnerOnlyDir(dir string) error {
-	if err := os.MkdirAll(dir, encryptionKeyDirPerm); err != nil {
-		return err
-	}
-	return os.Chmod(dir, encryptionKeyDirPerm)
+	return securityutil.EnsureSecureStorageDir(dir, encryptionKeyDirPerm)
 }
 
 func decodeEncryptionKey(data []byte) ([]byte, error) {

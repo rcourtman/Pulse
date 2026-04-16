@@ -440,6 +440,15 @@ once and resolve only the fixed `.license-key`, `license.enc`, and
 filesystem read, write, rename, stat, or delete. Future licensing persistence
 changes must not bypass that resolver with raw `filepath.Join(configDir, ...)`
 joins or introduce caller-controlled persistence filenames.
+That same local-persistence boundary also owns writable-but-not-owned runtime
+storage semantics for commercial state. `pkg/licensing/persistence.go` and
+`pkg/licensing/conversion_store.go` may harden directories they own to `0700`,
+but they must not assume they can chmod the root of a writable Kubernetes or
+container-mounted runtime data directory. When the mount root is writable but
+not owned by the Pulse process, canonical persistence must keep file-level
+secrets hardened at `0600`, fail closed on world-writable storage roots, and
+continue operating instead of crashing just because the mount root itself
+cannot be chmod-ed.
 Hosted entitlement-source loading follows the same rule: `DatabaseSource` must
 normalize persisted Cloud/MSP plan aliases and legacy limit keys before runtime
 evaluation, but it must not fabricate a canonical `plan_version` from bare

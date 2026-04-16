@@ -289,6 +289,33 @@ func TestPersistenceEnforcesOwnerOnlyPermissions(t *testing.T) {
 	}
 }
 
+func TestNewPersistence_HardensExistingPersistentKeyFileOnLoad(t *testing.T) {
+	tmpDir := t.TempDir()
+	keyPath := filepath.Join(tmpDir, PersistentKeyFileName)
+	if err := os.WriteFile(keyPath, []byte("persistent-key-material"), 0o644); err != nil {
+		t.Fatalf("failed to write persistent key: %v", err)
+	}
+	if err := os.Chmod(keyPath, 0o644); err != nil {
+		t.Fatalf("failed to loosen persistent key perms: %v", err)
+	}
+
+	p, err := NewPersistence(tmpDir)
+	if err != nil {
+		t.Fatalf("NewPersistence() error: %v", err)
+	}
+	if p.encryptionKey != "persistent-key-material" {
+		t.Fatalf("encryptionKey = %q, want persistent key contents", p.encryptionKey)
+	}
+
+	info, err := os.Stat(keyPath)
+	if err != nil {
+		t.Fatalf("stat %s: %v", keyPath, err)
+	}
+	if got := info.Mode().Perm(); got != 0o600 {
+		t.Fatalf("%s perms = %o, want 600", filepath.Base(keyPath), got)
+	}
+}
+
 func TestResolvePersistencePathCanonicalizesConfigDir(t *testing.T) {
 	baseDir := t.TempDir()
 	inputDir := "  " + filepath.Join(baseDir, "nested", "..", "licensing") + string(os.PathSeparator) + ".  "

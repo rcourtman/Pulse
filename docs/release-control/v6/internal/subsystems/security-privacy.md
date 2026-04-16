@@ -49,7 +49,9 @@ visibility, and privacy controls to operators.
 23. `internal/api/system_settings.go`
 24. `internal/telemetry/telemetry.go`
 25. `internal/api/router_routes_auth_security.go`
-26. `scripts/telemetry_adoption_report.py`
+26. `internal/crypto/crypto.go`
+27. `internal/securityutil/secure_storage_dir.go`
+28. `scripts/telemetry_adoption_report.py`
 
 ## Shared Boundaries
 
@@ -73,6 +75,7 @@ visibility, and privacy controls to operators.
 4. Change security/auth/token transport behavior through the shared `frontend-modern/src/api/security.ts`, `frontend-modern/src/components/Settings/APITokenManager.tsx`, `frontend-modern/src/components/Settings/apiTokenManagerModel.ts`, `frontend-modern/src/components/Settings/useAPITokenManagerState.ts`, `internal/api/security.go`, `internal/api/security_tokens.go`, and `internal/api/system_settings.go` boundary.
 5. Change security/privacy settings presentation through the shared `frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx`, `frontend-modern/src/components/Settings/SecurityAuthPanel.tsx`, `frontend-modern/src/components/Settings/SecurityOverviewPanel.tsx`, `frontend-modern/src/components/Settings/QuickSecuritySetup.tsx`, `frontend-modern/src/components/Settings/SecurityPostureSummary.tsx`, `frontend-modern/src/components/Settings/SSOProviderTypeIcon.tsx`, `frontend-modern/src/utils/securityAuthPresentation.ts`, `frontend-modern/src/utils/securityScorePresentation.ts`, `frontend-modern/src/utils/auditLogPresentation.ts`, and `frontend-modern/src/utils/auditWebhookPresentation.ts` boundary.
 6. Change operator-facing telemetry/adoption reporting through `scripts/telemetry_adoption_report.py` together with the privacy disclosure whenever release-identity interpretation changes.
+7. Change data-at-rest encryption-key storage-root hardening semantics through `internal/crypto/crypto.go` and `internal/securityutil/secure_storage_dir.go` together so writable-but-not-owned runtime storage mounts stay supported without weakening file-level secrecy.
 
 ## Forbidden Paths
 
@@ -87,6 +90,7 @@ visibility, and privacy controls to operators.
 3. Keep shared frontend settings proof routing aligned whenever security/privacy presentation changes.
 4. Keep the checked-in telemetry adoption report aligned with the same release-identity rules used by the runtime telemetry payload.
 5. Update this contract whenever a new canonical security, token, auth, or privacy surface becomes part of the governed trust boundary.
+6. Keep the shared storage-directory hardening helper and the crypto manager aligned whenever runtime data-root ownership assumptions change.
 
 ## Current State
 
@@ -216,6 +220,14 @@ HTTP, but private authenticated runtimes that are only missing optional
 hardening controls such as HTTPS on localhost or an API token must route that
 guidance through the governed Security Overview posture surfaces instead of
 covering the primary app chrome with a persistent warning.
+That same governed trust boundary now also owns the runtime contract for
+storage-root hardening of at-rest secrets: `internal/crypto/crypto.go` and the
+shared `internal/securityutil/secure_storage_dir.go` helper may attempt to
+harden storage directories when Pulse owns them, but they must not assume the
+process owns the mount root of a writable Kubernetes or container volume.
+Mounted storage roots that are writable but not chmod-able must still support
+secure startup, while sensitive leaf files such as `.encryption.key` remain
+file-hardened at `0600` and world-writable storage roots still fail closed.
 That same Security Overview surface must stay action-oriented once those
 low-risk states are demoted out of the global banner:
 `frontend-modern/src/components/Settings/SecurityOverviewPanel.tsx` and

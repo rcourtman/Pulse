@@ -4552,6 +4552,76 @@ class SubsystemLookupTest(unittest.TestCase):
             ],
         )
 
+    def test_lookup_paths_assigns_helm_chart_to_deployment_installability(self) -> None:
+        result = lookup_paths(
+            [
+                "deploy/helm/pulse/Chart.yaml",
+                "deploy/helm/pulse/templates/deployment.yaml",
+                "deploy/helm/pulse/values.yaml",
+            ]
+        )
+        self.assertEqual(result["unowned_runtime_files"], [])
+        self.assertEqual(
+            {item["subsystem"] for item in result["impacted_subsystems"]},
+            {"deployment-installability"},
+        )
+        for file_entry in result["files"]:
+            self.assertEqual(file_entry["classification"], "runtime")
+            self.assertEqual(
+                {match["subsystem"] for match in file_entry["matches"]},
+                {"deployment-installability"},
+            )
+            match = file_entry["matches"][0]
+            self.assertEqual(
+                match["contract"],
+                "docs/release-control/v6/internal/subsystems/deployment-installability.md",
+            )
+            self.assertEqual(match["lane_context"]["lane_id"], "L1")
+            self.assertEqual(
+                match["verification_requirement"]["id"],
+                "helm-chart-release-runtime",
+            )
+            self.assertEqual(
+                match["verification_requirement"]["exact_files"],
+                ["scripts/release_control/subsystem_lookup_test.py"],
+            )
+
+    def test_lookup_paths_assigns_crypto_storage_hardening_to_security_privacy(self) -> None:
+        result = lookup_paths(
+            [
+                "internal/crypto/crypto.go",
+                "internal/securityutil/secure_storage_dir.go",
+            ]
+        )
+        self.assertEqual(result["unowned_runtime_files"], [])
+        self.assertEqual(
+            {item["subsystem"] for item in result["impacted_subsystems"]},
+            {"security-privacy"},
+        )
+        for file_entry in result["files"]:
+            self.assertEqual(file_entry["classification"], "runtime")
+            self.assertEqual(
+                {match["subsystem"] for match in file_entry["matches"]},
+                {"security-privacy"},
+            )
+            match = file_entry["matches"][0]
+            self.assertEqual(
+                match["contract"],
+                "docs/release-control/v6/internal/subsystems/security-privacy.md",
+            )
+            self.assertEqual(match["lane_context"]["lane_id"], "L14")
+            self.assertEqual(
+                match["verification_requirement"]["id"],
+                "storage-directory-security",
+            )
+            self.assertEqual(
+                match["verification_requirement"]["exact_files"],
+                [
+                    "internal/crypto/crypto_test.go",
+                    "internal/securityutil/secure_storage_dir_test.go",
+                ],
+            )
+
     def test_lookup_paths_assigns_mock_runtime_fixture_authority_to_monitoring(self) -> None:
         result = lookup_paths(
             [

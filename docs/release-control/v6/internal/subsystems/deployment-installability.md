@@ -73,16 +73,17 @@ server-side update execution surfaces.
 51. `scripts/trigger-release-dry-run.sh`
 52. `scripts/trigger-release.sh`
 53. `scripts/toggle-mock.sh`
-54. `tests/integration/playwright.config.ts`
-55. `tests/integration/QUICK_START.md`
-56. `tests/integration/README.md`
-57. `tests/integration/scripts/bootstrap-hosted-mobile-onboarding.mjs`
-58. `tests/integration/scripts/hosted-mobile-token-runtime.mjs`
-59. `tests/integration/scripts/hosted-tenant-runtime.mjs`
-60. `tests/integration/scripts/managed-dev-runtime.mjs`
-61. `tests/integration/scripts/relay-mobile-token-helper.go`
-62. `tests/integration/tests/helpers.ts`
-63. `tests/integration/tests/runtime-defaults.ts`
+54. `deploy/helm/pulse/`
+55. `tests/integration/playwright.config.ts`
+56. `tests/integration/QUICK_START.md`
+57. `tests/integration/README.md`
+58. `tests/integration/scripts/bootstrap-hosted-mobile-onboarding.mjs`
+59. `tests/integration/scripts/hosted-mobile-token-runtime.mjs`
+60. `tests/integration/scripts/hosted-tenant-runtime.mjs`
+61. `tests/integration/scripts/managed-dev-runtime.mjs`
+62. `tests/integration/scripts/relay-mobile-token-helper.go`
+63. `tests/integration/tests/helpers.ts`
+64. `tests/integration/tests/runtime-defaults.ts`
 
 ## Shared Boundaries
 
@@ -127,6 +128,10 @@ server-side update execution surfaces.
    unowned release-cut switch: changing the version string for a new RC or
    stable cut belongs to this subsystem and its release-promotion proof path.
 7. Preserve release-matched installer and Helm operator documentation links through `scripts/install.sh`, `.github/workflows/helm-pages.yml`, `.github/workflows/publish-helm-chart.yml`, and the chart metadata itself so deployment guidance and packaged chart metadata do not drift back to branch-tip `main` docs when a release line or promoted tag already exists.
+   The same governed Helm boundary also owns `deploy/helm/pulse/` itself:
+   chart metadata, default values, templates, and generated chart docs must
+   stay on the validated release line rather than mutating `main` or packaging
+   from whatever branch GitHub happened to check out.
 8. Add or change operator-facing hosted tenant runtime canary rollout, batch runtime contract reconciliation, canonical hosted route/public URL generation, or control-plane runtime-registry reconciliation through `cmd/pulse-control-plane/main.go`, `internal/cloudcp/docker/manager.go`, `internal/cloudcp/docker/labels.go`, and `internal/cloudcp/tenant_runtime_rollout.go`
 9. Add or change the canonical hosted staging smoke operator path through `scripts/run_hosted_staging_smoke.sh`, `tests/integration/scripts/bootstrap-hosted-mobile-onboarding.mjs`, `tests/integration/scripts/hosted-mobile-token-runtime.mjs`, `tests/integration/scripts/hosted-tenant-runtime.mjs`, and `tests/integration/scripts/relay-mobile-token-helper.go`
 
@@ -173,6 +178,11 @@ This subsystem now makes deployment planning, updater orchestration, and the
 non-shell installer/update scripts explicit inside the current self-hosted
 release-confidence lane instead of leaving them as implied behavior around the
 core runtime.
+
+That same release-confidence lane now also owns the shipped Helm chart path,
+so release automation, packaged chart metadata, and chart-runtime smoke no
+longer depend on unowned `deploy/helm/pulse/` files while the governed
+release workflows package and publish those artifacts.
 
 `internal/updates/` is the live deployment and upgrade planner. It owns
 deployment-type detection, update-plan generation, adapter selection, server

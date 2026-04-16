@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 	_ "modernc.org/sqlite"
 )
 
@@ -44,10 +45,7 @@ type FunnelSummary struct {
 }
 
 func ensureOwnerOnlyDir(dir string) error {
-	if err := os.MkdirAll(dir, privateDirPerm); err != nil {
-		return err
-	}
-	return os.Chmod(dir, privateDirPerm)
+	return securityutil.EnsureSecureStorageDir(dir, privateDirPerm)
 }
 
 func rejectSymlinkOrNonRegular(path string) error {

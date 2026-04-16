@@ -2400,6 +2400,7 @@
       "lane": "L1",
       "contract": "docs/release-control/v6/internal/subsystems/deployment-installability.md",
       "owned_prefixes": [
+        "deploy/helm/pulse/",
         "docs/releases/",
         "internal/updates/"
       ],
@@ -2502,6 +2503,19 @@
             "exact_files": [
               "frontend-modern/src/api/__tests__/updates.test.ts",
               "internal/api/updates_test.go"
+            ]
+          },
+          {
+            "id": "helm-chart-release-runtime",
+            "label": "Helm chart release packaging proof",
+            "match_prefixes": [
+              "deploy/helm/pulse/"
+            ],
+            "match_files": [],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "scripts/release_control/subsystem_lookup_test.py"
             ]
           },
           {
@@ -4248,6 +4262,8 @@
         "internal/api/security.go",
         "internal/api/security_tokens.go",
         "internal/api/system_settings.go",
+        "internal/crypto/crypto.go",
+        "internal/securityutil/secure_storage_dir.go",
         "internal/telemetry/telemetry.go",
         "scripts/telemetry_adoption_report.py",
         "SECURITY.md"
@@ -4349,6 +4365,21 @@
             "test_prefixes": [],
             "exact_files": [
               "frontend-modern/src/utils/__tests__/apiTokenPresentation.test.ts"
+            ]
+          },
+          {
+            "id": "storage-directory-security",
+            "label": "storage directory hardening proof",
+            "match_prefixes": [],
+            "match_files": [
+              "internal/crypto/crypto.go",
+              "internal/securityutil/secure_storage_dir.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/crypto/crypto_test.go",
+              "internal/securityutil/secure_storage_dir_test.go"
             ]
           },
           {
