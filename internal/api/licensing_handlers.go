@@ -375,12 +375,23 @@ func licensePurchaseActivationTemplateURL(returnURL, returnToken string) (string
 	return parsed.String(), nil
 }
 
+func normalizeSelfHostedPurchaseFeature(feature string) string {
+	switch strings.TrimSpace(feature) {
+	case "":
+		return ""
+	case "max_monitored_systems", "self_hosted_plan":
+		return "self_hosted_plan"
+	default:
+		return strings.TrimSpace(feature)
+	}
+}
+
 func licensePurchaseActivationRedirectPath(feature, purchaseResult string) string {
-	normalizedFeature := strings.TrimSpace(feature)
+	normalizedFeature := normalizeSelfHostedPurchaseFeature(feature)
 	query := url.Values{}
 	switch normalizedFeature {
-	case "max_monitored_systems":
-		query.Set("intent", "max_monitored_systems")
+	case "self_hosted_plan":
+		query.Set("intent", "self_hosted_plan")
 	}
 	switch strings.TrimSpace(purchaseResult) {
 	case selfHostedBillingPurchaseActivated,
@@ -1515,7 +1526,9 @@ func (h *LicenseHandlers) HandleCheckoutStart(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	feature := strings.TrimSpace(r.URL.Query().Get(pulseAccountPortalFeatureQueryParam))
+	feature := normalizeSelfHostedPurchaseFeature(
+		r.URL.Query().Get(pulseAccountPortalFeatureQueryParam),
+	)
 	writeUnavailable := func(statusCode int, message string) {
 		writeLicensePurchaseStartFailurePage(w, statusCode, feature, message)
 	}
@@ -1650,7 +1663,7 @@ func (h *LicenseHandlers) HandleCheckoutActivation(w http.ResponseWriter, r *htt
 	if r.Method == http.MethodGet {
 		sessionID := strings.TrimSpace(r.URL.Query().Get(licensePurchaseSessionIDField))
 		portalHandoffID := strings.TrimSpace(r.URL.Query().Get(pulseAccountPortalHandoffIDField))
-		feature := strings.TrimSpace(r.URL.Query().Get("feature"))
+		feature := normalizeSelfHostedPurchaseFeature(r.URL.Query().Get("feature"))
 		returnToken := strings.TrimSpace(r.URL.Query().Get(licensePurchaseReturnTokenField))
 		if returnToken == "" || sessionID == "" {
 			writeLicensePurchaseActivationFailurePage(w, http.StatusBadRequest, feature, selfHostedBillingPurchaseExpired, "Purchase activation link expired or is missing required state. Reopen the upgrade flow from Pulse Pro billing.")
@@ -1663,7 +1676,7 @@ func (h *LicenseHandlers) HandleCheckoutActivation(w http.ResponseWriter, r *htt
 			return
 		}
 		if claims != nil && strings.TrimSpace(claims.Feature) != "" {
-			feature = strings.TrimSpace(claims.Feature)
+			feature = normalizeSelfHostedPurchaseFeature(claims.Feature)
 		}
 		writeLicensePurchaseActivationContinuePage(w, sessionID, portalHandoffID, feature, returnToken)
 		return
@@ -1679,7 +1692,7 @@ func (h *LicenseHandlers) HandleCheckoutActivation(w http.ResponseWriter, r *htt
 
 	sessionID := strings.TrimSpace(r.FormValue(licensePurchaseSessionIDField))
 	portalHandoffID := strings.TrimSpace(r.FormValue(pulseAccountPortalHandoffIDField))
-	feature := strings.TrimSpace(r.FormValue("feature"))
+	feature := normalizeSelfHostedPurchaseFeature(r.FormValue("feature"))
 	returnToken := strings.TrimSpace(r.FormValue(licensePurchaseReturnTokenField))
 	if returnToken == "" {
 		writeLicensePurchaseActivationFailurePage(w, http.StatusBadRequest, feature, selfHostedBillingPurchaseExpired, "Purchase activation link expired or is missing required state. Reopen the upgrade flow from Pulse Pro billing.")
@@ -1693,11 +1706,12 @@ func (h *LicenseHandlers) HandleCheckoutActivation(w http.ResponseWriter, r *htt
 		return
 	}
 	if claims != nil && strings.TrimSpace(claims.Feature) != "" {
-		if feature != "" && feature != strings.TrimSpace(claims.Feature) {
-			writeLicensePurchaseActivationFailurePage(w, http.StatusBadRequest, strings.TrimSpace(claims.Feature), selfHostedBillingPurchaseExpired, "Purchase activation state did not match the completed upgrade flow.")
+		normalizedClaimsFeature := normalizeSelfHostedPurchaseFeature(claims.Feature)
+		if feature != "" && feature != normalizedClaimsFeature {
+			writeLicensePurchaseActivationFailurePage(w, http.StatusBadRequest, normalizedClaimsFeature, selfHostedBillingPurchaseExpired, "Purchase activation state did not match the completed upgrade flow.")
 			return
 		}
-		feature = strings.TrimSpace(claims.Feature)
+		feature = normalizedClaimsFeature
 	}
 	if sessionID == "" {
 		writeLicensePurchaseActivationFailurePage(w, http.StatusBadRequest, feature, selfHostedBillingPurchaseFailed, "Purchase activation requires a completed checkout session.")

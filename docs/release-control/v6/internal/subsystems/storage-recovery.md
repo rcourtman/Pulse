@@ -294,6 +294,12 @@ querying, and the operator-facing storage health presentation layer.
     callbacks, owned billing purchase-arrival states, or demo-hidden
     commercial route policy as recovery identity, restore proof, preview
     framing, or backup/recovery-local transport. That same adjacent commercial
+    boundary also owns the canonical self-hosted purchase intent label:
+    storage- and recovery-adjacent surfaces may observe `self_hosted_plan`, but
+    they must not emit or reinterpret legacy `max_monitored_systems` intent or
+    query state as a recovery-local contract once uncapped self-hosted
+    monitoring is canonical.
+    That same adjacent commercial
     boundary now also owns migrated-v5 monitored-system grandfathering:
     storage and recovery may read the resulting entitlement limits as context,
     but they must not infer a second capacity floor from protected inventory,

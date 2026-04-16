@@ -778,6 +778,13 @@ browser to owned billing with `purchase=unavailable` so the runtime can
 surface the failure in-product instead of leaving the operator on a raw
 service error. When the upgrade flow was opened in a secondary tab,
 the callback may refresh the originating billing tab and close itself; when no
+owned billing tab is present, the same contract still owns intent
+normalization. Product-originated self-hosted purchase handoff must emit
+`feature=self_hosted_plan` and `intent=self_hosted_plan` as the canonical
+browser/runtime value. The older `max_monitored_systems` label may be accepted
+only as a backward-compatible alias during request or callback normalization,
+but Pulse and the license server must not emit it as the primary self-hosted
+purchase intent once the uncapped self-hosted model is canonical.
 opener is available, the callback must still return the current tab to the
 owned billing route automatically instead of leaving the operator on a dead
 success page.

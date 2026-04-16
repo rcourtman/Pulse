@@ -6547,8 +6547,8 @@ func TestContract_SelfHostedPurchaseHandoffJSONSnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("verifyPurchaseReturnTokenFromLicensing: %v", err)
 	}
-	if claims.Feature != "max_monitored_systems" {
-		t.Fatalf("claims.Feature=%q, want max_monitored_systems", claims.Feature)
+	if claims.Feature != "self_hosted_plan" {
+		t.Fatalf("claims.Feature=%q, want self_hosted_plan", claims.Feature)
 	}
 	if claims.OrgID != "default" {
 		t.Fatalf("claims.OrgID=%q, want default", claims.OrgID)
@@ -6582,10 +6582,10 @@ func TestContract_SelfHostedPurchaseHandoffJSONSnapshot(t *testing.T) {
 	const want = `{
 		"portal_utm_content":"legacy-bookmark",
 		"portal_handoff_id":"cph_placeholder",
-		"intent_feature":"max_monitored_systems",
+		"intent_feature":"self_hosted_plan",
 		"purchase_return_jti":"placeholder",
 		"success_url_template":"https://pulse.example.com/auth/license-purchase-activate?purchase_return_token=placeholder\u0026session_id=%7BCHECKOUT_SESSION_ID%7D",
-		"cancel_url":"https://pulse.example.com/settings/system/billing/plan?intent=max_monitored_systems\u0026purchase=cancelled"
+		"cancel_url":"https://pulse.example.com/settings/system/billing/plan?intent=self_hosted_plan\u0026purchase=cancelled"
 	}`
 
 	assertJSONSnapshot(t, got, want)
@@ -6622,7 +6622,7 @@ func TestContract_SelfHostedPurchaseHandoffUnavailableJSONSnapshot(t *testing.T)
 		StatusCode:          rec.Code,
 		TitlePresent:        strings.Contains(rec.Body.String(), "Pulse Account unavailable"),
 		RetryMessagePresent: strings.Contains(rec.Body.String(), "Retry from this instance in a moment"),
-		OwnedRedirectPath:   strings.Contains(rec.Body.String(), "/settings/system/billing/plan?intent=max_monitored_systems&purchase=unavailable"),
+		OwnedRedirectPath:   strings.Contains(rec.Body.String(), "/settings/system/billing/plan?intent=self_hosted_plan&purchase=unavailable"),
 	}, "", "\t")
 	if err != nil {
 		t.Fatalf("marshal unavailable handoff snapshot: %v", err)

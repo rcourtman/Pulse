@@ -47,7 +47,7 @@ func TestHandleCheckoutStart_ReopensOwnedBillingWhenPulseAccountHandoffIsUnavail
 	if !strings.Contains(body, "window.close()") {
 		t.Fatalf("body = %q, want popup close bridge", body)
 	}
-	if !strings.Contains(body, "/settings/system/billing/plan?intent=max_monitored_systems&purchase=unavailable") {
+	if !strings.Contains(body, "/settings/system/billing/plan?intent=self_hosted_plan&purchase=unavailable") {
 		t.Fatalf("body = %q, want owned billing unavailable route", body)
 	}
 }

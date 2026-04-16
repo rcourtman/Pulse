@@ -872,7 +872,7 @@ func TestHandleCheckoutActivation_GETRendersAutoSubmitBridge(t *testing.T) {
 	if !strings.Contains(body, `name="portal_handoff_id" value="cph_success"`) {
 		t.Fatalf("body = %q, want portal_handoff_id hidden field", body)
 	}
-	if !strings.Contains(body, `name="feature" value="max_monitored_systems"`) {
+	if !strings.Contains(body, `name="feature" value="self_hosted_plan"`) {
 		t.Fatalf("body = %q, want feature hidden field derived from claims", body)
 	}
 	if !strings.Contains(body, "form.submit()") {
@@ -956,7 +956,7 @@ func TestHandleCheckoutActivation_RedeemsCompletedCheckoutAndWritesSuccessBridge
 	if !strings.Contains(rec.Body.String(), "window.close()") {
 		t.Fatalf("body = %q, want popup close bridge", rec.Body.String())
 	}
-	if !strings.Contains(rec.Body.String(), "/settings/system/billing/plan?intent=max_monitored_systems&purchase=activated") {
+	if !strings.Contains(rec.Body.String(), "/settings/system/billing/plan?intent=self_hosted_plan&purchase=activated") {
 		t.Fatalf("body = %q, want monitored-system billing route", rec.Body.String())
 	}
 	if !handler.Service(context.Background()).IsActivated() {

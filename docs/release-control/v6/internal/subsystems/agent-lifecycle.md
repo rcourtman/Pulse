@@ -264,6 +264,11 @@ an add-only capacity posture.
     they must not strand install or fleet flows on a raw Pulse Account error
     tab, reinterpret `purchase=unavailable` as lifecycle repair state, or
     bypass the owned billing retry/recovery path.
+    That same adjacent commercial/auth boundary also owns the canonical
+    self-hosted purchase intent label: lifecycle-adjacent setup and install
+    flows may observe `self_hosted_plan`, but they must not keep emitting or
+    inferring legacy `max_monitored_systems` intent/query values once the
+    uncapped self-hosted model is canonical.
     The same adjacent
     commercial boundary now also owns migrated-v5 monitored-system
     grandfathering: lifecycle surfaces may react to the resulting license or

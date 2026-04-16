@@ -84,6 +84,12 @@ agreement, and cloud-specific enforcement rules.
 62. `frontend-modern/src/utils/selfHostedPlans.ts`
 63. `frontend-modern/src/utils/upgradePresentation.ts`
 64. `frontend-modern/src/components/Settings/selfHostedBillingPresentation.ts`
+65. `pulse-pro:license-server/public_pricing.go`
+66. `pulse-pro:license-server/v6_checkout.go`
+67. `pulse-pro:landing-page/thanks.html`
+68. `pulse-pro:scripts/grandfathered_recurring_cutover_preview.py`
+69. `pulse-pro:scripts/validate_public_pricing_model.py`
+70. `pulse-pro:V6_LAUNCH_CHECKLIST.md`
 
 ## Shared Boundaries
 
@@ -121,6 +127,12 @@ rolling trailing windows for "last 24 hours" and "previous 7 days" semantics
 rather than UTC calendar-day buckets, so midnight does not suppress active
 checkout regressions or leave the admin summary without the alert state the
 server already observed.
+That same public-pricing boundary also owns the machine-readable v6 pricing
+validator and launch checklist in `pulse-pro:scripts/validate_public_pricing_model.py`
+and `pulse-pro:V6_LAUNCH_CHECKLIST.md`. Those operator surfaces must describe
+self-hosted Pulse as uncapped core monitoring, must not reintroduce monitored-system
+upsell language, and must verify the no-cap release posture rather than legacy
+Community limit enforcement.
 
 ## Extension Points
 
