@@ -139,5 +139,5 @@ uncontrolled warning banner.
 
 ## Canonical Links
 
-- Release notes: `docs/releases/RELEASE_NOTES_v6.md`
-- Support pack: `docs/releases/V6_RC_OPERATOR_SUPPORT_PACK.md`
+- Release notes index: `docs/RELEASE_NOTES.md`
+- Current RC packet: `docs/releases/`

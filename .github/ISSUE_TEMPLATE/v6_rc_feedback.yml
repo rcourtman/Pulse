@@ -31,7 +31,7 @@ body:
     attributes:
       label: Pulse version
       description: Exact version shown in the UI, logs, or release asset.
-      placeholder: v6.0.0-rc.1
+      placeholder: v6.0.0-rc.N
     validations:
       required: true
 
@@ -40,7 +40,7 @@ body:
     attributes:
       label: Image tag or binary reference
       description: Exact image tag, digest, or release asset name if you know it.
-      placeholder: rcourtman/pulse:v6.0.0-rc.1 or pulse-linux-amd64
+      placeholder: rcourtman/pulse:v6.0.0-rc.N or pulse-linux-amd64
 
   - type: dropdown
     id: install_path
@@ -108,7 +108,7 @@ body:
       label: Steps to reproduce or usage context
       description: If this is a bug, list exact steps. If this is workflow feedback, describe what you were trying to do.
       placeholder: |
-        1. Upgrade to v6.0.0-rc.1
+        1. Upgrade to the current v6 RC build
         2. Open ...
         3. Click ...
         4. Observe ...

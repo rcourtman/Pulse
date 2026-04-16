@@ -134,6 +134,25 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("docs/releases/V6_RC2_OPERATOR_SUPPORT_PACK_DRAFT.md", upgrade_guide)
         self.assertNotIn("docs/releases/V6_RC_OPERATOR_SUPPORT_PACK.md", upgrade_guide)
 
+    def test_prerelease_feedback_template_uses_generic_current_rc_wording(self) -> None:
+        template = read(".github/ISSUE_TEMPLATE/v6_rc_feedback.yml")
+        self.assertIn("placeholder: v6.0.0-rc.N", template)
+        self.assertIn("placeholder: rcourtman/pulse:v6.0.0-rc.N or pulse-linux-amd64", template)
+        self.assertIn("Upgrade to the current v6 RC build", template)
+        self.assertNotIn("v6.0.0-rc.1", template)
+
+    def test_demo_site_copy_points_at_current_release_packet_index(self) -> None:
+        demo_copy = read("docs/releases/V6_RC_DEMO_SITE_COPY.md")
+        self.assertIn("docs/RELEASE_NOTES.md", demo_copy)
+        self.assertIn("Current RC packet: `docs/releases/`", demo_copy)
+        self.assertNotIn("docs/releases/RELEASE_NOTES_v6.md", demo_copy)
+        self.assertNotIn("docs/releases/V6_RC_OPERATOR_SUPPORT_PACK.md", demo_copy)
+
+    def test_update_demo_server_workflow_uses_generic_tag_examples(self) -> None:
+        workflow = read(".github/workflows/update-demo-server.yml")
+        self.assertIn("v6.0.0-rc.N or v6.0.0", workflow)
+        self.assertNotIn("v6.0.0-rc.1", workflow)
+
     def test_rehearsal_template_and_workflow_capture_ga_rehearsal_record(self) -> None:
         template = read("docs/release-control/v6/internal/RC_TO_GA_REHEARSAL_TEMPLATE.md")
         workflow = read(".github/workflows/release-dry-run.yml")

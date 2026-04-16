@@ -2405,6 +2405,7 @@
       ],
       "owned_files": [
         ".dockerignore",
+        ".github/ISSUE_TEMPLATE/v6_rc_feedback.yml",
         ".github/workflows/create-release.yml",
         ".github/workflows/deploy-demo-server.yml",
         ".github/workflows/helm-pages.yml",
@@ -2509,6 +2510,7 @@
               "docs/releases/"
             ],
             "match_files": [
+              ".github/ISSUE_TEMPLATE/v6_rc_feedback.yml",
               ".github/workflows/create-release.yml",
               ".github/workflows/helm-pages.yml",
               ".github/workflows/promote-floating-tags.yml",
