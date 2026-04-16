@@ -4509,7 +4509,7 @@
     },
     {
       "id": "self-hosted-pricing-band-lock-v2",
-      "summary": "Pulse v6 self-hosted pricing is locked at Community free, Relay $4.99/$39, Pro $8.99/$79, and Pro+ $14.99/$129 with the 5/8/15/50 monitored-system ladder.",
+      "summary": "Historical RC1 self-hosted pricing lock: Pulse v6 temporarily carried a capped Community / Relay / Pro / Pro+ self-hosted ladder during RC1, but that direction was superseded on 2026-04-16 by `self-hosted-core-monitoring-free` and must not be treated as the final GA self-hosted pricing truth.",
       "kind": "pricing",
       "decided_at": "2026-03-17",
       "subsystem_ids": [],
