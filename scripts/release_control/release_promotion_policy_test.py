@@ -129,6 +129,11 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("docs/releases/V6_CHANGELOG_RC2_DRAFT.md", release_index)
         self.assertIn("docs/releases/V6_RC2_OPERATOR_SUPPORT_PACK_DRAFT.md", release_index)
 
+    def test_upgrade_guide_points_at_current_rc_support_pack(self) -> None:
+        upgrade_guide = read("docs/UPGRADE_v6.md")
+        self.assertIn("docs/releases/V6_RC2_OPERATOR_SUPPORT_PACK_DRAFT.md", upgrade_guide)
+        self.assertNotIn("docs/releases/V6_RC_OPERATOR_SUPPORT_PACK.md", upgrade_guide)
+
     def test_rehearsal_template_and_workflow_capture_ga_rehearsal_record(self) -> None:
         template = read("docs/release-control/v6/internal/RC_TO_GA_REHEARSAL_TEMPLATE.md")
         workflow = read(".github/workflows/release-dry-run.yml")

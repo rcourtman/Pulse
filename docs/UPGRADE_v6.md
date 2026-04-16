@@ -2,9 +2,9 @@
 
 This guide covers practical upgrade steps for existing Pulse installs moving to v6.
 
-For launch-time rollout answers and canned support responses, see:
+For current RC rollout answers and canned support responses, see:
 
-- `docs/releases/V6_RC_OPERATOR_SUPPORT_PACK.md`
+- `docs/releases/V6_RC2_OPERATOR_SUPPORT_PACK_DRAFT.md`
 
 ## Before You Upgrade
 
