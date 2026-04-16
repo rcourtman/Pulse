@@ -129,6 +129,19 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("docs/releases/V6_CHANGELOG_RC2_DRAFT.md", release_index)
         self.assertIn("docs/releases/V6_RC2_OPERATOR_SUPPORT_PACK_DRAFT.md", release_index)
 
+    def test_version_file_matches_current_rc_packet(self) -> None:
+        current_version = read("VERSION").strip()
+        self.assertEqual(current_version, "6.0.0-rc.2")
+
+        release_notes = read("docs/releases/RELEASE_NOTES_v6_RC2_DRAFT.md")
+        changelog = read("docs/releases/V6_CHANGELOG_RC2_DRAFT.md")
+        operator_pack = read("docs/releases/V6_RC2_OPERATOR_SUPPORT_PACK_DRAFT.md")
+
+        self.assertIn(f"Pulse v{current_version} Draft Release Notes", release_notes)
+        self.assertIn(f"`v{current_version}`", release_notes)
+        self.assertIn(f"Pulse v{current_version} Draft Changelog", changelog)
+        self.assertIn(f"`v{current_version}`", operator_pack)
+
     def test_upgrade_guide_points_at_current_rc_support_pack(self) -> None:
         upgrade_guide = read("docs/UPGRADE_v6.md")
         self.assertIn("docs/releases/V6_RC2_OPERATOR_SUPPORT_PACK_DRAFT.md", upgrade_guide)

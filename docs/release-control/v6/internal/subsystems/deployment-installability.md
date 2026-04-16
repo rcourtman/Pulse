@@ -113,6 +113,12 @@ server-side update execution surfaces.
    `docs/UPGRADE_v6.md` must also stay aligned with the current RC support
    packet so upgrade guidance does not keep pointing operators at retired
    rollout/support docs after a later RC packet is prepared.
+   The active prerelease cut must keep the repo-root `VERSION` file aligned
+   with the current RC packet itself: when the governed line moves from `rc.1`
+   to `rc.2` or later, the staged release-notes packet, changelog packet, and
+   operator support packet must describe that same candidate instead of leaving
+   the branch on a newer version string while the in-repo packet still speaks
+   for an older RC.
    The prerelease feedback intake template and active demo/update metadata must
    also stay on generic or current-RC wording instead of hard-coding stale
    `rc.1` examples once later candidates exist.
