@@ -58,7 +58,11 @@ The workflow auto-marks `-rc.N`/`-alpha.N`/`-beta.N` as prerelease.
 
 1. `pulse/v6-release` is pushed and green in CI.
 2. `VERSION` file in `pulse/v6-release` exactly matches the release input version.
-3. Release notes are prepared.
+3. The current RC release packet is prepared and internally linked:
+   - release notes
+   - changelog
+   - operator support pack
+   - `docs/RELEASE_NOTES.md` points at the current in-repo draft packet
 4. `PULSE_LICENSE_PUBLIC_KEY` secret is present in GitHub Actions.
 
 ## RC Release Steps
@@ -66,11 +70,13 @@ The workflow auto-marks `-rc.N`/`-alpha.N`/`-beta.N` as prerelease.
 1. Update version on `pulse/v6-release`:
 
 ```bash
+export RC_VERSION="6.0.0-rc.2"
+
 git checkout pulse/v6-release
 git pull --ff-only
-echo "6.0.0-rc.1" > VERSION
+printf '%s\n' "$RC_VERSION" > VERSION
 git add VERSION
-git commit -m "chore(release): bump version to 6.0.0-rc.1"
+git commit -m "chore(release): bump version to ${RC_VERSION}"
 git push origin pulse/v6-release
 ```
 
@@ -78,16 +84,18 @@ git push origin pulse/v6-release
    - Run workflow: `Release Dry Run`
    - Ref: `pulse/v6-release`
    - Inputs:
-     - `version`: `6.0.0-rc.1`
+     - `version`: `RC_VERSION`
      - optional `note`
 
 3. Create draft prerelease:
    - Run workflow: `Pulse Release Pipeline`
    - Ref: `pulse/v6-release`
    - Inputs:
-     - `version`: `6.0.0-rc.1`
-     - `release_notes`: markdown text
+     - `version`: `RC_VERSION`
+     - `release_notes`: markdown text from the current release-notes packet
      - `draft_only`: `true`
+   - Keep the current release-notes, changelog, and operator-support packet in
+     sync. Do not update only one of them and treat the packet as ready.
 
 4. Validate draft outputs:
    - Confirm assets exist and checksums match.
@@ -96,7 +104,7 @@ git push origin pulse/v6-release
 
 5. Publish prerelease:
    - Re-run `Pulse Release Pipeline` on `pulse/v6-release`
-   - Same `version` and notes
+   - Same `version` and release-notes packet
    - `draft_only`: `false`
    - Existing unpublished draft releases for the same tag are updated in place
      and their tag is retargeted to the current governed `pulse/v6-release`

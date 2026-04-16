@@ -122,6 +122,13 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
             self.assertRegex(release_notes, re.compile(r"(final GA release|stable `v6\.0\.0` release)"))
             self.assertNotIn("Pulse v5 Support Transition", release_notes)
 
+    def test_release_notes_index_points_at_current_rc_packet(self) -> None:
+        release_index = read("docs/RELEASE_NOTES.md")
+        self.assertIn("docs/releases/RELEASE_NOTES_v6.md", release_index)
+        self.assertIn("docs/releases/RELEASE_NOTES_v6_RC2_DRAFT.md", release_index)
+        self.assertIn("docs/releases/V6_CHANGELOG_RC2_DRAFT.md", release_index)
+        self.assertIn("docs/releases/V6_RC2_OPERATOR_SUPPORT_PACK_DRAFT.md", release_index)
+
     def test_rehearsal_template_and_workflow_capture_ga_rehearsal_record(self) -> None:
         template = read("docs/release-control/v6/internal/RC_TO_GA_REHEARSAL_TEMPLATE.md")
         workflow = read(".github/workflows/release-dry-run.yml")
@@ -233,6 +240,12 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("Existing unpublished draft releases for the same tag are updated in place", runbook)
         self.assertIn("Do not rewrite shipped RC notes in place", runbook)
         self.assertIn("`rc.1`, `rc.2`, and later prerelease", runbook)
+        self.assertIn("The current RC release packet is prepared and internally linked", runbook)
+        self.assertIn("points at the current in-repo draft packet", runbook)
+        self.assertIn('export RC_VERSION="6.0.0-rc.2"', runbook)
+        self.assertIn("printf '%s\\n' \"$RC_VERSION\" > VERSION", runbook)
+        self.assertIn("markdown text from the current release-notes packet", runbook)
+        self.assertIn("Keep the current release-notes, changelog, and operator-support packet in", runbook)
 
     def test_release_artifact_workflows_refuse_stable_without_matching_rc(self) -> None:
         publish = read(".github/workflows/publish-docker.yml")

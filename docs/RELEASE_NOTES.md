@@ -10,4 +10,6 @@ For the shipped v6 `rc.1` notes, see:
 `docs/releases/RELEASE_NOTES_v6.md`
 
 For the current in-repo v6 `rc.2` draft packet, see:
-`docs/releases/RELEASE_NOTES_v6_RC2_DRAFT.md`
+- `docs/releases/RELEASE_NOTES_v6_RC2_DRAFT.md`
+- `docs/releases/V6_CHANGELOG_RC2_DRAFT.md`
+- `docs/releases/V6_RC2_OPERATOR_SUPPORT_PACK_DRAFT.md`

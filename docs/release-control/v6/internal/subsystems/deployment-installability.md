@@ -103,6 +103,11 @@ server-side update execution surfaces.
    and draft packets coherently, and each later RC should get its own draft or
    published release-notes, changelog, and support packet instead of silently
    rewriting the already-shipped `rc.1` operator context in place.
+   The same boundary also owns packet discoverability and operator execution
+   clarity: the release index must point at the full current RC packet rather
+   than only one markdown file, and prerelease runbook commands should stay
+   parameterized to the current candidate version instead of hard-coding stale
+   `rc.1` examples once later RCs exist.
 7. Preserve release-matched installer and Helm operator documentation links through `scripts/install.sh`, `.github/workflows/helm-pages.yml`, `.github/workflows/publish-helm-chart.yml`, and the chart metadata itself so deployment guidance and packaged chart metadata do not drift back to branch-tip `main` docs when a release line or promoted tag already exists.
 8. Add or change operator-facing hosted tenant runtime canary rollout, batch runtime contract reconciliation, canonical hosted route/public URL generation, or control-plane runtime-registry reconciliation through `cmd/pulse-control-plane/main.go`, `internal/cloudcp/docker/manager.go`, `internal/cloudcp/docker/labels.go`, and `internal/cloudcp/tenant_runtime_rollout.go`
 9. Add or change the canonical hosted staging smoke operator path through `scripts/run_hosted_staging_smoke.sh`, `tests/integration/scripts/bootstrap-hosted-mobile-onboarding.mjs`, `tests/integration/scripts/hosted-mobile-token-runtime.mjs`, `tests/integration/scripts/hosted-tenant-runtime.mjs`, and `tests/integration/scripts/relay-mobile-token-helper.go`
