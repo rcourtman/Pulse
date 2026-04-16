@@ -227,7 +227,10 @@ harden storage directories when Pulse owns them, but they must not assume the
 process owns the mount root of a writable Kubernetes or container volume.
 Mounted storage roots that are writable but not chmod-able must still support
 secure startup, while sensitive leaf files such as `.encryption.key` remain
-file-hardened at `0600` and world-writable storage roots still fail closed.
+file-hardened at `0600`. The mount root itself must be validated as the real
+directory path rather than a symlink or other filesystem object, but its mode
+bits are not a fatal startup gate when Kubernetes or another runtime owns that
+mount point.
 That same Security Overview surface must stay action-oriented once those
 low-risk states are demoted out of the global banner:
 `frontend-modern/src/components/Settings/SecurityOverviewPanel.tsx` and

@@ -446,8 +446,9 @@ storage semantics for commercial state. `pkg/licensing/persistence.go` and
 but they must not assume they can chmod the root of a writable Kubernetes or
 container-mounted runtime data directory. When the mount root is writable but
 not owned by the Pulse process, canonical persistence must keep file-level
-secrets hardened at `0600`, fail closed on world-writable storage roots, and
-continue operating instead of crashing just because the mount root itself
+secrets hardened at `0600`, validate that the resolved storage root is still
+the expected real directory rather than a symlink or other filesystem object,
+and continue operating instead of crashing just because the mount root itself
 cannot be chmod-ed.
 Hosted entitlement-source loading follows the same rule: `DatabaseSource` must
 normalize persisted Cloud/MSP plan aliases and legacy limit keys before runtime

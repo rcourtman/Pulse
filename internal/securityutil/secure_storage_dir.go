@@ -17,8 +17,8 @@ var (
 // permissions when possible. For pre-mounted runtime storage roots such as
 // Kubernetes volume mounts, the running process may be able to write inside the
 // directory without owning the mount root itself. In that case, permission
-// errors from chmod are tolerated as long as the existing directory is not
-// world-writable.
+// errors from chmod are tolerated as long as the resolved path is still the
+// expected real directory rather than a symlink or other filesystem object.
 func EnsureSecureStorageDir(dir string, perm os.FileMode) error {
 	if err := secureStorageDirMkdirAllFn(dir, perm); err != nil {
 		return err
@@ -38,9 +38,6 @@ func EnsureSecureStorageDir(dir string, perm os.FileMode) error {
 	if err := secureStorageDirChmodFn(dir, perm); err != nil {
 		if !isStorageDirPermissionError(err) {
 			return err
-		}
-		if info.Mode().Perm()&0o002 != 0 {
-			return fmt.Errorf("cannot leave world-writable storage directory %q unhardened: %w", dir, err)
 		}
 		return nil
 	}

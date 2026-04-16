@@ -56,7 +56,7 @@ func TestEnsureSecureStorageDir_AllowsExistingCompatibleDirWhenChmodNotPermitted
 	}
 }
 
-func TestEnsureSecureStorageDir_RejectsWorldWritableExistingDirWhenChmodNotPermitted(t *testing.T) {
+func TestEnsureSecureStorageDir_AllowsMountedDirWhenChmodNotPermitted(t *testing.T) {
 	t.Cleanup(resetSecureStorageDirFns)
 
 	secureStorageDirMkdirAllFn = func(string, os.FileMode) error { return nil }
@@ -64,9 +64,8 @@ func TestEnsureSecureStorageDir_RejectsWorldWritableExistingDirWhenChmodNotPermi
 		return stubFileInfo{mode: os.ModeDir | 0o777}, nil
 	}
 	secureStorageDirChmodFn = func(string, os.FileMode) error { return os.ErrPermission }
-
-	if err := EnsureSecureStorageDir("/data", 0o700); err == nil {
-		t.Fatal("expected world-writable directory error")
+	if err := EnsureSecureStorageDir("/data", 0o700); err != nil {
+		t.Fatalf("EnsureSecureStorageDir() error: %v", err)
 	}
 }
 
@@ -80,5 +79,18 @@ func TestEnsureSecureStorageDir_RejectsSymlinkPaths(t *testing.T) {
 
 	if err := EnsureSecureStorageDir("/data", 0o700); err == nil {
 		t.Fatal("expected symlink directory error")
+	}
+}
+
+func TestEnsureSecureStorageDir_RejectsNonDirectoryPaths(t *testing.T) {
+	t.Cleanup(resetSecureStorageDirFns)
+
+	secureStorageDirMkdirAllFn = func(string, os.FileMode) error { return nil }
+	secureStorageDirLstatFn = func(string) (os.FileInfo, error) {
+		return stubFileInfo{mode: 0o600}, nil
+	}
+
+	if err := EnsureSecureStorageDir("/data", 0o700); err == nil {
+		t.Fatal("expected non-directory path error")
 	}
 }
