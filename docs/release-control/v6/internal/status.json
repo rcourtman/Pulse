@@ -4236,22 +4236,6 @@
       "subsystem_ids": [
         "patrol-intelligence"
       ]
-    },
-    {
-      "id": "self-hosted-paid-extras-packaging",
-      "summary": "With self-hosted core monitoring no longer treated as a paid gate, decide before GA which optional extras, convenience features, AI or business-workflow surfaces, and support tiers remain the paid self-hosted packaging and how Relay, Pro, Pro+, or successor plans map onto that model.",
-      "owner": "project-owner",
-      "blocking_level": "release-ready",
-      "status": "open",
-      "opened_at": "2026-04-16",
-      "lane_ids": [
-        "L2",
-        "L3",
-        "L9"
-      ],
-      "subsystem_ids": [
-        "cloud-paid"
-      ]
     }
   ],
   "source_of_truth_file": "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md",
@@ -4705,6 +4689,20 @@
     {
       "id": "self-hosted-core-monitoring-free",
       "summary": "Pulse v6 self-hosted core monitoring is not a paid gate: homelab users must not be monetized on monitored-system volume itself, monitored systems remain the canonical counted unit for product understanding and migration truth, and paid self-hosted value must come from optional extras, hosted convenience, business workflow, support, or similar non-core surfaces.",
+      "kind": "pricing",
+      "decided_at": "2026-04-16",
+      "subsystem_ids": [
+        "cloud-paid"
+      ],
+      "lane_ids": [
+        "L2",
+        "L3",
+        "L9"
+      ]
+    },
+    {
+      "id": "self-hosted-paid-extras-packaging",
+      "summary": "Pulse v6 self-hosted paid packaging is now locked to Community / Relay / Pro with unlimited core monitoring on every self-hosted tier: Relay sells remote access, mobile, push, and convenience plus 14-day history; Pro sells Relay plus AI operations, automation, advanced administration, and 90-day history; legacy Pro+ remains continuity-only and is not a public no-cap self-hosted checkout tier; Cloud and MSP continue as separate hosted/commercial offers.",
       "kind": "pricing",
       "decided_at": "2026-04-16",
       "subsystem_ids": [

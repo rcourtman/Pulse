@@ -234,7 +234,8 @@ Insights`, rather than reviving generic `AI Patrol` or `AI ... analysis`
    recurring plans keep their existing recurring price plus uncapped
    monitored-system and guest capacity while the subscription remains
    continuous, and only new v6 retail purchases or post-cancellation re-entry
-   may take the current Pro/Pro+ caps.
+   may take the current Community / Relay / Pro no-cap self-hosted packaging,
+   with Pro+ remaining legacy continuity only.
 7. Keep persisted billing baselines and live recurring continuity distinct:
    `pkg/licensing/billing_state_normalization.go` must store the canonical
    monitored-system billing baseline for recognized grandfathered recurring
@@ -1116,12 +1117,15 @@ must render plan terms and a continuity notice that makes it clear the
 existing recurring price plus uncapped monitored-system and guest capacity
 remain in force until cancellation.
 The self-hosted commercial presentation on that same surface is now locked to
-the monitored-system model as well. `ProLicensePanel.tsx`,
+the no-cap monitored-system model as well. `ProLicensePanel.tsx`,
 `CommercialBillingSections.tsx`, and
 `frontend-modern/src/utils/commercialBillingModel.ts` must present current v6
-retail capacity as monitored systems rather than agents for Community, Relay,
-Pro, and Pro+, while leaving Cloud/MSP pricing semantics unchanged and
-preserving grandfathered v5 continuity copy as an explicit boundary policy.
+self-hosted packages as unlimited core monitoring plus plan-specific extras:
+Community stays free for core monitoring, Relay adds remote access/mobile/push
+convenience and 14-day history, Pro adds Relay plus AI operations, automation,
+advanced administration, and 90-day history, while Pro+ remains legacy
+continuity only. Cloud/MSP pricing semantics stay separate, and grandfathered
+v5 continuity copy remains an explicit boundary policy.
 That same settings-owned presentation must distinguish between active
 grandfathered recurring v5 continuity and bounded legacy fallbacks. Active
 grandfathered recurring v5 plans must render uncapped monitored-system and
@@ -1151,9 +1155,10 @@ those facts describe the canonical offer rather than one page's local layout.
 The same rule applies to self-hosted commercial framing inside product-owned
 billing and activation surfaces: plan names, counted-unit copy, and upgrade
 adjacency must come from the shared self-hosted plan-definition owner rather
-than page-local strings. That owner must also keep Community, Relay, Pro, and
-Pro+ retail limit copy on top-level monitored systems rather than drifting back
-to vague `systems` or device-style language.
+than page-local strings. That owner must also keep Community, Relay, and Pro
+framed as unlimited core monitoring plus their bundle-specific extras rather
+than drifting back to bounded monitored-system sales copy, vague `systems`, or
+device-style language. Pro+ may appear only as a legacy continuity tier.
 The shared license presentation owner also holds self-hosted Pro settings
 upsell and trial-ended notice copy for `ProLicensePlanSection.tsx`; that
 surface must consume canonical helper notices instead of carrying inline
@@ -1219,8 +1224,8 @@ signup should not repeat the selected plan facts across the page header, form
 card, and plan summary at the same time.
 That contract applies to both plan summary labels and upgrade/paywall copy:
 current v6 self-hosted pricing may not drift back to the older `$49/yr Relay`,
-`$99/yr Pro`, or monitored-system-count marketing drift that contradicts the
-locked Community / Relay / Pro / Pro+ model.
+`$99/yr Pro`, monitored-system-count marketing drift, or public Pro+ sales
+language that contradicts the locked Community / Relay / Pro no-cap packaging.
 Cancellation is the explicit boundary for that policy. Once a grandfathered v5
 recurring subscription is canceled, any later return must resolve through the
 current v6 pricing contract rather than reviving the legacy recurring rate.
