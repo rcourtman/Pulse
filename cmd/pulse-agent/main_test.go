@@ -1103,6 +1103,14 @@ func TestRun(t *testing.T) {
 		}
 	})
 
+	t.Run("version exits cleanly", func(t *testing.T) {
+		ctx := context.Background()
+		err := run(ctx, []string{"-version"}, func(s string) string { return "" })
+		if err != flag.ErrHelp {
+			t.Fatalf("expected flag.ErrHelp for -version, got %v", err)
+		}
+	})
+
 	t.Run("basic run", func(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		// Cancel after a short time

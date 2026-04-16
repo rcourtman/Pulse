@@ -104,6 +104,9 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 	// 1. Parse Configuration
 	cfg, err := loadConfig(args, getenv)
 	if err != nil {
+		if err == flag.ErrHelp {
+			return err
+		}
 		return fmt.Errorf("failed to load unified agent configuration: %w", err)
 	}
 

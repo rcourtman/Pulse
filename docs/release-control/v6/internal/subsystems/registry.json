@@ -596,6 +596,7 @@
         "internal/hostagent/"
       ],
       "owned_files": [
+        "cmd/pulse-agent/main.go",
         "frontend-modern/src/api/agentProfiles.ts",
         "frontend-modern/src/api/nodes.ts",
         "frontend-modern/src/components/Infrastructure/deploy/ResultsStep.tsx",
@@ -671,6 +672,19 @@
         "exact_files": [],
         "require_explicit_path_policy_coverage": true,
         "path_policies": [
+          {
+            "id": "pulse-agent-cli-entrypoint",
+            "label": "pulse-agent CLI entrypoint proof",
+            "match_prefixes": [],
+            "match_files": [
+              "cmd/pulse-agent/main.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "cmd/pulse-agent/main_test.go"
+            ]
+          },
           {
             "id": "agent-install-api-surface",
             "label": "agent install and registration API proof",
