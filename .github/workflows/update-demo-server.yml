@@ -363,24 +363,24 @@ jobs:
 
           AUTH_USER="${DEMO_AUTH_USER:-demo}"
           AUTH_PASS="${DEMO_AUTH_PASS:-demo}"
-          NODES=$(ssh -i ~/.ssh/id_ed25519 "$DEMO_SERVER_USER@$DEMO_SERVER_HOST" \
+          RESOURCES=$(ssh -i ~/.ssh/id_ed25519 "$DEMO_SERVER_USER@$DEMO_SERVER_HOST" \
             'AUTH_USER='"$(printf '%q' "$AUTH_USER")"' AUTH_PASS='"$(printf '%q' "$AUTH_PASS")"' DEMO_LOCAL_BASE_URL='"$(printf '%q' "$DEMO_LOCAL_BASE_URL")"' bash -s' <<'EOF'
           set -euo pipefail
           COOKIE_FILE="$HOME/.demo-cookies.txt"
           curl -fsS -c "$COOKIE_FILE" "${DEMO_LOCAL_BASE_URL}/api/login" -X POST \
             -H "Content-Type: application/json" \
             -d "{\"username\":\"${AUTH_USER}\",\"password\":\"${AUTH_PASS}\"}" > /dev/null
-          curl -fsS -b "$COOKIE_FILE" "${DEMO_LOCAL_BASE_URL}/api/state" | jq -r '.nodes | length'
+          curl -fsS -b "$COOKIE_FILE" "${DEMO_LOCAL_BASE_URL}/api/state" | jq -r '.resources | if type == "array" then length else 0 end'
           rm -f "$COOKIE_FILE"
           EOF
           )
 
-          echo "Mock nodes detected: $NODES"
+          echo "Mock resources detected: $RESOURCES"
 
-          if [ "$NODES" -ge 1 ]; then
+          if [ "$RESOURCES" -ge 1 ]; then
             echo "Demo server successfully updated and verified."
           else
-            echo "::error::Demo server updated but mock mode may not be active"
+            echo "::error::Demo server updated but canonical mock resources are missing"
             exit 1
           fi
 

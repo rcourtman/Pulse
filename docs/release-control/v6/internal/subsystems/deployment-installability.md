@@ -278,6 +278,11 @@ open on API-only reachability. That proof must treat the visible login controls
 as the readiness signal and must not block on Playwright `networkidle`, because
 the public demo shell can keep background activity alive after the page is
 already usable.
+That same demo-update verification boundary also owns the canonical v6 mock
+runtime state contract. `.github/workflows/update-demo-server.yml` must verify
+mock-mode readiness through the unified `/api/state` `resources[]` collection,
+not legacy `nodes`, because v6 intentionally strips per-type arrays from the
+state payload.
 That same operator-proof boundary also now owns the canonical hosted staging
 smoke entrypoint. `scripts/run_hosted_staging_smoke.sh` must stay as the
 repo-tracked operator command that composes the hosted signup/billing eval pack
@@ -293,6 +298,12 @@ that promotion metadata. Human-visible workflow inputs, summaries, and error
 messages must describe the path as a prerelease or preview flow rather than
 implying a near-ready release candidate, while machine-owned identifiers such
 as `rc`, `rc-to-ga-*`, and `v6.0.0-rc.1` remain the canonical internal keys.
+That same downstream-dispatch boundary also owns release-ref fidelity. When
+`.github/workflows/create-release.yml` fans out to governed post-publish
+workflows such as Docker publication or demo updates, it must dispatch those
+workflows on `needs.prepare.outputs.required_branch` rather than GitHub's
+default-branch workflow definition, so prerelease automation cannot silently
+fall back onto stale `main`-branch inputs or older demo verification logic.
 That same promotion-governance package also owns the dated rehearsal-record
 materialization path. The public recorder
 `scripts/release_control/record_rc_to_ga_rehearsal.py` and its internal module
