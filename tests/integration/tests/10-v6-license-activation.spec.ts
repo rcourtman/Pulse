@@ -110,7 +110,7 @@ test.describe.serial('V6 license activation flow', () => {
         plan_key: 'pro_monthly',
         billing_model: 'manual',
         duration_days: 1,
-        max_monitored_systems: 15,
+        max_monitored_systems: 0,
         max_guests: 5,
         max_installations: 3,
         send_email: false,
@@ -188,7 +188,7 @@ test.describe.serial('V6 license activation flow', () => {
     await expect(page.getByRole('heading', { name: 'Plan' })).toBeVisible();
     await expect(page.getByText(/^Active$/).first()).toBeVisible({ timeout: 10_000 });
     await expect(page.getByText('No Pro license is active.')).toHaveCount(0);
-    await expect(page.getByText('15').first()).toBeVisible();
+    await expect(page.getByText('Unlimited').first()).toBeVisible();
 
     // Verify entitlements API agrees.
     const entRes = await apiRequest(page, '/api/license/entitlements');
@@ -200,10 +200,9 @@ test.describe.serial('V6 license activation flow', () => {
     expect(ent.valid).toBe(true);
     expect(ent.licensed_email).toBe('e2e-playwright@test.local');
 
-    // Check max_monitored_systems limit.
+    // Core monitoring is unlimited for self-hosted v6 plans.
     const agentLimit = ent.limits?.find((l) => l.key === 'max_monitored_systems');
-    expect(agentLimit, 'max_monitored_systems limit not found in entitlements').toBeTruthy();
-    expect(agentLimit!.limit).toBe(15);
+    expect(agentLimit).toBeUndefined();
 
     // Check max_guests limit.
     const guestLimit = ent.limits?.find((l) => l.key === 'max_guests');

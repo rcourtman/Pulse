@@ -12,19 +12,19 @@ const PURCHASE_START_URL = `${DEV_SERVER_URL}${PURCHASE_START_PATH}`;
 const PULSE_ACCOUNT_PORTAL_URL = "https://cloud.pulserelay.pro/portal";
 const PURCHASE_RETURN_URL = `${DEV_SERVER_URL}/auth/license-purchase-activate`;
 const PORTAL_HANDOFF_ID = "cph_checkout_return";
-const ACTIVATED_BILLING_URL = `${DEV_SERVER_URL}/settings/system/billing/plan?intent=max_monitored_systems&purchase=activated`;
-const CANCELLED_BILLING_URL = `${DEV_SERVER_URL}/settings/system/billing/plan?intent=max_monitored_systems&purchase=cancelled`;
-const EXPIRED_BILLING_URL = `${DEV_SERVER_URL}/settings/system/billing/plan?intent=max_monitored_systems&purchase=expired`;
-const FAILED_BILLING_URL = `${DEV_SERVER_URL}/settings/system/billing/plan?intent=max_monitored_systems&purchase=failed`;
-const UNAVAILABLE_BILLING_URL = `${DEV_SERVER_URL}/settings/system/billing/plan?intent=max_monitored_systems&purchase=unavailable`;
-const FINAL_BILLING_URL = `${DEV_SERVER_URL}/settings/system/billing/plan?intent=max_monitored_systems`;
+const ACTIVATED_BILLING_URL = `${DEV_SERVER_URL}/settings/system/billing/plan?intent=self_hosted_plan&purchase=activated`;
+const CANCELLED_BILLING_URL = `${DEV_SERVER_URL}/settings/system/billing/plan?intent=self_hosted_plan&purchase=cancelled`;
+const EXPIRED_BILLING_URL = `${DEV_SERVER_URL}/settings/system/billing/plan?intent=self_hosted_plan&purchase=expired`;
+const FAILED_BILLING_URL = `${DEV_SERVER_URL}/settings/system/billing/plan?intent=self_hosted_plan&purchase=failed`;
+const UNAVAILABLE_BILLING_URL = `${DEV_SERVER_URL}/settings/system/billing/plan?intent=self_hosted_plan&purchase=unavailable`;
+const FINAL_BILLING_URL = `${DEV_SERVER_URL}/settings/system/billing/plan?intent=self_hosted_plan`;
 const USAGE_BILLING_URL = `${DEV_SERVER_URL}/settings/system/billing/usage`;
 const RECOVERY_BILLING_HREF =
-  "/settings/system/billing/plan?intent=max_monitored_systems&details=recovery";
+  "/settings/system/billing/plan?intent=self_hosted_plan&details=recovery";
 const RECOVERY_BILLING_URL = `${DEV_SERVER_URL}${RECOVERY_BILLING_HREF}`;
 const PURCHASE_RETURN_TOKEN = "prt_signed_checkout_return";
 const CHECKOUT_SESSION_ID = "cs_upgrade_return";
-const MONITORED_SYSTEM_FEATURE = "max_monitored_systems";
+const MONITORED_SYSTEM_FEATURE = "self_hosted_plan";
 
 const MONITORED_SYSTEM_ENTITLEMENTS = {
   capabilities: [],
@@ -353,29 +353,16 @@ async function configureBillingFixtures(context: BrowserContext, page: Page) {
 }
 
 async function openMonitoredSystemUpgradeArrival(page: Page) {
-  await page.goto(`${DEV_SERVER_URL}/settings/system-general`, {
+  await page.goto(`${DEV_SERVER_URL}/settings/system/billing/plan?intent=self_hosted_plan`, {
     waitUntil: "domcontentloaded",
   });
-  await expect(
-    page
-      .getByRole("status")
-      .filter({ hasText: "16 monitored systems currently counted" }),
-  ).toBeVisible();
-  await page
-    .getByRole("status")
-    .filter({ hasText: "16 monitored systems currently counted" })
-    .getByRole("link", { name: "Upgrade to add more" })
-    .click();
-  await page.waitForURL(
-    "**/settings/system/billing/plan?intent=max_monitored_systems",
-  );
   await expect(page.getByRole("tab", { name: "Plan" })).toHaveAttribute(
     "aria-selected",
     "true",
   );
   await expect(
     page.getByText(
-      "Pulse counts top-level monitored systems such as Docker hosts, Kubernetes clusters, Proxmox nodes, standalone hosts, and TrueNAS systems. Compare self-hosted plans in Pulse Account and return here with Pulse Pro activated automatically.",
+      "Community keeps core monitoring free. Compare Relay and Pro in Pulse Account, then return here with Pulse Pro activated automatically.",
     ),
   ).toBeVisible();
   await expect(page.getByRole("button", { name: "Hide counting rules" })).toBeVisible();
@@ -416,14 +403,14 @@ test.describe("Self-hosted upgrade return flow", () => {
     const comparePlansLink = page.getByRole("link", { name: "Compare plans" });
     await expect(comparePlansLink).toHaveAttribute(
       "href",
-      `${PURCHASE_START_PATH}?feature=max_monitored_systems`,
+      `${PURCHASE_START_PATH}?feature=self_hosted_plan`,
     );
 
     await expect(comparePlansLink).toHaveAttribute("target", "_blank");
     await comparePlansLink.click();
     await expect
       .poll(() => purchaseStartURL)
-      .toBe(`${PURCHASE_START_URL}?feature=max_monitored_systems`);
+      .toBe(`${PURCHASE_START_URL}?feature=self_hosted_plan`);
 
     await page.goto(buildPortalHandoffUrl(), { waitUntil: "domcontentloaded" });
     await expect(
@@ -477,7 +464,7 @@ test.describe("Self-hosted upgrade return flow", () => {
     await expect(page.getByText("Checkout cancelled", { exact: true })).toBeVisible();
     await expect(page.getByRole("link", { name: "Compare plans" })).toHaveAttribute(
       "href",
-      `${PURCHASE_START_PATH}?feature=max_monitored_systems`,
+      `${PURCHASE_START_PATH}?feature=self_hosted_plan`,
     );
   });
 
@@ -550,7 +537,7 @@ test.describe("Self-hosted upgrade return flow", () => {
     const restartUpgradeLink = page.getByRole("link", { name: "Restart upgrade" });
     await expect(restartUpgradeLink).toHaveAttribute(
       "href",
-      `${PURCHASE_START_PATH}?feature=max_monitored_systems`,
+      `${PURCHASE_START_PATH}?feature=self_hosted_plan`,
     );
     await expect(restartUpgradeLink).toHaveAttribute("target", "_blank");
   });
@@ -649,7 +636,7 @@ test.describe("Self-hosted upgrade return flow", () => {
     ).toBeVisible();
     await expect(billingSurface.getByRole("link", { name: "Try again" })).toHaveAttribute(
       "href",
-      `${PURCHASE_START_PATH}?feature=max_monitored_systems`,
+      `${PURCHASE_START_PATH}?feature=self_hosted_plan`,
     );
   });
 });

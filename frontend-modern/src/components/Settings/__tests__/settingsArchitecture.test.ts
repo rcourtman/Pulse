@@ -1434,7 +1434,7 @@ describe('Settings architecture guardrails', () => {
       'SELF_HOSTED_PRO_BILLING_PRESENTATION.infrastructureRouteReferral',
     );
     expect(settingsHeaderMetaSource).not.toContain(
-      'Billing and monitored-system limits live in Pulse Pro.',
+      'Billing and self-hosted plan features live in Pulse Pro.',
     );
     expect(SETTINGS_HEADER_META['infrastructure-operations'].title).toBe(
       'Infrastructure Operations',
@@ -1447,9 +1447,9 @@ describe('Settings architecture guardrails', () => {
     );
   });
 
-  it('keeps billing-related shell framing on monitored-system commercial terms', () => {
+  it('keeps billing-related shell framing on self-hosted commercial terms', () => {
     expect(SETTINGS_HEADER_META['infrastructure-operations'].description).toContain(
-      'monitored-system limits',
+      'self-hosted plan features',
     );
     expect(SETTINGS_HEADER_META['infrastructure-operations'].description).not.toContain(
       'installed-agent',

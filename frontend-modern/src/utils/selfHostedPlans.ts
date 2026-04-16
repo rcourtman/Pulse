@@ -1,11 +1,10 @@
-export type SelfHostedTierKey = 'community' | 'relay' | 'pro' | 'proPlus';
+export type SelfHostedTierKey = 'community' | 'relay' | 'pro';
 
 export interface SelfHostedPlanDefinition {
   tier: SelfHostedTierKey;
   name: string;
   price: string;
   subline: string;
-  monitoredSystems: number;
   metricHistoryDays: number;
   highlights: readonly string[];
 }
@@ -16,7 +15,6 @@ export interface SelfHostedFeatureRow {
   community: boolean | string;
   relay: boolean | string;
   pro: boolean | string;
-  proPlus: boolean | string;
 }
 
 export interface SelfHostedLinkCTA {
@@ -34,7 +32,6 @@ export interface SelfHostedCommercialPresentation {
   freeLabel: string;
   buyRelayLabel: string;
   upgradeToProLabel: string;
-  upgradeToProPlusLabel: string;
   startTrialLabel: string;
   featureComparisonHeading: string;
   footerLinks: readonly SelfHostedLinkCTA[];
@@ -45,11 +42,11 @@ export const SELF_HOSTED_PLAN_DEFINITIONS: readonly SelfHostedPlanDefinition[] =
     tier: 'community',
     name: 'Community',
     price: 'Free forever',
-    subline: 'Up to 5 top-level monitored systems',
-    monitoredSystems: 5,
+    subline: 'Unlimited self-hosted monitoring',
     metricHistoryDays: 7,
     highlights: [
       'Real-time monitoring',
+      'Unlimited self-hosted monitoring',
       '7-day metric history',
       'Pulse Patrol (BYOK)',
       'Patrol quickstart after activation or trial: 25 runs, no API key',
@@ -63,7 +60,6 @@ export const SELF_HOSTED_PLAN_DEFINITIONS: readonly SelfHostedPlanDefinition[] =
     name: 'Relay',
     price: '$4.99/month',
     subline: 'or $39/year',
-    monitoredSystems: 8,
     metricHistoryDays: 14,
     highlights: [
       'Everything in Community',
@@ -71,7 +67,7 @@ export const SELF_HOSTED_PLAN_DEFINITIONS: readonly SelfHostedPlanDefinition[] =
       'Mobile app access',
       'Push notifications',
       'Custom URL (yourlab.pulserelay.pro)',
-      '8 top-level monitored systems · 14-day history',
+      '14-day metric history',
     ],
   },
   {
@@ -79,7 +75,6 @@ export const SELF_HOSTED_PLAN_DEFINITIONS: readonly SelfHostedPlanDefinition[] =
     name: 'Pro',
     price: '$8.99/month',
     subline: 'or $79/year',
-    monitoredSystems: 15,
     metricHistoryDays: 90,
     highlights: [
       'Everything in Relay',
@@ -89,17 +84,8 @@ export const SELF_HOSTED_PLAN_DEFINITIONS: readonly SelfHostedPlanDefinition[] =
       '90-day metric history',
       'RBAC, audit logging, SAML SSO',
       'Agent profiles · PDF/CSV reports',
-      '15 top-level monitored systems',
+      'Unlimited self-hosted monitoring',
     ],
-  },
-  {
-    tier: 'proPlus',
-    name: 'Pro+',
-    price: '$14.99/month',
-    subline: 'or $129/year',
-    monitoredSystems: 50,
-    metricHistoryDays: 90,
-    highlights: ['Everything in Pro', '50 top-level monitored systems'],
   },
 ] as const;
 
@@ -107,20 +93,18 @@ export const SELF_HOSTED_PLAN_BY_TIER: Record<SelfHostedTierKey, SelfHostedPlanD
   community: SELF_HOSTED_PLAN_DEFINITIONS[0],
   relay: SELF_HOSTED_PLAN_DEFINITIONS[1],
   pro: SELF_HOSTED_PLAN_DEFINITIONS[2],
-  proPlus: SELF_HOSTED_PLAN_DEFINITIONS[3],
 };
 
 export const SELF_HOSTED_COMMERCIAL_PRESENTATION: SelfHostedCommercialPresentation = {
   pageTitle: 'Pricing',
   pageDescription:
-    'Core monitoring stays free. Pulse counts top-level monitored systems, while child resources underneath them are included. Relay adds remote access, and Pro unlocks Pulse Patrol, alert analysis, and auto-fix.',
+    'Core monitoring stays free for self-hosted Pulse. Relay adds remote access and mobile convenience, while Pro unlocks AI operations, automation, governance, and longer history.',
   mostPopularBadge: 'Most Popular',
   currentPlanLabel: 'Current Plan',
   includedLabel: 'Included',
   freeLabel: 'Free',
   buyRelayLabel: 'Buy Relay',
   upgradeToProLabel: 'Upgrade to Pro',
-  upgradeToProPlusLabel: 'Upgrade to Pro+',
   startTrialLabel: 'Start Free 14-day Trial',
   featureComparisonHeading: 'Feature Comparison',
   footerLinks: [
@@ -134,11 +118,6 @@ export const SELF_HOSTED_COMMERCIAL_PRESENTATION: SelfHostedCommercialPresentati
       label: 'See MSP plans',
       href: 'mailto:hello@pulserelay.pro?subject=Pulse%20MSP%20Inquiry',
     },
-    {
-      preface: 'Need more than 50 monitored systems?',
-      label: 'Contact us',
-      href: 'mailto:hello@pulserelay.pro?subject=Pulse%20Enterprise%20Inquiry',
-    },
   ],
 } as const;
 
@@ -149,15 +128,13 @@ export const SELF_HOSTED_FEATURE_ROWS: readonly SelfHostedFeatureRow[] = [
     community: true,
     relay: true,
     pro: true,
-    proPlus: true,
   },
   {
-    key: 'hosts',
-    name: 'Monitored Systems',
-    community: String(SELF_HOSTED_PLAN_BY_TIER.community.monitoredSystems),
-    relay: String(SELF_HOSTED_PLAN_BY_TIER.relay.monitoredSystems),
-    pro: String(SELF_HOSTED_PLAN_BY_TIER.pro.monitoredSystems),
-    proPlus: String(SELF_HOSTED_PLAN_BY_TIER.proPlus.monitoredSystems),
+    key: 'core_monitoring_scope',
+    name: 'Core Monitoring Scope',
+    community: 'Unlimited',
+    relay: 'Unlimited',
+    pro: 'Unlimited',
   },
   {
     key: 'history',
@@ -165,7 +142,6 @@ export const SELF_HOSTED_FEATURE_ROWS: readonly SelfHostedFeatureRow[] = [
     community: `${SELF_HOSTED_PLAN_BY_TIER.community.metricHistoryDays} days`,
     relay: `${SELF_HOSTED_PLAN_BY_TIER.relay.metricHistoryDays} days`,
     pro: `${SELF_HOSTED_PLAN_BY_TIER.pro.metricHistoryDays} days`,
-    proPlus: `${SELF_HOSTED_PLAN_BY_TIER.proPlus.metricHistoryDays} days`,
   },
   {
     key: 'update_alerts',
@@ -173,7 +149,6 @@ export const SELF_HOSTED_FEATURE_ROWS: readonly SelfHostedFeatureRow[] = [
     community: true,
     relay: true,
     pro: true,
-    proPlus: true,
   },
   {
     key: 'sso',
@@ -181,7 +156,6 @@ export const SELF_HOSTED_FEATURE_ROWS: readonly SelfHostedFeatureRow[] = [
     community: true,
     relay: true,
     pro: true,
-    proPlus: true,
   },
   {
     key: 'relay',
@@ -189,7 +163,6 @@ export const SELF_HOSTED_FEATURE_ROWS: readonly SelfHostedFeatureRow[] = [
     community: false,
     relay: true,
     pro: true,
-    proPlus: true,
   },
   {
     key: 'mobile_app',
@@ -197,7 +170,6 @@ export const SELF_HOSTED_FEATURE_ROWS: readonly SelfHostedFeatureRow[] = [
     community: false,
     relay: true,
     pro: true,
-    proPlus: true,
   },
   {
     key: 'push_notifications',
@@ -205,7 +177,6 @@ export const SELF_HOSTED_FEATURE_ROWS: readonly SelfHostedFeatureRow[] = [
     community: false,
     relay: true,
     pro: true,
-    proPlus: true,
   },
   {
     key: 'ai_patrol',
@@ -213,7 +184,6 @@ export const SELF_HOSTED_FEATURE_ROWS: readonly SelfHostedFeatureRow[] = [
     community: true,
     relay: true,
     pro: true,
-    proPlus: true,
   },
   {
     key: 'ai_autofix',
@@ -221,7 +191,6 @@ export const SELF_HOSTED_FEATURE_ROWS: readonly SelfHostedFeatureRow[] = [
     community: false,
     relay: false,
     pro: true,
-    proPlus: true,
   },
   {
     key: 'ai_alerts',
@@ -229,7 +198,6 @@ export const SELF_HOSTED_FEATURE_ROWS: readonly SelfHostedFeatureRow[] = [
     community: false,
     relay: false,
     pro: true,
-    proPlus: true,
   },
   {
     key: 'kubernetes_ai',
@@ -237,7 +205,6 @@ export const SELF_HOSTED_FEATURE_ROWS: readonly SelfHostedFeatureRow[] = [
     community: false,
     relay: false,
     pro: true,
-    proPlus: true,
   },
   {
     key: 'rbac',
@@ -245,7 +212,6 @@ export const SELF_HOSTED_FEATURE_ROWS: readonly SelfHostedFeatureRow[] = [
     community: false,
     relay: false,
     pro: true,
-    proPlus: true,
   },
   {
     key: 'audit_logging',
@@ -253,7 +219,6 @@ export const SELF_HOSTED_FEATURE_ROWS: readonly SelfHostedFeatureRow[] = [
     community: false,
     relay: false,
     pro: true,
-    proPlus: true,
   },
   {
     key: 'advanced_sso',
@@ -261,7 +226,6 @@ export const SELF_HOSTED_FEATURE_ROWS: readonly SelfHostedFeatureRow[] = [
     community: false,
     relay: false,
     pro: true,
-    proPlus: true,
   },
   {
     key: 'agent_profiles',
@@ -269,7 +233,6 @@ export const SELF_HOSTED_FEATURE_ROWS: readonly SelfHostedFeatureRow[] = [
     community: false,
     relay: false,
     pro: true,
-    proPlus: true,
   },
   {
     key: 'advanced_reporting',
@@ -277,6 +240,5 @@ export const SELF_HOSTED_FEATURE_ROWS: readonly SelfHostedFeatureRow[] = [
     community: false,
     relay: false,
     pro: true,
-    proPlus: true,
   },
 ] as const;

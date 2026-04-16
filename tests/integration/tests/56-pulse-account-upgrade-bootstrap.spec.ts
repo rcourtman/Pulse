@@ -80,12 +80,12 @@ test.describe("Pulse Account upgrade bootstrap", () => {
     ).toBeVisible();
     await expect(
       page.getByText(
-        "Pulse counts top-level monitored systems. Child resources underneath them are included.",
+        "Community keeps core monitoring free. Relay and Pro sell convenience, history, AI operations, and advanced administration.",
       ),
     ).toBeVisible();
     await expect(
       page.getByText(
-        "Pulse Account compares self-hosted tiers by top-level monitored systems, keeps child resources underneath those roots included, and sends completed checkout straight back to Pulse Pro billing.",
+        "Pulse Account compares self-hosted tiers by convenience and advanced capabilities, keeps core monitoring available across plans, and sends completed checkout straight back to Pulse Pro billing.",
       ),
     ).toBeVisible();
     await expect(

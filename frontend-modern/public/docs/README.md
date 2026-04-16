@@ -78,27 +78,26 @@ All other documents are supporting references unless explicitly required for evi
 - **[Mail Gateway](MAIL_GATEWAY.md)** – Proxmox Mail Gateway (PMG) monitoring.
 - **[Auto Updates](AUTO_UPDATE.md)** – One-click updates for supported deployments.
 - **[Multi-Tenant Organizations](MULTI_TENANT.md)** – Isolate infrastructure by organization (Enterprise, opt-in).
-- **[Entitlements Overhaul](PULSE_PRO.md)** – Capability-key-based feature gating across Community/Relay/Pro/Pro+/Cloud.
+- **[Entitlements Overhaul](PULSE_PRO.md)** – Capability-key-based feature gating across Community/Relay/Pro/Cloud, with legacy Pro+ continuity still supported.
 
-## 💳 Plans (Community / Relay / Pro / Pro+ / Cloud)
+## 💳 Plans (Community / Relay / Pro / Cloud)
 
-Pulse is available in four self-hosted tiers plus hosted Cloud:
+Pulse is available in three self-hosted tiers plus hosted Cloud:
 
-- **Community**: Free self-hosted monitoring for up to 5 monitored systems with 7-day history.
-- **Relay**: Adds remote access, mobile, push notifications, 14-day history, and raises the monitored-system limit to 8.
-- **Pro**: Adds AI investigation, auto-fix, operations tooling, and raises the monitored-system limit to 15 with 90-day history.
-- **Pro+**: Everything in Pro with room for up to 50 monitored systems.
+- **Community**: Free self-hosted monitoring with unlimited core monitoring and 7-day history.
+- **Relay**: Adds remote access, mobile, push notifications, and 14-day history.
+- **Pro**: Adds AI investigation, auto-fix, operations tooling, governance features, and 90-day history.
 - **Cloud**: Hosted Pulse with Pro-level capabilities; hosted pricing is unchanged by the self-hosted model lock.
 
 - **[Learn more at pulserelay.pro](https://pulserelay.pro)**
-- **[Plans and entitlements](PULSE_PRO.md)** (includes the Community/Relay/Pro/Pro+/Cloud matrix)
+- **[Plans and entitlements](PULSE_PRO.md)** (includes the Community/Relay/Pro/Cloud matrix)
 - **[AI deep dive](AI.md)**
 - **[Multi-Tenant Organizations (Enterprise)](MULTI_TENANT.md)** — Isolate infrastructure by organization for MSPs and multi-datacenter deployments.
 
 ## 📡 Monitoring & Agents
 
 - **[Unified Agent](UNIFIED_AGENT.md)** – Single binary for host, Docker, and Kubernetes monitoring.
-- **[Centralized Agent Management (Pro/Pro+/Cloud)](CENTRALIZED_MANAGEMENT.md)** – Agent profiles and remote config.
+- **[Centralized Agent Management (Pro/Cloud)](CENTRALIZED_MANAGEMENT.md)** – Agent profiles and remote config.
 - **[Proxmox Backup Server](PBS.md)** – PBS integration, direct API vs PVE passthrough, token setup.
 - **[TrueNAS](TRUENAS.md)** – TrueNAS SCALE/CORE integration.
 - **[ZFS Monitoring](ZFS_MONITORING.md)** – Proxmox-native ZFS pool monitoring.

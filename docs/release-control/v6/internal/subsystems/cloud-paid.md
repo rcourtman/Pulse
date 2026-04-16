@@ -161,7 +161,7 @@ the same active-at-snapshot rule as the live server before anyone sets
     `usage`) that survives direct links, compatibility redirects, and
     in-product CTA navigation. The current canonical arrivals are
     `/settings/system/billing/usage?details=counting-rules` for explanation and
-    `/settings/system/billing/plan?intent=max_monitored_systems` for upgrade
+    `/settings/system/billing/plan?intent=self_hosted_plan` for upgrade
     intent.
 24. Keep public-demo dashboard bootstrap route-owned on the adjacent
     commercial/runtime boundary. `frontend-modern/src/useAppRuntimeState.ts`
@@ -224,6 +224,11 @@ Insights`, rather than reviving generic `AI Patrol` or `AI ... analysis`
    `pkg/licensing/models.go`, and downstream runtime entitlement evaluation
    must strip that stored cap before enforcement so active recurring
    grandfathered continuity remains uncapped until cancellation.
+8. Before GA, treat self-hosted core monitoring as free for homelab use:
+   monitored systems remain the canonical counted unit, but self-hosted paid
+   value must come from optional extras, hosted convenience, business
+   workflow, support, or similar non-core surfaces rather than using
+   monitored-system volume itself as the primary paid gate.
 
 ## Current State
 

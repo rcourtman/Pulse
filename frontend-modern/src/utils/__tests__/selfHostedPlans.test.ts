@@ -13,22 +13,17 @@ describe('selfHostedPlans', () => {
       'Community',
       'Relay',
       'Pro',
-      'Pro+',
     ]);
 
-    expect(SELF_HOSTED_PLAN_BY_TIER.community.monitoredSystems).toBe(5);
-    expect(SELF_HOSTED_PLAN_BY_TIER.relay.monitoredSystems).toBe(8);
-    expect(SELF_HOSTED_PLAN_BY_TIER.pro.monitoredSystems).toBe(15);
-    expect(SELF_HOSTED_PLAN_BY_TIER.proPlus.monitoredSystems).toBe(50);
-
-    const hostsRow = SELF_HOSTED_FEATURE_ROWS.find((row) => row.key === 'hosts');
-    expect(hostsRow).toEqual({
-      key: 'hosts',
-      name: 'Monitored Systems',
-      community: '5',
-      relay: '8',
-      pro: '15',
-      proPlus: '50',
+    const monitoringScopeRow = SELF_HOSTED_FEATURE_ROWS.find(
+      (row) => row.key === 'core_monitoring_scope',
+    );
+    expect(monitoringScopeRow).toEqual({
+      key: 'core_monitoring_scope',
+      name: 'Core Monitoring Scope',
+      community: 'Unlimited',
+      relay: 'Unlimited',
+      pro: 'Unlimited',
     });
   });
 
@@ -36,14 +31,13 @@ describe('selfHostedPlans', () => {
     expect(SELF_HOSTED_COMMERCIAL_PRESENTATION).toEqual({
       pageTitle: 'Pricing',
       pageDescription:
-        'Core monitoring stays free. Pulse counts top-level monitored systems, while child resources underneath them are included. Relay adds remote access, and Pro unlocks Pulse Patrol, alert analysis, and auto-fix.',
+        'Core monitoring stays free for self-hosted Pulse. Relay adds remote access and mobile convenience, while Pro unlocks AI operations, automation, governance, and longer history.',
       mostPopularBadge: 'Most Popular',
       currentPlanLabel: 'Current Plan',
       includedLabel: 'Included',
       freeLabel: 'Free',
       buyRelayLabel: 'Buy Relay',
       upgradeToProLabel: 'Upgrade to Pro',
-      upgradeToProPlusLabel: 'Upgrade to Pro+',
       startTrialLabel: 'Start Free 14-day Trial',
       featureComparisonHeading: 'Feature Comparison',
       footerLinks: [
@@ -57,34 +51,21 @@ describe('selfHostedPlans', () => {
           label: 'See MSP plans',
           href: 'mailto:hello@pulserelay.pro?subject=Pulse%20MSP%20Inquiry',
         },
-        {
-          preface: 'Need more than 50 monitored systems?',
-          label: 'Contact us',
-          href: 'mailto:hello@pulserelay.pro?subject=Pulse%20Enterprise%20Inquiry',
-        },
       ],
     });
   });
 
   it('keeps Community quickstart copy scoped to Patrol activation support', () => {
-    expect(SELF_HOSTED_PLAN_BY_TIER.community.subline).toBe(
-      'Up to 5 top-level monitored systems',
-    );
+    expect(SELF_HOSTED_PLAN_BY_TIER.community.subline).toBe('Unlimited self-hosted monitoring');
     expect(SELF_HOSTED_PLAN_BY_TIER.community.highlights).toEqual(
       expect.arrayContaining([
+        'Unlimited self-hosted monitoring',
         'Pulse Patrol (BYOK)',
         'Patrol quickstart after activation or trial: 25 runs, no API key',
       ]),
     );
-    expect(SELF_HOSTED_PLAN_BY_TIER.relay.highlights).toContain(
-      '8 top-level monitored systems · 14-day history',
-    );
-    expect(SELF_HOSTED_PLAN_BY_TIER.pro.highlights).toContain(
-      '15 top-level monitored systems',
-    );
-    expect(SELF_HOSTED_PLAN_BY_TIER.proPlus.highlights).toContain(
-      '50 top-level monitored systems',
-    );
+    expect(SELF_HOSTED_PLAN_BY_TIER.relay.highlights).toContain('14-day metric history');
+    expect(SELF_HOSTED_PLAN_BY_TIER.pro.highlights).toContain('Unlimited self-hosted monitoring');
     expect(SELF_HOSTED_PLAN_BY_TIER.community.highlights).not.toContain(
       'Patrol quickstart: 25 runs, no API key',
     );

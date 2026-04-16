@@ -54,6 +54,9 @@ export interface HostedCommercialModelInput {
 const asUnlimitedLimit = (value?: number) =>
   typeof value === 'number' && value > 0 ? value : undefined;
 
+const hasFiniteSelfHostedLimit = (value: string | number) =>
+  typeof value === 'number' ? value > 0 : value.trim().toLowerCase() !== 'unlimited';
+
 export const buildSelfHostedCommercialPlanModel = (
   input: SelfHostedCommercialModelInput,
 ): CommercialPlanViewModel => ({
@@ -128,12 +131,14 @@ export const buildSelfHostedCommercialPlanModel = (
               : input.continuityCapturedAt || 'Captured',
           },
         ]
-      : [
-          {
-            label: 'Included Monitored Systems',
-            value: input.maxMonitoredSystems,
-          },
-        ]),
+	      : hasFiniteSelfHostedLimit(input.maxMonitoredSystems)
+	        ? [
+	            {
+	              label: 'Included Monitored Systems',
+	              value: input.maxMonitoredSystems,
+	            },
+	          ]
+	        : []),
     {
       label: 'Max Guests',
       value: input.maxGuests,

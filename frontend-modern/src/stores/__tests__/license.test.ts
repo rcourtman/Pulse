@@ -543,7 +543,7 @@ describe('license stores', () => {
       });
       await loadCommercialPosture(true);
       expect(getUpgradeActionUrlOrFallback('max_monitored_systems')).toBe(
-        '/settings/system/billing/plan?intent=max_monitored_systems',
+        '/settings/system/billing/plan?intent=self_hosted_plan',
       );
     });
 

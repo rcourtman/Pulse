@@ -70,21 +70,22 @@ Use this cohort breakdown:
   remain permanently valid and uncapped.
 - Legacy paid v5 licenses migrated into v6 outside the recurring grandfathered
   path:
-  can retain a monitored-system continuity floor for the migrated install where
-  needed, but that continuity path is not the same as an uncapped entitlement.
+  can still exchange into the v6 activation model without repurchasing.
+  Migration records can preserve the original cohort for support and audit, but
+  self-hosted monitoring volume is no longer the paid gate.
 - Former recurring subscribers who already canceled or later lapse:
-  any later return uses current public v6 pricing and caps rather than
+  any later return uses current public v6 pricing rather than
   resuming the old grandfathered terms.
 - New self-hosted v6 purchasers:
-  take the current Relay / Pro / Pro+ caps.
+  take the current Community / Relay / Pro model with unlimited core
+  monitoring.
 
-If a grandfathered recurring subscriber covered by the pre-cutover legacy
-policy, or a lifetime customer, sees a bounded monitored-system or guest cap
-in v6, treat that as a product bug, not as intended policy.
+If a self-hosted v6 install shows a bounded monitored-system cap after
+activation or migration, treat that as a product bug, not as intended policy.
 
 Canonical short reply:
 
-`Lifetime customers remain uncapped. Legacy recurring Pulse Pro subscribers who were already active before the public v6 pricing cutover remain uncapped while that subscription stays active. Other migrated legacy paid installs can preserve a monitored-system continuity floor for that install where needed, but that is not an uncapped entitlement. Former recurring subscribers who return later, and new/current public v6 purchases, use the current v6 plan caps.`
+`Lifetime customers remain uncapped. Legacy recurring Pulse Pro subscribers who were already active before the public v6 pricing cutover remain uncapped while that subscription stays active. Other migrated legacy paid installs can still exchange into the v6 activation model without repurchasing, but self-hosted monitoring volume is no longer the paid gate. Former recurring subscribers who return later re-enter on current v6 pricing, and current self-hosted v6 purchases keep core monitoring unlimited.`
 
 ### Will old bookmarks and familiar v5 pages still work?
 

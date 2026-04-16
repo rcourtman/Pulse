@@ -60,17 +60,17 @@ const (
 )
 
 // TierMonitoredSystemLimits defines the maximum monitored-system count per tier.
-// A value of 0 means unlimited (enforced at the MSP/Enterprise level).
+// A value of 0 means unlimited.
 var TierMonitoredSystemLimits = map[Tier]int{
-	TierFree:       5,
-	TierRelay:      8,
-	TierPro:        15,
-	TierProPlus:    50,
-	TierProAnnual:  15, // Legacy: same as Pro
-	TierLifetime:   0,  // Grandfathered lifetime entitlements remain uncapped
-	TierCloud:      0,  // Cloud tiers have per-plan limits set in license claims
-	TierMSP:        0,  // MSP tiers have per-plan pool limits set in license claims
-	TierEnterprise: 0,  // Custom
+	TierFree:       0, // Self-hosted Community no longer caps core monitoring
+	TierRelay:      0, // Self-hosted Relay adds convenience features, not more room
+	TierPro:        0, // Self-hosted Pro monetizes operations features, not monitoring volume
+	TierProPlus:    0, // Legacy/self-hosted compatibility tier; no monitored-system cap
+	TierProAnnual:  0, // Legacy: same as Pro
+	TierLifetime:   0, // Grandfathered lifetime entitlements remain uncapped
+	TierCloud:      0, // Cloud tiers have per-plan limits set in license claims
+	TierMSP:        0, // MSP tiers have per-plan pool limits set in license claims
+	TierEnterprise: 0, // Custom
 }
 
 // CloudPlanMonitoredSystemLimits maps hosted and continuity plan version strings to

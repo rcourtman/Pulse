@@ -134,21 +134,26 @@ function normalizeUpgradeFeatureKey(featureKey: string): string {
   return String(featureKey || '').trim();
 }
 
+function isSelfHostedPlanUpgrade(featureKey: string): boolean {
+  var normalized = normalizeUpgradeFeatureKey(featureKey);
+  return normalized === 'self_hosted_plan' || normalized === 'max_monitored_systems';
+}
+
 function selfHostedUpgradeActionTitle(featureKey: string): string {
-  return normalizeUpgradeFeatureKey(featureKey) === 'max_monitored_systems'
-    ? 'Upgrade monitored-system cap'
+  return isSelfHostedPlanUpgrade(featureKey)
+    ? 'Compare self-hosted plans'
     : 'Upgrade self-hosted plan';
 }
 
 function selfHostedUpgradeActionDescription(featureKey: string): string {
-  return normalizeUpgradeFeatureKey(featureKey) === 'max_monitored_systems'
-    ? 'Compare self-hosted plans by top-level monitored systems such as Docker hosts, Kubernetes clusters, Proxmox nodes, standalone hosts, and TrueNAS systems.'
+  return isSelfHostedPlanUpgrade(featureKey)
+    ? 'Compare self-hosted plans by Relay and Pro capabilities rather than monitored-system volume.'
     : 'Compare self-hosted plans and continue into the commercial checkout path.';
 }
 
 function selfHostedUpgradeActionHighlights(featureKey: string): string[] {
-  return normalizeUpgradeFeatureKey(featureKey) === 'max_monitored_systems'
-    ? ['Top-level monitored systems', 'Plan comparison']
+  return isSelfHostedPlanUpgrade(featureKey)
+    ? ['Plan comparison', 'Pulse Pro checkout']
     : ['Plan comparison', 'Checkout handoff'];
 }
 
@@ -167,8 +172,8 @@ function renderSelfHostedUpgradeActionRow(context: ShellViewContext): string {
 
 function renderSelfHostedUpgradeBillingPanel(context: ShellViewContext): string {
   var featureKey = normalizeUpgradeFeatureKey(context.billingState.upgradeFeatureKey);
-  var helperCopy = featureKey === 'max_monitored_systems'
-    ? 'Choose the self-hosted tier that fits the top-level monitored systems you run. Child resources like VMs, containers, pods, disks, backups, and services underneath those roots are included. Pulse Account will send completed checkout directly back to Pulse Pro billing.'
+  var helperCopy = isSelfHostedPlanUpgrade(featureKey)
+    ? 'Choose the self-hosted tier that fits the convenience and advanced capabilities you want. Core monitoring stays available across self-hosted plans. Pulse Account will send completed checkout directly back to Pulse Pro billing.'
     : 'Choose the self-hosted tier that fits this upgrade. Pulse Account will send completed checkout directly back to Pulse Pro billing.';
   return renderBillingTaskPanel(
     selfHostedUpgradeActionTitle(featureKey),

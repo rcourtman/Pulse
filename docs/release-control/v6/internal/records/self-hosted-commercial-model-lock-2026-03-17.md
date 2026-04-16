@@ -1,12 +1,13 @@
-# Self-Hosted Commercial Model Lock
+# Self-Hosted Commercial Model Lock (Superseded)
 
 Date: 2026-03-17
 Target: `v6-rc-stabilization`
 Lanes: `L2`, `L13`
+Status: Superseded on 2026-04-16 by `self-hosted-core-monitoring-free`; this record now preserves the capped RC1 self-hosted model as historical context only and is not the final GA pricing direction.
 
-## Decision
+## Historical Decision
 
-Pulse v6 self-hosted commercial packaging is locked to this model:
+On 2026-03-17, Pulse v6 self-hosted commercial packaging was locked to this capped RC1 model:
 
 | Plan | Price | Included limit | History | Purpose |
 |---|---:|---:|---:|---|

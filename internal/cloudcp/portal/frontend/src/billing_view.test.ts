@@ -227,12 +227,12 @@ describe('services view', function() {
     document.body.innerHTML = '<div id="upgrade-billing-root"></div>';
 
     var billingState = createPortalBillingState();
-    billingState.upgradeFeatureKey = 'max_monitored_systems';
+    billingState.upgradeFeatureKey = 'self_hosted_plan';
     billingState.upgradePortalHandoffID = 'cph_signed';
     billingState.upgradePortalHandoff.status = 'ready';
     billingState.upgradePortalHandoff.data = {
       portal_handoff_id: 'cph_signed',
-      feature: 'max_monitored_systems',
+      feature: 'self_hosted_plan',
       status: 'resolved',
     };
     billingState.upgradePricing.status = 'ready';
@@ -240,21 +240,21 @@ describe('services view', function() {
       title: 'Pricing',
       description: 'Canonical pricing model',
       explainer:
-        'Pulse counts <strong>top-level monitored systems</strong>. Child resources underneath them are included.',
+        'Community keeps core monitoring free. Relay and Pro sell convenience, history, AI operations, and advanced administration.',
       plans: [
         {
-          tierKicker: 'Pro+',
-          title: 'Pro+',
-          price: '$14.99',
-          period: '$129/year available too',
-          blurb: 'More room.',
-          features: [{ tone: 'check', html: 'Up to <strong>50 monitored systems</strong>' }],
+          tierKicker: 'Pro',
+          title: 'Pro',
+          price: '$8.99',
+          period: '$79/year available too',
+          blurb: 'Investigation, alert analysis, and auto-fix.',
+          features: [{ tone: 'check', html: 'Unlimited <strong>self-hosted monitoring</strong>' }],
           buttons: [
             {
               kind: 'checkout',
               className: 'btn btn-primary',
-              tier: 'pro_plus',
-              planKey: 'price_pro_plus_annual',
+              tier: 'pro',
+              planKey: 'price_pro_annual',
               billingCycle: 'annual',
               label: 'Buy Annual',
             },
@@ -270,10 +270,10 @@ describe('services view', function() {
       'Pulse Account will return completed checkout directly to Pulse Pro billing.',
     );
     expect(document.getElementById('upgrade-billing-root')?.innerHTML).toContain(
-      'Pulse counts <strong>top-level monitored systems</strong>. Child resources underneath them are included.',
+      'Community keeps core monitoring free. Relay and Pro sell convenience, history, AI operations, and advanced administration.',
     );
     expect(document.getElementById('upgrade-billing-root')?.innerHTML).toContain(
-      'Pulse Account compares self-hosted tiers by top-level monitored systems, keeps child resources underneath those roots included, and sends completed checkout straight back to Pulse Pro billing.',
+      'Pulse Account compares self-hosted tiers by convenience and advanced capabilities, keeps core monitoring available across plans, and sends completed checkout straight back to Pulse Pro billing.',
     );
     expect(document.getElementById('upgrade-billing-root')?.innerHTML).not.toContain('Activate in Pulse Pro');
     expect(document.getElementById('upgrade-billing-root')?.innerHTML).not.toContain('ppk_live_preview');
@@ -300,7 +300,7 @@ describe('services view', function() {
           price: '$4.99',
           period: '$39/year available too',
           blurb: 'Secure remote access and mobile access.',
-          features: [{ tone: 'check', html: 'Up to <strong>8 monitored systems</strong>' }],
+          features: [{ tone: 'check', html: 'Unlimited <strong>self-hosted monitoring</strong>' }],
           buttons: [
             {
               kind: 'checkout',
@@ -333,7 +333,7 @@ describe('services view', function() {
     billingState.upgradePortalHandoff.status = 'ready';
     billingState.upgradePortalHandoff.data = {
       portal_handoff_id: 'cph_completed',
-      feature: 'max_monitored_systems',
+      feature: 'self_hosted_plan',
       status: 'completed',
     };
     billingState.upgradePricing.status = 'ready';
@@ -342,18 +342,18 @@ describe('services view', function() {
       description: 'Canonical pricing model',
       plans: [
         {
-          tierKicker: 'Pro+',
-          title: 'Pro+',
-          price: '$14.99',
-          period: '$129/year available too',
-          blurb: 'More room.',
-          features: [{ tone: 'check', html: 'Up to <strong>50 monitored systems</strong>' }],
+          tierKicker: 'Pro',
+          title: 'Pro',
+          price: '$8.99',
+          period: '$79/year available too',
+          blurb: 'Investigation, alert analysis, and auto-fix.',
+          features: [{ tone: 'check', html: 'Unlimited <strong>self-hosted monitoring</strong>' }],
           buttons: [
             {
               kind: 'checkout',
               className: 'btn btn-primary',
-              tier: 'pro_plus',
-              planKey: 'price_pro_plus_annual',
+              tier: 'pro',
+              planKey: 'price_pro_annual',
               billingCycle: 'annual',
               label: 'Buy Annual',
             },
@@ -382,18 +382,18 @@ describe('services view', function() {
       description: 'Canonical pricing model',
       plans: [
         {
-          tierKicker: 'Pro+',
-          title: 'Pro+',
-          price: '$14.99',
-          period: '$129/year available too',
-          blurb: 'More room.',
-          features: [{ tone: 'check', html: 'Up to <strong>50 monitored systems</strong>' }],
+          tierKicker: 'Pro',
+          title: 'Pro',
+          price: '$8.99',
+          period: '$79/year available too',
+          blurb: 'Investigation, alert analysis, and auto-fix.',
+          features: [{ tone: 'check', html: 'Unlimited <strong>self-hosted monitoring</strong>' }],
           buttons: [
             {
               kind: 'checkout',
               className: 'btn btn-primary',
-              tier: 'pro_plus',
-              planKey: 'price_pro_plus_annual',
+              tier: 'pro',
+              planKey: 'price_pro_annual',
               billingCycle: 'annual',
               label: 'Buy Annual',
             },

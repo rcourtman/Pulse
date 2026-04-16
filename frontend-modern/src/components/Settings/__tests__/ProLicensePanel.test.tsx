@@ -13,6 +13,7 @@ import {
   getPublicPricingUrl,
   getSelfHostedPurchaseStartUrl,
   SELF_HOSTED_PRO_BILLING_PLAN_HREF,
+  SELF_HOSTED_PRO_BILLING_MONITORED_SYSTEM_INTENT,
   SELF_HOSTED_PRO_BILLING_PURCHASE_ACTIVATED,
   SELF_HOSTED_PRO_BILLING_PURCHASE_CANCELLED,
   SELF_HOSTED_PRO_BILLING_PURCHASE_EXPIRED,
@@ -295,7 +296,7 @@ describe('ProLicensePanel', () => {
     });
 
     expect(screen.getByText('V5 Lifetime Grandfathered')).toBeInTheDocument();
-    expect(screen.getByText('Included Monitored Systems')).toBeInTheDocument();
+    expect(screen.queryByText('Included Monitored Systems')).not.toBeInTheDocument();
     expect(screen.getByText('Max Guests')).toBeInTheDocument();
     expect(screen.getAllByText('Unlimited').length).toBeGreaterThan(0);
     expect(screen.queryByText('5 / 12')).not.toBeInTheDocument();
@@ -351,7 +352,7 @@ describe('ProLicensePanel', () => {
           'Unlimited',
         ),
       ).toBeInTheDocument();
-      expect(screen.getByText('Included Monitored Systems')).toBeInTheDocument();
+      expect(screen.queryByText('Included Monitored Systems')).not.toBeInTheDocument();
       expect(screen.getByText('Max Guests')).toBeInTheDocument();
       expect(screen.getAllByText('Unlimited').length).toBeGreaterThan(0);
       expect(screen.queryByText('Plan Monitored System Limit')).not.toBeInTheDocument();
@@ -694,7 +695,7 @@ describe('ProLicensePanel', () => {
 
   it('shows a monitored-system activation success action and suppresses the compare-plans arrival callout', async () => {
     useLocationMock.mockReturnValue({
-      search: `?purchase=${SELF_HOSTED_PRO_BILLING_PURCHASE_ACTIVATED}&intent=max_monitored_systems`,
+      search: `?purchase=${SELF_HOSTED_PRO_BILLING_PURCHASE_ACTIVATED}&intent=${SELF_HOSTED_PRO_BILLING_MONITORED_SYSTEM_INTENT}`,
       pathname: '/settings/system/billing/plan',
       hash: '',
     });
@@ -706,7 +707,7 @@ describe('ProLicensePanel', () => {
       'href',
       SELF_HOSTED_PRO_BILLING_USAGE_HREF,
     );
-    expect(screen.queryByText('Need a higher monitored-system cap?')).not.toBeInTheDocument();
+    expect(screen.queryByText('Compare self-hosted plans')).not.toBeInTheDocument();
   });
 
   it('opens recovery by default when the billing route requests the recovery detail', async () => {
@@ -742,17 +743,17 @@ describe('ProLicensePanel', () => {
 
   it('shows a monitored-system upgrade arrival callout on the plan upgrade route', async () => {
     useLocationMock.mockReturnValue({
-      search: '?intent=max_monitored_systems',
+      search: `?intent=${SELF_HOSTED_PRO_BILLING_MONITORED_SYSTEM_INTENT}`,
       pathname: '/settings/system/billing/plan',
       hash: '',
     });
 
     renderPanel();
 
-    expect(screen.getByText('Need a higher monitored-system cap?')).toBeInTheDocument();
+    expect(screen.getByText('Compare self-hosted plans')).toBeInTheDocument();
     expect(
       screen.getByText(
-        'Pulse counts top-level monitored systems such as Docker hosts, Kubernetes clusters, Proxmox nodes, standalone hosts, and TrueNAS systems. Compare self-hosted plans in Pulse Account and return here with Pulse Pro activated automatically.',
+        'Community keeps core monitoring free. Compare Relay and Pro in Pulse Account, then return here with Pulse Pro activated automatically.',
       ),
     ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Hide counting rules' })).toBeInTheDocument();
@@ -763,7 +764,7 @@ describe('ProLicensePanel', () => {
     ).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Compare plans' })).toHaveAttribute(
       'href',
-      getSelfHostedPurchaseStartUrl('max_monitored_systems'),
+      getSelfHostedPurchaseStartUrl('self_hosted_plan'),
     );
   });
 
@@ -982,7 +983,7 @@ describe('ProLicensePanel', () => {
     );
     expect(proLicensePlanSectionSource).toContain('monitoredSystemUpgradeArrivalTitle');
     expect(proLicensePlanSectionSource).toContain(
-      "resolveSelfHostedPurchaseStartDestination('max_monitored_systems')",
+      "resolveSelfHostedPurchaseStartDestination('self_hosted_plan')",
     );
     expect(proLicensePlanSectionSource).not.toContain('Your Pro trial has ended');
     expect(proLicensePlanSectionSource).not.toContain(

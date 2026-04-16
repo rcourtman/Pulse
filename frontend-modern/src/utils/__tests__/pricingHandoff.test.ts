@@ -108,6 +108,9 @@ describe('pricingHandoff', () => {
     expect(
       getSelfHostedBillingPlanIntent('?intent=' + SELF_HOSTED_PRO_BILLING_MONITORED_SYSTEM_INTENT),
     ).toBe(SELF_HOSTED_PRO_BILLING_MONITORED_SYSTEM_INTENT);
+    expect(getSelfHostedBillingPlanIntent('?intent=max_monitored_systems')).toBe(
+      SELF_HOSTED_PRO_BILLING_MONITORED_SYSTEM_INTENT,
+    );
     expect(getSelfHostedBillingPlanDetail('?details=' + SELF_HOSTED_PRO_BILLING_RECOVERY_DETAIL)).toBe(
       SELF_HOSTED_PRO_BILLING_RECOVERY_DETAIL,
     );

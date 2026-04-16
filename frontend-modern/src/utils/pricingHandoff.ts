@@ -23,7 +23,8 @@ export const SELF_HOSTED_PRO_BILLING_PLAN_INTENT_QUERY_PARAM = 'intent';
 export const SELF_HOSTED_PRO_BILLING_PURCHASE_QUERY_PARAM = 'purchase';
 export const SELF_HOSTED_PRO_BILLING_COUNTING_RULES_DETAIL = 'counting-rules';
 export const SELF_HOSTED_PRO_BILLING_RECOVERY_DETAIL = 'recovery';
-export const SELF_HOSTED_PRO_BILLING_MONITORED_SYSTEM_INTENT = 'max_monitored_systems';
+export const SELF_HOSTED_PRO_BILLING_MONITORED_SYSTEM_INTENT = 'self_hosted_plan';
+const LEGACY_SELF_HOSTED_PRO_BILLING_MONITORED_SYSTEM_INTENT = 'max_monitored_systems';
 export const SELF_HOSTED_PRO_BILLING_PURCHASE_ACTIVATED = 'activated';
 export const SELF_HOSTED_PRO_BILLING_PURCHASE_CANCELLED = 'cancelled';
 export const SELF_HOSTED_PRO_BILLING_PURCHASE_EXPIRED = 'expired';
@@ -49,6 +50,7 @@ export const SELF_HOSTED_PRO_BILLING_USAGE_COUNTING_RULES_HREF = `${SELF_HOSTED_
 export const SELF_HOSTED_PRO_BILLING_PLAN_MONITORED_SYSTEM_UPGRADE_HREF = `${SELF_HOSTED_PRO_BILLING_PLAN_ROUTE}?${SELF_HOSTED_PRO_BILLING_PLAN_INTENT_QUERY_PARAM}=${SELF_HOSTED_PRO_BILLING_MONITORED_SYSTEM_INTENT}`;
 
 const IN_PRODUCT_PRICING_DESTINATIONS: Record<string, string> = {
+  self_hosted_plan: SELF_HOSTED_PRO_BILLING_PLAN_MONITORED_SYSTEM_UPGRADE_HREF,
   max_monitored_systems: SELF_HOSTED_PRO_BILLING_PLAN_MONITORED_SYSTEM_UPGRADE_HREF,
   cloud: '/cloud',
 };
@@ -162,7 +164,13 @@ export function getSelfHostedBillingPlanDetail(search: string): SelfHostedBillin
 
 export function getSelfHostedBillingPlanIntent(search: string): SelfHostedBillingPlanIntent | null {
   const intent = billingSearch(search).get(SELF_HOSTED_PRO_BILLING_PLAN_INTENT_QUERY_PARAM)?.trim();
-  return intent === SELF_HOSTED_PRO_BILLING_MONITORED_SYSTEM_INTENT ? intent : null;
+  if (
+    intent === SELF_HOSTED_PRO_BILLING_MONITORED_SYSTEM_INTENT ||
+    intent === LEGACY_SELF_HOSTED_PRO_BILLING_MONITORED_SYSTEM_INTENT
+  ) {
+    return SELF_HOSTED_PRO_BILLING_MONITORED_SYSTEM_INTENT;
+  }
+  return null;
 }
 
 export function getSelfHostedBillingPurchaseArrival(

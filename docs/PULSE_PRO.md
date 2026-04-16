@@ -1,4 +1,4 @@
-# Pulse Plans and Entitlements (Community / Relay / Pro / Pro+ / Cloud)
+# Pulse Plans and Entitlements (Community / Relay / Pro / Cloud)
 
 This document explains Pulse's user-facing plan structure, the locked self-hosted commercial model, and how those plans map to runtime feature gates.
 
@@ -13,26 +13,26 @@ User-facing plans map to internal tiers as follows:
 - **Community**: `free`
 - **Relay**: `relay`
 - **Pro**: `pro`, `pro_annual`, `lifetime`
-- **Pro+**: `pro_plus`
 - **Cloud**: `msp` or `enterprise`
 
 Notes:
-- `lifetime` keeps the same runtime feature set as Pro, but lifetime and grandfathered recurring legacy entitlements remain uncapped for monitored systems and guest access. Other migrated legacy paid installs can preserve monitored-system continuity without becoming uncapped.
+- `lifetime` keeps the same runtime feature set as Pro, but lifetime and grandfathered recurring legacy entitlements remain uncapped for monitored systems and guest access. Other migrated legacy paid installs can still carry cohort continuity metadata for support and audit, but self-hosted monitoring volume is no longer the paid gate.
 - Items marked **Cloud*** require the `enterprise` tier rather than the base `msp` tier.
 - If you are self-hosting, you can use capability keys and `GET /api/license/features` to discover exactly what is active in your instance.
 
 ## Self-Hosted Commercial Model
 
-Pulse sells monitored coverage. The counted unit is a monitored system, not an installed agent.
+Pulse does not monetize self-hosted users on monitored-system volume. The counted
+unit remains a monitored system for product understanding, migrations, and
+inventory truth, but self-hosted core monitoring is not the paid gate.
 
-Self-hosted pricing is locked to:
+Self-hosted pricing is:
 
-| Plan | Price | Included monitored systems | Metric history | Purpose |
-|---|---:|---:|---:|---|
-| Community | Free | 5 | 7 days | One real small lab end to end |
-| Relay | $4.99/mo or $39/yr | 8 | 14 days | Cheap headroom plus remote access |
-| Pro | $8.99/mo or $79/yr | 15 | 90 days | Automation and operations tier |
-| Pro+ | $14.99/mo or $129/yr | 50 | 90 days | Larger self-hosted labs |
+| Plan | Price | Core monitoring | Metric history | Purpose |
+|---|---:|---|---:|---|
+| Community | Free | Unlimited | 7 days | Full self-hosted monitoring for normal homelab use |
+| Relay | $4.99/mo or $39/yr | Unlimited | 14 days | Remote access, mobile, push, and convenience |
+| Pro | $8.99/mo or $79/yr | Unlimited | 90 days | AI operations, automation, and advanced admin features |
 
 Counted examples:
 - Proxmox PVE node
@@ -59,10 +59,8 @@ Runtime rules:
 
 Migration policy:
 - Legacy recurring Pulse Pro subscriptions already active before the public v6 pricing cutover keep their grandfathered recurring price and uncapped monitored-system and guest capacity until cancellation.
-- Supported legacy paid v5 migrations outside that recurring grandfathered path can retain a monitored-system continuity floor for the migrated install where needed, but that continuity path is not the same as an uncapped entitlement.
-- Existing free users above the new Community cap are not hard-broken on rollout day.
-- During grace, existing monitoring keeps working.
-- During grace, only new counted-system additions are blocked until the user removes systems or upgrades.
+- Existing lifetime license holders remain valid and uncapped.
+- Supported legacy paid v5 migrations outside that recurring grandfathered path can still exchange into the v6 activation model without losing self-hosted monitoring access. Migration metadata can preserve the original cohort for support and audit, but monitored-system volume is no longer the paid gate.
 
 ### Paid Customer Continuity Matrix
 
@@ -70,12 +68,12 @@ Migration policy:
 |---|---|---|
 | Legacy recurring subscriber from a v5 or earlier Pulse Pro monthly/annual plan, already active before the public v6 pricing cutover | The install can migrate into the v6 activation model without forcing a repurchase. | The existing recurring price stays in place and monitored-system plus guest capacity remain uncapped while the subscription remains continuously active. |
 | Existing lifetime license holder | The license remains valid through the v6 licensing transition. | Lifetime remains permanently valid and monitored-system plus guest capacity stay uncapped. |
-| Legacy paid v5 license migrated into v6 outside the recurring grandfathered path | The install can still exchange into the v6 activation model. If its existing monitored estate exceeds the exchanged plan limit, the migrated install can retain a monitored-system continuity floor for that install. | The continuity floor preserves the existing migrated estate where needed, but it is not an uncapped entitlement. |
-| Former recurring subscriber who already canceled or later lapses/cancels | A later return is treated as a new paid purchase, not as a grandfathered renewal. | The old grandfathered price and uncapped capacity do not resume automatically; current public v6 pricing and caps apply. |
-| New self-hosted v6 purchase | The purchase uses the current Relay / Pro / Pro+ self-hosted plans. | Current public v6 monitored-system and guest caps apply. |
+| Legacy paid v5 license migrated into v6 outside the recurring grandfathered path | The install can still exchange into the v6 activation model without forcing a repurchase. Migration records can still preserve the original cohort for support and audit. | Self-hosted monitoring stays available; monitored-system volume is no longer sold as a paid gate on current v6 self-hosted plans. |
+| Former recurring subscriber who already canceled or later lapses/cancels | A later return is treated as a new paid purchase, not as a grandfathered renewal. | The old grandfathered price and uncapped capacity do not resume automatically; current public v6 pricing applies. |
+| New self-hosted v6 purchase | The purchase uses the current Community / Relay / Pro self-hosted plans. | Core monitoring stays unlimited; paid value comes from convenience, AI, history, and advanced admin features. |
 
 Support rule:
-- If a grandfathered recurring subscriber covered by the pre-cutover legacy policy, or a lifetime customer, sees a bounded monitored-system or guest cap in v6, treat it as a bug rather than as intended policy.
+- If any self-hosted v6 install shows a bounded monitored-system cap after activation or migration, treat it as a bug rather than as intended policy. Guest limits still follow the active tier or continuity contract.
 
 ## Feature Matrix
 
@@ -119,7 +117,7 @@ Patrol and the Assistant support tiered autonomy:
 ## What You Get (By Plan)
 
 ### Community
-- Core monitoring for up to 5 monitored systems.
+- Unlimited self-hosted core monitoring.
 - 7-day history.
 - Pulse Patrol with BYOK.
 - Patrol quickstart after activation or trial: 25 Patrol runs with no API key on a server-verified install.
@@ -128,14 +126,12 @@ Patrol and the Assistant support tiered autonomy:
 
 ### Relay
 - Everything in Community, plus:
-- 8 monitored systems.
 - 14-day history.
 - Remote access via Relay.
 - Mobile app access and push notifications.
 
 ### Pro
 - Everything in Relay, plus:
-- 15 monitored systems.
 - AI alert analysis.
 - Auto-fix and higher autonomy.
 - Kubernetes AI analysis.
@@ -143,8 +139,8 @@ Patrol and the Assistant support tiered autonomy:
 - Advanced SSO, RBAC, audit logging, and advanced reporting.
 - 90-day history.
 
-### Pro+
-- Everything in Pro, with 50 monitored systems for larger self-hosted labs.
+### Legacy Pro+
+- Existing Pro+ entitlements remain supported for current holders, but Pro+ is no longer presented as a public self-hosted plan because monitored-system volume is no longer the paid boundary.
 
 ### Cloud
 - Hosted Pulse with Pro-level capabilities and hosted lifecycle management.

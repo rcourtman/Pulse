@@ -5325,7 +5325,7 @@ func TestContract_EntitlementPayloadMonitoredSystemUsageJSONSnapshot(t *testing.
 		Valid:               true,
 		Tier:                pkglicensing.TierPro,
 		Features:            append([]string(nil), pkglicensing.TierFeatures[pkglicensing.TierPro]...),
-		MaxMonitoredSystems: 15,
+		MaxMonitoredSystems: 0,
 	}, string(pkglicensing.SubStateActive), entitlementUsageSnapshot{
 		MonitoredSystems:          7,
 		MonitoredSystemsAvailable: true,
@@ -5343,7 +5343,7 @@ func TestContract_EntitlementPayloadMonitoredSystemUsageJSONSnapshot(t *testing.
 
 	const want = `{
 		"capabilities":["update_alerts","sso","ai_patrol","relay","mobile_app","push_notifications","long_term_metrics","ai_alerts","ai_autofix","kubernetes_ai","agent_profiles","advanced_sso","rbac","audit_logging","advanced_reporting"],
-		"limits":[{"key":"max_monitored_systems","limit":15,"current":7,"current_available":true,"state":"ok"}],
+		"limits":[],
 		"subscription_state":"active",
 		"upgrade_reasons":[],
 		"tier":"pro",
@@ -5355,7 +5355,7 @@ func TestContract_EntitlementPayloadMonitoredSystemUsageJSONSnapshot(t *testing.
 		"max_history_days":90,
 		"legacy_connections":{"proxmox_nodes":2,"docker_hosts":1,"kubernetes_clusters":1},
 		"has_migration_gap":false,
-		"monitored_system_capacity":{"mode":"within_limit","urgency":"ok","current":7,"limit":15,"current_available":true,"available_slots":8,"overage":0,"blocks_new_systems":false,"existing_monitoring_continues":true}
+		"monitored_system_capacity":{"mode":"unlimited","urgency":"ok","current":7,"limit":0,"current_available":true,"available_slots":0,"overage":0,"blocks_new_systems":false,"existing_monitoring_continues":true}
 	}`
 
 	assertJSONSnapshot(t, got, want)

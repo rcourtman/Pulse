@@ -4238,8 +4238,8 @@
       ]
     },
     {
-      "id": "self-hosted-homelab-monetization-boundary",
-      "summary": "Pulse v6 should not monetize homelab users on core monitoring itself; before GA, decide whether that principle lands as a materially more generous self-hosted cap ladder or as a model where core monitoring stays free and optional extras plus business-grade workflow, convenience, and support features carry the paid value.",
+      "id": "self-hosted-paid-extras-packaging",
+      "summary": "With self-hosted core monitoring no longer treated as a paid gate, decide before GA which optional extras, convenience features, AI or business-workflow surfaces, and support tiers remain the paid self-hosted packaging and how Relay, Pro, Pro+, or successor plans map onto that model.",
       "owner": "project-owner",
       "blocking_level": "release-ready",
       "status": "open",
@@ -4693,6 +4693,20 @@
       "summary": "Uncapped grandfathered recurring continuity applies only to legacy recurring Pulse Pro subscriptions that were already active before the public v6 pricing cutover; public pricing and checkout copy must not imply that brand-new pre-cutover purchases automatically qualify for that legacy continuity.",
       "kind": "pricing",
       "decided_at": "2026-04-15",
+      "subsystem_ids": [
+        "cloud-paid"
+      ],
+      "lane_ids": [
+        "L2",
+        "L3",
+        "L9"
+      ]
+    },
+    {
+      "id": "self-hosted-core-monitoring-free",
+      "summary": "Pulse v6 self-hosted core monitoring is not a paid gate: homelab users must not be monetized on monitored-system volume itself, monitored systems remain the canonical counted unit for product understanding and migration truth, and paid self-hosted value must come from optional extras, hosted convenience, business workflow, support, or similar non-core surfaces.",
+      "kind": "pricing",
+      "decided_at": "2026-04-16",
       "subsystem_ids": [
         "cloud-paid"
       ],

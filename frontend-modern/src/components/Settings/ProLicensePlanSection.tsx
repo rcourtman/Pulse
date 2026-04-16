@@ -80,7 +80,7 @@ export const ProLicensePlanSection: Component<ProLicensePlanSectionProps> = (pro
   const inactiveProUpsellNotice =
     !props.hasPaidFeatures && !props.trialEnded ? getInactiveProUpsellNotice() : null;
   const monitoredSystemUpgradeDestination = () =>
-    resolveSelfHostedPurchaseStartDestination('max_monitored_systems');
+    resolveSelfHostedPurchaseStartDestination('self_hosted_plan');
 
   return (
     <>

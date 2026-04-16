@@ -135,39 +135,44 @@ Community-maintained integrations and addons:
 
 - **[Home Assistant Addons](https://github.com/Kosztyk/homeassistant-addons)** - Run Pulse Agent and Pulse Server as Home Assistant addons.
 
-## 💳 Plans (Community / Relay / Pro / Pro+ / Cloud)
+## 💳 Plans (Community / Relay / Pro / Cloud)
 
-Pulse is full-featured for core monitoring in every tier. Self-hosted pricing now sells monitored coverage by monitored system, not by installed agent. Cloud and MSP pricing are unchanged.
+Pulse is full-featured for core monitoring in every self-hosted tier. Self-hosted
+pricing no longer sells more room for monitoring volume; paid value comes from
+convenience, history, AI operations, and advanced administration. Cloud and MSP
+pricing are unchanged.
 
 Self-hosted tiers:
 
-| Plan | Price | Included monitored systems | Metric history | Key upgrade |
-|---|---:|---:|---:|---|
-| Community | Free | 5 | 7 days | Core monitoring for one real small lab |
-| Relay | $4.99/mo or $39/yr | 8 | 14 days | Remote access, mobile, and push notifications |
-| Pro | $8.99/mo or $79/yr | 15 | 90 days | AI investigation, auto-fix, and operations tooling |
-| Pro+ | $14.99/mo or $129/yr | 50 | 90 days | More room for larger self-hosted labs |
+| Plan | Price | Core monitoring | Metric history | Key upgrade |
+|---|---:|---|---:|---|
+| Community | Free | Unlimited | 7 days | Full self-hosted monitoring |
+| Relay | $4.99/mo or $39/yr | Unlimited | 14 days | Remote access, mobile, and push notifications |
+| Pro | $8.99/mo or $79/yr | Unlimited | 90 days | AI investigation, auto-fix, and operations tooling |
 
-Pulse counts top-level monitored systems once no matter how they are collected. VMs, containers, pods, disks, backups, and other child resources under that system are included rather than counted separately.
+Pulse still counts top-level monitored systems once no matter how they are
+collected. VMs, containers, pods, disks, backups, and other child resources
+under that system are included rather than counted separately, but that count is
+no longer the self-hosted paid gate.
 
 Community keeps Patrol available with BYOK. Activated or trial-backed installs can also use
 Patrol quickstart for first-run activation: 25 Patrol runs with no API key on a
 server-verified install. Without activation, self-hosted Patrol continues with your
-configured provider. Relay remains the convenience tier, and Pro/Pro+ are the paid
-operations tiers.
+configured provider. Relay remains the convenience tier, and Pro is the paid
+operations tier.
 
 Runtime-aligned capability summary:
 
-| Capability | Community | Relay | Pro | Pro+ | Cloud |
-|---|:---:|:---:|:---:|:---:|:---:|
-| Pulse Patrol (Background Health Checks) | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Remote Access / Mobile / Push | — | ✅ | ✅ | ✅ | ✅ |
-| Alert Analysis | — | — | ✅ | ✅ | ✅ |
-| Pulse Patrol Auto-Fix | — | — | ✅ | ✅ | ✅ |
-| Kubernetes Analysis | — | — | ✅ | ✅ | ✅ |
-| Centralized Agent Profiles | — | — | ✅ | ✅ | ✅ |
-| Update Alerts (Container/Package Updates) | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Basic SSO (OIDC) | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Capability | Community | Relay | Pro | Cloud |
+|---|:---:|:---:|:---:|:---:|
+| Pulse Patrol (Background Health Checks) | ✅ | ✅ | ✅ | ✅ |
+| Remote Access / Mobile / Push | — | ✅ | ✅ | ✅ |
+| Alert Analysis | — | — | ✅ | ✅ |
+| Pulse Patrol Auto-Fix | — | — | ✅ | ✅ |
+| Kubernetes Analysis | — | — | ✅ | ✅ |
+| Centralized Agent Profiles | — | — | ✅ | ✅ |
+| Update Alerts (Container/Package Updates) | ✅ | ✅ | ✅ | ✅ |
+| Basic SSO (OIDC) | ✅ | ✅ | ✅ | ✅ |
 | Advanced SSO (SAML/Multi-Provider) | — | — | ✅ | ✅ | ✅ |
 | Role-Based Access Control (RBAC) | — | — | ✅ | ✅ | ✅ |
 | Enterprise Audit Logging | — | — | ✅ | ✅ | ✅ |

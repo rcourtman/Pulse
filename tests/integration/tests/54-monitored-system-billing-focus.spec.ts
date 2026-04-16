@@ -303,14 +303,14 @@ test("keeps capacity and upgrade arrivals distinct on the billing surface", asyn
 
     await banner.getByRole("link", { name: "Upgrade to add more" }).click();
     await page.waitForURL(
-      "**/settings/system/billing/plan?intent=max_monitored_systems",
+      "**/settings/system/billing/plan?intent=self_hosted_plan",
     );
     await expect(page.getByRole("tab", { name: "Plan" })).toHaveAttribute(
       "aria-selected",
       "true",
     );
     await expect(
-      page.getByText("Need a higher monitored-system cap?"),
+      page.getByText("Compare self-hosted plans"),
     ).toBeVisible();
     await expect(page.getByText("Redeem existing key")).toBeVisible();
     await expect(page.getByLabel("Pulse Pro Key")).toBeHidden();
@@ -318,7 +318,7 @@ test("keeps capacity and upgrade arrivals distinct on the billing surface", asyn
       page.getByRole("link", { name: "Compare plans" }),
     ).toHaveAttribute(
       "href",
-      "/auth/license-purchase-start?feature=max_monitored_systems",
+      "/auth/license-purchase-start?feature=self_hosted_plan",
     );
   });
 

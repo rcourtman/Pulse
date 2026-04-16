@@ -93,7 +93,7 @@ describe('MonitoredSystemLimitWarningBanner', () => {
       external: false,
     });
     mockGetUpgradeActionUrlOrFallback.mockReturnValue(
-      '/settings/system/billing/plan?intent=max_monitored_systems',
+      '/settings/system/billing/plan?intent=self_hosted_plan',
     );
   });
 
@@ -211,7 +211,7 @@ describe('MonitoredSystemLimitWarningBanner', () => {
     expect(screen.getByText('Upgrade to add more')).toBeInTheDocument();
     expect(screen.getByText('Upgrade to add more')).toHaveAttribute(
       'href',
-      '/settings/system/billing/plan?intent=max_monitored_systems',
+      '/settings/system/billing/plan?intent=self_hosted_plan',
     );
     expect(screen.queryByText('Install v6 collectors')).not.toBeInTheDocument();
   });
@@ -268,7 +268,7 @@ describe('MonitoredSystemLimitWarningBanner', () => {
     );
     expect(screen.getByText('Upgrade to add more')).toHaveAttribute(
       'href',
-      '/settings/system/billing/plan?intent=max_monitored_systems',
+      '/settings/system/billing/plan?intent=self_hosted_plan',
     );
   });
 

@@ -484,7 +484,7 @@ function routeCommercialAPI(request, response, url, scenario) {
       title: 'Simple self-hosted pricing for Pulse',
       description: 'Preview pricing contract',
       explainer:
-        'Pulse counts <strong>top-level monitored systems</strong>. Child resources underneath them are included.',
+        'Community keeps core monitoring free. Relay and Pro sell convenience, history, AI operations, and advanced administration.',
       plans: [
         {
           badge: 'Recommended',
@@ -495,7 +495,7 @@ function routeCommercialAPI(request, response, url, scenario) {
           period: '$39/year available too',
           blurb: 'Secure remote access and mobile access.',
           features: [
-            { tone: 'check', html: 'Up to <strong>8 monitored systems</strong>' },
+            { tone: 'check', html: 'Unlimited <strong>self-hosted monitoring</strong>' },
             { tone: 'check', html: 'Remote access' },
           ],
           buttons: [
@@ -510,27 +510,12 @@ function routeCommercialAPI(request, response, url, scenario) {
           period: '$79/year available too',
           blurb: 'Investigation, alert analysis, and auto-fix.',
           features: [
-            { tone: 'check', html: 'Up to <strong>15 monitored systems</strong>' },
+            { tone: 'check', html: 'Unlimited <strong>self-hosted monitoring</strong>' },
             { tone: 'check', html: 'Everything in Relay' },
           ],
           buttons: [
             { kind: 'checkout', className: 'btn btn-secondary', tier: 'pro', planKey: 'price_pro_monthly', billingCycle: 'monthly', label: 'Buy Monthly' },
             { kind: 'checkout', className: 'btn btn-primary', tier: 'pro', planKey: 'price_pro_annual', billingCycle: 'annual', label: 'Buy Annual' },
-          ],
-        },
-        {
-          tierKicker: 'Pro+',
-          title: 'Pro+',
-          price: '$14.99',
-          period: '$129/year available too',
-          blurb: 'More room for larger self-hosted environments.',
-          features: [
-            { tone: 'check', html: 'Up to <strong>50 monitored systems</strong>' },
-            { tone: 'check', html: 'Everything in Pro' },
-          ],
-          buttons: [
-            { kind: 'checkout', className: 'btn btn-secondary', tier: 'pro_plus', planKey: 'price_pro_plus_monthly', billingCycle: 'monthly', label: 'Buy Monthly' },
-            { kind: 'checkout', className: 'btn btn-primary', tier: 'pro_plus', planKey: 'price_pro_plus_annual', billingCycle: 'annual', label: 'Buy Annual' },
           ],
         },
       ],
@@ -549,7 +534,7 @@ function routeCommercialAPI(request, response, url, scenario) {
     }
     sendJSON(response, 200, {
       portal_handoff_id: portalHandoffID,
-      feature: 'max_monitored_systems',
+      feature: 'self_hosted_plan',
       status: portalHandoffID === 'cph_preview_completed' ? 'completed' : 'resolved',
       resolved_at: Math.floor(Date.now() / 1000) - 30,
       expires_at: Math.floor(Date.now() / 1000) + 3600,
@@ -561,10 +546,10 @@ function routeCommercialAPI(request, response, url, scenario) {
     sendJSON(response, 200, {
       status: 'fulfilled',
       owner_email: 'buyer@example.com',
-      tier: 'pro_plus',
-      plan_key: 'price_pro_plus_annual',
+      tier: 'pro',
+      plan_key: 'price_pro_annual',
       activation_key_prefix: 'ppk_live_preview',
-      max_monitored_systems: 50,
+      max_monitored_systems: 0,
       current_period_end: iso('2027-03-20T10:00:00Z'),
     });
     return;

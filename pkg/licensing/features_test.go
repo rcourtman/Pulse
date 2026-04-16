@@ -260,11 +260,11 @@ func TestTierMonitoredSystemLimits(t *testing.T) {
 		tier Tier
 		want int
 	}{
-		{TierFree, 5},
-		{TierRelay, 8},
-		{TierPro, 15},
-		{TierProPlus, 50},
-		{TierProAnnual, 15},
+		{TierFree, 0},
+		{TierRelay, 0},
+		{TierPro, 0},
+		{TierProPlus, 0},
+		{TierProAnnual, 0},
 		{TierLifetime, 0},
 	}
 

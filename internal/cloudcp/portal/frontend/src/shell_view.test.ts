@@ -629,21 +629,21 @@ describe('shell view', function() {
         }),
         billingState: createBillingState({
           openBillingPanelID: 'upgrade-billing-panel',
-          upgradeFeatureKey: 'max_monitored_systems',
+          upgradeFeatureKey: 'self_hosted_plan',
         }),
         activeSection: 'billing',
       })
     );
 
     expect(html).toContain('Pulse Account owns the commercial handoff for self-hosted upgrades from the app.');
-    expect(html).toContain('Upgrade monitored-system cap');
+    expect(html).toContain('Compare self-hosted plans');
     expect(html).toContain(
-      'Compare self-hosted plans by top-level monitored systems such as Docker hosts, Kubernetes clusters, Proxmox nodes, standalone hosts, and TrueNAS systems.',
+      'Compare self-hosted plans by Relay and Pro capabilities rather than monitored-system volume.',
     );
-    expect(html).toContain('Top-level monitored systems');
+    expect(html).toContain('Plan comparison');
     expect(html).toContain('id="upgrade-billing-root"');
     expect(html).toContain(
-      'Choose the self-hosted tier that fits the top-level monitored systems you run. Child resources like VMs, containers, pods, disks, backups, and services underneath those roots are included. Pulse Account will send completed checkout directly back to Pulse Pro billing.',
+      'Choose the self-hosted tier that fits the convenience and advanced capabilities you want. Core monitoring stays available across self-hosted plans. Pulse Account will send completed checkout directly back to Pulse Pro billing.',
     );
     expect(html).toContain('Pulse Account owns self-hosted plan selection and checkout for Pulse Pro upgrades.');
     expect(html).not.toContain('id="open-manage-billing"');

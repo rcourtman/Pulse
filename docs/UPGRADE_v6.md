@@ -115,11 +115,12 @@ Pulse v6 feature gating is driven by the entitlements endpoint:
 
 - `GET /api/license/entitlements`
 
-For self-hosted v6, Pulse now sells monitored coverage by monitored system rather than by installed agent. Community includes 5 monitored systems, Relay includes 8, Pro includes 15, and Pro+ includes 50. Relay also raises history to 14 days, while Pro and Pro+ raise it to 90 days.
+For self-hosted v6, Pulse no longer sells monitored-system volume. Core
+monitoring stays available across Community, Relay, and Pro, while Relay and
+Pro sell convenience, history, AI operations, and advanced administration.
+Relay raises history to 14 days, while Pro raises it to 90 days.
 
 For self-hosted v6, `POST /api/license/trial/start` initiates hosted signup by returning `409 trial_signup_required` with a hosted `action_url` rather than minting a local trial directly. Duplicate start attempts stay on the hosted-signup retry burst until it is exhausted, then return canonical `429 trial_rate_limited` plus `Retry-After` backoff metadata. Pulse only reflects trial lifecycle entitlements after the hosted control plane returns a signed activation token to `/auth/trial-activate`.
-
-If you are upgrading an existing free instance that already exceeds the new Community cap, Pulse should not hard-break monitoring on rollout day. During grace, existing monitoring continues and only newly added counted systems are blocked until you remove systems or upgrade.
 
 #### v5 License Migration
 
@@ -131,8 +132,10 @@ Pulse v6 uses the activation/grant model for active licensing, but it can migrat
   - a Pulse v6 activation key, or
   - a valid Pulse v5 paid license key, which Pulse will try to exchange automatically into the v6 activation model
 - If the exchange service cannot complete the migration, retry from the v6 license panel or use the self-serve retrieval flow to fetch the current v6 activation key. Email is only a backup copy of that key.
-- The exchanged v6 entitlement depends on the original cohort. Lifetime, active pre-cutover recurring Pro, and other migrated legacy paid installs do not all land on the same monitored-system policy.
-- Legacy recurring Pulse Pro subscriptions already active before the public v6 pricing cutover keep their grandfathered recurring price and uncapped monitored-system and guest capacity until cancellation. If they cancel and later return, current v6 pricing and limits apply.
+- The exchanged v6 entitlement depends on the original cohort. Lifetime,
+  active pre-cutover recurring Pro, and other migrated legacy paid installs do
+  not all land on the same commercial continuity posture.
+- Legacy recurring Pulse Pro subscriptions already active before the public v6 pricing cutover keep their grandfathered recurring price and uncapped monitored-system and guest capacity until cancellation. If they cancel and later return, current v6 pricing applies.
 
 #### Paid Upgrade Truth Table
 
@@ -140,11 +143,11 @@ When an existing paid user asks what changes for them specifically, use this rul
 
 - Legacy recurring Pulse Pro subscriptions from v5 or earlier that were already active before the public v6 pricing cutover keep their current recurring price and uncapped monitored-system plus guest capacity while the subscription remains continuously active.
 - Existing lifetime customers remain permanently valid and uncapped.
-- Legacy paid v5 licenses migrated into v6 outside the recurring grandfathered path can retain a monitored-system continuity floor for the migrated install where needed, but that continuity path is not the same thing as an uncapped entitlement.
-- Former recurring customers who already canceled, or who cancel and later return, do not resume the old grandfathered pricing or uncapped capacity automatically; they re-enter on current public v6 pricing and limits.
-- New self-hosted v6 purchases use the current Relay / Pro / Pro+ plan caps.
+- Legacy paid v5 licenses migrated into v6 outside the recurring grandfathered path can still exchange into the v6 activation model without repurchasing. Migration records can preserve the original cohort for support and audit, but self-hosted monitoring volume is no longer the paid gate.
+- Former recurring customers who already canceled, or who cancel and later return, do not resume the old grandfathered pricing or uncapped capacity automatically; they re-enter on current public v6 pricing.
+- New self-hosted v6 purchases use the current Community / Relay / Pro plan model with unlimited core monitoring.
 
-If a grandfathered recurring subscriber covered by the pre-cutover legacy policy, or a lifetime customer, sees a new monitored-system or guest cap after moving to v6, treat that as a regression, not as expected upgrade behavior.
+If a self-hosted v6 install sees a new monitored-system cap after moving to v6, treat that as a regression, not as expected upgrade behavior.
 
 Practical recommendation:
 

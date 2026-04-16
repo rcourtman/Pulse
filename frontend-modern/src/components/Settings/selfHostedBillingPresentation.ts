@@ -35,10 +35,10 @@ export interface SelfHostedProBillingPresentation {
 export const SELF_HOSTED_PRO_BILLING_PRESENTATION: SelfHostedProBillingPresentation = {
   shellTitle: 'Pulse Pro',
   shellDescription:
-    'Manage self-hosted billing, monitored-system limits, and Pulse Pro license status.',
-  infrastructureRouteReferral: 'Billing and monitored-system limits live in Pulse Pro.',
+    'Manage self-hosted billing, plan features, and Pulse Pro license status.',
+  infrastructureRouteReferral: 'Billing and self-hosted plan features live in Pulse Pro.',
   infrastructureWorkspaceReferral:
-    'Billing, monitored-system limits, and Pulse Pro license status live in Pulse Pro, not here.',
+    'Billing, self-hosted plan features, and Pulse Pro license status live in Pulse Pro, not here.',
   sectionSelectorAriaLabel: 'Pulse Pro billing section',
   refreshLabel: 'Refresh',
   planTabLabel: 'Plan',
@@ -54,9 +54,9 @@ export const SELF_HOSTED_PRO_BILLING_PRESENTATION: SelfHostedProBillingPresentat
   policyLoadingTitle: 'Loading settings access',
   policyLoadingBody:
     'Pulse waits for the session presentation policy before showing license, billing, or usage details.',
-  monitoredSystemUpgradeArrivalTitle: 'Need a higher monitored-system cap?',
+  monitoredSystemUpgradeArrivalTitle: 'Compare self-hosted plans',
   monitoredSystemUpgradeArrivalBody:
-    'Pulse counts top-level monitored systems such as Docker hosts, Kubernetes clusters, Proxmox nodes, standalone hosts, and TrueNAS systems. Compare self-hosted plans in Pulse Account and return here with Pulse Pro activated automatically.',
+    'Community keeps core monitoring free. Compare Relay and Pro in Pulse Account, then return here with Pulse Pro activated automatically.',
   monitoredSystemUpgradeArrivalActionLabel: 'Compare plans',
   purchaseActivatedUsageActionLabel: 'Review usage',
   purchaseCancelledActionLabel: 'Compare plans',
