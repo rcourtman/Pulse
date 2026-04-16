@@ -4416,6 +4416,7 @@ class SubsystemLookupTest(unittest.TestCase):
                 "scripts/release_control/internal/record_rc_to_ga_rehearsal_test.py",
                 "scripts/release_control/release_promotion_policy_support_test.py",
                 "scripts/release_control/release_promotion_policy_test.py",
+                "scripts/release_control/render_release_body_test.py",
                 "scripts/release_control/resolve_release_promotion_test.py",
             ],
         )
@@ -4449,6 +4450,7 @@ class SubsystemLookupTest(unittest.TestCase):
                 "scripts/release_control/internal/record_rc_to_ga_rehearsal_test.py",
                 "scripts/release_control/release_promotion_policy_support_test.py",
                 "scripts/release_control/release_promotion_policy_test.py",
+                "scripts/release_control/render_release_body_test.py",
                 "scripts/release_control/resolve_release_promotion_test.py",
             ],
         )
@@ -4482,6 +4484,7 @@ class SubsystemLookupTest(unittest.TestCase):
                 "scripts/release_control/internal/record_rc_to_ga_rehearsal_test.py",
                 "scripts/release_control/release_promotion_policy_support_test.py",
                 "scripts/release_control/release_promotion_policy_test.py",
+                "scripts/release_control/render_release_body_test.py",
                 "scripts/release_control/resolve_release_promotion_test.py",
             ],
         )
@@ -4515,6 +4518,7 @@ class SubsystemLookupTest(unittest.TestCase):
                 "scripts/release_control/internal/record_rc_to_ga_rehearsal_test.py",
                 "scripts/release_control/release_promotion_policy_support_test.py",
                 "scripts/release_control/release_promotion_policy_test.py",
+                "scripts/release_control/render_release_body_test.py",
                 "scripts/release_control/resolve_release_promotion_test.py",
             ],
         )
@@ -4548,6 +4552,7 @@ class SubsystemLookupTest(unittest.TestCase):
                 "scripts/release_control/internal/record_rc_to_ga_rehearsal_test.py",
                 "scripts/release_control/release_promotion_policy_support_test.py",
                 "scripts/release_control/release_promotion_policy_test.py",
+                "scripts/release_control/render_release_body_test.py",
                 "scripts/release_control/resolve_release_promotion_test.py",
             ],
         )

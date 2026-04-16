@@ -577,49 +577,27 @@ jobs:
           if [ -n "$RELEASE_NOTES_INPUT" ]; then
             printf "%s\n" "$RELEASE_NOTES_INPUT" > "$NOTES_FILE"
           else
-            echo "Release $VERSION" > "$NOTES_FILE"
+            echo "# Pulse v${VERSION} Release Notes" > "$NOTES_FILE"
             echo "" >> "$NOTES_FILE"
             echo "See commit history for changes." >> "$NOTES_FILE"
           fi
 
-          {
-            echo ""
-            echo "## Installation"
-            echo ""
-            echo "**Docker (recommended):**"
-            echo '```bash'
-            echo "docker pull rcourtman/pulse:${VERSION}"
-            echo '```'
-            echo ""
-            echo "**Docker Compose:**"
-            echo "Update your \`docker-compose.yml\` to use \`rcourtman/pulse:${VERSION}\`"
-            echo ""
-            echo "See the [Installation Guide](https://github.com/rcourtman/Pulse#installation) for complete setup instructions."
-            echo ""
-            echo "## Promotion Metadata"
-            echo ""
-            echo "- Promotion channel: ${{ needs.prepare.outputs.is_prerelease == 'true' && 'rc' || 'stable' }}"
-            echo "- Candidate stable tag: ${{ needs.prepare.outputs.tag }}"
-            if [ -n "${{ needs.prepare.outputs.promoted_from_tag }}" ]; then
-              echo "- Promoted prerelease tag: ${{ needs.prepare.outputs.promoted_from_tag }}"
-            else
-              echo "- Promoted prerelease tag: n/a"
-            fi
-            echo "- Rollback target: ${{ needs.prepare.outputs.rollback_tag }}"
-            echo "- Rollback command: \`${{ needs.prepare.outputs.rollback_command }}\`"
-            if [ -n "${{ needs.prepare.outputs.ga_date }}" ]; then
-              echo "- Planned GA date: ${{ needs.prepare.outputs.ga_date }}"
-            fi
-            if [ -n "${{ needs.prepare.outputs.v5_eos_date }}" ]; then
-              echo "- Planned v5 end-of-support date: ${{ needs.prepare.outputs.v5_eos_date }}"
-            fi
-            echo "- Hotfix exception: ${{ needs.prepare.outputs.hotfix_exception }}"
-            if [ -n "${{ needs.prepare.outputs.hotfix_reason }}" ]; then
-              echo "- Hotfix reason: ${{ needs.prepare.outputs.hotfix_reason }}"
-            fi
-          } >> "$NOTES_FILE"
+          RENDERED_NOTES_FILE=$(mktemp)
+          python3 scripts/release_control/render_release_body.py \
+            --version "$VERSION" \
+            --release-notes-file "$NOTES_FILE" \
+            --output "$RENDERED_NOTES_FILE" \
+            --promotion-channel "${{ needs.prepare.outputs.is_prerelease == 'true' && 'rc' || 'stable' }}" \
+            --candidate-tag "${{ needs.prepare.outputs.tag }}" \
+            --promoted-prerelease-tag "${{ needs.prepare.outputs.promoted_from_tag }}" \
+            --rollback-target "${{ needs.prepare.outputs.rollback_tag }}" \
+            --rollback-command "${{ needs.prepare.outputs.rollback_command }}" \
+            --planned-ga-date "${{ needs.prepare.outputs.ga_date }}" \
+            --planned-v5-eos-date "${{ needs.prepare.outputs.v5_eos_date }}" \
+            --hotfix-exception "${{ needs.prepare.outputs.hotfix_exception }}" \
+            --hotfix-reason "${{ needs.prepare.outputs.hotfix_reason }}"
 
-          echo "notes_file=${NOTES_FILE}" >> $GITHUB_OUTPUT
+          echo "notes_file=${RENDERED_NOTES_FILE}" >> $GITHUB_OUTPUT
 
       - name: Locate existing release
         id: existing_release

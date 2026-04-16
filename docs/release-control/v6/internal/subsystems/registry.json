@@ -2452,6 +2452,7 @@
         "scripts/release_control/internal/record_rc_to_ga_rehearsal.py",
         "scripts/release_control/record_rc_to_ga_rehearsal.py",
         "scripts/release_control/release_promotion_policy_support.py",
+        "scripts/release_control/render_release_body.py",
         "scripts/release_control/resolve_release_promotion.py",
         "scripts/release_ldflags.sh",
         "scripts/run_demo_public_browser_smoke.sh",
@@ -2542,6 +2543,7 @@
               "scripts/release_control/internal/record_rc_to_ga_rehearsal.py",
               "scripts/release_control/record_rc_to_ga_rehearsal.py",
               "scripts/release_control/release_promotion_policy_support.py",
+              "scripts/release_control/render_release_body.py",
               "scripts/release_control/resolve_release_promotion.py",
               "scripts/trigger-release-dry-run.sh",
               "scripts/trigger-release.sh",
@@ -2553,6 +2555,7 @@
               "scripts/release_control/internal/record_rc_to_ga_rehearsal_test.py",
               "scripts/release_control/release_promotion_policy_support_test.py",
               "scripts/release_control/release_promotion_policy_test.py",
+              "scripts/release_control/render_release_body_test.py",
               "scripts/release_control/resolve_release_promotion_test.py"
             ]
           },
