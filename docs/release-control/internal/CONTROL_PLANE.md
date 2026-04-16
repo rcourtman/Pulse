@@ -236,18 +236,20 @@ user language should update the control plane.
 ## Current State
 
 1. v6 is the current active release profile.
-2. `v6-rc-cut` is the current active engineering target.
-   It is a release target, so default slice selection should stay centered on
-   prerelease blockers, RC-publication judgment, and the remaining proof needed
-   before a real governed RC should actually be cut.
+2. `v6-rc-stabilization` is the current active engineering target.
+   It is a post-RC stabilization target, so default slice selection should stay
+   centered on keeping Pulse v6 simple, accurate, and cleanly readable around
+   the proven monitoring-first floor of the shipped RCs, while broader
+   control-plane expansion stays out of the default target until it is proven.
 3. `v6-product-lane-expansion` remains planned and is still blocked on the
    broader surfaced product case being proven.
    Its candidate-lane surface remains available in `available_candidate_lane_queue`
    plus the linked `candidate_lanes` and `coverage_gaps`.
-4. `v6-ga-promotion` remains planned and must stay dormant until a real
-   governed RC has actually shipped and been validated.
-5. `v6-rc-stabilization` remains planned and should only become active once
-   the first governed RC exists.
+4. `v6-ga-promotion` remains planned and must stay dormant until the shipped
+   RCs have been validated enough to clear the stabilization floor and the
+   `rc-to-ga-promotion-readiness` gate.
+5. `v6-rc-stabilization` is now the active target, promoted after the first
+   governed RC shipped.
 6. Its files remain under `docs/release-control/v6/`.
 7. The existing v6 control surfaces are still live, but they now sit underneath
    an evergreen Pulse control plane rather than pretending to be the whole
