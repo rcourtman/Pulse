@@ -115,6 +115,9 @@ git push origin pulse/v6-release
 - Continue v5 patch releases from `main` as normal.
 - Do not merge `pulse/v6-release` into `main` during prerelease.
 - Keep v5 and v6 changelogs/release notes separate.
+- Do not rewrite shipped RC notes in place. Each RC should get its own draft or
+  published release-notes packet so `rc.1`, `rc.2`, and later prerelease
+  support context remain historically accurate.
 
 ## GA Cutover (Only After RC Confidence)
 

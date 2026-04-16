@@ -231,6 +231,8 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("record_rc_to_ga_rehearsal.py --run-id <run-id>", runbook)
         self.assertIn("rc-to-ga-promotion-readiness-rehearsal-<record-date>.md", runbook)
         self.assertIn("Existing unpublished draft releases for the same tag are updated in place", runbook)
+        self.assertIn("Do not rewrite shipped RC notes in place", runbook)
+        self.assertIn("`rc.1`, `rc.2`, and later prerelease", runbook)
 
     def test_release_artifact_workflows_refuse_stable_without_matching_rc(self) -> None:
         publish = read(".github/workflows/publish-docker.yml")
