@@ -194,14 +194,14 @@ test.describe.serial('v5 commercial migration notice', () => {
       await expectFieldValue(expectFieldLocator(page, 'Plan Terms'), formatTitleCase(expectedPlanVersion));
       if (expectedIsLifetime === 'true') {
         await expectFieldValue(expectFieldLocator(page, 'Expires'), 'Never (Lifetime)');
-        await expectFieldValue(expectFieldLocator(page, 'Included Monitored Systems'), 'Unlimited');
+        await expectFieldValue(expectFieldLocator(page, 'Core Monitoring'), 'Unlimited');
       } else if (expectedMaxMonitoredSystems > 0) {
         await expectFieldValue(
           expectFieldLocator(page, 'Included Monitored Systems'),
           String(expectedMaxMonitoredSystems),
         );
       } else {
-        await expectFieldValue(expectFieldLocator(page, 'Included Monitored Systems'), 'Unlimited');
+        await expectFieldValue(expectFieldLocator(page, 'Core Monitoring'), 'Unlimited');
       }
       return;
     }
