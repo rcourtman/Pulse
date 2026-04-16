@@ -2400,6 +2400,7 @@
       "lane": "L1",
       "contract": "docs/release-control/v6/internal/subsystems/deployment-installability.md",
       "owned_prefixes": [
+        "docs/releases/",
         "internal/updates/"
       ],
       "owned_files": [
@@ -2417,7 +2418,7 @@
         "docs/release-control/v6/internal/PRE_RELEASE_CHECKLIST.md",
         "docs/release-control/v6/internal/RC_TO_GA_REHEARSAL_TEMPLATE.md",
         "docs/release-control/v6/internal/RELEASE_PROMOTION_POLICY.md",
-        "docs/releases/V6_PRERELEASE_RUNBOOK.md",
+        "docs/RELEASE_NOTES.md",
         "frontend-modern/package-lock.json",
         "frontend-modern/package.json",
         "frontend-modern/src/api/updates.ts",
@@ -2503,7 +2504,9 @@
           {
             "id": "release-promotion-metadata-runtime",
             "label": "release promotion and artifact dispatch proof",
-            "match_prefixes": [],
+            "match_prefixes": [
+              "docs/releases/"
+            ],
             "match_files": [
               ".github/workflows/create-release.yml",
               ".github/workflows/helm-pages.yml",
@@ -2515,7 +2518,7 @@
               "docs/release-control/v6/internal/PRE_RELEASE_CHECKLIST.md",
               "docs/release-control/v6/internal/RC_TO_GA_REHEARSAL_TEMPLATE.md",
               "docs/release-control/v6/internal/RELEASE_PROMOTION_POLICY.md",
-              "docs/releases/V6_PRERELEASE_RUNBOOK.md",
+              "docs/RELEASE_NOTES.md",
               "scripts/check-workflow-dispatch-inputs.py",
               "scripts/release_control/internal/record_rc_to_ga_rehearsal.py",
               "scripts/release_control/record_rc_to_ga_rehearsal.py",
