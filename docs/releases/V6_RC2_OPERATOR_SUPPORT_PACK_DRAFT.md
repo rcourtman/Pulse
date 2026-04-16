@@ -136,6 +136,7 @@ Escalate without asking the user to keep experimenting when the report involves:
 ## Canonical References
 
 - `docs/releases/RELEASE_NOTES_v6_RC2_DRAFT.md`
+- `docs/releases/V6_CHANGELOG_RC2_DRAFT.md`
 - `docs/UPGRADE_v6.md`
 - `docs/PULSE_PRO.md`
 - `docs/MIGRATION_UNIFIED_NAV.md`

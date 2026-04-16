@@ -107,6 +107,7 @@ When reporting an `rc.2` problem, include:
 ## Operator References
 
 - `docs/releases/V6_RC2_OPERATOR_SUPPORT_PACK_DRAFT.md`
+- `docs/releases/V6_CHANGELOG_RC2_DRAFT.md`
 - `docs/UPGRADE_v6.md`
 - `docs/PULSE_PRO.md`
 - `docs/MIGRATION_UNIFIED_NAV.md`
