@@ -4519,6 +4519,39 @@ class SubsystemLookupTest(unittest.TestCase):
             ],
         )
 
+    def test_lookup_paths_assigns_version_file_to_deployment_installability(self) -> None:
+        result = lookup_paths(["VERSION"])
+        self.assertEqual(result["unowned_runtime_files"], [])
+        self.assertEqual(
+            {item["subsystem"] for item in result["impacted_subsystems"]},
+            {"deployment-installability"},
+        )
+        file_entry = result["files"][0]
+        self.assertEqual(file_entry["classification"], "runtime")
+        self.assertEqual(
+            {match["subsystem"] for match in file_entry["matches"]},
+            {"deployment-installability"},
+        )
+        match = file_entry["matches"][0]
+        self.assertEqual(
+            match["contract"],
+            "docs/release-control/v6/internal/subsystems/deployment-installability.md",
+        )
+        self.assertEqual(match["lane_context"]["lane_id"], "L1")
+        self.assertEqual(
+            match["verification_requirement"]["id"],
+            "release-promotion-metadata-runtime",
+        )
+        self.assertEqual(
+            match["verification_requirement"]["exact_files"],
+            [
+                "scripts/release_control/internal/record_rc_to_ga_rehearsal_test.py",
+                "scripts/release_control/release_promotion_policy_support_test.py",
+                "scripts/release_control/release_promotion_policy_test.py",
+                "scripts/release_control/resolve_release_promotion_test.py",
+            ],
+        )
+
     def test_lookup_paths_normalizes_absolute_repo_paths(self) -> None:
         absolute = str(Path(REPO_ROOT, "internal/api/resources.go"))
         result = lookup_paths([absolute])

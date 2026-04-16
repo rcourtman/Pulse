@@ -2467,7 +2467,8 @@
         "tests/integration/scripts/managed-dev-runtime.mjs",
         "tests/integration/scripts/relay-mobile-token-helper.go",
         "tests/integration/tests/helpers.ts",
-        "tests/integration/tests/runtime-defaults.ts"
+        "tests/integration/tests/runtime-defaults.ts",
+        "VERSION"
       ],
       "verification": {
         "allow_same_subsystem_tests": false,
@@ -2529,7 +2530,8 @@
               "scripts/release_control/release_promotion_policy_support.py",
               "scripts/release_control/resolve_release_promotion.py",
               "scripts/trigger-release-dry-run.sh",
-              "scripts/trigger-release.sh"
+              "scripts/trigger-release.sh",
+              "VERSION"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
