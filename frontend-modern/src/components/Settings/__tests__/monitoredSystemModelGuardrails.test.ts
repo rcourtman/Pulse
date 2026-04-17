@@ -992,7 +992,7 @@ describe('monitored-system model guardrails', () => {
     expect(setupCompletionPanelSource).toContain('Open Infrastructure Install');
     expect(setupCompletionPanelSource).toContain('Open Platform connections');
     expect(setupCompletionPanelSource).toContain(
-      'The canonical install flow now lives in Infrastructure Operations.',
+      'The canonical install flow now lives in Connections & Inventory.',
     );
     expect(setupCompletionPanelSource).not.toContain('const hasAgentFacet = (resource: Resource)');
     expect(setupCompletionPanelSource).not.toContain(

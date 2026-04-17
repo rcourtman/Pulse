@@ -249,10 +249,11 @@ organization chrome: `frontend-modern/src/App.tsx` and
 `frontend-modern/src/AppLayout.tsx` may hide org switchers or demo-only org
 labels, but they must not couple assistant visibility, session reset, or
 drawer-open behavior to that organization presentation state.
-That same shell boundary also owns demo-only Operations suppression:
-`frontend-modern/src/AppLayout.tsx` may remove the top-level Operations route
-from the public demo shell, but assistant availability and reset behavior must
-stay independent of that utility-tab presentation choice.
+That same shell boundary also owns demo-only support-surface suppression:
+Pulse no longer exposes Operations as a top-level route. Demo-only support
+surfaces now hide inside the shared Settings navigation instead, and assistant
+availability plus reset behavior must stay independent of that settings-nav
+presentation choice.
 Authenticated `/login` recovery belongs to that same route shell boundary:
 once login succeeds, `frontend-modern/src/App.tsx` must resolve `/login`
 through the canonical post-auth landing route instead of leaving the

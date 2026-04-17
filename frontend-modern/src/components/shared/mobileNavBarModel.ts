@@ -14,7 +14,7 @@ export type MobileNavBarPlatformTab = {
 };
 
 export type MobileNavBarUtilityTab = {
-  id: 'alerts' | 'ai' | 'operations' | 'settings';
+  id: 'alerts' | 'ai' | 'settings';
   label: string;
   route: string;
   tooltip: string;
@@ -40,7 +40,7 @@ const MOBILE_NAV_PLATFORM_PRIORITY = [
   'recovery',
 ] as const;
 
-const MOBILE_NAV_UTILITY_PRIORITY = ['alerts', 'ai', 'operations', 'settings'] as const;
+const MOBILE_NAV_UTILITY_PRIORITY = ['alerts', 'ai', 'settings'] as const;
 
 export function buildOrderedMobileNavTabs<T extends { id: string }>(
   tabs: T[],

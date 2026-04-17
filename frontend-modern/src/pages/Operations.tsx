@@ -1,8 +1,10 @@
-import type { Component } from 'solid-js';
-import { OperationsPageSurface } from '@/features/operations/OperationsPageSurface';
+import { Navigate, useLocation } from '@solidjs/router';
+import { buildLegacyOperationsSettingsPath } from '@/components/Settings/settingsNavigationModel';
 
-export const Operations: Component = () => {
-  return <OperationsPageSurface />;
+export const Operations = () => {
+  const location = useLocation();
+  const canonicalPath = buildLegacyOperationsSettingsPath(location.pathname);
+  return <Navigate href={`${canonicalPath}${location.search ?? ''}`} />;
 };
 
 export default Operations;

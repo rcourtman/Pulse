@@ -99,6 +99,8 @@ describe('MobileNavBar', () => {
     const buttons = container.querySelectorAll('button[data-tab-id]');
     expect(buttons[0]).toHaveAttribute('data-tab-id', 'dashboard');
     expect(buttons[1]).toHaveAttribute('data-tab-id', 'storage');
+    expect(buttons[2]).toHaveAttribute('data-tab-id', 'alerts');
+    expect(buttons[3]).toHaveAttribute('data-tab-id', 'settings');
 
     expect(screen.getByText('2')).toBeInTheDocument();
     expect(screen.getByText('3')).toBeInTheDocument();

@@ -17,6 +17,9 @@ export type SettingsTab =
   | 'system-ai'
   | 'system-relay'
   | 'system-billing'
+  | 'support-diagnostics'
+  | 'support-reporting'
+  | 'support-logs'
   | 'organization-overview'
   | 'organization-access'
   | 'organization-billing'
@@ -37,7 +40,12 @@ export type ProxmoxPlatformType = Extract<
   'proxmox-pve' | 'proxmox-pbs' | 'proxmox-pmg'
 >;
 
-export type SettingsNavGroupId = 'infrastructure' | 'organization' | 'system' | 'security';
+export type SettingsNavGroupId =
+  | 'infrastructure'
+  | 'organization'
+  | 'system'
+  | 'support'
+  | 'security';
 
 export interface SettingsNavItem {
   id: SettingsTab;
@@ -51,6 +59,7 @@ export interface SettingsNavItem {
   hostedOnly?: boolean;
   hideWhenCommercialHidden?: boolean;
   hideWhenOrganizationHidden?: boolean;
+  hideWhenDemoMode?: boolean;
   requiredCapability?: keyof SecurityStatusSettingsCapabilities;
   badge?: string;
   features?: string[];
@@ -78,11 +87,16 @@ const LEGACY_DOCKER_PREFIX = '/settings/workloads/docker';
 const INFRASTRUCTURE_INSTALL_PREFIX = '/settings/infrastructure/install';
 const INFRASTRUCTURE_OPERATIONS_PREFIX = '/settings/infrastructure/operations';
 const PLATFORM_CONNECTIONS_PREFIX = '/settings/infrastructure/platforms';
+const SUPPORT_PREFIX = '/settings/support';
+const SUPPORT_DIAGNOSTICS_PREFIX = `${SUPPORT_PREFIX}/diagnostics`;
+const SUPPORT_REPORTING_PREFIX = `${SUPPORT_PREFIX}/reporting`;
+const SUPPORT_LOGS_PREFIX = `${SUPPORT_PREFIX}/logs`;
 const TRUENAS_PREFIX = `${PLATFORM_CONNECTIONS_PREFIX}/truenas`;
 const PROXMOX_PREFIX = `${PLATFORM_CONNECTIONS_PREFIX}/proxmox`;
 const LEGACY_PROXMOX_PREFIX = '/settings/infrastructure/proxmox';
 const LEGACY_PROXMOX_API_PREFIX = '/settings/infrastructure/api';
 const LEGACY_INTEGRATIONS_API_PREFIX = '/settings/integrations/api';
+const LEGACY_SETTINGS_OPERATIONS_PREFIX = '/settings/operations';
 const SECURITY_API_PREFIX = '/settings/security/api';
 const SYSTEM_BILLING_PREFIX = SELF_HOSTED_PRO_BILLING_ROUTE;
 const LEGACY_SYSTEM_PRO_PREFIX = '/settings/system-pro';
@@ -142,6 +156,15 @@ export function resolveCanonicalSettingsPath(path: string): string | null {
   }
   if (normalizedPath === LEGACY_DOCKER_PREFIX) {
     return settingsTabPath(DEFAULT_SETTINGS_TAB);
+  }
+  if (normalizedPath === SUPPORT_PREFIX) {
+    return SUPPORT_DIAGNOSTICS_PREFIX;
+  }
+  if (normalizedPath === LEGACY_SETTINGS_OPERATIONS_PREFIX) {
+    return SUPPORT_DIAGNOSTICS_PREFIX;
+  }
+  if (normalizedPath.startsWith(`${LEGACY_SETTINGS_OPERATIONS_PREFIX}/`)) {
+    return buildLegacyOperationsSettingsPath(normalizedPath);
   }
   if (normalizedPath === LEGACY_PROXMOX_API_PREFIX) {
     return PROXMOX_PREFIX;
@@ -218,6 +241,10 @@ export function deriveTabFromPath(path: string): SettingsTab {
   if (canonicalPath.includes('/settings/system-relay')) return 'system-relay';
   if (canonicalPath.includes(SYSTEM_BILLING_PREFIX) || canonicalPath.includes(LEGACY_SYSTEM_PRO_PREFIX))
     return 'system-billing';
+  if (canonicalPath.startsWith(SUPPORT_LOGS_PREFIX)) return 'support-logs';
+  if (canonicalPath.startsWith(SUPPORT_REPORTING_PREFIX)) return 'support-reporting';
+  if (canonicalPath.startsWith(SUPPORT_DIAGNOSTICS_PREFIX) || canonicalPath === SUPPORT_PREFIX)
+    return 'support-diagnostics';
   if (canonicalPath.includes('/settings/organization/access')) return 'organization-access';
   if (canonicalPath.includes('/settings/organization/sharing')) return 'organization-sharing';
   if (canonicalPath.includes('/settings/organization/billing-admin'))
@@ -317,6 +344,15 @@ export function deriveTabFromQuery(search: string): SettingsTab | null {
     case 'system-pro':
     case 'system-billing':
       return 'system-billing';
+    case 'diagnostics':
+    case 'support-diagnostics':
+      return 'support-diagnostics';
+    case 'reporting':
+    case 'support-reporting':
+      return 'support-reporting';
+    case 'logs':
+    case 'support-logs':
+      return 'support-logs';
     case 'api':
       return 'api';
     case 'docker':
@@ -374,7 +410,37 @@ export function settingsTabPath(tab: SettingsTab): string {
       return '/settings/system-relay';
     case 'system-billing':
       return SELF_HOSTED_PRO_BILLING_PLAN_ROUTE;
+    case 'support-diagnostics':
+      return SUPPORT_DIAGNOSTICS_PREFIX;
+    case 'support-reporting':
+      return SUPPORT_REPORTING_PREFIX;
+    case 'support-logs':
+      return SUPPORT_LOGS_PREFIX;
     default:
       return `/settings/${tab}`;
   }
+}
+
+export function buildLegacyOperationsSettingsPath(path: string): string {
+  const normalizedPath = normalizeSettingsPath(path);
+
+  if (
+    normalizedPath === '/operations/logs' ||
+    normalizedPath.startsWith('/operations/logs/') ||
+    normalizedPath === `${LEGACY_SETTINGS_OPERATIONS_PREFIX}/logs` ||
+    normalizedPath.startsWith(`${LEGACY_SETTINGS_OPERATIONS_PREFIX}/logs/`)
+  ) {
+    return SUPPORT_LOGS_PREFIX;
+  }
+
+  if (
+    normalizedPath === '/operations/reporting' ||
+    normalizedPath.startsWith('/operations/reporting/') ||
+    normalizedPath === `${LEGACY_SETTINGS_OPERATIONS_PREFIX}/reporting` ||
+    normalizedPath.startsWith(`${LEGACY_SETTINGS_OPERATIONS_PREFIX}/reporting/`)
+  ) {
+    return SUPPORT_REPORTING_PREFIX;
+  }
+
+  return SUPPORT_DIAGNOSTICS_PREFIX;
 }

@@ -13,7 +13,7 @@ export function useSettingsShellState({ activeTab }: UseSettingsShellStateParams
       const tab = activeTab();
       if (tab === 'infrastructure-operations' && presentationPolicyIsReadOnly()) {
         return {
-          title: 'Infrastructure Operations',
+          title: 'Connections & Inventory',
           description:
             'Review the current monitored-system inventory, reporting posture, and connected platform coverage. Setup changes stay unavailable in this read-only session.',
         };

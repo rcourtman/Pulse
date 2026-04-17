@@ -15,6 +15,9 @@ const canonicalTabPaths = {
   'system-ai': '/settings/system-ai',
   'system-relay': '/settings/system-relay',
   'system-billing': '/settings/system/billing/plan',
+  'support-diagnostics': '/settings/support/diagnostics',
+  'support-reporting': '/settings/support/reporting',
+  'support-logs': '/settings/support/logs',
   'organization-overview': '/settings/organization',
   'organization-access': '/settings/organization/access',
   'organization-billing': '/settings/organization/billing',
@@ -110,8 +113,30 @@ describe('settingsNavigation integration scaffold', () => {
       shouldHideSettingsNavItem('organization-billing', {
         hasFeature: hasFeatures(['multi_tenant']),
         runtimeCapabilitiesLoaded: () => true,
+        presentationPolicyIsDemoMode: true,
         presentationPolicyHidesCommercial: true,
         hostedModeEnabled: true,
+      }),
+    ).toBe(true);
+  });
+
+  it('hides support tabs in demo mode and before demo policy resolves', () => {
+    expect(
+      shouldHideSettingsNavItem('support-diagnostics', {
+        hasFeature: hasFeatures([]),
+        runtimeCapabilitiesLoaded: () => true,
+        presentationPolicyResolved: false,
+        hostedModeEnabled: false,
+      }),
+    ).toBe(true);
+
+    expect(
+      shouldHideSettingsNavItem('support-reporting', {
+        hasFeature: hasFeatures([]),
+        runtimeCapabilitiesLoaded: () => true,
+        presentationPolicyResolved: true,
+        presentationPolicyIsDemoMode: true,
+        hostedModeEnabled: false,
       }),
     ).toBe(true);
   });

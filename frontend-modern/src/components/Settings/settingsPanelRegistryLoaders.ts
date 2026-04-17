@@ -4,6 +4,9 @@ export const SETTINGS_PANEL_REGISTRY_LOADERS = {
   APIAccessPanel: lazy(() =>
     import('./APIAccessPanel').then((m) => ({ default: m.APIAccessPanel })),
   ),
+  DiagnosticsPanel: lazy(() =>
+    import('./DiagnosticsPanel').then((m) => ({ default: m.DiagnosticsPanel })),
+  ),
   AuditLogPanel: lazy(() => import('./AuditLogPanel')),
   AuditWebhookPanel: lazy(() =>
     import('./AuditWebhookPanel').then((m) => ({ default: m.AuditWebhookPanel })),
@@ -22,6 +25,9 @@ export const SETTINGS_PANEL_REGISTRY_LOADERS = {
   RecoverySettingsPanel: lazy(() =>
     import('./RecoverySettingsPanel').then((m) => ({ default: m.RecoverySettingsPanel })),
   ),
+  ReportingPanel: lazy(() =>
+    import('./ReportingPanel').then((m) => ({ default: m.ReportingPanel })),
+  ),
   RelaySettingsPanel: lazy(() =>
     import('./RelaySettingsPanel').then((m) => ({ default: m.RelaySettingsPanel })),
   ),
@@ -31,6 +37,9 @@ export const SETTINGS_PANEL_REGISTRY_LOADERS = {
   ),
   SecurityOverviewPanel: lazy(() =>
     import('./SecurityOverviewPanel').then((m) => ({ default: m.SecurityOverviewPanel })),
+  ),
+  SystemLogsPanel: lazy(() =>
+    import('./SystemLogsPanel').then((m) => ({ default: m.SystemLogsPanel })),
   ),
   UpdatesSettingsPanel: lazy(() =>
     import('./UpdatesSettingsPanel').then((m) => ({ default: m.UpdatesSettingsPanel })),

@@ -2769,8 +2769,6 @@
         "frontend-modern/src/features/dashboardOverview/KPIStrip.tsx",
         "frontend-modern/src/features/dashboardOverview/ProblemResourcesTable.tsx",
         "frontend-modern/src/features/dashboardOverview/TrendCharts.tsx",
-        "frontend-modern/src/features/operations/operationsPageModel.ts",
-        "frontend-modern/src/features/operations/OperationsPageSurface.tsx",
         "frontend-modern/src/hooks/createNonSuspendingQuery.ts",
         "frontend-modern/src/pages/Operations.tsx",
         "frontend-modern/src/stores/aiChat.ts",
@@ -2928,7 +2926,7 @@
           },
           {
             "id": "route-shell-and-operations",
-            "label": "route shell and operations proof",
+            "label": "route shell and settings support proof",
             "match_prefixes": [],
             "match_files": [
               "frontend-modern/src/components/Settings/ReportingPanel.tsx",
@@ -2938,8 +2936,6 @@
               "frontend-modern/src/components/Settings/SystemLogsPanel.tsx",
               "frontend-modern/src/components/Settings/useReportingPanelState.ts",
               "frontend-modern/src/components/Settings/useSystemLogsPanelState.ts",
-              "frontend-modern/src/features/operations/operationsPageModel.ts",
-              "frontend-modern/src/features/operations/OperationsPageSurface.tsx",
               "frontend-modern/src/pages/Operations.tsx",
               "frontend-modern/src/utils/reportableResourceTypes.ts",
               "frontend-modern/src/utils/reportingPresentation.ts",

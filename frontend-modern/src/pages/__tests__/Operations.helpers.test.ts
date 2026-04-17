@@ -1,30 +1,26 @@
 import { describe, expect, it } from 'vitest';
 import appSource from '@/App.tsx?raw';
 import operationsPageRouteSource from '@/pages/Operations.tsx?raw';
-import operationsPageSurfaceSource from '@/features/operations/OperationsPageSurface.tsx?raw';
-import operationsPageModelSource from '@/features/operations/operationsPageModel.ts?raw';
+import settingsNavigationModelSource from '@/components/Settings/settingsNavigationModel.ts?raw';
 
-describe('operations page route shell', () => {
-  it('keeps App routing on a page shell instead of a page-local route controller', () => {
+describe('legacy operations route plumbing', () => {
+  it('keeps /operations as a redirect-only compatibility page', () => {
     expect(appSource).toContain("const OperationsPage = lazy(() => import('./pages/Operations'));");
     expect(operationsPageRouteSource).toContain(
-      "import { OperationsPageSurface } from '@/features/operations/OperationsPageSurface';",
+      "import { Navigate, useLocation } from '@solidjs/router';",
     );
-    expect(operationsPageRouteSource).toContain('<OperationsPageSurface />');
-    expect(operationsPageRouteSource).not.toContain('useLocation');
-    expect(operationsPageRouteSource).not.toContain('useNavigate');
-    expect(operationsPageRouteSource).not.toContain('createSignal');
-    expect(operationsPageSurfaceSource).toContain('@/components/shared/Subtabs');
-    expect(operationsPageSurfaceSource).toContain("import { PageHeader } from '@/components/shared/PageHeader';");
-    expect(operationsPageSurfaceSource).toContain('<PageHeader');
-    expect(operationsPageSurfaceSource).toContain('title="Operations"');
-    expect(operationsPageSurfaceSource).toContain('getOperationsTabFromPath');
-    expect(operationsPageSurfaceSource).toContain('buildOperationsPath');
-    expect(operationsPageSurfaceSource).toContain('operationsSurfaceHiddenInDemoMode');
-    expect(operationsPageSurfaceSource).not.toContain('-webkit-overflow-scrolling');
-    expect(operationsPageModelSource).toContain('export const OPERATIONS_TABS');
-    expect(operationsPageModelSource).toContain('export function operationsSurfaceHiddenInDemoMode');
-    expect(operationsPageModelSource).toContain('export function getOperationsTabFromPath');
-    expect(operationsPageModelSource).toContain('export function buildOperationsPath');
+    expect(operationsPageRouteSource).toContain(
+      "import { buildLegacyOperationsSettingsPath } from '@/components/Settings/settingsNavigationModel';",
+    );
+    expect(operationsPageRouteSource).toContain(
+      'const canonicalPath = buildLegacyOperationsSettingsPath(location.pathname);',
+    );
+    expect(operationsPageRouteSource).toContain(
+      "return <Navigate href={`${canonicalPath}${location.search ?? ''}`} />;",
+    );
+    expect(operationsPageRouteSource).not.toContain('OperationsPageSurface');
+    expect(settingsNavigationModelSource).toContain(
+      'export function buildLegacyOperationsSettingsPath',
+    );
   });
 });

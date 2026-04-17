@@ -140,10 +140,9 @@ Navigation is organised by **task**, not by platform:
 | `/dashboard` | Dashboard | Summary panels and metrics |
 | `/alerts/*` | Alerts | Alert rules, active alerts, history |
 | `/ai/*` | AI Intelligence | Patrol findings, investigations, forecasts |
-| `/settings/*` | Settings | Configuration, security, AI, relay |
-| `/operations/*` | Operations | Operational tools |
+| `/settings/*` | Settings | Configuration, security, diagnostics, reporting, AI, relay |
 
-Legacy route aliases have been removed; canonical v6 routes are the only supported navigation surface.
+Canonical v6 task surfaces live on the routes above; legacy aliases redirect into those canonical settings and patrol paths.
 
 ### State Management
 - **WebSocket store** (`stores/websocket.ts`): Manages the live connection, reactive `State` object, reconnection logic, and per-org switching.

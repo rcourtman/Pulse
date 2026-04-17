@@ -95,7 +95,6 @@ const APP_SHELL_ROUTE_PRELOAD_PATHS = [
   ROOT_PATROL_PATH,
   '/alerts',
   STORAGE_PATH,
-  '/operations',
   '/settings',
 ] as const;
 
@@ -203,12 +202,6 @@ function GlobalUpdateProgressWatcher() {
 }
 
 function App() {
-  const LegacyOperationsSettingsRedirect = () => {
-    const location = useLocation();
-    const canonicalPath =
-      location.pathname.replace(/^\/settings\/operations(?=\/|$)/, '/operations') || '/operations';
-    return <Navigate href={`${canonicalPath}${location.search ?? ''}`} />;
-  };
   const LegacyPatrolRouteRedirect = () => {
     const location = useLocation();
     const canonicalPath =
@@ -497,7 +490,6 @@ function App() {
       <Route path="/alerts/*" component={AlertsPage} />
       <Route path={`${ROOT_PATROL_PATH}/*`} component={AIIntelligencePage} />
       <Route path="/ai/*" component={LegacyPatrolRouteRedirect} />
-      <Route path="/settings/operations/*" component={LegacyOperationsSettingsRedirect} />
       <Route path="/settings/*" component={SettingsRoute} />
       <Route path="/operations/*" component={OperationsPage} />
       <Route path="*all" component={NotFoundPage} />

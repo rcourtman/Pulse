@@ -12,9 +12,9 @@ describe('navigation routing helpers', () => {
     expect(getActiveTabForPath('/alerts/open')).toBe('alerts');
     expect(getActiveTabForPath('/patrol')).toBe('ai');
     expect(getActiveTabForPath('/ai')).toBe('ai');
-    expect(getActiveTabForPath('/operations')).toBe('operations');
-    expect(getActiveTabForPath('/operations/diagnostics')).toBe('operations');
-    expect(getActiveTabForPath('/operations/logs')).toBe('operations');
+    expect(getActiveTabForPath('/operations')).toBe('settings');
+    expect(getActiveTabForPath('/operations/diagnostics')).toBe('settings');
+    expect(getActiveTabForPath('/operations/logs')).toBe('settings');
     expect(getActiveTabForPath('/settings/security')).toBe('settings');
   });
 });

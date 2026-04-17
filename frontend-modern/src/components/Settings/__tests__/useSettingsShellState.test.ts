@@ -22,7 +22,7 @@ describe('useSettingsShellState', () => {
         activeTab: () => 'infrastructure-operations',
       });
 
-      expect(state.headerMeta().title).toBe('Infrastructure Operations');
+      expect(state.headerMeta().title).toBe('Connections & Inventory');
       expect(state.headerMeta().description).toBe(
         'Review the current monitored-system inventory, reporting posture, and connected platform coverage. Setup changes stay unavailable in this read-only session.',
       );

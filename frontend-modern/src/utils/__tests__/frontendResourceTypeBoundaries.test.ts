@@ -256,8 +256,6 @@ import useChatSource from '@/components/AI/Chat/hooks/useChat.ts?raw';
 import patrolStatusBarSource from '@/components/patrol/PatrolStatusBar.tsx?raw';
 import patrolFormatSource from '@/utils/patrolFormat.ts?raw';
 import aiFindingPresentationSource from '@/utils/aiFindingPresentation.ts?raw';
-import operationsPageSurfaceSource from '@/features/operations/OperationsPageSurface.tsx?raw';
-import operationsPageModelSource from '@/features/operations/operationsPageModel.ts?raw';
 import chatIdentifiersSource from '@/utils/chatIdentifiers.ts?raw';
 import resourceIdentitySource from '@/utils/resourceIdentity.ts?raw';
 import stringUtilsSource from '@/utils/stringUtils.ts?raw';
@@ -4388,21 +4386,14 @@ describe('frontend resource type boundaries', () => {
       '!presentationPolicyHidesUpgradePrompts() && state.alertAnalysisLocked()',
     );
     expect(operationsPageRouteSource).toContain(
-      "import { OperationsPageSurface } from '@/features/operations/OperationsPageSurface';",
+      "import { Navigate, useLocation } from '@solidjs/router';",
     );
-    expect(operationsPageRouteSource).toContain('<OperationsPageSurface />');
-    expect(operationsPageRouteSource).not.toContain('useLocation');
-    expect(operationsPageRouteSource).not.toContain('useNavigate');
-    expect(operationsPageSurfaceSource).toContain('@/components/shared/Subtabs');
-    expect(operationsPageSurfaceSource).toContain('getOperationsTabFromPath');
-    expect(operationsPageSurfaceSource).toContain('buildOperationsPath');
-    expect(operationsPageSurfaceSource).toContain('<DiagnosticsPanel />');
-    expect(operationsPageSurfaceSource).toContain('<ReportingPanel />');
-    expect(operationsPageSurfaceSource).toContain('<SystemLogsPanel />');
-    expect(operationsPageSurfaceSource).not.toContain('-webkit-overflow-scrolling');
-    expect(operationsPageModelSource).toContain('export const OPERATIONS_TABS');
-    expect(operationsPageModelSource).toContain('export function getOperationsTabFromPath');
-    expect(operationsPageModelSource).toContain('export function buildOperationsPath');
+    expect(operationsPageRouteSource).toContain('buildLegacyOperationsSettingsPath');
+    expect(operationsPageRouteSource).toContain('<Navigate href={`${canonicalPath}${location.search ?? \'\'}`} />');
+    expect(operationsPageRouteSource).not.toContain('OperationsPageSurface');
+    expect(settingsNavigationModelSource).toContain(
+      'export function buildLegacyOperationsSettingsPath',
+    );
     expect(reportingPanelSource).toContain('OperationsPanel');
     expect(systemLogsPanelSource).toContain('OperationsPanel');
     expect(systemLogsPanelSource).toContain('./useSystemLogsPanelState');

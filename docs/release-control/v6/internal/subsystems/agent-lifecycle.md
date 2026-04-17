@@ -397,6 +397,9 @@ an add-only capacity posture.
    install the first host again. While the first host is still pending, that
    same completion narrative must describe Infrastructure Install as the place
    where the first-host scoped install token is prepared from setup handoff,
+   and when it names the shared settings workspace for follow-up lifecycle
+   control it must use the canonical `Connections & Inventory` label instead
+   of reviving the retired `Infrastructure Operations` wording.
    not as a second manual token-generation task the operator still needs to
    figure out.
 10. Keep API-backed platform onboarding explicit across

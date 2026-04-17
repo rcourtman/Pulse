@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  buildLegacyOperationsSettingsPath,
   agentKeyFromPlatformType,
   DEFAULT_SETTINGS_TAB,
   deriveAgentFromPath,
@@ -25,6 +26,9 @@ const canonicalTabPaths = {
   'system-ai': '/settings/system-ai',
   'system-relay': '/settings/system-relay',
   'system-billing': '/settings/system/billing/plan',
+  'support-diagnostics': '/settings/support/diagnostics',
+  'support-reporting': '/settings/support/reporting',
+  'support-logs': '/settings/support/logs',
   'organization-overview': '/settings/organization',
   'organization-access': '/settings/organization/access',
   'organization-billing': '/settings/organization/billing',
@@ -68,6 +72,7 @@ describe('settingsNavigationModel', () => {
     expect(resolveCanonicalSettingsPath('/settings/workloads/docker')).toBe(
       '/settings/infrastructure/install',
     );
+    expect(resolveCanonicalSettingsPath('/settings/support')).toBe('/settings/support/diagnostics');
     expect(resolveCanonicalSettingsPath('/settings/system-updates')).toBe(
       '/settings/system-updates',
     );
@@ -91,6 +96,15 @@ describe('settingsNavigationModel', () => {
     );
     expect(resolveCanonicalSettingsPath('/settings/integrations/api')).toBe(
       '/settings/security/api',
+    );
+    expect(resolveCanonicalSettingsPath('/settings/operations')).toBe(
+      '/settings/support/diagnostics',
+    );
+    expect(resolveCanonicalSettingsPath('/settings/operations/reporting')).toBe(
+      '/settings/support/reporting',
+    );
+    expect(resolveCanonicalSettingsPath('/settings/operations/logs')).toBe(
+      '/settings/support/logs',
     );
     expect(resolveCanonicalSettingsPath('/settings/system/billing')).toBe(
       '/settings/system/billing/plan',
@@ -129,6 +143,9 @@ describe('settingsNavigationModel', () => {
       ['?tab=system-relay', 'system-relay'],
       ['?tab=system-pro', 'system-billing'],
       ['?tab=system-billing', 'system-billing'],
+      ['?tab=diagnostics', 'support-diagnostics'],
+      ['?tab=reporting', 'support-reporting'],
+      ['?tab=logs', 'support-logs'],
       ['?tab=system-recovery', 'system-recovery'],
       ['?tab=organization-overview', 'organization-overview'],
       ['?tab=organization-billing', 'organization-billing'],
@@ -224,5 +241,16 @@ describe('settingsNavigationModel', () => {
     expect(deriveTabFromPath('/settings/infrastructure/api/pve')).toBe(
       'infrastructure-operations',
     );
+  });
+
+  it('maps support and legacy operations routes back to support tabs', () => {
+    expect(deriveTabFromPath('/settings/support/diagnostics')).toBe('support-diagnostics');
+    expect(deriveTabFromPath('/settings/support/reporting')).toBe('support-reporting');
+    expect(deriveTabFromPath('/settings/support/logs')).toBe('support-logs');
+    expect(buildLegacyOperationsSettingsPath('/operations')).toBe('/settings/support/diagnostics');
+    expect(buildLegacyOperationsSettingsPath('/operations/reporting')).toBe(
+      '/settings/support/reporting',
+    );
+    expect(buildLegacyOperationsSettingsPath('/operations/logs')).toBe('/settings/support/logs');
   });
 });

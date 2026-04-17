@@ -16,6 +16,8 @@ import BadgeCheck from 'lucide-solid/icons/badge-check';
 import Building2 from 'lucide-solid/icons/building-2';
 import Share2 from 'lucide-solid/icons/share-2';
 import CreditCard from 'lucide-solid/icons/credit-card';
+import FileText from 'lucide-solid/icons/file-text';
+import Terminal from 'lucide-solid/icons/terminal';
 import { PulseLogoIcon } from '@/components/icons/PulseLogoIcon';
 import { SELF_HOSTED_PRO_BILLING_PRESENTATION } from './selfHostedBillingPresentation';
 import type {
@@ -31,7 +33,7 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
     items: [
       {
         id: 'infrastructure-operations',
-        label: 'Operations',
+        label: 'Connections & Inventory',
         icon: Bot,
         iconProps: { strokeWidth: 2 },
       },
@@ -135,6 +137,33 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
         label: SELF_HOSTED_PRO_BILLING_PRESENTATION.shellTitle,
         icon: PulseLogoIcon,
         hideWhenCommercialHidden: true,
+      },
+    ],
+  },
+  {
+    id: 'support',
+    label: 'Support',
+    items: [
+      {
+        id: 'support-diagnostics',
+        label: 'Diagnostics & Health',
+        icon: Activity,
+        iconProps: { strokeWidth: 2 },
+        hideWhenDemoMode: true,
+      },
+      {
+        id: 'support-reporting',
+        label: 'Data & Reports',
+        icon: FileText,
+        iconProps: { strokeWidth: 2 },
+        hideWhenDemoMode: true,
+      },
+      {
+        id: 'support-logs',
+        label: 'System Logs',
+        icon: Terminal,
+        iconProps: { strokeWidth: 2 },
+        hideWhenDemoMode: true,
       },
     ],
   },

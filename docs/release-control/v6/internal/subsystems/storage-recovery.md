@@ -277,6 +277,10 @@ querying, and the operator-facing storage health presentation layer.
     may hide top-bar org chrome for public demo posture, but it must not leak
     into storage/recovery preview route ownership, first-session recovery copy,
     or route-level framing decisions.
+    Legacy `/operations/*` entrypoints now redirect into Settings support
+    surfaces. That compatibility path must stay a thin redirect in
+    `frontend-modern/src/App.tsx` and must not grow a second authenticated
+    shell boundary that competes with storage/recovery route ownership.
     That same shared app-shell boundary must also respect blocking shared
     dialogs: background assistant affordances may hide while a modal owns the
     viewport, but storage/recovery routes must not grow their own parallel

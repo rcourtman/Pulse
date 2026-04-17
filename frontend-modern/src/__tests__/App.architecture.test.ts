@@ -84,8 +84,11 @@ describe('App architecture', () => {
     expect(appLayoutSource).toContain(
       '<ReleaseCandidateBanner version={props.versionInfo()?.version} />',
     );
-    expect(appLayoutSource).toContain("const blockedPrefixes = ['/settings', '/operations', '/patrol', '/ai'];");
+    expect(appLayoutSource).toContain(
+      "const blockedPrefixes = ['/settings', '/operations', '/patrol', '/ai'];",
+    );
     expect(appLayoutSource).toContain("route: '/patrol',");
+    expect(appLayoutSource).not.toContain("route: '/operations',");
     expect(appLayoutSource).not.toContain('props.connected()');
     expect(appLayoutSource).toContain('const utilityTabs = createMemo(() =>');
     expect(appLayoutSource).not.toContain("import { isMultiTenantEnabled } from '@/stores/license';");
@@ -95,8 +98,7 @@ describe('App architecture', () => {
     expect(appLayoutSource).not.toContain('sessionPresentationPolicyResolved');
     expect(appLayoutSource).not.toContain('presentationPolicyHidesCommercialSurfaces');
     expect(appLayoutSource).not.toContain('presentationPolicyHidesOrganizationSurfaces');
-    expect(appLayoutSource).toContain('presentationPolicyIsDemoMode');
-    expect(appLayoutSource).toContain("if (!presentationPolicyIsDemoMode()) {");
+    expect(appLayoutSource).not.toContain('presentationPolicyIsDemoMode');
     expect(appLayoutSource).toContain('await preloadRouteModule(targetRoute);');
     expect(appLayoutSource).toContain('await preloadRouteModule(tab.route);');
     expect(appLayoutSource).toContain('onMouseEnter={() => warmNavigationTarget(');

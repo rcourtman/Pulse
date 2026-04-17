@@ -305,8 +305,10 @@ commercial posture store and billing-entitlements store must also fail closed
 locally until the shared presentation policy resolves, then stay fail-closed
 in demo mode so hidden routes are not probed from the browser shell.
 That same browser-shell boundary also owns utility-nav suppression:
-`frontend-modern/src/AppLayout.tsx` must drop the top-level Operations tab in
-public demo mode instead of leaving diagnostics or system-log shells
+`frontend-modern/src/AppLayout.tsx` must not expose a separate top-level
+Operations destination. Diagnostics, reports, and logs now live under the
+canonical Settings support navigation, and public demo mode must keep those
+support-only entries hidden instead of leaving the retired operations surface
 discoverable after commercial surfaces are hidden.
 Deep-linkable commercial panels must consume the same resolved presentation
 policy directly, not rely only on settings navigation to keep public-demo

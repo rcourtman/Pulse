@@ -228,6 +228,10 @@ regression protection.
     is canonical, that alias must stay a thin redirect and must not mount a
     second Patrol shell or duplicate app bootstrap work before navigation
     settles on the canonical route.
+    The same rule now applies to the retired `/operations` surface: legacy
+    `/operations/*` links may redirect into Settings support routes, but they
+    must not mount a second diagnostics/reporting shell or pay extra bootstrap
+    work before the canonical Settings URL takes over.
     Authenticated `/login` recovery belongs to that same app-shell boundary:
     `frontend-modern/src/App.tsx` must redirect that route back to the
     canonical dashboard landing path instead of leaving the freshly

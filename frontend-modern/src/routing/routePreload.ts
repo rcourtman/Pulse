@@ -18,7 +18,6 @@ const ROOT_WORKLOADS_PATH = buildWorkloadsPath();
 const STORAGE_PATH = buildStoragePath();
 const RECOVERY_ROUTE_PATH = buildRecoveryPath();
 const ALERTS_PATH = '/alerts';
-const OPERATIONS_PATH = '/operations';
 const SETTINGS_PATH = '/settings';
 const routePreloadCache = new Map<string, Promise<void>>();
 
@@ -73,12 +72,6 @@ const ROUTE_PRELOADERS: readonly RoutePreloader[] = [
     matches: (route) => route === PATROL_PATH || route.startsWith(`${PATROL_PATH}/`),
     preload: () =>
       import('@/pages/AIIntelligence').then(() => undefined),
-  },
-  {
-    id: 'operations',
-    matches: (route) => route === OPERATIONS_PATH || route.startsWith(`${OPERATIONS_PATH}/`),
-    preload: () =>
-      import('@/pages/Operations').then(() => undefined),
   },
   {
     id: 'settings',

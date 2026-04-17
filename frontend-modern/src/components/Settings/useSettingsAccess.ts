@@ -2,6 +2,7 @@ import { Accessor, createEffect, createMemo, createSignal } from 'solid-js';
 import {
   presentationPolicyHidesCommercialSurfaces,
   presentationPolicyHidesOrganizationSurfaces,
+  presentationPolicyIsDemoMode,
   sessionPresentationPolicyResolved,
   syncSessionPresentationPolicy,
 } from '@/stores/sessionPresentationPolicy';
@@ -40,6 +41,16 @@ export function useSettingsAccess({
   const presentationPolicyResolved = createMemo(
     () => securityStatus() !== null || sessionPresentationPolicyResolved(),
   );
+  const demoMode = createMemo(() => {
+    const resolvedSecurityStatus = securityStatus();
+    if (resolvedSecurityStatus) {
+      return (
+        resolvedSecurityStatus.presentationPolicy?.demoMode === true ||
+        resolvedSecurityStatus.sessionCapabilities?.demoMode === true
+      );
+    }
+    return presentationPolicyIsDemoMode();
+  });
   const organizationSurfacesHidden = createMemo(() => {
     const resolvedSecurityStatus = securityStatus();
     if (resolvedSecurityStatus) {
@@ -65,6 +76,7 @@ export function useSettingsAccess({
               hasFeature,
               runtimeCapabilitiesLoaded,
               presentationPolicyHidesCommercial: commercialSurfacesHidden(),
+              presentationPolicyIsDemoMode: demoMode(),
               presentationPolicyHidesOrganizations: organizationSurfacesHidden(),
               presentationPolicyResolved: presentationPolicyResolved(),
               hostedModeEnabled,

@@ -1430,7 +1430,7 @@ describe('Settings architecture guardrails', () => {
     }
   });
 
-  it('keeps infrastructure shell framing focused on operations, not billing', () => {
+  it('keeps infrastructure shell framing focused on connected systems, not billing', () => {
     expect(settingsHeaderMetaSource).toContain('./selfHostedBillingPresentation');
     expect(settingsHeaderMetaSource).toContain(
       'SELF_HOSTED_PRO_BILLING_PRESENTATION.infrastructureRouteReferral',
@@ -1439,7 +1439,7 @@ describe('Settings architecture guardrails', () => {
       'Billing and self-hosted plan features live in Pulse Pro.',
     );
     expect(SETTINGS_HEADER_META['infrastructure-operations'].title).toBe(
-      'Infrastructure Operations',
+      'Connections & Inventory',
     );
     expect(SETTINGS_HEADER_META['infrastructure-operations'].description).toContain(
       'actively reporting',

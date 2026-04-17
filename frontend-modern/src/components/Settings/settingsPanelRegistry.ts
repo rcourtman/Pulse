@@ -76,6 +76,15 @@ export const createSettingsPanelRegistry = (
   'system-billing': {
     component: context.systemBillingPanel,
   },
+  'support-diagnostics': {
+    component: SETTINGS_PANEL_REGISTRY_LOADERS.DiagnosticsPanel,
+  },
+  'support-reporting': {
+    component: SETTINGS_PANEL_REGISTRY_LOADERS.ReportingPanel,
+  },
+  'support-logs': {
+    component: SETTINGS_PANEL_REGISTRY_LOADERS.SystemLogsPanel,
+  },
   'organization-overview': {
     component: SETTINGS_PANEL_REGISTRY_LOADERS.OrganizationOverviewPanel,
     getProps: context.getOrganizationOverviewPanelProps,

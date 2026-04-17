@@ -13,7 +13,7 @@ export const SETTINGS_HEADER_META: SettingsHeaderMetaMap = {
       'Add and manage Proxmox VE, Backup Server, and Mail Gateway connections when the unified agent is not available on the host.',
   },
   'infrastructure-operations': {
-    title: 'Infrastructure Operations',
+    title: 'Connections & Inventory',
     description:
       `Bring infrastructure into Pulse, manage API-backed platform connections, and control which systems are actively reporting. ${SELF_HOSTED_PRO_BILLING_PRESENTATION.infrastructureRouteReferral}`,
   },
@@ -44,6 +44,18 @@ export const SETTINGS_HEADER_META: SettingsHeaderMetaMap = {
   'system-billing': {
     title: SELF_HOSTED_PRO_BILLING_PRESENTATION.shellTitle,
     description: SELF_HOSTED_PRO_BILLING_PRESENTATION.shellDescription,
+  },
+  'support-diagnostics': {
+    title: 'Diagnostics & Health',
+    description: 'Run health checks, validate connectivity, and export troubleshooting snapshots.',
+  },
+  'support-reporting': {
+    title: 'Data & Reports',
+    description: 'Export inventory data and generate performance reports from the canonical settings shell.',
+  },
+  'support-logs': {
+    title: 'System Logs',
+    description: 'Inspect the live Pulse log stream and download the captured buffer for support work.',
   },
   'organization-overview': {
     title: 'Organization Overview',

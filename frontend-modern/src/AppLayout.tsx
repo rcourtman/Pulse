@@ -18,7 +18,6 @@ import BellIcon from 'lucide-solid/icons/bell';
 import SettingsIcon from 'lucide-solid/icons/settings';
 import Maximize2Icon from 'lucide-solid/icons/maximize-2';
 import Minimize2Icon from 'lucide-solid/icons/minimize-2';
-import ActivityIcon from 'lucide-solid/icons/activity';
 import { MobileNavBar } from '@/components/shared/MobileNavBar';
 import { ReleaseCandidateBanner } from '@/components/shared/ReleaseCandidateBanner';
 import { dialogStackHasBlockingDialog } from '@/components/shared/useDialogState';
@@ -43,10 +42,7 @@ import { getKioskModePreference, setKioskMode } from '@/utils/url';
 import { updateStore } from '@/stores/updates';
 import { aiChatStore } from '@/stores/aiChat';
 import { isPro } from '@/stores/licenseCommercial';
-import {
-  presentationPolicyHidesUpgradePrompts,
-  presentationPolicyIsDemoMode,
-} from '@/stores/sessionPresentationPolicy';
+import { presentationPolicyHidesUpgradePrompts } from '@/stores/sessionPresentationPolicy';
 import {
   AI_CHAT_LAUNCHER_ARIA_LABEL,
   getAIChatLauncherTitle,
@@ -70,7 +66,7 @@ type PlatformTab = {
 };
 
 type UtilityTab = {
-  id: 'alerts' | 'ai' | 'operations' | 'settings';
+  id: 'alerts' | 'ai' | 'settings';
   label: string;
   route: string;
   tooltip: string;
@@ -433,19 +429,6 @@ export function AppLayout(props: AppLayoutProps) {
         icon: <PulsePatrolLogo class="w-4 h-4 shrink-0" />,
       },
     ];
-
-    if (!presentationPolicyIsDemoMode()) {
-      tabs.push({
-        id: 'operations',
-        label: 'Operations',
-        route: '/operations',
-        tooltip: 'System operations, diagnostics, and reporting',
-        badge: null,
-        count: undefined,
-        breakdown: undefined,
-        icon: <ActivityIcon class="w-4 h-4 shrink-0" />,
-      });
-    }
 
     if (hasSettingsAccess) {
       tabs.push({

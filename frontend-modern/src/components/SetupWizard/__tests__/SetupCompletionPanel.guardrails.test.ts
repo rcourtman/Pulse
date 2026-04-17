@@ -104,7 +104,7 @@ describe('SetupCompletionPanel guardrails', () => {
     expect(setupCompletionPanelSource).not.toContain('hasConnectedAgents');
     expect(setupCompletionPanelSource).not.toContain('connectedAgents().length');
     expect(setupCompletionPanelSource).not.toContain(
-      'You can return here later from Infrastructure Operations if you skip install for now.',
+      'You can return here later from Connections & Inventory if you skip install for now.',
     );
   });
 });

@@ -93,61 +93,59 @@ work extends shared components instead of creating new local variants.
 67. `frontend-modern/src/components/Settings/useSystemLogsPanelState.ts`
 68. `frontend-modern/src/utils/systemLogsPresentation.ts`
 69. `frontend-modern/src/components/Settings/__tests__/SystemLogsPanel.test.tsx`
-70. `frontend-modern/src/features/operations/OperationsPageSurface.tsx`
-71. `frontend-modern/src/features/operations/operationsPageModel.ts`
-72. `frontend-modern/src/pages/Operations.tsx`
-73. `frontend-modern/src/components/Settings/ResourcePicker.tsx`
-74. `frontend-modern/src/components/Settings/reportingResourceTypes.ts`
-75. `frontend-modern/src/utils/reportableResourceTypes.ts`
-76. `frontend-modern/src/utils/reportingResourceTypes.ts`
-77. `frontend-modern/src/utils/problemResourcePresentation.ts`
-78. `frontend-modern/src/utils/dashboardEmptyStatePresentation.ts`
-79. `frontend-modern/src/utils/dashboardGuestPresentation.ts`
-80. `frontend-modern/src/utils/dashboardKpiPresentation.ts`
-81. `frontend-modern/src/utils/dashboardTrendPresentation.ts`
-82. `frontend-modern/src/components/Toast/Toast.tsx`
-83. `frontend-modern/src/utils/toast.ts`
-84. `frontend-modern/src/utils/semanticTonePresentation.ts`
-85. `frontend-modern/src/utils/emptyStatePresentation.ts`
-86. `frontend-modern/src/utils/typeColumnPresentation.ts`
-87. `frontend-modern/src/pages/__tests__/Operations.helpers.test.ts`
-88. `frontend-modern/src/components/Settings/NetworkDiscoverySection.tsx`
-89. `frontend-modern/src/components/Settings/NetworkBoundarySettingsSection.tsx`
-90. `frontend-modern/src/components/Settings/networkSettingsModel.ts`
-91. `frontend-modern/src/components/Settings/useDiscoverySettingsState.ts`
-92. `frontend-modern/src/components/Settings/useSettingsInfrastructurePanelProps.ts`
-93. `frontend-modern/src/components/Settings/settingsPanelRegistryContext.tsx`
-94. `frontend-modern/src/components/Settings/settingsPanelRegistryLoaders.ts`
-95. `frontend-modern/src/components/Settings/settingsNavigationModel.ts`
-96. `frontend-modern/src/components/Settings/settingsNavCatalog.ts`
-97. `frontend-modern/src/components/Settings/settingsNavVisibility.ts`
-98. `frontend-modern/src/components/Settings/settingsRouting.ts`
-99. `frontend-modern/src/components/Settings/settingsTabSaveBehavior.ts`
-100. `frontend-modern/src/components/Settings/settingsTypes.ts`
-101. `frontend-modern/src/components/Settings/useSettingsNavigation.ts`
-102. `frontend-modern/src/components/Settings/useSettingsPanelRegistry.tsx`
-103. `frontend-modern/src/components/Settings/useSettingsSystemPanels.tsx`
-104. `frontend-modern/src/components/Settings/DockerRuntimeSettingsCard.tsx`
-105. `frontend-modern/src/components/shared/EnvironmentLockBadge.tsx`
-106. `frontend-modern/src/utils/environmentLockPresentation.ts`
-107. `frontend-modern/src/utils/docsLinks.ts`
-108. `tests/integration/tests/20-local-doc-links.spec.ts`
-109. `frontend-modern/src/index.css`
-110. `frontend-modern/src/components/shared/summaryInteractionA11y.ts`
-111. `frontend-modern/src/components/shared/SummaryRowActionButton.tsx`
-112. `frontend-modern/src/hooks/createNonSuspendingQuery.ts`
-113. `frontend-modern/src/components/shared/SummaryTableCardHeader.tsx`
-114. `frontend-modern/src/components/shared/UpgradeLink.tsx`
-115. `frontend-modern/src/components/shared/useUpgradeNavigation.ts`
-116. `frontend-modern/src/utils/upgradeNavigation.ts`
-117. `frontend-modern/src/components/DemoBanner.tsx`
-118. `frontend-modern/src/components/Login.tsx`
-119. `frontend-modern/src/stores/demoMode.ts`
-120. `frontend-modern/src/stores/sessionCapabilities.ts`
-121. `frontend-modern/src/stores/sessionPresentationPolicy.ts`
-122. `frontend-modern/src/stores/licenseCommercial.ts`
-123. `frontend-modern/src/useAppRuntimeState.ts`
-124. `frontend-modern/src/stores/aiChat.ts`
+70. `frontend-modern/src/pages/Operations.tsx`
+71. `frontend-modern/src/components/Settings/ResourcePicker.tsx`
+72. `frontend-modern/src/components/Settings/reportingResourceTypes.ts`
+73. `frontend-modern/src/utils/reportableResourceTypes.ts`
+74. `frontend-modern/src/utils/reportingResourceTypes.ts`
+75. `frontend-modern/src/utils/problemResourcePresentation.ts`
+76. `frontend-modern/src/utils/dashboardEmptyStatePresentation.ts`
+77. `frontend-modern/src/utils/dashboardGuestPresentation.ts`
+78. `frontend-modern/src/utils/dashboardKpiPresentation.ts`
+79. `frontend-modern/src/utils/dashboardTrendPresentation.ts`
+80. `frontend-modern/src/components/Toast/Toast.tsx`
+81. `frontend-modern/src/utils/toast.ts`
+82. `frontend-modern/src/utils/semanticTonePresentation.ts`
+83. `frontend-modern/src/utils/emptyStatePresentation.ts`
+84. `frontend-modern/src/utils/typeColumnPresentation.ts`
+85. `frontend-modern/src/pages/__tests__/Operations.helpers.test.ts`
+86. `frontend-modern/src/components/Settings/NetworkDiscoverySection.tsx`
+87. `frontend-modern/src/components/Settings/NetworkBoundarySettingsSection.tsx`
+88. `frontend-modern/src/components/Settings/networkSettingsModel.ts`
+89. `frontend-modern/src/components/Settings/useDiscoverySettingsState.ts`
+90. `frontend-modern/src/components/Settings/useSettingsInfrastructurePanelProps.ts`
+91. `frontend-modern/src/components/Settings/settingsPanelRegistryContext.tsx`
+92. `frontend-modern/src/components/Settings/settingsPanelRegistryLoaders.ts`
+93. `frontend-modern/src/components/Settings/settingsNavigationModel.ts`
+94. `frontend-modern/src/components/Settings/settingsNavCatalog.ts`
+95. `frontend-modern/src/components/Settings/settingsNavVisibility.ts`
+96. `frontend-modern/src/components/Settings/settingsRouting.ts`
+97. `frontend-modern/src/components/Settings/settingsTabSaveBehavior.ts`
+98. `frontend-modern/src/components/Settings/settingsTypes.ts`
+99. `frontend-modern/src/components/Settings/useSettingsNavigation.ts`
+100. `frontend-modern/src/components/Settings/useSettingsPanelRegistry.tsx`
+101. `frontend-modern/src/components/Settings/useSettingsSystemPanels.tsx`
+102. `frontend-modern/src/components/Settings/DockerRuntimeSettingsCard.tsx`
+103. `frontend-modern/src/components/shared/EnvironmentLockBadge.tsx`
+104. `frontend-modern/src/utils/environmentLockPresentation.ts`
+105. `frontend-modern/src/utils/docsLinks.ts`
+106. `tests/integration/tests/20-local-doc-links.spec.ts`
+107. `frontend-modern/src/index.css`
+108. `frontend-modern/src/components/shared/summaryInteractionA11y.ts`
+109. `frontend-modern/src/components/shared/SummaryRowActionButton.tsx`
+110. `frontend-modern/src/hooks/createNonSuspendingQuery.ts`
+111. `frontend-modern/src/components/shared/SummaryTableCardHeader.tsx`
+112. `frontend-modern/src/components/shared/UpgradeLink.tsx`
+113. `frontend-modern/src/components/shared/useUpgradeNavigation.ts`
+114. `frontend-modern/src/utils/upgradeNavigation.ts`
+115. `frontend-modern/src/components/DemoBanner.tsx`
+116. `frontend-modern/src/components/Login.tsx`
+117. `frontend-modern/src/stores/demoMode.ts`
+118. `frontend-modern/src/stores/sessionCapabilities.ts`
+119. `frontend-modern/src/stores/sessionPresentationPolicy.ts`
+120. `frontend-modern/src/stores/licenseCommercial.ts`
+121. `frontend-modern/src/useAppRuntimeState.ts`
+122. `frontend-modern/src/stores/aiChat.ts`
 
 ## Shared Boundaries
 
@@ -185,11 +183,12 @@ work extends shared components instead of creating new local variants.
    posture: `/alerts` may continue exposing reporting tabs such as overview and
    history, but activation controls plus configuration routes must collapse out
    of the public-demo shell instead of advertising blocked management actions.
-   That same public-demo presentation boundary also owns top-level Operations
-   posture: the authenticated demo shell must not advertise the Operations
-   utility tab, and `/operations` deep links must hand back to the dashboard
-   instead of surfacing diagnostics or system-log chrome that the backend hides
-   for demo sessions.
+   That same public-demo presentation boundary also owns Settings support
+   posture: the authenticated demo shell must not advertise `Diagnostics &
+   Health`, `Data & Reports`, or `System Logs` in the Settings navigation, and
+   legacy `/operations/*` links must resolve through the canonical Settings
+   routing boundary instead of reviving a standalone Operations utility tab or
+   route-local support shell.
    Shared sparkline primitives must also stay CSP-safe by construction:
    `frontend-modern/src/components/shared/InteractiveSparkline.tsx` may use SVG
    attributes and shared state/model helpers for cursor, axis-label, and
@@ -456,10 +455,11 @@ connections` visible as the API-backed alternative for Proxmox and
     top-level page-header contract before publication. The audit may follow
     local imports when a route shell composes `PageHeader` through a nested
     surface, and settings coverage must stay limited to top-level registry
-    panels rather than every helper `*Panel.tsx` file. Route shells such as
-    `frontend-modern/src/features/operations/OperationsPageSurface.tsx` must
-    therefore keep the shared `PageHeader` above owned subtabs instead of
-    drifting back to page-local `<h1>` framing.
+    panels rather than every helper `*Panel.tsx` file. The canonical Settings
+    shell therefore owns the shared `PageHeader` for support tools, and
+    `frontend-modern/src/pages/Operations.tsx` must stay a redirect-only
+    compatibility handoff instead of regrowing a second route-local heading,
+    tab strip, or page shell for diagnostics, reporting, or logs.
 23. Keep the authenticated app root aligned with that same first-session path.
     That same shared-primitive ownership now includes contextual row focus.
     `frontend-modern/src/components/shared/contextualFocus.ts` is the canonical
@@ -1138,7 +1138,10 @@ handoff lifecycle, and
 `frontend-modern/src/components/shared/mobileNavBarModel.ts` owns platform and
 utility tab ordering, alert badge counts, fade-state derivation, and tab
 button class policy. Future mobile-nav work should extend those owners instead
-of pushing tab-order or DOM lifecycle logic back into the shared shell.
+of pushing tab-order or DOM lifecycle logic back into the shared shell. With
+support/admin tools moved under Settings, that utility ordering must no longer
+reserve a standalone `operations` slot; alerts, Patrol, and Settings are the
+remaining authenticated utility tabs.
 The shared command palette now follows that same owner split.
 `frontend-modern/src/components/shared/CommandPaletteModal.tsx` stays the
 render shell, `frontend-modern/src/components/shared/useCommandPaletteState.ts`
@@ -1302,17 +1305,14 @@ must consume the direct Proxmox panel contract through
 registry stays a shell/composition owner and does not depend on
 `ProxmoxSettingsPanel.tsx` as though the panel still owned the runtime model.
 
-The operations route now follows the same thin-route pattern as infrastructure,
-storage, and Patrol. `frontend-modern/src/pages/Operations.tsx` stays the route
-shell, `frontend-modern/src/features/operations/OperationsPageSurface.tsx` owns
-the tabbed operations surface, and
-`frontend-modern/src/features/operations/operationsPageModel.ts` owns the tab
-and path contract. The operations route must keep its navigation routed through
-the shared `frontend-modern/src/components/shared/Subtabs.tsx` primitive rather
-than rebuilding a bespoke page-local tab bar. When the session presentation
-policy marks the operator as a public demo viewer, that same route owner must
-suppress the surface entirely and hand the browser back to the canonical
-dashboard route instead of rendering diagnostics, reporting, or logs shells
+The retired `/operations` route is now a thin compatibility redirect only.
+`frontend-modern/src/pages/Operations.tsx` may normalize legacy `/operations/*`
+links into the canonical Settings support routes, but diagnostics, reports,
+and logs now belong to the shared Settings shell instead of a bespoke page-
+local tab surface. Support-only navigation must therefore route through the
+shared settings owners rather than rebuilding a second route-level shell, and
+public demo posture must keep those support entries hidden from the Settings
+navigation instead of reviving a standalone operations page.
 that are unavailable in demo mode.
 
 The dashboard overview route now follows that same feature-owner pattern for
@@ -1586,6 +1586,12 @@ final memoized registry composition only. `frontend-modern/src/components/Settin
 must stay a shell that wires those owners together instead of re-accumulating
 infrastructure workspace props, registry context maps, system panel prop maps,
 lazy loader definitions, or discovery draft state inline.
+That same settings-routing contract now also owns the Support group for
+`Diagnostics & Health`, `Data & Reports`, and `System Logs`: the navigation
+model must normalize both `/settings/operations/*` and legacy `/operations/*`
+compatibility links into `/settings/support/*`, and the catalog plus visibility
+owners must treat those support surfaces as Settings-native pages rather than
+as a second top-level utility destination.
 
 The resource incident panel's collapsed activity summary is now part of that
 same shared primitive boundary. Event-type count chips, visible-event copy,
@@ -2119,7 +2125,7 @@ reference cases, and
 locks that direct-root contract so single-surface pages do not quietly regain
 redundant outer spacing chrome.
 The same shared settings-shell boundary now also owns the API-backed
-alternative path inside Infrastructure Operations. `frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx`,
+alternative path inside Connections & Inventory. `frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx`,
 `frontend-modern/src/components/Settings/InfrastructurePlatformConnectionsSummaryCard.tsx`, `frontend-modern/src/components/Settings/settingsHeaderMeta.ts`,
 `frontend-modern/src/components/Settings/settingsNavigationModel.ts`, `frontend-modern/src/utils/dashboardEmptyStatePresentation.ts`,
 `frontend-modern/src/utils/infrastructureEmptyStatePresentation.ts`, and adjacent setup guidance must

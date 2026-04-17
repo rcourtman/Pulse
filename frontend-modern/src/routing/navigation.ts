@@ -8,8 +8,7 @@ export type AppTabId =
   | 'recovery'
   | 'alerts'
   | 'ai'
-  | 'settings'
-  | 'operations';
+  | 'settings';
 
 export function getActiveTabForPath(path: string): AppTabId {
   if (path.startsWith('/dashboard')) return 'dashboard';
@@ -21,6 +20,6 @@ export function getActiveTabForPath(path: string): AppTabId {
   if (path.startsWith('/alerts')) return 'alerts';
   if (path.startsWith(PATROL_PATH) || path.startsWith('/ai')) return 'ai';
   if (path.startsWith('/settings')) return 'settings';
-  if (path.startsWith('/operations')) return 'operations';
+  if (path.startsWith('/operations')) return 'settings';
   return 'infrastructure';
 }
