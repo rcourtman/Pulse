@@ -859,6 +859,11 @@ consume the shared column presentation owner and render canonical table sizing
 through classes plus DOM width/height attributes rather than lane-local inline
 style objects, so the same unified-resource dataset can reach the public demo
 without transport-specific DOM drift.
+That same consumer contract now also owns full-width desktop balance for the
+infrastructure tables. The shared column presentation owner must publish an
+explicit desktop `Resource` width for host, PBS, and PMG sections so wide
+shells redistribute surplus width across the remaining columns instead of
+turning the first column into blank filler that hides metric density.
 The canonical unified-resource change and relationship presenters now also
 share the same elapsed-time and "ago" wording utilities, so `observed`,
 `last seen`, and `ago` fragments stay consistent without each formatter

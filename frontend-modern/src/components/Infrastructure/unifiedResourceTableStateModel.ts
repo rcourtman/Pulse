@@ -194,7 +194,7 @@ export const getUnifiedResourceTableColumnPresentations = (
 ): UnifiedResourceTableColumnPresentations => ({
   resourceColumn: isMobile
     ? buildUnifiedResourceTableColumnPresentation('w-full min-w-[120px]', '100%')
-    : buildUnifiedResourceTableColumnPresentation('min-w-[220px]'),
+    : buildUnifiedResourceTableColumnPresentation('min-w-[220px] max-w-[220px]', 220),
   metricColumn: isMobile
     ? buildUnifiedResourceTableColumnPresentation('min-w-[65px]', 70)
     : buildUnifiedResourceTableColumnPresentation('min-w-[144px] max-w-[144px]', 144),

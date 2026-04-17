@@ -288,6 +288,12 @@ regression protection.
 2. Update this contract when a new protected hot path is adopted
 3. Route runtime changes through the explicit performance proof policies in `registry.json`; default fallback proof routing is not allowed
 4. Record the evidence source for any claimed performance improvement
+5. Keep wide-desktop infrastructure table layout proof on the shared owner.
+   Changes to `frontend-modern/src/components/Infrastructure/unifiedResourceTableStateModel.ts`
+   that affect host, PBS, or PMG desktop column widths must ship with shared
+   model verification plus desktop Playwright proof that full-width shells
+   distribute surplus width across peer columns instead of stretching only the
+   `Resource` column.
 
 ## Current State
 
@@ -684,6 +690,12 @@ and apply those values through classes and width/height attributes, not inline
 `style=` maps on the live table DOM. Future hot-path table work must not
 reintroduce inline width, min/max width, or row-height styles into the render
 shell just to land a local layout tweak.
+That same shared sizing contract now also owns wide-desktop width
+distribution. In full-width shells, host, PBS, and PMG tables must keep an
+explicit desktop `Resource` column width in the shared presentation owner so
+surplus width is redistributed across peer metric, source, uptime, and action
+columns instead of being dumped into the first column and wasting operator
+visible table density.
 That hot-path contract now includes policy badge rendering on resource rows.
 The infrastructure summary hot path is now explicit shared ownership too:
 `InfrastructureSummary.tsx` stays a render shell,
