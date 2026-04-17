@@ -122,6 +122,37 @@ load_env_file() {
     fi
 }
 
+load_runtime_env_overrides() {
+    local runtime_env="${PULSE_DATA_DIR}/.env"
+    if [[ -f "${runtime_env}" ]]; then
+        load_env_file "${runtime_env}"
+        log_info "Loaded runtime .env overrides from ${runtime_env}"
+    fi
+}
+
+show_startup_banner() {
+    cat <<BANNER
+=========================================
+Starting HOT-RELOAD development mode
+=========================================
+
+Frontend: http://${FRONTEND_DEV_HOST}:${FRONTEND_DEV_PORT} (Local)
+          http://${LAN_IP}:${FRONTEND_DEV_PORT} (LAN)
+Backend API: ${PULSE_DEV_API_URL}
+
+Dev Credentials: admin / admin
+
+Mock Mode: ${PULSE_MOCK_MODE:-false}
+Toggle mock mode: npm run mock:on / npm run mock:off
+Mock config: npm run mock:edit
+
+Frontend: Edit files and see changes instantly!
+Backend: Auto-rebuilds when Go or embedded demo assets change!
+Press Ctrl+C to stop
+=========================================
+BANNER
+}
+
 load_env_file "${ROOT_DIR}/.env"
 load_env_file "${ROOT_DIR}/.env.local"
 load_env_file "${ROOT_DIR}/.env.dev"
@@ -202,27 +233,6 @@ EMBEDDED_FRONTEND_DIST_DIR="${EMBEDDED_FRONTEND_DIR}/dist"
 
 check_dependencies
 
-cat <<BANNER
-=========================================
-Starting HOT-RELOAD development mode
-=========================================
-
-Frontend: http://${FRONTEND_DEV_HOST}:${FRONTEND_DEV_PORT} (Local)
-          http://${LAN_IP}:${FRONTEND_DEV_PORT} (LAN)
-Backend API: ${PULSE_DEV_API_URL}
-
-Dev Credentials: admin / admin
-
-Mock Mode: ${PULSE_MOCK_MODE:-false}
-Toggle mock mode: npm run mock:on / npm run mock:off
-Mock config: npm run mock:edit
-
-Frontend: Edit files and see changes instantly!
-Backend: Auto-rebuilds when Go or embedded demo assets change!
-Press Ctrl+C to stop
-=========================================
-BANNER
-
 kill_port() {
     local port=$1
     log_info "Cleaning up port ${port}..."
@@ -293,21 +303,6 @@ check_script_change() {
 
 # --- Config Setup ---
 
-if [[ -f "${ROOT_DIR}/mock.env" ]]; then
-    load_env_file "${ROOT_DIR}/mock.env"
-    if [[ -f "${ROOT_DIR}/mock.env.local" ]]; then
-        load_env_file "${ROOT_DIR}/mock.env.local"
-        log_info "Loaded mock.env.local overrides"
-    fi
-    if [[ ${PULSE_MOCK_MODE:-false} == "true" ]]; then
-        TOTAL_GUESTS=$((PULSE_MOCK_NODES * (PULSE_MOCK_VMS_PER_NODE + PULSE_MOCK_LXCS_PER_NODE)))
-        echo "Mock mode ENABLED with ${PULSE_MOCK_NODES} nodes (${TOTAL_GUESTS} total guests)"
-    else
-        echo "Syncing production configuration..."
-        DEV_DIR="${ROOT_DIR}/tmp/dev-config" "${ROOT_DIR}/scripts/sync-production-config.sh"
-    fi
-fi
-
 if [[ -f /etc/pulse/.env ]] && [[ -r /etc/pulse/.env ]]; then
     load_env_file "/etc/pulse/.env"
     echo "Auth configuration loaded from /etc/pulse/.env"
@@ -352,18 +347,20 @@ else
     log_info "Using dev config directory: ${PULSE_DATA_DIR}"
 fi
 
-# Also check for mock.env in PULSE_DATA_DIR (where `pulse mock enable` writes it)
-# This allows the CLI command to work without manually copying files to the repo root.
-if [[ -f "${PULSE_DATA_DIR}/mock.env" ]]; then
-    load_env_file "${PULSE_DATA_DIR}/mock.env"
-    if [[ -f "${PULSE_DATA_DIR}/mock.env.local" ]]; then
-        load_env_file "${PULSE_DATA_DIR}/mock.env.local"
-    fi
+load_runtime_env_overrides
+
+if [[ "${PULSE_DATA_DIR}" == "${ROOT_DIR}/tmp/dev-config" ]] && [[ ${PULSE_MOCK_MODE:-false} != "true" ]]; then
+    echo "Syncing production configuration..."
+    DEV_DIR="${ROOT_DIR}/tmp/dev-config" "${ROOT_DIR}/scripts/sync-production-config.sh"
 fi
 
 if [[ ${PULSE_MOCK_MODE:-false} == "true" ]]; then
     log_info "Mock mode enabled: retaining shared data directory (${PULSE_DATA_DIR}) to preserve real history"
+    TOTAL_GUESTS=$((${PULSE_MOCK_NODES:-3} * (${PULSE_MOCK_VMS_PER_NODE:-3} + ${PULSE_MOCK_LXCS_PER_NODE:-3})))
+    echo "Mock mode ENABLED with ${PULSE_MOCK_NODES:-3} nodes (${TOTAL_GUESTS} total guests)"
 fi
+
+show_startup_banner
 
 # Auto-restore encryption key from backup if missing
 if [[ ! -f "${PULSE_DATA_DIR}/.encryption.key" ]]; then
@@ -632,19 +629,9 @@ log_info "Starting backend file watcher..."
 
         log_info "Restarting backend..."
 
-        # Re-source mock.env so that `pulse mock enable/disable` changes take
+        # Re-source the canonical runtime .env so mock-mode changes take
         # effect without a full hot-dev restart.
-        if [[ -f "${PULSE_DATA_DIR}/mock.env" ]]; then
-            load_env_file "${PULSE_DATA_DIR}/mock.env"
-            if [[ -f "${PULSE_DATA_DIR}/mock.env.local" ]]; then
-                load_env_file "${PULSE_DATA_DIR}/mock.env.local"
-            fi
-        elif [[ -f "${ROOT_DIR}/mock.env" ]]; then
-            load_env_file "${ROOT_DIR}/mock.env"
-            if [[ -f "${ROOT_DIR}/mock.env.local" ]]; then
-                load_env_file "${ROOT_DIR}/mock.env.local"
-            fi
-        fi
+        load_runtime_env_overrides
 
         # Kill ALL pulse processes (not just one) to prevent duplicates
         pkill -f "^\./pulse$" 2>/dev/null || true

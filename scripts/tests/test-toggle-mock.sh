@@ -148,9 +148,15 @@ test_ensure_mock_env_file_seeds_canonical_demo_defaults() {
   output="$(
     TOGGLE_MOCK_PATH="${TOGGLE_MOCK}" \
     MOCK_ENV_OVERRIDE="${state}/mock.env" \
+    LEGACY_ROOT_MOCK_ENV_OVERRIDE="${state}/legacy-root.mock.env" \
+    LEGACY_DEV_MOCK_ENV_OVERRIDE="${state}/legacy-dev.mock.env" \
+    LEGACY_RUNTIME_MOCK_ENV_OVERRIDE="${state}/legacy-runtime.mock.env" \
     bash -lc '
       source "${TOGGLE_MOCK_PATH}"
       MOCK_ENV_FILE="${MOCK_ENV_OVERRIDE}"
+      LEGACY_ROOT_MOCK_ENV_FILE="${LEGACY_ROOT_MOCK_ENV_OVERRIDE}"
+      LEGACY_DEV_MOCK_ENV_FILE="${LEGACY_DEV_MOCK_ENV_OVERRIDE}"
+      LEGACY_RUNTIME_MOCK_ENV_FILE="${LEGACY_RUNTIME_MOCK_ENV_OVERRIDE}"
       ensure_mock_env_file
       cat "${MOCK_ENV_FILE}"
     '
@@ -172,11 +178,45 @@ test_ensure_mock_env_file_seeds_canonical_demo_defaults() {
   assert_contains "ensure_mock_env_file seeds canonical stopped percent" "${env_contents}" "PULSE_MOCK_STOPPED_PERCENT=6"
 }
 
+test_ensure_mock_env_file_migrates_legacy_sidecar() {
+  local state output env_contents
+  state="$(mktemp -d)"
+  temp_dirs+=("${state}")
+
+  cat > "${state}/legacy.mock.env" <<'EOF'
+PULSE_MOCK_MODE=true
+PULSE_MOCK_NODES=9
+EOF
+
+  output="$(
+    TOGGLE_MOCK_PATH="${TOGGLE_MOCK}" \
+    MOCK_ENV_OVERRIDE="${state}/runtime.env" \
+    LEGACY_DEV_MOCK_ENV_OVERRIDE="${state}/legacy.mock.env" \
+    LEGACY_ROOT_MOCK_ENV_OVERRIDE="${state}/legacy-root.mock.env" \
+    LEGACY_RUNTIME_MOCK_ENV_OVERRIDE="${state}/legacy-runtime.mock.env" \
+    bash -lc '
+      source "${TOGGLE_MOCK_PATH}"
+      MOCK_ENV_FILE="${MOCK_ENV_OVERRIDE}"
+      LEGACY_DEV_MOCK_ENV_FILE="${LEGACY_DEV_MOCK_ENV_OVERRIDE}"
+      LEGACY_ROOT_MOCK_ENV_FILE="${LEGACY_ROOT_MOCK_ENV_OVERRIDE}"
+      LEGACY_RUNTIME_MOCK_ENV_FILE="${LEGACY_RUNTIME_MOCK_ENV_OVERRIDE}"
+      ensure_mock_env_file
+      cat "${MOCK_ENV_FILE}"
+    '
+  )"
+  env_contents="${output}"
+
+  assert_contains "ensure_mock_env_file migrates legacy mock mode" "${env_contents}" "PULSE_MOCK_MODE=true"
+  assert_contains "ensure_mock_env_file migrates legacy node count" "${env_contents}" "PULSE_MOCK_NODES=9"
+  assert_contains "ensure_mock_env_file still seeds missing defaults" "${env_contents}" "PULSE_MOCK_VMS_PER_NODE=3"
+}
+
 main() {
   test_detects_managed_hot_dev_runtime
   test_managed_hot_dev_start_uses_takeover
   test_managed_hot_dev_stop_uses_control_plane
   test_ensure_mock_env_file_seeds_canonical_demo_defaults
+  test_ensure_mock_env_file_migrates_legacy_sidecar
 
   if (( failures > 0 )); then
     echo "Total failures: ${failures}" >&2

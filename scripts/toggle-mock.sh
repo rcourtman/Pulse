@@ -20,10 +20,14 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(dirname "$SCRIPT_DIR")"
 HOT_DEV_BG_PATH="${HOT_DEV_BG_PATH:-${ROOT_DIR}/scripts/hot-dev-bg.sh}"
 
-MOCK_ENV_FILE="${ROOT_DIR}/mock.env"
 DEV_DATA_DIR="${ROOT_DIR}/tmp/dev-config"
 MOCK_DATA_DIR="${ROOT_DIR}/tmp/mock-data"
 DEV_KEY_FILE="${DEV_DATA_DIR}/.encryption.key"
+MOCK_ENV_FILE="${MOCK_ENV_FILE:-${DEV_DATA_DIR}/.env}"
+RUNTIME_MOCK_ENV_FILE="${RUNTIME_MOCK_ENV_FILE:-${MOCK_DATA_DIR}/.env}"
+LEGACY_ROOT_MOCK_ENV_FILE="${LEGACY_ROOT_MOCK_ENV_FILE:-${ROOT_DIR}/mock.env}"
+LEGACY_DEV_MOCK_ENV_FILE="${LEGACY_DEV_MOCK_ENV_FILE:-${DEV_DATA_DIR}/mock.env}"
+LEGACY_RUNTIME_MOCK_ENV_FILE="${LEGACY_RUNTIME_MOCK_ENV_FILE:-${MOCK_DATA_DIR}/mock.env}"
 
 HOT_DEV_LOG="/tmp/pulse-hot-dev.log"
 STANDALONE_LOG="/tmp/pulse-standalone.log"
@@ -217,13 +221,8 @@ load_env_file() {
     fi
 }
 
-ensure_mock_env_file() {
-    if [[ -f "$MOCK_ENV_FILE" ]]; then
-        return
-    fi
-
-    cat > "$MOCK_ENV_FILE" <<'ENVEOF'
-# Mock Mode Configuration
+mock_default_entries() {
+    cat <<'ENVEOF'
 PULSE_MOCK_MODE=false
 PULSE_MOCK_NODES=3
 PULSE_MOCK_VMS_PER_NODE=3
@@ -238,17 +237,115 @@ PULSE_MOCK_K8S_DEPLOYMENTS=4
 PULSE_MOCK_RANDOM_METRICS=true
 PULSE_MOCK_STOPPED_PERCENT=6
 ENVEOF
+}
 
-    log_info "Created $MOCK_ENV_FILE"
+ensure_parent_dir() {
+    mkdir -p "$(dirname "$1")"
+}
+
+ensure_env_file_exists() {
+    local file="$1"
+    ensure_parent_dir "$file"
+    if [[ ! -f "$file" ]]; then
+        : > "$file"
+    fi
+}
+
+env_has_key() {
+    local file="$1"
+    local key="$2"
+    [[ -f "$file" ]] && grep -Eq "^[[:space:]]*${key}=" "$file"
+}
+
+read_env_value() {
+    local file="$1"
+    local key="$2"
+    if [[ ! -f "$file" ]]; then
+        return 1
+    fi
+
+    awk -F= -v lookup="$key" '
+        $1 ~ "^[[:space:]]*" lookup "$" {
+            value = substr($0, index($0, "=") + 1)
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
+            print value
+        }
+    ' "$file" | tail -n 1
+}
+
+set_env_value() {
+    local file="$1"
+    local key="$2"
+    local value="$3"
+
+    ensure_env_file_exists "$file"
+    if env_has_key "$file" "$key"; then
+        sed_inplace "s|^[[:space:]]*${key}=.*|${key}=${value}|" "$file"
+    else
+        printf '\n%s=%s\n' "$key" "$value" >> "$file"
+    fi
+}
+
+ensure_env_value() {
+    local file="$1"
+    local key="$2"
+    local value="$3"
+
+    ensure_env_file_exists "$file"
+    if ! env_has_key "$file" "$key"; then
+        printf '%s=%s\n' "$key" "$value" >> "$file"
+    fi
+}
+
+sync_mock_entries_to_file() {
+    local file="$1"
+    local line key value
+
+    ensure_env_file_exists "$file"
+    while IFS='=' read -r key value; do
+        [[ -n "${key}" ]] || continue
+        value="$(read_env_value "$MOCK_ENV_FILE" "$key" || printf '%s' "$value")"
+        set_env_value "$file" "$key" "$value"
+    done < <(mock_default_entries)
+}
+
+ensure_mock_env_file() {
+    local legacy_file key value
+    local created=false
+
+    if [[ ! -f "$MOCK_ENV_FILE" ]]; then
+        ensure_env_file_exists "$MOCK_ENV_FILE"
+        created=true
+    fi
+
+    if ! env_has_key "$MOCK_ENV_FILE" "PULSE_MOCK_MODE"; then
+        for legacy_file in \
+            "$LEGACY_DEV_MOCK_ENV_FILE" \
+            "$LEGACY_ROOT_MOCK_ENV_FILE" \
+            "$LEGACY_RUNTIME_MOCK_ENV_FILE"
+        do
+            [[ -f "$legacy_file" ]] || continue
+            while IFS='=' read -r key value; do
+                [[ "${key}" == PULSE_MOCK_* ]] || continue
+                set_env_value "$MOCK_ENV_FILE" "$key" "$value"
+            done < <(grep -E '^[[:space:]]*PULSE_MOCK_[A-Z0-9_]*=' "$legacy_file" || true)
+            log_info "Migrated legacy mock settings from ${legacy_file} to ${MOCK_ENV_FILE}"
+            break
+        done
+    fi
+
+    while IFS='=' read -r key value; do
+        ensure_env_value "$MOCK_ENV_FILE" "$key" "$value"
+    done < <(mock_default_entries)
+
+    if [[ "$created" == "true" ]]; then
+        log_info "Created ${MOCK_ENV_FILE}"
+    fi
 }
 
 get_mock_mode() {
     ensure_mock_env_file
-    set +u
-    # shellcheck disable=SC1090
-    source "$MOCK_ENV_FILE"
-    set -u
-    if [[ "${PULSE_MOCK_MODE:-false}" == "true" ]]; then
+    if [[ "$(read_env_value "$MOCK_ENV_FILE" "PULSE_MOCK_MODE" || true)" == "true" ]]; then
         echo "true"
     else
         echo "false"
@@ -259,12 +356,12 @@ set_mock_mode() {
     local enabled="$1"
     ensure_mock_env_file
 
-    if grep -Eq '^[[:space:]]*PULSE_MOCK_MODE=' "$MOCK_ENV_FILE"; then
-        sed_inplace "s/^[[:space:]]*PULSE_MOCK_MODE=.*/PULSE_MOCK_MODE=${enabled}/" "$MOCK_ENV_FILE"
-    else
-        printf '\nPULSE_MOCK_MODE=%s\n' "$enabled" >> "$MOCK_ENV_FILE"
-    fi
-
+    set_env_value "$MOCK_ENV_FILE" "PULSE_MOCK_MODE" "$enabled"
+    sync_mock_entries_to_file "$DEV_DATA_DIR/.env"
+    sync_mock_entries_to_file "$RUNTIME_MOCK_ENV_FILE"
+    sync_mock_entries_to_file "$LEGACY_DEV_MOCK_ENV_FILE"
+    sync_mock_entries_to_file "$LEGACY_RUNTIME_MOCK_ENV_FILE"
+    sync_mock_entries_to_file "$LEGACY_ROOT_MOCK_ENV_FILE"
     touch "$MOCK_ENV_FILE"
 }
 
@@ -493,8 +590,6 @@ start_standalone_runtime() {
     load_env_file "${ROOT_DIR}/.env"
     load_env_file "${ROOT_DIR}/.env.local"
     load_env_file "${ROOT_DIR}/.env.dev"
-    load_env_file "${ROOT_DIR}/mock.env"
-    load_env_file "${ROOT_DIR}/mock.env.local"
 
     if [[ "$target_mock_mode" == "true" ]] && use_isolated_mock_data_dir; then
         data_dir="$MOCK_DATA_DIR"
@@ -502,6 +597,7 @@ start_standalone_runtime() {
 
     export PULSE_DATA_DIR="$data_dir"
     mkdir -p "$PULSE_DATA_DIR"
+    load_env_file "${PULSE_DATA_DIR}/.env"
 
     if [[ "$PULSE_DATA_DIR" == "$MOCK_DATA_DIR" ]]; then
         log_warn "Using isolated mock data dir (${MOCK_DATA_DIR}); production metrics history will pause while mock mode is on"
@@ -699,7 +795,7 @@ usage() {
     echo "  on      - Enable mock mode and restart/rebuild stack"
     echo "  off     - Disable mock mode, sync real nodes config, restart/rebuild stack"
     echo "  status  - Show current mock mode + runtime status"
-    echo "  edit    - Edit mock.env"
+    echo "  edit    - Edit the runtime .env mock settings"
     echo "  sync    - Sync production config to dev config and restart if running"
 }
 
