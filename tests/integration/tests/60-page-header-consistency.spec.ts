@@ -17,12 +17,31 @@ const PAGE_HEADER_ROUTES = [
       "Review active incidents, confirm alert coverage, and control whether alerts are actively monitoring this install.",
   },
   {
+    slug: "settings",
+    route: "/settings/system-general",
+    title: "General",
+    description: "Manage appearance, layout, and default monitoring cadence.",
+  },
+  {
     slug: "patrol",
     route: "/patrol",
     title: "Patrol",
     description:
       "Continuously verify infrastructure health, review findings, and control Patrol runtime behavior.",
   },
+] as const;
+
+const ALIGNED_PAGE_HEADER_ROUTES = [
+  PAGE_HEADER_ROUTES[0],
+  PAGE_HEADER_ROUTES[1],
+  {
+    slug: "settings-operations",
+    route: "/settings/infrastructure-operations",
+    title: "Infrastructure Operations",
+    description:
+      "Bring infrastructure into Pulse, manage API-backed platform connections, and control which systems are actively reporting. Reporting and install workflows now live on the Operations tab.",
+  },
+  PAGE_HEADER_ROUTES[3],
 ] as const;
 
 const PRIMARY_API_TOKEN =
@@ -83,4 +102,34 @@ test.describe("Top-level page header consistency", () => {
       );
     });
   }
+
+  test("keeps primary page headings vertically aligned", async ({ page }) => {
+    let baselineY: number | null = null;
+
+    for (const surface of ALIGNED_PAGE_HEADER_ROUTES) {
+      await page.goto(surface.route, { waitUntil: "domcontentloaded" });
+
+      const pageHeading = page.getByRole("heading", {
+        level: 1,
+        name: surface.title,
+      });
+      await expect(pageHeading).toBeVisible();
+
+      const boundingBox = await pageHeading.boundingBox();
+      expect(
+        boundingBox,
+        `${surface.route} should expose a measurable heading box`,
+      ).not.toBeNull();
+
+      if (baselineY === null) {
+        baselineY = boundingBox!.y;
+        continue;
+      }
+
+      expect(
+        Math.abs(boundingBox!.y - baselineY),
+        `${surface.route} should keep its top-level heading aligned with the other utility surfaces`,
+      ).toBeLessThanOrEqual(1.5);
+    }
+  });
 });

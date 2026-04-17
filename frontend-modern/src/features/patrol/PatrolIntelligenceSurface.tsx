@@ -8,17 +8,15 @@ export function PatrolIntelligenceSurface() {
   const state = usePatrolIntelligenceState();
 
   return (
-    <div class="h-full flex flex-col bg-base">
+    <div class="space-y-6">
       <PatrolIntelligenceHeader state={state} />
       <PatrolIntelligenceBanners state={state} />
 
       <div
-        class={`flex-1 overflow-auto p-4 transition-opacity ${!state.patrolEnabledLocal() ? 'opacity-50 pointer-events-none' : ''}`}
+        class={`space-y-4 transition-opacity ${!state.patrolEnabledLocal() ? 'opacity-50 pointer-events-none' : ''}`}
       >
-        <div class="space-y-4">
-          <PatrolIntelligenceSummary state={state} />
-          <PatrolIntelligenceWorkspace state={state} />
-        </div>
+        <PatrolIntelligenceSummary state={state} />
+        <PatrolIntelligenceWorkspace state={state} />
       </div>
     </div>
   );
