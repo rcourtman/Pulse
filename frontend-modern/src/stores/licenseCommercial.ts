@@ -244,17 +244,6 @@ export function commercialOverflowDaysRemaining(): number | null {
   return typeof current === 'number' && Number.isFinite(current) ? current : null;
 }
 
-export function canShowActiveUseTrialNudge(): boolean {
-  const current = commercialPostureState();
-  if (!current) return false;
-  return (
-    current.tier === 'free' &&
-    current.subscription_state !== 'trial' &&
-    current.subscription_state !== 'active' &&
-    current.trial_eligible !== false
-  );
-}
-
 export function getUpgradeReason(key: string) {
   const current = commercialPostureState();
   if (!current?.upgrade_reasons?.length) return undefined;

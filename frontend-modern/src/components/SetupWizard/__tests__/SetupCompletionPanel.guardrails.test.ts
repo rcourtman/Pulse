@@ -4,7 +4,6 @@ import setupCompletionModelSource from '../setupCompletionModel.ts?raw';
 
 describe('SetupCompletionPanel guardrails', () => {
   it('keeps setup completion aligned with the canonical infrastructure install workspace', () => {
-    expect(setupCompletionPanelSource).toContain("from '@/stores/licenseCommercial';");
     expect(setupCompletionPanelSource).toContain(
       "const INFRASTRUCTURE_INSTALL_PATH = '/settings/infrastructure/install';",
     );
@@ -25,10 +24,13 @@ describe('SetupCompletionPanel guardrails', () => {
     );
     expect(setupCompletionPanelSource).toContain('Use the Platform connections workspace when:');
     expect(setupCompletionPanelSource).toContain('configure TLS and custom CA options');
-    expect(setupCompletionPanelSource).toContain('runStartProTrialAction({');
-    expect(setupCompletionPanelSource).toContain('await loadCommercialPosture(true);');
-    expect(setupCompletionPanelSource).toContain('isCommercialTrialActive');
-    expect(setupCompletionPanelSource).not.toContain("commercialPosture()?.subscription_state !== 'trial'");
+    expect(setupCompletionPanelSource).not.toContain("from '@/stores/licenseCommercial';");
+    expect(setupCompletionPanelSource).not.toContain('runStartProTrialAction');
+    expect(setupCompletionPanelSource).not.toContain('loadCommercialPosture');
+    expect(setupCompletionPanelSource).not.toContain('isCommercialTrialActive');
+    expect(setupCompletionPanelSource).not.toContain('Monitor from Anywhere');
+    expect(setupCompletionPanelSource).not.toContain("trackPaywallViewed('relay'");
+    expect(setupCompletionPanelSource).not.toContain("trackUpgradeClicked('setup_wizard'");
     expect(setupCompletionPanelSource).not.toContain('getUpgradeActionUrlOrFallback');
   });
 

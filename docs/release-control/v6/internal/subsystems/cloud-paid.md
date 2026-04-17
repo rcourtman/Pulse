@@ -53,43 +53,41 @@ agreement, and cloud-specific enforcement rules.
 31. `frontend-modern/src/App.tsx`
 32. `frontend-modern/src/AppLayout.tsx`
 33. `frontend-modern/src/useAppRuntimeState.ts`
-34. `frontend-modern/src/components/Dashboard/RelayOnboardingCard.tsx`
-35. `frontend-modern/src/components/Dashboard/useRelayOnboardingCardState.ts`
-36. `frontend-modern/src/components/Commercial/MonitoredSystemDefinitionDisclosure.tsx`
-37. `frontend-modern/src/components/Settings/BillingAdminPanel.tsx`
-38. `frontend-modern/src/components/Settings/BillingAdminOrganizationsTable.tsx`
-39. `frontend-modern/src/components/Settings/OrganizationBillingPanel.tsx`
-40. `frontend-modern/src/components/Settings/OrganizationBillingLoadingState.tsx`
-41. `frontend-modern/src/components/Settings/MonitoredSystemLedgerPanel.tsx`
-42. `frontend-modern/src/components/Settings/MonitoredSystemAdmissionPreview.tsx`
-43. `frontend-modern/src/components/Settings/ProLicensePanel.tsx`
-44. `frontend-modern/src/components/Settings/ProLicensePlanSection.tsx`
-45. `frontend-modern/src/components/Settings/CommercialBillingSections.tsx`
-46. `frontend-modern/src/components/Settings/SelfHostedCommercialRecoverySection.tsx`
-47. `frontend-modern/src/components/Settings/RelaySettingsPanel.tsx`
-48. `frontend-modern/src/components/Settings/RelayPairingSection.tsx`
-49. `frontend-modern/src/components/Settings/useBillingAdminPanelState.ts`
-50. `frontend-modern/src/components/Settings/useOrganizationBillingPanelState.ts`
-51. `frontend-modern/src/components/Settings/useProLicensePanelState.ts`
-52. `frontend-modern/src/components/Settings/useRelaySettingsPanelState.ts`
-53. `frontend-modern/src/pages/CloudPricing.tsx`
-54. `frontend-modern/src/pages/HostedSignup.tsx`
-55. `frontend-modern/src/pages/PricingHandoff.tsx`
-56. `frontend-modern/src/utils/apiClient.ts`
-57. `frontend-modern/src/utils/cloudPlans.ts`
-58. `frontend-modern/src/utils/commercialBillingModel.ts`
-59. `frontend-modern/src/utils/licensePresentation.ts`
-60. `frontend-modern/src/utils/monitoredSystemPresentation.ts`
-61. `frontend-modern/src/utils/pricingHandoff.ts`
-62. `frontend-modern/src/utils/selfHostedPlans.ts`
-63. `frontend-modern/src/utils/upgradePresentation.ts`
-64. `frontend-modern/src/components/Settings/selfHostedBillingPresentation.ts`
-65. `pulse-pro:license-server/public_pricing.go`
-66. `pulse-pro:license-server/v6_checkout.go`
-67. `pulse-pro:landing-page/thanks.html`
-68. `pulse-pro:scripts/grandfathered_recurring_cutover_preview.py`
-69. `pulse-pro:scripts/validate_public_pricing_model.py`
-70. `pulse-pro:V6_LAUNCH_CHECKLIST.md`
+34. `frontend-modern/src/components/Commercial/MonitoredSystemDefinitionDisclosure.tsx`
+35. `frontend-modern/src/components/Settings/BillingAdminPanel.tsx`
+36. `frontend-modern/src/components/Settings/BillingAdminOrganizationsTable.tsx`
+37. `frontend-modern/src/components/Settings/OrganizationBillingPanel.tsx`
+38. `frontend-modern/src/components/Settings/OrganizationBillingLoadingState.tsx`
+39. `frontend-modern/src/components/Settings/MonitoredSystemLedgerPanel.tsx`
+40. `frontend-modern/src/components/Settings/MonitoredSystemAdmissionPreview.tsx`
+41. `frontend-modern/src/components/Settings/ProLicensePanel.tsx`
+42. `frontend-modern/src/components/Settings/ProLicensePlanSection.tsx`
+43. `frontend-modern/src/components/Settings/CommercialBillingSections.tsx`
+44. `frontend-modern/src/components/Settings/SelfHostedCommercialRecoverySection.tsx`
+45. `frontend-modern/src/components/Settings/RelaySettingsPanel.tsx`
+46. `frontend-modern/src/components/Settings/RelayPairingSection.tsx`
+47. `frontend-modern/src/components/Settings/useBillingAdminPanelState.ts`
+48. `frontend-modern/src/components/Settings/useOrganizationBillingPanelState.ts`
+49. `frontend-modern/src/components/Settings/useProLicensePanelState.ts`
+50. `frontend-modern/src/components/Settings/useRelaySettingsPanelState.ts`
+51. `frontend-modern/src/pages/CloudPricing.tsx`
+52. `frontend-modern/src/pages/HostedSignup.tsx`
+53. `frontend-modern/src/pages/PricingHandoff.tsx`
+54. `frontend-modern/src/utils/apiClient.ts`
+55. `frontend-modern/src/utils/cloudPlans.ts`
+56. `frontend-modern/src/utils/commercialBillingModel.ts`
+57. `frontend-modern/src/utils/licensePresentation.ts`
+58. `frontend-modern/src/utils/monitoredSystemPresentation.ts`
+59. `frontend-modern/src/utils/pricingHandoff.ts`
+60. `frontend-modern/src/utils/selfHostedPlans.ts`
+61. `frontend-modern/src/utils/upgradePresentation.ts`
+62. `frontend-modern/src/components/Settings/selfHostedBillingPresentation.ts`
+63. `pulse-pro:license-server/public_pricing.go`
+64. `pulse-pro:license-server/v6_checkout.go`
+65. `pulse-pro:landing-page/thanks.html`
+66. `pulse-pro:scripts/grandfathered_recurring_cutover_preview.py`
+67. `pulse-pro:scripts/validate_public_pricing_model.py`
+68. `pulse-pro:V6_LAUNCH_CHECKLIST.md`
 
 ## Shared Boundaries
 
@@ -155,7 +153,7 @@ Community limit enforcement.
 15. Add or change organization billing and usage presentation through `frontend-modern/src/components/Settings/OrganizationBillingPanel.tsx`, `frontend-modern/src/components/Settings/OrganizationBillingLoadingState.tsx`, and `frontend-modern/src/components/Settings/useOrganizationBillingPanelState.ts`
 16. Add or change self-hosted Pro plan, trial, recovery, and entitlement actions through `frontend-modern/src/components/Settings/ProLicensePanel.tsx`, `frontend-modern/src/components/Settings/ProLicensePlanSection.tsx`, `frontend-modern/src/components/Settings/SelfHostedCommercialRecoverySection.tsx`, and `frontend-modern/src/components/Settings/useProLicensePanelState.ts`
 17. Add or change monitored-system ledger, disclosure, or admission-preview presentation through `frontend-modern/src/components/Settings/MonitoredSystemLedgerPanel.tsx`, `frontend-modern/src/components/Settings/MonitoredSystemAdmissionPreview.tsx`, `frontend-modern/src/components/Commercial/MonitoredSystemDefinitionDisclosure.tsx`, and `frontend-modern/src/utils/monitoredSystemPresentation.ts`
-18. Add or change paid relay settings and onboarding presentation through `frontend-modern/src/components/Settings/RelaySettingsPanel.tsx`, `frontend-modern/src/components/Settings/RelayPairingSection.tsx`, `frontend-modern/src/components/Settings/useRelaySettingsPanelState.ts`, `frontend-modern/src/components/Dashboard/RelayOnboardingCard.tsx`, and `frontend-modern/src/components/Dashboard/useRelayOnboardingCardState.ts`
+18. Add or change paid relay settings and pairing presentation through `frontend-modern/src/components/Settings/RelaySettingsPanel.tsx`, `frontend-modern/src/components/Settings/RelayPairingSection.tsx`, and `frontend-modern/src/components/Settings/useRelaySettingsPanelState.ts`. The Dashboard shell must not carry a Relay onboarding card or equivalent blanket upsell — relay discovery stays inside its owning settings surface.
     Public demo and other read-only presentation policy states must suppress
     relay setup and upsell onboarding instead of inviting pairing or commercial
     action from a governed non-manageable surface.
@@ -1187,6 +1185,20 @@ must be gated on `hasPaidFeatures`. Self-hosted Pro marketing lives at
 `pulserelay.pro/pricing`; the Settings plan surface must show factual
 license state for Community users and leave discovery of paid tiers to
 surfaces outside the plan page.
+That same no-funnel rule extends beyond Settings -> Plan. The self-hosted
+frontend must not render blanket trial/upgrade marketing to Community users
+from the main dashboard shell, the setup wizard completion screen, or any
+app-wide surface that fires without the user having explicitly engaged with
+a paid feature. In particular the Dashboard overview may not carry a
+`RelayOnboardingCard` paywall or equivalent `Start trial` prompt, the
+`SetupCompletionPanel` may not carry a `Monitor from Anywhere` Relay trial
+block, and no time-triggered "active use" nudge such as `ActiveUseTrialNudge`
+may auto-appear for Community users. Feature-gated discovery that fires only
+when a Community user clicks a locked feature (for example alert
+investigation, 30/90-day history ranges, Patrol AI autonomy modes, or
+Settings panels whose feature the user opened themselves) remains in scope
+for that feature's owning subsystem — those are user-initiated discovery
+paths, not blanket funnels, and are not required to be removed.
 That same counted-unit boundary also owns the disclosure rule for retail copy:
 default billing and pricing surfaces should use concise monitored-system copy,
 while the full counted-unit definition appears only behind explicit disclosure
@@ -1249,29 +1261,21 @@ recurring subscription is canceled, any later return must resolve through the
 current v6 pricing contract rather than reviving the legacy recurring rate.
 The canonical cross-repo manual drill for that boundary is
 `docs/release-control/v6/COMMERCIAL_CANCELLATION_REACTIVATION_E2E_TEST_PLAN.md`.
-The paid relay settings and onboarding surfaces are now part of that same
-ownership model. Changes to
-`frontend-modern/src/components/Settings/RelaySettingsPanel.tsx` and
-`frontend-modern/src/components/Dashboard/RelayOnboardingCard.tsx` must carry
+The paid relay settings surface is part of that same ownership model. Changes
+to `frontend-modern/src/components/Settings/RelaySettingsPanel.tsx` must carry
 this contract and the dedicated relay frontend proof files instead of
-remaining unowned consumers of relay licensing and onboarding state.
-That relay settings owner is now intentionally split by role as well:
+remaining unowned consumers of relay licensing state.
+That relay settings owner is intentionally split by role:
 `frontend-modern/src/components/Settings/RelaySettingsPanel.tsx` is the
 settings shell, `frontend-modern/src/components/Settings/useRelaySettingsPanelState.ts`
 owns relay config/status polling, trial, and pairing runtime, and
 `frontend-modern/src/components/Settings/RelayPairingSection.tsx` owns the QR
 pairing surface. Future relay settings work must extend that split instead of
 pulling polling and QR-generation lifecycle back into the shell component.
-The dashboard relay onboarding surface now follows the same rule:
-`frontend-modern/src/components/Dashboard/RelayOnboardingCard.tsx` is the
-dashboard shell, while
-`frontend-modern/src/components/Dashboard/useRelayOnboardingCardState.ts`
-owns license readiness, relay status polling, snooze state, and trial start
-runtime. Future onboarding changes must extend that split instead of pulling
-license and relay runtime back into the card shell. Live-route regressions in
-that dashboard composition must be caught by
-`tests/integration/tests/59-dashboard-relay-onboarding-trial-rate-limit.spec.ts`
-instead of relying only on isolated component tests.
+The Dashboard shell must not host a Relay onboarding card or equivalent
+blanket Relay upsell. Relay discovery belongs to the owning Settings surface
+above; the Dashboard stays a monitoring-first view with no app-wide paywall
+onboarding composed into it.
 That relay pairing boundary now also includes backend-owned mobile credential
 lifecycle: when the settings surface generates a mobile pairing QR, it must ask
 the server for a fresh scoped Pulse Mobile relay access token, fetch the

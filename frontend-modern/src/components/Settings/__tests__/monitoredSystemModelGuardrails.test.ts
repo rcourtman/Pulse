@@ -192,8 +192,6 @@ import trueNASSettingsPanelStateSource from '../useTrueNASSettingsPanelState.ts?
 import vmwareApiSource from '@/api/vmware.ts?raw';
 import vmwareSettingsPanelSource from '../VMwareSettingsPanel.tsx?raw';
 import vmwareSettingsPanelStateSource from '../useVMwareSettingsPanelState.ts?raw';
-import relayOnboardingCardSource from '@/components/Dashboard/RelayOnboardingCard.tsx?raw';
-import relayOnboardingCardStateSource from '@/components/Dashboard/useRelayOnboardingCardState.ts?raw';
 import generalSettingsPanelSource from '../GeneralSettingsPanel.tsx?raw';
 import networkBoundarySettingsSectionSource from '../NetworkBoundarySettingsSection.tsx?raw';
 import networkDiscoverySectionSource from '../NetworkDiscoverySection.tsx?raw';
@@ -517,26 +515,6 @@ describe('monitored-system model guardrails', () => {
     expect(infrastructureDiscoveryRuntimeStateSource).not.toContain('NodesAPI.getNodes');
     expect(infrastructureSettingsModelSource).toContain('collectConfiguredInfrastructureHosts');
     expect(infrastructureSettingsModelSource).toContain('matchConfiguredNodeToResource');
-    expect(relayOnboardingCardSource).toContain('@/utils/relayPresentation');
-    expect(relayOnboardingCardSource).toContain('./useRelayOnboardingCardState');
-    expect(relayOnboardingCardSource).toContain('RELAY_ONBOARDING_TITLE');
-    expect(relayOnboardingCardSource).toContain('RELAY_ONBOARDING_DESCRIPTION');
-    expect(relayOnboardingCardSource).toContain('RELAY_ONBOARDING_UPGRADE_LABEL');
-    expect(relayOnboardingCardSource).toContain('RELAY_ONBOARDING_TRIAL_LABEL');
-    expect(relayOnboardingCardSource).toContain('RELAY_ONBOARDING_TRIAL_STARTING_LABEL');
-    expect(relayOnboardingCardSource).toContain('RELAY_ONBOARDING_SETUP_LABEL');
-    expect(relayOnboardingCardSource).toContain('RELAY_ONBOARDING_DISCONNECTED_LABEL');
-    expect(relayOnboardingCardSource).not.toContain('createSignal(');
-    expect(relayOnboardingCardSource).not.toContain('loadRuntimeCapabilities()');
-    expect(relayOnboardingCardSource).not.toContain('RelayAPI.getStatus()');
-    expect(relayOnboardingCardSource).not.toContain('startProTrial()');
-    expect(relayOnboardingCardSource).not.toContain('Pair Your Mobile Device');
-    expect(relayOnboardingCardSource).not.toContain('Relay is currently disconnected.');
-    expect(relayOnboardingCardStateSource).toContain('loadRuntimeCapabilities()');
-    expect(relayOnboardingCardStateSource).toContain('RelayAPI.getStatus()');
-    expect(relayOnboardingCardStateSource).toContain('trackPaywallViewed');
-    expect(relayOnboardingCardStateSource).toContain('runStartProTrialAction({');
-    expect(relayOnboardingCardStateSource).not.toContain('startProTrial()');
     expect(infrastructureInstallStateSource).toContain('STORAGE_KEYS.SETUP_HANDOFF');
     expect(infrastructureInstallerSectionSource).toContain(
       'Security configured. Save these first-run credentials now.',
@@ -544,11 +522,11 @@ describe('monitored-system model guardrails', () => {
     expect(infrastructureInstallerSectionSource).toContain(
       'Pulse generated the first scoped install token automatically. The install commands below are ready for the first host.',
     );
-    expect(setupCompletionPanelSource).toContain('@/utils/relayPresentation');
-    expect(setupCompletionPanelSource).toContain('RELAY_ONBOARDING_SETUP_LABEL');
-    expect(setupCompletionPanelSource).toContain('RELAY_ONBOARDING_TRIAL_STARTING_LABEL');
-    expect(setupCompletionPanelSource).toContain('RELAY_ONBOARDING_SETUP_WIZARD_TRIAL_LABEL');
-    expect(setupCompletionPanelSource).toContain('RELAY_ONBOARDING_TRIAL_HINT');
+    expect(setupCompletionPanelSource).not.toContain('@/utils/relayPresentation');
+    expect(setupCompletionPanelSource).not.toContain('RELAY_ONBOARDING_SETUP_LABEL');
+    expect(setupCompletionPanelSource).not.toContain('RELAY_ONBOARDING_TRIAL_STARTING_LABEL');
+    expect(setupCompletionPanelSource).not.toContain('RELAY_ONBOARDING_SETUP_WIZARD_TRIAL_LABEL');
+    expect(setupCompletionPanelSource).not.toContain('RELAY_ONBOARDING_TRIAL_HINT');
     expect(setupCompletionPanelSource).not.toContain('Start Free Trial & Set Up Mobile');
     expect(setupCompletionPanelSource).not.toContain('14-DAY PRO TRIAL');
     expect(relayPresentationSource).toContain('export function getRelayConnectionPresentation');

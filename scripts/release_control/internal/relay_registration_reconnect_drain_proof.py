@@ -88,7 +88,6 @@ def build_command_specs(args: argparse.Namespace) -> list[CommandSpec]:
                 "npx",
                 "vitest",
                 "run",
-                "src/components/Dashboard/__tests__/RelayOnboardingCard.test.tsx",
                 "src/components/Settings/__tests__/RelaySettingsPanel.runtime.test.tsx",
                 "src/components/Settings/__tests__/settingsReadOnlyPanels.test.tsx",
             ],

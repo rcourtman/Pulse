@@ -10,8 +10,6 @@ import alertTargetTypesSource from '@/utils/alertTargetTypes.ts?raw';
 import resourceBadgesSource from '@/components/Infrastructure/resourceBadges.ts?raw';
 import commandPaletteModalSource from '@/components/shared/CommandPaletteModal.tsx?raw';
 import commandPaletteModelSource from '@/components/shared/commandPaletteModel.ts?raw';
-import activeUseTrialNudgeSource from '@/components/shared/ActiveUseTrialNudge.tsx?raw';
-import activeUseTrialNudgeModelSource from '@/components/shared/activeUseTrialNudgeModel.ts?raw';
 import columnPickerSource from '@/components/shared/ColumnPicker.tsx?raw';
 import columnPickerModelSource from '@/components/shared/columnPickerModel.ts?raw';
 import tagInputSource from '@/components/shared/TagInput.tsx?raw';
@@ -72,7 +70,6 @@ import selectionCardGroupSource from '@/components/shared/SelectionCardGroup.tsx
 import selectionCardGroupModelSource from '@/components/shared/selectionCardGroupModel.ts?raw';
 import sharedInfrastructureSummaryTableModelSource from '@/components/shared/infrastructureSummaryTableModel.ts?raw';
 import commandPaletteStateSource from '@/components/shared/useCommandPaletteState.ts?raw';
-import activeUseTrialNudgeStateSource from '@/components/shared/useActiveUseTrialNudgeState.ts?raw';
 import columnPickerStateSource from '@/components/shared/useColumnPickerState.ts?raw';
 import tagInputStateSource from '@/components/shared/useTagInputState.ts?raw';
 import collapsibleSearchInputStateSource from '@/components/shared/useCollapsibleSearchInputState.ts?raw';
@@ -330,7 +327,6 @@ import k8sNamespacePresentationSource from '@/utils/k8sNamespacePresentation.ts?
 import k8sStatusPresentationSource from '@/utils/k8sStatusPresentation.ts?raw';
 import raidCardSource from '@/components/shared/cards/RaidCard.tsx?raw';
 import raidPresentationSource from '@/utils/raidPresentation.ts?raw';
-import relayOnboardingCardSource from '@/components/Dashboard/RelayOnboardingCard.tsx?raw';
 import proLicensePanelSource from '@/components/Settings/ProLicensePanel.tsx?raw';
 import proLicensePlanSectionSource from '@/components/Settings/ProLicensePlanSection.tsx?raw';
 import securityPostureSummarySource from '@/components/Settings/SecurityPostureSummary.tsx?raw';
@@ -410,7 +406,6 @@ import storageDomainSource from '@/features/storageBackups/storageDomain.ts?raw'
 import storagePoolDetailPresentationSource from '@/features/storageBackups/storagePoolDetailPresentation.ts?raw';
 import storageBarPresentationSource from '@/features/storageBackups/storageBarPresentation.ts?raw';
 import storagePagePresentationSource from '@/features/storageBackups/storagePagePresentation.ts?raw';
-import relayOnboardingCardStateSource from '@/components/Dashboard/useRelayOnboardingCardState.ts?raw';
 import proLicensePanelStateSource from '@/components/Settings/useProLicensePanelState.ts?raw';
 import storagePageStatusSource from '@/features/storageBackups/storagePageStatus.ts?raw';
 import storageRowPresentationSource from '@/features/storageBackups/rowPresentation.ts?raw';
@@ -1557,17 +1552,6 @@ describe('frontend resource type boundaries', () => {
     expect(organizationBillingStateSource).toContain('@/utils/organizationSettingsPresentation');
     expect(billingAdminPanelSource).toContain('./useBillingAdminPanelState');
     expect(billingAdminPanelSource).toContain('./BillingAdminOrganizationsTable');
-    expect(relayOnboardingCardSource).toContain('./useRelayOnboardingCardState');
-    expect(relayOnboardingCardSource).toContain('presentationPolicyHidesCommercialSurfaces');
-    expect(relayOnboardingCardSource).toContain(
-      '!presentationPolicyHidesCommercialSurfaces() || state.hasRelay()',
-    );
-    expect(relayOnboardingCardSource).not.toContain('createSignal(');
-    expect(relayOnboardingCardSource).not.toContain('RelayAPI.getStatus()');
-    expect(relayOnboardingCardStateSource).toContain('RelayAPI.getStatus()');
-    expect(relayOnboardingCardStateSource).toContain('loadRuntimeCapabilities()');
-    expect(relayOnboardingCardStateSource).toContain('runStartProTrialAction({');
-    expect(relayOnboardingCardStateSource).not.toContain('startProTrial()');
     expect(organizationBillingPanelSource).not.toContain('normalizeOrgScope(getOrgID())');
     expect(organizationBillingPanelSource).not.toContain('createSignal(');
     expect(billingAdminPanelSource).not.toContain('createSignal(');
@@ -2528,7 +2512,7 @@ describe('frontend resource type boundaries', () => {
     expect(proLicensePlanSectionSource).toContain('getLicenseStatusLoadingState');
     expect(proLicensePlanSectionSource).toContain('getNoActiveProLicenseState');
     expect(proLicensePlanSectionSource).toContain('getTrialEndedProLicenseNotice');
-    expect(proLicensePlanSectionSource).toContain('getInactiveProUpsellNotice');
+    expect(proLicensePlanSectionSource).not.toContain('getInactiveProUpsellNotice');
     expect(proLicensePanelSource).not.toContain('Loading license status...');
     expect(proLicensePanelSource).not.toContain('No Pro license is active.');
     expect(proLicensePanelSource).not.toContain('const statusLabel =');
@@ -2833,24 +2817,6 @@ describe('frontend resource type boundaries', () => {
     expect(searchTipsPopoverModelSource).toContain('getSearchTipsPopoverPositionClass');
     expect(searchTipsPopoverModelSource).toContain('getSearchTipsPopoverTriggerVariant');
     expect(searchTipsPopoverModelSource).toContain('shouldSearchTipsPopoverOpenOnHover');
-    expect(activeUseTrialNudgeSource).toContain('useActiveUseTrialNudgeState');
-    expect(activeUseTrialNudgeSource).toContain('ACTIVE_USE_TRIAL_NUDGE_TITLE');
-    expect(activeUseTrialNudgeSource).not.toContain('createSignal');
-    expect(activeUseTrialNudgeSource).not.toContain('createMemo');
-    expect(activeUseTrialNudgeSource).not.toContain('startProTrial');
-    expect(activeUseTrialNudgeSource).not.toContain('localStorage');
-    expect(activeUseTrialNudgeSource).not.toContain('setInterval');
-    expect(activeUseTrialNudgeStateSource).toContain('createSignal');
-    expect(activeUseTrialNudgeStateSource).toContain('createMemo');
-    expect(activeUseTrialNudgeStateSource).toContain('window.localStorage');
-    expect(activeUseTrialNudgeStateSource).toContain('setInterval');
-    expect(activeUseTrialNudgeStateSource).toContain('runStartProTrialAction');
-    expect(activeUseTrialNudgeStateSource).toContain('snoozeUpsell');
-    expect(activeUseTrialNudgeModelSource).toContain('ACTIVE_USE_TRIAL_NUDGE_SNOOZE_KEY');
-    expect(activeUseTrialNudgeModelSource).toContain('ACTIVE_USE_TRIAL_NUDGE_FIRST_SEEN_KEY');
-    expect(activeUseTrialNudgeModelSource).toContain('isActiveUseTrialNudgeEligible');
-    expect(activeUseTrialNudgeModelSource).toContain('isActiveUseTrialNudgeOldEnough');
-    expect(activeUseTrialNudgeModelSource).toContain('ACTIVE_USE_TRIAL_NUDGE_TITLE');
     expect(trialBannerSource).toContain('useTrialBannerState');
     expect(trialBannerSource).toContain('TRIAL_BANNER_TITLE');
     expect(trialBannerSource).not.toContain('createSignal');

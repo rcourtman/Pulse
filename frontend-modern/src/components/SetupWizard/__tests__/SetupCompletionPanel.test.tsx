@@ -5,16 +5,9 @@ import type { WizardState } from '../SetupWizard';
 
 const copyToClipboardMock = vi.fn();
 const apiFetchJSONMock = vi.fn();
-const loadLicenseStatusMock = vi.fn();
-const startProTrialMock = vi.fn();
-const showSuccessMock = vi.fn();
-const showErrorMock = vi.fn();
-const navigateMock = vi.fn();
 const createObjectURLMock = vi.fn(() => 'blob:mock-url');
 const revokeObjectURLMock = vi.fn();
 const trackAgentFirstConnectedMock = vi.fn();
-const trackPaywallViewedMock = vi.fn();
-const trackUpgradeClickedMock = vi.fn();
 
 class MockBlob {
   readonly parts: string[];
@@ -36,14 +29,6 @@ const getLastDownloadedBlob = (): MockBlob => {
   return lastCall![0];
 };
 
-vi.mock('@solidjs/router', async () => {
-  const actual = await vi.importActual<typeof import('@solidjs/router')>('@solidjs/router');
-  return {
-    ...actual,
-    useNavigate: () => navigateMock,
-  };
-});
-
 vi.mock('@/utils/clipboard', () => ({
   copyToClipboard: (...args: unknown[]) => copyToClipboardMock(...args),
 }));
@@ -54,19 +39,6 @@ vi.mock('@/utils/apiClient', () => ({
 
 vi.mock('@/utils/url', () => ({
   getPulseBaseUrl: () => 'https://pulse.example.com',
-}));
-
-vi.mock('@/stores/licenseCommercial', () => ({
-  isCommercialTrialActive: () => false,
-  loadCommercialPosture: (...args: unknown[]) => loadLicenseStatusMock(...args),
-  commercialPosture: () => ({ relay: false }),
-  getUpgradeActionUrlOrFallback: () => 'https://pulse.example.com/upgrade',
-  startProTrial: (...args: unknown[]) => startProTrialMock(...args),
-}));
-
-vi.mock('@/utils/toast', () => ({
-  showSuccess: (...args: unknown[]) => showSuccessMock(...args),
-  showError: (...args: unknown[]) => showErrorMock(...args),
 }));
 
 vi.mock('@/utils/logger', () => ({
@@ -80,8 +52,6 @@ vi.mock('@/utils/logger', () => ({
 
 vi.mock('@/utils/upgradeMetrics', () => ({
   trackAgentFirstConnected: (...args: unknown[]) => trackAgentFirstConnectedMock(...args),
-  trackPaywallViewed: (...args: unknown[]) => trackPaywallViewedMock(...args),
-  trackUpgradeClicked: (...args: unknown[]) => trackUpgradeClickedMock(...args),
 }));
 
 const baseState: WizardState = {
@@ -99,8 +69,6 @@ describe('SetupCompletionPanel', () => {
       revokeObjectURL: revokeObjectURLMock,
     });
     apiFetchJSONMock.mockResolvedValue({ resources: [] });
-    loadLicenseStatusMock.mockResolvedValue(undefined);
-    startProTrialMock.mockResolvedValue({ outcome: 'noop' });
     copyToClipboardMock.mockResolvedValue(true);
   });
 
@@ -458,8 +426,7 @@ describe('SetupCompletionPanel', () => {
     ).not.toBeInTheDocument();
   });
 
-  it('routes relay setup through the canonical settings destination', async () => {
-    const onComplete = vi.fn();
+  it('does not surface a Monitor from Anywhere trial CTA in the setup completion panel', async () => {
     apiFetchJSONMock.mockResolvedValue({
       resources: [
         {
@@ -471,22 +438,16 @@ describe('SetupCompletionPanel', () => {
       ],
     });
 
-    render(() => <SetupCompletionPanel state={baseState} onComplete={onComplete} />);
+    render(() => <SetupCompletionPanel state={baseState} onComplete={vi.fn()} />);
 
     await waitFor(() => {
-      expect(screen.getByText('Monitor from Anywhere')).toBeInTheDocument();
+      expect(screen.getByText('Connected (1 system)')).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Start Free Trial & Set Up Mobile' }));
-
-    await waitFor(() => {
-      expect(showSuccessMock).toHaveBeenCalled();
-      expect(screen.getByRole('button', { name: 'Set Up Relay' })).toBeInTheDocument();
-    });
-
-    fireEvent.click(screen.getByRole('button', { name: 'Set Up Relay' }));
-
-    expect(onComplete).toHaveBeenCalledWith('/settings/system-relay');
-    expect(navigateMock).toHaveBeenCalledWith('/settings/system-relay');
+    expect(screen.queryByText('Monitor from Anywhere')).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /start free trial/i }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /set up relay/i })).not.toBeInTheDocument();
   });
 });

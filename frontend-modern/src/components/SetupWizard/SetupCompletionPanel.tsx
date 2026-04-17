@@ -4,34 +4,16 @@ import {
   createEffect,
   createMemo,
   onCleanup,
-  onMount,
   Show,
   For,
 } from 'solid-js';
-import { useNavigate } from '@solidjs/router';
 import { copyToClipboard } from '@/utils/clipboard';
 import { logger } from '@/utils/logger';
 import { apiFetchJSON } from '@/utils/apiClient';
 import { getPulseBaseUrl } from '@/utils/url';
 import type { State } from '@/types/api';
 import type { Resource } from '@/types/resource';
-import { showSuccess, showError } from '@/utils/toast';
-import {
-  trackAgentFirstConnected,
-  trackPaywallViewed,
-  trackUpgradeClicked,
-} from '@/utils/upgradeMetrics';
-import {
-  isCommercialTrialActive,
-  loadCommercialPosture,
-} from '@/stores/licenseCommercial';
-import {
-  RELAY_ONBOARDING_SETUP_LABEL,
-  RELAY_ONBOARDING_SETUP_WIZARD_TRIAL_LABEL,
-  RELAY_ONBOARDING_TRIAL_HINT,
-  RELAY_ONBOARDING_TRIAL_STARTING_LABEL,
-} from '@/utils/relayPresentation';
-import { runStartProTrialAction } from '@/utils/trialStartAction';
+import { trackAgentFirstConnected } from '@/utils/upgradeMetrics';
 import type { WizardState } from '../SetupWizard';
 import {
   buildSetupCompletionConnectedSystems,
@@ -72,33 +54,17 @@ const UNIFIED_RESOURCE_GUIDANCE = {
   ],
 } as const;
 
-const RELAY_SETTINGS_PATH = '/settings/system-relay';
 const INFRASTRUCTURE_INSTALL_PATH = '/settings/infrastructure/install';
 const INFRASTRUCTURE_PLATFORMS_PATH = '/settings/infrastructure/platforms';
 const SETUP_WIZARD_TELEMETRY_SURFACE = 'setup_wizard_complete';
 
 export const SetupCompletionPanel: Component<CompleteStepProps> = (props) => {
-  const navigate = useNavigate();
   const [copied, setCopied] = createSignal<'password' | 'admin-token' | null>(null);
   const [showCredentials, setShowCredentials] = createSignal(true);
   const [connectedSystems, setConnectedSystems] = createSignal<
     ReturnType<typeof buildSetupCompletionConnectedSystems>
   >([]);
-  const [trialStarting, setTrialStarting] = createSignal(false);
-  const [trialStarted, setTrialStarted] = createSignal(false);
-  const [relayPaywallTracked, setRelayPaywallTracked] = createSignal(false);
   let firstAgentConnectionTracked = false;
-
-  onMount(() => {
-    void loadCommercialPosture();
-  });
-
-  createEffect(() => {
-    if (connectedSystems().length > 0 && !relayPaywallTracked()) {
-      trackPaywallViewed('relay', 'setup_wizard');
-      setRelayPaywallTracked(true);
-    }
-  });
 
   createEffect(() => {
     if (props.connectedResourcesOverride !== undefined) {
@@ -233,32 +199,6 @@ Keep these credentials secure!
 
   const handleGoToDashboard = () => {
     props.onComplete('/');
-  };
-
-  const handleStartTrial = async () => {
-    trackUpgradeClicked('setup_wizard', 'relay');
-    if (trialStarting()) return;
-
-    setTrialStarting(true);
-    try {
-      const outcome = await runStartProTrialAction({
-        branded: true,
-        successMessage: '14-day Pro trial started! Set up Relay to monitor from your phone.',
-        showSuccess,
-        showError,
-      });
-      if (outcome === 'activated') {
-        setTrialStarted(true);
-        await loadCommercialPosture(true);
-      }
-    } finally {
-      setTrialStarting(false);
-    }
-  };
-
-  const handleSetupRelay = () => {
-    props.onComplete(RELAY_SETTINGS_PATH);
-    navigate(RELAY_SETTINGS_PATH);
   };
 
   const completionViewModel = createMemo(() =>
@@ -629,92 +569,6 @@ Keep these credentials secure!
           </div>
         </div>
 
-        <Show when={completionViewModel().hasConnectedSystems}>
-          <div class="bg-indigo-50 dark:bg-indigo-900 rounded-md border border-indigo-100 dark:border-indigo-800 p-5 text-left mt-8 overflow-hidden relative">
-            <div class="flex items-start gap-4 relative z-10">
-              <div class="flex h-12 w-12 items-center justify-center rounded-md bg-indigo-600 text-white shrink-0 border border-indigo-500">
-                <svg
-                  class="w-6 h-6"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  stroke-width="2"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"
-                  />
-                </svg>
-              </div>
-              <div class="flex-1 min-w-0">
-                <h3 class="text-sm font-bold text-base-content mb-1">Monitor from Anywhere</h3>
-                <p class="text-xs text-slate-600 dark:text-indigo-200 mb-4 leading-relaxed">
-                  Get push notifications and manage your infrastructure from your phone with Pulse
-                  Relay.
-                </p>
-                <Show
-                  when={!trialStarted() && !isCommercialTrialActive()}
-                  fallback={
-                    <button
-                      type="button"
-                      onClick={handleSetupRelay}
-                      class="inline-flex items-center gap-2 rounded-md bg-indigo-600 hover:bg-indigo-700 px-4 py-2 text-xs font-semibold text-white transition-colors"
-                    >
-                      <svg
-                        class="w-4 h-4"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                        stroke-width="2"
-                      >
-                        <path
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          d="M13 7l5 5m0 0l-5 5m5-5H6"
-                        />
-                      </svg>
-                      {RELAY_ONBOARDING_SETUP_LABEL}
-                    </button>
-                  }
-                >
-                  <button
-                    type="button"
-                    onClick={() => void handleStartTrial()}
-                    disabled={trialStarting()}
-                    class="inline-flex items-center gap-2 rounded-md bg-indigo-600 hover:bg-indigo-700 px-4 py-2 text-xs font-semibold text-white transition-colors disabled:opacity-50"
-                  >
-                    {trialStarting() ? (
-                      <>
-                        <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                          <circle
-                            class="opacity-25"
-                            cx="12"
-                            cy="12"
-                            r="10"
-                            stroke="currentColor"
-                            stroke-width="4"
-                          ></circle>
-                          <path
-                            class="opacity-75"
-                            fill="currentColor"
-                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-                          ></path>
-                        </svg>
-                        {RELAY_ONBOARDING_TRIAL_STARTING_LABEL}
-                      </>
-                    ) : (
-                      RELAY_ONBOARDING_SETUP_WIZARD_TRIAL_LABEL
-                    )}
-                  </button>
-                </Show>
-                <p class="mt-3 text-[10px] text-slate-500 dark:text-indigo-300 font-medium tracking-wide">
-                  {RELAY_ONBOARDING_TRIAL_HINT}
-                </p>
-              </div>
-            </div>
-          </div>
-        </Show>
       </div>
     </div>
   );

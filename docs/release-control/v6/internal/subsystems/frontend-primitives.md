@@ -587,7 +587,6 @@ commercial suppression. `frontend-modern/src/components/Settings/settingsNavCata
 `frontend-modern/src/useAppRuntimeState.ts`,
 `frontend-modern/src/components/shared/useTrialBannerState.ts`, and
 `frontend-modern/src/components/shared/useMonitoredSystemLimitWarningBannerState.ts`,
-`frontend-modern/src/components/Dashboard/RelayOnboardingCard.tsx`,
 `frontend-modern/src/components/shared/HistoryChartOverlay.tsx`,
 `frontend-modern/src/features/patrol/PatrolIntelligenceBanners.tsx`, and
 `frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx`
@@ -886,7 +885,7 @@ later" message; user-facing CTA surfaces must therefore inherit
 inventing lane-local 429 wording.
 That same shared primitive boundary now also owns intent-level commercial
 selectors for non-billing surfaces. Leaf/shared state such as
-`useTrialBannerState.ts`, `useActiveUseTrialNudgeState.ts`,
+`useTrialBannerState.ts`,
 `useMonitoredSystemLimitWarningBannerState.ts`, settings panel state, and
 Patrol approval/header shells must consume selector helpers from
 `frontend-modern/src/stores/licenseCommercial.ts` such as
@@ -1007,14 +1006,6 @@ math, hover target selection, focused-series tooltip detail, and density-cell
 opacity rules. Future density-map work should extend those owners instead of
 pushing canvas lifecycle, tooltip shaping, or chart math back into the shared
 shell.
-The shared active-use trial nudge now follows that same owner split.
-`frontend-modern/src/components/shared/ActiveUseTrialNudge.tsx` stays the
-render shell, `frontend-modern/src/components/shared/useActiveUseTrialNudgeState.ts`
-owns first-seen persistence, snooze state, hourly age refresh, and trial-start
-runtime, and `frontend-modern/src/components/shared/activeUseTrialNudgeModel.ts`
-owns the eligibility policy, age threshold, and nudge copy/config. Future
-active-use trial work should extend those owners instead of pushing storage
-policy, timers, or commercial action flow back into the shared shell.
 The shared trial banner now follows that same owner split.
 `frontend-modern/src/components/shared/TrialBanner.tsx` stays the render
 shell, `frontend-modern/src/components/shared/useTrialBannerState.ts` owns
@@ -2186,7 +2177,6 @@ commercial suppression. `frontend-modern/src/components/Settings/settingsNavCata
 `frontend-modern/src/useAppRuntimeState.ts`,
 `frontend-modern/src/components/shared/useTrialBannerState.ts`, and
 `frontend-modern/src/components/shared/useMonitoredSystemLimitWarningBannerState.ts`,
-`frontend-modern/src/components/Dashboard/RelayOnboardingCard.tsx`,
 `frontend-modern/src/components/shared/HistoryChartOverlay.tsx`,
 `frontend-modern/src/features/patrol/PatrolIntelligenceBanners.tsx`, and
 `frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx`

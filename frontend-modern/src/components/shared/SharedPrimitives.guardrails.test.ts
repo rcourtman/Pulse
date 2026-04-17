@@ -4,8 +4,6 @@ import { describe, expect, it } from 'vitest';
 import calloutCardSource from '@/components/shared/CalloutCard.tsx?raw';
 import commandPaletteModalSource from '@/components/shared/CommandPaletteModal.tsx?raw';
 import commandPaletteModelSource from '@/components/shared/commandPaletteModel.ts?raw';
-import activeUseTrialNudgeSource from '@/components/shared/ActiveUseTrialNudge.tsx?raw';
-import activeUseTrialNudgeModelSource from '@/components/shared/activeUseTrialNudgeModel.ts?raw';
 import columnPickerSource from '@/components/shared/ColumnPicker.tsx?raw';
 import columnPickerModelSource from '@/components/shared/columnPickerModel.ts?raw';
 import tagInputSource from '@/components/shared/TagInput.tsx?raw';
@@ -82,7 +80,6 @@ import summaryPanelSource from '@/components/shared/SummaryPanel.tsx?raw';
 import summarySynchronizedReadoutSource from '@/components/shared/SummarySynchronizedReadout.tsx?raw';
 import tagBadgesSource from '@/components/shared/TagBadges.tsx?raw';
 import commandPaletteStateSource from '@/components/shared/useCommandPaletteState.ts?raw';
-import activeUseTrialNudgeStateSource from '@/components/shared/useActiveUseTrialNudgeState.ts?raw';
 import columnPickerStateSource from '@/components/shared/useColumnPickerState.ts?raw';
 import tagInputStateSource from '@/components/shared/useTagInputState.ts?raw';
 import collapsibleSearchInputStateSource from '@/components/shared/useCollapsibleSearchInputState.ts?raw';
@@ -259,30 +256,6 @@ describe('shared primitive guardrails', () => {
     expect(dashboardWorkloadTableSource).toContain('SummaryTableCardHeader');
     expect(unifiedResourceHostTableCardSource).toContain('SummaryTableCardHeader');
     expect(storagePoolRowSource).not.toContain('Clear selection');
-  });
-
-  it('keeps active use trial nudge on shell, runtime, and model owners', () => {
-    expect(activeUseTrialNudgeSource).toContain('useActiveUseTrialNudgeState');
-    expect(activeUseTrialNudgeSource).toContain('ACTIVE_USE_TRIAL_NUDGE_TITLE');
-    expect(activeUseTrialNudgeSource).not.toContain('createSignal');
-    expect(activeUseTrialNudgeSource).not.toContain('createMemo');
-    expect(activeUseTrialNudgeSource).not.toContain('startProTrial');
-    expect(activeUseTrialNudgeSource).not.toContain('localStorage');
-    expect(activeUseTrialNudgeSource).not.toContain('setInterval');
-
-    expect(activeUseTrialNudgeStateSource).toContain('export function useActiveUseTrialNudgeState');
-    expect(activeUseTrialNudgeStateSource).toContain('createSignal');
-    expect(activeUseTrialNudgeStateSource).toContain('createMemo');
-    expect(activeUseTrialNudgeStateSource).toContain('window.localStorage');
-    expect(activeUseTrialNudgeStateSource).toContain('setInterval');
-    expect(activeUseTrialNudgeStateSource).toContain('runStartProTrialAction');
-    expect(activeUseTrialNudgeStateSource).toContain('snoozeUpsell');
-
-    expect(activeUseTrialNudgeModelSource).toContain('ACTIVE_USE_TRIAL_NUDGE_SNOOZE_KEY');
-    expect(activeUseTrialNudgeModelSource).toContain('ACTIVE_USE_TRIAL_NUDGE_FIRST_SEEN_KEY');
-    expect(activeUseTrialNudgeModelSource).toContain('isActiveUseTrialNudgeEligible');
-    expect(activeUseTrialNudgeModelSource).toContain('isActiveUseTrialNudgeOldEnough');
-    expect(activeUseTrialNudgeModelSource).toContain('ACTIVE_USE_TRIAL_NUDGE_TITLE');
   });
 
   it('keeps shared subtabs as one primitive and leaves shell styling to owning surfaces', () => {

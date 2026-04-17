@@ -334,7 +334,6 @@
             "test",
             "--",
             "--run",
-            "src/components/Dashboard/__tests__/RelayOnboardingCard.test.tsx",
             "src/components/Settings/__tests__/RBACPaywallPanels.test.tsx",
             "src/components/Settings/__tests__/settingsNavigation.integration.test.tsx",
             "src/pages/__tests__/AIIntelligence.test.tsx"
@@ -342,11 +341,6 @@
         }
       ],
       "evidence": [
-        {
-          "repo": "pulse",
-          "path": "frontend-modern/src/components/Dashboard/__tests__/RelayOnboardingCard.test.tsx",
-          "kind": "file"
-        },
         {
           "repo": "pulse",
           "path": "frontend-modern/src/components/Settings/__tests__/RBACPaywallPanels.test.tsx",
@@ -1605,11 +1599,6 @@
         {
           "repo": "pulse",
           "path": "docs/release-control/v6/internal/records/relay-registration-reconnect-drain-2026-03-13.md",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse",
-          "path": "frontend-modern/src/components/Dashboard/__tests__/RelayOnboardingCard.test.tsx",
           "kind": "file"
         },
         {

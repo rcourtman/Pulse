@@ -44,7 +44,6 @@ describe('App architecture', () => {
     expect(appSource).not.toContain('function AppLayout(');
     expect(appSource).not.toContain('export const WebSocketContext = createContext<');
     expect(appSource).not.toContain('export const DarkModeContext = createContext<');
-    expect(appSource).not.toContain('ActiveUseTrialNudge');
     expect(appSource).not.toContain('const [organizations, setOrganizations] = createSignal(');
     expect(appSource).not.toContain('const [themePreference, setThemePreference] =');
     expect(appSource).not.toContain('const [activeOrgID, setActiveOrgID] = createSignal(');

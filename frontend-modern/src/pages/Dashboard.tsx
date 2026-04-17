@@ -31,7 +31,6 @@ import {
   TrendCharts,
 } from '@/features/dashboardOverview';
 import { RecentAlertsPanel } from '@/components/Alerts/RecentAlertsPanel';
-import { RelayOnboardingCard } from '@/components/Dashboard/RelayOnboardingCard';
 import { DashboardRecoveryStatusPanel } from '@/components/Recovery/DashboardRecoveryStatusPanel';
 import { DashboardStoragePanel } from '@/components/Storage/DashboardStoragePanel';
 import { PageHeader } from '@/components/shared/PageHeader';
@@ -278,8 +277,6 @@ export default function Dashboard() {
 
         <Match when={initialLoadComplete() && hasCachedData()}>
           <section class="space-y-5">
-            <RelayOnboardingCard />
-
             {/* 1. Action Required Panel — only when actions exist */}
             <ActionRequiredPanel
               pendingApprovals={actions.pendingApprovals()}

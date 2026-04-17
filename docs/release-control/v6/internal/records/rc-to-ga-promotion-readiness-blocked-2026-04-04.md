@@ -6,28 +6,31 @@
 
 ## Blocking Facts
 
-1. The latest shipped Pulse v6 prerelease tag is `v6.0.0-rc.1`.
-2. That shipped prerelease tag resolves to commit `7812e00f943e48db1781b463cf6d21164e38480e`.
-3. The governed release profile in `docs/release-control/control_plane.json`
+1. The latest shipped Pulse v6 prerelease tag is `v6.0.0-rc.2`.
+2. That shipped prerelease tag resolves to commit `7b0bdebdff8127228708e84eb836cfd3d7214c08`.
+3. The selected remote ref `origin/pulse/v6-release` is still behind the current
+   local governed branch state, so `Release Dry Run` would exercise stale remote
+   control-plane metadata instead of the intended candidate.
+4. The governed release profile in `docs/release-control/control_plane.json`
    currently declares both `prerelease_branch` and `stable_branch` as
    `pulse/v6-release`.
-4. The active control-plane target is still `v6-rc-stabilization`, not
+5. The active control-plane target is still `v6-rc-stabilization`, not
    `v6-ga-promotion`.
-5. The active local `pulse/v6-release` branch currently reports `VERSION=6.0.0-rc.2`, so the
+6. The active local `pulse/v6-release` branch currently reports `VERSION=6.0.0-rc.2`, so the
    working line is still prerelease and there is not yet a governed local stable
    `6.0.0` candidate.
-6. There is still no governed `Prerelease-to-GA Rehearsal Record` proving a successful
+7. There is still no governed `Prerelease-to-GA Rehearsal Record` proving a successful
    non-publish `Release Dry Run` for the eventual stable `6.0.0` candidate.
-7. `docs/releases/RELEASE_NOTES_v6.md` and
+8. `docs/releases/RELEASE_NOTES_v6.md` and
    `docs/release-control/v6/internal/V5_MAINTENANCE_SUPPORT_POLICY.md` still leave the
    GA announcement dates as placeholders because no real prerelease lineage or GA-ready
    rehearsal has locked them yet:
    - `v6` GA date placeholder: `[v6-ga-date]`
    - `v5` end-of-support placeholder: `[v5-eos-date]`
-8. There is still no governed `Release Dry Run` artifact or rehearsal record
+9. There is still no governed `Release Dry Run` artifact or rehearsal record
    exercising stable inputs for:
    - `version=6.0.0`
-   - `promoted_from_tag=v6.0.0-rc.1`
+   - `promoted_from_tag=v6.0.0-rc.2`
    - the artifact-owned candidate stable tag for that rehearsal
    - the artifact-owned promotion channel for that rehearsal
    - the artifact-owned promoted prerelease tag for that rehearsal
@@ -55,7 +58,7 @@ users would still be the first real cohort for the final promotion path.
    change and release-control records, to `origin/pulse/v6-release`.
 3. Run `Release Dry Run` from `pulse/v6-release` with:
    - `version=6.0.0`
-   - `promoted_from_tag=v6.0.0-rc.1`
+   - `promoted_from_tag=v6.0.0-rc.2`
    - an artifact-owned candidate stable tag matching that rehearsal
    - an artifact-owned promotion channel matching that rehearsal
    - an artifact-owned promoted prerelease tag matching that rehearsal
