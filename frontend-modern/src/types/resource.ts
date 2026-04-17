@@ -377,6 +377,8 @@ export interface ResourceProxmoxMeta {
   swapUsed?: number;
   swapTotal?: number;
   balloon?: number;
+  isOci?: boolean;
+  osTemplate?: string;
 }
 
 export interface ResourceKubernetesMetricCapabilities {

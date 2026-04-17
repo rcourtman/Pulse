@@ -95,6 +95,8 @@ type APIResource = {
     swapUsed?: number;
     swapTotal?: number;
     balloon?: number;
+    isOci?: boolean;
+    osTemplate?: string;
   };
   agent?: {
     hostname?: string;
@@ -442,8 +444,9 @@ const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
     tags: resource.tags ?? [],
     lock: '',
     lastSeen: toIsoString(resource.lastSeen),
-    isOci: false,
-    osTemplate: undefined,
+    isOci: workloadType === 'system-container' ? (resource.proxmox?.isOci ?? false) : false,
+    osTemplate:
+      workloadType === 'system-container' ? resource.proxmox?.osTemplate : undefined,
     workloadType,
     displayId,
     containerId: appContainerRuntimeId || undefined,

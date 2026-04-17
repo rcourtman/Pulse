@@ -113,30 +113,18 @@ export function useGuestRowState(props: GuestRowProps) {
   });
 
   const typeInfo = createMemo(() => {
-    if (isOCIContainer()) {
-      return getWorkloadTypeBadge('oci-container', {
+    const type = workloadType();
+
+    if (type === 'system-container' && isOCIContainer()) {
+      return getWorkloadTypeBadge('system-container', {
         title: `OCI Container${ociImage() ? ` • ${ociImage()}` : ''}`,
       });
     }
 
-    if (workloadType() === 'app-container') {
-      if (!isDockerManagedAppContainer(props.guest)) {
-        const platform = (props.guest.platformType || '').trim().toLowerCase();
-        return getWorkloadTypeBadge('app-container', {
-          title: platform === 'truenas' ? 'TrueNAS App Container' : 'Application Container',
-        });
-      }
-
+    if (type === 'app-container') {
+      const platform = (props.guest.platformType || '').trim().toLowerCase();
       const runtime = (props.guest.containerRuntime || '').trim();
       const normalized = runtime.toLowerCase();
-      const label =
-        normalized === 'podman'
-          ? 'Podman'
-          : normalized === 'docker'
-            ? 'Docker'
-            : runtime
-              ? runtime
-              : 'Containers';
       const title =
         normalized === 'podman'
           ? 'Podman Container'
@@ -144,11 +132,13 @@ export function useGuestRowState(props: GuestRowProps) {
             ? 'Docker Container'
             : runtime
               ? `${runtime} Container`
-              : 'Container (Docker-compatible runtime)';
-      return getWorkloadTypeBadge('app-container', { label, title });
+              : platform === 'truenas'
+                ? 'TrueNAS App Container'
+                : 'Application Container';
+      return getWorkloadTypeBadge('app-container', { title });
     }
 
-    return getWorkloadTypeBadge(workloadType());
+    return getWorkloadTypeBadge(type);
   });
 
   const diskRead = createMemo(() => props.guest.diskRead || 0);

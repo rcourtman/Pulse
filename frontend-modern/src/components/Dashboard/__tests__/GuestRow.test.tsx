@@ -889,7 +889,7 @@ describe('getOutlierEmphasis (via I/O column rendering)', () => {
 });
 
 describe('OCI container handling', () => {
-  it('renders OCI badge for OCI containers', () => {
+  it('renders system-container badge with OCI-specific tooltip for OCI containers', () => {
     renderGuestRow({
       guest: makeGuest({
         type: 'oci-container',
@@ -898,8 +898,11 @@ describe('OCI container handling', () => {
       }),
       visibleColumnIds: ['name', 'type'],
     });
-    // Should render the OCI type badge
-    expect(screen.getByText('OCI-CONTAINER')).toBeTruthy();
+    const badge = screen.getByText('SYSTEM-CONTAINER');
+    expect(badge).toBeTruthy();
+    expect(badge.getAttribute('title')).toBe(
+      'OCI Container • docker.io/library/alpine:3.18',
+    );
   });
 });
 
