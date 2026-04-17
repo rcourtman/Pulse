@@ -13,22 +13,11 @@ export const ALERT_HISTORY_EMPTY_DESCRIPTION = 'Try adjusting your filters or ch
 export const ALERT_BUCKET_EMPTY_LABEL = 'No alerts';
 export const ALERT_HISTORY_LOADING_STATE = 'Loading alert history...';
 export const ALERTS_PAGE_DEFAULT_TITLE = 'Alerts';
-export const ALERTS_PAGE_DEFAULT_DESCRIPTION = 'Manage alerting configuration.';
 export const ALERTS_PAGE_OVERVIEW_TITLE = 'Alerts Overview';
-export const ALERTS_PAGE_OVERVIEW_DESCRIPTION =
-  'Monitor active alerts, acknowledgements, and recent status changes across platforms.';
 export const ALERTS_PAGE_THRESHOLDS_TITLE = 'Alert Thresholds';
-export const ALERTS_PAGE_THRESHOLDS_DESCRIPTION =
-  'Tune threshold and override rules for infrastructure, systems, storage, and containers.';
 export const ALERTS_PAGE_DESTINATIONS_TITLE = 'Notification Destinations';
-export const ALERTS_PAGE_DESTINATIONS_DESCRIPTION =
-  'Configure email, webhooks, and escalation paths for alert delivery.';
 export const ALERTS_PAGE_SCHEDULE_TITLE = 'Maintenance Schedule';
-export const ALERTS_PAGE_SCHEDULE_DESCRIPTION =
-  'Set quiet hours and maintenance windows to suppress alerts when expected changes occur.';
 export const ALERTS_PAGE_HISTORY_TITLE = 'Alert History';
-export const ALERTS_PAGE_HISTORY_DESCRIPTION =
-  'Review previously triggered alerts and their resolution timeline.';
 
 export type DashboardAlertTone = 'default' | 'warning' | 'danger';
 
@@ -45,30 +34,12 @@ export interface AlertOverviewCardPresentation {
 
 export function getAlertsPageHeaderMeta() {
   return {
-    overview: {
-      title: ALERTS_PAGE_OVERVIEW_TITLE,
-      description: ALERTS_PAGE_OVERVIEW_DESCRIPTION,
-    },
-    thresholds: {
-      title: ALERTS_PAGE_THRESHOLDS_TITLE,
-      description: ALERTS_PAGE_THRESHOLDS_DESCRIPTION,
-    },
-    destinations: {
-      title: ALERTS_PAGE_DESTINATIONS_TITLE,
-      description: ALERTS_PAGE_DESTINATIONS_DESCRIPTION,
-    },
-    schedule: {
-      title: ALERTS_PAGE_SCHEDULE_TITLE,
-      description: ALERTS_PAGE_SCHEDULE_DESCRIPTION,
-    },
-    history: {
-      title: ALERTS_PAGE_HISTORY_TITLE,
-      description: ALERTS_PAGE_HISTORY_DESCRIPTION,
-    },
-    default: {
-      title: ALERTS_PAGE_DEFAULT_TITLE,
-      description: ALERTS_PAGE_DEFAULT_DESCRIPTION,
-    },
+    overview: { title: ALERTS_PAGE_OVERVIEW_TITLE },
+    thresholds: { title: ALERTS_PAGE_THRESHOLDS_TITLE },
+    destinations: { title: ALERTS_PAGE_DESTINATIONS_TITLE },
+    schedule: { title: ALERTS_PAGE_SCHEDULE_TITLE },
+    history: { title: ALERTS_PAGE_HISTORY_TITLE },
+    default: { title: ALERTS_PAGE_DEFAULT_TITLE },
   } as const;
 }
 

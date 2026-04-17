@@ -71,7 +71,6 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
             <span>Patrol</span>
           </span>
         }
-        description="Continuous verification and actionable findings"
         class="mb-3"
         actions={
           <div class="flex flex-wrap items-center justify-end gap-3">

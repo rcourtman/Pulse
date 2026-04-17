@@ -257,11 +257,7 @@ export function Alerts() {
       {/* Header with better styling */}
       <Card padding="md">
         <div class="flex items-center justify-between gap-4">
-          <SectionHeader
-            title={headerMeta().title}
-            description={headerMeta().description}
-            size="lg"
-          />
+          <SectionHeader title={headerMeta().title} size="lg" />
           <Show when={activeTab() === 'overview' && !readOnlySession()}>
             <div class="flex items-center gap-3">
               <span class={`text-sm font-medium ${alertActivationPresentation().labelClass}`}>

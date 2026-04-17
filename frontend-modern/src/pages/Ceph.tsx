@@ -289,11 +289,7 @@ const Ceph: Component = () => {
 
   return (
     <div class="space-y-4">
-      <PageHeader
-        id="ceph-title"
-        title="Ceph"
-        description="Cluster health, services, pools, and capacity across connected storage nodes."
-      />
+      <PageHeader id="ceph-title" title="Ceph" />
       {/* Navigation */}
 
       {/* Loading State */}
