@@ -40,11 +40,15 @@ func (h *LicenseHandlers) buildCommercialEntitlementPayload(
 	usage := h.entitlementUsageSnapshot(ctx)
 	trialEndsAtUnix := trialEndsAtUnixFromService(svc)
 
-	// Onboarding overflow: +1 agent for 14 days on free tier.
+	// Onboarding overflow: +1 agent for 14 days on free tier. Only applies
+	// on plans that have an actual cap — adding the bonus to an uncapped
+	// limit (0) would surface as a cap of 1 to the UI.
 	overflowGrantedAt := h.ensureOnboardingOverflow(ctx, status.Tier)
 	now := time.Now()
-	if bonus := overflowBonusFromLicensing(status.Tier, overflowGrantedAt, now); bonus > 0 {
-		status.MaxMonitoredSystems += bonus
+	if status.MaxMonitoredSystems > 0 {
+		if bonus := overflowBonusFromLicensing(status.Tier, overflowGrantedAt, now); bonus > 0 {
+			status.MaxMonitoredSystems += bonus
+		}
 	}
 
 	payload := buildEntitlementPayloadWithUsage(status, svc.SubscriptionState(), usage, trialEndsAtUnix)
@@ -123,8 +127,10 @@ func (h *LicenseHandlers) HandleRuntimeCapabilities(w http.ResponseWriter, r *ht
 
 	overflowGrantedAt := h.ensureOnboardingOverflow(r.Context(), status.Tier)
 	now := time.Now()
-	if bonus := overflowBonusFromLicensing(status.Tier, overflowGrantedAt, now); bonus > 0 {
-		status.MaxMonitoredSystems += bonus
+	if status.MaxMonitoredSystems > 0 {
+		if bonus := overflowBonusFromLicensing(status.Tier, overflowGrantedAt, now); bonus > 0 {
+			status.MaxMonitoredSystems += bonus
+		}
 	}
 
 	payload := buildRuntimeCapabilitiesPayloadWithUsage(status, svc.SubscriptionState(), usage)

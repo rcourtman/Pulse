@@ -85,8 +85,10 @@ func maxMonitoredSystemsLimitForContext(ctx context.Context) int {
 
 	limit := status.MaxMonitoredSystems
 
-	// Apply onboarding overflow bonus for free-tier orgs.
-	if status.Tier == licenseTierFreeValue {
+	// Apply onboarding overflow bonus for free-tier orgs. The bonus only
+	// makes sense on plans that actually have a cap — adding +1 to an
+	// uncapped limit (0) would convert "unlimited" into a cap of 1.
+	if status.Tier == licenseTierFreeValue && limit > 0 {
 		var overflowGrantedAt *int64
 
 		// Try evaluator first (covers hosted path with DatabaseSource).

@@ -550,6 +550,30 @@ func TestVMwareAdmissionEnforcementSkipsUsageAndInventoryForDisabledConnections(
 	)
 }
 
+func TestOnboardingOverflowBonusSkipsUncappedPlans(t *testing.T) {
+	enforcement := readAPIPackageFile(t, "monitored_system_limit_enforcement.go")
+	overflowSegment := requireSourceSegment(
+		t,
+		enforcement,
+		"func maxMonitoredSystemsLimitForContext",
+		"\n}\n",
+	)
+	requireSnippetBefore(
+		t,
+		overflowSegment,
+		"limit > 0",
+		"overflowBonusFromLicensing",
+	)
+
+	entitlements := readAPIPackageFile(t, "subscription_entitlements.go")
+	requireSnippetCountAtLeast(
+		t,
+		entitlements,
+		"if status.MaxMonitoredSystems > 0 {",
+		2,
+	)
+}
+
 func TestMonitoredSystemCountNilMonitor(t *testing.T) {
 	got := monitoredSystemCount(nil)
 	if got != 0 {
