@@ -139,12 +139,11 @@ export const AgentProfilesPanel: Component = () => {
                   <span class="hidden sm:inline">New Profile</span>
                   <span class="sm:hidden">New</span>
                 </button>
-                {/* Only show AI Ideas button if AI is enabled and configured */}
                 <Show when={aiAvailable()}>
                   <button
                     type="button"
                     onClick={handleSuggest}
-                    title="Get AI-powered profile suggestions"
+                    title="Suggest profiles for your estate"
                     class="inline-flex min-h-10 sm:min-h-9 min-w-10 items-center gap-1.5 rounded-md border border-border bg-surface px-3 py-2 text-sm font-medium text-base-content transition-colors hover:bg-surface-hover sm:px-3 sm:py-2 sm:text-sm"
                   >
                     <Lightbulb class="w-3.5 h-3.5" />

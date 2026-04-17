@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor, fireEvent, cleanup, within } from '@solidjs/testing-library';
 import agentProfilesPanelStateSource from '../useAgentProfilesPanelState.ts?raw';
+import agentProfilesPanelSource from '../AgentProfilesPanel.tsx?raw';
 import { AgentProfilesPanel } from '../AgentProfilesPanel';
 import { notificationStore } from '@/stores/notifications';
 import type { ConnectedInfrastructureItem, State } from '@/types/api';
@@ -268,6 +269,11 @@ describe('AgentProfilesPanel V6 agent ID handling', () => {
     expect(agentProfilesPanelStateSource).not.toContain('loadCommercialPosture(');
     expect(agentProfilesPanelStateSource).toContain('canOfferCommercialTrial');
     expect(agentProfilesPanelStateSource).not.toContain('commercialPosture()?.trial_eligible');
+  });
+
+  it('keeps the Ideas button tooltip product-first instead of AI-branded', () => {
+    expect(agentProfilesPanelSource).toContain('title="Suggest profiles for your estate"');
+    expect(agentProfilesPanelSource).not.toContain('title="Get AI-powered profile suggestions"');
   });
 
   it('maps assignments using actionable V6 agent ID instead of resource hash ID', async () => {
