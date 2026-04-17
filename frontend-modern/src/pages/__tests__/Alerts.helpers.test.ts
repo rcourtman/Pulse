@@ -218,6 +218,11 @@ describe('tab path helpers', () => {
 
   it('keeps alerts configuration owned by a feature surface instead of the page shell', () => {
     expect(alertsPageSource).toContain(
+      "import { PageHeader } from '@/components/shared/PageHeader';",
+    );
+    expect(alertsPageSource).toContain('<PageHeader');
+    expect(alertsPageSource).toContain('description={headerMeta().description}');
+    expect(alertsPageSource).toContain(
       "import { AlertsConfigurationSurface } from '@/features/alerts/AlertsConfigurationSurface';",
     );
     expect(alertsPageSource).toContain(
@@ -312,7 +317,9 @@ describe('tab path helpers', () => {
     expect(alertDestinationsModelSource).toContain('export function buildAppriseConfigPayload');
     expect(alertDestinationsModelSource).toContain('formatAppriseTargets');
     expect(alertDestinationsModelSource).toContain('parseAppriseTargets');
-    expect(alertDestinationsTabStateSource).toContain('export function useAlertDestinationsTabState');
+    expect(alertDestinationsTabStateSource).toContain(
+      'export function useAlertDestinationsTabState',
+    );
     expect(alertDestinationsTabStateSource).toContain('NotificationsAPI.testNotification');
     expect(alertDestinationsTabStateSource).toContain('useAlertWebhookDestinationsState');
     expect(alertDestinationsTabStateSource).not.toContain('NotificationsAPI.getWebhooks');
@@ -359,21 +366,21 @@ describe('tab path helpers', () => {
     expect(alertHistoryTabSource).not.toContain('const loadIncidentTimeline = async');
     expect(alertHistoryTabSource).not.toContain('const saveIncidentNote = async');
     expect(alertHistoryTabSource).not.toContain('usePersistentSignal(');
-    expect(alertHistoryTabSource).not.toContain("const [searchTerm, setSearchTerm] = createSignal");
+    expect(alertHistoryTabSource).not.toContain('const [searchTerm, setSearchTerm] = createSignal');
     expect(alertHistoryFrequencyCardSource).toContain('export function AlertHistoryFrequencyCard');
     expect(alertHistoryFrequencyCardSource).toContain('getAlertFrequencySelectionPresentation');
     expect(alertHistoryFrequencyCardSource).toContain('getAlertBucketCountLabel');
     expect(alertHistoryFiltersCardSource).toContain('export function AlertHistoryFiltersCard');
     expect(alertHistoryFiltersCardSource).toContain('getAlertHistorySearchPlaceholder');
-    expect(alertResourceIncidentsPanelSource).toContain('export function AlertResourceIncidentsPanel');
+    expect(alertResourceIncidentsPanelSource).toContain(
+      'export function AlertResourceIncidentsPanel',
+    );
     expect(alertResourceIncidentsPanelSource).toContain('IncidentEventFilters');
     expect(alertResourceIncidentsPanelSource).toContain('IncidentTimelineEventCard');
     expect(alertResourceIncidentsPanelSource).toContain('buildResolvedResourceSurfaceLinks');
     expect(alertResourceIncidentsPanelSource).toContain('allowInfrastructureFallback: true');
     expect(alertResourceIncidentsPanelSource).not.toContain('buildInfrastructureResourceLink');
-    expect(alertResourceIncidentsPanelSource).not.toContain(
-      'buildResourceSurfaceLinksForResource',
-    );
+    expect(alertResourceIncidentsPanelSource).not.toContain('buildResourceSurfaceLinksForResource');
     expect(alertResourceIncidentsPanelSource).toContain('{link.compactLabel}');
     expect(alertHistoryTableSectionSource).toContain('export function AlertHistoryTableSection');
     expect(alertHistoryTableSectionSource).toContain('AlertHistoryTableGroupRow');
@@ -441,7 +448,9 @@ describe('tab path helpers', () => {
     expect(alertOverviewAlertCardSource).toContain('getAlertOverviewStartedAtClass');
     expect(alertOverviewAlertCardSource).toContain('getAlertOverviewPrimaryActionClass');
     expect(alertOverviewAlertCardSource).toContain('getAlertOverviewSecondaryActionClass');
-    expect(alertAcknowledgementStateSource).toContain('export function useAlertAcknowledgementState');
+    expect(alertAcknowledgementStateSource).toContain(
+      'export function useAlertAcknowledgementState',
+    );
     expect(alertAcknowledgementStateSource).toContain('AlertsAPI.bulkAcknowledge');
     expect(alertAcknowledgementStateSource).toContain('AlertsAPI.acknowledge');
     expect(alertAcknowledgementStateSource).toContain('AlertsAPI.unacknowledge');
@@ -483,28 +492,46 @@ describe('tab path helpers', () => {
     expect(thresholdsTableSource).toContain(
       "import { useThresholdsTableState } from '@/features/alerts/thresholds/hooks/useThresholdsTableState';",
     );
-    expect(thresholdsTableSource).toContain("import { ThresholdsTableProxmoxTab } from './ThresholdsTableProxmoxTab';");
-    expect(thresholdsTableSource).toContain("import { ThresholdsTablePMGTab } from './ThresholdsTablePMGTab';");
-    expect(thresholdsTableSource).toContain("import { ThresholdsTableAgentsTab } from './ThresholdsTableAgentsTab';");
-    expect(thresholdsTableSource).toContain("import { ThresholdsTableDockerTab } from './ThresholdsTableDockerTab';");
+    expect(thresholdsTableSource).toContain(
+      "import { ThresholdsTableProxmoxTab } from './ThresholdsTableProxmoxTab';",
+    );
+    expect(thresholdsTableSource).toContain(
+      "import { ThresholdsTablePMGTab } from './ThresholdsTablePMGTab';",
+    );
+    expect(thresholdsTableSource).toContain(
+      "import { ThresholdsTableAgentsTab } from './ThresholdsTableAgentsTab';",
+    );
+    expect(thresholdsTableSource).toContain(
+      "import { ThresholdsTableDockerTab } from './ThresholdsTableDockerTab';",
+    );
     expect(thresholdsTableSource).not.toContain('const [searchTerm, setSearchTerm] = createSignal');
     expect(thresholdsTableSource).not.toContain('const handleTabClick =');
-    expect(thresholdsTableSource).not.toContain("groupedResources={state.guestsGroupedByNode()}");
+    expect(thresholdsTableSource).not.toContain('groupedResources={state.guestsGroupedByNode()}');
     expect(thresholdsTableSource).not.toContain('dockerIgnoredPrefixesPresentation.title');
     expect(thresholdsTableProxmoxTabSource).toContain('export function ThresholdsTableProxmoxTab');
     expect(thresholdsTableProxmoxTabSource).toContain('ThresholdsTableProxmoxNodesSection');
     expect(thresholdsTableProxmoxTabSource).toContain('ThresholdsTableProxmoxPBSSection');
     expect(thresholdsTableProxmoxTabSource).toContain('ThresholdsTableProxmoxGuestsSection');
-    expect(thresholdsTableProxmoxTabSource).toContain('ThresholdsTableProxmoxGuestFilteringSection');
+    expect(thresholdsTableProxmoxTabSource).toContain(
+      'ThresholdsTableProxmoxGuestFilteringSection',
+    );
     expect(thresholdsTableProxmoxTabSource).toContain('ThresholdsTableProxmoxBackupsSection');
     expect(thresholdsTableProxmoxTabSource).toContain('ThresholdsTableProxmoxSnapshotsSection');
     expect(thresholdsTableProxmoxTabSource).toContain('ThresholdsTableProxmoxStorageSection');
     expect(thresholdsTableProxmoxTabSource).not.toContain('backupOrphanedPresentation');
-    expect(thresholdsTableProxmoxTabSource).not.toContain("sectionTitles.guestFiltering");
-    expect(thresholdsTableSectionPropsSource).toContain('export interface ThresholdsTableSectionProps');
-    expect(thresholdsTableProxmoxNodesSectionSource).toContain('export function ThresholdsTableProxmoxNodesSection');
-    expect(thresholdsTableProxmoxPBSSectionSource).toContain('export function ThresholdsTableProxmoxPBSSection');
-    expect(thresholdsTableProxmoxGuestsSectionSource).toContain('export function ThresholdsTableProxmoxGuestsSection');
+    expect(thresholdsTableProxmoxTabSource).not.toContain('sectionTitles.guestFiltering');
+    expect(thresholdsTableSectionPropsSource).toContain(
+      'export interface ThresholdsTableSectionProps',
+    );
+    expect(thresholdsTableProxmoxNodesSectionSource).toContain(
+      'export function ThresholdsTableProxmoxNodesSection',
+    );
+    expect(thresholdsTableProxmoxPBSSectionSource).toContain(
+      'export function ThresholdsTableProxmoxPBSSection',
+    );
+    expect(thresholdsTableProxmoxGuestsSectionSource).toContain(
+      'export function ThresholdsTableProxmoxGuestsSection',
+    );
     expect(thresholdsTableProxmoxGuestFilteringSectionSource).toContain(
       'export function ThresholdsTableProxmoxGuestFilteringSection',
     );
@@ -560,7 +587,9 @@ describe('tab path helpers', () => {
     expect(thresholdsDataHookSource).toContain('useThresholdsGuestData(inputs)');
     expect(thresholdsDataHookSource).toContain('useThresholdsInfrastructureData(inputs)');
     expect(thresholdsDataHookSource).not.toContain('const hostOverrideIdCandidates =');
-    expect(thresholdsDataHookSource).not.toContain('const dockerContainersGroupedByHost = createMemo');
+    expect(thresholdsDataHookSource).not.toContain(
+      'const dockerContainersGroupedByHost = createMemo',
+    );
     expect(thresholdsHostDataHookSource).toContain('export function useThresholdsHostData');
     expect(thresholdsHostDataHookSource).toContain('hostOverrideIdCandidates(agentResource)');
     expect(thresholdsDockerDataHookSource).toContain('export function useThresholdsDockerData');
@@ -573,11 +602,15 @@ describe('tab path helpers', () => {
     expect(thresholdsResourceModelSource).toContain('export function buildNodeHeaderMeta');
     expect(thresholdsResourceModelSource).toContain('export const normalizeStorageStatus');
     expect(thresholdsTableStateHookSource).toContain('export function useThresholdsTableState');
-    expect(thresholdsTableStateHookSource).toContain('useThresholdsData(props, editingId, searchTerm)');
+    expect(thresholdsTableStateHookSource).toContain(
+      'useThresholdsData(props, editingId, searchTerm)',
+    );
     expect(thresholdsTableStateHookSource).toContain('useThresholdsRecoveryDefaultsState(props)');
     expect(thresholdsTableStateHookSource).toContain('useThresholdsOverrideMutations');
     expect(thresholdsTableStateHookSource).toContain('useThresholdsAvailabilityMutations');
-    expect(thresholdsTableStateHookSource).not.toContain('const saveEdit = (resourceId: string) => {');
+    expect(thresholdsTableStateHookSource).not.toContain(
+      'const saveEdit = (resourceId: string) => {',
+    );
     expect(thresholdsTableStateHookSource).not.toContain(
       'const toggleNodeConnectivity = (resourceId: string, forceState?: boolean) => {',
     );
@@ -591,7 +624,9 @@ describe('tab path helpers', () => {
     expect(thresholdsOverrideMutationsHookSource).toContain(
       'export function useThresholdsOverrideMutations',
     );
-    expect(thresholdsOverrideMutationsHookSource).toContain('const saveEdit = (resourceId: string) => {');
+    expect(thresholdsOverrideMutationsHookSource).toContain(
+      'const saveEdit = (resourceId: string) => {',
+    );
     expect(thresholdsOverrideMutationsHookSource).toContain(
       'const handleSaveBulkEdit = (thresholds: Record<string, number | undefined>) => {',
     );
@@ -610,9 +645,7 @@ describe('tab path helpers', () => {
       'const setOfflineState = (resourceId: string, state: OfflineState) => {',
     );
     expect(thresholdsOverrideMutationModelSource).toContain('export const upsertOverride =');
-    expect(thresholdsOverrideMutationModelSource).toContain(
-      'export const withThresholdEntries =',
-    );
+    expect(thresholdsOverrideMutationModelSource).toContain('export const withThresholdEntries =');
     expect(thresholdsOverrideMutationModelSource).toContain('export const stripStateKeys =');
   });
 
@@ -738,16 +771,12 @@ describe('incident timeline presentation helpers', () => {
     );
     expect(getAlertIncidentTimelineHeadingClass()).toBe('font-medium text-base-content');
     expect(getAlertIncidentTimelineDetailClass()).toBe('mt-1 text-xs text-base-content');
-    expect(getAlertIncidentTimelineCommandClass()).toBe(
-      'mt-1 font-mono text-xs text-base-content',
-    );
+    expect(getAlertIncidentTimelineCommandClass()).toBe('mt-1 font-mono text-xs text-base-content');
     expect(getAlertIncidentTimelineOutputClass()).toBe('mt-1 text-xs text-muted');
   });
 
   it('returns the resource incident panel presentation', () => {
-    expect(getAlertResourceIncidentCardClass()).toBe(
-      'rounded border border-border bg-surface p-3',
-    );
+    expect(getAlertResourceIncidentCardClass()).toBe('rounded border border-border bg-surface p-3');
     expect(getAlertResourceIncidentSummaryRowClass()).toBe(
       'mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-muted',
     );

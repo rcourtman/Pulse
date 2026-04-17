@@ -1,8 +1,7 @@
 export const ALERTS_EMPTY_STATE = 'No active alerts';
 export const ALERTS_THRESHOLD_HINT = 'Alerts will appear here when thresholds are exceeded';
 export const ALERT_TIMELINE_LOADING_STATE = 'Loading timeline...';
-export const ALERT_TIMELINE_FILTER_EMPTY_STATE =
-  'No timeline events match the selected filters.';
+export const ALERT_TIMELINE_FILTER_EMPTY_STATE = 'No timeline events match the selected filters.';
 export const ALERT_TIMELINE_EMPTY_STATE = 'No timeline events yet.';
 export const ALERT_TIMELINE_UNAVAILABLE_STATE = 'No incident timeline available.';
 export const ALERT_TIMELINE_FAILURE_STATE = 'Failed to load timeline.';
@@ -18,6 +17,18 @@ export const ALERTS_PAGE_THRESHOLDS_TITLE = 'Alert Thresholds';
 export const ALERTS_PAGE_DESTINATIONS_TITLE = 'Notification Destinations';
 export const ALERTS_PAGE_SCHEDULE_TITLE = 'Maintenance Schedule';
 export const ALERTS_PAGE_HISTORY_TITLE = 'Alert History';
+export const ALERTS_PAGE_DEFAULT_DESCRIPTION =
+  'Review active incidents, inspect alert history, and manage thresholds, notifications, and schedules.';
+export const ALERTS_PAGE_OVERVIEW_DESCRIPTION =
+  'Review active incidents, confirm alert coverage, and control whether alerts are actively monitoring this install.';
+export const ALERTS_PAGE_THRESHOLDS_DESCRIPTION =
+  'Tune thresholds and scoped overrides for infrastructure, workloads, and integrations.';
+export const ALERTS_PAGE_DESTINATIONS_DESCRIPTION =
+  'Route alert notifications to email, Apprise, and webhook destinations.';
+export const ALERTS_PAGE_SCHEDULE_DESCRIPTION =
+  'Define quiet hours, grouping, cooldowns, recovery, and escalation behavior for alert delivery.';
+export const ALERTS_PAGE_HISTORY_DESCRIPTION =
+  'Search prior alerts, review incident timelines, and inspect alert frequency over time.';
 
 export type DashboardAlertTone = 'default' | 'warning' | 'danger';
 
@@ -34,12 +45,30 @@ export interface AlertOverviewCardPresentation {
 
 export function getAlertsPageHeaderMeta() {
   return {
-    overview: { title: ALERTS_PAGE_OVERVIEW_TITLE },
-    thresholds: { title: ALERTS_PAGE_THRESHOLDS_TITLE },
-    destinations: { title: ALERTS_PAGE_DESTINATIONS_TITLE },
-    schedule: { title: ALERTS_PAGE_SCHEDULE_TITLE },
-    history: { title: ALERTS_PAGE_HISTORY_TITLE },
-    default: { title: ALERTS_PAGE_DEFAULT_TITLE },
+    overview: {
+      title: ALERTS_PAGE_OVERVIEW_TITLE,
+      description: ALERTS_PAGE_OVERVIEW_DESCRIPTION,
+    },
+    thresholds: {
+      title: ALERTS_PAGE_THRESHOLDS_TITLE,
+      description: ALERTS_PAGE_THRESHOLDS_DESCRIPTION,
+    },
+    destinations: {
+      title: ALERTS_PAGE_DESTINATIONS_TITLE,
+      description: ALERTS_PAGE_DESTINATIONS_DESCRIPTION,
+    },
+    schedule: {
+      title: ALERTS_PAGE_SCHEDULE_TITLE,
+      description: ALERTS_PAGE_SCHEDULE_DESCRIPTION,
+    },
+    history: {
+      title: ALERTS_PAGE_HISTORY_TITLE,
+      description: ALERTS_PAGE_HISTORY_DESCRIPTION,
+    },
+    default: {
+      title: ALERTS_PAGE_DEFAULT_TITLE,
+      description: ALERTS_PAGE_DEFAULT_DESCRIPTION,
+    },
   } as const;
 }
 

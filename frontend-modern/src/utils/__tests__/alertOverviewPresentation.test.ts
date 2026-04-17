@@ -7,10 +7,16 @@ import {
   ALERT_HISTORY_SEARCH_PLACEHOLDER,
   ALERTS_EMPTY_STATE,
   ALERTS_PAGE_DEFAULT_TITLE,
+  ALERTS_PAGE_DEFAULT_DESCRIPTION,
+  ALERTS_PAGE_DESTINATIONS_DESCRIPTION,
   ALERTS_PAGE_DESTINATIONS_TITLE,
+  ALERTS_PAGE_HISTORY_DESCRIPTION,
   ALERTS_PAGE_HISTORY_TITLE,
+  ALERTS_PAGE_OVERVIEW_DESCRIPTION,
   ALERTS_PAGE_OVERVIEW_TITLE,
+  ALERTS_PAGE_SCHEDULE_DESCRIPTION,
   ALERTS_PAGE_SCHEDULE_TITLE,
+  ALERTS_PAGE_THRESHOLDS_DESCRIPTION,
   ALERTS_PAGE_THRESHOLDS_TITLE,
   ALERT_TIMELINE_EMPTY_STATE,
   ALERT_TIMELINE_FAILURE_STATE,
@@ -60,9 +66,7 @@ describe('alertOverviewPresentation', () => {
     expect(ALERT_HISTORY_SEARCH_PLACEHOLDER).toBe('Search alerts...');
     expect(getAlertHistorySearchPlaceholder()).toBe('Search alerts...');
     expect(ALERT_HISTORY_EMPTY_STATE).toBe('No alerts found');
-    expect(ALERT_HISTORY_EMPTY_DESCRIPTION).toBe(
-      'Try adjusting your filters or check back later',
-    );
+    expect(ALERT_HISTORY_EMPTY_DESCRIPTION).toBe('Try adjusting your filters or check back later');
     expect(getAlertHistoryEmptyState()).toEqual({
       title: 'No alerts found',
       description: 'Try adjusting your filters or check back later',
@@ -80,13 +84,54 @@ describe('alertOverviewPresentation', () => {
     expect(ALERTS_PAGE_DESTINATIONS_TITLE).toBe('Notification Destinations');
     expect(ALERTS_PAGE_SCHEDULE_TITLE).toBe('Maintenance Schedule');
     expect(ALERTS_PAGE_HISTORY_TITLE).toBe('Alert History');
+    expect(ALERTS_PAGE_DEFAULT_DESCRIPTION).toBe(
+      'Review active incidents, inspect alert history, and manage thresholds, notifications, and schedules.',
+    );
+    expect(ALERTS_PAGE_OVERVIEW_DESCRIPTION).toBe(
+      'Review active incidents, confirm alert coverage, and control whether alerts are actively monitoring this install.',
+    );
+    expect(ALERTS_PAGE_THRESHOLDS_DESCRIPTION).toBe(
+      'Tune thresholds and scoped overrides for infrastructure, workloads, and integrations.',
+    );
+    expect(ALERTS_PAGE_DESTINATIONS_DESCRIPTION).toBe(
+      'Route alert notifications to email, Apprise, and webhook destinations.',
+    );
+    expect(ALERTS_PAGE_SCHEDULE_DESCRIPTION).toBe(
+      'Define quiet hours, grouping, cooldowns, recovery, and escalation behavior for alert delivery.',
+    );
+    expect(ALERTS_PAGE_HISTORY_DESCRIPTION).toBe(
+      'Search prior alerts, review incident timelines, and inspect alert frequency over time.',
+    );
     expect(getAlertsPageHeaderMeta()).toEqual({
-      overview: { title: 'Alerts Overview' },
-      thresholds: { title: 'Alert Thresholds' },
-      destinations: { title: 'Notification Destinations' },
-      schedule: { title: 'Maintenance Schedule' },
-      history: { title: 'Alert History' },
-      default: { title: 'Alerts' },
+      overview: {
+        title: 'Alerts Overview',
+        description:
+          'Review active incidents, confirm alert coverage, and control whether alerts are actively monitoring this install.',
+      },
+      thresholds: {
+        title: 'Alert Thresholds',
+        description:
+          'Tune thresholds and scoped overrides for infrastructure, workloads, and integrations.',
+      },
+      destinations: {
+        title: 'Notification Destinations',
+        description: 'Route alert notifications to email, Apprise, and webhook destinations.',
+      },
+      schedule: {
+        title: 'Maintenance Schedule',
+        description:
+          'Define quiet hours, grouping, cooldowns, recovery, and escalation behavior for alert delivery.',
+      },
+      history: {
+        title: 'Alert History',
+        description:
+          'Search prior alerts, review incident timelines, and inspect alert frequency over time.',
+      },
+      default: {
+        title: 'Alerts',
+        description:
+          'Review active incidents, inspect alert history, and manage thresholds, notifications, and schedules.',
+      },
     });
   });
 

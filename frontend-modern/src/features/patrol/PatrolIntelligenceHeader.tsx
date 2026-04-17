@@ -12,6 +12,7 @@ import { CountdownTimer } from '@/components/patrol';
 import { presentationPolicyHidesUpgradePrompts } from '@/stores/sessionPresentationPolicy';
 import { formatRelativeTime } from '@/utils/format';
 import { groupModelsByProvider } from '@/utils/patrolFormat';
+import { getPatrolPageHeaderMeta } from '@/utils/patrolPagePresentation';
 import {
   getAIQuickstartCreditsPresentation,
   isPatrolQuickstartExhaustedReason,
@@ -23,6 +24,7 @@ import type { PatrolIntelligenceState } from './usePatrolIntelligenceState';
 
 export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState }) {
   const state = props.state;
+  const headerMeta = getPatrolPageHeaderMeta();
   const quickstartPresentation = createMemo(() =>
     getAIQuickstartCreditsPresentation(
       state.patrolStatus()?.quickstart_credits_remaining ?? 0,
@@ -49,7 +51,9 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
     const patrolStatus = state.patrolStatus();
     if (!patrolStatus) return false;
     if (patrolStatus.using_quickstart) return true;
-    return state.runtimeState() === 'blocked' && isPatrolQuickstartExhaustedReason(state.blockedReason());
+    return (
+      state.runtimeState() === 'blocked' && isPatrolQuickstartExhaustedReason(state.blockedReason())
+    );
   });
   const patrolModelStale = createMemo(() => {
     const model = state.patrolModel();
@@ -62,13 +66,14 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
     <div class="flex-shrink-0 bg-surface border-b border-border px-4 py-3">
       <PageHeader
         id="patrol-title"
+        description={headerMeta.description}
         title={
           <span
             class="inline-flex items-center gap-3"
             title="Pulse Patrol continuously verifies your infrastructure, surfaces actionable findings, and can automatically fix issues based on your autonomy settings."
           >
             <PulsePatrolLogo class="w-6 h-6 text-base-content" />
-            <span>Patrol</span>
+            <span>{headerMeta.title}</span>
           </span>
         }
         class="mb-3"

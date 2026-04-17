@@ -256,9 +256,10 @@ vi.mock('@/hooks/usePatrolStream', () => ({
 }));
 
 vi.mock('@/components/shared/PageHeader', () => ({
-  PageHeader: (props: { title?: string; actions?: unknown }) => (
+  PageHeader: (props: { title?: string; description?: string; actions?: unknown }) => (
     <div>
       <h1>{props.title}</h1>
+      <p>{props.description}</p>
       <div>{props.actions as any}</div>
     </div>
   ),
@@ -387,8 +388,8 @@ describe('AIIntelligence entitlement gating', () => {
       href: getPublicPricingUrl(feature),
       external: true,
     }));
-    getUpgradeActionUrlOrFallbackMock.mockImplementation(
-      (feature?: string) => getPublicPricingUrl(feature),
+    getUpgradeActionUrlOrFallbackMock.mockImplementation((feature?: string) =>
+      getPublicPricingUrl(feature),
     );
     getCorrelationsMock.mockResolvedValue({
       correlations: [],
@@ -659,7 +660,9 @@ describe('AIIntelligence entitlement gating', () => {
 
     expect(screen.getByText(/Health A · 91\/100/)).toBeInTheDocument();
     expect(screen.queryByText('Supporting context')).not.toBeInTheDocument();
-    expect(screen.queryByText('1 recent change · 4 policy-covered resources')).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('1 recent change · 4 policy-covered resources'),
+    ).not.toBeInTheDocument();
     expect(screen.queryByText('Policy posture')).not.toBeInTheDocument();
   });
 

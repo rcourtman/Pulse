@@ -11,7 +11,7 @@ import {
 import { useLocation, useNavigate } from '@solidjs/router';
 import { logger } from '@/utils/logger';
 import { Card } from '@/components/shared/Card';
-import { SectionHeader } from '@/components/shared/SectionHeader';
+import { PageHeader } from '@/components/shared/PageHeader';
 
 import { notificationStore } from '@/stores/notifications';
 import Calendar from 'lucide-solid/icons/calendar';
@@ -34,12 +34,8 @@ import {
   getAlertsTabTitle,
   isAlertsConfigurationTab,
 } from '@/utils/alertTabsPresentation';
-import {
-  getAlertsPageHeaderMeta,
-} from '@/utils/alertOverviewPresentation';
-import {
-  getAlertConfigLeaveConfirmation,
-} from '@/utils/alertConfigPresentation';
+import { getAlertsPageHeaderMeta } from '@/utils/alertOverviewPresentation';
+import { getAlertConfigLeaveConfirmation } from '@/utils/alertConfigPresentation';
 import { useAlertsActivation } from '@/stores/alertsActivation';
 import LayoutDashboard from 'lucide-solid/icons/layout-dashboard';
 import History from 'lucide-solid/icons/history';
@@ -49,12 +45,7 @@ import { presentationPolicyIsReadOnly } from '@/stores/sessionPresentationPolicy
 import { AlertsConfigurationSurface } from '@/features/alerts/AlertsConfigurationSurface';
 import { OverviewTab } from '@/features/alerts/OverviewTab';
 import { HistoryTab } from '@/features/alerts/tabs/HistoryTab';
-import {
-  pathForTab,
-  tabFromPath,
-  type AlertTab,
-  type Override,
-} from '@/features/alerts/types';
+import { pathForTab, tabFromPath, type AlertTab, type Override } from '@/features/alerts/types';
 
 export function Alerts() {
   const { activeAlerts, updateAlert, removeAlerts } = useWebSocket();
@@ -66,9 +57,7 @@ export function Alerts() {
   const readOnlySession = createMemo(() => presentationPolicyIsReadOnly());
   const isAlertsActive = createMemo(() => alertsActivation.activationState() === 'active');
   const areAlertsDisabled = createMemo(() => !isAlertsActive());
-  const alertsConfigurationLocked = createMemo(
-    () => !readOnlySession() && areAlertsDisabled(),
-  );
+  const alertsConfigurationLocked = createMemo(() => !readOnlySession() && areAlertsDisabled());
   const alertActivationPresentation = createMemo(() =>
     getAlertActivationPresentation({
       isActive: isAlertsActive(),
@@ -127,8 +116,7 @@ export function Alerts() {
   const [overviewOverrides, setOverviewOverrides] = createSignal<Override[]>([]);
   const alertsPageHeaderMeta = getAlertsPageHeaderMeta();
 
-  const headerMeta = () =>
-    alertsPageHeaderMeta[activeTab()] ?? alertsPageHeaderMeta.default;
+  const headerMeta = () => alertsPageHeaderMeta[activeTab()] ?? alertsPageHeaderMeta.default;
 
   createEffect(() => {
     const currentPath = location.pathname;
@@ -175,8 +163,12 @@ export function Alerts() {
     localStorage.getItem('hideAlertsQuickTip') !== 'true',
   );
 
-  const runtimeCapabilitiesLoading = createMemo(() => !runtimeCapabilitiesLoaded() || entitlementsLoading());
-  const hasAIAlertsFeature = createMemo(() => !runtimeCapabilitiesLoaded() || hasFeature('ai_alerts'));
+  const runtimeCapabilitiesLoading = createMemo(
+    () => !runtimeCapabilitiesLoaded() || entitlementsLoading(),
+  );
+  const hasAIAlertsFeature = createMemo(
+    () => !runtimeCapabilitiesLoaded() || hasFeature('ai_alerts'),
+  );
 
   createEffect((wasPaywallVisible) => {
     const isPaywallVisible =
@@ -253,11 +245,11 @@ export function Alerts() {
   const [sidebarCollapsed, setSidebarCollapsed] = createSignal(false);
 
   return (
-    <div class="space-y-4">
-      {/* Header with better styling */}
-      <Card padding="md">
-        <div class="flex items-center justify-between gap-4">
-          <SectionHeader title={headerMeta().title} size="lg" />
+    <div class="space-y-6">
+      <PageHeader
+        title={headerMeta().title}
+        description={headerMeta().description}
+        actions={
           <Show when={activeTab() === 'overview' && !readOnlySession()}>
             <div class="flex items-center gap-3">
               <span class={`text-sm font-medium ${alertActivationPresentation().labelClass}`}>
@@ -284,180 +276,172 @@ export function Alerts() {
               </label>
             </div>
           </Show>
-        </div>
-      </Card>
+        }
+      />
 
-      <div>
-        <Card padding="none" class="relative lg:flex overflow-hidden">
+      <Card padding="none" class="relative lg:flex overflow-hidden">
+        <div
+          class={`hidden lg:flex lg:flex-col ${sidebarCollapsed() ? 'w-16' : 'w-72'} ${sidebarCollapsed() ? 'lg:min-w-[4rem] lg:max-w-[4rem] lg:basis-[4rem]' : 'lg:min-w-[18rem] lg:max-w-[18rem] lg:basis-[18rem]'} relative border-b border-border lg:border-b-0 lg:border-r lg:align-top flex-shrink-0 transition-all duration-200`}
+          aria-label="Alerts navigation"
+          aria-expanded={!sidebarCollapsed()}
+        >
           <div
-            class={`hidden lg:flex lg:flex-col ${sidebarCollapsed() ? 'w-16' : 'w-72'} ${sidebarCollapsed() ? 'lg:min-w-[4rem] lg:max-w-[4rem] lg:basis-[4rem]' : 'lg:min-w-[18rem] lg:max-w-[18rem] lg:basis-[18rem]'} relative border-b border-border lg:border-b-0 lg:border-r lg:align-top flex-shrink-0 transition-all duration-200`}
-            aria-label="Alerts navigation"
-            aria-expanded={!sidebarCollapsed()}
+            class={`sticky top-0 ${sidebarCollapsed() ? 'px-2' : 'px-4'} py-5 space-y-5 transition-all duration-200`}
           >
-            <div
-              class={`sticky top-0 ${sidebarCollapsed() ? 'px-2' : 'px-4'} py-5 space-y-5 transition-all duration-200`}
-            >
-              <Show when={!sidebarCollapsed()}>
-                <div class="flex items-center justify-between pb-2 border-b border-border">
-                  <h2 class="text-sm font-semibold text-base-content">Alerts</h2>
-                  <button
-                    type="button"
-                    onClick={() => setSidebarCollapsed(true)}
-                    class="p-1 rounded-md hover:bg-surface-hover transition-colors"
-                    aria-label="Collapse sidebar"
-                  >
-                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        stroke-width="2"
-                        d="M11 19l-7-7 7-7m8 14l-7-7 7-7"
-                      />
-                    </svg>
-                  </button>
-                </div>
-              </Show>
-              <Show when={sidebarCollapsed()}>
+            <Show when={!sidebarCollapsed()}>
+              <div class="flex items-center justify-between pb-2 border-b border-border">
+                <h2 class="text-sm font-semibold text-base-content">Alerts</h2>
                 <button
                   type="button"
-                  onClick={() => setSidebarCollapsed(false)}
-                  class="w-full p-2 rounded-md hover:bg-surface-hover transition-colors"
-                  aria-label="Expand sidebar"
+                  onClick={() => setSidebarCollapsed(true)}
+                  class="p-1 rounded-md hover:bg-surface-hover transition-colors"
+                  aria-label="Collapse sidebar"
                 >
-                  <svg
-                    class="w-5 h-5 mx-auto"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
+                  <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path
                       stroke-linecap="round"
                       stroke-linejoin="round"
                       stroke-width="2"
-                      d="M13 5l7 7-7 7M5 5l7 7-7 7"
+                      d="M11 19l-7-7 7-7m8 14l-7-7 7-7"
                     />
                   </svg>
                 </button>
-              </Show>
-              <div id="alerts-sidebar-menu" class="space-y-5">
-                <For each={tabGroups()}>
-                  {(group) => (
-                    <div class="space-y-2">
-                      <Show when={!sidebarCollapsed()}>
-                        <p class="text-xs font-semibold uppercase tracking-wide text-muted">
-                          {group.label}
-                        </p>
-                      </Show>
-                      <div class="space-y-1.5">
-                        <For each={group.items}>
-                          {(item) => (
-                            <button
-                              type="button"
-                              aria-current={activeTab() === item.id ? 'page' : undefined}
-                              aria-disabled={alertsConfigurationLocked()}
-                              disabled={alertsConfigurationLocked()}
-                              class={getAlertsSidebarTabClass({
-                                isActive: activeTab() === item.id,
-                                isDisabled: alertsConfigurationLocked(),
-                                collapsed: sidebarCollapsed(),
-                              })}
-                              onClick={() => handleTabChange(item.id)}
-                              title={getAlertsTabTitle({
-                                isDisabled: alertsConfigurationLocked(),
-                                collapsed: sidebarCollapsed(),
-                                label: item.label,
-                              })}
-                            >
-                              {item.icon}
-                              <Show when={!sidebarCollapsed()}>
-                                <span class="truncate">{item.label}</span>
-                              </Show>
-                            </button>
-                          )}
-                        </For>
-                      </div>
-                    </div>
-                  )}
-                </For>
-              </div>
-            </div>
-          </div>
-
-          <div class="flex-1 overflow-hidden">
-            <Show when={flatTabs().length > 0}>
-              <div class="lg:hidden border-b border-border">
-                <div class="p-1">
-                  <div class="flex w-full overflow-x-auto rounded-md bg-surface-hover p-0.5 touch-scroll scrollbar-hide">
-                    <For each={flatTabs()}>
-                      {(tab) => (
-                        <button
-                          type="button"
-                          aria-disabled={alertsConfigurationLocked()}
-                          disabled={alertsConfigurationLocked()}
-                          class={getAlertsMobileTabClass({
-                            isActive: activeTab() === tab.id,
-                            isDisabled: alertsConfigurationLocked(),
-                          })}
-                          onClick={() => handleTabChange(tab.id)}
-                          title={getAlertsTabTitle({
-                            isDisabled: alertsConfigurationLocked(),
-                            label: tab.label,
-                          })}
-                        >
-                          <span class="w-full text-center truncate block">{tab.label}</span>
-                        </button>
-                      )}
-                    </For>
-                  </div>
-                </div>
               </div>
             </Show>
-
-            {/* Tab Content */}
-            <div class="p-2 sm:p-6">
-              <Show when={activeTab() === 'overview'}>
-                <OverviewTab
-                  overrides={overviewOverrides()}
-                  activeAlerts={activeAlerts}
-                  updateAlert={updateAlert}
-                  showQuickTip={showQuickTip}
-                  dismissQuickTip={dismissQuickTip}
-                  showAcknowledged={showAcknowledged}
-                  setShowAcknowledged={setShowAcknowledged}
-                  alertsDisabled={alertsConfigurationLocked}
-                  hasAIAlertsFeature={hasAIAlertsFeature}
-                  runtimeCapabilitiesLoading={runtimeCapabilitiesLoading}
-                />
-              </Show>
-
-              <Show when={!readOnlySession()}>
-                <AlertsConfigurationSurface
-                  activeTab={activeTab}
-                  allResources={allResources}
-                  byType={byType}
-                  children={children}
-                  activeAlerts={activeAlerts}
-                  removeAlerts={removeAlerts}
-                  setOverviewOverrides={setOverviewOverrides}
-                  hasUnsavedChanges={hasUnsavedChanges}
-                  setHasUnsavedChanges={setHasUnsavedChanges}
-                  alertsActivationState={alertsActivation.activationState}
-                  alertsActivationConfig={alertsActivation.config}
-                />
-              </Show>
-
-              <Show when={activeTab() === 'history'}>
-                <HistoryTab
-                  hasAIAlertsFeature={hasAIAlertsFeature}
-                  runtimeCapabilitiesLoading={runtimeCapabilitiesLoading}
-                  getResource={getResource}
-                  allResources={allResources}
-                />
-              </Show>
+            <Show when={sidebarCollapsed()}>
+              <button
+                type="button"
+                onClick={() => setSidebarCollapsed(false)}
+                class="w-full p-2 rounded-md hover:bg-surface-hover transition-colors"
+                aria-label="Expand sidebar"
+              >
+                <svg class="w-5 h-5 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M13 5l7 7-7 7M5 5l7 7-7 7"
+                  />
+                </svg>
+              </button>
+            </Show>
+            <div id="alerts-sidebar-menu" class="space-y-5">
+              <For each={tabGroups()}>
+                {(group) => (
+                  <div class="space-y-2">
+                    <Show when={!sidebarCollapsed()}>
+                      <p class="text-xs font-semibold uppercase tracking-wide text-muted">
+                        {group.label}
+                      </p>
+                    </Show>
+                    <div class="space-y-1.5">
+                      <For each={group.items}>
+                        {(item) => (
+                          <button
+                            type="button"
+                            aria-current={activeTab() === item.id ? 'page' : undefined}
+                            aria-disabled={alertsConfigurationLocked()}
+                            disabled={alertsConfigurationLocked()}
+                            class={getAlertsSidebarTabClass({
+                              isActive: activeTab() === item.id,
+                              isDisabled: alertsConfigurationLocked(),
+                              collapsed: sidebarCollapsed(),
+                            })}
+                            onClick={() => handleTabChange(item.id)}
+                            title={getAlertsTabTitle({
+                              isDisabled: alertsConfigurationLocked(),
+                              collapsed: sidebarCollapsed(),
+                              label: item.label,
+                            })}
+                          >
+                            {item.icon}
+                            <Show when={!sidebarCollapsed()}>
+                              <span class="truncate">{item.label}</span>
+                            </Show>
+                          </button>
+                        )}
+                      </For>
+                    </div>
+                  </div>
+                )}
+              </For>
             </div>
           </div>
-        </Card>
-      </div>
+        </div>
+
+        <div class="flex-1 overflow-hidden">
+          <Show when={flatTabs().length > 0}>
+            <div class="lg:hidden border-b border-border">
+              <div class="p-1">
+                <div class="flex w-full overflow-x-auto rounded-md bg-surface-hover p-0.5 touch-scroll scrollbar-hide">
+                  <For each={flatTabs()}>
+                    {(tab) => (
+                      <button
+                        type="button"
+                        aria-disabled={alertsConfigurationLocked()}
+                        disabled={alertsConfigurationLocked()}
+                        class={getAlertsMobileTabClass({
+                          isActive: activeTab() === tab.id,
+                          isDisabled: alertsConfigurationLocked(),
+                        })}
+                        onClick={() => handleTabChange(tab.id)}
+                        title={getAlertsTabTitle({
+                          isDisabled: alertsConfigurationLocked(),
+                          label: tab.label,
+                        })}
+                      >
+                        <span class="w-full text-center truncate block">{tab.label}</span>
+                      </button>
+                    )}
+                  </For>
+                </div>
+              </div>
+            </div>
+          </Show>
+
+          <div class="p-2 sm:p-6">
+            <Show when={activeTab() === 'overview'}>
+              <OverviewTab
+                overrides={overviewOverrides()}
+                activeAlerts={activeAlerts}
+                updateAlert={updateAlert}
+                showQuickTip={showQuickTip}
+                dismissQuickTip={dismissQuickTip}
+                showAcknowledged={showAcknowledged}
+                setShowAcknowledged={setShowAcknowledged}
+                alertsDisabled={alertsConfigurationLocked}
+                hasAIAlertsFeature={hasAIAlertsFeature}
+                runtimeCapabilitiesLoading={runtimeCapabilitiesLoading}
+              />
+            </Show>
+
+            <Show when={!readOnlySession()}>
+              <AlertsConfigurationSurface
+                activeTab={activeTab}
+                allResources={allResources}
+                byType={byType}
+                children={children}
+                activeAlerts={activeAlerts}
+                removeAlerts={removeAlerts}
+                setOverviewOverrides={setOverviewOverrides}
+                hasUnsavedChanges={hasUnsavedChanges}
+                setHasUnsavedChanges={setHasUnsavedChanges}
+                alertsActivationState={alertsActivation.activationState}
+                alertsActivationConfig={alertsActivation.config}
+              />
+            </Show>
+
+            <Show when={activeTab() === 'history'}>
+              <HistoryTab
+                hasAIAlertsFeature={hasAIAlertsFeature}
+                runtimeCapabilitiesLoading={runtimeCapabilitiesLoading}
+                getResource={getResource}
+                allResources={allResources}
+              />
+            </Show>
+          </div>
+        </div>
+      </Card>
     </div>
   );
 }
