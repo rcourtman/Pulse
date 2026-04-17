@@ -32,7 +32,6 @@ For organisations that need multi-tenant management:
 | Multi-Tenant Mode | `multi_tenant` |
 | Multi-User Mode | `multi_user` |
 | Unlimited Instances | `unlimited` |
-| White-Label Branding | `white_label` (coming soon) |
 
 See [Plans & Entitlements](PULSE_PRO.md) for the full feature matrix.
 

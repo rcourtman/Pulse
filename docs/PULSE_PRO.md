@@ -32,7 +32,7 @@ Self-hosted pricing is:
 |---|---:|---|---:|---|
 | Community | Free | Unlimited | 7 days | Full self-hosted monitoring for normal homelab use |
 | Relay | $4.99/mo or $39/yr | Unlimited | 14 days | Remote access, mobile, push, and convenience |
-| Pro | $8.99/mo or $79/yr | Unlimited | 90 days | AI operations, automation, and advanced admin features |
+| Pro | $8.99/mo or $79/yr | Unlimited | 90 days | AI operations and advanced admin features |
 
 Counted examples:
 - Proxmox PVE node
@@ -99,7 +99,6 @@ This matrix is derived from the canonical table in `docs/architecture/ENTITLEMEN
 | `FeatureAdvancedReporting` | `advanced_reporting` | PDF/CSV Reporting | N | N | Y | Y | Y | API route gating via `RequireLicenseFeature(..., advanced_reporting, ...)`. |
 | `FeatureLongTermMetrics` | `long_term_metrics` | Extended Metric History | N | Y | Y | Y | Y | Runtime history limits are tier-aware through `max_history_days`: Community `7`, Relay `14`, Pro/Pro+ `90`. |
 | `FeatureMultiUser` | `multi_user` | Multi-User Mode | N | N | N | N | Y* | Cloud Enterprise only. |
-| `FeatureWhiteLabel` | `white_label` | White-Label Branding | N | N | N | N | Y* | Capability key exists but is still marked not implemented in `internal/license/features.go`. |
 | `FeatureMultiTenant` | `multi_tenant` | Multi-Tenant Mode | N | N | N | N | Y* | Requires both `PULSE_MULTI_TENANT_ENABLED=true` and the `multi_tenant` capability for non-default orgs. |
 | `FeatureUnlimited` | `unlimited` | Unlimited Instances | N | N | N | N | Y | Used for hosted volume and instance limit removal. |
 
@@ -144,7 +143,7 @@ Patrol and the Assistant support tiered autonomy:
 
 ### Cloud
 - Hosted Pulse with Pro-level capabilities and hosted lifecycle management.
-- Cloud Enterprise adds multi-tenant orgs, multi-user mode, and future white-labeling where licensed.
+- Cloud Enterprise adds multi-tenant orgs and multi-user mode.
 
 ## License Activation and Introspection
 
