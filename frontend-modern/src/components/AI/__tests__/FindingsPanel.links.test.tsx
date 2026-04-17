@@ -119,8 +119,12 @@ vi.mock('@/stores/aiIntelligence', () => ({
     get pendingApprovalCount() {
       return 0;
     },
+    get remediationPlans() {
+      return [];
+    },
     findingsSignal: () => mockState.findings,
     loadFindings: mockState.loadFindings,
+    loadRemediationPlans: vi.fn(),
   },
 }));
 
