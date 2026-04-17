@@ -115,6 +115,7 @@ export function useRecoveryRollups(query?: () => RecoveryRollupsQuery | null | u
 
   const state = createNonSuspendingQuery<ProtectionRollup[], string>({
     source,
+    cacheKey: (key) => `recovery-rollups:${key}`,
     fetcher: async (key) => fetchRecoveryRollups(parseSerializedQuery(key)),
     initialValue: [],
     pollMs: REFRESH_MS,

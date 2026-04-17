@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { Suspense, createSignal } from 'solid-js';
+import { resetCreateNonSuspendingQueryCacheForTest } from '@/hooks/createNonSuspendingQuery';
 import { resetAIRuntimeState } from '@/stores/aiRuntimeState';
 import { getPublicPricingUrl } from '@/utils/pricingHandoff';
 
@@ -323,6 +324,7 @@ const defaultAISettings = {
 
 describe('AIIntelligence entitlement gating', () => {
   beforeEach(() => {
+    resetCreateNonSuspendingQueryCacheForTest();
     resetAIRuntimeState();
     getPatrolStatusMock.mockReset();
     getPatrolAutonomySettingsMock.mockReset();

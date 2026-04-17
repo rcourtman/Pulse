@@ -126,6 +126,7 @@ export function useRecoveryPointsFacets(query?: Accessor<RecoveryFacetsQuery | n
 
   const state = createNonSuspendingQuery<RecoveryPointsFacetsResponse, string>({
     source,
+    cacheKey: (key) => `recovery-facets:${key}`,
     fetcher: async (key) => fetchFacets(parseSerializedQuery(key)),
     initialValue: { data: {} },
     pollMs: REFRESH_MS,

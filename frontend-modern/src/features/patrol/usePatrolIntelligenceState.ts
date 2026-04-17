@@ -109,6 +109,7 @@ export function usePatrolIntelligenceState() {
 
   const patrolStatusState = createNonSuspendingQuery<PatrolStatus | null, string>({
     source: () => 'patrol-status',
+    cacheKey: () => 'patrol-status',
     fetcher: async () => {
       try {
         return await getPatrolStatus();
@@ -345,6 +346,7 @@ export function usePatrolIntelligenceState() {
 
   const patrolRunHistory = createNonSuspendingQuery<PatrolRunRecord[], number>({
     source: activityRefreshTrigger,
+    cacheKey: () => 'patrol-run-history',
     fetcher: async () => {
       try {
         return await getPatrolRunHistory(30);

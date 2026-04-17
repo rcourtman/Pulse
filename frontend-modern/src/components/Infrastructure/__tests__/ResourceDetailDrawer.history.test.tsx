@@ -215,8 +215,9 @@ describe('ResourceDetailDrawer change history section', () => {
       'const modeLabel = formatSourceType(resource.sourceType);',
     );
     expect(resourceDetailDrawerOverviewSource).not.toContain('<span class="text-muted">Mode</span>');
+    expect(createNonSuspendingQuerySource).toContain('const retainedQueryCache = new Map<');
     expect(createNonSuspendingQuerySource).toContain(
-      'const [resolvedOnce, setResolvedOnce] = createSignal(false);',
+      'export function resetCreateNonSuspendingQueryCacheForTest()',
     );
     expect(createNonSuspendingQuerySource).toContain('setResolvedOnce(true);');
     expect(createNonSuspendingQuerySource).toContain('setResolvedOnce(false);');

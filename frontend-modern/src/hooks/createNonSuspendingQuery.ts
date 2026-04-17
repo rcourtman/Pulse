@@ -4,6 +4,7 @@ interface CreateNonSuspendingQueryOptions<T, K> {
   source: Accessor<K | null>;
   fetcher: (key: K) => Promise<T>;
   initialValue: T;
+  cacheKey?: (key: K) => string | null;
   pollMs?: number;
 }
 
@@ -15,11 +16,47 @@ interface QueryRunOptions {
  * Keep query-backed surfaces out of the app-level Suspense boundary by
  * retaining the last fulfilled value while the next request is in flight.
  */
+const retainedQueryCache = new Map<
+  string,
+  { error: unknown; resolvedOnce: boolean; value: unknown }
+>();
+
+export function resetCreateNonSuspendingQueryCacheForTest() {
+  retainedQueryCache.clear();
+}
+
 export function createNonSuspendingQuery<T, K>(options: CreateNonSuspendingQueryOptions<T, K>) {
-  const [value, setValue] = createSignal<T>(options.initialValue);
+  const getRetainedCacheKey = (key: K | null): string | null => {
+    if (key === null || !options.cacheKey) {
+      return null;
+    }
+    return options.cacheKey(key);
+  };
+
+  const readRetainedValue = (key: K | null) => {
+    const cacheKey = getRetainedCacheKey(key);
+    if (!cacheKey) {
+      return null;
+    }
+    const cached = retainedQueryCache.get(cacheKey);
+    if (!cached) {
+      return null;
+    }
+    return cached as { error: unknown; resolvedOnce: boolean; value: T };
+  };
+
+  const applyRetainedValue = (cached: { error: unknown; resolvedOnce: boolean; value: T }) => {
+    setValue(() => cached.value);
+    setError(cached.error);
+    setResolvedOnce(cached.resolvedOnce);
+  };
+
+  const initialCached = readRetainedValue(options.source());
+
+  const [value, setValue] = createSignal<T>(initialCached?.value ?? options.initialValue);
   const [loading, setLoading] = createSignal(false);
-  const [error, setError] = createSignal<unknown>(null);
-  const [resolvedOnce, setResolvedOnce] = createSignal(false);
+  const [error, setError] = createSignal<unknown>(initialCached?.error ?? null);
+  const [resolvedOnce, setResolvedOnce] = createSignal(initialCached?.resolvedOnce ?? false);
 
   let latestRequestId = 0;
 
@@ -34,6 +71,7 @@ export function createNonSuspendingQuery<T, K>(options: CreateNonSuspendingQuery
 
   const run = async (key: K, runOptions: QueryRunOptions = {}): Promise<T> => {
     const requestId = ++latestRequestId;
+    const retainedCacheKey = getRetainedCacheKey(key);
     if (!runOptions.background) {
       setLoading(true);
     }
@@ -54,6 +92,13 @@ export function createNonSuspendingQuery<T, K>(options: CreateNonSuspendingQuery
     } finally {
       if (requestId === latestRequestId) {
         setResolvedOnce(true);
+        if (retainedCacheKey) {
+          retainedQueryCache.set(retainedCacheKey, {
+            error: error(),
+            resolvedOnce: true,
+            value: value(),
+          });
+        }
         if (!runOptions.background) {
           setLoading(false);
         }
@@ -67,7 +112,11 @@ export function createNonSuspendingQuery<T, K>(options: CreateNonSuspendingQuery
       reset();
       return;
     }
-    void run(key);
+    const cached = readRetainedValue(key);
+    if (cached) {
+      applyRetainedValue(cached);
+    }
+    void run(key, { background: Boolean(cached) });
   });
 
   const refetch = async (runOptions: QueryRunOptions = {}): Promise<T> => {

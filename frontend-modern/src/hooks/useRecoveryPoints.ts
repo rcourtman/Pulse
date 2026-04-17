@@ -134,6 +134,7 @@ export function useRecoveryPoints(query?: Accessor<RecoveryPointsQuery | null | 
 
   const state = createNonSuspendingQuery<RecoveryPointsResponse, string>({
     source,
+    cacheKey: (key) => `recovery-points:${key}`,
     fetcher: async (key) => fetchRecoveryPointsResponse(parseSerializedQuery(key)),
     initialValue: {
       data: [],

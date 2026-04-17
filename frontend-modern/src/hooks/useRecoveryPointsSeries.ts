@@ -112,6 +112,7 @@ export function useRecoveryPointsSeries(query?: Accessor<RecoverySeriesQuery | n
 
   const state = createNonSuspendingQuery<RecoveryPointsSeriesResponse, string>({
     source,
+    cacheKey: (key) => `recovery-series:${key}`,
     fetcher: async (key) => fetchSeries(parseSerializedQuery(key)),
     initialValue: { data: [] },
     pollMs: REFRESH_MS,
