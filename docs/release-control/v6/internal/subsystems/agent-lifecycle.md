@@ -356,16 +356,25 @@ an add-only capacity posture.
    before non-default connection controls.
 7. Keep `frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx`
    and `frontend-modern/src/components/Settings/infrastructureWorkspaceModel.ts`
-   aligned with that same lifecycle path. Bare infrastructure settings routes
-   must default to the install workspace, and the workspace shell must make
-   the first-host sequence explicit before operators drift into reporting and
-   control surfaces. The third workspace subtab owns the reporting-and-control
-   surface at route `/settings/infrastructure/operations`; its user-facing
-   label is `Inventory` so the workspace narrative leads new operators from
-   install-or-connect into a reporting surface named after what it shows, not
-   after the internal lifecycle stage. The first-host orientation card must
-   hide once any platform connection or agent resource is already reporting,
-   so established operators do not see a first-system prompt.
+   aligned with that same lifecycle path. The bare
+   `/settings/infrastructure` route must render a unified Connections table
+   that lists every monitored system — Proxmox VE, PBS, PMG, TrueNAS, VMware,
+   and agent hosts — as sibling rows sharing a single name/kind/method/status/
+   last-reported shape, so operators read what is currently being monitored
+   in one scan instead of tab-hopping between per-kind surfaces. Adding a new
+   system must be a single entry point on that table: an `Add a system`
+   picker whose tiles route the operator into the right flow per kind
+   (`/settings/infrastructure/install` for the agent choice,
+   `/settings/infrastructure/platforms/<kind>` for Proxmox/TrueNAS/VMware
+   tiles). `/settings/infrastructure/install`,
+   `/settings/infrastructure/platforms`, and
+   `/settings/infrastructure/operations` remain reachable as detail routes
+   for install, platform connections, and legacy reporting/control surfaces
+   respectively, but the workspace shell must not gate inventory visibility
+   behind tab navigation. Read-only sessions must continue to redirect the
+   install detail route back to the unified inventory view and suppress the
+   add-system entry point on the base table so presentation-policy
+   restrictions still hold.
 8. Keep post-install lifecycle completion explicit inside
    `frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx`
    and `frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx`.

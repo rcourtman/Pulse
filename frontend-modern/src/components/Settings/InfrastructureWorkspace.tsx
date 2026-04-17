@@ -1,17 +1,15 @@
-import { Component, Match, Show, Switch, createEffect, createMemo } from 'solid-js';
+import { Component, Match, Switch, createEffect, createMemo, createSignal } from 'solid-js';
 import { useLocation, useNavigate } from '@solidjs/router';
-import { Card } from '@/components/shared/Card';
-import { Subtabs } from '@/components/shared/Subtabs';
 import { presentationPolicyIsReadOnly } from '@/stores/sessionPresentationPolicy';
-import { SELF_HOSTED_PRO_BILLING_PRESENTATION } from './selfHostedBillingPresentation';
 import { InfrastructureInstallPanel } from './InfrastructureInstallPanel';
 import { InfrastructureReportingPanel } from './InfrastructureReportingPanel';
 import { PlatformConnectionsWorkspace } from './PlatformConnectionsWorkspace';
+import { ConnectionsTable } from './ConnectionsTable';
+import { AddSystemPicker, type AddSystemChoice } from './AddSystemPicker';
+import { buildConnectionRows, type ConnectionRow } from './connectionsTableModel';
 import {
-  INFRASTRUCTURE_WORKSPACE_TABS,
   buildInfrastructureWorkspacePath,
   getInfrastructureWorkspaceViewFromPath,
-  type InfrastructureWorkspaceView,
 } from './infrastructureWorkspaceModel';
 import type { InfrastructurePlatformSettingsProps } from './proxmoxSettingsModel';
 
@@ -22,126 +20,58 @@ export const InfrastructureWorkspace: Component<InfrastructureWorkspaceProps> = 
   const location = useLocation();
   const activeView = createMemo(() => getInfrastructureWorkspaceViewFromPath(location.pathname));
   const readOnlyWorkspace = createMemo(() => presentationPolicyIsReadOnly());
-  const installPath = createMemo(() => buildInfrastructureWorkspacePath('install'));
-  const platformsPath = createMemo(() => buildInfrastructureWorkspacePath('platforms'));
-  const inventoryPath = createMemo(() => buildInfrastructureWorkspacePath('inventory'));
-  const visibleTabs = createMemo(() =>
-    readOnlyWorkspace()
-      ? INFRASTRUCTURE_WORKSPACE_TABS.filter((tab) => tab.id === 'inventory')
-      : INFRASTRUCTURE_WORKSPACE_TABS,
-  );
-  const hasAnySystem = createMemo(() => {
-    const summary = props.platformConnectionsSummary?.();
-    const platformCount = summary
-      ? summary.pveCount +
-        summary.pbsCount +
-        summary.pmgCount +
-        summary.truenasCount +
-        summary.vmwareCount
-      : 0;
-    const agentCount = props.agentStateResources?.()?.length ?? 0;
-    return platformCount + agentCount > 0;
-  });
-  const showOrientation = createMemo(() => !readOnlyWorkspace() && !hasAnySystem());
+  const [pickerOpen, setPickerOpen] = createSignal(false);
 
-  const openView = (view: InfrastructureWorkspaceView) =>
-    navigate(buildInfrastructureWorkspacePath(view));
+  const rows = createMemo<ConnectionRow[]>(() =>
+    buildConnectionRows({
+      pveNodes: props.pveNodes(),
+      pbsNodes: props.pbsNodes(),
+      pmgNodes: props.pmgNodes(),
+      truenasConnections: props.trueNASSettings.connections(),
+      vmwareConnections: props.vmwareSettings.connections(),
+      agentResources: props.agentStateResources?.() ?? [],
+    }),
+  );
+
+  const handleAddSystem = (choice: AddSystemChoice) => {
+    setPickerOpen(false);
+    if (choice.kind === 'agent') {
+      navigate('/settings/infrastructure/install');
+      return;
+    }
+    if (choice.kind === 'truenas') {
+      navigate('/settings/infrastructure/platforms/truenas');
+      return;
+    }
+    if (choice.kind === 'vmware') {
+      navigate('/settings/infrastructure/platforms/vmware');
+      return;
+    }
+    props.onSelectAgent(choice.kind);
+    navigate('/settings/infrastructure/platforms/proxmox');
+  };
 
   createEffect(() => {
-    if (readOnlyWorkspace() && activeView() !== 'inventory') {
-      navigate(inventoryPath(), { replace: true });
+    if (readOnlyWorkspace() && activeView() === 'install') {
+      navigate(buildInfrastructureWorkspacePath('inventory'), { replace: true });
     }
   });
 
   return (
     <div class="space-y-6">
-      <Show when={showOrientation()}>
-        <Card padding="lg" class="rounded-xl border border-border shadow-sm">
-          <div class="space-y-4">
-            <div class="space-y-2">
-              <h3 class="text-base font-semibold text-base-content">Connect your first system</h3>
-              <p class="text-sm text-muted">
-                Use Install on a host for the first machine that should run the unified agent. If
-                the first system is API-backed, such as Proxmox or TrueNAS, go straight to Platform
-                connections.
-              </p>
-            </div>
-            <div class="grid gap-3 lg:grid-cols-3">
-              <div class="rounded-md border border-border bg-surface px-4 py-3">
-                <p class="text-xs font-semibold uppercase tracking-wide text-muted">
-                  1. Choose path
-                </p>
-                <p class="mt-1 text-sm text-base-content">
-                  Choose Install on a host for agent-managed systems, or open Platform connections
-                  for Proxmox, TrueNAS, and other systems Pulse should poll through their own APIs.
-                </p>
-              </div>
-              <div class="rounded-md border border-border bg-surface px-4 py-3">
-                <p class="text-xs font-semibold uppercase tracking-wide text-muted">
-                  2. Generate access
-                </p>
-                <p class="mt-1 text-sm text-base-content">
-                  Create the install token Pulse expects for the first monitored host, or add the
-                  API credentials Pulse should store for API-backed platforms like Proxmox and
-                  TrueNAS.
-                </p>
-              </div>
-              <div class="rounded-md border border-border bg-surface px-4 py-3">
-                <p class="text-xs font-semibold uppercase tracking-wide text-muted">
-                  3. Confirm reporting
-                </p>
-                <p class="mt-1 text-sm text-base-content">
-                  Run the command on that machine, then open Inventory once the first system starts
-                  reporting.
-                </p>
-              </div>
-            </div>
-            <div class="flex flex-wrap gap-3">
-              <button
-                type="button"
-                onClick={() => navigate(installPath())}
-                aria-current={activeView() === 'install' ? 'page' : undefined}
-                class={`inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-medium transition-colors ${
-                  activeView() === 'install'
-                    ? 'bg-blue-600 text-white'
-                    : 'border border-border bg-surface text-base-content hover:bg-surface-hover'
-                }`}
-              >
-                Open Install on a host
-              </button>
-              <button
-                type="button"
-                onClick={() => navigate(platformsPath())}
-                aria-current={activeView() === 'platforms' ? 'page' : undefined}
-                class={`inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-medium transition-colors ${
-                  activeView() === 'platforms'
-                    ? 'bg-emerald-600 text-white'
-                    : 'border border-border bg-surface text-base-content hover:bg-surface-hover'
-                }`}
-              >
-                Open Platform connections
-              </button>
-            </div>
-            <p class="text-sm text-muted">
-              {SELF_HOSTED_PRO_BILLING_PRESENTATION.infrastructureWorkspaceReferral}
-            </p>
-          </div>
-        </Card>
-      </Show>
-
-      <div class="space-y-3">
-        <Subtabs
-          value={activeView()}
-          onChange={(value) => openView(value as InfrastructureWorkspaceView)}
-          ariaLabel="Infrastructure workspace"
-          tabs={visibleTabs().map((tab) => ({
-            value: tab.id,
-            label: tab.label,
-          }))}
-        />
-      </div>
-
       <Switch>
+        <Match when={activeView() === 'inventory'}>
+          <ConnectionsTable
+            rows={rows}
+            onAddSystem={readOnlyWorkspace() ? undefined : () => setPickerOpen(true)}
+          />
+          <AddSystemPicker
+            isOpen={pickerOpen()}
+            onClose={() => setPickerOpen(false)}
+            onSelect={handleAddSystem}
+          />
+        </Match>
+
         <Match when={activeView() === 'install'}>
           <InfrastructureInstallPanel />
         </Match>
@@ -150,10 +80,12 @@ export const InfrastructureWorkspace: Component<InfrastructureWorkspaceProps> = 
           <PlatformConnectionsWorkspace {...props} />
         </Match>
 
-        <Match when={activeView() === 'inventory'}>
+        <Match when={activeView() === 'operations'}>
           <InfrastructureReportingPanel
             {...props}
-            onManagePlatformConnections={() => openView('platforms')}
+            onManagePlatformConnections={() =>
+              navigate('/settings/infrastructure/platforms')
+            }
           />
         </Match>
       </Switch>

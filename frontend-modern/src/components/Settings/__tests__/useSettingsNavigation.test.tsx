@@ -44,7 +44,7 @@ describe('useSettingsNavigation', () => {
     renderHarness('/settings');
 
     await waitFor(() => {
-      expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure/operations', {
+      expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure', {
         replace: true,
         scroll: false,
       });
@@ -57,7 +57,7 @@ describe('useSettingsNavigation', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'open infrastructure settings' }));
 
-    expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure/operations', {
+    expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure', {
       scroll: false,
     });
   });

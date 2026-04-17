@@ -1,28 +1,11 @@
-export type InfrastructureWorkspaceView = 'install' | 'platforms' | 'inventory';
+export type InfrastructureWorkspaceView = 'inventory' | 'install' | 'platforms' | 'operations';
 
-export interface InfrastructureWorkspaceTabDefinition {
-  id: InfrastructureWorkspaceView;
-  label: string;
-  path: string;
-}
-
-export const INFRASTRUCTURE_WORKSPACE_TABS: readonly InfrastructureWorkspaceTabDefinition[] = [
-  {
-    id: 'install',
-    label: 'Install on a host',
-    path: '/settings/infrastructure/install',
-  },
-  {
-    id: 'platforms',
-    label: 'Platform connections',
-    path: '/settings/infrastructure/platforms',
-  },
-  {
-    id: 'inventory',
-    label: 'Inventory',
-    path: '/settings/infrastructure/operations',
-  },
-];
+const INFRASTRUCTURE_WORKSPACE_PATHS: Record<InfrastructureWorkspaceView, string> = {
+  inventory: '/settings/infrastructure',
+  install: '/settings/infrastructure/install',
+  platforms: '/settings/infrastructure/platforms',
+  operations: '/settings/infrastructure/operations',
+};
 
 export function getInfrastructureWorkspaceViewFromPath(
   pathname: string,
@@ -35,20 +18,15 @@ export function getInfrastructureWorkspaceViewFromPath(
   ) {
     return 'platforms';
   }
-  if (pathname.startsWith('/settings/infrastructure/operations')) {
-    return 'inventory';
-  }
   if (pathname.startsWith('/settings/infrastructure/install')) {
     return 'install';
   }
-  return 'install';
+  if (pathname.startsWith('/settings/infrastructure/operations')) {
+    return 'operations';
+  }
+  return 'inventory';
 }
 
-export function buildInfrastructureWorkspacePath(
-  view: InfrastructureWorkspaceView,
-): string {
-  return (
-    INFRASTRUCTURE_WORKSPACE_TABS.find((tab) => tab.id === view)?.path ??
-    '/settings/infrastructure/install'
-  );
+export function buildInfrastructureWorkspacePath(view: InfrastructureWorkspaceView): string {
+  return INFRASTRUCTURE_WORKSPACE_PATHS[view];
 }

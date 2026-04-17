@@ -785,7 +785,7 @@ describe('monitored-system model guardrails', () => {
       "pathname.startsWith('/settings/infrastructure/proxmox')",
     );
     expect(infrastructureWorkspaceModelSource).toContain(
-      "path: '/settings/infrastructure/operations'",
+      "operations: '/settings/infrastructure/operations'",
     );
   });
 

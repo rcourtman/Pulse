@@ -1054,7 +1054,7 @@ describe('InfrastructureOperationsController agent lookup', () => {
     expect(navigateMock).toHaveBeenCalledWith('/dashboard');
 
     fireEvent.click(screen.getByRole('button', { name: 'Open inventory' }));
-    expect(navigateMock).toHaveBeenCalledWith('/settings/infrastructure/operations');
+    expect(navigateMock).toHaveBeenCalledWith('/settings/infrastructure');
   });
 
   it('shows error message when agent is not found', async () => {

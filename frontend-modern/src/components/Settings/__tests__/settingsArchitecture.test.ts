@@ -593,12 +593,9 @@ describe('Settings architecture guardrails', () => {
     expect(proLicensePanelSource).not.toContain('description="Manage self-hosted billing');
     expect(proLicensePanelSource).not.toContain('title="Plan"');
     expect(proLicensePanelSource).not.toContain('title="Usage"');
-    expect(infrastructureWorkspaceSource).toContain('./selfHostedBillingPresentation');
-    expect(infrastructureWorkspaceSource).toContain(
-      'SELF_HOSTED_PRO_BILLING_PRESENTATION.infrastructureWorkspaceReferral',
-    );
+    expect(infrastructureWorkspaceSource).not.toContain('./selfHostedBillingPresentation');
     expect(infrastructureWorkspaceSource).not.toContain(
-      'Billing, monitored-system limits, and Pulse Pro license status live in Pulse Pro, not here.',
+      'SELF_HOSTED_PRO_BILLING_PRESENTATION.infrastructureWorkspaceReferral',
     );
     expect(proLicensePlanSectionSource).toContain('CommercialStatGrid');
     expect(proLicensePlanSectionSource).toContain('getLicenseStatusLoadingState');
@@ -892,7 +889,7 @@ describe('Settings architecture guardrails', () => {
     );
     expect(infrastructureWorkspaceSource).toContain('createEffect(() =>');
     expect(infrastructureWorkspaceSource).toContain(
-      "if (readOnlyWorkspace() && activeView() !== 'inventory')",
+      "if (readOnlyWorkspace() && activeView() === 'install')",
     );
     expect(infrastructureWorkspaceSource).toContain('InfrastructureInstallPanel');
     expect(infrastructureWorkspaceSource).toContain('PlatformConnectionsWorkspace');
@@ -958,8 +955,8 @@ describe('Settings architecture guardrails', () => {
     );
     expect(infrastructureActiveRowDetailsSource).toContain('useInfrastructureOperationsContext');
     expect(infrastructureIgnoredRowDetailsSource).toContain('useInfrastructureOperationsContext');
-    expect(infrastructureWorkspaceModelSource).toContain(
-      'export const INFRASTRUCTURE_WORKSPACE_TABS',
+    expect(infrastructureWorkspaceModelSource).not.toContain(
+      'INFRASTRUCTURE_WORKSPACE_TABS',
     );
     expect(infrastructureWorkspaceModelSource).toContain(
       'export function getInfrastructureWorkspaceViewFromPath',
@@ -1501,7 +1498,7 @@ describe('Settings architecture guardrails', () => {
       'Setup changes stay unavailable in this read-only session.',
     );
     expect(infrastructureWorkspaceSource).toContain('presentationPolicyIsReadOnly');
-    expect(infrastructureWorkspaceSource).toContain("tab.id === 'inventory'");
+    expect(infrastructureWorkspaceSource).toContain("activeView() === 'inventory'");
   });
 
   it('keeps relay shell copy on the shared relay presentation owner', () => {
