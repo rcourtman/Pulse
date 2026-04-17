@@ -41,6 +41,7 @@ export function GuestRow(props: GuestRowProps) {
   const navigate = useNavigate();
   const {
     agentVersion,
+    appContainerRuntimeLabel,
     clusterName,
     contextLabel,
     cpuAnomaly,
@@ -324,7 +325,7 @@ export function GuestRow(props: GuestRowProps) {
         {/* Image */}
         <Show when={isColVisible('image')}>
           <td class="px-1.5 sm:px-2 py-0.5 align-middle">
-            <div class="flex justify-center">
+            <div class="flex items-center justify-center gap-1.5">
               <Show
                 when={workloadType() === 'app-container' && dockerImage()}
                 fallback={<span class="text-xs ">—</span>}
@@ -332,6 +333,14 @@ export function GuestRow(props: GuestRowProps) {
                 <span class="text-xs text-muted truncate max-w-[140px]" title={dockerImage()}>
                   {getShortImageName(dockerImage())}
                 </span>
+                <Show when={appContainerRuntimeLabel()}>
+                  <span
+                    class="rounded bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 px-1 py-0.5 text-[9px] font-medium uppercase tracking-wide whitespace-nowrap"
+                    title={`${appContainerRuntimeLabel()} runtime`}
+                  >
+                    {appContainerRuntimeLabel()}
+                  </span>
+                </Show>
               </Show>
             </div>
           </td>

@@ -94,6 +94,18 @@ export function useGuestRowState(props: GuestRowProps) {
     return type === 'vm' || type === 'system-container';
   });
 
+  const appContainerRuntimeLabel = createMemo<string | null>(() => {
+    if (workloadType() !== 'app-container') return null;
+    const runtime = (props.guest.containerRuntime || '').trim();
+    const normalized = runtime.toLowerCase();
+    if (normalized === 'docker') return 'Docker';
+    if (normalized === 'podman') return 'Podman';
+    if (runtime) return runtime;
+    const platform = (props.guest.platformType || '').trim().toLowerCase();
+    if (platform === 'truenas') return 'TrueNAS';
+    return null;
+  });
+
   const isOCIContainer = createMemo(() => {
     if (workloadType() !== 'system-container') return false;
     const containerMeta = props.guest as Partial<Pick<Container, 'isOci'>>;
@@ -242,6 +254,7 @@ export function useGuestRowState(props: GuestRowProps) {
   );
 
   return {
+    appContainerRuntimeLabel,
     cpuAnomaly,
     customUrl,
     diskAnomaly,

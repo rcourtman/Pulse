@@ -551,6 +551,59 @@ describe('GuestRow', () => {
       });
       expect(screen.getByTestId('update-button')).toBeTruthy();
     });
+
+    it('renders Docker runtime chip next to image for Docker-managed app-containers', () => {
+      renderGuestRow({
+        guest: makeGuest({
+          type: 'app-container',
+          workloadType: 'app-container',
+          image: 'nginx:latest',
+          containerRuntime: 'docker',
+        }),
+        visibleColumnIds: ['name', 'image'],
+      });
+      expect(screen.getByText('Docker')).toBeTruthy();
+    });
+
+    it('renders Podman runtime chip next to image for Podman-managed app-containers', () => {
+      renderGuestRow({
+        guest: makeGuest({
+          type: 'app-container',
+          workloadType: 'app-container',
+          image: 'nginx:latest',
+          containerRuntime: 'podman',
+        }),
+        visibleColumnIds: ['name', 'image'],
+      });
+      expect(screen.getByText('Podman')).toBeTruthy();
+    });
+
+    it('renders TrueNAS runtime chip for TrueNAS app-containers without explicit runtime', () => {
+      renderGuestRow({
+        guest: makeGuest({
+          type: 'app-container',
+          workloadType: 'app-container',
+          image: 'nginx:latest',
+          platformType: 'truenas',
+        }),
+        visibleColumnIds: ['name', 'image'],
+      });
+      expect(screen.getByText('TrueNAS')).toBeTruthy();
+    });
+
+    it('does not render a runtime chip when runtime and platform are both unknown', () => {
+      renderGuestRow({
+        guest: makeGuest({
+          type: 'app-container',
+          workloadType: 'app-container',
+          image: 'nginx:latest',
+        }),
+        visibleColumnIds: ['name', 'image'],
+      });
+      expect(screen.queryByText('Docker')).toBeNull();
+      expect(screen.queryByText('Podman')).toBeNull();
+      expect(screen.queryByText('TrueNAS')).toBeNull();
+    });
   });
 
   describe('pod workload type', () => {
