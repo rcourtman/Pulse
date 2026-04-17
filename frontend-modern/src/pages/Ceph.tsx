@@ -12,7 +12,6 @@ import {
   TableCell,
 } from '@/components/shared/Table';
 import { EmptyState } from '@/components/shared/EmptyState';
-import { PageHeader } from '@/components/shared/PageHeader';
 import { SearchInput } from '@/components/shared/SearchInput';
 import CephServiceIcon from '@/components/Ceph/CephServiceIcon';
 import type { CephCluster, CephPool, CephServiceStatus } from '@/types/api';
@@ -289,9 +288,6 @@ const Ceph: Component = () => {
 
   return (
     <div class="space-y-4">
-      <PageHeader id="ceph-title" title="Ceph" />
-      {/* Navigation */}
-
       {/* Loading State */}
       <Show when={isLoading()}>
         <Card padding="lg">

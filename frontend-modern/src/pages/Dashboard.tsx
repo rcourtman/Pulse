@@ -33,7 +33,6 @@ import {
 import { RecentAlertsPanel } from '@/components/Alerts/RecentAlertsPanel';
 import { DashboardRecoveryStatusPanel } from '@/components/Recovery/DashboardRecoveryStatusPanel';
 import { DashboardStoragePanel } from '@/components/Storage/DashboardStoragePanel';
-import { PageHeader } from '@/components/shared/PageHeader';
 import type { DashboardWidgetDef, DashboardWidgetId } from '@/features/dashboardOverview/dashboardWidgets';
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -169,8 +168,6 @@ export default function Dashboard() {
 
   return (
     <main data-testid="dashboard-page" class="space-y-6">
-      <PageHeader title="Dashboard" />
-
       {/* Connection warning banner — shown above all content, NOT a full-page takeover */}
       <Show when={hasConnectionError() && initialLoadComplete()}>
         <div

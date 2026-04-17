@@ -4,7 +4,6 @@ import StorageContentCard from '@/components/Storage/StorageContentCard';
 import StoragePageBanners from '@/components/Storage/StoragePageBanners';
 import StoragePageControls from '@/components/Storage/StoragePageControls';
 import StoragePageSummary from '@/components/Storage/StoragePageSummary';
-import { PageHeader } from '@/components/shared/PageHeader';
 import { StickySummarySection } from '@/components/shared/StickySummarySection';
 import { isStorageRecordCeph } from './storagePageState';
 import { useStoragePageModel } from './useStoragePageModel';
@@ -74,8 +73,6 @@ const Storage: Component = () => {
       class="space-y-4"
       data-testid="storage-page"
     >
-      <PageHeader title="Storage" />
-
       <StickySummarySection desktopOnly={false}>
         <StoragePageSummary
           filteredRecordCount={() => filteredRecords().length}

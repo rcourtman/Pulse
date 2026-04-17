@@ -4,7 +4,6 @@ import { buildInfrastructureWorkspacePath } from '@/components/Settings/infrastr
 import { EmptyState } from '@/components/shared/EmptyState';
 import { Card } from '@/components/shared/Card';
 import { FilterSegmentedControl, LabeledFilterSelect } from '@/components/shared/FilterToolbar';
-import { PageHeader } from '@/components/shared/PageHeader';
 import { PageControls } from '@/components/shared/PageControls';
 import { SearchInput } from '@/components/shared/SearchInput';
 import { StickySummarySection } from '@/components/shared/StickySummarySection';
@@ -87,8 +86,6 @@ export function InfrastructurePageSurface() {
       data-testid="infrastructure-page"
       class="space-y-4"
     >
-      <PageHeader title="Infrastructure" />
-
       <Show
         when={!loading() || initialLoadComplete()}
         fallback={
