@@ -70,9 +70,6 @@ describe('App architecture', () => {
     expect(appLayoutSource).toContain(
       "import { dialogStackHasBlockingDialog } from '@/components/shared/useDialogState';",
     );
-    expect(appLayoutSource).toContain(
-      "import { ReleaseCandidateBanner } from '@/components/shared/ReleaseCandidateBanner';",
-    );
     expect(appLayoutSource).toContain('<OrgSwitcher');
     expect(appLayoutSource).toContain('const status = () => props.connectionStatus();');
     expect(appLayoutSource).toContain("status().kind === 'sync-reconnecting' || status().kind === 'reconnecting'");
@@ -81,7 +78,10 @@ describe('App architecture', () => {
     );
     expect(appLayoutSource).toContain("props.versionInfo()?.channel === 'rc'");
     expect(appLayoutSource).toContain('Preview');
-    expect(appLayoutSource).toContain(
+    expect(appLayoutSource).not.toContain(
+      "import { ReleaseCandidateBanner } from '@/components/shared/ReleaseCandidateBanner';",
+    );
+    expect(appLayoutSource).not.toContain(
       '<ReleaseCandidateBanner version={props.versionInfo()?.version} />',
     );
     expect(appLayoutSource).toContain(

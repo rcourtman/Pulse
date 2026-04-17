@@ -644,15 +644,15 @@ paywall surfaces navigate those destinations. Feature shells may request a
 commercial destination, but they must not re-decide whether that destination
 opens in-app or in a new tab once the shared primitive exists.
 That same shared-primitive floor now also owns prerelease shell guidance.
-`frontend-modern/src/components/shared/ReleaseCandidateBanner.tsx` is the
-canonical low-key release-candidate callout for authenticated chrome, and
-`frontend-modern/src/AppLayout.tsx` may mount it only from resolved release
-metadata. Feature pages, settings panels, and route-local shells must not add
-duplicate RC modals, hardcoded GitHub release or feedback links, or page-local
-prerelease banners once that shared primitive exists. The shared banner copy
-must stay version-aware but RC-order-agnostic: later builds like `rc.2` and
-beyond may identify the current version, but they must not keep claiming to be
-the first public v6 RC once the release line has moved on.
+`frontend-modern/src/AppLayout.tsx` is the canonical authenticated-shell owner
+for prerelease presentation, and the remaining user-facing treatment is the
+compact `Preview` badge keyed from resolved release metadata. Feature pages,
+settings panels, shared components, and route-local shells must not add a
+second release-candidate banner, hardcoded GitHub release or feedback links,
+or page-local prerelease notices once that shared shell contract exists.
+Browser proof for that shell rule now lives in
+`tests/integration/tests/57-release-candidate-shell.spec.ts`, which must keep
+rc-channel builds banner-free while preserving the compact preview badge.
 
 The subsystem registry now also requires explicit proof-policy coverage for all
 shared runtime files, and shared-component guardrails fail if raw table

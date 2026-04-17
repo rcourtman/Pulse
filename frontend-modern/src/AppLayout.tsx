@@ -19,7 +19,6 @@ import SettingsIcon from 'lucide-solid/icons/settings';
 import Maximize2Icon from 'lucide-solid/icons/maximize-2';
 import Minimize2Icon from 'lucide-solid/icons/minimize-2';
 import { MobileNavBar } from '@/components/shared/MobileNavBar';
-import { ReleaseCandidateBanner } from '@/components/shared/ReleaseCandidateBanner';
 import { dialogStackHasBlockingDialog } from '@/components/shared/useDialogState';
 import { OrgSwitcher } from '@/components/OrgSwitcher';
 import { PulsePatrolLogo } from '@/components/Brand/PulsePatrolLogo';
@@ -645,12 +644,6 @@ export function AppLayout(props: AppLayoutProps) {
           />
         </div>
       </div>
-
-      <Show when={!kioskMode()}>
-        <Show when={props.versionInfo()?.channel === 'rc'}>
-          <ReleaseCandidateBanner version={props.versionInfo()?.version} />
-        </Show>
-      </Show>
 
       <Show when={!kioskMode()}>
         <div

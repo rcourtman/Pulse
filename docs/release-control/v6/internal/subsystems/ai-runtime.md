@@ -237,7 +237,11 @@ they must remain presentation-only. Prerelease banners, billing callouts, or
 other header-adjacent notices must not fork assistant open state, gate on AI
 runtime fetches, or move assistant availability logic out of
 `frontend-modern/src/stores/aiChat.ts` and `frontend-modern/src/useAppRuntimeState.ts`
-just because they share the same authenticated shell.
+just because they share the same authenticated shell. The remaining
+prerelease-shell treatment is the compact `Preview` badge on rc-channel
+builds; `frontend-modern/src/AppLayout.tsx` must not revive a standalone
+release-candidate banner, release-notes CTA, or feedback CTA that starts
+participating in assistant-shell state or modal ownership.
 That same shared shell boundary must respect blocking modal ownership.
 `frontend-modern/src/App.tsx` and `frontend-modern/src/AppLayout.tsx` may use
 the shared dialog runtime to hide the closed assistant launcher and close the

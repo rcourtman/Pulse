@@ -625,7 +625,11 @@ That same shell framing also owns user-facing prerelease labeling for
 rc-channel builds. `frontend-modern/src/AppLayout.tsx` may still key off the
 canonical `rc` channel metadata internally, but the visible badge must frame
 those builds as a preview/prerelease experience rather than implying a
-near-ready release candidate.
+near-ready release candidate. That authenticated shell must not pair the
+preview label with a second top-of-shell release-candidate warning banner or
+release-feedback CTA in `frontend-modern/src/AppLayout.tsx`; prerelease cloud
+posture stays a subtle shell label, not a public-RC callout inside the paid
+runtime chrome.
 The shared trial-start runtime is part of that same cloud-paid boundary.
 Commercial relay, onboarding, setup, Pro settings, and shared paywall
 surfaces may customize success copy, but they must route hosted handoff,
