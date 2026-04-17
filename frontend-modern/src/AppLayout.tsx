@@ -1,12 +1,4 @@
-import {
-  For,
-  Show,
-  Suspense,
-  createEffect,
-  createMemo,
-  createSignal,
-  onCleanup,
-} from 'solid-js';
+import { For, Show, Suspense, createEffect, createMemo, createSignal, onCleanup } from 'solid-js';
 import type { JSX } from 'solid-js';
 import { useLocation, useNavigate } from '@solidjs/router';
 import BoxesIcon from 'lucide-solid/icons/boxes';
@@ -18,7 +10,11 @@ import BellIcon from 'lucide-solid/icons/bell';
 import SettingsIcon from 'lucide-solid/icons/settings';
 import Maximize2Icon from 'lucide-solid/icons/maximize-2';
 import Minimize2Icon from 'lucide-solid/icons/minimize-2';
-import { MobileNavBar } from '@/components/shared/MobileNavBar';
+import {
+  MobileNavBar,
+  type MobileNavBarPlatformTab as PlatformTab,
+  type MobileNavBarUtilityTab as UtilityTab,
+} from '@/components/shared/MobileNavBar';
 import { dialogStackHasBlockingDialog } from '@/components/shared/useDialogState';
 import { OrgSwitcher } from '@/components/OrgSwitcher';
 import { PulsePatrolLogo } from '@/components/Brand/PulsePatrolLogo';
@@ -42,38 +38,12 @@ import { updateStore } from '@/stores/updates';
 import { aiChatStore } from '@/stores/aiChat';
 import { isPro } from '@/stores/licenseCommercial';
 import { presentationPolicyHidesUpgradePrompts } from '@/stores/sessionPresentationPolicy';
-import {
-  AI_CHAT_LAUNCHER_ARIA_LABEL,
-  getAIChatLauncherTitle,
-} from '@/utils/aiChatPresentation';
+import { AI_CHAT_LAUNCHER_ARIA_LABEL, getAIChatLauncherTitle } from '@/utils/aiChatPresentation';
 import type { AppConnectionStatus } from '@/useAppRuntimeState';
 
 const ROOT_INFRASTRUCTURE_PATH = buildInfrastructurePath();
 const ROOT_WORKLOADS_PATH = buildWorkloadsPath();
-
-type PlatformTab = {
-  id: string;
-  label: string;
-  route: string;
-  settingsRoute: string;
-  tooltip: string;
-  enabled: boolean;
-  live: boolean;
-  icon: JSX.Element;
-  alwaysShow: boolean;
-  badge?: string;
-};
-
-type UtilityTab = {
-  id: 'alerts' | 'ai' | 'settings';
-  label: string;
-  route: string;
-  tooltip: string;
-  badge: 'update' | 'pro' | null;
-  count: number | undefined;
-  breakdown: { warning: number; critical: number } | undefined;
-  icon: JSX.Element;
-};
+const NAV_TAB_ICON_CLASS = 'w-4 h-4 shrink-0';
 
 export interface AppLayoutProps {
   connectionStatus: () => AppConnectionStatus;
@@ -283,7 +253,7 @@ export function AppLayout(props: AppLayoutProps) {
   const getActiveTabDesktop = () => getActiveTabForPath(location.pathname);
   const getActiveTabMobile = () => getActiveTabForPath(location.pathname);
 
-  const platformTabsDesktop = createMemo(() => {
+  const platformTabs = createMemo<PlatformTab[]>(() => {
     const allPlatforms: PlatformTab[] = [
       {
         id: 'dashboard',
@@ -293,7 +263,7 @@ export function AppLayout(props: AppLayoutProps) {
         tooltip: 'Environment overview and command center',
         enabled: true,
         live: true,
-        icon: <LayoutDashboardIcon class="w-4 h-4 shrink-0" />,
+        icon: LayoutDashboardIcon,
         alwaysShow: true,
       },
       {
@@ -304,7 +274,7 @@ export function AppLayout(props: AppLayoutProps) {
         tooltip: 'All agents and nodes across platforms',
         enabled: true,
         live: true,
-        icon: <ServerIcon class="w-4 h-4 shrink-0" />,
+        icon: ServerIcon,
         alwaysShow: true,
       },
       {
@@ -315,69 +285,14 @@ export function AppLayout(props: AppLayoutProps) {
         tooltip: 'VMs, containers, and Kubernetes workloads',
         enabled: true,
         live: true,
-        icon: <BoxesIcon class="w-4 h-4 shrink-0" />,
+        icon: BoxesIcon,
         alwaysShow: true,
       },
       ...buildStorageRecoveryTabSpecs().map((tab) => ({
         ...tab,
         enabled: true,
         live: true,
-        icon: tab.id.startsWith('storage') ? (
-          <HardDriveIcon class="w-4 h-4 shrink-0" />
-        ) : (
-          <ArchiveIcon class="w-4 h-4 shrink-0" />
-        ),
-        alwaysShow: true,
-      })),
-    ];
-
-    return allPlatforms.filter((platform) => platform.alwaysShow || platform.enabled);
-  });
-
-  const platformTabsMobile = createMemo(() => {
-    const allPlatforms: PlatformTab[] = [
-      {
-        id: 'dashboard',
-        label: 'Dashboard',
-        route: DASHBOARD_PATH,
-        settingsRoute: '/settings',
-        tooltip: 'Environment overview and command center',
-        enabled: true,
-        live: true,
-        icon: <LayoutDashboardIcon class="w-4 h-4 shrink-0" />,
-        alwaysShow: true,
-      },
-      {
-        id: 'infrastructure',
-        label: 'Infrastructure',
-        route: ROOT_INFRASTRUCTURE_PATH,
-        settingsRoute: '/settings',
-        tooltip: 'All agents and nodes across platforms',
-        enabled: true,
-        live: true,
-        icon: <ServerIcon class="w-4 h-4 shrink-0" />,
-        alwaysShow: true,
-      },
-      {
-        id: 'workloads',
-        label: 'Workloads',
-        route: ROOT_WORKLOADS_PATH,
-        settingsRoute: '/settings/workloads/docker',
-        tooltip: 'VMs, containers, and Kubernetes workloads',
-        enabled: true,
-        live: true,
-        icon: <BoxesIcon class="w-4 h-4 shrink-0" />,
-        alwaysShow: true,
-      },
-      ...buildStorageRecoveryTabSpecs().map((tab) => ({
-        ...tab,
-        enabled: true,
-        live: true,
-        icon: tab.id.startsWith('storage') ? (
-          <HardDriveIcon class="w-4 h-4 shrink-0" />
-        ) : (
-          <ArchiveIcon class="w-4 h-4 shrink-0" />
-        ),
+        icon: tab.id.startsWith('storage') ? HardDriveIcon : ArchiveIcon,
         alwaysShow: true,
       })),
     ];
@@ -415,7 +330,7 @@ export function AppLayout(props: AppLayoutProps) {
         badge: null,
         count: activeAlertCount,
         breakdown,
-        icon: <BellIcon class="w-4 h-4 shrink-0" />,
+        icon: BellIcon,
       },
       {
         id: 'ai',
@@ -425,7 +340,7 @@ export function AppLayout(props: AppLayoutProps) {
         badge: null,
         count: undefined,
         breakdown: undefined,
-        icon: <PulsePatrolLogo class="w-4 h-4 shrink-0" />,
+        icon: PulsePatrolLogo,
       },
     ];
 
@@ -438,7 +353,7 @@ export function AppLayout(props: AppLayoutProps) {
         badge: updateStore.isUpdateVisible() ? 'update' : null,
         count: undefined,
         breakdown: undefined,
-        icon: <SettingsIcon class="w-4 h-4 shrink-0" />,
+        icon: SettingsIcon,
       });
     }
 
@@ -557,14 +472,24 @@ export function AppLayout(props: AppLayoutProps) {
                 class={`pulse-logo ${props.connectionStatus().kind === 'connected' && props.dataUpdated() ? 'animate-pulse-logo' : ''}`}
               >
                 <title>Pulse Logo</title>
-                <circle class="pulse-bg fill-blue-600 dark:fill-blue-500" cx="128" cy="128" r="122" />
+                <circle
+                  class="pulse-bg fill-blue-600 dark:fill-blue-500"
+                  cx="128"
+                  cy="128"
+                  r="122"
+                />
                 <circle
                   class="pulse-ring fill-none stroke-white stroke-[14] opacity-[0.92]"
                   cx="128"
                   cy="128"
                   r="84"
                 />
-                <circle class="pulse-center fill-white dark:fill-[#dbeafe]" cx="128" cy="128" r="26" />
+                <circle
+                  class="pulse-center fill-white dark:fill-[#dbeafe]"
+                  cx="128"
+                  cy="128"
+                  r="26"
+                />
               </svg>
               <span class="text-lg font-medium text-base-content">Pulse</span>
               <Show when={props.versionInfo()?.channel === 'rc'}>
@@ -604,10 +529,7 @@ export function AppLayout(props: AppLayoutProps) {
                 aria-label={kioskMode() ? 'Exit kiosk mode' : 'Enter kiosk mode'}
                 aria-pressed={kioskMode()}
               >
-                <Show
-                  when={kioskMode()}
-                  fallback={<Maximize2Icon class="h-4 w-4 flex-shrink-0" />}
-                >
+                <Show when={kioskMode()} fallback={<Maximize2Icon class="h-4 w-4 flex-shrink-0" />}>
                   <Minimize2Icon class="h-4 w-4 flex-shrink-0" />
                 </Show>
               </button>
@@ -638,10 +560,7 @@ export function AppLayout(props: AppLayoutProps) {
               </button>
             </div>
           </Show>
-          <ConnectionStatusBadge
-            connectionStatus={props.connectionStatus}
-            class="flex-shrink-0"
-          />
+          <ConnectionStatusBadge connectionStatus={props.connectionStatus} class="flex-shrink-0" />
         </div>
       </div>
 
@@ -652,10 +571,11 @@ export function AppLayout(props: AppLayoutProps) {
           aria-label="Primary navigation"
         >
           <div class="flex items-end gap-1" role="group" aria-label="Infrastructure">
-            <For each={platformTabsDesktop()}>
+            <For each={platformTabs()}>
               {(platform) => {
                 const isActive = () => getActiveTabDesktop() === platform.id;
                 const disabled = () => !platform.enabled;
+                const Icon = platform.icon;
                 const baseClasses =
                   'tab relative px-1.5 sm:px-3 py-1.5 text-xs sm:text-sm font-medium flex items-center gap-1 sm:gap-1.5 rounded-t border border-transparent transition-colors whitespace-nowrap cursor-pointer';
 
@@ -683,7 +603,7 @@ export function AppLayout(props: AppLayoutProps) {
                     onClick={() => handlePlatformClick(platform)}
                     title={title()}
                   >
-                    {platform.icon}
+                    <Icon class={NAV_TAB_ICON_CLASS} />
                     <span class="hidden xs:inline-flex items-center gap-1">
                       <span>{platform.label}</span>
                       <Show when={platform.badge}>
@@ -703,6 +623,7 @@ export function AppLayout(props: AppLayoutProps) {
               <For each={utilityTabs()}>
                 {(tab) => {
                   const isActive = () => getActiveTabDesktop() === tab.id;
+                  const Icon = tab.icon;
                   const baseClasses =
                     'tab relative px-1.5 sm:px-3 py-1.5 text-xs sm:text-sm font-medium flex items-center gap-1 sm:gap-1.5 rounded-t border border-transparent transition-colors whitespace-nowrap cursor-pointer';
 
@@ -722,7 +643,7 @@ export function AppLayout(props: AppLayoutProps) {
                       onClick={() => handleUtilityClick(tab)}
                       title={tab.tooltip}
                     >
-                      {tab.icon}
+                      <Icon class={NAV_TAB_ICON_CLASS} />
                       <span class="flex items-center gap-1">
                         <span class="hidden xs:inline">{tab.label}</span>
                         <span class="xs:hidden">{tab.label.charAt(0)}</span>
@@ -757,9 +678,7 @@ export function AppLayout(props: AppLayoutProps) {
                           />
                         </span>
                       </Show>
-                      <Show
-                        when={tab.badge === 'pro' && !presentationPolicyHidesUpgradePrompts()}
-                      >
+                      <Show when={tab.badge === 'pro' && !presentationPolicyHidesUpgradePrompts()}>
                         <span class="ml-1.5 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-900 rounded">
                           Pro
                         </span>
@@ -787,7 +706,7 @@ export function AppLayout(props: AppLayoutProps) {
       <Show when={!kioskMode()}>
         <MobileNavBar
           activeTab={getActiveTabMobile}
-          platformTabs={platformTabsMobile}
+          platformTabs={platformTabs}
           utilityTabs={utilityTabs}
           onPlatformClick={handlePlatformClick}
           onUtilityClick={handleUtilityClick}

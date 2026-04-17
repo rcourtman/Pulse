@@ -91,6 +91,18 @@ describe('App architecture', () => {
     expect(appLayoutSource).not.toContain("route: '/operations',");
     expect(appLayoutSource).not.toContain('props.connected()');
     expect(appLayoutSource).toContain('const utilityTabs = createMemo(() =>');
+    expect(appLayoutSource).toContain(
+      "type MobileNavBarPlatformTab as PlatformTab,\n  type MobileNavBarUtilityTab as UtilityTab,",
+    );
+    expect(appLayoutSource).toContain("const NAV_TAB_ICON_CLASS = 'w-4 h-4 shrink-0';");
+    expect(appLayoutSource).toContain('const platformTabs = createMemo<PlatformTab[]>(() =>');
+    expect(appLayoutSource).toContain('const Icon = platform.icon;');
+    expect(appLayoutSource).toContain('const Icon = tab.icon;');
+    expect(appLayoutSource).toContain('<Icon class={NAV_TAB_ICON_CLASS} />');
+    expect(appLayoutSource).not.toContain('type PlatformTab = {');
+    expect(appLayoutSource).not.toContain('type UtilityTab = {');
+    expect(appLayoutSource).not.toContain('const platformTabsDesktop = createMemo(() =>');
+    expect(appLayoutSource).not.toContain('const platformTabsMobile = createMemo(() =>');
     expect(appLayoutSource).not.toContain("import { isMultiTenantEnabled } from '@/stores/license';");
     expect(appLayoutSource).not.toContain('loadCommercialPosture');
     expect(appLayoutSource).not.toContain('buildReleaseNotesUrl');

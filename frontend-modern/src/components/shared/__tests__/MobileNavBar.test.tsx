@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { describe, expect, it, vi } from 'vitest';
+import type { Component } from 'solid-js';
 import mobileNavBarSource from '@/components/shared/MobileNavBar.tsx?raw';
 import mobileNavBarModelSource from '@/components/shared/mobileNavBarModel.ts?raw';
 import mobileNavBarStateSource from '@/components/shared/useMobileNavBarState.ts?raw';
@@ -10,6 +11,11 @@ window.requestAnimationFrame = ((callback: FrameRequestCallback) => {
   callback(0);
   return 1;
 }) as typeof window.requestAnimationFrame;
+
+const DashboardIcon: Component<{ class?: string }> = (props) => <span class={props.class}>DB</span>;
+const StorageIcon: Component<{ class?: string }> = (props) => <span class={props.class}>ST</span>;
+const AlertsIcon: Component<{ class?: string }> = (props) => <span class={props.class}>AL</span>;
+const SettingsIcon: Component<{ class?: string }> = (props) => <span class={props.class}>SE</span>;
 
 describe('MobileNavBar', () => {
   it('keeps the mobile nav on shell, runtime, and model owners', () => {
@@ -47,7 +53,7 @@ describe('MobileNavBar', () => {
             tooltip: 'Storage',
             enabled: true,
             live: true,
-            icon: <span>ST</span>,
+            icon: StorageIcon,
             alwaysShow: true,
           },
           {
@@ -58,7 +64,7 @@ describe('MobileNavBar', () => {
             tooltip: 'Dashboard',
             enabled: true,
             live: true,
-            icon: <span>DB</span>,
+            icon: DashboardIcon,
             alwaysShow: true,
           },
         ]}
@@ -71,7 +77,7 @@ describe('MobileNavBar', () => {
             badge: 'pro',
             count: undefined,
             breakdown: undefined,
-            icon: <span>SE</span>,
+            icon: SettingsIcon,
           },
           {
             id: 'alerts',
@@ -81,7 +87,7 @@ describe('MobileNavBar', () => {
             badge: null,
             count: 5,
             breakdown: { critical: 2, warning: 3 },
-            icon: <span>AL</span>,
+            icon: AlertsIcon,
           },
         ]}
         onPlatformClick={onPlatformClick}

@@ -1,4 +1,6 @@
-import type { JSX } from 'solid-js';
+import type { Component } from 'solid-js';
+
+export type MobileNavBarIcon = Component<{ class?: string }>;
 
 export type MobileNavBarPlatformTab = {
   id: string;
@@ -8,7 +10,7 @@ export type MobileNavBarPlatformTab = {
   tooltip: string;
   enabled: boolean;
   live: boolean;
-  icon: JSX.Element;
+  icon: MobileNavBarIcon;
   alwaysShow: boolean;
   badge?: string;
 };
@@ -21,7 +23,7 @@ export type MobileNavBarUtilityTab = {
   badge: 'update' | 'pro' | null;
   count: number | undefined;
   breakdown: { warning: number; critical: number } | undefined;
-  icon: JSX.Element;
+  icon: MobileNavBarIcon;
 };
 
 export type MobileNavBarProps = {
@@ -91,9 +93,7 @@ export function getMobileNavTabButtonClass(options: {
   enabled?: boolean;
 }): string {
   return `relative flex min-h-10 shrink-0 flex-col items-center gap-1 rounded-md px-2 py-1.5 text-[11px] font-medium transition-colors ${
-    options.active
-      ? 'bg-blue-50 text-blue-700 dark:bg-blue-900 dark:text-blue-300'
-      : 'text-muted'
+    options.active ? 'bg-blue-50 text-blue-700 dark:bg-blue-900 dark:text-blue-300' : 'text-muted'
   } ${options.enabled === false ? 'opacity-70' : ''}`.trim();
 }
 

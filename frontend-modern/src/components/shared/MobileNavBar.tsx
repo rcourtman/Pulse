@@ -1,9 +1,6 @@
 import { For, Show } from 'solid-js';
 import { type MobileNavBarProps, useMobileNavBarState } from './useMobileNavBarState';
-import {
-  getMobileNavAlertBadgeCounts,
-  getMobileNavTabButtonClass,
-} from './mobileNavBarModel';
+import { getMobileNavAlertBadgeCounts, getMobileNavTabButtonClass } from './mobileNavBarModel';
 
 export type {
   MobileNavBarPlatformTab,
@@ -13,6 +10,7 @@ export type {
 
 export function MobileNavBar(props: MobileNavBarProps) {
   const mobileNav = useMobileNavBarState(props);
+  const tabIconClass = 'h-4 w-4 shrink-0';
 
   return (
     <>
@@ -25,36 +23,43 @@ export function MobileNavBar(props: MobileNavBarProps) {
             aria-label="Mobile navigation"
           >
             <For each={mobileNav.orderedPlatformTabs()}>
-              {(platform) => (
-                <button
-                  type="button"
-                  data-tab-id={platform.id}
-                  onClick={() => mobileNav.handlePlatformClick(platform)}
-                  title={platform.tooltip}
-                  class={getMobileNavTabButtonClass({
-                    active: props.activeTab() === platform.id,
-                    enabled: platform.enabled,
-                  })}
-                >
-                  <span class="relative flex items-center justify-center">{platform.icon}</span>
-                  <span class="whitespace-nowrap">{platform.label}</span>
-                  <Show when={!platform.enabled}>
-                    <span class="rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-semibold text-amber-700 dark:bg-amber-900 dark:text-amber-200">
-                      Setup
+              {(platform) => {
+                const Icon = platform.icon;
+
+                return (
+                  <button
+                    type="button"
+                    data-tab-id={platform.id}
+                    onClick={() => mobileNav.handlePlatformClick(platform)}
+                    title={platform.tooltip}
+                    class={getMobileNavTabButtonClass({
+                      active: props.activeTab() === platform.id,
+                      enabled: platform.enabled,
+                    })}
+                  >
+                    <span class="relative flex items-center justify-center">
+                      <Icon class={tabIconClass} />
                     </span>
-                  </Show>
-                  <Show when={platform.badge}>
-                    <span class="rounded-full bg-surface-hover px-1.5 py-0.5 text-[9px] font-semibold text-muted">
-                      {platform.badge}
-                    </span>
-                  </Show>
-                </button>
-              )}
+                    <span class="whitespace-nowrap">{platform.label}</span>
+                    <Show when={!platform.enabled}>
+                      <span class="rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-semibold text-amber-700 dark:bg-amber-900 dark:text-amber-200">
+                        Setup
+                      </span>
+                    </Show>
+                    <Show when={platform.badge}>
+                      <span class="rounded-full bg-surface-hover px-1.5 py-0.5 text-[9px] font-semibold text-muted">
+                        {platform.badge}
+                      </span>
+                    </Show>
+                  </button>
+                );
+              }}
             </For>
 
             <For each={mobileNav.orderedUtilityTabs()}>
               {(tab) => {
                 const alertBadges = () => getMobileNavAlertBadgeCounts(tab);
+                const Icon = tab.icon;
 
                 return (
                   <button
@@ -67,7 +72,7 @@ export function MobileNavBar(props: MobileNavBarProps) {
                     })}
                   >
                     <span class="relative flex items-center justify-center">
-                      {tab.icon}
+                      <Icon class={tabIconClass} />
                       <Show when={alertBadges()}>
                         {(badges) => (
                           <span class="absolute -right-2 -top-1 flex items-center gap-1">
