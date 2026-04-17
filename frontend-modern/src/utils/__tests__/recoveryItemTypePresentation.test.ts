@@ -27,7 +27,7 @@ describe('recoveryItemTypePresentation', () => {
     });
     expect(getRecoveryItemTypePresentation('system-container')).toMatchObject({
       key: 'system-container',
-      label: 'Container',
+      label: 'LXC',
     });
     expect(getRecoveryItemTypePresentation('app-container')).toMatchObject({
       key: 'app-container',

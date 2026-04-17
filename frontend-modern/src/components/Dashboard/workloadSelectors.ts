@@ -8,6 +8,7 @@ import { normalizeSourcePlatformQueryValue } from '@/utils/sourcePlatforms';
 import { DEGRADED_HEALTH_STATUSES, OFFLINE_HEALTH_STATUSES } from '@/utils/status';
 import { getNodeDisplayName } from '@/utils/nodes';
 import { getCanonicalWorkloadId, resolveWorkloadType } from '@/utils/workloads';
+import { getWorkloadTypePresentation } from '@/utils/workloadTypePresentation';
 import { buildNodeByInstance, getKubernetesContextKey, workloadNodeScopeId } from './workloadTopology';
 
 export interface FilterWorkloadsParams {
@@ -263,10 +264,14 @@ export const getWorkloadGroupLabel = (
   if (normalizedNodeName) {
     return { type: '', name: normalizedNodeName };
   }
-  if (prefix === 'app-container') return { type: 'App Containers', name: context };
-  if (prefix === 'pod') return { type: 'Pods', name: context };
-  if (prefix === 'vm') return { type: 'VM', name: context };
-  if (prefix === 'system-container') return { type: 'Container', name: context };
+  if (
+    prefix === 'app-container' ||
+    prefix === 'pod' ||
+    prefix === 'vm' ||
+    prefix === 'system-container'
+  ) {
+    return { type: getWorkloadTypePresentation(prefix).pluralLabel, name: context };
+  }
   const first = guests[0];
   if (first) {
     const cluster = (first.clusterName || '').trim();

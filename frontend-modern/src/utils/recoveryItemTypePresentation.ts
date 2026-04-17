@@ -62,7 +62,7 @@ export const normalizeRecoveryItemTypeQueryValue = (
     case 'app-container':
       return 'app-container';
     case 'oci-container':
-      return 'oci-container';
+      return 'system-container';
     case 'k8s-pod':
     case 'pod':
       return 'pod';
@@ -115,15 +115,6 @@ export const getRecoveryItemTypePresentation = (
         label: 'App Container',
         title: 'Application Container',
       });
-      return {
-        key,
-        label: presentation.label,
-        badgeClasses: `${BADGE_BASE_CLASSES} ${presentation.className}`,
-        tableBadgeClasses: `${TABLE_BADGE_BASE_CLASSES} ${presentation.className}`,
-      };
-    }
-    case 'oci-container': {
-      const presentation = getWorkloadTypePresentation('oci-container');
       return {
         key,
         label: presentation.label,

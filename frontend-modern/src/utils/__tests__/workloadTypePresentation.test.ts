@@ -34,7 +34,7 @@ describe('workloadTypePresentation', () => {
     });
 
     it('retains canonical alias compatibility through the utility layer', () => {
-      expect(getWorkloadTypePresentation('docker').label).toBe('Containers');
+      expect(getWorkloadTypePresentation('docker').label).toBe('Container');
       expect(getWorkloadTypePresentation('host').label).toBe('Agent');
       expect(getWorkloadTypePresentation('k8s').label).toBe('Pod');
     });
@@ -51,7 +51,7 @@ describe('workloadTypePresentation', () => {
   describe('getWorkloadTypeLabel', () => {
     it('returns the presentation label for known and unknown workload types', () => {
       expect(getWorkloadTypeLabel('vm')).toBe('VM');
-      expect(getWorkloadTypeLabel('docker')).toBe('Containers');
+      expect(getWorkloadTypeLabel('docker')).toBe('Container');
       expect(getWorkloadTypeLabel('custom-type')).toBe('Custom Type');
     });
   });

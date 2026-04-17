@@ -30,9 +30,9 @@ describe('workloadTypeBadges', () => {
     });
 
     describe('System container types', () => {
-      it('returns Container badge for system-container', () => {
+      it('returns LXC badge for system-container', () => {
         const result = getWorkloadTypeBadge('system-container');
-        expect(result.label).toBe('Container');
+        expect(result.label).toBe('LXC');
         expect(result.title).toBe('System Container');
       });
 
@@ -50,14 +50,14 @@ describe('workloadTypeBadges', () => {
     });
 
     describe('App container types', () => {
-      it('returns Containers badge for canonical app-container', () => {
+      it('returns Container badge for canonical app-container', () => {
         const result = getWorkloadTypeBadge('app-container');
-        expect(result.label).toBe('Containers');
+        expect(result.label).toBe('Container');
       });
 
       it('retains docker alias compatibility', () => {
         const result = getWorkloadTypeBadge('docker');
-        expect(result.label).toBe('Containers');
+        expect(result.label).toBe('Container');
       });
 
       it('does not normalize removed docker-container alias', () => {
@@ -105,10 +105,10 @@ describe('workloadTypeBadges', () => {
     });
 
     describe('OCI types', () => {
-      it('returns OCI badge for oci-container', () => {
+      it('collapses oci-container into the LXC badge — OCI is a flavor of system-container, not a distinct kind', () => {
         const result = getWorkloadTypeBadge('oci-container');
-        expect(result.label).toBe('OCI');
-        expect(result.title).toBe('OCI Container');
+        expect(result.label).toBe('LXC');
+        expect(result.title).toBe('System Container');
       });
     });
 
