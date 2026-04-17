@@ -1,10 +1,16 @@
+import io
+import os
 import unittest
+from contextlib import redirect_stderr
 from pathlib import Path
+from unittest.mock import patch
 
 from canonical_completion_guard import (
+    CONTRACT_NEUTRAL_OVERRIDE_ENV,
     REPO_ROOT,
     SUBSYSTEM_REGISTRY,
     build_verification_requirements,
+    check_staged_contracts,
     contract_patch_has_substantive_change,
     infer_impacted_subsystems,
     is_ignored_runtime_file,
@@ -4206,6 +4212,89 @@ index 1111111..2222222 100644
             [],
             msg="cloud-paid runtime files must not resolve to the removed pkg/licensing fallback policy",
         )
+
+
+class ContractNeutralOverrideTest(unittest.TestCase):
+    def test_check_staged_contracts_returns_zero_when_override_set(self):
+        stderr = io.StringIO()
+        with (
+            patch.dict(
+                os.environ,
+                {CONTRACT_NEUTRAL_OVERRIDE_ENV: "contract-neutral fix"},
+                clear=False,
+            ),
+            patch(
+                "canonical_completion_guard.infer_impacted_subsystems",
+                return_value={
+                    "cloud-paid": {
+                        "contract_path": "docs/subsystems/cloud-paid.md",
+                        "verification_requirements": [],
+                    }
+                },
+            ),
+            patch(
+                "canonical_completion_guard.required_contract_updates",
+                return_value={"docs/subsystems/cloud-paid.md": {}},
+            ),
+            patch(
+                "canonical_completion_guard.staged_contract_has_substantive_change",
+                return_value=False,
+            ),
+            patch(
+                "canonical_completion_guard.staged_verification_files_for_requirement",
+                return_value=[],
+            ),
+            patch(
+                "canonical_completion_guard.format_missing_requirements",
+                return_value="BLOCKED: missing contract",
+            ),
+            redirect_stderr(stderr),
+        ):
+            self.assertEqual(check_staged_contracts(["pkg/cloud/runtime.go"]), 0)
+
+        stderr_value = stderr.getvalue()
+        self.assertIn("canonical-shape block bypassed by", stderr_value)
+        self.assertIn("contract-neutral fix", stderr_value)
+        self.assertIn("Suppressed requirements", stderr_value)
+        self.assertIn("BLOCKED: missing contract", stderr_value)
+
+    def test_check_staged_contracts_blocks_and_suggests_bypass_when_unset(self):
+        stderr = io.StringIO()
+        with (
+            patch.dict(os.environ, {CONTRACT_NEUTRAL_OVERRIDE_ENV: ""}, clear=False),
+            patch(
+                "canonical_completion_guard.infer_impacted_subsystems",
+                return_value={
+                    "cloud-paid": {
+                        "contract_path": "docs/subsystems/cloud-paid.md",
+                        "verification_requirements": [],
+                    }
+                },
+            ),
+            patch(
+                "canonical_completion_guard.required_contract_updates",
+                return_value={"docs/subsystems/cloud-paid.md": {}},
+            ),
+            patch(
+                "canonical_completion_guard.staged_contract_has_substantive_change",
+                return_value=False,
+            ),
+            patch(
+                "canonical_completion_guard.staged_verification_files_for_requirement",
+                return_value=[],
+            ),
+            patch(
+                "canonical_completion_guard.format_missing_requirements",
+                return_value="BLOCKED: missing contract",
+            ),
+            redirect_stderr(stderr),
+        ):
+            self.assertEqual(check_staged_contracts(["pkg/cloud/runtime.go"]), 1)
+
+        stderr_value = stderr.getvalue()
+        self.assertIn("BLOCKED: missing contract", stderr_value)
+        self.assertIn(CONTRACT_NEUTRAL_OVERRIDE_ENV, stderr_value)
+        self.assertIn("contract-neutral", stderr_value)
 
 
 if __name__ == "__main__":

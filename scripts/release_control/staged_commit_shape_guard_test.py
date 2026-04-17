@@ -1,9 +1,11 @@
 import io
+import os
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from unittest.mock import patch
 
 from staged_commit_shape_guard import (
+    CONTRACT_NEUTRAL_OVERRIDE_ENV,
     advanced_lane_ids,
     format_combined_errors,
     lane_progress_shape_errors,
@@ -195,6 +197,7 @@ class StagedCommitShapeGuardTest(unittest.TestCase):
         stdout = io.StringIO()
         stderr = io.StringIO()
         with (
+            patch.dict(os.environ, {CONTRACT_NEUTRAL_OVERRIDE_ENV: ""}, clear=False),
             patch("staged_commit_shape_guard.git_staged_files", return_value=["runtime/file.go"]),
             patch(
                 "staged_commit_shape_guard.canonical_commit_shape_errors",
@@ -214,10 +217,12 @@ class StagedCommitShapeGuardTest(unittest.TestCase):
             self.assertEqual(main(), 1)
 
         self.assertEqual(stdout.getvalue(), "")
-        self.assertEqual(
-            stderr.getvalue(),
-            "BLOCKED: canonical issue\n\nBLOCKED: lane progress issue\n\nBLOCKED: promotion proof issue\n",
-        )
+        stderr_value = stderr.getvalue()
+        self.assertIn("BLOCKED: canonical issue", stderr_value)
+        self.assertIn("BLOCKED: lane progress issue", stderr_value)
+        self.assertIn("BLOCKED: promotion proof issue", stderr_value)
+        self.assertIn(CONTRACT_NEUTRAL_OVERRIDE_ENV, stderr_value)
+        self.assertIn("contract-neutral", stderr_value)
 
     def test_main_reports_success_when_no_errors(self) -> None:
         stdout = io.StringIO()
@@ -234,6 +239,71 @@ class StagedCommitShapeGuardTest(unittest.TestCase):
 
         self.assertEqual(stdout.getvalue(), "Staged commit shape guard passed.\n")
         self.assertEqual(stderr.getvalue(), "")
+
+    def test_main_bypasses_canonical_errors_when_env_reason_set(self) -> None:
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        with (
+            patch.dict(
+                os.environ,
+                {CONTRACT_NEUTRAL_OVERRIDE_ENV: "behavioral bug fix #1429"},
+                clear=False,
+            ),
+            patch("staged_commit_shape_guard.git_staged_files", return_value=["runtime/file.go"]),
+            patch(
+                "staged_commit_shape_guard.canonical_commit_shape_errors",
+                return_value=["BLOCKED: canonical issue"],
+            ),
+            patch("staged_commit_shape_guard.lane_progress_shape_errors", return_value=[]),
+            patch("staged_commit_shape_guard.staged_promotion_proof_errors", return_value=[]),
+            redirect_stdout(stdout),
+            redirect_stderr(stderr),
+        ):
+            self.assertEqual(main(), 0)
+
+        self.assertEqual(stdout.getvalue(), "Staged commit shape guard passed.\n")
+        stderr_value = stderr.getvalue()
+        self.assertIn("canonical-shape block bypassed by", stderr_value)
+        self.assertIn("behavioral bug fix #1429", stderr_value)
+        self.assertIn("Suppressed canonical-shape errors", stderr_value)
+        self.assertIn("BLOCKED: canonical issue", stderr_value)
+
+    def test_main_bypass_does_not_suppress_lane_or_promotion_errors(self) -> None:
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        with (
+            patch.dict(
+                os.environ,
+                {CONTRACT_NEUTRAL_OVERRIDE_ENV: "behavioral bug fix #1429"},
+                clear=False,
+            ),
+            patch("staged_commit_shape_guard.git_staged_files", return_value=["runtime/file.go"]),
+            patch(
+                "staged_commit_shape_guard.canonical_commit_shape_errors",
+                return_value=["BLOCKED: canonical issue"],
+            ),
+            patch(
+                "staged_commit_shape_guard.lane_progress_shape_errors",
+                return_value=["BLOCKED: lane progress issue"],
+            ),
+            patch(
+                "staged_commit_shape_guard.staged_promotion_proof_errors",
+                return_value=["BLOCKED: promotion proof issue"],
+            ),
+            redirect_stdout(stdout),
+            redirect_stderr(stderr),
+        ):
+            self.assertEqual(main(), 1)
+
+        stderr_value = stderr.getvalue()
+        self.assertIn("canonical-shape block bypassed by", stderr_value)
+        self.assertIn("BLOCKED: lane progress issue", stderr_value)
+        self.assertIn("BLOCKED: promotion proof issue", stderr_value)
+        # When the bypass is active the discoverability hint should not repeat.
+        self.assertNotIn(
+            "If this is a contract-neutral change",
+            stderr_value,
+        )
 
 
 if __name__ == "__main__":

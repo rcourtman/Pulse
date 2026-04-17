@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -18,6 +19,21 @@ from typing import Dict, List, Sequence, Set
 from control_plane import DEFAULT_CONTROL_PLANE
 from repo_file_io import load_repo_json
 from subsystem_contracts import load_contract_index, referenced_contracts_for_path
+
+
+CONTRACT_NEUTRAL_OVERRIDE_ENV = "PULSE_ALLOW_CONTRACT_NEUTRAL_COMMIT"
+
+
+def contract_neutral_override_reason() -> str | None:
+    """Return the operator-supplied reason for bypassing canonical-shape checks.
+
+    The `PULSE_ALLOW_CONTRACT_NEUTRAL_COMMIT` env var opts a single commit out of
+    the canonical-shape block when the author knows the runtime change is
+    behavioral (no public-contract delta). A non-empty value is required so the
+    reason is auditable in stderr; empty strings are treated as unset.
+    """
+    reason = os.environ.get(CONTRACT_NEUTRAL_OVERRIDE_ENV, "").strip()
+    return reason or None
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -518,12 +534,34 @@ def check_staged_contracts(staged_files: Sequence[str]) -> int:
     if not missing_contracts and not insufficient_contract_updates and not missing_verification:
         return 0
 
+    formatted = format_missing_requirements(
+        missing_contracts,
+        insufficient_contract_updates,
+        missing_verification,
+    )
+
+    override_reason = contract_neutral_override_reason()
+    if override_reason:
+        print(
+            "Canonical completion guard: canonical-shape block bypassed by "
+            f"{CONTRACT_NEUTRAL_OVERRIDE_ENV}={override_reason!r}",
+            file=sys.stderr,
+        )
+        print("Suppressed requirements (logged for audit):", file=sys.stderr)
+        print(formatted, file=sys.stderr)
+        return 0
+
+    print(formatted, file=sys.stderr)
     print(
-        format_missing_requirements(
-            missing_contracts,
-            insufficient_contract_updates,
-            missing_verification,
-        ),
+        "",
+        file=sys.stderr,
+    )
+    print(
+        "If this change is contract-neutral (behavioral fix, no public-contract "
+        "delta), you may bypass only this block by setting "
+        f"{CONTRACT_NEUTRAL_OVERRIDE_ENV}=<reason>. The reason is logged to "
+        "stderr. Sensitivity, gitleaks, governance-stage, control-plane, "
+        "status, registry, and contract audits still run.",
         file=sys.stderr,
     )
     return 1

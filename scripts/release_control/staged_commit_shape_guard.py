@@ -9,6 +9,8 @@ import sys
 from typing import Sequence
 
 from canonical_completion_guard import (
+    CONTRACT_NEUTRAL_OVERRIDE_ENV,
+    contract_neutral_override_reason,
     format_missing_requirements,
     git_staged_files as canonical_git_staged_files,
     infer_impacted_subsystems,
@@ -304,7 +306,18 @@ def format_combined_errors(errors: Sequence[str]) -> str:
 
 def main() -> int:
     staged_files = git_staged_files()
-    errors = canonical_commit_shape_errors(staged_files)
+    override_reason = contract_neutral_override_reason()
+    canonical_errors = canonical_commit_shape_errors(staged_files)
+    if canonical_errors and override_reason:
+        print(
+            "Staged commit shape guard: canonical-shape block bypassed by "
+            f"{CONTRACT_NEUTRAL_OVERRIDE_ENV}={override_reason!r}",
+            file=sys.stderr,
+        )
+        print("Suppressed canonical-shape errors (logged for audit):", file=sys.stderr)
+        print(format_combined_errors(canonical_errors), file=sys.stderr)
+        canonical_errors = []
+    errors = list(canonical_errors)
     errors.extend(lane_progress_shape_errors(staged_files))
     errors.extend(staged_promotion_proof_errors(staged_files))
     if not errors:
@@ -312,6 +325,16 @@ def main() -> int:
         return 0
 
     print(format_combined_errors(errors), file=sys.stderr)
+    if not override_reason:
+        print(
+            "\nIf this is a contract-neutral change (behavioral bug fix with no "
+            "public-contract delta) you may bypass only the canonical-shape "
+            f"block by setting {CONTRACT_NEUTRAL_OVERRIDE_ENV}=<reason>. The "
+            "reason is logged to stderr for audit. Lane-progress, promotion-proof, "
+            "sensitivity, gitleaks, governance-stage, control-plane, status, "
+            "registry, and contract audits still run.",
+            file=sys.stderr,
+        )
     return 1
 
 
