@@ -958,6 +958,7 @@ describe('Dashboard performance contract', () => {
       expect(dashboardWorkloadTableSource).not.toContain('GuestDrawer');
       expect(workloadTableHeaderSource).toContain('TableHead');
       expect(workloadTableHeaderSource).toContain("col.sortKey as WorkloadSortKey");
+      expect(workloadTableHeaderSource).toContain('width={col.width}');
       expect(workloadTableHeaderSource).not.toContain('style={{');
       expect(workloadTableHeaderSource).not.toContain('style={');
       expect(workloadTableHeaderSource).not.toContain('NodeGroupHeader');

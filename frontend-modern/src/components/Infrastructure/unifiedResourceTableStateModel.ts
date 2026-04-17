@@ -197,13 +197,13 @@ export const getUnifiedResourceTableColumnPresentations = (
     : buildUnifiedResourceTableColumnPresentation('min-w-[220px]'),
   metricColumn: isMobile
     ? buildUnifiedResourceTableColumnPresentation('min-w-[65px]', 70)
-    : buildUnifiedResourceTableColumnPresentation('min-w-[140px] max-w-[180px]'),
+    : buildUnifiedResourceTableColumnPresentation('min-w-[144px] max-w-[144px]', 144),
   ioColumn: isMobile
     ? buildUnifiedResourceTableColumnPresentation('min-w-[180px]', 180)
-    : buildUnifiedResourceTableColumnPresentation('min-w-[160px] max-w-[180px]', 160),
+    : buildUnifiedResourceTableColumnPresentation('min-w-[192px] max-w-[192px]', 192),
   sourceColumn: isMobile
     ? buildUnifiedResourceTableColumnPresentation('min-w-[140px]', 140)
-    : buildUnifiedResourceTableColumnPresentation('min-w-[160px]', 160),
+    : buildUnifiedResourceTableColumnPresentation('min-w-[144px] max-w-[144px]', 144),
   uptimeColumn: isMobile
     ? buildUnifiedResourceTableColumnPresentation('min-w-[70px] max-w-[80px]', 70)
     : buildUnifiedResourceTableColumnPresentation('min-w-[80px] max-w-[80px]', 80),

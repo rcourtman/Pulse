@@ -113,7 +113,9 @@ describe('unifiedResourceTableStateModel', () => {
     expect(mobileColumns.resourceColumn.width).toBe('100%');
     expect(mobileColumns.metricColumn.width).toBe(70);
     expect(desktopColumns.resourceColumn.className).toContain('min-w-[220px]');
-    expect(desktopColumns.ioColumn.width).toBe(160);
+    expect(desktopColumns.metricColumn.width).toBe(144);
+    expect(desktopColumns.ioColumn.width).toBe(192);
+    expect(desktopColumns.sourceColumn.width).toBe(144);
     expect(shouldShowUnifiedResourceHostTable(0, 0)).toBe(true);
     expect(shouldShowUnifiedResourceHostTable(0, 2)).toBe(false);
     expect(shouldShowUnifiedResourceHostTable(3, 2)).toBe(true);

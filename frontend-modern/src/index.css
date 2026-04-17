@@ -194,6 +194,12 @@
     max-width: 100px;
   }
 
+  .workload-table [data-workload-col='type'] {
+    width: 60px;
+    min-width: 60px;
+    max-width: 80px;
+  }
+
   .workload-table [data-workload-col='vmid'],
   .workload-table [data-workload-col='ip'],
   .workload-table [data-workload-col='os'] {
@@ -250,9 +256,9 @@
 
   .workload-table [data-workload-col='netIo'],
   .workload-table [data-workload-col='diskIo'] {
-    width: 130px;
-    min-width: 120px;
-    max-width: 130px;
+    width: 170px;
+    min-width: 170px;
+    max-width: 170px;
   }
 
   .workload-table [data-workload-col='link'] {

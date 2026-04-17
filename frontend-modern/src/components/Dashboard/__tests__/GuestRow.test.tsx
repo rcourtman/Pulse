@@ -740,6 +740,18 @@ describe('GUEST_COLUMNS', () => {
     expect(toggleableIds).toContain('diskIo');
   });
 
+  it('keeps the Type and I/O column width contract aligned with the desktop table layout', () => {
+    const typeColumn = GUEST_COLUMNS.find((column) => column.id === 'type');
+    const netIoColumn = GUEST_COLUMNS.find((column) => column.id === 'netIo');
+    const diskIoColumn = GUEST_COLUMNS.find((column) => column.id === 'diskIo');
+
+    expect(typeColumn?.width).toBe('60px');
+    expect(netIoColumn?.width).toBe('170px');
+    expect(netIoColumn?.minWidth).toBe('170px');
+    expect(diskIoColumn?.width).toBe('170px');
+    expect(diskIoColumn?.minWidth).toBe('170px');
+  });
+
   it('non-toggleable columns include core metrics', () => {
     const nonToggleable = GUEST_COLUMNS.filter((c) => !c.toggleable);
     const ids = nonToggleable.map((c) => c.id);
