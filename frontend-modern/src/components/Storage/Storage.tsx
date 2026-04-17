@@ -74,10 +74,7 @@ const Storage: Component = () => {
       class="space-y-4"
       data-testid="storage-page"
     >
-      <PageHeader
-        title="Storage"
-        description="Track capacity, cluster health, and storage alerts across local and distributed systems."
-      />
+      <PageHeader title="Storage" />
 
       <StickySummarySection desktopOnly={false}>
         <StoragePageSummary

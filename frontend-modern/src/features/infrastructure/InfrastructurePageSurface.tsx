@@ -87,10 +87,7 @@ export function InfrastructurePageSurface() {
       data-testid="infrastructure-page"
       class="space-y-4"
     >
-      <PageHeader
-        title="Infrastructure"
-        description="Inspect discovered systems, cluster health, and resource status across the monitored estate."
-      />
+      <PageHeader title="Infrastructure" />
 
       <Show
         when={!loading() || initialLoadComplete()}
