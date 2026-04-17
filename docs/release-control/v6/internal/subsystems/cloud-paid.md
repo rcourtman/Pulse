@@ -1170,15 +1170,23 @@ framed as unlimited core monitoring plus their bundle-specific extras rather
 than drifting back to bounded monitored-system sales copy, vague `systems`, or
 device-style language. Pro+ may appear only as a legacy continuity tier.
 The shared license presentation owner also holds self-hosted Pro settings
-upsell and trial-ended notice copy for `ProLicensePlanSection.tsx`; that
-surface must consume canonical helper notices instead of carrying inline
-upgrade copy or local status-tone branches.
+trial-ended notice copy for `ProLicensePlanSection.tsx`; that surface must
+consume canonical helper notices instead of carrying inline upgrade copy or
+local status-tone branches.
 That same plan-section boundary must also defer notice resolution to component
 runtime. `frontend-modern/src/components/Settings/ProLicensePlanSection.tsx`
-may not compute trial-ended or inactive-upsell notices at module scope,
-because hosted settings bundles must survive top-level import ordering without
-throwing initialization-time `ReferenceError` crashes before the workspace UI
-mounts.
+may not compute trial-ended notices at module scope, because hosted settings
+bundles must survive top-level import ordering without throwing
+initialization-time `ReferenceError` crashes before the workspace UI mounts.
+That same plan-section boundary also owns the rule that Community (non-paid)
+users must not be funneled through upgrade CTAs inside Settings -> Plan.
+`ProLicensePlanSection.tsx` must not render the monitored-system upgrade
+arrival banner, the trial-start CTA, or the inactive-Pro upsell notice to
+users without paid features, and the capacity-section `Upgrade plan` button
+must be gated on `hasPaidFeatures`. Self-hosted Pro marketing lives at
+`pulserelay.pro/pricing`; the Settings plan surface must show factual
+license state for Community users and leave discovery of paid tiers to
+surfaces outside the plan page.
 That same counted-unit boundary also owns the disclosure rule for retail copy:
 default billing and pricing surfaces should use concise monitored-system copy,
 while the full counted-unit definition appears only behind explicit disclosure

@@ -110,11 +110,7 @@ const ProLicensePanelContent: Component = () => {
                   onReload={() => void state.loadPanelData()}
                   purchaseActivationAction={state.purchaseActivationAction()}
                   purchaseActivationNotice={state.purchaseActivationNotice()}
-                  showMonitoredSystemUpgradeArrival={state.showMonitoredSystemUpgradeArrival()}
-                  showTrialStart={state.showTrialStart()}
-                  startingTrial={state.startingTrial()}
                   statusPresentation={state.statusPresentation()}
-                  onStartTrial={() => void state.handleStartTrial()}
                   trialActivationNotice={state.trialActivationNotice()}
                   trialEnded={state.trialEnded()}
                 />

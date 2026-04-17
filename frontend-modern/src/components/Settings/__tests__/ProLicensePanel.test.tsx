@@ -185,7 +185,7 @@ describe('ProLicensePanel', () => {
     ).not.toBeInTheDocument();
   });
 
-  it('shows start trial action only when trial_eligible is true', async () => {
+  it('does not show a trial-start CTA on the Pro license settings page', async () => {
     renderPanel();
 
     await waitFor(() => {
@@ -193,7 +193,9 @@ describe('ProLicensePanel', () => {
     });
 
     expect(screen.getByText('Pulse Pro')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /start 14-day pro trial/i })).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /start 14-day pro trial/i }),
+    ).not.toBeInTheDocument();
   });
 
   it('hides start trial action and shows trial-ended banner when trial was already used', async () => {
@@ -588,17 +590,6 @@ describe('ProLicensePanel', () => {
     expect(screen.queryByText('Unlimited Instances')).not.toBeInTheDocument();
   });
 
-  it('starts trial and records conversion metric when user clicks start', async () => {
-    renderPanel();
-
-    fireEvent.click(screen.getByRole('button', { name: /start 14-day pro trial/i }));
-
-    await waitFor(() => {
-      expect(startProTrialMock).toHaveBeenCalledTimes(1);
-    });
-    expect(notificationSuccessMock).toHaveBeenCalledWith('Pro trial started');
-  });
-
   it('shows migration guidance when the pasted key looks like a legacy v5 license', async () => {
     renderPanel();
 
@@ -747,7 +738,7 @@ describe('ProLicensePanel', () => {
     expect(screen.getByRole('button', { name: 'Hide counting rules' })).toBeInTheDocument();
   });
 
-  it('shows a monitored-system upgrade arrival callout on the plan upgrade route', async () => {
+  it('does not render a monitored-system upgrade arrival callout on the plan upgrade route', async () => {
     useLocationMock.mockReturnValue({
       search: `?intent=${SELF_HOSTED_PRO_BILLING_MONITORED_SYSTEM_INTENT}`,
       pathname: '/settings/system/billing/plan',
@@ -756,18 +747,10 @@ describe('ProLicensePanel', () => {
 
     renderPanel();
 
-    expect(screen.getByText('Compare self-hosted plans')).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        'Community keeps core monitoring free. Compare Relay and Pro in Pulse Account, then return here with Pulse Pro activated automatically.',
-      ),
-    ).toBeInTheDocument();
+    expect(screen.queryByText('Compare self-hosted plans')).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Compare plans' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Hide counting rules' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'View counting rules' })).not.toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Compare plans' })).toHaveAttribute(
-      'href',
-      getSelfHostedPurchaseStartUrl('self_hosted_plan'),
-    );
   });
 
   it('keeps monitored-system counting guidance out of the plan surface', async () => {
@@ -876,62 +859,6 @@ describe('ProLicensePanel', () => {
     ).not.toBeInTheDocument();
   });
 
-  it('surfaces backend trial-start messages instead of collapsing every conflict into already-used', async () => {
-    startProTrialMock.mockRejectedValue(
-      Object.assign(
-        new Error('Trial cannot be started while a paid v5 license migration is pending'),
-        {
-          status: 409,
-          code: 'trial_not_available',
-        },
-      ),
-    );
-
-    renderPanel();
-
-    fireEvent.click(screen.getByRole('button', { name: /start 14-day pro trial/i }));
-
-    await waitFor(() => {
-      expect(notificationErrorMock).toHaveBeenCalledWith(
-        'Trial cannot be started while a paid v5 license migration is pending',
-      );
-    });
-  });
-
-  it('maps explicit trial-already-used errors to the canonical message', async () => {
-    startProTrialMock.mockRejectedValue(
-      Object.assign(new Error('conflict'), {
-        status: 409,
-        code: 'trial_already_used',
-      }),
-    );
-
-    renderPanel();
-
-    fireEvent.click(screen.getByRole('button', { name: /start 14-day pro trial/i }));
-
-    await waitFor(() => {
-      expect(notificationErrorMock).toHaveBeenCalledWith('Trial already used');
-    });
-  });
-
-  it('maps rate-limited trial starts to the retry-after guidance when available', async () => {
-    startProTrialMock.mockRejectedValue(
-      Object.assign(new Error('rate limited'), {
-        status: 429,
-        retryAfterSeconds: 120,
-      }),
-    );
-
-    renderPanel();
-
-    fireEvent.click(screen.getByRole('button', { name: /start 14-day pro trial/i }));
-
-    await waitFor(() => {
-      expect(notificationErrorMock).toHaveBeenCalledWith('Try again in about 2 minutes');
-    });
-  });
-
   it('keeps Pro license split into shell, runtime, and plan owners', () => {
     expect(proLicensePanelSource).toContain('./useProLicensePanelState');
     expect(proLicensePanelSource).toContain('sessionPresentationPolicyResolved');
@@ -959,24 +886,15 @@ describe('ProLicensePanel', () => {
     expect(proLicensePlanSectionSource).toContain('getLicenseStatusLoadingState');
     expect(proLicensePlanSectionSource).toContain('getNoActiveProLicenseState');
     expect(proLicensePlanSectionSource).toContain('getTrialEndedProLicenseNotice');
-    expect(proLicensePlanSectionSource).toContain('getInactiveProUpsellNotice');
+    expect(proLicensePlanSectionSource).not.toContain('getInactiveProUpsellNotice');
     expect(proLicensePlanSectionSource).not.toContain('MonitoredSystemDefinitionDisclosure');
-    expect(proLicensePlanSectionSource).toContain('trialStartTitle');
-    expect(proLicensePlanSectionSource).toContain('trialStartIdleActionLabel');
-    expect(proLicensePlanSectionSource).not.toContain(
-      'const trialEndedNotice = getTrialEndedProLicenseNotice();',
-    );
-    expect(proLicensePlanSectionSource).not.toContain(
-      'const inactiveProUpsellNotice = getInactiveProUpsellNotice();',
-    );
+    expect(proLicensePlanSectionSource).not.toContain('trialStartTitle');
+    expect(proLicensePlanSectionSource).not.toContain('trialStartIdleActionLabel');
     expect(proLicensePlanSectionSource).toContain(
       'const trialEndedNotice = props.trialEnded ? getTrialEndedProLicenseNotice() : null;',
     );
-    expect(proLicensePlanSectionSource).toContain(
-      '!props.hasPaidFeatures && !props.trialEnded ? getInactiveProUpsellNotice() : null;',
-    );
-    expect(proLicensePlanSectionSource).toContain('monitoredSystemUpgradeArrivalTitle');
-    expect(proLicensePlanSectionSource).toContain(
+    expect(proLicensePlanSectionSource).not.toContain('monitoredSystemUpgradeArrivalTitle');
+    expect(proLicensePlanSectionSource).not.toContain(
       "resolveSelfHostedPurchaseStartDestination('self_hosted_plan')",
     );
     expect(proLicensePlanSectionSource).not.toContain('Your Pro trial has ended');

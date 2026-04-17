@@ -4,15 +4,12 @@ import { UpgradeLink } from '@/components/shared/UpgradeLink';
 import { getUpgradeActionDestination } from '@/stores/licenseCommercial';
 import { licenseEntitlementsLoadError } from '@/stores/licenseEntitlements';
 import {
-  getInactiveProUpsellNotice,
   getLicenseStatusLoadingState,
   getNoActiveProLicenseState,
   getTrialEndedProLicenseNotice,
 } from '@/utils/licensePresentation';
-import { resolveSelfHostedPurchaseStartDestination } from '@/utils/pricingHandoff';
 import type { UpgradeDestination } from '@/utils/upgradeNavigation';
 import { CommercialStatGrid } from './CommercialBillingSections';
-import { SELF_HOSTED_PRO_BILLING_PRESENTATION } from './selfHostedBillingPresentation';
 
 interface Notice {
   title: string;
@@ -50,7 +47,6 @@ interface ProLicensePlanSectionProps {
   monitoredSystemCapacitySection: MonitoredSystemCapacitySection | null;
   monitoredSystemContinuityNotice: Notice | null;
   onReload: () => void;
-  onStartTrial: () => void;
   purchaseActivationNotice: Notice | null;
   purchaseActivationAction: {
     label: string;
@@ -60,9 +56,6 @@ interface ProLicensePlanSectionProps {
     badgeClass: string;
     label: string;
   };
-  showMonitoredSystemUpgradeArrival: boolean;
-  showTrialStart: boolean;
-  startingTrial: boolean;
   trialActivationNotice: Notice | null;
   trialEnded: boolean;
 }
@@ -76,10 +69,6 @@ const formatDate = (value?: string | null) => {
 
 export const ProLicensePlanSection: Component<ProLicensePlanSectionProps> = (props) => {
   const trialEndedNotice = props.trialEnded ? getTrialEndedProLicenseNotice() : null;
-  const inactiveProUpsellNotice =
-    !props.hasPaidFeatures && !props.trialEnded ? getInactiveProUpsellNotice() : null;
-  const monitoredSystemUpgradeDestination = () =>
-    resolveSelfHostedPurchaseStartDestination('self_hosted_plan');
 
   return (
     <>
@@ -101,22 +90,6 @@ export const ProLicensePlanSection: Component<ProLicensePlanSectionProps> = (pro
           </div>
         )}
       </Show>
-      <Show when={props.showMonitoredSystemUpgradeArrival}>
-        <div class="mb-4 rounded-md border border-primary/30 bg-primary/5 p-3 text-sm text-base-content">
-          <p class="font-medium">
-            {SELF_HOSTED_PRO_BILLING_PRESENTATION.monitoredSystemUpgradeArrivalTitle}
-          </p>
-          <p class="mt-1 text-xs opacity-90">
-            {SELF_HOSTED_PRO_BILLING_PRESENTATION.monitoredSystemUpgradeArrivalBody}
-          </p>
-          <UpgradeLink
-            class="inline-flex items-center gap-1 mt-2 text-xs font-medium text-primary hover:underline"
-            destination={monitoredSystemUpgradeDestination()}
-          >
-            {SELF_HOSTED_PRO_BILLING_PRESENTATION.monitoredSystemUpgradeArrivalActionLabel}
-          </UpgradeLink>
-        </div>
-      </Show>
       <Show when={props.trialActivationNotice}>
         {(notice) => (
           <div class={`mb-4 rounded-md border p-3 text-sm ${notice().tone}`}>
@@ -124,26 +97,6 @@ export const ProLicensePlanSection: Component<ProLicensePlanSectionProps> = (pro
             <p class="mt-1 text-xs opacity-90">{notice().body}</p>
           </div>
         )}
-      </Show>
-      <Show when={props.showTrialStart}>
-        <div class="mb-4 rounded-md border border-border bg-surface-alt p-3">
-          <p class="text-sm font-medium text-base-content">
-            {SELF_HOSTED_PRO_BILLING_PRESENTATION.trialStartTitle}
-          </p>
-          <p class="mt-1 text-xs text-muted">
-            {SELF_HOSTED_PRO_BILLING_PRESENTATION.trialStartBody}
-          </p>
-          <button
-            type="button"
-            class="mt-3 inline-flex min-h-10 sm:min-h-9 items-center justify-center px-4 py-2.5 text-sm font-medium rounded-md bg-emerald-600 text-white hover:bg-emerald-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-            disabled={props.startingTrial}
-            onClick={props.onStartTrial}
-          >
-            {props.startingTrial
-              ? SELF_HOSTED_PRO_BILLING_PRESENTATION.trialStartPendingActionLabel
-              : SELF_HOSTED_PRO_BILLING_PRESENTATION.trialStartIdleActionLabel}
-          </button>
-        </div>
       </Show>
       <Show when={props.commercialMigrationNotice}>
         {(notice) => (
@@ -202,7 +155,7 @@ export const ProLicensePlanSection: Component<ProLicensePlanSectionProps> = (pro
               >
                 Review monitored systems
               </UpgradeLink>
-              <Show when={section().upgradeDestination}>
+              <Show when={props.hasPaidFeatures ? section().upgradeDestination : null}>
                 {(destination) => (
                   <UpgradeLink
                     class="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
@@ -297,18 +250,6 @@ export const ProLicensePlanSection: Component<ProLicensePlanSectionProps> = (pro
             </Show>
           </Show>
 
-          <Show when={!props.hasPaidFeatures && !props.trialEnded && inactiveProUpsellNotice}>
-            <div class={`rounded-md border p-3 text-sm ${inactiveProUpsellNotice?.tone ?? ''}`}>
-              <p class="font-medium">{inactiveProUpsellNotice?.title}</p>
-              <p class="text-xs mt-1 opacity-90">{inactiveProUpsellNotice?.body}</p>
-              <UpgradeLink
-                class="inline-flex items-center gap-1 mt-2 text-xs font-medium hover:underline"
-                destination={getUpgradeActionDestination('ai_autofix')}
-              >
-                {inactiveProUpsellNotice?.actionLabel}
-              </UpgradeLink>
-            </div>
-          </Show>
         </Show>
       </Show>
     </>
