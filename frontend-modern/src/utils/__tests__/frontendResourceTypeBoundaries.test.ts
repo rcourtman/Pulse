@@ -978,7 +978,7 @@ describe('frontend resource type boundaries', () => {
     );
     expect(infrastructureSummaryStateSource).not.toContain("displaySeries().map((series) => ({");
     expect(infrastructureSummaryStateSource).not.toContain(
-      "isAwaitingFirstSample() ? 'Waiting for first sample' : 'No history yet'",
+      "isAwaitingFirstSample() ? 'Gathering first sample…' : 'Building trend history…'",
     );
     expect(infrastructureSummaryStateSource).not.toContain("getOrgID() || 'default'");
     expect(storageSummaryCacheSource).toContain('normalizeOrgScope(getOrgID())');

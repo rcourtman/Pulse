@@ -65,7 +65,7 @@ describe('TrendCharts', () => {
           infrastructure: {
             cpu: new Map(),
             memory: new Map(),
-            emptyMessage: 'Waiting for first sample',
+            emptyMessage: 'Gathering first sample…',
           },
         })}
         overview={makeOverview()}
@@ -74,6 +74,6 @@ describe('TrendCharts', () => {
       />
     ));
 
-    expect(screen.getByText('Waiting for first sample')).toBeTruthy();
+    expect(screen.getByText('Gathering first sample…')).toBeTruthy();
   });
 });

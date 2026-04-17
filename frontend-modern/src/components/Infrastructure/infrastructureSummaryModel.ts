@@ -281,7 +281,7 @@ export function isInfrastructureAwaitingFirstSample(options: {
 }
 
 export function buildInfrastructureEmptyHistoryLabel(isAwaitingFirstSample: boolean): string {
-  return isAwaitingFirstSample ? 'Waiting for first sample' : 'No history yet';
+  return isAwaitingFirstSample ? 'Gathering first sample…' : 'Building trend history…';
 }
 
 export function buildInfrastructureEmptyMessage(

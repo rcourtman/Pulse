@@ -157,10 +157,10 @@ describe('infrastructureSummaryModel', () => {
     ]);
     expect(hasInfrastructureSeriesData(series, 'network')).toBe(true);
     expect(hasInfrastructureSeriesData(series, 'diskio')).toBe(false);
-    expect(buildInfrastructureEmptyHistoryLabel(true)).toBe('Waiting for first sample');
-    expect(buildInfrastructureEmptyHistoryLabel(false)).toBe('No history yet');
-    expect(buildInfrastructureEmptyMessage(true, 'No history yet')).toBe('Trend data unavailable');
-    expect(buildInfrastructureEmptyMessage(false, 'No history yet')).toBe('No history yet');
+    expect(buildInfrastructureEmptyHistoryLabel(true)).toBe('Gathering first sample…');
+    expect(buildInfrastructureEmptyHistoryLabel(false)).toBe('Building trend history…');
+    expect(buildInfrastructureEmptyMessage(true, 'Building trend history…')).toBe('Trend data unavailable');
+    expect(buildInfrastructureEmptyMessage(false, 'Building trend history…')).toBe('Building trend history…');
   });
 
   it('keeps network and diskio series on canonical ids when focused summary selection narrows the view', () => {

@@ -289,7 +289,7 @@ describe('UnifiedResourceTable performance contract', () => {
         "displaySeries().map((series) => ({",
       );
       expect(infrastructureSummaryStateSource).not.toContain(
-        "isAwaitingFirstSample() ? 'Waiting for first sample' : 'No history yet'",
+        "isAwaitingFirstSample() ? 'Gathering first sample…' : 'Building trend history…'",
       );
       expect(infrastructureSummaryStateSource).not.toContain("fetchFailed() ? 'Trend data unavailable' : emptyHistoryLabel()");
       expect(infrastructureSummaryModelSource).toContain(

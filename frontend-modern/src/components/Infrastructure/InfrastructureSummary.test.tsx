@@ -285,7 +285,7 @@ describe('InfrastructureSummary range behavior', () => {
 
     await waitFor(() => {
       expect(container.querySelector('svg.cursor-crosshair')).toBeNull();
-      expect(container.textContent).toContain('Waiting for first sample');
+      expect(container.textContent).toContain('Gathering first sample…');
     });
   });
 
@@ -310,7 +310,7 @@ describe('InfrastructureSummary range behavior', () => {
     });
 
     await waitFor(() => {
-      expect(container.textContent).toContain('Waiting for first sample');
+      expect(container.textContent).toContain('Gathering first sample…');
     });
   });
 
@@ -620,7 +620,7 @@ describe('InfrastructureSummary range behavior', () => {
     });
 
     await waitFor(() => {
-      expect(container.textContent).not.toContain('No history yet');
+      expect(container.textContent).not.toContain('Building trend history…');
     });
   });
 
