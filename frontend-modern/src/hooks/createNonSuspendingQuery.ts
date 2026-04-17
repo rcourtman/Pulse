@@ -19,6 +19,7 @@ export function createNonSuspendingQuery<T, K>(options: CreateNonSuspendingQuery
   const [value, setValue] = createSignal<T>(options.initialValue);
   const [loading, setLoading] = createSignal(false);
   const [error, setError] = createSignal<unknown>(null);
+  const [resolvedOnce, setResolvedOnce] = createSignal(false);
 
   let latestRequestId = 0;
 
@@ -27,6 +28,7 @@ export function createNonSuspendingQuery<T, K>(options: CreateNonSuspendingQuery
     setValue(() => options.initialValue);
     setLoading(false);
     setError(null);
+    setResolvedOnce(false);
     return options.initialValue;
   };
 
@@ -50,8 +52,11 @@ export function createNonSuspendingQuery<T, K>(options: CreateNonSuspendingQuery
       }
       return value();
     } finally {
-      if (requestId === latestRequestId && !runOptions.background) {
-        setLoading(false);
+      if (requestId === latestRequestId) {
+        setResolvedOnce(true);
+        if (!runOptions.background) {
+          setLoading(false);
+        }
       }
     }
   };
@@ -84,6 +89,7 @@ export function createNonSuspendingQuery<T, K>(options: CreateNonSuspendingQuery
     error,
     loading,
     refetch,
+    resolvedOnce,
     value,
   };
 }

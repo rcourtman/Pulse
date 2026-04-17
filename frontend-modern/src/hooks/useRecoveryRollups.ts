@@ -136,5 +136,6 @@ export function useRecoveryRollups(query?: () => RecoveryRollupsQuery | null | u
   return {
     rollups,
     refetch: state.refetch,
+    resolvedOnce: state.resolvedOnce,
   };
 }

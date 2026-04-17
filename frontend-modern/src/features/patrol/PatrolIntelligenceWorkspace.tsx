@@ -126,7 +126,7 @@ export function PatrolIntelligenceWorkspace(props: { state: PatrolIntelligenceSt
       <Show when={state.activeTab() === 'history'}>
         <RunHistoryPanel
           runs={state.displayRunHistory()}
-          loading={state.patrolRunHistory.loading}
+          loading={state.patrolRunHistory.loading()}
           selectedRun={state.selectedRun()}
           onSelectRun={state.setSelectedRun}
           patrolStream={state.patrolStream}

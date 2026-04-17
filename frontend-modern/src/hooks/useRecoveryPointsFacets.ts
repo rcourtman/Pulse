@@ -146,5 +146,6 @@ export function useRecoveryPointsFacets(query?: Accessor<RecoveryFacetsQuery | n
     response,
     facets,
     refetch: state.refetch,
+    resolvedOnce: state.resolvedOnce,
   };
 }

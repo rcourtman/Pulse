@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import appSource from '@/App.tsx?raw';
 import appLayoutSource from '@/AppLayout.tsx?raw';
 import appRuntimeContextSource from '@/contexts/appRuntime.ts?raw';
+import routePreloadSource from '@/routing/routePreload.ts?raw';
 import appRuntimeStateSource from '@/useAppRuntimeState.ts?raw';
 
 describe('App architecture', () => {
@@ -25,6 +26,13 @@ describe('App architecture', () => {
     expect(appSource).toContain('clearPendingAppShellRestoreTop');
     expect(appSource).toContain('const ROOT_DASHBOARD_PATH = DASHBOARD_PATH;');
     expect(appSource).toContain('const ROOT_PATROL_PATH = PATROL_PATH;');
+    expect(appSource).toContain("import { preloadRouteModule } from '@/routing/routePreload';");
+    expect(appSource).toContain('const APP_SHELL_ROUTE_PRELOAD_PATHS = [');
+    expect(appSource).toContain('RECOVERY_ROUTE_PATH,');
+    expect(appSource).toContain('ROOT_PATROL_PATH,');
+    expect(appSource).toContain('await preloadRouteModule(route);');
+    expect(appSource).toContain('const timeoutId = window.setTimeout(() => {');
+    expect(appSource).toContain('void preloadAppShellRoutes();');
     expect(appSource).toContain('<Route path={ROOT_DASHBOARD_PATH} component={DashboardPage} />');
     expect(appSource).toContain('<Route path="/login" component={() => <Navigate href={ROOT_DASHBOARD_PATH} />} />');
     expect(appSource).toContain('<Route path="/" component={() => <Navigate href={ROOT_DASHBOARD_PATH} />} />');
@@ -57,6 +65,7 @@ describe('App architecture', () => {
 
   it('keeps authenticated chrome in AppLayout and hosted bootstrap in useAppRuntimeState', () => {
     expect(appLayoutSource).toContain('export function AppLayout(props: AppLayoutProps)');
+    expect(appLayoutSource).toContain("import { preloadRouteModule } from '@/routing/routePreload';");
     expect(appLayoutSource).toContain("import { aiChatStore } from '@/stores/aiChat';");
     expect(appLayoutSource).toContain(
       "import { dialogStackHasBlockingDialog } from '@/components/shared/useDialogState';",
@@ -88,6 +97,9 @@ describe('App architecture', () => {
     expect(appLayoutSource).not.toContain('presentationPolicyHidesOrganizationSurfaces');
     expect(appLayoutSource).toContain('presentationPolicyIsDemoMode');
     expect(appLayoutSource).toContain("if (!presentationPolicyIsDemoMode()) {");
+    expect(appLayoutSource).toContain('await preloadRouteModule(targetRoute);');
+    expect(appLayoutSource).toContain('await preloadRouteModule(tab.route);');
+    expect(appLayoutSource).toContain('onMouseEnter={() => warmNavigationTarget(');
     expect(appLayoutSource).toContain(
       'aiChatStore.enabled === true &&',
     );
@@ -139,6 +151,10 @@ describe('App architecture', () => {
     expect(appRuntimeStateSource).not.toContain("import { startMetricsCollector } from '@/stores/metricsCollector';");
     expect(appRuntimeStateSource).not.toContain('startMetricsCollector();');
     expect(appRuntimeStateSource).not.toContain('function AppLayout(');
+    expect(routePreloadSource).toContain('const ROUTE_PRELOADERS: readonly RoutePreloader[] = [');
+    expect(routePreloadSource).toContain("id: 'recovery',");
+    expect(routePreloadSource).toContain("id: 'patrol',");
+    expect(routePreloadSource).toContain('const routePreloadCache = new Map<string, Promise<void>>();');
     expect(appRuntimeContextSource).toContain(
       "import { createContext, useContext } from 'solid-js';",
     );

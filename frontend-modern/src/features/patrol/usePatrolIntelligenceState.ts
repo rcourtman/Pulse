@@ -1,7 +1,6 @@
 import {
   createEffect,
   createMemo,
-  createResource,
   createSignal,
   onCleanup,
   onMount,
@@ -29,6 +28,7 @@ import {
 import { notificationStore } from '@/stores/notifications';
 import { hasTriggeringAlert } from '@/utils/findingAlertIdentity';
 import { usePatrolStream } from '@/hooks/usePatrolStream';
+import { createNonSuspendingQuery } from '@/hooks/createNonSuspendingQuery';
 import {
   hasFeature,
   loadRuntimeCapabilities,
@@ -46,6 +46,7 @@ import { runStartProTrialAction } from '@/utils/trialStartAction';
 type PatrolTab = 'findings' | 'history';
 
 export function usePatrolIntelligenceState() {
+  const [initialSurfaceReady, setInitialSurfaceReady] = createSignal(false);
   const [activeTab, setActiveTab] = createSignal<PatrolTab>('findings');
   const [showInvestigationContext, setShowInvestigationContext] = createSignal(false);
   const [findingsFilterOverride, setFindingsFilterOverride] = createSignal<
@@ -106,15 +107,19 @@ export function usePatrolIntelligenceState() {
     }
   };
 
-  const [patrolStatus, { refetch: refetchPatrolStatus }] = createResource<PatrolStatus | null>(
-    async () => {
+  const patrolStatusState = createNonSuspendingQuery<PatrolStatus | null, string>({
+    source: () => 'patrol-status',
+    fetcher: async () => {
       try {
         return await getPatrolStatus();
       } catch {
         return null;
       }
     },
-  );
+    initialValue: null,
+  });
+  const patrolStatus = patrolStatusState.value;
+  const refetchPatrolStatus = patrolStatusState.refetch;
 
   const patrolStream = usePatrolStream({
     running: () =>
@@ -338,9 +343,9 @@ export function usePatrolIntelligenceState() {
     }
   }
 
-  const [patrolRunHistory] = createResource(
-    () => activityRefreshTrigger(),
-    async () => {
+  const patrolRunHistory = createNonSuspendingQuery<PatrolRunRecord[], number>({
+    source: activityRefreshTrigger,
+    fetcher: async () => {
       try {
         return await getPatrolRunHistory(30);
       } catch (err) {
@@ -348,7 +353,8 @@ export function usePatrolIntelligenceState() {
         return [];
       }
     },
-  );
+    initialValue: [],
+  });
 
   const licenseRequired = createMemo(() => patrolStatus()?.license_required ?? false);
   const upgradeDestination = createMemo(() => getUpgradeActionDestination('ai_autofix'));
@@ -490,7 +496,7 @@ export function usePatrolIntelligenceState() {
 
   const displayRunHistory = createMemo(() => {
     const live = liveRunRecord();
-    const history = patrolRunHistory() || [];
+    const history = patrolRunHistory.value() || [];
     return live ? [live, ...history] : history;
   });
 
@@ -645,13 +651,17 @@ export function usePatrolIntelligenceState() {
   });
 
   onMount(async () => {
-    await Promise.all([
-      loadRuntimeCapabilities(),
-      loadAllData(),
-      loadAutonomySettings(),
-      loadAIRuntimeModels(),
-      loadAIRuntimeSettings(),
-    ]);
+    try {
+      await Promise.all([
+        loadRuntimeCapabilities(),
+        loadAllData(),
+        loadAutonomySettings(),
+        loadAIRuntimeModels(),
+        loadAIRuntimeSettings(),
+      ]);
+    } finally {
+      setInitialSurfaceReady(true);
+    }
   });
 
   onMount(() => {
@@ -715,6 +725,7 @@ export function usePatrolIntelligenceState() {
     handleStartTrial,
     handleTogglePatrol,
     hasInvestigationContext,
+    initialSurfaceReady,
     intelligenceSummary,
     investigationContextSummary,
     isRefreshing,

@@ -14,6 +14,7 @@ import {
 } from '@/utils/recoverySummaryPresentation';
 
 export interface RecoverySummaryProps {
+  loaded: () => boolean;
   rollups: () => ProtectionRollup[];
   series: () => RecoveryPointsSeriesBucket[];
   seriesLoaded: () => boolean;
@@ -29,6 +30,7 @@ export interface RecoverySummaryProps {
 }
 
 export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
+  const loaded = () => props.loaded();
   const summary = () => props.summary();
   const hasRollups = () => summary().total > 0;
 
@@ -109,10 +111,15 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
     return <span class="ml-auto truncate text-xs text-muted">{latestLabel}</span>;
   });
   return (
-    <Show when={hasRollups()}>
+    <Show when={!loaded() || hasRollups()}>
       <SummaryPanel
         headerLeft={
-          <span class="font-medium text-base-content">{summary().total} protected items</span>
+          <Show
+            when={loaded()}
+            fallback={<div class="h-4 w-32 rounded bg-surface-hover animate-pulse" />}
+          >
+            <span class="font-medium text-base-content">{summary().total} protected items</span>
+          </Show>
         }
         timeRange={props.timeRange()}
         onTimeRangeChange={props.onTimeRangeChange ? handleTimeRangeChange : undefined}
@@ -123,9 +130,9 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
       >
         <SummaryMetricCard
           label="Posture"
-          secondaryLabel={postureSecondaryLabel()}
+          secondaryLabel={loaded() ? postureSecondaryLabel() : undefined}
           bodyLayout="auto"
-          loaded={true}
+          loaded={loaded()}
           hasData={hasRollups()}
         >
           <div class="flex h-full flex-col gap-1.5">
@@ -140,9 +147,9 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
 
         <SummaryMetricCard
           label="Freshness"
-          secondaryLabel={freshnessSecondaryLabel()}
+          secondaryLabel={loaded() ? freshnessSecondaryLabel() : undefined}
           bodyLayout="auto"
-          loaded={true}
+          loaded={loaded()}
           hasData={hasRollups()}
         >
           <div class="flex h-full flex-col gap-1.5">
@@ -157,9 +164,9 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
 
         <SummaryMetricCard
           label="Coverage"
-          secondaryLabel={coverageSecondaryLabel()}
+          secondaryLabel={loaded() ? coverageSecondaryLabel() : undefined}
           bodyLayout="auto"
-          loaded={true}
+          loaded={loaded()}
           hasData={hasRollups()}
         >
           <div class="flex h-full flex-col gap-1.5">
@@ -174,7 +181,7 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
 
         <SummaryMetricCard
           label="Activity"
-          secondaryLabel={activitySecondaryLabel()}
+          secondaryLabel={props.seriesLoaded() ? activitySecondaryLabel() : undefined}
           bodyLayout="auto"
           loaded={props.seriesLoaded()}
           hasData={activity().hasData}

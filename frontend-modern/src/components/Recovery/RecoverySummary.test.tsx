@@ -14,6 +14,7 @@ describe('RecoverySummary', () => {
 
     render(() => (
       <RecoverySummary
+        loaded={() => true}
         rollups={() => [
           {
             rollupId: 'alpha',
@@ -96,6 +97,34 @@ describe('RecoverySummary', () => {
     expect(recoverySummarySource).not.toContain('density="compact"');
     expect(recoverySummarySource).not.toContain('!p-1.5 sm:!p-2');
     expect(recoverySummarySource.match(/bodyLayout="auto"/g) ?? []).toHaveLength(4);
+  });
+
+  it('renders a stable summary shell while the first recovery rollups request is still pending', () => {
+    render(() => (
+      <RecoverySummary
+        loaded={() => false}
+        rollups={() => []}
+        series={() => []}
+        seriesLoaded={() => false}
+        summary={() => ({
+          total: 0,
+          counts: {
+            success: 0,
+            warning: 0,
+            failed: 0,
+            running: 0,
+            unknown: 0,
+          },
+          stale: 0,
+          neverSucceeded: 0,
+        })}
+        timeRange={() => '30d'}
+      />
+    ));
+
+    expect(screen.getByTestId('recovery-summary')).toBeInTheDocument();
+    expect(screen.queryByText('0 protected items')).not.toBeInTheDocument();
+    expect(screen.queryByText('No recovery activity yet')).not.toBeInTheDocument();
   });
 
   it('keeps recovery summary outside the interactive page-group-entity summary contract', () => {

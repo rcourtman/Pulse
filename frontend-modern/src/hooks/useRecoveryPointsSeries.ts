@@ -132,5 +132,6 @@ export function useRecoveryPointsSeries(query?: Accessor<RecoverySeriesQuery | n
     response,
     series,
     refetch: state.refetch,
+    resolvedOnce: state.resolvedOnce,
   };
 }

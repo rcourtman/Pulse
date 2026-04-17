@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
-import { createSignal } from 'solid-js';
+import { Suspense, createSignal } from 'solid-js';
 import { resetAIRuntimeState } from '@/stores/aiRuntimeState';
 import { getPublicPricingUrl } from '@/utils/pricingHandoff';
 
@@ -664,6 +664,24 @@ describe('AIIntelligence entitlement gating', () => {
       screen.queryByText('1 recent change · 4 policy-covered resources'),
     ).not.toBeInTheDocument();
     expect(screen.queryByText('Policy posture')).not.toBeInTheDocument();
+  });
+
+  it('renders a stable patrol summary loading shell before the first assessment payload arrives', async () => {
+    getPatrolStatusMock.mockImplementation(() => new Promise(() => {}));
+    intelligenceState.summary = null;
+
+    render(() => (
+      <Suspense fallback={<div>Loading view...</div>}>
+        <AIIntelligence />
+      </Suspense>
+    ));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('patrol-summary-loading')).toBeInTheDocument();
+    });
+
+    expect(screen.queryByText('Loading view...')).not.toBeInTheDocument();
+    expect(screen.queryByText('Patrol assessment')).not.toBeInTheDocument();
   });
 
   it('does not present a healthy patrol summary when patrol is blocked on exhausted quickstart credits', async () => {

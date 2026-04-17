@@ -316,8 +316,35 @@ export const RecoveryProtectedInventorySection: Component<
 
       <Card padding="none" tone="card" class="overflow-hidden border-border-subtle bg-surface">
         <Show when={props.loading() && props.filteredRollups().length === 0}>
-          <div class="px-6 py-6 text-sm text-muted">
-            {getRecoveryProtectedItemsLoadingState().text}
+          <div
+            data-testid="recovery-protected-loading"
+            class="animate-pulse pointer-events-none select-none"
+          >
+            <div class="border-b border-border bg-surface-alt/80 px-3 py-2 text-[11px] font-medium uppercase tracking-wide text-muted">
+              {getRecoveryProtectedItemsLoadingState().text}
+            </div>
+            <div class="space-y-3 px-4 py-4">
+              <div class="flex items-center gap-3">
+                <div class="h-4 w-32 rounded bg-surface-hover" />
+                <div class="h-4 w-20 rounded bg-surface-hover" />
+                <div class="h-4 w-24 rounded bg-surface-hover" />
+                <div class="ml-auto h-4 w-16 rounded bg-surface-hover" />
+              </div>
+              <For each={[1, 2, 3, 4]}>
+                {() => (
+                  <div class="grid grid-cols-[minmax(0,1.5fr)_110px_110px_120px_90px] gap-3 border-t border-border-subtle pt-3">
+                    <div class="space-y-2">
+                      <div class="h-4 w-3/4 rounded bg-surface-hover" />
+                      <div class="h-3 w-1/2 rounded bg-surface-hover" />
+                    </div>
+                    <div class="h-4 w-16 rounded bg-surface-hover" />
+                    <div class="h-4 w-20 rounded bg-surface-hover" />
+                    <div class="h-4 w-24 rounded bg-surface-hover" />
+                    <div class="h-6 w-16 rounded bg-surface-hover" />
+                  </div>
+                )}
+              </For>
+            </div>
           </div>
         </Show>
 

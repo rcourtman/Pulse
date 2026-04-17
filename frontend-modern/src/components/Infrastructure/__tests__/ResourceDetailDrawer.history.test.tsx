@@ -7,6 +7,7 @@ import discoveryTabStateSource from '@/components/Discovery/useDiscoveryTabState
 import resourceDetailDrawerShellSource from '@/components/Infrastructure/ResourceDetailDrawer.tsx?raw';
 import resourceDetailDrawerOverviewSource from '@/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx?raw';
 import resourceDetailDrawerHistoryStateSource from '@/components/Infrastructure/useResourceDetailDrawerHistoryState.ts?raw';
+import createNonSuspendingQuerySource from '@/hooks/createNonSuspendingQuery.ts?raw';
 import resourceDetailDrawerDerivedStateSource from '@/components/Infrastructure/useResourceDetailDrawerDerivedState.ts?raw';
 import resourceDetailDrawerDiscoveryModelSource from '@/components/Infrastructure/resourceDetailDiscoveryModel.ts?raw';
 import resourceDetailDrawerIdentityModelSource from '@/components/Infrastructure/resourceDetailDrawerIdentityModel.ts?raw';
@@ -214,6 +215,11 @@ describe('ResourceDetailDrawer change history section', () => {
       'const modeLabel = formatSourceType(resource.sourceType);',
     );
     expect(resourceDetailDrawerOverviewSource).not.toContain('<span class="text-muted">Mode</span>');
+    expect(createNonSuspendingQuerySource).toContain(
+      'const [resolvedOnce, setResolvedOnce] = createSignal(false);',
+    );
+    expect(createNonSuspendingQuerySource).toContain('setResolvedOnce(true);');
+    expect(createNonSuspendingQuerySource).toContain('setResolvedOnce(false);');
     expect(resourceDetailDrawerDockerActionsStateSource).toContain('MonitoringAPI.checkDockerUpdates');
     expect(resourceDetailDrawerDockerActionsStateSource).toContain(
       'MonitoringAPI.updateAllDockerContainers',

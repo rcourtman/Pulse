@@ -80,6 +80,7 @@ describe('Recovery layout guards', () => {
       recoveryPoints: {
         meta: () => ({ page: 1, limit: 200, total: 0, totalPages: 1 }),
         points: () => [],
+        resolvedOnce: () => true,
         response: {
           error: new Error('history points unavailable'),
           loading: false,
@@ -87,9 +88,11 @@ describe('Recovery layout guards', () => {
       },
       recoveryRollups: {
         rollups: () => [],
+        resolvedOnce: () => true,
         response: { error: undefined, loading: false },
       },
       recoverySeries: {
+        resolvedOnce: () => true,
         response: { error: undefined, loading: false },
         series: () => [
           { day: '2026-02-13', total: 1, snapshot: 1, local: 0, remote: 0 },
@@ -146,5 +149,29 @@ describe('Recovery layout guards', () => {
     expect(screen.queryByTestId('protected-inventory')).not.toBeInTheDocument();
     expect(screen.queryByTestId('history-section')).not.toBeInTheDocument();
     expect(screen.getByText('Failed to load recovery points')).toBeInTheDocument();
+  });
+
+  it('keeps the summary shell mounted while recovery data is still on its first load', () => {
+    mockRecoverySurfaceState.recoveryRollups = {
+      rollups: Object.assign(() => [], { loading: false }),
+      resolvedOnce: () => false,
+      response: { error: undefined, loading: false },
+    };
+    mockRecoverySurfaceState.recoverySeries = {
+      resolvedOnce: () => false,
+      response: { error: undefined, loading: false },
+      series: () => [],
+    };
+    mockRecoverySurfaceState.recoveryPoints = {
+      meta: () => ({ page: 1, limit: 200, total: 0, totalPages: 1 }),
+      points: () => [],
+      resolvedOnce: () => false,
+      response: { error: undefined, loading: false },
+    };
+
+    render(() => <Recovery />);
+
+    expect(screen.getByTestId('recovery-summary')).toBeInTheDocument();
+    expect(screen.getByTestId('protected-inventory')).toBeInTheDocument();
   });
 });

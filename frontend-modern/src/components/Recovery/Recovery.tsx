@@ -282,6 +282,29 @@ const Recovery: Component = () => {
   const hasNodeData = createMemo(() => (facets().nodesAgents || []).length > 0);
   const hasNamespaceData = createMemo(() => (facets().namespaces || []).length > 0);
   const hasEntityIDData = createMemo(() => Boolean(facets().hasEntityId));
+  const recoveryRollupsLoaded = createMemo(() => recoveryRollups.resolvedOnce());
+  const recoveryRollupsLoading = createMemo(
+    () => !recoveryRollupsLoaded() || recoveryRollups.rollups.loading,
+  );
+  const recoverySeriesLoaded = createMemo(() => recoverySeries.resolvedOnce());
+  const recoverySeriesLoading = createMemo(
+    () => !recoverySeriesLoaded() || recoverySeries.response.loading,
+  );
+  const recoveryPointsLoaded = createMemo(() => recoveryPoints.resolvedOnce());
+  const recoveryPointsLoading = createMemo(
+    () => !recoveryPointsLoaded() || recoveryPoints.response.loading,
+  );
+  const recoveryPointsModel = {
+    meta: recoveryPoints.meta,
+    response: {
+      get loading() {
+        return recoveryPointsLoading();
+      },
+      get error() {
+        return recoveryPoints.response.error;
+      },
+    },
+  };
 
   const artifactColumns: ColumnDef[] = [
     { id: 'time', label: 'Time' },
@@ -535,7 +558,7 @@ const Recovery: Component = () => {
         setCurrentPage(1);
       }}
       isMobile={isMobile()}
-      loading={() => recoverySeries.response.loading}
+      loading={recoverySeriesLoading}
       overallRollupsSummary={overallRollupsSummary}
       selectedDateKey={selectedDateKey}
       selectedDateLabel={selectedDateLabel}
@@ -553,9 +576,10 @@ const Recovery: Component = () => {
   return (
     <div data-testid="recovery-page" class="flex flex-col gap-2">
       <RecoverySummary
+        loaded={recoveryRollupsLoaded}
         rollups={rollups}
         series={() => recoverySeries.series() || []}
-        seriesLoaded={() => !recoverySeries.response.loading}
+        seriesLoaded={recoverySeriesLoaded}
         seriesFailed={() => Boolean(recoverySeries.response.error)}
         summary={overallRollupsSummary}
         timeRange={summaryRange}
@@ -574,7 +598,7 @@ const Recovery: Component = () => {
                   historyOutcomeFilter={historyOutcomeFilter}
                   isMobile={isMobile()}
                   kioskMode={kioskMode()}
-                  loading={() => recoveryRollups.rollups.loading}
+                  loading={recoveryRollupsLoading}
                   error={() => recoveryRollups.rollups.error}
                   onSelectRollup={handleSelectRollup}
                   protectedStaleOnly={protectedStaleOnly}
@@ -598,7 +622,7 @@ const Recovery: Component = () => {
               <Show when={workspaceView() === 'events'}>
                 {eventsActivity()}
 
-                <Show when={!recoveryPoints.response.loading && recoveryPoints.response.error}>
+                <Show when={!recoveryPointsLoading() && recoveryPoints.response.error}>
                   <Card
                     padding="none"
                     tone="card"
@@ -642,7 +666,7 @@ const Recovery: Component = () => {
                     platformFilter={platformFilter}
                     platformOptions={platformOptions}
                     queryFilter={queryFilter}
-                    recoveryPoints={recoveryPoints}
+                    recoveryPoints={recoveryPointsModel}
                     resetAdvancedArtifactFilters={resetAdvancedArtifactFilters}
                     resetAllArtifactFilters={resetAllArtifactFilters}
                     resourcesById={resourcesById}

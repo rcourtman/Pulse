@@ -161,5 +161,6 @@ export function useRecoveryPoints(query?: Accessor<RecoveryPointsQuery | null | 
     points,
     meta,
     refetch: state.refetch,
+    resolvedOnce: state.resolvedOnce,
   };
 }

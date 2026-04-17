@@ -30,7 +30,9 @@ import type { VersionInfo } from '@/api/updates';
 import type { Alert, State } from '@/types/api';
 import { useKioskMode } from '@/hooks/useKioskMode';
 import { layoutStore } from '@/utils/layout';
+import { logger } from '@/utils/logger';
 import { getActiveTabForPath } from '@/routing/navigation';
+import { preloadRouteModule } from '@/routing/routePreload';
 import {
   buildInfrastructurePath,
   buildWorkloadsPath,
@@ -462,15 +464,48 @@ export function AppLayout(props: AppLayoutProps) {
   });
 
   const handlePlatformClick = (platform: PlatformTab) => {
-    if (platform.enabled) {
-      navigate(platform.route);
-    } else {
-      navigate(platform.settingsRoute);
-    }
+    const targetRoute = platform.enabled ? platform.route : platform.settingsRoute;
+    void (async () => {
+      try {
+        await preloadRouteModule(targetRoute);
+      } catch (error) {
+        logger.warn('Failed to preload navigation target', {
+          route: targetRoute,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+      navigate(targetRoute);
+    })();
   };
 
   const handleUtilityClick = (tab: UtilityTab) => {
-    navigate(tab.route);
+    void (async () => {
+      try {
+        await preloadRouteModule(tab.route);
+      } catch (error) {
+        logger.warn('Failed to preload navigation target', {
+          route: tab.route,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+      navigate(tab.route);
+    })();
+  };
+
+  const warmNavigationTarget = (route: string) => {
+    void preloadRouteModule(route).catch((error) => {
+      logger.warn('Failed to warm navigation target', {
+        route,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    });
+  };
+
+  const getPlatformTargetRoute = (platform: PlatformTab) => {
+    if (platform.enabled) {
+      return platform.route;
+    }
+    return platform.settingsRoute;
   };
 
   return (
@@ -668,6 +703,7 @@ export function AppLayout(props: AppLayoutProps) {
                     class={className()}
                     role="tab"
                     aria-disabled={disabled()}
+                    onMouseEnter={() => warmNavigationTarget(getPlatformTargetRoute(platform))}
                     onClick={() => handlePlatformClick(platform)}
                     title={title()}
                   >
@@ -706,6 +742,7 @@ export function AppLayout(props: AppLayoutProps) {
                       class={className()}
                       role="tab"
                       aria-disabled={false}
+                      onMouseEnter={() => warmNavigationTarget(tab.route)}
                       onClick={() => handleUtilityClick(tab)}
                       title={tab.tooltip}
                     >

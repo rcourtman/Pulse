@@ -39,6 +39,7 @@ import {
   buildStoragePath,
   buildWorkloadsPath,
 } from './routing/resourceLinks';
+import { preloadRouteModule } from '@/routing/routePreload';
 import { AppLayout } from '@/AppLayout';
 import { useAppRuntimeState } from '@/useAppRuntimeState';
 import {
@@ -89,6 +90,29 @@ const ROOT_WORKLOADS_PATH = buildWorkloadsPath();
 const STORAGE_PATH = buildStoragePath();
 const RECOVERY_ROUTE_PATH = buildRecoveryPath();
 const ROOT_PATROL_PATH = PATROL_PATH;
+const APP_SHELL_ROUTE_PRELOAD_PATHS = [
+  RECOVERY_ROUTE_PATH,
+  ROOT_PATROL_PATH,
+  '/alerts',
+  STORAGE_PATH,
+  '/operations',
+  '/settings',
+] as const;
+
+async function preloadAppShellRoutes() {
+  await Promise.all(
+    APP_SHELL_ROUTE_PRELOAD_PATHS.map(async (route) => {
+      try {
+        await preloadRouteModule(route);
+      } catch (error) {
+        logger.warn('Failed to preload app shell route', {
+          route,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }),
+  );
+}
 
 // Helper to detect if an update is actively in progress (not just checking for updates)
 function isUpdateInProgress(status: string | undefined): boolean {
@@ -219,6 +243,8 @@ function App() {
     );
     const location = useLocation();
     const isPublicRoute = createMemo(() => isPublicRoutePath(location.pathname));
+    let appShellRoutePreloadCleanup: (() => void) | undefined;
+    let appShellRoutesPreloadScheduled = false;
 
     createEffect(() => {
       location.pathname;
@@ -289,6 +315,28 @@ function App() {
       onCleanup(finish);
     });
 
+    createEffect(() => {
+      if (
+        runtime.isLoading() ||
+        runtime.needsAuth() ||
+        isPublicRoute() ||
+        appShellRoutesPreloadScheduled
+      ) {
+        return;
+      }
+
+      appShellRoutesPreloadScheduled = true;
+      const startPreload = () => {
+        appShellRoutePreloadCleanup = undefined;
+        void preloadAppShellRoutes();
+      };
+
+      const timeoutId = window.setTimeout(() => {
+        startPreload();
+      }, 150);
+      appShellRoutePreloadCleanup = () => window.clearTimeout(timeoutId);
+    });
+
     useKeyboardShortcuts({
       enabled: () => !runtime.needsAuth(),
       isShortcutsOpen: shortcutsOpen,
@@ -324,6 +372,10 @@ function App() {
       onCleanup(() => {
         document.removeEventListener('keydown', handleKeyDown);
       });
+    });
+
+    onCleanup(() => {
+      appShellRoutePreloadCleanup?.();
     });
 
     return (
