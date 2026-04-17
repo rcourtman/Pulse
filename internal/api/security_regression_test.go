@@ -4302,8 +4302,8 @@ func TestSSHConfigRejectsSetupTokenOrgMismatch(t *testing.T) {
 	}
 }
 
-func TestVerifyTemperatureSSHAllowsSetupTokenQueryParam(t *testing.T) {
-	cfg := newTestConfigWithTokens(t)
+func TestVerifyTemperatureSSHRejectsSetupTokenQueryParam(t *testing.T) {
+	cfg := newTestConfigWithTokens(t, newTokenRecord(t, "settings-write-token", []string{config.ScopeSettingsWrite}, nil))
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
 
 	token := "abcdefabcdefabcdefabcdefabcdefab"
@@ -4315,16 +4315,13 @@ func TestVerifyTemperatureSSHAllowsSetupTokenQueryParam(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/system/verify-temperature-ssh?auth_token="+token, strings.NewReader(`{"nodes":""}`))
 	rec := httptest.NewRecorder()
 	router.Handler().ServeHTTP(rec, req)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200 with setup token query param, got %d", rec.Code)
-	}
-	if !strings.Contains(rec.Body.String(), "No nodes to verify") {
-		t.Fatalf("expected verify response, got %q", rec.Body.String())
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 when setup token is only provided in query string, got %d", rec.Code)
 	}
 }
 
-func TestSSHConfigAllowsSetupTokenQueryParam(t *testing.T) {
-	cfg := newTestConfigWithTokens(t)
+func TestSSHConfigRejectsSetupTokenQueryParam(t *testing.T) {
+	cfg := newTestConfigWithTokens(t, newTokenRecord(t, "settings-write-token", []string{config.ScopeSettingsWrite}, nil))
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
 	t.Setenv("HOME", t.TempDir())
 
@@ -4337,10 +4334,7 @@ func TestSSHConfigAllowsSetupTokenQueryParam(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/system/ssh-config?auth_token="+token, strings.NewReader("Host example\nHostname example\n"))
 	rec := httptest.NewRecorder()
 	router.Handler().ServeHTTP(rec, req)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200 with setup token query param, got %d", rec.Code)
-	}
-	if !strings.Contains(rec.Body.String(), `"success":true`) {
-		t.Fatalf("expected success response, got %q", rec.Body.String())
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 when setup token is only provided in query string, got %d", rec.Code)
 	}
 }

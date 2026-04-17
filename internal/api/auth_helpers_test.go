@@ -921,6 +921,36 @@ func TestCheckAuth_ValidSessionWithSlidingExpiration(t *testing.T) {
 	}
 }
 
+func TestReadSessionCookie_SecureRequestRequiresHostPrefix(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "https://pulse.example.test/api/test", nil)
+	req.TLS = &tls.ConnectionState{}
+	req.AddCookie(&http.Cookie{
+		Name:  cookieNameSession,
+		Value: "legacy-session",
+	})
+
+	if _, err := readSessionCookie(req); err == nil {
+		t.Fatalf("expected secure request to reject legacy session cookie")
+	}
+}
+
+func TestReadSessionCookie_SecureRequestAcceptsHostPrefix(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "https://pulse.example.test/api/test", nil)
+	req.TLS = &tls.ConnectionState{}
+	req.AddCookie(&http.Cookie{
+		Name:  cookieNameSessionSecure,
+		Value: "secure-session",
+	})
+
+	cookie, err := readSessionCookie(req)
+	if err != nil {
+		t.Fatalf("expected secure request to accept __Host- session cookie: %v", err)
+	}
+	if cookie.Value != "secure-session" {
+		t.Fatalf("unexpected cookie value %q", cookie.Value)
+	}
+}
+
 func TestCheckAuth_NoAuthConfigured(t *testing.T) {
 	cfg := &config.Config{
 		// No auth configured at all

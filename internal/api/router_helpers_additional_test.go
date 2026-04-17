@@ -81,11 +81,11 @@ func TestExtractSetupToken(t *testing.T) {
 		}
 	})
 
-	t.Run("falls back to query", func(t *testing.T) {
+	t.Run("ignores query auth_token", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/setup?auth_token=query-token", nil)
 
-		if got := extractSetupToken(req); got != "query-token" {
-			t.Fatalf("expected query token, got %q", got)
+		if got := extractSetupToken(req); got != "" {
+			t.Fatalf("expected empty token, got %q", got)
 		}
 	})
 

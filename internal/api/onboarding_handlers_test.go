@@ -209,6 +209,35 @@ func TestNormalizeOnboardingRelayAppURL(t *testing.T) {
 	}
 }
 
+func TestOnboardingAuthTokenFromRequest(t *testing.T) {
+	t.Run("prefers X-API-Token header", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/onboarding/qr?auth_token=query-token", nil)
+		req.Header.Set("X-API-Token", " header-token ")
+		req.Header.Set("Authorization", "Bearer bearer-token")
+
+		if got := onboardingAuthTokenFromRequest(req); got != "header-token" {
+			t.Fatalf("expected X-API-Token header, got %q", got)
+		}
+	})
+
+	t.Run("falls back to bearer token", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/onboarding/qr?auth_token=query-token", nil)
+		req.Header.Set("Authorization", "Bearer bearer-token")
+
+		if got := onboardingAuthTokenFromRequest(req); got != "bearer-token" {
+			t.Fatalf("expected bearer token, got %q", got)
+		}
+	})
+
+	t.Run("ignores query auth_token", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/onboarding/qr?auth_token=query-token", nil)
+
+		if got := onboardingAuthTokenFromRequest(req); got != "" {
+			t.Fatalf("expected empty auth token, got %q", got)
+		}
+	})
+}
+
 func newOnboardingContractRouter(t *testing.T) (*Router, string, relay.Config) {
 	t.Helper()
 

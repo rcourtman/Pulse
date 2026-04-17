@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/ed25519"
+	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -4086,6 +4087,58 @@ func TestContract_HostedSessionAuthPrecedesAnonymousFallback(t *testing.T) {
 	}
 }
 
+func TestContract_SecureHostedSessionRequiresHostPrefixedCookie(t *testing.T) {
+	resetPersistentAuthStoresForTests()
+	t.Cleanup(resetPersistentAuthStoresForTests)
+
+	InitSessionStore(t.TempDir())
+
+	store := GetSessionStore()
+	sessionToken := generateSessionToken()
+	store.CreateSession(sessionToken, 24*time.Hour, "contract-test", "127.0.0.1", "hosted-owner@example.com")
+	record, err := config.NewAPITokenRecord("hosted-secure-session-token.12345678", "hosted-secure-session", []string{config.ScopeSettingsWrite})
+	if err != nil {
+		t.Fatalf("NewAPITokenRecord: %v", err)
+	}
+	cfg := &config.Config{
+		APITokens: []config.APITokenRecord{*record},
+	}
+
+	t.Run("legacy cookie is rejected on secure requests", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "https://pulse.example.test/api/security/tokens/relay-mobile", nil)
+		req.TLS = &tls.ConnectionState{}
+		req.AddCookie(&http.Cookie{
+			Name:  cookieNameSession,
+			Value: sessionToken,
+		})
+		rec := httptest.NewRecorder()
+
+		if CheckAuth(cfg, rec, req) {
+			t.Fatal("CheckAuth() = true, want false for legacy session cookie on secure request")
+		}
+		if rec.Code != http.StatusUnauthorized {
+			t.Fatalf("status = %d, want %d when secure request only presents legacy cookie", rec.Code, http.StatusUnauthorized)
+		}
+	})
+
+	t.Run("host-prefixed cookie remains valid on secure requests", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "https://pulse.example.test/api/security/tokens/relay-mobile", nil)
+		req.TLS = &tls.ConnectionState{}
+		req.AddCookie(&http.Cookie{
+			Name:  cookieNameSessionSecure,
+			Value: sessionToken,
+		})
+		rec := httptest.NewRecorder()
+
+		if !CheckAuth(cfg, rec, req) {
+			t.Fatal("CheckAuth() = false, want true for __Host- session cookie on secure request")
+		}
+		if got := rec.Header().Get("X-Authenticated-User"); got != "hosted-owner@example.com" {
+			t.Fatalf("X-Authenticated-User = %q, want hosted-owner@example.com", got)
+		}
+	})
+}
+
 func TestContract_UniversalRateLimitStateIsScopedPerRouterConfig(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -4272,6 +4325,71 @@ func TestContract_RelayMobileScopeCanReadOnboardingDeepLink(t *testing.T) {
 	if rec.Code == http.StatusForbidden && strings.Contains(rec.Body.String(), "missing_scope") {
 		t.Fatalf("relay mobile scope should satisfy onboarding deep-link gating, got %d: %s", rec.Code, rec.Body.String())
 	}
+}
+
+func TestContract_OnboardingDeepLinkIgnoresQueryAuthToken(t *testing.T) {
+	rawToken := "relay-mobile-onboarding-query-token.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeRelayMobileAccess}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/onboarding/deep-link?auth_token="+url.QueryEscape(rawToken), nil)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want %d when auth token is only provided in query string", rec.Code, http.StatusUnauthorized)
+	}
+}
+
+func TestContract_SetupTokenRoutesRejectQueryAuthToken(t *testing.T) {
+	cfg := newTestConfigWithTokens(t, newTokenRecord(t, "settings-write-token", []string{config.ScopeSettingsWrite}, nil))
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	t.Setenv("HOME", t.TempDir())
+
+	token := "fedcba9876543210fedcba9876543210"
+	tokenHash := authpkg.HashAPIToken(token)
+	router.configHandlers.codeMutex.Lock()
+	router.configHandlers.setupTokens[tokenHash] = &SetupTokenRecord{ExpiresAt: time.Now().Add(time.Minute)}
+	router.configHandlers.codeMutex.Unlock()
+
+	t.Run("verify-temperature-ssh requires header token transport", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/system/verify-temperature-ssh?auth_token="+token, strings.NewReader(`{"nodes":""}`))
+		rec := httptest.NewRecorder()
+		router.Handler().ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusUnauthorized {
+			t.Fatalf("status = %d, want %d when setup token is only in query string", rec.Code, http.StatusUnauthorized)
+		}
+
+		req = httptest.NewRequest(http.MethodPost, "/api/system/verify-temperature-ssh", strings.NewReader(`{"nodes":""}`))
+		req.Header.Set("X-Setup-Token", token)
+		rec = httptest.NewRecorder()
+		router.Handler().ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status = %d, want %d when setup token is provided in header", rec.Code, http.StatusOK)
+		}
+	})
+
+	t.Run("ssh-config requires header token transport", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/system/ssh-config?auth_token="+token, strings.NewReader("Host example\nHostname example\n"))
+		rec := httptest.NewRecorder()
+		router.Handler().ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusUnauthorized {
+			t.Fatalf("status = %d, want %d when setup token is only in query string", rec.Code, http.StatusUnauthorized)
+		}
+
+		req = httptest.NewRequest(http.MethodPost, "/api/system/ssh-config", strings.NewReader("Host example\nHostname example\n"))
+		req.Header.Set("X-Setup-Token", token)
+		rec = httptest.NewRecorder()
+		router.Handler().ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status = %d, want %d when setup token is provided in header", rec.Code, http.StatusOK)
+		}
+	})
 }
 
 func TestContract_RelayMobileScopeCannotReadApprovalDetail(t *testing.T) {

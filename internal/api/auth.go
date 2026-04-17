@@ -337,14 +337,20 @@ func sessionCookieName(secure bool) string {
 	return cookieNameSession
 }
 
-// readSessionCookie reads the session cookie from the request, checking for the
-// __Host- prefixed name first (HTTPS) then falling back to the unprefixed name
-// (HTTP or upgrade transition). This ensures sessions survive an HTTP→HTTPS migration.
+// readSessionCookie reads the session cookie from the request. Secure requests
+// must present the __Host- prefixed cookie; insecure requests continue to use
+// the legacy unprefixed name.
 func readSessionCookie(r *http.Request) (*http.Cookie, error) {
-	if c, err := r.Cookie(cookieNameSessionSecure); err == nil {
+	if r == nil {
+		return nil, http.ErrNoCookie
+	}
+	if isConnectionSecure(r) {
+		return r.Cookie(cookieNameSessionSecure)
+	}
+	if c, err := r.Cookie(cookieNameSession); err == nil {
 		return c, nil
 	}
-	return r.Cookie(cookieNameSession)
+	return r.Cookie(cookieNameSessionSecure)
 }
 
 // generateSessionToken creates a cryptographically secure session token

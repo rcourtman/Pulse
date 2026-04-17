@@ -350,9 +350,6 @@ func onboardingAuthTokenFromRequest(req *http.Request) string {
 	if token := extractBearerToken(req.Header.Get("Authorization")); token != "" {
 		return token
 	}
-	if token := strings.TrimSpace(req.URL.Query().Get("auth_token")); token != "" {
-		return token
-	}
 	return ""
 }
 
