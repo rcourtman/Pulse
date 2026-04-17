@@ -83,7 +83,7 @@ describe('InfrastructureWorkspace', () => {
       'aria-selected',
       'false',
     );
-    expect(screen.getByRole('tab', { name: 'Reporting & control' })).toHaveAttribute(
+    expect(screen.getByRole('tab', { name: 'Inventory' })).toHaveAttribute(
       'aria-selected',
       'false',
     );
@@ -113,7 +113,7 @@ describe('InfrastructureWorkspace', () => {
     mockPathname = '/settings/infrastructure/operations';
     renderWorkspace();
 
-    expect(screen.getByRole('tab', { name: 'Reporting & control' })).toHaveAttribute(
+    expect(screen.getByRole('tab', { name: 'Inventory' })).toHaveAttribute(
       'aria-selected',
       'true',
     );
@@ -123,7 +123,7 @@ describe('InfrastructureWorkspace', () => {
   it('uses the guided workspace actions to open install and platform paths', () => {
     renderWorkspace();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Install on a host selected' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open Install on a host' }));
     fireEvent.click(screen.getByRole('button', { name: 'Open Platform connections' }));
 
     expect(navigateSpy).toHaveBeenNthCalledWith(1, '/settings/infrastructure/install');
@@ -139,6 +139,61 @@ describe('InfrastructureWorkspace', () => {
     expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure/install');
   });
 
+  it('hides the first-system orientation card once any platform connection exists', () => {
+    render(
+      () =>
+        (
+          <InfrastructureWorkspace
+            {...({
+              pveNodes: () => [],
+              pbsNodes: () => [],
+              pmgNodes: () => [],
+              agentStateResources: () => [],
+              platformConnectionsSummary: () => ({
+                pveCount: 1,
+                pbsCount: 0,
+                pmgCount: 0,
+                truenasCount: 0,
+                truenasAvailable: true,
+                vmwareCount: 0,
+                vmwareAvailable: true,
+              }),
+            } as any)}
+          />
+        ) as any,
+    );
+
+    expect(screen.queryByText('Connect your first system')).not.toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Install on a host' })).toBeInTheDocument();
+  });
+
+  it('hides the first-system orientation card once any agent resource is reporting', () => {
+    render(
+      () =>
+        (
+          <InfrastructureWorkspace
+            {...({
+              pveNodes: () => [],
+              pbsNodes: () => [],
+              pmgNodes: () => [],
+              agentStateResources: () => [{ id: 'agent-1' }],
+              platformConnectionsSummary: () => ({
+                pveCount: 0,
+                pbsCount: 0,
+                pmgCount: 0,
+                truenasCount: 0,
+                truenasAvailable: true,
+                vmwareCount: 0,
+                vmwareAvailable: true,
+              }),
+            } as any)}
+          />
+        ) as any,
+    );
+
+    expect(screen.queryByText('Connect your first system')).not.toBeInTheDocument();
+  });
+
   it('collapses the workspace to reporting and redirects install routes in read-only mode', () => {
     presentationPolicyIsReadOnlyMock.mockReturnValue(true);
     mockPathname = '/settings/infrastructure/install';
@@ -147,7 +202,7 @@ describe('InfrastructureWorkspace', () => {
     expect(screen.queryByText('Connect your first system')).not.toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: 'Install on a host' })).not.toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: 'Platform connections' })).not.toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'Reporting & control' })).toHaveAttribute(
+    expect(screen.getByRole('tab', { name: 'Inventory' })).toHaveAttribute(
       'aria-selected',
       'false',
     );

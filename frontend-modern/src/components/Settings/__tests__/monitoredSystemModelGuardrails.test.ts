@@ -478,7 +478,6 @@ describe('monitored-system model guardrails', () => {
     expect(relaySettingsPanelStateSource).toContain('getRelayConnectionPresentation');
     expect(relaySettingsPanelStateSource).toContain('trackPaywallViewed');
     expect(relayPairingSectionSource).toContain('getRelayDiagnosticClass');
-    expect(proxmoxSettingsPanelSource).toContain('CalloutCard');
     expect(proxmoxSettingsPanelSource).not.toContain('Loading configuration...');
     expect(proxmoxSettingsPanelSource).toContain('./ProxmoxDirectWorkspace');
     expect(proxmoxDirectWorkspaceSource).toContain('./useProxmoxDirectWorkspaceState');

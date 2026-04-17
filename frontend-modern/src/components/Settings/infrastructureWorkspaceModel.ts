@@ -19,7 +19,7 @@ export const INFRASTRUCTURE_WORKSPACE_TABS: readonly InfrastructureWorkspaceTabD
   },
   {
     id: 'inventory',
-    label: 'Reporting & control',
+    label: 'Inventory',
     path: '/settings/infrastructure/operations',
   },
 ];

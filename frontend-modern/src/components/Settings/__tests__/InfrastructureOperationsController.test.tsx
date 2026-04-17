@@ -984,7 +984,7 @@ describe('InfrastructureOperationsController agent lookup', () => {
     });
     expect(
       screen.getByText(
-        'First Host started reporting and Pulse detected it automatically. Open the dashboard to verify your first overview, or continue in Reporting & control to inspect this host and add more infrastructure.',
+        'First Host started reporting and Pulse detected it automatically. Open the dashboard to verify your first overview, or open Inventory to inspect this host and add more infrastructure.',
       ),
     ).toBeInTheDocument();
     expect((screen.getByPlaceholderText('Hostname or agent ID') as HTMLInputElement).value).toBe(
@@ -1046,14 +1046,14 @@ describe('InfrastructureOperationsController agent lookup', () => {
     expect(screen.getByText('First host connected')).toBeInTheDocument();
     expect(
       screen.getByText(
-        'Host One is reporting live telemetry to Pulse. Open the dashboard to verify your first overview, or continue in Reporting & control to inspect this host and add more infrastructure.',
+        'Host One is reporting live telemetry to Pulse. Open the dashboard to verify your first overview, or open Inventory to inspect this host and add more infrastructure.',
       ),
     ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Open dashboard' }));
     expect(navigateMock).toHaveBeenCalledWith('/dashboard');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Open reporting & control' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open inventory' }));
     expect(navigateMock).toHaveBeenCalledWith('/settings/infrastructure/operations');
   });
 

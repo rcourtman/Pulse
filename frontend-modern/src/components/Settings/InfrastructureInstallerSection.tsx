@@ -136,34 +136,6 @@ export const InfrastructureInstallerSection: Component = () => {
         )}
       </Show>
 
-      <div class="rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900 dark:border-blue-700 dark:bg-blue-900 dark:text-blue-100">
-        <p class="font-semibold">Use this workspace for the first agent-managed host.</p>
-        <p class="mt-1 text-xs text-blue-800 dark:text-blue-200">
-          Install the Pulse agent here only when the first system should run the unified agent
-          directly. If the first system is API-backed, such as TrueNAS or Proxmox, open Platform
-          connections instead.
-        </p>
-      </div>
-
-      <Show when={!state.isEmbedded()}>
-        <div class="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 dark:border-emerald-700 dark:bg-emerald-900 dark:text-emerald-100">
-          <div class="space-y-2">
-            <p class="text-sm">
-              API-backed platforms such as Proxmox and TrueNAS belong in Platform connections. Use
-              this install workspace only for systems where Pulse should run the unified agent on
-              the machine itself.
-            </p>
-            <button
-              type="button"
-              onClick={state.openPlatformConnections}
-              class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-2 py-1.5 text-sm font-medium text-emerald-800 underline hover:bg-emerald-100 hover:text-emerald-900 dark:text-emerald-200 dark:hover:bg-emerald-900 dark:hover:text-emerald-100"
-            >
-              Open Platform connections →
-            </button>
-          </div>
-        </div>
-      </Show>
-
       <div class="space-y-5">
         <div class="space-y-3">
           <div class="space-y-1">
@@ -257,37 +229,69 @@ export const InfrastructureInstallerSection: Component = () => {
         </Show>
 
         <Show when={state.requiresToken() && !state.commandsUnlocked()}>
-          <div class="pointer-events-none select-none space-y-3 opacity-60">
-            <div class="flex items-center justify-between">
-              <div>
-                <h4 class="text-sm font-semibold text-base-content">
-                  <span class="mr-1.5 inline-flex h-5 w-5 items-center justify-center rounded-full bg-slate-400 text-xs font-bold text-white">
-                    2
-                  </span>
-                  Installation commands
-                </h4>
-                <p class="ml-6 mt-0.5 text-xs text-muted">
-                  Generate an install token above to unlock the commands for your first host.
-                </p>
-              </div>
-            </div>
-            <div class="rounded-md border border-border bg-surface-hover px-4 py-6 text-center">
-              <svg
-                class="mx-auto mb-2 h-8 w-8 text-muted"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                stroke-width="1.5"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z"
-                />
-              </svg>
-              <p class="text-sm text-muted">
-                Click "Generate token" above to see the install commands for your first host.
+          <div class="space-y-3">
+            <div>
+              <h4 class="text-sm font-semibold text-base-content">
+                <span class="mr-1.5 inline-flex h-5 w-5 items-center justify-center rounded-full bg-slate-400 text-xs font-bold text-white">
+                  2
+                </span>
+                Installation commands
+              </h4>
+              <p class="ml-6 mt-0.5 text-xs text-muted">
+                Preview — generate a token above to enable copying. The{' '}
+                <code class="rounded bg-surface-hover px-1">{'<api-token>'}</code> placeholder
+                below will be replaced automatically once a token exists.
               </p>
+            </div>
+            <div class="space-y-4">
+              <For each={state.commandSections()}>
+                {(section) => (
+                  <div class="space-y-3 rounded-md border border-border p-4 opacity-70">
+                    <div class="space-y-1">
+                      <h5 class="text-sm font-semibold text-base-content">{section.title}</h5>
+                      <p class="text-xs text-muted">{section.description}</p>
+                    </div>
+                    <div class="space-y-3">
+                      <For each={section.snippets}>
+                        {(snippet) => (
+                          <div class="space-y-2">
+                            <h6 class="text-xs font-semibold uppercase tracking-wide text-muted">
+                              {snippet.label}
+                            </h6>
+                            <div class="relative">
+                              <button
+                                type="button"
+                                disabled
+                                class="absolute right-2 top-2 inline-flex min-h-10 min-w-10 cursor-not-allowed items-center justify-center rounded-md bg-surface-hover p-2 opacity-50 sm:min-h-9 sm:min-w-9"
+                                title="Generate a token above to enable copying"
+                                aria-label="Copy disabled until an install token is generated"
+                              >
+                                <svg
+                                  width="16"
+                                  height="16"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  stroke-width="2"
+                                >
+                                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                  <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
+                                </svg>
+                              </button>
+                              <pre class="overflow-x-auto rounded-md bg-base p-3 pr-12 text-xs text-base-content">
+                                <code>{snippet.command}</code>
+                              </pre>
+                            </div>
+                            <Show when={snippet.note}>
+                              <p class="text-xs text-muted">{snippet.note}</p>
+                            </Show>
+                          </div>
+                        )}
+                      </For>
+                    </div>
+                  </div>
+                )}
+              </For>
             </div>
           </div>
         </Show>
@@ -462,7 +466,14 @@ export const InfrastructureInstallerSection: Component = () => {
                     </p>
                     <p class="mt-1.5 text-xs text-muted">
                       API-backed platforms such as TrueNAS connect through Platform connections
-                      rather than a dedicated install profile here.
+                      rather than a dedicated install profile here.{' '}
+                      <button
+                        type="button"
+                        onClick={state.openPlatformConnections}
+                        class="text-blue-600 underline hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+                      >
+                        Open Platform connections
+                      </button>
                     </p>
                     <Show when={state.getInstallProfileFlags().length > 0}>
                       <p class="mt-1.5 text-xs text-muted">
@@ -615,8 +626,8 @@ export const InfrastructureInstallerSection: Component = () => {
                           >
                             {isConnected()
                               ? state.lookupWasAutoDetected()
-                                ? `${agent().displayName || agent().hostname} started reporting and Pulse detected it automatically. Open the dashboard to verify your first overview, or continue in Reporting & control to inspect this host and add more infrastructure.`
-                                : `${agent().displayName || agent().hostname} is reporting live telemetry to Pulse. Open the dashboard to verify your first overview, or continue in Reporting & control to inspect this host and add more infrastructure.`
+                                ? `${agent().displayName || agent().hostname} started reporting and Pulse detected it automatically. Open the dashboard to verify your first overview, or open Inventory to inspect this host and add more infrastructure.`
+                                : `${agent().displayName || agent().hostname} is reporting live telemetry to Pulse. Open the dashboard to verify your first overview, or open Inventory to inspect this host and add more infrastructure.`
                               : `${agent().displayName || agent().hostname} has been found, but Pulse is not receiving a live check-in yet. Keep the installer running on that machine and check again.`}
                           </p>
                         </div>
@@ -662,7 +673,7 @@ export const InfrastructureInstallerSection: Component = () => {
                             onClick={state.openInfrastructureInventory}
                             class="inline-flex items-center justify-center rounded-md border border-emerald-300 bg-white px-3 py-2 text-sm font-medium text-emerald-900 transition-colors hover:bg-emerald-100 dark:border-emerald-700 dark:bg-emerald-950 dark:text-emerald-100 dark:hover:bg-emerald-800"
                           >
-                            Open reporting &amp; control
+                            Open inventory
                           </button>
                         </div>
                       </Show>
@@ -711,9 +722,11 @@ export const InfrastructureInstallerSection: Component = () => {
           </div>
         </Show>
 
-        <div class="mt-4 border-t border-border pt-4">
-          <div class="space-y-3">
-            <h4 class="text-sm font-semibold text-base-content">Uninstall agent</h4>
+        <details class="mt-4 border-t border-border pt-4">
+          <summary class="cursor-pointer text-sm font-semibold text-base-content">
+            Uninstall agent
+          </summary>
+          <div class="mt-3 space-y-3">
             <p class="text-xs text-muted">
               Run the appropriate command on your machine to remove the Pulse agent:
             </p>
@@ -785,7 +798,7 @@ export const InfrastructureInstallerSection: Component = () => {
               </div>
             </div>
           </div>
-        </div>
+        </details>
       </div>
     </SettingsPanel>
   );

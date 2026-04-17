@@ -30,6 +30,19 @@ export const InfrastructureWorkspace: Component<InfrastructureWorkspaceProps> = 
       ? INFRASTRUCTURE_WORKSPACE_TABS.filter((tab) => tab.id === 'inventory')
       : INFRASTRUCTURE_WORKSPACE_TABS,
   );
+  const hasAnySystem = createMemo(() => {
+    const summary = props.platformConnectionsSummary?.();
+    const platformCount = summary
+      ? summary.pveCount +
+        summary.pbsCount +
+        summary.pmgCount +
+        summary.truenasCount +
+        summary.vmwareCount
+      : 0;
+    const agentCount = props.agentStateResources?.()?.length ?? 0;
+    return platformCount + agentCount > 0;
+  });
+  const showOrientation = createMemo(() => !readOnlyWorkspace() && !hasAnySystem());
 
   const openView = (view: InfrastructureWorkspaceView) =>
     navigate(buildInfrastructureWorkspacePath(view));
@@ -42,7 +55,7 @@ export const InfrastructureWorkspace: Component<InfrastructureWorkspaceProps> = 
 
   return (
     <div class="space-y-6">
-      <Show when={!readOnlyWorkspace()}>
+      <Show when={showOrientation()}>
         <Card padding="lg" class="rounded-xl border border-border shadow-sm">
           <div class="space-y-4">
             <div class="space-y-2">
@@ -78,8 +91,8 @@ export const InfrastructureWorkspace: Component<InfrastructureWorkspaceProps> = 
                   3. Confirm reporting
                 </p>
                 <p class="mt-1 text-sm text-base-content">
-                  Run the command on that machine, then use Reporting &amp; control once the first
-                  system starts reporting.
+                  Run the command on that machine, then open Inventory once the first system starts
+                  reporting.
                 </p>
               </div>
             </div>
@@ -87,28 +100,26 @@ export const InfrastructureWorkspace: Component<InfrastructureWorkspaceProps> = 
               <button
                 type="button"
                 onClick={() => navigate(installPath())}
+                aria-current={activeView() === 'install' ? 'page' : undefined}
                 class={`inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-medium transition-colors ${
                   activeView() === 'install'
                     ? 'bg-blue-600 text-white'
                     : 'border border-border bg-surface text-base-content hover:bg-surface-hover'
                 }`}
               >
-                {activeView() === 'install'
-                  ? 'Install on a host selected'
-                  : 'Open Install on a host'}
+                Open Install on a host
               </button>
               <button
                 type="button"
                 onClick={() => navigate(platformsPath())}
+                aria-current={activeView() === 'platforms' ? 'page' : undefined}
                 class={`inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-medium transition-colors ${
                   activeView() === 'platforms'
                     ? 'bg-emerald-600 text-white'
                     : 'border border-border bg-surface text-base-content hover:bg-surface-hover'
                 }`}
               >
-                {activeView() === 'platforms'
-                  ? 'Platform connections selected'
-                  : 'Open Platform connections'}
+                Open Platform connections
               </button>
             </div>
             <p class="text-sm text-muted">

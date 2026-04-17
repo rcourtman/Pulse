@@ -359,7 +359,13 @@ an add-only capacity posture.
    aligned with that same lifecycle path. Bare infrastructure settings routes
    must default to the install workspace, and the workspace shell must make
    the first-host sequence explicit before operators drift into reporting and
-   control surfaces.
+   control surfaces. The third workspace subtab owns the reporting-and-control
+   surface at route `/settings/infrastructure/operations`; its user-facing
+   label is `Inventory` so the workspace narrative leads new operators from
+   install-or-connect into a reporting surface named after what it shows, not
+   after the internal lifecycle stage. The first-host orientation card must
+   hide once any platform connection or agent resource is already reporting,
+   so established operators do not see a first-system prompt.
 8. Keep post-install lifecycle completion explicit inside
    `frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx`
    and `frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx`.

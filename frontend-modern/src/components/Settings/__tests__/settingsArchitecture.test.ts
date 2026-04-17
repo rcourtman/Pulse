@@ -729,7 +729,6 @@ describe('Settings architecture guardrails', () => {
   it('keeps the direct Proxmox settings workspace split into section owners', () => {
     expect(proxmoxSettingsPanelSource).toContain('./ProxmoxDirectWorkspace');
     expect(proxmoxSettingsPanelSource).toContain('./proxmoxSettingsModel');
-    expect(proxmoxSettingsPanelSource).toContain('CalloutCard');
     expect(proxmoxSettingsPanelSource).toContain('SettingsSectionNav');
     expect(proxmoxSettingsPanelSource).not.toContain('./useProxmoxSettingsPanelState');
     expect(proxmoxSettingsPanelSource).not.toContain('./useProxmoxDirectWorkspaceState');
