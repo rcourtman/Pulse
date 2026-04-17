@@ -536,8 +536,10 @@ func TestRefreshGrantOnce_PreservesLegacyGrandfatherFloor(t *testing.T) {
 	}
 
 	status := svc.Status()
-	if status.MaxMonitoredSystems != 23 {
-		t.Fatalf("status.MaxMonitoredSystems=%d, want 23", status.MaxMonitoredSystems)
+	// Self-hosted Pro is uncapped, so status reports 0 regardless of the
+	// captured continuity floor. The floor is still persisted for audit.
+	if status.MaxMonitoredSystems != 0 {
+		t.Fatalf("status.MaxMonitoredSystems=%d, want 0 (uncapped self-hosted)", status.MaxMonitoredSystems)
 	}
 
 	loaded, err := p.LoadActivationState()

@@ -431,16 +431,16 @@ func TestServiceCaptureLegacyMonitoredSystemGrandfatherFloorPersistsAndUpdatesSt
 	}
 
 	status := svc.Status()
-	if status.MaxMonitoredSystems != 23 {
-		t.Fatalf("status.MaxMonitoredSystems=%d, want 23", status.MaxMonitoredSystems)
+	if status.MaxMonitoredSystems != 0 {
+		t.Fatalf("status.MaxMonitoredSystems=%d, want 0 (uncapped self-hosted)", status.MaxMonitoredSystems)
 	}
 
 	current := svc.Current()
 	if current == nil {
 		t.Fatal("expected current license")
 	}
-	if got := current.Claims.EffectiveLimits()[MaxMonitoredSystemsLicenseGateKey]; got != 23 {
-		t.Fatalf("EffectiveLimits()[max_monitored_systems]=%d, want 23", got)
+	if got, ok := current.Claims.EffectiveLimits()[MaxMonitoredSystemsLicenseGateKey]; ok {
+		t.Fatalf("EffectiveLimits()[max_monitored_systems]=%d present, want absent (uncapped self-hosted)", got)
 	}
 
 	loaded, err := p.LoadActivationState()
@@ -486,10 +486,10 @@ func TestServiceStatus_ExposesMonitoredSystemContinuityForFallbackMigrations(t *
 				LegacyMigration: true,
 			},
 			wantPlanLimit:      10,
-			wantEffectiveLimit: 10,
+			wantEffectiveLimit: 0,
 			wantFloor:          0,
 			wantCapturePending: true,
-			wantMaxSystems:     10,
+			wantMaxSystems:     0,
 		},
 		{
 			name: "captured floor",
@@ -499,10 +499,10 @@ func TestServiceStatus_ExposesMonitoredSystemContinuityForFallbackMigrations(t *
 				GrandfatheredMonitoredSystemsCapturedAt: 123,
 			},
 			wantPlanLimit:      10,
-			wantEffectiveLimit: 23,
+			wantEffectiveLimit: 0,
 			wantFloor:          23,
 			wantCapturePending: false,
-			wantMaxSystems:     23,
+			wantMaxSystems:     0,
 		},
 	}
 

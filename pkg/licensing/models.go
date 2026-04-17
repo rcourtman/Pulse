@@ -68,6 +68,20 @@ func (c Claims) EffectiveCapabilities() []string {
 	return DeriveCapabilitiesFromTier(c.Tier, c.Features)
 }
 
+// isSelfHostedUncappedTier reports whether a tier is a self-hosted tier that
+// must remain uncapped for core monitoring regardless of any persisted limit.
+// Cloud and MSP tiers resolve their limits from plan version, so they are
+// excluded. Enterprise is excluded because its claims carry explicit per-deal
+// limits that must be honored.
+func isSelfHostedUncappedTier(tier Tier) bool {
+	switch tier {
+	case TierFree, TierRelay, TierPro, TierProPlus, TierProAnnual, TierLifetime:
+		return true
+	default:
+		return false
+	}
+}
+
 // EffectiveLimits returns explicit limits when present; otherwise limits derived from legacy fields.
 func (c Claims) EffectiveLimits() map[string]int64 {
 	limits := NormalizeMonitoredSystemLimits(c.Limits)
@@ -80,10 +94,12 @@ func (c Claims) EffectiveLimits() map[string]int64 {
 			limits["max_guests"] = int64(c.MaxGuests)
 		}
 	}
-	if c.Tier == TierLifetime || IsGrandfatheredRecurringV5PlanVersion(c.PlanVersion) {
-		// Grandfathered lifetime licenses and active recurring v5 migrations
-		// must remain uncapped even if older tokens or migrated records still
-		// carry historical Pro-era limits.
+	if isSelfHostedUncappedTier(c.Tier) || IsGrandfatheredRecurringV5PlanVersion(c.PlanVersion) {
+		// Self-hosted tiers are uncapped for core monitoring, and grandfathered
+		// recurring v5 migrations must remain uncapped too. Older tokens or
+		// migrated activation records may still carry historical per-tier limits
+		// (e.g. a v5-migrated Community install persisted max_monitored_systems=1);
+		// scrub them so the current tier policy wins.
 		delete(limits, MaxMonitoredSystemsLicenseGateKey)
 		delete(limits, "max_guests")
 	}

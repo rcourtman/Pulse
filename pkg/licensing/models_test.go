@@ -117,6 +117,53 @@ func TestClaims_EffectiveLimits(t *testing.T) {
 			},
 			expected: map[string]int64{},
 		},
+		{
+			name: "free_strips_legacy_v5_cap_after_upgrade",
+			claims: Claims{
+				Tier:                TierFree,
+				Limits:              map[string]int64{"max_monitored_systems": 1, "max_guests": 5},
+				MaxMonitoredSystems: 1,
+				MaxGuests:           5,
+			},
+			expected: map[string]int64{},
+		},
+		{
+			name: "relay_strips_legacy_cap",
+			claims: Claims{
+				Tier:                TierRelay,
+				Limits:              map[string]int64{"max_monitored_systems": 8},
+				MaxMonitoredSystems: 8,
+			},
+			expected: map[string]int64{},
+		},
+		{
+			name: "pro_strips_legacy_cap",
+			claims: Claims{
+				Tier:                TierPro,
+				Limits:              map[string]int64{"max_monitored_systems": 15, "max_guests": 100},
+				MaxMonitoredSystems: 15,
+				MaxGuests:           100,
+			},
+			expected: map[string]int64{},
+		},
+		{
+			name: "pro_plus_strips_legacy_cap",
+			claims: Claims{
+				Tier:                TierProPlus,
+				Limits:              map[string]int64{"max_monitored_systems": 50},
+				MaxMonitoredSystems: 50,
+			},
+			expected: map[string]int64{},
+		},
+		{
+			name: "pro_annual_strips_legacy_cap",
+			claims: Claims{
+				Tier:                TierProAnnual,
+				Limits:              map[string]int64{"max_monitored_systems": 15},
+				MaxMonitoredSystems: 15,
+			},
+			expected: map[string]int64{},
+		},
 	}
 
 	for _, tt := range tests {

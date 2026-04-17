@@ -551,10 +551,10 @@ func (s *Service) monitoredSystemContinuityStatusLocked() *MonitoredSystemContin
 
 	effectiveLimit := planLimit
 	if s.license != nil {
+		// When a license is present, trust its claims. Self-hosted uncapped
+		// tiers return 0 here as a first-class "unlimited" signal, not a
+		// missing-data sentinel — do not fall back to the grant's plan limit.
 		effectiveLimit = monitoredSystemLimitFromClaims(s.license.Claims)
-	}
-	if effectiveLimit <= 0 {
-		effectiveLimit = planLimit
 	}
 
 	status := &MonitoredSystemContinuityStatus{

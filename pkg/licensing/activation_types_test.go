@@ -195,11 +195,13 @@ func TestGrantClaimsToClaimsWithContinuityAppliesGrandfatherFloor(t *testing.T) 
 		GrandfatheredMonitoredSystemsCapturedAt: time.Now().Unix(),
 	})
 
+	// The raw MaxMonitoredSystems field still records the continuity floor, but
+	// self-hosted Pro is uncapped, so EffectiveLimits must not surface a cap.
 	if claims.MaxMonitoredSystems != 23 {
 		t.Fatalf("MaxMonitoredSystems = %d, want 23", claims.MaxMonitoredSystems)
 	}
-	if got := claims.EffectiveLimits()[MaxMonitoredSystemsLicenseGateKey]; got != 23 {
-		t.Fatalf("EffectiveLimits()[max_monitored_systems] = %d, want 23", got)
+	if got, ok := claims.EffectiveLimits()[MaxMonitoredSystemsLicenseGateKey]; ok {
+		t.Fatalf("EffectiveLimits()[max_monitored_systems] = %d present, want absent (uncapped self-hosted)", got)
 	}
 }
 
@@ -219,11 +221,13 @@ func TestGrantClaimsToClaimsWithContinuityDoesNotLowerGrantLimit(t *testing.T) {
 		GrandfatheredMonitoredSystemsCapturedAt: time.Now().Unix(),
 	})
 
+	// Floor of 10 is below grant's 15, so the raw field is left at 15. Either
+	// way, self-hosted Pro is uncapped so EffectiveLimits does not surface a cap.
 	if claims.MaxMonitoredSystems != 15 {
 		t.Fatalf("MaxMonitoredSystems = %d, want 15", claims.MaxMonitoredSystems)
 	}
-	if got := claims.EffectiveLimits()[MaxMonitoredSystemsLicenseGateKey]; got != 15 {
-		t.Fatalf("EffectiveLimits()[max_monitored_systems] = %d, want 15", got)
+	if got, ok := claims.EffectiveLimits()[MaxMonitoredSystemsLicenseGateKey]; ok {
+		t.Fatalf("EffectiveLimits()[max_monitored_systems] = %d present, want absent (uncapped self-hosted)", got)
 	}
 }
 
