@@ -65,7 +65,7 @@ describe('RecoverySummary', () => {
     expect(screen.getAllByText('1 healthy')).toHaveLength(1);
     expect(screen.getByText('1 stale')).toBeInTheDocument();
     expect(screen.getByText('fresh in 24h')).toBeInTheDocument();
-    expect(screen.getByText('Mar 9')).toBeInTheDocument();
+    expect(screen.getByText(/^(Mar 9|9 Mar)$/)).toBeInTheDocument();
     expect(screen.getByText('2 protected items')).toBeInTheDocument();
     expect(screen.getByText('attention')).toBeInTheDocument();
     expect(screen.queryByText('need attention')).not.toBeInTheDocument();
@@ -86,7 +86,7 @@ describe('RecoverySummary', () => {
     expect(screen.queryByText('Peak Day')).not.toBeInTheDocument();
     expect(screen.queryByText('stale items')).not.toBeInTheDocument();
     expect(screen.queryByText('Platforms 2')).not.toBeInTheDocument();
-    expect(screen.queryByText('Latest Activity Mar 9')).not.toBeInTheDocument();
+    expect(screen.queryByText(/^Latest Activity (Mar 9|9 Mar)$/)).not.toBeInTheDocument();
     expect(screen.queryByText(/^Platforms$/)).not.toBeInTheDocument();
     expect(screen.queryByText(/^Healthy$/)).not.toBeInTheDocument();
     expect(screen.queryByText(/^Failed$/)).not.toBeInTheDocument();

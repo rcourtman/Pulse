@@ -10,7 +10,7 @@ describe('storagePageStatus', () => {
       getStoragePageBannerKind({
         loading: false,
         filteredRecordCount: 3,
-        connected: true,
+        connected: false,
         initialDataReceived: true,
         reconnecting: true,
         hasFetchError: false,

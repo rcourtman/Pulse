@@ -103,13 +103,13 @@ describe('InfrastructureSummary range behavior', () => {
     render(() => <InfrastructureSummary resources={[makeHost()]} timeRange={range()} />);
 
     await waitFor(() => {
-      expect(mockGetCharts).toHaveBeenCalledWith('1h');
+      expect(mockGetCharts).toHaveBeenCalledWith('1h', undefined, expect.any(Object));
     });
 
     setRange('24h');
 
     await waitFor(() => {
-      expect(mockGetCharts).toHaveBeenCalledWith('24h');
+      expect(mockGetCharts).toHaveBeenCalledWith('24h', undefined, expect.any(Object));
     });
   });
 
@@ -130,7 +130,7 @@ describe('InfrastructureSummary range behavior', () => {
 
     await waitFor(() => {
       expect(mockGetCharts).toHaveBeenCalledTimes(1);
-      expect(mockGetCharts).toHaveBeenCalledWith('1h');
+      expect(mockGetCharts).toHaveBeenCalledWith('1h', undefined, expect.any(Object));
     });
 
     resolveFetch?.(makeChartsResponse());
@@ -148,7 +148,7 @@ describe('InfrastructureSummary range behavior', () => {
       <InfrastructureSummary resources={[makeHost()]} timeRange="1h" />
     ));
     await waitFor(() => {
-      expect(mockGetCharts).toHaveBeenCalledWith('1h');
+      expect(mockGetCharts).toHaveBeenCalledWith('1h', undefined, expect.any(Object));
       expect(firstContainer.querySelector('svg.cursor-crosshair')).toBeTruthy();
     });
     unmount();
@@ -183,7 +183,7 @@ describe('InfrastructureSummary range behavior', () => {
     ));
 
     await waitFor(() => {
-      expect(mockGetCharts).toHaveBeenCalledWith('1h');
+      expect(mockGetCharts).toHaveBeenCalledWith('1h', undefined, expect.any(Object));
     });
 
     // While fetch is pending, skeleton should be shown (no in-memory cache yet).
@@ -210,7 +210,7 @@ describe('InfrastructureSummary range behavior', () => {
     ));
 
     await waitFor(() => {
-      expect(mockGetCharts).toHaveBeenCalledWith('1h');
+      expect(mockGetCharts).toHaveBeenCalledWith('1h', undefined, expect.any(Object));
     });
 
     await waitFor(() => {
@@ -222,7 +222,7 @@ describe('InfrastructureSummary range behavior', () => {
     setRange('24h');
 
     await waitFor(() => {
-      expect(mockGetCharts).toHaveBeenCalledWith('24h');
+      expect(mockGetCharts).toHaveBeenCalledWith('24h', undefined, expect.any(Object));
     });
 
     expect(container.querySelector('svg.cursor-crosshair')).toBeNull();
@@ -240,13 +240,13 @@ describe('InfrastructureSummary range behavior', () => {
     render(() => <InfrastructureSummary resources={[makeHost()]} timeRange={range()} />);
 
     await waitFor(() => {
-      expect(mockGetCharts).toHaveBeenCalledWith('1h');
+      expect(mockGetCharts).toHaveBeenCalledWith('1h', undefined, expect.any(Object));
     });
 
     setRange('24h');
 
     await waitFor(() => {
-      expect(mockGetCharts).toHaveBeenCalledWith('24h');
+      expect(mockGetCharts).toHaveBeenCalledWith('24h', undefined, expect.any(Object));
     });
   });
 
@@ -271,7 +271,7 @@ describe('InfrastructureSummary range behavior', () => {
     ));
 
     await waitFor(() => {
-      expect(mockGetCharts).toHaveBeenCalledWith('1h');
+      expect(mockGetCharts).toHaveBeenCalledWith('1h', undefined, expect.any(Object));
     });
     await waitFor(() => {
       expect(container.querySelector('svg.cursor-crosshair')).toBeTruthy();
@@ -280,7 +280,7 @@ describe('InfrastructureSummary range behavior', () => {
     setRange('24h');
 
     await waitFor(() => {
-      expect(mockGetCharts).toHaveBeenCalledWith('24h');
+      expect(mockGetCharts).toHaveBeenCalledWith('24h', undefined, expect.any(Object));
     });
 
     await waitFor(() => {
@@ -306,7 +306,7 @@ describe('InfrastructureSummary range behavior', () => {
     ));
 
     await waitFor(() => {
-      expect(mockGetCharts).toHaveBeenCalledWith('1h');
+      expect(mockGetCharts).toHaveBeenCalledWith('1h', undefined, expect.any(Object));
     });
 
     await waitFor(() => {
@@ -325,7 +325,7 @@ describe('InfrastructureSummary range behavior', () => {
     ));
 
     await waitFor(() => {
-      expect(mockGetCharts).toHaveBeenCalledWith('1h');
+      expect(mockGetCharts).toHaveBeenCalledWith('1h', undefined, expect.any(Object));
     });
     await waitFor(() => {
       expect(container.querySelector('svg.cursor-crosshair')).toBeTruthy();
@@ -334,7 +334,7 @@ describe('InfrastructureSummary range behavior', () => {
     setRange('24h');
 
     await waitFor(() => {
-      expect(mockGetCharts).toHaveBeenCalledWith('24h');
+      expect(mockGetCharts).toHaveBeenCalledWith('24h', undefined, expect.any(Object));
     });
 
     await waitFor(() => {
@@ -354,7 +354,7 @@ describe('InfrastructureSummary range behavior', () => {
     ));
 
     await waitFor(() => {
-      expect(mockGetCharts).toHaveBeenCalledWith('1h');
+      expect(mockGetCharts).toHaveBeenCalledWith('1h', undefined, expect.any(Object));
     });
     await waitFor(() => {
       expect(container.querySelector('svg.cursor-crosshair')).toBeTruthy();
@@ -395,7 +395,7 @@ describe('InfrastructureSummary range behavior', () => {
     ));
 
     await waitFor(() => {
-      expect(mockGetCharts).toHaveBeenCalledWith('1h');
+      expect(mockGetCharts).toHaveBeenCalledWith('1h', undefined, expect.any(Object));
       expect(container.querySelectorAll('[data-testid="sparkline-skeleton"]')).toHaveLength(0);
       expect(countSparklinePaths(container)).toBeGreaterThan(0);
     });
@@ -491,7 +491,7 @@ describe('InfrastructureSummary range behavior', () => {
     ));
 
     await waitFor(() => {
-      expect(mockGetCharts).toHaveBeenCalledWith('1h');
+      expect(mockGetCharts).toHaveBeenCalledWith('1h', undefined, expect.any(Object));
     });
 
     await waitFor(() => {
@@ -550,7 +550,7 @@ describe('InfrastructureSummary range behavior', () => {
     ));
 
     await waitFor(() => {
-      expect(mockGetCharts).toHaveBeenCalledWith('1h');
+      expect(mockGetCharts).toHaveBeenCalledWith('1h', undefined, expect.any(Object));
     });
 
     await waitFor(() => {
@@ -616,7 +616,7 @@ describe('InfrastructureSummary range behavior', () => {
     ));
 
     await waitFor(() => {
-      expect(mockGetCharts).toHaveBeenCalledWith('1h');
+      expect(mockGetCharts).toHaveBeenCalledWith('1h', undefined, expect.any(Object));
     });
 
     await waitFor(() => {
@@ -709,11 +709,14 @@ describe('InfrastructureSummary range behavior', () => {
     };
 
     const { container } = render(() => (
-      <InfrastructureSummary resources={[proxmoxNodeHost]} timeRange="1h" />
+      <InfrastructureSummary
+        resources={[proxmoxNodeHost, ...mockHostAgentResources]}
+        timeRange="1h"
+      />
     ));
 
     await waitFor(() => {
-      expect(mockGetCharts).toHaveBeenCalledWith('1h');
+      expect(mockGetCharts).toHaveBeenCalledWith('1h', undefined, expect.any(Object));
     });
 
     await waitFor(() => {
@@ -786,7 +789,7 @@ describe('InfrastructureSummary range behavior', () => {
     ));
 
     await waitFor(() => {
-      expect(mockGetCharts).toHaveBeenCalledWith('1h');
+      expect(mockGetCharts).toHaveBeenCalledWith('1h', undefined, expect.any(Object));
     });
 
     await waitFor(() => {
@@ -877,11 +880,14 @@ describe('InfrastructureSummary range behavior', () => {
     };
 
     const { container } = render(() => (
-      <InfrastructureSummary resources={[proxmoxNodeHost]} timeRange="1h" />
+      <InfrastructureSummary
+        resources={[proxmoxNodeHost, ...mockHostAgentResources]}
+        timeRange="1h"
+      />
     ));
 
     await waitFor(() => {
-      expect(mockGetCharts).toHaveBeenCalledWith('1h');
+      expect(mockGetCharts).toHaveBeenCalledWith('1h', undefined, expect.any(Object));
     });
 
     await waitFor(() => {

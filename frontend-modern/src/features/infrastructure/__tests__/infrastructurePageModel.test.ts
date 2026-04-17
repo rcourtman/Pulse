@@ -43,7 +43,7 @@ describe('infrastructurePageModel', () => {
     ]);
     expect(derivation.statusOptions).toEqual([
       { key: 'online', label: 'Online' },
-      { key: 'warning', label: 'warning' },
+      { key: 'degraded', label: 'Degraded' },
     ]);
     expect(derivation.activeFilterCount).toBe(0);
     expect(derivation.hasActiveFilters).toBe(false);

@@ -75,7 +75,7 @@ describe('licensePresentation', () => {
       usageTabLabel: 'Usage',
       planSectionTitle: 'Plan',
       planSectionDescription:
-        'Review your active plan, expiry, included limits, and paid capabilities.',
+        'Review your active plan, expiry, and the paid capabilities that come with it.',
       usageSectionTitle: 'Usage',
       hiddenShellTitle: 'Demo mode',
       hiddenShellDescription: 'Commercial settings are hidden for this session.',

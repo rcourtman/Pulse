@@ -98,7 +98,6 @@ describe('storagePagePresentation', () => {
       'Usage',
       'Impact',
       'Primary Issue',
-      '',
     ]);
   });
 

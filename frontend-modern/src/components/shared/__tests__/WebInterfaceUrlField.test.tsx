@@ -109,7 +109,7 @@ describe('WebInterfaceUrlField', () => {
       />
     ));
 
-    expect(await screen.findByText('No suggested URL found')).toBeInTheDocument();
+    expect(await screen.findByText('No suggested URL available')).toBeInTheDocument();
     expect(screen.getByText('No management interface could be inferred.')).toBeInTheDocument();
   });
 });

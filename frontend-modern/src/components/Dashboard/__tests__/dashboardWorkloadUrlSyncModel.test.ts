@@ -21,6 +21,7 @@ describe('dashboardWorkloadUrlSyncModel', () => {
       namespace: 'default',
       agent: 'node-a',
       resource: 'guest-1',
+      summaryGroup: '',
     });
   });
 

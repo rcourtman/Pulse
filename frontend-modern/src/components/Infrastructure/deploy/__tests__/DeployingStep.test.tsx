@@ -301,10 +301,10 @@ describe('DeployingStep', () => {
       const wizard = createMockWizard({ jobTargets: targets });
       render(() => <DeployingStep wizard={wizard} />);
 
-      // DeployStatusBadge renders role="status" spans; progress summary also has role="status"
-      const allStatusElements = screen.getAllByRole('status');
-      // Exactly 1 progress summary + 2 badges = 3
-      expect(allStatusElements).toHaveLength(3);
+      // Progress summary has role="status"; badges render label text from getDeployStatusPresentation
+      expect(screen.getAllByRole('status')).toHaveLength(1);
+      expect(screen.getByText('Deployed')).toBeInTheDocument();
+      expect(screen.getByText('Failed')).toBeInTheDocument();
     });
 
     it('renders empty table body when no targets', () => {

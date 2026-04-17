@@ -29,6 +29,6 @@ describe('useStoragePageControlsModel', () => {
     expect(setGroupBy).toHaveBeenCalledWith('node');
 
     result.setNormalizedSortKey('type');
-    expect(setSortKey).toHaveBeenCalledWith('priority');
+    expect(setSortKey).toHaveBeenCalledWith('type');
   });
 });

@@ -63,6 +63,7 @@ describe('useStoragePageFilters', () => {
     expect(ctx.filters.sourceFilter()).toBe('proxmox-pve');
     expect(ctx.navigate).toHaveBeenCalledWith('/storage?source=proxmox-pve', {
       replace: true,
+      scroll: false,
     });
 
     ctx.dispose();
@@ -76,6 +77,7 @@ describe('useStoragePageFilters', () => {
     expect(ctx.filters.selectedNodeId()).toBe('all');
     expect(ctx.navigate).toHaveBeenCalledWith('/storage', {
       replace: true,
+      scroll: false,
     });
 
     ctx.dispose();
@@ -95,6 +97,7 @@ describe('useStoragePageFilters', () => {
     expect(ctx.navigate).toHaveBeenCalledTimes(1);
     expect(ctx.navigate).toHaveBeenCalledWith('/storage?tab=disks&source=agent&q=tank', {
       replace: true,
+      scroll: false,
     });
 
     ctx.dispose();

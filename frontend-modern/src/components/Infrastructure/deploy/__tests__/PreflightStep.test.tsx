@@ -494,12 +494,13 @@ describe('PreflightStep', () => {
   /* ── Empty targets with no error ─────────────────────────────── */
 
   describe('empty targets', () => {
-    it('shows "Preflight checks complete" with 0 of 0 nodes', () => {
+    it('shows the "Checking" summary when targets list is empty', () => {
       const wizard = createMockWizard({ preflightTargets: [] });
       render(() => <PreflightStep wizard={wizard} />);
 
-      // completedCount=0, totalCount=0 → 0 < 0 is false → shows "Preflight checks complete"
-      expect(getProgressSummary()).toHaveTextContent('Preflight checks complete');
+      // totalCount=0 short-circuits to the "Checking..." branch so the summary
+      // never prematurely declares "complete" before targets populate.
+      expect(getProgressSummary()).toHaveTextContent('Checking 0 of 0 nodes...');
     });
   });
 });

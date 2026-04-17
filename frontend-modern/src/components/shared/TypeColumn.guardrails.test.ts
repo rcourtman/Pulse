@@ -65,7 +65,7 @@ describe('type column guardrails', () => {
     expect(guestRowModelSource).not.toMatch(INLINE_TYPE_COLUMN_PATTERN);
     expect(guestRowModelSource).not.toContain("defaultVisibility:");
 
-    expect(recoverySource).toContain('createHiddenCanonicalTypeColumn()');
+    expect(recoverySource).toContain('createVisibleCanonicalTypeColumn()');
     expect(recoverySource).not.toContain('createCanonicalTypeColumn');
     expect(recoverySource).not.toMatch(INLINE_TYPE_COLUMN_PATTERN);
     expect(recoverySource).not.toContain("defaultVisibility:");

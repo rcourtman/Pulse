@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import recoveryActivitySectionSource from '@/components/Recovery/RecoveryActivitySection.tsx?raw';
-import recoveryPageSource from '@/components/Recovery/Recovery.tsx?raw';
 import recoveryPointDetailsSource from '@/components/Recovery/RecoveryPointDetails.tsx?raw';
+import recoverySurfaceStateSource from '@/features/recovery/useRecoverySurfaceState.ts?raw';
 import recoverySummaryPresentationSource from '@/utils/recoverySummaryPresentation.ts?raw';
 import recoveryHistorySectionSource from '@/components/Recovery/RecoveryHistorySection.tsx?raw';
 import recoveryProtectedInventorySectionSource from '@/components/Recovery/RecoveryProtectedInventorySection.tsx?raw';
@@ -25,10 +24,10 @@ describe('recovery canonical vocabulary', () => {
   });
 
   it('keeps recovery activity focus labels item-first', () => {
-    expect(recoveryPageSource).toContain('const selectedHistoryItemLabel = createMemo(() => {');
-    expect(recoveryPageSource).not.toContain('const selectedHistorySubjectLabel = createMemo(() => {');
-    expect(recoveryActivitySectionSource).toContain('selectedHistoryItemLabel: Accessor<string | null>;');
-    expect(recoveryActivitySectionSource).not.toContain(
+    expect(recoverySurfaceStateSource).toContain('const selectedHistoryItemLabel = createMemo(() => {');
+    expect(recoverySurfaceStateSource).not.toContain('const selectedHistorySubjectLabel = createMemo(() => {');
+    expect(recoveryHistorySectionSource).toContain('selectedHistoryItemLabel: Accessor<string | null>;');
+    expect(recoveryHistorySectionSource).not.toContain(
       'selectedHistorySubjectLabel: Accessor<string | null>;',
     );
   });
