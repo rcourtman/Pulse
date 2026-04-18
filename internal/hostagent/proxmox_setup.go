@@ -547,7 +547,17 @@ func (p *ProxmoxSetup) orderedCandidateHosts(ctx context.Context, ptype proxmoxP
 func (p *ProxmoxSetup) checkRegistrationWithPulse(ctx context.Context, ptype proxmoxProductType, hostURL string) (bool, error) {
 	setupToken, err := p.fetchSetupToken(ctx, ptype, hostURL)
 	if err != nil {
-		return false, fmt.Errorf("fetch setup token: %w", err)
+		var ce *clientError
+		var pe *permanentError
+		if errors.As(err, &pe) {
+			return false, fmt.Errorf("fetch setup token: %w", err)
+		}
+		if errors.As(err, &ce) {
+			// Fall through without a setup token; server will authenticate via X-API-Token.
+			setupToken = ""
+		} else {
+			return false, fmt.Errorf("fetch setup token: %w", err)
+		}
 	}
 
 	payload := autoRegisterRequest{
@@ -570,6 +580,9 @@ func (p *ProxmoxSetup) checkRegistrationWithPulse(ctx context.Context, ptype pro
 		return false, fmt.Errorf("create registration-check request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
+	if token := strings.TrimSpace(p.apiToken); token != "" {
+		req.Header.Set("X-API-Token", token)
+	}
 
 	resp, err := p.httpClient.Do(req)
 	if err != nil {
@@ -1143,6 +1156,9 @@ func (p *ProxmoxSetup) doRegisterRequest(ctx context.Context, body []byte, expec
 		return autoRegisterResponse{}, &permanentError{fmt.Errorf("create request: %w", err)}
 	}
 	req.Header.Set("Content-Type", "application/json")
+	if token := strings.TrimSpace(p.apiToken); token != "" {
+		req.Header.Set("X-API-Token", token)
+	}
 
 	resp, err := p.httpClient.Do(req)
 	if err != nil {
@@ -1327,15 +1343,26 @@ func (p *ProxmoxSetup) registerWithPulse(ctx context.Context, ptype proxmoxProdu
 			lastErr = fmt.Errorf("fetch setup token: %w", err)
 			var ce *clientError
 			var pe *permanentError
-			if errors.As(lastErr, &ce) || errors.As(lastErr, &pe) {
+			if errors.As(lastErr, &pe) {
 				return autoRegisterResponse{}, lastErr
 			}
-			p.logger.Warn().Err(lastErr).
-				Int("attempt", attempt+1).
-				Int("max_attempts", len(backoffs)+1).
-				Str("type", string(ptype)).
-				Msg("Proxmox setup token fetch failed")
-			continue
+			if errors.As(lastErr, &ce) {
+				// The setup-script-url endpoint requires settings:write scope; agent tokens
+				// only have agent:report. Fall through without a setup token — the server
+				// will authenticate via the X-API-Token header instead (update-only path).
+				p.logger.Info().
+					Int("statusCode", ce.statusCode).
+					Str("type", string(ptype)).
+					Msg("Setup token fetch returned client error; falling back to agent API token auth")
+				setupToken = ""
+			} else {
+				p.logger.Warn().Err(lastErr).
+					Int("attempt", attempt+1).
+					Int("max_attempts", len(backoffs)+1).
+					Str("type", string(ptype)).
+					Msg("Proxmox setup token fetch failed")
+				continue
+			}
 		}
 
 		payload := autoRegisterRequest{

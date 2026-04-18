@@ -26,6 +26,15 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+// agentAutoRegContextKey marks a request authenticated via agent:report token.
+// When set, handleCanonicalAutoRegister restricts to updating existing nodes only.
+type agentAutoRegContextKey struct{}
+
+func isAgentAutoRegAuth(ctx context.Context) bool {
+	v, _ := ctx.Value(agentAutoRegContextKey{}).(bool)
+	return v
+}
+
 // HandleSetupScript serves the setup script for Proxmox/PBS nodes
 func (h *ConfigHandlers) handleSetupScript(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
@@ -646,6 +655,32 @@ func (h *ConfigHandlers) handleAutoRegister(w http.ResponseWriter, r *http.Reque
 		h.codeMutex.Unlock()
 	}
 
+	// Fallback: allow agents with a valid agent:report API token to re-register their
+	// Proxmox node. This is needed when an agent reinstalls — it rotates the PVE token
+	// but can't fetch a one-time setup token (that endpoint requires settings:write).
+	// For security this path is restricted to updating existing nodes only.
+	if !authenticated {
+		if apiToken, hasToken := explicitAPITokenFromRequest(r); hasToken {
+			config.Mu.RLock()
+			cfg := h.getConfig(r.Context())
+			isValid := cfg != nil && cfg.IsValidAPIToken(apiToken)
+			config.Mu.RUnlock()
+			if isValid {
+				config.Mu.Lock()
+				record, ok := cfg.ValidateAPIToken(apiToken)
+				config.Mu.Unlock()
+				if ok && record != nil && record.HasScope(config.ScopeAgentReport) {
+					authenticated = true
+					r = r.WithContext(context.WithValue(r.Context(), agentAutoRegContextKey{}, true))
+					log.Info().
+						Str("type", req.Type).
+						Str("host", req.Host).
+						Msg("Auto-register authenticated via agent API token (update-only mode)")
+				}
+			}
+		}
+	}
+
 	// Abort when no authentication succeeded. This applies even when API tokens
 	// are not configured to ensure one-time setup tokens are always required.
 	if !authenticated {
@@ -859,6 +894,12 @@ func (h *ConfigHandlers) handleCanonicalAutoRegister(w http.ResponseWriter, r *h
 			instance.VerifySSL = pveNode.VerifySSL
 			log.Info().Str("host", host).Str("type", "pve").Msg(canonicalAutoRegisterMatchMessage("host; updated token in-place"))
 		} else {
+			// Agent-token auth is restricted to updating existing nodes only.
+			if isAgentAutoRegAuth(r.Context()) {
+				log.Warn().Str("host", host).Str("type", "pve").Msg("Agent API token auth rejected for new PVE node registration")
+				http.Error(w, "agent token auth permits token updates for existing nodes only", http.StatusForbidden)
+				return
+			}
 			if enforceMonitoredSystemLimitForConfigRegistration(w, r.Context(), h.getConfig(r.Context()), h.getMonitor(r.Context()), unifiedresources.MonitoredSystemCandidate{
 				Source:   unifiedresources.SourceProxmox,
 				Type:     unifiedresources.ResourceTypeAgent,
@@ -934,6 +975,12 @@ func (h *ConfigHandlers) handleCanonicalAutoRegister(w http.ResponseWriter, r *h
 			instance.VerifySSL = pbsNode.VerifySSL
 			log.Info().Str("host", host).Str("type", "pbs").Msg(canonicalAutoRegisterMatchMessage("host; updated token in-place"))
 		} else {
+			// Agent-token auth is restricted to updating existing nodes only.
+			if isAgentAutoRegAuth(r.Context()) {
+				log.Warn().Str("host", host).Str("type", "pbs").Msg("Agent API token auth rejected for new PBS node registration")
+				http.Error(w, "agent token auth permits token updates for existing nodes only", http.StatusForbidden)
+				return
+			}
 			if enforceMonitoredSystemLimitForConfigRegistration(w, r.Context(), h.getConfig(r.Context()), h.getMonitor(r.Context()), unifiedresources.MonitoredSystemCandidate{
 				Source:   unifiedresources.SourcePBS,
 				Type:     unifiedresources.ResourceTypePBS,

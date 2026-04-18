@@ -4869,8 +4869,9 @@ func (r *Router) handleAgentVersion(w http.ResponseWriter, req *http.Request) {
 	// Return the server version - all agents should match the server version.
 	// Dev/git builds return "dev" so agents don't enter an infinite update loop
 	// (the agent skips updates when the server reports "dev").
+	versionInfo, err := updates.GetCurrentVersion()
 	version := "dev"
-	if versionInfo, err := updates.GetCurrentVersion(); err == nil && !versionInfo.IsDevelopment {
+	if err == nil && !versionInfo.IsDevelopment {
 		version = versionInfo.Version
 	}
 
