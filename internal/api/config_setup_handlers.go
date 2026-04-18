@@ -718,12 +718,19 @@ func (h *ConfigHandlers) handleAutoRegister(w http.ResponseWriter, r *http.Reque
 				record, ok := cfg.ValidateAPIToken(apiToken)
 				config.Mu.Unlock()
 				if ok && record != nil && record.HasScope(config.ScopeAgentReport) {
-					authenticated = true
-					r = r.WithContext(context.WithValue(r.Context(), agentAutoRegContextKey{}, true))
-					log.Info().
-						Str("type", req.Type).
-						Str("host", req.Host).
-						Msg("Auto-register authenticated via agent API token (update-only mode)")
+					// Reject cross-org tokens: if the request context has an explicit
+					// non-default org, the token must belong to that same org.
+					requestOrgID := GetOrgID(r.Context())
+					orgMismatch := requestOrgID != "" && requestOrgID != "default" &&
+						record.OrgID != "" && record.OrgID != requestOrgID
+					if !orgMismatch {
+						authenticated = true
+						r = r.WithContext(context.WithValue(r.Context(), agentAutoRegContextKey{}, true))
+						log.Info().
+							Str("type", req.Type).
+							Str("host", req.Host).
+							Msg("Auto-register authenticated via agent API token (update-only mode)")
+					}
 				}
 			}
 		}

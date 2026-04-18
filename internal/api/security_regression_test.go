@@ -2065,16 +2065,19 @@ func TestAutoRegisterRejectsAgentTokenWithoutSetupToken(t *testing.T) {
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
 	router.configHandlers.SetConfig(cfg)
 
-	body := `{"type":"pve","host":"https://192.168.1.1:8006","tokenId":"test@pam!pulse","tokenValue":"secret"}`
+	// Agent-report tokens can authenticate auto-register but are restricted to
+	// updating existing nodes. Attempting to register a brand-new node must
+	// return 403, not succeed.
+	body := `{"type":"pve","host":"https://192.168.1.1:8006","tokenId":"pulse-monitor@pve!pulse-192-168-1-1","tokenValue":"secret","source":"agent","serverName":"newhost"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/auto-register", strings.NewReader(body))
 	req.Header.Set("X-API-Token", rawToken)
 	rec := httptest.NewRecorder()
 	router.Handler().ServeHTTP(rec, req)
-	if rec.Code != http.StatusUnauthorized {
-		t.Fatalf("expected 401 when agent API token is provided without a Pulse setup token, got %d", rec.Code)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 when agent API token is used to register a new node, got %d", rec.Code)
 	}
-	if !strings.Contains(rec.Body.String(), "Pulse setup token required") {
-		t.Fatalf("expected setup-token requirement guidance, got %q", rec.Body.String())
+	if !strings.Contains(rec.Body.String(), "agent token auth permits token updates for existing nodes only") {
+		t.Fatalf("expected agent-token restriction message, got %q", rec.Body.String())
 	}
 }
 
