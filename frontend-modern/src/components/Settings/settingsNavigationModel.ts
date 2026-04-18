@@ -219,6 +219,7 @@ export function deriveTabFromPath(path: string): SettingsTab {
 
   if (canonicalPath === '/settings') return DEFAULT_SETTINGS_TAB;
   if (
+    canonicalPath === LEGACY_INFRASTRUCTURE_PREFIX ||
     canonicalPath === INFRASTRUCTURE_INSTALL_PREFIX ||
     canonicalPath === PLATFORM_CONNECTIONS_PREFIX ||
     canonicalPath === INFRASTRUCTURE_OPERATIONS_PREFIX
@@ -391,7 +392,7 @@ export function settingsTabPath(tab: SettingsTab): string {
     case 'proxmox':
       return PROXMOX_PREFIX;
     case 'infrastructure-operations':
-      return INFRASTRUCTURE_INSTALL_PREFIX;
+      return LEGACY_INFRASTRUCTURE_PREFIX;
     case 'system-recovery':
       return '/settings/system-recovery';
     case 'organization-overview':

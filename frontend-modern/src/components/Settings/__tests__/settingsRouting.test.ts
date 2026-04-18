@@ -18,7 +18,7 @@ import { isFeatureLocked, isTabLocked } from '../settingsFeatureGates';
 
 const canonicalTabPaths = {
   proxmox: '/settings/infrastructure/platforms/proxmox',
-  'infrastructure-operations': '/settings/infrastructure/install',
+  'infrastructure-operations': '/settings/infrastructure',
   'system-general': '/settings/system-general',
   'system-network': '/settings/system-network',
   'system-updates': '/settings/system-updates',
@@ -65,19 +65,19 @@ describe('settingsNavigationModel', () => {
   });
 
   it('resolves only canonical settings paths', () => {
-    expect(resolveCanonicalSettingsPath('/settings')).toBe('/settings/infrastructure/install');
+    expect(resolveCanonicalSettingsPath('/settings')).toBe('/settings/infrastructure');
     expect(resolveCanonicalSettingsPath('/settings/workloads')).toBe(
-      '/settings/infrastructure/install',
+      '/settings/infrastructure',
     );
     expect(resolveCanonicalSettingsPath('/settings/workloads/docker')).toBe(
-      '/settings/infrastructure/install',
+      '/settings/infrastructure',
     );
     expect(resolveCanonicalSettingsPath('/settings/support')).toBe('/settings/support/diagnostics');
     expect(resolveCanonicalSettingsPath('/settings/system-updates')).toBe(
       '/settings/system-updates',
     );
     expect(resolveCanonicalSettingsPath('/settings/infrastructure')).toBe(
-      '/settings/infrastructure/install',
+      '/settings/infrastructure',
     );
     expect(resolveCanonicalSettingsPath('/settings/infrastructure/pve')).toBe(
       '/settings/infrastructure/platforms/proxmox/pve',

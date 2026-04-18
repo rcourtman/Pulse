@@ -412,9 +412,12 @@ work extends shared components instead of creating new local variants.
 13. Keep the settings-shell infrastructure landing path aligned with that same
     first-session story. `frontend-modern/src/components/Settings/settingsNavigationModel.ts`
     must treat `/settings` and the infrastructure settings tab as the canonical
-    path to `/settings/infrastructure/install`, not to reporting/control, so
-    the shell does not send first-time operators to the wrong infrastructure
-    subview by default.
+    path to the bare `/settings/infrastructure`, which renders the unified
+    Connections table, not to a separate install subview or to reporting/
+    control. The first-session story is owned by that table's own empty state
+    and the `Add a system` entry point on it, not by a second landing route,
+    so first-time operators and returning operators see one consistent
+    infrastructure surface by default.
 14. Keep dashboard onboarding copy on the shared presentation owner in
     `frontend-modern/src/utils/dashboardEmptyStatePresentation.ts`. Both the
     infrastructure empty state and the dashboard route's no-resources state
