@@ -19,10 +19,10 @@ describe('useSettingsShellState', () => {
 
     createRoot((dispose) => {
       const state = useSettingsShellState({
-        activeTab: () => 'infrastructure-operations',
+        activeTab: () => 'infrastructure-systems',
       });
 
-      expect(state.headerMeta().title).toBe('Infrastructure');
+      expect(state.headerMeta().title).toBe('Systems');
       expect(state.headerMeta().description).toBe(
         'Review the current top-level monitored systems and reporting posture. Setup changes stay unavailable in this read-only session.',
       );

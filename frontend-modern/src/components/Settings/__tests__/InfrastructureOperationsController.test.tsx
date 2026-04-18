@@ -129,6 +129,9 @@ describe('InfrastructureOperationsController ownership guardrails', () => {
       'export const useInfrastructureDiscoveryRuntimeState',
     );
     expect(infrastructureDiscoveryRuntimeStateSource).toContain("apiFetch('/api/discover'");
+    expect(infrastructureDiscoveryRuntimeStateSource).toContain(
+      "currentTab() === 'infrastructure-connections'",
+    );
     expect(infrastructureDiscoveryRuntimeStateSource).toContain('SettingsAPI.updateSystemSettings');
     expect(infrastructureInstallerSectionSource).toContain('useInfrastructureOperationsContext');
     expect(infrastructureInstallerSectionSource).toContain(

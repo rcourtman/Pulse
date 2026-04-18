@@ -1,6 +1,5 @@
 import { Component, Match, Show, Switch, createEffect, createMemo, createSignal } from 'solid-js';
 import { useLocation, useNavigate } from '@solidjs/router';
-import { Subtabs } from '@/components/shared/Subtabs';
 import { Dialog } from '@/components/shared/Dialog';
 import { presentationPolicyIsReadOnly } from '@/stores/sessionPresentationPolicy';
 import { AgentProfilesPanel } from './AgentProfilesPanel';
@@ -13,15 +12,12 @@ import {
 } from './connectionsTableModel';
 import { InfrastructureActiveRowDetails } from './InfrastructureActiveRowDetails';
 import { InfrastructureInstallerSection } from './InfrastructureInstallerSection';
-import { InfrastructureInventorySection } from './InfrastructureInventorySection';
 import { InfrastructureIgnoredRowDetails } from './InfrastructureIgnoredRowDetails';
 import { InfrastructureStopMonitoringDialog } from './InfrastructureStopMonitoringDialog';
 import { PlatformConnectionsWorkspace } from './PlatformConnectionsWorkspace';
 import {
-  INFRASTRUCTURE_WORKSPACE_TABS,
   buildInfrastructureWorkspacePath,
   getInfrastructureWorkspaceViewFromPath,
-  type InfrastructureWorkspaceTabView,
 } from './infrastructureWorkspaceModel';
 import type { InfrastructurePlatformSettingsProps } from './proxmoxSettingsModel';
 import {
@@ -130,20 +126,6 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
 
   return (
     <div class="space-y-8">
-      <Show when={!readOnlyWorkspace() && activeView() !== 'operations'}>
-        <Subtabs
-          value={activeView()}
-          onChange={(value) =>
-            navigate(buildInfrastructureWorkspacePath(value as InfrastructureWorkspaceTabView))
-          }
-          ariaLabel="Infrastructure workspace"
-          tabs={INFRASTRUCTURE_WORKSPACE_TABS.map((tab) => ({
-            value: tab.id,
-            label: tab.label,
-          }))}
-        />
-      </Show>
-
       <Show when={activeView() === 'inventory'}>
         <ConnectionsTable
           rows={rows}
@@ -197,10 +179,6 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
       </Dialog>
 
       <Switch>
-        <Match when={activeView() === 'operations'}>
-          <InfrastructureInventorySection />
-        </Match>
-
         <Match when={!readOnlyWorkspace() && activeView() === 'platforms'}>
           <PlatformConnectionsWorkspace {...props} />
         </Match>

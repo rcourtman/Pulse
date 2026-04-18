@@ -7,6 +7,7 @@ import {
   deriveAgentFromPath,
   deriveTabFromPath,
   deriveTabFromQuery,
+  isInfrastructureSettingsTab,
   isProxmoxSettingsPath,
   resolveCanonicalSettingsPath,
   settingsAgentPath,
@@ -14,8 +15,6 @@ import {
   type AgentKey,
   type SettingsTab,
 } from './settingsNavigationModel';
-
-type SettingsDispatchableTab = Exclude<SettingsTab, 'proxmox'>;
 
 type SettingsLocation = {
   hash: string;
@@ -41,20 +40,19 @@ export function useSettingsNavigation({ navigate, location }: UseSettingsNavigat
     deriveTabFromPath(location.pathname),
   );
   const resolveTabPath = (tab: SettingsTab): string =>
-    tab === 'infrastructure-operations' && presentationPolicyIsReadOnly()
+    presentationPolicyIsReadOnly() &&
+    isInfrastructureSettingsTab(tab) &&
+    tab !== 'infrastructure-systems'
       ? buildInfrastructureWorkspacePath('inventory')
       : settingsTabPath(tab);
-  const activeTab = (): SettingsDispatchableTab => {
-    const tab = currentTab();
-    return tab === 'proxmox' ? 'infrastructure-operations' : tab;
-  };
+  const activeTab = (): SettingsTab => currentTab();
 
   const [selectedAgent, setSelectedAgent] = createSignal<AgentKey>('pve');
 
   const handleSelectAgent = (agent: AgentKey) => {
     setSelectedAgent(agent);
-    if (currentTab() !== 'proxmox') {
-      setCurrentTab('proxmox');
+    if (currentTab() !== 'infrastructure-connections') {
+      setCurrentTab('infrastructure-connections');
     }
     const target = settingsAgentPath(agent);
     if (target && location.pathname !== target) {
@@ -63,7 +61,7 @@ export function useSettingsNavigation({ navigate, location }: UseSettingsNavigat
   };
 
   const setActiveTab = (tab: SettingsTab) => {
-    if (tab === 'proxmox' && deriveAgentFromPath(location.pathname) === null) {
+    if (tab === 'infrastructure-connections' && deriveAgentFromPath(location.pathname) === null) {
       setSelectedAgent('pve');
     }
     // Eagerly update tab state so UI reflects the click immediately,
@@ -95,10 +93,6 @@ export function useSettingsNavigation({ navigate, location }: UseSettingsNavigat
           if (currentTab() !== resolvedTab) {
             setCurrentTab(resolvedTab);
           }
-
-          if (resolvedTab === 'proxmox') {
-            setSelectedAgent('pve');
-          }
           return;
         }
 
@@ -115,6 +109,12 @@ export function useSettingsNavigation({ navigate, location }: UseSettingsNavigat
         if (
           presentationPolicyIsReadOnly() &&
           (path === '/settings/infrastructure' ||
+            path.startsWith('/settings/infrastructure/platforms') ||
+            path.startsWith('/settings/infrastructure/install') ||
+            path.startsWith('/settings/infrastructure/proxmox') ||
+            path.startsWith('/settings/infrastructure/api') ||
+            path.startsWith('/settings/infrastructure/truenas') ||
+            path.startsWith('/settings/infrastructure/vmware') ||
             path === '/settings/workloads' ||
             path === '/settings/workloads/docker')
         ) {

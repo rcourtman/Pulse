@@ -6,8 +6,9 @@ import { getSettingsTabSaveBehavior } from '../settingsTabSaveBehavior';
 import { updateDisableLocalUpgradeMetricsSetting } from '@/stores/systemSettings';
 
 const canonicalTabPaths = {
-  proxmox: '/settings/infrastructure/platforms/proxmox',
-  'infrastructure-operations': '/settings/infrastructure',
+  'infrastructure-systems': '/settings/infrastructure',
+  'infrastructure-connections': '/settings/infrastructure/platforms',
+  'infrastructure-install': '/settings/infrastructure/install',
   'system-general': '/settings/system-general',
   'system-network': '/settings/system-network',
   'system-updates': '/settings/system-updates',
@@ -33,9 +34,7 @@ const canonicalTabPaths = {
   'security-webhooks': '/settings/security-webhooks',
 } as const satisfies Record<SettingsTab, string>;
 
-const dispatchableCanonicalTabPaths = Object.fromEntries(
-  Object.entries(canonicalTabPaths).filter(([tab]) => tab !== 'proxmox'),
-) as Record<Exclude<SettingsTab, 'proxmox'>, string>;
+const dispatchableCanonicalTabPaths = canonicalTabPaths as Record<SettingsTab, string>;
 
 const hasFeatures =
   (features: string[]) =>
@@ -263,20 +262,20 @@ describe('settingsNavigation integration scaffold', () => {
     expect(getSettingsTabSaveBehavior('system-network')).toBe('system');
     expect(getSettingsTabSaveBehavior('system-updates')).toBe('system');
     expect(getSettingsTabSaveBehavior('system-recovery')).toBe('system');
-    expect(getSettingsTabSaveBehavior('proxmox')).toBeUndefined();
+    expect(getSettingsTabSaveBehavior('infrastructure-systems')).toBeUndefined();
     expect(getSettingsTabSaveBehavior('security-auth')).toBeUndefined();
   });
 
   it('resolves every canonical tab path', () => {
     for (const [tab, path] of Object.entries(dispatchableCanonicalTabPaths) as Array<
-      [Exclude<SettingsTab, 'proxmox'>, string]
+      [SettingsTab, string]
     >) {
       expect(deriveTabFromPath(path)).toBe(tab);
     }
   });
 
   it('round-trips settingsTabPath through deriveTabFromPath', () => {
-    for (const tab of Object.keys(dispatchableCanonicalTabPaths) as Exclude<SettingsTab, 'proxmox'>[]) {
+    for (const tab of Object.keys(dispatchableCanonicalTabPaths) as SettingsTab[]) {
       expect(deriveTabFromPath(settingsTabPath(tab))).toBe(tab);
     }
   });
@@ -288,7 +287,7 @@ describe('settingsNavigation integration scaffold', () => {
   });
 
   it('setActiveTab eagerly updates currentTab before navigation', () => {
-    for (const tab of Object.keys(dispatchableCanonicalTabPaths) as Exclude<SettingsTab, 'proxmox'>[]) {
+    for (const tab of Object.keys(dispatchableCanonicalTabPaths) as SettingsTab[]) {
       const path = settingsTabPath(tab);
       const derived = deriveTabFromPath(path);
       expect(derived).toBe(tab);
@@ -310,7 +309,7 @@ describe('settingsNavigation integration scaffold', () => {
     });
 
     it('keeps non-gated tabs unlocked', () => {
-      expect(isTabLocked('proxmox', hasFeatures([]), () => true)).toBe(false);
+      expect(isTabLocked('infrastructure-connections', hasFeatures([]), () => true)).toBe(false);
     });
 
     it('getTabLockReason returns tier-specific reason for locked tabs and null for unlocked', () => {
@@ -326,7 +325,7 @@ describe('settingsNavigation integration scaffold', () => {
         );
         expect(getTabLockReason(tab, hasFeatures([requiredFeature]), () => true)).toBeNull();
       }
-      expect(getTabLockReason('proxmox', hasFeatures([]), () => true)).toBeNull();
+      expect(getTabLockReason('infrastructure-connections', hasFeatures([]), () => true)).toBeNull();
     });
   });
 

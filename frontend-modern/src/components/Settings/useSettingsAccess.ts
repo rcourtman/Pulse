@@ -3,6 +3,7 @@ import {
   presentationPolicyHidesCommercialSurfaces,
   presentationPolicyHidesOrganizationSurfaces,
   presentationPolicyIsDemoMode,
+  presentationPolicyIsReadOnly,
   sessionPresentationPolicyResolved,
   syncSessionPresentationPolicy,
 } from '@/stores/sessionPresentationPolicy';
@@ -61,6 +62,13 @@ export function useSettingsAccess({
     }
     return presentationPolicyHidesOrganizationSurfaces();
   });
+  const readOnly = createMemo(() => {
+    const resolvedSecurityStatus = securityStatus();
+    if (resolvedSecurityStatus) {
+      return resolvedSecurityStatus.presentationPolicy?.readOnly === true || demoMode();
+    }
+    return presentationPolicyIsReadOnly();
+  });
 
   const visibleTabGroups = createMemo(() => {
     const hostedModeEnabled = isHostedModeEnabled();
@@ -77,6 +85,7 @@ export function useSettingsAccess({
               runtimeCapabilitiesLoaded,
               presentationPolicyHidesCommercial: commercialSurfacesHidden(),
               presentationPolicyIsDemoMode: demoMode(),
+              presentationPolicyIsReadOnly: readOnly(),
               presentationPolicyHidesOrganizations: organizationSurfacesHidden(),
               presentationPolicyResolved: presentationPolicyResolved(),
               hostedModeEnabled,
@@ -116,7 +125,8 @@ export function useSettingsAccess({
     const requiresCapabilityResolution = Boolean(getSettingsNavItem(current)?.requiredCapability);
     const requiresPresentationPolicyResolution = Boolean(
       getSettingsNavItem(current)?.hideWhenCommercialHidden ||
-        getSettingsNavItem(current)?.hideWhenOrganizationHidden,
+        getSettingsNavItem(current)?.hideWhenOrganizationHidden ||
+        getSettingsNavItem(current)?.hideWhenReadOnly,
     );
     if (
       (requiresFeatureResolution && !runtimeCapabilitiesLoaded()) ||

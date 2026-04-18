@@ -7,15 +7,20 @@ import {
 } from '@/utils/aiSettingsPresentation';
 
 export const SETTINGS_HEADER_META: SettingsHeaderMetaMap = {
-  proxmox: {
-    title: 'Proxmox',
+  'infrastructure-systems': {
+    title: 'Systems',
     description:
-      'Add and manage Proxmox VE, Backup Server, and Mail Gateway connections when the unified agent is not available on the host.',
+      `Review top-level monitored systems and how Pulse is collecting data from each one. ${SELF_HOSTED_PRO_BILLING_PRESENTATION.infrastructureRouteReferral}`,
   },
-  'infrastructure-operations': {
-    title: 'Infrastructure',
+  'infrastructure-connections': {
+    title: 'Connections',
     description:
-      `Review top-level monitored systems, open install or platform connection workflows when needed, and control how Pulse collects infrastructure data. ${SELF_HOSTED_PRO_BILLING_PRESENTATION.infrastructureRouteReferral}`,
+      'Manage API-backed platform connections for Proxmox, TrueNAS, and VMware without mixing them into the monitored systems ledger.',
+  },
+  'infrastructure-install': {
+    title: 'Install',
+    description:
+      'Generate install tokens and copy unified agent commands for Linux, macOS, FreeBSD, and Windows.',
   },
   'system-general': {
     title: 'General',

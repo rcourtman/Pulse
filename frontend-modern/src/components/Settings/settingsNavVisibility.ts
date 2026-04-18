@@ -8,6 +8,7 @@ export interface SettingsNavVisibilityContext {
   runtimeCapabilitiesLoaded: () => boolean;
   presentationPolicyHidesCommercial?: boolean;
   presentationPolicyIsDemoMode?: boolean;
+  presentationPolicyIsReadOnly?: boolean;
   presentationPolicyHidesOrganizations?: boolean;
   presentationPolicyResolved?: boolean;
   hostedModeEnabled?: boolean;
@@ -60,6 +61,16 @@ export function shouldHideSettingsNavItem(
     }
 
     if (context.presentationPolicyIsDemoMode) {
+      return true;
+    }
+  }
+
+  if (item.hideWhenReadOnly) {
+    if (context.presentationPolicyResolved === false) {
+      return true;
+    }
+
+    if (context.presentationPolicyIsReadOnly) {
       return true;
     }
   }

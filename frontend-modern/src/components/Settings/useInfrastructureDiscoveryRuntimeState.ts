@@ -492,7 +492,7 @@ export const useInfrastructureDiscoveryRuntimeState = ({
         discoveryInterval = undefined;
       }
 
-      if (currentTab() === 'infrastructure-operations') {
+      if (currentTab() === 'infrastructure-connections') {
         discoveryInterval = setInterval(() => {
           void loadDiscoveredNodes();
         }, 30000);

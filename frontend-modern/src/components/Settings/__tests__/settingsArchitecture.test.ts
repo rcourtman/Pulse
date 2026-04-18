@@ -516,7 +516,8 @@ describe('Settings architecture guardrails', () => {
     expect(settingsNavigationModelSource).toContain('export function resolveCanonicalSettingsPath');
     expect(settingsNavigationModelSource).toContain('export function isProxmoxSettingsPath');
     expect(settingsNavigationModelSource).toContain('export function settingsTabPath');
-    expect(settingsNavigationModelSource).toContain('return LEGACY_INFRASTRUCTURE_PREFIX;');
+    expect(settingsNavigationModelSource).toContain("case 'infrastructure-systems':");
+    expect(settingsNavigationModelSource).toContain('return INFRASTRUCTURE_SYSTEMS_PREFIX;');
     expect(settingsNavigationModelSource).toContain('SELF_HOSTED_PRO_BILLING_PLAN_ROUTE');
     expect(settingsNavigationHookSource).toContain('deriveTabFromPath');
     expect(settingsNavigationHookSource).toContain('isProxmoxSettingsPath');
@@ -892,14 +893,13 @@ describe('Settings architecture guardrails', () => {
     expect(infrastructureWorkspaceSource).toContain('./InfrastructureActiveRowDetails');
     expect(infrastructureWorkspaceSource).toContain('./InfrastructureIgnoredRowDetails');
     expect(infrastructureWorkspaceSource).toContain('InfrastructureOperationsStateProvider');
-    expect(infrastructureWorkspaceSource).toContain('InfrastructureInventorySection');
     expect(infrastructureWorkspaceSource).toContain('InfrastructureInstallerSection');
     expect(infrastructureWorkspaceSource).toContain('InfrastructureStopMonitoringDialog');
     expect(infrastructureWorkspaceSource).toContain('AgentProfilesPanel');
     expect(infrastructureWorkspaceSource).toContain('PlatformConnectionsWorkspace');
-    expect(infrastructureWorkspaceSource).toContain("import { Subtabs } from '@/components/shared/Subtabs'");
-    expect(infrastructureWorkspaceSource).toContain('<Subtabs');
-    expect(infrastructureWorkspaceSource).toContain("activeView() === 'operations'");
+    expect(infrastructureWorkspaceSource).not.toContain("import { Subtabs } from '@/components/shared/Subtabs'");
+    expect(infrastructureWorkspaceSource).not.toContain('<Subtabs');
+    expect(infrastructureWorkspaceSource).not.toContain("activeView() === 'operations'");
     expect(infrastructureWorkspaceSource).toContain("activeView() === 'platforms'");
     expect(infrastructureWorkspaceSource).toContain("activeView() === 'install'");
     expect(connectionsTableSource).toContain('headerActions');
@@ -955,7 +955,7 @@ describe('Settings architecture guardrails', () => {
     );
     expect(infrastructureActiveRowDetailsSource).toContain('useInfrastructureOperationsContext');
     expect(infrastructureIgnoredRowDetailsSource).toContain('useInfrastructureOperationsContext');
-    expect(infrastructureWorkspaceModelSource).toContain(
+    expect(infrastructureWorkspaceModelSource).not.toContain(
       'export const INFRASTRUCTURE_WORKSPACE_TABS',
     );
     expect(infrastructureWorkspaceModelSource).toContain(
@@ -1407,7 +1407,6 @@ describe('Settings architecture guardrails', () => {
         source.includes('CommercialBillingShell') ||
         (panelName === 'InfrastructureWorkspace' &&
           source.includes('./InfrastructureInstallerSection') &&
-          source.includes('./InfrastructureInventorySection') &&
           source.includes('./PlatformConnectionsWorkspace') &&
           source.includes('./ConnectionsTable'));
       expect(usesCanonicalShell, `${panelName} should use a canonical settings panel shell`).toBe(
@@ -1427,20 +1426,22 @@ describe('Settings architecture guardrails', () => {
     expect(settingsHeaderMetaSource).not.toContain(
       'Billing and self-hosted plan features live in Pulse Pro.',
     );
-    expect(SETTINGS_HEADER_META['infrastructure-operations'].title).toBe('Infrastructure');
-    expect(SETTINGS_HEADER_META['infrastructure-operations'].description).toContain(
+    expect(SETTINGS_HEADER_META['infrastructure-systems'].title).toBe('Systems');
+    expect(SETTINGS_HEADER_META['infrastructure-systems'].description).toContain(
       'top-level monitored systems',
     );
-    expect(SETTINGS_HEADER_META['infrastructure-operations'].description).toBe(
-      `Review top-level monitored systems, open install or platform connection workflows when needed, and control how Pulse collects infrastructure data. ${SELF_HOSTED_PRO_BILLING_PRESENTATION.infrastructureRouteReferral}`,
+    expect(SETTINGS_HEADER_META['infrastructure-systems'].description).toBe(
+      `Review top-level monitored systems and how Pulse is collecting data from each one. ${SELF_HOSTED_PRO_BILLING_PRESENTATION.infrastructureRouteReferral}`,
     );
+    expect(SETTINGS_HEADER_META['infrastructure-connections'].title).toBe('Connections');
+    expect(SETTINGS_HEADER_META['infrastructure-install'].title).toBe('Install');
   });
 
   it('keeps billing-related shell framing on self-hosted commercial terms', () => {
-    expect(SETTINGS_HEADER_META['infrastructure-operations'].description).toContain(
+    expect(SETTINGS_HEADER_META['infrastructure-systems'].description).toContain(
       'self-hosted plan features',
     );
-    expect(SETTINGS_HEADER_META['infrastructure-operations'].description).not.toContain(
+    expect(SETTINGS_HEADER_META['infrastructure-systems'].description).not.toContain(
       'installed-agent',
     );
     expect(SETTINGS_HEADER_META['system-billing'].title).toBe(

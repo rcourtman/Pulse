@@ -22,8 +22,8 @@ function renderHarness(pathname = '/settings', search = '', hash = '') {
 
     return (
       <>
-        <button type="button" onClick={() => navigation.setActiveTab('infrastructure-operations')}>
-          open infrastructure settings
+        <button type="button" onClick={() => navigation.setActiveTab('infrastructure-connections')}>
+          open connections settings
         </button>
         <div data-testid="selected-agent">{navigation.selectedAgent()}</div>
       </>
@@ -51,11 +51,11 @@ describe('useSettingsNavigation', () => {
     });
   });
 
-  it('routes infrastructure tab clicks to reporting inventory when the session is read-only', () => {
+  it('routes setup-oriented infrastructure tab clicks back to systems when the session is read-only', () => {
     presentationPolicyIsReadOnlyMock.mockReturnValue(true);
     renderHarness('/settings/system-general');
 
-    fireEvent.click(screen.getByRole('button', { name: 'open infrastructure settings' }));
+    fireEvent.click(screen.getByRole('button', { name: 'open connections settings' }));
 
     expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure', {
       scroll: false,

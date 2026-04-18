@@ -20,7 +20,7 @@ export interface SettingsPanelRegistryEntry {
   getProps?: () => object;
 }
 
-export type SettingsDispatchableTab = Exclude<SettingsTab, 'proxmox'>;
+export type SettingsDispatchableTab = SettingsTab;
 
 export type SettingsPanelRegistry = Record<SettingsDispatchableTab, SettingsPanelRegistryEntry>;
 
@@ -47,7 +47,15 @@ export interface SettingsPanelRegistryContext {
 export const createSettingsPanelRegistry = (
   context: SettingsPanelRegistryContext,
 ): SettingsPanelRegistry => ({
-  'infrastructure-operations': {
+  'infrastructure-systems': {
+    component: SETTINGS_PANEL_REGISTRY_LOADERS.InfrastructureWorkspace,
+    getProps: context.getInfrastructurePanelProps,
+  },
+  'infrastructure-connections': {
+    component: SETTINGS_PANEL_REGISTRY_LOADERS.InfrastructureWorkspace,
+    getProps: context.getInfrastructurePanelProps,
+  },
+  'infrastructure-install': {
     component: SETTINGS_PANEL_REGISTRY_LOADERS.InfrastructureWorkspace,
     getProps: context.getInfrastructurePanelProps,
   },

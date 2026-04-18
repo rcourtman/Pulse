@@ -1,7 +1,7 @@
 import { Accessor, createMemo, createSignal } from 'solid-js';
 import { presentationPolicyIsReadOnly } from '@/stores/sessionPresentationPolicy';
 import { SETTINGS_HEADER_META } from './settingsHeaderMeta';
-import type { SettingsTab } from './settingsNavigationModel';
+import { isInfrastructureSettingsTab, type SettingsTab } from './settingsNavigationModel';
 
 interface UseSettingsShellStateParams {
   activeTab: Accessor<SettingsTab>;
@@ -11,9 +11,9 @@ export function useSettingsShellState({ activeTab }: UseSettingsShellStateParams
   const headerMeta = createMemo(
     () => {
       const tab = activeTab();
-      if (tab === 'infrastructure-operations' && presentationPolicyIsReadOnly()) {
+      if (isInfrastructureSettingsTab(tab) && presentationPolicyIsReadOnly()) {
         return {
-          title: 'Infrastructure',
+          title: 'Systems',
           description:
             'Review the current top-level monitored systems and reporting posture. Setup changes stay unavailable in this read-only session.',
         };
