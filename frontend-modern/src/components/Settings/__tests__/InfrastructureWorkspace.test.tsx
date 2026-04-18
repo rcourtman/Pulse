@@ -99,14 +99,10 @@ const reportingRow = (overrides: Partial<UnifiedAgentRow> = {}): UnifiedAgentRow
     ...overrides,
   }) as UnifiedAgentRow;
 
-const trueNASOpenCreateDialogSpy = vi.fn();
-const vmwareOpenCreateDialogSpy = vi.fn();
 const setShowNodeModalSpy = vi.fn();
 const setEditingNodeSpy = vi.fn();
 const setCurrentNodeTypeSpy = vi.fn();
 const setModalResetKeySpy = vi.fn();
-
-const onSelectAgentSpy = vi.fn();
 
 const baseProps = () =>
   ({
@@ -116,20 +112,20 @@ const baseProps = () =>
     agentStateResources: () => [],
     trueNASSettings: {
       connections: () => [{ id: 'tn-1', name: 'Tower NAS', host: '10.0.0.20', enabled: true }],
-      openCreateDialog: trueNASOpenCreateDialogSpy,
+      openCreateDialog: vi.fn(),
       closeDialog: vi.fn(),
       closeDeleteDialog: vi.fn(),
       openEditDialog: vi.fn(),
     },
     vmwareSettings: {
       connections: () => [{ id: 'vm-1', name: 'lab-vcenter', host: '10.0.0.30', enabled: true }],
-      openCreateDialog: vmwareOpenCreateDialogSpy,
+      openCreateDialog: vi.fn(),
       closeDialog: vi.fn(),
       closeDeleteDialog: vi.fn(),
       openEditDialog: vi.fn(),
     },
     selectedAgent: () => 'pve',
-    onSelectAgent: onSelectAgentSpy,
+    onSelectAgent: vi.fn(),
     setShowNodeModal: setShowNodeModalSpy,
     setEditingNode: setEditingNodeSpy,
     setCurrentNodeType: setCurrentNodeTypeSpy,
@@ -143,13 +139,10 @@ describe('InfrastructureWorkspace', () => {
     presentationPolicyIsReadOnlyMock.mockReturnValue(false);
     setExpandedRowKeySpy.mockReset();
     setSelectedIgnoredRowKeySpy.mockReset();
-    trueNASOpenCreateDialogSpy.mockReset();
-    vmwareOpenCreateDialogSpy.mockReset();
     setShowNodeModalSpy.mockReset();
     setEditingNodeSpy.mockReset();
     setCurrentNodeTypeSpy.mockReset();
     setModalResetKeySpy.mockReset();
-    onSelectAgentSpy.mockReset();
     mockPathname = '/settings/infrastructure';
     mockActiveRows = [reportingRow()];
     mockIgnoredRows = [];
@@ -185,55 +178,12 @@ describe('InfrastructureWorkspace', () => {
     expect(screen.queryByText('lab-vcenter')).toBeNull();
   });
 
-  it('opens the add-system picker when the add button is clicked', () => {
+  it('routes the add-infrastructure action to the install workspace', () => {
     renderWorkspace();
 
     fireEvent.click(screen.getByRole('button', { name: /Add infrastructure/i }));
-
-    expect(screen.getByText('Install on a host')).toBeInTheDocument();
-    expect(screen.getByText('Proxmox VE')).toBeInTheDocument();
-    expect(screen.getByText('TrueNAS SCALE')).toBeInTheDocument();
-  });
-
-  it('routes the agent-host choice to the install section deep link', () => {
-    renderWorkspace();
-    fireEvent.click(screen.getByRole('button', { name: /Add infrastructure/i }));
-    fireEvent.click(screen.getByText('Install on a host'));
 
     expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure/install', {
-      scroll: false,
-    });
-  });
-
-  it('opens provider creation flows directly from the add-system picker', () => {
-    renderWorkspace();
-    fireEvent.click(screen.getByRole('button', { name: /Add infrastructure/i }));
-    fireEvent.click(screen.getByText('TrueNAS SCALE'));
-
-    expect(trueNASOpenCreateDialogSpy).toHaveBeenCalledTimes(1);
-    expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure/platforms/truenas', {
-      scroll: false,
-    });
-
-    fireEvent.click(screen.getByRole('button', { name: /Add infrastructure/i }));
-    fireEvent.click(screen.getByText('VMware vSphere or ESXi'));
-
-    expect(vmwareOpenCreateDialogSpy).toHaveBeenCalledTimes(1);
-    expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure/platforms/vmware', {
-      scroll: false,
-    });
-  });
-
-  it('opens the proxmox node modal directly from the add-system picker', () => {
-    renderWorkspace();
-    fireEvent.click(screen.getByRole('button', { name: /Add infrastructure/i }));
-    fireEvent.click(screen.getByText('Proxmox VE'));
-
-    expect(onSelectAgentSpy).toHaveBeenCalledWith('pve');
-    expect(setCurrentNodeTypeSpy).toHaveBeenCalledWith('pve');
-    expect(setEditingNodeSpy).toHaveBeenCalledWith(null);
-    expect(setShowNodeModalSpy).toHaveBeenCalledWith(true);
-    expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure/platforms/proxmox/pve', {
       scroll: false,
     });
   });
@@ -247,44 +197,69 @@ describe('InfrastructureWorkspace', () => {
     expect(screen.getByTestId('active-details')).toBeInTheDocument();
   });
 
-  it('keeps the ledger visible and opens platform setup in a drawer on platform deep links', () => {
+  it('renders platform connections as a full-page workspace on platform deep links', () => {
     mockPathname = '/settings/infrastructure/platforms/truenas';
     renderWorkspace();
 
-    expect(screen.getByRole('heading', { name: 'Monitored systems' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Monitored systems' })).toBeNull();
     expect(screen.getByText('Platform connections')).toBeInTheDocument();
     expect(screen.getByTestId('platform-section')).toBeInTheDocument();
     expect(screen.queryByTestId('install-section')).toBeNull();
   });
 
-  it('keeps the ledger visible and opens install tools in a drawer on install deep links', () => {
+  it('renders install tools as a full-page workspace on install deep links', () => {
     mockPathname = '/settings/infrastructure/install';
     renderWorkspace();
 
-    expect(screen.getByRole('heading', { name: 'Monitored systems' })).toBeInTheDocument();
-    expect(screen.getByText('Install Pulse agent')).toBeInTheDocument();
+    expect(screen.getByText('Choose what to connect')).toBeInTheDocument();
+    expect(screen.getByText('Install on a host')).toBeInTheDocument();
     expect(screen.getByTestId('install-section')).toBeInTheDocument();
     expect(screen.queryByTestId('platform-section')).toBeNull();
   });
 
-  it('opens agent profiles from the add-infrastructure chooser secondary action', () => {
+  it('opens agent profiles inline inside the install workspace', () => {
+    mockPathname = '/settings/infrastructure/install';
     renderWorkspace();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Add infrastructure' }));
     fireEvent.click(screen.getByRole('button', { name: 'Manage agent profiles' }));
 
     expect(screen.getByTestId('agent-profiles')).toBeInTheDocument();
   });
 
-  it('closes the platform drawer back to the ledger route', () => {
+  it('returns from platform connections to the monitored systems route', () => {
     mockPathname = '/settings/infrastructure/platforms/truenas';
     renderWorkspace();
 
-    fireEvent.click(screen.getAllByRole('button', { name: 'Close' })[0]);
+    fireEvent.click(screen.getByRole('button', { name: 'Back to monitored systems' }));
 
     expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure', {
       scroll: false,
     });
+  });
+
+  it('routes infrastructure choices through full-page setup routes instead of auto-opening dialogs', () => {
+    mockPathname = '/settings/infrastructure/install';
+    renderWorkspace();
+
+    fireEvent.click(screen.getByRole('button', { name: /TrueNAS SCALE/i }));
+    expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure/platforms/truenas', {
+      scroll: false,
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /VMware vSphere or ESXi/i }));
+    expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure/platforms/vmware', {
+      scroll: false,
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /Proxmox VE/i }));
+    expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure/platforms/proxmox/pve', {
+      scroll: false,
+    });
+
+    expect(setShowNodeModalSpy).not.toHaveBeenCalled();
+    expect(setEditingNodeSpy).not.toHaveBeenCalled();
+    expect(setCurrentNodeTypeSpy).not.toHaveBeenCalled();
+    expect(setModalResetKeySpy).not.toHaveBeenCalled();
   });
 
   it('collapses read-only sessions back to inventory and hides setup sections', () => {

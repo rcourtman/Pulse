@@ -903,7 +903,7 @@ describe('Settings architecture guardrails', () => {
     );
     expect(infrastructureWorkspaceSource).not.toContain('<Subtabs');
     expect(infrastructureWorkspaceSource).toContain('Platform connections');
-    expect(infrastructureWorkspaceSource).toContain('Install Pulse agent');
+    expect(infrastructureWorkspaceSource).toContain('Choose what to connect');
     expect(infrastructureWorkspaceSource).toContain('activeView() === \'platforms\'');
     expect(infrastructureWorkspaceSource).toContain('activeView() === \'install\'');
     expect(infrastructureWorkspaceSource).not.toContain("activeView() === 'operations'");
