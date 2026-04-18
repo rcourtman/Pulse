@@ -40,8 +40,16 @@ describe('pricingHandoff', () => {
     expect(getUpgradeFallbackDestination('cloud')).toBe('/cloud');
   });
 
-  it('routes self-hosted upgrades to Pulse Account first', () => {
-    expect(getUpgradeFallbackDestination('relay')).toBe(getSelfHostedPurchaseStartUrl('relay'));
+  it('routes Pro feature upgrades to the in-product billing plan page', () => {
+    expect(getUpgradeFallbackDestination('relay')).toBe(SELF_HOSTED_PRO_BILLING_PLAN_HREF);
+    expect(getUpgradeFallbackDestination('ai_alerts')).toBe(SELF_HOSTED_PRO_BILLING_PLAN_HREF);
+    expect(getUpgradeFallbackDestination('rbac')).toBe(SELF_HOSTED_PRO_BILLING_PLAN_HREF);
+  });
+
+  it('routes unknown feature upgrades to Pulse Account purchase start', () => {
+    expect(getUpgradeFallbackDestination('unknown_pro_feature')).toBe(
+      getSelfHostedPurchaseStartUrl('unknown_pro_feature'),
+    );
   });
 
   it('returns the canonical public pricing URL when no feature is provided', () => {
@@ -51,10 +59,12 @@ describe('pricingHandoff', () => {
   });
 
   it('preserves extra query parameters when handing off the legacy pricing route', () => {
-    expect(getPricingRouteDestination('?feature=relay&utm_content=legacy-bookmark')).toBe(
+    expect(
+      getPricingRouteDestination('?feature=unknown_pro_feature&utm_content=legacy-bookmark'),
+    ).toBe(
       getSelfHostedPurchaseStartUrl(
-        'relay',
-        new URLSearchParams('feature=relay&utm_content=legacy-bookmark'),
+        'unknown_pro_feature',
+        new URLSearchParams('feature=unknown_pro_feature&utm_content=legacy-bookmark'),
       ),
     );
   });

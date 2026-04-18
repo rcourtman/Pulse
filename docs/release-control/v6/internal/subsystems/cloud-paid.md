@@ -250,6 +250,14 @@ Insights`, rather than reviving generic `AI Patrol` or `AI ... analysis`
 
 ## Current State
 
+`frontend-modern/src/utils/pricingHandoff.ts` now routes pro-feature paywall
+keys (`ai_alerts`, `ai_autofix`, `relay`, `rbac`, `audit_logging`,
+`advanced_sso`, `agent_profiles`, `long_term_metrics`, `trial_expired`) to the
+self-hosted billing plan page instead of the Pulse Account purchase-start
+handoff. The purchase-start handoff requires a `PublicURL` and fails on local
+instances; routing these keys to the in-product billing plan keeps upgrades
+accessible from self-hosted environments.
+
 Cloud paid readiness is materially behind architecture work. The main concern is
 contract coherence between pricing, entitlements, and runtime enforcement.
 That public-demo commercial boundary also owns monitored-system preview

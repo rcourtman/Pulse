@@ -53,6 +53,17 @@ const IN_PRODUCT_PRICING_DESTINATIONS: Record<string, string> = {
   self_hosted_plan: SELF_HOSTED_PRO_BILLING_PLAN_MONITORED_SYSTEM_UPGRADE_HREF,
   max_monitored_systems: SELF_HOSTED_PRO_BILLING_PLAN_MONITORED_SYSTEM_UPGRADE_HREF,
   cloud: '/cloud',
+  // Pro-feature keys: route to billing plan page instead of the Pulse Account
+  // purchase-start handoff, which fails for local instances without PublicURL.
+  ai_alerts: SELF_HOSTED_PRO_BILLING_PLAN_HREF,
+  ai_autofix: SELF_HOSTED_PRO_BILLING_PLAN_HREF,
+  relay: SELF_HOSTED_PRO_BILLING_PLAN_HREF,
+  rbac: SELF_HOSTED_PRO_BILLING_PLAN_HREF,
+  audit_logging: SELF_HOSTED_PRO_BILLING_PLAN_HREF,
+  advanced_sso: SELF_HOSTED_PRO_BILLING_PLAN_HREF,
+  agent_profiles: SELF_HOSTED_PRO_BILLING_PLAN_HREF,
+  long_term_metrics: SELF_HOSTED_PRO_BILLING_PLAN_HREF,
+  trial_expired: SELF_HOSTED_PRO_BILLING_PLAN_HREF,
 };
 
 const INTERNAL_HREF_BASE = 'https://pulse.invalid';
