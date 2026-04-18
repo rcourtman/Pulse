@@ -217,6 +217,13 @@ shared Docker host model, and `internal/monitoring/docker_commands.go` must
 refuse Docker daemon-mutating commands when authorization plugins are
 configured until the upstream Moby authz-plugin advisory line has a fixed Go
 module release.
+That same collector boundary also owns the maintained engine-client seam.
+`internal/dockeragent/docker_client.go`, `internal/dockeragent/collect.go`,
+and `internal/dockeragent/swarm.go` must keep Pulse's package-local
+`dockerClient` interface as the compatibility layer while the underlying
+implementation routes through maintained `github.com/moby/moby/api` and
+`github.com/moby/moby/client` modules, so monitoring runtime collection does
+not drift back onto the legacy `github.com/docker/docker` Go module line.
 That same monitoring owner now also governs restart-safe standalone host
 continuity for monitored-system usage and admission. `internal/monitoring/monitor_agents.go`
 must persist recent host identity at report time, and

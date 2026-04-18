@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	swarmtypes "github.com/docker/docker/api/types/swarm"
+	swarmtypes "github.com/moby/moby/api/types/swarm"
 	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
 )
 

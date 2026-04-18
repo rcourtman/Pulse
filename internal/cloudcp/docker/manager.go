@@ -12,11 +12,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/docker/docker/api/types/container"
-	"github.com/docker/docker/api/types/mount"
-	"github.com/docker/docker/api/types/network"
-	"github.com/docker/docker/client"
-	"github.com/docker/docker/errdefs"
+	"github.com/containerd/errdefs"
+	"github.com/moby/moby/api/types/container"
+	"github.com/moby/moby/api/types/mount"
+	"github.com/moby/moby/api/types/network"
+	"github.com/moby/moby/client"
 	"github.com/rs/zerolog/log"
 )
 
@@ -59,7 +59,7 @@ const (
 
 // NewManager creates a Docker manager connected to the local daemon.
 func NewManager(cfg ManagerConfig) (*Manager, error) {
-	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+	cli, err := client.New(client.FromEnv)
 	if err != nil {
 		return nil, fmt.Errorf("create docker client: %w", err)
 	}
@@ -95,7 +95,7 @@ func (m *Manager) ensureDaemonReachable(ctx context.Context) error {
 	if m == nil || m.cli == nil {
 		return fmt.Errorf("docker client unavailable")
 	}
-	if _, err := m.cli.Ping(ctx); err != nil {
+	if _, err := m.cli.Ping(ctx, client.PingOptions{}); err != nil {
 		return fmt.Errorf("ping docker daemon: %w", err)
 	}
 	return nil
@@ -116,13 +116,13 @@ func (m *Manager) CreateAndStart(ctx context.Context, tenantID, tenantDataDir st
 
 	containerName := "pulse-" + tenantID
 
-	resp, err := m.cli.ContainerCreate(ctx,
-		&container.Config{
+	resp, err := m.cli.ContainerCreate(ctx, client.ContainerCreateOptions{
+		Config: &container.Config{
 			Image:  m.cfg.Image,
 			Labels: labels,
 			Env:    tenantEnv(tenantID, m.cfg.BaseDomain, m.cfg.TrialActivationPublicKey, m.tenantTrustedProxyCIDRs(ctx)),
 		},
-		&container.HostConfig{
+		HostConfig: &container.HostConfig{
 			RestartPolicy: container.RestartPolicy{Name: "unless-stopped"},
 			Resources: container.Resources{
 				Memory:    m.cfg.MemoryLimit,
@@ -130,19 +130,18 @@ func (m *Manager) CreateAndStart(ctx context.Context, tenantID, tenantDataDir st
 			},
 			Mounts: tenantMounts(tenantDataDir),
 		},
-		&network.NetworkingConfig{
+		NetworkingConfig: &network.NetworkingConfig{
 			EndpointsConfig: map[string]*network.EndpointSettings{
 				m.cfg.Network: {},
 			},
 		},
-		nil, // platform
-		containerName,
-	)
+		Name: containerName,
+	})
 	if err != nil {
 		return "", fmt.Errorf("create container for %s: %w", tenantID, err)
 	}
 
-	if err := m.cli.ContainerStart(ctx, resp.ID, container.StartOptions{}); err != nil {
+	if _, err := m.cli.ContainerStart(ctx, resp.ID, client.ContainerStartOptions{}); err != nil {
 		return resp.ID, fmt.Errorf("start container for %s: %w", tenantID, err)
 	}
 
@@ -247,12 +246,12 @@ func (m *Manager) tenantTrustedProxyCIDRs(ctx context.Context) []string {
 
 	if m != nil && m.cli != nil && strings.TrimSpace(m.cfg.Network) != "" {
 		networkName := strings.TrimSpace(m.cfg.Network)
-		inspect, err := m.cli.NetworkInspect(ctx, networkName, network.InspectOptions{})
+		inspect, err := m.cli.NetworkInspect(ctx, networkName, client.NetworkInspectOptions{})
 		if err != nil {
 			log.Warn().Err(err).Str("network", networkName).Msg("Failed to inspect tenant network for trusted proxy CIDRs")
 		} else {
-			for _, cfg := range inspect.IPAM.Config {
-				appendCIDR(cfg.Subnet)
+			for _, cfg := range inspect.Network.IPAM.Config {
+				appendCIDR(cfg.Subnet.String())
 			}
 		}
 	}
@@ -317,19 +316,22 @@ func prepareTenantRuntimeMountSources(tenantDataDir string, uid, gid int) error 
 // Stop stops a tenant container gracefully.
 func (m *Manager) Stop(ctx context.Context, containerID string) error {
 	timeout := 30
-	return m.cli.ContainerStop(ctx, containerID, container.StopOptions{Timeout: &timeout})
+	_, err := m.cli.ContainerStop(ctx, containerID, client.ContainerStopOptions{Timeout: &timeout})
+	return err
 }
 
 // Start starts a stopped tenant container.
 func (m *Manager) Start(ctx context.Context, containerID string) error {
-	return m.cli.ContainerStart(ctx, containerID, container.StartOptions{})
+	_, err := m.cli.ContainerStart(ctx, containerID, client.ContainerStartOptions{})
+	return err
 }
 
 // Remove removes a stopped tenant container.
 func (m *Manager) Remove(ctx context.Context, containerID string) error {
-	return m.cli.ContainerRemove(ctx, containerID, container.RemoveOptions{
+	_, err := m.cli.ContainerRemove(ctx, containerID, client.ContainerRemoveOptions{
 		Force: true,
 	})
+	return err
 }
 
 // Rename renames a tenant container to the supplied Docker name.
@@ -337,7 +339,7 @@ func (m *Manager) Rename(ctx context.Context, containerIDOrName, newName string)
 	if err := m.ensureDaemonReachable(ctx); err != nil {
 		return err
 	}
-	if err := m.cli.ContainerRename(ctx, containerIDOrName, newName); err != nil {
+	if _, err := m.cli.ContainerRename(ctx, containerIDOrName, client.ContainerRenameOptions{NewName: newName}); err != nil {
 		return fmt.Errorf("rename container %s -> %s: %w", containerIDOrName, newName, err)
 	}
 	return nil
@@ -349,10 +351,11 @@ func (m *Manager) Inspect(ctx context.Context, containerIDOrName string) (*Runti
 	if err := m.ensureDaemonReachable(ctx); err != nil {
 		return nil, err
 	}
-	inspect, err := m.cli.ContainerInspect(ctx, containerIDOrName)
+	inspectResult, err := m.cli.ContainerInspect(ctx, containerIDOrName, client.ContainerInspectOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("inspect container %s: %w", containerIDOrName, err)
 	}
+	inspect := inspectResult.Container
 	imageRef := ""
 	if inspect.Config != nil {
 		imageRef = strings.TrimSpace(inspect.Config.Image)
@@ -386,10 +389,11 @@ func (m *Manager) StopAndRemove(ctx context.Context, containerID string) error {
 // HealthCheck performs an HTTP health check against a running container.
 // It connects to the container's published port via the Docker network.
 func (m *Manager) HealthCheck(ctx context.Context, containerID string) (bool, error) {
-	inspect, err := m.cli.ContainerInspect(ctx, containerID)
+	inspectResult, err := m.cli.ContainerInspect(ctx, containerID, client.ContainerInspectOptions{})
 	if err != nil {
 		return false, fmt.Errorf("inspect container: %w", err)
 	}
+	inspect := inspectResult.Container
 
 	if !inspect.State.Running {
 		return false, nil
@@ -397,11 +401,11 @@ func (m *Manager) HealthCheck(ctx context.Context, containerID string) (bool, er
 
 	// Find the container's IP on our network
 	netSettings, ok := inspect.NetworkSettings.Networks[m.cfg.Network]
-	if !ok || netSettings.IPAddress == "" {
+	if !ok || !netSettings.IPAddress.IsValid() {
 		return false, fmt.Errorf("container not connected to network %s", m.cfg.Network)
 	}
 
-	healthURL := fmt.Sprintf("http://%s:%d/api/health", netSettings.IPAddress, m.cfg.ContainerPort)
+	healthURL := fmt.Sprintf("http://%s:%d/api/health", netSettings.IPAddress.String(), m.cfg.ContainerPort)
 	httpClient := &http.Client{Timeout: 5 * time.Second}
 	resp, err := httpClient.Get(healthURL)
 	if err != nil {

@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	containertypes "github.com/docker/docker/api/types/container"
-	swarmtypes "github.com/docker/docker/api/types/swarm"
-	systemtypes "github.com/docker/docker/api/types/system"
+	containertypes "github.com/moby/moby/api/types/container"
+	swarmtypes "github.com/moby/moby/api/types/swarm"
+	systemtypes "github.com/moby/moby/api/types/system"
 	"github.com/rcourtman/pulse-go-rewrite/internal/hostmetrics"
 	"github.com/rs/zerolog"
 )
@@ -22,9 +22,7 @@ func TestBuildReport_RuntimeChangePodman(t *testing.T) {
 	})
 
 	inspect := containertypes.InspectResponse{
-		ContainerJSONBase: &containertypes.ContainerJSONBase{
-			State: &containertypes.State{Running: false},
-		},
+		State:  &containertypes.State{Running: false},
 		Config: &containertypes.Config{},
 	}
 
@@ -54,7 +52,7 @@ func TestBuildReport_RuntimeChangePodman(t *testing.T) {
 					OperatingSystem: "linux",
 				}, nil
 			},
-			containerListFunc: func(context.Context, containertypes.ListOptions) ([]containertypes.Summary, error) {
+			containerListFunc: func(context.Context, dockerContainerListOptions) ([]containertypes.Summary, error) {
 				return []containertypes.Summary{
 					{ID: "container1", Names: []string{"/app"}, State: "exited"},
 				}, nil
@@ -86,9 +84,7 @@ func TestBuildReport_CollectContainersForcedAndSwarmInfo(t *testing.T) {
 	})
 
 	inspect := containertypes.InspectResponse{
-		ContainerJSONBase: &containertypes.ContainerJSONBase{
-			State: &containertypes.State{Running: false},
-		},
+		State:  &containertypes.State{Running: false},
 		Config: &containertypes.Config{},
 	}
 
@@ -120,7 +116,7 @@ func TestBuildReport_CollectContainersForcedAndSwarmInfo(t *testing.T) {
 					},
 				}, nil
 			},
-			containerListFunc: func(context.Context, containertypes.ListOptions) ([]containertypes.Summary, error) {
+			containerListFunc: func(context.Context, dockerContainerListOptions) ([]containertypes.Summary, error) {
 				listCalled = true
 				return []containertypes.Summary{
 					{
@@ -227,7 +223,7 @@ func TestBuildReport_CollectContainersError(t *testing.T) {
 			infoFunc: func(context.Context) (systemtypes.Info, error) {
 				return systemtypes.Info{ServerVersion: "24.0.0"}, nil
 			},
-			containerListFunc: func(context.Context, containertypes.ListOptions) ([]containertypes.Summary, error) {
+			containerListFunc: func(context.Context, dockerContainerListOptions) ([]containertypes.Summary, error) {
 				return nil, errors.New("list failed")
 			},
 		},
@@ -244,9 +240,7 @@ func TestBuildReport_SwarmServicesTasks(t *testing.T) {
 	})
 
 	inspect := containertypes.InspectResponse{
-		ContainerJSONBase: &containertypes.ContainerJSONBase{
-			State: &containertypes.State{Running: false},
-		},
+		State:  &containertypes.State{Running: false},
 		Config: &containertypes.Config{},
 	}
 
@@ -270,7 +264,7 @@ func TestBuildReport_SwarmServicesTasks(t *testing.T) {
 					},
 				}, nil
 			},
-			containerListFunc: func(context.Context, containertypes.ListOptions) ([]containertypes.Summary, error) {
+			containerListFunc: func(context.Context, dockerContainerListOptions) ([]containertypes.Summary, error) {
 				return []containertypes.Summary{
 					{
 						ID:    "container1",
@@ -311,11 +305,9 @@ func TestCollectContainerFinishedAt(t *testing.T) {
 	finishedAt := time.Now().Add(-time.Minute).Format(time.RFC3339Nano)
 
 	inspect := containertypes.InspectResponse{
-		ContainerJSONBase: &containertypes.ContainerJSONBase{
-			State: &containertypes.State{
-				Running:    false,
-				FinishedAt: finishedAt,
-			},
+		State: &containertypes.State{
+			Running:    false,
+			FinishedAt: finishedAt,
 		},
 		Config:          &containertypes.Config{},
 		NetworkSettings: nil,

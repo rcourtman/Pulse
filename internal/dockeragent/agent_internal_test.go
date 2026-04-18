@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	containertypes "github.com/docker/docker/api/types/container"
-	systemtypes "github.com/docker/docker/api/types/system"
+	containertypes "github.com/moby/moby/api/types/container"
+	systemtypes "github.com/moby/moby/api/types/system"
 	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
 )
 

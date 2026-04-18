@@ -223,6 +223,14 @@ demo-deploy workflow. Shipped binaries, installable container images, and
 governed deployment-build workflows must all carry the same build metadata
 contract rather than depending on whichever local ldflags string happened to be
 updated last.
+That same dev-runtime dependency-manifest boundary now also owns the maintained
+Docker engine module floor. `go.mod`, `go.sum`, and
+`internal/cloudcp/docker/manager.go` must route hosted runtime orchestration
+through the maintained `github.com/moby/moby/api` and
+`github.com/moby/moby/client` modules instead of reviving the legacy
+`github.com/docker/docker` line, so managed-runtime manifests and hosted
+runtime rollout control do not silently inherit an unfixed Docker SDK
+advisory path.
 That same Docker release-build boundary also owns the embedded frontend's
 shipped-doc inputs and the Docker context allowlist that makes those files
 available to release builds in the first place. When the frontend embed build

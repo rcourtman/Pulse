@@ -8,13 +8,13 @@ import (
 	"io"
 	"math"
 	"math/big"
+	"net/netip"
 	"strconv"
 	"strings"
 	"time"
 
-	containertypes "github.com/docker/docker/api/types/container"
-	"github.com/docker/docker/api/types/filters"
-	systemtypes "github.com/docker/docker/api/types/system"
+	containertypes "github.com/moby/moby/api/types/container"
+	systemtypes "github.com/moby/moby/api/types/system"
 	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
 )
 
@@ -210,9 +210,9 @@ func normalizedNonEmptyStrings(values []string) []string {
 }
 
 func (a *Agent) collectContainers(ctx context.Context) ([]agentsdocker.Container, error) {
-	options := containertypes.ListOptions{All: true}
+	options := dockerContainerListOptions{All: true}
 	if len(a.stateFilters) > 0 {
-		filterArgs := filters.NewArgs()
+		filterArgs := newDockerFilters()
 		for _, state := range a.stateFilters {
 			filterArgs.Add("status", state)
 		}
@@ -230,7 +230,7 @@ func (a *Agent) collectContainers(ctx context.Context) ([]agentsdocker.Container
 	active := make(map[string]struct{}, len(list))
 	for _, summary := range list {
 		if len(a.allowedStates) > 0 {
-			if _, ok := a.allowedStates[strings.ToLower(summary.State)]; !ok {
+			if _, ok := a.allowedStates[strings.ToLower(string(summary.State))]; !ok {
 				continue
 			}
 		}
@@ -342,7 +342,7 @@ func (a *Agent) collectContainer(ctx context.Context, summary containertypes.Sum
 
 	health := ""
 	if inspect.State.Health != nil {
-		health = inspect.State.Health.Status
+		health = string(inspect.State.Health.Status)
 	}
 
 	ports := make([]agentsdocker.ContainerPort, len(summary.Ports))
@@ -351,7 +351,7 @@ func (a *Agent) collectContainer(ctx context.Context, summary containertypes.Sum
 			PrivatePort: int(port.PrivatePort),
 			PublicPort:  int(port.PublicPort),
 			Protocol:    port.Type,
-			IP:          port.IP,
+			IP:          addrString(port.IP),
 		}
 	}
 
@@ -365,8 +365,8 @@ func (a *Agent) collectContainer(ctx context.Context, summary containertypes.Sum
 		for name, cfg := range inspect.NetworkSettings.Networks {
 			networks = append(networks, agentsdocker.ContainerNetwork{
 				Name: name,
-				IPv4: cfg.IPAddress,
-				IPv6: cfg.GlobalIPv6Address,
+				IPv4: addrString(cfg.IPAddress),
+				IPv6: addrString(cfg.GlobalIPv6Address),
 			})
 		}
 	}
@@ -414,7 +414,7 @@ func (a *Agent) collectContainer(ctx context.Context, summary containertypes.Sum
 		Image:               summary.Image,
 		ImageDigest:         summary.ImageID, // sha256:... digest of the image
 		CreatedAt:           createdAt,
-		State:               summary.State,
+		State:               string(summary.State),
 		Status:              summary.Status,
 		Health:              health,
 		CPUPercent:          cpuPercent,
@@ -552,6 +552,13 @@ func (a *Agent) getImageRepoDigest(ctx context.Context, imageID, imageName strin
 	}
 
 	return "", arch, os, variant
+}
+
+func addrString(addr netip.Addr) string {
+	if !addr.IsValid() {
+		return ""
+	}
+	return addr.String()
 }
 
 // matchesImageReference checks if a RepoDigest repository matches an image reference.

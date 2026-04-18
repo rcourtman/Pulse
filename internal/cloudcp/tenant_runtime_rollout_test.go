@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/docker/docker/errdefs"
+	"github.com/containerd/errdefs"
 	cpDocker "github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/docker"
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/registry"
 )
@@ -575,7 +575,7 @@ func (f *fakeTenantRuntimeRolloutDocker) HealthCheck(_ context.Context, containe
 	}
 	info, ok := f.byID[containerID]
 	if !ok {
-		return false, errdefs.NotFound(fmt.Errorf("missing container %s", containerID))
+		return false, errdefs.ErrNotFound.WithMessage(fmt.Sprintf("missing container %s", containerID))
 	}
 	return info.Running, nil
 }
@@ -589,7 +589,7 @@ func (f *fakeTenantRuntimeRolloutDocker) Inspect(_ context.Context, containerIDO
 		copy := *info
 		return &copy, nil
 	}
-	return nil, errdefs.NotFound(fmt.Errorf("missing container %s", containerIDOrName))
+	return nil, errdefs.ErrNotFound.WithMessage(fmt.Sprintf("missing container %s", containerIDOrName))
 }
 
 func (f *fakeTenantRuntimeRolloutDocker) Remove(_ context.Context, containerID string) error {
@@ -602,7 +602,7 @@ func (f *fakeTenantRuntimeRolloutDocker) Remove(_ context.Context, containerID s
 		}
 	}
 	if !ok {
-		return errdefs.NotFound(fmt.Errorf("missing container %s", containerID))
+		return errdefs.ErrNotFound.WithMessage(fmt.Sprintf("missing container %s", containerID))
 	}
 	delete(f.byID, info.ID)
 	delete(f.byName, info.Name)

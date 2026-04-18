@@ -9,9 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/docker/docker/api/types/container"
-	"github.com/docker/docker/api/types/image"
-	"github.com/docker/docker/api/types/network"
+	containertypes "github.com/moby/moby/api/types/container"
+	"github.com/moby/moby/api/types/network"
 	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
 )
 
@@ -164,7 +163,7 @@ func (a *Agent) updateContainerWithProgress(ctx context.Context, containerID str
 	}
 
 	// 1. Inspect the current container to get its full configuration
-	inspect, err := dockerCallWithRetry(ctx, dockerUpdateCallTimeout, func(callCtx context.Context) (container.InspectResponse, error) {
+	inspect, err := dockerCallWithRetry(ctx, dockerUpdateCallTimeout, func(callCtx context.Context) (containertypes.InspectResponse, error) {
 		return a.docker.ContainerInspect(callCtx, containerID)
 	})
 	if err != nil {
@@ -198,7 +197,7 @@ func (a *Agent) updateContainerWithProgress(ctx context.Context, containerID str
 	a.logger.Info().Str("image", imageName).Msg("Pulling latest image")
 
 	pullCtx, pullCancel := context.WithTimeout(ctx, dockerUpdateCallTimeout)
-	pullResp, err := a.docker.ImagePull(pullCtx, imageName, image.PullOptions{})
+	pullResp, err := a.docker.ImagePull(pullCtx, imageName, dockerImagePullOptions{})
 	if err != nil {
 		pullCancel()
 		result.Error = fmt.Sprintf("Failed to pull image %s: %v", imageName, annotateDockerConnectionError(err))
@@ -217,7 +216,7 @@ func (a *Agent) updateContainerWithProgress(ctx context.Context, containerID str
 		reportProgress(fmt.Sprintf("Stopping container %s...", result.ContainerName))
 		stopTimeout := 30 // seconds
 		_, err = dockerCallWithRetry(ctx, dockerUpdateCallTimeout, func(callCtx context.Context) (struct{}, error) {
-			err := a.docker.ContainerStop(callCtx, containerID, container.StopOptions{Timeout: &stopTimeout})
+			err := a.docker.ContainerStop(callCtx, containerID, dockerContainerStopOptions{Timeout: &stopTimeout})
 			return struct{}{}, err
 		})
 		if err != nil {
@@ -240,7 +239,7 @@ func (a *Agent) updateContainerWithProgress(ctx context.Context, containerID str
 		a.logger.Error().Err(err).Str("container", result.ContainerName).Msg("Failed to rename container for backup")
 		if wasRunning {
 			// Try to restart the original container.
-			if restartErr := a.docker.ContainerStart(ctx, containerID, container.StartOptions{}); restartErr != nil {
+			if restartErr := a.docker.ContainerStart(ctx, containerID, dockerContainerStartOptions{}); restartErr != nil {
 				a.logger.Warn().
 					Err(restartErr).
 					Str("container", result.ContainerName).
@@ -270,9 +269,6 @@ func (a *Agent) updateContainerWithProgress(ctx context.Context, containerID str
 				IPAMConfig: netConfig.IPAMConfig,
 				Links:      netConfig.Links,
 				NetworkID:  netConfig.NetworkID,
-				EndpointID: "", // Will be assigned
-				Gateway:    "", // Will be assigned
-				IPAddress:  "", // Will be assigned
 				MacAddress: netConfig.MacAddress,
 				DriverOpts: netConfig.DriverOpts,
 			}
@@ -281,7 +277,7 @@ func (a *Agent) updateContainerWithProgress(ctx context.Context, containerID str
 	}
 
 	// 6. Create a new container with the same configuration
-	createResp, err := dockerCallWithRetry(ctx, dockerUpdateCallTimeout, func(callCtx context.Context) (container.CreateResponse, error) {
+	createResp, err := dockerCallWithRetry(ctx, dockerUpdateCallTimeout, func(callCtx context.Context) (containertypes.CreateResponse, error) {
 		return a.docker.ContainerCreate(
 			callCtx,
 			inspect.Config,
@@ -327,7 +323,7 @@ func (a *Agent) updateContainerWithProgress(ctx context.Context, containerID str
 	if wasRunning {
 		reportProgress(fmt.Sprintf("Starting container %s...", result.ContainerName))
 		_, err = dockerCallWithRetry(ctx, dockerUpdateCallTimeout, func(callCtx context.Context) (struct{}, error) {
-			err := a.docker.ContainerStart(callCtx, newContainerID, container.StartOptions{})
+			err := a.docker.ContainerStart(callCtx, newContainerID, dockerContainerStartOptions{})
 			return struct{}{}, err
 		})
 		if err != nil {
@@ -346,7 +342,7 @@ func (a *Agent) updateContainerWithProgress(ctx context.Context, containerID str
 		sleepFn(5 * time.Second)
 	}
 
-	verifyInspect, err := dockerCallWithRetry(ctx, dockerUpdateCallTimeout, func(callCtx context.Context) (container.InspectResponse, error) {
+	verifyInspect, err := dockerCallWithRetry(ctx, dockerUpdateCallTimeout, func(callCtx context.Context) (containertypes.InspectResponse, error) {
 		return a.docker.ContainerInspect(callCtx, newContainerID)
 	})
 	if err != nil {
@@ -390,7 +386,7 @@ func (a *Agent) updateContainerWithProgress(ctx context.Context, containerID str
 		if !a.waitForAsyncDelay(5 * time.Minute) {
 			return
 		}
-		if err := a.docker.ContainerRemove(asyncCtx, backupName, container.RemoveOptions{Force: true}); err != nil {
+		if err := a.docker.ContainerRemove(asyncCtx, backupName, dockerContainerRemoveOptions{Force: true}); err != nil {
 			a.logger.Warn().Err(err).Str("backup", backupName).Msg("Failed to cleanup backup container")
 		} else {
 			a.logger.Info().Str("backup", backupName).Msg("Backup container cleaned up")
@@ -440,7 +436,7 @@ func (a *Agent) rollbackRenameAndRestart(ctx context.Context, backupName, origin
 			Msg("Rollback step failed: restore original container name")
 	}
 	if restart {
-		if err := a.docker.ContainerStart(ctx, originalID, container.StartOptions{}); err != nil {
+		if err := a.docker.ContainerStart(ctx, originalID, dockerContainerStartOptions{}); err != nil {
 			a.logger.Warn().
 				Err(err).
 				Str("container", originalName).
@@ -450,7 +446,7 @@ func (a *Agent) rollbackRenameAndRestart(ctx context.Context, backupName, origin
 }
 
 func (a *Agent) rollbackRemoveRenameAndRestart(ctx context.Context, newContainerID, backupName, originalName, originalID string, restart bool) {
-	if err := a.docker.ContainerRemove(ctx, newContainerID, container.RemoveOptions{Force: true}); err != nil {
+	if err := a.docker.ContainerRemove(ctx, newContainerID, dockerContainerRemoveOptions{Force: true}); err != nil {
 		a.logger.Warn().
 			Err(err).
 			Str("containerId", newContainerID).

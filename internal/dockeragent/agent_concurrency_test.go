@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	containertypes "github.com/docker/docker/api/types/container"
-	systemtypes "github.com/docker/docker/api/types/system"
+	containertypes "github.com/moby/moby/api/types/container"
+	systemtypes "github.com/moby/moby/api/types/system"
 	"github.com/rcourtman/pulse-go-rewrite/internal/hostmetrics"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
@@ -141,7 +141,7 @@ func TestCleanupOrphanedBackupsSkipsOverlappingRuns(t *testing.T) {
 
 	agent := &Agent{
 		docker: &fakeDockerClient{
-			containerListFunc: func(context.Context, containertypes.ListOptions) ([]containertypes.Summary, error) {
+			containerListFunc: func(context.Context, dockerContainerListOptions) ([]containertypes.Summary, error) {
 				atomic.AddInt32(&listCalls, 1)
 				listStarted <- struct{}{}
 				<-release

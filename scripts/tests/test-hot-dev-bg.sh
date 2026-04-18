@@ -591,6 +591,7 @@ path_env = {
     "go.mod": "GO_MOD_PATH",
     "go.sum": "GO_SUM_PATH",
 }
+go_mod = Path(os.environ["GO_MOD_PATH"]).read_text(encoding="utf-8")
 
 subsystem = next(item for item in registry["subsystems"] if item["id"] == "deployment-installability")
 policy = next(
@@ -607,6 +608,10 @@ for path in paths:
     print(f"{path}:owned={path in owned}")
     print(f"{path}:policy={path in matched}")
     print(f"{path}:contract={f'`{path}`' in contract}")
+
+print(f"go.mod:uses_moby_api={'github.com/moby/moby/api' in go_mod}")
+print(f"go.mod:uses_moby_client={'github.com/moby/moby/client' in go_mod}")
+print(f"go.mod:uses_legacy_docker={'github.com/docker/docker' in go_mod}")
 PY
   )"
 
@@ -623,6 +628,10 @@ PY
     assert_contains "dev runtime manifest has proof policy: ${manifest_path}" "${output}" "${manifest_path}:policy=True"
     assert_contains "dev runtime manifest is in contract: ${manifest_path}" "${output}" "${manifest_path}:contract=True"
   done
+
+  assert_contains "go.mod uses maintained moby api module" "${output}" "go.mod:uses_moby_api=True"
+  assert_contains "go.mod uses maintained moby client module" "${output}" "go.mod:uses_moby_client=True"
+  assert_contains "go.mod drops legacy docker module" "${output}" "go.mod:uses_legacy_docker=False"
 }
 
 test_makefile_routes_managed_runtime_through_npm() {

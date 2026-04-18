@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/docker/docker/api/types/container"
+	containertypes "github.com/moby/moby/api/types/container"
 )
 
 // cleanupOrphanedBackups searches for and removes any Pulse backup containers
@@ -20,8 +20,8 @@ func (a *Agent) cleanupOrphanedBackups(ctx context.Context) {
 	a.logger.Debug().Msg("Checking for orphaned backup containers")
 
 	// List all containers (including stopped ones)
-	list, err := dockerCallWithRetry(ctx, dockerCleanupCallTimeout, func(callCtx context.Context) ([]container.Summary, error) {
-		return a.docker.ContainerList(callCtx, container.ListOptions{
+	list, err := dockerCallWithRetry(ctx, dockerCleanupCallTimeout, func(callCtx context.Context) ([]containertypes.Summary, error) {
+		return a.docker.ContainerList(callCtx, dockerContainerListOptions{
 			All: true,
 		})
 	})
@@ -63,7 +63,7 @@ func (a *Agent) cleanupOrphanedBackups(ctx context.Context) {
 				Msg("removing orphaned backup container")
 
 			_, err := dockerCallWithRetry(ctx, dockerCleanupCallTimeout, func(callCtx context.Context) (struct{}, error) {
-				err := a.docker.ContainerRemove(callCtx, c.ID, container.RemoveOptions{Force: true})
+				err := a.docker.ContainerRemove(callCtx, c.ID, dockerContainerRemoveOptions{Force: true})
 				return struct{}{}, err
 			})
 			if err != nil {

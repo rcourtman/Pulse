@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	systemtypes "github.com/docker/docker/api/types/system"
-	"github.com/docker/docker/client"
+	systemtypes "github.com/moby/moby/api/types/system"
+	"github.com/moby/moby/client"
 	"github.com/rs/zerolog"
 )
 

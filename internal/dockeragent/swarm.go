@@ -7,9 +7,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/docker/docker/api/types/filters"
-	swarmtypes "github.com/docker/docker/api/types/swarm"
-	systemtypes "github.com/docker/docker/api/types/system"
+	swarmtypes "github.com/moby/moby/api/types/swarm"
+	systemtypes "github.com/moby/moby/api/types/system"
 	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
 )
 
@@ -153,7 +152,7 @@ func (a *Agent) collectSwarmData(ctx context.Context, info systemtypes.Info, con
 
 func (a *Agent) collectSwarmDataFromManager(ctx context.Context, info systemtypes.Info, scope string, containers map[string]agentsdocker.Container, includeServices, includeTasks bool) ([]agentsdocker.Service, []agentsdocker.Task, error) {
 	serviceList, err := dockerCallWithRetry(ctx, dockerSwarmListCallTimeout, func(callCtx context.Context) ([]swarmtypes.Service, error) {
-		return a.docker.ServiceList(callCtx, swarmtypes.ServiceListOptions{Status: true})
+		return a.docker.ServiceList(callCtx, dockerServiceListOptions{Status: true})
 	})
 	if err != nil {
 		return nil, nil, annotateDockerConnectionError(err)
@@ -174,14 +173,14 @@ func (a *Agent) collectSwarmDataFromManager(ctx context.Context, info systemtype
 
 	var tasks []agentsdocker.Task
 	if includeTasks {
-		taskFilters := filters.NewArgs()
+		taskFilters := newDockerFilters()
 		taskFilters.Add("desired-state", string(swarmtypes.TaskStateRunning))
 		if scope != swarmScopeCluster && info.Swarm.NodeID != "" {
 			taskFilters.Add("node", info.Swarm.NodeID)
 		}
 
 		taskList, err := dockerCallWithRetry(ctx, dockerSwarmListCallTimeout, func(callCtx context.Context) ([]swarmtypes.Task, error) {
-			return a.docker.TaskList(callCtx, swarmtypes.TaskListOptions{Filters: taskFilters})
+			return a.docker.TaskList(callCtx, dockerTaskListOptions{Filters: taskFilters})
 		})
 		if err != nil {
 			return services, nil, annotateDockerConnectionError(err)

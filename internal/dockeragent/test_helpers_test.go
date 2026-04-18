@@ -8,30 +8,30 @@ import (
 	"io"
 	"testing"
 
-	containertypes "github.com/docker/docker/api/types/container"
-	"github.com/docker/docker/api/types/image"
-	"github.com/docker/docker/api/types/network"
-	swarmtypes "github.com/docker/docker/api/types/swarm"
-	systemtypes "github.com/docker/docker/api/types/system"
+	containertypes "github.com/moby/moby/api/types/container"
+	"github.com/moby/moby/api/types/image"
+	"github.com/moby/moby/api/types/network"
+	swarmtypes "github.com/moby/moby/api/types/swarm"
+	systemtypes "github.com/moby/moby/api/types/system"
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
 type fakeDockerClient struct {
 	daemonHost                string
 	infoFunc                  func(ctx context.Context) (systemtypes.Info, error)
-	containerListFunc         func(ctx context.Context, opts containertypes.ListOptions) ([]containertypes.Summary, error)
+	containerListFunc         func(ctx context.Context, opts dockerContainerListOptions) ([]containertypes.Summary, error)
 	containerInspectWithRawFn func(ctx context.Context, id string, size bool) (containertypes.InspectResponse, []byte, error)
-	containerStatsOneShotFn   func(ctx context.Context, id string) (containertypes.StatsResponseReader, error)
+	containerStatsOneShotFn   func(ctx context.Context, id string) (dockerStatsResponseReader, error)
 	containerInspectFn        func(ctx context.Context, id string) (containertypes.InspectResponse, error)
-	imagePullFn               func(ctx context.Context, ref string, opts image.PullOptions) (io.ReadCloser, error)
-	containerStopFn           func(ctx context.Context, id string, opts containertypes.StopOptions) error
+	imagePullFn               func(ctx context.Context, ref string, opts dockerImagePullOptions) (io.ReadCloser, error)
+	containerStopFn           func(ctx context.Context, id string, opts dockerContainerStopOptions) error
 	containerRenameFn         func(ctx context.Context, id, newName string) error
 	containerCreateFn         func(ctx context.Context, config *containertypes.Config, hostConfig *containertypes.HostConfig, networkingConfig *network.NetworkingConfig, platform *v1.Platform, containerName string) (containertypes.CreateResponse, error)
 	networkConnectFn          func(ctx context.Context, netName, containerID string, endpoint *network.EndpointSettings) error
-	containerStartFn          func(ctx context.Context, id string, opts containertypes.StartOptions) error
-	containerRemoveFn         func(ctx context.Context, id string, opts containertypes.RemoveOptions) error
-	serviceListFn             func(ctx context.Context, opts swarmtypes.ServiceListOptions) ([]swarmtypes.Service, error)
-	taskListFn                func(ctx context.Context, opts swarmtypes.TaskListOptions) ([]swarmtypes.Task, error)
+	containerStartFn          func(ctx context.Context, id string, opts dockerContainerStartOptions) error
+	containerRemoveFn         func(ctx context.Context, id string, opts dockerContainerRemoveOptions) error
+	serviceListFn             func(ctx context.Context, opts dockerServiceListOptions) ([]swarmtypes.Service, error)
+	taskListFn                func(ctx context.Context, opts dockerTaskListOptions) ([]swarmtypes.Task, error)
 	imageInspectWithRawFn     func(ctx context.Context, imageID string) (image.InspectResponse, []byte, error)
 	closeFn                   func() error
 }
@@ -47,7 +47,7 @@ func (f *fakeDockerClient) DaemonHost() string {
 	return f.daemonHost
 }
 
-func (f *fakeDockerClient) ContainerList(ctx context.Context, opts containertypes.ListOptions) ([]containertypes.Summary, error) {
+func (f *fakeDockerClient) ContainerList(ctx context.Context, opts dockerContainerListOptions) ([]containertypes.Summary, error) {
 	if f.containerListFunc == nil {
 		return nil, errors.New("unexpected ContainerList call")
 	}
@@ -61,9 +61,9 @@ func (f *fakeDockerClient) ContainerInspectWithRaw(ctx context.Context, id strin
 	return f.containerInspectWithRawFn(ctx, id, size)
 }
 
-func (f *fakeDockerClient) ContainerStatsOneShot(ctx context.Context, id string) (containertypes.StatsResponseReader, error) {
+func (f *fakeDockerClient) ContainerStatsOneShot(ctx context.Context, id string) (dockerStatsResponseReader, error) {
 	if f.containerStatsOneShotFn == nil {
-		return containertypes.StatsResponseReader{}, errors.New("unexpected ContainerStatsOneShot call")
+		return dockerStatsResponseReader{}, errors.New("unexpected ContainerStatsOneShot call")
 	}
 	return f.containerStatsOneShotFn(ctx, id)
 }
@@ -75,14 +75,14 @@ func (f *fakeDockerClient) ContainerInspect(ctx context.Context, id string) (con
 	return f.containerInspectFn(ctx, id)
 }
 
-func (f *fakeDockerClient) ImagePull(ctx context.Context, ref string, opts image.PullOptions) (io.ReadCloser, error) {
+func (f *fakeDockerClient) ImagePull(ctx context.Context, ref string, opts dockerImagePullOptions) (io.ReadCloser, error) {
 	if f.imagePullFn == nil {
 		return nil, errors.New("unexpected ImagePull call")
 	}
 	return f.imagePullFn(ctx, ref, opts)
 }
 
-func (f *fakeDockerClient) ContainerStop(ctx context.Context, id string, opts containertypes.StopOptions) error {
+func (f *fakeDockerClient) ContainerStop(ctx context.Context, id string, opts dockerContainerStopOptions) error {
 	if f.containerStopFn == nil {
 		return errors.New("unexpected ContainerStop call")
 	}
@@ -110,28 +110,28 @@ func (f *fakeDockerClient) NetworkConnect(ctx context.Context, netName, containe
 	return f.networkConnectFn(ctx, netName, containerID, endpoint)
 }
 
-func (f *fakeDockerClient) ContainerStart(ctx context.Context, id string, opts containertypes.StartOptions) error {
+func (f *fakeDockerClient) ContainerStart(ctx context.Context, id string, opts dockerContainerStartOptions) error {
 	if f.containerStartFn == nil {
 		return errors.New("unexpected ContainerStart call")
 	}
 	return f.containerStartFn(ctx, id, opts)
 }
 
-func (f *fakeDockerClient) ContainerRemove(ctx context.Context, id string, opts containertypes.RemoveOptions) error {
+func (f *fakeDockerClient) ContainerRemove(ctx context.Context, id string, opts dockerContainerRemoveOptions) error {
 	if f.containerRemoveFn == nil {
 		return errors.New("unexpected ContainerRemove call")
 	}
 	return f.containerRemoveFn(ctx, id, opts)
 }
 
-func (f *fakeDockerClient) ServiceList(ctx context.Context, opts swarmtypes.ServiceListOptions) ([]swarmtypes.Service, error) {
+func (f *fakeDockerClient) ServiceList(ctx context.Context, opts dockerServiceListOptions) ([]swarmtypes.Service, error) {
 	if f.serviceListFn == nil {
 		return nil, errors.New("unexpected ServiceList call")
 	}
 	return f.serviceListFn(ctx, opts)
 }
 
-func (f *fakeDockerClient) TaskList(ctx context.Context, opts swarmtypes.TaskListOptions) ([]swarmtypes.Task, error) {
+func (f *fakeDockerClient) TaskList(ctx context.Context, opts dockerTaskListOptions) ([]swarmtypes.Task, error) {
 	if f.taskListFn == nil {
 		return nil, errors.New("unexpected TaskList call")
 	}
@@ -153,7 +153,7 @@ func (f *fakeDockerClient) Close() error {
 	return f.closeFn()
 }
 
-func statsReader(t *testing.T, stats containertypes.StatsResponse) containertypes.StatsResponseReader {
+func statsReader(t *testing.T, stats containertypes.StatsResponse) dockerStatsResponseReader {
 	t.Helper()
 
 	payload, err := json.Marshal(stats)
@@ -161,7 +161,7 @@ func statsReader(t *testing.T, stats containertypes.StatsResponse) containertype
 		t.Fatalf("marshal stats: %v", err)
 	}
 
-	return containertypes.StatsResponseReader{
+	return dockerStatsResponseReader{
 		Body: io.NopCloser(bytes.NewReader(payload)),
 	}
 }

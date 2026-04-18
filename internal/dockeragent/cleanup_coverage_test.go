@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	containertypes "github.com/docker/docker/api/types/container"
+	containertypes "github.com/moby/moby/api/types/container"
 	"github.com/rs/zerolog"
 )
 
@@ -15,7 +15,7 @@ func TestCleanupOrphanedBackups(t *testing.T) {
 		agent := &Agent{
 			logger: zerolog.Nop(),
 			docker: &fakeDockerClient{
-				containerListFunc: func(context.Context, containertypes.ListOptions) ([]containertypes.Summary, error) {
+				containerListFunc: func(context.Context, dockerContainerListOptions) ([]containertypes.Summary, error) {
 					return nil, errors.New("list failed")
 				},
 			},
@@ -30,11 +30,11 @@ func TestCleanupOrphanedBackups(t *testing.T) {
 		oldCreated := time.Now().Add(-20 * time.Minute).Unix()
 		recentCreated := time.Now().Add(-5 * time.Minute).Unix()
 
-		removed := make(map[string]containertypes.RemoveOptions)
+		removed := make(map[string]dockerContainerRemoveOptions)
 		agent := &Agent{
 			logger: zerolog.Nop(),
 			docker: &fakeDockerClient{
-				containerListFunc: func(_ context.Context, opts containertypes.ListOptions) ([]containertypes.Summary, error) {
+				containerListFunc: func(_ context.Context, opts dockerContainerListOptions) ([]containertypes.Summary, error) {
 					if !opts.All {
 						t.Fatal("expected cleanup list query to set All=true")
 					}
@@ -47,7 +47,7 @@ func TestCleanupOrphanedBackups(t *testing.T) {
 						{ID: "secondary-name-only", Names: []string{"/service", "/service_pulse_backup_" + oldTimestamp}, Created: oldCreated},
 					}, nil
 				},
-				containerRemoveFn: func(_ context.Context, id string, opts containertypes.RemoveOptions) error {
+				containerRemoveFn: func(_ context.Context, id string, opts dockerContainerRemoveOptions) error {
 					removed[id] = opts
 					if id == "old-fallback" {
 						return errors.New("remove failed")

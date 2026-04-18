@@ -6,8 +6,9 @@ import (
 	"testing"
 	"time"
 
-	swarmtypes "github.com/docker/docker/api/types/swarm"
-	systemtypes "github.com/docker/docker/api/types/system"
+	networktypes "github.com/moby/moby/api/types/network"
+	swarmtypes "github.com/moby/moby/api/types/swarm"
+	systemtypes "github.com/moby/moby/api/types/system"
 	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
 )
 
@@ -72,7 +73,7 @@ func TestMapSwarmService(t *testing.T) {
 		},
 		Endpoint: swarmtypes.Endpoint{
 			Ports: []swarmtypes.PortConfig{
-				{Name: "http", Protocol: swarmtypes.PortConfigProtocolTCP, TargetPort: 80, PublishedPort: 8080, PublishMode: swarmtypes.PortConfigPublishModeIngress},
+				{Name: "http", Protocol: networktypes.TCP, TargetPort: 80, PublishedPort: 8080, PublishMode: swarmtypes.PortConfigPublishModeIngress},
 			},
 		},
 		Meta: swarmtypes.Meta{
@@ -206,13 +207,13 @@ func TestMapSwarmTask(t *testing.T) {
 func TestCollectSwarmDataFromManager(t *testing.T) {
 	agent := &Agent{
 		docker: &fakeDockerClient{
-			serviceListFn: func(_ context.Context, _ swarmtypes.ServiceListOptions) ([]swarmtypes.Service, error) {
+			serviceListFn: func(_ context.Context, _ dockerServiceListOptions) ([]swarmtypes.Service, error) {
 				return []swarmtypes.Service{
 					{ID: "svc1", Spec: swarmtypes.ServiceSpec{Annotations: swarmtypes.Annotations{Name: "alpha"}}},
 					{ID: "svc2", Spec: swarmtypes.ServiceSpec{Annotations: swarmtypes.Annotations{Name: "beta"}}},
 				}, nil
 			},
-			taskListFn: func(_ context.Context, opts swarmtypes.TaskListOptions) ([]swarmtypes.Task, error) {
+			taskListFn: func(_ context.Context, opts dockerTaskListOptions) ([]swarmtypes.Task, error) {
 				if got := opts.Filters.Get("node"); len(got) != 1 || got[0] != "node1" {
 					t.Fatalf("expected node filter to include node1, got %v", got)
 				}
@@ -250,12 +251,12 @@ func TestCollectSwarmDataFromManager(t *testing.T) {
 	t.Run("task list error", func(t *testing.T) {
 		agent := &Agent{
 			docker: &fakeDockerClient{
-				serviceListFn: func(_ context.Context, _ swarmtypes.ServiceListOptions) ([]swarmtypes.Service, error) {
+				serviceListFn: func(_ context.Context, _ dockerServiceListOptions) ([]swarmtypes.Service, error) {
 					return []swarmtypes.Service{
 						{ID: "svc1", Spec: swarmtypes.ServiceSpec{Annotations: swarmtypes.Annotations{Name: "alpha"}}},
 					}, nil
 				},
-				taskListFn: func(_ context.Context, _ swarmtypes.TaskListOptions) ([]swarmtypes.Task, error) {
+				taskListFn: func(_ context.Context, _ dockerTaskListOptions) ([]swarmtypes.Task, error) {
 					return nil, errors.New("task failed")
 				},
 			},
@@ -321,7 +322,7 @@ func TestCollectSwarmData(t *testing.T) {
 				SwarmScope:      swarmScopeAuto,
 			},
 			docker: &fakeDockerClient{
-				serviceListFn: func(context.Context, swarmtypes.ServiceListOptions) ([]swarmtypes.Service, error) {
+				serviceListFn: func(context.Context, dockerServiceListOptions) ([]swarmtypes.Service, error) {
 					return nil, errors.New("boom")
 				},
 			},
@@ -374,13 +375,13 @@ func TestCollectSwarmData(t *testing.T) {
 				SwarmScope:      swarmScopeCluster,
 			},
 			docker: &fakeDockerClient{
-				serviceListFn: func(context.Context, swarmtypes.ServiceListOptions) ([]swarmtypes.Service, error) {
+				serviceListFn: func(context.Context, dockerServiceListOptions) ([]swarmtypes.Service, error) {
 					return []swarmtypes.Service{
 						{ID: "svc1", Spec: swarmtypes.ServiceSpec{Annotations: swarmtypes.Annotations{Name: "zeta"}}},
 						{ID: "svc2", Spec: swarmtypes.ServiceSpec{Annotations: swarmtypes.Annotations{Name: "alpha"}}},
 					}, nil
 				},
-				taskListFn: func(context.Context, swarmtypes.TaskListOptions) ([]swarmtypes.Task, error) {
+				taskListFn: func(context.Context, dockerTaskListOptions) ([]swarmtypes.Task, error) {
 					return []swarmtypes.Task{
 						{ID: "task2", ServiceID: "svc2", Slot: 2, DesiredState: swarmtypes.TaskStateRunning, Status: swarmtypes.TaskStatus{State: swarmtypes.TaskStateRunning}},
 						{ID: "task1", ServiceID: "svc2", Slot: 1, DesiredState: swarmtypes.TaskStateRunning, Status: swarmtypes.TaskStatus{State: swarmtypes.TaskStateRunning}},
@@ -492,14 +493,14 @@ func TestCollectSwarmData(t *testing.T) {
 				SwarmScope:      swarmScopeCluster,
 			},
 			docker: &fakeDockerClient{
-				serviceListFn: func(context.Context, swarmtypes.ServiceListOptions) ([]swarmtypes.Service, error) {
+				serviceListFn: func(context.Context, dockerServiceListOptions) ([]swarmtypes.Service, error) {
 					return []swarmtypes.Service{
 						{ID: "b", Spec: swarmtypes.ServiceSpec{Annotations: swarmtypes.Annotations{Name: "web"}}},
 						{ID: "a", Spec: swarmtypes.ServiceSpec{Annotations: swarmtypes.Annotations{Name: "web"}}},
 						{ID: "c", Spec: swarmtypes.ServiceSpec{Annotations: swarmtypes.Annotations{Name: "api"}}},
 					}, nil
 				},
-				taskListFn: func(context.Context, swarmtypes.TaskListOptions) ([]swarmtypes.Task, error) {
+				taskListFn: func(context.Context, dockerTaskListOptions) ([]swarmtypes.Task, error) {
 					return []swarmtypes.Task{
 						{ID: "b", ServiceID: "a", Slot: 1, DesiredState: swarmtypes.TaskStateRunning, Status: swarmtypes.TaskStatus{State: swarmtypes.TaskStateRunning}},
 						{ID: "a", ServiceID: "a", Slot: 1, DesiredState: swarmtypes.TaskStateRunning, Status: swarmtypes.TaskStatus{State: swarmtypes.TaskStateRunning}},

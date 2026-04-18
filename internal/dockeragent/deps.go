@@ -11,7 +11,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/docker/docker/client"
+	"github.com/moby/moby/client"
 	"github.com/rcourtman/pulse-go-rewrite/internal/hostmetrics"
 )
 
@@ -58,7 +58,7 @@ var (
 		return os.Open("/proc/uptime")
 	}
 	newDockerClientFn = func(opts ...client.Opt) (dockerClient, error) {
-		return client.NewClientWithOpts(opts...)
+		return newMobyDockerClient(opts...)
 	}
 	selfUpdateFunc = func(a *Agent, ctx context.Context) error {
 		return a.selfUpdate(ctx)
