@@ -58,6 +58,7 @@ export interface SettingsNavItem {
   label: string;
   icon: Component<{ class?: string; strokeWidth?: number }>;
   iconProps?: { strokeWidth?: number };
+  hideFromSidebar?: boolean;
   saveBehavior?: 'system';
   disabled?: boolean;
   locked?: boolean;

@@ -8,19 +8,19 @@ import {
 
 export const SETTINGS_HEADER_META: SettingsHeaderMetaMap = {
   'infrastructure-systems': {
-    title: 'Systems',
+    title: 'Infrastructure',
     description:
-      `Review top-level monitored systems and how Pulse is collecting data from each one. ${SELF_HOSTED_PRO_BILLING_PRESENTATION.infrastructureRouteReferral}`,
+      `Review monitored systems, manage platform connections, and install Pulse agents from one workspace. ${SELF_HOSTED_PRO_BILLING_PRESENTATION.infrastructureRouteReferral}`,
   },
   'infrastructure-connections': {
-    title: 'Connections',
+    title: 'Infrastructure',
     description:
-      'Manage API-backed platform connections for Proxmox, TrueNAS, and VMware without mixing them into the monitored systems ledger.',
+      `Review monitored systems, manage platform connections, and install Pulse agents from one workspace. ${SELF_HOSTED_PRO_BILLING_PRESENTATION.infrastructureRouteReferral}`,
   },
   'infrastructure-install': {
-    title: 'Install',
+    title: 'Infrastructure',
     description:
-      'Generate install tokens and copy unified agent commands for Linux, macOS, FreeBSD, and Windows.',
+      `Review monitored systems, manage platform connections, and install Pulse agents from one workspace. ${SELF_HOSTED_PRO_BILLING_PRESENTATION.infrastructureRouteReferral}`,
   },
   'system-general': {
     title: 'General',

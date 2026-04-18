@@ -70,7 +70,7 @@ export function useSettingsAccess({
     return presentationPolicyIsReadOnly();
   });
 
-  const visibleTabGroups = createMemo(() => {
+  const accessibleTabGroups = createMemo(() => {
     const hostedModeEnabled = isHostedModeEnabled();
     const settingsCapabilities = securityStatus()?.settingsCapabilities ?? null;
     const settingsCapabilitiesResolved = securityStatus() !== null;
@@ -97,7 +97,16 @@ export function useSettingsAccess({
       .filter((group) => group.items.length > 0);
   });
 
-  const flatTabs = createMemo(() => visibleTabGroups().flatMap((group) => group.items));
+  const flatTabs = createMemo(() => accessibleTabGroups().flatMap((group) => group.items));
+
+  const visibleTabGroups = createMemo(() =>
+    accessibleTabGroups()
+      .map((group) => ({
+        ...group,
+        items: group.items.filter((item) => !item.hideFromSidebar),
+      }))
+      .filter((group) => group.items.length > 0),
+  );
 
   const filteredTabGroups = createMemo(() => {
     const q = searchQuery().trim().toLowerCase();

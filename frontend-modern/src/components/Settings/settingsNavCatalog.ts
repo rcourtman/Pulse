@@ -35,7 +35,7 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
     items: [
       {
         id: 'infrastructure-systems',
-        label: 'Systems',
+        label: 'Infrastructure',
         icon: Server,
         iconProps: { strokeWidth: 2 },
       },
@@ -44,6 +44,7 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
         label: 'Connections',
         icon: PlugZap,
         iconProps: { strokeWidth: 2 },
+        hideFromSidebar: true,
         hideWhenReadOnly: true,
       },
       {
@@ -51,6 +52,7 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
         label: 'Install',
         icon: Download,
         iconProps: { strokeWidth: 2 },
+        hideFromSidebar: true,
         hideWhenReadOnly: true,
       },
     ],

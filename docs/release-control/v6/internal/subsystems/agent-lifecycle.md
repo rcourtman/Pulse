@@ -863,13 +863,14 @@ rather than stacking beneath the systems ledger. When the operator opens
 platform connection management, install tooling, or the legacy operations
 workspace route, `InfrastructureWorkspace.tsx` must not keep the systems table
 mounted above that second surface.
-That infrastructure surface must now stay single-purpose per settings route:
-the default systems destination owns the top-level monitored-system ledger,
-the connections destination owns API-backed platform management, and the
-install destination owns Linux/Windows/macOS/FreeBSD command generation.
-`InfrastructureWorkspace.tsx` must not rebuild a second local tab shell inside
-that content area now that the canonical Settings navigation owns movement
-between those three jobs.
+That infrastructure surface must now stay single-purpose per workspace route:
+the default systems view owns the top-level monitored-system ledger, the
+connections view owns API-backed platform management, and the install view
+owns Linux/Windows/macOS/FreeBSD command generation. The shared Settings
+sidebar owns only the top-level `Infrastructure` destination; movement between
+those three jobs belongs to the primary workspace subtabs rendered inside
+`InfrastructureWorkspace.tsx`, and selecting one subtab must replace the body
+instead of stacking another surface underneath it.
 That same lifecycle-owned platform-connections workspace must keep API-backed
 provider state operationally useful, not CRUD-only. `TrueNASSettingsPanel.tsx`
 and `useTrueNASSettingsPanelState.ts` must surface the shared runtime health,

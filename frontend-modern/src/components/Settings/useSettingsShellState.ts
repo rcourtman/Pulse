@@ -13,9 +13,17 @@ export function useSettingsShellState({ activeTab }: UseSettingsShellStateParams
       const tab = activeTab();
       if (isInfrastructureSettingsTab(tab) && presentationPolicyIsReadOnly()) {
         return {
-          title: 'Systems',
+          title: 'Infrastructure',
           description:
             'Review the current top-level monitored systems and reporting posture. Setup changes stay unavailable in this read-only session.',
+        };
+      }
+
+      if (isInfrastructureSettingsTab(tab)) {
+        return {
+          title: 'Infrastructure',
+          description:
+            SETTINGS_HEADER_META['infrastructure-systems'].description,
         };
       }
 

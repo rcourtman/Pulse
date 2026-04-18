@@ -13,6 +13,7 @@ import type {
   SettingsNavGroup,
   SettingsTab,
 } from './settingsNavigationModel';
+import { isInfrastructureSettingsTab } from './settingsNavigationModel';
 
 interface SettingsPageShellProps {
   headerMeta: Accessor<SettingsHeaderMeta>;
@@ -36,6 +37,10 @@ interface SettingsPageShellProps {
 
 export const SettingsPageShell: Component<SettingsPageShellProps> = (props) => {
   const unsavedChangesBanner = () => getSettingsUnsavedChangesBanner();
+  const isSidebarItemActive = (itemId: SettingsTab) =>
+    itemId === 'infrastructure-systems'
+      ? isInfrastructureSettingsTab(props.activeTab())
+      : props.activeTab() === itemId;
 
   return (
     <div class="space-y-6">
@@ -165,7 +170,12 @@ export const SettingsPageShell: Component<SettingsPageShellProps> = (props) => {
               <For each={props.filteredTabGroups()}>
                 {(group) => (
                   <div class="mb-6 lg:mb-2 lg:space-y-2">
-                    <Show when={!props.sidebarCollapsed()}>
+                    <Show
+                      when={
+                        !props.sidebarCollapsed() &&
+                        !(group.items.length === 1 && group.items[0]?.label === group.label)
+                      }
+                    >
                       <p class="px-4 lg:px-0 mb-2 lg:mb-0 text-[13px] lg:text-xs font-[500] uppercase tracking-wider text-muted">
                         {group.label}
                       </p>
@@ -173,7 +183,7 @@ export const SettingsPageShell: Component<SettingsPageShellProps> = (props) => {
                     <div class="lg:bg-transparent border-y lg:border-none divide-y lg:divide-y-0 divide-border-subtle flex flex-col lg:space-y-1.5">
                       <For each={group.items}>
                         {(item) => {
-                          const isActive = () => props.activeTab() === item.id;
+                          const isActive = () => isSidebarItemActive(item.id);
                           return (
                             <button
                               type="button"

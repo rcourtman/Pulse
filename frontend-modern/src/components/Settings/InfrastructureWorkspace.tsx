@@ -1,6 +1,7 @@
 import { Component, Match, Show, Switch, createEffect, createMemo, createSignal } from 'solid-js';
 import { useLocation, useNavigate } from '@solidjs/router';
 import { Dialog } from '@/components/shared/Dialog';
+import { Subtabs } from '@/components/shared/Subtabs';
 import { presentationPolicyIsReadOnly } from '@/stores/sessionPresentationPolicy';
 import { AgentProfilesPanel } from './AgentProfilesPanel';
 import { AddSystemPicker, type AddSystemChoice } from './AddSystemPicker';
@@ -18,6 +19,7 @@ import { PlatformConnectionsWorkspace } from './PlatformConnectionsWorkspace';
 import {
   buildInfrastructureWorkspacePath,
   getInfrastructureWorkspaceViewFromPath,
+  type InfrastructureWorkspaceView,
 } from './infrastructureWorkspaceModel';
 import type { InfrastructurePlatformSettingsProps } from './proxmoxSettingsModel';
 import {
@@ -62,6 +64,11 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
           },
         ],
   );
+  const workspaceTabs = createMemo(() => [
+    { value: 'inventory', label: 'Systems' },
+    { value: 'platforms', label: 'Connections' },
+    { value: 'install', label: 'Install' },
+  ]);
 
   const openProxmoxNode = (nodeKind: 'pve' | 'pbs' | 'pmg', nodeId: string) => {
     const nodes =
@@ -126,6 +133,17 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
 
   return (
     <div class="space-y-8">
+      <Show when={!readOnlyWorkspace()}>
+        <Subtabs
+          value={activeView()}
+          onChange={(value) =>
+            navigate(buildInfrastructureWorkspacePath(value as InfrastructureWorkspaceView))
+          }
+          ariaLabel="Infrastructure workspace"
+          tabs={workspaceTabs()}
+        />
+      </Show>
+
       <Show when={activeView() === 'inventory'}>
         <ConnectionsTable
           rows={rows}
