@@ -1,4 +1,11 @@
 export type InfrastructureWorkspaceView = 'inventory' | 'install' | 'platforms' | 'operations';
+export type InfrastructureWorkspaceTabView = Exclude<InfrastructureWorkspaceView, 'operations'>;
+
+export interface InfrastructureWorkspaceTabDefinition {
+  id: InfrastructureWorkspaceTabView;
+  label: string;
+  path: string;
+}
 
 const INFRASTRUCTURE_WORKSPACE_PATHS: Record<InfrastructureWorkspaceView, string> = {
   inventory: '/settings/infrastructure',
@@ -6,6 +13,24 @@ const INFRASTRUCTURE_WORKSPACE_PATHS: Record<InfrastructureWorkspaceView, string
   platforms: '/settings/infrastructure/platforms',
   operations: '/settings/infrastructure/operations',
 };
+
+export const INFRASTRUCTURE_WORKSPACE_TABS: readonly InfrastructureWorkspaceTabDefinition[] = [
+  {
+    id: 'inventory',
+    label: 'Systems',
+    path: INFRASTRUCTURE_WORKSPACE_PATHS.inventory,
+  },
+  {
+    id: 'platforms',
+    label: 'Connections',
+    path: INFRASTRUCTURE_WORKSPACE_PATHS.platforms,
+  },
+  {
+    id: 'install',
+    label: 'Install',
+    path: INFRASTRUCTURE_WORKSPACE_PATHS.install,
+  },
+];
 
 export function getInfrastructureWorkspaceViewFromPath(
   pathname: string,

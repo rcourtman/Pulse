@@ -897,6 +897,8 @@ describe('Settings architecture guardrails', () => {
     expect(infrastructureWorkspaceSource).toContain('InfrastructureStopMonitoringDialog');
     expect(infrastructureWorkspaceSource).toContain('AgentProfilesPanel');
     expect(infrastructureWorkspaceSource).toContain('PlatformConnectionsWorkspace');
+    expect(infrastructureWorkspaceSource).toContain("import { Subtabs } from '@/components/shared/Subtabs'");
+    expect(infrastructureWorkspaceSource).toContain('<Subtabs');
     expect(infrastructureWorkspaceSource).toContain("activeView() === 'operations'");
     expect(infrastructureWorkspaceSource).toContain("activeView() === 'platforms'");
     expect(infrastructureWorkspaceSource).toContain("activeView() === 'install'");
@@ -953,8 +955,8 @@ describe('Settings architecture guardrails', () => {
     );
     expect(infrastructureActiveRowDetailsSource).toContain('useInfrastructureOperationsContext');
     expect(infrastructureIgnoredRowDetailsSource).toContain('useInfrastructureOperationsContext');
-    expect(infrastructureWorkspaceModelSource).not.toContain(
-      'INFRASTRUCTURE_WORKSPACE_TABS',
+    expect(infrastructureWorkspaceModelSource).toContain(
+      'export const INFRASTRUCTURE_WORKSPACE_TABS',
     );
     expect(infrastructureWorkspaceModelSource).toContain(
       'export function getInfrastructureWorkspaceViewFromPath',

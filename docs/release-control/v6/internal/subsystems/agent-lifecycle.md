@@ -863,6 +863,10 @@ rather than stacking beneath the systems ledger. When the operator opens
 platform connection management, install tooling, or the legacy operations
 workspace route, `InfrastructureWorkspace.tsx` must not keep the systems table
 mounted above that second surface.
+That shared infrastructure shell must also preserve explicit peer navigation
+between `Systems`, `Connections`, and `Install`, so entering platform
+management or installer tooling never strands the operator on a sub-route with
+no governed path back to the ledger or to Linux/Windows install commands.
 That same lifecycle-owned platform-connections workspace must keep API-backed
 provider state operationally useful, not CRUD-only. `TrueNASSettingsPanel.tsx`
 and `useTrueNASSettingsPanelState.ts` must surface the shared runtime health,

@@ -167,9 +167,13 @@ describe('InfrastructureWorkspace', () => {
   it('renders only the top-level ledger at the base infrastructure route', () => {
     renderWorkspace();
 
-    expect(screen.getByText('Systems')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Manage connections' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Systems' })).toBeInTheDocument();
+    expect(screen.getByRole('tablist', { name: 'Infrastructure workspace' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Systems' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Connections' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Install' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Agent profiles' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Manage connections' })).toBeNull();
     expect(screen.queryByTestId('inventory-section')).toBeNull();
     expect(screen.queryByTestId('platform-section')).toBeNull();
     expect(screen.queryByTestId('install-section')).toBeNull();
@@ -239,10 +243,10 @@ describe('InfrastructureWorkspace', () => {
     expect(screen.getByTestId('active-details')).toBeInTheDocument();
   });
 
-  it('routes connection management into the platform workspace instead of the main ledger', () => {
+  it('navigates from the systems ledger into the peer connections workspace', () => {
     renderWorkspace();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Manage connections' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Connections' }));
 
     expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure/platforms');
   });
@@ -251,11 +255,17 @@ describe('InfrastructureWorkspace', () => {
     mockPathname = '/settings/infrastructure/platforms/truenas';
     renderWorkspace();
 
-    expect(screen.queryByText('Systems')).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Systems' })).toBeNull();
+    expect(screen.getByRole('tablist', { name: 'Infrastructure workspace' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Systems' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Connections' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    expect(screen.getByRole('tab', { name: 'Install' })).toBeInTheDocument();
     expect(screen.getByTestId('platform-section')).toBeInTheDocument();
     expect(screen.queryByTestId('inventory-section')).toBeNull();
     expect(screen.queryByTestId('install-section')).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Manage connections' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Agent profiles' })).toBeNull();
     expect(screen.queryByTestId('agent-profiles')).toBeNull();
   });
@@ -264,11 +274,30 @@ describe('InfrastructureWorkspace', () => {
     mockPathname = '/settings/infrastructure/install';
     renderWorkspace();
 
-    expect(screen.queryByText('Systems')).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Systems' })).toBeNull();
+    expect(screen.getByRole('tablist', { name: 'Infrastructure workspace' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Install' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByTestId('install-section')).toBeInTheDocument();
     expect(screen.queryByTestId('inventory-section')).toBeNull();
     expect(screen.queryByTestId('platform-section')).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Manage connections' })).toBeNull();
+  });
+
+  it('lets platform deep links navigate back to the systems ledger', () => {
+    mockPathname = '/settings/infrastructure/platforms/truenas';
+    renderWorkspace();
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Systems' }));
+
+    expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure');
+  });
+
+  it('keeps Linux and Windows install tooling reachable from the shared workspace tabs', () => {
+    mockPathname = '/settings/infrastructure/platforms/truenas';
+    renderWorkspace();
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Install' }));
+
+    expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure/install');
   });
 
   it('opens agent profiles in a dedicated drawer instead of inline', () => {
@@ -285,6 +314,7 @@ describe('InfrastructureWorkspace', () => {
     renderWorkspace();
 
     expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure', { replace: true });
+    expect(screen.queryByRole('tablist', { name: 'Infrastructure workspace' })).toBeNull();
     expect(screen.queryByRole('button', { name: /\+ Add a system/i })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Agent profiles' })).toBeNull();
     expect(screen.queryByTestId('platform-section')).toBeNull();
