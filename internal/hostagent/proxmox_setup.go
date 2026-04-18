@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -497,6 +498,11 @@ func (p *ProxmoxSetup) runForType(ctx context.Context, ptype proxmoxProductType)
 	}
 
 	p.logger.Info().Str("type", string(ptype)).Msg("Setting up Proxmox type")
+
+	// Clear the registration marker before token operations so that a failed
+	// Pulse update (rotation succeeds but registration fails) leaves the system
+	// retriable on the next startup rather than stuck on a stale state file.
+	p.clearTypeRegisteredMarker(ptype)
 
 	// Create monitoring user and token
 	tokenID, tokenValue, err := p.setupToken(ctx, ptype)
@@ -1520,5 +1526,15 @@ func (p *ProxmoxSetup) markTypeAsRegistered(ptype proxmoxProductType) {
 	}
 	if err := p.collector.Chmod(stateFile, proxmoxStateFilePerm); err != nil {
 		p.logger.Warn().Err(err).Str("type", string(ptype)).Msg("Failed to enforce type state file permissions")
+	}
+}
+
+// clearTypeRegisteredMarker removes the registration state file for a specific
+// Proxmox type. Called before token rotation so that a failed Pulse update
+// leaves the system in a retriable state rather than silently stale.
+func (p *ProxmoxSetup) clearTypeRegisteredMarker(ptype proxmoxProductType) {
+	stateFile := p.stateFileForType(ptype)
+	if err := os.Remove(stateFile); err != nil && !os.IsNotExist(err) {
+		p.logger.Warn().Err(err).Str("type", string(ptype)).Msg("Failed to clear type registration marker")
 	}
 }

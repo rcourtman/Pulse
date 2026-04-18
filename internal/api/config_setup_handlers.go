@@ -479,22 +479,58 @@ func (h *ConfigHandlers) autoRegisteredNodeExists(ctx context.Context, req *Auto
 		return false
 	}
 
+	// Snapshot connection statuses once; nil if monitor not available yet.
+	var connStatuses map[string]bool
+	if m := h.getMonitor(ctx); m != nil {
+		connStatuses = m.GetConnectionStatuses()
+	}
+
 	switch req.Type {
 	case "pve":
 		for _, node := range h.getConfig(ctx).PVEInstances {
 			if autoRegisterHostMatchesCandidates(node.Host, candidates) {
+				// Node exists in config. If the monitor has definitively confirmed
+				// it is disconnected (stale token), allow re-registration so the
+				// agent can update the token. Default to "registered" when there
+				// is no monitor status yet (e.g. startup race).
+				if isKnownDisconnected(connStatuses, "pve", node.Name, node.Host) {
+					return false
+				}
 				return true
 			}
 		}
 	case "pbs":
 		for _, node := range h.getConfig(ctx).PBSInstances {
 			if autoRegisterHostMatchesCandidates(node.Host, candidates) {
+				if isKnownDisconnected(connStatuses, "pbs", node.Name, node.Host) {
+					return false
+				}
 				return true
 			}
 		}
 	}
 
 	return false
+}
+
+// isKnownDisconnected reports whether the monitor has a definitive "unhealthy"
+// entry for the given instance. Returns false (i.e., assume connected) when
+// there is no monitor data yet so we don't mistakenly trigger re-registration
+// on every cold startup before the monitor has had a chance to poll.
+func isKnownDisconnected(connStatuses map[string]bool, instanceType, name, host string) bool {
+	if connStatuses == nil {
+		return false
+	}
+	instanceName := strings.TrimSpace(name)
+	if instanceName == "" {
+		instanceName = strings.TrimSpace(host)
+	}
+	if instanceName == "" {
+		return false
+	}
+	key := instanceType + "-" + instanceName
+	connected, known := connStatuses[key]
+	return known && !connected
 }
 
 func buildCanonicalAutoRegisterResponse(req *AutoRegisterRequest, host string, actualName string, tokenID string, tokenValue string) AutoRegisterResponse {
