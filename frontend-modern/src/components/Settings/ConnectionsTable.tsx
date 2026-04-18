@@ -10,9 +10,15 @@ import {
 } from '@/components/shared/Table';
 import type { ConnectionRow } from './connectionsTableModel';
 
+export interface ConnectionsTableHeaderAction {
+  label: string;
+  onSelect: () => void;
+  tone?: 'primary' | 'secondary';
+}
+
 interface ConnectionsTableProps {
   rows: Accessor<readonly ConnectionRow[]>;
-  onAddSystem?: () => void;
+  headerActions?: readonly ConnectionsTableHeaderAction[];
   onManageRow?: (row: ConnectionRow) => void;
 }
 
@@ -22,19 +28,26 @@ export const ConnectionsTable: Component<ConnectionsTableProps> = (props) => {
       <div class="flex flex-col gap-3 border-b border-border px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h3 class="text-base font-semibold text-base-content">Connections and inventory</h3>
-          <p class="text-xs text-muted">
-            Configured platform connections, active reporting items, and ignored systems in one
-            ledger.
-          </p>
+          <p class="text-xs text-muted">Top-level systems and platform connections.</p>
         </div>
-        <Show when={props.onAddSystem}>
-          <button
-            type="button"
-            onClick={props.onAddSystem}
-            class="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
-          >
-            + Add a system
-          </button>
+        <Show when={(props.headerActions?.length ?? 0) > 0}>
+          <div class="flex flex-wrap items-center gap-2">
+            <For each={props.headerActions ?? []}>
+              {(action) => (
+                <button
+                  type="button"
+                  onClick={action.onSelect}
+                  class={
+                    action.tone === 'primary'
+                      ? 'inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700'
+                      : 'inline-flex items-center rounded-md border border-border px-3 py-1.5 text-sm font-medium text-base-content transition-colors hover:bg-surface-hover'
+                  }
+                >
+                  {action.label}
+                </button>
+              )}
+            </For>
+          </div>
         </Show>
       </div>
 
@@ -42,9 +55,7 @@ export const ConnectionsTable: Component<ConnectionsTableProps> = (props) => {
         when={props.rows().length > 0}
         fallback={
           <div class="px-4 py-10 text-center text-sm text-muted">
-            Nothing is configured or reporting yet. Use
-            <span class="mx-1 font-medium text-base-content">+ Add a system</span>
-            to connect the first one.
+            Nothing is configured or reporting yet.
           </div>
         }
       >

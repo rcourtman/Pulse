@@ -602,6 +602,8 @@
         "frontend-modern/src/components/Infrastructure/deploy/ResultsStep.tsx",
         "frontend-modern/src/components/Settings/AgentProfilesPanel.tsx",
         "frontend-modern/src/components/Settings/ConfiguredNodeTables.tsx",
+        "frontend-modern/src/components/Settings/ConnectionsTable.tsx",
+        "frontend-modern/src/components/Settings/connectionsTableModel.ts",
         "frontend-modern/src/components/Settings/InfrastructureActiveRowDetails.tsx",
         "frontend-modern/src/components/Settings/InfrastructureIgnoredRowDetails.tsx",
         "frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx",
@@ -890,6 +892,23 @@
               "frontend-modern/src/api/__tests__/monitoring.test.ts",
               "frontend-modern/src/components/Settings/__tests__/InfrastructureOperationsController.test.tsx",
               "frontend-modern/src/components/Settings/__tests__/InfrastructureOperationsModel.test.tsx"
+            ]
+          },
+          {
+            "id": "connections-ledger-workspace-surface",
+            "label": "connections ledger lifecycle proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/components/Settings/ConnectionsTable.tsx",
+              "frontend-modern/src/components/Settings/connectionsTableModel.ts"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/components/Settings/__tests__/ConnectionsTable.test.tsx",
+              "frontend-modern/src/components/Settings/__tests__/connectionsTableModel.test.ts",
+              "frontend-modern/src/components/Settings/__tests__/InfrastructureWorkspace.test.tsx",
+              "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts"
             ]
           },
           {

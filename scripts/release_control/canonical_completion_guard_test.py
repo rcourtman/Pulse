@@ -43,6 +43,13 @@ PLATFORM_CONNECTIONS_WORKSPACE_EXACT_FILES = [
     "tests/integration/tests/22-vmware-settings-platform-connections.spec.ts",
 ]
 
+CONNECTIONS_LEDGER_WORKSPACE_EXACT_FILES = [
+    "frontend-modern/src/components/Settings/__tests__/ConnectionsTable.test.tsx",
+    "frontend-modern/src/components/Settings/__tests__/InfrastructureWorkspace.test.tsx",
+    "frontend-modern/src/components/Settings/__tests__/connectionsTableModel.test.ts",
+    "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
+]
+
 
 def _contract_reference(contract_path: str, needle: str, runtime_path: str) -> dict:
     lines = (REPO_ROOT / contract_path).read_text(encoding="utf-8").splitlines()
@@ -2311,6 +2318,40 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                     "exact_files": PLATFORM_CONNECTIONS_WORKSPACE_EXACT_FILES,
                 }
             ],
+        )
+
+    def _assert_connections_ledger_change_requires_agent_lifecycle(self, touched_path: str) -> None:
+        required = infer_impacted_subsystems([touched_path])
+        self.assertEqual(set(required), {"agent-lifecycle"})
+
+        lifecycle = required["agent-lifecycle"]
+        self.assertEqual(
+            lifecycle["contract"],
+            "docs/release-control/v6/internal/subsystems/agent-lifecycle.md",
+        )
+        self.assertEqual(lifecycle["touched_runtime_files"], [touched_path])
+        self.assertEqual(
+            lifecycle["verification_requirements"],
+            [
+                {
+                    "id": "connections-ledger-workspace-surface",
+                    "label": "connections ledger lifecycle proof",
+                    "touched_runtime_files": [touched_path],
+                    "allow_same_subsystem_tests": False,
+                    "test_prefixes": [],
+                    "exact_files": CONNECTIONS_LEDGER_WORKSPACE_EXACT_FILES,
+                }
+            ],
+        )
+
+    def test_connections_table_change_requires_agent_lifecycle(self):
+        self._assert_connections_ledger_change_requires_agent_lifecycle(
+            "frontend-modern/src/components/Settings/ConnectionsTable.tsx"
+        )
+
+    def test_connections_table_model_change_requires_agent_lifecycle(self):
+        self._assert_connections_ledger_change_requires_agent_lifecycle(
+            "frontend-modern/src/components/Settings/connectionsTableModel.ts"
         )
 
     def test_proxmox_settings_panel_change_requires_agent_lifecycle(self):

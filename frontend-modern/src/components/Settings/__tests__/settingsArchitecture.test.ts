@@ -5,6 +5,8 @@ import settingsSource from '../Settings.tsx?raw';
 import settingsDialogsSource from '../SettingsDialogs.tsx?raw';
 import settingsShellSource from '../SettingsPageShell.tsx?raw';
 import settingsHeaderMetaSource from '../settingsHeaderMeta.ts?raw';
+import connectionsTableSource from '../ConnectionsTable.tsx?raw';
+import connectionsTableModelSource from '../connectionsTableModel.ts?raw';
 import infrastructureWorkspaceSource from '../InfrastructureWorkspace.tsx?raw';
 import infrastructureWorkspaceModelSource from '../infrastructureWorkspaceModel.ts?raw';
 import platformConnectionsWorkspaceSource from '../PlatformConnectionsWorkspace.tsx?raw';
@@ -198,6 +200,8 @@ const extractedModules = [
   '../nodeModalModel.ts',
   '../useNodeModalState.ts',
   '../InfrastructureWorkspace.tsx',
+  '../ConnectionsTable.tsx',
+  '../connectionsTableModel.ts',
   '../infrastructureWorkspaceModel.ts',
   '../InfrastructureInstallerSection.tsx',
   '../InfrastructureInventorySection.tsx',
@@ -884,12 +888,20 @@ describe('Settings architecture guardrails', () => {
     expect(infrastructureWorkspaceSource).toContain(
       "if (readOnlyWorkspace() && activeView() !== 'inventory')",
     );
+    expect(infrastructureWorkspaceSource).toContain('./ConnectionsTable');
+    expect(infrastructureWorkspaceSource).toContain('./InfrastructureActiveRowDetails');
+    expect(infrastructureWorkspaceSource).toContain('./InfrastructureIgnoredRowDetails');
     expect(infrastructureWorkspaceSource).toContain('InfrastructureOperationsStateProvider');
     expect(infrastructureWorkspaceSource).toContain('InfrastructureInventorySection');
     expect(infrastructureWorkspaceSource).toContain('InfrastructureInstallerSection');
     expect(infrastructureWorkspaceSource).toContain('InfrastructureStopMonitoringDialog');
     expect(infrastructureWorkspaceSource).toContain('AgentProfilesPanel');
     expect(infrastructureWorkspaceSource).toContain('PlatformConnectionsWorkspace');
+    expect(infrastructureWorkspaceSource).toContain("activeView() === 'operations'");
+    expect(infrastructureWorkspaceSource).toContain("activeView() === 'platforms'");
+    expect(infrastructureWorkspaceSource).toContain("activeView() === 'install'");
+    expect(connectionsTableSource).toContain('headerActions');
+    expect(connectionsTableModelSource).toContain('export function buildConnectionRows');
     expect(platformConnectionsWorkspaceSource).toContain('./platformConnectionsModel');
     expect(platformConnectionsWorkspaceSource).toContain('./ProxmoxSettingsPanel');
     expect(platformConnectionsWorkspaceSource).toContain('./TrueNASSettingsPanel');

@@ -41,6 +41,13 @@ PLATFORM_CONNECTIONS_WORKSPACE_EXACT_FILES = [
     "tests/integration/tests/22-vmware-settings-platform-connections.spec.ts",
 ]
 
+CONNECTIONS_LEDGER_WORKSPACE_EXACT_FILES = [
+    "frontend-modern/src/components/Settings/__tests__/ConnectionsTable.test.tsx",
+    "frontend-modern/src/components/Settings/__tests__/InfrastructureWorkspace.test.tsx",
+    "frontend-modern/src/components/Settings/__tests__/connectionsTableModel.test.ts",
+    "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
+]
+
 
 def _contract_reference(contract_path: str, needle: str, runtime_path: str) -> dict:
     lines = (REPO_ROOT / contract_path).read_text(encoding="utf-8").splitlines()
@@ -1920,6 +1927,64 @@ class SubsystemLookupTest(unittest.TestCase):
         self.assertEqual(
             match["verification_requirement"]["exact_files"],
             PLATFORM_CONNECTIONS_WORKSPACE_EXACT_FILES,
+        )
+
+    def test_lookup_paths_assigns_connections_table_to_agent_lifecycle(self) -> None:
+        result = lookup_paths(["frontend-modern/src/components/Settings/ConnectionsTable.tsx"])
+        self.assertEqual(result["unowned_runtime_files"], [])
+        self.assertEqual(
+            {item["subsystem"] for item in result["impacted_subsystems"]},
+            {"agent-lifecycle"},
+        )
+        file_entry = result["files"][0]
+        self.assertEqual(file_entry["classification"], "runtime")
+        self.assertEqual(
+            {match["subsystem"] for match in file_entry["matches"]},
+            {"agent-lifecycle"},
+        )
+        match = file_entry["matches"][0]
+        self.assertEqual(
+            match["contract"],
+            "docs/release-control/v6/internal/subsystems/agent-lifecycle.md",
+        )
+        self.assertEqual(match["lane_context"]["lane_id"], "L16")
+        self.assertEqual(
+            match["verification_requirement"]["id"],
+            "connections-ledger-workspace-surface",
+        )
+        self.assertEqual(
+            match["verification_requirement"]["exact_files"],
+            CONNECTIONS_LEDGER_WORKSPACE_EXACT_FILES,
+        )
+
+    def test_lookup_paths_assigns_connections_table_model_to_agent_lifecycle(self) -> None:
+        result = lookup_paths(
+            ["frontend-modern/src/components/Settings/connectionsTableModel.ts"]
+        )
+        self.assertEqual(result["unowned_runtime_files"], [])
+        self.assertEqual(
+            {item["subsystem"] for item in result["impacted_subsystems"]},
+            {"agent-lifecycle"},
+        )
+        file_entry = result["files"][0]
+        self.assertEqual(file_entry["classification"], "runtime")
+        self.assertEqual(
+            {match["subsystem"] for match in file_entry["matches"]},
+            {"agent-lifecycle"},
+        )
+        match = file_entry["matches"][0]
+        self.assertEqual(
+            match["contract"],
+            "docs/release-control/v6/internal/subsystems/agent-lifecycle.md",
+        )
+        self.assertEqual(match["lane_context"]["lane_id"], "L16")
+        self.assertEqual(
+            match["verification_requirement"]["id"],
+            "connections-ledger-workspace-surface",
+        )
+        self.assertEqual(
+            match["verification_requirement"]["exact_files"],
+            CONNECTIONS_LEDGER_WORKSPACE_EXACT_FILES,
         )
 
     def test_lookup_paths_assigns_proxmox_direct_workspace_state_to_agent_lifecycle(self) -> None:

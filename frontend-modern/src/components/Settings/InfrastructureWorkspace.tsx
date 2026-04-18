@@ -1,16 +1,19 @@
 import { Component, Show, createEffect, createMemo, createSignal } from 'solid-js';
 import { useLocation, useNavigate } from '@solidjs/router';
+import { Dialog } from '@/components/shared/Dialog';
 import { presentationPolicyIsReadOnly } from '@/stores/sessionPresentationPolicy';
 import { AgentProfilesPanel } from './AgentProfilesPanel';
 import { AddSystemPicker, type AddSystemChoice } from './AddSystemPicker';
-import { ConnectionsTable } from './ConnectionsTable';
+import { ConnectionsTable, type ConnectionsTableHeaderAction } from './ConnectionsTable';
 import {
   buildConnectionRows,
   type ConnectionRow,
   type ConnectionManageAction,
 } from './connectionsTableModel';
+import { InfrastructureActiveRowDetails } from './InfrastructureActiveRowDetails';
 import { InfrastructureInstallerSection } from './InfrastructureInstallerSection';
 import { InfrastructureInventorySection } from './InfrastructureInventorySection';
+import { InfrastructureIgnoredRowDetails } from './InfrastructureIgnoredRowDetails';
 import { InfrastructureStopMonitoringDialog } from './InfrastructureStopMonitoringDialog';
 import { PlatformConnectionsWorkspace } from './PlatformConnectionsWorkspace';
 import {
@@ -50,6 +53,7 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
   const activeView = createMemo(() => getInfrastructureWorkspaceViewFromPath(location.pathname));
   const readOnlyWorkspace = createMemo(() => presentationPolicyIsReadOnly());
   const [pickerOpen, setPickerOpen] = createSignal(false);
+  const [profilesOpen, setProfilesOpen] = createSignal(false);
 
   let inventorySectionRef: HTMLDivElement | undefined;
   let platformSectionRef: HTMLDivElement | undefined;
@@ -66,6 +70,22 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
       vmwareConnections: props.vmwareSettings.connections(),
       includeConfigurationRows: !readOnlyWorkspace(),
     }),
+  );
+  const headerActions = createMemo<ConnectionsTableHeaderAction[]>(() =>
+    readOnlyWorkspace()
+      ? []
+      : [
+          {
+            label: 'Agent profiles',
+            onSelect: () => setProfilesOpen(true),
+            tone: 'secondary' as const,
+          },
+          {
+            label: '+ Add a system',
+            onSelect: () => setPickerOpen(true),
+            tone: 'primary' as const,
+          },
+        ],
   );
 
   const openProxmoxNode = (nodeKind: 'pve' | 'pbs' | 'pmg', nodeId: string) => {
@@ -116,13 +136,11 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
     switch (action.kind) {
       case 'inventory-active':
         state.setExpandedRowKey(action.rowKey);
-        navigate(buildInfrastructureWorkspacePath('operations'));
-        scrollSectionIntoView(inventorySectionRef);
+        state.setSelectedIgnoredRowKey(null);
         return;
       case 'inventory-ignored':
+        state.setExpandedRowKey(null);
         state.setSelectedIgnoredRowKey(action.rowKey);
-        navigate(buildInfrastructureWorkspacePath('operations'));
-        scrollSectionIntoView(inventorySectionRef);
         return;
       case 'proxmox-node':
         openProxmoxNode(action.nodeKind, action.nodeId);
@@ -186,7 +204,7 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
     <div class="space-y-8">
       <ConnectionsTable
         rows={rows}
-        onAddSystem={readOnlyWorkspace() ? undefined : () => setPickerOpen(true)}
+        headerActions={headerActions()}
         onManageRow={(row) => handleManageAction(row.manage)}
       />
 
@@ -198,20 +216,58 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
 
       <InfrastructureStopMonitoringDialog />
 
-      <div ref={inventorySectionRef}>
-        <InfrastructureInventorySection />
-      </div>
+      <Dialog
+        isOpen={profilesOpen()}
+        onClose={() => setProfilesOpen(false)}
+        layout="drawer-right"
+        panelClass="max-w-[960px]"
+        ariaLabel="Agent profiles"
+      >
+        <div class="h-full overflow-y-auto bg-surface p-4 sm:p-6">
+          <AgentProfilesPanel />
+        </div>
+      </Dialog>
 
-      <Show when={!readOnlyWorkspace()}>
+      <Dialog
+        isOpen={Boolean(state.selectedActiveRow())}
+        onClose={() => state.setExpandedRowKey(null)}
+        layout="drawer-right"
+        panelClass="max-w-[760px]"
+        ariaLabel="Reporting item details"
+      >
+        <Show when={state.selectedActiveRow()}>
+          {(rowAccessor) => <InfrastructureActiveRowDetails rowAccessor={rowAccessor} />}
+        </Show>
+      </Dialog>
+
+      <Dialog
+        isOpen={Boolean(state.selectedIgnoredRow())}
+        onClose={() => state.setSelectedIgnoredRowKey(null)}
+        layout="drawer-right"
+        panelClass="max-w-[760px]"
+        ariaLabel="Ignored item details"
+      >
+        <Show when={state.selectedIgnoredRow()}>
+          {(rowAccessor) => <InfrastructureIgnoredRowDetails rowAccessor={rowAccessor} />}
+        </Show>
+      </Dialog>
+
+      <Show when={activeView() === 'operations'}>
+        <div ref={inventorySectionRef}>
+          <InfrastructureInventorySection />
+        </div>
+      </Show>
+
+      <Show when={!readOnlyWorkspace() && activeView() === 'platforms'}>
         <div ref={platformSectionRef} class="space-y-6">
           <PlatformConnectionsWorkspace {...props} />
         </div>
+      </Show>
 
+      <Show when={!readOnlyWorkspace() && activeView() === 'install'}>
         <div ref={installSectionRef}>
           <InfrastructureInstallerSection />
         </div>
-
-        <AgentProfilesPanel />
       </Show>
     </div>
   );

@@ -62,13 +62,28 @@ describe('ConnectionsTable', () => {
     expect(screen.getByText('Reporting')).toBeInTheDocument();
   });
 
-  it('surfaces the add-system action only when an onAddSystem handler is provided', () => {
+  it('surfaces configured header actions when provided', () => {
     const onAddSystem = vi.fn();
     render(() => (
-      <ConnectionsTable rows={() => []} onAddSystem={onAddSystem} />
+      <ConnectionsTable
+        rows={() => []}
+        headerActions={[
+          {
+            label: '+ Add a system',
+            onSelect: onAddSystem,
+            tone: 'primary',
+          },
+          {
+            label: 'Agent profiles',
+            onSelect: vi.fn(),
+            tone: 'secondary',
+          },
+        ]}
+      />
     ) as any);
 
-    const button = screen.getByRole('button', { name: /Add a system/i });
+    expect(screen.getByRole('button', { name: 'Agent profiles' })).toBeInTheDocument();
+    const button = screen.getByRole('button', { name: /\+ Add a system/i });
     fireEvent.click(button);
     expect(onAddSystem).toHaveBeenCalledTimes(1);
   });
