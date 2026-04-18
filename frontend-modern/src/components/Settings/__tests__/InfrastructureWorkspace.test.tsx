@@ -130,14 +130,23 @@ describe('InfrastructureWorkspace', () => {
     expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure/platforms/vmware');
   });
 
-  it('preselects the Proxmox kind and lands on the platforms route for PVE, PBS, and PMG', () => {
+  it('preselects the Proxmox kind and lands on the kind-scoped platforms route for PVE, PBS, and PMG', () => {
     renderWorkspace();
 
     fireEvent.click(screen.getByRole('button', { name: /Add a system/i }));
-    fireEvent.click(screen.getByText('Proxmox Backup Server'));
+    fireEvent.click(screen.getByText('Proxmox VE'));
+    expect(onSelectAgentSpy).toHaveBeenCalledWith('pve');
+    expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure/platforms/proxmox/pve');
 
+    fireEvent.click(screen.getByRole('button', { name: /Add a system/i }));
+    fireEvent.click(screen.getByText('Proxmox Backup Server'));
     expect(onSelectAgentSpy).toHaveBeenCalledWith('pbs');
-    expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure/platforms/proxmox');
+    expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure/platforms/proxmox/pbs');
+
+    fireEvent.click(screen.getByRole('button', { name: /Add a system/i }));
+    fireEvent.click(screen.getByText('Proxmox Mail Gateway'));
+    expect(onSelectAgentSpy).toHaveBeenCalledWith('pmg');
+    expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure/platforms/proxmox/pmg');
   });
 
   it('renders the install workspace when the URL is /install', () => {

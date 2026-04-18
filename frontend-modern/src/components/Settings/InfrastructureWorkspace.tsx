@@ -48,7 +48,7 @@ export const InfrastructureWorkspace: Component<InfrastructureWorkspaceProps> = 
       return;
     }
     props.onSelectAgent(choice.kind);
-    navigate('/settings/infrastructure/platforms/proxmox');
+    navigate(`/settings/infrastructure/platforms/proxmox/${choice.kind}`);
   };
 
   createEffect(() => {
