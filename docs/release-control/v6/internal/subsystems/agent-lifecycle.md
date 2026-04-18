@@ -858,6 +858,11 @@ ledger. Inline detail drawers may surface reporting-item and ignored-item
 controls, but installer setup, platform-specific configuration, and profile
 management must remain secondary flows rather than being dumped underneath the
 default ledger.
+Those secondary infrastructure views must also replace the workspace body
+rather than stacking beneath the systems ledger. When the operator opens
+platform connection management, install tooling, or the legacy operations
+workspace route, `InfrastructureWorkspace.tsx` must not keep the systems table
+mounted above that second surface.
 That same lifecycle-owned platform-connections workspace must keep API-backed
 provider state operationally useful, not CRUD-only. `TrueNASSettingsPanel.tsx`
 and `useTrueNASSettingsPanelState.ts` must surface the shared runtime health,

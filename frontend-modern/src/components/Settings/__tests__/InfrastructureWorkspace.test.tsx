@@ -251,10 +251,12 @@ describe('InfrastructureWorkspace', () => {
     mockPathname = '/settings/infrastructure/platforms/truenas';
     renderWorkspace();
 
-    expect(screen.getByText('Systems')).toBeInTheDocument();
+    expect(screen.queryByText('Systems')).toBeNull();
     expect(screen.getByTestId('platform-section')).toBeInTheDocument();
     expect(screen.queryByTestId('inventory-section')).toBeNull();
     expect(screen.queryByTestId('install-section')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Manage connections' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Agent profiles' })).toBeNull();
     expect(screen.queryByTestId('agent-profiles')).toBeNull();
   });
 
@@ -262,10 +264,11 @@ describe('InfrastructureWorkspace', () => {
     mockPathname = '/settings/infrastructure/install';
     renderWorkspace();
 
-    expect(screen.getByText('Systems')).toBeInTheDocument();
+    expect(screen.queryByText('Systems')).toBeNull();
     expect(screen.getByTestId('install-section')).toBeInTheDocument();
     expect(screen.queryByTestId('inventory-section')).toBeNull();
     expect(screen.queryByTestId('platform-section')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Manage connections' })).toBeNull();
   });
 
   it('opens agent profiles in a dedicated drawer instead of inline', () => {

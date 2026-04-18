@@ -1,4 +1,4 @@
-import { Component, Show, createEffect, createMemo, createSignal } from 'solid-js';
+import { Component, Match, Show, Switch, createEffect, createMemo, createSignal } from 'solid-js';
 import { useLocation, useNavigate } from '@solidjs/router';
 import { Dialog } from '@/components/shared/Dialog';
 import { presentationPolicyIsReadOnly } from '@/stores/sessionPresentationPolicy';
@@ -28,20 +28,6 @@ import {
 
 export type InfrastructureWorkspaceProps = InfrastructurePlatformSettingsProps;
 
-const scrollSectionIntoView = (section?: HTMLDivElement) => {
-  if (
-    typeof window === 'undefined' ||
-    !section ||
-    typeof section.scrollIntoView !== 'function'
-  ) {
-    return;
-  }
-
-  window.requestAnimationFrame(() => {
-    section.scrollIntoView({ block: 'start', behavior: 'smooth' });
-  });
-};
-
 const proxmoxRouteForKind = (kind: 'pve' | 'pbs' | 'pmg') =>
   `/settings/infrastructure/platforms/proxmox/${kind}`;
 
@@ -55,10 +41,6 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
   const [pickerOpen, setPickerOpen] = createSignal(false);
   const [profilesOpen, setProfilesOpen] = createSignal(false);
 
-  let inventorySectionRef: HTMLDivElement | undefined;
-  let platformSectionRef: HTMLDivElement | undefined;
-  let installSectionRef: HTMLDivElement | undefined;
-
   const rows = createMemo<InfrastructureSystemRow[]>(() =>
     buildInfrastructureSystemRows({
       activeRows: state.activeRows(),
@@ -71,10 +53,7 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
       : [
           {
             label: 'Manage connections',
-            onSelect: () => {
-              navigate(buildInfrastructureWorkspacePath('platforms'));
-              scrollSectionIntoView(platformSectionRef);
-            },
+            onSelect: () => navigate(buildInfrastructureWorkspacePath('platforms')),
             tone: 'secondary' as const,
           },
           {
@@ -105,7 +84,6 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
     props.setModalResetKey((value) => value + 1);
     props.setShowNodeModal(true);
     navigate(proxmoxRouteForKind(nodeKind));
-    scrollSectionIntoView(platformSectionRef);
   };
 
   const handleAddSystem = (choice: AddSystemChoice) => {
@@ -113,21 +91,18 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
 
     if (choice.kind === 'agent') {
       navigate(buildInfrastructureWorkspacePath('install'));
-      scrollSectionIntoView(installSectionRef);
       return;
     }
 
     if (choice.kind === 'truenas') {
       props.trueNASSettings.openCreateDialog();
       navigate('/settings/infrastructure/platforms/truenas');
-      scrollSectionIntoView(platformSectionRef);
       return;
     }
 
     if (choice.kind === 'vmware') {
       props.vmwareSettings.openCreateDialog();
       navigate('/settings/infrastructure/platforms/vmware');
-      scrollSectionIntoView(platformSectionRef);
       return;
     }
 
@@ -152,36 +127,18 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
   createEffect(() => {
     if (readOnlyWorkspace() && activeView() !== 'inventory') {
       navigate(buildInfrastructureWorkspacePath('inventory'), { replace: true });
-      return;
-    }
-
-    const view = activeView();
-    if (view === 'inventory') {
-      return;
-    }
-
-    if (view === 'operations') {
-      scrollSectionIntoView(inventorySectionRef);
-      return;
-    }
-
-    if (view === 'platforms') {
-      scrollSectionIntoView(platformSectionRef);
-      return;
-    }
-
-    if (view === 'install') {
-      scrollSectionIntoView(installSectionRef);
     }
   });
 
   return (
     <div class="space-y-8">
-      <ConnectionsTable
-        rows={rows}
-        headerActions={headerActions()}
-        onManageRow={(row) => handleManageAction(row.manage)}
-      />
+      <Show when={activeView() === 'inventory'}>
+        <ConnectionsTable
+          rows={rows}
+          headerActions={headerActions()}
+          onManageRow={(row) => handleManageAction(row.manage)}
+        />
+      </Show>
 
       <AddSystemPicker
         isOpen={pickerOpen()}
@@ -227,23 +184,19 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
         </Show>
       </Dialog>
 
-      <Show when={activeView() === 'operations'}>
-        <div ref={inventorySectionRef}>
+      <Switch>
+        <Match when={activeView() === 'operations'}>
           <InfrastructureInventorySection />
-        </div>
-      </Show>
+        </Match>
 
-      <Show when={!readOnlyWorkspace() && activeView() === 'platforms'}>
-        <div ref={platformSectionRef} class="space-y-6">
+        <Match when={!readOnlyWorkspace() && activeView() === 'platforms'}>
           <PlatformConnectionsWorkspace {...props} />
-        </div>
-      </Show>
+        </Match>
 
-      <Show when={!readOnlyWorkspace() && activeView() === 'install'}>
-        <div ref={installSectionRef}>
+        <Match when={!readOnlyWorkspace() && activeView() === 'install'}>
           <InfrastructureInstallerSection />
-        </div>
-      </Show>
+        </Match>
+      </Switch>
     </div>
   );
 };
