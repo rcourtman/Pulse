@@ -667,6 +667,16 @@ test_hot_dev_script_ignores_test_only_backend_churn() {
   assert_contains "hot-dev watcher suppresses source churn during managed verification" "${output}" 'verify_lock_active'
 }
 
+test_hot_dev_health_monitor_probes_api_health() {
+  local output
+  output="$(cat "${HOT_DEV}")"
+
+  assert_contains "hot-dev health monitor declares an unhealthy streak threshold" "${output}" 'UNHEALTHY_THRESHOLD=2'
+  assert_contains "hot-dev health monitor probes /api/health on the dev backend port" "${output}" '"http://127.0.0.1:${PULSE_DEV_API_PORT:-7655}/api/health"'
+  assert_contains "hot-dev health monitor restarts on alive-but-unresponsive state" "${output}" 'elif ! backend_serving; then'
+  assert_contains "hot-dev health monitor kills unresponsive Pulse before restart" "${output}" 'Killing unresponsive Pulse and restarting'
+}
+
 test_hot_dev_script_marks_managed_rebuild_output_before_build() {
   local rebuild_block mark_line build_line
   rebuild_block="$(
@@ -1161,6 +1171,7 @@ main() {
   test_makefile_routes_managed_runtime_through_npm
   test_hot_dev_script_advertises_foreground_escape_hatch
   test_hot_dev_script_ignores_test_only_backend_churn
+  test_hot_dev_health_monitor_probes_api_health
   test_hot_dev_bg_script_advertises_managed_entrypoint
   test_hot_dev_bg_usage_prefers_managed_wrappers
   test_integration_readme_uses_managed_backend_restart_wrapper

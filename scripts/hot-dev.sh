@@ -450,12 +450,22 @@ if ! kill -0 "${BACKEND_PID}" 2>/dev/null; then
 fi
 
 # --- Backend Health Monitor ---
-# Restarts Pulse if it dies unexpectedly (not from file watcher rebuild)
-# IMPORTANT: Enforces single-instance - kills duplicates if found
+# Restarts Pulse if it dies unexpectedly (not from file watcher rebuild),
+# enforces single-instance, and detects the alive-but-unresponsive state
+# (process exists but /api/health is not serving) which a process-only check
+# blind-spots. Two consecutive 5s misses on /api/health -> kill and restart.
 log_info "Starting backend health monitor..."
 (
+    UNHEALTHY_STREAK=0
+    UNHEALTHY_THRESHOLD=2
+
+    backend_serving() {
+        curl -sf -o /dev/null --max-time 3 \
+            "http://127.0.0.1:${PULSE_DEV_API_PORT:-7655}/api/health" 2>/dev/null
+    }
+
     while true; do
-        sleep 10
+        sleep 5
         PULSE_COUNT=$(pgrep -f "^\./pulse$" 2>/dev/null | wc -l | tr -d ' ')
 
         if [[ "$PULSE_COUNT" -eq 0 ]]; then
@@ -480,6 +490,7 @@ log_info "Starting backend health monitor..."
             else
                 log_error "✗ Backend failed to auto-restart!"
             fi
+            UNHEALTHY_STREAK=0
         elif [[ "$PULSE_COUNT" -gt 1 ]]; then
             log_error "⚠️  Multiple Pulse processes detected ($PULSE_COUNT), killing all and restarting..."
             pkill -9 -f "^\./pulse$" 2>/dev/null || true
@@ -504,6 +515,38 @@ log_info "Starting backend health monitor..."
             else
                 log_error "✗ Backend failed to restart after killing duplicates!"
             fi
+            UNHEALTHY_STREAK=0
+        elif ! backend_serving; then
+            UNHEALTHY_STREAK=$((UNHEALTHY_STREAK + 1))
+            log_warn "⚠️  Pulse alive but /api/health unresponsive (streak ${UNHEALTHY_STREAK}/${UNHEALTHY_THRESHOLD})"
+            if [[ "$UNHEALTHY_STREAK" -ge "$UNHEALTHY_THRESHOLD" ]]; then
+                log_error "⚠️  Killing unresponsive Pulse and restarting..."
+                pkill -9 -f "^\./pulse$" 2>/dev/null || true
+                sleep 2
+                LOG_LEVEL="${LOG_LEVEL:-debug}" \
+                FRONTEND_PORT="${PULSE_DEV_API_PORT:-7655}" \
+                PORT="${PULSE_DEV_API_PORT:-7655}" \
+                PULSE_DATA_DIR="${PULSE_DATA_DIR:-}" \
+                PULSE_ENCRYPTION_KEY="${PULSE_ENCRYPTION_KEY:-}" \
+                ALLOW_ADMIN_BYPASS="${ALLOW_ADMIN_BYPASS:-1}" \
+                PULSE_DEV="${PULSE_DEV:-true}" \
+                PULSE_AUTH_USER="${PULSE_AUTH_USER:-}" \
+                PULSE_AUTH_PASS="${PULSE_AUTH_PASS:-}" \
+                ALLOWED_ORIGINS="${ALLOWED_ORIGINS:-}" \
+                LOG_FILE="/tmp/pulse-debug.log" \
+                LOG_MAX_SIZE="50" \
+                ./pulse </dev/null > /dev/null 2>&1 &
+                NEW_PID=$!
+                sleep 2
+                if kill -0 "$NEW_PID" 2>/dev/null; then
+                    log_info "✓ Backend restarted after unresponsive state (PID: $NEW_PID)"
+                else
+                    log_error "✗ Backend failed to restart after unresponsive state!"
+                fi
+                UNHEALTHY_STREAK=0
+            fi
+        else
+            UNHEALTHY_STREAK=0
         fi
     done
 ) &

@@ -455,6 +455,14 @@ the managed local stack: `scripts/hot-dev.sh` may only rebuild the backend for
 runtime Go sources, not `*_test.go` churn, and it must suppress `pulse` binary
 change events produced by its own successful managed rebuilds, managed backend
 restarts, or startup build.
+That same boundary also owns backend-liveness recovery, not just process-
+existence. The managed health monitor in `scripts/hot-dev.sh` must probe
+`http://127.0.0.1:${PULSE_DEV_API_PORT}/api/health` in addition to checking
+that a `./pulse` process exists, so an alive-but-unresponsive backend (hung
+goroutine, panic-recovery loop, port-bind failure with the process still
+running) is detected and restarted instead of leaving the dev frontend
+talking to a dead listener. Two consecutive missed health probes must trigger
+a managed kill and restart of the unresponsive process.
 That same watcher boundary also owns backend-served demo coherence:
 `internal/api/frontend-modern/dist` changes must trigger a managed backend
 rebuild so the `go:embed` frontend on `:7655` cannot drift behind a freshly
