@@ -149,6 +149,7 @@ func (a *Agent) buildReport(ctx context.Context) (agentsdocker.Report, error) {
 			Memory:           snapshot.Memory,
 			Disks:            append([]agentsdocker.Disk(nil), snapshot.Disks...),
 			Network:          append([]agentsdocker.NetworkInterface(nil), snapshot.Network...),
+			Security:         buildHostSecurityInfo(info),
 		},
 		Timestamp: time.Now().UTC(),
 	}
@@ -172,6 +173,40 @@ func (a *Agent) buildReport(ctx context.Context) (agentsdocker.Report, error) {
 	}
 
 	return report, nil
+}
+
+func buildHostSecurityInfo(info systemtypes.Info) *agentsdocker.HostSecurityInfo {
+	authzPlugins := normalizedNonEmptyStrings(info.Plugins.Authorization)
+	if len(authzPlugins) == 0 {
+		return nil
+	}
+	return &agentsdocker.HostSecurityInfo{
+		AuthorizationPlugins: authzPlugins,
+	}
+}
+
+func normalizedNonEmptyStrings(values []string) []string {
+	if len(values) == 0 {
+		return nil
+	}
+
+	normalized := make([]string, 0, len(values))
+	seen := make(map[string]struct{}, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		normalized = append(normalized, value)
+	}
+	if len(normalized) == 0 {
+		return nil
+	}
+	return normalized
 }
 
 func (a *Agent) collectContainers(ctx context.Context) ([]agentsdocker.Container, error) {

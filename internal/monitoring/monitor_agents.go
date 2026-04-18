@@ -1236,6 +1236,7 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 	services := convertDockerServices(report.Services)
 	tasks := convertDockerTasks(report.Tasks)
 	swarmInfo := convertDockerSwarmInfo(report.Host.Swarm)
+	security := deriveDockerHostSecurity(report.Host.Security, runtime)
 
 	loadAverage := make([]float64, 0, len(report.Host.LoadAverage))
 	if len(report.Host.LoadAverage) > 0 {
@@ -1339,6 +1340,7 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 		Services:          services,
 		Tasks:             tasks,
 		Swarm:             swarmInfo,
+		Security:          security,
 		IsLegacy:          isLegacyAgent(report.Agent.Type),
 	}
 
@@ -1491,6 +1493,54 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 		Msg("Docker host report processed")
 
 	return host, nil
+}
+
+const dockerAuthorizationPluginBlockReasonFormat = "Pulse blocks Docker daemon-mutating commands while Docker authorization plugins are configured (%s) because advisory GO-2026-4887 does not yet provide a fixed Docker Go module line."
+
+func deriveDockerHostSecurity(raw *agentsdocker.HostSecurityInfo, runtime string) *models.DockerHostSecurity {
+	authzPlugins := normalizedSecurityStrings(nil)
+	if raw != nil {
+		authzPlugins = normalizedSecurityStrings(raw.AuthorizationPlugins)
+	}
+	if len(authzPlugins) == 0 {
+		return nil
+	}
+
+	security := &models.DockerHostSecurity{
+		AuthorizationPlugins: authzPlugins,
+	}
+	if strings.EqualFold(strings.TrimSpace(runtime), "docker") {
+		security.MutatingCommandsBlocked = true
+		security.MutatingCommandsBlockedReason = fmt.Sprintf(
+			dockerAuthorizationPluginBlockReasonFormat,
+			strings.Join(authzPlugins, ", "),
+		)
+	}
+	return security
+}
+
+func normalizedSecurityStrings(values []string) []string {
+	if len(values) == 0 {
+		return nil
+	}
+
+	normalized := make([]string, 0, len(values))
+	seen := make(map[string]struct{}, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		normalized = append(normalized, value)
+	}
+	if len(normalized) == 0 {
+		return nil
+	}
+	return normalized
 }
 
 // ApplyHostReport ingests a host agent report into the shared state.

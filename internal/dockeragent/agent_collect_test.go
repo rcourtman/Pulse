@@ -10,8 +10,24 @@ import (
 	"time"
 
 	containertypes "github.com/docker/docker/api/types/container"
+	systemtypes "github.com/docker/docker/api/types/system"
 	"github.com/rs/zerolog"
 )
+
+func TestBuildHostSecurityInfoAuthorizationPlugins(t *testing.T) {
+	security := buildHostSecurityInfo(systemtypes.Info{
+		Plugins: systemtypes.PluginsInfo{
+			Authorization: []string{"opa", " audit ", "opa", ""},
+		},
+	})
+
+	if security == nil {
+		t.Fatalf("expected host security info")
+	}
+	if got := security.AuthorizationPlugins; len(got) != 2 || got[0] != "opa" || got[1] != "audit" {
+		t.Fatalf("expected normalized authorization plugins, got %#v", got)
+	}
+}
 
 func TestCollectContainer(t *testing.T) {
 	logger := zerolog.Nop()

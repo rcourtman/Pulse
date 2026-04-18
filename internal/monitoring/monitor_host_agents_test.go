@@ -1,6 +1,7 @@
 package monitoring
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -9,6 +10,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
+	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
 )
@@ -261,6 +263,51 @@ func TestApplyHostReportAllowsTokenReuseAcrossHosts(t *testing.T) {
 	snapshot := monitor.state.GetSnapshot()
 	if got := len(snapshot.Hosts); got != 2 {
 		t.Fatalf("expected 2 hosts in state, got %d", got)
+	}
+}
+
+func TestApplyDockerReportDerivesCanonicalDockerSecurityPosture(t *testing.T) {
+	t.Helper()
+
+	monitor := &Monitor{
+		state:               models.NewState(),
+		alertManager:        alerts.NewManager(),
+		config:              &config.Config{},
+		rateTracker:         NewRateTracker(),
+		dockerMetadataStore: config.NewDockerMetadataStore(t.TempDir(), nil),
+	}
+	t.Cleanup(func() { monitor.alertManager.Stop() })
+
+	host, err := monitor.ApplyDockerReport(agentsdocker.Report{
+		Agent: agentsdocker.AgentInfo{
+			ID:              "agent-secure",
+			Version:         "1.0.0",
+			IntervalSeconds: 30,
+		},
+		Host: agentsdocker.HostInfo{
+			Hostname: "docker-secure-host",
+			Runtime:  "docker",
+			Security: &agentsdocker.HostSecurityInfo{
+				AuthorizationPlugins: []string{"opa", " audit "},
+			},
+		},
+		Timestamp: time.Now().UTC(),
+	}, nil)
+	if err != nil {
+		t.Fatalf("ApplyDockerReport returned error: %v", err)
+	}
+
+	if host.Security == nil {
+		t.Fatalf("expected security posture on docker host")
+	}
+	if !host.Security.MutatingCommandsBlocked {
+		t.Fatalf("expected mutating commands to be blocked")
+	}
+	if got := host.Security.AuthorizationPlugins; len(got) != 2 || got[0] != "opa" || got[1] != "audit" {
+		t.Fatalf("expected normalized authorization plugins, got %#v", got)
+	}
+	if !strings.Contains(host.Security.MutatingCommandsBlockedReason, "GO-2026-4887") {
+		t.Fatalf("expected advisory reason, got %q", host.Security.MutatingCommandsBlockedReason)
 	}
 }
 

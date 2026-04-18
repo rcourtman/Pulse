@@ -183,6 +183,9 @@ func (m *Monitor) QueueDockerContainerUpdateCommand(hostID, containerID, contain
 		return models.DockerHostCommandStatus{}, fmt.Errorf("docker host %q not found", hostID)
 	}
 	hostID = canonicalHostID
+	if err := m.ensureDockerMutatingCommandsAllowedLocked(hostID); err != nil {
+		return models.DockerHostCommandStatus{}, err
+	}
 
 	// Check for existing commands in progress for this host
 	if existing, ok := m.dockerCommands[hostID]; ok {
@@ -238,6 +241,9 @@ func (m *Monitor) QueueDockerUpdateAllCommand(hostID string) (models.DockerHostC
 		return models.DockerHostCommandStatus{}, fmt.Errorf("docker host %q not found", hostID)
 	}
 	hostID = canonicalHostID
+	if err := m.ensureDockerMutatingCommandsAllowedLocked(hostID); err != nil {
+		return models.DockerHostCommandStatus{}, err
+	}
 
 	// Check for existing commands in progress for this host
 	if existing, ok := m.dockerCommands[hostID]; ok {
@@ -538,4 +544,20 @@ func (m *Monitor) stateDockerHostByIDLocked(hostID string) (models.DockerHost, b
 		}
 	}
 	return models.DockerHost{}, false
+}
+
+func (m *Monitor) ensureDockerMutatingCommandsAllowedLocked(hostID string) error {
+	host, found := m.stateDockerHostByIDLocked(hostID)
+	if !found {
+		return fmt.Errorf("docker host %q not found", hostID)
+	}
+	if host.Security == nil || !host.Security.MutatingCommandsBlocked {
+		return nil
+	}
+
+	reason := strings.TrimSpace(host.Security.MutatingCommandsBlockedReason)
+	if reason == "" {
+		reason = "Docker daemon-mutating commands are disabled for this host."
+	}
+	return fmt.Errorf("%s", reason)
 }

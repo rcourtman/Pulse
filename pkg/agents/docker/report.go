@@ -48,6 +48,12 @@ type HostInfo struct {
 	Memory           MemoryMetric       `json:"memory,omitempty"`
 	Disks            []Disk             `json:"disks,omitempty"`
 	Network          []NetworkInterface `json:"network,omitempty"`
+	Security         *HostSecurityInfo  `json:"security,omitempty"`
+}
+
+// HostSecurityInfo captures container-runtime security posture data reported by the agent.
+type HostSecurityInfo struct {
+	AuthorizationPlugins []string `json:"authorizationPlugins,omitempty"`
 }
 
 // Container captures the runtime state for a Docker container at report time.

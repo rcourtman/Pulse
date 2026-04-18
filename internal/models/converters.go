@@ -271,6 +271,14 @@ func (d DockerHost) ToFrontend() DockerHostFrontend {
 		sw := d.Swarm.ToFrontend()
 		h.Swarm = &sw
 	}
+	if d.Security != nil {
+		security := DockerHostSecurityFrontend{
+			AuthorizationPlugins:          append([]string(nil), d.Security.AuthorizationPlugins...),
+			MutatingCommandsBlocked:       d.Security.MutatingCommandsBlocked,
+			MutatingCommandsBlockedReason: d.Security.MutatingCommandsBlockedReason,
+		}.NormalizeCollections()
+		h.Security = &security
+	}
 
 	if len(d.LoadAverage) > 0 {
 		h.LoadAverage = append([]float64(nil), d.LoadAverage...)

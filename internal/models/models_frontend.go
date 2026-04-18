@@ -141,40 +141,41 @@ func (c ContainerFrontend) NormalizeCollections() ContainerFrontend {
 
 // DockerHostFrontend represents a Docker host with frontend-friendly fields
 type DockerHostFrontend struct {
-	ID                string                     `json:"id"`
-	AgentID           string                     `json:"agentId"`
-	Hostname          string                     `json:"hostname"`
-	DisplayName       string                     `json:"displayName"`
-	CustomDisplayName string                     `json:"customDisplayName,omitempty"`
-	MachineID         string                     `json:"machineId,omitempty"`
-	OS                string                     `json:"os,omitempty"`
-	KernelVersion     string                     `json:"kernelVersion,omitempty"`
-	Architecture      string                     `json:"architecture,omitempty"`
-	Runtime           string                     `json:"runtime"`
-	RuntimeVersion    string                     `json:"runtimeVersion,omitempty"`
-	DockerVersion     string                     `json:"dockerVersion,omitempty"`
-	CPUs              int                        `json:"cpus"`
-	TotalMemoryBytes  int64                      `json:"totalMemoryBytes"`
-	UptimeSeconds     int64                      `json:"uptimeSeconds"`
-	CPUUsagePercent   float64                    `json:"cpuUsagePercent"`
-	LoadAverage       []float64                  `json:"loadAverage"`
-	Memory            *Memory                    `json:"memory,omitempty"`
-	Disks             []Disk                     `json:"disks"`
-	NetworkInterfaces []HostNetworkInterface     `json:"networkInterfaces"`
-	Status            string                     `json:"status"`
-	LastSeen          int64                      `json:"lastSeen"`
-	IntervalSeconds   int                        `json:"intervalSeconds"`
-	AgentVersion      string                     `json:"agentVersion,omitempty"`
-	Containers        []DockerContainerFrontend  `json:"containers"`
-	Services          []DockerServiceFrontend    `json:"services"`
-	Tasks             []DockerTaskFrontend       `json:"tasks"`
-	Swarm             *DockerSwarmFrontend       `json:"swarm,omitempty"`
-	TokenID           string                     `json:"tokenId,omitempty"`
-	TokenName         string                     `json:"tokenName,omitempty"`
-	TokenHint         string                     `json:"tokenHint,omitempty"`
-	TokenLastUsedAt   *int64                     `json:"tokenLastUsedAt,omitempty"`
-	PendingUninstall  bool                       `json:"pendingUninstall"`
-	Command           *DockerHostCommandFrontend `json:"command,omitempty"`
+	ID                string                      `json:"id"`
+	AgentID           string                      `json:"agentId"`
+	Hostname          string                      `json:"hostname"`
+	DisplayName       string                      `json:"displayName"`
+	CustomDisplayName string                      `json:"customDisplayName,omitempty"`
+	MachineID         string                      `json:"machineId,omitempty"`
+	OS                string                      `json:"os,omitempty"`
+	KernelVersion     string                      `json:"kernelVersion,omitempty"`
+	Architecture      string                      `json:"architecture,omitempty"`
+	Runtime           string                      `json:"runtime"`
+	RuntimeVersion    string                      `json:"runtimeVersion,omitempty"`
+	DockerVersion     string                      `json:"dockerVersion,omitempty"`
+	CPUs              int                         `json:"cpus"`
+	TotalMemoryBytes  int64                       `json:"totalMemoryBytes"`
+	UptimeSeconds     int64                       `json:"uptimeSeconds"`
+	CPUUsagePercent   float64                     `json:"cpuUsagePercent"`
+	LoadAverage       []float64                   `json:"loadAverage"`
+	Memory            *Memory                     `json:"memory,omitempty"`
+	Disks             []Disk                      `json:"disks"`
+	NetworkInterfaces []HostNetworkInterface      `json:"networkInterfaces"`
+	Status            string                      `json:"status"`
+	LastSeen          int64                       `json:"lastSeen"`
+	IntervalSeconds   int                         `json:"intervalSeconds"`
+	AgentVersion      string                      `json:"agentVersion,omitempty"`
+	Containers        []DockerContainerFrontend   `json:"containers"`
+	Services          []DockerServiceFrontend     `json:"services"`
+	Tasks             []DockerTaskFrontend        `json:"tasks"`
+	Swarm             *DockerSwarmFrontend        `json:"swarm,omitempty"`
+	Security          *DockerHostSecurityFrontend `json:"security,omitempty"`
+	TokenID           string                      `json:"tokenId,omitempty"`
+	TokenName         string                      `json:"tokenName,omitempty"`
+	TokenHint         string                      `json:"tokenHint,omitempty"`
+	TokenLastUsedAt   *int64                      `json:"tokenLastUsedAt,omitempty"`
+	PendingUninstall  bool                        `json:"pendingUninstall"`
+	Command           *DockerHostCommandFrontend  `json:"command,omitempty"`
 }
 
 func (h DockerHostFrontend) NormalizeCollections() DockerHostFrontend {
@@ -202,7 +203,25 @@ func (h DockerHostFrontend) NormalizeCollections() DockerHostFrontend {
 	for i := range h.Services {
 		h.Services[i] = h.Services[i].NormalizeCollections()
 	}
+	if h.Security != nil {
+		security := h.Security.NormalizeCollections()
+		h.Security = &security
+	}
 	return h
+}
+
+// DockerHostSecurityFrontend exposes docker-host security posture to the UI.
+type DockerHostSecurityFrontend struct {
+	AuthorizationPlugins          []string `json:"authorizationPlugins"`
+	MutatingCommandsBlocked       bool     `json:"mutatingCommandsBlocked,omitempty"`
+	MutatingCommandsBlockedReason string   `json:"mutatingCommandsBlockedReason,omitempty"`
+}
+
+func (s DockerHostSecurityFrontend) NormalizeCollections() DockerHostSecurityFrontend {
+	if s.AuthorizationPlugins == nil {
+		s.AuthorizationPlugins = []string{}
+	}
+	return s
 }
 
 // ConnectedInfrastructureSurfaceFrontend describes one reporting surface that

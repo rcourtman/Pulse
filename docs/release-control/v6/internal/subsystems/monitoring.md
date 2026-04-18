@@ -209,6 +209,14 @@ publish those resources from the same canonical unified snapshot that
 raw store-only inventory for broadcast. Otherwise cold hydrate and later
 registry-backed refreshes can swap the operator-visible infrastructure set
 under one running session.
+That same Docker/Podman monitoring boundary now also owns Docker
+authorization-plugin posture. `internal/dockeragent/collect.go` must project
+`system.Info().Plugins.Authorization` into the canonical agent report,
+`internal/monitoring/monitor_agents.go` must preserve that posture on the
+shared Docker host model, and `internal/monitoring/docker_commands.go` must
+refuse Docker daemon-mutating commands when authorization plugins are
+configured until the upstream Moby authz-plugin advisory line has a fixed Go
+module release.
 That same monitoring owner now also governs restart-safe standalone host
 continuity for monitored-system usage and admission. `internal/monitoring/monitor_agents.go`
 must persist recent host identity at report time, and

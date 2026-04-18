@@ -228,6 +228,47 @@ func TestProxmoxGuestMemoryFallbackUsesInstanceScopedCachesAndAgentMeminfo(t *te
 	}
 }
 
+func TestDockerMutatingCommandsRespectCanonicalSecurityPosture(t *testing.T) {
+	monitor := newTestMonitorForCommands(t)
+	host := models.DockerHost{
+		ID:       "docker-secure-host",
+		Hostname: "docker-secure-host",
+		Status:   "online",
+		Containers: []models.DockerContainer{
+			{
+				ID:   "container-a",
+				Name: "container-a",
+				UpdateStatus: &models.DockerContainerUpdateStatus{
+					UpdateAvailable: true,
+					LastChecked:     time.Now().UTC(),
+				},
+			},
+		},
+		Security: &models.DockerHostSecurity{
+			AuthorizationPlugins:          []string{"opa"},
+			MutatingCommandsBlocked:       true,
+			MutatingCommandsBlockedReason: "blocked for test",
+		},
+	}
+	monitor.state.UpsertDockerHost(host)
+
+	if _, err := monitor.QueueDockerContainerUpdateCommand(host.ID, "container-a", "container-a"); err == nil || !strings.Contains(err.Error(), "blocked for test") {
+		t.Fatalf("expected container update to be blocked by canonical security posture, got %v", err)
+	}
+
+	if _, err := monitor.QueueDockerUpdateAllCommand(host.ID); err == nil || !strings.Contains(err.Error(), "blocked for test") {
+		t.Fatalf("expected update-all to be blocked by canonical security posture, got %v", err)
+	}
+
+	status, err := monitor.QueueDockerCheckUpdatesCommand(host.ID)
+	if err != nil {
+		t.Fatalf("expected check-updates to remain allowed, got %v", err)
+	}
+	if status.Type != DockerCommandTypeCheckUpdates {
+		t.Fatalf("expected check-updates command, got %q", status.Type)
+	}
+}
+
 func TestProxmoxGuestMemoryCarryForwardUsesCanonicalSnapshotStability(t *testing.T) {
 	requiredSnippets := map[string][]string{
 		"guest_memory_stability.go": {

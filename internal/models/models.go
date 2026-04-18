@@ -643,6 +643,7 @@ type DockerHost struct {
 	Services          []DockerService          `json:"services,omitempty"`
 	Tasks             []DockerTask             `json:"tasks,omitempty"`
 	Swarm             *DockerSwarmInfo         `json:"swarm,omitempty"`
+	Security          *DockerHostSecurity      `json:"security,omitempty"`
 	Temperature       *float64                 `json:"temperature,omitempty"` // Optional host temperature in Celsius
 	TokenID           string                   `json:"tokenId,omitempty"`
 	TokenName         string                   `json:"tokenName,omitempty"`
@@ -688,7 +689,25 @@ func (h DockerHost) NormalizeCollections() DockerHost {
 	if h.Tasks == nil {
 		h.Tasks = []DockerTask{}
 	}
+	if h.Security != nil {
+		security := h.Security.NormalizeCollections()
+		h.Security = &security
+	}
 	return h
+}
+
+// DockerHostSecurity describes security-relevant runtime posture for a Docker host.
+type DockerHostSecurity struct {
+	AuthorizationPlugins          []string `json:"authorizationPlugins,omitempty"`
+	MutatingCommandsBlocked       bool     `json:"mutatingCommandsBlocked,omitempty"`
+	MutatingCommandsBlockedReason string   `json:"mutatingCommandsBlockedReason,omitempty"`
+}
+
+func (s DockerHostSecurity) NormalizeCollections() DockerHostSecurity {
+	if s.AuthorizationPlugins == nil {
+		s.AuthorizationPlugins = []string{}
+	}
+	return s
 }
 
 // RemovedDockerHost tracks a docker host that was deliberately removed and blocked from reporting.

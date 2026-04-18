@@ -319,6 +319,45 @@ func TestDockerAgentHandlers_HandleContainerUpdate_Disabled(t *testing.T) {
 	}
 }
 
+func TestDockerAgentHandlers_HandleContainerUpdate_BlockedBySecurityPosture(t *testing.T) {
+	handler, monitor := newDockerAgentHandlers(t, &config.Config{DataPath: t.TempDir()})
+	hostID := seedDockerHost(t, monitor)
+
+	if _, err := monitor.ApplyDockerReport(agentsdocker.Report{
+		Agent: agentsdocker.AgentInfo{
+			ID:              "agent-1",
+			Version:         "1.0.0",
+			IntervalSeconds: 30,
+		},
+		Host: agentsdocker.HostInfo{
+			Hostname: "docker-host",
+			Security: &agentsdocker.HostSecurityInfo{
+				AuthorizationPlugins: []string{"opa"},
+			},
+		},
+		Timestamp: time.Now().UTC(),
+	}, nil); err != nil {
+		t.Fatalf("ApplyDockerReport (with security): %v", err)
+	}
+
+	reqBody := map[string]string{
+		"agentId":       hostID,
+		"containerId":   "container-1",
+		"containerName": "nginx",
+	}
+	body, _ := json.Marshal(reqBody)
+	req := httptest.NewRequest(http.MethodPost, "/api/agents/docker/containers/container-1/update", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+
+	handler.HandleContainerUpdate(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400: %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "authorization plugins") {
+		t.Fatalf("expected authorization plugin block reason, got %s", rec.Body.String())
+	}
+}
+
 func TestDockerAgentHandlers_HandleCheckUpdates(t *testing.T) {
 	handler, monitor := newDockerAgentHandlers(t, nil)
 	hostID := seedDockerHost(t, monitor)
@@ -394,5 +433,53 @@ func TestDockerAgentHandlers_HandleUpdateAll_Disabled(t *testing.T) {
 	handler.HandleUpdateAll(rec, req)
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("status = %d, want 403", rec.Code)
+	}
+}
+
+func TestDockerAgentHandlers_HandleUpdateAll_BlockedBySecurityPosture(t *testing.T) {
+	handler, monitor := newDockerAgentHandlers(t, nil)
+	hostID := seedDockerHost(t, monitor)
+
+	_, err := monitor.ApplyDockerReport(agentsdocker.Report{
+		Agent: agentsdocker.AgentInfo{
+			ID:              "agent-1",
+			Version:         "1.0.0",
+			IntervalSeconds: 30,
+		},
+		Host: agentsdocker.HostInfo{
+			Hostname: "docker-host",
+			Security: &agentsdocker.HostSecurityInfo{
+				AuthorizationPlugins: []string{"opa"},
+			},
+		},
+		Containers: []agentsdocker.Container{{
+			ID:        "container-1",
+			Name:      "nginx",
+			Image:     "nginx:latest",
+			CreatedAt: time.Now().UTC(),
+			State:     "running",
+			Status:    "Up",
+			UpdateStatus: &agentsdocker.UpdateStatus{
+				UpdateAvailable: true,
+				CurrentDigest:   "sha256:old",
+				LatestDigest:    "sha256:new",
+				LastChecked:     time.Now().UTC(),
+			},
+		}},
+		Timestamp: time.Now().UTC(),
+	}, nil)
+	if err != nil {
+		t.Fatalf("ApplyDockerReport (with containers and security): %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/agents/docker/runtimes/"+hostID+"/update-all", nil)
+	rec := httptest.NewRecorder()
+
+	handler.HandleUpdateAll(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400: %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "authorization plugins") {
+		t.Fatalf("expected authorization plugin block reason, got %s", rec.Body.String())
 	}
 }

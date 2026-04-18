@@ -555,6 +555,43 @@ func TestApplyDockerReportPodmanRuntimeMetadata(t *testing.T) {
 	}
 }
 
+func TestApplyDockerReportDerivesDockerSecurityPosture(t *testing.T) {
+	monitor := newTestMonitor(t)
+
+	report := agentsdocker.Report{
+		Agent: agentsdocker.AgentInfo{
+			ID:              "agent-secure",
+			Version:         "2.0.0",
+			IntervalSeconds: 60,
+		},
+		Host: agentsdocker.HostInfo{
+			Hostname: "secure-docker-host",
+			Runtime:  "docker",
+			Security: &agentsdocker.HostSecurityInfo{
+				AuthorizationPlugins: []string{"opa", " audit "},
+			},
+		},
+		Timestamp: time.Now().UTC(),
+	}
+
+	host, err := monitor.ApplyDockerReport(report, nil)
+	if err != nil {
+		t.Fatalf("ApplyDockerReport returned error: %v", err)
+	}
+	if host.Security == nil {
+		t.Fatalf("expected host security posture to be populated")
+	}
+	if !host.Security.MutatingCommandsBlocked {
+		t.Fatalf("expected mutating commands to be blocked")
+	}
+	if got := host.Security.AuthorizationPlugins; len(got) != 2 || got[0] != "opa" || got[1] != "audit" {
+		t.Fatalf("expected normalized authorization plugins, got %#v", got)
+	}
+	if !strings.Contains(host.Security.MutatingCommandsBlockedReason, "GO-2026-4887") {
+		t.Fatalf("expected advisory reason, got %q", host.Security.MutatingCommandsBlockedReason)
+	}
+}
+
 func TestConvertDockerServices(t *testing.T) {
 	t.Parallel()
 

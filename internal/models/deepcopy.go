@@ -413,6 +413,15 @@ func cloneDockerSwarmInfo(src *DockerSwarmInfo) *DockerSwarmInfo {
 	return &dest
 }
 
+func cloneDockerHostSecurity(src *DockerHostSecurity) *DockerHostSecurity {
+	if src == nil {
+		return nil
+	}
+	dest := *src
+	dest.AuthorizationPlugins = append([]string(nil), src.AuthorizationPlugins...)
+	return &dest
+}
+
 func cloneDockerHostCommandStatus(src *DockerHostCommandStatus) *DockerHostCommandStatus {
 	if src == nil {
 		return nil
@@ -435,6 +444,7 @@ func cloneDockerHost(src DockerHost) DockerHost {
 	dest.Services = cloneDockerServices(src.Services)
 	dest.Tasks = cloneDockerTasks(src.Tasks)
 	dest.Swarm = cloneDockerSwarmInfo(src.Swarm)
+	dest.Security = cloneDockerHostSecurity(src.Security)
 	dest.Temperature = cloneFloat64Ptr(src.Temperature)
 	dest.TokenLastUsedAt = cloneTimePtr(src.TokenLastUsedAt)
 	dest.Command = cloneDockerHostCommandStatus(src.Command)

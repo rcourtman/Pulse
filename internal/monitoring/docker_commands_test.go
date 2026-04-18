@@ -1230,6 +1230,31 @@ func TestQueueDockerContainerUpdateCommand(t *testing.T) {
 	}
 }
 
+func TestQueueDockerContainerUpdateCommand_BlockedBySecurityPosture(t *testing.T) {
+	t.Parallel()
+
+	monitor := newTestMonitorForCommands(t)
+	host := models.DockerHost{
+		ID:       "host-secure-update",
+		Hostname: "node-secure-update",
+		Status:   "online",
+		Security: &models.DockerHostSecurity{
+			AuthorizationPlugins:          []string{"opa"},
+			MutatingCommandsBlocked:       true,
+			MutatingCommandsBlockedReason: "blocked for test",
+		},
+	}
+	monitor.state.UpsertDockerHost(host)
+
+	_, err := monitor.QueueDockerContainerUpdateCommand(host.ID, "container-1", "nginx")
+	if err == nil {
+		t.Fatalf("expected security posture to block mutating command")
+	}
+	if !strings.Contains(err.Error(), "blocked for test") {
+		t.Fatalf("expected block reason in error, got %v", err)
+	}
+}
+
 func TestQueueDockerCheckUpdatesCommand(t *testing.T) {
 	t.Parallel()
 
@@ -1358,6 +1383,59 @@ func TestQueueDockerUpdateAllCommand(t *testing.T) {
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "no containers have updates available")
 	})
+}
+
+func TestQueueDockerUpdateAllCommand_BlockedBySecurityPosture(t *testing.T) {
+	t.Parallel()
+
+	monitor := newTestMonitorForCommands(t)
+	host := models.DockerHost{
+		ID:       "host-secure-update-all",
+		Hostname: "node-secure-update-all",
+		Status:   "online",
+		Containers: []models.DockerContainer{
+			{ID: "c1", Name: "app1", UpdateStatus: &models.DockerContainerUpdateStatus{UpdateAvailable: true, LastChecked: time.Now().UTC()}},
+		},
+		Security: &models.DockerHostSecurity{
+			AuthorizationPlugins:          []string{"opa"},
+			MutatingCommandsBlocked:       true,
+			MutatingCommandsBlockedReason: "blocked for test",
+		},
+	}
+	monitor.state.UpsertDockerHost(host)
+
+	_, err := monitor.QueueDockerUpdateAllCommand(host.ID)
+	if err == nil {
+		t.Fatalf("expected security posture to block mutating command")
+	}
+	if !strings.Contains(err.Error(), "blocked for test") {
+		t.Fatalf("expected block reason in error, got %v", err)
+	}
+}
+
+func TestQueueDockerCheckUpdatesCommand_AllowsSecurityPosture(t *testing.T) {
+	t.Parallel()
+
+	monitor := newTestMonitorForCommands(t)
+	host := models.DockerHost{
+		ID:       "host-secure-check-updates",
+		Hostname: "node-secure-check-updates",
+		Status:   "online",
+		Security: &models.DockerHostSecurity{
+			AuthorizationPlugins:          []string{"opa"},
+			MutatingCommandsBlocked:       true,
+			MutatingCommandsBlockedReason: "blocked for test",
+		},
+	}
+	monitor.state.UpsertDockerHost(host)
+
+	status, err := monitor.QueueDockerCheckUpdatesCommand(host.ID)
+	if err != nil {
+		t.Fatalf("check updates should remain allowed: %v", err)
+	}
+	if status.Type != DockerCommandTypeCheckUpdates {
+		t.Fatalf("expected check updates command, got %q", status.Type)
+	}
 }
 
 func TestQueueDockerUpdateAllCommand_AcceptsUnifiedHostID(t *testing.T) {

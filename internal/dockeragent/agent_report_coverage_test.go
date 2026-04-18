@@ -154,6 +154,43 @@ func TestBuildReport_CollectContainersForcedAndSwarmInfo(t *testing.T) {
 	}
 }
 
+func TestBuildReport_ReportsAuthorizationPlugins(t *testing.T) {
+	swap(t, &hostmetricsCollect, func(context.Context, []string) (hostmetrics.Snapshot, error) {
+		return hostmetrics.Snapshot{}, nil
+	})
+
+	agent := &Agent{
+		cfg: Config{
+			IncludeContainers: false,
+		},
+		runtime: RuntimeDocker,
+		logger:  zerolog.Nop(),
+		docker: &fakeDockerClient{
+			infoFunc: func(context.Context) (systemtypes.Info, error) {
+				return systemtypes.Info{
+					Name:            "docker-host",
+					ServerVersion:   "24.0.0",
+					OperatingSystem: "linux",
+					Plugins: systemtypes.PluginsInfo{
+						Authorization: []string{"opa", " audit "},
+					},
+				}, nil
+			},
+		},
+	}
+
+	report, err := agent.buildReport(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if report.Host.Security == nil {
+		t.Fatalf("expected security posture in report")
+	}
+	if got := report.Host.Security.AuthorizationPlugins; len(got) != 2 || got[0] != "opa" || got[1] != "audit" {
+		t.Fatalf("expected normalized authorization plugins, got %#v", got)
+	}
+}
+
 func TestBuildReport_HostMetricsError(t *testing.T) {
 	swap(t, &hostmetricsCollect, func(context.Context, []string) (hostmetrics.Snapshot, error) {
 		return hostmetrics.Snapshot{}, errors.New("metrics failed")
