@@ -1,20 +1,20 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ConnectionsTable } from '../ConnectionsTable';
-import type { ConnectionRow } from '../connectionsTableModel';
+import type { InfrastructureSystemRow } from '../connectionsTableModel';
 
-const row = (overrides: Partial<ConnectionRow> = {}): ConnectionRow => ({
+const row = (overrides: Partial<InfrastructureSystemRow> = {}): InfrastructureSystemRow => ({
   id: 'row-1',
-  name: 'production-pve',
-  subtitle: 'Configured platform connection',
+  name: 'tower',
+  subtitle: 'Monitored system',
   host: '10.0.0.1',
-  coverageLabels: ['Proxmox VE data'],
-  collectionLabel: 'API',
-  statusLabel: 'Connected',
+  coverageLabels: ['Host telemetry'],
+  collectionLabel: 'Agent',
+  statusLabel: 'online',
   statusClassName: 'bg-green-100 text-green-800',
   lastActivityText: '5s ago',
-  manageLabel: 'Edit connection',
-  manage: { kind: 'proxmox-node', nodeKind: 'pve', nodeId: 'pve-1' },
+  manageLabel: 'View details',
+  manage: { kind: 'inventory-active', rowKey: 'agent:tower' },
   ...overrides,
 });
 
@@ -26,40 +26,40 @@ describe('ConnectionsTable', () => {
       <ConnectionsTable rows={() => []} />
     ) as any);
 
-    expect(screen.getByText(/Nothing is configured or reporting yet/i)).toBeInTheDocument();
+    expect(screen.getByText(/No monitored systems yet/i)).toBeInTheDocument();
     expect(screen.queryByRole('table')).toBeNull();
   });
 
-  it('renders one row per connection with coverage, collection, and status labels', () => {
+  it('renders one row per top-level monitored system with coverage, collection, and status labels', () => {
     render(() => (
       <ConnectionsTable
         rows={() => [
           row(),
           row({
             id: 'row-2',
-            name: 'tower',
-            subtitle: 'Live reporting item',
+            name: 'pbs-docker',
+            subtitle: 'Ignored by Pulse',
             host: undefined,
-            coverageLabels: ['Host telemetry', 'Docker runtime data'],
-            collectionLabel: 'Agent',
-            statusLabel: 'Reporting',
-            manageLabel: 'View details',
-            manage: { kind: 'inventory-active', rowKey: 'agent-tower' },
+            coverageLabels: ['PBS data'],
+            collectionLabel: 'API',
+            statusLabel: 'Ignored',
+            manageLabel: 'Review ignored',
+            manage: { kind: 'inventory-ignored', rowKey: 'removed:pbs-docker' },
           }),
         ]}
       />
     ) as any);
 
     expect(screen.getByRole('table')).toBeInTheDocument();
-    expect(screen.getByText('production-pve')).toBeInTheDocument();
     expect(screen.getByText('tower')).toBeInTheDocument();
-    expect(screen.getByText('Proxmox VE data')).toBeInTheDocument();
+    expect(screen.getByText('pbs-docker')).toBeInTheDocument();
+    expect(screen.getByText('Monitored system')).toBeInTheDocument();
+    expect(screen.getByText('Ignored by Pulse')).toBeInTheDocument();
     expect(screen.getByText('Host telemetry')).toBeInTheDocument();
-    expect(screen.getByText('Docker runtime data')).toBeInTheDocument();
     expect(screen.getByText('API')).toBeInTheDocument();
     expect(screen.getByText('Agent')).toBeInTheDocument();
-    expect(screen.getByText('Connected')).toBeInTheDocument();
-    expect(screen.getByText('Reporting')).toBeInTheDocument();
+    expect(screen.getByText('Ignored')).toBeInTheDocument();
+    expect(screen.getByText('online')).toBeInTheDocument();
   });
 
   it('surfaces configured header actions when provided', () => {
@@ -94,11 +94,11 @@ describe('ConnectionsTable', () => {
       <ConnectionsTable rows={() => [row()]} onManageRow={onManageRow} />
     ) as any);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Edit connection' }));
+    fireEvent.click(screen.getByRole('button', { name: 'View details' }));
     expect(onManageRow).toHaveBeenCalledWith(
       expect.objectContaining({
         id: 'row-1',
-        manage: { kind: 'proxmox-node', nodeKind: 'pve', nodeId: 'pve-1' },
+        manage: { kind: 'inventory-active', rowKey: 'agent:tower' },
       }),
     );
   });

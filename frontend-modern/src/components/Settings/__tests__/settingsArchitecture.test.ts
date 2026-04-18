@@ -901,7 +901,7 @@ describe('Settings architecture guardrails', () => {
     expect(infrastructureWorkspaceSource).toContain("activeView() === 'platforms'");
     expect(infrastructureWorkspaceSource).toContain("activeView() === 'install'");
     expect(connectionsTableSource).toContain('headerActions');
-    expect(connectionsTableModelSource).toContain('export function buildConnectionRows');
+    expect(connectionsTableModelSource).toContain('export function buildInfrastructureSystemRows');
     expect(platformConnectionsWorkspaceSource).toContain('./platformConnectionsModel');
     expect(platformConnectionsWorkspaceSource).toContain('./ProxmoxSettingsPanel');
     expect(platformConnectionsWorkspaceSource).toContain('./TrueNASSettingsPanel');
@@ -1425,14 +1425,12 @@ describe('Settings architecture guardrails', () => {
     expect(settingsHeaderMetaSource).not.toContain(
       'Billing and self-hosted plan features live in Pulse Pro.',
     );
-    expect(SETTINGS_HEADER_META['infrastructure-operations'].title).toBe(
-      'Connections & Inventory',
-    );
+    expect(SETTINGS_HEADER_META['infrastructure-operations'].title).toBe('Infrastructure');
     expect(SETTINGS_HEADER_META['infrastructure-operations'].description).toContain(
-      'actively reporting',
+      'top-level monitored systems',
     );
     expect(SETTINGS_HEADER_META['infrastructure-operations'].description).toBe(
-      `Bring infrastructure into Pulse, manage API-backed platform connections, and control which systems are actively reporting. ${SELF_HOSTED_PRO_BILLING_PRESENTATION.infrastructureRouteReferral}`,
+      `Review top-level monitored systems, open install or platform connection workflows when needed, and control how Pulse collects infrastructure data. ${SELF_HOSTED_PRO_BILLING_PRESENTATION.infrastructureRouteReferral}`,
     );
   });
 

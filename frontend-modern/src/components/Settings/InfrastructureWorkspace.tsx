@@ -6,9 +6,9 @@ import { AgentProfilesPanel } from './AgentProfilesPanel';
 import { AddSystemPicker, type AddSystemChoice } from './AddSystemPicker';
 import { ConnectionsTable, type ConnectionsTableHeaderAction } from './ConnectionsTable';
 import {
-  buildConnectionRows,
-  type ConnectionRow,
-  type ConnectionManageAction,
+  buildInfrastructureSystemRows,
+  type InfrastructureSystemRow,
+  type SystemManageAction,
 } from './connectionsTableModel';
 import { InfrastructureActiveRowDetails } from './InfrastructureActiveRowDetails';
 import { InfrastructureInstallerSection } from './InfrastructureInstallerSection';
@@ -59,22 +59,24 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
   let platformSectionRef: HTMLDivElement | undefined;
   let installSectionRef: HTMLDivElement | undefined;
 
-  const rows = createMemo<ConnectionRow[]>(() =>
-    buildConnectionRows({
+  const rows = createMemo<InfrastructureSystemRow[]>(() =>
+    buildInfrastructureSystemRows({
       activeRows: state.activeRows(),
       monitoringStoppedRows: state.monitoringStoppedRows(),
-      pveNodes: props.pveNodes(),
-      pbsNodes: props.pbsNodes(),
-      pmgNodes: props.pmgNodes(),
-      truenasConnections: props.trueNASSettings.connections(),
-      vmwareConnections: props.vmwareSettings.connections(),
-      includeConfigurationRows: !readOnlyWorkspace(),
     }),
   );
   const headerActions = createMemo<ConnectionsTableHeaderAction[]>(() =>
     readOnlyWorkspace()
       ? []
       : [
+          {
+            label: 'Manage connections',
+            onSelect: () => {
+              navigate(buildInfrastructureWorkspacePath('platforms'));
+              scrollSectionIntoView(platformSectionRef);
+            },
+            tone: 'secondary' as const,
+          },
           {
             label: 'Agent profiles',
             onSelect: () => setProfilesOpen(true),
@@ -132,7 +134,7 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
     openProxmoxNode(choice.kind, '');
   };
 
-  const handleManageAction = (action: ConnectionManageAction) => {
+  const handleManageAction = (action: SystemManageAction) => {
     switch (action.kind) {
       case 'inventory-active':
         state.setExpandedRowKey(action.rowKey);
@@ -142,33 +144,6 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
         state.setExpandedRowKey(null);
         state.setSelectedIgnoredRowKey(action.rowKey);
         return;
-      case 'proxmox-node':
-        openProxmoxNode(action.nodeKind, action.nodeId);
-        return;
-      case 'truenas-connection': {
-        const connection = props
-          .trueNASSettings
-          .connections()
-          .find((candidate) => candidate.id === action.connectionId);
-        if (connection) {
-          props.trueNASSettings.openEditDialog(connection);
-        }
-        navigate('/settings/infrastructure/platforms/truenas');
-        scrollSectionIntoView(platformSectionRef);
-        return;
-      }
-      case 'vmware-connection': {
-        const connection = props
-          .vmwareSettings
-          .connections()
-          .find((candidate) => candidate.id === action.connectionId);
-        if (connection) {
-          props.vmwareSettings.openEditDialog(connection);
-        }
-        navigate('/settings/infrastructure/platforms/vmware');
-        scrollSectionIntoView(platformSectionRef);
-        return;
-      }
       default:
         return;
     }

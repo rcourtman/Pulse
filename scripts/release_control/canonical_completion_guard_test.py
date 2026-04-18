@@ -2320,7 +2320,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
             ],
         )
 
-    def _assert_connections_ledger_change_requires_agent_lifecycle(self, touched_path: str) -> None:
+    def _assert_systems_ledger_change_requires_agent_lifecycle(self, touched_path: str) -> None:
         required = infer_impacted_subsystems([touched_path])
         self.assertEqual(set(required), {"agent-lifecycle"})
 
@@ -2334,8 +2334,8 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
             lifecycle["verification_requirements"],
             [
                 {
-                    "id": "connections-ledger-workspace-surface",
-                    "label": "connections ledger lifecycle proof",
+                    "id": "systems-ledger-workspace-surface",
+                    "label": "systems ledger lifecycle proof",
                     "touched_runtime_files": [touched_path],
                     "allow_same_subsystem_tests": False,
                     "test_prefixes": [],
@@ -2345,12 +2345,12 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
         )
 
     def test_connections_table_change_requires_agent_lifecycle(self):
-        self._assert_connections_ledger_change_requires_agent_lifecycle(
+        self._assert_systems_ledger_change_requires_agent_lifecycle(
             "frontend-modern/src/components/Settings/ConnectionsTable.tsx"
         )
 
     def test_connections_table_model_change_requires_agent_lifecycle(self):
-        self._assert_connections_ledger_change_requires_agent_lifecycle(
+        self._assert_systems_ledger_change_requires_agent_lifecycle(
             "frontend-modern/src/components/Settings/connectionsTableModel.ts"
         )
 

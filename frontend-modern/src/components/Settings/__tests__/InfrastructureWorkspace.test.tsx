@@ -104,9 +104,7 @@ const reportingRow = (overrides: Partial<UnifiedAgentRow> = {}): UnifiedAgentRow
   }) as UnifiedAgentRow;
 
 const trueNASOpenCreateDialogSpy = vi.fn();
-const trueNASOpenEditDialogSpy = vi.fn();
 const vmwareOpenCreateDialogSpy = vi.fn();
-const vmwareOpenEditDialogSpy = vi.fn();
 const setShowNodeModalSpy = vi.fn();
 const setEditingNodeSpy = vi.fn();
 const setCurrentNodeTypeSpy = vi.fn();
@@ -123,12 +121,12 @@ const baseProps = () =>
     trueNASSettings: {
       connections: () => [{ id: 'tn-1', name: 'Tower NAS', host: '10.0.0.20', enabled: true }],
       openCreateDialog: trueNASOpenCreateDialogSpy,
-      openEditDialog: trueNASOpenEditDialogSpy,
+      openEditDialog: vi.fn(),
     },
     vmwareSettings: {
       connections: () => [{ id: 'vm-1', name: 'lab-vcenter', host: '10.0.0.30', enabled: true }],
       openCreateDialog: vmwareOpenCreateDialogSpy,
-      openEditDialog: vmwareOpenEditDialogSpy,
+      openEditDialog: vi.fn(),
     },
     selectedAgent: () => 'pve',
     onSelectAgent: onSelectAgentSpy,
@@ -146,9 +144,7 @@ describe('InfrastructureWorkspace', () => {
     setExpandedRowKeySpy.mockReset();
     setSelectedIgnoredRowKeySpy.mockReset();
     trueNASOpenCreateDialogSpy.mockReset();
-    trueNASOpenEditDialogSpy.mockReset();
     vmwareOpenCreateDialogSpy.mockReset();
-    vmwareOpenEditDialogSpy.mockReset();
     setShowNodeModalSpy.mockReset();
     setEditingNodeSpy.mockReset();
     setCurrentNodeTypeSpy.mockReset();
@@ -171,7 +167,8 @@ describe('InfrastructureWorkspace', () => {
   it('renders only the top-level ledger at the base infrastructure route', () => {
     renderWorkspace();
 
-    expect(screen.getByText('Connections and inventory')).toBeInTheDocument();
+    expect(screen.getByText('Systems')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Manage connections' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Agent profiles' })).toBeInTheDocument();
     expect(screen.queryByTestId('inventory-section')).toBeNull();
     expect(screen.queryByTestId('platform-section')).toBeNull();
@@ -179,13 +176,13 @@ describe('InfrastructureWorkspace', () => {
     expect(screen.queryByTestId('agent-profiles')).toBeNull();
   });
 
-  it('merges reporting and configured connection rows into the top ledger', () => {
+  it('shows monitored systems only in the top ledger', () => {
     renderWorkspace();
 
     expect(screen.getByText('tower')).toBeInTheDocument();
-    expect(screen.getByText('zeus')).toBeInTheDocument();
-    expect(screen.getByText('Tower NAS')).toBeInTheDocument();
-    expect(screen.getByText('lab-vcenter')).toBeInTheDocument();
+    expect(screen.queryByText('zeus')).toBeNull();
+    expect(screen.queryByText('Tower NAS')).toBeNull();
+    expect(screen.queryByText('lab-vcenter')).toBeNull();
   });
 
   it('opens the add-system picker when the add button is clicked', () => {
@@ -242,22 +239,19 @@ describe('InfrastructureWorkspace', () => {
     expect(screen.getByTestId('active-details')).toBeInTheDocument();
   });
 
-  it('opens saved VMware connections from the top ledger', () => {
-    renderWorkspace({ pveNodes: () => [], trueNASSettings: { ...baseProps().trueNASSettings, connections: () => [] } });
+  it('routes connection management into the platform workspace instead of the main ledger', () => {
+    renderWorkspace();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Edit connection' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Manage connections' }));
 
-    expect(vmwareOpenEditDialogSpy).toHaveBeenCalledWith(
-      expect.objectContaining({ id: 'vm-1', name: 'lab-vcenter' }),
-    );
-    expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure/platforms/vmware');
+    expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure/platforms');
   });
 
   it('shows only platform setup below the ledger on platform deep links', () => {
     mockPathname = '/settings/infrastructure/platforms/truenas';
     renderWorkspace();
 
-    expect(screen.getByText('Connections and inventory')).toBeInTheDocument();
+    expect(screen.getByText('Systems')).toBeInTheDocument();
     expect(screen.getByTestId('platform-section')).toBeInTheDocument();
     expect(screen.queryByTestId('inventory-section')).toBeNull();
     expect(screen.queryByTestId('install-section')).toBeNull();
@@ -268,7 +262,7 @@ describe('InfrastructureWorkspace', () => {
     mockPathname = '/settings/infrastructure/install';
     renderWorkspace();
 
-    expect(screen.getByText('Connections and inventory')).toBeInTheDocument();
+    expect(screen.getByText('Systems')).toBeInTheDocument();
     expect(screen.getByTestId('install-section')).toBeInTheDocument();
     expect(screen.queryByTestId('inventory-section')).toBeNull();
     expect(screen.queryByTestId('platform-section')).toBeNull();

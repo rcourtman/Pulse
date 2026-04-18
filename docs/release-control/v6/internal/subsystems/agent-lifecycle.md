@@ -415,8 +415,8 @@ an add-only capacity posture.
    same completion narrative must describe Infrastructure Install as the place
    where the first-host scoped install token is prepared from setup handoff,
    and when it names the shared settings workspace for follow-up lifecycle
-   control it must use the canonical `Connections & Inventory` label instead
-   of reviving the retired `Infrastructure Operations` wording.
+   control it must use the canonical `Infrastructure` label instead of
+   reviving the retired `Infrastructure Operations` wording.
    not as a second manual token-generation task the operator still needs to
    figure out.
 10. Keep API-backed platform onboarding explicit across
@@ -851,11 +851,13 @@ composition boundary, and
 the direct-node/discovery runtime hooks plus `useTrueNASSettingsPanelState.ts`
 as the canonical provider state owners, instead of leaving those panels
 ungoverned beside the canonical unified-agent install path.
-That ledger-first default route must stay focused on top-level monitored
-systems and configured platform connections only. Inline detail drawers may
-surface reporting-item and ignored-item controls, but installer setup,
-platform-specific configuration, and profile management must remain secondary
-flows rather than being dumped underneath the default ledger.
+That ledger-first default route must stay focused on one row per top-level
+monitored system. Configured platform connections must stay in secondary
+connection-management flows rather than appearing as peer rows in the default
+ledger. Inline detail drawers may surface reporting-item and ignored-item
+controls, but installer setup, platform-specific configuration, and profile
+management must remain secondary flows rather than being dumped underneath the
+default ledger.
 That same lifecycle-owned platform-connections workspace must keep API-backed
 provider state operationally useful, not CRUD-only. `TrueNASSettingsPanel.tsx`
 and `useTrueNASSettingsPanelState.ts` must surface the shared runtime health,

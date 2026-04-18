@@ -518,8 +518,8 @@ Keep these credentials secure!
               </h3>
               <p class="mt-2 text-xs text-muted max-w-xl">
                 {completionViewModel().hasConnectedSystems
-                  ? 'Pulse already has a live monitored system. Open the dashboard to confirm the first overview, then return to Connections & Inventory when you want to continue with the next system path.'
-                  : 'The canonical install flow now lives in Connections & Inventory. Open that workspace to continue with the first-host install token Pulse prepares from setup, adjust the agent connection URL only if needed, configure TLS or custom CA options, and copy the correct command for the first system you want Pulse to monitor.'}
+                  ? 'Pulse already has a live monitored system. Open the dashboard to confirm the first overview, then return to Infrastructure when you want to continue with the next system path.'
+                  : 'The canonical install flow now lives in Infrastructure. Open that workspace to continue with the first-host install token Pulse prepares from setup, adjust the agent connection URL only if needed, configure TLS or custom CA options, and copy the correct command for the first system you want Pulse to monitor.'}
               </p>
             </div>
             <div class="rounded-sm bg-blue-50 px-2 py-1 text-[10px] font-medium text-blue-700 dark:bg-blue-900 dark:text-blue-300">

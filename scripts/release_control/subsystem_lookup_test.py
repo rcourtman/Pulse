@@ -1950,7 +1950,7 @@ class SubsystemLookupTest(unittest.TestCase):
         self.assertEqual(match["lane_context"]["lane_id"], "L16")
         self.assertEqual(
             match["verification_requirement"]["id"],
-            "connections-ledger-workspace-surface",
+            "systems-ledger-workspace-surface",
         )
         self.assertEqual(
             match["verification_requirement"]["exact_files"],
@@ -1980,7 +1980,7 @@ class SubsystemLookupTest(unittest.TestCase):
         self.assertEqual(match["lane_context"]["lane_id"], "L16")
         self.assertEqual(
             match["verification_requirement"]["id"],
-            "connections-ledger-workspace-surface",
+            "systems-ledger-workspace-surface",
         )
         self.assertEqual(
             match["verification_requirement"]["exact_files"],

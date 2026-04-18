@@ -13,9 +13,9 @@ export function useSettingsShellState({ activeTab }: UseSettingsShellStateParams
       const tab = activeTab();
       if (tab === 'infrastructure-operations' && presentationPolicyIsReadOnly()) {
         return {
-          title: 'Connections & Inventory',
+          title: 'Infrastructure',
           description:
-            'Review the current monitored-system inventory, reporting posture, and connected platform coverage. Setup changes stay unavailable in this read-only session.',
+            'Review the current top-level monitored systems and reporting posture. Setup changes stay unavailable in this read-only session.',
         };
       }
 

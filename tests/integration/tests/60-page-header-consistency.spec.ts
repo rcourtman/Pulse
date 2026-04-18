@@ -37,9 +37,9 @@ const ALIGNED_PAGE_HEADER_ROUTES = [
   {
     slug: "settings-operations",
     route: "/settings/infrastructure-operations",
-    title: "Infrastructure Operations",
+    title: "Infrastructure",
     description:
-      "Bring infrastructure into Pulse, manage API-backed platform connections, and control which systems are actively reporting. Reporting and install workflows now live on the Operations tab.",
+      "Review top-level monitored systems, open install or platform connection workflows when needed, and control how Pulse collects infrastructure data. Billing and self-hosted plan features live in Pulse Pro.",
   },
   PAGE_HEADER_ROUTES[3],
 ] as const;

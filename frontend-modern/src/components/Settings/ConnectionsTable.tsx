@@ -8,7 +8,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/shared/Table';
-import type { ConnectionRow } from './connectionsTableModel';
+import type { InfrastructureSystemRow } from './connectionsTableModel';
 
 export interface ConnectionsTableHeaderAction {
   label: string;
@@ -17,9 +17,9 @@ export interface ConnectionsTableHeaderAction {
 }
 
 interface ConnectionsTableProps {
-  rows: Accessor<readonly ConnectionRow[]>;
+  rows: Accessor<readonly InfrastructureSystemRow[]>;
   headerActions?: readonly ConnectionsTableHeaderAction[];
-  onManageRow?: (row: ConnectionRow) => void;
+  onManageRow?: (row: InfrastructureSystemRow) => void;
 }
 
 export const ConnectionsTable: Component<ConnectionsTableProps> = (props) => {
@@ -27,8 +27,8 @@ export const ConnectionsTable: Component<ConnectionsTableProps> = (props) => {
     <Card padding="none" tone="card" class="rounded-md">
       <div class="flex flex-col gap-3 border-b border-border px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h3 class="text-base font-semibold text-base-content">Connections and inventory</h3>
-          <p class="text-xs text-muted">Top-level systems and platform connections.</p>
+          <h3 class="text-base font-semibold text-base-content">Systems</h3>
+          <p class="text-xs text-muted">One row per top-level monitored system.</p>
         </div>
         <Show when={(props.headerActions?.length ?? 0) > 0}>
           <div class="flex flex-wrap items-center gap-2">
@@ -54,9 +54,7 @@ export const ConnectionsTable: Component<ConnectionsTableProps> = (props) => {
       <Show
         when={props.rows().length > 0}
         fallback={
-          <div class="px-4 py-10 text-center text-sm text-muted">
-            Nothing is configured or reporting yet.
-          </div>
+          <div class="px-4 py-10 text-center text-sm text-muted">No monitored systems yet.</div>
         }
       >
         <div class="overflow-auto">

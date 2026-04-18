@@ -106,5 +106,11 @@ describe('SetupCompletionPanel guardrails', () => {
     expect(setupCompletionPanelSource).not.toContain(
       'You can return here later from Connections & Inventory if you skip install for now.',
     );
+    expect(setupCompletionPanelSource).toContain(
+      'The canonical install flow now lives in Infrastructure.',
+    );
+    expect(setupCompletionPanelSource).toContain(
+      'then return to Infrastructure when you want to continue with the next system path.',
+    );
   });
 });

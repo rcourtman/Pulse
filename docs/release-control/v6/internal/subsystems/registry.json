@@ -895,8 +895,8 @@
             ]
           },
           {
-            "id": "connections-ledger-workspace-surface",
-            "label": "connections ledger lifecycle proof",
+            "id": "systems-ledger-workspace-surface",
+            "label": "systems ledger lifecycle proof",
             "match_prefixes": [],
             "match_files": [
               "frontend-modern/src/components/Settings/ConnectionsTable.tsx",

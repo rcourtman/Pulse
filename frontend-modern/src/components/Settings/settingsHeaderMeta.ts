@@ -13,9 +13,9 @@ export const SETTINGS_HEADER_META: SettingsHeaderMetaMap = {
       'Add and manage Proxmox VE, Backup Server, and Mail Gateway connections when the unified agent is not available on the host.',
   },
   'infrastructure-operations': {
-    title: 'Connections & Inventory',
+    title: 'Infrastructure',
     description:
-      `Bring infrastructure into Pulse, manage API-backed platform connections, and control which systems are actively reporting. ${SELF_HOSTED_PRO_BILLING_PRESENTATION.infrastructureRouteReferral}`,
+      `Review top-level monitored systems, open install or platform connection workflows when needed, and control how Pulse collects infrastructure data. ${SELF_HOSTED_PRO_BILLING_PRESENTATION.infrastructureRouteReferral}`,
   },
   'system-general': {
     title: 'General',

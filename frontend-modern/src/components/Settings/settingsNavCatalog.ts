@@ -33,7 +33,7 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
     items: [
       {
         id: 'infrastructure-operations',
-        label: 'Connections & Inventory',
+        label: 'Infrastructure',
         icon: Bot,
         iconProps: { strokeWidth: 2 },
       },
