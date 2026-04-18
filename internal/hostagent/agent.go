@@ -382,6 +382,7 @@ func (a *Agent) Run(ctx context.Context) error {
 	// Proxmox setup (if enabled)
 	if a.cfg.EnableProxmox {
 		a.runProxmoxSetup(ctx)
+		go a.runProxmoxHealthCheckLoop(ctx)
 	}
 
 	// Start command client in background for AI command execution
@@ -1335,6 +1336,66 @@ func (a *Agent) runProxmoxSetup(ctx context.Context) {
 				Str("type", result.ProxmoxType).
 				Str("host", result.NodeHost).
 				Msg("Proxmox token created but registration failed (node may need manual configuration)")
+		}
+	}
+}
+
+const (
+	proxmoxHealthCheckInitialDelay = 2 * time.Minute
+	proxmoxHealthCheckInterval     = 5 * time.Minute
+)
+
+// runProxmoxHealthCheckLoop periodically verifies that Proxmox nodes registered
+// at startup are still connected to Pulse. This closes the cold-startup race
+// where the monitor may not have connection data at the time of the initial
+// registration check, causing a stale-token node to be silently skipped.
+func (a *Agent) runProxmoxHealthCheckLoop(ctx context.Context) {
+	// Wait for the monitor to build initial connection-health state before
+	// the first check so that a stale token is detectable.
+	select {
+	case <-ctx.Done():
+		return
+	case <-time.After(proxmoxHealthCheckInitialDelay):
+	}
+
+	ticker := time.NewTicker(proxmoxHealthCheckInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			setup := NewProxmoxSetup(
+				a.logger,
+				a.httpClient,
+				a.collector,
+				a.trimmedPulseURL,
+				a.cfg.APIToken,
+				a.cfg.ProxmoxType,
+				a.hostname,
+				a.reportIP,
+				a.stateDir,
+				a.cfg.InsecureSkipVerify,
+			)
+			results, err := setup.RunHealthCheck(ctx)
+			if err != nil {
+				a.logger.Warn().Err(err).Msg("Proxmox health check failed")
+				continue
+			}
+			for _, result := range results {
+				if result.Registered {
+					a.logger.Info().
+						Str("type", result.ProxmoxType).
+						Str("host", result.NodeHost).
+						Msg("Proxmox node re-registered via health check")
+				} else {
+					a.logger.Warn().
+						Str("type", result.ProxmoxType).
+						Str("host", result.NodeHost).
+						Msg("Proxmox health check: token rotated but registration failed")
+				}
+			}
 		}
 	}
 }

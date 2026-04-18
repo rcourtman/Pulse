@@ -468,6 +468,69 @@ func (p *ProxmoxSetup) RunAll(ctx context.Context) ([]*ProxmoxSetupResult, error
 	return results, nil
 }
 
+// RunHealthCheck verifies that every previously-registered Proxmox type is
+// still connected to Pulse. If a type's registration is confirmed stale by the
+// server (node exists in config but connection is broken), RunHealthCheck
+// re-registers it with a fresh token.
+//
+// Types with no local registration marker are intentionally skipped. Those
+// need a full RunAll cycle (typically at next agent startup) rather than a
+// health-check rotation, which would cause uncontrolled token churn if Pulse
+// is temporarily unreachable.
+func (p *ProxmoxSetup) RunHealthCheck(ctx context.Context) ([]*ProxmoxSetupResult, error) {
+	pulseURL, err := normalizePulseURL(p.pulseURL)
+	if err != nil {
+		return nil, fmt.Errorf("invalid pulse URL: %w", err)
+	}
+	p.pulseURL = pulseURL
+
+	forcedTypeStr, err := normalizeProxmoxType(string(p.proxmoxType))
+	if err != nil {
+		return nil, err
+	}
+	forcedType := proxmoxProductType(forcedTypeStr)
+
+	var typesToCheck []proxmoxProductType
+	if forcedType != "" {
+		typesToCheck = []proxmoxProductType{forcedType}
+	} else {
+		typesToCheck = p.detectProxmoxTypes()
+	}
+
+	var results []*ProxmoxSetupResult
+	for _, ptype := range typesToCheck {
+		// Skip types with no local marker — they need a full startup setup
+		// cycle, not a periodic health-check rotation.
+		if !p.isTypeRegistered(ptype) {
+			continue
+		}
+
+		hostURL := p.getHostURL(ctx, ptype)
+		registered, err := p.checkRegistrationWithPulse(ctx, ptype, hostURL)
+		if err != nil {
+			p.logger.Warn().Err(err).Str("type", string(ptype)).
+				Msg("Proxmox health check: could not verify registration with Pulse")
+			continue
+		}
+		if registered {
+			continue // still healthy
+		}
+
+		p.logger.Info().Str("type", string(ptype)).Str("host", hostURL).
+			Msg("Proxmox health check: node disconnected, re-registering")
+		result, err := p.runForType(ctx, ptype)
+		if err != nil {
+			p.logger.Error().Err(err).Str("type", string(ptype)).
+				Msg("Proxmox health check: re-registration failed")
+			continue
+		}
+		if result != nil {
+			results = append(results, result)
+		}
+	}
+	return results, nil
+}
+
 // runForType executes setup for a specific Proxmox type.
 func (p *ProxmoxSetup) runForType(ctx context.Context, ptype proxmoxProductType) (*ProxmoxSetupResult, error) {
 	normalizedTypeStr, err := normalizeProxmoxType(string(ptype))
