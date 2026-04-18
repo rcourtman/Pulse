@@ -9,8 +9,6 @@ import {
 
 export type SettingsTab =
   | 'infrastructure-systems'
-  | 'infrastructure-connections'
-  | 'infrastructure-install'
   | 'system-general'
   | 'system-network'
   | 'system-updates'
@@ -35,10 +33,7 @@ export type SettingsTab =
   | 'security-audit'
   | 'security-webhooks';
 
-export type InfrastructureSettingsTab = Extract<
-  SettingsTab,
-  'infrastructure-systems' | 'infrastructure-connections' | 'infrastructure-install'
->;
+export type InfrastructureSettingsTab = Extract<SettingsTab, 'infrastructure-systems'>;
 
 export type AgentKey = 'pve' | 'pbs' | 'pmg';
 export type ProxmoxPlatformType = Extract<
@@ -92,19 +87,13 @@ export const DEFAULT_SETTINGS_TAB: SettingsTab = 'infrastructure-systems';
 const INFRASTRUCTURE_SYSTEMS_PREFIX = '/settings/infrastructure';
 const LEGACY_AGENTS_PREFIX = '/settings/workloads';
 const LEGACY_DOCKER_PREFIX = '/settings/workloads/docker';
-const INFRASTRUCTURE_INSTALL_PREFIX = '/settings/infrastructure/install';
-const INFRASTRUCTURE_OPERATIONS_PREFIX = '/settings/infrastructure/operations';
-const PLATFORM_CONNECTIONS_PREFIX = '/settings/infrastructure/platforms';
 const SUPPORT_PREFIX = '/settings/support';
 const SUPPORT_DIAGNOSTICS_PREFIX = `${SUPPORT_PREFIX}/diagnostics`;
 const SUPPORT_REPORTING_PREFIX = `${SUPPORT_PREFIX}/reporting`;
 const SUPPORT_LOGS_PREFIX = `${SUPPORT_PREFIX}/logs`;
-const TRUENAS_PREFIX = `${PLATFORM_CONNECTIONS_PREFIX}/truenas`;
-const PROXMOX_PREFIX = `${PLATFORM_CONNECTIONS_PREFIX}/proxmox`;
+const PROXMOX_PREFIX = `${INFRASTRUCTURE_SYSTEMS_PREFIX}/platforms/proxmox`;
 const LEGACY_PROXMOX_PREFIX = '/settings/infrastructure/proxmox';
 const LEGACY_PROXMOX_API_PREFIX = '/settings/infrastructure/api';
-const LEGACY_TRUENAS_PREFIX = '/settings/infrastructure/truenas';
-const LEGACY_VMWARE_PREFIX = '/settings/infrastructure/vmware';
 const LEGACY_INTEGRATIONS_API_PREFIX = '/settings/integrations/api';
 const LEGACY_SETTINGS_OPERATIONS_PREFIX = '/settings/operations';
 const SECURITY_API_PREFIX = '/settings/security/api';
@@ -158,19 +147,14 @@ export function resolveCanonicalSettingsPath(path: string): string | null {
   if (normalizedPath === LEGACY_AGENTS_PREFIX) {
     return settingsTabPath(DEFAULT_SETTINGS_TAB);
   }
-  if (normalizedPath === INFRASTRUCTURE_SYSTEMS_PREFIX) {
+  if (normalizedPath === LEGACY_DOCKER_PREFIX) {
     return settingsTabPath(DEFAULT_SETTINGS_TAB);
   }
-  if (normalizedPath === PLATFORM_CONNECTIONS_PREFIX) {
-    return PLATFORM_CONNECTIONS_PREFIX;
-  }
-  if (normalizedPath === INFRASTRUCTURE_INSTALL_PREFIX) {
-    return INFRASTRUCTURE_INSTALL_PREFIX;
-  }
-  if (normalizedPath === INFRASTRUCTURE_OPERATIONS_PREFIX) {
+  // All infrastructure sub-paths collapse to the single infrastructure workspace.
+  if (normalizedPath.startsWith(`${INFRASTRUCTURE_SYSTEMS_PREFIX}/`)) {
     return INFRASTRUCTURE_SYSTEMS_PREFIX;
   }
-  if (normalizedPath === LEGACY_DOCKER_PREFIX) {
+  if (normalizedPath === INFRASTRUCTURE_SYSTEMS_PREFIX) {
     return settingsTabPath(DEFAULT_SETTINGS_TAB);
   }
   if (normalizedPath === SUPPORT_PREFIX) {
@@ -182,44 +166,13 @@ export function resolveCanonicalSettingsPath(path: string): string | null {
   if (normalizedPath.startsWith(`${LEGACY_SETTINGS_OPERATIONS_PREFIX}/`)) {
     return buildLegacyOperationsSettingsPath(normalizedPath);
   }
-  if (normalizedPath === LEGACY_PROXMOX_API_PREFIX) {
-    return PROXMOX_PREFIX;
-  }
-  if (normalizedPath === LEGACY_PROXMOX_PREFIX) {
-    return PROXMOX_PREFIX;
-  }
-  if (normalizedPath === LEGACY_TRUENAS_PREFIX) {
-    return TRUENAS_PREFIX;
-  }
-  if (normalizedPath === LEGACY_VMWARE_PREFIX) {
-    return `${PLATFORM_CONNECTIONS_PREFIX}/vmware`;
-  }
-  if (normalizedPath === `${INFRASTRUCTURE_SYSTEMS_PREFIX}/pve`) {
-    return `${PROXMOX_PREFIX}/pve`;
-  }
-  if (normalizedPath === `${INFRASTRUCTURE_SYSTEMS_PREFIX}/pbs`) {
-    return `${PROXMOX_PREFIX}/pbs`;
-  }
-  if (normalizedPath === `${INFRASTRUCTURE_SYSTEMS_PREFIX}/pmg`) {
-    return `${PROXMOX_PREFIX}/pmg`;
-  }
-  if (normalizedPath === `${LEGACY_PROXMOX_API_PREFIX}/pve`) {
-    return `${PROXMOX_PREFIX}/pve`;
-  }
-  if (normalizedPath === `${LEGACY_PROXMOX_API_PREFIX}/pbs`) {
-    return `${PROXMOX_PREFIX}/pbs`;
-  }
-  if (normalizedPath === `${LEGACY_PROXMOX_API_PREFIX}/pmg`) {
-    return `${PROXMOX_PREFIX}/pmg`;
-  }
-  if (normalizedPath === `${LEGACY_PROXMOX_PREFIX}/pve`) {
-    return `${PROXMOX_PREFIX}/pve`;
-  }
-  if (normalizedPath === `${LEGACY_PROXMOX_PREFIX}/pbs`) {
-    return `${PROXMOX_PREFIX}/pbs`;
-  }
-  if (normalizedPath === `${LEGACY_PROXMOX_PREFIX}/pmg`) {
-    return `${PROXMOX_PREFIX}/pmg`;
+  if (
+    normalizedPath.startsWith(`${LEGACY_PROXMOX_API_PREFIX}/`) ||
+    normalizedPath === LEGACY_PROXMOX_API_PREFIX ||
+    normalizedPath.startsWith(`${LEGACY_PROXMOX_PREFIX}/`) ||
+    normalizedPath === LEGACY_PROXMOX_PREFIX
+  ) {
+    return INFRASTRUCTURE_SYSTEMS_PREFIX;
   }
   if (normalizedPath === LEGACY_INTEGRATIONS_API_PREFIX) {
     return SECURITY_API_PREFIX;
@@ -239,25 +192,12 @@ export function deriveTabFromPath(path: string): SettingsTab {
   if (canonicalPath === '/settings') return DEFAULT_SETTINGS_TAB;
   if (
     canonicalPath === INFRASTRUCTURE_SYSTEMS_PREFIX ||
+    canonicalPath.startsWith(`${INFRASTRUCTURE_SYSTEMS_PREFIX}/`) ||
     canonicalPath === LEGACY_AGENTS_PREFIX ||
     canonicalPath === LEGACY_DOCKER_PREFIX
   ) {
     return 'infrastructure-systems';
   }
-  if (canonicalPath === INFRASTRUCTURE_INSTALL_PREFIX) {
-    return 'infrastructure-install';
-  }
-  if (
-    canonicalPath === PLATFORM_CONNECTIONS_PREFIX ||
-    canonicalPath.startsWith(PROXMOX_PREFIX) ||
-    canonicalPath.startsWith(TRUENAS_PREFIX) ||
-    canonicalPath.startsWith(`${PLATFORM_CONNECTIONS_PREFIX}/vmware`) ||
-    canonicalPath.startsWith(LEGACY_PROXMOX_PREFIX) ||
-    canonicalPath.startsWith(LEGACY_PROXMOX_API_PREFIX) ||
-    canonicalPath.startsWith(LEGACY_TRUENAS_PREFIX) ||
-    canonicalPath.startsWith(LEGACY_VMWARE_PREFIX)
-  )
-    return 'infrastructure-connections';
 
   if (canonicalPath.includes('/settings/system-general')) return 'system-general';
   if (canonicalPath.includes('/settings/system-network')) return 'system-network';
@@ -293,23 +233,21 @@ export function deriveTabFromPath(path: string): SettingsTab {
 }
 
 export function deriveAgentFromPath(path: string): AgentKey | null {
-  const canonicalPath = resolveCanonicalSettingsPath(path) ?? normalizeSettingsPath(path);
-
+  const normalizedPath = normalizeSettingsPath(path);
   for (const [agent, meta] of Object.entries(PROXMOX_AGENT_META) as Array<
     [AgentKey, (typeof PROXMOX_AGENT_META)[AgentKey]]
   >) {
-    if (canonicalPath.includes(meta.path)) return agent;
+    if (normalizedPath.includes(meta.path)) return agent;
   }
   return null;
 }
 
 export function isProxmoxSettingsPath(path: string): boolean {
-  const canonicalPath = resolveCanonicalSettingsPath(path) ?? normalizeSettingsPath(path);
+  const normalizedPath = normalizeSettingsPath(path);
   return (
-    canonicalPath === PLATFORM_CONNECTIONS_PREFIX ||
-    canonicalPath.startsWith(PROXMOX_PREFIX) ||
-    canonicalPath.startsWith(LEGACY_PROXMOX_PREFIX) ||
-    canonicalPath.startsWith(LEGACY_PROXMOX_API_PREFIX)
+    normalizedPath.startsWith(PROXMOX_PREFIX) ||
+    normalizedPath.startsWith(LEGACY_PROXMOX_PREFIX) ||
+    normalizedPath.startsWith(LEGACY_PROXMOX_API_PREFIX)
   );
 }
 
@@ -356,9 +294,8 @@ export function deriveTabFromQuery(search: string): SettingsTab | null {
     case 'connections':
     case 'platforms':
     case 'proxmox':
-      return 'infrastructure-connections';
     case 'install':
-      return 'infrastructure-install';
+      return 'infrastructure-systems';
     case 'system-recovery':
       return 'system-recovery';
     case 'system-updates':
@@ -420,10 +357,6 @@ export function settingsTabPath(tab: SettingsTab): string {
   switch (tab) {
     case 'infrastructure-systems':
       return INFRASTRUCTURE_SYSTEMS_PREFIX;
-    case 'infrastructure-connections':
-      return PLATFORM_CONNECTIONS_PREFIX;
-    case 'infrastructure-install':
-      return INFRASTRUCTURE_INSTALL_PREFIX;
     case 'system-recovery':
       return '/settings/system-recovery';
     case 'organization-overview':
@@ -454,11 +387,7 @@ export function settingsTabPath(tab: SettingsTab): string {
 }
 
 export function isInfrastructureSettingsTab(tab: SettingsTab): tab is InfrastructureSettingsTab {
-  return (
-    tab === 'infrastructure-systems' ||
-    tab === 'infrastructure-connections' ||
-    tab === 'infrastructure-install'
-  );
+  return tab === 'infrastructure-systems';
 }
 
 export function buildLegacyOperationsSettingsPath(path: string): string {

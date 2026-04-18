@@ -465,15 +465,8 @@ export const InfrastructureInstallerSection: Component = () => {
                       {state.getSelectedInstallProfile().description}
                     </p>
                     <p class="mt-1.5 text-xs text-muted">
-                      API-backed platforms such as TrueNAS connect through Platform connections
-                      rather than a dedicated install profile here.{' '}
-                      <button
-                        type="button"
-                        onClick={state.openPlatformConnections}
-                        class="text-blue-600 underline hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
-                      >
-                        Open Platform connections
-                      </button>
+                      API-backed platforms such as TrueNAS connect through Add infrastructure →
+                      choose the platform type.
                     </p>
                     <Show when={state.getInstallProfileFlags().length > 0}>
                       <p class="mt-1.5 text-xs text-muted">

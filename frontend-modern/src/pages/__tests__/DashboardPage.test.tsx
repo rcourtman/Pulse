@@ -185,7 +185,7 @@ describe('Dashboard page module contract', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Open infrastructure install' }));
 
-    expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure/install');
+    expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure');
   });
 
   it('renders the governed storage and recovery dashboard panels', () => {

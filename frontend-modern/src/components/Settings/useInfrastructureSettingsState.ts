@@ -1,7 +1,6 @@
 import { Accessor, Setter, createEffect, createSignal, onCleanup, onMount } from 'solid-js';
 import { logger } from '@/utils/logger';
 import type { EventDataMap, EventType } from '@/stores/events';
-import type { SettingsTab } from './settingsTypes';
 import { useInfrastructureConfiguredNodesState } from './useInfrastructureConfiguredNodesState';
 import { useInfrastructureDiscoveryRuntimeState } from './useInfrastructureDiscoveryRuntimeState';
 import { useTrueNASSettingsPanelState } from './useTrueNASSettingsPanelState';
@@ -19,7 +18,6 @@ type InfrastructureEventBus = {
 
 interface UseInfrastructureSettingsStateParams {
   eventBus: InfrastructureEventBus;
-  currentTab: Accessor<SettingsTab>;
   discoveryEnabled: Accessor<boolean>;
   setDiscoveryEnabled: Setter<boolean>;
   discoverySubnet: Accessor<string>;
@@ -46,7 +44,6 @@ interface UseInfrastructureSettingsStateParams {
 
 export function useInfrastructureSettingsState({
   eventBus,
-  currentTab,
   discoveryEnabled,
   setDiscoveryEnabled,
   discoverySubnet,
@@ -82,7 +79,6 @@ export function useInfrastructureSettingsState({
 
   const discoveryRuntime = useInfrastructureDiscoveryRuntimeState({
     eventBus,
-    currentTab,
     nodes: configuredNodes.nodes,
     discoveryEnabled,
     setDiscoveryEnabled,

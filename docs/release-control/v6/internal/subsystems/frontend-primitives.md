@@ -572,6 +572,12 @@ connections` visible as the API-backed alternative for Proxmox and
 
 ## Current State
 
+`SettingsTab` no longer includes `infrastructure-connections` or
+`infrastructure-install`. The single `infrastructure-systems` entry in
+`settingsNavCatalog.ts`, `settingsPanelRegistry.ts`, and
+`settingsNavigationModel.ts` replaces both. Panel routing within the
+infrastructure area uses `InfrastructurePanelStep` in-page state.
+
 The frontend already has several guardrail tests. The next step is to keep
 turning repeated local patterns into explicit shared primitives with hard usage
 bounds, including provider-backed alert-history wording. `frontend-modern/src/features/alerts/helpers.ts`,
@@ -2238,3 +2244,18 @@ shared buttons must preserve discriminated disclosure props, toggle and a11y
 helpers must expose exact event signatures, shared rows must accept typed
 `data-*` props, and reporting-panel helpers must remain ES2020-safe instead of
 depending on feature-local casts or newer string helpers.
+The settings navigation model now exposes a single `infrastructure-systems`
+sidebar entry for the infrastructure settings area. The former
+`infrastructure-connections` and `infrastructure-install` entries have been
+removed from `SettingsTab`, `settingsNavCatalog.ts`, `settingsPanelRegistry.ts`,
+and `settingsNavigationModel.ts`. All canonical redirects and tab-derivation
+logic that previously mapped to those two entries now collapse to
+`infrastructure-systems`. No future additions to the settings nav may restore
+`infrastructure-connections` or `infrastructure-install` as independent tab
+identifiers; panel routing within the infrastructure area must use
+`InfrastructurePanelStep` in-page state instead of URL sub-routes.
+`frontend-modern/src/components/Settings/settingsNavigationModel.ts` now uses
+the normalised (not canonical) path when resolving Proxmox agent and path
+checks so that deep links such as `/settings/infrastructure/platforms/proxmox/pbs`
+resolve to the correct agent before the canonical-redirect fires, rather than
+after it has already collapsed the path.

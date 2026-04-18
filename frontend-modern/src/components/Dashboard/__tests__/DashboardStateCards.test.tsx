@@ -47,6 +47,6 @@ describe('DashboardStateCards', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Open infrastructure setup' }));
 
-    expect(navigate).toHaveBeenCalledWith('/settings/infrastructure/install');
+    expect(navigate).toHaveBeenCalledWith('/settings/infrastructure');
   });
 });

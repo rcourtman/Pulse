@@ -118,7 +118,7 @@ describe('SetupCompletionPanel', () => {
 
     fireEvent.click(screen.getAllByRole('button', { name: 'Open Infrastructure Install' })[0]);
 
-    expect(onComplete).toHaveBeenCalledWith('/settings/infrastructure/install');
+    expect(onComplete).toHaveBeenCalledWith('/settings/infrastructure');
   });
 
   it('hands API-backed starts into the canonical platform connections workspace', async () => {
@@ -128,7 +128,7 @@ describe('SetupCompletionPanel', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Open Platform connections' }));
 
-    expect(onComplete).toHaveBeenCalledWith('/settings/infrastructure/platforms');
+    expect(onComplete).toHaveBeenCalledWith('/settings/infrastructure');
   });
 
   it('downloads credentials that point operators to the install workspace instead of inline commands', async () => {
@@ -155,16 +155,9 @@ describe('SetupCompletionPanel', () => {
     const content = await getLastDownloadedBlob().text();
     expect(content).toContain('Web Login:');
     expect(content).toContain('Admin API Token:');
-    expect(content).toContain('Infrastructure Install Workspace:');
-    expect(content).toContain('https://pulse.example.com/settings/infrastructure/install');
-    expect(content).toContain('Platform Connections Workspace:');
-    expect(content).toContain('https://pulse.example.com/settings/infrastructure/platforms');
-    expect(content).toContain(
-      'continue with the first-host install token Pulse prepares from setup',
-    );
-    expect(content).toContain(
-      'the first system is API-backed, such as Proxmox, TrueNAS, or VMware',
-    );
+    expect(content).toContain('Infrastructure:');
+    expect(content).toContain('https://pulse.example.com/settings/infrastructure');
+    expect(content).toContain('Use Add infrastructure to connect');
     expect(content).not.toContain('Example Install Command');
     expect(content).not.toContain('Example Windows Install Command');
 
@@ -291,7 +284,7 @@ describe('SetupCompletionPanel', () => {
         name: 'Open Platform connections',
       }),
     );
-    expect(onComplete).toHaveBeenCalledWith('/settings/infrastructure/platforms');
+    expect(onComplete).toHaveBeenCalledWith('/settings/infrastructure');
   });
 
   it('derives admitted VMware onboarding from the governed platform manifest', async () => {
@@ -331,7 +324,7 @@ describe('SetupCompletionPanel', () => {
     expect(screen.getByRole('button', { name: 'Open Platform connections' })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Open Platform connections' }));
-    expect(onComplete).toHaveBeenCalledWith('/settings/infrastructure/platforms');
+    expect(onComplete).toHaveBeenCalledWith('/settings/infrastructure');
   });
 
   it('keeps both continuation paths visible when install-managed and API-backed systems are already present', async () => {

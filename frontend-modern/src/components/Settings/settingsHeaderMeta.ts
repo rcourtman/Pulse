@@ -9,18 +9,7 @@ import {
 export const SETTINGS_HEADER_META: SettingsHeaderMetaMap = {
   'infrastructure-systems': {
     title: 'Infrastructure',
-    description:
-      `Review monitored systems in one ledger, then use Add infrastructure when you need platform setup or agent install commands. ${SELF_HOSTED_PRO_BILLING_PRESENTATION.infrastructureRouteReferral}`,
-  },
-  'infrastructure-connections': {
-    title: 'Infrastructure',
-    description:
-      `Review monitored systems in one ledger, then use Add infrastructure when you need platform setup or agent install commands. ${SELF_HOSTED_PRO_BILLING_PRESENTATION.infrastructureRouteReferral}`,
-  },
-  'infrastructure-install': {
-    title: 'Infrastructure',
-    description:
-      `Review monitored systems in one ledger, then use Add infrastructure when you need platform setup or agent install commands. ${SELF_HOSTED_PRO_BILLING_PRESENTATION.infrastructureRouteReferral}`,
+    description: `Review monitored systems in one ledger, then use Add infrastructure when you need platform setup or agent install commands. ${SELF_HOSTED_PRO_BILLING_PRESENTATION.infrastructureRouteReferral}`,
   },
   'system-general': {
     title: 'General',

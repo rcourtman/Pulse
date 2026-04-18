@@ -111,7 +111,7 @@ describe('InfrastructureOperationsController ownership guardrails', () => {
     expect(infrastructureInstallStateSource).toContain('MonitoringAPI.getState()');
     expect(infrastructureInstallStateSource).toContain('./infrastructureWorkspaceModel');
     expect(infrastructureInstallStateSource).toContain(
-      "navigate(buildInfrastructureWorkspacePath('platforms'))",
+      "navigate(buildInfrastructureWorkspacePath())",
     );
     expect(infrastructureInstallStateSource).not.toContain(
       "navigate('/settings/infrastructure/proxmox')",
@@ -130,7 +130,7 @@ describe('InfrastructureOperationsController ownership guardrails', () => {
     );
     expect(infrastructureDiscoveryRuntimeStateSource).toContain("apiFetch('/api/discover'");
     expect(infrastructureDiscoveryRuntimeStateSource).toContain(
-      "currentTab() === 'infrastructure-connections'",
+      "discoveryEnabled: Accessor<boolean>",
     );
     expect(infrastructureDiscoveryRuntimeStateSource).toContain('SettingsAPI.updateSystemSettings');
     expect(infrastructureInstallerSectionSource).toContain('useInfrastructureOperationsContext');
@@ -2725,9 +2725,9 @@ describe('InfrastructureOperationsController platform commands', () => {
 
     expect(screen.queryByRole('option', { name: 'TrueNAS SCALE agent' })).toBeNull();
 
-    fireEvent.click(screen.getByRole('button', { name: /Open Platform connections/i }));
-
-    expect(navigateMock).toHaveBeenCalledWith('/settings/infrastructure/platforms');
+    expect(
+      screen.getByText(/API-backed platforms such as TrueNAS connect through Add infrastructure/i),
+    ).toBeInTheDocument();
   });
 
   it('tracks install command copies', async () => {

@@ -14,12 +14,17 @@ import { InfrastructureActiveRowDetails } from './InfrastructureActiveRowDetails
 import { InfrastructureInstallerSection } from './InfrastructureInstallerSection';
 import { InfrastructureIgnoredRowDetails } from './InfrastructureIgnoredRowDetails';
 import { InfrastructureStopMonitoringDialog } from './InfrastructureStopMonitoringDialog';
-import { PlatformConnectionsWorkspace } from './PlatformConnectionsWorkspace';
+import { ProxmoxSettingsPanel } from './ProxmoxSettingsPanel';
+import { TrueNASSettingsPanel } from './TrueNASSettingsPanel';
+import { VMwareSettingsPanel } from './VMwareSettingsPanel';
 import {
   buildInfrastructureWorkspacePath,
-  getInfrastructureWorkspaceViewFromPath,
+  deriveAddStepFromLegacyPath,
+  type InfrastructureAddStep,
+  type InfrastructurePanelStep,
 } from './infrastructureWorkspaceModel';
 import type { InfrastructurePlatformSettingsProps } from './proxmoxSettingsModel';
+import type { NodeType } from './infrastructureSettingsModel';
 import {
   InfrastructureOperationsStateProvider,
   useInfrastructureOperationsContext,
@@ -27,17 +32,49 @@ import {
 
 export type InfrastructureWorkspaceProps = InfrastructurePlatformSettingsProps;
 
-const proxmoxRouteForKind = (kind: 'pve' | 'pbs' | 'pmg') =>
-  `/settings/infrastructure/platforms/proxmox/${kind}`;
+const STEP_TITLES: Record<InfrastructureAddStep, string> = {
+  agent: 'Install on a host',
+  pve: 'Proxmox VE',
+  pbs: 'Proxmox Backup Server',
+  pmg: 'Proxmox Mail Gateway',
+  truenas: 'TrueNAS SCALE',
+  vmware: 'VMware vSphere / ESXi',
+};
 
 const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = (props) => {
   const navigate = useNavigate();
   const location = useLocation();
   const state = useInfrastructureOperationsContext();
 
-  const activeView = createMemo(() => getInfrastructureWorkspaceViewFromPath(location.pathname));
-  const readOnlyWorkspace = createMemo(() => presentationPolicyIsReadOnly());
-  const [showInstallProfiles, setShowInstallProfiles] = createSignal(false);
+  const [panelStep, setPanelStep] = createSignal<InfrastructurePanelStep | null>(null);
+  const [showAgentProfiles, setShowAgentProfiles] = createSignal(false);
+  const readOnly = createMemo(() => presentationPolicyIsReadOnly());
+
+  // Redirect legacy deep links and open the appropriate panel.
+  createEffect(() => {
+    const path = location.pathname;
+    if (path === '/settings/infrastructure') return;
+
+    const step = deriveAddStepFromLegacyPath(path);
+    navigate(buildInfrastructureWorkspacePath(), { replace: true });
+    if (step && !readOnly()) {
+      setPanelStep(step);
+    }
+  });
+
+  // Auto-open the agent installer when a setup handoff is waiting.
+  createEffect(() => {
+    if (state.setupHandoff?.() && panelStep() === null && !readOnly()) {
+      setPanelStep('agent');
+    }
+  });
+
+  // Close add panel in read-only mode.
+  createEffect(() => {
+    if (readOnly() && panelStep() !== null) {
+      setPanelStep(null);
+    }
+  });
 
   const rows = createMemo<InfrastructureSystemRow[]>(() =>
     buildInfrastructureSystemRows({
@@ -45,52 +82,21 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
       monitoringStoppedRows: state.monitoringStoppedRows(),
     }),
   );
+
   const headerActions = createMemo<ConnectionsTableHeaderAction[]>(() =>
-    readOnlyWorkspace()
+    readOnly()
       ? []
       : [
           {
             label: 'Add infrastructure',
-            onSelect: () => navigate(buildInfrastructureWorkspacePath('install'), { scroll: false }),
+            onSelect: () => {
+              setPanelStep('pick');
+              setShowAgentProfiles(false);
+            },
             tone: 'primary' as const,
           },
         ],
   );
-  const closeConnectionsWorkspace = () => {
-    props.trueNASSettings.closeDialog?.();
-    props.trueNASSettings.closeDeleteDialog?.();
-    props.vmwareSettings.closeDialog?.();
-    props.vmwareSettings.closeDeleteDialog?.();
-    props.setShowNodeModal(false);
-    props.setEditingNode(null);
-    props.cancelDeleteNode?.();
-    navigate(buildInfrastructureWorkspacePath('inventory'), { scroll: false });
-  };
-  const closeInstallWorkspace = () => {
-    setShowInstallProfiles(false);
-    navigate(buildInfrastructureWorkspacePath('inventory'), { scroll: false });
-  };
-
-  const handleAddSystem = (choice: AddSystemChoice) => {
-    setShowInstallProfiles(false);
-
-    if (choice.kind === 'agent') {
-      navigate(buildInfrastructureWorkspacePath('install'), { scroll: false });
-      return;
-    }
-
-    if (choice.kind === 'truenas') {
-      navigate('/settings/infrastructure/platforms/truenas', { scroll: false });
-      return;
-    }
-
-    if (choice.kind === 'vmware') {
-      navigate('/settings/infrastructure/platforms/vmware', { scroll: false });
-      return;
-    }
-
-    navigate(proxmoxRouteForKind(choice.kind), { scroll: false });
-  };
 
   const handleManageAction = (action: SystemManageAction) => {
     switch (action.kind) {
@@ -107,137 +113,191 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
     }
   };
 
-  createEffect(() => {
-    if (readOnlyWorkspace() && activeView() !== 'inventory') {
-      navigate(buildInfrastructureWorkspacePath('inventory'), { replace: true });
-    }
+  const handleAddSystem = (choice: AddSystemChoice) => {
+    setShowAgentProfiles(false);
+    setPanelStep(choice.kind as InfrastructureAddStep);
+  };
+
+  const closePanel = () => {
+    setPanelStep(null);
+    setShowAgentProfiles(false);
+  };
+
+  const goBackToPick = () => {
+    setShowAgentProfiles(false);
+    setPanelStep('pick');
+  };
+
+  // For Proxmox: selectedAgent is derived from the active panel step.
+  const proxmoxAgent = createMemo<NodeType>(() => {
+    const step = panelStep();
+    if (step === 'pbs') return 'pbs';
+    if (step === 'pmg') return 'pmg';
+    return 'pve';
   });
 
-  createEffect(() => {
-    if (activeView() === 'inventory') {
-      return;
-    }
-    if (activeView() !== 'install') {
-      setShowInstallProfiles(false);
-    }
-    state.setExpandedRowKey(null);
-    state.setSelectedIgnoredRowKey(null);
-  });
+  const onSelectProxmoxAgent = (agent: NodeType) => {
+    setPanelStep(agent as InfrastructureAddStep);
+  };
+
+  const isProxmoxStep = () => {
+    const step = panelStep();
+    return step === 'pve' || step === 'pbs' || step === 'pmg';
+  };
+
+  const stepTitle = () => {
+    const step = panelStep();
+    if (!step || step === 'pick') return 'Add infrastructure';
+    return STEP_TITLES[step];
+  };
 
   return (
     <div class="space-y-8">
-      <Show when={activeView() === 'inventory'}>
-        <ConnectionsTable
-          rows={rows}
-          headerActions={headerActions()}
-          onManageRow={(row) => handleManageAction(row.manage)}
-        />
-      </Show>
+      <ConnectionsTable
+        rows={rows}
+        headerActions={headerActions()}
+        onManageRow={(row) => handleManageAction(row.manage)}
+      />
 
-      <Show when={!readOnlyWorkspace() && activeView() === 'install'}>
-        <div class="space-y-6">
-          <div class="space-y-3">
-            <button
-              type="button"
-              onClick={closeInstallWorkspace}
-              class="inline-flex items-center gap-2 rounded-md border border-border px-3 py-1.5 text-sm font-medium text-base-content transition-colors hover:bg-surface-hover"
-            >
-              Back to monitored systems
-            </button>
-            <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-              <div class="space-y-1">
-                <div class="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted">
-                  Add infrastructure
-                </div>
-                <div class="text-xl font-semibold text-base-content">Choose what to connect</div>
-                <div class="text-sm text-muted">
-                  Start with a host install or jump straight to an API-backed platform connection.
-                </div>
-              </div>
+      {/* Add-infrastructure panel — right drawer */}
+      <Dialog
+        isOpen={panelStep() !== null}
+        onClose={closePanel}
+        layout="drawer-right"
+        panelClass="max-w-[820px]"
+        ariaLabel={stepTitle()}
+      >
+        <div class="flex h-full flex-col overflow-hidden">
+          {/* Drawer header */}
+          <div class="flex shrink-0 items-center justify-between gap-3 border-b border-border px-4 py-3">
+            <div class="flex items-center gap-2">
+              <Show when={panelStep() !== 'pick'}>
+                <button
+                  type="button"
+                  onClick={goBackToPick}
+                  class="inline-flex items-center gap-1 rounded-md border border-border px-2.5 py-1 text-xs font-medium text-base-content transition-colors hover:bg-surface-hover"
+                >
+                  ← Choose different type
+                </button>
+              </Show>
+              <span class="text-sm font-semibold text-base-content">{stepTitle()}</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <Show when={panelStep() === 'agent'}>
+                <button
+                  type="button"
+                  onClick={() => setShowAgentProfiles((v) => !v)}
+                  class="inline-flex items-center rounded-md border border-border px-2.5 py-1 text-xs font-medium text-base-content transition-colors hover:bg-surface-hover"
+                >
+                  {showAgentProfiles() ? 'Hide agent profiles' : 'Manage agent profiles'}
+                </button>
+              </Show>
               <button
                 type="button"
-                onClick={() => setShowInstallProfiles((value) => !value)}
-                class="inline-flex items-center rounded-md border border-border px-3 py-1.5 text-sm font-medium text-base-content transition-colors hover:bg-surface-hover"
+                onClick={closePanel}
+                class="rounded-md p-1 text-muted hover:bg-surface-hover hover:text-base-content"
+                aria-label="Close"
               >
-                {showInstallProfiles() ? 'Hide agent profiles' : 'Manage agent profiles'}
+                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M6 18L18 6M6 6l12 12"
+                  />
+                </svg>
               </button>
             </div>
           </div>
 
-          <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-            <For each={ADD_SYSTEM_CHOICES}>
-              {(choice) => (
-                <button
-                  type="button"
-                  onClick={() => handleAddSystem(choice)}
-                  class={`flex h-full flex-col items-start justify-between gap-4 rounded-xl border px-4 py-4 text-left transition-colors ${
-                    choice.kind === 'agent'
-                      ? 'border-blue-300 bg-blue-50/60 text-base-content dark:border-blue-700 dark:bg-blue-950/20'
-                      : 'border-border bg-surface hover:bg-surface-hover'
-                  }`}
-                >
-                  <div class="space-y-1.5">
-                    <div class="text-sm font-semibold text-base-content">{choice.title}</div>
-                    <div class="text-xs text-muted">{choice.description}</div>
+          {/* Drawer content */}
+          <div class="flex-1 overflow-y-auto">
+            {/* Step 1: picker */}
+            <Show when={panelStep() === 'pick'}>
+              <div class="space-y-4 p-4">
+                <p class="text-sm text-muted">
+                  Choose the system or platform you want Pulse to start monitoring.
+                </p>
+                <ul class="divide-y divide-border rounded-md border border-border">
+                  <For each={ADD_SYSTEM_CHOICES}>
+                    {(choice) => (
+                      <li>
+                        <button
+                          type="button"
+                          onClick={() => handleAddSystem(choice)}
+                          class="flex w-full items-start justify-between gap-4 px-4 py-3 text-left hover:bg-surface-hover"
+                        >
+                          <div>
+                            <div class="text-sm font-semibold text-base-content">
+                              {choice.title}
+                            </div>
+                            <div class="mt-0.5 text-xs text-muted">{choice.description}</div>
+                          </div>
+                          <span
+                            class={`inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                              choice.method === 'api'
+                                ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100'
+                                : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-100'
+                            }`}
+                          >
+                            {choice.methodLabel}
+                          </span>
+                        </button>
+                      </li>
+                    )}
+                  </For>
+                </ul>
+              </div>
+            </Show>
+
+            {/* Step 2a: agent installer */}
+            <Show when={panelStep() === 'agent'}>
+              <div class="space-y-4 p-4">
+                <Show when={showAgentProfiles()}>
+                  <div class="rounded-xl border border-border bg-surface p-4 shadow-sm">
+                    <div class="mb-4 space-y-1">
+                      <div class="text-base font-semibold text-base-content">Agent profiles</div>
+                      <div class="text-sm text-muted">
+                        Manage reusable install defaults for agent-based systems.
+                      </div>
+                    </div>
+                    <AgentProfilesPanel />
                   </div>
-                  <span
-                    class={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-                      choice.method === 'api'
-                        ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100'
-                        : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-100'
-                    }`}
-                  >
-                    {choice.methodLabel}
-                  </span>
-                </button>
-              )}
-            </For>
-          </div>
-
-          <div class="rounded-xl border border-border bg-surface p-4 shadow-sm sm:p-6">
-            <InfrastructureInstallerSection />
-          </div>
-
-          <Show when={showInstallProfiles()}>
-            <div class="rounded-xl border border-border bg-surface p-4 shadow-sm sm:p-6">
-              <div class="mb-4 space-y-1">
-                <div class="text-lg font-semibold text-base-content">Agent profiles</div>
-                <div class="text-sm text-muted">
-                  Manage reusable install defaults for agent-based systems.
-                </div>
+                </Show>
+                <InfrastructureInstallerSection />
               </div>
-              <AgentProfilesPanel />
-            </div>
-          </Show>
+            </Show>
+
+            {/* Step 2b: Proxmox (PVE / PBS / PMG) */}
+            <Show when={isProxmoxStep()}>
+              <div class="p-4">
+                <ProxmoxSettingsPanel
+                  {...props}
+                  selectedAgent={proxmoxAgent}
+                  onSelectAgent={onSelectProxmoxAgent}
+                  embedded
+                />
+              </div>
+            </Show>
+
+            {/* Step 2c: TrueNAS */}
+            <Show when={panelStep() === 'truenas'}>
+              <div class="p-4">
+                <TrueNASSettingsPanel state={props.trueNASSettings} />
+              </div>
+            </Show>
+
+            {/* Step 2d: VMware */}
+            <Show when={panelStep() === 'vmware'}>
+              <div class="p-4">
+                <VMwareSettingsPanel state={props.vmwareSettings} />
+              </div>
+            </Show>
+          </div>
         </div>
-      </Show>
+      </Dialog>
 
-      <Show when={!readOnlyWorkspace() && activeView() === 'platforms'}>
-        <div class="space-y-6">
-          <div class="space-y-3">
-            <button
-              type="button"
-              onClick={closeConnectionsWorkspace}
-              class="inline-flex items-center gap-2 rounded-md border border-border px-3 py-1.5 text-sm font-medium text-base-content transition-colors hover:bg-surface-hover"
-            >
-              Back to monitored systems
-            </button>
-            <div class="space-y-1">
-              <div class="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted">
-                Connections
-              </div>
-              <div class="text-xl font-semibold text-base-content">Platform connections</div>
-              <div class="text-sm text-muted">
-                Configure API-backed providers in a full workspace instead of a modal overlay.
-              </div>
-            </div>
-          </div>
-          <PlatformConnectionsWorkspace {...props} />
-        </div>
-      </Show>
-
-      <InfrastructureStopMonitoringDialog />
-
+      {/* Active system detail drawer */}
       <Dialog
         isOpen={Boolean(state.selectedActiveRow())}
         onClose={() => state.setExpandedRowKey(null)}
@@ -250,6 +310,7 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
         </Show>
       </Dialog>
 
+      {/* Ignored system detail drawer */}
       <Dialog
         isOpen={Boolean(state.selectedIgnoredRow())}
         onClose={() => state.setSelectedIgnoredRowKey(null)}
@@ -261,6 +322,8 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
           {(rowAccessor) => <InfrastructureIgnoredRowDetails rowAccessor={rowAccessor} />}
         </Show>
       </Dialog>
+
+      <InfrastructureStopMonitoringDialog />
     </div>
   );
 };

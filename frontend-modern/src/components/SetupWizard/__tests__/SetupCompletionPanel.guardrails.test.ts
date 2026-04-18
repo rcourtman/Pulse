@@ -5,25 +5,16 @@ import setupCompletionModelSource from '../setupCompletionModel.ts?raw';
 describe('SetupCompletionPanel guardrails', () => {
   it('keeps setup completion aligned with the canonical infrastructure install workspace', () => {
     expect(setupCompletionPanelSource).toContain(
-      "const INFRASTRUCTURE_INSTALL_PATH = '/settings/infrastructure/install';",
-    );
-    expect(setupCompletionPanelSource).toContain(
-      "const INFRASTRUCTURE_PLATFORMS_PATH = '/settings/infrastructure/platforms';",
+      "const INFRASTRUCTURE_PATH = '/settings/infrastructure';",
     );
     expect(setupCompletionPanelSource).toContain('Open Infrastructure Install');
     expect(setupCompletionPanelSource).toContain('Open Platform connections');
-    expect(setupCompletionPanelSource).toContain('Infrastructure Install Workspace');
-    expect(setupCompletionPanelSource).toContain('Platform Connections Workspace');
     expect(setupCompletionPanelSource).toContain('Credentials you must save now');
     expect(setupCompletionPanelSource).toContain('Shown during setup');
-    expect(setupCompletionPanelSource).toContain('props.onComplete(INFRASTRUCTURE_INSTALL_PATH);');
-    expect(setupCompletionPanelSource).toContain('props.onComplete(INFRASTRUCTURE_PLATFORMS_PATH);');
-    expect(setupCompletionPanelSource).toContain('Use the Infrastructure Install workspace to:');
+    expect(setupCompletionPanelSource).toContain('props.onComplete(INFRASTRUCTURE_PATH);');
     expect(setupCompletionPanelSource).toContain(
       'continue with the first-host install token Pulse prepares from setup',
     );
-    expect(setupCompletionPanelSource).toContain('Use the Platform connections workspace when:');
-    expect(setupCompletionPanelSource).toContain('configure TLS and custom CA options');
     expect(setupCompletionPanelSource).not.toContain("from '@/stores/licenseCommercial';");
     expect(setupCompletionPanelSource).not.toContain('runStartProTrialAction');
     expect(setupCompletionPanelSource).not.toContain('loadCommercialPosture');

@@ -3425,7 +3425,7 @@ describe('frontend resource type boundaries', () => {
     );
     expect(infrastructureWorkspaceSource).not.toContain('inferViewFromPath');
     expect(infrastructureWorkspaceModelSource).toContain(
-      'export function getInfrastructureWorkspaceViewFromPath',
+      'export function deriveAddStepFromLegacyPath',
     );
     expect(infrastructureWorkspaceModelSource).toContain(
       'export function buildInfrastructureWorkspacePath',

@@ -19,7 +19,7 @@ export function buildStorageRecoveryTabSpecs(): StorageRecoveryTabSpec[] {
       id: 'storage',
       label: 'Storage',
       route: buildStoragePath(),
-      settingsRoute: '/settings/infrastructure/platforms/proxmox/pbs',
+      settingsRoute: '/settings/infrastructure',
       tooltip: 'Storage pools, disks, and datastores',
     },
     {

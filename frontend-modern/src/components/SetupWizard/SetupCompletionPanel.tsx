@@ -54,8 +54,7 @@ const UNIFIED_RESOURCE_GUIDANCE = {
   ],
 } as const;
 
-const INFRASTRUCTURE_INSTALL_PATH = '/settings/infrastructure/install';
-const INFRASTRUCTURE_PLATFORMS_PATH = '/settings/infrastructure/platforms';
+const INFRASTRUCTURE_PATH = '/settings/infrastructure';
 const SETUP_WIZARD_TELEMETRY_SURFACE = 'setup_wizard_complete';
 
 export const SetupCompletionPanel: Component<CompleteStepProps> = (props) => {
@@ -141,8 +140,7 @@ export const SetupCompletionPanel: Component<CompleteStepProps> = (props) => {
 
   const downloadCredentials = () => {
     const baseUrl = getPulseBaseUrl();
-    const installWorkspaceUrl = `${baseUrl.replace(/\/$/, '')}${INFRASTRUCTURE_INSTALL_PATH}`;
-    const platformConnectionsUrl = `${baseUrl.replace(/\/$/, '')}${INFRASTRUCTURE_PLATFORMS_PATH}`;
+    const infrastructureUrl = `${baseUrl.replace(/\/$/, '')}${INFRASTRUCTURE_PATH}`;
     const content = `Pulse Credentials
 ==================
 Generated: ${new Date().toISOString()}
@@ -157,23 +155,12 @@ Admin API Token:
 ----------------
 ${props.state.apiToken}
 
-Infrastructure Install Workspace:
----------------------------------
-${installWorkspaceUrl}
+Infrastructure:
+---------------
+${infrastructureUrl}
 
-Platform Connections Workspace:
--------------------------------
-${platformConnectionsUrl}
-
-Use the Infrastructure Install workspace to:
-- continue with the first-host install token Pulse prepares from setup
-- choose the agent connection URL
-- configure TLS and custom CA options
-- copy Linux, macOS, Windows, and related install commands
-
-Use the Platform connections workspace when:
-- the first system is API-backed, such as Proxmox, TrueNAS, or VMware
-- Pulse should poll that platform directly instead of starting with a host install
+Use Add infrastructure to connect your first host or API-backed platform
+(Proxmox, TrueNAS, VMware, and others).
 
 Keep these credentials secure!
 `;
@@ -190,11 +177,11 @@ Keep these credentials secure!
   };
 
   const handleOpenInstallWorkspace = () => {
-    props.onComplete(INFRASTRUCTURE_INSTALL_PATH);
+    props.onComplete(INFRASTRUCTURE_PATH);
   };
 
   const handleOpenPlatformConnections = () => {
-    props.onComplete(INFRASTRUCTURE_PLATFORMS_PATH);
+    props.onComplete(INFRASTRUCTURE_PATH);
   };
 
   const handleGoToDashboard = () => {
@@ -414,10 +401,10 @@ Keep these credentials secure!
 
               <div class="bg-surface-hover dark:bg-black border border-border rounded-md p-3">
                 <div class="text-[11px] font-medium text-muted mb-1 uppercase tracking-wider">
-                  Infrastructure Install Workspace
+                  Infrastructure
                 </div>
                 <code class="text-base-content font-mono text-xs break-all">
-                  {INFRASTRUCTURE_INSTALL_PATH}
+                  {INFRASTRUCTURE_PATH}
                 </code>
               </div>
 

@@ -58,7 +58,7 @@ describe('SetupCompletionPreview', () => {
 
     fireEvent.click(screen.getAllByRole('button', { name: 'Open Infrastructure Install' })[0]);
 
-    expect(navigateMock).toHaveBeenCalledWith('/settings/infrastructure/install');
+    expect(navigateMock).toHaveBeenCalledWith('/settings/infrastructure');
   });
 
   it('renders the VMware-connected preview scenario without polling runtime state', () => {

@@ -4,7 +4,6 @@ import { logger } from '@/utils/logger';
 import { SettingsAPI } from '@/api/settings';
 import type { EventDataMap, EventType } from '@/stores/events';
 import type { NodeConfigWithStatus } from '@/types/nodes';
-import type { SettingsTab } from './settingsTypes';
 import {
   collectConfiguredInfrastructureHosts,
   type DiscoveryScanStatus,
@@ -37,7 +36,6 @@ type RawDiscoveredServer = {
 
 interface UseInfrastructureDiscoveryRuntimeStateParams {
   eventBus: InfrastructureEventBus;
-  currentTab: Accessor<SettingsTab>;
   nodes: Accessor<NodeConfigWithStatus[]>;
   discoveryEnabled: Accessor<boolean>;
   setDiscoveryEnabled: Setter<boolean>;
@@ -60,7 +58,6 @@ interface UseInfrastructureDiscoveryRuntimeStateParams {
 
 export const useInfrastructureDiscoveryRuntimeState = ({
   eventBus,
-  currentTab,
   nodes,
   discoveryEnabled,
   setDiscoveryEnabled,
@@ -492,11 +489,9 @@ export const useInfrastructureDiscoveryRuntimeState = ({
         discoveryInterval = undefined;
       }
 
-      if (currentTab() === 'infrastructure-connections') {
-        discoveryInterval = setInterval(() => {
-          void loadDiscoveredNodes();
-        }, 30000);
-      }
+      discoveryInterval = setInterval(() => {
+        void loadDiscoveredNodes();
+      }, 30000);
     });
 
     onCleanup(() => {

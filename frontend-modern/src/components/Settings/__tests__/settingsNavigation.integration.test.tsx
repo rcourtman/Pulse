@@ -7,8 +7,6 @@ import { updateDisableLocalUpgradeMetricsSetting } from '@/stores/systemSettings
 
 const canonicalTabPaths = {
   'infrastructure-systems': '/settings/infrastructure',
-  'infrastructure-connections': '/settings/infrastructure/platforms',
-  'infrastructure-install': '/settings/infrastructure/install',
   'system-general': '/settings/system-general',
   'system-network': '/settings/system-network',
   'system-updates': '/settings/system-updates',
@@ -309,7 +307,7 @@ describe('settingsNavigation integration scaffold', () => {
     });
 
     it('keeps non-gated tabs unlocked', () => {
-      expect(isTabLocked('infrastructure-connections', hasFeatures([]), () => true)).toBe(false);
+      expect(isTabLocked('infrastructure-systems', hasFeatures([]), () => true)).toBe(false);
     });
 
     it('getTabLockReason returns tier-specific reason for locked tabs and null for unlocked', () => {
@@ -325,7 +323,7 @@ describe('settingsNavigation integration scaffold', () => {
         );
         expect(getTabLockReason(tab, hasFeatures([requiredFeature]), () => true)).toBeNull();
       }
-      expect(getTabLockReason('infrastructure-connections', hasFeatures([]), () => true)).toBeNull();
+      expect(getTabLockReason('infrastructure-systems', hasFeatures([]), () => true)).toBeNull();
     });
   });
 

@@ -7,10 +7,8 @@ import {
   deriveAgentFromPath,
   deriveTabFromPath,
   deriveTabFromQuery,
-  isInfrastructureSettingsTab,
   isProxmoxSettingsPath,
   resolveCanonicalSettingsPath,
-  settingsAgentPath,
   settingsTabPath,
   type AgentKey,
   type SettingsTab,
@@ -39,33 +37,16 @@ export function useSettingsNavigation({ navigate, location }: UseSettingsNavigat
   const [currentTab, setCurrentTab] = createSignal<SettingsTab>(
     deriveTabFromPath(location.pathname),
   );
-  const resolveTabPath = (tab: SettingsTab): string =>
-    presentationPolicyIsReadOnly() &&
-    isInfrastructureSettingsTab(tab) &&
-    tab !== 'infrastructure-systems'
-      ? buildInfrastructureWorkspacePath('inventory')
-      : settingsTabPath(tab);
+  const resolveTabPath = (tab: SettingsTab): string => settingsTabPath(tab);
   const activeTab = (): SettingsTab => currentTab();
 
   const [selectedAgent, setSelectedAgent] = createSignal<AgentKey>('pve');
 
   const handleSelectAgent = (agent: AgentKey) => {
     setSelectedAgent(agent);
-    if (currentTab() !== 'infrastructure-connections') {
-      setCurrentTab('infrastructure-connections');
-    }
-    const target = settingsAgentPath(agent);
-    if (target && location.pathname !== target) {
-      navigate(target, { scroll: false });
-    }
   };
 
   const setActiveTab = (tab: SettingsTab) => {
-    if (tab === 'infrastructure-connections' && deriveAgentFromPath(location.pathname) === null) {
-      setSelectedAgent('pve');
-    }
-    // Eagerly update tab state so UI reflects the click immediately,
-    // even before the URL change triggers the sync effect.
     if (currentTab() !== tab) {
       setCurrentTab(tab);
     }
@@ -75,7 +56,6 @@ export function useSettingsNavigation({ navigate, location }: UseSettingsNavigat
     }
   };
 
-  // Keep tab state in sync with canonical URLs, while preserving old deep links as aliases.
   createEffect(
     on(
       () => [location.pathname, location.search, location.hash] as const,
@@ -108,21 +88,24 @@ export function useSettingsNavigation({ navigate, location }: UseSettingsNavigat
 
         if (
           presentationPolicyIsReadOnly() &&
-          (path === '/settings/infrastructure' ||
-            path.startsWith('/settings/infrastructure/platforms') ||
-            path.startsWith('/settings/infrastructure/install') ||
-            path.startsWith('/settings/infrastructure/proxmox') ||
-            path.startsWith('/settings/infrastructure/api') ||
-            path.startsWith('/settings/infrastructure/truenas') ||
-            path.startsWith('/settings/infrastructure/vmware') ||
+          (path.startsWith('/settings/infrastructure') ||
             path === '/settings/workloads' ||
             path === '/settings/workloads/docker')
         ) {
-          navigate(buildInfrastructureWorkspacePath('inventory'), {
+          navigate(buildInfrastructureWorkspacePath(), {
             replace: true,
             scroll: false,
           });
           return;
+        }
+
+        // Sync Proxmox agent from the raw path before any redirect so deep
+        // links like /platforms/proxmox/pbs still seed the correct agent.
+        if (isProxmoxSettingsPath(path)) {
+          const agentFromPath = deriveAgentFromPath(path) ?? 'pve';
+          if (selectedAgent() !== agentFromPath) {
+            setSelectedAgent(agentFromPath);
+          }
         }
 
         const canonicalPath = resolveCanonicalSettingsPath(path);
@@ -138,13 +121,6 @@ export function useSettingsNavigation({ navigate, location }: UseSettingsNavigat
         const resolved = deriveTabFromPath(effectivePath);
         if (resolved !== currentTab()) {
           setCurrentTab(resolved);
-        }
-
-        if (isProxmoxSettingsPath(effectivePath)) {
-          const agentFromPath = deriveAgentFromPath(effectivePath) ?? 'pve';
-          if (selectedAgent() !== agentFromPath) {
-            setSelectedAgent(agentFromPath);
-          }
         }
       },
     ),

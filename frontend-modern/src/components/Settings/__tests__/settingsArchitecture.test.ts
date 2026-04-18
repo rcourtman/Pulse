@@ -510,9 +510,6 @@ describe('Settings architecture guardrails', () => {
     expect(settingsInfrastructurePanelPropsSource).toContain('getInfrastructurePanelProps');
     expect(settingsNavigationModelSource).toContain('export type SettingsTab =');
     expect(settingsNavigationModelSource).toContain('export const DEFAULT_SETTINGS_TAB');
-    expect(settingsNavigationModelSource).toContain(
-      "const INFRASTRUCTURE_INSTALL_PREFIX = '/settings/infrastructure/install';",
-    );
     expect(settingsNavigationModelSource).toContain('export function resolveCanonicalSettingsPath');
     expect(settingsNavigationModelSource).toContain('export function isProxmoxSettingsPath');
     expect(settingsNavigationModelSource).toContain('export function settingsTabPath');
@@ -525,7 +522,7 @@ describe('Settings architecture guardrails', () => {
     expect(settingsNavigationHookSource).toContain('resolveCanonicalSelfHostedBillingHref');
     expect(settingsNavigationHookSource).toContain('settingsTabPath');
     expect(settingsNavigationHookSource).toContain('presentationPolicyIsReadOnly');
-    expect(settingsNavigationHookSource).toContain("buildInfrastructureWorkspacePath('inventory')");
+    expect(settingsNavigationHookSource).toContain('buildInfrastructureWorkspacePath');
     expect(settingsNavigationModelSource).toContain('hideFromSidebar?: boolean;');
     expect(settingsRoutingSource).toContain("from './settingsNavigationModel'");
     expect(settingsTypesSource).toContain("from './settingsNavigationModel'");
@@ -887,9 +884,7 @@ describe('Settings architecture guardrails', () => {
       'createSignal<InfrastructureWorkspaceView>',
     );
     expect(infrastructureWorkspaceSource).toContain('createEffect(() =>');
-    expect(infrastructureWorkspaceSource).toContain(
-      "if (readOnlyWorkspace() && activeView() !== 'inventory')",
-    );
+    expect(infrastructureWorkspaceSource).toContain('readOnly()');
     expect(infrastructureWorkspaceSource).toContain('./ConnectionsTable');
     expect(infrastructureWorkspaceSource).toContain('./InfrastructureActiveRowDetails');
     expect(infrastructureWorkspaceSource).toContain('./InfrastructureIgnoredRowDetails');
@@ -897,15 +892,12 @@ describe('Settings architecture guardrails', () => {
     expect(infrastructureWorkspaceSource).toContain('InfrastructureInstallerSection');
     expect(infrastructureWorkspaceSource).toContain('InfrastructureStopMonitoringDialog');
     expect(infrastructureWorkspaceSource).toContain('AgentProfilesPanel');
-    expect(infrastructureWorkspaceSource).toContain('PlatformConnectionsWorkspace');
     expect(infrastructureWorkspaceSource).not.toContain(
       "import { Subtabs } from '@/components/shared/Subtabs'",
     );
     expect(infrastructureWorkspaceSource).not.toContain('<Subtabs');
-    expect(infrastructureWorkspaceSource).toContain('Platform connections');
-    expect(infrastructureWorkspaceSource).toContain('Choose what to connect');
-    expect(infrastructureWorkspaceSource).toContain('activeView() === \'platforms\'');
-    expect(infrastructureWorkspaceSource).toContain('activeView() === \'install\'');
+    expect(infrastructureWorkspaceSource).toContain("panelStep() === 'pick'");
+    expect(infrastructureWorkspaceSource).toContain("panelStep() === 'agent'");
     expect(infrastructureWorkspaceSource).not.toContain("activeView() === 'operations'");
     expect(connectionsTableSource).toContain('headerActions');
     expect(connectionsTableModelSource).toContain('export function buildInfrastructureSystemRows');
@@ -964,7 +956,7 @@ describe('Settings architecture guardrails', () => {
       'export const INFRASTRUCTURE_WORKSPACE_TABS',
     );
     expect(infrastructureWorkspaceModelSource).toContain(
-      'export function getInfrastructureWorkspaceViewFromPath',
+      'export function deriveAddStepFromLegacyPath',
     );
     expect(infrastructureWorkspaceModelSource).toContain(
       'export function buildInfrastructureWorkspacePath',
@@ -1438,8 +1430,6 @@ describe('Settings architecture guardrails', () => {
     expect(SETTINGS_HEADER_META['infrastructure-systems'].description).toBe(
       `Review monitored systems in one ledger, then use Add infrastructure when you need platform setup or agent install commands. ${SELF_HOSTED_PRO_BILLING_PRESENTATION.infrastructureRouteReferral}`,
     );
-    expect(SETTINGS_HEADER_META['infrastructure-connections'].title).toBe('Infrastructure');
-    expect(SETTINGS_HEADER_META['infrastructure-install'].title).toBe('Infrastructure');
   });
 
   it('keeps billing-related shell framing on self-hosted commercial terms', () => {
@@ -1489,13 +1479,13 @@ describe('Settings architecture guardrails', () => {
 
   it('keeps read-only infrastructure landing and shell copy on the shared settings owner', () => {
     expect(settingsNavigationHookSource).toContain('presentationPolicyIsReadOnly');
-    expect(settingsNavigationHookSource).toContain("buildInfrastructureWorkspacePath('inventory')");
+    expect(settingsNavigationHookSource).toContain('buildInfrastructureWorkspacePath');
     expect(settingsShellStateSource).toContain('presentationPolicyIsReadOnly');
     expect(settingsShellStateSource).toContain(
       'Setup changes stay unavailable in this read-only session.',
     );
     expect(infrastructureWorkspaceSource).toContain('presentationPolicyIsReadOnly');
-    expect(infrastructureWorkspaceSource).toContain("activeView() !== 'inventory'");
+    expect(infrastructureWorkspaceSource).toContain('readOnly()');
   });
 
   it('keeps relay shell copy on the shared relay presentation owner', () => {

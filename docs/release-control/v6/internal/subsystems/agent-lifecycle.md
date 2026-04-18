@@ -451,6 +451,12 @@ an add-only capacity posture.
 
 ## Current State
 
+The infrastructure workspace collapsed to a single `/settings/infrastructure`
+route. `buildInfrastructureWorkspacePath()` always returns the base path;
+`deriveAddStepFromLegacyPath()` maps legacy sub-paths to in-page panel state.
+`SetupCompletionPanel.tsx` uses one `INFRASTRUCTURE_PATH` constant for all
+install and platform CTAs.
+
 This subsystem now sits under the dedicated agent lifecycle and fleet
 operations lane so install, registration, update continuity, profile
 management, and fleet safety stop hiding inside architecture, migration, or
@@ -2185,3 +2191,21 @@ test hooks, command-client factories, and timing overrides on the per-config or
 per-agent instance instead of package-global variables, so concurrent
 lifecycle-owned update and registration paths cannot leak one test or runtime
 override into another agent session.
+The infrastructure workspace now uses a single flat route
+(`/settings/infrastructure`) instead of the former three-sub-route layout
+(`/install`, `/platforms`, `/connections`). Panel state — which of the picker,
+agent-install, or platform-specific screens is open — is managed in-page
+through `InfrastructurePanelStep` signals rather than URL segments.
+`frontend-modern/src/components/Settings/infrastructureWorkspaceModel.ts`
+exposes `buildInfrastructureWorkspacePath()` (always returns the base path
+regardless of argument) and `deriveAddStepFromLegacyPath()` (maps legacy deep
+URLs to panel state for backwards-compatible deep-link resolution) as the sole
+path-building and path-reading contract for lifecycle-adjacent install and
+setup surfaces. Callers that formerly passed `'platforms'` or `'install'` to
+`buildInfrastructureWorkspacePath` must use the no-argument form; the argument
+is accepted but ignored so link-site callers can be updated incrementally
+without breaking navigation.
+`frontend-modern/src/components/SetupWizard/SetupCompletionPanel.tsx` now uses
+a single `INFRASTRUCTURE_PATH` constant (`/settings/infrastructure`) for all
+install and platform-connection CTAs, replacing the former pair of
+`INFRASTRUCTURE_INSTALL_PATH` and `INFRASTRUCTURE_PLATFORMS_PATH` constants.

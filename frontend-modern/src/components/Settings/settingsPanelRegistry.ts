@@ -51,14 +51,6 @@ export const createSettingsPanelRegistry = (
     component: SETTINGS_PANEL_REGISTRY_LOADERS.InfrastructureWorkspace,
     getProps: context.getInfrastructurePanelProps,
   },
-  'infrastructure-connections': {
-    component: SETTINGS_PANEL_REGISTRY_LOADERS.InfrastructureWorkspace,
-    getProps: context.getInfrastructurePanelProps,
-  },
-  'infrastructure-install': {
-    component: SETTINGS_PANEL_REGISTRY_LOADERS.InfrastructureWorkspace,
-    getProps: context.getInfrastructurePanelProps,
-  },
   'system-general': {
     component: context.systemGeneralPanel,
   },

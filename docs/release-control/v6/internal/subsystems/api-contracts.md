@@ -526,6 +526,11 @@ the canonical monitored-system blocked payload.
 
 ## Current State
 
+`useInfrastructureDiscoveryRuntimeState.ts` no longer gates `/api/discover`
+polling on a settings tab name; polling is mount-scoped. The tab guard was
+removed when the infrastructure nav collapsed to one `infrastructure-systems`
+entry.
+
 The API layer already uses contract tests in many places, but every major live
 contract should continue moving toward canonical-only runtime shapes.
 That same shared settings/licensing contract now also owns the split usage-data
@@ -2893,3 +2898,12 @@ payloads without changing the runtime truth. Patrol transport may omit
 only after canonical IDs have been resolved or a safe row-name fallback has
 been chosen. API-adjacent browser callers must not reinterpret missing IDs or
 preview arrays as authoritative empty success.
+That same shared browser transport contract now also owns the discovery polling
+mount scope.
+`frontend-modern/src/components/Settings/useInfrastructureDiscoveryRuntimeState.ts`
+no longer gates `/api/discover` polling on the settings tab name; polling
+starts whenever the hook is mounted and stops on cleanup. Callers must not
+re-introduce a per-tab gate on this boundary. The discovery subnet settings
+write path through `SettingsAPI.updateSystemSettings` remains governed by the
+shared `internal/api/` settings boundary and is unaffected by the polling
+scope change.

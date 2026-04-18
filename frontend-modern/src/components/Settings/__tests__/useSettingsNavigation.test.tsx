@@ -22,8 +22,8 @@ function renderHarness(pathname = '/settings', search = '', hash = '') {
 
     return (
       <>
-        <button type="button" onClick={() => navigation.setActiveTab('infrastructure-connections')}>
-          open connections settings
+        <button type="button" onClick={() => navigation.setActiveTab('infrastructure-systems')}>
+          open infrastructure settings
         </button>
         <div data-testid="selected-agent">{navigation.selectedAgent()}</div>
       </>
@@ -55,7 +55,7 @@ describe('useSettingsNavigation', () => {
     presentationPolicyIsReadOnlyMock.mockReturnValue(true);
     renderHarness('/settings/system-general');
 
-    fireEvent.click(screen.getByRole('button', { name: 'open connections settings' }));
+    fireEvent.click(screen.getByRole('button', { name: 'open infrastructure settings' }));
 
     expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure', {
       scroll: false,

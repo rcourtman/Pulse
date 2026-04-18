@@ -470,16 +470,12 @@ Pulse prepares the first-host install token from setup so you can move straight 
     }));
   });
 
-  const openPlatformConnections = () => {
-    navigate(buildInfrastructureWorkspacePath('platforms'));
-  };
-
   const openDashboard = () => {
     navigate('/dashboard');
   };
 
   const openInfrastructureInventory = () => {
-    navigate(buildInfrastructureWorkspacePath('inventory'));
+    navigate(buildInfrastructureWorkspacePath());
   };
 
   const isEmbedded = () => options.embedded ?? false;
@@ -517,7 +513,6 @@ Pulse prepares the first-host install token from setup so you can move straight 
     lookupValue,
     lookupWasAutoDetected,
     openDashboard,
-    openPlatformConnections,
     openInfrastructureInventory,
     requiresToken,
     selectedAgentUrl,

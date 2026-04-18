@@ -34,7 +34,7 @@ const Settings: Component<SettingsProps> = (props) => {
   const { state, connected: _connected } = useWebSocket();
   const navigate = useNavigate();
   const location = useLocation();
-  const { currentTab, activeTab, selectedAgent, setActiveTab, handleSelectAgent } =
+  const { activeTab, selectedAgent, setActiveTab, handleSelectAgent } =
     useSettingsNavigation({
       navigate,
       location,
@@ -74,7 +74,6 @@ const Settings: Component<SettingsProps> = (props) => {
   });
   const infrastructureSettings = useInfrastructureSettingsState({
     eventBus,
-    currentTab,
     discoveryEnabled: discoverySettings.discoveryEnabled,
     setDiscoveryEnabled: discoverySettings.setDiscoveryEnabled,
     discoverySubnet: discoverySettings.discoverySubnet,

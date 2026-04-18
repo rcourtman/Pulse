@@ -6,8 +6,6 @@ import Key from 'lucide-solid/icons/key';
 import Activity from 'lucide-solid/icons/activity';
 import Network from 'lucide-solid/icons/network';
 import Server from 'lucide-solid/icons/server';
-import PlugZap from 'lucide-solid/icons/plug-zap';
-import Download from 'lucide-solid/icons/download';
 import Users from 'lucide-solid/icons/users';
 import Sliders from 'lucide-solid/icons/sliders-horizontal';
 import RefreshCw from 'lucide-solid/icons/refresh-cw';
@@ -38,22 +36,6 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
         label: 'Infrastructure',
         icon: Server,
         iconProps: { strokeWidth: 2 },
-      },
-      {
-        id: 'infrastructure-connections',
-        label: 'Connections',
-        icon: PlugZap,
-        iconProps: { strokeWidth: 2 },
-        hideFromSidebar: true,
-        hideWhenReadOnly: true,
-      },
-      {
-        id: 'infrastructure-install',
-        label: 'Install',
-        icon: Download,
-        iconProps: { strokeWidth: 2 },
-        hideFromSidebar: true,
-        hideWhenReadOnly: true,
       },
     ],
   },

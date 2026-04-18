@@ -779,7 +779,7 @@ describe('monitored-system model guardrails', () => {
       "navigate('/settings/infrastructure/proxmox')",
     );
     expect(infrastructureWorkspaceModelSource).toContain(
-      'export function getInfrastructureWorkspaceViewFromPath',
+      'export function deriveAddStepFromLegacyPath',
     );
     expect(infrastructureWorkspaceModelSource).toContain(
       "pathname.startsWith('/settings/infrastructure/proxmox')",
