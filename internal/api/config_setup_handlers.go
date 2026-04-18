@@ -517,6 +517,10 @@ func (h *ConfigHandlers) autoRegisteredNodeExists(ctx context.Context, req *Auto
 // entry for the given instance. Returns false (i.e., assume connected) when
 // there is no monitor data yet so we don't mistakenly trigger re-registration
 // on every cold startup before the monitor has had a chance to poll.
+//
+// Key format must match the PollProvider connectionKey functions:
+//   - pve: bare instance name (e.g. "delly")
+//   - pbs: "pbs-" + instance name
 func isKnownDisconnected(connStatuses map[string]bool, instanceType, name, host string) bool {
 	if connStatuses == nil {
 		return false
@@ -528,7 +532,15 @@ func isKnownDisconnected(connStatuses map[string]bool, instanceType, name, host 
 	if instanceName == "" {
 		return false
 	}
-	key := instanceType + "-" + instanceName
+	var key string
+	switch instanceType {
+	case "pve":
+		key = instanceName // PVE connectionKey returns bare name
+	case "pbs":
+		key = "pbs-" + instanceName
+	default:
+		key = instanceType + "-" + instanceName
+	}
 	connected, known := connStatuses[key]
 	return known && !connected
 }
