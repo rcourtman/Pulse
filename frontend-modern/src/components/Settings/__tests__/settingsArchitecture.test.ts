@@ -898,11 +898,15 @@ describe('Settings architecture guardrails', () => {
     expect(infrastructureWorkspaceSource).toContain('InfrastructureStopMonitoringDialog');
     expect(infrastructureWorkspaceSource).toContain('AgentProfilesPanel');
     expect(infrastructureWorkspaceSource).toContain('PlatformConnectionsWorkspace');
-    expect(infrastructureWorkspaceSource).toContain("import { Subtabs } from '@/components/shared/Subtabs'");
-    expect(infrastructureWorkspaceSource).toContain('<Subtabs');
+    expect(infrastructureWorkspaceSource).not.toContain(
+      "import { Subtabs } from '@/components/shared/Subtabs'",
+    );
+    expect(infrastructureWorkspaceSource).not.toContain('<Subtabs');
+    expect(infrastructureWorkspaceSource).toContain('Platform connections');
+    expect(infrastructureWorkspaceSource).toContain('Install Pulse agent');
+    expect(infrastructureWorkspaceSource).toContain('activeView() === \'platforms\'');
+    expect(infrastructureWorkspaceSource).toContain('activeView() === \'install\'');
     expect(infrastructureWorkspaceSource).not.toContain("activeView() === 'operations'");
-    expect(infrastructureWorkspaceSource).toContain("activeView() === 'platforms'");
-    expect(infrastructureWorkspaceSource).toContain("activeView() === 'install'");
     expect(connectionsTableSource).toContain('headerActions');
     expect(connectionsTableModelSource).toContain('export function buildInfrastructureSystemRows');
     expect(platformConnectionsWorkspaceSource).toContain('./platformConnectionsModel');
@@ -1429,10 +1433,10 @@ describe('Settings architecture guardrails', () => {
     );
     expect(SETTINGS_HEADER_META['infrastructure-systems'].title).toBe('Infrastructure');
     expect(SETTINGS_HEADER_META['infrastructure-systems'].description).toContain(
-      'manage platform connections',
+      'open drawers for platform connections',
     );
     expect(SETTINGS_HEADER_META['infrastructure-systems'].description).toBe(
-      `Review monitored systems, manage platform connections, and install Pulse agents from one workspace. ${SELF_HOSTED_PRO_BILLING_PRESENTATION.infrastructureRouteReferral}`,
+      `Review top-level monitored systems from one ledger, then open drawers for platform connections, install commands, and agent profiles. ${SELF_HOSTED_PRO_BILLING_PRESENTATION.infrastructureRouteReferral}`,
     );
     expect(SETTINGS_HEADER_META['infrastructure-connections'].title).toBe('Infrastructure');
     expect(SETTINGS_HEADER_META['infrastructure-install'].title).toBe('Infrastructure');

@@ -222,14 +222,14 @@ work extends shared components instead of creating new local variants.
    workspaces, and profile management remain secondary flows opened by explicit
    deep links or drawers instead of being dumped inline underneath the default
    table.
-   Those deep-linked secondary views must replace the body below the shared
-   page header instead of keeping the systems ledger mounted above them, so the
-   same system or connection context is not duplicated once in the default
-   ledger and again inside a secondary management workspace.
+   Those deep-linked secondary views must keep the systems ledger mounted and
+   open inside route-backed drawers instead of replacing the page body or
+   stacking another inline workspace underneath it, so the operator always
+   stays anchored to the same canonical ledger while managing setup flows.
    That same shared shell boundary now owns one canonical infrastructure
    destination in the Settings sidebar. `InfrastructureWorkspace.tsx` owns the
-   primary `Systems`, `Connections`, and `Install` workspace subtabs inside
-   that destination, while each selected route body still stays
+   one default ledger plus route-backed `Connections` and `Install` drawers
+   inside that destination, while each secondary flow still stays
    single-purpose instead of stacking multiple workspace surfaces at once.
 6. Keep Proxmox deep-link route selection on the shared settings-navigation boundary. `frontend-modern/src/components/Settings/settingsNavigationModel.ts` and `frontend-modern/src/components/Settings/useSettingsNavigation.ts` must treat the canonical PBS and PMG Proxmox deep links as agent-selection authority even though those URLs resolve to the shared `infrastructure-operations` tab. Reloading or remounting on a PBS or PMG deep link must not silently fall back to the PVE selector state.
 7. Keep shared storage feature presenters on canonical platform truth. When reusable storage presenters under `frontend-modern/src/features/storageBackups/` classify canonical resources for the shared storage route, API-backed virtualization datastores such as VMware must stay inventory-only datastores instead of inheriting PBS-specific backup-repository or protected-target copy from older fallback branches.

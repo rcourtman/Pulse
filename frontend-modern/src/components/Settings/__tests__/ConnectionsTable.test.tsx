@@ -69,7 +69,7 @@ describe('ConnectionsTable', () => {
         rows={() => []}
         headerActions={[
           {
-            label: '+ Add a system',
+            label: 'Add infrastructure',
             onSelect: onAddSystem,
             tone: 'primary',
           },
@@ -83,7 +83,7 @@ describe('ConnectionsTable', () => {
     ) as any);
 
     expect(screen.getByRole('button', { name: 'Agent profiles' })).toBeInTheDocument();
-    const button = screen.getByRole('button', { name: /\+ Add a system/i });
+    const button = screen.getByRole('button', { name: /Add infrastructure/i });
     fireEvent.click(button);
     expect(onAddSystem).toHaveBeenCalledTimes(1);
   });

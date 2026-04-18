@@ -27,7 +27,7 @@ export const ConnectionsTable: Component<ConnectionsTableProps> = (props) => {
     <Card padding="none" tone="card" class="rounded-md">
       <div class="flex flex-col gap-3 border-b border-border px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h3 class="text-base font-semibold text-base-content">Systems</h3>
+          <h3 class="text-base font-semibold text-base-content">Monitored systems</h3>
           <p class="text-xs text-muted">One row per top-level monitored system.</p>
         </div>
         <Show when={(props.headerActions?.length ?? 0) > 0}>

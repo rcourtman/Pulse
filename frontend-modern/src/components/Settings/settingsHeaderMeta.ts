@@ -10,17 +10,17 @@ export const SETTINGS_HEADER_META: SettingsHeaderMetaMap = {
   'infrastructure-systems': {
     title: 'Infrastructure',
     description:
-      `Review monitored systems, manage platform connections, and install Pulse agents from one workspace. ${SELF_HOSTED_PRO_BILLING_PRESENTATION.infrastructureRouteReferral}`,
+      `Review top-level monitored systems from one ledger, then open drawers for platform connections, install commands, and agent profiles. ${SELF_HOSTED_PRO_BILLING_PRESENTATION.infrastructureRouteReferral}`,
   },
   'infrastructure-connections': {
     title: 'Infrastructure',
     description:
-      `Review monitored systems, manage platform connections, and install Pulse agents from one workspace. ${SELF_HOSTED_PRO_BILLING_PRESENTATION.infrastructureRouteReferral}`,
+      `Review top-level monitored systems from one ledger, then open drawers for platform connections, install commands, and agent profiles. ${SELF_HOSTED_PRO_BILLING_PRESENTATION.infrastructureRouteReferral}`,
   },
   'infrastructure-install': {
     title: 'Infrastructure',
     description:
-      `Review monitored systems, manage platform connections, and install Pulse agents from one workspace. ${SELF_HOSTED_PRO_BILLING_PRESENTATION.infrastructureRouteReferral}`,
+      `Review top-level monitored systems from one ledger, then open drawers for platform connections, install commands, and agent profiles. ${SELF_HOSTED_PRO_BILLING_PRESENTATION.infrastructureRouteReferral}`,
   },
   'system-general': {
     title: 'General',

@@ -314,11 +314,11 @@ export const InfrastructureActiveRowDetails: Component<InfrastructureActiveRowDe
                                 data-row-action
                                 onClick={(event) => {
                                   event.stopPropagation();
-                                  navigate(path());
+                                  navigate(path(), { scroll: false });
                                 }}
                                 class="inline-flex min-h-9 items-center rounded-md px-2.5 py-1.5 text-xs font-medium text-blue-600 hover:bg-blue-50 hover:text-blue-900 dark:text-blue-400 dark:hover:bg-blue-900 dark:hover:text-blue-300"
                               >
-                                Open platform connections
+                                Manage connection
                               </button>
                             )}
                           </Show>

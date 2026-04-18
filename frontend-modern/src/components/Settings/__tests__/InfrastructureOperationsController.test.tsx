@@ -1231,7 +1231,7 @@ describe('InfrastructureOperationsController managed agents table', () => {
     expect(details.getByText('Docker runtime ID')).toBeInTheDocument();
     expect(details.getByText('Node ID')).toBeInTheDocument();
     expect(details.getAllByText('delly-resource').length).toBeGreaterThan(0);
-    expect(details.getByRole('button', { name: /Open platform connections/i })).toBeInTheDocument();
+    expect(details.getByRole('button', { name: /Manage connection/i })).toBeInTheDocument();
     expect(details.getAllByText('delly-agent').length).toBeGreaterThan(0);
     expect(details.getAllByText('delly-docker').length).toBeGreaterThan(0);
   });
@@ -1282,11 +1282,13 @@ describe('InfrastructureOperationsController managed agents table', () => {
     ).not.toBeInTheDocument();
 
     const openPlatformConnectionsButton = details.getByRole('button', {
-      name: /Open platform connections/i,
+      name: /Manage connection/i,
     });
     fireEvent.click(openPlatformConnectionsButton);
 
-    expect(navigateMock).toHaveBeenCalledWith('/settings/infrastructure/platforms/truenas');
+    expect(navigateMock).toHaveBeenCalledWith('/settings/infrastructure/platforms/truenas', {
+      scroll: false,
+    });
   });
 
   it('distinguishes PBS coverage from Proxmox nodes on non-Proxmox hosts', async () => {

@@ -48,10 +48,6 @@ vi.mock('../useInfrastructureOperationsState', () => ({
   }),
 }));
 
-vi.mock('../InfrastructureInventorySection', () => ({
-  InfrastructureInventorySection: () => <div data-testid="inventory-section">inventory</div>,
-}));
-
 vi.mock('../InfrastructureInstallerSection', () => ({
   InfrastructureInstallerSection: () => <div data-testid="install-section">install</div>,
 }));
@@ -121,11 +117,15 @@ const baseProps = () =>
     trueNASSettings: {
       connections: () => [{ id: 'tn-1', name: 'Tower NAS', host: '10.0.0.20', enabled: true }],
       openCreateDialog: trueNASOpenCreateDialogSpy,
+      closeDialog: vi.fn(),
+      closeDeleteDialog: vi.fn(),
       openEditDialog: vi.fn(),
     },
     vmwareSettings: {
       connections: () => [{ id: 'vm-1', name: 'lab-vcenter', host: '10.0.0.30', enabled: true }],
       openCreateDialog: vmwareOpenCreateDialogSpy,
+      closeDialog: vi.fn(),
+      closeDeleteDialog: vi.fn(),
       openEditDialog: vi.fn(),
     },
     selectedAgent: () => 'pve',
@@ -167,10 +167,9 @@ describe('InfrastructureWorkspace', () => {
   it('renders only the top-level ledger at the base infrastructure route', () => {
     renderWorkspace();
 
-    expect(screen.getByRole('heading', { name: 'Systems' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Monitored systems' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Connections' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Agent profiles' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Manage connections' })).toBeNull();
-    expect(screen.queryByTestId('inventory-section')).toBeNull();
     expect(screen.queryByTestId('platform-section')).toBeNull();
     expect(screen.queryByTestId('install-section')).toBeNull();
     expect(screen.queryByTestId('agent-profiles')).toBeNull();
@@ -188,7 +187,7 @@ describe('InfrastructureWorkspace', () => {
   it('opens the add-system picker when the add button is clicked', () => {
     renderWorkspace();
 
-    fireEvent.click(screen.getByRole('button', { name: /\+ Add a system/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Add infrastructure/i }));
 
     expect(screen.getByText('Install on a host')).toBeInTheDocument();
     expect(screen.getByText('Proxmox VE')).toBeInTheDocument();
@@ -197,37 +196,45 @@ describe('InfrastructureWorkspace', () => {
 
   it('routes the agent-host choice to the install section deep link', () => {
     renderWorkspace();
-    fireEvent.click(screen.getByRole('button', { name: /\+ Add a system/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Add infrastructure/i }));
     fireEvent.click(screen.getByText('Install on a host'));
 
-    expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure/install');
+    expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure/install', {
+      scroll: false,
+    });
   });
 
   it('opens provider creation flows directly from the add-system picker', () => {
     renderWorkspace();
-    fireEvent.click(screen.getByRole('button', { name: /\+ Add a system/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Add infrastructure/i }));
     fireEvent.click(screen.getByText('TrueNAS SCALE'));
 
     expect(trueNASOpenCreateDialogSpy).toHaveBeenCalledTimes(1);
-    expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure/platforms/truenas');
+    expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure/platforms/truenas', {
+      scroll: false,
+    });
 
-    fireEvent.click(screen.getByRole('button', { name: /\+ Add a system/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Add infrastructure/i }));
     fireEvent.click(screen.getByText('VMware vSphere or ESXi'));
 
     expect(vmwareOpenCreateDialogSpy).toHaveBeenCalledTimes(1);
-    expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure/platforms/vmware');
+    expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure/platforms/vmware', {
+      scroll: false,
+    });
   });
 
   it('opens the proxmox node modal directly from the add-system picker', () => {
     renderWorkspace();
-    fireEvent.click(screen.getByRole('button', { name: /\+ Add a system/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Add infrastructure/i }));
     fireEvent.click(screen.getByText('Proxmox VE'));
 
     expect(onSelectAgentSpy).toHaveBeenCalledWith('pve');
     expect(setCurrentNodeTypeSpy).toHaveBeenCalledWith('pve');
     expect(setEditingNodeSpy).toHaveBeenCalledWith(null);
     expect(setShowNodeModalSpy).toHaveBeenCalledWith(true);
-    expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure/platforms/proxmox/pve');
+    expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure/platforms/proxmox/pve', {
+      scroll: false,
+    });
   });
 
   it('opens reporting details from the top ledger in a drawer', () => {
@@ -239,26 +246,45 @@ describe('InfrastructureWorkspace', () => {
     expect(screen.getByTestId('active-details')).toBeInTheDocument();
   });
 
-  it('shows only platform setup below the ledger on platform deep links', () => {
+  it('keeps the ledger visible and opens platform setup in a drawer on platform deep links', () => {
     mockPathname = '/settings/infrastructure/platforms/truenas';
     renderWorkspace();
 
-    expect(screen.queryByRole('heading', { name: 'Systems' })).toBeNull();
+    expect(screen.getByRole('heading', { name: 'Monitored systems' })).toBeInTheDocument();
+    expect(screen.getByText('Platform connections')).toBeInTheDocument();
     expect(screen.getByTestId('platform-section')).toBeInTheDocument();
-    expect(screen.queryByTestId('inventory-section')).toBeNull();
     expect(screen.queryByTestId('install-section')).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Agent profiles' })).toBeNull();
-    expect(screen.queryByTestId('agent-profiles')).toBeNull();
   });
 
-  it('shows only install tools below the ledger on install deep links', () => {
+  it('keeps the ledger visible and opens install tools in a drawer on install deep links', () => {
     mockPathname = '/settings/infrastructure/install';
     renderWorkspace();
 
-    expect(screen.queryByRole('heading', { name: 'Systems' })).toBeNull();
+    expect(screen.getByRole('heading', { name: 'Monitored systems' })).toBeInTheDocument();
+    expect(screen.getByText('Install Pulse agent')).toBeInTheDocument();
     expect(screen.getByTestId('install-section')).toBeInTheDocument();
-    expect(screen.queryByTestId('inventory-section')).toBeNull();
     expect(screen.queryByTestId('platform-section')).toBeNull();
+  });
+
+  it('opens the platform connections drawer from the header action', () => {
+    renderWorkspace();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Connections' }));
+
+    expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure/platforms', {
+      scroll: false,
+    });
+  });
+
+  it('closes the platform drawer back to the ledger route', () => {
+    mockPathname = '/settings/infrastructure/platforms/truenas';
+    renderWorkspace();
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Close' })[0]);
+
+    expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure', {
+      scroll: false,
+    });
   });
 
   it('opens agent profiles in a dedicated drawer instead of inline', () => {
@@ -275,11 +301,11 @@ describe('InfrastructureWorkspace', () => {
     renderWorkspace();
 
     expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure', { replace: true });
-    expect(screen.queryByRole('button', { name: /\+ Add a system/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Add infrastructure/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Connections' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Agent profiles' })).toBeNull();
     expect(screen.queryByTestId('platform-section')).toBeNull();
     expect(screen.queryByTestId('install-section')).toBeNull();
     expect(screen.queryByTestId('agent-profiles')).toBeNull();
-    expect(screen.queryByTestId('inventory-section')).toBeNull();
   });
 });

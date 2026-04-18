@@ -1,7 +1,6 @@
-import { Component, Match, Show, Switch, createEffect, createMemo, createSignal } from 'solid-js';
+import { Component, Show, createEffect, createMemo, createSignal } from 'solid-js';
 import { useLocation, useNavigate } from '@solidjs/router';
 import { Dialog } from '@/components/shared/Dialog';
-import { Subtabs } from '@/components/shared/Subtabs';
 import { presentationPolicyIsReadOnly } from '@/stores/sessionPresentationPolicy';
 import { AgentProfilesPanel } from './AgentProfilesPanel';
 import { AddSystemPicker, type AddSystemChoice } from './AddSystemPicker';
@@ -19,7 +18,6 @@ import { PlatformConnectionsWorkspace } from './PlatformConnectionsWorkspace';
 import {
   buildInfrastructureWorkspacePath,
   getInfrastructureWorkspaceViewFromPath,
-  type InfrastructureWorkspaceView,
 } from './infrastructureWorkspaceModel';
 import type { InfrastructurePlatformSettingsProps } from './proxmoxSettingsModel';
 import {
@@ -53,22 +51,35 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
       ? []
       : [
           {
+            label: 'Connections',
+            onSelect: () => navigate(buildInfrastructureWorkspacePath('platforms'), { scroll: false }),
+            tone: 'secondary' as const,
+          },
+          {
             label: 'Agent profiles',
             onSelect: () => setProfilesOpen(true),
             tone: 'secondary' as const,
           },
           {
-            label: '+ Add a system',
+            label: 'Add infrastructure',
             onSelect: () => setPickerOpen(true),
             tone: 'primary' as const,
           },
         ],
   );
-  const workspaceTabs = createMemo(() => [
-    { value: 'inventory', label: 'Systems' },
-    { value: 'platforms', label: 'Connections' },
-    { value: 'install', label: 'Install' },
-  ]);
+  const closeConnectionsWorkspace = () => {
+    props.trueNASSettings.closeDialog?.();
+    props.trueNASSettings.closeDeleteDialog?.();
+    props.vmwareSettings.closeDialog?.();
+    props.vmwareSettings.closeDeleteDialog?.();
+    props.setShowNodeModal(false);
+    props.setEditingNode(null);
+    props.cancelDeleteNode?.();
+    navigate(buildInfrastructureWorkspacePath('inventory'), { scroll: false });
+  };
+  const closeInstallWorkspace = () => {
+    navigate(buildInfrastructureWorkspacePath('inventory'), { scroll: false });
+  };
 
   const openProxmoxNode = (nodeKind: 'pve' | 'pbs' | 'pmg', nodeId: string) => {
     const nodes =
@@ -84,26 +95,26 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
     props.setEditingNode(node);
     props.setModalResetKey((value) => value + 1);
     props.setShowNodeModal(true);
-    navigate(proxmoxRouteForKind(nodeKind));
+    navigate(proxmoxRouteForKind(nodeKind), { scroll: false });
   };
 
   const handleAddSystem = (choice: AddSystemChoice) => {
     setPickerOpen(false);
 
     if (choice.kind === 'agent') {
-      navigate(buildInfrastructureWorkspacePath('install'));
+      navigate(buildInfrastructureWorkspacePath('install'), { scroll: false });
       return;
     }
 
     if (choice.kind === 'truenas') {
       props.trueNASSettings.openCreateDialog();
-      navigate('/settings/infrastructure/platforms/truenas');
+      navigate('/settings/infrastructure/platforms/truenas', { scroll: false });
       return;
     }
 
     if (choice.kind === 'vmware') {
       props.vmwareSettings.openCreateDialog();
-      navigate('/settings/infrastructure/platforms/vmware');
+      navigate('/settings/infrastructure/platforms/vmware', { scroll: false });
       return;
     }
 
@@ -131,26 +142,23 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
     }
   });
 
+  createEffect(() => {
+    if (activeView() === 'inventory') {
+      return;
+    }
+    setPickerOpen(false);
+    setProfilesOpen(false);
+    state.setExpandedRowKey(null);
+    state.setSelectedIgnoredRowKey(null);
+  });
+
   return (
     <div class="space-y-8">
-      <Show when={!readOnlyWorkspace()}>
-        <Subtabs
-          value={activeView()}
-          onChange={(value) =>
-            navigate(buildInfrastructureWorkspacePath(value as InfrastructureWorkspaceView))
-          }
-          ariaLabel="Infrastructure workspace"
-          tabs={workspaceTabs()}
-        />
-      </Show>
-
-      <Show when={activeView() === 'inventory'}>
-        <ConnectionsTable
-          rows={rows}
-          headerActions={headerActions()}
-          onManageRow={(row) => handleManageAction(row.manage)}
-        />
-      </Show>
+      <ConnectionsTable
+        rows={rows}
+        headerActions={headerActions()}
+        onManageRow={(row) => handleManageAction(row.manage)}
+      />
 
       <AddSystemPicker
         isOpen={pickerOpen()}
@@ -169,6 +177,91 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
       >
         <div class="h-full overflow-y-auto bg-surface p-4 sm:p-6">
           <AgentProfilesPanel />
+        </div>
+      </Dialog>
+
+      <Dialog
+        isOpen={!readOnlyWorkspace() && activeView() === 'platforms'}
+        onClose={closeConnectionsWorkspace}
+        layout="drawer-right"
+        panelClass="max-w-[1120px]"
+        ariaLabel="Platform connections"
+      >
+        <div class="flex h-full flex-col bg-surface">
+          <div class="border-b border-border bg-surface-alt px-4 py-4 sm:px-6">
+            <div class="flex items-start justify-between gap-4">
+              <div class="space-y-1">
+                <div class="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted">
+                  Connections
+                </div>
+                <div class="text-lg font-semibold text-base-content">Platform connections</div>
+                <div class="text-sm text-muted">
+                  Configure API-backed providers without leaving the infrastructure ledger.
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={closeConnectionsWorkspace}
+                class="rounded-md p-1 hover:bg-surface-hover hover:text-base-content"
+                aria-label="Close"
+              >
+                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M6 18L18 6M6 6l12 12"
+                  />
+                </svg>
+              </button>
+            </div>
+          </div>
+          <div class="flex-1 overflow-y-auto p-4 sm:p-6">
+            <PlatformConnectionsWorkspace {...props} />
+          </div>
+        </div>
+      </Dialog>
+
+      <Dialog
+        isOpen={!readOnlyWorkspace() && activeView() === 'install'}
+        onClose={closeInstallWorkspace}
+        layout="drawer-right"
+        panelClass="max-w-[1120px]"
+        ariaLabel="Install Pulse agent"
+      >
+        <div class="flex h-full flex-col bg-surface">
+          <div class="border-b border-border bg-surface-alt px-4 py-4 sm:px-6">
+            <div class="flex items-start justify-between gap-4">
+              <div class="space-y-1">
+                <div class="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted">
+                  Install
+                </div>
+                <div class="text-lg font-semibold text-base-content">Install Pulse agent</div>
+                <div class="text-sm text-muted">
+                  Generate Linux, macOS, FreeBSD, and Windows install commands from the same
+                  workspace.
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={closeInstallWorkspace}
+                class="rounded-md p-1 hover:bg-surface-hover hover:text-base-content"
+                aria-label="Close"
+              >
+                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M6 18L18 6M6 6l12 12"
+                  />
+                </svg>
+              </button>
+            </div>
+          </div>
+          <div class="flex-1 overflow-y-auto p-4 sm:p-6">
+            <InfrastructureInstallerSection />
+          </div>
         </div>
       </Dialog>
 
@@ -195,16 +288,6 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
           {(rowAccessor) => <InfrastructureIgnoredRowDetails rowAccessor={rowAccessor} />}
         </Show>
       </Dialog>
-
-      <Switch>
-        <Match when={!readOnlyWorkspace() && activeView() === 'platforms'}>
-          <PlatformConnectionsWorkspace {...props} />
-        </Match>
-
-        <Match when={!readOnlyWorkspace() && activeView() === 'install'}>
-          <InfrastructureInstallerSection />
-        </Match>
-      </Switch>
     </div>
   );
 };
