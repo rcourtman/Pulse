@@ -168,8 +168,9 @@ describe('InfrastructureWorkspace', () => {
     renderWorkspace();
 
     expect(screen.getByRole('heading', { name: 'Monitored systems' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Connections' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Agent profiles' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add infrastructure' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Connections' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Agent profiles' })).toBeNull();
     expect(screen.queryByTestId('platform-section')).toBeNull();
     expect(screen.queryByTestId('install-section')).toBeNull();
     expect(screen.queryByTestId('agent-profiles')).toBeNull();
@@ -266,14 +267,13 @@ describe('InfrastructureWorkspace', () => {
     expect(screen.queryByTestId('platform-section')).toBeNull();
   });
 
-  it('opens the platform connections drawer from the header action', () => {
+  it('opens agent profiles from the add-infrastructure chooser secondary action', () => {
     renderWorkspace();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Connections' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add infrastructure' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Manage agent profiles' }));
 
-    expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure/platforms', {
-      scroll: false,
-    });
+    expect(screen.getByTestId('agent-profiles')).toBeInTheDocument();
   });
 
   it('closes the platform drawer back to the ledger route', () => {
@@ -285,14 +285,6 @@ describe('InfrastructureWorkspace', () => {
     expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure', {
       scroll: false,
     });
-  });
-
-  it('opens agent profiles in a dedicated drawer instead of inline', () => {
-    renderWorkspace();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Agent profiles' }));
-
-    expect(screen.getByTestId('agent-profiles')).toBeInTheDocument();
   });
 
   it('collapses read-only sessions back to inventory and hides setup sections', () => {

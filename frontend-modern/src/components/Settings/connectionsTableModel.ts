@@ -12,7 +12,7 @@ export type SystemManageAction =
 export interface InfrastructureSystemRow {
   id: string;
   name: string;
-  subtitle: string;
+  subtitle?: string;
   host?: string;
   coverageLabels: string[];
   collectionLabel: string;
@@ -65,7 +65,7 @@ const reportingRow = (row: UnifiedAgentRow): InfrastructureSystemRow => {
   return {
     id: row.rowKey,
     name: row.name,
-    subtitle: row.status === 'removed' ? 'Ignored by Pulse' : 'Monitored system',
+    subtitle: row.status === 'removed' ? 'Ignored by Pulse' : undefined,
     host:
       row.hostname && row.hostname !== row.name && row.hostname !== row.displayName
         ? row.hostname

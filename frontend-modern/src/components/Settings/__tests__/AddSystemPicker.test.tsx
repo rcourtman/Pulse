@@ -21,12 +21,12 @@ describe('AddSystemPicker', () => {
       expect(screen.getByText(choice.title)).toBeInTheDocument();
     }
     expect(ADD_SYSTEM_CHOICES.map((c) => c.kind)).toEqual([
+      'agent',
       'pve',
       'pbs',
       'pmg',
       'truenas',
       'vmware',
-      'agent',
     ]);
   });
 
@@ -50,6 +50,21 @@ describe('AddSystemPicker', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Close' }));
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('offers agent profile management as a secondary action when provided', () => {
+    const onManageProfiles = vi.fn();
+    render(() => (
+      <AddSystemPicker
+        isOpen={true}
+        onClose={() => {}}
+        onSelect={() => {}}
+        onManageProfiles={onManageProfiles}
+      />
+    ) as any);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Manage agent profiles' }));
+    expect(onManageProfiles).toHaveBeenCalledTimes(1);
   });
 
   it('marks the agent-host choice as an agent install and everything else as an API connection', () => {

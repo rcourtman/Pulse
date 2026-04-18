@@ -6,7 +6,7 @@ import type { InfrastructureSystemRow } from '../connectionsTableModel';
 const row = (overrides: Partial<InfrastructureSystemRow> = {}): InfrastructureSystemRow => ({
   id: 'row-1',
   name: 'tower',
-  subtitle: 'Monitored system',
+  subtitle: undefined,
   host: '10.0.0.1',
   coverageLabels: ['Host telemetry'],
   collectionLabel: 'Agent',
@@ -53,7 +53,6 @@ describe('ConnectionsTable', () => {
     expect(screen.getByRole('table')).toBeInTheDocument();
     expect(screen.getByText('tower')).toBeInTheDocument();
     expect(screen.getByText('pbs-docker')).toBeInTheDocument();
-    expect(screen.getByText('Monitored system')).toBeInTheDocument();
     expect(screen.getByText('Ignored by Pulse')).toBeInTheDocument();
     expect(screen.getByText('Host telemetry')).toBeInTheDocument();
     expect(screen.getByText('API')).toBeInTheDocument();
@@ -73,16 +72,10 @@ describe('ConnectionsTable', () => {
             onSelect: onAddSystem,
             tone: 'primary',
           },
-          {
-            label: 'Agent profiles',
-            onSelect: vi.fn(),
-            tone: 'secondary',
-          },
         ]}
       />
     ) as any);
 
-    expect(screen.getByRole('button', { name: 'Agent profiles' })).toBeInTheDocument();
     const button = screen.getByRole('button', { name: /Add infrastructure/i });
     fireEvent.click(button);
     expect(onAddSystem).toHaveBeenCalledTimes(1);

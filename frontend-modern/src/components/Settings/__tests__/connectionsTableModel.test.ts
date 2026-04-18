@@ -61,7 +61,7 @@ describe('connectionsTableModel', () => {
       manageLabel: 'Review ignored',
     });
     expect(rows.find((row) => row.name === 'tower')).toMatchObject({
-      subtitle: 'Monitored system',
+      subtitle: undefined,
       manageLabel: 'View details',
     });
   });

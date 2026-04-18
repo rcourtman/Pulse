@@ -220,15 +220,17 @@ work extends shared components instead of creating new local variants.
    connections must stay in their own management workspace instead of showing up
    as peer rows in the default table, while installer tooling, provider setup
    workspaces, and profile management remain secondary flows opened by explicit
-   deep links or drawers instead of being dumped inline underneath the default
+   deep links or modal work surfaces instead of being dumped inline underneath the default
    table.
    Those deep-linked secondary views must keep the systems ledger mounted and
-   open inside route-backed drawers instead of replacing the page body or
+   open inside route-backed modal surfaces instead of replacing the page body or
    stacking another inline workspace underneath it, so the operator always
-   stays anchored to the same canonical ledger while managing setup flows.
+   stays anchored to the same canonical ledger while managing setup flows
+   without relegating primary setup work to off-canvas side drawers.
    That same shared shell boundary now owns one canonical infrastructure
    destination in the Settings sidebar. `InfrastructureWorkspace.tsx` owns the
-   one default ledger plus route-backed `Connections` and `Install` drawers
+   one default ledger plus route-backed `Connections` and `Install` modal work
+   surfaces
    inside that destination, while each secondary flow still stays
    single-purpose instead of stacking multiple workspace surfaces at once.
 6. Keep Proxmox deep-link route selection on the shared settings-navigation boundary. `frontend-modern/src/components/Settings/settingsNavigationModel.ts` and `frontend-modern/src/components/Settings/useSettingsNavigation.ts` must treat the canonical PBS and PMG Proxmox deep links as agent-selection authority even though those URLs resolve to the shared `infrastructure-operations` tab. Reloading or remounting on a PBS or PMG deep link must not silently fall back to the PVE selector state.

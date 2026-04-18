@@ -62,6 +62,7 @@ interface AddSystemPickerProps {
   isOpen: boolean;
   onClose: () => void;
   onSelect: (choice: AddSystemChoice) => void;
+  onManageProfiles?: () => void;
 }
 
 export const AddSystemPicker: Component<AddSystemPickerProps> = (props) => {
@@ -77,10 +78,10 @@ export const AddSystemPicker: Component<AddSystemPickerProps> = (props) => {
         <div class="flex items-start justify-between gap-4">
           <div>
             <h2 id="add-system-picker-title" class="text-lg font-semibold text-base-content">
-              Add a system
+              Add infrastructure
             </h2>
             <p class="mt-1 text-sm text-muted">
-              Pick what you are connecting. Pulse will route you straight into the right flow.
+              Choose the system or platform you want Pulse to start monitoring.
             </p>
           </div>
           <button
@@ -119,6 +120,22 @@ export const AddSystemPicker: Component<AddSystemPickerProps> = (props) => {
             )}
           </For>
         </ul>
+        <For each={props.onManageProfiles ? [props.onManageProfiles] : []}>
+          {(onManageProfiles) => (
+            <div class="flex items-center justify-between gap-3 rounded-md border border-border bg-surface-alt px-4 py-3">
+              <div class="text-xs text-muted">
+                Agent profiles change install defaults for agent-based systems.
+              </div>
+              <button
+                type="button"
+                onClick={onManageProfiles}
+                class="inline-flex items-center rounded-md border border-border px-3 py-1.5 text-sm font-medium text-base-content transition-colors hover:bg-surface-hover"
+              >
+                Manage agent profiles
+              </button>
+            </div>
+          )}
+        </For>
       </div>
     </Dialog>
   );

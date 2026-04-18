@@ -858,19 +858,20 @@ ledger. Inline detail drawers may surface reporting-item and ignored-item
 controls, but installer setup, platform-specific configuration, and profile
 management must remain secondary flows rather than being dumped underneath the
 default ledger.
-Those secondary infrastructure views must open through route-backed drawers
-rather than replacing the ledger body or stacking beneath it. When the
+Those secondary infrastructure views must open through route-backed modal work
+surfaces rather than replacing the ledger body or stacking beneath it. When the
 operator opens platform connection management, install tooling, or the legacy
 operations workspace route, `InfrastructureWorkspace.tsx` must keep the same
 top-level systems ledger anchored in place and layer the secondary surface in a
-drawer that can close back to `/settings/infrastructure` without trapping the
-user.
+centered modal that can close back to `/settings/infrastructure` without
+trapping the user or relegating primary setup work to an off-canvas detail
+pattern.
 That infrastructure surface must now stay single-purpose per route-backed
-drawer: the default systems view owns the top-level monitored-system ledger,
-the connections drawer owns API-backed platform management, and the install
-drawer owns Linux/Windows/macOS/FreeBSD command generation. The shared
+modal: the default systems view owns the top-level monitored-system ledger,
+the connections modal owns API-backed platform management, and the install
+modal owns Linux/Windows/macOS/FreeBSD command generation. The shared
 Settings sidebar owns only the top-level `Infrastructure` destination; movement
-between those three jobs belongs to explicit drawer actions inside
+between those three jobs belongs to explicit ledger actions inside
 `InfrastructureWorkspace.tsx`, not extra sidebar entries or body-replacing
 workspace subtabs.
 That same lifecycle-owned platform-connections workspace must keep API-backed

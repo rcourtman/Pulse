@@ -51,16 +51,6 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
       ? []
       : [
           {
-            label: 'Connections',
-            onSelect: () => navigate(buildInfrastructureWorkspacePath('platforms'), { scroll: false }),
-            tone: 'secondary' as const,
-          },
-          {
-            label: 'Agent profiles',
-            onSelect: () => setProfilesOpen(true),
-            tone: 'secondary' as const,
-          },
-          {
             label: 'Add infrastructure',
             onSelect: () => setPickerOpen(true),
             tone: 'primary' as const,
@@ -164,6 +154,10 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
         isOpen={pickerOpen()}
         onClose={() => setPickerOpen(false)}
         onSelect={handleAddSystem}
+        onManageProfiles={() => {
+          setPickerOpen(false);
+          setProfilesOpen(true);
+        }}
       />
 
       <InfrastructureStopMonitoringDialog />
@@ -171,20 +165,45 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
       <Dialog
         isOpen={profilesOpen()}
         onClose={() => setProfilesOpen(false)}
-        layout="drawer-right"
-        panelClass="max-w-[960px]"
+        panelClass="h-[calc(100dvh-2rem)] w-full max-w-[1100px]"
         ariaLabel="Agent profiles"
       >
-        <div class="h-full overflow-y-auto bg-surface p-4 sm:p-6">
-          <AgentProfilesPanel />
+        <div class="flex h-full flex-col bg-surface">
+          <div class="border-b border-border bg-surface-alt px-4 py-4 sm:px-6">
+            <div class="flex items-start justify-between gap-4">
+              <div class="space-y-1">
+                <div class="text-lg font-semibold text-base-content">Agent profiles</div>
+                <div class="text-sm text-muted">
+                  Manage reusable install defaults for agent-based systems.
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setProfilesOpen(false)}
+                class="rounded-md p-1 hover:bg-surface-hover hover:text-base-content"
+                aria-label="Close"
+              >
+                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M6 18L18 6M6 6l12 12"
+                  />
+                </svg>
+              </button>
+            </div>
+          </div>
+          <div class="flex-1 overflow-y-auto p-4 sm:p-6">
+            <AgentProfilesPanel />
+          </div>
         </div>
       </Dialog>
 
       <Dialog
         isOpen={!readOnlyWorkspace() && activeView() === 'platforms'}
         onClose={closeConnectionsWorkspace}
-        layout="drawer-right"
-        panelClass="max-w-[1120px]"
+        panelClass="h-[calc(100dvh-2rem)] w-full max-w-[1280px]"
         ariaLabel="Platform connections"
       >
         <div class="flex h-full flex-col bg-surface">
@@ -225,8 +244,7 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
       <Dialog
         isOpen={!readOnlyWorkspace() && activeView() === 'install'}
         onClose={closeInstallWorkspace}
-        layout="drawer-right"
-        panelClass="max-w-[1120px]"
+        panelClass="h-[calc(100dvh-2rem)] w-full max-w-[1280px]"
         ariaLabel="Install Pulse agent"
       >
         <div class="flex h-full flex-col bg-surface">

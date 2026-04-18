@@ -93,7 +93,9 @@ export const ConnectionsTable: Component<ConnectionsTableProps> = (props) => {
                         <Show when={row.host}>
                           <div class="truncate text-xs text-muted">{row.host}</div>
                         </Show>
-                        <div class="text-xs text-muted">{row.subtitle}</div>
+                        <Show when={row.subtitle}>
+                          <div class="text-xs text-muted">{row.subtitle}</div>
+                        </Show>
                       </div>
                     </TableCell>
 

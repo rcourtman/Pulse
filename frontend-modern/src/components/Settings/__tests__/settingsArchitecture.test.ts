@@ -1433,10 +1433,10 @@ describe('Settings architecture guardrails', () => {
     );
     expect(SETTINGS_HEADER_META['infrastructure-systems'].title).toBe('Infrastructure');
     expect(SETTINGS_HEADER_META['infrastructure-systems'].description).toContain(
-      'open drawers for platform connections',
+      'use Add infrastructure',
     );
     expect(SETTINGS_HEADER_META['infrastructure-systems'].description).toBe(
-      `Review top-level monitored systems from one ledger, then open drawers for platform connections, install commands, and agent profiles. ${SELF_HOSTED_PRO_BILLING_PRESENTATION.infrastructureRouteReferral}`,
+      `Review monitored systems in one ledger, then use Add infrastructure when you need platform setup or agent install commands. ${SELF_HOSTED_PRO_BILLING_PRESENTATION.infrastructureRouteReferral}`,
     );
     expect(SETTINGS_HEADER_META['infrastructure-connections'].title).toBe('Infrastructure');
     expect(SETTINGS_HEADER_META['infrastructure-install'].title).toBe('Infrastructure');
