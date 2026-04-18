@@ -1,13 +1,7 @@
-import { createSignal, Show, For, createMemo, createEffect, onMount, onCleanup } from 'solid-js';
+import { createSignal, Show, For, createMemo, createEffect, onCleanup } from 'solid-js';
 import { useBeforeLeave } from '@solidjs/router';
 import type { JSX } from 'solid-js';
 
-import {
-  hasFeature,
-  runtimeCapabilitiesLoaded,
-  runtimeCapabilitiesLoading as entitlementsLoading,
-  loadRuntimeCapabilities,
-} from '@/stores/license';
 import { useLocation, useNavigate } from '@solidjs/router';
 import { logger } from '@/utils/logger';
 import { Card } from '@/components/shared/Card';
@@ -18,8 +12,6 @@ import Calendar from 'lucide-solid/icons/calendar';
 
 import { useWebSocket } from '@/contexts/appRuntime';
 import { useResources } from '@/hooks/useResources';
-import { aiChatStore } from '@/stores/aiChat';
-import { trackPaywallViewed } from '@/utils/upgradeMetrics';
 import {
   getAlertActivationFailure,
   getAlertActivationPresentation,
@@ -162,26 +154,6 @@ export function Alerts() {
   const [showQuickTip, setShowQuickTip] = createSignal(
     localStorage.getItem('hideAlertsQuickTip') !== 'true',
   );
-
-  const runtimeCapabilitiesLoading = createMemo(
-    () => !runtimeCapabilitiesLoaded() || entitlementsLoading(),
-  );
-  const hasAIAlertsFeature = createMemo(
-    () => !runtimeCapabilitiesLoaded() || hasFeature('ai_alerts'),
-  );
-
-  createEffect((wasPaywallVisible) => {
-    const isPaywallVisible =
-      runtimeCapabilitiesLoaded() && aiChatStore.enabled === true && !hasFeature('ai_alerts');
-    if (isPaywallVisible && !wasPaywallVisible) {
-      trackPaywallViewed('ai_alerts', 'alerts_page');
-    }
-    return isPaywallVisible;
-  }, false);
-
-  onMount(() => {
-    void loadRuntimeCapabilities();
-  });
 
   const dismissQuickTip = () => {
     setShowQuickTip(false);
@@ -410,8 +382,6 @@ export function Alerts() {
                 showAcknowledged={showAcknowledged}
                 setShowAcknowledged={setShowAcknowledged}
                 alertsDisabled={alertsConfigurationLocked}
-                hasAIAlertsFeature={hasAIAlertsFeature}
-                runtimeCapabilitiesLoading={runtimeCapabilitiesLoading}
               />
             </Show>
 
@@ -433,8 +403,6 @@ export function Alerts() {
 
             <Show when={activeTab() === 'history'}>
               <HistoryTab
-                hasAIAlertsFeature={hasAIAlertsFeature}
-                runtimeCapabilitiesLoading={runtimeCapabilitiesLoading}
                 getResource={getResource}
                 allResources={allResources}
               />

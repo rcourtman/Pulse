@@ -51,8 +51,6 @@ describe('HistoryTab', () => {
   it('renders against the current history-state contract without depending on legacy filteredAlerts', () => {
     render(() => (
       <HistoryTab
-        hasAIAlertsFeature={() => true}
-        runtimeCapabilitiesLoading={() => false}
         getResource={() => undefined}
         allResources={() => []}
       />

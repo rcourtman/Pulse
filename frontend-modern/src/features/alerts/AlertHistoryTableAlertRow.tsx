@@ -20,8 +20,6 @@ type AlertHistoryAlert = ReturnType<AlertHistoryState['groupedAlerts']>[number][
 interface AlertHistoryTableAlertRowProps {
   alert: AlertHistoryAlert;
   state: AlertHistoryState;
-  hasAIAlertsFeature: () => boolean;
-  runtimeCapabilitiesLoading: () => boolean;
 }
 
 export function AlertHistoryTableAlertRow(props: AlertHistoryTableAlertRowProps) {
@@ -140,7 +138,6 @@ export function AlertHistoryTableAlertRow(props: AlertHistoryTableAlertRowProps)
                 resourceType={props.alert.resourceType}
                 variant="icon"
                 size="sm"
-                licenseLocked={!props.hasAIAlertsFeature() && !props.runtimeCapabilitiesLoading()}
               />
             </Show>
           </div>

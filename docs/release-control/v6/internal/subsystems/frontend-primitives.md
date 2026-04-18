@@ -577,6 +577,12 @@ connections` visible as the API-backed alternative for Proxmox and
 `settingsNavCatalog.ts`, `settingsPanelRegistry.ts`, and
 `settingsNavigationModel.ts` replaces both. Panel routing within the
 infrastructure area uses `InfrastructurePanelStep` in-page state.
+Shared alert presentation surfaces (`OverviewTab.tsx`, `HistoryTab.tsx`,
+`AlertOverviewActiveAlertsSection.tsx`, `AlertHistoryTableSection.tsx`,
+`AlertHistoryTableAlertRow.tsx`, `AlertOverviewAlertCard.tsx`) no longer accept
+`hasAIAlertsFeature` or `runtimeCapabilitiesLoading` props. Feature gating for
+AI alerts flows through the shared entitlements layer; surfaces must not
+re-introduce per-surface capability fetch props.
 
 The frontend already has several guardrail tests. The next step is to keep
 turning repeated local patterns into explicit shared primitives with hard usage

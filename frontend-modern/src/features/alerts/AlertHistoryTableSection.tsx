@@ -19,8 +19,6 @@ import type { AlertHistoryState } from './useAlertHistoryState';
 
 interface AlertHistoryTableSectionProps {
   state: AlertHistoryState;
-  hasAIAlertsFeature: () => boolean;
-  runtimeCapabilitiesLoading: () => boolean;
 }
 
 export function AlertHistoryTableSection(props: AlertHistoryTableSectionProps) {
@@ -85,8 +83,6 @@ export function AlertHistoryTableSection(props: AlertHistoryTableSectionProps) {
                             <AlertHistoryTableAlertRow
                               alert={alert}
                               state={props.state}
-                              hasAIAlertsFeature={props.hasAIAlertsFeature}
-                              runtimeCapabilitiesLoading={props.runtimeCapabilitiesLoading}
                             />
                           )}
                         </For>

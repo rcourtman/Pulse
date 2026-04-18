@@ -20,8 +20,6 @@ interface AlertOverviewAlertCardProps {
   alert: Alert;
   state: AlertOverviewState;
   timelineState: AlertIncidentTimelineState;
-  hasAIAlertsFeature: boolean;
-  runtimeCapabilitiesLoading: boolean;
 }
 
 export function AlertOverviewAlertCard(props: AlertOverviewAlertCardProps) {
@@ -110,7 +108,6 @@ export function AlertOverviewAlertCard(props: AlertOverviewAlertCardProps) {
             }
             variant="text"
             size="sm"
-            licenseLocked={!props.hasAIAlertsFeature && !props.runtimeCapabilitiesLoading}
           />
         </div>
       </div>

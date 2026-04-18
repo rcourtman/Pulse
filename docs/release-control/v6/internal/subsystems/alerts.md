@@ -72,6 +72,16 @@ operator-facing alert routing behavior for live runtime alerts.
 
 ## Current State
 
+Alert browser surfaces no longer manage their own runtime-capabilities fetch or
+`hasAIAlertsFeature` prop chain. `frontend-modern/src/pages/Alerts.tsx` and the
+shared alert overview surfaces (`OverviewTab.tsx`, `HistoryTab.tsx`,
+`AlertOverviewActiveAlertsSection.tsx`, `AlertHistoryTableSection.tsx`,
+`AlertHistoryTableAlertRow.tsx`, `AlertOverviewAlertCard.tsx`) must source AI
+alert feature gating from the shared entitlements layer, not from a per-surface
+`loadRuntimeCapabilities` fetch. Alert surfaces must not re-introduce their own
+`hasAIAlertsFeature`, `runtimeCapabilitiesLoading`, or direct
+`/api/license/runtime-capabilities` reads.
+
 Canonical alert identity and evaluation are the live runtime model. Remaining
 legacy references should exist only in explicit migration or negative test
 boundaries.

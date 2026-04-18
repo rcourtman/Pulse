@@ -18,8 +18,6 @@ export function OverviewTab(props: {
   showAcknowledged: () => boolean;
   setShowAcknowledged: (value: boolean) => void;
   alertsDisabled: () => boolean;
-  hasAIAlertsFeature: () => boolean;
-  runtimeCapabilitiesLoading: () => boolean;
 }) {
   const location = useLocation();
   let hashScrollRafId: number | undefined;
@@ -77,8 +75,6 @@ export function OverviewTab(props: {
         timelineState={timelineState}
         activeAlerts={props.activeAlerts}
         alertsDisabled={props.alertsDisabled()}
-        hasAIAlertsFeature={props.hasAIAlertsFeature()}
-        runtimeCapabilitiesLoading={props.runtimeCapabilitiesLoading()}
         showAcknowledged={props.showAcknowledged()}
         setShowAcknowledged={props.setShowAcknowledged}
       />

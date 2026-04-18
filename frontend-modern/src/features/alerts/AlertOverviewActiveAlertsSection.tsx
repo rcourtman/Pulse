@@ -17,8 +17,6 @@ interface AlertOverviewActiveAlertsSectionProps {
   timelineState: AlertIncidentTimelineState;
   activeAlerts: Record<string, Alert>;
   alertsDisabled: boolean;
-  hasAIAlertsFeature: boolean;
-  runtimeCapabilitiesLoading: boolean;
   showAcknowledged: boolean;
   setShowAcknowledged: (value: boolean) => void;
 }
@@ -127,8 +125,6 @@ export function AlertOverviewActiveAlertsSection(props: AlertOverviewActiveAlert
                 alert={alert}
                 state={props.state}
                 timelineState={props.timelineState}
-                hasAIAlertsFeature={props.hasAIAlertsFeature}
-                runtimeCapabilitiesLoading={props.runtimeCapabilitiesLoading}
               />
             )}
           </For>

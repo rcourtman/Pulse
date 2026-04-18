@@ -13,8 +13,6 @@ import { AlertResourceIncidentsPanel } from '../AlertResourceIncidentsPanel';
 import { useAlertHistoryState } from '../useAlertHistoryState';
 
 export interface HistoryTabProps {
-  hasAIAlertsFeature: () => boolean;
-  runtimeCapabilitiesLoading: () => boolean;
   getResource: (resourceId: string) => Resource | undefined;
   allResources: () => Resource[];
 }
@@ -75,8 +73,6 @@ export function HistoryTab(props: HistoryTabProps) {
       <AlertResourceIncidentsPanel state={historyState} getResource={props.getResource} />
       <AlertHistoryTableSection
         state={historyState}
-        hasAIAlertsFeature={props.hasAIAlertsFeature}
-        runtimeCapabilitiesLoading={props.runtimeCapabilitiesLoading}
       />
       <AlertHistoryAdministrationCard state={historyState} />
     </div>

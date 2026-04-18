@@ -33,8 +33,6 @@ function defaultProps(overrides: Record<string, unknown> = {}) {
     showAcknowledged: () => false,
     setShowAcknowledged: vi.fn(),
     alertsDisabled: () => false,
-    hasAIAlertsFeature: () => true,
-    runtimeCapabilitiesLoading: () => false,
     ...overrides,
   };
 }
