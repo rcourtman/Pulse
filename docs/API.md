@@ -938,7 +938,7 @@ Runs a focused investigation for an alert payload (used by the UI).
 
 Request bodies:
 - `approve`: `{ "plan_id": "...", "approved_by": "api" }`
-- `execute`: `{ "execution_id": "...", "plan_id": "..." }`
+- `execute`: `{ "execution_id": "..." }`
 - `rollback`: `{ "execution_id": "..." }`
 
 ### Intelligence & Forecasting
