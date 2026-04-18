@@ -1,4 +1,4 @@
-FROM golang:1.25.7
+FROM golang:1.25.9
 
 # Set bash as default shell for features
 SHELL ["/bin/bash", "-c"]

@@ -3023,7 +3023,7 @@ build_from_source() {
     original_dir=$(pwd)
     local temp_build=""
     # Keep this aligned with go.mod's toolchain directive for consistent builds and security posture.
-    local GO_MIN_VERSION="1.25.7"
+    local GO_MIN_VERSION="1.25.9"
     local GO_INSTALLED=false
     local arch=""
     local go_arch=""
