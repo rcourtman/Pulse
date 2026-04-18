@@ -1,16 +1,26 @@
 import { Component, For } from 'solid-js';
 import { Dialog } from '@/components/shared/Dialog';
-import type { ConnectionKind, ConnectionMethod } from './connectionsTableModel';
+
+export type AddSystemChoiceKind = 'pve' | 'pbs' | 'pmg' | 'truenas' | 'vmware' | 'agent';
+export type AddSystemChoiceMethod = 'api' | 'agent';
 
 export interface AddSystemChoice {
-  kind: ConnectionKind;
+  kind: AddSystemChoiceKind;
   title: string;
   description: string;
-  method: ConnectionMethod;
+  method: AddSystemChoiceMethod;
   methodLabel: string;
 }
 
 export const ADD_SYSTEM_CHOICES: readonly AddSystemChoice[] = [
+  {
+    kind: 'agent',
+    title: 'Install on a host',
+    description:
+      'Generate an install token and run the Pulse agent on the host itself. Best for the first monitored system or anything without a supported API.',
+    method: 'agent',
+    methodLabel: 'Agent install',
+  },
   {
     kind: 'pve',
     title: 'Proxmox VE',
@@ -45,14 +55,6 @@ export const ADD_SYSTEM_CHOICES: readonly AddSystemChoice[] = [
     description: 'Connect a vCenter or ESXi host. Pulse polls the vSphere API.',
     method: 'api',
     methodLabel: 'API connection',
-  },
-  {
-    kind: 'agent',
-    title: 'Linux or Docker host (agent)',
-    description:
-      'Generate an install token and run the Pulse agent on the host itself. Best for anything without a supported API.',
-    method: 'agent',
-    methodLabel: 'Agent install',
   },
 ];
 

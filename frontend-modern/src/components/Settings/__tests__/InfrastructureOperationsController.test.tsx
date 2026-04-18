@@ -3,14 +3,10 @@ import { render, fireEvent, screen, waitFor, cleanup, within } from '@solidjs/te
 import { createSignal } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { Router, Route } from '@solidjs/router';
-import { InfrastructurePlatformConnectionsSummaryCard } from '../InfrastructurePlatformConnectionsSummaryCard';
 import { InfrastructureOperationsController } from '../InfrastructureOperationsController';
-import infrastructureInstallPanelSource from '../InfrastructureInstallPanel.tsx?raw';
 import infrastructureInstallerSectionSource from '../InfrastructureInstallerSection.tsx?raw';
 import infrastructureOperationsControllerSource from '../InfrastructureOperationsController.tsx?raw';
 import infrastructureOperationsModelSource from '../infrastructureOperationsModel.tsx?raw';
-import infrastructureReportingPanelSource from '../InfrastructureReportingPanel.tsx?raw';
-import infrastructurePlatformConnectionsSummaryCardSource from '../InfrastructurePlatformConnectionsSummaryCard.tsx?raw';
 import infrastructureInventorySectionSource from '../InfrastructureInventorySection.tsx?raw';
 import infrastructureInstallStateSource from '../useInfrastructureInstallState.tsx?raw';
 import infrastructureOperationsStateSource from '../useInfrastructureOperationsState.tsx?raw';
@@ -97,18 +93,6 @@ describe('InfrastructureOperationsController ownership guardrails', () => {
     expect(infrastructureOperationsControllerSource).toContain(
       'InfrastructureStopMonitoringDialog',
     );
-    expect(infrastructureInstallPanelSource).toContain('InfrastructureOperationsStateProvider');
-    expect(infrastructureInstallPanelSource).toContain('InfrastructureInstallerSection');
-    expect(infrastructureReportingPanelSource).toContain('InfrastructureOperationsStateProvider');
-    expect(infrastructureReportingPanelSource).toContain('InfrastructureInventorySection');
-    expect(infrastructureReportingPanelSource).toContain('InfrastructureStopMonitoringDialog');
-    expect(infrastructureReportingPanelSource).toContain(
-      './InfrastructurePlatformConnectionsSummaryCard',
-    );
-    expect(infrastructureReportingPanelSource).not.toContain('Platform connections');
-    expect(infrastructurePlatformConnectionsSummaryCardSource).toContain('Platform connections');
-    expect(infrastructurePlatformConnectionsSummaryCardSource).toContain('TrueNAS');
-    expect(infrastructurePlatformConnectionsSummaryCardSource).toContain('VMware');
     expect(infrastructureOperationsStateSource).toContain('./infrastructureOperationsModel');
     expect(infrastructureOperationsStateSource).toContain('./useInfrastructureInstallState');
     expect(infrastructureOperationsStateSource).toContain('./useInfrastructureReportingState');
@@ -161,61 +145,6 @@ describe('InfrastructureOperationsController ownership guardrails', () => {
     expect(infrastructureOperationsModelSource).toContain(
       'export const getPowerShellInstallProfileEnvFromFlags',
     );
-  });
-});
-
-describe('InfrastructurePlatformConnectionsSummaryCard', () => {
-  it('renders TrueNAS as a counted first-class platform connection', () => {
-    const onManagePlatformConnections = vi.fn();
-
-    render(() => (
-      <InfrastructurePlatformConnectionsSummaryCard
-        pveCount={1}
-        pbsCount={2}
-        pmgCount={3}
-        truenasCount={4}
-        truenasAvailable={true}
-        vmwareCount={5}
-        vmwareAvailable={true}
-        onManagePlatformConnections={onManagePlatformConnections}
-      />
-    ));
-
-    expect(screen.getByText('PVE')).toBeInTheDocument();
-    expect(screen.getByText('PBS')).toBeInTheDocument();
-    expect(screen.getByText('PMG')).toBeInTheDocument();
-    expect(screen.getByText('TrueNAS')).toBeInTheDocument();
-    expect(screen.getByText('VMware')).toBeInTheDocument();
-    expect(screen.getByTestId('platform-connections-truenas')).toHaveTextContent('4');
-    expect(screen.getByTestId('platform-connections-vmware')).toHaveTextContent('5');
-    expect(screen.getByText('API-backed NAS connections')).toBeInTheDocument();
-    expect(screen.getByText('vCenter platform connections')).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Open platform connections' }));
-    expect(onManagePlatformConnections).toHaveBeenCalledTimes(1);
-  });
-
-  it('shows when the TrueNAS integration is disabled instead of implying zero configured systems', () => {
-    render(() => (
-      <InfrastructurePlatformConnectionsSummaryCard
-        pveCount={0}
-        pbsCount={0}
-        pmgCount={0}
-        truenasCount={0}
-        truenasAvailable={false}
-        vmwareCount={0}
-        vmwareAvailable={false}
-        onManagePlatformConnections={() => {}}
-      />
-    ));
-
-    expect(
-      within(screen.getByTestId('platform-connections-truenas')).getByText('Disabled'),
-    ).toBeInTheDocument();
-    expect(
-      within(screen.getByTestId('platform-connections-vmware')).getByText('Disabled'),
-    ).toBeInTheDocument();
-    expect(screen.getAllByText('Explicitly disabled on this Pulse server.')).toHaveLength(2);
   });
 });
 

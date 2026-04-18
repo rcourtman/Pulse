@@ -53,6 +53,8 @@ export interface ConnectedInfrastructureItem {
   version?: string;
   isOutdatedBinary?: boolean;
   linkedNodeId?: string;
+  linkedVmId?: string;
+  linkedContainerId?: string;
   commandsEnabled?: boolean;
   scopeAgentId?: string;
   upgradePlatform?: 'linux' | 'macos' | 'freebsd' | 'windows';

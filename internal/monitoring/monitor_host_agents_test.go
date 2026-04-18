@@ -518,6 +518,45 @@ func TestRemoveHostAgentUnbindsToken(t *testing.T) {
 	}
 }
 
+func TestRemoveHostAgent_PreservesLinkedGuestIdentityInRemovedState(t *testing.T) {
+	t.Helper()
+
+	monitor := &Monitor{
+		state:             models.NewState(),
+		alertManager:      alerts.NewManager(),
+		hostTokenBindings: make(map[string]string),
+		config:            &config.Config{},
+	}
+	t.Cleanup(func() { monitor.alertManager.Stop() })
+
+	hostID := "host-linked-guest"
+	monitor.state.UpsertHost(models.Host{
+		ID:                hostID,
+		Hostname:          "guest-host.local",
+		DisplayName:       "guest-host",
+		LinkedVMID:        "101",
+		LinkedContainerID: "102",
+	})
+
+	if _, err := monitor.RemoveHostAgent(hostID); err != nil {
+		t.Fatalf("RemoveHostAgent: %v", err)
+	}
+
+	removedHosts := monitor.state.GetRemovedHostAgents()
+	if len(removedHosts) != 1 {
+		t.Fatalf("expected one removed host entry, got %d", len(removedHosts))
+	}
+	if removedHosts[0].LinkedVMID != "101" {
+		t.Fatalf("expected linked VM id to persist, got %q", removedHosts[0].LinkedVMID)
+	}
+	if removedHosts[0].LinkedContainerID != "102" {
+		t.Fatalf(
+			"expected linked container id to persist, got %q",
+			removedHosts[0].LinkedContainerID,
+		)
+	}
+}
+
 func TestRemoveHostAgent_KeepsSharedTokenUsedByDockerRuntime(t *testing.T) {
 	t.Helper()
 

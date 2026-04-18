@@ -1,122 +1,226 @@
-import { Component, Match, Show, Switch, createEffect, createMemo, createSignal } from 'solid-js';
+import { Component, Show, createEffect, createMemo, createSignal } from 'solid-js';
 import { useLocation, useNavigate } from '@solidjs/router';
 import { presentationPolicyIsReadOnly } from '@/stores/sessionPresentationPolicy';
-import { InfrastructureInstallPanel } from './InfrastructureInstallPanel';
-import { InfrastructureReportingPanel } from './InfrastructureReportingPanel';
-import { PlatformConnectionsWorkspace } from './PlatformConnectionsWorkspace';
-import { ConnectionsTable } from './ConnectionsTable';
+import { AgentProfilesPanel } from './AgentProfilesPanel';
 import { AddSystemPicker, type AddSystemChoice } from './AddSystemPicker';
-import { buildConnectionRows, type ConnectionRow } from './connectionsTableModel';
+import { ConnectionsTable } from './ConnectionsTable';
+import {
+  buildConnectionRows,
+  type ConnectionRow,
+  type ConnectionManageAction,
+} from './connectionsTableModel';
+import { InfrastructureInstallerSection } from './InfrastructureInstallerSection';
+import { InfrastructureInventorySection } from './InfrastructureInventorySection';
+import { InfrastructureStopMonitoringDialog } from './InfrastructureStopMonitoringDialog';
+import { PlatformConnectionsWorkspace } from './PlatformConnectionsWorkspace';
 import {
   buildInfrastructureWorkspacePath,
   getInfrastructureWorkspaceViewFromPath,
 } from './infrastructureWorkspaceModel';
 import type { InfrastructurePlatformSettingsProps } from './proxmoxSettingsModel';
+import {
+  InfrastructureOperationsStateProvider,
+  useInfrastructureOperationsContext,
+} from './useInfrastructureOperationsState';
 
 export type InfrastructureWorkspaceProps = InfrastructurePlatformSettingsProps;
 
-export const InfrastructureWorkspace: Component<InfrastructureWorkspaceProps> = (props) => {
+const scrollSectionIntoView = (section?: HTMLDivElement) => {
+  if (
+    typeof window === 'undefined' ||
+    !section ||
+    typeof section.scrollIntoView !== 'function'
+  ) {
+    return;
+  }
+
+  window.requestAnimationFrame(() => {
+    section.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  });
+};
+
+const proxmoxRouteForKind = (kind: 'pve' | 'pbs' | 'pmg') =>
+  `/settings/infrastructure/platforms/proxmox/${kind}`;
+
+const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = (props) => {
   const navigate = useNavigate();
   const location = useLocation();
+  const state = useInfrastructureOperationsContext();
+
   const activeView = createMemo(() => getInfrastructureWorkspaceViewFromPath(location.pathname));
   const readOnlyWorkspace = createMemo(() => presentationPolicyIsReadOnly());
   const [pickerOpen, setPickerOpen] = createSignal(false);
 
+  let inventorySectionRef: HTMLDivElement | undefined;
+  let platformSectionRef: HTMLDivElement | undefined;
+  let installSectionRef: HTMLDivElement | undefined;
+
   const rows = createMemo<ConnectionRow[]>(() =>
     buildConnectionRows({
+      activeRows: state.activeRows(),
+      monitoringStoppedRows: state.monitoringStoppedRows(),
       pveNodes: props.pveNodes(),
       pbsNodes: props.pbsNodes(),
       pmgNodes: props.pmgNodes(),
       truenasConnections: props.trueNASSettings.connections(),
       vmwareConnections: props.vmwareSettings.connections(),
-      agentResources: props.agentStateResources?.() ?? [],
+      includeConfigurationRows: !readOnlyWorkspace(),
     }),
   );
 
+  const openProxmoxNode = (nodeKind: 'pve' | 'pbs' | 'pmg', nodeId: string) => {
+    const nodes =
+      nodeKind === 'pve'
+        ? props.pveNodes()
+        : nodeKind === 'pbs'
+          ? props.pbsNodes()
+          : props.pmgNodes();
+    const node = nodes.find((candidate) => candidate.id === nodeId) ?? null;
+
+    props.onSelectAgent(nodeKind);
+    props.setCurrentNodeType(nodeKind);
+    props.setEditingNode(node);
+    props.setModalResetKey((value) => value + 1);
+    props.setShowNodeModal(true);
+    navigate(proxmoxRouteForKind(nodeKind));
+    scrollSectionIntoView(platformSectionRef);
+  };
+
   const handleAddSystem = (choice: AddSystemChoice) => {
     setPickerOpen(false);
+
     if (choice.kind === 'agent') {
-      navigate('/settings/infrastructure/install');
+      navigate(buildInfrastructureWorkspacePath('install'));
+      scrollSectionIntoView(installSectionRef);
       return;
     }
+
     if (choice.kind === 'truenas') {
+      props.trueNASSettings.openCreateDialog();
       navigate('/settings/infrastructure/platforms/truenas');
+      scrollSectionIntoView(platformSectionRef);
       return;
     }
+
     if (choice.kind === 'vmware') {
+      props.vmwareSettings.openCreateDialog();
       navigate('/settings/infrastructure/platforms/vmware');
+      scrollSectionIntoView(platformSectionRef);
       return;
     }
-    props.onSelectAgent(choice.kind);
-    navigate(`/settings/infrastructure/platforms/proxmox/${choice.kind}`);
+
+    openProxmoxNode(choice.kind, '');
+  };
+
+  const handleManageAction = (action: ConnectionManageAction) => {
+    switch (action.kind) {
+      case 'inventory-active':
+        state.setExpandedRowKey(action.rowKey);
+        navigate(buildInfrastructureWorkspacePath('operations'));
+        scrollSectionIntoView(inventorySectionRef);
+        return;
+      case 'inventory-ignored':
+        state.setSelectedIgnoredRowKey(action.rowKey);
+        navigate(buildInfrastructureWorkspacePath('operations'));
+        scrollSectionIntoView(inventorySectionRef);
+        return;
+      case 'proxmox-node':
+        openProxmoxNode(action.nodeKind, action.nodeId);
+        return;
+      case 'truenas-connection': {
+        const connection = props
+          .trueNASSettings
+          .connections()
+          .find((candidate) => candidate.id === action.connectionId);
+        if (connection) {
+          props.trueNASSettings.openEditDialog(connection);
+        }
+        navigate('/settings/infrastructure/platforms/truenas');
+        scrollSectionIntoView(platformSectionRef);
+        return;
+      }
+      case 'vmware-connection': {
+        const connection = props
+          .vmwareSettings
+          .connections()
+          .find((candidate) => candidate.id === action.connectionId);
+        if (connection) {
+          props.vmwareSettings.openEditDialog(connection);
+        }
+        navigate('/settings/infrastructure/platforms/vmware');
+        scrollSectionIntoView(platformSectionRef);
+        return;
+      }
+      default:
+        return;
+    }
   };
 
   createEffect(() => {
-    if (readOnlyWorkspace() && activeView() === 'install') {
+    if (readOnlyWorkspace() && activeView() !== 'inventory') {
       navigate(buildInfrastructureWorkspacePath('inventory'), { replace: true });
+      return;
     }
-  });
 
-  const subviewHeading = createMemo(() => {
-    switch (activeView()) {
-      case 'install':
-        return 'Install on a host';
-      case 'platforms':
-        return 'Platform connections';
-      case 'operations':
-        return 'Reporting';
-      default:
-        return '';
+    const view = activeView();
+    if (view === 'inventory') {
+      return;
+    }
+
+    if (view === 'operations') {
+      scrollSectionIntoView(inventorySectionRef);
+      return;
+    }
+
+    if (view === 'platforms') {
+      scrollSectionIntoView(platformSectionRef);
+      return;
+    }
+
+    if (view === 'install') {
+      scrollSectionIntoView(installSectionRef);
     }
   });
 
   return (
-    <div class="space-y-6">
-      <Show when={activeView() !== 'inventory'}>
-        <div class="flex items-center gap-2 text-sm">
-          <button
-            type="button"
-            onClick={() => navigate(buildInfrastructureWorkspacePath('inventory'))}
-            class="inline-flex items-center gap-1 rounded-md border border-border bg-surface px-2.5 py-1 text-muted hover:bg-surface-hover hover:text-base-content"
-          >
-            <span aria-hidden="true">←</span>
-            <span>Connections and Inventory</span>
-          </button>
-          <span class="text-muted" aria-hidden="true">/</span>
-          <span class="font-medium text-base-content">{subviewHeading()}</span>
-        </div>
-      </Show>
+    <div class="space-y-8">
+      <ConnectionsTable
+        rows={rows}
+        onAddSystem={readOnlyWorkspace() ? undefined : () => setPickerOpen(true)}
+        onManageRow={(row) => handleManageAction(row.manage)}
+      />
 
-      <Switch>
-        <Match when={activeView() === 'inventory'}>
-          <ConnectionsTable
-            rows={rows}
-            onAddSystem={readOnlyWorkspace() ? undefined : () => setPickerOpen(true)}
-          />
-          <AddSystemPicker
-            isOpen={pickerOpen()}
-            onClose={() => setPickerOpen(false)}
-            onSelect={handleAddSystem}
-          />
-        </Match>
+      <AddSystemPicker
+        isOpen={pickerOpen()}
+        onClose={() => setPickerOpen(false)}
+        onSelect={handleAddSystem}
+      />
 
-        <Match when={activeView() === 'install'}>
-          <InfrastructureInstallPanel />
-        </Match>
+      <InfrastructureStopMonitoringDialog />
 
-        <Match when={activeView() === 'platforms'}>
+      <div ref={inventorySectionRef}>
+        <InfrastructureInventorySection />
+      </div>
+
+      <Show when={!readOnlyWorkspace()}>
+        <div ref={platformSectionRef} class="space-y-6">
           <PlatformConnectionsWorkspace {...props} />
-        </Match>
+        </div>
 
-        <Match when={activeView() === 'operations'}>
-          <InfrastructureReportingPanel
-            {...props}
-            onManagePlatformConnections={() =>
-              navigate('/settings/infrastructure/platforms')
-            }
-          />
-        </Match>
-      </Switch>
+        <div ref={installSectionRef}>
+          <InfrastructureInstallerSection />
+        </div>
+
+        <AgentProfilesPanel />
+      </Show>
     </div>
+  );
+};
+
+export const InfrastructureWorkspace: Component<InfrastructureWorkspaceProps> = (props) => {
+  return (
+    <InfrastructureOperationsStateProvider embedded>
+      <InfrastructureWorkspaceContent {...props} />
+    </InfrastructureOperationsStateProvider>
   );
 };

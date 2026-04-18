@@ -39,16 +39,6 @@ export function useSettingsInfrastructurePanelProps(
       .filter((instance): instance is NonNullable<typeof instance> => Boolean(instance)),
   );
 
-  const platformConnectionsSummary = createMemo(() => ({
-    pveCount: params.infrastructureSettings.pveNodes().length,
-    pbsCount: params.infrastructureSettings.pbsNodes().length,
-    pmgCount: params.infrastructureSettings.pmgNodes().length,
-    truenasCount: params.infrastructureSettings.trueNASSettings.connections().length,
-    truenasAvailable: !params.infrastructureSettings.trueNASSettings.featureDisabled(),
-    vmwareCount: params.infrastructureSettings.vmwareSettings.connections().length,
-    vmwareAvailable: !params.infrastructureSettings.vmwareSettings.featureDisabled(),
-  }));
-
   const getInfrastructurePanelProps = (): InfrastructurePlatformSettingsProps => ({
     selectedAgent: params.selectedAgent,
     onSelectAgent: params.onSelectAgent,
@@ -67,7 +57,6 @@ export function useSettingsInfrastructurePanelProps(
     pmgNodes: params.infrastructureSettings.pmgNodes,
     trueNASSettings: params.infrastructureSettings.trueNASSettings,
     vmwareSettings: params.infrastructureSettings.vmwareSettings,
-    platformConnectionsSummary,
     temperatureMonitoringEnabled: params.systemSettings.temperatureMonitoringEnabled,
     triggerDiscoveryScan: params.infrastructureSettings.triggerDiscoveryScan,
     loadDiscoveredNodes: params.infrastructureSettings.loadDiscoveredNodes,

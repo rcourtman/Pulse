@@ -213,7 +213,7 @@ work extends shared components instead of creating new local variants.
    helper plus runtime `monitored_system_capacity` reads rather than
    reconstructing raw `current / limit` slash math or `0 remaining` copy in
    the banner shell, state owner, or shared model.
-5. Keep shared platform-connections shell state on the reusable settings boundary: `frontend-modern/src/components/Settings/useSettingsInfrastructurePanelProps.ts`, `frontend-modern/src/components/Settings/InfrastructurePlatformConnectionsSummaryCard.tsx`, and `frontend-modern/src/components/Settings/PlatformConnectionsWorkspace.tsx` must continue to derive provider counts, availability, and shared subtab copy from one infrastructure-settings source instead of creating provider-local summary fetches or VMware-only shell vocabulary.
+5. Keep shared platform-connections shell state on the reusable settings boundary: `frontend-modern/src/components/Settings/useSettingsInfrastructurePanelProps.ts`, `frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx`, and `frontend-modern/src/components/Settings/PlatformConnectionsWorkspace.tsx` must continue to derive provider counts, availability, and shared subtab copy from one infrastructure-settings source instead of creating provider-local summary fetches or VMware-only shell vocabulary.
 6. Keep Proxmox deep-link route selection on the shared settings-navigation boundary. `frontend-modern/src/components/Settings/settingsNavigationModel.ts` and `frontend-modern/src/components/Settings/useSettingsNavigation.ts` must treat the canonical PBS and PMG Proxmox deep links as agent-selection authority even though those URLs resolve to the shared `infrastructure-operations` tab. Reloading or remounting on a PBS or PMG deep link must not silently fall back to the PVE selector state.
 7. Keep shared storage feature presenters on canonical platform truth. When reusable storage presenters under `frontend-modern/src/features/storageBackups/` classify canonical resources for the shared storage route, API-backed virtualization datastores such as VMware must stay inventory-only datastores instead of inheriting PBS-specific backup-repository or protected-target copy from older fallback branches.
 8. Keep shared source/platform vocabulary on the governed manifest boundary. `frontend-modern/src/utils/platformSupportManifest.generated.ts` must be the tracked frontend projection of `docs/release-control/v6/internal/PLATFORM_SUPPORT_MANIFEST.json`, `frontend-modern/src/utils/platformSupportManifest.ts`, `frontend-modern/src/utils/sourcePlatforms.ts`, and `frontend-modern/src/utils/sourcePlatformOptions.ts` must consume that generated projection instead of embedding divergent future-label lists, setup/onboarding path allowlists, or presentation-only guesses, and `frontend-modern/scripts/canonical-platform-audit.mjs` must fail when the generated projection drifts from the governed manifest.
@@ -518,10 +518,10 @@ connections` visible as the API-backed alternative for Proxmox and
 30. Keep the infrastructure settings platform-connections summary and provider
     workspaces on one shared state source. `frontend-modern/src/components/Settings/useInfrastructureSettingsState.ts`,
     `frontend-modern/src/components/Settings/useSettingsInfrastructurePanelProps.ts`,
-    `frontend-modern/src/components/Settings/InfrastructurePlatformConnectionsSummaryCard.tsx`,
+    `frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx`,
     `frontend-modern/src/components/Settings/PlatformConnectionsWorkspace.tsx`, and `frontend-modern/src/components/Settings/TrueNASSettingsPanel.tsx` must
     derive TrueNAS connection counts and availability from the shared
-    infrastructure settings state instead of letting the reporting summary and
+    infrastructure settings state instead of letting the top-level ledger and
     the provider-specific panel issue separate connection fetches.
 31. Keep alert-history feature composition on the current owned state contract.
     `frontend-modern/src/features/alerts/tabs/HistoryTab.tsx` must react to the
@@ -2129,7 +2129,7 @@ locks that direct-root contract so single-surface pages do not quietly regain
 redundant outer spacing chrome.
 The same shared settings-shell boundary now also owns the API-backed
 alternative path inside Connections & Inventory. `frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx`,
-`frontend-modern/src/components/Settings/InfrastructurePlatformConnectionsSummaryCard.tsx`, `frontend-modern/src/components/Settings/settingsHeaderMeta.ts`,
+`frontend-modern/src/components/Settings/settingsHeaderMeta.ts`,
 `frontend-modern/src/components/Settings/settingsNavigationModel.ts`, `frontend-modern/src/utils/dashboardEmptyStatePresentation.ts`,
 `frontend-modern/src/utils/infrastructureEmptyStatePresentation.ts`, and adjacent setup guidance must
 treat `Platform connections` as the canonical API-backed alternative for
@@ -2138,11 +2138,11 @@ top-level `Direct Proxmox` wording or shell-local provider routes.
 That same settings-shell contract also owns the shared platform-connections
 summary state. `frontend-modern/src/components/Settings/useInfrastructureSettingsState.ts`,
 `frontend-modern/src/components/Settings/useSettingsInfrastructurePanelProps.ts`,
-`frontend-modern/src/components/Settings/InfrastructurePlatformConnectionsSummaryCard.tsx`,
+`frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx`,
 `frontend-modern/src/components/Settings/PlatformConnectionsWorkspace.tsx`, `frontend-modern/src/components/Settings/TrueNASSettingsPanel.tsx`, and
 `frontend-modern/src/components/Settings/VMwareSettingsPanel.tsx` must derive Proxmox/PBS/PMG/TrueNAS/VMware counts
 and availability from one shared infrastructure settings state source instead
-of letting the reporting summary and the provider-specific panels fetch the
+of letting the top-level ledger and the provider-specific panels fetch the
 same connection state separately.
 That same shared settings-shell boundary also owns provider parity inside the
 platform workspace. Adding VMware to the shared `Platform connections`

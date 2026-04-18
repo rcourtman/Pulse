@@ -254,6 +254,8 @@ type ConnectedInfrastructureItemFrontend struct {
 	Version           string                                   `json:"version,omitempty"`
 	IsOutdatedBinary  bool                                     `json:"isOutdatedBinary,omitempty"`
 	LinkedNodeID      string                                   `json:"linkedNodeId,omitempty"`
+	LinkedVMID        string                                   `json:"linkedVmId,omitempty"`
+	LinkedContainerID string                                   `json:"linkedContainerId,omitempty"`
 	CommandsEnabled   bool                                     `json:"commandsEnabled,omitempty"`
 	ScopeAgentID      string                                   `json:"scopeAgentId,omitempty"`
 	UpgradePlatform   string                                   `json:"upgradePlatform,omitempty"`

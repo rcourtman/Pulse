@@ -1,173 +1,337 @@
-import type { Resource } from '@/types/resource';
-import type { NodeConfigWithStatus } from '@/types/nodes';
 import type { TrueNASConnection } from '@/api/truenas';
 import type { VMwareConnection } from '@/api/vmware';
+import type { NodeConfigWithStatus } from '@/types/nodes';
+import { formatRelativeTime } from '@/utils/format';
+import { getUnifiedAgentLastSeenLabel } from '@/utils/unifiedAgentInventoryPresentation';
+import {
+  getUnifiedAgentStatusPresentation,
+  MONITORING_STOPPED_STATUS_LABEL,
+} from '@/utils/unifiedAgentStatusPresentation';
+import type { UnifiedAgentRow } from './infrastructureOperationsModel';
 
-export type ConnectionKind = 'pve' | 'pbs' | 'pmg' | 'truenas' | 'vmware' | 'agent';
-export type ConnectionMethod = 'api' | 'agent';
-export type ConnectionStatus = 'reporting' | 'pending' | 'offline' | 'error' | 'unknown';
+type ManagedNodeKind = 'pve' | 'pbs' | 'pmg';
+
+export type ConnectionManageAction =
+  | { kind: 'inventory-active'; rowKey: string }
+  | { kind: 'inventory-ignored'; rowKey: string }
+  | { kind: 'proxmox-node'; nodeKind: ManagedNodeKind; nodeId: string }
+  | { kind: 'truenas-connection'; connectionId: string }
+  | { kind: 'vmware-connection'; connectionId: string };
 
 export interface ConnectionRow {
   id: string;
-  kind: ConnectionKind;
-  kindLabel: string;
-  method: ConnectionMethod;
-  methodLabel: string;
+  name: string;
+  subtitle: string;
+  host?: string;
+  coverageLabels: string[];
+  collectionLabel: string;
+  statusLabel: string;
+  statusClassName: string;
+  lastActivityText: string;
+  manageLabel: string;
+  manage: ConnectionManageAction;
+}
+
+const SUCCESS_BADGE_CLASS =
+  'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300';
+const WARNING_BADGE_CLASS =
+  'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200';
+const DANGER_BADGE_CLASS = 'bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300';
+const MUTED_BADGE_CLASS = 'bg-surface text-muted';
+const DEFAULT_BADGE_CLASS = 'bg-surface-alt text-base-content';
+
+const PROXMOX_CAPABILITY_KEYS = ['proxmox', 'pbs', 'pmg'] as const;
+const AGENT_CAPABILITY_KEYS = ['agent', 'docker', 'kubernetes'] as const;
+
+const formatActivity = (value?: number | string | null) =>
+  value ? formatRelativeTime(value, { emptyText: '—' }) : '—';
+
+const normalizeConfigKey = (value?: string | null) => value?.trim().toLowerCase() ?? '';
+
+const buildConfiguredRow = (params: {
+  id: string;
   name: string;
   host?: string;
-  status: ConnectionStatus;
+  subtitle: string;
+  coverageLabels: string[];
+  collectionLabel: string;
   statusLabel: string;
-  lastReportedMs?: number;
-}
+  statusClassName: string;
+  lastActivityText: string;
+  manageLabel: string;
+  manage: ConnectionManageAction;
+}) => ({
+  id: params.id,
+  name: params.name,
+  subtitle: params.subtitle,
+  host: params.host && params.host !== params.name ? params.host : undefined,
+  coverageLabels: params.coverageLabels,
+  collectionLabel: params.collectionLabel,
+  statusLabel: params.statusLabel,
+  statusClassName: params.statusClassName,
+  lastActivityText: params.lastActivityText,
+  manageLabel: params.manageLabel,
+  manage: params.manage,
+});
 
-export const CONNECTION_KIND_LABELS: Record<ConnectionKind, string> = {
-  pve: 'Proxmox VE',
-  pbs: 'PBS',
-  pmg: 'PMG',
-  truenas: 'TrueNAS',
-  vmware: 'VMware',
-  agent: 'Agent host',
+const collectionLabelFromCapabilities = (capabilities: UnifiedAgentRow['capabilities']) => {
+  const hasAgent = capabilities.some((capability) =>
+    AGENT_CAPABILITY_KEYS.includes(capability as (typeof AGENT_CAPABILITY_KEYS)[number]),
+  );
+  const hasApi = capabilities.some((capability) =>
+    PROXMOX_CAPABILITY_KEYS.includes(capability as (typeof PROXMOX_CAPABILITY_KEYS)[number]) ||
+    capability === 'truenas',
+  );
+
+  if (hasAgent && hasApi) {
+    return 'Agent + API';
+  }
+  if (hasApi) {
+    return 'API';
+  }
+  if (hasAgent) {
+    return 'Agent';
+  }
+  return 'Runtime';
 };
 
-export const CONNECTION_METHOD_LABELS: Record<ConnectionMethod, string> = {
-  api: 'API',
-  agent: 'Agent',
-};
+const reportingRow = (row: UnifiedAgentRow): ConnectionRow => {
+  const statusPresentation = getUnifiedAgentStatusPresentation(row.status, row.healthStatus);
 
-export const CONNECTION_STATUS_LABELS: Record<ConnectionStatus, string> = {
-  reporting: 'Reporting',
-  pending: 'Pending',
-  offline: 'Offline',
-  error: 'Error',
-  unknown: 'Unknown',
-};
-
-function row(
-  kind: ConnectionKind,
-  id: string,
-  name: string,
-  method: ConnectionMethod,
-  status: ConnectionStatus,
-  host?: string,
-  lastReportedMs?: number,
-): ConnectionRow {
   return {
-    id: `${kind}:${id}`,
-    kind,
-    kindLabel: CONNECTION_KIND_LABELS[kind],
-    method,
-    methodLabel: CONNECTION_METHOD_LABELS[method],
-    name,
-    host,
-    status,
-    statusLabel: CONNECTION_STATUS_LABELS[status],
-    lastReportedMs,
+    id: row.rowKey,
+    name: row.name,
+    subtitle: row.status === 'removed' ? 'Ignored by Pulse' : 'Live reporting item',
+    host:
+      row.hostname && row.hostname !== row.name && row.hostname !== row.displayName
+        ? row.hostname
+        : undefined,
+    coverageLabels: row.surfaces.map((surface) => surface.label),
+    collectionLabel: collectionLabelFromCapabilities(row.capabilities),
+    statusLabel: statusPresentation.label,
+    statusClassName: statusPresentation.badgeClass,
+    lastActivityText: getUnifiedAgentLastSeenLabel(row, MONITORING_STOPPED_STATUS_LABEL),
+    manageLabel: row.status === 'removed' ? 'Review ignored' : 'View details',
+    manage:
+      row.status === 'removed'
+        ? { kind: 'inventory-ignored', rowKey: row.rowKey }
+        : { kind: 'inventory-active', rowKey: row.rowKey },
   };
-}
+};
 
-function mapNodeStatus(status: NodeConfigWithStatus['status']): ConnectionStatus {
+const nodeStatusPresentation = (status: NodeConfigWithStatus['status']) => {
   switch (status) {
     case 'connected':
-      return 'reporting';
+      return { label: 'Connected', className: SUCCESS_BADGE_CLASS };
     case 'pending':
-      return 'pending';
+      return { label: 'Pending', className: WARNING_BADGE_CLASS };
     case 'disconnected':
     case 'offline':
-      return 'offline';
+      return { label: 'Offline', className: MUTED_BADGE_CLASS };
     case 'error':
-      return 'error';
+      return { label: 'Error', className: DANGER_BADGE_CLASS };
     default:
-      return 'unknown';
+      return { label: 'Unknown', className: DEFAULT_BADGE_CLASS };
   }
-}
+};
 
-export function pveConnectionRow(node: NodeConfigWithStatus): ConnectionRow {
-  return row('pve', node.id, node.displayName || node.name, 'api', mapNodeStatus(node.status), node.host);
-}
+const proxmoxNodeRow = (
+  node: NodeConfigWithStatus,
+  kindLabel: string,
+  nodeKind: ManagedNodeKind,
+): ConnectionRow => {
+  const status = nodeStatusPresentation(node.status);
 
-export function pbsConnectionRow(node: NodeConfigWithStatus): ConnectionRow {
-  return row('pbs', node.id, node.displayName || node.name, 'api', mapNodeStatus(node.status), node.host);
-}
+  return buildConfiguredRow({
+    id: `${nodeKind}:${node.id}`,
+    name: node.displayName || node.name,
+    host: node.host,
+    subtitle: 'Configured platform connection',
+    coverageLabels: [`${kindLabel} data`],
+    collectionLabel: 'API',
+    statusLabel: status.label,
+    statusClassName: status.className,
+    lastActivityText: '—',
+    manageLabel: 'Edit connection',
+    manage: { kind: 'proxmox-node', nodeKind, nodeId: node.id },
+  });
+};
 
-export function pmgConnectionRow(node: NodeConfigWithStatus): ConnectionRow {
-  return row('pmg', node.id, node.displayName || node.name, 'api', mapNodeStatus(node.status), node.host);
-}
-
-function pollBackedStatus(
+const pollBackedPresentation = (
   enabled: boolean,
   lastSuccessAt: string | undefined,
   consecutiveFailures: number | undefined,
-): { status: ConnectionStatus; lastReportedMs?: number } {
-  if (!enabled) return { status: 'offline' };
-  const lastReportedMs = lastSuccessAt ? Date.parse(lastSuccessAt) || undefined : undefined;
-  const fails = consecutiveFailures ?? 0;
-  if (fails > 2) return { status: 'error', lastReportedMs };
-  if (fails > 0 && !lastReportedMs) return { status: 'error' };
-  if (lastReportedMs) return { status: 'reporting', lastReportedMs };
-  return { status: 'pending' };
-}
+) => {
+  const lastActivityText = formatActivity(lastSuccessAt);
+  const failures = consecutiveFailures ?? 0;
 
-export function truenasConnectionRow(conn: TrueNASConnection): ConnectionRow {
-  const { status, lastReportedMs } = pollBackedStatus(
-    conn.enabled,
-    conn.poll?.lastSuccessAt,
-    conn.poll?.consecutiveFailures,
-  );
-  return row('truenas', conn.id, conn.name || conn.host, 'api', status, conn.host, lastReportedMs);
-}
-
-export function vmwareConnectionRow(conn: VMwareConnection): ConnectionRow {
-  const { status, lastReportedMs } = pollBackedStatus(
-    conn.enabled,
-    conn.poll?.lastSuccessAt,
-    conn.poll?.consecutiveFailures,
-  );
-  return row('vmware', conn.id, conn.name || conn.host, 'api', status, conn.host, lastReportedMs);
-}
-
-function mapResourceStatus(status: Resource['status']): ConnectionStatus {
-  switch (status) {
-    case 'online':
-    case 'running':
-      return 'reporting';
-    case 'offline':
-    case 'stopped':
-      return 'offline';
-    case 'degraded':
-      return 'error';
-    default:
-      return 'unknown';
+  if (!enabled) {
+    return {
+      label: 'Disabled',
+      className: MUTED_BADGE_CLASS,
+      lastActivityText,
+    };
   }
-}
 
-export function agentConnectionRow(resource: Resource): ConnectionRow {
-  return row(
-    'agent',
-    resource.id,
-    resource.displayName || resource.name,
-    'agent',
-    mapResourceStatus(resource.status),
-    undefined,
-    resource.lastSeen || undefined,
+  if (failures > 2) {
+    return {
+      label: 'Sync failing',
+      className: DANGER_BADGE_CLASS,
+      lastActivityText,
+    };
+  }
+
+  if (failures > 0 && !lastSuccessAt) {
+    return {
+      label: 'Error',
+      className: DANGER_BADGE_CLASS,
+      lastActivityText: 'No successful sync yet',
+    };
+  }
+
+  if (lastSuccessAt) {
+    return {
+      label: 'Healthy',
+      className: SUCCESS_BADGE_CLASS,
+      lastActivityText,
+    };
+  }
+
+  return {
+    label: 'Awaiting first sync',
+    className: WARNING_BADGE_CLASS,
+    lastActivityText: '—',
+  };
+};
+
+const truenasRow = (connection: TrueNASConnection): ConnectionRow => {
+  const health = pollBackedPresentation(
+    connection.enabled,
+    connection.poll?.lastSuccessAt,
+    connection.poll?.consecutiveFailures,
   );
-}
+
+  return buildConfiguredRow({
+    id: `truenas:${connection.id}`,
+    name: connection.name || connection.host,
+    host: connection.host,
+    subtitle: 'Configured platform connection',
+    coverageLabels: ['TrueNAS data'],
+    collectionLabel: 'API',
+    statusLabel: health.label,
+    statusClassName: health.className,
+    lastActivityText: health.lastActivityText,
+    manageLabel: 'Edit connection',
+    manage: { kind: 'truenas-connection', connectionId: connection.id },
+  });
+};
+
+const vmwareRow = (connection: VMwareConnection): ConnectionRow => {
+  const health = pollBackedPresentation(
+    connection.enabled,
+    connection.poll?.lastSuccessAt,
+    connection.poll?.consecutiveFailures,
+  );
+
+  return buildConfiguredRow({
+    id: `vmware:${connection.id}`,
+    name: connection.name || connection.host,
+    host: connection.host,
+    subtitle: 'Configured platform connection',
+    coverageLabels: ['VMware data'],
+    collectionLabel: 'API',
+    statusLabel: health.label,
+    statusClassName: health.className,
+    lastActivityText: health.lastActivityText,
+    manageLabel: 'Edit connection',
+    manage: { kind: 'vmware-connection', connectionId: connection.id },
+  });
+};
+
+const isTopLevelInfrastructureRow = (row: UnifiedAgentRow) =>
+  !row.linkedVmId?.trim() && !row.linkedContainerId?.trim();
+
+const reportingConfigKeys = (rows: UnifiedAgentRow[]) => {
+  const keys = new Set<string>();
+
+  for (const row of rows) {
+    for (const surface of row.surfaces) {
+      switch (surface.kind) {
+        case 'proxmox':
+        case 'pbs':
+        case 'pmg': {
+          const rawId = surface.idValue || surface.controlId || row.id;
+          if (rawId) {
+            keys.add(`${surface.kind}:${normalizeConfigKey(rawId)}`);
+          }
+          break;
+        }
+        case 'truenas': {
+          const rawId = surface.idValue || row.hostname || row.id;
+          if (rawId) {
+            keys.add(`truenas:${normalizeConfigKey(rawId)}`);
+          }
+          break;
+        }
+        default:
+          break;
+      }
+    }
+  }
+
+  return keys;
+};
+
+const compareRows = (left: ConnectionRow, right: ConnectionRow) => {
+  const leftName = left.name.trim().toLowerCase();
+  const rightName = right.name.trim().toLowerCase();
+  if (leftName === rightName) {
+    return left.id.localeCompare(right.id);
+  }
+  return leftName.localeCompare(rightName);
+};
 
 export interface ConnectionsTableSources {
+  activeRows: readonly UnifiedAgentRow[];
+  monitoringStoppedRows: readonly UnifiedAgentRow[];
   pveNodes: readonly NodeConfigWithStatus[];
   pbsNodes: readonly NodeConfigWithStatus[];
   pmgNodes: readonly NodeConfigWithStatus[];
   truenasConnections: readonly TrueNASConnection[];
   vmwareConnections: readonly VMwareConnection[];
-  agentResources: readonly Resource[];
+  includeConfigurationRows?: boolean;
 }
 
 export function buildConnectionRows(sources: ConnectionsTableSources): ConnectionRow[] {
-  return [
-    ...sources.pveNodes.map(pveConnectionRow),
-    ...sources.pbsNodes.map(pbsConnectionRow),
-    ...sources.pmgNodes.map(pmgConnectionRow),
-    ...sources.truenasConnections.map(truenasConnectionRow),
-    ...sources.vmwareConnections.map(vmwareConnectionRow),
-    ...sources.agentResources.map(agentConnectionRow),
-  ].sort((a, b) => a.name.localeCompare(b.name));
+  const infrastructureRows = [
+    ...sources.activeRows.filter(isTopLevelInfrastructureRow),
+    ...sources.monitoringStoppedRows.filter(isTopLevelInfrastructureRow),
+  ];
+  const reportingRows = [
+    ...infrastructureRows.map(reportingRow),
+  ];
+
+  if (sources.includeConfigurationRows === false) {
+    return reportingRows.sort(compareRows);
+  }
+
+  const seenConfigKeys = reportingConfigKeys(infrastructureRows);
+
+  const configuredRows: ConnectionRow[] = [
+    ...sources.pveNodes
+      .filter((node) => !seenConfigKeys.has(`proxmox:${normalizeConfigKey(node.id)}`))
+      .map((node) => proxmoxNodeRow(node, 'Proxmox VE', 'pve')),
+    ...sources.pbsNodes
+      .filter((node) => !seenConfigKeys.has(`pbs:${normalizeConfigKey(node.id)}`))
+      .map((node) => proxmoxNodeRow(node, 'PBS', 'pbs')),
+    ...sources.pmgNodes
+      .filter((node) => !seenConfigKeys.has(`pmg:${normalizeConfigKey(node.id)}`))
+      .map((node) => proxmoxNodeRow(node, 'PMG', 'pmg')),
+    ...sources.truenasConnections
+      .filter((connection) => !seenConfigKeys.has(`truenas:${normalizeConfigKey(connection.host)}`))
+      .map(truenasRow),
+    ...sources.vmwareConnections.map(vmwareRow),
+  ];
+
+  return [...reportingRows, ...configuredRows].sort(compareRows);
 }

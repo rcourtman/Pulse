@@ -698,7 +698,12 @@ carry TrueNAS hostname/version through the shared top-level system grouping,
 and preserve platform-managed surfaces such as `proxmox`, `pbs`, `pmg`, and
 `truenas` when host telemetry is ignored. Ignore/remove semantics on that
 surface remain machine-scoped and may only strip the local `agent`, `docker`,
-and `kubernetes` reporting surfaces from the grouped row.
+and `kubernetes` reporting surfaces from the grouped row. That same
+connected-infrastructure payload now also owns guest-link continuity for host
+agents: when an agent is running inside a VM or system container, monitoring
+must preserve the canonical linked guest identity on both active and ignored
+connected-infrastructure rows instead of forcing settings consumers to infer
+guest-backed hosts from labels or hostnames.
 path or treat API-backed app workloads as second-class compared with native
 Docker reports.
 That same boundary now also owns native host-history fallback for API-backed

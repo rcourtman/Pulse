@@ -20,6 +20,8 @@ type connectedInfrastructureGroup struct {
 	version           string
 	isOutdatedBinary  bool
 	linkedNodeID      string
+	linkedVMID        string
+	linkedContainerID string
 	commandsEnabled   bool
 	scopeAgentID      string
 	upgradePlatform   string
@@ -42,7 +44,15 @@ func buildConnectedInfrastructure(
 	applyConnectedInfrastructureIgnoreState(groups, snapshot)
 
 	for _, removed := range snapshot.RemovedHostAgents {
-		item := removedConnectedInfrastructureItem("agent", removed.ID, removed.Hostname, removed.DisplayName, removed.RemovedAt.UnixMilli())
+		item := removedConnectedInfrastructureItem(
+			"agent",
+			removed.ID,
+			removed.Hostname,
+			removed.DisplayName,
+			removed.LinkedVMID,
+			removed.LinkedContainerID,
+			removed.RemovedAt.UnixMilli(),
+		)
 		item.Surfaces = []models.ConnectedInfrastructureSurfaceFrontend{{
 			ID:        "agent:" + removed.ID,
 			Kind:      "agent",
@@ -57,7 +67,15 @@ func buildConnectedInfrastructure(
 	}
 
 	for _, removed := range snapshot.RemovedDockerHosts {
-		item := removedConnectedInfrastructureItem("docker", removed.ID, removed.Hostname, removed.DisplayName, removed.RemovedAt.UnixMilli())
+		item := removedConnectedInfrastructureItem(
+			"docker",
+			removed.ID,
+			removed.Hostname,
+			removed.DisplayName,
+			"",
+			"",
+			removed.RemovedAt.UnixMilli(),
+		)
 		item.Surfaces = []models.ConnectedInfrastructureSurfaceFrontend{{
 			ID:        "docker:" + removed.ID,
 			Kind:      "docker",
@@ -125,6 +143,8 @@ func buildConnectedInfrastructure(
 			Version:           group.version,
 			IsOutdatedBinary:  group.isOutdatedBinary,
 			LinkedNodeID:      group.linkedNodeID,
+			LinkedVMID:        group.linkedVMID,
+			LinkedContainerID: group.linkedContainerID,
 			CommandsEnabled:   group.commandsEnabled,
 			ScopeAgentID:      group.scopeAgentID,
 			UpgradePlatform:   group.upgradePlatform,
@@ -250,6 +270,8 @@ func addConnectedInfrastructureSurface(
 			version:           connectedInfrastructureVersion(resource),
 			isOutdatedBinary:  connectedInfrastructureIsOutdated(resource),
 			linkedNodeID:      connectedInfrastructureLinkedNodeID(resource),
+			linkedVMID:        connectedInfrastructureLinkedVMID(resource),
+			linkedContainerID: connectedInfrastructureLinkedContainerID(resource),
 			commandsEnabled:   connectedInfrastructureCommandsEnabled(resource),
 			scopeAgentID:      connectedInfrastructureScopeAgentID(resource),
 			upgradePlatform:   connectedInfrastructureUpgradePlatform(resource),
@@ -271,6 +293,12 @@ func addConnectedInfrastructureSurface(
 	}
 	if group.linkedNodeID == "" {
 		group.linkedNodeID = connectedInfrastructureLinkedNodeID(resource)
+	}
+	if group.linkedVMID == "" {
+		group.linkedVMID = connectedInfrastructureLinkedVMID(resource)
+	}
+	if group.linkedContainerID == "" {
+		group.linkedContainerID = connectedInfrastructureLinkedContainerID(resource)
 	}
 	if !group.commandsEnabled {
 		group.commandsEnabled = connectedInfrastructureCommandsEnabled(resource)
@@ -319,6 +347,8 @@ func connectedInfrastructureGroupFromFrontend(
 		version:           item.Version,
 		isOutdatedBinary:  item.IsOutdatedBinary,
 		linkedNodeID:      item.LinkedNodeID,
+		linkedVMID:        item.LinkedVMID,
+		linkedContainerID: item.LinkedContainerID,
 		commandsEnabled:   item.CommandsEnabled,
 		scopeAgentID:      item.ScopeAgentID,
 		upgradePlatform:   item.UpgradePlatform,
@@ -333,6 +363,8 @@ func removedConnectedInfrastructureItem(
 	controlID string,
 	hostname string,
 	displayName string,
+	linkedVMID string,
+	linkedContainerID string,
 	removedAt int64,
 ) models.ConnectedInfrastructureItemFrontend {
 	name := strings.TrimSpace(displayName)
@@ -348,6 +380,8 @@ func removedConnectedInfrastructureItem(
 		DisplayName:       strings.TrimSpace(displayName),
 		Hostname:          strings.TrimSpace(hostname),
 		Status:            "ignored",
+		LinkedVMID:        strings.TrimSpace(linkedVMID),
+		LinkedContainerID: strings.TrimSpace(linkedContainerID),
 		RemovedAt:         removedAt,
 		UpgradePlatform:   "linux",
 		UninstallHostname: strings.TrimSpace(hostname),
@@ -452,6 +486,20 @@ func connectedInfrastructureLinkedNodeID(resource unifiedresources.Resource) str
 	return ""
 }
 
+func connectedInfrastructureLinkedVMID(resource unifiedresources.Resource) string {
+	if resource.Agent != nil {
+		return strings.TrimSpace(resource.Agent.LinkedVMID)
+	}
+	return ""
+}
+
+func connectedInfrastructureLinkedContainerID(resource unifiedresources.Resource) string {
+	if resource.Agent != nil {
+		return strings.TrimSpace(resource.Agent.LinkedContainerID)
+	}
+	return ""
+}
+
 func connectedInfrastructureCommandsEnabled(resource unifiedresources.Resource) bool {
 	return resource.Agent != nil && resource.Agent.CommandsEnabled
 }
@@ -493,6 +541,10 @@ func connectedInfrastructureUpgradePlatform(resource unifiedresources.Resource) 
 func connectedInfrastructureAgentSurface(
 	resource unifiedresources.Resource,
 ) (models.ConnectedInfrastructureSurfaceFrontend, bool) {
+	explicitType := connectedInfrastructureExplicitType(resource)
+	if explicitType != "" && explicitType != unifiedresources.ResourceTypeAgent {
+		return models.ConnectedInfrastructureSurfaceFrontend{}, false
+	}
 	if resource.Agent == nil || strings.TrimSpace(resource.Agent.AgentID) == "" {
 		return models.ConnectedInfrastructureSurfaceFrontend{}, false
 	}
@@ -512,6 +564,12 @@ func connectedInfrastructureAgentSurface(
 func connectedInfrastructureDockerSurface(
 	resource unifiedresources.Resource,
 ) (models.ConnectedInfrastructureSurfaceFrontend, bool) {
+	explicitType := connectedInfrastructureExplicitType(resource)
+	if explicitType != "" &&
+		explicitType != unifiedresources.ResourceTypeAgent &&
+		explicitType != unifiedresources.ResourceType("docker-host") {
+		return models.ConnectedInfrastructureSurfaceFrontend{}, false
+	}
 	if resource.Docker == nil {
 		return models.ConnectedInfrastructureSurfaceFrontend{}, false
 	}
@@ -543,6 +601,12 @@ func connectedInfrastructureDockerSurface(
 func connectedInfrastructureKubernetesSurface(
 	resource unifiedresources.Resource,
 ) (models.ConnectedInfrastructureSurfaceFrontend, bool) {
+	explicitType := connectedInfrastructureExplicitType(resource)
+	if explicitType != "" &&
+		explicitType != unifiedresources.ResourceTypeAgent &&
+		explicitType != unifiedresources.ResourceTypeK8sCluster {
+		return models.ConnectedInfrastructureSurfaceFrontend{}, false
+	}
 	if resource.Kubernetes == nil || strings.TrimSpace(resource.Kubernetes.ClusterID) == "" {
 		return models.ConnectedInfrastructureSurfaceFrontend{}, false
 	}
@@ -562,6 +626,10 @@ func connectedInfrastructureKubernetesSurface(
 func connectedInfrastructureProxmoxSurface(
 	resource unifiedresources.Resource,
 ) (models.ConnectedInfrastructureSurfaceFrontend, bool) {
+	explicitType := connectedInfrastructureExplicitType(resource)
+	if explicitType != "" && explicitType != unifiedresources.ResourceTypeAgent {
+		return models.ConnectedInfrastructureSurfaceFrontend{}, false
+	}
 	if resource.Proxmox == nil {
 		return models.ConnectedInfrastructureSurfaceFrontend{}, false
 	}
@@ -582,6 +650,10 @@ func connectedInfrastructureProxmoxSurface(
 func connectedInfrastructurePBSSurface(
 	resource unifiedresources.Resource,
 ) (models.ConnectedInfrastructureSurfaceFrontend, bool) {
+	explicitType := connectedInfrastructureExplicitType(resource)
+	if explicitType != "" && explicitType != unifiedresources.ResourceTypePBS {
+		return models.ConnectedInfrastructureSurfaceFrontend{}, false
+	}
 	if resource.PBS == nil {
 		return models.ConnectedInfrastructureSurfaceFrontend{}, false
 	}
@@ -602,6 +674,10 @@ func connectedInfrastructurePBSSurface(
 func connectedInfrastructurePMGSurface(
 	resource unifiedresources.Resource,
 ) (models.ConnectedInfrastructureSurfaceFrontend, bool) {
+	explicitType := connectedInfrastructureExplicitType(resource)
+	if explicitType != "" && explicitType != unifiedresources.ResourceTypePMG {
+		return models.ConnectedInfrastructureSurfaceFrontend{}, false
+	}
 	if resource.PMG == nil {
 		return models.ConnectedInfrastructureSurfaceFrontend{}, false
 	}
@@ -622,6 +698,10 @@ func connectedInfrastructurePMGSurface(
 func connectedInfrastructureTrueNASSurface(
 	resource unifiedresources.Resource,
 ) (models.ConnectedInfrastructureSurfaceFrontend, bool) {
+	explicitType := connectedInfrastructureExplicitType(resource)
+	if explicitType != "" && explicitType != unifiedresources.ResourceTypeAgent {
+		return models.ConnectedInfrastructureSurfaceFrontend{}, false
+	}
 	if resource.TrueNAS == nil {
 		return models.ConnectedInfrastructureSurfaceFrontend{}, false
 	}
@@ -661,6 +741,13 @@ func connectedInfrastructureSurfaceOrder(kind string) int {
 	default:
 		return 99
 	}
+}
+
+func connectedInfrastructureExplicitType(resource unifiedresources.Resource) unifiedresources.ResourceType {
+	if strings.TrimSpace(string(resource.Type)) == "" {
+		return ""
+	}
+	return unifiedresources.CanonicalResourceType(resource.Type)
 }
 
 func connectedInfrastructureAgentHostname(resource unifiedresources.Resource) string {

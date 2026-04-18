@@ -13,16 +13,6 @@ import type { VMwareSettingsPanelState } from './useVMwareSettingsPanelState';
 
 export type DiscoveryMode = 'auto' | 'custom';
 
-export interface PlatformConnectionsSummary {
-  pveCount: number;
-  pbsCount: number;
-  pmgCount: number;
-  truenasCount: number;
-  truenasAvailable: boolean;
-  vmwareCount: number;
-  vmwareAvailable: boolean;
-}
-
 export interface InfrastructurePlatformSettingsProps {
   selectedAgent: Accessor<NodeType>;
   onSelectAgent: (agent: NodeType) => void;
@@ -41,7 +31,6 @@ export interface InfrastructurePlatformSettingsProps {
   pmgNodes: Accessor<NodeConfigWithStatus[]>;
   trueNASSettings: TrueNASSettingsPanelState;
   vmwareSettings: VMwareSettingsPanelState;
-  platformConnectionsSummary: Accessor<PlatformConnectionsSummary>;
   temperatureMonitoringEnabled: Accessor<boolean>;
   triggerDiscoveryScan: (options?: { quiet?: boolean }) => Promise<void>;
   loadDiscoveredNodes: () => Promise<void>;

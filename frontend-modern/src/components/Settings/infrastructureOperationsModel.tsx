@@ -60,6 +60,8 @@ export type UnifiedAgentRow = {
   version?: string;
   isOutdatedBinary?: boolean;
   linkedNodeId?: string;
+  linkedVmId?: string;
+  linkedContainerId?: string;
   commandsEnabled?: boolean;
   agentId?: string;
   upgradePlatform: AgentPlatform;
@@ -510,6 +512,8 @@ export const rowFromConnectedInfrastructureItem = (
     version: item.version,
     isOutdatedBinary: item.isOutdatedBinary,
     linkedNodeId: item.linkedNodeId,
+    linkedVmId: item.linkedVmId,
+    linkedContainerId: item.linkedContainerId,
     commandsEnabled: item.commandsEnabled,
     agentId: item.scopeAgentId || item.uninstallAgentId,
     upgradePlatform: item.upgradePlatform || 'linux',

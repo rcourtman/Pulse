@@ -2445,9 +2445,9 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
             "frontend-modern/src/components/Settings/infrastructureWorkspaceModel.ts"
         )
 
-    def test_infrastructure_reporting_summary_change_requires_agent_lifecycle(self):
+    def test_infrastructure_workspace_change_requires_agent_lifecycle(self):
         self._assert_platform_connections_workspace_change_requires_agent_lifecycle(
-            "frontend-modern/src/components/Settings/InfrastructurePlatformConnectionsSummaryCard.tsx"
+            "frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx"
         )
 
     def test_proxmox_direct_workspace_state_change_requires_agent_lifecycle(self):

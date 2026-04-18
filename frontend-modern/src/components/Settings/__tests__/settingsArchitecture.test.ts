@@ -9,12 +9,9 @@ import infrastructureWorkspaceSource from '../InfrastructureWorkspace.tsx?raw';
 import infrastructureWorkspaceModelSource from '../infrastructureWorkspaceModel.ts?raw';
 import platformConnectionsWorkspaceSource from '../PlatformConnectionsWorkspace.tsx?raw';
 import platformConnectionsModelSource from '../platformConnectionsModel.ts?raw';
-import infrastructureInstallPanelSource from '../InfrastructureInstallPanel.tsx?raw';
 import infrastructureInstallerSectionSource from '../InfrastructureInstallerSection.tsx?raw';
 import infrastructureOperationsControllerSource from '../InfrastructureOperationsController.tsx?raw';
 import infrastructureOperationsModelSource from '../infrastructureOperationsModel.tsx?raw';
-import infrastructureReportingPanelSource from '../InfrastructureReportingPanel.tsx?raw';
-import infrastructurePlatformConnectionsSummaryCardSource from '../InfrastructurePlatformConnectionsSummaryCard.tsx?raw';
 import trueNASSettingsPanelSource from '../TrueNASSettingsPanel.tsx?raw';
 import vmwareSettingsPanelSource from '../VMwareSettingsPanel.tsx?raw';
 import infrastructureInventorySectionSource from '../InfrastructureInventorySection.tsx?raw';
@@ -202,10 +199,7 @@ const extractedModules = [
   '../useNodeModalState.ts',
   '../InfrastructureWorkspace.tsx',
   '../infrastructureWorkspaceModel.ts',
-  '../InfrastructureInstallPanel.tsx',
   '../InfrastructureInstallerSection.tsx',
-  '../InfrastructureReportingPanel.tsx',
-  '../InfrastructurePlatformConnectionsSummaryCard.tsx',
   '../InfrastructureInventorySection.tsx',
   '../InfrastructureActiveRowDetails.tsx',
   '../InfrastructureIgnoredRowDetails.tsx',
@@ -755,7 +749,6 @@ describe('Settings architecture guardrails', () => {
     expect(proxmoxSettingsModelSource).toContain(
       'export interface InfrastructurePlatformSettingsProps',
     );
-    expect(proxmoxSettingsModelSource).toContain('platformConnectionsSummary');
     expect(proxmoxSettingsModelSource).toContain('trueNASSettings');
     expect(proxmoxSettingsModelSource).toContain('./infrastructureSettingsModel');
     expect(proxmoxDirectWorkspaceStateSource).toContain(
@@ -889,11 +882,14 @@ describe('Settings architecture guardrails', () => {
     );
     expect(infrastructureWorkspaceSource).toContain('createEffect(() =>');
     expect(infrastructureWorkspaceSource).toContain(
-      "if (readOnlyWorkspace() && activeView() === 'install')",
+      "if (readOnlyWorkspace() && activeView() !== 'inventory')",
     );
-    expect(infrastructureWorkspaceSource).toContain('InfrastructureInstallPanel');
+    expect(infrastructureWorkspaceSource).toContain('InfrastructureOperationsStateProvider');
+    expect(infrastructureWorkspaceSource).toContain('InfrastructureInventorySection');
+    expect(infrastructureWorkspaceSource).toContain('InfrastructureInstallerSection');
+    expect(infrastructureWorkspaceSource).toContain('InfrastructureStopMonitoringDialog');
+    expect(infrastructureWorkspaceSource).toContain('AgentProfilesPanel');
     expect(infrastructureWorkspaceSource).toContain('PlatformConnectionsWorkspace');
-    expect(infrastructureWorkspaceSource).toContain('InfrastructureReportingPanel');
     expect(platformConnectionsWorkspaceSource).toContain('./platformConnectionsModel');
     expect(platformConnectionsWorkspaceSource).toContain('./ProxmoxSettingsPanel');
     expect(platformConnectionsWorkspaceSource).toContain('./TrueNASSettingsPanel');
@@ -902,16 +898,6 @@ describe('Settings architecture guardrails', () => {
     expect(platformConnectionsModelSource).toContain(
       'export function getPlatformConnectionsViewFromPath',
     );
-    expect(infrastructureInstallPanelSource).toContain('InfrastructureOperationsStateProvider');
-    expect(infrastructureInstallPanelSource).toContain('InfrastructureInstallerSection');
-    expect(infrastructureReportingPanelSource).toContain('InfrastructureOperationsStateProvider');
-    expect(infrastructureReportingPanelSource).toContain('InfrastructureInventorySection');
-    expect(infrastructureReportingPanelSource).toContain('InfrastructureStopMonitoringDialog');
-    expect(infrastructureReportingPanelSource).toContain(
-      './InfrastructurePlatformConnectionsSummaryCard',
-    );
-    expect(infrastructureReportingPanelSource).not.toContain('Platform connections');
-    expect(infrastructureReportingPanelSource).not.toContain('Manage direct connections');
     expect(infrastructureOperationsControllerSource).toContain(
       'InfrastructureOperationsStateProvider',
     );
@@ -964,14 +950,6 @@ describe('Settings architecture guardrails', () => {
     expect(infrastructureWorkspaceModelSource).toContain(
       'export function buildInfrastructureWorkspacePath',
     );
-    expect(infrastructurePlatformConnectionsSummaryCardSource).toContain('Platform connections');
-    expect(infrastructurePlatformConnectionsSummaryCardSource).toContain('TrueNAS');
-    expect(infrastructurePlatformConnectionsSummaryCardSource).toContain('VMware');
-    expect(infrastructurePlatformConnectionsSummaryCardSource).toContain(
-      'Open platform connections',
-    );
-    expect(infrastructureInstallPanelSource).not.toContain('<PageHeader');
-    expect(infrastructureReportingPanelSource).not.toContain('<PageHeader');
   });
 
   it('keeps the infrastructure operations model extracted from the reactive hook owner', () => {
@@ -1414,9 +1392,10 @@ describe('Settings architecture guardrails', () => {
         source.includes('SettingsPanel') ||
         source.includes('CommercialBillingShell') ||
         (panelName === 'InfrastructureWorkspace' &&
-          source.includes('./InfrastructureInstallPanel') &&
+          source.includes('./InfrastructureInstallerSection') &&
+          source.includes('./InfrastructureInventorySection') &&
           source.includes('./PlatformConnectionsWorkspace') &&
-          source.includes('./InfrastructureReportingPanel'));
+          source.includes('./ConnectionsTable'));
       expect(usesCanonicalShell, `${panelName} should use a canonical settings panel shell`).toBe(
         true,
       );
@@ -1498,7 +1477,7 @@ describe('Settings architecture guardrails', () => {
       'Setup changes stay unavailable in this read-only session.',
     );
     expect(infrastructureWorkspaceSource).toContain('presentationPolicyIsReadOnly');
-    expect(infrastructureWorkspaceSource).toContain("activeView() === 'inventory'");
+    expect(infrastructureWorkspaceSource).toContain("activeView() !== 'inventory'");
   });
 
   it('keeps relay shell copy on the shared relay presentation owner', () => {

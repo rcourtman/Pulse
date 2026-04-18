@@ -443,7 +443,12 @@ the canonical monitored-system blocked payload.
     must preserve the transport distinction between machine-managed surfaces
     (`agent`, `docker`, `kubernetes`) and platform-connections-managed
     surfaces (`proxmox`, `pbs`, `pmg`, `truenas`) instead of collapsing them
-    into one uninstall/stop-monitoring model.
+    into one uninstall/stop-monitoring model. That same shared payload
+    contract must also preserve guest-linked host identity on connected
+    infrastructure and removed-host records through `linkedVmId` and
+    `linkedContainerId`, so settings consumers can keep the top connections
+    ledger scoped to top-level infrastructure without re-deriving guest status
+    from names or local heuristics.
 24. Keep AI settings payload continuity explicit on the shared `/api/settings/ai`
     surface: `internal/api/ai_handlers.go` and `internal/api/contract_test.go`
     must expose masked provider-auth state such as `ollama_username` and

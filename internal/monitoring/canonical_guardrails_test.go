@@ -516,6 +516,26 @@ func TestConnectedInfrastructureKeepsPlatformConnectionsAndProjectsTrueNAS(t *te
 	}
 }
 
+func TestConnectedInfrastructureSkipsChildPlatformResourceTypes(t *testing.T) {
+	data, err := os.ReadFile("connected_infrastructure.go")
+	if err != nil {
+		t.Fatalf("failed to read connected_infrastructure.go: %v", err)
+	}
+	source := string(data)
+	requiredSnippets := []string{
+		"func connectedInfrastructureExplicitType(resource unifiedresources.Resource) unifiedresources.ResourceType {",
+		"explicitType := connectedInfrastructureExplicitType(resource)",
+		`if explicitType != "" && explicitType != unifiedresources.ResourceTypeAgent {`,
+		`if explicitType != "" && explicitType != unifiedresources.ResourceTypePBS {`,
+		`if explicitType != "" && explicitType != unifiedresources.ResourceTypePMG {`,
+	}
+	for _, snippet := range requiredSnippets {
+		if !strings.Contains(source, snippet) {
+			t.Fatalf("connected_infrastructure.go must contain %q", snippet)
+		}
+	}
+}
+
 func TestVMwarePollerUsesCanonicalSupplementalIngestOwnership(t *testing.T) {
 	data, err := os.ReadFile("vmware_poller.go")
 	if err != nil {

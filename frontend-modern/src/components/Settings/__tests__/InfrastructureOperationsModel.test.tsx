@@ -17,6 +17,7 @@ describe('infrastructure operations model', () => {
       name: 'node-a',
       hostname: 'node-a.internal',
       status: 'active',
+      linkedVmId: '101',
       scopeAgentId: 'agent-1',
       surfaces: [
         {
@@ -51,6 +52,7 @@ describe('infrastructure operations model', () => {
     expect(row.rowKey).toBe('agent-agent-1');
     expect(row.capabilities).toEqual(['agent', 'pbs']);
     expect(row.installFlags).toEqual(['--enable-proxmox', '--proxmox-type pbs']);
+    expect(row.linkedVmId).toBe('101');
     expect(row.searchText).toContain('node-a.internal');
   });
 

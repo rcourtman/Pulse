@@ -27,6 +27,8 @@ export interface RemovedHostAgent {
   id: string;
   hostname?: string;
   displayName?: string;
+  linkedVmId?: string;
+  linkedContainerId?: string;
   removedAt: number;
 }
 

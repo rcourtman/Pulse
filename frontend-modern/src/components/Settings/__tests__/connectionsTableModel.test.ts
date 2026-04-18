@@ -1,17 +1,55 @@
 import { describe, expect, it } from 'vitest';
 import type { NodeConfigWithStatus } from '@/types/nodes';
-import type { Resource } from '@/types/resource';
 import type { TrueNASConnection } from '@/api/truenas';
 import type { VMwareConnection } from '@/api/vmware';
-import {
-  agentConnectionRow,
-  buildConnectionRows,
-  pbsConnectionRow,
-  pmgConnectionRow,
-  pveConnectionRow,
-  truenasConnectionRow,
-  vmwareConnectionRow,
-} from '../connectionsTableModel';
+import type { UnifiedAgentRow } from '../infrastructureOperationsModel';
+import { buildConnectionRows } from '../connectionsTableModel';
+
+const activeRow = (overrides: Partial<UnifiedAgentRow> = {}): UnifiedAgentRow =>
+  ({
+    rowKey: 'agent:tower',
+    id: 'tower',
+    name: 'tower',
+    hostname: 'tower.local',
+    capabilities: ['agent'],
+    status: 'active',
+    healthStatus: 'online',
+    lastSeen: Date.now(),
+    upgradePlatform: 'linux',
+    scope: { label: 'Default', category: 'default' },
+    installFlags: [],
+    searchText: 'tower tower.local',
+    surfaces: [
+      {
+        key: 'agent',
+        kind: 'agent',
+        label: 'Host telemetry',
+        detail: 'Host telemetry',
+        action: 'stop-monitoring',
+        controlId: 'tower',
+      },
+    ],
+    ...overrides,
+  }) as UnifiedAgentRow;
+
+const ignoredRow = (overrides: Partial<UnifiedAgentRow> = {}): UnifiedAgentRow =>
+  ({
+    ...activeRow(),
+    rowKey: 'removed:tower',
+    status: 'removed',
+    removedAt: Date.now(),
+    surfaces: [
+      {
+        key: 'agent',
+        kind: 'agent',
+        label: 'Host telemetry',
+        detail: 'Host telemetry',
+        action: 'allow-reconnect',
+        controlId: 'tower',
+      },
+    ],
+    ...overrides,
+  }) as UnifiedAgentRow;
 
 const pveNode = (overrides: Partial<NodeConfigWithStatus> = {}): NodeConfigWithStatus =>
   ({
@@ -51,87 +89,124 @@ const vmware = (overrides: Partial<VMwareConnection> = {}): VMwareConnection =>
     ...overrides,
   }) as VMwareConnection;
 
-const agentResource = (overrides: Partial<Resource> = {}): Resource =>
-  ({
-    id: 'agent-1',
-    type: 'agent',
-    name: 'tower',
-    displayName: 'tower',
-    platformId: 'agent-tower',
-    platformType: 'agent',
-    sourceType: 'agent',
-    status: 'online',
-    lastSeen: 1700000000000,
-    ...overrides,
-  }) as Resource;
-
 describe('connectionsTableModel', () => {
-  it('maps PVE / PBS / PMG node status into unified reporting states', () => {
-    expect(pveConnectionRow(pveNode()).status).toBe('reporting');
-    expect(pveConnectionRow(pveNode({ status: 'pending' })).status).toBe('pending');
-    expect(pveConnectionRow(pveNode({ status: 'disconnected' })).status).toBe('offline');
-    expect(pveConnectionRow(pveNode({ status: 'error' })).status).toBe('error');
-    expect(pbsConnectionRow(pveNode({ type: 'pbs', status: 'offline' })).kind).toBe('pbs');
-    expect(pmgConnectionRow(pveNode({ type: 'pmg', status: 'connected' })).kind).toBe('pmg');
-  });
-
-  it('prefers the display name over the internal name', () => {
-    const row = pveConnectionRow(pveNode({ displayName: 'Production cluster', name: 'pve-1' }));
-    expect(row.name).toBe('Production cluster');
-  });
-
-  it('treats a disabled TrueNAS or VMware connection as offline regardless of poll state', () => {
-    const tnRow = truenasConnectionRow(truenas({ enabled: false, poll: { lastSuccessAt: '2026-01-01T00:00:00Z' } }));
-    const vmRow = vmwareConnectionRow(vmware({ enabled: false, poll: { lastSuccessAt: '2026-01-01T00:00:00Z' } }));
-    expect(tnRow.status).toBe('offline');
-    expect(vmRow.status).toBe('offline');
-  });
-
-  it('reports pending when a connection has no poll success and no failures', () => {
-    expect(truenasConnectionRow(truenas()).status).toBe('pending');
-    expect(vmwareConnectionRow(vmware()).status).toBe('pending');
-  });
-
-  it('reports reporting with a lastReportedMs once a poll has succeeded', () => {
-    const row = truenasConnectionRow(
-      truenas({ poll: { lastSuccessAt: '2026-01-01T00:00:00Z', consecutiveFailures: 0 } }),
-    );
-    expect(row.status).toBe('reporting');
-    expect(row.lastReportedMs).toBe(Date.parse('2026-01-01T00:00:00Z'));
-  });
-
-  it('reports error when consecutive failures exceed the tolerance', () => {
-    expect(
-      truenasConnectionRow(
-        truenas({ poll: { lastSuccessAt: '2026-01-01T00:00:00Z', consecutiveFailures: 5 } }),
-      ).status,
-    ).toBe('error');
-    expect(
-      vmwareConnectionRow(vmware({ poll: { consecutiveFailures: 1 } })).status,
-    ).toBe('error');
-  });
-
-  it('maps agent resource status into unified reporting states and carries lastSeen', () => {
-    expect(agentConnectionRow(agentResource()).status).toBe('reporting');
-    expect(agentConnectionRow(agentResource()).lastReportedMs).toBe(1700000000000);
-    expect(agentConnectionRow(agentResource({ status: 'offline' })).status).toBe('offline');
-    expect(agentConnectionRow(agentResource({ status: 'degraded' })).status).toBe('error');
-    expect(agentConnectionRow(agentResource({ status: 'unknown' })).status).toBe('unknown');
-  });
-
-  it('merges every source into a single alpha-sorted row set with stable composite ids', () => {
+  it('merges active reporting, ignored rows, and configured connections into one alpha-sorted ledger', () => {
     const rows = buildConnectionRows({
+      activeRows: [activeRow({ name: 'tower' })],
+      monitoringStoppedRows: [ignoredRow({ name: 'archive' })],
       pveNodes: [pveNode({ id: 'a', name: 'zeus' })],
       pbsNodes: [pveNode({ id: 'b', type: 'pbs', name: 'backup' })],
       pmgNodes: [],
       truenasConnections: [truenas({ id: 'c', name: 'mira' })],
       vmwareConnections: [vmware({ id: 'd', name: 'apex' })],
-      agentResources: [agentResource({ id: 'e', name: 'tower', displayName: 'tower' })],
     });
 
-    expect(rows.map((r) => r.name)).toEqual(['apex', 'backup', 'mira', 'tower', 'zeus']);
-    expect(new Set(rows.map((r) => r.id)).size).toBe(rows.length);
-    expect(rows.find((r) => r.name === 'tower')?.method).toBe('agent');
-    expect(rows.find((r) => r.name === 'apex')?.method).toBe('api');
+    expect(rows.map((row) => row.name)).toEqual(['apex', 'archive', 'backup', 'mira', 'tower', 'zeus']);
+    expect(rows.find((row) => row.name === 'archive')).toMatchObject({
+      subtitle: 'Ignored by Pulse',
+      manageLabel: 'Review ignored',
+    });
+    expect(rows.find((row) => row.name === 'tower')).toMatchObject({
+      subtitle: 'Live reporting item',
+      manageLabel: 'View details',
+    });
+    expect(rows.find((row) => row.name === 'zeus')).toMatchObject({
+      subtitle: 'Configured platform connection',
+      collectionLabel: 'API',
+    });
+  });
+
+  it('drops configured rows that are already represented by the reporting projection', () => {
+    const rows = buildConnectionRows({
+      activeRows: [
+        activeRow({
+          name: 'tower',
+          capabilities: ['truenas'],
+          surfaces: [
+            {
+              key: 'truenas',
+              kind: 'truenas',
+              label: 'TrueNAS data',
+              detail: 'TrueNAS data',
+              idValue: '10.0.0.20',
+            },
+          ],
+        }),
+      ],
+      monitoringStoppedRows: [],
+      pveNodes: [],
+      pbsNodes: [],
+      pmgNodes: [],
+      truenasConnections: [truenas()],
+      vmwareConnections: [],
+    });
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0].name).toBe('tower');
+  });
+
+  it('can collapse to reporting-only rows for read-only sessions', () => {
+    const rows = buildConnectionRows({
+      activeRows: [activeRow()],
+      monitoringStoppedRows: [ignoredRow()],
+      pveNodes: [pveNode()],
+      pbsNodes: [],
+      pmgNodes: [],
+      truenasConnections: [truenas()],
+      vmwareConnections: [vmware()],
+      includeConfigurationRows: false,
+    });
+
+    expect(rows).toHaveLength(2);
+    expect(rows.every((row) => row.subtitle !== 'Configured platform connection')).toBe(true);
+  });
+
+  it('keeps guest-linked agents out of the top-level infrastructure ledger', () => {
+    const rows = buildConnectionRows({
+      activeRows: [
+        activeRow({ name: 'tower' }),
+        activeRow({
+          rowKey: 'agent:guest-101',
+          id: 'guest-101',
+          name: 'debian-go',
+          linkedVmId: '101',
+        }),
+      ],
+      monitoringStoppedRows: [
+        ignoredRow({
+          rowKey: 'removed:guest-102',
+          id: 'guest-102',
+          name: 'archive-guest',
+          linkedContainerId: '102',
+        }),
+      ],
+      pveNodes: [],
+      pbsNodes: [],
+      pmgNodes: [],
+      truenasConnections: [],
+      vmwareConnections: [],
+    });
+
+    expect(rows.map((row) => row.name)).toEqual(['tower']);
+  });
+
+  it('keeps saved VMware connections visible even though the reporting projection does not own them yet', () => {
+    const rows = buildConnectionRows({
+      activeRows: [],
+      monitoringStoppedRows: [],
+      pveNodes: [],
+      pbsNodes: [],
+      pmgNodes: [],
+      truenasConnections: [],
+      vmwareConnections: [vmware({ name: 'lab-vcenter' })],
+    });
+
+    expect(rows).toEqual([
+      expect.objectContaining({
+        name: 'lab-vcenter',
+        coverageLabels: ['VMware data'],
+        manage: { kind: 'vmware-connection', connectionId: 'vm-1' },
+      }),
+    ]);
   });
 });

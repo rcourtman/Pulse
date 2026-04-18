@@ -253,3 +253,104 @@ func TestBuildConnectedInfrastructure_ProjectsTrueNASSurface(t *testing.T) {
 		t.Fatalf("expected truenas surface kind, got %#v", item.Surfaces[0])
 	}
 }
+
+func TestBuildConnectedInfrastructure_PreservesLinkedGuestIdentity(t *testing.T) {
+	now := time.Unix(1_700_000_000, 0)
+	items := buildConnectedInfrastructure([]unifiedresources.Resource{
+		{
+			ID:       "guest-agent",
+			Name:     "debian-go",
+			LastSeen: now,
+			Status:   unifiedresources.StatusOnline,
+			Agent: &unifiedresources.AgentData{
+				AgentID:           "guest-agent",
+				AgentVersion:      "1.2.3",
+				Hostname:          "debian-go.local",
+				LinkedVMID:        "101",
+				LinkedContainerID: "",
+			},
+			Identity: unifiedresources.ResourceIdentity{
+				Hostnames: []string{"debian-go.local"},
+			},
+		},
+	}, models.StateSnapshot{
+		RemovedHostAgents: []models.RemovedHostAgent{
+			{
+				ID:                "ignored-guest-agent",
+				Hostname:          "archive-guest.local",
+				DisplayName:       "archive-guest",
+				LinkedContainerID: "102",
+				RemovedAt:         now,
+			},
+		},
+	})
+
+	if len(items) != 2 {
+		t.Fatalf("expected active and ignored guest rows, got %d", len(items))
+	}
+
+	var active *models.ConnectedInfrastructureItemFrontend
+	var ignored *models.ConnectedInfrastructureItemFrontend
+	for i := range items {
+		item := &items[i]
+		switch item.Status {
+		case "active":
+			active = item
+		case "ignored":
+			ignored = item
+		}
+	}
+
+	if active == nil || ignored == nil {
+		t.Fatalf("expected both active and ignored connected infrastructure items, got %#v", items)
+	}
+	if active.LinkedVMID != "101" {
+		t.Fatalf("expected active linked VM id to round-trip, got %q", active.LinkedVMID)
+	}
+	if ignored.LinkedContainerID != "102" {
+		t.Fatalf("expected ignored linked container id to round-trip, got %q", ignored.LinkedContainerID)
+	}
+}
+
+func TestBuildConnectedInfrastructure_IgnoresChildPlatformResources(t *testing.T) {
+	now := time.Unix(1_700_000_000, 0)
+	items := buildConnectedInfrastructure([]unifiedresources.Resource{
+		{
+			ID:       "vm-100",
+			Type:     unifiedresources.ResourceTypeVM,
+			Name:     "cloudflared",
+			LastSeen: now,
+			Status:   unifiedresources.StatusOnline,
+			Proxmox: &unifiedresources.ProxmoxData{
+				SourceID: "100",
+				NodeName: "pve-a",
+			},
+		},
+		{
+			ID:       "storage-local-zfs",
+			Type:     unifiedresources.ResourceTypeStorage,
+			Name:     "local-zfs",
+			LastSeen: now,
+			Status:   unifiedresources.StatusOnline,
+			Proxmox: &unifiedresources.ProxmoxData{
+				SourceID: "local-zfs",
+				NodeName: "pve-a",
+			},
+		},
+		{
+			ID:       "pbs-datastore-main",
+			Type:     unifiedresources.ResourceTypeStorage,
+			Name:     "main",
+			LastSeen: now,
+			Status:   unifiedresources.StatusOnline,
+			PBS: &unifiedresources.PBSData{
+				InstanceID: "pbs-main",
+				Hostname:   "pbs.local",
+			},
+		},
+	}, models.StateSnapshot{})
+
+	if len(items) != 0 {
+		t.Fatalf("expected child platform resources to stay out of connected infrastructure, got %#v", items)
+	}
+}

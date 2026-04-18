@@ -137,39 +137,6 @@ describe('useSettingsInfrastructurePanelProps', () => {
 
     expect(panelProps.pbsInstances()).toEqual([expect.objectContaining({ name: 'PBS Main' })]);
     expect(panelProps.pmgInstances()).toEqual([expect.objectContaining({ name: 'PMG Main' })]);
-    expect(panelProps.platformConnectionsSummary()).toMatchObject({
-      pveCount: 0,
-      pbsCount: 0,
-      pmgCount: 0,
-      truenasCount: 0,
-      truenasAvailable: true,
-      vmwareCount: 0,
-      vmwareAvailable: true,
-    });
-
-    dispose();
-  });
-
-  it('derives platform connection counts from the shared infrastructure settings state', () => {
-    const { hookState, dispose } = mountHook([], {
-      pveCount: 1,
-      pbsCount: 2,
-      pmgCount: 3,
-      truenasConnections: [{ id: 'truenas-1' }, { id: 'truenas-2' }],
-      vmwareConnections: [{ id: 'vmware-1' }],
-    });
-
-    const panelProps = hookState.getInfrastructurePanelProps();
-
-    expect(panelProps.platformConnectionsSummary()).toEqual({
-      pveCount: 1,
-      pbsCount: 2,
-      pmgCount: 3,
-      truenasCount: 2,
-      truenasAvailable: true,
-      vmwareCount: 1,
-      vmwareAvailable: true,
-    });
 
     dispose();
   });

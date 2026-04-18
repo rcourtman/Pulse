@@ -208,10 +208,12 @@ func (m *Monitor) RemoveHostAgent(hostID string) (models.Host, error) {
 	m.mu.Unlock()
 
 	m.state.AddRemovedHostAgent(models.RemovedHostAgent{
-		ID:          hostID,
-		Hostname:    host.Hostname,
-		DisplayName: host.DisplayName,
-		RemovedAt:   removedAt,
+		ID:                hostID,
+		Hostname:          host.Hostname,
+		DisplayName:       host.DisplayName,
+		LinkedVMID:        host.LinkedVMID,
+		LinkedContainerID: host.LinkedContainerID,
+		RemovedAt:         removedAt,
 	})
 
 	m.state.RemoveConnectionHealth(hostConnectionPrefix + hostID)

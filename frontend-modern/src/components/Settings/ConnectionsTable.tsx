@@ -8,30 +8,23 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/shared/Table';
-import { formatRelativeTime } from '@/utils/format';
-import type { ConnectionRow, ConnectionStatus } from './connectionsTableModel';
+import type { ConnectionRow } from './connectionsTableModel';
 
 interface ConnectionsTableProps {
   rows: Accessor<readonly ConnectionRow[]>;
   onAddSystem?: () => void;
+  onManageRow?: (row: ConnectionRow) => void;
 }
-
-const STATUS_DOT_CLASS: Record<ConnectionStatus, string> = {
-  reporting: 'bg-emerald-500',
-  pending: 'bg-amber-400',
-  offline: 'bg-slate-400',
-  error: 'bg-rose-500',
-  unknown: 'bg-slate-300',
-};
 
 export const ConnectionsTable: Component<ConnectionsTableProps> = (props) => {
   return (
     <Card padding="none" tone="card" class="rounded-md">
-      <div class="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
+      <div class="flex flex-col gap-3 border-b border-border px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h3 class="text-base font-semibold text-base-content">Connections</h3>
+          <h3 class="text-base font-semibold text-base-content">Connections and inventory</h3>
           <p class="text-xs text-muted">
-            Every system Pulse is configured to monitor, regardless of how it reports.
+            Configured platform connections, active reporting items, and ignored systems in one
+            ledger.
           </p>
         </div>
         <Show when={props.onAddSystem}>
@@ -44,61 +37,96 @@ export const ConnectionsTable: Component<ConnectionsTableProps> = (props) => {
           </button>
         </Show>
       </div>
+
       <Show
         when={props.rows().length > 0}
         fallback={
           <div class="px-4 py-10 text-center text-sm text-muted">
-            No systems connected yet. Use
+            Nothing is configured or reporting yet. Use
             <span class="mx-1 font-medium text-base-content">+ Add a system</span>
-            to connect your first one.
+            to connect the first one.
           </div>
         }
       >
         <div class="overflow-auto">
-          <Table class="min-w-[max-content] w-full divide-y divide-border text-sm">
+          <Table class="min-w-[1040px] w-full divide-y divide-border text-sm">
             <TableHeader class="bg-surface-alt">
               <TableRow>
                 <TableHead class="py-2 pl-4 pr-3 text-left text-xs font-semibold uppercase tracking-wide text-muted">
-                  Name
+                  System
                 </TableHead>
                 <TableHead class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted">
-                  Kind
+                  Coverage
                 </TableHead>
                 <TableHead class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted">
-                  Method
+                  Collection
                 </TableHead>
                 <TableHead class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted">
                   Status
                 </TableHead>
                 <TableHead class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted">
-                  Last reported
+                  Last activity
                 </TableHead>
+                <Show when={props.onManageRow}>
+                  <TableHead class="px-4 py-2 text-right text-xs font-semibold uppercase tracking-wide text-muted">
+                    Manage
+                  </TableHead>
+                </Show>
               </TableRow>
             </TableHeader>
             <TableBody class="divide-y divide-border bg-surface">
               <For each={props.rows()}>
-                {(r) => (
+                {(row) => (
                   <TableRow class="even:bg-surface-alt">
-                    <TableCell class="py-2.5 pl-4 pr-3">
-                      <div class="font-medium text-base-content">{r.name}</div>
-                      <Show when={r.host && r.host !== r.name}>
-                        <div class="text-xs text-muted">{r.host}</div>
-                      </Show>
+                    <TableCell class="py-3 pl-4 pr-3 align-top">
+                      <div class="min-w-0 space-y-1">
+                        <div class="font-medium text-base-content">{row.name}</div>
+                        <Show when={row.host}>
+                          <div class="truncate text-xs text-muted">{row.host}</div>
+                        </Show>
+                        <div class="text-xs text-muted">{row.subtitle}</div>
+                      </div>
                     </TableCell>
-                    <TableCell class="px-3 py-2.5 text-base-content">{r.kindLabel}</TableCell>
-                    <TableCell class="px-3 py-2.5 text-base-content">{r.methodLabel}</TableCell>
-                    <TableCell class="px-3 py-2.5">
-                      <span class="inline-flex items-center gap-2">
-                        <span
-                          aria-hidden="true"
-                          class={`inline-block h-2 w-2 rounded-full ${STATUS_DOT_CLASS[r.status]}`}
-                        />
-                        <span class="text-base-content">{r.statusLabel}</span>
+
+                    <TableCell class="px-3 py-3 align-top">
+                      <div class="flex flex-wrap gap-1.5">
+                        <For each={row.coverageLabels}>
+                          {(label) => (
+                            <span class="inline-flex items-center rounded-full border border-border bg-surface px-2 py-0.5 text-xs font-medium text-base-content">
+                              {label}
+                            </span>
+                          )}
+                        </For>
+                      </div>
+                    </TableCell>
+
+                    <TableCell class="px-3 py-3 align-top text-base-content">
+                      {row.collectionLabel}
+                    </TableCell>
+
+                    <TableCell class="px-3 py-3 align-top">
+                      <span
+                        class={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${row.statusClassName}`}
+                      >
+                        {row.statusLabel}
                       </span>
                     </TableCell>
-                    <TableCell class="px-3 py-2.5 text-muted">
-                      {formatRelativeTime(r.lastReportedMs, { emptyText: '—' })}
+
+                    <TableCell class="px-3 py-3 align-top text-muted">
+                      {row.lastActivityText}
                     </TableCell>
+
+                    <Show when={props.onManageRow}>
+                      <TableCell class="px-4 py-3 align-top text-right">
+                        <button
+                          type="button"
+                          onClick={() => props.onManageRow?.(row)}
+                          class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md border border-border px-3 py-2 text-sm font-medium text-base-content transition-colors hover:bg-surface-hover"
+                        >
+                          {row.manageLabel}
+                        </button>
+                      </TableCell>
+                    </Show>
                   </TableRow>
                 )}
               </For>

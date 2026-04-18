@@ -1888,12 +1888,12 @@ class SubsystemLookupTest(unittest.TestCase):
             PLATFORM_CONNECTIONS_WORKSPACE_EXACT_FILES,
         )
 
-    def test_lookup_paths_assigns_infrastructure_reporting_summary_to_agent_lifecycle(
+    def test_lookup_paths_assigns_infrastructure_workspace_to_agent_lifecycle(
         self,
     ) -> None:
         result = lookup_paths(
             [
-                "frontend-modern/src/components/Settings/InfrastructurePlatformConnectionsSummaryCard.tsx"
+                "frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx"
             ]
         )
         self.assertEqual(result["unowned_runtime_files"], [])

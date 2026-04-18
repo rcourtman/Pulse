@@ -720,10 +720,12 @@ type RemovedDockerHost struct {
 
 // RemovedHostAgent tracks a host agent that was deliberately removed and blocked from reporting.
 type RemovedHostAgent struct {
-	ID          string    `json:"id"`
-	Hostname    string    `json:"hostname,omitempty"`
-	DisplayName string    `json:"displayName,omitempty"`
-	RemovedAt   time.Time `json:"removedAt"`
+	ID                string    `json:"id"`
+	Hostname          string    `json:"hostname,omitempty"`
+	DisplayName       string    `json:"displayName,omitempty"`
+	LinkedVMID        string    `json:"linkedVmId,omitempty"`
+	LinkedContainerID string    `json:"linkedContainerId,omitempty"`
+	RemovedAt         time.Time `json:"removedAt"`
 }
 
 // DockerContainer represents the state of a Docker container on a monitored host.
