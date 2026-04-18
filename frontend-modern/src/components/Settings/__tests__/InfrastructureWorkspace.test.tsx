@@ -158,6 +158,37 @@ describe('InfrastructureWorkspace', () => {
     expect(screen.getByTestId('reporting-panel')).toBeInTheDocument();
   });
 
+  it('renders a back-to-inventory header on the install subview', () => {
+    mockPathname = '/settings/infrastructure/install';
+    renderWorkspace();
+
+    const backButton = screen.getByRole('button', { name: /Connections and Inventory/i });
+    expect(backButton).toBeInTheDocument();
+    expect(screen.getByText('Install on a host')).toBeInTheDocument();
+
+    fireEvent.click(backButton);
+    expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure');
+  });
+
+  it('renders a back-to-inventory header on the platforms subview', () => {
+    mockPathname = '/settings/infrastructure/platforms/truenas';
+    renderWorkspace();
+
+    const backButton = screen.getByRole('button', { name: /Connections and Inventory/i });
+    expect(backButton).toBeInTheDocument();
+    expect(screen.getByText('Platform connections')).toBeInTheDocument();
+
+    fireEvent.click(backButton);
+    expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure');
+  });
+
+  it('does not render the back-to-inventory header on the inventory landing', () => {
+    mockPathname = '/settings/infrastructure';
+    renderWorkspace();
+
+    expect(screen.queryByRole('button', { name: /^Connections and Inventory$/ })).toBeNull();
+  });
+
   it('hides the add-system action and redirects install routes in read-only mode', () => {
     presentationPolicyIsReadOnlyMock.mockReturnValue(true);
     mockPathname = '/settings/infrastructure/install';

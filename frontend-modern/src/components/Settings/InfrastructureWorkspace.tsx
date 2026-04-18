@@ -1,4 +1,4 @@
-import { Component, Match, Switch, createEffect, createMemo, createSignal } from 'solid-js';
+import { Component, Match, Show, Switch, createEffect, createMemo, createSignal } from 'solid-js';
 import { useLocation, useNavigate } from '@solidjs/router';
 import { presentationPolicyIsReadOnly } from '@/stores/sessionPresentationPolicy';
 import { InfrastructureInstallPanel } from './InfrastructureInstallPanel';
@@ -57,8 +57,36 @@ export const InfrastructureWorkspace: Component<InfrastructureWorkspaceProps> = 
     }
   });
 
+  const subviewHeading = createMemo(() => {
+    switch (activeView()) {
+      case 'install':
+        return 'Install on a host';
+      case 'platforms':
+        return 'Platform connections';
+      case 'operations':
+        return 'Reporting';
+      default:
+        return '';
+    }
+  });
+
   return (
     <div class="space-y-6">
+      <Show when={activeView() !== 'inventory'}>
+        <div class="flex items-center gap-2 text-sm">
+          <button
+            type="button"
+            onClick={() => navigate(buildInfrastructureWorkspacePath('inventory'))}
+            class="inline-flex items-center gap-1 rounded-md border border-border bg-surface px-2.5 py-1 text-muted hover:bg-surface-hover hover:text-base-content"
+          >
+            <span aria-hidden="true">←</span>
+            <span>Connections and Inventory</span>
+          </button>
+          <span class="text-muted" aria-hidden="true">/</span>
+          <span class="font-medium text-base-content">{subviewHeading()}</span>
+        </div>
+      </Show>
+
       <Switch>
         <Match when={activeView() === 'inventory'}>
           <ConnectionsTable

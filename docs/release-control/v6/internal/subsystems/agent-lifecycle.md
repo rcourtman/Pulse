@@ -371,10 +371,15 @@ an add-only capacity posture.
    `/settings/infrastructure/operations` remain reachable as detail routes
    for install, platform connections, and legacy reporting/control surfaces
    respectively, but the workspace shell must not gate inventory visibility
-   behind tab navigation. Read-only sessions must continue to redirect the
-   install detail route back to the unified inventory view and suppress the
-   add-system entry point on the base table so presentation-policy
-   restrictions still hold.
+   behind tab navigation. Every non-inventory detail route under
+   `/settings/infrastructure/*` must render a persistent breadcrumb header
+   that includes a one-click `Connections and Inventory` control returning
+   to the bare `/settings/infrastructure` route, so operators are never
+   stranded on a deeper install or platform-connection surface without a
+   visible path back to the unified table. Read-only sessions must continue
+   to redirect the install detail route back to the unified inventory view
+   and suppress the add-system entry point on the base table so
+   presentation-policy restrictions still hold.
 8. Keep post-install lifecycle completion explicit inside
    `frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx`
    and `frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx`.
