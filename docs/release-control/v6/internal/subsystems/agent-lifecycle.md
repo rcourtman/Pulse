@@ -386,7 +386,14 @@ an add-only capacity posture.
    sessions must redirect any non-inventory infrastructure deep link back to
    `/settings/infrastructure`, suppress the add-system entry point, and hide
    configuration-only sections so presentation-policy restrictions still
-   hold.
+   hold. That top ledger must also stay readable inside the governed settings
+   shell at ordinary desktop widths: when the settings rail leaves the table
+   without room for the full six-column ledger, `ConnectionsTable.tsx` must
+   collapse collection and last-activity into row metadata instead of forcing
+   horizontal scrolling just to reach primary controls. The dedicated
+   collection and last-activity columns may return only once the workspace has
+   enough width to show the full ledger without clipping headers or row
+   actions.
 8. Keep post-install lifecycle completion explicit inside
    `frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx`
    and `frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx`.

@@ -55,10 +55,23 @@ describe('ConnectionsTable', () => {
     expect(screen.getByText('pbs-docker')).toBeInTheDocument();
     expect(screen.getByText('Ignored by Pulse')).toBeInTheDocument();
     expect(screen.getByText('Host telemetry')).toBeInTheDocument();
-    expect(screen.getByText('API')).toBeInTheDocument();
-    expect(screen.getByText('Agent')).toBeInTheDocument();
+    expect(screen.getAllByText('API')).toHaveLength(2);
+    expect(screen.getAllByText('Agent')).toHaveLength(2);
     expect(screen.getByText('Ignored')).toBeInTheDocument();
     expect(screen.getByText('online')).toBeInTheDocument();
+  });
+
+  it('uses the responsive ledger layout without the legacy fixed minimum width', () => {
+    render(() => (
+      <ConnectionsTable rows={() => [row()]} onManageRow={vi.fn()} />
+    ) as any);
+
+    const table = screen.getByRole('table');
+    expect(table).toHaveClass('table-fixed');
+    expect(table.className).toContain('!whitespace-normal');
+    expect(table.className).not.toContain('min-w-[1040px]');
+    expect(screen.getAllByText('Agent')).toHaveLength(2);
+    expect(screen.getAllByText('5s ago')).toHaveLength(2);
   });
 
   it('surfaces configured header actions when provided', () => {
