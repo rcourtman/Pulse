@@ -331,11 +331,19 @@ an add-only capacity posture.
     `NodeModalAuthenticationSection`, `NodeModalMonitoringSection`, and
     `NodeModalStatusFooter` primitives inline under the editor — dropping
     the Dialog wrapper and the surrounding discovery/configured-nodes
-    workspace. The add flow must not reintroduce the full Proxmox
-    workspace (discovery card, configured nodes table, node-modal stack)
-    into the credential slot, because that previously showed the
-    ledger-of-other-systems in the middle of entering one system's
-    credentials.
+    workspace. For TrueNAS and VMware, the credential slots are
+    `frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/TrueNASCredentialSlot.tsx`
+    and
+    `frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/VMwareCredentialSlot.tsx`;
+    they extract the inner form bodies from the per-type panels and
+    render them inline under the editor while still driving the existing
+    `TrueNASSettingsPanelState` and `VMwareSettingsPanelState` APIs for
+    save, test, preview, and admission-preview behavior. The add flow
+    must not reintroduce the full per-type workspace (Proxmox discovery
+    card, configured nodes table, node-modal stack; TrueNAS/VMware
+    connection list with headers and row actions) into the credential
+    slot, because that previously showed the ledger-of-other-systems in
+    the middle of entering one system's credentials.
 
 ## Forbidden Paths
 

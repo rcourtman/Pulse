@@ -62,12 +62,12 @@ vi.mock('../ConnectionEditor/CredentialSlots/NodeCredentialSlot', () => ({
   ),
 }));
 
-vi.mock('../TrueNASSettingsPanel', () => ({
-  TrueNASSettingsPanel: () => <div data-testid="truenas-section">truenas</div>,
+vi.mock('../ConnectionEditor/CredentialSlots/TrueNASCredentialSlot', () => ({
+  TrueNASCredentialSlot: () => <div data-testid="truenas-section">truenas</div>,
 }));
 
-vi.mock('../VMwareSettingsPanel', () => ({
-  VMwareSettingsPanel: () => <div data-testid="vmware-section">vmware</div>,
+vi.mock('../ConnectionEditor/CredentialSlots/VMwareCredentialSlot', () => ({
+  VMwareCredentialSlot: () => <div data-testid="vmware-section">vmware</div>,
 }));
 
 vi.mock('../InfrastructureActiveRowDetails', () => ({

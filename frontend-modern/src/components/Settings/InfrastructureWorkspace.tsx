@@ -11,13 +11,13 @@ import {
 } from './connectionsTableModel';
 import { ConnectionEditor } from './ConnectionEditor/ConnectionEditor';
 import { NodeCredentialSlot } from './ConnectionEditor/CredentialSlots/NodeCredentialSlot';
+import { TrueNASCredentialSlot } from './ConnectionEditor/CredentialSlots/TrueNASCredentialSlot';
+import { VMwareCredentialSlot } from './ConnectionEditor/CredentialSlots/VMwareCredentialSlot';
 import type { ConnectionType } from '@/api/connections';
 import { InfrastructureActiveRowDetails } from './InfrastructureActiveRowDetails';
 import { InfrastructureInstallerSection } from './InfrastructureInstallerSection';
 import { InfrastructureIgnoredRowDetails } from './InfrastructureIgnoredRowDetails';
 import { InfrastructureStopMonitoringDialog } from './InfrastructureStopMonitoringDialog';
-import { TrueNASSettingsPanel } from './TrueNASSettingsPanel';
-import { VMwareSettingsPanel } from './VMwareSettingsPanel';
 import {
   buildInfrastructureWorkspacePath,
   deriveAddStepFromLegacyPath,
@@ -178,9 +178,21 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
                   case 'pmg':
                     return renderNodeSlot(type);
                   case 'truenas':
-                    return <TrueNASSettingsPanel state={props.trueNASSettings} />;
+                    return (
+                      <TrueNASCredentialSlot
+                        state={props.trueNASSettings}
+                        onCancel={exitAddMode}
+                        onSaved={exitAddMode}
+                      />
+                    );
                   case 'vmware':
-                    return <VMwareSettingsPanel state={props.vmwareSettings} />;
+                    return (
+                      <VMwareCredentialSlot
+                        state={props.vmwareSettings}
+                        onCancel={exitAddMode}
+                        onSaved={exitAddMode}
+                      />
+                    );
                   case 'agent':
                     return (
                       <div class="space-y-4">
