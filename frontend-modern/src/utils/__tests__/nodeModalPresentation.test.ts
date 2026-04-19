@@ -97,6 +97,40 @@ describe('nodeModalPresentation', () => {
     });
   });
 
+  it('propagates per-surface scope toggles through the pve payload', () => {
+    const form = {
+      ...getNodeModalDefaultFormData('pve'),
+      monitorVMs: false,
+      monitorContainers: true,
+      monitorStorage: false,
+      monitorBackups: true,
+    };
+    expect(buildNodeModalMonitoringPayload('pve', form)).toMatchObject({
+      monitorVMs: false,
+      monitorContainers: true,
+      monitorStorage: false,
+      monitorBackups: true,
+    });
+  });
+
+  it('propagates per-surface scope toggles through the pbs payload', () => {
+    const form = {
+      ...getNodeModalDefaultFormData('pbs'),
+      monitorDatastores: true,
+      monitorSyncJobs: false,
+      monitorVerifyJobs: true,
+      monitorPruneJobs: false,
+      monitorGarbageJobs: false,
+    };
+    expect(buildNodeModalMonitoringPayload('pbs', form)).toMatchObject({
+      monitorDatastores: true,
+      monitorSyncJobs: false,
+      monitorVerifyJobs: true,
+      monitorPruneJobs: false,
+      monitorGarbageJobs: false,
+    });
+  });
+
   it('returns canonical node test result presentation', () => {
     expect(getNodeModalTestResultPresentation('success')).toMatchObject({
       icon: 'success',

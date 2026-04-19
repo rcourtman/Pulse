@@ -18,8 +18,17 @@ export interface NodeModalFormData {
   tokenValue: string;
   fingerprint: string;
   verifySSL: boolean;
+  monitorVMs: boolean;
+  monitorContainers: boolean;
+  monitorStorage: boolean;
+  monitorBackups: boolean;
   monitorPhysicalDisks: boolean;
   physicalDiskPollingMinutes: number;
+  monitorDatastores: boolean;
+  monitorSyncJobs: boolean;
+  monitorVerifyJobs: boolean;
+  monitorPruneJobs: boolean;
+  monitorGarbageJobs: boolean;
   monitorMailStats: boolean;
   monitorQueues: boolean;
   monitorQuarantine: boolean;
@@ -47,8 +56,17 @@ export function getNodeModalDefaultFormData(
     tokenValue: '',
     fingerprint: '',
     verifySSL: true,
+    monitorVMs: true,
+    monitorContainers: true,
+    monitorStorage: true,
+    monitorBackups: true,
     monitorPhysicalDisks: false,
     physicalDiskPollingMinutes: 5,
+    monitorDatastores: true,
+    monitorSyncJobs: true,
+    monitorVerifyJobs: true,
+    monitorPruneJobs: true,
+    monitorGarbageJobs: true,
     monitorMailStats: true,
     monitorQueues: true,
     monitorQuarantine: true,
@@ -150,20 +168,20 @@ export function buildNodeModalMonitoringPayload(
   switch (nodeType) {
     case 'pve':
       return {
-        monitorVMs: true,
-        monitorContainers: true,
-        monitorStorage: true,
-        monitorBackups: true,
+        monitorVMs: formData.monitorVMs,
+        monitorContainers: formData.monitorContainers,
+        monitorStorage: formData.monitorStorage,
+        monitorBackups: formData.monitorBackups,
         monitorPhysicalDisks: formData.monitorPhysicalDisks,
         physicalDiskPollingMinutes: formData.physicalDiskPollingMinutes,
       };
     case 'pbs':
       return {
-        monitorDatastores: true,
-        monitorSyncJobs: true,
-        monitorVerifyJobs: true,
-        monitorPruneJobs: true,
-        monitorGarbageJobs: true,
+        monitorDatastores: formData.monitorDatastores,
+        monitorSyncJobs: formData.monitorSyncJobs,
+        monitorVerifyJobs: formData.monitorVerifyJobs,
+        monitorPruneJobs: formData.monitorPruneJobs,
+        monitorGarbageJobs: formData.monitorGarbageJobs,
       };
     case 'pmg':
       return {

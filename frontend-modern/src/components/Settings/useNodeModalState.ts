@@ -276,6 +276,27 @@ export const useNodeModalState = (props: NodeModalProps) => {
       username = parts[0];
     }
 
+    const pveConfig =
+      node.type === 'pve'
+        ? (node as NodeConfig & {
+            monitorVMs?: boolean;
+            monitorContainers?: boolean;
+            monitorStorage?: boolean;
+            monitorBackups?: boolean;
+          })
+        : undefined;
+
+    const pbsConfig =
+      node.type === 'pbs'
+        ? (node as NodeConfig & {
+            monitorDatastores?: boolean;
+            monitorSyncJobs?: boolean;
+            monitorVerifyJobs?: boolean;
+            monitorPruneJobs?: boolean;
+            monitorGarbageJobs?: boolean;
+          })
+        : undefined;
+
     const pmgConfig =
       node.type === 'pmg'
         ? (node as NodeConfig & {
@@ -298,6 +319,10 @@ export const useNodeModalState = (props: NodeModalProps) => {
       tokenValue: '',
       fingerprint: ('fingerprint' in node ? node.fingerprint : '') || '',
       verifySSL: node.verifySSL ?? true,
+      monitorVMs: pveConfig?.monitorVMs ?? true,
+      monitorContainers: pveConfig?.monitorContainers ?? true,
+      monitorStorage: pveConfig?.monitorStorage ?? true,
+      monitorBackups: pveConfig?.monitorBackups ?? true,
       monitorPhysicalDisks:
         node.type === 'pve'
           ? ((node as NodeConfig & { monitorPhysicalDisks?: boolean }).monitorPhysicalDisks ?? true)
@@ -307,6 +332,11 @@ export const useNodeModalState = (props: NodeModalProps) => {
           ? ((node as NodeConfig & { physicalDiskPollingMinutes?: number })
               .physicalDiskPollingMinutes ?? 5)
           : 5,
+      monitorDatastores: pbsConfig?.monitorDatastores ?? true,
+      monitorSyncJobs: pbsConfig?.monitorSyncJobs ?? true,
+      monitorVerifyJobs: pbsConfig?.monitorVerifyJobs ?? true,
+      monitorPruneJobs: pbsConfig?.monitorPruneJobs ?? true,
+      monitorGarbageJobs: pbsConfig?.monitorGarbageJobs ?? true,
       monitorMailStats: pmgConfig?.monitorMailStats ?? true,
       monitorQueues: pmgConfig?.monitorQueues ?? true,
       monitorQuarantine: pmgConfig?.monitorQuarantine ?? true,

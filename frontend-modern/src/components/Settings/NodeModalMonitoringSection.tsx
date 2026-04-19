@@ -59,6 +59,81 @@ export const NodeModalMonitoringSection: Component<NodeModalMonitoringSectionPro
       </div>
 
       <Show when={modalProps.nodeType === 'pve'}>
+        <div class="space-y-3">
+          <SectionHeader
+            title="Data collection"
+            size="sm"
+            class="mb-1"
+            titleClass="text-base-content"
+          />
+          <p class="text-xs text-muted">
+            Control which Proxmox VE resources Pulse ingests. Disable individual collectors to
+            reduce API load or trim dashboard noise.
+          </p>
+
+          <label class="flex items-start gap-2 text-sm text-base-content">
+            <input
+              type="checkbox"
+              checked={state.formData().monitorVMs}
+              onChange={(event) => state.updateField('monitorVMs', event.currentTarget.checked)}
+              class={formCheckbox + ' mt-0.5'}
+            />
+            <div>
+              <div>Virtual machines</div>
+              <p class="text-xs text-muted mt-1">
+                QEMU guest state, resource usage, and per-VM metrics.
+              </p>
+            </div>
+          </label>
+
+          <label class="flex items-start gap-2 text-sm text-base-content">
+            <input
+              type="checkbox"
+              checked={state.formData().monitorContainers}
+              onChange={(event) =>
+                state.updateField('monitorContainers', event.currentTarget.checked)
+              }
+              class={formCheckbox + ' mt-0.5'}
+            />
+            <div>
+              <div>Containers</div>
+              <p class="text-xs text-muted mt-1">
+                LXC container state and resource usage.
+              </p>
+            </div>
+          </label>
+
+          <label class="flex items-start gap-2 text-sm text-base-content">
+            <input
+              type="checkbox"
+              checked={state.formData().monitorStorage}
+              onChange={(event) => state.updateField('monitorStorage', event.currentTarget.checked)}
+              class={formCheckbox + ' mt-0.5'}
+            />
+            <div>
+              <div>Storage</div>
+              <p class="text-xs text-muted mt-1">
+                Per-storage capacity, status, and content type breakdown.
+              </p>
+            </div>
+          </label>
+
+          <label class="flex items-start gap-2 text-sm text-base-content">
+            <input
+              type="checkbox"
+              checked={state.formData().monitorBackups}
+              onChange={(event) => state.updateField('monitorBackups', event.currentTarget.checked)}
+              class={formCheckbox + ' mt-0.5'}
+            />
+            <div>
+              <div>Backups</div>
+              <p class="text-xs text-muted mt-1">
+                vzdump schedules and recent backup activity.
+              </p>
+            </div>
+          </label>
+        </div>
+
         <div class="space-y-4">
           <SectionHeader
             title="Advanced monitoring"
@@ -147,6 +222,106 @@ export const NodeModalMonitoringSection: Component<NodeModalMonitoringSectionPro
               </Show>
             </div>
           </Show>
+        </div>
+      </Show>
+
+      <Show when={modalProps.nodeType === 'pbs'}>
+        <div class="space-y-3">
+          <SectionHeader
+            title="Data collection"
+            size="sm"
+            class="mb-1"
+            titleClass="text-base-content"
+          />
+          <p class="text-xs text-muted">
+            Control which Proxmox Backup Server surfaces Pulse ingests. Disable collectors you
+            don't need.
+          </p>
+
+          <label class="flex items-start gap-2 text-sm text-base-content">
+            <input
+              type="checkbox"
+              checked={state.formData().monitorDatastores}
+              onChange={(event) =>
+                state.updateField('monitorDatastores', event.currentTarget.checked)
+              }
+              class={formCheckbox + ' mt-0.5'}
+            />
+            <div>
+              <div>Datastores</div>
+              <p class="text-xs text-muted mt-1">
+                Datastore capacity, usage, and deduplication status.
+              </p>
+            </div>
+          </label>
+
+          <label class="flex items-start gap-2 text-sm text-base-content">
+            <input
+              type="checkbox"
+              checked={state.formData().monitorSyncJobs}
+              onChange={(event) =>
+                state.updateField('monitorSyncJobs', event.currentTarget.checked)
+              }
+              class={formCheckbox + ' mt-0.5'}
+            />
+            <div>
+              <div>Sync jobs</div>
+              <p class="text-xs text-muted mt-1">
+                Remote sync schedules and their last-run state.
+              </p>
+            </div>
+          </label>
+
+          <label class="flex items-start gap-2 text-sm text-base-content">
+            <input
+              type="checkbox"
+              checked={state.formData().monitorVerifyJobs}
+              onChange={(event) =>
+                state.updateField('monitorVerifyJobs', event.currentTarget.checked)
+              }
+              class={formCheckbox + ' mt-0.5'}
+            />
+            <div>
+              <div>Verify jobs</div>
+              <p class="text-xs text-muted mt-1">
+                Backup verification schedules and outcomes.
+              </p>
+            </div>
+          </label>
+
+          <label class="flex items-start gap-2 text-sm text-base-content">
+            <input
+              type="checkbox"
+              checked={state.formData().monitorPruneJobs}
+              onChange={(event) =>
+                state.updateField('monitorPruneJobs', event.currentTarget.checked)
+              }
+              class={formCheckbox + ' mt-0.5'}
+            />
+            <div>
+              <div>Prune jobs</div>
+              <p class="text-xs text-muted mt-1">
+                Retention policy runs and the snapshots they remove.
+              </p>
+            </div>
+          </label>
+
+          <label class="flex items-start gap-2 text-sm text-base-content">
+            <input
+              type="checkbox"
+              checked={state.formData().monitorGarbageJobs}
+              onChange={(event) =>
+                state.updateField('monitorGarbageJobs', event.currentTarget.checked)
+              }
+              class={formCheckbox + ' mt-0.5'}
+            />
+            <div>
+              <div>Garbage collection</div>
+              <p class="text-xs text-muted mt-1">
+                GC runs that reclaim orphaned chunks from the datastore.
+              </p>
+            </div>
+          </label>
         </div>
       </Show>
 
