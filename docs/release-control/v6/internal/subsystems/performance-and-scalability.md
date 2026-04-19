@@ -401,6 +401,16 @@ onto the shared backend `resourceType=k8s` transport, but it must preserve the
 canonical frontend target types for clusters, nodes, pods, and deployments so
 the workloads and drawer hot paths do not silently drop deployment history or
 split Kubernetes charts across incompatible cache keys.
+That same protected metrics-store boundary also owns write-path churn on local
+instances. `pkg/metrics/store.go` must prefer fewer, larger SQLite write
+transactions over tiny frequent commits: the default write buffer should stay
+large enough to absorb one poll cycle on modest multi-node installs, queued
+flush batches should coalesce before commit when the worker is already behind,
+and WAL auto-checkpointing should avoid tiny segment rewrite loops that keep
+rewriting `metrics.db` on SSD-backed systems. Any future change that reduces
+that batching headroom or makes WAL checkpoints more aggressive again must
+re-prove the metrics-store hot path with the owned store tests rather than
+assuming the earlier vacuum fixes are sufficient.
 contract instead of inventing an infrastructure-local summary filter branch.
 For shared line charts on that hot path, the shared sparkline primitive may
 isolate the selected series inside the existing render budget, but that

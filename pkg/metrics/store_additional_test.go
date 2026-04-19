@@ -12,6 +12,37 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+func TestDefaultConfigUsesLargerWriteBuffer(t *testing.T) {
+	cfg := DefaultConfig("/tmp/pulse")
+	if cfg.WriteBufferSize != 500 {
+		t.Fatalf("WriteBufferSize = %d, want 500", cfg.WriteBufferSize)
+	}
+}
+
+func TestStoreCoalesceQueuedBatches(t *testing.T) {
+	store := &Store{
+		writeCh: make(chan []bufferedMetric, 4),
+	}
+
+	initial := []bufferedMetric{
+		{resourceType: "vm", resourceID: "vm-1", metricType: "cpu", value: 10},
+	}
+	store.writeCh <- []bufferedMetric{
+		{resourceType: "vm", resourceID: "vm-1", metricType: "memory", value: 20},
+	}
+	store.writeCh <- []bufferedMetric{
+		{resourceType: "vm", resourceID: "vm-2", metricType: "cpu", value: 30},
+	}
+
+	combined := store.coalesceQueuedBatches(initial)
+	if len(combined) != 3 {
+		t.Fatalf("expected 3 combined metrics, got %d", len(combined))
+	}
+	if len(store.writeCh) != 0 {
+		t.Fatalf("expected queued batches to be drained, got %d remaining", len(store.writeCh))
+	}
+}
+
 func TestStoreWriteBatchSync(t *testing.T) {
 	dir := t.TempDir()
 	store, err := NewStore(DefaultConfig(dir))
