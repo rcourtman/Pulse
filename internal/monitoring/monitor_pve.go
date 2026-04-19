@@ -957,6 +957,12 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 		pollErr = fmt.Errorf("pve instance config not found for %s", instanceName)
 		return
 	}
+	if instanceCfg.Disabled {
+		if debugEnabled {
+			log.Debug().Str("instance", instanceName).Msg("Skipping PVE poll: instance is paused")
+		}
+		return
+	}
 
 	// Poll nodes
 	nodes, updatedClient, err := m.fetchPVENodes(ctx, instanceName, instanceCfg, client)

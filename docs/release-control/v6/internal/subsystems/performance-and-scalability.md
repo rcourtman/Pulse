@@ -275,6 +275,16 @@ regression protection.
     colors, but they must not fall back to inline `style=` attributes on the
     public shell just to express virtualization spacers, alert accents, or
     workload metric bars.
+36. Keep the unified connections ledger off the polling hot path. Changes to
+    `internal/api/router.go` that register `/api/connections` and
+    `/api/connections/probe` must keep those routes off the monitoring fan-out
+    budget: `GET /api/connections` must resolve purely from
+    `monitoring.Monitor.SchedulerHealth()` plus existing per-type config
+    stores without triggering any live network probes, and
+    `POST /api/connections/probe` must remain bounded at 3s total /
+    2s dial / 1s read with at most 5 concurrent fingerprints so the probe
+    endpoint cannot be repurposed into a slow-leak scanner that starves the
+    dashboard hot path.
 
 ## Forbidden Paths
 

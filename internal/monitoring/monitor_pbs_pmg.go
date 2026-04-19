@@ -128,6 +128,12 @@ func (m *Monitor) pollPBSInstance(ctx context.Context, instanceName string, clie
 		log.Error().Str("instance", instanceName).Msg("PBS instance config not found")
 		return
 	}
+	if instanceCfg.Disabled {
+		if debugEnabled {
+			log.Debug().Str("instance", instanceName).Msg("Skipping PBS poll: instance is paused")
+		}
+		return
+	}
 
 	// Initialize PBS instance with default values
 	pbsInst := models.PBSInstance{
@@ -500,6 +506,12 @@ func (m *Monitor) pollPMGInstance(ctx context.Context, instanceName string, clie
 	if instanceCfg == nil {
 		log.Error().Str("instance", instanceName).Msg("PMG instance config not found")
 		pollErr = fmt.Errorf("pmg instance config not found for %s", instanceName)
+		return
+	}
+	if instanceCfg.Disabled {
+		if debugEnabled {
+			log.Debug().Str("instance", instanceName).Msg("Skipping PMG poll: instance is paused")
+		}
 		return
 	}
 

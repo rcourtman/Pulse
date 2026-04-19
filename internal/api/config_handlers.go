@@ -642,6 +642,7 @@ type NodeConfigRequest struct {
 	MonitorQueues                *bool    `json:"monitorQueues,omitempty"`                // PMG only
 	MonitorQuarantine            *bool    `json:"monitorQuarantine,omitempty"`            // PMG only
 	MonitorDomainStats           *bool    `json:"monitorDomainStats,omitempty"`           // PMG only
+	Enabled                      *bool    `json:"enabled,omitempty"`                      // Lifecycle toggle; nil on update preserves current
 }
 
 // NodeResponse represents a node in API responses
@@ -674,7 +675,8 @@ type NodeResponse struct {
 	MonitorQueues                bool                      `json:"monitorQueues,omitempty"`
 	MonitorQuarantine            bool                      `json:"monitorQuarantine,omitempty"`
 	MonitorDomainStats           bool                      `json:"monitorDomainStats,omitempty"`
-	Status                       string                    `json:"status"` // "connected", "disconnected", "error"
+	Enabled                      bool                      `json:"enabled"` // Lifecycle; false = paused
+	Status                       string                    `json:"status"`  // "connected", "disconnected", "error"
 	IsCluster                    bool                      `json:"isCluster,omitempty"`
 	ClusterName                  string                    `json:"clusterName,omitempty"`
 	ClusterEndpoints             []ClusterEndpointResponse `json:"clusterEndpoints"`
@@ -1296,6 +1298,7 @@ func (h *ConfigHandlers) GetAllNodesForAPI(ctx context.Context) []NodeResponse {
 			MonitorPhysicalDisks:         pve.MonitorPhysicalDisks,
 			PhysicalDiskPollingMinutes:   pve.PhysicalDiskPollingMinutes,
 			TemperatureMonitoringEnabled: pve.TemperatureMonitoringEnabled,
+			Enabled:                      !pve.Disabled,
 			Status:                       h.getNodeStatus(ctx, "pve", pve.Name),
 			IsCluster:                    pve.IsCluster,
 			ClusterName:                  pve.ClusterName,
@@ -1326,6 +1329,7 @@ func (h *ConfigHandlers) GetAllNodesForAPI(ctx context.Context) []NodeResponse {
 			MonitorPruneJobs:             pbs.MonitorPruneJobs,
 			MonitorGarbageJobs:           pbs.MonitorGarbageJobs,
 			ExcludeDatastores:            pbs.ExcludeDatastores,
+			Enabled:                      !pbs.Disabled,
 			Status:                       h.getNodeStatus(ctx, "pbs", pbs.Name),
 			Source:                       pbs.Source,
 		}.NormalizeCollections()
@@ -1356,6 +1360,7 @@ func (h *ConfigHandlers) GetAllNodesForAPI(ctx context.Context) []NodeResponse {
 			MonitorQueues:                pmgInst.MonitorQueues,
 			MonitorQuarantine:            pmgInst.MonitorQuarantine,
 			MonitorDomainStats:           pmgInst.MonitorDomainStats,
+			Enabled:                      !pmgInst.Disabled,
 			Status:                       h.getNodeStatus(ctx, "pmg", pmgInst.Name),
 		}.NormalizeCollections()
 		nodes = append(nodes, node)

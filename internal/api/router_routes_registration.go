@@ -176,6 +176,32 @@ func (r *Router) registerConfigSystemRoutes(updateHandlers *UpdateHandlers) {
 		}
 	})
 
+	// Unified connections ledger — aggregates PVE/PBS/PMG/VMware/TrueNAS/agent rows.
+	r.mux.HandleFunc("/api/connections", func(w http.ResponseWriter, req *http.Request) {
+		if r.connectionsHandlers == nil {
+			writeErrorResponse(w, http.StatusServiceUnavailable, "connections_unavailable", "Connections service unavailable", nil)
+			return
+		}
+		if req.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.connectionsHandlers.HandleList))(w, req)
+	})
+
+	// Connection address probe — stateless type detection before credential entry.
+	r.mux.HandleFunc("/api/connections/probe", func(w http.ResponseWriter, req *http.Request) {
+		if r.connectionsHandlers == nil {
+			writeErrorResponse(w, http.StatusServiceUnavailable, "connections_unavailable", "Connections service unavailable", nil)
+			return
+		}
+		if req.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.connectionsHandlers.HandleProbe))(w, req)
+	})
+
 	// TrueNAS connection management
 	r.mux.HandleFunc("/api/truenas/connections", func(w http.ResponseWriter, req *http.Request) {
 		if r.trueNASHandlers == nil {

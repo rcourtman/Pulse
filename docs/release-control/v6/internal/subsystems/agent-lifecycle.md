@@ -303,6 +303,16 @@ an add-only capacity posture.
     VMware must not collect external vCenter inventory before that canonical
     capacity view is safe, so fleet/setup surfaces cannot bypass the
     monitored-system accounting boundary through direct API writes.
+    The same lifecycle-adjacent platform-connections boundary now also owns
+    the unified connections ledger (`GET /api/connections`) and address
+    probe (`POST /api/connections/probe`). Lifecycle surfaces may observe
+    agent `Host.LastSeen`-backed rows on that ledger, but must not
+    reinterpret derived `state` (active/paused/unauthorized/unreachable/
+    stale/pending) as install authority or treat the probe response as
+    enrollment state; ledger writes still flow through the per-type config
+    endpoints that own admission checks, and the `Disabled` flag on
+    PVE/PBS/PMG surfaced by that ledger must remain a pause-only signal
+    rather than an installer pre-flight gate.
 
 ## Forbidden Paths
 

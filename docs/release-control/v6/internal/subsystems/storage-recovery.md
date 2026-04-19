@@ -343,6 +343,18 @@ querying, and the operator-facing storage health presentation layer.
     canonical storage page model, recovery presenters, and shared summary
     caches. Header chrome must not become a second owner for storage filters,
     recovery posture, commercial purchase state, or transport selection.
+39. Keep the unified connections ledger owner-neutral toward storage and
+    recovery. Shared `internal/api/router.go` may mount the
+    `/api/connections` and `/api/connections/probe` routes alongside the
+    existing storage/recovery-adjacent API surfaces, and
+    `internal/api/config_handlers.go` and `internal/api/config_node_handlers.go`
+    may carry the new per-instance `Enabled`/`Disabled` round-trip, but
+    storage and recovery consumers must not reinterpret the derived
+    connection `state` (active/paused/unauthorized/unreachable/stale/pending)
+    as storage health, backup-job posture, or recovery verification state;
+    storage and recovery UI must keep sourcing those signals from their
+    existing canonical page models instead of polling the connections
+    ledger for per-datastore or per-backup truth.
 
 ## Forbidden Paths
 

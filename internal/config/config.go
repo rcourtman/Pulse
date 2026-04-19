@@ -543,6 +543,11 @@ type PVEInstance struct {
 	// Agent tracking
 	Source      string // "agent" or "script" - how this node was registered (empty = legacy/manual)
 	DisableCeph bool   // Disable Ceph status polling for this instance
+
+	// Lifecycle. Disabled (not Enabled) so the zero value means "poll" —
+	// existing nodes.json records from before this field existed load
+	// unpaused without a schema migration.
+	Disabled bool `json:"disabled,omitempty"`
 }
 
 // ClusterEndpoint represents a single node in a cluster
@@ -595,6 +600,9 @@ type PBSInstance struct {
 
 	// Datastore exclusion (for unmounted/removable datastores that cause log noise)
 	ExcludeDatastores []string
+
+	// Lifecycle. See PVEInstance.Disabled.
+	Disabled bool `json:"disabled,omitempty"`
 }
 
 // PMGInstance represents a Proxmox Mail Gateway connection
@@ -615,6 +623,9 @@ type PMGInstance struct {
 	MonitorDomainStats           bool
 	TemperatureMonitoringEnabled *bool // Monitor temperature via SSH (nil = use global setting, true/false = override)
 	SSHPort                      int   // SSH port for temperature monitoring (0 = use global default)
+
+	// Lifecycle. See PVEInstance.Disabled.
+	Disabled bool `json:"disabled,omitempty"`
 }
 
 // Global persistence instance for saving

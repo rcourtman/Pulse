@@ -79,6 +79,11 @@ Own canonical runtime payload shapes between backend and frontend.
 54. `internal/api/security_status_capabilities.go`
 55. `internal/api/demo_middleware.go`
 56. `frontend-modern/src/stores/aiRuntimeState.ts`
+57. `internal/api/connections_types.go`
+58. `internal/api/connections_aggregator.go`
+59. `internal/api/connections_handlers.go`
+60. `internal/api/connections_probe.go`
+61. `frontend-modern/src/api/connections.ts`
 
 ## Shared Boundaries
 
@@ -311,6 +316,19 @@ the canonical monitored-system blocked payload.
     presentation is active, so VMware, storage, and infrastructure series stay
     aligned with `/api/resources` and `/api/state` instead of drifting onto the
     live store-backed graph.
+39. Route the unified connections ledger and address probe through
+    `internal/api/connections_types.go`,
+    `internal/api/connections_aggregator.go`,
+    `internal/api/connections_handlers.go`,
+    `internal/api/connections_probe.go`, and
+    `frontend-modern/src/api/connections.ts` together so `GET /api/connections`
+    and `POST /api/connections/probe` stay on one canonical payload shape
+    instead of re-deriving state from per-type config stores in the frontend.
+    State must remain a derived field sourced from in-memory scheduler health
+    (`monitoring.Monitor.SchedulerHealth()`) plus agent `Host.LastSeen`; the
+    endpoint must not introduce new persisted per-connection state. The probe
+    endpoint must remain admin-gated (`RequireAdmin` + `ScopeSettingsWrite`)
+    to block unauthenticated SSRF against internal hosts.
 
 ## Forbidden Paths
 

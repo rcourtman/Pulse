@@ -14,6 +14,10 @@ import (
 func (m *Monitor) initPVEClients(cfg *config.Config) {
 	log.Info().Int("count", len(cfg.PVEInstances)).Msg("initializing PVE clients")
 	for _, pve := range cfg.PVEInstances {
+		if pve.Disabled {
+			log.Info().Str("instance", pve.Name).Msg("Skipping PVE client init: instance is paused")
+			continue
+		}
 		log.Info().
 			Str("name", pve.Name).
 			Str("host", pve.Host).
@@ -78,6 +82,10 @@ func (m *Monitor) initPVEClients(cfg *config.Config) {
 func (m *Monitor) initPBSClients(cfg *config.Config) {
 	log.Info().Int("count", len(cfg.PBSInstances)).Msg("initializing PBS clients")
 	for _, pbsInst := range cfg.PBSInstances {
+		if pbsInst.Disabled {
+			log.Info().Str("instance", pbsInst.Name).Msg("Skipping PBS client init: instance is paused")
+			continue
+		}
 		log.Info().
 			Str("name", pbsInst.Name).
 			Str("host", pbsInst.Host).
@@ -112,6 +120,10 @@ func (m *Monitor) initPBSClients(cfg *config.Config) {
 func (m *Monitor) initPMGClients(cfg *config.Config) {
 	log.Info().Int("count", len(cfg.PMGInstances)).Msg("initializing PMG clients")
 	for _, pmgInst := range cfg.PMGInstances {
+		if pmgInst.Disabled {
+			log.Info().Str("instance", pmgInst.Name).Msg("Skipping PMG client init: instance is paused")
+			continue
+		}
 		log.Info().
 			Str("name", pmgInst.Name).
 			Str("host", pmgInst.Host).

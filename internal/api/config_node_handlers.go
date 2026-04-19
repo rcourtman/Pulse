@@ -1208,6 +1208,9 @@ func (h *ConfigHandlers) handleUpdateNode(w http.ResponseWriter, r *http.Request
 		if req.TemperatureMonitoringEnabled != nil {
 			updated.TemperatureMonitoringEnabled = req.TemperatureMonitoringEnabled
 		}
+		if req.Enabled != nil {
+			updated.Disabled = !*req.Enabled
+		}
 
 		if enforceMonitoredSystemLimitForConfigReplacement(
 			w,
@@ -1312,6 +1315,9 @@ func (h *ConfigHandlers) handleUpdateNode(w http.ResponseWriter, r *http.Request
 		if req.ExcludeDatastores != nil {
 			updated.ExcludeDatastores = req.ExcludeDatastores
 		}
+		if req.Enabled != nil {
+			updated.Disabled = !*req.Enabled
+		}
 
 		if enforceMonitoredSystemLimitForConfigReplacement(
 			w,
@@ -1399,6 +1405,9 @@ func (h *ConfigHandlers) handleUpdateNode(w http.ResponseWriter, r *http.Request
 		}
 		if req.TemperatureMonitoringEnabled != nil {
 			updated.TemperatureMonitoringEnabled = req.TemperatureMonitoringEnabled
+		}
+		if req.Enabled != nil {
+			updated.Disabled = !*req.Enabled
 		}
 
 		if enforceMonitoredSystemLimitForConfigReplacement(

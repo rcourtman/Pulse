@@ -10433,6 +10433,59 @@ func TestContract_ShippedSecurityDocReferencesStayLocal(t *testing.T) {
 	}
 }
 
+// TestContract_ConnectionPayloadShapeStaysCanonical pins the JSON shape of
+// the unified connections ledger so the Go types in
+// `internal/api/connections_types.go` stay in lockstep with the
+// `frontend-modern/src/api/connections.ts` client. Adding or renaming fields
+// on this wire shape requires an explicit update to both ends in the same
+// commit.
+func TestContract_ConnectionPayloadShapeStaysCanonical(t *testing.T) {
+	conn := Connection{
+		ID:           "pve-lab",
+		Type:         ConnectionTypePVE,
+		Name:         "lab",
+		Address:      "https://pve.lab:8006",
+		State:        ConnectionStateActive,
+		StateReason:  "",
+		Enabled:      true,
+		Surfaces:     []string{"vms", "containers"},
+		Scope:        map[string]bool{"vms": true, "containers": true},
+		LastSeen:     timePtr(time.Date(2026, 4, 19, 10, 0, 0, 0, time.UTC)),
+		LastError:    nil,
+		Source:       ConnectionSourceManual,
+		Capabilities: ConnectionCapabilities{SupportsPause: true, SupportsScope: true, SupportsTest: true},
+	}
+	body, err := json.Marshal(ConnectionsListResponse{Connections: []Connection{conn}})
+	if err != nil {
+		t.Fatalf("marshal Connection: %v", err)
+	}
+	want := `{"connections":[{"id":"pve-lab","type":"pve","name":"lab","address":"https://pve.lab:8006","state":"active","enabled":true,"surfaces":["vms","containers"],"scope":{"containers":true,"vms":true},"lastSeen":"2026-04-19T10:00:00Z","source":"manual","capabilities":{"supportsPause":true,"supportsScope":true,"supportsTest":true}}]}`
+	assertJSONSnapshot(t, body, want)
+}
+
+// TestContract_ProbePayloadShapeStaysCanonical pins the POST
+// /api/connections/probe wire shape. Hint keys are free-form; the envelope
+// fields (type, host, port, hints) are the contract boundary.
+func TestContract_ProbePayloadShapeStaysCanonical(t *testing.T) {
+	resp := ProbeResponse{
+		Candidates: []ProbeCandidate{
+			{
+				Type:  ConnectionTypePVE,
+				Host:  "https://pve.lab:8006",
+				Port:  8006,
+				Hints: map[string]string{"product": "Proxmox VE", "version": "8.2.4"},
+			},
+		},
+		ProbedMs: 812,
+	}
+	body, err := json.Marshal(resp)
+	if err != nil {
+		t.Fatalf("marshal ProbeResponse: %v", err)
+	}
+	want := `{"candidates":[{"type":"pve","host":"https://pve.lab:8006","port":8006,"hints":{"product":"Proxmox VE","version":"8.2.4"}}],"probedMs":812}`
+	assertJSONSnapshot(t, body, want)
+}
+
 func mustStreamEvent(t *testing.T, eventType string, data interface{}) chat.StreamEvent {
 	t.Helper()
 

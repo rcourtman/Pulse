@@ -71,6 +71,12 @@ truth for live infrastructure data.
 10. Add or change mock chart synthesis, seeded history continuity, or mock-owned
    chart fallbacks through `internal/monitoring/mock_metrics_history.go` and
    `internal/monitoring/mock_chart_history.go`
+11. Honor the per-instance `Disabled` flag on PVE/PBS/PMG at poller client
+   init, reconnect, and per-node iteration so disabled connections do not
+   drive API calls, scheduler health, or surface ingest. Zero-value
+   `Disabled=false` must remain the migration-safe default for existing
+   `nodes.json` content; the poller must never create a client or mark an
+   instance reachable when `Disabled` is true.
 
 ## Forbidden Paths
 

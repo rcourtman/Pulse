@@ -68,15 +68,23 @@ func (m *Monitor) retryFailedConnections(ctx context.Context) {
 		if m.config != nil {
 			connectionTimeout = m.config.ConnectionTimeout
 
-			// Find PVE instances without clients
+			// Find PVE instances without clients. Skip paused instances —
+			// a missing client for a paused instance is intentional, not a failure.
 			for _, pve := range m.config.PVEInstances {
+				if pve.Disabled {
+					continue
+				}
 				if _, exists := m.pveClients[pve.Name]; !exists {
 					missingPVE = append(missingPVE, pve)
 				}
 			}
 
-			// Find PBS instances without clients
+			// Find PBS instances without clients. Skip paused instances —
+			// a missing client for a paused instance is intentional, not a failure.
 			for _, pbsInst := range m.config.PBSInstances {
+				if pbsInst.Disabled {
+					continue
+				}
 				if _, exists := m.pbsClients[pbsInst.Name]; !exists {
 					missingPBS = append(missingPBS, pbsInst)
 				}

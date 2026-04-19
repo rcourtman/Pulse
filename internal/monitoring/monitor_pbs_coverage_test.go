@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -196,5 +197,35 @@ func TestMonitor_PollPBSInstance_DatastoreDetails(t *testing.T) {
 		}
 	} else {
 		t.Error("DS2 not found")
+	}
+}
+
+// TestPBSAndPMGPollSkipDisabledInstances asserts that the PBS and PMG poll
+// entry points short-circuit when their resolved instance config carries
+// `Disabled: true`. This is a source-level guardrail for the discovery
+// provider surface: the unified connections ledger surfaces `Disabled` as
+// `paused`, and the PBS/PMG pollers must not drive live API calls or
+// surface ingest while that flag is set, across restarts or reloads.
+func TestPBSAndPMGPollSkipDisabledInstances(t *testing.T) {
+	data, err := os.ReadFile("monitor_pbs_pmg.go")
+	if err != nil {
+		t.Fatalf("failed to read monitor_pbs_pmg.go: %v", err)
+	}
+	source := string(data)
+
+	// Both PBS and PMG poll flows must explicitly guard on Disabled.
+	if count := strings.Count(source, "if instanceCfg.Disabled {"); count < 2 {
+		t.Fatalf("monitor_pbs_pmg.go must contain the Disabled-skip guard in both PBS and PMG poll entry points; found %d", count)
+	}
+
+	// The guards must short-circuit the poll with an early return so no
+	// downstream API client is constructed for a paused instance.
+	for _, snippet := range []string{
+		"Skipping PBS poll: instance is paused",
+		"Skipping PMG poll: instance is paused",
+	} {
+		if !strings.Contains(source, snippet) {
+			t.Fatalf("monitor_pbs_pmg.go must emit debug-log %q when skipping a disabled instance so operators can correlate paused ledger rows with runtime behavior", snippet)
+		}
 	}
 }

@@ -72,6 +72,7 @@ type Router struct {
 	configHandlers             *ConfigHandlers
 	trueNASHandlers            *TrueNASHandlers
 	vmwareHandlers             *VMwareHandlers
+	connectionsHandlers        *ConnectionsHandlers
 	notificationHandlers       *NotificationHandlers
 	notificationQueueHandlers  *NotificationQueueHandlers
 	dockerAgentHandlers        *DockerAgentHandlers
@@ -386,6 +387,11 @@ func (r *Router) setupRoutes() {
 		getMonitor:     r.configHandlers.getMonitor,
 		getPoller:      func(context.Context) *monitoring.VMwarePoller { return r.vmwarePoller },
 	}
+	r.connectionsHandlers = NewConnectionsHandlers(
+		r.configHandlers.getConfig,
+		r.configHandlers.getPersistence,
+		r.configHandlers.getMonitor,
+	)
 	recoveryManager := recoverymanager.New(r.multiTenant)
 	r.recoveryHandlers = NewRecoveryHandlers(recoveryManager)
 	if r.mtMonitor != nil {

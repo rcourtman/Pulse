@@ -1331,3 +1331,43 @@ func TestReloadAndRuntimeContextStayOnCanonicalMonitoringPath(t *testing.T) {
 		}
 	}
 }
+
+// TestPollersHonorDisabledInstanceFlag asserts that the PVE, PBS, and PMG
+// pollers skip instances whose `Disabled` flag is set, both at client
+// initialization/reconnect time and on every per-instance iteration of the
+// poll loop. The unified connections ledger surfaces `Disabled` as a
+// `paused` state, so the monitoring runtime must not drive API calls or
+// mark a disabled instance reachable; that behavior is what keeps the
+// ledger's pause semantics honest across restarts.
+func TestPollersHonorDisabledInstanceFlag(t *testing.T) {
+	expectations := map[string][]string{
+		"monitor_client_init.go": {
+			"if pve.Disabled {",
+			"if pbsInst.Disabled {",
+			"if pmgInst.Disabled {",
+		},
+		"monitor_client_reconnect.go": {
+			"if pve.Disabled {",
+			"if pbsInst.Disabled {",
+		},
+		"monitor_pve.go": {
+			"if instanceCfg.Disabled {",
+		},
+		"monitor_pbs_pmg.go": {
+			"if instanceCfg.Disabled {",
+		},
+	}
+
+	for file, snippets := range expectations {
+		data, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatalf("failed to read %s: %v", file, err)
+		}
+		source := string(data)
+		for _, snippet := range snippets {
+			if !strings.Contains(source, snippet) {
+				t.Fatalf("%s must contain %q so disabled instances stay off the monitoring hot path", file, snippet)
+			}
+		}
+	}
+}
