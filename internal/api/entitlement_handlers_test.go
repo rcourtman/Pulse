@@ -494,6 +494,59 @@ func TestEntitlementHandler_GrandfatheredRecurringEvaluatorStateIsUncapped(t *te
 	}
 }
 
+func TestHandleRuntimeCapabilities_HostedCommunityEvaluatorStateStripsLegacyCommercialCaps(t *testing.T) {
+	baseDir := t.TempDir()
+	mtp := config.NewMultiTenantPersistence(baseDir)
+
+	orgID := "test-hosted-community-runtime-capabilities"
+	if _, err := mtp.GetPersistence(orgID); err != nil {
+		t.Fatalf("GetPersistence(%s) failed: %v", orgID, err)
+	}
+
+	store := config.NewFileBillingStore(baseDir)
+	if err := store.SaveBillingState(orgID, &entitlements.BillingState{
+		Capabilities: []string{
+			license.FeatureAIPatrol,
+		},
+		Limits: map[string]int64{
+			"max_monitored_systems": 1,
+			"max_guests":            5,
+		},
+		PlanVersion:       "community",
+		SubscriptionState: entitlements.SubStateActive,
+	}); err != nil {
+		t.Fatalf("SaveBillingState(%s) failed: %v", orgID, err)
+	}
+
+	h := NewLicenseHandlers(mtp, true)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/license/runtime-capabilities", nil)
+	req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, orgID))
+	rec := httptest.NewRecorder()
+	h.HandleRuntimeCapabilities(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d, want %d", rec.Code, http.StatusOK)
+	}
+
+	var payload RuntimeCapabilitiesPayload
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("unmarshal payload failed: %v", err)
+	}
+
+	for _, limit := range payload.Limits {
+		if limit.Key == "max_monitored_systems" || limit.Key == "max_guests" {
+			t.Fatalf("expected runtime capabilities to omit stale commercial caps, got %+v", payload.Limits)
+		}
+	}
+	if payload.MonitoredSystemCapacity == nil {
+		t.Fatal("expected monitored_system_capacity in runtime capabilities payload")
+	}
+	if payload.MonitoredSystemCapacity.Limit != 0 {
+		t.Fatalf("monitored_system_capacity.limit=%d, want %d", payload.MonitoredSystemCapacity.Limit, 0)
+	}
+}
+
 func TestEntitlementHandler_TrialEligibility_FreshOrgAllowed(t *testing.T) {
 	baseDir := t.TempDir()
 	mtp := config.NewMultiTenantPersistence(baseDir)

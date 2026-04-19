@@ -247,6 +247,15 @@ Insights`, rather than reviving generic `AI Patrol` or `AI ... analysis`
    value must come from optional extras, hosted convenience, business
    workflow, support, or similar non-core surfaces rather than using
    monitored-system volume itself as the primary paid gate.
+9. Keep migrated self-hosted Community/free billing state uncapped even when
+   the persisted file still carries legacy v5 commercial limit keys:
+   `pkg/licensing/billing_state_normalization.go` and
+   `pkg/licensing/database_source.go` must scrub stale
+   `max_monitored_systems` and `max_guests` values for community/free
+   billing-state plan labels before runtime-capability, entitlement, or
+   warning-banner payloads are built, while leaving non-community plan labels
+   available for bounded hosted or legacy continuity contracts that still
+   carry explicit monitored-system ceilings.
 
 ## Current State
 

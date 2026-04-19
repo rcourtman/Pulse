@@ -243,9 +243,9 @@ func normalizeDatabaseSourceState(state BillingState) BillingState {
 	normalized.CommercialMigration = NormalizeCommercialMigrationStatus(normalized.CommercialMigration)
 
 	normalized.Limits = NormalizeMonitoredSystemLimits(normalized.Limits)
-	if IsGrandfatheredRecurringV5PlanVersion(normalized.PlanVersion) {
-		delete(normalized.Limits, MaxMonitoredSystemsLicenseGateKey)
-		delete(normalized.Limits, "max_guests")
+	if IsSelfHostedCommunityPlanVersion(normalized.PlanVersion) ||
+		IsGrandfatheredRecurringV5PlanVersion(normalized.PlanVersion) {
+		stripLegacyCommercialCaps(normalized.Limits)
 	}
 
 	switch normalized.SubscriptionState {

@@ -6,6 +6,7 @@ package licensing
 
 import (
 	"sort"
+	"strings"
 	"time"
 )
 
@@ -158,6 +159,25 @@ func IsGrandfatheredRecurringV5PlanVersion(planVersion string) bool {
 	default:
 		return false
 	}
+}
+
+// IsSelfHostedCommunityPlanVersion reports whether a persisted billing-state
+// plan version denotes the uncapped self-hosted Community/free posture. This
+// is narrower than tier-based self-hosted licensing: billing-state plan labels
+// like "pro" can still carry explicit continuity limits in hosted and legacy
+// migration paths, so only community/free variants are safe to scrub here.
+func IsSelfHostedCommunityPlanVersion(planVersion string) bool {
+	switch strings.ToLower(CanonicalizePlanVersion(planVersion)) {
+	case "community", string(TierFree):
+		return true
+	default:
+		return false
+	}
+}
+
+func stripLegacyCommercialCaps(limits map[string]int64) {
+	delete(limits, MaxMonitoredSystemsLicenseGateKey)
+	delete(limits, "max_guests")
 }
 
 // UnknownPlanDefaultMonitoredSystemLimit is the safe-default monitored-system limit applied when a

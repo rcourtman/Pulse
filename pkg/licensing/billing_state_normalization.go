@@ -48,6 +48,9 @@ func NormalizeBillingState(state *BillingState) *BillingState {
 	normalized.CommercialMigration = NormalizeCommercialMigrationStatus(normalized.CommercialMigration)
 
 	normalized.Limits = NormalizeMonitoredSystemLimits(normalized.Limits)
+	if IsSelfHostedCommunityPlanVersion(normalized.PlanVersion) {
+		stripLegacyCommercialCaps(normalized.Limits)
+	}
 
 	// Ensure slices/maps are never nil (JSON marshals as [] / {} instead of null).
 	if normalized.Capabilities == nil {
@@ -78,6 +81,9 @@ func NormalizeBillingState(state *BillingState) *BillingState {
 
 func billingStateStoredMonitoredSystemLimit(planVersion string) (int, bool) {
 	planVersion = CanonicalizePlanVersion(planVersion)
+	if IsSelfHostedCommunityPlanVersion(planVersion) {
+		return 0, false
+	}
 	if IsGrandfatheredRecurringV5PlanVersion(planVersion) {
 		return UnknownPlanDefaultMonitoredSystemLimit, true
 	}

@@ -599,6 +599,35 @@ func TestIsGrandfatheredRecurringV5PlanVersion(t *testing.T) {
 	}
 }
 
+func TestIsSelfHostedCommunityPlanVersion(t *testing.T) {
+	tests := []struct {
+		plan string
+		want bool
+	}{
+		{plan: "community", want: true},
+		{plan: "Community", want: true},
+		{plan: "free", want: true},
+		{plan: "relay", want: false},
+		{plan: "pro", want: false},
+		{plan: "pro_plus", want: false},
+		{plan: "pro_annual", want: false},
+		{plan: "lifetime", want: false},
+		{plan: "v5_lifetime_grandfathered", want: false},
+		{plan: "cloud_starter", want: false},
+		{plan: "trial", want: false},
+		{plan: "pro-v2", want: false},
+		{plan: "", want: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.plan, func(t *testing.T) {
+			if got := IsSelfHostedCommunityPlanVersion(tt.plan); got != tt.want {
+				t.Fatalf("IsSelfHostedCommunityPlanVersion(%q) = %v, want %v", tt.plan, got, tt.want)
+			}
+		})
+	}
+}
+
 // TestPriceIDToPlanVersion_AllMapToKnownPlans ensures every plan version in the
 // price→plan map is recognized by LimitsForCloudPlan (fail-closed safety net).
 func TestPriceIDToPlanVersion_AllMapToKnownPlans(t *testing.T) {
