@@ -119,9 +119,11 @@ Pulse is secure by default. On first launch, you must retrieve a **Bootstrap Tok
 
 | Platform | Command |
 |----------|---------|
-| **Docker** | `docker exec pulse cat /data/.bootstrap_token` or `docker exec pulse /app/pulse bootstrap-token` |
-| **Kubernetes** | `kubectl exec -it <pod> -- cat /data/.bootstrap_token` or `kubectl exec -it <pod> -- /app/pulse bootstrap-token` |
-| **Systemd** | `sudo cat /etc/pulse/.bootstrap_token` or `sudo pulse bootstrap-token` |
+| **Docker** | `docker exec pulse /app/pulse bootstrap-token` |
+| **Kubernetes** | `kubectl exec -it <pod> -- /app/pulse bootstrap-token` |
+| **Systemd** | `sudo pulse bootstrap-token` |
+
+> **Important**: Paste the token string printed by the command above. Do not paste the raw `.bootstrap_token` file contents directly. In v6 that file may contain an encrypted JSON snapshot rather than the usable setup token.
 
 ### Step 2: Create Admin Account
 1. Open `http://<your-ip>:7655`

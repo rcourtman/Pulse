@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen, waitFor } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { WelcomeStep } from '../steps/WelcomeStep';
 
 const apiFetchMock = vi.fn();
@@ -69,7 +69,7 @@ describe('WelcomeStep', () => {
     expect(screen.getByText('What this token does')).toBeInTheDocument();
     expect(
       screen.getByText(
-        'This one-time bootstrap token only unlocks first-run setup on this Pulse server. It is not your admin password and it is not the API token you will use after setup.',
+        'This one-time bootstrap token only unlocks first-run setup on this Pulse server. Run the command above and paste the token string it prints. It is not your admin password and it is not the API token you will use after setup.',
       ),
     ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Verify bootstrap token →' })).toBeInTheDocument();
@@ -100,9 +100,37 @@ describe('WelcomeStep', () => {
 
     expect(
       screen.getByText(
-        'Pulse appears to be running in Docker as container "pulse-main". Run the command on the Docker host so you can read /srv/pulse/bootstrap.token from that container.',
+        'Pulse appears to be running in Docker as container "pulse-main". Run the command on the Docker host to print the one-time setup token from that container.',
       ),
     ).toBeInTheDocument();
-    expect(screen.getByText('docker exec pulse-main cat /srv/pulse/bootstrap.token')).toBeInTheDocument();
+    expect(
+      screen.getByText('docker exec pulse-main /app/pulse bootstrap-token'),
+    ).toBeInTheDocument();
+  });
+
+  it('blocks encrypted bootstrap snapshot pastes with a specific error', async () => {
+    const onNext = vi.fn();
+
+    render(() => (
+      <WelcomeStep
+        onNext={onNext}
+        bootstrapToken='{"version":2,"token_ciphertext":"cipher","token_hash":"hash"}'
+        setBootstrapToken={vi.fn()}
+        isUnlocked={false}
+        setIsUnlocked={vi.fn()}
+      />
+    ));
+
+    await waitFor(() => {
+      expect(apiFetchJSONMock).toHaveBeenCalledWith('/api/security/status');
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Verify bootstrap token →' }));
+
+    expect(showErrorMock).toHaveBeenCalledWith(
+      'That looks like the encrypted .bootstrap_token file contents, not the raw setup token. Run the command above and paste the token string it prints.',
+    );
+    expect(apiFetchMock).not.toHaveBeenCalled();
+    expect(onNext).not.toHaveBeenCalled();
   });
 });

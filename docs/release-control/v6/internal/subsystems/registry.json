@@ -3163,13 +3163,15 @@
             "match_prefixes": [],
             "match_files": [
               "frontend-modern/src/components/SetupWizard/SetupCompletionPreview.tsx",
-              "frontend-modern/src/components/SetupWizard/SetupWizard.tsx"
+              "frontend-modern/src/components/SetupWizard/SetupWizard.tsx",
+              "frontend-modern/src/components/SetupWizard/steps/WelcomeStep.tsx"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
               "frontend-modern/src/components/SetupWizard/__tests__/SetupCompletionPreview.test.tsx",
-              "frontend-modern/src/components/SetupWizard/__tests__/SetupWizard.test.tsx"
+              "frontend-modern/src/components/SetupWizard/__tests__/SetupWizard.test.tsx",
+              "frontend-modern/src/components/SetupWizard/__tests__/WelcomeStep.test.tsx"
             ]
           },
           {

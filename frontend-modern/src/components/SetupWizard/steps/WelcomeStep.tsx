@@ -15,7 +15,6 @@ interface WelcomeStepProps {
 
 export const WelcomeStep: Component<WelcomeStepProps> = (props) => {
   const [isValidating, setIsValidating] = createSignal(false);
-  const [tokenPath, setTokenPath] = createSignal('');
   const [isDocker, setIsDocker] = createSignal(false);
   const [inContainer, setInContainer] = createSignal(false);
   const [lxcCtid, setLxcCtid] = createSignal('');
@@ -43,13 +42,10 @@ export const WelcomeStep: Component<WelcomeStepProps> = (props) => {
         lxcCtid?: string;
         dockerContainerName?: string;
       }>('/api/security/status');
-      if (data?.bootstrapTokenPath) {
-        setTokenPath(data.bootstrapTokenPath);
-        setIsDocker(data.isDocker || false);
-        setInContainer(data.inContainer || false);
-        setLxcCtid(data.lxcCtid || '');
-        setDockerContainerName(data.dockerContainerName || '');
-      }
+      setIsDocker(data?.isDocker || false);
+      setInContainer(data?.inContainer || false);
+      setLxcCtid(data?.lxcCtid || '');
+      setDockerContainerName(data?.dockerContainerName || '');
     } catch (error) {
       logger.error('Failed to fetch bootstrap info:', error);
     }
@@ -59,9 +55,38 @@ export const WelcomeStep: Component<WelcomeStepProps> = (props) => {
     void fetchBootstrapInfo();
   });
 
+  const looksLikeBootstrapTokenSnapshot = (value: string) => {
+    const trimmed = value.trim();
+    if (!trimmed.startsWith('{')) {
+      return false;
+    }
+    try {
+      const parsed = JSON.parse(trimmed) as {
+        token_ciphertext?: unknown;
+        token_hash?: unknown;
+        version?: unknown;
+      };
+      return (
+        typeof parsed.version === 'number' &&
+        typeof parsed.token_ciphertext === 'string' &&
+        typeof parsed.token_hash === 'string'
+      );
+    } catch {
+      return false;
+    }
+  };
+
+  const snapshotPasteHelp =
+    'That looks like the encrypted .bootstrap_token file contents, not the raw setup token. Run the command above and paste the token string it prints.';
+
   const handleUnlock = async () => {
-    if (!props.bootstrapToken.trim()) {
+    const trimmedToken = props.bootstrapToken.trim();
+    if (!trimmedToken) {
       showError('Please enter the bootstrap token');
+      return;
+    }
+    if (looksLikeBootstrapTokenSnapshot(trimmedToken)) {
+      showError(snapshotPasteHelp);
       return;
     }
 
@@ -69,7 +94,7 @@ export const WelcomeStep: Component<WelcomeStepProps> = (props) => {
     try {
       const response = await apiFetch('/api/security/validate-bootstrap-token', {
         method: 'POST',
-        body: JSON.stringify({ token: props.bootstrapToken.trim() }),
+        body: JSON.stringify({ token: trimmedToken }),
       });
 
       if (!response.ok) {
@@ -87,17 +112,16 @@ export const WelcomeStep: Component<WelcomeStepProps> = (props) => {
   };
 
   const getTokenCommand = () => {
-    const path = tokenPath() || '/etc/pulse/.bootstrap_token';
     if (isDocker()) {
-      return `docker exec ${dockerContainerName() || '<pulse-container>'} cat ${path}`;
+      return `docker exec ${dockerContainerName() || '<pulse-container>'} /app/pulse bootstrap-token`;
     }
     if (inContainer() && lxcCtid()) {
-      return `pct exec ${lxcCtid()} -- cat ${path}`;
+      return `pct exec ${lxcCtid()} -- pulse bootstrap-token`;
     }
     if (inContainer()) {
-      return `pct exec <ctid> -- cat ${path}`;
+      return `pct exec <ctid> -- pulse bootstrap-token`;
     }
-    return `cat ${path}`;
+    return `sudo pulse bootstrap-token`;
   };
 
   const deploymentLabel = createMemo(() => {
@@ -114,26 +138,25 @@ export const WelcomeStep: Component<WelcomeStepProps> = (props) => {
   });
 
   const deploymentHint = createMemo(() => {
-    const path = tokenPath() || '/etc/pulse/.bootstrap_token';
     if (isDocker()) {
       return dockerContainerName()
-        ? `Pulse appears to be running in Docker as container "${dockerContainerName()}". Run the command on the Docker host so you can read ${path} from that container.`
-        : `Pulse appears to be running in Docker. Run the command on the Docker host and replace <pulse-container> with the running Pulse container name.`;
+        ? `Pulse appears to be running in Docker as container "${dockerContainerName()}". Run the command on the Docker host to print the one-time setup token from that container.`
+        : 'Pulse appears to be running in Docker. Run the command on the Docker host and replace <pulse-container> with the running Pulse container name.';
     }
     if (inContainer() && lxcCtid()) {
-      return `Pulse appears to be running in LXC container ${lxcCtid()}. Run the command on the Proxmox host so you can execute into that container and read ${path}.`;
+      return `Pulse appears to be running in LXC container ${lxcCtid()}. Run the command on the Proxmox host to execute into that container and print the one-time setup token.`;
     }
     if (inContainer()) {
-      return `Pulse appears to be running in a containerized environment. Run the command from the host that manages the container so you can read ${path}.`;
+      return 'Pulse appears to be running in a containerized environment. Run the command from the host that manages the container so you can print the one-time setup token.';
     }
-    return `Run the command directly in a shell on the Pulse server to read ${path}.`;
+    return 'Run the command directly in a shell on the Pulse server to print the one-time setup token.';
   });
 
   const unlockHelp = createMemo(() => {
     if (isDocker()) {
-      return 'This one-time bootstrap token only unlocks first-run setup. After verification, you will create the admin account and Pulse will generate the long-lived API token separately.';
+      return 'This one-time bootstrap token only unlocks first-run setup. Run the command above and paste the token string it prints. After verification, you will create the admin account and Pulse will generate the long-lived API token separately.';
     }
-    return 'This one-time bootstrap token only unlocks first-run setup on this Pulse server. It is not your admin password and it is not the API token you will use after setup.';
+    return 'This one-time bootstrap token only unlocks first-run setup on this Pulse server. Run the command above and paste the token string it prints. It is not your admin password and it is not the API token you will use after setup.';
   });
 
   return (
@@ -196,7 +219,8 @@ export const WelcomeStep: Component<WelcomeStepProps> = (props) => {
             </h3>
             <p class="text-sm text-muted mb-6">
               Run the following command on the Pulse server to retrieve the one-time bootstrap
-              token that unlocks this wizard:
+              token that unlocks this wizard. Do not paste the raw `.bootstrap_token` file
+              contents directly.
             </p>
 
             <div class="mb-4 rounded-md border border-blue-200 bg-blue-50 px-4 py-3 dark:border-blue-800 dark:bg-blue-950/40">
@@ -262,6 +286,11 @@ export const WelcomeStep: Component<WelcomeStepProps> = (props) => {
                 After Pulse verifies this token, the next step is creating the admin account for
                 this server.
               </p>
+              <Show when={looksLikeBootstrapTokenSnapshot(props.bootstrapToken)}>
+                <p class="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
+                  {snapshotPasteHelp}
+                </p>
+              </Show>
 
               <button
                 onClick={handleUnlock}
