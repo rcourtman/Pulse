@@ -1286,6 +1286,12 @@ page should pass the live alert list into `RecentAlertsPanel` and let the
 alert-owned surface derive its own summary and acknowledgement state instead of
 rebuilding alert summary counts or alert-action runtime inside the
 storage/recovery-governed dashboard route.
+That same route shell also owns the top-of-dashboard scan order. When
+`frontend-modern/src/pages/Dashboard.tsx` renders both the KPI strip and the
+problem-resources table, the route must keep the operator snapshot above the
+detail table so the page reads as action queue, summary, then problem detail
+rather than dropping operators straight into a long exception list before the
+dashboard baseline is visible.
 The shared recovery type contract must be pinned the same way:
 `frontend-modern/src/types/recovery.ts` must stay on the explicit
 `recovery-product-surface` proof path instead of riding indirectly on route or

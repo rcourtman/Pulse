@@ -119,6 +119,12 @@ describe('Dashboard page module contract', () => {
     reconnectSpy.mockReset();
     navigateSpy.mockReset();
     overviewMock.health.totalResources = 0;
+    overviewMock.infrastructure.total = 0;
+    overviewMock.infrastructure.byStatus = {};
+    overviewMock.workloads.total = 0;
+    overviewMock.workloads.running = 0;
+    overviewMock.workloads.stopped = 0;
+    overviewMock.problemResources = [];
     overviewMock.storage.total = 0;
     overviewMock.storage.totalCapacity = 0;
     overviewMock.storage.totalUsed = 0;
@@ -199,5 +205,38 @@ describe('Dashboard page module contract', () => {
     expect(screen.getByRole('heading', { name: /Storage/ })).toBeInTheDocument();
     expect(screen.getByText('Last recovery point over 24 hours ago')).toBeInTheDocument();
     expect(screen.getAllByText(/1\.95 KB \/ 3\.91 KB/i)).toHaveLength(2);
+  });
+
+  it('keeps the KPI strip above problem resources so the dashboard snapshot reads before detail', () => {
+    overviewMock.health.totalResources = 5;
+    overviewMock.infrastructure.total = 5;
+    overviewMock.infrastructure.byStatus = { online: 5 };
+    overviewMock.workloads.total = 12;
+    overviewMock.workloads.running = 9;
+    overviewMock.problemResources = [
+      {
+        resource: {
+          id: 'storage-1',
+          type: 'storage',
+          name: 'Storage 1',
+          displayName: 'Storage 1',
+          platformId: 'storage-1',
+          platformType: 'truenas',
+          sourceType: 'api',
+          status: 'offline',
+        } as DashboardOverview['problemResources'][number]['resource'],
+        problems: ['Offline'],
+        worstValue: 200,
+      },
+    ];
+
+    render(() => <DashboardPage />);
+
+    const kpiLabel = screen.getByText('Infrastructure');
+    const problemHeading = screen.getByRole('heading', { name: 'Problem Resources' });
+
+    expect(kpiLabel.compareDocumentPosition(problemHeading) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
   });
 });

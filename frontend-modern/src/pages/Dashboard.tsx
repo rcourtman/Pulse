@@ -278,10 +278,7 @@ export default function Dashboard() {
               findingsNeedingAttention={actions.findingsNeedingAttention()}
             />
 
-            {/* 2. Problem Resources Table — only when problems exist */}
-            <ProblemResourcesTable problems={overview().problemResources} />
-
-            {/* 3. KPI Strip — always visible */}
+            {/* 2. KPI Strip — always visible */}
             <KPIStrip
               infrastructure={{
                 total: overview().infrastructure.total,
@@ -302,6 +299,9 @@ export default function Dashboard() {
                 total: overview().alerts.total,
               }}
             />
+
+            {/* 3. Problem Resources Table — only when problems exist */}
+            <ProblemResourcesTable problems={overview().problemResources} />
 
             {/* 4–5. Customizable widgets: Trend Charts, Recent Alerts */}
             <For each={widgetGroups()}>
