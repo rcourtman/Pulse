@@ -7,7 +7,10 @@ interface ConnectionDetailDrawerProps {
   connection: () => Connection | undefined;
   onClose: () => void;
   onMutated?: () => void;
+  onEdit?: (connection: Connection) => void;
 }
+
+const EDITABLE_CONNECTION_TYPES: readonly Connection['type'][] = ['pve', 'pbs', 'pmg'];
 
 const REMOVE_CONFIRM_TIMEOUT_MS = 4000;
 
@@ -114,6 +117,8 @@ export const ConnectionDetailDrawer: Component<ConnectionDetailDrawerProps> = (p
           const canPause = connection.capabilities.supportsPause;
           const canRemove =
             connection.type !== 'docker' && connection.type !== 'kubernetes';
+          const canEdit =
+            Boolean(props.onEdit) && EDITABLE_CONNECTION_TYPES.includes(connection.type);
           const pauseLabel = connection.enabled ? 'Pause' : 'Resume';
           const pauseBusy = () => pendingAction() === 'pause';
           const removeBusy = () => pendingAction() === 'remove';
@@ -234,7 +239,7 @@ export const ConnectionDetailDrawer: Component<ConnectionDetailDrawerProps> = (p
                 </dl>
               </div>
 
-              <Show when={canPause || canRemove}>
+              <Show when={canEdit || canPause || canRemove}>
                 <div class="space-y-2 border-t border-border px-5 py-4">
                   <Show when={actionError()}>
                     <div
@@ -245,6 +250,16 @@ export const ConnectionDetailDrawer: Component<ConnectionDetailDrawerProps> = (p
                     </div>
                   </Show>
                   <div class="flex flex-wrap items-center justify-end gap-2">
+                    <Show when={canEdit}>
+                      <button
+                        type="button"
+                        disabled={anyBusy()}
+                        onClick={() => props.onEdit?.(connection)}
+                        class="inline-flex items-center rounded-md border border-border px-3 py-1.5 text-sm font-medium text-base-content transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        Edit
+                      </button>
+                    </Show>
                     <Show when={canPause}>
                       <button
                         type="button"

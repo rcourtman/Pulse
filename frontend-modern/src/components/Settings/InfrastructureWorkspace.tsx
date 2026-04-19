@@ -1,4 +1,4 @@
-import { Component, Show, createEffect, createMemo, createSignal } from 'solid-js';
+import { Component, Match, Show, Switch, createEffect, createMemo, createSignal } from 'solid-js';
 import { useLocation, useNavigate, useSearchParams } from '@solidjs/router';
 import { presentationPolicyIsReadOnly } from '@/stores/sessionPresentationPolicy';
 import { AgentProfilesPanel } from './AgentProfilesPanel';
@@ -9,7 +9,8 @@ import { ConnectionEditor } from './ConnectionEditor/ConnectionEditor';
 import { NodeCredentialSlot } from './ConnectionEditor/CredentialSlots/NodeCredentialSlot';
 import { TrueNASCredentialSlot } from './ConnectionEditor/CredentialSlots/TrueNASCredentialSlot';
 import { VMwareCredentialSlot } from './ConnectionEditor/CredentialSlots/VMwareCredentialSlot';
-import type { ConnectionType } from '@/api/connections';
+import type { Connection, ConnectionType } from '@/api/connections';
+import type { NodeConfigWithStatus } from '@/types/nodes';
 import { InfrastructureInstallerSection } from './InfrastructureInstallerSection';
 import {
   buildInfrastructureWorkspacePath,
@@ -43,11 +44,25 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
   const [initialAddType, setInitialAddType] = createSignal<ConnectionType | null>(null);
   const [showAgentProfiles, setShowAgentProfiles] = createSignal(false);
   const [selectedConnectionId, setSelectedConnectionId] = createSignal<string | null>(null);
+  const [editingConnection, setEditingConnection] = createSignal<Connection | null>(null);
   const readOnly = createMemo(() => presentationPolicyIsReadOnly());
   const selectedConnection = createMemo(() => {
     const id = selectedConnectionId();
     return id ? ledger.findById(id) : undefined;
   });
+
+  const findEditableNode = (connection: Connection): NodeConfigWithStatus | null => {
+    const accessor =
+      connection.type === 'pve'
+        ? props.pveNodes
+        : connection.type === 'pbs'
+          ? props.pbsNodes
+          : connection.type === 'pmg'
+            ? props.pmgNodes
+            : null;
+    if (!accessor) return null;
+    return accessor().find((node) => node.name === connection.name) ?? null;
+  };
 
   // Redirect legacy deep links and pre-select the matching type in the editor.
   createEffect(() => {
@@ -76,10 +91,13 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
     setShowAgentProfiles(false);
   });
 
-  // Drop add mode in read-only sessions.
+  // Drop add/edit mode in read-only sessions.
   createEffect(() => {
     if (readOnly() && addMode()) {
       setAddMode(false);
+    }
+    if (readOnly() && editingConnection()) {
+      setEditingConnection(null);
     }
   });
 
@@ -113,21 +131,46 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
     setShowAgentProfiles(false);
   };
 
-  const renderNodeSlot = (type: 'pve' | 'pbs' | 'pmg') => {
+  const exitEditMode = () => {
+    setEditingConnection(null);
+  };
+
+  const handleEditConnection = (connection: Connection) => {
+    setSelectedConnectionId(null);
+    setEditingConnection(connection);
+  };
+
+  const handleEditSaved = () => {
+    ledger.reload();
+    exitEditMode();
+  };
+
+  const renderNodeSlot = (
+    type: 'pve' | 'pbs' | 'pmg',
+    editingNode?: NodeConfigWithStatus | null,
+  ) => {
+    const onExit = editingNode ? exitEditMode : exitAddMode;
+    const onSaved = editingNode ? handleEditSaved : exitAddMode;
     return (
       <NodeCredentialSlot
         nodeType={type}
         settings={props}
-        onCancel={exitAddMode}
-        onSaved={exitAddMode}
+        editingNode={editingNode ?? null}
+        onCancel={onExit}
+        onSaved={onSaved}
       />
     );
   };
 
+  const mode = createMemo<'ledger' | 'add' | 'edit'>(() => {
+    if (editingConnection()) return 'edit';
+    if (addMode()) return 'add';
+    return 'ledger';
+  });
+
   return (
     <div class="space-y-8">
-      <Show
-        when={addMode()}
+      <Switch
         fallback={
           <ConnectionsTable
             rows={rows}
@@ -136,6 +179,65 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
           />
         }
       >
+        <Match when={mode() === 'edit' && editingConnection()}>
+          {(accessor) => {
+            const connection = accessor();
+            const editingNode = findEditableNode(connection);
+            if (!editingNode) {
+              return (
+                <div class="space-y-4">
+                  <div class="flex items-center justify-between gap-3">
+                    <div class="text-base font-semibold text-base-content">
+                      Edit connection
+                    </div>
+                    <button
+                      type="button"
+                      onClick={exitEditMode}
+                      class="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-sm font-medium text-base-content transition-colors hover:bg-surface-hover"
+                    >
+                      ← Back to systems
+                    </button>
+                  </div>
+                  <div
+                    role="alert"
+                    class="rounded-md border border-rose-300 bg-rose-50 px-4 py-3 text-sm text-rose-800 dark:border-rose-900 dark:bg-rose-950 dark:text-rose-200"
+                  >
+                    Couldn't find the underlying configuration for {connection.name}. It may have
+                    been removed. Reload and try again.
+                  </div>
+                </div>
+              );
+            }
+            return (
+              <div class="space-y-4">
+                <div class="flex items-center justify-between gap-3">
+                  <div>
+                    <div class="text-base font-semibold text-base-content">
+                      Edit {connection.name}
+                    </div>
+                    <div class="mt-0.5 text-xs text-muted">{connection.address}</div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={exitEditMode}
+                    class="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-sm font-medium text-base-content transition-colors hover:bg-surface-hover"
+                  >
+                    ← Back to systems
+                  </button>
+                </div>
+
+                <div class="rounded-lg border border-border bg-surface p-4">
+                  {renderNodeSlot(
+                    connection.type as 'pve' | 'pbs' | 'pmg',
+                    editingNode,
+                  )}
+                </div>
+              </div>
+            );
+          }}
+        </Match>
+
+        <Match when={mode() === 'add'}>
         <div class="space-y-4">
           <div class="flex items-center justify-between gap-3">
             <div>
@@ -219,12 +321,14 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
             />
           </div>
         </div>
-      </Show>
+        </Match>
+      </Switch>
 
       <ConnectionDetailDrawer
         connection={selectedConnection}
         onClose={() => setSelectedConnectionId(null)}
         onMutated={() => ledger.reload()}
+        onEdit={handleEditConnection}
       />
     </div>
   );

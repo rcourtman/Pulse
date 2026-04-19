@@ -74,6 +74,36 @@ describe('ConnectionDetailDrawer', () => {
     expect(screen.getByText(/Removing stops recording this agent/i)).toBeInTheDocument();
   });
 
+  it('shows Edit for pve connections and invokes onEdit with the connection', () => {
+    const onEdit = vi.fn();
+    render(() => (
+      <ConnectionDetailDrawer
+        connection={() => pveConnection()}
+        onClose={() => {}}
+        onMutated={() => {}}
+        onEdit={onEdit}
+      />
+    ));
+
+    const editButton = screen.getByRole('button', { name: 'Edit' });
+    fireEvent.click(editButton);
+    expect(onEdit).toHaveBeenCalledTimes(1);
+    expect(onEdit.mock.calls[0][0]).toMatchObject({ id: 'pve:tower', type: 'pve' });
+  });
+
+  it('omits Edit for agent connections (edit is not yet supported)', () => {
+    render(() => (
+      <ConnectionDetailDrawer
+        connection={() => agentConnection()}
+        onClose={() => {}}
+        onMutated={() => {}}
+        onEdit={() => {}}
+      />
+    ));
+
+    expect(screen.queryByRole('button', { name: 'Edit' })).toBeNull();
+  });
+
   it('toggles pause via ConnectionsAPI and calls onMutated on success', async () => {
     setEnabled.mockResolvedValueOnce(undefined);
     const onMutated = vi.fn();
