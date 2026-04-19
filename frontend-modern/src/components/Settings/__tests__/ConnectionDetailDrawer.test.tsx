@@ -1,0 +1,144 @@
+import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { ConnectionDetailDrawer } from '../ConnectionDetailDrawer';
+import type { Connection } from '@/api/connections';
+
+const setEnabled = vi.fn<(connectionId: string, enabled: boolean) => Promise<void>>();
+const remove = vi.fn<(connectionId: string) => Promise<void>>();
+
+vi.mock('@/api/connections', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/api/connections')>();
+  return {
+    ...actual,
+    ConnectionsAPI: {
+      ...actual.ConnectionsAPI,
+      setEnabled: (...args: Parameters<typeof actual.ConnectionsAPI.setEnabled>) =>
+        setEnabled(...args),
+      remove: (...args: Parameters<typeof actual.ConnectionsAPI.remove>) => remove(...args),
+    },
+  };
+});
+
+const pveConnection = (overrides: Partial<Connection> = {}): Connection => ({
+  id: 'pve:tower',
+  type: 'pve',
+  name: 'tower',
+  address: 'https://tower.local:8006',
+  state: 'active',
+  stateReason: '',
+  enabled: true,
+  surfaces: ['vms', 'containers'],
+  scope: { vms: true, containers: true },
+  lastSeen: null,
+  lastError: null,
+  source: 'manual',
+  capabilities: { supportsPause: true, supportsScope: true, supportsTest: true },
+  ...overrides,
+});
+
+const agentConnection = (overrides: Partial<Connection> = {}): Connection => ({
+  id: 'agent:host-1',
+  type: 'agent',
+  name: 'tower.local',
+  address: 'tower.local',
+  state: 'active',
+  stateReason: '',
+  enabled: true,
+  surfaces: ['host'],
+  scope: { host: true },
+  lastSeen: null,
+  lastError: null,
+  source: 'agent',
+  capabilities: { supportsPause: false, supportsScope: false, supportsTest: false },
+  ...overrides,
+});
+
+describe('ConnectionDetailDrawer', () => {
+  beforeEach(() => {
+    setEnabled.mockReset();
+    remove.mockReset();
+  });
+  afterEach(() => cleanup());
+
+  it('hides pause for agent connections but still allows remove', () => {
+    render(() => (
+      <ConnectionDetailDrawer
+        connection={() => agentConnection()}
+        onClose={() => {}}
+        onMutated={() => {}}
+      />
+    ));
+
+    expect(screen.queryByRole('button', { name: /Pause/i })).toBeNull();
+    expect(screen.getByRole('button', { name: /Remove/i })).toBeInTheDocument();
+    expect(screen.getByText(/Removing stops recording this agent/i)).toBeInTheDocument();
+  });
+
+  it('toggles pause via ConnectionsAPI and calls onMutated on success', async () => {
+    setEnabled.mockResolvedValueOnce(undefined);
+    const onMutated = vi.fn();
+
+    render(() => (
+      <ConnectionDetailDrawer
+        connection={() => pveConnection()}
+        onClose={() => {}}
+        onMutated={onMutated}
+      />
+    ));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Pause' }));
+
+    await waitFor(() => {
+      expect(setEnabled).toHaveBeenCalledWith('pve:tower', false);
+      expect(onMutated).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it('shows the returned error inline when pause fails', async () => {
+    setEnabled.mockRejectedValueOnce(new Error('license limit reached'));
+    const onMutated = vi.fn();
+
+    render(() => (
+      <ConnectionDetailDrawer
+        connection={() => pveConnection()}
+        onClose={() => {}}
+        onMutated={onMutated}
+      />
+    ));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Pause' }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toHaveTextContent('license limit reached');
+    });
+    expect(onMutated).not.toHaveBeenCalled();
+  });
+
+  it('requires a second click to confirm removal, then calls remove + onClose + onMutated', async () => {
+    remove.mockResolvedValueOnce(undefined);
+    const onMutated = vi.fn();
+    const onClose = vi.fn();
+
+    render(() => (
+      <ConnectionDetailDrawer
+        connection={() => pveConnection()}
+        onClose={onClose}
+        onMutated={onMutated}
+      />
+    ));
+
+    const removeButton = screen.getByRole('button', { name: 'Remove' });
+    fireEvent.click(removeButton);
+
+    expect(remove).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: /Click again to confirm/i })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Click again to confirm/i }));
+
+    await waitFor(() => {
+      expect(remove).toHaveBeenCalledWith('pve:tower');
+      expect(onMutated).toHaveBeenCalledTimes(1);
+      expect(onClose).toHaveBeenCalledTimes(1);
+    });
+  });
+});

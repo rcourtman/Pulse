@@ -224,6 +224,7 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
       <ConnectionDetailDrawer
         connection={selectedConnection}
         onClose={() => setSelectedConnectionId(null)}
+        onMutated={() => ledger.reload()}
       />
     </div>
   );
