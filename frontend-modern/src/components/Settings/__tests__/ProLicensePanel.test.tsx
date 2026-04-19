@@ -23,6 +23,7 @@ import {
   SELF_HOSTED_PRO_BILLING_PLAN_SECTION_ID,
   SELF_HOSTED_PRO_BILLING_USAGE_HREF,
   SELF_HOSTED_PRO_BILLING_USAGE_SECTION_ID,
+  SELF_HOSTED_PRO_BILLING_PLAN_ROUTE,
 } from '@/utils/pricingHandoff';
 
 let mockEntitlements: LicenseEntitlements | null = null;
@@ -193,6 +194,7 @@ describe('ProLicensePanel', () => {
     });
 
     expect(screen.getByText('Pulse Pro')).toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'Usage' })).not.toBeInTheDocument();
     expect(
       screen.queryByRole('button', { name: /start 14-day pro trial/i }),
     ).not.toBeInTheDocument();
@@ -309,6 +311,7 @@ describe('ProLicensePanel', () => {
     expect(screen.queryByText('Monitored Systems')).not.toBeInTheDocument();
     expect(screen.queryByText('Capacity Status')).not.toBeInTheDocument();
     expect(screen.queryByText('Monitoring capacity')).not.toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'Usage' })).not.toBeInTheDocument();
     expect(screen.getAllByText('Unlimited').length).toBeGreaterThan(0);
     expect(screen.queryByText('5 / 12')).not.toBeInTheDocument();
   });
@@ -362,6 +365,7 @@ describe('ProLicensePanel', () => {
       expect(screen.queryByText('Included Monitored Systems')).not.toBeInTheDocument();
       expect(screen.getByText('Max Guests')).toBeInTheDocument();
       expect(screen.queryByText('Monitoring capacity')).not.toBeInTheDocument();
+      expect(screen.queryByRole('tab', { name: 'Usage' })).not.toBeInTheDocument();
       expect(screen.getAllByText('Unlimited').length).toBeGreaterThan(0);
       expect(screen.queryByText('Plan Monitored System Limit')).not.toBeInTheDocument();
 
@@ -690,7 +694,7 @@ describe('ProLicensePanel', () => {
     },
   );
 
-  it('shows a monitored-system activation success action and suppresses the compare-plans arrival callout', async () => {
+  it('returns self-hosted plan purchases to the plan surface instead of the legacy usage tab', async () => {
     useLocationMock.mockReturnValue({
       search: `?purchase=${SELF_HOSTED_PRO_BILLING_PURCHASE_ACTIVATED}&intent=${SELF_HOSTED_PRO_BILLING_MONITORED_SYSTEM_INTENT}`,
       pathname: '/settings/system/billing/plan',
@@ -700,9 +704,9 @@ describe('ProLicensePanel', () => {
     renderPanel();
 
     expect(screen.getByText('Pulse Pro activated')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Review usage' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Review plan' })).toHaveAttribute(
       'href',
-      SELF_HOSTED_PRO_BILLING_USAGE_HREF,
+      SELF_HOSTED_PRO_BILLING_PLAN_HREF,
     );
     expect(screen.queryByText('Compare self-hosted plans')).not.toBeInTheDocument();
   });
@@ -720,7 +724,17 @@ describe('ProLicensePanel', () => {
     expect(recoveryDisclosure).toHaveAttribute('open');
   });
 
-  it('focuses the usage billing section when the usage route requests counting rules', async () => {
+  it('focuses the usage billing section when a bounded legacy billing route requests counting rules', async () => {
+    mockEntitlements = {
+      capabilities: ['relay'],
+      limits: [{ key: 'max_monitored_systems', limit: 10, current: 5, state: 'ok' }],
+      subscription_state: 'active',
+      upgrade_reasons: [],
+      tier: 'pro',
+      plan_version: 'legacy_migration_fallback',
+      licensed_email: 'owner@example.com',
+      trial_eligible: false,
+    };
     useLocationMock.mockReturnValue({
       search: '?details=counting-rules',
       pathname: '/settings/system/billing/usage',
@@ -736,6 +750,28 @@ describe('ProLicensePanel', () => {
     expect(document.getElementById(SELF_HOSTED_PRO_BILLING_USAGE_SECTION_ID)).toBeInTheDocument();
     expect(screen.getByText('Monitored Systems')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Hide counting rules' })).toBeInTheDocument();
+  });
+
+  it('redirects uncapped self-hosted billing usage routes back to the plan surface', async () => {
+    useLocationMock.mockReturnValue({
+      search: '?details=counting-rules',
+      pathname: '/settings/system/billing/usage',
+      hash: '',
+    });
+
+    renderPanel();
+
+    await waitFor(() => {
+      expect(loadLicenseEntitlementsMock).toHaveBeenCalled();
+    });
+
+    expect(screen.queryByRole('tab', { name: 'Usage' })).not.toBeInTheDocument();
+    expect(document.getElementById(SELF_HOSTED_PRO_BILLING_USAGE_SECTION_ID)).not.toBeInTheDocument();
+    expect(document.getElementById(SELF_HOSTED_PRO_BILLING_PLAN_SECTION_ID)).toBeInTheDocument();
+    expect(navigateMock).toHaveBeenCalledWith(SELF_HOSTED_PRO_BILLING_PLAN_ROUTE, {
+      replace: true,
+      scroll: false,
+    });
   });
 
   it('does not render a monitored-system upgrade arrival callout on the plan upgrade route', async () => {
@@ -761,7 +797,17 @@ describe('ProLicensePanel', () => {
     expect(screen.queryByText('Monitoring capacity')).not.toBeInTheDocument();
   });
 
-  it('navigates between plan and usage focus states through the billing subtabs', async () => {
+  it('navigates between plan and usage focus states through the billing subtabs when legacy capacity handling is active', async () => {
+    mockEntitlements = {
+      capabilities: ['relay'],
+      limits: [{ key: 'max_monitored_systems', limit: 10, current: 5, state: 'ok' }],
+      subscription_state: 'active',
+      upgrade_reasons: [],
+      tier: 'pro',
+      plan_version: 'legacy_migration_fallback',
+      licensed_email: 'owner@example.com',
+      trial_eligible: false,
+    };
     useLocationMock.mockReturnValue({
       search: '',
       pathname: '/settings/system/billing/plan',

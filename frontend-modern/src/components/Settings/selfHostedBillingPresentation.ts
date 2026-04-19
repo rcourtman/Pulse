@@ -19,7 +19,7 @@ export interface SelfHostedProBillingPresentation {
   monitoredSystemUpgradeArrivalTitle: string;
   monitoredSystemUpgradeArrivalBody: string;
   monitoredSystemUpgradeArrivalActionLabel: string;
-  purchaseActivatedUsageActionLabel: string;
+  purchaseActivatedPlanActionLabel: string;
   purchaseCancelledActionLabel: string;
   purchaseExpiredActionLabel: string;
   purchaseFailedActionLabel: string;
@@ -59,7 +59,7 @@ export const SELF_HOSTED_PRO_BILLING_PRESENTATION: SelfHostedProBillingPresentat
   monitoredSystemUpgradeArrivalBody:
     'Community keeps core monitoring free. Compare Relay and Pro in Pulse Account, then return here with Pulse Pro activated automatically.',
   monitoredSystemUpgradeArrivalActionLabel: 'Compare plans',
-  purchaseActivatedUsageActionLabel: 'Review usage',
+  purchaseActivatedPlanActionLabel: 'Review plan',
   purchaseCancelledActionLabel: 'Compare plans',
   purchaseExpiredActionLabel: 'Restart upgrade',
   purchaseFailedActionLabel: 'Open recovery',

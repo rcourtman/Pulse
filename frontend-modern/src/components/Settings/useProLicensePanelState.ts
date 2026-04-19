@@ -1,4 +1,4 @@
-import { createMemo, createSignal, onMount } from 'solid-js';
+import { createEffect, createMemo, createSignal, onMount } from 'solid-js';
 import { useLocation, useNavigate } from '@solidjs/router';
 import { notificationStore } from '@/stores/notifications';
 import { loadCommercialPosture } from '@/stores/licenseCommercial';
@@ -40,6 +40,7 @@ import {
   SELF_HOSTED_PRO_BILLING_PURCHASE_FAILED,
   SELF_HOSTED_PRO_BILLING_PURCHASE_UNAVAILABLE,
   SELF_HOSTED_PRO_BILLING_PLAN_DETAILS_QUERY_PARAM,
+  SELF_HOSTED_PRO_BILLING_PLAN_HREF,
   SELF_HOSTED_PRO_BILLING_PLAN_ROUTE,
   SELF_HOSTED_PRO_BILLING_PURCHASE_QUERY_PARAM,
   SELF_HOSTED_PRO_BILLING_USAGE_HREF,
@@ -76,6 +77,9 @@ export function useProLicensePanelState() {
   const navigate = useNavigate();
   const [licenseKey, setLicenseKey] = createSignal('');
   const [loading, setLoading] = createSignal(false);
+  const [panelDataSettled, setPanelDataSettled] = createSignal(
+    Boolean(licenseEntitlements() || licenseEntitlementsLoadError()),
+  );
   const [activating, setActivating] = createSignal(false);
   const [clearing, setClearing] = createSignal(false);
   const [startingTrial, setStartingTrial] = createSignal(false);
@@ -89,8 +93,12 @@ export function useProLicensePanelState() {
 
   const loadPanelData = async () => {
     setLoading(true);
-    await loadLicenseEntitlements(true);
-    setLoading(false);
+    try {
+      await loadLicenseEntitlements(true);
+    } finally {
+      setLoading(false);
+      setPanelDataSettled(true);
+    }
   };
 
   onMount(() => {
@@ -122,12 +130,72 @@ export function useProLicensePanelState() {
     void loadPanelData();
   });
 
+  const requestedSection = createMemo<SelfHostedBillingSection>(() =>
+    resolveSelfHostedBillingSection(location.pathname, location.search, location.hash),
+  );
+
+  const limitStatus = (key: string) => entitlements()?.limits?.find((entry) => entry.key === key);
+  const monitoredSystemLimitStatus = createMemo(() => limitStatus('max_monitored_systems'));
+  const monitoredSystemCapacity = createMemo(() => entitlements()?.monitored_system_capacity);
+  const monitoredSystemContinuity = createMemo(() => entitlements()?.monitored_system_continuity);
+
+  const showUsageSection = createMemo(() => {
+    if (!panelDataSettled()) {
+      return true;
+    }
+
+    const continuity = monitoredSystemContinuity();
+    if (continuity) {
+      if (continuity.capture_pending) {
+        return true;
+      }
+      if (typeof continuity.plan_limit === 'number' && continuity.plan_limit > 0) {
+        return true;
+      }
+      if (typeof continuity.effective_limit === 'number' && continuity.effective_limit > 0) {
+        return true;
+      }
+      if (
+        typeof continuity.grandfathered_floor === 'number' &&
+        continuity.grandfathered_floor > 0
+      ) {
+        return true;
+      }
+    }
+
+    const resolved = resolveMonitoredSystemCapacityStatus(
+      monitoredSystemCapacity(),
+      monitoredSystemLimitStatus(),
+    );
+    return Boolean(resolved && resolved.limit > 0);
+  });
+
   const activeSection = createMemo<SelfHostedBillingSection>(() => {
-    return resolveSelfHostedBillingSection(location.pathname, location.search, location.hash);
+    if (!panelDataSettled()) {
+      return requestedSection();
+    }
+    if (requestedSection() === 'usage' && !showUsageSection()) {
+      return 'plan';
+    }
+    return requestedSection();
+  });
+
+  createEffect(() => {
+    if (!panelDataSettled()) {
+      return;
+    }
+    if (requestedSection() !== 'usage' || showUsageSection()) {
+      return;
+    }
+    navigate(SELF_HOSTED_PRO_BILLING_PLAN_ROUTE, { replace: true, scroll: false });
   });
 
   const setActiveSection = (section: string) => {
     if (section !== 'plan' && section !== 'usage') {
+      return;
+    }
+    if (section === 'usage' && panelDataSettled() && !showUsageSection()) {
+      navigate(SELF_HOSTED_PRO_BILLING_PLAN_ROUTE, { replace: false, scroll: false });
       return;
     }
     const nextPath =
@@ -136,14 +204,6 @@ export function useProLicensePanelState() {
         : SELF_HOSTED_PRO_BILLING_PLAN_ROUTE;
     navigate(nextPath, { replace: false, scroll: false });
   };
-
-  const showMonitoredSystemUpgradeArrival = createMemo(
-    () =>
-      !purchaseActivationResult() &&
-      activeSection() === 'plan' &&
-      getSelfHostedBillingPlanIntent(location.search) ===
-        SELF_HOSTED_PRO_BILLING_MONITORED_SYSTEM_INTENT,
-  );
   const showCountingRulesByDefault = createMemo(
     () =>
       activeSection() === 'usage' &&
@@ -246,10 +306,6 @@ export function useProLicensePanelState() {
     return segments.length === 3 && segments.every((segment) => segment.length > 0);
   });
 
-  const limitStatus = (key: string) => entitlements()?.limits?.find((entry) => entry.key === key);
-
-  const monitoredSystemLimitStatus = createMemo(() => limitStatus('max_monitored_systems'));
-  const monitoredSystemCapacity = createMemo(() => entitlements()?.monitored_system_capacity);
   const uncappedGrandfatheredPlan = createMemo(() =>
     isUncappedGrandfatheredPlanVersion(entitlements()?.plan_version, entitlements()?.is_lifetime),
   );
@@ -272,7 +328,6 @@ export function useProLicensePanelState() {
   const monitoredSystemCapacityPosture = createMemo(() =>
     resolveMonitoredSystemCapacityStatus(monitoredSystemCapacity(), monitoredSystemLimitStatus()),
   );
-  const monitoredSystemContinuity = createMemo(() => entitlements()?.monitored_system_continuity);
   const monitoredSystemContinuityNotice = createMemo(() =>
     getMonitoredSystemContinuityNotice(
       monitoredSystemContinuity(),
@@ -332,8 +387,8 @@ export function useProLicensePanelState() {
       case SELF_HOSTED_PRO_BILLING_PURCHASE_ACTIVATED:
         if (intent === SELF_HOSTED_PRO_BILLING_MONITORED_SYSTEM_INTENT) {
           return {
-            label: SELF_HOSTED_PRO_BILLING_PRESENTATION.purchaseActivatedUsageActionLabel,
-            destination: resolveUpgradeDestination(SELF_HOSTED_PRO_BILLING_USAGE_HREF),
+            label: SELF_HOSTED_PRO_BILLING_PRESENTATION.purchaseActivatedPlanActionLabel,
+            destination: resolveUpgradeDestination(SELF_HOSTED_PRO_BILLING_PLAN_HREF),
           };
         }
         return null;
@@ -481,8 +536,8 @@ export function useProLicensePanelState() {
     purchaseActivationAction,
     setActiveSection,
     setLicenseKey,
+    showUsageSection,
     showCountingRulesByDefault,
-    showMonitoredSystemUpgradeArrival,
     showRecoveryByDefault,
     showTrialStart,
     startingTrial,

@@ -981,15 +981,19 @@ shared shell/model first instead of letting self-hosted Pulse Pro and hosted
 organization billing drift back into parallel local layouts or vocabularies.
 For self-hosted Pulse Pro specifically, the plan/usage split is now also a
 router contract: `/settings/system/billing/plan` is the canonical plan state,
-`/settings/system/billing/usage` is the canonical monitored-system usage state,
-and `/settings/system/billing` remains a compatibility handoff rather than the
-primary owned destination. Arrival-specific UI affordances belong to that same
-owned billing surface: usage arrivals may open counting rules by default, and
-plan arrivals may surface an upgrade callout that hands off into `Pulse Account`
-for self-hosted plan comparison and checkout before returning through the
-runtime-owned activation callback. Pulse product routes keep ownership of
-license status, usage, and activation state; `Pulse Account` owns the commerce
-flow itself.
+`/settings/system/billing/usage` is the canonical monitored-system usage state
+only when Pulse is still reconciling or enforcing a finite monitored-system
+limit, and `/settings/system/billing` remains a compatibility handoff rather
+than the primary owned destination. Uncapped current self-hosted Pulse Pro
+plans must not keep a standing Usage subtab alive just to restate counted-unit
+totals; direct `/usage` arrivals on those no-cap plans should canonicalize back
+to `/plan`. Arrival-specific UI affordances belong to that same owned billing
+surface: legacy usage arrivals may open counting rules by default, and plan
+arrivals may surface an upgrade callout that hands off into `Pulse Account`
+for self-hosted plan comparison and checkout before returning to the owned
+plan state through the runtime-owned activation callback. Pulse product routes
+keep ownership of license status, usage, and activation state; `Pulse Account`
+owns the commerce flow itself.
 That same router-owned billing contract now also includes recovery as a plan
 detail state instead of a fragment alias. The canonical recovery arrival is
 `/settings/system/billing/plan?details=recovery`, while
@@ -1234,11 +1238,11 @@ as bounded migration continuity, grandfathered floors, or other explicit
 carry-forward limits. Uncapped self-hosted plans should not keep a
 `Monitoring capacity` section alive just to restate that monitoring is
 unlimited; those plan surfaces should describe core monitoring as unlimited in
-their summary model and leave counted-unit explanation plus current usage
-inspection to the usage-owned ledger/disclosure path. When a finite plan is
-full, the section must explain that existing monitoring continues while new
-monitored systems are blocked; when an installation is already above the
-current plan, it must explain that Pulse is in an over-plan frozen state
+their summary model and reserve counted-unit explanation plus current usage
+inspection for the bounded legacy usage ledger/disclosure path. When a finite
+plan is full, the section must explain that existing monitoring continues
+while new monitored systems are blocked; when an installation is already above
+the current plan, it must explain that Pulse is in an over-plan frozen state
 rather than implying a hard runtime blackout.
 Community overflow/setup-slot messaging must still explain the included
 monitored systems plus the temporary setup slot in customer terms rather than

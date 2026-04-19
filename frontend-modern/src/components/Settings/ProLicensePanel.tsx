@@ -82,10 +82,14 @@ const ProLicensePanelContent: Component = () => {
                 value: 'plan',
                 label: SELF_HOSTED_PRO_BILLING_PRESENTATION.planTabLabel,
               },
-              {
-                value: 'usage',
-                label: SELF_HOSTED_PRO_BILLING_PRESENTATION.usageTabLabel,
-              },
+              ...(state.showUsageSection()
+                ? [
+                    {
+                      value: 'usage',
+                      label: SELF_HOSTED_PRO_BILLING_PRESENTATION.usageTabLabel,
+                    },
+                  ]
+                : []),
             ]}
           />
 
@@ -132,7 +136,7 @@ const ProLicensePanelContent: Component = () => {
             </CommercialSection>
           </Show>
 
-          <Show when={state.activeSection() === 'usage'}>
+          <Show when={state.showUsageSection() && state.activeSection() === 'usage'}>
             <CommercialSection
               id={SELF_HOSTED_PRO_BILLING_USAGE_SECTION_ID}
               title={SELF_HOSTED_PRO_BILLING_PRESENTATION.usageSectionTitle}
