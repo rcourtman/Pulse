@@ -2,7 +2,7 @@ import { Component, Match, Show, Switch, createEffect, createMemo, createSignal 
 import { useLocation, useNavigate, useSearchParams } from '@solidjs/router';
 import { presentationPolicyIsReadOnly } from '@/stores/sessionPresentationPolicy';
 import { AgentProfilesPanel } from './AgentProfilesPanel';
-import { ConnectionDetailDrawer } from './ConnectionDetailDrawer';
+import { ConnectionDetailPanel } from './ConnectionDetailPanel';
 import { ConnectionsTable, type ConnectionsTableHeaderAction } from './ConnectionsTable';
 import type { InfrastructureSystemRow, SystemManageAction } from './connectionsTableModel';
 import { ConnectionEditor } from './ConnectionEditor/ConnectionEditor';
@@ -179,11 +179,14 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
     );
   };
 
-  const mode = createMemo<'ledger' | 'add' | 'edit'>(() => {
+  const mode = createMemo<'ledger' | 'add' | 'edit' | 'detail'>(() => {
     if (editingConnection()) return 'edit';
     if (addMode()) return 'add';
+    if (selectedConnection()) return 'detail';
     return 'ledger';
   });
+
+  const exitDetailMode = () => setSelectedConnectionId(null);
 
   return (
     <div class="space-y-8">
@@ -297,6 +300,39 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
           }}
         </Match>
 
+        <Match when={mode() === 'detail' && selectedConnection()}>
+          {(accessor) => {
+            const connection = accessor();
+            const handleEditFromDetail = () => handleEditConnection(connection);
+            return (
+              <div class="space-y-4">
+                <div class="flex items-center justify-between gap-3">
+                  <div>
+                    <div class="text-base font-semibold text-base-content">
+                      {connection.name || connection.address || connection.id}
+                    </div>
+                    <div class="mt-0.5 text-xs text-muted">{connection.address}</div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={exitDetailMode}
+                    class="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-sm font-medium text-base-content transition-colors hover:bg-surface-hover"
+                  >
+                    ← Back to systems
+                  </button>
+                </div>
+
+                <ConnectionDetailPanel
+                  connection={selectedConnection}
+                  onMutated={() => ledger.reload()}
+                  onEdit={handleEditFromDetail}
+                  onRemoved={exitDetailMode}
+                />
+              </div>
+            );
+          }}
+        </Match>
+
         <Match when={mode() === 'add'}>
         <div class="space-y-4">
           <div class="flex items-center justify-between gap-3">
@@ -383,13 +419,6 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
         </div>
         </Match>
       </Switch>
-
-      <ConnectionDetailDrawer
-        connection={selectedConnection}
-        onClose={() => setSelectedConnectionId(null)}
-        onMutated={() => ledger.reload()}
-        onEdit={handleEditConnection}
-      />
     </div>
   );
 };

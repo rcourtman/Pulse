@@ -260,8 +260,9 @@ work extends shared components instead of creating new local variants.
    table rows from
    `frontend-modern/src/components/Settings/useConnectionsLedger.ts`
    (polling `GET /api/connections`) and the unified row click opens
-   `frontend-modern/src/components/Settings/ConnectionDetailDrawer.tsx`,
-   which reads the aggregator fields directly. Phase 9 retired the
+   `frontend-modern/src/components/Settings/ConnectionDetailPanel.tsx`
+   inline as a workspace mode, which reads the aggregator fields
+   directly and must not be re-wrapped as a floating `Dialog` drawer. Phase 9 retired the
    parallel reporting/inventory surface entirely:
    `useInfrastructureReportingState`, `InfrastructureOperationsController`,
    `InfrastructureInventorySection`, `InfrastructureActiveRowDetails`,
@@ -1317,10 +1318,12 @@ The v6 welcome surface is one guided spotlight tour, not a modal plus a second
 dashboard-only migration hint: it must dim the live app, glow the real
 primary-navigation target being described, and keep route-orientation copy on
 the existing welcome flow instead of layering a duplicate in-product banner.
-Its primary job is rapid v5-to-v6 reorientation. The modal should explain
-where familiar v5 destinations moved and what each v6 top-level area is for,
-so operators who feel briefly lost after upgrading can rebuild their mental
-map in one pass.
+Its primary job is fast route orientation. The modal should explain what each
+top-level area is for in plain product language, so operators can understand
+the new navigation in one pass without needing historical layout context.
+That copy should stay direct and present-tense. Each guided step should say
+what the destination does, not depend on v5 comparisons, migration framing, or
+older information architecture to make sense.
 That guided welcome surface should stay compact. The canonical shape is a
 coachmark-sized card centered on the current destination with one short
 step-specific sentence, a small clickable step strip, and minimal footer

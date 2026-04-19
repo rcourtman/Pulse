@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ConnectionDetailDrawer } from '../ConnectionDetailDrawer';
+import { ConnectionDetailPanel } from '../ConnectionDetailPanel';
 import type { Connection } from '@/api/connections';
 
 const setEnabled = vi.fn<(connectionId: string, enabled: boolean) => Promise<void>>();
@@ -53,7 +53,7 @@ const agentConnection = (overrides: Partial<Connection> = {}): Connection => ({
   ...overrides,
 });
 
-describe('ConnectionDetailDrawer', () => {
+describe('ConnectionDetailPanel', () => {
   beforeEach(() => {
     setEnabled.mockReset();
     remove.mockReset();
@@ -62,9 +62,8 @@ describe('ConnectionDetailDrawer', () => {
 
   it('hides pause for agent connections but still allows remove', () => {
     render(() => (
-      <ConnectionDetailDrawer
+      <ConnectionDetailPanel
         connection={() => agentConnection()}
-        onClose={() => {}}
         onMutated={() => {}}
       />
     ));
@@ -77,9 +76,8 @@ describe('ConnectionDetailDrawer', () => {
   it('shows Edit for pve connections and invokes onEdit with the connection', () => {
     const onEdit = vi.fn();
     render(() => (
-      <ConnectionDetailDrawer
+      <ConnectionDetailPanel
         connection={() => pveConnection()}
-        onClose={() => {}}
         onMutated={() => {}}
         onEdit={onEdit}
       />
@@ -94,11 +92,10 @@ describe('ConnectionDetailDrawer', () => {
   it('shows Edit for vmware connections', () => {
     const onEdit = vi.fn();
     render(() => (
-      <ConnectionDetailDrawer
+      <ConnectionDetailPanel
         connection={() =>
           pveConnection({ id: 'vmware:abc', type: 'vmware', name: 'vcsa' })
         }
-        onClose={() => {}}
         onMutated={() => {}}
         onEdit={onEdit}
       />
@@ -113,11 +110,10 @@ describe('ConnectionDetailDrawer', () => {
   it('shows Edit for truenas connections', () => {
     const onEdit = vi.fn();
     render(() => (
-      <ConnectionDetailDrawer
+      <ConnectionDetailPanel
         connection={() =>
           pveConnection({ id: 'truenas:xyz', type: 'truenas', name: 'tower' })
         }
-        onClose={() => {}}
         onMutated={() => {}}
         onEdit={onEdit}
       />
@@ -131,9 +127,8 @@ describe('ConnectionDetailDrawer', () => {
 
   it('omits Edit for agent connections (edit is not yet supported)', () => {
     render(() => (
-      <ConnectionDetailDrawer
+      <ConnectionDetailPanel
         connection={() => agentConnection()}
-        onClose={() => {}}
         onMutated={() => {}}
         onEdit={() => {}}
       />
@@ -147,9 +142,8 @@ describe('ConnectionDetailDrawer', () => {
     const onMutated = vi.fn();
 
     render(() => (
-      <ConnectionDetailDrawer
+      <ConnectionDetailPanel
         connection={() => pveConnection()}
-        onClose={() => {}}
         onMutated={onMutated}
       />
     ));
@@ -167,9 +161,8 @@ describe('ConnectionDetailDrawer', () => {
     const onMutated = vi.fn();
 
     render(() => (
-      <ConnectionDetailDrawer
+      <ConnectionDetailPanel
         connection={() => pveConnection()}
-        onClose={() => {}}
         onMutated={onMutated}
       />
     ));
@@ -182,16 +175,16 @@ describe('ConnectionDetailDrawer', () => {
     expect(onMutated).not.toHaveBeenCalled();
   });
 
-  it('requires a second click to confirm removal, then calls remove + onClose + onMutated', async () => {
+  it('requires a second click to confirm removal, then calls remove + onRemoved + onMutated', async () => {
     remove.mockResolvedValueOnce(undefined);
     const onMutated = vi.fn();
-    const onClose = vi.fn();
+    const onRemoved = vi.fn();
 
     render(() => (
-      <ConnectionDetailDrawer
+      <ConnectionDetailPanel
         connection={() => pveConnection()}
-        onClose={onClose}
         onMutated={onMutated}
+        onRemoved={onRemoved}
       />
     ));
 
@@ -206,7 +199,7 @@ describe('ConnectionDetailDrawer', () => {
     await waitFor(() => {
       expect(remove).toHaveBeenCalledWith('pve:tower');
       expect(onMutated).toHaveBeenCalledTimes(1);
-      expect(onClose).toHaveBeenCalledTimes(1);
+      expect(onRemoved).toHaveBeenCalledTimes(1);
     });
   });
 });

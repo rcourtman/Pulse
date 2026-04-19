@@ -586,7 +586,7 @@
         "frontend-modern/src/components/Infrastructure/deploy/ResultsStep.tsx",
         "frontend-modern/src/components/Settings/AgentProfilesPanel.tsx",
         "frontend-modern/src/components/Settings/ConfiguredNodeTables.tsx",
-        "frontend-modern/src/components/Settings/ConnectionDetailDrawer.tsx",
+        "frontend-modern/src/components/Settings/ConnectionDetailPanel.tsx",
         "frontend-modern/src/components/Settings/ConnectionEditor/AddressProbeStep.tsx",
         "frontend-modern/src/components/Settings/ConnectionEditor/ConnectionEditor.tsx",
         "frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/NodeCredentialSlot.tsx",
@@ -883,7 +883,7 @@
             "match_prefixes": [],
             "match_files": [
               "frontend-modern/src/components/Settings/ConfiguredNodeTables.tsx",
-              "frontend-modern/src/components/Settings/ConnectionDetailDrawer.tsx",
+              "frontend-modern/src/components/Settings/ConnectionDetailPanel.tsx",
               "frontend-modern/src/components/Settings/ConnectionEditor/AddressProbeStep.tsx",
               "frontend-modern/src/components/Settings/ConnectionEditor/ConnectionEditor.tsx",
               "frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/NodeCredentialSlot.tsx",

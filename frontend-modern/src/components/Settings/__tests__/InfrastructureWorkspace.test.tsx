@@ -81,18 +81,12 @@ vi.mock('../AgentProfilesPanel', () => ({
   AgentProfilesPanel: () => <div data-testid="agent-profiles">profiles</div>,
 }));
 
-vi.mock('../ConnectionDetailDrawer', () => ({
-  ConnectionDetailDrawer: (props: {
-    connection: () => Connection | undefined;
-    onClose: () => void;
-  }) => (
+vi.mock('../ConnectionDetailPanel', () => ({
+  ConnectionDetailPanel: (props: { connection: () => Connection | undefined }) => (
     <>
       {props.connection() ? (
-        <div role="dialog" aria-label="Connection details">
+        <div data-testid="connection-detail-panel">
           <div>{props.connection()!.name || props.connection()!.id}</div>
-          <button type="button" onClick={props.onClose}>
-            Close
-          </button>
         </div>
       ) : null}
     </>
@@ -304,15 +298,16 @@ describe('InfrastructureWorkspace', () => {
     expect(screen.getByTestId('agent-profiles')).toBeInTheDocument();
   });
 
-  it('opens the connection detail drawer when a ledger row is viewed', async () => {
+  it('opens the inline connection detail panel when a ledger row is viewed', async () => {
     renderWorkspace();
 
     await waitFor(() => expect(screen.getByText('zeus')).toBeInTheDocument());
     fireEvent.click(screen.getByRole('button', { name: 'View details' }));
 
-    const dialog = screen.getByRole('dialog', { name: 'Connection details' });
-    expect(dialog).toBeInTheDocument();
-    expect(within(dialog).getByText('zeus')).toBeInTheDocument();
+    const panel = screen.getByTestId('connection-detail-panel');
+    expect(panel).toBeInTheDocument();
+    expect(within(panel).getByText('zeus')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Back to systems/i })).toBeInTheDocument();
   });
 
   it('redirects legacy install deep links and pre-selects the agent install slot', async () => {
