@@ -25,6 +25,9 @@ func TestTrueNASNewInstanceDefaultsAndUniqueID(t *testing.T) {
 	require.True(t, first.UseHTTPS)
 	require.True(t, first.Enabled)
 	require.Equal(t, 60, first.PollIntervalSecs)
+	require.True(t, first.MonitorDatasets)
+	require.True(t, first.MonitorPools)
+	require.True(t, first.MonitorReplication)
 }
 
 func TestTrueNASEffectivePollIntervalAndApplyDefaults(t *testing.T) {
@@ -33,9 +36,23 @@ func TestTrueNASEffectivePollIntervalAndApplyDefaults(t *testing.T) {
 
 	instance.ApplyDefaults()
 	require.Equal(t, 60, instance.PollIntervalSecs)
+	// Legacy all-false Monitor* state migrates to all-true.
+	require.True(t, instance.MonitorDatasets)
+	require.True(t, instance.MonitorPools)
+	require.True(t, instance.MonitorReplication)
 
 	instance.PollIntervalSecs = 120
 	require.Equal(t, 120, instance.EffectivePollIntervalSecs())
+}
+
+func TestTrueNASApplyDefaultsPreservesExplicitScope(t *testing.T) {
+	// User who has deliberately disabled a single surface keeps at least
+	// one other enabled, so the migration must not clobber their choice.
+	instance := TrueNASInstance{MonitorDatasets: true, MonitorPools: false, MonitorReplication: false}
+	instance.ApplyDefaults()
+	require.True(t, instance.MonitorDatasets)
+	require.False(t, instance.MonitorPools)
+	require.False(t, instance.MonitorReplication)
 }
 
 func TestTrueNASValidate(t *testing.T) {

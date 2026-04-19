@@ -104,6 +104,9 @@ describe('VMwareSettingsPanel', () => {
         password: '********',
         insecureSkipVerify: false,
         enabled: true,
+        monitorVms: true,
+        monitorHosts: true,
+        monitorDatastores: true,
         poll: {
           lastSuccessAt: new Date(Date.now() - 60_000).toISOString(),
         },
@@ -122,6 +125,9 @@ describe('VMwareSettingsPanel', () => {
         username: 'operator@vsphere.local',
         insecureSkipVerify: true,
         enabled: true,
+        monitorVms: true,
+        monitorHosts: true,
+        monitorDatastores: true,
         poll: {
           lastAttemptAt: new Date(Date.now() - 30_000).toISOString(),
           lastError: {
@@ -138,6 +144,9 @@ describe('VMwareSettingsPanel', () => {
         username: 'readonly@vsphere.local',
         insecureSkipVerify: false,
         enabled: true,
+        monitorVms: true,
+        monitorHosts: true,
+        monitorDatastores: true,
         poll: {
           lastSuccessAt: new Date(Date.now() - 120_000).toISOString(),
         },

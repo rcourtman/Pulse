@@ -116,6 +116,9 @@ describe('TrueNASSettingsPanel', () => {
         useHttps: true,
         insecureSkipVerify: false,
         enabled: true,
+        monitorDatasets: true,
+        monitorPools: true,
+        monitorReplication: true,
         poll: {
           intervalSeconds: 60,
           lastSuccessAt: new Date(Date.now() - 60_000).toISOString(),
@@ -141,6 +144,9 @@ describe('TrueNASSettingsPanel', () => {
         insecureSkipVerify: false,
         enabled: false,
         pollIntervalSeconds: 300,
+        monitorDatasets: true,
+        monitorPools: true,
+        monitorReplication: true,
       },
     ]);
 

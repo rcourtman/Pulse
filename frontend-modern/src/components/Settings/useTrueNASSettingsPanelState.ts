@@ -35,6 +35,9 @@ export interface TrueNASConnectionFormState {
   insecureSkipVerify: boolean;
   fingerprint: string;
   enabled: boolean;
+  monitorDatasets: boolean;
+  monitorPools: boolean;
+  monitorReplication: boolean;
   hasStoredApiKey: boolean;
   hasStoredPassword: boolean;
 }
@@ -54,6 +57,9 @@ const createEmptyFormState = (): TrueNASConnectionFormState => ({
   insecureSkipVerify: false,
   fingerprint: '',
   enabled: true,
+  monitorDatasets: true,
+  monitorPools: true,
+  monitorReplication: true,
   hasStoredApiKey: false,
   hasStoredPassword: false,
 });
@@ -79,6 +85,9 @@ const buildFormStateFromConnection = (
     insecureSkipVerify: connection.insecureSkipVerify,
     fingerprint: connection.fingerprint || '',
     enabled: connection.enabled,
+    monitorDatasets: connection.monitorDatasets,
+    monitorPools: connection.monitorPools,
+    monitorReplication: connection.monitorReplication,
     hasStoredApiKey: hasStoredAPIKey,
     hasStoredPassword: hasStoredPassword,
   };
@@ -145,6 +154,9 @@ const buildConnectionInput = (form: TrueNASConnectionFormState): TrueNASConnecti
     insecureSkipVerify: form.insecureSkipVerify,
     ...(fingerprint ? { fingerprint } : {}),
     enabled: form.enabled,
+    monitorDatasets: form.monitorDatasets,
+    monitorPools: form.monitorPools,
+    monitorReplication: form.monitorReplication,
   };
 
   if (form.authMode === 'apiKey') {

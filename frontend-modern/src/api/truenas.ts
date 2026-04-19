@@ -61,6 +61,9 @@ export interface TrueNASConnection {
   fingerprint?: string;
   enabled: boolean;
   pollIntervalSeconds?: number;
+  monitorDatasets: boolean;
+  monitorPools: boolean;
+  monitorReplication: boolean;
   poll?: TrueNASConnectionPollStatus;
   observed?: TrueNASConnectionObservedSummary;
 }
@@ -77,6 +80,9 @@ export interface TrueNASConnectionInput {
   fingerprint?: string;
   enabled?: boolean;
   pollIntervalSeconds?: number;
+  monitorDatasets?: boolean;
+  monitorPools?: boolean;
+  monitorReplication?: boolean;
 }
 
 export interface TrueNASConnectionTestResult {
@@ -137,6 +143,9 @@ const normalizeTrueNASConnection = (connection: RawTrueNASConnection): TrueNASCo
   fingerprint: optionalTrimmedString(connection.fingerprint),
   enabled: strictBoolean(connection.enabled),
   pollIntervalSeconds: finiteNumberOrUndefined(connection.pollIntervalSeconds),
+  monitorDatasets: strictBoolean(connection.monitorDatasets),
+  monitorPools: strictBoolean(connection.monitorPools),
+  monitorReplication: strictBoolean(connection.monitorReplication),
   poll: normalizeTrueNASConnectionPoll(connection.poll),
   observed: normalizeTrueNASConnectionObservedSummary(connection.observed),
 });
@@ -156,6 +165,11 @@ const serializeTrueNASConnectionInput = (input: TrueNASConnectionInput) => ({
   ...(input.enabled !== undefined ? { enabled: input.enabled } : {}),
   ...(input.pollIntervalSeconds !== undefined
     ? { pollIntervalSeconds: input.pollIntervalSeconds }
+    : {}),
+  ...(input.monitorDatasets !== undefined ? { monitorDatasets: input.monitorDatasets } : {}),
+  ...(input.monitorPools !== undefined ? { monitorPools: input.monitorPools } : {}),
+  ...(input.monitorReplication !== undefined
+    ? { monitorReplication: input.monitorReplication }
     : {}),
 });
 

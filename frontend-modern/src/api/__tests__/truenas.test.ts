@@ -73,8 +73,71 @@ describe('TrueNASAPI', () => {
           disks: 8,
           recoveryArtifacts: 18,
         },
+        monitorDatasets: false,
+        monitorPools: false,
+        monitorReplication: false,
       },
     ]);
+  });
+
+  it('round-trips per-surface monitor* flags through list and update payloads', async () => {
+    vi.mocked(apiFetchJSON)
+      .mockResolvedValueOnce([
+        {
+          id: 'conn-1',
+          name: 'tower',
+          host: 'truenas.local',
+          useHttps: true,
+          insecureSkipVerify: false,
+          enabled: true,
+          pollIntervalSeconds: 60,
+          monitorDatasets: true,
+          monitorPools: false,
+          monitorReplication: true,
+        },
+      ])
+      .mockResolvedValueOnce({
+        id: 'conn-1',
+        name: 'tower',
+        host: 'truenas.local',
+        useHttps: true,
+        insecureSkipVerify: false,
+        enabled: true,
+        pollIntervalSeconds: 60,
+        monitorDatasets: false,
+        monitorPools: true,
+        monitorReplication: false,
+      });
+
+    const connections = await TrueNASAPI.listConnections();
+    expect(connections[0]).toMatchObject({
+      monitorDatasets: true,
+      monitorPools: false,
+      monitorReplication: true,
+    });
+
+    await TrueNASAPI.updateConnection('conn-1', {
+      host: 'truenas.local',
+      useHttps: true,
+      enabled: true,
+      monitorDatasets: false,
+      monitorPools: true,
+      monitorReplication: false,
+    });
+    expect(apiFetchJSON).toHaveBeenLastCalledWith(
+      '/api/truenas/connections/conn-1',
+      expect.objectContaining({
+        method: 'PUT',
+        body: JSON.stringify({
+          host: 'truenas.local',
+          useHttps: true,
+          enabled: true,
+          monitorDatasets: false,
+          monitorPools: true,
+          monitorReplication: false,
+        }),
+      }),
+    );
   });
 
   it('creates, updates, deletes, and tests connections through canonical routes', async () => {

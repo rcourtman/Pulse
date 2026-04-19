@@ -30,15 +30,26 @@ type TrueNASInstance struct {
 	Fingerprint        string `json:"fingerprint,omitempty"`
 	Enabled            bool   `json:"enabled"`
 	PollIntervalSecs   int    `json:"pollIntervalSeconds,omitempty"`
+
+	// Per-surface collection scope. Positive booleans. Existing records that
+	// predate these fields have all-zero Monitor* values — ApplyDefaults
+	// treats that as "legacy" and enables every surface so behavior doesn't
+	// silently change on upgrade.
+	MonitorDatasets    bool `json:"monitorDatasets"`
+	MonitorPools       bool `json:"monitorPools"`
+	MonitorReplication bool `json:"monitorReplication"`
 }
 
 // NewTrueNASInstance returns a new instance with generated ID and sane defaults.
 func NewTrueNASInstance() TrueNASInstance {
 	return TrueNASInstance{
-		ID:               uuid.NewString(),
-		UseHTTPS:         true,
-		Enabled:          true,
-		PollIntervalSecs: defaultTrueNASPollIntervalSecs,
+		ID:                 uuid.NewString(),
+		UseHTTPS:           true,
+		Enabled:            true,
+		PollIntervalSecs:   defaultTrueNASPollIntervalSecs,
+		MonitorDatasets:    true,
+		MonitorPools:       true,
+		MonitorReplication: true,
 	}
 }
 
@@ -60,6 +71,16 @@ func (t *TrueNASInstance) ApplyDefaults() {
 	}
 	if t.PollIntervalSecs <= 0 {
 		t.PollIntervalSecs = defaultTrueNASPollIntervalSecs
+	}
+	// Legacy records predate per-surface scope booleans. Zero-value false
+	// across all three means "never configured" — enable everything so
+	// existing users keep full visibility after upgrade. Users who
+	// deliberately disable a surface keep at least one other enabled, so
+	// the all-false state will not recur.
+	if !t.MonitorDatasets && !t.MonitorPools && !t.MonitorReplication {
+		t.MonitorDatasets = true
+		t.MonitorPools = true
+		t.MonitorReplication = true
 	}
 }
 

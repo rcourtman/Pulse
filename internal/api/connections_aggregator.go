@@ -169,6 +169,11 @@ func buildPMGConnection(inst config.PMGInstance, health map[string]monitoring.In
 func buildVMwareConnection(inst config.VMwareVCenterInstance, health map[string]monitoring.InstanceHealth, now time.Time) Connection {
 	enabled := inst.Enabled
 	surfaces := []string{"vms", "hosts", "datastores"}
+	scope := map[string]bool{
+		"vms":        inst.MonitorVMs,
+		"hosts":      inst.MonitorHosts,
+		"datastores": inst.MonitorDatastores,
+	}
 	h := health["vmware::"+inst.ID]
 	state, reason, lastSeen, lastError := deriveConnectionState(enabled, h, now)
 	port := inst.Port
@@ -184,17 +189,22 @@ func buildVMwareConnection(inst config.VMwareVCenterInstance, health map[string]
 		StateReason:  reason,
 		Enabled:      enabled,
 		Surfaces:     surfaces,
-		Scope:        map[string]bool{"vms": true, "hosts": true, "datastores": true},
+		Scope:        scope,
 		LastSeen:     lastSeen,
 		LastError:    lastError,
 		Source:       ConnectionSourceManual,
-		Capabilities: ConnectionCapabilities{SupportsPause: true, SupportsScope: false, SupportsTest: true},
+		Capabilities: ConnectionCapabilities{SupportsPause: true, SupportsScope: true, SupportsTest: true},
 	}
 }
 
 func buildTrueNASConnection(inst config.TrueNASInstance, health map[string]monitoring.InstanceHealth, now time.Time) Connection {
 	enabled := inst.Enabled
 	surfaces := []string{"datasets", "pools", "replication"}
+	scope := map[string]bool{
+		"datasets":    inst.MonitorDatasets,
+		"pools":       inst.MonitorPools,
+		"replication": inst.MonitorReplication,
+	}
 	h := health["truenas::"+inst.ID]
 	state, reason, lastSeen, lastError := deriveConnectionState(enabled, h, now)
 	scheme := "https"
@@ -218,11 +228,11 @@ func buildTrueNASConnection(inst config.TrueNASInstance, health map[string]monit
 		StateReason:  reason,
 		Enabled:      enabled,
 		Surfaces:     surfaces,
-		Scope:        map[string]bool{"datasets": true, "pools": true, "replication": true},
+		Scope:        scope,
 		LastSeen:     lastSeen,
 		LastError:    lastError,
 		Source:       ConnectionSourceManual,
-		Capabilities: ConnectionCapabilities{SupportsPause: true, SupportsScope: false, SupportsTest: true},
+		Capabilities: ConnectionCapabilities{SupportsPause: true, SupportsScope: true, SupportsTest: true},
 	}
 }
 

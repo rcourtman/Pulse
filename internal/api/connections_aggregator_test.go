@@ -166,9 +166,15 @@ func TestBuildConnections_AgentStateFromLastSeen(t *testing.T) {
 
 func TestBuildConnections_VMwareAndTrueNASEnabledFlag(t *testing.T) {
 	in := aggregatorInputs{
-		vmwareInstances:  []config.VMwareVCenterInstance{{ID: "vc1", Name: "vc", Host: "vc.lan", Enabled: false}},
-		truenasInstances: []config.TrueNASInstance{{ID: "tn1", Name: "tn", Host: "tn.lan", Enabled: true, UseHTTPS: true}},
-		now:              time.Now(),
+		vmwareInstances: []config.VMwareVCenterInstance{{
+			ID: "vc1", Name: "vc", Host: "vc.lan", Enabled: false,
+			MonitorVMs: true, MonitorHosts: true, MonitorDatastores: false,
+		}},
+		truenasInstances: []config.TrueNASInstance{{
+			ID: "tn1", Name: "tn", Host: "tn.lan", Enabled: true, UseHTTPS: true,
+			MonitorDatasets: true, MonitorPools: false, MonitorReplication: true,
+		}},
+		now: time.Now(),
 	}
 	got := buildConnections(in)
 	var vmw, tn Connection
@@ -183,11 +189,23 @@ func TestBuildConnections_VMwareAndTrueNASEnabledFlag(t *testing.T) {
 	if vmw.State != ConnectionStatePaused || vmw.Enabled {
 		t.Fatalf("vmware with Enabled=false should be paused, got state=%q enabled=%v", vmw.State, vmw.Enabled)
 	}
+	if !vmw.Capabilities.SupportsScope {
+		t.Fatal("vmware connections must advertise scope capability")
+	}
+	if vmw.Scope["datastores"] || !vmw.Scope["vms"] || !vmw.Scope["hosts"] {
+		t.Fatalf("vmware scope map should reflect Monitor* fields, got %+v", vmw.Scope)
+	}
 	if tn.State != ConnectionStatePending {
 		t.Fatalf("truenas with no health yet should be pending, got %q", tn.State)
 	}
 	if !tn.Enabled {
 		t.Fatal("truenas with Enabled=true should surface enabled=true")
+	}
+	if !tn.Capabilities.SupportsScope {
+		t.Fatal("truenas connections must advertise scope capability")
+	}
+	if tn.Scope["pools"] || !tn.Scope["datasets"] || !tn.Scope["replication"] {
+		t.Fatalf("truenas scope map should reflect Monitor* fields, got %+v", tn.Scope)
 	}
 }
 

@@ -82,8 +82,65 @@ describe('VMwareAPI', () => {
             },
           ],
         },
+        monitorVms: false,
+        monitorHosts: false,
+        monitorDatastores: false,
       },
     ]);
+  });
+
+  it('round-trips per-surface monitor* flags through list and update payloads', async () => {
+    vi.mocked(apiFetchJSON)
+      .mockResolvedValueOnce([
+        {
+          id: 'conn-1',
+          name: 'lab-vcenter',
+          host: 'vcsa.lab.local',
+          insecureSkipVerify: false,
+          enabled: true,
+          monitorVms: true,
+          monitorHosts: false,
+          monitorDatastores: true,
+        },
+      ])
+      .mockResolvedValueOnce({
+        id: 'conn-1',
+        name: 'lab-vcenter',
+        host: 'vcsa.lab.local',
+        insecureSkipVerify: false,
+        enabled: true,
+        monitorVms: false,
+        monitorHosts: true,
+        monitorDatastores: false,
+      });
+
+    const connections = await VMwareAPI.listConnections();
+    expect(connections[0]).toMatchObject({
+      monitorVms: true,
+      monitorHosts: false,
+      monitorDatastores: true,
+    });
+
+    await VMwareAPI.updateConnection('conn-1', {
+      host: 'vcsa.lab.local',
+      enabled: true,
+      monitorVms: false,
+      monitorHosts: true,
+      monitorDatastores: false,
+    });
+    expect(apiFetchJSON).toHaveBeenLastCalledWith(
+      '/api/vmware/connections/conn-1',
+      expect.objectContaining({
+        method: 'PUT',
+        body: JSON.stringify({
+          host: 'vcsa.lab.local',
+          enabled: true,
+          monitorVms: false,
+          monitorHosts: true,
+          monitorDatastores: false,
+        }),
+      }),
+    );
   });
 
   it('creates, updates, deletes, and tests connections through canonical routes', async () => {

@@ -361,6 +361,17 @@ an add-only capacity posture.
     last error) rather than the legacy `InfrastructureActiveRowDetails`
     surface-breakdown drawer; the active-row drawer is no longer mounted
     by the workspace for unified rows.
+    The TrueNAS and VMware credential slots carry per-surface Monitor*
+    scope the same way the PVE/PBS/PMG credential slot already does:
+    `TrueNASSettingsPanelState`/`VMwareSettingsPanelState` read and
+    write positive `MonitorDatasets`/`MonitorPools`/`MonitorReplication`
+    (TrueNAS) and `MonitorVMs`/`MonitorHosts`/`MonitorDatastores`
+    (VMware) booleans, and the credential slot renders a
+    "Collection scope" checkbox cluster backed by those fields. The
+    unified aggregator must project those flags into the connection
+    row's `scope` map and keep `capabilities.supportsScope: true` for
+    TrueNAS/VMware — reintroducing the per-type Stop-this-surface
+    dialog or hard-coding scope to a fixed all-true map is forbidden.
 
 ## Forbidden Paths
 

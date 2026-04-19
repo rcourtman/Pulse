@@ -22,7 +22,6 @@
 Own canonical runtime payload shapes between backend and frontend.
 
 ## Canonical Files
-
 1. `internal/api/contract_test.go`
 2. `internal/api/resources.go`
 3. `internal/api/alerts.go`
@@ -84,6 +83,7 @@ Own canonical runtime payload shapes between backend and frontend.
 59. `internal/api/connections_handlers.go`
 60. `internal/api/connections_probe.go`
 61. `frontend-modern/src/api/connections.ts`
+62. `frontend-modern/src/api/hostedSignup.ts`
 
 ## Shared Boundaries
 
@@ -1193,6 +1193,23 @@ preserve the canonical top-level `code` plus string-valued `details.error` and
 `frontend-modern/src/utils/apiClient.ts` plus
 `frontend-modern/src/api/responseUtils.ts` must carry that metadata through the
 shared error object without inventing a VMware-only fetch or parsing path.
+That same TrueNAS and VMware platform-connections contract now also owns
+per-surface scope as a first-class field on the connection shape. The
+TrueNAS connection payload must carry positive `monitorDatasets`,
+`monitorPools`, and `monitorReplication` booleans; the VMware connection
+payload must carry positive `monitorVms`, `monitorHosts`, and
+`monitorDatastores` booleans. `internal/config/truenas.go` and
+`internal/config/vmware.go` must default those fields to true on new
+instances and migrate legacy all-false records to all-true inside
+`ApplyDefaults`, so existing `truenas.json` and `vmware.json` on disk
+continue monitoring every surface after upgrade. The unified
+`/api/connections` aggregator in `internal/api/connections_aggregator.go`
+must project those booleans into the connection row's `scope` map and
+declare `capabilities.supportsScope: true` for TrueNAS and VMware rather
+than hard-coding an all-true scope; `frontend-modern/src/api/truenas.ts`
+and `frontend-modern/src/api/vmware.ts` must round-trip the booleans
+through their `normalize*Connection` and `serialize*ConnectionInput`
+helpers without dropping them on edit-save.
 That same VMware API boundary now also owns the phase-1 runtime negative
 space around inventory projection. `internal/api/router.go` may wire VMware's
 supplemental ingest into the shared `/api/resources` surface so canonical

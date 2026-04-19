@@ -63,6 +63,9 @@ export interface VMwareConnection {
   password?: string;
   insecureSkipVerify: boolean;
   enabled: boolean;
+  monitorVms: boolean;
+  monitorHosts: boolean;
+  monitorDatastores: boolean;
   poll?: VMwareConnectionPollStatus;
   observed?: VMwareConnectionObservedSummary;
 }
@@ -75,6 +78,9 @@ export interface VMwareConnectionInput {
   password?: string;
   insecureSkipVerify?: boolean;
   enabled?: boolean;
+  monitorVms?: boolean;
+  monitorHosts?: boolean;
+  monitorDatastores?: boolean;
 }
 
 export interface VMwareConnectionTestResult {
@@ -137,6 +143,9 @@ const normalizeVMwareConnection = (
   password: optionalTrimmedString(connection.password),
   insecureSkipVerify: strictBoolean(connection.insecureSkipVerify),
   enabled: strictBoolean(connection.enabled),
+  monitorVms: strictBoolean(connection.monitorVms),
+  monitorHosts: strictBoolean(connection.monitorHosts),
+  monitorDatastores: strictBoolean(connection.monitorDatastores),
   poll: normalizeVMwareConnectionPoll(connection.poll ?? connection.test),
   observed: normalizeVMwareConnectionObservedSummary(connection.observed),
 });
@@ -151,6 +160,11 @@ const serializeVMwareConnectionInput = (input: VMwareConnectionInput) => ({
     ? { insecureSkipVerify: input.insecureSkipVerify }
     : {}),
   ...(input.enabled !== undefined ? { enabled: input.enabled } : {}),
+  ...(input.monitorVms !== undefined ? { monitorVms: input.monitorVms } : {}),
+  ...(input.monitorHosts !== undefined ? { monitorHosts: input.monitorHosts } : {}),
+  ...(input.monitorDatastores !== undefined
+    ? { monitorDatastores: input.monitorDatastores }
+    : {}),
 });
 
 export const isRedactedVMwareSecret = (value: string | null | undefined) =>

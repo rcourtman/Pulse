@@ -159,6 +159,59 @@ export const VMwareCredentialSlot: Component<VMwareCredentialSlotProps> = (props
           </label>
         </div>
 
+        <div class="space-y-3 rounded-md border border-border bg-surface p-4">
+          <div>
+            <div class="text-sm font-semibold text-base-content">Collection scope</div>
+            <p class="mt-0.5 text-xs text-muted">
+              Pulse only collects the surfaces you keep enabled. Disable anything you don't need.
+            </p>
+          </div>
+          <div class="grid gap-2 sm:grid-cols-3">
+            <label class="flex items-start gap-2 text-sm text-base-content">
+              <input
+                type="checkbox"
+                class={formCheckbox + ' mt-0.5'}
+                checked={props.state.form().monitorVms}
+                onChange={(event) =>
+                  props.state.updateForm({ monitorVms: event.currentTarget.checked })
+                }
+              />
+              <span>
+                <span class="font-medium">VMs</span>
+                <span class="block text-xs text-muted">Power state, resources, snapshots.</span>
+              </span>
+            </label>
+            <label class="flex items-start gap-2 text-sm text-base-content">
+              <input
+                type="checkbox"
+                class={formCheckbox + ' mt-0.5'}
+                checked={props.state.form().monitorHosts}
+                onChange={(event) =>
+                  props.state.updateForm({ monitorHosts: event.currentTarget.checked })
+                }
+              />
+              <span>
+                <span class="font-medium">Hosts</span>
+                <span class="block text-xs text-muted">ESXi host health and capacity.</span>
+              </span>
+            </label>
+            <label class="flex items-start gap-2 text-sm text-base-content">
+              <input
+                type="checkbox"
+                class={formCheckbox + ' mt-0.5'}
+                checked={props.state.form().monitorDatastores}
+                onChange={(event) =>
+                  props.state.updateForm({ monitorDatastores: event.currentTarget.checked })
+                }
+              />
+              <span>
+                <span class="font-medium">Datastores</span>
+                <span class="block text-xs text-muted">Capacity and status per datastore.</span>
+              </span>
+            </label>
+          </div>
+        </div>
+
         <MonitoredSystemAdmissionPreview
           preview={props.state.monitoredSystemPreview()}
           loading={props.state.previewing()}

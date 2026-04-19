@@ -26,15 +26,26 @@ type VMwareVCenterInstance struct {
 	Password           string `json:"password,omitempty"`
 	InsecureSkipVerify bool   `json:"insecureSkipVerify,omitempty"`
 	Enabled            bool   `json:"enabled"`
+
+	// Per-surface collection scope. Positive booleans. Existing records
+	// that predate these fields have all-zero Monitor* values —
+	// ApplyDefaults treats that as "legacy" and enables every surface so
+	// behavior doesn't silently change on upgrade.
+	MonitorVMs        bool `json:"monitorVms"`
+	MonitorHosts      bool `json:"monitorHosts"`
+	MonitorDatastores bool `json:"monitorDatastores"`
 }
 
 // NewVMwareVCenterInstance returns a new instance with generated ID and sane
 // defaults.
 func NewVMwareVCenterInstance() VMwareVCenterInstance {
 	return VMwareVCenterInstance{
-		ID:      uuid.NewString(),
-		Port:    defaultVMwarePort,
-		Enabled: true,
+		ID:                uuid.NewString(),
+		Port:              defaultVMwarePort,
+		Enabled:           true,
+		MonitorVMs:        true,
+		MonitorHosts:      true,
+		MonitorDatastores: true,
 	}
 }
 
@@ -46,6 +57,14 @@ func (v *VMwareVCenterInstance) ApplyDefaults() {
 	}
 	if v.Port <= 0 {
 		v.Port = defaultVMwarePort
+	}
+	// Legacy records predate per-surface scope booleans. Zero-value false
+	// across all three means "never configured" — enable everything so
+	// existing users keep full visibility after upgrade.
+	if !v.MonitorVMs && !v.MonitorHosts && !v.MonitorDatastores {
+		v.MonitorVMs = true
+		v.MonitorHosts = true
+		v.MonitorDatastores = true
 	}
 }
 

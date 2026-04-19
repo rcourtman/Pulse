@@ -32,6 +32,9 @@ export interface VMwareConnectionFormState {
   password: string;
   insecureSkipVerify: boolean;
   enabled: boolean;
+  monitorVms: boolean;
+  monitorHosts: boolean;
+  monitorDatastores: boolean;
   hasStoredPassword: boolean;
 }
 
@@ -45,6 +48,9 @@ const createEmptyFormState = (): VMwareConnectionFormState => ({
   password: '',
   insecureSkipVerify: false,
   enabled: true,
+  monitorVms: true,
+  monitorHosts: true,
+  monitorDatastores: true,
   hasStoredPassword: false,
 });
 
@@ -56,6 +62,9 @@ const buildFormStateFromConnection = (connection: VMwareConnection): VMwareConne
   password: '',
   insecureSkipVerify: connection.insecureSkipVerify,
   enabled: connection.enabled,
+  monitorVms: connection.monitorVms,
+  monitorHosts: connection.monitorHosts,
+  monitorDatastores: connection.monitorDatastores,
   hasStoredPassword: isRedactedVMwareSecret(connection.password),
 });
 
@@ -111,6 +120,9 @@ const buildConnectionInput = (form: VMwareConnectionFormState): VMwareConnection
     password: form.password.trim() || (form.hasStoredPassword ? REDACTED_SECRET : ''),
     insecureSkipVerify: form.insecureSkipVerify,
     enabled: form.enabled,
+    monitorVms: form.monitorVms,
+    monitorHosts: form.monitorHosts,
+    monitorDatastores: form.monitorDatastores,
   };
 };
 

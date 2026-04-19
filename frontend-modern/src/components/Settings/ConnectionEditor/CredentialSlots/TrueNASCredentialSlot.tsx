@@ -221,6 +221,59 @@ export const TrueNASCredentialSlot: Component<TrueNASCredentialSlotProps> = (pro
           </div>
         </div>
 
+        <div class="space-y-3 rounded-md border border-border bg-surface p-4">
+          <div>
+            <div class="text-sm font-semibold text-base-content">Collection scope</div>
+            <p class="mt-0.5 text-xs text-muted">
+              Pulse only collects the surfaces you keep enabled. Disable anything you don't need.
+            </p>
+          </div>
+          <div class="grid gap-2 sm:grid-cols-3">
+            <label class="flex items-start gap-2 text-sm text-base-content">
+              <input
+                type="checkbox"
+                class={formCheckbox + ' mt-0.5'}
+                checked={props.state.form().monitorDatasets}
+                onChange={(event) =>
+                  props.state.updateForm({ monitorDatasets: event.currentTarget.checked })
+                }
+              />
+              <span>
+                <span class="font-medium">Datasets</span>
+                <span class="block text-xs text-muted">Dataset sizes, quotas, snapshots.</span>
+              </span>
+            </label>
+            <label class="flex items-start gap-2 text-sm text-base-content">
+              <input
+                type="checkbox"
+                class={formCheckbox + ' mt-0.5'}
+                checked={props.state.form().monitorPools}
+                onChange={(event) =>
+                  props.state.updateForm({ monitorPools: event.currentTarget.checked })
+                }
+              />
+              <span>
+                <span class="font-medium">Pools</span>
+                <span class="block text-xs text-muted">ZFS pool health, capacity, scrubs.</span>
+              </span>
+            </label>
+            <label class="flex items-start gap-2 text-sm text-base-content">
+              <input
+                type="checkbox"
+                class={formCheckbox + ' mt-0.5'}
+                checked={props.state.form().monitorReplication}
+                onChange={(event) =>
+                  props.state.updateForm({ monitorReplication: event.currentTarget.checked })
+                }
+              />
+              <span>
+                <span class="font-medium">Replication</span>
+                <span class="block text-xs text-muted">Replication tasks and their state.</span>
+              </span>
+            </label>
+          </div>
+        </div>
+
         <MonitoredSystemAdmissionPreview
           preview={props.state.monitoredSystemPreview()}
           loading={props.state.previewing()}
