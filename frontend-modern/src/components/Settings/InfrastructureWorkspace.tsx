@@ -46,7 +46,7 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
   const location = useLocation();
   const state = useInfrastructureOperationsContext();
 
-  const [addDrawerOpen, setAddDrawerOpen] = createSignal(false);
+  const [addMode, setAddMode] = createSignal(false);
   const [initialAddType, setInitialAddType] = createSignal<ConnectionType | null>(null);
   const [showAgentProfiles, setShowAgentProfiles] = createSignal(false);
   const readOnly = createMemo(() => presentationPolicyIsReadOnly());
@@ -59,7 +59,7 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
     const step = deriveAddStepFromLegacyPath(path);
     navigate(buildInfrastructureWorkspacePath(), { replace: true });
     if (!readOnly()) {
-      setAddDrawerOpen(true);
+      setAddMode(true);
       if (step && step !== 'pick') {
         setInitialAddType(ADD_STEP_TO_TYPE[step]);
       } else {
@@ -70,16 +70,16 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
 
   // Auto-open the agent installer when a setup handoff is waiting.
   createEffect(() => {
-    if (state.setupHandoff?.() && !addDrawerOpen() && !readOnly()) {
-      setAddDrawerOpen(true);
+    if (state.setupHandoff?.() && !addMode() && !readOnly()) {
+      setAddMode(true);
       setInitialAddType('agent');
     }
   });
 
-  // Close add panel in read-only mode.
+  // Drop add mode in read-only sessions.
   createEffect(() => {
-    if (readOnly() && addDrawerOpen()) {
-      setAddDrawerOpen(false);
+    if (readOnly() && addMode()) {
+      setAddMode(false);
     }
   });
 
@@ -95,10 +95,10 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
       ? []
       : [
           {
-            label: 'Add infrastructure',
+            label: 'Add connection',
             onSelect: () => {
               setInitialAddType(null);
-              setAddDrawerOpen(true);
+              setAddMode(true);
               setShowAgentProfiles(false);
             },
             tone: 'primary' as const,
@@ -121,8 +121,8 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
     }
   };
 
-  const closeAddDrawer = () => {
-    setAddDrawerOpen(false);
+  const exitAddMode = () => {
+    setAddMode(false);
     setInitialAddType(null);
     setShowAgentProfiles(false);
   };
@@ -141,97 +141,88 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
 
   return (
     <div class="space-y-8">
-      <ConnectionsTable
-        rows={rows}
-        headerActions={headerActions()}
-        onManageRow={(row) => handleManageAction(row.manage)}
-      />
-
-      {/* Unified add-connection drawer */}
-      <Dialog
-        isOpen={addDrawerOpen()}
-        onClose={closeAddDrawer}
-        layout="drawer-right"
-        panelClass="max-w-[820px]"
-        ariaLabel="Add connection"
+      <Show
+        when={addMode()}
+        fallback={
+          <ConnectionsTable
+            rows={rows}
+            headerActions={headerActions()}
+            onManageRow={(row) => handleManageAction(row.manage)}
+          />
+        }
       >
-        <div class="flex h-full flex-col overflow-hidden">
-          <div class="flex shrink-0 items-center justify-between gap-3 border-b border-border px-4 py-3">
-            <span class="text-sm font-semibold text-base-content">Add connection</span>
+        <div class="space-y-4">
+          <div class="flex items-center justify-between gap-3">
+            <div>
+              <div class="text-base font-semibold text-base-content">Add connection</div>
+              <div class="mt-0.5 text-xs text-muted">
+                Paste an address — Pulse detects the product, you enter credentials, save.
+              </div>
+            </div>
             <button
               type="button"
-              onClick={closeAddDrawer}
-              class="rounded-md p-1 text-muted hover:bg-surface-hover hover:text-base-content"
-              aria-label="Close"
+              onClick={exitAddMode}
+              class="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-sm font-medium text-base-content transition-colors hover:bg-surface-hover"
             >
-              <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M6 18L18 6M6 6l12 12"
-                />
-              </svg>
+              ← Back to systems
             </button>
           </div>
 
-          <div class="flex-1 overflow-y-auto">
-            <Show when={addDrawerOpen()}>
-              <ConnectionEditor
-                mode="add"
-                initialType={initialAddType() ?? undefined}
-                onClose={closeAddDrawer}
-                renderCredentialSlot={({ type }) => {
-                  switch (type) {
-                    case 'pve':
-                    case 'pbs':
-                    case 'pmg':
-                      return renderProxmoxSlot(type);
-                    case 'truenas':
-                      return <TrueNASSettingsPanel state={props.trueNASSettings} />;
-                    case 'vmware':
-                      return <VMwareSettingsPanel state={props.vmwareSettings} />;
-                    case 'agent':
-                      return (
-                        <div class="space-y-4">
-                          <div class="flex items-center justify-end">
-                            <button
-                              type="button"
-                              onClick={() => setShowAgentProfiles((v) => !v)}
-                              class="inline-flex items-center rounded-md border border-border px-2.5 py-1 text-xs font-medium text-base-content transition-colors hover:bg-surface-hover"
-                            >
-                              {showAgentProfiles() ? 'Hide agent profiles' : 'Manage agent profiles'}
-                            </button>
-                          </div>
-                          <Show when={showAgentProfiles()}>
-                            <div class="rounded-xl border border-border bg-surface p-4 shadow-sm">
-                              <div class="mb-4 space-y-1">
-                                <div class="text-base font-semibold text-base-content">
-                                  Agent profiles
-                                </div>
-                                <div class="text-sm text-muted">
-                                  Manage reusable install defaults for agent-based systems.
-                                </div>
+          <div class="rounded-lg border border-border bg-surface">
+            <ConnectionEditor
+              mode="add"
+              initialType={initialAddType() ?? undefined}
+              onClose={exitAddMode}
+              renderCredentialSlot={({ type }) => {
+                switch (type) {
+                  case 'pve':
+                  case 'pbs':
+                  case 'pmg':
+                    return renderProxmoxSlot(type);
+                  case 'truenas':
+                    return <TrueNASSettingsPanel state={props.trueNASSettings} />;
+                  case 'vmware':
+                    return <VMwareSettingsPanel state={props.vmwareSettings} />;
+                  case 'agent':
+                    return (
+                      <div class="space-y-4">
+                        <div class="flex items-center justify-end">
+                          <button
+                            type="button"
+                            onClick={() => setShowAgentProfiles((v) => !v)}
+                            class="inline-flex items-center rounded-md border border-border px-2.5 py-1 text-xs font-medium text-base-content transition-colors hover:bg-surface-hover"
+                          >
+                            {showAgentProfiles() ? 'Hide agent profiles' : 'Manage agent profiles'}
+                          </button>
+                        </div>
+                        <Show when={showAgentProfiles()}>
+                          <div class="rounded-xl border border-border bg-surface p-4 shadow-sm">
+                            <div class="mb-4 space-y-1">
+                              <div class="text-base font-semibold text-base-content">
+                                Agent profiles
                               </div>
-                              <AgentProfilesPanel />
+                              <div class="text-sm text-muted">
+                                Manage reusable install defaults for agent-based systems.
+                              </div>
                             </div>
-                          </Show>
-                          <InfrastructureInstallerSection />
-                        </div>
-                      );
-                    default:
-                      return (
-                        <div class="text-sm text-muted">
-                          No credential form is wired up for the {type} type yet.
-                        </div>
-                      );
-                  }
-                }}
-              />
-            </Show>
+                            <AgentProfilesPanel />
+                          </div>
+                        </Show>
+                        <InfrastructureInstallerSection />
+                      </div>
+                    );
+                  default:
+                    return (
+                      <div class="text-sm text-muted">
+                        No credential form is wired up for the {type} type yet.
+                      </div>
+                    );
+                }
+              }}
+            />
           </div>
         </div>
-      </Dialog>
+      </Show>
 
       {/* Active system detail drawer */}
       <Dialog

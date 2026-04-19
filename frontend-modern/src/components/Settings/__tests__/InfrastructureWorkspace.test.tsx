@@ -183,7 +183,7 @@ describe('InfrastructureWorkspace', () => {
     renderWorkspace();
 
     expect(screen.getByRole('heading', { name: 'Monitored systems' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Add infrastructure' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add connection' })).toBeInTheDocument();
     expect(screen.queryByTestId('install-section')).toBeNull();
     expect(screen.queryByTestId('proxmox-section')).toBeNull();
     expect(screen.queryByTestId('agent-profiles')).toBeNull();
@@ -201,7 +201,7 @@ describe('InfrastructureWorkspace', () => {
   it('opens the unified add drawer with the probe step when Add infrastructure is clicked', () => {
     renderWorkspace();
 
-    fireEvent.click(screen.getByRole('button', { name: /Add infrastructure/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Add connection/i }));
 
     expect(screen.getByRole('button', { name: /Probe address/i })).toBeInTheDocument();
     expect(screen.getByPlaceholderText(/pve01\.lan/)).toBeInTheDocument();
@@ -211,7 +211,7 @@ describe('InfrastructureWorkspace', () => {
   it('routes to the agent credential slot when the user picks agent manually', () => {
     renderWorkspace();
 
-    fireEvent.click(screen.getByRole('button', { name: /Add infrastructure/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Add connection/i }));
     fireEvent.click(screen.getByRole('button', { name: /Enter credentials manually/i }));
     fireEvent.click(screen.getByRole('button', { name: /Agent \(install on host\)/i }));
 
@@ -221,7 +221,7 @@ describe('InfrastructureWorkspace', () => {
   it('routes to the TrueNAS credential slot when TrueNAS is picked manually', () => {
     renderWorkspace();
 
-    fireEvent.click(screen.getByRole('button', { name: /Add infrastructure/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Add connection/i }));
     fireEvent.click(screen.getByRole('button', { name: /Enter credentials manually/i }));
     fireEvent.click(screen.getByRole('button', { name: /TrueNAS SCALE/i }));
 
@@ -231,7 +231,7 @@ describe('InfrastructureWorkspace', () => {
   it('routes to the VMware credential slot when VMware is picked manually', () => {
     renderWorkspace();
 
-    fireEvent.click(screen.getByRole('button', { name: /Add infrastructure/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Add connection/i }));
     fireEvent.click(screen.getByRole('button', { name: /Enter credentials manually/i }));
     fireEvent.click(screen.getByRole('button', { name: /VMware vCenter/i }));
 
@@ -241,7 +241,7 @@ describe('InfrastructureWorkspace', () => {
   it('routes to the Proxmox credential slot when Proxmox VE is picked manually', () => {
     renderWorkspace();
 
-    fireEvent.click(screen.getByRole('button', { name: /Add infrastructure/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Add connection/i }));
     fireEvent.click(screen.getByRole('button', { name: /Enter credentials manually/i }));
     fireEvent.click(screen.getByRole('button', { name: /^Proxmox VE/i }));
 
@@ -251,7 +251,7 @@ describe('InfrastructureWorkspace', () => {
   it('can return to the probe step from a credential slot via Back to probe', () => {
     renderWorkspace();
 
-    fireEvent.click(screen.getByRole('button', { name: /Add infrastructure/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Add connection/i }));
     fireEvent.click(screen.getByRole('button', { name: /Enter credentials manually/i }));
     fireEvent.click(screen.getByRole('button', { name: /Agent \(install on host\)/i }));
     fireEvent.click(screen.getByRole('button', { name: /Back to probe/i }));
@@ -263,7 +263,7 @@ describe('InfrastructureWorkspace', () => {
   it('toggles agent profiles inside the agent credential slot', () => {
     renderWorkspace();
 
-    fireEvent.click(screen.getByRole('button', { name: /Add infrastructure/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Add connection/i }));
     fireEvent.click(screen.getByRole('button', { name: /Enter credentials manually/i }));
     fireEvent.click(screen.getByRole('button', { name: /Agent \(install on host\)/i }));
     fireEvent.click(screen.getByRole('button', { name: 'Manage agent profiles' }));
@@ -274,7 +274,7 @@ describe('InfrastructureWorkspace', () => {
   it('does not mount node-modal legacy spies when a credential slot is rendered', () => {
     renderWorkspace();
 
-    fireEvent.click(screen.getByRole('button', { name: /Add infrastructure/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Add connection/i }));
     fireEvent.click(screen.getByRole('button', { name: /Enter credentials manually/i }));
     fireEvent.click(screen.getByRole('button', { name: /^Proxmox VE/i }));
 
@@ -313,7 +313,7 @@ describe('InfrastructureWorkspace', () => {
     presentationPolicyIsReadOnlyMock.mockReturnValue(true);
     renderWorkspace();
 
-    expect(screen.queryByRole('button', { name: /Add infrastructure/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Add connection/i })).toBeNull();
     expect(screen.queryByTestId('install-section')).toBeNull();
     expect(screen.queryByRole('button', { name: /Probe address/i })).toBeNull();
   });

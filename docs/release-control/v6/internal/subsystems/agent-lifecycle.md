@@ -315,12 +315,15 @@ an add-only capacity posture.
     rather than an installer pre-flight gate.
     The unified add surface is
     `frontend-modern/src/components/Settings/ConnectionEditor/ConnectionEditor.tsx`,
-    mounted by `InfrastructureWorkspace.tsx` in place of the legacy
-    type-picker step tree. The editor's probe step calls the aggregator
-    probe endpoint and dispatches the detected or manually-selected type
-    into a credential slot that renders the existing per-type panel; it
-    must not bypass the probe endpoint or fabricate probe candidates, and
-    the agent credential slot must continue to reach
+    mounted inline by `InfrastructureWorkspace.tsx` in place of the legacy
+    type-picker step tree. The add flow must not be a right-side drawer,
+    centered modal, or any other overlay chrome — it takes over the
+    infrastructure workspace in place, headed by a back-to-systems
+    affordance. The editor's probe step calls the aggregator probe
+    endpoint and dispatches the detected or manually-selected type into a
+    credential slot that renders the existing per-type panel; it must not
+    bypass the probe endpoint or fabricate probe candidates, and the
+    agent credential slot must continue to reach
     `InfrastructureInstallerSection.tsx` so install handoffs remain on the
     canonical unified-agent install path.
 
