@@ -107,6 +107,10 @@ export function useWhatsNewModalState() {
     setStepIndex((current) => clamp(current - 1, 0, WHATS_NEW_FEATURE_CARDS.length - 1));
   };
 
+  const handleSelectStep = (index: number) => {
+    setStepIndex(clamp(index, 0, WHATS_NEW_FEATURE_CARDS.length - 1));
+  };
+
   createEffect(() => {
     if (!isOpen()) return;
 
@@ -165,7 +169,8 @@ export function useWhatsNewModalState() {
 
     const rect = spotlightRect();
     const panel = panelRef();
-    const panelWidth = Math.min(384, window.innerWidth - 32);
+    const desktopWidth = window.innerWidth >= 1024 ? 448 : 420;
+    const panelWidth = Math.min(desktopWidth, window.innerWidth - 32);
     const panelHeight = panel?.offsetHeight ?? 340;
 
     if (!rect) {
@@ -213,6 +218,7 @@ export function useWhatsNewModalState() {
     handleClose,
     handleNext,
     handlePrevious,
+    handleSelectStep,
     isFirstStep,
     isLastStep,
     isOpen,

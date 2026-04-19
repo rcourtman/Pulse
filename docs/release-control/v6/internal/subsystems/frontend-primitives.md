@@ -1308,7 +1308,7 @@ The shared what's-new modal now follows that same owner split.
 `frontend-modern/src/components/shared/WhatsNewModal.tsx` stays the render
 shell, `frontend-modern/src/components/shared/useWhatsNewModalState.ts` owns
 local-storage dismissal, session dismissal, step progression, spotlight target
-resolution, and overlay placement/runtime behavior, and
+resolution, direct stop selection, and overlay placement/runtime behavior, and
 `frontend-modern/src/components/shared/whatsNewModalModel.ts` owns the feature
 tour catalog, telemetry copy, labels, and canonical docs/privacy links. Future
 what's-new work should extend those owners instead of pushing dismissal state,
@@ -1317,6 +1317,10 @@ The v6 welcome surface is one guided spotlight tour, not a modal plus a second
 dashboard-only migration hint: it must dim the live app, glow the real
 primary-navigation target being described, and keep route-orientation copy on
 the existing welcome flow instead of layering a duplicate in-product banner.
+The guided stop map inside that welcome surface is interactive, not decorative:
+operators must be able to jump directly to any tour step from the stop list,
+and desktop layouts may widen the panel enough to keep stop labels readable
+without overlapping or collapsing into clipped pills.
 That state owner now also owns public-demo suppression: the modal must stay
 closed until `sessionPresentationPolicyResolved()` is true and must fail closed
 when `presentationPolicyIsDemoMode()` resolves true, so the public demo does

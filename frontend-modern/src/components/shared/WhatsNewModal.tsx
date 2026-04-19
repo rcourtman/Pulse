@@ -83,13 +83,16 @@ export function WhatsNewModal() {
             aria-modal="true"
             aria-labelledby="whats-new-title"
             tabindex="-1"
-            class="fixed z-[1001] max-h-[min(90vh,42rem)] overflow-y-auto rounded-2xl border border-border bg-surface shadow-2xl focus:outline-none"
+            class="fixed z-[1001] max-h-[min(90vh,44rem)] overflow-y-auto rounded-[1.75rem] border border-border bg-surface shadow-2xl backdrop-blur-sm focus:outline-none"
             style={state.panelStyle()}
             onClick={(event) => event.stopPropagation()}
           >
-            <div class="flex items-start justify-between border-b border-border px-5 py-4">
+            <div class="flex items-start justify-between border-b border-border bg-gradient-to-r from-blue-50/90 via-surface to-slate-50/80 px-6 py-5 dark:from-blue-950/30 dark:via-surface dark:to-slate-950/40">
               <div>
-                <div class="text-xs font-semibold uppercase tracking-[0.18em] text-blue-600 dark:text-blue-300">
+                <div class="inline-flex items-center rounded-full border border-blue-200 bg-white/80 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-blue-700 shadow-sm dark:border-blue-800 dark:bg-slate-950/60 dark:text-blue-200">
+                  Guided Welcome Tour
+                </div>
+                <div class="mt-3 text-xs font-semibold uppercase tracking-[0.18em] text-blue-600 dark:text-blue-300">
                   Step {state.stepIndex() + 1} of {state.stepCount()}
                 </div>
                 <h2 id="whats-new-title" class="mt-1 text-xl font-semibold text-base-content">
@@ -107,39 +110,83 @@ export function WhatsNewModal() {
               </button>
             </div>
 
-            <div class="space-y-5 px-5 py-5">
-              <div class={`rounded-2xl border p-4 ${step().accent}`}>
-                <div class="flex items-center gap-2 text-sm font-semibold text-inherit">
-                  <WhatsNewFeatureIcon card={step()} />
-                  {step().title}
-                </div>
-                <p class="mt-2 text-sm leading-6 text-inherit">{step().description}</p>
-              </div>
-
-              <div class="grid gap-2 sm:grid-cols-5">
-                <For each={WHATS_NEW_FEATURE_CARDS}>
-                  {(card, index) => (
-                    <div
-                      class={`rounded-xl border px-2.5 py-2 text-left text-xs ${
-                        index() === state.stepIndex()
-                          ? 'border-blue-300 bg-blue-50 text-blue-900 dark:border-blue-700 dark:bg-blue-950 dark:text-blue-100'
-                          : 'border-border bg-surface-hover text-muted'
-                      }`}
-                    >
-                      {card.title}
+            <div class="space-y-5 px-6 py-5">
+              <div class={`rounded-[1.5rem] border p-5 shadow-sm ${step().accent}`}>
+                <div class="flex items-start gap-4">
+                  <div class="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-2xl bg-white/80 text-inherit shadow-sm dark:bg-slate-950/40">
+                    <WhatsNewFeatureIcon card={step()} />
+                  </div>
+                  <div class="min-w-0">
+                    <div class="text-[11px] font-semibold uppercase tracking-[0.16em] opacity-70">
+                      Now showing
                     </div>
-                  )}
-                </For>
+                    <div class="mt-1 text-base font-semibold text-inherit">{step().title}</div>
+                    <p class="mt-2 text-sm leading-6 text-inherit">{step().description}</p>
+                  </div>
+                </div>
               </div>
 
-              <div class="rounded-xl border border-sky-200 bg-sky-50 p-3 dark:border-sky-800 dark:bg-sky-900/40">
-                <div class="flex items-center gap-2 text-sm font-medium text-sky-900 dark:text-sky-100">
-                  <ChartBarIcon class="h-4 w-4 flex-shrink-0" />
-                  {WHATS_NEW_TELEMETRY_TITLE}
+              <div class="space-y-2.5">
+                <div class="flex items-center gap-3">
+                  <div class="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">
+                    Tour Stops
+                  </div>
+                  <div class="h-px flex-1 bg-border"></div>
                 </div>
-                <p class="mt-1.5 text-xs leading-5 text-sky-900 dark:text-sky-200">
-                  {WHATS_NEW_TELEMETRY_COPY[0]}
-                </p>
+                <p class="text-xs text-muted">Click any stop to jump there.</p>
+                <div class="grid grid-cols-2 gap-2.5">
+                  <For each={WHATS_NEW_FEATURE_CARDS}>
+                    {(card, index) => (
+                      <button
+                        type="button"
+                        onClick={() => state.handleSelectStep(index())}
+                        aria-current={index() === state.stepIndex() ? 'step' : undefined}
+                        class={`min-h-[3.25rem] rounded-2xl border px-3 py-2.5 text-left transition-colors ${
+                          index() === state.stepIndex()
+                            ? 'border-blue-300 bg-blue-50 text-blue-900 shadow-sm dark:border-blue-700 dark:bg-blue-950 dark:text-blue-100'
+                            : 'border-border bg-surface-hover text-muted hover:border-slate-300 hover:bg-surface dark:hover:border-slate-700'
+                        }`}
+                      >
+                        <div class="flex items-center gap-2.5">
+                          <div
+                            class={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full ${
+                              index() === state.stepIndex()
+                                ? 'bg-white/80 text-blue-700 dark:bg-slate-950/50 dark:text-blue-200'
+                                : 'bg-surface text-muted'
+                            }`}
+                          >
+                            <WhatsNewFeatureIcon card={card} />
+                          </div>
+                          <div class="min-w-0">
+                            <div class="truncate text-xs font-semibold">{card.title}</div>
+                            <div class="text-[10px] uppercase tracking-[0.14em] opacity-70">
+                              Stop {index() + 1}
+                            </div>
+                          </div>
+                        </div>
+                      </button>
+                    )}
+                  </For>
+                </div>
+              </div>
+
+              <div class="rounded-[1.35rem] border border-sky-200 bg-gradient-to-br from-sky-50/95 to-white p-4 dark:border-sky-800 dark:from-sky-900/45 dark:to-slate-950">
+                <div class="flex items-start gap-2.5">
+                  <div class="mt-0.5 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl bg-white/70 text-sky-800 shadow-sm dark:bg-slate-950/40 dark:text-sky-100">
+                    <ChartBarIcon class="h-4 w-4" />
+                  </div>
+                  <div>
+                    <div class="text-[11px] font-semibold uppercase tracking-[0.16em] text-sky-700 dark:text-sky-300">
+                      Privacy note
+                    </div>
+                    <div class="mt-1 text-sm font-medium text-sky-900 dark:text-sky-100">
+                      {WHATS_NEW_TELEMETRY_TITLE}
+                    </div>
+                    <p class="mt-1.5 text-xs leading-5 text-sky-900 dark:text-sky-200">
+                      {WHATS_NEW_TELEMETRY_COPY[0]}
+                    </p>
+                  </div>
+                </div>
                 <p class="mt-1.5 text-xs leading-5 text-sky-900 dark:text-sky-200">
                   {WHATS_NEW_TELEMETRY_COPY[1]} You can disable it any time in{' '}
                   <span class="font-medium">{WHATS_NEW_TELEMETRY_SETTINGS_PATH}</span> or by
@@ -159,7 +206,7 @@ export function WhatsNewModal() {
                 </p>
               </div>
 
-              <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div class="flex flex-col gap-3 rounded-2xl border border-border bg-surface-hover/70 p-3.5 sm:flex-row sm:items-center sm:justify-between">
                 <label class="flex items-center gap-2 text-sm text-muted">
                   <input
                     type="checkbox"
@@ -175,7 +222,7 @@ export function WhatsNewModal() {
                     href={WHATS_NEW_DOCS_URL}
                     target="_blank"
                     rel="noopener noreferrer"
-                    class="inline-flex items-center gap-1 text-sm font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+                    class="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-white px-3 py-1.5 text-sm font-medium text-blue-700 shadow-sm transition-colors hover:border-blue-300 hover:text-blue-800 dark:border-blue-900 dark:bg-slate-950 dark:text-blue-300 dark:hover:border-blue-700 dark:hover:text-blue-200"
                   >
                     {WHATS_NEW_DOCS_LABEL}
                     <ExternalLinkIcon class="h-4 w-4" />
@@ -184,7 +231,7 @@ export function WhatsNewModal() {
               </div>
             </div>
 
-            <div class="flex items-center justify-between border-t border-border bg-surface-hover px-5 py-4">
+            <div class="flex items-center justify-between border-t border-border bg-surface-hover px-6 py-4">
               <button
                 type="button"
                 onClick={state.handleClose}
@@ -197,13 +244,13 @@ export function WhatsNewModal() {
                   type="button"
                   onClick={state.handlePrevious}
                   disabled={state.isFirstStep()}
-                  class="rounded-md border border-border px-3 py-2 text-sm font-medium text-base-content transition-colors hover:bg-surface disabled:cursor-not-allowed disabled:opacity-50"
+                  class="rounded-xl border border-border px-3.5 py-2 text-sm font-medium text-base-content transition-colors hover:bg-surface disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {WHATS_NEW_BACK_LABEL}
                 </button>
                 <button
                   onClick={state.handleNext}
-                  class="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-700"
+                  class="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-blue-700"
                   type="button"
                 >
                   {state.isLastStep() ? WHATS_NEW_PRIMARY_ACTION_LABEL : WHATS_NEW_NEXT_LABEL}

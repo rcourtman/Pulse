@@ -135,6 +135,17 @@ describe('WhatsNewModal', () => {
     expect(screen.getByRole('button', { name: "Let's go" })).toBeInTheDocument();
   });
 
+  it('lets the user jump to a tour stop directly from the stop map', async () => {
+    render(() => <WhatsNewModal />);
+
+    expect(await screen.findByText(/problem-focused summary/i)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Workloads/i }));
+
+    expect(await screen.findByText(/docker update status now share/i)).toBeInTheDocument();
+    expect(screen.getByText('Step 3 of 5')).toBeInTheDocument();
+  });
+
   it('routes the docs CTA through the migration guide', async () => {
     render(() => <WhatsNewModal />);
 
