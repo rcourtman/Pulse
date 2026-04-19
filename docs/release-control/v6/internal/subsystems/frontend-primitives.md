@@ -1419,6 +1419,14 @@ owns the dashboard-specific action, KPI, problem-resource, trend, and
 customization surfaces. Lane-owned widgets like recent alerts, storage,
 and recovery must continue to route through their own subsystem owners instead
 of drifting back into a page-local dashboard panel cluster.
+That same dashboard route shell also owns the v5-to-v6 navigation continuity
+notice. When the populated dashboard needs to orient operators who still
+expect the old Proxmox, Docker, or Hosts tabs, `frontend-modern/src/pages/Dashboard.tsx`
+must render the shared `MigrationNoticeBanner` with a dismissible local-storage
+backing key, route the learn-more affordance to the shipped
+`/docs/MIGRATION_UNIFIED_NAV.md` guide, and keep the mapping explicit that
+Infrastructure now holds platform roots while Workloads now holds VMs,
+containers, pods, and container update status.
 The recovery feature shell now also depends on the shared
 `frontend-modern/src/components/shared/Subtabs.tsx` primitive for its primary
 protected-items versus recovery-events workspace switch. The recovery lane may

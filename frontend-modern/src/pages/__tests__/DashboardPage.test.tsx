@@ -4,6 +4,7 @@ import type { DashboardOverview } from '@/hooks/useDashboardOverview';
 import type { DashboardRecoverySummary } from '@/hooks/useDashboardRecovery';
 import DashboardPage from '@/pages/Dashboard';
 import dashboardPageSource from '@/pages/Dashboard.tsx?raw';
+import { STORAGE_KEYS } from '@/utils/localStorage';
 
 let overviewLoading = false;
 let overviewError: unknown = undefined;
@@ -118,6 +119,7 @@ describe('Dashboard page module contract', () => {
     wsReconnecting = false;
     reconnectSpy.mockReset();
     navigateSpy.mockReset();
+    localStorage.clear();
     overviewMock.health.totalResources = 0;
     overviewMock.infrastructure.total = 0;
     overviewMock.infrastructure.byStatus = {};
@@ -205,6 +207,45 @@ describe('Dashboard page module contract', () => {
     expect(screen.getByRole('heading', { name: /Storage/ })).toBeInTheDocument();
     expect(screen.getByText('Last recovery point over 24 hours ago')).toBeInTheDocument();
     expect(screen.getAllByText(/1\.95 KB \/ 3\.91 KB/i)).toHaveLength(2);
+  });
+
+  it('shows a dismissible v5-to-v6 migration notice on the populated dashboard', async () => {
+    overviewMock.health.totalResources = 5;
+    overviewMock.infrastructure.total = 5;
+    overviewMock.infrastructure.byStatus = { online: 5 };
+    overviewMock.workloads.total = 12;
+    overviewMock.workloads.running = 9;
+
+    render(() => <DashboardPage />);
+
+    expect(screen.getByText('Looking for Proxmox, Docker, and Hosts?')).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Use Infrastructure for Proxmox nodes, Docker hosts, clusters, and other systems. Use Workloads for VMs, containers, pods, and Docker update status.',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'See full migration guide' })).toHaveAttribute(
+      'href',
+      '/docs/MIGRATION_UNIFIED_NAV.md',
+    );
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Dismiss navigation notice' }));
+
+    expect(localStorage.getItem(STORAGE_KEYS.DASHBOARD_MIGRATION_NOTICE_DISMISSED)).toBe('true');
+    expect(screen.queryByText('Looking for Proxmox, Docker, and Hosts?')).not.toBeInTheDocument();
+  });
+
+  it('keeps the dashboard migration notice hidden once dismissed', () => {
+    localStorage.setItem(STORAGE_KEYS.DASHBOARD_MIGRATION_NOTICE_DISMISSED, 'true');
+    overviewMock.health.totalResources = 5;
+    overviewMock.infrastructure.total = 5;
+    overviewMock.infrastructure.byStatus = { online: 5 };
+    overviewMock.workloads.total = 12;
+    overviewMock.workloads.running = 9;
+
+    render(() => <DashboardPage />);
+
+    expect(screen.queryByText('Looking for Proxmox, Docker, and Hosts?')).not.toBeInTheDocument();
   });
 
   it('keeps the KPI strip above problem resources so the dashboard snapshot reads before detail', () => {
