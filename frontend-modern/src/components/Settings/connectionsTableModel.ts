@@ -6,6 +6,7 @@ import {
 import type { UnifiedAgentRow } from './infrastructureOperationsModel';
 
 export type SystemManageAction =
+  | { kind: 'connection'; connectionId: string }
   | { kind: 'inventory-active'; rowKey: string }
   | { kind: 'inventory-ignored'; rowKey: string };
 

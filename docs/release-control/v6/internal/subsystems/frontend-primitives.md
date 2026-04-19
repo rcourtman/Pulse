@@ -255,6 +255,19 @@ work extends shared components instead of creating new local variants.
    editor shell — no connection list, no row actions, no surrounding
    panel chrome. Showing a ledger of other systems inside the credential
    slot is exactly the ledger-inside-editor drift this contract forbids.
+   The configured-connections ledger itself must render exclusively from
+   the aggregator. `InfrastructureWorkspace.tsx` composes the default
+   table rows from
+   `frontend-modern/src/components/Settings/useConnectionsLedger.ts`
+   (polling `GET /api/connections`) and the unified row click opens
+   `frontend-modern/src/components/Settings/ConnectionDetailDrawer.tsx`,
+   which reads the aggregator fields directly. The workspace must not
+   reconstruct the table's state, coverage, or last-seen columns from
+   `useInfrastructureReportingState` for configured connection rows, and
+   the legacy `InfrastructureActiveRowDetails` drawer must not be
+   mounted for those rows. Monitoring-stopped inventory still routes to
+   `InfrastructureIgnoredRowDetails` pending phase 9 cleanup, but that
+   fallback must not be extended to cover configured connections.
 6. Keep Proxmox deep-link route selection on the shared settings-navigation boundary. `frontend-modern/src/components/Settings/settingsNavigationModel.ts` and `frontend-modern/src/components/Settings/useSettingsNavigation.ts` must treat the canonical PBS and PMG Proxmox deep links as agent-selection authority even though those URLs resolve to the shared `infrastructure-operations` tab. Reloading or remounting on a PBS or PMG deep link must not silently fall back to the PVE selector state.
 7. Keep shared storage feature presenters on canonical platform truth. When reusable storage presenters under `frontend-modern/src/features/storageBackups/` classify canonical resources for the shared storage route, API-backed virtualization datastores such as VMware must stay inventory-only datastores instead of inheriting PBS-specific backup-repository or protected-target copy from older fallback branches.
 8. Keep shared source/platform vocabulary on the governed manifest boundary. `frontend-modern/src/utils/platformSupportManifest.generated.ts` must be the tracked frontend projection of `docs/release-control/v6/internal/PLATFORM_SUPPORT_MANIFEST.json`, `frontend-modern/src/utils/platformSupportManifest.ts`, `frontend-modern/src/utils/sourcePlatforms.ts`, and `frontend-modern/src/utils/sourcePlatformOptions.ts` must consume that generated projection instead of embedding divergent future-label lists, setup/onboarding path allowlists, or presentation-only guesses, and `frontend-modern/scripts/canonical-platform-audit.mjs` must fail when the generated projection drifts from the governed manifest.

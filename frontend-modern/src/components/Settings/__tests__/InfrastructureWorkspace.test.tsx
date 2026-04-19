@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { Connection } from '@/api/connections';
 import type { UnifiedAgentRow } from '../infrastructureOperationsModel';
 import { InfrastructureWorkspace } from '../InfrastructureWorkspace';
 
@@ -13,6 +14,7 @@ const setSelectedIgnoredRowKeySpy = vi.hoisted(() => vi.fn());
 
 let mockActiveRows: UnifiedAgentRow[] = [];
 let mockIgnoredRows: UnifiedAgentRow[] = [];
+let mockConnections: Connection[] = [];
 const [selectedActiveRowKey, setSelectedActiveRowKey] = createSignal<string | null>(null);
 const [selectedIgnoredRowKey, setSelectedIgnoredRowKey] = createSignal<string | null>(null);
 
@@ -70,10 +72,6 @@ vi.mock('../ConnectionEditor/CredentialSlots/VMwareCredentialSlot', () => ({
   VMwareCredentialSlot: () => <div data-testid="vmware-section">vmware</div>,
 }));
 
-vi.mock('../InfrastructureActiveRowDetails', () => ({
-  InfrastructureActiveRowDetails: () => <div data-testid="active-details">active details</div>,
-}));
-
 vi.mock('../InfrastructureIgnoredRowDetails', () => ({
   InfrastructureIgnoredRowDetails: () => <div data-testid="ignored-details">ignored details</div>,
 }));
@@ -91,10 +89,27 @@ vi.mock('@/api/connections', async () => {
   return {
     ...actual,
     ConnectionsAPI: {
-      list: vi.fn(),
+      list: vi.fn(() => Promise.resolve(mockConnections)),
       probe: vi.fn().mockResolvedValue({ candidates: [], probedMs: 0 }),
     },
   };
+});
+
+const connectionFixture = (overrides: Partial<Connection> = {}): Connection => ({
+  id: 'pve:zeus',
+  type: 'pve',
+  name: 'zeus',
+  address: 'https://10.0.0.1:8006',
+  state: 'active',
+  stateReason: '',
+  enabled: true,
+  surfaces: ['vms', 'containers', 'storage', 'backups'],
+  scope: { vms: true, containers: true, storage: true, backups: true },
+  lastSeen: new Date().toISOString(),
+  lastError: null,
+  source: 'manual',
+  capabilities: { supportsPause: true, supportsScope: true, supportsTest: true },
+  ...overrides,
 });
 
 const reportingRow = (overrides: Partial<UnifiedAgentRow> = {}): UnifiedAgentRow =>
@@ -172,6 +187,7 @@ describe('InfrastructureWorkspace', () => {
     mockSearch = '';
     mockActiveRows = [reportingRow()];
     mockIgnoredRows = [];
+    mockConnections = [connectionFixture()];
     setSelectedActiveRowKey(null);
     setSelectedIgnoredRowKey(null);
   });
@@ -193,13 +209,23 @@ describe('InfrastructureWorkspace', () => {
     expect(screen.queryByTestId('agent-profiles')).toBeNull();
   });
 
-  it('shows only monitored agents in the inventory table', () => {
+  it('renders unified connection rows from the aggregator', async () => {
+    mockConnections = [
+      connectionFixture({ id: 'pve:zeus', name: 'zeus', type: 'pve', state: 'active' }),
+      connectionFixture({
+        id: 'truenas:tn-1',
+        name: 'tower-nas',
+        type: 'truenas',
+        state: 'paused',
+        enabled: false,
+      }),
+    ];
     renderWorkspace();
 
-    expect(screen.getByText('tower')).toBeInTheDocument();
-    expect(screen.queryByText('zeus')).toBeNull();
-    expect(screen.queryByText('Tower NAS')).toBeNull();
-    expect(screen.queryByText('lab-vcenter')).toBeNull();
+    await waitFor(() => expect(screen.getByText('zeus')).toBeInTheDocument());
+    expect(screen.getByText('tower-nas')).toBeInTheDocument();
+    expect(screen.getByText('Active')).toBeInTheDocument();
+    expect(screen.getByText('Paused')).toBeInTheDocument();
   });
 
   it('opens the unified add drawer with the probe step when Add infrastructure is clicked', () => {
@@ -288,13 +314,15 @@ describe('InfrastructureWorkspace', () => {
     expect(setModalResetKeySpy).not.toHaveBeenCalled();
   });
 
-  it('opens reporting details from the inventory in a drawer', () => {
+  it('opens the connection detail drawer when a unified row is viewed', async () => {
+    mockConnections = [connectionFixture({ id: 'pve:zeus', name: 'zeus' })];
     renderWorkspace();
 
+    await waitFor(() => expect(screen.getByText('zeus')).toBeInTheDocument());
     fireEvent.click(screen.getByRole('button', { name: 'View details' }));
 
-    expect(setExpandedRowKeySpy).toHaveBeenCalledWith('agent:tower');
-    expect(screen.getByTestId('active-details')).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Connection details' })).toBeInTheDocument();
+    expect(setExpandedRowKeySpy).not.toHaveBeenCalled();
   });
 
   it('redirects legacy install deep link and pre-selects the agent credential slot', async () => {

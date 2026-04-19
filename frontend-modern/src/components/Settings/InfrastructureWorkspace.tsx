@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from '@solidjs/router';
 import { Dialog } from '@/components/shared/Dialog';
 import { presentationPolicyIsReadOnly } from '@/stores/sessionPresentationPolicy';
 import { AgentProfilesPanel } from './AgentProfilesPanel';
+import { ConnectionDetailDrawer } from './ConnectionDetailDrawer';
 import { ConnectionsTable, type ConnectionsTableHeaderAction } from './ConnectionsTable';
 import {
   buildInfrastructureSystemRows,
@@ -14,7 +15,6 @@ import { NodeCredentialSlot } from './ConnectionEditor/CredentialSlots/NodeCrede
 import { TrueNASCredentialSlot } from './ConnectionEditor/CredentialSlots/TrueNASCredentialSlot';
 import { VMwareCredentialSlot } from './ConnectionEditor/CredentialSlots/VMwareCredentialSlot';
 import type { ConnectionType } from '@/api/connections';
-import { InfrastructureActiveRowDetails } from './InfrastructureActiveRowDetails';
 import { InfrastructureInstallerSection } from './InfrastructureInstallerSection';
 import { InfrastructureIgnoredRowDetails } from './InfrastructureIgnoredRowDetails';
 import { InfrastructureStopMonitoringDialog } from './InfrastructureStopMonitoringDialog';
@@ -24,6 +24,7 @@ import {
   type InfrastructureAddStep,
 } from './infrastructureWorkspaceModel';
 import type { InfrastructurePlatformSettingsProps } from './proxmoxSettingsModel';
+import { useConnectionsLedger } from './useConnectionsLedger';
 import {
   InfrastructureOperationsStateProvider,
   useInfrastructureOperationsContext,
@@ -44,11 +45,17 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
   const navigate = useNavigate();
   const location = useLocation();
   const state = useInfrastructureOperationsContext();
+  const ledger = useConnectionsLedger();
 
   const [addMode, setAddMode] = createSignal(false);
   const [initialAddType, setInitialAddType] = createSignal<ConnectionType | null>(null);
   const [showAgentProfiles, setShowAgentProfiles] = createSignal(false);
+  const [selectedConnectionId, setSelectedConnectionId] = createSignal<string | null>(null);
   const readOnly = createMemo(() => presentationPolicyIsReadOnly());
+  const selectedConnection = createMemo(() => {
+    const id = selectedConnectionId();
+    return id ? ledger.findById(id) : undefined;
+  });
 
   // Redirect legacy deep links and pre-select the matching type in the editor.
   createEffect(() => {
@@ -82,12 +89,13 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
     }
   });
 
-  const rows = createMemo<InfrastructureSystemRow[]>(() =>
-    buildInfrastructureSystemRows({
-      activeRows: state.activeRows(),
+  const rows = createMemo<InfrastructureSystemRow[]>(() => [
+    ...ledger.rows(),
+    ...buildInfrastructureSystemRows({
+      activeRows: [],
       monitoringStoppedRows: state.monitoringStoppedRows(),
     }),
-  );
+  ]);
 
   const headerActions = createMemo<ConnectionsTableHeaderAction[]>(() =>
     readOnly()
@@ -107,13 +115,16 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
 
   const handleManageAction = (action: SystemManageAction) => {
     switch (action.kind) {
-      case 'inventory-active':
-        state.setExpandedRowKey(action.rowKey);
+      case 'connection':
         state.setSelectedIgnoredRowKey(null);
+        setSelectedConnectionId(action.connectionId);
         return;
       case 'inventory-ignored':
-        state.setExpandedRowKey(null);
+        setSelectedConnectionId(null);
         state.setSelectedIgnoredRowKey(action.rowKey);
+        return;
+      case 'inventory-active':
+        // Legacy active-row path retired; unified rows use the connection drawer.
         return;
       default:
         return;
@@ -234,20 +245,12 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
         </div>
       </Show>
 
-      {/* Active system detail drawer */}
-      <Dialog
-        isOpen={Boolean(state.selectedActiveRow())}
-        onClose={() => state.setExpandedRowKey(null)}
-        layout="drawer-right"
-        panelClass="max-w-[760px]"
-        ariaLabel="Reporting item details"
-      >
-        <Show when={state.selectedActiveRow()}>
-          {(rowAccessor) => <InfrastructureActiveRowDetails rowAccessor={rowAccessor} />}
-        </Show>
-      </Dialog>
+      <ConnectionDetailDrawer
+        connection={selectedConnection}
+        onClose={() => setSelectedConnectionId(null)}
+      />
 
-      {/* Ignored system detail drawer */}
+      {/* Ignored system detail drawer (retires with phase 9). */}
       <Dialog
         isOpen={Boolean(state.selectedIgnoredRow())}
         onClose={() => state.setSelectedIgnoredRowKey(null)}

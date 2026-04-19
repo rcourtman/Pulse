@@ -343,7 +343,24 @@ an add-only capacity posture.
     card, configured nodes table, node-modal stack; TrueNAS/VMware
     connection list with headers and row actions) into the credential
     slot, because that previously showed the ledger-of-other-systems in
-    the middle of entering one system's credentials.
+    the middle of entering one system's credentials. The configured
+    connections table reads exclusively from the unified aggregator: the
+    `ConnectionsTable` rows are produced by
+    `frontend-modern/src/components/Settings/useConnectionsLedger.ts`,
+    which polls `GET /api/connections` and maps the aggregator-derived
+    state (active/paused/unauthorized/unreachable/stale/pending) and
+    active scope keys into the table's display. `InfrastructureWorkspace`
+    must not reconstruct per-type health, scope, or last-seen columns
+    from `useInfrastructureReportingState` for configured connection
+    rows; the legacy reporting-state path is retained only for
+    monitoring-stopped inventory rows pending phase 9 cleanup. Drill-in
+    from a unified row opens
+    `frontend-modern/src/components/Settings/ConnectionDetailDrawer.tsx`,
+    which renders the aggregator fields directly (type, address, state,
+    state reason, enabled flag, surfaces with active scope, last seen,
+    last error) rather than the legacy `InfrastructureActiveRowDetails`
+    surface-breakdown drawer; the active-row drawer is no longer mounted
+    by the workspace for unified rows.
 
 ## Forbidden Paths
 
