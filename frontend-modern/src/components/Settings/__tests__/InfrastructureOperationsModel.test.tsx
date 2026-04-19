@@ -152,4 +152,11 @@ describe('infrastructure operations model', () => {
   it('keeps api-backed TrueNAS out of the host install profile list', () => {
     expect(INSTALL_PROFILE_OPTIONS.map((option) => option.value)).not.toContain('truenas');
   });
+
+  it('does not reintroduce the retired reporting state hook on the operations state', async () => {
+    const operationsStateSource = await import(
+      '../useInfrastructureOperationsState?raw'
+    ).then((mod) => (mod as { default: string }).default);
+    expect(operationsStateSource).not.toContain('useInfrastructureReportingState');
+  });
 });

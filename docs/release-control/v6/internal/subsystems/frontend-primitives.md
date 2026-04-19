@@ -213,7 +213,7 @@ work extends shared components instead of creating new local variants.
    helper plus runtime `monitored_system_capacity` reads rather than
    reconstructing raw `current / limit` slash math or `0 remaining` copy in
    the banner shell, state owner, or shared model.
-5. Keep shared platform-connections shell state on the reusable settings boundary: `frontend-modern/src/components/Settings/useSettingsInfrastructurePanelProps.ts`, `frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx`, and `frontend-modern/src/components/Settings/PlatformConnectionsWorkspace.tsx` must continue to derive provider counts, availability, and shared subtab copy from one infrastructure-settings source instead of creating provider-local summary fetches or VMware-only shell vocabulary.
+5. Keep shared infrastructure shell state on the reusable settings boundary: `frontend-modern/src/components/Settings/useSettingsInfrastructurePanelProps.ts` and `frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx` must continue to derive provider counts, availability, and shared subtab copy from one infrastructure-settings source — via the unified aggregator through `frontend-modern/src/components/Settings/useConnectionsLedger.ts` — instead of creating provider-local summary fetches or VMware-only shell vocabulary. Phase 9 retired the old `PlatformConnectionsWorkspace` per-type shell and the `Platform connections` nomenclature.
    That same shared shell boundary now owns the default posture for
    `/settings/infrastructure`: the landing route should read as one ledger-first
    workspace with one row per top-level monitored system. Configured platform
@@ -261,13 +261,20 @@ work extends shared components instead of creating new local variants.
    `frontend-modern/src/components/Settings/useConnectionsLedger.ts`
    (polling `GET /api/connections`) and the unified row click opens
    `frontend-modern/src/components/Settings/ConnectionDetailDrawer.tsx`,
-   which reads the aggregator fields directly. The workspace must not
-   reconstruct the table's state, coverage, or last-seen columns from
-   `useInfrastructureReportingState` for configured connection rows, and
-   the legacy `InfrastructureActiveRowDetails` drawer must not be
-   mounted for those rows. Monitoring-stopped inventory still routes to
-   `InfrastructureIgnoredRowDetails` pending phase 9 cleanup, but that
-   fallback must not be extended to cover configured connections.
+   which reads the aggregator fields directly. Phase 9 retired the
+   parallel reporting/inventory surface entirely:
+   `useInfrastructureReportingState`, `InfrastructureOperationsController`,
+   `InfrastructureInventorySection`, `InfrastructureActiveRowDetails`,
+   `InfrastructureIgnoredRowDetails`, `InfrastructureStopMonitoringDialog`,
+   and the per-type shells `PlatformConnectionsWorkspace`,
+   `ProxmoxSettingsPanel`, `ProxmoxDirectWorkspace`, `NodeModal.tsx`,
+   `TrueNASSettingsPanel`, and `VMwareSettingsPanel` no longer exist.
+   The aggregator plus `ConnectionEditor` is the only path; no
+   parallel reporting state, stop-surface dialog, ignored-row fallback,
+   or per-type workspace may be reintroduced. `connectionsTableModel.ts`
+   carries only the connection-scoped `SystemManageAction` variant —
+   `inventory-active` / `inventory-ignored` manage kinds must not
+   return.
 6. Keep Proxmox deep-link route selection on the shared settings-navigation boundary. `frontend-modern/src/components/Settings/settingsNavigationModel.ts` and `frontend-modern/src/components/Settings/useSettingsNavigation.ts` must treat the canonical PBS and PMG Proxmox deep links as agent-selection authority even though those URLs resolve to the shared `infrastructure-operations` tab. Reloading or remounting on a PBS or PMG deep link must not silently fall back to the PVE selector state.
 7. Keep shared storage feature presenters on canonical platform truth. When reusable storage presenters under `frontend-modern/src/features/storageBackups/` classify canonical resources for the shared storage route, API-backed virtualization datastores such as VMware must stay inventory-only datastores instead of inheriting PBS-specific backup-repository or protected-target copy from older fallback branches.
 8. Keep shared source/platform vocabulary on the governed manifest boundary. `frontend-modern/src/utils/platformSupportManifest.generated.ts` must be the tracked frontend projection of `docs/release-control/v6/internal/PLATFORM_SUPPORT_MANIFEST.json`, `frontend-modern/src/utils/platformSupportManifest.ts`, `frontend-modern/src/utils/sourcePlatforms.ts`, and `frontend-modern/src/utils/sourcePlatformOptions.ts` must consume that generated projection instead of embedding divergent future-label lists, setup/onboarding path allowlists, or presentation-only guesses, and `frontend-modern/scripts/canonical-platform-audit.mjs` must fail when the generated projection drifts from the governed manifest.
@@ -563,20 +570,26 @@ connections` visible as the API-backed alternative for Proxmox and
     shared page.
 29. Keep infrastructure settings-shell API alternatives on the shared shell
     contract. `frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx`,
-    `frontend-modern/src/components/Settings/settingsHeaderMeta.ts`,
-    `frontend-modern/src/components/Settings/settingsNavigationModel.ts`, and
-    shared empty-state/setup guidance must
-    present `Platform connections` as the canonical API-backed alternative for
-    Proxmox, TrueNAS, and future provider integrations instead of reviving
-    top-level `Direct Proxmox` wording or shell-local provider routes.
-30. Keep the infrastructure settings platform-connections summary and provider
-    workspaces on one shared state source. `frontend-modern/src/components/Settings/useInfrastructureSettingsState.ts`,
-    `frontend-modern/src/components/Settings/useSettingsInfrastructurePanelProps.ts`,
-    `frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx`,
-    `frontend-modern/src/components/Settings/PlatformConnectionsWorkspace.tsx`, and `frontend-modern/src/components/Settings/TrueNASSettingsPanel.tsx` must
-    derive TrueNAS connection counts and availability from the shared
-    infrastructure settings state instead of letting the top-level ledger and
-    the provider-specific panel issue separate connection fetches.
+    `frontend-modern/src/components/Settings/settingsHeaderMeta.ts`, and
+    `frontend-modern/src/components/Settings/settingsNavigationModel.ts` must
+    present the unified add flow as the canonical API-backed entry for
+    Proxmox, TrueNAS, VMware, and future provider integrations instead of
+    reviving top-level `Direct Proxmox` wording or shell-local provider
+    routes. Phase 9 retired the `Platform connections` nomenclature along
+    with the shells that owned it — there is no `PlatformConnectionsWorkspace`
+    and no per-type `ProxmoxSettingsPanel` / `TrueNASSettingsPanel` /
+    `VMwareSettingsPanel` to route through; the provider is a field inside
+    one `ConnectionEditor`, not a destination.
+30. Keep the infrastructure settings connection inventory on one shared
+    source. `frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx`
+    composes rows exclusively from
+    `frontend-modern/src/components/Settings/useConnectionsLedger.ts`,
+    which polls `GET /api/connections`. Provider connection counts and
+    availability must derive from that aggregator, not from a top-level
+    ledger plus parallel provider-specific fetches. The retired
+    `PlatformConnectionsWorkspace` / `TrueNASSettingsPanel` /
+    `VMwareSettingsPanel` panels must not be reintroduced as a second
+    fetch path.
 31. Keep alert-history feature composition on the current owned state contract.
     `frontend-modern/src/features/alerts/tabs/HistoryTab.tsx` must react to the
     shared `alertData()` history state instead of reviving deleted aliases, and
@@ -2199,28 +2212,34 @@ reference cases, and
 locks that direct-root contract so single-surface pages do not quietly regain
 redundant outer spacing chrome.
 The same shared settings-shell boundary now also owns the API-backed
-alternative path inside Infrastructure. `frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx`,
+alternative path inside Infrastructure.
+`frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx`,
 `frontend-modern/src/components/Settings/settingsHeaderMeta.ts`,
-`frontend-modern/src/components/Settings/settingsNavigationModel.ts`, `frontend-modern/src/utils/dashboardEmptyStatePresentation.ts`,
-`frontend-modern/src/utils/infrastructureEmptyStatePresentation.ts`, and adjacent setup guidance must
-treat `Platform connections` as the canonical API-backed alternative for
-Proxmox, TrueNAS, and future provider integrations instead of reviving
-top-level `Direct Proxmox` wording or shell-local provider routes.
-That same settings-shell contract also owns the shared platform-connections
-summary state. `frontend-modern/src/components/Settings/useInfrastructureSettingsState.ts`,
+`frontend-modern/src/components/Settings/settingsNavigationModel.ts`,
+`frontend-modern/src/utils/dashboardEmptyStatePresentation.ts`,
+`frontend-modern/src/utils/infrastructureEmptyStatePresentation.ts`, and
+adjacent setup guidance may still use `Platform connections` as the
+operator-facing first-run label for API-backed onboarding, but that label must
+resolve to the shared `Infrastructure` destination and its inline
+`ConnectionEditor` add flow rather than reviving a standalone platform shell
+or provider-local route.
+That same settings-shell contract also owns the shared infrastructure summary
+state. `frontend-modern/src/components/Settings/useInfrastructureSettingsState.ts`,
 `frontend-modern/src/components/Settings/useSettingsInfrastructurePanelProps.ts`,
 `frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx`,
-`frontend-modern/src/components/Settings/PlatformConnectionsWorkspace.tsx`, `frontend-modern/src/components/Settings/TrueNASSettingsPanel.tsx`, and
-`frontend-modern/src/components/Settings/VMwareSettingsPanel.tsx` must derive Proxmox/PBS/PMG/TrueNAS/VMware counts
-and availability from one shared infrastructure settings state source instead
-of letting the top-level ledger and the provider-specific panels fetch the
-same connection state separately.
+`frontend-modern/src/components/Settings/useTrueNASSettingsPanelState.ts`, and
+`frontend-modern/src/components/Settings/useVMwareSettingsPanelState.ts` must
+derive Proxmox/PBS/PMG/TrueNAS/VMware counts and availability from one shared
+infrastructure settings state source instead of letting the top-level ledger
+and inline credential flows fetch the same connection state separately. Phase
+9 retired the standalone `PlatformConnectionsWorkspace.tsx`,
+`TrueNASSettingsPanel.tsx`, and `VMwareSettingsPanel.tsx` shells; they remain
+labels and proof history, not live presentation surfaces.
 That same shared settings-shell boundary also owns provider parity inside the
-platform workspace. Adding VMware to the shared `Platform connections`
-subtabs may extend the same card, empty-state, dialog, and summary-shell
-patterns used by TrueNAS, but it must not introduce a VMware-only outer page
-shell, alternate settings route hierarchy, or another summary vocabulary for
-connection health and contribution counts.
+inline add flow. Adding VMware may extend the same card, empty-state, dialog,
+and summary-shell patterns used by TrueNAS, but it must not introduce a
+VMware-only outer page shell, alternate settings route hierarchy, or another
+summary vocabulary for connection health and contribution counts.
 That same shared filter-presentation boundary also owns infrastructure
 route-filter continuity. `frontend-modern/src/features/infrastructure/`
 must keep a route-owned canonical source option such as `truenas` visible in

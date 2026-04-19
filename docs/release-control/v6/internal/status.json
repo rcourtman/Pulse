@@ -3251,12 +3251,12 @@
         },
         {
           "repo": "pulse",
-          "path": "frontend-modern/src/components/Settings/InfrastructureOperationsController.tsx",
+          "path": "frontend-modern/src/components/Settings/ConnectionEditor/ConnectionEditor.tsx",
           "kind": "file"
         },
         {
           "repo": "pulse",
-          "path": "frontend-modern/src/components/Settings/NodeModal.tsx",
+          "path": "frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/NodeCredentialSlot.tsx",
           "kind": "file"
         },
         {

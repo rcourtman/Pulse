@@ -27,12 +27,8 @@ from canonical_completion_guard import (
 WORKSPACE_REPOS_ROOT = REPO_ROOT.parent
 
 PLATFORM_CONNECTIONS_WORKSPACE_EXACT_FILES = [
-    "frontend-modern/src/components/Settings/__tests__/InfrastructureOperationsController.test.tsx",
+    "frontend-modern/src/components/Settings/ConnectionEditor/__tests__/ConnectionEditor.test.tsx",
     "frontend-modern/src/components/Settings/__tests__/InfrastructureWorkspace.test.tsx",
-    "frontend-modern/src/components/Settings/__tests__/PlatformConnectionsWorkspace.test.tsx",
-    "frontend-modern/src/components/Settings/__tests__/TrueNASSettingsPanel.test.tsx",
-    "frontend-modern/src/components/Settings/__tests__/VMwareSettingsPanel.test.tsx",
-    "frontend-modern/src/components/Settings/__tests__/monitoredSystemModelGuardrails.test.ts",
     "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
     "frontend-modern/src/components/Settings/__tests__/useTrueNASSettingsPanelState.test.tsx",
     "frontend-modern/src/components/Settings/__tests__/useVMwareSettingsPanelState.test.tsx",
@@ -46,7 +42,6 @@ PLATFORM_CONNECTIONS_WORKSPACE_EXACT_FILES = [
 CONNECTIONS_LEDGER_WORKSPACE_EXACT_FILES = [
     "frontend-modern/src/components/Settings/__tests__/ConnectionsTable.test.tsx",
     "frontend-modern/src/components/Settings/__tests__/InfrastructureWorkspace.test.tsx",
-    "frontend-modern/src/components/Settings/__tests__/connectionsTableModel.test.ts",
     "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
 ]
 
@@ -975,7 +970,6 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                     "exact_files": [
                         "frontend-modern/src/api/__tests__/agentProfiles.test.ts",
                         "frontend-modern/src/components/Settings/__tests__/AgentProfilesPanel.test.tsx",
-                        "frontend-modern/src/components/Settings/__tests__/monitoredSystemModelGuardrails.test.ts",
                         "frontend-modern/src/utils/__tests__/agentProfilesPresentation.test.ts",
                     ],
                 }
@@ -1910,69 +1904,6 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
             ],
         )
 
-    def test_node_modal_change_uses_node_setup_settings_policy(self):
-        required = infer_impacted_subsystems(
-            ["frontend-modern/src/components/Settings/NodeModal.tsx"]
-        )
-        self.assertEqual(set(required), {"agent-lifecycle", "api-contracts"})
-
-        lifecycle = required["agent-lifecycle"]
-        self.assertEqual(
-            lifecycle["contract"],
-            "docs/release-control/v6/internal/subsystems/agent-lifecycle.md",
-        )
-        self.assertEqual(
-            lifecycle["touched_runtime_files"],
-            ["frontend-modern/src/components/Settings/NodeModal.tsx"],
-        )
-        self.assertEqual(
-            lifecycle["verification_requirements"],
-            [
-                {
-                    "id": "node-setup-settings-surface",
-                    "label": "node setup/install command proof",
-                    "touched_runtime_files": [
-                        "frontend-modern/src/components/Settings/NodeModal.tsx"
-                    ],
-                    "allow_same_subsystem_tests": False,
-                    "test_prefixes": [],
-                    "exact_files": [
-                        "frontend-modern/src/components/Settings/__tests__/NodeModal.guardrails.test.ts",
-                        "frontend-modern/src/utils/__tests__/nodeModalPresentation.test.ts",
-                    ],
-                }
-            ],
-        )
-
-        api_contracts = required["api-contracts"]
-        self.assertEqual(
-            api_contracts["contract"],
-            "docs/release-control/v6/internal/subsystems/api-contracts.md",
-        )
-        self.assertEqual(
-            api_contracts["touched_runtime_files"],
-            ["frontend-modern/src/components/Settings/NodeModal.tsx"],
-        )
-        self.assertEqual(
-            api_contracts["verification_requirements"],
-            [
-                {
-                    "id": "node-setup-settings-client-surface",
-                    "label": "node setup client consumer proof",
-                    "touched_runtime_files": [
-                        "frontend-modern/src/components/Settings/NodeModal.tsx"
-                    ],
-                    "allow_same_subsystem_tests": False,
-                    "test_prefixes": [],
-                    "exact_files": [
-                        "frontend-modern/src/api/__tests__/nodes.test.ts",
-                        "frontend-modern/src/components/Settings/__tests__/NodeModal.guardrails.test.ts",
-                        "frontend-modern/src/types/api.ts",
-                    ],
-                }
-            ],
-        )
-
     def test_setup_completion_panel_change_uses_setup_completion_install_policy(self):
         required = infer_impacted_subsystems(
             ["frontend-modern/src/components/SetupWizard/SetupCompletionPanel.tsx"]
@@ -2068,7 +1999,6 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                     "exact_files": [
                         "frontend-modern/src/api/__tests__/agentProfiles.test.ts",
                         "frontend-modern/src/components/Settings/__tests__/AgentProfilesPanel.test.tsx",
-                        "frontend-modern/src/components/Settings/__tests__/monitoredSystemModelGuardrails.test.ts",
                         "frontend-modern/src/utils/__tests__/agentProfilesPresentation.test.ts",
                     ],
                 }
@@ -2104,75 +2034,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                     "exact_files": [
                         "frontend-modern/src/api/__tests__/agentProfiles.test.ts",
                         "frontend-modern/src/components/Settings/__tests__/AgentProfilesPanel.test.tsx",
-                        "frontend-modern/src/components/Settings/__tests__/monitoredSystemModelGuardrails.test.ts",
                         "frontend-modern/src/utils/__tests__/agentProfilesPresentation.test.ts",
-                    ],
-                }
-            ],
-        )
-
-    def test_infrastructure_operations_controller_change_requires_lifecycle_and_api_contracts(self):
-        required = infer_impacted_subsystems(
-            ["frontend-modern/src/components/Settings/InfrastructureOperationsController.tsx"]
-        )
-        self.assertEqual(set(required), {"agent-lifecycle", "api-contracts"})
-
-        lifecycle = required["agent-lifecycle"]
-        self.assertEqual(
-            lifecycle["contract"],
-            "docs/release-control/v6/internal/subsystems/agent-lifecycle.md",
-        )
-        self.assertEqual(
-            lifecycle["touched_runtime_files"],
-            ["frontend-modern/src/components/Settings/InfrastructureOperationsController.tsx"],
-        )
-        self.assertEqual(
-            lifecycle["verification_requirements"],
-            [
-                {
-                    "id": "unified-agent-settings-surface",
-                    "label": "unified agent settings lifecycle proof",
-                    "touched_runtime_files": [
-                        "frontend-modern/src/components/Settings/InfrastructureOperationsController.tsx"
-                    ],
-                    "allow_same_subsystem_tests": False,
-                    "test_prefixes": [],
-                    "exact_files": [
-                        "frontend-modern/src/api/__tests__/agentProfiles.test.ts",
-                        "frontend-modern/src/api/__tests__/monitoring.test.ts",
-                        "frontend-modern/src/components/Settings/__tests__/InfrastructureOperationsController.test.tsx",
-                        "frontend-modern/src/components/Settings/__tests__/InfrastructureOperationsModel.test.tsx",
-                    ],
-                }
-            ],
-        )
-
-        api_contracts = required["api-contracts"]
-        self.assertEqual(
-            api_contracts["contract"],
-            "docs/release-control/v6/internal/subsystems/api-contracts.md",
-        )
-        self.assertEqual(
-            api_contracts["touched_runtime_files"],
-            ["frontend-modern/src/components/Settings/InfrastructureOperationsController.tsx"],
-        )
-        self.assertEqual(
-            api_contracts["verification_requirements"],
-            [
-                {
-                    "id": "unified-agent-settings-surface",
-                    "label": "infrastructure operations API proof",
-                    "touched_runtime_files": [
-                        "frontend-modern/src/components/Settings/InfrastructureOperationsController.tsx"
-                    ],
-                    "allow_same_subsystem_tests": False,
-                    "test_prefixes": [],
-                    "exact_files": [
-                        "frontend-modern/src/api/__tests__/agentProfiles.test.ts",
-                        "frontend-modern/src/api/__tests__/monitoring.test.ts",
-                        "frontend-modern/src/api/__tests__/security.test.ts",
-                        "frontend-modern/src/components/Settings/__tests__/InfrastructureOperationsController.test.tsx",
-                        "frontend-modern/src/components/Settings/__tests__/InfrastructureOperationsModel.test.tsx",
                     ],
                 }
             ],
@@ -2203,7 +2065,6 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                     "exact_files": [
                         "frontend-modern/src/api/__tests__/agentProfiles.test.ts",
                         "frontend-modern/src/api/__tests__/monitoring.test.ts",
-                        "frontend-modern/src/components/Settings/__tests__/InfrastructureOperationsController.test.tsx",
                         "frontend-modern/src/components/Settings/__tests__/InfrastructureOperationsModel.test.tsx",
                     ],
                 }
@@ -2230,66 +2091,6 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                         "frontend-modern/src/api/__tests__/agentProfiles.test.ts",
                         "frontend-modern/src/api/__tests__/monitoring.test.ts",
                         "frontend-modern/src/api/__tests__/security.test.ts",
-                        "frontend-modern/src/components/Settings/__tests__/InfrastructureOperationsController.test.tsx",
-                        "frontend-modern/src/components/Settings/__tests__/InfrastructureOperationsModel.test.tsx",
-                    ],
-                }
-            ],
-        )
-
-    def test_infrastructure_reporting_state_change_requires_lifecycle_and_api_contracts(self):
-        required = infer_impacted_subsystems(
-            ["frontend-modern/src/components/Settings/useInfrastructureReportingState.tsx"]
-        )
-        self.assertEqual(set(required), {"agent-lifecycle", "api-contracts"})
-
-        lifecycle = required["agent-lifecycle"]
-        self.assertEqual(
-            lifecycle["touched_runtime_files"],
-            ["frontend-modern/src/components/Settings/useInfrastructureReportingState.tsx"],
-        )
-        self.assertEqual(
-            lifecycle["verification_requirements"],
-            [
-                {
-                    "id": "unified-agent-settings-surface",
-                    "label": "unified agent settings lifecycle proof",
-                    "touched_runtime_files": [
-                        "frontend-modern/src/components/Settings/useInfrastructureReportingState.tsx"
-                    ],
-                    "allow_same_subsystem_tests": False,
-                    "test_prefixes": [],
-                    "exact_files": [
-                        "frontend-modern/src/api/__tests__/agentProfiles.test.ts",
-                        "frontend-modern/src/api/__tests__/monitoring.test.ts",
-                        "frontend-modern/src/components/Settings/__tests__/InfrastructureOperationsController.test.tsx",
-                        "frontend-modern/src/components/Settings/__tests__/InfrastructureOperationsModel.test.tsx",
-                    ],
-                }
-            ],
-        )
-
-        api_contracts = required["api-contracts"]
-        self.assertEqual(
-            api_contracts["touched_runtime_files"],
-            ["frontend-modern/src/components/Settings/useInfrastructureReportingState.tsx"],
-        )
-        self.assertEqual(
-            api_contracts["verification_requirements"],
-            [
-                {
-                    "id": "unified-agent-settings-surface",
-                    "label": "infrastructure operations API proof",
-                    "touched_runtime_files": [
-                        "frontend-modern/src/components/Settings/useInfrastructureReportingState.tsx"
-                    ],
-                    "allow_same_subsystem_tests": False,
-                    "test_prefixes": [],
-                    "exact_files": [
-                        "frontend-modern/src/api/__tests__/agentProfiles.test.ts",
-                        "frontend-modern/src/api/__tests__/monitoring.test.ts",
-                        "frontend-modern/src/api/__tests__/security.test.ts",
-                        "frontend-modern/src/components/Settings/__tests__/InfrastructureOperationsController.test.tsx",
                         "frontend-modern/src/components/Settings/__tests__/InfrastructureOperationsModel.test.tsx",
                     ],
                 }
@@ -2356,11 +2157,6 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
             "frontend-modern/src/components/Settings/connectionsTableModel.ts"
         )
 
-    def test_proxmox_settings_panel_change_requires_agent_lifecycle(self):
-        self._assert_platform_connections_workspace_change_requires_agent_lifecycle(
-            "frontend-modern/src/components/Settings/ProxmoxSettingsPanel.tsx"
-        )
-
     def test_infrastructure_settings_state_change_requires_agent_lifecycle(self):
         self._assert_platform_connections_workspace_change_requires_agent_lifecycle(
             "frontend-modern/src/components/Settings/useInfrastructureSettingsState.ts"
@@ -2420,7 +2216,6 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                         "frontend-modern/src/api/__tests__/agentProfiles.test.ts",
                         "frontend-modern/src/api/__tests__/monitoring.test.ts",
                         "frontend-modern/src/api/__tests__/security.test.ts",
-                        "frontend-modern/src/components/Settings/__tests__/InfrastructureOperationsController.test.tsx",
                         "frontend-modern/src/components/Settings/__tests__/InfrastructureOperationsModel.test.tsx",
                     ],
                 }
@@ -2476,7 +2271,6 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                         "frontend-modern/src/api/__tests__/agentProfiles.test.ts",
                         "frontend-modern/src/api/__tests__/monitoring.test.ts",
                         "frontend-modern/src/api/__tests__/security.test.ts",
-                        "frontend-modern/src/components/Settings/__tests__/InfrastructureOperationsController.test.tsx",
                         "frontend-modern/src/components/Settings/__tests__/InfrastructureOperationsModel.test.tsx",
                     ],
                 }
@@ -2491,11 +2285,6 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
     def test_infrastructure_workspace_change_requires_agent_lifecycle(self):
         self._assert_platform_connections_workspace_change_requires_agent_lifecycle(
             "frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx"
-        )
-
-    def test_proxmox_direct_workspace_state_change_requires_agent_lifecycle(self):
-        self._assert_platform_connections_workspace_change_requires_agent_lifecycle(
-            "frontend-modern/src/components/Settings/useProxmoxDirectWorkspaceState.ts"
         )
 
     def test_infrastructure_installer_section_change_requires_agent_lifecycle(self):
@@ -2527,7 +2316,6 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                     "exact_files": [
                         "frontend-modern/src/api/__tests__/agentProfiles.test.ts",
                         "frontend-modern/src/api/__tests__/monitoring.test.ts",
-                        "frontend-modern/src/components/Settings/__tests__/InfrastructureOperationsController.test.tsx",
                         "frontend-modern/src/components/Settings/__tests__/InfrastructureOperationsModel.test.tsx",
                     ],
                 }

@@ -14,7 +14,7 @@ const row = (overrides: Partial<InfrastructureSystemRow> = {}): InfrastructureSy
   statusClassName: 'bg-green-100 text-green-800',
   lastActivityText: '5s ago',
   manageLabel: 'View details',
-  manage: { kind: 'inventory-active', rowKey: 'agent:tower' },
+  manage: { kind: 'connection', connectionId: 'row-1' },
   ...overrides,
 });
 
@@ -44,7 +44,7 @@ describe('ConnectionsTable', () => {
             collectionLabel: 'API',
             statusLabel: 'Ignored',
             manageLabel: 'Review ignored',
-            manage: { kind: 'inventory-ignored', rowKey: 'removed:pbs-docker' },
+            manage: { kind: 'connection', connectionId: 'row-2' },
           }),
         ]}
       />
@@ -104,7 +104,7 @@ describe('ConnectionsTable', () => {
     expect(onManageRow).toHaveBeenCalledWith(
       expect.objectContaining({
         id: 'row-1',
-        manage: { kind: 'inventory-active', rowKey: 'agent:tower' },
+        manage: { kind: 'connection', connectionId: 'row-1' },
       }),
     );
   });

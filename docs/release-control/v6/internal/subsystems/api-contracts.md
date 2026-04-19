@@ -10,6 +10,7 @@
   "status_file": "docs/release-control/v6/internal/status.json",
   "registry_file": "docs/release-control/v6/internal/subsystems/registry.json",
   "dependency_subsystem_ids": [
+    "agent-lifecycle",
     "ai-runtime",
     "cloud-paid",
     "patrol-intelligence"
@@ -30,12 +31,10 @@ Own canonical runtime payload shapes between backend and frontend.
 6. `frontend-modern/src/api/responseUtils.ts`
 7. `frontend-modern/src/components/Settings/APITokenManager.tsx`
 8. `frontend-modern/src/components/Settings/apiTokenManagerModel.ts`
-9. `frontend-modern/src/components/Settings/InfrastructureOperationsController.tsx`
-10. `frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx`
-11. `frontend-modern/src/components/Settings/useAPITokenManagerState.ts`
-12. `frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx`
-13. `frontend-modern/src/components/Settings/NodeModal.tsx`
-14. `frontend-modern/src/components/Settings/NodeModalAuthenticationSection.tsx`
+9. `frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx`
+10. `frontend-modern/src/components/Settings/useAPITokenManagerState.ts`
+11. `frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx`
+12. `frontend-modern/src/components/Settings/NodeModalAuthenticationSection.tsx`
 15. `frontend-modern/src/components/Settings/NodeModalBasicInfoSection.tsx`
 16. `frontend-modern/src/components/Settings/nodeModalModel.ts`
 17. `frontend-modern/src/components/Settings/NodeModalMonitoringSection.tsx`
@@ -50,8 +49,7 @@ Own canonical runtime payload shapes between backend and frontend.
 26. `frontend-modern/src/api/monitoring.ts`
 27. `internal/api/monitored_system_ledger.go`
 28. `frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx`
-29. `frontend-modern/src/components/Settings/useInfrastructureReportingState.tsx`
-30. `frontend-modern/src/components/Settings/useInfrastructureConfiguredNodesState.ts`
+29. `frontend-modern/src/components/Settings/useInfrastructureConfiguredNodesState.ts`
 31. `frontend-modern/src/components/Settings/useInfrastructureDiscoveryRuntimeState.ts`
 32. `frontend-modern/src/utils/apiTokenPresentation.ts`
 33. `frontend-modern/src/utils/infrastructureSettingsPresentation.ts`
@@ -98,10 +96,9 @@ Own canonical runtime payload shapes between backend and frontend.
 9. `frontend-modern/src/api/updates.ts` shared with `deployment-installability`: the updates frontend client is both a deployment-installability control surface and a canonical API payload contract boundary.
 10. `frontend-modern/src/components/Settings/APITokenManager.tsx` shared with `security-privacy`: the API token settings surface is both a security/privacy control surface and a canonical API payload contract boundary.
 11. `frontend-modern/src/components/Settings/apiTokenManagerModel.ts` shared with `security-privacy`: the pure API token settings model is both a security/privacy control surface and a canonical API payload contract boundary.
-12. `frontend-modern/src/components/Settings/InfrastructureOperationsController.tsx` shared with `agent-lifecycle`: the infrastructure operations controller is both an agent fleet lifecycle control surface and an API token, lookup, assignment, and reporting/install contract boundary.
+12. `frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/NodeCredentialSlot.tsx` shared with `agent-lifecycle`: the inline node credential slot is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary.
 13. `frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx` shared with `agent-lifecycle`: the pure infrastructure operations inventory/install model is both an agent fleet lifecycle control surface and an API token, lookup, assignment, and reporting/install contract boundary.
-14. `frontend-modern/src/components/Settings/NodeModal.tsx` shared with `agent-lifecycle`: the node setup modal render shell is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary.
-15. `frontend-modern/src/components/Settings/NodeModalAuthenticationSection.tsx` shared with `agent-lifecycle`: the node setup authentication section is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary.
+13. `frontend-modern/src/components/Settings/NodeModalAuthenticationSection.tsx` shared with `agent-lifecycle`: the node setup authentication section is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary.
 16. `frontend-modern/src/components/Settings/NodeModalBasicInfoSection.tsx` shared with `agent-lifecycle`: the node setup basic-info section is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary.
 17. `frontend-modern/src/components/Settings/nodeModalModel.ts` shared with `agent-lifecycle`: the pure node setup modal model is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary.
 18. `frontend-modern/src/components/Settings/NodeModalMonitoringSection.tsx` shared with `agent-lifecycle`: the node setup monitoring section is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary.
@@ -113,8 +110,7 @@ Own canonical runtime payload shapes between backend and frontend.
     That same shared boundary also owns settings-route polling scope for discovery payloads: the `/api/discover` refresh loop and websocket-backed discovery status hydration may run only while the operator is on the infrastructure connections workspace under `/settings/infrastructure/platforms*`, not on the systems ledger or install workspace.
 24. `frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx` shared with `agent-lifecycle`: the infrastructure install state hook is both an agent fleet lifecycle control surface and an API token, lookup, and install transport contract boundary.
 25. `frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx` shared with `agent-lifecycle`: the shared infrastructure operations state hook is both an agent fleet lifecycle control surface and an API token, lookup, assignment, and reporting/install contract boundary.
-26. `frontend-modern/src/components/Settings/useInfrastructureReportingState.tsx` shared with `agent-lifecycle`: the infrastructure reporting state hook is both an agent fleet lifecycle control surface and an API-backed assignment, reporting, and reconnect contract boundary.
-27. `frontend-modern/src/components/Settings/useNodeModalState.ts` shared with `agent-lifecycle`: the node setup modal state hook is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary.
+26. `frontend-modern/src/components/Settings/useNodeModalState.ts` shared with `agent-lifecycle`: the node setup modal state hook is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary.
 28. `frontend-modern/src/utils/agentInstallCommand.ts` shared with `agent-lifecycle`: the shared frontend install-command helper is both an agent lifecycle control surface and a canonical API/install transport contract boundary.
 29. `frontend-modern/src/utils/apiTokenPresentation.ts` shared with `security-privacy`: the API token presentation helper is both a security/privacy control surface and a canonical API token management boundary.
 30. `frontend-modern/src/utils/infrastructureSettingsPresentation.ts` shared with `agent-lifecycle`: the infrastructure settings presentation helper is both an agent lifecycle control surface and an API-backed direct-node/discovery settings boundary.
@@ -202,7 +198,7 @@ the canonical monitored-system blocked payload.
    and the Patrol route-shell destination itself, so the thin page shell at `frontend-modern/src/pages/AIIntelligence.tsx` may continue to bridge the shared AI-runtime payload boundary while exposing `/patrol` as the canonical product route and preserving `/ai` only as a compatibility redirect
 9. Route frontend API-client parsed error propagation, API-error-status fallback handling, allowed-status handling, custom status-specific error handling, command-trigger success envelope handling, shared response parsing pipelines, missing-resource lookup handling, metadata CRUD routing, stream event consumption, response status, collection normalization, scalar payload coercion, and structured error normalization through canonical shared helpers under `frontend-modern/src/api/`
 10. Add or change API token scope, assignment, and revocation presentation through `frontend-modern/src/components/Settings/APITokenManager.tsx`, `frontend-modern/src/components/Settings/apiTokenManagerModel.ts`, and `frontend-modern/src/components/Settings/useAPITokenManagerState.ts`
-11. Add or change infrastructure operations token generation, lookup, assignment, the pure unified-agent inventory/install model, the split infrastructure install/reporting state owners, the split direct-node/discovery infrastructure settings owners, the shared infrastructure-operations state provider/context shell, and reporting/install presentation through `frontend-modern/src/components/Settings/InfrastructureOperationsController.tsx`, `frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx`, `frontend-modern/src/components/Settings/useInfrastructureConfiguredNodesState.ts`, `frontend-modern/src/components/Settings/useInfrastructureDiscoveryRuntimeState.ts`, `frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx`, `frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx`, and `frontend-modern/src/components/Settings/useInfrastructureReportingState.tsx`
+11. Add or change infrastructure operations token generation, lookup, assignment, the pure unified-agent inventory/install model, the split infrastructure install state owner, the split direct-node/discovery infrastructure settings owners, the shared infrastructure-operations state provider/context shell, and install presentation through `frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx`, `frontend-modern/src/components/Settings/useInfrastructureConfiguredNodesState.ts`, `frontend-modern/src/components/Settings/useInfrastructureDiscoveryRuntimeState.ts`, `frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx`, and `frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx`. Phase 9 retired the InfrastructureOperationsController shell and the useInfrastructureReportingState reporting path; they must not be reintroduced, and aggregator-backed reporting reads are owned by `frontend-modern/src/components/Settings/useConnectionsLedger.ts` under the frontend-primitives contract.
     That same governed infrastructure-operations API boundary also owns discovery polling activation: the shared discovery runtime may only poll `/api/discover` while the settings shell has the `infrastructure-connections` route active, so route-level IA changes cannot silently keep discovery traffic alive on unrelated systems or install screens.
 12. Keep `internal/api/session_store.go` on a fail-closed auth-persistence boundary: persisted OIDC refresh tokens may only round-trip through encrypted-at-rest session payloads, and any missing-crypto or invalid-ciphertext path must drop the token instead of preserving plaintext-at-rest session state.
 13. Keep tenant AI handler wiring on canonical provider ownership: `internal/api/ai_handlers.go` may wire tenant `ReadState` and tenant-scoped unified-resource providers into AI services, but it must not revive tenant snapshot-provider bridges once Patrol can initialize and verify from those canonical providers directly.

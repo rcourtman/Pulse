@@ -14,7 +14,6 @@ import {
   useInfrastructureInstallState,
   type InfrastructureInstallStateOptions,
 } from './useInfrastructureInstallState';
-import { useInfrastructureReportingState } from './useInfrastructureReportingState';
 
 export type InfrastructureOperationsStateOptions = InfrastructureInstallStateOptions;
 
@@ -22,7 +21,6 @@ export const useInfrastructureOperationsState = (
   options: InfrastructureOperationsStateOptions = {},
 ) => {
   const installState = useInfrastructureInstallState(options);
-  const reportingState = useInfrastructureReportingState();
 
   const withPrivilegeEscalation = (command: string) => {
     if (!command.includes('| bash -s --')) return command;
@@ -157,7 +155,6 @@ export const useInfrastructureOperationsState = (
 
   return {
     ...installState,
-    ...reportingState,
     getPlatformUninstallCommand,
     getUninstallCommand,
     getUpgradeCommand,

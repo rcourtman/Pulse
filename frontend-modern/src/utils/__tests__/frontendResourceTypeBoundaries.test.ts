@@ -366,12 +366,7 @@ import pmgPresentationSource from '@/utils/pmgPresentation.ts?raw';
 import pmgThreatPresentationSource from '@/utils/pmgThreatPresentation.ts?raw';
 import pmgQueuePresentationSource from '@/utils/pmgQueuePresentation.ts?raw';
 import pmgServiceHealthBadgeSource from '@/components/PMG/ServiceHealthBadge.tsx?raw';
-import proxmoxSettingsPanelSource from '@/components/Settings/ProxmoxSettingsPanel.tsx?raw';
-import proxmoxConfiguredNodesTableSource from '@/components/Settings/ProxmoxConfiguredNodesTable.tsx?raw';
-import proxmoxDirectWorkspaceSource from '@/components/Settings/ProxmoxDirectWorkspace.tsx?raw';
-import proxmoxNodeModalStackSource from '@/components/Settings/ProxmoxNodeModalStack.tsx?raw';
 import proxmoxSettingsModelSource from '@/components/Settings/proxmoxSettingsModel.ts?raw';
-import proxmoxDirectWorkspaceStateSource from '@/components/Settings/useProxmoxDirectWorkspaceState.ts?raw';
 import infrastructureWorkspaceSource from '@/components/Settings/InfrastructureWorkspace.tsx?raw';
 import infrastructureWorkspaceModelSource from '@/components/Settings/infrastructureWorkspaceModel.ts?raw';
 import proxmoxSettingsPresentationSource from '@/utils/proxmoxSettingsPresentation.ts?raw';
@@ -382,7 +377,6 @@ import nodeModalModelSource from '@/components/Settings/nodeModalModel.ts?raw';
 import nodeModalMonitoringSectionSource from '@/components/Settings/NodeModalMonitoringSection.tsx?raw';
 import nodeModalSetupGuideSectionSource from '@/components/Settings/NodeModalSetupGuideSection.tsx?raw';
 import nodeModalStatusFooterSource from '@/components/Settings/NodeModalStatusFooter.tsx?raw';
-import nodeModalSource from '@/components/Settings/NodeModal.tsx?raw';
 import nodeModalStateSource from '@/components/Settings/useNodeModalState.ts?raw';
 import nodeModalPresentationSource from '@/utils/nodeModalPresentation.ts?raw';
 import cephPageSource from '@/pages/Ceph.tsx?raw';
@@ -3393,24 +3387,9 @@ describe('frontend resource type boundaries', () => {
     expect(pmgThreatPresentationSource).toContain('export function getPMGThreatPresentation');
     expect(pmgQueuePresentationSource).toContain('export function getPMGQueueTextClass');
     expect(pmgServiceHealthBadgeSource).toContain('getServiceHealthPresentation');
-    expect(proxmoxSettingsPanelSource).toContain('./ProxmoxDirectWorkspace');
-    expect(proxmoxSettingsPanelSource).not.toContain('const VARIANT_CONFIG: Record<NodeType');
-    expect(proxmoxSettingsPanelSource).not.toContain('const buildDiscoveryPrefillNode =');
-    expect(proxmoxDirectWorkspaceSource).toContain('./useProxmoxDirectWorkspaceState');
-    expect(proxmoxSettingsPanelSource).not.toContain('const openCreateNode = (type: NodeType) =>');
-    expect(proxmoxSettingsPanelSource).not.toContain('const openDiscoveredNode = (server: DiscoveredServer) =>');
-    expect(proxmoxConfiguredNodesTableSource).toContain('PveNodesTable');
-    expect(proxmoxConfiguredNodesTableSource).toContain('PbsNodesTable');
-    expect(proxmoxConfiguredNodesTableSource).toContain('PmgNodesTable');
-    expect(proxmoxNodeModalStackSource).toContain('PROXMOX_NODE_TYPES');
     expect(proxmoxSettingsModelSource).toContain(
       'export interface InfrastructurePlatformSettingsProps',
     );
-    expect(proxmoxDirectWorkspaceStateSource).toContain(
-      'export function useProxmoxDirectWorkspaceState',
-    );
-    expect(proxmoxDirectWorkspaceStateSource).toContain('getProxmoxVariantPresentation');
-    expect(proxmoxDirectWorkspaceStateSource).toContain('buildProxmoxDiscoveryPrefillNode');
     expect(proxmoxSettingsPresentationSource).toContain(
       'export const PROXMOX_VARIANT_PRESENTATION',
     );
@@ -3430,24 +3409,6 @@ describe('frontend resource type boundaries', () => {
     expect(infrastructureWorkspaceModelSource).toContain(
       'export function buildInfrastructureWorkspacePath',
     );
-    expect(nodeModalSource).toContain('getNodeProductName');
-    expect(nodeModalSource).toContain('@/components/Settings/NodeModalBasicInfoSection');
-    expect(nodeModalSource).toContain('@/components/Settings/NodeModalAuthenticationSection');
-    expect(nodeModalSource).toContain('@/components/Settings/NodeModalMonitoringSection');
-    expect(nodeModalSource).toContain('@/components/Settings/NodeModalStatusFooter');
-    expect(nodeModalSource).toContain('@/components/Settings/nodeModalModel');
-    expect(nodeModalSource).toContain('@/components/Settings/useNodeModalState');
-    expect(nodeModalSource).not.toContain('title="Basic information"');
-    expect(nodeModalSource).not.toContain('title="Authentication"');
-    expect(nodeModalSource).not.toContain('title="Monitoring coverage"');
-    expect(nodeModalSource).not.toContain('const getCleanFormData =');
-    expect(nodeModalSource).not.toContain('const nodeProductName =');
-    expect(nodeModalSource).not.toContain('const deriveNameFromHost =');
-    expect(nodeModalSource).not.toContain('const PVE_MANUAL_PERMISSION_COMMAND = `');
-    expect(nodeModalSource).not.toContain('const [quickSetupBootstrap, setQuickSetupBootstrap] =');
-    expect(nodeModalSource).not.toContain('const handleTestConnection = async () =>');
-    expect(nodeModalSource).not.toContain("testResult()?.status === 'success'");
-    expect(nodeModalSource).not.toContain("testResult()?.status === 'warning'");
     expect(nodeModalModelSource).toContain('export const deriveNameFromHost =');
     expect(nodeModalModelSource).toContain('export const PVE_MANUAL_PERMISSION_COMMAND = `');
     expect(nodeModalStateSource).toContain('export const useNodeModalState =');

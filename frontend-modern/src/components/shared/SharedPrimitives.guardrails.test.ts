@@ -129,7 +129,6 @@ import workloadsSummarySource from '@/components/Workloads/WorkloadsSummary.tsx?
 import resourceDetailDrawerOverviewSource from '@/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx?raw';
 import aiSettingsDialogsSource from '@/components/Settings/AISettingsDialogs.tsx?raw';
 import generalSettingsPanelSource from '@/components/Settings/GeneralSettingsPanel.tsx?raw';
-import proxmoxSettingsPanelSource from '@/components/Settings/ProxmoxSettingsPanel.tsx?raw';
 import reportingPanelSource from '@/components/Settings/ReportingPanel.tsx?raw';
 import updatesSettingsPanelSource from '@/components/Settings/UpdatesSettingsPanel.tsx?raw';
 
@@ -584,10 +583,6 @@ describe('shared primitive guardrails', () => {
     expect(calloutCardSource).toContain(
       "type CalloutTone = 'danger' | 'info' | 'success' | 'warning'",
     );
-    expect(proxmoxSettingsPanelSource).toContain('CalloutCard');
-    expect(proxmoxSettingsPanelSource).not.toContain(
-      'rounded-md border border-blue-200 bg-blue-50 px-4 py-3',
-    );
     expect(reportingPanelSource).toContain('CalloutCard');
     expect(reportingPanelSource).not.toContain('rounded-md border border-blue-200 bg-blue-50 p-6');
   });
@@ -647,7 +642,7 @@ describe('shared primitive guardrails', () => {
       'scopeSelfHostedBillingDestination',
     );
     expect(monitoredSystemLimitWarningBannerStateSource).toContain(
-      'SELF_HOSTED_PRO_BILLING_MONITORED_SYSTEM_INTENT',
+      'SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_INTENT',
     );
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('viewCapacityDestination');
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('handleUpgradeClick');

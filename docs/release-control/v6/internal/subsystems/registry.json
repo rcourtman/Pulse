@@ -202,19 +202,19 @@
       ]
     },
     {
+      "path": "frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/NodeCredentialSlot.tsx",
+      "rationale": "the inline node credential slot is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary",
+      "subsystems": [
+        "agent-lifecycle",
+        "api-contracts"
+      ]
+    },
+    {
       "path": "frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx",
       "rationale": "the general settings privacy panel is both a security/privacy control surface and a canonical settings-shell presentation boundary",
       "subsystems": [
         "frontend-primitives",
         "security-privacy"
-      ]
-    },
-    {
-      "path": "frontend-modern/src/components/Settings/InfrastructureOperationsController.tsx",
-      "rationale": "the infrastructure operations controller is both an agent fleet lifecycle control surface and an API token, lookup, assignment, and reporting/install contract boundary",
-      "subsystems": [
-        "agent-lifecycle",
-        "api-contracts"
       ]
     },
     {
@@ -231,14 +231,6 @@
       "subsystems": [
         "agent-lifecycle",
         "cloud-paid"
-      ]
-    },
-    {
-      "path": "frontend-modern/src/components/Settings/NodeModal.tsx",
-      "rationale": "the node setup modal render shell is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary",
-      "subsystems": [
-        "agent-lifecycle",
-        "api-contracts"
       ]
     },
     {
@@ -340,14 +332,6 @@
     {
       "path": "frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx",
       "rationale": "the shared infrastructure operations state hook is both an agent fleet lifecycle control surface and an API token, lookup, assignment, and reporting/install contract boundary",
-      "subsystems": [
-        "agent-lifecycle",
-        "api-contracts"
-      ]
-    },
-    {
-      "path": "frontend-modern/src/components/Settings/useInfrastructureReportingState.tsx",
-      "rationale": "the infrastructure reporting state hook is both an agent fleet lifecycle control surface and an API-backed assignment, reporting, and reconnect contract boundary",
       "subsystems": [
         "agent-lifecycle",
         "api-contracts"
@@ -602,20 +586,21 @@
         "frontend-modern/src/components/Infrastructure/deploy/ResultsStep.tsx",
         "frontend-modern/src/components/Settings/AgentProfilesPanel.tsx",
         "frontend-modern/src/components/Settings/ConfiguredNodeTables.tsx",
+        "frontend-modern/src/components/Settings/ConnectionDetailDrawer.tsx",
+        "frontend-modern/src/components/Settings/ConnectionEditor/AddressProbeStep.tsx",
+        "frontend-modern/src/components/Settings/ConnectionEditor/ConnectionEditor.tsx",
+        "frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/NodeCredentialSlot.tsx",
+        "frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/TrueNASCredentialSlot.tsx",
+        "frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/VMwareCredentialSlot.tsx",
+        "frontend-modern/src/components/Settings/ConnectionEditor/useConnectionEditor.ts",
         "frontend-modern/src/components/Settings/ConnectionsTable.tsx",
         "frontend-modern/src/components/Settings/connectionsTableModel.ts",
-        "frontend-modern/src/components/Settings/InfrastructureActiveRowDetails.tsx",
-        "frontend-modern/src/components/Settings/InfrastructureIgnoredRowDetails.tsx",
         "frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx",
-        "frontend-modern/src/components/Settings/InfrastructureInventorySection.tsx",
-        "frontend-modern/src/components/Settings/InfrastructureOperationsController.tsx",
         "frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx",
         "frontend-modern/src/components/Settings/infrastructureSettingsModel.ts",
-        "frontend-modern/src/components/Settings/InfrastructureStopMonitoringDialog.tsx",
         "frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx",
         "frontend-modern/src/components/Settings/infrastructureWorkspaceModel.ts",
         "frontend-modern/src/components/Settings/MonitoredSystemAdmissionPreview.tsx",
-        "frontend-modern/src/components/Settings/NodeModal.tsx",
         "frontend-modern/src/components/Settings/NodeModalAuthenticationSection.tsx",
         "frontend-modern/src/components/Settings/NodeModalBasicInfoSection.tsx",
         "frontend-modern/src/components/Settings/nodeModalModel.ts",
@@ -623,29 +608,18 @@
         "frontend-modern/src/components/Settings/NodeModalSetupGuideSection.tsx",
         "frontend-modern/src/components/Settings/NodeModalStatusFooter.tsx",
         "frontend-modern/src/components/Settings/platformConnectionsModel.ts",
-        "frontend-modern/src/components/Settings/PlatformConnectionsWorkspace.tsx",
-        "frontend-modern/src/components/Settings/ProxmoxConfiguredNodesTable.tsx",
-        "frontend-modern/src/components/Settings/ProxmoxDeleteNodeDialog.tsx",
-        "frontend-modern/src/components/Settings/ProxmoxDirectConnectionsCard.tsx",
-        "frontend-modern/src/components/Settings/ProxmoxDirectWorkspace.tsx",
-        "frontend-modern/src/components/Settings/ProxmoxDiscoveryResultsCard.tsx",
-        "frontend-modern/src/components/Settings/ProxmoxNodeModalStack.tsx",
         "frontend-modern/src/components/Settings/proxmoxSettingsModel.ts",
-        "frontend-modern/src/components/Settings/ProxmoxSettingsPanel.tsx",
         "frontend-modern/src/components/Settings/SettingsSectionNav.tsx",
-        "frontend-modern/src/components/Settings/TrueNASSettingsPanel.tsx",
         "frontend-modern/src/components/Settings/useAgentProfilesPanelState.ts",
+        "frontend-modern/src/components/Settings/useConnectionsLedger.ts",
         "frontend-modern/src/components/Settings/useInfrastructureConfiguredNodesState.ts",
         "frontend-modern/src/components/Settings/useInfrastructureDiscoveryRuntimeState.ts",
         "frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx",
         "frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx",
-        "frontend-modern/src/components/Settings/useInfrastructureReportingState.tsx",
         "frontend-modern/src/components/Settings/useInfrastructureSettingsState.ts",
         "frontend-modern/src/components/Settings/useNodeModalState.ts",
-        "frontend-modern/src/components/Settings/useProxmoxDirectWorkspaceState.ts",
         "frontend-modern/src/components/Settings/useTrueNASSettingsPanelState.ts",
         "frontend-modern/src/components/Settings/useVMwareSettingsPanelState.ts",
-        "frontend-modern/src/components/Settings/VMwareSettingsPanel.tsx",
         "frontend-modern/src/components/SetupWizard/SetupCompletionPanel.tsx",
         "frontend-modern/src/utils/agentCapabilityPresentation.ts",
         "frontend-modern/src/utils/agentInstallCommand.ts",
@@ -791,7 +765,6 @@
             "exact_files": [
               "frontend-modern/src/api/__tests__/agentProfiles.test.ts",
               "frontend-modern/src/components/Settings/__tests__/AgentProfilesPanel.test.tsx",
-              "frontend-modern/src/components/Settings/__tests__/monitoredSystemModelGuardrails.test.ts",
               "frontend-modern/src/utils/__tests__/agentProfilesPresentation.test.ts"
             ]
           },
@@ -826,7 +799,7 @@
             "label": "node setup/install command proof",
             "match_prefixes": [],
             "match_files": [
-              "frontend-modern/src/components/Settings/NodeModal.tsx",
+              "frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/NodeCredentialSlot.tsx",
               "frontend-modern/src/components/Settings/NodeModalAuthenticationSection.tsx",
               "frontend-modern/src/components/Settings/NodeModalBasicInfoSection.tsx",
               "frontend-modern/src/components/Settings/nodeModalModel.ts",
@@ -839,7 +812,8 @@
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
-              "frontend-modern/src/components/Settings/__tests__/NodeModal.guardrails.test.ts",
+              "frontend-modern/src/components/Settings/__tests__/InfrastructureWorkspace.test.tsx",
+              "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
               "frontend-modern/src/utils/__tests__/nodeModalPresentation.test.ts"
             ]
           },
@@ -874,23 +848,16 @@
             "label": "unified agent settings lifecycle proof",
             "match_prefixes": [],
             "match_files": [
-              "frontend-modern/src/components/Settings/InfrastructureActiveRowDetails.tsx",
-              "frontend-modern/src/components/Settings/InfrastructureIgnoredRowDetails.tsx",
               "frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx",
-              "frontend-modern/src/components/Settings/InfrastructureInventorySection.tsx",
-              "frontend-modern/src/components/Settings/InfrastructureOperationsController.tsx",
               "frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx",
-              "frontend-modern/src/components/Settings/InfrastructureStopMonitoringDialog.tsx",
               "frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx",
-              "frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx",
-              "frontend-modern/src/components/Settings/useInfrastructureReportingState.tsx"
+              "frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
               "frontend-modern/src/api/__tests__/agentProfiles.test.ts",
               "frontend-modern/src/api/__tests__/monitoring.test.ts",
-              "frontend-modern/src/components/Settings/__tests__/InfrastructureOperationsController.test.tsx",
               "frontend-modern/src/components/Settings/__tests__/InfrastructureOperationsModel.test.tsx"
             ]
           },
@@ -906,7 +873,6 @@
             "test_prefixes": [],
             "exact_files": [
               "frontend-modern/src/components/Settings/__tests__/ConnectionsTable.test.tsx",
-              "frontend-modern/src/components/Settings/__tests__/connectionsTableModel.test.ts",
               "frontend-modern/src/components/Settings/__tests__/InfrastructureWorkspace.test.tsx",
               "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts"
             ]
@@ -917,44 +883,37 @@
             "match_prefixes": [],
             "match_files": [
               "frontend-modern/src/components/Settings/ConfiguredNodeTables.tsx",
+              "frontend-modern/src/components/Settings/ConnectionDetailDrawer.tsx",
+              "frontend-modern/src/components/Settings/ConnectionEditor/AddressProbeStep.tsx",
+              "frontend-modern/src/components/Settings/ConnectionEditor/ConnectionEditor.tsx",
+              "frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/NodeCredentialSlot.tsx",
+              "frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/TrueNASCredentialSlot.tsx",
+              "frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/VMwareCredentialSlot.tsx",
+              "frontend-modern/src/components/Settings/ConnectionEditor/useConnectionEditor.ts",
               "frontend-modern/src/components/Settings/infrastructureSettingsModel.ts",
               "frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx",
               "frontend-modern/src/components/Settings/infrastructureWorkspaceModel.ts",
               "frontend-modern/src/components/Settings/MonitoredSystemAdmissionPreview.tsx",
               "frontend-modern/src/components/Settings/platformConnectionsModel.ts",
-              "frontend-modern/src/components/Settings/PlatformConnectionsWorkspace.tsx",
-              "frontend-modern/src/components/Settings/ProxmoxConfiguredNodesTable.tsx",
-              "frontend-modern/src/components/Settings/ProxmoxDeleteNodeDialog.tsx",
-              "frontend-modern/src/components/Settings/ProxmoxDirectConnectionsCard.tsx",
-              "frontend-modern/src/components/Settings/ProxmoxDirectWorkspace.tsx",
-              "frontend-modern/src/components/Settings/ProxmoxDiscoveryResultsCard.tsx",
-              "frontend-modern/src/components/Settings/ProxmoxNodeModalStack.tsx",
               "frontend-modern/src/components/Settings/proxmoxSettingsModel.ts",
-              "frontend-modern/src/components/Settings/ProxmoxSettingsPanel.tsx",
               "frontend-modern/src/components/Settings/SettingsSectionNav.tsx",
-              "frontend-modern/src/components/Settings/TrueNASSettingsPanel.tsx",
+              "frontend-modern/src/components/Settings/useConnectionsLedger.ts",
               "frontend-modern/src/components/Settings/useInfrastructureConfiguredNodesState.ts",
               "frontend-modern/src/components/Settings/useInfrastructureDiscoveryRuntimeState.ts",
               "frontend-modern/src/components/Settings/useInfrastructureSettingsState.ts",
-              "frontend-modern/src/components/Settings/useProxmoxDirectWorkspaceState.ts",
               "frontend-modern/src/components/Settings/useTrueNASSettingsPanelState.ts",
               "frontend-modern/src/components/Settings/useVMwareSettingsPanelState.ts",
-              "frontend-modern/src/components/Settings/VMwareSettingsPanel.tsx",
               "frontend-modern/src/utils/clusterEndpointPresentation.ts",
               "frontend-modern/src/utils/proxmoxSettingsPresentation.ts"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
-              "frontend-modern/src/components/Settings/__tests__/InfrastructureOperationsController.test.tsx",
               "frontend-modern/src/components/Settings/__tests__/InfrastructureWorkspace.test.tsx",
-              "frontend-modern/src/components/Settings/__tests__/monitoredSystemModelGuardrails.test.ts",
-              "frontend-modern/src/components/Settings/__tests__/PlatformConnectionsWorkspace.test.tsx",
               "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
-              "frontend-modern/src/components/Settings/__tests__/TrueNASSettingsPanel.test.tsx",
               "frontend-modern/src/components/Settings/__tests__/useTrueNASSettingsPanelState.test.tsx",
               "frontend-modern/src/components/Settings/__tests__/useVMwareSettingsPanelState.test.tsx",
-              "frontend-modern/src/components/Settings/__tests__/VMwareSettingsPanel.test.tsx",
+              "frontend-modern/src/components/Settings/ConnectionEditor/__tests__/ConnectionEditor.test.tsx",
               "frontend-modern/src/utils/__tests__/clusterEndpointPresentation.test.ts",
               "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
               "frontend-modern/src/utils/__tests__/proxmoxSettingsPresentation.test.ts",
@@ -977,7 +936,6 @@
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
-              "frontend-modern/src/components/Settings/__tests__/monitoredSystemModelGuardrails.test.ts",
               "frontend-modern/src/utils/__tests__/agentCapabilityPresentation.test.ts",
               "frontend-modern/src/utils/__tests__/agentProfileSuggestionPresentation.test.ts",
               "frontend-modern/src/utils/__tests__/configuredNodeCapabilityPresentation.test.ts",
@@ -1106,7 +1064,6 @@
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
-              "frontend-modern/src/components/Settings/__tests__/monitoredSystemModelGuardrails.test.ts",
               "frontend-modern/src/utils/__tests__/aiChatPresentation.test.ts",
               "frontend-modern/src/utils/__tests__/aiControlLevelPresentation.test.ts",
               "frontend-modern/src/utils/__tests__/aiExplorePresentation.test.ts",
@@ -1275,7 +1232,6 @@
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
-              "frontend-modern/src/components/Settings/__tests__/monitoredSystemModelGuardrails.test.ts",
               "frontend-modern/src/utils/__tests__/alertActivationPresentation.test.ts",
               "frontend-modern/src/utils/__tests__/alertAdministrationPresentation.test.ts",
               "frontend-modern/src/utils/__tests__/alertBulkEditPresentation.test.ts",
@@ -1391,9 +1347,8 @@
       "owned_files": [
         "frontend-modern/src/components/Settings/APITokenManager.tsx",
         "frontend-modern/src/components/Settings/apiTokenManagerModel.ts",
-        "frontend-modern/src/components/Settings/InfrastructureOperationsController.tsx",
+        "frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/NodeCredentialSlot.tsx",
         "frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx",
-        "frontend-modern/src/components/Settings/NodeModal.tsx",
         "frontend-modern/src/components/Settings/NodeModalAuthenticationSection.tsx",
         "frontend-modern/src/components/Settings/NodeModalBasicInfoSection.tsx",
         "frontend-modern/src/components/Settings/nodeModalModel.ts",
@@ -1405,7 +1360,6 @@
         "frontend-modern/src/components/Settings/useInfrastructureDiscoveryRuntimeState.ts",
         "frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx",
         "frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx",
-        "frontend-modern/src/components/Settings/useInfrastructureReportingState.tsx",
         "frontend-modern/src/components/Settings/useNodeModalState.ts",
         "frontend-modern/src/types/api.ts",
         "frontend-modern/src/utils/agentInstallCommand.ts",
@@ -1593,7 +1547,7 @@
             "label": "node setup client consumer proof",
             "match_prefixes": [],
             "match_files": [
-              "frontend-modern/src/components/Settings/NodeModal.tsx",
+              "frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/NodeCredentialSlot.tsx",
               "frontend-modern/src/components/Settings/NodeModalAuthenticationSection.tsx",
               "frontend-modern/src/components/Settings/NodeModalBasicInfoSection.tsx",
               "frontend-modern/src/components/Settings/nodeModalModel.ts",
@@ -1606,7 +1560,8 @@
             "test_prefixes": [],
             "exact_files": [
               "frontend-modern/src/api/__tests__/nodes.test.ts",
-              "frontend-modern/src/components/Settings/__tests__/NodeModal.guardrails.test.ts",
+              "frontend-modern/src/components/Settings/__tests__/InfrastructureWorkspace.test.tsx",
+              "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
               "frontend-modern/src/types/api.ts"
             ]
           },
@@ -1658,13 +1613,11 @@
             "label": "infrastructure operations API proof",
             "match_prefixes": [],
             "match_files": [
-              "frontend-modern/src/components/Settings/InfrastructureOperationsController.tsx",
               "frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx",
               "frontend-modern/src/components/Settings/useInfrastructureConfiguredNodesState.ts",
               "frontend-modern/src/components/Settings/useInfrastructureDiscoveryRuntimeState.ts",
               "frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx",
-              "frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx",
-              "frontend-modern/src/components/Settings/useInfrastructureReportingState.tsx"
+              "frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
@@ -1672,7 +1625,6 @@
               "frontend-modern/src/api/__tests__/agentProfiles.test.ts",
               "frontend-modern/src/api/__tests__/monitoring.test.ts",
               "frontend-modern/src/api/__tests__/security.test.ts",
-              "frontend-modern/src/components/Settings/__tests__/InfrastructureOperationsController.test.tsx",
               "frontend-modern/src/components/Settings/__tests__/InfrastructureOperationsModel.test.tsx"
             ]
           },
@@ -1726,6 +1678,7 @@
         "frontend-modern/src/pages/CloudPricing.tsx",
         "frontend-modern/src/pages/HostedSignup.tsx",
         "frontend-modern/src/pages/PricingHandoff.tsx",
+        "frontend-modern/src/pages/RuntimeHome.tsx",
         "frontend-modern/src/useAppRuntimeState.ts",
         "frontend-modern/src/utils/apiClient.ts",
         "frontend-modern/src/utils/cloudPlans.ts",
@@ -2237,8 +2190,6 @@
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
-              "frontend-modern/src/components/Settings/__tests__/TrueNASSettingsPanel.test.tsx",
-              "frontend-modern/src/components/Settings/__tests__/VMwareSettingsPanel.test.tsx",
               "frontend-modern/src/utils/__tests__/monitoredSystemPresentation.test.ts",
               "tests/integration/tests/21-truenas-settings-platform-connections.spec.ts",
               "tests/integration/tests/22-vmware-settings-platform-connections.spec.ts"
@@ -2255,7 +2206,6 @@
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
-              "frontend-modern/src/components/Settings/__tests__/monitoredSystemModelGuardrails.test.ts",
               "frontend-modern/src/utils/__tests__/licensePresentation.test.ts",
               "frontend-modern/src/utils/__tests__/upgradePresentation.test.ts"
             ]
@@ -2350,6 +2300,19 @@
               "frontend-modern/src/pages/__tests__/HostedSignup.test.tsx",
               "frontend-modern/src/pages/__tests__/PricingHandoff.test.tsx",
               "frontend-modern/src/utils/__tests__/pricingHandoff.test.ts"
+            ]
+          },
+          {
+            "id": "runtime-home-landing",
+            "label": "hosted runtime landing proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/pages/RuntimeHome.tsx"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/pages/__tests__/RuntimeHome.test.tsx"
             ]
           },
           {
@@ -2984,7 +2947,6 @@
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
-              "frontend-modern/src/components/Settings/__tests__/monitoredSystemModelGuardrails.test.ts",
               "frontend-modern/src/utils/__tests__/dashboardEmptyStatePresentation.test.ts",
               "frontend-modern/src/utils/__tests__/dashboardGuestPresentation.test.ts",
               "frontend-modern/src/utils/__tests__/dashboardKpiPresentation.test.ts",
@@ -3694,7 +3656,6 @@
             "test_prefixes": [],
             "exact_files": [
               "frontend-modern/src/api/__tests__/orgs.test.ts",
-              "frontend-modern/src/components/Settings/__tests__/monitoredSystemModelGuardrails.test.ts",
               "frontend-modern/src/components/Settings/__tests__/OrganizationAccessPanel.test.tsx",
               "frontend-modern/src/components/Settings/__tests__/OrganizationOverviewPanel.test.tsx",
               "frontend-modern/src/components/Settings/__tests__/OrganizationSharingPanel.test.tsx",
@@ -3799,7 +3760,6 @@
             "test_prefixes": [],
             "exact_files": [
               "frontend-modern/src/components/Brand/__tests__/PulsePatrolLogo.test.tsx",
-              "frontend-modern/src/components/Settings/__tests__/monitoredSystemModelGuardrails.test.ts",
               "frontend-modern/src/pages/__tests__/AIIntelligence.test.tsx",
               "frontend-modern/src/stores/__tests__/aiIntelligence.test.ts",
               "frontend-modern/src/stores/__tests__/aiIntelligenceSummaryModel.test.ts",
