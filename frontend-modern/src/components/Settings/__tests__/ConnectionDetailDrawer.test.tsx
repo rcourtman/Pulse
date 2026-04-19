@@ -91,6 +91,44 @@ describe('ConnectionDetailDrawer', () => {
     expect(onEdit.mock.calls[0][0]).toMatchObject({ id: 'pve:tower', type: 'pve' });
   });
 
+  it('shows Edit for vmware connections', () => {
+    const onEdit = vi.fn();
+    render(() => (
+      <ConnectionDetailDrawer
+        connection={() =>
+          pveConnection({ id: 'vmware:abc', type: 'vmware', name: 'vcsa' })
+        }
+        onClose={() => {}}
+        onMutated={() => {}}
+        onEdit={onEdit}
+      />
+    ));
+
+    const editButton = screen.getByRole('button', { name: 'Edit' });
+    fireEvent.click(editButton);
+    expect(onEdit).toHaveBeenCalledTimes(1);
+    expect(onEdit.mock.calls[0][0]).toMatchObject({ id: 'vmware:abc', type: 'vmware' });
+  });
+
+  it('shows Edit for truenas connections', () => {
+    const onEdit = vi.fn();
+    render(() => (
+      <ConnectionDetailDrawer
+        connection={() =>
+          pveConnection({ id: 'truenas:xyz', type: 'truenas', name: 'tower' })
+        }
+        onClose={() => {}}
+        onMutated={() => {}}
+        onEdit={onEdit}
+      />
+    ));
+
+    const editButton = screen.getByRole('button', { name: 'Edit' });
+    fireEvent.click(editButton);
+    expect(onEdit).toHaveBeenCalledTimes(1);
+    expect(onEdit.mock.calls[0][0]).toMatchObject({ id: 'truenas:xyz', type: 'truenas' });
+  });
+
   it('omits Edit for agent connections (edit is not yet supported)', () => {
     render(() => (
       <ConnectionDetailDrawer

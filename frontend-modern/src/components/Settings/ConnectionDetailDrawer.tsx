@@ -10,7 +10,13 @@ interface ConnectionDetailDrawerProps {
   onEdit?: (connection: Connection) => void;
 }
 
-const EDITABLE_CONNECTION_TYPES: readonly Connection['type'][] = ['pve', 'pbs', 'pmg'];
+const EDITABLE_CONNECTION_TYPES: readonly Connection['type'][] = [
+  'pve',
+  'pbs',
+  'pmg',
+  'vmware',
+  'truenas',
+];
 
 const REMOVE_CONFIRM_TIMEOUT_MS = 4000;
 

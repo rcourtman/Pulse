@@ -9,6 +9,7 @@ import {
   formLabel,
 } from '@/components/shared/Form';
 import { MonitoredSystemAdmissionPreview } from '../../MonitoredSystemAdmissionPreview';
+import type { VMwareConnection } from '@/api/vmware';
 import type { VMwareSettingsPanelState } from '../../useVMwareSettingsPanelState';
 
 const buttonClass =
@@ -18,6 +19,7 @@ const primaryButtonClass =
 
 export interface VMwareCredentialSlotProps {
   state: VMwareSettingsPanelState;
+  editingConnection?: VMwareConnection | null;
   onCancel: () => void;
   onSaved: () => void;
 }
@@ -27,7 +29,11 @@ export const VMwareCredentialSlot: Component<VMwareCredentialSlotProps> = (props
 
   onMount(() => {
     if (!props.state.dialogOpen()) {
-      props.state.openCreateDialog();
+      if (props.editingConnection) {
+        props.state.openEditDialog(props.editingConnection);
+      } else {
+        props.state.openCreateDialog();
+      }
     }
     primed = true;
   });

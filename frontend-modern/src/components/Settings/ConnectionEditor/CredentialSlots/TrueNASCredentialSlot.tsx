@@ -8,6 +8,7 @@ import {
   formSelect,
 } from '@/components/shared/Form';
 import { MonitoredSystemAdmissionPreview } from '../../MonitoredSystemAdmissionPreview';
+import type { TrueNASConnection } from '@/api/truenas';
 import type { TrueNASSettingsPanelState } from '../../useTrueNASSettingsPanelState';
 
 const buttonClass =
@@ -17,6 +18,7 @@ const primaryButtonClass =
 
 export interface TrueNASCredentialSlotProps {
   state: TrueNASSettingsPanelState;
+  editingConnection?: TrueNASConnection | null;
   onCancel: () => void;
   onSaved: () => void;
 }
@@ -26,7 +28,11 @@ export const TrueNASCredentialSlot: Component<TrueNASCredentialSlotProps> = (pro
 
   onMount(() => {
     if (!props.state.dialogOpen()) {
-      props.state.openCreateDialog();
+      if (props.editingConnection) {
+        props.state.openEditDialog(props.editingConnection);
+      } else {
+        props.state.openCreateDialog();
+      }
     }
     primed = true;
   });

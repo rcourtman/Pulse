@@ -10,6 +10,8 @@ import { NodeCredentialSlot } from './ConnectionEditor/CredentialSlots/NodeCrede
 import { TrueNASCredentialSlot } from './ConnectionEditor/CredentialSlots/TrueNASCredentialSlot';
 import { VMwareCredentialSlot } from './ConnectionEditor/CredentialSlots/VMwareCredentialSlot';
 import type { Connection, ConnectionType } from '@/api/connections';
+import type { TrueNASConnection } from '@/api/truenas';
+import type { VMwareConnection } from '@/api/vmware';
 import type { NodeConfigWithStatus } from '@/types/nodes';
 import { InfrastructureInstallerSection } from './InfrastructureInstallerSection';
 import {
@@ -62,6 +64,21 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
             : null;
     if (!accessor) return null;
     return accessor().find((node) => node.name === connection.name) ?? null;
+  };
+
+  const aggregatorSuffix = (id: string): string => {
+    const colonIndex = id.indexOf(':');
+    return colonIndex === -1 ? id : id.slice(colonIndex + 1);
+  };
+
+  const findEditableVMware = (connection: Connection): VMwareConnection | null => {
+    const suffix = aggregatorSuffix(connection.id);
+    return props.vmwareSettings.connections().find((conn) => conn.id === suffix) ?? null;
+  };
+
+  const findEditableTrueNAS = (connection: Connection): TrueNASConnection | null => {
+    const suffix = aggregatorSuffix(connection.id);
+    return props.trueNASSettings.connections().find((conn) => conn.id === suffix) ?? null;
   };
 
   // Redirect legacy deep links and pre-select the matching type in the editor.
@@ -182,8 +199,54 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
         <Match when={mode() === 'edit' && editingConnection()}>
           {(accessor) => {
             const connection = accessor();
-            const editingNode = findEditableNode(connection);
-            if (!editingNode) {
+            const editableSlot = (() => {
+              switch (connection.type) {
+                case 'pve':
+                case 'pbs':
+                case 'pmg': {
+                  const node = findEditableNode(connection);
+                  return node
+                    ? { kind: 'node' as const, render: () => renderNodeSlot(connection.type as 'pve' | 'pbs' | 'pmg', node) }
+                    : null;
+                }
+                case 'vmware': {
+                  const vmware = findEditableVMware(connection);
+                  return vmware
+                    ? {
+                        kind: 'vmware' as const,
+                        render: () => (
+                          <VMwareCredentialSlot
+                            state={props.vmwareSettings}
+                            editingConnection={vmware}
+                            onCancel={exitEditMode}
+                            onSaved={handleEditSaved}
+                          />
+                        ),
+                      }
+                    : null;
+                }
+                case 'truenas': {
+                  const truenas = findEditableTrueNAS(connection);
+                  return truenas
+                    ? {
+                        kind: 'truenas' as const,
+                        render: () => (
+                          <TrueNASCredentialSlot
+                            state={props.trueNASSettings}
+                            editingConnection={truenas}
+                            onCancel={exitEditMode}
+                            onSaved={handleEditSaved}
+                          />
+                        ),
+                      }
+                    : null;
+                }
+                default:
+                  return null;
+              }
+            })();
+
+            if (!editableSlot) {
               return (
                 <div class="space-y-4">
                   <div class="flex items-center justify-between gap-3">
@@ -227,10 +290,7 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
                 </div>
 
                 <div class="rounded-lg border border-border bg-surface p-4">
-                  {renderNodeSlot(
-                    connection.type as 'pve' | 'pbs' | 'pmg',
-                    editingNode,
-                  )}
+                  {editableSlot.render()}
                 </div>
               </div>
             );
