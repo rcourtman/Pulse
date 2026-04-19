@@ -306,7 +306,7 @@ describe('ProLicensePanel', () => {
       ),
     ).toBeInTheDocument();
     expect(screen.queryByText('Included Monitored Systems')).not.toBeInTheDocument();
-    expect(screen.getByText('Max Guests')).toBeInTheDocument();
+    expect(screen.getByText('Guest Capacity')).toBeInTheDocument();
     expect(screen.getByText('Core Monitoring')).toBeInTheDocument();
     expect(screen.queryByText('Monitored Systems')).not.toBeInTheDocument();
     expect(screen.queryByText('Capacity Status')).not.toBeInTheDocument();
@@ -363,7 +363,7 @@ describe('ProLicensePanel', () => {
       ).toBeInTheDocument();
       expect(screen.queryByText('Capacity Status')).not.toBeInTheDocument();
       expect(screen.queryByText('Included Monitored Systems')).not.toBeInTheDocument();
-      expect(screen.getByText('Max Guests')).toBeInTheDocument();
+      expect(screen.getByText('Guest Capacity')).toBeInTheDocument();
       expect(screen.queryByText('Monitoring capacity')).not.toBeInTheDocument();
       expect(screen.queryByRole('tab', { name: 'Usage' })).not.toBeInTheDocument();
       expect(screen.getAllByText('Unlimited').length).toBeGreaterThan(0);
@@ -371,6 +371,35 @@ describe('ProLicensePanel', () => {
 
       cleanup();
     }
+  });
+
+  it('uses shared current-plan metadata for uncapped retail self-hosted tiers', async () => {
+    mockEntitlements = {
+      capabilities: ['relay', 'mobile_app', 'push_notifications', 'ai_patrol', 'ai_autofix'],
+      limits: [],
+      subscription_state: 'active',
+      upgrade_reasons: [],
+      tier: 'pro',
+      plan_version: 'pro_monthly',
+      licensed_email: 'owner@example.com',
+      trial_eligible: false,
+    };
+
+    renderPanel();
+
+    await waitFor(() => {
+      expect(screen.getByText('Metric History')).toBeInTheDocument();
+    });
+
+    expect(screen.getByText('Core Monitoring')).toBeInTheDocument();
+    expect(screen.getByText('Metric History')).toBeInTheDocument();
+    expect(screen.getByText('Included Extras')).toBeInTheDocument();
+    expect(screen.getByText('90 days')).toBeInTheDocument();
+    expect(screen.getByText('AI operations and advanced admin')).toBeInTheDocument();
+    expect(screen.queryByText('Guest Capacity')).not.toBeInTheDocument();
+    expect(screen.queryByText('Included Monitored Systems')).not.toBeInTheDocument();
+    expect(screen.queryByText('Monitoring capacity')).not.toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'Usage' })).not.toBeInTheDocument();
   });
 
   it('shows continuity verification while a bounded fallback migration is still pending', async () => {

@@ -1214,7 +1214,12 @@ adjacency must come from the shared self-hosted plan-definition owner rather
 than page-local strings. That owner must also keep Community, Relay, and Pro
 framed as unlimited core monitoring plus their bundle-specific extras rather
 than drifting back to bounded monitored-system sales copy, vague `systems`, or
-device-style language. Pro+ may appear only as a legacy continuity tier.
+device-style language. The same shared owner must also provide the billing
+surface bundle summary and metric-history facts for current uncapped
+self-hosted tiers, so `commercialBillingModel.ts` and
+`useProLicensePanelState.ts` do not regress back to legacy guest-capacity or
+meter-style entitlement fields on retail Community, Relay, or Pro plans. Pro+
+may appear only as a legacy continuity tier.
 The shared license presentation owner also holds self-hosted Pro settings
 trial-ended notice copy for `ProLicensePlanSection.tsx`; that surface must
 consume canonical helper notices instead of carrying inline upgrade copy or

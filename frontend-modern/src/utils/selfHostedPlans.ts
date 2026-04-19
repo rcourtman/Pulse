@@ -6,6 +6,7 @@ export interface SelfHostedPlanDefinition {
   price: string;
   subline: string;
   metricHistoryDays: number;
+  billingExtrasSummary: string;
   highlights: readonly string[];
 }
 
@@ -44,6 +45,7 @@ export const SELF_HOSTED_PLAN_DEFINITIONS: readonly SelfHostedPlanDefinition[] =
     price: 'Free forever',
     subline: 'Unlimited self-hosted monitoring',
     metricHistoryDays: 7,
+    billingExtrasSummary: 'Patrol, alerts, and OIDC',
     highlights: [
       'Real-time monitoring',
       'Unlimited self-hosted monitoring',
@@ -61,6 +63,7 @@ export const SELF_HOSTED_PLAN_DEFINITIONS: readonly SelfHostedPlanDefinition[] =
     price: '$4.99/month',
     subline: 'or $39/year',
     metricHistoryDays: 14,
+    billingExtrasSummary: 'Remote access, mobile, and push',
     highlights: [
       'Everything in Community',
       'Remote access via Relay',
@@ -76,6 +79,7 @@ export const SELF_HOSTED_PLAN_DEFINITIONS: readonly SelfHostedPlanDefinition[] =
     price: '$8.99/month',
     subline: 'or $79/year',
     metricHistoryDays: 90,
+    billingExtrasSummary: 'AI operations and advanced admin',
     highlights: [
       'Everything in Relay',
       'Patrol Auto-Fix & investigation',
@@ -94,6 +98,22 @@ export const SELF_HOSTED_PLAN_BY_TIER: Record<SelfHostedTierKey, SelfHostedPlanD
   relay: SELF_HOSTED_PLAN_DEFINITIONS[1],
   pro: SELF_HOSTED_PLAN_DEFINITIONS[2],
 };
+
+export function getSelfHostedPlanDefinitionForBillingTier(
+  tier?: string | null,
+): SelfHostedPlanDefinition | null {
+  switch ((tier || '').trim().toLowerCase()) {
+    case 'community':
+    case 'free':
+      return SELF_HOSTED_PLAN_BY_TIER.community;
+    case 'relay':
+      return SELF_HOSTED_PLAN_BY_TIER.relay;
+    case 'pro':
+      return SELF_HOSTED_PLAN_BY_TIER.pro;
+    default:
+      return null;
+  }
+}
 
 export const SELF_HOSTED_COMMERCIAL_PRESENTATION: SelfHostedCommercialPresentation = {
   pageTitle: 'Pricing',

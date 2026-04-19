@@ -48,6 +48,7 @@ import {
   type SelfHostedBillingSection,
 } from '@/utils/pricingHandoff';
 import { buildSelfHostedCommercialPlanModel } from '@/utils/commercialBillingModel';
+import { getSelfHostedPlanDefinitionForBillingTier } from '@/utils/selfHostedPlans';
 import {
   buildMonitoredSystemCapacitySectionModel,
   getMonitoredSystemLimitCapacityStatusSummary,
@@ -328,6 +329,18 @@ export function useProLicensePanelState() {
   const monitoredSystemCapacityPosture = createMemo(() =>
     resolveMonitoredSystemCapacityStatus(monitoredSystemCapacity(), monitoredSystemLimitStatus()),
   );
+  const currentRetailPlanDefinition = createMemo(() => {
+    if (monitoredSystemContinuity()) {
+      return null;
+    }
+    if (uncappedGrandfatheredPlan()) {
+      return null;
+    }
+    if ((monitoredSystemCapacityPosture()?.limit ?? 0) > 0) {
+      return null;
+    }
+    return getSelfHostedPlanDefinitionForBillingTier(entitlements()?.tier);
+  });
   const monitoredSystemContinuityNotice = createMemo(() =>
     getMonitoredSystemContinuityNotice(
       monitoredSystemContinuity(),
@@ -437,6 +450,16 @@ export function useProLicensePanelState() {
     const state = subscriptionState();
     return state === 'active' || state === 'trial' || state === 'grace';
   });
+  const showGuestCapacity = createMemo(() => {
+    if (currentRetailPlanDefinition()) {
+      return false;
+    }
+    if (uncappedGrandfatheredPlan()) {
+      return true;
+    }
+    const guestLimit = limitStatus('max_guests')?.limit;
+    return typeof guestLimit === 'number' && guestLimit > 0;
+  });
 
   const commercialPlanModel = createMemo(() =>
     buildSelfHostedCommercialPlanModel({
@@ -453,10 +476,12 @@ export function useProLicensePanelState() {
         limitStatus('max_monitored_systems')!.limit > 0
           ? limitStatus('max_monitored_systems')!.limit
           : 'Unlimited',
-      maxGuests:
+      guestCapacity:
         typeof limitStatus('max_guests')?.limit === 'number' && limitStatus('max_guests')!.limit > 0
           ? limitStatus('max_guests')!.limit
           : 'Unlimited',
+      retailPlanDefinition: currentRetailPlanDefinition(),
+      showGuestCapacity: showGuestCapacity(),
       monitoredSystemContinuity: monitoredSystemContinuity() ?? null,
       continuityCapturedAt: continuityCapturedAt(),
     }),

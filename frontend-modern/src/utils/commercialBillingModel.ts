@@ -1,5 +1,6 @@
 import type { LicenseStatus } from '@/api/license';
 import type { MonitoredSystemContinuityStatus } from '@/api/license';
+import type { SelfHostedPlanDefinition } from '@/utils/selfHostedPlans';
 
 export interface CommercialStatValue {
   label: string;
@@ -32,7 +33,12 @@ export interface SelfHostedCommercialModelInput {
   monitoredSystemsSummary: string | number;
   capacityStatusSummary: string | number;
   maxMonitoredSystems: string | number;
-  maxGuests: string | number;
+  guestCapacity: string | number;
+  retailPlanDefinition?: Pick<
+    SelfHostedPlanDefinition,
+    'billingExtrasSummary' | 'metricHistoryDays'
+  > | null;
+  showGuestCapacity?: boolean;
   monitoredSystemContinuity?: MonitoredSystemContinuityStatus | null;
   continuityCapturedAt?: string;
 }
@@ -57,110 +63,138 @@ const asUnlimitedLimit = (value?: number) =>
 const hasFiniteSelfHostedLimit = (value: string | number) =>
   typeof value === 'number' ? value > 0 : value.trim().toLowerCase() !== 'unlimited';
 
+const buildSelfHostedBaseDetails = (
+  input: SelfHostedCommercialModelInput,
+): CommercialPlanViewModel['details'] => [
+  {
+    label: 'Tier',
+    value: input.tierLabel,
+  },
+  {
+    label: 'Licensed Email',
+    value: input.licensedEmail || 'Not available',
+  },
+  ...(input.planTerms
+    ? [
+        {
+          label: 'Plan Terms',
+          value: input.planTerms,
+        },
+      ]
+    : []),
+  {
+    label: 'Expires',
+    value: input.expires,
+  },
+  {
+    label: 'Days Remaining',
+    value: input.daysRemaining,
+  },
+];
+
 export const buildSelfHostedCommercialPlanModel = (
   input: SelfHostedCommercialModelInput,
-): CommercialPlanViewModel => ({
-  summary:
-    !input.monitoredSystemContinuity && !hasFiniteSelfHostedLimit(input.maxMonitoredSystems)
-      ? [
-          {
-            label: 'Core Monitoring',
-            value: 'Unlimited',
-          },
-          {
-            label: 'Plan Status',
-            value: input.statusLabel,
-          },
-          {
-            label: 'Guests',
-            value: input.maxGuests,
-          },
-        ]
-      : [
-          {
-            label: 'Monitored Systems',
-            value: input.monitoredSystemsSummary,
-          },
-          {
-            label: 'Capacity Status',
-            value: input.capacityStatusSummary,
-          },
-          {
-            label: 'Plan Status',
-            value: input.statusLabel,
-          },
-        ],
-  details: [
-    {
-      label: 'Tier',
-      value: input.tierLabel,
-    },
-    {
-      label: 'Licensed Email',
-      value: input.licensedEmail || 'Not available',
-    },
-    ...(input.planTerms
-      ? [
-          {
-            label: 'Plan Terms',
-            value: input.planTerms,
-          },
-        ]
-      : []),
-    {
-      label: 'Expires',
-      value: input.expires,
-    },
-    {
-      label: 'Days Remaining',
-      value: input.daysRemaining,
-    },
-    ...(input.monitoredSystemContinuity
-      ? [
-          {
-            label: 'Plan Monitored System Limit',
-            value:
-              input.monitoredSystemContinuity.plan_limit > 0
-                ? input.monitoredSystemContinuity.plan_limit
-                : 'Unlimited',
-          },
-          {
-            label: 'Effective Monitored System Limit',
-            value:
-              input.monitoredSystemContinuity.effective_limit > 0
-                ? input.monitoredSystemContinuity.effective_limit
-                : 'Unlimited',
-          },
-          ...(typeof input.monitoredSystemContinuity.grandfathered_floor === 'number' &&
-          input.monitoredSystemContinuity.grandfathered_floor > 0
-            ? [
-                {
-                  label: 'Grandfathered Floor',
-                  value: input.monitoredSystemContinuity.grandfathered_floor,
-                },
-              ]
-            : []),
-          {
-            label: 'Continuity Capture',
-            value: input.monitoredSystemContinuity.capture_pending
-              ? 'Pending'
-              : input.continuityCapturedAt || 'Captured',
-          },
-        ]
-	      : hasFiniteSelfHostedLimit(input.maxMonitoredSystems)
-	        ? [
-	            {
-	              label: 'Included Monitored Systems',
-	              value: input.maxMonitoredSystems,
-	            },
-	          ]
-	        : []),
-    {
-      label: 'Max Guests',
-      value: input.maxGuests,
-    },
-  ],
-});
+): CommercialPlanViewModel => {
+  if (input.retailPlanDefinition) {
+    return {
+      summary: [
+        {
+          label: 'Core Monitoring',
+          value: 'Unlimited',
+        },
+        {
+          label: 'Metric History',
+          value: `${input.retailPlanDefinition.metricHistoryDays} days`,
+        },
+        {
+          label: 'Included Extras',
+          value: input.retailPlanDefinition.billingExtrasSummary,
+        },
+      ],
+      details: buildSelfHostedBaseDetails(input),
+    };
+  }
+
+  return {
+    summary:
+      !input.monitoredSystemContinuity && !hasFiniteSelfHostedLimit(input.maxMonitoredSystems)
+        ? [
+            {
+              label: 'Core Monitoring',
+              value: 'Unlimited',
+            },
+            ...(input.showGuestCapacity
+              ? [
+                  {
+                    label: 'Guest Capacity',
+                    value: input.guestCapacity,
+                  },
+                ]
+              : []),
+            {
+              label: 'Plan Status',
+              value: input.statusLabel,
+            },
+          ]
+        : [
+            {
+              label: 'Monitored Systems',
+              value: input.monitoredSystemsSummary,
+            },
+            {
+              label: 'Capacity Status',
+              value: input.capacityStatusSummary,
+            },
+            {
+              label: 'Plan Status',
+              value: input.statusLabel,
+            },
+          ],
+    details: [
+      ...buildSelfHostedBaseDetails(input),
+      ...(input.monitoredSystemContinuity
+        ? [
+            {
+              label: 'Plan Monitored System Limit',
+              value:
+                input.monitoredSystemContinuity.plan_limit > 0
+                  ? input.monitoredSystemContinuity.plan_limit
+                  : 'Unlimited',
+            },
+            {
+              label: 'Effective Monitored System Limit',
+              value:
+                input.monitoredSystemContinuity.effective_limit > 0
+                  ? input.monitoredSystemContinuity.effective_limit
+                  : 'Unlimited',
+            },
+            ...(typeof input.monitoredSystemContinuity.grandfathered_floor === 'number' &&
+            input.monitoredSystemContinuity.grandfathered_floor > 0
+              ? [
+                  {
+                    label: 'Grandfathered Floor',
+                    value: input.monitoredSystemContinuity.grandfathered_floor,
+                  },
+                ]
+              : []),
+            {
+              label: 'Continuity Capture',
+              value: input.monitoredSystemContinuity.capture_pending
+                ? 'Pending'
+                : input.continuityCapturedAt || 'Captured',
+            },
+          ]
+        : hasFiniteSelfHostedLimit(input.maxMonitoredSystems)
+          ? [
+              {
+                label: 'Included Monitored Systems',
+                value: input.maxMonitoredSystems,
+              },
+            ]
+          : []),
+    ],
+  };
+};
 
 export const buildHostedCommercialPlanModel = (
   input: HostedCommercialModelInput,
