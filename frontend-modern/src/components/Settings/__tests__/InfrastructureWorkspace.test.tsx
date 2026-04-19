@@ -333,12 +333,35 @@ describe('InfrastructureWorkspace', () => {
     await waitFor(() => expect(screen.getByTestId('install-section')).toBeInTheDocument());
   });
 
-  it('redirects legacy truenas deep link and pre-selects the TrueNAS credential slot', async () => {
+  it('opens the canonical query onboarding route and pre-selects the agent credential slot', async () => {
+    mockSearch = '?add=agent';
+    renderWorkspace();
+
+    expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure', { replace: true });
+    await waitFor(() => expect(screen.getByTestId('install-section')).toBeInTheDocument());
+  });
+
+  it('opens the canonical query onboarding route for platform picking without pre-selecting a type', async () => {
+    mockSearch = '?add=pick';
+    renderWorkspace();
+
+    expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure', { replace: true });
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Probe address/i })).toBeInTheDocument();
+    });
+    expect(screen.queryByTestId('install-section')).toBeNull();
+  });
+
+  it('keeps legacy platform-management paths out of add mode', async () => {
     mockPathname = '/settings/infrastructure/platforms/truenas';
     renderWorkspace();
 
     expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure', { replace: true });
-    await waitFor(() => expect(screen.getByTestId('truenas-section')).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { name: 'Monitored systems' })).toBeInTheDocument(),
+    );
+    expect(screen.queryByTestId('truenas-section')).toBeNull();
+    expect(screen.queryByRole('button', { name: /Probe address/i })).toBeNull();
   });
 
   it('hides Add infrastructure and the add drawer in read-only mode', () => {

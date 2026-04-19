@@ -803,7 +803,7 @@ describe('InfrastructureOperationsController token generation', () => {
     expect(downloadedBlob).toBeDefined();
     const content = await downloadedBlob!.text();
     expect(content).toContain('Canonical install workspace:');
-    expect(content).toContain('/settings/infrastructure/install');
+    expect(content).toContain('/settings/infrastructure?add=agent');
     expect(content).toContain(
       'Pulse prepares the first-host install token from setup so you can move straight to the generated Unified Agent install commands.',
     );
@@ -1286,7 +1286,7 @@ describe('InfrastructureOperationsController managed agents table', () => {
     });
     fireEvent.click(openPlatformConnectionsButton);
 
-    expect(navigateMock).toHaveBeenCalledWith('/settings/infrastructure/platforms/truenas', {
+    expect(navigateMock).toHaveBeenCalledWith('/settings/infrastructure', {
       scroll: false,
     });
   });

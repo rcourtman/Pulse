@@ -77,4 +77,37 @@ describe('useSettingsNavigation', () => {
       expect(screen.getByTestId('selected-agent')).toHaveTextContent('pve');
     });
   });
+
+  it('translates the legacy install route into the canonical onboarding query', async () => {
+    renderHarness('/settings/infrastructure/install');
+
+    await waitFor(() => {
+      expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure?add=agent', {
+        replace: true,
+        scroll: false,
+      });
+    });
+  });
+
+  it('translates the legacy platform chooser route into the canonical onboarding query', async () => {
+    renderHarness('/settings/infrastructure/platforms');
+
+    await waitFor(() => {
+      expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure?add=pick', {
+        replace: true,
+        scroll: false,
+      });
+    });
+  });
+
+  it('keeps legacy platform-management paths out of onboarding mode', async () => {
+    renderHarness('/settings/infrastructure/platforms/truenas');
+
+    await waitFor(() => {
+      expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure', {
+        replace: true,
+        scroll: false,
+      });
+    });
+  });
 });

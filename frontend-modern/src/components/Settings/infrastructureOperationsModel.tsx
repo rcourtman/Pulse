@@ -8,9 +8,9 @@ import {
   type AgentCapability,
 } from '@/utils/agentCapabilityPresentation';
 import {
-  buildPlatformConnectionsPath,
   type PlatformConnectionsView,
 } from './platformConnectionsModel';
+import { buildInfrastructureWorkspacePath } from './infrastructureWorkspaceModel';
 
 export const TOKEN_PLACEHOLDER = '<api-token>';
 export const UNIFIED_AGENT_TELEMETRY_SURFACE = 'settings_unified_agents';
@@ -214,10 +214,8 @@ export const getPlatformConnectionsViewForCapability = (
   }
 };
 
-export const getPlatformConnectionsPathForCapability = (capability: AgentCapability) => {
-  const view = getPlatformConnectionsViewForCapability(capability);
-  return view ? buildPlatformConnectionsPath(view) : null;
-};
+export const getCapabilityManagementPath = (capability: AgentCapability) =>
+  isPlatformConnectionsCapability(capability) ? buildInfrastructureWorkspacePath() : null;
 
 export const hasMachineInstallActions = (row: UnifiedAgentRow) =>
   Boolean(row.agentActionId?.trim() || row.agentId?.trim());

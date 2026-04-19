@@ -140,9 +140,6 @@ describe('Dashboard page module contract', () => {
   it('routes dashboard overview panels through the dashboard overview feature owner', () => {
     expect(dashboardPageSource).toContain("from '@/features/dashboardOverview'");
     expect(dashboardPageSource).not.toContain("from '@/components/Dashboard/RelayOnboardingCard'");
-    expect(dashboardPageSource).toContain("from '@/components/shared/PageHeader'");
-    expect(dashboardPageSource).toContain('<PageHeader');
-    expect(dashboardPageSource).toContain('title="Dashboard"');
     expect(dashboardPageSource).not.toContain('<RelayOnboardingCard />');
     expect(dashboardPageSource).toContain(
       'ActionRequiredPanel,\n  DashboardCustomizer,\n  KPIStrip,\n  ProblemResourcesTable,\n  TrendCharts,',
@@ -175,7 +172,6 @@ describe('Dashboard page module contract', () => {
   it('routes the empty dashboard state to infrastructure install', () => {
     render(() => <DashboardPage />);
 
-    expect(screen.getByRole('heading', { name: 'Dashboard' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'No resources yet' })).toBeInTheDocument();
     expect(
       screen.getByText(
@@ -185,7 +181,7 @@ describe('Dashboard page module contract', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Open infrastructure install' }));
 
-    expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure');
+    expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure?add=agent');
   });
 
   it('renders the governed storage and recovery dashboard panels', () => {

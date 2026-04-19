@@ -318,13 +318,13 @@ func (p *Provisioner) pollHealth(ctx context.Context, containerID string) bool {
 	}
 }
 
-func (p *Provisioner) generateAndLogMagicLink(email, tenantID string) {
+func (p *Provisioner) generateAndLogPortalMagicLink(email, tenantID string) {
 	if p.magicLinks == nil || email == "" {
 		return
 	}
-	token, err := p.magicLinks.GenerateToken(email, tenantID)
+	token, err := p.magicLinks.GeneratePortalToken(email, tenantID)
 	if err != nil {
-		log.Error().Err(err).Str("tenant_id", tenantID).Msg("Failed to generate magic link token")
+		log.Error().Err(err).Str("tenant_id", tenantID).Msg("Failed to generate Pulse Account magic link token")
 		return
 	}
 	magicURL := cpauth.BuildVerifyURL(p.baseURL, token)
@@ -332,7 +332,7 @@ func (p *Provisioner) generateAndLogMagicLink(email, tenantID string) {
 		log.Error().
 			Str("tenant_id", tenantID).
 			Str("base_url", strings.TrimSpace(p.baseURL)).
-			Msg("Failed to build magic link URL")
+			Msg("Failed to build Pulse Account magic link URL")
 		return
 	}
 
@@ -354,23 +354,23 @@ func (p *Provisioner) generateAndLogMagicLink(email, tenantID string) {
 				log.Error().Err(sendErr).
 					Str("tenant_id", tenantID).
 					Str("email", email).
-					Msg("Failed to send magic link email — falling back to log")
+					Msg("Failed to send Pulse Account magic link email — falling back to log")
 			} else {
 				log.Info().
 					Str("tenant_id", tenantID).
 					Str("email", email).
-					Msg("Magic link email sent")
+					Msg("Pulse Account magic link email sent")
 				return // Email sent successfully, don't log the URL
 			}
 		}
 	}
 
-	// Fallback: log the magic link URL
+	// Fallback: log the Pulse Account magic link URL.
 	log.Info().
 		Str("tenant_id", tenantID).
 		Str("email", email).
 		Str("magic_link_url_redacted", redactMagicLinkURL(magicURL)).
-		Msg("Magic link generated for new tenant")
+		Msg("Pulse Account magic link generated for new tenant")
 }
 
 func redactMagicLinkURL(raw string) string {
@@ -746,7 +746,7 @@ func (p *Provisioner) HandleCheckout(ctx context.Context, session CheckoutSessio
 			if err := p.registry.Update(tenant); err != nil {
 				return fmt.Errorf("update tenant record: %w", err)
 			}
-			p.generateAndLogMagicLink(email, tenantID)
+			p.generateAndLogPortalMagicLink(email, tenantID)
 			log.Warn().
 				Str("tenant_id", tenantID).
 				Msg("Provisioned without container because CP_ALLOW_DOCKERLESS_PROVISIONING is enabled")
@@ -759,7 +759,7 @@ func (p *Provisioner) HandleCheckout(ctx context.Context, session CheckoutSessio
 		if err := p.registry.Update(tenant); err != nil {
 			return fmt.Errorf("update tenant record: %w", err)
 		}
-		p.generateAndLogMagicLink(email, tenantID)
+		p.generateAndLogPortalMagicLink(email, tenantID)
 	} else {
 		log.Warn().
 			Str("tenant_id", tenantID).

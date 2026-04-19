@@ -33,7 +33,7 @@ describe('HostedSignup', () => {
       ok: true,
       status: 201,
       data: {
-        message: 'Check your email for a sign-in link.',
+        message: 'Check your email for a Pulse Account sign-in link.',
       },
     });
     requestMagicLinkMock.mockResolvedValue({
@@ -41,7 +41,7 @@ describe('HostedSignup', () => {
       status: 200,
       data: {
         success: true,
-        message: "If that email is registered, you'll receive a sign-in link shortly.",
+        message: "If that email is registered, you'll receive a Pulse Account sign-in link shortly.",
       },
     });
     window.history.replaceState({}, '', '/cloud/signup?tier=power');
@@ -60,13 +60,13 @@ describe('HostedSignup', () => {
     ));
 
     expect(await screen.findByText('Workspace')).toBeInTheDocument();
-    expect(screen.getByText('Create your managed Pulse Cloud workspace.')).toBeInTheDocument();
+    expect(screen.getByText('Create your Pulse Cloud account and hosted workspace.')).toBeInTheDocument();
     expect(screen.getByText('Plan')).toBeInTheDocument();
-    expect(screen.getByText('Next')).toBeInTheDocument();
-    expect(screen.getByText('Continue through checkout if prompted.')).toBeInTheDocument();
+    expect(screen.getByText('How it works')).toBeInTheDocument();
+    expect(screen.getByText('Choose a Cloud plan and complete secure checkout.')).toBeInTheDocument();
     expect(screen.getByText('Already signed up?')).toBeInTheDocument();
-    expect(screen.getByText('Request a fresh sign-in link.')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Email Sign-In Link' })).toBeInTheDocument();
+    expect(screen.getByText('Request a fresh Pulse Account sign-in link.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Email Pulse Account Link' })).toBeInTheDocument();
 
     fireEvent.input(screen.getByLabelText('Work Email'), {
       target: { value: 'owner@example.com' },
@@ -74,7 +74,7 @@ describe('HostedSignup', () => {
     fireEvent.input(screen.getByLabelText('Organization Name'), {
       target: { value: 'Pulse Labs' },
     });
-    fireEvent.submit(screen.getByRole('button', { name: 'Create Workspace' }).closest('form')!);
+    fireEvent.submit(screen.getByRole('button', { name: 'Continue to Checkout' }).closest('form')!);
 
     await waitFor(() => {
       expect(signupMock).toHaveBeenCalledWith({

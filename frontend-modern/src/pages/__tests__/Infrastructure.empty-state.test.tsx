@@ -61,6 +61,6 @@ describe('Infrastructure empty state', () => {
 
     fireEvent.click(getByText('Open Infrastructure Install'));
 
-    expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure');
+    expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure?add=agent');
   });
 });

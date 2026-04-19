@@ -88,7 +88,7 @@ var publicCloudSignupPageTemplate = template.Must(template.New("public-cloud-sig
       {{if .ErrorMessage}}<div class="error">{{.ErrorMessage}}</div>{{end}}
       {{if .Cancelled}}<div class="note">Checkout was cancelled. You can start again below.</div>{{end}}
 
-      <form method="POST" action="/signup">
+      <form method="POST" action="{{.FormAction}}">
         {{/* Tier labels show monthly pricing for orientation. Stripe checkout
              displays the actual price from the configured price ID. */}}
         {{if or .HasPower .HasMax}}
@@ -111,11 +111,11 @@ var publicCloudSignupPageTemplate = template.Must(template.New("public-cloud-sig
         <button class="cta" type="submit">Continue To Secure Checkout</button>
       </form>
 
-      <p class="fine">After checkout, you will receive a magic-link email to access your dedicated tenant.</p>
+      <p class="fine">After checkout, we will email a Pulse Account sign-in link so you can open your hosted workspace.</p>
       <ol>
         <li>Your Stripe checkout completes securely.</li>
-        <li>Pulse Cloud provisions your dedicated tenant container.</li>
-        <li>You receive a sign-in magic link by email.</li>
+        <li>Pulse Cloud provisions your hosted workspace.</li>
+        <li>The email link opens Pulse Account, where you open your workspace and continue setup.</li>
       </ol>
     </div>
   </div>
@@ -128,7 +128,7 @@ var publicCloudSignupCompleteTemplate = template.Must(template.New("public-cloud
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Pulse Cloud Signup Complete</title>
+  <title>Pulse Cloud Checkout Complete</title>
   <style nonce="{{.Nonce}}">
     :root { color-scheme: light; }
     body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #f8fafc; color: #0f172a; }
@@ -141,9 +141,9 @@ var publicCloudSignupCompleteTemplate = template.Must(template.New("public-cloud
 <body>
   <div class="wrap">
     <div class="card">
-      <h1>Signup Received</h1>
-      <p>Your checkout completed. Pulse Cloud is provisioning your workspace.</p>
-      <p>Watch your inbox for a magic-link sign-in email. If it does not arrive shortly, return to signup and request a new link.</p>
+      <h1>Checkout Complete</h1>
+      <p>Your checkout completed. Pulse Cloud is provisioning your hosted workspace.</p>
+      <p>Watch your inbox for a Pulse Account sign-in link. That link lands in Pulse Account, where you can open your workspace and continue setup.</p>
     </div>
   </div>
 </body>
@@ -166,6 +166,7 @@ type publicCloudSignupPageData struct {
 	Email        string
 	OrgName      string
 	Tier         string // selected tier slug ("starter", "power", "max")
+	FormAction   string
 	ErrorMessage string
 	Cancelled    bool
 	Nonce        string
@@ -188,6 +189,8 @@ type publicMagicLinkRequest struct {
 	Email  string `json:"email"`
 	Target string `json:"target,omitempty"`
 }
+
+const canonicalPublicCloudSignupPath = "/cloud/signup"
 
 func NewPublicCloudSignupHandlers(cfg *CPConfig, reg *registry.TenantRegistry, magicLinks interface {
 	GenerateToken(email, tenantID string) (string, error)
@@ -259,12 +262,13 @@ func (h *PublicCloudSignupHandlers) HandleSignupPage(w http.ResponseWriter, r *h
 			tier = cloudTierStarter // valid but unconfigured tier → default to starter
 		}
 		data := publicCloudSignupPageData{
-			Email:     strings.TrimSpace(r.URL.Query().Get("email")),
-			OrgName:   strings.TrimSpace(r.URL.Query().Get("org_name")),
-			Tier:      string(tier),
-			Cancelled: strings.EqualFold(strings.TrimSpace(r.URL.Query().Get("cancelled")), "1"),
-			HasPower:  h.cfg != nil && strings.TrimSpace(h.cfg.CloudPowerPriceID) != "",
-			HasMax:    h.cfg != nil && strings.TrimSpace(h.cfg.CloudMaxPriceID) != "",
+			Email:      strings.TrimSpace(r.URL.Query().Get("email")),
+			OrgName:    strings.TrimSpace(r.URL.Query().Get("org_name")),
+			Tier:       string(tier),
+			FormAction: canonicalPublicCloudSignupPath,
+			Cancelled:  strings.EqualFold(strings.TrimSpace(r.URL.Query().Get("cancelled")), "1"),
+			HasPower:   h.cfg != nil && strings.TrimSpace(h.cfg.CloudPowerPriceID) != "",
+			HasMax:     h.cfg != nil && strings.TrimSpace(h.cfg.CloudMaxPriceID) != "",
 		}
 		h.renderSignupPage(w, r, http.StatusOK, data)
 	case http.MethodPost:
@@ -282,6 +286,7 @@ func (h *PublicCloudSignupHandlers) HandleSignupPage(w http.ResponseWriter, r *h
 				Email:        email,
 				OrgName:      orgName,
 				Tier:         tierStr,
+				FormAction:   canonicalPublicCloudSignupPath,
 				ErrorMessage: "Invalid plan tier selected.",
 				HasPower:     h.cfg != nil && strings.TrimSpace(h.cfg.CloudPowerPriceID) != "",
 				HasMax:       h.cfg != nil && strings.TrimSpace(h.cfg.CloudMaxPriceID) != "",
@@ -294,6 +299,7 @@ func (h *PublicCloudSignupHandlers) HandleSignupPage(w http.ResponseWriter, r *h
 				Email:        email,
 				OrgName:      orgName,
 				Tier:         string(tier),
+				FormAction:   canonicalPublicCloudSignupPath,
 				ErrorMessage: "A valid email address is required.",
 				HasPower:     h.cfg != nil && strings.TrimSpace(h.cfg.CloudPowerPriceID) != "",
 				HasMax:       h.cfg != nil && strings.TrimSpace(h.cfg.CloudMaxPriceID) != "",
@@ -305,6 +311,7 @@ func (h *PublicCloudSignupHandlers) HandleSignupPage(w http.ResponseWriter, r *h
 				Email:        email,
 				OrgName:      orgName,
 				Tier:         string(tier),
+				FormAction:   canonicalPublicCloudSignupPath,
 				ErrorMessage: "Organization name must be 3-64 characters and cannot contain slashes.",
 				HasPower:     h.cfg != nil && strings.TrimSpace(h.cfg.CloudPowerPriceID) != "",
 				HasMax:       h.cfg != nil && strings.TrimSpace(h.cfg.CloudMaxPriceID) != "",
@@ -316,6 +323,7 @@ func (h *PublicCloudSignupHandlers) HandleSignupPage(w http.ResponseWriter, r *h
 				Email:        email,
 				OrgName:      orgName,
 				Tier:         string(tier),
+				FormAction:   canonicalPublicCloudSignupPath,
 				ErrorMessage: "The selected plan tier is not currently available.",
 				HasPower:     h.cfg != nil && strings.TrimSpace(h.cfg.CloudPowerPriceID) != "",
 				HasMax:       h.cfg != nil && strings.TrimSpace(h.cfg.CloudMaxPriceID) != "",
@@ -330,6 +338,7 @@ func (h *PublicCloudSignupHandlers) HandleSignupPage(w http.ResponseWriter, r *h
 				Email:        email,
 				OrgName:      orgName,
 				Tier:         string(tier),
+				FormAction:   canonicalPublicCloudSignupPath,
 				ErrorMessage: "Unable to create checkout session. Please try again.",
 				HasPower:     h.cfg != nil && strings.TrimSpace(h.cfg.CloudPowerPriceID) != "",
 				HasMax:       h.cfg != nil && strings.TrimSpace(h.cfg.CloudMaxPriceID) != "",
@@ -398,7 +407,7 @@ func (h *PublicCloudSignupHandlers) HandlePublicSignup(w http.ResponseWriter, r 
 
 	writePublicSignupJSON(w, http.StatusCreated, map[string]any{
 		"checkout_url": checkoutURL,
-		"message":      "Checkout session created. Continue in Stripe to provision your Pulse Cloud tenant.",
+		"message":      "Checkout session created. Continue in Stripe to provision your Pulse Cloud workspace.",
 	})
 }
 
@@ -421,7 +430,10 @@ func (h *PublicCloudSignupHandlers) HandlePublicMagicLinkRequest(w http.Response
 	}
 	target := parsePublicMagicLinkTarget(req.Target)
 
-	const msg = "If that email is registered, you'll receive a magic link shortly."
+	msg := "If that email is registered, you'll receive a magic link shortly."
+	if target == cpauth.MagicLinkTargetPortal {
+		msg = "If that email is registered, you'll receive a Pulse Account sign-in link shortly."
+	}
 	if h.registry == nil || h.magicLinks == nil {
 		writePublicSignupJSON(w, http.StatusOK, map[string]any{
 			"success": true,
@@ -489,8 +501,8 @@ func (h *PublicCloudSignupHandlers) createCheckout(email, orgName string, tier c
 	}
 
 	stripe.Key = strings.TrimSpace(h.cfg.StripeAPIKey)
-	successURL := buildCPURL(h.cfg.BaseURL, "/signup/complete", nil)
-	cancelURL := buildCPURL(h.cfg.BaseURL, "/signup", url.Values{
+	successURL := buildCPURL(h.cfg.BaseURL, canonicalPublicCloudSignupPath+"/complete", nil)
+	cancelURL := buildCPURL(h.cfg.BaseURL, canonicalPublicCloudSignupPath, url.Values{
 		"cancelled": {"1"},
 		"email":     {email},
 		"org_name":  {orgName},

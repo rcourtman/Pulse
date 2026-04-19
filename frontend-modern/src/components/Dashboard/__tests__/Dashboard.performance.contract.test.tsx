@@ -979,10 +979,9 @@ describe('Dashboard performance contract', () => {
       expect(dashboardSource).toContain('hoveredGroupScope={state.hoveredSummaryWorkloadGroupScope()}');
       expect(dashboardSource).toContain('focusedGroupScope={state.focusedSummaryWorkloadGroupScope()}');
       expect(workloadPanelSource).not.toContain('TableHead');
-      expect(dashboardStateCardsSource).toContain('buildInfrastructureWorkspacePath');
       expect(dashboardStateCardsSource).toContain('dashboardInfrastructureEmptyState().title');
       expect(dashboardStateCardsSource).toContain('dashboardDisconnectedState().actionLabel');
-      expect(dashboardStateCardsSource).toContain("buildInfrastructureWorkspacePath('install')");
+      expect(dashboardStateCardsSource).toContain("buildInfrastructureOnboardingPath('agent')");
       expect(dashboardStatsStripSource).toContain('totalStats().running');
       expect(dashboardStatsStripSource).toContain('totalStats().stopped');
     });

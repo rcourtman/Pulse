@@ -502,9 +502,13 @@ the canonical monitored-system blocked payload.
     onboarding rather than as dedicated unified-agent install profiles. The
     shared host-install contract may guide operators through the first
     agent-managed host, but alternate CTAs and setup-completion guidance must
-    route API-backed first systems to `/settings/infrastructure/platforms`
-    instead of implying that a host install command is required before those
-    platforms can report into Pulse.
+    route API-backed first systems through the canonical infrastructure
+    onboarding contract at `/settings/infrastructure?add=pick`, while
+    agent-managed first hosts use `/settings/infrastructure?add=agent`. The
+    infrastructure workspace may consume those onboarding query params and
+    normalize the browser back to `/settings/infrastructure`, but first-run
+    callers must not fall back to the retired `/settings/infrastructure/install`
+    or `/settings/infrastructure/platforms` deep links.
 27. Keep shared install-script fallback transport pinned to published release
     lineage. `internal/api/unified_agent.go` and
     `internal/api/contract_test.go` must only map stable tags or explicit RC

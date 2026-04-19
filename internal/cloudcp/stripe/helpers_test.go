@@ -1,10 +1,51 @@
 package stripe
 
 import (
+	"context"
+	"net/url"
+	"strings"
 	"testing"
 
+	cpauth "github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/auth"
+	cpemail "github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/email"
 	"github.com/rcourtman/pulse-go-rewrite/internal/license/entitlements"
 )
+
+type captureProvisionerEmailSender struct {
+	calls int
+	msg   cpemail.Message
+}
+
+func (c *captureProvisionerEmailSender) Send(_ context.Context, msg cpemail.Message) error {
+	c.calls++
+	c.msg = msg
+	return nil
+}
+
+func extractMagicLinkToken(t *testing.T, body string) string {
+	t.Helper()
+
+	start := strings.Index(body, "http")
+	if start < 0 {
+		t.Fatalf("expected magic link URL in body %q", body)
+	}
+
+	rawURL := body[start:]
+	if end := strings.IndexAny(rawURL, " \r\n\t<>\""); end >= 0 {
+		rawURL = rawURL[:end]
+	}
+
+	parsed, err := url.Parse(strings.TrimSpace(rawURL))
+	if err != nil {
+		t.Fatalf("parse magic link URL: %v", err)
+	}
+
+	token := strings.TrimSpace(parsed.Query().Get("token"))
+	if token == "" {
+		t.Fatalf("expected token in magic link URL %q", rawURL)
+	}
+	return token
+}
 
 func TestMapSubscriptionStatus(t *testing.T) {
 	tests := []struct {
@@ -180,5 +221,42 @@ func TestRedactMagicLinkURL(t *testing.T) {
 				t.Fatalf("redactMagicLinkURL(%q) = %q, want %q", tt.in, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestGenerateAndLogPortalMagicLinkIssuesPortalTargetedToken(t *testing.T) {
+	svc, err := cpauth.NewService(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewService: %v", err)
+	}
+	t.Cleanup(svc.Close)
+
+	emailSender := &captureProvisionerEmailSender{}
+	provisioner := &Provisioner{
+		magicLinks:  svc,
+		baseURL:     "https://cloud.example.com",
+		emailSender: emailSender,
+		emailFrom:   "noreply@pulserelay.pro",
+	}
+
+	provisioner.generateAndLogPortalMagicLink("Owner@Example.com", "t_hosted_1")
+
+	if emailSender.calls != 1 {
+		t.Fatalf("email sender calls=%d, want 1", emailSender.calls)
+	}
+
+	token := extractMagicLinkToken(t, emailSender.msg.Text)
+	validated, err := svc.ValidateToken(token)
+	if err != nil {
+		t.Fatalf("ValidateToken: %v", err)
+	}
+	if validated.Target != cpauth.MagicLinkTargetPortal {
+		t.Fatalf("token target=%q, want %q", validated.Target, cpauth.MagicLinkTargetPortal)
+	}
+	if validated.TenantID != "t_hosted_1" {
+		t.Fatalf("token tenantID=%q, want %q", validated.TenantID, "t_hosted_1")
+	}
+	if validated.Email != "owner@example.com" {
+		t.Fatalf("token email=%q, want %q", validated.Email, "owner@example.com")
 	}
 }

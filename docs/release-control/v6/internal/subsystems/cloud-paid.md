@@ -140,6 +140,14 @@ Community limit enforcement.
 4. Add or change MSP account-scoped workspace provisioning entry handlers through `internal/cloudcp/account/tenant_handlers.go`
 5. Add or change public cloud self-serve signup price configuration or checkout gating through `internal/cloudcp/config.go` and `internal/cloudcp/public_cloud_signup_handlers.go`
 6. Add or change the hosted account portal API, task-first browser shell, maintained portal frontend/bundle, or account-scoped workspace/access/billing handoff through `internal/cloudcp/portal/` and `internal/cloudcp/routes.go`
+   That same customer-entry boundary owns the canonical hosted Cloud handoff:
+   public Cloud entry, secure checkout return, and returning-customer sign-in
+   must converge on Pulse Account. Public Cloud signup stays canonical at
+   `/cloud/signup`, returning commercial magic-link requests from hosted signup
+   must target `portal`, and hosted checkout provisioning must issue a
+   portal-targeted magic link carrying tenant identity so the first
+   authenticated landing is Pulse Account rather than a tenant-runtime-only
+   redirect.
 7. Add or change Stripe provisioning plan resolution through `internal/cloudcp/stripe/provisioner.go`
 8. Add or change activation/grant lifecycle or dev-mode capability widening through `pkg/licensing/dev_mode_features.go`, `pkg/licensing/service.go`, `pkg/licensing/grant_refresh.go`, and `pkg/licensing/revocation_poll.go`
 9. Add or change license-server transport through `pkg/licensing/license_server_client.go` and `pkg/licensing/quickstart_bootstrap.go`
@@ -158,6 +166,13 @@ Community limit enforcement.
     relay setup and upsell onboarding instead of inviting pairing or commercial
     action from a governed non-manageable surface.
 19. Add or change cloud plan presentation through `frontend-modern/src/pages/CloudPricing.tsx`
+    That same presentation boundary also owns truthful customer-entry copy for
+    hosted Cloud pricing and signup. Cloud CTA labels, setup steps, and
+    returning-account wording in `frontend-modern/src/pages/HostedSignup.tsx`,
+    `frontend-modern/src/utils/cloudPlans.ts`, and adjacent public Cloud entry
+    surfaces must describe the real commercial flow as secure checkout ->
+    Pulse Account -> open workspace, not as an immediate workspace creation or
+    trial-only shortcut.
 20. Add contract tests where runtime and pricing need to stay aligned
 21. Add or change hosted browser org-context bootstrap through `frontend-modern/src/App.tsx`, `frontend-modern/src/AppLayout.tsx`, `frontend-modern/src/useAppRuntimeState.ts`, and `frontend-modern/src/utils/apiClient.ts`
 22. Keep the hosted account portal shell task-first and compact. Section
@@ -178,7 +193,7 @@ Community limit enforcement.
     `usage`) that survives direct links, compatibility redirects, and
     in-product CTA navigation. The current canonical arrivals are
     `/settings/system/billing/usage?details=counting-rules` for explanation and
-    `/settings/system/billing/plan?intent=self_hosted_plan` for upgrade
+    `/settings/system/billing/plan?intent=self_hosted_plan` for plan-selection
     intent.
 24. Keep public-demo dashboard bootstrap route-owned on the adjacent
     commercial/runtime boundary. `frontend-modern/src/useAppRuntimeState.ts`
@@ -687,7 +702,9 @@ canonically `self_hosted_plan`. Pulse Account may continue normalizing the
 legacy `max_monitored_systems` alias so older handoff links do not break, but
 the portal proxy contract, checked-in embedded bundle, and rendered upgrade
 copy must treat self-hosted commerce as plan selection and paid extras rather
-than monitored-system-cap expansion.
+than monitored-system-cap expansion. Shared helpers and route-owned browser
+symbols should name that state as plan selection as well; the monitored-system
+alias belongs only to backward-compatible handoff normalization.
 If Pulse cannot create or resolve that portal handoff locally, the Pulse-owned
 start route must still return the operator to the owned billing plan surface
 with an explicit `purchase=unavailable` arrival instead of leaving the browser
@@ -1059,15 +1076,19 @@ instead of wiring product-surface components such as
 so hosted bootstrap ownership stays at the app boundary rather than leaking
 route concerns back into feature components.
 That same authenticated route shell also owns the canonical post-auth landing
-path. `frontend-modern/src/App.tsx` must send `/` through the dashboard page
-shell first, so existing operators land on the overview route and first-time
-operators hit the governed dashboard empty state that forwards them into
-Infrastructure Install, instead of carrying a root-only redirect to the
-infrastructure route that bypasses the shared landing contract.
+path. `frontend-modern/src/App.tsx` and
+`frontend-modern/src/pages/RuntimeHome.tsx` must send authenticated `/`
+through the runtime-home landing contract first: existing operators and
+self-hosted sessions land on the governed dashboard route, while hosted
+workspaces with no connected infrastructure forward into the canonical
+infrastructure onboarding contract before the workspace normalizes back to the
+single `/settings/infrastructure` shell. That same shared landing contract
+must not regress into a root-only redirect straight to the infrastructure
+workspace or a dashboard-only shortcut that strands first-time hosted tenants.
 That same landing contract also owns authenticated `/login`: once the browser
-has a valid session, `frontend-modern/src/App.tsx` must redirect `/login` to
-the governed dashboard landing route instead of leaving the authenticated app
-shell on a not-found compatibility path.
+has a valid session, `frontend-modern/src/App.tsx` must route `/login`
+through that same runtime-home landing boundary instead of leaving the
+authenticated app shell on a not-found compatibility path.
 The Pro license settings surface now follows the same rule as well. Changes to
 `frontend-modern/src/components/Settings/ProLicensePanel.tsx` must carry this
 contract and the dedicated Pro-license proof file instead of remaining an

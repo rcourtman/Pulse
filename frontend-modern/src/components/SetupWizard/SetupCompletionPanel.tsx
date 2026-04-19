@@ -13,6 +13,7 @@ import { apiFetchJSON } from '@/utils/apiClient';
 import { getPulseBaseUrl } from '@/utils/url';
 import type { State } from '@/types/api';
 import type { Resource } from '@/types/resource';
+import { buildInfrastructureOnboardingPath } from '@/components/Settings/infrastructureWorkspaceModel';
 import { trackAgentFirstConnected } from '@/utils/upgradeMetrics';
 import type { WizardState } from '../SetupWizard';
 import {
@@ -54,7 +55,8 @@ const UNIFIED_RESOURCE_GUIDANCE = {
   ],
 } as const;
 
-const INFRASTRUCTURE_PATH = '/settings/infrastructure';
+const INFRASTRUCTURE_INSTALL_PATH = buildInfrastructureOnboardingPath('agent');
+const PLATFORM_CONNECTIONS_PATH = buildInfrastructureOnboardingPath('pick');
 const SETUP_WIZARD_TELEMETRY_SURFACE = 'setup_wizard_complete';
 
 export const SetupCompletionPanel: Component<CompleteStepProps> = (props) => {
@@ -140,7 +142,7 @@ export const SetupCompletionPanel: Component<CompleteStepProps> = (props) => {
 
   const downloadCredentials = () => {
     const baseUrl = getPulseBaseUrl();
-    const infrastructureUrl = `${baseUrl.replace(/\/$/, '')}${INFRASTRUCTURE_PATH}`;
+    const infrastructureUrl = `${baseUrl.replace(/\/$/, '')}${INFRASTRUCTURE_INSTALL_PATH}`;
     const content = `Pulse Credentials
 ==================
 Generated: ${new Date().toISOString()}
@@ -177,11 +179,11 @@ Keep these credentials secure!
   };
 
   const handleOpenInstallWorkspace = () => {
-    props.onComplete(INFRASTRUCTURE_PATH);
+    props.onComplete(INFRASTRUCTURE_INSTALL_PATH);
   };
 
   const handleOpenPlatformConnections = () => {
-    props.onComplete(INFRASTRUCTURE_PATH);
+    props.onComplete(PLATFORM_CONNECTIONS_PATH);
   };
 
   const handleGoToDashboard = () => {
@@ -404,7 +406,7 @@ Keep these credentials secure!
                   Infrastructure
                 </div>
                 <code class="text-base-content font-mono text-xs break-all">
-                  {INFRASTRUCTURE_PATH}
+                  {INFRASTRUCTURE_INSTALL_PATH}
                 </code>
               </div>
 

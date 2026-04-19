@@ -128,8 +128,8 @@ export default function CloudPricing() {
       <div class="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm text-muted">
         <span>
           Already have a Cloud account?{' '}
-          <A href="/cloud/signup" class="text-blue-600 hover:underline dark:text-blue-400">
-            Sign in
+          <A href="/portal" class="text-blue-600 hover:underline dark:text-blue-400">
+            Open Pulse Account
           </A>
         </span>
         <span>

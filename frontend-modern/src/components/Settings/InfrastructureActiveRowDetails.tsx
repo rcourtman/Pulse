@@ -14,7 +14,7 @@ import {
 } from '@/utils/unifiedAgentInventoryPresentation';
 import {
   createSurfaceScopedRow,
-  getPlatformConnectionsPathForCapability,
+  getCapabilityManagementPath,
   getRowSurfaceBreakdown,
   hasMachineInstallActions,
   type UnifiedAgentRow,
@@ -303,7 +303,7 @@ export const InfrastructureActiveRowDetails: Component<InfrastructureActiveRowDe
                         }
                         fallback={
                           <Show
-                            when={getPlatformConnectionsPathForCapability(surface.kind)}
+                            when={getCapabilityManagementPath(surface.kind)}
                             fallback={
                               <span class="text-[11px] text-muted">Managed by this reporting item</span>
                             }

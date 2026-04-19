@@ -118,7 +118,7 @@ describe('SetupCompletionPanel', () => {
 
     fireEvent.click(screen.getAllByRole('button', { name: 'Open Infrastructure Install' })[0]);
 
-    expect(onComplete).toHaveBeenCalledWith('/settings/infrastructure');
+    expect(onComplete).toHaveBeenCalledWith('/settings/infrastructure?add=agent');
   });
 
   it('hands API-backed starts into the canonical platform connections workspace', async () => {
@@ -128,7 +128,7 @@ describe('SetupCompletionPanel', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Open Platform connections' }));
 
-    expect(onComplete).toHaveBeenCalledWith('/settings/infrastructure');
+    expect(onComplete).toHaveBeenCalledWith('/settings/infrastructure?add=pick');
   });
 
   it('downloads credentials that point operators to the install workspace instead of inline commands', async () => {
@@ -156,7 +156,7 @@ describe('SetupCompletionPanel', () => {
     expect(content).toContain('Web Login:');
     expect(content).toContain('Admin API Token:');
     expect(content).toContain('Infrastructure:');
-    expect(content).toContain('https://pulse.example.com/settings/infrastructure');
+    expect(content).toContain('https://pulse.example.com/settings/infrastructure?add=agent');
     expect(content).toContain('Use Add infrastructure to connect');
     expect(content).not.toContain('Example Install Command');
     expect(content).not.toContain('Example Windows Install Command');
@@ -284,7 +284,7 @@ describe('SetupCompletionPanel', () => {
         name: 'Open Platform connections',
       }),
     );
-    expect(onComplete).toHaveBeenCalledWith('/settings/infrastructure');
+    expect(onComplete).toHaveBeenCalledWith('/settings/infrastructure?add=pick');
   });
 
   it('derives admitted VMware onboarding from the governed platform manifest', async () => {
@@ -324,7 +324,7 @@ describe('SetupCompletionPanel', () => {
     expect(screen.getByRole('button', { name: 'Open Platform connections' })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Open Platform connections' }));
-    expect(onComplete).toHaveBeenCalledWith('/settings/infrastructure');
+    expect(onComplete).toHaveBeenCalledWith('/settings/infrastructure?add=pick');
   });
 
   it('keeps both continuation paths visible when install-managed and API-backed systems are already present', async () => {

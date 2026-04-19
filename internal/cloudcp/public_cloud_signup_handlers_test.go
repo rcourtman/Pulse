@@ -78,6 +78,28 @@ func TestPublicCloudSignupHandleSignupPageRendersForm(t *testing.T) {
 	if !strings.Contains(body, "<form") || !strings.Contains(body, "Start Pulse Cloud") {
 		t.Fatalf("expected signup form markup in response body")
 	}
+	if !strings.Contains(body, `action="/cloud/signup"`) {
+		t.Fatalf("expected signup form to post to the canonical cloud signup path")
+	}
+}
+
+func TestPublicCloudSignupHandleSignupCompleteRendersPulseAccountHandoff(t *testing.T) {
+	h := NewPublicCloudSignupHandlers(&CPConfig{}, nil, nil, nil)
+	req := httptest.NewRequest(http.MethodGet, "/cloud/signup/complete", nil)
+	rec := httptest.NewRecorder()
+
+	h.HandleSignupComplete(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d, want %d", rec.Code, http.StatusOK)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, "Checkout Complete") {
+		t.Fatalf("expected checkout completion heading")
+	}
+	if !strings.Contains(body, "Pulse Account sign-in link") {
+		t.Fatalf("expected Pulse Account handoff copy")
+	}
 }
 
 func TestPublicCloudSignupHandleSignupPagePostValidRedirectsToStripe(t *testing.T) {

@@ -4,14 +4,19 @@ import setupCompletionModelSource from '../setupCompletionModel.ts?raw';
 
 describe('SetupCompletionPanel guardrails', () => {
   it('keeps setup completion aligned with the canonical infrastructure install workspace', () => {
+    expect(setupCompletionPanelSource).toContain('buildInfrastructureOnboardingPath');
     expect(setupCompletionPanelSource).toContain(
-      "const INFRASTRUCTURE_PATH = '/settings/infrastructure';",
+      "const INFRASTRUCTURE_INSTALL_PATH = buildInfrastructureOnboardingPath('agent');",
+    );
+    expect(setupCompletionPanelSource).toContain(
+      "const PLATFORM_CONNECTIONS_PATH = buildInfrastructureOnboardingPath('pick');",
     );
     expect(setupCompletionPanelSource).toContain('Open Infrastructure Install');
     expect(setupCompletionPanelSource).toContain('Open Platform connections');
     expect(setupCompletionPanelSource).toContain('Credentials you must save now');
     expect(setupCompletionPanelSource).toContain('Shown during setup');
-    expect(setupCompletionPanelSource).toContain('props.onComplete(INFRASTRUCTURE_PATH);');
+    expect(setupCompletionPanelSource).toContain('props.onComplete(INFRASTRUCTURE_INSTALL_PATH);');
+    expect(setupCompletionPanelSource).toContain('props.onComplete(PLATFORM_CONNECTIONS_PATH);');
     expect(setupCompletionPanelSource).toContain(
       'continue with the first-host install token Pulse prepares from setup',
     );

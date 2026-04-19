@@ -93,7 +93,7 @@ export default function HostedSignup() {
         return;
       }
       setStatus('success');
-      setMessage(result.data.message || 'Check your email for a sign-in link.');
+      setMessage(result.data.message || 'Check your email for a Pulse Account sign-in link.');
       return;
     }
 
@@ -123,7 +123,7 @@ export default function HostedSignup() {
       if (result.ok) {
         setMagicLinkMessage(
           result.data.message ||
-            "If that email is registered, you'll receive a sign-in link shortly.",
+            "If that email is registered, you'll receive a Pulse Account sign-in link shortly.",
         );
       } else {
         setMagicLinkMessage(result.error.message || 'Failed to request sign-in link.');

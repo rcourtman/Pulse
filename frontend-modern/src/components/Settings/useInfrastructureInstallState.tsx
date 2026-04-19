@@ -16,7 +16,10 @@ import { copyToClipboard } from '@/utils/clipboard';
 import { getPulseBaseUrl } from '@/utils/url';
 import { logger } from '@/utils/logger';
 import { STORAGE_KEYS } from '@/utils/localStorage';
-import { buildInfrastructureWorkspacePath } from './infrastructureWorkspaceModel';
+import {
+  buildInfrastructureOnboardingPath,
+  buildInfrastructureWorkspacePath,
+} from './infrastructureWorkspaceModel';
 import {
   buildUnixAgentInstallCommand,
   buildWindowsAgentInstallCommand,
@@ -193,7 +196,7 @@ ${handoff.apiToken}
 
 Canonical install workspace:
 ----------------------------
-${baseUrl.replace(/\/$/, '')}/settings/infrastructure/install
+${baseUrl.replace(/\/$/, '')}${buildInfrastructureOnboardingPath('agent')}
 
 Pulse prepares the first-host install token from setup so you can move straight to the generated Unified Agent install commands.
 `;

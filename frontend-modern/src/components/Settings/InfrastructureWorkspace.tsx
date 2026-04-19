@@ -20,7 +20,7 @@ import { InfrastructureIgnoredRowDetails } from './InfrastructureIgnoredRowDetai
 import { InfrastructureStopMonitoringDialog } from './InfrastructureStopMonitoringDialog';
 import {
   buildInfrastructureWorkspacePath,
-  deriveAddStepFromLegacyPath,
+  deriveAddStepFromLocation,
   type InfrastructureAddStep,
 } from './infrastructureWorkspaceModel';
 import type { InfrastructurePlatformSettingsProps } from './proxmoxSettingsModel';
@@ -60,18 +60,23 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
   // Redirect legacy deep links and pre-select the matching type in the editor.
   createEffect(() => {
     const path = location.pathname;
-    if (path === '/settings/infrastructure') return;
+    const step = deriveAddStepFromLocation(path, location.search ?? '');
+    if (path === '/settings/infrastructure' && !step) return;
 
-    const step = deriveAddStepFromLegacyPath(path);
     navigate(buildInfrastructureWorkspacePath(), { replace: true });
-    if (!readOnly()) {
+    if (!readOnly() && step) {
       setAddMode(true);
       if (step && step !== 'pick') {
         setInitialAddType(ADD_STEP_TO_TYPE[step]);
       } else {
         setInitialAddType(null);
       }
+      return;
     }
+
+    setAddMode(false);
+    setInitialAddType(null);
+    setShowAgentProfiles(false);
   });
 
   // Auto-open the agent installer when a setup handoff is waiting.

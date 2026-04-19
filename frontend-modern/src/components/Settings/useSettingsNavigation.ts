@@ -1,7 +1,11 @@
 import { createEffect, createSignal, on } from 'solid-js';
 import { presentationPolicyIsReadOnly } from '@/stores/sessionPresentationPolicy';
 import { resolveCanonicalSelfHostedBillingHref } from '@/utils/pricingHandoff';
-import { buildInfrastructureWorkspacePath } from './infrastructureWorkspaceModel';
+import {
+  buildInfrastructureOnboardingPath,
+  buildInfrastructureWorkspacePath,
+  deriveAddStepFromLegacyPath,
+} from './infrastructureWorkspaceModel';
 import {
   DEFAULT_SETTINGS_TAB,
   deriveAgentFromPath,
@@ -106,6 +110,15 @@ export function useSettingsNavigation({ navigate, location }: UseSettingsNavigat
           if (selectedAgent() !== agentFromPath) {
             setSelectedAgent(agentFromPath);
           }
+        }
+
+        const infrastructureOnboardingStep = deriveAddStepFromLegacyPath(path);
+        if (infrastructureOnboardingStep) {
+          navigate(buildInfrastructureOnboardingPath(infrastructureOnboardingStep), {
+            replace: true,
+            scroll: false,
+          });
+          return;
         }
 
         const canonicalPath = resolveCanonicalSettingsPath(path);

@@ -45,6 +45,12 @@ export interface HostedSignupPresentation {
   sendingSignInLinkLabel: string;
 }
 
+export const CLOUD_ACCOUNT_FLOW_STEPS = [
+  'Choose a Cloud plan and complete secure checkout.',
+  'Use the email link to open Pulse Account.',
+  'Open your workspace and connect systems.',
+] as const;
+
 export const DEFAULT_CLOUD_TIER: CloudTierKey = 'starter';
 
 export const CLOUD_PLAN_DEFINITIONS: readonly CloudPlanDefinition[] = [
@@ -108,30 +114,22 @@ export const CLOUD_COMMERCIAL_PRESENTATION: CloudCommercialPresentation = {
     'Mobile app access and push notifications',
     'Dedicated workspace URL',
   ],
-  setupHeading: 'Setup',
-  setupSteps: [
-    'Create your workspace. No credit card is required for the trial.',
-    'Install the Pulse agent on any Linux machine.',
-    'Connect systems, review findings, and configure alerts.',
-  ],
+  setupHeading: 'How it works',
+  setupSteps: CLOUD_ACCOUNT_FLOW_STEPS,
 } as const;
 
 export const HOSTED_SIGNUP_PRESENTATION: HostedSignupPresentation = {
   pageTitlePrefix: 'Pulse Cloud',
-  pageDescription: 'Create your managed Pulse Cloud workspace.',
+  pageDescription: 'Create your Pulse Cloud account and hosted workspace.',
   workspaceHeading: 'Workspace',
   planHeading: 'Plan',
-  nextHeading: 'Next',
-  nextSteps: [
-    'Continue through checkout if prompted.',
-    'Finish sign-in from the email link.',
-    'Open your workspace and start connecting systems.',
-  ],
+  nextHeading: 'How it works',
+  nextSteps: CLOUD_ACCOUNT_FLOW_STEPS,
   existingAccountHeading: 'Already signed up?',
-  existingAccountDescription: 'Request a fresh sign-in link.',
-  createWorkspaceLabel: 'Create Workspace',
-  creatingWorkspaceLabel: 'Creating...',
-  emailSignInLinkLabel: 'Email Sign-In Link',
+  existingAccountDescription: 'Request a fresh Pulse Account sign-in link.',
+  createWorkspaceLabel: 'Continue to Checkout',
+  creatingWorkspaceLabel: 'Preparing Checkout...',
+  emailSignInLinkLabel: 'Email Pulse Account Link',
   sendingSignInLinkLabel: 'Sending...',
 } as const;
 

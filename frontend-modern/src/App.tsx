@@ -41,6 +41,7 @@ import {
 } from './routing/resourceLinks';
 import { preloadRouteModule } from '@/routing/routePreload';
 import { AppLayout } from '@/AppLayout';
+import RuntimeHomePage from '@/pages/RuntimeHome';
 import { useAppRuntimeState } from '@/useAppRuntimeState';
 import {
   clearPendingAppShellRestoreTop,
@@ -479,8 +480,8 @@ function App() {
       <Route path="/cloud/signup" component={HostedSignupPage} />
       <Route path="/preview/setup-complete" component={SetupCompletionPreviewPage} />
       <Route path={ROOT_DASHBOARD_PATH} component={DashboardPage} />
-      <Route path="/login" component={() => <Navigate href={ROOT_DASHBOARD_PATH} />} />
-      <Route path="/" component={() => <Navigate href={ROOT_DASHBOARD_PATH} />} />
+      <Route path="/login" component={RuntimeHomePage} />
+      <Route path="/" component={RuntimeHomePage} />
       <Route path={ROOT_WORKLOADS_PATH} component={WorkloadsView} />
       <Route path={STORAGE_PATH} component={StoragePage} />
       <Route path={RECOVERY_ROUTE_PATH} component={RecoveryRoute} />

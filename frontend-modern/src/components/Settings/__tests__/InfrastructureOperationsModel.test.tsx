@@ -3,7 +3,7 @@ import type { ConnectedInfrastructureItem } from '@/types/api';
 import type { UnifiedAgentRow } from '../infrastructureOperationsModel';
 import {
   INSTALL_PROFILE_OPTIONS,
-  getPlatformConnectionsPathForCapability,
+  getCapabilityManagementPath,
   hasMachineInstallActions,
   getPowerShellInstallProfileEnvFromFlags,
   getStopMonitoringScopeLabel,
@@ -129,9 +129,7 @@ describe('infrastructure operations model', () => {
     expect(row.capabilities).toEqual(['truenas']);
     expect(row.installFlags).toEqual([]);
     expect(hasMachineInstallActions(row)).toBe(false);
-    expect(getPlatformConnectionsPathForCapability('truenas')).toBe(
-      '/settings/infrastructure/platforms/truenas',
-    );
+    expect(getCapabilityManagementPath('truenas')).toBe('/settings/infrastructure');
   });
 
   it('maps install-profile flags into PowerShell installer env assignments', () => {

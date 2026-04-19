@@ -10,7 +10,7 @@ import {
 } from 'solid-js';
 import { useNavigate } from '@solidjs/router';
 import { useWebSocket } from '@/contexts/appRuntime';
-import { buildInfrastructureWorkspacePath } from '@/components/Settings/infrastructureWorkspaceModel';
+import { buildInfrastructureOnboardingPath } from '@/components/Settings/infrastructureWorkspaceModel';
 import { useDashboardOverview } from '@/hooks/useDashboardOverview';
 import { useDashboardTrends } from '@/hooks/useDashboardTrends';
 import { useDashboardLayout } from '@/hooks/useDashboardLayout';
@@ -261,7 +261,7 @@ export default function Dashboard() {
             <p class="mt-2 text-sm text-muted">{dashboardNoResourcesState().description}</p>
             <button
               type="button"
-              onClick={() => navigate(buildInfrastructureWorkspacePath('install'))}
+              onClick={() => navigate(buildInfrastructureOnboardingPath('agent'))}
               class="mt-4 inline-flex items-center rounded-md border border-transparent bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700"
             >
               {dashboardNoResourcesState().actionLabel}

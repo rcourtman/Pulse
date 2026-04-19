@@ -38,10 +38,12 @@ describe('CloudPricing', () => {
     expect(screen.queryByText('Starter founding rate')).not.toBeInTheDocument();
     expect(screen.getAllByText('All Pro features')).toHaveLength(1);
     expect(screen.getByText('Managed hosting')).toBeInTheDocument();
-    expect(
-      screen.getByText('Create your workspace. No credit card is required for the trial.'),
-    ).toBeInTheDocument();
-    expect(screen.getByText('Setup')).toBeInTheDocument();
+    expect(screen.getByText('Choose a Cloud plan and complete secure checkout.')).toBeInTheDocument();
+    expect(screen.getByText('How it works')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Open Pulse Account' })).toHaveAttribute(
+      'href',
+      '/portal',
+    );
     expect(screen.getByRole('link', { name: 'See self-hosted plans' })).toHaveAttribute(
       'href',
       'https://pulserelay.pro/pricing?utm_source=pulse&utm_medium=app&utm_campaign=upgrade',

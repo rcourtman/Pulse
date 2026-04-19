@@ -66,7 +66,7 @@ export class HostedSignupAPI {
         'Content-Type': 'application/json',
         Accept: 'application/json',
       },
-      body: JSON.stringify({ email }),
+      body: JSON.stringify({ email, target: 'portal' }),
       skipAuth: true,
       skipOrgContext: true,
     });

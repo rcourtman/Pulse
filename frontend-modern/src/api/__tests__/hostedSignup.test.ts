@@ -130,7 +130,7 @@ describe('HostedSignupAPI', () => {
         'Content-Type': 'application/json',
         Accept: 'application/json',
       },
-      body: JSON.stringify({ email: 'owner@example.com' }),
+      body: JSON.stringify({ email: 'owner@example.com', target: 'portal' }),
       skipAuth: true,
       skipOrgContext: true,
     });

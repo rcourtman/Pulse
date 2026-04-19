@@ -34,8 +34,9 @@ describe('App architecture', () => {
     expect(appSource).toContain('const timeoutId = window.setTimeout(() => {');
     expect(appSource).toContain('void preloadAppShellRoutes();');
     expect(appSource).toContain('<Route path={ROOT_DASHBOARD_PATH} component={DashboardPage} />');
-    expect(appSource).toContain('<Route path="/login" component={() => <Navigate href={ROOT_DASHBOARD_PATH} />} />');
-    expect(appSource).toContain('<Route path="/" component={() => <Navigate href={ROOT_DASHBOARD_PATH} />} />');
+    expect(appSource).toContain("import RuntimeHomePage from '@/pages/RuntimeHome';");
+    expect(appSource).toContain('<Route path="/login" component={RuntimeHomePage} />');
+    expect(appSource).toContain('<Route path="/" component={RuntimeHomePage} />');
     expect(appSource).toContain('<Route path={`${ROOT_PATROL_PATH}/*`} component={AIIntelligencePage} />');
     expect(appSource).toContain('<Route path="/ai/*" component={LegacyPatrolRouteRedirect} />');
     expect(appSource).toContain(
