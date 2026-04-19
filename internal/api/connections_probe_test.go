@@ -99,7 +99,7 @@ func probeTestServer(t *testing.T, handler http.HandlerFunc) (host string, port 
 func pveHandler(body string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Server", "pve-api-daemon/3.4")
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		fmt.Fprint(w, body)
 	}
 }
@@ -107,7 +107,7 @@ func pveHandler(body string) http.HandlerFunc {
 func pbsHandler(body string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Server", "proxmox-backup-api/3.2")
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		fmt.Fprint(w, body)
 	}
 }
@@ -115,7 +115,7 @@ func pbsHandler(body string) http.HandlerFunc {
 func pmgHandler(body string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Server", "pmg-api-daemon/8.1")
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		fmt.Fprint(w, body)
 	}
 }
@@ -157,14 +157,14 @@ func withSingleTarget(t *testing.T, tgt probeTarget) func() {
 }
 
 func TestProbeOne_DetectsPVE(t *testing.T) {
-	host, port, done := probeTestServer(t, pveHandler(`{"data":{"version":"8.2.4","release":"8.2","repoid":"abc"}}`))
+	host, port, done := probeTestServer(t, pveHandler(`<html><title>delly - Proxmox Virtual Environment</title></html>`))
 	defer done()
 
 	tgt := probeTarget{
 		Type:       ConnectionTypePVE,
 		Scheme:     "https",
 		Port:       port,
-		Path:       "/api2/json/version",
+		Path:       "/",
 		identifyFn: defaultProbeTargets[0].identifyFn,
 	}
 	cand, ok := probeOne(context.Background(), host, tgt, testProbeClient())
@@ -174,13 +174,13 @@ func TestProbeOne_DetectsPVE(t *testing.T) {
 	if cand.Type != ConnectionTypePVE {
 		t.Fatalf("type = %q, want pve", cand.Type)
 	}
-	if cand.Hints["version"] != "8.2.4" {
-		t.Fatalf("version hint not propagated: %+v", cand.Hints)
+	if cand.Hints["product"] != "Proxmox VE" {
+		t.Fatalf("product hint not set: %+v", cand.Hints)
 	}
 }
 
 func TestProbeOne_DetectsPBS(t *testing.T) {
-	host, port, done := probeTestServer(t, pbsHandler(`{"data":{"version":"3.2.1","release":"3.2"}}`))
+	host, port, done := probeTestServer(t, pbsHandler(`<html><title>pbs-docker - Proxmox Backup Server</title></html>`))
 	defer done()
 
 	// Find the PBS identifyFn from defaults.
@@ -193,17 +193,18 @@ func TestProbeOne_DetectsPBS(t *testing.T) {
 	if pbsFn == nil {
 		t.Fatal("pbs target not in defaults")
 	}
-	tgt := probeTarget{Type: ConnectionTypePBS, Scheme: "https", Port: port, Path: "/api2/json/version", identifyFn: pbsFn}
+	tgt := probeTarget{Type: ConnectionTypePBS, Scheme: "https", Port: port, Path: "/", identifyFn: pbsFn}
 	if _, ok := probeOne(context.Background(), host, tgt, testProbeClient()); !ok {
 		t.Fatal("expected PBS detection")
 	}
 }
 
-func TestProbeOne_DetectsPMGByProductField(t *testing.T) {
-	// Simulate a server that serves PMG content but with no distinctive Server header.
+func TestProbeOne_DetectsPMGByTitle(t *testing.T) {
+	// Simulate a PMG root that omits the Server banner but still advertises the
+	// product via HTML title.
 	host, port, done := probeTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprint(w, `{"data":{"product":"pmg","version":"8.1.2"}}`)
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		fmt.Fprint(w, `<html><title>mail01 - Proxmox Mail Gateway</title></html>`)
 	})
 	defer done()
 
@@ -213,9 +214,9 @@ func TestProbeOne_DetectsPMGByProductField(t *testing.T) {
 			pmgFn = tgt.identifyFn
 		}
 	}
-	tgt := probeTarget{Type: ConnectionTypePMG, Scheme: "https", Port: port, Path: "/api2/json/version", identifyFn: pmgFn}
+	tgt := probeTarget{Type: ConnectionTypePMG, Scheme: "https", Port: port, Path: "/", identifyFn: pmgFn}
 	if _, ok := probeOne(context.Background(), host, tgt, testProbeClient()); !ok {
-		t.Fatal("expected PMG detection via product field")
+		t.Fatal("expected PMG detection via HTML title")
 	}
 }
 
@@ -268,7 +269,7 @@ func TestProbeOne_RejectsNonMatchingServer(t *testing.T) {
 }
 
 func TestProbeOne_DoesNotConfusePVEForPMG(t *testing.T) {
-	host, port, done := probeTestServer(t, pveHandler(`{"data":{"version":"8.2.4","release":"8.2","repoid":"abc"}}`))
+	host, port, done := probeTestServer(t, pveHandler(`<html><title>delly - Proxmox Virtual Environment</title></html>`))
 	defer done()
 
 	var pmgFn func(*http.Response, []byte) (bool, map[string]string)
@@ -277,7 +278,7 @@ func TestProbeOne_DoesNotConfusePVEForPMG(t *testing.T) {
 			pmgFn = tgt.identifyFn
 		}
 	}
-	tgt := probeTarget{Type: ConnectionTypePMG, Scheme: "https", Port: port, Path: "/api2/json/version", identifyFn: pmgFn}
+	tgt := probeTarget{Type: ConnectionTypePMG, Scheme: "https", Port: port, Path: "/", identifyFn: pmgFn}
 	if _, ok := probeOne(context.Background(), host, tgt, testProbeClient()); ok {
 		t.Fatal("PMG identifyFn should not match a PVE server")
 	}
@@ -286,7 +287,7 @@ func TestProbeOne_DoesNotConfusePVEForPMG(t *testing.T) {
 func TestRunProbe_ReturnsSortedCandidates(t *testing.T) {
 	// Spin up one PVE server; runProbe should invoke all candidates but only
 	// detect PVE. Shorten the budget for the test.
-	host, port, done := probeTestServer(t, pveHandler(`{"data":{"version":"8.2.4","release":"8.2","repoid":"abc"}}`))
+	host, port, done := probeTestServer(t, pveHandler(`<html><title>delly - Proxmox Virtual Environment</title></html>`))
 	defer done()
 
 	// Override defaultProbeTargets to only the PVE target at our ephemeral port.
@@ -296,7 +297,7 @@ func TestRunProbe_ReturnsSortedCandidates(t *testing.T) {
 			pveFn = tgt.identifyFn
 		}
 	}
-	restore := withSingleTarget(t, probeTarget{Type: ConnectionTypePVE, Scheme: "https", Port: port, Path: "/api2/json/version", identifyFn: pveFn})
+	restore := withSingleTarget(t, probeTarget{Type: ConnectionTypePVE, Scheme: "https", Port: port, Path: "/", identifyFn: pveFn})
 	defer restore()
 
 	results, elapsed := runProbe(context.Background(), host, port, testProbeClient())
@@ -314,7 +315,7 @@ func TestRunProbe_TotalBudgetEnforced(t *testing.T) {
 		Type:   ConnectionTypePVE,
 		Scheme: "https",
 		Port:   1, // unlikely open
-		Path:   "/api2/json/version",
+		Path:   "/",
 		identifyFn: func(*http.Response, []byte) (bool, map[string]string) {
 			return true, nil
 		},

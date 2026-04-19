@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"crypto/tls"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net"
@@ -56,20 +55,24 @@ type probeTarget struct {
 	identifyFn func(resp *http.Response, body []byte) (match bool, hints map[string]string)
 }
 
+// PVE, PBS, and PMG all delay auth-required 401 responses by ~3 seconds as a
+// timing-attack mitigation. /api2/json/version requires auth, so probing it
+// costs the full probe budget on every attempt. The web-UI root at / returns
+// the login page in <100ms and carries the same identifying Server banner
+// (PVE/PMG) or an unambiguous HTML title (PBS, which omits Server on /).
 var defaultProbeTargets = []probeTarget{
 	{
 		Type:   ConnectionTypePVE,
 		Scheme: "https",
 		Port:   8006,
-		Path:   "/api2/json/version",
+		Path:   "/",
 		identifyFn: func(resp *http.Response, body []byte) (bool, map[string]string) {
 			server := strings.ToLower(resp.Header.Get("Server"))
 			if strings.Contains(server, "pve-api-daemon") {
-				return true, versionHintsFromProxmoxBody(body, "Proxmox VE")
+				return true, map[string]string{"product": "Proxmox VE"}
 			}
-			if strings.Contains(string(body), `"repoid"`) && strings.Contains(string(body), `"version"`) &&
-				!strings.Contains(string(body), `"product":"pmg"`) {
-				return true, versionHintsFromProxmoxBody(body, "Proxmox VE")
+			if strings.Contains(string(body), "Proxmox Virtual Environment") {
+				return true, map[string]string{"product": "Proxmox VE"}
 			}
 			return false, nil
 		},
@@ -78,11 +81,14 @@ var defaultProbeTargets = []probeTarget{
 		Type:   ConnectionTypePBS,
 		Scheme: "https",
 		Port:   8007,
-		Path:   "/api2/json/version",
+		Path:   "/",
 		identifyFn: func(resp *http.Response, body []byte) (bool, map[string]string) {
 			server := strings.ToLower(resp.Header.Get("Server"))
-			if strings.Contains(server, "proxmox-backup-api") {
-				return true, versionHintsFromProxmoxBody(body, "Proxmox Backup Server")
+			if strings.Contains(server, "proxmox-backup") {
+				return true, map[string]string{"product": "Proxmox Backup Server"}
+			}
+			if strings.Contains(string(body), "Proxmox Backup Server") {
+				return true, map[string]string{"product": "Proxmox Backup Server"}
 			}
 			return false, nil
 		},
@@ -91,14 +97,14 @@ var defaultProbeTargets = []probeTarget{
 		Type:   ConnectionTypePMG,
 		Scheme: "https",
 		Port:   8006,
-		Path:   "/api2/json/version",
+		Path:   "/",
 		identifyFn: func(resp *http.Response, body []byte) (bool, map[string]string) {
 			server := strings.ToLower(resp.Header.Get("Server"))
 			if strings.Contains(server, "pmg-api-daemon") {
-				return true, versionHintsFromProxmoxBody(body, "Proxmox Mail Gateway")
+				return true, map[string]string{"product": "Proxmox Mail Gateway"}
 			}
-			if strings.Contains(string(body), `"product":"pmg"`) {
-				return true, versionHintsFromProxmoxBody(body, "Proxmox Mail Gateway")
+			if strings.Contains(string(body), "Proxmox Mail Gateway") {
+				return true, map[string]string{"product": "Proxmox Mail Gateway"}
 			}
 			return false, nil
 		},
@@ -128,30 +134,6 @@ var defaultProbeTargets = []probeTarget{
 			return false, nil
 		},
 	},
-}
-
-// versionHintsFromProxmoxBody pulls the minimum fields out of a Proxmox API
-// /version response so the frontend can show the user something useful
-// beyond "we think this is PVE." Any shape mismatch just yields the product
-// name alone — we never fail a probe on a hint-parse error.
-func versionHintsFromProxmoxBody(body []byte, productName string) map[string]string {
-	hints := map[string]string{"product": productName}
-	var wrapper struct {
-		Data struct {
-			Version string `json:"version"`
-			Release string `json:"release"`
-			Repoid  string `json:"repoid"`
-		} `json:"data"`
-	}
-	if err := json.Unmarshal(body, &wrapper); err == nil {
-		if wrapper.Data.Version != "" {
-			hints["version"] = wrapper.Data.Version
-		}
-		if wrapper.Data.Release != "" {
-			hints["release"] = wrapper.Data.Release
-		}
-	}
-	return hints
 }
 
 // parseProbeAddress normalizes user input into (host, explicitPort).
