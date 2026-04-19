@@ -230,6 +230,12 @@ work extends shared components instead of creating new local variants.
    default ledger plus route-backed `Connections` and `Install` workspaces
    inside that destination, while each secondary flow still stays
    single-purpose instead of stacking multiple workspace surfaces at once.
+   `InfrastructureWorkspace.tsx` must open a new connection through
+   `frontend-modern/src/components/Settings/ConnectionEditor/ConnectionEditor.tsx`,
+   not through a per-type picker or per-type step tree. The editor's probe
+   step is the canonical entry point; credential slots are dispatched by the
+   detected or manually-selected type and must reach the existing per-type
+   settings panel rather than diverging into a parallel add surface.
 6. Keep Proxmox deep-link route selection on the shared settings-navigation boundary. `frontend-modern/src/components/Settings/settingsNavigationModel.ts` and `frontend-modern/src/components/Settings/useSettingsNavigation.ts` must treat the canonical PBS and PMG Proxmox deep links as agent-selection authority even though those URLs resolve to the shared `infrastructure-operations` tab. Reloading or remounting on a PBS or PMG deep link must not silently fall back to the PVE selector state.
 7. Keep shared storage feature presenters on canonical platform truth. When reusable storage presenters under `frontend-modern/src/features/storageBackups/` classify canonical resources for the shared storage route, API-backed virtualization datastores such as VMware must stay inventory-only datastores instead of inheriting PBS-specific backup-repository or protected-target copy from older fallback branches.
 8. Keep shared source/platform vocabulary on the governed manifest boundary. `frontend-modern/src/utils/platformSupportManifest.generated.ts` must be the tracked frontend projection of `docs/release-control/v6/internal/PLATFORM_SUPPORT_MANIFEST.json`, `frontend-modern/src/utils/platformSupportManifest.ts`, `frontend-modern/src/utils/sourcePlatforms.ts`, and `frontend-modern/src/utils/sourcePlatformOptions.ts` must consume that generated projection instead of embedding divergent future-label lists, setup/onboarding path allowlists, or presentation-only guesses, and `frontend-modern/scripts/canonical-platform-audit.mjs` must fail when the generated projection drifts from the governed manifest.

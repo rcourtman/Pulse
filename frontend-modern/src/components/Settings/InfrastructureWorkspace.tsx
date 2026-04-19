@@ -1,15 +1,16 @@
-import { Component, For, Show, createEffect, createMemo, createSignal } from 'solid-js';
+import { Component, Show, createEffect, createMemo, createSignal } from 'solid-js';
 import { useLocation, useNavigate } from '@solidjs/router';
 import { Dialog } from '@/components/shared/Dialog';
 import { presentationPolicyIsReadOnly } from '@/stores/sessionPresentationPolicy';
 import { AgentProfilesPanel } from './AgentProfilesPanel';
-import { ADD_SYSTEM_CHOICES, type AddSystemChoice } from './AddSystemPicker';
 import { ConnectionsTable, type ConnectionsTableHeaderAction } from './ConnectionsTable';
 import {
   buildInfrastructureSystemRows,
   type InfrastructureSystemRow,
   type SystemManageAction,
 } from './connectionsTableModel';
+import { ConnectionEditor } from './ConnectionEditor/ConnectionEditor';
+import type { ConnectionType } from '@/api/connections';
 import { InfrastructureActiveRowDetails } from './InfrastructureActiveRowDetails';
 import { InfrastructureInstallerSection } from './InfrastructureInstallerSection';
 import { InfrastructureIgnoredRowDetails } from './InfrastructureIgnoredRowDetails';
@@ -21,7 +22,6 @@ import {
   buildInfrastructureWorkspacePath,
   deriveAddStepFromLegacyPath,
   type InfrastructureAddStep,
-  type InfrastructurePanelStep,
 } from './infrastructureWorkspaceModel';
 import type { InfrastructurePlatformSettingsProps } from './proxmoxSettingsModel';
 import type { NodeType } from './infrastructureSettingsModel';
@@ -32,13 +32,13 @@ import {
 
 export type InfrastructureWorkspaceProps = InfrastructurePlatformSettingsProps;
 
-const STEP_TITLES: Record<InfrastructureAddStep, string> = {
-  agent: 'Install on a host',
-  pve: 'Proxmox VE',
-  pbs: 'Proxmox Backup Server',
-  pmg: 'Proxmox Mail Gateway',
-  truenas: 'TrueNAS SCALE',
-  vmware: 'VMware vSphere / ESXi',
+const ADD_STEP_TO_TYPE: Record<InfrastructureAddStep, ConnectionType> = {
+  agent: 'agent',
+  pve: 'pve',
+  pbs: 'pbs',
+  pmg: 'pmg',
+  truenas: 'truenas',
+  vmware: 'vmware',
 };
 
 const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = (props) => {
@@ -46,33 +46,40 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
   const location = useLocation();
   const state = useInfrastructureOperationsContext();
 
-  const [panelStep, setPanelStep] = createSignal<InfrastructurePanelStep | null>(null);
+  const [addDrawerOpen, setAddDrawerOpen] = createSignal(false);
+  const [initialAddType, setInitialAddType] = createSignal<ConnectionType | null>(null);
   const [showAgentProfiles, setShowAgentProfiles] = createSignal(false);
   const readOnly = createMemo(() => presentationPolicyIsReadOnly());
 
-  // Redirect legacy deep links and open the appropriate panel.
+  // Redirect legacy deep links and pre-select the matching type in the editor.
   createEffect(() => {
     const path = location.pathname;
     if (path === '/settings/infrastructure') return;
 
     const step = deriveAddStepFromLegacyPath(path);
     navigate(buildInfrastructureWorkspacePath(), { replace: true });
-    if (step && !readOnly()) {
-      setPanelStep(step);
+    if (!readOnly()) {
+      setAddDrawerOpen(true);
+      if (step && step !== 'pick') {
+        setInitialAddType(ADD_STEP_TO_TYPE[step]);
+      } else {
+        setInitialAddType(null);
+      }
     }
   });
 
   // Auto-open the agent installer when a setup handoff is waiting.
   createEffect(() => {
-    if (state.setupHandoff?.() && panelStep() === null && !readOnly()) {
-      setPanelStep('agent');
+    if (state.setupHandoff?.() && !addDrawerOpen() && !readOnly()) {
+      setAddDrawerOpen(true);
+      setInitialAddType('agent');
     }
   });
 
   // Close add panel in read-only mode.
   createEffect(() => {
-    if (readOnly() && panelStep() !== null) {
-      setPanelStep(null);
+    if (readOnly() && addDrawerOpen()) {
+      setAddDrawerOpen(false);
     }
   });
 
@@ -90,7 +97,8 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
           {
             label: 'Add infrastructure',
             onSelect: () => {
-              setPanelStep('pick');
+              setInitialAddType(null);
+              setAddDrawerOpen(true);
               setShowAgentProfiles(false);
             },
             tone: 'primary' as const,
@@ -113,42 +121,22 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
     }
   };
 
-  const handleAddSystem = (choice: AddSystemChoice) => {
-    setShowAgentProfiles(false);
-    setPanelStep(choice.kind as InfrastructureAddStep);
-  };
-
-  const closePanel = () => {
-    setPanelStep(null);
+  const closeAddDrawer = () => {
+    setAddDrawerOpen(false);
+    setInitialAddType(null);
     setShowAgentProfiles(false);
   };
 
-  const goBackToPick = () => {
-    setShowAgentProfiles(false);
-    setPanelStep('pick');
-  };
-
-  // For Proxmox: selectedAgent is derived from the active panel step.
-  const proxmoxAgent = createMemo<NodeType>(() => {
-    const step = panelStep();
-    if (step === 'pbs') return 'pbs';
-    if (step === 'pmg') return 'pmg';
-    return 'pve';
-  });
-
-  const onSelectProxmoxAgent = (agent: NodeType) => {
-    setPanelStep(agent as InfrastructureAddStep);
-  };
-
-  const isProxmoxStep = () => {
-    const step = panelStep();
-    return step === 'pve' || step === 'pbs' || step === 'pmg';
-  };
-
-  const stepTitle = () => {
-    const step = panelStep();
-    if (!step || step === 'pick') return 'Add infrastructure';
-    return STEP_TITLES[step];
+  const renderProxmoxSlot = (type: NodeType) => {
+    const selectedAgent = () => type;
+    return (
+      <ProxmoxSettingsPanel
+        {...props}
+        selectedAgent={selectedAgent}
+        onSelectAgent={() => {}}
+        embedded
+      />
+    );
   };
 
   return (
@@ -159,139 +147,87 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
         onManageRow={(row) => handleManageAction(row.manage)}
       />
 
-      {/* Add-infrastructure panel — right drawer */}
+      {/* Unified add-connection drawer */}
       <Dialog
-        isOpen={panelStep() !== null}
-        onClose={closePanel}
+        isOpen={addDrawerOpen()}
+        onClose={closeAddDrawer}
         layout="drawer-right"
         panelClass="max-w-[820px]"
-        ariaLabel={stepTitle()}
+        ariaLabel="Add connection"
       >
         <div class="flex h-full flex-col overflow-hidden">
-          {/* Drawer header */}
           <div class="flex shrink-0 items-center justify-between gap-3 border-b border-border px-4 py-3">
-            <div class="flex items-center gap-2">
-              <Show when={panelStep() !== 'pick'}>
-                <button
-                  type="button"
-                  onClick={goBackToPick}
-                  class="inline-flex items-center gap-1 rounded-md border border-border px-2.5 py-1 text-xs font-medium text-base-content transition-colors hover:bg-surface-hover"
-                >
-                  ← Choose different type
-                </button>
-              </Show>
-              <span class="text-sm font-semibold text-base-content">{stepTitle()}</span>
-            </div>
-            <div class="flex items-center gap-2">
-              <Show when={panelStep() === 'agent'}>
-                <button
-                  type="button"
-                  onClick={() => setShowAgentProfiles((v) => !v)}
-                  class="inline-flex items-center rounded-md border border-border px-2.5 py-1 text-xs font-medium text-base-content transition-colors hover:bg-surface-hover"
-                >
-                  {showAgentProfiles() ? 'Hide agent profiles' : 'Manage agent profiles'}
-                </button>
-              </Show>
-              <button
-                type="button"
-                onClick={closePanel}
-                class="rounded-md p-1 text-muted hover:bg-surface-hover hover:text-base-content"
-                aria-label="Close"
-              >
-                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M6 18L18 6M6 6l12 12"
-                  />
-                </svg>
-              </button>
-            </div>
+            <span class="text-sm font-semibold text-base-content">Add connection</span>
+            <button
+              type="button"
+              onClick={closeAddDrawer}
+              class="rounded-md p-1 text-muted hover:bg-surface-hover hover:text-base-content"
+              aria-label="Close"
+            >
+              <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M6 18L18 6M6 6l12 12"
+                />
+              </svg>
+            </button>
           </div>
 
-          {/* Drawer content */}
           <div class="flex-1 overflow-y-auto">
-            {/* Step 1: picker */}
-            <Show when={panelStep() === 'pick'}>
-              <div class="space-y-4 p-4">
-                <p class="text-sm text-muted">
-                  Choose the system or platform you want Pulse to start monitoring.
-                </p>
-                <ul class="divide-y divide-border rounded-md border border-border">
-                  <For each={ADD_SYSTEM_CHOICES}>
-                    {(choice) => (
-                      <li>
-                        <button
-                          type="button"
-                          onClick={() => handleAddSystem(choice)}
-                          class="flex w-full items-start justify-between gap-4 px-4 py-3 text-left hover:bg-surface-hover"
-                        >
-                          <div>
-                            <div class="text-sm font-semibold text-base-content">
-                              {choice.title}
-                            </div>
-                            <div class="mt-0.5 text-xs text-muted">{choice.description}</div>
+            <Show when={addDrawerOpen()}>
+              <ConnectionEditor
+                mode="add"
+                initialType={initialAddType() ?? undefined}
+                onClose={closeAddDrawer}
+                renderCredentialSlot={({ type }) => {
+                  switch (type) {
+                    case 'pve':
+                    case 'pbs':
+                    case 'pmg':
+                      return renderProxmoxSlot(type);
+                    case 'truenas':
+                      return <TrueNASSettingsPanel state={props.trueNASSettings} />;
+                    case 'vmware':
+                      return <VMwareSettingsPanel state={props.vmwareSettings} />;
+                    case 'agent':
+                      return (
+                        <div class="space-y-4">
+                          <div class="flex items-center justify-end">
+                            <button
+                              type="button"
+                              onClick={() => setShowAgentProfiles((v) => !v)}
+                              class="inline-flex items-center rounded-md border border-border px-2.5 py-1 text-xs font-medium text-base-content transition-colors hover:bg-surface-hover"
+                            >
+                              {showAgentProfiles() ? 'Hide agent profiles' : 'Manage agent profiles'}
+                            </button>
                           </div>
-                          <span
-                            class={`inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-                              choice.method === 'api'
-                                ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100'
-                                : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-100'
-                            }`}
-                          >
-                            {choice.methodLabel}
-                          </span>
-                        </button>
-                      </li>
-                    )}
-                  </For>
-                </ul>
-              </div>
-            </Show>
-
-            {/* Step 2a: agent installer */}
-            <Show when={panelStep() === 'agent'}>
-              <div class="space-y-4 p-4">
-                <Show when={showAgentProfiles()}>
-                  <div class="rounded-xl border border-border bg-surface p-4 shadow-sm">
-                    <div class="mb-4 space-y-1">
-                      <div class="text-base font-semibold text-base-content">Agent profiles</div>
-                      <div class="text-sm text-muted">
-                        Manage reusable install defaults for agent-based systems.
-                      </div>
-                    </div>
-                    <AgentProfilesPanel />
-                  </div>
-                </Show>
-                <InfrastructureInstallerSection />
-              </div>
-            </Show>
-
-            {/* Step 2b: Proxmox (PVE / PBS / PMG) */}
-            <Show when={isProxmoxStep()}>
-              <div class="p-4">
-                <ProxmoxSettingsPanel
-                  {...props}
-                  selectedAgent={proxmoxAgent}
-                  onSelectAgent={onSelectProxmoxAgent}
-                  embedded
-                />
-              </div>
-            </Show>
-
-            {/* Step 2c: TrueNAS */}
-            <Show when={panelStep() === 'truenas'}>
-              <div class="p-4">
-                <TrueNASSettingsPanel state={props.trueNASSettings} />
-              </div>
-            </Show>
-
-            {/* Step 2d: VMware */}
-            <Show when={panelStep() === 'vmware'}>
-              <div class="p-4">
-                <VMwareSettingsPanel state={props.vmwareSettings} />
-              </div>
+                          <Show when={showAgentProfiles()}>
+                            <div class="rounded-xl border border-border bg-surface p-4 shadow-sm">
+                              <div class="mb-4 space-y-1">
+                                <div class="text-base font-semibold text-base-content">
+                                  Agent profiles
+                                </div>
+                                <div class="text-sm text-muted">
+                                  Manage reusable install defaults for agent-based systems.
+                                </div>
+                              </div>
+                              <AgentProfilesPanel />
+                            </div>
+                          </Show>
+                          <InfrastructureInstallerSection />
+                        </div>
+                      );
+                    default:
+                      return (
+                        <div class="text-sm text-muted">
+                          No credential form is wired up for the {type} type yet.
+                        </div>
+                      );
+                  }
+                }}
+              />
             </Show>
           </div>
         </div>

@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { UnifiedAgentRow } from '../infrastructureOperationsModel';
@@ -81,6 +81,17 @@ vi.mock('../InfrastructureStopMonitoringDialog', () => ({
 vi.mock('../AgentProfilesPanel', () => ({
   AgentProfilesPanel: () => <div data-testid="agent-profiles">profiles</div>,
 }));
+
+vi.mock('@/api/connections', async () => {
+  const actual = await vi.importActual<typeof import('@/api/connections')>('@/api/connections');
+  return {
+    ...actual,
+    ConnectionsAPI: {
+      list: vi.fn(),
+      probe: vi.fn().mockResolvedValue({ candidates: [], probedMs: 0 }),
+    },
+  };
+});
 
 const reportingRow = (overrides: Partial<UnifiedAgentRow> = {}): UnifiedAgentRow =>
   ({
@@ -187,82 +198,85 @@ describe('InfrastructureWorkspace', () => {
     expect(screen.queryByText('lab-vcenter')).toBeNull();
   });
 
-  it('opens the type picker in the add panel when Add infrastructure is clicked', () => {
+  it('opens the unified add drawer with the probe step when Add infrastructure is clicked', () => {
     renderWorkspace();
 
     fireEvent.click(screen.getByRole('button', { name: /Add infrastructure/i }));
 
-    expect(screen.getByText('Choose the system or platform you want Pulse to start monitoring.')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Install on a host/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Probe address/i })).toBeInTheDocument();
+    expect(screen.getByPlaceholderText(/pve01\.lan/)).toBeInTheDocument();
     expect(navigateSpy).not.toHaveBeenCalled();
   });
 
-  it('shows the agent installer when Install on a host is chosen', () => {
+  it('routes to the agent credential slot when the user picks agent manually', () => {
     renderWorkspace();
 
     fireEvent.click(screen.getByRole('button', { name: /Add infrastructure/i }));
-    fireEvent.click(screen.getByRole('button', { name: /Install on a host/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Enter credentials manually/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Agent \(install on host\)/i }));
 
     expect(screen.getByTestId('install-section')).toBeInTheDocument();
-    expect(screen.queryByText('What do you want to connect?')).toBeNull();
   });
 
-  it('shows the TrueNAS panel when TrueNAS SCALE is chosen', () => {
+  it('routes to the TrueNAS credential slot when TrueNAS is picked manually', () => {
     renderWorkspace();
 
     fireEvent.click(screen.getByRole('button', { name: /Add infrastructure/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Enter credentials manually/i }));
     fireEvent.click(screen.getByRole('button', { name: /TrueNAS SCALE/i }));
 
     expect(screen.getByTestId('truenas-section')).toBeInTheDocument();
-    expect(navigateSpy).not.toHaveBeenCalled();
   });
 
-  it('shows the VMware panel when VMware vSphere is chosen', () => {
+  it('routes to the VMware credential slot when VMware is picked manually', () => {
     renderWorkspace();
 
     fireEvent.click(screen.getByRole('button', { name: /Add infrastructure/i }));
-    fireEvent.click(screen.getByRole('button', { name: /VMware vSphere or ESXi/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Enter credentials manually/i }));
+    fireEvent.click(screen.getByRole('button', { name: /VMware vCenter/i }));
 
     expect(screen.getByTestId('vmware-section')).toBeInTheDocument();
-    expect(navigateSpy).not.toHaveBeenCalled();
   });
 
-  it('shows the Proxmox panel when Proxmox VE is chosen', () => {
+  it('routes to the Proxmox credential slot when Proxmox VE is picked manually', () => {
     renderWorkspace();
 
     fireEvent.click(screen.getByRole('button', { name: /Add infrastructure/i }));
-    fireEvent.click(screen.getByRole('button', { name: /Proxmox VE/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Enter credentials manually/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^Proxmox VE/i }));
 
     expect(screen.getByTestId('proxmox-section')).toBeInTheDocument();
-    expect(navigateSpy).not.toHaveBeenCalled();
   });
 
-  it('returns to the picker via back button from a step-2 form', () => {
+  it('can return to the probe step from a credential slot via Back to probe', () => {
     renderWorkspace();
 
     fireEvent.click(screen.getByRole('button', { name: /Add infrastructure/i }));
-    fireEvent.click(screen.getByRole('button', { name: /Install on a host/i }));
-    fireEvent.click(screen.getByRole('button', { name: /Choose different type/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Enter credentials manually/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Agent \(install on host\)/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Back to probe/i }));
 
-    expect(screen.getByText('Choose the system or platform you want Pulse to start monitoring.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Probe address/i })).toBeInTheDocument();
     expect(screen.queryByTestId('install-section')).toBeNull();
   });
 
-  it('toggles agent profiles in the agent install drawer', () => {
+  it('toggles agent profiles inside the agent credential slot', () => {
     renderWorkspace();
 
     fireEvent.click(screen.getByRole('button', { name: /Add infrastructure/i }));
-    fireEvent.click(screen.getByRole('button', { name: /Install on a host/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Enter credentials manually/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Agent \(install on host\)/i }));
     fireEvent.click(screen.getByRole('button', { name: 'Manage agent profiles' }));
 
     expect(screen.getByTestId('agent-profiles')).toBeInTheDocument();
   });
 
-  it('does not use modals or child-node setup, only sets panel state on no-modal choices', () => {
+  it('does not mount node-modal legacy spies when a credential slot is rendered', () => {
     renderWorkspace();
 
     fireEvent.click(screen.getByRole('button', { name: /Add infrastructure/i }));
-    fireEvent.click(screen.getByRole('button', { name: /Proxmox VE/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Enter credentials manually/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^Proxmox VE/i }));
 
     expect(setShowNodeModalSpy).not.toHaveBeenCalled();
     expect(setEditingNodeSpy).not.toHaveBeenCalled();
@@ -279,28 +293,29 @@ describe('InfrastructureWorkspace', () => {
     expect(screen.getByTestId('active-details')).toBeInTheDocument();
   });
 
-  it('redirects legacy install deep link to the base route and opens the agent panel', () => {
+  it('redirects legacy install deep link and pre-selects the agent credential slot', async () => {
     mockPathname = '/settings/infrastructure/install';
     renderWorkspace();
 
     expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure', { replace: true });
-    expect(screen.getByTestId('install-section')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByTestId('install-section')).toBeInTheDocument());
   });
 
-  it('redirects legacy platforms deep link to the base route and opens the picker', () => {
+  it('redirects legacy truenas deep link and pre-selects the TrueNAS credential slot', async () => {
     mockPathname = '/settings/infrastructure/platforms/truenas';
     renderWorkspace();
 
     expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure', { replace: true });
-    expect(screen.getByTestId('truenas-section')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByTestId('truenas-section')).toBeInTheDocument());
   });
 
-  it('hides Add infrastructure and the add panel in read-only mode', () => {
+  it('hides Add infrastructure and the add drawer in read-only mode', () => {
     presentationPolicyIsReadOnlyMock.mockReturnValue(true);
     renderWorkspace();
 
     expect(screen.queryByRole('button', { name: /Add infrastructure/i })).toBeNull();
     expect(screen.queryByTestId('install-section')).toBeNull();
+    expect(screen.queryByRole('button', { name: /Probe address/i })).toBeNull();
   });
 
   it('collapses read-only sessions back to the inventory and redirects', () => {

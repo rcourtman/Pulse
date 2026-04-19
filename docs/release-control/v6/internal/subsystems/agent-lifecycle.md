@@ -313,6 +313,16 @@ an add-only capacity posture.
     endpoints that own admission checks, and the `Disabled` flag on
     PVE/PBS/PMG surfaced by that ledger must remain a pause-only signal
     rather than an installer pre-flight gate.
+    The unified add surface is
+    `frontend-modern/src/components/Settings/ConnectionEditor/ConnectionEditor.tsx`,
+    mounted by `InfrastructureWorkspace.tsx` in place of the legacy
+    type-picker step tree. The editor's probe step calls the aggregator
+    probe endpoint and dispatches the detected or manually-selected type
+    into a credential slot that renders the existing per-type panel; it
+    must not bypass the probe endpoint or fabricate probe candidates, and
+    the agent credential slot must continue to reach
+    `InfrastructureInstallerSection.tsx` so install handoffs remain on the
+    canonical unified-agent install path.
 
 ## Forbidden Paths
 

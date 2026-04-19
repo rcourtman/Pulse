@@ -896,8 +896,8 @@ describe('Settings architecture guardrails', () => {
       "import { Subtabs } from '@/components/shared/Subtabs'",
     );
     expect(infrastructureWorkspaceSource).not.toContain('<Subtabs');
-    expect(infrastructureWorkspaceSource).toContain("panelStep() === 'pick'");
-    expect(infrastructureWorkspaceSource).toContain("panelStep() === 'agent'");
+    expect(infrastructureWorkspaceSource).toContain('./ConnectionEditor/ConnectionEditor');
+    expect(infrastructureWorkspaceSource).toContain('renderCredentialSlot');
     expect(infrastructureWorkspaceSource).not.toContain("activeView() === 'operations'");
     expect(connectionsTableSource).toContain('headerActions');
     expect(connectionsTableModelSource).toContain('export function buildInfrastructureSystemRows');
