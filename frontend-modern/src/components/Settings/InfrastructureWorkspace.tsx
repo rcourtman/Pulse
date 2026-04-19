@@ -10,12 +10,12 @@ import {
   type SystemManageAction,
 } from './connectionsTableModel';
 import { ConnectionEditor } from './ConnectionEditor/ConnectionEditor';
+import { NodeCredentialSlot } from './ConnectionEditor/CredentialSlots/NodeCredentialSlot';
 import type { ConnectionType } from '@/api/connections';
 import { InfrastructureActiveRowDetails } from './InfrastructureActiveRowDetails';
 import { InfrastructureInstallerSection } from './InfrastructureInstallerSection';
 import { InfrastructureIgnoredRowDetails } from './InfrastructureIgnoredRowDetails';
 import { InfrastructureStopMonitoringDialog } from './InfrastructureStopMonitoringDialog';
-import { ProxmoxSettingsPanel } from './ProxmoxSettingsPanel';
 import { TrueNASSettingsPanel } from './TrueNASSettingsPanel';
 import { VMwareSettingsPanel } from './VMwareSettingsPanel';
 import {
@@ -24,7 +24,6 @@ import {
   type InfrastructureAddStep,
 } from './infrastructureWorkspaceModel';
 import type { InfrastructurePlatformSettingsProps } from './proxmoxSettingsModel';
-import type { NodeType } from './infrastructureSettingsModel';
 import {
   InfrastructureOperationsStateProvider,
   useInfrastructureOperationsContext,
@@ -127,14 +126,13 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
     setShowAgentProfiles(false);
   };
 
-  const renderProxmoxSlot = (type: NodeType) => {
-    const selectedAgent = () => type;
+  const renderNodeSlot = (type: 'pve' | 'pbs' | 'pmg') => {
     return (
-      <ProxmoxSettingsPanel
-        {...props}
-        selectedAgent={selectedAgent}
-        onSelectAgent={() => {}}
-        embedded
+      <NodeCredentialSlot
+        nodeType={type}
+        settings={props}
+        onCancel={exitAddMode}
+        onSaved={exitAddMode}
       />
     );
   };
@@ -178,7 +176,7 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
                   case 'pve':
                   case 'pbs':
                   case 'pmg':
-                    return renderProxmoxSlot(type);
+                    return renderNodeSlot(type);
                   case 'truenas':
                     return <TrueNASSettingsPanel state={props.trueNASSettings} />;
                   case 'vmware':

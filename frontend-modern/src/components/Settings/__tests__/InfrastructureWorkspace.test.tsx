@@ -54,8 +54,12 @@ vi.mock('../InfrastructureInstallerSection', () => ({
   InfrastructureInstallerSection: () => <div data-testid="install-section">install</div>,
 }));
 
-vi.mock('../ProxmoxSettingsPanel', () => ({
-  ProxmoxSettingsPanel: () => <div data-testid="proxmox-section">proxmox</div>,
+vi.mock('../ConnectionEditor/CredentialSlots/NodeCredentialSlot', () => ({
+  NodeCredentialSlot: (props: { nodeType: string }) => (
+    <div data-testid="proxmox-section" data-node-type={props.nodeType}>
+      proxmox
+    </div>
+  ),
 }));
 
 vi.mock('../TrueNASSettingsPanel', () => ({

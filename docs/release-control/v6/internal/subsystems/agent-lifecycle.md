@@ -321,11 +321,21 @@ an add-only capacity posture.
     infrastructure workspace in place, headed by a back-to-systems
     affordance. The editor's probe step calls the aggregator probe
     endpoint and dispatches the detected or manually-selected type into a
-    credential slot that renders the existing per-type panel; it must not
-    bypass the probe endpoint or fabricate probe candidates, and the
-    agent credential slot must continue to reach
+    credential slot; it must not bypass the probe endpoint or fabricate
+    probe candidates, and the agent credential slot must continue to reach
     `InfrastructureInstallerSection.tsx` so install handoffs remain on the
-    canonical unified-agent install path.
+    canonical unified-agent install path. For PVE, PBS, and PMG, the
+    credential slot is
+    `frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/NodeCredentialSlot.tsx`,
+    which reuses the existing `NodeModalBasicInfoSection`,
+    `NodeModalAuthenticationSection`, `NodeModalMonitoringSection`, and
+    `NodeModalStatusFooter` primitives inline under the editor — dropping
+    the Dialog wrapper and the surrounding discovery/configured-nodes
+    workspace. The add flow must not reintroduce the full Proxmox
+    workspace (discovery card, configured nodes table, node-modal stack)
+    into the credential slot, because that previously showed the
+    ledger-of-other-systems in the middle of entering one system's
+    credentials.
 
 ## Forbidden Paths
 
