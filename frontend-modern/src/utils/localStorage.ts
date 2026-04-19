@@ -216,7 +216,6 @@ export const STORAGE_KEYS = {
 
   // Billing / migration guidance
   AGENT_MIGRATION_NOTICE_DISMISSED: 'pulse-agent-migration-notice-dismissed',
-  DASHBOARD_MIGRATION_NOTICE_DISMISSED: 'pulse-dashboard-migration-notice-dismissed',
 
   // Audit log
   AUDIT_AUTO_VERIFY: 'pulse-audit-auto-verify',

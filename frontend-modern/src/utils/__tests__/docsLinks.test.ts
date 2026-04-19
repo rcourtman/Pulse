@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import {
   API_TOKEN_SCOPES_DOC_URL,
   CONFIGURATION_DOC_URL,
+  MIGRATION_GUIDE_DOC_URL,
   PRIVACY_DOC_URL,
   PROXY_AUTH_DOC_URL,
   README_DOC_URL,
@@ -63,6 +64,7 @@ describe('docsLinks', () => {
     expect(getShippedDocUrl('PRIVACY.md')).toBe('/docs/PRIVACY.md');
     expect(PRIVACY_DOC_URL).toBe('/docs/PRIVACY.md');
     expect(README_DOC_URL).toBe('/docs/README.md');
+    expect(MIGRATION_GUIDE_DOC_URL).toBe('/docs/MIGRATION_UNIFIED_NAV.md');
     expect(CONFIGURATION_DOC_URL).toBe('/docs/CONFIGURATION.md');
     expect(PROXY_AUTH_DOC_URL).toBe('/docs/PROXY_AUTH.md');
     expect(SECURITY_DOC_URL).toBe('/docs/SECURITY.md');
@@ -73,6 +75,7 @@ describe('docsLinks', () => {
   it('keeps shipped docs content synced with repo docs', () => {
     const docPairs = [
       { source: path.join(repoRoot, 'docs', 'README.md'), target: 'README.md' },
+      { source: path.join(repoRoot, 'docs', 'MIGRATION_UNIFIED_NAV.md'), target: 'MIGRATION_UNIFIED_NAV.md' },
       { source: path.join(repoRoot, 'docs', 'PRIVACY.md'), target: 'PRIVACY.md' },
       { source: path.join(repoRoot, 'docs', 'CONFIGURATION.md'), target: 'CONFIGURATION.md' },
       { source: path.join(repoRoot, 'docs', 'PROXY_AUTH.md'), target: 'PROXY_AUTH.md' },

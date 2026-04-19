@@ -10,6 +10,7 @@ const targetDocsDir = path.join(frontendRoot, 'public', 'docs');
 
 const shippedDocs = [
   { source: path.join(repoRoot, 'docs', 'README.md'), target: 'README.md' },
+  { source: path.join(repoRoot, 'docs', 'MIGRATION_UNIFIED_NAV.md'), target: 'MIGRATION_UNIFIED_NAV.md' },
   { source: path.join(repoRoot, 'docs', 'PRIVACY.md'), target: 'PRIVACY.md' },
   { source: path.join(repoRoot, 'docs', 'CONFIGURATION.md'), target: 'CONFIGURATION.md' },
   { source: path.join(repoRoot, 'docs', 'PROXY_AUTH.md'), target: 'PROXY_AUTH.md' },

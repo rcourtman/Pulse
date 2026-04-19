@@ -50,6 +50,27 @@ async function expectPopupDoc(
   await popup.close();
 }
 
+async function expectSpotlightAround(spotlight: Locator, target: Locator) {
+  await expect(spotlight).toBeVisible();
+  await expect(target).toBeVisible();
+  await expect
+    .poll(async () => {
+      const spotlightBox = await spotlight.boundingBox();
+      const targetBox = await target.boundingBox();
+      if (!spotlightBox || !targetBox) {
+        return false;
+      }
+
+      return (
+        spotlightBox.x <= targetBox.x + 1 &&
+        spotlightBox.y <= targetBox.y + 1 &&
+        spotlightBox.x + spotlightBox.width >= targetBox.x + targetBox.width - 1 &&
+        spotlightBox.y + spotlightBox.height >= targetBox.y + targetBox.height - 1
+      );
+    })
+    .toBe(true);
+}
+
 async function readTelemetryPreview(page: Page) {
   const preview = page.locator('pre[aria-label="Telemetry payload preview"]');
   await expect(preview).toBeVisible();
@@ -112,7 +133,7 @@ test.describe('Telemetry disclosure', () => {
       .not.toBe(initialPreview.install_id);
   });
 
-  test('whats-new modal opens shipped privacy and documentation pages', async ({ page }, testInfo) => {
+  test('whats-new tour opens shipped privacy and migration guide pages', async ({ page }, testInfo) => {
     test.skip(testInfo.project.name.startsWith('mobile-'), 'Desktop-only telemetry disclosure coverage');
 
     await page.addInitScript(() => {
@@ -122,9 +143,20 @@ test.describe('Telemetry disclosure', () => {
     await page.goto('/dashboard', { waitUntil: 'domcontentloaded' });
 
     const dialog = page.getByRole('dialog');
+    const spotlight = page.locator('[data-tour-spotlight]');
     const assistantLauncher = page.getByRole('button', { name: 'Expand Pulse Assistant' });
-    await expect(dialog.getByText('Welcome to the New Navigation!')).toBeVisible();
+    const dashboardTab = page.locator(
+      '[role="tab"][title="Environment overview and command center"]',
+    );
+    const infrastructureTab = page.locator(
+      '[role="tab"][title="All agents and nodes across platforms"]',
+    );
+    await expect(dialog.getByText('Welcome to Pulse v6')).toBeVisible();
+    await expect(dialog.getByText('Step 1 of 5')).toBeVisible();
     await expect(assistantLauncher).toBeHidden();
+    await expect(spotlight).toHaveAttribute('data-tour-step', 'dashboard');
+    await expect(dialog).toHaveAttribute('data-tour-step', 'dashboard');
+    await expectSpotlightAround(spotlight, dashboardTab);
     await expect(
       dialog.getByText(
         /rotating install ID, normalized release identity, platform, resource counts, and feature flags/i,
@@ -143,15 +175,23 @@ test.describe('Telemetry disclosure', () => {
       'Pulse currently has two usage-data scopes',
     );
 
-    const docsLink = dialog.getByRole('link', { name: 'Documentation' });
-    await expect(docsLink).toHaveAttribute('href', '/docs/README.md');
+    const docsLink = dialog.getByRole('link', { name: 'Migration guide' });
+    await expect(docsLink).toHaveAttribute('href', '/docs/MIGRATION_UNIFIED_NAV.md');
     await expectPopupDoc(
       page,
       docsLink,
-      '/docs/README.md',
-      'Welcome to the Pulse documentation portal.',
+      '/docs/MIGRATION_UNIFIED_NAV.md',
+      'Migration Guide: Unified Navigation',
     );
 
+    await dialog.getByRole('button', { name: 'Next' }).click();
+    await expect(dialog).toHaveAttribute('data-tour-step', 'infrastructure');
+    await expect(spotlight).toHaveAttribute('data-tour-step', 'infrastructure');
+    await expectSpotlightAround(spotlight, infrastructureTab);
+
+    for (let step = 0; step < 3; step += 1) {
+      await dialog.getByRole('button', { name: 'Next' }).click();
+    }
     await dialog.getByRole('button', { name: "Let's go" }).click();
     await expect(dialog).not.toBeVisible();
     await expect(assistantLauncher).toBeVisible();

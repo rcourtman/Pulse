@@ -33,20 +33,11 @@ import {
 import { RecentAlertsPanel } from '@/components/Alerts/RecentAlertsPanel';
 import { DashboardRecoveryStatusPanel } from '@/components/Recovery/DashboardRecoveryStatusPanel';
 import { DashboardStoragePanel } from '@/components/Storage/DashboardStoragePanel';
-import { MigrationNoticeBanner } from '@/components/shared/MigrationNoticeBanner';
 import type { DashboardWidgetDef, DashboardWidgetId } from '@/features/dashboardOverview/dashboardWidgets';
-import { MIGRATION_GUIDE_DOC_URL } from '@/utils/docsLinks';
-import { createLocalStorageBooleanSignal, STORAGE_KEYS } from '@/utils/localStorage';
-
-const DASHBOARD_MIGRATION_NOTICE_TITLE = 'Looking for Proxmox, Docker, and Hosts?';
-const DASHBOARD_MIGRATION_NOTICE_MESSAGE =
-  'Use Infrastructure for Proxmox nodes, Docker hosts, clusters, and other systems. Use Workloads for VMs, containers, pods, and Docker update status.';
 
 export default function Dashboard() {
   const navigate = useNavigate();
   const { connected, reconnecting, reconnect, activeAlerts } = useWebSocket();
-  const [dashboardMigrationNoticeDismissed, setDashboardMigrationNoticeDismissed] =
-    createLocalStorageBooleanSignal(STORAGE_KEYS.DASHBOARD_MIGRATION_NOTICE_DISMISSED, false);
 
   const alertsList = createMemo<Alert[]>(() =>
     Object.values(activeAlerts as Record<string, Alert | undefined>).filter(
@@ -282,23 +273,13 @@ export default function Dashboard() {
         <Match when={initialLoadComplete() && hasCachedData()}>
           <section class="space-y-5">
             {/* 1. Action Required Panel — only when actions exist */}
-            <Show when={!dashboardMigrationNoticeDismissed()}>
-              <MigrationNoticeBanner
-                title={DASHBOARD_MIGRATION_NOTICE_TITLE}
-                message={DASHBOARD_MIGRATION_NOTICE_MESSAGE}
-                learnMoreHref={MIGRATION_GUIDE_DOC_URL}
-                onDismiss={() => setDashboardMigrationNoticeDismissed(true)}
-              />
-            </Show>
-
-            {/* 2. Action Required Panel — only when actions exist */}
             <ActionRequiredPanel
               pendingApprovals={actions.pendingApprovals()}
               unackedCriticalAlerts={actions.unackedCriticalAlerts()}
               findingsNeedingAttention={actions.findingsNeedingAttention()}
             />
 
-            {/* 3. KPI Strip — always visible */}
+            {/* 2. KPI Strip — always visible */}
             <KPIStrip
               infrastructure={{
                 total: overview().infrastructure.total,
@@ -320,10 +301,10 @@ export default function Dashboard() {
               }}
             />
 
-            {/* 4. Problem Resources Table — only when problems exist */}
+            {/* 3. Problem Resources Table — only when problems exist */}
             <ProblemResourcesTable problems={overview().problemResources} />
 
-            {/* 5–6. Customizable widgets: Trend Charts, Recent Alerts */}
+            {/* 4–5. Customizable widgets: Trend Charts, Recent Alerts */}
             <For each={widgetGroups()}>
               {(group) =>
                 group.type === 'full' ? (

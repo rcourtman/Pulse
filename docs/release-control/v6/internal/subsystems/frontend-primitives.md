@@ -1307,14 +1307,16 @@ pushing listener lifecycle or trigger policy back into the shared shell.
 The shared what's-new modal now follows that same owner split.
 `frontend-modern/src/components/shared/WhatsNewModal.tsx` stays the render
 shell, `frontend-modern/src/components/shared/useWhatsNewModalState.ts` owns
-local-storage dismissal, session dismissal, and close behavior, and
+local-storage dismissal, session dismissal, step progression, spotlight target
+resolution, and overlay placement/runtime behavior, and
 `frontend-modern/src/components/shared/whatsNewModalModel.ts` owns the feature
-card catalog, telemetry copy, labels, and canonical docs/privacy links. Future
+tour catalog, telemetry copy, labels, and canonical docs/privacy links. Future
 what's-new work should extend those owners instead of pushing dismissal state,
-product copy, or external links back into the shared shell. Internal product
-navigation from that shell should still route through canonical shared helpers
-such as `frontend-modern/src/routing/resourceLinks.ts` rather than freezing raw
-`/recovery?...` route strings into the modal itself.
+spotlight runtime, product copy, or external links back into the shared shell.
+The v6 welcome surface is one guided spotlight tour, not a modal plus a second
+dashboard-only migration hint: it must dim the live app, glow the real
+primary-navigation target being described, and keep route-orientation copy on
+the existing welcome flow instead of layering a duplicate in-product banner.
 That state owner now also owns public-demo suppression: the modal must stay
 closed until `sessionPresentationPolicyResolved()` is true and must fail closed
 when `presentationPolicyIsDemoMode()` resolves true, so the public demo does
@@ -1419,14 +1421,6 @@ owns the dashboard-specific action, KPI, problem-resource, trend, and
 customization surfaces. Lane-owned widgets like recent alerts, storage,
 and recovery must continue to route through their own subsystem owners instead
 of drifting back into a page-local dashboard panel cluster.
-That same dashboard route shell also owns the v5-to-v6 navigation continuity
-notice. When the populated dashboard needs to orient operators who still
-expect the old Proxmox, Docker, or Hosts tabs, `frontend-modern/src/pages/Dashboard.tsx`
-must render the shared `MigrationNoticeBanner` with a dismissible local-storage
-backing key, route the learn-more affordance to the shipped
-`/docs/MIGRATION_UNIFIED_NAV.md` guide, and keep the mapping explicit that
-Infrastructure now holds platform roots while Workloads now holds VMs,
-containers, pods, and container update status.
 The recovery feature shell now also depends on the shared
 `frontend-modern/src/components/shared/Subtabs.tsx` primitive for its primary
 protected-items versus recovery-events workspace switch. The recovery lane may

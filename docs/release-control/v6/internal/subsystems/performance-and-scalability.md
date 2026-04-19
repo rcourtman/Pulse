@@ -244,12 +244,6 @@ regression protection.
     timing steady-state reads, so one-time retention or auto-vacuum cleanup does
     not masquerade as summary-route or chart-batch regression latency.
 31. Keep the dashboard overview hot path compact and route-owned. `frontend-modern/src/pages/Dashboard.tsx`, `frontend-modern/src/api/resources.ts`, and `frontend-modern/src/hooks/useDashboardOverview.ts` must hydrate KPI cards, problem-resource rows, and top-infrastructure identities through the compact dashboard-summary API contract owned by the adjacent `api-contracts` and `unified-resources` surfaces, rather than booting the full unfiltered paginated unified-resource list just to derive summary cards.
-32. Keep dashboard migration continuity on the same hot path passive. When
-    `frontend-modern/src/pages/Dashboard.tsx` renders the dismissible v5-to-v6
-    navigation notice, that surface must read and persist only a local
-    dismissal flag and shipped-doc link state; it must not introduce another
-    dashboard fetch, route-blocking readiness check, or legacy topology scan
-    just to decide whether the notice appears.
     Any commercial or relay-owned dashboard affordances composed into that
     route must remain additive shells on top of the same compact summary
     payload instead of reintroducing route-local `all-resources` fetches,
@@ -364,12 +358,6 @@ page-local “selected row” overlays on top of already downsampled summary
 history. Hovering a sparkline or density map for one entity must promote that
 entity into the shared active series so sibling cards highlight the same object
 at once rather than maintaining chart-local hover state, and the synchronized
-The dashboard route shell may now also carry a dismissible migration notice for
-operators coming from v5 navigation, but that continuity affordance stays on
-the same protected hot path. The notice must remain a static route-shell
-projection layered above the existing action/KPI widgets, with dismissal backed
-by local storage only; it must not fork a second dashboard readiness state,
-delay KPI hydration, or displace the governed summary-before-detail scan order.
 hover timestamp must remain visible across those sibling cards even when the
 active entity has no samples for one metric in the current range. Those
 sibling cards should expose the synchronized value through one compact

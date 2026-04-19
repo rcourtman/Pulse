@@ -1292,14 +1292,6 @@ problem-resources table, the route must keep the operator snapshot above the
 detail table so the page reads as action queue, summary, then problem detail
 rather than dropping operators straight into a long exception list before the
 dashboard baseline is visible.
-That same dashboard route shell may also surface a dismissible migration
-continuity notice for operators coming from v5 Proxmox, Docker, and Hosts
-tabs, but the notice must preserve the same scan order: continuity notice
-first when present, action-required summary next, KPI strip after that, and
-problem detail below the snapshot layer. The notice may explain that platform
-roots live under Infrastructure and workloads plus container update status live
-under Workloads, but it must stay read-only and must not push storage/recovery
-widgets or the KPI summary below the problem-resources table again.
 The shared recovery type contract must be pinned the same way:
 `frontend-modern/src/types/recovery.ts` must stay on the explicit
 `recovery-product-surface` proof path instead of riding indirectly on route or

@@ -69,11 +69,11 @@ async function ensureMockModeEnabled(page: import('@playwright/test').Page): Pro
 }
 
 async function dismissWhatsNewModal(page: import('@playwright/test').Page): Promise<void> {
-  const modalTitle = page.getByText('Welcome to the New Navigation!');
+  const modalTitle = page.getByText('Welcome to Pulse v6');
   if (!(await modalTitle.isVisible().catch(() => false))) {
     return;
   }
-  await page.getByRole('button', { name: "Let's go" }).click();
+  await page.getByRole('button', { name: 'Skip tour' }).click();
   await expect(modalTitle).toHaveCount(0);
 }
 

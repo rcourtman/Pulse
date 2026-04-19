@@ -3003,23 +3003,29 @@ describe('frontend resource type boundaries', () => {
       'export function getMonitoredSystemDisclosureToggleLabel',
     );
     expect(whatsNewModalSource).toContain('useWhatsNewModalState');
+    expect(whatsNewModalSource).toContain('useDialogState');
     expect(whatsNewModalSource).toContain('WHATS_NEW_FEATURE_CARDS');
+    expect(whatsNewModalSource).toContain('Portal');
     expect(whatsNewModalSource).not.toContain('createLocalStorageBooleanSignal');
     expect(whatsNewModalSource).not.toContain('createSignal');
     expect(whatsNewModalSource).not.toContain('WHATS_NEW_NAV_V2_SHOWN');
-    expect(whatsNewModalSource).not.toContain('Documentation');
+    expect(whatsNewModalSource).not.toContain('Migration guide');
     expect(whatsNewModalSource).not.toContain(
       'https://github.com/rcourtman/Pulse/blob/main/docs/PRIVACY.md',
     );
     expect(whatsNewModalStateSource).toContain('createLocalStorageBooleanSignal');
     expect(whatsNewModalStateSource).toContain('createSignal');
+    expect(whatsNewModalStateSource).toContain('createMemo');
     expect(whatsNewModalStateSource).toContain('STORAGE_KEYS.WHATS_NEW_NAV_V2_SHOWN');
     expect(whatsNewModalStateSource).toContain('handleClose');
+    expect(whatsNewModalStateSource).toContain('handleNext');
+    expect(whatsNewModalStateSource).toContain('spotlightStyle');
     expect(whatsNewModalModelSource).toContain('WHATS_NEW_FEATURE_CARDS');
     expect(whatsNewModalModelSource).toContain('WHATS_NEW_TELEMETRY_TITLE');
     expect(whatsNewModalModelSource).toContain('WHATS_NEW_DOCS_URL');
     expect(whatsNewModalModelSource).toContain('WHATS_NEW_PRIVACY_URL');
     expect(whatsNewModalModelSource).toContain('WHATS_NEW_DOCS_LABEL');
+    expect(whatsNewModalModelSource).toContain('MIGRATION_GUIDE_DOC_URL');
     expect(tooltipSource).toContain('useTooltipState');
     expect(tooltipSource).toContain('createTooltipSystemState');
     expect(tooltipSource).not.toContain('createSignal');
