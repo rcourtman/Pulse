@@ -374,6 +374,13 @@ assembly branch.
 
 ## Current State
 
+`InfrastructureSummary.tsx` and `infrastructureSummaryModel.ts` now surface
+`degraded` and `alerting` resource counts alongside the existing `online` and
+`offline` totals. `buildInfrastructureResourceCounts` is the canonical owner of
+this health-state projection: it must derive counts only from the resources
+accessor already available to the summary state, not from a separate API call or
+a re-projection of websocket state outside the shared summary pipeline.
+
 This subsystem now sits under the dedicated core monitoring runtime lane so
 canonical resource identity, discovery normalization, and platform-runtime
 coverage stay governed as a first-class Pulse product surface, including the

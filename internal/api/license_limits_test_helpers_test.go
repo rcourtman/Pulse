@@ -27,7 +27,7 @@ func setMaxMonitoredSystemsLicenseForTests(t *testing.T, maxMonitoredSystems int
 	t.Setenv("PULSE_LICENSE_DEV_MODE", "true")
 
 	service := pkglicensing.NewService()
-	licenseKey, err := pkglicensing.GenerateLicenseForTesting("limits@example.com", pkglicensing.TierPro, 24*time.Hour)
+	licenseKey, err := pkglicensing.GenerateLicenseForTesting("limits@example.com", pkglicensing.TierEnterprise, 24*time.Hour)
 	if err != nil {
 		t.Fatalf("failed to generate test license: %v", err)
 	}

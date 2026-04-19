@@ -1,6 +1,6 @@
 import { createMemo, type Accessor } from 'solid-js';
 
-import type { Node } from '@/types/api';
+import type { Alert, Node } from '@/types/api';
 import type { WorkloadGuest } from '@/types/workloads';
 import type { WorkloadSummarySnapshot } from '@/components/Workloads/WorkloadsSummary';
 import { getNodeDisplayName } from '@/utils/nodes';
@@ -31,6 +31,8 @@ const workloadMetricPercent = (value: number | null | undefined): number => {
 };
 
 interface DashboardWorkloadDerivedStateOptions {
+  activeAlerts: Accessor<Record<string, Alert>>;
+  alertsEnabled: Accessor<boolean>;
   allGuests: Accessor<WorkloadGuest[]>;
   filteredGuests: Accessor<WorkloadGuest[]>;
   groupingMode: Accessor<GroupingMode>;
@@ -55,10 +57,27 @@ export function useDashboardWorkloadDerivedState(
     const running = guests.filter(
       (guest) => guest.status === 'running' || guest.status === 'online',
     ).length;
+    let alerting = 0;
+    if (options.alertsEnabled()) {
+      const alertingResourceIds = new Set<string>();
+      for (const alert of Object.values(options.activeAlerts())) {
+        if (!alert.acknowledged && alert.resourceId) {
+          alertingResourceIds.add(alert.resourceId);
+        }
+      }
+      if (alertingResourceIds.size > 0) {
+        for (const guest of guests) {
+          if (alertingResourceIds.has(getCanonicalWorkloadId(guest))) {
+            alerting++;
+          }
+        }
+      }
+    }
     return {
       total: guests.length,
       running,
       stopped: Math.max(0, guests.length - running),
+      alerting,
     };
   });
 

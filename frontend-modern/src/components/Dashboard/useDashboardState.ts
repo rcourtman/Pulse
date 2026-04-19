@@ -253,6 +253,8 @@ export function useDashboardState(props: DashboardProps) {
     workloadsSummaryFallbackSnapshots,
     workloadsSummaryVisibleIds,
   } = useDashboardWorkloadDerivedState({
+    activeAlerts: () => activeAlerts,
+    alertsEnabled,
     allGuests,
     filteredGuests,
     groupingMode,

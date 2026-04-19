@@ -75,7 +75,7 @@ const Storage: Component = () => {
     >
       <StickySummarySection desktopOnly={false}>
         <StoragePageSummary
-          filteredRecordCount={() => filteredRecords().length}
+          filteredRecords={filteredRecords}
           selectedNodeId={selectedNodeId}
           nodeOptions={nodeOptions}
           physicalDisks={physicalDisks}

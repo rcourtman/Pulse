@@ -297,6 +297,16 @@ regression protection.
 
 ## Current State
 
+Summary cards for Infrastructure, Storage, Workloads, and Recovery now surface
+health-state counts (offline, degraded, alerting) instead of raw online/offline
+splits. `InfrastructureSummary.tsx` and `infrastructureSummaryModel.ts` add
+`degraded` and `alerting` resource counts; `StorageSummary.tsx` and
+`useStoragePageSummary.ts` add `poolsDegraded` and `disksFailing` indicators;
+`WorkloadsSummary.tsx` and `useDashboardWorkloadDerivedState.ts` add an
+alerting count derived from `activeAlerts`. These additions must remain
+read-only projections from existing websocket state — they must not introduce
+new polling loops or widen fetch scope on the hot-path boundary.
+
 This lane already has strong evidence and guardrails, but it still trails on
 score because critical hot paths need more complete protection and verification.
 Compact physical-disk drawer charts now also belong to the protected hot path.

@@ -37,6 +37,8 @@ const POLL_INTERVAL_MS = 30_000;
 interface StorageSummaryProps {
   poolCount: number;
   diskCount: number;
+  poolsDegraded?: number;
+  disksFailing?: number;
   timeRange: SummaryTimeRange;
   onTimeRangeChange?: (range: SummaryTimeRange) => void;
   nodeId?: string;
@@ -359,10 +361,31 @@ const StorageSummary: Component<StorageSummaryProps> = (props) => {
               <span class="font-medium text-base-content">
                 {props.poolCount} {props.poolCount === 1 ? 'pool' : 'pools'}
               </span>
-              <Show when={props.diskCount > 0}>
-                <span class="text-muted">
-                  {props.diskCount} {props.diskCount === 1 ? 'disk' : 'disks'}
-                </span>
+              <Show
+                when={(props.poolsDegraded ?? 0) > 0 || (props.disksFailing ?? 0) > 0}
+                fallback={
+                  <>
+                    <Show when={props.poolCount > 0 || props.diskCount > 0}>
+                      <span class="text-emerald-600 dark:text-emerald-400">all healthy</span>
+                    </Show>
+                    <Show when={props.diskCount > 0}>
+                      <span class="text-muted">
+                        {props.diskCount} {props.diskCount === 1 ? 'disk' : 'disks'}
+                      </span>
+                    </Show>
+                  </>
+                }
+              >
+                <Show when={(props.poolsDegraded ?? 0) > 0}>
+                  <span class="text-amber-600 dark:text-amber-400">
+                    {props.poolsDegraded} degraded
+                  </span>
+                </Show>
+                <Show when={(props.disksFailing ?? 0) > 0}>
+                  <span class="text-amber-600 dark:text-amber-400">
+                    {props.disksFailing} {props.disksFailing === 1 ? 'disk failing' : 'disks failing'}
+                  </span>
+                </Show>
               </Show>
               <Show when={props.showJumpToActiveRow && props.onJumpToActiveRow}>
                 <SummaryJumpToRowButton onClick={() => props.onJumpToActiveRow?.()} />

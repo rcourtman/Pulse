@@ -526,6 +526,12 @@ querying, and the operator-facing storage health presentation layer.
 
 ## Current State
 
+`StorageSummary.tsx`, `StoragePageSummary.tsx`, and `useStoragePageSummary.ts`
+now surface `poolsDegraded` and `disksFailing` health indicators alongside
+pool/disk counts. `RecoverySummary.tsx` gains an aggregate health-state summary
+row. These additions project from existing websocket pool/disk state; they must
+not introduce new API polling or widen the storage-fetch boundary.
+
 This subsystem now sits under the dedicated storage and recovery lane so the
 operator-facing storage page, recovery timeline, and recovery-point persistence
 engine stop hiding inside broader monitoring and E2E buckets.

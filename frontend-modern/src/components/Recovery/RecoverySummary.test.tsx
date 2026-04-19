@@ -64,7 +64,8 @@ describe('RecoverySummary', () => {
     expect(screen.getByText(/^types$/i)).toBeInTheDocument();
     expect(screen.getByText('2 platforms')).toBeInTheDocument();
     expect(screen.getAllByText('1 healthy')).toHaveLength(1);
-    expect(screen.getByText('1 stale')).toBeInTheDocument();
+    expect(screen.getAllByText('1 stale').length).toBeGreaterThan(0);
+    expect(screen.getByText('1 never succeeded')).toBeInTheDocument();
     expect(screen.getByText('fresh in 24h')).toBeInTheDocument();
     expect(screen.getByText(/^(Mar 9|9 Mar)$/)).toBeInTheDocument();
     expect(screen.getByText('2 protected items')).toBeInTheDocument();

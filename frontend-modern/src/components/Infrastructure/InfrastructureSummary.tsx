@@ -89,15 +89,35 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
             <>
               <span class="font-medium text-base-content">
                 {state.resourceCounts().total}{' '}
-                {state.resourceCounts().total === 1 ? 'resource' : 'resources'}
+                {state.resourceCounts().total === 1 ? 'system' : 'systems'}
               </span>
-              <Show when={state.resourceCounts().online > 0}>
-                <span class="text-emerald-600 dark:text-emerald-400">
-                  {state.resourceCounts().online} online
-                </span>
-              </Show>
-              <Show when={state.resourceCounts().offline > 0}>
-                <span class="text-muted">{state.resourceCounts().offline} offline</span>
+              <Show
+                when={
+                  state.resourceCounts().offline > 0 ||
+                  state.resourceCounts().degraded > 0 ||
+                  state.resourceCounts().alerting > 0
+                }
+                fallback={
+                  <Show when={state.resourceCounts().online > 0}>
+                    <span class="text-emerald-600 dark:text-emerald-400">all online</span>
+                  </Show>
+                }
+              >
+                <Show when={state.resourceCounts().offline > 0}>
+                  <span class="text-red-600 dark:text-red-400">
+                    {state.resourceCounts().offline} offline
+                  </span>
+                </Show>
+                <Show when={state.resourceCounts().degraded > 0}>
+                  <span class="text-amber-600 dark:text-amber-400">
+                    {state.resourceCounts().degraded} degraded
+                  </span>
+                </Show>
+                <Show when={state.resourceCounts().alerting > 0}>
+                  <span class="text-amber-600 dark:text-amber-400">
+                    {state.resourceCounts().alerting} alerting
+                  </span>
+                </Show>
               </Show>
               <Show when={props.showJumpToActiveRow && props.onJumpToActiveRow}>
                 <SummaryJumpToRowButton onClick={() => props.onJumpToActiveRow?.()} />

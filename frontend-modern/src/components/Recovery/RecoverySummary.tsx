@@ -119,6 +119,25 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
             fallback={<div class="h-4 w-32 rounded bg-surface-hover animate-pulse" />}
           >
             <span class="font-medium text-base-content">{summary().total} protected items</span>
+            <Show
+              when={summary().stale > 0 || summary().neverSucceeded > 0}
+              fallback={
+                <Show when={summary().total > 0}>
+                  <span class="text-emerald-600 dark:text-emerald-400">all fresh</span>
+                </Show>
+              }
+            >
+              <Show when={summary().neverSucceeded > 0}>
+                <span class="text-red-600 dark:text-red-400">
+                  {summary().neverSucceeded} never succeeded
+                </span>
+              </Show>
+              <Show when={summary().stale > 0}>
+                <span class="text-amber-600 dark:text-amber-400">
+                  {summary().stale} stale
+                </span>
+              </Show>
+            </Show>
           </Show>
         }
         timeRange={props.timeRange()}

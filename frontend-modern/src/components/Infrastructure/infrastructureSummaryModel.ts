@@ -61,6 +61,8 @@ export interface InfrastructureResourceCounts {
   total: number;
   online: number;
   offline: number;
+  degraded: number;
+  alerting: number;
 }
 
 export interface InfrastructureSummaryMetricSeriesEntry {
@@ -335,13 +337,26 @@ export function buildInfrastructureWorkloadStats(
 export function buildInfrastructureResourceCounts(
   resources: Resource[],
 ): InfrastructureResourceCounts {
-  const total = resources.length;
-  const online = resources.filter((resource) => resource.status === 'online').length;
-  return {
-    total,
-    online,
-    offline: total - online,
-  };
+  let total = 0;
+  let online = 0;
+  let offline = 0;
+  let degraded = 0;
+  let alerting = 0;
+  for (const resource of resources) {
+    total++;
+    if (resource.status === 'online') {
+      if ((resource.alerts?.length ?? 0) > 0) {
+        alerting++;
+      } else {
+        online++;
+      }
+    } else if (resource.status === 'degraded') {
+      degraded++;
+    } else {
+      offline++;
+    }
+  }
+  return { total, online, offline, degraded, alerting };
 }
 
 export function getAverageDiskCapacity(resources: Resource[]): number | null {

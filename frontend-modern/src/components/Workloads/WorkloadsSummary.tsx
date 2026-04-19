@@ -35,6 +35,7 @@ interface WorkloadsSummaryProps {
     total: number;
     running: number;
     stopped: number;
+    alerting?: number;
   };
   fallbackSnapshots?: WorkloadSummarySnapshot[];
   hoveredWorkloadId?: string | null;
@@ -577,8 +578,10 @@ export const WorkloadsSummary: Component<WorkloadsSummaryProps> = (props) => {
   });
 
   const guestCounts = createMemo(() => {
-    if (props.fallbackGuestCounts) return props.fallbackGuestCounts;
-    return { total: 0, running: 0, stopped: 0 };
+    if (props.fallbackGuestCounts) {
+      return { alerting: 0, ...props.fallbackGuestCounts };
+    }
+    return { total: 0, running: 0, stopped: 0, alerting: 0 };
   });
 
   const selectedNodeWorkloadIds = createMemo<Set<string> | null>(() => {
@@ -803,13 +806,22 @@ export const WorkloadsSummary: Component<WorkloadsSummaryProps> = (props) => {
       headerLeft={
         <>
           <span class="font-medium text-base-content">{guestCounts().total} workloads</span>
-          <Show when={guestCounts().running > 0}>
-            <span class="text-emerald-600 dark:text-emerald-400">
-              {guestCounts().running} running
-            </span>
-          </Show>
-          <Show when={guestCounts().stopped > 0}>
-            <span class="text-muted">{guestCounts().stopped} stopped</span>
+          <Show
+            when={guestCounts().stopped > 0 || guestCounts().alerting > 0}
+            fallback={
+              <Show when={guestCounts().total > 0}>
+                <span class="text-emerald-600 dark:text-emerald-400">all running</span>
+              </Show>
+            }
+          >
+            <Show when={guestCounts().alerting > 0}>
+              <span class="text-amber-600 dark:text-amber-400">
+                {guestCounts().alerting} alerting
+              </span>
+            </Show>
+            <Show when={guestCounts().stopped > 0}>
+              <span class="text-muted">{guestCounts().stopped} stopped</span>
+            </Show>
           </Show>
           <Show when={props.showJumpToActiveRow && props.onJumpToActiveRow}>
             <SummaryJumpToRowButton onClick={() => props.onJumpToActiveRow?.()} />

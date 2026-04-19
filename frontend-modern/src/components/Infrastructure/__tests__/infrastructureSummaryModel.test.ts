@@ -12,6 +12,7 @@ import {
   buildInfrastructureEmptyHistoryLabel,
   buildInfrastructureEmptyMessage,
   buildInfrastructureMetricSeries,
+  buildInfrastructureResourceCounts,
   getFocusedInfrastructureResourceName,
   getSingleDisplayedOnlineInfrastructureResource,
   hasInfrastructureSeriesData,
@@ -353,5 +354,26 @@ describe('infrastructureSummaryModel', () => {
     );
     expect(useInfrastructureSummaryStateSource).toContain('hoveredGroupScope');
     expect(useInfrastructureSummaryStateSource).toContain('filterSeriesForActiveScope');
+  });
+
+  it('buildInfrastructureResourceCounts separates online, alerting, degraded, and offline', () => {
+    const resources = [
+      makeResource({ id: 'r1', status: 'online' }),
+      makeResource({ id: 'r2', status: 'online', alerts: [{ id: 'a1' } as never] }),
+      makeResource({ id: 'r3', status: 'degraded' }),
+      makeResource({ id: 'r4', status: 'offline' }),
+    ];
+    const counts = buildInfrastructureResourceCounts(resources);
+    expect(counts).toEqual({ total: 4, online: 1, alerting: 1, degraded: 1, offline: 1 });
+  });
+
+  it('buildInfrastructureResourceCounts returns zero counts for empty input', () => {
+    expect(buildInfrastructureResourceCounts([])).toEqual({
+      total: 0,
+      online: 0,
+      alerting: 0,
+      degraded: 0,
+      offline: 0,
+    });
   });
 });
