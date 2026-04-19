@@ -31,6 +31,9 @@ describe('settings architecture guardrails', () => {
   it('keeps infrastructure onboarding route-backed under the shared settings shell', () => {
     expect(settingsHeaderMetaSource).toContain("'infrastructure-systems': {");
     expect(settingsHeaderMetaSource).toContain('Review monitored systems in one ledger');
+    expect(settingsHeaderMetaSource).toContain(
+      'use Add connection when you need platform setup or agent install commands.',
+    );
 
     expect(settingsNavigationHookSource).toContain('deriveAddStepFromLegacyPath(path)');
     expect(settingsNavigationHookSource).toContain(
@@ -48,6 +51,9 @@ describe('settings architecture guardrails', () => {
     expect(infrastructureWorkspaceModelSource).toContain(
       'export function deriveAddStepFromLegacyPath(',
     );
+    expect(infrastructureWorkspaceModelSource).toContain(
+      'export function deriveAddStepFromSearch(',
+    );
   });
 
   it('keeps the infrastructure add flow inline on ConnectionEditor instead of retired overlays', () => {
@@ -58,6 +64,10 @@ describe('settings architecture guardrails', () => {
     expect(infrastructureWorkspaceSource).toContain('TrueNASCredentialSlot');
     expect(infrastructureWorkspaceSource).toContain('VMwareCredentialSlot');
     expect(infrastructureWorkspaceSource).toContain('navigate(buildInfrastructureWorkspacePath(), { replace: true });');
+    expect(infrastructureWorkspaceSource).toContain('const [, setSearchParams] = useSearchParams();');
+    expect(infrastructureWorkspaceSource).toContain(
+      'setSearchParams({ [INFRASTRUCTURE_ADD_QUERY_PARAM]: null }, { replace: true });',
+    );
     expect(infrastructureWorkspaceSource).not.toContain('InfrastructureOperationsController');
     expect(infrastructureWorkspaceSource).not.toContain('PlatformConnectionsWorkspace');
     expect(infrastructureWorkspaceSource).not.toContain('NodeModal');

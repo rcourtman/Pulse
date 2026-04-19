@@ -213,7 +213,7 @@ work extends shared components instead of creating new local variants.
    helper plus runtime `monitored_system_capacity` reads rather than
    reconstructing raw `current / limit` slash math or `0 remaining` copy in
    the banner shell, state owner, or shared model.
-5. Keep shared infrastructure shell state on the reusable settings boundary: `frontend-modern/src/components/Settings/useSettingsInfrastructurePanelProps.ts` and `frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx` must continue to derive provider counts, availability, and shared subtab copy from one infrastructure-settings source — via the unified aggregator through `frontend-modern/src/components/Settings/useConnectionsLedger.ts` — instead of creating provider-local summary fetches or VMware-only shell vocabulary. Phase 9 retired the old `PlatformConnectionsWorkspace` per-type shell and the `Platform connections` nomenclature.
+5. Keep shared infrastructure shell state on the reusable settings boundary: `frontend-modern/src/components/Settings/useSettingsInfrastructurePanelProps.ts` and `frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx` must continue to derive provider counts, availability, and shared subtab copy from one infrastructure-settings source — via the unified aggregator through `frontend-modern/src/components/Settings/useConnectionsLedger.ts` — instead of creating provider-local summary fetches or VMware-only shell vocabulary. Phase 9 retired the old `PlatformConnectionsWorkspace` per-type shell, but setup guidance may still use `Platform connections` as the operator-facing label for the shared API-backed onboarding path.
    That same shared shell boundary now owns the default posture for
    `/settings/infrastructure`: the landing route should read as one ledger-first
    workspace with one row per top-level monitored system. Configured platform
@@ -476,7 +476,7 @@ work extends shared components instead of creating new local variants.
     path to the bare `/settings/infrastructure`, which renders the unified
     Connections table, not to a separate install subview or to reporting/
     control. The first-session story is owned by that table's own empty state
-    and the `Add a system` entry point on it, not by a second landing route,
+    and the `Add connection` entry point on it, not by a second landing route,
     so first-time operators and returning operators see one consistent
     infrastructure surface by default.
 14. Keep dashboard onboarding copy on the shared presentation owner in
@@ -1069,6 +1069,12 @@ must treat missing infrastructure history as a governed empty state rather than
 as a silent blank sparkline box. Error copy and empty-history copy belong to
 the feature shell, while the data path and chart-shaping logic must stay in the
 owned hook/model layers that feed it.
+That same dashboard overview shell also owns workload discoverability copy on
+the KPI strip. `frontend-modern/src/features/dashboardOverview/KPIStrip.tsx`
+and `frontend-modern/src/utils/dashboardKpiPresentation.ts` must keep the
+`Workloads` card explicit that the unified workloads surface contains VMs,
+containers, and pods, rather than assuming operators will infer that mapping
+from the route label alone.
 That same dashboard boundary now also owns the shared dashboard presentation
 helpers through `frontend-modern/src/utils/dashboardEmptyStatePresentation.ts`,
 `frontend-modern/src/utils/dashboardGuestPresentation.ts`,

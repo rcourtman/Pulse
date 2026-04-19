@@ -1,5 +1,5 @@
 import { Component, Show, createEffect, createMemo, createSignal } from 'solid-js';
-import { useLocation, useNavigate } from '@solidjs/router';
+import { useLocation, useNavigate, useSearchParams } from '@solidjs/router';
 import { presentationPolicyIsReadOnly } from '@/stores/sessionPresentationPolicy';
 import { AgentProfilesPanel } from './AgentProfilesPanel';
 import { ConnectionDetailDrawer } from './ConnectionDetailDrawer';
@@ -13,7 +13,9 @@ import type { ConnectionType } from '@/api/connections';
 import { InfrastructureInstallerSection } from './InfrastructureInstallerSection';
 import {
   buildInfrastructureWorkspacePath,
+  deriveAddStepFromSearch,
   deriveAddStepFromLocation,
+  INFRASTRUCTURE_ADD_QUERY_PARAM,
   type InfrastructureAddStep,
 } from './infrastructureWorkspaceModel';
 import type { InfrastructurePlatformSettingsProps } from './proxmoxSettingsModel';
@@ -34,6 +36,7 @@ const ADD_STEP_TO_TYPE: Record<InfrastructureAddStep, ConnectionType> = {
 const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = (props) => {
   const navigate = useNavigate();
   const location = useLocation();
+  const [, setSearchParams] = useSearchParams();
   const ledger = useConnectionsLedger();
 
   const [addMode, setAddMode] = createSignal(false);
@@ -49,10 +52,15 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
   // Redirect legacy deep links and pre-select the matching type in the editor.
   createEffect(() => {
     const path = location.pathname;
+    const queryStep = deriveAddStepFromSearch(location.search ?? '');
     const step = deriveAddStepFromLocation(path, location.search ?? '');
     if (path === '/settings/infrastructure' && !step) return;
 
-    navigate(buildInfrastructureWorkspacePath(), { replace: true });
+    if (queryStep) {
+      setSearchParams({ [INFRASTRUCTURE_ADD_QUERY_PARAM]: null }, { replace: true });
+    } else {
+      navigate(buildInfrastructureWorkspacePath(), { replace: true });
+    }
     if (!readOnly() && step) {
       setAddMode(true);
       if (step && step !== 'pick') {

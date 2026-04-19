@@ -165,7 +165,7 @@ the canonical monitored-system blocked payload.
 
 1. Add or change payload fields through handler + contract tests together
 2. Update frontend API types in lockstep with backend contract changes.
-   Websocket-backed API consumers such as `frontend-modern/src/components/Settings/useAPITokenManagerState.ts` and `frontend-modern/src/components/Settings/useInfrastructureReportingState.tsx` may read runtime context only through `frontend-modern/src/contexts/appRuntime.ts`; they must not import `frontend-modern/src/App.tsx`, because payload ownership remains in the API contract rather than the root shell.
+   Websocket-backed API consumers such as `frontend-modern/src/components/Settings/useAPITokenManagerState.ts` and `frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx` may read runtime context only through `frontend-modern/src/contexts/appRuntime.ts`; they must not import `frontend-modern/src/App.tsx`, because payload ownership remains in the API contract rather than the root shell.
 3. Add dedicated contract tests for new stable payloads
 4. Route unified resource sensitivity, routing, and `aiSafeSummary` payload changes through `internal/api/resources.go`, `internal/api/contract_test.go`, and the canonical frontend resource consumer proofs together; resource governance metadata must not ship as an API-only or frontend-only heuristic
 5. Route unified-resource action, lifecycle, and export audit reads through `internal/api/activity_audit_handlers.go`, `internal/api/router_routes_licensing.go`, and `internal/api/contract_test.go` together so the control-plane execution trail stays on a governed API contract instead of a store-only shape
@@ -454,8 +454,9 @@ the canonical monitored-system blocked payload.
     connected-infrastructure surface kind, and connected-infrastructure
     consumers such as
     `frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx`
-    and
-    `frontend-modern/src/components/Settings/useInfrastructureReportingState.tsx`
+    together with
+    `frontend-modern/src/components/Settings/useConnectionsLedger.ts` and
+    `frontend-modern/src/components/Settings/ConnectionDetailDrawer.tsx`
     must preserve the transport distinction between machine-managed surfaces
     (`agent`, `docker`, `kubernetes`) and platform-connections-managed
     surfaces (`proxmox`, `pbs`, `pmg`, `truenas`) instead of collapsing them
@@ -1124,13 +1125,15 @@ explicitly opted out of the default-on TrueNAS integration, not as the normal
 bootstrap state for a supported platform.
 That same platform-connections boundary therefore defines the current TrueNAS
 onboarding floor for Pulse. Supported now means operators can bootstrap
-TrueNAS through the shared Platform connections workflow and
-`/api/truenas/connections` without the unified agent, preserve masked secrets
-on ordinary edits, retest saved connections through the stored-secret path,
-and see last-sync plus discovered contribution summaries on the same settings
-surface. Pulse does not promise a separate TrueNAS-only onboarding wizard,
-agent-required bootstrap, or public provider-local app/log/config APIs at this
-floor.
+TrueNAS through the shared Infrastructure onboarding flow
+(`Platform connections` may remain the operator-facing setup-wizard label,
+but it lands on `/settings/infrastructure?add=pick` and normalizes into the
+shared workspace) and `/api/truenas/connections` without the unified agent,
+preserve masked secrets on ordinary edits, retest saved connections through
+the stored-secret path, and see last-sync plus discovered contribution
+summaries on the same settings surface. Pulse does not promise a separate
+TrueNAS-only onboarding wizard, agent-required bootstrap, or public
+provider-local app/log/config APIs at this floor.
 That same infrastructure platform-connections contract is also the only
 acceptable public backend boundary for the admitted VMware vSphere phase-1
 direction. `/api/vmware/connections` must be the canonical
@@ -1372,18 +1375,23 @@ The router now wires the tenant resource state provider during initial setup
 when a multi-tenant monitor is present, so non-default org resource list and
 facet reads do not fall back to a missing-provider 500 during normal tenant
 requests.
-The unified agent settings surface now also follows an explicit shared
-boundary with agent-lifecycle. Changes to
-`frontend-modern/src/components/Settings/InfrastructureOperationsController.tsx` must carry this
-contract together with the shared agent-lifecycle contract and the dedicated API
-proof files for token generation, agent lookup, and profile assignment, rather
-than remaining an unowned consumer of those contract surfaces.
-That shared `InfrastructureOperationsController.tsx` boundary must also stay under explicit proof
-routing on both sides instead of relying only on generic owned-file coverage on
-the API-contract side: token generation, agent lookup, and profile assignment
-transport changes must continue to carry the direct
-`unified-agent-settings-surface` proof path together with the lifecycle-side
-surface proof.
+The unified infrastructure settings surface now also follows an explicit
+shared boundary with agent-lifecycle. Changes to
+`frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx`,
+`frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx`,
+`frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/NodeCredentialSlot.tsx`,
+`frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx`,
+and `frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx`
+must carry this contract together with the shared agent-lifecycle contract and
+the dedicated API proof files for token generation, agent lookup, profile
+assignment, install/uninstall copy transport, and Proxmox setup/install flows,
+rather than remaining unowned consumers of those contract surfaces.
+That shared infrastructure-settings boundary must also stay under explicit
+proof routing on both sides instead of relying only on generic owned-file
+coverage on the API-contract side: token generation, agent lookup, profile
+assignment, install/uninstall copy transport, and inline Proxmox credential
+flows must continue to carry the direct proof paths together with the
+lifecycle-side surface proof.
 The same shared-boundary rule now applies to `frontend-modern/src/api/agentProfiles.ts`,
 `frontend-modern/src/api/nodes.ts`,
 `frontend-modern/src/utils/agentInstallCommand.ts`,
@@ -1391,11 +1399,15 @@ The same shared-boundary rule now applies to `frontend-modern/src/api/agentProfi
 `internal/api/config_setup_handlers.go`, and `internal/api/unified_agent.go`:
 agent install/register/profile control changes must preserve canonical API
 payload behavior instead of drifting into subsystem-local transport rules.
-That same shared boundary now assumes `InfrastructureOperationsController.tsx`
-is only the shell, while `useInfrastructureOperationsState.tsx` composes `useInfrastructureInstallState.tsx` and `useInfrastructureReportingState.tsx` into the shared API-backed
-state/provider contract and the extracted installer, inventory, and stop-monitoring
-section owners stay render-side consumers of that canonical state instead of
-embedding their own transport calls or ad hoc API parsing.
+That same shared boundary now assumes `InfrastructureWorkspace.tsx` owns the
+top-level ledger shell, `frontend-modern/src/components/Settings/useConnectionsLedger.ts`
+consumes the canonical `/api/connections` projection for configured rows, and
+`InfrastructureInstallerSection.tsx` plus
+`ConnectionEditor/CredentialSlots/NodeCredentialSlot.tsx` consume the shared
+API-backed lifecycle state. The retired
+`InfrastructureOperationsController.tsx` shell and
+`useInfrastructureReportingState.tsx` reporting path must not be reintroduced
+as parallel transport owners.
 That shared `frontend-modern/src/api/agentProfiles.ts` boundary must also stay
 under explicit proof routing on both sides instead of remaining a generic
 frontend-client match on the API-contract side: assignment, delete, unassign,
@@ -1462,12 +1474,13 @@ surfaces instead of treating them as harmless reads. Demo sessions must receive
 shared `/api/logs/*` endpoints, so the preview shell cannot expose runtime
 diagnostics, log streams, or downloadable log bundles behind a supposedly
 read-only demo account.
-That shared `InfrastructureOperationsController.tsx` boundary now also preserves copied shell
-command payload continuity: any privilege-escalation wrapper applied at the
-settings surface must keep the full canonical installer argument list intact
-instead of dropping token, profile, or command-execution flags between display
-and clipboard transport.
-That same shared `InfrastructureOperationsController.tsx` boundary now also consumes the canonical
+That shared infrastructure install boundary now also preserves copied shell
+command payload continuity: any privilege-escalation wrapper applied at
+`frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx`
+through `useInfrastructureOperationsState.tsx` must keep the full canonical
+installer argument list intact instead of dropping token, profile, or
+command-execution flags between display and clipboard transport.
+That same shared infrastructure-settings boundary now also consumes the canonical
 `connectedInfrastructure` projection from the backend state contract instead of
 reconstructing reporting rows by merging raw unified-resource facets and
 removed-_ arrays in the browser. v6 clients no longer receive those removed-_
@@ -1614,11 +1627,14 @@ resolves in the fetched profile collection: the current payload state must stay
 visible to the operator instead of collapsing into an empty/default select
 value that misstates the backend assignment.
 That same shared install-command boundary must preserve selected Proxmox target
-profiles across PowerShell transport: `InfrastructureOperationsController.tsx` must emit
-`PULSE_ENABLE_PROXMOX` and `PULSE_PROXMOX_TYPE` when the operator copies a
-Windows install command for a Proxmox-targeted flow, and `scripts/install.ps1`
-must convert those env vars back into canonical `pulse-agent` service args so
-the copied payload does not drift from the governed shell command contract.
+profiles across PowerShell transport:
+`frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx`
+and `frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx`
+must emit `PULSE_ENABLE_PROXMOX` and `PULSE_PROXMOX_TYPE` when the operator
+copies a Windows install command for a Proxmox-targeted flow, and
+`scripts/install.ps1` must convert those env vars back into canonical
+`pulse-agent` service args so the copied payload does not drift from the
+governed shell command contract.
 That same shared PowerShell install transport must also preserve
 operator-selected insecure TLS and command-execution settings: copied Windows
 install and upgrade payloads must emit `PULSE_INSECURE_SKIP_VERIFY` and
@@ -1667,7 +1683,7 @@ transport: `SetupCompletionPanel` must expose a governed PowerShell install comm
 route it through the shared lifecycle helper, so `PULSE_URL`, optional
 `PULSE_TOKEN`, insecure/self-signed TLS handling, and `PULSE_CACERT` stay
 identical to the Windows install payload contract already enforced in
-`InfrastructureOperationsController.tsx`.
+`InfrastructureInstallerSection.tsx` and `useInfrastructureOperationsState.tsx`.
 That same first-session install boundary must also preserve the shared
 optional-auth command contract: the Unix install builder must support omitted
 `--token` transport, and `SetupCompletionPanel` may only omit that argument after an
@@ -1703,15 +1719,16 @@ when `PULSE_INSECURE_SKIP_VERIFY` is set, `scripts/install.ps1` must use the
 same relaxed certificate policy for the governed binary download and uninstall
 API callback requests instead of preserving `--insecure` only for the later
 agent runtime.
-That same shared `InfrastructureOperationsController.tsx` boundary must also preserve
+That same shared infrastructure install boundary must also preserve
 platform-canonical uninstall command payloads: copied utility actions for
 Windows agents must emit the PowerShell uninstall transport, and uninstall
 payloads must only carry real API token secrets rather than token record IDs
 when server-side deregistration is requested.
 That same uninstall payload rule now also applies to copied Unix shell flows:
-`InfrastructureOperationsController.tsx` must never serialize a token record ID into the governed
-`--token` argument when building uninstall transport, because the backend
-runtime only accepts the raw token secret or no token at all.
+`frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx`
+must never serialize a token record ID into the governed `--token` argument
+when building uninstall transport, because the backend runtime only accepts
+the raw token secret or no token at all.
 The same shared uninstall transport must preserve `PULSE_URL` for token-optional
 Windows flows, because `install.ps1` reads its canonical server endpoint from
 that environment variable when composing the governed uninstall request.
@@ -1926,13 +1943,13 @@ assignment rows that no governed UI can represent.
 That same not-found assignment contract must propagate through the shared
 frontend client path: `frontend-modern/src/api/agentProfiles.ts` must surface
 the canonical missing-profile message for 404 assignment responses, and the
-settings profile surfaces in `AgentProfilesPanel.tsx` and `InfrastructureOperationsController.tsx`
+settings profile surfaces in `AgentProfilesPanel.tsx` and `InfrastructureInstallerSection.tsx`
 must treat that message as a resync trigger so stale profile options do not
 survive after the backend has already rejected them.
 That same shared response contract must also fail closed on malformed list
 payloads: the profile-management client may not treat non-array profile or
 assignment responses as empty collections, and `AgentProfilesPanel.tsx` /
-`InfrastructureOperationsController.tsx` must surface the resulting load failure instead of
+`InfrastructureInstallerSection.tsx` must surface the resulting load failure instead of
 flattening it into a fake zero-profile state.
 That same shared response contract must also fail closed on malformed
 profile-object, suggestion, schema, and validation payloads: the
@@ -1985,7 +2002,7 @@ host install transport too: shared Unix install command builders must append
 the lifecycle contract already enforced in the unified settings surface.
 That same frontend install-command contract must also fail closed on blank
 local overrides: whitespace-only custom Pulse endpoint input in
-`InfrastructureOperationsController.tsx` or `SetupCompletionPanel.tsx` may not override the canonical
+`InfrastructureInstallerSection.tsx` or `SetupCompletionPanel.tsx` may not override the canonical
 backend-governed endpoint, and the shared install-command helper must reject
 blank base URLs instead of composing installer script paths from an empty
 transport root.
@@ -2001,7 +2018,7 @@ for `http://` Pulse URLs automatically, while only the explicit insecure-TLS
 toggle may widen curl transport itself to `-k`.
 That same unified settings install boundary must also preserve preview/copy
 parity: the rendered Linux/macOS/BSD and Windows install snippets in
-`InfrastructureOperationsController.tsx` must already reflect the active token contract, custom-CA
+`InfrastructureInstallerSection.tsx` must already reflect the active token contract, custom-CA
 transport, insecure/plain-HTTP behavior, install-profile env/flags, and
 command-execution mode, rather than showing a stale base command that is only
 rewritten at copy time.
@@ -2055,10 +2072,14 @@ field, not merely a positive number, so expired setup-script-url responses are
 rejected before quick-setup UI state or copy actions trust the returned setup
 token.
 That same settings quick-setup surface must consume the canonicalized response
-directly: `NodeModal.tsx` must copy the governed token-bearing
-`commandWithEnv` field but render `commandWithoutEnv` as the visible preview,
-using the guaranteed `expires` value without reintroducing module-local
-nullable fallbacks. The same shared surface must
+directly:
+`frontend-modern/src/components/Settings/NodeModalSetupGuideSection.tsx`
+inside
+`frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/NodeCredentialSlot.tsx`
+must copy the governed token-bearing `commandWithEnv` field but render
+`commandWithoutEnv` as the visible preview, using the guaranteed `expires`
+value without reintroducing module-local nullable fallbacks. The same shared
+surface must
 also treat `setupToken` as bootstrap transport data and `tokenHint` as the
 operator-facing display field, so the UI does not re-expose the full one-time
 token once the copied/downloaded artifact already carries it. That preview
@@ -2462,9 +2483,11 @@ types. That same shared client boundary must also validate a non-empty
 `command` response and keep the raw backend `token` field inside
 `frontend-modern/src/api/nodes.ts` rather than leaking it into downstream UI
 state. Downstream Proxmox install-command consumers like the extracted node
-setup modal owner (`NodeModal.tsx`, `NodeModalAuthenticationSection.tsx`,
-`NodeModalSetupGuideSection.tsx`, `nodeModalModel.ts`, and
-`useNodeModalState.ts`) must then surface those canonical validation errors
+setup surface
+(`ConnectionEditor/CredentialSlots/NodeCredentialSlot.tsx`,
+`NodeModalAuthenticationSection.tsx`, `NodeModalSetupGuideSection.tsx`,
+`nodeModalModel.ts`, and `useNodeModalState.ts`) must then surface those
+canonical validation errors
 directly rather than collapsing one node-type pane back to generic
 copy-generation failure.
 Hosted organization-route gating now also falls under this API payload
@@ -2885,7 +2908,8 @@ That same shared infrastructure-settings API contract now also owns the
 connected-infrastructure distinction between machine-managed and
 platform-connections-managed reporting. `frontend-modern/src/types/api.ts`,
 `frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx`,
-and `frontend-modern/src/components/Settings/useInfrastructureReportingState.tsx`
+`frontend-modern/src/components/Settings/useConnectionsLedger.ts`, and
+`frontend-modern/src/components/Settings/ConnectionDetailDrawer.tsx`
 must treat `truenas` as a canonical connected-infrastructure surface kind
 alongside `proxmox`, `pbs`, and `pmg`, and the settings reporting/install
 surfaces must keep those platform-managed rows navigable back to platform
@@ -2902,7 +2926,7 @@ when the governed chart API already owns that transport.
 The shared browser contract now also includes a neutral app-runtime context
 boundary for websocket-backed API consumers. API-contract-owned hooks such as
 `frontend-modern/src/components/Settings/useAPITokenManagerState.ts` and
-`frontend-modern/src/components/Settings/useInfrastructureReportingState.tsx`
+`frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx`
 may read websocket state through `frontend-modern/src/contexts/appRuntime.ts`,
 but payload truth, bootstrap rules, and commercial identity still belong to
 the governed API handlers and contract tests. Those hooks must not import

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ConnectedInfrastructureItem } from '@/types/api';
 import type { UnifiedAgentRow } from '../infrastructureOperationsModel';
+import infrastructureInstallerSectionSource from '../InfrastructureInstallerSection.tsx?raw';
 import {
   INSTALL_PROFILE_OPTIONS,
   getCapabilityManagementPath,
@@ -151,6 +152,15 @@ describe('infrastructure operations model', () => {
 
   it('keeps api-backed TrueNAS out of the host install profile list', () => {
     expect(INSTALL_PROFILE_OPTIONS.map((option) => option.value)).not.toContain('truenas');
+  });
+
+  it('keeps the embedded installer section on the canonical host-install framing', () => {
+    expect(infrastructureInstallerSectionSource).toContain(
+      "title={state.isEmbedded() ? 'Install on a host' : 'Infrastructure'}",
+    );
+    expect(infrastructureInstallerSectionSource).toContain('Generate install token');
+    expect(infrastructureInstallerSectionSource).toContain('Generate token');
+    expect(infrastructureInstallerSectionSource).not.toContain('Add infrastructure');
   });
 
   it('does not reintroduce the retired reporting state hook on the operations state', async () => {

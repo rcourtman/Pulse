@@ -18,7 +18,13 @@ describe('SetupCompletionPanel guardrails', () => {
     expect(setupCompletionPanelSource).toContain('props.onComplete(INFRASTRUCTURE_INSTALL_PATH);');
     expect(setupCompletionPanelSource).toContain('props.onComplete(PLATFORM_CONNECTIONS_PATH);');
     expect(setupCompletionPanelSource).toContain(
+      'Use Add connection to connect your first host or API-backed platform',
+    );
+    expect(setupCompletionPanelSource).toContain(
       'continue with the first-host install token Pulse prepares from setup',
+    );
+    expect(setupCompletionPanelSource).not.toContain(
+      'Use Add infrastructure to connect your first host or API-backed platform',
     );
     expect(setupCompletionPanelSource).not.toContain("from '@/stores/licenseCommercial';");
     expect(setupCompletionPanelSource).not.toContain('runStartProTrialAction');

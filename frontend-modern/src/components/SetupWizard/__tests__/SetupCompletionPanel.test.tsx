@@ -157,7 +157,7 @@ describe('SetupCompletionPanel', () => {
     expect(content).toContain('Admin API Token:');
     expect(content).toContain('Infrastructure:');
     expect(content).toContain('https://pulse.example.com/settings/infrastructure?add=agent');
-    expect(content).toContain('Use Add infrastructure to connect');
+    expect(content).toContain('Use Add connection to connect');
     expect(content).not.toContain('Example Install Command');
     expect(content).not.toContain('Example Windows Install Command');
 

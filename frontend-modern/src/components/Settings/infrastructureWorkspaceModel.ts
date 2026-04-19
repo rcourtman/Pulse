@@ -2,7 +2,7 @@ export type InfrastructureAddStep = 'agent' | 'pve' | 'pbs' | 'pmg' | 'truenas' 
 export type InfrastructurePanelStep = 'pick' | InfrastructureAddStep;
 
 const INFRASTRUCTURE_BASE_PATH = '/settings/infrastructure';
-const INFRASTRUCTURE_ADD_QUERY_PARAM = 'add';
+export const INFRASTRUCTURE_ADD_QUERY_PARAM = 'add';
 const LEGACY_INSTALL_PATH = `${INFRASTRUCTURE_BASE_PATH}/install`;
 const LEGACY_PLATFORMS_PATH = `${INFRASTRUCTURE_BASE_PATH}/platforms`;
 
@@ -14,7 +14,7 @@ function matchesPathPrefix(pathname: string, expected: string): boolean {
   return pathname === expected || pathname.startsWith(`${expected}/`);
 }
 
-function normalizeInfrastructurePanelStep(
+export function normalizeInfrastructurePanelStep(
   value: string | null | undefined,
 ): InfrastructurePanelStep | null {
   switch ((value || '').trim()) {
@@ -51,15 +51,17 @@ export function deriveAddStepFromLegacyPath(
   return null;
 }
 
+export function deriveAddStepFromSearch(search: string): InfrastructurePanelStep | null {
+  const params = new URLSearchParams(search);
+  return normalizeInfrastructurePanelStep(params.get(INFRASTRUCTURE_ADD_QUERY_PARAM));
+}
+
 export function deriveAddStepFromLocation(
   pathname: string,
   search: string,
 ): InfrastructurePanelStep | null {
   if (pathname === INFRASTRUCTURE_BASE_PATH || pathname.startsWith(`${INFRASTRUCTURE_BASE_PATH}/`)) {
-    const params = new URLSearchParams(search);
-    const stepFromQuery = normalizeInfrastructurePanelStep(
-      params.get(INFRASTRUCTURE_ADD_QUERY_PARAM),
-    );
+    const stepFromQuery = deriveAddStepFromSearch(search);
     if (stepFromQuery) {
       return stepFromQuery;
     }

@@ -161,7 +161,7 @@ Infrastructure:
 ---------------
 ${infrastructureUrl}
 
-Use Add infrastructure to connect your first host or API-backed platform
+Use Add connection to connect your first host or API-backed platform
 (Proxmox, TrueNAS, VMware, and others).
 
 Keep these credentials secure!

@@ -339,9 +339,9 @@ an add-only capacity posture.
     state (active/paused/unauthorized/unreachable/stale/pending) and
     active scope keys into the table's display. `InfrastructureWorkspace`
     must not reconstruct per-type health, scope, or last-seen columns
-    from `useInfrastructureReportingState` for configured connection
-    rows; the legacy reporting-state path is retained only for
-    monitoring-stopped inventory rows pending phase 9 cleanup. Drill-in
+    from any retired reporting-local state for configured connection
+    rows; the aggregator is the only configured-connections source of
+    truth. Drill-in
     from a unified row opens
     `frontend-modern/src/components/Settings/ConnectionDetailDrawer.tsx`,
     which renders the aggregator fields directly (type, address, state,
@@ -423,9 +423,9 @@ an add-only capacity posture.
    still belong to the reporting inventory and inline lifecycle detail, but
    they must not appear as peer connection rows on that top ledger. Adding a
    new system must stay a single entry point on that ledger:
-   one `Add a system` picker that keeps `Install on a host` explicit for the
-   agent path while opening the saved-connection create flow for API-backed
-   platforms on the same page. `/settings/infrastructure/install`,
+   one `Add connection` entry point that keeps `Install on a host` explicit
+   for the agent path while opening the saved-connection create flow for
+   API-backed platforms on the same page. `/settings/infrastructure/install`,
    `/settings/infrastructure/platforms`, and
    `/settings/infrastructure/operations` remain valid deep links, but they
    must resolve to section focus on that same single-page workspace rather
@@ -451,7 +451,11 @@ an add-only capacity posture.
    canonical `Open Infrastructure Install` handoff and the explicit
    `Open Platform connections` handoff against the live setup wizard instead
    of relying on stale bootstrap tokens, dashboard fallbacks, or preview-only
-   coverage.
+   coverage. That API-backed handoff may keep the operator-facing `Platform
+   connections` label, but it must land on the shared infrastructure
+   onboarding contract at `/settings/infrastructure?add=pick` and normalize
+   back to `/settings/infrastructure` instead of reviving a separate
+   platform-management shell.
    When the first host reports successfully, the install workflow must treat
    that as a completion handoff with direct navigation into `/dashboard` and
    `/settings/infrastructure/operations` instead of leaving operators on a
@@ -721,9 +725,10 @@ instead of adopting execution-history persistence as a side effect.
 The connected-infrastructure reporting workspace also now treats API-backed
 platform surfaces as platform-connection-managed capabilities, not host-managed
 agent extensions. `frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx`,
-`InfrastructureActiveRowDetails.tsx`, and `useInfrastructureReportingState.tsx`
-must keep Proxmox, PBS, PMG, and TrueNAS on the shared Platform connections
-path, while only machine-installed agent, Docker, and Kubernetes surfaces
+`frontend-modern/src/components/Settings/useConnectionsLedger.ts`, and
+`frontend-modern/src/components/Settings/ConnectionDetailDrawer.tsx` must keep
+Proxmox, PBS, PMG, and TrueNAS on the shared Infrastructure API-backed path,
+while only machine-installed agent, Docker, and Kubernetes surfaces
 participate in host stop-monitoring scope, uninstall commands, and upgrade
 actions. That same lifecycle-owned reporting contract now also owns guest-link
 truth for agent rows: when a host agent is actually attached to a VM or system
@@ -892,42 +897,27 @@ best-effort report.
 When those lifecycle-adjacent calls fail validation, adjacent automation should
 rely on the API-owned error codes rather than message-text heuristics, because
 the backend contract owns the reporting validation classification.
-The API-backed platform connections workspace now also lives explicitly inside
-this lifecycle boundary: `ConnectionsTable.tsx`,
+The API-backed platform onboarding surface now lives inside the shared
+Infrastructure workspace. `ConnectionsTable.tsx`,
 `connectionsTableModel.ts`, `InfrastructureWorkspace.tsx`,
-`infrastructureWorkspaceModel.ts`,
-`InfrastructureInstallerSection.tsx`, `InfrastructureInventorySection.tsx`,
-`InfrastructureActiveRowDetails.tsx`,
-`InfrastructureIgnoredRowDetails.tsx`,
-`InfrastructureStopMonitoringDialog.tsx`,
-`PlatformConnectionsWorkspace.tsx`, `platformConnectionsModel.ts`,
-`TrueNASSettingsPanel.tsx`, `useTrueNASSettingsPanelState.ts`,
-`ProxmoxSettingsPanel.tsx`, `proxmoxSettingsModel.ts`,
-`ProxmoxDirectWorkspace.tsx`, `ProxmoxConfiguredNodesTable.tsx`,
-`ProxmoxDirectConnectionsCard.tsx`, `ProxmoxDiscoveryResultsCard.tsx`,
-`ProxmoxDeleteNodeDialog.tsx`, `ProxmoxNodeModalStack.tsx`,
-`ConfiguredNodeTables.tsx`, `SettingsSectionNav.tsx`,
-`useInfrastructureOperationsState.ts`, `infrastructureSettingsModel.ts`,
-`useInfrastructureConfiguredNodesState.ts`,
-`useInfrastructureDiscoveryRuntimeState.ts`, `useInfrastructureSettingsState.ts`,
-and `useProxmoxDirectWorkspaceState.ts` own the fallback install/direct/reporting
-operator flow, with `ConnectionsTable.tsx` plus
-`connectionsTableModel.ts` as the canonical top-level infrastructure ledger,
-`PlatformConnectionsWorkspace.tsx` as the canonical
-API-backed platform shell, `ProxmoxSettingsPanel.tsx` and
-`TrueNASSettingsPanel.tsx` as provider-specific workspaces,
-`useInfrastructureSettingsState.ts` as the shared platform-connections
-composition boundary, and
-the direct-node/discovery runtime hooks plus `useTrueNASSettingsPanelState.ts`
-as the canonical provider state owners, instead of leaving those panels
-ungoverned beside the canonical unified-agent install path.
+`infrastructureWorkspaceModel.ts`, `InfrastructureInstallerSection.tsx`,
+`platformConnectionsModel.ts`, `useInfrastructureSettingsState.ts`,
+`useTrueNASSettingsPanelState.ts`, `useVMwareSettingsPanelState.ts`,
+`proxmoxSettingsModel.ts`, `useInfrastructureConfiguredNodesState.ts`, and
+`useInfrastructureDiscoveryRuntimeState.ts` own the fallback
+install/direct/reporting operator flow, with `ConnectionsTable.tsx` plus
+`connectionsTableModel.ts` as the canonical top-level infrastructure ledger
+and the inline `ConnectionEditor` credential slots as the API-backed add/edit
+surface. Operator-facing setup copy may still use `Platform connections`, but
+that label now means the shared Infrastructure onboarding path
+(`/settings/infrastructure?add=pick`) rather than a standalone
+`PlatformConnectionsWorkspace.tsx` shell.
 That ledger-first default route must stay focused on one row per top-level
 monitored system. Configured platform connections must stay in secondary
 connection-management flows rather than appearing as peer rows in the default
-ledger. Inline detail drawers may surface reporting-item and ignored-item
-controls, but installer setup, platform-specific configuration, and profile
-management must remain secondary flows rather than being dumped underneath the
-default ledger.
+ledger, and movement between the connections ledger, inline add flow, and
+install surface must stay inside the single `Infrastructure` sidebar
+destination rather than reviving extra shells, tabs, or overlays.
 Those secondary infrastructure views must open through route-backed workspaces
 rather than modal overlays or stacked inline bodies. When the
 operator opens platform connection management, install tooling, or the legacy
@@ -944,92 +934,43 @@ Settings sidebar owns only the top-level `Infrastructure` destination; movement
 between those three jobs belongs to explicit ledger actions inside
 `InfrastructureWorkspace.tsx`, not extra sidebar entries or body-replacing
 workspace subtabs.
-That same lifecycle-owned platform-connections workspace must keep API-backed
-provider state operationally useful, not CRUD-only. `TrueNASSettingsPanel.tsx`
-and `useTrueNASSettingsPanelState.ts` must surface the shared runtime health,
-poll cadence, discovered contribution summary, and canonical infrastructure /
-workloads / storage / recovery handoffs coming from `/api/truenas/connections`
-instead of falling back to panel-local inference or agent-first setup guidance.
-Saved connection retests from that workspace must use the server-owned
-`POST /api/truenas/connections/{id}/test` path so operators can verify stored
-credentials without leaking masked-secret placeholders back into the draft
-connection form contract. When the operator is editing a saved connection, that
-same path must also accept the in-flight form payload and merge unchanged
-masked secrets on the server, so edit-dialog tests do not force credential
-re-entry just to validate changed host or TLS fields.
-When an operator runs a row-level saved-connection test from that workspace,
-`useTrueNASSettingsPanelState.ts` must reload the shared connection summary
-after the request completes so the card reflects refreshed last-success or
-last-error state instead of leaving stale health beside a success or failure
-toast.
-When that same platform workspace reports TrueNAS as unavailable, the disabled
-state must mean the server has explicitly opted out of the default-on TrueNAS
-integration, not that operators still need to enable a hidden feature gate for
-normal product use.
-That same API-backed platform workspace owner now also includes the shared
-presentation helpers `frontend-modern/src/utils/clusterEndpointPresentation.ts`
-and `frontend-modern/src/utils/proxmoxSettingsPresentation.ts`, so endpoint
-reachability state, discovery-prefill defaults, and variant copy stay on the
-same governed lifecycle surface instead of drifting into card-local strings or
-prefill assembly.
-That same platform-connections boundary also defines the agent-optional rule
-for API-backed platforms. TrueNAS may surface Assistant control and runtime
-insight through the backend-owned platform connection and polling path, but
-adjacent lifecycle flows must not start treating a unified-agent install as
-the required bootstrap for provider-backed TrueNAS operations.
-That same agent-optional rule also covers Assistant diagnostics. Provider-
-backed TrueNAS app log reads may route through shared AI/runtime wiring on the
-platform connection and poller path, but lifecycle-adjacent setup/install
-flows must not reframe those diagnostics as requiring unified-agent host
-install before TrueNAS becomes operational in Pulse.
-That same agent-optional rule also covers Assistant configuration reads.
-Provider-backed TrueNAS app config may route through shared AI/runtime wiring
-on the platform connection and poller path, but lifecycle-adjacent
-setup/install flows must not reframe those config reads as requiring
-unified-agent host install before TrueNAS becomes operational in Pulse.
-That same platform-connections boundary now also defines the only acceptable
-phase-1 VMware onboarding path. If `vmware-vsphere` implementation starts,
-`PlatformConnectionsWorkspace.tsx` must add `vCenter` under the shared
-API-backed workspace, preserve the saved-connection test and health model, and
-keep direct `ESXi` out of the phase-1 route and install model. Lifecycle-
-adjacent flows must not invent a VMware-only setup shell or reframe unified-
-agent host install as the bootstrap requirement for VMware support.
-That same platform-connections boundary also owns demo/mock continuity for
-those settings surfaces. When `/api/system/mock-mode` is enabled,
-provider-backed settings panels and their downstream infrastructure,
-workloads, storage, and recovery handoffs must read the canonical connection
-fixtures from `internal/mock/fixture_graph.go` instead of handler-local demo
-lists, so operator-facing demos stay coherent across those adjacent product
-surfaces without a restart.
-That same lifecycle-owned platform-connections boundary also owns configured
+That same lifecycle-owned platform onboarding boundary must keep API-backed
+provider state operationally useful, not CRUD-only.
+`useTrueNASSettingsPanelState.ts` and `useVMwareSettingsPanelState.ts` must
+surface shared runtime health, poll cadence, discovered contribution summary,
+and canonical infrastructure / workloads / storage / recovery handoffs coming
+from the saved-connection APIs instead of falling back to provider-local
+inference or agent-first setup guidance. Saved-connection retests must use the
+server-owned test routes, must allow masked-secret continuity on edit, and
+must refresh the shared connection-summary state after a save or retest
+completes. `frontend-modern/src/utils/clusterEndpointPresentation.ts` and
+`frontend-modern/src/utils/proxmoxSettingsPresentation.ts` remain part of that
+same governed lifecycle surface, so endpoint reachability state,
+discovery-prefill defaults, and variant copy do not drift into card-local
+strings or prefill assembly.
+That same platform-onboarding boundary also defines the agent-optional rule
+for API-backed platforms. TrueNAS and VMware may surface Assistant control,
+diagnostics, configuration reads, and runtime insight through the backend-owned
+connection and polling path, but adjacent lifecycle flows must not start
+treating a unified-agent install as the required bootstrap for provider-backed
+operations.
+That same boundary also defines the only acceptable VMware phase-1 path:
+`vCenter` under the shared Infrastructure onboarding flow. Lifecycle-adjacent
+flows must not invent a VMware-only setup shell, direct-ESXi branch, or
+agent-first bootstrap story just because the runtime now has a live VMware
+connection panel and poller.
+That same platform-onboarding boundary also owns demo/mock continuity for API-
+backed settings surfaces. When `/api/system/mock-mode` is enabled, provider
+fixtures and their downstream infrastructure/workloads/storage/recovery
+handoffs must still read from `internal/mock/fixture_graph.go`, so
+operator-facing demos stay coherent across those adjacent product surfaces
+without a restart.
+That same lifecycle-owned platform-onboarding boundary also owns configured
 Proxmox, PBS, and PMG replacement continuity. Node update handlers must pass
 the current platform surface into monitored-system admission through the shared
 structured replacement selector so host or name edits preserve the intended
 slot without reintroducing lifecycle-local matcher closures or empty-estate
 fallbacks.
-That same lifecycle-owned VMware workspace must also keep the backend-runtime
-shape hidden behind one operator-facing connection model. The settings surface
-may show one VMware connection's poll health, last error classification, and
-observed contribution summary, but it must not force the operator to manage
-separate Automation API versus VI JSON sessions or understand multi-client
-runtime wiring just to use the shared platform-connections path.
-That same shared connection model now also includes one runtime-health owner:
-manual saved-connection retests with no edit overlay must refresh the same
-poller-owned `poll` summary that ordinary list reads surface, while draft tests
-and edit-form overlay tests stay non-persistent until a save succeeds.
-Lifecycle-owned settings flows must not bring back a second `test` status model
-or a VMware-only health fetch just to describe row health.
-That lifecycle-owned VMware slice now also includes the first live runtime
-handoff rule. `frontend-modern/src/components/Settings/VMwareSettingsPanel.tsx`,
-`frontend-modern/src/components/Settings/useVMwareSettingsPanelState.ts`,
-`frontend-modern/src/components/Settings/PlatformConnectionsWorkspace.tsx`,
-and `internal/api/router.go` must keep VMware on the shared platform-
-connections workflow with one `vCenter` connection family under the same
-saved-connection ledger. Lifecycle-adjacent install or discovery surfaces must
-not fork that
-into a VMware-only install wizard, direct-ESXi setup branch, or agent-first
-bootstrap story just because the runtime now has a live VMware connection
-panel and poller.
 That same shared router boundary must treat infrastructure summary chart
 normalization as summary-only presentation transport: long-range chart bucket
 shaping may improve operator-facing summary readability, but it must not be
@@ -1040,11 +981,12 @@ canonical `/workloads` row contract so lifecycle settings, reporting, and
 handoff surfaces never depend on provider-native metric keys.
 That same lifecycle-owned settings slice now also owns the shared VMware
 handoff framing. `InfrastructureWorkspace.tsx`,
-`PlatformConnectionsWorkspace.tsx`, `useInfrastructureSettingsState.ts`, and
+`useInfrastructureSettingsState.ts`, and
 `useSettingsInfrastructurePanelProps.ts` must surface VMware availability and
 connection counts from the same shared infrastructure settings state that owns
-the VMware panel itself, rather than letting adjacent setup surfaces grow a
-second VMware availability fetch or a VMware-only handoff path.
+the inline VMware credential flow itself, rather than letting adjacent setup
+surfaces grow a second VMware availability fetch or a VMware-only handoff
+path.
 That same infrastructure workspace boundary now also owns the first-run
 handoff copy for new operators. `InfrastructureWorkspace.tsx` must keep
 `Install on a host` visible as the first monitored-system path while still
@@ -1246,9 +1188,11 @@ registration must all create the same Pulse-managed `pulse-<canonical-scope-slug
 token name for a given Pulse endpoint instead of letting one caller drift into
 timestamp-suffixed or rerun-local token identities.
 The corresponding node setup modal owner is now an explicit shell-plus-sections
-surface: `NodeModal.tsx` composes `NodeModalBasicInfoSection.tsx`,
-`NodeModalAuthenticationSection.tsx`, `NodeModalMonitoringSection.tsx`,
-`NodeModalStatusFooter.tsx`, `nodeModalModel.ts`, and `useNodeModalState.ts`.
+surface:
+`ConnectionEditor/CredentialSlots/NodeCredentialSlot.tsx` composes
+`NodeModalBasicInfoSection.tsx`, `NodeModalAuthenticationSection.tsx`,
+`NodeModalMonitoringSection.tsx`, `NodeModalStatusFooter.tsx`,
+`nodeModalModel.ts`, and `useNodeModalState.ts`.
 That same node setup owner also includes
 `frontend-modern/src/utils/nodeModalPresentation.ts`, which now owns the
 canonical node-type defaults, endpoint/auth placeholders, monitoring coverage
@@ -1480,13 +1424,13 @@ instead of persisting an orphan profile reference through the API.
 That same missing-profile assignment contract must survive the shared frontend
 control surface: `frontend-modern/src/api/agentProfiles.ts` must preserve the
 canonical missing-profile message for assignment 404s, and
-`AgentProfilesPanel.tsx` and `InfrastructureOperationsController.tsx` must resync profile state after
+`AgentProfilesPanel.tsx` and `InfrastructureInstallerSection.tsx` must resync profile state after
 that rejection instead of flattening it into a generic assignment failure while
 leaving stale profile options visible.
 That same shared profile-management boundary must also fail closed on malformed
 list payloads: `frontend-modern/src/api/agentProfiles.ts` may not silently
 reinterpret non-array profile or assignment responses as an empty state, and
-`useAgentProfilesPanelState.ts` / `InfrastructureOperationsController.tsx` must surface that load
+`useAgentProfilesPanelState.ts` / `InfrastructureInstallerSection.tsx` must surface that load
 failure instead of pretending no profiles exist.
 That same shared profile-management boundary must also fail closed on malformed
 profile-object, suggestion, schema, and validation payloads: the shared
@@ -1573,7 +1517,8 @@ must preserve both `PULSE_ENABLE_PROXMOX` and `PULSE_PROXMOX_TYPE`, and
 `scripts/install.ps1` must persist those flags into the managed service
 arguments instead of silently collapsing back to generic host monitoring.
 The same lifecycle ownership now also covers manual node setup command
-presentation in the extracted node setup modal owner (`NodeModal.tsx`,
+presentation in the extracted node setup surface
+(`ConnectionEditor/CredentialSlots/NodeCredentialSlot.tsx`,
 `NodeModalSetupGuideSection.tsx`, `nodeModalModel.ts`, and
 `useNodeModalState.ts`): the copied PVE permission snippet must stay
 aligned with the canonical backend setup script, including comma-joined
@@ -1591,7 +1536,8 @@ generation and manual setup-script download through canonical `NodesAPI`
 helpers for both PVE and PBS, preserving the shared setup-token and expiry
 contract instead of letting one node type drift onto a raw fetch-only path.
 That same node setup modal owner must also stay on the direct
-`node-setup-settings-surface` proof path across `NodeModal.tsx`,
+`node-setup-settings-surface` proof path across
+`ConnectionEditor/CredentialSlots/NodeCredentialSlot.tsx`,
 `NodeModalAuthenticationSection.tsx`, `NodeModalBasicInfoSection.tsx`,
 `NodeModalMonitoringSection.tsx`, `NodeModalSetupGuideSection.tsx`,
 `NodeModalStatusFooter.tsx`, `nodeModalModel.ts`, and `useNodeModalState.ts`,
@@ -1884,7 +1830,8 @@ and private-CA continuity controls used by the shared lifecycle command
 surface: the first-session setup-completion install handoff must pass explicit
 `--insecure` and `--cacert` choices through the shared Unix install builder so
 the very first installer fetch and the installer runtime stay aligned with the
-same transport contract as `InfrastructureOperationsController.tsx`. In explicit insecure mode, that
+same transport contract as `InfrastructureInstallerSection.tsx` and
+`useInfrastructureOperationsState.tsx`. In explicit insecure mode, that
 means the outer `curl` fetch must widen to `-kfsSL` instead of preserving
 strict TLS until `install.sh` starts.
 That same first-session install surface must also preserve canonical
@@ -1896,7 +1843,8 @@ That same first-session surface must also preserve Windows install parity:
 `SetupCompletionPanel` may not stop at Unix-only shell transport while claiming Windows
 coverage. Its PowerShell install command must route through the shared
 transport helper so URL, token, insecure-TLS, and custom-CA behavior stay
-aligned with `InfrastructureOperationsController.tsx`.
+aligned with `InfrastructureInstallerSection.tsx` and
+`useInfrastructureOperationsState.tsx`.
 That same first-session setup-completion surface also owns the operator's v6
 mental model for Unified Agent onboarding: `SetupCompletionPanel` must teach that one
 Unified Agent install creates one canonical Pulse system resource first, then
@@ -1983,7 +1931,7 @@ Pulse URL, shell and PowerShell install commands must trim it before appending
 `/install.sh` or `/install.ps1` so lifecycle transport does not drift onto
 double-slash asset paths.
 That same shared install-command transport must also fail closed on blank local
-overrides: whitespace-only custom Pulse endpoint input in `InfrastructureOperationsController.tsx`
+overrides: whitespace-only custom Pulse endpoint input in `InfrastructureInstallerSection.tsx`
 or `SetupCompletionPanel.tsx` may not override the canonical backend-governed
 endpoint, and shared command builders must reject blank endpoint URLs instead
 of composing `/install.sh` or `/install.ps1` from an empty base.
@@ -2226,7 +2174,7 @@ surface-local history identity.
 The browser-side runtime boundary is now explicit too. Lifecycle-owned
 settings hooks such as
 `frontend-modern/src/components/Settings/useAgentProfilesPanelState.ts` and
-`frontend-modern/src/components/Settings/useInfrastructureReportingState.tsx`
+`frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx`
 may read websocket state only through
 `frontend-modern/src/contexts/appRuntime.ts`. They must not import `@/App` or
 recreate app-shell providers, because `frontend-modern/src/App.tsx` owns
