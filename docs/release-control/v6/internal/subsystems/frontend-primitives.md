@@ -1319,8 +1319,11 @@ primary-navigation target being described, and keep route-orientation copy on
 the existing welcome flow instead of layering a duplicate in-product banner.
 The guided stop map inside that welcome surface is interactive, not decorative:
 operators must be able to jump directly to any tour step from the stop list,
-and desktop layouts may widen the panel enough to keep stop labels readable
-without overlapping or collapsing into clipped pills.
+and desktop layouts may widen the panel enough to keep step labels readable
+without overlapping or collapsing into clipped pills. That map should read as
+numbered wayfinding, not placeholder onboarding chrome: concise numeric badges
+plus section titles are preferred over repeated `Stop N` copy or other filler
+labels that add noise without helping orientation.
 That state owner now also owns public-demo suppression: the modal must stay
 closed until `sessionPresentationPolicyResolved()` is true and must fail closed
 when `presentationPolicyIsDemoMode()` resolves true, so the public demo does

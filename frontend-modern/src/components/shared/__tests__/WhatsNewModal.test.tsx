@@ -70,6 +70,8 @@ describe('WhatsNewModal', () => {
     expect(dialog).toBeInTheDocument();
     expect(within(dialog).getByText('Welcome to Pulse v6')).toBeInTheDocument();
     expect(within(dialog).getByText('Step 1 of 5')).toBeInTheDocument();
+    expect(within(dialog).getByText('In This Tour')).toBeInTheDocument();
+    expect(within(dialog).queryByText(/Stop 1/i)).not.toBeInTheDocument();
     expect(within(dialog).getAllByText('Dashboard')).toHaveLength(2);
   });
 

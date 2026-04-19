@@ -129,11 +129,11 @@ export function WhatsNewModal() {
               <div class="space-y-2.5">
                 <div class="flex items-center gap-3">
                   <div class="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">
-                    Tour Stops
+                    In This Tour
                   </div>
                   <div class="h-px flex-1 bg-border"></div>
                 </div>
-                <p class="text-xs text-muted">Click any stop to jump there.</p>
+                <p class="text-xs text-muted">Jump ahead or follow the highlighted path.</p>
                 <div class="grid grid-cols-2 gap-2.5">
                   <For each={WHATS_NEW_FEATURE_CARDS}>
                     {(card, index) => (
@@ -141,28 +141,23 @@ export function WhatsNewModal() {
                         type="button"
                         onClick={() => state.handleSelectStep(index())}
                         aria-current={index() === state.stepIndex() ? 'step' : undefined}
-                        class={`min-h-[3.25rem] rounded-2xl border px-3 py-2.5 text-left transition-colors ${
+                        class={`group min-h-[3.35rem] rounded-2xl border px-3.5 py-3 text-left transition-colors ${
                           index() === state.stepIndex()
-                            ? 'border-blue-300 bg-blue-50 text-blue-900 shadow-sm dark:border-blue-700 dark:bg-blue-950 dark:text-blue-100'
-                            : 'border-border bg-surface-hover text-muted hover:border-slate-300 hover:bg-surface dark:hover:border-slate-700'
+                            ? 'border-blue-300 bg-gradient-to-br from-blue-50 to-white text-blue-900 shadow-sm dark:border-blue-700 dark:from-blue-950 dark:to-slate-950 dark:text-blue-100'
+                            : 'border-border bg-surface-hover text-base-content hover:border-slate-300 hover:bg-surface dark:hover:border-slate-700'
                         }`}
                       >
-                        <div class="flex items-center gap-2.5">
+                        <div class="flex items-center gap-3">
                           <div
-                            class={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full ${
+                            class={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-[11px] font-semibold font-mono ${
                               index() === state.stepIndex()
-                                ? 'bg-white/80 text-blue-700 dark:bg-slate-950/50 dark:text-blue-200'
+                                ? 'bg-white/85 text-blue-700 shadow-sm dark:bg-slate-950/50 dark:text-blue-200'
                                 : 'bg-surface text-muted'
                             }`}
                           >
-                            <WhatsNewFeatureIcon card={card} />
+                            {String(index() + 1).padStart(2, '0')}
                           </div>
-                          <div class="min-w-0">
-                            <div class="truncate text-xs font-semibold">{card.title}</div>
-                            <div class="text-[10px] uppercase tracking-[0.14em] opacity-70">
-                              Stop {index() + 1}
-                            </div>
-                          </div>
+                          <div class="min-w-0 flex-1 truncate text-sm font-semibold">{card.title}</div>
                         </div>
                       </button>
                     )}
