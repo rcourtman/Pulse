@@ -124,6 +124,32 @@ func TestHandleUpdateNode(t *testing.T) {
 			},
 			expectedStatus: http.StatusNotFound,
 		},
+		{
+			// The unified connections aggregator emits IDs of the form
+			// "pve:<name>"; the update endpoint accepts this form and resolves
+			// by Name.
+			name:   "success_semantic_id_pve_by_name",
+			nodeID: "pve:test-renamed-pve",
+			requestBody: map[string]interface{}{
+				"name": "renamed-via-semantic-id",
+			},
+			expectedStatus: http.StatusOK,
+			verifyConfig: func(t *testing.T, c *config.Config) {
+				if c.PVEInstances[0].Name != "renamed-via-semantic-id" {
+					t.Errorf("semantic-id update didn't take effect: got %q", c.PVEInstances[0].Name)
+				}
+			},
+		},
+		{
+			// Previous case just renamed to "renamed-via-semantic-id", so
+			// resolving by an outdated name should 404, not 400.
+			name:   "fail_semantic_id_unknown_name",
+			nodeID: "pve:test-renamed-pve",
+			requestBody: map[string]interface{}{
+				"name": "wont-work",
+			},
+			expectedStatus: http.StatusNotFound,
+		},
 	}
 
 	for _, tt := range tests {

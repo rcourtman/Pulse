@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -18,6 +19,72 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 	"github.com/rs/zerolog/log"
 )
+
+// errNodeIDNotFound signals that resolveNodeID parsed a well-formed semantic
+// ID ("pve:delly") but no matching instance is in the current config. Callers
+// distinguish this from malformed IDs so they can emit 404 vs 400.
+var errNodeIDNotFound = errors.New("node id not found")
+
+// resolveNodeID accepts either the legacy array-index form ("pve-0") or the
+// semantic form the unified connections aggregator emits ("pve:delly") and
+// returns (nodeType, slice-index) suitable for indexing into cfg's per-type
+// instance slices.
+//
+// Semantic-form lookup is by Name. Duplicate names are prevented at write
+// time; if one somehow sneaks in, the first match wins.
+func resolveNodeID(cfg *config.Config, raw string) (string, int, error) {
+	if raw == "" {
+		return "", 0, fmt.Errorf("empty node id")
+	}
+
+	if colonIdx := strings.Index(raw, ":"); colonIdx > 0 {
+		nodeType := raw[:colonIdx]
+		name := raw[colonIdx+1:]
+		if name == "" {
+			return "", 0, fmt.Errorf("empty name in node id %q", raw)
+		}
+		idx, found := findInstanceIndexByName(cfg, nodeType, name)
+		if !found {
+			return nodeType, 0, errNodeIDNotFound
+		}
+		return nodeType, idx, nil
+	}
+
+	parts := strings.Split(raw, "-")
+	if len(parts) != 2 {
+		return "", 0, fmt.Errorf("invalid node id %q", raw)
+	}
+	nodeType := parts[0]
+	var index int
+	if _, err := fmt.Sscanf(parts[1], "%d", &index); err != nil {
+		return "", 0, fmt.Errorf("invalid index in node id %q: %w", raw, err)
+	}
+	return nodeType, index, nil
+}
+
+func findInstanceIndexByName(cfg *config.Config, nodeType, name string) (int, bool) {
+	switch nodeType {
+	case "pve":
+		for i, inst := range cfg.PVEInstances {
+			if inst.Name == name {
+				return i, true
+			}
+		}
+	case "pbs":
+		for i, inst := range cfg.PBSInstances {
+			if inst.Name == name {
+				return i, true
+			}
+		}
+	case "pmg":
+		for i, inst := range cfg.PMGInstances {
+			if inst.Name == name {
+				return i, true
+			}
+		}
+	}
+	return 0, false
+}
 
 func (h *ConfigHandlers) handleGetNodes(w http.ResponseWriter, r *http.Request) {
 	// Check if mock mode is enabled
@@ -1113,17 +1180,13 @@ func (h *ConfigHandlers) handleUpdateNode(w http.ResponseWriter, r *http.Request
 		Interface("temperatureMonitoringEnabled", req.TemperatureMonitoringEnabled).
 		Msg("Received node update request")
 
-	// Parse node ID
-	parts := strings.Split(nodeID, "-")
-	if len(parts) != 2 {
-		http.Error(w, "Invalid node ID", http.StatusBadRequest)
-		return
-	}
-
-	nodeType := parts[0]
-	index := 0
-	if _, err := fmt.Sscanf(parts[1], "%d", &index); err != nil {
-		http.Error(w, "Invalid node ID", http.StatusBadRequest)
+	nodeType, index, err := resolveNodeID(h.getConfig(r.Context()), nodeID)
+	if err != nil {
+		if errors.Is(err, errNodeIDNotFound) {
+			http.Error(w, "Node not found", http.StatusNotFound)
+		} else {
+			http.Error(w, "Invalid node ID", http.StatusBadRequest)
+		}
 		return
 	}
 
@@ -1530,17 +1593,13 @@ func (h *ConfigHandlers) handleDeleteNode(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// Parse node ID
-	parts := strings.Split(nodeID, "-")
-	if len(parts) != 2 {
-		http.Error(w, "Invalid node ID", http.StatusBadRequest)
-		return
-	}
-
-	nodeType := parts[0]
-	index := 0
-	if _, err := fmt.Sscanf(parts[1], "%d", &index); err != nil {
-		http.Error(w, "Invalid node ID", http.StatusBadRequest)
+	nodeType, index, err := resolveNodeID(h.getConfig(r.Context()), nodeID)
+	if err != nil {
+		if errors.Is(err, errNodeIDNotFound) {
+			http.Error(w, "Node not found", http.StatusNotFound)
+		} else {
+			http.Error(w, "Invalid node ID", http.StatusBadRequest)
+		}
 		return
 	}
 
@@ -1659,17 +1718,13 @@ func (h *ConfigHandlers) handleRefreshClusterNodes(w http.ResponseWriter, r *htt
 		return
 	}
 
-	// Parse node ID
-	parts := strings.Split(nodeID, "-")
-	if len(parts) != 2 {
-		http.Error(w, "Invalid node ID", http.StatusBadRequest)
-		return
-	}
-
-	nodeType := parts[0]
-	index := 0
-	if _, err := fmt.Sscanf(parts[1], "%d", &index); err != nil {
-		http.Error(w, "Invalid node ID", http.StatusBadRequest)
+	nodeType, index, err := resolveNodeID(h.getConfig(r.Context()), nodeID)
+	if err != nil {
+		if errors.Is(err, errNodeIDNotFound) {
+			http.Error(w, "Node not found", http.StatusNotFound)
+		} else {
+			http.Error(w, "Invalid node ID", http.StatusBadRequest)
+		}
 		return
 	}
 
@@ -1847,17 +1902,13 @@ func (h *ConfigHandlers) handleTestNode(w http.ResponseWriter, r *http.Request) 
 
 	nodeID := parts[0]
 
-	// Parse node ID
-	idParts := strings.Split(nodeID, "-")
-	if len(idParts) != 2 {
-		http.Error(w, "Invalid node ID", http.StatusBadRequest)
-		return
-	}
-
-	nodeType := idParts[0]
-	index := 0
-	if _, err := fmt.Sscanf(idParts[1], "%d", &index); err != nil {
-		http.Error(w, "Invalid node ID", http.StatusBadRequest)
+	nodeType, index, err := resolveNodeID(h.getConfig(r.Context()), nodeID)
+	if err != nil {
+		if errors.Is(err, errNodeIDNotFound) {
+			http.Error(w, "Node not found", http.StatusNotFound)
+		} else {
+			http.Error(w, "Invalid node ID", http.StatusBadRequest)
+		}
 		return
 	}
 

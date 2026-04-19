@@ -80,6 +80,25 @@ func TestHandleDeleteNode(t *testing.T) {
 			expectedStatus: http.StatusNotFound, // Handler returns 404 for unknown types
 			verifyDeletion: nil,
 		},
+		{
+			// Semantic ID form emitted by the unified connections aggregator.
+			// Looks up the remaining PVE ("pve2") by name after earlier deletes.
+			name:           "success_semantic_id_pve_by_name",
+			nodeID:         "pve:pve2",
+			expectedStatus: http.StatusOK,
+			verifyDeletion: func(t *testing.T, c *config.Config) {
+				if len(c.PVEInstances) != 0 {
+					t.Errorf("expected 0 PVE instances after semantic-id delete, got %d", len(c.PVEInstances))
+				}
+			},
+		},
+		{
+			// Name that no longer exists after the previous delete.
+			name:           "fail_semantic_id_unknown_name",
+			nodeID:         "pve:pve2",
+			expectedStatus: http.StatusNotFound,
+			verifyDeletion: nil,
+		},
 	}
 
 	for _, tt := range tests {

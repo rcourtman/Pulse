@@ -1,4 +1,5 @@
 import { apiFetchJSON } from '@/utils/apiClient';
+import { MonitoringAPI } from './monitoring';
 
 export type ConnectionType =
   | 'pve'
@@ -81,4 +82,80 @@ export class ConnectionsAPI {
       body: JSON.stringify({ address } satisfies ProbeRequest),
     });
   }
+
+  static async setEnabled(connectionId: string, enabled: boolean): Promise<void> {
+    const { type, suffix } = splitConnectionId(connectionId);
+    switch (type) {
+      case 'pve':
+      case 'pbs':
+      case 'pmg':
+        await apiFetchJSON(`/api/config/nodes/${encodeURIComponent(connectionId)}`, {
+          method: 'PUT',
+          body: JSON.stringify({ enabled }),
+        });
+        return;
+      case 'vmware':
+        await apiFetchJSON(`/api/vmware/connections/${encodeURIComponent(suffix)}`, {
+          method: 'PUT',
+          body: JSON.stringify({ enabled }),
+        });
+        return;
+      case 'truenas':
+        await apiFetchJSON(`/api/truenas/connections/${encodeURIComponent(suffix)}`, {
+          method: 'PUT',
+          body: JSON.stringify({ enabled }),
+        });
+        return;
+      case 'agent':
+      case 'docker':
+      case 'kubernetes':
+        throw new Error(`Pause is not supported for ${type} connections`);
+      default:
+        throw new Error(`Unknown connection type: ${type}`);
+    }
+  }
+
+  static async remove(connectionId: string): Promise<void> {
+    const { type, suffix } = splitConnectionId(connectionId);
+    switch (type) {
+      case 'pve':
+      case 'pbs':
+      case 'pmg':
+        await apiFetchJSON(`/api/config/nodes/${encodeURIComponent(connectionId)}`, {
+          method: 'DELETE',
+        });
+        return;
+      case 'vmware':
+        await apiFetchJSON(`/api/vmware/connections/${encodeURIComponent(suffix)}`, {
+          method: 'DELETE',
+        });
+        return;
+      case 'truenas':
+        await apiFetchJSON(`/api/truenas/connections/${encodeURIComponent(suffix)}`, {
+          method: 'DELETE',
+        });
+        return;
+      case 'agent':
+        await MonitoringAPI.deleteAgent(suffix);
+        return;
+      case 'docker':
+      case 'kubernetes':
+        throw new Error(`Remove is not yet supported for ${type} connections`);
+      default:
+        throw new Error(`Unknown connection type: ${type}`);
+    }
+  }
 }
+
+const splitConnectionId = (id: string): { type: ConnectionType; suffix: string } => {
+  const colon = id.indexOf(':');
+  if (colon <= 0) {
+    throw new Error(`Invalid connection id: ${id}`);
+  }
+  const type = id.slice(0, colon) as ConnectionType;
+  const suffix = id.slice(colon + 1);
+  if (!suffix) {
+    throw new Error(`Invalid connection id (empty suffix): ${id}`);
+  }
+  return { type, suffix };
+};
