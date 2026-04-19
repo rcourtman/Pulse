@@ -8,6 +8,7 @@ describe('dashboardKpiPresentation', () => {
     });
     expect(getDashboardKpiPresentation('workloads')).toMatchObject({
       label: 'Workloads',
+      supportingText: 'VMs, containers, and pods',
     });
     expect(getDashboardKpiPresentation('storage')).toMatchObject({
       label: 'Storage',

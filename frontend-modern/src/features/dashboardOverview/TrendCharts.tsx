@@ -40,6 +40,14 @@ function normalizeRange(range: HistoryTimeRange): SummaryTimeRange {
 
 export function TrendCharts(props: TrendChartsProps) {
   const selectedRange = createMemo(() => normalizeRange(props.trendRange()));
+  const emptyStateTitle = createMemo(() =>
+    props.overview.infrastructure.total > 0 ? 'History is warming up' : 'No infrastructure trends yet',
+  );
+  const emptyStateBody = createMemo(() =>
+    props.overview.infrastructure.total > 0
+      ? 'Pulse needs a couple of CPU and memory samples from connected infrastructure before these charts render.'
+      : 'These charts appear after connected systems start reporting infrastructure CPU and memory history.',
+  );
 
   const cpuSeries = createMemo<InteractiveSparklineSeries[]>(() => {
     const resources = props.overview.infrastructure.topCPU.slice(0, 5);
@@ -125,8 +133,12 @@ export function TrendCharts(props: TrendChartsProps) {
         </div>
       </Show>
       <Show when={!props.trends.error && props.trends.infrastructure.emptyMessage}>
-        <div class="mb-2 rounded border border-border bg-surface px-2 py-1.5 text-[11px] text-muted">
-          {props.trends.infrastructure.emptyMessage}
+        <div class="mb-2 rounded border border-border bg-surface px-3 py-2 text-[11px] text-muted">
+          <p class="font-medium text-base-content">{emptyStateTitle()}</p>
+          <p class="mt-1">{emptyStateBody()}</p>
+          <p class="mt-1 text-[10px] uppercase tracking-wide text-muted/80">
+            {props.trends.infrastructure.emptyMessage}
+          </p>
         </div>
       </Show>
 

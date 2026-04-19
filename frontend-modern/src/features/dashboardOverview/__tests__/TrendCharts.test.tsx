@@ -61,6 +61,15 @@ describe('TrendCharts', () => {
     const [range, setRange] = createSignal<HistoryTimeRange>('1h');
     render(() => (
       <TrendCharts
+        overview={makeOverview({
+          infrastructure: {
+            total: 2,
+            byStatus: {},
+            byType: {},
+            topCPU: [],
+            topMemory: [],
+          },
+        })}
         trends={makeTrends({
           infrastructure: {
             cpu: new Map(),
@@ -68,12 +77,17 @@ describe('TrendCharts', () => {
             emptyMessage: 'Gathering first sample…',
           },
         })}
-        overview={makeOverview()}
         trendRange={range}
         setTrendRange={setRange}
       />
     ));
 
+    expect(screen.getByText('History is warming up')).toBeTruthy();
+    expect(
+      screen.getByText(
+        'Pulse needs a couple of CPU and memory samples from connected infrastructure before these charts render.',
+      ),
+    ).toBeTruthy();
     expect(screen.getByText('Gathering first sample…')).toBeTruthy();
   });
 });

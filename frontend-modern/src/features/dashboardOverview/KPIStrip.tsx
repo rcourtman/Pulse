@@ -85,6 +85,9 @@ export function KPIStrip(props: KPIStripProps) {
             <p class="text-2xl font-mono font-semibold text-base-content mt-1">
               {props.workloads.total}
             </p>
+            <p class="text-[11px] text-muted mt-0.5">
+              {workloadsPresentation.supportingText}
+            </p>
             <p class="text-xs text-muted mt-0.5">
               <span class="font-mono font-medium text-emerald-600 dark:text-emerald-400">
                 {props.workloads.running}

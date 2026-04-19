@@ -8,6 +8,7 @@ export type DashboardKpiKey = 'infrastructure' | 'workloads' | 'storage' | 'aler
 
 export interface DashboardKpiPresentation {
   label: string;
+  supportingText?: string;
   cardClassName: string;
   iconClassName: string;
   icon: Component<{ class?: string }>;
@@ -23,6 +24,7 @@ const DASHBOARD_KPI_PRESENTATION: Record<DashboardKpiKey, DashboardKpiPresentati
   },
   workloads: {
     label: 'Workloads',
+    supportingText: 'VMs, containers, and pods',
     cardClassName:
       'h-full border-l-[3px] border-l-violet-500 dark:border-l-violet-400 bg-surface group-hover:bg-surface-hover transition-colors',
     iconClassName: 'w-3.5 h-3.5 text-violet-500/50 dark:text-violet-400/50',
