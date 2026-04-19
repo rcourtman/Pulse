@@ -56,9 +56,11 @@ describe('WhatsNewModal', () => {
     expect(whatsNewModalModelSource).toContain('WHATS_NEW_PRIVACY_URL');
     expect(whatsNewModalModelSource).toContain('MIGRATION_GUIDE_DOC_URL');
     expect(whatsNewModalModelSource).toContain('PRIVACY_DOC_URL');
-    expect(whatsNewModalModelSource).toContain('rotating install ID');
-    expect(whatsNewModalModelSource).toContain('normalized release identity');
-    expect(whatsNewModalModelSource).toContain('IP addresses are not stored in telemetry rows');
+    expect(whatsNewModalModelSource).toContain('anonymous daily ping');
+    expect(whatsNewModalModelSource).toContain('nothing is gone');
+    expect(whatsNewModalModelSource).toContain('WHATS_NEW_KICKER_LABEL');
+    expect(whatsNewModalModelSource).toContain('WHATS_NEW_STEP_MAP_LABEL');
+    expect(whatsNewModalModelSource).toContain('WHATS_NEW_TELEMETRY_LABEL');
     expect(whatsNewModalModelSource).not.toContain('https://github.com/rcourtman/Pulse/blob/main/docs/README.md');
     expect(whatsNewModalModelSource).not.toContain('https://github.com/rcourtman/Pulse/blob/main/docs/PRIVACY.md');
     expect(whatsNewModalModelSource).toContain('WHATS_NEW_DOCS_LABEL');
@@ -71,8 +73,9 @@ describe('WhatsNewModal', () => {
     const dialog = await screen.findByRole('dialog');
     expect(dialog).toBeInTheDocument();
     expect(within(dialog).getByText('Welcome to Pulse v6')).toBeInTheDocument();
+    expect(within(dialog).getByText(/nothing is gone/i)).toBeInTheDocument();
     expect(within(dialog).getByText('Step 1 of 5')).toBeInTheDocument();
-    expect(within(dialog).getByText('In This Tour')).toBeInTheDocument();
+    expect(within(dialog).getByText('Where Things Moved')).toBeInTheDocument();
     expect(within(dialog).queryByText(/Stop 1/i)).not.toBeInTheDocument();
     expect(within(dialog).getAllByText('Dashboard')).toHaveLength(2);
   });
@@ -127,26 +130,26 @@ describe('WhatsNewModal', () => {
   it('advances through the guided tour and finishes on the last step', async () => {
     render(() => <WhatsNewModal />);
 
-    expect(await screen.findByText(/problem-focused summary/i)).toBeInTheDocument();
+    expect(await screen.findByText(/overall picture: health, alerts, capacity/i)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Next' }));
-    expect(await screen.findByText(/platform roots live here/i)).toBeInTheDocument();
+    expect(await screen.findByText(/systems themselves: Proxmox nodes, Docker hosts/i)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Next' }));
-    expect(await screen.findByText(/docker update status now share/i)).toBeInTheDocument();
+    expect(await screen.findByText(/guests or Docker workloads in v5/i)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Next' }));
-    expect(await screen.findByText(/Storage is now a top-level destination/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Datastores, pools, disks, and capacity moved here/i)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Next' }));
-    expect(await screen.findByText(/Recovery events \(backups, snapshots, and replication\)/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Backups, snapshots, and replication moved here/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: "Let's go" })).toBeInTheDocument();
   });
 
   it('lets the user jump to a tour stop directly from the stop map', async () => {
     render(() => <WhatsNewModal />);
 
-    expect(await screen.findByText(/problem-focused summary/i)).toBeInTheDocument();
+    expect(await screen.findByText(/overall picture: health, alerts, capacity/i)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /Workloads/i }));
 
-    expect(await screen.findByText(/docker update status now share/i)).toBeInTheDocument();
+    expect(await screen.findByText(/guests or Docker workloads in v5/i)).toBeInTheDocument();
     expect(screen.getByText('Step 3 of 5')).toBeInTheDocument();
   });
 

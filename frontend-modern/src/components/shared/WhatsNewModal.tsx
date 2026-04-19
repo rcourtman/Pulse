@@ -11,17 +11,22 @@ import XIcon from 'lucide-solid/icons/x';
 import {
   WHATS_NEW_BACK_LABEL,
   WHATS_NEW_CLOSE_LABEL,
+  WHATS_NEW_CURRENT_STEP_LABEL,
   WHATS_NEW_DOCS_LABEL,
   WHATS_NEW_DOCS_URL,
   WHATS_NEW_DO_NOT_SHOW_LABEL,
   WHATS_NEW_FEATURE_CARDS,
+  WHATS_NEW_KICKER_LABEL,
   WHATS_NEW_NEXT_LABEL,
   WHATS_NEW_PRIMARY_ACTION_LABEL,
   WHATS_NEW_PRIVACY_URL,
   WHATS_NEW_SKIP_LABEL,
+  WHATS_NEW_STEP_MAP_HELPER,
+  WHATS_NEW_STEP_MAP_LABEL,
   WHATS_NEW_SUBTITLE,
   WHATS_NEW_TELEMETRY_COPY,
   WHATS_NEW_TELEMETRY_ENV_VAR,
+  WHATS_NEW_TELEMETRY_LABEL,
   WHATS_NEW_TELEMETRY_PRIVACY_LABEL,
   WHATS_NEW_TELEMETRY_SETTINGS_PATH,
   WHATS_NEW_TELEMETRY_TITLE,
@@ -90,7 +95,7 @@ export function WhatsNewModal() {
             <div class="flex items-start justify-between border-b border-border bg-surface px-6 py-5">
               <div>
                 <div class="inline-flex items-center rounded-full border border-border bg-surface-hover px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted">
-                  Guided Welcome Tour
+                  {WHATS_NEW_KICKER_LABEL}
                 </div>
                 <div class="mt-3 text-xs font-semibold uppercase tracking-[0.18em] text-muted">
                   Step {state.stepIndex() + 1} of {state.stepCount()}
@@ -118,7 +123,7 @@ export function WhatsNewModal() {
                   </div>
                   <div class="min-w-0">
                     <div class="text-[11px] font-semibold uppercase tracking-[0.16em] opacity-70">
-                      Now showing
+                      {WHATS_NEW_CURRENT_STEP_LABEL}
                     </div>
                     <div class="mt-1 text-base font-semibold text-inherit">{step().title}</div>
                     <p class="mt-2 text-sm leading-6 text-inherit">{step().description}</p>
@@ -129,11 +134,11 @@ export function WhatsNewModal() {
               <div class="space-y-2.5">
                 <div class="flex items-center gap-3">
                   <div class="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">
-                    In This Tour
+                    {WHATS_NEW_STEP_MAP_LABEL}
                   </div>
                   <div class="h-px flex-1 bg-border"></div>
                 </div>
-                <p class="text-xs text-muted">Jump ahead or follow the highlighted path.</p>
+                <p class="text-xs text-muted">{WHATS_NEW_STEP_MAP_HELPER}</p>
                 <div class="grid grid-cols-2 gap-2.5">
                   <For each={WHATS_NEW_FEATURE_CARDS}>
                     {(card, index) => (
@@ -165,40 +170,42 @@ export function WhatsNewModal() {
                 </div>
               </div>
 
-              <div class="rounded-md border border-sky-200 bg-sky-50 p-4 dark:border-sky-800 dark:bg-sky-900/30">
-                <div class="flex items-start gap-2.5">
-                  <div class="mt-0.5 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md border border-sky-200 bg-surface text-sky-800 dark:border-sky-800 dark:bg-slate-900 dark:text-sky-100">
+              <div class="rounded-md border border-border bg-surface-hover p-3.5">
+                <div class="flex items-start gap-3">
+                  <div class="mt-0.5 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md border border-border bg-surface text-muted">
                     <ChartBarIcon class="h-4 w-4" />
                   </div>
-                  <div>
-                    <div class="text-[11px] font-semibold uppercase tracking-[0.16em] text-sky-700 dark:text-sky-300">
-                      Privacy note
+                  <div class="min-w-0">
+                    <div class="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">
+                      {WHATS_NEW_TELEMETRY_LABEL}
                     </div>
-                    <div class="mt-1 text-sm font-medium text-sky-900 dark:text-sky-100">
+                    <div class="mt-1 text-sm font-medium text-base-content">
                       {WHATS_NEW_TELEMETRY_TITLE}
                     </div>
-                    <p class="mt-1.5 text-xs leading-5 text-sky-900 dark:text-sky-200">
-                      {WHATS_NEW_TELEMETRY_COPY[0]}
+                    <p class="mt-1 text-xs leading-5 text-muted">
+                      {WHATS_NEW_TELEMETRY_COPY[0]}{' '}
+                      <a
+                        href={WHATS_NEW_PRIVACY_URL}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class="underline hover:text-base-content"
+                      >
+                        {WHATS_NEW_TELEMETRY_PRIVACY_LABEL}
+                      </a>
                     </p>
+                    <p class="mt-1 text-xs leading-5 text-muted">
+                      {WHATS_NEW_TELEMETRY_COPY[1]}
+                    </p>
+                    <div class="mt-2 flex flex-wrap items-center gap-2 text-[10px] text-muted">
+                      <span class="rounded bg-surface px-1.5 py-0.5 font-medium">
+                        {WHATS_NEW_TELEMETRY_SETTINGS_PATH}
+                      </span>
+                      <code class="rounded bg-surface px-1.5 py-0.5 font-mono">
+                        {WHATS_NEW_TELEMETRY_ENV_VAR}
+                      </code>
+                    </div>
                   </div>
                 </div>
-                <p class="mt-1.5 text-xs leading-5 text-sky-900 dark:text-sky-200">
-                  {WHATS_NEW_TELEMETRY_COPY[1]} You can disable it any time in{' '}
-                  <span class="font-medium">{WHATS_NEW_TELEMETRY_SETTINGS_PATH}</span> or by
-                  setting{' '}
-                  <code class="rounded bg-sky-100 px-1 py-0.5 text-[10px] font-mono dark:bg-sky-800">
-                    {WHATS_NEW_TELEMETRY_ENV_VAR}
-                  </code>
-                  .{' '}
-                  <a
-                    href={WHATS_NEW_PRIVACY_URL}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    class="underline hover:text-sky-700 dark:hover:text-sky-100"
-                  >
-                    {WHATS_NEW_TELEMETRY_PRIVACY_LABEL}
-                  </a>
-                </p>
               </div>
 
               <div class="flex flex-col gap-3 rounded-md border border-border bg-surface-hover p-3.5 sm:flex-row sm:items-center sm:justify-between">

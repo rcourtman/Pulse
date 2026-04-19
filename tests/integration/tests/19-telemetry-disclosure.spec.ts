@@ -153,18 +153,15 @@ test.describe('Telemetry disclosure', () => {
     );
     await expect(dialog.getByText('Welcome to Pulse v6')).toBeVisible();
     await expect(dialog.getByText('Step 1 of 5')).toBeVisible();
+    await expect(dialog.getByText(/nothing is gone/i)).toBeVisible();
     await expect(assistantLauncher).toBeHidden();
     await expect(spotlight).toHaveAttribute('data-tour-step', 'dashboard');
     await expect(dialog).toHaveAttribute('data-tour-step', 'dashboard');
     await expectSpotlightAround(spotlight, dashboardTab);
-    await expect(
-      dialog.getByText(
-        /rotating install ID, normalized release identity, platform, resource counts, and feature flags/i,
-      ),
-    ).toBeVisible();
-    await expect(
-      dialog.getByText(/IP addresses are not stored in telemetry rows/i),
-    ).toBeVisible();
+    await expect(dialog.getByText('Where Things Moved')).toBeVisible();
+    await expect(dialog.getByText('Telemetry note')).toBeVisible();
+    await expect(dialog.getByText(/lightweight anonymous daily ping/i)).toBeVisible();
+    await expect(dialog.getByText('Settings → System → General', { exact: true })).toBeVisible();
 
     const privacyLink = dialog.getByRole('link', { name: 'Full details' });
     await expect(privacyLink).toHaveAttribute('href', '/docs/PRIVACY.md');
