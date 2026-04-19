@@ -1,22 +1,14 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
-import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Connection } from '@/api/connections';
-import type { UnifiedAgentRow } from '../infrastructureOperationsModel';
 import { InfrastructureWorkspace } from '../InfrastructureWorkspace';
 
 let mockPathname = '/settings/infrastructure';
 let mockSearch = '';
 const navigateSpy = vi.hoisted(() => vi.fn());
 const presentationPolicyIsReadOnlyMock = vi.hoisted(() => vi.fn(() => false));
-const setExpandedRowKeySpy = vi.hoisted(() => vi.fn());
-const setSelectedIgnoredRowKeySpy = vi.hoisted(() => vi.fn());
 
-let mockActiveRows: UnifiedAgentRow[] = [];
-let mockIgnoredRows: UnifiedAgentRow[] = [];
 let mockConnections: Connection[] = [];
-const [selectedActiveRowKey, setSelectedActiveRowKey] = createSignal<string | null>(null);
-const [selectedIgnoredRowKey, setSelectedIgnoredRowKey] = createSignal<string | null>(null);
 
 vi.mock('@solidjs/router', async () => {
   const actual = await vi.importActual<typeof import('@solidjs/router')>('@solidjs/router');
@@ -33,23 +25,6 @@ vi.mock('@/stores/sessionPresentationPolicy', () => ({
 
 vi.mock('../useInfrastructureOperationsState', () => ({
   InfrastructureOperationsStateProvider: (props: { children: unknown }) => <>{props.children}</>,
-  useInfrastructureOperationsContext: () => ({
-    activeRows: () => mockActiveRows,
-    monitoringStoppedRows: () => mockIgnoredRows,
-    selectedActiveRow: () =>
-      mockActiveRows.find((row) => row.rowKey === selectedActiveRowKey()) ?? null,
-    selectedIgnoredRow: () =>
-      mockIgnoredRows.find((row) => row.rowKey === selectedIgnoredRowKey()) ?? null,
-    setExpandedRowKey: (value: string | null) => {
-      setExpandedRowKeySpy(value);
-      setSelectedActiveRowKey(value);
-    },
-    setSelectedIgnoredRowKey: (value: string | null) => {
-      setSelectedIgnoredRowKeySpy(value);
-      setSelectedIgnoredRowKey(value);
-    },
-    setupHandoff: () => null,
-  }),
 }));
 
 vi.mock('../InfrastructureInstallerSection', () => ({
@@ -70,14 +45,6 @@ vi.mock('../ConnectionEditor/CredentialSlots/TrueNASCredentialSlot', () => ({
 
 vi.mock('../ConnectionEditor/CredentialSlots/VMwareCredentialSlot', () => ({
   VMwareCredentialSlot: () => <div data-testid="vmware-section">vmware</div>,
-}));
-
-vi.mock('../InfrastructureIgnoredRowDetails', () => ({
-  InfrastructureIgnoredRowDetails: () => <div data-testid="ignored-details">ignored details</div>,
-}));
-
-vi.mock('../InfrastructureStopMonitoringDialog', () => ({
-  InfrastructureStopMonitoringDialog: () => <div data-testid="stop-monitoring-dialog" />,
 }));
 
 vi.mock('../AgentProfilesPanel', () => ({
@@ -111,33 +78,6 @@ const connectionFixture = (overrides: Partial<Connection> = {}): Connection => (
   capabilities: { supportsPause: true, supportsScope: true, supportsTest: true },
   ...overrides,
 });
-
-const reportingRow = (overrides: Partial<UnifiedAgentRow> = {}): UnifiedAgentRow =>
-  ({
-    rowKey: 'agent:tower',
-    id: 'tower',
-    name: 'tower',
-    hostname: 'tower.local',
-    capabilities: ['agent'],
-    status: 'active',
-    healthStatus: 'online',
-    lastSeen: Date.now(),
-    upgradePlatform: 'linux',
-    scope: { label: 'Default', category: 'default' },
-    installFlags: [],
-    searchText: 'tower',
-    surfaces: [
-      {
-        key: 'agent',
-        kind: 'agent',
-        label: 'Host telemetry',
-        detail: 'Host telemetry',
-        action: 'stop-monitoring',
-        controlId: 'tower',
-      },
-    ],
-    ...overrides,
-  }) as UnifiedAgentRow;
 
 const setShowNodeModalSpy = vi.fn();
 const setEditingNodeSpy = vi.fn();
@@ -177,19 +117,13 @@ describe('InfrastructureWorkspace', () => {
     navigateSpy.mockReset();
     presentationPolicyIsReadOnlyMock.mockReset();
     presentationPolicyIsReadOnlyMock.mockReturnValue(false);
-    setExpandedRowKeySpy.mockReset();
-    setSelectedIgnoredRowKeySpy.mockReset();
     setShowNodeModalSpy.mockReset();
     setEditingNodeSpy.mockReset();
     setCurrentNodeTypeSpy.mockReset();
     setModalResetKeySpy.mockReset();
     mockPathname = '/settings/infrastructure';
     mockSearch = '';
-    mockActiveRows = [reportingRow()];
-    mockIgnoredRows = [];
     mockConnections = [connectionFixture()];
-    setSelectedActiveRowKey(null);
-    setSelectedIgnoredRowKey(null);
   });
 
   afterEach(() => {
@@ -322,7 +256,6 @@ describe('InfrastructureWorkspace', () => {
     fireEvent.click(screen.getByRole('button', { name: 'View details' }));
 
     expect(screen.getByRole('dialog', { name: 'Connection details' })).toBeInTheDocument();
-    expect(setExpandedRowKeySpy).not.toHaveBeenCalled();
   });
 
   it('redirects legacy install deep link and pre-selects the agent credential slot', async () => {

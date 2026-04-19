@@ -1,23 +1,16 @@
 import { Component, Show, createEffect, createMemo, createSignal } from 'solid-js';
 import { useLocation, useNavigate } from '@solidjs/router';
-import { Dialog } from '@/components/shared/Dialog';
 import { presentationPolicyIsReadOnly } from '@/stores/sessionPresentationPolicy';
 import { AgentProfilesPanel } from './AgentProfilesPanel';
 import { ConnectionDetailDrawer } from './ConnectionDetailDrawer';
 import { ConnectionsTable, type ConnectionsTableHeaderAction } from './ConnectionsTable';
-import {
-  buildInfrastructureSystemRows,
-  type InfrastructureSystemRow,
-  type SystemManageAction,
-} from './connectionsTableModel';
+import type { InfrastructureSystemRow, SystemManageAction } from './connectionsTableModel';
 import { ConnectionEditor } from './ConnectionEditor/ConnectionEditor';
 import { NodeCredentialSlot } from './ConnectionEditor/CredentialSlots/NodeCredentialSlot';
 import { TrueNASCredentialSlot } from './ConnectionEditor/CredentialSlots/TrueNASCredentialSlot';
 import { VMwareCredentialSlot } from './ConnectionEditor/CredentialSlots/VMwareCredentialSlot';
 import type { ConnectionType } from '@/api/connections';
 import { InfrastructureInstallerSection } from './InfrastructureInstallerSection';
-import { InfrastructureIgnoredRowDetails } from './InfrastructureIgnoredRowDetails';
-import { InfrastructureStopMonitoringDialog } from './InfrastructureStopMonitoringDialog';
 import {
   buildInfrastructureWorkspacePath,
   deriveAddStepFromLocation,
@@ -25,10 +18,7 @@ import {
 } from './infrastructureWorkspaceModel';
 import type { InfrastructurePlatformSettingsProps } from './proxmoxSettingsModel';
 import { useConnectionsLedger } from './useConnectionsLedger';
-import {
-  InfrastructureOperationsStateProvider,
-  useInfrastructureOperationsContext,
-} from './useInfrastructureOperationsState';
+import { InfrastructureOperationsStateProvider } from './useInfrastructureOperationsState';
 
 export type InfrastructureWorkspaceProps = InfrastructurePlatformSettingsProps;
 
@@ -44,7 +34,6 @@ const ADD_STEP_TO_TYPE: Record<InfrastructureAddStep, ConnectionType> = {
 const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = (props) => {
   const navigate = useNavigate();
   const location = useLocation();
-  const state = useInfrastructureOperationsContext();
   const ledger = useConnectionsLedger();
 
   const [addMode, setAddMode] = createSignal(false);
@@ -79,14 +68,6 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
     setShowAgentProfiles(false);
   });
 
-  // Auto-open the agent installer when a setup handoff is waiting.
-  createEffect(() => {
-    if (state.setupHandoff?.() && !addMode() && !readOnly()) {
-      setAddMode(true);
-      setInitialAddType('agent');
-    }
-  });
-
   // Drop add mode in read-only sessions.
   createEffect(() => {
     if (readOnly() && addMode()) {
@@ -94,13 +75,7 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
     }
   });
 
-  const rows = createMemo<InfrastructureSystemRow[]>(() => [
-    ...ledger.rows(),
-    ...buildInfrastructureSystemRows({
-      activeRows: [],
-      monitoringStoppedRows: state.monitoringStoppedRows(),
-    }),
-  ]);
+  const rows = createMemo<InfrastructureSystemRow[]>(() => ledger.rows());
 
   const headerActions = createMemo<ConnectionsTableHeaderAction[]>(() =>
     readOnly()
@@ -119,20 +94,8 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
   );
 
   const handleManageAction = (action: SystemManageAction) => {
-    switch (action.kind) {
-      case 'connection':
-        state.setSelectedIgnoredRowKey(null);
-        setSelectedConnectionId(action.connectionId);
-        return;
-      case 'inventory-ignored':
-        setSelectedConnectionId(null);
-        state.setSelectedIgnoredRowKey(action.rowKey);
-        return;
-      case 'inventory-active':
-        // Legacy active-row path retired; unified rows use the connection drawer.
-        return;
-      default:
-        return;
+    if (action.kind === 'connection') {
+      setSelectedConnectionId(action.connectionId);
     }
   };
 
@@ -254,21 +217,6 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
         connection={selectedConnection}
         onClose={() => setSelectedConnectionId(null)}
       />
-
-      {/* Ignored system detail drawer (retires with phase 9). */}
-      <Dialog
-        isOpen={Boolean(state.selectedIgnoredRow())}
-        onClose={() => state.setSelectedIgnoredRowKey(null)}
-        layout="drawer-right"
-        panelClass="max-w-[760px]"
-        ariaLabel="Ignored item details"
-      >
-        <Show when={state.selectedIgnoredRow()}>
-          {(rowAccessor) => <InfrastructureIgnoredRowDetails rowAccessor={rowAccessor} />}
-        </Show>
-      </Dialog>
-
-      <InfrastructureStopMonitoringDialog />
     </div>
   );
 };
