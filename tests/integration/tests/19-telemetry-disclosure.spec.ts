@@ -151,19 +151,17 @@ test.describe('Telemetry disclosure', () => {
     const infrastructureTab = page.locator(
       '[role="tab"][title="All agents and nodes across platforms"]',
     );
-    await expect(dialog.getByText('Welcome to Pulse v6')).toBeVisible();
+    await expect(dialog).toHaveAttribute('aria-label', 'Welcome to Pulse v6');
     await expect(dialog.getByText('Step 1 of 5')).toBeVisible();
-    await expect(dialog.getByText(/nothing is gone/i)).toBeVisible();
+    await expect(dialog.getByText('V5 to V6')).toBeVisible();
     await expect(assistantLauncher).toBeHidden();
     await expect(spotlight).toHaveAttribute('data-tour-step', 'dashboard');
     await expect(dialog).toHaveAttribute('data-tour-step', 'dashboard');
     await expectSpotlightAround(spotlight, dashboardTab);
-    await expect(dialog.getByText('Where Things Moved')).toBeVisible();
-    await expect(dialog.getByText('Telemetry note')).toBeVisible();
-    await expect(dialog.getByText(/lightweight anonymous daily ping/i)).toBeVisible();
-    await expect(dialog.getByText('Settings → System → General', { exact: true })).toBeVisible();
+    await expect(dialog.getByText(/overview for health, alerts, capacity/i)).toBeVisible();
+    await expect(dialog.getByRole('link', { name: 'Telemetry details' })).toBeVisible();
 
-    const privacyLink = dialog.getByRole('link', { name: 'Full details' });
+    const privacyLink = dialog.getByRole('link', { name: 'Telemetry details' });
     await expect(privacyLink).toHaveAttribute('href', '/docs/PRIVACY.md');
     await expectPopupDoc(
       page,
@@ -189,7 +187,7 @@ test.describe('Telemetry disclosure', () => {
     for (let step = 0; step < 3; step += 1) {
       await dialog.getByRole('button', { name: 'Next' }).click();
     }
-    await dialog.getByRole('button', { name: "Let's go" }).click();
+    await dialog.getByRole('button', { name: 'Done' }).click();
     await expect(dialog).not.toBeVisible();
     await expect(assistantLauncher).toBeVisible();
 

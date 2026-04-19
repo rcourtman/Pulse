@@ -1321,6 +1321,11 @@ Its primary job is rapid v5-to-v6 reorientation. The modal should explain
 where familiar v5 destinations moved and what each v6 top-level area is for,
 so operators who feel briefly lost after upgrading can rebuild their mental
 map in one pass.
+That guided welcome surface should stay compact. The canonical shape is a
+coachmark-sized card centered on the current destination with one short
+step-specific sentence, a small clickable step strip, and minimal footer
+controls. It must not grow back into a large sectioned explainer when one
+sentence would do the job.
 The guided stop map inside that welcome surface is interactive, not decorative:
 operators must be able to jump directly to any tour step from the stop list,
 and desktop layouts may widen the panel enough to keep step labels readable
@@ -1334,8 +1339,9 @@ use bordered flat fills and normal app radii instead of gradient washes,
 glassmorphism, or other marketing-style promo chrome that drifts from the rest
 of the product.
 Secondary disclosures such as telemetry must stay subordinate to that
-orientation job: keep them compact, link to the canonical privacy/settings
-surfaces, and do not let them crowd out the migration wayfinding copy.
+orientation job: keep them as footer-level links into the canonical
+privacy/settings surfaces, and do not let them crowd out the migration
+wayfinding copy.
 That state owner now also owns public-demo suppression: the modal must stay
 closed until `sessionPresentationPolicyResolved()` is true and must fail closed
 when `presentationPolicyIsDemoMode()` resolves true, so the public demo does

@@ -5,13 +5,10 @@ import ServerIcon from 'lucide-solid/icons/server';
 import BoxesIcon from 'lucide-solid/icons/boxes';
 import HardDriveIcon from 'lucide-solid/icons/hard-drive';
 import ShieldCheckIcon from 'lucide-solid/icons/shield-check';
-import ChartBarIcon from 'lucide-solid/icons/chart-bar';
-import ExternalLinkIcon from 'lucide-solid/icons/external-link';
 import XIcon from 'lucide-solid/icons/x';
 import {
   WHATS_NEW_BACK_LABEL,
   WHATS_NEW_CLOSE_LABEL,
-  WHATS_NEW_CURRENT_STEP_LABEL,
   WHATS_NEW_DOCS_LABEL,
   WHATS_NEW_DOCS_URL,
   WHATS_NEW_DO_NOT_SHOW_LABEL,
@@ -19,17 +16,9 @@ import {
   WHATS_NEW_KICKER_LABEL,
   WHATS_NEW_NEXT_LABEL,
   WHATS_NEW_PRIMARY_ACTION_LABEL,
+  WHATS_NEW_PROGRESS_PREFIX,
   WHATS_NEW_PRIVACY_URL,
-  WHATS_NEW_SKIP_LABEL,
-  WHATS_NEW_STEP_MAP_HELPER,
-  WHATS_NEW_STEP_MAP_LABEL,
-  WHATS_NEW_SUBTITLE,
-  WHATS_NEW_TELEMETRY_COPY,
-  WHATS_NEW_TELEMETRY_ENV_VAR,
-  WHATS_NEW_TELEMETRY_LABEL,
-  WHATS_NEW_TELEMETRY_PRIVACY_LABEL,
-  WHATS_NEW_TELEMETRY_SETTINGS_PATH,
-  WHATS_NEW_TELEMETRY_TITLE,
+  WHATS_NEW_TELEMETRY_LINK_LABEL,
   WHATS_NEW_TITLE,
   type WhatsNewFeatureCard,
 } from './whatsNewModalModel';
@@ -86,24 +75,31 @@ export function WhatsNewModal() {
             data-tour-step={step().target}
             role="dialog"
             aria-modal="true"
-            aria-labelledby="whats-new-title"
+            aria-label={WHATS_NEW_TITLE}
             tabindex="-1"
-            class="fixed z-[1001] max-h-[min(90vh,44rem)] overflow-y-auto rounded-md border border-border bg-surface shadow-xl focus:outline-none"
+            class="fixed z-[1001] max-h-[min(90vh,32rem)] overflow-y-auto rounded-md border border-border bg-surface shadow-xl focus:outline-none"
             style={state.panelStyle()}
             onClick={(event) => event.stopPropagation()}
           >
-            <div class="flex items-start justify-between border-b border-border bg-surface px-6 py-5">
-              <div>
-                <div class="inline-flex items-center rounded-full border border-border bg-surface-hover px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted">
-                  {WHATS_NEW_KICKER_LABEL}
+            <div class="flex items-start justify-between border-b border-border bg-surface px-5 py-4">
+              <div class="min-w-0">
+                <div class="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted">
+                  <span class="inline-flex items-center rounded-full border border-border bg-surface-hover px-2 py-1">
+                    {WHATS_NEW_KICKER_LABEL}
+                  </span>
+                  <span>
+                    {WHATS_NEW_PROGRESS_PREFIX} {state.stepIndex() + 1} of {state.stepCount()}
+                  </span>
                 </div>
-                <div class="mt-3 text-xs font-semibold uppercase tracking-[0.18em] text-muted">
-                  Step {state.stepIndex() + 1} of {state.stepCount()}
+                <div class="mt-3 flex items-start gap-3">
+                  <div class={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-md border bg-surface ${step().accent}`}>
+                    <WhatsNewFeatureIcon card={step()} />
+                  </div>
+                  <div class="min-w-0">
+                    <div class="text-lg font-semibold text-base-content">{step().title}</div>
+                    <p class="mt-1 text-sm leading-6 text-muted">{step().description}</p>
+                  </div>
                 </div>
-                <h2 id="whats-new-title" class="mt-1 text-xl font-semibold text-base-content">
-                  {WHATS_NEW_TITLE}
-                </h2>
-                <p class="mt-1 text-sm text-muted">{WHATS_NEW_SUBTITLE}</p>
               </div>
               <button
                 onClick={state.handleClose}
@@ -115,148 +111,81 @@ export function WhatsNewModal() {
               </button>
             </div>
 
-            <div class="space-y-5 px-6 py-5">
-              <div class={`rounded-md border p-4 ${step().accent}`}>
-                <div class="flex items-start gap-4">
-                  <div class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-md border border-white/40 bg-surface text-inherit dark:border-slate-800">
-                    <WhatsNewFeatureIcon card={step()} />
-                  </div>
-                  <div class="min-w-0">
-                    <div class="text-[11px] font-semibold uppercase tracking-[0.16em] opacity-70">
-                      {WHATS_NEW_CURRENT_STEP_LABEL}
-                    </div>
-                    <div class="mt-1 text-base font-semibold text-inherit">{step().title}</div>
-                    <p class="mt-2 text-sm leading-6 text-inherit">{step().description}</p>
-                  </div>
-                </div>
-              </div>
-
-              <div class="space-y-2.5">
-                <div class="flex items-center gap-3">
-                  <div class="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">
-                    {WHATS_NEW_STEP_MAP_LABEL}
-                  </div>
-                  <div class="h-px flex-1 bg-border"></div>
-                </div>
-                <p class="text-xs text-muted">{WHATS_NEW_STEP_MAP_HELPER}</p>
-                <div class="grid grid-cols-2 gap-2.5">
-                  <For each={WHATS_NEW_FEATURE_CARDS}>
-                    {(card, index) => (
-                      <button
-                        type="button"
-                        onClick={() => state.handleSelectStep(index())}
-                        aria-current={index() === state.stepIndex() ? 'step' : undefined}
-                        class={`min-h-[3.25rem] rounded-md border px-3 py-2.5 text-left transition-colors ${
+            <div class="space-y-4 px-5 py-4">
+              <div class="flex flex-wrap gap-2">
+                <For each={WHATS_NEW_FEATURE_CARDS}>
+                  {(card, index) => (
+                    <button
+                      type="button"
+                      onClick={() => state.handleSelectStep(index())}
+                      aria-current={index() === state.stepIndex() ? 'step' : undefined}
+                      class={`inline-flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors ${
+                        index() === state.stepIndex()
+                          ? 'border-blue-300 bg-blue-50 text-blue-900 dark:border-blue-700 dark:bg-blue-950 dark:text-blue-100'
+                          : 'border-border bg-surface-hover text-base-content hover:border-slate-300 hover:bg-surface dark:hover:border-slate-700'
+                      }`}
+                    >
+                      <span
+                        class={`inline-flex h-5 w-5 items-center justify-center rounded-sm border text-[10px] font-semibold font-mono ${
                           index() === state.stepIndex()
-                            ? 'border-blue-300 bg-blue-50 text-blue-900 dark:border-blue-700 dark:bg-blue-950 dark:text-blue-100'
-                            : 'border-border bg-surface-hover text-base-content hover:border-slate-300 hover:bg-surface dark:hover:border-slate-700'
+                            ? 'border-blue-200 bg-surface text-blue-700 dark:border-blue-800 dark:bg-slate-900 dark:text-blue-200'
+                            : 'border-border bg-surface text-muted'
                         }`}
                       >
-                        <div class="flex items-center gap-3">
-                          <div
-                            class={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md border text-[11px] font-semibold font-mono ${
-                              index() === state.stepIndex()
-                                ? 'border-blue-200 bg-surface text-blue-700 dark:border-blue-800 dark:bg-slate-900 dark:text-blue-200'
-                                : 'border-border bg-surface text-muted'
-                            }`}
-                          >
-                            {String(index() + 1).padStart(2, '0')}
-                          </div>
-                          <div class="min-w-0 flex-1 truncate text-sm font-semibold">{card.title}</div>
-                        </div>
-                      </button>
-                    )}
-                  </For>
-                </div>
-              </div>
-
-              <div class="rounded-md border border-border bg-surface-hover p-3.5">
-                <div class="flex items-start gap-3">
-                  <div class="mt-0.5 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md border border-border bg-surface text-muted">
-                    <ChartBarIcon class="h-4 w-4" />
-                  </div>
-                  <div class="min-w-0">
-                    <div class="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">
-                      {WHATS_NEW_TELEMETRY_LABEL}
-                    </div>
-                    <div class="mt-1 text-sm font-medium text-base-content">
-                      {WHATS_NEW_TELEMETRY_TITLE}
-                    </div>
-                    <p class="mt-1 text-xs leading-5 text-muted">
-                      {WHATS_NEW_TELEMETRY_COPY[0]}{' '}
-                      <a
-                        href={WHATS_NEW_PRIVACY_URL}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        class="underline hover:text-base-content"
-                      >
-                        {WHATS_NEW_TELEMETRY_PRIVACY_LABEL}
-                      </a>
-                    </p>
-                    <p class="mt-1 text-xs leading-5 text-muted">
-                      {WHATS_NEW_TELEMETRY_COPY[1]}
-                    </p>
-                    <div class="mt-2 flex flex-wrap items-center gap-2 text-[10px] text-muted">
-                      <span class="rounded bg-surface px-1.5 py-0.5 font-medium">
-                        {WHATS_NEW_TELEMETRY_SETTINGS_PATH}
+                        {String(index() + 1).padStart(2, '0')}
                       </span>
-                      <code class="rounded bg-surface px-1.5 py-0.5 font-mono">
-                        {WHATS_NEW_TELEMETRY_ENV_VAR}
-                      </code>
-                    </div>
-                  </div>
-                </div>
+                      <span>{card.title}</span>
+                    </button>
+                  )}
+                </For>
               </div>
 
-              <div class="flex flex-col gap-3 rounded-md border border-border bg-surface-hover p-3.5 sm:flex-row sm:items-center sm:justify-between">
-                <label class="flex items-center gap-2 text-sm text-muted">
-                  <input
-                    type="checkbox"
-                    checked={state.dontShowAgain()}
-                    onChange={(event) => state.setDontShowAgain(event.currentTarget.checked)}
-                    class="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-2 focus:ring-blue-500"
-                  />
-                  {WHATS_NEW_DO_NOT_SHOW_LABEL}
-                </label>
-
-                <div class="flex items-center gap-4">
+              <div class="flex flex-col gap-3 border-t border-border pt-3 sm:flex-row sm:items-center sm:justify-between">
+                <div class="flex flex-wrap items-center gap-3 text-xs text-muted">
+                  <label class="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={state.dontShowAgain()}
+                      onChange={(event) => state.setDontShowAgain(event.currentTarget.checked)}
+                      class="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-2 focus:ring-blue-500"
+                    />
+                    {WHATS_NEW_DO_NOT_SHOW_LABEL}
+                  </label>
                   <a
                     href={WHATS_NEW_DOCS_URL}
                     target="_blank"
                     rel="noopener noreferrer"
-                    class="inline-flex items-center gap-1 rounded-md border border-border bg-surface px-3 py-1.5 text-sm font-medium text-base-content transition-colors hover:bg-surface-hover"
+                    class="underline hover:text-base-content"
                   >
                     {WHATS_NEW_DOCS_LABEL}
-                    <ExternalLinkIcon class="h-4 w-4" />
+                  </a>
+                  <a
+                    href={WHATS_NEW_PRIVACY_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="underline hover:text-base-content"
+                  >
+                    {WHATS_NEW_TELEMETRY_LINK_LABEL}
                   </a>
                 </div>
-              </div>
-            </div>
 
-            <div class="flex items-center justify-between border-t border-border bg-surface-hover px-6 py-4">
-              <button
-                type="button"
-                onClick={state.handleClose}
-                class="text-sm font-medium text-muted transition-colors hover:text-base-content"
-              >
-                {WHATS_NEW_SKIP_LABEL}
-              </button>
-              <div class="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={state.handlePrevious}
-                  disabled={state.isFirstStep()}
-                  class="rounded-md border border-border px-3.5 py-2 text-sm font-medium text-base-content transition-colors hover:bg-surface disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {WHATS_NEW_BACK_LABEL}
-                </button>
-                <button
-                  onClick={state.handleNext}
-                  class="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-700"
-                  type="button"
-                >
-                  {state.isLastStep() ? WHATS_NEW_PRIMARY_ACTION_LABEL : WHATS_NEW_NEXT_LABEL}
-                </button>
+                <div class="flex items-center gap-2 sm:justify-end">
+                  <button
+                    type="button"
+                    onClick={state.handlePrevious}
+                    disabled={state.isFirstStep()}
+                    class="rounded-md border border-border px-3 py-1.5 text-sm font-medium text-base-content transition-colors hover:bg-surface disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {WHATS_NEW_BACK_LABEL}
+                  </button>
+                  <button
+                    onClick={state.handleNext}
+                    class="rounded-md bg-blue-600 px-3.5 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-blue-700"
+                    type="button"
+                  >
+                    {state.isLastStep() ? WHATS_NEW_PRIMARY_ACTION_LABEL : WHATS_NEW_NEXT_LABEL}
+                  </button>
+                </div>
               </div>
             </div>
           </div>

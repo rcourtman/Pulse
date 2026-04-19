@@ -1143,11 +1143,11 @@ describe('shared primitive guardrails', () => {
     expect(whatsNewModalStateSource).toContain('spotlightStyle');
 
     expect(whatsNewModalModelSource).toContain('WHATS_NEW_FEATURE_CARDS');
-    expect(whatsNewModalModelSource).toContain('WHATS_NEW_TELEMETRY_TITLE');
     expect(whatsNewModalModelSource).toContain('WHATS_NEW_DOCS_URL');
     expect(whatsNewModalModelSource).toContain('WHATS_NEW_PRIVACY_URL');
     expect(whatsNewModalModelSource).toContain('WHATS_NEW_DOCS_LABEL');
     expect(whatsNewModalModelSource).toContain('MIGRATION_GUIDE_DOC_URL');
+    expect(whatsNewModalModelSource).toContain('Telemetry details');
     expect(whatsNewModalModelSource).toContain("title: 'Dashboard'");
   });
 

@@ -169,9 +169,9 @@ export function useWhatsNewModalState() {
 
     const rect = spotlightRect();
     const panel = panelRef();
-    const desktopWidth = window.innerWidth >= 1024 ? 448 : 420;
+    const desktopWidth = window.innerWidth >= 1024 ? 376 : 344;
     const panelWidth = Math.min(desktopWidth, window.innerWidth - 32);
-    const panelHeight = panel?.offsetHeight ?? 340;
+    const panelHeight = panel?.offsetHeight ?? 260;
 
     if (!rect) {
       return {

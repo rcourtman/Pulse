@@ -51,16 +51,14 @@ describe('WhatsNewModal', () => {
     expect(whatsNewModalStateSource).toContain('handleClose');
 
     expect(whatsNewModalModelSource).toContain('WHATS_NEW_FEATURE_CARDS');
-    expect(whatsNewModalModelSource).toContain('WHATS_NEW_TELEMETRY_TITLE');
     expect(whatsNewModalModelSource).toContain('WHATS_NEW_DOCS_URL');
     expect(whatsNewModalModelSource).toContain('WHATS_NEW_PRIVACY_URL');
     expect(whatsNewModalModelSource).toContain('MIGRATION_GUIDE_DOC_URL');
     expect(whatsNewModalModelSource).toContain('PRIVACY_DOC_URL');
-    expect(whatsNewModalModelSource).toContain('anonymous daily ping');
-    expect(whatsNewModalModelSource).toContain('nothing is gone');
+    expect(whatsNewModalModelSource).toContain('Telemetry details');
     expect(whatsNewModalModelSource).toContain('WHATS_NEW_KICKER_LABEL');
-    expect(whatsNewModalModelSource).toContain('WHATS_NEW_STEP_MAP_LABEL');
-    expect(whatsNewModalModelSource).toContain('WHATS_NEW_TELEMETRY_LABEL');
+    expect(whatsNewModalModelSource).toContain('WHATS_NEW_PROGRESS_PREFIX');
+    expect(whatsNewModalModelSource).toContain("WHATS_NEW_PRIMARY_ACTION_LABEL = 'Done'");
     expect(whatsNewModalModelSource).not.toContain('https://github.com/rcourtman/Pulse/blob/main/docs/README.md');
     expect(whatsNewModalModelSource).not.toContain('https://github.com/rcourtman/Pulse/blob/main/docs/PRIVACY.md');
     expect(whatsNewModalModelSource).toContain('WHATS_NEW_DOCS_LABEL');
@@ -70,14 +68,14 @@ describe('WhatsNewModal', () => {
   it('renders when the navigation modal has not been seen yet', async () => {
     render(() => <WhatsNewModal />);
 
-    const dialog = await screen.findByRole('dialog');
+    const dialog = await screen.findByRole('dialog', { name: 'Welcome to Pulse v6' });
     expect(dialog).toBeInTheDocument();
-    expect(within(dialog).getByText('Welcome to Pulse v6')).toBeInTheDocument();
-    expect(within(dialog).getByText(/nothing is gone/i)).toBeInTheDocument();
     expect(within(dialog).getByText('Step 1 of 5')).toBeInTheDocument();
-    expect(within(dialog).getByText('Where Things Moved')).toBeInTheDocument();
-    expect(within(dialog).queryByText(/Stop 1/i)).not.toBeInTheDocument();
-    expect(within(dialog).getAllByText('Dashboard')).toHaveLength(2);
+    expect(within(dialog).getByText('V5 to V6')).toBeInTheDocument();
+    expect(within(dialog).getByText(/overview for health, alerts, capacity/i)).toBeInTheDocument();
+    expect(within(dialog).queryByText('Where Things Moved')).not.toBeInTheDocument();
+    expect(within(dialog).getByRole('link', { name: 'Migration guide' })).toBeInTheDocument();
+    expect(within(dialog).getByRole('link', { name: 'Telemetry details' })).toBeInTheDocument();
   });
 
   it('stays hidden for public demo sessions', async () => {
@@ -130,26 +128,26 @@ describe('WhatsNewModal', () => {
   it('advances through the guided tour and finishes on the last step', async () => {
     render(() => <WhatsNewModal />);
 
-    expect(await screen.findByText(/overall picture: health, alerts, capacity/i)).toBeInTheDocument();
+    expect(await screen.findByText(/overview for health, alerts, capacity/i)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Next' }));
-    expect(await screen.findByText(/systems themselves: Proxmox nodes, Docker hosts/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Systems live here: nodes, hosts, clusters/i)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Next' }));
-    expect(await screen.findByText(/guests or Docker workloads in v5/i)).toBeInTheDocument();
+    expect(await screen.findByText(/If you looked for guests in v5/i)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Next' }));
-    expect(await screen.findByText(/Datastores, pools, disks, and capacity moved here/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Datastores, pools, disks, and capacity live here/i)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Next' }));
-    expect(await screen.findByText(/Backups, snapshots, and replication moved here/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: "Let's go" })).toBeInTheDocument();
+    expect(await screen.findByText(/Backups, snapshots, and replication live here/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Done' })).toBeInTheDocument();
   });
 
   it('lets the user jump to a tour stop directly from the stop map', async () => {
     render(() => <WhatsNewModal />);
 
-    expect(await screen.findByText(/overall picture: health, alerts, capacity/i)).toBeInTheDocument();
+    expect(await screen.findByText(/overview for health, alerts, capacity/i)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /Workloads/i }));
 
-    expect(await screen.findByText(/guests or Docker workloads in v5/i)).toBeInTheDocument();
+    expect(await screen.findByText(/If you looked for guests in v5/i)).toBeInTheDocument();
     expect(screen.getByText('Step 3 of 5')).toBeInTheDocument();
   });
 
