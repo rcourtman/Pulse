@@ -194,7 +194,10 @@ Community limit enforcement.
     in-product CTA navigation. The current canonical arrivals are
     `/settings/system/billing/usage?details=counting-rules` for explanation and
     `/settings/system/billing/plan?intent=self_hosted_plan` for plan-selection
-    intent.
+    intent. That plan-selection arrival must reopen an explicit
+    `Compare self-hosted plans` prompt inside Pulse Pro billing so operators can
+    review the self-hosted upgrade path without falling back to the legacy
+    usage surface or a dead-end placeholder CTA.
 24. Keep public-demo dashboard bootstrap route-owned on the adjacent
     commercial/runtime boundary. `frontend-modern/src/useAppRuntimeState.ts`
     may prewarm shared infrastructure summary caches for non-dashboard routes,
@@ -746,6 +749,11 @@ completed checkout, and return the operator to the canonical billing plan
 route with an explicit owned purchase arrival state (`purchase=activated`,
 `purchase=expired`, `purchase=failed`, or `purchase=unavailable`) whether
 checkout completed in a secondary tab or in the current-tab fallback path.
+When billing preserves `intent=self_hosted_plan` across that return, the
+runtime may keep the operator on the compare-plans prompt, but any visible
+`Compare plans` action must still route through owned
+`GET /auth/license-purchase-start?feature=self_hosted_plan` instead of
+constructing a direct Pulse Account URL in the browser.
 That destination split is canonical commercial truth, but navigation semantics
 are not owned here. `frontend-modern/src/utils/pricingHandoff.ts` and
 `frontend-modern/src/stores/license.ts` decide which href each commercial

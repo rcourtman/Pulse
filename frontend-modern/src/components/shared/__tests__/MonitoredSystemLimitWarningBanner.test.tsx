@@ -131,7 +131,7 @@ describe('MonitoredSystemLimitWarningBanner', () => {
       'scopeSelfHostedBillingDestination',
     );
     expect(monitoredSystemLimitWarningBannerStateSource).toContain(
-      'SELF_HOSTED_PRO_BILLING_MONITORED_SYSTEM_INTENT',
+      'SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_INTENT',
     );
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('viewCapacityDestination');
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('handleUpgradeClick');

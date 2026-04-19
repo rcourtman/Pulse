@@ -32,7 +32,7 @@ import {
   resolveSelfHostedBillingSection,
   resolveSelfHostedPurchaseStartDestination,
   SELF_HOSTED_PRO_BILLING_COUNTING_RULES_DETAIL,
-  SELF_HOSTED_PRO_BILLING_MONITORED_SYSTEM_INTENT,
+  SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_INTENT,
   SELF_HOSTED_PRO_BILLING_RECOVERY_DETAIL,
   SELF_HOSTED_PRO_BILLING_PURCHASE_ACTIVATED,
   SELF_HOSTED_PRO_BILLING_PURCHASE_CANCELLED,
@@ -41,10 +41,12 @@ import {
   SELF_HOSTED_PRO_BILLING_PURCHASE_UNAVAILABLE,
   SELF_HOSTED_PRO_BILLING_PLAN_DETAILS_QUERY_PARAM,
   SELF_HOSTED_PRO_BILLING_PLAN_HREF,
+  SELF_HOSTED_PRO_BILLING_PLAN_INTENT_QUERY_PARAM,
   SELF_HOSTED_PRO_BILLING_PLAN_ROUTE,
   SELF_HOSTED_PRO_BILLING_PURCHASE_QUERY_PARAM,
   SELF_HOSTED_PRO_BILLING_USAGE_HREF,
   SELF_HOSTED_PRO_BILLING_USAGE_ROUTE,
+  type SelfHostedBillingPlanIntent,
   type SelfHostedBillingSection,
 } from '@/utils/pricingHandoff';
 import { buildSelfHostedCommercialPlanModel } from '@/utils/commercialBillingModel';
@@ -86,6 +88,8 @@ export function useProLicensePanelState() {
   const [startingTrial, setStartingTrial] = createSignal(false);
   const [trialActivationResult, setTrialActivationResult] = createSignal('');
   const [purchaseActivationResult, setPurchaseActivationResult] = createSignal('');
+  const [purchaseActivationIntent, setPurchaseActivationIntent] =
+    createSignal<SelfHostedBillingPlanIntent | null>(null);
 
   const entitlements = createMemo(() => licenseEntitlements());
   const subscriptionState = createMemo(() => entitlements()?.subscription_state);
@@ -112,7 +116,11 @@ export function useProLicensePanelState() {
     }
     if (purchaseResult) {
       setPurchaseActivationResult(purchaseResult);
+      setPurchaseActivationIntent(getSelfHostedBillingPlanIntent(location.search));
       params.delete(SELF_HOSTED_PRO_BILLING_PURCHASE_QUERY_PARAM);
+      if (purchaseResult === SELF_HOSTED_PRO_BILLING_PURCHASE_ACTIVATED) {
+        params.delete(SELF_HOSTED_PRO_BILLING_PLAN_INTENT_QUERY_PARAM);
+      }
       if (
         purchaseResult === SELF_HOSTED_PRO_BILLING_PURCHASE_FAILED &&
         getSelfHostedBillingPlanDetail(location.search) !== SELF_HOSTED_PRO_BILLING_RECOVERY_DETAIL
@@ -216,6 +224,29 @@ export function useProLicensePanelState() {
       activeSection() === 'plan' &&
       getSelfHostedBillingPlanDetail(location.search) === SELF_HOSTED_PRO_BILLING_RECOVERY_DETAIL,
   );
+  const showPlanSelectionPrompt = createMemo(
+    () =>
+      activeSection() === 'plan' &&
+      getSelfHostedBillingPlanIntent(location.search) ===
+        SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_INTENT,
+  );
+  const planSelectionPrompt = createMemo(() => {
+    if (
+      !showPlanSelectionPrompt() ||
+      purchaseActivationResult().trim().length > 0
+    ) {
+      return null;
+    }
+    return {
+      tone: 'border-sky-200 dark:border-sky-900 bg-sky-50 dark:bg-sky-950 text-sky-900 dark:text-sky-100',
+      title: SELF_HOSTED_PRO_BILLING_PRESENTATION.planSelectionPromptTitle,
+      body: SELF_HOSTED_PRO_BILLING_PRESENTATION.planSelectionPromptBody,
+      actionLabel: SELF_HOSTED_PRO_BILLING_PRESENTATION.planSelectionPromptActionLabel,
+      actionDestination: resolveSelfHostedPurchaseStartDestination(
+        SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_INTENT,
+      ),
+    };
+  });
 
   const showTrialStart = createMemo(() => {
     const current = entitlements();
@@ -363,12 +394,12 @@ export function useProLicensePanelState() {
       upgradeDestination:
         posture?.blocks_new_systems === true &&
         posture.reason !== 'legacy_migration_capture_pending'
-          ? resolveUpgradeDestination(
-              getSelfHostedBillingHref('plan', {
-                intent: SELF_HOSTED_PRO_BILLING_MONITORED_SYSTEM_INTENT,
-              }),
-            )
-          : null,
+              ? resolveUpgradeDestination(
+                  getSelfHostedBillingHref('plan', {
+                    intent: SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_INTENT,
+                  }),
+                )
+              : null,
     };
   });
   const continuityCapturedAt = createMemo(() => {
@@ -395,10 +426,10 @@ export function useProLicensePanelState() {
     destination: UpgradeDestination;
   } | null>(() => {
     const purchase = purchaseActivationResult().trim().toLowerCase();
-    const intent = getSelfHostedBillingPlanIntent(location.search);
+    const intent = purchaseActivationIntent();
     switch (purchase) {
       case SELF_HOSTED_PRO_BILLING_PURCHASE_ACTIVATED:
-        if (intent === SELF_HOSTED_PRO_BILLING_MONITORED_SYSTEM_INTENT) {
+        if (intent === SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_INTENT) {
           return {
             label: SELF_HOSTED_PRO_BILLING_PRESENTATION.purchaseActivatedPlanActionLabel,
             destination: resolveUpgradeDestination(SELF_HOSTED_PRO_BILLING_PLAN_HREF),
@@ -557,6 +588,7 @@ export function useProLicensePanelState() {
     loadPanelData,
     loading,
     looksLikeLegacyLicenseKey,
+    planSelectionPrompt,
     purchaseActivationNotice,
     purchaseActivationAction,
     setActiveSection,

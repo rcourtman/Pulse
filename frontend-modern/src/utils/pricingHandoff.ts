@@ -23,8 +23,8 @@ export const SELF_HOSTED_PRO_BILLING_PLAN_INTENT_QUERY_PARAM = 'intent';
 export const SELF_HOSTED_PRO_BILLING_PURCHASE_QUERY_PARAM = 'purchase';
 export const SELF_HOSTED_PRO_BILLING_COUNTING_RULES_DETAIL = 'counting-rules';
 export const SELF_HOSTED_PRO_BILLING_RECOVERY_DETAIL = 'recovery';
-export const SELF_HOSTED_PRO_BILLING_MONITORED_SYSTEM_INTENT = 'self_hosted_plan';
-const LEGACY_SELF_HOSTED_PRO_BILLING_MONITORED_SYSTEM_INTENT = 'max_monitored_systems';
+export const SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_INTENT = 'self_hosted_plan';
+const LEGACY_SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_INTENT = 'max_monitored_systems';
 export const SELF_HOSTED_PRO_BILLING_PURCHASE_ACTIVATED = 'activated';
 export const SELF_HOSTED_PRO_BILLING_PURCHASE_CANCELLED = 'cancelled';
 export const SELF_HOSTED_PRO_BILLING_PURCHASE_EXPIRED = 'expired';
@@ -35,7 +35,7 @@ export type SelfHostedBillingSection = 'plan' | 'usage';
 export type SelfHostedBillingUsageDetail = typeof SELF_HOSTED_PRO_BILLING_COUNTING_RULES_DETAIL;
 export type SelfHostedBillingPlanDetail = typeof SELF_HOSTED_PRO_BILLING_RECOVERY_DETAIL;
 export type SelfHostedBillingDetail = SelfHostedBillingUsageDetail | SelfHostedBillingPlanDetail;
-export type SelfHostedBillingPlanIntent = typeof SELF_HOSTED_PRO_BILLING_MONITORED_SYSTEM_INTENT;
+export type SelfHostedBillingPlanIntent = typeof SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_INTENT;
 export type SelfHostedBillingPurchaseArrival =
   | typeof SELF_HOSTED_PRO_BILLING_PURCHASE_ACTIVATED
   | typeof SELF_HOSTED_PRO_BILLING_PURCHASE_CANCELLED
@@ -47,11 +47,11 @@ export const SELF_HOSTED_PRO_BILLING_PLAN_HREF = SELF_HOSTED_PRO_BILLING_PLAN_RO
 export const SELF_HOSTED_PRO_BILLING_USAGE_HREF = SELF_HOSTED_PRO_BILLING_USAGE_ROUTE;
 export const SELF_HOSTED_PRO_BILLING_PLAN_RECOVERY_HREF = `${SELF_HOSTED_PRO_BILLING_PLAN_ROUTE}?${SELF_HOSTED_PRO_BILLING_PLAN_DETAILS_QUERY_PARAM}=${SELF_HOSTED_PRO_BILLING_RECOVERY_DETAIL}`;
 export const SELF_HOSTED_PRO_BILLING_USAGE_COUNTING_RULES_HREF = `${SELF_HOSTED_PRO_BILLING_USAGE_ROUTE}?${SELF_HOSTED_PRO_BILLING_USAGE_DETAILS_QUERY_PARAM}=${SELF_HOSTED_PRO_BILLING_COUNTING_RULES_DETAIL}`;
-export const SELF_HOSTED_PRO_BILLING_PLAN_MONITORED_SYSTEM_UPGRADE_HREF = `${SELF_HOSTED_PRO_BILLING_PLAN_ROUTE}?${SELF_HOSTED_PRO_BILLING_PLAN_INTENT_QUERY_PARAM}=${SELF_HOSTED_PRO_BILLING_MONITORED_SYSTEM_INTENT}`;
+export const SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_HREF = `${SELF_HOSTED_PRO_BILLING_PLAN_ROUTE}?${SELF_HOSTED_PRO_BILLING_PLAN_INTENT_QUERY_PARAM}=${SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_INTENT}`;
 
 const IN_PRODUCT_PRICING_DESTINATIONS: Record<string, string> = {
-  self_hosted_plan: SELF_HOSTED_PRO_BILLING_PLAN_MONITORED_SYSTEM_UPGRADE_HREF,
-  max_monitored_systems: SELF_HOSTED_PRO_BILLING_PLAN_MONITORED_SYSTEM_UPGRADE_HREF,
+  self_hosted_plan: SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_HREF,
+  max_monitored_systems: SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_HREF,
   cloud: '/cloud',
   // Pro-feature keys: route to billing plan page instead of the Pulse Account
   // purchase-start handoff, which fails for local instances without PublicURL.
@@ -176,10 +176,10 @@ export function getSelfHostedBillingPlanDetail(search: string): SelfHostedBillin
 export function getSelfHostedBillingPlanIntent(search: string): SelfHostedBillingPlanIntent | null {
   const intent = billingSearch(search).get(SELF_HOSTED_PRO_BILLING_PLAN_INTENT_QUERY_PARAM)?.trim();
   if (
-    intent === SELF_HOSTED_PRO_BILLING_MONITORED_SYSTEM_INTENT ||
-    intent === LEGACY_SELF_HOSTED_PRO_BILLING_MONITORED_SYSTEM_INTENT
+    intent === SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_INTENT ||
+    intent === LEGACY_SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_INTENT
   ) {
-    return SELF_HOSTED_PRO_BILLING_MONITORED_SYSTEM_INTENT;
+    return SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_INTENT;
   }
   return null;
 }
@@ -219,10 +219,10 @@ export function getSelfHostedBillingHref(
     );
   }
 
-  if (section === 'plan' && options.intent === SELF_HOSTED_PRO_BILLING_MONITORED_SYSTEM_INTENT) {
+  if (section === 'plan' && options.intent === SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_INTENT) {
     params.set(
       SELF_HOSTED_PRO_BILLING_PLAN_INTENT_QUERY_PARAM,
-      SELF_HOSTED_PRO_BILLING_MONITORED_SYSTEM_INTENT,
+      SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_INTENT,
     );
   }
 

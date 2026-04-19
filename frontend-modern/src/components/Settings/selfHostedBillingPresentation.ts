@@ -16,9 +16,9 @@ export interface SelfHostedProBillingPresentation {
   hiddenStateBody: string;
   policyLoadingTitle: string;
   policyLoadingBody: string;
-  monitoredSystemUpgradeArrivalTitle: string;
-  monitoredSystemUpgradeArrivalBody: string;
-  monitoredSystemUpgradeArrivalActionLabel: string;
+  planSelectionPromptTitle: string;
+  planSelectionPromptBody: string;
+  planSelectionPromptActionLabel: string;
   purchaseActivatedPlanActionLabel: string;
   purchaseCancelledActionLabel: string;
   purchaseExpiredActionLabel: string;
@@ -55,10 +55,10 @@ export const SELF_HOSTED_PRO_BILLING_PRESENTATION: SelfHostedProBillingPresentat
   policyLoadingTitle: 'Loading settings access',
   policyLoadingBody:
     'Pulse waits for the session presentation policy before showing license, billing, or usage details.',
-  monitoredSystemUpgradeArrivalTitle: 'Compare self-hosted plans',
-  monitoredSystemUpgradeArrivalBody:
+  planSelectionPromptTitle: 'Compare self-hosted plans',
+  planSelectionPromptBody:
     'Community keeps core monitoring free. Compare Relay and Pro in Pulse Account, then return here with Pulse Pro activated automatically.',
-  monitoredSystemUpgradeArrivalActionLabel: 'Compare plans',
+  planSelectionPromptActionLabel: 'Compare plans',
   purchaseActivatedPlanActionLabel: 'Review plan',
   purchaseCancelledActionLabel: 'Compare plans',
   purchaseExpiredActionLabel: 'Restart upgrade',

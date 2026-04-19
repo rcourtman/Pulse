@@ -17,6 +17,11 @@ interface Notice {
   tone: string;
 }
 
+interface ActionNotice extends Notice {
+  actionLabel: string;
+  actionDestination: UpgradeDestination;
+}
+
 interface MonitoredSystemCapacitySection {
   stats: Array<{ label: string; value: string }>;
   statusMessage: string;
@@ -47,6 +52,7 @@ interface ProLicensePlanSectionProps {
   monitoredSystemCapacitySection: MonitoredSystemCapacitySection | null;
   monitoredSystemContinuityNotice: Notice | null;
   onReload: () => void;
+  planSelectionPrompt: ActionNotice | null;
   purchaseActivationNotice: Notice | null;
   purchaseActivationAction: {
     label: string;
@@ -87,6 +93,20 @@ export const ProLicensePlanSection: Component<ProLicensePlanSectionProps> = (pro
                 </UpgradeLink>
               )}
             </Show>
+          </div>
+        )}
+      </Show>
+      <Show when={props.planSelectionPrompt}>
+        {(prompt) => (
+          <div class={`mb-4 rounded-md border p-3 text-sm ${prompt().tone}`}>
+            <p class="font-medium">{prompt().title}</p>
+            <p class="mt-1 text-xs opacity-90">{prompt().body}</p>
+            <UpgradeLink
+              class="inline-flex items-center gap-1 mt-3 min-h-10 sm:min-h-9 rounded-md border border-current/20 px-3 py-2 text-xs font-medium hover:bg-black/5 dark:hover:bg-white/5"
+              destination={prompt().actionDestination}
+            >
+              {prompt().actionLabel}
+            </UpgradeLink>
           </div>
         )}
       </Show>

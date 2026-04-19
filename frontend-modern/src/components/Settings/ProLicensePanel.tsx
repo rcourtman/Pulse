@@ -112,6 +112,7 @@ const ProLicensePanelContent: Component = () => {
                   monitoredSystemCapacitySection={state.monitoredSystemCapacitySection()}
                   monitoredSystemContinuityNotice={state.monitoredSystemContinuityNotice()}
                   onReload={() => void state.loadPanelData()}
+                  planSelectionPrompt={state.planSelectionPrompt()}
                   purchaseActivationAction={state.purchaseActivationAction()}
                   purchaseActivationNotice={state.purchaseActivationNotice()}
                   statusPresentation={state.statusPresentation()}

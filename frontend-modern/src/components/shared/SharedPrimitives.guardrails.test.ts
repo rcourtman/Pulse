@@ -644,6 +644,9 @@ describe('shared primitive guardrails', () => {
     expect(monitoredSystemLimitWarningBannerStateSource).toContain(
       'SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_INTENT',
     );
+    expect(monitoredSystemLimitWarningBannerStateSource).not.toContain(
+      'SELF_HOSTED_PRO_BILLING_MONITORED_SYSTEM_INTENT',
+    );
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('viewCapacityDestination');
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('handleUpgradeClick');
     expect(monitoredSystemLimitWarningBannerStateSource).not.toContain("fetch('/api/health'");

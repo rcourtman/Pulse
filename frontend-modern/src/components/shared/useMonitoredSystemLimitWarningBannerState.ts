@@ -12,7 +12,7 @@ import {
 import { resolveUpgradeDestination } from '@/utils/upgradeNavigation';
 import {
   scopeSelfHostedBillingDestination,
-  SELF_HOSTED_PRO_BILLING_MONITORED_SYSTEM_INTENT,
+  SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_INTENT,
 } from '@/utils/pricingHandoff';
 import {
   trackUpgradeClicked,
@@ -67,7 +67,7 @@ export function useMonitoredSystemLimitWarningBannerState() {
           getUpgradeActionDestination(MONITORED_SYSTEM_LIMIT_KEY),
           'plan',
           {
-            intent: SELF_HOSTED_PRO_BILLING_MONITORED_SYSTEM_INTENT,
+            intent: SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_INTENT,
           },
         ),
   );

@@ -13,7 +13,7 @@ import {
   getPublicPricingUrl,
   getSelfHostedPurchaseStartUrl,
   SELF_HOSTED_PRO_BILLING_PLAN_HREF,
-  SELF_HOSTED_PRO_BILLING_MONITORED_SYSTEM_INTENT,
+  SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_INTENT,
   SELF_HOSTED_PRO_BILLING_PURCHASE_ACTIVATED,
   SELF_HOSTED_PRO_BILLING_PURCHASE_CANCELLED,
   SELF_HOSTED_PRO_BILLING_PURCHASE_EXPIRED,
@@ -668,7 +668,10 @@ describe('ProLicensePanel', () => {
       purchase: SELF_HOSTED_PRO_BILLING_PURCHASE_CANCELLED,
       title: 'Checkout cancelled',
       actionLabel: 'Compare plans',
-      actionHref: getSelfHostedPurchaseStartUrl(),
+      actionHref: getSelfHostedPurchaseStartUrl(SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_INTENT),
+      redirectedHref: getSelfHostedBillingHref('plan', {
+        intent: SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_INTENT,
+      }),
     },
     {
       purchase: SELF_HOSTED_PRO_BILLING_PURCHASE_EXPIRED,
@@ -703,7 +706,10 @@ describe('ProLicensePanel', () => {
       redirectedHref = SELF_HOSTED_PRO_BILLING_PLAN_HREF,
     }) => {
       useLocationMock.mockReturnValue({
-        search: `?purchase=${purchase}`,
+        search:
+          purchase === SELF_HOSTED_PRO_BILLING_PURCHASE_CANCELLED
+            ? `?purchase=${purchase}&intent=${SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_INTENT}`
+            : `?purchase=${purchase}`,
         pathname: '/settings/system/billing/plan',
         hash: '',
       });
@@ -712,7 +718,8 @@ describe('ProLicensePanel', () => {
 
       expect(screen.getByText(title)).toBeInTheDocument();
       if (actionLabel && actionHref) {
-        expect(screen.getByRole('link', { name: actionLabel })).toHaveAttribute('href', actionHref);
+        const actionLinks = screen.getAllByRole('link', { name: actionLabel });
+        expect(actionLinks.some((link) => link.getAttribute('href') === actionHref)).toBe(true);
       } else {
         expect(screen.queryByRole('link', { name: 'Review usage' })).not.toBeInTheDocument();
       }
@@ -725,7 +732,7 @@ describe('ProLicensePanel', () => {
 
   it('returns self-hosted plan purchases to the plan surface instead of the legacy usage tab', async () => {
     useLocationMock.mockReturnValue({
-      search: `?purchase=${SELF_HOSTED_PRO_BILLING_PURCHASE_ACTIVATED}&intent=${SELF_HOSTED_PRO_BILLING_MONITORED_SYSTEM_INTENT}`,
+      search: `?purchase=${SELF_HOSTED_PRO_BILLING_PURCHASE_ACTIVATED}&intent=${SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_INTENT}`,
       pathname: '/settings/system/billing/plan',
       hash: '',
     });
@@ -749,7 +756,7 @@ describe('ProLicensePanel', () => {
 
     renderPanel();
 
-    const recoveryDisclosure = screen.getByText('Redeem existing key').closest('details');
+    const recoveryDisclosure = screen.getAllByText('Redeem existing key')[0]?.closest('details');
     expect(recoveryDisclosure).toHaveAttribute('open');
   });
 
@@ -772,11 +779,11 @@ describe('ProLicensePanel', () => {
 
     renderPanel();
 
-    expect(screen.getByRole('tab', { name: 'Usage' })).toHaveAttribute('aria-selected', 'true');
-    expect(
-      document.getElementById(SELF_HOSTED_PRO_BILLING_PLAN_SECTION_ID),
-    ).not.toBeInTheDocument();
-    expect(document.getElementById(SELF_HOSTED_PRO_BILLING_USAGE_SECTION_ID)).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByRole('tab', { name: 'Usage' })).toHaveAttribute('aria-selected', 'true');
+      expect(document.getElementById(SELF_HOSTED_PRO_BILLING_PLAN_SECTION_ID)).not.toBeInTheDocument();
+      expect(document.getElementById(SELF_HOSTED_PRO_BILLING_USAGE_SECTION_ID)).toBeInTheDocument();
+    });
     expect(screen.getByText('Monitored Systems')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Hide counting rules' })).toBeInTheDocument();
   });
@@ -803,17 +810,25 @@ describe('ProLicensePanel', () => {
     });
   });
 
-  it('does not render a monitored-system upgrade arrival callout on the plan upgrade route', async () => {
+  it('renders the self-hosted plan-selection prompt on the plan compare route', async () => {
     useLocationMock.mockReturnValue({
-      search: `?intent=${SELF_HOSTED_PRO_BILLING_MONITORED_SYSTEM_INTENT}`,
+      search: `?intent=${SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_INTENT}`,
       pathname: '/settings/system/billing/plan',
       hash: '',
     });
 
     renderPanel();
 
-    expect(screen.queryByText('Compare self-hosted plans')).not.toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: 'Compare plans' })).not.toBeInTheDocument();
+    expect(screen.getAllByText('Compare self-hosted plans').length).toBeGreaterThan(0);
+    expect(screen.getByText(/Community keeps core monitoring free/i)).toBeInTheDocument();
+    const compareLinks = screen.getAllByRole('link', { name: 'Compare plans' });
+    expect(
+      compareLinks.some(
+        (link) =>
+          link.getAttribute('href') ===
+          getSelfHostedPurchaseStartUrl(SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_INTENT),
+      ),
+    ).toBe(true);
     expect(screen.queryByRole('button', { name: 'Hide counting rules' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'View counting rules' })).not.toBeInTheDocument();
   });
@@ -968,7 +983,7 @@ describe('ProLicensePanel', () => {
     expect(proLicensePlanSectionSource).toContain(
       'const trialEndedNotice = props.trialEnded ? getTrialEndedProLicenseNotice() : null;',
     );
-    expect(proLicensePlanSectionSource).not.toContain('monitoredSystemUpgradeArrivalTitle');
+    expect(proLicensePlanSectionSource).toContain('planSelectionPrompt');
     expect(proLicensePlanSectionSource).not.toContain(
       "resolveSelfHostedPurchaseStartDestination('self_hosted_plan')",
     );
