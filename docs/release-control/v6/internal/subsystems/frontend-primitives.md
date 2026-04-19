@@ -1324,6 +1324,11 @@ without overlapping or collapsing into clipped pills. That map should read as
 numbered wayfinding, not placeholder onboarding chrome: concise numeric badges
 plus section titles are preferred over repeated `Stop N` copy or other filler
 labels that add noise without helping orientation.
+That same welcome surface must stay inside Pulse's existing flat visual
+language. The shell, step map, telemetry note, and supporting actions should
+use bordered flat fills and normal app radii instead of gradient washes,
+glassmorphism, or other marketing-style promo chrome that drifts from the rest
+of the product.
 That state owner now also owns public-demo suppression: the modal must stay
 closed until `sessionPresentationPolicyResolved()` is true and must fail closed
 when `presentationPolicyIsDemoMode()` resolves true, so the public demo does

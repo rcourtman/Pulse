@@ -35,6 +35,8 @@ describe('WhatsNewModal', () => {
     expect(whatsNewModalSource).not.toContain('WHATS_NEW_NAV_V2_SHOWN');
     expect(whatsNewModalSource).not.toContain('Migration guide');
     expect(whatsNewModalSource).not.toContain('https://github.com/rcourtman/Pulse/blob/main/docs/PRIVACY.md');
+    expect(whatsNewModalSource).not.toContain('bg-gradient');
+    expect(whatsNewModalSource).not.toContain('backdrop-blur-sm');
 
     expect(whatsNewModalStateSource).toContain('export function useWhatsNewModalState');
     expect(whatsNewModalStateSource).toContain('createLocalStorageBooleanSignal');
