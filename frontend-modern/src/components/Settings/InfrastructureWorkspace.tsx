@@ -135,6 +135,15 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
             },
             tone: 'primary' as const,
           },
+          {
+            label: 'Install agent',
+            onSelect: () => {
+              setInitialAddType('agent');
+              setAddMode(true);
+              setShowAgentProfiles(false);
+            },
+            tone: 'secondary' as const,
+          },
         ],
   );
 

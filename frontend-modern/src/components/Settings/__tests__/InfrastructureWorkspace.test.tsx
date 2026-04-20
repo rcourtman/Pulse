@@ -232,13 +232,13 @@ describe('InfrastructureWorkspace', () => {
     expect(setSearchParamsSpy).not.toHaveBeenCalled();
   });
 
-  it('routes to the agent install slot via the dedicated Unified Agent path', () => {
+  it('routes to the agent install slot via the ledger-header Install agent button', () => {
     renderWorkspace();
 
-    fireEvent.click(screen.getByRole('button', { name: /Add connection/i }));
-    fireEvent.click(
-      screen.getByRole('button', { name: /Install the Unified Agent on a host/i }),
-    );
+    // The agent path is a first-class peer action in the ledger header, not
+    // a subtext offramp hidden inside the Add screen — a user who wants
+    // CPU/disk temps or is on bare-metal Linux should reach it in one click.
+    fireEvent.click(screen.getByRole('button', { name: /^Install agent$/i }));
 
     expect(screen.getByTestId('install-section')).toBeInTheDocument();
   });
@@ -276,10 +276,7 @@ describe('InfrastructureWorkspace', () => {
   it('can return to the probe step from a credential slot', () => {
     renderWorkspace();
 
-    fireEvent.click(screen.getByRole('button', { name: /Add connection/i }));
-    fireEvent.click(
-      screen.getByRole('button', { name: /Install the Unified Agent on a host/i }),
-    );
+    fireEvent.click(screen.getByRole('button', { name: /^Install agent$/i }));
     fireEvent.click(screen.getByRole('button', { name: /Back to probe/i }));
 
     expect(screen.getByRole('button', { name: /Probe address/i })).toBeInTheDocument();
@@ -289,10 +286,7 @@ describe('InfrastructureWorkspace', () => {
   it('toggles agent profiles inside the agent install slot', () => {
     renderWorkspace();
 
-    fireEvent.click(screen.getByRole('button', { name: /Add connection/i }));
-    fireEvent.click(
-      screen.getByRole('button', { name: /Install the Unified Agent on a host/i }),
-    );
+    fireEvent.click(screen.getByRole('button', { name: /^Install agent$/i }));
     fireEvent.click(screen.getByRole('button', { name: 'Manage agent profiles' }));
 
     expect(screen.getByTestId('agent-profiles')).toBeInTheDocument();
@@ -372,11 +366,12 @@ describe('InfrastructureWorkspace', () => {
     expect(screen.queryByTestId('truenas-section')).toBeNull();
   });
 
-  it('hides Add connection and the add flow in read-only mode', () => {
+  it('hides Add connection, Install agent, and the add flow in read-only mode', () => {
     presentationPolicyIsReadOnlyMock.mockReturnValue(true);
     renderWorkspace();
 
     expect(screen.queryByRole('button', { name: /Add connection/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Install agent$/i })).toBeNull();
     expect(screen.queryByRole('button', { name: /Probe address/i })).toBeNull();
     expect(screen.queryByTestId('install-section')).toBeNull();
   });

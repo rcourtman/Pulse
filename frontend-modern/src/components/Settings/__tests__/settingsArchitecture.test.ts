@@ -31,9 +31,8 @@ describe('settings architecture guardrails', () => {
   it('keeps infrastructure onboarding route-backed under the shared settings shell', () => {
     expect(settingsHeaderMetaSource).toContain("'infrastructure-systems': {");
     expect(settingsHeaderMetaSource).toContain('Review monitored systems in one ledger');
-    expect(settingsHeaderMetaSource).toContain(
-      'use Add connection when you need platform setup or agent install commands.',
-    );
+    expect(settingsHeaderMetaSource).toContain('Add connection for Platform API setup');
+    expect(settingsHeaderMetaSource).toContain('Install agent for host-level metrics');
 
     expect(settingsNavigationHookSource).toContain('deriveAddStepFromLegacyPath(path)');
     expect(settingsNavigationHookSource).toContain(
@@ -78,11 +77,18 @@ describe('settings architecture guardrails', () => {
     expect(connectionEditorSource).toContain("import { AddressProbeStep } from './AddressProbeStep';");
     expect(connectionEditorSource).toContain('const DEFAULT_MANUAL_TYPES: ConnectionType[] =');
     expect(connectionEditorSource).toContain('<AddressProbeStep');
-    expect(connectionEditorSource).toContain('Install the Unified Agent on a host');
+    // The agent install path is a first-class ledger-header action, not a
+    // subtext offramp inside the editor — make sure it doesn't drift back.
+    expect(connectionEditorSource).not.toContain('Install the Unified Agent on a host');
     expect(connectionEditorSource).not.toContain('NodeModal');
 
     expect(addressProbeStepSource).toContain('Probe address');
     expect(addressProbeStepSource).toContain('Enter credentials manually');
+    // The no-match branch must name the agent alternative so a user who
+    // probed bare-metal Linux / Unraid / FreeBSD is not left in a
+    // Platform-API-only dead end.
+    expect(addressProbeStepSource).toContain('install the Unified Agent instead');
+    expect(addressProbeStepSource).toContain('bare-metal Linux');
 
     expect(connectionEditorStateSource).toContain('ConnectionsAPI.probe(value)');
     expect(connectionEditorStateSource).toContain('export const CONNECTION_TYPE_LABELS');

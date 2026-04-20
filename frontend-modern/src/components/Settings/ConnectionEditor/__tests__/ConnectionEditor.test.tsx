@@ -94,7 +94,7 @@ describe('ConnectionEditor', () => {
     expect(lastCall.candidate).toBeNull();
   });
 
-  it('leads with the address probe; agent install is an offramp, not a peer fork', () => {
+  it('leads with the address probe and does not re-teach the two-mode split', () => {
     render(() => (
       <ConnectionEditor
         renderCredentialSlot={() => <div />}
@@ -104,21 +104,21 @@ describe('ConnectionEditor', () => {
 
     // Primary path is probe-the-address. The explainer on the ledger already
     // taught the user the two-mode split, so the editor must not restate it
-    // as a second decision screen — no "Platform API" card header here.
+    // as a second decision screen — no "Platform API" card header, no
+    // always-visible "install agent" subtext competing with the primary flow.
+    // The agent path is surfaced by the ledger header, not duplicated here.
     expect(screen.getByRole('button', { name: /probe address/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /enter credentials manually/i })).toBeInTheDocument();
     expect(screen.queryByText('Platform API')).toBeNull();
-
-    // Agent install is still reachable, but as a contextual offramp beneath
-    // the probe, not as an equal-weight card.
+    expect(screen.queryByText(/host-level metrics/i)).toBeNull();
     expect(
-      screen.getByRole('button', { name: /install the unified agent on a host/i }),
-    ).toBeInTheDocument();
-    expect(screen.getByText(/host-level metrics/i)).toBeInTheDocument();
-    expect(screen.queryByText(/host-level telemetry/i)).toBeNull();
+      screen.queryByRole('button', { name: /install the unified agent on a host/i }),
+    ).toBeNull();
   });
 
-  it('routes the Install Unified Agent button straight to the agent credential slot', () => {
+  it('offers the agent path contextually when a probe returns no match', async () => {
+    mockedProbe.mockResolvedValueOnce({ candidates: [], probedMs: 180 });
+
     const renderSlot = vi.fn(({ type }) => <div data-testid="slot">slot:{type}</div>);
 
     render(() => (
@@ -128,7 +128,18 @@ describe('ConnectionEditor', () => {
       />
     ));
 
-    fireEvent.click(screen.getByRole('button', { name: /install the unified agent on a host/i }));
+    const input = screen.getByPlaceholderText(/pve01\.lan/) as HTMLInputElement;
+    fireEvent.input(input, { target: { value: 'baremetal.lan' } });
+    fireEvent.click(screen.getByRole('button', { name: /probe address/i }));
+    await waitFor(() => expect(mockedProbe).toHaveBeenCalled());
+
+    // The no-match box names bare-metal Linux / Unraid / FreeBSD and offers
+    // the agent as a first-class alternative, so a user who probed the wrong
+    // thing isn't left in a Platform-API-only dead end.
+    const agentButton = await screen.findByRole('button', {
+      name: /install the unified agent instead/i,
+    });
+    fireEvent.click(agentButton);
 
     expect(screen.getByTestId('slot').textContent).toBe('slot:agent');
     const call = renderSlot.mock.calls.at(-1)![0];

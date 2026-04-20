@@ -81,6 +81,7 @@ export const ConnectionEditor: Component<ConnectionEditorProps> = (props) => {
               state={state}
               onSelectCandidate={chooseCandidate}
               onChooseManually={() => setManualPickerOpen((v) => !v)}
+              onInstallAgent={() => chooseManualType('agent')}
             />
 
             <Show when={manualPickerOpen()}>
@@ -104,19 +105,6 @@ export const ConnectionEditor: Component<ConnectionEditorProps> = (props) => {
                 </ul>
               </div>
             </Show>
-
-            <div class="border-t border-border pt-3 text-xs text-muted">
-              Setting up bare-metal Linux, Unraid, or FreeBSD, or adding host-level
-              metrics (CPU/disk temps, SMART, power) on Proxmox, VMware, or TrueNAS?{' '}
-              <button
-                type="button"
-                onClick={() => chooseManualType('agent')}
-                class="font-medium text-blue-600 underline underline-offset-2 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
-              >
-                Install the Unified Agent on a host
-              </button>
-              .
-            </div>
           </div>
         }
       >
