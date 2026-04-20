@@ -80,12 +80,12 @@ test.describe("Pulse Account upgrade bootstrap", () => {
     ).toBeVisible();
     await expect(
       page.getByText(
-        "Community keeps core monitoring free. Relay and Pro sell convenience, history, AI operations, and advanced administration.",
+        "Community keeps monitoring free. Relay gets Pulse securely from anywhere. Pro adds root-cause analysis, safe remediation, and 90-day incident history.",
       ),
     ).toBeVisible();
     await expect(
       page.getByText(
-        "Pulse Account compares self-hosted tiers by convenience and advanced capabilities, keeps core monitoring available across plans, and sends completed checkout straight back to Pulse Pro billing.",
+        "Pulse Account keeps checkout tied to the Pulse instance that opened it, so completed Relay or Pro purchases return to the right billing surface automatically.",
       ),
     ).toBeVisible();
     await expect(

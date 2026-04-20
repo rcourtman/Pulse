@@ -63,3 +63,22 @@ func TestResolvePulseAccountPortalURL_RejectsInvalidOverrides(t *testing.T) {
 		})
 	}
 }
+
+func TestOperatorOutcomeUpgradeReasonsRemainCanonical(t *testing.T) {
+	expected := map[string]string{
+		FeatureRelay:           "Get Relay so Pulse stays reachable securely from anywhere instead of only on the local dashboard.",
+		FeatureLongTermMetrics: "Get Relay for 14 days of history, or Pro for 90 days, so you can see what changed before and after an incident.",
+		FeatureAIAlerts:        "Upgrade to Pro so alerts arrive with root-cause analysis instead of a stack of symptoms.",
+		FeatureAIAutoFix:       "Upgrade to Pro so Pulse can move from finding issues to applying safe remediation with your approval or in autonomous mode.",
+	}
+
+	for _, entry := range UpgradeReasonMatrix {
+		want, ok := expected[entry.Feature]
+		if !ok {
+			continue
+		}
+		if entry.Reason != want {
+			t.Fatalf("reason for %q = %q, want %q", entry.Feature, entry.Reason, want)
+		}
+	}
+}

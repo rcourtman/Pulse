@@ -91,6 +91,25 @@ func TestUpgradeURLForFeatureUnknownFallsBackToGenericPricing(t *testing.T) {
 	}
 }
 
+func TestUpgradeReasonMatrix_OperatorOutcomeCopyRemainsCanonical(t *testing.T) {
+	expected := map[string]string{
+		license.FeatureRelay:           "Get Relay so Pulse stays reachable securely from anywhere instead of only on the local dashboard.",
+		license.FeatureLongTermMetrics: "Get Relay for 14 days of history, or Pro for 90 days, so you can see what changed before and after an incident.",
+		license.FeatureAIAlerts:        "Upgrade to Pro so alerts arrive with root-cause analysis instead of a stack of symptoms.",
+		license.FeatureAIAutoFix:       "Upgrade to Pro so Pulse can move from finding issues to applying safe remediation with your approval or in autonomous mode.",
+	}
+
+	for _, entry := range UpgradeReasonMatrix {
+		want, ok := expected[entry.Feature]
+		if !ok {
+			continue
+		}
+		if entry.Reason != want {
+			t.Fatalf("expected canonical reason %q for feature %q, got %q", want, entry.Feature, entry.Reason)
+		}
+	}
+}
+
 func expectedProOnlyFeatureSet() map[string]struct{} {
 	proFeatures := make(map[string]struct{}, len(license.TierFeatures[license.TierPro]))
 	for _, feature := range license.TierFeatures[license.TierPro] {

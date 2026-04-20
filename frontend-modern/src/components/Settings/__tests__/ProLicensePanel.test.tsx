@@ -208,7 +208,7 @@ describe('ProLicensePanel', () => {
     });
 
     expect(screen.getAllByText('Compare self-hosted plans').length).toBeGreaterThan(0);
-    expect(screen.getByText(/Community keeps core monitoring free/i)).toBeInTheDocument();
+    expect(screen.getByText(/Community keeps monitoring free/i)).toBeInTheDocument();
     const compareLinks = screen.getAllByRole('link', { name: 'Compare plans' });
     expect(
       compareLinks.some(
@@ -321,7 +321,7 @@ describe('ProLicensePanel', () => {
     expect(screen.getByText('V5 Lifetime Grandfathered')).toBeInTheDocument();
     expect(
       screen.getByText(
-        'Review your active plan, expiry, and the paid capabilities that come with it.',
+        'Review your active plan, expiry, and whether this instance only monitors, reaches anywhere, or also helps investigate and fix issues.',
       ),
     ).toBeInTheDocument();
     expect(screen.queryByText('Included Monitored Systems')).not.toBeInTheDocument();
@@ -839,7 +839,7 @@ describe('ProLicensePanel', () => {
     renderPanel();
 
     expect(screen.getAllByText('Compare self-hosted plans').length).toBeGreaterThan(0);
-    expect(screen.getByText(/Community keeps core monitoring free/i)).toBeInTheDocument();
+    expect(screen.getByText(/Community keeps monitoring free/i)).toBeInTheDocument();
     const compareLinks = screen.getAllByRole('link', { name: 'Compare plans' });
     expect(
       compareLinks.some(
@@ -1008,7 +1008,7 @@ describe('ProLicensePanel', () => {
     );
     expect(proLicensePlanSectionSource).not.toContain('Your Pro trial has ended');
     expect(proLicensePlanSectionSource).not.toContain(
-      'Unlock Pulse Patrol, alert analysis, auto-fix, and more.',
+      'Turn alert noise into root-cause answers, safe fixes, and 90-day incident history.',
     );
     expect(selfHostedCommercialRecoverySectionSource).toContain(
       'SELF_HOSTED_RECOVERY_PRESENTATION',

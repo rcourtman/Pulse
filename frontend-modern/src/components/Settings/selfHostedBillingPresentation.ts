@@ -35,17 +35,17 @@ export interface SelfHostedProBillingPresentation {
 export const SELF_HOSTED_PRO_BILLING_PRESENTATION: SelfHostedProBillingPresentation = {
   shellTitle: 'Plans & Billing',
   shellDescription:
-    'Manage self-hosted billing, plan features, and activation status.',
-  infrastructureRouteReferral: 'Billing and self-hosted plan features live in Plans & Billing.',
+    'Manage self-hosted plans, activation, and how Pulse helps when something breaks.',
+  infrastructureRouteReferral: 'Billing and self-hosted plan changes live in Plans & Billing.',
   infrastructureWorkspaceReferral:
-    'Billing, self-hosted plan features, and activation status live in Plans & Billing, not here.',
+    'Billing, self-hosted plan changes, and activation status live in Plans & Billing, not here.',
   sectionSelectorAriaLabel: 'Self-hosted billing section',
   refreshLabel: 'Refresh',
   planTabLabel: 'Plan',
   usageTabLabel: 'Usage',
   planSectionTitle: 'Plan',
   planSectionDescription:
-    'Review your active plan, expiry, and the paid capabilities that come with it.',
+    'Review your active plan, expiry, and whether this instance only monitors, reaches anywhere, or also helps investigate and fix issues.',
   usageSectionTitle: 'Usage',
   hiddenShellTitle: 'Demo mode',
   hiddenShellDescription: 'Commercial settings are hidden for this session.',
@@ -57,7 +57,7 @@ export const SELF_HOSTED_PRO_BILLING_PRESENTATION: SelfHostedProBillingPresentat
     'Pulse waits for the session presentation policy before showing license, billing, or usage details.',
   planSelectionPromptTitle: 'Compare self-hosted plans',
   planSelectionPromptBody:
-    'Community keeps core monitoring free. Compare Relay and Pro in Pulse Account, then return here with the new plan activated automatically.',
+    'Community keeps monitoring free. Compare Relay when you want secure access from anywhere, or Pro when you want root-cause answers, safe remediation, and 90-day incident history.',
   planSelectionPromptActionLabel: 'Compare plans',
   purchaseActivatedPlanActionLabel: 'Review plan',
   purchaseCancelledActionLabel: 'Compare plans',
@@ -65,7 +65,8 @@ export const SELF_HOSTED_PRO_BILLING_PRESENTATION: SelfHostedProBillingPresentat
   purchaseFailedActionLabel: 'Open recovery',
   purchaseUnavailableActionLabel: 'Try again',
   trialStartTitle: 'Try Pro for free',
-  trialStartBody: 'Start a 14-day Pro trial for this organization.',
+  trialStartBody:
+    'Start a 14-day Pro trial for root-cause analysis, safe auto-fix, and 90-day incident history on this organization.',
   trialStartIdleActionLabel: 'Start 14-day Pro Trial',
   trialStartPendingActionLabel: 'Starting...',
   recoverySectionTitle: 'Recovery',

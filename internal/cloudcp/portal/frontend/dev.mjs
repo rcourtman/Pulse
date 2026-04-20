@@ -482,9 +482,9 @@ function routeCommercialAPI(request, response, url, scenario) {
   if (request.method === 'GET' && route === '/v1/public/pricing-model') {
     sendJSON(response, 200, {
       title: 'Simple self-hosted pricing for Pulse',
-      description: 'Preview pricing contract',
+      description: 'Community keeps monitoring free. Relay lets you reach Pulse securely from anywhere. Pro explains what broke, helps fix it safely, and keeps 90 days of incident history.',
       explainer:
-        'Community keeps core monitoring free. Relay and Pro sell convenience, history, AI operations, and advanced administration.',
+        'Community keeps monitoring free. Relay gets Pulse securely from anywhere. Pro adds root-cause analysis, safe remediation, and 90-day incident history.',
       plans: [
         {
           badge: 'Recommended',
@@ -493,10 +493,12 @@ function routeCommercialAPI(request, response, url, scenario) {
           title: 'Relay',
           price: '$4.99',
           period: '$39/year available too',
-          blurb: 'Secure remote access and mobile access.',
+          blurb: 'The reach-it-anywhere tier for secure remote access, mobile access, and push notifications.',
           features: [
             { tone: 'check', html: 'Unlimited <strong>self-hosted monitoring</strong>' },
-            { tone: 'check', html: 'Remote access' },
+            { tone: 'check', html: 'Secure remote access' },
+            { tone: 'check', html: 'Mobile access' },
+            { tone: 'check', html: 'Push notifications' },
           ],
           buttons: [
             { kind: 'checkout', className: 'btn btn-secondary', tier: 'relay', planKey: 'price_relay_monthly', billingCycle: 'monthly', label: 'Buy Monthly' },
@@ -508,10 +510,13 @@ function routeCommercialAPI(request, response, url, scenario) {
           title: 'Pro',
           price: '$8.99',
           period: '$79/year available too',
-          blurb: 'Investigation, alert analysis, and auto-fix.',
+          blurb: 'The operator tier for root-cause answers, safe remediation, and longer incident memory.',
           features: [
             { tone: 'check', html: 'Unlimited <strong>self-hosted monitoring</strong>' },
             { tone: 'check', html: 'Everything in Relay' },
+            { tone: 'check', html: 'Alert-triggered root-cause analysis' },
+            { tone: 'check', html: 'Patrol auto-fix with approval or autonomous mode' },
+            { tone: 'check', html: '90-day incident history' },
           ],
           buttons: [
             { kind: 'checkout', className: 'btn btn-secondary', tier: 'pro', planKey: 'price_pro_monthly', billingCycle: 'monthly', label: 'Buy Monthly' },

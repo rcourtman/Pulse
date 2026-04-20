@@ -17,7 +17,8 @@ const CANCELLED_BILLING_URL = `${DEV_SERVER_URL}/settings/system/billing/plan?in
 const EXPIRED_BILLING_URL = `${DEV_SERVER_URL}/settings/system/billing/plan?intent=self_hosted_plan&purchase=expired`;
 const FAILED_BILLING_URL = `${DEV_SERVER_URL}/settings/system/billing/plan?intent=self_hosted_plan&purchase=failed`;
 const UNAVAILABLE_BILLING_URL = `${DEV_SERVER_URL}/settings/system/billing/plan?intent=self_hosted_plan&purchase=unavailable`;
-const FINAL_BILLING_URL = `${DEV_SERVER_URL}/settings/system/billing/plan?intent=self_hosted_plan`;
+const FINAL_BILLING_URL = `${DEV_SERVER_URL}/settings/system/billing/plan`;
+const FINAL_RESTARTABLE_BILLING_URL = `${DEV_SERVER_URL}/settings/system/billing/plan?intent=self_hosted_plan`;
 const USAGE_BILLING_URL = `${DEV_SERVER_URL}/settings/system/billing/usage`;
 const RECOVERY_BILLING_HREF =
   "/settings/system/billing/plan?intent=self_hosted_plan&details=recovery";
@@ -356,7 +357,7 @@ async function openMonitoredSystemUpgradeArrival(page: Page) {
   );
   await expect(
     page.getByText(
-      "Community keeps core monitoring free. Compare Relay and Pro in Pulse Account, then return here with Pulse Pro activated automatically.",
+      "Community keeps monitoring free. Compare Relay when you want secure access from anywhere, or Pro when you want root-cause answers, safe remediation, and 90-day incident history.",
     ),
   ).toBeVisible();
   await expect(page.getByRole("button", { name: "Hide counting rules" })).toHaveCount(0);
@@ -415,16 +416,11 @@ test.describe("Self-hosted upgrade return flow", () => {
     ).toHaveCount(0);
     await expect(page).toHaveURL(FINAL_BILLING_URL);
     await expect(
-      page.getByText("Pulse Pro activated", { exact: true }),
+      page.getByText("Plan activated", { exact: true }),
     ).toBeVisible();
-    const reviewUsageLink = page.getByRole("link", { name: "Review usage" });
-    await expect(reviewUsageLink).toHaveAttribute("href", "/settings/system/billing/usage");
-    await reviewUsageLink.click();
-    await expect(page).toHaveURL(USAGE_BILLING_URL);
-    await expect(page.getByRole("tab", { name: "Usage" })).toHaveAttribute(
-      "aria-selected",
-      "true",
-    );
+    const reviewPlanLink = page.getByRole("link", { name: "Review plan" });
+    await expect(reviewPlanLink).toHaveAttribute("href", "/settings/system/billing/plan");
+    await expect(page.getByRole("link", { name: "Review usage" })).toHaveCount(0);
   });
 
   test("returns cancelled checkout directly to the owned billing plan route", async ({
@@ -487,12 +483,13 @@ test.describe("Self-hosted upgrade return flow", () => {
 
     await expect(page).toHaveURL(FINAL_BILLING_URL);
     await expect(
-      page.getByText("Pulse Pro activated", { exact: true }),
+      page.getByText("Plan activated", { exact: true }),
     ).toBeVisible();
-    await expect(page.getByRole("link", { name: "Review usage" })).toHaveAttribute(
+    await expect(page.getByRole("link", { name: "Review plan" })).toHaveAttribute(
       "href",
-      "/settings/system/billing/usage",
+      "/settings/system/billing/plan",
     );
+    await expect(page.getByRole("link", { name: "Review usage" })).toHaveCount(0);
   });
 
   test("returns an expired or mismatched checkout state to restart the owned upgrade flow", async ({
@@ -621,7 +618,7 @@ test.describe("Self-hosted upgrade return flow", () => {
         ? page
         : popup;
 
-    await expect(billingSurface).toHaveURL(FINAL_BILLING_URL);
+    await expect(billingSurface).toHaveURL(FINAL_RESTARTABLE_BILLING_URL);
     await expect(
       billingSurface.getByText("Pulse Account unavailable", { exact: true }),
     ).toBeVisible();

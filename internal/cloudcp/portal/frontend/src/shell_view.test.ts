@@ -676,12 +676,12 @@ describe('shell view', function() {
     expect(html).toContain('Pulse Account owns the commercial handoff for self-hosted upgrades from the app.');
     expect(html).toContain('Compare self-hosted plans');
     expect(html).toContain(
-      'Compare self-hosted plans by Relay and Pro capabilities rather than monitored-system volume.',
+      'Compare self-hosted plans as monitor, reach, or operate instead of by monitored-system volume.',
     );
     expect(html).toContain('Plan comparison');
     expect(html).toContain('id="upgrade-billing-root"');
     expect(html).toContain(
-      'Choose the self-hosted tier that fits the convenience and advanced capabilities you want. Core monitoring stays available across self-hosted plans. Pulse Account will send completed checkout directly back to Pulse Pro billing.',
+      'Choose the self-hosted tier that fits how you run Pulse: Community monitors, Relay reaches anywhere, and Pro investigates and helps fix issues. Pulse Account will send completed checkout directly back to Pulse Pro billing.',
     );
     expect(html).toContain('Pulse Account owns self-hosted plan selection and checkout for Pulse Pro upgrades.');
     expect(html).not.toContain('id="open-manage-billing"');

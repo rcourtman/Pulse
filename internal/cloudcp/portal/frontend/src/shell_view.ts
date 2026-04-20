@@ -151,7 +151,7 @@ function selfHostedUpgradeActionTitle(featureKey: string): string {
 
 function selfHostedUpgradeActionDescription(featureKey: string): string {
   return isSelfHostedPlanUpgrade(featureKey)
-    ? 'Compare self-hosted plans by Relay and Pro capabilities rather than monitored-system volume.'
+    ? 'Compare self-hosted plans as monitor, reach, or operate instead of by monitored-system volume.'
     : 'Compare self-hosted plans and continue into the commercial checkout path.';
 }
 
@@ -177,7 +177,7 @@ function renderSelfHostedUpgradeActionRow(context: ShellViewContext): string {
 function renderSelfHostedUpgradeBillingPanel(context: ShellViewContext): string {
   var featureKey = normalizeUpgradeFeatureKey(context.billingState.upgradeFeatureKey);
   var helperCopy = isSelfHostedPlanUpgrade(featureKey)
-    ? 'Choose the self-hosted tier that fits the convenience and advanced capabilities you want. Core monitoring stays available across self-hosted plans. Pulse Account will send completed checkout directly back to Pulse Pro billing.'
+    ? 'Choose the self-hosted tier that fits how you run Pulse: Community monitors, Relay reaches anywhere, and Pro investigates and helps fix issues. Pulse Account will send completed checkout directly back to Pulse Pro billing.'
     : 'Choose the self-hosted tier that fits this upgrade. Pulse Account will send completed checkout directly back to Pulse Pro billing.';
   return renderBillingTaskPanel(
     selfHostedUpgradeActionTitle(featureKey),

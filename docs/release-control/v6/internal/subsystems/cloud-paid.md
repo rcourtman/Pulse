@@ -220,6 +220,15 @@ Community limit enforcement.
     `max_monitored_systems` entitlement row, and
     `monitored_system_capacity.mode = unlimited` once runtime usage is
     available.
+    That same self-hosted commercial boundary also owns the operator-value
+    narrative across the in-app billing shell, Pulse Account handoff, public
+    pricing contract, and owned upgrade reasons. Customer-facing self-hosted
+    copy must keep the ladder explicit as `Community = monitor`, `Relay = reach
+    Pulse from anywhere`, and `Pro = investigate root cause, apply safe
+    remediation, and retain longer incident memory`. Team/admin extras such as
+    RBAC, SSO, audit logging, reporting, and agent profiles may remain present,
+    but they are secondary included value and must not displace that operator
+    outcome framing on owned commercial surfaces.
 24. Keep public-demo dashboard bootstrap route-owned on the adjacent
     commercial/runtime boundary. `frontend-modern/src/useAppRuntimeState.ts`
     may prewarm shared infrastructure summary caches for non-dashboard routes,

@@ -44,13 +44,13 @@ describe('licensePresentation', () => {
     expect(getTrialEndedProLicenseNotice()).toEqual({
       tone: 'border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-900 text-red-900 dark:text-red-100',
       title: 'Your Pro trial has ended',
-      body: 'Upgrade to keep Pro features.',
+      body: 'Upgrade to keep root-cause analysis, safe auto-fix, and 90-day incident history.',
       actionLabel: 'View Pro plans',
     });
     expect(getInactiveProUpsellNotice()).toEqual({
       tone: 'border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900 text-amber-800 dark:text-amber-200',
       title: 'Upgrade to Pro',
-      body: 'Unlock Pulse Patrol, alert analysis, auto-fix, and more.',
+      body: 'Turn alert noise into root-cause answers, safe fixes, and 90-day incident history.',
       actionLabel: 'View Pro plans',
     });
     expect(SELF_HOSTED_RECOVERY_PRESENTATION).toMatchObject({
@@ -65,17 +65,17 @@ describe('licensePresentation', () => {
     expect(SELF_HOSTED_PRO_BILLING_PRESENTATION).toEqual({
       shellTitle: 'Plans & Billing',
       shellDescription:
-        'Manage self-hosted billing, plan features, and activation status.',
-      infrastructureRouteReferral: 'Billing and self-hosted plan features live in Plans & Billing.',
+        'Manage self-hosted plans, activation, and how Pulse helps when something breaks.',
+      infrastructureRouteReferral: 'Billing and self-hosted plan changes live in Plans & Billing.',
       infrastructureWorkspaceReferral:
-        'Billing, self-hosted plan features, and activation status live in Plans & Billing, not here.',
+        'Billing, self-hosted plan changes, and activation status live in Plans & Billing, not here.',
       sectionSelectorAriaLabel: 'Self-hosted billing section',
       refreshLabel: 'Refresh',
       planTabLabel: 'Plan',
       usageTabLabel: 'Usage',
       planSectionTitle: 'Plan',
       planSectionDescription:
-        'Review your active plan, expiry, and the paid capabilities that come with it.',
+        'Review your active plan, expiry, and whether this instance only monitors, reaches anywhere, or also helps investigate and fix issues.',
       usageSectionTitle: 'Usage',
       hiddenShellTitle: 'Demo mode',
       hiddenShellDescription: 'Commercial settings are hidden for this session.',
@@ -87,7 +87,7 @@ describe('licensePresentation', () => {
         'Pulse waits for the session presentation policy before showing license, billing, or usage details.',
       planSelectionPromptTitle: 'Compare self-hosted plans',
       planSelectionPromptBody:
-        'Community keeps core monitoring free. Compare Relay and Pro in Pulse Account, then return here with the new plan activated automatically.',
+        'Community keeps monitoring free. Compare Relay when you want secure access from anywhere, or Pro when you want root-cause answers, safe remediation, and 90-day incident history.',
       planSelectionPromptActionLabel: 'Compare plans',
       purchaseActivatedPlanActionLabel: 'Review plan',
       purchaseCancelledActionLabel: 'Compare plans',
@@ -95,7 +95,8 @@ describe('licensePresentation', () => {
       purchaseFailedActionLabel: 'Open recovery',
       purchaseUnavailableActionLabel: 'Try again',
       trialStartTitle: 'Try Pro for free',
-      trialStartBody: 'Start a 14-day Pro trial for this organization.',
+      trialStartBody:
+        'Start a 14-day Pro trial for root-cause analysis, safe auto-fix, and 90-day incident history on this organization.',
       trialStartIdleActionLabel: 'Start 14-day Pro Trial',
       trialStartPendingActionLabel: 'Starting...',
       recoverySectionTitle: 'Recovery',

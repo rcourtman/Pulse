@@ -240,14 +240,14 @@ describe('services view', function() {
       title: 'Pricing',
       description: 'Canonical pricing model',
       explainer:
-        'Community keeps core monitoring free. Relay and Pro sell convenience, history, AI operations, and advanced administration.',
+        'Community keeps monitoring free. Relay gets Pulse securely from anywhere. Pro adds root-cause analysis, safe remediation, and 90-day incident history.',
       plans: [
         {
           tierKicker: 'Pro',
           title: 'Pro',
           price: '$8.99',
           period: '$79/year available too',
-          blurb: 'Investigation, alert analysis, and auto-fix.',
+          blurb: 'The operator tier for root-cause answers, safe remediation, and longer incident memory.',
           features: [{ tone: 'check', html: 'Unlimited <strong>self-hosted monitoring</strong>' }],
           buttons: [
             {
@@ -270,10 +270,10 @@ describe('services view', function() {
       'Pulse Account will return completed checkout directly to Pulse Pro billing.',
     );
     expect(document.getElementById('upgrade-billing-root')?.innerHTML).toContain(
-      'Community keeps core monitoring free. Relay and Pro sell convenience, history, AI operations, and advanced administration.',
+      'Pulse Account keeps checkout tied to the Pulse instance that opened it, so completed Relay or Pro purchases return to the right billing surface automatically.',
     );
     expect(document.getElementById('upgrade-billing-root')?.innerHTML).toContain(
-      'Pulse Account compares self-hosted tiers by convenience and advanced capabilities, keeps core monitoring available across plans, and sends completed checkout straight back to Pulse Pro billing.',
+      'Community keeps monitoring free. Relay gets Pulse securely from anywhere. Pro adds root-cause analysis, safe remediation, and 90-day incident history.',
     );
     expect(document.getElementById('upgrade-billing-root')?.innerHTML).not.toContain('Activate in Pulse Pro');
     expect(document.getElementById('upgrade-billing-root')?.innerHTML).not.toContain('ppk_live_preview');
