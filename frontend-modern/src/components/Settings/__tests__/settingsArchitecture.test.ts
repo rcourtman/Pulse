@@ -81,18 +81,21 @@ describe('settings architecture guardrails', () => {
     expect(connectionEditorSource).toContain('const DEFAULT_PLATFORM_TYPES: ConnectionType[] =');
     expect(connectionEditorSource).not.toContain("'agent'] =");
     expect(connectionEditorSource).toContain('<AddressProbeStep');
-    expect(connectionEditorSource).toContain('Or install the agent on the host');
     expect(connectionEditorSource).toContain('Or connect a platform API directly');
-    // The agent card sits above the platform grid and is marked Recommended
-    // because it auto-registers PVE/PBS and covers the host-telemetry path
-    // the platform APIs can't reach. Guarding the ordering here prevents a
-    // drift back to "agent as a fifth tile."
-    const agentSectionIdx = connectionEditorSource.indexOf('Or install the agent on the host');
-    const platformSectionIdx = connectionEditorSource.indexOf('Or connect a platform API directly');
-    expect(agentSectionIdx).toBeGreaterThan(-1);
-    expect(platformSectionIdx).toBeGreaterThan(-1);
-    expect(agentSectionIdx).toBeLessThan(platformSectionIdx);
-    expect(connectionEditorSource).toContain('On a Proxmox host, this is the');
+    // The agent card is the *primary* path on the Add landing — it sits above
+    // the probe input AND the platform grid so a user doesn't read the probe
+    // as the lead action. The probe + platforms collapse into one "connect
+    // via API instead" fallback block below the agent. Guarding ordering
+    // here prevents regression to "agent as an alternative to the probe."
+    const agentPrimaryIdx = connectionEditorSource.indexOf('On a Proxmox host, this is the');
+    const apiSectionIdx = connectionEditorSource.indexOf('Or connect a platform API directly');
+    const probeIdx = connectionEditorSource.indexOf('<AddressProbeStep');
+    expect(agentPrimaryIdx).toBeGreaterThan(-1);
+    expect(apiSectionIdx).toBeGreaterThan(-1);
+    expect(probeIdx).toBeGreaterThan(-1);
+    expect(agentPrimaryIdx).toBeLessThan(apiSectionIdx);
+    expect(apiSectionIdx).toBeLessThan(probeIdx);
+    expect(connectionEditorSource).not.toContain('Or install the agent on the host');
     expect(connectionEditorSource).toContain('auto-registers the node');
     expect(connectionEditorSource).toContain('Recommended');
     // The agent install path is a first-class ledger-header action, not a

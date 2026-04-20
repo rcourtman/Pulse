@@ -93,19 +93,7 @@ export const ConnectionEditor: Component<ConnectionEditorProps> = (props) => {
         when={showCredentialSlot()}
         fallback={
           <div class="space-y-8 p-4">
-            <AddressProbeStep
-              state={state}
-              onSelectCandidate={chooseCandidate}
-              onInstallAgent={() => chooseManualType('agent')}
-            />
-
             <section class="space-y-3">
-              <div class="flex items-center gap-3 text-xs font-semibold uppercase tracking-wide text-muted">
-                <span class="h-px flex-1 bg-border" aria-hidden="true" />
-                Or install the agent on the host
-                <span class="h-px flex-1 bg-border" aria-hidden="true" />
-              </div>
-
               <button
                 type="button"
                 onClick={() => chooseManualType('agent')}
@@ -148,7 +136,7 @@ export const ConnectionEditor: Component<ConnectionEditorProps> = (props) => {
               </button>
             </section>
 
-            <section class="space-y-3">
+            <section class="space-y-4">
               <div class="flex items-center gap-3 text-xs font-semibold uppercase tracking-wide text-muted">
                 <span class="h-px flex-1 bg-border" aria-hidden="true" />
                 Or connect a platform API directly
@@ -156,7 +144,14 @@ export const ConnectionEditor: Component<ConnectionEditorProps> = (props) => {
               </div>
               <p class="text-xs text-muted">
                 For VMware, TrueNAS, PMG, or a remote Proxmox you can't install the agent on.
+                Paste the address and Pulse will auto-detect the product, or pick it below.
               </p>
+
+              <AddressProbeStep
+                state={state}
+                onSelectCandidate={chooseCandidate}
+                onInstallAgent={() => chooseManualType('agent')}
+              />
 
               <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
                 <For each={platformOptions()}>
