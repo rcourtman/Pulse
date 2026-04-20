@@ -14,7 +14,9 @@ type portalFrontendManifest struct {
 	BuildInputs []string `json:"build_inputs"`
 }
 
-func TestPulseAccountFrontendBundleStaysInSync(t *testing.T) {
+func readPortalFrontendManifest(t *testing.T) portalFrontendManifest {
+	t.Helper()
+
 	manifestPath := filepath.Join("dist", "build_manifest.json")
 	manifestBytes, err := os.ReadFile(manifestPath)
 	if err != nil {
@@ -31,6 +33,27 @@ func TestPulseAccountFrontendBundleStaysInSync(t *testing.T) {
 	if len(manifest.BuildInputs) == 0 {
 		t.Fatal("portal frontend manifest missing build_inputs")
 	}
+	return manifest
+}
+
+func TestPulseAccountFrontendManifestListsCanonicalInputs(t *testing.T) {
+	manifest := readPortalFrontendManifest(t)
+
+	requiredInputs := map[string]struct{}{
+		"build_config.mjs": {},
+		"src/styles.css":   {},
+	}
+
+	for _, relativePath := range manifest.BuildInputs {
+		delete(requiredInputs, relativePath)
+	}
+	if len(requiredInputs) > 0 {
+		t.Fatalf("portal frontend manifest missing canonical inputs: %v", mapsKeys(requiredInputs))
+	}
+}
+
+func TestPulseAccountFrontendBundleStaysInSync(t *testing.T) {
+	manifest := readPortalFrontendManifest(t)
 
 	requiredInputs := map[string]struct{}{
 		"build_config.mjs": {},

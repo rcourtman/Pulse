@@ -399,8 +399,8 @@ func TestGetTenantComponents_AutoExchangeGrandfathersObservedMonitoredSystems(t 
 	if !svc.IsActivated() {
 		t.Fatal("expected persisted legacy JWT to auto-exchange into activation state")
 	}
-	if got := svc.Status().MaxMonitoredSystems; got != 23 {
-		t.Fatalf("status.MaxMonitoredSystems=%d, want 23", got)
+	if got := svc.Status().MaxMonitoredSystems; got != 0 {
+		t.Fatalf("status.MaxMonitoredSystems=%d, want 0 for uncapped self-hosted continuity", got)
 	}
 	if activationState, err := persistence.LoadActivationState(); err != nil {
 		t.Fatalf("load activation state: %v", err)
@@ -475,8 +475,8 @@ func TestGetTenantComponents_BackfillsGrandfatherFloorAfterRestoreWhenMonitorArr
 	if svc == nil {
 		t.Fatal("expected non-nil service")
 	}
-	if got := svc.Status().MaxMonitoredSystems; got != 10 {
-		t.Fatalf("initial status.MaxMonitoredSystems=%d, want 10 before floor capture", got)
+	if got := svc.Status().MaxMonitoredSystems; got != 0 {
+		t.Fatalf("initial status.MaxMonitoredSystems=%d, want 0 before floor capture for uncapped self-hosted continuity", got)
 	}
 
 	handlers.SetMonitors(buildGrandfatherFloorMonitor(23), nil)
@@ -511,8 +511,8 @@ func TestGetTenantComponents_BackfillsGrandfatherFloorAfterRestoreWhenMonitorArr
 	if loaded.Continuity.GrandfatheredMonitoredSystemsCapturedAt == 0 {
 		t.Fatal("expected captured timestamp after late monitor restore")
 	}
-	if got := svc.Status().MaxMonitoredSystems; got != 23 {
-		t.Fatalf("status.MaxMonitoredSystems=%d, want 23 after late monitor capture", got)
+	if got := svc.Status().MaxMonitoredSystems; got != 0 {
+		t.Fatalf("status.MaxMonitoredSystems=%d, want 0 after late monitor capture for uncapped self-hosted continuity", got)
 	}
 
 	handlers.StopAllBackgroundLoops()
@@ -686,8 +686,8 @@ func TestActivateLicenseKey_GrandfathersObservedMonitoredSystemsForLegacyMigrati
 	if svc == nil {
 		t.Fatal("expected non-nil service")
 	}
-	if got := svc.Status().MaxMonitoredSystems; got != 23 {
-		t.Fatalf("status.MaxMonitoredSystems=%d, want 23", got)
+	if got := svc.Status().MaxMonitoredSystems; got != 0 {
+		t.Fatalf("status.MaxMonitoredSystems=%d, want 0 for uncapped self-hosted continuity", got)
 	}
 }
 
@@ -794,13 +794,13 @@ func TestGetTenantComponents_DelaysGrandfatherFloorUntilSupplementalInventorySet
 	}
 
 	status := readStatus()
-	if got := status.MaxMonitoredSystems; got != 10 {
-		t.Fatalf("initial status.MaxMonitoredSystems=%d, want 10 while supplemental inventory is unsettled", got)
+	if got := status.MaxMonitoredSystems; got != 0 {
+		t.Fatalf("initial status.MaxMonitoredSystems=%d, want 0 while supplemental inventory is unsettled for uncapped self-hosted continuity", got)
 	}
 	if status.MonitoredSystemContinuity == nil || !status.MonitoredSystemContinuity.CapturePending {
 		t.Fatalf("expected pending continuity in status payload, got %+v", status.MonitoredSystemContinuity)
 	}
-	if status.MonitoredSystemContinuity.PlanLimit != 10 || status.MonitoredSystemContinuity.EffectiveLimit != 10 {
+	if status.MonitoredSystemContinuity.PlanLimit != 10 || status.MonitoredSystemContinuity.EffectiveLimit != 0 {
 		t.Fatalf("unexpected pending continuity status payload: %+v", status.MonitoredSystemContinuity)
 	}
 
@@ -808,14 +808,23 @@ func TestGetTenantComponents_DelaysGrandfatherFloorUntilSupplementalInventorySet
 	if payload.MonitoredSystemContinuity == nil || !payload.MonitoredSystemContinuity.CapturePending {
 		t.Fatalf("expected pending continuity in entitlements payload, got %+v", payload.MonitoredSystemContinuity)
 	}
-	if len(payload.Limits) != 1 {
-		t.Fatalf("expected one monitored-system limit, got %+v", payload.Limits)
+	if len(payload.Limits) != 0 {
+		t.Fatalf("expected no enforced monitored-system limit for uncapped continuity, got %+v", payload.Limits)
 	}
-	if payload.Limits[0].CurrentAvailable == nil || *payload.Limits[0].CurrentAvailable {
-		t.Fatalf("expected unavailable monitored-system usage while supplemental inventory is unsettled, got %+v", payload.Limits[0])
+	if payload.MonitoredSystemCapacity == nil {
+		t.Fatal("expected monitored-system capacity payload")
 	}
-	if payload.Limits[0].CurrentUnavailableReason != "supplemental_inventory_unsettled" {
-		t.Fatalf("CurrentUnavailableReason=%q, want %q", payload.Limits[0].CurrentUnavailableReason, "supplemental_inventory_unsettled")
+	if payload.MonitoredSystemCapacity.Mode != "usage_unavailable" {
+		t.Fatalf("expected usage_unavailable monitored-system capacity while supplemental inventory is unsettled, got %+v", payload.MonitoredSystemCapacity)
+	}
+	if payload.MonitoredSystemCapacity.Limit != 0 {
+		t.Fatalf("monitored_system_capacity.limit=%d, want 0 for uncapped continuity", payload.MonitoredSystemCapacity.Limit)
+	}
+	if payload.MonitoredSystemCapacity.CurrentAvailable {
+		t.Fatalf("expected unavailable monitored-system usage while supplemental inventory is unsettled, got %+v", payload.MonitoredSystemCapacity)
+	}
+	if payload.MonitoredSystemCapacity.CurrentUnavailableReason != "supplemental_inventory_unsettled" {
+		t.Fatalf("CurrentUnavailableReason=%q, want %q", payload.MonitoredSystemCapacity.CurrentUnavailableReason, "supplemental_inventory_unsettled")
 	}
 
 	activationState, err := persistence.LoadActivationState()
@@ -831,14 +840,14 @@ func TestGetTenantComponents_DelaysGrandfatherFloorUntilSupplementalInventorySet
 
 	provider.settle(23)
 	status = readStatus()
-	if got := status.MaxMonitoredSystems; got != 10 {
-		t.Fatalf("stale supplemental store should not capture grandfather floor yet, got %d", got)
+	if got := status.MaxMonitoredSystems; got != 0 {
+		t.Fatalf("stale supplemental store should keep uncapped self-hosted status, got %d", got)
 	}
 
 	monitor.SetSupplementalRecordsProvider(unifiedresources.SourceTrueNAS, provider)
 	status = readStatus()
-	if got := status.MaxMonitoredSystems; got != 10 {
-		t.Fatalf("status read should not capture grandfather floor directly after canonical store rebuild, got %d", got)
+	if got := status.MaxMonitoredSystems; got != 0 {
+		t.Fatalf("status read should not reintroduce a monitored-system cap directly after canonical store rebuild, got %d", got)
 	}
 
 	deadline := time.Now().Add(8 * time.Second)
@@ -859,13 +868,13 @@ func TestGetTenantComponents_DelaysGrandfatherFloorUntilSupplementalInventorySet
 	}
 
 	status = readStatus()
-	if got := status.MaxMonitoredSystems; got != 23 {
-		t.Fatalf("status.MaxMonitoredSystems=%d, want 23 after async grandfather capture", got)
+	if got := status.MaxMonitoredSystems; got != 0 {
+		t.Fatalf("status.MaxMonitoredSystems=%d, want 0 after async grandfather capture for uncapped self-hosted continuity", got)
 	}
 	if status.MonitoredSystemContinuity == nil || status.MonitoredSystemContinuity.CapturePending {
 		t.Fatalf("expected settled continuity in status payload after async capture, got %+v", status.MonitoredSystemContinuity)
 	}
-	if status.MonitoredSystemContinuity.GrandfatheredFloor != 23 || status.MonitoredSystemContinuity.EffectiveLimit != 23 {
+	if status.MonitoredSystemContinuity.GrandfatheredFloor != 23 || status.MonitoredSystemContinuity.EffectiveLimit != 0 {
 		t.Fatalf("unexpected settled continuity status payload: %+v", status.MonitoredSystemContinuity)
 	}
 
@@ -873,11 +882,14 @@ func TestGetTenantComponents_DelaysGrandfatherFloorUntilSupplementalInventorySet
 	if payload.MonitoredSystemContinuity == nil || payload.MonitoredSystemContinuity.CapturePending {
 		t.Fatalf("expected settled continuity in entitlements payload after async capture, got %+v", payload.MonitoredSystemContinuity)
 	}
-	if len(payload.Limits) != 1 || payload.Limits[0].Current != 23 {
-		t.Fatalf("expected settled monitored-system usage in entitlements payload, got %+v", payload.Limits)
+	if len(payload.Limits) != 0 {
+		t.Fatalf("expected no enforced monitored-system limit in entitlements payload after async capture, got %+v", payload.Limits)
 	}
-	if payload.Limits[0].CurrentAvailable == nil || !*payload.Limits[0].CurrentAvailable {
-		t.Fatalf("expected available monitored-system usage after async capture, got %+v", payload.Limits[0])
+	if payload.MonitoredSystemCapacity == nil {
+		t.Fatal("expected monitored-system capacity payload after async capture")
+	}
+	if payload.MonitoredSystemCapacity.Mode != "unlimited" || payload.MonitoredSystemCapacity.Current != 23 {
+		t.Fatalf("expected unlimited monitored-system capacity with current=23 after async capture, got %+v", payload.MonitoredSystemCapacity)
 	}
 }
 

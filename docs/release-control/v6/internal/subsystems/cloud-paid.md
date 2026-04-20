@@ -212,6 +212,14 @@ Community limit enforcement.
     also reopen that compare-plans prompt by default for expired or no-paid
     self-hosted installs, so `Plans & Billing` remains actionable even when the
     operator arrives without an explicit `intent=self_hosted_plan` link.
+    That same self-hosted commercial boundary also owns legacy migration
+    continuity semantics: `legacy_migration_fallback` may preserve
+    `plan_limit` and `grandfathered_floor` for support/audit context, but
+    self-hosted v6 monitoring remains uncapped. The canonical contract is
+    therefore `status.max_monitored_systems = 0`, no enforced
+    `max_monitored_systems` entitlement row, and
+    `monitored_system_capacity.mode = unlimited` once runtime usage is
+    available.
 24. Keep public-demo dashboard bootstrap route-owned on the adjacent
     commercial/runtime boundary. `frontend-modern/src/useAppRuntimeState.ts`
     may prewarm shared infrastructure summary caches for non-dashboard routes,
@@ -274,12 +282,25 @@ Insights`, rather than reviving generic `AI Patrol` or `AI ... analysis`
    `pkg/licensing/models.go`, and downstream runtime entitlement evaluation
    must strip that stored cap before enforcement so active recurring
    grandfathered continuity remains uncapped until cancellation.
-8. Before GA, treat self-hosted core monitoring as free for homelab use:
+8. Keep legacy migration fallback continuity audit-only on self-hosted v6:
+   `legacy_migration_fallback` may preserve `plan_limit`,
+   `grandfathered_floor`, and related support telemetry, but runtime status
+   and entitlement enforcement must keep self-hosted monitoring uncapped.
+   The canonical contract is `status.max_monitored_systems = 0`, no enforced
+   `max_monitored_systems` entitlement row, and
+   `monitored_system_capacity.mode = unlimited` once runtime usage is
+   available.
+9. Keep the maintained Pulse Account portal bundle source-synced with
+   `internal/cloudcp/portal/frontend/`: any slice that changes the portal
+   frontend hash or emitted manifest must rebuild
+   `internal/cloudcp/portal/dist/build_manifest.json` and keep
+   `internal/cloudcp/portal/frontend_sync_test.go` green in the same change.
+10. Before GA, treat self-hosted core monitoring as free for homelab use:
    monitored systems remain the canonical counted unit, but self-hosted paid
    value must come from optional extras, hosted convenience, business
    workflow, support, or similar non-core surfaces rather than using
    monitored-system volume itself as the primary paid gate.
-9. Keep migrated self-hosted Community/free billing state uncapped even when
+11. Keep migrated self-hosted Community/free billing state uncapped even when
    the persisted file still carries legacy v5 commercial limit keys:
    `pkg/licensing/billing_state_normalization.go` and
    `pkg/licensing/database_source.go` must scrub stale

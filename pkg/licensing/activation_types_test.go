@@ -197,6 +197,9 @@ func TestGrantClaimsToClaimsWithContinuityAppliesGrandfatherFloor(t *testing.T) 
 
 	// The raw MaxMonitoredSystems field still records the continuity floor, but
 	// self-hosted Pro is uncapped, so EffectiveLimits must not surface a cap.
+	if !claims.CoreMonitoringUncapped {
+		t.Fatal("expected grant-backed self-hosted continuity claims to carry the uncapped core monitoring marker")
+	}
 	if claims.MaxMonitoredSystems != 23 {
 		t.Fatalf("MaxMonitoredSystems = %d, want 23", claims.MaxMonitoredSystems)
 	}
@@ -223,6 +226,9 @@ func TestGrantClaimsToClaimsWithContinuityDoesNotLowerGrantLimit(t *testing.T) {
 
 	// Floor of 10 is below grant's 15, so the raw field is left at 15. Either
 	// way, self-hosted Pro is uncapped so EffectiveLimits does not surface a cap.
+	if !claims.CoreMonitoringUncapped {
+		t.Fatal("expected grant-backed self-hosted continuity claims to carry the uncapped core monitoring marker")
+	}
 	if claims.MaxMonitoredSystems != 15 {
 		t.Fatalf("MaxMonitoredSystems = %d, want 15", claims.MaxMonitoredSystems)
 	}

@@ -2,6 +2,7 @@ package licensing
 
 import (
 	"encoding/json"
+	"strings"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -94,6 +95,19 @@ func applyActivationContinuityToClaims(claims *Claims, continuity ActivationCont
 	}
 }
 
+func grantClaimsUseUncappedCoreMonitoring(gc *GrantClaims) bool {
+	if gc == nil {
+		return false
+	}
+
+	switch Tier(strings.TrimSpace(gc.Tier)) {
+	case TierFree, TierRelay, TierPro, TierProPlus, TierProAnnual, TierLifetime:
+		return true
+	default:
+		return false
+	}
+}
+
 // GrantClaims are the claims parsed from a relay grant JWT payload.
 // The grant is a short-lived JWT (72h TTL) issued by the license server.
 type GrantClaims struct {
@@ -135,15 +149,16 @@ func grantClaimsToClaims(gc *GrantClaims) Claims {
 
 func grantClaimsToClaimsWithContinuity(gc *GrantClaims, continuity ActivationContinuity) Claims {
 	c := Claims{
-		LicenseID:           gc.LicenseID,
-		Email:               gc.Email,
-		Tier:                Tier(gc.Tier),
-		IssuedAt:            gc.IssuedAt,
-		ExpiresAt:           gc.ExpiresAt,
-		Features:            gc.Features,
-		MaxMonitoredSystems: gc.MaxMonitoredSystems,
-		MaxGuests:           gc.MaxGuests,
-		PlanVersion:         gc.PlanKey,
+		LicenseID:              gc.LicenseID,
+		Email:                  gc.Email,
+		Tier:                   Tier(gc.Tier),
+		IssuedAt:               gc.IssuedAt,
+		ExpiresAt:              gc.ExpiresAt,
+		Features:               gc.Features,
+		MaxMonitoredSystems:    gc.MaxMonitoredSystems,
+		MaxGuests:              gc.MaxGuests,
+		PlanVersion:            gc.PlanKey,
+		CoreMonitoringUncapped: grantClaimsUseUncappedCoreMonitoring(gc),
 	}
 
 	// Map grant state to subscription state. Fail closed: unknown states

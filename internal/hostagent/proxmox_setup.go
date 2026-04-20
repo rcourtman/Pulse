@@ -649,7 +649,7 @@ func (p *ProxmoxSetup) checkRegistrationWithPulse(ctx context.Context, ptype pro
 		return false, fmt.Errorf("create registration-check request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	if token := strings.TrimSpace(p.apiToken); token != "" {
+	if token := autoRegisterAPITokenHeader(p.apiToken, setupToken); token != "" {
 		req.Header.Set("X-API-Token", token)
 	}
 
@@ -1219,13 +1219,20 @@ func autoRegisterResponseMatchesCandidateHost(responseHost string, candidateHost
 	return false
 }
 
-func (p *ProxmoxSetup) doRegisterRequest(ctx context.Context, body []byte, expectedType proxmoxProductType, expectedSource autoRegisterSource, expectedHosts []string, expectedTokenID, expectedTokenValue string) (autoRegisterResponse, error) {
+func autoRegisterAPITokenHeader(apiToken, setupToken string) string {
+	if strings.TrimSpace(setupToken) != "" {
+		return ""
+	}
+	return strings.TrimSpace(apiToken)
+}
+
+func (p *ProxmoxSetup) doRegisterRequest(ctx context.Context, body []byte, setupToken string, expectedType proxmoxProductType, expectedSource autoRegisterSource, expectedHosts []string, expectedTokenID, expectedTokenValue string) (autoRegisterResponse, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, p.pulseURL+"/api/auto-register", bytes.NewReader(body))
 	if err != nil {
 		return autoRegisterResponse{}, &permanentError{fmt.Errorf("create request: %w", err)}
 	}
 	req.Header.Set("Content-Type", "application/json")
-	if token := strings.TrimSpace(p.apiToken); token != "" {
+	if token := autoRegisterAPITokenHeader(p.apiToken, setupToken); token != "" {
 		req.Header.Set("X-API-Token", token)
 	}
 
@@ -1450,7 +1457,7 @@ func (p *ProxmoxSetup) registerWithPulse(ctx context.Context, ptype proxmoxProdu
 			return autoRegisterResponse{}, fmt.Errorf("marshal payload: %w", err)
 		}
 
-		parsed, err := p.doRegisterRequest(ctx, body, ptype, autoRegisterSourceAgent, candidateHosts, tokenID, tokenValue)
+		parsed, err := p.doRegisterRequest(ctx, body, setupToken, ptype, autoRegisterSourceAgent, candidateHosts, tokenID, tokenValue)
 		if err == nil {
 			if attempt > 0 {
 				p.logger.Info().Int("attempt", attempt+1).Str("type", string(ptype)).Msg("Proxmox auto-registration succeeded after retry")

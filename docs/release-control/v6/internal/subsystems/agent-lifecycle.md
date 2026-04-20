@@ -119,6 +119,11 @@ an add-only capacity posture.
 ## Extension Points
 
 1. Add or change install-command generation, canonical /api/auto-register behavior, or installer download behavior through the owned `internal/api/` files above.
+   Canonical `/api/auto-register` auth is split by intent: when the setup-token
+   bootstrap path succeeds, lifecycle clients must complete registration with
+   the one-time `authToken` only and must not also send the long-lived
+   `X-API-Token` header. The header-backed `agent:report` fallback exists only
+   for update-only re-registration when setup-token fetch is unavailable.
    That same shared `internal/api/` adjacency does not transfer ownership of
    Patrol quickstart bootstrap or mobile Patrol-provider bridging:
    `internal/api/ai_handlers.go` and `internal/api/chat_service_adapter.go`

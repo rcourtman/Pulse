@@ -180,6 +180,15 @@ func TestRegisterWithPulse_Payload(t *testing.T) {
 	}
 }
 
+func TestAutoRegisterAPITokenHeader(t *testing.T) {
+	if got := autoRegisterAPITokenHeader(" api-token ", "setup-token"); got != "" {
+		t.Fatalf("autoRegisterAPITokenHeader()=%q, want empty when setup token is present", got)
+	}
+	if got := autoRegisterAPITokenHeader(" api-token ", "   "); got != "api-token" {
+		t.Fatalf("autoRegisterAPITokenHeader()=%q, want %q when falling back to agent API token auth", got, "api-token")
+	}
+}
+
 func TestRegisterWithPulse_AcceptsServerSelectedFallbackHost(t *testing.T) {
 	var gotPayload autoRegisterRequest
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
