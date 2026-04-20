@@ -1,4 +1,4 @@
-import { Component, Show, createEffect, createMemo, createSignal, onCleanup } from 'solid-js';
+import { Component, Show, createEffect, createMemo, createSignal } from 'solid-js';
 import { InteractiveSparkline } from '@/components/shared/InteractiveSparkline';
 import type { InteractiveSparklineSeries } from '@/components/shared/InteractiveSparkline';
 import {
@@ -21,14 +21,7 @@ import {
   type SummaryTimeRange,
 } from '@/components/shared/summaryTimeRange';
 import { formatBytes } from '@/utils/format';
-import { eventBus } from '@/stores/events';
 import { getChartSeriesColor } from '@/utils/chartSeriesPresentation';
-import {
-  fetchStorageSummaryAndCache,
-  readStorageSummaryCache,
-} from '@/utils/storageSummaryCache';
-
-const POLL_INTERVAL_MS = 30_000;
 
 // ---------------------------------------------------------------------------
 // Props
@@ -39,9 +32,11 @@ interface StorageSummaryProps {
   diskCount: number;
   poolsDegraded?: number;
   disksFailing?: number;
+  data: StorageSummaryChartsResponse | null;
+  loaded: boolean;
+  fetchFailed: boolean;
   timeRange: SummaryTimeRange;
   onTimeRangeChange?: (range: SummaryTimeRange) => void;
-  nodeId?: string;
   hoveredResourceId?: string | null;
   hoveredGroupScope?: SummarySeriesGroupScope | null;
   focusedResourceId?: string | null;
@@ -57,9 +52,6 @@ interface StorageSummaryProps {
 // ---------------------------------------------------------------------------
 
 const StorageSummary: Component<StorageSummaryProps> = (props) => {
-  const [data, setData] = createSignal<StorageSummaryChartsResponse | null>(null);
-  const [loaded, setLoaded] = createSignal(false);
-  const [fetchFailed, setFetchFailed] = createSignal(false);
   const [localChartHoverSync, setLocalChartHoverSync] = createSignal<SummaryChartHoverSync | null>(
     null,
   );
@@ -71,132 +63,12 @@ const StorageSummary: Component<StorageSummaryProps> = (props) => {
     props.onChartHoverSyncChange?.(value);
   };
 
-  // Track org switches so the effect re-runs when the org changes.
-  const [orgVersion, setOrgVersion] = createSignal(0);
-  const unsubscribeOrgSwitch = eventBus.on('org_switched', () => {
-    setOrgVersion((v) => v + 1);
-  });
-
-  let activeFetchController: AbortController | null = null;
-  let activeFetchRequest = 0;
-  let refreshTimer: ReturnType<typeof setInterval> | undefined;
-
-  const selectedRange = createMemo<TimeRange>(() => (props.timeRange as TimeRange) || '1h');
-  const selectedNodeId = createMemo(() => {
-    const id = props.nodeId?.trim();
-    return id && id !== 'all' ? id : undefined;
-  });
-
-  const awaitAbortable = <T,>(promise: Promise<T>, signal: AbortSignal): Promise<T> => {
-    if (signal.aborted) {
-      return Promise.reject(new DOMException('Aborted', 'AbortError'));
-    }
-    return new Promise<T>((resolve, reject) => {
-      const onAbort = () => reject(new DOMException('Aborted', 'AbortError'));
-      signal.addEventListener('abort', onAbort, { once: true });
-      promise.then(
-        (value) => {
-          signal.removeEventListener('abort', onAbort);
-          resolve(value);
-        },
-        (error) => {
-          signal.removeEventListener('abort', onAbort);
-          reject(error);
-        },
-      );
-    });
-  };
-
-  // Fetch data with race-condition prevention via request ID
-  const fetchData = async (options?: { prioritize?: boolean }) => {
-    const prioritize = options?.prioritize === true;
-    if (activeFetchController && !prioritize) return;
-    if (activeFetchController && prioritize) {
-      activeFetchController.abort();
-    }
-
-    const requestedRange = selectedRange();
-    const requestedNodeId = selectedNodeId();
-    const controller = new AbortController();
-    const requestId = ++activeFetchRequest;
-    activeFetchController = controller;
-
-    try {
-      const response = await awaitAbortable(
-        fetchStorageSummaryAndCache(requestedRange, {
-          caller: 'StorageSummary',
-          nodeId: requestedNodeId,
-        }),
-        controller.signal,
-      );
-      if (requestId !== activeFetchRequest) return; // stale response
-      setData(response);
-      setFetchFailed(false);
-    } catch (err: unknown) {
-      if (err instanceof DOMException && err.name === 'AbortError') return;
-      if (requestId !== activeFetchRequest) return; // stale error
-      setFetchFailed(true);
-      // Fall back to cache
-      const cached = readStorageSummaryCache(requestedRange, requestedNodeId);
-      if (cached) setData(cached);
-    } finally {
-      if (activeFetchController === controller) {
-        activeFetchController = null;
-      }
-      if (requestId === activeFetchRequest) {
-        setLoaded(true);
-      }
-    }
-  };
-
-  // Initial load + range/org/node change
-  createEffect(() => {
-    const range = selectedRange();
-    const nodeId = selectedNodeId();
-    const _org = orgVersion(); // subscribe to org switches
-    void _org;
-
-    // Clear stale timer on scope change
-    if (refreshTimer) {
-      clearInterval(refreshTimer);
-      refreshTimer = undefined;
-    }
-
-    // Try cache first for instant display
-    const cached = readStorageSummaryCache(range, nodeId);
-    if (cached) {
-      setData(cached);
-      setLoaded(true);
-    } else {
-      setData(null);
-      setLoaded(false);
-    }
-    setFetchFailed(false);
-
-    // Start polling
-    refreshTimer = setInterval(() => void fetchData(), POLL_INTERVAL_MS);
-
-    void fetchData({ prioritize: true });
-
-    onCleanup(() => {
-      if (refreshTimer) {
-        clearInterval(refreshTimer);
-        refreshTimer = undefined;
-      }
-    });
-  });
-
-  onCleanup(() => {
-    activeFetchController?.abort();
-    unsubscribeOrgSwitch();
-  });
-
   // ---------------------------------------------------------------------------
   // Series builders
   // ---------------------------------------------------------------------------
 
   const allPoolUsageSeries = createMemo((): InteractiveSparklineSeries[] => {
-    const d = data();
+    const d = props.data;
     if (!d?.pools) return [];
     const entries = Object.entries(d.pools);
     return entries
@@ -210,7 +82,7 @@ const StorageSummary: Component<StorageSummaryProps> = (props) => {
   });
 
   const allPoolUsedSeries = createMemo((): InteractiveSparklineSeries[] => {
-    const d = data();
+    const d = props.data;
     if (!d?.pools) return [];
     const entries = Object.entries(d.pools);
     return entries
@@ -224,7 +96,7 @@ const StorageSummary: Component<StorageSummaryProps> = (props) => {
   });
 
   const allPoolAvailSeries = createMemo((): InteractiveSparklineSeries[] => {
-    const d = data();
+    const d = props.data;
     if (!d?.pools) return [];
     const entries = Object.entries(d.pools);
     return entries
@@ -238,7 +110,7 @@ const StorageSummary: Component<StorageSummaryProps> = (props) => {
   });
 
   const allDiskTempSeries = createMemo((): InteractiveSparklineSeries[] => {
-    const d = data();
+    const d = props.data;
     if (!d?.disks) return [];
     const entries = Object.entries(d.disks);
     return entries
@@ -292,7 +164,7 @@ const StorageSummary: Component<StorageSummaryProps> = (props) => {
   const hasPoolAvail = () => poolAvailSeries().length > 0;
 
   const emptyLabel = () => {
-    if (fetchFailed()) return 'Trend data unavailable';
+    if (props.fetchFailed) return 'Trend data unavailable';
     if (summaryFocus.activeGroupScope()) return 'No group history yet';
     return 'No history yet';
   };
@@ -399,7 +271,7 @@ const StorageSummary: Component<StorageSummaryProps> = (props) => {
             label="Pool Usage"
             secondaryLabel={focusedLabel(poolUsageSeries())}
             headerValue={renderSyncedReadout(poolUsageSyncedReadout())}
-            loaded={loaded()}
+            loaded={props.loaded}
             hasData={hasPoolUsage()}
             emptyMessage={emptyLabel()}
             interactionState={summaryFocus.interactionStateFor(poolUsageSeries())}
@@ -423,7 +295,7 @@ const StorageSummary: Component<StorageSummaryProps> = (props) => {
             label="Disk Temperature"
             secondaryLabel={focusedLabel(diskTempSeries())}
             headerValue={renderSyncedReadout(diskTempSyncedReadout())}
-            loaded={loaded()}
+            loaded={props.loaded}
             hasData={hasDiskTemp()}
             emptyMessage={emptyLabel()}
             interactionState={summaryFocus.interactionStateFor(diskTempSeries())}
@@ -449,7 +321,7 @@ const StorageSummary: Component<StorageSummaryProps> = (props) => {
             label="Used Capacity"
             secondaryLabel={focusedLabel(poolUsedSeries())}
             headerValue={renderSyncedReadout(poolUsedSyncedReadout())}
-            loaded={loaded()}
+            loaded={props.loaded}
             hasData={hasPoolUsed()}
             emptyMessage={emptyLabel()}
             interactionState={summaryFocus.interactionStateFor(poolUsedSeries())}
@@ -475,7 +347,7 @@ const StorageSummary: Component<StorageSummaryProps> = (props) => {
             label="Available Space"
             secondaryLabel={focusedLabel(poolAvailSeries())}
             headerValue={renderSyncedReadout(poolAvailSyncedReadout())}
-            loaded={loaded()}
+            loaded={props.loaded}
             hasData={hasPoolAvail()}
             emptyMessage={emptyLabel()}
             interactionState={summaryFocus.interactionStateFor(poolAvailSeries())}

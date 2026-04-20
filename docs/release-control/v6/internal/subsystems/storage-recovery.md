@@ -57,6 +57,8 @@ querying, and the operator-facing storage health presentation layer.
 30. `frontend-modern/src/utils/textPresentation.ts`
 31. `frontend-modern/src/components/Storage/StorageSummary.tsx`
 32. `frontend-modern/src/utils/storageSummaryCache.ts`
+33. `frontend-modern/src/components/Storage/useStorageSummaryCharts.ts`
+34. `frontend-modern/src/features/storageBackups/storageCapacityDeltaPresentation.ts`
 
 ## Shared Boundaries
 
@@ -441,6 +443,11 @@ querying, and the operator-facing storage health presentation layer.
     storage detail charts must all address history through the canonical
     unified-resource metrics-target IDs, and the storage page must reuse the
     shared sticky summary primitive instead of a storage-local scroll wrapper.
+    Storage-page pool growth readouts belong to that same contract: the table
+    may derive per-pool used-capacity deltas from the shared
+    `/api/storage-charts` summary payload, but it must not fan out row-local
+    `/api/metrics-store/history` calls, invent a second storage-history cache,
+    or drift onto storage-page-only metric identifiers.
     Dashboard storage trends belong to that same owned summary contract: the
     dashboard may derive a 24-hour storage capacity delta from
     `/api/charts/storage-summary`, but it must not rebuild storage summary
@@ -549,6 +556,11 @@ now surface `poolsDegraded` and `disksFailing` health indicators alongside
 pool/disk counts. `RecoverySummary.tsx` gains an aggregate health-state summary
 row. These additions project from existing websocket pool/disk state; they must
 not introduce new API polling or widen the storage-fetch boundary.
+That same owned summary path now also runs through
+`useStorageSummaryCharts.ts`: the storage page owns one page-scoped summary
+range and one shared storage-summary history fetch, and both the sticky
+summary cards and per-pool growth column reuse that payload instead of
+forking separate row-local history reads or duplicate polling loops.
 
 This subsystem now sits under the dedicated storage and recovery lane so the
 operator-facing storage page, recovery timeline, and recovery-point persistence

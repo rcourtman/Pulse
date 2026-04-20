@@ -1,5 +1,7 @@
 import { createEffect, createMemo, createSignal, onCleanup, untrack } from 'solid-js';
 import { useLocation, useNavigate } from '@solidjs/router';
+import { SUMMARY_TIME_RANGE_LABEL, type SummaryTimeRange } from '@/components/shared/summaryTimeRange';
+import { buildStorageCapacityDeltaPresentation } from '@/features/storageBackups/storageCapacityDeltaPresentation';
 import {
   resolvePhysicalDiskMetricResourceId,
   resolveStorageRecordMetricResourceId,
@@ -20,6 +22,7 @@ import { useStoragePageFilters } from './useStoragePageFilters';
 import { useStoragePageResources } from './useStoragePageResources';
 import { useStoragePageStatus } from './useStoragePageStatus';
 import { useStorageResourceHighlight } from './useStorageResourceHighlight';
+import { useStorageSummaryCharts } from './useStorageSummaryCharts';
 import {
   DEFAULT_STORAGE_SELECTED_NODE_ID,
   DEFAULT_STORAGE_SOURCE_FILTER,
@@ -41,6 +44,7 @@ export const useStoragePageModel = () => {
   const [selectedStorageGroupId, setSelectedStorageGroupIdRaw] = createSignal<string | null>(null);
   const [handledSummaryGroupId, setHandledSummaryGroupId] = createSignal<string | null>(null);
   const [selectedDiskId, setSelectedDiskId] = createSignal<string | null>(null);
+  const [summaryTimeRange, setSummaryTimeRange] = createSignal<SummaryTimeRange>('24h');
   const {
     state,
     activeAlerts,
@@ -118,6 +122,11 @@ export const useStoragePageModel = () => {
     void storageRecoveryResources.refetch();
     reconnect();
   };
+  const storageSummaryCharts = useStorageSummaryCharts({
+    timeRange: summaryTimeRange,
+    nodeId: selectedNodeId,
+    caller: 'useStoragePageModel',
+  });
 
   const { expandedGroups, expandedPoolId, setExpandedPoolId: setExpandedPoolIdRaw, toggleGroup } =
     useStorageExpansionState({
@@ -137,6 +146,23 @@ export const useStoragePageModel = () => {
       ids.set(disk.id, resolvePhysicalDiskMetricResourceId(disk));
     }
     return ids;
+  });
+  const storageGrowthRangeLabel = createMemo(
+    () => SUMMARY_TIME_RANGE_LABEL[summaryTimeRange()] ?? summaryTimeRange(),
+  );
+  const storageGrowthColumnLabel = createMemo(
+    () => `Growth (${storageGrowthRangeLabel()})`,
+  );
+  const storageGrowthBySeriesId = createMemo(() => {
+    const growth = new Map<string, ReturnType<typeof buildStorageCapacityDeltaPresentation>>();
+    const pools = storageSummaryCharts.data()?.pools ?? {};
+    for (const [seriesId, pool] of Object.entries(pools)) {
+      growth.set(
+        seriesId,
+        buildStorageCapacityDeltaPresentation(pool.used ?? [], storageGrowthRangeLabel()),
+      );
+    }
+    return growth;
   });
   const hoveredStorageResourceId = createMemo(() => {
     const hoveredId = hoveredStorageRowId();
@@ -380,6 +406,13 @@ export const useStoragePageModel = () => {
     clearPinnedSummaryScope,
     kioskMode,
     reconnect: reconnectSurface,
+    summaryTimeRange,
+    setSummaryTimeRange,
+    storageGrowthBySeriesId,
+    storageGrowthColumnLabel,
+    storageSummaryData: storageSummaryCharts.data,
+    storageSummaryLoaded: storageSummaryCharts.loaded,
+    storageSummaryFetchFailed: storageSummaryCharts.fetchFailed,
     selectedNodeId,
     setSelectedNodeId,
     view,

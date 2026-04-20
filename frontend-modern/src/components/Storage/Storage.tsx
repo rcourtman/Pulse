@@ -13,6 +13,13 @@ const Storage: Component = () => {
   const {
     kioskMode,
     reconnect,
+    summaryTimeRange,
+    setSummaryTimeRange,
+    storageGrowthBySeriesId,
+    storageGrowthColumnLabel,
+    storageSummaryData,
+    storageSummaryLoaded,
+    storageSummaryFetchFailed,
     selectedNodeId,
     setSelectedNodeId,
     view,
@@ -85,6 +92,11 @@ const Storage: Component = () => {
           selectedNodeId={selectedNodeId}
           nodeOptions={nodeOptions}
           physicalDisks={physicalDisks}
+          summaryTimeRange={summaryTimeRange}
+          setSummaryTimeRange={setSummaryTimeRange}
+          storageSummaryData={storageSummaryData}
+          storageSummaryLoaded={storageSummaryLoaded}
+          storageSummaryFetchFailed={storageSummaryFetchFailed}
           hoveredResourceId={hoveredStorageResourceId}
           hoveredGroupScope={hoveredSummaryStorageGroupScope}
           focusedResourceId={focusedStorageResourceId}
@@ -143,6 +155,8 @@ const Storage: Component = () => {
           toggleGroup={toggleGroup}
           expandedPoolId={expandedPoolId}
           setExpandedPoolId={setExpandedPoolId}
+          storageGrowthBySeriesId={storageGrowthBySeriesId}
+          storageGrowthColumnLabel={storageGrowthColumnLabel}
           nodeOnlineByLabel={nodeOnlineByLabel}
           highlightedRecordId={highlightedRecordId}
           getRecordAlertState={getRecordAlertState}

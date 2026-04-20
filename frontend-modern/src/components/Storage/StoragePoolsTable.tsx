@@ -1,6 +1,7 @@
 import { Component, For, Index, Show } from 'solid-js';
 import { Table, TableBody, TableHead, TableHeader, TableRow } from '@/components/shared/Table';
 import {
+  getStoragePoolTableColumns,
   getStorageEmptyStateMessage,
   getStorageLoadingMessage,
   STORAGE_POOLS_BODY_CLASS,
@@ -9,9 +10,9 @@ import {
   STORAGE_POOLS_LOADING_STATE_CLASS,
   STORAGE_POOLS_SCROLL_WRAP_CLASS,
   STORAGE_POOLS_TABLE_CLASS,
-  STORAGE_POOL_TABLE_COLUMNS,
 } from '@/features/storageBackups/storagePagePresentation';
 import { resolveStorageRecordMetricResourceId } from '@/features/storageBackups/storageMetricsIdentity';
+import type { StorageCapacityDeltaPresentation } from '@/features/storageBackups/storageCapacityDeltaPresentation';
 import type { StorageAlertRowState } from '@/features/storageBackups/storageAlertState';
 import type { Resource } from '@/types/resource';
 import { StorageGroupRow } from './StorageGroupRow';
@@ -29,6 +30,8 @@ type StoragePoolsTableProps = {
   toggleGroup: (key: string) => void;
   expandedPoolId: string | null;
   setExpandedPoolId: (value: string | null | ((current: string | null) => string | null)) => void;
+  storageGrowthBySeriesId: Map<string, StorageCapacityDeltaPresentation>;
+  storageGrowthColumnLabel: string;
   physicalDisks: Resource[];
   nodeOnlineByLabel: Map<string, boolean>;
   highlightedRecordId: string | null;
@@ -70,7 +73,7 @@ export const StoragePoolsTable: Component<StoragePoolsTableProps> = (props) => {
             <Table class={STORAGE_POOLS_TABLE_CLASS}>
               <TableHeader>
                 <TableRow class={STORAGE_POOLS_HEADER_ROW_CLASS}>
-                  <For each={STORAGE_POOL_TABLE_COLUMNS}>
+                  <For each={getStoragePoolTableColumns(props.storageGrowthColumnLabel)}>
                     {(column) => <TableHead class={column.className}>{column.label}</TableHead>}
                   </For>
                 </TableRow>
@@ -83,17 +86,17 @@ export const StoragePoolsTable: Component<StoragePoolsTableProps> = (props) => {
                         {(() => {
                           const groupSummaryScope = buildStorageSummaryGroupScope(group, props.groupBy);
                           return (
-                        <StorageGroupRow
-                          group={group}
-                          groupBy={props.groupBy}
-                          expanded={group.expanded}
-                          onToggle={() => props.toggleGroup(group.key)}
-                          summaryGroupScope={groupSummaryScope}
-                          summaryActive={props.activeSummaryGroupScope?.id === groupSummaryScope?.id}
-                          summaryFocused={props.focusedSummaryGroupId === groupSummaryScope?.id}
-                          onFocusChange={props.onGroupFocusChange}
-                          onHoverChange={props.onGroupHoverChange}
-                        />
+                            <StorageGroupRow
+                              group={group}
+                              groupBy={props.groupBy}
+                              expanded={group.expanded}
+                              onToggle={() => props.toggleGroup(group.key)}
+                              summaryGroupScope={groupSummaryScope}
+                              summaryActive={props.activeSummaryGroupScope?.id === groupSummaryScope?.id}
+                              summaryFocused={props.focusedSummaryGroupId === groupSummaryScope?.id}
+                              onFocusChange={props.onGroupFocusChange}
+                              onHoverChange={props.onGroupHoverChange}
+                            />
                           );
                         })()}
                       </Show>
@@ -105,6 +108,11 @@ export const StoragePoolsTable: Component<StoragePoolsTableProps> = (props) => {
                             return (
                               <StoragePoolRow
                                 record={record()}
+                                growthDelta={
+                                  props.storageGrowthBySeriesId.get(
+                                    resolveStorageRecordMetricResourceId(record()),
+                                  ) ?? null
+                                }
                                 summarySeriesId={resolveStorageRecordMetricResourceId(record())}
                                 expanded={rowModel().expanded}
                                 summaryHighlighted={

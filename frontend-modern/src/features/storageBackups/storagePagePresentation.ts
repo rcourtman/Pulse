@@ -23,7 +23,9 @@ export const STORAGE_VIEW_OPTIONS: readonly StorageViewOption[] = [
   { value: 'disks', label: 'Physical Disks' },
 ];
 
-export const STORAGE_POOL_TABLE_COLUMNS: readonly StoragePoolTableColumn[] = [
+export const getStoragePoolTableColumns = (
+  growthColumnLabel: string,
+): readonly StoragePoolTableColumn[] => [
   {
     label: 'Storage',
     className: 'px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider',
@@ -52,9 +54,14 @@ export const STORAGE_POOL_TABLE_COLUMNS: readonly StoragePoolTableColumn[] = [
       'px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider md:min-w-[190px] xl:min-w-[220px]',
   },
   {
+    label: growthColumnLabel,
+    className:
+      'hidden lg:table-cell px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider',
+  },
+  {
     label: 'Impact',
     className:
-      'px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider hidden lg:table-cell',
+      'hidden xl:table-cell px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider',
   },
   {
     label: 'Primary Issue',

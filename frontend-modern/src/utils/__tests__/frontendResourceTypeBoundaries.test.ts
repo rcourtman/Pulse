@@ -278,7 +278,7 @@ import storagePageBannerSource from '@/components/Storage/StoragePageBanner.tsx?
 import useStoragePageBannerModelSource from '@/components/Storage/useStoragePageBannerModel.ts?raw';
 import storagePageBannersSource from '@/components/Storage/StoragePageBanners.tsx?raw';
 import useStoragePageBannersModelSource from '@/components/Storage/useStoragePageBannersModel.ts?raw';
-import storageSummarySource from '@/components/Storage/StorageSummary.tsx?raw';
+import storageSummarySource from '@/components/Storage/useStorageSummaryCharts.ts?raw';
 import storageSummaryCacheSource from '@/utils/storageSummaryCache.ts?raw';
 import storagePageSummarySource from '@/components/Storage/StoragePageSummary.tsx?raw';
 import storageCephSummaryCardSource from '@/components/Storage/StorageCephSummaryCard.tsx?raw';
@@ -1902,7 +1902,7 @@ describe('frontend resource type boundaries', () => {
     expect(storagePagePresentationSource).toContain('export const shouldShowCephSummaryCard');
     expect(storagePagePresentationSource).toContain('export const getStoragePageBannerMessage');
     expect(storagePagePresentationSource).toContain('export const STORAGE_VIEW_OPTIONS');
-    expect(storagePagePresentationSource).toContain('export const STORAGE_POOL_TABLE_COLUMNS');
+    expect(storagePagePresentationSource).toContain('export const getStoragePoolTableColumns');
     expect(storagePagePresentationSource).toContain(
       'export const STORAGE_BANNER_ACTION_BUTTON_CLASS',
     );
@@ -2048,7 +2048,7 @@ describe('frontend resource type boundaries', () => {
     expect(useStorageContentCardModelSource).toContain("options.view() === 'disks'");
     expect(useStorageCephSectionModelSource).toContain('shouldShowCephSummaryCard');
     expect(storagePoolsTableSource).toContain('export const StoragePoolsTable');
-    expect(storagePoolsTableSource).toContain('STORAGE_POOL_TABLE_COLUMNS');
+    expect(storagePoolsTableSource).toContain('getStoragePoolTableColumns');
     expect(storagePoolsTableSource).toContain('getStorageLoadingMessage');
     expect(storagePoolsTableSource).toContain('useStoragePoolsTableModel');
     expect(storagePoolsTableSource).toContain('StoragePoolRow');

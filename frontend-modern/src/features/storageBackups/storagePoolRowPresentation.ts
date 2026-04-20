@@ -1,5 +1,6 @@
 import { getSourcePlatformPresentation } from '@/utils/sourcePlatforms';
 import type { StorageRecord } from './models';
+import type { StorageCapacityDeltaPresentation } from './storageCapacityDeltaPresentation';
 import {
   getStorageRecordHostLabel,
   getStorageRecordPlatformLabel,
@@ -25,6 +26,9 @@ export interface StoragePoolRowModel {
   topologyLabel: string;
   compactProtection: string;
   compactProtectionTitle: string;
+  capacityDeltaLabel: string;
+  capacityDeltaTitle: string;
+  capacityDeltaToneClass: string;
   compactImpact: string;
   compactIssue: string;
   compactIssueSummary: string;
@@ -47,6 +51,9 @@ export const STORAGE_POOL_ROW_PROTECTION_TEXT_CLASS = 'block truncate font-semib
 export const STORAGE_POOL_ROW_USAGE_CELL_CLASS = 'px-2 py-1 align-middle md:min-w-[190px] xl:min-w-[220px]';
 export const STORAGE_POOL_ROW_USAGE_WRAP_CLASS = 'flex items-center whitespace-nowrap text-[11px]';
 export const STORAGE_POOL_ROW_USAGE_BAR_WRAP_CLASS = 'min-w-[120px] flex-1';
+export const STORAGE_POOL_ROW_GROWTH_CELL_CLASS =
+  'hidden lg:table-cell px-2 py-1 align-middle text-[11px]';
+export const STORAGE_POOL_ROW_GROWTH_TEXT_CLASS = 'block truncate font-mono font-semibold';
 export const STORAGE_POOL_ROW_IMPACT_CELL_CLASS =
   'hidden lg:table-cell px-2 py-1 align-middle text-[11px] text-base-content';
 export const STORAGE_POOL_ROW_ISSUE_CELL_CLASS = 'px-2 py-1 align-middle text-[11px]';
@@ -54,7 +61,10 @@ export const STORAGE_POOL_ROW_ISSUE_TEXT_CLASS = 'block truncate text-[11px] fon
 export const STORAGE_POOL_ROW_PLACEHOLDER_CLASS = 'text-muted';
 export const STORAGE_POOL_ROW_USAGE_FALLBACK_CLASS = 'text-[11px] text-muted';
 
-export const buildStoragePoolRowModel = (record: StorageRecord): StoragePoolRowModel => {
+export const buildStoragePoolRowModel = (
+  record: StorageRecord,
+  capacityDelta: StorageCapacityDeltaPresentation | null = null,
+): StoragePoolRowModel => {
   const totalBytes = record.capacity.totalBytes || 0;
   const usedBytes = record.capacity.usedBytes || 0;
   const freeBytes =
@@ -72,6 +82,9 @@ export const buildStoragePoolRowModel = (record: StorageRecord): StoragePoolRowM
     topologyLabel: getStorageRecordTopologyLabel(record),
     compactProtection: getCompactStoragePoolProtectionLabel(record),
     compactProtectionTitle: getCompactStoragePoolProtectionTitle(record),
+    capacityDeltaLabel: capacityDelta?.label ?? '—',
+    capacityDeltaTitle: capacityDelta?.title ?? 'No used-capacity change history available.',
+    capacityDeltaToneClass: capacityDelta?.toneClass ?? STORAGE_POOL_ROW_PLACEHOLDER_CLASS,
     compactImpact: getCompactStoragePoolImpactLabel(record),
     compactIssue: getCompactStoragePoolIssueLabel(record),
     compactIssueSummary: getCompactStoragePoolIssueSummary(record),

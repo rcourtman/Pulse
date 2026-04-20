@@ -1,5 +1,4 @@
-import { Accessor, createMemo, createSignal } from 'solid-js';
-import type { SummaryTimeRange } from '@/components/shared/summaryTimeRange';
+import { Accessor, createMemo } from 'solid-js';
 import type { Resource } from '@/types/resource';
 import type { StorageRecord } from '@/features/storageBackups/models';
 import type { StoragePageNodeOption } from './storagePageState';
@@ -15,8 +14,6 @@ type UseStoragePageSummaryOptions = {
 const POOL_DEGRADED_HEALTHS = new Set(['warning', 'critical', 'offline']);
 
 export const useStoragePageSummary = (options: UseStoragePageSummaryOptions) => {
-  const [summaryTimeRange, setSummaryTimeRange] = createSignal<SummaryTimeRange>('1h');
-
   const poolCount = createMemo(() => options.filteredRecords().length);
   const diskCount = createMemo(() =>
     countVisiblePhysicalDisksForNode(
@@ -48,8 +45,6 @@ export const useStoragePageSummary = (options: UseStoragePageSummaryOptions) => 
   });
 
   return {
-    summaryTimeRange,
-    setSummaryTimeRange,
     poolCount,
     diskCount,
     poolsDegraded,

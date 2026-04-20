@@ -6,6 +6,7 @@ import StoragePoolsTable from '@/components/Storage/StoragePoolsTable';
 import {
   STORAGE_CONTENT_CARD_BODY_CLASS,
 } from '@/features/storageBackups/storagePagePresentation';
+import type { StorageCapacityDeltaPresentation } from '@/features/storageBackups/storageCapacityDeltaPresentation';
 import type { Resource } from '@/types/resource';
 import type { StorageGroupKey, StorageGroupedRecords } from './useStorageModel';
 import type { StorageAlertRowState } from '@/features/storageBackups/storageAlertState';
@@ -25,6 +26,8 @@ type StorageContentCardProps = {
   toggleGroup: (key: string) => void;
   expandedPoolId: () => string | null;
   setExpandedPoolId: (value: string | ((current: string | null) => string | null) | null) => void;
+  storageGrowthBySeriesId: () => Map<string, StorageCapacityDeltaPresentation>;
+  storageGrowthColumnLabel: () => string;
   nodeOnlineByLabel: () => Map<string, boolean>;
   highlightedRecordId: () => string | null;
   getRecordAlertState: (recordId: string) => StorageAlertRowState;
@@ -88,6 +91,8 @@ export const StorageContentCard: Component<StorageContentCardProps> = (props) =>
           toggleGroup={props.toggleGroup}
           expandedPoolId={props.expandedPoolId()}
           setExpandedPoolId={props.setExpandedPoolId}
+          storageGrowthBySeriesId={props.storageGrowthBySeriesId()}
+          storageGrowthColumnLabel={props.storageGrowthColumnLabel()}
           physicalDisks={props.physicalDisks()}
           nodeOnlineByLabel={props.nodeOnlineByLabel()}
           highlightedRecordId={props.highlightedRecordId()}

@@ -73,6 +73,5 @@ describe('useStoragePageSummary', () => {
     expect(result.diskCount()).toBe(1);
     expect(result.poolsDegraded()).toBe(0);
     expect(result.disksFailing()).toBe(0);
-    expect(result.summaryTimeRange()).toBe('1h');
   });
 });

@@ -79,6 +79,14 @@ describe('StorageSummary', () => {
     { timestamp: now - 60_000, value: 45 },
     { timestamp: now, value: 47 },
   ];
+  const buildSummaryData = (overrides?: Record<string, unknown>) => ({
+    pools: {},
+    disks: {},
+    stats: {
+      oldestDataTimestamp: now - 60_000,
+    },
+    ...(overrides ?? {}),
+  });
 
   beforeEach(() => {
     mockGetStorageSummaryCharts.mockReset();
@@ -90,7 +98,7 @@ describe('StorageSummary', () => {
   });
 
   it('keeps storage summary series page-scoped when a focused resource is selected', async () => {
-    mockGetStorageSummaryCharts.mockResolvedValueOnce({
+    const data = buildSummaryData({
       pools: {
         'pool:alpha': {
           name: 'Alpha Pool',
@@ -105,14 +113,18 @@ describe('StorageSummary', () => {
           avail: twoPointSeries,
         },
       },
-      disks: {},
-      stats: {
-        oldestDataTimestamp: now - 60_000,
-      },
     });
 
     render(() => (
-      <StorageSummary poolCount={2} diskCount={0} timeRange="1h" focusedResourceId="pool:alpha" />
+      <StorageSummary
+        poolCount={2}
+        diskCount={0}
+        data={data}
+        loaded
+        fetchFailed={false}
+        timeRange="1h"
+        focusedResourceId="pool:alpha"
+      />
     ));
 
     await waitFor(() => {
@@ -127,7 +139,7 @@ describe('StorageSummary', () => {
   });
 
   it('treats chart hover as the shared active storage entity across cards', async () => {
-    mockGetStorageSummaryCharts.mockResolvedValueOnce({
+    const data = buildSummaryData({
       pools: {
         'pool:alpha': {
           name: 'Alpha Pool',
@@ -148,12 +160,18 @@ describe('StorageSummary', () => {
           temperature: twoPointSeries,
         },
       },
-      stats: {
-        oldestDataTimestamp: now - 60_000,
-      },
     });
 
-    render(() => <StorageSummary poolCount={2} diskCount={1} timeRange="1h" />);
+    render(() => (
+      <StorageSummary
+        poolCount={2}
+        diskCount={1}
+        data={data}
+        loaded
+        fetchFailed={false}
+        timeRange="1h"
+      />
+    ));
 
     await waitFor(() => {
       expect(screen.getAllByTestId('sparkline')).toHaveLength(4);
@@ -191,7 +209,7 @@ describe('StorageSummary', () => {
       label: 'pve1 (2 pools)',
       seriesIds: poolIds.slice(0, 2),
     };
-    mockGetStorageSummaryCharts.mockResolvedValueOnce({
+    const data = buildSummaryData({
       pools: {
         'pool:alpha': {
           name: 'Alpha Pool',
@@ -212,16 +230,15 @@ describe('StorageSummary', () => {
           avail: twoPointSeries,
         },
       },
-      disks: {},
-      stats: {
-        oldestDataTimestamp: now - 60_000,
-      },
     });
 
     render(() => (
       <StorageSummary
         poolCount={3}
         diskCount={0}
+        data={data}
+        loaded
+        fetchFailed={false}
         timeRange="1h"
         hoveredGroupScope={hoveredGroupScope}
         hoveredResourceId="pool:alpha"

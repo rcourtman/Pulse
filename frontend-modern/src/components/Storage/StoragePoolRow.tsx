@@ -6,6 +6,8 @@ import {
 } from '@/features/storageBackups/rowPresentation';
 import {
   buildStoragePoolRowModel,
+  STORAGE_POOL_ROW_GROWTH_CELL_CLASS,
+  STORAGE_POOL_ROW_GROWTH_TEXT_CLASS,
   getStoragePoolImpactTextClass,
   STORAGE_POOL_ROW_CLASS,
   STORAGE_POOL_ROW_EXPANDED_CLASS,
@@ -28,6 +30,7 @@ import {
   STORAGE_POOL_ROW_USAGE_CELL_CLASS,
   STORAGE_POOL_ROW_USAGE_WRAP_CLASS,
 } from '@/features/storageBackups/storagePoolRowPresentation';
+import type { StorageCapacityDeltaPresentation } from '@/features/storageBackups/storageCapacityDeltaPresentation';
 import type { Resource } from '@/types/resource';
 import type { SummaryGroupMemberInteractionState } from '@/components/shared/summaryCardInteraction';
 import { EnhancedStorageBar } from './EnhancedStorageBar';
@@ -40,6 +43,7 @@ import { SummaryRowActionButton } from '@/components/shared/SummaryRowActionButt
 
 interface StoragePoolRowProps {
   record: StorageRecord;
+  growthDelta?: StorageCapacityDeltaPresentation | null;
   summarySeriesId: string;
   expanded: boolean;
   summaryHighlighted?: boolean;
@@ -57,7 +61,7 @@ interface StoragePoolRowProps {
 }
 
 export const StoragePoolRow: Component<StoragePoolRowProps> = (props) => {
-  const row = createMemo(() => buildStoragePoolRowModel(props.record));
+  const row = createMemo(() => buildStoragePoolRowModel(props.record, props.growthDelta ?? null));
   const detailControlsId = createMemo(() =>
     buildSummaryDisclosureControlsId(props.summarySeriesId),
   );
@@ -145,6 +149,15 @@ export const StoragePoolRow: Component<StoragePoolRowProps> = (props) => {
               </div>
             </div>
           </Show>
+        </td>
+
+        <td class={STORAGE_POOL_ROW_GROWTH_CELL_CLASS}>
+          <span
+            class={`${STORAGE_POOL_ROW_GROWTH_TEXT_CLASS} ${row().capacityDeltaToneClass}`}
+            title={row().capacityDeltaTitle}
+          >
+            {row().capacityDeltaLabel}
+          </span>
         </td>
 
         <td class={STORAGE_POOL_ROW_IMPACT_CELL_CLASS}>

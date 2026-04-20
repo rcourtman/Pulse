@@ -10,6 +10,7 @@ import {
   getStorageEmptyStateMessage,
   getStoragePageBannerActionLabel,
   getStoragePageBannerMessage,
+  getStoragePoolTableColumns,
   getStorageTableHeading,
   STORAGE_BANNER_ACTION_BUTTON_CLASS,
   STORAGE_CONTENT_CARD_BODY_CLASS,
@@ -24,7 +25,6 @@ import {
   STORAGE_POOLS_LOADING_STATE_CLASS,
   STORAGE_POOLS_SCROLL_WRAP_CLASS,
   STORAGE_POOLS_TABLE_CLASS,
-  STORAGE_POOL_TABLE_COLUMNS,
   STORAGE_VIEW_OPTIONS,
   shouldShowCephSummaryCard,
 } from '@/features/storageBackups/storagePagePresentation';
@@ -89,13 +89,14 @@ describe('storagePagePresentation', () => {
       { value: 'pools', label: 'Pools' },
       { value: 'disks', label: 'Physical Disks' },
     ]);
-    expect(STORAGE_POOL_TABLE_COLUMNS.map((column) => column.label)).toEqual([
+    expect(getStoragePoolTableColumns('Growth (24h)').map((column) => column.label)).toEqual([
       'Storage',
       'Source',
       'Type',
       'Host',
       'Protection',
       'Usage',
+      'Growth (24h)',
       'Impact',
       'Primary Issue',
     ]);

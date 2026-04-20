@@ -2,7 +2,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/te
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChartsAPI } from '@/api/charts';
 import StorageSummary from '@/components/Storage/StorageSummary';
-import storageSummarySource from '@/components/Storage/StorageSummary.tsx?raw';
+import storageSummarySource from '@/components/Storage/useStorageSummaryCharts.ts?raw';
 import storageSummaryCacheSource from '@/utils/storageSummaryCache.ts?raw';
 import type { Alert } from '@/types/api';
 import type { Resource, ResourceType } from '@/types/resource';
@@ -392,6 +392,71 @@ describe('Storage', () => {
 
     expect(screen.getByText('Local-LVM-PVE1')).toBeInTheDocument();
     expect(screen.queryByText('Local-LVM-PVE2')).not.toBeInTheDocument();
+  });
+
+  it('renders per-pool growth from the shared storage summary history contract', async () => {
+    const storageSummarySpy = vi.spyOn(ChartsAPI, 'getStorageSummaryCharts').mockResolvedValue({
+      pools: {
+        'pool:alpha': {
+          name: 'Alpha-Store',
+          usage: [
+            { timestamp: Date.now() - 86_400_000, value: 40 },
+            { timestamp: Date.now(), value: 44 },
+          ],
+          used: [
+            { timestamp: Date.now() - 86_400_000, value: 100 * 1024 * 1024 * 1024 },
+            { timestamp: Date.now(), value: 140 * 1024 * 1024 * 1024 },
+          ],
+          avail: [
+            { timestamp: Date.now() - 86_400_000, value: 150 * 1024 * 1024 * 1024 },
+            { timestamp: Date.now(), value: 110 * 1024 * 1024 * 1024 },
+          ],
+        },
+        'pool:beta': {
+          name: 'Beta-Store',
+          usage: [
+            { timestamp: Date.now() - 86_400_000, value: 72 },
+            { timestamp: Date.now(), value: 68 },
+          ],
+          used: [
+            { timestamp: Date.now() - 86_400_000, value: 220 * 1024 * 1024 * 1024 },
+            { timestamp: Date.now(), value: 200 * 1024 * 1024 * 1024 },
+          ],
+          avail: [
+            { timestamp: Date.now() - 86_400_000, value: 80 * 1024 * 1024 * 1024 },
+            { timestamp: Date.now(), value: 100 * 1024 * 1024 * 1024 },
+          ],
+        },
+      },
+      disks: {},
+      stats: {
+        oldestDataTimestamp: Date.now() - 86_400_000,
+      },
+    });
+
+    hookResources = [
+      buildStorageResource('storage-display-alpha', 'Alpha-Store', 'pve1', {
+        metricsTarget: {
+          resourceType: 'storage',
+          resourceId: 'pool:alpha',
+        },
+      }),
+      buildStorageResource('storage-display-beta', 'Beta-Store', 'pve2', {
+        metricsTarget: {
+          resourceType: 'storage',
+          resourceId: 'pool:beta',
+        },
+      }),
+    ];
+
+    render(() => <Storage />);
+
+    expect(await screen.findByText('Growth (24h)')).toBeInTheDocument();
+    expect(await screen.findByText(/\+40(?:\.0)? GB/)).toBeInTheDocument();
+    expect(screen.getByText(/-20(?:\.0)? GB/)).toBeInTheDocument();
+    expect(storageSummarySpy).toHaveBeenCalledWith('24h', undefined, { nodeId: undefined });
+
+    storageSummarySpy.mockRestore();
   });
 
   it('routes hovered pool rows into the shared summary highlight contract and keeps the summary sticky', async () => {
@@ -1178,6 +1243,46 @@ describe('Storage', () => {
       <StorageSummary
         poolCount={2}
         diskCount={0}
+        data={{
+          pools: {
+            'pool:alpha': {
+              name: 'Alpha-Store',
+              usage: [
+                { timestamp: Date.now() - 60_000, value: 45 },
+                { timestamp: Date.now(), value: 47 },
+              ],
+              used: [
+                { timestamp: Date.now() - 60_000, value: 450 },
+                { timestamp: Date.now(), value: 470 },
+              ],
+              avail: [
+                { timestamp: Date.now() - 60_000, value: 550 },
+                { timestamp: Date.now(), value: 530 },
+              ],
+            },
+            'pool:beta': {
+              name: 'Beta-Store',
+              usage: [
+                { timestamp: Date.now() - 60_000, value: 68 },
+                { timestamp: Date.now(), value: 70 },
+              ],
+              used: [
+                { timestamp: Date.now() - 60_000, value: 680 },
+                { timestamp: Date.now(), value: 700 },
+              ],
+              avail: [
+                { timestamp: Date.now() - 60_000, value: 320 },
+                { timestamp: Date.now(), value: 300 },
+              ],
+            },
+          },
+          disks: {},
+          stats: {
+            oldestDataTimestamp: Date.now() - 60_000,
+          },
+        }}
+        loaded
+        fetchFailed={false}
         timeRange="1h"
         chartHoverSync={{
           sourceKey: 'pool-usage',
@@ -1721,7 +1826,7 @@ describe('Storage', () => {
   it('routes storage summary fetches through the shared storage summary cache owner', () => {
     expect(storageSummarySource).toContain('readStorageSummaryCache(range, nodeId)');
     expect(storageSummarySource).toContain('fetchStorageSummaryAndCache(requestedRange, {');
-    expect(storageSummarySource).not.toContain('ChartsAPI.getStorageSummaryCharts(');
+    expect(storageSummarySource).toContain("caller: options.caller ?? 'useStorageSummaryCharts'");
     expect(storageSummaryCacheSource).toContain('const STORAGE_SUMMARY_CACHE_VERSION = 1;');
     expect(storageSummaryCacheSource).toContain(
       "return `${STORAGE_SUMMARY_CACHE_VERSION}::${orgScope}::${range}::${nodeId || '__all__'}`;",

@@ -1,5 +1,7 @@
 import { Component } from 'solid-js';
 import StorageSummary from '@/components/Storage/StorageSummary';
+import type { StorageSummaryChartsResponse } from '@/api/charts';
+import type { SummaryTimeRange } from '@/components/shared/summaryTimeRange';
 import type { Resource } from '@/types/resource';
 import type { StorageRecord } from '@/features/storageBackups/models';
 import type { SummarySeriesGroupScope } from '@/components/shared/summaryCardInteraction';
@@ -12,6 +14,11 @@ type StoragePageSummaryProps = {
   selectedNodeId: () => string;
   nodeOptions: () => StoragePageNodeOption[];
   physicalDisks: () => Resource[];
+  summaryTimeRange: () => SummaryTimeRange;
+  setSummaryTimeRange: (range: SummaryTimeRange) => void;
+  storageSummaryData: () => StorageSummaryChartsResponse | null;
+  storageSummaryLoaded: () => boolean;
+  storageSummaryFetchFailed: () => boolean;
   hoveredResourceId: () => string | null;
   hoveredGroupScope: () => SummarySeriesGroupScope | null;
   focusedResourceId: () => string | null;
@@ -24,8 +31,6 @@ type StoragePageSummaryProps = {
 
 export const StoragePageSummary: Component<StoragePageSummaryProps> = (props) => {
   const {
-    summaryTimeRange,
-    setSummaryTimeRange,
     poolCount,
     diskCount,
     poolsDegraded,
@@ -43,9 +48,11 @@ export const StoragePageSummary: Component<StoragePageSummaryProps> = (props) =>
       diskCount={diskCount()}
       poolsDegraded={poolsDegraded()}
       disksFailing={disksFailing()}
-      timeRange={summaryTimeRange()}
-      onTimeRangeChange={setSummaryTimeRange}
-      nodeId={props.selectedNodeId()}
+      data={props.storageSummaryData()}
+      loaded={props.storageSummaryLoaded()}
+      fetchFailed={props.storageSummaryFetchFailed()}
+      timeRange={props.summaryTimeRange()}
+      onTimeRangeChange={props.setSummaryTimeRange}
       hoveredResourceId={props.hoveredResourceId()}
       hoveredGroupScope={props.hoveredGroupScope()}
       focusedResourceId={props.focusedResourceId()}

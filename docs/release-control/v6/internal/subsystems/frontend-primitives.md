@@ -646,6 +646,13 @@ aggregate health-state summary row. Per the Extension Points constraint, this
 surface must continue to stay outside the shared hover-synchronization dialect;
 new additions to `RecoverySummary.tsx` must not introduce row/group/chart hover
 wiring without a separate governed product decision.
+`frontend-modern/src/components/Storage/useStorageSummaryCharts.ts` now owns
+the reusable polling/caching state for storage summary history, while
+`frontend-modern/src/features/storageBackups/storageCapacityDeltaPresentation.ts`
+keeps pool-growth label/tone formatting inside the shared feature presentation
+layer. The storage page must keep reusing those shared owners instead of
+rebuilding storage-history timers or byte-delta formatting inside row
+components.
 
 The frontend already has several guardrail tests. The next step is to keep
 turning repeated local patterns into explicit shared primitives with hard usage
