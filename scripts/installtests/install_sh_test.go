@@ -806,10 +806,17 @@ func extractRootInstallShellFunction(t *testing.T, name string) string {
 	return string(match)
 }
 
+func extractSelectedUpdateChannelShellFunctions(t *testing.T) string {
+	t.Helper()
+
+	return extractRootInstallShellFunction(t, "read_configured_update_channel") + "\n" +
+		extractRootInstallShellFunction(t, "selected_update_channel")
+}
+
 func extractSetupAutoUpdatesShellFunctions(t *testing.T) string {
 	t.Helper()
 
-	return extractRootInstallShellFunction(t, "selected_update_channel") + "\n" +
+	return extractSelectedUpdateChannelShellFunctions(t) + "\n" +
 		extractRootInstallShellFunction(t, "repo_web_url") + "\n" +
 		extractRootInstallShellFunction(t, "configure_auto_update_script_repo") + "\n" +
 		extractRootInstallShellFunction(t, "setup_auto_updates")
@@ -1258,7 +1265,7 @@ func TestBuildContainerInstallCommandPreservesForcedVersion(t *testing.T) {
 		SOURCE_BRANCH="main"
 		frontend_port="7655"
 		CONFIG_DIR="` + t.TempDir() + `"
-` + extractRootInstallShellFunction(t, "selected_update_channel") + `
+` + extractSelectedUpdateChannelShellFunctions(t) + `
 ` + extractRootInstallShellFunction(t, "build_container_install_command") + `
 		build_container_install_command
 	`
@@ -1285,7 +1292,7 @@ func TestBuildContainerInstallCommandPreservesExplicitAutoUpdateDisable(t *testi
 		SOURCE_BRANCH="main"
 		frontend_port="7655"
 		CONFIG_DIR="` + t.TempDir() + `"
-` + extractRootInstallShellFunction(t, "selected_update_channel") + `
+` + extractSelectedUpdateChannelShellFunctions(t) + `
 ` + extractRootInstallShellFunction(t, "build_container_install_command") + `
 		build_container_install_command
 	`
@@ -1313,7 +1320,7 @@ func TestBuildContainerInstallCommandPassesArchiveToContainer(t *testing.T) {
 		frontend_port="7655"
 		container_archive_dest="/tmp/pulse-v6.0.0-rc.1-linux-amd64.tar.gz"
 		CONFIG_DIR="` + t.TempDir() + `"
-` + extractRootInstallShellFunction(t, "selected_update_channel") + `
+` + extractSelectedUpdateChannelShellFunctions(t) + `
 ` + extractRootInstallShellFunction(t, "build_container_install_command") + `
 		build_container_install_command
 	`
@@ -1341,7 +1348,7 @@ func TestBuildContainerInstallCommandQuotesArchivePath(t *testing.T) {
 		frontend_port="7655"
 		container_archive_dest="/tmp/pulse archive-linux-amd64.tar.gz"
 		CONFIG_DIR="` + t.TempDir() + `"
-` + extractRootInstallShellFunction(t, "selected_update_channel") + `
+` + extractSelectedUpdateChannelShellFunctions(t) + `
 ` + extractRootInstallShellFunction(t, "build_container_install_command") + `
 		build_container_install_command
 	`
@@ -1368,7 +1375,7 @@ func TestBuildContainerInstallCommandPreservesRCChannel(t *testing.T) {
 		SOURCE_BRANCH="main"
 		frontend_port="7766"
 		CONFIG_DIR="` + t.TempDir() + `"
-` + extractRootInstallShellFunction(t, "selected_update_channel") + `
+` + extractSelectedUpdateChannelShellFunctions(t) + `
 ` + extractRootInstallShellFunction(t, "build_container_install_command") + `
 		build_container_install_command
 	`
@@ -1385,6 +1392,39 @@ func TestBuildContainerInstallCommandPreservesRCChannel(t *testing.T) {
 	}
 }
 
+func TestBuildContainerInstallCommandIgnoresHostConfiguredRCChannelForFreshLXCInstall(t *testing.T) {
+	configDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(configDir, "system.json"), []byte(`{"updateChannel":"rc"}`), 0644); err != nil {
+		t.Fatalf("write system.json: %v", err)
+	}
+
+	script := `
+		FORCE_VERSION=""
+		FORCE_CHANNEL=""
+		UPDATE_CHANNEL=""
+		IGNORE_CONFIGURED_UPDATE_CHANNEL="true"
+		auto_updates_flag=""
+		BUILD_FROM_SOURCE="false"
+		SOURCE_BRANCH="main"
+		frontend_port="7655"
+		CONFIG_DIR="` + configDir + `"
+` + extractSelectedUpdateChannelShellFunctions(t) + `
+` + extractRootInstallShellFunction(t, "build_container_install_command") + `
+		build_container_install_command
+	`
+
+	out, err := exec.Command("bash", "-c", script).CombinedOutput()
+	if err != nil {
+		t.Fatalf("bash: %v\n%s", err, out)
+	}
+
+	got := strings.TrimSpace(string(out))
+	want := "bash /tmp/install.sh --in-container"
+	if got != want {
+		t.Fatalf("install cmd = %q, want %q", got, want)
+	}
+}
+
 func TestPrintContainerRecoveryCommandPreservesForcedVersion(t *testing.T) {
 	script := `
 		FORCE_VERSION="v1.2.3"
@@ -1396,7 +1436,7 @@ func TestPrintContainerRecoveryCommandPreservesForcedVersion(t *testing.T) {
 		frontend_port="7655"
 		CONFIG_DIR="` + t.TempDir() + `"
 		print_info() { printf '%s\n' "$1"; }
-` + extractRootInstallShellFunction(t, "selected_update_channel") + `
+` + extractSelectedUpdateChannelShellFunctions(t) + `
 ` + extractRootInstallShellFunction(t, "build_container_install_command") + `
 ` + extractRootInstallShellFunction(t, "print_container_recovery_command") + `
 		print_container_recovery_command
@@ -1425,7 +1465,7 @@ func TestPrintContainerRecoveryCommandPreservesExplicitAutoUpdateDisable(t *test
 		frontend_port="7655"
 		CONFIG_DIR="` + t.TempDir() + `"
 		print_info() { printf '%s\n' "$1"; }
-` + extractRootInstallShellFunction(t, "selected_update_channel") + `
+` + extractSelectedUpdateChannelShellFunctions(t) + `
 ` + extractRootInstallShellFunction(t, "build_container_install_command") + `
 ` + extractRootInstallShellFunction(t, "print_container_recovery_command") + `
 		print_container_recovery_command
@@ -1454,7 +1494,7 @@ func TestPrintContainerRecoveryCommandPreservesRCChannel(t *testing.T) {
 		frontend_port="7766"
 		CONFIG_DIR="` + t.TempDir() + `"
 		print_info() { printf '%s\n' "$1"; }
-` + extractRootInstallShellFunction(t, "selected_update_channel") + `
+` + extractSelectedUpdateChannelShellFunctions(t) + `
 ` + extractRootInstallShellFunction(t, "build_container_install_command") + `
 ` + extractRootInstallShellFunction(t, "print_container_recovery_command") + `
 		print_container_recovery_command
@@ -1804,7 +1844,7 @@ func TestSelectedUpdateChannelTreatsPrereleaseVersionAsRC(t *testing.T) {
 		FORCE_VERSION="v1.2.3-rc.4"
 		UPDATE_CHANNEL=""
 		CONFIG_DIR="` + t.TempDir() + `"
-` + extractRootInstallShellFunction(t, "selected_update_channel") + `
+` + extractSelectedUpdateChannelShellFunctions(t) + `
 		selected_update_channel
 	`
 
@@ -1814,6 +1854,63 @@ func TestSelectedUpdateChannelTreatsPrereleaseVersionAsRC(t *testing.T) {
 	}
 	if got := strings.TrimSpace(string(out)); got != "rc" {
 		t.Fatalf("selected_update_channel = %q, want rc", got)
+	}
+}
+
+func TestResolveTargetReleaseIgnoresHostConfiguredRCChannelForFreshLXCInstall(t *testing.T) {
+	tmpDir := t.TempDir()
+	configDir := filepath.Join(tmpDir, "config")
+	if err := os.MkdirAll(configDir, 0755); err != nil {
+		t.Fatalf("mkdir config dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(configDir, "system.json"), []byte(`{"updateChannel":"rc"}`), 0644); err != nil {
+		t.Fatalf("write system.json: %v", err)
+	}
+
+	timeoutPath := filepath.Join(tmpDir, "timeout")
+	curlPath := filepath.Join(tmpDir, "curl")
+
+	if err := os.WriteFile(timeoutPath, []byte("#!/usr/bin/env bash\nshift\nexec \"$@\"\n"), 0755); err != nil {
+		t.Fatalf("write timeout stub: %v", err)
+	}
+
+	curlStub := `#!/usr/bin/env bash
+for arg in "$@"; do
+	if [[ "$arg" == "https://api.github.com/repos/rcourtman/Pulse/releases" ]]; then
+		printf '%s\n' '[{"draft":false,"prerelease":true,"tag_name":"v6.0.0-rc.1"},{"draft":false,"prerelease":false,"tag_name":"v5.1.28"}]'
+		exit 0
+	fi
+done
+echo "unexpected curl invocation: $*" >&2
+exit 1
+`
+	if err := os.WriteFile(curlPath, []byte(curlStub), 0755); err != nil {
+		t.Fatalf("write curl stub: %v", err)
+	}
+
+	script := `
+		PATH="` + tmpDir + `:$PATH"
+		GITHUB_REPO="rcourtman/Pulse"
+		FORCE_VERSION=""
+		FORCE_CHANNEL=""
+		UPDATE_CHANNEL=""
+		IGNORE_CONFIGURED_UPDATE_CHANNEL="true"
+		CONFIG_DIR="` + configDir + `"
+		print_info() { :; }
+		print_warn() { :; }
+		get_latest_release_from_redirect() { return 1; }
+` + extractRootInstallShellFunction(t, "read_configured_update_channel") + `
+` + extractRootInstallShellFunction(t, "resolve_target_release") + `
+		resolve_target_release
+		printf '%s\n' "$LATEST_RELEASE"
+	`
+
+	out, err := exec.Command("bash", "-c", script).CombinedOutput()
+	if err != nil {
+		t.Fatalf("bash: %v\n%s", err, out)
+	}
+	if got := strings.TrimSpace(string(out)); got != "v5.1.28" {
+		t.Fatalf("LATEST_RELEASE = %q, want v5.1.28", got)
 	}
 }
 

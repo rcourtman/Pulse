@@ -146,6 +146,24 @@ get_latest_release_from_redirect() {
     return 0
 }
 
+read_configured_update_channel() {
+    if [[ "${IGNORE_CONFIGURED_UPDATE_CHANNEL:-false}" == "true" ]]; then
+        return 1
+    fi
+
+    if [[ ! -f "$CONFIG_DIR/system.json" ]]; then
+        return 1
+    fi
+
+    local configured_channel=""
+    configured_channel=$(grep -o '"updateChannel"[[:space:]]*:[[:space:]]*"[^"]*"' "$CONFIG_DIR/system.json" 2>/dev/null | sed 's/.*"\([^"]*\)"$/\1/' || true)
+    if [[ -z "$configured_channel" ]]; then
+        return 1
+    fi
+
+    printf '%s\n' "$configured_channel"
+}
+
 resolve_install_script_download_url() {
     if [[ -n "${FORCE_VERSION:-}" ]]; then
         printf 'https://github.com/%s/releases/download/%s/install.sh\n' "$GITHUB_REPO" "$FORCE_VERSION"
@@ -196,13 +214,11 @@ selected_update_channel() {
         return 0
     fi
 
-    if [[ -f "$CONFIG_DIR/system.json" ]]; then
-        local configured_channel=""
-        configured_channel=$(grep -o '"updateChannel"[[:space:]]*:[[:space:]]*"[^"]*"' "$CONFIG_DIR/system.json" 2>/dev/null | sed 's/.*"\([^"]*\)"$/\1/' || true)
-        if [[ -n "$configured_channel" ]]; then
-            printf '%s\n' "$configured_channel"
-            return 0
-        fi
+    local configured_channel=""
+    configured_channel=$(read_configured_update_channel 2>/dev/null || true)
+    if [[ -n "$configured_channel" ]]; then
+        printf '%s\n' "$configured_channel"
+        return 0
     fi
 
     printf 'stable\n'
@@ -894,6 +910,12 @@ create_lxc_container() {
             ADVANCED_MODE=false
             ;;
     esac
+
+    # A Proxmox-host LXC install creates a brand-new Pulse instance inside the
+    # container. Host-local Pulse config must not silently switch that fresh
+    # install onto the prerelease channel unless the operator explicitly asked
+    # for it via --rc or --version.
+    IGNORE_CONFIGURED_UPDATE_CHANNEL=true
     
     # Get next available container ID from Proxmox
     local CTID=$(pvesh get /cluster/nextid 2>/dev/null || echo "100")
@@ -2516,8 +2538,8 @@ resolve_target_release() {
         if [[ -n "${FORCE_CHANNEL}" ]]; then
             UPDATE_CHANNEL="${FORCE_CHANNEL}"
             print_info "Using $UPDATE_CHANNEL channel from command line"
-        elif [[ -f "$CONFIG_DIR/system.json" ]]; then
-            CONFIGURED_CHANNEL=$(cat "$CONFIG_DIR/system.json" 2>/dev/null | grep -o '"updateChannel"[[:space:]]*:[[:space:]]*"[^"]*"' | sed 's/.*"\([^"]*\)"$/\1/' || true)
+        else
+            CONFIGURED_CHANNEL=$(read_configured_update_channel 2>/dev/null || true)
             if [[ "$CONFIGURED_CHANNEL" == "rc" ]]; then
                 UPDATE_CHANNEL="rc"
                 print_info "Prerelease channel detected in configuration"
@@ -3934,8 +3956,8 @@ main() {
         # Allow override via command line
         if [[ -n "${FORCE_CHANNEL}" ]]; then
             UPDATE_CHANNEL="${FORCE_CHANNEL}"
-        elif [[ -f "$CONFIG_DIR/system.json" ]]; then
-            CONFIGURED_CHANNEL=$(cat "$CONFIG_DIR/system.json" 2>/dev/null | grep -o '"updateChannel"[[:space:]]*:[[:space:]]*"[^"]*"' | sed 's/.*"\([^"]*\)"$/\1/' || true)
+        else
+            CONFIGURED_CHANNEL=$(read_configured_update_channel 2>/dev/null || true)
             if [[ "$CONFIGURED_CHANNEL" == "rc" ]]; then
                 UPDATE_CHANNEL="rc"
             fi
