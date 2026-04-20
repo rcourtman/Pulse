@@ -13,6 +13,11 @@ import type {
   HostSensorSummary,
   HostRAIDArray,
   Memory,
+  PBSBackupJob,
+  PBSGarbageJob,
+  PBSPruneJob,
+  PBSSyncJob,
+  PBSVerifyJob,
 } from '@/types/api';
 import {
   PLATFORM_TYPE_KEYS as GENERATED_PLATFORM_TYPE_KEYS,
@@ -284,6 +289,11 @@ export interface ResourcePBSMeta {
   verifyJobCount?: number;
   pruneJobCount?: number;
   garbageJobCount?: number;
+  backupJobs?: PBSBackupJob[];
+  syncJobs?: PBSSyncJob[];
+  verifyJobs?: PBSVerifyJob[];
+  pruneJobs?: PBSPruneJob[];
+  garbageJobs?: PBSGarbageJob[];
   connectionHealth?: string;
   affectedDatastoreCount?: number;
   affectedDatastores?: string[];

@@ -70,7 +70,7 @@ export const UnifiedResourcePBSTableSection: Component<UnifiedResourcePBSTableSe
                 class={table.serviceCountColumn().className}
                 width={table.serviceCountColumn().width}
               >
-                Jobs
+                Activity
               </TableHead>
               <TableHead
                 class={table.serviceHealthColumn().className}
@@ -127,6 +127,11 @@ export const UnifiedResourcePBSTableSection: Component<UnifiedResourcePBSTableSe
                   () =>
                     getServiceHealthSummaryPresentation(resource.status, pbsRow()?.health)
                       .textClass,
+                );
+                const activityClass = createMemo(() =>
+                  (pbsRow()?.activeTaskCount || 0) > 0
+                    ? 'text-[11px] font-semibold text-emerald-700 dark:text-emerald-300'
+                    : 'text-xs text-base-content',
                 );
 
                 const rowClass = createMemo(() => {
@@ -215,10 +220,22 @@ export const UnifiedResourcePBSTableSection: Component<UnifiedResourcePBSTableSe
                       <TableCell classList={{ hidden: !table.isVisible('secondary') && !table.isMobile() }}>
                         <div class="flex justify-center">
                           <Show
-                            when={pbsRow()?.jobs != null}
+                            when={pbsRow()?.activity}
                             fallback={<span class="text-xs text-slate-400">—</span>}
                           >
-                            <span class="text-xs text-base-content">{pbsRow()!.jobs}</span>
+                            <div
+                              class="flex flex-col items-center leading-tight"
+                              title={[pbsRow()!.activity, pbsRow()!.activityDetail]
+                                .filter(Boolean)
+                                .join(' · ')}
+                            >
+                              <span class={activityClass()}>{pbsRow()!.activity}</span>
+                              <Show when={pbsRow()?.activityDetail}>
+                                <span class="text-[10px] text-muted">
+                                  {pbsRow()!.activityDetail}
+                                </span>
+                              </Show>
+                            </div>
                           </Show>
                         </div>
                       </TableCell>

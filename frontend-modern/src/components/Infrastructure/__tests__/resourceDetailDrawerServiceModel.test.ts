@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  buildPbsActiveTasks,
+  getPbsActivitySummary,
   buildPbsVisibleJobBreakdown,
   buildPmgVisibleMailBreakdown,
   buildPmgVisibleQueueBreakdown,
@@ -33,6 +35,90 @@ describe('resourceDetailDrawerServiceModel', () => {
         pmg: undefined,
       }),
     ).toBe('2 datastores · 4 jobs');
+  });
+
+  it('derives active PBS tasks from the canonical raw job payloads', () => {
+    const pbs = {
+      datastoreCount: 2,
+      backupJobCount: 2,
+      syncJobCount: 1,
+      verifyJobCount: 1,
+      pruneJobCount: 0,
+      garbageJobCount: 0,
+      backupJobs: [
+        {
+          id: 'backup-nightly',
+          store: 'fast',
+          type: 'vm',
+          vmid: '100',
+          lastBackup: '',
+          nextRun: '',
+          status: 'running',
+          error: '',
+        },
+        {
+          id: 'backup-weekly',
+          store: 'archive',
+          type: 'ct',
+          vmid: '200',
+          lastBackup: '',
+          nextRun: '',
+          status: 'ok',
+          error: '',
+        },
+      ],
+      syncJobs: [
+        {
+          id: 'sync-remote',
+          store: 'fast',
+          remote: 'offsite',
+          status: 'queued',
+          lastSync: '',
+          nextRun: '',
+          error: '',
+        },
+      ],
+      verifyJobs: [
+        {
+          id: 'verify-1',
+          store: 'fast',
+          status: 'ok',
+          lastVerify: '',
+          nextRun: '',
+          error: '',
+        },
+      ],
+    };
+
+    expect(buildPbsActiveTasks(pbs)).toEqual([
+      {
+        id: 'backup-nightly',
+        label: 'Backup backup-nightly',
+        context: 'fast · VM 100',
+        statusLabel: 'Running',
+        error: undefined,
+      },
+      {
+        id: 'sync-remote',
+        label: 'Sync sync-remote',
+        context: 'fast · Remote offsite',
+        statusLabel: 'Queued',
+        error: undefined,
+      },
+    ]);
+    expect(getPbsActivitySummary(pbs)).toEqual({
+      label: '2 active',
+      detail: '4 total',
+      activeTaskCount: 2,
+    });
+    expect(
+      getServiceDetailsSummary({
+        resourceType: 'pbs',
+        docker: undefined,
+        pbs,
+        pmg: undefined,
+      }),
+    ).toBe('2 datastores · 2 active tasks');
   });
 
   it('keeps PMG backlog and breakdown visibility canonical', () => {

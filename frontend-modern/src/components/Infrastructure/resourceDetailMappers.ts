@@ -6,6 +6,11 @@ import type {
   HostSensorSummary,
   Memory,
   Node,
+  PBSBackupJob,
+  PBSGarbageJob,
+  PBSPruneJob,
+  PBSSyncJob,
+  PBSVerifyJob,
 } from '@/types/api';
 import type { Resource, ResourceMetric, ResourceVMwareMeta } from '@/types/resource';
 import { formatTemperature } from '@/utils/temperature';
@@ -66,6 +71,11 @@ export type PBSPlatformData = {
   verifyJobCount?: number;
   pruneJobCount?: number;
   garbageJobCount?: number;
+  backupJobs?: PBSBackupJob[];
+  syncJobs?: PBSSyncJob[];
+  verifyJobs?: PBSVerifyJob[];
+  pruneJobs?: PBSPruneJob[];
+  garbageJobs?: PBSGarbageJob[];
   connectionHealth?: string;
 };
 

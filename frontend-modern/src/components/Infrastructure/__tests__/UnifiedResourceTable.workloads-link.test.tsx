@@ -165,7 +165,41 @@ describe('UnifiedResourceTable workloads links', () => {
           sources: ['pbs'],
           pbs: {
             datastoreCount: 2,
-            backupJobCount: 1,
+            backupJobCount: 2,
+            syncJobCount: 1,
+            backupJobs: [
+              {
+                id: 'backup-nightly',
+                store: 'fast',
+                type: 'vm',
+                vmid: '100',
+                lastBackup: '',
+                nextRun: '',
+                status: 'running',
+                error: '',
+              },
+              {
+                id: 'backup-weekly',
+                store: 'archive',
+                type: 'ct',
+                vmid: '200',
+                lastBackup: '',
+                nextRun: '',
+                status: 'ok',
+                error: '',
+              },
+            ],
+            syncJobs: [
+              {
+                id: 'sync-remote',
+                store: 'fast',
+                remote: 'offsite',
+                status: 'queued',
+                lastSync: '',
+                nextRun: '',
+                error: '',
+              },
+            ],
           },
         },
         recentChanges: [
@@ -219,7 +253,7 @@ describe('UnifiedResourceTable workloads links', () => {
     expect(getByText('PBS Services')).toBeInTheDocument();
     expect(getByText('PMG Services')).toBeInTheDocument();
     expect(getByText('Datastores')).toBeInTheDocument();
-    expect(getByText('Jobs')).toBeInTheDocument();
+    expect(getByText('Activity')).toBeInTheDocument();
     expect(getAllByText('Action').length).toBeGreaterThan(0);
     expect(getByText('Queue')).toBeInTheDocument();
     expect(getByText('Deferred')).toBeInTheDocument();
@@ -231,7 +265,8 @@ describe('UnifiedResourceTable workloads links', () => {
     if (pbsRow) {
       const row = within(pbsRow);
       expect(row.getByText('2')).toBeInTheDocument();
-      expect(row.getByText('1')).toBeInTheDocument();
+      expect(row.getByText('2 active')).toBeInTheDocument();
+      expect(row.getByText('3 total')).toBeInTheDocument();
       expect(row.getByText('Timeline 1')).toBeInTheDocument();
       expect(row.queryByText('Capabilities 1')).toBeNull();
       expect(row.queryByText('Relationships 1')).toBeNull();

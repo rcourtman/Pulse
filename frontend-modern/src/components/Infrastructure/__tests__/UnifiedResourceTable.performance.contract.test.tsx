@@ -264,6 +264,14 @@ describe('UnifiedResourceTable performance contract', () => {
       );
     });
 
+    it('keeps PBS activity projection in the shared table-model owner', () => {
+      expect(unifiedResourceTableModelSource).toContain('getPbsActivitySummary');
+      expect(unifiedResourcePBSTableSectionSource).toContain('Activity');
+      expect(unifiedResourcePBSTableSectionSource).not.toContain('backupJobs');
+      expect(unifiedResourcePBSTableSectionSource).not.toContain('syncJobs');
+      expect(unifiedResourcePBSTableSectionSource).not.toContain('getPbsActivitySummary');
+    });
+
     it('keeps infrastructure summary fetch runtime out of the render shell', () => {
       expect(infrastructureSummarySource).toContain('useInfrastructureSummaryState');
       expect(infrastructureSummarySource).not.toContain('fetchInfrastructureSummaryAndCache');

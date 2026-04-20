@@ -1,28 +1,21 @@
 import type { Resource } from '@/types/resource';
 import { getServiceHealthSummaryPresentation } from '@/utils/serviceHealthPresentation';
 import type { IODistributionStats } from '@/components/Infrastructure/infrastructureSelectors';
+import type { PBSPlatformData, PMGPlatformData } from './resourceDetailMappers';
+import {
+  getPbsActivitySummary,
+  getPbsJobTotal,
+} from './resourceDetailDrawerServiceModel';
 
-type PBSServiceData = {
-  datastoreCount?: number;
-  backupJobCount?: number;
-  syncJobCount?: number;
-  verifyJobCount?: number;
-  pruneJobCount?: number;
-  garbageJobCount?: number;
-  connectionHealth?: string;
-};
-
-type PMGServiceData = {
-  nodeCount?: number;
-  queueTotal?: number;
-  queueDeferred?: number;
-  queueHold?: number;
-  connectionHealth?: string;
-};
+type PBSServiceData = PBSPlatformData;
+type PMGServiceData = PMGPlatformData;
 
 export type PBSTableRow = {
   datastores: number | null;
   jobs: number | null;
+  activity: string | null;
+  activityDetail: string | null;
+  activeTaskCount: number;
   health: string | null;
   tone: ReturnType<typeof getServiceHealthSummaryPresentation>['tone'];
 };
@@ -52,17 +45,16 @@ export const getPBSTableRow = (resource: Resource): PBSTableRow | null => {
     | { pbs?: PBSServiceData; pmg?: PMGServiceData }
     | undefined;
   const pbs = platformData?.pbs;
-  const totalJobs =
-    (pbs?.backupJobCount || 0) +
-    (pbs?.syncJobCount || 0) +
-    (pbs?.verifyJobCount || 0) +
-    (pbs?.pruneJobCount || 0) +
-    (pbs?.garbageJobCount || 0);
+  const totalJobs = getPbsJobTotal(pbs);
+  const activitySummary = getPbsActivitySummary(pbs);
   const health = pbs?.connectionHealth?.trim() || null;
 
   return {
     datastores: (pbs?.datastoreCount || 0) > 0 ? pbs?.datastoreCount || 0 : null,
     jobs: totalJobs > 0 ? totalJobs : null,
+    activity: activitySummary.label,
+    activityDetail: activitySummary.detail,
+    activeTaskCount: activitySummary.activeTaskCount,
     health,
     tone: getServiceHealthSummaryPresentation(resource.status, health).tone,
   };

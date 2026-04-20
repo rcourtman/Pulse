@@ -116,6 +116,90 @@ describe('ResourceDetailDrawer service cards', () => {
     );
   });
 
+  it('surfaces active PBS tasks before and inside job detail', () => {
+    const resource = baseResource({
+      id: 'pbs-2',
+      type: 'pbs',
+      name: 'pbs-active',
+      displayName: 'PBS Active',
+      platformId: '192.168.0.9',
+      platformType: 'proxmox-pbs',
+      platformData: {
+        sources: ['pbs'],
+        pbs: {
+          hostname: 'pbs-active.local',
+          connectionHealth: 'online',
+          datastoreCount: 2,
+          backupJobCount: 2,
+          syncJobCount: 1,
+          verifyJobCount: 1,
+          backupJobs: [
+            {
+              id: 'backup-nightly',
+              store: 'fast',
+              type: 'vm',
+              vmid: '100',
+              lastBackup: '',
+              nextRun: '',
+              status: 'running',
+              error: '',
+            },
+            {
+              id: 'backup-weekly',
+              store: 'archive',
+              type: 'ct',
+              vmid: '200',
+              lastBackup: '',
+              nextRun: '',
+              status: 'ok',
+              error: '',
+            },
+          ],
+          syncJobs: [
+            {
+              id: 'sync-remote',
+              store: 'fast',
+              remote: 'offsite',
+              status: 'queued',
+              lastSync: '',
+              nextRun: '',
+              error: '',
+            },
+          ],
+          verifyJobs: [
+            {
+              id: 'verify-1',
+              store: 'fast',
+              status: 'ok',
+              lastVerify: '',
+              nextRun: '',
+              error: '',
+            },
+          ],
+        },
+      },
+    });
+
+    const { getByText, getByRole, getByTestId } = render(() => (
+      <ResourceDetailDrawer resource={resource} />
+    ));
+
+    expect(getByText('2 datastores · 2 active tasks')).toBeInTheDocument();
+    fireEvent.click(getByRole('button', { name: 'Show service' }));
+    const serviceDetails = within(getByTestId('resource-service-details-section'));
+    expect(serviceDetails.getByText('Active tasks')).toBeInTheDocument();
+    expect(serviceDetails.getByText('2')).toBeInTheDocument();
+
+    fireEvent.click(getByRole('button', { name: 'Show jobs' }));
+    const activeTasks = within(getByTestId('pbs-active-tasks'));
+    expect(activeTasks.getByText('Backup backup-nightly')).toBeInTheDocument();
+    expect(activeTasks.getByText('fast · VM 100')).toBeInTheDocument();
+    expect(activeTasks.getByText('Running')).toBeInTheDocument();
+    expect(activeTasks.getByText('Sync sync-remote')).toBeInTheDocument();
+    expect(activeTasks.getByText('fast · Remote offsite')).toBeInTheDocument();
+    expect(activeTasks.getByText('Queued')).toBeInTheDocument();
+  });
+
   it('renders PMG card with compact summary and queue/mail breakdown sections', () => {
     const resource = baseResource({
       id: 'pmg-1',

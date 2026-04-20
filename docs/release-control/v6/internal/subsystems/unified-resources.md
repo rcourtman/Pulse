@@ -726,6 +726,16 @@ explanation surfaces still show the full canonical `aiSafeSummary`,
 `resourceDetailDrawerServiceModel.ts` owns the pure Docker/PBS/PMG service
 summary and breakdown derivations that feed the overview service-details
 surface,
+and PBS running-task visibility is part of that same canonical service model:
+raw backup, sync, verify, prune, and garbage job arrays travel through the
+unified-resource metadata contract in `frontend-modern/src/types/resource.ts`
+and `frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts`,
+`resourceDetailDrawerServiceModel.ts` owns active-task status classification and
+shared activity wording, and both
+`frontend-modern/src/components/Infrastructure/UnifiedResourcePBSTableSection.tsx`
+and `frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx`
+must render from that shared projection instead of rescanning raw job arrays or
+inventing local PBS status heuristics,
 `resourceDetailDrawerIdentityModel.ts` owns the pure identity-card,
 discovery-summary, source-debug, and debug-bundle derivations that feed the
 overview and debug drawer surfaces,

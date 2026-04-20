@@ -633,6 +633,15 @@ while canonical drawer discovery-target derivation now lives in
 under `unified-resources`. Future discovery-config or target-resolution
 changes must extend through that unified-resource owner instead of
 re-accumulating discovery heuristics back into the performance hot-path mapper.
+The PBS service-table hot path now follows that same split: raw job arrays may
+cross the transport boundary, but
+`frontend-modern/src/components/Infrastructure/unifiedResourceTableModel.ts`
+must collapse them into one shared `Activity` presentation via the canonical
+service-model helpers, while
+`frontend-modern/src/components/Infrastructure/UnifiedResourcePBSTableSection.tsx`
+stays a thin render shell. Future running-task visibility changes must extend
+through the shared model and accepted performance proof file instead of adding
+per-row PBS status parsing or inline job scans in the table render path.
 The dashboard disk list now follows the same pattern: the shell stays in
 `frontend-modern/src/components/Dashboard/DiskList.tsx`, while disk-row
 presentation derivations and fallback tooltip/runtime wiring live in

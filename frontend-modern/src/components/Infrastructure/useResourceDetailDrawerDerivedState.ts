@@ -36,6 +36,7 @@ import {
 } from '@/components/Infrastructure/resourceDetailMappers';
 import { toDiscoveryConfig } from '@/components/Infrastructure/resourceDetailDiscoveryModel';
 import {
+  buildPbsActiveTasks,
   buildPbsVisibleJobBreakdown,
   buildPmgVisibleMailBreakdown,
   buildPmgVisibleQueueBreakdown,
@@ -216,6 +217,8 @@ export const useResourceDetailDrawerDerivedState = (
     return formatRelativeTime(parsed);
   });
   const pbsVisibleJobBreakdown = createMemo(() => buildPbsVisibleJobBreakdown(pbsData()));
+  const pbsActiveTasks = createMemo(() => buildPbsActiveTasks(pbsData()));
+  const pbsActiveTaskCount = createMemo(() => pbsActiveTasks().length);
   const pmgVisibleQueueBreakdown = createMemo(() => buildPmgVisibleQueueBreakdown(pmgData()));
   const pmgVisibleMailBreakdown = createMemo(() => buildPmgVisibleMailBreakdown(pmgData()));
 
@@ -359,6 +362,8 @@ export const useResourceDetailDrawerDerivedState = (
     pbsData,
     pmgData,
     pbsJobTotal,
+    pbsActiveTasks,
+    pbsActiveTaskCount,
     pmgQueueBacklog,
     pmgUpdatedRelative,
     pbsVisibleJobBreakdown,

@@ -950,9 +950,17 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
                           </span>
                         </div>
                       </Show>
+                      <Show when={drawer.pbsActiveTaskCount() > 0}>
+                        <div class="flex items-center justify-between gap-2">
+                          <span class="text-muted">Active tasks</span>
+                          <span class="font-medium text-emerald-700 dark:text-emerald-300">
+                            {formatInteger(drawer.pbsActiveTaskCount())}
+                          </span>
+                        </div>
+                      </Show>
                       <Show when={drawer.showPbsJobDetail()}>
                         <div class="space-y-1.5 border-t border-indigo-200 pt-2 dark:border-indigo-700">
-                          <div class="grid grid-cols-2 gap-2">
+                          <div class="grid grid-cols-2 gap-2 md:grid-cols-3">
                             <div class="rounded border border-indigo-200 bg-surface px-2 py-1.5 dark:border-indigo-700">
                               <div class="text-[10px] text-muted">Datastores</div>
                               <div class="text-sm font-semibold text-base-content">
@@ -965,7 +973,65 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
                                 {formatInteger(drawer.pbsJobTotal())}
                               </div>
                             </div>
+                            <Show when={drawer.pbsActiveTaskCount() > 0}>
+                              <div class="rounded border border-emerald-200 bg-emerald-50 px-2 py-1.5 dark:border-emerald-700 dark:bg-emerald-950/40">
+                                <div class="text-[10px] text-muted">Active</div>
+                                <div class="text-sm font-semibold text-emerald-700 dark:text-emerald-300">
+                                  {formatInteger(drawer.pbsActiveTaskCount())}
+                                </div>
+                              </div>
+                            </Show>
                           </div>
+                          <Show when={drawer.pbsActiveTaskCount() > 0}>
+                            <div
+                              data-testid="pbs-active-tasks"
+                              class="rounded border border-emerald-200 bg-surface px-2 py-1.5 dark:border-emerald-700"
+                            >
+                              <div class="flex items-center justify-between gap-2">
+                                <span class="text-[10px] font-medium uppercase tracking-wide text-muted">
+                                  Active tasks
+                                </span>
+                                <span class="text-[10px] font-semibold text-emerald-700 dark:text-emerald-300">
+                                  {formatInteger(drawer.pbsActiveTaskCount())}
+                                </span>
+                              </div>
+                              <div class="mt-2 space-y-2 border-t border-emerald-200 pt-2 dark:border-emerald-700">
+                                <For each={drawer.pbsActiveTasks()}>
+                                  {(task) => (
+                                    <div class="flex items-start justify-between gap-2 text-[10px]">
+                                      <div class="min-w-0">
+                                        <div
+                                          class="truncate font-medium text-base-content"
+                                          title={task.label}
+                                        >
+                                          {task.label}
+                                        </div>
+                                        <Show when={task.context}>
+                                          <div
+                                            class="truncate text-muted"
+                                            title={task.context ?? undefined}
+                                          >
+                                            {task.context}
+                                          </div>
+                                        </Show>
+                                        <Show when={task.error}>
+                                          <div
+                                            class="truncate text-rose-700 dark:text-rose-300"
+                                            title={task.error}
+                                          >
+                                            {task.error}
+                                          </div>
+                                        </Show>
+                                      </div>
+                                      <span class="shrink-0 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 font-medium text-emerald-700 dark:border-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
+                                        {task.statusLabel}
+                                      </span>
+                                    </div>
+                                  )}
+                                </For>
+                              </div>
+                            </div>
+                          </Show>
                           <details class="rounded border border-indigo-200 bg-surface px-2 py-1.5 dark:border-indigo-700">
                             <summary class="flex cursor-pointer list-none items-center justify-between text-[10px] font-medium text-muted">
                               <span>Types</span>

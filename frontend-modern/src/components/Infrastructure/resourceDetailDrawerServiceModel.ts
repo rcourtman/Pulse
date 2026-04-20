@@ -1,30 +1,21 @@
-import type { DockerPlatformData } from './resourceDetailMappers';
+import type {
+  DockerPlatformData,
+  PBSPlatformData,
+  PMGPlatformData,
+} from './resourceDetailMappers';
 import { formatInteger } from './resourceDetailMappers';
+import type {
+  PBSBackupJob,
+  PBSGarbageJob,
+  PBSPruneJob,
+  PBSSyncJob,
+  PBSVerifyJob,
+} from '@/types/api';
 
 export type ResourceDetailValueBreakdownEntry = {
   label: string;
   value: number;
   warn?: boolean;
-};
-
-type PbsPlatformDataLike = {
-  datastoreCount?: number;
-  backupJobCount?: number;
-  syncJobCount?: number;
-  verifyJobCount?: number;
-  pruneJobCount?: number;
-  garbageJobCount?: number;
-};
-
-type PmgPlatformDataLike = {
-  queueTotal?: number;
-  queueActive?: number;
-  queueDeferred?: number;
-  queueHold?: number;
-  queueIncoming?: number;
-  mailCountTotal?: number;
-  spamIn?: number;
-  virusIn?: number;
 };
 
 const filterVisibleBreakdown = <T extends ResourceDetailValueBreakdownEntry>(
@@ -37,7 +28,131 @@ const filterVisibleBreakdown = <T extends ResourceDetailValueBreakdownEntry>(
 const formatCount = (value: number, singular: string, plural = `${singular}s`): string =>
   `${formatInteger(value)} ${value === 1 ? singular : plural}`;
 
-export const getPbsJobTotal = (pbs: PbsPlatformDataLike | undefined): number => {
+const normalizeDelimitedLabel = (value: string): string =>
+  value
+    .trim()
+    .split(/[\s_-]+/)
+    .filter((part) => part.length > 0)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+
+const normalizePbsTaskStatus = (status?: string): string =>
+  (status || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[_-]+/g, ' ')
+    .replace(/\s+/g, ' ');
+
+const PBS_ACTIVE_STATUS_TOKENS = [
+  'running',
+  'active',
+  'queued',
+  'pending',
+  'starting',
+  'started',
+  'in progress',
+] as const;
+
+const PBS_INACTIVE_STATUS_TOKENS = [
+  'ok',
+  'idle',
+  'stopped',
+  'disabled',
+  'error',
+  'failed',
+  'warning',
+  'unknown',
+  'success',
+  'successful',
+  'complete',
+  'completed',
+  'scheduled',
+] as const;
+
+const hasStatusToken = (status: string, token: string): boolean =>
+  new RegExp(`(?:^|\\b)${token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:$|\\b)`, 'i').test(
+    status,
+  );
+
+const isPbsTaskStatusActive = (status?: string): boolean => {
+  const normalized = normalizePbsTaskStatus(status);
+  if (!normalized) return false;
+  if (PBS_INACTIVE_STATUS_TOKENS.some((token) => hasStatusToken(normalized, token))) {
+    return false;
+  }
+  return PBS_ACTIVE_STATUS_TOKENS.some((token) => hasStatusToken(normalized, token));
+};
+
+const formatPbsTaskStatusLabel = (status?: string): string => {
+  const normalized = normalizePbsTaskStatus(status);
+  if (!normalized) return 'Active';
+  return normalizeDelimitedLabel(normalized);
+};
+
+const joinPbsTaskContext = (...parts: Array<string | null | undefined>): string | null => {
+  const filtered = parts
+    .map((part) => part?.trim())
+    .filter((part): part is string => Boolean(part));
+  return filtered.length > 0 ? filtered.join(' · ') : null;
+};
+
+const formatPbsBackupWorkload = (type?: string, vmid?: string): string | null => {
+  const normalizedType = (type || '').trim().toLowerCase();
+  if (!normalizedType && !(vmid || '').trim()) return null;
+  const typeLabel =
+    normalizedType === 'vm'
+      ? 'VM'
+      : normalizedType === 'ct'
+        ? 'Container'
+        : normalizedType
+          ? normalizeDelimitedLabel(normalizedType)
+          : 'Workload';
+  const workloadId = (vmid || '').trim();
+  return workloadId ? `${typeLabel} ${workloadId}` : typeLabel;
+};
+
+const buildPbsTaskLabel = (taskType: string, id?: string): string => {
+  const normalizedId = (id || '').trim();
+  return normalizedId ? `${taskType} ${normalizedId}` : taskType;
+};
+
+export type PbsActiveTaskEntry = {
+  id: string;
+  label: string;
+  context: string | null;
+  statusLabel: string;
+  error?: string;
+};
+
+export type PbsActivitySummary = {
+  label: string | null;
+  detail: string | null;
+  activeTaskCount: number;
+};
+
+const buildPbsActiveTaskEntry = (
+  taskType: string,
+  job:
+    | PBSBackupJob
+    | PBSSyncJob
+    | PBSVerifyJob
+    | PBSPruneJob
+    | PBSGarbageJob,
+  context: string | null,
+): PbsActiveTaskEntry | null => {
+  if (!isPbsTaskStatusActive(job.status)) {
+    return null;
+  }
+  return {
+    id: job.id,
+    label: buildPbsTaskLabel(taskType, job.id),
+    context,
+    statusLabel: formatPbsTaskStatusLabel(job.status),
+    error: job.error?.trim() || undefined,
+  };
+};
+
+export const getPbsJobTotal = (pbs: PBSPlatformData | undefined): number => {
   if (!pbs) return 0;
   return (
     (pbs.backupJobCount || 0) +
@@ -49,7 +164,7 @@ export const getPbsJobTotal = (pbs: PbsPlatformDataLike | undefined): number => 
 };
 
 export const buildPbsVisibleJobBreakdown = (
-  pbs: PbsPlatformDataLike | undefined,
+  pbs: PBSPlatformData | undefined,
 ): ResourceDetailValueBreakdownEntry[] => {
   if (!pbs) return [];
 
@@ -62,11 +177,78 @@ export const buildPbsVisibleJobBreakdown = (
   ]);
 };
 
-export const getPmgQueueBacklog = (pmg: PmgPlatformDataLike | undefined): number =>
+export const buildPbsActiveTasks = (pbs: PBSPlatformData | undefined): PbsActiveTaskEntry[] => {
+  if (!pbs) return [];
+
+  const tasks: PbsActiveTaskEntry[] = [];
+
+  for (const job of pbs.backupJobs ?? []) {
+    const entry = buildPbsActiveTaskEntry(
+      'Backup',
+      job,
+      joinPbsTaskContext(job.store, formatPbsBackupWorkload(job.type, job.vmid)),
+    );
+    if (entry) tasks.push(entry);
+  }
+
+  for (const job of pbs.syncJobs ?? []) {
+    const entry = buildPbsActiveTaskEntry(
+      'Sync',
+      job,
+      joinPbsTaskContext(job.store, job.remote ? `Remote ${job.remote}` : null),
+    );
+    if (entry) tasks.push(entry);
+  }
+
+  for (const job of pbs.verifyJobs ?? []) {
+    const entry = buildPbsActiveTaskEntry('Verify', job, joinPbsTaskContext(job.store));
+    if (entry) tasks.push(entry);
+  }
+
+  for (const job of pbs.pruneJobs ?? []) {
+    const entry = buildPbsActiveTaskEntry('Prune', job, joinPbsTaskContext(job.store));
+    if (entry) tasks.push(entry);
+  }
+
+  for (const job of pbs.garbageJobs ?? []) {
+    const entry = buildPbsActiveTaskEntry(
+      'Garbage Collection',
+      job,
+      joinPbsTaskContext(job.store),
+    );
+    if (entry) tasks.push(entry);
+  }
+
+  return tasks;
+};
+
+export const getPbsActivitySummary = (
+  pbs: PBSPlatformData | undefined,
+): PbsActivitySummary => {
+  const totalJobs = getPbsJobTotal(pbs);
+  const activeTaskCount = buildPbsActiveTasks(pbs).length;
+
+  if (activeTaskCount > 0) {
+    return {
+      label: `${formatInteger(activeTaskCount)} active`,
+      detail:
+        totalJobs > activeTaskCount ? `${formatInteger(totalJobs)} total` : null,
+      activeTaskCount,
+    };
+  }
+
+  return {
+    label: totalJobs > 0 ? `${formatInteger(totalJobs)} jobs` : null,
+    detail: null,
+    activeTaskCount: 0,
+  };
+};
+
+export const getPmgQueueBacklog = (pmg: PMGPlatformData | undefined): number =>
   !pmg ? 0 : (pmg.queueDeferred || 0) + (pmg.queueHold || 0);
 
 export const buildPmgVisibleQueueBreakdown = (
-  pmg: PmgPlatformDataLike | undefined,
+  pmg: PMGPlatformData | undefined,
 ): ResourceDetailValueBreakdownEntry[] => {
   if (!pmg) return [];
 
@@ -79,7 +261,7 @@ export const buildPmgVisibleQueueBreakdown = (
 };
 
 export const buildPmgVisibleMailBreakdown = (
-  pmg: PmgPlatformDataLike | undefined,
+  pmg: PMGPlatformData | undefined,
 ): ResourceDetailValueBreakdownEntry[] => {
   if (!pmg) return [];
 
@@ -93,8 +275,8 @@ export const buildPmgVisibleMailBreakdown = (
 export const getServiceDetailsSummary = (args: {
   resourceType: string;
   docker: DockerPlatformData | undefined;
-  pbs: PbsPlatformDataLike | undefined;
-  pmg: PmgPlatformDataLike | undefined;
+  pbs: PBSPlatformData | undefined;
+  pmg: PMGPlatformData | undefined;
 }): string | null => {
   const { resourceType, docker, pbs, pmg } = args;
 
@@ -106,9 +288,10 @@ export const getServiceDetailsSummary = (args: {
   }
 
   if (pbs) {
+    const activeTaskCount = buildPbsActiveTasks(pbs).length;
     return `${formatCount(pbs.datastoreCount || 0, 'datastore')} · ${formatCount(
-      getPbsJobTotal(pbs),
-      'job',
+      activeTaskCount > 0 ? activeTaskCount : getPbsJobTotal(pbs),
+      activeTaskCount > 0 ? 'active task' : 'job',
     )}`;
   }
 
