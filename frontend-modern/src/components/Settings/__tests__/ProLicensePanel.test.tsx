@@ -200,6 +200,25 @@ describe('ProLicensePanel', () => {
     ).not.toBeInTheDocument();
   });
 
+  it('shows the compare-plans prompt by default when no paid self-hosted plan is active', async () => {
+    renderPanel();
+
+    await waitFor(() => {
+      expect(loadLicenseEntitlementsMock).toHaveBeenCalled();
+    });
+
+    expect(screen.getAllByText('Compare self-hosted plans').length).toBeGreaterThan(0);
+    expect(screen.getByText(/Community keeps core monitoring free/i)).toBeInTheDocument();
+    const compareLinks = screen.getAllByRole('link', { name: 'Compare plans' });
+    expect(
+      compareLinks.some(
+        (link) =>
+          link.getAttribute('href') ===
+          getSelfHostedPurchaseStartUrl(SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_INTENT),
+      ),
+    ).toBe(true);
+  });
+
   it('hides start trial action and shows trial-ended banner when trial was already used', async () => {
     mockEntitlements = {
       capabilities: [],

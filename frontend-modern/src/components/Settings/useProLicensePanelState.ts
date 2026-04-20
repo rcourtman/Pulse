@@ -224,17 +224,30 @@ export function useProLicensePanelState() {
       activeSection() === 'plan' &&
       getSelfHostedBillingPlanDetail(location.search) === SELF_HOSTED_PRO_BILLING_RECOVERY_DETAIL,
   );
+  const showDefaultPlanSelectionPrompt = createMemo(() => {
+    const current = entitlements();
+    if (!current) {
+      return false;
+    }
+    if (!panelDataSettled() || licenseEntitlementsLoadError()) {
+      return false;
+    }
+    if (current.commercial_migration?.state) {
+      return false;
+    }
+    const state = subscriptionState();
+    return state !== 'active' && state !== 'trial' && state !== 'grace';
+  });
   const showPlanSelectionPrompt = createMemo(
     () =>
       activeSection() === 'plan' &&
-      getSelfHostedBillingPlanIntent(location.search) ===
-        SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_INTENT,
+      purchaseActivationResult().trim().length === 0 &&
+      (getSelfHostedBillingPlanIntent(location.search) ===
+        SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_INTENT ||
+        showDefaultPlanSelectionPrompt()),
   );
   const planSelectionPrompt = createMemo(() => {
-    if (
-      !showPlanSelectionPrompt() ||
-      purchaseActivationResult().trim().length > 0
-    ) {
+    if (!showPlanSelectionPrompt()) {
       return null;
     }
     return {

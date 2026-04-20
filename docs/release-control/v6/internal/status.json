@@ -625,7 +625,7 @@
         },
         {
           "repo": "pulse",
-          "path": "docs/release-control/v6/internal/records/self-hosted-commercial-ga-coherence-blocked-2026-04-20.md",
+          "path": "docs/release-control/v6/internal/records/self-hosted-commercial-ga-coherence-2026-04-20.md",
           "kind": "file"
         },
         {
@@ -2448,15 +2448,11 @@
       "status": "partial",
       "completion": {
         "state": "bounded-residual",
-        "summary": "Commercial conversion surfaces are at the current tracked RC floor, but GA promotion still depends on a coherent self-hosted commercial package across the public site, upgrade/trial paths, checkout/account flows, and GA-facing guidance.",
+        "summary": "Commercial conversion surfaces are now coherent through the preview and app-side rehearsal path, while the production public flip and release-day rollout execution remain a separate promotion-time follow-up.",
         "tracking": [
           {
             "kind": "lane-followup",
             "id": "commercial-ga-promotion-package"
-          },
-          {
-            "kind": "release-gate",
-            "id": "self-hosted-commercial-ga-coherence"
           }
         ]
       },
@@ -2471,6 +2467,11 @@
         {
           "repo": "pulse",
           "path": "docs/release-control/v6/internal/records/cloud-msp-price-audit-2026-03-13.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/self-hosted-commercial-ga-coherence-2026-04-20.md",
           "kind": "file"
         },
         {
@@ -3752,7 +3753,7 @@
       "owner": "project-owner",
       "blocking_level": "release-ready",
       "minimum_evidence_tier": "real-external-e2e",
-      "status": "blocked",
+      "status": "passed",
       "verification_doc": "docs/release-control/v6/internal/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
       "lane_ids": [
         "L2",
@@ -3763,9 +3764,9 @@
       "evidence": [
         {
           "repo": "pulse",
-          "path": "docs/release-control/v6/internal/records/self-hosted-commercial-ga-coherence-blocked-2026-04-20.md",
+          "path": "docs/release-control/v6/internal/records/self-hosted-commercial-ga-coherence-2026-04-20.md",
           "kind": "file",
-          "evidence_tier": "local-rehearsal"
+          "evidence_tier": "real-external-e2e"
         }
       ]
     },
@@ -3935,7 +3936,7 @@
     },
     {
       "id": "commercial-ga-promotion-package",
-      "summary": "Track the lane-local self-hosted commercial GA package: public landing, pricing story, upgrade/trial path, checkout and Pulse Account/license-management flows, and GA-facing guidance must describe one coherent Community / Relay / Pro product before promotion is executed.",
+      "summary": "Track the production public flip and release-day execution work for the self-hosted commercial package now that preview, in-app entry, checkout handoff, and Pulse Account coherence are already proved.",
       "owner": "project-owner",
       "status": "planned",
       "recorded_at": "2026-04-20",

@@ -191,7 +191,7 @@ Companion drill:
   encountering contradictory plan copy, preview-only posture, or legacy-v5
   bridge messaging.
 - Latest exercised record:
-  `docs/release-control/v6/internal/records/self-hosted-commercial-ga-coherence-blocked-2026-04-20.md`
+  `docs/release-control/v6/internal/records/self-hosted-commercial-ga-coherence-2026-04-20.md`
 - Block release if:
   GA can still be promoted while the public self-hosted commercial path remains
   transitional, contradictory, or dependent on RC-only bridge posture.

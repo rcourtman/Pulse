@@ -208,7 +208,10 @@ Community limit enforcement.
     intent. That plan-selection arrival must reopen an explicit
     `Compare self-hosted plans` prompt inside Plans & Billing so operators can
     review the self-hosted upgrade path without falling back to the legacy
-    usage surface or a dead-end placeholder CTA.
+    usage surface or a dead-end placeholder CTA. The same owned plan route must
+    also reopen that compare-plans prompt by default for expired or no-paid
+    self-hosted installs, so `Plans & Billing` remains actionable even when the
+    operator arrives without an explicit `intent=self_hosted_plan` link.
 24. Keep public-demo dashboard bootstrap route-owned on the adjacent
     commercial/runtime boundary. `frontend-modern/src/useAppRuntimeState.ts`
     may prewarm shared infrastructure summary caches for non-dashboard routes,
