@@ -2,19 +2,56 @@ import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ConnectionsTable } from '../ConnectionsTable';
 import type { InfrastructureSystemRow } from '../connectionsTableModel';
+import type { Connection } from '@/api/connections';
+import type { ConnectionRowActions } from '../useConnectionRowActions';
 
-const row = (overrides: Partial<InfrastructureSystemRow> = {}): InfrastructureSystemRow => ({
-  id: 'row-1',
+const connectionFixture = (overrides: Partial<Connection> = {}): Connection => ({
+  id: 'pve:tower',
+  type: 'pve',
   name: 'tower',
-  subtitle: undefined,
-  host: '10.0.0.1',
-  coverageLabels: ['Host telemetry'],
-  collectionLabel: 'Agent',
-  statusLabel: 'online',
-  statusClassName: 'bg-green-100 text-green-800',
-  lastActivityText: '5s ago',
-  manageLabel: 'View details',
-  manage: { kind: 'connection', connectionId: 'row-1' },
+  address: 'https://tower.local:8006',
+  state: 'active',
+  stateReason: '',
+  enabled: true,
+  surfaces: ['vms'],
+  scope: { vms: true },
+  lastSeen: null,
+  lastError: null,
+  source: 'manual',
+  capabilities: { supportsPause: true, supportsScope: true, supportsTest: true },
+  ...overrides,
+});
+
+const row = (overrides: Partial<InfrastructureSystemRow> = {}): InfrastructureSystemRow => {
+  const connection = overrides.connection ?? connectionFixture();
+  return {
+    id: overrides.id ?? connection.id,
+    name: overrides.name ?? 'tower',
+    subtitle: undefined,
+    host: '10.0.0.1',
+    coverageLabels: ['Host telemetry'],
+    collectionLabel: 'Agent',
+    statusLabel: 'online',
+    statusClassName: 'bg-green-100 text-green-800',
+    lastActivityText: '5s ago',
+    lastErrorMessage: undefined,
+    enabled: connection.enabled,
+    canEdit: true,
+    canPause: connection.capabilities.supportsPause,
+    canRemove: connection.type !== 'docker' && connection.type !== 'kubernetes',
+    isAgent: connection.type === 'agent',
+    connection,
+    ...overrides,
+  };
+};
+
+const makeActions = (overrides: Partial<ConnectionRowActions> = {}): ConnectionRowActions => ({
+  pendingAction: () => null,
+  actionError: () => null,
+  confirmingRemove: () => false,
+  togglePause: vi.fn(),
+  requestRemove: vi.fn(),
+  cancelRemove: vi.fn(),
   ...overrides,
 });
 
@@ -22,90 +59,191 @@ describe('ConnectionsTable', () => {
   afterEach(() => cleanup());
 
   it('renders an empty-state hint when no rows exist', () => {
-    render(() => (
-      <ConnectionsTable rows={() => []} />
-    ) as any);
+    render(() => <ConnectionsTable rows={() => []} />);
 
     expect(screen.getByText(/No monitored systems yet/i)).toBeInTheDocument();
     expect(screen.queryByRole('table')).toBeNull();
   });
 
-  it('renders one row per top-level monitored system with coverage, collection, and status labels', () => {
+  it('renders one row per monitored system with coverage, collection, and status labels', () => {
     render(() => (
       <ConnectionsTable
         rows={() => [
           row(),
           row({
-            id: 'row-2',
-            name: 'pbs-docker',
-            subtitle: 'Ignored by Pulse',
+            id: 'truenas:nas',
+            name: 'nas',
+            subtitle: 'TrueNAS',
             host: undefined,
-            coverageLabels: ['PBS data'],
+            coverageLabels: ['Datasets'],
             collectionLabel: 'API',
-            statusLabel: 'Ignored',
-            manageLabel: 'Review ignored',
-            manage: { kind: 'connection', connectionId: 'row-2' },
+            statusLabel: 'Paused',
+            connection: connectionFixture({ id: 'truenas:nas', type: 'truenas', name: 'nas' }),
           }),
         ]}
       />
-    ) as any);
+    ));
 
     expect(screen.getByRole('table')).toBeInTheDocument();
     expect(screen.getByText('tower')).toBeInTheDocument();
-    expect(screen.getByText('pbs-docker')).toBeInTheDocument();
-    expect(screen.getByText('Ignored by Pulse')).toBeInTheDocument();
-    expect(screen.getByText('Host telemetry')).toBeInTheDocument();
-    expect(screen.getAllByText('API')).toHaveLength(2);
-    expect(screen.getAllByText('Agent')).toHaveLength(2);
-    expect(screen.getByText('Ignored')).toBeInTheDocument();
+    expect(screen.getByText('nas')).toBeInTheDocument();
+    expect(screen.getByText('TrueNAS')).toBeInTheDocument();
+    expect(screen.getByText('Datasets')).toBeInTheDocument();
+    expect(screen.getByText('Paused')).toBeInTheDocument();
     expect(screen.getByText('online')).toBeInTheDocument();
   });
 
-  it('uses the responsive ledger layout without the legacy fixed minimum width', () => {
-    render(() => (
-      <ConnectionsTable rows={() => [row()]} onManageRow={vi.fn()} />
-    ) as any);
-
-    const table = screen.getByRole('table');
-    expect(table).toHaveClass('table-fixed');
-    expect(table.className).toContain('!whitespace-normal');
-    expect(table.className).not.toContain('min-w-[1040px]');
-    expect(screen.getAllByText('Agent')).toHaveLength(2);
-    expect(screen.getAllByText('5s ago')).toHaveLength(2);
-  });
-
-  it('surfaces configured header actions when provided', () => {
-    const onAddSystem = vi.fn();
+  it('surfaces configured header actions', () => {
+    const onAdd = vi.fn();
     render(() => (
       <ConnectionsTable
         rows={() => []}
-        headerActions={[
-          {
-            label: 'Add infrastructure',
-            onSelect: onAddSystem,
-            tone: 'primary',
-          },
-        ]}
+        headerActions={[{ label: 'Add connection', onSelect: onAdd, tone: 'primary' }]}
       />
-    ) as any);
+    ));
 
-    const button = screen.getByRole('button', { name: /Add infrastructure/i });
-    fireEvent.click(button);
-    expect(onAddSystem).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole('button', { name: /Add connection/i }));
+    expect(onAdd).toHaveBeenCalledTimes(1);
   });
 
-  it('routes per-row manage actions through the provided callback', () => {
-    const onManageRow = vi.fn();
+  it('shows lastErrorMessage inline on the row when present', () => {
     render(() => (
-      <ConnectionsTable rows={() => [row()]} onManageRow={onManageRow} />
-    ) as any);
+      <ConnectionsTable
+        rows={() => [row({ lastErrorMessage: 'certificate expired' })]}
+      />
+    ));
 
-    fireEvent.click(screen.getByRole('button', { name: 'View details' }));
-    expect(onManageRow).toHaveBeenCalledWith(
-      expect.objectContaining({
-        id: 'row-1',
-        manage: { kind: 'connection', connectionId: 'row-1' },
-      }),
-    );
+    expect(screen.getByText('certificate expired')).toBeInTheDocument();
+  });
+
+  it('renders Edit / Pause / Remove buttons when actions and onEdit are provided', () => {
+    const onEdit = vi.fn();
+    const actions = makeActions();
+    render(() => (
+      <ConnectionsTable rows={() => [row()]} actions={actions} onEdit={onEdit} />
+    ));
+
+    expect(screen.getByRole('button', { name: 'Edit' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Pause' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Remove' })).toBeInTheDocument();
+  });
+
+  it('invokes onEdit with the underlying Connection', () => {
+    const onEdit = vi.fn();
+    const connection = connectionFixture({ id: 'pve:zeus', name: 'zeus' });
+    render(() => (
+      <ConnectionsTable
+        rows={() => [row({ connection })]}
+        actions={makeActions()}
+        onEdit={onEdit}
+      />
+    ));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    expect(onEdit).toHaveBeenCalledTimes(1);
+    expect(onEdit).toHaveBeenCalledWith(connection);
+  });
+
+  it('invokes togglePause with the Connection when Pause is clicked', () => {
+    const togglePause = vi.fn();
+    const actions = makeActions({ togglePause });
+    const connection = connectionFixture();
+    render(() => (
+      <ConnectionsTable
+        rows={() => [row({ connection })]}
+        actions={actions}
+        onEdit={vi.fn()}
+      />
+    ));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Pause' }));
+    expect(togglePause).toHaveBeenCalledWith(connection);
+  });
+
+  it('labels the pause button Resume when the connection is already paused', () => {
+    const connection = connectionFixture({ enabled: false });
+    render(() => (
+      <ConnectionsTable
+        rows={() => [row({ connection, enabled: false })]}
+        actions={makeActions()}
+      />
+    ));
+
+    expect(screen.getByRole('button', { name: 'Resume' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Pause' })).toBeNull();
+  });
+
+  it('surfaces the row-specific actionError inside an alert', () => {
+    const actions = makeActions({ actionError: () => 'permission denied' });
+    render(() => (
+      <ConnectionsTable rows={() => [row()]} actions={actions} onEdit={vi.fn()} />
+    ));
+
+    expect(screen.getByRole('alert')).toHaveTextContent('permission denied');
+  });
+
+  it('swaps the remove button into a confirming state when confirmingRemove is true', () => {
+    const actions = makeActions({ confirmingRemove: () => true });
+    render(() => (
+      <ConnectionsTable rows={() => [row()]} actions={actions} onEdit={vi.fn()} />
+    ));
+
+    expect(screen.getByRole('button', { name: /Click again to confirm/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Remove' })).toBeNull();
+  });
+
+  it('reveals the agent uninstall commands while confirming removal of an agent row', () => {
+    const actions = makeActions({ confirmingRemove: () => true });
+    const agentConnection = connectionFixture({
+      id: 'agent:host-1',
+      type: 'agent',
+      name: 'host-1',
+      capabilities: { supportsPause: false, supportsScope: false, supportsTest: false },
+    });
+    render(() => (
+      <ConnectionsTable
+        rows={() => [
+          row({
+            connection: agentConnection,
+            isAgent: true,
+            canPause: false,
+          }),
+        ]}
+        actions={actions}
+        onEdit={vi.fn()}
+        agentUninstallCommands={{
+          linux: 'curl -fsSL http://pulse/install.sh | bash -s -- --uninstall',
+          windows: '$env:PULSE_URL="http://pulse"; $env:PULSE_UNINSTALL="true"; iwr /install.ps1 | iex',
+        }}
+      />
+    ));
+
+    expect(screen.getByText(/Removing forgets this agent/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/curl -fsSL http:\/\/pulse\/install\.sh \| bash -s -- --uninstall/),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/\$env:PULSE_UNINSTALL="true"/),
+    ).toBeInTheDocument();
+  });
+
+  it('does not render action buttons when the row model forbids them', () => {
+    render(() => (
+      <ConnectionsTable
+        rows={() => [
+          row({
+            canEdit: false,
+            canPause: false,
+            canRemove: false,
+          }),
+        ]}
+        actions={makeActions()}
+        onEdit={vi.fn()}
+      />
+    ));
+
+    expect(screen.queryByRole('button', { name: 'Edit' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Pause' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Remove' })).toBeNull();
   });
 });

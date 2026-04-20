@@ -259,10 +259,12 @@ work extends shared components instead of creating new local variants.
    the aggregator. `InfrastructureWorkspace.tsx` composes the default
    table rows from
    `frontend-modern/src/components/Settings/useConnectionsLedger.ts`
-   (polling `GET /api/connections`) and the unified row click opens
-   `frontend-modern/src/components/Settings/ConnectionDetailPanel.tsx`
-   inline as a workspace mode, which reads the aggregator fields
-   directly and must not be re-wrapped as a floating `Dialog` drawer. Phase 9 retired the
+   (polling `GET /api/connections`) and renders per-row Edit, Pause, and
+   Remove actions inline via
+   `frontend-modern/src/components/Settings/useConnectionRowActions.ts`;
+   last-error detail and agent uninstall commands surface on the row
+   itself rather than behind a separate detail page or `Dialog` drawer.
+   Phase 9 retired the
    parallel reporting/inventory surface entirely:
    `useInfrastructureReportingState`, `InfrastructureOperationsController`,
    `InfrastructureInventorySection`, `InfrastructureActiveRowDetails`,

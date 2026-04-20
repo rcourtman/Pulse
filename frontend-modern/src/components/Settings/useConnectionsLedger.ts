@@ -108,6 +108,14 @@ const subtitleFor = (connection: Connection): string | undefined => {
   return CONNECTION_TYPE_LABELS[connection.type] ?? connection.type;
 };
 
+const EDITABLE_CONNECTION_TYPES: readonly ConnectionType[] = [
+  'pve',
+  'pbs',
+  'pmg',
+  'vmware',
+  'truenas',
+];
+
 export const connectionToRow = (connection: Connection): InfrastructureSystemRow => {
   const presentation = STATE_PRESENTATION[connection.state] ?? STATE_PRESENTATION.pending;
   const activeScopeKeys = Object.keys(connection.scope ?? {}).filter(
@@ -127,8 +135,13 @@ export const connectionToRow = (connection: Connection): InfrastructureSystemRow
     statusLabel: presentation.label,
     statusClassName: presentation.badgeClass,
     lastActivityText: lastActivityText(connection),
-    manageLabel: 'View details',
-    manage: { kind: 'connection', connectionId: connection.id },
+    lastErrorMessage: connection.lastError?.message,
+    enabled: connection.enabled,
+    canEdit: EDITABLE_CONNECTION_TYPES.includes(connection.type),
+    canPause: connection.capabilities.supportsPause,
+    canRemove: connection.type !== 'docker' && connection.type !== 'kubernetes',
+    isAgent: connection.type === 'agent',
+    connection,
   };
 };
 

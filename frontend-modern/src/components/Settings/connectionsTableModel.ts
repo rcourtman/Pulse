@@ -1,4 +1,4 @@
-export type SystemManageAction = { kind: 'connection'; connectionId: string };
+import type { Connection } from '@/api/connections';
 
 export interface InfrastructureSystemRow {
   id: string;
@@ -10,6 +10,11 @@ export interface InfrastructureSystemRow {
   statusLabel: string;
   statusClassName: string;
   lastActivityText: string;
-  manageLabel: string;
-  manage: SystemManageAction;
+  lastErrorMessage?: string;
+  enabled: boolean;
+  canEdit: boolean;
+  canPause: boolean;
+  canRemove: boolean;
+  isAgent: boolean;
+  connection: Connection;
 }

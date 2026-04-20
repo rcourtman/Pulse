@@ -1,10 +1,10 @@
 import { Component, Match, Show, Switch, createEffect, createMemo, createSignal } from 'solid-js';
 import { useLocation, useNavigate, useSearchParams } from '@solidjs/router';
 import { presentationPolicyIsReadOnly } from '@/stores/sessionPresentationPolicy';
+import { copyToClipboard } from '@/utils/clipboard';
+import { notificationStore } from '@/stores/notifications';
 import { AgentProfilesPanel } from './AgentProfilesPanel';
-import { ConnectionDetailPanel } from './ConnectionDetailPanel';
 import { ConnectionsTable, type ConnectionsTableHeaderAction } from './ConnectionsTable';
-import type { InfrastructureSystemRow, SystemManageAction } from './connectionsTableModel';
 import { ConnectionEditor } from './ConnectionEditor/ConnectionEditor';
 import { NodeCredentialSlot } from './ConnectionEditor/CredentialSlots/NodeCredentialSlot';
 import { TrueNASCredentialSlot } from './ConnectionEditor/CredentialSlots/TrueNASCredentialSlot';
@@ -23,7 +23,11 @@ import {
 } from './infrastructureWorkspaceModel';
 import type { InfrastructurePlatformSettingsProps } from './proxmoxSettingsModel';
 import { useConnectionsLedger } from './useConnectionsLedger';
-import { InfrastructureOperationsStateProvider } from './useInfrastructureOperationsState';
+import { useConnectionRowActions } from './useConnectionRowActions';
+import {
+  InfrastructureOperationsStateProvider,
+  useInfrastructureOperationsContext,
+} from './useInfrastructureOperationsState';
 
 export type InfrastructureWorkspaceProps = InfrastructurePlatformSettingsProps;
 
@@ -41,17 +45,14 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
   const location = useLocation();
   const [, setSearchParams] = useSearchParams();
   const ledger = useConnectionsLedger();
+  const operations = useInfrastructureOperationsContext();
+  const rowActions = useConnectionRowActions({ onMutated: () => ledger.reload() });
 
   const [addMode, setAddMode] = createSignal(false);
   const [initialAddType, setInitialAddType] = createSignal<ConnectionType | null>(null);
   const [showAgentProfiles, setShowAgentProfiles] = createSignal(false);
-  const [selectedConnectionId, setSelectedConnectionId] = createSignal<string | null>(null);
   const [editingConnection, setEditingConnection] = createSignal<Connection | null>(null);
   const readOnly = createMemo(() => presentationPolicyIsReadOnly());
-  const selectedConnection = createMemo(() => {
-    const id = selectedConnectionId();
-    return id ? ledger.findById(id) : undefined;
-  });
 
   const findEditableNode = (connection: Connection): NodeConfigWithStatus | null => {
     const accessor =
@@ -118,7 +119,7 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
     }
   });
 
-  const rows = createMemo<InfrastructureSystemRow[]>(() => ledger.rows());
+  const rows = createMemo(() => ledger.rows());
 
   const headerActions = createMemo<ConnectionsTableHeaderAction[]>(() =>
     readOnly()
@@ -136,9 +137,17 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
         ],
   );
 
-  const handleManageAction = (action: SystemManageAction) => {
-    if (action.kind === 'connection') {
-      setSelectedConnectionId(action.connectionId);
+  const agentUninstallCommands = createMemo(() => ({
+    linux: operations.getUninstallCommand(),
+    windows: operations.getWindowsUninstallCommand(),
+  }));
+
+  const handleCopy = async (text: string) => {
+    const ok = await copyToClipboard(text);
+    if (ok) {
+      notificationStore.success('Copied to clipboard');
+    } else {
+      notificationStore.error('Copy failed');
     }
   };
 
@@ -153,7 +162,6 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
   };
 
   const handleEditConnection = (connection: Connection) => {
-    setSelectedConnectionId(null);
     setEditingConnection(connection);
   };
 
@@ -179,14 +187,11 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
     );
   };
 
-  const mode = createMemo<'ledger' | 'add' | 'edit' | 'detail'>(() => {
+  const mode = createMemo<'ledger' | 'add' | 'edit'>(() => {
     if (editingConnection()) return 'edit';
     if (addMode()) return 'add';
-    if (selectedConnection()) return 'detail';
     return 'ledger';
   });
-
-  const exitDetailMode = () => setSelectedConnectionId(null);
 
   return (
     <div class="space-y-8">
@@ -195,7 +200,10 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
           <ConnectionsTable
             rows={rows}
             headerActions={headerActions()}
-            onManageRow={(row) => handleManageAction(row.manage)}
+            actions={readOnly() ? undefined : rowActions}
+            onEdit={readOnly() ? undefined : handleEditConnection}
+            agentUninstallCommands={agentUninstallCommands()}
+            onCopyText={(text) => void handleCopy(text)}
           />
         }
       >
@@ -295,39 +303,6 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
                 <div class="rounded-lg border border-border bg-surface p-4">
                   {editableSlot.render()}
                 </div>
-              </div>
-            );
-          }}
-        </Match>
-
-        <Match when={mode() === 'detail' && selectedConnection()}>
-          {(accessor) => {
-            const connection = accessor();
-            const handleEditFromDetail = () => handleEditConnection(connection);
-            return (
-              <div class="space-y-4">
-                <div class="flex items-center justify-between gap-3">
-                  <div>
-                    <div class="text-base font-semibold text-base-content">
-                      {connection.name || connection.address || connection.id}
-                    </div>
-                    <div class="mt-0.5 text-xs text-muted">{connection.address}</div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={exitDetailMode}
-                    class="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-sm font-medium text-base-content transition-colors hover:bg-surface-hover"
-                  >
-                    ← Back to systems
-                  </button>
-                </div>
-
-                <ConnectionDetailPanel
-                  connection={selectedConnection}
-                  onMutated={() => ledger.reload()}
-                  onEdit={handleEditFromDetail}
-                  onRemoved={exitDetailMode}
-                />
               </div>
             );
           }}

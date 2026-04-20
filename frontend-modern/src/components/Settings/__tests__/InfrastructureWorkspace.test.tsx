@@ -31,6 +31,11 @@ vi.mock('@/stores/sessionPresentationPolicy', () => ({
 
 vi.mock('../useInfrastructureOperationsState', () => ({
   InfrastructureOperationsStateProvider: (props: { children: unknown }) => <>{props.children}</>,
+  useInfrastructureOperationsContext: () => ({
+    getUninstallCommand: () => 'curl -fsSL http://pulse/install.sh | bash -s -- --uninstall',
+    getWindowsUninstallCommand: () =>
+      '$env:PULSE_URL="http://pulse"; $env:PULSE_UNINSTALL="true"; iwr /install.ps1 | iex',
+  }),
 }));
 
 vi.mock('../useConnectionsLedger', () => ({
@@ -47,8 +52,13 @@ vi.mock('../useConnectionsLedger', () => ({
         statusLabel: connection.state === 'paused' ? 'Paused' : 'Active',
         statusClassName: '',
         lastActivityText: '1m ago',
-        manageLabel: 'View details',
-        manage: { kind: 'connection' as const, connectionId: connection.id },
+        lastErrorMessage: connection.lastError?.message,
+        enabled: connection.enabled,
+        canEdit: ['pve', 'pbs', 'pmg', 'vmware', 'truenas'].includes(connection.type),
+        canPause: connection.capabilities.supportsPause,
+        canRemove: connection.type !== 'docker' && connection.type !== 'kubernetes',
+        isAgent: connection.type === 'agent',
+        connection,
       })),
     findById: (id: string) => connectionState.connections.find((connection) => connection.id === id),
     reload: vi.fn(),
@@ -79,18 +89,6 @@ vi.mock('../ConnectionEditor/CredentialSlots/VMwareCredentialSlot', () => ({
 
 vi.mock('../AgentProfilesPanel', () => ({
   AgentProfilesPanel: () => <div data-testid="agent-profiles">profiles</div>,
-}));
-
-vi.mock('../ConnectionDetailPanel', () => ({
-  ConnectionDetailPanel: (props: { connection: () => Connection | undefined }) => (
-    <>
-      {props.connection() ? (
-        <div data-testid="connection-detail-panel">
-          <div>{props.connection()!.name || props.connection()!.id}</div>
-        </div>
-      ) : null}
-    </>
-  ),
 }));
 
 vi.mock('@/api/connections', async () => {
@@ -298,16 +296,35 @@ describe('InfrastructureWorkspace', () => {
     expect(screen.getByTestId('agent-profiles')).toBeInTheDocument();
   });
 
-  it('opens the inline connection detail panel when a ledger row is viewed', async () => {
+  it('exposes Edit / Pause / Remove on each ledger row directly', async () => {
     renderWorkspace();
 
     await waitFor(() => expect(screen.getByText('zeus')).toBeInTheDocument());
-    fireEvent.click(screen.getByRole('button', { name: 'View details' }));
+    expect(screen.getByRole('button', { name: 'Edit' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Pause' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Remove' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'View details' })).toBeNull();
+  });
 
-    const panel = screen.getByTestId('connection-detail-panel');
-    expect(panel).toBeInTheDocument();
-    expect(within(panel).getByText('zeus')).toBeInTheDocument();
+  it('opens the inline edit flow when Edit is clicked on a pve row', async () => {
+    renderWorkspace({
+      pveNodes: () => [{ name: 'zeus', host: 'https://10.0.0.1:8006' } as any],
+    });
+
+    await waitFor(() => expect(screen.getByText('zeus')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+
+    await waitFor(() => expect(screen.getByTestId('proxmox-section')).toBeInTheDocument());
     expect(screen.getByRole('button', { name: /Back to systems/i })).toBeInTheDocument();
+  });
+
+  // `within` was previously used for the detail panel test; retain a smoke reference so the
+  // import stays live until the broader test harness evolves.
+  it('isolates row content by cell', async () => {
+    renderWorkspace();
+    await waitFor(() => expect(screen.getByText('zeus')).toBeInTheDocument());
+    const table = screen.getByRole('table');
+    expect(within(table).getByText('zeus')).toBeInTheDocument();
   });
 
   it('redirects legacy install deep links and pre-selects the agent install slot', async () => {
