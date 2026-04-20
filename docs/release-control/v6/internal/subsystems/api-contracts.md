@@ -1420,6 +1420,14 @@ API-backed lifecycle state. The retired
 `InfrastructureOperationsController.tsx` shell and
 `useInfrastructureReportingState.tsx` reporting path must not be reintroduced
 as parallel transport owners.
+That same shared infrastructure-settings boundary also owns install-profile
+semantics surfaced by
+`frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx`:
+the recommended auto profile may describe Proxmox auto-detect only as the
+canonical unpinned runtime mode that lets the agent register every detected
+local PVE or PBS service. Frontend copy on that shared model must not imply a
+hidden single-type selection or invent a profile flag that the installer and
+auto-register contract do not actually persist.
 That shared `frontend-modern/src/api/agentProfiles.ts` boundary must also stay
 under explicit proof routing on both sides instead of remaining a generic
 frontend-client match on the API-contract side: assignment, delete, unassign,

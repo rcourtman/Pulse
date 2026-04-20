@@ -78,6 +78,7 @@ export const ConnectionEditor: Component<ConnectionEditorProps> = (props) => {
   };
 
   const reopenProbe = () => {
+    state.reset();
     setSelectedCandidate(null);
     setSelectedType(null);
   };
@@ -116,15 +117,18 @@ export const ConnectionEditor: Component<ConnectionEditorProps> = (props) => {
                     </div>
                   </div>
                   <div class="text-xs text-muted">
-                    <span class="font-medium text-base-content">On a Proxmox host, this is the
-                    fastest path.</span> The agent creates the PVE / PBS API token itself and
-                    auto-registers the node — no address or credentials to paste.
+                    <span class="font-medium text-base-content">
+                      On a Proxmox host, this is the fastest path.
+                    </span>{' '}
+                    The installer auto-detects Proxmox on the machine, creates the needed API
+                    token(s), and auto-registers any detected PVE / PBS services — no address or
+                    credentials to paste.
                   </div>
                   <div class="text-xs text-muted">
                     It also reports CPU temperature, disk SMART, systemd services, and network
-                    metrics from the host, and auto-detects Docker and Kubernetes on that
-                    machine. Required for bare-metal Linux / Unraid / FreeBSD targets that have
-                    no platform API to connect.
+                    metrics from the host, and auto-detects Docker and Kubernetes on that machine.
+                    Required for bare-metal Linux / Unraid / FreeBSD targets that have no platform
+                    API to connect.
                   </div>
                 </div>
                 <div
@@ -143,8 +147,8 @@ export const ConnectionEditor: Component<ConnectionEditorProps> = (props) => {
                 <span class="h-px flex-1 bg-border" aria-hidden="true" />
               </div>
               <p class="text-xs text-muted">
-                For VMware, TrueNAS, PMG, or a remote Proxmox you can't install the agent on.
-                Paste the address and Pulse will auto-detect the product, or pick it below.
+                For VMware, TrueNAS, PMG, or a remote Proxmox you can't install the agent on. Paste
+                the address and Pulse will auto-detect the product, or pick it below.
               </p>
 
               <AddressProbeStep
@@ -191,7 +195,7 @@ export const ConnectionEditor: Component<ConnectionEditorProps> = (props) => {
             <span class="font-semibold text-base-content">
               {activeType() === 'agent'
                 ? 'Install Pulse Agent'
-                : CONNECTION_TYPE_LABELS[activeType()!] ?? activeType()}
+                : (CONNECTION_TYPE_LABELS[activeType()!] ?? activeType())}
             </span>
             <Show when={selectedCandidate()}>
               <span class="ml-2 text-xs text-muted">{selectedCandidate()!.host}</span>

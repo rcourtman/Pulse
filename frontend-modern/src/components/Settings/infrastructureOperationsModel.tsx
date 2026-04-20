@@ -1,15 +1,7 @@
 import type { JSX } from 'solid-js';
-import type {
-  ConnectedInfrastructureItem,
-  ConnectedInfrastructureSurface,
-} from '@/types/api';
-import {
-  getAgentCapabilityLabel,
-  type AgentCapability,
-} from '@/utils/agentCapabilityPresentation';
-import {
-  type PlatformConnectionsView,
-} from './platformConnectionsModel';
+import type { ConnectedInfrastructureItem, ConnectedInfrastructureSurface } from '@/types/api';
+import { getAgentCapabilityLabel, type AgentCapability } from '@/utils/agentCapabilityPresentation';
+import { type PlatformConnectionsView } from './platformConnectionsModel';
 import { buildInfrastructureWorkspacePath } from './infrastructureWorkspaceModel';
 
 export const TOKEN_PLACEHOLDER = '<api-token>';
@@ -18,12 +10,7 @@ export const UNIFIED_AGENT_TELEMETRY_SURFACE = 'settings_unified_agents';
 export type AgentPlatform = 'linux' | 'macos' | 'freebsd' | 'windows';
 export type UnifiedAgentStatus = 'active' | 'removed';
 export type ScopeCategory = 'default' | 'profile' | 'ai-managed' | 'na';
-export type InstallProfile =
-  | 'auto'
-  | 'docker'
-  | 'kubernetes'
-  | 'proxmox-pve'
-  | 'proxmox-pbs';
+export type InstallProfile = 'auto' | 'docker' | 'kubernetes' | 'proxmox-pve' | 'proxmox-pbs';
 
 export type SetupHandoffState = {
   username: string;
@@ -309,7 +296,7 @@ export const INSTALL_PROFILE_OPTIONS: InstallProfileOption[] = [
     value: 'auto',
     label: 'Auto-detect (recommended)',
     description:
-      'Let the installer detect Docker, Kubernetes, Proxmox, and agent capabilities automatically.',
+      'Let the installer detect Docker, Kubernetes, and Proxmox automatically. On Proxmox hosts, auto mode leaves the type unpinned so the agent can register every detected PVE / PBS service.',
     flags: [],
   },
   {
@@ -426,7 +413,9 @@ export const buildCommandsByPlatform = (
   },
 });
 
-const agentCapabilityFromSurfaceKind = (kind: ConnectedInfrastructureSurface['kind']): AgentCapability => {
+const agentCapabilityFromSurfaceKind = (
+  kind: ConnectedInfrastructureSurface['kind'],
+): AgentCapability => {
   switch (kind) {
     case 'agent':
     case 'docker':

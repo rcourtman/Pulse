@@ -26,9 +26,10 @@
 #
 # Auto-Detection:
 #   The installer automatically detects Docker, Kubernetes, and Proxmox on the
-#   target machine and enables monitoring for detected platforms. Use --disable-*
-#   flags to skip specific platforms, or --enable-* to force enable even if not
-#   detected.
+#   target machine and enables monitoring for detected platforms. Proxmox auto
+#   mode keeps the runtime unpinned so the agent can register every detected
+#   PVE / PBS service on that host. Use --disable-* flags to skip specific
+#   platforms, or --enable-* to force enable even if not detected.
 
 set -euo pipefail
 
@@ -774,19 +775,6 @@ detect_proxmox() {
     return 1
 }
 
-detect_proxmox_type() {
-    if [[ -d "/etc/proxmox-backup" ]] || command -v proxmox-backup-manager &>/dev/null; then
-        echo "pbs"
-        return 0
-    fi
-    if [[ -d "/etc/pve" ]] || command -v pveversion &>/dev/null; then
-        echo "pve"
-        return 0
-    fi
-    echo ""
-    return 1
-}
-
 pulse_url_uses_plain_http() {
     local url_lower
     url_lower=$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')
@@ -1106,22 +1094,18 @@ if [[ "$PROXMOX_EXPLICIT" != "true" ]]; then
     fi
 fi
 
-if [[ "$ENABLE_PROXMOX" == "true" && -z "$PROXMOX_TYPE" ]]; then
-    auto_type="$(detect_proxmox_type || true)"
-    if [[ -n "$auto_type" ]]; then
-        PROXMOX_TYPE="$auto_type"
-        log_info "Proxmox mode detected: ${PROXMOX_TYPE}"
-    fi
-fi
-
 # Summary of what will be monitored
 log_info "Monitoring configuration:"
 log_info "  Agent metrics: $ENABLE_HOST"
 log_info "  Docker/Podman: $ENABLE_DOCKER"
 log_info "  Kubernetes: $ENABLE_KUBERNETES"
 log_info "  Proxmox: $ENABLE_PROXMOX"
-if [[ "$ENABLE_PROXMOX" == "true" && -n "$PROXMOX_TYPE" ]]; then
-    log_info "  Proxmox type: $PROXMOX_TYPE"
+if [[ "$ENABLE_PROXMOX" == "true" ]]; then
+    if [[ -n "$PROXMOX_TYPE" ]]; then
+        log_info "  Proxmox type: $PROXMOX_TYPE"
+    else
+        log_info "  Proxmox type: auto-detect all installed services"
+    fi
 fi
 
 # --- Uninstall Logic ---

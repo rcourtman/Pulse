@@ -16,6 +16,10 @@ vi.mock('@/api/connections', async () => {
 
 const mockedProbe = vi.mocked(ConnectionsAPI.probe);
 
+function expectNodeBefore(a: Node, b: Node) {
+  expect(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+}
+
 describe('ConnectionEditor', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -32,16 +36,9 @@ describe('ConnectionEditor', () => {
 
     const renderSlot = vi.fn(({ type }) => <div data-testid="slot">slot:{type}</div>);
 
-    render(() => (
-      <ConnectionEditor
-        renderCredentialSlot={renderSlot}
-        onClose={() => {}}
-      />
-    ));
+    render(() => <ConnectionEditor renderCredentialSlot={renderSlot} onClose={() => {}} />);
 
-    const input = screen.getByPlaceholderText(
-      /pve01\.lan/,
-    ) as HTMLInputElement;
+    const input = screen.getByPlaceholderText(/pve01\.lan/) as HTMLInputElement;
     fireEvent.input(input, { target: { value: 'pve.lab' } });
 
     const probeButton = screen.getByRole('button', { name: /probe address/i });
@@ -67,16 +64,9 @@ describe('ConnectionEditor', () => {
 
     const renderSlot = vi.fn(({ type }) => <div data-testid="slot">slot:{type}</div>);
 
-    render(() => (
-      <ConnectionEditor
-        renderCredentialSlot={renderSlot}
-        onClose={() => {}}
-      />
-    ));
+    render(() => <ConnectionEditor renderCredentialSlot={renderSlot} onClose={() => {}} />);
 
-    const input = screen.getByPlaceholderText(
-      /pve01\.lan/,
-    ) as HTMLInputElement;
+    const input = screen.getByPlaceholderText(/pve01\.lan/) as HTMLInputElement;
     fireEvent.input(input, { target: { value: '192.168.1.50' } });
 
     fireEvent.click(screen.getByRole('button', { name: /probe address/i }));
@@ -94,23 +84,23 @@ describe('ConnectionEditor', () => {
     expect(lastCall.candidate).toBeNull();
   });
 
-  it('surfaces the probe input and the full product catalog as peers', () => {
-    render(() => (
-      <ConnectionEditor
-        renderCredentialSlot={() => <div />}
-        onClose={() => {}}
-      />
-    ));
+  it('renders an agent-led catalog with the API fallback beneath it', () => {
+    render(() => <ConnectionEditor renderCredentialSlot={() => <div />} onClose={() => {}} />);
 
-    // Catalog landing — the probe input sits above a tile grid that includes
-    // every supported product as a peer, Install Pulse Agent included. There
-    // is no intermediate mode picker or "Platform API" framing.
-    expect(screen.getByRole('button', { name: /probe address/i })).toBeInTheDocument();
+    const agentButton = screen.getByRole('button', { name: /Install Pulse Agent/i });
+    const apiHeading = screen.getByText('Or connect a platform API directly');
+    const probeButton = screen.getByRole('button', { name: /probe address/i });
+
+    // Catalog landing — lead with the agent card, then collapse the probe and
+    // direct platform options into one API fallback section below it.
+    expect(agentButton).toBeInTheDocument();
+    expect(apiHeading).toBeInTheDocument();
+    expect(probeButton).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^Proxmox VE/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /TrueNAS SCALE/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /VMware vCenter \/ ESXi/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Install Pulse Agent/i })).toBeInTheDocument();
-    expect(screen.queryByText('Platform API')).toBeNull();
+    expectNodeBefore(agentButton, apiHeading);
+    expectNodeBefore(apiHeading, probeButton);
     expect(
       screen.queryByRole('button', { name: /install the unified agent on a host/i }),
     ).toBeNull();
@@ -121,12 +111,7 @@ describe('ConnectionEditor', () => {
 
     const renderSlot = vi.fn(({ type }) => <div data-testid="slot">slot:{type}</div>);
 
-    render(() => (
-      <ConnectionEditor
-        renderCredentialSlot={renderSlot}
-        onClose={() => {}}
-      />
-    ));
+    render(() => <ConnectionEditor renderCredentialSlot={renderSlot} onClose={() => {}} />);
 
     const input = screen.getByPlaceholderText(/pve01\.lan/) as HTMLInputElement;
     fireEvent.input(input, { target: { value: 'baremetal.lan' } });
@@ -164,5 +149,30 @@ describe('ConnectionEditor', () => {
     expect(call.mode).toBe('edit');
     expect(call.type).toBe('vmware');
     expect(call.candidate).toBeNull();
+  });
+
+  it('resets probe state when returning to the catalog from a credential slot', async () => {
+    mockedProbe.mockResolvedValueOnce({ candidates: [], probedMs: 203 });
+
+    const renderSlot = vi.fn(({ type }) => <div data-testid="slot">slot:{type}</div>);
+
+    render(() => <ConnectionEditor renderCredentialSlot={renderSlot} onClose={() => {}} />);
+
+    const input = screen.getByPlaceholderText(/pve01\.lan/) as HTMLInputElement;
+    fireEvent.input(input, { target: { value: '192.168.1.50' } });
+    fireEvent.click(screen.getByRole('button', { name: /probe address/i }));
+
+    await waitFor(() => expect(mockedProbe).toHaveBeenCalled());
+    await screen.findByText(/no supported product detected/i);
+
+    fireEvent.click(screen.getByRole('button', { name: /TrueNAS SCALE/i }));
+    await waitFor(() => expect(screen.getByTestId('slot').textContent).toBe('slot:truenas'));
+
+    fireEvent.click(screen.getByRole('button', { name: /back to catalog/i }));
+
+    const resetInput = screen.getByPlaceholderText(/pve01\.lan/) as HTMLInputElement;
+    expect(resetInput.value).toBe('');
+    expect(screen.queryByText(/no supported product detected/i)).toBeNull();
+    expect(screen.queryByTestId('slot')).toBeNull();
   });
 });

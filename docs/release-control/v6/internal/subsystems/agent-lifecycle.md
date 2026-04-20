@@ -1006,6 +1006,17 @@ presenting `Platform connections` as the explicit API-backed alternative
 instead of leaving first-session install guidance implicit in generic
 settings-shell prose or retreating to one provider's name as the primary
 alternative.
+That same first-run infrastructure handoff now also owns the inline
+add-infrastructure landing in `ConnectionEditor.tsx`: when the target can run
+the Unified Agent, the landing must lead with the recommended host-install
+card above the platform-API probe and picker instead of teaching probe-first
+as the default story, and returning `Back to catalog` must reset probe input
+and result state rather than reopening the landing with stale no-match or
+detected-product state already rendered.
+Render-order proof for that landing belongs to DOM-backed settings tests, not
+raw source-string position checks, so lifecycle ownership continues to guard
+the operator-visible order after reasonable component extraction or copy
+refactors.
 When that infrastructure workspace needs to redirect operators to the Pulse Pro
 surface for billing, monitored-system limits, or license status, it must
 consume the settings-owned referral copy from

@@ -40,7 +40,9 @@ describe('settings architecture guardrails', () => {
     expect(settingsNavigationHookSource).toContain(
       'navigate(buildInfrastructureOnboardingPath(infrastructureOnboardingStep), {',
     );
-    expect(settingsNavigationHookSource).toContain('navigate(buildInfrastructureWorkspacePath(), {');
+    expect(settingsNavigationHookSource).toContain(
+      'navigate(buildInfrastructureWorkspacePath(), {',
+    );
     expect(settingsNavigationHookSource).toContain('resolveCanonicalSettingsPath(path)');
 
     expect(infrastructureWorkspaceModelSource).toContain(
@@ -64,8 +66,12 @@ describe('settings architecture guardrails', () => {
     expect(infrastructureWorkspaceSource).toContain('NodeCredentialSlot');
     expect(infrastructureWorkspaceSource).toContain('TrueNASCredentialSlot');
     expect(infrastructureWorkspaceSource).toContain('VMwareCredentialSlot');
-    expect(infrastructureWorkspaceSource).toContain('navigate(buildInfrastructureWorkspacePath(), { replace: true });');
-    expect(infrastructureWorkspaceSource).toContain('const [, setSearchParams] = useSearchParams();');
+    expect(infrastructureWorkspaceSource).toContain(
+      'navigate(buildInfrastructureWorkspacePath(), { replace: true });',
+    );
+    expect(infrastructureWorkspaceSource).toContain(
+      'const [, setSearchParams] = useSearchParams();',
+    );
     expect(infrastructureWorkspaceSource).toContain(
       'setSearchParams({ [INFRASTRUCTURE_ADD_QUERY_PARAM]: null }, { replace: true });',
     );
@@ -75,8 +81,10 @@ describe('settings architecture guardrails', () => {
     expect(infrastructureWorkspaceSource).not.toContain('layout="drawer-right"');
   });
 
-  it('keeps probe-first connection setup and inline node credentials on the shared editor model', () => {
-    expect(connectionEditorSource).toContain("import { AddressProbeStep } from './AddressProbeStep';");
+  it('keeps the agent-led add landing and inline node credentials on the shared editor model', () => {
+    expect(connectionEditorSource).toContain(
+      "import { AddressProbeStep } from './AddressProbeStep';",
+    );
     // Platform integrations render as peer tiles; the agent lives in its own
     // section below so it can explain what host-level telemetry adds instead
     // of being mistaken for one more peer of Proxmox / VMware / TrueNAS.
@@ -84,21 +92,13 @@ describe('settings architecture guardrails', () => {
     expect(connectionEditorSource).not.toContain("'agent'] =");
     expect(connectionEditorSource).toContain('<AddressProbeStep');
     expect(connectionEditorSource).toContain('Or connect a platform API directly');
-    // The agent card is the *primary* path on the Add landing — it sits above
-    // the probe input AND the platform grid so a user doesn't read the probe
-    // as the lead action. The probe + platforms collapse into one "connect
-    // via API instead" fallback block below the agent. Guarding ordering
-    // here prevents regression to "agent as an alternative to the probe."
-    const agentPrimaryIdx = connectionEditorSource.indexOf('On a Proxmox host, this is the');
-    const apiSectionIdx = connectionEditorSource.indexOf('Or connect a platform API directly');
-    const probeIdx = connectionEditorSource.indexOf('<AddressProbeStep');
-    expect(agentPrimaryIdx).toBeGreaterThan(-1);
-    expect(apiSectionIdx).toBeGreaterThan(-1);
-    expect(probeIdx).toBeGreaterThan(-1);
-    expect(agentPrimaryIdx).toBeLessThan(apiSectionIdx);
-    expect(apiSectionIdx).toBeLessThan(probeIdx);
+    // Keep the landing source aligned with the canonical agent-first story, but
+    // leave actual DOM ordering to the render test rather than raw source
+    // string positions.
     expect(connectionEditorSource).not.toContain('Or install the agent on the host');
-    expect(connectionEditorSource).toContain('auto-registers the node');
+    expect(connectionEditorSource).toContain('On a Proxmox host, this is the');
+    expect(connectionEditorSource).toContain('auto-registers any detected PVE / PBS services');
+    expect(connectionEditorSource).not.toContain('auto-registers the node');
     expect(connectionEditorSource).toContain('Recommended');
     // The agent install path is a first-class ledger-header action, not a
     // subtext offramp inside the editor — make sure it doesn't drift back.

@@ -59,7 +59,8 @@ vi.mock('../useConnectionsLedger', () => ({
         isAgent: connection.type === 'agent',
         connection,
       })),
-    findById: (id: string) => connectionState.connections.find((connection) => connection.id === id),
+    findById: (id: string) =>
+      connectionState.connections.find((connection) => connection.id === id),
     reload: vi.fn(),
     loading: () => false,
     error: () => null,
@@ -226,11 +227,11 @@ describe('InfrastructureWorkspace', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Add infrastructure/i }));
 
-    // The catalog landing surfaces the probe input and a tile grid of every
-    // supported product — including Install Pulse Agent as a peer tile — with
-    // no intermediate picker screen.
-    expect(screen.getByRole('button', { name: /Probe address/i })).toBeInTheDocument();
+    // The catalog landing leads with the agent path and keeps the direct API
+    // probe/catalog visible below it in the same shared editor.
     expect(screen.getByRole('button', { name: /Install Pulse Agent/i })).toBeInTheDocument();
+    expect(screen.getByText('Or connect a platform API directly')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Probe address/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^Proxmox VE/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /TrueNAS SCALE/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /VMware vCenter \/ ESXi/i })).toBeInTheDocument();
@@ -354,8 +355,8 @@ describe('InfrastructureWorkspace', () => {
     await waitFor(() =>
       expect(screen.getByRole('button', { name: /Probe address/i })).toBeInTheDocument(),
     );
-    // Catalog landing — probe input + tile grid are visible, no credential
-    // slot has been entered yet.
+    // Catalog landing — the shared agent-led entry is visible again, and no
+    // credential slot has been entered yet.
     expect(screen.getByRole('button', { name: /Install Pulse Agent/i })).toBeInTheDocument();
     expect(screen.queryByTestId('install-section')).toBeNull();
   });

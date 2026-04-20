@@ -38,6 +38,36 @@ func TestInstallSHAllowsMissingTokenForOptionalAuth(t *testing.T) {
 	}
 }
 
+func TestInstallSHAutoDetectProxmoxKeepsRuntimeTypeUnpinned(t *testing.T) {
+	content, err := os.ReadFile(repoFile("scripts", "install.sh"))
+	if err != nil {
+		t.Fatalf("read install.sh: %v", err)
+	}
+
+	script := string(content)
+	required := []string{
+		`if detect_proxmox; then`,
+		`log_info "Proxmox detected - enabling Proxmox integration"`,
+		`log_info "  Proxmox type: auto-detect all installed services"`,
+	}
+	for _, needle := range required {
+		if !strings.Contains(script, needle) {
+			t.Fatalf("install.sh missing unpinned Proxmox auto-detect contract: %s", needle)
+		}
+	}
+
+	forbidden := []string{
+		`detect_proxmox_type() {`,
+		`auto_type="$(detect_proxmox_type || true)"`,
+		`PROXMOX_TYPE="$auto_type"`,
+	}
+	for _, needle := range forbidden {
+		if strings.Contains(script, needle) {
+			t.Fatalf("install.sh preserved stale single-type Proxmox auto-detect contract: %s", needle)
+		}
+	}
+}
+
 // TestConnectionEnvRecovery verifies the canonical helper logic that parses
 // connection.env without using shell source (to prevent injection).
 func TestConnectionEnvRecovery(t *testing.T) {

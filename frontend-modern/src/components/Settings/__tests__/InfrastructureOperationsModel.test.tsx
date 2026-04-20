@@ -154,6 +154,15 @@ describe('infrastructure operations model', () => {
     expect(INSTALL_PROFILE_OPTIONS.map((option) => option.value)).not.toContain('truenas');
   });
 
+  it('keeps the recommended auto profile aligned with unpinned Proxmox detection', () => {
+    const autoProfile = INSTALL_PROFILE_OPTIONS.find((option) => option.value === 'auto');
+
+    expect(autoProfile).toBeDefined();
+    expect(autoProfile?.flags).toEqual([]);
+    expect(autoProfile?.description).toContain('leaves the type unpinned');
+    expect(autoProfile?.description).toContain('every detected PVE / PBS service');
+  });
+
   it('keeps the embedded installer section on the canonical host-install framing', () => {
     expect(infrastructureInstallerSectionSource).toContain(
       "title={state.isEmbedded() ? 'Install on a host' : 'Infrastructure'}",

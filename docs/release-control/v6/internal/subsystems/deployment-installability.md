@@ -759,6 +759,12 @@ and it must fail closed unless the response comes back on the canonical
 installer response handling must also use the returned canonical
 `nodeId`/`nodeName` identity instead of continuing to report the caller's local
 hostname after Pulse stores a disambiguated node record.
+When Proxmox is only auto-detected rather than explicitly profile-pinned, that
+same installer-owned boundary must enable Proxmox without persisting a forced
+`--proxmox-type` service argument. Auto mode must stay unpinned so the runtime
+can detect and register every supported local Proxmox service it finds; only
+an operator-selected install profile may lock the persisted runtime to one
+specific `pve` or `pbs` type.
 That same installer-owned bootstrap step against `/api/setup-script-url` must
 also validate the returned canonical `type`, normalized `host`, and live
 `expires` metadata before using the one-time setup token, so install-time
