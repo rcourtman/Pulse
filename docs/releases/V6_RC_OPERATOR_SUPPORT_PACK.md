@@ -164,7 +164,7 @@ that switch, the preview helper text, and the in-demo banner.
 ## Canonical References
 
 - `docs/UPGRADE_v6.md`
-- `docs/releases/RELEASE_NOTES_v6.md`
+- `docs/releases/RELEASE_NOTES_v6_RC1.md`
 - `docs/releases/V6_RC_DEMO_SITE_COPY.md`
 - `docs/MIGRATION_UNIFIED_NAV.md`
 - `docs/PULSE_PRO.md`

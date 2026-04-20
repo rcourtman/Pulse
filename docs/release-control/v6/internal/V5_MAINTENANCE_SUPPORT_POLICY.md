@@ -62,11 +62,10 @@ These do not qualify as v5 maintenance work:
 
 ## Required GA Release Notice
 
-The first stable `v6.0.0` release must publish this meaning, with placeholders
-replaced by exact dates:
+The first stable `v6.0.0` release must publish this exact notice:
 
-> Pulse v5 entered maintenance-only support on [v6-ga-date]. I will ship only
+> Pulse v5 entered maintenance-only support on 2026-04-20. I will ship only
 > critical security, data-loss, licensing or billing blocker, installer or
 > updater failure, and safe migration blocker fixes for existing v5 users until
-> [v5-eos-date]. After [v5-eos-date], Pulse v5 is end-of-support and new fixes
-> land on v6 unless I publish an explicit exception.
+> 2026-07-19. After 2026-07-19, Pulse v5 is end-of-support and new fixes land
+> on v6 unless I publish an explicit exception.

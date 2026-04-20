@@ -19,9 +19,9 @@ Use this as the final gate before cutting a Pulse v6 pre-release.
 - The latest RC publication judgment packet is
   `docs/release-control/v6/internal/records/rc-publication-judgment-packet-2026-04-09.md`.
   It now records approval, not a proof blocker.
-- The active target is now `v6-rc-stabilization`, so the governed RC floor is
-  complete and GA rehearsal remains intentionally out of scope until a real RC
-  has actually shipped and promotion is resumed explicitly.
+- The active target is now `v6-ga-promotion`, so the remaining release-ready
+  work is explicitly about stable promotion proof rather than RC-floor
+  stabilization.
 - The remaining release-ready blocker is `rc-to-ga-promotion-readiness`, which
   stays blocked until a later stable `6.0.0` candidate completes a matching
   `Release Dry Run` rehearsal with the canonical promotion artifact envelope:

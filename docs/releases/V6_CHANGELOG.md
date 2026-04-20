@@ -1,26 +1,58 @@
-# Pulse v6.0.0-rc.1
+# Pulse v6.0.0
 
-_This changelog is based on the shipped `v6.0.0-rc.1` tag compared with `v5.1.27`. It does not describe later branch-only work on `pulse/v6-release`._
+_This changelog describes the shipped stable `v6.0.0` release compared with
+`v5.1.27`. It includes the corrective changes that were validated across
+`v6.0.0-rc.1` and `v6.0.0-rc.2`._
 
 ## What v6 changes at a high level
 
-Pulse v6 changes both the shape of the product and the shape of the runtime behind it. Pulse v5 was organized mainly around Proxmox and separate platform-specific views. Pulse v6 is organized around five primary surfaces: `Dashboard`, `Infrastructure`, `Workloads`, `Storage`, and `Recovery`.
+Pulse v6 changes both the shape of the product and the shape of the runtime
+behind it. Pulse v5 was organized mainly around Proxmox and separate
+platform-specific views. Pulse v6 is organized around five primary surfaces:
+`Dashboard`, `Infrastructure`, `Workloads`, `Storage`, and `Recovery`.
 
-For existing Pulse v5 operators, this is not just a visual refresh. The default routes change, the main live-state contract changes, install and onboarding are split differently, and licensing now revolves around canonical monitored systems rather than older v5 assumptions. The right way to test v6 is to verify real operator workflows against those new surfaces and contracts, not just to look for familiar pages.
+For existing Pulse v5 operators, this is not just a visual refresh. The
+default routes change, the main live-state contract changes, install and
+onboarding are split differently, and self-hosted commercial posture now
+revolves around unlimited core monitoring plus paid convenience, history, and
+AI/admin surfaces rather than capped monitored-system volume.
 
 ## Major product and workflow changes
 
-- **The top-level product layout is different.** Opening Pulse no longer drops directly into a Proxmox overview. The v6 default route lands on `Dashboard`, with separate primary views for `Infrastructure`, `Workloads`, `Storage`, and `Recovery`.
+- **The top-level product layout is different.** Opening Pulse no longer drops
+  directly into a Proxmox overview. The v6 default route lands on `Dashboard`,
+  with separate primary views for `Infrastructure`, `Workloads`, `Storage`,
+  and `Recovery`.
 
-- **Recovery is a first-class surface.** In v5, backup-related behavior was centered on backup-specific pages and route families. In v6, recovery is treated as its own primary surface, and `Recovery` replaces the older backup-first page model.
+- **Recovery is a first-class surface.** In v5, backup-related behavior was
+  centered on backup-specific pages and route families. In v6, recovery is
+  treated as its own primary surface, and `Recovery` replaces the older
+  backup-first page model.
 
-- **Infrastructure setup is split by ownership.** `Install on a host` is the path for machines that should run the unified agent directly. `Platform connections` is the path for API-backed systems such as Proxmox, TrueNAS, and VMware.
+- **Infrastructure setup is split by ownership.** `Install on a host` is the
+  path for machines that should run the Unified Agent directly. `Platform
+  connections` is the path for API-backed systems such as Proxmox, TrueNAS,
+  and VMware.
 
-- **Adding infrastructure is more structured.** The shipped RC includes cluster agent deployment workflows with candidate discovery, preflights, jobs, event streams, cancel, and retry paths. That is a real workflow change from v5's more manual install-command model.
+- **Adding infrastructure is more structured.** The shipped v6 line includes
+  cluster agent deployment workflows with candidate discovery, preflights,
+  jobs, event streams, cancel, and retry paths. That is a real workflow change
+  from v5's more manual install-command model.
 
-- **Licensing and activation behave differently.** V6 tracks entitlement state, monitored-system limits, commercial posture, and trial eligibility more explicitly. It also has dedicated behavior for upgrading supported paid v5 licenses into v6 entitlements.
+- **Licensing and activation behave differently.** V6 tracks entitlement
+  state, continuity cohorts, commercial posture, and trial eligibility more
+  explicitly. It also has dedicated behavior for upgrading supported paid v5
+  licenses into v6 entitlements.
 
-- **Hosted, org, and relay/mobile capabilities are also part of the shipped RC.** They are present in `v6.0.0-rc.1`, but most existing self-hosted v5 operators can treat them as second-wave testing rather than the first things to validate.
+- **Self-hosted core monitoring is no longer commercially capped on current
+  public plans.** Community, Relay, and Pro now keep self-hosted core
+  monitoring unlimited. Relay sells remote/mobile convenience plus 14-day
+  history, while Pro adds AI operations, automation, advanced admin surfaces,
+  and 90-day history.
+
+- **Hosted, org, and relay/mobile capabilities are part of the shipped stable
+  line.** They were already present in the RC line, and `v6.0.0` keeps them as
+  governed product surfaces rather than beta-only sidecars.
 
 ## What existing Pulse v5 users should re-test first
 
@@ -32,7 +64,10 @@ For existing Pulse v5 operators, this is not just a visual refresh. The default 
 
 4. **Install and bootstrap flows.** Re-test copied install commands, setup-script flows, and any automation that provisions new systems into Pulse. V6 keeps install automation, but the generated bootstrap artifacts are more structured and more controlled.
 
-5. **License activation after upgrade.** If the v5 system has a paid license, verify the v6 entitlement state, monitored-system count, grandfathering behavior, and downgrade safety immediately after first boot.
+5. **License activation and paid continuity after upgrade.** If the v5 system
+   has a paid license, verify the v6 entitlement state, lifetime or recurring
+   continuity cohort, and self-hosted no-cap commercial posture immediately
+   after first boot.
 
 6. **Upgrade against a real v5 data copy.** Use a copy of an actual v5 data directory and verify sessions, alert configuration, AI settings, metrics history, audit history, and filesystem assumptions after the v6 startup migration.
 
@@ -56,14 +91,27 @@ For existing Pulse v5 operators, this is not just a visual refresh. The default 
 
 ## Under the hood but important
 
-- **V6 ships with a real v5 upgrade path.** The shipped migration tests cover config loading, encrypted config round-trips, session continuity, CSRF token continuity, metrics database migration, and audit database preservation.
+- **V6 ships with a real v5 upgrade path.** The migration tests cover config
+  loading, encrypted config round-trips, session continuity, CSRF token
+  continuity, metrics database migration, and audit database preservation.
 
-- **Paid v5 licenses are handled explicitly.** Supported v5 paid licenses can auto-exchange into v6 entitlements, while unresolved paid-license migration states are recorded and surfaced instead of being silently ignored.
+- **Paid v5 licenses are handled explicitly.** Supported v5 paid licenses can
+  auto-exchange into v6 entitlements, while unresolved paid-license migration
+  states are recorded and surfaced instead of being silently ignored.
 
-- **Monitored-system counting is more deliberate.** Limits are applied to canonical top-level monitored systems, including cases where Pulse sees the same machine through more than one collection path.
+- **Monitored-system counting is still deliberate where continuity needs it.**
+  Current public self-hosted plans are no-cap, but canonical monitored-system
+  identity still matters for migration truth, inventory language, and the
+  remaining continuity cohorts that are preserved inside the v6 model.
 
-- **Grandfathering is explicit rather than implied.** When a migrated v5 installation qualifies for a higher monitored-system floor than the base v6 plan limit, that continuity state is tracked and surfaced in v6.
+- **Grandfathering is explicit rather than implied.** When a migrated v5
+  installation qualifies for a special continuity cohort, that state is tracked
+  and surfaced in v6 instead of being left to support-side interpretation.
 
-- **Released install assets are tied to the release tag.** For released builds, install-script resolution is pinned to the shipped release asset, not to later branch state.
+- **Released install assets are tied to the release tag.** For released builds,
+  install-script resolution is pinned to the shipped release asset, not to
+  later branch state.
 
-- **Relay now has persistent runtime identity.** If relay is enabled, v6 persists an instance identity keypair so the relay runtime has stable identity across restarts.
+- **Relay now has persistent runtime identity.** If relay is enabled, v6
+  persists an instance identity keypair so the relay runtime has stable
+  identity across restarts.

@@ -125,27 +125,45 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
     def test_release_notes_index_points_at_current_rc_packet(self) -> None:
         release_index = read("docs/RELEASE_NOTES.md")
         self.assertIn("docs/releases/RELEASE_NOTES_v6.md", release_index)
+        self.assertIn("docs/releases/V6_CHANGELOG.md", release_index)
+        self.assertIn("docs/UPGRADE_v6.md", release_index)
+        self.assertIn("docs/releases/RELEASE_NOTES_v6_RC1.md", release_index)
+        self.assertIn("docs/releases/V6_CHANGELOG_RC1.md", release_index)
+        self.assertIn("docs/releases/V6_RC_OPERATOR_SUPPORT_PACK.md", release_index)
         self.assertIn("docs/releases/RELEASE_NOTES_v6_RC2_DRAFT.md", release_index)
         self.assertIn("docs/releases/V6_CHANGELOG_RC2_DRAFT.md", release_index)
         self.assertIn("docs/releases/V6_RC2_OPERATOR_SUPPORT_PACK_DRAFT.md", release_index)
 
     def test_version_file_matches_current_rc_packet(self) -> None:
         current_version = read("VERSION").strip()
-        self.assertEqual(current_version, "6.0.0-rc.2")
+        if current_version == "6.0.0":
+            release_notes = read("docs/releases/RELEASE_NOTES_v6.md")
+            changelog = read("docs/releases/V6_CHANGELOG.md")
+            self.assertIn(f"Pulse v{current_version} Release Notes", release_notes)
+            self.assertIn(f"`v{current_version}`", release_notes)
+            self.assertIn(f"Pulse v{current_version}", changelog)
+        else:
+            self.assertEqual(current_version, "6.0.0-rc.2")
 
-        release_notes = read("docs/releases/RELEASE_NOTES_v6_RC2_DRAFT.md")
-        changelog = read("docs/releases/V6_CHANGELOG_RC2_DRAFT.md")
-        operator_pack = read("docs/releases/V6_RC2_OPERATOR_SUPPORT_PACK_DRAFT.md")
+            release_notes = read("docs/releases/RELEASE_NOTES_v6_RC2_DRAFT.md")
+            changelog = read("docs/releases/V6_CHANGELOG_RC2_DRAFT.md")
+            operator_pack = read("docs/releases/V6_RC2_OPERATOR_SUPPORT_PACK_DRAFT.md")
 
-        self.assertIn(f"Pulse v{current_version} Draft Release Notes", release_notes)
-        self.assertIn(f"`v{current_version}`", release_notes)
-        self.assertIn(f"Pulse v{current_version} Draft Changelog", changelog)
-        self.assertIn(f"`v{current_version}`", operator_pack)
+            self.assertIn(f"Pulse v{current_version} Draft Release Notes", release_notes)
+            self.assertIn(f"`v{current_version}`", release_notes)
+            self.assertIn(f"Pulse v{current_version} Draft Changelog", changelog)
+            self.assertIn(f"`v{current_version}`", operator_pack)
 
     def test_upgrade_guide_points_at_current_rc_support_pack(self) -> None:
         upgrade_guide = read("docs/UPGRADE_v6.md")
-        self.assertIn("docs/releases/V6_RC2_OPERATOR_SUPPORT_PACK_DRAFT.md", upgrade_guide)
-        self.assertNotIn("docs/releases/V6_RC_OPERATOR_SUPPORT_PACK.md", upgrade_guide)
+        current_version = read("VERSION").strip()
+        if current_version == "6.0.0":
+            self.assertIn("docs/releases/RELEASE_NOTES_v6.md", upgrade_guide)
+            self.assertIn("docs/releases/V6_CHANGELOG.md", upgrade_guide)
+            self.assertNotIn("docs/releases/V6_RC2_OPERATOR_SUPPORT_PACK_DRAFT.md", upgrade_guide)
+        else:
+            self.assertIn("docs/releases/V6_RC2_OPERATOR_SUPPORT_PACK_DRAFT.md", upgrade_guide)
+            self.assertNotIn("docs/releases/V6_RC_OPERATOR_SUPPORT_PACK.md", upgrade_guide)
 
     def test_prerelease_feedback_template_uses_generic_current_rc_wording(self) -> None:
         template = read(".github/ISSUE_TEMPLATE/v6_rc_feedback.yml")
@@ -409,7 +427,13 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("artifact-owned rollback target", blocked)
         self.assertIn("Materialize the final rehearsal record from that artifact without", blocked)
         self.assertIn("hand-repairing any missing candidate tag, promoted prerelease tag, rollback", blocked)
-        self.assertIn(f"The active control-plane target is still `{active_target_id}`, not", blocked)
+        if active_target_id == "v6-ga-promotion":
+            self.assertIn(
+                f"The active control-plane target is `{active_target_id}`, so stable or GA",
+                blocked,
+            )
+        else:
+            self.assertIn(f"The active control-plane target is still `{active_target_id}`, not", blocked)
         matrix = read("docs/release-control/v6/internal/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md")
         self.assertIn(promotion_metadata_envelope(), normalize_ws(matrix))
         expected = blocked_record.build_blocked_record(record_date="2026-04-04")

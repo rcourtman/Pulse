@@ -132,11 +132,23 @@ server-side update execution surfaces.
    not drift as an
    unowned release-cut switch: changing the version string for a new RC or
    stable cut belongs to this subsystem and its release-promotion proof path.
+   Stable promotion is part of that same lineage boundary: once a governed
+   `6.0.0` candidate is prepared, the canonical stable packet names under
+   `docs/releases/` may only be reused after the already-shipped RC packet is
+   preserved under explicit historical filenames, the top-level
+   `docs/RELEASE_NOTES.md` index keeps both the stable packet and the preserved
+   RC packet discoverable, and `docs/UPGRADE_v6.md` points operators at the
+   live stable support transition instead of a retired prerelease packet.
 7. Preserve release-matched installer and Helm operator documentation links through `scripts/install.sh`, `.github/workflows/helm-pages.yml`, `.github/workflows/publish-helm-chart.yml`, and the chart metadata itself so deployment guidance and packaged chart metadata do not drift back to branch-tip `main` docs when a release line or promoted tag already exists.
    The same governed Helm boundary also owns `deploy/helm/pulse/` itself:
    chart metadata, default values, templates, and generated chart docs must
    stay on the validated release line rather than mutating `main` or packaging
    from whatever branch GitHub happened to check out.
+   Generated chart docs are part of the packaged release artifact, not a
+   disposable byproduct: when the stable candidate version changes, the checked
+   in `deploy/helm/pulse/README.md` output must be regenerated from the same
+   chart metadata and release line so published Helm docs, chart version
+   badges, and packaged archive metadata all describe the identical cut.
 8. Add or change operator-facing hosted tenant runtime canary rollout, batch runtime contract reconciliation, canonical hosted route/public URL generation, or control-plane runtime-registry reconciliation through `cmd/pulse-control-plane/main.go`, `internal/cloudcp/docker/manager.go`, `internal/cloudcp/docker/labels.go`, and `internal/cloudcp/tenant_runtime_rollout.go`
 9. Add or change the canonical hosted staging smoke operator path through `scripts/run_hosted_staging_smoke.sh`, `tests/integration/scripts/bootstrap-hosted-mobile-onboarding.mjs`, `tests/integration/scripts/hosted-mobile-token-runtime.mjs`, `tests/integration/scripts/hosted-tenant-runtime.mjs`, and `tests/integration/scripts/relay-mobile-token-helper.go`
 
@@ -151,13 +163,21 @@ server-side update execution surfaces.
 1. Update this contract when canonical deployment or installer entry points move
 2. Keep deployment runtime and shared API proof routing aligned in `registry.json`
 3. Preserve explicit coverage for installer parity, update planning, and deployment bootstrap behavior when these surfaces change
-4. Keep managed-runtime first-session helpers deterministic: shared browser
+4. Keep stable and prerelease packet lineage explicit when `docs/releases/` or
+   `VERSION` changes: preserve already-shipped RC packets under dedicated
+   historical filenames before reusing canonical stable names, keep
+   `docs/RELEASE_NOTES.md` and `docs/UPGRADE_v6.md` coherent with that
+   lineage, and prove the result through the release-promotion metadata path.
+5. Keep `deploy/helm/pulse/README.md` regenerated and release-matched whenever
+   chart metadata or the governed release version changes so packaged Helm docs
+   remain on the same validated cut as `Chart.yaml`.
+6. Keep managed-runtime first-session helpers deterministic: shared browser
    helpers under `tests/integration/tests/helpers.ts` may only drive the live
    setup wizard through the current managed runtime after refreshing the
    canonical dev reset route, and any helper changes that rely on hot-dev
    browser/backend behavior must keep a managed-runtime recovery proof updated
    in the same slice.
-5. Keep root-level Playwright wrapper routing on the canonical managed browser
+7. Keep root-level Playwright wrapper routing on the canonical managed browser
    truth. `playwright.config.ts`, `tests/integration/playwright.config.ts`,
    and `tests/integration/tests/runtime-defaults.ts` must resolve the same
    browser base URL precedence so repo-root browser proofs attach to the live
@@ -170,7 +190,7 @@ server-side update execution surfaces.
    `PULSE_E2E_REPO_ROOT` for runtime-state and managed-session discovery so
    isolated verification harnesses can relocate managed runtime state without
    mutating the live repo root.
-6. Keep hosted staging smoke fail-closed and repo-tracked. `scripts/run_hosted_staging_smoke.sh`
+8. Keep hosted staging smoke fail-closed and repo-tracked. `scripts/run_hosted_staging_smoke.sh`
    and the hosted onboarding helpers under `tests/integration/scripts/` must
    require explicit target environment input, compose the canonical hosted
    signup/billing Playwright evals with the hosted mobile onboarding proof, and

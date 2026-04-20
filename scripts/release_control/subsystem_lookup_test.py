@@ -4250,6 +4250,47 @@ class SubsystemLookupTest(unittest.TestCase):
             ],
         )
 
+    def test_lookup_paths_assigns_stable_and_historical_release_packet_docs_to_deployment_installability(self) -> None:
+        result = lookup_paths(
+            [
+                "docs/releases/RELEASE_NOTES_v6.md",
+                "docs/releases/RELEASE_NOTES_v6_RC1.md",
+                "docs/releases/V6_CHANGELOG.md",
+                "docs/releases/V6_CHANGELOG_RC1.md",
+            ]
+        )
+        self.assertEqual(result["unowned_runtime_files"], [])
+        self.assertEqual(
+            {item["subsystem"] for item in result["impacted_subsystems"]},
+            {"deployment-installability"},
+        )
+        for file_entry in result["files"]:
+            self.assertEqual(file_entry["classification"], "runtime")
+            self.assertEqual(
+                {match["subsystem"] for match in file_entry["matches"]},
+                {"deployment-installability"},
+            )
+            match = file_entry["matches"][0]
+            self.assertEqual(
+                match["contract"],
+                "docs/release-control/v6/internal/subsystems/deployment-installability.md",
+            )
+            self.assertEqual(match["lane_context"]["lane_id"], "L1")
+            self.assertEqual(
+                match["verification_requirement"]["id"],
+                "release-promotion-metadata-runtime",
+            )
+            self.assertEqual(
+                match["verification_requirement"]["exact_files"],
+                [
+                    "scripts/release_control/internal/record_rc_to_ga_rehearsal_test.py",
+                    "scripts/release_control/release_promotion_policy_support_test.py",
+                    "scripts/release_control/release_promotion_policy_test.py",
+                    "scripts/release_control/render_release_body_test.py",
+                    "scripts/release_control/resolve_release_promotion_test.py",
+                ],
+            )
+
     def test_lookup_paths_assigns_upgrade_guide_to_deployment_installability(self) -> None:
         result = lookup_paths(["docs/UPGRADE_v6.md"])
         self.assertEqual(result["unowned_runtime_files"], [])
@@ -4356,6 +4397,7 @@ class SubsystemLookupTest(unittest.TestCase):
         result = lookup_paths(
             [
                 "deploy/helm/pulse/Chart.yaml",
+                "deploy/helm/pulse/README.md",
                 "deploy/helm/pulse/templates/deployment.yaml",
                 "deploy/helm/pulse/values.yaml",
             ]

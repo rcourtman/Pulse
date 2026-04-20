@@ -1,96 +1,91 @@
-# Pulse v6.0.0-rc.1 Release Candidate Notes
+# Pulse v6.0.0 Release Notes
 
-`v6.0.0-rc.1` is the first public release candidate for Pulse v6.
+`v6.0.0` is the first stable release of Pulse v6. It promotes the validated
+`v6.0.0-rc.1` and `v6.0.0-rc.2` line into the default supported v6 release.
 
-This build is intended for evaluation and early deployment testing before the stable `v6.0.0` release. Pulse v5 remains the current stable line. If you rely on Pulse in production today, start with a staging or non-critical environment first and keep a rollback path available.
+Pulse v6 reorganizes the product around `Dashboard`, `Infrastructure`,
+`Workloads`, `Storage`, and `Recovery`, keeps the governed v5-to-v6 upgrade and
+Unified Agent continuity path, and ships the corrected self-hosted commercial
+model that was validated during `rc.2`.
 
-If you are handling rollout questions or want the launch-time canned answers for current v5 users, use:
+## Pulse v5 Support Transition
 
-- `docs/releases/V6_RC_OPERATOR_SUPPORT_PACK.md`
+Pulse v5 entered maintenance-only support on `2026-04-20`.
+I will ship only critical security, data-loss, licensing or billing blocker, installer or updater failure, and safe migration blocker fixes for existing v5 users until `2026-07-19`.
+After `2026-07-19`, Pulse v5 is end-of-support and new fixes land on v6 unless
+I publish an explicit exception.
 
-## Before You Try It
+## What Is In v6.0.0
 
-- Do not make your first v6 test on a production Pulse v5 installation.
-- Prefer a lab, staging instance, or separate non-critical install for your first RC pass.
-- Keep current backups and direct console access available before upgrading.
-- Treat this RC as real release-candidate software: suitable for evaluation, but not yet the default recommendation for broad production rollout.
+### Unified v6 product layout
 
-## What This RC Is For
+Pulse v6 changes the default product shape. The primary surfaces are now:
 
-- validating the v5 to v6 upgrade path
-- checking first-session navigation and onboarding
-- testing unified-agent continuity after the server upgrade
-- exercising Pulse Pro activation and v5 Pro or Lifetime migration
-- surfacing regressions, broken flows, and rough edges before GA
+- `Dashboard`
+- `Infrastructure`
+- `Workloads`
+- `Storage`
+- `Recovery`
 
-## Upgrade FAQ
+Existing bookmarks, old screenshots, and operator runbooks that assumed the v5
+Proxmox-first layout should be reviewed during upgrade.
 
-### Do I need to uninstall Pulse v5 first?
+### Recovery and infrastructure are first-class
 
-No. Test Pulse v6 as an upgrade, not as a tear-down-and-rebuild exercise.
+`Recovery` is now a primary surface rather than a backup-only page family, and
+infrastructure onboarding is split by ownership:
 
-### Does upgrading the Pulse server to v6 automatically update my unified agents?
+- `Install on a host` for direct Unified Agent deployment
+- `Platform connections` for API-backed systems such as Proxmox, TrueNAS, and
+  VMware
 
-No. The server upgrade and unified-agent upgrade are separate.
+### Self-hosted packaging is corrected from the early RC posture
 
-If you install Pulse v6, your existing agents do not all switch to v6 automatically just because the server changed.
+Self-hosted core monitoring is no longer sold by monitored-system count on the
+current public v6 plans.
 
-### If I want to test the full v6 agent path, what should I do?
+| Plan | Core monitoring | Metric history | Paid value |
+|---|---|---:|---|
+| Community | Unlimited | 7 days | Full self-hosted monitoring |
+| Relay | Unlimited | 14 days | Remote access, mobile, push, and convenience |
+| Pro | Unlimited | 90 days | Relay plus AI operations, automation, and advanced admin features |
 
-After upgrading the server, update existing agents separately using the command generated from:
+Legacy `Pro+` remains continuity-only for existing holders. It is not a public
+self-hosted checkout tier.
 
-`Settings -> Infrastructure -> Install on a host`
+### Existing paid customer continuity is explicit
 
-That is the supported v5-to-v6 crossover path for agent testing.
+- Existing lifetime customers remain valid and uncapped.
+- Legacy recurring Pulse Pro subscribers who were already active before the
+  public v6 pricing cutover remain uncapped while that subscription stays
+  active.
+- Supported legacy paid migrations can still exchange into the v6 activation
+  model without repurchasing.
+- If a self-hosted v6 install still shows a bounded monitored-system cap after
+  activation or migration, treat that as a bug rather than intended policy.
 
-### Do I need to uninstall existing v5 agents before updating them?
+### Commercial account and upgrade surfaces match the current model
 
-No. Existing v5 unified agents should be upgraded in place when testing them against a v6 server.
+Pulse Account, the in-product `Plans & Billing` surface, and related pricing
+copy now describe self-hosted upgrades as plan selection plus paid extras
+instead of buying more monitored-system capacity.
 
-### Will an upgraded v5 agent keep the same identity in v6?
+## Upgrade Guidance For Existing v5 Users
 
-Yes. The supported v5-to-v6 agent path is intended to preserve one canonical agent identity rather than duplicating the machine during upgrade.
+1. Back up the current system and keep direct console access available.
+2. Re-test navigation, bookmarks, and any saved links that depended on the old
+   route structure.
+3. Re-test custom automation or dashboards that depended on v5-style
+   `/api/state` or websocket payloads.
+4. Re-test recovery workflows and any backup-era assumptions.
+5. Verify license activation or paid-license migration immediately after first
+   boot on upgraded systems.
+6. Upgrade Unified Agents separately only when you are explicitly testing the
+   v5-to-v6 agent path.
 
-### Can one installed Pulse Unified Agent report to both a Pulse v5 instance and a Pulse v6 instance at the same time?
-
-Not as a supported in-place setup. A running Unified Agent installation is configured against one Pulse URL and one token. If you need side-by-side evaluation, use a separate test host or VM, a cloned lab machine, or a separate isolated agent installation instead of trying to point one running agent service at two Pulse servers.
-
-### What about Pulse Pro licensing?
-
-If you already have a valid Pulse v5 Pro or Lifetime license, Pulse v6 can migrate it into the v6 activation model.
-
-If the automatic exchange does not complete, retry from the v6 license panel. You can enter either:
-
-- a Pulse v6 activation key
-- a valid Pulse v5 Pro or Lifetime key for migration
-
-### Will my old bookmarks and familiar pages still work?
-
-Not necessarily. v6 reorganizes the product around Dashboard, Infrastructure, Workloads, Storage, and Recovery, and legacy page aliases have been removed.
-
-If you rely on old bookmarks or runbooks, expect to update them.
-
-## Feedback
-
-Use the `Pulse v6 pre-release feedback` issue template for bugs, regressions, upgrade failures, performance issues, or actionable UX friction:
-
-- `https://github.com/rcourtman/Pulse/issues/new?template=v6_rc_feedback.yml`
-
-When you report something, include:
-
-- Pulse version
-- install path
-- installation type
-- OS or environment
-- license tier
-- what you expected
-- what happened instead
-- sanitized logs, screenshots, or diagnostics if they help
-
-## More Detail
-
-If you want the operator-facing migration and upgrade details, use these docs:
+## Operator References
 
 - `docs/UPGRADE_v6.md`
+- `docs/releases/V6_CHANGELOG.md`
 - `docs/PULSE_PRO.md`
 - `docs/MIGRATION_UNIFIED_NAV.md`

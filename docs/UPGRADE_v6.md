@@ -2,9 +2,10 @@
 
 This guide covers practical upgrade steps for existing Pulse installs moving to v6.
 
-For current RC rollout answers and canned support responses, see:
+For current stable release notes and rollout references, see:
 
-- `docs/releases/V6_RC2_OPERATOR_SUPPORT_PACK_DRAFT.md`
+- `docs/releases/RELEASE_NOTES_v6.md`
+- `docs/releases/V6_CHANGELOG.md`
 
 ## Before You Upgrade
 
@@ -90,8 +91,11 @@ servers.
 
 ### Can I keep Pulse v5 stable while I test Pulse v6?
 
-Yes. That is the recommended RC posture. Keep v5 as your stable line and test
-v6 first on a staging or non-critical install with a rollback path available.
+Pulse v5 entered maintenance-only support on `2026-04-20` and remains eligible
+only for critical maintenance fixes until `2026-07-19`.
+
+If you want extra caution, use a staging or otherwise controlled upgrade first
+and keep a rollback path available, but v6 is now the supported stable line.
 
 ## Migration Notes (v6)
 

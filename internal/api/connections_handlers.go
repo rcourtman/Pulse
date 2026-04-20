@@ -66,8 +66,7 @@ func (h *ConnectionsHandlers) HandleList(w http.ResponseWriter, r *http.Request)
 	}
 
 	if monitor != nil {
-		snapshot := monitor.GetState()
-		inputs.hosts = snapshot.Hosts
+		inputs.hosts = monitor.HostsSnapshot()
 		inputs.instanceHealth = instanceHealthByKey(monitor.SchedulerHealth())
 	} else {
 		inputs.hosts = []models.Host{}

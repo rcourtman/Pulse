@@ -109,7 +109,7 @@ test.describe("Assistant & Patrol settings provider setup", () => {
     await page.goto("/settings/system-ai", { waitUntil: "domcontentloaded" });
     await expect(page.getByRole("heading", { name: "Assistant & Patrol", level: 1 })).toBeVisible();
     await expect(
-      page.getByText("Configure providers and models for Pulse Assistant and Patrol.", { exact: true }),
+      page.getByText("Configure providers and models for Pulse Assistant and Patrol.", { exact: true }).first(),
     ).toBeVisible();
 
     await page.getByRole("button", { name: /enable assistant and patrol/i }).click();

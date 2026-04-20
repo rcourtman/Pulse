@@ -10463,6 +10463,86 @@ func TestContract_ConnectionPayloadShapeStaysCanonical(t *testing.T) {
 	assertJSONSnapshot(t, body, want)
 }
 
+func TestContract_ConnectionsListIncludesAgentHostsFromUnifiedReadState(t *testing.T) {
+	cfg := &config.Config{DataPath: t.TempDir()}
+	monitor, err := monitoring.New(cfg)
+	if err != nil {
+		t.Fatalf("monitoring.New: %v", err)
+	}
+	t.Cleanup(func() { monitor.Stop() })
+
+	adapter := unifiedresources.NewMonitorAdapter(nil)
+	setTestUnexportedField(t, monitor, "resourceStore", monitoring.ResourceStoreInterface(adapter))
+
+	now := time.Now().UTC()
+	adapter.PopulateSupplementalRecords(unifiedresources.SourceAgent, []unifiedresources.IngestRecord{
+		{
+			SourceID: "agent-1",
+			Resource: unifiedresources.Resource{
+				ID:       "resource-host-1",
+				Type:     unifiedresources.ResourceTypeAgent,
+				Name:     "mini-pc",
+				Status:   unifiedresources.StatusOnline,
+				LastSeen: now,
+				Agent: &unifiedresources.AgentData{
+					AgentID:   "agent-1",
+					Hostname:  "mini-pc",
+					MachineID: "machine-1",
+				},
+				Identity: unifiedresources.ResourceIdentity{
+					MachineID: "machine-1",
+					Hostnames: []string{"mini-pc"},
+				},
+			},
+		},
+	})
+
+	if got := len(monitorState(t, monitor).GetHosts()); got != 0 {
+		t.Fatalf("expected legacy host snapshot to stay empty, got %d hosts", got)
+	}
+	if got := len(monitor.GetUnifiedReadStateOrSnapshot().Hosts()); got != 1 {
+		t.Fatalf("expected unified read-state to expose 1 agent host, got %d", got)
+	}
+
+	handler := NewConnectionsHandlers(
+		func(context.Context) *config.Config { return cfg },
+		func(context.Context) *config.ConfigPersistence { return nil },
+		func(context.Context) *monitoring.Monitor { return monitor },
+	)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/connections", nil)
+	rec := httptest.NewRecorder()
+	handler.HandleList(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+
+	var resp ConnectionsListResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode connections response: %v", err)
+	}
+	if len(resp.Connections) != 1 {
+		t.Fatalf("expected 1 connection from unified read-state, got %d", len(resp.Connections))
+	}
+
+	conn := resp.Connections[0]
+	if conn.ID != "agent:agent-1" {
+		t.Fatalf("connection id = %q, want %q", conn.ID, "agent:agent-1")
+	}
+	if conn.Type != ConnectionTypeAgent {
+		t.Fatalf("connection type = %q, want %q", conn.Type, ConnectionTypeAgent)
+	}
+	if conn.Name != "mini-pc" || conn.Address != "mini-pc" {
+		t.Fatalf("unexpected agent identity: name=%q address=%q", conn.Name, conn.Address)
+	}
+	if conn.State != ConnectionStateActive {
+		t.Fatalf("connection state = %q, want %q", conn.State, ConnectionStateActive)
+	}
+	if conn.Source != ConnectionSourceAgent {
+		t.Fatalf("connection source = %q, want %q", conn.Source, ConnectionSourceAgent)
+	}
+}
+
 // TestContract_ProbePayloadShapeStaysCanonical pins the POST
 // /api/connections/probe wire shape. Hint keys are free-form; the envelope
 // fields (type, host, port, hints) are the contract boundary.
