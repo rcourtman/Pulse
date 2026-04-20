@@ -51,7 +51,12 @@ func (h *LicenseHandlers) buildCommercialEntitlementPayload(
 		}
 	}
 
-	payload := buildEntitlementPayloadWithUsage(status, svc.SubscriptionState(), usage, trialEndsAtUnix)
+	payload := buildEntitlementPayloadWithUsage(
+		status,
+		h.payloadSubscriptionStateForService(svc),
+		usage,
+		trialEndsAtUnix,
+	)
 
 	// Surface overflow days remaining for frontend messaging.
 	if days := overflowDaysRemainingFromLicensing(status.Tier, overflowGrantedAt, now); days > 0 {
@@ -133,7 +138,11 @@ func (h *LicenseHandlers) HandleRuntimeCapabilities(w http.ResponseWriter, r *ht
 		}
 	}
 
-	payload := buildRuntimeCapabilitiesPayloadWithUsage(status, svc.SubscriptionState(), usage)
+	payload := buildRuntimeCapabilitiesPayloadWithUsage(
+		status,
+		h.payloadSubscriptionStateForService(svc),
+		usage,
+	)
 	payload.HostedMode = h != nil && h.hostedMode
 	if h != nil && h.cfg != nil && h.cfg.DemoMode {
 		payload = sanitizeRuntimeCapabilitiesPayloadForPublicDemo(payload)
@@ -141,6 +150,19 @@ func (h *LicenseHandlers) HandleRuntimeCapabilities(w http.ResponseWriter, r *ht
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(payload)
+}
+
+func (h *LicenseHandlers) payloadSubscriptionStateForService(svc *licenseService) string {
+	if svc == nil {
+		return ""
+	}
+	if svc.Current() == nil && svc.Evaluator() == nil && h != nil && !h.hostedMode {
+		// Self-hosted community installs have no commercial lifecycle source at
+		// all. Report the runtime posture as active community instead of an
+		// expired paid subscription.
+		return string(subscriptionStateActiveValue)
+	}
+	return svc.SubscriptionState()
 }
 
 func trialEndsAtUnixFromService(svc *licenseService) *int64 {

@@ -5479,6 +5479,64 @@ func TestContract_EntitlementPayloadMonitoredSystemUsageJSONSnapshot(t *testing.
 	assertJSONSnapshot(t, got, want)
 }
 
+func TestContract_SelfHostedCommunityEntitlementsJSONSnapshot(t *testing.T) {
+	baseDir := t.TempDir()
+	mtp := config.NewMultiTenantPersistence(baseDir)
+	handlers := NewLicenseHandlers(mtp, false)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/license/entitlements", nil).
+		WithContext(context.WithValue(context.Background(), OrgIDContextKey, "default"))
+	rec := httptest.NewRecorder()
+	handlers.HandleEntitlements(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("entitlements status=%d, want %d: %s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+
+	var payload EntitlementPayload
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode entitlements: %v", err)
+	}
+
+	got, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal entitlements payload: %v", err)
+	}
+
+	const want = `{
+		"capabilities":["update_alerts","sso","ai_patrol"],
+		"limits":[],
+		"subscription_state":"active",
+		"upgrade_reasons":[
+			{"key":"mobile_app","reason":"Get Relay so you can check Pulse from your phone when you are away from the dashboard.","action_url":"https://pulserelay.pro/pricing?utm_source=pulse\u0026utm_medium=app\u0026utm_campaign=upgrade\u0026feature=mobile_app"},
+			{"key":"push_notifications","reason":"Get Relay so important alerts reach you immediately on mobile instead of waiting for you to reopen Pulse.","action_url":"https://pulserelay.pro/pricing?utm_source=pulse\u0026utm_medium=app\u0026utm_campaign=upgrade\u0026feature=push_notifications"},
+			{"key":"relay","reason":"Get Relay so Pulse stays reachable securely from anywhere instead of only on the local dashboard.","action_url":"https://pulserelay.pro/pricing?utm_source=pulse\u0026utm_medium=app\u0026utm_campaign=upgrade\u0026feature=relay"},
+			{"key":"long_term_metrics","reason":"Get Relay for 14 days of history, or Pro for 90 days, so you can see what changed before and after an incident.","action_url":"https://pulserelay.pro/pricing?utm_source=pulse\u0026utm_medium=app\u0026utm_campaign=upgrade\u0026feature=long_term_metrics"},
+			{"key":"ai_autofix","reason":"Upgrade to Pro so Pulse can move from finding issues to applying safe remediation with your approval or in autonomous mode.","action_url":"https://pulserelay.pro/pricing?utm_source=pulse\u0026utm_medium=app\u0026utm_campaign=upgrade\u0026feature=ai_autofix"},
+			{"key":"ai_alerts","reason":"Upgrade to Pro so alerts arrive with root-cause analysis instead of a stack of symptoms.","action_url":"https://pulserelay.pro/pricing?utm_source=pulse\u0026utm_medium=app\u0026utm_campaign=upgrade\u0026feature=ai_alerts"},
+			{"key":"kubernetes_ai","reason":"Upgrade to Pro so Pulse can explain cluster pressure, failing pods, and likely causes without manual Kubernetes triage.","action_url":"https://pulserelay.pro/pricing?utm_source=pulse\u0026utm_medium=app\u0026utm_campaign=upgrade\u0026feature=kubernetes_ai"},
+			{"key":"rbac","reason":"Upgrade to Pro when more than one operator needs safe access boundaries around infrastructure changes.","action_url":"https://pulserelay.pro/pricing?utm_source=pulse\u0026utm_medium=app\u0026utm_campaign=upgrade\u0026feature=rbac"},
+			{"key":"agent_profiles","reason":"Upgrade to Pro to standardize agent behavior across systems without reconfiguring every install by hand.","action_url":"https://pulserelay.pro/pricing?utm_source=pulse\u0026utm_medium=app\u0026utm_campaign=upgrade\u0026feature=agent_profiles"},
+			{"key":"advanced_sso","reason":"Upgrade to Pro to connect your identity provider and keep operator access aligned with your existing auth controls.","action_url":"https://pulserelay.pro/pricing?utm_source=pulse\u0026utm_medium=app\u0026utm_campaign=upgrade\u0026feature=advanced_sso"},
+			{"key":"audit_logging","reason":"Upgrade to Pro to keep a trustworthy action trail for incident review, accountability, and compliance.","action_url":"https://pulserelay.pro/pricing?utm_source=pulse\u0026utm_medium=app\u0026utm_campaign=upgrade\u0026feature=audit_logging"},
+			{"key":"advanced_reporting","reason":"Upgrade to Pro to turn live infrastructure state into shareable reports without manual screenshot work.","action_url":"https://pulserelay.pro/pricing?utm_source=pulse\u0026utm_medium=app\u0026utm_campaign=upgrade\u0026feature=advanced_reporting"}
+		],
+		"tier":"free",
+		"hosted_mode":false,
+		"valid":false,
+		"is_lifetime":false,
+		"days_remaining":0,
+		"trial_eligible":true,
+		"max_history_days":7,
+		"overflow_days_remaining":14,
+		"legacy_connections":{"proxmox_nodes":0,"docker_hosts":0,"kubernetes_clusters":0},
+		"has_migration_gap":false,
+		"monitored_system_capacity":{"mode":"usage_unavailable","urgency":"ok","current":0,"limit":0,"current_available":false,"available_slots":0,"overage":0,"blocks_new_systems":false,"existing_monitoring_continues":false}
+	}`
+
+	assertJSONSnapshot(t, got, want)
+}
+
 func TestContract_EntitlementPayloadMonitoredSystemUsageUnavailableJSONSnapshot(t *testing.T) {
 	payload := buildEntitlementPayloadWithUsage(&licenseStatus{
 		Valid:               true,

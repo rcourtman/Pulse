@@ -565,11 +565,67 @@ func TestEntitlementHandler_TrialEligibility_FreshOrgAllowed(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
 		t.Fatalf("unmarshal payload failed: %v", err)
 	}
+	if payload.SubscriptionState != string(license.SubStateActive) {
+		t.Fatalf("subscription_state=%q, want %q", payload.SubscriptionState, license.SubStateActive)
+	}
 	if !payload.TrialEligible {
 		t.Fatalf("trial_eligible=%v, want true", payload.TrialEligible)
 	}
 	if payload.TrialEligibilityReason != "" {
 		t.Fatalf("trial_eligibility_reason=%q, want empty", payload.TrialEligibilityReason)
+	}
+	for _, limit := range payload.Limits {
+		if limit.Key == "max_monitored_systems" {
+			t.Fatalf("expected no max_monitored_systems limit in payload, got %+v", payload.Limits)
+		}
+	}
+	if payload.MonitoredSystemCapacity == nil {
+		t.Fatal("expected monitored_system_capacity in payload")
+	}
+	if payload.MonitoredSystemCapacity.Limit != 0 || payload.MonitoredSystemCapacity.BlocksNewSystems {
+		t.Fatalf(
+			"expected uncapped monitored_system_capacity for fresh community org, got %+v",
+			payload.MonitoredSystemCapacity,
+		)
+	}
+}
+
+func TestEntitlementHandler_OverflowOnlyBillingStateReportsActiveCommunity(t *testing.T) {
+	baseDir := t.TempDir()
+	mtp := config.NewMultiTenantPersistence(baseDir)
+	now := time.Now().Unix()
+	store := config.NewFileBillingStore(baseDir)
+	if err := store.SaveBillingState("default", &entitlements.BillingState{
+		Capabilities:      []string{},
+		Limits:            map[string]int64{},
+		MetersEnabled:     []string{},
+		OverflowGrantedAt: &now,
+	}); err != nil {
+		t.Fatalf("SaveBillingState: %v", err)
+	}
+
+	h := NewLicenseHandlers(mtp, false)
+	ctx := context.WithValue(context.Background(), OrgIDContextKey, "default")
+	req := httptest.NewRequest(http.MethodGet, "/api/license/entitlements", nil).WithContext(ctx)
+	rec := httptest.NewRecorder()
+	h.HandleEntitlements(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d, want %d: %s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+
+	var payload EntitlementPayload
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("unmarshal payload failed: %v", err)
+	}
+	if payload.SubscriptionState != string(license.SubStateActive) {
+		t.Fatalf("subscription_state=%q, want %q", payload.SubscriptionState, license.SubStateActive)
+	}
+	if !payload.TrialEligible {
+		t.Fatalf("trial_eligible=%v, want true", payload.TrialEligible)
+	}
+	if payload.MonitoredSystemCapacity == nil || payload.MonitoredSystemCapacity.Limit != 0 || payload.MonitoredSystemCapacity.BlocksNewSystems {
+		t.Fatalf("expected uncapped monitored_system_capacity, got %+v", payload.MonitoredSystemCapacity)
 	}
 }
 
