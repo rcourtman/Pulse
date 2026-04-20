@@ -232,10 +232,10 @@ describe('InfrastructureWorkspace', () => {
     expect(setSearchParamsSpy).not.toHaveBeenCalled();
   });
 
-  it('routes to the agent install slot via the ledger-header Install agent button', () => {
+  it('routes to the agent install slot via the Install agent CTA inside the entry card', () => {
     renderWorkspace();
 
-    // The agent path is a first-class peer action in the ledger header, not
+    // The agent path is a first-class peer entry inside the unified cards, not
     // a subtext offramp hidden inside the Add screen — a user who wants
     // CPU/disk temps or is on bare-metal Linux should reach it in one click.
     fireEvent.click(screen.getByRole('button', { name: /^Install agent$/i }));

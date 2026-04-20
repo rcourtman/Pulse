@@ -1,17 +1,10 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ConnectionsExplainer } from '../ConnectionsExplainer';
 
-const DISMISS_KEY = 'pulse.infrastructure.explainer.dismissed.v1';
-
 describe('ConnectionsExplainer', () => {
-  beforeEach(() => {
-    window.localStorage.clear();
-  });
-
   afterEach(() => {
     cleanup();
-    window.localStorage.clear();
   });
 
   it('names both ingestion modes with their branded labels', () => {
@@ -51,19 +44,44 @@ describe('ConnectionsExplainer', () => {
     }
   });
 
-  it('hides itself and persists dismissal to localStorage when closed', () => {
-    const { container } = render(() => <ConnectionsExplainer />);
+  it('exposes Add connection and Install agent as the entry CTAs, not as duplicate buttons elsewhere', () => {
+    const onAddConnection = vi.fn();
+    const onInstallAgent = vi.fn();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+    render(() => (
+      <ConnectionsExplainer
+        onAddConnection={onAddConnection}
+        onInstallAgent={onInstallAgent}
+      />
+    ));
 
-    expect(container.querySelector('section')).toBeNull();
-    expect(window.localStorage.getItem(DISMISS_KEY)).toBe('1');
+    const addBtn = screen.getByRole('button', { name: /^Add connection$/i });
+    const installBtn = screen.getByRole('button', { name: /^Install agent$/i });
+
+    fireEvent.click(addBtn);
+    expect(onAddConnection).toHaveBeenCalledTimes(1);
+    expect(onInstallAgent).not.toHaveBeenCalled();
+
+    fireEvent.click(installBtn);
+    expect(onInstallAgent).toHaveBeenCalledTimes(1);
   });
 
-  it('stays dismissed across remounts once localStorage records it', () => {
-    window.localStorage.setItem(DISMISS_KEY, '1');
-    const { container } = render(() => <ConnectionsExplainer />);
+  it('does not render the action CTAs in read-only mode', () => {
+    render(() => (
+      <ConnectionsExplainer
+        readOnly
+        onAddConnection={() => {}}
+        onInstallAgent={() => {}}
+      />
+    ));
 
-    expect(container.querySelector('section')).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Add connection$/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Install agent$/i })).toBeNull();
+  });
+
+  it('no longer offers a dismiss affordance — the cards are the entry path, not a tutorial banner', () => {
+    render(() => <ConnectionsExplainer />);
+
+    expect(screen.queryByRole('button', { name: /Dismiss/i })).toBeNull();
   });
 });

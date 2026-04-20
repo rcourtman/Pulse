@@ -10,7 +10,7 @@ export const SETTINGS_HEADER_META: SettingsHeaderMetaMap = {
   'infrastructure-systems': {
     title: 'Infrastructure',
     description:
-      'Review monitored systems in one ledger. Add connection for Platform API setup; Install agent for host-level metrics or bare-metal Linux / Unraid / FreeBSD.',
+      'Review monitored systems and add new connections or agent installs from one place.',
   },
   'system-general': {
     title: 'General',

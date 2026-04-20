@@ -5,7 +5,7 @@ import { copyToClipboard } from '@/utils/clipboard';
 import { notificationStore } from '@/stores/notifications';
 import { AgentProfilesPanel } from './AgentProfilesPanel';
 import { ConnectionsExplainer } from './ConnectionsExplainer';
-import { ConnectionsTable, type ConnectionsTableHeaderAction } from './ConnectionsTable';
+import { ConnectionsTable } from './ConnectionsTable';
 import { ConnectionEditor } from './ConnectionEditor/ConnectionEditor';
 import { NodeCredentialSlot } from './ConnectionEditor/CredentialSlots/NodeCredentialSlot';
 import { TrueNASCredentialSlot } from './ConnectionEditor/CredentialSlots/TrueNASCredentialSlot';
@@ -122,30 +122,17 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
 
   const rows = createMemo(() => ledger.rows());
 
-  const headerActions = createMemo<ConnectionsTableHeaderAction[]>(() =>
-    readOnly()
-      ? []
-      : [
-          {
-            label: 'Add connection',
-            onSelect: () => {
-              setInitialAddType(null);
-              setAddMode(true);
-              setShowAgentProfiles(false);
-            },
-            tone: 'secondary' as const,
-          },
-          {
-            label: 'Install agent',
-            onSelect: () => {
-              setInitialAddType('agent');
-              setAddMode(true);
-              setShowAgentProfiles(false);
-            },
-            tone: 'secondary' as const,
-          },
-        ],
-  );
+  const startAddConnection = () => {
+    setInitialAddType(null);
+    setAddMode(true);
+    setShowAgentProfiles(false);
+  };
+
+  const startInstallAgent = () => {
+    setInitialAddType('agent');
+    setAddMode(true);
+    setShowAgentProfiles(false);
+  };
 
   const agentUninstallCommands = createMemo(() => ({
     linux: operations.getUninstallCommand(),
@@ -208,10 +195,13 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
       <Switch
         fallback={
           <>
-            <ConnectionsExplainer />
+            <ConnectionsExplainer
+              readOnly={readOnly()}
+              onAddConnection={readOnly() ? undefined : startAddConnection}
+              onInstallAgent={readOnly() ? undefined : startInstallAgent}
+            />
             <ConnectionsTable
               rows={rows}
-              headerActions={headerActions()}
               actions={readOnly() ? undefined : rowActions}
               onEdit={readOnly() ? undefined : handleEditConnection}
               agentUninstallCommands={agentUninstallCommands()}

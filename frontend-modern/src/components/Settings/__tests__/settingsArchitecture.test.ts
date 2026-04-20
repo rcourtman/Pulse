@@ -30,9 +30,9 @@ describe('settings architecture guardrails', () => {
 
   it('keeps infrastructure onboarding route-backed under the shared settings shell', () => {
     expect(settingsHeaderMetaSource).toContain("'infrastructure-systems': {");
-    expect(settingsHeaderMetaSource).toContain('Review monitored systems in one ledger');
-    expect(settingsHeaderMetaSource).toContain('Add connection for Platform API setup');
-    expect(settingsHeaderMetaSource).toContain('Install agent for host-level metrics');
+    expect(settingsHeaderMetaSource).toContain(
+      'Review monitored systems and add new connections or agent installs from one place',
+    );
 
     expect(settingsNavigationHookSource).toContain('deriveAddStepFromLegacyPath(path)');
     expect(settingsNavigationHookSource).toContain(
