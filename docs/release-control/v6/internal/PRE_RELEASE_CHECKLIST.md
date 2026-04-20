@@ -22,26 +22,28 @@ Use this as the final gate before cutting a Pulse v6 pre-release.
 - The active target is now `v6-ga-promotion`, so the remaining release-ready
   work is explicitly about stable promotion proof rather than RC-floor
   stabilization.
-- The remaining release-ready blocker is `rc-to-ga-promotion-readiness`, which
-  stays blocked until a later stable `6.0.0` candidate completes a matching
-  `Release Dry Run` rehearsal with the canonical promotion artifact envelope:
-  candidate stable tag, promotion channel, promoted prerelease tag, rollback target,
+- `rc-to-ga-promotion-readiness` was cleared on 2026-04-20 by `Release Dry Run`
+  run `24673393628`, recorded at
+  `docs/release-control/v6/internal/records/rc-to-ga-promotion-readiness-rehearsal-2026-04-20.md`.
+- The stable `6.0.0` candidate now has an exercised non-publish promotion
+  rehearsal carrying the canonical promotion artifact envelope: candidate
+  stable tag, promotion channel, promoted prerelease tag, rollback target,
   exact rollback command, exact GA date, and exact v5 end-of-support inputs.
 - Mobile is in scope for the release and now has targeted readiness coverage in `pulse-mobile`.
 - High-risk release confidence now lives in `docs/release-control/v6/internal/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md` and should be cleared alongside this checklist.
 
 ## Promotion Policy
-- [ ] Record the previous stable tag and exact rollback pin command before publishing a new prerelease or stable release.
+- [x] Record the previous stable tag and exact rollback pin command before publishing a new prerelease or stable release.
 - [ ] For the GA/stable candidate, confirm the release pipeline has already been exercised on a real prerelease tag, not only linted or YAML-parsed.
-- [ ] For stable promotion, confirm the candidate commit has already shipped on `rc`.
-- [ ] For stable promotion, confirm the chosen `promoted_from_tag` is a prerelease that was actually published through the governed prerelease path, not an accidental git tag.
-- [ ] For stable promotion, confirm the prerelease soak window is at least 72 hours or document the hotfix exception explicitly.
+- [x] For stable promotion, confirm the candidate commit has already shipped on `rc`.
+- [x] For stable promotion, confirm the chosen `promoted_from_tag` is a prerelease that was actually published through the governed prerelease path, not an accidental git tag.
+- [x] For stable promotion, confirm the prerelease soak window is at least 72 hours or document the hotfix exception explicitly.
 - [ ] For stable promotion, confirm paid production tenants are not being moved onto an unvalidated build.
-- [ ] For GA/stable promotion, confirm `V5_MAINTENANCE_SUPPORT_POLICY.md` is still the intended policy and replace any placeholder GA notice dates with the exact v6 GA date and exact v5 end-of-support date that will ship with the announcement.
-- [ ] For GA/stable promotion, confirm the pushed governed release-branch copy of `.github/workflows/release-dry-run.yml` already accepts the governed stable rehearsal metadata envelope (`promoted_from_tag`, `rollback_version`, `ga_date`, `v5_eos_date`) through `workflow_dispatch`, because GitHub executes the selected remote ref and does not see local-only governance state.
-- [ ] For GA/stable promotion, confirm the local rehearsal branch exactly matches `origin` before dispatching `Release Dry Run`, so the run exercises the intended governed branch state instead of stale remote control-plane metadata.
+- [x] For GA/stable promotion, confirm `V5_MAINTENANCE_SUPPORT_POLICY.md` is still the intended policy and replace any placeholder GA notice dates with the exact v6 GA date and exact v5 end-of-support date that will ship with the announcement.
+- [x] For GA/stable promotion, confirm the pushed governed release-branch copy of `.github/workflows/release-dry-run.yml` already accepts the governed stable rehearsal metadata envelope (`promoted_from_tag`, `rollback_version`, `ga_date`, `v5_eos_date`) through `workflow_dispatch`, because GitHub executes the selected remote ref and does not see local-only governance state.
+- [x] For GA/stable promotion, confirm the local rehearsal branch exactly matches `origin` before dispatching `Release Dry Run`, so the run exercises the intended governed branch state instead of stale remote control-plane metadata.
 - [ ] For GA/stable promotion, confirm the release rehearsal and publish workflows both derive the governed release branch from release-control metadata instead of hardcoding a branch name inline.
-- [ ] For GA/stable promotion, materialize the final rehearsal record with `python3 scripts/release_control/record_rc_to_ga_rehearsal.py --run-id <run-id>` and, unless an explicit `--output` is chosen, confirm it lands at `docs/release-control/v6/internal/records/rc-to-ga-promotion-readiness-rehearsal-<record-date>.md`.
+- [x] For GA/stable promotion, materialize the final rehearsal record with `python3 scripts/release_control/record_rc_to_ga_rehearsal.py --run-id <run-id>` and, unless an explicit `--output` is chosen, confirm it lands at `docs/release-control/v6/internal/records/rc-to-ga-promotion-readiness-rehearsal-<record-date>.md`.
 - [ ] For GA/stable promotion, attach the dated rehearsal record, `Release Dry Run` run URL, and `rc-to-ga-rehearsal-summary` artifact to the release ticket, and confirm that artifact records the canonical promotion metadata envelope for that candidate: candidate stable tag, promotion channel, promoted prerelease tag, rollback target, exact rollback command, planned GA date, and planned v5 end-of-support date.
 - [ ] For v6 GA specifically, attach the exact self-hosted public forward and rollback packet from `pulse-pro/V6_LAUNCH_CHECKLIST.md` to the launch ticket: preview deploy/audit, production deploy/audit, and rollback deploy/audit commands must all be explicit before the gate can clear.
 
@@ -324,7 +326,7 @@ Mobile automated checks completed:
 - [ ] Clear gate `commercial-cancellation-reactivation`.
 - [ ] Clear gate `hosted-signup-billing-replay`.
 - [x] Clear gate `paid-feature-entitlement-gating`.
-- [ ] Clear gate `rc-to-ga-promotion-readiness`.
+- [x] Clear gate `rc-to-ga-promotion-readiness`.
 - [x] Clear gate `relay-registration-reconnect-drain`.
 - [x] Clear gate `mobile-relay-auth-approvals`.
 - [x] Clear gate `organization-user-scope-and-rbac`.

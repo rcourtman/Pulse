@@ -355,8 +355,8 @@ Companion drill:
   maintenance policy plus exact end-of-support date, with a linked rehearsal
   run URL and dry-run artifact carrying the full canonical promotion metadata
   envelope.
-- Current blocked record:
-  `docs/release-control/v6/records/rc-to-ga-promotion-readiness-blocked-2026-03-13.md`
+- Latest exercised record:
+  `docs/release-control/v6/internal/records/rc-to-ga-promotion-readiness-rehearsal-2026-04-20.md`
 - Block release if:
   Stable users would become the first real validation cohort, the rollback
   target is unclear, or the v5 maintenance-only policy is still undecided.

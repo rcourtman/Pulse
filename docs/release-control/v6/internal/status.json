@@ -620,6 +620,11 @@
         },
         {
           "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/rc-to-ga-promotion-readiness-rehearsal-2026-04-20.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "docs/release-control/v6/internal/records/rc-to-ga-promotion-readiness-rehearsal-blocked-2026-03-26.md",
           "kind": "file"
         },
@@ -2411,15 +2416,11 @@
       "status": "partial",
       "completion": {
         "state": "bounded-residual",
-        "summary": "Self-hosted RC confidence is at the current floor; GA promotion still depends on the shared RC-to-GA gate plus the lane-local self-hosted promotion package follow-up.",
+        "summary": "Self-hosted RC confidence is at the current floor; the remaining residual is the lane-local self-hosted promotion package follow-up.",
         "tracking": [
           {
             "kind": "lane-followup",
             "id": "self-hosted-ga-promotion-package"
-          },
-          {
-            "kind": "release-gate",
-            "id": "rc-to-ga-promotion-readiness"
           }
         ]
       },
@@ -2752,15 +2753,11 @@
       "status": "partial",
       "completion": {
         "state": "bounded-residual",
-        "summary": "Documentation is current enough for the RC floor, but GA-facing promotion and release communication stay as a lane-local follow-up alongside the shared RC-to-GA gate.",
+        "summary": "Documentation is current enough for the RC floor, and the remaining residual is the lane-local GA-facing promotion and release communication follow-up.",
         "tracking": [
           {
             "kind": "lane-followup",
             "id": "documentation-ga-promotion-package"
-          },
-          {
-            "kind": "release-gate",
-            "id": "rc-to-ga-promotion-readiness"
           }
         ]
       },
@@ -2870,11 +2867,11 @@
       "status": "partial",
       "completion": {
         "state": "bounded-residual",
-        "summary": "Migration safety is at the RC floor, while GA promotion proof remains the only governed residual work.",
+        "summary": "Migration safety is at the RC floor; any remaining same-lane hardening is outside the current release-gate slice.",
         "tracking": [
           {
-            "kind": "release-gate",
-            "id": "rc-to-ga-promotion-readiness"
+            "kind": "lane-followup",
+            "id": "migration-post-ga-hardening"
           }
         ]
       },
@@ -2941,11 +2938,11 @@
       "status": "partial",
       "completion": {
         "state": "bounded-residual",
-        "summary": "The end-to-end journey suite covers the RC floor, while RC-to-GA promotion remains the only shared residual proof track.",
+        "summary": "The end-to-end journey suite covers the RC floor; broader same-lane journey expansion remains outside the current release-gate slice.",
         "tracking": [
           {
-            "kind": "release-gate",
-            "id": "rc-to-ga-promotion-readiness"
+            "kind": "lane-followup",
+            "id": "journey-post-ga-expansion"
           }
         ]
       },
@@ -3684,7 +3681,7 @@
       "owner": "project-owner",
       "blocking_level": "release-ready",
       "minimum_evidence_tier": "real-external-e2e",
-      "status": "blocked",
+      "status": "passed",
       "verification_doc": "docs/release-control/v6/internal/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
       "lane_ids": [
         "L1",
@@ -3716,6 +3713,12 @@
           "path": "docs/release-control/v6/internal/records/rc-to-ga-promotion-readiness-blocked-2026-04-04.md",
           "kind": "file",
           "evidence_tier": "local-rehearsal"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/rc-to-ga-promotion-readiness-rehearsal-2026-04-20.md",
+          "kind": "file",
+          "evidence_tier": "real-external-e2e"
         },
         {
           "repo": "pulse",
@@ -3942,6 +3945,28 @@
       "recorded_at": "2026-04-20",
       "lane_ids": [
         "L2"
+      ],
+      "subsystem_ids": []
+    },
+    {
+      "id": "journey-post-ga-expansion",
+      "summary": "Track broader same-lane end-to-end journey expansion beyond the current GA floor now that prerelease-to-GA promotion proof is recorded.",
+      "owner": "project-owner",
+      "status": "planned",
+      "recorded_at": "2026-04-20",
+      "lane_ids": [
+        "L12"
+      ],
+      "subsystem_ids": []
+    },
+    {
+      "id": "migration-post-ga-hardening",
+      "summary": "Track remaining same-lane migration-safety hardening beyond the current GA floor now that prerelease-to-GA promotion proof is recorded.",
+      "owner": "project-owner",
+      "status": "planned",
+      "recorded_at": "2026-04-20",
+      "lane_ids": [
+        "L11"
       ],
       "subsystem_ids": []
     }

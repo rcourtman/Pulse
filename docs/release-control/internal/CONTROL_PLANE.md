@@ -236,18 +236,16 @@ user language should update the control plane.
 ## Current State
 
 1. v6 is the current active release profile.
-2. `v6-ga-promotion` is the current active engineering target.
-   It is the governed release-promotion target, so default slice selection
-   should stay centered on the remaining GA blockers, exercised promotion
-   proof, rollback clarity, and explicit launch-day inputs rather than broader
-   control-plane expansion.
-3. `v6-product-lane-expansion` remains planned and is still blocked on the
-   broader surfaced product case being proven.
-   Its candidate-lane surface remains available in `available_candidate_lane_queue`
-   plus the linked `candidate_lanes` and `coverage_gaps`.
-4. `v6-ga-promotion` is now active because the shipped RC line has cleared the
-   stabilization floor and the remaining work is explicitly about governed GA
-   promotion proof.
+2. `v6-product-lane-expansion` is the current active engineering target.
+   The GA-promotion target is now complete, so default slice selection should
+   move back to the highest-impact governed lane and coverage-gap work rather
+   than staying pinned to release-promotion proof.
+3. Its candidate-lane surface remains available in
+   `available_candidate_lane_queue` plus the linked `candidate_lanes` and
+   `coverage_gaps`.
+4. `v6-ga-promotion` is completed because the shipped RC line reached
+   `release_ready` with exercised prerelease-to-GA promotion proof, rollback
+   clarity, and the written v5 maintenance-only policy in place.
 5. `v6-rc-stabilization` is completed after the shipped RCs established the
    current monitored-first floor and the active objective moved to stable
    promotion.

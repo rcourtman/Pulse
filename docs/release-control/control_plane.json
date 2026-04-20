@@ -6,7 +6,7 @@
   "control_plane_doc": "docs/release-control/internal/CONTROL_PLANE.md",
   "control_plane_schema": "docs/release-control/control_plane.schema.json",
   "active_profile_id": "v6",
-  "active_target_id": "v6-ga-promotion",
+  "active_target_id": "v6-product-lane-expansion",
   "legacy_release_lines": [
     {
       "version_prefix": "5.1.",
@@ -54,7 +54,7 @@
       "id": "v6-ga-promotion",
       "profile_id": "v6",
       "kind": "release",
-      "status": "active",
+      "status": "completed",
       "summary": "Promote Pulse v6 from a validated, actually shipped RC to governed GA with exercised promotion proof, rollback clarity, and only GA-blocking decisions remaining.",
       "completion_rule": "release_ready"
     },
@@ -62,7 +62,7 @@
       "id": "v6-product-lane-expansion",
       "profile_id": "v6",
       "kind": "feature",
-      "status": "planned",
+      "status": "active",
       "summary": "Promote policy-aware data governance, resource-change intelligence, action-governance, and fleet-governance gaps only after the monitoring-first RC target is satisfied and the broader surfaced product case is proven.",
       "completion_rule": "manual",
       "proof_scope": "none"

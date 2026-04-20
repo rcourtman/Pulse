@@ -11,8 +11,8 @@
 3. The governed release profile in `docs/release-control/control_plane.json`
    currently declares both `prerelease_branch` and `stable_branch` as
    `pulse/v6-release`.
-4. The active control-plane target is `v6-ga-promotion`, so stable or GA
-   promotion is now the governed objective for Pulse v6.
+4. The active control-plane target is still `v6-product-lane-expansion`, not
+   `v6-ga-promotion`.
 5. The active local `pulse/v6-release` branch currently reports `VERSION=6.0.0`, so a
    local GA candidate exists on the governed stable line.
 6. There is still no governed `Prerelease-to-GA Rehearsal Record` proving a successful
@@ -38,15 +38,18 @@
 ## Why The Gate Cannot Be Cleared Yet
 
 The blocker is no longer missing governance text. The remaining problem is that
-there is still no exercised `Release Dry Run` record proving the exact `6.0.0`
+the control plane still holds v6 on the pre-GA prerelease line, and there is
+still no exercised `Release Dry Run` record proving the exact `6.0.0`
 candidate is ready for GA-style promotion. Until that rehearsal exists, stable
 users would still be the first real cohort for the final promotion path.
 
 ## Required Unblock Steps
 
-1. Push the governed `pulse/v6-release` branch state, including the current
+1. Promote the active target from `v6-product-lane-expansion` to
+   `v6-ga-promotion` only when that change is actually intended.
+2. Push the governed `pulse/v6-release` branch state, including the current
    `VERSION=6.0.0` candidate and release-control records, to `origin/pulse/v6-release`.
-2. Run `Release Dry Run` from `pulse/v6-release` with:
+3. Run `Release Dry Run` from `pulse/v6-release` with:
    - `version=6.0.0`
    - `promoted_from_tag=v6.0.0-rc.2`
    - an artifact-owned candidate stable tag matching that rehearsal
@@ -58,9 +61,9 @@ users would still be the first real cohort for the final promotion path.
    - an explicit stable `rollback_version`
    - the exact derived rollback command that artifact will publish
    - `v5_eos_date=2026-07-19`
-3. Capture the `rc-to-ga-rehearsal-summary` artifact and run URL.
-4. Materialize the final rehearsal record from that artifact without
+4. Capture the `rc-to-ga-rehearsal-summary` artifact and run URL.
+5. Materialize the final rehearsal record from that artifact without
    hand-repairing any missing candidate tag, promoted prerelease tag, rollback
    target, rollback command, or GA/EOS metadata.
-5. Change the gate from `blocked` only if the rehearsal passes and the rollout
+6. Change the gate from `blocked` only if the rehearsal passes and the rollout
    inputs remain explicit.
