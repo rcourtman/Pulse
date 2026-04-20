@@ -83,7 +83,6 @@ describe('settings architecture guardrails', () => {
     expect(connectionEditorSource).not.toContain('NodeModal');
 
     expect(addressProbeStepSource).toContain('Probe address');
-    expect(addressProbeStepSource).toContain('Enter credentials manually');
     // The no-match branch must name the agent alternative so a user who
     // probed bare-metal Linux / Unraid / FreeBSD is not left in a
     // Platform-API-only dead end.

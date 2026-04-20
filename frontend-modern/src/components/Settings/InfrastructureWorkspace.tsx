@@ -4,7 +4,6 @@ import { presentationPolicyIsReadOnly } from '@/stores/sessionPresentationPolicy
 import { copyToClipboard } from '@/utils/clipboard';
 import { notificationStore } from '@/stores/notifications';
 import { AgentProfilesPanel } from './AgentProfilesPanel';
-import { ConnectionsExplainer } from './ConnectionsExplainer';
 import { ConnectionsTable, type ConnectionsTableHeaderAction } from './ConnectionsTable';
 import { ConnectionEditor } from './ConnectionEditor/ConnectionEditor';
 import { NodeCredentialSlot } from './ConnectionEditor/CredentialSlots/NodeCredentialSlot';
@@ -50,7 +49,6 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
   const rowActions = useConnectionRowActions({ onMutated: () => ledger.reload() });
 
   const [addMode, setAddMode] = createSignal(false);
-  const [addPickerMode, setAddPickerMode] = createSignal(false);
   const [initialAddType, setInitialAddType] = createSignal<ConnectionType | null>(null);
   const [showAgentProfiles, setShowAgentProfiles] = createSignal(false);
   const [editingConnection, setEditingConnection] = createSignal<Connection | null>(null);
@@ -99,17 +97,14 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
     if (!readOnly() && step) {
       setAddMode(true);
       if (step === 'pick') {
-        setAddPickerMode(true);
         setInitialAddType(null);
       } else {
-        setAddPickerMode(false);
         setInitialAddType(ADD_STEP_TO_TYPE[step]);
       }
       return;
     }
 
     setAddMode(false);
-    setAddPickerMode(false);
     setInitialAddType(null);
     setShowAgentProfiles(false);
   });
@@ -128,24 +123,7 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
 
   const startAddInfrastructure = () => {
     setInitialAddType(null);
-    setAddPickerMode(true);
     setAddMode(true);
-    setShowAgentProfiles(false);
-  };
-
-  const pickPlatformApi = () => {
-    setInitialAddType(null);
-    setAddPickerMode(false);
-  };
-
-  const pickAgent = () => {
-    setInitialAddType('agent');
-    setAddPickerMode(false);
-  };
-
-  const backToPicker = () => {
-    setInitialAddType(null);
-    setAddPickerMode(true);
     setShowAgentProfiles(false);
   };
 
@@ -177,7 +155,6 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
 
   const exitAddMode = () => {
     setAddMode(false);
-    setAddPickerMode(false);
     setInitialAddType(null);
     setShowAgentProfiles(false);
   };
@@ -333,61 +310,22 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
           }}
         </Match>
 
-        <Match when={mode() === 'add' && addPickerMode()}>
-          <div class="space-y-4">
-            <div class="flex items-center justify-between gap-3">
-              <div>
-                <div class="text-base font-semibold text-base-content">Add infrastructure</div>
-                <div class="mt-0.5 text-xs text-muted">
-                  Pick how Pulse should connect to this system.
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={exitAddMode}
-                class="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-sm font-medium text-base-content transition-colors hover:bg-surface-hover"
-              >
-                ← Back to systems
-              </button>
-            </div>
-
-            <ConnectionsExplainer
-              readOnly={readOnly()}
-              onAddConnection={readOnly() ? undefined : pickPlatformApi}
-              onInstallAgent={readOnly() ? undefined : pickAgent}
-            />
-          </div>
-        </Match>
-
-        <Match when={mode() === 'add' && !addPickerMode()}>
+        <Match when={mode() === 'add'}>
         <div class="space-y-4">
           <div class="flex items-center justify-between gap-3">
             <div>
-              <div class="text-base font-semibold text-base-content">
-                {initialAddType() === 'agent' ? 'Install agent' : 'Add connection'}
-              </div>
+              <div class="text-base font-semibold text-base-content">Add infrastructure</div>
               <div class="mt-0.5 text-xs text-muted">
-                {initialAddType() === 'agent'
-                  ? 'Install the Pulse Unified Agent on a host for CPU / disk temps, SMART, and power, or on bare-metal Linux / Unraid / FreeBSD.'
-                  : 'Paste an address. Pulse detects the product, you enter credentials, and save.'}
+                Paste an address to auto-detect, or pick your system from the catalog.
               </div>
             </div>
-            <div class="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={backToPicker}
-                class="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-sm font-medium text-base-content transition-colors hover:bg-surface-hover"
-              >
-                ← Change method
-              </button>
-              <button
-                type="button"
-                onClick={exitAddMode}
-                class="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-sm font-medium text-base-content transition-colors hover:bg-surface-hover"
-              >
-                Back to systems
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={exitAddMode}
+              class="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-sm font-medium text-base-content transition-colors hover:bg-surface-hover"
+            >
+              ← Back to systems
+            </button>
           </div>
 
           <div class="rounded-lg border border-border bg-surface">

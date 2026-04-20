@@ -1,4 +1,5 @@
-import { Component, type JSX, Show, createMemo, createSignal } from 'solid-js';
+import { Component, For, type JSX, Show, createMemo, createSignal } from 'solid-js';
+import { Archive, Cpu, Database, Mail, Server, ServerCog } from 'lucide-solid';
 import type { ConnectionType, ProbeCandidate } from '@/api/connections';
 import { AddressProbeStep } from './AddressProbeStep';
 import {
@@ -29,7 +30,24 @@ export interface ConnectionEditorProps {
   onSaved?: () => void;
 }
 
-const DEFAULT_MANUAL_TYPES: ConnectionType[] = ['pve', 'pbs', 'pmg', 'truenas', 'vmware'];
+const DEFAULT_MANUAL_TYPES: ConnectionType[] = ['pve', 'pbs', 'pmg', 'vmware', 'truenas', 'agent'];
+
+interface TileMeta {
+  icon: Component<{ class?: string }>;
+  description: string;
+}
+
+const TILE_META: Partial<Record<ConnectionType, TileMeta>> = {
+  pve: { icon: Server, description: 'VMs, containers, storage, backups' },
+  pbs: { icon: Archive, description: 'Backups, sync and verify jobs' },
+  pmg: { icon: Mail, description: 'Mail stats, queues, quarantine' },
+  vmware: { icon: ServerCog, description: 'vCenter or ESXi clusters' },
+  truenas: { icon: Database, description: 'Pools, datasets, replications' },
+  agent: {
+    icon: Cpu,
+    description: 'Host metrics, or bare-metal Linux / Unraid / FreeBSD',
+  },
+};
 
 export const ConnectionEditor: Component<ConnectionEditorProps> = (props) => {
   const state: ConnectionEditorState = createConnectionEditorState();
@@ -41,7 +59,6 @@ export const ConnectionEditor: Component<ConnectionEditorProps> = (props) => {
     props.initialType ?? null,
   );
   const [selectedCandidate, setSelectedCandidate] = createSignal<ProbeCandidate | null>(null);
-  const [manualPickerOpen, setManualPickerOpen] = createSignal(false);
 
   const manualOptions = createMemo(() => props.manualTypeOptions ?? DEFAULT_MANUAL_TYPES);
 
@@ -51,19 +68,16 @@ export const ConnectionEditor: Component<ConnectionEditorProps> = (props) => {
   const chooseCandidate = (candidate: ProbeCandidate) => {
     setSelectedCandidate(candidate);
     setSelectedType(candidate.type);
-    setManualPickerOpen(false);
   };
 
   const chooseManualType = (type: ConnectionType) => {
     setSelectedCandidate(null);
     setSelectedType(type);
-    setManualPickerOpen(false);
   };
 
   const reopenProbe = () => {
     setSelectedCandidate(null);
     setSelectedType(null);
-    setManualPickerOpen(false);
   };
 
   const handleSaved = () => {
@@ -76,42 +90,64 @@ export const ConnectionEditor: Component<ConnectionEditorProps> = (props) => {
       <Show
         when={showCredentialSlot()}
         fallback={
-          <div class="space-y-5 p-4">
+          <div class="space-y-6 p-4">
             <AddressProbeStep
               state={state}
               onSelectCandidate={chooseCandidate}
-              onChooseManually={() => setManualPickerOpen((v) => !v)}
               onInstallAgent={() => chooseManualType('agent')}
             />
 
-            <Show when={manualPickerOpen()}>
-              <div class="space-y-2 rounded-md border border-border bg-surface p-3">
-                <div class="text-xs font-semibold uppercase tracking-wide text-muted">
-                  Choose Platform API type manually
-                </div>
-                <ul class="divide-y divide-border rounded-md border border-border">
-                  {manualOptions().map((type) => (
-                    <li>
-                      <button
-                        type="button"
-                        class="flex w-full items-center justify-between px-3 py-2 text-left text-sm text-base-content transition-colors hover:bg-surface-hover"
-                        onClick={() => chooseManualType(type)}
-                      >
-                        <span>{CONNECTION_TYPE_LABELS[type] ?? type}</span>
-                        <span class="text-xs text-muted">{type}</span>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </Show>
+            <div class="flex items-center gap-3 text-xs font-semibold uppercase tracking-wide text-muted">
+              <span class="h-px flex-1 bg-border" aria-hidden="true" />
+              Or pick your system directly
+              <span class="h-px flex-1 bg-border" aria-hidden="true" />
+            </div>
+
+            <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              <For each={manualOptions()}>
+                {(type) => {
+                  const meta = TILE_META[type];
+                  const Icon = meta?.icon ?? Server;
+                  const label = CONNECTION_TYPE_LABELS[type] ?? type;
+                  const isAgent = type === 'agent';
+                  return (
+                    <button
+                      type="button"
+                      onClick={() => chooseManualType(type)}
+                      class="group flex h-full flex-col gap-2 rounded-lg border border-border bg-surface p-4 text-left transition-colors hover:border-blue-500 hover:bg-blue-50/40 dark:hover:bg-blue-950/20"
+                    >
+                      <div class="flex items-center gap-2.5">
+                        <div
+                          aria-hidden="true"
+                          class={
+                            isAgent
+                              ? 'flex h-8 w-8 flex-none items-center justify-center rounded-md border border-blue-200 bg-blue-100 text-blue-700 dark:border-blue-900 dark:bg-blue-900/40 dark:text-blue-300'
+                              : 'flex h-8 w-8 flex-none items-center justify-center rounded-md border border-border bg-surface-alt text-base-content'
+                          }
+                        >
+                          <Icon class="h-4 w-4" />
+                        </div>
+                        <div class="text-sm font-semibold text-base-content">
+                          {isAgent ? 'Install Pulse Agent' : label}
+                        </div>
+                      </div>
+                      <Show when={meta?.description}>
+                        <div class="text-xs text-muted">{meta!.description}</div>
+                      </Show>
+                    </button>
+                  );
+                }}
+              </For>
+            </div>
           </div>
         }
       >
         <div class="flex items-center justify-between border-b border-border px-4 py-2">
           <div class="text-sm">
             <span class="font-semibold text-base-content">
-              {CONNECTION_TYPE_LABELS[activeType()!] ?? activeType()}
+              {activeType() === 'agent'
+                ? 'Install Pulse Agent'
+                : CONNECTION_TYPE_LABELS[activeType()!] ?? activeType()}
             </span>
             <Show when={selectedCandidate()}>
               <span class="ml-2 text-xs text-muted">{selectedCandidate()!.host}</span>
@@ -123,7 +159,7 @@ export const ConnectionEditor: Component<ConnectionEditorProps> = (props) => {
               onClick={reopenProbe}
               class="inline-flex items-center rounded-md border border-border px-2.5 py-1 text-xs font-medium text-base-content transition-colors hover:bg-surface-hover"
             >
-              ← Back to probe
+              ← Back to catalog
             </button>
           </Show>
         </div>

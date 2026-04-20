@@ -7,7 +7,6 @@ import { CONNECTION_TYPE_LABELS } from './useConnectionEditor';
 export interface AddressProbeStepProps {
   state: ConnectionEditorState;
   onSelectCandidate: (candidate: ProbeCandidate) => void;
-  onChooseManually: () => void;
   onInstallAgent?: () => void;
 }
 
@@ -47,13 +46,6 @@ export const AddressProbeStep: Component<AddressProbeStepProps> = (props) => {
         >
           {props.state.phase() === 'probing' ? 'Probing…' : 'Probe address'}
         </button>
-        <button
-          type="button"
-          class="inline-flex items-center rounded-md border border-border px-3 py-2 text-sm font-medium text-base-content transition-colors hover:bg-surface-hover"
-          onClick={props.onChooseManually}
-        >
-          Enter credentials manually
-        </button>
       </div>
 
       <Show when={props.state.phase() === 'error' && props.state.errorMessage().length > 0}>
@@ -66,8 +58,8 @@ export const AddressProbeStep: Component<AddressProbeStepProps> = (props) => {
         <div class="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
           <div class="font-medium">No supported product detected at that address.</div>
           <div class="mt-1 text-xs">
-            Pick a Platform API type manually and enter credentials, or if this is
-            bare-metal Linux / Unraid / FreeBSD,{' '}
+            Pick your system from the catalog below, or if this is bare-metal Linux / Unraid /
+            FreeBSD,{' '}
             <Show
               when={props.onInstallAgent}
               fallback={<span class="font-medium">install the Unified Agent instead</span>}

@@ -62,7 +62,7 @@ describe('ConnectionEditor', () => {
     expect(lastCall.mode).toBe('add');
   });
 
-  it('falls back to manual type selection when probe returns no match', async () => {
+  it('lets the user pick a product tile when probe returns no match', async () => {
     mockedProbe.mockResolvedValueOnce({ candidates: [], probedMs: 203 });
 
     const renderSlot = vi.fn(({ type }) => <div data-testid="slot">slot:{type}</div>);
@@ -84,9 +84,9 @@ describe('ConnectionEditor', () => {
 
     await screen.findByText(/no supported product detected/i);
 
-    fireEvent.click(screen.getByRole('button', { name: /enter credentials manually/i }));
-
-    fireEvent.click(screen.getByText('TrueNAS SCALE'));
+    // The catalog grid is always visible below the probe, so the user picks a
+    // tile directly — no intermediate "enter credentials manually" toggle.
+    fireEvent.click(screen.getByRole('button', { name: /TrueNAS SCALE/i }));
 
     await waitFor(() => expect(screen.getByTestId('slot').textContent).toBe('slot:truenas'));
     const lastCall = renderSlot.mock.calls.at(-1)![0];
@@ -94,7 +94,7 @@ describe('ConnectionEditor', () => {
     expect(lastCall.candidate).toBeNull();
   });
 
-  it('leads with the address probe and does not re-teach the two-mode split', () => {
+  it('surfaces the probe input and the full product catalog as peers', () => {
     render(() => (
       <ConnectionEditor
         renderCredentialSlot={() => <div />}
@@ -102,15 +102,15 @@ describe('ConnectionEditor', () => {
       />
     ));
 
-    // Primary path is probe-the-address. The explainer on the ledger already
-    // taught the user the two-mode split, so the editor must not restate it
-    // as a second decision screen — no "Platform API" card header, no
-    // always-visible "install agent" subtext competing with the primary flow.
-    // The agent path is surfaced by the ledger header, not duplicated here.
+    // Catalog landing — the probe input sits above a tile grid that includes
+    // every supported product as a peer, Install Pulse Agent included. There
+    // is no intermediate mode picker or "Platform API" framing.
     expect(screen.getByRole('button', { name: /probe address/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /enter credentials manually/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Proxmox VE/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /TrueNAS SCALE/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /VMware vCenter \/ ESXi/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Install Pulse Agent/i })).toBeInTheDocument();
     expect(screen.queryByText('Platform API')).toBeNull();
-    expect(screen.queryByText(/host-level metrics/i)).toBeNull();
     expect(
       screen.queryByRole('button', { name: /install the unified agent on a host/i }),
     ).toBeNull();
@@ -145,27 +145,6 @@ describe('ConnectionEditor', () => {
     const call = renderSlot.mock.calls.at(-1)![0];
     expect(call.type).toBe('agent');
     expect(call.candidate).toBeNull();
-  });
-
-  it('keeps agent out of the Platform API manual picker (it has its own path)', async () => {
-    mockedProbe.mockResolvedValueOnce({ candidates: [], probedMs: 150 });
-
-    render(() => (
-      <ConnectionEditor
-        renderCredentialSlot={() => <div />}
-        onClose={() => {}}
-      />
-    ));
-
-    const input = screen.getByPlaceholderText(/pve01\.lan/) as HTMLInputElement;
-    fireEvent.input(input, { target: { value: 'example.lan' } });
-    fireEvent.click(screen.getByRole('button', { name: /probe address/i }));
-    await waitFor(() => expect(mockedProbe).toHaveBeenCalled());
-
-    fireEvent.click(screen.getByRole('button', { name: /enter credentials manually/i }));
-
-    expect(screen.getByText(/choose platform api type manually/i)).toBeInTheDocument();
-    expect(screen.queryByText(/Agent \(install on host\)/i)).toBeNull();
   });
 
   it('skips the probe step when an initialType is supplied (edit mode)', () => {
