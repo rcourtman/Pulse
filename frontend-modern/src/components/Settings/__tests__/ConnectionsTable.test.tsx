@@ -190,6 +190,27 @@ describe('ConnectionsTable', () => {
     expect(screen.queryByRole('button', { name: 'Remove' })).toBeNull();
   });
 
+  it('tells the truth on Platform API remove confirm: history retained, platform untouched', () => {
+    const actions = makeActions({ confirmingRemove: () => true });
+    const pveConnection = connectionFixture({
+      id: 'pve:zeus',
+      type: 'pve',
+      name: 'zeus',
+    });
+    render(() => (
+      <ConnectionsTable
+        rows={() => [row({ connection: pveConnection, isAgent: false })]}
+        actions={actions}
+        onEdit={vi.fn()}
+      />
+    ));
+
+    expect(screen.getByText(/history is retained/i)).toBeInTheDocument();
+    expect(screen.getByText(/Credentials on the platform itself are untouched/i)).toBeInTheDocument();
+    // No uninstall block for Platform API rows — only agents get that courtesy.
+    expect(screen.queryByText(/--uninstall/)).toBeNull();
+  });
+
   it('reveals the agent uninstall commands while confirming removal of an agent row', () => {
     const actions = makeActions({ confirmingRemove: () => true });
     const agentConnection = connectionFixture({

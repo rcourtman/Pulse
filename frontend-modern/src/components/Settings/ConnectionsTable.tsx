@@ -219,6 +219,18 @@ export const ConnectionsTable: Component<ConnectionsTableProps> = (props) => {
                       </TableRow>
                     </Show>
 
+                    <Show when={!row.isAgent && isConfirmingRemove()}>
+                      <TableRow>
+                        <TableCell colspan={colSpan()} class="bg-surface-alt px-4 pb-3 pt-1">
+                          <p class="text-xs text-muted">
+                            Removing forgets this connection from Pulse; history is retained.
+                            Credentials on the platform itself are untouched — revoke them there
+                            separately if you want to invalidate access.
+                          </p>
+                        </TableCell>
+                      </TableRow>
+                    </Show>
+
                     <Show when={row.isAgent && isConfirmingRemove() && props.agentUninstallCommands}>
                       <TableRow>
                         <TableCell colspan={colSpan()} class="bg-surface-alt px-4 pb-4 pt-1">
