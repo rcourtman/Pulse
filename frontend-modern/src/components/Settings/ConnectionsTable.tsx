@@ -48,7 +48,7 @@ export const ConnectionsTable: Component<ConnectionsTableProps> = (props) => {
   const hasActions = () =>
     Boolean(props.actions) || Boolean(props.onEdit);
 
-  const colSpan = () => (hasActions() ? 6 : 5);
+  const colSpan = () => (hasActions() ? 5 : 4);
 
   return (
     <Card padding="none" tone="card" class="rounded-md">
@@ -90,13 +90,10 @@ export const ConnectionsTable: Component<ConnectionsTableProps> = (props) => {
               <TableHead class="w-[26%] py-2 pl-4 pr-3 text-left text-xs font-semibold uppercase tracking-wide text-muted whitespace-nowrap 2xl:w-[18%]">
                 System
               </TableHead>
-              <TableHead class="w-[28%] px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted whitespace-nowrap 2xl:w-[26%]">
+              <TableHead class="w-[34%] px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted whitespace-nowrap 2xl:w-[32%]">
                 Coverage
               </TableHead>
-              <TableHead class="hidden w-[12%] px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted whitespace-nowrap 2xl:table-cell">
-                Collection
-              </TableHead>
-              <TableHead class="w-[14%] px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted whitespace-nowrap 2xl:w-[10%]">
+              <TableHead class="w-[14%] px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted whitespace-nowrap 2xl:w-[12%]">
                 Status
               </TableHead>
               <TableHead class="hidden w-[12%] px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted whitespace-nowrap 2xl:table-cell">
@@ -135,7 +132,6 @@ export const ConnectionsTable: Component<ConnectionsTableProps> = (props) => {
                               {row.lastErrorMessage}
                             </div>
                           </Show>
-                          <div class="text-xs text-muted 2xl:hidden">{row.collectionLabel}</div>
                         </div>
                       </TableCell>
 
@@ -149,10 +145,6 @@ export const ConnectionsTable: Component<ConnectionsTableProps> = (props) => {
                             )}
                           </For>
                         </div>
-                      </TableCell>
-
-                      <TableCell class="hidden px-3 py-3 align-top whitespace-nowrap text-base-content 2xl:table-cell">
-                        {row.collectionLabel}
                       </TableCell>
 
                       <TableCell class="px-3 py-3 align-top">

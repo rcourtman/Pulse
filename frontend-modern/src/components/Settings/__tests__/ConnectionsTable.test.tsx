@@ -30,7 +30,6 @@ const row = (overrides: Partial<InfrastructureSystemRow> = {}): InfrastructureSy
     subtitle: undefined,
     host: '10.0.0.1',
     coverageLabels: ['Host telemetry'],
-    collectionLabel: 'Agent',
     statusLabel: 'online',
     statusClassName: 'bg-green-100 text-green-800',
     lastActivityText: '5s ago',
@@ -65,7 +64,7 @@ describe('ConnectionsTable', () => {
     expect(screen.queryByRole('table')).toBeNull();
   });
 
-  it('renders one row per monitored system with coverage, collection, and status labels', () => {
+  it('renders one row per monitored system with coverage and status labels', () => {
     render(() => (
       <ConnectionsTable
         rows={() => [
@@ -73,10 +72,9 @@ describe('ConnectionsTable', () => {
           row({
             id: 'truenas:nas',
             name: 'nas',
-            subtitle: 'TrueNAS',
+            subtitle: 'Platform API · TrueNAS',
             host: undefined,
             coverageLabels: ['Datasets'],
-            collectionLabel: 'API',
             statusLabel: 'Paused',
             connection: connectionFixture({ id: 'truenas:nas', type: 'truenas', name: 'nas' }),
           }),
@@ -87,7 +85,7 @@ describe('ConnectionsTable', () => {
     expect(screen.getByRole('table')).toBeInTheDocument();
     expect(screen.getByText('tower')).toBeInTheDocument();
     expect(screen.getByText('nas')).toBeInTheDocument();
-    expect(screen.getByText('TrueNAS')).toBeInTheDocument();
+    expect(screen.getByText('Platform API · TrueNAS')).toBeInTheDocument();
     expect(screen.getByText('Datasets')).toBeInTheDocument();
     expect(screen.getByText('Paused')).toBeInTheDocument();
     expect(screen.getByText('online')).toBeInTheDocument();

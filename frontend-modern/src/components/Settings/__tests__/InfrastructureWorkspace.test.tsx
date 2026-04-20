@@ -48,7 +48,6 @@ vi.mock('../useConnectionsLedger', () => ({
         subtitle: connection.type,
         host: connection.address,
         coverageLabels: ['VMs'],
-        collectionLabel: connection.type === 'agent' ? 'Agent' : 'API',
         statusLabel: connection.state === 'paused' ? 'Paused' : 'Active',
         statusClassName: '',
         lastActivityText: '1m ago',

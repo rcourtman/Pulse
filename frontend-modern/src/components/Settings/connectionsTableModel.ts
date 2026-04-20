@@ -6,7 +6,6 @@ export interface InfrastructureSystemRow {
   subtitle?: string;
   host?: string;
   coverageLabels: string[];
-  collectionLabel: string;
   statusLabel: string;
   statusClassName: string;
   lastActivityText: string;

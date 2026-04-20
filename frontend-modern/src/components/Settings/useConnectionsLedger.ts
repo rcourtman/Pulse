@@ -70,24 +70,18 @@ const SURFACE_LABELS: Record<string, string> = {
 
 export const surfaceLabel = (key: string): string => SURFACE_LABELS[key] ?? key;
 
-const collectionLabelFor = (type: ConnectionType): string => {
-  switch (type) {
-    case 'pve':
-    case 'pbs':
-    case 'pmg':
-    case 'vmware':
-    case 'truenas':
-      return 'API';
-    case 'agent':
-      return 'Agent';
-    case 'docker':
-      return 'Docker';
-    case 'kubernetes':
-      return 'Kubernetes';
-    default:
-      return 'Runtime';
-  }
-};
+// The ledger subtitle speaks the explainer's vocabulary so the user reads the
+// same "Platform API vs Pulse Unified Agent" split here that the explainer
+// card above just taught them. API-backed types get a "Platform API · {product}"
+// prefix; agent/docker/k8s rows use the product label alone (the product name
+// already carries the source — "Pulse Unified Agent" / "Docker" / "Kubernetes").
+const PLATFORM_API_TYPES: ReadonlySet<ConnectionType> = new Set([
+  'pve',
+  'pbs',
+  'pmg',
+  'vmware',
+  'truenas',
+]);
 
 const lastActivityText = (connection: Connection): string => {
   if (!connection.lastSeen) return 'No activity yet';
@@ -106,7 +100,10 @@ const lastActivityText = (connection: Connection): string => {
 
 const subtitleFor = (connection: Connection): string | undefined => {
   if (connection.stateReason) return connection.stateReason;
-  return CONNECTION_TYPE_LABELS[connection.type] ?? connection.type;
+  const productLabel = CONNECTION_TYPE_LABELS[connection.type] ?? connection.type;
+  return PLATFORM_API_TYPES.has(connection.type)
+    ? `Platform API · ${productLabel}`
+    : productLabel;
 };
 
 const EDITABLE_CONNECTION_TYPES: readonly ConnectionType[] = [
@@ -135,7 +132,6 @@ export const connectionToRow = (connection: Connection): InfrastructureSystemRow
     subtitle: subtitleFor(connection),
     host,
     coverageLabels: coverage,
-    collectionLabel: collectionLabelFor(connection.type),
     statusLabel: presentation.label,
     statusClassName: presentation.badgeClass,
     lastActivityText: lastActivityText(connection),
