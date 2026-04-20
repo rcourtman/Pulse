@@ -102,9 +102,61 @@ export const ConnectionEditor: Component<ConnectionEditorProps> = (props) => {
             <section class="space-y-3">
               <div class="flex items-center gap-3 text-xs font-semibold uppercase tracking-wide text-muted">
                 <span class="h-px flex-1 bg-border" aria-hidden="true" />
-                Or connect a remote platform API
+                Or install the agent on the host
                 <span class="h-px flex-1 bg-border" aria-hidden="true" />
               </div>
+
+              <button
+                type="button"
+                onClick={() => chooseManualType('agent')}
+                class="group flex w-full items-start gap-4 rounded-lg border-2 border-blue-300 bg-blue-50/40 p-4 text-left transition-colors hover:border-blue-500 hover:bg-blue-50 dark:border-blue-800 dark:bg-blue-950/20 dark:hover:border-blue-600 dark:hover:bg-blue-950/40"
+              >
+                <div
+                  aria-hidden="true"
+                  class="flex h-10 w-10 flex-none items-center justify-center rounded-md border border-blue-200 bg-blue-100 text-blue-700 dark:border-blue-900 dark:bg-blue-900/40 dark:text-blue-300"
+                >
+                  <Cpu class="h-5 w-5" />
+                </div>
+                <div class="flex-1 space-y-1.5">
+                  <div class="flex flex-wrap items-center gap-2">
+                    <div class="text-sm font-semibold text-base-content">Install Pulse Agent</div>
+                    <div class="rounded-full border border-blue-300 bg-blue-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-blue-800 dark:border-blue-700 dark:bg-blue-900/60 dark:text-blue-200">
+                      Recommended
+                    </div>
+                    <div class="rounded-full border border-border bg-surface px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted">
+                      Runs on a host
+                    </div>
+                  </div>
+                  <div class="text-xs text-muted">
+                    <span class="font-medium text-base-content">On a Proxmox host, this is the
+                    fastest path.</span> The agent creates the PVE / PBS API token itself and
+                    auto-registers the node — no address or credentials to paste.
+                  </div>
+                  <div class="text-xs text-muted">
+                    It also reports CPU temperature, disk SMART, systemd services, and network
+                    metrics from the host, and auto-detects Docker and Kubernetes on that
+                    machine. Required for bare-metal Linux / Unraid / FreeBSD targets that have
+                    no platform API to connect.
+                  </div>
+                </div>
+                <div
+                  aria-hidden="true"
+                  class="flex-none self-center text-blue-600 transition-colors group-hover:text-blue-700 dark:text-blue-400 dark:group-hover:text-blue-300"
+                >
+                  <ArrowRight class="h-4 w-4" />
+                </div>
+              </button>
+            </section>
+
+            <section class="space-y-3">
+              <div class="flex items-center gap-3 text-xs font-semibold uppercase tracking-wide text-muted">
+                <span class="h-px flex-1 bg-border" aria-hidden="true" />
+                Or connect a platform API directly
+                <span class="h-px flex-1 bg-border" aria-hidden="true" />
+              </div>
+              <p class="text-xs text-muted">
+                For VMware, TrueNAS, PMG, or a remote Proxmox you can't install the agent on.
+              </p>
 
               <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
                 <For each={platformOptions()}>
@@ -135,52 +187,6 @@ export const ConnectionEditor: Component<ConnectionEditorProps> = (props) => {
                   }}
                 </For>
               </div>
-            </section>
-
-            <section class="space-y-3">
-              <div class="flex items-center gap-3 text-xs font-semibold uppercase tracking-wide text-muted">
-                <span class="h-px flex-1 bg-border" aria-hidden="true" />
-                Or install the agent on the host
-                <span class="h-px flex-1 bg-border" aria-hidden="true" />
-              </div>
-
-              <button
-                type="button"
-                onClick={() => chooseManualType('agent')}
-                class="group flex w-full items-start gap-4 rounded-lg border border-border bg-surface p-4 text-left transition-colors hover:border-blue-500 hover:bg-blue-50/40 dark:hover:bg-blue-950/20"
-              >
-                <div
-                  aria-hidden="true"
-                  class="flex h-10 w-10 flex-none items-center justify-center rounded-md border border-blue-200 bg-blue-100 text-blue-700 dark:border-blue-900 dark:bg-blue-900/40 dark:text-blue-300"
-                >
-                  <Cpu class="h-5 w-5" />
-                </div>
-                <div class="flex-1 space-y-1.5">
-                  <div class="flex items-center gap-2">
-                    <div class="text-sm font-semibold text-base-content">Install Pulse Agent</div>
-                    <div class="rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-blue-700 dark:border-blue-900 dark:bg-blue-950/60 dark:text-blue-300">
-                      Runs on a host
-                    </div>
-                  </div>
-                  <div class="text-xs text-muted">
-                    <span class="font-medium text-base-content">On a Proxmox host, this is the
-                    fastest path.</span> The agent creates the PVE / PBS API token itself and
-                    auto-registers the node — no address or credentials to paste above.
-                  </div>
-                  <div class="text-xs text-muted">
-                    It also reports CPU temperature, disk SMART, systemd services, and network
-                    metrics from the host, and auto-detects Docker and Kubernetes on that
-                    machine. Required for bare-metal Linux / Unraid / FreeBSD targets that have
-                    no platform API to connect.
-                  </div>
-                </div>
-                <div
-                  aria-hidden="true"
-                  class="flex-none self-center text-muted transition-colors group-hover:text-blue-600 dark:group-hover:text-blue-400"
-                >
-                  <ArrowRight class="h-4 w-4" />
-                </div>
-              </button>
             </section>
           </div>
         }

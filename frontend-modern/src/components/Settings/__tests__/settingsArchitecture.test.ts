@@ -82,11 +82,19 @@ describe('settings architecture guardrails', () => {
     expect(connectionEditorSource).not.toContain("'agent'] =");
     expect(connectionEditorSource).toContain('<AddressProbeStep');
     expect(connectionEditorSource).toContain('Or install the agent on the host');
-    // Honest framing: the agent auto-registers PVE/PBS when installed on a
-    // Proxmox node, so the card must surface that shortcut rather than
-    // pretending the agent is only for host metrics.
+    expect(connectionEditorSource).toContain('Or connect a platform API directly');
+    // The agent card sits above the platform grid and is marked Recommended
+    // because it auto-registers PVE/PBS and covers the host-telemetry path
+    // the platform APIs can't reach. Guarding the ordering here prevents a
+    // drift back to "agent as a fifth tile."
+    const agentSectionIdx = connectionEditorSource.indexOf('Or install the agent on the host');
+    const platformSectionIdx = connectionEditorSource.indexOf('Or connect a platform API directly');
+    expect(agentSectionIdx).toBeGreaterThan(-1);
+    expect(platformSectionIdx).toBeGreaterThan(-1);
+    expect(agentSectionIdx).toBeLessThan(platformSectionIdx);
     expect(connectionEditorSource).toContain('On a Proxmox host, this is the');
     expect(connectionEditorSource).toContain('auto-registers the node');
+    expect(connectionEditorSource).toContain('Recommended');
     // The agent install path is a first-class ledger-header action, not a
     // subtext offramp inside the editor — make sure it doesn't drift back.
     expect(connectionEditorSource).not.toContain('Install the Unified Agent on a host');
