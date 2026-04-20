@@ -233,12 +233,13 @@ describe('InfrastructureWorkspace', () => {
     expect(setSearchParamsSpy).not.toHaveBeenCalled();
   });
 
-  it('routes to the agent install slot when Pulse agent is picked manually', () => {
+  it('routes to the agent install slot via the dedicated Unified Agent path', () => {
     renderWorkspace();
 
     fireEvent.click(screen.getByRole('button', { name: /Add connection/i }));
-    fireEvent.click(screen.getByRole('button', { name: /Enter credentials manually/i }));
-    fireEvent.click(screen.getByRole('button', { name: /Agent \(install on host\)/i }));
+    fireEvent.click(
+      screen.getByRole('button', { name: /Install the Unified Agent on a host/i }),
+    );
 
     expect(screen.getByTestId('install-section')).toBeInTheDocument();
   });
@@ -277,8 +278,9 @@ describe('InfrastructureWorkspace', () => {
     renderWorkspace();
 
     fireEvent.click(screen.getByRole('button', { name: /Add connection/i }));
-    fireEvent.click(screen.getByRole('button', { name: /Enter credentials manually/i }));
-    fireEvent.click(screen.getByRole('button', { name: /Agent \(install on host\)/i }));
+    fireEvent.click(
+      screen.getByRole('button', { name: /Install the Unified Agent on a host/i }),
+    );
     fireEvent.click(screen.getByRole('button', { name: /Back to probe/i }));
 
     expect(screen.getByRole('button', { name: /Probe address/i })).toBeInTheDocument();
@@ -289,8 +291,9 @@ describe('InfrastructureWorkspace', () => {
     renderWorkspace();
 
     fireEvent.click(screen.getByRole('button', { name: /Add connection/i }));
-    fireEvent.click(screen.getByRole('button', { name: /Enter credentials manually/i }));
-    fireEvent.click(screen.getByRole('button', { name: /Agent \(install on host\)/i }));
+    fireEvent.click(
+      screen.getByRole('button', { name: /Install the Unified Agent on a host/i }),
+    );
     fireEvent.click(screen.getByRole('button', { name: 'Manage agent profiles' }));
 
     expect(screen.getByTestId('agent-profiles')).toBeInTheDocument();

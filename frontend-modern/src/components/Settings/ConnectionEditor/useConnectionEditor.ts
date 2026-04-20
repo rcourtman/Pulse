@@ -102,7 +102,7 @@ export const CONNECTION_TYPE_LABELS: Record<ConnectionType, string> = {
   pmg: 'Proxmox Mail Gateway',
   vmware: 'VMware vCenter / ESXi',
   truenas: 'TrueNAS SCALE',
-  agent: 'Agent (install on host)',
+  agent: 'Pulse Unified Agent',
   docker: 'Docker',
   kubernetes: 'Kubernetes',
 };
