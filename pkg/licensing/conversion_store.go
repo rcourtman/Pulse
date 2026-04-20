@@ -34,11 +34,16 @@ type StoredConversionEvent struct {
 }
 
 type FunnelSummary struct {
-	PaywallViewed     int64 `json:"paywall_viewed"`
-	TrialStarted      int64 `json:"trial_started"`
-	UpgradeClicked    int64 `json:"upgrade_clicked"`
-	CheckoutCompleted int64 `json:"checkout_completed"`
-	Period            struct {
+	PricingViewed           int64 `json:"pricing_viewed"`
+	PaywallViewed           int64 `json:"paywall_viewed"`
+	TrialStarted            int64 `json:"trial_started"`
+	UpgradeClicked          int64 `json:"upgrade_clicked"`
+	CheckoutClicked         int64 `json:"checkout_clicked"`
+	CheckoutStarted         int64 `json:"checkout_started"`
+	CheckoutCompleted       int64 `json:"checkout_completed"`
+	LicenseActivated        int64 `json:"license_activated"`
+	LicenseActivationFailed int64 `json:"license_activation_failed"`
+	Period                  struct {
 		From time.Time `json:"from"`
 		To   time.Time `json:"to"`
 	} `json:"period"`
@@ -342,14 +347,24 @@ func (s *ConversionStore) FunnelSummary(orgID string, from, to time.Time) (summa
 			return nil, fmt.Errorf("failed to scan funnel summary row: %w", err)
 		}
 		switch strings.TrimSpace(eventType) {
+		case EventPricingViewed:
+			summary.PricingViewed = count
 		case EventPaywallViewed:
 			summary.PaywallViewed = count
 		case EventTrialStarted:
 			summary.TrialStarted = count
 		case EventUpgradeClicked:
 			summary.UpgradeClicked = count
+		case EventCheckoutClicked:
+			summary.CheckoutClicked = count
+		case EventCheckoutStarted:
+			summary.CheckoutStarted = count
 		case EventCheckoutCompleted:
 			summary.CheckoutCompleted = count
+		case EventLicenseActivated:
+			summary.LicenseActivated = count
+		case EventLicenseActivationFailed:
+			summary.LicenseActivationFailed = count
 		}
 	}
 	if err := rows.Err(); err != nil {

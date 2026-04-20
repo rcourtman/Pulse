@@ -318,6 +318,16 @@ Insights`, rather than reviving generic `AI Patrol` or `AI ... analysis`
    warning-banner payloads are built, while leaving non-community plan labels
    available for bounded hosted or legacy continuity contracts that still
    carry explicit monitored-system ceilings.
+12. Keep self-hosted commercial funnel stage ownership explicit:
+    `pkg/licensing/conversion_events.go`,
+    `pkg/licensing/conversion_store.go`, and
+    `frontend-modern/src/utils/upgradeMetrics.ts` own in-app `Plans & Billing`
+    stage events such as `pricing_viewed` and `checkout_clicked`, while
+    `pulse-pro:license-server/v6_checkout.go` owns the Pulse Account handoff
+    equivalents bound to `portal_handoff_id`. Pulse must not infer those
+    portal stages from referrer state, and the commercial service must keep
+    those self-hosted handoffs on release track `v6` even while the public
+    site remains on `v5` before GA.
 
 ## Current State
 
@@ -1550,6 +1560,18 @@ feature/limit primitives, billing and entitlement type shapes, commercial
 migration and trial flow, conversion telemetry, host lifecycle tracking, and
 public-key/build-mode boundaries should all resolve through explicit proof
 routes rather than a package-wide `pkg/licensing/` fallback.
+That same conversion-telemetry boundary now treats self-hosted commercial
+progression as explicit stage events instead of inferring everything from
+backend completion. `pkg/licensing/conversion_events.go`,
+`pkg/licensing/conversion_store.go`, and
+`frontend-modern/src/utils/upgradeMetrics.ts` own local `pricing_viewed` and
+`checkout_clicked` events for the in-app `Plans & Billing` plan surface, while
+`pulse-pro:license-server/v6_checkout.go` owns the Pulse Account handoff
+equivalents bound to `portal_handoff_id` and the canonical checkout intent.
+The browser app must not try to recreate those Pulse Account stages from
+referrer state, and the commercial service must not collapse self-hosted v6
+handoffs back onto the public-site release track when production public GA is
+still on v5.
 Stripe checkout and subscription webhook persistence now also follows the
 canonical Cloud/MSP limit rule: when paid state is granted, billing-state
 writes must persist authoritative `limits.max_monitored_systems` derived from canonical

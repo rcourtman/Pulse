@@ -9,6 +9,8 @@ vi.mock('@/utils/apiClient', () => ({
 }));
 
 import {
+  trackCheckoutClicked,
+  trackPricingViewed,
   trackAgentFirstConnected,
   trackAgentInstallCommandCopied,
   trackAgentInstallProfileSelected,
@@ -46,5 +48,18 @@ describe('upgradeMetrics local-only UX metrics wrappers', () => {
     trackAgentInstallCommandCopied('settings_unified_agents', 'linux:auto:install:dedupe');
 
     expect(apiFetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('sends canonical pricing and checkout funnel events for self-hosted billing surfaces', () => {
+    trackPricingViewed('settings_self_hosted_billing_plan', 'self_hosted_plan');
+    trackCheckoutClicked('settings_self_hosted_billing_compare_prompt', 'self_hosted_plan');
+
+    expect(apiFetchMock).toHaveBeenCalledTimes(2);
+    expect(getPayloadForCall(0).type).toBe('pricing_viewed');
+    expect(getPayloadForCall(0).surface).toBe('settings_self_hosted_billing_plan');
+    expect(getPayloadForCall(0).capability).toBe('self_hosted_plan');
+    expect(getPayloadForCall(1).type).toBe('checkout_clicked');
+    expect(getPayloadForCall(1).surface).toBe('settings_self_hosted_billing_compare_prompt');
+    expect(getPayloadForCall(1).capability).toBe('self_hosted_plan');
   });
 });

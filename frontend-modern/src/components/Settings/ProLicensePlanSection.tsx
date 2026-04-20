@@ -53,11 +53,13 @@ interface ProLicensePlanSectionProps {
   monitoredSystemContinuityNotice: Notice | null;
   onReload: () => void;
   planSelectionPrompt: ActionNotice | null;
+  onPlanSelectionPromptClick: () => void;
   purchaseActivationNotice: Notice | null;
   purchaseActivationAction: {
     label: string;
     destination: UpgradeDestination;
   } | null;
+  onPurchaseActivationActionClick: () => void;
   statusPresentation: {
     badgeClass: string;
     label: string;
@@ -88,6 +90,7 @@ export const ProLicensePlanSection: Component<ProLicensePlanSectionProps> = (pro
                 <UpgradeLink
                   class="inline-flex items-center gap-1 mt-3 min-h-10 sm:min-h-9 rounded-md border border-current/20 px-3 py-2 text-xs font-medium hover:bg-black/5 dark:hover:bg-white/5"
                   destination={action().destination}
+                  onClick={props.onPurchaseActivationActionClick}
                 >
                   {action().label}
                 </UpgradeLink>
@@ -104,6 +107,7 @@ export const ProLicensePlanSection: Component<ProLicensePlanSectionProps> = (pro
             <UpgradeLink
               class="inline-flex items-center gap-1 mt-3 min-h-10 sm:min-h-9 rounded-md border border-current/20 px-3 py-2 text-xs font-medium hover:bg-black/5 dark:hover:bg-white/5"
               destination={prompt().actionDestination}
+              onClick={props.onPlanSelectionPromptClick}
             >
               {prompt().actionLabel}
             </UpgradeLink>

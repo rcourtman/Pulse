@@ -113,7 +113,9 @@ const ProLicensePanelContent: Component = () => {
                   monitoredSystemContinuityNotice={state.monitoredSystemContinuityNotice()}
                   onReload={() => void state.loadPanelData()}
                   planSelectionPrompt={state.planSelectionPrompt()}
+                  onPlanSelectionPromptClick={state.handlePlanSelectionPromptClick}
                   purchaseActivationAction={state.purchaseActivationAction()}
+                  onPurchaseActivationActionClick={state.handlePurchaseActivationActionClick}
                   purchaseActivationNotice={state.purchaseActivationNotice()}
                   statusPresentation={state.statusPresentation()}
                   trialActivationNotice={state.trialActivationNotice()}

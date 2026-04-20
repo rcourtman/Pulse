@@ -50,6 +50,26 @@ func TestConversionEventValidate(t *testing.T) {
 			wantError: "capability is required",
 		},
 		{
+			name: "valid pricing viewed event",
+			event: ConversionEvent{
+				Type:           EventPricingViewed,
+				Surface:        "settings_self_hosted_billing_plan",
+				Capability:     "self_hosted_plan",
+				Timestamp:      now,
+				IdempotencyKey: "id-pricing-viewed-1",
+			},
+		},
+		{
+			name: "valid checkout clicked event",
+			event: ConversionEvent{
+				Type:           EventCheckoutClicked,
+				Surface:        "settings_self_hosted_billing_compare_prompt",
+				Capability:     "self_hosted_plan",
+				Timestamp:      now,
+				IdempotencyKey: "id-checkout-clicked-1",
+			},
+		},
+		{
 			name:      "limit warning requires limit key",
 			event:     ConversionEvent{Type: EventLimitWarningShown, Surface: "dashboard", Timestamp: now, IdempotencyKey: "id-1"},
 			wantError: "limit_key is required",

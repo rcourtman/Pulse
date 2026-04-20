@@ -542,10 +542,14 @@ func TestConversionHandleConversionFunnelAggregatesPerOrg(t *testing.T) {
 		}
 	}
 
+	post("org-a", fmt.Sprintf(`{"type":"pricing_viewed","capability":"self_hosted_plan","surface":"settings_self_hosted_billing_plan","timestamp":%d,"idempotency_key":"a:prv:1"}`, now.UnixMilli()))
 	post("org-a", fmt.Sprintf(`{"type":"paywall_viewed","capability":"long_term_metrics","surface":"history_chart","timestamp":%d,"idempotency_key":"a:pv:1"}`, now.UnixMilli()))
 	post("org-a", fmt.Sprintf(`{"type":"trial_started","surface":"license_panel","timestamp":%d,"idempotency_key":"a:ts:1"}`, now.UnixMilli()))
 	post("org-a", fmt.Sprintf(`{"type":"upgrade_clicked","capability":"relay","surface":"paywall_modal","timestamp":%d,"idempotency_key":"a:uc:1"}`, now.UnixMilli()))
+	post("org-a", fmt.Sprintf(`{"type":"checkout_clicked","capability":"self_hosted_plan","surface":"settings_self_hosted_billing_compare_prompt","timestamp":%d,"idempotency_key":"a:ck:1"}`, now.UnixMilli()))
+	post("org-a", fmt.Sprintf(`{"type":"checkout_started","surface":"license_api","timestamp":%d,"idempotency_key":"a:cs:1"}`, now.UnixMilli()))
 	post("org-a", fmt.Sprintf(`{"type":"checkout_completed","surface":"stripe_return","timestamp":%d,"idempotency_key":"a:cc:1"}`, now.UnixMilli()))
+	post("org-a", fmt.Sprintf(`{"type":"license_activated","surface":"license_api","timestamp":%d,"idempotency_key":"a:la:1"}`, now.UnixMilli()))
 	post("org-b", fmt.Sprintf(`{"type":"paywall_viewed","capability":"relay","surface":"mobile_onboarding","timestamp":%d,"idempotency_key":"b:pv:1"}`, now.UnixMilli()))
 
 	from := now.Add(-1 * time.Hour)
@@ -568,6 +572,9 @@ func TestConversionHandleConversionFunnelAggregatesPerOrg(t *testing.T) {
 	if err := json.NewDecoder(rec.Body).Decode(&summary); err != nil {
 		t.Fatalf("failed decoding response: %v", err)
 	}
+	if summary.PricingViewed != 1 {
+		t.Fatalf("PricingViewed = %d, want 1", summary.PricingViewed)
+	}
 	if summary.PaywallViewed != 1 {
 		t.Fatalf("PaywallViewed = %d, want 1", summary.PaywallViewed)
 	}
@@ -577,8 +584,17 @@ func TestConversionHandleConversionFunnelAggregatesPerOrg(t *testing.T) {
 	if summary.UpgradeClicked != 1 {
 		t.Fatalf("UpgradeClicked = %d, want 1", summary.UpgradeClicked)
 	}
+	if summary.CheckoutClicked != 1 {
+		t.Fatalf("CheckoutClicked = %d, want 1", summary.CheckoutClicked)
+	}
+	if summary.CheckoutStarted != 1 {
+		t.Fatalf("CheckoutStarted = %d, want 1", summary.CheckoutStarted)
+	}
 	if summary.CheckoutCompleted != 1 {
 		t.Fatalf("CheckoutCompleted = %d, want 1", summary.CheckoutCompleted)
+	}
+	if summary.LicenseActivated != 1 {
+		t.Fatalf("LicenseActivated = %d, want 1", summary.LicenseActivated)
 	}
 
 	reqAll := httptest.NewRequest(http.MethodGet, "/api/admin/upgrade-metrics-funnel", nil)

@@ -15,10 +15,12 @@ export interface UpgradeMetricEvent {
 }
 
 export const UPGRADE_METRIC_EVENTS = {
+  PRICING_VIEWED: 'pricing_viewed',
   PAYWALL_VIEWED: 'paywall_viewed',
   TRIAL_STARTED: 'trial_started',
   LICENSE_ACTIVATED: 'license_activated',
   UPGRADE_CLICKED: 'upgrade_clicked',
+  CHECKOUT_CLICKED: 'checkout_clicked',
   LIMIT_WARNING_SHOWN: 'limit_warning_shown',
   LIMIT_BLOCKED: 'limit_blocked',
   AGENT_INSTALL_TOKEN_GENERATED: 'agent_install_token_generated',
@@ -99,9 +101,25 @@ export function trackPaywallViewed(capability: string, surface: string): void {
   });
 }
 
+export function trackPricingViewed(surface: string, capability?: string): void {
+  trackUpgradeMetricEvent({
+    type: UPGRADE_METRIC_EVENTS.PRICING_VIEWED,
+    surface,
+    capability,
+  });
+}
+
 export function trackUpgradeClicked(surface: string, capability?: string): void {
   trackUpgradeMetricEvent({
     type: UPGRADE_METRIC_EVENTS.UPGRADE_CLICKED,
+    surface,
+    capability,
+  });
+}
+
+export function trackCheckoutClicked(surface: string, capability?: string): void {
+  trackUpgradeMetricEvent({
+    type: UPGRADE_METRIC_EVENTS.CHECKOUT_CLICKED,
     surface,
     capability,
   });

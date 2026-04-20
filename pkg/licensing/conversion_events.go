@@ -6,11 +6,13 @@ import (
 )
 
 const (
+	EventPricingViewed               = "pricing_viewed"
 	EventPaywallViewed               = "paywall_viewed"
 	EventTrialStarted                = "trial_started"
 	EventLicenseActivated            = "license_activated"
 	EventLicenseActivationFailed     = "license_activation_failed"
 	EventUpgradeClicked              = "upgrade_clicked"
+	EventCheckoutClicked             = "checkout_clicked"
 	EventCheckoutStarted             = "checkout_started"
 	EventCheckoutCompleted           = "checkout_completed"
 	EventLimitWarningShown           = "limit_warning_shown"
@@ -22,11 +24,13 @@ const (
 )
 
 var supportedConversionEventTypes = map[string]struct{}{
+	EventPricingViewed:               {},
 	EventPaywallViewed:               {},
 	EventTrialStarted:                {},
 	EventLicenseActivated:            {},
 	EventLicenseActivationFailed:     {},
 	EventUpgradeClicked:              {},
+	EventCheckoutClicked:             {},
 	EventCheckoutStarted:             {},
 	EventCheckoutCompleted:           {},
 	EventLimitWarningShown:           {},

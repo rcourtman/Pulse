@@ -28,6 +28,8 @@ import {
 
 let mockEntitlements: LicenseEntitlements | null = null;
 
+const trackPricingViewedMock = vi.fn();
+const trackCheckoutClickedMock = vi.fn();
 const loadRuntimeLicenseStatusMock = vi.fn();
 const loadCommercialPostureMock = vi.fn();
 const loadLicenseEntitlementsMock = vi.fn();
@@ -94,6 +96,11 @@ vi.mock('@/stores/notifications', () => ({
   },
 }));
 
+vi.mock('@/utils/upgradeMetrics', () => ({
+  trackPricingViewed: (...args: unknown[]) => trackPricingViewedMock(...args),
+  trackCheckoutClicked: (...args: unknown[]) => trackCheckoutClickedMock(...args),
+}));
+
 describe('ProLicensePanel', () => {
   const renderPanel = () =>
     render(() => (
@@ -115,6 +122,8 @@ describe('ProLicensePanel', () => {
     loadRuntimeLicenseStatusMock.mockReset();
     loadCommercialPostureMock.mockReset();
     loadLicenseEntitlementsMock.mockReset();
+    trackPricingViewedMock.mockReset();
+    trackCheckoutClickedMock.mockReset();
     licenseEntitlementsLoadErrorMock.mockReset();
     startProTrialMock.mockReset();
     activateLicenseMock.mockReset();
@@ -208,6 +217,10 @@ describe('ProLicensePanel', () => {
     });
 
     expect(screen.getAllByText('Compare self-hosted plans').length).toBeGreaterThan(0);
+    expect(trackPricingViewedMock).toHaveBeenCalledWith(
+      'settings_self_hosted_billing_plan',
+      SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_INTENT,
+    );
     expect(screen.getByText(/Community keeps monitoring free/i)).toBeInTheDocument();
     const compareLinks = screen.getAllByRole('link', { name: 'Compare plans' });
     expect(
@@ -217,6 +230,21 @@ describe('ProLicensePanel', () => {
           getSelfHostedPurchaseStartUrl(SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_INTENT),
       ),
     ).toBe(true);
+  });
+
+  it('tracks compare-plan checkout intent from the self-hosted billing prompt', async () => {
+    renderPanel();
+
+    await waitFor(() => {
+      expect(loadLicenseEntitlementsMock).toHaveBeenCalled();
+    });
+
+    await fireEvent.click(screen.getAllByRole('link', { name: 'Compare plans' })[0]);
+
+    expect(trackCheckoutClickedMock).toHaveBeenCalledWith(
+      'settings_self_hosted_billing_compare_prompt',
+      SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_INTENT,
+    );
   });
 
   it('hides start trial action and shows trial-ended banner when trial was already used', async () => {

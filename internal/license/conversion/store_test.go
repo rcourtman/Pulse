@@ -133,11 +133,16 @@ func TestConversionStoreFunnelSummaryAggregation(t *testing.T) {
 	to := from.Add(2 * time.Hour)
 
 	events := []StoredConversionEvent{
+		{OrgID: "org-a", EventType: EventPricingViewed, Surface: "s0", Capability: "self_hosted_plan", IdempotencyKey: "k0", CreatedAt: from.Add(30 * time.Second)},
 		{OrgID: "org-a", EventType: EventPaywallViewed, Surface: "s1", Capability: "c1", IdempotencyKey: "k1", CreatedAt: from.Add(1 * time.Minute)},
 		{OrgID: "org-a", EventType: EventPaywallViewed, Surface: "s1", Capability: "c1", IdempotencyKey: "k2", CreatedAt: from.Add(2 * time.Minute)},
 		{OrgID: "org-a", EventType: EventTrialStarted, Surface: "s2", Capability: "", IdempotencyKey: "k3", CreatedAt: from.Add(3 * time.Minute)},
 		{OrgID: "org-a", EventType: EventUpgradeClicked, Surface: "s3", Capability: "relay", IdempotencyKey: "k4", CreatedAt: from.Add(4 * time.Minute)},
-		{OrgID: "org-a", EventType: EventCheckoutCompleted, Surface: "s4", Capability: "", IdempotencyKey: "k5", CreatedAt: from.Add(5 * time.Minute)},
+		{OrgID: "org-a", EventType: EventCheckoutClicked, Surface: "s4", Capability: "self_hosted_plan", IdempotencyKey: "k5", CreatedAt: from.Add(5 * time.Minute)},
+		{OrgID: "org-a", EventType: EventCheckoutStarted, Surface: "s5", Capability: "", IdempotencyKey: "k6", CreatedAt: from.Add(6 * time.Minute)},
+		{OrgID: "org-a", EventType: EventCheckoutCompleted, Surface: "s6", Capability: "", IdempotencyKey: "k7", CreatedAt: from.Add(7 * time.Minute)},
+		{OrgID: "org-a", EventType: EventLicenseActivated, Surface: "s7", Capability: "", IdempotencyKey: "k8", CreatedAt: from.Add(8 * time.Minute)},
+		{OrgID: "org-a", EventType: EventLicenseActivationFailed, Surface: "s8", Capability: "", IdempotencyKey: "k9", CreatedAt: from.Add(9 * time.Minute)},
 	}
 	for _, ev := range events {
 		if err := store.Record(ev); err != nil {
@@ -152,14 +157,29 @@ func TestConversionStoreFunnelSummaryAggregation(t *testing.T) {
 	if summary.PaywallViewed != 2 {
 		t.Fatalf("PaywallViewed = %d, want 2", summary.PaywallViewed)
 	}
+	if summary.PricingViewed != 1 {
+		t.Fatalf("PricingViewed = %d, want 1", summary.PricingViewed)
+	}
 	if summary.TrialStarted != 1 {
 		t.Fatalf("TrialStarted = %d, want 1", summary.TrialStarted)
 	}
 	if summary.UpgradeClicked != 1 {
 		t.Fatalf("UpgradeClicked = %d, want 1", summary.UpgradeClicked)
 	}
+	if summary.CheckoutClicked != 1 {
+		t.Fatalf("CheckoutClicked = %d, want 1", summary.CheckoutClicked)
+	}
+	if summary.CheckoutStarted != 1 {
+		t.Fatalf("CheckoutStarted = %d, want 1", summary.CheckoutStarted)
+	}
 	if summary.CheckoutCompleted != 1 {
 		t.Fatalf("CheckoutCompleted = %d, want 1", summary.CheckoutCompleted)
+	}
+	if summary.LicenseActivated != 1 {
+		t.Fatalf("LicenseActivated = %d, want 1", summary.LicenseActivated)
+	}
+	if summary.LicenseActivationFailed != 1 {
+		t.Fatalf("LicenseActivationFailed = %d, want 1", summary.LicenseActivationFailed)
 	}
 	if !summary.Period.From.Equal(from.UTC()) || !summary.Period.To.Equal(to.UTC()) {
 		t.Fatalf("Period = %v..%v, want %v..%v", summary.Period.From, summary.Period.To, from.UTC(), to.UTC())
