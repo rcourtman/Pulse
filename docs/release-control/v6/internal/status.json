@@ -1,6 +1,6 @@
 {
   "version": "6.0",
-  "updated_at": "2026-04-17",
+  "updated_at": "2026-04-20",
   "scope": {
     "active_repos": [
       "pulse",
@@ -561,19 +561,22 @@
     },
     {
       "id": "RA8",
-      "summary": "Stable or GA promotion happens only after an exercised RC, live release-pipeline proof, a recorded rollback target, and a written v5 maintenance-only support policy.",
+      "summary": "Stable or GA promotion happens only after an exercised RC, live release-pipeline proof, a recorded rollback target, a written v5 maintenance-only support policy, and a coherent self-hosted commercial package.",
       "kind": "trust-gate",
       "blocking_level": "release-ready",
       "proof_type": "hybrid",
       "lane_ids": [
         "L1",
+        "L2",
         "L9",
         "L11",
-        "L12"
+        "L12",
+        "L17"
       ],
       "subsystem_ids": [],
       "release_gate_ids": [
-        "rc-to-ga-promotion-readiness"
+        "rc-to-ga-promotion-readiness",
+        "self-hosted-commercial-ga-coherence"
       ],
       "proof_commands": [
         {
@@ -618,6 +621,11 @@
         {
           "repo": "pulse",
           "path": "docs/release-control/v6/internal/records/rc-to-ga-promotion-readiness-rehearsal-blocked-2026-03-26.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/self-hosted-commercial-ga-coherence-blocked-2026-04-20.md",
           "kind": "file"
         },
         {
@@ -2437,11 +2445,20 @@
       "name": "Conversion/commercial readiness",
       "target_score": 9,
       "current_score": 9,
-      "status": "target-met",
+      "status": "partial",
       "completion": {
-        "state": "complete",
-        "summary": "Commercial conversion surfaces are at the current tracked RC floor, including real cancellation/reactivation continuity through the governed external Stripe rehearsal.",
-        "tracking": []
+        "state": "bounded-residual",
+        "summary": "Commercial conversion surfaces are at the current tracked RC floor, but GA promotion still depends on a coherent self-hosted commercial package across the public site, upgrade/trial paths, checkout/account flows, and GA-facing guidance.",
+        "tracking": [
+          {
+            "kind": "lane-followup",
+            "id": "commercial-ga-promotion-package"
+          },
+          {
+            "kind": "release-gate",
+            "id": "self-hosted-commercial-ga-coherence"
+          }
+        ]
       },
       "blockers": [],
       "subsystems": [],
@@ -3730,6 +3747,29 @@
       ]
     },
     {
+      "id": "self-hosted-commercial-ga-coherence",
+      "summary": "Confirm the self-hosted GA commercial package is coherent end-to-end: public landing, in-app upgrade/trial path, checkout/account/license-management flows, and GA-facing guidance all describe the same Community / Relay / Pro product without legacy v5 bridge posture or contradictory plan copy.",
+      "owner": "project-owner",
+      "blocking_level": "release-ready",
+      "minimum_evidence_tier": "real-external-e2e",
+      "status": "blocked",
+      "verification_doc": "docs/release-control/v6/internal/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
+      "lane_ids": [
+        "L2",
+        "L9",
+        "L12",
+        "L17"
+      ],
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/self-hosted-commercial-ga-coherence-blocked-2026-04-20.md",
+          "kind": "file",
+          "evidence_tier": "local-rehearsal"
+        }
+      ]
+    },
+    {
       "id": "settings-surface-layout-consistency",
       "summary": "Confirm comparable settings surfaces present the canonical page shell, with consistent header framing and no ad hoc top-level layout chrome.",
       "owner": "project-owner",
@@ -3892,6 +3932,17 @@
         "storage-recovery"
       ],
       "cross_repo": false
+    },
+    {
+      "id": "commercial-ga-promotion-package",
+      "summary": "Track the lane-local self-hosted commercial GA package: public landing, pricing story, upgrade/trial path, checkout and Pulse Account/license-management flows, and GA-facing guidance must describe one coherent Community / Relay / Pro product before promotion is executed.",
+      "owner": "project-owner",
+      "status": "planned",
+      "recorded_at": "2026-04-20",
+      "lane_ids": [
+        "L2"
+      ],
+      "subsystem_ids": []
     }
   ],
   "coverage_gaps": [

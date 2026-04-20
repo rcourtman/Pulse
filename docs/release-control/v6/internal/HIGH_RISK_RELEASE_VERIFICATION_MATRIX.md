@@ -151,6 +151,51 @@ Companion drill:
   legacy recurring price, or cancellation/reactivation leaves pricing and
   entitlement state inconsistent across Stripe, Pulse runtime, and customer UI.
 
+## Gate: `self-hosted-commercial-ga-coherence`
+
+- Why this is risky:
+  A technically promotable build is still a broken GA release if the
+  self-hosted commercial path reads like a bridge product. Public landing copy,
+  in-app upgrade and trial prompts, checkout, Pulse Account/license-management,
+  and GA-facing guidance all need to describe the same Community / Relay / Pro
+  offer without preview-only, legacy-v5, or contradictory framing.
+- Primary runtime surfaces:
+  `pulse-pro/landing-page/index.html`
+  `pulse-pro/landing-page/README.md`
+  `pulse-pro/V6_LAUNCH_CHECKLIST.md`
+  `frontend-modern/src/components/Settings/BillingAdminPanel.tsx`
+  `frontend-modern/src/components/Settings/CommercialBillingSections.tsx`
+  `frontend-modern/src/utils/commercialBillingModel.ts`
+  `docs/PULSE_PRO.md`
+- Automated proof:
+  `python3 scripts/release_control/documentation_currentness_test.py`
+  `python3 scripts/release_control/release_promotion_policy_test.py`
+  The automation floor only checks governance drift. It does not clear this
+  gate by itself.
+- Manual scenario:
+  1. Open the externally reachable GA candidate for the self-hosted public site.
+  2. Confirm the public landing surface presents the actual v6 self-hosted
+     Community / Relay / Pro ladder and product promise rather than a live v5
+     bridge with preview-only v6 packaging.
+  3. Follow a real self-hosted upgrade or trial entry point from the app and
+     confirm the wording, plan identity, and customer expectation match the
+     public site.
+  4. Continue through the real checkout and Pulse Account/license-management
+     path and confirm it stays on the same product story instead of switching
+     back to legacy Pulse Pro framing or ambiguous plan rules.
+  5. Review the GA-facing guidance/release communication intended to ship with
+     promotion and confirm it matches the same package and customer path.
+- Pass when:
+  A new self-hosted customer can move from public understanding to upgrade or
+  trial entry, checkout/account management, and GA-facing guidance without
+  encountering contradictory plan copy, preview-only posture, or legacy-v5
+  bridge messaging.
+- Latest exercised record:
+  `docs/release-control/v6/internal/records/self-hosted-commercial-ga-coherence-blocked-2026-04-20.md`
+- Block release if:
+  GA can still be promoted while the public self-hosted commercial path remains
+  transitional, contradictory, or dependent on RC-only bridge posture.
+
 ## Gate: `documentation-currentness-and-legacy-cleanup`
 
 - Why this is risky:
