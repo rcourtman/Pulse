@@ -87,6 +87,45 @@ export interface MetricsStoreDiagnostic {
   error?: string;
 }
 
+export interface CommercialFunnelStageCounts {
+  pricing_viewed: number;
+  paywall_viewed: number;
+  trial_started: number;
+  upgrade_clicked: number;
+  checkout_clicked: number;
+  checkout_started: number;
+  checkout_completed: number;
+  license_activated: number;
+  license_activation_failed: number;
+}
+
+export interface CommercialFunnelSummary extends CommercialFunnelStageCounts {
+  period: {
+    from: string;
+    to: string;
+  };
+}
+
+export interface CommercialFunnelDayBreakdown extends CommercialFunnelStageCounts {
+  day: string;
+}
+
+export interface CommercialFunnelDimensionBreakdown extends CommercialFunnelStageCounts {
+  key: string;
+}
+
+export interface CommercialFunnelDiagnostic {
+  enabled: boolean;
+  status: 'active' | 'idle' | 'warning' | 'error' | 'unavailable';
+  windowDays: number;
+  summary: CommercialFunnelSummary;
+  daily: CommercialFunnelDayBreakdown[];
+  surfaces: CommercialFunnelDimensionBreakdown[];
+  capabilities: CommercialFunnelDimensionBreakdown[];
+  notes?: string[];
+  error?: string;
+}
+
 export interface AIChatDiagnostic {
   enabled: boolean;
   running: boolean;
@@ -107,6 +146,7 @@ export interface DiagnosticsData {
   pbs: DiagnosticsPBS[];
   system: SystemDiagnostic;
   metricsStore?: MetricsStoreDiagnostic | null;
+  commercialFunnel?: CommercialFunnelDiagnostic | null;
   apiTokens?: APITokenDiagnostic | null;
   dockerAgents?: DockerAgentDiagnostic | null;
   alerts?: AlertsDiagnostic | null;

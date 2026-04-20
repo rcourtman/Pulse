@@ -1425,6 +1425,12 @@ run/export lifecycle, results rendering, sanitization/model helpers, and
 customer-facing diagnostics copy. The shell must not re-accumulate inline API
 calls, export-download plumbing, diagnostics-card composition, or diagnostics
 surface copy.
+That same diagnostics owner split now also covers local commercial funnel
+rendering: if diagnostics surfaces expose self-hosted pricing, checkout, or
+activation summaries, `DiagnosticsResultsPanel.tsx` and `diagnosticsModel.ts`
+must own the card composition, label humanization, and typed payload shape,
+while the shell remains a layout/composition owner and does not reintroduce
+inline diagnostics fetches or commerce-specific rendering logic.
 
 The settings shell registry now also treats extracted feature prop contracts as
 canonical shell inputs instead of reaching back into feature panels for type

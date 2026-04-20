@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -33,7 +34,7 @@ type StoredConversionEvent struct {
 	CreatedAt      time.Time
 }
 
-type FunnelSummary struct {
+type FunnelStageCounts struct {
 	PricingViewed           int64 `json:"pricing_viewed"`
 	PaywallViewed           int64 `json:"paywall_viewed"`
 	TrialStarted            int64 `json:"trial_started"`
@@ -43,10 +44,89 @@ type FunnelSummary struct {
 	CheckoutCompleted       int64 `json:"checkout_completed"`
 	LicenseActivated        int64 `json:"license_activated"`
 	LicenseActivationFailed int64 `json:"license_activation_failed"`
-	Period                  struct {
+}
+
+type FunnelSummary struct {
+	FunnelStageCounts
+	Period struct {
 		From time.Time `json:"from"`
 		To   time.Time `json:"to"`
 	} `json:"period"`
+}
+
+type FunnelDayBreakdown struct {
+	Day string `json:"day"`
+	FunnelStageCounts
+}
+
+type FunnelDimensionBreakdown struct {
+	Key string `json:"key"`
+	FunnelStageCounts
+}
+
+type FunnelReport struct {
+	Summary      FunnelSummary              `json:"summary"`
+	Daily        []FunnelDayBreakdown       `json:"daily"`
+	Surfaces     []FunnelDimensionBreakdown `json:"surfaces"`
+	Capabilities []FunnelDimensionBreakdown `json:"capabilities"`
+}
+
+func applyFunnelStageCount(counts *FunnelStageCounts, eventType string, count int64) {
+	if counts == nil {
+		return
+	}
+
+	switch strings.TrimSpace(eventType) {
+	case EventPricingViewed:
+		counts.PricingViewed = count
+	case EventPaywallViewed:
+		counts.PaywallViewed = count
+	case EventTrialStarted:
+		counts.TrialStarted = count
+	case EventUpgradeClicked:
+		counts.UpgradeClicked = count
+	case EventCheckoutClicked:
+		counts.CheckoutClicked = count
+	case EventCheckoutStarted:
+		counts.CheckoutStarted = count
+	case EventCheckoutCompleted:
+		counts.CheckoutCompleted = count
+	case EventLicenseActivated:
+		counts.LicenseActivated = count
+	case EventLicenseActivationFailed:
+		counts.LicenseActivationFailed = count
+	}
+}
+
+func compareFunnelBreakdowns(a, b FunnelDimensionBreakdown) int {
+	switch {
+	case a.CheckoutClicked != b.CheckoutClicked:
+		if a.CheckoutClicked > b.CheckoutClicked {
+			return -1
+		}
+		return 1
+	case a.PricingViewed != b.PricingViewed:
+		if a.PricingViewed > b.PricingViewed {
+			return -1
+		}
+		return 1
+	case a.LicenseActivated != b.LicenseActivated:
+		if a.LicenseActivated > b.LicenseActivated {
+			return -1
+		}
+		return 1
+	case a.TrialStarted != b.TrialStarted:
+		if a.TrialStarted > b.TrialStarted {
+			return -1
+		}
+		return 1
+	case a.Key < b.Key:
+		return -1
+	case a.Key > b.Key:
+		return 1
+	default:
+		return 0
+	}
 }
 
 func ensureOwnerOnlyDir(dir string) error {
@@ -346,31 +426,195 @@ func (s *ConversionStore) FunnelSummary(orgID string, from, to time.Time) (summa
 		if err := rows.Scan(&eventType, &count); err != nil {
 			return nil, fmt.Errorf("failed to scan funnel summary row: %w", err)
 		}
-		switch strings.TrimSpace(eventType) {
-		case EventPricingViewed:
-			summary.PricingViewed = count
-		case EventPaywallViewed:
-			summary.PaywallViewed = count
-		case EventTrialStarted:
-			summary.TrialStarted = count
-		case EventUpgradeClicked:
-			summary.UpgradeClicked = count
-		case EventCheckoutClicked:
-			summary.CheckoutClicked = count
-		case EventCheckoutStarted:
-			summary.CheckoutStarted = count
-		case EventCheckoutCompleted:
-			summary.CheckoutCompleted = count
-		case EventLicenseActivated:
-			summary.LicenseActivated = count
-		case EventLicenseActivationFailed:
-			summary.LicenseActivationFailed = count
-		}
+		applyFunnelStageCount(&summary.FunnelStageCounts, eventType, count)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("failed to iterate funnel summary rows: %w", err)
 	}
 	return summary, nil
+}
+
+func (s *ConversionStore) FunnelDailyBreakdown(orgID string, from, to time.Time) (breakdown []FunnelDayBreakdown, retErr error) {
+	if s == nil || s.db == nil {
+		return nil, fmt.Errorf("conversion store is not initialized")
+	}
+	if from.IsZero() || to.IsZero() {
+		return nil, fmt.Errorf("from/to are required")
+	}
+
+	orgID = strings.TrimSpace(orgID)
+	if orgID == "" {
+		return nil, fmt.Errorf("org_id is required")
+	}
+
+	startDay := from.UTC().Truncate(24 * time.Hour)
+	endDay := to.UTC().Truncate(24 * time.Hour)
+	if !to.UTC().Equal(endDay) {
+		endDay = endDay.Add(24 * time.Hour)
+	}
+	if !startDay.Before(endDay) {
+		return []FunnelDayBreakdown{}, nil
+	}
+
+	query := `
+		SELECT strftime('%Y-%m-%d', created_at) AS bucket_day, event_type, COUNT(1)
+		FROM conversion_events
+		WHERE created_at >= ? AND created_at < ? AND org_id = ?
+		GROUP BY bucket_day, event_type
+		ORDER BY bucket_day ASC
+	`
+
+	rows, err := s.db.Query(
+		query,
+		from.UTC().Truncate(time.Second).Format(time.RFC3339),
+		to.UTC().Truncate(time.Second).Format(time.RFC3339),
+		orgID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query funnel daily breakdown: %w", err)
+	}
+	defer func() {
+		if closeErr := rows.Close(); closeErr != nil {
+			wrappedCloseErr := fmt.Errorf("close funnel daily rows: %w", closeErr)
+			if retErr != nil {
+				retErr = errors.Join(retErr, wrappedCloseErr)
+				return
+			}
+			retErr = wrappedCloseErr
+		}
+	}()
+
+	buckets := make(map[string]*FunnelDayBreakdown)
+	breakdown = make([]FunnelDayBreakdown, 0, int(endDay.Sub(startDay)/(24*time.Hour)))
+	for day := startDay; day.Before(endDay); day = day.Add(24 * time.Hour) {
+		entry := FunnelDayBreakdown{Day: day.Format("2006-01-02")}
+		breakdown = append(breakdown, entry)
+		buckets[entry.Day] = &breakdown[len(breakdown)-1]
+	}
+
+	for rows.Next() {
+		var day string
+		var eventType string
+		var count int64
+		if err := rows.Scan(&day, &eventType, &count); err != nil {
+			return nil, fmt.Errorf("failed to scan funnel daily row: %w", err)
+		}
+		if entry := buckets[strings.TrimSpace(day)]; entry != nil {
+			applyFunnelStageCount(&entry.FunnelStageCounts, eventType, count)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to iterate funnel daily rows: %w", err)
+	}
+
+	return breakdown, nil
+}
+
+func (s *ConversionStore) FunnelDimensionBreakdown(orgID string, from, to time.Time, dimension string) (breakdown []FunnelDimensionBreakdown, retErr error) {
+	if s == nil || s.db == nil {
+		return nil, fmt.Errorf("conversion store is not initialized")
+	}
+	if from.IsZero() || to.IsZero() {
+		return nil, fmt.Errorf("from/to are required")
+	}
+
+	orgID = strings.TrimSpace(orgID)
+	if orgID == "" {
+		return nil, fmt.Errorf("org_id is required")
+	}
+
+	column := ""
+	switch strings.TrimSpace(dimension) {
+	case "surface":
+		column = "surface"
+	case "capability":
+		column = "capability"
+	default:
+		return nil, fmt.Errorf("unsupported breakdown dimension %q", dimension)
+	}
+
+	query := fmt.Sprintf(`
+		SELECT %s AS bucket_key, event_type, COUNT(1)
+		FROM conversion_events
+		WHERE created_at >= ? AND created_at < ? AND org_id = ? AND TRIM(%s) <> ''
+		GROUP BY bucket_key, event_type
+	`, column, column)
+
+	rows, err := s.db.Query(
+		query,
+		from.UTC().Truncate(time.Second).Format(time.RFC3339),
+		to.UTC().Truncate(time.Second).Format(time.RFC3339),
+		orgID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query funnel %s breakdown: %w", dimension, err)
+	}
+	defer func() {
+		if closeErr := rows.Close(); closeErr != nil {
+			wrappedCloseErr := fmt.Errorf("close funnel %s rows: %w", dimension, closeErr)
+			if retErr != nil {
+				retErr = errors.Join(retErr, wrappedCloseErr)
+				return
+			}
+			retErr = wrappedCloseErr
+		}
+	}()
+
+	buckets := make(map[string]*FunnelDimensionBreakdown)
+	for rows.Next() {
+		var key string
+		var eventType string
+		var count int64
+		if err := rows.Scan(&key, &eventType, &count); err != nil {
+			return nil, fmt.Errorf("failed to scan funnel %s row: %w", dimension, err)
+		}
+		key = strings.TrimSpace(key)
+		if key == "" {
+			continue
+		}
+		entry, ok := buckets[key]
+		if !ok {
+			breakdown = append(breakdown, FunnelDimensionBreakdown{Key: key})
+			entry = &breakdown[len(breakdown)-1]
+			buckets[key] = entry
+		}
+		applyFunnelStageCount(&entry.FunnelStageCounts, eventType, count)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to iterate funnel %s rows: %w", dimension, err)
+	}
+
+	sort.SliceStable(breakdown, func(i, j int) bool {
+		return compareFunnelBreakdowns(breakdown[i], breakdown[j]) < 0
+	})
+
+	return breakdown, nil
+}
+
+func (s *ConversionStore) FunnelReport(orgID string, from, to time.Time) (*FunnelReport, error) {
+	summary, err := s.FunnelSummary(orgID, from, to)
+	if err != nil {
+		return nil, err
+	}
+	daily, err := s.FunnelDailyBreakdown(orgID, from, to)
+	if err != nil {
+		return nil, err
+	}
+	surfaces, err := s.FunnelDimensionBreakdown(orgID, from, to, "surface")
+	if err != nil {
+		return nil, err
+	}
+	capabilities, err := s.FunnelDimensionBreakdown(orgID, from, to, "capability")
+	if err != nil {
+		return nil, err
+	}
+
+	return &FunnelReport{
+		Summary:      *summary,
+		Daily:        daily,
+		Surfaces:     surfaces,
+		Capabilities: capabilities,
+	}, nil
 }
 
 func (s *ConversionStore) Close() error {

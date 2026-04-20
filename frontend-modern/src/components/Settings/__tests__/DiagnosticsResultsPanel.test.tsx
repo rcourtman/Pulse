@@ -1,0 +1,119 @@
+import { cleanup, render, screen } from '@solidjs/testing-library';
+import { afterEach, describe, expect, it } from 'vitest';
+import { DiagnosticsResultsPanel } from '@/components/Settings/DiagnosticsResultsPanel';
+import type { DiagnosticsData } from '@/components/Settings/diagnosticsModel';
+
+describe('DiagnosticsResultsPanel', () => {
+  afterEach(() => {
+    cleanup();
+  });
+
+  it('renders the commercial funnel card with readable breakdown labels', () => {
+    const diagnosticsData: DiagnosticsData = {
+      version: '6.0.0',
+      runtime: 'go',
+      uptime: 3600,
+      nodes: [],
+      pbs: [],
+      system: {
+        os: 'linux',
+        arch: 'amd64',
+        goVersion: 'go1.25',
+        numCPU: 8,
+        numGoroutine: 32,
+        memoryMB: 128,
+      },
+      commercialFunnel: {
+        enabled: true,
+        status: 'active',
+        windowDays: 30,
+        summary: {
+          pricing_viewed: 3,
+          paywall_viewed: 0,
+          trial_started: 1,
+          upgrade_clicked: 0,
+          checkout_clicked: 2,
+          checkout_started: 2,
+          checkout_completed: 1,
+          license_activated: 1,
+          license_activation_failed: 0,
+          period: {
+            from: '2026-03-19T00:00:00Z',
+            to: '2026-04-18T00:00:00Z',
+          },
+        },
+        daily: [
+          {
+            day: '2026-04-17',
+            pricing_viewed: 1,
+            paywall_viewed: 0,
+            trial_started: 0,
+            upgrade_clicked: 0,
+            checkout_clicked: 1,
+            checkout_started: 1,
+            checkout_completed: 0,
+            license_activated: 0,
+            license_activation_failed: 0,
+          },
+          {
+            day: '2026-04-18',
+            pricing_viewed: 2,
+            paywall_viewed: 0,
+            trial_started: 1,
+            upgrade_clicked: 0,
+            checkout_clicked: 1,
+            checkout_started: 1,
+            checkout_completed: 1,
+            license_activated: 1,
+            license_activation_failed: 0,
+          },
+        ],
+        surfaces: [
+          {
+            key: 'settings_self_hosted_billing_compare_prompt',
+            pricing_viewed: 0,
+            paywall_viewed: 0,
+            trial_started: 0,
+            upgrade_clicked: 0,
+            checkout_clicked: 2,
+            checkout_started: 0,
+            checkout_completed: 0,
+            license_activated: 0,
+            license_activation_failed: 0,
+          },
+        ],
+        capabilities: [
+          {
+            key: 'self_hosted_plan',
+            pricing_viewed: 3,
+            paywall_viewed: 0,
+            trial_started: 0,
+            upgrade_clicked: 0,
+            checkout_clicked: 2,
+            checkout_started: 2,
+            checkout_completed: 1,
+            license_activated: 1,
+            license_activation_failed: 0,
+          },
+        ],
+        notes: ['Local pricing and activation events show at least one completed conversion.'],
+      },
+      errors: [],
+    };
+
+    render(() => (
+      <DiagnosticsResultsPanel
+        diagnosticsData={diagnosticsData}
+        loading={false}
+        onRunDiagnostics={() => {}}
+      />
+    ));
+
+    expect(screen.getByText('Commercial Funnel')).toBeInTheDocument();
+    expect(screen.getByText('Pricing Views')).toBeInTheDocument();
+    expect(screen.getByText('Checkout Clicks')).toBeInTheDocument();
+    expect(screen.getByText('Self Hosted Plan')).toBeInTheDocument();
+    expect(screen.getByText('Settings Self Hosted Billing Compare Prompt')).toBeInTheDocument();
+    expect(screen.getByText(/Pricing 3/i)).toBeInTheDocument();
+  });
+});

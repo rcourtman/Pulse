@@ -85,6 +85,39 @@ func TestConversionStoreQueryPlansUseIndexes(t *testing.T) {
 			wantIndex:             "idx_conversion_events_org_time",
 			allowTempBTreeGroupBy: true,
 		},
+		{
+			name: "funnel daily breakdown by org and time range",
+			query: `
+				SELECT strftime('%Y-%m-%d', created_at) AS bucket_day, event_type, COUNT(1)
+				FROM conversion_events
+				WHERE created_at >= ? AND created_at < ? AND org_id = ?
+				GROUP BY bucket_day, event_type
+				ORDER BY bucket_day ASC
+			`,
+			args: []any{
+				time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC).Format(time.RFC3339),
+				time.Date(2026, 3, 20, 0, 0, 0, 0, time.UTC).Format(time.RFC3339),
+				"org-03",
+			},
+			wantIndex:             "idx_conversion_events_org_time",
+			allowTempBTreeGroupBy: true,
+		},
+		{
+			name: "funnel surface breakdown by org and time range",
+			query: `
+				SELECT surface AS bucket_key, event_type, COUNT(1)
+				FROM conversion_events
+				WHERE created_at >= ? AND created_at < ? AND org_id = ? AND TRIM(surface) <> ''
+				GROUP BY bucket_key, event_type
+			`,
+			args: []any{
+				time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC).Format(time.RFC3339),
+				time.Date(2026, 3, 20, 0, 0, 0, 0, time.UTC).Format(time.RFC3339),
+				"org-03",
+			},
+			wantIndex:             "idx_conversion_events_org_time",
+			allowTempBTreeGroupBy: true,
+		},
 	}
 
 	for _, tt := range tests {

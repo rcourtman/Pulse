@@ -28,19 +28,20 @@ import (
 
 // DiagnosticsInfo contains comprehensive diagnostic information
 type DiagnosticsInfo struct {
-	Version      string                  `json:"version"`
-	Runtime      string                  `json:"runtime"`
-	Uptime       float64                 `json:"uptime"`
-	Nodes        []NodeDiagnostic        `json:"nodes"`
-	PBS          []PBSDiagnostic         `json:"pbs"`
-	System       SystemDiagnostic        `json:"system"`
-	MetricsStore *MetricsStoreDiagnostic `json:"metricsStore,omitempty"`
-	Discovery    *DiscoveryDiagnostic    `json:"discovery,omitempty"`
-	APITokens    *APITokenDiagnostic     `json:"apiTokens,omitempty"`
-	DockerAgents *DockerAgentDiagnostic  `json:"dockerAgents,omitempty"`
-	Alerts       *AlertsDiagnostic       `json:"alerts,omitempty"`
-	AIChat       *AIChatDiagnostic       `json:"aiChat,omitempty"`
-	Errors       []string                `json:"errors"`
+	Version          string                      `json:"version"`
+	Runtime          string                      `json:"runtime"`
+	Uptime           float64                     `json:"uptime"`
+	Nodes            []NodeDiagnostic            `json:"nodes"`
+	PBS              []PBSDiagnostic             `json:"pbs"`
+	System           SystemDiagnostic            `json:"system"`
+	MetricsStore     *MetricsStoreDiagnostic     `json:"metricsStore,omitempty"`
+	CommercialFunnel *CommercialFunnelDiagnostic `json:"commercialFunnel,omitempty"`
+	Discovery        *DiscoveryDiagnostic        `json:"discovery,omitempty"`
+	APITokens        *APITokenDiagnostic         `json:"apiTokens,omitempty"`
+	DockerAgents     *DockerAgentDiagnostic      `json:"dockerAgents,omitempty"`
+	Alerts           *AlertsDiagnostic           `json:"alerts,omitempty"`
+	AIChat           *AIChatDiagnostic           `json:"aiChat,omitempty"`
+	Errors           []string                    `json:"errors"`
 	// NodeSnapshots captures the raw memory payload and derived usage Pulse last observed per node.
 	NodeSnapshots []monitoring.NodeMemorySnapshot `json:"nodeSnapshots"`
 	// GuestSnapshots captures recent per-guest memory breakdowns (VM/LXC) with the raw Proxmox fields.
@@ -86,6 +87,10 @@ func (d DiagnosticsInfo) NormalizeCollections() DiagnosticsInfo {
 	if d.MetricsStore != nil {
 		normalized := d.MetricsStore.NormalizeCollections()
 		d.MetricsStore = &normalized
+	}
+	if d.CommercialFunnel != nil {
+		normalized := d.CommercialFunnel.NormalizeCollections()
+		d.CommercialFunnel = &normalized
 	}
 	if d.Discovery != nil {
 		normalized := d.Discovery.NormalizeCollections()
@@ -198,6 +203,34 @@ type MetricsStoreDiagnostic struct {
 }
 
 func (d MetricsStoreDiagnostic) NormalizeCollections() MetricsStoreDiagnostic {
+	if d.Notes == nil {
+		d.Notes = []string{}
+	}
+	return d
+}
+
+type CommercialFunnelDiagnostic struct {
+	Enabled      bool                                 `json:"enabled"`
+	Status       string                               `json:"status"`
+	WindowDays   int                                  `json:"windowDays"`
+	Summary      conversionFunnelSummary              `json:"summary"`
+	Daily        []conversionFunnelDayBreakdown       `json:"daily"`
+	Surfaces     []conversionFunnelDimensionBreakdown `json:"surfaces"`
+	Capabilities []conversionFunnelDimensionBreakdown `json:"capabilities"`
+	Notes        []string                             `json:"notes"`
+	Error        string                               `json:"error,omitempty"`
+}
+
+func (d CommercialFunnelDiagnostic) NormalizeCollections() CommercialFunnelDiagnostic {
+	if d.Daily == nil {
+		d.Daily = []conversionFunnelDayBreakdown{}
+	}
+	if d.Surfaces == nil {
+		d.Surfaces = []conversionFunnelDimensionBreakdown{}
+	}
+	if d.Capabilities == nil {
+		d.Capabilities = []conversionFunnelDimensionBreakdown{}
+	}
 	if d.Notes == nil {
 		d.Notes = []string{}
 	}
@@ -381,14 +414,88 @@ func buildMetricsStoreDiagnostic(monitor *monitoring.Monitor) *MetricsStoreDiagn
 	}
 }
 
+func buildCommercialFunnelDiagnostic(ctx context.Context, store *conversionStore, now time.Time) *CommercialFunnelDiagnostic {
+	diag := (&CommercialFunnelDiagnostic{
+		Enabled:    store != nil,
+		Status:     "idle",
+		WindowDays: commercialFunnelDiagnosticsWindowDays,
+		Notes:      []string{},
+	}).NormalizeCollections()
+
+	if store == nil {
+		diag.Status = "unavailable"
+		diag.Error = "conversion store not initialized"
+		diag.Notes = append(diag.Notes, "Local upgrade metrics are unavailable on this instance.")
+		return &diag
+	}
+
+	to := now.UTC().Truncate(24 * time.Hour).Add(24 * time.Hour)
+	from := to.AddDate(0, 0, -commercialFunnelDiagnosticsWindowDays)
+	orgID := diagnosticsCommercialOrgID(ctx)
+
+	report, err := store.FunnelReport(orgID, from, to)
+	if err != nil {
+		diag.Status = "error"
+		diag.Error = "failed to query local upgrade metrics"
+		diag.Notes = append(diag.Notes, "Diagnostics could not read the local upgrade funnel store.")
+		return &diag
+	}
+
+	diag.Summary = report.Summary
+	diag.Daily = report.Daily
+	diag.Surfaces = report.Surfaces
+	diag.Capabilities = report.Capabilities
+
+	totalSignal := report.Summary.PricingViewed +
+		report.Summary.PaywallViewed +
+		report.Summary.TrialStarted +
+		report.Summary.UpgradeClicked +
+		report.Summary.CheckoutClicked +
+		report.Summary.CheckoutStarted +
+		report.Summary.CheckoutCompleted +
+		report.Summary.LicenseActivated +
+		report.Summary.LicenseActivationFailed
+
+	switch {
+	case totalSignal == 0:
+		diag.Status = "idle"
+		diag.Notes = append(diag.Notes, "No local upgrade funnel activity was recorded in the last 30 days.")
+	case report.Summary.LicenseActivationFailed > 0:
+		diag.Status = "warning"
+		diag.Notes = append(diag.Notes, "At least one local activation attempt failed in the current window.")
+	case report.Summary.CheckoutClicked > 0 && report.Summary.LicenseActivated == 0:
+		diag.Status = "warning"
+		diag.Notes = append(diag.Notes, "Checkout interest is present, but no local activation completed in the current window.")
+	case report.Summary.LicenseActivated > 0:
+		diag.Status = "active"
+		diag.Notes = append(diag.Notes, "Local pricing and activation events show at least one completed conversion in the current window.")
+	default:
+		diag.Status = "active"
+	}
+
+	if report.Summary.PricingViewed > 0 && report.Summary.CheckoutClicked == 0 {
+		diag.Notes = append(diag.Notes, "Pricing views are not yet turning into checkout clicks.")
+	}
+	if report.Summary.CheckoutClicked > report.Summary.CheckoutStarted {
+		diag.Notes = append(diag.Notes, "Some checkout clicks leave the app before a local checkout-start event is recorded.")
+	}
+
+	return &diag
+}
+
 const diagnosticsCacheTTL = 45 * time.Second
+const commercialFunnelDiagnosticsWindowDays = 30
+
+type cachedDiagnosticsEntry struct {
+	diag     DiagnosticsInfo
+	cachedAt time.Time
+}
 
 var (
 	diagnosticsMetricsOnce sync.Once
 
-	diagnosticsCacheMu        sync.RWMutex
-	diagnosticsCache          DiagnosticsInfo
-	diagnosticsCacheTimestamp time.Time
+	diagnosticsCacheMu sync.RWMutex
+	diagnosticsCache   = map[string]cachedDiagnosticsEntry{}
 
 	diagnosticsCacheHits = prometheus.NewCounter(prometheus.CounterOpts{
 		Namespace: "pulse",
@@ -412,6 +519,20 @@ var (
 		Buckets:   []float64{0.1, 0.25, 0.5, 1, 2.5, 5, 10, 20, 30},
 	})
 )
+
+func diagnosticsScopeKey(ctx context.Context) string {
+	if orgID := strings.TrimSpace(GetOrgID(ctx)); orgID != "" {
+		return orgID
+	}
+	return "__default__"
+}
+
+func diagnosticsCommercialOrgID(ctx context.Context) string {
+	if orgID := strings.TrimSpace(GetOrgID(ctx)); orgID != "" {
+		return orgID
+	}
+	return "default"
+}
 
 // NodeDiagnostic contains diagnostic info for a Proxmox node
 type NodeDiagnostic struct {
@@ -701,15 +822,15 @@ func (r *Router) handleDiagnostics(w http.ResponseWriter, req *http.Request) {
 	})
 
 	now := time.Now()
+	scopeKey := diagnosticsScopeKey(req.Context())
 
 	diagnosticsCacheMu.RLock()
-	cachedDiag := diagnosticsCache
-	cachedAt := diagnosticsCacheTimestamp
+	cachedEntry, ok := diagnosticsCache[scopeKey]
 	diagnosticsCacheMu.RUnlock()
 
-	if !cachedAt.IsZero() && now.Sub(cachedAt) <= diagnosticsCacheTTL {
+	if ok && !cachedEntry.cachedAt.IsZero() && now.Sub(cachedEntry.cachedAt) <= diagnosticsCacheTTL {
 		diagnosticsCacheHits.Inc()
-		writeDiagnosticsResponse(w, cachedDiag, cachedAt)
+		writeDiagnosticsResponse(w, cachedEntry.diag, cachedEntry.cachedAt)
 		return
 	}
 
@@ -723,9 +844,11 @@ func (r *Router) handleDiagnostics(w http.ResponseWriter, req *http.Request) {
 	diagnosticsRefreshDuration.Observe(time.Since(start).Seconds())
 
 	diagnosticsCacheMu.Lock()
-	diagnosticsCache = fresh
-	diagnosticsCacheTimestamp = time.Now()
-	cachedAt = diagnosticsCacheTimestamp
+	cachedAt := time.Now()
+	diagnosticsCache[scopeKey] = cachedDiagnosticsEntry{
+		diag:     fresh,
+		cachedAt: cachedAt,
+	}
 	diagnosticsCacheMu.Unlock()
 
 	writeDiagnosticsResponse(w, fresh, cachedAt)
@@ -772,6 +895,7 @@ func (r *Router) computeDiagnostics(ctx context.Context) DiagnosticsInfo {
 
 	diag.APITokens = buildAPITokenDiagnostic(r.config, r.monitor)
 	diag.MetricsStore = buildMetricsStoreDiagnostic(r.monitor)
+	diag.CommercialFunnel = buildCommercialFunnelDiagnostic(ctx, r.conversionStore, time.Now().UTC())
 
 	// Test each configured node
 	for _, node := range r.config.PVEInstances {

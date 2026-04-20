@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -12,6 +13,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
+	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 )
 
@@ -94,18 +96,21 @@ func newMonitorForDiagnostics(t *testing.T, cfg *config.Config) *monitoring.Moni
 func TestHandleDiagnostics_CacheHit(t *testing.T) {
 	cached := DiagnosticsInfo{Version: "cached"}
 	cachedAt := time.Now()
+	scopeKey := diagnosticsScopeKey(context.Background())
 
 	diagnosticsCacheMu.Lock()
 	prevCache := diagnosticsCache
-	prevTimestamp := diagnosticsCacheTimestamp
-	diagnosticsCache = cached
-	diagnosticsCacheTimestamp = cachedAt
+	diagnosticsCache = map[string]cachedDiagnosticsEntry{
+		scopeKey: {
+			diag:     cached,
+			cachedAt: cachedAt,
+		},
+	}
 	diagnosticsCacheMu.Unlock()
 
 	t.Cleanup(func() {
 		diagnosticsCacheMu.Lock()
 		diagnosticsCache = prevCache
-		diagnosticsCacheTimestamp = prevTimestamp
 		diagnosticsCacheMu.Unlock()
 	})
 
@@ -127,6 +132,46 @@ func TestHandleDiagnostics_CacheHit(t *testing.T) {
 	}
 	if rec.Header().Get("X-Diagnostics-Cached-At") == "" {
 		t.Fatalf("expected cached-at header to be set")
+	}
+}
+
+func TestHandleDiagnostics_CacheIsScopedByOrg(t *testing.T) {
+	cfg := &config.Config{DataPath: t.TempDir()}
+	monitor := newMonitorForDiagnostics(t, cfg)
+	cachedAt := time.Now()
+
+	diagnosticsCacheMu.Lock()
+	prevCache := diagnosticsCache
+	diagnosticsCache = map[string]cachedDiagnosticsEntry{
+		"org-a": {
+			diag:     DiagnosticsInfo{Version: "cached-org-a"},
+			cachedAt: cachedAt,
+		},
+	}
+	diagnosticsCacheMu.Unlock()
+
+	t.Cleanup(func() {
+		diagnosticsCacheMu.Lock()
+		diagnosticsCache = prevCache
+		diagnosticsCacheMu.Unlock()
+	})
+
+	router := &Router{config: cfg, monitor: monitor}
+	req := httptest.NewRequest(http.MethodGet, "/api/diagnostics", nil)
+	req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, "org-b"))
+	rec := httptest.NewRecorder()
+
+	router.handleDiagnostics(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+
+	var payload DiagnosticsInfo
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode diagnostics: %v", err)
+	}
+	if payload.Version == "cached-org-a" {
+		t.Fatalf("expected org-b diagnostics to bypass org-a cache entry")
 	}
 }
 
@@ -164,6 +209,9 @@ func TestComputeDiagnostics_Basic(t *testing.T) {
 	if diag.MetricsStore == nil {
 		t.Fatalf("expected metrics store diagnostics")
 	}
+	if diag.CommercialFunnel == nil {
+		t.Fatalf("expected commercial funnel diagnostics")
+	}
 	if diag.APITokens == nil {
 		t.Fatalf("expected api token diagnostics")
 	}
@@ -172,6 +220,76 @@ func TestComputeDiagnostics_Basic(t *testing.T) {
 	}
 	if diag.AIChat == nil {
 		t.Fatalf("expected ai chat diagnostics")
+	}
+}
+
+func TestComputeDiagnostics_CommercialFunnelUsesOrgScopedConversionReport(t *testing.T) {
+	cfg := &config.Config{DataPath: t.TempDir()}
+	monitor := newMonitorForDiagnostics(t, cfg)
+	store, err := pkglicensing.NewConversionStore(filepath.Join(t.TempDir(), "conversion.db"))
+	if err != nil {
+		t.Fatalf("NewConversionStore() error = %v", err)
+	}
+	defer store.Close()
+
+	base := time.Now().UTC().Truncate(time.Hour).Add(-6 * time.Hour)
+	for _, event := range []pkglicensing.StoredConversionEvent{
+		{
+			OrgID:          "org-a",
+			EventType:      pkglicensing.EventPricingViewed,
+			Surface:        "settings_self_hosted_billing_plan",
+			Capability:     "self_hosted_plan",
+			IdempotencyKey: "org-a:pricing",
+			CreatedAt:      base,
+		},
+		{
+			OrgID:          "org-a",
+			EventType:      pkglicensing.EventCheckoutClicked,
+			Surface:        "settings_self_hosted_billing_compare_prompt",
+			Capability:     "self_hosted_plan",
+			IdempotencyKey: "org-a:click",
+			CreatedAt:      base.Add(time.Hour),
+		},
+		{
+			OrgID:          "org-a",
+			EventType:      pkglicensing.EventLicenseActivated,
+			Surface:        "license_api",
+			Capability:     "self_hosted_plan",
+			IdempotencyKey: "org-a:activated",
+			CreatedAt:      base.Add(2 * time.Hour),
+		},
+		{
+			OrgID:          "org-b",
+			EventType:      pkglicensing.EventPricingViewed,
+			Surface:        "paywall_modal",
+			Capability:     "relay",
+			IdempotencyKey: "org-b:pricing",
+			CreatedAt:      base,
+		},
+	} {
+		if err := store.Record(event); err != nil {
+			t.Fatalf("Record(%s) error = %v", event.IdempotencyKey, err)
+		}
+	}
+
+	router := &Router{config: cfg, monitor: monitor, conversionStore: store}
+	ctx := context.WithValue(context.Background(), OrgIDContextKey, "org-a")
+	diag := router.computeDiagnostics(ctx)
+
+	if diag.CommercialFunnel == nil {
+		t.Fatalf("expected commercial funnel diagnostics")
+	}
+	if diag.CommercialFunnel.Summary.PricingViewed != 1 {
+		t.Fatalf("PricingViewed = %d, want 1", diag.CommercialFunnel.Summary.PricingViewed)
+	}
+	if diag.CommercialFunnel.Summary.CheckoutClicked != 1 {
+		t.Fatalf("CheckoutClicked = %d, want 1", diag.CommercialFunnel.Summary.CheckoutClicked)
+	}
+	if diag.CommercialFunnel.Summary.LicenseActivated != 1 {
+		t.Fatalf("LicenseActivated = %d, want 1", diag.CommercialFunnel.Summary.LicenseActivated)
+	}
+	if len(diag.CommercialFunnel.Surfaces) == 0 || diag.CommercialFunnel.Surfaces[0].Key != "settings_self_hosted_billing_compare_prompt" {
+		t.Fatalf("unexpected surfaces breakdown: %+v", diag.CommercialFunnel.Surfaces)
 	}
 }
 

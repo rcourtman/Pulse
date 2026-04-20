@@ -186,6 +186,124 @@ func TestConversionStoreFunnelSummaryAggregation(t *testing.T) {
 	}
 }
 
+func TestConversionStoreFunnelReportIncludesDailySurfaceAndCapabilityBreakdowns(t *testing.T) {
+	tmp := t.TempDir()
+	store, err := NewConversionStore(filepath.Join(tmp, "conversion.db"))
+	if err != nil {
+		t.Fatalf("NewConversionStore() error = %v", err)
+	}
+	defer store.Close()
+
+	from := time.Date(2026, 4, 1, 0, 0, 0, 0, time.UTC)
+	to := from.Add(3 * 24 * time.Hour)
+
+	events := []StoredConversionEvent{
+		{
+			OrgID:          "org-a",
+			EventType:      EventPricingViewed,
+			Surface:        "settings_self_hosted_billing_plan",
+			Capability:     "self_hosted_plan",
+			IdempotencyKey: "funnel:1",
+			CreatedAt:      from.Add(2 * time.Hour),
+		},
+		{
+			OrgID:          "org-a",
+			EventType:      EventCheckoutClicked,
+			Surface:        "settings_self_hosted_billing_compare_prompt",
+			Capability:     "self_hosted_plan",
+			IdempotencyKey: "funnel:2",
+			CreatedAt:      from.Add(3 * time.Hour),
+		},
+		{
+			OrgID:          "org-a",
+			EventType:      EventCheckoutStarted,
+			Surface:        "license_api",
+			Capability:     "self_hosted_plan",
+			IdempotencyKey: "funnel:3",
+			CreatedAt:      from.Add(4 * time.Hour),
+		},
+		{
+			OrgID:          "org-a",
+			EventType:      EventLicenseActivated,
+			Surface:        "license_api",
+			Capability:     "self_hosted_plan",
+			IdempotencyKey: "funnel:4",
+			CreatedAt:      from.Add(27 * time.Hour),
+		},
+		{
+			OrgID:          "org-a",
+			EventType:      EventTrialStarted,
+			Surface:        "license_panel",
+			Capability:     "relay",
+			IdempotencyKey: "funnel:5",
+			CreatedAt:      from.Add(28 * time.Hour),
+		},
+		{
+			OrgID:          "org-a",
+			EventType:      EventPricingViewed,
+			Surface:        "paywall_modal",
+			Capability:     "relay",
+			IdempotencyKey: "funnel:6",
+			CreatedAt:      from.Add(50 * time.Hour),
+		},
+	}
+	for _, ev := range events {
+		if err := store.Record(ev); err != nil {
+			t.Fatalf("Record(%s) error = %v", ev.IdempotencyKey, err)
+		}
+	}
+
+	report, err := store.FunnelReport("org-a", from, to)
+	if err != nil {
+		t.Fatalf("FunnelReport() error = %v", err)
+	}
+
+	if report.Summary.PricingViewed != 2 {
+		t.Fatalf("Summary.PricingViewed = %d, want 2", report.Summary.PricingViewed)
+	}
+	if report.Summary.CheckoutClicked != 1 {
+		t.Fatalf("Summary.CheckoutClicked = %d, want 1", report.Summary.CheckoutClicked)
+	}
+	if report.Summary.LicenseActivated != 1 {
+		t.Fatalf("Summary.LicenseActivated = %d, want 1", report.Summary.LicenseActivated)
+	}
+	if len(report.Daily) != 3 {
+		t.Fatalf("len(Daily) = %d, want 3", len(report.Daily))
+	}
+	if report.Daily[0].Day != "2026-04-01" || report.Daily[0].PricingViewed != 1 || report.Daily[0].CheckoutClicked != 1 {
+		t.Fatalf("unexpected first daily bucket: %+v", report.Daily[0])
+	}
+	if report.Daily[1].Day != "2026-04-02" || report.Daily[1].LicenseActivated != 1 || report.Daily[1].TrialStarted != 1 {
+		t.Fatalf("unexpected second daily bucket: %+v", report.Daily[1])
+	}
+	if report.Daily[2].Day != "2026-04-03" || report.Daily[2].PricingViewed != 1 {
+		t.Fatalf("unexpected third daily bucket: %+v", report.Daily[2])
+	}
+
+	if len(report.Surfaces) < 3 {
+		t.Fatalf("len(Surfaces) = %d, want >= 3", len(report.Surfaces))
+	}
+	if report.Surfaces[0].Key != "settings_self_hosted_billing_compare_prompt" {
+		t.Fatalf("Surfaces[0].Key = %q, want settings_self_hosted_billing_compare_prompt", report.Surfaces[0].Key)
+	}
+	if report.Surfaces[0].CheckoutClicked != 1 {
+		t.Fatalf("Surfaces[0].CheckoutClicked = %d, want 1", report.Surfaces[0].CheckoutClicked)
+	}
+
+	if len(report.Capabilities) != 2 {
+		t.Fatalf("len(Capabilities) = %d, want 2", len(report.Capabilities))
+	}
+	if report.Capabilities[0].Key != "self_hosted_plan" {
+		t.Fatalf("Capabilities[0].Key = %q, want self_hosted_plan", report.Capabilities[0].Key)
+	}
+	if report.Capabilities[0].PricingViewed != 1 || report.Capabilities[0].LicenseActivated != 1 {
+		t.Fatalf("unexpected self_hosted_plan capability bucket: %+v", report.Capabilities[0])
+	}
+	if report.Capabilities[1].Key != "relay" {
+		t.Fatalf("Capabilities[1].Key = %q, want relay", report.Capabilities[1].Key)
+	}
+}
+
 func TestConversionStoreOrgIsolation(t *testing.T) {
 	tmp := t.TempDir()
 	store, err := NewConversionStore(filepath.Join(tmp, "conversion.db"))
@@ -230,6 +348,12 @@ func TestConversionStoreRequiresOrgScopeForReads(t *testing.T) {
 
 	if _, err := store.FunnelSummary("", now.Add(-time.Minute), now.Add(time.Minute)); err == nil {
 		t.Fatal("FunnelSummary() with empty org_id error = nil, want error")
+	}
+	if _, err := store.FunnelDailyBreakdown("", now.Add(-time.Minute), now.Add(time.Minute)); err == nil {
+		t.Fatal("FunnelDailyBreakdown() with empty org_id error = nil, want error")
+	}
+	if _, err := store.FunnelDimensionBreakdown("", now.Add(-time.Minute), now.Add(time.Minute), "surface"); err == nil {
+		t.Fatal("FunnelDimensionBreakdown() with empty org_id error = nil, want error")
 	}
 }
 

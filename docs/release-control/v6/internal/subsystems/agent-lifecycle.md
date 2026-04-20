@@ -1354,6 +1354,12 @@ for lifecycle-adjacent diagnostics surfaces, legacy aliases and empty
 fallback-reason fields must still normalize onto the governed canonical reason
 contract instead of depending on monitor-owned snapshot accessors to have run
 first.
+That same shared diagnostics dependency now also assumes any local commercial
+funnel diagnostics stay org-scoped at the cache boundary: when
+`internal/api/diagnostics.go` adds self-hosted upgrade-metric summaries beside
+lifecycle diagnostics, the shared diagnostics cache must key by authenticated
+org context so lifecycle-adjacent admin surfaces do not cross-tenant leak local
+commerce telemetry.
 That same shared `internal/api/` dependency now also assumes auth persistence
 compatibility is handled as an explicit migration/import boundary: legacy
 raw-token `sessions.json` and `csrf_tokens.json` files may load for upgrade

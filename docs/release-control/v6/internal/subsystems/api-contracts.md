@@ -1480,6 +1480,14 @@ That same diagnostics boundary must also backfill canonical fallback reasons
 when a raw snapshot reaches the API layer without one, so
 `buildMemorySourceDiagnostics` stays self-consistent even if a caller bypasses
 `GetDiagnosticSnapshots()` and hands diagnostics a legacy alias directly.
+That same diagnostics boundary now also owns org-scoped local commercial funnel
+serialization when the self-hosted privacy contract allows it: if
+`internal/api/diagnostics.go` exposes local upgrade-metric summaries, daily
+buckets, or surface/capability breakdowns, it must read them from the local
+conversion store through the licensing bridge, keep diagnostics caching scoped
+to the authenticated org context, and preserve the canonical camelCase
+diagnostics payload shape instead of leaking pkg/licensing types or inferring
+hosted checkout stages from the local API layer.
 That same public-demo API boundary must also hide runtime-admin operations
 surfaces instead of treating them as harmless reads. Demo sessions must receive
 `404` for `/api/diagnostics`, `/api/diagnostics/docker/prepare-token`, and the

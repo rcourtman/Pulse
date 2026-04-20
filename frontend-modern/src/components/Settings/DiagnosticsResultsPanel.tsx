@@ -5,6 +5,7 @@ import { Card } from '@/components/shared/Card';
 import Activity from 'lucide-solid/icons/activity';
 import AlertTriangle from 'lucide-solid/icons/alert-triangle';
 import CheckCircle from 'lucide-solid/icons/check-circle';
+import CreditCard from 'lucide-solid/icons/credit-card';
 import Cpu from 'lucide-solid/icons/cpu';
 import Database from 'lucide-solid/icons/database';
 import HardDrive from 'lucide-solid/icons/hard-drive';
@@ -22,7 +23,12 @@ import {
   DIAGNOSTICS_EMPTY_STATE_COPY,
   DIAGNOSTICS_PANEL_COPY,
 } from '@/utils/diagnosticsPresentation';
-import type { DiagnosticsData } from '@/components/Settings/diagnosticsModel';
+import { titleCaseDelimitedLabel } from '@/utils/textPresentation';
+import type {
+  CommercialFunnelDimensionBreakdown,
+  CommercialFunnelStageCounts,
+  DiagnosticsData,
+} from '@/components/Settings/diagnosticsModel';
 
 const DiagnosticCard: Component<{
   children: JSX.Element;
@@ -78,6 +84,68 @@ const MetricRow: Component<{
     </span>
   </div>
 );
+
+const formatCommercialBreakdownLabel = (value?: string): string =>
+  titleCaseDelimitedLabel(value, { fallback: 'Unknown' });
+
+const formatCommercialDayLabel = (day?: string): string => {
+  if (!day) return 'Unknown';
+  const parsed = new Date(`${day}T00:00:00Z`);
+  if (Number.isNaN(parsed.getTime())) return day;
+  return parsed.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+};
+
+const getCommercialFunnelBadge = (
+  status?: string,
+): {
+  badgeStatus: 'online' | 'offline' | 'warning' | 'unknown';
+  label: string;
+} => {
+  switch (status) {
+    case 'active':
+      return { badgeStatus: 'online', label: 'Active' };
+    case 'warning':
+      return { badgeStatus: 'warning', label: 'Needs Review' };
+    case 'error':
+      return { badgeStatus: 'offline', label: 'Error' };
+    case 'unavailable':
+      return { badgeStatus: 'offline', label: 'Unavailable' };
+    default:
+      return { badgeStatus: 'unknown', label: 'Idle' };
+  }
+};
+
+const formatCommercialBreakdownSummary = (entry: CommercialFunnelDimensionBreakdown): string => {
+  const segments: string[] = [];
+  if (entry.pricing_viewed > 0) {
+    segments.push(`Pricing ${entry.pricing_viewed}`);
+  }
+  if (entry.checkout_clicked > 0) {
+    segments.push(`Checkout ${entry.checkout_clicked}`);
+  }
+  if (entry.trial_started > 0) {
+    segments.push(`Trials ${entry.trial_started}`);
+  }
+  if (entry.license_activated > 0) {
+    segments.push(`Activated ${entry.license_activated}`);
+  }
+  return segments.join(' • ') || 'No recorded activity';
+};
+
+const totalCommercialSignals = (summary?: CommercialFunnelStageCounts | null): number => {
+  if (!summary) return 0;
+  return (
+    summary.pricing_viewed +
+    summary.paywall_viewed +
+    summary.trial_started +
+    summary.upgrade_clicked +
+    summary.checkout_clicked +
+    summary.checkout_started +
+    summary.checkout_completed +
+    summary.license_activated +
+    summary.license_activation_failed
+  );
+};
 
 interface DiagnosticsResultsPanelProps {
   diagnosticsData: DiagnosticsData | null;
@@ -293,6 +361,162 @@ export const DiagnosticsResultsPanel: Component<DiagnosticsResultsPanelProps> = 
               <Show when={props.diagnosticsData?.metricsStore?.error}>
                 <div class="mt-3 rounded-md border border-red-200 bg-red-50 p-2 text-xs text-red-700 dark:border-red-800 dark:bg-red-900 dark:text-red-300">
                   {props.diagnosticsData?.metricsStore?.error}
+                </div>
+              </Show>
+            </Card>
+          </Show>
+
+          <Show when={props.diagnosticsData?.commercialFunnel}>
+            <Card padding="md" class="lg:col-span-2">
+              <div class="mb-4 flex items-center gap-3 border-b border-border pb-3">
+                <div class="rounded-md bg-blue-100 p-2 dark:bg-blue-900">
+                  <CreditCard class="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                </div>
+                <div>
+                  <h4 class="text-sm font-semibold text-base-content">Commercial Funnel</h4>
+                  <p class="text-xs text-muted">
+                    Local pricing, checkout, and activation activity over the last{' '}
+                    {props.diagnosticsData?.commercialFunnel?.windowDays ?? 0} days.
+                  </p>
+                </div>
+                <div class="ml-auto">
+                  <StatusBadge
+                    status={getCommercialFunnelBadge(props.diagnosticsData?.commercialFunnel?.status).badgeStatus}
+                    label={getCommercialFunnelBadge(props.diagnosticsData?.commercialFunnel?.status).label}
+                  />
+                </div>
+              </div>
+
+              <div class="grid gap-4 xl:grid-cols-[minmax(0,220px)_minmax(0,1fr)_minmax(0,1fr)]">
+                <div class="space-y-2 text-xs">
+                  <MetricRow
+                    label="Signals"
+                    value={totalCommercialSignals(props.diagnosticsData?.commercialFunnel?.summary)}
+                  />
+                  <MetricRow
+                    label="Pricing Views"
+                    value={props.diagnosticsData?.commercialFunnel?.summary?.pricing_viewed ?? 0}
+                  />
+                  <MetricRow
+                    label="Checkout Clicks"
+                    value={props.diagnosticsData?.commercialFunnel?.summary?.checkout_clicked ?? 0}
+                  />
+                  <MetricRow
+                    label="Checkout Starts"
+                    value={props.diagnosticsData?.commercialFunnel?.summary?.checkout_started ?? 0}
+                  />
+                  <MetricRow
+                    label="Activations"
+                    value={props.diagnosticsData?.commercialFunnel?.summary?.license_activated ?? 0}
+                  />
+                  <MetricRow
+                    label="Activation Failures"
+                    value={
+                      props.diagnosticsData?.commercialFunnel?.summary?.license_activation_failed ?? 0
+                    }
+                  />
+                </div>
+
+                <div>
+                  <div class="mb-2 flex items-center justify-between">
+                    <h5 class="text-xs font-semibold uppercase tracking-wide text-muted">
+                      Recent Daily Trend
+                    </h5>
+                    <span class="text-[11px] text-muted">UTC day buckets</span>
+                  </div>
+                  <div class="space-y-2">
+                    <Show
+                      when={(props.diagnosticsData?.commercialFunnel?.daily?.length || 0) > 0}
+                      fallback={<p class="text-xs text-muted">No daily activity recorded.</p>}
+                    >
+                      <For each={props.diagnosticsData?.commercialFunnel?.daily?.slice(-7) || []}>
+                        {(bucket) => (
+                          <div class="rounded-md border border-border-subtle px-3 py-2 text-xs">
+                            <div class="flex items-center justify-between gap-3">
+                              <span class="font-medium text-base-content">
+                                {formatCommercialDayLabel(bucket.day)}
+                              </span>
+                              <span class="text-muted">
+                                Pricing {bucket.pricing_viewed} • Checkout {bucket.checkout_clicked} •
+                                Activated {bucket.license_activated}
+                              </span>
+                            </div>
+                          </div>
+                        )}
+                      </For>
+                    </Show>
+                  </div>
+                </div>
+
+                <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-1">
+                  <div>
+                    <div class="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">
+                      Top Surfaces
+                    </div>
+                    <div class="space-y-2">
+                      <Show
+                        when={(props.diagnosticsData?.commercialFunnel?.surfaces?.length || 0) > 0}
+                        fallback={<p class="text-xs text-muted">No surface attribution recorded.</p>}
+                      >
+                        <For each={props.diagnosticsData?.commercialFunnel?.surfaces?.slice(0, 4) || []}>
+                          {(entry) => (
+                            <div class="rounded-md border border-border-subtle px-3 py-2 text-xs">
+                              <div class="font-medium text-base-content">
+                                {formatCommercialBreakdownLabel(entry.key)}
+                              </div>
+                              <div class="mt-1 text-muted">
+                                {formatCommercialBreakdownSummary(entry)}
+                              </div>
+                            </div>
+                          )}
+                        </For>
+                      </Show>
+                    </div>
+                  </div>
+
+                  <div>
+                    <div class="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">
+                      Top Capabilities
+                    </div>
+                    <div class="space-y-2">
+                      <Show
+                        when={(props.diagnosticsData?.commercialFunnel?.capabilities?.length || 0) > 0}
+                        fallback={<p class="text-xs text-muted">No capability attribution recorded.</p>}
+                      >
+                        <For each={props.diagnosticsData?.commercialFunnel?.capabilities?.slice(0, 4) || []}>
+                          {(entry) => (
+                            <div class="rounded-md border border-border-subtle px-3 py-2 text-xs">
+                              <div class="font-medium text-base-content">
+                                {formatCommercialBreakdownLabel(entry.key)}
+                              </div>
+                              <div class="mt-1 text-muted">
+                                {formatCommercialBreakdownSummary(entry)}
+                              </div>
+                            </div>
+                          )}
+                        </For>
+                      </Show>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <Show when={(props.diagnosticsData?.commercialFunnel?.notes?.length || 0) > 0}>
+                <div class="mt-4 rounded-md border border-amber-200 bg-amber-50 p-2 dark:border-amber-800 dark:bg-amber-900">
+                  <div class="flex items-start gap-2 text-xs text-amber-700 dark:text-amber-300">
+                    <AlertTriangle class="mt-0.5 h-4 w-4 flex-shrink-0" />
+                    <div class="space-y-1">
+                      <For each={props.diagnosticsData?.commercialFunnel?.notes || []}>
+                        {(note) => <div>{note}</div>}
+                      </For>
+                    </div>
+                  </div>
+                </div>
+              </Show>
+
+              <Show when={props.diagnosticsData?.commercialFunnel?.error}>
+                <div class="mt-3 rounded-md border border-red-200 bg-red-50 p-2 text-xs text-red-700 dark:border-red-800 dark:bg-red-900 dark:text-red-300">
+                  {props.diagnosticsData?.commercialFunnel?.error}
                 </div>
               </Show>
             </Card>

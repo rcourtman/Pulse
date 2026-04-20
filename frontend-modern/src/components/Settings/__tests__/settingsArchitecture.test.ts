@@ -10,6 +10,8 @@ import connectionEditorSource from '../ConnectionEditor/ConnectionEditor.tsx?raw
 import addressProbeStepSource from '../ConnectionEditor/AddressProbeStep.tsx?raw';
 import connectionEditorStateSource from '../ConnectionEditor/useConnectionEditor.ts?raw';
 import nodeCredentialSlotSource from '../ConnectionEditor/CredentialSlots/NodeCredentialSlot.tsx?raw';
+import diagnosticsResultsPanelSource from '../DiagnosticsResultsPanel.tsx?raw';
+import diagnosticsModelSource from '../diagnosticsModel.ts?raw';
 
 describe('settings architecture guardrails', () => {
   it('keeps Settings on the canonical page shell boundary', () => {
@@ -119,5 +121,14 @@ describe('settings architecture guardrails', () => {
     expect(nodeCredentialSlotSource).toContain('<NodeModalMonitoringSection');
     expect(nodeCredentialSlotSource).toContain('<NodeModalStatusFooter');
     expect(nodeCredentialSlotSource).not.toContain('<Dialog');
+  });
+
+  it('keeps diagnostics commercial funnel rendering on the shared results/model boundary', () => {
+    expect(diagnosticsResultsPanelSource).toContain('Commercial Funnel');
+    expect(diagnosticsResultsPanelSource).toContain('titleCaseDelimitedLabel');
+    expect(diagnosticsResultsPanelSource).not.toContain("apiFetchJSON('/api/diagnostics')");
+
+    expect(diagnosticsModelSource).toContain('export interface CommercialFunnelDiagnostic');
+    expect(diagnosticsModelSource).toContain('export interface CommercialFunnelSummary');
   });
 });
