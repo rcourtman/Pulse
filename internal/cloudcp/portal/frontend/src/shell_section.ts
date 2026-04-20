@@ -7,14 +7,11 @@ export function preferredPortalShellSection(
   var hasHostedAccounts = accounts.length > 0;
   var hasSelfHostedCommercial = bootstrap.has_self_hosted_commercial === true || !hasHostedAccounts;
 
-  if (!bootstrap.authenticated) {
-    return 'overview';
-  }
   if (hasHostedAccounts) {
     return 'workspaces';
   }
   if (hasSelfHostedCommercial) {
     return 'billing';
   }
-  return 'overview';
+  return 'billing';
 }

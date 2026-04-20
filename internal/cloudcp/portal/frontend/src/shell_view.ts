@@ -19,7 +19,7 @@ export interface ShellViewContext {
   activeSection?: PortalShellSection;
 }
 
-interface OverviewWorkspaceEntry {
+interface WorkspaceSummaryEntry {
   account: PortalAccountSummary;
   workspace: PortalWorkspaceSummary;
 }
@@ -62,6 +62,10 @@ function accountKindLabel(account: PortalAccountSummary): string {
 
 function workspaceCountLabel(count: number): string {
   return count === 1 ? '1 workspace' : String(count) + ' workspaces';
+}
+
+function accountCountLabel(count: number): string {
+  return count === 1 ? '1 account' : String(count) + ' accounts';
 }
 
 
@@ -203,8 +207,8 @@ function collectWorkspaces(accounts: PortalAccountSummary[]): PortalWorkspaceSum
   return results;
 }
 
-function collectOverviewWorkspaceEntries(accounts: PortalAccountSummary[]): OverviewWorkspaceEntry[] {
-  var results: OverviewWorkspaceEntry[] = [];
+function collectWorkspaceSummaryEntries(accounts: PortalAccountSummary[]): WorkspaceSummaryEntry[] {
+  var results: WorkspaceSummaryEntry[] = [];
   for (var i = 0; i < accounts.length; i += 1) {
     var workspaces = Array.isArray(accounts[i].workspaces) ? accounts[i].workspaces : [];
     for (var j = 0; j < workspaces.length; j += 1) {
@@ -283,22 +287,6 @@ function renderFactLine(className: string, facts: string[]): string {
       facts.map(function(fact) {
         return '<span>' + escapeHTML(fact) + '</span>';
       }).join('<span class="portal-fact-separator">•</span>') +
-    '</div>'
-  );
-}
-
-function renderSummaryStrip(items: Array<{ label: string; value: string }>): string {
-  if (!items.length) return '';
-  return (
-    '<div class="portal-summary-strip">' +
-      items.map(function(item) {
-        return (
-          '<div class="portal-summary-item">' +
-            '<span>' + escapeHTML(item.label) + '</span>' +
-            '<strong>' + escapeHTML(item.value) + '</strong>' +
-          '</div>'
-        );
-      }).join('') +
     '</div>'
   );
 }
@@ -408,6 +396,14 @@ function renderTabBar(bootstrap: PortalBootstrapData, activeSection: PortalShell
   );
 }
 
+function workspaceListAnchorID(accountID: string): string {
+  return 'workspace-list-' + accountID;
+}
+
+function workspaceRowAnchorID(accountID: string, workspaceID: string): string {
+  return 'workspace-row-' + accountID + '-' + workspaceID;
+}
+
 function renderWorkspaceCard(account: PortalAccountSummary, workspace: PortalWorkspaceSummary, accountAPIBasePath: string): string {
   var status = workspaceHealthState(workspace);
   var state = String(workspace.state || '');
@@ -441,7 +437,7 @@ function renderWorkspaceCard(account: PortalAccountSummary, workspace: PortalWor
   }
 
   return (
-    '<article class="workspace-row workspace-row-health-' + escapeAttr(status) + ' workspace-row-state-' + escapeAttr(state || 'unknown') + '" data-workspace-row="' + escapeAttr(workspace.id) + '">' +
+    '<article class="workspace-row workspace-row-health-' + escapeAttr(status) + ' workspace-row-state-' + escapeAttr(state || 'unknown') + '" id="' + escapeAttr(workspaceRowAnchorID(account.id, workspace.id)) + '" data-workspace-row="' + escapeAttr(workspace.id) + '">' +
       '<div class="workspace-row-primary">' +
         '<div class="workspace-row-heading">' +
           '<h4 class="workspace-name">' + escapeHTML(workspace.display_name) + '</h4>' +
@@ -486,8 +482,8 @@ function renderWorkspaceHandoffForm(accountID: string, workspaceID: string, acco
   );
 }
 
-function attentionOverviewEntries(entries: OverviewWorkspaceEntry[]): OverviewWorkspaceEntry[] {
-  var results: OverviewWorkspaceEntry[] = [];
+function attentionWorkspaceEntries(entries: WorkspaceSummaryEntry[]): WorkspaceSummaryEntry[] {
+  var results: WorkspaceSummaryEntry[] = [];
   for (var i = 0; i < entries.length; i += 1) {
     var status = workspaceHealthState(entries[i].workspace);
     if (status === 'unhealthy' || status === 'checking') {
@@ -497,8 +493,8 @@ function attentionOverviewEntries(entries: OverviewWorkspaceEntry[]): OverviewWo
   return results;
 }
 
-function readyOverviewEntries(entries: OverviewWorkspaceEntry[]): OverviewWorkspaceEntry[] {
-  var results: OverviewWorkspaceEntry[] = [];
+function readyWorkspaceEntries(entries: WorkspaceSummaryEntry[]): WorkspaceSummaryEntry[] {
+  var results: WorkspaceSummaryEntry[] = [];
   for (var i = 0; i < entries.length; i += 1) {
     if (String(entries[i].workspace.state || '') === 'active' && workspaceHealthState(entries[i].workspace) === 'healthy') {
       results.push(entries[i]);
@@ -507,188 +503,41 @@ function readyOverviewEntries(entries: OverviewWorkspaceEntry[]): OverviewWorksp
   return results;
 }
 
-function overviewWorkspaceContext(entry: OverviewWorkspaceEntry, includeAccountName: boolean, note: string): string {
+function suspendedWorkspaceEntries(entries: WorkspaceSummaryEntry[]): WorkspaceSummaryEntry[] {
+  var results: WorkspaceSummaryEntry[] = [];
+  for (var i = 0; i < entries.length; i += 1) {
+    if (String(entries[i].workspace.state || '') === 'suspended') {
+      results.push(entries[i]);
+    }
+  }
+  return results;
+}
+
+function workspaceSummaryContext(entry: WorkspaceSummaryEntry, includeAccountName: boolean, note: string): string {
   if (!includeAccountName) return note;
   return entry.account.name + ' · ' + note;
 }
 
-function overviewBillingSeparationCopy(
-  accounts: PortalAccountSummary[],
-  showSelfHostedCommercial: boolean
-): { title: string; copy: string } {
-  var hostedBillingCount = 0;
-  var canManageHostedBilling = false;
-  for (var i = 0; i < accounts.length; i += 1) {
-    if (accounts[i].has_billing) {
-      hostedBillingCount += 1;
-      if (accounts[i].can_manage) {
-        canManageHostedBilling = true;
-      }
-    }
-  }
-
-  if (!accounts.length) {
-    return {
-      title: 'Billing stays separate',
-      copy: 'Self-hosted billing, licenses, refunds, and privacy stay in Billing.',
-    };
-  }
-
-  if (showSelfHostedCommercial) {
-    if (hostedBillingCount > 0) {
-      return {
-        title: 'Billing stays separate',
-        copy: canManageHostedBilling
-          ? 'Hosted billing stays in Billing, and self-hosted tools appear there only when relevant.'
-          : 'Hosted billing stays in Billing, an owner or admin opens it, and self-hosted tools appear there only when relevant.',
-      };
-    }
-    return {
-      title: 'Billing stays separate',
-      copy: 'Self-hosted tools appear in Billing only when they are relevant to this account.',
-    };
-  }
-
-  if (hostedBillingCount > 0) {
-    return {
-      title: 'Hosted billing stays separate',
-      copy: canManageHostedBilling
-        ? 'Use Billing only for hosted invoices, payment methods, or subscription changes.'
-        : 'Hosted billing stays in Billing, and an owner or admin must open it.',
-    };
-  }
-
-  return {
-    title: 'Billing stays separate',
-    copy: 'Use Billing only when the task is commercial, not operational.',
-  };
+function renderWorkspaceAnchorAction(anchorID: string, label: string, className = 'btn-secondary btn-compact workspace-summary-link'): string {
+  return '<a class="' + escapeAttr(className) + '" href="#' + escapeAttr(anchorID) + '">' + escapeHTML(label) + '</a>';
 }
 
-function renderOverviewAttentionCard(
-  accounts: PortalAccountSummary[],
-  entries: OverviewWorkspaceEntry[],
-  showSelfHostedCommercial: boolean
-): string {
-  var attention = attentionOverviewEntries(entries);
-  var ready = readyOverviewEntries(entries);
-  var includeAccountName = accounts.length > 1;
-  var suspendedCount = countWorkspacesByState(entries.map(function(entry) {
-    return entry.workspace;
-  }), 'suspended');
-  if (!attention.length) {
-    return (
-      '<article class="overview-task-card">' +
-        '<div class="account-panel-kicker">Needs attention</div>' +
-        '<h4>' + escapeHTML(accounts.length > 0 ? reviewWorkspaceHeadline(0) : '0 hosted workspaces need review') + '</h4>' +
-        '<p>' + escapeHTML(entries.length > 0
-          ? 'No active workspace is failed or waiting on a completed health check.'
-          : accounts.length > 0
-            ? 'No hosted workspace is attached to this account yet.'
-            : 'No hosted account is attached to this sign-in.'
-        ) + '</p>' +
-        '<div class="overview-task-list">' +
-          '<div class="overview-task-item"><strong>Ready</strong><span>' + escapeHTML(entries.length > 0
-            ? readyWorkspaceHeadline(ready.length)
-            : accounts.length > 0
-              ? readyWorkspaceHeadline(0)
-              : '0 hosted workspaces are ready to use'
-          ) + '</span></div>' +
-          '<div class="overview-task-item"><strong>Suspended</strong><span>' + escapeHTML(suspendedCount > 0
-            ? suspendedCount === 1
-              ? '1 workspace is suspended. Resume it before opening it again.'
-              : String(suspendedCount) + ' workspaces are suspended. Resume them before opening them again.'
-            : '0 suspended workspaces.'
-          ) + '</span></div>' +
-        '</div>' +
-      '</article>'
-    );
-  }
-
-  return (
-    '<article class="overview-task-card overview-task-card-attention">' +
-      '<div class="account-panel-kicker">Needs attention</div>' +
-      '<h4>' + escapeHTML(reviewWorkspaceHeadline(attention.length)) + '</h4>' +
-      '<p>Each listed workspace is failed or still waiting on a completed health check.</p>' +
-      '<div class="overview-task-list">' +
-        attention.slice(0, 3).map(function(entry) {
-          return (
-            '<div class="overview-task-item">' +
-              '<strong>' + escapeHTML(entry.workspace.display_name) + '</strong>' +
-              '<span>' + escapeHTML(overviewWorkspaceContext(entry, includeAccountName, workspaceStatusCopy(entry.workspace))) + '</span>' +
-            '</div>'
-          );
-        }).join('') +
-      '</div>' +
-    '</article>'
-  );
+interface WorkspaceSummaryDecision {
+  title: string;
+  description: string;
+  primaryAction: string;
+  secondaryAction: string;
 }
 
-function renderOverviewReadyCard(
+function renderWorkspaceSummaryDecision(
   accounts: PortalAccountSummary[],
-  entries: OverviewWorkspaceEntry[],
-  accountAPIBasePath: string
-): string {
-  var ready = readyOverviewEntries(entries);
-  var includeAccountName = accounts.length > 1;
-  var totalWorkspaces = countWorkspaces(accounts);
-  var canManageHosted = accounts.some(function(account) {
-    return account.can_manage;
-  });
-  var suspendedCount = countWorkspacesByState(entries.map(function(entry) {
-    return entry.workspace;
-  }), 'suspended');
-  if (!ready.length) {
-    return (
-      '<article class="overview-task-card">' +
-        '<div class="account-panel-kicker">Ready</div>' +
-        '<h4>' + escapeHTML(!accounts.length
-          ? 'Billing is available'
-          : readyWorkspaceHeadline(0)
-        ) + '</h4>' +
-        '<p>' + escapeHTML(!accounts.length
-          ? 'Use Billing for self-hosted subscriptions, licenses, refunds, and privacy requests.'
-          : totalWorkspaces > 0
-            ? suspendedCount === totalWorkspaces
-              ? 'Every hosted workspace is suspended right now.'
-              : 'Open Workspaces to see the current state of each hosted workspace.'
-            : canManageHosted
-              ? 'No hosted workspace exists yet. Create the first one in Workspaces.'
-              : 'No hosted workspace exists yet. An owner or admin must create the first one.'
-        ) + '</p>' +
-      '</article>'
-    );
-  }
-
-  return (
-    '<article class="overview-task-card">' +
-      '<div class="account-panel-kicker">Ready</div>' +
-      '<h4>' + escapeHTML(readyWorkspaceHeadline(ready.length)) + '</h4>' +
-      '<p>Each listed workspace is active and passed its latest health check.</p>' +
-      '<div class="overview-task-list">' +
-        ready.slice(0, 3).map(function(entry) {
-          return (
-            '<div class="overview-task-item overview-task-item-action">' +
-              '<div class="overview-task-copy">' +
-                '<strong>' + escapeHTML(entry.workspace.display_name) + '</strong>' +
-                '<span>' + escapeHTML(overviewWorkspaceContext(entry, includeAccountName, workspaceRowNote(entry.workspace))) + '</span>' +
-              '</div>' +
-              renderWorkspaceHandoffForm(entry.account.id, entry.workspace.id, accountAPIBasePath, 'Open workspace') +
-            '</div>'
-          );
-        }).join('') +
-      '</div>' +
-    '</article>'
-  );
-}
-
-function renderOverviewNextActionCard(
-  accounts: PortalAccountSummary[],
-  entries: OverviewWorkspaceEntry[],
+  entries: WorkspaceSummaryEntry[],
   accountAPIBasePath: string,
   showSelfHostedCommercial: boolean
-): string {
-  var attention = attentionOverviewEntries(entries);
-  var ready = readyOverviewEntries(entries);
+): WorkspaceSummaryDecision {
+  var attention = attentionWorkspaceEntries(entries);
+  var suspended = suspendedWorkspaceEntries(entries);
+  var ready = readyWorkspaceEntries(entries);
   var primaryAction = '';
   var secondaryAction = '';
   var title = '';
@@ -697,54 +546,74 @@ function renderOverviewNextActionCard(
   var creatableAccount = accounts.find(function(account) {
     return account.kind === 'msp' && account.can_manage;
   }) || null;
-  var billingAccount = accounts.find(function(account) {
-    return account.has_billing && account.can_manage;
-  }) || null;
   var accessAccount = accounts.find(function(account) {
     return account.can_manage;
   }) || null;
   var hostedViewOnly = accounts.length > 0 && !accessAccount;
 
   if (attention.length) {
-    title = 'Open Workspaces';
-    description = attention.length > 1
-      ? 'Open Workspaces to review each failed or pending workspace.'
-      : 'Open Workspaces to review ' + attention[0].workspace.display_name + '.';
-    primaryAction = '<button class="btn-primary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="workspaces">Open Workspaces</button>';
-    secondaryAction = accessAccount
-      ? '<button class="btn-secondary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="access">Open Access</button>'
-      : '';
+    var attentionEntry = attention[0];
+    title = 'Review ' + attentionEntry.workspace.display_name;
+    description = workspaceSummaryContext(attentionEntry, accounts.length > 1, workspaceStatusCopy(attentionEntry.workspace));
+    primaryAction = renderWorkspaceAnchorAction(
+      workspaceRowAnchorID(attentionEntry.account.id, attentionEntry.workspace.id),
+      'Review workspace',
+      'btn-primary btn-compact workspace-summary-link',
+    );
+    secondaryAction = attentionEntry.account.can_manage && (
+      attentionEntry.workspace.state === 'active' ||
+      attentionEntry.workspace.state === 'suspended' ||
+      attentionEntry.workspace.state === 'failed'
+    )
+      ? '<button type="button" class="btn-secondary btn-compact" data-action="select-workspace" data-account-id="' +
+        escapeAttr(attentionEntry.account.id) +
+        '" data-workspace-id="' +
+        escapeAttr(attentionEntry.workspace.id) +
+        '">Open lifecycle</button>'
+      : '<button class="btn-secondary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="access">Open Access</button>';
+  } else if (suspended.length) {
+    var suspendedEntry = suspended[0];
+    title = 'Review ' + suspendedEntry.workspace.display_name;
+    description = workspaceSummaryContext(suspendedEntry, accounts.length > 1, workspaceStatusCopy(suspendedEntry.workspace));
+    primaryAction = renderWorkspaceAnchorAction(
+      workspaceRowAnchorID(suspendedEntry.account.id, suspendedEntry.workspace.id),
+      'Review workspace',
+      'btn-primary btn-compact workspace-summary-link',
+    );
+    secondaryAction = suspendedEntry.account.can_manage
+      ? '<button type="button" class="btn-secondary btn-compact" data-action="select-workspace" data-account-id="' +
+        escapeAttr(suspendedEntry.account.id) +
+        '" data-workspace-id="' +
+        escapeAttr(suspendedEntry.workspace.id) +
+        '">Open lifecycle</button>'
+      : '<button class="btn-secondary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="access">Open Access</button>';
   } else if (ready.length) {
-    title = 'Open workspace';
-    description = accounts.length > 1
-      ? 'Open ' + ready[0].workspace.display_name + ' in ' + ready[0].account.name + '.'
-      : 'Open the ready workspace.';
-    primaryAction = renderWorkspaceHandoffForm(ready[0].account.id, ready[0].workspace.id, accountAPIBasePath, 'Open ' + ready[0].workspace.display_name, 'btn-primary btn-compact');
+    var readyEntry = ready[0];
+    title = 'Open ' + readyEntry.workspace.display_name;
+    description = workspaceSummaryContext(readyEntry, accounts.length > 1, workspaceRowNote(readyEntry.workspace));
+    primaryAction = renderWorkspaceHandoffForm(
+      readyEntry.account.id,
+      readyEntry.workspace.id,
+      accountAPIBasePath,
+      'Open workspace',
+      'btn-primary btn-compact',
+    );
     secondaryAction = ready.length > 1
-      ? '<button class="btn-secondary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="workspaces">See all workspaces</button>'
+      ? renderWorkspaceAnchorAction(workspaceListAnchorID(readyEntry.account.id), 'See all workspaces')
       : '';
   } else if (creatableAccount) {
-    title = 'Create workspace';
-    description = 'No workspace is ready. Create a workspace in ' + creatableAccount.name + '.';
+    title = 'Create the first workspace';
+    description = 'No hosted workspace is attached yet. Create the first workspace in ' + creatableAccount.name + '.';
     primaryAction = '<button class="btn-primary btn-compact" type="button" data-action="toggle-add-workspace" data-account-id="' + escapeAttr(creatableAccount.id) + '">Create workspace</button>';
-    secondaryAction = '<button class="btn-secondary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="access">Open Access</button>';
-  } else if (billingAccount) {
-    title = 'Open billing';
-    description = 'Use Billing for invoices, payment methods, or subscription changes.';
-    primaryAction = '<button class="btn-primary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="billing">Open billing</button>';
     secondaryAction = accessAccount
       ? '<button class="btn-secondary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="access">Open Access</button>'
       : '';
-  } else if (!accounts.length) {
-    title = 'Open billing';
-    description = 'Use Billing for self-hosted subscriptions, licenses, refunds, or privacy requests.';
-    primaryAction = '<button class="btn-primary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="billing">Open billing</button>';
   } else if (hostedViewOnly) {
-    if (totalWorkspaces > 0) {
-      title = 'Review workspace state';
-      description = 'No workspace is ready. Open Workspaces to review current state, then hand off changes to an owner or admin.';
-      primaryAction = '<button class="btn-primary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="workspaces">Open Workspaces</button>';
-      secondaryAction = '<button class="btn-secondary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="access">Open Access</button>';
+    if (entries.length > 0) {
+      title = 'Review who can act';
+      description = 'Hosted workspaces are attached here, but an owner or admin must make account-level changes.';
+      primaryAction = '<button class="btn-primary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="access">Open Access</button>';
+      secondaryAction = renderWorkspaceAnchorAction(workspaceListAnchorID(accounts[0].id), 'Review workspace list');
     } else {
       title = 'Review who can act';
       description = showSelfHostedCommercial
@@ -758,40 +627,80 @@ function renderOverviewNextActionCard(
   } else if (accessAccount) {
     title = 'Open access';
     description = 'Use Access for invites, role changes, or access removal.';
-    primaryAction = '<button class="btn-primary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="access">Open access</button>';
-    secondaryAction = '<button class="btn-secondary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="billing">Open billing</button>';
+    primaryAction = '<button class="btn-primary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="access">Open Access</button>';
+    secondaryAction = showSelfHostedCommercial
+      ? '<button class="btn-secondary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="billing">Open billing</button>'
+      : '';
   } else {
     title = 'Open billing or support';
-    description = 'Use Billing for commercial work. Use Support only after the billing path fails.';
+    description = totalWorkspaces > 0
+      ? 'Review the workspace list here, then use Billing for commercial work or Support only after a self-service path fails.'
+      : 'Use Billing for commercial work. Use Support only after the billing path fails.';
     primaryAction = '<button class="btn-primary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="billing">Open billing</button>';
     secondaryAction = '<button class="btn-secondary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="support">Escalate</button>';
   }
 
+  return {
+    title: title,
+    description: description,
+    primaryAction: primaryAction,
+    secondaryAction: secondaryAction,
+  };
+}
+
+function renderWorkspaceSummaryFacts(accounts: PortalAccountSummary[], entries: WorkspaceSummaryEntry[]): string[] {
+  return [
+    accountCountLabel(accounts.length),
+    workspaceCountLabel(entries.length),
+    readyWorkspaceChipLabel(readyWorkspaceEntries(entries).length),
+    reviewWorkspaceChipLabel(attentionWorkspaceEntries(entries).length),
+    suspendedWorkspaceChipLabel(suspendedWorkspaceEntries(entries).length),
+  ];
+}
+
+function renderWorkspaceSummaryInline(
+  accounts: PortalAccountSummary[],
+  entries: WorkspaceSummaryEntry[],
+  accountAPIBasePath: string,
+  showSelfHostedCommercial: boolean
+): string {
+  var decision = renderWorkspaceSummaryDecision(accounts, entries, accountAPIBasePath, showSelfHostedCommercial);
   return (
-    '<article class="overview-task-card overview-task-card-next">' +
-      '<div class="account-panel-kicker">Next action</div>' +
-      '<h4>' + escapeHTML(title) + '</h4>' +
-      '<p>' + escapeHTML(description) + '</p>' +
-      '<div class="overview-task-actions">' +
-        primaryAction +
-        secondaryAction +
+    '<section class="workspace-summary-inline">' +
+      '<div class="workspace-summary-inline-copy">' +
+        '<p><strong>Next:</strong> ' + escapeHTML(decision.title) + '</p>' +
+        '<p>' + escapeHTML(decision.description) + '</p>' +
       '</div>' +
-    '</article>'
+      '<div class="workspace-summary-actions">' +
+        decision.primaryAction +
+        decision.secondaryAction +
+      '</div>' +
+    '</section>'
   );
 }
 
-function renderShellOverviewSection(context: ShellViewContext): string {
+function workspaceSectionHeaderCopy(accounts: PortalAccountSummary[], entries: WorkspaceSummaryEntry[]): string {
+  if (!entries.length) {
+    return accounts.some(function(account) { return account.can_manage; })
+      ? 'Review hosted workspaces here, then create the next workspace when you are ready.'
+      : 'Review hosted workspace state here. An owner or admin must create or change hosted workspaces.';
+  }
+  return 'Review hosted workspace health here, open the next ready workspace, and use Lifecycle only when an account-level change is required.';
+}
+
+export function renderWorkspaceSummarySection(context: ShellViewContext): string {
   var accounts = Array.isArray(context.bootstrap.accounts) ? context.bootstrap.accounts : [];
-  var entries = collectOverviewWorkspaceEntries(accounts);
+  var entries = collectWorkspaceSummaryEntries(accounts);
   var showSelfHostedCommercial = hasSelfHostedCommercial(context.bootstrap);
 
   return (
-    '<section class="account-content-panel account-content-panel-overview">' +
-      '<div class="overview-task-grid overview-task-grid-compact">' +
-        renderOverviewAttentionCard(accounts, entries, showSelfHostedCommercial) +
-        renderOverviewReadyCard(accounts, entries, context.accountAPIBasePath) +
-        renderOverviewNextActionCard(accounts, entries, context.accountAPIBasePath, showSelfHostedCommercial) +
+    '<section class="workspace-summary-shell">' +
+      '<div class="portal-page-header">' +
+        '<h2>Workspaces</h2>' +
+        '<p>' + escapeHTML(workspaceSectionHeaderCopy(accounts, entries)) + '</p>' +
       '</div>' +
+      renderFactLine('workspace-summary-facts', renderWorkspaceSummaryFacts(accounts, entries)) +
+      renderWorkspaceSummaryInline(accounts, entries, context.accountAPIBasePath, showSelfHostedCommercial) +
     '</section>'
   );
 }
@@ -941,7 +850,7 @@ function renderAccountWorkspaceSection(account: PortalAccountSummary, accountAPI
   }
 
   var workspaceHTML = workspaces.length
-    ? '<div class="workspace-list-wrap">' +
+    ? '<div class="workspace-list-wrap" id="' + escapeAttr(workspaceListAnchorID(account.id)) + '">' +
           (workspaceHeaderActions ? '<div class="workspace-list-toolbar">' + workspaceHeaderActions + '</div>' : '') +
           '<div class="workspace-list-head">' +
             '<span>Workspace</span>' +
@@ -1230,10 +1139,6 @@ export function renderHeaderHTML(context: ShellViewContext): string {
   return '<a class="logout-btn link-button" href="' + escapeAttr(context.signupPath) + '">Create account</a>';
 }
 
-export function renderAccountsHTML(context: ShellViewContext): string {
-  return renderShellOverviewSection(context);
-}
-
 export function renderAuthenticatedPortalHTML(context: ShellViewContext): string {
   var accounts = Array.isArray(context.bootstrap.accounts) ? context.bootstrap.accounts : [];
   var hosted = hasHostedAccounts(accounts);
@@ -1267,6 +1172,7 @@ export function renderAuthenticatedPortalHTML(context: ShellViewContext): string
       );
     }).join('')
     : renderNoHostedWorkspacesSection();
+  var workspaceSummaryContent = hosted ? renderWorkspaceSummarySection(context) : '';
   var accessContent = accounts.length
     ? accounts.map(function(account) {
       return (
@@ -1330,13 +1236,11 @@ export function renderAuthenticatedPortalHTML(context: ShellViewContext): string
         (hosted
           ? (
             '<section class="portal-content-panel portal-content-panel-workspaces">' +
+              workspaceSummaryContent +
               workspacesContent +
             '</section>' +
             '<section class="portal-content-panel portal-content-panel-access">' +
               accessContent +
-            '</section>' +
-            '<section class="portal-content-panel portal-content-panel-overview">' +
-              renderShellOverviewSection(context) +
             '</section>'
           )
           : '') +

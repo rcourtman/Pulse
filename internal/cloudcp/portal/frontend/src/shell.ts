@@ -88,7 +88,7 @@ export function installShell(deps: ShellDeps): void {
     var target = event.target instanceof HTMLElement ? event.target.closest('[data-shell-action="activate-section"]') as HTMLElement | null : null;
     if (!target) return;
     event.preventDefault();
-    var section = (target.getAttribute('data-shell-section') || 'overview') as PortalShellSection;
+    var section = (target.getAttribute('data-shell-section') || deps.store.getShellState().activeSection || 'billing') as PortalShellSection;
     deps.store.setActiveShellSection(section);
     if (deps.onSectionChange) {
       deps.onSectionChange(section);

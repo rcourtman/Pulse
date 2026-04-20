@@ -1,6 +1,6 @@
 # Customer Account Portal Spec
 
-Last updated: 2026-03-25
+Last updated: 2026-04-20
 Status: PLANNED
 Governance surface: `status.json.coverage_gaps.customer-account-portal-surface`
 Candidate lane: `customer-account-portal`
@@ -11,8 +11,9 @@ Pulse v6 now has real customer-facing commercial surfaces across self-hosted
 licensing, hosted tenants, MSP provider workflows, billing, refund/recovery
 utilities, and account-scoped control-plane actions.
 
-Those surfaces work, but they do not yet form one coherent authenticated Pulse
-account experience.
+Those surfaces work, and `Pulse Account` now presents them through one coherent
+authenticated shell, but the current lane map still does not govern that
+account surface as one explicit product area.
 
 The purpose of the customer account portal lane is to promote those fragmented
 surfaces into one governed product area:
@@ -55,8 +56,9 @@ Today Pulse has:
 - hosted organization billing and cloud pricing surfaces
 - MSP provider account and tenant-management behavior
 
-What it does not yet have is one coherent authenticated account portal that
-joins those pieces together.
+What it does not yet have is one explicit governed lane that owns that
+now-coherent account surface end-to-end instead of leaving it split across the
+current commercial and hosted-MSP lanes.
 
 ## Goals
 
@@ -113,48 +115,30 @@ Needs:
 
 ## Canonical Information Architecture
 
-The future portal should converge on this shape:
+The canonical account shell should stay centered on this shape:
 
-### 1. Home
+### 1. Workspaces
 
-- account summary
-- active subscriptions and licenses
-- owned hosted tenants
-- outstanding recovery/billing/action-needed state
+- hosted workspaces and entry points
+- inline workspace counts at the top of the page
+- the next obvious workspace action without a separate overview destination
 
-### 2. Licenses
+### 2. Access
 
-- self-hosted licenses and activation state
-- entitlement summary
-- continuity / renewal / cancellation state
-- migration guidance where relevant
+- hosted account roster
+- invites, role changes, and access removal when permitted
+- role meaning and ownership clarity
 
-### 3. Pulse Cloud
+### 3. Billing
 
-- hosted tenants
-- tenant status and entry points
-- organization/account linkage
-- hosted account-scoped actions
+- hosted billing handoff
+- self-hosted subscriptions, licenses, refunds, and privacy tasks
+- continuity / renewal / cancellation state where relevant
 
-### 4. Billing
+### 4. Support
 
-- subscriptions
-- invoices and payment method context
-- tax / VAT / receipt surfaces
-- refund and cancellation/re-entry surfaces
-
-### 5. MSP
-
-- provider account summary
-- customers / workspaces / tenant list
-- operator-scoped admin actions
-- clear separation from normal self-hosted customer flows
-
-### 6. Recovery And Support
-
-- license retrieval
-- account verification flows
-- data request/export/delete
+- escalation only after the owned self-service path fails
+- recovery and support packet expectations
 - transition path away from isolated standalone utilities
 
 ## Transitional Mapping From Current Surfaces

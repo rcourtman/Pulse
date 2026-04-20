@@ -3936,7 +3936,7 @@
     },
     {
       "id": "customer-account-portal-surface",
-      "summary": "v6 has real billing, checkout, hosted tenant, MSP account, and self-serve utility surfaces, but it still lacks one coherent authenticated Pulse account portal that unifies licenses, hosted tenants, billing, recovery, and MSP admin actions under a canonical customer control surface.",
+      "summary": "Pulse Account now provides one coherent authenticated customer shell across hosted tenants, billing, recovery, and MSP/self-serve commercial actions, but the current lane map still splits that owned account surface across L3/L4 instead of governing it as one explicit customer-account lane.",
       "owner": "project-owner",
       "status": "planned",
       "recorded_at": "2026-03-25",
@@ -3963,6 +3963,16 @@
         {
           "repo": "pulse",
           "path": "internal/cloudcp/account/tenant_handlers.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/cloudcp/portal/frontend/src/shell_view.test.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/cloudcp/portal/frontend/src/shell_view.ts",
           "kind": "file"
         },
         {
@@ -4170,7 +4180,7 @@
     {
       "id": "customer-account-portal",
       "name": "Customer account portal",
-      "summary": "Promote fragmented cloud billing, hosted tenant, self-serve licensing, recovery, and MSP admin surfaces into one governed Pulse account lane with a coherent customer and operator control surface.",
+      "summary": "Promote the now-coherent Pulse Account shell and its cross-surface ownership model into one governed customer-account lane instead of leaving that surface split across L3/L4.",
       "status": "planned",
       "recorded_at": "2026-03-25",
       "target_id": "v6-product-lane-expansion",

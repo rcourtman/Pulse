@@ -130,7 +130,7 @@ export interface PortalAccountState {
   byAccountID: Record<string, PortalAccountUIEntry>;
 }
 
-export type PortalShellSection = 'overview' | 'workspaces' | 'access' | 'billing' | 'support';
+export type PortalShellSection = 'workspaces' | 'access' | 'billing' | 'support';
 
 export interface PortalShellState {
   activeSection: PortalShellSection;

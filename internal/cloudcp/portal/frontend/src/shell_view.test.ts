@@ -3,10 +3,10 @@ import { describe, expect, it } from 'vitest';
 import type { PortalBillingState, PortalBootstrapData, PortalLoginState } from './types';
 import { createPortalBillingState } from './state';
 import {
-  renderAccountsHTML,
   renderAuthenticatedPortalHTML,
   renderHeaderHTML,
   renderSignedOutPortalHTML,
+  renderWorkspaceSummarySection,
   type ShellViewContext,
 } from './shell_view';
 
@@ -93,10 +93,40 @@ describe('shell view', function() {
     expect(renderSignedOutPortalHTML(context)).not.toContain('Create account');
   });
 
-  it('renders empty accounts state with support contact', function() {
-    var html = renderAccountsHTML(createContext());
+  it('renders workspace summary inside the canonical workspaces shell', function() {
+    var html = renderWorkspaceSummarySection(
+      createContext({
+        bootstrap: createBootstrap({
+          accounts: [
+            {
+              id: 'acct_summary',
+              name: 'Summary Account',
+              kind: 'msp',
+              kind_label: 'MSP',
+              role: 'owner',
+              can_manage: true,
+              has_billing: true,
+              members: [],
+              workspaces: [
+                {
+                  id: 'ws_summary',
+                  display_name: 'Summary Workspace',
+                  state: 'active',
+                  healthy: true,
+                  health_status: 'healthy',
+                },
+              ],
+            },
+          ],
+        }),
+      })
+    );
 
-    expect(html).toContain('overview-task-grid');
+    expect(html).toContain('workspace-summary-shell');
+    expect(html).toContain('workspace-summary-facts');
+    expect(html).toContain('Next:</strong> Open Summary Workspace');
+    expect(html).toContain('Summary Workspace');
+    expect(html).not.toContain('overview-task-grid');
   });
 
   it('renders authenticated portal accounts, workspaces, and hosted-only billing entrypoints', function() {
@@ -154,6 +184,12 @@ describe('shell view', function() {
     expect(html).toContain('Owner');
     expect(html).toContain('MSP account');
     expect(html).toContain('Acme MSP');
+    expect(html).toContain('workspace-summary-facts');
+    expect(html).toContain('1 account');
+    expect(html).toContain('3 workspaces');
+    expect(html).toContain('1 ready workspace');
+    expect(html).toContain('2 workspaces to review');
+    expect(html).toContain('Next:</strong> Review Beta Workspace');
     expect(html).toContain('Create workspace');
     expect(html).not.toContain('Manage billing');
     expect(html).not.toContain('Manage team');
@@ -163,7 +199,7 @@ describe('shell view', function() {
     expect(html).toContain('Unhealthy</span>');
     expect(html).toContain('Checking</span>');
     expect(html).toContain('This workspace is in a failed state.');
-    expect(html).toContain('Latest health check is still pending.');
+    expect(html).toContain('Health check pending');
     expect(html).toContain('/api/accounts/acct_1/tenants/ws_active/handoff');
     expect(html).toContain('Open workspace');
     expect(html).toContain('data-action="select-workspace"');
@@ -204,6 +240,8 @@ describe('shell view', function() {
     expect(html).not.toContain('section-context-strip');
     expect(html).not.toContain('View roster');
     expect(html).not.toContain('Owner or admin required');
+    expect(html).not.toContain('portal-content-panel-overview');
+    expect(html).not.toContain('data-shell-section="overview"');
   });
 
   it('defaults the authenticated hosted shell to workspaces', function() {

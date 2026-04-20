@@ -824,6 +824,13 @@ in shell section from account shape: hosted accounts open on `Workspaces`,
 self-hosted-only accounts open on `Billing`, and the signed-in shell keeps
 precise workspace counts inline on `Workspaces` instead of exposing a separate
 `Summary` tab as a primary or default destination.
+That same typed shell-section contract now excludes `overview` entirely:
+`internal/cloudcp/portal/frontend/src/types.ts`,
+`internal/cloudcp/portal/frontend/src/shell_section.ts`, and
+`internal/cloudcp/portal/frontend/src/shell.ts` may route only the governed
+`workspaces`, `access`, `billing`, and `support` destinations, with hosted
+account arrivals defaulting to `workspaces` and self-hosted-only arrivals
+defaulting to `billing`.
 The same account-shape runtime contract must also keep the shell navigation
 honest: the task row is `Workspaces`, `Access`, `Billing`, and `Support`.
 Self-hosted-only accounts must drop hosted-only `Workspaces` and `Access`
@@ -897,17 +904,22 @@ That same typed portal page contract also owns favicon cache-busting: the
 rendered `<link rel="icon">` must point at the shared `/favicon.svg` asset
 through a versioned href so new portal icon revisions bypass browser cache on
 deploy instead of waiting for asset expiry.
-That same typed overview contract must also preserve a calm, flat account-tool
-visual posture across all portal scenarios: no gradients, heavy shadows, or
-decorative dashboard chrome. The shell uses a compact identity bar (account name,
-role, kind) and a horizontal tab bar for Workspaces, Access, Billing, and
-Support. Content panels render directly below the tab bar without redundant
-page headers, summary strips, or fact chips. Action buttons (Create workspace,
-Invite people, Change roles, Remove access) are integrated into toolbar rows
-within their respective bordered data cards rather than existing as
-free-floating elements above content. Hierarchy is driven by spacing,
-typography, and 1px borders rather than cards, pills, stacked metrics, or
-ornamental side rails competing with the active task.
+That same typed portal page contract must also preserve a calm, flat
+account-tool visual posture across all portal scenarios: no gradients, heavy
+shadows, or decorative dashboard chrome. The shell uses a compact identity bar
+(account name, role, kind) and a horizontal tab bar for Workspaces, Access,
+Billing, and Support. Content panels render directly below the tab bar without
+reintroducing a second shell-level hero, overview panel, summary deck, or
+metric grid ahead of the active task. The `Workspaces` panel may own one
+section header, one quiet inline facts line, and one inline next-action row
+above the workspace list when those elements are part of the same task
+surface; they must not drift into a separate overview destination or duplicate
+context strip. Action buttons (Create workspace, Invite people, Change roles,
+Remove access) are integrated into toolbar rows within their respective
+bordered data cards rather than existing as free-floating elements above
+content. Hierarchy is driven by spacing, typography, and 1px borders rather
+than cards, pills, stacked metrics, or ornamental side rails competing with
+the active task.
 That same typed page contract also applies before auth: the signed-out portal
 surface must keep one obvious sign-in action plus precise account-scope
 presentation, instead of falling back to a separate marketing-like hero and

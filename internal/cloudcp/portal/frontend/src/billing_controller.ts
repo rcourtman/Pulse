@@ -1,7 +1,7 @@
 import { asHTMLElement } from './billing_view';
 
 export interface BillingControllerDeps {
-  setShellSection: (section: 'overview' | 'workspaces' | 'access' | 'billing' | 'support') => void;
+  setShellSection: (section: 'workspaces' | 'access' | 'billing' | 'support') => void;
   toggleBillingPanel: (panelID: string) => void;
   clearBillingPanel: () => void;
   focusElement: (id: string) => void;

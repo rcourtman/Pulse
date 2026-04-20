@@ -148,6 +148,13 @@ Community limit enforcement.
    portal-targeted magic link carrying tenant identity so the first
    authenticated landing is Pulse Account rather than a tenant-runtime-only
    redirect.
+   That same portal boundary also owns the signed-in shell shape: hosted
+   arrivals default to `Workspaces`, self-hosted-only arrivals default to
+   `Billing`, and the shell destinations are limited to `Workspaces`,
+   `Access`, `Billing`, and `Support` rather than a separate `Overview` or
+   `Summary` destination. The top of `Workspaces` may surface one quiet inline
+   facts line plus one next-action row before the list, but it must not turn
+   that summary into a second overview deck, metric grid, or competing shell.
 7. Add or change Stripe provisioning plan resolution through `internal/cloudcp/stripe/provisioner.go`
 8. Add or change activation/grant lifecycle or dev-mode capability widening through `pkg/licensing/dev_mode_features.go`, `pkg/licensing/service.go`, `pkg/licensing/grant_refresh.go`, and `pkg/licensing/revocation_poll.go`
 9. Add or change license-server transport through `pkg/licensing/license_server_client.go` and `pkg/licensing/quickstart_bootstrap.go`
@@ -179,7 +186,11 @@ Community limit enforcement.
     headers, billing action rows, and the maintained portal bundle under
     `internal/cloudcp/portal/` may surface the facts an operator needs, but the
     shell should not spend vertical space on duplicate context-chip strips when
-    the page header and section body already communicate that scope.
+    the page header and section body already communicate that scope. `Workspaces`
+    may own one inline facts line and one inline next-action row at the top of
+    the section, but that summary treatment must stay inside the same task
+    surface instead of reviving a separate overview panel, summary strip, or
+    metric deck ahead of the real workspace list.
 23. Keep self-hosted monitored-system warning CTA intents distinct on the owned
     billing surface. `Learn more` links must land on the monitored-system
     usage-focused billing state, while `Upgrade to add more` links must land on
@@ -1540,30 +1551,31 @@ describe supported Pulse Mobile pairing as a normal-use Relay capability, and
 must not fall back to staged-beta or coming-soon messaging once the owned
 pairing/runtime path is live.
 The customer-account surface is now also an explicit cloud-paid ownership
-boundary. Pulse already has a real hosted control-plane portal in
+boundary. Pulse now has a coherent authenticated Pulse Account shell in
 `internal/cloudcp/portal/`, account/workspace mutation APIs in
 `internal/cloudcp/account/tenant_handlers.go`, and transitional self-hosted
-commercial utility pages in `pulse-pro/landing-page/`, but those surfaces do
-not yet form one coherent Pulse account product. The canonical future shape is
-`docs/release-control/v6/internal/PULSE_ACCOUNT_PORTAL_SPEC.md`: one
+commercial utility pages in `pulse-pro/landing-page/`. The canonical product
+shape is `docs/release-control/v6/internal/PULSE_ACCOUNT_PORTAL_SPEC.md`: one
 authenticated Pulse account shell that unifies Cloud tenants, self-hosted
 licenses, billing, recovery, and MSP admin surfaces without creating a
 standalone Relay portal. That shell now also owns two product rules
-explicitly: signed-in workspace counts stay inline at the top of
-`Workspaces` instead of as a separate `Overview` or `Summary` tab, and the
-top-level task row must stay honest to account shape by removing irrelevant
-hosted-only tasks instead of pretending they are live. Any shared fallback
-that still lands on a non-live task must render an explicit unavailable state
-instead of blank space. The same shell also owns action-first task
-surfaces for `Access`, `Billing`, and `Support`: access mutations must be
-permission-honest and roster-led, billing must reduce to one obvious job at a
-time with hosted billing first when relevant, support must stay a failed-path
-handoff rather than a peer workflow, and phone-width layouts must collapse the
-desktop shell into a compact task strip so the active job remains
-primary and visibly in-frame when the strip scrolls. The same narrow-screen
-shell must also compress account identity into one compact context strip
-instead of repeating a desktop-sized intro block or second summary box ahead
-of every task, and lower
+explicitly: signed-in hosted arrivals land on `Workspaces`, not on a separate
+`Overview` or `Summary` destination, and the top of `Workspaces` may render
+only one quiet inline facts line plus one next-action row before the workspace
+list instead of a second summary deck, metric grid, or duplicated overview
+panel. The top-level task row must stay honest to account shape by removing
+irrelevant hosted-only tasks instead of pretending they are live. Any shared
+fallback that still lands on a non-live task must render an explicit
+unavailable state instead of blank space. The same shell also owns
+action-first task surfaces for `Access`, `Billing`, and `Support`: access
+mutations must be permission-honest and roster-led, billing must reduce to one
+obvious job at a time with hosted billing first when relevant, support must
+stay a failed-path handoff rather than a peer workflow, and phone-width
+layouts must collapse the desktop shell into a compact task strip so the
+active job remains primary and visibly in-frame when the strip scrolls. The
+same narrow-screen shell must also compress account identity into one compact
+context strip instead of repeating a desktop-sized intro block or second
+summary box ahead of every task, and lower
 workspace job surfaces such as lifecycle review or create-workspace forms must
 be revealed when the user opens them. `Workspaces` must also default to the
 workspace list plus the real task entry points rather than an idle lifecycle
@@ -1591,12 +1603,14 @@ escalation path and billing-specific handoff packet only, and hosted
 workspace/access escalation routes must not render without hosted accounts.
 That same owned shell also owns the signed-in visual posture: the portal
 should read like a serious settings/account tool rather than a dashboard.
-Navigation chrome, account framing, and overview panels must stay visually
-quieter than the active task surface, with flatter light treatment and
-list-first task presentation instead of dark ornamental rails, sidebars, or
-nested explanatory cards. The signed-in shell should orient the user with one
-quiet account-context header and one flat top task row, not a second summary
-deck competing with the task itself.
+Navigation chrome, account framing, and inline workspace summary treatment
+must stay visually quieter than the active task surface, with flatter light
+treatment and list-first task presentation instead of dark ornamental rails,
+sidebars, or nested explanatory cards. The signed-in shell should orient the
+user with one quiet account-context header and one flat top task row; the
+`Workspaces` surface may add one factual inline summary line and one next-step
+row inside the section itself, but it must not bring back a second summary
+deck competing with the task.
 That same owned shell must also open on the first live job instead of a
 summary layer: hosted accounts should land in `Workspaces`, and self-hosted-
 only accounts should land in `Billing`. The signed-in shell must not expose a

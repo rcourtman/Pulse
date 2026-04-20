@@ -279,22 +279,8 @@ header .logout-btn:hover,
 .portal-shell[data-shell-section=workspaces] .portal-content-panel-workspaces,
 .portal-shell[data-shell-section=access] .portal-content-panel-access,
 .portal-shell[data-shell-section=billing] .portal-content-panel-billing,
-.portal-shell[data-shell-section=support] .portal-content-panel-support,
-.portal-shell[data-shell-section=overview] .portal-content-panel-overview {
+.portal-shell[data-shell-section=support] .portal-content-panel-support {
   display: block !important;
-}
-.portal-shell[data-shell-section=overview] .account-content-panel-overview,
-.portal-shell[data-shell-section=workspaces] .account-content-panel-workspaces,
-.portal-shell[data-shell-section=access] .account-content-panel-access {
-  display: block !important;
-}
-.portal-shell[data-shell-section=overview] .account-content-panel-workspaces,
-.portal-shell[data-shell-section=overview] .account-content-panel-access,
-.portal-shell[data-shell-section=workspaces] .account-content-panel-overview,
-.portal-shell[data-shell-section=workspaces] .account-content-panel-access,
-.portal-shell[data-shell-section=access] .account-content-panel-overview,
-.portal-shell[data-shell-section=access] .account-content-panel-workspaces {
-  display: none !important;
 }
 .portal-content-panel {
   padding: 16px 0 0;
@@ -335,7 +321,6 @@ header .logout-btn:hover,
 .account-content-panel {
   display: block;
 }
-.account-content-panel-overview,
 .account-content-panel-workspaces,
 .account-content-panel-access {
   padding: 0;
@@ -1380,76 +1365,62 @@ header .logout-btn:hover,
 .support-link {
   color: var(--accent);
 }
-.overview-task-grid,
-.overview-task-grid-compact {
+.workspace-summary-shell {
   display: flex;
   flex-direction: column;
-  gap: 0;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  overflow: hidden;
+  gap: 16px;
 }
-.overview-task-card {
+.workspace-summary-shell + .account-surface {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+}
+.workspace-summary-facts {
   display: flex;
-  flex-direction: column;
+  flex-wrap: wrap;
   gap: 8px;
-  padding: 12px 16px;
-  border-top: 1px solid var(--border-muted);
-  background: var(--bg);
-}
-.overview-task-card:first-child {
-  border-top: none;
-}
-.overview-task-card h4 {
-  margin: 0;
-  font-size: 14px;
-  font-weight: 600;
-}
-.overview-task-card p {
-  margin: 0;
-  font-size: 13px;
-  color: var(--ink-secondary);
-}
-.overview-task-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-}
-.overview-task-item {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 8px 0;
-  border-top: 1px solid var(--border-muted);
-}
-.overview-task-item:first-child {
-  border-top: none;
-  padding-top: 0;
-}
-.overview-task-item strong {
-  font-size: 13px;
-  color: var(--ink);
-}
-.overview-task-item span {
   font-size: 12px;
   color: var(--ink-secondary);
 }
-.overview-task-item-action {
-  flex-direction: row;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+.workspace-summary-facts span {
+  white-space: nowrap;
 }
-.overview-task-copy {
+.portal-fact-separator {
+  color: var(--border);
+}
+.workspace-summary-inline {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 0 0 16px;
+  border-bottom: 1px solid var(--border);
+}
+.workspace-summary-inline-copy {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
   min-width: 0;
 }
-.overview-task-actions {
+.workspace-summary-inline-copy p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--ink-secondary);
+}
+.workspace-summary-inline-copy p:first-child {
+  color: var(--ink);
+}
+.workspace-summary-inline-copy strong {
+  color: var(--ink);
+}
+.workspace-summary-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
-  margin-top: 4px;
+  justify-content: flex-end;
+}
+.workspace-summary-link:hover {
+  text-decoration: none;
 }
 .account-panel-kicker,
 .billing-card-kicker,
@@ -1596,55 +1567,6 @@ header .logout-btn:hover,
   font-size: 13px;
   color: var(--ink-secondary);
 }
-.portal-page-facts {
-  display: none;
-}
-.portal-summary-strip {
-  display: none;
-}
-.portal-account-block-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 12px;
-}
-.portal-account-block-copy h3 {
-  margin: 0;
-  font-size: 14px;
-  font-weight: 600;
-}
-.portal-account-block-copy p {
-  margin: 4px 0 0;
-  font-size: 13px;
-  color: var(--ink-secondary);
-}
-.portal-account-block-facts {
-  display: none;
-}
-.portal-account-block-actions {
-  display: flex;
-  gap: 8px;
-}
-.section-context-strip {
-  display: none;
-}
-.account-stage-header {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin-bottom: 12px;
-}
-.account-stage-header h3 {
-  margin: 0;
-  font-size: 14px;
-  font-weight: 600;
-}
-.account-stage-header p {
-  margin: 0;
-  font-size: 13px;
-  color: var(--ink-secondary);
-}
 .spinner {
   display: inline-block;
   width: 16px;
@@ -1702,6 +1624,13 @@ header .logout-btn:hover,
   }
   .portal-identity-bar h2 {
     font-size: 18px;
+  }
+  .workspace-summary-inline {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .workspace-summary-actions {
+    justify-content: flex-start;
   }
   .workspace-list-head {
     display: none;

@@ -3,7 +3,7 @@ import type { AccountRuntime } from './account_runtime';
 
 export interface AccountControllerDeps {
   runtime: AccountRuntime;
-  setShellSection: (section: 'overview' | 'workspaces' | 'access' | 'billing' | 'support') => void;
+  setShellSection: (section: 'workspaces' | 'access' | 'billing' | 'support') => void;
 }
 
 export function installAccountController(deps: AccountControllerDeps): void {
