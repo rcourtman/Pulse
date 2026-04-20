@@ -61,6 +61,7 @@ const SURFACE_LABELS: Record<string, string> = {
   queues: 'Queues',
   quarantine: 'Quarantine',
   domainStats: 'Domain stats',
+  host: 'Host',
   hosts: 'Hosts',
   datasets: 'Datasets',
   pools: 'Pools',
@@ -125,11 +126,14 @@ export const connectionToRow = (connection: Connection): InfrastructureSystemRow
     activeScopeKeys.length > 0
       ? activeScopeKeys.map(surfaceLabel)
       : connection.surfaces.map(surfaceLabel);
+  const name = connection.name || connection.address || connection.id;
+  const host =
+    connection.address && connection.address !== name ? connection.address : undefined;
   return {
     id: connection.id,
-    name: connection.name || connection.address || connection.id,
+    name,
     subtitle: subtitleFor(connection),
-    host: connection.address,
+    host,
     coverageLabels: coverage,
     collectionLabel: collectionLabelFor(connection.type),
     statusLabel: presentation.label,
