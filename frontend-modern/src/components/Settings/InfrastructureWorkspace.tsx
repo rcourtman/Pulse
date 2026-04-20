@@ -4,6 +4,7 @@ import { presentationPolicyIsReadOnly } from '@/stores/sessionPresentationPolicy
 import { copyToClipboard } from '@/utils/clipboard';
 import { notificationStore } from '@/stores/notifications';
 import { AgentProfilesPanel } from './AgentProfilesPanel';
+import { ConnectionsExplainer } from './ConnectionsExplainer';
 import { ConnectionsTable, type ConnectionsTableHeaderAction } from './ConnectionsTable';
 import { ConnectionEditor } from './ConnectionEditor/ConnectionEditor';
 import { NodeCredentialSlot } from './ConnectionEditor/CredentialSlots/NodeCredentialSlot';
@@ -197,14 +198,17 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
     <div class="space-y-8">
       <Switch
         fallback={
-          <ConnectionsTable
-            rows={rows}
-            headerActions={headerActions()}
-            actions={readOnly() ? undefined : rowActions}
-            onEdit={readOnly() ? undefined : handleEditConnection}
-            agentUninstallCommands={agentUninstallCommands()}
-            onCopyText={(text) => void handleCopy(text)}
-          />
+          <>
+            <ConnectionsExplainer />
+            <ConnectionsTable
+              rows={rows}
+              headerActions={headerActions()}
+              actions={readOnly() ? undefined : rowActions}
+              onEdit={readOnly() ? undefined : handleEditConnection}
+              agentUninstallCommands={agentUninstallCommands()}
+              onCopyText={(text) => void handleCopy(text)}
+            />
+          </>
         }
       >
         <Match when={mode() === 'edit' && editingConnection()}>
