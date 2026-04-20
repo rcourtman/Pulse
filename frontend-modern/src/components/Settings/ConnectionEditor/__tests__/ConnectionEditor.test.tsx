@@ -107,6 +107,8 @@ describe('ConnectionEditor', () => {
     expect(
       screen.getByRole('button', { name: /install the unified agent on a host/i }),
     ).toBeInTheDocument();
+    expect(screen.getByText(/host-level metrics/i)).toBeInTheDocument();
+    expect(screen.queryByText(/host-level telemetry/i)).toBeNull();
   });
 
   it('routes the Install Unified Agent button straight to the agent credential slot', () => {

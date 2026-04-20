@@ -21,7 +21,7 @@ const persistDismissed = () => {
   }
 };
 
-const ALWAYS_ON_CAPABILITIES = ['Hardware telemetry'];
+const ALWAYS_ON_CAPABILITIES = ['Hardware metrics'];
 
 const OPT_IN_CAPABILITIES = ['Assistant commands', 'Patrol remediation'];
 
@@ -61,7 +61,7 @@ export const ConnectionsExplainer: Component = () => {
           </h3>
           <p class="mt-0.5 text-xs text-muted">
             The platform API covers workloads. The Unified Agent adds host-level
-            telemetry, and stands alone where there's no API.
+            metrics, and stands alone where there's no API.
           </p>
         </div>
 

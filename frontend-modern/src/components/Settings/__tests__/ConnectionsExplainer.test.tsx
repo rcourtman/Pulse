@@ -32,7 +32,7 @@ describe('ConnectionsExplainer', () => {
   it('surfaces concrete agent capabilities and trust facts users care about', () => {
     render(() => <ConnectionsExplainer />);
 
-    for (const capability of ['Hardware telemetry', 'Assistant commands', 'Patrol remediation']) {
+    for (const capability of ['Hardware metrics', 'Assistant commands', 'Patrol remediation']) {
       expect(screen.getByText(capability)).toBeInTheDocument();
     }
     for (const fact of ['Single Go binary', '~13 MB download', 'No runtime dependencies', 'Open source']) {

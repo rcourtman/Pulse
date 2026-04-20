@@ -77,14 +77,6 @@ export const ConnectionEditor: Component<ConnectionEditorProps> = (props) => {
         when={showCredentialSlot()}
         fallback={
           <div class="space-y-4 p-4">
-            <div>
-              <div class="text-sm font-semibold text-base-content">Add a connection</div>
-              <div class="mt-0.5 text-xs text-muted">
-                Paste a platform address to connect its API, or install the Unified Agent on a
-                host.
-              </div>
-            </div>
-
             <section class="space-y-3 rounded-md border border-border bg-surface-alt/30 p-3">
               <div>
                 <div class="text-xs font-semibold uppercase tracking-wide text-muted">
@@ -130,7 +122,7 @@ export const ConnectionEditor: Component<ConnectionEditorProps> = (props) => {
                   Pulse Unified Agent
                 </div>
                 <div class="text-[11px] text-muted">
-                  Host-level telemetry on Proxmox / VMware / TrueNAS, or the only path on
+                  Host-level metrics on Proxmox / VMware / TrueNAS, or the only path on
                   bare-metal Linux, Unraid, FreeBSD.
                 </div>
               </div>

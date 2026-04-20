@@ -318,7 +318,7 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
             <div>
               <div class="text-base font-semibold text-base-content">Add connection</div>
               <div class="mt-0.5 text-xs text-muted">
-                Paste an address — Pulse detects the product, you enter credentials, save.
+                Paste an address. Pulse detects the product, you enter credentials, and save.
               </div>
             </div>
             <button
