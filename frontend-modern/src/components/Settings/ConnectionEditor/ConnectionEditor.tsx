@@ -76,64 +76,47 @@ export const ConnectionEditor: Component<ConnectionEditorProps> = (props) => {
       <Show
         when={showCredentialSlot()}
         fallback={
-          <div class="space-y-4 p-4">
-            <section class="space-y-3 rounded-md border border-border bg-surface-alt/30 p-3">
-              <div>
+          <div class="space-y-5 p-4">
+            <AddressProbeStep
+              state={state}
+              onSelectCandidate={chooseCandidate}
+              onChooseManually={() => setManualPickerOpen((v) => !v)}
+            />
+
+            <Show when={manualPickerOpen()}>
+              <div class="space-y-2 rounded-md border border-border bg-surface p-3">
                 <div class="text-xs font-semibold uppercase tracking-wide text-muted">
-                  Platform API
+                  Choose Platform API type manually
                 </div>
-                <div class="text-[11px] text-muted">
-                  Proxmox VE / PBS / PMG, VMware, TrueNAS
-                </div>
+                <ul class="divide-y divide-border rounded-md border border-border">
+                  {manualOptions().map((type) => (
+                    <li>
+                      <button
+                        type="button"
+                        class="flex w-full items-center justify-between px-3 py-2 text-left text-sm text-base-content transition-colors hover:bg-surface-hover"
+                        onClick={() => chooseManualType(type)}
+                      >
+                        <span>{CONNECTION_TYPE_LABELS[type] ?? type}</span>
+                        <span class="text-xs text-muted">{type}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
               </div>
+            </Show>
 
-              <AddressProbeStep
-                state={state}
-                onSelectCandidate={chooseCandidate}
-                onChooseManually={() => setManualPickerOpen((v) => !v)}
-              />
-
-              <Show when={manualPickerOpen()}>
-                <div class="space-y-2 rounded-md border border-border bg-surface p-3">
-                  <div class="text-xs font-semibold uppercase tracking-wide text-muted">
-                    Choose Platform API type manually
-                  </div>
-                  <ul class="divide-y divide-border rounded-md border border-border">
-                    {manualOptions().map((type) => (
-                      <li>
-                        <button
-                          type="button"
-                          class="flex w-full items-center justify-between px-3 py-2 text-left text-sm text-base-content transition-colors hover:bg-surface-hover"
-                          onClick={() => chooseManualType(type)}
-                        >
-                          <span>{CONNECTION_TYPE_LABELS[type] ?? type}</span>
-                          <span class="text-xs text-muted">{type}</span>
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </Show>
-            </section>
-
-            <section class="space-y-3 rounded-md border border-blue-200 bg-blue-50/40 p-3 dark:border-blue-900 dark:bg-blue-950/20">
-              <div>
-                <div class="text-xs font-semibold uppercase tracking-wide text-muted">
-                  Pulse Unified Agent
-                </div>
-                <div class="text-[11px] text-muted">
-                  Host-level metrics on Proxmox / VMware / TrueNAS, or the only path on
-                  bare-metal Linux, Unraid, FreeBSD.
-                </div>
-              </div>
+            <div class="border-t border-border pt-3 text-xs text-muted">
+              Setting up bare-metal Linux, Unraid, or FreeBSD, or adding host-level
+              metrics (CPU/disk temps, SMART, power) on Proxmox, VMware, or TrueNAS?{' '}
               <button
                 type="button"
                 onClick={() => chooseManualType('agent')}
-                class="inline-flex items-center rounded-md border border-blue-600 bg-blue-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-500"
+                class="font-medium text-blue-600 underline underline-offset-2 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
               >
                 Install the Unified Agent on a host
               </button>
-            </section>
+              .
+            </div>
           </div>
         }
       >

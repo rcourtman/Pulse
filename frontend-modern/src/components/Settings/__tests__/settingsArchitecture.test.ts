@@ -77,10 +77,8 @@ describe('settings architecture guardrails', () => {
   it('keeps probe-first connection setup and inline node credentials on the shared editor model', () => {
     expect(connectionEditorSource).toContain("import { AddressProbeStep } from './AddressProbeStep';");
     expect(connectionEditorSource).toContain('const DEFAULT_MANUAL_TYPES: ConnectionType[] =');
-    expect(connectionEditorSource).toContain('Platform API');
-    expect(connectionEditorSource).toContain('Pulse Unified Agent');
-    expect(connectionEditorSource).toContain('Install the Unified Agent on a host');
     expect(connectionEditorSource).toContain('<AddressProbeStep');
+    expect(connectionEditorSource).toContain('Install the Unified Agent on a host');
     expect(connectionEditorSource).not.toContain('NodeModal');
 
     expect(addressProbeStepSource).toContain('Probe address');

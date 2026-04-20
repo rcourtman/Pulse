@@ -94,7 +94,7 @@ describe('ConnectionEditor', () => {
     expect(lastCall.candidate).toBeNull();
   });
 
-  it('surfaces Platform API and Pulse Unified Agent as the two add-paths, mirroring the explainer', () => {
+  it('leads with the address probe; agent install is an offramp, not a peer fork', () => {
     render(() => (
       <ConnectionEditor
         renderCredentialSlot={() => <div />}
@@ -102,8 +102,15 @@ describe('ConnectionEditor', () => {
       />
     ));
 
-    expect(screen.getByText('Platform API')).toBeInTheDocument();
-    expect(screen.getByText('Pulse Unified Agent')).toBeInTheDocument();
+    // Primary path is probe-the-address. The explainer on the ledger already
+    // taught the user the two-mode split, so the editor must not restate it
+    // as a second decision screen — no "Platform API" card header here.
+    expect(screen.getByRole('button', { name: /probe address/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /enter credentials manually/i })).toBeInTheDocument();
+    expect(screen.queryByText('Platform API')).toBeNull();
+
+    // Agent install is still reachable, but as a contextual offramp beneath
+    // the probe, not as an equal-weight card.
     expect(
       screen.getByRole('button', { name: /install the unified agent on a host/i }),
     ).toBeInTheDocument();
