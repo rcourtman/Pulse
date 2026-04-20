@@ -1,5 +1,5 @@
 import { Component, For, type JSX, Show, createMemo, createSignal } from 'solid-js';
-import { Archive, Cpu, Database, Mail, Server, ServerCog } from 'lucide-solid';
+import { Archive, ArrowRight, Cpu, Database, Mail, Server, ServerCog } from 'lucide-solid';
 import type { ConnectionType, ProbeCandidate } from '@/api/connections';
 import { AddressProbeStep } from './AddressProbeStep';
 import {
@@ -30,23 +30,23 @@ export interface ConnectionEditorProps {
   onSaved?: () => void;
 }
 
-const DEFAULT_MANUAL_TYPES: ConnectionType[] = ['pve', 'pbs', 'pmg', 'vmware', 'truenas', 'agent'];
+// Platform integrations — connect to a product's management API. Peers of
+// each other. The agent is NOT in this list: it is a different kind of
+// integration (see the dedicated section below the grid) and surfacing it
+// as a tile alongside these hides what it actually adds.
+const DEFAULT_PLATFORM_TYPES: ConnectionType[] = ['pve', 'pbs', 'pmg', 'vmware', 'truenas'];
 
 interface TileMeta {
   icon: Component<{ class?: string }>;
   description: string;
 }
 
-const TILE_META: Partial<Record<ConnectionType, TileMeta>> = {
+const PLATFORM_TILE_META: Partial<Record<ConnectionType, TileMeta>> = {
   pve: { icon: Server, description: 'VMs, containers, storage, backups' },
   pbs: { icon: Archive, description: 'Backups, sync and verify jobs' },
   pmg: { icon: Mail, description: 'Mail stats, queues, quarantine' },
   vmware: { icon: ServerCog, description: 'vCenter or ESXi clusters' },
   truenas: { icon: Database, description: 'Pools, datasets, replications' },
-  agent: {
-    icon: Cpu,
-    description: 'Host metrics, or bare-metal Linux / Unraid / FreeBSD',
-  },
 };
 
 export const ConnectionEditor: Component<ConnectionEditorProps> = (props) => {
@@ -60,7 +60,9 @@ export const ConnectionEditor: Component<ConnectionEditorProps> = (props) => {
   );
   const [selectedCandidate, setSelectedCandidate] = createSignal<ProbeCandidate | null>(null);
 
-  const manualOptions = createMemo(() => props.manualTypeOptions ?? DEFAULT_MANUAL_TYPES);
+  const platformOptions = createMemo(() =>
+    (props.manualTypeOptions ?? DEFAULT_PLATFORM_TYPES).filter((type) => type !== 'agent'),
+  );
 
   const activeType = () => selectedType();
   const showCredentialSlot = () => activeType() !== null;
@@ -90,55 +92,95 @@ export const ConnectionEditor: Component<ConnectionEditorProps> = (props) => {
       <Show
         when={showCredentialSlot()}
         fallback={
-          <div class="space-y-6 p-4">
+          <div class="space-y-8 p-4">
             <AddressProbeStep
               state={state}
               onSelectCandidate={chooseCandidate}
               onInstallAgent={() => chooseManualType('agent')}
             />
 
-            <div class="flex items-center gap-3 text-xs font-semibold uppercase tracking-wide text-muted">
-              <span class="h-px flex-1 bg-border" aria-hidden="true" />
-              Or pick your system directly
-              <span class="h-px flex-1 bg-border" aria-hidden="true" />
-            </div>
+            <section class="space-y-3">
+              <div class="flex items-center gap-3 text-xs font-semibold uppercase tracking-wide text-muted">
+                <span class="h-px flex-1 bg-border" aria-hidden="true" />
+                Or pick a platform to connect
+                <span class="h-px flex-1 bg-border" aria-hidden="true" />
+              </div>
 
-            <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-              <For each={manualOptions()}>
-                {(type) => {
-                  const meta = TILE_META[type];
-                  const Icon = meta?.icon ?? Server;
-                  const label = CONNECTION_TYPE_LABELS[type] ?? type;
-                  const isAgent = type === 'agent';
-                  return (
-                    <button
-                      type="button"
-                      onClick={() => chooseManualType(type)}
-                      class="group flex h-full flex-col gap-2 rounded-lg border border-border bg-surface p-4 text-left transition-colors hover:border-blue-500 hover:bg-blue-50/40 dark:hover:bg-blue-950/20"
-                    >
-                      <div class="flex items-center gap-2.5">
-                        <div
-                          aria-hidden="true"
-                          class={
-                            isAgent
-                              ? 'flex h-8 w-8 flex-none items-center justify-center rounded-md border border-blue-200 bg-blue-100 text-blue-700 dark:border-blue-900 dark:bg-blue-900/40 dark:text-blue-300'
-                              : 'flex h-8 w-8 flex-none items-center justify-center rounded-md border border-border bg-surface-alt text-base-content'
-                          }
-                        >
-                          <Icon class="h-4 w-4" />
+              <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                <For each={platformOptions()}>
+                  {(type) => {
+                    const meta = PLATFORM_TILE_META[type];
+                    const Icon = meta?.icon ?? Server;
+                    const label = CONNECTION_TYPE_LABELS[type] ?? type;
+                    return (
+                      <button
+                        type="button"
+                        onClick={() => chooseManualType(type)}
+                        class="group flex h-full flex-col gap-2 rounded-lg border border-border bg-surface p-4 text-left transition-colors hover:border-blue-500 hover:bg-blue-50/40 dark:hover:bg-blue-950/20"
+                      >
+                        <div class="flex items-center gap-2.5">
+                          <div
+                            aria-hidden="true"
+                            class="flex h-8 w-8 flex-none items-center justify-center rounded-md border border-border bg-surface-alt text-base-content"
+                          >
+                            <Icon class="h-4 w-4" />
+                          </div>
+                          <div class="text-sm font-semibold text-base-content">{label}</div>
                         </div>
-                        <div class="text-sm font-semibold text-base-content">
-                          {isAgent ? 'Install Pulse Agent' : label}
-                        </div>
-                      </div>
-                      <Show when={meta?.description}>
-                        <div class="text-xs text-muted">{meta!.description}</div>
-                      </Show>
-                    </button>
-                  );
-                }}
-              </For>
-            </div>
+                        <Show when={meta?.description}>
+                          <div class="text-xs text-muted">{meta!.description}</div>
+                        </Show>
+                      </button>
+                    );
+                  }}
+                </For>
+              </div>
+            </section>
+
+            <section class="space-y-3">
+              <div class="flex items-center gap-3 text-xs font-semibold uppercase tracking-wide text-muted">
+                <span class="h-px flex-1 bg-border" aria-hidden="true" />
+                Or install a host-level agent
+                <span class="h-px flex-1 bg-border" aria-hidden="true" />
+              </div>
+
+              <button
+                type="button"
+                onClick={() => chooseManualType('agent')}
+                class="group flex w-full items-start gap-4 rounded-lg border border-border bg-surface p-4 text-left transition-colors hover:border-blue-500 hover:bg-blue-50/40 dark:hover:bg-blue-950/20"
+              >
+                <div
+                  aria-hidden="true"
+                  class="flex h-10 w-10 flex-none items-center justify-center rounded-md border border-blue-200 bg-blue-100 text-blue-700 dark:border-blue-900 dark:bg-blue-900/40 dark:text-blue-300"
+                >
+                  <Cpu class="h-5 w-5" />
+                </div>
+                <div class="flex-1 space-y-1.5">
+                  <div class="flex items-center gap-2">
+                    <div class="text-sm font-semibold text-base-content">Install Pulse Agent</div>
+                    <div class="rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-blue-700 dark:border-blue-900 dark:bg-blue-950/60 dark:text-blue-300">
+                      Runs on a host
+                    </div>
+                  </div>
+                  <div class="text-xs text-muted">
+                    Reports CPU temperature, disk SMART, systemd services, and network metrics
+                    from the host itself. Auto-detects Docker, Kubernetes, and Proxmox on that
+                    machine.
+                  </div>
+                  <div class="text-xs text-muted">
+                    Use it for bare-metal Linux / Unraid / FreeBSD, or install it on Proxmox /
+                    TrueNAS hosts <span class="font-medium">in addition to</span> a platform
+                    connection above for deeper per-host telemetry.
+                  </div>
+                </div>
+                <div
+                  aria-hidden="true"
+                  class="flex-none self-center text-muted transition-colors group-hover:text-blue-600 dark:group-hover:text-blue-400"
+                >
+                  <ArrowRight class="h-4 w-4" />
+                </div>
+              </button>
+            </section>
           </div>
         }
       >

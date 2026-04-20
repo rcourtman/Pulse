@@ -75,8 +75,13 @@ describe('settings architecture guardrails', () => {
 
   it('keeps probe-first connection setup and inline node credentials on the shared editor model', () => {
     expect(connectionEditorSource).toContain("import { AddressProbeStep } from './AddressProbeStep';");
-    expect(connectionEditorSource).toContain('const DEFAULT_MANUAL_TYPES: ConnectionType[] =');
+    // Platform integrations render as peer tiles; the agent lives in its own
+    // section below so it can explain what host-level telemetry adds instead
+    // of being mistaken for one more peer of Proxmox / VMware / TrueNAS.
+    expect(connectionEditorSource).toContain('const DEFAULT_PLATFORM_TYPES: ConnectionType[] =');
+    expect(connectionEditorSource).not.toContain("'agent'] =");
     expect(connectionEditorSource).toContain('<AddressProbeStep');
+    expect(connectionEditorSource).toContain('Or install a host-level agent');
     // The agent install path is a first-class ledger-header action, not a
     // subtext offramp inside the editor — make sure it doesn't drift back.
     expect(connectionEditorSource).not.toContain('Install the Unified Agent on a host');
