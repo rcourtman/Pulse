@@ -9,7 +9,6 @@ const REQUIRED_PAGE_HEADERS = new Map([
   ['src/pages/Ceph.tsx', 'PageHeader'],
   ['src/pages/Dashboard.tsx', 'PageHeader'],
   ['src/pages/Infrastructure.tsx', 'PageHeader'],
-  ['src/pages/Operations.tsx', 'PageHeader'],
   ['src/pages/NotFound.tsx', 'PageHeader'],
   ['src/pages/PricingHandoff.tsx', 'PageHeader'],
   ['src/components/Settings/Settings.tsx', 'PageHeader'],
@@ -24,6 +23,10 @@ const REQUIRED_OPERATIONS_WRAPPERS = new Map([
 const NON_VISUAL_PAGE_WRAPPERS = new Set([
   // Router wrapper; renders Recovery component and intentionally has no page chrome.
   'src/pages/RecoveryRoute.tsx',
+  // Redirect shim into the canonical settings route and intentionally has no page chrome.
+  'src/pages/Operations.tsx',
+  // Bootstrap route that only resolves the workspace destination before navigation.
+  'src/pages/RuntimeHome.tsx',
 ]);
 
 const SETTINGS_PANEL_SHIMS = new Set([]);

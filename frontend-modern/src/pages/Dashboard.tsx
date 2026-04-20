@@ -11,6 +11,7 @@ import {
 import { useNavigate } from '@solidjs/router';
 import { useWebSocket } from '@/contexts/appRuntime';
 import { buildInfrastructureOnboardingPath } from '@/components/Settings/infrastructureWorkspaceModel';
+import { PageHeader } from '@/components/shared/PageHeader';
 import { useDashboardOverview } from '@/hooks/useDashboardOverview';
 import { useDashboardTrends } from '@/hooks/useDashboardTrends';
 import { useDashboardLayout } from '@/hooks/useDashboardLayout';
@@ -169,6 +170,11 @@ export default function Dashboard() {
 
   return (
     <main data-testid="dashboard-page" class="space-y-6">
+      <PageHeader
+        title="Dashboard"
+        description="Track infrastructure health, active risks, storage pressure, and recovery readiness from one overview."
+      />
+
       {/* Connection warning banner — shown above all content, NOT a full-page takeover */}
       <Show when={hasConnectionError() && initialLoadComplete()}>
         <div

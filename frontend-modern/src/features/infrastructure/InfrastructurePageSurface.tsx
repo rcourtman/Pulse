@@ -5,6 +5,7 @@ import { EmptyState } from '@/components/shared/EmptyState';
 import { Card } from '@/components/shared/Card';
 import { FilterSegmentedControl, LabeledFilterSelect } from '@/components/shared/FilterToolbar';
 import { PageControls } from '@/components/shared/PageControls';
+import { PageHeader } from '@/components/shared/PageHeader';
 import { SearchInput } from '@/components/shared/SearchInput';
 import { StickySummarySection } from '@/components/shared/StickySummarySection';
 import { UnifiedResourceTable } from '@/components/Infrastructure/UnifiedResourceTable';
@@ -86,6 +87,11 @@ export function InfrastructurePageSurface() {
       data-testid="infrastructure-page"
       class="space-y-4"
     >
+      <PageHeader
+        title="Infrastructure"
+        description="Inspect connected resources, filter by source and status, and drill into live health and capacity."
+      />
+
       <Show
         when={!loading() || initialLoadComplete()}
         fallback={

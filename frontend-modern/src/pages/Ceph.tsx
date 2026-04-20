@@ -12,6 +12,7 @@ import {
   TableCell,
 } from '@/components/shared/Table';
 import { EmptyState } from '@/components/shared/EmptyState';
+import { PageHeader } from '@/components/shared/PageHeader';
 import { SearchInput } from '@/components/shared/SearchInput';
 import CephServiceIcon from '@/components/Ceph/CephServiceIcon';
 import type { CephCluster, CephPool, CephServiceStatus } from '@/types/api';
@@ -288,6 +289,11 @@ const Ceph: Component = () => {
 
   return (
     <div class="space-y-4">
+      <PageHeader
+        title="Ceph"
+        description="Monitor cluster health, service status, capacity, and pool utilization across connected Ceph environments."
+      />
+
       {/* Loading State */}
       <Show when={isLoading()}>
         <Card padding="lg">
