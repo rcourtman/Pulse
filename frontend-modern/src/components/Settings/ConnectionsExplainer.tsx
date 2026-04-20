@@ -21,8 +21,6 @@ const persistDismissed = () => {
   }
 };
 
-const ALWAYS_ON_CAPABILITIES = ['Hardware metrics'];
-
 const OPT_IN_CAPABILITIES = ['Assistant commands', 'Patrol remediation'];
 
 const AGENT_FACTS = [
@@ -113,34 +111,18 @@ export const ConnectionsExplainer: Component = () => {
               only path.
             </p>
 
-            <div class="mt-4 space-y-2">
-              <div>
-                <div class="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted">
-                  Always on
-                </div>
-                <div class="flex flex-wrap gap-1.5">
-                  <For each={ALWAYS_ON_CAPABILITIES}>
-                    {(label) => (
-                      <span class="inline-flex items-center rounded-full border border-border bg-surface px-2 py-0.5 text-[11px] font-medium text-base-content">
-                        {label}
-                      </span>
-                    )}
-                  </For>
-                </div>
+            <div class="mt-4">
+              <div class="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted">
+                Off by default, opt in per host
               </div>
-              <div>
-                <div class="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted">
-                  Off by default, opt in per host
-                </div>
-                <div class="flex flex-wrap gap-1.5">
-                  <For each={OPT_IN_CAPABILITIES}>
-                    {(label) => (
-                      <span class="inline-flex items-center rounded-full border border-dashed border-border bg-surface px-2 py-0.5 text-[11px] font-medium text-muted">
-                        {label}
-                      </span>
-                    )}
-                  </For>
-                </div>
+              <div class="flex flex-wrap gap-1.5">
+                <For each={OPT_IN_CAPABILITIES}>
+                  {(label) => (
+                    <span class="inline-flex items-center rounded-full border border-dashed border-border bg-surface px-2 py-0.5 text-[11px] font-medium text-muted">
+                      {label}
+                    </span>
+                  )}
+                </For>
               </div>
             </div>
 
