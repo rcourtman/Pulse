@@ -81,7 +81,12 @@ describe('settings architecture guardrails', () => {
     expect(connectionEditorSource).toContain('const DEFAULT_PLATFORM_TYPES: ConnectionType[] =');
     expect(connectionEditorSource).not.toContain("'agent'] =");
     expect(connectionEditorSource).toContain('<AddressProbeStep');
-    expect(connectionEditorSource).toContain('Or install a host-level agent');
+    expect(connectionEditorSource).toContain('Or install the agent on the host');
+    // Honest framing: the agent auto-registers PVE/PBS when installed on a
+    // Proxmox node, so the card must surface that shortcut rather than
+    // pretending the agent is only for host metrics.
+    expect(connectionEditorSource).toContain('On a Proxmox host, this is the');
+    expect(connectionEditorSource).toContain('auto-registers the node');
     // The agent install path is a first-class ledger-header action, not a
     // subtext offramp inside the editor — make sure it doesn't drift back.
     expect(connectionEditorSource).not.toContain('Install the Unified Agent on a host');

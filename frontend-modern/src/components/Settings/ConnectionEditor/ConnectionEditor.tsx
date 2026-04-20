@@ -102,7 +102,7 @@ export const ConnectionEditor: Component<ConnectionEditorProps> = (props) => {
             <section class="space-y-3">
               <div class="flex items-center gap-3 text-xs font-semibold uppercase tracking-wide text-muted">
                 <span class="h-px flex-1 bg-border" aria-hidden="true" />
-                Or pick a platform to connect
+                Or connect a remote platform API
                 <span class="h-px flex-1 bg-border" aria-hidden="true" />
               </div>
 
@@ -140,7 +140,7 @@ export const ConnectionEditor: Component<ConnectionEditorProps> = (props) => {
             <section class="space-y-3">
               <div class="flex items-center gap-3 text-xs font-semibold uppercase tracking-wide text-muted">
                 <span class="h-px flex-1 bg-border" aria-hidden="true" />
-                Or install a host-level agent
+                Or install the agent on the host
                 <span class="h-px flex-1 bg-border" aria-hidden="true" />
               </div>
 
@@ -163,14 +163,15 @@ export const ConnectionEditor: Component<ConnectionEditorProps> = (props) => {
                     </div>
                   </div>
                   <div class="text-xs text-muted">
-                    Reports CPU temperature, disk SMART, systemd services, and network metrics
-                    from the host itself. Auto-detects Docker, Kubernetes, and Proxmox on that
-                    machine.
+                    <span class="font-medium text-base-content">On a Proxmox host, this is the
+                    fastest path.</span> The agent creates the PVE / PBS API token itself and
+                    auto-registers the node — no address or credentials to paste above.
                   </div>
                   <div class="text-xs text-muted">
-                    Use it for bare-metal Linux / Unraid / FreeBSD, or install it on Proxmox /
-                    TrueNAS hosts <span class="font-medium">in addition to</span> a platform
-                    connection above for deeper per-host telemetry.
+                    It also reports CPU temperature, disk SMART, systemd services, and network
+                    metrics from the host, and auto-detects Docker and Kubernetes on that
+                    machine. Required for bare-metal Linux / Unraid / FreeBSD targets that have
+                    no platform API to connect.
                   </div>
                 </div>
                 <div
