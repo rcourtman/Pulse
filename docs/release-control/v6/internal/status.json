@@ -821,7 +821,8 @@
       "lane_ids": [
         "L3",
         "L4",
-        "L12"
+        "L12",
+        "L17"
       ],
       "subsystem_ids": [
         "cloud-paid"
@@ -953,7 +954,8 @@
         "L6",
         "L12",
         "L13",
-        "L14"
+        "L14",
+        "L17"
       ],
       "subsystem_ids": [
         "api-contracts",
@@ -1110,7 +1112,8 @@
       "lane_ids": [
         "L3",
         "L4",
-        "L12"
+        "L12",
+        "L17"
       ],
       "subsystem_ids": [
         "cloud-paid"
@@ -1356,7 +1359,8 @@
         "L4",
         "L6",
         "L12",
-        "L14"
+        "L14",
+        "L17"
       ],
       "subsystem_ids": [
         "api-contracts",
@@ -2472,7 +2476,7 @@
       "status": "target-met",
       "completion": {
         "state": "complete",
-        "summary": "Cloud-paid runtime and billing surfaces are at the current tracked RC floor, including real cancellation/reactivation continuity across checkout, portal, entitlement boundaries, and the shared commercial billing shell/model now used by both self-hosted Pulse Pro and hosted organization billing.",
+        "summary": "Cloud-paid runtime and billing surfaces are at the current tracked RC floor, including real cancellation/reactivation continuity across checkout, entitlement boundaries, and the shared commercial billing shell/model now used by both self-hosted Pulse Pro and hosted organization billing.",
         "tracking": []
       },
       "blockers": [],
@@ -2515,7 +2519,7 @@
       "status": "target-met",
       "completion": {
         "state": "complete",
-        "summary": "Hosted MSP support is at the current tracked RC floor, including real tenant-management behavior and the shared hosted commercial replay proof.",
+        "summary": "Hosted MSP support is at the current tracked RC floor, including real tenant-management behavior and the exercised MSP provisioning and replay proof.",
         "tracking": []
       },
       "blockers": [],
@@ -3285,6 +3289,77 @@
           "kind": "file"
         }
       ]
+    },
+    {
+      "id": "L17",
+      "name": "Customer account portal",
+      "target_score": 6,
+      "current_score": 6,
+      "status": "target-met",
+      "completion": {
+        "state": "complete",
+        "summary": "Pulse Account is now a first-class governed customer-account surface at the current RC floor: hosted accounts land directly in Workspaces, the signed-in shell stays task-first across Workspaces, Access, Billing, and Support, and MSP plus self-serve commercial actions converge on one coherent authenticated account boundary.",
+        "tracking": []
+      },
+      "blockers": [],
+      "subsystems": [],
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/CUSTOMER_ACCOUNT_PORTAL_SPEC.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/cloud-hosted-tier-runtime-readiness-production-recovered-2026-03-26.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/msp-provider-tenant-management-production-followup-2026-03-13.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/organization-user-scope-and-rbac-2026-03-12.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/subsystems/api-contracts.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/subsystems/cloud-paid.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/cloudcp/portal/frontend/src/shell_view.test.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/cloudcp/portal/frontend/src/shell_view.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/cloudcp/portal/page.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse-pro",
+          "path": "landing-page/manage.html",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse-pro",
+          "path": "landing-page/retrieve-license.html",
+          "kind": "file"
+        }
+      ]
     }
   ],
   "release_gates": [
@@ -3323,7 +3398,8 @@
       "lane_ids": [
         "L3",
         "L4",
-        "L12"
+        "L12",
+        "L17"
       ],
       "evidence": [
         {
@@ -3425,7 +3501,8 @@
         "L2",
         "L3",
         "L4",
-        "L12"
+        "L12",
+        "L17"
       ],
       "evidence": [
         {
@@ -3481,7 +3558,8 @@
       "lane_ids": [
         "L3",
         "L4",
-        "L12"
+        "L12",
+        "L17"
       ],
       "evidence": [
         {
@@ -3521,7 +3599,8 @@
       "lane_ids": [
         "L4",
         "L6",
-        "L12"
+        "L12",
+        "L17"
       ],
       "evidence": [
         {
@@ -3544,7 +3623,8 @@
         "L4",
         "L9",
         "L12",
-        "L14"
+        "L14",
+        "L17"
       ],
       "evidence": [
         {
@@ -3935,64 +4015,6 @@
       ]
     },
     {
-      "id": "customer-account-portal-surface",
-      "summary": "Pulse Account now provides one coherent authenticated customer shell across hosted tenants, billing, recovery, and MSP/self-serve commercial actions, but the current lane map still splits that owned account surface across L3/L4 instead of governing it as one explicit customer-account lane.",
-      "owner": "project-owner",
-      "status": "planned",
-      "recorded_at": "2026-03-25",
-      "lane_ids": [
-        "L3",
-        "L4"
-      ],
-      "subsystem_ids": [
-        "cloud-paid"
-      ],
-      "proposed_resolution": "new-lane",
-      "coverage_impact": 14,
-      "evidence": [
-        {
-          "repo": "pulse",
-          "path": "docs/release-control/v6/internal/PULSE_ACCOUNT_PORTAL_SPEC.md",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse",
-          "path": "docs/release-control/v6/internal/subsystems/cloud-paid.md",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse",
-          "path": "internal/cloudcp/account/tenant_handlers.go",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse",
-          "path": "internal/cloudcp/portal/frontend/src/shell_view.test.ts",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse",
-          "path": "internal/cloudcp/portal/frontend/src/shell_view.ts",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse",
-          "path": "internal/cloudcp/portal/page.go",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse-pro",
-          "path": "landing-page/manage.html",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse-pro",
-          "path": "landing-page/retrieve-license.html",
-          "kind": "file"
-        }
-      ]
-    },
-    {
       "id": "platform-admission-execution",
       "summary": "The platform support model now governs admission decisions, and VMware vSphere is already the current admitted strategic next-platform direction, but the lane map still underrepresents the cross-surface work needed to carry an admitted first-class platform from architecture lock to a proved support floor across setup, canonical projections, alerts, assistant read, and bounded control classification.",
       "owner": "project-owner",
@@ -4178,24 +4200,6 @@
       ]
     },
     {
-      "id": "customer-account-portal",
-      "name": "Customer account portal",
-      "summary": "Promote the now-coherent Pulse Account shell and its cross-surface ownership model into one governed customer-account lane instead of leaving that surface split across L3/L4.",
-      "status": "planned",
-      "recorded_at": "2026-03-25",
-      "target_id": "v6-product-lane-expansion",
-      "current_lane_ids": [
-        "L3",
-        "L4"
-      ],
-      "coverage_gap_ids": [
-        "customer-account-portal-surface"
-      ],
-      "subsystem_ids": [
-        "cloud-paid"
-      ]
-    },
-    {
       "id": "platform-admission-execution",
       "name": "Platform admission execution",
       "summary": "Carry admitted first-class platform directions from architecture lock to proved support floors through one governed lane covering shared onboarding, canonical resource projection, support-floor proof, and bounded assistant/control classification, starting with the active VMware vSphere direction.",
@@ -4226,12 +4230,13 @@
   "resolved_decisions": [
     {
       "id": "ga-floor-policy",
-      "summary": "Staged release policy locked; L4 Hosted MSP full portal is post-GA and not a GA floor gate.",
+      "summary": "Staged release policy locked; deeper Hosted MSP and Pulse Account portal expansion is post-GA and not a GA floor gate.",
       "kind": "release-policy",
       "decided_at": "2026-02-27",
       "subsystem_ids": [],
       "lane_ids": [
-        "L4"
+        "L4",
+        "L17"
       ]
     },
     {
