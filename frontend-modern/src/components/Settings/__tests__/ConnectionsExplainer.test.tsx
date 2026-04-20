@@ -21,6 +21,14 @@ describe('ConnectionsExplainer', () => {
     expect(screen.getByText('Pulse Unified Agent')).toBeInTheDocument();
   });
 
+  it('frames the agent as supplementary to the API, not a replacement', () => {
+    render(() => <ConnectionsExplainer />);
+
+    expect(screen.queryByText(/Recommended/i)).toBeNull();
+    expect(screen.getByText(/supplements the API/i)).toBeInTheDocument();
+    expect(screen.getByText(/Primary source for workloads/i)).toBeInTheDocument();
+  });
+
   it('surfaces concrete agent capabilities and trust facts users care about', () => {
     render(() => <ConnectionsExplainer />);
 

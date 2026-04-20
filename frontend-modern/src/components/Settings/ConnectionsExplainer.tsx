@@ -17,15 +17,13 @@ const persistDismissed = () => {
   try {
     window.localStorage.setItem(DISMISS_KEY, '1');
   } catch {
-    // Ignore storage failures (private mode, quota) — the in-memory signal is enough for this session.
+    // Ignore storage failures (private mode, quota); the in-memory signal is enough for this session.
   }
 };
 
-const AGENT_CAPABILITIES = [
-  'Hardware telemetry',
-  'Assistant commands',
-  'Patrol remediation',
-];
+const ALWAYS_ON_CAPABILITIES = ['Hardware telemetry'];
+
+const OPT_IN_CAPABILITIES = ['Assistant commands', 'Patrol remediation'];
 
 const AGENT_FACTS = [
   'Single Go binary',
@@ -59,10 +57,11 @@ export const ConnectionsExplainer: Component = () => {
 
         <div class="border-b border-border px-5 py-3">
           <h3 class="text-sm font-semibold text-base-content">
-            Two ways to connect infrastructure
+            How Pulse collects data
           </h3>
           <p class="mt-0.5 text-xs text-muted">
-            Pick whichever fits the target. You can mix both on the same host.
+            The platform API covers workloads. The Unified Agent adds host-level
+            telemetry, and stands alone where there's no API.
           </p>
         </div>
 
@@ -77,12 +76,13 @@ export const ConnectionsExplainer: Component = () => {
               </div>
               <div class="min-w-0">
                 <div class="text-sm font-semibold text-base-content">Platform API</div>
-                <div class="text-xs text-muted">Polled from the platform</div>
+                <div class="text-xs text-muted">Primary source for workloads</div>
               </div>
             </div>
             <p class="mt-3 text-xs leading-relaxed text-muted">
               Pulse polls the platform's own API (Proxmox VE / PBS / PMG, VMware,
-              TrueNAS). Fastest to set up; coverage matches what the platform exposes.
+              TrueNAS) for VMs, containers, storage, backups, and other workload data.
+              Required for every API-backed target; fastest to set up.
             </p>
           </div>
 
@@ -99,36 +99,52 @@ export const ConnectionsExplainer: Component = () => {
                 <Cpu class="h-4 w-4" />
               </div>
               <div class="min-w-0">
-                <div class="flex flex-wrap items-center gap-2">
-                  <span class="text-sm font-semibold text-base-content">
-                    Pulse Unified Agent
-                  </span>
-                  <span class="inline-flex items-center rounded-full border border-blue-200 bg-blue-100 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-blue-700 dark:border-blue-900 dark:bg-blue-900/40 dark:text-blue-300">
-                    Recommended
-                  </span>
+                <div class="text-sm font-semibold text-base-content">
+                  Pulse Unified Agent
                 </div>
-                <div class="text-xs text-muted">Runs on the host</div>
+                <div class="text-xs text-muted">Runs on the host, alongside the API</div>
               </div>
             </div>
 
             <p class="mt-3 text-xs leading-relaxed text-muted">
-              Installs on the host itself. Use when there's no API (bare-metal Linux,
-              Unraid), when you want data the API can't surface (CPU/disk temps, SMART,
-              power, Ceph/RAID), or to let Assistant and Patrol run commands and fixes
-              on the host.
+              On Proxmox / VMware / TrueNAS, the agent supplements the API with data
+              it can't expose (CPU and disk temperatures, SMART, power, Ceph/RAID).
+              On bare-metal Linux, Unraid, or FreeBSD with no platform API, it's the
+              only path.
             </p>
 
-            <div class="mt-3 flex flex-wrap gap-1.5">
-              <For each={AGENT_CAPABILITIES}>
-                {(label) => (
-                  <span class="inline-flex items-center rounded-full border border-border bg-surface px-2 py-0.5 text-[11px] font-medium text-base-content">
-                    {label}
-                  </span>
-                )}
-              </For>
+            <div class="mt-4 space-y-2">
+              <div>
+                <div class="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted">
+                  Always on
+                </div>
+                <div class="flex flex-wrap gap-1.5">
+                  <For each={ALWAYS_ON_CAPABILITIES}>
+                    {(label) => (
+                      <span class="inline-flex items-center rounded-full border border-border bg-surface px-2 py-0.5 text-[11px] font-medium text-base-content">
+                        {label}
+                      </span>
+                    )}
+                  </For>
+                </div>
+              </div>
+              <div>
+                <div class="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted">
+                  Off by default, opt in per host
+                </div>
+                <div class="flex flex-wrap gap-1.5">
+                  <For each={OPT_IN_CAPABILITIES}>
+                    {(label) => (
+                      <span class="inline-flex items-center rounded-full border border-dashed border-border bg-surface px-2 py-0.5 text-[11px] font-medium text-muted">
+                        {label}
+                      </span>
+                    )}
+                  </For>
+                </div>
+              </div>
             </div>
 
-            <ul class="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-muted">
+            <ul class="mt-4 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-muted">
               <For each={AGENT_FACTS}>
                 {(fact, index) => (
                   <li class="flex items-center gap-1.5">
