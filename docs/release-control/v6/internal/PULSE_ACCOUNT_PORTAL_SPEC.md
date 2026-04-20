@@ -1,13 +1,13 @@
 # Pulse Account Portal Spec
 
-Last updated: 2026-04-07
+Last updated: 2026-04-20
 Status: ACTIVE
 
 ## Purpose
 
-Define the canonical customer and operator account surface for Pulse once the
-current fragmented cloud, licensing, billing, recovery, and MSP account
-surfaces are promoted into a dedicated governed lane.
+Define the canonical customer and operator account surface for Pulse now that
+the fragmented cloud, licensing, billing, recovery, and MSP account surfaces
+have been promoted into governed lane `L17`.
 
 This spec exists to stop three kinds of drift:
 
@@ -37,8 +37,9 @@ are split across different products and repos:
 4. Hosted Cloud and MSP now have public explanatory pages, but those pages are
    not themselves the account surface.
 
-That means Pulse has account plumbing, not yet one coherent Pulse account
-product surface.
+That means Pulse now has both account plumbing and one coherent governed Pulse
+Account product surface, while deeper hosted/MSP expansion remains
+intentionally post-GA.
 
 ## Canonical Product Definition
 
@@ -455,7 +456,9 @@ The full Pulse Account portal is not an RC or GA floor gate for v6. That
 matches the current resolved decision that full hosted MSP portal expansion is
 post-GA.
 
-But it is the canonical next product-shaping lane for commercial coherence.
+But the coherent first account scope is now governed as `L17`, and further
+portal expansion remains a later product-shaping track rather than an
+unclaimed gap.
 
 ### Current v6 floor
 
@@ -478,12 +481,13 @@ Accepted as sufficient for RC and GA:
    straight into Pulse's activation bridge
 6. owned billing must surface explicit self-hosted purchase arrival states
    (`activated`, `cancelled`, `expired`, `failed`) after checkout return
-7. commercial surfaces are functional but still fragmented outside the owned
-   checkout-return path
+7. commercial surfaces still preserve some legacy utility compatibility
+   outside the authenticated account shell while that shell remains the
+   canonical account home
 
-### Candidate lane target
+### Governed lane floor
 
-The `customer-account-portal` lane should deliver:
+Lane `L17` now delivers at the current RC floor:
 
 1. one named `Pulse Account` shell and task-first IA centered on
    `Workspaces`, `Access`, `Billing`, and `Support`, with precise workspace
@@ -500,8 +504,8 @@ The `customer-account-portal` lane should deliver:
 6. a maintained bundled frontend source tree and sync-proof path inside
    `internal/cloudcp/portal`, so the account shell does not regress into
    handwritten embedded asset drift
-7. an overview model that makes the next obvious action explicit instead of
-   teaching the user Pulse's internal account model before they can act
+7. an inline workspace summary model that makes the next obvious action
+   explicit without a separate `Overview` destination
 
 ### Current frontend seam
 
@@ -554,14 +558,16 @@ Reasonable later expansions include:
 
 ## Ownership
 
-The owning governed subsystem is `cloud-paid`.
+The governed surface is `L17`, and at the current floor it is intentionally
+cross-subsystem rather than assigned to a dedicated subsystem record.
 
 Why:
 
 1. the portal is a commercial/account boundary first
-2. it spans Cloud, MSP, billing, licensing, and recovery
-3. the existing control-plane portal and self-hosted utility surfaces already
-   sit inside cloud-paid-adjacent ownership
+2. it spans Cloud, MSP, billing, licensing, recovery, and hosted runtime entry
+3. the evidence and runtime ownership already cross `cloud-paid`, hosted
+   account handlers, portal frontend/runtime seams, and account utility edges
 
-This is a lane-expansion / new-lane shape above current `L3` and `L4`, not a
-reason to fork commercial governance into another subsystem.
+This is a governed product lane above the existing subsystem map, not a reason
+to force all account truth into `cloud-paid` or mint a new subsystem before
+that ownership boundary proves necessary.

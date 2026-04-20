@@ -1,9 +1,8 @@
 # Customer Account Portal Spec
 
 Last updated: 2026-04-20
-Status: PLANNED
-Governance surface: `status.json.coverage_gaps.customer-account-portal-surface`
-Candidate lane: `customer-account-portal`
+Status: ACTIVE
+Lane: `L17`
 
 ## Intent
 
@@ -12,11 +11,11 @@ licensing, hosted tenants, MSP provider workflows, billing, refund/recovery
 utilities, and account-scoped control-plane actions.
 
 Those surfaces work, and `Pulse Account` now presents them through one coherent
-authenticated shell, but the current lane map still does not govern that
-account surface as one explicit product area.
+authenticated shell. `L17` governs that account surface as one explicit
+product area.
 
-The purpose of the customer account portal lane is to promote those fragmented
-surfaces into one governed product area:
+The purpose of this spec is to lock the product boundary, IA, and expansion
+rules for that governed surface:
 
 - one account identity
 - one commercial home
@@ -42,9 +41,9 @@ It crosses:
 - MSP customer and workspace administration
 - billing, invoices, refunds, and recovery/support actions
 
-Those concerns already exist in runtime and operations, but they are split
-across in-product settings, hosted account handlers, and public utility pages.
-That is a real product surface gap, not a copy problem.
+Those concerns already exist in runtime and operations, but they span
+in-product settings, hosted account handlers, and public utility pages.
+That required a real product lane, not a copy cleanup.
 
 ## Current Truth
 
@@ -56,9 +55,9 @@ Today Pulse has:
 - hosted organization billing and cloud pricing surfaces
 - MSP provider account and tenant-management behavior
 
-What it does not yet have is one explicit governed lane that owns that
-now-coherent account surface end-to-end instead of leaving it split across the
-current commercial and hosted-MSP lanes.
+What it now has is one explicit governed lane that owns that account surface
+at the current RC floor, while deeper hosted/MSP expansion remains
+intentionally post-GA.
 
 ## Goals
 
@@ -181,8 +180,12 @@ These are valid follow-ons after the first coherent portal lands:
 
 ## Ownership Boundary
 
-This lane should stay owned by the `cloud-paid` subsystem unless the governance
-map later proves it needs a separate subsystem.
+This lane is intentionally cross-subsystem at the current floor rather than
+owned by one dedicated subsystem record.
+
+It draws evidence from commercial (`cloud-paid`), hosted account/runtime
+handlers, and the authenticated portal frontend/runtime seam without forcing
+all account ownership into one subsystem before the boundary proves necessary.
 
 Repo split:
 
@@ -195,11 +198,13 @@ Repo split:
 
 ## Release Policy
 
-This lane is a real product gap, but it is not an RC floor blocker.
+This lane is now a real governed product surface, but deeper hosted/MSP portal
+expansion is not an RC or GA floor blocker.
 
 That matches the existing governed policy already recorded in
-`status.json.resolved_decisions.ga-floor-policy`: full hosted/MSP portal depth
-is post-GA rather than a GA floor gate.
+`status.json.resolved_decisions.ga-floor-policy`: deeper hosted MSP and Pulse
+Account portal expansion is post-GA rather than a GA floor gate.
 
-The right action is not to pretend the gap does not exist.
-It is to track it as a deliberate planned lane with a coherent first scope.
+The right action was to promote the coherent first scope into `L17` and keep
+later expansion as bounded follow-on work instead of reviving the retired gap
+and candidate-lane framing.
