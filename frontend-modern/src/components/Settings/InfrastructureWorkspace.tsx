@@ -133,7 +133,7 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
               setAddMode(true);
               setShowAgentProfiles(false);
             },
-            tone: 'primary' as const,
+            tone: 'secondary' as const,
           },
           {
             label: 'Install agent',
