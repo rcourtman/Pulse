@@ -197,7 +197,7 @@ describe('InfrastructureWorkspace', () => {
     await waitFor(() =>
       expect(screen.getByRole('heading', { name: 'Monitored systems' })).toBeInTheDocument(),
     );
-    expect(screen.getByRole('button', { name: 'Add connection' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add infrastructure' })).toBeInTheDocument();
     expect(screen.getByText('zeus')).toBeInTheDocument();
     expect(screen.queryByTestId('install-section')).toBeNull();
   });
@@ -221,23 +221,37 @@ describe('InfrastructureWorkspace', () => {
     expect(screen.getByText('Paused')).toBeInTheDocument();
   });
 
-  it('opens the inline add flow when Add connection is clicked', () => {
+  it('opens the picker screen when Add infrastructure is clicked', () => {
     renderWorkspace();
 
-    fireEvent.click(screen.getByRole('button', { name: /Add connection/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Add infrastructure/i }));
 
-    expect(screen.getByRole('button', { name: /Probe address/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Enter credentials manually/i })).toBeInTheDocument();
+    // The picker screen surfaces both mode choices side-by-side; the probe flow
+    // has not started yet.
+    expect(screen.getByRole('button', { name: /^Add connection$/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Install agent$/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Probe address/i })).toBeNull();
     expect(navigateSpy).not.toHaveBeenCalled();
     expect(setSearchParamsSpy).not.toHaveBeenCalled();
   });
 
-  it('routes to the agent install slot via the Install agent CTA inside the entry card', () => {
+  it('routes from the picker into the probe flow when Add connection is chosen', () => {
     renderWorkspace();
 
-    // The agent path is a first-class peer entry inside the unified cards, not
-    // a subtext offramp hidden inside the Add screen — a user who wants
-    // CPU/disk temps or is on bare-metal Linux should reach it in one click.
+    fireEvent.click(screen.getByRole('button', { name: /Add infrastructure/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^Add connection$/i }));
+
+    expect(screen.getByRole('button', { name: /Probe address/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Enter credentials manually/i })).toBeInTheDocument();
+  });
+
+  it('routes from the picker into the agent install slot when Install agent is chosen', () => {
+    renderWorkspace();
+
+    // The agent path is a first-class peer entry inside the picker, not a
+    // subtext offramp hidden elsewhere — a user who wants CPU/disk temps or
+    // is on bare-metal Linux should reach it in two clicks from the ledger.
+    fireEvent.click(screen.getByRole('button', { name: /Add infrastructure/i }));
     fireEvent.click(screen.getByRole('button', { name: /^Install agent$/i }));
 
     expect(screen.getByTestId('install-section')).toBeInTheDocument();
@@ -246,7 +260,8 @@ describe('InfrastructureWorkspace', () => {
   it('routes to the TrueNAS credential slot when TrueNAS is picked manually', () => {
     renderWorkspace();
 
-    fireEvent.click(screen.getByRole('button', { name: /Add connection/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Add infrastructure/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^Add connection$/i }));
     fireEvent.click(screen.getByRole('button', { name: /Enter credentials manually/i }));
     fireEvent.click(screen.getByRole('button', { name: /TrueNAS SCALE/i }));
 
@@ -256,7 +271,8 @@ describe('InfrastructureWorkspace', () => {
   it('routes to the VMware credential slot when VMware is picked manually', () => {
     renderWorkspace();
 
-    fireEvent.click(screen.getByRole('button', { name: /Add connection/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Add infrastructure/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^Add connection$/i }));
     fireEvent.click(screen.getByRole('button', { name: /Enter credentials manually/i }));
     fireEvent.click(screen.getByRole('button', { name: /VMware vCenter \/ ESXi/i }));
 
@@ -266,7 +282,8 @@ describe('InfrastructureWorkspace', () => {
   it('routes to the Proxmox credential slot when Proxmox VE is picked manually', () => {
     renderWorkspace();
 
-    fireEvent.click(screen.getByRole('button', { name: /Add connection/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Add infrastructure/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^Add connection$/i }));
     fireEvent.click(screen.getByRole('button', { name: /Enter credentials manually/i }));
     fireEvent.click(screen.getByRole('button', { name: /^Proxmox VE/i }));
 
@@ -276,6 +293,7 @@ describe('InfrastructureWorkspace', () => {
   it('can return to the probe step from a credential slot', () => {
     renderWorkspace();
 
+    fireEvent.click(screen.getByRole('button', { name: /Add infrastructure/i }));
     fireEvent.click(screen.getByRole('button', { name: /^Install agent$/i }));
     fireEvent.click(screen.getByRole('button', { name: /Back to probe/i }));
 
@@ -286,10 +304,27 @@ describe('InfrastructureWorkspace', () => {
   it('toggles agent profiles inside the agent install slot', () => {
     renderWorkspace();
 
+    fireEvent.click(screen.getByRole('button', { name: /Add infrastructure/i }));
     fireEvent.click(screen.getByRole('button', { name: /^Install agent$/i }));
     fireEvent.click(screen.getByRole('button', { name: 'Manage agent profiles' }));
 
     expect(screen.getByTestId('agent-profiles')).toBeInTheDocument();
+  });
+
+  it('offers Change method from a sub-flow to return to the picker', () => {
+    renderWorkspace();
+
+    fireEvent.click(screen.getByRole('button', { name: /Add infrastructure/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^Install agent$/i }));
+    expect(screen.getByTestId('install-section')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Change method/i }));
+
+    // Back on the picker screen — both card CTAs are visible again, install
+    // section is gone.
+    expect(screen.getByRole('button', { name: /^Add connection$/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Install agent$/i })).toBeInTheDocument();
+    expect(screen.queryByTestId('install-section')).toBeNull();
   });
 
   it('exposes Edit / Pause / Remove on each ledger row directly', async () => {
@@ -341,15 +376,17 @@ describe('InfrastructureWorkspace', () => {
     await waitFor(() => expect(screen.getByTestId('install-section')).toBeInTheDocument());
   });
 
-  it('clears the canonical query onboarding route for platform picking without pre-selecting a type', async () => {
+  it('clears the canonical query onboarding route for platform picking and lands on the picker', async () => {
     routeState.search = '?add=pick';
     renderWorkspace();
 
     expect(setSearchParamsSpy).toHaveBeenCalledWith({ add: null }, { replace: true });
     expect(navigateSpy).not.toHaveBeenCalled();
     await waitFor(() =>
-      expect(screen.getByRole('button', { name: /Probe address/i })).toBeInTheDocument(),
+      expect(screen.getByRole('button', { name: /^Add connection$/i })).toBeInTheDocument(),
     );
+    // Picker screen — probe hasn't started yet, install section isn't open.
+    expect(screen.queryByRole('button', { name: /Probe address/i })).toBeNull();
     expect(screen.queryByTestId('install-section')).toBeNull();
   });
 
@@ -366,11 +403,12 @@ describe('InfrastructureWorkspace', () => {
     expect(screen.queryByTestId('truenas-section')).toBeNull();
   });
 
-  it('hides Add connection, Install agent, and the add flow in read-only mode', () => {
+  it('hides Add infrastructure and every add sub-flow in read-only mode', () => {
     presentationPolicyIsReadOnlyMock.mockReturnValue(true);
     renderWorkspace();
 
-    expect(screen.queryByRole('button', { name: /Add connection/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Add infrastructure/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Add connection$/i })).toBeNull();
     expect(screen.queryByRole('button', { name: /^Install agent$/i })).toBeNull();
     expect(screen.queryByRole('button', { name: /Probe address/i })).toBeNull();
     expect(screen.queryByTestId('install-section')).toBeNull();
