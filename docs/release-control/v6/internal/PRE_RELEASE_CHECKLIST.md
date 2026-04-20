@@ -43,6 +43,56 @@ Use this as the final gate before cutting a Pulse v6 pre-release.
 - [ ] For GA/stable promotion, confirm the release rehearsal and publish workflows both derive the governed release branch from release-control metadata instead of hardcoding a branch name inline.
 - [ ] For GA/stable promotion, materialize the final rehearsal record with `python3 scripts/release_control/record_rc_to_ga_rehearsal.py --run-id <run-id>` and, unless an explicit `--output` is chosen, confirm it lands at `docs/release-control/v6/internal/records/rc-to-ga-promotion-readiness-rehearsal-<record-date>.md`.
 - [ ] For GA/stable promotion, attach the dated rehearsal record, `Release Dry Run` run URL, and `rc-to-ga-rehearsal-summary` artifact to the release ticket, and confirm that artifact records the canonical promotion metadata envelope for that candidate: candidate stable tag, promotion channel, promoted prerelease tag, rollback target, exact rollback command, planned GA date, and planned v5 end-of-support date.
+- [ ] For v6 GA specifically, attach the exact self-hosted public forward and rollback packet from `pulse-pro/V6_LAUNCH_CHECKLIST.md` to the launch ticket: preview deploy/audit, production deploy/audit, and rollback deploy/audit commands must all be explicit before the gate can clear.
+
+### Stable / GA Packet
+
+Use this exact operator sequence when the stable `6.0.0` candidate is actually
+ready to rehearse. Replace the placeholder dates and run id with the real GA
+decision values; do not fill them in speculatively.
+
+```bash
+cd /Volumes/Development/pulse/repos/pulse
+git fetch origin --tags
+git status --porcelain
+git rev-parse HEAD
+git rev-parse origin/pulse/v6-release
+
+# Confirm VERSION=6.0.0 first, then run the governed stable rehearsal helper.
+./scripts/trigger-release-dry-run.sh 6.0.0
+
+# After dispatch:
+gh run list --workflow=release-dry-run.yml --limit 1
+gh run watch <run-id>
+python3 scripts/release_control/record_rc_to_ga_rehearsal.py --run-id <run-id>
+```
+
+For the same launch ticket, keep the exact public self-hosted commercial packet
+from `/Volumes/Development/pulse/repos/pulse-pro/V6_LAUNCH_CHECKLIST.md`
+alongside the release dry-run artifact:
+
+```bash
+# Preview deploy and audit (non-production URL/branch only)
+cd /Volumes/Development/pulse/repos/pulse-pro
+PULSE_PUBLIC_SITE_BRANCH=<preview-branch> \
+PULSE_PUBLIC_SITE_URL=https://<preview-host> \
+PULSE_LICENSE_PUBLIC_URL=https://<preview-license-host> \
+PULSE_PUBLIC_RELEASE_TRACK=v6 \
+PULSE_V6_RELEASE_APPROVED=1 \
+./scripts/deploy-landing.sh
+
+PULSE_PUBLIC_SITE_URL=https://<preview-host> \
+PULSE_LICENSE_PUBLIC_URL=https://<preview-license-host> \
+PULSE_PUBLIC_RELEASE_TRACK=v6 \
+PULSE_V6_RELEASE_APPROVED=1 \
+./scripts/audit_public_release.sh
+
+# Production GA flip and rollback packet
+PULSE_PUBLIC_RELEASE_TRACK=v6 PULSE_V6_RELEASE_APPROVED=1 ./scripts/deploy-landing.sh
+PULSE_PUBLIC_RELEASE_TRACK=v6 PULSE_V6_RELEASE_APPROVED=1 ./scripts/audit_public_release.sh
+PULSE_PUBLIC_RELEASE_TRACK=v5 PULSE_V6_RELEASE_APPROVED=0 ./scripts/deploy-landing.sh
+PULSE_PUBLIC_RELEASE_TRACK=v5 PULSE_V6_RELEASE_APPROVED=0 ./scripts/audit_public_release.sh
+```
 
 ## Scope
 - [x] Confirm whether there is a separate mobile app codebase.

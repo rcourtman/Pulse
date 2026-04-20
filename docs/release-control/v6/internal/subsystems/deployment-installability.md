@@ -351,6 +351,12 @@ must remain the canonical route from a `Release Dry Run` run ID or summary
 artifact to `docs/release-control/v6/internal/records/`, and they must fail
 closed on missing artifact metadata or silent record overwrites rather than
 encouraging hand-written repair of governed promotion fields.
+That same operator packet boundary also owns the exact stable-promotion command
+sequence and public self-hosted GA flip or rollback packet. The canonical
+commands for `trigger-release-dry-run.sh`, rehearsal-record materialization,
+preview public deploy or audit, production public deploy or audit, and rollback
+back to the approved v5 posture must live in the governed release docs rather
+than only in chat, tickets, or operator memory.
 That same prerelease framing requirement also applies to installer and update
 runtime copy: `install.sh`, `scripts/pulse-auto-update.sh`, and
 `internal/updates/manager.go` must present `rc`-tagged builds as prerelease or

@@ -152,6 +152,10 @@ Cloud, and self-hosted production users.
    `workflow_dispatch`, and the local release branch must match `origin` before
    dispatch, because GitHub executes the selected remote ref and does not see
    local-only governance state.
+9. For v6 GA, the exact self-hosted public forward and rollback packet must be
+   locked in the launch ticket before promotion: preview deploy/audit commands,
+   production deploy/audit commands, and the explicit rollback deploy/audit
+   commands that return `pulserelay.pro` to the approved v5 posture.
 
 ## Authority
 
