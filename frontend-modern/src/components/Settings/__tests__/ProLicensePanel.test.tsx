@@ -179,7 +179,7 @@ describe('ProLicensePanel', () => {
     expect(loadCommercialPostureMock).not.toHaveBeenCalled();
     expect(screen.getByText('License and billing details are hidden')).toBeInTheDocument();
     expect(screen.getByText(/instead of creating a demo license/i)).toBeInTheDocument();
-    expect(screen.queryByText('Pulse Pro')).not.toBeInTheDocument();
+    expect(screen.queryByText('Plans & Billing')).not.toBeInTheDocument();
     expect(screen.queryByText('Monitored Systems')).not.toBeInTheDocument();
     expect(
       screen.queryByRole('button', { name: /start 14-day pro trial/i }),
@@ -193,7 +193,7 @@ describe('ProLicensePanel', () => {
       expect(loadLicenseEntitlementsMock).toHaveBeenCalled();
     });
 
-    expect(screen.getByText('Pulse Pro')).toBeInTheDocument();
+    expect(screen.getByText('Plans & Billing')).toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: 'Usage' })).not.toBeInTheDocument();
     expect(
       screen.queryByRole('button', { name: /start 14-day pro trial/i }),
@@ -628,7 +628,7 @@ describe('ProLicensePanel', () => {
 
     fireEvent.click(screen.getByText('Redeem existing key'));
 
-    fireEvent.input(screen.getByLabelText(/pulse pro key/i), {
+    fireEvent.input(screen.getByLabelText(/license or activation key/i), {
       target: { value: 'header.payload.signature' },
     });
 
@@ -660,7 +660,7 @@ describe('ProLicensePanel', () => {
   it.each([
     {
       purchase: SELF_HOSTED_PRO_BILLING_PURCHASE_ACTIVATED,
-      title: 'Pulse Pro activated',
+      title: 'Plan activated',
       actionLabel: null,
       actionHref: null,
     },
@@ -739,7 +739,7 @@ describe('ProLicensePanel', () => {
 
     renderPanel();
 
-    expect(screen.getByText('Pulse Pro activated')).toBeInTheDocument();
+    expect(screen.getByText('Plan activated')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Review plan' })).toHaveAttribute(
       'href',
       SELF_HOSTED_PRO_BILLING_PLAN_HREF,
@@ -972,7 +972,7 @@ describe('ProLicensePanel', () => {
     expect(proLicensePanelStateSource).toContain('buildSelfHostedCommercialPlanModel');
     expect(proLicensePanelStateSource).toContain('runStartProTrialAction({');
     expect(proLicensePanelStateSource).not.toContain('startProTrial()');
-    expect(proLicensePanelStateSource).toContain("'A Pulse Pro key is required'");
+    expect(proLicensePanelStateSource).toContain("'A license or activation key is required'");
     expect(proLicensePlanSectionSource).toContain('getLicenseStatusLoadingState');
     expect(proLicensePlanSectionSource).toContain('getNoActiveProLicenseState');
     expect(proLicensePlanSectionSource).toContain('getTrialEndedProLicenseNotice');

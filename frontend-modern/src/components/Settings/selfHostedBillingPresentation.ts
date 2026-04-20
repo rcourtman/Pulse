@@ -33,13 +33,13 @@ export interface SelfHostedProBillingPresentation {
 }
 
 export const SELF_HOSTED_PRO_BILLING_PRESENTATION: SelfHostedProBillingPresentation = {
-  shellTitle: 'Pulse Pro',
+  shellTitle: 'Plans & Billing',
   shellDescription:
-    'Manage self-hosted billing, plan features, and Pulse Pro license status.',
-  infrastructureRouteReferral: 'Billing and self-hosted plan features live in Pulse Pro.',
+    'Manage self-hosted billing, plan features, and activation status.',
+  infrastructureRouteReferral: 'Billing and self-hosted plan features live in Plans & Billing.',
   infrastructureWorkspaceReferral:
-    'Billing, self-hosted plan features, and Pulse Pro license status live in Pulse Pro, not here.',
-  sectionSelectorAriaLabel: 'Pulse Pro billing section',
+    'Billing, self-hosted plan features, and activation status live in Plans & Billing, not here.',
+  sectionSelectorAriaLabel: 'Self-hosted billing section',
   refreshLabel: 'Refresh',
   planTabLabel: 'Plan',
   usageTabLabel: 'Usage',
@@ -57,7 +57,7 @@ export const SELF_HOSTED_PRO_BILLING_PRESENTATION: SelfHostedProBillingPresentat
     'Pulse waits for the session presentation policy before showing license, billing, or usage details.',
   planSelectionPromptTitle: 'Compare self-hosted plans',
   planSelectionPromptBody:
-    'Community keeps core monitoring free. Compare Relay and Pro in Pulse Account, then return here with Pulse Pro activated automatically.',
+    'Community keeps core monitoring free. Compare Relay and Pro in Pulse Account, then return here with the new plan activated automatically.',
   planSelectionPromptActionLabel: 'Compare plans',
   purchaseActivatedPlanActionLabel: 'Review plan',
   purchaseCancelledActionLabel: 'Compare plans',
@@ -70,5 +70,5 @@ export const SELF_HOSTED_PRO_BILLING_PRESENTATION: SelfHostedProBillingPresentat
   trialStartPendingActionLabel: 'Starting...',
   recoverySectionTitle: 'Recovery',
   recoverySectionDescription:
-    'Use recovery tools only when you already have a Pulse Pro key or need to remove a local key from this instance.',
+    'Use recovery tools only when you already have an activation key or need to remove a local key from this instance.',
 };

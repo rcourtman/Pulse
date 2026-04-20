@@ -55,7 +55,7 @@ describe('licensePresentation', () => {
     });
     expect(SELF_HOSTED_RECOVERY_PRESENTATION).toMatchObject({
       disclosureLabel: 'Redeem existing key',
-      fieldLabel: 'Pulse Pro Key',
+      fieldLabel: 'License or Activation Key',
       activateIdleLabel: 'Activate License',
       clearIdleLabel: 'Clear License',
       legacyNotice: {
@@ -63,13 +63,13 @@ describe('licensePresentation', () => {
       },
     });
     expect(SELF_HOSTED_PRO_BILLING_PRESENTATION).toEqual({
-      shellTitle: 'Pulse Pro',
+      shellTitle: 'Plans & Billing',
       shellDescription:
-        'Manage self-hosted billing, plan features, and Pulse Pro license status.',
-      infrastructureRouteReferral: 'Billing and self-hosted plan features live in Pulse Pro.',
+        'Manage self-hosted billing, plan features, and activation status.',
+      infrastructureRouteReferral: 'Billing and self-hosted plan features live in Plans & Billing.',
       infrastructureWorkspaceReferral:
-        'Billing, self-hosted plan features, and Pulse Pro license status live in Pulse Pro, not here.',
-      sectionSelectorAriaLabel: 'Pulse Pro billing section',
+        'Billing, self-hosted plan features, and activation status live in Plans & Billing, not here.',
+      sectionSelectorAriaLabel: 'Self-hosted billing section',
       refreshLabel: 'Refresh',
       planTabLabel: 'Plan',
       usageTabLabel: 'Usage',
@@ -87,7 +87,7 @@ describe('licensePresentation', () => {
         'Pulse waits for the session presentation policy before showing license, billing, or usage details.',
       planSelectionPromptTitle: 'Compare self-hosted plans',
       planSelectionPromptBody:
-        'Community keeps core monitoring free. Compare Relay and Pro in Pulse Account, then return here with Pulse Pro activated automatically.',
+        'Community keeps core monitoring free. Compare Relay and Pro in Pulse Account, then return here with the new plan activated automatically.',
       planSelectionPromptActionLabel: 'Compare plans',
       purchaseActivatedPlanActionLabel: 'Review plan',
       purchaseCancelledActionLabel: 'Compare plans',
@@ -100,7 +100,7 @@ describe('licensePresentation', () => {
       trialStartPendingActionLabel: 'Starting...',
       recoverySectionTitle: 'Recovery',
       recoverySectionDescription:
-        'Use recovery tools only when you already have a Pulse Pro key or need to remove a local key from this instance.',
+        'Use recovery tools only when you already have an activation key or need to remove a local key from this instance.',
     });
   });
 
@@ -294,7 +294,7 @@ describe('licensePresentation', () => {
     });
     expect(getTrialActivationNotice('invalid')).toMatchObject({
       title: 'Activation link invalid',
-      body: expect.stringContaining('fresh secure trial handoff'),
+      body: expect.stringContaining('Return to Plans & Billing'),
     });
     expect(getTrialActivationNotice('unavailable')).toMatchObject({
       title: 'Activation unavailable',
@@ -309,7 +309,7 @@ describe('licensePresentation', () => {
 
   it('returns canonical purchase activation notices', () => {
     expect(getPurchaseActivationNotice('activated')).toMatchObject({
-      title: 'Pulse Pro activated',
+      title: 'Plan activated',
       tone: expect.stringContaining('green'),
     });
     expect(getPurchaseActivationNotice('cancelled')).toMatchObject({

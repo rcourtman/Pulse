@@ -521,7 +521,7 @@ export function useProLicensePanelState() {
   const handleActivate = async () => {
     const trimmedKey = licenseKey().trim();
     if (!trimmedKey) {
-      notificationStore.error('A Pulse Pro key is required');
+      notificationStore.error('A license or activation key is required');
       return;
     }
     setActivating(true);

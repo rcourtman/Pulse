@@ -323,7 +323,7 @@ export const getTrialActivationNotice = (result?: string | null): LicenseInlineN
       return {
         tone: 'border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-900 text-red-900 dark:text-red-100',
         title: 'Activation link invalid',
-        body: 'That activation handoff is invalid or expired. Return to Pulse Pro settings on this instance and start a fresh secure trial handoff.',
+        body: 'That activation handoff is invalid or expired. Return to Plans & Billing on this instance and start a fresh secure trial handoff.',
       };
     case 'replayed':
       return {
@@ -353,7 +353,7 @@ export const getPurchaseActivationNotice = (result?: string | null): LicenseInli
     case 'activated':
       return {
         tone: 'border-green-200 dark:border-green-900 bg-green-50 dark:bg-green-900 text-green-900 dark:text-green-100',
-        title: 'Pulse Pro activated',
+        title: 'Plan activated',
         body: 'Pulse finished checkout and activated this instance automatically. The plan state below is live.',
       };
     case 'cancelled':
@@ -448,8 +448,8 @@ export const getInactiveProUpsellNotice = (): LicenseActionNotice => ({
 export const SELF_HOSTED_RECOVERY_PRESENTATION: SelfHostedRecoveryPresentation = {
   disclosureLabel: 'Redeem existing key',
   disclosureDescription:
-    'Use this only if you already have a Pulse Pro key or need to recover a legacy self-hosted purchase on this instance.',
-  fieldLabel: 'Pulse Pro Key',
+    'Use this only if you already have an activation key or need to recover a legacy self-hosted purchase on this instance.',
+  fieldLabel: 'License or Activation Key',
   fieldPlaceholder: 'Paste your license key or activation key',
   helpTextBeforeTerms:
     'Paste the Pulse v6 activation key shown on the hosted checkout success page. A backup copy is also sent by email, but the hosted success page is the primary handoff. You can also paste a legacy Pulse v5 Pro/Lifetime license key and Pulse will exchange it automatically during activation when migration is available. By activating a license, you agree to the',

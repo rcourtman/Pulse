@@ -206,7 +206,7 @@ Community limit enforcement.
     `/settings/system/billing/usage?details=counting-rules` for explanation and
     `/settings/system/billing/plan?intent=self_hosted_plan` for plan-selection
     intent. That plan-selection arrival must reopen an explicit
-    `Compare self-hosted plans` prompt inside Pulse Pro billing so operators can
+    `Compare self-hosted plans` prompt inside Plans & Billing so operators can
     review the self-hosted upgrade path without falling back to the legacy
     usage surface or a dead-end placeholder CTA.
 24. Keep public-demo dashboard bootstrap route-owned on the adjacent
@@ -753,7 +753,7 @@ Pulse Account portal URLs, `return_url` parameters, or other portal-entry
 contract state in the browser once the server owns that handoff boundary.
 `GET /auth/license-purchase-activate` bridge, which auto-submits into the
 owned POST activation path; the portal must not render a second manual
-`Activate in Pulse Pro` step after checkout. Stripe cancel must return
+`Activate in Plans & Billing` step after checkout. Stripe cancel must return
 directly to the owned Pulse billing plan route rather than back into the
 portal. The owned activation callback must accept the signed state, redeem the
 completed checkout, and return the operator to the canonical billing plan
@@ -1122,10 +1122,11 @@ owns the plan/read-model presentation. Future Pro-license work must extend
 that split instead of pulling route state, entitlement derivation, and retry
 lifecycle back into the shell component.
 That owned presentation boundary includes the settings shell itself: the
-top-level Pulse Pro surface must keep its page-shell title and leading
-SettingsPanel title aligned so commercial activation, trial, and pricing state
-do not present as one surface in navigation and a differently named surface in
-the actual paid settings UI.
+top-level self-hosted billing surface must keep its page-shell title and
+leading SettingsPanel title aligned on the canonical `Plans & Billing` label
+so commercial activation, trial, and pricing state do not present as one
+surface in navigation and a differently named surface in the actual paid
+settings UI.
 That same boundary also owns the shell and section framing copy for the
 self-hosted Pro billing surface. `ProLicensePanel.tsx` must consume shared
 presentation for its shell title/description, refresh CTA label, and section
@@ -1136,20 +1137,22 @@ header metadata so the nav, shell, and route header do not narrate the same
 commercial surface differently.
 That same shared presentation owner also carries the canonical cross-surface
 referral copy used outside the billing shell itself. When infrastructure or
-other adjacent settings surfaces need to point operators toward Pulse Pro for
-billing, monitored-system limits, or license status, they must consume the
+other adjacent settings surfaces need to point operators toward Plans & Billing
+for billing, monitored-system limits, or license status, they must consume the
 settings-owned referral strings from
 `frontend-modern/src/components/Settings/selfHostedBillingPresentation.ts`
 instead of drafting route-local commercial guidance or reaching directly into
 generic commercial helpers from hosted settings routes.
 That same hosted-settings presentation boundary is explicit about bundle
 ownership. `frontend-modern/src/components/Settings/selfHostedBillingPresentation.ts`
-is the canonical settings-shell adapter for self-hosted Pro shell framing and
-referral copy, while `frontend-modern/src/utils/licensePresentation.ts`
-remains the shared commercial notice/label owner. Hosted settings surfaces
-must not import self-hosted billing framing straight from the generic helper
-module when doing so would reintroduce top-level bundle-init cycles into
-hosted tenant settings routes.
+is the canonical settings-shell adapter for self-hosted Plans & Billing shell
+framing and referral copy, while
+`frontend-modern/src/utils/licensePresentation.ts` remains the shared
+commercial notice/label owner for activation, trial, purchase, and recovery
+language such as `License or Activation Key`. Hosted settings surfaces must
+not import self-hosted billing framing straight from the generic helper module
+when doing so would reintroduce top-level bundle-init cycles into hosted
+tenant settings routes.
 Paid Pulse Pro v5 grandfathering is now part of that same canonical boundary:
 when a recurring v5 customer migrates into v6, billing persistence,
 entitlement evaluation, renewal handling, and Pro-license presentation must
