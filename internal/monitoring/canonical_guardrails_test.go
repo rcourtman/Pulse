@@ -168,6 +168,22 @@ func TestMonitoredSystemUsageReadinessGuardrailsRemainCanonical(t *testing.T) {
 	}
 }
 
+func TestDockerHostIdentityUsesCanonicalHostnameEquivalence(t *testing.T) {
+	data, err := os.ReadFile("docker_host_identity.go")
+	if err != nil {
+		t.Fatalf("failed to read docker_host_identity.go: %v", err)
+	}
+	source := string(data)
+
+	for _, snippet := range []string{
+		"unifiedresources.HostnamesEquivalent(host.Hostname(), hostname)",
+	} {
+		if !strings.Contains(source, snippet) {
+			t.Fatalf("docker_host_identity.go must contain %q", snippet)
+		}
+	}
+}
+
 func TestGuestMemoryFallbackUsesCanonicalLowTrustSelector(t *testing.T) {
 	data, err := os.ReadFile("guest_memory_sources.go")
 	if err != nil {

@@ -23,7 +23,16 @@
    - Result:
      - self-hosted Community / Relay / Pro no longer carry the stale rc.2 monitored-system cap posture into the GA candidate.
 
-3. `#1429` (`missing docker info including updates`)
+3. `#1421` (`[Bug]: QNAP shown as separate Host and Docker agents, even though only one agent is installed`)
+   - Fixed on the current `pulse/v6-release` candidate by tightening the canonical hostname-equivalence contract used by top-level monitored-system grouping, monitored-system replacement selectors, and Docker host re-identification.
+   - Verification:
+     - `go test ./internal/unifiedresources -run 'TestHostnamesEquivalent|TestResolveTopLevelSystemsTopLevelSourceMatrix|TestProjectMonitoredSystemCandidateReplacementMatchesShortAndFQDNHostnames'`
+     - `go test ./internal/unifiedresources`
+     - `go test ./internal/monitoring -run 'TestFindMatchingDockerHost'`
+   - Result:
+     - the current candidate no longer splits one QNAP box into separate Host and Docker monitored-system rows just because one path reports `qnap` while another reports `qnap.local`.
+
+4. `#1429` (`missing docker info including updates`)
    - Treated as an umbrella trust report rather than one atomic bug. The user-visible failures admitted in the thread were decomposed and covered on the current candidate:
      - stale self-hosted cap copy: covered by `943389827` and `770cceae5`
      - unavailable compare-plans / Pulse Account handoff: covered by `429f12dec` (`Recover unavailable Pulse Account handoffs`)
@@ -37,7 +46,7 @@
      - the GA candidate no longer knowingly carries the specific cap, handoff, or trend-state failures raised during the RC2 discussion.
      - the remaining GitHub thread hygiene is reporter-confirmation / maintainer-triage work, not an admitted GA product blocker.
 
-4. `#1430` (`Width of the Name column`)
+5. `#1430` (`Width of the Name column`)
    - Fixed by consolidating the workload table sizing contract into the canonical dashboard column model and removing the legacy global CSS width rules that caused Firefox to expand the table to multi-million-pixel width.
    - Verification:
      - `cd /Volumes/Development/pulse/repos/pulse/frontend-modern && npx vitest run src/components/Dashboard/__tests__/GuestRow.test.tsx src/components/Dashboard/__tests__/Dashboard.performance.contract.test.tsx`
@@ -50,14 +59,14 @@
    - Result:
      - Firefox no longer blows the workloads table out horizontally; the current desktop table fits the shell with the bounded `Name` width contract intact.
 
-5. `#1432` (`Dashbord filter`)
+6. `#1432` (`Dashbord filter`)
    - Already satisfied on the current candidate by the dashboard/workloads status filter path.
    - Verification:
      - `cd /Volumes/Development/pulse/repos/pulse/frontend-modern && npm test -- src/components/Dashboard/__tests__/DashboardFilter.test.tsx src/components/Dashboard/__tests__/workloadSelectors.test.ts`
    - Result:
      - the candidate already supports filtering the workloads slice by status (`All`, `Running`, `Degraded`, `Stopped`), so there is no missing offline-filter blocker to carry into GA.
 
-6. `#1436` (`Better disk i/o reads for LXC containers`)
+7. `#1436` (`Better disk i/o reads for LXC containers`)
    - Fixed by merging prefetched LXC `status/current` counters into both container polling paths before rate calculation and reusing the same status snapshot for metadata enrichment.
    - Verification:
      - `go test ./internal/monitoring -run 'TestMergeContainerRuntimeCounters_PrefersHigherStatusCounters|TestBuildContainerFromClusterResource_UsesContainerStatusCountersForRates|TestBuildContainerFromClusterResource_PreservesProxmoxPool|TestEnrichContainerMetadata_DetectsOCIForStoppedContainer|TestMonitor_EnrichContainerMetadata_Extra'`

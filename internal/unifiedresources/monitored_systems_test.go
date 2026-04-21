@@ -343,6 +343,50 @@ func TestProjectMonitoredSystemCandidateReplacementPreservesOverlappingSources(t
 	}
 }
 
+func TestProjectMonitoredSystemCandidateReplacementMatchesShortAndFQDNHostnames(t *testing.T) {
+	registry := NewRegistry(nil)
+	registry.IngestRecords(SourceDocker, []IngestRecord{
+		{
+			SourceID: "docker-qnap",
+			Resource: Resource{
+				ID:     "docker-qnap",
+				Type:   ResourceTypeAgent,
+				Name:   "qnap.local",
+				Status: StatusOnline,
+				Docker: &DockerData{
+					HostSourceID: "docker-qnap",
+					Hostname:     "qnap.local",
+				},
+			},
+			Identity: ResourceIdentity{
+				Hostnames: []string{"qnap.local"},
+			},
+		},
+	})
+
+	projection := ProjectMonitoredSystemCandidateReplacement(registry, MonitoredSystemReplacement{
+		Source: SourceDocker,
+		Selector: MonitoredSystemReplacementSelector{
+			Hostname: "qnap",
+		},
+	}, MonitoredSystemCandidate{
+		Source:   SourceDocker,
+		Type:     ResourceTypeAgent,
+		Name:     "qnap",
+		Hostname: "qnap",
+	})
+
+	if projection.CurrentCount != 1 {
+		t.Fatalf("CurrentCount = %d, want 1", projection.CurrentCount)
+	}
+	if projection.ProjectedCount != 1 {
+		t.Fatalf("ProjectedCount = %d, want 1", projection.ProjectedCount)
+	}
+	if projection.AdditionalCount != 0 {
+		t.Fatalf("AdditionalCount = %d, want 0", projection.AdditionalCount)
+	}
+}
+
 func TestProjectMonitoredSystemCandidateReplacementRemovesStandaloneSource(t *testing.T) {
 	registry := NewRegistry(nil)
 	registry.IngestRecords(SourcePBS, []IngestRecord{

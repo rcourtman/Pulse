@@ -595,13 +595,17 @@ func monitoredSystemSelectorMatchesHost(
 	}
 	for _, candidate := range candidates {
 		if normalized := topLevelSystemNormalizeHost(candidate); normalized != "" {
-			if _, ok := selectorHosts[normalized]; ok {
-				return true
+			for selectorHost := range selectorHosts {
+				if HostnamesEquivalent(selectorHost, normalized) {
+					return true
+				}
 			}
 		}
 		if normalized := topLevelSystemNormalizeHost(extractHostname(candidate)); normalized != "" {
-			if _, ok := selectorHosts[normalized]; ok {
-				return true
+			for selectorHost := range selectorHosts {
+				if HostnamesEquivalent(selectorHost, normalized) {
+					return true
+				}
 			}
 		}
 	}

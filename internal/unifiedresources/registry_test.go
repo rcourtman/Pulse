@@ -754,6 +754,64 @@ func TestMonitoredSystemsExplainsStaleGroupedSourceWhileLastSeenStaysFresh(t *te
 	}
 }
 
+func TestMonitoredSystemsMergeShortAndFQDNHostnamesForOneHost(t *testing.T) {
+	rr := NewRegistry(nil)
+	now := time.Date(2026, 4, 21, 21, 30, 0, 0, time.UTC)
+
+	rr.IngestRecords(SourceAgent, []IngestRecord{
+		{
+			SourceID: "agent-qnap",
+			Resource: Resource{
+				ID:       "agent-qnap",
+				Type:     ResourceTypeAgent,
+				Name:     "qnap.local",
+				Status:   StatusOnline,
+				LastSeen: now.Add(-2 * time.Minute),
+				Agent: &AgentData{
+					AgentID:  "agent-qnap",
+					Hostname: "qnap.local",
+				},
+			},
+			Identity: ResourceIdentity{
+				Hostnames: []string{"qnap.local"},
+			},
+		},
+	})
+	rr.IngestRecords(SourceDocker, []IngestRecord{
+		{
+			SourceID: "docker-qnap",
+			Resource: Resource{
+				ID:       "docker-qnap",
+				Type:     ResourceTypeAgent,
+				Name:     "qnap",
+				Status:   StatusOnline,
+				LastSeen: now,
+				Docker: &DockerData{
+					HostSourceID: "docker-qnap",
+					Hostname:     "qnap",
+				},
+			},
+			Identity: ResourceIdentity{
+				Hostnames: []string{"qnap"},
+			},
+		},
+	})
+
+	systems := MonitoredSystems(rr)
+	if len(systems) != 1 {
+		t.Fatalf("MonitoredSystems() returned %d systems, want 1", len(systems))
+	}
+	if systems[0].Source != "multiple" {
+		t.Fatalf("MonitoredSystems()[0].Source = %q, want %q", systems[0].Source, "multiple")
+	}
+	if systems[0].Explanation.Summary == "" {
+		t.Fatal("expected grouped monitored-system explanation summary")
+	}
+	if !systems[0].LastSeen.Equal(now) {
+		t.Fatalf("MonitoredSystems()[0].LastSeen = %s, want %s", systems[0].LastSeen, now)
+	}
+}
+
 func TestMonitoredSystemsReportOnlineStatusWithoutUnknownBaselineBias(t *testing.T) {
 	rr := NewRegistry(nil)
 

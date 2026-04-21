@@ -462,6 +462,10 @@ func uniqueBetterTopLevelSystemTarget(
 	groups map[int]topLevelSystemResolvedGroup,
 ) (topLevelSystemFallbackTarget, bool) {
 	targets := make(map[int]topLevelSystemGroupingEvidence)
+	groupRoots := make(map[int]struct{}, len(groups))
+	for root := range groups {
+		groupRoots[root] = struct{}{}
+	}
 
 	for _, host := range topLevelSystemSortedSet(group.exactHosts) {
 		for _, targetRoot := range topLevelSystemSortedRoots(hostOwners[host]) {
@@ -480,6 +484,26 @@ func uniqueBetterTopLevelSystemTarget(
 					host,
 				)
 			}
+		}
+	}
+	for _, targetRoot := range topLevelSystemSortedRoots(groupRoots) {
+		if targetRoot == groupRoot {
+			continue
+		}
+		if groups[targetRoot].priority >= group.priority {
+			continue
+		}
+		if _, ok := targets[targetRoot]; ok {
+			continue
+		}
+		if value, ok := topLevelSystemShortFormHostMatchValue(group.exactHosts, groups[targetRoot].exactHosts); ok {
+			targets[targetRoot] = topLevelSystemAttachmentEvidence(
+				group,
+				groups[targetRoot],
+				"hostname-form-attachment",
+				"short-hostname",
+				value,
+			)
 		}
 	}
 	for _, ip := range topLevelSystemSortedSet(group.exactIPs) {
@@ -522,11 +546,27 @@ func candidateExactTargetGroups(
 	priority int,
 ) map[string]struct{} {
 	targets := make(map[string]struct{})
+	groupIDs := make(map[string]struct{}, len(groups))
+	for groupID := range groups {
+		groupIDs[groupID] = struct{}{}
+	}
 	for host := range monitoredSystemCandidateExactHosts(candidate) {
 		for groupID := range hostOwners[host] {
 			if groups[groupID].priority >= priority {
 				continue
 			}
+			targets[groupID] = struct{}{}
+		}
+	}
+	candidateHosts := monitoredSystemCandidateExactHosts(candidate)
+	for _, groupID := range topLevelSystemSortedSet(groupIDs) {
+		if groups[groupID].priority >= priority {
+			continue
+		}
+		if _, ok := targets[groupID]; ok {
+			continue
+		}
+		if _, ok := topLevelSystemShortFormHostMatchValue(candidateHosts, groups[groupID].exactHosts); ok {
 			targets[groupID] = struct{}{}
 		}
 	}
@@ -737,6 +777,12 @@ func topLevelSystemReasonFromEvidence(
 			Signal:  evidence.signal,
 			Summary: topLevelSystemAttachmentSummary(evidence.fromType, evidence.toType, "a unique exact hostname match", evidence.value),
 		}
+	case "hostname-form-attachment":
+		return MonitoredSystemGroupingReason{
+			Kind:    evidence.kind,
+			Signal:  evidence.signal,
+			Summary: topLevelSystemAttachmentSummary(evidence.fromType, evidence.toType, "a unique short-vs-FQDN hostname match", evidence.value),
+		}
 	case "exact-ip-attachment":
 		return MonitoredSystemGroupingReason{
 			Kind:    evidence.kind,
@@ -783,6 +829,8 @@ func topLevelSystemReasonBasis(reason MonitoredSystemGroupingReason) string {
 		return topLevelSystemIdentityMatchBasis(reason.Signal)
 	case "exact-host-attachment":
 		return "a unique exact hostname attachment"
+	case "hostname-form-attachment":
+		return "a unique short-vs-FQDN hostname attachment"
 	case "exact-ip-attachment":
 		return "a unique exact IP attachment"
 	default:
@@ -997,14 +1045,55 @@ func addTopLevelSystemOwner(index map[string]map[string]struct{}, key, owner str
 }
 
 func topLevelSystemNormalizeHost(value string) string {
-	trimmed := strings.TrimSpace(strings.ToLower(value))
-	if trimmed == "" {
-		return ""
+	return normalizeComparableHostname(value)
+}
+
+func topLevelSystemShortFormHostMatchValue(
+	leftHosts map[string]struct{},
+	rightHosts map[string]struct{},
+) (string, bool) {
+	if len(leftHosts) == 0 || len(rightHosts) == 0 {
+		return "", false
 	}
-	if NormalizeIP(trimmed) != "" {
-		return ""
+	rightOrdered := topLevelSystemSortedSet(rightHosts)
+	for _, left := range topLevelSystemSortedSet(leftHosts) {
+		for _, right := range rightOrdered {
+			if left == right {
+				continue
+			}
+			if HostnamesEquivalent(left, right) {
+				return topLevelSystemHostMatchValue(left, right), true
+			}
+		}
 	}
-	return trimmed
+	return "", false
+}
+
+func topLevelSystemHostMatchValue(left, right string) string {
+	left = topLevelSystemNormalizeHost(left)
+	right = topLevelSystemNormalizeHost(right)
+	if left == "" {
+		return right
+	}
+	if right == "" {
+		return left
+	}
+	if left == right {
+		return left
+	}
+
+	leftShort := NormalizeHostname(left)
+	rightShort := NormalizeHostname(right)
+	if left == leftShort && right != rightShort {
+		return right
+	}
+	if right == rightShort && left != leftShort {
+		return left
+	}
+	if len(left) >= len(right) {
+		return left
+	}
+	return right
 }
 
 func topLevelSystemProxmoxHostURL(resource Resource) string {

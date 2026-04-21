@@ -20,6 +20,15 @@ func TestResolveTopLevelSystemsTopLevelSourceMatrix(t *testing.T) {
 			same:      [][2]string{{"agent-host", "docker-host"}},
 		},
 		{
+			name: "agent and docker host share one top-level system when hostnames differ only by fqdn form",
+			resources: []Resource{
+				topLevelTestAgentWithoutMachineID("agent-host", "qnap.local", "agent-1"),
+				topLevelTestDockerHost("docker-host", "qnap", "docker-runtime-1", ""),
+			},
+			wantCount: 1,
+			same:      [][2]string{{"agent-host", "docker-host"}},
+		},
+		{
 			name: "agent and proxmox node share one top-level system",
 			resources: []Resource{
 				topLevelTestAgent("agent-host", "tower.local", "machine-1", "agent-1"),

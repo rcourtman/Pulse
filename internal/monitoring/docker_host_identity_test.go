@@ -572,6 +572,26 @@ func TestFindMatchingDockerHost(t *testing.T) {
 			expectMatch: true,
 		},
 		{
+			name: "match by machineID and hostname with matching token when hostname differs only by fqdn form",
+			hosts: []models.DockerHost{
+				{
+					ID:        "host-fqdn",
+					TokenID:   "token-fqdn",
+					MachineID: "machine-fqdn",
+					Hostname:  "qnap.local",
+				},
+			},
+			report: agentsdocker.Report{
+				Host: agentsdocker.HostInfo{
+					MachineID: "machine-fqdn",
+					Hostname:  "qnap",
+				},
+			},
+			tokenRecord: &config.APITokenRecord{ID: "token-fqdn"},
+			expectedID:  "host-fqdn",
+			expectMatch: true,
+		},
+		{
 			name:  "match by machineID and hostname with no token",
 			hosts: hosts,
 			report: agentsdocker.Report{

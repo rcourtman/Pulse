@@ -97,7 +97,8 @@ func findMatchingDockerHost(hosts []*unifiedresources.DockerHostView, report age
 			if host == nil {
 				continue
 			}
-			if strings.TrimSpace(host.MachineID()) == machineID && strings.TrimSpace(host.Hostname()) == hostname {
+			if strings.TrimSpace(host.MachineID()) == machineID &&
+				unifiedresources.HostnamesEquivalent(host.Hostname(), hostname) {
 				if tokenID == "" || strings.TrimSpace(host.TokenID()) == tokenID {
 					return host, true
 				}
@@ -113,7 +114,8 @@ func findMatchingDockerHost(hosts []*unifiedresources.DockerHostView, report age
 			if host == nil {
 				continue
 			}
-			if strings.TrimSpace(host.Hostname()) == hostname && strings.TrimSpace(host.TokenID()) == tokenID {
+			if unifiedresources.HostnamesEquivalent(host.Hostname(), hostname) &&
+				strings.TrimSpace(host.TokenID()) == tokenID {
 				return host, true
 			}
 		}
@@ -135,7 +137,8 @@ func findMatchingDockerHost(hosts []*unifiedresources.DockerHostView, report age
 			if host == nil {
 				continue
 			}
-			if strings.TrimSpace(host.Hostname()) == hostname && strings.TrimSpace(host.TokenID()) == "" {
+			if unifiedresources.HostnamesEquivalent(host.Hostname(), hostname) &&
+				strings.TrimSpace(host.TokenID()) == "" {
 				return host, true
 			}
 		}

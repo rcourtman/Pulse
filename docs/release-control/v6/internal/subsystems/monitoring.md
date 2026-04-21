@@ -613,6 +613,11 @@ host identifier for the `(token, machine-id, hostname)` tuple before it checks
 `removedHostAgents` or emits the reconnect-blocking error, so removing one
 token-bound host cannot poison a different host that shared the same raw
 machine identifier.
+Docker host re-identification now shares the same hostname-equivalence rule:
+monitoring may treat `qnap` and `qnap.local` as the same host when the token
+or machine identity already points at one canonical runtime, but it must not
+invent broader short-name collapsing on its own or fork away from the
+unified-resource monitored-system contract.
 Node disk-source selection now also routes through one canonical resolver
 under `internal/monitoring/`. When a Proxmox node has a linked Pulse host
 agent, the node summary must prefer the linked host's canonical disk view over
