@@ -218,6 +218,14 @@ func handleQuickSecuritySetupFixed(r *Router) http.HandlerFunc {
 		}
 
 		if !authorized && !authConfigured {
+			if !isDirectLoopbackRequest(req) {
+				log.Warn().
+					Str("ip", clientIP).
+					Msg("Rejected initial quick setup outside direct loopback")
+				http.Error(w, "Initial security setup is only available from localhost until authentication is configured", http.StatusForbidden)
+				return
+			}
+
 			if r.bootstrapTokenHash == "" {
 				log.Error().Msg("Bootstrap setup token unavailable; refusing unauthenticated quick setup")
 				http.Error(w, "Bootstrap token unavailable; restart Pulse or inspect data directory", http.StatusServiceUnavailable)

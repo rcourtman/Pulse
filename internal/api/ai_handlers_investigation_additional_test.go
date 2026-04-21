@@ -418,7 +418,7 @@ func TestHandleClearAllFindings(t *testing.T) {
 		Description:  "desc",
 	})
 
-	req := httptest.NewRequest(http.MethodDelete, "/api/ai/patrol/findings?confirm=true", nil)
+	req := newLoopbackRequest(http.MethodDelete, "/api/ai/patrol/findings?confirm=true", nil)
 	rec := httptest.NewRecorder()
 	handler.HandleClearAllFindings(rec, req)
 
@@ -457,7 +457,7 @@ func TestHandlePatrolAutonomyGet(t *testing.T) {
 
 	handler := newTestAISettingsHandler(cfg, persistence, nil)
 
-	getReq := httptest.NewRequest(http.MethodGet, "/api/ai/patrol/autonomy", nil)
+	getReq := newLoopbackRequest(http.MethodGet, "/api/ai/patrol/autonomy", nil)
 	getRec := httptest.NewRecorder()
 	handler.HandleGetPatrolAutonomy(getRec, getReq)
 
@@ -501,7 +501,7 @@ func TestHandleGetInvestigation(t *testing.T) {
 	orchestrator := &stubInvestigationOrchestrator{session: session}
 	patrol.SetInvestigationOrchestrator(orchestrator)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/ai/findings/finding-1/investigation", nil)
+	req := newLoopbackRequest(http.MethodGet, "/api/ai/findings/finding-1/investigation", nil)
 	rec := httptest.NewRecorder()
 	handler.HandleGetInvestigation(rec, req)
 
@@ -555,7 +555,7 @@ func TestHandleGetInvestigationMessages(t *testing.T) {
 	orchestrator := &stubInvestigationOrchestrator{session: session}
 	patrol.SetInvestigationOrchestrator(orchestrator)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/ai/findings/finding-1/investigation/messages", nil)
+	req := newLoopbackRequest(http.MethodGet, "/api/ai/findings/finding-1/investigation/messages", nil)
 	rec := httptest.NewRecorder()
 	handler.HandleGetInvestigationMessages(rec, req)
 

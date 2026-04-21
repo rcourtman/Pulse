@@ -52,12 +52,12 @@ func TestPersistentAuthStoresReconfigureDataPath(t *testing.T) {
 	}
 
 	InitRecoveryTokenStore(dirOne)
-	recoveryToken, err := GetRecoveryTokenStore().GenerateRecoveryToken(time.Hour)
+	recoveryToken, err := GetRecoveryTokenStore().GenerateRecoveryToken(time.Hour, "127.0.0.1")
 	if err != nil {
 		t.Fatalf("generate recovery token: %v", err)
 	}
 	InitRecoveryTokenStore(dirTwo)
-	if GetRecoveryTokenStore().IsRecoveryTokenValidConstantTime(recoveryToken) {
+	if GetRecoveryTokenStore().IsRecoveryTokenValidConstantTime(recoveryToken, "127.0.0.1") {
 		t.Fatal("reconfigured recovery token store should not retain tokens from the previous data path")
 	}
 }

@@ -33,6 +33,7 @@ func sessionHash(token string) string {
 type sessionPersisted struct {
 	Key              string        `json:"key"`
 	Username         string        `json:"username,omitempty"`
+	RecoveryBypass   bool          `json:"recovery_bypass,omitempty"`
 	ExpiresAt        time.Time     `json:"expires_at"`
 	CreatedAt        time.Time     `json:"created_at"`
 	UserAgent        string        `json:"user_agent,omitempty"`
@@ -53,6 +54,7 @@ type sessionPersisted struct {
 // SessionData represents a user session
 type SessionData struct {
 	Username         string        `json:"username,omitempty"` // The authenticated user
+	RecoveryBypass   bool          `json:"recovery_bypass,omitempty"`
 	ExpiresAt        time.Time     `json:"expires_at"`
 	CreatedAt        time.Time     `json:"created_at"`
 	UserAgent        string        `json:"user_agent,omitempty"`
@@ -99,6 +101,7 @@ func (s *SessionStore) loadHashedSessions(persisted []sessionPersisted, now time
 
 		s.sessions[entry.Key] = &SessionData{
 			Username:           entry.Username,
+			RecoveryBypass:     entry.RecoveryBypass,
 			ExpiresAt:          entry.ExpiresAt,
 			CreatedAt:          entry.CreatedAt,
 			UserAgent:          entry.UserAgent,
@@ -208,6 +211,7 @@ func (s *SessionStore) CreateSession(token string, duration time.Duration, userA
 	key := sessionHash(token)
 	s.sessions[key] = &SessionData{
 		Username:         username,
+		RecoveryBypass:   false,
 		ExpiresAt:        time.Now().Add(duration),
 		CreatedAt:        time.Now(),
 		UserAgent:        userAgent,
@@ -216,6 +220,26 @@ func (s *SessionStore) CreateSession(token string, duration time.Duration, userA
 	}
 
 	// Save immediately for important operations
+	s.saveUnsafe()
+}
+
+// CreateRecoverySession creates a localhost-bound recovery session for the
+// configured browser client without disabling auth globally.
+func (s *SessionStore) CreateRecoverySession(token string, duration time.Duration, userAgent, ip, username string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	key := sessionHash(token)
+	s.sessions[key] = &SessionData{
+		Username:         username,
+		RecoveryBypass:   true,
+		ExpiresAt:        time.Now().Add(duration),
+		CreatedAt:        time.Now(),
+		UserAgent:        userAgent,
+		IP:               ip,
+		OriginalDuration: duration,
+	}
+
 	s.saveUnsafe()
 }
 
@@ -235,6 +259,7 @@ func (s *SessionStore) CreateOIDCSession(token string, duration time.Duration, u
 	key := sessionHash(token)
 	session := &SessionData{
 		Username:         username,
+		RecoveryBypass:   false,
 		ExpiresAt:        time.Now().Add(duration),
 		CreatedAt:        time.Now(),
 		UserAgent:        userAgent,
@@ -270,6 +295,7 @@ func (s *SessionStore) CreateSAMLSession(token string, duration time.Duration, u
 	key := sessionHash(token)
 	session := &SessionData{
 		Username:         username,
+		RecoveryBypass:   false,
 		ExpiresAt:        time.Now().Add(duration),
 		CreatedAt:        time.Now(),
 		UserAgent:        userAgent,
@@ -462,6 +488,7 @@ func (s *SessionStore) saveUnsafe() {
 		persisted = append(persisted, sessionPersisted{
 			Key:                key,
 			Username:           session.Username,
+			RecoveryBypass:     session.RecoveryBypass,
 			ExpiresAt:          session.ExpiresAt,
 			CreatedAt:          session.CreatedAt,
 			UserAgent:          session.UserAgent,

@@ -3,8 +3,10 @@ package api
 import (
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -51,6 +53,34 @@ var (
 func recoveryTokenHash(token string) string {
 	sum := sha256.Sum256([]byte(token))
 	return hex.EncodeToString(sum[:])
+}
+
+func normalizeRecoveryBindingIP(ip string) string {
+	trimmed := strings.TrimSpace(ip)
+	if trimmed == "" {
+		return ""
+	}
+	parsed := net.ParseIP(trimmed)
+	if parsed == nil {
+		return trimmed
+	}
+	if parsed.IsLoopback() {
+		return "loopback"
+	}
+	return parsed.String()
+}
+
+func recoveryTokenBoundToIP(token *RecoveryToken, ip string) bool {
+	if token == nil {
+		return false
+	}
+	expectedIP := normalizeRecoveryBindingIP(token.IP)
+	actualIP := normalizeRecoveryBindingIP(ip)
+	if expectedIP == "" || actualIP == "" {
+		return false
+	}
+	return len(expectedIP) == len(actualIP) &&
+		subtle.ConstantTimeCompare([]byte(expectedIP), []byte(actualIP)) == 1
 }
 
 // InitRecoveryTokenStore initializes the recovery token store
@@ -100,8 +130,8 @@ func GetRecoveryTokenStore() *RecoveryTokenStore {
 	return store
 }
 
-// GenerateRecoveryToken creates a new recovery token
-func (r *RecoveryTokenStore) GenerateRecoveryToken(duration time.Duration) (string, error) {
+// GenerateRecoveryToken creates a new recovery token bound to the generating client IP.
+func (r *RecoveryTokenStore) GenerateRecoveryToken(duration time.Duration, ip string) (string, error) {
 	// Generate secure random token
 	tokenBytes := make([]byte, 32)
 	if _, err := rand.Read(tokenBytes); err != nil {
@@ -119,6 +149,10 @@ func (r *RecoveryTokenStore) GenerateRecoveryToken(duration time.Duration) (stri
 		CreatedAt: time.Now(),
 		ExpiresAt: time.Now().Add(duration),
 		Used:      false,
+		IP:        normalizeRecoveryBindingIP(ip),
+	}
+	if token.IP == "" {
+		return "", os.ErrInvalid
 	}
 
 	r.tokens[tokenHash] = token
@@ -126,6 +160,7 @@ func (r *RecoveryTokenStore) GenerateRecoveryToken(duration time.Duration) (stri
 
 	log.Info().
 		Str("token", safePrefixForLog(tokenStr, 8)+"...").
+		Str("ip", token.IP).
 		Time("expires", token.ExpiresAt).
 		Msg("Recovery token generated")
 
@@ -134,7 +169,7 @@ func (r *RecoveryTokenStore) GenerateRecoveryToken(duration time.Duration) (stri
 
 // IsRecoveryTokenValidConstantTime checks token validity without consuming it.
 // This is intended for preflight decisions (e.g., CSRF skip routing).
-func (r *RecoveryTokenStore) IsRecoveryTokenValidConstantTime(providedToken string) bool {
+func (r *RecoveryTokenStore) IsRecoveryTokenValidConstantTime(providedToken string, ip string) bool {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
@@ -142,7 +177,7 @@ func (r *RecoveryTokenStore) IsRecoveryTokenValidConstantTime(providedToken stri
 	if !exists {
 		return false
 	}
-	return !time.Now().After(token.ExpiresAt) && !token.Used
+	return !time.Now().After(token.ExpiresAt) && !token.Used && recoveryTokenBoundToIP(token, ip)
 }
 
 // ValidateRecoveryTokenConstantTime validates token with constant-time comparison
@@ -153,7 +188,7 @@ func (r *RecoveryTokenStore) ValidateRecoveryTokenConstantTime(providedToken str
 	defer r.mu.RUnlock()
 
 	token, exists := r.tokens[tokenHash]
-	if !exists || time.Now().After(token.ExpiresAt) || token.Used {
+	if !exists || time.Now().After(token.ExpiresAt) || token.Used || !recoveryTokenBoundToIP(token, ip) {
 		return false
 	}
 
@@ -161,7 +196,7 @@ func (r *RecoveryTokenStore) ValidateRecoveryTokenConstantTime(providedToken str
 	r.mu.Lock()
 
 	token, exists = r.tokens[tokenHash]
-	if !exists || time.Now().After(token.ExpiresAt) || token.Used {
+	if !exists || time.Now().After(token.ExpiresAt) || token.Used || !recoveryTokenBoundToIP(token, ip) {
 		r.mu.Unlock()
 		r.mu.RLock()
 		return false
@@ -169,7 +204,6 @@ func (r *RecoveryTokenStore) ValidateRecoveryTokenConstantTime(providedToken str
 
 	token.Used = true
 	token.UsedAt = time.Now()
-	token.IP = ip
 	r.saveUnsafe()
 	r.mu.Unlock()
 	r.mu.RLock()

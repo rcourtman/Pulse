@@ -74,6 +74,12 @@ querying, and the operator-facing storage health presentation layer.
    provider-backed recovery: storage and recovery must treat `truenas_disabled`
    as an explicit platform opt-out, not as the baseline onboarding state for a
    supported platform.
+   That same adjacent API boundary also owns pre-auth local recovery
+   containment. Storage- and recovery-adjacent quick setup or break-glass
+   routes may exist before auth is configured, but they must stay
+   direct-loopback only, keep recovery-token validation bound to the
+   generating client IP, and mint or clear browser recovery sessions instead
+   of toggling a shared `.auth_recovery` file for every localhost caller.
    That same adjacent API boundary also owns monitored-system admission preview
    transport for provider-backed setup context. `/api/truenas/connections/preview`,
    `/api/truenas/connections/{id}/preview`, `/api/vmware/connections/preview`,
@@ -2219,6 +2225,12 @@ surfaces may run without local auth configured, but a valid tenant
 the anonymous optional-auth fallback so hosted recovery, onboarding, and
 support flows do not silently degrade into unauthenticated state or bearer-
 token-only mode after cloud handoff.
+That same recovery-adjacent auth boundary also owns local bootstrap and
+break-glass containment. Before auth is configured, quick setup and recovery
+ingress must stay direct-loopback only, recovery-token validation must remain
+bound to the generating client IP, and break-glass recovery must clear or mint
+browser sessions rather than toggling a shared `.auth_recovery` file for every
+localhost caller.
 That same shared `internal/api/` boundary also owns hosted AI bootstrap
 continuity. Storage- and recovery-adjacent hosted flows may surface Patrol-
 backed investigation or AI-assisted recovery guidance before an operator has

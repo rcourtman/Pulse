@@ -249,6 +249,12 @@ persistence: `recovery_tokens.go` may mint raw recovery secrets for immediate
 operator use, but persisted `recovery_tokens.json` state must store only token
 hashes and treat any legacy plaintext-token file as a one-time migration input
 that is rewritten immediately into hashed canonical persistence on load.
+That same recovery trust boundary also governs live use of those secrets:
+recovery tokens must bind to the generating client IP, may authorize only a
+direct-loopback browser recovery session, and must not reopen authentication
+through a shared `.auth_recovery` flag that affects every localhost client.
+Secret-bearing comparisons on adjacent auth paths such as metrics bearer
+validation and local-auth username matching must stay constant-time.
 That same persistence rule also governs API token metadata: even though
 `api_tokens.json` stores hashed records rather than raw token secrets, a
 legacy plaintext metadata file may only serve as migration input. Canonical

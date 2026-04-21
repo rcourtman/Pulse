@@ -313,11 +313,11 @@ func TestQuickSecuritySetupBootstrapTokenUnavailable(t *testing.T) {
 	}
 	handler := handleQuickSecuritySetupFixed(router)
 
-	authLimiter.Reset("198.51.100.16")
+	authLimiter.Reset("127.0.0.1")
 
 	payload := `{"username":"bootstrap","password":"StrongPass!1","apiToken":"` + strings.Repeat("aa", 32) + `"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/security/quick-setup", strings.NewReader(payload))
-	req.RemoteAddr = "198.51.100.16:54321"
+	req.RemoteAddr = "127.0.0.1:54321"
 	rec := httptest.NewRecorder()
 
 	handler(rec, req)
@@ -351,11 +351,11 @@ func TestQuickSecuritySetupAcceptsSetupTokenInBody(t *testing.T) {
 
 	handler := handleQuickSecuritySetupFixed(router)
 
-	authLimiter.Reset("198.51.100.17")
+	authLimiter.Reset("127.0.0.1")
 
 	payload := `{"username":"bootstrap","password":"StrongPass!1","apiToken":"` + strings.Repeat("aa", 32) + `","setupToken":"` + bootstrapToken + `"}` //nolint:lll
 	req := httptest.NewRequest(http.MethodPost, "/api/security/quick-setup", strings.NewReader(payload))
-	req.RemoteAddr = "198.51.100.17:54321"
+	req.RemoteAddr = "127.0.0.1:54321"
 	rec := httptest.NewRecorder()
 
 	handler(rec, req)

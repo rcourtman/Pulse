@@ -86,12 +86,12 @@ func TestQuickSecuritySetupRequiresBootstrapToken(t *testing.T) {
 
 	handler := handleQuickSecuritySetupFixed(router)
 
-	authLimiter.Reset("198.51.100.80")
+	authLimiter.Reset("127.0.0.1")
 
 	payload := `{"username":"bootstrap","password":"StrongPass!1","apiToken":"` + strings.Repeat("aa", 32) + `"}`
 
 	req := httptest.NewRequest(http.MethodPost, "/api/security/quick-setup", strings.NewReader(payload))
-	req.RemoteAddr = "198.51.100.80:54321"
+	req.RemoteAddr = "127.0.0.1:54321"
 	rr := httptest.NewRecorder()
 	handler(rr, req)
 	if rr.Code != http.StatusUnauthorized {
@@ -106,11 +106,23 @@ func TestQuickSecuritySetupRequiresBootstrapToken(t *testing.T) {
 
 	rrWith := httptest.NewRecorder()
 	handler(rrWith, reqWith)
-	if rrWith.Code != http.StatusOK {
-		t.Fatalf("expected 200 OK with valid bootstrap token, got %d (%s)", rrWith.Code, rrWith.Body.String())
+	if rrWith.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 forbidden for remote quick setup even with valid bootstrap token, got %d (%s)", rrWith.Code, rrWith.Body.String())
 	}
 
-	cookies := rrWith.Result().Cookies()
+	authLimiter.Reset("127.0.0.1")
+
+	reqLoopback := httptest.NewRequest(http.MethodPost, "/api/security/quick-setup", strings.NewReader(payload))
+	reqLoopback.RemoteAddr = "127.0.0.1:54321"
+	reqLoopback.Header.Set(bootstrapTokenHeader, bootstrapToken)
+
+	rrLoopback := httptest.NewRecorder()
+	handler(rrLoopback, reqLoopback)
+	if rrLoopback.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK with valid bootstrap token from loopback, got %d (%s)", rrLoopback.Code, rrLoopback.Body.String())
+	}
+
+	cookies := rrLoopback.Result().Cookies()
 	sessionCookie := findCookie(cookies, sessionCookieName(false))
 	if sessionCookie == nil || strings.TrimSpace(sessionCookie.Value) == "" {
 		t.Fatalf("expected quick setup to establish a browser session cookie")
@@ -230,7 +242,7 @@ func TestQuickSecuritySetupAllowsRecoveryTokenRotation(t *testing.T) {
 	}
 
 	InitRecoveryTokenStore(cfg.DataPath)
-	token, err := GetRecoveryTokenStore().GenerateRecoveryToken(5 * time.Minute)
+	token, err := GetRecoveryTokenStore().GenerateRecoveryToken(5*time.Minute, "127.0.0.1")
 	if err != nil {
 		t.Fatalf("generate recovery token: %v", err)
 	}

@@ -3447,29 +3447,6 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		needsAuth := true
 		clientIP := GetClientIP(req)
 
-		// Recovery mechanism: Check if recovery mode is enabled
-		recoveryFile := filepath.Join(r.config.DataPath, ".auth_recovery")
-		if _, err := os.Stat(recoveryFile); err == nil {
-			// Recovery mode is enabled - allow local access only
-			log.Debug().
-				Str("recovery_file", recoveryFile).
-				Str("client_ip", clientIP).
-				Str("remote_addr", req.RemoteAddr).
-				Str("path", req.URL.Path).
-				Bool("file_exists", err == nil).
-				Msg("Checking auth recovery mode")
-			if isDirectLoopbackRequest(req) {
-				log.Warn().
-					Str("recovery_file", recoveryFile).
-					Str("client_ip", clientIP).
-					Msg("AUTH RECOVERY MODE: Allowing local access without authentication")
-				// Allow access but add a warning header
-				w.Header().Set("X-Auth-Recovery", "true")
-				// Recovery mode bypasses auth for localhost
-				needsAuth = false
-			}
-		}
-
 		if needsAuth {
 			// Normal authentication check
 			// Normalize path to handle double slashes (e.g., //download -> /download)
@@ -3480,6 +3457,7 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			publicPaths := []string{
 				"/api/health",
 				"/api/security/status",
+				"/api/security/recovery",
 				"/api/security/validate-bootstrap-token",
 				"/api/security/quick-setup", // Handler does its own auth (bootstrap token or session)
 				"/api/version",
@@ -3622,7 +3600,7 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			})()
 		validRecoveryToken := false
 		if recoveryToken := strings.TrimSpace(req.Header.Get("X-Recovery-Token")); recoveryToken != "" {
-			validRecoveryToken = GetRecoveryTokenStore().IsRecoveryTokenValidConstantTime(recoveryToken)
+			validRecoveryToken = GetRecoveryTokenStore().IsRecoveryTokenValidConstantTime(recoveryToken, clientIP)
 		}
 		if req.URL.Path == "/api/security/quick-setup" &&
 			(!authConfigured || validRecoveryToken) {
@@ -4030,7 +4008,7 @@ func canCapturePublicURL(cfg *config.Config, req *http.Request) bool {
 			adminUser := strings.TrimSpace(cfg.AuthUser)
 			if adminUser != "" {
 				username := strings.TrimSpace(GetSessionUsername(cookie.Value))
-				if strings.EqualFold(username, adminUser) {
+				if constantTimeStringEqual(strings.ToLower(username), strings.ToLower(adminUser)) {
 					return true
 				}
 			}
@@ -4043,7 +4021,7 @@ func canCapturePublicURL(cfg *config.Config, req *http.Request) bool {
 		if authHeader := req.Header.Get("Authorization"); strings.HasPrefix(authHeader, prefix) {
 			if decoded, err := base64.StdEncoding.DecodeString(authHeader[len(prefix):]); err == nil {
 				if parts := strings.SplitN(string(decoded), ":", 2); len(parts) == 2 {
-					if parts[0] == cfg.AuthUser && internalauth.CheckPasswordHash(parts[1], cfg.AuthPass) {
+					if constantTimeStringEqual(parts[0], cfg.AuthUser) && internalauth.CheckPasswordHash(parts[1], cfg.AuthPass) {
 						return true
 					}
 				}
@@ -4226,7 +4204,7 @@ func (r *Router) handleChangePassword(w http.ResponseWriter, req *http.Request) 
 				parts := strings.SplitN(string(decoded), ":", 2)
 				if len(parts) == 2 {
 					// Check if this looks like Pulse credentials (matching username)
-					if parts[0] == r.config.AuthUser {
+					if constantTimeStringEqual(parts[0], r.config.AuthUser) {
 						// This is likely from Pulse's own auth, not a proxy
 						username = parts[0]
 						useAuthHeader = true
@@ -4409,36 +4387,7 @@ func (r *Router) handleLogout(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	// Get session token from cookie
-	var sessionToken string
-	if cookie, err := readSessionCookie(req); err == nil {
-		sessionToken = cookie.Value
-	}
-
-	// Delete the session if it exists
-	if sessionToken != "" {
-		GetSessionStore().DeleteSession(sessionToken)
-
-		// Also delete CSRF token if exists
-		GetCSRFStore().DeleteCSRFToken(sessionToken)
-	}
-
-	// Get appropriate cookie settings based on proxy detection (consistent with login)
-	isSecure, sameSitePolicy := getCookieSettings(req)
-
-	// Clear both session cookie variants (prefixed and unprefixed) to ensure
-	// a clean logout regardless of how the cookie was originally set.
-	for _, name := range []string{cookieNameSession, cookieNameSessionSecure} {
-		http.SetCookie(w, &http.Cookie{
-			Name:     name,
-			Value:    "",
-			Path:     "/",
-			MaxAge:   -1,
-			HttpOnly: true,
-			Secure:   isSecure,
-			SameSite: sameSitePolicy,
-		})
-	}
+	r.clearSession(w, req)
 
 	// Audit log logout (use admin as username since we have single user for now)
 	LogAuditEventForTenant(GetOrgID(req.Context()), "logout", "admin", GetClientIP(req), req.URL.Path, true, "User logged out")
@@ -4472,6 +4421,47 @@ func (r *Router) establishSession(w http.ResponseWriter, req *http.Request, user
 	if username != "" {
 		TrackUserSession(username, token)
 	}
+
+	csrfToken := generateCSRFToken(token)
+	isSecure, sameSitePolicy := getCookieSettings(req)
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     sessionCookieName(isSecure),
+		Value:    token,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   isSecure,
+		SameSite: sameSitePolicy,
+		MaxAge:   86400,
+	})
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     CookieNameCSRF,
+		Value:    csrfToken,
+		Path:     "/",
+		Secure:   isSecure,
+		SameSite: sameSitePolicy,
+		MaxAge:   86400,
+	})
+
+	return nil
+}
+
+func (r *Router) establishRecoverySession(w http.ResponseWriter, req *http.Request, username string) error {
+	InvalidateOldSessionFromRequest(req)
+
+	token := generateSessionToken()
+	if token == "" {
+		return fmt.Errorf("failed to generate recovery session token")
+	}
+
+	userAgent := req.Header.Get("User-Agent")
+	clientIP := normalizeRecoveryBindingIP(GetClientIP(req))
+	if clientIP == "" {
+		return fmt.Errorf("recovery session requires a client IP")
+	}
+
+	GetSessionStore().CreateRecoverySession(token, 24*time.Hour, userAgent, clientIP, username)
 
 	csrfToken := generateCSRFToken(token)
 	isSecure, sameSitePolicy := getCookieSettings(req)
@@ -4607,7 +4597,7 @@ func (r *Router) handleLogin(w http.ResponseWriter, req *http.Request) {
 	}
 
 	// Verify credentials
-	if loginReq.Username == r.config.AuthUser && auth.CheckPasswordHash(loginReq.Password, r.config.AuthPass) {
+	if constantTimeStringEqual(loginReq.Username, r.config.AuthUser) && auth.CheckPasswordHash(loginReq.Password, r.config.AuthPass) {
 		// Clear failed login attempts
 		ClearFailedLogins(loginReq.Username)
 		ClearFailedLogins(clientIP)

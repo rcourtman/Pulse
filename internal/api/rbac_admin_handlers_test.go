@@ -132,7 +132,7 @@ func TestResetAdminRoleEndpoint_ValidToken(t *testing.T) {
 	InitRecoveryTokenStore(baseDir)
 
 	store := GetRecoveryTokenStore()
-	token, err := store.GenerateRecoveryToken(5 * time.Minute)
+	token, err := store.GenerateRecoveryToken(5*time.Minute, "127.0.0.1")
 	if err != nil {
 		t.Fatalf("failed to generate recovery token: %v", err)
 	}
@@ -145,6 +145,7 @@ func TestResetAdminRoleEndpoint_ValidToken(t *testing.T) {
 		"recovery_token": token,
 	})
 	req := httptest.NewRequest(http.MethodPost, "/api/admin/rbac/reset-admin", bytes.NewBuffer(body))
+	req.RemoteAddr = "127.0.0.1:12345"
 	req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, "test-org"))
 	rec := httptest.NewRecorder()
 	handlers.HandleRBACAdminReset(rec, req)

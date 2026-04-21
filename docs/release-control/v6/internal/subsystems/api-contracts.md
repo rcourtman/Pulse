@@ -218,6 +218,10 @@ the canonical monitored-system blocked payload.
     canonical invitation, membership-management, or explicit owner-transfer flows may create tenant membership or
     change the stored owner/admin role. Shared auth routes and downstream settings consumers must treat handoff role
     claims as bounded by the server-owned membership record, never as authority to elevate tenant privileges.
+    That same shared auth boundary also owns pre-auth local setup and recovery containment. When no authentication is
+    configured, anonymous fallback and bootstrap quick setup may run only on direct loopback, recovery tokens must bind
+    to the generating client IP, and recovery may mint only a browser-bound localhost session rather than a shared
+    filesystem toggle that disables auth for every loopback client.
     The same shared auth boundary also owns release-build admin bypass gating.
     `internal/api/auth.go` may keep `ALLOW_ADMIN_BYPASS` for non-release
     development workflows, but release builds must compile that env override
@@ -2874,6 +2878,11 @@ is considered, so hosted protected routes such as relay-mobile token minting,
 onboarding reads, and billing-admin/API surfaces stay reachable after cloud
 handoff instead of flattening the operator back to `anonymous` or demanding a
 bearer token from the browser as soon as the tenant has minted one.
+That same shared auth contract also governs unauthenticated local recovery and
+bootstrap ingress: before auth exists, anonymous fallback and `/api/security/quick-setup`
+must remain direct-loopback only, and recovery tokens may authorize only the
+same loopback client IP that minted them when establishing a browser recovery
+session.
 That same shared settings-scope contract must then preserve canonical
 org-management privilege on the tenant side: when a hosted or multi-tenant
 request is scoped to a non-default org, `internal/api/security_setup_fix.go`

@@ -10,6 +10,8 @@ import (
 	"time"
 )
 
+const recoveryBindIP = "10.0.0.1"
+
 func TestRecoveryToken_Fields(t *testing.T) {
 	now := time.Now()
 	expiry := now.Add(time.Hour)
@@ -57,7 +59,7 @@ func newTestRecoveryStore(t *testing.T) *RecoveryTokenStore {
 func TestRecoveryTokenStore_GenerateRecoveryToken(t *testing.T) {
 	store := newTestRecoveryStore(t)
 
-	token, err := store.GenerateRecoveryToken(time.Hour)
+	token, err := store.GenerateRecoveryToken(time.Hour, recoveryBindIP)
 	if err != nil {
 		t.Fatalf("GenerateRecoveryToken failed: %v", err)
 	}
@@ -93,7 +95,7 @@ func TestRecoveryTokenStore_GenerateRecoveryToken_Uniqueness(t *testing.T) {
 
 	tokens := make(map[string]bool)
 	for i := 0; i < 100; i++ {
-		token, err := store.GenerateRecoveryToken(time.Hour)
+		token, err := store.GenerateRecoveryToken(time.Hour, recoveryBindIP)
 		if err != nil {
 			t.Fatalf("GenerateRecoveryToken failed on iteration %d: %v", i, err)
 		}
@@ -121,7 +123,7 @@ func TestRecoveryTokenStore_GenerateRecoveryToken_ExpiryDurations(t *testing.T) 
 			store := newTestRecoveryStore(t)
 			beforeGen := time.Now()
 
-			token, err := store.GenerateRecoveryToken(tc.duration)
+			token, err := store.GenerateRecoveryToken(tc.duration, recoveryBindIP)
 			if err != nil {
 				t.Fatalf("GenerateRecoveryToken failed: %v", err)
 			}
@@ -146,13 +148,13 @@ func TestRecoveryTokenStore_GenerateRecoveryToken_ExpiryDurations(t *testing.T) 
 func TestRecoveryTokenStore_ValidateRecoveryTokenConstantTime_ValidToken(t *testing.T) {
 	store := newTestRecoveryStore(t)
 
-	token, err := store.GenerateRecoveryToken(time.Hour)
+	token, err := store.GenerateRecoveryToken(time.Hour, recoveryBindIP)
 	if err != nil {
 		t.Fatalf("GenerateRecoveryToken failed: %v", err)
 	}
 
 	// Validate token
-	if !store.ValidateRecoveryTokenConstantTime(token, "10.0.0.1") {
+	if !store.ValidateRecoveryTokenConstantTime(token, recoveryBindIP) {
 		t.Error("ValidateRecoveryTokenConstantTime returned false for valid token")
 	}
 
@@ -164,23 +166,39 @@ func TestRecoveryTokenStore_ValidateRecoveryTokenConstantTime_ValidToken(t *test
 	if !stored.Used {
 		t.Error("token should be marked as used after validation")
 	}
-	if stored.IP != "10.0.0.1" {
-		t.Errorf("IP = %q, want 10.0.0.1", stored.IP)
+	if stored.IP != recoveryBindIP {
+		t.Errorf("IP = %q, want %s", stored.IP, recoveryBindIP)
 	}
 	if stored.UsedAt.IsZero() {
 		t.Error("UsedAt should be set")
 	}
 }
 
-func TestRecoveryTokenStore_IsRecoveryTokenValidConstantTime_DoesNotConsume(t *testing.T) {
+func TestRecoveryTokenStore_ValidateRecoveryTokenConstantTime_RejectsDifferentIP(t *testing.T) {
 	store := newTestRecoveryStore(t)
 
-	token, err := store.GenerateRecoveryToken(time.Hour)
+	token, err := store.GenerateRecoveryToken(time.Hour, recoveryBindIP)
 	if err != nil {
 		t.Fatalf("GenerateRecoveryToken failed: %v", err)
 	}
 
-	if !store.IsRecoveryTokenValidConstantTime(token) {
+	if store.ValidateRecoveryTokenConstantTime(token, "10.0.0.2") {
+		t.Fatal("ValidateRecoveryTokenConstantTime should reject a different client IP")
+	}
+	if store.IsRecoveryTokenValidConstantTime(token, "10.0.0.2") {
+		t.Fatal("IsRecoveryTokenValidConstantTime should reject a different client IP")
+	}
+}
+
+func TestRecoveryTokenStore_IsRecoveryTokenValidConstantTime_DoesNotConsume(t *testing.T) {
+	store := newTestRecoveryStore(t)
+
+	token, err := store.GenerateRecoveryToken(time.Hour, recoveryBindIP)
+	if err != nil {
+		t.Fatalf("GenerateRecoveryToken failed: %v", err)
+	}
+
+	if !store.IsRecoveryTokenValidConstantTime(token, recoveryBindIP) {
 		t.Fatal("IsRecoveryTokenValidConstantTime returned false for valid token")
 	}
 
@@ -191,7 +209,7 @@ func TestRecoveryTokenStore_IsRecoveryTokenValidConstantTime_DoesNotConsume(t *t
 		t.Fatal("IsRecoveryTokenValidConstantTime must not mark token as used")
 	}
 
-	if !store.ValidateRecoveryTokenConstantTime(token, "10.0.0.1") {
+	if !store.ValidateRecoveryTokenConstantTime(token, recoveryBindIP) {
 		t.Fatal("ValidateRecoveryTokenConstantTime should still succeed after non-consuming check")
 	}
 }
@@ -199,18 +217,18 @@ func TestRecoveryTokenStore_IsRecoveryTokenValidConstantTime_DoesNotConsume(t *t
 func TestRecoveryTokenStore_IsRecoveryTokenValidConstantTime_InvalidOrUsed(t *testing.T) {
 	store := newTestRecoveryStore(t)
 
-	if store.IsRecoveryTokenValidConstantTime("missing-token") {
+	if store.IsRecoveryTokenValidConstantTime("missing-token", recoveryBindIP) {
 		t.Fatal("IsRecoveryTokenValidConstantTime returned true for missing token")
 	}
 
-	token, err := store.GenerateRecoveryToken(time.Hour)
+	token, err := store.GenerateRecoveryToken(time.Hour, recoveryBindIP)
 	if err != nil {
 		t.Fatalf("GenerateRecoveryToken failed: %v", err)
 	}
-	if !store.ValidateRecoveryTokenConstantTime(token, "10.0.0.1") {
+	if !store.ValidateRecoveryTokenConstantTime(token, recoveryBindIP) {
 		t.Fatal("ValidateRecoveryTokenConstantTime should succeed")
 	}
-	if store.IsRecoveryTokenValidConstantTime(token) {
+	if store.IsRecoveryTokenValidConstantTime(token, recoveryBindIP) {
 		t.Fatal("IsRecoveryTokenValidConstantTime returned true for used token")
 	}
 }
@@ -219,12 +237,12 @@ func TestRecoveryTokenStore_ValidateRecoveryTokenConstantTime_InvalidToken(t *te
 	store := newTestRecoveryStore(t)
 
 	// Generate a valid token but try to validate with a different one
-	_, err := store.GenerateRecoveryToken(time.Hour)
+	_, err := store.GenerateRecoveryToken(time.Hour, recoveryBindIP)
 	if err != nil {
 		t.Fatalf("GenerateRecoveryToken failed: %v", err)
 	}
 
-	if store.ValidateRecoveryTokenConstantTime("nonexistent-token", "10.0.0.1") {
+	if store.ValidateRecoveryTokenConstantTime("nonexistent-token", recoveryBindIP) {
 		t.Error("ValidateRecoveryTokenConstantTime returned true for invalid token")
 	}
 }
@@ -244,7 +262,7 @@ func TestRecoveryTokenStore_ValidateRecoveryTokenConstantTime_ExpiredToken(t *te
 	}
 	store.mu.Unlock()
 
-	if store.ValidateRecoveryTokenConstantTime(expiredToken, "10.0.0.1") {
+	if store.ValidateRecoveryTokenConstantTime(expiredToken, recoveryBindIP) {
 		t.Error("ValidateRecoveryTokenConstantTime returned true for expired token")
 	}
 }
@@ -252,13 +270,13 @@ func TestRecoveryTokenStore_ValidateRecoveryTokenConstantTime_ExpiredToken(t *te
 func TestRecoveryTokenStore_ValidateRecoveryTokenConstantTime_UsedToken(t *testing.T) {
 	store := newTestRecoveryStore(t)
 
-	token, err := store.GenerateRecoveryToken(time.Hour)
+	token, err := store.GenerateRecoveryToken(time.Hour, recoveryBindIP)
 	if err != nil {
 		t.Fatalf("GenerateRecoveryToken failed: %v", err)
 	}
 
 	// Use the token
-	if !store.ValidateRecoveryTokenConstantTime(token, "10.0.0.1") {
+	if !store.ValidateRecoveryTokenConstantTime(token, recoveryBindIP) {
 		t.Fatal("first validation should succeed")
 	}
 
@@ -271,7 +289,7 @@ func TestRecoveryTokenStore_ValidateRecoveryTokenConstantTime_UsedToken(t *testi
 func TestRecoveryTokenStore_ValidateRecoveryTokenConstantTime_EmptyStore(t *testing.T) {
 	store := newTestRecoveryStore(t)
 
-	if store.ValidateRecoveryTokenConstantTime("any-token", "10.0.0.1") {
+	if store.ValidateRecoveryTokenConstantTime("any-token", recoveryBindIP) {
 		t.Error("ValidateRecoveryTokenConstantTime returned true on empty store")
 	}
 }
@@ -279,7 +297,7 @@ func TestRecoveryTokenStore_ValidateRecoveryTokenConstantTime_EmptyStore(t *test
 func TestRecoveryTokenStore_ValidateRecoveryTokenConstantTime_ConcurrentUse(t *testing.T) {
 	store := newTestRecoveryStore(t)
 
-	token, err := store.GenerateRecoveryToken(time.Hour)
+	token, err := store.GenerateRecoveryToken(time.Hour, recoveryBindIP)
 	if err != nil {
 		t.Fatalf("GenerateRecoveryToken failed: %v", err)
 	}
@@ -293,7 +311,7 @@ func TestRecoveryTokenStore_ValidateRecoveryTokenConstantTime_ConcurrentUse(t *t
 		wg.Add(1)
 		go func(id int) {
 			defer wg.Done()
-			result := store.ValidateRecoveryTokenConstantTime(token, "10.0.0.1")
+			result := store.ValidateRecoveryTokenConstantTime(token, recoveryBindIP)
 			results <- result
 		}(i)
 	}
@@ -436,7 +454,7 @@ func TestRecoveryTokenStore_Persistence_Save(t *testing.T) {
 	}
 
 	// Generate a token (which triggers save)
-	token, err := store.GenerateRecoveryToken(time.Hour)
+	token, err := store.GenerateRecoveryToken(time.Hour, recoveryBindIP)
 	if err != nil {
 		t.Fatalf("GenerateRecoveryToken failed: %v", err)
 	}
@@ -476,7 +494,7 @@ func TestRecoveryTokenStore_Persistence_Load(t *testing.T) {
 		stopCleanup: make(chan struct{}),
 	}
 
-	token, err := store1.GenerateRecoveryToken(time.Hour)
+	token, err := store1.GenerateRecoveryToken(time.Hour, recoveryBindIP)
 	if err != nil {
 		t.Fatalf("GenerateRecoveryToken failed: %v", err)
 	}
@@ -510,7 +528,8 @@ func TestRecoveryTokenStore_Load_MigratesLegacyFormat(t *testing.T) {
 			"token": "` + rawToken + `",
 			"created_at": "2026-03-15T12:00:00Z",
 			"expires_at": "2099-03-15T13:00:00Z",
-			"used": false
+			"used": false,
+			"ip": "` + recoveryBindIP + `"
 		}
 	}`
 	tokensFile := filepath.Join(tmpDir, "recovery_tokens.json")
@@ -525,7 +544,7 @@ func TestRecoveryTokenStore_Load_MigratesLegacyFormat(t *testing.T) {
 	}
 	store.load()
 
-	if !store.IsRecoveryTokenValidConstantTime(rawToken) {
+	if !store.IsRecoveryTokenValidConstantTime(rawToken, recoveryBindIP) {
 		t.Fatal("legacy recovery token should validate after migration load")
 	}
 

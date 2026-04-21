@@ -956,11 +956,23 @@ func TestCheckAuth_NoAuthConfigured(t *testing.T) {
 		// No auth configured at all
 	}
 	req := httptest.NewRequest("GET", "/api/test", nil)
+	req.RemoteAddr = "127.0.0.1:12345"
 	w := httptest.NewRecorder()
 
 	result := CheckAuth(cfg, w, req)
-	// Should return true when no auth is configured
+	// Should return true for direct loopback when no auth is configured
 	if !result {
-		t.Error("CheckAuth should return true when no auth is configured")
+		t.Error("CheckAuth should return true for loopback when no auth is configured")
+	}
+}
+
+func TestCheckAuth_NoAuthConfiguredRejectsRemote(t *testing.T) {
+	cfg := &config.Config{}
+	req := httptest.NewRequest("GET", "/api/test", nil)
+	req.RemoteAddr = "198.51.100.10:12345"
+	w := httptest.NewRecorder()
+
+	if CheckAuth(cfg, w, req) {
+		t.Fatal("CheckAuth should reject remote access before auth is configured")
 	}
 }

@@ -426,11 +426,11 @@ func (r *Router) registerAuthSecurityInstallRoutes() {
 				return
 			}
 
-			// Write a recovery flag file before restarting
+			// Retire the legacy filesystem recovery toggle before restart. Recovery
+			// remains available through the localhost-bound recovery session flow.
 			recoveryFile := filepath.Join(r.config.DataPath, ".auth_recovery")
-			recoveryContent := fmt.Sprintf("Auth setup at %s\nIf locked out, delete this file and restart to disable auth temporarily\n", time.Now().Format(time.RFC3339))
-			if err := os.WriteFile(recoveryFile, []byte(recoveryContent), 0600); err != nil {
-				log.Warn().Err(err).Str("path", recoveryFile).Msg("Failed to write recovery flag file")
+			if err := os.Remove(recoveryFile); err != nil && !os.IsNotExist(err) {
+				log.Warn().Err(err).Str("path", recoveryFile).Msg("Failed to remove legacy recovery flag file")
 			}
 
 			// Schedule restart with full service restart to pick up new config
@@ -521,7 +521,7 @@ func (r *Router) registerAuthSecurityInstallRoutes() {
 					duration = recoveryRequest.Duration
 				}
 
-				token, err := GetRecoveryTokenStore().GenerateRecoveryToken(time.Duration(duration) * time.Minute)
+				token, err := GetRecoveryTokenStore().GenerateRecoveryToken(time.Duration(duration)*time.Minute, clientIP)
 				if err != nil {
 					log.Error().Err(err).Msg("Failed to generate recovery token")
 					response["success"] = false
@@ -539,34 +539,39 @@ func (r *Router) registerAuthSecurityInstallRoutes() {
 				}
 
 			case "disable_auth":
-				// Temporarily disable auth by creating recovery file
-				recoveryFile := filepath.Join(r.config.DataPath, ".auth_recovery")
-				content := fmt.Sprintf("Recovery mode enabled at %s\nAuth temporarily disabled for local access\nEnabled by: %s\n", time.Now().Format(time.RFC3339), clientIP)
-				if err := os.WriteFile(recoveryFile, []byte(content), 0600); err != nil {
-					log.Error().Err(err).Msg("Failed to enable recovery mode")
+				recoveryUser := strings.TrimSpace(r.config.AuthUser)
+				if recoveryUser == "" {
+					recoveryUser = "recovery"
+				}
+				if err := r.establishRecoverySession(w, req, recoveryUser); err != nil {
+					log.Error().Err(err).Msg("Failed to establish recovery session")
 					response["success"] = false
 					response["message"] = "Failed to enable recovery mode"
 				} else {
+					recoveryFile := filepath.Join(r.config.DataPath, ".auth_recovery")
+					if err := os.Remove(recoveryFile); err != nil && !os.IsNotExist(err) {
+						log.Warn().Err(err).Str("path", recoveryFile).Msg("Failed to remove legacy recovery flag file")
+					}
 					response["success"] = true
-					response["message"] = "Recovery mode enabled. Auth disabled for localhost. Delete .auth_recovery file to re-enable."
+					response["message"] = "Recovery mode enabled for this local browser session only."
 					log.Warn().
 						Str("ip", clientIP).
 						Bool("direct_loopback", isLoopback).
 						Bool("via_token", hasValidToken).
-						Msg("AUTH RECOVERY: Authentication disabled via recovery endpoint")
+						Msg("AUTH RECOVERY: Recovery session established")
 				}
 
 			case "enable_auth":
-				// Re-enable auth by removing recovery file
+				r.clearSession(w, req)
 				recoveryFile := filepath.Join(r.config.DataPath, ".auth_recovery")
-				if err := os.Remove(recoveryFile); err != nil {
+				if err := os.Remove(recoveryFile); err != nil && !os.IsNotExist(err) {
 					log.Error().Err(err).Msg("Failed to disable recovery mode")
 					response["success"] = false
 					response["message"] = "Failed to disable recovery mode"
 				} else {
 					response["success"] = true
-					response["message"] = "Recovery mode disabled. Authentication re-enabled."
-					log.Info().Msg("AUTH RECOVERY: Authentication re-enabled via recovery endpoint")
+					response["message"] = "Recovery mode disabled for this browser session."
+					log.Info().Msg("AUTH RECOVERY: Recovery session cleared via recovery endpoint")
 				}
 
 			default:
@@ -577,12 +582,15 @@ func (r *Router) registerAuthSecurityInstallRoutes() {
 			w.Header().Set("Content-Type", "application/json")
 			json.NewEncoder(w).Encode(response)
 		} else if req.Method == http.MethodGet {
-			// Check recovery status
-			recoveryFile := filepath.Join(r.config.DataPath, ".auth_recovery")
-			_, err := os.Stat(recoveryFile)
+			recoveryMode := false
+			if cookie, err := readSessionCookie(req); err == nil && cookie.Value != "" && ValidateSession(cookie.Value) {
+				if session := GetSessionStore().GetSession(cookie.Value); requestMatchesRecoverySession(req, session) {
+					recoveryMode = true
+				}
+			}
 			response := map[string]interface{}{
-				"recovery_mode": err == nil,
-				"message":       "Recovery endpoint accessible from localhost only",
+				"recovery_mode": recoveryMode,
+				"message":       "Recovery endpoint accessible from localhost only; recovery sessions are browser-bound",
 			}
 			w.Header().Set("Content-Type", "application/json")
 			json.NewEncoder(w).Encode(response)

@@ -1099,6 +1099,11 @@ That same transport boundary also keeps plaintext Pulse URLs loopback-only.
 must still use HTTPS/WSS. `InsecureSkipVerify` may relax certificate
 verification on TLS transport; it must not reopen plaintext HTTP for
 private-network updater, websocket, or reporting paths.
+That same first-run lifecycle boundary also keeps unauthenticated setup local.
+Lifecycle-adjacent quick setup or recovery entrypoints may exist before an
+operator has configured auth, but they must stay direct-loopback only and any
+recovery token/session path must stay bound to the generating localhost client
+instead of reopening auth for all loopback callers.
 That same shared `internal/api/` lifecycle boundary also assumes tenant-scoped
 resource helpers stay on canonical unified-resource seeds: adjacent fleet and
 install surfaces may not revive raw tenant `StateSnapshot` fallback through

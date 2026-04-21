@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"crypto/subtle"
 	"crypto/tls"
 	"encoding/base64"
 	"fmt"
@@ -735,7 +736,12 @@ func startMetricsServer(ctx context.Context, addr string, metricsToken string) {
 		handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			auth := r.Header.Get("Authorization")
 			const prefix = "Bearer "
-			if len(auth) < len(prefix) || !strings.EqualFold(auth[:len(prefix)], prefix) || auth[len(prefix):] != metricsToken {
+			providedToken := ""
+			if len(auth) >= len(prefix) && strings.EqualFold(auth[:len(prefix)], prefix) {
+				providedToken = auth[len(prefix):]
+			}
+			if len(providedToken) != len(metricsToken) ||
+				subtle.ConstantTimeCompare([]byte(providedToken), []byte(metricsToken)) != 1 {
 				http.Error(w, "Unauthorized", http.StatusUnauthorized)
 				return
 			}

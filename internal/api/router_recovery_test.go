@@ -2,11 +2,8 @@ package api
 
 import (
 	"encoding/json"
-	"errors"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -33,25 +30,44 @@ func newRecoveryRouter(t *testing.T) *Router {
 		ConfigPath: dir,
 	}
 
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
-
-	recoveryFile := filepath.Join(cfg.DataPath, ".auth_recovery")
-	if err := os.WriteFile(recoveryFile, []byte("recovery enabled"), 0600); err != nil {
-		t.Fatalf("write recovery file: %v", err)
-	}
-
-	return router
+	return NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
 }
 
-func TestAuthRecoveryAllowsDirectLoopback(t *testing.T) {
+func establishLoopbackRecoverySession(t *testing.T, router *Router) *http.Cookie {
+	t.Helper()
+
+	req := httptest.NewRequest(http.MethodPost, "/api/security/recovery", strings.NewReader(`{"action":"disable_auth"}`))
+	req.RemoteAddr = "127.0.0.1:12345"
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	router.mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d (%s)", http.StatusOK, rec.Code, rec.Body.String())
+	}
+
+	for _, cookie := range rec.Result().Cookies() {
+		if cookie.Name == cookieNameSession || cookie.Name == cookieNameSessionSecure {
+			return cookie
+		}
+	}
+
+	t.Fatal("expected recovery session cookie")
+	return nil
+}
+
+func TestRecoverySessionAllowsDirectLoopback(t *testing.T) {
 	router := newRecoveryRouter(t)
 
 	router.mux.HandleFunc("/api/secure", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
 
+	sessionCookie := establishLoopbackRecoverySession(t, router)
+
 	req := httptest.NewRequest(http.MethodGet, "/api/secure", nil)
 	req.RemoteAddr = "127.0.0.1:12345"
+	req.AddCookie(sessionCookie)
 	rec := httptest.NewRecorder()
 
 	router.ServeHTTP(rec, req)
@@ -64,16 +80,19 @@ func TestAuthRecoveryAllowsDirectLoopback(t *testing.T) {
 	}
 }
 
-func TestAuthRecoveryRejectsForwardedLoopback(t *testing.T) {
+func TestRecoverySessionRejectsForwardedLoopback(t *testing.T) {
 	router := newRecoveryRouter(t)
 
 	router.mux.HandleFunc("/api/secure", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
 
+	sessionCookie := establishLoopbackRecoverySession(t, router)
+
 	req := httptest.NewRequest(http.MethodGet, "/api/secure", nil)
 	req.RemoteAddr = "127.0.0.1:12345"
 	req.Header.Set("X-Forwarded-For", "127.0.0.1")
+	req.AddCookie(sessionCookie)
 	rec := httptest.NewRecorder()
 
 	router.ServeHTTP(rec, req)
@@ -111,12 +130,22 @@ func TestRecoveryEndpointDisableAuthAllowsLoopback(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected status %d, got %d (%s)", http.StatusOK, rec.Code, rec.Body.String())
 	}
+	foundSessionCookie := false
+	for _, cookie := range rec.Result().Cookies() {
+		if cookie.Name == cookieNameSession || cookie.Name == cookieNameSessionSecure {
+			foundSessionCookie = true
+			break
+		}
+	}
+	if !foundSessionCookie {
+		t.Fatal("expected recovery session cookie")
+	}
 }
 
-func TestRecoveryEndpointDisableAuthAllowsValidToken(t *testing.T) {
+func TestRecoveryEndpointDisableAuthRejectsTokenFromDifferentIP(t *testing.T) {
 	router := newRecoveryRouter(t)
 	InitRecoveryTokenStore(router.config.DataPath)
-	token, err := GetRecoveryTokenStore().GenerateRecoveryToken(5 * time.Minute)
+	token, err := GetRecoveryTokenStore().GenerateRecoveryToken(5*time.Minute, "127.0.0.1")
 	if err != nil {
 		t.Fatalf("generate recovery token: %v", err)
 	}
@@ -129,23 +158,23 @@ func TestRecoveryEndpointDisableAuthAllowsValidToken(t *testing.T) {
 
 	router.mux.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected status %d, got %d (%s)", http.StatusOK, rec.Code, rec.Body.String())
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected status %d, got %d (%s)", http.StatusForbidden, rec.Code, rec.Body.String())
 	}
 }
 
-func TestRecoveryEndpointEnableAuthRemovesFile(t *testing.T) {
+func TestRecoveryEndpointEnableAuthClearsRecoverySession(t *testing.T) {
 	router := newRecoveryRouter(t)
-	InitRecoveryTokenStore(router.config.DataPath)
-	token, err := GetRecoveryTokenStore().GenerateRecoveryToken(5 * time.Minute)
-	if err != nil {
-		t.Fatalf("generate recovery token: %v", err)
-	}
+	router.mux.HandleFunc("/api/secure", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	sessionCookie := establishLoopbackRecoverySession(t, router)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/security/recovery", strings.NewReader(`{"action":"enable_auth"}`))
-	req.RemoteAddr = "203.0.113.52:12345"
+	req.RemoteAddr = "127.0.0.1:12345"
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Recovery-Token", token)
+	req.AddCookie(sessionCookie)
 	rec := httptest.NewRecorder()
 
 	router.mux.ServeHTTP(rec, req)
@@ -154,9 +183,14 @@ func TestRecoveryEndpointEnableAuthRemovesFile(t *testing.T) {
 		t.Fatalf("expected status %d, got %d (%s)", http.StatusOK, rec.Code, rec.Body.String())
 	}
 
-	recoveryFile := filepath.Join(router.config.DataPath, ".auth_recovery")
-	if _, err := os.Stat(recoveryFile); !errors.Is(err, os.ErrNotExist) {
-		t.Fatalf("expected recovery file to be removed, got err=%v", err)
+	followUp := httptest.NewRequest(http.MethodGet, "/api/secure", nil)
+	followUp.RemoteAddr = "127.0.0.1:12345"
+	followUp.AddCookie(sessionCookie)
+	followRec := httptest.NewRecorder()
+
+	router.ServeHTTP(followRec, followUp)
+	if followRec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected status %d after clearing recovery session, got %d (%s)", http.StatusUnauthorized, followRec.Code, followRec.Body.String())
 	}
 }
 
@@ -181,7 +215,7 @@ func TestRecoveryEndpointGenerateTokenRejectsRemoteToken(t *testing.T) {
 	router := newRecoveryRouter(t)
 	resetRecoveryStore()
 	InitRecoveryTokenStore(router.config.DataPath)
-	token, err := GetRecoveryTokenStore().GenerateRecoveryToken(5 * time.Minute)
+	token, err := GetRecoveryTokenStore().GenerateRecoveryToken(5*time.Minute, "127.0.0.1")
 	if err != nil {
 		t.Fatalf("generate recovery token: %v", err)
 	}

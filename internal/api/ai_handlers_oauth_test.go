@@ -359,6 +359,7 @@ func TestHandleOAuthDisconnect_AuthFailure(t *testing.T) {
 	// With nil config, CheckAuth returns 503 Service Unavailable.
 	handler := &AISettingsHandler{}
 	req := httptest.NewRequest(http.MethodPost, "/api/ai/oauth/disconnect", nil)
+	req.RemoteAddr = "127.0.0.1:12345"
 	rr := httptest.NewRecorder()
 
 	handler.HandleOAuthDisconnect(rr, req)
@@ -390,6 +391,7 @@ func TestHandleOAuthDisconnect_Success(t *testing.T) {
 	handler.SetConfig(&config.Config{})
 
 	req := httptest.NewRequest(http.MethodPost, "/api/ai/oauth/disconnect", nil)
+	req.RemoteAddr = "127.0.0.1:12345"
 	rr := httptest.NewRecorder()
 
 	handler.HandleOAuthDisconnect(rr, req)
@@ -431,6 +433,7 @@ func TestHandleOAuthDisconnect_NilPersistence(t *testing.T) {
 	handler.SetConfig(&config.Config{})
 
 	req := httptest.NewRequest(http.MethodPost, "/api/ai/oauth/disconnect", nil)
+	req.RemoteAddr = "127.0.0.1:12345"
 	rr := httptest.NewRecorder()
 
 	handler.HandleOAuthDisconnect(rr, req)
@@ -471,6 +474,7 @@ func TestHandleOAuthDisconnect_TenantIsolation(t *testing.T) {
 
 	// Disconnect tenant-a's OAuth.
 	req := httptest.NewRequest(http.MethodPost, "/api/ai/oauth/disconnect", nil)
+	req.RemoteAddr = "127.0.0.1:12345"
 	req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, "tenant-a"))
 	rr := httptest.NewRecorder()
 

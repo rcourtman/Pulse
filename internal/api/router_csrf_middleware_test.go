@@ -18,6 +18,7 @@ func newRouterWithSession(t *testing.T) (*Router, string) {
 	dir := t.TempDir()
 	InitSessionStore(dir)
 	InitCSRFStore(dir)
+	InitRecoveryTokenStore(dir)
 
 	hashed, err := internalauth.HashPassword("Password!1")
 	if err != nil {
@@ -221,12 +222,13 @@ func TestRouterCSRFBypassedForQuickSetupWithValidRecoveryToken(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	token, err := GetRecoveryTokenStore().GenerateRecoveryToken(5 * time.Minute)
+	token, err := GetRecoveryTokenStore().GenerateRecoveryToken(5*time.Minute, "127.0.0.1")
 	if err != nil {
 		t.Fatalf("generate recovery token: %v", err)
 	}
 
 	req := httptest.NewRequest(http.MethodPost, "/api/security/quick-setup", nil)
+	req.RemoteAddr = "127.0.0.1:12345"
 	req.AddCookie(&http.Cookie{Name: "pulse_session", Value: sessionToken})
 	req.Header.Set("X-Recovery-Token", token)
 	rec := httptest.NewRecorder()

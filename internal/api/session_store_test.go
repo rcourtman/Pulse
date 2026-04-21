@@ -162,6 +162,48 @@ func TestSessionStore_CreateAndValidate(t *testing.T) {
 	}
 }
 
+func TestSessionStore_CreateRecoverySession_PersistsRecoveryBypass(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	store := NewSessionStore(tmpDir)
+	token := "recovery-session-token"
+	store.CreateRecoverySession(token, time.Hour, "TestAgent", "loopback", "recovery")
+	store.Shutdown()
+
+	data, err := os.ReadFile(filepath.Join(tmpDir, "sessions.json"))
+	if err != nil {
+		t.Fatalf("ReadFile sessions.json: %v", err)
+	}
+
+	var persisted []sessionPersisted
+	if err := json.Unmarshal(data, &persisted); err != nil {
+		t.Fatalf("Unmarshal persisted sessions: %v", err)
+	}
+	if len(persisted) != 1 {
+		t.Fatalf("expected 1 persisted session, got %d", len(persisted))
+	}
+	if !persisted[0].RecoveryBypass {
+		t.Fatal("expected persisted recovery session to retain RecoveryBypass")
+	}
+
+	reloaded := NewSessionStore(tmpDir)
+	defer reloaded.Shutdown()
+
+	session := reloaded.GetSession(token)
+	if session == nil {
+		t.Fatal("expected reloaded recovery session to exist")
+	}
+	if !session.RecoveryBypass {
+		t.Fatal("expected reloaded recovery session to retain RecoveryBypass")
+	}
+	if session.Username != "recovery" {
+		t.Fatalf("reloaded recovery session username = %q, want %q", session.Username, "recovery")
+	}
+	if session.IP != "loopback" {
+		t.Fatalf("reloaded recovery session IP = %q, want %q", session.IP, "loopback")
+	}
+}
+
 func TestSessionStore_ValidateSession_NonExistent(t *testing.T) {
 	store := &SessionStore{
 		sessions: make(map[string]*SessionData),

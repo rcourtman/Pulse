@@ -393,7 +393,7 @@ func TestAISettingsHandler_UpdateSettings_QuickstartRequiresActivationBeforeEnab
 	body, _ := json.Marshal(AISettingsUpdateRequest{
 		Enabled: ptr(true),
 	})
-	req := httptest.NewRequest(http.MethodPut, "/api/settings/ai", bytes.NewReader(body))
+	req := newLoopbackRequest(http.MethodPut, "/api/settings/ai", bytes.NewReader(body))
 	rec := httptest.NewRecorder()
 	handler.HandleUpdateAISettings(rec, req)
 
@@ -426,7 +426,7 @@ func TestAISettingsHandler_UpdateSettings_QuickstartBootstrapBeforeEnableUsesAct
 	body, _ := json.Marshal(AISettingsUpdateRequest{
 		Enabled: ptr(true),
 	})
-	req := httptest.NewRequest(http.MethodPut, "/api/settings/ai", bytes.NewReader(body))
+	req := newLoopbackRequest(http.MethodPut, "/api/settings/ai", bytes.NewReader(body))
 	rec := httptest.NewRecorder()
 	handler.HandleUpdateAISettings(rec, req)
 
@@ -1813,7 +1813,7 @@ func TestHandleRunCommand_RequiresApprovalID(t *testing.T) {
 	handler := newTestAISettingsHandler(cfg, persistence, nil)
 
 	body := []byte(`{"command":"uptime","target_type":"vm","target_id":"vm-101","run_on_host":false}`)
-	req := httptest.NewRequest(http.MethodPost, "/api/ai/run-command", bytes.NewReader(body))
+	req := newLoopbackRequest(http.MethodPost, "/api/ai/run-command", bytes.NewReader(body))
 	rec := httptest.NewRecorder()
 	handler.HandleRunCommand(rec, req)
 
@@ -1847,7 +1847,7 @@ func TestHandleRunCommand_ConsumesApproval(t *testing.T) {
 	require.NoError(t, err)
 
 	body := []byte(`{"approval_id":"approval-1","command":"uptime","target_type":"vm","target_id":"vm-101","run_on_host":false}`)
-	req := httptest.NewRequest(http.MethodPost, "/api/ai/run-command", bytes.NewReader(body))
+	req := newLoopbackRequest(http.MethodPost, "/api/ai/run-command", bytes.NewReader(body))
 	rec := httptest.NewRecorder()
 	handler.HandleRunCommand(rec, req)
 
@@ -1883,7 +1883,7 @@ func TestHandleRunCommand_RejectsCommandMismatch(t *testing.T) {
 	require.NoError(t, err)
 
 	body := []byte(`{"approval_id":"approval-2","command":"whoami","target_type":"vm","target_id":"vm-101","run_on_host":false}`)
-	req := httptest.NewRequest(http.MethodPost, "/api/ai/run-command", bytes.NewReader(body))
+	req := newLoopbackRequest(http.MethodPost, "/api/ai/run-command", bytes.NewReader(body))
 	rec := httptest.NewRecorder()
 	handler.HandleRunCommand(rec, req)
 
@@ -1919,7 +1919,7 @@ func TestHandleRunCommand_RejectsUnsupportedTargetType(t *testing.T) {
 	require.NoError(t, err)
 
 	body := []byte(`{"approval_id":"approval-docker-1","command":"docker restart web","target_type":"docker","target_id":"host-1:web","run_on_host":false}`)
-	req := httptest.NewRequest(http.MethodPost, "/api/ai/run-command", bytes.NewReader(body))
+	req := newLoopbackRequest(http.MethodPost, "/api/ai/run-command", bytes.NewReader(body))
 	rec := httptest.NewRecorder()
 	handler.HandleRunCommand(rec, req)
 
@@ -1958,7 +1958,7 @@ func TestHandleRunCommand_RejectsCrossOrgApproval(t *testing.T) {
 	require.NoError(t, err)
 
 	body := []byte(`{"approval_id":"approval-org-a","command":"uptime","target_type":"vm","target_id":"vm-101","run_on_host":false}`)
-	req := httptest.NewRequest(http.MethodPost, "/api/ai/run-command", bytes.NewReader(body))
+	req := newLoopbackRequest(http.MethodPost, "/api/ai/run-command", bytes.NewReader(body))
 	ctx := context.WithValue(req.Context(), OrgIDContextKey, "org-b")
 	req = req.WithContext(ctx)
 

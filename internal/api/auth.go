@@ -373,6 +373,22 @@ func ValidateAndExtendSession(token string) bool {
 	return GetSessionStore().ValidateAndExtendSession(token)
 }
 
+func constantTimeStringEqual(a, b string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	return subtle.ConstantTimeCompare([]byte(a), []byte(b)) == 1
+}
+
+func requestMatchesRecoverySession(r *http.Request, session *SessionData) bool {
+	if r == nil || session == nil || !session.RecoveryBypass || !isDirectLoopbackRequest(r) {
+		return false
+	}
+	expectedIP := normalizeRecoveryBindingIP(session.IP)
+	actualIP := normalizeRecoveryBindingIP(GetClientIP(r))
+	return expectedIP != "" && actualIP != "" && constantTimeStringEqual(expectedIP, actualIP)
+}
+
 func explicitAPITokenFromRequest(r *http.Request) (string, bool) {
 	if r == nil {
 		return "", false
@@ -562,10 +578,23 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 	// other browser-session flows must stay authoritative even when the runtime
 	// also has API tokens configured.
 	if cookie, err := readSessionCookie(r); err == nil && cookie.Value != "" {
-		// Use ValidateAndExtendSession for sliding expiration
-		if ValidateAndExtendSession(cookie.Value) {
+		session := GetSessionStore().GetSession(cookie.Value)
+		if session != nil && session.RecoveryBypass {
+			if requestMatchesRecoverySession(r, session) && ValidateAndExtendSession(cookie.Value) {
+				if session.Username != "" {
+					w.Header().Set("X-Authenticated-User", session.Username)
+				}
+				w.Header().Set("X-Auth-Method", "recovery_session")
+				w.Header().Set("X-Auth-Recovery", "true")
+				return true
+			}
+			log.Warn().
+				Str("path", r.URL.Path).
+				Str("client_ip", GetClientIP(r)).
+				Str("session_ip", session.IP).
+				Msg("Rejected recovery session outside direct loopback binding")
+		} else if ValidateAndExtendSession(cookie.Value) {
 			username := GetSessionUsername(cookie.Value)
-			session := GetSessionStore().GetSession(cookie.Value)
 			if session != nil && session.OIDCRefreshToken != "" && hasEnabledSSOProvidersForAuth(cfg) {
 				// Check if access token is expired or about to expire (5 min buffer)
 				if time.Now().Add(5 * time.Minute).After(session.OIDCAccessTokenExp) {
@@ -615,12 +644,18 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 		if hasEnabledSSOProvidersForAuth(cfg) {
 			log.Debug().Msg("SSO enabled without local credentials, authentication required")
 		} else {
-			log.Debug().Msg("No auth configured, allowing access as 'anonymous'")
-			if w != nil {
-				w.Header().Set("X-Authenticated-User", "anonymous")
-				w.Header().Set("X-Auth-Method", "none")
+			if isDirectLoopbackRequest(r) {
+				log.Debug().Msg("No auth configured, allowing loopback access as 'anonymous'")
+				if w != nil {
+					w.Header().Set("X-Authenticated-User", "anonymous")
+					w.Header().Set("X-Auth-Method", "none")
+				}
+				return true
 			}
-			return true
+			log.Warn().
+				Str("path", r.URL.Path).
+				Str("ip", GetClientIP(r)).
+				Msg("Rejected non-loopback access before auth was configured")
 		}
 	}
 
@@ -685,7 +720,7 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 							return false
 						}
 						// Check username
-						userMatch := parts[0] == cfg.AuthUser
+						userMatch := constantTimeStringEqual(parts[0], cfg.AuthUser)
 
 						// Check password - support both hashed and plain text for migration
 						// Config always has hashed password now (auto-hashed on load)

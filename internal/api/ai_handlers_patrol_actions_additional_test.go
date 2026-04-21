@@ -147,7 +147,7 @@ func TestHandleGetPatrolStatus_IncludesQuickstartFields(t *testing.T) {
 	handler.defaultAIService.SetQuickstartCredits(&stubQuickstartCreditManager{remaining: 7})
 	setUnexportedField(t, handler.defaultAIService, "usingQuickstart", true)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/ai/patrol/status", nil)
+	req := newLoopbackRequest(http.MethodGet, "/api/ai/patrol/status", nil)
 	rec := httptest.NewRecorder()
 
 	handler.HandleGetPatrolStatus(rec, req)
@@ -177,7 +177,7 @@ func TestHandleGetPatrolStatus_DerivesBlockedRuntimeStateForExhaustedQuickstartC
 
 	handler.defaultAIService.SetQuickstartCredits(&stubQuickstartCreditManager{remaining: 0})
 
-	req := httptest.NewRequest(http.MethodGet, "/api/ai/patrol/status", nil)
+	req := newLoopbackRequest(http.MethodGet, "/api/ai/patrol/status", nil)
 	rec := httptest.NewRecorder()
 
 	handler.HandleGetPatrolStatus(rec, req)
@@ -210,7 +210,7 @@ func TestHandleGetPatrolStatus_DistinguishesLastFullPatrolFromLastActivity(t *te
 	setUnexportedField(t, patrol, "lastFullPatrol", lastPatrolAt)
 	setUnexportedField(t, patrol, "lastActivity", lastActivityAt)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/ai/patrol/status", nil)
+	req := newLoopbackRequest(http.MethodGet, "/api/ai/patrol/status", nil)
 	rec := httptest.NewRecorder()
 
 	handler.HandleGetPatrolStatus(rec, req)
@@ -240,7 +240,7 @@ func TestHandleGetPatrolStatus_ExposesScopedTriggerStatus(t *testing.T) {
 		AnomalyTriggersEnabled: true,
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/api/ai/patrol/status", nil)
+	req := newLoopbackRequest(http.MethodGet, "/api/ai/patrol/status", nil)
 	rec := httptest.NewRecorder()
 
 	handler.HandleGetPatrolStatus(rec, req)
@@ -348,7 +348,7 @@ func TestPatrolActionHandlers_NoAIService_ReturnStructuredServiceUnavailable(t *
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			req := httptest.NewRequest(tc.method, tc.path, strings.NewReader(tc.body))
+			req := newLoopbackRequest(tc.method, tc.path, strings.NewReader(tc.body))
 			rec := httptest.NewRecorder()
 
 			tc.handler(rec, req)
@@ -378,7 +378,7 @@ func TestHandleAcknowledgeFinding_PatrolAndUnified(t *testing.T) {
 	addPatrolFinding(t, patrol, "finding-ack", detectedAt)
 	addUnifiedFinding(unifiedStore, "finding-ack", detectedAt)
 
-	req := httptest.NewRequest(http.MethodPost, "/api/ai/patrol/acknowledge", strings.NewReader(`{"finding_id":"finding-ack"}`))
+	req := newLoopbackRequest(http.MethodPost, "/api/ai/patrol/acknowledge", strings.NewReader(`{"finding_id":"finding-ack"}`))
 	rec := httptest.NewRecorder()
 
 	handler.HandleAcknowledgeFinding(rec, req)
@@ -409,7 +409,7 @@ func TestHandleAcknowledgeFinding_UnifiedOnly(t *testing.T) {
 	detectedAt := time.Now().Add(-1 * time.Hour)
 	addUnifiedFinding(unifiedStore, "finding-unified-only", detectedAt)
 
-	req := httptest.NewRequest(http.MethodPost, "/api/ai/patrol/acknowledge", strings.NewReader(`{"finding_id":"finding-unified-only"}`))
+	req := newLoopbackRequest(http.MethodPost, "/api/ai/patrol/acknowledge", strings.NewReader(`{"finding_id":"finding-unified-only"}`))
 	rec := httptest.NewRecorder()
 
 	handler.HandleAcknowledgeFinding(rec, req)
@@ -441,7 +441,7 @@ func TestHandleSnoozeFinding_CapsDuration(t *testing.T) {
 	addUnifiedFinding(unifiedStore, "finding-snooze", detectedAt)
 
 	body := `{"finding_id":"finding-snooze","duration_hours":200}`
-	req := httptest.NewRequest(http.MethodPost, "/api/ai/patrol/snooze", strings.NewReader(body))
+	req := newLoopbackRequest(http.MethodPost, "/api/ai/patrol/snooze", strings.NewReader(body))
 	rec := httptest.NewRecorder()
 
 	handler.HandleSnoozeFinding(rec, req)
@@ -485,7 +485,7 @@ func TestHandleResolveFinding_SetsResolved(t *testing.T) {
 	addPatrolFinding(t, patrol, "finding-resolve", detectedAt)
 	addUnifiedFinding(unifiedStore, "finding-resolve", detectedAt)
 
-	req := httptest.NewRequest(http.MethodPost, "/api/ai/patrol/resolve", strings.NewReader(`{"finding_id":"finding-resolve"}`))
+	req := newLoopbackRequest(http.MethodPost, "/api/ai/patrol/resolve", strings.NewReader(`{"finding_id":"finding-resolve"}`))
 	rec := httptest.NewRecorder()
 
 	handler.HandleResolveFinding(rec, req)
@@ -523,7 +523,7 @@ func TestHandleDismissFinding_ValidReason(t *testing.T) {
 		"note":       "known load test",
 	}
 	body, _ := json.Marshal(payload)
-	req := httptest.NewRequest(http.MethodPost, "/api/ai/patrol/dismiss", bytes.NewReader(body))
+	req := newLoopbackRequest(http.MethodPost, "/api/ai/patrol/dismiss", bytes.NewReader(body))
 	rec := httptest.NewRecorder()
 
 	handler.HandleDismissFinding(rec, req)
@@ -561,7 +561,7 @@ func TestHandleSuppressFinding_SetsSuppressed(t *testing.T) {
 	addPatrolFinding(t, patrol, "finding-suppress", detectedAt)
 	addUnifiedFinding(unifiedStore, "finding-suppress", detectedAt)
 
-	req := httptest.NewRequest(http.MethodPost, "/api/ai/patrol/suppress", strings.NewReader(`{"finding_id":"finding-suppress"}`))
+	req := newLoopbackRequest(http.MethodPost, "/api/ai/patrol/suppress", strings.NewReader(`{"finding_id":"finding-suppress"}`))
 	rec := httptest.NewRecorder()
 
 	handler.HandleSuppressFinding(rec, req)
@@ -645,7 +645,7 @@ func TestHandlePatrolRuntimeFindingActions_AreRejected(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			req := httptest.NewRequest(http.MethodPost, tt.path, strings.NewReader(tt.body))
+			req := newLoopbackRequest(http.MethodPost, tt.path, strings.NewReader(tt.body))
 			rec := httptest.NewRecorder()
 
 			tt.handler(rec, req)
@@ -711,7 +711,7 @@ func TestHandleGetFindingsHistory_StartTimeFilter(t *testing.T) {
 	addPatrolFinding(t, patrol, "finding-recent", recentTime)
 
 	startTime := time.Now().Add(-1 * time.Hour).UTC().Format(time.RFC3339)
-	req := httptest.NewRequest(http.MethodGet, "/api/ai/patrol/history?start_time="+startTime, nil)
+	req := newLoopbackRequest(http.MethodGet, "/api/ai/patrol/history?start_time="+startTime, nil)
 	rec := httptest.NewRecorder()
 
 	handler.HandleGetFindingsHistory(rec, req)
@@ -739,7 +739,7 @@ func TestHandleForcePatrol_ConfigDisabled(t *testing.T) {
 	cfg.Enabled = false
 	patrol.SetConfig(cfg)
 
-	req := httptest.NewRequest(http.MethodPost, "/api/ai/patrol/run", nil)
+	req := newLoopbackRequest(http.MethodPost, "/api/ai/patrol/run", nil)
 	rec := httptest.NewRecorder()
 
 	handler.HandleForcePatrol(rec, req)
@@ -758,7 +758,7 @@ func TestHandleForcePatrol_CommunityTierIgnoresRecentScopedActivityForFullPatrol
 
 	setUnexportedField(t, patrol, "lastActivity", time.Now().Add(-10*time.Minute))
 
-	req := httptest.NewRequest(http.MethodPost, "/api/ai/patrol/run", nil)
+	req := newLoopbackRequest(http.MethodPost, "/api/ai/patrol/run", nil)
 	rec := httptest.NewRecorder()
 
 	handler.HandleForcePatrol(rec, req)
