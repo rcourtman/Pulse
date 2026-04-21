@@ -45,9 +45,17 @@ describe('App architecture', () => {
     expect(appSource).toContain('<Route path="/pricing" component={PricingHandoffPage} />');
     expect(appSource).toContain("const StoragePage = lazy(() => import('./pages/Storage'));");
     expect(appSource).toContain("const OperationsPage = lazy(() => import('./pages/Operations'));");
+    expect(appSource).toContain("const WorkloadsPage = lazy(() => import('./pages/Workloads'));");
+    expect(appSource).toContain("const RecoveryPage = lazy(() => import('./pages/Recovery'));");
+    expect(appSource).toContain('<Route path={ROOT_WORKLOADS_PATH} component={WorkloadsPage} />');
+    expect(appSource).toContain('<Route path={RECOVERY_ROUTE_PATH} component={RecoveryPage} />');
     expect(appSource).not.toContain(
       "const StorageComponent = lazy(() => import('./components/Storage/Storage'));",
     );
+    expect(appSource).not.toContain(
+      "const WorkloadsView = lazy(() => import('./components/Dashboard/Dashboard'));",
+    );
+    expect(appSource).not.toContain("const RecoveryRoute = lazy(() => import('./pages/RecoveryRoute'));");
     expect(appSource).not.toContain("const PricingPage = lazy(() => import('./pages/PricingV6'));");
     expect(appSource).not.toContain('function ConnectionStatusBadge(');
     expect(appSource).not.toContain('function AppLayout(');
@@ -170,6 +178,10 @@ describe('App architecture', () => {
     expect(routePreloadSource).toContain("id: 'recovery',");
     expect(routePreloadSource).toContain("id: 'patrol',");
     expect(routePreloadSource).toContain('const routePreloadCache = new Map<string, Promise<void>>();');
+    expect(routePreloadSource).toContain("import('@/pages/Workloads')");
+    expect(routePreloadSource).toContain("import('@/pages/Recovery')");
+    expect(routePreloadSource).not.toContain("import('@/components/Dashboard/Dashboard')");
+    expect(routePreloadSource).not.toContain("import('@/pages/RecoveryRoute')");
     expect(appRuntimeContextSource).toContain(
       "import { createContext, useContext } from 'solid-js';",
     );

@@ -7,6 +7,7 @@ import { RecoveryProtectedInventorySection } from '@/components/Recovery/Recover
 import { RecoverySummary } from '@/components/Recovery/RecoverySummary';
 import { Card } from '@/components/shared/Card';
 import { EmptyState } from '@/components/shared/EmptyState';
+import { PageHeader } from '@/components/shared/PageHeader';
 import { Subtabs } from '@/components/shared/Subtabs';
 import { useRecoverySurfaceState } from '@/features/recovery/useRecoverySurfaceState';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
@@ -575,6 +576,11 @@ const Recovery: Component = () => {
 
   return (
     <div data-testid="recovery-page" class="flex flex-col gap-2">
+      <PageHeader
+        title="Recovery"
+        description="Review protected inventory, recent recovery activity, and restore posture across platforms."
+      />
+
       <RecoverySummary
         loaded={recoveryRollupsLoaded}
         rollups={rollups}

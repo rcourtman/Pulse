@@ -2675,6 +2675,7 @@
         "frontend-modern/src/components/shared/"
       ],
       "owned_files": [
+        "frontend-modern/scripts/header-audit.mjs",
         "frontend-modern/src/components/Settings/AIChatMaintenanceSection.tsx",
         "frontend-modern/src/components/Settings/AIModelSelectionSection.tsx",
         "frontend-modern/src/components/Settings/AIProviderConfigurationSection.tsx",
@@ -2905,6 +2906,7 @@
             "label": "route shell and settings support proof",
             "match_prefixes": [],
             "match_files": [
+              "frontend-modern/scripts/header-audit.mjs",
               "frontend-modern/src/components/Settings/ReportingPanel.tsx",
               "frontend-modern/src/components/Settings/reportingPanelModel.ts",
               "frontend-modern/src/components/Settings/reportingResourceTypes.ts",
@@ -2927,6 +2929,8 @@
               "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
               "frontend-modern/src/components/Settings/__tests__/SystemLogsPanel.test.tsx",
               "frontend-modern/src/pages/__tests__/Operations.helpers.test.ts",
+              "frontend-modern/src/pages/__tests__/Recovery.test.tsx",
+              "frontend-modern/src/pages/__tests__/Workloads.helpers.test.ts",
               "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
               "frontend-modern/src/utils/__tests__/reportableResourceTypes.test.ts",
               "frontend-modern/src/utils/__tests__/reportingPresentation.test.ts",
@@ -3918,6 +3922,7 @@
         "frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts",
         "frontend-modern/src/components/Infrastructure/useUnifiedResourceTableViewportSync.ts",
         "frontend-modern/src/components/Workloads/WorkloadsSummary.tsx",
+        "frontend-modern/src/pages/Workloads.tsx",
         "frontend-modern/src/utils/thresholdSliderPresentation.ts",
         "frontend-modern/src/utils/throughputPresentation.ts",
         "internal/api/router_bench_test.go",
@@ -4046,6 +4051,7 @@
               "frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts",
               "frontend-modern/src/components/Infrastructure/useUnifiedResourceTableViewportSync.ts",
               "frontend-modern/src/components/Workloads/WorkloadsSummary.tsx",
+              "frontend-modern/src/pages/Workloads.tsx",
               "frontend-modern/src/utils/thresholdSliderPresentation.ts"
             ],
             "allow_same_subsystem_tests": false,
@@ -4081,6 +4087,7 @@
               "frontend-modern/src/components/Infrastructure/__tests__/UnifiedResourceTable.performance.contract.test.tsx",
               "frontend-modern/src/components/Infrastructure/__tests__/unifiedResourceTableStateModel.test.ts",
               "frontend-modern/src/components/Workloads/WorkloadsSummary.test.tsx",
+              "frontend-modern/src/pages/__tests__/Workloads.helpers.test.ts",
               "frontend-modern/src/utils/__tests__/thresholdSliderPresentation.test.ts"
             ]
           },
@@ -4398,7 +4405,7 @@
         "frontend-modern/src/hooks/useRecoveryPointsSeries.ts",
         "frontend-modern/src/hooks/useRecoveryRollups.ts",
         "frontend-modern/src/pages/Dashboard.tsx",
-        "frontend-modern/src/pages/RecoveryRoute.tsx",
+        "frontend-modern/src/pages/Recovery.tsx",
         "frontend-modern/src/pages/Storage.tsx",
         "frontend-modern/src/types/recovery.ts",
         "frontend-modern/src/utils/dashboardRecoveryPresentation.ts",
@@ -4424,7 +4431,7 @@
           "frontend-modern/src/components/Recovery/__tests__/Recovery.test.tsx",
           "frontend-modern/src/components/Recovery/RecoverySummary.test.tsx",
           "frontend-modern/src/components/Storage/code_standards.test.ts",
-          "frontend-modern/src/pages/__tests__/RecoveryRoute.test.tsx",
+          "frontend-modern/src/pages/__tests__/Recovery.test.tsx",
           "frontend-modern/src/utils/__tests__/dashboardRecoveryPresentation.test.ts",
           "internal/recovery/recovery_test.go"
         ],
@@ -4477,7 +4484,7 @@
               "frontend-modern/src/hooks/useRecoveryPointsFacets.ts",
               "frontend-modern/src/hooks/useRecoveryPointsSeries.ts",
               "frontend-modern/src/hooks/useRecoveryRollups.ts",
-              "frontend-modern/src/pages/RecoveryRoute.tsx",
+              "frontend-modern/src/pages/Recovery.tsx",
               "frontend-modern/src/types/recovery.ts",
               "frontend-modern/src/utils/dashboardRecoveryPresentation.ts",
               "frontend-modern/src/utils/recoveryActionPresentation.ts",
@@ -4499,7 +4506,7 @@
             "exact_files": [
               "frontend-modern/src/components/Recovery/__tests__/Recovery.test.tsx",
               "frontend-modern/src/components/Recovery/RecoverySummary.test.tsx",
-              "frontend-modern/src/pages/__tests__/RecoveryRoute.test.tsx",
+              "frontend-modern/src/pages/__tests__/Recovery.test.tsx",
               "frontend-modern/src/utils/__tests__/dashboardRecoveryPresentation.test.ts",
               "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
               "tests/integration/tests/17-recovery-layout.spec.ts"

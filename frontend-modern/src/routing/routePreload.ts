@@ -47,7 +47,7 @@ const ROUTE_PRELOADERS: readonly RoutePreloader[] = [
     id: 'workloads',
     matches: (route) => route === ROOT_WORKLOADS_PATH,
     preload: () =>
-      import('@/components/Dashboard/Dashboard').then(() => undefined),
+      import('@/pages/Workloads').then(() => undefined),
   },
   {
     id: 'storage',
@@ -59,7 +59,7 @@ const ROUTE_PRELOADERS: readonly RoutePreloader[] = [
     id: 'recovery',
     matches: (route) => route === RECOVERY_ROUTE_PATH,
     preload: () =>
-      import('@/pages/RecoveryRoute').then(() => undefined),
+      import('@/pages/Recovery').then(() => undefined),
   },
   {
     id: 'alerts',

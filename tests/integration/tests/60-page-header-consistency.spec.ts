@@ -1,13 +1,51 @@
-import { test, expect } from "@playwright/test";
-import { readRuntimeState } from "./runtime-defaults";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { expect, test as base } from "@playwright/test";
+
+import { createAuthenticatedStorageState } from "./helpers";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+type WorkerFixtures = {
+  authStorageStatePath: string;
+};
 
 const PAGE_HEADER_ROUTES = [
   {
-    slug: "operations",
-    route: "/operations",
-    title: "Operations",
+    slug: "dashboard",
+    route: "/dashboard",
+    title: "Dashboard",
     description:
-      "Run diagnostics, review generated reports, and inspect system logs without leaving the app.",
+      "Track infrastructure health, active risks, storage pressure, and recovery readiness from one overview.",
+  },
+  {
+    slug: "workloads",
+    route: "/workloads",
+    title: "Workloads",
+    description:
+      "Inspect live workloads, filter by platform and status, and drill into compute, memory, and I/O posture.",
+  },
+  {
+    slug: "infrastructure",
+    route: "/infrastructure",
+    title: "Infrastructure",
+    description:
+      "Inspect connected resources, filter by source and status, and drill into live health and capacity.",
+  },
+  {
+    slug: "storage",
+    route: "/storage",
+    title: "Storage",
+    description:
+      "Review capacity, node health, pools, and storage pressure across connected clusters and devices.",
+  },
+  {
+    slug: "recovery",
+    route: "/recovery",
+    title: "Recovery",
+    description:
+      "Review protected inventory, recent recovery activity, and restore posture across platforms.",
   },
   {
     slug: "alerts",
@@ -34,43 +72,39 @@ const PAGE_HEADER_ROUTES = [
 const ALIGNED_PAGE_HEADER_ROUTES = [
   PAGE_HEADER_ROUTES[0],
   PAGE_HEADER_ROUTES[1],
-  {
-    slug: "settings-operations",
-    route: "/settings/infrastructure-operations",
-    title: "Infrastructure",
-    description:
-      "Review top-level monitored systems, open install or platform connection workflows when needed, and control how Pulse collects infrastructure data. Billing and self-hosted plan features live in Pulse Pro.",
-  },
+  PAGE_HEADER_ROUTES[2],
   PAGE_HEADER_ROUTES[3],
+  PAGE_HEADER_ROUTES[4],
 ] as const;
 
-const PRIMARY_API_TOKEN =
-  process.env.PULSE_E2E_PRIMARY_API_TOKEN?.trim() ||
-  (typeof readRuntimeState()?.primaryAPIToken === "string"
-    ? readRuntimeState()!.primaryAPIToken!.trim()
-    : "");
-
-test.skip(
-  PRIMARY_API_TOKEN === "",
-  "Top-level header browser proof requires a runtime API token.",
-);
+const test = base.extend<{}, WorkerFixtures>({
+  storageState: async ({ authStorageStatePath }, use) => {
+    await use(authStorageStatePath);
+  },
+  authStorageStatePath: [
+    async ({ browser }, use, workerInfo) => {
+      const storageStatePath = path.resolve(
+        __dirname,
+        "..",
+        "..",
+        "tmp",
+        "playwright-auth",
+        `page-header-consistency-${workerInfo.project.name}.json`,
+      );
+      fs.mkdirSync(path.dirname(storageStatePath), { recursive: true });
+      await createAuthenticatedStorageState(browser, storageStatePath);
+      try {
+        await use(storageStatePath);
+      } finally {
+        fs.rmSync(storageStatePath, { force: true });
+      }
+    },
+    { scope: "worker" },
+  ],
+});
 
 test.describe("Top-level page header consistency", () => {
   test.setTimeout(180_000);
-
-  test.beforeEach(async ({ page }) => {
-    await page.addInitScript((token: string) => {
-      sessionStorage.setItem(
-        "pulse_auth",
-        JSON.stringify({
-          type: "token",
-          value: token,
-        }),
-      );
-      sessionStorage.setItem("pulse_auth_user", "admin");
-      localStorage.setItem("pulse_whats_new_v2_shown", "true");
-    }, PRIMARY_API_TOKEN);
-  });
 
   for (const surface of PAGE_HEADER_ROUTES) {
     test(`renders the canonical header framing on ${surface.route}`, async ({

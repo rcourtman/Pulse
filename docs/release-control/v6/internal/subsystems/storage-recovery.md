@@ -45,7 +45,7 @@ querying, and the operator-facing storage health presentation layer.
 18. `frontend-modern/src/hooks/useRecoveryRollups.ts`
 19. `frontend-modern/src/hooks/useRecoveryPointsFacets.ts`
 20. `frontend-modern/src/hooks/useRecoveryPointsSeries.ts`
-21. `frontend-modern/src/pages/RecoveryRoute.tsx`
+21. `frontend-modern/src/pages/Recovery.tsx`
 22. `frontend-modern/src/routing/resourceLinks.ts`
 23. `frontend-modern/src/pages/Dashboard.tsx`
 24. `frontend-modern/src/features/dashboardOverview/dashboardWidgets.ts`
@@ -1268,7 +1268,7 @@ implementation detail: `frontend-modern/src/hooks/useRecoveryPoints.ts`,
 `frontend-modern/src/hooks/useRecoveryPointsSeries.ts`, and
 `frontend-modern/src/hooks/useRecoveryRollups.ts` must stay on the explicit
 `recovery-product-surface` proof path instead of inheriting release-control
-coverage only through `frontend-modern/src/pages/RecoveryRoute.tsx`.
+coverage only through `frontend-modern/src/pages/Recovery.tsx`.
 Those same hooks now also own recovery transport normalization at the frontend
 boundary: raw compatibility fields such as `provider` / `providers` may be
 accepted from older `/api/recovery/*` payloads, but the runtime values they

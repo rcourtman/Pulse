@@ -149,7 +149,7 @@ def first_matching_policy_id(rule: dict, rel: str) -> str:
 RECOVERY_PRODUCT_SURFACE_EXACT_FILES = [
     "frontend-modern/src/components/Recovery/RecoverySummary.test.tsx",
     "frontend-modern/src/components/Recovery/__tests__/Recovery.test.tsx",
-    "frontend-modern/src/pages/__tests__/RecoveryRoute.test.tsx",
+    "frontend-modern/src/pages/__tests__/Recovery.test.tsx",
     "frontend-modern/src/utils/__tests__/dashboardRecoveryPresentation.test.ts",
     "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
     "tests/integration/tests/17-recovery-layout.spec.ts",
@@ -1115,7 +1115,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
         )
 
     def test_recovery_route_change_requires_storage_recovery_contract(self):
-        required = infer_impacted_subsystems(["frontend-modern/src/pages/RecoveryRoute.tsx"])
+        required = infer_impacted_subsystems(["frontend-modern/src/pages/Recovery.tsx"])
         self.assertEqual(set(required), {"storage-recovery"})
 
         recovery = required["storage-recovery"]
@@ -1125,7 +1125,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
         )
         self.assertEqual(
             recovery["touched_runtime_files"],
-            ["frontend-modern/src/pages/RecoveryRoute.tsx"],
+            ["frontend-modern/src/pages/Recovery.tsx"],
         )
         self.assertEqual(
             recovery["verification_requirements"],
@@ -1133,7 +1133,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                 {
                     "id": "recovery-product-surface",
                     "label": "recovery product surface proof",
-                    "touched_runtime_files": ["frontend-modern/src/pages/RecoveryRoute.tsx"],
+                    "touched_runtime_files": ["frontend-modern/src/pages/Recovery.tsx"],
                     "allow_same_subsystem_tests": False,
                     "test_prefixes": [],
                     "exact_files": RECOVERY_PRODUCT_SURFACE_EXACT_FILES,
@@ -3158,6 +3158,7 @@ index 1111111..2222222 100644
                         "frontend-modern/src/components/Infrastructure/__tests__/infrastructureSummaryModel.test.ts",
                         "frontend-modern/src/components/Infrastructure/__tests__/unifiedResourceTableStateModel.test.ts",
                         "frontend-modern/src/components/Workloads/WorkloadsSummary.test.tsx",
+                        "frontend-modern/src/pages/__tests__/Workloads.helpers.test.ts",
                         "frontend-modern/src/utils/__tests__/thresholdSliderPresentation.test.ts",
                     ],
                 }

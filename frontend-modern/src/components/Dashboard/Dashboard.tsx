@@ -1,5 +1,6 @@
 import { Show } from 'solid-js';
 import { InfrastructureSelector } from '@/components/shared/InfrastructureSelector';
+import { PageHeader } from '@/components/shared/PageHeader';
 import { DashboardFilter } from './DashboardFilter';
 import { WorkloadsSummary } from '@/components/Workloads/WorkloadsSummary';
 import { ScrollToTopButton } from '@/components/shared/ScrollToTopButton';
@@ -18,6 +19,11 @@ export function Dashboard(props: DashboardProps) {
       class="space-y-3"
       data-testid="workloads-page"
     >
+      <PageHeader
+        title="Workloads"
+        description="Inspect live workloads, filter by platform and status, and drill into compute, memory, and I/O posture."
+      />
+
       <Show when={state.isWorkloadsRoute() && !state.workloadsSummaryCollapsed()}>
         <StickySummarySection>
           <WorkloadsSummary

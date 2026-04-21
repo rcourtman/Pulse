@@ -8,7 +8,7 @@ from subsystem_lookup import lookup_paths, parse_args, render_pretty
 RECOVERY_PRODUCT_SURFACE_EXACT_FILES = [
     "frontend-modern/src/components/Recovery/RecoverySummary.test.tsx",
     "frontend-modern/src/components/Recovery/__tests__/Recovery.test.tsx",
-    "frontend-modern/src/pages/__tests__/RecoveryRoute.test.tsx",
+    "frontend-modern/src/pages/__tests__/Recovery.test.tsx",
     "frontend-modern/src/utils/__tests__/dashboardRecoveryPresentation.test.ts",
     "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
     "tests/integration/tests/17-recovery-layout.spec.ts",
@@ -713,7 +713,7 @@ class SubsystemLookupTest(unittest.TestCase):
         )
 
     def test_lookup_paths_assigns_recovery_route_to_storage_recovery(self) -> None:
-        result = lookup_paths(["frontend-modern/src/pages/RecoveryRoute.tsx"])
+        result = lookup_paths(["frontend-modern/src/pages/Recovery.tsx"])
         self.assertEqual(result["unowned_runtime_files"], [])
         self.assertEqual(
             {item["subsystem"] for item in result["impacted_subsystems"]},

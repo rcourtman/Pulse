@@ -124,6 +124,7 @@ regression protection.
 102. `frontend-modern/src/components/Storage/DashboardStoragePanel.tsx`
 103. `frontend-modern/src/components/Storage/StorageSummary.tsx`
 104. `frontend-modern/src/utils/storageSummaryCache.ts`
+105. `frontend-modern/src/pages/Workloads.tsx`
 
 ## Shared Boundaries
 

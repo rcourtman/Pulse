@@ -60,11 +60,8 @@ function isPublicRoutePath(pathname: string): boolean {
   );
 }
 
-const Dashboard = lazy(() =>
-  import('./components/Dashboard/Dashboard').then((module) => ({ default: module.Dashboard })),
-);
 const StoragePage = lazy(() => import('./pages/Storage'));
-const RecoveryRoute = lazy(() => import('./pages/RecoveryRoute'));
+const RecoveryPage = lazy(() => import('./pages/Recovery'));
 const CephPage = lazy(() => import('./pages/Ceph'));
 const AlertsPage = lazy(() =>
   import('./pages/Alerts').then((module) => ({ default: module.Alerts })),
@@ -72,6 +69,7 @@ const AlertsPage = lazy(() =>
 const SettingsPage = lazy(() => import('./components/Settings/Settings'));
 const InfrastructurePage = lazy(() => import('./pages/Infrastructure'));
 const DashboardPage = lazy(() => import('./pages/Dashboard'));
+const WorkloadsPage = lazy(() => import('./pages/Workloads'));
 const AIIntelligencePage = lazy(() =>
   import('./pages/AIIntelligence').then((module) => ({ default: module.AIIntelligence })),
 );
@@ -212,8 +210,6 @@ function App() {
   const kioskMode = useKioskMode();
   const TooltipRoot = createTooltipSystem();
   const runtime = useAppRuntimeState();
-
-  const WorkloadsView = () => <Dashboard vms={[]} containers={[]} nodes={[]} useWorkloads />;
 
   // V2 is GA - always serve V2 at canonical routes.
 
@@ -482,9 +478,9 @@ function App() {
       <Route path={ROOT_DASHBOARD_PATH} component={DashboardPage} />
       <Route path="/login" component={RuntimeHomePage} />
       <Route path="/" component={RuntimeHomePage} />
-      <Route path={ROOT_WORKLOADS_PATH} component={WorkloadsView} />
+      <Route path={ROOT_WORKLOADS_PATH} component={WorkloadsPage} />
       <Route path={STORAGE_PATH} component={StoragePage} />
-      <Route path={RECOVERY_ROUTE_PATH} component={RecoveryRoute} />
+      <Route path={RECOVERY_ROUTE_PATH} component={RecoveryPage} />
       <Route path="/ceph" component={CephPage} />
       <Route path={INFRASTRUCTURE_ROUTE_PATH} component={InfrastructurePage} />
 

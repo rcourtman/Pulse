@@ -11,7 +11,9 @@ const REQUIRED_PAGE_HEADERS = new Map([
   ['src/pages/Infrastructure.tsx', 'PageHeader'],
   ['src/pages/NotFound.tsx', 'PageHeader'],
   ['src/pages/PricingHandoff.tsx', 'PageHeader'],
+  ['src/pages/Recovery.tsx', 'PageHeader'],
   ['src/components/Settings/Settings.tsx', 'PageHeader'],
+  ['src/pages/Workloads.tsx', 'PageHeader'],
 ]);
 
 const REQUIRED_OPERATIONS_WRAPPERS = new Map([
@@ -21,8 +23,6 @@ const REQUIRED_OPERATIONS_WRAPPERS = new Map([
 ]);
 
 const NON_VISUAL_PAGE_WRAPPERS = new Set([
-  // Router wrapper; renders Recovery component and intentionally has no page chrome.
-  'src/pages/RecoveryRoute.tsx',
   // Redirect shim into the canonical settings route and intentionally has no page chrome.
   'src/pages/Operations.tsx',
   // Bootstrap route that only resolves the workspace destination before navigation.

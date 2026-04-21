@@ -146,6 +146,7 @@ work extends shared components instead of creating new local variants.
 120. `frontend-modern/src/stores/licenseCommercial.ts`
 121. `frontend-modern/src/useAppRuntimeState.ts`
 122. `frontend-modern/src/stores/aiChat.ts`
+123. `frontend-modern/scripts/header-audit.mjs`
 
 ## Shared Boundaries
 

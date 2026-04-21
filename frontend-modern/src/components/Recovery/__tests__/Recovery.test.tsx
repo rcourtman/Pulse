@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import Recovery from '@/components/Recovery/Recovery';
+import { resetCreateNonSuspendingQueryCacheForTest } from '@/hooks/createNonSuspendingQuery';
 import createNonSuspendingQuerySource from '@/hooks/createNonSuspendingQuery.ts?raw';
 import useRecoveryPointsFacetsSource from '@/hooks/useRecoveryPointsFacets.ts?raw';
 import useRecoveryPointsSeriesSource from '@/hooks/useRecoveryPointsSeries.ts?raw';
@@ -123,6 +124,7 @@ vi.mock('@/hooks/useUnifiedResources', () => ({
 
 describe('Recovery', () => {
   beforeEach(() => {
+    resetCreateNonSuspendingQueryCacheForTest();
     localStorage.clear();
     navigateSpy.mockReset();
     apiFetchMock.mockClear();
@@ -227,6 +229,7 @@ describe('Recovery', () => {
   });
 
   afterEach(() => {
+    resetCreateNonSuspendingQueryCacheForTest();
     cleanup();
   });
 
@@ -549,8 +552,8 @@ describe('Recovery', () => {
     render(() => <Recovery />);
 
     const summary = await screen.findByTestId('recovery-summary');
-    expect(within(summary).getByText('Coverage')).toBeInTheDocument();
-    expect(within(summary).getByText(/\d+ protected items/i)).toBeInTheDocument();
+    expect(await within(summary).findByText('Coverage')).toBeInTheDocument();
+    expect(await within(summary).findByText(/\d+ protected items/i)).toBeInTheDocument();
     expect(within(summary).queryByText(/\d+ attention/i)).not.toBeInTheDocument();
     expect(within(summary).getByText(/^attention$/i)).toBeInTheDocument();
     expect(within(summary).queryByText('Primary Item')).not.toBeInTheDocument();
