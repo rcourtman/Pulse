@@ -256,6 +256,13 @@ func (c *CommandClient) preflightTarget(
 			"preflight_complete", "failed", fmt.Sprintf("Invalid node IP: %s", target.NodeIP), data, false)
 		return false
 	}
+	normalizedPulseURL, err := normalizePulseURL(pulseURL)
+	if err != nil {
+		data := marshalPreflightResult(false, false, false, "", err.Error())
+		c.sendDeployProgress(conn, requestID, jobID, target.TargetID,
+			"preflight_complete", "failed", fmt.Sprintf("Invalid Pulse URL: %v", err), data, false)
+		return false
+	}
 
 	// 1. SSH reachability check.
 	c.sendDeployProgress(conn, requestID, jobID, target.TargetID,
@@ -303,7 +310,7 @@ func (c *CommandClient) preflightTarget(
 	c.sendDeployProgress(conn, requestID, jobID, target.TargetID,
 		"preflight_reachability", "started", "Checking Pulse URL reachability", "", false)
 
-	reachable := c.checkPulseReachabilitySSH(tctx, target.NodeIP, pulseURL)
+	reachable := c.checkPulseReachabilitySSH(tctx, target.NodeIP, normalizedPulseURL)
 	reachStatus := "ok"
 	reachMsg := "Pulse URL reachable"
 	if !reachable {
@@ -348,6 +355,13 @@ func (c *CommandClient) installTarget(
 			"install_complete", "failed", fmt.Sprintf("Invalid node IP: %s", target.NodeIP), data, false)
 		return false
 	}
+	normalizedPulseURL, err := normalizePulseURL(pulseURL)
+	if err != nil {
+		data := marshalInstallResult(-1, err.Error())
+		c.sendDeployProgress(conn, requestID, jobID, target.TargetID,
+			"install_complete", "failed", fmt.Sprintf("Invalid Pulse URL: %v", err), data, false)
+		return false
+	}
 
 	// 1. Write bootstrap token to target via SSH stdin.
 	c.sendDeployProgress(conn, requestID, jobID, target.TargetID,
@@ -366,7 +380,7 @@ func (c *CommandClient) installTarget(
 	c.sendDeployProgress(conn, requestID, jobID, target.TargetID,
 		"install_execute", "started", "Running install script", "", false)
 
-	exitCode, output, err := c.runInstallSSH(tctx, target.NodeIP, pulseURL)
+	exitCode, output, err := c.runInstallSSH(tctx, target.NodeIP, normalizedPulseURL)
 	if err != nil || exitCode != 0 {
 		msg := fmt.Sprintf("Install failed (exit %d)", exitCode)
 		if err != nil {
@@ -484,13 +498,18 @@ func (c *CommandClient) writeTokenSSH(ctx context.Context, nodeIP, token string)
 
 // runInstallSSH runs the Pulse install script on a remote node via SSH.
 func (c *CommandClient) runInstallSSH(ctx context.Context, nodeIP, pulseURL string) (int, string, error) {
+	normalizedPulseURL, err := normalizePulseURL(pulseURL)
+	if err != nil {
+		return -1, "", err
+	}
+
 	// SSH concatenates all command arguments into a single string passed to the
 	// remote shell. We use shellescape (single quotes) for the URL, which prevents
 	// all shell expansion ($(), backticks, $VAR). We invoke bash explicitly so
 	// pipefail works regardless of the remote user's default shell (e.g. dash/ash).
 	// The single-quoted URL is embedded in the outer single-quoted bash -c argument
 	// using the '\'' escape pattern (end quote, literal quote, resume quote).
-	escapedURL := shellescape(pulseURL)
+	escapedURL := shellescape(normalizedPulseURL)
 	innerCmd := fmt.Sprintf(
 		"set -o pipefail; curl -sfL -- %s/install.sh | bash -s -- --non-interactive --token-file /run/pulse-agent/bootstrap.token --pulse-url %s --enroll --enable-commands --enable-proxmox",
 		escapedURL, escapedURL,

@@ -390,7 +390,12 @@ func TestNew_RejectsInvalidPulseURL(t *testing.T) {
 		{
 			name: "non-loopback http rejected",
 			url:  "http://example.com",
-			want: "must use https unless host is loopback or private network",
+			want: "must use https unless host is loopback",
+		},
+		{
+			name: "private-network http rejected",
+			url:  "http://10.0.0.5:7655",
+			want: "must use https unless host is loopback",
 		},
 		{
 			name: "query rejected",

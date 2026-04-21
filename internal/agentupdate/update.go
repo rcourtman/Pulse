@@ -568,14 +568,6 @@ func isLoopbackHost(host string) bool {
 	return ip != nil && ip.IsLoopback()
 }
 
-func isPrivateNetworkHost(host string) bool {
-	if host == "" {
-		return false
-	}
-	ip := net.ParseIP(strings.Trim(host, "[]"))
-	return ip != nil && ip.IsPrivate()
-}
-
 func (u *Updater) validatePulseURL() error {
 	pulseURL := strings.TrimSpace(u.cfg.PulseURL)
 	if pulseURL == "" {
@@ -601,10 +593,10 @@ func (u *Updater) validatePulseURL() error {
 	case "https":
 		return nil
 	case "http":
-		if u.cfg.InsecureSkipVerify || isLoopbackHost(parsed.Hostname()) || isPrivateNetworkHost(parsed.Hostname()) {
+		if isLoopbackHost(parsed.Hostname()) {
 			return nil
 		}
-		return fmt.Errorf("HTTP Pulse URL is only allowed for localhost/loopback, private networks, or when insecure mode is enabled")
+		return fmt.Errorf("HTTP Pulse URL is only allowed for localhost/loopback")
 	default:
 		return fmt.Errorf("unsupported Pulse URL scheme %q", parsed.Scheme)
 	}

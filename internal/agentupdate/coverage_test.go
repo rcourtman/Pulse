@@ -212,11 +212,18 @@ func TestValidatePulseURL(t *testing.T) {
 		}
 	})
 
-	t.Run("AllowRemoteHTTPInInsecureMode", func(t *testing.T) {
+	t.Run("RejectRemoteHTTPInInsecureMode", func(t *testing.T) {
 		u := newUpdaterForTest("http://pulse.example.com")
 		u.cfg.InsecureSkipVerify = true
-		if err := u.validatePulseURL(); err != nil {
-			t.Fatalf("expected remote http URL in insecure mode to be valid, got %v", err)
+		if err := u.validatePulseURL(); err == nil {
+			t.Fatalf("expected remote http URL in insecure mode to be rejected")
+		}
+	})
+
+	t.Run("RejectPrivateNetworkHTTP", func(t *testing.T) {
+		u := newUpdaterForTest("http://10.0.0.5:7655")
+		if err := u.validatePulseURL(); err == nil {
+			t.Fatalf("expected private-network http URL to be rejected")
 		}
 	})
 
@@ -804,8 +811,7 @@ func TestPerformUpdateDownloadErrorAndHeaders(t *testing.T) {
 
 func TestPerformUpdateDownloadRetriesTransientError(t *testing.T) {
 	_, execPath := writeTempExec(t)
-	u := newUpdaterForTest("http://example")
-	u.cfg.InsecureSkipVerify = true
+	u := newUpdaterForTest("https://example")
 	u.cfg.APIToken = "token"
 
 	data := testBinary()

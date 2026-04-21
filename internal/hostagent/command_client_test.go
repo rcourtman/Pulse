@@ -99,8 +99,18 @@ func TestCommandClientBuildWebSocketURL(t *testing.T) {
 			wantErr:  true,
 		},
 		{
+			name:     "private-network http rejected",
+			pulseURL: "http://10.0.0.5:7655",
+			wantErr:  true,
+		},
+		{
 			name:     "non-loopback ws rejected",
 			pulseURL: "ws://example.invalid",
+			wantErr:  true,
+		},
+		{
+			name:     "private-network ws rejected",
+			pulseURL: "ws://10.0.0.5:7655",
 			wantErr:  true,
 		},
 		{

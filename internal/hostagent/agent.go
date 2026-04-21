@@ -867,8 +867,8 @@ func normalizePulseURL(rawURL string) (string, error) {
 	case "https":
 		// Always allowed.
 	case "http":
-		if !isLoopbackOrPrivateHost(parsed.Hostname()) {
-			return "", fmt.Errorf("pulse URL %q must use https unless host is loopback or private network", rawURL)
+		if !isLoopbackHost(parsed.Hostname()) {
+			return "", fmt.Errorf("pulse URL %q must use https unless host is loopback", rawURL)
 		}
 	default:
 		return "", fmt.Errorf("pulse URL %q has unsupported scheme %q", rawURL, parsed.Scheme)
@@ -881,19 +881,19 @@ func normalizePulseURL(rawURL string) (string, error) {
 	return parsed.String(), nil
 }
 
-// isLoopbackOrPrivateHost returns true for loopback and RFC1918 private
-// network addresses.  HTTP (non-TLS) is safe over a local/private network;
-// the scheme guard only needs to prevent plaintext over the public internet.
-func isLoopbackOrPrivateHost(host string) bool {
-	if strings.EqualFold(host, "localhost") {
+// isLoopbackHost returns true for localhost and loopback IPs only. Plain HTTP
+// is never allowed for non-loopback Pulse URLs, even on private networks.
+func isLoopbackHost(host string) bool {
+	normalized := strings.ToLower(strings.Trim(host, "[]"))
+	if normalized == "localhost" || strings.HasSuffix(normalized, ".localhost") {
 		return true
 	}
 
-	ip := net.ParseIP(host)
+	ip := net.ParseIP(normalized)
 	if ip == nil {
 		return false
 	}
-	return ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast()
+	return ip.IsLoopback()
 }
 
 // collectTemperatures attempts to collect temperature data from the local system.

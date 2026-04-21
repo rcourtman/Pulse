@@ -374,15 +374,15 @@ func (c *CommandClient) buildWebSocketURL() (string, error) {
 	case "https":
 		parsed.Scheme = "wss"
 	case "http":
-		if !isLoopbackOrPrivateHost(parsed.Hostname()) {
-			return "", fmt.Errorf("pulse URL %q must use https/wss unless host is loopback or private network", c.pulseURL)
+		if !isLoopbackHost(parsed.Hostname()) {
+			return "", fmt.Errorf("pulse URL %q must use https/wss unless host is loopback", c.pulseURL)
 		}
 		parsed.Scheme = "ws"
 	case "wss":
 		parsed.Scheme = "wss"
 	case "ws":
-		if !isLoopbackOrPrivateHost(parsed.Hostname()) {
-			return "", fmt.Errorf("pulse URL %q must use https/wss unless host is loopback or private network", c.pulseURL)
+		if !isLoopbackHost(parsed.Hostname()) {
+			return "", fmt.Errorf("pulse URL %q must use https/wss unless host is loopback", c.pulseURL)
 		}
 		parsed.Scheme = "ws"
 	default:

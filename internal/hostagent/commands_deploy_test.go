@@ -150,7 +150,7 @@ func TestRunInstallSSH_IncludesEnrollAndEnableCommands(t *testing.T) {
 		sshKnownHosts: stubKnownHostsManager{path: "/tmp/pulse-test-known-hosts"},
 	}
 
-	exitCode, _, err := c.runInstallSSH(context.Background(), "10.0.0.1", "http://10.0.0.1:7655")
+	exitCode, _, err := c.runInstallSSH(context.Background(), "10.0.0.1", "https://10.0.0.1:7655")
 	if err != nil {
 		t.Fatalf("runInstallSSH error: %v", err)
 	}
@@ -177,5 +177,16 @@ func TestRunInstallSSH_IncludesEnrollAndEnableCommands(t *testing.T) {
 	}
 	if !strings.Contains(joined, "GlobalKnownHostsFile=/dev/null") {
 		t.Error("SSH install command does not isolate global known_hosts state")
+	}
+}
+
+func TestRunInstallSSH_RejectsNonLoopbackPlainHTTP(t *testing.T) {
+	c := &CommandClient{
+		logger:        zerolog.New(zerolog.NewTestWriter(t)),
+		sshKnownHosts: stubKnownHostsManager{path: "/tmp/pulse-test-known-hosts"},
+	}
+
+	if _, _, err := c.runInstallSSH(context.Background(), "10.0.0.1", "http://10.0.0.1:7655"); err == nil {
+		t.Fatal("expected non-loopback plain HTTP Pulse URL to be rejected")
 	}
 }

@@ -1087,6 +1087,13 @@ keys through the managed `ssh_known_hosts` store before any automated deploy
 fan-out writes a bootstrap token or runs the installer on a remote node, keep
 `StrictHostKeyChecking=yes`, and fail closed on key mismatch or missing-host-
 key state instead of downgrading to unauthenticated SSH during install.
+That same transport boundary also keeps plaintext Pulse URLs loopback-only.
+`internal/hostagent/agent.go`, `internal/hostagent/commands.go`, and
+`internal/agentupdate/update.go` may keep local-development `http://` or
+`ws://` only for loopback hosts, but private-network and remote Pulse URLs
+must still use HTTPS/WSS. `InsecureSkipVerify` may relax certificate
+verification on TLS transport; it must not reopen plaintext HTTP for
+private-network updater, websocket, or reporting paths.
 That same shared `internal/api/` lifecycle boundary also assumes tenant-scoped
 resource helpers stay on canonical unified-resource seeds: adjacent fleet and
 install surfaces may not revive raw tenant `StateSnapshot` fallback through
