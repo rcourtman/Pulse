@@ -92,7 +92,7 @@ describe('ConnectionEditor', () => {
     const probeButton = screen.getByRole('button', { name: /probe address/i });
     const vmwareButton = screen.getByRole('button', { name: /VMware vCenter \/ ESXi/i });
     const trueNASButton = screen.getByRole('button', { name: /TrueNAS SCALE/i });
-    const proxmoxButton = screen.getByRole('button', { name: /^Proxmox VE/i });
+    const proxmoxButton = screen.getByRole('button', { name: /^Proxmox\b/i });
 
     // Catalog landing — lead with management-platform onboarding, then keep
     // host install as a secondary path below it.
@@ -106,7 +106,39 @@ describe('ConnectionEditor', () => {
     expectNodeBefore(vmwareButton, trueNASButton);
     expectNodeBefore(trueNASButton, proxmoxButton);
     expectNodeBefore(proxmoxButton, agentButton);
+    expect(screen.queryByText('Proxmox VE')).toBeNull();
     expect(screen.queryByText('Recommended')).toBeNull();
+  });
+
+  it('groups Proxmox products under one family step before entering credentials', async () => {
+    const renderSlot = vi.fn(({ type }) => <div data-testid="slot">slot:{type}</div>);
+
+    render(() => <ConnectionEditor renderCredentialSlot={renderSlot} onClose={() => {}} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /^Proxmox\b/i }));
+
+    expect(screen.getByText('Choose a Proxmox product')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Proxmox VE/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Proxmox Backup Server/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Proxmox Mail Gateway/i })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /^Proxmox VE/i }));
+
+    await waitFor(() => expect(screen.getByTestId('slot').textContent).toBe('slot:pve'));
+    expect(renderSlot.mock.calls.at(-1)![0].type).toBe('pve');
+  });
+
+  it('keeps a single available Proxmox product as a direct tile', () => {
+    render(() => (
+      <ConnectionEditor
+        manualTypeOptions={['pve']}
+        renderCredentialSlot={() => <div />}
+        onClose={() => {}}
+      />
+    ));
+
+    expect(screen.getByRole('button', { name: /^Proxmox VE/i })).toBeInTheDocument();
+    expect(screen.queryByText('VE, Backup Server, Mail Gateway')).toBeNull();
   });
 
   it('offers the agent path contextually when a probe returns no match', async () => {
@@ -152,6 +184,18 @@ describe('ConnectionEditor', () => {
     expect(call.mode).toBe('edit');
     expect(call.type).toBe('vmware');
     expect(call.candidate).toBeNull();
+  });
+
+  it('can return from a provider family to the top-level platform catalog', () => {
+    render(() => <ConnectionEditor renderCredentialSlot={() => <div />} onClose={() => {}} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /^Proxmox\b/i }));
+    expect(screen.getByText('Choose a Proxmox product')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /back to platforms/i }));
+
+    expect(screen.getByRole('button', { name: /^Proxmox\b/i })).toBeInTheDocument();
+    expect(screen.queryByText('Choose a Proxmox product')).toBeNull();
   });
 
   it('resets probe state when returning to the catalog from a credential slot', async () => {

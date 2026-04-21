@@ -1,6 +1,6 @@
 # Pulse v6 Platform Support Model
 
-Last updated: 2026-03-31
+Last updated: 2026-04-21
 Status: ACTIVE
 
 This file is the canonical governed model for platform support in Pulse v6.
@@ -225,12 +225,13 @@ Rules:
 
 `PLATFORM_SUPPORT_MANIFEST.json` is the machine-readable projection of the
 supported, admitted, and presentation-only platform vocabulary declared here,
-plus the canonical onboarding-path classification for supported and admitted
-platforms. Tests and shared frontend vocabulary may consume that manifest, and
-the tracked frontend projection in
+plus the canonical platform-family and onboarding-path classification for
+supported and admitted platforms. Tests and shared frontend vocabulary may
+consume that manifest, and the tracked frontend projection in
 `frontend-modern/src/utils/platformSupportManifest.generated.ts` must be
 generated from it, but neither projection may introduce platform ids or
-governance states or onboarding paths that are not declared in this document.
+governance states or platform families or onboarding paths that are not
+declared in this document.
 
 ### Runtime variants
 

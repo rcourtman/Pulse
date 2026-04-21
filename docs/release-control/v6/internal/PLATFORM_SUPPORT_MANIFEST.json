@@ -12,6 +12,7 @@
   "platforms": [
     {
       "id": "agent",
+      "family": "Pulse-managed host",
       "governance_state": "supported",
       "onboarding_paths": ["install-workspace"],
       "ui_label": "Agent",
@@ -22,6 +23,7 @@
     },
     {
       "id": "docker",
+      "family": "Container runtime",
       "governance_state": "supported",
       "onboarding_paths": ["install-workspace"],
       "ui_label": "Containers",
@@ -32,6 +34,7 @@
     },
     {
       "id": "kubernetes",
+      "family": "Cluster runtime",
       "governance_state": "supported",
       "onboarding_paths": ["install-workspace"],
       "ui_label": "K8s",
@@ -42,6 +45,7 @@
     },
     {
       "id": "proxmox-pve",
+      "family": "Proxmox",
       "governance_state": "supported",
       "onboarding_paths": ["platform-connections"],
       "ui_label": "PVE",
@@ -52,6 +56,7 @@
     },
     {
       "id": "proxmox-pbs",
+      "family": "Proxmox",
       "governance_state": "supported",
       "onboarding_paths": ["platform-connections"],
       "ui_label": "PBS",
@@ -62,6 +67,7 @@
     },
     {
       "id": "proxmox-pmg",
+      "family": "Proxmox",
       "governance_state": "supported",
       "onboarding_paths": ["platform-connections"],
       "ui_label": "PMG",
@@ -72,6 +78,7 @@
     },
     {
       "id": "truenas",
+      "family": "TrueNAS",
       "governance_state": "supported",
       "onboarding_paths": ["platform-connections"],
       "ui_label": "TrueNAS",
@@ -82,6 +89,7 @@
     },
     {
       "id": "vmware-vsphere",
+      "family": "VMware",
       "governance_state": "admitted",
       "onboarding_paths": ["platform-connections"],
       "ui_label": "vSphere",
@@ -92,6 +100,7 @@
     },
     {
       "id": "unraid",
+      "family": "Unraid",
       "governance_state": "presentation-only",
       "onboarding_paths": [],
       "ui_label": "Unraid",
@@ -102,6 +111,7 @@
     },
     {
       "id": "synology-dsm",
+      "family": "Synology",
       "governance_state": "presentation-only",
       "onboarding_paths": [],
       "ui_label": "Synology",
@@ -112,6 +122,7 @@
     },
     {
       "id": "microsoft-hyperv",
+      "family": "Hyper-V",
       "governance_state": "presentation-only",
       "onboarding_paths": [],
       "ui_label": "Hyper-V",
@@ -122,6 +133,7 @@
     },
     {
       "id": "aws",
+      "family": "AWS",
       "governance_state": "presentation-only",
       "onboarding_paths": [],
       "ui_label": "AWS",
@@ -132,6 +144,7 @@
     },
     {
       "id": "azure",
+      "family": "Azure",
       "governance_state": "presentation-only",
       "onboarding_paths": [],
       "ui_label": "Azure",
@@ -142,6 +155,7 @@
     },
     {
       "id": "gcp",
+      "family": "GCP",
       "governance_state": "presentation-only",
       "onboarding_paths": [],
       "ui_label": "GCP",

@@ -12,6 +12,7 @@ import {
   SOURCE_PLATFORM_ALIAS_MAP,
   SOURCE_PLATFORM_AUDIT_TOKENS,
   SOURCE_PLATFORM_DISPLAY_TOKENS,
+  SOURCE_PLATFORM_FAMILY,
   SOURCE_PLATFORM_MANIFEST_ENTRIES,
   SOURCE_PLATFORM_STORAGE_FAMILY,
   SUPPORTED_PLATFORM_IDS,
@@ -19,6 +20,7 @@ import {
   type GeneratedSourcePlatformOnboardingPath,
   type GeneratedSourcePlatformManifestEntry,
   type PlatformGovernanceState,
+  type SourcePlatformFamily,
   type SourcePlatformStorageFamily,
 } from '@/utils/platformSupportManifest.generated';
 
@@ -27,6 +29,7 @@ export type {
   GeneratedKnownSourcePlatform,
   GeneratedSourcePlatformOnboardingPath as SourcePlatformOnboardingPath,
   PlatformGovernanceState,
+  SourcePlatformFamily,
   SourcePlatformStorageFamily,
 };
 
@@ -49,6 +52,7 @@ export {
   SOURCE_PLATFORM_ALIAS_MAP,
   SOURCE_PLATFORM_AUDIT_TOKENS,
   SOURCE_PLATFORM_DISPLAY_TOKENS,
+  SOURCE_PLATFORM_FAMILY,
   SOURCE_PLATFORM_MANIFEST_ENTRIES,
   SUPPORTED_PLATFORM_IDS,
 };
@@ -78,6 +82,14 @@ export const getSourcePlatformOnboardingPaths = (
   const manifestPlatform = getSourcePlatformManifestEntry(value);
   if (!manifestPlatform) return EMPTY_ONBOARDING_PATHS;
   return SOURCE_PLATFORM_ONBOARDING_PATHS[manifestPlatform.id];
+};
+
+export const getSourcePlatformFamily = (
+  value: string | null | undefined,
+): SourcePlatformFamily | null => {
+  const manifestPlatform = getSourcePlatformManifestEntry(value);
+  if (!manifestPlatform) return null;
+  return SOURCE_PLATFORM_FAMILY[manifestPlatform.id];
 };
 
 export const sourcePlatformSupportsOnboardingPath = (

@@ -1010,12 +1010,20 @@ add-infrastructure landing in `ConnectionEditor.tsx`: when the target can run
 the Unified Agent, the landing must lead with the platform-API probe and
 picker as the primary catalog story while keeping the host-install path in a
 separate secondary section instead of teaching one provider-specific shortcut
-as the frame for the whole screen. Product-specific host advantages such as
-Proxmox auto-registration may be explained inside that host-install section,
-but they must not become the headline copy or top visual weight for the
-shared add-infrastructure landing. Returning `Back to catalog` must reset
-probe input and result state rather than reopening the landing with stale
-no-match or detected-product state already rendered.
+as the frame for the whole screen. That top-level catalog must also collapse
+the Proxmox family into one peer entry rather than rendering Proxmox VE, PBS,
+and PMG as three separate first-class tiles beside VMware and TrueNAS; after
+the operator picks that family, the shared editor may present a second-step
+Proxmox product chooser before entering the inline credential slot. The shared
+grouping membership for that catalog belongs to the governed platform-support
+manifest family model rather than lane-local UI lists. Product-specific host
+advantages such as Proxmox auto-registration may be explained inside that
+host-install section, but they must not become the headline copy or top
+visual weight for the shared add-infrastructure landing. Returning `Back to
+catalog` must reset probe input and result state rather than reopening the
+landing with stale no-match or detected-product state already rendered, and
+the family-local `Back to platforms` path must restore the top-level platform
+catalog without entering a credential slot.
 Render-order proof for that landing belongs to DOM-backed settings tests, not
 raw source-string position checks, so lifecycle ownership continues to guard
 the operator-visible order after reasonable component extraction or copy

@@ -3,8 +3,11 @@ import { Archive, ArrowRight, Cpu, Database, Mail, Server, ServerCog } from 'luc
 import type { ConnectionType, ProbeCandidate } from '@/api/connections';
 import { AddressProbeStep } from './AddressProbeStep';
 import {
+  buildConnectionEditorCatalogEntries,
   CONNECTION_TYPE_LABELS,
-  DEFAULT_CONNECTION_EDITOR_PLATFORM_TYPES,
+  type ConnectionEditorCatalogFamilyEntry,
+  type ConnectionEditorCatalogFamilyId,
+  type ConnectionEditorCatalogEntry,
   createConnectionEditorState,
   type ConnectionEditorState,
 } from './useConnectionEditor';
@@ -36,7 +39,10 @@ interface TileMeta {
   description: string;
 }
 
-const PLATFORM_TILE_META: Partial<Record<ConnectionType, TileMeta>> = {
+const PLATFORM_TILE_META: Record<
+  Exclude<ConnectionType, 'agent' | 'docker' | 'kubernetes'>,
+  TileMeta
+> = {
   pve: { icon: Server, description: 'VMs, containers, storage, backups' },
   pbs: { icon: Archive, description: 'Backups, sync and verify jobs' },
   pmg: { icon: Mail, description: 'Mail stats, queues, quarantine' },
@@ -54,29 +60,50 @@ export const ConnectionEditor: Component<ConnectionEditorProps> = (props) => {
     props.initialType ?? null,
   );
   const [selectedCandidate, setSelectedCandidate] = createSignal<ProbeCandidate | null>(null);
+  const [selectedFamilyId, setSelectedFamilyId] =
+    createSignal<ConnectionEditorCatalogFamilyId | null>(null);
 
-  const platformOptions = createMemo(() =>
-    (props.manualTypeOptions ?? DEFAULT_CONNECTION_EDITOR_PLATFORM_TYPES).filter(
-      (type) => type !== 'agent',
-    ),
+  const platformCatalogEntries = createMemo<ConnectionEditorCatalogEntry[]>(() =>
+    buildConnectionEditorCatalogEntries(props.manualTypeOptions),
   );
+  const activeFamily = createMemo<ConnectionEditorCatalogFamilyEntry | null>(() => {
+    const familyId = selectedFamilyId();
+    if (!familyId) return null;
+    const family = platformCatalogEntries().find(
+      (entry): entry is ConnectionEditorCatalogFamilyEntry =>
+        entry.kind === 'family' && entry.id === familyId,
+    );
+    return family ?? null;
+  });
 
   const activeType = () => selectedType();
   const showCredentialSlot = () => activeType() !== null;
 
   const chooseCandidate = (candidate: ProbeCandidate) => {
     setSelectedCandidate(candidate);
+    setSelectedFamilyId(null);
     setSelectedType(candidate.type);
   };
 
   const chooseManualType = (type: ConnectionType) => {
     setSelectedCandidate(null);
+    setSelectedFamilyId(null);
     setSelectedType(type);
+  };
+
+  const chooseFamily = (familyId: ConnectionEditorCatalogFamilyId) => {
+    setSelectedCandidate(null);
+    setSelectedFamilyId(familyId);
+  };
+
+  const reopenFamilies = () => {
+    setSelectedFamilyId(null);
   };
 
   const reopenProbe = () => {
     state.reset();
     setSelectedCandidate(null);
+    setSelectedFamilyId(null);
     setSelectedType(null);
   };
 
@@ -106,35 +133,118 @@ export const ConnectionEditor: Component<ConnectionEditorProps> = (props) => {
                 onInstallAgent={() => chooseManualType('agent')}
               />
 
-              <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                <For each={platformOptions()}>
-                  {(type) => {
-                    const meta = PLATFORM_TILE_META[type];
-                    const Icon = meta?.icon ?? Server;
-                    const label = CONNECTION_TYPE_LABELS[type] ?? type;
-                    return (
-                      <button
-                        type="button"
-                        onClick={() => chooseManualType(type)}
-                        class="group flex h-full flex-col gap-2 rounded-lg border border-border bg-surface p-4 text-left transition-colors hover:border-blue-500 hover:bg-blue-50/40 dark:hover:bg-blue-950/20"
-                      >
-                        <div class="flex items-center gap-2.5">
-                          <div
-                            aria-hidden="true"
-                            class="flex h-8 w-8 flex-none items-center justify-center rounded-md border border-border bg-surface-alt text-base-content"
+              <Show
+                when={activeFamily()}
+                fallback={
+                  <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                    <For each={platformCatalogEntries()}>
+                      {(entry) => {
+                        if (entry.kind === 'type') {
+                          const meta = PLATFORM_TILE_META[entry.type];
+                          const Icon = meta.icon;
+                          const label = CONNECTION_TYPE_LABELS[entry.type];
+                          return (
+                            <button
+                              type="button"
+                              onClick={() => chooseManualType(entry.type)}
+                              class="group flex h-full flex-col gap-2 rounded-lg border border-border bg-surface p-4 text-left transition-colors hover:border-blue-500 hover:bg-blue-50/40 dark:hover:bg-blue-950/20"
+                            >
+                              <div class="flex items-center gap-2.5">
+                                <div
+                                  aria-hidden="true"
+                                  class="flex h-8 w-8 flex-none items-center justify-center rounded-md border border-border bg-surface-alt text-base-content"
+                                >
+                                  <Icon class="h-4 w-4" />
+                                </div>
+                                <div class="text-sm font-semibold text-base-content">{label}</div>
+                              </div>
+                              <div class="text-xs text-muted">{meta.description}</div>
+                            </button>
+                          );
+                        }
+
+                        const familyLeadType = entry.childTypes[0];
+                        const Icon = PLATFORM_TILE_META[familyLeadType]?.icon ?? Server;
+                        return (
+                          <button
+                            type="button"
+                            onClick={() => chooseFamily(entry.id)}
+                            class="group flex h-full flex-col gap-2 rounded-lg border border-border bg-surface p-4 text-left transition-colors hover:border-blue-500 hover:bg-blue-50/40 dark:hover:bg-blue-950/20"
                           >
-                            <Icon class="h-4 w-4" />
+                            <div class="flex items-center gap-2.5">
+                              <div
+                                aria-hidden="true"
+                                class="flex h-8 w-8 flex-none items-center justify-center rounded-md border border-border bg-surface-alt text-base-content"
+                              >
+                                <Icon class="h-4 w-4" />
+                              </div>
+                              <div class="text-sm font-semibold text-base-content">
+                                {entry.label}
+                              </div>
+                            </div>
+                            <div class="text-xs text-muted">{entry.description}</div>
+                          </button>
+                        );
+                      }}
+                    </For>
+                  </div>
+                }
+              >
+                {(familyAccessor) => {
+                  const family = familyAccessor();
+                  return (
+                    <div class="space-y-4 rounded-lg border border-border bg-surface p-4">
+                      <div class="flex flex-wrap items-start justify-between gap-3">
+                        <div class="space-y-1">
+                          <div class="text-sm font-semibold text-base-content">
+                            Choose a {family.label} product
                           </div>
-                          <div class="text-sm font-semibold text-base-content">{label}</div>
+                          <p class="text-xs text-muted">
+                            Pick the {family.label} product you want to connect. Pulse will open the
+                            matching credential flow next.
+                          </p>
                         </div>
-                        <Show when={meta?.description}>
-                          <div class="text-xs text-muted">{meta!.description}</div>
-                        </Show>
-                      </button>
-                    );
-                  }}
-                </For>
-              </div>
+                        <button
+                          type="button"
+                          onClick={reopenFamilies}
+                          class="inline-flex items-center rounded-md border border-border px-2.5 py-1 text-xs font-medium text-base-content transition-colors hover:bg-surface-hover"
+                        >
+                          ← Back to platforms
+                        </button>
+                      </div>
+
+                      <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                        <For each={family.childTypes}>
+                          {(type) => {
+                            const meta = PLATFORM_TILE_META[type];
+                            const Icon = meta.icon;
+                            return (
+                              <button
+                                type="button"
+                                onClick={() => chooseManualType(type)}
+                                class="group flex h-full flex-col gap-2 rounded-lg border border-border bg-surface-alt p-4 text-left transition-colors hover:border-blue-500 hover:bg-blue-50/40 dark:hover:bg-blue-950/20"
+                              >
+                                <div class="flex items-center gap-2.5">
+                                  <div
+                                    aria-hidden="true"
+                                    class="flex h-8 w-8 flex-none items-center justify-center rounded-md border border-border bg-surface text-base-content"
+                                  >
+                                    <Icon class="h-4 w-4" />
+                                  </div>
+                                  <div class="text-sm font-semibold text-base-content">
+                                    {CONNECTION_TYPE_LABELS[type]}
+                                  </div>
+                                </div>
+                                <div class="text-xs text-muted">{meta.description}</div>
+                              </button>
+                            );
+                          }}
+                        </For>
+                      </div>
+                    </div>
+                  );
+                }}
+              </Show>
             </section>
 
             <section class="space-y-3 border-t border-border pt-6">

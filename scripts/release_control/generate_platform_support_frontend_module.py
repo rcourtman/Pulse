@@ -144,6 +144,7 @@ def normalize_manifest(raw_manifest: dict[str, Any]) -> dict[str, Any]:
         platforms.append(
             {
                 "id": platform_id,
+                "family": require_string(record.get("family"), f"platforms[{index}].family"),
                 "governanceState": governance_state,
                 "onboardingPaths": onboarding_paths,
                 "uiLabel": require_string(record.get("ui_label"), f"platforms[{index}].ui_label"),
@@ -195,6 +196,9 @@ def normalize_manifest(raw_manifest: dict[str, Any]) -> dict[str, Any]:
         platform["id"]: {"label": platform["uiLabel"], "tone": platform["uiTone"]}
         for platform in platforms
     }
+    family_by_id = {
+        platform["id"]: platform["family"] for platform in platforms
+    }
     onboarding_paths_by_id = {
         platform["id"]: platform["onboardingPaths"] for platform in platforms
     }
@@ -232,6 +236,7 @@ def normalize_manifest(raw_manifest: dict[str, Any]) -> dict[str, Any]:
         "auditTokens": audit_tokens,
         "displayTokens": display_tokens,
         "onboardingPathKeys": onboarding_path_keys,
+        "familyById": family_by_id,
         "onboardingPathsById": onboarding_paths_by_id,
         "presentation": {**presentation, "generic": DEFAULT_GENERIC_PRESENTATION},
         "storageFamilyById": storage_family_by_id,
@@ -278,6 +283,7 @@ def render_module(normalized: dict[str, Any], manifest_hash: str) -> str:
         render_const("SOURCE_PLATFORM_AUDIT_TOKENS", normalized["auditTokens"]),
         render_const("SOURCE_PLATFORM_DISPLAY_TOKENS", normalized["displayTokens"]),
         render_const("SOURCE_PLATFORM_ONBOARDING_PATH_KEYS", normalized["onboardingPathKeys"]),
+        render_const("SOURCE_PLATFORM_FAMILY", normalized["familyById"]),
         render_const("SOURCE_PLATFORM_ONBOARDING_PATHS", normalized["onboardingPathsById"]),
         render_const("SOURCE_PLATFORM_PRESENTATION", normalized["presentation"]),
         render_const("SOURCE_PLATFORM_STORAGE_FAMILY", normalized["storageFamilyById"]),
@@ -292,6 +298,8 @@ def render_module(normalized: dict[str, Any], manifest_hash: str) -> str:
         "  (typeof KNOWN_SOURCE_PLATFORM_KEYS)[number];\n",
         "export type GeneratedSourcePlatformManifestEntry =\n"
         "  (typeof SOURCE_PLATFORM_MANIFEST_ENTRIES)[number];\n",
+        "export type SourcePlatformFamily =\n"
+        "  (typeof SOURCE_PLATFORM_MANIFEST_ENTRIES)[number]['family'];\n",
     ]
     return "".join(sections)
 

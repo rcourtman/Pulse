@@ -85,9 +85,12 @@ describe('settings architecture guardrails', () => {
     expect(connectionEditorSource).toContain(
       "import { AddressProbeStep } from './AddressProbeStep';",
     );
-    expect(connectionEditorSource).toContain('DEFAULT_CONNECTION_EDITOR_PLATFORM_TYPES');
+    expect(connectionEditorSource).toContain('buildConnectionEditorCatalogEntries');
+    expect(connectionEditorSource).toContain('selectedFamilyId');
     expect(connectionEditorSource).toContain('<AddressProbeStep');
     expect(connectionEditorSource).toContain('Connect a platform');
+    expect(connectionEditorSource).toContain('Choose a {family.label} product');
+    expect(connectionEditorSource).toContain('Back to platforms');
     expect(connectionEditorSource).toContain('Install on a host instead');
     expect(connectionEditorSource).toContain('On supported Proxmox hosts');
     expect(connectionEditorSource).toContain('register them automatically');
@@ -105,9 +108,14 @@ describe('settings architecture guardrails', () => {
     expect(connectionEditorStateSource).toContain('ConnectionsAPI.probe(value)');
     expect(connectionEditorStateSource).toContain('export const CONNECTION_TYPE_LABELS');
     expect(connectionEditorStateSource).toContain('DEFAULT_INFRASTRUCTURE_SOURCE_ORDER');
+    expect(connectionEditorStateSource).toContain('getSourcePlatformFamily');
     expect(connectionEditorStateSource).toContain(
-      'export const DEFAULT_CONNECTION_EDITOR_PLATFORM_TYPES',
+      'export const DEFAULT_CONNECTION_EDITOR_CATALOG_ENTRIES',
     );
+    expect(connectionEditorStateSource).toContain(
+      'export function buildConnectionEditorCatalogEntries',
+    );
+    expect(connectionEditorStateSource).not.toContain('PROXMOX_FAMILY_TYPES');
 
     expect(nodeCredentialSlotSource).toContain('useNodeModalState(modalProps)');
     expect(nodeCredentialSlotSource).toContain('<NodeModalBasicInfoSection');

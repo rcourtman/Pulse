@@ -236,7 +236,7 @@ describe('InfrastructureWorkspace', () => {
     const platformHeading = screen.getByText('Connect a platform');
     const vmwareButton = screen.getByRole('button', { name: /VMware vCenter \/ ESXi/i });
     const trueNASButton = screen.getByRole('button', { name: /TrueNAS SCALE/i });
-    const proxmoxButton = screen.getByRole('button', { name: /^Proxmox VE/i });
+    const proxmoxButton = screen.getByRole('button', { name: /^Proxmox\b/i });
     const agentButton = screen.getByRole('button', { name: /Install Pulse Agent/i });
 
     expect(platformHeading).toBeInTheDocument();
@@ -279,10 +279,12 @@ describe('InfrastructureWorkspace', () => {
     expect(screen.getByTestId('vmware-section')).toBeInTheDocument();
   });
 
-  it('routes to the Proxmox credential slot when Proxmox VE tile is clicked', () => {
+  it('routes through the Proxmox family picker before opening the Proxmox credential slot', () => {
     renderWorkspace();
 
     fireEvent.click(screen.getByRole('button', { name: /Add infrastructure/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^Proxmox\b/i }));
+    expect(screen.getByText('Choose a Proxmox product')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /^Proxmox VE/i }));
 
     expect(screen.getByTestId('proxmox-section')).toBeInTheDocument();
