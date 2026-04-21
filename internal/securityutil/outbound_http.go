@@ -19,6 +19,7 @@ type RestrictedOutboundHTTPOptions struct {
 	AllowPrivateIPs bool
 	AllowLoopback   bool
 	TLSConfig       *tls.Config
+	ResolveIPAddrs  func(ctx context.Context, host string) ([]net.IPAddr, error)
 }
 
 var resolveOutboundFetchIPs = net.DefaultResolver.LookupIPAddr
@@ -64,6 +65,13 @@ func validateOutboundIP(ip net.IP, opts RestrictedOutboundHTTPOptions) error {
 	return nil
 }
 
+func resolveOutboundIPAddrs(ctx context.Context, host string, opts RestrictedOutboundHTTPOptions) ([]net.IPAddr, error) {
+	if resolver := opts.ResolveIPAddrs; resolver != nil {
+		return resolver(ctx, host)
+	}
+	return resolveOutboundFetchIPs(ctx, host)
+}
+
 func resolvePermittedOutboundIP(ctx context.Context, host string, opts RestrictedOutboundHTTPOptions) (net.IP, error) {
 	host = strings.TrimSpace(host)
 	if host == "" {
@@ -89,7 +97,7 @@ func resolvePermittedOutboundIP(ctx context.Context, host string, opts Restricte
 	resolveCtx, cancel := context.WithTimeout(baseCtx, 5*time.Second)
 	defer cancel()
 
-	addrs, err := resolveOutboundFetchIPs(resolveCtx, host)
+	addrs, err := resolveOutboundIPAddrs(resolveCtx, host, opts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve hostname %s: %w", host, err)
 	}

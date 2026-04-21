@@ -148,7 +148,7 @@ func TestAdminKeyMiddleware(t *testing.T) {
 		}
 	})
 
-	t.Run("injects default owner role when missing", func(t *testing.T) {
+	t.Run("injects owner role when missing", func(t *testing.T) {
 		roleSeen := ""
 		inspect := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			roleSeen = r.Header.Get("X-User-Role")
@@ -169,7 +169,7 @@ func TestAdminKeyMiddleware(t *testing.T) {
 		}
 	})
 
-	t.Run("preserves explicit caller role header", func(t *testing.T) {
+	t.Run("overrides explicit caller role header", func(t *testing.T) {
 		roleSeen := ""
 		inspect := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			roleSeen = r.Header.Get("X-User-Role")
@@ -186,8 +186,8 @@ func TestAdminKeyMiddleware(t *testing.T) {
 		if rec.Code != http.StatusOK {
 			t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
 		}
-		if roleSeen != string(registry.MemberRoleAdmin) {
-			t.Fatalf("X-User-Role = %q, want %q", roleSeen, registry.MemberRoleAdmin)
+		if roleSeen != string(registry.MemberRoleOwner) {
+			t.Fatalf("X-User-Role = %q, want %q", roleSeen, registry.MemberRoleOwner)
 		}
 	})
 

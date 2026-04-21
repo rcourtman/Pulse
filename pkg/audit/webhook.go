@@ -48,16 +48,10 @@ type WebhookPayload struct {
 func NewWebhookDelivery(urls []string) *WebhookDelivery {
 	return &WebhookDelivery{
 		urls: urls,
-		client: &http.Client{
-			Timeout: webhookTimeout,
-			Transport: &http.Transport{
-				MaxIdleConns:        10,
-				IdleConnTimeout:     90 * time.Second,
-				DisableCompression:  true,
-				MaxConnsPerHost:     5,
-				MaxIdleConnsPerHost: 2,
-			},
-		},
+		client: securityutil.NewRestrictedOutboundHTTPClient(webhookTimeout, securityutil.RestrictedOutboundHTTPOptions{
+			AllowedSchemes: []string{"http", "https"},
+			ResolveIPAddrs: resolveWebhookIPs,
+		}),
 		queue:    make(chan Event, webhookQueueSize),
 		stopChan: make(chan struct{}),
 	}

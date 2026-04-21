@@ -165,6 +165,10 @@ Community limit enforcement.
     through `pkg/licensing/trial_activation.go` and
     `pkg/licensing/purchase_return.go`
 12. Add or change hosted signup provisioning through `internal/hosted/provisioner.go`
+    That provisioning boundary owns owner-email idempotency for public hosted
+    signup. Repeated signup requests for the same owner email must resolve to
+    the existing tenant record instead of creating parallel orgs for one
+    account identity.
 13. Add or change hosted billing-admin presentation through `frontend-modern/src/components/Settings/BillingAdminPanel.tsx`, `frontend-modern/src/components/Settings/BillingAdminOrganizationsTable.tsx`, and `frontend-modern/src/components/Settings/useBillingAdminPanelState.ts`
 14. Add or change shared commercial plan/usage presentation through `frontend-modern/src/components/Settings/CommercialBillingSections.tsx` and `frontend-modern/src/utils/commercialBillingModel.ts`
 15. Add or change organization billing and usage presentation through `frontend-modern/src/components/Settings/OrganizationBillingPanel.tsx`, `frontend-modern/src/components/Settings/OrganizationBillingLoadingState.tsx`, and `frontend-modern/src/components/Settings/useOrganizationBillingPanelState.ts`
@@ -1448,7 +1452,12 @@ unowned hosted runtime helper.
 That hosted signup boundary is now also canonical in shape: the public signup
 handler owns request validation, trial billing initialization, and magic-link
 issuance, while `internal/hosted/provisioner.go` owns the shared org
-bootstrap/admin-role assignment and rollback path for hosted signup failures.
+bootstrap/admin-role assignment, duplicate-owner-email idempotency, and
+rollback path for hosted signup failures.
+That duplicate-owner-email rule is fail-closed and server-owned. Repeated
+hosted signup attempts for an email that already owns a tenant must resolve to
+the existing org identity instead of minting a second tenant and relying on
+later auth or billing surfaces to untangle the collision.
 Hosted billing-state normalization now follows the same rule: a missing
 `plan_version` must remain missing instead of being synthesized from
 `subscription_state`, while explicit trial defaults remain explicit.

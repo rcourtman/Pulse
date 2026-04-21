@@ -89,9 +89,7 @@ func AdminKeyMiddleware(adminKey string, next http.Handler) http.Handler {
 		// Provide a conservative default role so downstream account-mutation auth
 		// checks stay fail-closed on missing role context.
 		req := r.Clone(r.Context())
-		if strings.TrimSpace(req.Header.Get("X-User-Role")) == "" {
-			req.Header.Set("X-User-Role", string(registry.MemberRoleOwner))
-		}
+		req.Header.Set("X-User-Role", string(registry.MemberRoleOwner))
 		next.ServeHTTP(w, req)
 	})
 }

@@ -131,21 +131,10 @@ func (p *Provisioner) ProvisionTenant(ctx context.Context, req ProvisionRequest)
 		return nil, err
 	}
 
-	orgs, err := p.persistence.ListOrganizations()
-	if err != nil {
-		return nil, &SystemError{Op: "list_organizations", Err: err}
-	}
-	for _, org := range orgs {
-		if org == nil {
-			continue
-		}
-		if strings.EqualFold(strings.TrimSpace(org.OwnerUserID), req.Email) {
-			return &ProvisionResult{
-				OrgID:  org.ID,
-				UserID: req.Email,
-				Status: ProvisionStatusExisting,
-			}, nil
-		}
+	if existing, err := p.findExistingOrganizationByOwnerEmail(req.Email); err != nil {
+		return nil, err
+	} else if existing != nil {
+		return existing, nil
 	}
 
 	orgID := p.newOrgID()
@@ -165,7 +154,33 @@ func (p *Provisioner) ProvisionHostedSignup(ctx context.Context, req HostedSignu
 		return nil, err
 	}
 
+	if existing, err := p.findExistingOrganizationByOwnerEmail(req.Email); err != nil {
+		return nil, err
+	} else if existing != nil {
+		return existing, nil
+	}
+
 	return p.createOrganization(ctx, p.newOrgID(), req.Email, req.OrgName)
+}
+
+func (p *Provisioner) findExistingOrganizationByOwnerEmail(email string) (*ProvisionResult, error) {
+	orgs, err := p.persistence.ListOrganizations()
+	if err != nil {
+		return nil, &SystemError{Op: "list_organizations", Err: err}
+	}
+	for _, org := range orgs {
+		if org == nil {
+			continue
+		}
+		if strings.EqualFold(strings.TrimSpace(org.OwnerUserID), email) {
+			return &ProvisionResult{
+				OrgID:  org.ID,
+				UserID: strings.TrimSpace(org.OwnerUserID),
+				Status: ProvisionStatusExisting,
+			}, nil
+		}
+	}
+	return nil, nil
 }
 
 func (p *Provisioner) RollbackProvisioning(orgID string) {
