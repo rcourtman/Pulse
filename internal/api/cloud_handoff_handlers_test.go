@@ -43,6 +43,26 @@ func makeExchangeRequest(t *testing.T, handler http.HandlerFunc, host, token str
 	return rec
 }
 
+func saveHandoffTestOrganization(t *testing.T, configDir string, org *models.Organization) *config.MultiTenantPersistence {
+	t.Helper()
+	mtp := config.NewMultiTenantPersistence(configDir)
+	if strings.TrimSpace(org.DisplayName) == "" {
+		org.DisplayName = org.ID
+	}
+	if org.CreatedAt.IsZero() {
+		org.CreatedAt = time.Now().UTC()
+	}
+	if strings.TrimSpace(string(org.Status)) == "" {
+		org.Status = models.OrgStatusActive
+	} else {
+		org.Status = models.NormalizeOrgStatus(org.Status)
+	}
+	if err := mtp.SaveOrganization(org); err != nil {
+		t.Fatalf("SaveOrganization() error = %v", err)
+	}
+	return mtp
+}
+
 func TestIsSQLiteUniqueViolation(t *testing.T) {
 	if isSQLiteUniqueViolation(nil) {
 		t.Fatal("expected nil error to return false")
@@ -294,6 +314,18 @@ func TestHandleHandoffExchange(t *testing.T) {
 	handler := HandleHandoffExchange(configDir)
 	tenantID := "tenant-a"
 	host := tenantID + ".example.com"
+	saveHandoffTestOrganization(t, configDir, &models.Organization{
+		ID:          tenantID,
+		DisplayName: "Tenant A",
+		Status:      models.OrgStatusActive,
+		CreatedAt:   time.Now().UTC(),
+		OwnerUserID: "legacy-owner@example.com",
+		Members: []models.OrganizationMember{
+			{UserID: "legacy-owner@example.com", Role: models.OrgRoleOwner, AddedAt: time.Now().UTC()},
+			{UserID: "user@example.com", Role: models.OrgRoleOwner, AddedAt: time.Now().UTC()},
+			{UserID: "operator.owner+mixed@pulserelay.pro", Role: models.OrgRoleOwner, AddedAt: time.Now().UTC()},
+		},
+	})
 
 	t.Run("missing token returns bad request", func(t *testing.T) {
 		t.Setenv("PULSE_TENANT_ID", "")
@@ -451,6 +483,13 @@ func TestHandleHandoffExchangeBrowserFlowSetsSessionCookies(t *testing.T) {
 
 	handler := HandleHandoffExchange(configDir)
 	tenantID := "tenant-browser"
+	saveHandoffTestOrganization(t, configDir, &models.Organization{
+		ID:          tenantID,
+		DisplayName: "Tenant Browser",
+		Status:      models.OrgStatusActive,
+		CreatedAt:   time.Now().UTC(),
+		OwnerUserID: "browser@example.com",
+	})
 	token := signHandoffToken(t, key, cloudHandoffClaims{
 		AccountID: "acct-browser",
 		Email:     "browser@example.com",
@@ -505,7 +544,7 @@ func TestHandleHandoffExchangeBrowserFlowSetsSessionCookies(t *testing.T) {
 	}
 }
 
-func TestHandleHandoffExchangeEnsuresTenantOrganizationMembership(t *testing.T) {
+func TestHandleHandoffExchangeRejectsMissingTenantOrganizationMembership(t *testing.T) {
 	key := []byte("test-handoff-key")
 	configDir := t.TempDir()
 	resetSessionStoreForTests()
@@ -524,8 +563,7 @@ func TestHandleHandoffExchangeEnsuresTenantOrganizationMembership(t *testing.T) 
 	}
 
 	tenantID := "tenant-membership"
-	mtp := config.NewMultiTenantPersistence(configDir)
-	if err := mtp.SaveOrganization(&models.Organization{
+	mtp := saveHandoffTestOrganization(t, configDir, &models.Organization{
 		ID:          tenantID,
 		DisplayName: "Membership Test",
 		Status:      models.OrgStatusActive,
@@ -534,9 +572,7 @@ func TestHandleHandoffExchangeEnsuresTenantOrganizationMembership(t *testing.T) 
 		Members: []models.OrganizationMember{
 			{UserID: "legacy-owner@example.com", Role: models.OrgRoleOwner, AddedAt: time.Now().UTC()},
 		},
-	}); err != nil {
-		t.Fatalf("SaveOrganization() error = %v", err)
-	}
+	})
 
 	handler := HandleHandoffExchange(configDir)
 	token := signHandoffToken(t, key, cloudHandoffClaims{
@@ -553,8 +589,8 @@ func TestHandleHandoffExchangeEnsuresTenantOrganizationMembership(t *testing.T) 
 	})
 
 	rec := makeExchangeRequest(t, handler, tenantID+".example.com", token)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d, want %d: %s", rec.Code, http.StatusOK, rec.Body.String())
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d: %s", rec.Code, http.StatusForbidden, rec.Body.String())
 	}
 
 	org, err := mtp.LoadOrganization(tenantID)
@@ -564,11 +600,118 @@ func TestHandleHandoffExchangeEnsuresTenantOrganizationMembership(t *testing.T) 
 	if org.OwnerUserID != "legacy-owner@example.com" {
 		t.Fatalf("OwnerUserID = %q, want %q", org.OwnerUserID, "legacy-owner@example.com")
 	}
-	if got := org.GetMemberRole("courtmanr@gmail.com"); got != models.OrgRoleOwner {
-		t.Fatalf("role for courtmanr@gmail.com = %q, want %q", got, models.OrgRoleOwner)
+	if got := org.GetMemberRole("courtmanr@gmail.com"); got != "" {
+		t.Fatalf("role for courtmanr@gmail.com = %q, want empty", got)
 	}
-	if !org.CanUserAccess("courtmanr@gmail.com") {
-		t.Fatal("expected handed-off user to have tenant organization access")
+	if org.CanUserAccess("courtmanr@gmail.com") {
+		t.Fatal("expected handed-off user to remain outside the tenant organization")
+	}
+}
+
+func TestHandleHandoffExchangeRejectsRoleEscalationFromClaims(t *testing.T) {
+	key := []byte("test-handoff-key")
+	configDir := t.TempDir()
+	resetSessionStoreForTests()
+	t.Cleanup(resetSessionStoreForTests)
+	resetCSRFStoreForTests()
+	t.Cleanup(resetCSRFStoreForTests)
+	InitSessionStore(configDir)
+	InitCSRFStore(configDir)
+
+	secretsDir := filepath.Join(configDir, "secrets")
+	if err := os.MkdirAll(secretsDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(secretsDir, "handoff.key"), key, 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	tenantID := "tenant-role-escalation"
+	mtp := saveHandoffTestOrganization(t, configDir, &models.Organization{
+		ID:          tenantID,
+		DisplayName: "Role Escalation Test",
+		Status:      models.OrgStatusActive,
+		CreatedAt:   time.Now().UTC(),
+		OwnerUserID: "legacy-owner@example.com",
+		Members: []models.OrganizationMember{
+			{UserID: "legacy-owner@example.com", Role: models.OrgRoleOwner, AddedAt: time.Now().UTC()},
+			{UserID: "viewer@example.com", Role: models.OrgRoleViewer, AddedAt: time.Now().UTC()},
+		},
+	})
+
+	token := signHandoffToken(t, key, cloudHandoffClaims{
+		AccountID: "acct-role-escalation",
+		Email:     "viewer@example.com",
+		Role:      "owner",
+		RegisteredClaims: jwt.RegisteredClaims{
+			ID:        "jti-role-escalation",
+			Subject:   "user-role-escalation",
+			Issuer:    cloudHandoffIssuer,
+			Audience:  jwt.ClaimStrings{tenantID},
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour)),
+		},
+	})
+
+	rec := makeExchangeRequest(t, HandleHandoffExchange(configDir), tenantID+".example.com", token)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d: %s", rec.Code, http.StatusForbidden, rec.Body.String())
+	}
+
+	org, err := mtp.LoadOrganization(tenantID)
+	if err != nil {
+		t.Fatalf("LoadOrganization() error = %v", err)
+	}
+	if got := org.GetMemberRole("viewer@example.com"); got != models.OrgRoleViewer {
+		t.Fatalf("role for viewer@example.com = %q, want %q", got, models.OrgRoleViewer)
+	}
+}
+
+func TestHandleHandoffExchangeRejectsOwnerHandoffWhenOwnerUserIDBlank(t *testing.T) {
+	key := []byte("test-handoff-key")
+	configDir := t.TempDir()
+	resetSessionStoreForTests()
+	t.Cleanup(resetSessionStoreForTests)
+	resetCSRFStoreForTests()
+	t.Cleanup(resetCSRFStoreForTests)
+	InitSessionStore(configDir)
+	InitCSRFStore(configDir)
+
+	secretsDir := filepath.Join(configDir, "secrets")
+	if err := os.MkdirAll(secretsDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(secretsDir, "handoff.key"), key, 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	tenantID := "tenant-blank-owner"
+	saveHandoffTestOrganization(t, configDir, &models.Organization{
+		ID:          tenantID,
+		DisplayName: "Blank Owner Test",
+		Status:      models.OrgStatusActive,
+		CreatedAt:   time.Now().UTC(),
+		OwnerUserID: "",
+		Members: []models.OrganizationMember{
+			{UserID: "blank-owner@example.com", Role: models.OrgRoleOwner, AddedAt: time.Now().UTC()},
+		},
+	})
+
+	token := signHandoffToken(t, key, cloudHandoffClaims{
+		AccountID: "acct-blank-owner",
+		Email:     "blank-owner@example.com",
+		Role:      "owner",
+		RegisteredClaims: jwt.RegisteredClaims{
+			ID:        "jti-blank-owner",
+			Subject:   "user-blank-owner",
+			Issuer:    cloudHandoffIssuer,
+			Audience:  jwt.ClaimStrings{tenantID},
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour)),
+		},
+	})
+
+	rec := makeExchangeRequest(t, HandleHandoffExchange(configDir), tenantID+".example.com", token)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d: %s", rec.Code, http.StatusForbidden, rec.Body.String())
 	}
 }
 

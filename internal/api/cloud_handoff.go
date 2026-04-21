@@ -3,6 +3,7 @@ package api
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -56,12 +57,21 @@ func HandleCloudHandoff(dataPath string) http.HandlerFunc {
 			http.Redirect(w, r, "/login?error=handoff_invalid", http.StatusTemporaryRedirect)
 			return
 		}
-		if err := ensureHandoffOrganizationMembership(dataPath, tenantID, email, claims.Role); err != nil {
+		if _, err := authorizeHandoffOrganizationMembership(dataPath, tenantID, email, claims.Role); err != nil {
+			if errors.Is(err, errHandoffAuthorizationDenied) {
+				log.Warn().
+					Err(err).
+					Str("tenant_id", tenantID).
+					Str("email", email).
+					Msg("Cloud handoff authorization denied")
+				http.Redirect(w, r, "/login?error=handoff_invalid", http.StatusTemporaryRedirect)
+				return
+			}
 			log.Error().
 				Err(err).
 				Str("tenant_id", tenantID).
 				Str("email", email).
-				Msg("Cloud handoff membership repair failed")
+				Msg("Cloud handoff authorization lookup failed")
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}

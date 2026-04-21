@@ -6849,6 +6849,13 @@ func TestContract_HandoffExchangeJSONSnapshot(t *testing.T) {
 
 	handler := HandleHandoffExchange(configDir)
 	tenantID := "tenant-contract"
+	saveHandoffTestOrganization(t, configDir, &models.Organization{
+		ID:          tenantID,
+		DisplayName: "Contract Tenant",
+		Status:      models.OrgStatusActive,
+		CreatedAt:   time.Now().UTC(),
+		OwnerUserID: "operator.owner+mixed@pulserelay.pro",
+	})
 	t.Setenv("PULSE_TENANT_ID", "")
 	token := signHandoffToken(t, key, cloudHandoffClaims{
 		AccountID: "acct-contract",
@@ -6934,7 +6941,7 @@ func TestContract_TenantAIServiceAvoidsSnapshotProviderBridge(t *testing.T) {
 	}
 }
 
-func TestContract_HostedCloudHandoffEnsuresTenantOrganizationMembership(t *testing.T) {
+func TestContract_HostedCloudHandoffUsesExistingTenantOrganizationMembership(t *testing.T) {
 	key := []byte("test-handoff-key")
 	configDir := t.TempDir()
 	resetSessionStoreForTests()
@@ -6953,8 +6960,7 @@ func TestContract_HostedCloudHandoffEnsuresTenantOrganizationMembership(t *testi
 	}
 
 	tenantID := "tenant-contract-membership"
-	mtp := config.NewMultiTenantPersistence(configDir)
-	if err := mtp.SaveOrganization(&models.Organization{
+	mtp := saveHandoffTestOrganization(t, configDir, &models.Organization{
 		ID:          tenantID,
 		DisplayName: "Contract Membership",
 		Status:      models.OrgStatusActive,
@@ -6962,10 +6968,9 @@ func TestContract_HostedCloudHandoffEnsuresTenantOrganizationMembership(t *testi
 		OwnerUserID: "legacy-owner@example.com",
 		Members: []models.OrganizationMember{
 			{UserID: "legacy-owner@example.com", Role: models.OrgRoleOwner, AddedAt: time.Now().UTC()},
+			{UserID: "courtmanr@gmail.com", Role: models.OrgRoleOwner, AddedAt: time.Now().UTC()},
 		},
-	}); err != nil {
-		t.Fatalf("save organization: %v", err)
-	}
+	})
 
 	token := signHandoffToken(t, key, cloudHandoffClaims{
 		AccountID: "acct-contract-membership",
@@ -7009,7 +7014,7 @@ func TestContract_HostedCloudHandoffEnsuresTenantOrganizationMembership(t *testi
 	}
 }
 
-func TestContract_HostedDirectCloudHandoffPreservesMembershipClaims(t *testing.T) {
+func TestContract_HostedDirectCloudHandoffUsesExistingTenantMembership(t *testing.T) {
 	key := []byte("test-direct-handoff-key")
 	configDir := t.TempDir()
 	resetPersistentAuthStoresForTests()
@@ -7020,8 +7025,7 @@ func TestContract_HostedDirectCloudHandoffPreservesMembershipClaims(t *testing.T
 	}
 
 	tenantID := "tenant-direct-contract"
-	mtp := config.NewMultiTenantPersistence(configDir)
-	if err := mtp.SaveOrganization(&models.Organization{
+	mtp := saveHandoffTestOrganization(t, configDir, &models.Organization{
 		ID:          tenantID,
 		DisplayName: "Direct Contract Membership",
 		Status:      models.OrgStatusActive,
@@ -7029,10 +7033,9 @@ func TestContract_HostedDirectCloudHandoffPreservesMembershipClaims(t *testing.T
 		OwnerUserID: "legacy-owner@example.com",
 		Members: []models.OrganizationMember{
 			{UserID: "legacy-owner@example.com", Role: models.OrgRoleOwner, AddedAt: time.Now().UTC()},
+			{UserID: "courtmanr@gmail.com", Role: models.OrgRoleOwner, AddedAt: time.Now().UTC()},
 		},
-	}); err != nil {
-		t.Fatalf("save organization: %v", err)
-	}
+	})
 
 	token, err := cloudauth.SignWithClaims(key, cloudauth.Claims{
 		Email:     "courtmanr@gmail.com",

@@ -10,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/cloudauth"
 )
@@ -28,6 +27,13 @@ func TestHandleCloudHandoffRejectsReplay(t *testing.T) {
 	if err != nil {
 		t.Fatalf("sign handoff token: %v", err)
 	}
+	saveHandoffTestOrganization(t, dataPath, &models.Organization{
+		ID:          "tenant-1",
+		DisplayName: "Tenant One",
+		Status:      models.OrgStatusActive,
+		CreatedAt:   time.Now().UTC(),
+		OwnerUserID: "alice@example.com",
+	})
 
 	handler := HandleCloudHandoff(dataPath)
 
@@ -70,6 +76,13 @@ func TestHandleCloudHandoffSetsTenantOrgCookie(t *testing.T) {
 	if err != nil {
 		t.Fatalf("sign handoff token: %v", err)
 	}
+	saveHandoffTestOrganization(t, dataPath, &models.Organization{
+		ID:          "tenant-1",
+		DisplayName: "Tenant One",
+		Status:      models.OrgStatusActive,
+		CreatedAt:   time.Now().UTC(),
+		OwnerUserID: "alice@example.com",
+	})
 
 	handler := HandleCloudHandoff(dataPath)
 
@@ -127,16 +140,35 @@ func TestHandleCloudHandoffRejectsInvalidTenantID(t *testing.T) {
 func TestHandleCloudHandoffLowercasesSessionEmailIdentity(t *testing.T) {
 	resetPersistentAuthStoresForTests()
 	t.Cleanup(resetPersistentAuthStoresForTests)
+	sessionsMu.Lock()
+	allSessions = make(map[string][]string)
+	sessionsMu.Unlock()
 	dataPath := t.TempDir()
 	key := []byte("0123456789abcdef0123456789abcdef")
 	if err := os.WriteFile(filepath.Join(dataPath, cloudauth.HandoffKeyFile), key, 0o600); err != nil {
 		t.Fatalf("write handoff key: %v", err)
 	}
 
-	token, err := cloudauth.Sign(key, "Operator.Owner+Mixed@PulseRelay.Pro", "tenant-1", 5*time.Minute)
+	token, err := cloudauth.SignWithClaims(key, cloudauth.Claims{
+		Email:     "Operator.Owner+Mixed@PulseRelay.Pro",
+		TenantID:  "tenant-1",
+		AccountID: "acct-mixed-email",
+		UserID:    "user-mixed-email",
+		Role:      "owner",
+	}, 5*time.Minute)
 	if err != nil {
 		t.Fatalf("sign handoff token: %v", err)
 	}
+	saveHandoffTestOrganization(t, dataPath, &models.Organization{
+		ID:          "tenant-1",
+		DisplayName: "Tenant One",
+		Status:      models.OrgStatusActive,
+		CreatedAt:   time.Now().UTC(),
+		OwnerUserID: "operator.owner+mixed@pulserelay.pro",
+		Members: []models.OrganizationMember{
+			{UserID: "operator.owner+mixed@pulserelay.pro", Role: models.OrgRoleOwner, AddedAt: time.Now().UTC()},
+		},
+	})
 
 	handler := HandleCloudHandoff(dataPath)
 
@@ -147,28 +179,33 @@ func TestHandleCloudHandoffLowercasesSessionEmailIdentity(t *testing.T) {
 	if rec.Code != http.StatusTemporaryRedirect {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusTemporaryRedirect)
 	}
+	if got := rec.Header().Get("Location"); got != "/" {
+		t.Fatalf("redirect = %q, want %q", got, "/")
+	}
 
-	var sessionCookie *http.Cookie
-	for _, c := range rec.Result().Cookies() {
-		if strings.HasPrefix(c.Name, "pulse_session") {
-			sessionCookie = c
+	sessionsMu.RLock()
+	tracked := append([]string(nil), allSessions["operator.owner+mixed@pulserelay.pro"]...)
+	sessionsMu.RUnlock()
+	if len(tracked) == 0 {
+		t.Fatal("expected normalized user session to be tracked")
+	}
+
+	var session *SessionData
+	for i := len(tracked) - 1; i >= 0; i-- {
+		session = GetSessionStore().GetSession(tracked[i])
+		if session != nil {
 			break
 		}
 	}
-	if sessionCookie == nil {
-		t.Fatal("expected pulse_session cookie to be set")
-	}
-
-	session := GetSessionStore().GetSession(sessionCookie.Value)
 	if session == nil {
-		t.Fatal("expected session to exist")
+		t.Fatal("expected tracked session to exist in the session store")
 	}
 	if session.Username != "operator.owner+mixed@pulserelay.pro" {
 		t.Fatalf("session username = %q, want %q", session.Username, "operator.owner+mixed@pulserelay.pro")
 	}
 }
 
-func TestHandleCloudHandoffEnsuresTenantOrganizationMembershipFromClaims(t *testing.T) {
+func TestHandleCloudHandoffUsesExistingTenantOrganizationMembership(t *testing.T) {
 	resetPersistentAuthStoresForTests()
 	t.Cleanup(resetPersistentAuthStoresForTests)
 	dataPath := t.TempDir()
@@ -178,8 +215,7 @@ func TestHandleCloudHandoffEnsuresTenantOrganizationMembershipFromClaims(t *test
 	}
 
 	tenantID := "tenant-claims-membership"
-	mtp := config.NewMultiTenantPersistence(dataPath)
-	if err := mtp.SaveOrganization(&models.Organization{
+	mtp := saveHandoffTestOrganization(t, dataPath, &models.Organization{
 		ID:          tenantID,
 		DisplayName: "Claims Membership",
 		Status:      models.OrgStatusActive,
@@ -187,10 +223,9 @@ func TestHandleCloudHandoffEnsuresTenantOrganizationMembershipFromClaims(t *test
 		OwnerUserID: "legacy-owner@example.com",
 		Members: []models.OrganizationMember{
 			{UserID: "legacy-owner@example.com", Role: models.OrgRoleOwner, AddedAt: time.Now().UTC()},
+			{UserID: "courtmanr@gmail.com", Role: models.OrgRoleOwner, AddedAt: time.Now().UTC()},
 		},
-	}); err != nil {
-		t.Fatalf("save organization: %v", err)
-	}
+	})
 
 	token, err := cloudauth.SignWithClaims(key, cloudauth.Claims{
 		Email:     "courtmanr@gmail.com",
@@ -225,5 +260,51 @@ func TestHandleCloudHandoffEnsuresTenantOrganizationMembershipFromClaims(t *test
 	}
 	if got := org.GetMemberRole("courtmanr@gmail.com"); got != models.OrgRoleOwner {
 		t.Fatalf("member role = %q, want %q", got, models.OrgRoleOwner)
+	}
+}
+
+func TestHandleCloudHandoffRejectsMissingTenantOrganizationMembership(t *testing.T) {
+	resetPersistentAuthStoresForTests()
+	t.Cleanup(resetPersistentAuthStoresForTests)
+	dataPath := t.TempDir()
+	key := []byte("0123456789abcdef0123456789abcdef")
+	if err := os.WriteFile(filepath.Join(dataPath, cloudauth.HandoffKeyFile), key, 0o600); err != nil {
+		t.Fatalf("write handoff key: %v", err)
+	}
+
+	tenantID := "tenant-missing-membership"
+	saveHandoffTestOrganization(t, dataPath, &models.Organization{
+		ID:          tenantID,
+		DisplayName: "Missing Membership",
+		Status:      models.OrgStatusActive,
+		CreatedAt:   time.Now().UTC(),
+		OwnerUserID: "legacy-owner@example.com",
+		Members: []models.OrganizationMember{
+			{UserID: "legacy-owner@example.com", Role: models.OrgRoleOwner, AddedAt: time.Now().UTC()},
+		},
+	})
+
+	token, err := cloudauth.SignWithClaims(key, cloudauth.Claims{
+		Email:     "courtmanr@gmail.com",
+		TenantID:  tenantID,
+		AccountID: "acct-missing-membership",
+		UserID:    "user-missing-membership",
+		Role:      "owner",
+	}, 5*time.Minute)
+	if err != nil {
+		t.Fatalf("sign handoff token: %v", err)
+	}
+
+	handler := HandleCloudHandoff(dataPath)
+
+	req := httptest.NewRequest(http.MethodGet, "/auth/cloud-handoff?token="+url.QueryEscape(token), nil)
+	rec := httptest.NewRecorder()
+	handler(rec, req)
+
+	if rec.Code != http.StatusTemporaryRedirect {
+		t.Fatalf("status = %d, want %d: %s", rec.Code, http.StatusTemporaryRedirect, rec.Body.String())
+	}
+	if got := rec.Header().Get("Location"); got != "/login?error=handoff_invalid" {
+		t.Fatalf("redirect = %q, want %q", got, "/login?error=handoff_invalid")
 	}
 }

@@ -797,12 +797,14 @@ knowledge, and discovery records may discover legacy identifier-derived files
 only for migration, and the next successful write must replace those legacy
 paths with hashed canonical names so operator-controlled identifiers do not
 become durable filesystem path segments.
-That same hosted handoff dependency also assumes the exchange path repairs
+That same hosted handoff dependency also assumes the exchange path authorizes
 tenant org access before redirecting the browser into protected routes.
 Recovery- and storage-adjacent hosted pages that open immediately after
-control-plane handoff must see a real tenant member session, not a freshly
-minted browser cookie that still fails tenant authorization because the org
-metadata lagged behind control-plane account membership.
+control-plane handoff must see a real tenant member session backed by a
+pre-existing owner/member record, not a freshly minted browser cookie created
+by appending missing members or upgrading roles from the handoff token.
+Missing tenant membership, blank-owner orgs, and role-escalation claims must
+all fail closed before protected recovery routes load.
 That shared `internal/api/` dependency now also assumes hosted tenant AI
 bootstrap and chat-runtime reads resolve through one effective hosted billing
 lease before storage- or recovery-adjacent runtime consumers inspect
@@ -2248,8 +2250,10 @@ admin identity that hosted tenants do not carry.
 That same hosted continuity assumption also applies when operators arrive via
 the older direct tenant magic-link path. Recovery- and storage-adjacent hosted
 opens that still redirect through `/auth/cloud-handoff` must carry enough
-canonical account/role identity for the tenant runtime to repair membership
-before protected routes load, not just the newer portal exchange path.
+canonical account/role identity for the tenant runtime to validate existing
+membership and derive the stored effective role before protected routes load,
+not just the newer portal exchange path. The direct path must not repair org
+membership, claim a blank owner, or honor role upgrades from handoff claims.
 That same adjacent onboarding boundary must also keep the dedicated
 relay-mobile bootstrap credential sufficient for QR, deep-link, and
 connection-validation reads, so hosted recovery/support flows that hand a

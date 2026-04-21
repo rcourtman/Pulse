@@ -27,6 +27,8 @@ const (
 	handoffPrivateFilePerm = 0o600
 )
 
+var errHandoffAuthorizationDenied = errors.New("handoff authorization denied")
+
 type cloudHandoffClaims struct {
 	AccountID string `json:"account_id"`
 	Email     string `json:"email"`
@@ -357,7 +359,12 @@ func HandleHandoffExchange(configDir string) http.HandlerFunc {
 			return
 		}
 
-		if err := ensureHandoffOrganizationMembership(configDir, tenantID, claims.Email, claims.Role); err != nil {
+		effectiveRole, err := authorizeHandoffOrganizationMembership(configDir, tenantID, claims.Email, claims.Role)
+		if err != nil {
+			if errors.Is(err, errHandoffAuthorizationDenied) {
+				http.Error(w, "forbidden", http.StatusForbidden)
+				return
+			}
 			http.Error(w, "internal error", http.StatusInternalServerError)
 			return
 		}
@@ -414,7 +421,7 @@ func HandleHandoffExchange(configDir string) http.HandlerFunc {
 				"account_id": claims.AccountID,
 				"user_id":    claims.Subject,
 				"email":      claims.Email,
-				"role":       claims.Role,
+				"role":       string(effectiveRole),
 				"jti":        claims.ID,
 				"exp":        claims.ExpiresAt.Time.UTC().Format(time.RFC3339),
 			}
@@ -428,72 +435,54 @@ func HandleHandoffExchange(configDir string) http.HandlerFunc {
 	}
 }
 
-func ensureHandoffOrganizationMembership(configDir, tenantID, email, role string) error {
+func authorizeHandoffOrganizationMembership(configDir, tenantID, email, role string) (models.OrganizationRole, error) {
 	mtp := config.NewMultiTenantPersistence(configDir)
 	org, err := mtp.LoadOrganization(tenantID)
 	if err != nil {
-		return fmt.Errorf("load tenant organization %s: %w", tenantID, err)
+		return "", fmt.Errorf("load tenant organization %s: %w", tenantID, err)
+	}
+	if org == nil {
+		return "", fmt.Errorf("%w: tenant organization %s is missing", errHandoffAuthorizationDenied, tenantID)
 	}
 
-	now := time.Now().UTC()
-	if org == nil {
-		org = &models.Organization{}
+	email = normalizeHandoffEmail(email)
+	if email == "" {
+		return "", fmt.Errorf("%w: handoff email is empty", errHandoffAuthorizationDenied)
 	}
-	if strings.TrimSpace(org.ID) == "" {
-		org.ID = tenantID
-	}
-	if strings.TrimSpace(org.DisplayName) == "" {
-		org.DisplayName = tenantID
-	}
-	if models.NormalizeOrgStatus(org.Status) == "" {
-		org.Status = models.OrgStatusActive
+
+	effectiveRole := models.OrganizationRole("")
+	if strings.EqualFold(strings.TrimSpace(org.OwnerUserID), email) {
+		effectiveRole = models.OrgRoleOwner
 	} else {
-		org.Status = models.NormalizeOrgStatus(org.Status)
+		for i := range org.Members {
+			if !strings.EqualFold(strings.TrimSpace(org.Members[i].UserID), email) {
+				continue
+			}
+			effectiveRole = models.NormalizeOrganizationRole(org.Members[i].Role)
+			break
+		}
 	}
-	if org.CreatedAt.IsZero() {
-		org.CreatedAt = now
+
+	if effectiveRole == "" {
+		return "", fmt.Errorf("%w: no pre-existing membership for %s", errHandoffAuthorizationDenied, email)
+	}
+	if !models.IsValidOrganizationRole(effectiveRole) {
+		return "", fmt.Errorf("%w: stored role %q for %s is invalid", errHandoffAuthorizationDenied, effectiveRole, email)
+	}
+	if effectiveRole == models.OrgRoleOwner && strings.TrimSpace(org.OwnerUserID) == "" {
+		return "", fmt.Errorf("%w: tenant organization %s has blank owner", errHandoffAuthorizationDenied, tenantID)
 	}
 
 	desiredRole := models.OrganizationRoleFromAccountRole(role)
-	memberFound := false
-	for i := range org.Members {
-		if !strings.EqualFold(strings.TrimSpace(org.Members[i].UserID), email) {
-			continue
-		}
-		memberFound = true
-		org.Members[i].UserID = email
-		if !models.OrganizationRoleAtLeast(org.Members[i].Role, desiredRole) {
-			org.Members[i].Role = desiredRole
-		}
-		if org.Members[i].AddedAt.IsZero() {
-			org.Members[i].AddedAt = now
-		}
-		if strings.TrimSpace(org.Members[i].AddedBy) == "" {
-			addedBy := strings.TrimSpace(org.OwnerUserID)
-			if addedBy == "" {
-				addedBy = email
-			}
-			org.Members[i].AddedBy = addedBy
-		}
-		break
+	if !models.OrganizationRoleAtLeast(effectiveRole, desiredRole) {
+		return "", fmt.Errorf(
+			"%w: requested role %q exceeds stored role %q for %s",
+			errHandoffAuthorizationDenied,
+			desiredRole,
+			effectiveRole,
+			email,
+		)
 	}
 
-	if !memberFound {
-		addedBy := strings.TrimSpace(org.OwnerUserID)
-		if addedBy == "" {
-			addedBy = email
-		}
-		org.Members = append(org.Members, models.OrganizationMember{
-			UserID:  email,
-			Role:    desiredRole,
-			AddedAt: now,
-			AddedBy: addedBy,
-		})
-	}
-
-	if desiredRole == models.OrgRoleOwner && strings.TrimSpace(org.OwnerUserID) == "" {
-		org.OwnerUserID = email
-	}
-
-	return mtp.SaveOrganization(org)
+	return effectiveRole, nil
 }

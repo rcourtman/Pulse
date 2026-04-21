@@ -647,13 +647,15 @@ prior chat session. Lifecycle-adjacent mobile pairing and setup flows depend
 on `/api/ai/approvals` becoming ready from the first governed settings save,
 not only after some earlier process-start or chat-start side effect has
 already initialized the approval store.
-That same shared dependency now also assumes hosted cloud handoff makes tenant
-org access real before browser lifecycle continues. Lifecycle-adjacent opens
+That same shared dependency now also assumes hosted cloud handoff authorizes
+tenant org access before browser lifecycle continues. Lifecycle-adjacent opens
 into hosted workspaces may depend on `internal/api/cloud_handoff_handlers.go`,
-but the canonical contract is that a successful handoff exchange must reconcile
-tenant organization membership for the handed-off account member before the
-browser follows the new session into protected routes, rather than landing on a
-fresh `access_denied` immediately after session minting.
+but the canonical contract is that a successful handoff exchange may continue
+only when the handed-off account already has server-owned tenant membership.
+The exchange path must derive the effective role from the existing owner/member
+record, reject any handoff claim that would upgrade that stored role, and fail
+closed when the tenant org still has a blank `OwnerUserID` instead of letting
+the first owner-shaped token claim the tenant during browser session minting.
 Lifecycle-owned paywalls now also follow the shared commercial navigation
 contract. `frontend-modern/src/components/Settings/AgentProfilesPanel.tsx` and
 `frontend-modern/src/components/Settings/useAgentProfilesPanelState.ts` may
@@ -695,9 +697,11 @@ and memory do not silently pay for disk/network guest fan-out.
 That same hosted continuity contract also applies to the older direct tenant
 magic-link path. Lifecycle-adjacent control-plane redirects through
 `/auth/cloud-handoff` must preserve canonical account/user/role identity in the
-handoff token long enough for the tenant runtime to repair org membership
-before it lands in protected hosted routes, rather than letting direct opens
-diverge from the newer portal exchange path.
+handoff token long enough for the tenant runtime to validate the existing org
+membership and derive the bounded effective role before it lands in protected
+hosted routes. Direct opens must fail closed on missing membership, blank-owner
+orgs, or owner/admin role escalation attempts instead of diverging from the
+newer portal exchange path by repairing org metadata on arrival.
 That same shared `internal/api/` dependency also assumes telemetry
 transparency remains explicitly system-settings-owned. When lifecycle-adjacent
 setup or router work touches shared `internal/api/` files, telemetry preview
