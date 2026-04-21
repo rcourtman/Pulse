@@ -4334,21 +4334,7 @@
       ]
     }
   ],
-  "work_claims": [
-    {
-      "id": "codex-lane-l3",
-      "agent_id": "codex",
-      "summary": "Trace residual single-device/self-hosted commercial limit regression paths",
-      "target_id": "v6-product-lane-expansion",
-      "claimed_at": "2026-04-21T08:02:26Z",
-      "heartbeat_at": "2026-04-21T08:02:26Z",
-      "expires_at": "2026-04-21T10:02:26Z",
-      "work_item": {
-        "kind": "lane",
-        "id": "L3"
-      }
-    }
-  ],
+  "work_claims": [],
   "open_decisions": [],
   "source_of_truth_file": "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md",
   "resolved_decisions": [
