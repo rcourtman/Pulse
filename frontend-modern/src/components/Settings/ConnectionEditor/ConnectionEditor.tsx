@@ -280,9 +280,8 @@ export const ConnectionEditor: Component<ConnectionEditorProps> = (props) => {
                     itself.
                   </div>
                   <div class="text-xs text-muted">
-                    On supported Proxmox hosts, the installer can also detect local PVE / PBS
-                    services, create the needed API token(s), and register them automatically.
-                    Docker and Kubernetes on that machine are detected too.
+                    Also detects local Docker, Kubernetes, and other supported services on the same
+                    machine during install, with automatic handoff where supported.
                   </div>
                 </div>
                 <div

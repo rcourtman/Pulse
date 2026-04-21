@@ -9,9 +9,7 @@
   "contract_file": "docs/release-control/v6/internal/subsystems/agent-lifecycle.md",
   "status_file": "docs/release-control/v6/internal/status.json",
   "registry_file": "docs/release-control/v6/internal/subsystems/registry.json",
-  "dependency_subsystem_ids": [
-    "api-contracts"
-  ]
+  "dependency_subsystem_ids": ["api-contracts"]
 }
 ```
 
@@ -53,11 +51,11 @@ management, and fleet control surfaces.
 29. `frontend-modern/src/components/Settings/useInfrastructureSettingsState.ts`
 30. `frontend-modern/src/components/Settings/NodeModalAuthenticationSection.tsx`
 31. `frontend-modern/src/components/Settings/NodeModalBasicInfoSection.tsx`
-34. `frontend-modern/src/components/Settings/nodeModalModel.ts`
-35. `frontend-modern/src/components/Settings/NodeModalMonitoringSection.tsx`
-36. `frontend-modern/src/components/Settings/NodeModalSetupGuideSection.tsx`
-37. `frontend-modern/src/components/Settings/NodeModalStatusFooter.tsx`
-38. `frontend-modern/src/components/Settings/useNodeModalState.ts`
+32. `frontend-modern/src/components/Settings/nodeModalModel.ts`
+33. `frontend-modern/src/components/Settings/NodeModalMonitoringSection.tsx`
+34. `frontend-modern/src/components/Settings/NodeModalSetupGuideSection.tsx`
+35. `frontend-modern/src/components/Settings/NodeModalStatusFooter.tsx`
+36. `frontend-modern/src/components/Settings/useNodeModalState.ts`
 37. `frontend-modern/src/components/SetupWizard/SetupCompletionPanel.tsx`
 38. `frontend-modern/src/components/Infrastructure/deploy/ResultsStep.tsx`
 39. `frontend-modern/src/utils/agentProfilesPresentation.ts`
@@ -66,23 +64,23 @@ management, and fleet control surfaces.
 42. `frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx`
 43. `frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx`
 44. `frontend-modern/src/components/Settings/infrastructureSettingsModel.ts`
-50. `frontend-modern/src/components/Settings/useInfrastructureConfiguredNodesState.ts`
-51. `frontend-modern/src/components/Settings/useInfrastructureDiscoveryRuntimeState.ts`
-52. `frontend-modern/src/utils/infrastructureSettingsPresentation.ts`
-53. `frontend-modern/src/utils/agentCapabilityPresentation.ts`
-54. `frontend-modern/src/utils/agentProfileSuggestionPresentation.ts`
-55. `frontend-modern/src/utils/configuredNodeCapabilityPresentation.ts`
-56. `frontend-modern/src/utils/configuredNodeStatusPresentation.ts`
-57. `frontend-modern/src/utils/unifiedAgentInventoryPresentation.ts`
-58. `frontend-modern/src/utils/unifiedAgentStatusPresentation.ts`
-59. `frontend-modern/src/utils/clusterEndpointPresentation.ts`
-60. `frontend-modern/src/utils/nodeModalPresentation.ts`
-61. `frontend-modern/src/utils/proxmoxSettingsPresentation.ts`
-62. `frontend-modern/src/components/Settings/platformConnectionsModel.ts`
-63. `frontend-modern/src/components/Settings/useTrueNASSettingsPanelState.ts`
-64. `frontend-modern/src/components/Settings/useVMwareSettingsPanelState.ts`
-65. `frontend-modern/src/components/Settings/MonitoredSystemAdmissionPreview.tsx`
-69. `internal/hostagent/proxmox_setup.go`
+45. `frontend-modern/src/components/Settings/useInfrastructureConfiguredNodesState.ts`
+46. `frontend-modern/src/components/Settings/useInfrastructureDiscoveryRuntimeState.ts`
+47. `frontend-modern/src/utils/infrastructureSettingsPresentation.ts`
+48. `frontend-modern/src/utils/agentCapabilityPresentation.ts`
+49. `frontend-modern/src/utils/agentProfileSuggestionPresentation.ts`
+50. `frontend-modern/src/utils/configuredNodeCapabilityPresentation.ts`
+51. `frontend-modern/src/utils/configuredNodeStatusPresentation.ts`
+52. `frontend-modern/src/utils/unifiedAgentInventoryPresentation.ts`
+53. `frontend-modern/src/utils/unifiedAgentStatusPresentation.ts`
+54. `frontend-modern/src/utils/clusterEndpointPresentation.ts`
+55. `frontend-modern/src/utils/nodeModalPresentation.ts`
+56. `frontend-modern/src/utils/proxmoxSettingsPresentation.ts`
+57. `frontend-modern/src/components/Settings/platformConnectionsModel.ts`
+58. `frontend-modern/src/components/Settings/useTrueNASSettingsPanelState.ts`
+59. `frontend-modern/src/components/Settings/useVMwareSettingsPanelState.ts`
+60. `frontend-modern/src/components/Settings/MonitoredSystemAdmissionPreview.tsx`
+61. `internal/hostagent/proxmox_setup.go`
 
 ## Shared Boundaries
 
@@ -90,25 +88,25 @@ management, and fleet control surfaces.
 2. `frontend-modern/src/api/nodes.ts` shared with `api-contracts`: the shared Proxmox node client is both an agent lifecycle setup/install control surface and a canonical API payload contract boundary.
 3. `frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/NodeCredentialSlot.tsx` shared with `api-contracts`: the inline node credential slot is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary.
 4. `frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx` shared with `api-contracts`: the pure infrastructure operations inventory/install model is both an agent fleet lifecycle control surface and an API token, lookup, assignment, and reporting/install contract boundary.
-4. `frontend-modern/src/components/Settings/MonitoredSystemAdmissionPreview.tsx` shared with `cloud-paid`: the monitored-system admission preview is both a platform-connections lifecycle surface and a canonical cloud-paid monitored-system presentation boundary.
-5. `frontend-modern/src/components/Settings/NodeModalAuthenticationSection.tsx` shared with `api-contracts`: the node setup authentication section is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary.
-8. `frontend-modern/src/components/Settings/NodeModalBasicInfoSection.tsx` shared with `api-contracts`: the node setup basic-info section is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary.
-9. `frontend-modern/src/components/Settings/nodeModalModel.ts` shared with `api-contracts`: the pure node setup modal model is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary.
-10. `frontend-modern/src/components/Settings/NodeModalMonitoringSection.tsx` shared with `api-contracts`: the node setup monitoring section is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary.
-11. `frontend-modern/src/components/Settings/NodeModalSetupGuideSection.tsx` shared with `api-contracts`: the node setup guide section is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary.
-12. `frontend-modern/src/components/Settings/NodeModalStatusFooter.tsx` shared with `api-contracts`: the node setup status/footer section is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary.
-13. `frontend-modern/src/components/Settings/useInfrastructureConfiguredNodesState.ts` shared with `api-contracts`: the direct-node infrastructure settings state hook is both an agent lifecycle control surface and a shared Proxmox node API contract boundary.
-14. `frontend-modern/src/components/Settings/useInfrastructureDiscoveryRuntimeState.ts` shared with `api-contracts`: the infrastructure discovery runtime state hook is both an agent lifecycle control surface and a shared discovery/settings API contract boundary.
-15. `frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx` shared with `api-contracts`: the infrastructure install state hook is both an agent fleet lifecycle control surface and an API token, lookup, and install transport contract boundary.
-16. `frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx` shared with `api-contracts`: the shared infrastructure operations state hook is both an agent fleet lifecycle control surface and an API token, lookup, assignment, and reporting/install contract boundary.
-17. `frontend-modern/src/components/Settings/useNodeModalState.ts` shared with `api-contracts`: the node setup modal state hook is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary.
-19. `frontend-modern/src/utils/agentInstallCommand.ts` shared with `api-contracts`: the shared frontend install-command helper is both an agent lifecycle control surface and a canonical API/install transport contract boundary.
-20. `frontend-modern/src/utils/infrastructureSettingsPresentation.ts` shared with `api-contracts`: the infrastructure settings presentation helper is both an agent lifecycle control surface and an API-backed direct-node/discovery settings boundary.
-21. `internal/api/agent_install_command_shared.go` shared with `api-contracts`: agent install command assembly is both an agent lifecycle control surface and a canonical API payload contract boundary.
-22. `internal/api/config_setup_handlers.go` shared with `api-contracts`: auto-register and setup handlers are both an agent lifecycle control surface and a canonical API payload contract boundary.
-23. `internal/api/unified_agent.go` shared with `api-contracts`: unified agent download and installer handlers are both an agent lifecycle control surface and a canonical API payload contract boundary.
-24. `scripts/install.ps1` shared with `deployment-installability`: the Windows installer is both a deployment installability entry point and a canonical agent lifecycle runtime continuity boundary.
-25. `scripts/install.sh` shared with `deployment-installability`: the shell installer is both a deployment installability entry point and a canonical agent lifecycle runtime continuity boundary.
+5. `frontend-modern/src/components/Settings/MonitoredSystemAdmissionPreview.tsx` shared with `cloud-paid`: the monitored-system admission preview is both a platform-connections lifecycle surface and a canonical cloud-paid monitored-system presentation boundary.
+6. `frontend-modern/src/components/Settings/NodeModalAuthenticationSection.tsx` shared with `api-contracts`: the node setup authentication section is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary.
+7. `frontend-modern/src/components/Settings/NodeModalBasicInfoSection.tsx` shared with `api-contracts`: the node setup basic-info section is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary.
+8. `frontend-modern/src/components/Settings/nodeModalModel.ts` shared with `api-contracts`: the pure node setup modal model is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary.
+9. `frontend-modern/src/components/Settings/NodeModalMonitoringSection.tsx` shared with `api-contracts`: the node setup monitoring section is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary.
+10. `frontend-modern/src/components/Settings/NodeModalSetupGuideSection.tsx` shared with `api-contracts`: the node setup guide section is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary.
+11. `frontend-modern/src/components/Settings/NodeModalStatusFooter.tsx` shared with `api-contracts`: the node setup status/footer section is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary.
+12. `frontend-modern/src/components/Settings/useInfrastructureConfiguredNodesState.ts` shared with `api-contracts`: the direct-node infrastructure settings state hook is both an agent lifecycle control surface and a shared Proxmox node API contract boundary.
+13. `frontend-modern/src/components/Settings/useInfrastructureDiscoveryRuntimeState.ts` shared with `api-contracts`: the infrastructure discovery runtime state hook is both an agent lifecycle control surface and a shared discovery/settings API contract boundary.
+14. `frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx` shared with `api-contracts`: the infrastructure install state hook is both an agent fleet lifecycle control surface and an API token, lookup, and install transport contract boundary.
+15. `frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx` shared with `api-contracts`: the shared infrastructure operations state hook is both an agent fleet lifecycle control surface and an API token, lookup, assignment, and reporting/install contract boundary.
+16. `frontend-modern/src/components/Settings/useNodeModalState.ts` shared with `api-contracts`: the node setup modal state hook is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary.
+17. `frontend-modern/src/utils/agentInstallCommand.ts` shared with `api-contracts`: the shared frontend install-command helper is both an agent lifecycle control surface and a canonical API/install transport contract boundary.
+18. `frontend-modern/src/utils/infrastructureSettingsPresentation.ts` shared with `api-contracts`: the infrastructure settings presentation helper is both an agent lifecycle control surface and an API-backed direct-node/discovery settings boundary.
+19. `internal/api/agent_install_command_shared.go` shared with `api-contracts`: agent install command assembly is both an agent lifecycle control surface and a canonical API payload contract boundary.
+20. `internal/api/config_setup_handlers.go` shared with `api-contracts`: auto-register and setup handlers are both an agent lifecycle control surface and a canonical API payload contract boundary.
+21. `internal/api/unified_agent.go` shared with `api-contracts`: unified agent download and installer handlers are both an agent lifecycle control surface and a canonical API payload contract boundary.
+22. `scripts/install.ps1` shared with `deployment-installability`: the Windows installer is both a deployment installability entry point and a canonical agent lifecycle runtime continuity boundary.
+23. `scripts/install.sh` shared with `deployment-installability`: the shell installer is both a deployment installability entry point and a canonical agent lifecycle runtime continuity boundary.
 
 That shared monitored-system admission preview boundary also owns the disabled
 platform-connection lifecycle state. Once a TrueNAS or VMware setup form marks
@@ -194,10 +192,10 @@ an add-only capacity posture.
 4. Keep shared `internal/api/` helper edits isolated from agent lifecycle semantics: Patrol-specific status transport or alert-trigger wiring changes in shared handlers must not bleed into auto-register, installer, or fleet-control behavior unless this contract moves in the same slice.
    The same isolation rule applies to AI settings payload work in `internal/api/ai_handlers.go`: provider auth fields, masked-secret echoes, and provider-test model selection remain AI/runtime plus API-contract ownership and must not be reinterpreted as lifecycle setup or registration semantics just because they share backend helper layers.
    The same shared-helper rule now covers SSO outbound discovery and metadata fetches plus credential-file loads in `internal/api/sso_outbound.go`, `internal/api/saml_service.go`, and `internal/api/oidc_service.go`: lifecycle-adjacent setup or auth work may depend on that shared trust boundary, but it must not fork a second HTTP client, redirect policy, or file-read rule inside lifecycle-local flows.
-4. Keep legacy Unified Agent compatibility names explicitly secondary when touching shared `internal/api/` runtime helpers: the legacy host-route family and `host-agent:*` scope names may remain as ingress or migration aliases, but they must not retake primary ownership in router state, live runtime scope checks, handler commentary, or operator-facing guidance.
-5. Add or change the unified agent CLI entrypoint, version/help exit semantics, or startup argument/error routing through `cmd/pulse-agent/main.go`.
-6. Add or change installer flags, persisted service arguments, or upgrade-safe re-entry behavior through `scripts/install.sh` and `scripts/install.ps1`.
-7. Add or change profile management, the extracted agent profiles runtime owner, the top-level infrastructure ledger, the pure unified-agent inventory/install model, the connections-ledger workspace shell, the unified ConnectionEditor and its per-type credential slots, route model, shared install section owner, the shared direct-node/discovery infrastructure settings owners plus their model, shared frontend install-command assembly, Proxmox setup/install API transport, TrueNAS platform-connection management, VMware platform-connection management, the shared monitored-system admission preview shell for those platform connections, setup-completion install handoff transport, deploy-fallback manual install transport, and fleet-control presentation through `frontend-modern/src/api/agentProfiles.ts`, `frontend-modern/src/api/nodes.ts`, `frontend-modern/src/components/Settings/AgentProfilesPanel.tsx`, `frontend-modern/src/components/Settings/useAgentProfilesPanelState.ts`, `frontend-modern/src/components/Settings/ConnectionsTable.tsx`, `frontend-modern/src/components/Settings/connectionsTableModel.ts`, `frontend-modern/src/components/Settings/useConnectionsLedger.ts`, `frontend-modern/src/components/Settings/useConnectionRowActions.ts`, `frontend-modern/src/components/Settings/ConnectionEditor/ConnectionEditor.tsx`, `frontend-modern/src/components/Settings/ConnectionEditor/AddressProbeStep.tsx`, `frontend-modern/src/components/Settings/ConnectionEditor/useConnectionEditor.ts`, `frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/NodeCredentialSlot.tsx`, `frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/TrueNASCredentialSlot.tsx`, `frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/VMwareCredentialSlot.tsx`, `frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx`, `frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx`, `frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx`, `frontend-modern/src/components/Settings/infrastructureWorkspaceModel.ts`, `frontend-modern/src/components/Settings/MonitoredSystemAdmissionPreview.tsx`, `frontend-modern/src/components/Settings/platformConnectionsModel.ts`, `frontend-modern/src/components/Settings/useTrueNASSettingsPanelState.ts`, `frontend-modern/src/components/Settings/useVMwareSettingsPanelState.ts`, `frontend-modern/src/components/Settings/proxmoxSettingsModel.ts`, `frontend-modern/src/components/Settings/ConfiguredNodeTables.tsx`, `frontend-modern/src/components/Settings/SettingsSectionNav.tsx`, `frontend-modern/src/components/Settings/infrastructureSettingsModel.ts`, `frontend-modern/src/components/Settings/useInfrastructureConfiguredNodesState.ts`, `frontend-modern/src/components/Settings/useInfrastructureDiscoveryRuntimeState.ts`, `frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx`, `frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx`, `frontend-modern/src/components/Settings/useInfrastructureSettingsState.ts`, `frontend-modern/src/components/Settings/nodeModalModel.ts`, `frontend-modern/src/components/Settings/useNodeModalState.ts`, `frontend-modern/src/components/SetupWizard/SetupCompletionPanel.tsx`, and `frontend-modern/src/utils/agentInstallCommand.ts`. Phase 9 retired the legacy reporting/inventory surface (InfrastructureOperationsController, InfrastructureInventorySection, InfrastructureActiveRowDetails, InfrastructureIgnoredRowDetails, InfrastructureStopMonitoringDialog, useInfrastructureReportingState) and the per-type shells (PlatformConnectionsWorkspace, ProxmoxSettingsPanel, ProxmoxDirectWorkspace, ProxmoxConfiguredNodesTable, ProxmoxDirectConnectionsCard, ProxmoxDiscoveryResultsCard, ProxmoxDeleteNodeDialog, ProxmoxNodeModalStack, NodeModal shell, TrueNASSettingsPanel, VMwareSettingsPanel, useProxmoxDirectWorkspaceState); lifecycle extensions must route through the unified aggregator ledger plus ConnectionEditor credential slots rather than reintroducing those retired surfaces.
+5. Keep legacy Unified Agent compatibility names explicitly secondary when touching shared `internal/api/` runtime helpers: the legacy host-route family and `host-agent:*` scope names may remain as ingress or migration aliases, but they must not retake primary ownership in router state, live runtime scope checks, handler commentary, or operator-facing guidance.
+6. Add or change the unified agent CLI entrypoint, version/help exit semantics, or startup argument/error routing through `cmd/pulse-agent/main.go`.
+7. Add or change installer flags, persisted service arguments, or upgrade-safe re-entry behavior through `scripts/install.sh` and `scripts/install.ps1`.
+8. Add or change profile management, the extracted agent profiles runtime owner, the top-level infrastructure ledger, the pure unified-agent inventory/install model, the connections-ledger workspace shell, the unified ConnectionEditor and its per-type credential slots, route model, shared install section owner, the shared direct-node/discovery infrastructure settings owners plus their model, shared frontend install-command assembly, Proxmox setup/install API transport, TrueNAS platform-connection management, VMware platform-connection management, the shared monitored-system admission preview shell for those platform connections, setup-completion install handoff transport, deploy-fallback manual install transport, and fleet-control presentation through `frontend-modern/src/api/agentProfiles.ts`, `frontend-modern/src/api/nodes.ts`, `frontend-modern/src/components/Settings/AgentProfilesPanel.tsx`, `frontend-modern/src/components/Settings/useAgentProfilesPanelState.ts`, `frontend-modern/src/components/Settings/ConnectionsTable.tsx`, `frontend-modern/src/components/Settings/connectionsTableModel.ts`, `frontend-modern/src/components/Settings/useConnectionsLedger.ts`, `frontend-modern/src/components/Settings/useConnectionRowActions.ts`, `frontend-modern/src/components/Settings/ConnectionEditor/ConnectionEditor.tsx`, `frontend-modern/src/components/Settings/ConnectionEditor/AddressProbeStep.tsx`, `frontend-modern/src/components/Settings/ConnectionEditor/useConnectionEditor.ts`, `frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/NodeCredentialSlot.tsx`, `frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/TrueNASCredentialSlot.tsx`, `frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/VMwareCredentialSlot.tsx`, `frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx`, `frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx`, `frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx`, `frontend-modern/src/components/Settings/infrastructureWorkspaceModel.ts`, `frontend-modern/src/components/Settings/MonitoredSystemAdmissionPreview.tsx`, `frontend-modern/src/components/Settings/platformConnectionsModel.ts`, `frontend-modern/src/components/Settings/useTrueNASSettingsPanelState.ts`, `frontend-modern/src/components/Settings/useVMwareSettingsPanelState.ts`, `frontend-modern/src/components/Settings/proxmoxSettingsModel.ts`, `frontend-modern/src/components/Settings/ConfiguredNodeTables.tsx`, `frontend-modern/src/components/Settings/SettingsSectionNav.tsx`, `frontend-modern/src/components/Settings/infrastructureSettingsModel.ts`, `frontend-modern/src/components/Settings/useInfrastructureConfiguredNodesState.ts`, `frontend-modern/src/components/Settings/useInfrastructureDiscoveryRuntimeState.ts`, `frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx`, `frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx`, `frontend-modern/src/components/Settings/useInfrastructureSettingsState.ts`, `frontend-modern/src/components/Settings/nodeModalModel.ts`, `frontend-modern/src/components/Settings/useNodeModalState.ts`, `frontend-modern/src/components/SetupWizard/SetupCompletionPanel.tsx`, and `frontend-modern/src/utils/agentInstallCommand.ts`. Phase 9 retired the legacy reporting/inventory surface (InfrastructureOperationsController, InfrastructureInventorySection, InfrastructureActiveRowDetails, InfrastructureIgnoredRowDetails, InfrastructureStopMonitoringDialog, useInfrastructureReportingState) and the per-type shells (PlatformConnectionsWorkspace, ProxmoxSettingsPanel, ProxmoxDirectWorkspace, ProxmoxConfiguredNodesTable, ProxmoxDirectConnectionsCard, ProxmoxDiscoveryResultsCard, ProxmoxDeleteNodeDialog, ProxmoxNodeModalStack, NodeModal shell, TrueNASSettingsPanel, VMwareSettingsPanel, useProxmoxDirectWorkspaceState); lifecycle extensions must route through the unified aggregator ledger plus ConnectionEditor credential slots rather than reintroducing those retired surfaces.
    Those lifecycle-owned settings hooks may consume websocket state only through `frontend-modern/src/contexts/appRuntime.ts`; they must not import `frontend-modern/src/App.tsx` or recreate root-shell providers.
    Public demo and other read-only settings posture must stay reporting-first
    on that same lifecycle-owned workspace boundary: infrastructure workspace
@@ -210,11 +208,11 @@ an add-only capacity posture.
    seeded by `/api/security/status.sessionCapabilities.assistantEnabled`, and
    must not probe `/api/settings/ai` just to decide whether that affordance
    should render.
-7. Preserve canonical token-lifecycle reads in shared `internal/api/` auth/security helpers so lifecycle-adjacent setup and install flows do not revoke a displayed relay pairing token after `lastUsedAt` proves that an already paired device is actively depending on that credential.
-8. Preserve backend-owned Pulse Mobile relay runtime credential minting in those same shared `internal/api/` auth/security helpers so lifecycle-adjacent setup and install flows reuse the canonical mobile token route instead of reintroducing wildcard or browser-authored runtime token bundles.
-9. Preserve the dedicated backend-owned `relay:mobile:access` capability and its governed backward-compatible route inventory plus the shared helper call sites around it, so lifecycle-adjacent setup and install flows do not widen the mobile device credential back into general AI chat/execute scope ownership.
-10. Preserve shipped security-doc guidance in shared lifecycle setup helpers so `internal/api/config_setup_handlers.go` and adjacent install/setup runtime paths point operators at the running build's local security documentation route rather than GitHub `main` links.
-11. Keep shared `internal/api/router.go` workload-chart downsampling presentation-only: when that router caps mixed-cadence workload history into equal-time buckets for operator-facing cards, lifecycle-adjacent setup and fleet surfaces must not reuse the shaped chart samples as heartbeat, enrollment, or last-seen authority.
+9. Preserve canonical token-lifecycle reads in shared `internal/api/` auth/security helpers so lifecycle-adjacent setup and install flows do not revoke a displayed relay pairing token after `lastUsedAt` proves that an already paired device is actively depending on that credential.
+10. Preserve backend-owned Pulse Mobile relay runtime credential minting in those same shared `internal/api/` auth/security helpers so lifecycle-adjacent setup and install flows reuse the canonical mobile token route instead of reintroducing wildcard or browser-authored runtime token bundles.
+11. Preserve the dedicated backend-owned `relay:mobile:access` capability and its governed backward-compatible route inventory plus the shared helper call sites around it, so lifecycle-adjacent setup and install flows do not widen the mobile device credential back into general AI chat/execute scope ownership.
+12. Preserve shipped security-doc guidance in shared lifecycle setup helpers so `internal/api/config_setup_handlers.go` and adjacent install/setup runtime paths point operators at the running build's local security documentation route rather than GitHub `main` links.
+13. Keep shared `internal/api/router.go` workload-chart downsampling presentation-only: when that router caps mixed-cadence workload history into equal-time buckets for operator-facing cards, lifecycle-adjacent setup and fleet surfaces must not reuse the shaped chart samples as heartbeat, enrollment, or last-seen authority.
     That same presentation-only boundary must preserve canonical millisecond timestamps when it serializes chart points, so lifecycle-adjacent first-host and fleet surfaces do not misread rounded chart samples as duplicate or restarted heartbeat evidence.
     The same rule now applies to storage summary interaction. Shared sticky-card or row-hover focus behavior on infrastructure, workloads, and storage may reuse the canonical chart transport, but lifecycle-adjacent install, enrollment, and fleet surfaces must not treat highlighted summary series or sticky-shell state as agent freshness or setup progress.
     The same rule now applies to infrastructure-summary metric filters. Shared
@@ -235,14 +233,14 @@ an add-only capacity posture.
     the omitted `usage` or `total` series as missing lifecycle telemetry or
     enrollment-state evidence.
     Dashboard storage trend consumers on that shared router boundary must now reuse the single `/api/storage-charts` summary response instead of fanning out per-pool `/api/metrics-store/history` reads, and lifecycle surfaces still must treat that batched storage summary transport as presentation context only rather than install, enrollment, or freshness truth.
-12. Keep lifecycle installer fallback pinned to published release lineage only.
+14. Keep lifecycle installer fallback pinned to published release lineage only.
     When `internal/api/unified_agent.go` has to proxy `/install.sh` or
     `/install.ps1` from GitHub, the shared lifecycle path may only treat stable
     tags and explicit RC prerelease tags as release assets. Working-line dev
     prereleases and build-metadata versions must fail closed so first-host
     install, repair, and fleet continuity do not depend on unpublished or
     branch-local installer URLs.
-13. Keep self-hosted purchase handoff state on the adjacent commercial/auth
+15. Keep self-hosted purchase handoff state on the adjacent commercial/auth
     boundary. When shared `internal/api/router.go`,
     `internal/api/router_routes_cloud.go`, `internal/api/licensing_handlers.go`,
     or `internal/api/demo_mode_commercial.go` evolve public
@@ -360,7 +358,7 @@ an add-only capacity posture.
     ledger must never reintroduce a separate detail page or `Dialog`
     drawer for viewing a connection's aggregator fields — everything is
     on the row.
-    The TrueNAS and VMware credential slots carry per-surface Monitor*
+    The TrueNAS and VMware credential slots carry per-surface Monitor\*
     scope the same way the PVE/PBS/PMG credential slot already does:
     `TrueNASSettingsPanelState`/`VMwareSettingsPanelState` read and
     write positive `MonitorDatasets`/`MonitorPools`/`MonitorReplication`
@@ -387,13 +385,13 @@ an add-only capacity posture.
    instance-scoped under `internal/hostagent/agent.go`; lifecycle-owned
    registration and update paths must not depend on package-global mutable test
    seams that can leak between concurrent agent sessions or tests.
-4. Preserve canonical /api/auto-register node identity continuity when canonical hosts shift between hostname and IP forms for the same node.
-5. Keep Proxmox registration continuity self-healing: stale local registration markers must be verified against Pulse before the host agent skips setup, and a missing matching node on the Pulse side must drive canonical re-registration instead of asking operators to delete marker files manually.
-5. Keep first-session lifecycle handoff explicit: the live setup completion
+5. Preserve canonical /api/auto-register node identity continuity when canonical hosts shift between hostname and IP forms for the same node.
+6. Keep Proxmox registration continuity self-healing: stale local registration markers must be verified against Pulse before the host agent skips setup, and a missing matching node on the Pulse side must drive canonical re-registration instead of asking operators to delete marker files manually.
+7. Keep first-session lifecycle handoff explicit: the live setup completion
    surface in `frontend-modern/src/components/SetupWizard/SetupCompletionPanel.tsx`
    must route the primary CTA into `/settings/infrastructure/install`, frame
    that route as the first-host install step, and present `Platform
-   connections` as the named API-backed alternative for Proxmox, TrueNAS, and
+connections` as the named API-backed alternative for Proxmox, TrueNAS, and
    future provider integrations rather than leaving post-setup next actions
    implicit. That API-backed alternative must be a real first-run handoff
    control, not prose-only guidance.
@@ -413,7 +411,7 @@ an add-only capacity posture.
    may accept a preview-provided connected-resource override, but the live
    first-session runtime path must keep `/api/state` polling as the sole
    source of connected-system truth when no override is supplied.
-6. Keep `frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx`
+8. Keep `frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx`
    oriented around the first monitored host. Install-token generation,
    governed command copy, and install instructions belong to the canonical
    lifecycle path; transport details, trust overrides, profile tuning, and
@@ -421,7 +419,7 @@ an add-only capacity posture.
    narrative, including an explicit advanced-options disclosure so first-time
    operators see token generation, command copy, and status confirmation
    before non-default connection controls.
-7. Keep `frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx`
+9. Keep `frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx`
    and `frontend-modern/src/components/Settings/infrastructureWorkspaceModel.ts`
    aligned with that same lifecycle path. The bare
    `/settings/infrastructure` route must render one Connections and inventory
@@ -452,53 +450,53 @@ an add-only capacity posture.
    collection and last-activity columns may return only once the workspace has
    enough width to show the full ledger without clipping headers or row
    actions.
-8. Keep post-install lifecycle completion explicit inside
-   `frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx`
-   and `frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx`.
-9. Keep the dev first-session proof deterministic on the real wizard path:
-   `tests/integration/tests/helpers.ts` and
-   `tests/integration/tests/11-first-session.spec.ts` must refresh first-run
-   state through `/api/security/dev/reset-first-run`, then prove both the
-   canonical `Open Infrastructure Install` handoff and the explicit
-   `Open Platform connections` handoff against the live setup wizard instead
-   of relying on stale bootstrap tokens, dashboard fallbacks, or preview-only
-   coverage. That API-backed handoff may keep the operator-facing `Platform
-   connections` label, but it must land on the shared infrastructure
-   onboarding contract at `/settings/infrastructure?add=pick` and normalize
-   back to `/settings/infrastructure` instead of reviving a separate
-   platform-management shell.
-   When the first host reports successfully, the install workflow must treat
-   that as a completion handoff with direct navigation into `/dashboard` and
-   `/settings/infrastructure/operations` instead of leaving operators on a
-   generic lookup result. When the workspace starts from zero active connected
-   infrastructure and install commands are available, the same lifecycle path
-   must auto-watch the canonical `/api/state` projection for the first
-   reporting host rather than requiring a brand-new operator to know and type
-   a hostname or agent ID just to see the first success handoff. When that
-   workspace is entered through first-run setup handoff, the same lifecycle
-   path must also auto-create the scoped first-host install token so the
-   operator lands on ready-to-copy commands instead of being asked to perform a
-   second manual token-generation step immediately after securing the server.
-   Any first-run credentials download generated from that same handoff must
-   describe the prepared first-host token path consistently instead of telling
-   the operator to generate another install token manually.
-9. Keep `frontend-modern/src/components/SetupWizard/SetupCompletionPanel.tsx`
-   ordered around the actual first-run operator sequence: credentials that must
-   be saved now should be visible before the operator leaves the screen, and
-   the completion surface should present one canonical primary next-step path
-   into Infrastructure Install instead of repeating competing install or
-   dashboard CTAs across multiple sections. Once the first monitored host is
-   already connected, that same surface must pivot its primary CTA and headline
-   to `/` so the operator is sent to the dashboard rather than being told to
-   install the first host again. While the first host is still pending, that
-   same completion narrative must describe Infrastructure Install as the place
-   where the first-host scoped install token is prepared from setup handoff,
-   and when it names the shared settings workspace for follow-up lifecycle
-   control it must use the canonical `Infrastructure` label instead of
-   reviving the retired `Infrastructure Operations` wording.
-   not as a second manual token-generation task the operator still needs to
-   figure out.
-10. Keep API-backed platform onboarding explicit across
+10. Keep post-install lifecycle completion explicit inside
+    `frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx`
+    and `frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx`.
+11. Keep the dev first-session proof deterministic on the real wizard path:
+    `tests/integration/tests/helpers.ts` and
+    `tests/integration/tests/11-first-session.spec.ts` must refresh first-run
+    state through `/api/security/dev/reset-first-run`, then prove both the
+    canonical `Open Infrastructure Install` handoff and the explicit
+    `Open Platform connections` handoff against the live setup wizard instead
+    of relying on stale bootstrap tokens, dashboard fallbacks, or preview-only
+    coverage. That API-backed handoff may keep the operator-facing `Platform
+connections` label, but it must land on the shared infrastructure
+    onboarding contract at `/settings/infrastructure?add=pick` and normalize
+    back to `/settings/infrastructure` instead of reviving a separate
+    platform-management shell.
+    When the first host reports successfully, the install workflow must treat
+    that as a completion handoff with direct navigation into `/dashboard` and
+    `/settings/infrastructure/operations` instead of leaving operators on a
+    generic lookup result. When the workspace starts from zero active connected
+    infrastructure and install commands are available, the same lifecycle path
+    must auto-watch the canonical `/api/state` projection for the first
+    reporting host rather than requiring a brand-new operator to know and type
+    a hostname or agent ID just to see the first success handoff. When that
+    workspace is entered through first-run setup handoff, the same lifecycle
+    path must also auto-create the scoped first-host install token so the
+    operator lands on ready-to-copy commands instead of being asked to perform a
+    second manual token-generation step immediately after securing the server.
+    Any first-run credentials download generated from that same handoff must
+    describe the prepared first-host token path consistently instead of telling
+    the operator to generate another install token manually.
+12. Keep `frontend-modern/src/components/SetupWizard/SetupCompletionPanel.tsx`
+    ordered around the actual first-run operator sequence: credentials that must
+    be saved now should be visible before the operator leaves the screen, and
+    the completion surface should present one canonical primary next-step path
+    into Infrastructure Install instead of repeating competing install or
+    dashboard CTAs across multiple sections. Once the first monitored host is
+    already connected, that same surface must pivot its primary CTA and headline
+    to `/` so the operator is sent to the dashboard rather than being told to
+    install the first host again. While the first host is still pending, that
+    same completion narrative must describe Infrastructure Install as the place
+    where the first-host scoped install token is prepared from setup handoff,
+    and when it names the shared settings workspace for follow-up lifecycle
+    control it must use the canonical `Infrastructure` label instead of
+    reviving the retired `Infrastructure Operations` wording.
+    not as a second manual token-generation task the operator still needs to
+    figure out.
+13. Keep API-backed platform onboarding explicit across
     `frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx`,
     `frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx`,
     `frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx`,
@@ -509,19 +507,19 @@ an add-only capacity posture.
     available for optional later agent augmentation on TrueNAS, but first-run
     copy, alternative CTAs, and install-profile lists must not imply that an
     agent install is the required bootstrap for TrueNAS support in Pulse.
-11. Keep first-session and lifecycle-adjacent frontend resource handling on the
+14. Keep first-session and lifecycle-adjacent frontend resource handling on the
     canonical unified-resource boundary. Top-level TrueNAS appliances may reach
     setup-completion or infrastructure lifecycle surfaces only as canonical
     `agent` resources with `platformType: 'truenas'`; any legacy raw
     `resource.type === 'truenas'` compatibility collapse belongs in the shared
     frontend resource adapters, not in setup or lifecycle-local UI branching.
-12. Keep lifecycle-adjacent AI transport compatibility on the shared
+15. Keep lifecycle-adjacent AI transport compatibility on the shared
     `internal/api/` boundary. If chat mention parsing, alert investigation
     targets, or adjacent Assistant resource transport still accept a legacy
     top-level `truenas` type, that value must collapse immediately to the
     canonical `agent` host type before lifecycle surfaces, setup handoffs, or
     operator-visible route state consume it.
-13. Keep onboarding ownership aligned with
+16. Keep onboarding ownership aligned with
     `docs/release-control/v6/internal/PLATFORM_SUPPORT_MODEL.md`: agent-backed
     first-class platforms belong to the install/reporting lifecycle path,
     API-backed first-class platforms belong to Platform connections, and any
@@ -1019,10 +1017,12 @@ grouping membership for that catalog belongs to the governed platform-support
 manifest family model rather than lane-local UI lists. Product-specific host
 advantages such as Proxmox auto-registration may be explained inside that
 host-install section, but they must not become the headline copy or top
-visual weight for the shared add-infrastructure landing. Returning `Back to
-catalog` must reset probe input and result state rather than reopening the
-landing with stale no-match or detected-product state already rendered, and
-the family-local `Back to platforms` path must restore the top-level platform
+visual weight for the shared add-infrastructure landing, and the Unified Agent
+framing itself must remain provider-neutral rather than teaching one platform
+as the memorable reason to choose the host path. Returning `Back to catalog`
+must reset probe input and result state rather than reopening the landing
+with stale no-match or detected-product state already rendered, and the
+family-local `Back to platforms` path must restore the top-level platform
 catalog without entering a credential slot.
 Render-order proof for that landing belongs to DOM-backed settings tests, not
 raw source-string position checks, so lifecycle ownership continues to guard

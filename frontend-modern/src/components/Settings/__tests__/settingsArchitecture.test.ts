@@ -92,8 +92,10 @@ describe('settings architecture guardrails', () => {
     expect(connectionEditorSource).toContain('Choose a {family.label} product');
     expect(connectionEditorSource).toContain('Back to platforms');
     expect(connectionEditorSource).toContain('Install on a host instead');
-    expect(connectionEditorSource).toContain('On supported Proxmox hosts');
-    expect(connectionEditorSource).toContain('register them automatically');
+    expect(connectionEditorSource).toContain('other supported services');
+    expect(connectionEditorSource).toContain('automatic handoff where supported');
+    expect(connectionEditorSource).not.toContain('On supported Proxmox hosts');
+    expect(connectionEditorSource).not.toContain('register them automatically');
     expect(connectionEditorSource).not.toContain('auto-registers the node');
     expect(connectionEditorSource).not.toContain('Recommended');
     expect(connectionEditorSource).not.toContain('NodeModal');
