@@ -1,13 +1,13 @@
 {
   "schema_version": 1,
   "default_infrastructure_source_order": [
-    "proxmox-pve",
     "agent",
-    "docker",
+    "truenas",
+    "proxmox-pve",
     "proxmox-pbs",
     "proxmox-pmg",
-    "kubernetes",
-    "truenas"
+    "docker",
+    "kubernetes"
   ],
   "platforms": [
     {

@@ -119,6 +119,10 @@ const connectionFixture = (overrides: Partial<Connection> = {}): Connection => (
   ...overrides,
 });
 
+function expectNodeBefore(a: Node, b: Node) {
+  expect(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+}
+
 const baseProps = () =>
   ({
     selectedAgent: () => 'pve',
@@ -227,14 +231,23 @@ describe('InfrastructureWorkspace', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Add infrastructure/i }));
 
-    // The catalog landing leads with the agent path and keeps the direct API
-    // probe/catalog visible below it in the same shared editor.
+    // The catalog landing leads with peer platform onboarding and keeps the
+    // host install path available beneath it in the same shared editor.
+    const platformHeading = screen.getByText('Connect a platform');
+    const vmwareButton = screen.getByRole('button', { name: /VMware vCenter \/ ESXi/i });
+    const trueNASButton = screen.getByRole('button', { name: /TrueNAS SCALE/i });
+    const proxmoxButton = screen.getByRole('button', { name: /^Proxmox VE/i });
+    const agentButton = screen.getByRole('button', { name: /Install Pulse Agent/i });
+
+    expect(platformHeading).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Install Pulse Agent/i })).toBeInTheDocument();
-    expect(screen.getByText('Or connect a platform API directly')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Probe address/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /^Proxmox VE/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /TrueNAS SCALE/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /VMware vCenter \/ ESXi/i })).toBeInTheDocument();
+    expect(proxmoxButton).toBeInTheDocument();
+    expect(trueNASButton).toBeInTheDocument();
+    expect(vmwareButton).toBeInTheDocument();
+    expectNodeBefore(vmwareButton, trueNASButton);
+    expectNodeBefore(trueNASButton, proxmoxButton);
+    expectNodeBefore(proxmoxButton, agentButton);
     expect(navigateSpy).not.toHaveBeenCalled();
     expect(setSearchParamsSpy).not.toHaveBeenCalled();
   });

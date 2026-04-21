@@ -26,7 +26,7 @@ export const AddressProbeStep: Component<AddressProbeStepProps> = (props) => {
           id="connection-address"
           type="text"
           class={formControl}
-          placeholder="pve01.lan, 10.0.0.4:8006, https://pbs.lab:8007"
+          placeholder="vcenter.lab, truenas.lan, https://pve.lab:8006"
           value={props.state.address()}
           onInput={(event) => props.state.setAddress(event.currentTarget.value)}
           autocomplete="off"

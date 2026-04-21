@@ -38,7 +38,7 @@ describe('ConnectionEditor', () => {
 
     render(() => <ConnectionEditor renderCredentialSlot={renderSlot} onClose={() => {}} />);
 
-    const input = screen.getByPlaceholderText(/pve01\.lan/) as HTMLInputElement;
+    const input = screen.getByPlaceholderText(/vcenter\.lab/) as HTMLInputElement;
     fireEvent.input(input, { target: { value: 'pve.lab' } });
 
     const probeButton = screen.getByRole('button', { name: /probe address/i });
@@ -66,7 +66,7 @@ describe('ConnectionEditor', () => {
 
     render(() => <ConnectionEditor renderCredentialSlot={renderSlot} onClose={() => {}} />);
 
-    const input = screen.getByPlaceholderText(/pve01\.lan/) as HTMLInputElement;
+    const input = screen.getByPlaceholderText(/vcenter\.lab/) as HTMLInputElement;
     fireEvent.input(input, { target: { value: '192.168.1.50' } });
 
     fireEvent.click(screen.getByRole('button', { name: /probe address/i }));
@@ -84,26 +84,29 @@ describe('ConnectionEditor', () => {
     expect(lastCall.candidate).toBeNull();
   });
 
-  it('renders an agent-led catalog with the API fallback beneath it', () => {
+  it('renders a platform-first catalog with the host-install path beneath it', () => {
     render(() => <ConnectionEditor renderCredentialSlot={() => <div />} onClose={() => {}} />);
 
+    const platformHeading = screen.getByText('Connect a platform');
     const agentButton = screen.getByRole('button', { name: /Install Pulse Agent/i });
-    const apiHeading = screen.getByText('Or connect a platform API directly');
     const probeButton = screen.getByRole('button', { name: /probe address/i });
+    const vmwareButton = screen.getByRole('button', { name: /VMware vCenter \/ ESXi/i });
+    const trueNASButton = screen.getByRole('button', { name: /TrueNAS SCALE/i });
+    const proxmoxButton = screen.getByRole('button', { name: /^Proxmox VE/i });
 
-    // Catalog landing — lead with the agent card, then collapse the probe and
-    // direct platform options into one API fallback section below it.
+    // Catalog landing — lead with management-platform onboarding, then keep
+    // host install as a secondary path below it.
+    expect(platformHeading).toBeInTheDocument();
     expect(agentButton).toBeInTheDocument();
-    expect(apiHeading).toBeInTheDocument();
     expect(probeButton).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /^Proxmox VE/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /TrueNAS SCALE/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /VMware vCenter \/ ESXi/i })).toBeInTheDocument();
-    expectNodeBefore(agentButton, apiHeading);
-    expectNodeBefore(apiHeading, probeButton);
-    expect(
-      screen.queryByRole('button', { name: /install the unified agent on a host/i }),
-    ).toBeNull();
+    expect(vmwareButton).toBeInTheDocument();
+    expect(trueNASButton).toBeInTheDocument();
+    expect(proxmoxButton).toBeInTheDocument();
+    expectNodeBefore(platformHeading, probeButton);
+    expectNodeBefore(vmwareButton, trueNASButton);
+    expectNodeBefore(trueNASButton, proxmoxButton);
+    expectNodeBefore(proxmoxButton, agentButton);
+    expect(screen.queryByText('Recommended')).toBeNull();
   });
 
   it('offers the agent path contextually when a probe returns no match', async () => {
@@ -113,7 +116,7 @@ describe('ConnectionEditor', () => {
 
     render(() => <ConnectionEditor renderCredentialSlot={renderSlot} onClose={() => {}} />);
 
-    const input = screen.getByPlaceholderText(/pve01\.lan/) as HTMLInputElement;
+    const input = screen.getByPlaceholderText(/vcenter\.lab/) as HTMLInputElement;
     fireEvent.input(input, { target: { value: 'baremetal.lan' } });
     fireEvent.click(screen.getByRole('button', { name: /probe address/i }));
     await waitFor(() => expect(mockedProbe).toHaveBeenCalled());
@@ -158,7 +161,7 @@ describe('ConnectionEditor', () => {
 
     render(() => <ConnectionEditor renderCredentialSlot={renderSlot} onClose={() => {}} />);
 
-    const input = screen.getByPlaceholderText(/pve01\.lan/) as HTMLInputElement;
+    const input = screen.getByPlaceholderText(/vcenter\.lab/) as HTMLInputElement;
     fireEvent.input(input, { target: { value: '192.168.1.50' } });
     fireEvent.click(screen.getByRole('button', { name: /probe address/i }));
 
@@ -170,7 +173,7 @@ describe('ConnectionEditor', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /back to catalog/i }));
 
-    const resetInput = screen.getByPlaceholderText(/pve01\.lan/) as HTMLInputElement;
+    const resetInput = screen.getByPlaceholderText(/vcenter\.lab/) as HTMLInputElement;
     expect(resetInput.value).toBe('');
     expect(screen.queryByText(/no supported product detected/i)).toBeNull();
     expect(screen.queryByTestId('slot')).toBeNull();

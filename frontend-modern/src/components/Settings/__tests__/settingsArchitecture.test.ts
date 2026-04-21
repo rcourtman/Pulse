@@ -81,28 +81,18 @@ describe('settings architecture guardrails', () => {
     expect(infrastructureWorkspaceSource).not.toContain('layout="drawer-right"');
   });
 
-  it('keeps the agent-led add landing and inline node credentials on the shared editor model', () => {
+  it('keeps the platform-first add landing and inline node credentials on the shared editor model', () => {
     expect(connectionEditorSource).toContain(
       "import { AddressProbeStep } from './AddressProbeStep';",
     );
-    // Platform integrations render as peer tiles; the agent lives in its own
-    // section below so it can explain what host-level telemetry adds instead
-    // of being mistaken for one more peer of Proxmox / VMware / TrueNAS.
-    expect(connectionEditorSource).toContain('const DEFAULT_PLATFORM_TYPES: ConnectionType[] =');
-    expect(connectionEditorSource).not.toContain("'agent'] =");
+    expect(connectionEditorSource).toContain('DEFAULT_CONNECTION_EDITOR_PLATFORM_TYPES');
     expect(connectionEditorSource).toContain('<AddressProbeStep');
-    expect(connectionEditorSource).toContain('Or connect a platform API directly');
-    // Keep the landing source aligned with the canonical agent-first story, but
-    // leave actual DOM ordering to the render test rather than raw source
-    // string positions.
-    expect(connectionEditorSource).not.toContain('Or install the agent on the host');
-    expect(connectionEditorSource).toContain('On a Proxmox host, this is the');
-    expect(connectionEditorSource).toContain('auto-registers any detected PVE / PBS services');
+    expect(connectionEditorSource).toContain('Connect a platform');
+    expect(connectionEditorSource).toContain('Install on a host instead');
+    expect(connectionEditorSource).toContain('On supported Proxmox hosts');
+    expect(connectionEditorSource).toContain('register them automatically');
     expect(connectionEditorSource).not.toContain('auto-registers the node');
-    expect(connectionEditorSource).toContain('Recommended');
-    // The agent install path is a first-class ledger-header action, not a
-    // subtext offramp inside the editor — make sure it doesn't drift back.
-    expect(connectionEditorSource).not.toContain('Install the Unified Agent on a host');
+    expect(connectionEditorSource).not.toContain('Recommended');
     expect(connectionEditorSource).not.toContain('NodeModal');
 
     expect(addressProbeStepSource).toContain('Probe address');
@@ -114,6 +104,10 @@ describe('settings architecture guardrails', () => {
 
     expect(connectionEditorStateSource).toContain('ConnectionsAPI.probe(value)');
     expect(connectionEditorStateSource).toContain('export const CONNECTION_TYPE_LABELS');
+    expect(connectionEditorStateSource).toContain('DEFAULT_INFRASTRUCTURE_SOURCE_ORDER');
+    expect(connectionEditorStateSource).toContain(
+      'export const DEFAULT_CONNECTION_EDITOR_PLATFORM_TYPES',
+    );
 
     expect(nodeCredentialSlotSource).toContain('useNodeModalState(modalProps)');
     expect(nodeCredentialSlotSource).toContain('<NodeModalBasicInfoSection');

@@ -1001,18 +1001,21 @@ surfaces grow a second VMware availability fetch or a VMware-only handoff
 path.
 That same infrastructure workspace boundary now also owns the first-run
 handoff copy for new operators. `InfrastructureWorkspace.tsx` must keep
-`Install on a host` visible as the first monitored-system path while still
-presenting `Platform connections` as the explicit API-backed alternative
-instead of leaving first-session install guidance implicit in generic
-settings-shell prose or retreating to one provider's name as the primary
-alternative.
+`Install on a host` and `Platform connections` explicit in the shared
+workspace instead of leaving first-session guidance implicit in generic
+settings-shell prose or retreating to one provider's name or one onboarding
+mode as the primary story.
 That same first-run infrastructure handoff now also owns the inline
 add-infrastructure landing in `ConnectionEditor.tsx`: when the target can run
-the Unified Agent, the landing must lead with the recommended host-install
-card above the platform-API probe and picker instead of teaching probe-first
-as the default story, and returning `Back to catalog` must reset probe input
-and result state rather than reopening the landing with stale no-match or
-detected-product state already rendered.
+the Unified Agent, the landing must lead with the platform-API probe and
+picker as the primary catalog story while keeping the host-install path in a
+separate secondary section instead of teaching one provider-specific shortcut
+as the frame for the whole screen. Product-specific host advantages such as
+Proxmox auto-registration may be explained inside that host-install section,
+but they must not become the headline copy or top visual weight for the
+shared add-infrastructure landing. Returning `Back to catalog` must reset
+probe input and result state rather than reopening the landing with stale
+no-match or detected-product state already rendered.
 Render-order proof for that landing belongs to DOM-backed settings tests, not
 raw source-string position checks, so lifecycle ownership continues to guard
 the operator-visible order after reasonable component extraction or copy

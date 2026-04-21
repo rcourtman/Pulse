@@ -9,9 +9,9 @@ describe('sourcePlatformOptions', () => {
   it('orders canonical source platform keys with preferred source ordering', () => {
     expect(orderSourcePlatformKeys(['truenas', 'pbs', 'agent', 'docker'])).toEqual([
       'agent',
-      'docker',
-      'proxmox-pbs',
       'truenas',
+      'proxmox-pbs',
+      'docker',
     ]);
   });
 
@@ -25,13 +25,13 @@ describe('sourcePlatformOptions', () => {
 
   it('exports the default infrastructure source options in canonical order', () => {
     expect(DEFAULT_INFRASTRUCTURE_SOURCE_OPTIONS.map((option) => option.key)).toEqual([
-      'proxmox-pve',
       'agent',
-      'docker',
+      'truenas',
+      'proxmox-pve',
       'proxmox-pbs',
       'proxmox-pmg',
+      'docker',
       'kubernetes',
-      'truenas',
     ]);
   });
 });

@@ -5,6 +5,7 @@ import {
   type ProbeCandidate,
   type ProbeResponse,
 } from '@/api/connections';
+import { DEFAULT_INFRASTRUCTURE_SOURCE_ORDER } from '@/utils/platformSupportManifest';
 
 const PROBE_ERROR_FALLBACK = 'Probe failed. Try again or enter credentials manually.';
 
@@ -30,6 +31,38 @@ export interface ConnectionEditorState {
   reset: () => void;
   runProbe: () => Promise<void>;
 }
+
+type PlatformConnectionType = Extract<ConnectionType, 'pve' | 'pbs' | 'pmg' | 'truenas' | 'vmware'>;
+
+const SOURCE_PLATFORM_TO_CONNECTION_TYPE: Partial<Record<string, PlatformConnectionType>> = {
+  'vmware-vsphere': 'vmware',
+  truenas: 'truenas',
+  'proxmox-pve': 'pve',
+  'proxmox-pbs': 'pbs',
+  'proxmox-pmg': 'pmg',
+};
+
+// The supported-source manifest order is reused where it applies, but the
+// add-infrastructure catalog still needs to surface the admitted vSphere path.
+const CONNECTION_EDITOR_PRIORITY_TYPES: PlatformConnectionType[] = ['vmware'];
+
+const PLATFORM_CONNECTION_TYPE_FALLBACK_ORDER: PlatformConnectionType[] = [
+  'truenas',
+  'pve',
+  'pbs',
+  'pmg',
+];
+
+export const DEFAULT_CONNECTION_EDITOR_PLATFORM_TYPES: PlatformConnectionType[] = Array.from(
+  new Set([
+    ...CONNECTION_EDITOR_PRIORITY_TYPES,
+    ...DEFAULT_INFRASTRUCTURE_SOURCE_ORDER.flatMap((platformKey) => {
+      const type = SOURCE_PLATFORM_TO_CONNECTION_TYPE[platformKey];
+      return type ? [type] : [];
+    }),
+    ...PLATFORM_CONNECTION_TYPE_FALLBACK_ORDER,
+  ]),
+);
 
 // Validation on the client side is intentionally lenient: the backend is the
 // real authority on what constitutes a probeable address. We only reject the
