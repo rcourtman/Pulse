@@ -87,6 +87,7 @@ type Service struct {
 	mu             sync.RWMutex
 	lastRun        time.Time
 	interval       time.Duration
+	intervalCh     chan time.Duration
 	stopCh         chan struct{}
 	lifecycleCtx   context.Context
 	lifecycleStop  context.CancelFunc
@@ -210,6 +211,7 @@ func NewService(knowledgeStore *knowledge.Store, cfg Config) *Service {
 	return &Service{
 		knowledgeStore:    knowledgeStore,
 		interval:          cfg.Interval,
+		intervalCh:        make(chan time.Duration, 1),
 		cacheExpiry:       cfg.CacheExpiry,
 		aiAnalysisTimeout: cfg.AIAnalysisTimeout,
 		stopCh:            make(chan struct{}),
@@ -311,6 +313,30 @@ func (s *Service) Start(ctx context.Context) {
 	}()
 }
 
+// SetInterval updates the discovery interval. Takes effect immediately if the
+// service is already running.
+func (s *Service) SetInterval(interval time.Duration) {
+	cfg := normalizeConfig(Config{
+		Interval:          interval,
+		CacheExpiry:       s.cacheExpiry,
+		AIAnalysisTimeout: s.aiAnalysisTimeout,
+	})
+
+	s.mu.Lock()
+	s.interval = cfg.Interval
+	running := s.running
+	s.mu.Unlock()
+
+	if running {
+		select {
+		case s.intervalCh <- cfg.Interval:
+			log.Info().Dur("interval", cfg.Interval).Msg("Infrastructure discovery interval updated (live)")
+		default:
+			log.Debug().Dur("interval", cfg.Interval).Msg("Infrastructure discovery interval updated (pending)")
+		}
+	}
+}
+
 // Stop stops the background discovery service.
 func (s *Service) Stop() {
 	s.mu.Lock()
@@ -366,13 +392,20 @@ func (s *Service) discoveryLoop(ctx context.Context) {
 		s.mu.Unlock()
 	}()
 
-	ticker := time.NewTicker(s.interval)
+	s.mu.RLock()
+	currentInterval := s.interval
+	s.mu.RUnlock()
+	ticker := time.NewTicker(currentInterval)
 	defer ticker.Stop()
 
 	for {
 		select {
 		case <-ticker.C:
 			s.RunDiscovery(ctx)
+		case newInterval := <-s.intervalCh:
+			ticker.Stop()
+			ticker = time.NewTicker(newInterval)
+			log.Info().Dur("interval", newInterval).Msg("Infrastructure discovery interval reset")
 		case <-s.stopCh:
 			log.Info().Msg("Stopping infrastructure discovery service")
 			return

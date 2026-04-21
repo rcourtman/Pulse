@@ -78,19 +78,20 @@ runtime cost control, and shared AI transport surfaces.
 1. Update this contract when canonical AI runtime or transport entry points move
 2. Keep AI runtime and shared API proof routing aligned in `registry.json`
 3. Preserve explicit coverage for chat, Patrol, remediation, and cost-control behavior when AI runtime changes
-4. Preserve auditability for outbound model-bound context exports and keep the export record aligned with the prompt boundary that actually reaches the provider
-5. Keep AI resource and incident context aligned with the canonical unified-resource timeline before falling back to patrol-local change detectors
-6. Keep platform assistant read/control claims aligned with
+4. Keep discovery scheduling authoritative through `internal/config/ai.go`: `discovery_enabled` and `discovery_interval_hours` must govern both lightweight infrastructure discovery and deep service-discovery background loops
+5. Preserve auditability for outbound model-bound context exports and keep the export record aligned with the prompt boundary that actually reaches the provider
+6. Keep AI resource and incident context aligned with the canonical unified-resource timeline before falling back to patrol-local change detectors
+7. Keep platform assistant read/control claims aligned with
    `docs/release-control/v6/internal/PLATFORM_SUPPORT_MODEL.md`. New
    platform-native reads or writes must extend the shared Assistant tool
    contracts, and read-only or augmentation-only platforms must stay explicit
    there instead of drifting into provider-local tools.
-7. Keep self-hosted Patrol quickstart messaging aligned with backend runtime
+8. Keep self-hosted Patrol quickstart messaging aligned with backend runtime
    truth: the governed quickstart contract is Patrol-only first-run
    acceleration on activated or trial-backed installs with server-authoritative
    run inventory, not a general hosted chat entitlement or a replacement for
    BYOK once Patrol leaves the quickstart path.
-8. Keep discovery-analysis prompt bounds and response budgets aligned across
+9. Keep discovery-analysis prompt bounds and response budgets aligned across
    `internal/ai/service.go` and the shared service-discovery prompt builders:
    the runtime must reserve enough output tokens for structured discovery JSON,
    and discovery prompts must cap fact/path/port fan-out explicitly instead of

@@ -201,7 +201,6 @@ type Service struct {
 
 	// Infrastructure discovery service - detects apps running on hosts
 	infraDiscoveryService *infradiscovery.Service
-	infraDiscoveryCancel  context.CancelFunc
 
 	// AI-powered deep discovery store - detailed service analysis with commands
 	discoveryStore *servicediscovery.Store
@@ -468,10 +467,11 @@ func (s *Service) CheckBudget(useCase string) error {
 // This is forwarded to PatrolService and DiscoveryService when available.
 func (s *Service) SetReadState(rs unifiedresources.ReadState) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	s.readState = rs
+	cfg := s.cfg
 
 	s.initPatrolServiceLocked()
+	s.initInfraDiscoveryServiceLocked()
 
 	if s.patrolService != nil {
 		s.patrolService.SetReadState(rs)
@@ -487,6 +487,9 @@ func (s *Service) SetReadState(rs unifiedresources.ReadState) {
 	// and SetReadState may be called after SetStateProvider (which sets up
 	// the discoveryStore). Try to create the service if both are now available.
 	s.initDiscoveryServiceLocked()
+	s.mu.Unlock()
+
+	s.updateInfraDiscoverySettings(cfg)
 }
 
 // initPatrolServiceLocked creates the patrol service once any canonical patrol
@@ -517,6 +520,31 @@ func (s *Service) initPatrolServiceLocked() {
 	}
 	if s.unifiedResourceProvider != nil {
 		s.patrolService.SetUnifiedResourceProvider(s.unifiedResourceProvider)
+	}
+}
+
+// initInfraDiscoveryServiceLocked creates the lightweight infrastructure
+// discovery service when the canonical runtime dependencies are available.
+// Must be called while holding s.mu.
+func (s *Service) initInfraDiscoveryServiceLocked() {
+	if s.infraDiscoveryService != nil || s.knowledgeStore == nil {
+		return
+	}
+
+	discoveryCfg := infradiscovery.DefaultConfig()
+	if s.cfg != nil {
+		if interval := s.cfg.GetDiscoveryInterval(); interval > 0 {
+			discoveryCfg.Interval = interval
+		}
+	}
+
+	s.infraDiscoveryService = infradiscovery.NewService(
+		s.knowledgeStore,
+		discoveryCfg,
+	)
+	s.infraDiscoveryService.SetAIAnalyzer(s)
+	if s.readState != nil {
+		s.infraDiscoveryService.SetReadState(s.readState)
 	}
 }
 
@@ -564,39 +592,18 @@ func (s *Service) initDiscoveryServiceLocked() {
 // SetStateProvider sets the state provider for infrastructure context
 func (s *Service) SetStateProvider(sp StateProvider) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	s.stateProvider = sp
+	cfg := s.cfg
 
 	s.initPatrolServiceLocked()
 	if s.patrolService != nil {
 		s.patrolService.SetStateProvider(sp)
 	}
 
-	// Initialize infrastructure discovery service if not already done
-	// This uses AI to detect applications running in Docker containers
-	// and saves discoveries to the knowledge store for Patrol to use when proposing commands
-	if s.infraDiscoveryService == nil && s.knowledgeStore != nil {
-		s.infraDiscoveryService = infradiscovery.NewService(
-			s.knowledgeStore,
-			infradiscovery.DefaultConfig(),
-		)
-		// Wire the AI service as the analyzer (implements infradiscovery.AIAnalyzer)
-		s.infraDiscoveryService.SetAIAnalyzer(s)
-		// Forward unified ReadState if already configured.
-		if s.readState != nil {
-			s.infraDiscoveryService.SetReadState(s.readState)
-		}
-
-		// Only start if AI is enabled
-		if s.cfg != nil && s.cfg.Enabled {
-			ctx, cancel := context.WithCancel(context.Background())
-			s.infraDiscoveryCancel = cancel
-			s.infraDiscoveryService.Start(ctx)
-			log.Info().Msg("AI-powered infrastructure discovery service started")
-		} else {
-			log.Info().Msg("AI-powered infrastructure discovery initialized (stopped - AI disabled)")
-		}
-	}
+	// Initialize infrastructure discovery service if not already done.
+	// This uses AI to detect applications running in Docker containers and is
+	// governed by the canonical discovery settings in AIConfig.
+	s.initInfraDiscoveryServiceLocked()
 
 	// Attempt lazy init — discovery service requires ReadState + discoveryStore.
 	s.initDiscoveryServiceLocked()
@@ -609,6 +616,9 @@ func (s *Service) SetStateProvider(sp StateProvider) {
 		}
 		s.alertTriggeredAnalyzer = s.alertAnalyzerFactory(deps)
 	}
+	s.mu.Unlock()
+
+	s.updateInfraDiscoverySettings(cfg)
 }
 
 // GetStateProvider returns the state provider for infrastructure context
@@ -821,6 +831,31 @@ func (s *Service) GetDiscoveryService() *servicediscovery.Service {
 	return s.discoveryService
 }
 
+// updateInfraDiscoverySettings updates the lightweight infrastructure discovery
+// service based on config changes.
+func (s *Service) updateInfraDiscoverySettings(cfg *config.AIConfig) {
+	if s.infraDiscoveryService == nil || cfg == nil {
+		return
+	}
+
+	enabled := s.IsEnabled() && cfg.IsDiscoveryEnabled()
+	interval := cfg.GetDiscoveryInterval()
+
+	if enabled && interval > 0 {
+		s.infraDiscoveryService.SetInterval(interval)
+		s.infraDiscoveryService.Start(context.Background())
+		log.Info().
+			Bool("enabled", enabled).
+			Dur("interval", interval).
+			Msg("Infrastructure discovery service updated: automatic scanning enabled")
+	} else {
+		s.infraDiscoveryService.Stop()
+		log.Info().
+			Bool("enabled", enabled).
+			Msg("Infrastructure discovery service updated: manual mode (background scanning stopped)")
+	}
+}
+
 // updateDiscoverySettings updates the discovery service based on config changes
 // Note: caller must NOT hold s.mu lock
 func (s *Service) updateDiscoverySettings(cfg *config.AIConfig) {
@@ -828,7 +863,7 @@ func (s *Service) updateDiscoverySettings(cfg *config.AIConfig) {
 		return
 	}
 
-	enabled := cfg.IsDiscoveryEnabled()
+	enabled := s.IsEnabled() && cfg.IsDiscoveryEnabled()
 	interval := cfg.GetDiscoveryInterval()
 
 	if enabled && interval > 0 {
@@ -1034,6 +1069,8 @@ func (s *Service) Stop() {
 	s.mu.Lock()
 	store := s.resourceExportStore
 	incidentStore := s.incidentStore
+	infraDiscovery := s.infraDiscoveryService
+	discoveryService := s.discoveryService
 	s.resourceExportStore = nil
 	s.resourceExportStoreOrgID = ""
 	defer s.mu.Unlock()
@@ -1042,12 +1079,11 @@ func (s *Service) Stop() {
 		incidentStore.SetResourceTimelineStore(nil)
 	}
 
-	if s.infraDiscoveryCancel != nil {
-		s.infraDiscoveryCancel()
-		s.infraDiscoveryCancel = nil
+	if infraDiscovery != nil {
+		infraDiscovery.Stop()
 	}
-	if s.discoveryService != nil {
-		s.discoveryService.Stop()
+	if discoveryService != nil {
+		discoveryService.Stop()
 	}
 
 	if store != nil {
@@ -1476,139 +1512,148 @@ func approvalNeededFromToolCall(req ExecuteRequest, tc providers.ToolCall, resul
 
 // LoadConfig loads the AI configuration and initializes the provider
 func (s *Service) LoadConfig() error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.mu.RLock()
+	persistence := s.persistence
+	quickstartCredits := s.quickstartCredits
+	orgID := s.orgID
+	s.mu.RUnlock()
 
-	if s.persistence == nil {
+	if persistence == nil {
+		s.mu.Lock()
 		s.provider = nil
+		s.cfg = nil
+		s.usingQuickstart = false
+		s.quickstartBlockedReason = ""
+		s.mu.Unlock()
 		return fmt.Errorf("Pulse Assistant config persistence unavailable")
 	}
 
-	cfg, err := s.persistence.LoadAIConfig()
+	cfg, err := persistence.LoadAIConfig()
 	if err != nil {
 		return fmt.Errorf("failed to load Pulse Assistant config: %w", err)
 	}
-
-	s.cfg = cfg
-
-	s.usingQuickstart = false
-	s.quickstartBlockedReason = ""
 	modelResolutionCtx := context.Background()
+	var providerClient providers.Provider
+	usingQuickstart := false
+	blockedReason := ""
 
 	// Don't initialize provider if AI is not enabled or not configured
 	if cfg == nil || !cfg.Enabled || !cfg.IsConfigured() {
 		// Check if quickstart can fill the Patrol gap (enabled but no BYOK).
-		if cfg != nil && cfg.Enabled && s.quickstartCredits != nil {
-			if err := s.quickstartCredits.EnsureBootstrap(context.Background()); err != nil {
-				s.quickstartBlockedReason = quickstartBlockedReasonFromError(err)
-				log.Warn().Err(err).Str("orgID", s.orgID).Msg("Quickstart bootstrap failed during AI service load")
+		if cfg != nil && cfg.Enabled && quickstartCredits != nil {
+			if err := quickstartCredits.EnsureBootstrap(context.Background()); err != nil {
+				blockedReason = quickstartBlockedReasonFromError(err)
+				log.Warn().Err(err).Str("orgID", orgID).Msg("Quickstart bootstrap failed during AI service load")
 			}
-			qp := s.quickstartCredits.GetProvider()
+			qp := quickstartCredits.GetProvider()
 			if qp != nil {
-				s.provider = qp
-				s.usingQuickstart = true
+				providerClient = qp
+				usingQuickstart = true
 				// Force all model strings to quickstart so chat.Service creates the right provider.
 				quickstartModelStr := config.DefaultModelForProvider(config.AIProviderQuickstart)
 				cfg.Model = quickstartModelStr
 				cfg.PatrolModel = quickstartModelStr
 				cfg.ChatModel = quickstartModelStr
 				log.Info().
-					Int("credits_remaining", s.quickstartCredits.CreditsRemaining()).
+					Int("credits_remaining", quickstartCredits.CreditsRemaining()).
 					Msg("AI service initialized via quickstart credits (no BYOK)")
-				return nil
 			}
-			if s.quickstartBlockedReason == "" && !s.quickstartCredits.HasCredits() {
-				s.quickstartBlockedReason = patrolQuickstartCreditsExhaustedReason
-			} else if s.quickstartBlockedReason == "" {
-				s.quickstartBlockedReason = patrolQuickstartUnavailableReason
+			if providerClient == nil && blockedReason == "" && !quickstartCredits.HasCredits() {
+				blockedReason = patrolQuickstartCreditsExhaustedReason
+			} else if providerClient == nil && blockedReason == "" {
+				blockedReason = patrolQuickstartUnavailableReason
 			}
 		}
-		s.provider = nil
-		return nil
-	}
-
-	selectedModel, err := ResolveConfiguredModel(modelResolutionCtx, cfg)
-	if err != nil {
-		log.Warn().Err(err).Str("orgID", s.orgID).Msg("AI enabled but no effective provider model could be resolved")
-		s.provider = nil
-		return nil
-	}
-	cfg.Model = selectedModel
-	selectedProvider, _ := config.ParseModelString(selectedModel)
-
-	// BYOK transition: if the user added their own API key while the model
-	// was still set to quickstart, switch to the BYOK provider's default.
-	if selectedProvider == config.AIProviderQuickstart && cfg.IsConfigured() {
-		var byokDefault string
-		configuredProviders := cfg.GetConfiguredProviders()
-		if len(configuredProviders) > 0 {
-			byokDefault, _ = ResolveConfiguredProviderModel(modelResolutionCtx, cfg, configuredProviders[0])
-		}
-		if byokDefault != "" {
-			log.Info().
-				Str("from", selectedModel).
-				Str("to", byokDefault).
-				Msg("AI service: BYOK configured, switching from quickstart model")
-			selectedModel = byokDefault
-			selectedProvider, _ = config.ParseModelString(selectedModel)
+	} else {
+		selectedModel, resolveErr := ResolveConfiguredModel(modelResolutionCtx, cfg)
+		if resolveErr != nil {
+			log.Warn().Err(resolveErr).Str("orgID", orgID).Msg("AI enabled but no effective provider model could be resolved")
+		} else {
 			cfg.Model = selectedModel
-			cfg.PatrolModel = "" // Let it inherit from Model
-			cfg.ChatModel = ""   // Let it inherit from Model
-		}
-	}
+			selectedProvider, _ := config.ParseModelString(selectedModel)
 
-	providerClient, err := providers.NewForModel(cfg, selectedModel)
-	if err != nil {
-		// Smart fallback: if selected provider isn't configured but OTHER providers are,
-		// automatically switch to a model from a configured provider.
-		// This prevents confusing errors when the user has e.g. DeepSeek configured
-		// but the model is still set to an Anthropic model.
-		configuredProviders := cfg.GetConfiguredProviders()
-		if len(configuredProviders) > 0 {
-			fallbackProvider := configuredProviders[0]
-			fallbackModel, _ := ResolveConfiguredProviderModel(modelResolutionCtx, cfg, fallbackProvider)
-
-			if fallbackModel != "" {
-				log.Warn().
-					Str("selected_model", selectedModel).
-					Str("selected_provider", selectedProvider).
-					Str("fallback_model", fallbackModel).
-					Str("fallback_provider", fallbackProvider).
-					Msg("Selected provider not configured - automatically falling back to configured provider")
-
-				providerClient, err = providers.NewForModel(cfg, fallbackModel)
-				if err == nil {
-					selectedModel = fallbackModel
-					selectedProvider = fallbackProvider
-				} else {
-					log.Error().Err(err).Str("fallback_model", fallbackModel).Msg("failed to create fallback provider")
-					s.provider = nil
-					return nil
+			// BYOK transition: if the user added their own API key while the model
+			// was still set to quickstart, switch to the BYOK provider's default.
+			if selectedProvider == config.AIProviderQuickstart && cfg.IsConfigured() {
+				var byokDefault string
+				configuredProviders := cfg.GetConfiguredProviders()
+				if len(configuredProviders) > 0 {
+					byokDefault, _ = ResolveConfiguredProviderModel(modelResolutionCtx, cfg, configuredProviders[0])
+				}
+				if byokDefault != "" {
+					log.Info().
+						Str("from", selectedModel).
+						Str("to", byokDefault).
+						Msg("AI service: BYOK configured, switching from quickstart model")
+					selectedModel = byokDefault
+					selectedProvider, _ = config.ParseModelString(selectedModel)
+					cfg.Model = selectedModel
+					cfg.PatrolModel = "" // Let it inherit from Model
+					cfg.ChatModel = ""   // Let it inherit from Model
 				}
 			}
-		}
 
-		if providerClient == nil {
-			log.Warn().
-				Err(err).
-				Str("selected_model", selectedModel).
-				Str("selected_provider", selectedProvider).
-				Strs("configured_providers", cfg.GetConfiguredProviders()).
-				Msg("AI enabled but no providers configured")
-			s.provider = nil
-			return nil
+			nextProvider, providerErr := providers.NewForModel(cfg, selectedModel)
+			if providerErr != nil {
+				// Smart fallback: if selected provider isn't configured but OTHER providers are,
+				// automatically switch to a model from a configured provider.
+				// This prevents confusing errors when the user has e.g. DeepSeek configured
+				// but the model is still set to an Anthropic model.
+				configuredProviders := cfg.GetConfiguredProviders()
+				if len(configuredProviders) > 0 {
+					fallbackProvider := configuredProviders[0]
+					fallbackModel, _ := ResolveConfiguredProviderModel(modelResolutionCtx, cfg, fallbackProvider)
+
+					if fallbackModel != "" {
+						log.Warn().
+							Str("selected_model", selectedModel).
+							Str("selected_provider", selectedProvider).
+							Str("fallback_model", fallbackModel).
+							Str("fallback_provider", fallbackProvider).
+							Msg("Selected provider not configured - automatically falling back to configured provider")
+
+						nextProvider, providerErr = providers.NewForModel(cfg, fallbackModel)
+						if providerErr == nil {
+							selectedModel = fallbackModel
+							selectedProvider = fallbackProvider
+						} else {
+							log.Error().Err(providerErr).Str("fallback_model", fallbackModel).Msg("failed to create fallback provider")
+						}
+					}
+				}
+
+				if nextProvider == nil {
+					log.Warn().
+						Err(providerErr).
+						Str("selected_model", selectedModel).
+						Str("selected_provider", selectedProvider).
+						Strs("configured_providers", cfg.GetConfiguredProviders()).
+						Msg("AI enabled but no providers configured")
+				}
+			}
+
+			providerClient = nextProvider
+			if providerClient != nil {
+				log.Info().
+					Str("provider", selectedProvider).
+					Str("model", selectedModel).
+					Str("control_level", cfg.GetControlLevel()).
+					Bool("autonomous", cfg.IsAutonomous()).
+					Msg("AI service initialized")
+			}
 		}
 	}
 
+	s.mu.Lock()
+	s.cfg = cfg
 	s.provider = providerClient
-	log.Info().
-		Str("provider", selectedProvider).
-		Str("model", selectedModel).
-		Str("control_level", cfg.GetControlLevel()).
-		Bool("autonomous", cfg.IsAutonomous()).
-		Msg("AI service initialized")
+	s.usingQuickstart = usingQuickstart
+	s.quickstartBlockedReason = blockedReason
+	s.initInfraDiscoveryServiceLocked()
+	s.initDiscoveryServiceLocked()
+	s.mu.Unlock()
 
-	// Update discovery service settings based on config
+	s.updateInfraDiscoverySettings(cfg)
 	s.updateDiscoverySettings(cfg)
 
 	return nil

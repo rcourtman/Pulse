@@ -172,6 +172,93 @@ func TestService_SetStateProvider(t *testing.T) {
 	}
 }
 
+func TestService_LoadConfig_SyncsInfraDiscoveryLifecycle(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "pulse-infra-discovery-lifecycle-*")
+	if err != nil {
+		t.Fatalf("create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	persistence := config.NewConfigPersistence(tmpDir)
+	svc := NewService(persistence, nil)
+	defer svc.Stop()
+
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestSnapshot(models.StateSnapshot{})
+	svc.SetReadState(registry)
+
+	saveConfig := func(cfg config.AIConfig) {
+		t.Helper()
+		if err := persistence.SaveAIConfig(cfg); err != nil {
+			t.Fatalf("save ai config: %v", err)
+		}
+		if err := svc.LoadConfig(); err != nil {
+			t.Fatalf("LoadConfig(): %v", err)
+		}
+		if svc.infraDiscoveryService == nil {
+			t.Fatal("expected infra discovery service to be initialized")
+		}
+	}
+
+	saveConfig(config.AIConfig{
+		Enabled:                true,
+		Model:                  "ollama:llama3.2",
+		OllamaBaseURL:          "http://localhost:11434",
+		DiscoveryEnabled:       false,
+		DiscoveryIntervalHours: 0,
+	})
+
+	status := svc.infraDiscoveryService.GetStatusSnapshot()
+	if status.Running {
+		t.Fatalf("expected infra discovery to stay stopped when discovery is disabled")
+	}
+
+	saveConfig(config.AIConfig{
+		Enabled:                true,
+		Model:                  "ollama:llama3.2",
+		OllamaBaseURL:          "http://localhost:11434",
+		DiscoveryEnabled:       true,
+		DiscoveryIntervalHours: 2,
+	})
+
+	status = svc.infraDiscoveryService.GetStatusSnapshot()
+	if !status.Running {
+		t.Fatalf("expected infra discovery to start when discovery is enabled")
+	}
+	if status.Interval != 2*time.Hour {
+		t.Fatalf("expected infra discovery interval 2h, got %v", status.Interval)
+	}
+
+	saveConfig(config.AIConfig{
+		Enabled:                true,
+		Model:                  "ollama:llama3.2",
+		OllamaBaseURL:          "http://localhost:11434",
+		DiscoveryEnabled:       true,
+		DiscoveryIntervalHours: 4,
+	})
+
+	status = svc.infraDiscoveryService.GetStatusSnapshot()
+	if !status.Running {
+		t.Fatalf("expected infra discovery to remain running after interval update")
+	}
+	if status.Interval != 4*time.Hour {
+		t.Fatalf("expected infra discovery interval 4h after reload, got %v", status.Interval)
+	}
+
+	saveConfig(config.AIConfig{
+		Enabled:                true,
+		Model:                  "ollama:llama3.2",
+		OllamaBaseURL:          "http://localhost:11434",
+		DiscoveryEnabled:       true,
+		DiscoveryIntervalHours: 0,
+	})
+
+	status = svc.infraDiscoveryService.GetStatusSnapshot()
+	if status.Running {
+		t.Fatalf("expected infra discovery to stop in manual discovery mode")
+	}
+}
+
 func TestService_GetCostSummary_NoStore(t *testing.T) {
 	svc := NewService(nil, nil)
 	svc.costStore = nil

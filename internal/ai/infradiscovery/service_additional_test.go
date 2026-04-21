@@ -100,6 +100,30 @@ func TestForceRefreshUpdatesLastRun(t *testing.T) {
 	})
 }
 
+func TestSetIntervalUpdatesStatusSnapshot(t *testing.T) {
+	service := NewService(nil, Config{
+		Interval:    10 * time.Millisecond,
+		CacheExpiry: time.Millisecond,
+	})
+	service.SetReadState(&mockReadState{})
+	service.SetAIAnalyzer(&mockAIAnalyzer{})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	service.Start(ctx)
+	defer service.Stop()
+
+	waitFor(t, 500*time.Millisecond, func() bool {
+		return service.GetStatusSnapshot().Running
+	})
+
+	service.SetInterval(2 * time.Second)
+	status := service.GetStatusSnapshot()
+	if status.Interval != 2*time.Second {
+		t.Fatalf("expected interval 2s after update, got %v", status.Interval)
+	}
+}
+
 func TestSaveDiscoveriesWritesKnowledge(t *testing.T) {
 	store, err := knowledge.NewStore(t.TempDir())
 	if err != nil {
