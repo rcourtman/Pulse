@@ -1019,7 +1019,10 @@ advantages such as Proxmox auto-registration may be explained inside that
 host-install section, but they must not become the headline copy or top
 visual weight for the shared add-infrastructure landing, and the Unified Agent
 framing itself must remain provider-neutral rather than teaching one platform
-as the memorable reason to choose the host path. Returning `Back to catalog`
+as the memorable reason to choose the host path. When that host-install card
+describes adjacent service discovery, it should use plain operator wording
+about detecting and connecting local services when available rather than
+platform-specific callouts or vague orchestration jargon. Returning `Back to catalog`
 must reset probe input and result state rather than reopening the landing
 with stale no-match or detected-product state already rendered, and the
 family-local `Back to platforms` path must restore the top-level platform

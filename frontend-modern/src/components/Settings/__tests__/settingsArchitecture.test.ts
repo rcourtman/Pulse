@@ -93,7 +93,7 @@ describe('settings architecture guardrails', () => {
     expect(connectionEditorSource).toContain('Back to platforms');
     expect(connectionEditorSource).toContain('Install on a host instead');
     expect(connectionEditorSource).toContain('other supported services');
-    expect(connectionEditorSource).toContain('automatic handoff where supported');
+    expect(connectionEditorSource).toContain('connects them when available');
     expect(connectionEditorSource).not.toContain('On supported Proxmox hosts');
     expect(connectionEditorSource).not.toContain('register them automatically');
     expect(connectionEditorSource).not.toContain('auto-registers the node');

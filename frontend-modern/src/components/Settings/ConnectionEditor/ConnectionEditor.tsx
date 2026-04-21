@@ -281,7 +281,7 @@ export const ConnectionEditor: Component<ConnectionEditorProps> = (props) => {
                   </div>
                   <div class="text-xs text-muted">
                     Also detects local Docker, Kubernetes, and other supported services on the same
-                    machine during install, with automatic handoff where supported.
+                    machine and connects them when available.
                   </div>
                 </div>
                 <div
