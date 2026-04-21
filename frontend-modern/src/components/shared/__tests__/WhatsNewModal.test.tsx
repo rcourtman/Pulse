@@ -71,10 +71,10 @@ describe('WhatsNewModal', () => {
     const dialog = await screen.findByRole('dialog', { name: 'Welcome to Pulse v6' });
     expect(dialog).toBeInTheDocument();
     expect(within(dialog).getByText('Step 1 of 5')).toBeInTheDocument();
-    expect(within(dialog).getByText('V5 to V6')).toBeInTheDocument();
-    expect(within(dialog).getByText(/overview for health, alerts, capacity/i)).toBeInTheDocument();
+    expect(within(dialog).getByText('Quick Tour')).toBeInTheDocument();
+    expect(within(dialog).getByText(/Start here for health, alerts, capacity/i)).toBeInTheDocument();
     expect(within(dialog).queryByText('Where Things Moved')).not.toBeInTheDocument();
-    expect(within(dialog).getByRole('link', { name: 'Migration guide' })).toBeInTheDocument();
+    expect(within(dialog).getByRole('link', { name: 'Navigation guide' })).toBeInTheDocument();
     expect(within(dialog).getByRole('link', { name: 'Telemetry details' })).toBeInTheDocument();
   });
 
@@ -128,33 +128,33 @@ describe('WhatsNewModal', () => {
   it('advances through the guided tour and finishes on the last step', async () => {
     render(() => <WhatsNewModal />);
 
-    expect(await screen.findByText(/overview for health, alerts, capacity/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Start here for health, alerts, capacity/i)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Next' }));
-    expect(await screen.findByText(/Systems live here: nodes, hosts, clusters/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Use this for nodes, hosts, clusters/i)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Next' }));
-    expect(await screen.findByText(/If you looked for guests in v5/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Use this for VMs, containers, and pods/i)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Next' }));
-    expect(await screen.findByText(/Datastores, pools, disks, and capacity live here/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Use this for datastores, pools, disks, and capacity/i)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Next' }));
-    expect(await screen.findByText(/Backups, snapshots, and replication live here/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Use this for backups, snapshots, and replication/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Done' })).toBeInTheDocument();
   });
 
   it('lets the user jump to a tour stop directly from the stop map', async () => {
     render(() => <WhatsNewModal />);
 
-    expect(await screen.findByText(/overview for health, alerts, capacity/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Start here for health, alerts, capacity/i)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /Workloads/i }));
 
-    expect(await screen.findByText(/If you looked for guests in v5/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Use this for VMs, containers, and pods/i)).toBeInTheDocument();
     expect(screen.getByText('Step 3 of 5')).toBeInTheDocument();
   });
 
-  it('routes the docs CTA through the migration guide', async () => {
+  it('routes the docs CTA through the navigation guide', async () => {
     render(() => <WhatsNewModal />);
 
-    const docsLink = await screen.findByRole('link', { name: 'Migration guide' });
+    const docsLink = await screen.findByRole('link', { name: 'Navigation guide' });
     expect(docsLink).toHaveAttribute('href', '/docs/MIGRATION_UNIFIED_NAV.md');
   });
 });

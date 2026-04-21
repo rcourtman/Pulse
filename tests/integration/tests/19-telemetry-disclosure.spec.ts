@@ -133,7 +133,7 @@ test.describe('Telemetry disclosure', () => {
       .not.toBe(initialPreview.install_id);
   });
 
-  test('whats-new tour opens shipped privacy and migration guide pages', async ({ page }, testInfo) => {
+  test('whats-new tour opens shipped privacy and navigation guide pages', async ({ page }, testInfo) => {
     test.skip(testInfo.project.name.startsWith('mobile-'), 'Desktop-only telemetry disclosure coverage');
 
     await page.addInitScript(() => {
@@ -153,12 +153,12 @@ test.describe('Telemetry disclosure', () => {
     );
     await expect(dialog).toHaveAttribute('aria-label', 'Welcome to Pulse v6');
     await expect(dialog.getByText('Step 1 of 5')).toBeVisible();
-    await expect(dialog.getByText('V5 to V6')).toBeVisible();
+    await expect(dialog.getByText('Quick Tour')).toBeVisible();
     await expect(assistantLauncher).toBeHidden();
     await expect(spotlight).toHaveAttribute('data-tour-step', 'dashboard');
     await expect(dialog).toHaveAttribute('data-tour-step', 'dashboard');
     await expectSpotlightAround(spotlight, dashboardTab);
-    await expect(dialog.getByText(/overview for health, alerts, capacity/i)).toBeVisible();
+    await expect(dialog.getByText(/Start here for health, alerts, capacity/i)).toBeVisible();
     await expect(dialog.getByRole('link', { name: 'Telemetry details' })).toBeVisible();
 
     const privacyLink = dialog.getByRole('link', { name: 'Telemetry details' });
@@ -170,7 +170,7 @@ test.describe('Telemetry disclosure', () => {
       'Pulse currently has two usage-data scopes',
     );
 
-    const docsLink = dialog.getByRole('link', { name: 'Migration guide' });
+    const docsLink = dialog.getByRole('link', { name: 'Navigation guide' });
     await expect(docsLink).toHaveAttribute('href', '/docs/MIGRATION_UNIFIED_NAV.md');
     await expectPopupDoc(
       page,

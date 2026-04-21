@@ -1354,7 +1354,10 @@ of the product.
 Secondary disclosures such as telemetry must stay subordinate to that
 orientation job: keep them as footer-level links into the canonical
 privacy/settings surfaces, and do not let them crowd out the migration
-wayfinding copy.
+wayfinding copy. The supporting docs CTA on that surface should likewise stay
+route-oriented: use a neutral `Navigation guide` label and plain present-tense
+copy that helps operators understand the current IA, rather than reviving
+`Migration guide` branding that pulls the tour back into v5 historical framing.
 That state owner now also owns public-demo suppression: the modal must stay
 closed until `sessionPresentationPolicyResolved()` is true and must fail closed
 when `presentationPolicyIsDemoMode()` resolves true, so the public demo does
