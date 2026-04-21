@@ -66,7 +66,17 @@
    - Result:
      - the candidate already supports filtering the workloads slice by status (`All`, `Running`, `Degraded`, `Stopped`), so there is no missing offline-filter blocker to carry into GA.
 
-7. `#1436` (`Better disk i/o reads for LXC containers`)
+7. `#1433` (`[Bug]:  v5.1.28 - Want All Proxmox Nodes Displayed on the DashBoard even if they are not Powered On`)
+   - Covered on the current v6 candidate by explicit proof on the v6 surfaces that own node visibility:
+     - the dashboard overview still counts the offline Proxmox node and surfaces it in `Problem Resources`
+     - the infrastructure inventory still lists the offline Proxmox node instead of dropping it when the node powers off
+   - Verification:
+     - `go test ./internal/api -run 'TestDashboardSummaryKeepsOfflineProxmoxNodeVisible'`
+     - `cd /Volumes/Development/pulse/repos/pulse/tests/integration && PULSE_E2E_SKIP_DOCKER=1 PLAYWRIGHT_BASE_URL=http://127.0.0.1:5173 npm test -- tests/65-offline-proxmox-node-visibility.spec.ts --project=chromium`
+   - Result:
+     - the current v6 candidate does not hide an offline Proxmox node from the product; it remains visible on the canonical dashboard and infrastructure surfaces even though v6 no longer uses the legacy v5 full-node dashboard layout.
+
+8. `#1436` (`Better disk i/o reads for LXC containers`)
    - Fixed by merging prefetched LXC `status/current` counters into both container polling paths before rate calculation and reusing the same status snapshot for metadata enrichment.
    - Verification:
      - `go test ./internal/monitoring -run 'TestMergeContainerRuntimeCounters_PrefersHigherStatusCounters|TestBuildContainerFromClusterResource_UsesContainerStatusCountersForRates|TestBuildContainerFromClusterResource_PreservesProxmoxPool|TestEnrichContainerMetadata_DetectsOCIForStoppedContainer|TestMonitor_EnrichContainerMetadata_Extra'`
