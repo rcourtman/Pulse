@@ -101,6 +101,7 @@ func (e *PulseToolExecutor) executeCommandWithAudit(
 	e.recordActionLifecycle(actionID, unifiedresources.ActionStateExecuting, requestedBy, fmt.Sprintf("dispatching command to agent %s", agentID))
 	e.recordActionAudit(record)
 
+	payload.ApprovalID = strings.TrimSpace(approvalID)
 	result, err := e.agentServer.ExecuteCommand(ctx, agentID, payload)
 	finalState := unifiedresources.ActionStateCompleted
 	finalMessage := "command completed"

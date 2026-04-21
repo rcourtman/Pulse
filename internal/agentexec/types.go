@@ -92,6 +92,7 @@ type RegisteredPayload struct {
 type ExecuteCommandPayload struct {
 	RequestID  string `json:"request_id"`
 	Command    string `json:"command"`
+	ApprovalID string `json:"approval_id,omitempty"`
 	TargetType string `json:"target_type"`         // "agent", "container", "vm"
 	TargetID   string `json:"target_id,omitempty"` // VMID for container/VM
 	Timeout    int    `json:"timeout,omitempty"`   // seconds, 0 = default

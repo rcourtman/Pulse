@@ -228,6 +228,15 @@ the canonical monitored-system blocked payload.
     target. When an explicit `targetHost` misses that canonical match, the
     shared relay adapter must keep the result empty instead of silently
     falling back to the lone connected agent.
+    That same shared runtime-token boundary also owns agent-exec binding.
+    `internal/api/deploy_handlers.go`, `internal/api/router.go`, and
+    `internal/api/contract_test.go` must mint agent-exec-capable runtime
+    tokens with a server-owned `bound_agent_id` and reject websocket
+    registration when the token is missing binding metadata or names a
+    different agent. Legacy `bound_hostname` metadata may be normalized only
+    as compatibility input into that same canonical `agent-<hostname>`
+    binding, and unbound agent-exec tokens must fail closed instead of being
+    treated as global command authority.
 21. Keep hosted billing-state quickstart payload fields on the shared API contract: `internal/api/hosted_entitlement_refresh.go`, `internal/api/subscription_state_handlers.go`, and `internal/api/contract_test.go` must preserve `quickstart_credits_granted`, `quickstart_credits_used`, and `quickstart_credits_granted_at` through hosted signup, hosted lease refresh, and billing-state reads instead of letting lease rewrites silently erase seeded quickstart inventory.
 22. Keep hosted AI settings bootstrap on the shared API contract: `internal/api/ai_hosted_runtime.go`, `internal/api/ai_handlers.go`, `internal/api/ai_handler.go`, and `internal/api/contract_test.go` must treat a missing `ai.enc` in hosted mode as a canonical bootstrap condition, persist one machine-owned quickstart-backed AI config with the Pulse-owned alias `quickstart:pulse-hosted` when hosted entitlements grant AI capability, and preserve that configured settings payload as the same public contract that Chat, Patrol, and AI Settings consume instead of embedding a third-party model ID in the transport contract.
     That same hosted bootstrap surface must also preserve the secure quickstart-identity contract: hosted or trial-backed AI settings reads and enablement may bootstrap Patrol quickstart from the effective signed entitlement lease when no self-hosted installation token exists, but they must not fabricate installation-scoped activation state or anonymous client identity to satisfy `/v1/quickstart/bootstrap`.

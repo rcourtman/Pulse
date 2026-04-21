@@ -360,6 +360,13 @@ was disabled at process boot. The approval cleanup loop must follow owned AI
 runtime lifetime rather than an HTTP request context, and approval persistence
 may fail closed only when AI is actually disabled instead of because runtime
 enablement happened after startup.
+That same approval boundary also owns approved command execution. When
+`internal/api/ai_handlers.go`, `internal/ai/service.go`, or
+`internal/ai/tools/action_audit.go` consume a governed approval record, the
+runtime must carry that approval identifier into the final
+`agentexec.ExecuteCommandPayload` so the host agent can re-check the shared
+command policy locally and fail closed on blocked or still-unapproved commands
+instead of treating control-plane approval as an implicit bypass.
 The same ownership includes the Pulse query tool schema under
 `internal/ai/tools/`: topology-query input names must stay canonical inside
 the AI runtime itself, so new tool arguments such as `max_proxmox_nodes`

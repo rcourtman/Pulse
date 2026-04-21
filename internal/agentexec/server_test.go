@@ -7,8 +7,20 @@ import (
 	"time"
 )
 
+func allowAllTestTokens(string, string) bool { return true }
+
+func TestNewServerRequiresValidateToken(t *testing.T) {
+	defer func() {
+		if recover() == nil {
+			t.Fatal("expected panic when validateToken is nil")
+		}
+	}()
+
+	_ = NewServer(nil)
+}
+
 func TestExecuteCommandAgentNotConnected(t *testing.T) {
-	s := NewServer(nil)
+	s := NewServer(allowAllTestTokens)
 	_, err := s.ExecuteCommand(context.Background(), "missing", ExecuteCommandPayload{RequestID: "r1", Timeout: 1})
 	if err == nil {
 		t.Fatalf("expected error when agent not connected")
@@ -16,7 +28,7 @@ func TestExecuteCommandAgentNotConnected(t *testing.T) {
 }
 
 func TestReadFileAgentNotConnected(t *testing.T) {
-	s := NewServer(nil)
+	s := NewServer(allowAllTestTokens)
 	_, err := s.ReadFile(context.Background(), "missing", ReadFilePayload{RequestID: "r1"})
 	if err == nil {
 		t.Fatalf("expected error when agent not connected")
@@ -24,7 +36,7 @@ func TestReadFileAgentNotConnected(t *testing.T) {
 }
 
 func TestExecuteCommandValidation(t *testing.T) {
-	s := NewServer(nil)
+	s := NewServer(allowAllTestTokens)
 	if _, err := s.ExecuteCommand(context.Background(), "", ExecuteCommandPayload{RequestID: "r1"}); err == nil {
 		t.Fatalf("expected empty agent id error")
 	}
@@ -34,7 +46,7 @@ func TestExecuteCommandValidation(t *testing.T) {
 }
 
 func TestExecuteCommandSecurityValidation(t *testing.T) {
-	s := NewServer(nil)
+	s := NewServer(allowAllTestTokens)
 
 	cases := []struct {
 		name    string
@@ -131,8 +143,32 @@ func TestExecuteCommandSecurityValidation(t *testing.T) {
 	}
 }
 
+func TestExecuteCommandSecurityValidation_RequiresApprovalIDWhenPolicyRequiresApproval(t *testing.T) {
+	s := NewServer(allowAllTestTokens)
+	serverConn, _, cleanup := newConnPair(t)
+	defer cleanup()
+
+	ac := &agentConn{
+		conn:  serverConn,
+		agent: ConnectedAgent{AgentID: "a1"},
+		done:  make(chan struct{}),
+	}
+	s.mu.Lock()
+	s.agents["a1"] = ac
+	s.mu.Unlock()
+
+	_, err := s.ExecuteCommand(context.Background(), "a1", ExecuteCommandPayload{
+		RequestID: "r1",
+		Command:   "echo ok",
+		Timeout:   1,
+	})
+	if err == nil || !strings.Contains(err.Error(), "requires approval") {
+		t.Fatalf("expected approval-required error, got %v", err)
+	}
+}
+
 func TestReadFileValidation(t *testing.T) {
-	s := NewServer(nil)
+	s := NewServer(allowAllTestTokens)
 	if _, err := s.ReadFile(context.Background(), "", ReadFilePayload{RequestID: "r1"}); err == nil {
 		t.Fatalf("expected empty agent id error")
 	}
@@ -142,7 +178,7 @@ func TestReadFileValidation(t *testing.T) {
 }
 
 func TestReadFileSecurityValidation(t *testing.T) {
-	s := NewServer(nil)
+	s := NewServer(allowAllTestTokens)
 
 	cases := []struct {
 		name    string
@@ -232,7 +268,7 @@ func TestReadFileSecurityValidation(t *testing.T) {
 }
 
 func TestConnectedAgentLookups(t *testing.T) {
-	s := NewServer(nil)
+	s := NewServer(allowAllTestTokens)
 	now := time.Now().Add(-1 * time.Minute)
 
 	s.mu.Lock()
@@ -262,7 +298,7 @@ func TestConnectedAgentLookups(t *testing.T) {
 }
 
 func TestGetAgentForHostNormalizesFQDNAndCase(t *testing.T) {
-	s := NewServer(nil)
+	s := NewServer(allowAllTestTokens)
 	now := time.Now().Add(-1 * time.Minute)
 
 	s.mu.Lock()
@@ -283,7 +319,7 @@ func TestGetAgentForHostNormalizesFQDNAndCase(t *testing.T) {
 }
 
 func TestGetAgentForHostKeepsDistinctFQDNsSeparate(t *testing.T) {
-	s := NewServer(nil)
+	s := NewServer(allowAllTestTokens)
 	now := time.Now().Add(-1 * time.Minute)
 
 	s.mu.Lock()

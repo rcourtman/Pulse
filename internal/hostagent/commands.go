@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"runtime"
 	"strings"
@@ -18,7 +19,9 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agenttls"
+	sshknownhosts "github.com/rcourtman/pulse-go-rewrite/internal/ssh/knownhosts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rs/zerolog"
 )
@@ -87,8 +90,13 @@ type CommandClient struct {
 	hostname           string
 	platform           string
 	version            string
+	stateDir           string
 	insecureSkipVerify bool
 	caCertPath         string
+	commandPolicy      *agentexec.CommandPolicy
+	sshKnownHosts      sshknownhosts.Manager
+	sshKnownHostsOnce  sync.Once
+	sshKnownHostsErr   error
 	logger             zerolog.Logger
 
 	conn   *websocket.Conn
@@ -99,6 +107,10 @@ type CommandClient struct {
 // NewCommandClient creates a new command execution client
 func NewCommandClient(cfg Config, agentID, hostname, platform, version string) *CommandClient {
 	logger := cfg.Logger.With().Str("component", "command-client").Logger()
+	stateDir := strings.TrimSpace(cfg.StateDir)
+	if stateDir == "" {
+		stateDir = defaultStateDir
+	}
 
 	return &CommandClient{
 		pulseURL:           strings.TrimRight(cfg.PulseURL, "/"),
@@ -107,8 +119,10 @@ func NewCommandClient(cfg Config, agentID, hostname, platform, version string) *
 		hostname:           hostname,
 		platform:           platform,
 		version:            version,
+		stateDir:           stateDir,
 		insecureSkipVerify: cfg.InsecureSkipVerify,
 		caCertPath:         cfg.CACertPath,
+		commandPolicy:      agentexec.DefaultPolicy(),
 		logger:             logger,
 		done:               make(chan struct{}),
 	}
@@ -166,6 +180,7 @@ type registeredPayload struct {
 type executeCommandPayload struct {
 	RequestID  string `json:"request_id"`
 	Command    string `json:"command"`
+	ApprovalID string `json:"approval_id,omitempty"`
 	TargetType string `json:"target_type"`
 	TargetID   string `json:"target_id,omitempty"`
 	Timeout    int    `json:"timeout,omitempty"`
@@ -543,6 +558,7 @@ func (c *CommandClient) handleExecuteCommand(ctx context.Context, conn *websocke
 	c.logger.Info().
 		Str("request_id", payload.RequestID).
 		Str("command", payload.Command).
+		Str("approval_id", payload.ApprovalID).
 		Str("target_type", payload.TargetType).
 		Str("target_id", payload.TargetID).
 		Msg("Executing command")
@@ -621,9 +637,62 @@ func shellQuote(s string) string {
 	return "'" + escaped + "'"
 }
 
+func (c *CommandClient) currentCommandPolicy() *agentexec.CommandPolicy {
+	if c != nil && c.commandPolicy != nil {
+		return c.commandPolicy
+	}
+	return agentexec.DefaultPolicy()
+}
+
+func (c *CommandClient) authorizeCommand(payload executeCommandPayload) error {
+	switch c.currentCommandPolicy().Evaluate(payload.Command) {
+	case agentexec.PolicyBlock:
+		return fmt.Errorf("command blocked by policy")
+	case agentexec.PolicyRequireApproval:
+		if strings.TrimSpace(payload.ApprovalID) == "" {
+			return fmt.Errorf("command requires approval")
+		}
+	}
+	return nil
+}
+
+func (c *CommandClient) ensureSSHKnownHostsManager() (sshknownhosts.Manager, error) {
+	if c == nil {
+		return nil, fmt.Errorf("command client is nil")
+	}
+
+	c.sshKnownHostsOnce.Do(func() {
+		if c.sshKnownHosts != nil {
+			return
+		}
+
+		stateDir := strings.TrimSpace(c.stateDir)
+		if stateDir == "" {
+			stateDir = defaultStateDir
+		}
+
+		c.sshKnownHosts, c.sshKnownHostsErr = sshknownhosts.NewManager(filepath.Join(stateDir, "ssh_known_hosts"))
+	})
+
+	if c.sshKnownHostsErr != nil {
+		return nil, c.sshKnownHostsErr
+	}
+	if c.sshKnownHosts == nil {
+		return nil, fmt.Errorf("ssh known_hosts manager is not configured")
+	}
+	return c.sshKnownHosts, nil
+}
+
 func (c *CommandClient) executeCommand(ctx context.Context, payload executeCommandPayload) commandResultPayload {
 	result := commandResultPayload{
 		RequestID: payload.RequestID,
+	}
+
+	if err := c.authorizeCommand(payload); err != nil {
+		result.Error = err.Error()
+		result.ExitCode = -1
+		result.Success = false
+		return result
 	}
 
 	// Determine timeout

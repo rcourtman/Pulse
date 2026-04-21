@@ -6,8 +6,24 @@ import (
 	"strings"
 	"testing"
 
+	sshknownhosts "github.com/rcourtman/pulse-go-rewrite/internal/ssh/knownhosts"
 	"github.com/rs/zerolog"
 )
+
+type stubKnownHostsManager struct {
+	path string
+}
+
+func (m stubKnownHostsManager) Ensure(context.Context, string) error { return nil }
+func (m stubKnownHostsManager) EnsureWithPort(context.Context, string, int) error {
+	return nil
+}
+func (m stubKnownHostsManager) EnsureWithEntries(context.Context, string, int, [][]byte) error {
+	return nil
+}
+func (m stubKnownHostsManager) Path() string { return m.path }
+
+var _ sshknownhosts.Manager = stubKnownHostsManager{}
 
 func TestShellescape(t *testing.T) {
 	tests := []struct {
@@ -130,7 +146,8 @@ func TestRunInstallSSH_IncludesEnrollAndEnableCommands(t *testing.T) {
 	}
 
 	c := &CommandClient{
-		logger: zerolog.New(zerolog.NewTestWriter(t)),
+		logger:        zerolog.New(zerolog.NewTestWriter(t)),
+		sshKnownHosts: stubKnownHostsManager{path: "/tmp/pulse-test-known-hosts"},
 	}
 
 	exitCode, _, err := c.runInstallSSH(context.Background(), "10.0.0.1", "http://10.0.0.1:7655")
@@ -151,5 +168,14 @@ func TestRunInstallSSH_IncludesEnrollAndEnableCommands(t *testing.T) {
 	}
 	if !strings.Contains(joined, "--enable-proxmox") {
 		t.Error("SSH install command does not include --enable-proxmox")
+	}
+	if !strings.Contains(joined, "StrictHostKeyChecking=yes") {
+		t.Error("SSH install command does not enforce strict host key checking")
+	}
+	if !strings.Contains(joined, "UserKnownHostsFile=/tmp/pulse-test-known-hosts") {
+		t.Error("SSH install command does not use the managed known_hosts file")
+	}
+	if !strings.Contains(joined, "GlobalKnownHostsFile=/dev/null") {
+		t.Error("SSH install command does not isolate global known_hosts state")
 	}
 }

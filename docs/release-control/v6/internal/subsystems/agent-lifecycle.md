@@ -1081,6 +1081,12 @@ runtime may not keep `.bootstrap_token` as an unstructured plaintext secret
 file after startup. Canonical persistence must encrypt the bootstrap token at
 rest and rewrite any legacy plaintext bootstrap-token file immediately into
 the encrypted canonical format on load.
+That same deploy/install runtime boundary also owns peer-node SSH trust.
+`internal/hostagent/commands_deploy.go` must resolve and persist peer host
+keys through the managed `ssh_known_hosts` store before any automated deploy
+fan-out writes a bootstrap token or runs the installer on a remote node, keep
+`StrictHostKeyChecking=yes`, and fail closed on key mismatch or missing-host-
+key state instead of downgrading to unauthenticated SSH during install.
 That same shared `internal/api/` lifecycle boundary also assumes tenant-scoped
 resource helpers stay on canonical unified-resource seeds: adjacent fleet and
 install surfaces may not revive raw tenant `StateSnapshot` fallback through
@@ -1979,6 +1985,13 @@ enables insecure TLS mode or Pulse command execution, the PowerShell path must
 carry `PULSE_INSECURE_SKIP_VERIFY` and `PULSE_ENABLE_COMMANDS` through to the
 installer where those settings apply, so Windows agents do not diverge from the
 governed shell transport.
+That same command-enabled lifecycle path must still enforce the shared command
+policy on the agent itself. `internal/hostagent/commands.go` may accept the
+installed command-execution capability, but it must re-evaluate
+`internal/agentexec/policy.go` immediately before `sh -c`, reject
+`PolicyBlock` commands regardless of caller, and require a consumed approval
+identifier before executing any `PolicyRequireApproval` command so a missed
+control-plane gate cannot silently turn into host-level RCE.
 That same copied install transport must also normalize canonical base URLs
 before composing installer asset paths: when operators enter a trailing-slash
 Pulse URL, shell and PowerShell install commands must trim it before appending

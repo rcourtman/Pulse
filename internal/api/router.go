@@ -492,16 +492,25 @@ func (r *Router) setupRoutes() {
 				return false
 			}
 
-			// SECURITY: Check if token is bound to a specific agent
-			if boundID, ok := record.Metadata["bound_agent_id"]; ok && boundID != "" {
-				if boundID != agentID {
-					log.Warn().
-						Str("token_id", record.ID).
-						Str("bound_id", boundID).
-						Str("requested_id", agentID).
-						Msg("Agent token mismatch: token is bound to a different agent ID")
-					return false
+			boundID := strings.TrimSpace(record.Metadata["bound_agent_id"])
+			if boundID == "" {
+				if legacyHost := strings.TrimSpace(record.Metadata["bound_hostname"]); legacyHost != "" {
+					boundID = fmt.Sprintf("agent-%s", legacyHost)
 				}
+			}
+			if boundID == "" {
+				log.Warn().
+					Str("token_id", record.ID).
+					Msg("Agent exec token missing binding metadata")
+				return false
+			}
+			if boundID != agentID {
+				log.Warn().
+					Str("token_id", record.ID).
+					Str("bound_id", boundID).
+					Str("requested_id", agentID).
+					Msg("Agent token mismatch: token is bound to a different agent ID")
+				return false
 			}
 
 			return true

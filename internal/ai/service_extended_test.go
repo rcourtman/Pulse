@@ -292,14 +292,20 @@ func TestService_RunCommandExtended(t *testing.T) {
 		AgentID:  "agent-1",
 		Hostname: "node-1",
 	}
+	var executed agentexec.ExecuteCommandPayload
 	mockServer := &mockAgentServer{
 		agents: []agentexec.ConnectedAgent{mockAgent},
+		executeFunc: func(ctx context.Context, agentID string, cmd agentexec.ExecuteCommandPayload) (*agentexec.CommandResultPayload, error) {
+			executed = cmd
+			return &agentexec.CommandResultPayload{Success: true, Stdout: "Mock output"}, nil
+		},
 	}
 	svc := NewService(nil, mockServer)
 
 	// Successful run
 	resp, err := svc.RunCommand(context.Background(), RunCommandRequest{
 		Command:    "uptime",
+		ApprovalID: "approval-1",
 		TargetType: "agent",
 		TargetHost: "node-1",
 	})
@@ -311,6 +317,9 @@ func TestService_RunCommandExtended(t *testing.T) {
 	}
 	if resp.Output != "Mock output" {
 		t.Errorf("Unexpected output: %s", resp.Output)
+	}
+	if executed.ApprovalID != "approval-1" {
+		t.Errorf("expected approval id to propagate, got %q", executed.ApprovalID)
 	}
 
 	// Failure (routing)

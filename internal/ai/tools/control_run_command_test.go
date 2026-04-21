@@ -147,7 +147,10 @@ func TestPulseToolExecutor_ExecuteRunCommand(t *testing.T) {
 			{AgentID: "agent-1", Hostname: "tower"},
 		}).Maybe()
 		agentSrv.On("ExecuteCommand", mock.Anything, "agent-1", mock.MatchedBy(func(payload agentexec.ExecuteCommandPayload) bool {
-			return payload.Command == "uptime" && payload.TargetType == "agent" && payload.TargetID == ""
+			return payload.Command == "uptime" &&
+				payload.ApprovalID == "approval-1" &&
+				payload.TargetType == "agent" &&
+				payload.TargetID == ""
 		})).Return(&agentexec.CommandResultPayload{
 			Stdout:   "ok",
 			ExitCode: 0,

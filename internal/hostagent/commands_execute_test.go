@@ -69,9 +69,10 @@ func TestCommandClient_executeCommand_Success(t *testing.T) {
 
 	c := &CommandClient{}
 	result := c.executeCommand(context.Background(), executeCommandPayload{
-		RequestID: "r1",
-		Command:   "echo hello",
-		Timeout:   5,
+		RequestID:  "r1",
+		Command:    "echo hello",
+		ApprovalID: "approval-1",
+		Timeout:    5,
 	})
 	if !result.Success || result.ExitCode != 0 {
 		t.Fatalf("expected success, got %#v", result)
@@ -88,9 +89,10 @@ func TestCommandClient_executeCommand_NonZeroExitCode(t *testing.T) {
 
 	c := &CommandClient{}
 	result := c.executeCommand(context.Background(), executeCommandPayload{
-		RequestID: "r1",
-		Command:   "echo err 1>&2; exit 3",
-		Timeout:   5,
+		RequestID:  "r1",
+		Command:    "echo err 1>&2; exit 3",
+		ApprovalID: "approval-1",
+		Timeout:    5,
 	})
 	if result.Success {
 		t.Fatalf("expected failure, got %#v", result)
@@ -111,9 +113,10 @@ func TestCommandClient_executeCommand_TimeoutSetsError(t *testing.T) {
 	c := &CommandClient{}
 	start := time.Now()
 	result := c.executeCommand(context.Background(), executeCommandPayload{
-		RequestID: "r1",
-		Command:   "sleep 2",
-		Timeout:   1,
+		RequestID:  "r1",
+		Command:    "sleep 2",
+		ApprovalID: "approval-1",
+		Timeout:    1,
 	})
 	if time.Since(start) > 3*time.Second {
 		t.Fatalf("timeout path took too long: %v", time.Since(start))
@@ -136,9 +139,10 @@ func TestCommandClient_executeCommand_TruncatesLargeOutput(t *testing.T) {
 
 	c := &CommandClient{}
 	result := c.executeCommand(context.Background(), executeCommandPayload{
-		RequestID: "r1",
-		Command:   "head -c 1048580 /dev/zero | tr '\\0' 'a'",
-		Timeout:   5,
+		RequestID:  "r1",
+		Command:    "head -c 1048580 /dev/zero | tr '\\0' 'a'",
+		ApprovalID: "approval-1",
+		Timeout:    5,
 	})
 	if !result.Success {
 		t.Fatalf("expected success, got %#v", result)
@@ -158,9 +162,10 @@ func TestCommandClient_executeCommand_TruncatesLargeStderr(t *testing.T) {
 
 	c := &CommandClient{}
 	result := c.executeCommand(context.Background(), executeCommandPayload{
-		RequestID: "r1",
-		Command:   "head -c 1048580 /dev/zero | tr '\\0' 'b' 1>&2",
-		Timeout:   5,
+		RequestID:  "r1",
+		Command:    "head -c 1048580 /dev/zero | tr '\\0' 'b' 1>&2",
+		ApprovalID: "approval-1",
+		Timeout:    5,
 	})
 	if !result.Success {
 		t.Fatalf("expected success, got %#v", result)
@@ -170,5 +175,35 @@ func TestCommandClient_executeCommand_TruncatesLargeStderr(t *testing.T) {
 	}
 	if len(result.Stderr) > 1024*1024+64 {
 		t.Fatalf("stderr len=%d, expected <= %d", len(result.Stderr), 1024*1024+64)
+	}
+}
+
+func TestCommandClient_executeCommand_RequiresApprovalForUnknownCommand(t *testing.T) {
+	c := &CommandClient{}
+	result := c.executeCommand(context.Background(), executeCommandPayload{
+		RequestID: "r1",
+		Command:   "echo hello",
+		Timeout:   5,
+	})
+	if result.Success {
+		t.Fatalf("expected approval-gated failure, got %#v", result)
+	}
+	if result.Error != "command requires approval" {
+		t.Fatalf("error = %q, want %q", result.Error, "command requires approval")
+	}
+}
+
+func TestCommandClient_executeCommand_BlocksPolicyDeniedCommand(t *testing.T) {
+	c := &CommandClient{}
+	result := c.executeCommand(context.Background(), executeCommandPayload{
+		RequestID: "r1",
+		Command:   "rm -rf /",
+		Timeout:   5,
+	})
+	if result.Success {
+		t.Fatalf("expected blocked-command failure, got %#v", result)
+	}
+	if result.Error != "command blocked by policy" {
+		t.Fatalf("error = %q, want %q", result.Error, "command blocked by policy")
 	}
 }

@@ -9956,6 +9956,76 @@ func TestContract_ResourceCapabilitiesJSONSnapshot(t *testing.T) {
 	assertJSONSnapshot(t, got, want)
 }
 
+func TestContract_AgentExecWebSocketRejectsUnboundToken(t *testing.T) {
+	rawToken := "contract-agent-unbound-token.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeAgentExec}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	ts := newIPv4HTTPServer(t, router.Handler())
+	defer ts.Close()
+
+	conn, _, err := websocket.DefaultDialer.Dial(wsURLForHTTP(ts.URL)+"/api/agent/ws", nil)
+	if err != nil {
+		t.Fatalf("Dial: %v", err)
+	}
+	defer conn.Close()
+
+	regMsg, err := agentexec.NewMessage(agentexec.MsgTypeAgentRegister, "", agentexec.AgentRegisterPayload{
+		AgentID:  "agent-node-1",
+		Hostname: "node-1",
+		Version:  "1.0.0",
+		Platform: "linux",
+		Token:    rawToken,
+	})
+	if err != nil {
+		t.Fatalf("NewMessage: %v", err)
+	}
+	if err := conn.WriteJSON(regMsg); err != nil {
+		t.Fatalf("WriteJSON: %v", err)
+	}
+
+	reg := readRegisteredPayload(t, conn)
+	if reg.Success {
+		t.Fatalf("expected unbound agent exec token registration to fail closed")
+	}
+}
+
+func TestContract_AgentExecWebSocketAcceptsLegacyHostnameBinding(t *testing.T) {
+	rawToken := "contract-agent-legacy-token.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeAgentExec}, map[string]string{"bound_hostname": "node-1"})
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	ts := newIPv4HTTPServer(t, router.Handler())
+	defer ts.Close()
+
+	conn, _, err := websocket.DefaultDialer.Dial(wsURLForHTTP(ts.URL)+"/api/agent/ws", nil)
+	if err != nil {
+		t.Fatalf("Dial: %v", err)
+	}
+	defer conn.Close()
+
+	regMsg, err := agentexec.NewMessage(agentexec.MsgTypeAgentRegister, "", agentexec.AgentRegisterPayload{
+		AgentID:  "agent-node-1",
+		Hostname: "node-1",
+		Version:  "1.0.0",
+		Platform: "linux",
+		Token:    rawToken,
+	})
+	if err != nil {
+		t.Fatalf("NewMessage: %v", err)
+	}
+	if err := conn.WriteJSON(regMsg); err != nil {
+		t.Fatalf("WriteJSON: %v", err)
+	}
+
+	reg := readRegisteredPayload(t, conn)
+	if !reg.Success {
+		t.Fatalf("expected legacy hostname binding to resolve to canonical agent binding, got %q", reg.Message)
+	}
+}
+
 func TestContract_ResourceRelationshipsJSONSnapshot(t *testing.T) {
 	now := time.Date(2026, 3, 18, 17, 0, 0, 0, time.UTC)
 	payload := struct {

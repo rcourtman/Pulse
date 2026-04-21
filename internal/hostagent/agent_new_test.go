@@ -172,6 +172,31 @@ func TestNew_DefaultPulseURL(t *testing.T) {
 	}
 }
 
+func TestNewCommandClient_SetsSecureCommandDefaults(t *testing.T) {
+	logger := zerolog.Nop()
+	client := NewCommandClient(Config{
+		PulseURL: "https://pulse.example",
+		Logger:   &logger,
+	}, "agent-1", "node-1", "linux", "1.0.0")
+
+	if client.commandPolicy == nil {
+		t.Fatalf("expected default command policy to be configured")
+	}
+	if client.stateDir != defaultStateDir {
+		t.Fatalf("stateDir = %q, want %q", client.stateDir, defaultStateDir)
+	}
+
+	if err := client.authorizeCommand(executeCommandPayload{Command: "systemctl restart nginx"}); err == nil || !strings.Contains(err.Error(), "requires approval") {
+		t.Fatalf("expected approval-required command to fail closed, got %v", err)
+	}
+	if err := client.authorizeCommand(executeCommandPayload{Command: "systemctl restart nginx", ApprovalID: "approval-1"}); err != nil {
+		t.Fatalf("expected approved command to pass, got %v", err)
+	}
+	if err := client.authorizeCommand(executeCommandPayload{Command: "rm -rf /"}); err == nil || !strings.Contains(err.Error(), "blocked by policy") {
+		t.Fatalf("expected blocked command to be rejected, got %v", err)
+	}
+}
+
 func TestNew_ResolvesVendorNASIdentityFromPlatformFiles(t *testing.T) {
 	t.Run("synology dsm from version file", func(t *testing.T) {
 		mc := &mockCollector{

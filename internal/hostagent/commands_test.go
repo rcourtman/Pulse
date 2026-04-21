@@ -53,9 +53,10 @@ func TestCommandClient_Run(t *testing.T) {
 
 		// 3. Send Execute Command
 		cmdPayload, _ := json.Marshal(executeCommandPayload{
-			RequestID: "cmd-1",
-			Command:   "echo hello",
-			Timeout:   5,
+			RequestID:  "cmd-1",
+			Command:    "echo hello",
+			ApprovalID: "approval-1",
+			Timeout:    5,
 		})
 		_ = conn.WriteJSON(wsMessage{
 			Type:      msgTypeExecuteCmd,

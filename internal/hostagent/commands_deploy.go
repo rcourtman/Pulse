@@ -394,27 +394,48 @@ func (c *CommandClient) installTarget(
 
 // --- SSH helpers ---
 
-// checkSSH tests basic SSH connectivity to a peer node.
-func (c *CommandClient) checkSSH(ctx context.Context, nodeIP string) bool {
-	cmd := execCommandContext(ctx, "ssh",
+func (c *CommandClient) sshCommand(ctx context.Context, nodeIP string, remoteArgs ...string) (*exec.Cmd, error) {
+	if err := validateNodeIP(nodeIP); err != nil {
+		return nil, err
+	}
+
+	hostKeys, err := c.ensureSSHKnownHostsManager()
+	if err != nil {
+		return nil, fmt.Errorf("initialize SSH known_hosts manager: %w", err)
+	}
+	if err := hostKeys.Ensure(ctx, nodeIP); err != nil {
+		return nil, fmt.Errorf("ensure SSH host key for %s: %w", nodeIP, err)
+	}
+
+	args := []string{
 		"-o", "BatchMode=yes",
-		"-o", "StrictHostKeyChecking=no",
+		"-o", "StrictHostKeyChecking=yes",
+		"-o", fmt.Sprintf("UserKnownHostsFile=%s", hostKeys.Path()),
+		"-o", "GlobalKnownHostsFile=/dev/null",
 		"-o", "ConnectTimeout=10",
 		fmt.Sprintf("root@%s", nodeIP),
-		"true",
-	)
+	}
+	args = append(args, remoteArgs...)
+	return execCommandContext(ctx, "ssh", args...), nil
+}
+
+// checkSSH tests basic SSH connectivity to a peer node.
+func (c *CommandClient) checkSSH(ctx context.Context, nodeIP string) bool {
+	cmd, err := c.sshCommand(ctx, nodeIP, "true")
+	if err != nil {
+		c.logger.Warn().Err(err).Str("node_ip", nodeIP).Msg("SSH connectivity check refused before execution")
+		return false
+	}
 	return cmd.Run() == nil
 }
 
 // detectArchSSH detects the architecture of a remote node via SSH.
 func (c *CommandClient) detectArchSSH(ctx context.Context, nodeIP string) string {
-	cmd := execCommandContext(ctx, "ssh",
-		"-o", "BatchMode=yes",
-		"-o", "StrictHostKeyChecking=no",
-		"-o", "ConnectTimeout=10",
-		fmt.Sprintf("root@%s", nodeIP),
-		"uname -m",
-	)
+	cmd, err := c.sshCommand(ctx, nodeIP, "uname -m")
+	if err != nil {
+		c.logger.Warn().Err(err).Str("node_ip", nodeIP).Msg("SSH arch detection refused before execution")
+		return ""
+	}
 	out, err := cmd.Output()
 	if err != nil {
 		return ""
@@ -432,38 +453,31 @@ func (c *CommandClient) detectArchSSH(ctx context.Context, nodeIP string) string
 
 // checkExistingAgentSSH checks if a Pulse agent is already installed on the target.
 func (c *CommandClient) checkExistingAgentSSH(ctx context.Context, nodeIP string) bool {
-	cmd := execCommandContext(ctx, "ssh",
-		"-o", "BatchMode=yes",
-		"-o", "StrictHostKeyChecking=no",
-		"-o", "ConnectTimeout=10",
-		fmt.Sprintf("root@%s", nodeIP),
-		"systemctl is-active pulse-agent 2>/dev/null || test -f /usr/local/bin/pulse-agent",
-	)
+	cmd, err := c.sshCommand(ctx, nodeIP, "systemctl is-active pulse-agent 2>/dev/null || test -f /usr/local/bin/pulse-agent")
+	if err != nil {
+		c.logger.Warn().Err(err).Str("node_ip", nodeIP).Msg("SSH existing-agent check refused before execution")
+		return false
+	}
 	return cmd.Run() == nil
 }
 
 // checkPulseReachabilitySSH checks if the peer can reach the Pulse URL.
 func (c *CommandClient) checkPulseReachabilitySSH(ctx context.Context, nodeIP, pulseURL string) bool {
 	// Use curl with a short timeout to check connectivity.
-	cmd := execCommandContext(ctx, "ssh",
-		"-o", "BatchMode=yes",
-		"-o", "StrictHostKeyChecking=no",
-		"-o", "ConnectTimeout=10",
-		fmt.Sprintf("root@%s", nodeIP),
-		fmt.Sprintf("curl -sf --connect-timeout 5 -o /dev/null %s/api/health || wget -q --timeout=5 -O /dev/null %s/api/health 2>/dev/null", shellescape(pulseURL), shellescape(pulseURL)),
-	)
+	cmd, err := c.sshCommand(ctx, nodeIP, fmt.Sprintf("curl -sf --connect-timeout 5 -o /dev/null %s/api/health || wget -q --timeout=5 -O /dev/null %s/api/health 2>/dev/null", shellescape(pulseURL), shellescape(pulseURL)))
+	if err != nil {
+		c.logger.Warn().Err(err).Str("node_ip", nodeIP).Msg("SSH Pulse reachability check refused before execution")
+		return false
+	}
 	return cmd.Run() == nil
 }
 
 // writeTokenSSH writes a bootstrap token to a secure path on the target via SSH stdin.
 func (c *CommandClient) writeTokenSSH(ctx context.Context, nodeIP, token string) error {
-	cmd := execCommandContext(ctx, "ssh",
-		"-o", "BatchMode=yes",
-		"-o", "StrictHostKeyChecking=no",
-		"-o", "ConnectTimeout=10",
-		fmt.Sprintf("root@%s", nodeIP),
-		"mkdir -p /run/pulse-agent && cat > /run/pulse-agent/bootstrap.token && chmod 600 /run/pulse-agent/bootstrap.token",
-	)
+	cmd, err := c.sshCommand(ctx, nodeIP, "mkdir -p /run/pulse-agent && cat > /run/pulse-agent/bootstrap.token && chmod 600 /run/pulse-agent/bootstrap.token")
+	if err != nil {
+		return err
+	}
 	cmd.Stdin = strings.NewReader(token)
 	return cmd.Run()
 }
@@ -482,13 +496,10 @@ func (c *CommandClient) runInstallSSH(ctx context.Context, nodeIP, pulseURL stri
 		escapedURL, escapedURL,
 	)
 	remoteCmd := "bash -c " + shellescape(innerCmd)
-	cmd := execCommandContext(ctx, "ssh",
-		"-o", "BatchMode=yes",
-		"-o", "StrictHostKeyChecking=no",
-		"-o", "ConnectTimeout=10",
-		fmt.Sprintf("root@%s", nodeIP),
-		remoteCmd,
-	)
+	cmd, err := c.sshCommand(ctx, nodeIP, remoteCmd)
+	if err != nil {
+		return -1, "", err
+	}
 
 	out, err := cmd.CombinedOutput()
 	exitCode := 0

@@ -36,15 +36,17 @@ func TestCommandClient_LoopsCoverage(t *testing.T) {
 
 		// 4. Send an execute_command
 		cmdPayload, _ := json.Marshal(executeCommandPayload{
-			RequestID: "req-1",
-			Command:   "echo hi",
+			RequestID:  "req-1",
+			Command:    "echo hi",
+			ApprovalID: "approval-1",
 		})
 		_ = conn.WriteJSON(wsMessage{Type: msgTypeExecuteCmd, Payload: cmdPayload})
 
 		// 5. Send a read_file
 		readPayload, _ := json.Marshal(executeCommandPayload{
-			RequestID: "req-2",
-			Command:   "cat /etc/hostname",
+			RequestID:  "req-2",
+			Command:    "cat /etc/hostname",
+			ApprovalID: "approval-1",
 		})
 		_ = conn.WriteJSON(wsMessage{Type: msgTypeReadFile, Payload: readPayload})
 

@@ -165,7 +165,7 @@ func TestHandleWebSocket_InvalidTokenRejected(t *testing.T) {
 }
 
 func TestHandleWebSocket_MissingAgentIDRejected(t *testing.T) {
-	s := NewServer(nil)
+	s := NewServer(allowAllTestTokens)
 	ts := newWSServer(t, s)
 	defer ts.Close()
 
@@ -196,7 +196,7 @@ func TestHandleWebSocket_MissingAgentIDRejected(t *testing.T) {
 }
 
 func TestHandleWebSocket_FirstMessageMustBeRegister(t *testing.T) {
-	s := NewServer(nil)
+	s := NewServer(allowAllTestTokens)
 	ts := newWSServer(t, s)
 	defer ts.Close()
 
@@ -216,7 +216,7 @@ func TestHandleWebSocket_FirstMessageMustBeRegister(t *testing.T) {
 }
 
 func TestHandleWebSocket_RejectsOversizedRegistrationMessage(t *testing.T) {
-	s := NewServer(nil)
+	s := NewServer(allowAllTestTokens)
 	ts := newWSServer(t, s)
 	defer ts.Close()
 
@@ -239,7 +239,7 @@ func TestHandleWebSocket_RejectsOversizedRegistrationMessage(t *testing.T) {
 }
 
 func TestHandleWebSocket_AgentPingRespondsWithPong(t *testing.T) {
-	s := NewServer(nil)
+	s := NewServer(allowAllTestTokens)
 	ts := newWSServer(t, s)
 	defer ts.Close()
 
@@ -267,7 +267,7 @@ func TestHandleWebSocket_AgentPingRespondsWithPong(t *testing.T) {
 }
 
 func TestExecuteCommand_RoundTripViaWebSocket(t *testing.T) {
-	s := NewServer(nil)
+	s := NewServer(allowAllTestTokens)
 	ts := newWSServer(t, s)
 	defer ts.Close()
 
@@ -328,9 +328,10 @@ func TestExecuteCommand_RoundTripViaWebSocket(t *testing.T) {
 	defer cancel()
 
 	result, err := s.ExecuteCommand(ctx, "a1", ExecuteCommandPayload{
-		RequestID: "req1",
-		Command:   "echo ok",
-		Timeout:   1,
+		RequestID:  "req1",
+		Command:    "echo ok",
+		ApprovalID: "approval-1",
+		Timeout:    1,
 	})
 	if err != nil {
 		t.Fatalf("ExecuteCommand: %v", err)
@@ -351,7 +352,7 @@ func TestExecuteCommand_RoundTripViaWebSocket(t *testing.T) {
 }
 
 func TestHandleWebSocket_ReconnectSameAgentIDClosesOldConnection(t *testing.T) {
-	s := NewServer(nil)
+	s := NewServer(allowAllTestTokens)
 	ts := newWSServer(t, s)
 	defer ts.Close()
 

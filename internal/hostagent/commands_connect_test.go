@@ -53,6 +53,7 @@ func TestCommandClient_connectAndHandle_ExecutesCommandAndReturnsResult(t *testi
 		execPayloadBytes, _ := json.Marshal(executeCommandPayload{
 			RequestID:  "req-1",
 			Command:    "echo hello",
+			ApprovalID: "approval-1",
 			TargetType: "host",
 			Timeout:    5,
 		})

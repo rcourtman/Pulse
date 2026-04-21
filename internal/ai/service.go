@@ -3911,6 +3911,10 @@ func extractVMIDFromContext(ctx map[string]interface{}) (string, bool) {
 
 // executeOnAgent executes a command via the agent WebSocket
 func (s *Service) executeOnAgent(ctx context.Context, req ExecuteRequest, command string) (string, error) {
+	return s.executeOnAgentWithApproval(ctx, req, command, "")
+}
+
+func (s *Service) executeOnAgentWithApproval(ctx context.Context, req ExecuteRequest, command, approvalID string) (string, error) {
 	if s.agentServer == nil {
 		return "", fmt.Errorf("agent server not available")
 	}
@@ -3984,6 +3988,7 @@ func (s *Service) executeOnAgent(ctx context.Context, req ExecuteRequest, comman
 	cmd := agentexec.ExecuteCommandPayload{
 		RequestID:  requestID,
 		Command:    command,
+		ApprovalID: strings.TrimSpace(approvalID),
 		TargetType: dispatchTargetType,
 		TargetID:   targetID,
 		Timeout:    300, // 5 minutes - commands like du, backups, etc. can take a while
@@ -4064,7 +4069,7 @@ func (s *Service) RunCommand(ctx context.Context, req RunCommandRequest) (*RunCo
 			Msg("RunCommand using explicit target_host for routing")
 	}
 
-	output, err := s.executeOnAgent(ctx, execReq, req.Command)
+	output, err := s.executeOnAgentWithApproval(ctx, execReq, req.Command, req.ApprovalID)
 	if err != nil {
 		return &RunCommandResponse{
 			Success: false,

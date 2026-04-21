@@ -897,7 +897,9 @@ func (h *DeployHandlers) HandleEnroll(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	runtimeRecord.OrgID = bootstrapToken.OrgID
+	canonicalAgentID := fmt.Sprintf("agent-%s", req.Hostname)
 	runtimeRecord.Metadata = map[string]string{
+		"bound_agent_id": canonicalAgentID,
 		"bound_hostname": req.Hostname,
 		"deploy_job_id":  jobID,
 	}
@@ -931,7 +933,6 @@ func (h *DeployHandlers) HandleEnroll(w http.ResponseWriter, r *http.Request) {
 	h.broadcastSSE(jobID, enrollEvt)
 
 	// 12. Return runtime token + config to agent.
-	canonicalAgentID := fmt.Sprintf("agent-%s", req.Hostname)
 	resp := map[string]any{
 		"agentId":        canonicalAgentID,
 		"runtimeToken":   runtimeRaw,

@@ -901,6 +901,9 @@ func TestHandleEnroll_CommandsEnabledAddsAgentExecScope(t *testing.T) {
 	if !hasManage {
 		t.Errorf("expected runtime token to have %s scope, got scopes: %v", config.ScopeAgentManage, found.Scopes)
 	}
+	if got := found.Metadata["bound_agent_id"]; got != "agent-cmd-host" {
+		t.Errorf("runtime token bound_agent_id = %q, want %q", got, "agent-cmd-host")
+	}
 }
 
 func TestHandleEnroll_CommandsDisabledNoAgentExecScope(t *testing.T) {

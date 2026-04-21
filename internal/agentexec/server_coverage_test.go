@@ -65,13 +65,13 @@ func newConnPair(t *testing.T) (*websocket.Conn, *websocket.Conn, func()) {
 }
 
 func TestHandleWebSocket_UpgradeFailureAndDeadlineErrors(t *testing.T) {
-	s := NewServer(nil)
+	s := NewServer(allowAllTestTokens)
 	req := httptest.NewRequest(http.MethodGet, "http://example/ws", nil)
 	s.HandleWebSocket(&noHijackResponseWriter{header: make(http.Header)}, req)
 }
 
 func TestHandleWebSocket_RegistrationReadError(t *testing.T) {
-	s := NewServer(nil)
+	s := NewServer(allowAllTestTokens)
 	ts := newWSServer(t, s)
 	defer ts.Close()
 
@@ -83,7 +83,7 @@ func TestHandleWebSocket_RegistrationReadError(t *testing.T) {
 }
 
 func TestHandleWebSocket_RegistrationMessageJSONError(t *testing.T) {
-	s := NewServer(nil)
+	s := NewServer(allowAllTestTokens)
 	ts := newWSServer(t, s)
 	defer ts.Close()
 
@@ -104,7 +104,7 @@ func TestHandleWebSocket_RegistrationMessageJSONError(t *testing.T) {
 }
 
 func TestHandleWebSocket_RegistrationPayloadMissing(t *testing.T) {
-	s := NewServer(nil)
+	s := NewServer(allowAllTestTokens)
 	ts := newWSServer(t, s)
 	defer ts.Close()
 
@@ -123,7 +123,7 @@ func TestHandleWebSocket_RegistrationPayloadMissing(t *testing.T) {
 }
 
 func TestHandleWebSocket_RegistrationPayloadUnmarshalError(t *testing.T) {
-	s := NewServer(nil)
+	s := NewServer(allowAllTestTokens)
 	ts := newWSServer(t, s)
 	defer ts.Close()
 
@@ -180,7 +180,7 @@ func TestHandleWebSocket_RegistrationAckSendFailure(t *testing.T) {
 		return errors.New("write failure")
 	}
 
-	s := NewServer(nil)
+	s := NewServer(allowAllTestTokens)
 	ts := newWSServer(t, s)
 	defer ts.Close()
 
@@ -208,7 +208,7 @@ func TestHandleWebSocket_RegistrationAckSendFailure(t *testing.T) {
 }
 
 func TestHandleWebSocket_PongHandler(t *testing.T) {
-	s := NewServer(nil)
+	s := NewServer(allowAllTestTokens)
 	ts := newWSServer(t, s)
 	defer ts.Close()
 
@@ -234,7 +234,7 @@ func TestHandleWebSocket_PongHandler(t *testing.T) {
 }
 
 func TestReadLoopDone(t *testing.T) {
-	s := NewServer(nil)
+	s := NewServer(allowAllTestTokens)
 	serverConn, clientConn, cleanup := newConnPair(t)
 	defer cleanup()
 
@@ -258,7 +258,7 @@ func TestReadLoopDone(t *testing.T) {
 }
 
 func TestReadLoopUnexpectedCloseError(t *testing.T) {
-	s := NewServer(nil)
+	s := NewServer(allowAllTestTokens)
 	serverConn, clientConn, cleanup := newConnPair(t)
 	defer cleanup()
 
@@ -292,7 +292,7 @@ func TestReadLoopUnexpectedCloseError(t *testing.T) {
 }
 
 func TestReadLoopCommandResultBranches(t *testing.T) {
-	s := NewServer(nil)
+	s := NewServer(allowAllTestTokens)
 	serverConn, clientConn, cleanup := newConnPair(t)
 	defer cleanup()
 
@@ -338,7 +338,7 @@ func TestReadLoopAgentPingPongSendFailure(t *testing.T) {
 		return errors.New("write failure")
 	}
 
-	s := NewServer(nil)
+	s := NewServer(allowAllTestTokens)
 	serverConn, clientConn, cleanup := newConnPair(t)
 	defer cleanup()
 
@@ -381,7 +381,7 @@ func TestReadLoopAgentPingPongSendFailure(t *testing.T) {
 }
 
 func TestPingLoopSuccessAndStop(t *testing.T) {
-	s := NewServer(nil)
+	s := NewServer(allowAllTestTokens)
 	s.pingInterval = 5 * time.Millisecond
 	serverConn, _, cleanup := newConnPair(t)
 	defer cleanup()
@@ -410,7 +410,7 @@ func TestPingLoopSuccessAndStop(t *testing.T) {
 }
 
 func TestPingLoopFailuresClose(t *testing.T) {
-	s := NewServer(nil)
+	s := NewServer(allowAllTestTokens)
 	s.pingInterval = 5 * time.Millisecond
 	serverConn, _, cleanup := newConnPair(t)
 	defer cleanup()
@@ -438,14 +438,14 @@ func TestPingLoopFailuresClose(t *testing.T) {
 }
 
 func TestSendMessageMarshalError(t *testing.T) {
-	s := NewServer(nil)
+	s := NewServer(allowAllTestTokens)
 	if err := s.sendMessage(nil, Message{Payload: json.RawMessage("{")}); err == nil {
 		t.Fatalf("expected marshal error")
 	}
 }
 
 func TestExecuteCommandSendError(t *testing.T) {
-	s := NewServer(nil)
+	s := NewServer(allowAllTestTokens)
 	serverConn, _, cleanup := newConnPair(t)
 	defer cleanup()
 
@@ -461,9 +461,10 @@ func TestExecuteCommandSendError(t *testing.T) {
 	s.mu.Unlock()
 
 	_, err := s.ExecuteCommand(context.Background(), "a1", ExecuteCommandPayload{
-		RequestID: "r1",
-		Command:   "echo ok",
-		Timeout:   1,
+		RequestID:  "r1",
+		Command:    "echo ok",
+		ApprovalID: "approval-1",
+		Timeout:    1,
 	})
 	if err == nil {
 		t.Fatalf("expected send error")
@@ -471,7 +472,7 @@ func TestExecuteCommandSendError(t *testing.T) {
 }
 
 func TestExecuteCommandTimeoutAndCancel(t *testing.T) {
-	s := NewServer(nil)
+	s := NewServer(allowAllTestTokens)
 	serverConn, _, cleanup := newConnPair(t)
 	defer cleanup()
 
@@ -485,9 +486,10 @@ func TestExecuteCommandTimeoutAndCancel(t *testing.T) {
 	s.mu.Unlock()
 
 	_, err := s.ExecuteCommand(context.Background(), "a1", ExecuteCommandPayload{
-		RequestID: "r-timeout",
-		Command:   "echo ok",
-		Timeout:   1,
+		RequestID:  "r-timeout",
+		Command:    "echo ok",
+		ApprovalID: "approval-1",
+		Timeout:    1,
 	})
 	if err == nil || !strings.Contains(err.Error(), "timed out") {
 		t.Fatalf("expected timeout error, got %v", err)
@@ -496,9 +498,10 @@ func TestExecuteCommandTimeoutAndCancel(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	_, err = s.ExecuteCommand(ctx, "a1", ExecuteCommandPayload{
-		RequestID: "r-cancel",
-		Command:   "echo ok",
-		Timeout:   1,
+		RequestID:  "r-cancel",
+		Command:    "echo ok",
+		ApprovalID: "approval-1",
+		Timeout:    1,
 	})
 	if err == nil {
 		t.Fatalf("expected cancel error")
@@ -506,7 +509,7 @@ func TestExecuteCommandTimeoutAndCancel(t *testing.T) {
 }
 
 func TestExecuteCommandDefaultTimeout(t *testing.T) {
-	s := NewServer(nil)
+	s := NewServer(allowAllTestTokens)
 	serverConn, _, cleanup := newConnPair(t)
 	defer cleanup()
 
@@ -533,8 +536,9 @@ func TestExecuteCommandDefaultTimeout(t *testing.T) {
 	}()
 
 	result, err := s.ExecuteCommand(context.Background(), "a1", ExecuteCommandPayload{
-		RequestID: "r-default",
-		Command:   "echo ok",
+		RequestID:  "r-default",
+		Command:    "echo ok",
+		ApprovalID: "approval-1",
 	})
 	if err != nil || result == nil || !result.Success {
 		t.Fatalf("expected success, got result=%v err=%v", result, err)
@@ -542,7 +546,7 @@ func TestExecuteCommandDefaultTimeout(t *testing.T) {
 }
 
 func TestReadFileRoundTrip(t *testing.T) {
-	s := NewServer(nil)
+	s := NewServer(allowAllTestTokens)
 	ts := newWSServer(t, s)
 	defer ts.Close()
 
@@ -603,7 +607,7 @@ func TestReadFileTimeoutCancelAndSendError(t *testing.T) {
 	t.Cleanup(func() { readFileTimeout = origTimeout })
 	readFileTimeout = 10 * time.Millisecond
 
-	s := NewServer(nil)
+	s := NewServer(allowAllTestTokens)
 	serverConn, _, cleanup := newConnPair(t)
 	defer cleanup()
 
@@ -642,7 +646,7 @@ func TestReadFileTimeoutCancelAndSendError(t *testing.T) {
 }
 
 func TestShutdownRejectsNewWebSocketConnections(t *testing.T) {
-	s := NewServer(nil)
+	s := NewServer(allowAllTestTokens)
 	s.Shutdown()
 	ts := newWSServer(t, s)
 	defer ts.Close()
@@ -664,7 +668,7 @@ func TestShutdownRejectsNewWebSocketConnections(t *testing.T) {
 }
 
 func TestShutdownClosesActiveConnectionsAndIsIdempotent(t *testing.T) {
-	s := NewServer(nil)
+	s := NewServer(allowAllTestTokens)
 	ts := newWSServer(t, s)
 	defer ts.Close()
 
@@ -698,7 +702,7 @@ func TestShutdownClosesActiveConnectionsAndIsIdempotent(t *testing.T) {
 
 func TestExecuteCommandAndReadFileReturnShutdownError(t *testing.T) {
 	t.Run("execute_command", func(t *testing.T) {
-		s := NewServer(nil)
+		s := NewServer(allowAllTestTokens)
 		serverConn, _, cleanup := newConnPair(t)
 		defer cleanup()
 
@@ -713,7 +717,7 @@ func TestExecuteCommandAndReadFileReturnShutdownError(t *testing.T) {
 
 		errCh := make(chan error, 1)
 		go func() {
-			_, err := s.ExecuteCommand(context.Background(), "a1", ExecuteCommandPayload{RequestID: "r-shutdown", Command: "echo test", Timeout: 60})
+			_, err := s.ExecuteCommand(context.Background(), "a1", ExecuteCommandPayload{RequestID: "r-shutdown", Command: "echo test", ApprovalID: "approval-1", Timeout: 60})
 			errCh <- err
 		}()
 
@@ -731,7 +735,7 @@ func TestExecuteCommandAndReadFileReturnShutdownError(t *testing.T) {
 	})
 
 	t.Run("read_file", func(t *testing.T) {
-		s := NewServer(nil)
+		s := NewServer(allowAllTestTokens)
 		serverConn, _, cleanup := newConnPair(t)
 		defer cleanup()
 

@@ -536,6 +536,43 @@ func TestAgentExecTokenBindingEnforced(t *testing.T) {
 	conn.Close()
 }
 
+func TestSecurityTokens_AgentExecRejectsUnboundToken(t *testing.T) {
+	rawToken := "agent-unbound-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeAgentExec}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	ts := newIPv4HTTPServer(t, router.Handler())
+	defer ts.Close()
+
+	wsURL := wsURLForHTTP(ts.URL) + "/api/agent/ws"
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("Dial: %v", err)
+	}
+	regMsg, err := agentexec.NewMessage(agentexec.MsgTypeAgentRegister, "", agentexec.AgentRegisterPayload{
+		AgentID:  "agent-1",
+		Hostname: "host-1",
+		Version:  "1.0.0",
+		Platform: "linux",
+		Token:    rawToken,
+	})
+	if err != nil {
+		conn.Close()
+		t.Fatalf("NewMessage: %v", err)
+	}
+	if err := conn.WriteJSON(regMsg); err != nil {
+		conn.Close()
+		t.Fatalf("WriteJSON: %v", err)
+	}
+	reg := readRegisteredPayload(t, conn)
+	if reg.Success {
+		conn.Close()
+		t.Fatalf("expected registration to be rejected for unbound token")
+	}
+	conn.Close()
+}
+
 func TestSecurityTokens_AgentExecRequiresAgentExecScope(t *testing.T) {
 	rawToken := "agent-scope-token-123.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeAIChat}, nil)

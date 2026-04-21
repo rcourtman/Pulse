@@ -61,6 +61,7 @@ type Server struct {
 	pendingReqs   map[string]chan CommandResultPayload  // scoped request key -> response channel
 	deploySubs    map[string]chan DeployProgressPayload // deploySubKey(agentID, jobID) -> progress subscriber
 	validateToken func(token string, agentID string) bool
+	commandPolicy *CommandPolicy
 	shutdown      chan struct{}
 	shutdownOnce  sync.Once
 	pingInterval  time.Duration
@@ -86,11 +87,16 @@ func (ac *agentConn) signalDone() {
 
 // NewServer creates a new agent execution server
 func NewServer(validateToken func(token string, agentID string) bool) *Server {
+	if validateToken == nil {
+		panic("agentexec: validateToken is required")
+	}
+
 	return &Server{
 		agents:        make(map[string]*agentConn),
 		pendingReqs:   make(map[string]chan CommandResultPayload),
 		deploySubs:    make(map[string]chan DeployProgressPayload),
 		validateToken: validateToken,
+		commandPolicy: DefaultPolicy(),
 		shutdown:      make(chan struct{}),
 		pingInterval:  defaultPingInterval,
 	}
@@ -148,6 +154,7 @@ func validateExecuteCommandPayload(cmd *ExecuteCommandPayload) error {
 	if strings.TrimSpace(cmd.Command) == "" {
 		return fmt.Errorf("command is required")
 	}
+	cmd.ApprovalID = strings.TrimSpace(cmd.ApprovalID)
 	if len(cmd.Command) > maxExecuteCommandLength {
 		return fmt.Errorf("command exceeds %d characters", maxExecuteCommandLength)
 	}
@@ -164,6 +171,23 @@ func validateExecuteCommandPayload(cmd *ExecuteCommandPayload) error {
 	}
 	if cmd.Timeout > maxExecuteCommandTimeoutSeconds {
 		return fmt.Errorf("timeout cannot exceed %d seconds", maxExecuteCommandTimeoutSeconds)
+	}
+
+	return nil
+}
+
+func (s *Server) authorizeCommandPayload(cmd ExecuteCommandPayload) error {
+	if s == nil || s.commandPolicy == nil {
+		return nil
+	}
+
+	switch s.commandPolicy.Evaluate(cmd.Command) {
+	case PolicyBlock:
+		return fmt.Errorf("command blocked by policy")
+	case PolicyRequireApproval:
+		if cmd.ApprovalID == "" {
+			return fmt.Errorf("command requires approval")
+		}
 	}
 
 	return nil
@@ -353,7 +377,7 @@ func (s *Server) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Validate token
-	if s.validateToken != nil && !s.validateToken(reg.Token, reg.AgentID) {
+	if !s.validateToken(reg.Token, reg.AgentID) {
 		log.Warn().Str("agent_id", reg.AgentID).Msg("Agent registration rejected: invalid token")
 		rejectedMsg, err := NewMessage(MsgTypeRegistered, "", RegisteredPayload{Success: false, Message: "Invalid token"})
 		if err != nil {
@@ -776,6 +800,9 @@ func (s *Server) ExecuteCommand(ctx context.Context, agentID string, cmd Execute
 			Str("request_id", cmd.RequestID).
 			Msg("Execute command requested for disconnected agent")
 		return nil, fmt.Errorf("agent %s not connected", agentID)
+	}
+	if err := s.authorizeCommandPayload(cmd); err != nil {
+		return nil, err
 	}
 
 	execLog := log.With().
