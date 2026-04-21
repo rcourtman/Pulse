@@ -386,6 +386,13 @@ querying, and the operator-facing storage health presentation layer.
 2. Keep recovery store/runtime changes aligned with the storage and recovery frontend proofs in `registry.json`
 3. Tighten guardrails when legacy storage or recovery presentation paths are removed
 4. Preserve the dependency split: API payload ownership stays in `api-contracts`, settings shell ownership stays in `frontend-primitives`, and canonical resource truth stays in `unified-resources`
+   That same adjacent API boundary now includes shared agent-target hostname
+   equivalence. Storage- and recovery-adjacent surfaces that reuse
+   `internal/api/router_routes_ai_relay.go` or other shared agent lookup
+   helpers may match a short host against the same agent's FQDN, but they
+   must keep that logic on the canonical
+   `internal/unifiedresources/hostname_equivalence.go` contract instead of
+   widening it into a broad short-name collapse across distinct FQDNs.
 5. Keep recovery history table width budgeting derived from the canonical column specs in `frontend-modern/src/utils/recoveryTablePresentation.ts`, not from raw visible-column counts, so normalized subject labels and optional column sets cannot drift the right-edge badges and controls off-screen
 6. Keep at least one browser-level desktop recovery proof in the governed `recovery-product-surface` policy so right-edge column visibility and wrapper-fit regressions are caught at rendered layout time instead of only through unit-level width math
 7. Keep the dashboard route's no-resources state on an explicit first-session

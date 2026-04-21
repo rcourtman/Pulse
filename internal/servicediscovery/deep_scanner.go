@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rs/zerolog/log"
 )
 
@@ -465,7 +466,7 @@ func (s *DeepScanner) findAgentForTarget(targetID, hostname string) string {
 
 	// Then try hostname match
 	for _, agent := range agents {
-		if agent.Hostname == hostname || agent.Hostname == targetID {
+		if unifiedresources.HostnamesEquivalent(agent.Hostname, hostname) || unifiedresources.HostnamesEquivalent(agent.Hostname, targetID) {
 			return agent.AgentID
 		}
 	}

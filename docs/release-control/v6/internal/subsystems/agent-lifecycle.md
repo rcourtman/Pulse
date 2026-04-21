@@ -386,6 +386,13 @@ an add-only capacity posture.
    registration and update paths must not depend on package-global mutable test
    seams that can leak between concurrent agent sessions or tests.
 5. Preserve canonical /api/auto-register node identity continuity when canonical hosts shift between hostname and IP forms for the same node.
+   That same lifecycle-adjacent shared-API boundary now covers relay and
+   command-target hostname resolution too. When lifecycle flows reuse
+   `internal/api/router_routes_ai_relay.go`, `internal/agentexec/server.go`,
+   or other shared agent-target helpers, they may treat a short hostname as
+   equivalent to the same agent's FQDN, but they must not widen that fallback
+   into a short-name collapse that would make two different FQDNs appear to
+   be the same lifecycle target.
 6. Keep Proxmox registration continuity self-healing: stale local registration markers must be verified against Pulse before the host agent skips setup, and a missing matching node on the Pulse side must drive canonical re-registration instead of asking operators to delete marker files manually.
 7. Keep first-session lifecycle handoff explicit: the live setup completion
    surface in `frontend-modern/src/components/SetupWizard/SetupCompletionPanel.tsx`

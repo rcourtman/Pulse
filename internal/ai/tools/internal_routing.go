@@ -2,6 +2,7 @@ package tools
 
 import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 func (e *PulseToolExecutor) resolveResourceLocation(name string) models.ResourceLocation {
@@ -15,7 +16,7 @@ func (e *PulseToolExecutor) resolveResourceLocation(name string) models.Resource
 		if nodeName == "" {
 			nodeName = node.NodeName()
 		}
-		if nodeName == name || node.ID() == name {
+		if unifiedresources.HostnamesEquivalent(nodeName, name) || node.ID() == name {
 			return models.ResourceLocation{
 				Found:        true,
 				Name:         name,
@@ -54,7 +55,7 @@ func (e *PulseToolExecutor) resolveResourceLocation(name string) models.Resource
 
 	for _, dh := range rs.DockerHosts() {
 		dhName := dh.Hostname()
-		if dhName == name || dh.ID() == name {
+		if unifiedresources.HostnamesEquivalent(dhName, name) || dh.ID() == name {
 			loc := models.ResourceLocation{
 				Found:          true,
 				Name:           dhName,
@@ -139,7 +140,7 @@ func (e *PulseToolExecutor) resolveResourceLocation(name string) models.Resource
 	}
 
 	for _, host := range rs.Hosts() {
-		if host.Hostname() == name || host.ID() == name {
+		if unifiedresources.HostnamesEquivalent(host.Hostname(), name) || host.ID() == name {
 			return models.ResourceLocation{
 				Found:        true,
 				Name:         host.Hostname(),

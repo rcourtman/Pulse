@@ -21,6 +21,7 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/gorilla/websocket"
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/approval"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/chat"
@@ -159,6 +160,27 @@ func TestContract_WebSocketTrustedProxyHostedOrigin(t *testing.T) {
 		t.Fatalf("expected 101 switching protocols, got %v", resp)
 	}
 	conn.Close()
+}
+
+func TestContract_AIRelayTargetHostnameEquivalence(t *testing.T) {
+	server := agentexec.NewServer(func(string, string) bool { return true })
+	ts := newIPv4HTTPServer(t, http.HandlerFunc(server.HandleWebSocket))
+	defer ts.Close()
+
+	conn := registerAgent(t, ts.URL, "agent-1", "prox97.seftic.local")
+	defer conn.Close()
+
+	adapter := &agentCommandAdapter{handler: &AISettingsHandler{agentServer: server}}
+
+	if got := adapter.FindAgentForTarget("prox97"); got != "agent-1" {
+		t.Fatalf("FindAgentForTarget(%q) = %q, want agent-1", "prox97", got)
+	}
+	if got := adapter.FindAgentForTarget("prox97.seftic.local"); got != "agent-1" {
+		t.Fatalf("FindAgentForTarget(%q) = %q, want agent-1", "prox97.seftic.local", got)
+	}
+	if got := adapter.FindAgentForTarget("prox97.other.local"); got != "" {
+		t.Fatalf("FindAgentForTarget(%q) = %q, want empty for distinct FQDN", "prox97.other.local", got)
+	}
 }
 
 func TestContract_WireAIChatDependencies_WiresTrueNASAppActionProvider(t *testing.T) {

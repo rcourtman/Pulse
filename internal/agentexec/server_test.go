@@ -260,3 +260,44 @@ func TestConnectedAgentLookups(t *testing.T) {
 		t.Fatalf("expected 2 connected agents, got %d", len(agents))
 	}
 }
+
+func TestGetAgentForHostNormalizesFQDNAndCase(t *testing.T) {
+	s := NewServer(nil)
+	now := time.Now().Add(-1 * time.Minute)
+
+	s.mu.Lock()
+	s.agents["a1"] = &agentConn{agent: ConnectedAgent{AgentID: "a1", Hostname: "prox97.seftic.local", ConnectedAt: now}}
+	s.mu.Unlock()
+
+	cases := []string{"prox97", "PROX97", "prox97.seftic.local", "Prox97.Seftic.Local"}
+	for _, lookup := range cases {
+		agentID, ok := s.GetAgentForHost(lookup)
+		if !ok || agentID != "a1" {
+			t.Errorf("GetAgentForHost(%q) = (%q, %v), want (a1, true)", lookup, agentID, ok)
+		}
+	}
+
+	if _, ok := s.GetAgentForHost(""); ok {
+		t.Errorf("GetAgentForHost(\"\") should return false")
+	}
+}
+
+func TestGetAgentForHostKeepsDistinctFQDNsSeparate(t *testing.T) {
+	s := NewServer(nil)
+	now := time.Now().Add(-1 * time.Minute)
+
+	s.mu.Lock()
+	s.agents["a1"] = &agentConn{agent: ConnectedAgent{AgentID: "a1", Hostname: "prox97.a.local", ConnectedAt: now}}
+	s.agents["a2"] = &agentConn{agent: ConnectedAgent{AgentID: "a2", Hostname: "prox97.b.local", ConnectedAt: now}}
+	s.mu.Unlock()
+
+	agentID, ok := s.GetAgentForHost("prox97.a.local")
+	if !ok || agentID != "a1" {
+		t.Fatalf("GetAgentForHost(%q) = (%q, %v), want (a1, true)", "prox97.a.local", agentID, ok)
+	}
+
+	agentID, ok = s.GetAgentForHost("prox97.b.local")
+	if !ok || agentID != "a2" {
+		t.Fatalf("GetAgentForHost(%q) = (%q, %v), want (a2, true)", "prox97.b.local", agentID, ok)
+	}
+}

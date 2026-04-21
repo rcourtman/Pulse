@@ -1300,6 +1300,67 @@ func TestRoutingOrder_HostnameMatchUsedWhenTopologyUnknown(t *testing.T) {
 	t.Log("✓ Agent hostname matching works as fallback for unknown resources")
 }
 
+// TestRoutingOrder_AgentFQDNMatchesShortNodeName verifies that an agent whose
+// os.Hostname() resolves to an FQDN (e.g. "prox97.seftic.local") still routes
+// correctly when the AI targets the Proxmox short node name ("prox97"). Prior
+// to the hostname-normalization fix this failed silently with "no agent
+// available", even though the agent was online with Pulse Commands enabled.
+func TestRoutingOrder_AgentFQDNMatchesShortNodeName(t *testing.T) {
+	state := models.StateSnapshot{
+		Nodes: []models.Node{{ID: "prox97", Name: "prox97"}},
+	}
+
+	agentServer := &mockAgentServer{
+		agents: []agentexec.ConnectedAgent{
+			{
+				AgentID:  "agent-prox97",
+				Hostname: "prox97.seftic.local", // FQDN as reported by os.Hostname()
+			},
+		},
+	}
+
+	executor := NewPulseToolExecutor(ExecutorConfig{
+		StateProvider: &mockStateProvider{state: state},
+		AgentServer:   agentServer,
+	})
+
+	// AI targets the short Proxmox node name
+	routing := executor.resolveTargetForCommandFull("prox97")
+
+	if routing.AgentID != "agent-prox97" {
+		t.Fatalf("AgentID = %q, want %q (FQDN must match short node name)", routing.AgentID, "agent-prox97")
+	}
+	if routing.ResolvedKind != "node" {
+		t.Errorf("ResolvedKind = %q, want %q (should resolve via topology)", routing.ResolvedKind, "node")
+	}
+	if routing.ResolvedNode != "prox97" {
+		t.Errorf("ResolvedNode = %q, want %q", routing.ResolvedNode, "prox97")
+	}
+}
+
+// TestRoutingOrder_UppercaseHostnameMatchesLowercase verifies case-insensitive
+// matching in the agent-hostname fallback path.
+func TestRoutingOrder_UppercaseHostnameMatchesLowercase(t *testing.T) {
+	state := models.StateSnapshot{}
+
+	agentServer := &mockAgentServer{
+		agents: []agentexec.ConnectedAgent{
+			{AgentID: "agent-x", Hostname: "MyHost"},
+		},
+	}
+
+	executor := NewPulseToolExecutor(ExecutorConfig{
+		StateProvider: &mockStateProvider{state: state},
+		AgentServer:   agentServer,
+	})
+
+	routing := executor.resolveTargetForCommandFull("myhost")
+
+	if routing.AgentID != "agent-x" {
+		t.Fatalf("AgentID = %q, want %q (hostname match must be case-insensitive)", routing.AgentID, "agent-x")
+	}
+}
+
 // TestRoutingOrder_VMRoutesViaQMExec verifies VMs also route through topology.
 func TestRoutingOrder_VMRoutesViaQMExec(t *testing.T) {
 	state := models.StateSnapshot{

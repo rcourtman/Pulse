@@ -15,6 +15,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rs/zerolog/log"
 )
 
@@ -980,13 +981,14 @@ func (s *Server) IsAgentConnected(agentID string) bool {
 	return ok
 }
 
-// GetAgentForHost finds the agent for a given hostname
+// GetAgentForHost finds the agent for a given hostname using the canonical
+// hostname-equivalence contract shared with the unified identity layer.
 func (s *Server) GetAgentForHost(hostname string) (string, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
 	for _, ac := range s.agents {
-		if ac.agent.Hostname == hostname {
+		if unifiedresources.HostnamesEquivalent(ac.agent.Hostname, hostname) {
 			return ac.agent.AgentID, true
 		}
 	}

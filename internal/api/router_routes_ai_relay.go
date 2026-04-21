@@ -12,6 +12,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/approval"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/chat"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/extensions"
@@ -581,10 +582,11 @@ func (a *agentCommandAdapter) FindAgentForTarget(targetHost string) string {
 	}
 	if targetHost != "" {
 		for _, agent := range agents {
-			if agent.Hostname == targetHost || agent.AgentID == targetHost {
+			if unifiedresources.HostnamesEquivalent(agent.Hostname, targetHost) || agent.AgentID == targetHost {
 				return agent.AgentID
 			}
 		}
+		return ""
 	}
 	if len(agents) == 1 {
 		return agents[0].AgentID

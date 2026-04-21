@@ -781,7 +781,7 @@ func (e *PulseToolExecutor) resolveTargetForCommandFull(targetHost string) Comma
 		switch loc.ResourceType {
 		case "agent":
 			for _, agent := range agents {
-				if agent.Hostname == loc.TargetHost || agent.AgentID == loc.TargetID {
+				if unifiedresources.HostnamesEquivalent(agent.Hostname, loc.TargetHost) || agent.AgentID == loc.TargetID {
 					result.AgentID = agent.AgentID
 					result.AgentHostname = agent.Hostname
 					result.ResolvedKind = "agent"
@@ -880,7 +880,7 @@ func (e *PulseToolExecutor) resolveTargetForCommandFull(targetHost string) Comma
 			}
 			// Standalone Docker host - find agent directly
 			for _, agent := range agents {
-				if agent.Hostname == loc.TargetHost || agent.AgentID == loc.TargetHost {
+				if unifiedresources.HostnamesEquivalent(agent.Hostname, loc.TargetHost) || agent.AgentID == loc.TargetHost {
 					result.AgentID = agent.AgentID
 					result.AgentHostname = agent.Hostname
 					return result
@@ -893,7 +893,7 @@ func (e *PulseToolExecutor) resolveTargetForCommandFull(targetHost string) Comma
 	// Only used when the state doesn't know about this resource at all.
 	// This handles standalone hosts without Proxmox topology.
 	for _, agent := range agents {
-		if agent.Hostname == targetHost || agent.AgentID == targetHost {
+		if unifiedresources.HostnamesEquivalent(agent.Hostname, targetHost) || agent.AgentID == targetHost {
 			result.AgentID = agent.AgentID
 			result.AgentHostname = agent.Hostname
 			result.ResolvedKind = "agent"
@@ -1170,7 +1170,7 @@ func (e *PulseToolExecutor) findAgentForNode(nodeName string) string {
 
 	agents := e.agentServer.GetConnectedAgents()
 	for _, agent := range agents {
-		if agent.Hostname == nodeName {
+		if unifiedresources.HostnamesEquivalent(agent.Hostname, nodeName) {
 			return agent.AgentID
 		}
 	}
@@ -1197,11 +1197,11 @@ func (e *PulseToolExecutor) findAgentForNode(nodeName string) string {
 		if linked == "" {
 			continue
 		}
-		if nodeNamesByID[linked] != nodeName {
+		if !unifiedresources.HostnamesEquivalent(nodeNamesByID[linked], nodeName) {
 			continue
 		}
 		for _, agent := range agents {
-			if agent.Hostname == host.Hostname() || agent.AgentID == host.ID() {
+			if unifiedresources.HostnamesEquivalent(agent.Hostname, host.Hostname()) || agent.AgentID == host.ID() {
 				return agent.AgentID
 			}
 		}
@@ -1228,7 +1228,7 @@ func (e *PulseToolExecutor) findAgentForDockerHost(dockerHost *models.DockerHost
 
 	// Fall back to hostname match
 	for _, agent := range agents {
-		if agent.Hostname == dockerHost.Hostname {
+		if unifiedresources.HostnamesEquivalent(agent.Hostname, dockerHost.Hostname) {
 			return agent.AgentID
 		}
 	}

@@ -96,6 +96,13 @@ runtime cost control, and shared AI transport surfaces.
    the runtime must reserve enough output tokens for structured discovery JSON,
    and discovery prompts must cap fact/path/port fan-out explicitly instead of
    relying on providers to truncate oversized infrastructure inventories.
+   That same runtime-owned command-target boundary must resolve hostnames
+   through `internal/unifiedresources/hostname_equivalence.go`.
+   `internal/ai/tools/internal_routing.go`,
+   `internal/ai/tools/tools_control.go`, and adjacent AI command helpers may
+   match a short host against its FQDN, but they must not broaden that
+   fallback into a generic short-name collapse that would make two distinct
+   FQDNs with the same short host look interchangeable.
 
 ## Current State
 
