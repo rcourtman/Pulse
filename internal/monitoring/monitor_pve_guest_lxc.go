@@ -99,7 +99,6 @@ func (m *Monitor) buildContainerFromClusterResource(
 
 	guestID := makeGuestID(instanceName, res.Node, res.VMID)
 
-	// Calculate I/O rates for container
 	sampleTime := time.Now()
 	currentMetrics := IOMetrics{
 		DiskRead:   int64(res.DiskRead),
@@ -107,6 +106,18 @@ func (m *Monitor) buildContainerFromClusterResource(
 		NetworkIn:  int64(res.NetIn),
 		NetworkOut: int64(res.NetOut),
 		Timestamp:  sampleTime,
+	}
+	statusSnapshot := (*proxmox.Container)(nil)
+	if res.Status == "running" {
+		statusSnapshot = m.fetchContainerStatusSnapshot(
+			ctx,
+			client,
+			instanceName,
+			res.Node,
+			res.Name,
+			res.VMID,
+		)
+		currentMetrics = mergeContainerRuntimeCounters(currentMetrics, statusSnapshot)
 	}
 	diskReadRate, diskWriteRate, netInRate, netOutRate := m.rateTracker.CalculateRates(guestID, currentMetrics)
 
@@ -187,7 +198,7 @@ func (m *Monitor) buildContainerFromClusterResource(
 		}
 	}
 
-	m.enrichContainerMetadata(ctx, client, instanceName, res.Node, &container)
+	m.enrichContainerMetadata(ctx, client, instanceName, res.Node, &container, statusSnapshot)
 
 	// For non-running containers, zero out resource usage metrics to prevent false alerts.
 	// Proxmox may report stale or residual metrics for stopped containers.

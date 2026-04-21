@@ -29,7 +29,46 @@ func sortContent(content string) string {
 	return strings.Join(parts, ",")
 }
 
-func (m *Monitor) enrichContainerMetadata(ctx context.Context, client PVEClientInterface, instanceName, nodeName string, container *models.Container) {
+func (m *Monitor) fetchContainerStatusSnapshot(
+	ctx context.Context,
+	client PVEClientInterface,
+	instanceName, nodeName, containerName string,
+	vmid int,
+) *proxmox.Container {
+	if client == nil {
+		return nil
+	}
+
+	statusCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	statusResp, err := client.GetContainerStatus(statusCtx, nodeName, vmid)
+	cancel()
+	if err != nil {
+		log.Debug().
+			Err(err).
+			Str("instance", instanceName).
+			Str("node", nodeName).
+			Str("container", containerName).
+			Int("vmid", vmid).
+			Msg("Container status metadata unavailable")
+		return nil
+	}
+
+	return statusResp
+}
+
+func mergeContainerRuntimeCounters(current IOMetrics, status *proxmox.Container) IOMetrics {
+	if status == nil {
+		return current
+	}
+
+	current.DiskRead = max(current.DiskRead, int64(status.DiskRead))
+	current.DiskWrite = max(current.DiskWrite, int64(status.DiskWrite))
+	current.NetworkIn = max(current.NetworkIn, int64(status.NetIn))
+	current.NetworkOut = max(current.NetworkOut, int64(status.NetOut))
+	return current
+}
+
+func (m *Monitor) enrichContainerMetadata(ctx context.Context, client PVEClientInterface, instanceName, nodeName string, container *models.Container, prefetchedStatus ...*proxmox.Container) {
 	if container == nil {
 		return
 	}
@@ -43,21 +82,18 @@ func (m *Monitor) enrichContainerMetadata(ctx context.Context, client PVEClientI
 	isRunning := container.Status == "running"
 
 	var status *proxmox.Container
-	if isRunning {
-		statusCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
-		statusResp, err := client.GetContainerStatus(statusCtx, nodeName, container.VMID)
-		cancel()
-		if err != nil {
-			log.Debug().
-				Err(err).
-				Str("instance", instanceName).
-				Str("node", nodeName).
-				Str("container", container.Name).
-				Int("vmid", container.VMID).
-				Msg("Container status metadata unavailable")
-		} else {
-			status = statusResp
-		}
+	if len(prefetchedStatus) > 0 {
+		status = prefetchedStatus[0]
+	}
+	if isRunning && status == nil {
+		status = m.fetchContainerStatusSnapshot(
+			ctx,
+			client,
+			instanceName,
+			nodeName,
+			container.Name,
+			container.VMID,
+		)
 	}
 
 	rootDeviceHint := ""

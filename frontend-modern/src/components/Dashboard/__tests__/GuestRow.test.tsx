@@ -119,7 +119,13 @@ vi.mock('../workloadTopology', () => ({
 
 // After mocks, import
 import { GuestRow } from '../GuestRow';
-import { GUEST_COLUMNS, VIEW_MODE_COLUMNS, type WorkloadIOEmphasis } from '../guestRowModel';
+import {
+  GUEST_COLUMNS,
+  VIEW_MODE_COLUMNS,
+  getGuestColumnStyle,
+  getGuestColumnWidthStyle,
+  type WorkloadIOEmphasis,
+} from '../guestRowModel';
 
 // ── Helpers ────────────────────────────────────────────────────────────
 
@@ -794,15 +800,30 @@ describe('GUEST_COLUMNS', () => {
   });
 
   it('keeps the Type and I/O column width contract aligned with the desktop table layout', () => {
+    const nameColumn = GUEST_COLUMNS.find((column) => column.id === 'name');
     const typeColumn = GUEST_COLUMNS.find((column) => column.id === 'type');
     const netIoColumn = GUEST_COLUMNS.find((column) => column.id === 'netIo');
     const diskIoColumn = GUEST_COLUMNS.find((column) => column.id === 'diskIo');
 
+    expect(nameColumn?.width).toBe('200px');
+    expect(nameColumn?.minWidth).toBe('180px');
+    expect(nameColumn?.maxWidth).toBe('220px');
     expect(typeColumn?.width).toBe('60px');
     expect(netIoColumn?.width).toBe('170px');
     expect(netIoColumn?.minWidth).toBe('170px');
     expect(diskIoColumn?.width).toBe('170px');
     expect(diskIoColumn?.minWidth).toBe('170px');
+  });
+
+  it('derives mobile overrides from the canonical guest column model', () => {
+    expect(getGuestColumnStyle('name', true)).toEqual({ minWidth: '120px' });
+    expect(getGuestColumnStyle('cpu', true)).toEqual({
+      width: '70px',
+      minWidth: '60px',
+      maxWidth: '70px',
+    });
+    expect(getGuestColumnWidthStyle('name', true)).toBeUndefined();
+    expect(getGuestColumnWidthStyle('diskIo', true)).toEqual({ width: '170px' });
   });
 
   it('non-toggleable columns include core metrics', () => {

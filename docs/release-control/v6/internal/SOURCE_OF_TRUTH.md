@@ -1,6 +1,6 @@
 # Pulse v6 Source Of Truth
 
-Last updated: 2026-04-20
+Last updated: 2026-04-21
 Status: ACTIVE
 
 This file is the stable human governance layer for the active v6 release
@@ -158,15 +158,19 @@ Pulse v6 is ready when these outcomes land together:
 3. Commercial packaging materially improves conversion and revenue.
 4. Stable or GA promotion happens only after prerelease validation, not as the first
    customer exposure.
+5. Stable or GA does not knowingly carry unresolved RC-era user-visible issues
+   across the admitted v6 scope.
 
-Pulse v6 is still a bridge release toward that unified operations layer, while
-the current active target remains governed prerelease-cut readiness with an
-explicit RC-publication hold rather than broad new platform execution.
-For this profile, "bridge release" means the product should stop reading as a
-monitoring tool growing sideways and instead make the mixed-estate operator
-surface legible through canonical resources, investigation context, governed
-action boundaries, and fleet governance wherever the surfaced case is already
-proven.
+Pulse v6 GA is intended to be a feature-complete release for the
+monitoring-first, unified-resource product case proven during prerelease.
+Broader post-GA lane expansion is still expected for policy-aware data
+governance, action governance, fleet governance, and later admitted platform
+depth, but those future lanes are not permission to ship known RC-era defects
+on the supported v6 scope.
+For this profile, the product should stop reading as a monitoring tool growing
+sideways and instead make the mixed-estate operator surface legible through
+canonical resources, investigation context, governed action boundaries, and
+fleet governance wherever the surfaced case is already proven.
 Pulse owns infrastructure context, policy, and governed action boundaries so
 any sandboxed agent can use them; Pulse does not own being the sandbox where
 arbitrary agent execution lives.
@@ -454,6 +458,11 @@ Assertion design rules:
     commands, runbooks, and alert lifecycle breadcrumbs, but it must remain a
     derived incident projection rather than a competing source of truth for
     durable resource history.
+13. Pulse v6 GA is feature-complete relative to the prerelease issue set.
+    Stable or GA must remain blocked until every known RC-era user-visible
+    issue intended for v6 is fixed in the candidate, proven invalid with
+    evidence, or conservatively superseded with the original problem resolved
+    or explicitly narrowed.
 
 ## TrueNAS Support Floor
 

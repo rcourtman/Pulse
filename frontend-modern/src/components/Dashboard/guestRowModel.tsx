@@ -1,3 +1,5 @@
+import type { JSX } from 'solid-js';
+
 import type { ColumnDef } from '@/hooks/useColumnVisibility';
 import type { SummaryGroupMemberInteractionState } from '@/components/shared/summaryCardInteraction';
 import type { WorkloadGuest, ViewMode } from '@/types/workloads';
@@ -110,7 +112,14 @@ export const getOutlierEmphasis = (
 };
 
 export const GUEST_COLUMNS: ColumnDef[] = [
-  { id: 'name', label: 'Name', width: '200px', sortKey: 'name' },
+  {
+    id: 'name',
+    label: 'Name',
+    width: '200px',
+    minWidth: '180px',
+    maxWidth: '220px',
+    sortKey: 'name',
+  },
   createVisibleCanonicalTypeColumn(),
   { id: 'info', label: 'Info', width: '100px' },
   { id: 'vmid', label: 'ID', width: '45px', sortKey: 'vmid' },
@@ -275,6 +284,71 @@ export const GUEST_COLUMNS: ColumnDef[] = [
   },
   { id: 'link', label: '', width: '28px' },
 ];
+
+const GUEST_COLUMN_BY_ID = new Map(GUEST_COLUMNS.map((column) => [column.id, column] as const));
+
+type GuestColumnWidthOverride = {
+  width?: string | null;
+  minWidth?: string | null;
+  maxWidth?: string | null;
+};
+
+const GUEST_COLUMN_MOBILE_OVERRIDES: Record<string, GuestColumnWidthOverride> = {
+  name: { width: null, minWidth: '120px', maxWidth: null },
+  cpu: { width: '70px', minWidth: '60px', maxWidth: '70px' },
+  memory: { width: '70px', minWidth: '60px', maxWidth: '70px' },
+  disk: { width: '70px', minWidth: '60px', maxWidth: '70px' },
+  netIo: { width: '170px', minWidth: '170px', maxWidth: '170px' },
+  diskIo: { width: '170px', minWidth: '170px', maxWidth: '170px' },
+};
+
+const getGuestColumnSizing = (
+  columnId: string,
+  isMobile = false,
+): Pick<ColumnDef, 'width' | 'minWidth' | 'maxWidth'> | undefined => {
+  const column = GUEST_COLUMN_BY_ID.get(columnId);
+  if (!column) return undefined;
+
+  const sizing: Pick<ColumnDef, 'width' | 'minWidth' | 'maxWidth'> = {
+    width: column.width,
+    minWidth: column.minWidth,
+    maxWidth: column.maxWidth,
+  };
+
+  const override = isMobile ? GUEST_COLUMN_MOBILE_OVERRIDES[columnId] : undefined;
+  if (override) {
+    if ('width' in override) sizing.width = override.width ?? undefined;
+    if ('minWidth' in override) sizing.minWidth = override.minWidth ?? undefined;
+    if ('maxWidth' in override) sizing.maxWidth = override.maxWidth ?? undefined;
+  }
+
+  return sizing;
+};
+
+export const getGuestColumnStyle = (
+  columnId: string,
+  isMobile = false,
+): JSX.CSSProperties | undefined => {
+  const sizing = getGuestColumnSizing(columnId, isMobile);
+  if (!sizing) return undefined;
+
+  const style: JSX.CSSProperties = {};
+
+  if (sizing.width) style.width = sizing.width;
+  if (sizing.minWidth) style.minWidth = sizing.minWidth;
+  if (sizing.maxWidth) style.maxWidth = sizing.maxWidth;
+
+  return Object.keys(style).length > 0 ? style : undefined;
+};
+
+export const getGuestColumnWidthStyle = (
+  columnId: string,
+  isMobile = false,
+): JSX.CSSProperties | undefined => {
+  const sizing = getGuestColumnSizing(columnId, isMobile);
+  if (!sizing?.width) return undefined;
+  return { width: sizing.width };
+};
 
 export const VIEW_MODE_COLUMNS: Record<ViewMode, Set<string> | null> = {
   all: new Set([

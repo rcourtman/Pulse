@@ -228,6 +228,37 @@ func TestProxmoxGuestMemoryFallbackUsesInstanceScopedCachesAndAgentMeminfo(t *te
 	}
 }
 
+func TestLXCStatusCountersStayOnCanonicalMergePath(t *testing.T) {
+	requiredSnippets := map[string][]string{
+		"monitor_pve.go": {
+			"func mergeContainerRuntimeCounters(current IOMetrics, status *proxmox.Container) IOMetrics {",
+			"func (m *Monitor) enrichContainerMetadata(ctx context.Context, client PVEClientInterface, instanceName, nodeName string, container *models.Container, prefetchedStatus ...*proxmox.Container) {",
+		},
+		"monitor_pve_guest_lxc.go": {
+			"currentMetrics = mergeContainerRuntimeCounters(currentMetrics, statusSnapshot)",
+			"m.enrichContainerMetadata(ctx, client, instanceName, res.Node, &container, statusSnapshot)",
+		},
+		"monitor_polling_containers.go": {
+			"currentMetrics = mergeContainerRuntimeCounters(currentMetrics, statusSnapshot)",
+			"m.enrichContainerMetadata(",
+			"statusSnapshot,",
+		},
+	}
+
+	for file, snippets := range requiredSnippets {
+		data, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatalf("failed to read %s: %v", file, err)
+		}
+		source := string(data)
+		for _, snippet := range snippets {
+			if !strings.Contains(source, snippet) {
+				t.Fatalf("%s must contain %q", file, snippet)
+			}
+		}
+	}
+}
+
 func TestDockerMutatingCommandsRespectCanonicalSecurityPosture(t *testing.T) {
 	monitor := newTestMonitorForCommands(t)
 	host := models.DockerHost{

@@ -1,8 +1,11 @@
+import { For } from 'solid-js';
+
 import { ComponentErrorBoundary } from '@/components/ErrorBoundary';
 import { Card } from '@/components/shared/Card';
 import { SummaryTableCardHeader } from '@/components/shared/SummaryTableCardHeader';
 import { Table } from '@/components/shared/Table';
 
+import { getGuestColumnWidthStyle } from './guestRowModel';
 import type { DashboardState } from './useDashboardState';
 import { WorkloadPanel } from './WorkloadPanel';
 import { WorkloadTableHeader } from './WorkloadTableHeader';
@@ -71,8 +74,18 @@ export function DashboardWorkloadTable(props: DashboardWorkloadTableProps) {
         />
         <Table
           wrapperRef={props.setTableWrapperRef}
-          class={`workload-table ${props.isMobile() ? 'workload-table--mobile' : 'workload-table--desktop'}`}
+          class={`workload-table min-w-full ${props.isMobile() ? 'workload-table--mobile' : 'workload-table--desktop table-fixed'}`}
         >
+          <colgroup>
+            <For each={props.mobileVisibleColumns()}>
+              {(column) => (
+                <col
+                  data-workload-col={column.id}
+                  style={getGuestColumnWidthStyle(column.id, props.isMobile())}
+                />
+              )}
+            </For>
+          </colgroup>
           <WorkloadTableHeader
             handleSort={props.handleSort}
             isMobile={props.isMobile}

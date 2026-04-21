@@ -21,6 +21,7 @@ type WorkloadsColumnLayout = {
   wrapperScrollWidth: number;
   tableScrollWidth: number;
   headers: ColumnHeaderMetric[];
+  nameWidths: number[];
   typeWidths: number[];
   netIoWidths: number[];
   diskIoWidths: number[];
@@ -107,6 +108,7 @@ async function readWorkloadsColumnLayout(page: Page): Promise<WorkloadsColumnLay
       wrapperScrollWidth: wrapper?.scrollWidth ?? 0,
       tableScrollWidth: table?.scrollWidth ?? 0,
       headers,
+      nameWidths: readColumnWidths('name'),
       typeWidths: readColumnWidths('type'),
       netIoWidths: readColumnWidths('netIo'),
       diskIoWidths: readColumnWidths('diskIo'),
@@ -148,6 +150,7 @@ test.describe.serial('Workloads column layout', () => {
     await page.waitForTimeout(1000);
 
     const layout = await readWorkloadsColumnLayout(page);
+    const nameHeader = layout.headers.find((header) => header.colId === 'name');
     const typeHeader = layout.headers.find((header) => header.colId === 'type');
     const netIoHeader = layout.headers.find((header) => header.colId === 'netIo');
     const diskIoHeader = layout.headers.find((header) => header.colId === 'diskIo');
@@ -157,15 +160,21 @@ test.describe.serial('Workloads column layout', () => {
         .map((value) => ({ columnId: entry.columnId, ...value })),
     );
 
+    expect(nameHeader).toBeDefined();
     expect(typeHeader).toBeDefined();
     expect(netIoHeader).toBeDefined();
     expect(diskIoHeader).toBeDefined();
 
+    expect(nameHeader?.width, 'Name column should stay bounded on desktop workloads').toBeLessThanOrEqual(260);
+    expect(nameHeader?.width, 'Name column should keep enough room for truncated labels').toBeGreaterThanOrEqual(180);
     expect(typeHeader?.width, 'Type column should stay compact on desktop workloads').toBeLessThanOrEqual(80);
     expect(typeHeader?.width, 'Type column should keep its canonical desktop width floor').toBeGreaterThanOrEqual(60);
     expect(netIoHeader?.width, 'Net I/O column should reserve enough width for both rates').toBeGreaterThanOrEqual(170);
     expect(diskIoHeader?.width, 'Disk I/O column should reserve enough width for both rates').toBeGreaterThanOrEqual(170);
 
+    expect(layout.nameWidths.length, 'Expected visible workload rows with a Name cell').toBeGreaterThan(0);
+    expect(Math.min(...layout.nameWidths), 'Name cells should keep the bounded desktop width floor').toBeGreaterThanOrEqual(180);
+    expect(Math.max(...layout.nameWidths), 'Name cells should not blow out the desktop table width').toBeLessThanOrEqual(260);
     expect(layout.typeWidths.length, 'Expected visible workload rows with a Type cell').toBeGreaterThan(0);
     expect(Math.max(...layout.typeWidths), 'Type cells should not expand past the compact desktop contract').toBeLessThanOrEqual(80);
     expect(layout.netIoWidths.length, 'Expected visible workload rows with Net I/O cells').toBeGreaterThan(0);

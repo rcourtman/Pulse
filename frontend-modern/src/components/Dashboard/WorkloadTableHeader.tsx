@@ -2,6 +2,7 @@ import { For } from 'solid-js';
 
 import { TableHead, TableHeader, TableRow } from '@/components/shared/Table';
 
+import { getGuestColumnStyle } from './guestRowModel';
 import type { DashboardState, WorkloadSortKey } from './useDashboardState';
 
 type WorkloadTableHeaderProps = Pick<
@@ -31,7 +32,7 @@ export function WorkloadTableHeader(props: WorkloadTableHeaderProps) {
  ${isFirst() ? 'pl-2 sm:pl-3 pr-1.5 sm:pr-2 text-left' : 'px-1.5 sm:px-2 text-center'} align-middle
  ${isSortable ? 'cursor-pointer hover:bg-surface-hover' : ''}`}
                 data-workload-col={col.id}
-                width={col.width}
+                style={getGuestColumnStyle(col.id, props.isMobile())}
                 onClick={() => isSortable && props.handleSort(sortKeyForCol!)}
                 title={col.icon ? col.label : undefined}
               >

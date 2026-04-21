@@ -98,13 +98,25 @@ func (m *Monitor) pollContainersWithNodes(ctx context.Context, instanceName stri
 				// Generate canonical guest ID: instance:node:vmid
 				guestID := makeGuestID(instanceName, n.Node, int(container.VMID))
 
-				// Calculate I/O rates
+				sampleTime := time.Now()
 				currentMetrics := IOMetrics{
 					DiskRead:   int64(container.DiskRead),
 					DiskWrite:  int64(container.DiskWrite),
 					NetworkIn:  int64(container.NetIn),
 					NetworkOut: int64(container.NetOut),
-					Timestamp:  time.Now(),
+					Timestamp:  sampleTime,
+				}
+				statusSnapshot := (*proxmox.Container)(nil)
+				if container.Status == "running" {
+					statusSnapshot = m.fetchContainerStatusSnapshot(
+						ctx,
+						client,
+						instanceName,
+						n.Node,
+						container.Name,
+						int(container.VMID),
+					)
+					currentMetrics = mergeContainerRuntimeCounters(currentMetrics, statusSnapshot)
 				}
 				diskReadRate, diskWriteRate, netInRate, netOutRate := m.rateTracker.CalculateRates(guestID, currentMetrics)
 
@@ -176,7 +188,7 @@ func (m *Monitor) pollContainersWithNodes(ctx context.Context, instanceName stri
 					DiskWrite:  max(0, int64(diskWriteRate)),
 					Uptime:     int64(container.Uptime),
 					Template:   container.Template == 1,
-					LastSeen:   time.Now(),
+					LastSeen:   sampleTime,
 					Tags:       tags,
 				}
 
@@ -209,7 +221,14 @@ func (m *Monitor) pollContainersWithNodes(ctx context.Context, instanceName stri
 					modelContainer.Disk.Usage = safePercentage(float64(modelContainer.Disk.Used), float64(modelContainer.Disk.Total))
 				}
 
-				m.enrichContainerMetadata(ctx, client, instanceName, n.Node, &modelContainer)
+				m.enrichContainerMetadata(
+					ctx,
+					client,
+					instanceName,
+					n.Node,
+					&modelContainer,
+					statusSnapshot,
+				)
 
 				// Zero out metrics for non-running containers
 				if container.Status != "running" {

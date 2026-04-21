@@ -933,3 +933,10 @@ resource detail mappers may accept partial platform metadata or undefined
 ratios, but they must normalize those values once in the shared model layer
 instead of scattering non-null assertions or per-component count coercion
 through the dashboard runtime.
+That same workload-table hot path now also owns a single width contract.
+`frontend-modern/src/components/Dashboard/DashboardWorkloadTable.tsx`,
+`WorkloadTableHeader.tsx`, `GuestRow.tsx`, and `guestRowModel.tsx` must remain
+the canonical owners for desktop and mobile workload column sizing. Global CSS
+must not reintroduce competing `.workload-table [data-workload-col=…]` width
+rules or `min-width: max-content` fallbacks that can blow the table out
+horizontally on Firefox or other desktop browsers.

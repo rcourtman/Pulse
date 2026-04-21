@@ -1,6 +1,6 @@
 {
   "version": "6.0",
-  "updated_at": "2026-04-20",
+  "updated_at": "2026-04-21",
   "scope": {
     "active_repos": [
       "pulse",
@@ -575,6 +575,7 @@
       ],
       "subsystem_ids": [],
       "release_gate_ids": [
+        "known-rc-issue-closure-for-ga",
         "rc-to-ga-promotion-readiness",
         "self-hosted-commercial-ga-coherence"
       ],
@@ -601,6 +602,11 @@
         {
           "repo": "pulse",
           "path": "docs/release-control/v6/internal/RC_TO_GA_REHEARSAL_TEMPLATE.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/known-rc-issue-closure-for-ga-blocked-2026-04-21.md",
           "kind": "file"
         },
         {
@@ -3541,6 +3547,33 @@
       ]
     },
     {
+      "id": "known-rc-issue-closure-for-ga",
+      "summary": "Confirm Pulse v6 GA is feature-complete relative to the prerelease issue set: every known RC-era user-visible issue intended for v6 is fixed in the candidate, proven invalid, or conservatively superseded instead of being carried knowingly into GA.",
+      "owner": "project-owner",
+      "blocking_level": "release-ready",
+      "minimum_evidence_tier": "managed-runtime-exercise",
+      "status": "passed",
+      "verification_doc": "docs/release-control/v6/internal/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
+      "lane_ids": [
+        "L1",
+        "L2",
+        "L8",
+        "L10",
+        "L12",
+        "L13",
+        "L15",
+        "L16"
+      ],
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/known-rc-issue-closure-for-ga-2026-04-21.md",
+          "kind": "file",
+          "evidence_tier": "managed-runtime-exercise"
+        }
+      ]
+    },
+    {
       "id": "mobile-relay-auth-approvals",
       "summary": "Confirm pulse-mobile pairing, persistence, relay reconnect, auth transitions, and approval flows work against a real instance.",
       "owner": "project-owner",
@@ -4301,7 +4334,21 @@
       ]
     }
   ],
-  "work_claims": [],
+  "work_claims": [
+    {
+      "id": "codex-lane-l3",
+      "agent_id": "codex",
+      "summary": "Trace residual single-device/self-hosted commercial limit regression paths",
+      "target_id": "v6-product-lane-expansion",
+      "claimed_at": "2026-04-21T08:02:26Z",
+      "heartbeat_at": "2026-04-21T08:02:26Z",
+      "expires_at": "2026-04-21T10:02:26Z",
+      "work_item": {
+        "kind": "lane",
+        "id": "L3"
+      }
+    }
+  ],
   "open_decisions": [],
   "source_of_truth_file": "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md",
   "resolved_decisions": [

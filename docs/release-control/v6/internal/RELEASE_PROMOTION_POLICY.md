@@ -94,7 +94,10 @@ Cloud, and self-hosted production users.
 4. Every stable promotion requires:
    - Applicable items in `PRE_RELEASE_CHECKLIST.md` complete.
    - Applicable entries in `HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md` cleared.
-   - No known unresolved high-severity regressions in touched release surfaces.
+   - No known unresolved RC-era user-visible issues intended for the v6 GA
+     scope remain open. Each one must be fixed in the candidate, proven
+     invalid with evidence, or conservatively superseded with the original
+     failure resolved or explicitly narrowed.
    - The previous stable rollback target and exact reinstall command recorded.
    - A live release-pipeline exercise already completed for the promoted prerelease tag,
      not only YAML lint or static workflow validation.
@@ -156,6 +159,9 @@ Cloud, and self-hosted production users.
    locked in the launch ticket before promotion: preview deploy/audit commands,
    production deploy/audit commands, and the explicit rollback deploy/audit
    commands that return `pulserelay.pro` to the approved v5 posture.
+10. For v6 GA, attach the dated RC issue-closure record for the candidate so
+    the final issue set and its dispositions are explicit in the promotion
+    packet rather than implied.
 
 ## Authority
 

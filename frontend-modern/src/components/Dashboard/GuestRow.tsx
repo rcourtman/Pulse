@@ -36,6 +36,7 @@ const isVM = (guest: Guest): guest is VM => {
 
 export { GUEST_COLUMNS, VIEW_MODE_COLUMNS } from './guestRowModel';
 export type { GuestRowProps, WorkloadIOEmphasis } from './guestRowModel';
+import { getGuestColumnStyle } from './guestRowModel';
 
 export function GuestRow(props: GuestRowProps) {
   const navigate = useNavigate();
@@ -123,6 +124,8 @@ export function GuestRow(props: GuestRowProps) {
         {/* Name - always visible */}
         <td
           class={`pr-1.5 sm:pr-2 py-0.5 align-middle whitespace-nowrap ${firstCellIndent()}`}
+          data-workload-col="name"
+          style={getGuestColumnStyle('name', isMobile())}
         >
           <div class="flex items-center gap-2 min-w-0">
             <Show when={props.onClick}>

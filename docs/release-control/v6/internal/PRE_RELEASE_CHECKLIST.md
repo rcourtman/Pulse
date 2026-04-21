@@ -19,9 +19,9 @@ Use this as the final gate before cutting a Pulse v6 pre-release.
 - The latest RC publication judgment packet is
   `docs/release-control/v6/internal/records/rc-publication-judgment-packet-2026-04-09.md`.
   It now records approval, not a proof blocker.
-- The active target is now `v6-ga-promotion`, so the remaining release-ready
-  work is explicitly about stable promotion proof rather than RC-floor
-  stabilization.
+- The active target is now `v6-product-lane-expansion`; the stable promotion
+  packet is no longer the only release-ready concern, and release-ready gates
+  must still fail closed if the product truth changes.
 - `rc-to-ga-promotion-readiness` was cleared on 2026-04-20 by `Release Dry Run`
   run `24673393628`, recorded at
   `docs/release-control/v6/internal/records/rc-to-ga-promotion-readiness-rehearsal-2026-04-20.md`.
@@ -29,6 +29,9 @@ Use this as the final gate before cutting a Pulse v6 pre-release.
   rehearsal carrying the canonical promotion artifact envelope: candidate
   stable tag, promotion channel, promoted prerelease tag, rollback target,
   exact rollback command, exact GA date, and exact v5 end-of-support inputs.
+- `known-rc-issue-closure-for-ga` was introduced on 2026-04-21 to reflect the
+  locked rule that v6 GA must be feature-complete relative to the prerelease
+  issue set. It is currently blocked on the dated RC issue-closure packet.
 - Mobile is in scope for the release and now has targeted readiness coverage in `pulse-mobile`.
 - High-risk release confidence now lives in `docs/release-control/v6/internal/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md` and should be cleared alongside this checklist.
 
@@ -46,6 +49,12 @@ Use this as the final gate before cutting a Pulse v6 pre-release.
 - [x] For GA/stable promotion, materialize the final rehearsal record with `python3 scripts/release_control/record_rc_to_ga_rehearsal.py --run-id <run-id>` and, unless an explicit `--output` is chosen, confirm it lands at `docs/release-control/v6/internal/records/rc-to-ga-promotion-readiness-rehearsal-<record-date>.md`.
 - [ ] For GA/stable promotion, attach the dated rehearsal record, `Release Dry Run` run URL, and `rc-to-ga-rehearsal-summary` artifact to the release ticket, and confirm that artifact records the canonical promotion metadata envelope for that candidate: candidate stable tag, promotion channel, promoted prerelease tag, rollback target, exact rollback command, planned GA date, and planned v5 end-of-support date.
 - [ ] For v6 GA specifically, attach the exact self-hosted public forward and rollback packet from `pulse-pro/V6_LAUNCH_CHECKLIST.md` to the launch ticket: preview deploy/audit, production deploy/audit, and rollback deploy/audit commands must all be explicit before the gate can clear.
+
+## RC Issue Closure
+- [ ] Materialize a dated RC issue-closure record for the actual GA candidate under `docs/release-control/v6/internal/records/`.
+- [ ] Confirm that record enumerates the labeled `affects-6.0.0-rc.*` issues plus any additional open v6 RC-soak issues the project owner still expects v6 GA to address.
+- [ ] For each item, record exactly one disposition: fixed in the candidate with proof, invalid with evidence, or conservatively superseded with the original user-visible failure resolved or explicitly narrowed.
+- [ ] Do not carry any open RC-era user-visible issue into GA as accepted “post-GA cleanup”.
 
 ### Stable / GA Packet
 

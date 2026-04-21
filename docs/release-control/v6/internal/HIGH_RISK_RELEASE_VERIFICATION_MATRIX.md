@@ -151,6 +151,44 @@ Companion drill:
   legacy recurring price, or cancellation/reactivation leaves pricing and
   entitlement state inconsistent across Stripe, Pulse runtime, and customer UI.
 
+## Gate: `known-rc-issue-closure-for-ga`
+
+- Why this is risky:
+  Pulse v6 GA is now explicitly treated as feature-complete for the admitted
+  v6 scope. If the RC program surfaces user-visible issues and GA still ships
+  with those items open or only half-resolved, stable users become the cohort
+  that pays for unfinished RC fallout anyway.
+- Primary runtime surfaces:
+  `docs/release-control/v6/internal/PRE_RELEASE_CHECKLIST.md`
+  `docs/release-control/v6/internal/RELEASE_PROMOTION_POLICY.md`
+  `docs/release-control/v6/internal/records/known-rc-issue-closure-for-ga-blocked-2026-04-21.md`
+  plus the issue-linked runtime surfaces enumerated in the current dated RC
+  issue-closure record for the candidate.
+- Automated proof:
+  `python3 scripts/release_control/status_audit.py --pretty`
+  The automation floor only proves that the gate state is recorded. It does
+  not clear the gate by itself.
+- Manual scenario:
+  1. Open or install the exact GA candidate being considered for promotion.
+  2. Materialize the current dated RC issue-closure record and confirm it
+     enumerates the full current RC issue set in scope for v6 GA.
+  3. For each issue, verify one of these dispositions on the affected surface:
+     fixed in candidate with proof, invalid with evidence, or conservatively
+     superseded with the original user-visible failure resolved or explicitly
+     narrowed.
+  4. Confirm no open RC-era user-visible issue is being accepted as normal
+     post-GA cleanup for the v6 line.
+- Pass when:
+  Every issue in the current RC closure set is fixed in the candidate with
+  proof, proven invalid with evidence, or conservatively superseded with the
+  original problem resolved or narrowed, and no user-visible RC-era issue
+  remains open as intended GA carryover.
+- Latest exercised record:
+  `docs/release-control/v6/internal/records/known-rc-issue-closure-for-ga-blocked-2026-04-21.md`
+- Block release if:
+  Any RC-era issue in scope remains open, unverified, or hand-waved into
+  post-GA work, or if the dated RC issue-closure record is missing or stale.
+
 ## Gate: `self-hosted-commercial-ga-coherence`
 
 - Why this is risky:

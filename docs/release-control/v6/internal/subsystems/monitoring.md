@@ -243,6 +243,15 @@ The mock update loop must keep provider-backed TrueNAS and VMware records plus
 legacy PBS and PMG summaries on current `LastSeen` and health state each tick,
 so long-lived infrastructure, workloads, storage, and recovery demos do not
 decay into synthetic stale-state warnings while mock mode remains enabled.
+That same Proxmox container monitoring boundary now also owns runtime counter
+recovery when the lower-fidelity container list or cluster-resources payload
+reports stale or zero I/O totals. `internal/monitoring/monitor_pve.go`,
+`internal/monitoring/monitor_pve_guest_lxc.go`, and
+`internal/monitoring/monitor_polling_containers.go` must merge the current
+`GetContainerStatus` counters through one canonical `mergeContainerRuntimeCounters`
+path before LXC rate calculation and must reuse the same prefetched status
+snapshot for metadata enrichment instead of paying disconnected metric and
+metadata status reads that can diverge.
 That same mock-runtime boundary also owns update cadence. Demo and preview
 environments may slow the configured tick interval to reduce visual churn, but
 that cadence must flow through the shared mock update loop and smoothing model
