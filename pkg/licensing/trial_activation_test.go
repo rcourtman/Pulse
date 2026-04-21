@@ -1,6 +1,7 @@
 package licensing
 
 import (
+	"bytes"
 	"crypto/ed25519"
 	"encoding/base64"
 	"errors"
@@ -165,29 +166,31 @@ func TestSignTrialActivationToken_RequiresReturnURL(t *testing.T) {
 	}
 }
 
-func TestTrialActivationPublicKey_EnvOverride(t *testing.T) {
-	pub, _, err := ed25519.GenerateKey(nil)
+func TestTrialActivationPublicKey_SelectsAllowedVerificationSource(t *testing.T) {
+	envPub, _, err := ed25519.GenerateKey(nil)
+	if err != nil {
+		t.Fatalf("GenerateKey: %v", err)
+	}
+	embeddedPub, _, err := ed25519.GenerateKey(nil)
 	if err != nil {
 		t.Fatalf("GenerateKey: %v", err)
 	}
 
-	t.Setenv(TrialActivationPublicKeyEnvVar, base64.StdEncoding.EncodeToString(pub))
+	t.Setenv("PULSE_HOSTED_MODE", "true")
+	t.Setenv(TrialActivationPublicKeyEnvVar, base64.StdEncoding.EncodeToString(envPub))
 	embeddedBefore := EmbeddedPublicKey
 	t.Cleanup(func() { EmbeddedPublicKey = embeddedBefore })
-	EmbeddedPublicKey = ""
+	EmbeddedPublicKey = base64.StdEncoding.EncodeToString(embeddedPub)
 
 	got, err := TrialActivationPublicKey()
 	if err != nil {
 		t.Fatalf("TrialActivationPublicKey: %v", err)
 	}
-	if string(got) != string(pub) {
-		t.Fatalf("TrialActivationPublicKey mismatch")
+	want := embeddedPub
+	if allowTrialActivationPublicKeyEnvOverride() {
+		want = envPub
 	}
-}
-
-func TestAllowTrialActivationPublicKeyEnvOverride_HostedMode(t *testing.T) {
-	t.Setenv("PULSE_HOSTED_MODE", "true")
-	if !allowTrialActivationPublicKeyEnvOverride() {
-		t.Fatal("allowTrialActivationPublicKeyEnvOverride() = false, want true in hosted mode")
+	if !bytes.Equal(got, want) {
+		t.Fatalf("TrialActivationPublicKey mismatch")
 	}
 }

@@ -76,9 +76,9 @@ func DecodeEd25519PrivateKey(encoded string) (ed25519.PrivateKey, error) {
 }
 
 // TrialActivationPublicKey resolves the verification key for hosted trial
-// activation tokens. Environment override is only allowed in local/dev builds,
-// or in hosted mode where the control plane injects the verification key at
-// runtime for managed tenants.
+// activation tokens. Environment override is only allowed in local/dev builds.
+// Release builds must use the build-time embedded verification key instead of
+// reopening that trust boundary through hosted-mode environment wiring.
 func TrialActivationPublicKey() (ed25519.PublicKey, error) {
 	if allowTrialActivationPublicKeyEnvOverride() {
 		if env := strings.TrimSpace(os.Getenv(TrialActivationPublicKeyEnvVar)); env != "" {
@@ -102,10 +102,7 @@ func TrialActivationPublicKey() (ed25519.PublicKey, error) {
 }
 
 func allowTrialActivationPublicKeyEnvOverride() bool {
-	if allowPublicKeyEnvOverride() {
-		return true
-	}
-	return strings.EqualFold(strings.TrimSpace(os.Getenv("PULSE_HOSTED_MODE")), "true")
+	return allowPublicKeyEnvOverride() || allowHostedTrialActivationPublicKeyEnvOverride()
 }
 
 // SignTrialActivationToken signs a hosted trial activation JWT.

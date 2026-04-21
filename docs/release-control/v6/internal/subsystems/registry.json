@@ -2100,7 +2100,9 @@
             "label": "hosted trial activation proof",
             "match_prefixes": [],
             "match_files": [
-              "pkg/licensing/trial_activation.go"
+              "pkg/licensing/trial_activation.go",
+              "pkg/licensing/trial_activation_public_key_override_dev.go",
+              "pkg/licensing/trial_activation_public_key_override_release.go"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],

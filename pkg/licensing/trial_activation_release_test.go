@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-func TestTrialActivationPublicKey_EnvOverrideHostedModeRelease(t *testing.T) {
+func TestTrialActivationPublicKey_EnvOverrideHostedModeReleaseRejected(t *testing.T) {
 	publicKey, _, err := ed25519.GenerateKey(nil)
 	if err != nil {
 		t.Fatalf("GenerateKey: %v", err)
@@ -16,12 +16,9 @@ func TestTrialActivationPublicKey_EnvOverrideHostedModeRelease(t *testing.T) {
 	t.Setenv("PULSE_HOSTED_MODE", "true")
 	t.Setenv(TrialActivationPublicKeyEnvVar, base64.StdEncoding.EncodeToString(publicKey))
 
-	got, err := TrialActivationPublicKey()
-	if err != nil {
-		t.Fatalf("TrialActivationPublicKey: %v", err)
-	}
-	if string(got) != string(publicKey) {
-		t.Fatal("public key mismatch")
+	_, err = TrialActivationPublicKey()
+	if err != ErrTrialActivationPublicKeyMissing {
+		t.Fatalf("TrialActivationPublicKey error = %v, want %v", err, ErrTrialActivationPublicKeyMissing)
 	}
 }
 

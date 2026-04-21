@@ -731,6 +731,11 @@ handoff stays on one canonical local redirect builder. Lifecycle-adjacent setup
 and hosted bootstrap surfaces may depend on shared OIDC/SAML callbacks, but
 they must not reintroduce per-handler `returnTo` shaping that can bypass the
 governed local-path validation before success or error query markers are added.
+That same shared auth dependency also assumes release builds do not revive the
+development-only admin bypass path. Lifecycle-adjacent setup or first-session
+flows may still run in non-release developer mode with `ALLOW_ADMIN_BYPASS`,
+but release binaries must compile that env override out instead of carrying a
+runtime branch that can be reopened after deployment.
 
 Agent lifecycle owns the install/register/update continuity surfaces, but it
 does not own unified-resource history or control-plane timeline persistence.

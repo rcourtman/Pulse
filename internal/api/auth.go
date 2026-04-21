@@ -9,7 +9,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"os"
 	"strings"
 	"sync"
 	"time"
@@ -1231,18 +1230,14 @@ func getAPITokenRecordFromRequest(r *http.Request) *config.APITokenRecord {
 }
 func adminBypassEnabled() bool {
 	adminBypassState.once.Do(func() {
-		if os.Getenv("ALLOW_ADMIN_BYPASS") != "1" {
-			return
-		}
-
-		if os.Getenv("PULSE_DEV") == "true" || strings.EqualFold(os.Getenv("NODE_ENV"), "development") {
+		adminBypassState.enabled, adminBypassState.declined = resolveAdminBypassEnv()
+		if adminBypassState.enabled {
 			log.Warn().Msg("Admin authentication bypass ENABLED (development mode)")
-			adminBypassState.enabled = true
 			return
 		}
-
-		log.Warn().Msg("Ignoring ALLOW_ADMIN_BYPASS outside development mode")
-		adminBypassState.declined = true
+		if adminBypassState.declined {
+			log.Warn().Msg("Ignoring ALLOW_ADMIN_BYPASS outside development mode")
+		}
 	})
 	return adminBypassState.enabled
 }

@@ -88,6 +88,8 @@ agreement, and cloud-specific enforcement rules.
 66. `pulse-pro:scripts/grandfathered_recurring_cutover_preview.py`
 67. `pulse-pro:scripts/validate_public_pricing_model.py`
 68. `pulse-pro:V6_LAUNCH_CHECKLIST.md`
+69. `pkg/licensing/trial_activation_public_key_override_dev.go`
+70. `pkg/licensing/trial_activation_public_key_override_release.go`
 
 ## Shared Boundaries
 
@@ -256,6 +258,14 @@ Community limit enforcement.
 Patrol`, `Pulse Alert Analysis`, `Patrol Auto-Fix`, and `Kubernetes
 Insights`, rather than reviving generic `AI Patrol` or `AI ... analysis`
     branding inside self-hosted pricing surfaces.
+26. Keep hosted trial-activation verifier source selection compile-time owned.
+    `pkg/licensing/trial_activation.go`,
+    `pkg/licensing/trial_activation_public_key_override_dev.go`, and
+    `pkg/licensing/trial_activation_public_key_override_release.go` together
+    define whether runtime environment may override the hosted verifier. Dev
+    builds may keep the local override path, but release builds must resolve
+    the verifier from the embedded build-time source of truth instead of
+    honoring `PULSE_HOSTED_MODE` or other runtime wiring.
 
 ## Forbidden Paths
 
@@ -1453,12 +1463,12 @@ tenant falls back to provider defaults, the persisted model identifier must
 remain canonical `provider:model` data rather than a bare provider-local alias,
 so hosted enterprise runtime startup does not fail before chat or approvals can
 initialize.
-Hosted release builds must also accept the trial-activation public key from
-runtime environment when `PULSE_HOSTED_MODE=true`, because hosted tenants
-receive that verification key from control-plane deployment rather than from
-the embedded self-hosted release asset. Otherwise a hosted tenant can mount a
-valid lease and still fail its first hosted trial-activation verification path
-solely because the release binary refuses the deployed public-key source.
+Hosted release builds must not reopen the trial-activation public key through
+runtime environment just because `PULSE_HOSTED_MODE=true`. Managed tenants may
+still receive a hosted-specific verification key, but the release binary must
+consume that key through the build-time embedded source of truth rather than a
+runtime env override that can silently replace the trusted verifier after
+deployment.
 Legacy MSP plan aliases are input-only compatibility shims. Live runtime
 defaults, fallback provisioning, entitlement issuance, and limit/workspace
 lookups must resolve to canonical `msp_starter` rather than preserving

@@ -10026,6 +10026,17 @@ func TestContract_AgentExecWebSocketAcceptsLegacyHostnameBinding(t *testing.T) {
 	}
 }
 
+func TestContract_AdminBypassFailsClosedOutsideDevMode(t *testing.T) {
+	t.Setenv("ALLOW_ADMIN_BYPASS", "1")
+	t.Setenv("PULSE_DEV", "")
+	t.Setenv("NODE_ENV", "production")
+	resetAdminBypassState()
+
+	if adminBypassEnabled() {
+		t.Fatal("expected admin bypass to fail closed outside development mode")
+	}
+}
+
 func TestContract_ResourceRelationshipsJSONSnapshot(t *testing.T) {
 	now := time.Date(2026, 3, 18, 17, 0, 0, 0, time.UTC)
 	payload := struct {

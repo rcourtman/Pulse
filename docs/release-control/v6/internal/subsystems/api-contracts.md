@@ -218,6 +218,11 @@ the canonical monitored-system blocked payload.
     canonical invitation, membership-management, or explicit owner-transfer flows may create tenant membership or
     change the stored owner/admin role. Shared auth routes and downstream settings consumers must treat handoff role
     claims as bounded by the server-owned membership record, never as authority to elevate tenant privileges.
+    The same shared auth boundary also owns release-build admin bypass gating.
+    `internal/api/auth.go` may keep `ALLOW_ADMIN_BYPASS` for non-release
+    development workflows, but release builds must compile that env override
+    out entirely instead of reading it and deciding at runtime whether to
+    honor or ignore it.
 20. Keep mobile onboarding payload reads aligned with the server-owned relay-mobile credential: `internal/api/router_routes_ai_relay.go`, `internal/api/onboarding_handlers.go`, and `internal/api/contract_test.go` must allow the dedicated `relay:mobile:access` scope to reach the governed QR, deep-link, and connection-validation payloads without reintroducing a broader `settings:read` requirement for token-authenticated pairing clients.
     That same shared relay/runtime boundary also owns hostname target
     equivalence for agent command routing. `internal/api/router_routes_ai_relay.go`
