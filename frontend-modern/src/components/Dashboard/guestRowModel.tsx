@@ -335,8 +335,8 @@ export const getGuestColumnStyle = (
   const style: JSX.CSSProperties = {};
 
   if (sizing.width) style.width = sizing.width;
-  if (sizing.minWidth) style.minWidth = sizing.minWidth;
-  if (sizing.maxWidth) style.maxWidth = sizing.maxWidth;
+  if (sizing.minWidth) style['min-width'] = sizing.minWidth;
+  if (sizing.maxWidth) style['max-width'] = sizing.maxWidth;
 
   return Object.keys(style).length > 0 ? style : undefined;
 };
