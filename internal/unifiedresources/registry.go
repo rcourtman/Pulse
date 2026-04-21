@@ -276,6 +276,7 @@ func (rr *ResourceRegistry) IngestRecords(source DataSource, records []IngestRec
 // This is used when a caller already has a canonical unified read model and
 // only needs store-backed manual links/exclusions applied on top.
 func (rr *ResourceRegistry) IngestResources(resources []Resource) {
+	seededIDs := make([]string, 0, len(resources))
 	for _, incoming := range resources {
 		resource := cloneResourcePtr(&incoming)
 		if resource == nil {
@@ -302,9 +303,14 @@ func (rr *ResourceRegistry) IngestResources(resources []Resource) {
 		rr.matcher.Add(resource.ID, resource.Identity)
 		rr.viewsDirty = true
 		rr.mu.Unlock()
+
+		seededIDs = append(seededIDs, resource.ID)
 	}
 
 	rr.mu.Lock()
+	for _, resourceID := range seededIDs {
+		rr.seedSourceMappingsFromResourceLocked(rr.resources[resourceID])
+	}
 	rr.applyManualLinks()
 	rr.refreshStorageConsumersLocked()
 	rr.refreshPBSRollupsLocked()
@@ -314,6 +320,276 @@ func (rr *ResourceRegistry) IngestResources(resources []Resource) {
 	rr.markStaleLocked(time.Now().UTC(), nil)
 	rr.viewsDirty = true
 	rr.mu.Unlock()
+}
+
+func (rr *ResourceRegistry) seedSourceMappingsFromResourceLocked(resource *Resource) {
+	if resource == nil {
+		return
+	}
+
+	sources := make([]DataSource, 0, len(resource.Sources)+len(resource.SourceStatus))
+	seen := make(map[DataSource]struct{}, len(resource.Sources)+len(resource.SourceStatus))
+	for _, source := range resource.Sources {
+		if _, ok := seen[source]; ok {
+			continue
+		}
+		seen[source] = struct{}{}
+		sources = append(sources, source)
+	}
+	for source := range resource.SourceStatus {
+		if _, ok := seen[source]; ok {
+			continue
+		}
+		seen[source] = struct{}{}
+		sources = append(sources, source)
+	}
+	sort.Slice(sources, func(i, j int) bool {
+		return string(sources[i]) < string(sources[j])
+	})
+
+	for _, source := range sources {
+		sourceID := rr.seedSourceIDForResourceLocked(resource, source)
+		sourceID = normalizeSourceID(sourceID)
+		if sourceID == "" {
+			continue
+		}
+		if _, ok := rr.bySource[source]; !ok {
+			rr.bySource[source] = make(map[string]string)
+		}
+		rr.bySource[source][sourceID] = resource.ID
+	}
+}
+
+func (rr *ResourceRegistry) seedSourceIDForResourceLocked(resource *Resource, source DataSource) string {
+	if resource == nil {
+		return ""
+	}
+
+	switch source {
+	case SourceProxmox:
+		if resource.Proxmox != nil {
+			if sourceID := strings.TrimSpace(resource.Proxmox.SourceID); sourceID != "" {
+				return sourceID
+			}
+			if CanonicalResourceType(resource.Type) == ResourceTypeAgent {
+				return proxmoxNodeSourceID(
+					strings.TrimSpace(resource.Proxmox.Instance),
+					strings.TrimSpace(resource.Proxmox.NodeName),
+				)
+			}
+		}
+		if resource.Ceph != nil {
+			return strings.TrimSpace(resource.Ceph.FSID)
+		}
+	case SourceAgent:
+		if resource.Agent != nil {
+			if sourceID := strings.TrimSpace(resource.Agent.AgentID); sourceID != "" {
+				return sourceID
+			}
+		}
+		switch CanonicalResourceType(resource.Type) {
+		case ResourceTypeStorage:
+			if resource.Storage != nil && strings.EqualFold(resource.Storage.Type, "unraid-array") {
+				if parentSourceID := rr.seedParentSourceIDLocked(resource, SourceAgent); parentSourceID != "" {
+					return parentSourceID + "/storage:unraid-array"
+				}
+			}
+		case ResourceTypePhysicalDisk:
+			if resource.PhysicalDisk == nil {
+				return ""
+			}
+			fallback := ""
+			if parentSourceID := rr.seedParentSourceIDLocked(resource, SourceAgent); parentSourceID != "" {
+				device := strings.TrimSpace(strings.TrimPrefix(resource.PhysicalDisk.DevPath, "/dev/"))
+				if device != "" {
+					fallback = fmt.Sprintf("%s:%s", parentSourceID, device)
+				}
+			}
+			return PreferredPhysicalDiskMetricID(resource.PhysicalDisk.Serial, resource.PhysicalDisk.WWN, fallback)
+		}
+	case SourceDocker:
+		if resource.Docker == nil {
+			return ""
+		}
+		switch CanonicalResourceType(resource.Type) {
+		case ResourceTypeAgent:
+			return strings.TrimSpace(resource.Docker.HostSourceID)
+		case ResourceTypeAppContainer:
+			return strings.TrimSpace(resource.Docker.ContainerID)
+		case ResourceTypeDockerService:
+			clusterKey := dockerSwarmClusterKeyFromMeta(resource.Docker.Swarm)
+			if clusterKey == "" {
+				return ""
+			}
+			serviceID := strings.TrimSpace(resource.Docker.ServiceID)
+			if serviceID == "" {
+				serviceID = strings.TrimSpace(resource.Name)
+			}
+			if serviceID == "" {
+				return ""
+			}
+			return fmt.Sprintf("%s:service:%s", clusterKey, serviceID)
+		default:
+			return strings.TrimSpace(resource.Docker.HostSourceID)
+		}
+	case SourcePBS:
+		if resource.PBS != nil {
+			if sourceID := strings.TrimSpace(resource.PBS.InstanceID); sourceID != "" {
+				return sourceID
+			}
+		}
+		if CanonicalResourceType(resource.Type) == ResourceTypeStorage && resource.Storage != nil && strings.EqualFold(resource.Storage.Platform, "pbs") {
+			parentSourceID := rr.seedParentSourceIDLocked(resource, SourcePBS)
+			if parentSourceID == "" {
+				return ""
+			}
+			datastoreName := strings.TrimSpace(resource.Name)
+			if datastoreName == "" {
+				return parentSourceID
+			}
+			return parentSourceID + "/" + datastoreName
+		}
+	case SourcePMG:
+		if resource.PMG != nil {
+			return strings.TrimSpace(resource.PMG.InstanceID)
+		}
+	case SourceK8s:
+		clusterSourceID := seededKubernetesClusterSourceID(resource.Kubernetes)
+		switch CanonicalResourceType(resource.Type) {
+		case ResourceTypeK8sCluster:
+			return clusterSourceID
+		case ResourceTypeAgent, ResourceTypeK8sNode:
+			nodeID := seededKubernetesNodeIdentity(resource.Kubernetes)
+			if clusterSourceID == "" || nodeID == "" {
+				return ""
+			}
+			return fmt.Sprintf("%s:node:%s", clusterSourceID, nodeID)
+		case ResourceTypePod:
+			podID := seededKubernetesPodIdentity(resource)
+			if clusterSourceID == "" || podID == "" {
+				return ""
+			}
+			return fmt.Sprintf("%s:pod:%s", clusterSourceID, podID)
+		case ResourceTypeK8sDeployment:
+			deploymentID := seededKubernetesDeploymentIdentity(resource)
+			if clusterSourceID == "" || deploymentID == "" {
+				return ""
+			}
+			return fmt.Sprintf("%s:deployment:%s", clusterSourceID, deploymentID)
+		}
+	case SourceVMware:
+		return seededVMwareSourceID(resource)
+	}
+
+	return ""
+}
+
+func (rr *ResourceRegistry) seedParentSourceIDLocked(resource *Resource, source DataSource) string {
+	if resource == nil || resource.ParentID == nil {
+		return ""
+	}
+
+	parentID := CanonicalResourceID(strings.TrimSpace(*resource.ParentID))
+	if parentID == "" {
+		return ""
+	}
+
+	parent := rr.resources[parentID]
+	return rr.seedSourceIDForResourceLocked(parent, source)
+}
+
+func dockerSwarmClusterKeyFromMeta(swarm *DockerSwarmInfo) string {
+	if swarm == nil {
+		return ""
+	}
+	if clusterID := strings.TrimSpace(swarm.ClusterID); clusterID != "" {
+		return clusterID
+	}
+	return strings.TrimSpace(swarm.ClusterName)
+}
+
+func seededKubernetesClusterSourceID(kubernetes *K8sData) string {
+	if kubernetes == nil {
+		return ""
+	}
+	for _, candidate := range []string{
+		kubernetes.ClusterID,
+		kubernetes.AgentID,
+		kubernetes.SourceName,
+		kubernetes.ClusterName,
+		kubernetes.Context,
+	} {
+		if value := strings.TrimSpace(candidate); value != "" {
+			return value
+		}
+	}
+	return ""
+}
+
+func seededKubernetesNodeIdentity(kubernetes *K8sData) string {
+	if kubernetes == nil {
+		return ""
+	}
+	if nodeUID := strings.TrimSpace(kubernetes.NodeUID); nodeUID != "" {
+		return nodeUID
+	}
+	return strings.TrimSpace(kubernetes.NodeName)
+}
+
+func seededKubernetesPodIdentity(resource *Resource) string {
+	if resource == nil || resource.Kubernetes == nil {
+		return ""
+	}
+	if podUID := strings.TrimSpace(resource.Kubernetes.PodUID); podUID != "" {
+		return podUID
+	}
+	namespace := strings.TrimSpace(resource.Kubernetes.Namespace)
+	name := strings.TrimSpace(resource.Name)
+	if namespace == "" || name == "" {
+		return ""
+	}
+	return namespace + "/" + name
+}
+
+func seededKubernetesDeploymentIdentity(resource *Resource) string {
+	if resource == nil || resource.Kubernetes == nil {
+		return ""
+	}
+	if deploymentUID := strings.TrimSpace(resource.Kubernetes.DeploymentUID); deploymentUID != "" {
+		return deploymentUID
+	}
+	namespace := strings.TrimSpace(resource.Kubernetes.Namespace)
+	name := strings.TrimSpace(resource.Name)
+	if namespace == "" || name == "" {
+		return ""
+	}
+	return namespace + "/" + name
+}
+
+func seededVMwareSourceID(resource *Resource) string {
+	if resource == nil || resource.VMware == nil {
+		return ""
+	}
+
+	managedObjectID := strings.TrimSpace(resource.VMware.ManagedObjectID)
+	if managedObjectID == "" {
+		return ""
+	}
+
+	entityType := strings.TrimSpace(resource.VMware.EntityType)
+	if entityType == "" {
+		entityType = string(CanonicalResourceType(resource.Type))
+	}
+
+	parts := make([]string, 0, 3)
+	if connectionID := strings.TrimSpace(resource.VMware.ConnectionID); connectionID != "" {
+		parts = append(parts, connectionID)
+	}
+	if entityType != "" {
+		parts = append(parts, entityType)
+	}
+	parts = append(parts, managedObjectID)
+	return strings.Join(parts, ":")
 }
 
 // List returns all resources.

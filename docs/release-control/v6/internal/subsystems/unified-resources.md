@@ -499,6 +499,13 @@ must preserve the canonical `MetricsTarget` already attached to provider-backed
 agents or app-containers, and typed views must expose that stored target
 unchanged so shared chart routes keep using canonical IDs across live and demo
 projections.
+Seeded unified-resource snapshots are part of that same registry ownership.
+`internal/unifiedresources/registry.go` must rebuild the canonical `bySource`
+index from source-owned facets already present on seeded unified resources
+before manual links, overlays, or metrics-target resolution run, so
+`/api/resources/dashboard-summary`, `/api/resources`, dashboard trend joins,
+and other chart consumers keep resolving history through canonical source
+coordinates instead of silently falling back to hashed unified resource IDs.
 That same registry/view boundary now also applies to provider-backed storage.
 `internal/unifiedresources/registry.go` must attach the resolved
 `MetricsTarget` onto cached view clones before `ReadState` exposes

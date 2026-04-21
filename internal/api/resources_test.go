@@ -3068,6 +3068,67 @@ func TestResourceDashboardSummaryUsesCompactGovernedPayload(t *testing.T) {
 	}
 }
 
+func TestResourceDashboardSummaryHydratesMetricsTargetsFromUnifiedSeedResources(t *testing.T) {
+	now := time.Now().UTC()
+
+	cfg := &config.Config{DataPath: t.TempDir()}
+	h := NewResourceHandlers(cfg)
+	h.SetStateProvider(resourceUnifiedSeedProvider{
+		snapshot: models.StateSnapshot{LastUpdate: now},
+		resources: []unified.Resource{
+			{
+				ID:        "agent-dashboard-1",
+				Type:      unified.ResourceTypeAgent,
+				Name:      "delly",
+				Status:    unified.StatusOnline,
+				LastSeen:  now,
+				UpdatedAt: now,
+				Sources:   []unified.DataSource{unified.SourceProxmox, unified.SourceAgent},
+				Metrics: &unified.ResourceMetrics{
+					CPU:    &unified.MetricValue{Percent: 91},
+					Memory: &unified.MetricValue{Percent: 63},
+				},
+				Identity: unified.ResourceIdentity{
+					MachineID: "machine-delly",
+					Hostnames: []string{"delly"},
+				},
+				Proxmox: &unified.ProxmoxData{
+					SourceID: "homelab-delly",
+					NodeName: "delly",
+					Instance: "homelab-entry",
+				},
+				Agent: &unified.AgentData{
+					AgentID:  "agent-source-delly",
+					Hostname: "delly",
+				},
+			},
+		},
+	})
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/resources/dashboard-summary", nil)
+	h.HandleDashboardSummary(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+
+	var resp DashboardOverviewSummaryResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	if len(resp.Infrastructure.TopCPU) != 1 {
+		t.Fatalf("topCPU len = %d, want 1", len(resp.Infrastructure.TopCPU))
+	}
+	if resp.Infrastructure.TopCPU[0].MetricsTarget == nil {
+		t.Fatalf("expected dashboard summary metrics target, got %+v", resp.Infrastructure.TopCPU[0])
+	}
+	if got := *resp.Infrastructure.TopCPU[0].MetricsTarget; got != (unified.MetricsTarget{ResourceType: "agent", ResourceID: "homelab-delly"}) {
+		t.Fatalf("topCPU[0].metricsTarget = %+v, want agent/homelab-delly", got)
+	}
+}
+
 func TestResourceListIncludesTrueNASPhysicalDiskTemperature(t *testing.T) {
 	previous := truenas.IsFeatureEnabled()
 	truenas.SetFeatureEnabled(true)

@@ -175,6 +175,62 @@ func TestResourceRegistry_IngestResourcesSeedsMatcherForOverlayRecords(t *testin
 	}
 }
 
+func TestResourceRegistry_IngestResourcesRebuildsSourceMappingsForMetricsTargets(t *testing.T) {
+	rr := NewRegistry(nil)
+	now := time.Date(2026, 4, 21, 9, 0, 0, 0, time.UTC)
+
+	rr.IngestResources([]Resource{
+		{
+			ID:       "agent-dashboard-1",
+			Type:     ResourceTypeAgent,
+			Name:     "delly",
+			Status:   StatusOnline,
+			LastSeen: now,
+			Sources:  []DataSource{SourceProxmox, SourceAgent},
+			Identity: ResourceIdentity{
+				MachineID: "machine-delly",
+				Hostnames: []string{"delly"},
+			},
+			Proxmox: &ProxmoxData{
+				SourceID: "homelab-delly",
+				NodeName: "delly",
+				Instance: "homelab-entry",
+			},
+			Agent: &AgentData{
+				AgentID:  "agent-source-delly",
+				Hostname: "delly",
+			},
+		},
+	})
+
+	target := BuildMetricsTargetForRegistry(rr, "agent-dashboard-1")
+	if target == nil {
+		t.Fatal("expected seeded unified agent to rebuild a metrics target")
+	}
+	if target.ResourceType != "agent" || target.ResourceID != "homelab-delly" {
+		t.Fatalf("metrics target = %+v, want agent/homelab-delly", target)
+	}
+
+	targets := rr.SourceTargets("agent-dashboard-1")
+	if len(targets) != 2 {
+		t.Fatalf("expected 2 source targets, got %d", len(targets))
+	}
+
+	foundAgent := false
+	foundProxmox := false
+	for _, sourceTarget := range targets {
+		switch sourceTarget.Source {
+		case SourceAgent:
+			foundAgent = sourceTarget.SourceID == "agent-source-delly"
+		case SourceProxmox:
+			foundProxmox = sourceTarget.SourceID == "homelab-delly"
+		}
+	}
+	if !foundAgent || !foundProxmox {
+		t.Fatalf("expected rebuilt agent+proxmox source targets, got %+v", targets)
+	}
+}
+
 func TestStorageRiskSemanticsPrefersUnraidParitySummaryOverGenericDiskCounts(t *testing.T) {
 	risk := &StorageRisk{
 		Reasons: []StorageRiskReason{
