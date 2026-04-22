@@ -16,6 +16,52 @@ export const connectionLastActivityText = (connection: Connection): string => {
   return `${days}d ago`;
 };
 
+export interface ConnectionAgentVersionPresentation {
+  badgeClassName: string;
+  badgeLabel: string;
+  detail: string;
+  title: string;
+}
+
+export const connectionAgentVersionPresentation = (
+  connection: Connection,
+): ConnectionAgentVersionPresentation | null => {
+  const currentVersion = connection.agentVersion?.trim() ?? '';
+  const expectedVersion = connection.expectedAgentVersion?.trim() ?? '';
+
+  if (connection.agentUpdateAvailable && currentVersion && expectedVersion) {
+    return {
+      badgeClassName:
+        'inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800 dark:bg-amber-900 dark:text-amber-200',
+      badgeLabel: 'Update available',
+      detail: `${currentVersion} -> ${expectedVersion}`,
+      title: `Pulse Agent update available: ${currentVersion} -> ${expectedVersion}`,
+    };
+  }
+
+  if (currentVersion) {
+    return {
+      badgeClassName:
+        'inline-flex items-center rounded-full border border-border bg-surface-alt px-2 py-0.5 text-[11px] font-medium text-base-content',
+      badgeLabel: 'Agent version',
+      detail: currentVersion,
+      title: `Pulse Agent version ${currentVersion}`,
+    };
+  }
+
+  if (expectedVersion) {
+    return {
+      badgeClassName:
+        'inline-flex items-center rounded-full border border-border bg-surface-alt px-2 py-0.5 text-[11px] font-medium text-base-content',
+      badgeLabel: 'Version target',
+      detail: expectedVersion,
+      title: `Pulse Agent target version ${expectedVersion}`,
+    };
+  }
+
+  return null;
+};
+
 export interface InfrastructureSystemRow {
   id: string;
   ownerType: ConnectionType;
@@ -26,6 +72,7 @@ export interface InfrastructureSystemRow {
   sourceBadges: string[];
   statusLabel: string;
   statusClassName: string;
+  agentUpdateCount: number;
   lastActivityText: string;
   lastErrorMessage?: string;
   enabled: boolean;

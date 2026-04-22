@@ -10,6 +10,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
+	pulseutils "github.com/rcourtman/pulse-go-rewrite/internal/utils"
 )
 
 // connectionStaleThreshold is the baseline "haven't heard from this connection
@@ -28,14 +29,15 @@ var connectionAuthErrorPattern = regexp.MustCompile(`(?i)401|403|unauthori[sz]ed
 // from the handler makes the aggregator unit-testable without spinning up a
 // monitor or persistence layer.
 type aggregatorInputs struct {
-	pveInstances     []config.PVEInstance
-	pbsInstances     []config.PBSInstance
-	pmgInstances     []config.PMGInstance
-	vmwareInstances  []config.VMwareVCenterInstance
-	truenasInstances []config.TrueNASInstance
-	hosts            []models.Host
-	instanceHealth   map[string]monitoring.InstanceHealth
-	now              time.Time
+	pveInstances         []config.PVEInstance
+	pbsInstances         []config.PBSInstance
+	pmgInstances         []config.PMGInstance
+	vmwareInstances      []config.VMwareVCenterInstance
+	truenasInstances     []config.TrueNASInstance
+	hosts                []models.Host
+	instanceHealth       map[string]monitoring.InstanceHealth
+	expectedAgentVersion string
+	now                  time.Time
 }
 
 // buildConnections produces a stable, sorted list of connection rows across
@@ -67,7 +69,7 @@ func buildConnections(in aggregatorInputs) []Connection {
 		out = append(out, buildTrueNASConnection(tn, in.instanceHealth, now))
 	}
 	for _, host := range in.hosts {
-		out = append(out, buildAgentConnection(host, now))
+		out = append(out, buildAgentConnection(host, in.expectedAgentVersion, now))
 	}
 
 	sort.Slice(out, func(i, j int) bool {
@@ -239,7 +241,7 @@ func buildTrueNASConnection(inst config.TrueNASInstance, health map[string]monit
 // buildAgentConnection derives a connection row from an agent Host record.
 // Agents have no pause toggle and no scope — reports are all-or-nothing —
 // so capability flags are off.
-func buildAgentConnection(host models.Host, now time.Time) Connection {
+func buildAgentConnection(host models.Host, expectedAgentVersion string, now time.Time) Connection {
 	name := host.DisplayName
 	if strings.TrimSpace(name) == "" {
 		name = host.Hostname
@@ -260,6 +262,12 @@ func buildAgentConnection(host models.Host, now time.Time) Connection {
 
 	state := ConnectionStatePending
 	reason := ""
+	currentAgentVersion := strings.TrimSpace(host.AgentVersion)
+	expectedAgentVersion = strings.TrimSpace(expectedAgentVersion)
+	updateAvailable := false
+	if currentAgentVersion != "" && expectedAgentVersion != "" {
+		updateAvailable = pulseutils.CompareVersions(currentAgentVersion, expectedAgentVersion) < 0
+	}
 	switch {
 	case lastSeen == nil:
 		state = ConnectionStatePending
@@ -271,19 +279,22 @@ func buildAgentConnection(host models.Host, now time.Time) Connection {
 	}
 
 	return Connection{
-		ID:           "agent:" + host.ID,
-		Type:         ConnectionTypeAgent,
-		Name:         name,
-		Address:      address,
-		State:        state,
-		StateReason:  reason,
-		Enabled:      true,
-		Surfaces:     []string{"host"},
-		Scope:        map[string]bool{"host": true},
-		LastSeen:     lastSeen,
-		LastError:    nil,
-		Source:       ConnectionSourceAgent,
-		Capabilities: ConnectionCapabilities{SupportsPause: false, SupportsScope: false, SupportsTest: false},
+		ID:                   "agent:" + host.ID,
+		Type:                 ConnectionTypeAgent,
+		Name:                 name,
+		Address:              address,
+		State:                state,
+		StateReason:          reason,
+		Enabled:              true,
+		Surfaces:             []string{"host"},
+		Scope:                map[string]bool{"host": true},
+		LastSeen:             lastSeen,
+		LastError:            nil,
+		Source:               ConnectionSourceAgent,
+		AgentVersion:         currentAgentVersion,
+		ExpectedAgentVersion: expectedAgentVersion,
+		AgentUpdateAvailable: updateAvailable,
+		Capabilities:         ConnectionCapabilities{SupportsPause: false, SupportsScope: false, SupportsTest: false},
 	}
 }
 

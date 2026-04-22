@@ -9,7 +9,10 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/shared/Table';
-import type { InfrastructureSystemRow } from './connectionsTableModel';
+import {
+  connectionAgentVersionPresentation,
+  type InfrastructureSystemRow,
+} from './connectionsTableModel';
 import type { DiscoveredServer, DiscoveryScanStatus } from './infrastructureSettingsModel';
 import {
   getInfrastructureOnboardingProductPresentation,
@@ -92,6 +95,31 @@ const discoveredServerEndpoint = (server: DiscoveredServer): string =>
 
 const discoveredCoverageText = (server: DiscoveredServer): string =>
   getInfrastructureOnboardingProductPresentation(server.type).coverage;
+
+const rowAgentConnections = (row: InfrastructureSystemRow) => {
+  const attachedAgents = row.attachedConnections.filter(
+    (connection) => connection.type === 'agent',
+  );
+  if (row.connection.type === 'agent') {
+    return [row.connection, ...attachedAgents];
+  }
+  return attachedAgents;
+};
+
+const pulseAgentBadgeTitle = (row: InfrastructureSystemRow): string | undefined => {
+  const agentConnections = rowAgentConnections(row);
+  if (agentConnections.length === 0) return undefined;
+  if (agentConnections.length === 1) {
+    return connectionAgentVersionPresentation(agentConnections[0])?.title ?? 'Pulse Agent attached';
+  }
+  const updateCount = agentConnections.filter(
+    (connection) => connection.agentUpdateAvailable,
+  ).length;
+  if (updateCount > 0) {
+    return `${agentConnections.length} Pulse Agent attachments · ${updateCount} update available`;
+  }
+  return `${agentConnections.length} Pulse Agent attachments`;
+};
 
 export const InfrastructureSourceManager: Component<InfrastructureSourceManagerProps> = (props) => {
   const products = createMemo(() => getInfrastructureSourceManagerProducts());
@@ -373,7 +401,14 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                           <div class="flex items-center gap-1 whitespace-nowrap">
                                             <For each={row.sourceBadges}>
                                               {(badge) => (
-                                                <span class="inline-flex items-center rounded-full border border-border bg-surface-alt px-1.5 py-0.5 text-[10px] font-medium text-muted">
+                                                <span
+                                                  class="inline-flex items-center rounded-full border border-border bg-surface-alt px-1.5 py-0.5 text-[10px] font-medium text-muted"
+                                                  title={
+                                                    badge === 'Pulse Agent'
+                                                      ? pulseAgentBadgeTitle(row)
+                                                      : undefined
+                                                  }
+                                                >
                                                   {badge}
                                                 </span>
                                               )}
@@ -421,6 +456,13 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                   >
                                     {row.statusLabel}
                                   </span>
+                                  <Show when={row.agentUpdateCount > 0}>
+                                    <span class="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800 dark:bg-amber-900 dark:text-amber-200">
+                                      {row.agentUpdateCount === 1
+                                        ? 'Agent update'
+                                        : `${row.agentUpdateCount} agent updates`}
+                                    </span>
+                                  </Show>
                                   <span class="text-[12px] text-muted/90">
                                     {row.lastActivityText}
                                   </span>

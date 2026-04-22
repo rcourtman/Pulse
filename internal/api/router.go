@@ -479,7 +479,7 @@ func (r *Router) setupRoutes() {
 	r.systemSettingsHandler = NewSystemSettingsHandler(r.config, r.persistence, r.wsHub, r.mtMonitor, r.monitor, r.reloadSystemSettings, r.reloadFunc)
 
 	// Agent execution server for AI tool use
-	r.agentExecServer = agentexec.NewServer(func(token string, agentID string) bool {
+	r.agentExecServer = agentexec.NewServer(func(token string, agentID string, hostname string) bool {
 		// Validate agent tokens using the API tokens system with scope check
 		if r.config == nil {
 			return false
@@ -495,27 +495,40 @@ func (r *Router) setupRoutes() {
 			}
 
 			boundID := strings.TrimSpace(record.Metadata["bound_agent_id"])
-			if boundID == "" {
-				if legacyHost := strings.TrimSpace(record.Metadata["bound_hostname"]); legacyHost != "" {
-					boundID = fmt.Sprintf("agent-%s", legacyHost)
-				}
-			}
-			if boundID == "" {
+			boundHost := strings.TrimSpace(record.Metadata["bound_hostname"])
+			if boundID == "" && boundHost == "" {
 				log.Warn().
 					Str("token_id", record.ID).
 					Msg("Agent exec token missing binding metadata")
 				return false
 			}
-			if boundID != agentID {
-				log.Warn().
-					Str("token_id", record.ID).
-					Str("bound_id", boundID).
-					Str("requested_id", agentID).
-					Msg("Agent token mismatch: token is bound to a different agent ID")
-				return false
+
+			// Hostname binding is authoritative: enrollment-minted tokens carry
+			// bound_hostname, and the agent's runtime agentID is derived locally
+			// (/etc/machine-id or override) rather than from a server-canonical
+			// form. Matching on hostname preserves the trust boundary ("the
+			// bearer is running on the bound host") and is robust to the agent
+			// reporting an agentID the server could not have predicted at
+			// mint time.
+			if boundHost != "" && strings.EqualFold(boundHost, strings.TrimSpace(hostname)) {
+				return true
 			}
 
-			return true
+			// Fall back to bound_agent_id equality for tokens minted through
+			// paths that set it directly. Pre-enroll tokens and tokens rotated
+			// by tests/contract suites use this form.
+			if boundID != "" && boundID == agentID {
+				return true
+			}
+
+			log.Warn().
+				Str("token_id", record.ID).
+				Str("bound_id", boundID).
+				Str("bound_hostname", boundHost).
+				Str("requested_id", agentID).
+				Str("requested_hostname", strings.TrimSpace(hostname)).
+				Msg("Agent token mismatch: token is not bound to the registering agent")
+			return false
 		}
 		return false
 	})
@@ -4876,13 +4889,9 @@ func (r *Router) handleAgentVersion(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	// Return the server version - all agents should match the server version.
-	// Dev/git builds return "dev" so agents don't enter an infinite update loop
-	// (the agent skips updates when the server reports "dev").
-	versionInfo, err := updates.GetCurrentVersion()
-	version := "dev"
-	if err == nil && !versionInfo.IsDevelopment {
-		version = versionInfo.Version
+	version := currentAgentTargetVersion()
+	if version == "" {
+		version = "dev"
 	}
 
 	response := AgentVersionResponse{

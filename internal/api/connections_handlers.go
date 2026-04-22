@@ -72,6 +72,7 @@ func (h *ConnectionsHandlers) HandleList(w http.ResponseWriter, r *http.Request)
 		inputs.hosts = []models.Host{}
 		inputs.instanceHealth = map[string]monitoring.InstanceHealth{}
 	}
+	inputs.expectedAgentVersion = currentAgentTargetVersion()
 
 	connections := buildConnections(inputs)
 	writeJSON(w, http.StatusOK, ConnectionsListResponse{

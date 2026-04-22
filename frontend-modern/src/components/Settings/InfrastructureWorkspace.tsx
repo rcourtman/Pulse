@@ -19,7 +19,11 @@ import { InfrastructureDiscoverySettingsDialog } from './InfrastructureDiscovery
 import { InfrastructureInstallerSection } from './InfrastructureInstallerSection';
 import { InfrastructureSourceManager } from './InfrastructureSourceManager';
 import { InfrastructureSourcePicker } from './InfrastructureSourcePicker';
-import { connectionLastActivityText, type InfrastructureSystemRow } from './connectionsTableModel';
+import {
+  connectionAgentVersionPresentation,
+  connectionLastActivityText,
+  type InfrastructureSystemRow,
+} from './connectionsTableModel';
 import {
   buildInfrastructureOnboardingPath,
   buildInfrastructureWorkspacePath,
@@ -345,6 +349,7 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
     const removePending = () => rowActions.pendingAction(connection.id) === 'remove';
     const removeConfirming = () => rowActions.confirmingRemove(connection.id);
     const error = () => rowActions.actionError(connection.id);
+    const versionPresentation = () => connectionAgentVersionPresentation(connection);
 
     return (
       <div class="space-y-6 p-4">
@@ -379,6 +384,21 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
                 {connection.lastSeen ? connection.lastSeen : 'No activity yet'}
               </div>
             </div>
+            <Show when={versionPresentation()}>
+              {(presentation) => (
+                <div class="rounded-lg border border-border bg-surface-alt px-3 py-3">
+                  <div class="text-[11px] font-medium uppercase tracking-wide text-muted">
+                    Pulse Agent version
+                  </div>
+                  <div class="mt-2 flex flex-wrap items-center gap-2">
+                    <span class={presentation().badgeClassName}>{presentation().badgeLabel}</span>
+                    <span class="text-sm text-base-content" title={presentation().title}>
+                      {presentation().detail}
+                    </span>
+                  </div>
+                </div>
+              )}
+            </Show>
           </div>
 
           <Show when={connection.lastError?.message}>
@@ -506,6 +526,7 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
             const removePending = () => rowActions.pendingAction(connection.id) === 'remove';
             const removeConfirming = () => rowActions.confirmingRemove(connection.id);
             const error = () => rowActions.actionError(connection.id);
+            const versionPresentation = () => connectionAgentVersionPresentation(connection);
 
             return (
               <div class="rounded-lg border border-border bg-surface-alt px-4 py-4">
@@ -514,6 +535,18 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
                     <div class="text-sm font-medium text-base-content">{connection.name}</div>
                     <Show when={connection.address}>
                       <div class="break-words text-xs text-muted">{connection.address}</div>
+                    </Show>
+                    <Show when={versionPresentation()}>
+                      {(presentation) => (
+                        <div class="flex flex-wrap items-center gap-2 pt-1">
+                          <span class={presentation().badgeClassName}>
+                            {presentation().badgeLabel}
+                          </span>
+                          <span class="text-xs text-muted" title={presentation().title}>
+                            {presentation().detail}
+                          </span>
+                        </div>
+                      )}
                     </Show>
                   </div>
                   <div class="flex items-center gap-2">

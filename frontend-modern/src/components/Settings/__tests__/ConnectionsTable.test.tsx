@@ -34,6 +34,7 @@ const row = (overrides: Partial<InfrastructureSystemRow> = {}): InfrastructureSy
     sourceBadges: [],
     statusLabel: 'online',
     statusClassName: 'bg-green-100 text-green-800',
+    agentUpdateCount: 0,
     lastActivityText: '5s ago',
     lastErrorMessage: undefined,
     enabled: connection.enabled,

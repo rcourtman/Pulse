@@ -63,19 +63,22 @@ type ConnectionError struct {
 // per-type shapes that today require separate fetches and separate table
 // renderers.
 type Connection struct {
-	ID           string                 `json:"id"`
-	Type         ConnectionType         `json:"type"`
-	Name         string                 `json:"name"`
-	Address      string                 `json:"address"`
-	State        ConnectionState        `json:"state"`
-	StateReason  string                 `json:"stateReason,omitempty"`
-	Enabled      bool                   `json:"enabled"`
-	Surfaces     []string               `json:"surfaces"`
-	Scope        map[string]bool        `json:"scope"`
-	LastSeen     *time.Time             `json:"lastSeen,omitempty"`
-	LastError    *ConnectionError       `json:"lastError,omitempty"`
-	Source       ConnectionSource       `json:"source"`
-	Capabilities ConnectionCapabilities `json:"capabilities"`
+	ID                   string                 `json:"id"`
+	Type                 ConnectionType         `json:"type"`
+	Name                 string                 `json:"name"`
+	Address              string                 `json:"address"`
+	State                ConnectionState        `json:"state"`
+	StateReason          string                 `json:"stateReason,omitempty"`
+	Enabled              bool                   `json:"enabled"`
+	Surfaces             []string               `json:"surfaces"`
+	Scope                map[string]bool        `json:"scope"`
+	LastSeen             *time.Time             `json:"lastSeen,omitempty"`
+	LastError            *ConnectionError       `json:"lastError,omitempty"`
+	Source               ConnectionSource       `json:"source"`
+	AgentVersion         string                 `json:"agentVersion,omitempty"`
+	ExpectedAgentVersion string                 `json:"expectedAgentVersion,omitempty"`
+	AgentUpdateAvailable bool                   `json:"agentUpdateAvailable,omitempty"`
+	Capabilities         ConnectionCapabilities `json:"capabilities"`
 }
 
 type ConnectionSystemComponentRole string

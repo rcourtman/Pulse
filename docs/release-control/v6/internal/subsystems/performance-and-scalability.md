@@ -155,6 +155,11 @@ regression protection.
    validate request-body setup tokens, but the router-level public-path check must
    stay O(1) and must not front-run persistence loads, monitor refresh, or other
    teardown/register side effects before the canonical handler owns the request.
+   Agent-version signaling follows that same hot-path rule. Shared helpers used
+   by `/api/agent/version` and adjacent settings payloads may read the cached
+   process version once, but they must not add per-request release lookups,
+   filesystem walks, or other heavy work just to compute whether an attached
+   agent is current.
 5. Extend dashboard hot-path filter, sort, grouping, and stats math through `frontend-modern/src/components/Dashboard/workloadSelectors.ts`, and extend workload identity, discovery routing, and node-topology helpers through `frontend-modern/src/components/Dashboard/workloadTopology.ts`, rather than duplicating selector or topology logic in `frontend-modern/src/components/Dashboard/Dashboard.tsx`
 6. Normalize dashboard workload view-mode aliases through `frontend-modern/src/utils/workloads.ts` instead of keeping local URL/storage parsing in `frontend-modern/src/components/Dashboard/Dashboard.tsx`
 7. Deduplicate dashboard workload rows by canonical workload ID from `frontend-modern/src/utils/workloads.ts` rather than via local pass-through wrappers in `frontend-modern/src/components/Dashboard/Dashboard.tsx`

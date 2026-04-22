@@ -420,7 +420,12 @@ the canonical monitored-system blocked payload.
     source-oriented and backend-authored: one primary source row may carry
     attached collection methods such as a linked Pulse Agent, but attached
     methods must not be emitted as duplicate peer rows when backend ownership
-    can prove they augment the same source.
+    can prove they augment the same source. Agent-backed connections also own
+    canonical version/update facts on that same payload: when a source or
+    attachment is backed by Pulse Agent, `/api/connections` carries the
+    installed agent version, the current server-side target agent version when
+    it is meaningful, and whether an update is available, so settings surfaces
+    do not invent frontend-local version comparison rules.
 
 ## Forbidden Paths
 

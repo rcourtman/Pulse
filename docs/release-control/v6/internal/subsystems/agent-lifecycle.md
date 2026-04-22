@@ -228,6 +228,11 @@ an add-only capacity posture.
    Those lifecycle-owned settings hooks may consume websocket state only through `frontend-modern/src/contexts/appRuntime.ts`; they must not import `frontend-modern/src/App.tsx` or recreate root-shell providers.
    Discovery configuration is part of that same lifecycle-owned workspace boundary. `InfrastructureSourceManager.tsx` must open one canonical discovery editor through `InfrastructureDiscoverySettingsDialog.tsx`, `DiscoverySettingsForm.tsx`, and `discoverySettingsModel.ts`, while the System/Network shell stays limited to network-boundary controls instead of reintroducing a second editable discovery surface.
    The same lifecycle-owned workspace boundary now also owns attached-agent composition. When a unified Pulse Agent augments a first-class platform source such as Proxmox VE, the source manager and edit dialog must present one primary platform row with explicit `API` plus `Pulse Agent` composition rather than duplicating that same machine as a second peer row under the generic Pulse Agent group. Standalone hosts with no owning platform source remain in the Pulse Agent group.
+   That same lifecycle-owned workspace boundary also owns agent version
+   posture on infrastructure settings. The landing table stays compact and
+   should only raise row-level attention when an attached or standalone agent
+   has an update available, while the exact installed version belongs in the
+   add/edit detail surfaces rather than as a permanent top-level table column.
    Public demo and other read-only settings posture must stay reporting-first
    on that same lifecycle-owned workspace boundary: infrastructure workspace
    routes may retain install and platform setup surfaces for manageable

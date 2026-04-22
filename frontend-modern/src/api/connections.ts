@@ -45,6 +45,9 @@ export interface Connection {
   lastSeen: string | null;
   lastError: ConnectionError | null;
   source: ConnectionSource;
+  agentVersion?: string;
+  expectedAgentVersion?: string;
+  agentUpdateAvailable?: boolean;
   capabilities: ConnectionCapabilities;
 }
 

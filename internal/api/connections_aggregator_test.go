@@ -164,6 +164,57 @@ func TestBuildConnections_AgentStateFromLastSeen(t *testing.T) {
 	}
 }
 
+func TestBuildConnections_AgentVersionUpdateAvailability(t *testing.T) {
+	now := time.Now()
+	in := aggregatorInputs{
+		hosts: []models.Host{
+			{ID: "current", Hostname: "current", LastSeen: now, AgentVersion: "6.0.2"},
+			{ID: "outdated", Hostname: "outdated", LastSeen: now, AgentVersion: "6.0.0"},
+			{ID: "unknown", Hostname: "unknown", LastSeen: now},
+		},
+		expectedAgentVersion: "6.0.2",
+		now:                  now,
+	}
+
+	got := buildConnections(in)
+	byID := map[string]Connection{}
+	for _, connection := range got {
+		byID[connection.ID] = connection
+	}
+
+	if byID["agent:current"].AgentVersion != "6.0.2" {
+		t.Fatalf("current agent version = %q, want %q", byID["agent:current"].AgentVersion, "6.0.2")
+	}
+	if byID["agent:current"].ExpectedAgentVersion != "6.0.2" {
+		t.Fatalf(
+			"current expected agent version = %q, want %q",
+			byID["agent:current"].ExpectedAgentVersion,
+			"6.0.2",
+		)
+	}
+	if byID["agent:current"].AgentUpdateAvailable {
+		t.Fatal("current agent should not report an update available")
+	}
+
+	if byID["agent:outdated"].AgentVersion != "6.0.0" {
+		t.Fatalf(
+			"outdated agent version = %q, want %q",
+			byID["agent:outdated"].AgentVersion,
+			"6.0.0",
+		)
+	}
+	if !byID["agent:outdated"].AgentUpdateAvailable {
+		t.Fatal("outdated agent should report an update available")
+	}
+
+	if byID["agent:unknown"].AgentVersion != "" {
+		t.Fatalf("unknown agent version = %q, want empty", byID["agent:unknown"].AgentVersion)
+	}
+	if byID["agent:unknown"].AgentUpdateAvailable {
+		t.Fatal("agent without a reported version should not raise an update flag")
+	}
+}
+
 func TestBuildConnections_VMwareAndTrueNASEnabledFlag(t *testing.T) {
 	in := aggregatorInputs{
 		vmwareInstances: []config.VMwareVCenterInstance{{

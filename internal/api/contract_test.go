@@ -11477,6 +11477,37 @@ func TestContract_ConnectionPayloadShapeStaysCanonical(t *testing.T) {
 	assertJSONSnapshot(t, body, want)
 }
 
+func TestContract_AgentConnectionPayloadIncludesVersionFields(t *testing.T) {
+	conn := Connection{
+		ID:                   "agent:host-1",
+		Type:                 ConnectionTypeAgent,
+		Name:                 "host-1",
+		Address:              "host-1",
+		State:                ConnectionStateActive,
+		Enabled:              true,
+		Surfaces:             []string{"host"},
+		Scope:                map[string]bool{"host": true},
+		LastSeen:             timePtr(time.Date(2026, 4, 22, 12, 0, 0, 0, time.UTC)),
+		Source:               ConnectionSourceAgent,
+		AgentVersion:         "6.0.0",
+		ExpectedAgentVersion: "6.0.2",
+		AgentUpdateAvailable: true,
+		Capabilities: ConnectionCapabilities{
+			SupportsPause: false,
+			SupportsScope: false,
+			SupportsTest:  false,
+		},
+	}
+
+	body, err := json.Marshal(conn)
+	if err != nil {
+		t.Fatalf("marshal agent Connection: %v", err)
+	}
+
+	want := `{"id":"agent:host-1","type":"agent","name":"host-1","address":"host-1","state":"active","enabled":true,"surfaces":["host"],"scope":{"host":true},"lastSeen":"2026-04-22T12:00:00Z","source":"agent","agentVersion":"6.0.0","expectedAgentVersion":"6.0.2","agentUpdateAvailable":true,"capabilities":{"supportsPause":false,"supportsScope":false,"supportsTest":false}}`
+	assertJSONSnapshot(t, body, want)
+}
+
 func TestContract_ConnectionsListIncludesAgentHostsFromUnifiedReadState(t *testing.T) {
 	cfg := &config.Config{DataPath: t.TempDir()}
 	monitor, err := monitoring.New(cfg)

@@ -121,6 +121,11 @@ const sourceBadgesFor = (connections: readonly Connection[]): string[] => {
   return badges;
 };
 
+const agentUpdateCountFor = (connections: readonly Connection[]): number =>
+  connections.filter(
+    (connection) => connection.type === 'agent' && Boolean(connection.agentUpdateAvailable),
+  ).length;
+
 const buildRow = (
   ownerType: ConnectionType,
   primaryConnection: Connection,
@@ -149,6 +154,7 @@ const buildRow = (
     sourceBadges: sourceBadgesFor(componentConnections),
     statusLabel: presentation.label,
     statusClassName: presentation.badgeClass,
+    agentUpdateCount: agentUpdateCountFor(componentConnections),
     lastActivityText: connectionLastActivityText(primaryConnection),
     lastErrorMessage,
     enabled: primaryConnection.enabled,

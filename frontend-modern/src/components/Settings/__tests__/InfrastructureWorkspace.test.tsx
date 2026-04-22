@@ -78,6 +78,7 @@ vi.mock('../useConnectionsLedger', () => ({
         sourceBadges: connection.type === 'agent' ? ['Pulse Agent'] : ['API'],
         statusLabel: connection.state === 'paused' ? 'Paused' : 'Active',
         statusClassName: 'bg-green-100 text-green-800',
+        agentUpdateCount: 0,
         lastActivityText: '1m ago',
         lastErrorMessage: connection.lastError?.message,
         enabled: connection.enabled,
@@ -416,6 +417,9 @@ describe('InfrastructureWorkspace', () => {
       surfaces: ['host'],
       scope: { host: true } as any,
       lastSeen: new Date().toISOString(),
+      agentVersion: '6.0.0',
+      expectedAgentVersion: '6.0.2',
+      agentUpdateAvailable: true,
       capabilities: { supportsPause: true, supportsScope: true, supportsTest: true },
     });
 
@@ -431,6 +435,7 @@ describe('InfrastructureWorkspace', () => {
         sourceBadges: ['API', 'Pulse Agent'],
         statusLabel: 'Active',
         statusClassName: 'bg-green-100 text-green-800',
+        agentUpdateCount: 1,
         lastActivityText: '1m ago',
         enabled: true,
         canEdit: true,
@@ -451,9 +456,12 @@ describe('InfrastructureWorkspace', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: /^Edit$/i }));
 
+    expect(screen.getByText('Agent update')).toBeInTheDocument();
     await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
     expect(screen.getByText('Pulse Agent augmentation')).toBeInTheDocument();
     expect(screen.getByText('zeus-agent')).toBeInTheDocument();
+    expect(screen.getByText('Update available')).toBeInTheDocument();
+    expect(screen.getByText('6.0.0 -> 6.0.2')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Copy uninstall command/i })).toBeInTheDocument();
   });
 

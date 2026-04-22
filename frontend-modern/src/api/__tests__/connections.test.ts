@@ -47,6 +47,38 @@ describe('ConnectionsAPI', () => {
     expect(result).toEqual({ connections: [], systems: [] });
   });
 
+  it('list() preserves agent version metadata on agent-backed connections', async () => {
+    const connections: Connection[] = [
+      {
+        id: 'agent:mini-pc',
+        type: 'agent',
+        name: 'mini-pc',
+        address: 'mini-pc',
+        state: 'active',
+        stateReason: '',
+        enabled: true,
+        surfaces: ['host'],
+        scope: { host: true },
+        lastSeen: '2026-04-22T20:00:00Z',
+        lastError: null,
+        source: 'agent',
+        agentVersion: '6.0.0',
+        expectedAgentVersion: '6.0.2',
+        agentUpdateAvailable: true,
+        capabilities: { supportsPause: false, supportsScope: false, supportsTest: false },
+      },
+    ];
+    mockedApiFetchJSON.mockResolvedValueOnce({ connections });
+
+    const result = await ConnectionsAPI.list();
+
+    expect(result.connections[0]).toMatchObject({
+      agentVersion: '6.0.0',
+      expectedAgentVersion: '6.0.2',
+      agentUpdateAvailable: true,
+    });
+  });
+
   it('probe() POSTs the address JSON and returns the candidates envelope', async () => {
     const response: ProbeResponse = {
       candidates: [
