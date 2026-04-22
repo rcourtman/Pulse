@@ -124,7 +124,7 @@ describe('portal store', function() {
           can_manage: true,
           has_billing: true,
           members: [
-            { email: 'owner@example.com', role: 'owner', user_id: 'u_1', created_at: '2026-03-28T10:00:00Z' },
+            { subject_id: 'u_1', email: 'owner@example.com', role: 'owner', user_id: 'u_1', state: 'active', created_at: '2026-03-28T10:00:00Z' },
           ],
           workspaces: [],
         },
@@ -135,7 +135,7 @@ describe('portal store', function() {
     expect(entry.accessQuery.status).toBe('ready');
     expect(entry.accessQuery.error).toBe('');
     expect(entry.accessQuery.data).toEqual([
-      { email: 'owner@example.com', role: 'owner', user_id: 'u_1', created_at: '2026-03-28T10:00:00Z' },
+      { subject_id: 'u_1', email: 'owner@example.com', role: 'owner', user_id: 'u_1', state: 'active', created_at: '2026-03-28T10:00:00Z' },
     ]);
 
     store.setBootstrap({
@@ -151,7 +151,7 @@ describe('portal store', function() {
           can_manage: true,
           has_billing: true,
           members: [
-            { email: 'admin@example.com', role: 'admin', user_id: 'u_2', created_at: '2026-03-28T11:00:00Z' },
+            { subject_id: 'u_2', email: 'admin@example.com', role: 'admin', user_id: 'u_2', state: 'active', created_at: '2026-03-28T11:00:00Z' },
           ],
           workspaces: [],
         },
@@ -159,7 +159,7 @@ describe('portal store', function() {
     });
 
     expect(store.getAccountState().byAccountID.acct_1.accessQuery.data).toEqual([
-      { email: 'admin@example.com', role: 'admin', user_id: 'u_2', created_at: '2026-03-28T11:00:00Z' },
+      { subject_id: 'u_2', email: 'admin@example.com', role: 'admin', user_id: 'u_2', state: 'active', created_at: '2026-03-28T11:00:00Z' },
     ]);
   });
 

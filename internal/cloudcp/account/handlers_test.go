@@ -88,27 +88,76 @@ func TestInviteMember(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/accounts/"+accountID+"/members", bytes.NewBufferString(body))
 	rec := doRequest(t, mux, req)
 
-	if rec.Code != http.StatusCreated {
-		t.Fatalf("status = %d, want %d (body=%q)", rec.Code, http.StatusCreated, rec.Body.String())
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("status = %d, want %d (body=%q)", rec.Code, http.StatusAccepted, rec.Body.String())
 	}
 
 	u, err := reg.GetUserByEmail("tech@msp.com")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if u == nil {
-		t.Fatal("expected user to be created")
+	if u != nil {
+		t.Fatalf("expected invitation-only flow without user creation, got %+v", u)
 	}
 
-	m, err := reg.GetMembership(accountID, u.ID)
+	invitation, err := reg.GetInvitationByAccountAndEmail(accountID, "tech@msp.com")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if m == nil {
-		t.Fatal("expected membership to be created")
+	if invitation == nil {
+		t.Fatal("expected pending invitation to be stored")
 	}
-	if m.Role != registry.MemberRoleTech {
-		t.Fatalf("role = %q, want %q", m.Role, registry.MemberRoleTech)
+	if invitation.Role != registry.MemberRoleTech {
+		t.Fatalf("role = %q, want %q", invitation.Role, registry.MemberRoleTech)
+	}
+}
+
+func TestInviteMember_ListMembersIncludesPendingInvitationForManagers(t *testing.T) {
+	reg := newTestRegistry(t)
+	handler := HandleListMembers(reg)
+
+	accountID, err := registry.GenerateAccountID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.CreateAccount(&registry.Account{ID: accountID, Kind: registry.AccountKindMSP, DisplayName: "Test"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.UpsertInvitation(&registry.AccountInvitation{
+		AccountID: accountID,
+		Email:     "pending@example.com",
+		Role:      registry.MemberRoleAdmin,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/accounts/"+accountID+"/members", nil)
+	req.SetPathValue("account_id", accountID)
+	req.Header.Set("X-User-Role", string(registry.MemberRoleOwner))
+	rec := doRawRequest(t, http.HandlerFunc(handler), req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d (body=%q)", rec.Code, http.StatusOK, rec.Body.String())
+	}
+
+	var subjects []struct {
+		SubjectID string `json:"subject_id"`
+		State     string `json:"state"`
+		Email     string `json:"email"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &subjects); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(subjects) != 1 {
+		t.Fatalf("subjects = %+v, want single pending invitation", subjects)
+	}
+	if subjects[0].State != string(registry.AccountAccessStatePending) {
+		t.Fatalf("state = %q, want %q", subjects[0].State, registry.AccountAccessStatePending)
+	}
+	if subjects[0].Email != "pending@example.com" {
+		t.Fatalf("email = %q, want %q", subjects[0].Email, "pending@example.com")
+	}
+	if subjects[0].SubjectID == "" {
+		t.Fatal("expected subject_id for pending invitation")
 	}
 }
 
@@ -351,7 +400,7 @@ func TestCannotRemoveLastOwner(t *testing.T) {
 
 func TestUpdateMemberRole_AdminCannotDemoteOwner(t *testing.T) {
 	reg := newTestRegistry(t)
-	mux := newTestMux(reg)
+	handler := HandleUpdateMemberRole(reg)
 
 	accountID, err := registry.GenerateAccountID()
 	if err != nil {
@@ -384,8 +433,10 @@ func TestUpdateMemberRole_AdminCannotDemoteOwner(t *testing.T) {
 
 	body := `{"role":"tech"}`
 	req := httptest.NewRequest(http.MethodPatch, "/api/accounts/"+accountID+"/members/"+ownerID, bytes.NewBufferString(body))
+	req.SetPathValue("account_id", accountID)
+	req.SetPathValue("user_id", ownerID)
 	req.Header.Set("X-User-Role", string(registry.MemberRoleAdmin))
-	rec := doRequest(t, mux, req)
+	rec := doRawRequest(t, http.HandlerFunc(handler), req)
 
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("status = %d, want %d (body=%q)", rec.Code, http.StatusForbidden, rec.Body.String())
@@ -443,7 +494,7 @@ func TestUpdateMemberRole_CannotDemoteLastOwner(t *testing.T) {
 
 func TestRemoveMember_AdminCannotRemoveOwner(t *testing.T) {
 	reg := newTestRegistry(t)
-	mux := newTestMux(reg)
+	handler := HandleRemoveMember(reg)
 
 	accountID, err := registry.GenerateAccountID()
 	if err != nil {
@@ -475,8 +526,10 @@ func TestRemoveMember_AdminCannotRemoveOwner(t *testing.T) {
 	}
 
 	req := httptest.NewRequest(http.MethodDelete, "/api/accounts/"+accountID+"/members/"+ownerID, nil)
+	req.SetPathValue("account_id", accountID)
+	req.SetPathValue("user_id", ownerID)
 	req.Header.Set("X-User-Role", string(registry.MemberRoleAdmin))
-	rec := doRequest(t, mux, req)
+	rec := doRawRequest(t, http.HandlerFunc(handler), req)
 
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("status = %d, want %d (body=%q)", rec.Code, http.StatusForbidden, rec.Body.String())

@@ -17,9 +17,11 @@ type BootstrapWorkspace struct {
 }
 
 type BootstrapMember struct {
-	UserID    string `json:"user_id"`
+	SubjectID string `json:"subject_id"`
+	UserID    string `json:"user_id,omitempty"`
 	Email     string `json:"email"`
 	Role      string `json:"role"`
+	State     string `json:"state"`
 	CreatedAt string `json:"created_at,omitempty"`
 }
 
@@ -87,9 +89,11 @@ func BuildBootstrapDataWithSignupPath(authenticated bool, email string, accounts
 				createdAt = member.CreatedAt.UTC().Format(time.RFC3339)
 			}
 			members = append(members, BootstrapMember{
+				SubjectID: member.SubjectID,
 				UserID:    member.UserID,
 				Email:     member.Email,
 				Role:      string(member.Role),
+				State:     string(member.State),
 				CreatedAt: createdAt,
 			})
 		}

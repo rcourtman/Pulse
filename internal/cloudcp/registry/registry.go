@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -136,6 +137,19 @@ func (r *TenantRegistry) initSchema() error {
 	CREATE INDEX IF NOT EXISTS idx_memberships_user_id ON account_memberships(user_id);
 	CREATE INDEX IF NOT EXISTS idx_memberships_user_id_created_at ON account_memberships(user_id, created_at DESC);
 	CREATE INDEX IF NOT EXISTS idx_memberships_account_id_created_at ON account_memberships(account_id, created_at DESC);
+
+	CREATE TABLE IF NOT EXISTS account_invitations (
+		id TEXT PRIMARY KEY,
+		account_id TEXT NOT NULL,
+		email TEXT NOT NULL,
+		role TEXT NOT NULL DEFAULT 'tech',
+		invited_by TEXT NOT NULL DEFAULT '',
+		invited_at INTEGER NOT NULL,
+		UNIQUE (account_id, email),
+		FOREIGN KEY (account_id) REFERENCES accounts(id)
+	);
+	CREATE INDEX IF NOT EXISTS idx_account_invitations_account_id_invited_at ON account_invitations(account_id, invited_at DESC);
+	CREATE INDEX IF NOT EXISTS idx_account_invitations_email_invited_at ON account_invitations(email, invited_at DESC);
 
 	CREATE TABLE IF NOT EXISTS hosted_entitlements (
 		id TEXT PRIMARY KEY,
@@ -1494,6 +1508,289 @@ func (r *TenantRegistry) ListMembersByAccount(accountID string) ([]*AccountMembe
 	return scanMemberships(rows)
 }
 
+// UpsertInvitation creates or updates a pending invitation for an account email.
+func (r *TenantRegistry) UpsertInvitation(invitation *AccountInvitation) error {
+	if invitation == nil {
+		return fmt.Errorf("invitation is nil")
+	}
+	now := time.Now().UTC()
+	if invitation.InvitedAt.IsZero() {
+		invitation.InvitedAt = now
+	}
+	invitation.Email = strings.ToLower(strings.TrimSpace(invitation.Email))
+	invitation.InvitedBy = strings.TrimSpace(invitation.InvitedBy)
+	if invitation.Email == "" {
+		return fmt.Errorf("invitation email is required")
+	}
+	if invitation.AccountID == "" {
+		return fmt.Errorf("invitation account id is required")
+	}
+	if invitation.ID == "" {
+		id, err := GenerateAccountInvitationID()
+		if err != nil {
+			return fmt.Errorf("generate invitation id: %w", err)
+		}
+		invitation.ID = id
+	}
+	role := invitation.Role
+	if strings.TrimSpace(string(role)) == "" {
+		role = MemberRoleTech
+	}
+	_, err := r.db.Exec(`
+		INSERT INTO account_invitations (
+			id, account_id, email, role, invited_by, invited_at
+		) VALUES (?, ?, ?, ?, ?, ?)
+		ON CONFLICT(account_id, email) DO UPDATE SET
+			role = excluded.role,
+			invited_by = excluded.invited_by,
+			invited_at = excluded.invited_at
+	`, invitation.ID, invitation.AccountID, invitation.Email, string(role), invitation.InvitedBy, invitation.InvitedAt.Unix())
+	if err != nil {
+		return fmt.Errorf("upsert invitation: %w", err)
+	}
+	invitation.Role = role
+	return nil
+}
+
+// GetInvitation returns an invitation by ID.
+func (r *TenantRegistry) GetInvitation(invitationID string) (*AccountInvitation, error) {
+	row := r.db.QueryRow(`SELECT
+		id, account_id, email, role, invited_by, invited_at
+		FROM account_invitations
+		WHERE id = ?`, strings.TrimSpace(invitationID))
+	return scanInvitation(row)
+}
+
+// GetInvitationByAccountAndEmail returns a pending invitation for an account/email pair.
+func (r *TenantRegistry) GetInvitationByAccountAndEmail(accountID, email string) (*AccountInvitation, error) {
+	row := r.db.QueryRow(`SELECT
+		id, account_id, email, role, invited_by, invited_at
+		FROM account_invitations
+		WHERE account_id = ? AND email = ?`, strings.TrimSpace(accountID), strings.ToLower(strings.TrimSpace(email)))
+	return scanInvitation(row)
+}
+
+// ListInvitationsByAccount returns pending invitations for an account.
+func (r *TenantRegistry) ListInvitationsByAccount(accountID string) ([]*AccountInvitation, error) {
+	rows, err := r.db.Query(`SELECT
+		id, account_id, email, role, invited_by, invited_at
+		FROM account_invitations
+		WHERE account_id = ?
+		ORDER BY invited_at DESC`, strings.TrimSpace(accountID))
+	if err != nil {
+		return nil, fmt.Errorf("list invitations by account: %w", err)
+	}
+	defer rows.Close()
+	return scanInvitations(rows)
+}
+
+// ListInvitationsByEmail returns all pending invitations for an email.
+func (r *TenantRegistry) ListInvitationsByEmail(email string) ([]*AccountInvitation, error) {
+	rows, err := r.db.Query(`SELECT
+		id, account_id, email, role, invited_by, invited_at
+		FROM account_invitations
+		WHERE email = ?
+		ORDER BY invited_at DESC`, strings.ToLower(strings.TrimSpace(email)))
+	if err != nil {
+		return nil, fmt.Errorf("list invitations by email: %w", err)
+	}
+	defer rows.Close()
+	return scanInvitations(rows)
+}
+
+// UpdateInvitationRole updates the role stored on a pending invitation.
+func (r *TenantRegistry) UpdateInvitationRole(invitationID string, role MemberRole, invitedBy string) error {
+	invitationID = strings.TrimSpace(invitationID)
+	if invitationID == "" {
+		return fmt.Errorf("invitation id is required")
+	}
+	roleValue := strings.TrimSpace(string(role))
+	if roleValue == "" {
+		roleValue = string(MemberRoleTech)
+	}
+	res, err := r.db.Exec(`
+		UPDATE account_invitations
+		SET role = ?, invited_by = ?, invited_at = ?
+		WHERE id = ?`,
+		roleValue,
+		strings.TrimSpace(invitedBy),
+		time.Now().UTC().Unix(),
+		invitationID,
+	)
+	if err != nil {
+		return fmt.Errorf("update invitation role: %w", err)
+	}
+	affected, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("get rows affected: %w", err)
+	}
+	if affected == 0 {
+		return fmt.Errorf("invitation %q not found", invitationID)
+	}
+	return nil
+}
+
+// DeleteInvitation removes a pending invitation by ID.
+func (r *TenantRegistry) DeleteInvitation(invitationID string) error {
+	res, err := r.db.Exec(`DELETE FROM account_invitations WHERE id = ?`, strings.TrimSpace(invitationID))
+	if err != nil {
+		return fmt.Errorf("delete invitation: %w", err)
+	}
+	affected, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("get rows affected: %w", err)
+	}
+	if affected == 0 {
+		return fmt.Errorf("invitation %q not found", invitationID)
+	}
+	return nil
+}
+
+// DeleteInvitationByAccountAndEmail removes a pending invitation for an account/email pair.
+func (r *TenantRegistry) DeleteInvitationByAccountAndEmail(accountID, email string) error {
+	_, err := r.db.Exec(
+		`DELETE FROM account_invitations WHERE account_id = ? AND email = ?`,
+		strings.TrimSpace(accountID),
+		strings.ToLower(strings.TrimSpace(email)),
+	)
+	if err != nil {
+		return fmt.Errorf("delete invitation by account and email: %w", err)
+	}
+	return nil
+}
+
+// AcceptInvitationsForUser promotes any pending account invitations for an email
+// into active memberships for the authenticated user and then clears them.
+func (r *TenantRegistry) AcceptInvitationsForUser(email, userID string) error {
+	email = strings.ToLower(strings.TrimSpace(email))
+	userID = strings.TrimSpace(userID)
+	if email == "" {
+		return fmt.Errorf("email is required")
+	}
+	if userID == "" {
+		return fmt.Errorf("user id is required")
+	}
+
+	tx, err := r.db.Begin()
+	if err != nil {
+		return fmt.Errorf("begin accept invitations tx: %w", err)
+	}
+	defer func() {
+		if tx != nil {
+			_ = tx.Rollback()
+		}
+	}()
+
+	rows, err := tx.Query(`SELECT
+		id, account_id, email, role, invited_by, invited_at
+		FROM account_invitations
+		WHERE email = ?
+		ORDER BY invited_at ASC`, email)
+	if err != nil {
+		return fmt.Errorf("list invitations for acceptance: %w", err)
+	}
+	invitations, err := scanInvitations(rows)
+	_ = rows.Close()
+	if err != nil {
+		return err
+	}
+
+	for _, invitation := range invitations {
+		if invitation == nil {
+			continue
+		}
+		var exists int
+		if err := tx.QueryRow(
+			`SELECT COUNT(1) FROM account_memberships WHERE account_id = ? AND user_id = ?`,
+			invitation.AccountID,
+			userID,
+		).Scan(&exists); err != nil {
+			return fmt.Errorf("check existing membership: %w", err)
+		}
+		if exists == 0 {
+			roleValue := strings.TrimSpace(string(invitation.Role))
+			if roleValue == "" {
+				roleValue = string(MemberRoleTech)
+			}
+			if _, err := tx.Exec(`
+				INSERT INTO account_memberships (
+					account_id, user_id, role, created_at
+				) VALUES (?, ?, ?, ?)`,
+				invitation.AccountID,
+				userID,
+				roleValue,
+				time.Now().UTC().Unix(),
+			); err != nil {
+				return fmt.Errorf("create membership from invitation: %w", err)
+			}
+		}
+		if _, err := tx.Exec(`DELETE FROM account_invitations WHERE id = ?`, invitation.ID); err != nil {
+			return fmt.Errorf("delete accepted invitation: %w", err)
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit accept invitations tx: %w", err)
+	}
+	tx = nil
+	return nil
+}
+
+// ListAccessSubjectsByAccount returns the canonical roster view for an account,
+// combining active members with pending invitations.
+func (r *TenantRegistry) ListAccessSubjectsByAccount(accountID string) ([]*AccountAccessSubject, error) {
+	memberships, err := r.ListMembersByAccount(accountID)
+	if err != nil {
+		return nil, err
+	}
+	invitations, err := r.ListInvitationsByAccount(accountID)
+	if err != nil {
+		return nil, err
+	}
+
+	subjects := make([]*AccountAccessSubject, 0, len(memberships)+len(invitations))
+	for _, membership := range memberships {
+		if membership == nil {
+			continue
+		}
+		user, err := r.GetUser(membership.UserID)
+		if err != nil {
+			return nil, fmt.Errorf("load member user: %w", err)
+		}
+		if user == nil {
+			return nil, fmt.Errorf("member user %q not found", membership.UserID)
+		}
+		subjects = append(subjects, &AccountAccessSubject{
+			SubjectID: membership.UserID,
+			UserID:    membership.UserID,
+			Email:     user.Email,
+			Role:      membership.Role,
+			State:     AccountAccessStateActive,
+			CreatedAt: membership.CreatedAt,
+		})
+	}
+	for _, invitation := range invitations {
+		if invitation == nil {
+			continue
+		}
+		subjects = append(subjects, &AccountAccessSubject{
+			SubjectID: invitation.ID,
+			Email:     invitation.Email,
+			Role:      invitation.Role,
+			State:     AccountAccessStatePending,
+			CreatedAt: invitation.InvitedAt,
+		})
+	}
+
+	sort.SliceStable(subjects, func(i, j int) bool {
+		if subjects[i].CreatedAt.Equal(subjects[j].CreatedAt) {
+			return subjects[i].State < subjects[j].State
+		}
+		return subjects[i].CreatedAt.After(subjects[j].CreatedAt)
+	})
+	return subjects, nil
+}
+
 // ListAccountsByUser returns account IDs for all accounts the given user belongs to.
 func (r *TenantRegistry) ListAccountsByUser(userID string) ([]string, error) {
 	rows, err := r.db.Query(`SELECT account_id FROM account_memberships WHERE user_id = ? ORDER BY created_at DESC`, userID)
@@ -1899,6 +2196,41 @@ func scanMemberships(rows *sql.Rows) ([]*AccountMembership, error) {
 		memberships = append(memberships, m)
 	}
 	return memberships, rows.Err()
+}
+
+func scanInvitation(s scanner) (*AccountInvitation, error) {
+	var invitation AccountInvitation
+	var role string
+	var invitedAt int64
+	if err := s.Scan(
+		&invitation.ID,
+		&invitation.AccountID,
+		&invitation.Email,
+		&role,
+		&invitation.InvitedBy,
+		&invitedAt,
+	); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("scan invitation: %w", err)
+	}
+	invitation.Email = strings.ToLower(strings.TrimSpace(invitation.Email))
+	invitation.Role = MemberRole(role)
+	invitation.InvitedAt = time.Unix(invitedAt, 0).UTC()
+	return &invitation, nil
+}
+
+func scanInvitations(rows *sql.Rows) ([]*AccountInvitation, error) {
+	var invitations []*AccountInvitation
+	for rows.Next() {
+		invitation, err := scanInvitation(rows)
+		if err != nil {
+			return nil, err
+		}
+		invitations = append(invitations, invitation)
+	}
+	return invitations, rows.Err()
 }
 
 func nullableTimeUnix(t *time.Time) driver.Value {

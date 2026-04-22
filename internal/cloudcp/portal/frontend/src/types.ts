@@ -9,9 +9,11 @@ export interface PortalWorkspaceSummary {
 }
 
 export interface PortalAccessMember {
+  subject_id?: string;
   email: string;
   role: string;
-  user_id: string;
+  user_id?: string;
+  state?: 'active' | 'pending';
   created_at?: string;
 }
 

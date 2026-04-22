@@ -448,6 +448,9 @@ func ensurePortalUser(reg *registry.TenantRegistry, email string) (string, error
 	if user == nil || strings.TrimSpace(user.ID) == "" {
 		return "", fmt.Errorf("user resolution failed")
 	}
+	if err := reg.AcceptInvitationsForUser(email, user.ID); err != nil {
+		return "", fmt.Errorf("accept account invitations: %w", err)
+	}
 	_ = reg.UpdateUserLastLogin(user.ID)
 	return user.ID, nil
 }

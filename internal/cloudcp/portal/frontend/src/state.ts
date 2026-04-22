@@ -95,9 +95,11 @@ function clonePortalAccessMembers(members: PortalAccessMember[]): PortalAccessMe
   var cloned = [] as PortalAccessMember[];
   for (var i = 0; i < members.length; i += 1) {
     cloned.push({
+      subject_id: members[i].subject_id,
       email: members[i].email,
       role: members[i].role,
       user_id: members[i].user_id,
+      state: members[i].state,
       created_at: members[i].created_at,
     });
   }

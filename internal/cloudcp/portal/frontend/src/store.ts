@@ -193,6 +193,8 @@ function normalizeMembers(members: PortalAccessMember[]): PortalAccessMember[] {
   return members.map(function(member) {
     return {
       ...(member as PortalAccessMember),
+      subject_id: member.subject_id || member.user_id || '',
+      state: member.state || 'active',
     };
   });
 }

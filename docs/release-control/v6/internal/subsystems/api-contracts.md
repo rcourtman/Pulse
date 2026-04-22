@@ -805,7 +805,13 @@ fake disabled row state. That same typed bootstrap/runtime contract must also
 ship the current hosted roster snapshot in the portal bootstrap payload so the
 first `Access` render is a real review surface rather than a fetch-first or
 error-first placeholder; later member API reads remain refresh and mutation
-follow-through. `Billing` follows the same shared runtime
+follow-through. That same shared access contract must keep stable access
+subject identity across bootstrap and mutation responses: hosted roster rows
+carry `subject_id`, `state`, and optional `user_id`, unknown-email invites
+return `202 Accepted` with `state=pending` instead of auto-binding a guessed
+future user record, and portal magic-link verification may materialize that
+pending subject into a membership only after the invited email authenticates
+through the portal-owned session path. `Billing` follows the same shared runtime
 contract: hosted billing remains the default primary path, self-hosted billing
 jobs open one panel at a time, and the runtime must reveal the active billing
 panel on phone-width layouts instead of leaving it offscreen. The same

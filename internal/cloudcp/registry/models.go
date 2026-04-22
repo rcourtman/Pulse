@@ -49,6 +49,35 @@ type AccountMembership struct {
 	CreatedAt time.Time  `json:"created_at"`
 }
 
+// AccountInvitation represents a pending account invitation that has not yet
+// been accepted through a verified account login.
+type AccountInvitation struct {
+	ID        string     `json:"id"`
+	AccountID string     `json:"account_id"`
+	Email     string     `json:"email"`
+	Role      MemberRole `json:"role"`
+	InvitedBy string     `json:"invited_by"`
+	InvitedAt time.Time  `json:"invited_at"`
+}
+
+type AccountAccessState string
+
+const (
+	AccountAccessStateActive  AccountAccessState = "active"
+	AccountAccessStatePending AccountAccessState = "pending"
+)
+
+// AccountAccessSubject is the canonical roster shape for Pulse Account access
+// surfaces, covering both active members and pending invitations.
+type AccountAccessSubject struct {
+	SubjectID string             `json:"subject_id"`
+	UserID    string             `json:"user_id,omitempty"`
+	Email     string             `json:"email"`
+	Role      MemberRole         `json:"role"`
+	State     AccountAccessState `json:"state"`
+	CreatedAt time.Time          `json:"created_at"`
+}
+
 // TenantState represents the lifecycle state of a tenant.
 type TenantState string
 
@@ -193,6 +222,21 @@ func GenerateUserID() (string, error) {
 	}
 	var sb strings.Builder
 	sb.WriteString("u_")
+	for _, v := range b {
+		sb.WriteByte(crockfordBase32[int(v)%len(crockfordBase32)])
+	}
+	return sb.String(), nil
+}
+
+// GenerateAccountInvitationID returns an invitation ID of the form "ainv_"
+// followed by 10 random Crockford base32 characters (50 bits of entropy).
+func GenerateAccountInvitationID() (string, error) {
+	b := make([]byte, 10)
+	if _, err := rand.Read(b); err != nil {
+		return "", fmt.Errorf("generate account invitation id: %w", err)
+	}
+	var sb strings.Builder
+	sb.WriteString("ainv_")
 	for _, v := range b {
 		sb.WriteByte(crockfordBase32[int(v)%len(crockfordBase32)])
 	}

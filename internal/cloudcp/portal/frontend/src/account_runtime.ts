@@ -294,12 +294,12 @@ export function installAccountRuntime(deps: AccountRuntimeDeps): AccountRuntime 
       return;
     }
     try {
-      await deps.api.inviteMember(accountID, { email: email, role: roleEl.value });
+      var result = await deps.api.inviteMember(accountID, { email: email, role: roleEl.value });
       emailEl.value = '';
       if (!await refreshAccountAccessSection(accountID)) {
         return;
       }
-      deps.showToast('Member invited!');
+      deps.showToast(result && result.state === 'active' ? 'Member added.' : 'Invitation saved.');
     } catch (error) {
       if (error instanceof PortalAPIError && error.status === 409) {
         deps.showToast('Member already exists.', true);

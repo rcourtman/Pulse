@@ -40,57 +40,62 @@ agreement, and cloud-specific enforcement rules.
 18. `pkg/licensing/purchase_return.go`
 19. `pkg/licensing/stripe_subscription.go`
 20. `pkg/licensing/monitored_system_limit.go`
-21. `internal/cloudcp/account/tenant_handlers.go`
-22. `internal/cloudcp/config.go`
-23. `internal/cloudcp/entitlements/service.go`
-24. `internal/cloudcp/portal/handlers.go`
-25. `internal/cloudcp/portal/page.go`
-26. `internal/cloudcp/public_cloud_signup_handlers.go`
-27. `internal/cloudcp/registry/registry.go`
-28. `internal/cloudcp/routes.go`
-29. `internal/cloudcp/stripe/provisioner.go`
-30. `internal/hosted/provisioner.go`
-31. `frontend-modern/src/App.tsx`
-32. `frontend-modern/src/AppLayout.tsx`
-33. `frontend-modern/src/useAppRuntimeState.ts`
-34. `frontend-modern/src/components/Commercial/MonitoredSystemDefinitionDisclosure.tsx`
-35. `frontend-modern/src/components/Settings/BillingAdminPanel.tsx`
-36. `frontend-modern/src/components/Settings/BillingAdminOrganizationsTable.tsx`
-37. `frontend-modern/src/components/Settings/OrganizationBillingPanel.tsx`
-38. `frontend-modern/src/components/Settings/OrganizationBillingLoadingState.tsx`
-39. `frontend-modern/src/components/Settings/MonitoredSystemLedgerPanel.tsx`
-40. `frontend-modern/src/components/Settings/MonitoredSystemAdmissionPreview.tsx`
-41. `frontend-modern/src/components/Settings/ProLicensePanel.tsx`
-42. `frontend-modern/src/components/Settings/ProLicensePlanSection.tsx`
-43. `frontend-modern/src/components/Settings/CommercialBillingSections.tsx`
-44. `frontend-modern/src/components/Settings/SelfHostedCommercialRecoverySection.tsx`
-45. `frontend-modern/src/components/Settings/RelaySettingsPanel.tsx`
-46. `frontend-modern/src/components/Settings/RelayPairingSection.tsx`
-47. `frontend-modern/src/components/Settings/useBillingAdminPanelState.ts`
-48. `frontend-modern/src/components/Settings/useOrganizationBillingPanelState.ts`
-49. `frontend-modern/src/components/Settings/useProLicensePanelState.ts`
-50. `frontend-modern/src/components/Settings/useRelaySettingsPanelState.ts`
-51. `frontend-modern/src/pages/CloudPricing.tsx`
-52. `frontend-modern/src/pages/HostedSignup.tsx`
-53. `frontend-modern/src/pages/PricingHandoff.tsx`
-54. `frontend-modern/src/utils/apiClient.ts`
-55. `frontend-modern/src/utils/cloudPlans.ts`
-56. `frontend-modern/src/utils/commercialBillingModel.ts`
-57. `frontend-modern/src/utils/licensePresentation.ts`
-58. `frontend-modern/src/utils/monitoredSystemPresentation.ts`
-59. `frontend-modern/src/utils/pricingHandoff.ts`
-60. `frontend-modern/src/utils/selfHostedPlans.ts`
-61. `frontend-modern/src/utils/upgradePresentation.ts`
-62. `frontend-modern/src/components/Settings/selfHostedBillingPresentation.ts`
-63. `pulse-pro:license-server/public_pricing.go`
-64. `pulse-pro:license-server/v6_checkout.go`
-65. `pulse-pro:landing-page/thanks.html`
-66. `pulse-pro:scripts/grandfathered_recurring_cutover_preview.py`
-67. `pulse-pro:scripts/validate_public_pricing_model.py`
-68. `pulse-pro:V6_LAUNCH_CHECKLIST.md`
-69. `pkg/licensing/trial_activation_public_key_override_dev.go`
-70. `pkg/licensing/trial_activation_public_key_override_release.go`
-71. `pkg/licensing/testing_helpers.go`
+21. `internal/cloudcp/account/audit.go`
+22. `internal/cloudcp/account/handlers.go`
+23. `internal/cloudcp/account/tenant_handlers.go`
+24. `internal/cloudcp/auth/handlers.go`
+25. `internal/cloudcp/auth/session.go`
+26. `internal/cloudcp/config.go`
+27. `internal/cloudcp/entitlements/service.go`
+28. `internal/cloudcp/portal/handlers.go`
+29. `internal/cloudcp/portal/page.go`
+30. `internal/cloudcp/public_cloud_signup_handlers.go`
+31. `internal/cloudcp/registry/models.go`
+32. `internal/cloudcp/registry/registry.go`
+33. `internal/cloudcp/routes.go`
+34. `internal/cloudcp/stripe/provisioner.go`
+35. `internal/hosted/provisioner.go`
+36. `frontend-modern/src/App.tsx`
+37. `frontend-modern/src/AppLayout.tsx`
+38. `frontend-modern/src/useAppRuntimeState.ts`
+39. `frontend-modern/src/components/Commercial/MonitoredSystemDefinitionDisclosure.tsx`
+40. `frontend-modern/src/components/Settings/BillingAdminPanel.tsx`
+41. `frontend-modern/src/components/Settings/BillingAdminOrganizationsTable.tsx`
+42. `frontend-modern/src/components/Settings/OrganizationBillingPanel.tsx`
+43. `frontend-modern/src/components/Settings/OrganizationBillingLoadingState.tsx`
+44. `frontend-modern/src/components/Settings/MonitoredSystemLedgerPanel.tsx`
+45. `frontend-modern/src/components/Settings/MonitoredSystemAdmissionPreview.tsx`
+46. `frontend-modern/src/components/Settings/ProLicensePanel.tsx`
+47. `frontend-modern/src/components/Settings/ProLicensePlanSection.tsx`
+48. `frontend-modern/src/components/Settings/CommercialBillingSections.tsx`
+49. `frontend-modern/src/components/Settings/SelfHostedCommercialRecoverySection.tsx`
+50. `frontend-modern/src/components/Settings/RelaySettingsPanel.tsx`
+51. `frontend-modern/src/components/Settings/RelayPairingSection.tsx`
+52. `frontend-modern/src/components/Settings/useBillingAdminPanelState.ts`
+53. `frontend-modern/src/components/Settings/useOrganizationBillingPanelState.ts`
+54. `frontend-modern/src/components/Settings/useProLicensePanelState.ts`
+55. `frontend-modern/src/components/Settings/useRelaySettingsPanelState.ts`
+56. `frontend-modern/src/pages/CloudPricing.tsx`
+57. `frontend-modern/src/pages/HostedSignup.tsx`
+58. `frontend-modern/src/pages/PricingHandoff.tsx`
+59. `frontend-modern/src/utils/apiClient.ts`
+60. `frontend-modern/src/utils/cloudPlans.ts`
+61. `frontend-modern/src/utils/commercialBillingModel.ts`
+62. `frontend-modern/src/utils/licensePresentation.ts`
+63. `frontend-modern/src/utils/monitoredSystemPresentation.ts`
+64. `frontend-modern/src/utils/pricingHandoff.ts`
+65. `frontend-modern/src/utils/selfHostedPlans.ts`
+66. `frontend-modern/src/utils/upgradePresentation.ts`
+67. `frontend-modern/src/components/Settings/selfHostedBillingPresentation.ts`
+68. `pulse-pro:license-server/public_pricing.go`
+69. `pulse-pro:license-server/v6_checkout.go`
+70. `pulse-pro:landing-page/thanks.html`
+71. `pulse-pro:scripts/grandfathered_recurring_cutover_preview.py`
+72. `pulse-pro:scripts/validate_public_pricing_model.py`
+73. `pulse-pro:V6_LAUNCH_CHECKLIST.md`
+74. `pkg/licensing/trial_activation_public_key_override_dev.go`
+75. `pkg/licensing/trial_activation_public_key_override_release.go`
+76. `pkg/licensing/testing_helpers.go`
 
 ## Shared Boundaries
 
@@ -139,10 +144,10 @@ Community limit enforcement.
 
 1. Add or change limits through `pkg/licensing/`
 2. Add or change hosted entitlement issuance through `internal/cloudcp/entitlements/service.go`
-3. Add or change control-plane plan storage through `internal/cloudcp/registry/registry.go`
+3. Add or change control-plane plan storage through `internal/cloudcp/registry/models.go` and `internal/cloudcp/registry/registry.go`
 4. Add or change MSP account-scoped workspace provisioning entry handlers through `internal/cloudcp/account/tenant_handlers.go`
 5. Add or change public cloud self-serve signup price configuration or checkout gating through `internal/cloudcp/config.go` and `internal/cloudcp/public_cloud_signup_handlers.go`
-6. Add or change the hosted account portal API, task-first browser shell, maintained portal frontend/bundle, or account-scoped workspace/access/billing handoff through `internal/cloudcp/portal/` and `internal/cloudcp/routes.go`
+6. Add or change the hosted account portal API, Pulse Account access/auth/session handling, task-first browser shell, maintained portal frontend/bundle, or account-scoped workspace/access/billing handoff through `internal/cloudcp/account/audit.go`, `internal/cloudcp/account/handlers.go`, `internal/cloudcp/auth/handlers.go`, `internal/cloudcp/auth/session.go`, `internal/cloudcp/portal/`, and `internal/cloudcp/routes.go`
    That same customer-entry boundary owns the canonical hosted Cloud handoff:
    public Cloud entry, secure checkout return, and returning-customer sign-in
    must converge on Pulse Account. Public Cloud signup stays canonical at
@@ -1702,7 +1707,17 @@ That same task-first `Access` contract
 must also start from bootstrap-owned roster truth: the first hosted roster
 render must come from the portal bootstrap payload itself, with later member
 API reads reserved for refresh and mutation follow-through instead of
-placeholder-first rendering. `Billing` follows
+placeholder-first rendering. That same hosted access boundary also owns
+invitation consent semantics: `internal/cloudcp/account/handlers.go` plus
+`internal/cloudcp/registry/models.go` and `internal/cloudcp/registry/registry.go`
+may persist pending invitation subjects for unknown emails, but they must not
+auto-create users or memberships from invite input alone. Pending access rows
+must remain explicit `pending` invitation subjects in the bootstrap roster and
+member API until the invited email authenticates through the portal-owned
+magic-link/session path in `internal/cloudcp/auth/handlers.go` and
+`internal/cloudcp/auth/session.go`, and role or removal mutations on those
+rows must target the invitation record rather than guessing a future user
+identity. `Billing` follows
 the same task-first rule: hosted billing leads when present, the self-hosted
 billing, license, refund, and privacy paths reduce to explicit job pickers,
 and the active self-hosted billing panel must stay hidden until that exact job

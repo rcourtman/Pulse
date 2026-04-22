@@ -64,6 +64,79 @@ func TestHandleMagicLinkVerifyPortalTargetCreatesPortalSession(t *testing.T) {
 	}
 }
 
+func TestHandleMagicLinkVerifyPortalTargetAcceptsPendingAccountInvitations(t *testing.T) {
+	dir := t.TempDir()
+	reg, err := registry.NewTenantRegistry(dir)
+	if err != nil {
+		t.Fatalf("NewTenantRegistry: %v", err)
+	}
+	t.Cleanup(func() { _ = reg.Close() })
+
+	accountID, err := registry.GenerateAccountID()
+	if err != nil {
+		t.Fatalf("GenerateAccountID: %v", err)
+	}
+	if err := reg.CreateAccount(&registry.Account{
+		ID:          accountID,
+		Kind:        registry.AccountKindMSP,
+		DisplayName: "Invited Account",
+	}); err != nil {
+		t.Fatalf("CreateAccount: %v", err)
+	}
+	if err := reg.UpsertInvitation(&registry.AccountInvitation{
+		AccountID: accountID,
+		Email:     "portal@example.com",
+		Role:      registry.MemberRoleTech,
+	}); err != nil {
+		t.Fatalf("UpsertInvitation: %v", err)
+	}
+
+	svc, err := NewService(dir)
+	if err != nil {
+		t.Fatalf("NewService: %v", err)
+	}
+	t.Cleanup(svc.Close)
+
+	token, err := svc.GeneratePortalToken("portal@example.com", "")
+	if err != nil {
+		t.Fatalf("GeneratePortalToken: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/auth/magic-link/verify?token="+token, nil)
+	rec := httptest.NewRecorder()
+
+	HandleMagicLinkVerify(svc, reg, filepath.Join(dir, "tenants"), "cloud.example.com", "/portal")(rec, req)
+
+	if rec.Code != http.StatusTemporaryRedirect {
+		t.Fatalf("status=%d body=%q", rec.Code, rec.Body.String())
+	}
+
+	user, err := reg.GetUserByEmail("portal@example.com")
+	if err != nil {
+		t.Fatalf("GetUserByEmail: %v", err)
+	}
+	if user == nil {
+		t.Fatal("expected portal user to be created")
+	}
+	membership, err := reg.GetMembership(accountID, user.ID)
+	if err != nil {
+		t.Fatalf("GetMembership: %v", err)
+	}
+	if membership == nil {
+		t.Fatal("expected pending invitation to become membership")
+	}
+	if membership.Role != registry.MemberRoleTech {
+		t.Fatalf("membership.Role = %q, want %q", membership.Role, registry.MemberRoleTech)
+	}
+	invitation, err := reg.GetInvitationByAccountAndEmail(accountID, "portal@example.com")
+	if err != nil {
+		t.Fatalf("GetInvitationByAccountAndEmail: %v", err)
+	}
+	if invitation != nil {
+		t.Fatalf("expected accepted invitation to be removed, got %+v", invitation)
+	}
+}
+
 func TestHandleMagicLinkVerifyTenantTargetStillRedirectsToTenantHandoff(t *testing.T) {
 	dir := t.TempDir()
 	reg, err := registry.NewTenantRegistry(dir)

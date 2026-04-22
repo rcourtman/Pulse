@@ -1689,10 +1689,15 @@
         "frontend-modern/src/utils/selfHostedPlans.ts",
         "frontend-modern/src/utils/upgradePresentation.ts",
         "internal/api/public_signup_handlers.go",
+        "internal/cloudcp/account/audit.go",
+        "internal/cloudcp/account/handlers.go",
         "internal/cloudcp/account/tenant_handlers.go",
+        "internal/cloudcp/auth/handlers.go",
+        "internal/cloudcp/auth/session.go",
         "internal/cloudcp/config.go",
         "internal/cloudcp/entitlements/service.go",
         "internal/cloudcp/public_cloud_signup_handlers.go",
+        "internal/cloudcp/registry/models.go",
         "internal/cloudcp/registry/registry.go",
         "internal/cloudcp/routes.go",
         "internal/cloudcp/stripe/provisioner.go",
@@ -1830,12 +1835,32 @@
             "label": "control-plane registry plan proof",
             "match_prefixes": [],
             "match_files": [
+              "internal/cloudcp/registry/models.go",
               "internal/cloudcp/registry/registry.go"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
               "internal/cloudcp/registry/registry_test.go"
+            ]
+          },
+          {
+            "id": "pulse-account-access-and-auth",
+            "label": "Pulse Account access and auth proof",
+            "match_prefixes": [],
+            "match_files": [
+              "internal/cloudcp/account/audit.go",
+              "internal/cloudcp/account/handlers.go",
+              "internal/cloudcp/auth/handlers.go",
+              "internal/cloudcp/auth/session.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/cloudcp/account/handlers_test.go",
+              "internal/cloudcp/auth/handlers_magiclink_test.go",
+              "internal/cloudcp/auth/handlers_test.go",
+              "internal/cloudcp/portal/frontend/src/store.test.ts"
             ]
           },
           {

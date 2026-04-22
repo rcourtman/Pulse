@@ -563,6 +563,149 @@ func TestCreateMembership_RequiresExistingAccountAndUser(t *testing.T) {
 	}
 }
 
+func TestInvitationCRUDAndAccessSubjects(t *testing.T) {
+	reg := newTestRegistry(t)
+
+	accountID, err := GenerateAccountID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	userID, err := GenerateUserID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.CreateAccount(&Account{ID: accountID, Kind: AccountKindMSP, DisplayName: "Account"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.CreateUser(&User{ID: userID, Email: "owner@example.com"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.CreateMembership(&AccountMembership{
+		AccountID: accountID,
+		UserID:    userID,
+		Role:      MemberRoleOwner,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	invitation := &AccountInvitation{
+		AccountID: accountID,
+		Email:     "invitee@example.com",
+		Role:      MemberRoleTech,
+		InvitedBy: "owner@example.com",
+	}
+	if err := reg.UpsertInvitation(invitation); err != nil {
+		t.Fatalf("UpsertInvitation: %v", err)
+	}
+	if invitation.ID == "" {
+		t.Fatal("expected invitation ID to be generated")
+	}
+
+	gotInvitation, err := reg.GetInvitationByAccountAndEmail(accountID, "invitee@example.com")
+	if err != nil {
+		t.Fatalf("GetInvitationByAccountAndEmail: %v", err)
+	}
+	if gotInvitation == nil {
+		t.Fatal("expected invitation to be stored")
+	}
+	if gotInvitation.Role != MemberRoleTech {
+		t.Fatalf("invitation role = %q, want %q", gotInvitation.Role, MemberRoleTech)
+	}
+
+	if err := reg.UpdateInvitationRole(gotInvitation.ID, MemberRoleAdmin, "owner@example.com"); err != nil {
+		t.Fatalf("UpdateInvitationRole: %v", err)
+	}
+	gotInvitation, err = reg.GetInvitation(gotInvitation.ID)
+	if err != nil {
+		t.Fatalf("GetInvitation: %v", err)
+	}
+	if gotInvitation == nil || gotInvitation.Role != MemberRoleAdmin {
+		t.Fatalf("updated invitation = %+v, want role=%q", gotInvitation, MemberRoleAdmin)
+	}
+
+	subjects, err := reg.ListAccessSubjectsByAccount(accountID)
+	if err != nil {
+		t.Fatalf("ListAccessSubjectsByAccount: %v", err)
+	}
+	if len(subjects) != 2 {
+		t.Fatalf("expected 2 access subjects, got %d", len(subjects))
+	}
+
+	var sawActive bool
+	var sawPending bool
+	for _, subject := range subjects {
+		if subject == nil {
+			continue
+		}
+		switch subject.State {
+		case AccountAccessStateActive:
+			sawActive = true
+			if subject.UserID != userID {
+				t.Fatalf("active subject user_id = %q, want %q", subject.UserID, userID)
+			}
+		case AccountAccessStatePending:
+			sawPending = true
+			if subject.SubjectID == "" {
+				t.Fatal("pending invitation missing subject ID")
+			}
+			if subject.Email != "invitee@example.com" {
+				t.Fatalf("pending email = %q, want %q", subject.Email, "invitee@example.com")
+			}
+		}
+	}
+	if !sawActive || !sawPending {
+		t.Fatalf("expected both active and pending access subjects, got %+v", subjects)
+	}
+}
+
+func TestAcceptInvitationsForUser(t *testing.T) {
+	reg := newTestRegistry(t)
+
+	accountID, err := GenerateAccountID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	userID, err := GenerateUserID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.CreateAccount(&Account{ID: accountID, Kind: AccountKindMSP, DisplayName: "Account"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.CreateUser(&User{ID: userID, Email: "invitee@example.com"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.UpsertInvitation(&AccountInvitation{
+		AccountID: accountID,
+		Email:     "invitee@example.com",
+		Role:      MemberRoleAdmin,
+	}); err != nil {
+		t.Fatalf("UpsertInvitation: %v", err)
+	}
+
+	if err := reg.AcceptInvitationsForUser("invitee@example.com", userID); err != nil {
+		t.Fatalf("AcceptInvitationsForUser: %v", err)
+	}
+
+	membership, err := reg.GetMembership(accountID, userID)
+	if err != nil {
+		t.Fatalf("GetMembership: %v", err)
+	}
+	if membership == nil {
+		t.Fatal("expected invitation to become membership")
+	}
+	if membership.Role != MemberRoleAdmin {
+		t.Fatalf("membership.Role = %q, want %q", membership.Role, MemberRoleAdmin)
+	}
+	invitation, err := reg.GetInvitationByAccountAndEmail(accountID, "invitee@example.com")
+	if err != nil {
+		t.Fatalf("GetInvitationByAccountAndEmail: %v", err)
+	}
+	if invitation != nil {
+		t.Fatalf("expected invitation to be deleted after acceptance, got %+v", invitation)
+	}
+}
+
 func TestList(t *testing.T) {
 	reg := newTestRegistry(t)
 

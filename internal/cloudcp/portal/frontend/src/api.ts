@@ -33,6 +33,12 @@ export interface PortalMemberInviteRequest {
   role: string;
 }
 
+export interface PortalMemberInviteResponse {
+  subject_id?: string;
+  user_id?: string;
+  state?: 'active' | 'pending';
+}
+
 export interface PortalMemberRoleRequest {
   role: string;
 }
@@ -48,7 +54,7 @@ export interface PortalAPI {
   deleteWorkspace(accountID: string, tenantID: string): Promise<void>;
   openBilling(accountID: string): Promise<PortalBillingResponse>;
   listMembers(accountID: string): Promise<PortalAccessMember[]>;
-  inviteMember(accountID: string, body: PortalMemberInviteRequest): Promise<void>;
+  inviteMember(accountID: string, body: PortalMemberInviteRequest): Promise<PortalMemberInviteResponse>;
   updateMemberRole(accountID: string, userID: string, body: PortalMemberRoleRequest): Promise<void>;
   removeMember(accountID: string, userID: string): Promise<void>;
 }
@@ -181,7 +187,7 @@ export function createPortalAPI(context: PortalAPIContext): PortalAPI {
       return request<PortalAccessMember[]>(accountURL(accountID, '/members'), {}, 'Failed to load access roster.');
     },
     inviteMember: function(accountID: string, body: PortalMemberInviteRequest) {
-      return request<void>(accountURL(accountID, '/members'), {
+      return request<PortalMemberInviteResponse>(accountURL(accountID, '/members'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),

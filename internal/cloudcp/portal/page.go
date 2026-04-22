@@ -24,9 +24,11 @@ type portalPageWorkspace struct {
 }
 
 type portalPageMember struct {
+	SubjectID string
 	UserID    string
 	Email     string
 	Role      registry.MemberRole
+	State     registry.AccountAccessState
 	CreatedAt time.Time
 }
 
@@ -156,7 +158,7 @@ func loadPortalAccountsForUser(reg *registry.TenantRegistry, userID string) ([]p
 			log.Error().Err(err).Str("account_id", accountID).Msg("cloudcp.portal.page: list tenants")
 			continue
 		}
-		members, err := loadPortalAccountMembers(reg, accountID)
+		members, err := loadPortalAccountMembers(reg, accountID, m.Role)
 		if err != nil {
 			log.Error().Err(err).Str("account_id", accountID).Msg("cloudcp.portal.page: list members")
 			continue
@@ -209,32 +211,31 @@ func loadPortalAccountsForUser(reg *registry.TenantRegistry, userID string) ([]p
 	return accounts, nil
 }
 
-func loadPortalAccountMembers(reg *registry.TenantRegistry, accountID string) ([]portalPageMember, error) {
-	memberships, err := reg.ListMembersByAccount(accountID)
+func loadPortalAccountMembers(reg *registry.TenantRegistry, accountID string, actorRole registry.MemberRole) ([]portalPageMember, error) {
+	subjects, err := reg.ListAccessSubjectsByAccount(accountID)
 	if err != nil {
 		return nil, err
 	}
-	if memberships == nil {
+	if subjects == nil {
 		return []portalPageMember{}, nil
 	}
 
-	members := make([]portalPageMember, 0, len(memberships))
-	for _, membership := range memberships {
-		if membership == nil {
+	canManage := actorRole == registry.MemberRoleOwner || actorRole == registry.MemberRoleAdmin
+	members := make([]portalPageMember, 0, len(subjects))
+	for _, subject := range subjects {
+		if subject == nil {
 			continue
 		}
-		user, err := reg.GetUser(membership.UserID)
-		if err != nil {
-			return nil, err
-		}
-		if user == nil {
-			return nil, errors.New("portal member user not found")
+		if subject.State == registry.AccountAccessStatePending && !canManage {
+			continue
 		}
 		members = append(members, portalPageMember{
-			UserID:    membership.UserID,
-			Email:     user.Email,
-			Role:      membership.Role,
-			CreatedAt: membership.CreatedAt,
+			SubjectID: subject.SubjectID,
+			UserID:    subject.UserID,
+			Email:     subject.Email,
+			Role:      subject.Role,
+			State:     subject.State,
+			CreatedAt: subject.CreatedAt,
 		})
 	}
 

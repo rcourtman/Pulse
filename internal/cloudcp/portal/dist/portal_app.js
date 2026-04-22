@@ -204,7 +204,15 @@
   function countMembersByRole(members, role) {
     var count = 0;
     for (var i = 0; i < members.length; i += 1) {
+      if ((members[i].state || "active") !== "active") continue;
       if (normalizePortalRole(members[i].role) === role) count += 1;
+    }
+    return count;
+  }
+  function countPendingMembers(members) {
+    var count = 0;
+    for (var i = 0; i < members.length; i += 1) {
+      if ((members[i].state || "active") === "pending") count += 1;
     }
     return count;
   }
@@ -252,7 +260,7 @@
     }
     var members = entry.accessQuery.data;
     stats.innerHTML = renderAccessStatsSummary(
-      "Members " + String(members.length) + " \u2022 Owners " + String(countMembersByRole(members, "owner")) + " \u2022 Admins " + String(countMembersByRole(members, "admin")) + " \u2022 Operators " + String(countMembersByRole(members, "tech") + countMembersByRole(members, "read_only")),
+      "Members " + String(members.length - countPendingMembers(members)) + " \u2022 Pending " + String(countPendingMembers(members)) + " \u2022 Owners " + String(countMembersByRole(members, "owner")) + " \u2022 Admins " + String(countMembersByRole(members, "admin")) + " \u2022 Operators " + String(countMembersByRole(members, "tech") + countMembersByRole(members, "read_only")),
       false
     );
   }
@@ -263,6 +271,7 @@
   }
   function renderAccessRoleControl(accountID, member, isOwner, canManage, activeJob) {
     var currentRole = normalizePortalRole(member.role);
+    var subjectID = member.subject_id || member.user_id || "";
     var group = createAccessControlCell("access-control-cell-role");
     if (!canManage || activeJob !== "change_role") {
       var badge = document.createElement("span");
@@ -290,11 +299,12 @@
     }
     sel.setAttribute("data-action", "change-role");
     sel.setAttribute("data-account-id", accountID);
-    sel.setAttribute("data-user-id", member.user_id);
+    sel.setAttribute("data-user-id", subjectID);
     group.appendChild(sel);
     return group;
   }
   function renderAccessMemberAction(accountID, member, isOwner, canManage, activeJob) {
+    var subjectID = member.subject_id || member.user_id || "";
     if (!canManage || activeJob !== "remove") {
       return null;
     }
@@ -312,7 +322,7 @@
     btn.textContent = "Remove access";
     btn.setAttribute("data-action", "remove-member");
     btn.setAttribute("data-account-id", accountID);
-    btn.setAttribute("data-user-id", member.user_id);
+    btn.setAttribute("data-user-id", subjectID);
     btn.setAttribute("data-member-email", member.email);
     group.appendChild(btn);
     return group;
@@ -333,10 +343,16 @@
     roleBadge.className = "access-inline-role-badge";
     roleBadge.textContent = portalRoleLabel(member.role);
     topline.appendChild(roleBadge);
+    if ((member.state || "active") === "pending") {
+      var pendingBadge = document.createElement("span");
+      pendingBadge.className = "access-inline-role-badge";
+      pendingBadge.textContent = "Pending";
+      topline.appendChild(pendingBadge);
+    }
     identity.appendChild(topline);
     var caption = document.createElement("div");
     caption.className = "access-member-caption";
-    caption.textContent = portalRoleCapabilityCopy(member.role);
+    caption.textContent = (member.state || "active") === "pending" ? "Invitation pending acceptance." : portalRoleCapabilityCopy(member.role);
     identity.appendChild(caption);
     row.appendChild(identity);
     row.appendChild(renderAccessRoleControl(accountID, member, isOwner, canManage, activeJob));
@@ -807,9 +823,11 @@
     var cloned = [];
     for (var i = 0; i < members.length; i += 1) {
       cloned.push({
+        subject_id: members[i].subject_id,
         email: members[i].email,
         role: members[i].role,
         user_id: members[i].user_id,
+        state: members[i].state,
         created_at: members[i].created_at
       });
     }
@@ -1174,12 +1192,12 @@
         return;
       }
       try {
-        await deps.api.inviteMember(accountID, { email, role: roleEl.value });
+        var result = await deps.api.inviteMember(accountID, { email, role: roleEl.value });
         emailEl.value = "";
         if (!await refreshAccountAccessSection(accountID)) {
           return;
         }
-        deps.showToast("Member invited!");
+        deps.showToast(result && result.state === "active" ? "Member added." : "Invitation saved.");
       } catch (error) {
         if (error instanceof PortalAPIError && error.status === 409) {
           deps.showToast("Member already exists.", true);
@@ -2932,7 +2950,9 @@
   function normalizeMembers(members) {
     return members.map(function(member) {
       return {
-        ...member
+        ...member,
+        subject_id: member.subject_id || member.user_id || "",
+        state: member.state || "active"
       };
     });
   }

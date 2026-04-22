@@ -12,11 +12,13 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-type memberResponse struct {
-	UserID    string              `json:"user_id"`
-	Email     string              `json:"email"`
-	Role      registry.MemberRole `json:"role"`
-	CreatedAt time.Time           `json:"created_at"`
+type accessSubjectResponse struct {
+	SubjectID string                      `json:"subject_id"`
+	UserID    string                      `json:"user_id,omitempty"`
+	Email     string                      `json:"email"`
+	Role      registry.MemberRole         `json:"role"`
+	State     registry.AccountAccessState `json:"state"`
+	CreatedAt time.Time                   `json:"created_at"`
 }
 
 // HandleListMembers returns an authenticated handler that lists all members of an account.
@@ -43,33 +45,11 @@ func HandleListMembers(reg *registry.TenantRegistry) http.HandlerFunc {
 			return
 		}
 
-		memberships, err := reg.ListMembersByAccount(accountID)
+		actorRole, _ := requestActorRole(r)
+		resp, err := accessSubjectsForActor(reg, accountID, actorRole)
 		if err != nil {
 			http.Error(w, "internal error", http.StatusInternalServerError)
 			return
-		}
-		if memberships == nil {
-			memberships = []*registry.AccountMembership{}
-		}
-
-		resp := make([]memberResponse, 0, len(memberships))
-		for _, m := range memberships {
-			u, err := reg.GetUser(m.UserID)
-			if err != nil {
-				http.Error(w, "internal error", http.StatusInternalServerError)
-				return
-			}
-			if u == nil {
-				http.Error(w, "internal error", http.StatusInternalServerError)
-				return
-			}
-
-			resp = append(resp, memberResponse{
-				UserID:    m.UserID,
-				Email:     u.Email,
-				Role:      m.Role,
-				CreatedAt: m.CreatedAt,
-			})
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -80,6 +60,12 @@ func HandleListMembers(reg *registry.TenantRegistry) http.HandlerFunc {
 type inviteMemberRequest struct {
 	Email string `json:"email"`
 	Role  string `json:"role"`
+}
+
+type inviteMemberResponse struct {
+	SubjectID string                      `json:"subject_id"`
+	UserID    string                      `json:"user_id,omitempty"`
+	State     registry.AccountAccessState `json:"state"`
 }
 
 func requestActorRole(r *http.Request) (registry.MemberRole, bool) {
@@ -95,6 +81,57 @@ func requestActorRole(r *http.Request) (registry.MemberRole, bool) {
 
 func actorCanManageAccount(role registry.MemberRole) bool {
 	return role == registry.MemberRoleOwner || role == registry.MemberRoleAdmin
+}
+
+func accessSubjectsForActor(reg *registry.TenantRegistry, accountID string, actorRole registry.MemberRole) ([]accessSubjectResponse, error) {
+	subjects, err := reg.ListAccessSubjectsByAccount(accountID)
+	if err != nil {
+		return nil, err
+	}
+
+	includePending := actorCanManageAccount(actorRole)
+	resp := make([]accessSubjectResponse, 0, len(subjects))
+	for _, subject := range subjects {
+		if subject == nil {
+			continue
+		}
+		if subject.State == registry.AccountAccessStatePending && !includePending {
+			continue
+		}
+		resp = append(resp, accessSubjectResponse{
+			SubjectID: subject.SubjectID,
+			UserID:    subject.UserID,
+			Email:     subject.Email,
+			Role:      subject.Role,
+			State:     subject.State,
+			CreatedAt: subject.CreatedAt,
+		})
+	}
+	return resp, nil
+}
+
+type accountAccessTarget struct {
+	membership *registry.AccountMembership
+	invitation *registry.AccountInvitation
+}
+
+func loadAccountAccessTarget(reg *registry.TenantRegistry, accountID string, subjectID string) (*accountAccessTarget, error) {
+	membership, err := reg.GetMembership(accountID, subjectID)
+	if err != nil {
+		return nil, err
+	}
+	if membership != nil {
+		return &accountAccessTarget{membership: membership}, nil
+	}
+
+	invitation, err := reg.GetInvitation(subjectID)
+	if err != nil {
+		return nil, err
+	}
+	if invitation != nil && invitation.AccountID == accountID {
+		return &accountAccessTarget{invitation: invitation}, nil
+	}
+	return &accountAccessTarget{}, nil
 }
 
 // HandleInviteMember returns an authenticated handler that invites a user to an account.
@@ -197,36 +234,51 @@ func HandleInviteMember(reg *registry.TenantRegistry) http.HandlerFunc {
 			return
 		}
 		if u == nil {
-			userID, err := registry.GenerateUserID()
-			if err != nil {
+			invitation := &registry.AccountInvitation{
+				AccountID: accountID,
+				Email:     email,
+				Role:      role,
+			}
+			if err := reg.UpsertInvitation(invitation); err != nil {
 				auditEvent(r, "cp_account_member_invite", "failure").
 					Err(err).
 					Str("account_id", accountID).
 					Str("email", email).
-					Str("reason", "user_id_generation_failed").
+					Str("role", string(role)).
+					Str("reason", "invitation_upsert_failed").
 					Msg("Account member invite failed")
 				http.Error(w, "internal error", http.StatusInternalServerError)
 				return
 			}
-			u = &registry.User{
-				ID:    userID,
-				Email: email,
+
+			storedInvitation, err := reg.GetInvitationByAccountAndEmail(accountID, email)
+			if err != nil || storedInvitation == nil {
+				auditEvent(r, "cp_account_member_invite", "failure").
+					Err(err).
+					Str("account_id", accountID).
+					Str("email", email).
+					Str("role", string(role)).
+					Str("reason", "invitation_lookup_failed").
+					Msg("Account member invite failed")
+				http.Error(w, "internal error", http.StatusInternalServerError)
+				return
 			}
-			if err := reg.CreateUser(u); err != nil {
-				// If a concurrent request created the user, fall back to lookup.
-				u2, gerr := reg.GetUserByEmail(email)
-				if gerr != nil || u2 == nil {
-					auditEvent(r, "cp_account_member_invite", "failure").
-						Err(err).
-						Str("account_id", accountID).
-						Str("email", email).
-						Str("reason", "user_create_failed").
-						Msg("Account member invite failed")
-					http.Error(w, "internal error", http.StatusInternalServerError)
-					return
-				}
-				u = u2
-			}
+
+			auditEvent(r, "cp_account_member_invite", "success").
+				Str("account_id", accountID).
+				Str("subject_id", storedInvitation.ID).
+				Str("email", email).
+				Str("role", string(role)).
+				Str("state", string(registry.AccountAccessStatePending)).
+				Msg("Account invitation saved")
+
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusAccepted)
+			encodeJSON(w, inviteMemberResponse{
+				SubjectID: storedInvitation.ID,
+				State:     registry.AccountAccessStatePending,
+			})
+			return
 		}
 
 		if err := reg.CreateMembership(&registry.AccountMembership{
@@ -256,15 +308,33 @@ func HandleInviteMember(reg *registry.TenantRegistry) http.HandlerFunc {
 			http.Error(w, "internal error", http.StatusInternalServerError)
 			return
 		}
+		if err := reg.DeleteInvitationByAccountAndEmail(accountID, email); err != nil {
+			auditEvent(r, "cp_account_member_invite", "failure").
+				Err(err).
+				Str("account_id", accountID).
+				Str("user_id", u.ID).
+				Str("email", email).
+				Str("reason", "invitation_cleanup_failed").
+				Msg("Account member invite failed")
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
 
 		auditEvent(r, "cp_account_member_invite", "success").
 			Str("account_id", accountID).
-			Str("user_id", u.ID).
+			Str("subject_id", u.ID).
 			Str("email", email).
 			Str("role", string(role)).
+			Str("state", string(registry.AccountAccessStateActive)).
 			Msg("Account member invited")
 
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusCreated)
+		encodeJSON(w, inviteMemberResponse{
+			SubjectID: u.ID,
+			UserID:    u.ID,
+			State:     registry.AccountAccessStateActive,
+		})
 	}
 }
 
@@ -343,33 +413,43 @@ func HandleUpdateMemberRole(reg *registry.TenantRegistry) http.HandlerFunc {
 			return
 		}
 
-		existing, err := reg.GetMembership(accountID, userID)
+		target, err := loadAccountAccessTarget(reg, accountID, userID)
 		if err != nil {
 			auditEvent(r, "cp_account_member_role_update", "failure").
 				Err(err).
 				Str("account_id", accountID).
 				Str("user_id", userID).
-				Str("reason", "membership_lookup_failed").
+				Str("reason", "access_target_lookup_failed").
 				Msg("Account member role update failed")
 			http.Error(w, "internal error", http.StatusInternalServerError)
 			return
 		}
-		if existing == nil {
+
+		currentRole := registry.MemberRole("")
+		currentState := registry.AccountAccessStateActive
+		switch {
+		case target.membership != nil:
+			currentRole = target.membership.Role
+			currentState = registry.AccountAccessStateActive
+		case target.invitation != nil:
+			currentRole = target.invitation.Role
+			currentState = registry.AccountAccessStatePending
+		default:
 			auditEvent(r, "cp_account_member_role_update", "failure").
 				Str("account_id", accountID).
 				Str("user_id", userID).
-				Str("reason", "membership_not_found").
+				Str("reason", "access_target_not_found").
 				Msg("Account member role update failed")
-			http.Error(w, "membership not found", http.StatusNotFound)
+			http.Error(w, "access subject not found", http.StatusNotFound)
 			return
 		}
 
-		if (role == registry.MemberRoleOwner || existing.Role == registry.MemberRoleOwner) && actorRole != registry.MemberRoleOwner {
+		if (role == registry.MemberRoleOwner || currentRole == registry.MemberRoleOwner) && actorRole != registry.MemberRoleOwner {
 			auditEvent(r, "cp_account_member_role_update", "failure").
 				Str("account_id", accountID).
 				Str("user_id", userID).
 				Str("actor_role", string(actorRole)).
-				Str("target_current_role", string(existing.Role)).
+				Str("target_current_role", string(currentRole)).
 				Str("target_new_role", string(role)).
 				Str("reason", "owner_role_change_requires_owner_actor").
 				Msg("Account member role update failed")
@@ -377,7 +457,7 @@ func HandleUpdateMemberRole(reg *registry.TenantRegistry) http.HandlerFunc {
 			return
 		}
 
-		if existing.Role == registry.MemberRoleOwner && role != registry.MemberRoleOwner {
+		if target.membership != nil && currentRole == registry.MemberRoleOwner && role != registry.MemberRoleOwner {
 			memberships, listErr := reg.ListMembersByAccount(accountID)
 			if listErr != nil {
 				auditEvent(r, "cp_account_member_role_update", "failure").
@@ -407,31 +487,54 @@ func HandleUpdateMemberRole(reg *registry.TenantRegistry) http.HandlerFunc {
 			}
 		}
 
-		if err := reg.UpdateMembershipRole(accountID, userID, role); err != nil {
-			if isNotFoundErr(err) {
+		if target.membership != nil {
+			if err := reg.UpdateMembershipRole(accountID, userID, role); err != nil {
+				if isNotFoundErr(err) {
+					auditEvent(r, "cp_account_member_role_update", "failure").
+						Err(err).
+						Str("account_id", accountID).
+						Str("user_id", userID).
+						Str("reason", "membership_not_found").
+						Msg("Account member role update failed")
+					http.Error(w, "membership not found", http.StatusNotFound)
+					return
+				}
 				auditEvent(r, "cp_account_member_role_update", "failure").
 					Err(err).
 					Str("account_id", accountID).
 					Str("user_id", userID).
-					Str("reason", "membership_not_found").
+					Str("reason", "membership_update_failed").
 					Msg("Account member role update failed")
-				http.Error(w, "membership not found", http.StatusNotFound)
+				http.Error(w, "internal error", http.StatusInternalServerError)
 				return
 			}
-			auditEvent(r, "cp_account_member_role_update", "failure").
-				Err(err).
-				Str("account_id", accountID).
-				Str("user_id", userID).
-				Str("reason", "membership_update_failed").
-				Msg("Account member role update failed")
-			http.Error(w, "internal error", http.StatusInternalServerError)
-			return
+		} else {
+			if err := reg.UpdateInvitationRole(userID, role, ""); err != nil {
+				if isNotFoundErr(err) {
+					auditEvent(r, "cp_account_member_role_update", "failure").
+						Err(err).
+						Str("account_id", accountID).
+						Str("user_id", userID).
+						Str("reason", "invitation_not_found").
+						Msg("Account member role update failed")
+					http.Error(w, "invitation not found", http.StatusNotFound)
+					return
+				}
+				auditEvent(r, "cp_account_member_role_update", "failure").
+					Str("account_id", accountID).
+					Str("user_id", userID).
+					Str("reason", "invitation_update_failed").
+					Msg("Account member role update failed")
+				http.Error(w, "internal error", http.StatusInternalServerError)
+				return
+			}
 		}
 
 		auditEvent(r, "cp_account_member_role_update", "success").
 			Str("account_id", accountID).
 			Str("user_id", userID).
-			Str("old_role", string(existing.Role)).
+			Str("state", string(currentState)).
+			Str("old_role", string(currentRole)).
 			Str("new_role", string(role)).
 			Msg("Account member role updated")
 
@@ -489,93 +592,128 @@ func HandleRemoveMember(reg *registry.TenantRegistry) http.HandlerFunc {
 			return
 		}
 
-		m, err := reg.GetMembership(accountID, userID)
+		target, err := loadAccountAccessTarget(reg, accountID, userID)
 		if err != nil {
 			auditEvent(r, "cp_account_member_remove", "failure").
 				Err(err).
 				Str("account_id", accountID).
 				Str("user_id", userID).
-				Str("reason", "membership_lookup_failed").
+				Str("reason", "access_target_lookup_failed").
 				Msg("Account member removal failed")
 			http.Error(w, "internal error", http.StatusInternalServerError)
 			return
 		}
-		if m == nil {
+
+		currentRole := registry.MemberRole("")
+		currentState := registry.AccountAccessStateActive
+		switch {
+		case target.membership != nil:
+			currentRole = target.membership.Role
+			currentState = registry.AccountAccessStateActive
+		case target.invitation != nil:
+			currentRole = target.invitation.Role
+			currentState = registry.AccountAccessStatePending
+		default:
 			auditEvent(r, "cp_account_member_remove", "failure").
 				Str("account_id", accountID).
 				Str("user_id", userID).
-				Str("reason", "membership_not_found").
+				Str("reason", "access_target_not_found").
 				Msg("Account member removal failed")
-			http.Error(w, "membership not found", http.StatusNotFound)
+			http.Error(w, "access subject not found", http.StatusNotFound)
 			return
 		}
 
-		if m.Role == registry.MemberRoleOwner {
+		if currentRole == registry.MemberRoleOwner {
 			if actorRole != registry.MemberRoleOwner {
 				auditEvent(r, "cp_account_member_remove", "failure").
 					Str("account_id", accountID).
 					Str("user_id", userID).
 					Str("actor_role", string(actorRole)).
-					Str("target_role", string(m.Role)).
+					Str("target_role", string(currentRole)).
 					Str("reason", "owner_removal_requires_owner_actor").
 					Msg("Account member removal failed")
 				http.Error(w, "forbidden", http.StatusForbidden)
 				return
 			}
 
-			memberships, err := reg.ListMembersByAccount(accountID)
-			if err != nil {
+			if target.membership != nil {
+				memberships, err := reg.ListMembersByAccount(accountID)
+				if err != nil {
+					auditEvent(r, "cp_account_member_remove", "failure").
+						Err(err).
+						Str("account_id", accountID).
+						Str("user_id", userID).
+						Str("reason", "membership_list_failed").
+						Msg("Account member removal failed")
+					http.Error(w, "internal error", http.StatusInternalServerError)
+					return
+				}
+				owners := 0
+				for _, mm := range memberships {
+					if mm.Role == registry.MemberRoleOwner {
+						owners++
+					}
+				}
+				if owners <= 1 {
+					auditEvent(r, "cp_account_member_remove", "failure").
+						Str("account_id", accountID).
+						Str("user_id", userID).
+						Str("reason", "cannot_remove_last_owner").
+						Msg("Account member removal denied")
+					http.Error(w, "cannot remove last owner", http.StatusConflict)
+					return
+				}
+			}
+		}
+
+		if target.membership != nil {
+			if err := reg.DeleteMembership(accountID, userID); err != nil {
+				if isNotFoundErr(err) {
+					auditEvent(r, "cp_account_member_remove", "failure").
+						Err(err).
+						Str("account_id", accountID).
+						Str("user_id", userID).
+						Str("reason", "membership_not_found").
+						Msg("Account member removal failed")
+					http.Error(w, "membership not found", http.StatusNotFound)
+					return
+				}
 				auditEvent(r, "cp_account_member_remove", "failure").
 					Err(err).
 					Str("account_id", accountID).
 					Str("user_id", userID).
-					Str("reason", "membership_list_failed").
+					Str("reason", "membership_delete_failed").
 					Msg("Account member removal failed")
 				http.Error(w, "internal error", http.StatusInternalServerError)
 				return
 			}
-			owners := 0
-			for _, mm := range memberships {
-				if mm.Role == registry.MemberRoleOwner {
-					owners++
+		} else {
+			if err := reg.DeleteInvitation(userID); err != nil {
+				if isNotFoundErr(err) {
+					auditEvent(r, "cp_account_member_remove", "failure").
+						Err(err).
+						Str("account_id", accountID).
+						Str("user_id", userID).
+						Str("reason", "invitation_not_found").
+						Msg("Account member removal failed")
+					http.Error(w, "invitation not found", http.StatusNotFound)
+					return
 				}
-			}
-			if owners <= 1 {
 				auditEvent(r, "cp_account_member_remove", "failure").
 					Str("account_id", accountID).
 					Str("user_id", userID).
-					Str("reason", "cannot_remove_last_owner").
-					Msg("Account member removal denied")
-				http.Error(w, "cannot remove last owner", http.StatusConflict)
-				return
-			}
-		}
-
-		if err := reg.DeleteMembership(accountID, userID); err != nil {
-			if isNotFoundErr(err) {
-				auditEvent(r, "cp_account_member_remove", "failure").
-					Err(err).
-					Str("account_id", accountID).
-					Str("user_id", userID).
-					Str("reason", "membership_not_found").
+					Str("reason", "invitation_delete_failed").
 					Msg("Account member removal failed")
-				http.Error(w, "membership not found", http.StatusNotFound)
+				http.Error(w, "internal error", http.StatusInternalServerError)
 				return
 			}
-			auditEvent(r, "cp_account_member_remove", "failure").
-				Err(err).
-				Str("account_id", accountID).
-				Str("user_id", userID).
-				Str("reason", "membership_delete_failed").
-				Msg("Account member removal failed")
-			http.Error(w, "internal error", http.StatusInternalServerError)
-			return
 		}
 
 		auditEvent(r, "cp_account_member_remove", "success").
 			Str("account_id", accountID).
 			Str("user_id", userID).
-			Str("removed_role", string(m.Role)).
+			Str("state", string(currentState)).
+			Str("removed_role", string(currentRole)).
 			Msg("Account member removed")
 
 		w.WriteHeader(http.StatusNoContent)
