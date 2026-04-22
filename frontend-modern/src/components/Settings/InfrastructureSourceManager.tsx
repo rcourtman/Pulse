@@ -1,5 +1,5 @@
-import { For, Show, createMemo, type Accessor } from 'solid-js';
-import { Plus, Search, Server } from 'lucide-solid';
+import { For, Show, createMemo, type Accessor, type Component } from 'solid-js';
+import { Plus, RotateCw, Search, Server, SlidersHorizontal } from 'lucide-solid';
 import type { Connection } from '@/api/connections';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import {
@@ -11,27 +11,48 @@ import {
   TableRow,
 } from '@/components/shared/Table';
 import type { InfrastructureSystemRow } from './connectionsTableModel';
+import type { DiscoveredServer, DiscoveryScanStatus } from './infrastructureSettingsModel';
 import {
+  getInfrastructureOnboardingProductPresentation,
   getInfrastructureSourceManagerProducts,
   type InfrastructureOnboardingConnectionType,
 } from '@/utils/infrastructureOnboardingPresentation';
 
 interface InfrastructureSourceManagerProps {
   rows: Accessor<readonly InfrastructureSystemRow[]>;
+  discoveredNodes: Accessor<readonly DiscoveredServer[]>;
+  discoveryEnabled: boolean;
+  discoveryScanStatus: Accessor<DiscoveryScanStatus>;
   readOnly: boolean;
   onAddSource?: (type: InfrastructureOnboardingConnectionType) => void;
+  onRunDiscovery?: () => void;
   onDetectFromAddress?: () => void;
+  onOpenDiscoverySettings?: () => void;
   onOpenConnection?: (connection: Connection) => void;
+  onReviewDiscoveredSource?: (server: DiscoveredServer) => void;
 }
 
 const inlineButtonClass =
   'inline-flex items-center rounded-md border border-border px-2.5 py-1 text-xs font-medium text-base-content transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-60';
 const addSectionButtonClass =
   'inline-flex items-center gap-1.5 rounded-md border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-200 dark:hover:bg-blue-900/40';
+const primaryToolbarButtonClass =
+  'inline-flex items-center justify-center gap-2 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-medium text-blue-700 transition-colors hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-200 dark:hover:bg-blue-900/40';
+const secondaryToolbarButtonClass =
+  'inline-flex items-center justify-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-medium text-base-content transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-60';
 const childIndentClass = 'pl-4 sm:pl-6';
+const discoveryRowClass =
+  'border-b border-border-subtle bg-blue-50/30 hover:bg-blue-50/40 dark:bg-blue-950/10 dark:hover:bg-blue-950/20';
 
 const sortRows = (rows: readonly InfrastructureSystemRow[]): InfrastructureSystemRow[] =>
   [...rows].sort((left, right) => left.name.localeCompare(right.name));
+
+const sortDiscoveredNodes = (nodes: readonly DiscoveredServer[]): DiscoveredServer[] =>
+  [...nodes].sort((left, right) => {
+    const leftLabel = (left.hostname || left.ip).toLowerCase();
+    const rightLabel = (right.hostname || right.ip).toLowerCase();
+    return leftLabel.localeCompare(rightLabel);
+  });
 
 const summarizeCoverage = (labels: readonly string[]): string => {
   if (labels.length <= 3) {
@@ -40,6 +61,38 @@ const summarizeCoverage = (labels: readonly string[]): string => {
 
   return `${labels.slice(0, 3).join(', ')} +${labels.length - 3} more`;
 };
+
+const normalizeDiscoveryTimestamp = (value?: number): number | undefined => {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
+    return undefined;
+  }
+
+  return value < 1_000_000_000_000 ? value * 1000 : value;
+};
+
+const formatRelativeTimestamp = (value?: number): string | undefined => {
+  const timestamp = normalizeDiscoveryTimestamp(value);
+  if (!timestamp) return undefined;
+
+  const diff = Math.max(0, Date.now() - timestamp);
+  const sec = Math.floor(diff / 1000);
+  if (sec < 60) return `${sec}s ago`;
+  const min = Math.floor(sec / 60);
+  if (min < 60) return `${min}m ago`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `${hr}h ago`;
+  const days = Math.floor(hr / 24);
+  return `${days}d ago`;
+};
+
+const discoveredServerName = (server: DiscoveredServer): string =>
+  server.hostname?.trim() || server.ip;
+
+const discoveredServerEndpoint = (server: DiscoveredServer): string =>
+  `https://${server.hostname?.trim() || server.ip}:${server.port}`;
+
+const discoveredCoverageText = (server: DiscoveredServer): string =>
+  getInfrastructureOnboardingProductPresentation(server.type).coverage;
 
 export const InfrastructureSourceManager: Component<InfrastructureSourceManagerProps> = (props) => {
   const products = createMemo(() => getInfrastructureSourceManagerProducts());
@@ -50,7 +103,8 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
     });
     return next;
   });
-  const groupedRows = createMemo(() => {
+
+  const groupedConfiguredRows = createMemo(() => {
     const next = new Map<InfrastructureOnboardingConnectionType, InfrastructureSystemRow[]>();
     for (const product of products()) {
       next.set(product.type, []);
@@ -68,11 +122,38 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
 
     return next;
   });
+
+  const groupedDiscoveredRows = createMemo(() => {
+    const next = new Map<InfrastructureOnboardingConnectionType, DiscoveredServer[]>();
+    for (const product of products()) {
+      next.set(product.type, []);
+    }
+
+    for (const server of props.discoveredNodes()) {
+      const productRows = next.get(server.type as InfrastructureOnboardingConnectionType);
+      if (!productRows) continue;
+      productRows.push(server);
+    }
+
+    for (const [type, rows] of next.entries()) {
+      next.set(type, sortDiscoveredNodes(rows));
+    }
+
+    return next;
+  });
+
   const sortedProducts = createMemo(() =>
     [...products()].sort((left, right) => {
-      const countDifference =
-        (groupedRows().get(right.type)?.length ?? 0) - (groupedRows().get(left.type)?.length ?? 0);
-      if (countDifference !== 0) return countDifference;
+      const configuredDifference =
+        (groupedConfiguredRows().get(right.type)?.length ?? 0) -
+        (groupedConfiguredRows().get(left.type)?.length ?? 0);
+      if (configuredDifference !== 0) return configuredDifference;
+
+      const discoveredDifference =
+        (groupedDiscoveredRows().get(right.type)?.length ?? 0) -
+        (groupedDiscoveredRows().get(left.type)?.length ?? 0);
+      if (discoveredDifference !== 0) return discoveredDifference;
+
       return (productRank().get(left.type) ?? 0) - (productRank().get(right.type) ?? 0);
     }),
   );
@@ -81,26 +162,123 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
     !props.readOnly && Boolean(props.onOpenConnection) && (row.canEdit || row.isAgent);
 
   const actionColumnVisible = () => !props.readOnly;
+  const discoveredCount = createMemo(() => props.discoveredNodes().length);
+  const discoveryErrors = createMemo(() => props.discoveryScanStatus().errors ?? []);
+  const lastDiscoveryResultText = createMemo(() =>
+    formatRelativeTimestamp(props.discoveryScanStatus().lastResultAt),
+  );
+  const discoveryStatePresentation = createMemo(() => {
+    if (props.discoveryScanStatus().scanning) {
+      return {
+        badgeLabel: 'Scanning',
+        badgeClass:
+          'inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-medium text-blue-800 dark:bg-blue-950/40 dark:text-blue-200',
+        description:
+          'Scanning the saved network scope for Proxmox VE, Backup Server, and Mail Gateway endpoints.',
+      };
+    }
+
+    if (props.discoveryEnabled) {
+      return {
+        badgeLabel: 'Background on',
+        badgeClass:
+          'inline-flex items-center rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-medium text-green-800 dark:bg-green-950/40 dark:text-green-200',
+        description:
+          'Background discovery is on. Run discovery here whenever you want to refresh the current candidates immediately.',
+      };
+    }
+
+    return {
+      badgeLabel: 'Manual only',
+      badgeClass:
+        'inline-flex items-center rounded-full bg-surface-alt px-2 py-0.5 text-[11px] font-medium text-base-content',
+      description:
+        'Background discovery is off. Pulse only scans when you run discovery here or probe a specific address.',
+    };
+  });
+
+  const discoverySummary = createMemo(() => {
+    const parts: string[] = [];
+    if (discoveredCount() > 0) {
+      parts.push(
+        `${discoveredCount()} discovered candidate${discoveredCount() === 1 ? '' : 's'} visible`,
+      );
+    }
+    if (lastDiscoveryResultText()) {
+      parts.push(`Last result ${lastDiscoveryResultText()}`);
+    }
+    if (discoveryErrors().length > 0) {
+      parts.push(
+        `${discoveryErrors().length} discovery issue${discoveryErrors().length === 1 ? '' : 's'} reported`,
+      );
+    }
+    return parts;
+  });
 
   return (
     <SettingsPanel
       title="Infrastructure sources"
-      description="Grouped by platform."
+      description="Configured and discovered candidates grouped by platform."
       noPadding
-      action={
-        !props.readOnly && props.onDetectFromAddress ? (
-          <button
-            type="button"
-            onClick={props.onDetectFromAddress}
-            class="inline-flex w-full items-center justify-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-medium text-base-content transition-colors hover:bg-surface-hover sm:w-auto"
-          >
-            <Search class="h-4 w-4" />
-            Detect from address
-          </button>
-        ) : undefined
-      }
       icon={<Server class="h-5 w-5" strokeWidth={2} />}
     >
+      <div class="border-b border-border bg-surface-alt/40 px-3 py-3 sm:px-4">
+        <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+          <div class="min-w-0 space-y-1">
+            <div class="flex flex-wrap items-center gap-2">
+              <span class={discoveryStatePresentation().badgeClass}>
+                {discoveryStatePresentation().badgeLabel}
+              </span>
+              <span class="text-sm text-base-content">Discovery</span>
+            </div>
+            <p class="text-sm text-muted">{discoveryStatePresentation().description}</p>
+            <Show when={discoverySummary().length > 0}>
+              <p class="text-xs text-muted">{discoverySummary().join(' · ')}</p>
+            </Show>
+          </div>
+
+          <Show when={!props.readOnly}>
+            <div class="flex flex-wrap items-center gap-2 lg:justify-end">
+              <Show when={props.onRunDiscovery}>
+                <button
+                  type="button"
+                  onClick={props.onRunDiscovery}
+                  disabled={props.discoveryScanStatus().scanning}
+                  class={primaryToolbarButtonClass}
+                >
+                  <RotateCw
+                    class={`h-4 w-4 ${props.discoveryScanStatus().scanning ? 'animate-spin' : ''}`}
+                  />
+                  {props.discoveryScanStatus().scanning ? 'Scanning…' : 'Run discovery'}
+                </button>
+              </Show>
+
+              <Show when={props.onDetectFromAddress}>
+                <button
+                  type="button"
+                  onClick={props.onDetectFromAddress}
+                  class={secondaryToolbarButtonClass}
+                >
+                  <Search class="h-4 w-4" />
+                  Detect from address
+                </button>
+              </Show>
+
+              <Show when={props.onOpenDiscoverySettings}>
+                <button
+                  type="button"
+                  onClick={props.onOpenDiscoverySettings}
+                  class={secondaryToolbarButtonClass}
+                >
+                  <SlidersHorizontal class="h-4 w-4" />
+                  Discovery settings
+                </button>
+              </Show>
+            </div>
+          </Show>
+        </div>
+      </div>
+
       <Table class="w-full table-fixed text-sm">
         <TableHeader class="bg-surface-alt/60">
           <TableRow>
@@ -124,12 +302,13 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
           </TableRow>
         </TableHeader>
 
-        <TableBody class="divide-y divide-border-subtle bg-surface">
+        <TableBody class="bg-surface">
           <For each={sortedProducts()}>
             {(product) => {
-              const rows = () => groupedRows().get(product.type) ?? [];
+              const configuredRows = () => groupedConfiguredRows().get(product.type) ?? [];
+              const discoveredRows = () => groupedDiscoveredRows().get(product.type) ?? [];
               const groupRowClass = () =>
-                'bg-surface-alt hover:bg-surface-alt dark:bg-base dark:hover:bg-base';
+                'border-b border-border-subtle bg-surface-alt hover:bg-surface-alt dark:bg-base dark:hover:bg-base';
               const groupLabelClass = () => 'text-[15px] font-semibold text-base-content';
 
               return (
@@ -149,9 +328,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                     <TableRow class={groupRowClass()}>
                       <TableCell colspan={4} class="px-3 py-1.5">
                         <div class="flex items-center gap-2 whitespace-nowrap">
-                          <div class="flex items-center gap-2">
-                            <span class={groupLabelClass()}>{product.label}</span>
-                          </div>
+                          <span class={groupLabelClass()}>{product.label}</span>
                         </div>
                       </TableCell>
                       <TableCell class="px-3 py-1.5 text-right">
@@ -170,29 +347,137 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                     </TableRow>
                   </Show>
 
-                  <Show when={rows().length > 0}>
-                    <For each={rows()}>
+                  <Show when={configuredRows().length > 0}>
+                    <For each={configuredRows()}>
                       {(row, index) => {
-                        const isLast = () => index() === rows().length - 1;
+                        const isLastConfigured = () =>
+                          index() === configuredRows().length - 1 && discoveredRows().length === 0;
 
                         return (
-                        <>
-                          <TableRow>
+                          <>
+                            <TableRow class="border-b border-border-subtle">
+                              <TableCell class="py-1 pl-3 pr-3 align-top">
+                                <div class={`min-w-0 space-y-0.5 ${childIndentClass}`}>
+                                  <div class="flex min-w-0 items-center gap-2 whitespace-nowrap">
+                                    <span aria-hidden="true" class="relative h-5 w-5 flex-none">
+                                      <span
+                                        class={`absolute left-2 top-0 w-px bg-border ${isLastConfigured() ? 'h-2.5' : 'h-5'}`}
+                                      />
+                                      <span class="absolute left-2 top-2.5 h-px w-3 bg-border" />
+                                    </span>
+                                    <div class="min-w-0">
+                                      <div
+                                        class="truncate text-[13px] text-base-content/80"
+                                        title={row.name}
+                                      >
+                                        {row.name}
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              </TableCell>
+
+                              <TableCell class="px-3 py-1 align-top">
+                                <Show
+                                  when={row.host}
+                                  fallback={<span class="text-xs text-muted">-</span>}
+                                >
+                                  <div
+                                    class="truncate whitespace-nowrap text-[12px] text-muted"
+                                    title={row.host}
+                                  >
+                                    {row.host}
+                                  </div>
+                                </Show>
+                              </TableCell>
+
+                              <TableCell class="px-3 py-1 align-top">
+                                <Show
+                                  when={row.coverageLabels.length > 0}
+                                  fallback={<span class="text-xs text-muted">-</span>}
+                                >
+                                  <div
+                                    class="truncate whitespace-nowrap text-[12px] text-muted"
+                                    title={row.coverageLabels.join(', ')}
+                                  >
+                                    {summarizeCoverage(row.coverageLabels)}
+                                  </div>
+                                </Show>
+                              </TableCell>
+
+                              <TableCell class="px-3 py-1 align-top">
+                                <div class="flex items-center gap-1.5 whitespace-nowrap">
+                                  <span
+                                    class={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium whitespace-nowrap ${row.statusClassName}`}
+                                  >
+                                    {row.statusLabel}
+                                  </span>
+                                  <span class="text-[12px] text-muted/90">
+                                    {row.lastActivityText}
+                                  </span>
+                                </div>
+                              </TableCell>
+
+                              <Show when={actionColumnVisible()}>
+                                <TableCell class="px-3 py-1 align-top text-right">
+                                  <Show
+                                    when={rowInteractive(row)}
+                                    fallback={<span class="text-xs text-muted">Read only</span>}
+                                  >
+                                    <button
+                                      type="button"
+                                      onClick={() => props.onOpenConnection?.(row.connection)}
+                                      class={inlineButtonClass}
+                                    >
+                                      Edit
+                                    </button>
+                                  </Show>
+                                </TableCell>
+                              </Show>
+                            </TableRow>
+
+                            <Show when={row.lastErrorMessage}>
+                              <TableRow class="border-b border-border-subtle">
+                                <TableCell
+                                  colspan={actionColumnVisible() ? 5 : 4}
+                                  class="bg-surface px-3 pb-1.5 pt-0"
+                                >
+                                  <div
+                                    role="alert"
+                                    class="rounded-md border border-rose-300 bg-rose-50 px-3 py-2 text-xs text-rose-800 dark:border-rose-900 dark:bg-rose-950 dark:text-rose-200"
+                                  >
+                                    {row.lastErrorMessage}
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            </Show>
+                          </>
+                        );
+                      }}
+                    </For>
+                  </Show>
+
+                  <Show when={discoveredRows().length > 0}>
+                    <For each={discoveredRows()}>
+                      {(server, index) => {
+                        const isLastDiscovered = () => index() === discoveredRows().length - 1;
+                        return (
+                          <TableRow class={discoveryRowClass}>
                             <TableCell class="py-1 pl-3 pr-3 align-top">
                               <div class={`min-w-0 space-y-0.5 ${childIndentClass}`}>
                                 <div class="flex min-w-0 items-center gap-2 whitespace-nowrap">
                                   <span aria-hidden="true" class="relative h-5 w-5 flex-none">
                                     <span
-                                      class={`absolute left-2 top-0 w-px bg-border ${isLast() ? 'h-2.5' : 'h-5'}`}
+                                      class={`absolute left-2 top-0 w-px bg-border ${isLastDiscovered() ? 'h-2.5' : 'h-5'}`}
                                     />
                                     <span class="absolute left-2 top-2.5 h-px w-3 bg-border" />
                                   </span>
                                   <div class="min-w-0">
                                     <div
-                                      class="truncate text-[13px] text-base-content/80"
-                                      title={row.name}
+                                      class="truncate text-[13px] text-base-content/85"
+                                      title={`${discoveredServerName(server)}${server.version ? ` · ${server.version}` : ''}`}
                                     >
-                                      {row.name}
+                                      {discoveredServerName(server)}
                                     </div>
                                   </div>
                                 </div>
@@ -200,78 +485,51 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                             </TableCell>
 
                             <TableCell class="px-3 py-1 align-top">
-                              <Show
-                                when={row.host}
-                                fallback={<span class="text-xs text-muted">-</span>}
+                              <div
+                                class="truncate whitespace-nowrap text-[12px] text-muted"
+                                title={discoveredServerEndpoint(server)}
                               >
-                                <div
-                                  class="truncate whitespace-nowrap text-[12px] text-muted"
-                                  title={row.host}
-                                >
-                                  {row.host}
-                                </div>
-                              </Show>
+                                {discoveredServerEndpoint(server)}
+                              </div>
                             </TableCell>
 
                             <TableCell class="px-3 py-1 align-top">
-                              <Show
-                                when={row.coverageLabels.length > 0}
-                                fallback={<span class="text-xs text-muted">-</span>}
+                              <div
+                                class="truncate whitespace-nowrap text-[12px] text-muted"
+                                title={discoveredCoverageText(server)}
                               >
-                                <div
-                                  class="truncate whitespace-nowrap text-[12px] text-muted"
-                                  title={row.coverageLabels.join(', ')}
-                                >
-                                  {summarizeCoverage(row.coverageLabels)}
-                                </div>
-                              </Show>
+                                {discoveredCoverageText(server)}
+                              </div>
                             </TableCell>
 
                             <TableCell class="px-3 py-1 align-top">
                               <div class="flex items-center gap-1.5 whitespace-nowrap">
-                                <span
-                                  class={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium whitespace-nowrap ${row.statusClassName}`}
-                                >
-                                  {row.statusLabel}
+                                <span class="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-medium text-blue-800 dark:bg-blue-950/40 dark:text-blue-200">
+                                  Discovered
                                 </span>
-                                <span class="text-[12px] text-muted/90">{row.lastActivityText}</span>
+                                <span class="text-[12px] text-muted/90">
+                                  {lastDiscoveryResultText() ?? 'Waiting for scan'}
+                                </span>
                               </div>
                             </TableCell>
 
                             <Show when={actionColumnVisible()}>
                               <TableCell class="px-3 py-1 align-top text-right">
                                 <Show
-                                  when={rowInteractive(row)}
+                                  when={props.onReviewDiscoveredSource}
                                   fallback={<span class="text-xs text-muted">Read only</span>}
                                 >
                                   <button
                                     type="button"
-                                    onClick={() => props.onOpenConnection?.(row.connection)}
+                                    onClick={() => props.onReviewDiscoveredSource?.(server)}
                                     class={inlineButtonClass}
                                   >
-                                    Edit
+                                    Review
                                   </button>
                                 </Show>
                               </TableCell>
                             </Show>
                           </TableRow>
-
-                          <Show when={row.lastErrorMessage}>
-                            <TableRow class="border-b border-border/80">
-                              <TableCell
-                                colspan={actionColumnVisible() ? 5 : 4}
-                                class="bg-surface px-3 pb-1.5 pt-0"
-                              >
-                                <div
-                                  role="alert"
-                                  class="rounded-md border border-rose-300 bg-rose-50 px-3 py-2 text-xs text-rose-800 dark:border-rose-900 dark:bg-rose-950 dark:text-rose-200"
-                                >
-                                  {row.lastErrorMessage}
-                                </div>
-                              </TableCell>
-                            </TableRow>
-                          </Show>
-                        </>
                         );
                       }}
                     </For>

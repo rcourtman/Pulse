@@ -108,6 +108,14 @@ Own canonical runtime payload shapes between backend and frontend.
 22. `frontend-modern/src/components/Settings/useInfrastructureConfiguredNodesState.ts` shared with `agent-lifecycle`: the direct-node infrastructure settings state hook is both an agent lifecycle control surface and a shared Proxmox node API contract boundary.
 23. `frontend-modern/src/components/Settings/useInfrastructureDiscoveryRuntimeState.ts` shared with `agent-lifecycle`: the infrastructure discovery runtime state hook is both an agent lifecycle control surface and a shared discovery/settings API contract boundary.
     That same shared boundary also owns settings-route polling scope for discovery payloads: the `/api/discover` refresh loop and websocket-backed discovery status hydration may run only while the operator is on the infrastructure connections workspace under `/settings/infrastructure/platforms*`, not on the systems ledger or install workspace.
+    It also owns the explicit manual-scan contract for `/api/discover`: when
+    the operator runs discovery from the infrastructure manager, the hook must
+    consume the immediate POST response body as the next source of truth for
+    discovered candidates and scan errors rather than waiting for a later poll
+    or websocket update. Cached GET payloads and manual POST payloads must both
+    normalize their `updated` / `timestamp` values into one millisecond-backed
+    `lastResultAt` state so discovery review rows do not depend on transport-
+    specific timestamp shapes.
 24. `frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx` shared with `agent-lifecycle`: the infrastructure install state hook is both an agent fleet lifecycle control surface and an API token, lookup, and install transport contract boundary.
 25. `frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx` shared with `agent-lifecycle`: the shared infrastructure operations state hook is both an agent fleet lifecycle control surface and an API token, lookup, assignment, and reporting/install contract boundary.
 26. `frontend-modern/src/components/Settings/useNodeModalState.ts` shared with `agent-lifecycle`: the node setup modal state hook is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary.

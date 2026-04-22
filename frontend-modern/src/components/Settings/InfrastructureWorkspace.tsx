@@ -14,7 +14,7 @@ import { VMwareCredentialSlot } from './ConnectionEditor/CredentialSlots/VMwareC
 import type { Connection, ConnectionType } from '@/api/connections';
 import type { TrueNASConnection } from '@/api/truenas';
 import type { VMwareConnection } from '@/api/vmware';
-import type { NodeConfigWithStatus } from '@/types/nodes';
+import type { NodeConfig, NodeConfigWithStatus } from '@/types/nodes';
 import { InfrastructureInstallerSection } from './InfrastructureInstallerSection';
 import { InfrastructureSourceManager } from './InfrastructureSourceManager';
 import { InfrastructureSourcePicker } from './InfrastructureSourcePicker';
@@ -41,6 +41,8 @@ import {
   getInfrastructureOnboardingProductPresentation,
   type InfrastructureOnboardingConnectionType,
 } from '@/utils/infrastructureOnboardingPresentation';
+import { settingsTabPath } from './settingsNavigationModel';
+import type { DiscoveredServer } from './infrastructureSettingsModel';
 
 export type InfrastructureWorkspaceProps = InfrastructurePlatformSettingsProps;
 
@@ -93,6 +95,8 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
 
   const [showAgentProfiles, setShowAgentProfiles] = createSignal(false);
   const [editingConnection, setEditingConnection] = createSignal<Connection | null>(null);
+  const [selectedDiscoveredSource, setSelectedDiscoveredSource] =
+    createSignal<DiscoveredServer | null>(null);
   const readOnly = createMemo(() => presentationPolicyIsReadOnly());
   const routeStep = createMemo<InfrastructurePanelStep | null>(() => {
     if (readOnly()) return null;
@@ -102,6 +106,7 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
     createSignal<InfrastructureOnboardingMetricsTracker | null>(
       routeStep() ? createOpenedOnboardingTracker() : null,
     );
+  let previousRouteStep: InfrastructurePanelStep | null | undefined = routeStep();
   const activeAddType = createMemo<ConnectionType | null>(() => {
     const step = routeStep();
     if (!step || step === 'pick' || step === 'detect') return null;
@@ -163,14 +168,24 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
   };
 
   const openAddFlow = (step: InfrastructurePanelStep) => {
+    setSelectedDiscoveredSource(null);
     if (!addFlowTracker()) {
       setAddFlowTracker(createOpenedOnboardingTracker());
     }
     navigate(buildInfrastructureOnboardingPath(step), { scroll: false });
   };
 
+  const reviewDiscoveredSource = (server: DiscoveredServer) => {
+    if (!addFlowTracker()) {
+      setAddFlowTracker(createOpenedOnboardingTracker());
+    }
+    setSelectedDiscoveredSource(server);
+    navigate(buildInfrastructureOnboardingPath(server.type), { scroll: false });
+  };
+
   const closeAddFlow = () => {
     resetInlineEditorState();
+    setSelectedDiscoveredSource(null);
     setAddFlowTracker(null);
     clearSharedInfrastructureOnboardingMetricsTracker();
     navigateToWorkspace(Boolean(routeStep()));
@@ -187,6 +202,7 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
 
   const handleAddSaved = () => {
     ledger.reload();
+    void props.loadDiscoveredNodes();
     closeAddFlow();
   };
 
@@ -215,12 +231,11 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
     const tracker = addFlowTracker();
     if (step && !tracker) {
       setAddFlowTracker(createOpenedOnboardingTracker());
-      return;
-    }
-    if (!step && tracker) {
+    } else if (!step && tracker && previousRouteStep) {
       setAddFlowTracker(null);
       clearSharedInfrastructureOnboardingMetricsTracker();
     }
+    previousRouteStep = step;
   });
 
   createEffect(() => {
@@ -237,10 +252,19 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
     }
   });
 
+  createEffect(() => {
+    const selected = selectedDiscoveredSource();
+    const activeType = activeAddType();
+    if (selected && activeType && activeType !== selected.type) {
+      setSelectedDiscoveredSource(null);
+    }
+  });
+
   const renderNodeSlot = (
     type: 'pve' | 'pbs' | 'pmg',
     editingNode?: NodeConfigWithStatus | null,
     editingRow?: Connection | null,
+    prefillNode?: Partial<NodeConfig>,
   ) => {
     const connectionId = editingRow?.id ?? null;
     return (
@@ -248,6 +272,7 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
         nodeType={type}
         settings={props}
         editingNode={editingNode ?? null}
+        prefillNode={prefillNode}
         onCancel={editingRow ? closeEditFlow : closeAddFlow}
         onSaved={editingRow ? handleEditSaved : handleAddSaved}
         onToggleEnabled={
@@ -551,11 +576,24 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
       }
     }
 
+    const discoveredPrefill = () => {
+      const discovered = selectedDiscoveredSource();
+      if (!discovered || discovered.type !== context.type) {
+        return undefined;
+      }
+
+      return {
+        type: discovered.type,
+        name: discovered.hostname?.trim() || discovered.ip,
+        host: `https://${discovered.hostname?.trim() || discovered.ip}:${discovered.port}`,
+      } satisfies Partial<NodeConfig>;
+    };
+
     switch (context.type) {
       case 'pve':
       case 'pbs':
       case 'pmg':
-        return renderNodeSlot(context.type);
+        return renderNodeSlot(context.type, undefined, undefined, discoveredPrefill());
       case 'truenas':
         return (
           <TrueNASCredentialSlot
@@ -598,6 +636,11 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
     if (step === 'detect') {
       return 'Probe an address and let Pulse open the matching credential flow when it recognizes the platform.';
     }
+    const discovered = selectedDiscoveredSource();
+    if (discovered && discovered.type === activeAddType()) {
+      const endpoint = `https://${discovered.hostname?.trim() || discovered.ip}:${discovered.port}`;
+      return `Pulse discovered ${endpoint}. Review the endpoint, finish the credentials, and then save it as a monitored source.`;
+    }
     const presentation = getInfrastructureOnboardingProductPresentation(
       activeAddType() as InfrastructureOnboardingConnectionType,
     );
@@ -624,14 +667,30 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
     <div class="space-y-6">
       <InfrastructureSourceManager
         rows={rows}
+        discoveredNodes={props.discoveredNodes}
+        discoveryEnabled={props.discoveryEnabled()}
+        discoveryScanStatus={props.discoveryScanStatus}
         readOnly={readOnly()}
         onAddSource={
           readOnly()
             ? undefined
             : (type) => openAddFlow(type === 'agent' ? 'agent' : (type as ManagedAddTypeStep))
         }
+        onRunDiscovery={
+          readOnly()
+            ? undefined
+            : () => {
+                void props.triggerDiscoveryScan();
+              }
+        }
         onDetectFromAddress={readOnly() ? undefined : () => openAddFlow('detect')}
+        onOpenDiscoverySettings={
+          readOnly()
+            ? undefined
+            : () => navigate(settingsTabPath('system-network'), { scroll: false })
+        }
         onOpenConnection={readOnly() ? undefined : (connection) => setEditingConnection(connection)}
+        onReviewDiscoveredSource={readOnly() ? undefined : (server) => reviewDiscoveredSource(server)}
       />
 
       <Show when={routeStep() !== null}>
@@ -687,7 +746,9 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
                     mode="add"
                     initialType={activeAddType() ?? undefined}
                     showSlotHeader={false}
-                    trackInitialCatalogSelection={activeAddType() !== 'agent'}
+                    trackInitialCatalogSelection={
+                      activeAddType() !== 'agent' && !selectedDiscoveredSource()
+                    }
                     onboardingMetricsTracker={addFlowTracker()}
                     onClose={closeAddFlow}
                     onSaved={handleAddSaved}

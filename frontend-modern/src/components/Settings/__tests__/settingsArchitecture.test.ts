@@ -106,16 +106,23 @@ describe('settings architecture guardrails', () => {
     expect(infrastructureWorkspaceSource).toContain(
       ": (type) => openAddFlow(type === 'agent' ? 'agent' : (type as ManagedAddTypeStep))",
     );
+    expect(infrastructureWorkspaceSource).toContain('reviewDiscoveredSource');
+    expect(infrastructureWorkspaceSource).toContain('selectedDiscoveredSource');
+    expect(infrastructureWorkspaceSource).toContain(
+      "navigate(settingsTabPath('system-network'), { scroll: false })",
+    );
     expect(infrastructureWorkspaceSource).toContain(
       "onDetectFromAddress={readOnly() ? undefined : () => openAddFlow('detect')}",
     );
+    expect(infrastructureWorkspaceSource).toContain('onReviewDiscoveredSource');
+    expect(infrastructureWorkspaceSource).toContain('void props.loadDiscoveredNodes();');
     expect(infrastructureWorkspaceSource).toContain('<InfrastructureSourceManager');
     expect(infrastructureWorkspaceSource).toContain('<InfrastructureSourcePicker');
     expect(infrastructureWorkspaceSource).not.toContain('<ConnectionsTable rows={rows} />');
     expect(infrastructureWorkspaceSource).toContain('flex h-full min-h-0 flex-col');
     expect(infrastructureWorkspaceSource).toContain("showSlotHeader={false}");
     expect(infrastructureWorkspaceSource).toContain(
-      "trackInitialCatalogSelection={activeAddType() !== 'agent'}",
+      "trackInitialCatalogSelection={",
     );
     expect(infrastructureWorkspaceSource).toContain("onDetectFromAddress={() => openAddFlow('detect')}");
     expect(infrastructureWorkspaceSource).toContain("onBackToCatalog={() => openAddFlow('pick')}");
@@ -124,10 +131,16 @@ describe('settings architecture guardrails', () => {
     expect(infrastructureWorkspaceSource).not.toContain('InfrastructureOperationsController');
     expect(infrastructureWorkspaceSource).not.toContain('PlatformConnectionsWorkspace');
     expect(infrastructureSourceManagerSource).toContain('Infrastructure sources');
+    expect(infrastructureSourceManagerSource).toContain('Run discovery');
     expect(infrastructureSourceManagerSource).toContain('Detect from address');
+    expect(infrastructureSourceManagerSource).toContain('Discovery settings');
+    expect(infrastructureSourceManagerSource).toContain('Configured and discovered candidates grouped by platform.');
+    expect(infrastructureSourceManagerSource).toContain('onReviewDiscoveredSource');
+    expect(infrastructureSourceManagerSource).toContain('Discovered');
     expect(infrastructureSourceManagerSource).toContain('getInfrastructureSourceManagerProducts');
     expect(infrastructureSourceManagerSource).toContain('TableHeader');
     expect(infrastructureSourceManagerSource).toContain('aria-label={`Add ${product.label}`}');
+    expect(infrastructureSourceManagerSource).toContain('Review');
     expect(infrastructureSourceManagerSource).toContain('Edit');
     expect(infrastructureSourceManagerSource).not.toContain('Connection types');
     expect(infrastructureSourcePickerSource).toContain('Choose a source type');

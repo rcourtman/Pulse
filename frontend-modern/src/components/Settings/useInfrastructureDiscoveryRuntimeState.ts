@@ -82,6 +82,13 @@ export const useInfrastructureDiscoveryRuntimeState = ({
     scanning: false,
   });
 
+  const normalizeDiscoveryTimestamp = (value: unknown): number | undefined => {
+    if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
+      return undefined;
+    }
+    return value < 1_000_000_000_000 ? value * 1000 : value;
+  };
+
   const updateDiscoveredNodesFromServers = (
     servers: RawDiscoveredServer[] | undefined | null,
     options: { merge?: boolean } = {},
@@ -183,11 +190,13 @@ export const useInfrastructureDiscoveryRuntimeState = ({
       }
 
       const data = await response.json();
+      const responseTimestamp = normalizeDiscoveryTimestamp(data?.timestamp ?? data?.updated);
       if (Array.isArray(data.servers)) {
         updateDiscoveredNodesFromServers(data.servers as RawDiscoveredServer[]);
         setDiscoveryScanStatus((previous) => ({
           ...previous,
-          lastResultAt: typeof data.timestamp === 'number' ? data.timestamp : Date.now(),
+          scanning: false,
+          lastResultAt: responseTimestamp ?? Date.now(),
           errors: Array.isArray(data.errors) && data.errors.length > 0 ? data.errors : undefined,
         }));
         return;
@@ -196,7 +205,8 @@ export const useInfrastructureDiscoveryRuntimeState = ({
       updateDiscoveredNodesFromServers([]);
       setDiscoveryScanStatus((previous) => ({
         ...previous,
-        lastResultAt: typeof data?.timestamp === 'number' ? data.timestamp : previous.lastResultAt,
+        scanning: false,
+        lastResultAt: responseTimestamp ?? previous.lastResultAt,
         errors: Array.isArray(data?.errors) && data.errors.length > 0 ? data.errors : undefined,
       }));
     } catch (error) {
@@ -230,8 +240,31 @@ export const useInfrastructureDiscoveryRuntimeState = ({
         throw new Error(message || 'Discovery request failed');
       }
 
+      const data = await response.json().catch(() => null);
+      const responseTimestamp = normalizeDiscoveryTimestamp(
+        data && typeof data === 'object'
+          ? (data as { timestamp?: unknown; updated?: unknown }).timestamp ??
+              (data as { timestamp?: unknown; updated?: unknown }).updated
+          : undefined,
+      );
+      if (data && typeof data === 'object' && Array.isArray((data as { servers?: unknown }).servers)) {
+        updateDiscoveredNodesFromServers((data as { servers: RawDiscoveredServer[] }).servers);
+      }
+      setDiscoveryScanStatus((previous) => ({
+        ...previous,
+        scanning: false,
+        lastResultAt: responseTimestamp ?? Date.now(),
+        errors:
+          data &&
+          typeof data === 'object' &&
+          Array.isArray((data as { errors?: unknown }).errors) &&
+          (data as { errors: unknown[] }).errors.length > 0
+            ? ((data as { errors: string[] }).errors ?? undefined)
+            : undefined,
+      }));
+
       if (!quiet) {
-        notificationStore.info('Discovery scan started', 2000);
+        notificationStore.success('Discovery scan complete', 2000);
       }
     } catch (error) {
       logger.error('Failed to start discovery scan', error);

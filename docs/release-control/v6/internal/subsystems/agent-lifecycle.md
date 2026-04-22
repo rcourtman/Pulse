@@ -336,6 +336,14 @@ an add-only capacity posture.
     instance list, the picker dialog owns source-type selection, and
     `frontend-modern/src/components/Settings/ConnectionEditor/ConnectionEditor.tsx`
     owns detect-driven credential handoff plus type-specific form bodies.
+    That same landing now owns explicit discovery review for API-backed
+    Proxmox-family systems: `InfrastructureSourceManager.tsx` may surface
+    discovered VE / PBS / PMG candidates under their matching platform groups,
+    and `InfrastructureWorkspace.tsx` may route a candidate's `Review` action
+    into the same typed add dialog with canonical prefills. Lifecycle flows
+    must not fork a second discovery-specific credential wizard or treat
+    discovery results as already-enrolled systems before the operator saves
+    the governed add form.
     The editor's probe step calls the aggregator probe endpoint and
     dispatches the detected or manually-selected type into a credential
     slot; it must not bypass the probe endpoint or fabricate probe

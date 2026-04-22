@@ -182,6 +182,8 @@ test.describe('Infrastructure onboarding', () => {
     await page.waitForURL(/\/settings\/infrastructure(?:\?.*)?$/, { timeout: 15_000 });
 
     await expect(page.getByText('Infrastructure sources', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Run discovery/i })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Discovery settings/i })).toBeVisible();
     await expect(page.getByText('VMware vCenter', { exact: true })).toBeVisible();
     await expect(page.getByText('TrueNAS SCALE', { exact: true })).toBeVisible();
     await expect(page.getByText('Proxmox VE', { exact: true })).toBeVisible();
@@ -239,6 +241,104 @@ test.describe('Infrastructure onboarding', () => {
         countUpgradeEvents(metricEvents, 'infrastructure_onboarding_credentials_opened', 'truenas'),
       )
       .toBe(1);
+  });
+
+  test('desktop explicit discovery scan surfaces a candidate row and opens a prefilled review dialog', async ({
+    page,
+  }, testInfo) => {
+    test.skip(
+      testInfo.project.name.startsWith('mobile-'),
+      'Desktop-only discovery-candidate review coverage',
+    );
+
+    const metricEvents = await recordUpgradeMetricEvents(page);
+    await prepareOnboardingPage(page);
+
+    await page.route('**/api/discover', async (route) => {
+      const requestUrl = new URL(route.request().url());
+      if (requestUrl.pathname !== '/api/discover') {
+        await route.continue();
+        return;
+      }
+
+      if (route.request().method() === 'GET') {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            servers: [],
+            errors: [],
+            cached: true,
+            updated: 0,
+            age: 0,
+          }),
+        });
+        return;
+      }
+
+      if (route.request().method() === 'POST') {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            servers: [
+              {
+                ip: '10.0.0.55',
+                port: 8006,
+                type: 'pve',
+                version: '8.2.2',
+                hostname: 'discovered-pve.lab',
+              },
+            ],
+            errors: [],
+            cached: false,
+            scanning: false,
+            timestamp: 1_700_000_000_000,
+          }),
+        });
+        return;
+      }
+
+      await route.continue();
+    });
+
+    await page.goto('/settings/infrastructure', { waitUntil: 'domcontentloaded' });
+    await page.waitForURL(/\/settings\/infrastructure(?:\?.*)?$/, { timeout: 15_000 });
+
+    await page.getByRole('button', { name: /Run discovery/i }).click();
+
+    await expect(page.getByText('discovered-pve.lab', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: /^Review$/i })).toBeVisible();
+
+    await page.getByRole('button', { name: /^Review$/i }).click();
+    await page.waitForURL(/\/settings\/infrastructure\?add=pve$/, { timeout: 15_000 });
+
+    await expect(page.getByRole('dialog')).toBeVisible();
+    await expect(
+      page.getByRole('dialog').getByRole('heading', { name: 'Add Proxmox VE', exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByPlaceholder('https://proxmox.example.com:8006'),
+    ).toHaveValue('https://discovered-pve.lab:8006');
+
+    await expect
+      .poll(() => countUpgradeEvents(metricEvents, 'infrastructure_onboarding_opened'))
+      .toBe(1);
+    await expect
+      .poll(() =>
+        countUpgradeEvents(metricEvents, 'infrastructure_onboarding_path_selected', 'api'),
+      )
+      .toBe(1);
+    await expect
+      .poll(() =>
+        countUpgradeEvents(metricEvents, 'infrastructure_onboarding_credentials_opened', 'pve'),
+      )
+      .toBe(1);
+    await expect
+      .poll(() =>
+        countUpgradeEvents(metricEvents, 'infrastructure_onboarding_catalog_selected', 'pve'),
+      )
+      .toBe(0);
   });
 
   test('desktop detect utility records no-match agent fallback from the landing header action', async ({

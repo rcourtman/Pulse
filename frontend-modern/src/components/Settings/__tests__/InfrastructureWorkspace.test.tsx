@@ -144,7 +144,7 @@ const baseProps = () =>
     initialLoadComplete: () => true,
     discoveryEnabled: () => false,
     discoveryMode: () => 'auto',
-    discoveryScanStatus: () => 'idle',
+    discoveryScanStatus: () => ({ scanning: false }),
     discoveredNodes: () => [],
     savingDiscoverySettings: () => false,
     envOverrides: () => ({}),
@@ -222,6 +222,8 @@ describe('InfrastructureWorkspace', () => {
     await waitFor(() =>
       expect(screen.getByText('Infrastructure sources')).toBeInTheDocument(),
     );
+    expect(screen.getByRole('button', { name: /Run discovery/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Discovery settings/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Detect from address/i })).toBeInTheDocument();
     expect(screen.getByText('VMware vCenter')).toBeInTheDocument();
     expect(screen.getByText('TrueNAS SCALE')).toBeInTheDocument();
@@ -229,6 +231,41 @@ describe('InfrastructureWorkspace', () => {
     expect(screen.getByRole('button', { name: /Add Proxmox VE/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Edit/i })).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Monitored systems' })).not.toBeInTheDocument();
+  });
+
+  it('routes discovery actions from the manager and shows discovered candidates in the matching platform group', async () => {
+    const triggerDiscoveryScan = vi.fn();
+    renderWorkspace({
+      discoveredNodes: () => [
+        {
+          ip: '10.0.0.55',
+          port: 8006,
+          type: 'pve',
+          version: '8.2.2',
+          hostname: 'discovered-pve.lab',
+        },
+      ],
+      discoveryScanStatus: () => ({ scanning: false, lastResultAt: Date.now() }),
+      triggerDiscoveryScan,
+    });
+
+    await waitFor(() =>
+      expect(screen.getByText('discovered-pve.lab')).toBeInTheDocument(),
+    );
+    expect(screen.getByText('Discovered')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Run discovery/i }));
+    expect(triggerDiscoveryScan).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole('button', { name: /Discovery settings/i }));
+    expect(navigateSpy).toHaveBeenCalledWith('/settings/system-network', {
+      scroll: false,
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /^Review$/i }));
+    expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure?add=pve', {
+      scroll: false,
+    });
   });
 
   it('opens the detect dialog from the source manager header action', () => {

@@ -259,6 +259,13 @@ work extends shared components instead of creating new local variants.
    source-manager landing inside that destination, while route-backed add flows
    and local edit flows stay single-purpose instead of stacking multiple
    page-level workspaces at once.
+   The source-manager landing now also owns the explicit discovery strip for
+   that destination. `InfrastructureSourceManager.tsx` may expose `Run
+   discovery`, `Detect from address`, and `Discovery settings` actions from the
+   shared landing shell, but it must not start a network scan just because the
+   page rendered. Discovered API-backed candidates stay visible in the same
+   platform-group table as configured sources, using the existing tree/table
+   hierarchy instead of spawning a second discovery-only page or card stack.
    `InfrastructureWorkspace.tsx` must still open a new connection through
    `frontend-modern/src/components/Settings/ConnectionEditor/ConnectionEditor.tsx`,
    but the editor now serves as governed dialog content under the source
@@ -2209,10 +2216,13 @@ that same shell boundary as
 `frontend-modern/src/components/Settings/ProLicensePanel.tsx` and the shared
 settings billing presentation owner in
 `frontend-modern/src/components/Settings/selfHostedBillingPresentation.ts`;
-the `system-billing` navigation label plus header title and description must reuse
-`SELF_HOSTED_PRO_BILLING_PRESENTATION.shellTitle` and
-`SELF_HOSTED_PRO_BILLING_PRESENTATION.shellDescription` so the route header and
-the billing shell do not narrate the same commercial surface differently.
+the `system-billing` navigation label, header title/description, and billing
+shell framing must all route through `SELF_HOSTED_PRO_BILLING_PRESENTATION`
+instead of drifting independently. The owned split is now explicit: the
+navigation label comes from `navLabel`, while the route header and billing
+shell reuse `shellTitle` plus `shellDescription`, so the settings IA can stay
+plan-owned (`Plans`) while the page itself still names the concrete job
+(`Plans & Activation`) without reintroducing local label drift.
 That same settings-shell framing boundary also covers adjacent top-level
 settings references to the self-hosted commercial surface. When
 `InfrastructureWorkspace.tsx` or other settings-shell surfaces point operators
