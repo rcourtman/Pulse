@@ -63,6 +63,46 @@ const MONITORED_SYSTEM_COMMERCIAL_POSTURE = {
   has_migration_gap: false,
 };
 
+const ACTIVATED_PLAN_ENTITLEMENTS = {
+  capabilities: [
+    "relay",
+    "mobile_app",
+    "push_notifications",
+    "ai_patrol",
+    "ai_autofix",
+    "ai_alerts",
+    "kubernetes_ai",
+    "rbac",
+    "audit_logging",
+  ],
+  limits: [],
+  subscription_state: "active",
+  upgrade_reasons: [],
+  tier: "pro",
+  plan_version: "pro_monthly",
+  licensed_email: "owner@example.com",
+  trial_eligible: false,
+  hosted_mode: false,
+  valid: true,
+  is_lifetime: false,
+  days_remaining: 30,
+};
+
+const ACTIVATED_PLAN_RUNTIME_CAPABILITIES = {
+  capabilities: ACTIVATED_PLAN_ENTITLEMENTS.capabilities,
+  limits: ACTIVATED_PLAN_ENTITLEMENTS.limits,
+  hosted_mode: false,
+  max_history_days: 90,
+};
+
+const ACTIVATED_PLAN_COMMERCIAL_POSTURE = {
+  subscription_state: "active",
+  upgrade_reasons: [],
+  tier: "pro",
+  trial_eligible: false,
+  has_migration_gap: false,
+};
+
 const MONITORED_SYSTEM_LEDGER = {
   systems: [
     {
@@ -249,6 +289,7 @@ async function configurePurchaseReturnRoute(
     bridgeTitle?: string;
     completionTitle: string;
     finalRedirectUrl: string;
+    onComplete?: () => void;
   },
 ) {
   const {
@@ -259,6 +300,7 @@ async function configurePurchaseReturnRoute(
     bridgeTitle,
     completionTitle,
     finalRedirectUrl,
+    onComplete,
   } = options;
 
   await context.route(`${PURCHASE_RETURN_URL}**`, async (route) => {
@@ -291,6 +333,7 @@ async function configurePurchaseReturnRoute(
     expect(formData.get("portal_handoff_id")).toBe(portalHandoffID);
     expect(formData.get("feature")).toBe(feature);
     expect(formData.get("purchase_return_token")).toBe(purchaseReturnToken);
+    onComplete?.();
     await route.fulfill({
       status: 200,
       contentType: "text/html",
@@ -299,7 +342,15 @@ async function configurePurchaseReturnRoute(
   });
 }
 
-async function configureBillingFixtures(context: BrowserContext, page: Page) {
+async function configureBillingFixtures(
+  context: BrowserContext,
+  page: Page,
+  options: {
+    activationState?: { current: boolean };
+  } = {},
+) {
+  const activationState = options.activationState ?? { current: false };
+
   await page.addInitScript(() => {
     localStorage.setItem("pulse_whats_new_v2_shown", "true");
   });
@@ -325,15 +376,28 @@ async function configureBillingFixtures(context: BrowserContext, page: Page) {
   });
 
   await context.route("**/api/license/runtime-capabilities", async (route) => {
-    await fulfillJSON(route, MONITORED_SYSTEM_RUNTIME_CAPABILITIES);
+    await fulfillJSON(
+      route,
+      activationState.current
+        ? ACTIVATED_PLAN_RUNTIME_CAPABILITIES
+        : MONITORED_SYSTEM_RUNTIME_CAPABILITIES,
+    );
   });
 
   await context.route("**/api/license/commercial-posture", async (route) => {
-    await fulfillJSON(route, MONITORED_SYSTEM_COMMERCIAL_POSTURE);
+    await fulfillJSON(
+      route,
+      activationState.current
+        ? ACTIVATED_PLAN_COMMERCIAL_POSTURE
+        : MONITORED_SYSTEM_COMMERCIAL_POSTURE,
+    );
   });
 
   await context.route("**/api/license/entitlements", async (route) => {
-    await fulfillJSON(route, MONITORED_SYSTEM_ENTITLEMENTS);
+    await fulfillJSON(
+      route,
+      activationState.current ? ACTIVATED_PLAN_ENTITLEMENTS : MONITORED_SYSTEM_ENTITLEMENTS,
+    );
   });
 
   await context.route(
@@ -375,7 +439,8 @@ test.describe("Self-hosted upgrade return flow", () => {
     );
 
     const context = page.context();
-    await configureBillingFixtures(context, page);
+    const activationState = { current: false };
+    await configureBillingFixtures(context, page, { activationState });
     let purchaseStartURL = "";
 
     await configurePurchaseStartRoute(context, (requestUrl) => {
@@ -388,6 +453,9 @@ test.describe("Self-hosted upgrade return flow", () => {
     await configurePurchaseReturnRoute(context, {
       completionTitle: "Plan activated",
       finalRedirectUrl: ACTIVATED_BILLING_URL,
+      onComplete: () => {
+        activationState.current = true;
+      },
     });
 
     await openMonitoredSystemUpgradeArrival(page);
@@ -415,12 +483,23 @@ test.describe("Self-hosted upgrade return flow", () => {
       page.getByRole("button", { name: "Continue to Plans" }),
     ).toHaveCount(0);
     await expect(page).toHaveURL(FINAL_BILLING_URL);
+    const activationSummary = page
+      .locator("div.rounded-md.border.p-3.text-sm")
+      .filter({ has: page.getByText("Pulse Pro is now active", { exact: true }) })
+      .first();
+
     await expect(
-      page.getByText("Plan activated", { exact: true }),
+      activationSummary.getByText("Pulse Pro is now active", { exact: true }),
     ).toBeVisible();
-    const reviewPlanLink = page.getByRole("link", { name: "Review plan" });
-    await expect(reviewPlanLink).toHaveAttribute("href", "/settings/system/billing/plan");
+    await expect(
+      activationSummary.getByText(
+        "Checkout completed and this instance is now running Pulse Pro.",
+      ),
+    ).toBeVisible();
+    await expect(activationSummary.getByText("Available now on this instance")).toBeVisible();
+    await expect(activationSummary.getByText("Patrol Auto-Fix")).toBeVisible();
     await expect(page.getByRole("link", { name: "Review usage" })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "Review plan" })).toHaveCount(0);
   });
 
   test("returns cancelled checkout directly to the owned billing plan route", async ({
@@ -432,7 +511,8 @@ test.describe("Self-hosted upgrade return flow", () => {
     );
 
     const context = page.context();
-    await configureBillingFixtures(context, page);
+    const activationState = { current: false };
+    await configureBillingFixtures(context, page, { activationState });
 
     await configurePurchaseStartRoute(context);
     await configurePortalRedirectRoute(context, {
@@ -464,7 +544,8 @@ test.describe("Self-hosted upgrade return flow", () => {
     );
 
     const context = page.context();
-    await configureBillingFixtures(context, page);
+    const activationState = { current: false };
+    await configureBillingFixtures(context, page, { activationState });
 
     await configurePurchaseStartRoute(context);
     await configurePortalRedirectRoute(context, {
@@ -475,6 +556,9 @@ test.describe("Self-hosted upgrade return flow", () => {
       bridgeTitle: "Confirming plan activation state",
       completionTitle: "Purchase activation already completed",
       finalRedirectUrl: ACTIVATED_BILLING_URL,
+      onComplete: () => {
+        activationState.current = true;
+      },
     });
 
     await openMonitoredSystemUpgradeArrival(page);
@@ -482,13 +566,22 @@ test.describe("Self-hosted upgrade return flow", () => {
     await page.goto(buildPortalHandoffUrl(), { waitUntil: "domcontentloaded" });
 
     await expect(page).toHaveURL(FINAL_BILLING_URL);
+    const activationSummary = page
+      .locator("div.rounded-md.border.p-3.text-sm")
+      .filter({ has: page.getByText("Pulse Pro is now active", { exact: true }) })
+      .first();
+
     await expect(
-      page.getByText("Plan activated", { exact: true }),
+      activationSummary.getByText("Pulse Pro is now active", { exact: true }),
     ).toBeVisible();
-    await expect(page.getByRole("link", { name: "Review plan" })).toHaveAttribute(
-      "href",
-      "/settings/system/billing/plan",
-    );
+    await expect(
+      activationSummary.getByText(
+        "Checkout completed and this instance is now running Pulse Pro.",
+      ),
+    ).toBeVisible();
+    await expect(activationSummary.getByText("Available now on this instance")).toBeVisible();
+    await expect(activationSummary.getByText("Patrol Auto-Fix")).toBeVisible();
+    await expect(page.getByRole("link", { name: "Review plan" })).toHaveCount(0);
     await expect(page.getByRole("link", { name: "Review usage" })).toHaveCount(0);
   });
 

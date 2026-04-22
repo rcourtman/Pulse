@@ -35,6 +35,13 @@ interface MonitoredSystemCapacitySection {
 }
 
 interface ProLicensePlanSectionProps {
+  activationSuccessSummary: {
+    title: string;
+    body: string;
+    tone: string;
+    highlightsLabel: string;
+    highlights: string[];
+  } | null;
   commercialMigrationNotice: Notice | null;
   commercialPlanModel: {
     summary: Array<{ label: string; value: string | number }>;
@@ -84,6 +91,31 @@ export const ProLicensePlanSection: Component<ProLicensePlanSectionProps> = (pro
 
   return (
     <>
+      <Show when={props.activationSuccessSummary}>
+        {(summary) => (
+          <div class={`mb-4 rounded-md border p-3 text-sm ${summary().tone}`}>
+            <p class="font-medium">{summary().title}</p>
+            <p class="mt-1 text-xs opacity-90">{summary().body}</p>
+            <Show when={summary().highlights.length > 0}>
+              <div class="mt-3">
+                <p class="text-[11px] uppercase tracking-wide opacity-80">
+                  {summary().highlightsLabel}
+                </p>
+                <ul class="mt-2 grid gap-2 sm:grid-cols-2">
+                  <For each={summary().highlights}>
+                    {(feature) => (
+                      <li class="text-xs flex items-center gap-2">
+                        <span class="w-1.5 h-1.5 rounded-full bg-current"></span>
+                        {feature}
+                      </li>
+                    )}
+                  </For>
+                </ul>
+              </div>
+            </Show>
+          </div>
+        )}
+      </Show>
       <Show when={props.purchaseActivationNotice}>
         {(notice) => (
           <div class={`mb-4 rounded-md border p-3 text-sm ${notice().tone}`}>

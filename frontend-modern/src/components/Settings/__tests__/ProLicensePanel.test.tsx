@@ -732,6 +732,14 @@ describe('ProLicensePanel', () => {
   });
 
   it('shows the hosted activation success banner on the Pro settings route', async () => {
+    mockEntitlements = {
+      capabilities: ['ai_patrol', 'ai_autofix', 'ai_alerts'],
+      limits: [],
+      subscription_state: 'trial',
+      upgrade_reasons: [],
+      tier: 'pro',
+      trial_eligible: false,
+    };
     useLocationMock.mockReturnValue({
       search: '?trial=activated',
       pathname: '/settings/system/billing/plan',
@@ -740,10 +748,12 @@ describe('ProLicensePanel', () => {
 
     renderPanel();
 
-    expect(screen.getByText('Trial activated')).toBeInTheDocument();
+    expect(screen.getByText('Pulse Pro trial is now active')).toBeInTheDocument();
     expect(
-      screen.getByText(/Pulse activated the Pro trial for this instance/i),
+      screen.getByText(/this instance now has Pulse Pro trial access/i),
     ).toBeInTheDocument();
+    expect(screen.getByText('Available during this trial')).toBeInTheDocument();
+    expect(screen.getAllByText('Patrol Auto-Fix').length).toBeGreaterThan(0);
     expect(navigateMock).toHaveBeenCalledWith(SELF_HOSTED_PRO_BILLING_PLAN_HREF, {
       replace: true,
       scroll: false,
@@ -753,7 +763,7 @@ describe('ProLicensePanel', () => {
   it.each([
     {
       purchase: SELF_HOSTED_PRO_BILLING_PURCHASE_ACTIVATED,
-      title: 'Plan activated',
+      title: 'Pulse Pro is now active',
       actionLabel: null,
       actionHref: null,
     },
@@ -798,6 +808,17 @@ describe('ProLicensePanel', () => {
       actionHref,
       redirectedHref = SELF_HOSTED_PRO_BILLING_PLAN_HREF,
     }) => {
+      if (purchase === SELF_HOSTED_PRO_BILLING_PURCHASE_ACTIVATED) {
+        mockEntitlements = {
+          capabilities: ['relay', 'mobile_app', 'push_notifications', 'ai_autofix'],
+          limits: [],
+          subscription_state: 'active',
+          upgrade_reasons: [],
+          tier: 'pro',
+          licensed_email: 'owner@example.com',
+          trial_eligible: false,
+        };
+      }
       useLocationMock.mockReturnValue({
         search:
           purchase === SELF_HOSTED_PRO_BILLING_PURCHASE_CANCELLED
@@ -810,6 +831,13 @@ describe('ProLicensePanel', () => {
       renderPanel();
 
       expect(screen.getByText(title)).toBeInTheDocument();
+      if (purchase === SELF_HOSTED_PRO_BILLING_PURCHASE_ACTIVATED) {
+        expect(
+          screen.getByText(/Checkout completed and this instance is now running Pulse Pro/i),
+        ).toBeInTheDocument();
+        expect(screen.getByText('Available now on this instance')).toBeInTheDocument();
+        expect(screen.getAllByText('Patrol Auto-Fix').length).toBeGreaterThan(0);
+      }
       if (actionLabel && actionHref) {
         const actionLinks = screen.getAllByRole('link', { name: actionLabel });
         expect(actionLinks.some((link) => link.getAttribute('href') === actionHref)).toBe(true);
@@ -824,6 +852,15 @@ describe('ProLicensePanel', () => {
   );
 
   it('returns self-hosted plan purchases to the plan surface instead of the legacy usage tab', async () => {
+    mockEntitlements = {
+      capabilities: ['relay', 'mobile_app', 'push_notifications', 'ai_autofix'],
+      limits: [],
+      subscription_state: 'active',
+      upgrade_reasons: [],
+      tier: 'pro',
+      licensed_email: 'owner@example.com',
+      trial_eligible: false,
+    };
     useLocationMock.mockReturnValue({
       search: `?purchase=${SELF_HOSTED_PRO_BILLING_PURCHASE_ACTIVATED}&intent=${SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_INTENT}`,
       pathname: '/settings/system/billing/plan',
@@ -832,12 +869,13 @@ describe('ProLicensePanel', () => {
 
     renderPanel();
 
-    expect(screen.getByText('Plan activated')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Review plan' })).toHaveAttribute(
-      'href',
-      SELF_HOSTED_PRO_BILLING_PLAN_HREF,
-    );
+    expect(screen.getByText('Pulse Pro is now active')).toBeInTheDocument();
+    expect(
+      screen.getByText(/Checkout completed and this instance is now running Pulse Pro/i),
+    ).toBeInTheDocument();
     expect(screen.queryByText('Compare self-hosted plans')).not.toBeInTheDocument();
+    expect(screen.getAllByText('Patrol Auto-Fix').length).toBeGreaterThan(0);
+    expect(screen.queryByRole('link', { name: 'Review plan' })).not.toBeInTheDocument();
   });
 
   it('opens recovery by default when the billing route requests the recovery detail', async () => {
@@ -1066,6 +1104,7 @@ describe('ProLicensePanel', () => {
     expect(proLicensePanelStateSource).toContain('loadRuntimeCapabilities(true)');
     expect(proLicensePanelStateSource).toContain('buildSelfHostedCommercialPlanModel');
     expect(proLicensePanelStateSource).toContain('getSelfHostedCurrentPlanPresentation({');
+    expect(proLicensePanelStateSource).toContain('getSelfHostedActivationSuccessPresentation({');
     expect(proLicensePanelStateSource).toContain('runStartProTrialAction({');
     expect(proLicensePanelStateSource).not.toContain('startProTrial()');
     expect(proLicensePanelStateSource).toContain("'A license or activation key is required'");
@@ -1074,6 +1113,8 @@ describe('ProLicensePanel', () => {
     expect(proLicensePlanSectionSource).toContain('getTrialEndedProLicenseNotice');
     expect(proLicensePlanSectionSource).toContain('currentPlanSummary.title');
     expect(proLicensePlanSectionSource).toContain('currentPlanSummary.supplementalBadges');
+    expect(proLicensePlanSectionSource).toContain('props.activationSuccessSummary');
+    expect(proLicensePlanSectionSource).toContain('summary().highlightsLabel');
     expect(proLicensePlanSectionSource).toContain('Unlocked on this instance');
     expect(proLicensePlanSectionSource).not.toContain('getInactiveProUpsellNotice');
     expect(proLicensePlanSectionSource).not.toContain('MonitoredSystemDefinitionDisclosure');

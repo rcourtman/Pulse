@@ -101,6 +101,7 @@ const ProLicensePanelContent: Component = () => {
             >
               <div class="space-y-6">
                 <ProLicensePlanSection
+                  activationSuccessSummary={state.activationSuccessSummary()}
                   commercialMigrationNotice={state.commercialMigrationNotice()}
                   commercialPlanModel={state.commercialPlanModel()}
                   currentPlanSummary={state.currentPlanSummary()}

@@ -12,6 +12,7 @@ import {
 import { LicenseAPI } from '@/api/license';
 import {
   formatLicensePlanVersion,
+  getSelfHostedActivationSuccessPresentation,
   getCommercialMigrationNotice,
   getGrandfatheredPriceContinuityNotice,
   getSelfHostedCurrentPlanPresentation,
@@ -93,6 +94,9 @@ export function useProLicensePanelState() {
   const [purchaseActivationResult, setPurchaseActivationResult] = createSignal('');
   const [purchaseActivationIntent, setPurchaseActivationIntent] =
     createSignal<SelfHostedBillingPlanIntent | null>(null);
+  const [activationSuccessSource, setActivationSuccessSource] = createSignal<
+    'manual' | 'purchase' | 'trial' | null
+  >(null);
 
   const entitlements = createMemo(() => licenseEntitlements());
   const subscriptionState = createMemo(() => entitlements()?.subscription_state);
@@ -115,11 +119,17 @@ export function useProLicensePanelState() {
     const purchaseResult = getSelfHostedBillingPurchaseArrival(location.search) ?? '';
     if (trialResult) {
       setTrialActivationResult(trialResult);
+      if (trialResult === 'activated') {
+        setActivationSuccessSource('trial');
+      }
       params.delete('trial');
     }
     if (purchaseResult) {
       setPurchaseActivationResult(purchaseResult);
       setPurchaseActivationIntent(getSelfHostedBillingPlanIntent(location.search));
+      if (purchaseResult === SELF_HOSTED_PRO_BILLING_PURCHASE_ACTIVATED) {
+        setActivationSuccessSource('purchase');
+      }
       params.delete(SELF_HOSTED_PRO_BILLING_PURCHASE_QUERY_PARAM);
       if (purchaseResult === SELF_HOSTED_PRO_BILLING_PURCHASE_ACTIVATED) {
         params.delete(SELF_HOSTED_PRO_BILLING_PLAN_INTENT_QUERY_PARAM);
@@ -452,11 +462,24 @@ export function useProLicensePanelState() {
   );
 
   const trialActivationNotice = createMemo(() => {
+    if (trialActivationResult().trim().toLowerCase() === 'activated') {
+      return null;
+    }
     return getTrialActivationNotice(trialActivationResult());
   });
   const purchaseActivationNotice = createMemo(() => {
+    if (purchaseActivationResult().trim().toLowerCase() === 'activated') {
+      return null;
+    }
     return getPurchaseActivationNotice(purchaseActivationResult());
   });
+  const activationSuccessSummary = createMemo(() =>
+    getSelfHostedActivationSuccessPresentation({
+      entitlements: entitlements(),
+      displayableCapabilities: formattedFeatures(),
+      source: activationSuccessSource(),
+    }),
+  );
   const purchaseActivationAction = createMemo<{
     label: string;
     destination: UpgradeDestination;
@@ -591,6 +614,7 @@ export function useProLicensePanelState() {
         return;
       }
       notificationStore.success(result.message || 'License activated');
+      setActivationSuccessSource('manual');
       setLicenseKey('');
       await Promise.all([
         loadPanelData(),
@@ -614,6 +638,7 @@ export function useProLicensePanelState() {
     try {
       const result = await LicenseAPI.clearLicense();
       notificationStore.success(result.message || 'License cleared');
+      setActivationSuccessSource(null);
       await Promise.all([
         loadPanelData(),
         loadCommercialPosture(true),
@@ -630,6 +655,7 @@ export function useProLicensePanelState() {
     activeSection,
     activating,
     clearing,
+    activationSuccessSummary,
     commercialMigrationNotice,
     commercialPlanModel,
     currentPlanSummary,

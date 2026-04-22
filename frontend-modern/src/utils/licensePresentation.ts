@@ -116,6 +116,13 @@ export interface SelfHostedCurrentPlanPresentation {
   supplementalSummary?: string;
 }
 
+export interface SelfHostedActivationSuccessPresentation extends LicenseInlineNotice {
+  highlightsLabel: string;
+  highlights: string[];
+}
+
+export type SelfHostedActivationSuccessSource = 'manual' | 'purchase' | 'trial';
+
 const GRANDFATHERED_V5_PLAN_LABELS: Record<string, string> = {
   v5_lifetime_grandfathered: 'V5 Lifetime Grandfathered',
   v5_pro_monthly_grandfathered: 'V5 Pro Monthly (Grandfathered)',
@@ -258,6 +265,56 @@ export const getMonitoredSystemContinuityNotice = (
   return null;
 };
 
+const getSelfHostedUnlockedFeatures = ({
+  entitlements,
+  displayableCapabilities,
+}: {
+  entitlements?: LicenseCommercialEntitlements | null;
+  displayableCapabilities: string[];
+}): string[] => {
+  const current = entitlements;
+  if (!current) {
+    return [];
+  }
+
+  const normalizedTier = (current.tier || '').trim().toLowerCase();
+  const planDefinition = getSelfHostedPlanDefinitionForBillingTier(current.tier);
+  const fallbackHighlights = [...(planDefinition?.entitlementHighlights ?? [])];
+  return normalizedTier === 'free'
+    ? fallbackHighlights
+    : displayableCapabilities.length > 0
+      ? displayableCapabilities
+      : fallbackHighlights;
+};
+
+const getSelfHostedActivationHighlights = ({
+  entitlements,
+  displayableCapabilities,
+}: {
+  entitlements?: LicenseCommercialEntitlements | null;
+  displayableCapabilities: string[];
+}): string[] => {
+  const planDefinition = getSelfHostedPlanDefinitionForBillingTier(entitlements?.tier);
+  const prioritized = [...(planDefinition?.entitlementHighlights ?? [])];
+  const unlockedFeatures = getSelfHostedUnlockedFeatures({
+    entitlements,
+    displayableCapabilities,
+  });
+  const highlights: string[] = [];
+
+  for (const feature of [...prioritized, ...unlockedFeatures]) {
+    if (!feature || highlights.includes(feature)) {
+      continue;
+    }
+    highlights.push(feature);
+    if (highlights.length >= 4) {
+      break;
+    }
+  }
+
+  return highlights;
+};
+
 export const getSelfHostedCurrentPlanPresentation = ({
   entitlements,
   displayableCapabilities,
@@ -279,13 +336,10 @@ export const getSelfHostedCurrentPlanPresentation = ({
   const normalizedTier = (current.tier || '').trim().toLowerCase();
   const planLabel = getSelfHostedPlanLabel(current.tier);
   const planDefinition = getSelfHostedPlanDefinitionForBillingTier(current.tier);
-  const fallbackHighlights = [...(planDefinition?.entitlementHighlights ?? [])];
-  const unlockedFeatures =
-    normalizedTier === 'free'
-      ? fallbackHighlights
-      : displayableCapabilities.length > 0
-        ? displayableCapabilities
-        : fallbackHighlights;
+  const unlockedFeatures = getSelfHostedUnlockedFeatures({
+    entitlements: current,
+    displayableCapabilities,
+  });
 
   const supplementalBadges: string[] = [];
   const supplementalDetails: string[] = [];
@@ -363,6 +417,62 @@ export const getSelfHostedCurrentPlanPresentation = ({
     unlockedFeatures,
     supplementalBadges,
     supplementalSummary: supplementalDetails.join(' '),
+  };
+};
+
+export const getSelfHostedActivationSuccessPresentation = ({
+  entitlements,
+  displayableCapabilities,
+  source,
+}: {
+  entitlements?: LicenseCommercialEntitlements | null;
+  displayableCapabilities: string[];
+  source: SelfHostedActivationSuccessSource | null;
+}): SelfHostedActivationSuccessPresentation | null => {
+  const current = entitlements;
+  if (!source || !current) {
+    return null;
+  }
+
+  const normalizedState = (current.subscription_state || '').trim().toLowerCase();
+  const normalizedTier = (current.tier || '').trim().toLowerCase();
+  if (normalizedTier === 'free') {
+    return null;
+  }
+
+  if (source === 'trial') {
+    if (normalizedState !== 'trial') {
+      return null;
+    }
+  } else if (normalizedState !== 'active' && normalizedState !== 'grace') {
+    return null;
+  }
+
+  const planLabel = getSelfHostedPlanLabel(current.tier);
+  const highlights = getSelfHostedActivationHighlights({
+    entitlements: current,
+    displayableCapabilities,
+  });
+
+  if (source === 'trial') {
+    return {
+      tone: 'border-green-200 dark:border-green-900 bg-green-50 dark:bg-green-900 text-green-900 dark:text-green-100',
+      title: `${planLabel} trial is now active`,
+      body: `The trial handoff completed and this instance now has ${planLabel} trial access.`,
+      highlightsLabel: 'Available during this trial',
+      highlights,
+    };
+  }
+
+  return {
+    tone: 'border-green-200 dark:border-green-900 bg-green-50 dark:bg-green-900 text-green-900 dark:text-green-100',
+    title: `${planLabel} is now active`,
+    body:
+      source === 'purchase'
+        ? `Checkout completed and this instance is now running ${planLabel}.`
+        : `The activation key was accepted and this instance is now running ${planLabel}.`,
+    highlightsLabel: 'Available now on this instance',
+    highlights,
   };
 };
 

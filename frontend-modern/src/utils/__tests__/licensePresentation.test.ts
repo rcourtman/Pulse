@@ -8,6 +8,7 @@ import {
   getCommercialMigrationNotice,
   getFeatureMinTierLabel,
   getGrandfatheredPriceContinuityNotice,
+  getSelfHostedActivationSuccessPresentation,
   getSelfHostedCurrentPlanPresentation,
   getLicenseFeatureLabel,
   getLicenseStatusLoadingState,
@@ -278,6 +279,106 @@ describe('licensePresentation', () => {
       supplementalSummary:
         'This migrated v5 subscription keeps its existing recurring price and uncapped guest capacity until cancellation. This installation keeps an effective monitored-system limit of 23 from the observed legacy estate.',
     });
+  });
+
+  it('builds activation-success summaries for purchase, pasted-key, and trial activation paths', () => {
+    expect(
+      getSelfHostedActivationSuccessPresentation({
+        entitlements: {
+          tier: 'pro',
+          subscription_state: 'active',
+          capabilities: ['relay', 'mobile_app', 'push_notifications', 'ai_autofix'],
+          limits: [],
+          upgrade_reasons: [],
+        },
+        displayableCapabilities: [
+          'Pulse Relay (Remote Access)',
+          'Mobile App Access',
+          'Push Notifications',
+          'Patrol Auto-Fix',
+        ],
+        source: 'purchase',
+      }),
+    ).toEqual({
+      tone: 'border-green-200 dark:border-green-900 bg-green-50 dark:bg-green-900 text-green-900 dark:text-green-100',
+      title: 'Pulse Pro is now active',
+      body: 'Checkout completed and this instance is now running Pulse Pro.',
+      highlightsLabel: 'Available now on this instance',
+      highlights: [
+        'Patrol Auto-Fix',
+        'Pulse Alert Analysis',
+        'Kubernetes Insights',
+        '90-day metric history',
+      ],
+    });
+
+    expect(
+      getSelfHostedActivationSuccessPresentation({
+        entitlements: {
+          tier: 'relay',
+          subscription_state: 'active',
+          capabilities: ['relay', 'mobile_app', 'push_notifications'],
+          limits: [],
+          upgrade_reasons: [],
+        },
+        displayableCapabilities: [
+          'Pulse Relay (Remote Access)',
+          'Mobile App Access',
+          'Push Notifications',
+        ],
+        source: 'manual',
+      }),
+    ).toEqual({
+      tone: 'border-green-200 dark:border-green-900 bg-green-50 dark:bg-green-900 text-green-900 dark:text-green-100',
+      title: 'Relay is now active',
+      body: 'The activation key was accepted and this instance is now running Relay.',
+      highlightsLabel: 'Available now on this instance',
+      highlights: [
+        'Pulse Relay (Remote Access)',
+        'Mobile App Access',
+        'Push Notifications',
+        '14-day metric history',
+      ],
+    });
+
+    expect(
+      getSelfHostedActivationSuccessPresentation({
+        entitlements: {
+          tier: 'pro',
+          subscription_state: 'trial',
+          capabilities: ['ai_patrol', 'ai_autofix'],
+          limits: [],
+          upgrade_reasons: [],
+        },
+        displayableCapabilities: ['Pulse Patrol', 'Patrol Auto-Fix'],
+        source: 'trial',
+      }),
+    ).toEqual({
+      tone: 'border-green-200 dark:border-green-900 bg-green-50 dark:bg-green-900 text-green-900 dark:text-green-100',
+      title: 'Pulse Pro trial is now active',
+      body: 'The trial handoff completed and this instance now has Pulse Pro trial access.',
+      highlightsLabel: 'Available during this trial',
+      highlights: [
+        'Patrol Auto-Fix',
+        'Pulse Alert Analysis',
+        'Kubernetes Insights',
+        '90-day metric history',
+      ],
+    });
+
+    expect(
+      getSelfHostedActivationSuccessPresentation({
+        entitlements: {
+          tier: 'free',
+          subscription_state: 'expired',
+          capabilities: [],
+          limits: [],
+          upgrade_reasons: [],
+        },
+        displayableCapabilities: [],
+        source: 'purchase',
+      }),
+    ).toBeNull();
   });
 
   it('returns monitored-system continuity notices for pending verification and captured grandfathering', () => {

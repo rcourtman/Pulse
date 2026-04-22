@@ -1144,6 +1144,12 @@ specific and continuity-aware: Relay and Pulse Pro should describe the actual
 paid capabilities unlocked on this instance, while grandfathered pricing or
 captured monitored-system continuity must be visible in that same top summary
 instead of only in secondary billing detail blocks further down the page.
+Fresh activation is part of that same governed plan state. After a checkout
+return, trial handoff, or pasted-key activation succeeds, the owned plan
+surface must show an explicit success summary that names the unlocked tier
+and the marquee capabilities now available on this instance, rather than
+falling back to a generic "activated" banner that leaves the user to infer
+what changed from the steady-state billing card alone.
 That same router-owned billing contract now also includes recovery as a plan
 detail state instead of a fragment alias. The canonical recovery arrival is
 `/settings/system/billing/plan?details=recovery`, while
