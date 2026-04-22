@@ -34,6 +34,10 @@ export function buildSettingsPanelRegistryContext(
   params: UseSettingsPanelRegistryParams,
 ): SettingsPanelRegistryContext {
   const settingsCapabilities = () => params.securityStatus()?.settingsCapabilities ?? null;
+  const currentUser = () =>
+    params.securityStatus()?.proxyAuthUsername
+    || params.securityStatus()?.ssoSessionUsername
+    || params.securityStatus()?.authUsername;
 
   const systemAiPanel: Component = () => (
     <div class="space-y-6">
@@ -66,9 +70,15 @@ export function buildSettingsPanelRegistryContext(
     getNetworkPanelProps: params.systemPanels.getNetworkPanelProps,
     getUpdatesPanelProps: params.systemPanels.getUpdatesPanelProps,
     getRecoveryPanelProps: params.systemPanels.getRecoveryPanelProps,
-    getOrganizationOverviewPanelProps: () => ({}),
-    getOrganizationAccessPanelProps: () => ({}),
-    getOrganizationSharingPanelProps: () => ({}),
+    getOrganizationOverviewPanelProps: () => ({
+      currentUser: currentUser(),
+    }),
+    getOrganizationAccessPanelProps: () => ({
+      currentUser: currentUser(),
+    }),
+    getOrganizationSharingPanelProps: () => ({
+      currentUser: currentUser(),
+    }),
     getOrganizationBillingPanelProps: () => ({
       nodeUsage: params.organizationMonitoredSystemUsage(),
       guestUsage: params.organizationGuestUsage(),

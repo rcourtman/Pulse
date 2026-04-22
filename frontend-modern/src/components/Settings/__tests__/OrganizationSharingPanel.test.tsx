@@ -11,6 +11,8 @@ const listMembersMock = vi.fn();
 const listOrgsMock = vi.fn();
 const listSharesMock = vi.fn();
 const listIncomingSharesMock = vi.fn();
+const acceptIncomingShareMock = vi.fn();
+const declineIncomingShareMock = vi.fn();
 const createShareMock = vi.fn();
 const deleteShareMock = vi.fn();
 const isMultiTenantEnabledMock = vi.fn();
@@ -27,6 +29,8 @@ vi.mock('@/api/orgs', () => ({
     list: (...args: unknown[]) => listOrgsMock(...args),
     listShares: (...args: unknown[]) => listSharesMock(...args),
     listIncomingShares: (...args: unknown[]) => listIncomingSharesMock(...args),
+    acceptIncomingShare: (...args: unknown[]) => acceptIncomingShareMock(...args),
+    declineIncomingShare: (...args: unknown[]) => declineIncomingShareMock(...args),
     createShare: (...args: unknown[]) => createShareMock(...args),
     deleteShare: (...args: unknown[]) => deleteShareMock(...args),
   },
@@ -108,6 +112,8 @@ beforeEach(() => {
   listOrgsMock.mockReset();
   listSharesMock.mockReset();
   listIncomingSharesMock.mockReset();
+  acceptIncomingShareMock.mockReset();
+  declineIncomingShareMock.mockReset();
   createShareMock.mockReset();
   deleteShareMock.mockReset();
   isMultiTenantEnabledMock.mockReset();
@@ -127,12 +133,21 @@ beforeEach(() => {
   isMultiTenantEnabledMock.mockReturnValue(true);
   getOrgIDMock.mockReturnValue('org-a');
   eventBusOnMock.mockReturnValue(() => undefined);
+  vi.stubGlobal(
+    'confirm',
+    vi.fn(() => true),
+  );
 
   orgGetMock.mockResolvedValue(baseOrg);
   listMembersMock.mockResolvedValue([]);
   listOrgsMock.mockResolvedValue([baseOrg, targetOrg]);
   listSharesMock.mockResolvedValue([]);
   listIncomingSharesMock.mockResolvedValue([]);
+  acceptIncomingShareMock.mockResolvedValue({
+    id: 'incoming-share-1',
+    status: 'accepted',
+  });
+  declineIncomingShareMock.mockResolvedValue(undefined);
   createShareMock.mockResolvedValue({
     id: 'share-1',
     targetOrgId: 'org-b',
@@ -140,6 +155,7 @@ beforeEach(() => {
     resourceId: 'vm-100',
     resourceName: 'Alpha VM',
     accessRole: 'viewer',
+    status: 'pending',
     createdAt: new Date().toISOString(),
     createdBy: 'user-1',
   });
@@ -148,6 +164,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  vi.unstubAllGlobals();
 });
 
 describe('OrganizationSharingPanel', () => {
@@ -301,6 +318,61 @@ describe('OrganizationSharingPanel', () => {
         resourceName: 'Production VM',
         accessRole: 'viewer',
       });
+    });
+  });
+
+  it('renders share status and lets target managers accept or decline incoming shares', async () => {
+    listSharesMock.mockResolvedValue([
+      {
+        id: 'share-out-1',
+        targetOrgId: 'org-b',
+        resourceType: 'vm',
+        resourceId: 'vm-100',
+        resourceName: 'Alpha VM',
+        accessRole: 'viewer',
+        status: 'pending',
+        createdAt: '2026-04-20T10:00:00Z',
+        createdBy: 'user-1',
+      },
+    ]);
+    listIncomingSharesMock.mockResolvedValue([
+      {
+        id: 'share-in-1',
+        sourceOrgId: 'org-b',
+        sourceOrgName: 'Organization B',
+        targetOrgId: 'org-a',
+        resourceType: 'view',
+        resourceId: 'alerts-high-cpu',
+        resourceName: 'High CPU',
+        accessRole: 'viewer',
+        status: 'pending',
+        createdAt: '2026-04-20T10:00:00Z',
+        createdBy: 'user-2',
+      },
+    ]);
+
+    renderPanel();
+
+    await waitFor(() => {
+      expect(screen.getAllByText('Pending approval').length).toBeGreaterThanOrEqual(2);
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Accept' }));
+
+    await waitFor(() => {
+      expect(acceptIncomingShareMock).toHaveBeenCalledWith('org-a', 'share-in-1');
+    });
+
+    await waitFor(() => {
+      expect((screen.getByRole('button', { name: 'Decline' }) as HTMLButtonElement).disabled).toBe(
+        false,
+      );
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Decline' }));
+
+    await waitFor(() => {
+      expect(declineIncomingShareMock).toHaveBeenCalledWith('org-a', 'share-in-1');
     });
   });
 

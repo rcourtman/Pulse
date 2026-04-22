@@ -9,6 +9,11 @@ import {
   getOrganizationDisplayNameRequiredMessage,
   getOrganizationDisplayNameUpdateErrorMessage,
   getOrganizationDisplayNameUpdatedMessage,
+  getOrganizationIncomingShareAcceptErrorMessage,
+  getOrganizationIncomingShareAcceptSuccessMessage,
+  getOrganizationIncomingShareDeclineConfirmMessage,
+  getOrganizationIncomingShareDeclineErrorMessage,
+  getOrganizationIncomingShareDeclineSuccessMessage,
   getOrganizationIncomingSharesEmptyState,
   getOrganizationMemberRemoveConfirmMessage,
   getOrganizationMemberRoleUpdateErrorMessage,
@@ -24,6 +29,8 @@ import {
   getOrganizationShareDeleteSuccessMessage,
   getOrganizationShareInvalidResourceMessage,
   getOrganizationShareResourceIdRequiredMessage,
+  getOrganizationShareStatusDescription,
+  getOrganizationShareStatusLabel,
   getOrganizationShareTargetOrgDifferentMessage,
   getOrganizationShareTargetOrgRequiredMessage,
   getOrganizationSettingsLoadErrorMessage,
@@ -80,9 +87,7 @@ describe('organizationSettingsPresentation', () => {
       'Unable to update the organization name.',
     );
     expect(getOrganizationDisplayNameUpdateErrorMessage('bad request')).toBe('bad request');
-    expect(getOrganizationDisplayNameUpdatedMessage()).toBe(
-      'Organization name has been updated.',
-    );
+    expect(getOrganizationDisplayNameUpdatedMessage()).toBe('Organization name has been updated.');
     expect(getOrganizationOverviewManageRequiredMessage()).toBe(
       'Admin or owner role required to update organization details.',
     );
@@ -96,9 +101,7 @@ describe('organizationSettingsPresentation', () => {
     expect(getOrganizationAccessRoleUpdatedMessage('alice', 'admin')).toBe(
       'Updated alice to the admin role.',
     );
-    expect(getOrganizationMemberRoleUpdateErrorMessage()).toBe(
-      'Unable to update the member role.',
-    );
+    expect(getOrganizationMemberRoleUpdateErrorMessage()).toBe('Unable to update the member role.');
     expect(getOrganizationMemberRoleUpdateErrorMessage('conflict')).toBe('conflict');
     expect(getOrganizationAccessMemberAddedMessage('alice', 'viewer')).toBe(
       'Added alice as viewer.',
@@ -124,9 +127,43 @@ describe('organizationSettingsPresentation', () => {
     expect(getOrganizationShareTargetOrgDifferentMessage()).toBe(
       'Target organization must differ from the current organization',
     );
-    expect(getOrganizationShareCreateSuccessMessage()).toBe('Resource has been shared.');
+    expect(getOrganizationShareCreateSuccessMessage()).toBe(
+      'Share request sent. A target organization admin must accept it before access becomes active.',
+    );
     expect(getOrganizationShareCreateErrorMessage()).toBe('Unable to create the share.');
     expect(getOrganizationShareCreateErrorMessage('duplicate')).toBe('duplicate');
+    expect(getOrganizationShareStatusLabel('pending')).toBe('Pending approval');
+    expect(getOrganizationShareStatusLabel('accepted')).toBe('Active');
+    expect(getOrganizationShareStatusDescription('pending')).toBe(
+      'Waiting for a target organization admin to accept.',
+    );
+    expect(
+      getOrganizationShareStatusDescription('accepted', '2026-04-22T10:30:00Z', 'alice'),
+    ).toContain('Accepted');
+    expect(
+      getOrganizationShareStatusDescription('accepted', '2026-04-22T10:30:00Z', 'alice'),
+    ).toContain('alice');
+    expect(getOrganizationIncomingShareAcceptSuccessMessage('High CPU')).toBe(
+      'Accepted shared access to High CPU.',
+    );
+    expect(getOrganizationIncomingShareAcceptErrorMessage()).toBe(
+      'Unable to accept the incoming share.',
+    );
+    expect(getOrganizationIncomingShareDeclineConfirmMessage('High CPU', 'pending')).toBe(
+      'Decline the share request for High CPU?',
+    );
+    expect(getOrganizationIncomingShareDeclineConfirmMessage('High CPU', 'accepted')).toBe(
+      'Remove shared access to High CPU?',
+    );
+    expect(getOrganizationIncomingShareDeclineSuccessMessage('High CPU', 'pending')).toBe(
+      'Declined the share request for High CPU.',
+    );
+    expect(getOrganizationIncomingShareDeclineSuccessMessage('High CPU', 'accepted')).toBe(
+      'Removed shared access to High CPU.',
+    );
+    expect(getOrganizationIncomingShareDeclineErrorMessage()).toBe(
+      'Unable to remove the incoming share.',
+    );
     expect(getOrganizationShareDeleteSuccessMessage()).toBe('Share has been removed.');
     expect(getOrganizationShareDeleteErrorMessage()).toBe('Unable to remove the share.');
     expect(getOrganizationShareDeleteErrorMessage('forbidden')).toBe('forbidden');

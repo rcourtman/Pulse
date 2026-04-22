@@ -260,6 +260,34 @@ describe('OrgsAPI', () => {
     });
   });
 
+  describe('acceptIncomingShare', () => {
+    it('accepts a pending incoming share', async () => {
+      const mockShare = { id: 'share-1', status: 'accepted' };
+      vi.mocked(apiFetchJSON).mockResolvedValueOnce(mockShare);
+
+      const result = await OrgsAPI.acceptIncomingShare('org-1', 'share-1');
+
+      expect(apiFetchJSON).toHaveBeenCalledWith(
+        '/api/orgs/org-1/shares/incoming/share-1/accept',
+        expect.objectContaining({ method: 'POST', skipOrgContext: true }),
+      );
+      expect(result).toEqual(mockShare);
+    });
+  });
+
+  describe('declineIncomingShare', () => {
+    it('declines or removes an incoming share', async () => {
+      vi.mocked(apiFetchJSON).mockResolvedValueOnce(undefined);
+
+      await OrgsAPI.declineIncomingShare('org-1', 'share-1');
+
+      expect(apiFetchJSON).toHaveBeenCalledWith(
+        '/api/orgs/org-1/shares/incoming/share-1',
+        expect.objectContaining({ method: 'DELETE', skipOrgContext: true }),
+      );
+    });
+  });
+
   describe('deleteShare', () => {
     it('deletes a resource share', async () => {
       vi.mocked(apiFetchJSON).mockResolvedValueOnce(undefined);

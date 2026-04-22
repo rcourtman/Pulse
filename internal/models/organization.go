@@ -28,6 +28,18 @@ const (
 	OrgStatusPendingDeletion OrgStatus = "pending_deletion"
 )
 
+// OrganizationShareStatus represents the lifecycle state of a cross-org share.
+type OrganizationShareStatus string
+
+const (
+	// OrganizationShareStatusPending requires explicit target-org acceptance
+	// before the share becomes active.
+	OrganizationShareStatusPending OrganizationShareStatus = "pending"
+	// OrganizationShareStatusAccepted is an active share that target-org admins
+	// have already accepted. Empty legacy status values normalize here.
+	OrganizationShareStatusAccepted OrganizationShareStatus = "accepted"
+)
+
 // NormalizeOrgStatus canonicalizes lifecycle status values.
 // Empty status is treated as active for backward compatibility.
 func NormalizeOrgStatus(status OrgStatus) OrgStatus {
@@ -40,6 +52,29 @@ func NormalizeOrgStatus(status OrgStatus) OrgStatus {
 		return OrgStatusPendingDeletion
 	default:
 		return OrgStatus(strings.ToLower(strings.TrimSpace(string(status))))
+	}
+}
+
+// NormalizeOrganizationShareStatus canonicalizes share lifecycle values.
+// Empty status is treated as accepted for backward compatibility.
+func NormalizeOrganizationShareStatus(status OrganizationShareStatus) OrganizationShareStatus {
+	switch strings.ToLower(strings.TrimSpace(string(status))) {
+	case "", string(OrganizationShareStatusAccepted):
+		return OrganizationShareStatusAccepted
+	case string(OrganizationShareStatusPending):
+		return OrganizationShareStatusPending
+	default:
+		return OrganizationShareStatus(strings.ToLower(strings.TrimSpace(string(status))))
+	}
+}
+
+// IsValidOrganizationShareStatus reports whether the share status is known.
+func IsValidOrganizationShareStatus(status OrganizationShareStatus) bool {
+	switch NormalizeOrganizationShareStatus(status) {
+	case OrganizationShareStatusPending, OrganizationShareStatusAccepted:
+		return true
+	default:
+		return false
 	}
 }
 
@@ -145,11 +180,20 @@ type OrganizationShare struct {
 	// AccessRole defines the access level granted to the target organization.
 	AccessRole OrganizationRole `json:"accessRole"`
 
+	// Status tracks whether the target organization has accepted the share.
+	Status OrganizationShareStatus `json:"status"`
+
 	// CreatedAt is when the share was created.
 	CreatedAt time.Time `json:"createdAt"`
 
 	// CreatedBy is the user ID that created the share.
 	CreatedBy string `json:"createdBy"`
+
+	// AcceptedAt is when the target organization accepted the share.
+	AcceptedAt time.Time `json:"acceptedAt,omitempty"`
+
+	// AcceptedBy is the target-org admin who accepted the share.
+	AcceptedBy string `json:"acceptedBy,omitempty"`
 }
 
 // Organization represents a distinct tenant in the system.

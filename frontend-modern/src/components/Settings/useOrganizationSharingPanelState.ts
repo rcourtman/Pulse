@@ -21,6 +21,11 @@ import { normalizeOrgScope } from '@/utils/orgScope';
 import { getPreferredResourceDisplayName } from '@/utils/resourceIdentity';
 import type { ShareAccessRole } from '@/utils/organizationRolePresentation';
 import {
+  getOrganizationIncomingShareAcceptErrorMessage,
+  getOrganizationIncomingShareAcceptSuccessMessage,
+  getOrganizationIncomingShareDeclineConfirmMessage,
+  getOrganizationIncomingShareDeclineErrorMessage,
+  getOrganizationIncomingShareDeclineSuccessMessage,
   getOrganizationShareCreateErrorMessage,
   getOrganizationShareCreateSuccessMessage,
   getOrganizationShareDeleteErrorMessage,
@@ -104,6 +109,17 @@ export function useOrganizationSharingPanelState(props: OrganizationSharingPanel
     }
     return map;
   });
+
+  const getShareLabel = (share: {
+    resourceId: string;
+    resourceName?: string;
+    resourceType: string;
+  }): string => {
+    const resourceName = share.resourceName?.trim();
+    if (resourceName) return resourceName;
+    if (share.resourceId.trim() !== '') return share.resourceId;
+    return `${share.resourceType}:${share.resourceId}`;
+  };
 
   createEffect(() => {
     if (unifiedResourceOptions().length > 0) return;
@@ -215,9 +231,7 @@ export function useOrganizationSharingPanelState(props: OrganizationSharingPanel
     const hasValidManualType = isCanonicalResourceType(nextResourceType);
     const hasValidManualResourceId = nextResourceId !== '';
 
-    setTargetOrgError(
-      nextTargetOrgId === '' ? getOrganizationShareTargetOrgRequiredMessage() : '',
-    );
+    setTargetOrgError(nextTargetOrgId === '' ? getOrganizationShareTargetOrgRequiredMessage() : '');
     if (hasQuickPick) {
       setResourceTypeError('');
       setResourceIdError('');
@@ -282,6 +296,57 @@ export function useOrganizationSharingPanelState(props: OrganizationSharingPanel
     }
   };
 
+  const acceptIncomingShare = async (share: IncomingOrganizationShare) => {
+    const currentOrg = org();
+    if (!currentOrg) return;
+
+    setSaving(true);
+    try {
+      await OrgsAPI.acceptIncomingShare(currentOrg.id, share.id);
+      notificationStore.success(
+        getOrganizationIncomingShareAcceptSuccessMessage(getShareLabel(share)),
+      );
+      await loadShares(currentOrg.id);
+    } catch (error) {
+      logger.error('Failed to accept incoming organization share', error);
+      notificationStore.error(
+        getOrganizationIncomingShareAcceptErrorMessage(
+          error instanceof Error ? error.message : undefined,
+        ),
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const declineIncomingShare = async (share: IncomingOrganizationShare) => {
+    const currentOrg = org();
+    if (!currentOrg) return;
+
+    const shareLabel = getShareLabel(share);
+    if (!confirm(getOrganizationIncomingShareDeclineConfirmMessage(shareLabel, share.status))) {
+      return;
+    }
+
+    setSaving(true);
+    try {
+      await OrgsAPI.declineIncomingShare(currentOrg.id, share.id);
+      notificationStore.success(
+        getOrganizationIncomingShareDeclineSuccessMessage(shareLabel, share.status),
+      );
+      await loadShares(currentOrg.id);
+    } catch (error) {
+      logger.error('Failed to remove incoming organization share', error);
+      notificationStore.error(
+        getOrganizationIncomingShareDeclineErrorMessage(
+          error instanceof Error ? error.message : undefined,
+        ),
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
   onMount(() => {
     if (!isMultiTenantEnabled() || presentationPolicyHidesOrganizationSurfaces()) {
       setLoading(false);
@@ -297,10 +362,12 @@ export function useOrganizationSharingPanelState(props: OrganizationSharingPanel
 
   return {
     accessRole,
+    acceptIncomingShare,
     applyResourceQuickPick,
     canCreateShare,
     canManageCurrentOrg,
     createShare,
+    declineIncomingShare,
     deleteShare,
     incomingShares,
     loading,

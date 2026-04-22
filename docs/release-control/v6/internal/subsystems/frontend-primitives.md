@@ -190,6 +190,14 @@ work extends shared components instead of creating new local variants.
    canonical settings-shell tests must not bounce an allowed organization
    route back to `Infrastructure` just because nav filtering has not yet
    surfaced that tab.
+   That same settings-shell boundary also owns authenticated operator identity
+   propagation into organization panels.
+   `frontend-modern/src/components/Settings/settingsPanelRegistryContext.tsx`
+   must derive the effective username from the resolved security status
+   (`proxyAuthUsername`, then `ssoSessionUsername`, then `authUsername`) and
+   pass that identity into the organization overview, access, and sharing
+   panels so deep-linked organization routes do not collapse into anonymous
+   read-only shells under proxy-auth, SSO, or local-auth sessions.
    That same shared session-presentation boundary also owns alerts read-only
    posture: `/alerts` may continue exposing reporting tabs such as overview and
    history, but activation controls plus configuration routes must collapse out

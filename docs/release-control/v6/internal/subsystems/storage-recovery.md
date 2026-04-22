@@ -74,6 +74,12 @@ querying, and the operator-facing storage health presentation layer.
    provider-backed recovery: storage and recovery must treat `truenas_disabled`
    as an explicit platform opt-out, not as the baseline onboarding state for a
    supported platform.
+   That same adjacent API boundary also owns organization-share target-consent
+   semantics. When `internal/api/org_handlers.go` and adjacent route wiring
+   evolve cross-organization sharing, storage and recovery may consume the
+   resulting org-scoped access only after the canonical target organization has
+   accepted the share; they must not treat pending share requests as live
+   recovery access or invent storage-local approval bypasses.
    That same adjacent API boundary also owns signed release-asset download
    continuity when shared helpers serve installer or unified-agent assets:
    storage- and recovery-adjacent callers may reuse the shared

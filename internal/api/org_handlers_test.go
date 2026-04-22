@@ -620,7 +620,7 @@ func TestOrgHandlersShareLifecycle(t *testing.T) {
 
 	createTargetReq := withUser(
 		httptest.NewRequest(http.MethodPost, "/api/orgs", bytes.NewBufferString(`{"id":"beta","displayName":"Beta"}`)),
-		"alice",
+		"bob",
 	)
 	createTargetRec := httptest.NewRecorder()
 	h.HandleCreateOrg(createTargetRec, createTargetReq)
@@ -645,8 +645,17 @@ func TestOrgHandlersShareLifecycle(t *testing.T) {
 	if share.ID == "" {
 		t.Fatalf("expected share id")
 	}
+	if share.Status != models.OrganizationShareStatusPending {
+		t.Fatalf("share status=%q, want %q", share.Status, models.OrganizationShareStatusPending)
+	}
+	if !share.AcceptedAt.IsZero() {
+		t.Fatalf("expected pending share accepted_at to be empty, got %s", share.AcceptedAt)
+	}
+	if share.AcceptedBy != "" {
+		t.Fatalf("expected pending share accepted_by to be empty, got %q", share.AcceptedBy)
+	}
 
-	incomingReq := withUser(httptest.NewRequest(http.MethodGet, "/api/orgs/beta/shares/incoming", nil), "alice")
+	incomingReq := withUser(httptest.NewRequest(http.MethodGet, "/api/orgs/beta/shares/incoming", nil), "bob")
 	incomingReq.SetPathValue("id", "beta")
 	incomingRec := httptest.NewRecorder()
 	h.HandleListIncomingShares(incomingRec, incomingReq)
@@ -659,6 +668,20 @@ func TestOrgHandlersShareLifecycle(t *testing.T) {
 	}
 	if len(incoming) != 1 || incoming[0].SourceOrgID != "acme" {
 		t.Fatalf("unexpected incoming shares: %+v", incoming)
+	}
+	if incoming[0].Status != models.OrganizationShareStatusPending {
+		t.Fatalf("incoming status=%q, want %q", incoming[0].Status, models.OrganizationShareStatusPending)
+	}
+
+	accepted := acceptIncomingShareForTest(t, h, "beta", "bob", share.ID)
+	if accepted.Status != models.OrganizationShareStatusAccepted {
+		t.Fatalf("accepted share status=%q, want %q", accepted.Status, models.OrganizationShareStatusAccepted)
+	}
+	if accepted.AcceptedBy != "bob" {
+		t.Fatalf("accepted share accepted_by=%q, want %q", accepted.AcceptedBy, "bob")
+	}
+	if accepted.AcceptedAt.IsZero() {
+		t.Fatalf("accepted share missing accepted_at")
 	}
 
 	deleteShareReq := withUser(httptest.NewRequest(http.MethodDelete, "/api/orgs/acme/shares/"+share.ID, nil), "alice")
@@ -698,6 +721,8 @@ func TestOrgHandlersIncomingSharesPreserveAccessRole(t *testing.T) {
 	if createTargetRec.Code != http.StatusCreated {
 		t.Fatalf("create target failed: %d %s", createTargetRec.Code, createTargetRec.Body.String())
 	}
+	inviteMemberForTest(t, h, "beta", "bob", "charlie", "editor", http.StatusAccepted)
+	acceptInvitationForTest(t, h, "beta", "charlie")
 
 	createShareReq := withUser(
 		httptest.NewRequest(http.MethodPost, "/api/orgs/acme/shares", bytes.NewBufferString(`{"targetOrgId":"beta","resourceType":"view","resourceId":"shared-view","resourceName":"Shared View","accessRole":"editor"}`)),
@@ -717,8 +742,28 @@ func TestOrgHandlersIncomingSharesPreserveAccessRole(t *testing.T) {
 	if share.AccessRole != models.OrgRoleEditor {
 		t.Fatalf("share access_role=%q, want %q", share.AccessRole, models.OrgRoleEditor)
 	}
+	if share.Status != models.OrganizationShareStatusPending {
+		t.Fatalf("share status=%q, want %q", share.Status, models.OrganizationShareStatusPending)
+	}
 
-	incomingReq := withUser(httptest.NewRequest(http.MethodGet, "/api/orgs/beta/shares/incoming", nil), "bob")
+	pendingIncomingReq := withUser(httptest.NewRequest(http.MethodGet, "/api/orgs/beta/shares/incoming", nil), "charlie")
+	pendingIncomingReq.SetPathValue("id", "beta")
+	pendingIncomingRec := httptest.NewRecorder()
+	h.HandleListIncomingShares(pendingIncomingRec, pendingIncomingReq)
+	if pendingIncomingRec.Code != http.StatusOK {
+		t.Fatalf("list pending incoming failed: %d %s", pendingIncomingRec.Code, pendingIncomingRec.Body.String())
+	}
+	var pendingIncoming []incomingOrganizationShare
+	if err := json.Unmarshal(pendingIncomingRec.Body.Bytes(), &pendingIncoming); err != nil {
+		t.Fatalf("decode pending incoming: %v", err)
+	}
+	if len(pendingIncoming) != 0 {
+		t.Fatalf("expected pending share to stay hidden from non-managers, got %+v", pendingIncoming)
+	}
+
+	acceptIncomingShareForTest(t, h, "beta", "bob", share.ID)
+
+	incomingReq := withUser(httptest.NewRequest(http.MethodGet, "/api/orgs/beta/shares/incoming", nil), "charlie")
 	incomingReq.SetPathValue("id", "beta")
 	incomingRec := httptest.NewRecorder()
 	h.HandleListIncomingShares(incomingRec, incomingReq)
@@ -738,6 +783,9 @@ func TestOrgHandlersIncomingSharesPreserveAccessRole(t *testing.T) {
 	}
 	if incoming[0].AccessRole != models.OrgRoleEditor {
 		t.Fatalf("incoming access_role=%q, want %q", incoming[0].AccessRole, models.OrgRoleEditor)
+	}
+	if incoming[0].Status != models.OrganizationShareStatusAccepted {
+		t.Fatalf("incoming status=%q, want %q", incoming[0].Status, models.OrganizationShareStatusAccepted)
 	}
 }
 
@@ -821,6 +869,8 @@ func TestOrgHandlersShareIsolationAcrossOrganizations(t *testing.T) {
 	if createBetaRec.Code != http.StatusCreated {
 		t.Fatalf("create beta failed: %d %s", createBetaRec.Code, createBetaRec.Body.String())
 	}
+	inviteMemberForTest(t, h, "beta", "bob", "charlie", "viewer", http.StatusAccepted)
+	acceptInvitationForTest(t, h, "beta", "charlie")
 
 	createShareReq := withUser(
 		httptest.NewRequest(http.MethodPost, "/api/orgs/acme/shares", bytes.NewBufferString(`{"targetOrgId":"beta","resourceType":"view","resourceId":"r-1","resourceName":"Shared View","accessRole":"viewer"}`)),
@@ -832,20 +882,24 @@ func TestOrgHandlersShareIsolationAcrossOrganizations(t *testing.T) {
 	if createShareRec.Code != http.StatusCreated {
 		t.Fatalf("create share failed: %d %s", createShareRec.Code, createShareRec.Body.String())
 	}
+	var share models.OrganizationShare
+	if err := json.Unmarshal(createShareRec.Body.Bytes(), &share); err != nil {
+		t.Fatalf("decode share: %v", err)
+	}
 
-	bobIncomingReq := withUser(httptest.NewRequest(http.MethodGet, "/api/orgs/beta/shares/incoming", nil), "bob")
-	bobIncomingReq.SetPathValue("id", "beta")
-	bobIncomingRec := httptest.NewRecorder()
-	h.HandleListIncomingShares(bobIncomingRec, bobIncomingReq)
-	if bobIncomingRec.Code != http.StatusOK {
-		t.Fatalf("expected 200 for incoming shares in target org, got %d: %s", bobIncomingRec.Code, bobIncomingRec.Body.String())
+	charlieIncomingReq := withUser(httptest.NewRequest(http.MethodGet, "/api/orgs/beta/shares/incoming", nil), "charlie")
+	charlieIncomingReq.SetPathValue("id", "beta")
+	charlieIncomingRec := httptest.NewRecorder()
+	h.HandleListIncomingShares(charlieIncomingRec, charlieIncomingReq)
+	if charlieIncomingRec.Code != http.StatusOK {
+		t.Fatalf("expected 200 for incoming shares in target org, got %d: %s", charlieIncomingRec.Code, charlieIncomingRec.Body.String())
 	}
 	var incoming []incomingOrganizationShare
-	if err := json.Unmarshal(bobIncomingRec.Body.Bytes(), &incoming); err != nil {
+	if err := json.Unmarshal(charlieIncomingRec.Body.Bytes(), &incoming); err != nil {
 		t.Fatalf("decode incoming: %v", err)
 	}
-	if len(incoming) != 1 || incoming[0].SourceOrgID != "acme" {
-		t.Fatalf("unexpected incoming shares payload: %+v", incoming)
+	if len(incoming) != 0 {
+		t.Fatalf("expected pending incoming shares to stay hidden from non-managers, got %+v", incoming)
 	}
 
 	bobSourceSharesReq := withUser(httptest.NewRequest(http.MethodGet, "/api/orgs/acme/shares", nil), "bob")
@@ -856,12 +910,90 @@ func TestOrgHandlersShareIsolationAcrossOrganizations(t *testing.T) {
 		t.Fatalf("expected 403 when target org user lists source org shares, got %d: %s", bobSourceSharesRec.Code, bobSourceSharesRec.Body.String())
 	}
 
-	charlieIncomingReq := withUser(httptest.NewRequest(http.MethodGet, "/api/orgs/beta/shares/incoming", nil), "charlie")
-	charlieIncomingReq.SetPathValue("id", "beta")
-	charlieIncomingRec := httptest.NewRecorder()
-	h.HandleListIncomingShares(charlieIncomingRec, charlieIncomingReq)
-	if charlieIncomingRec.Code != http.StatusForbidden {
-		t.Fatalf("expected 403 when non-member lists incoming shares, got %d: %s", charlieIncomingRec.Code, charlieIncomingRec.Body.String())
+	danaIncomingReq := withUser(httptest.NewRequest(http.MethodGet, "/api/orgs/beta/shares/incoming", nil), "dana")
+	danaIncomingReq.SetPathValue("id", "beta")
+	danaIncomingRec := httptest.NewRecorder()
+	h.HandleListIncomingShares(danaIncomingRec, danaIncomingReq)
+	if danaIncomingRec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 when non-member lists incoming shares, got %d: %s", danaIncomingRec.Code, danaIncomingRec.Body.String())
+	}
+
+	acceptIncomingShareForTest(t, h, "beta", "bob", share.ID)
+
+	acceptedIncomingReq := withUser(httptest.NewRequest(http.MethodGet, "/api/orgs/beta/shares/incoming", nil), "charlie")
+	acceptedIncomingReq.SetPathValue("id", "beta")
+	acceptedIncomingRec := httptest.NewRecorder()
+	h.HandleListIncomingShares(acceptedIncomingRec, acceptedIncomingReq)
+	if acceptedIncomingRec.Code != http.StatusOK {
+		t.Fatalf("expected 200 after share acceptance, got %d: %s", acceptedIncomingRec.Code, acceptedIncomingRec.Body.String())
+	}
+	if err := json.Unmarshal(acceptedIncomingRec.Body.Bytes(), &incoming); err != nil {
+		t.Fatalf("decode accepted incoming: %v", err)
+	}
+	if len(incoming) != 1 || incoming[0].SourceOrgID != "acme" {
+		t.Fatalf("unexpected accepted incoming shares payload: %+v", incoming)
+	}
+}
+
+func TestOrgHandlersDeclineIncomingShareRemovesPendingRequest(t *testing.T) {
+	t.Setenv("PULSE_DEV", "true")
+	defer SetMultiTenantEnabled(false)
+	SetMultiTenantEnabled(true)
+
+	persistence := config.NewMultiTenantPersistence(t.TempDir())
+	h := NewOrgHandlers(persistence, nil)
+
+	createSourceReq := withUser(
+		httptest.NewRequest(http.MethodPost, "/api/orgs", bytes.NewBufferString(`{"id":"acme","displayName":"Acme"}`)),
+		"alice",
+	)
+	createSourceRec := httptest.NewRecorder()
+	h.HandleCreateOrg(createSourceRec, createSourceReq)
+	if createSourceRec.Code != http.StatusCreated {
+		t.Fatalf("create source failed: %d %s", createSourceRec.Code, createSourceRec.Body.String())
+	}
+
+	createTargetReq := withUser(
+		httptest.NewRequest(http.MethodPost, "/api/orgs", bytes.NewBufferString(`{"id":"beta","displayName":"Beta"}`)),
+		"bob",
+	)
+	createTargetRec := httptest.NewRecorder()
+	h.HandleCreateOrg(createTargetRec, createTargetReq)
+	if createTargetRec.Code != http.StatusCreated {
+		t.Fatalf("create target failed: %d %s", createTargetRec.Code, createTargetRec.Body.String())
+	}
+
+	createShareReq := withUser(
+		httptest.NewRequest(http.MethodPost, "/api/orgs/acme/shares", bytes.NewBufferString(`{"targetOrgId":"beta","resourceType":"view","resourceId":"pending-view","resourceName":"Pending View","accessRole":"viewer"}`)),
+		"alice",
+	)
+	createShareReq.SetPathValue("id", "acme")
+	createShareRec := httptest.NewRecorder()
+	h.HandleCreateShare(createShareRec, createShareReq)
+	if createShareRec.Code != http.StatusCreated {
+		t.Fatalf("create share failed: %d %s", createShareRec.Code, createShareRec.Body.String())
+	}
+
+	var share models.OrganizationShare
+	if err := json.Unmarshal(createShareRec.Body.Bytes(), &share); err != nil {
+		t.Fatalf("decode share: %v", err)
+	}
+
+	req := withUser(httptest.NewRequest(http.MethodDelete, "/api/orgs/beta/shares/incoming/"+share.ID, nil), "bob")
+	req.SetPathValue("id", "beta")
+	req.SetPathValue("shareId", share.ID)
+	rec := httptest.NewRecorder()
+	h.HandleDeclineIncomingShare(rec, req)
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("decline incoming share failed: %d %s", rec.Code, rec.Body.String())
+	}
+
+	sourceOrg, err := h.loadOrganization("acme")
+	if err != nil {
+		t.Fatalf("load source org: %v", err)
+	}
+	if len(sourceOrg.SharedResources) != 0 {
+		t.Fatalf("expected declined share to be removed from source org, got %+v", sourceOrg.SharedResources)
 	}
 }
 
@@ -1154,4 +1286,22 @@ func acceptInvitationForTest(t *testing.T, h *OrgHandlers, orgID, username strin
 		t.Fatalf("accept invitation for %s returned %d: %s", username, rec.Code, rec.Body.String())
 	}
 	return rec
+}
+
+func acceptIncomingShareForTest(t *testing.T, h *OrgHandlers, orgID, username, shareID string) models.OrganizationShare {
+	t.Helper()
+	req := withUser(httptest.NewRequest(http.MethodPost, "/api/orgs/"+orgID+"/shares/incoming/"+shareID+"/accept", nil), username)
+	req.SetPathValue("id", orgID)
+	req.SetPathValue("shareId", shareID)
+	rec := httptest.NewRecorder()
+	h.HandleAcceptIncomingShare(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("accept incoming share %s for %s returned %d: %s", shareID, username, rec.Code, rec.Body.String())
+	}
+
+	var share models.OrganizationShare
+	if err := json.Unmarshal(rec.Body.Bytes(), &share); err != nil {
+		t.Fatalf("decode accepted share: %v", err)
+	}
+	return share
 }

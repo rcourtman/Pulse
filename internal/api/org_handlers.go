@@ -912,6 +912,7 @@ func (h *OrgHandlers) HandleListIncomingShares(w http.ResponseWriter, r *http.Re
 		return
 	}
 	targetRole := organizationRoleForUser(targetOrg, username)
+	canManageTargetOrg := targetOrg.CanUserManage(username)
 
 	orgs, err := h.persistence.ListOrganizations()
 	if err != nil {
@@ -928,7 +929,11 @@ func (h *OrgHandlers) HandleListIncomingShares(w http.ResponseWriter, r *http.Re
 			if share.TargetOrgID != targetOrgID {
 				continue
 			}
-			if !models.OrganizationRoleAtLeast(targetRole, share.AccessRole) {
+			if share.Status == models.OrganizationShareStatusPending {
+				if !canManageTargetOrg {
+					continue
+				}
+			} else if !models.OrganizationRoleAtLeast(targetRole, share.AccessRole) {
 				continue
 			}
 			incoming = append(incoming, incomingOrganizationShare{
@@ -940,6 +945,114 @@ func (h *OrgHandlers) HandleListIncomingShares(w http.ResponseWriter, r *http.Re
 	}
 
 	writeJSON(w, http.StatusOK, incoming)
+}
+
+func (h *OrgHandlers) HandleAcceptIncomingShare(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if !h.requireMultiTenantGate(w, r) {
+		return
+	}
+
+	targetOrgID := strings.TrimSpace(r.PathValue("id"))
+	shareID := strings.TrimSpace(r.PathValue("shareId"))
+	if shareID == "" {
+		writeErrorResponse(w, http.StatusBadRequest, "invalid_share", "Share ID is required", nil)
+		return
+	}
+
+	targetOrg, err := h.loadOrganization(targetOrgID)
+	if err != nil {
+		h.writeLoadOrgError(w, err)
+		return
+	}
+
+	username := auth.GetUser(r.Context())
+	token := getAPITokenRecordFromRequest(r)
+	if token != nil || strings.HasPrefix(username, "token:") {
+		writeErrorResponse(w, http.StatusForbidden, "session_required", "Session-based user authentication is required", nil)
+		return
+	}
+	if !targetOrg.CanUserManage(username) {
+		writeErrorResponse(w, http.StatusForbidden, "access_denied", "Admin role required for the target organization", nil)
+		return
+	}
+
+	sourceOrg, shareIndex, share, err := h.findIncomingShare(targetOrgID, shareID)
+	if err != nil {
+		h.writeLoadOrgError(w, err)
+		return
+	}
+
+	share.Status = models.OrganizationShareStatusAccepted
+	share.AcceptedAt = time.Now().UTC()
+	share.AcceptedBy = username
+	sourceOrg.SharedResources[shareIndex] = share
+
+	if err := h.persistence.SaveOrganization(sourceOrg); err != nil {
+		writeErrorResponse(w, http.StatusInternalServerError, "share_accept_failed", "Failed to accept incoming share", nil)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, share)
+}
+
+func (h *OrgHandlers) HandleDeclineIncomingShare(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodDelete {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if !h.requireMultiTenantGate(w, r) {
+		return
+	}
+
+	targetOrgID := strings.TrimSpace(r.PathValue("id"))
+	shareID := strings.TrimSpace(r.PathValue("shareId"))
+	if shareID == "" {
+		writeErrorResponse(w, http.StatusBadRequest, "invalid_share", "Share ID is required", nil)
+		return
+	}
+
+	targetOrg, err := h.loadOrganization(targetOrgID)
+	if err != nil {
+		h.writeLoadOrgError(w, err)
+		return
+	}
+
+	username := auth.GetUser(r.Context())
+	token := getAPITokenRecordFromRequest(r)
+	if token != nil || strings.HasPrefix(username, "token:") {
+		writeErrorResponse(w, http.StatusForbidden, "session_required", "Session-based user authentication is required", nil)
+		return
+	}
+	if !targetOrg.CanUserManage(username) {
+		writeErrorResponse(w, http.StatusForbidden, "access_denied", "Admin role required for the target organization", nil)
+		return
+	}
+
+	sourceOrg, shareIndex, _, err := h.findIncomingShare(targetOrgID, shareID)
+	if err != nil {
+		h.writeLoadOrgError(w, err)
+		return
+	}
+
+	nextShares := make([]models.OrganizationShare, 0, len(sourceOrg.SharedResources)-1)
+	for i, share := range normalizeOrganizationShares(sourceOrg.SharedResources) {
+		if i == shareIndex {
+			continue
+		}
+		nextShares = append(nextShares, share)
+	}
+	sourceOrg.SharedResources = nextShares
+
+	if err := h.persistence.SaveOrganization(sourceOrg); err != nil {
+		writeErrorResponse(w, http.StatusInternalServerError, "share_decline_failed", "Failed to remove incoming share", nil)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (h *OrgHandlers) HandleCreateShare(w http.ResponseWriter, r *http.Request) {
@@ -1016,11 +1129,22 @@ func (h *OrgHandlers) HandleCreateShare(w http.ResponseWriter, r *http.Request) 
 		if normalizedShares[i].TargetOrgID == req.TargetOrgID &&
 			normalizedShares[i].ResourceType == req.ResourceType &&
 			normalizedShares[i].ResourceID == req.ResourceID {
+			now := time.Now().UTC()
+			acceptedUnchanged := normalizedShares[i].Status == models.OrganizationShareStatusAccepted &&
+				normalizedShares[i].AccessRole == req.AccessRole
 			normalizedShares[i].AccessRole = req.AccessRole
 			normalizedShares[i].ResourceName = req.ResourceName
-			normalizedShares[i].CreatedBy = username
-			if normalizedShares[i].CreatedAt.IsZero() {
-				normalizedShares[i].CreatedAt = time.Now().UTC()
+			if !acceptedUnchanged {
+				normalizedShares[i].Status = models.OrganizationShareStatusPending
+				normalizedShares[i].AcceptedAt = time.Time{}
+				normalizedShares[i].AcceptedBy = ""
+				normalizedShares[i].CreatedBy = username
+				normalizedShares[i].CreatedAt = now
+			} else if normalizedShares[i].CreatedAt.IsZero() {
+				normalizedShares[i].CreatedAt = now
+			}
+			if normalizedShares[i].CreatedBy == "" {
+				normalizedShares[i].CreatedBy = username
 			}
 			sourceOrg.SharedResources = normalizedShares
 			if err := h.persistence.SaveOrganization(sourceOrg); err != nil {
@@ -1039,6 +1163,7 @@ func (h *OrgHandlers) HandleCreateShare(w http.ResponseWriter, r *http.Request) 
 		ResourceID:   req.ResourceID,
 		ResourceName: req.ResourceName,
 		AccessRole:   req.AccessRole,
+		Status:       models.OrganizationShareStatusPending,
 		CreatedAt:    time.Now().UTC(),
 		CreatedBy:    username,
 	}
@@ -1108,7 +1233,10 @@ func (h *OrgHandlers) HandleDeleteShare(w http.ResponseWriter, r *http.Request) 
 	w.WriteHeader(http.StatusNoContent)
 }
 
-var errOrgNotFound = errors.New("organization not found")
+var (
+	errOrgNotFound   = errors.New("organization not found")
+	errShareNotFound = errors.New("organization share not found")
+)
 
 func (h *OrgHandlers) loadOrganization(orgID string) (*models.Organization, error) {
 	if !isValidOrganizationID(orgID) {
@@ -1190,6 +1318,8 @@ func (h *OrgHandlers) writeLoadOrgError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, errOrgNotFound):
 		writeErrorResponse(w, http.StatusNotFound, "not_found", "Organization not found", nil)
+	case errors.Is(err, errShareNotFound):
+		writeErrorResponse(w, http.StatusNotFound, "share_not_found", "Organization share not found", nil)
 	default:
 		writeErrorResponse(w, http.StatusInternalServerError, "org_load_failed", "Failed to load organization", nil)
 	}
@@ -1284,6 +1414,15 @@ func normalizeOrganizationShares(shares []models.OrganizationShare) []models.Org
 		if share.AccessRole == models.OrgRoleOwner || !models.IsValidOrganizationRole(share.AccessRole) {
 			share.AccessRole = models.OrgRoleViewer
 		}
+		share.Status = models.NormalizeOrganizationShareStatus(share.Status)
+		if !models.IsValidOrganizationShareStatus(share.Status) {
+			share.Status = models.OrganizationShareStatusAccepted
+		}
+		share.AcceptedBy = strings.TrimSpace(share.AcceptedBy)
+		if share.Status != models.OrganizationShareStatusAccepted {
+			share.AcceptedAt = time.Time{}
+			share.AcceptedBy = ""
+		}
 		if share.TargetOrgID == "" || share.ResourceType == "" || share.ResourceID == "" {
 			continue
 		}
@@ -1294,6 +1433,31 @@ func normalizeOrganizationShares(shares []models.OrganizationShare) []models.Org
 		normalized = append(normalized, share)
 	}
 	return normalized
+}
+
+func (h *OrgHandlers) findIncomingShare(targetOrgID, shareID string) (*models.Organization, int, models.OrganizationShare, error) {
+	if h.persistence == nil {
+		return nil, -1, models.OrganizationShare{}, errors.New("organization persistence is not configured")
+	}
+
+	orgs, err := h.persistence.ListOrganizations()
+	if err != nil {
+		return nil, -1, models.OrganizationShare{}, err
+	}
+
+	for _, sourceOrg := range orgs {
+		if sourceOrg == nil || sourceOrg.ID == targetOrgID {
+			continue
+		}
+		normalizeOrganization(sourceOrg)
+		for i, share := range sourceOrg.SharedResources {
+			if share.ID == shareID && share.TargetOrgID == targetOrgID {
+				return sourceOrg, i, share, nil
+			}
+		}
+	}
+
+	return nil, -1, models.OrganizationShare{}, errShareNotFound
 }
 
 func findOrganizationMemberIndex(members []models.OrganizationMember, userID string) int {

@@ -124,3 +124,49 @@ func TestNormalizeOrgStatus(t *testing.T) {
 		})
 	}
 }
+
+func TestNormalizeOrganizationShareStatus(t *testing.T) {
+	testCases := []struct {
+		name   string
+		input  OrganizationShareStatus
+		output OrganizationShareStatus
+		valid  bool
+	}{
+		{
+			name:   "empty defaults to accepted",
+			input:  "",
+			output: OrganizationShareStatusAccepted,
+			valid:  true,
+		},
+		{
+			name:   "pending case-insensitive",
+			input:  "PENDING",
+			output: OrganizationShareStatusPending,
+			valid:  true,
+		},
+		{
+			name:   "accepted case-insensitive",
+			input:  "Accepted",
+			output: OrganizationShareStatusAccepted,
+			valid:  true,
+		},
+		{
+			name:   "unknown trimmed and lowered",
+			input:  "  custom  ",
+			output: "custom",
+			valid:  false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := NormalizeOrganizationShareStatus(tc.input)
+			if got != tc.output {
+				t.Fatalf("NormalizeOrganizationShareStatus(%q) = %q, want %q", tc.input, got, tc.output)
+			}
+			if valid := IsValidOrganizationShareStatus(tc.input); valid != tc.valid {
+				t.Fatalf("IsValidOrganizationShareStatus(%q) = %v, want %v", tc.input, valid, tc.valid)
+			}
+		})
+	}
+}

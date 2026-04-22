@@ -1,4 +1,5 @@
-import type { OrganizationRole } from '@/api/orgs';
+import type { OrganizationRole, OrganizationShareStatus } from '@/api/orgs';
+import { formatOrgDate } from '@/utils/orgUtils';
 
 export const ORGANIZATION_SETTINGS_UNAVAILABLE_MESSAGE =
   'Organization settings are not available on this server.';
@@ -165,11 +166,65 @@ export function getOrganizationShareTargetOrgDifferentMessage(): string {
 }
 
 export function getOrganizationShareCreateSuccessMessage(): string {
-  return 'Resource has been shared.';
+  return 'Share request sent. A target organization admin must accept it before access becomes active.';
 }
 
 export function getOrganizationShareCreateErrorMessage(message?: string): string {
   return message || 'Unable to create the share.';
+}
+
+export function getOrganizationShareStatusLabel(status: OrganizationShareStatus): string {
+  return status === 'pending' ? 'Pending approval' : 'Active';
+}
+
+export function getOrganizationShareStatusDescription(
+  status: OrganizationShareStatus,
+  acceptedAt?: string,
+  acceptedBy?: string,
+): string {
+  if (status === 'pending') {
+    return 'Waiting for a target organization admin to accept.';
+  }
+
+  let message = acceptedAt
+    ? `Accepted ${formatOrgDate(acceptedAt)}`
+    : 'Accepted by the target organization';
+  if (acceptedBy) {
+    message += ` by ${acceptedBy}`;
+  }
+  return `${message}.`;
+}
+
+export function getOrganizationIncomingShareAcceptSuccessMessage(resourceLabel: string): string {
+  return `Accepted shared access to ${resourceLabel}.`;
+}
+
+export function getOrganizationIncomingShareAcceptErrorMessage(message?: string): string {
+  return message || 'Unable to accept the incoming share.';
+}
+
+export function getOrganizationIncomingShareDeclineConfirmMessage(
+  resourceLabel: string,
+  status: OrganizationShareStatus,
+): string {
+  if (status === 'pending') {
+    return `Decline the share request for ${resourceLabel}?`;
+  }
+  return `Remove shared access to ${resourceLabel}?`;
+}
+
+export function getOrganizationIncomingShareDeclineSuccessMessage(
+  resourceLabel: string,
+  status: OrganizationShareStatus,
+): string {
+  if (status === 'pending') {
+    return `Declined the share request for ${resourceLabel}.`;
+  }
+  return `Removed shared access to ${resourceLabel}.`;
+}
+
+export function getOrganizationIncomingShareDeclineErrorMessage(message?: string): string {
+  return message || 'Unable to remove the incoming share.';
 }
 
 export function getOrganizationShareDeleteSuccessMessage(): string {

@@ -6,6 +6,7 @@ import {
   ensureAuthenticated,
   E2E_CREDENTIALS,
   isMultiTenantEnabled,
+  switchOrg,
 } from './helpers';
 
 type Organization = {
@@ -39,9 +40,13 @@ type OutgoingShare = {
   resourceId: string;
   resourceName?: string;
   accessRole: string;
+  status?: string;
+  acceptedAt?: string;
+  acceptedBy?: string;
 };
 
 type IncomingShare = {
+  id?: string;
   sourceOrgId?: string;
   sourceOrgID?: string;
   sourceOrgName?: string;
@@ -49,6 +54,9 @@ type IncomingShare = {
   resourceId: string;
   resourceName?: string;
   accessRole: string;
+  status?: string;
+  acceptedAt?: string;
+  acceptedBy?: string;
 };
 
 type Permission = {
@@ -245,7 +253,7 @@ test.describe('Multi-tenant E2E flows', () => {
     expect(payload.code).toBe('self_modification_denied');
   });
 
-  test('Scenario 6: cross-org share preserves intended access role', async ({ page }) => {
+  test('Scenario 6: cross-org share preserves intended access role and requires target acceptance', async ({ page }) => {
     await ensureAuthenticated(page);
 
     const mtEnabled = await isMultiTenantEnabled(page);
@@ -253,6 +261,8 @@ test.describe('Multi-tenant E2E flows', () => {
 
     const orgA = await createOrg(page, `E2E Share Source ${Date.now()}`);
     const orgB = await createOrg(page, `E2E Share Target ${Date.now()}`);
+    const outboundResourceName = `Shared View Outbound ${Date.now()}`;
+    const inboundResourceName = `Shared View Inbound ${Date.now()}`;
 
     try {
       const createShareRes = await apiRequest(page, `/api/orgs/${encodeURIComponent(orgA.id)}/shares`, {
@@ -261,7 +271,7 @@ test.describe('Multi-tenant E2E flows', () => {
           targetOrgId: orgB.id,
           resourceType: 'view',
           resourceId: `shared-view-${Date.now()}`,
-          resourceName: 'Shared View',
+          resourceName: outboundResourceName,
           accessRole: 'editor',
         },
         headers: { 'Content-Type': 'application/json' },
@@ -271,12 +281,33 @@ test.describe('Multi-tenant E2E flows', () => {
       const createdShare = (await createShareRes.json()) as OutgoingShare;
       expect(createdShare.targetOrgId).toBe(orgB.id);
       expect(createdShare.accessRole).toBe('editor');
+      expect(createdShare.status).toBe('pending');
+
+      const createIncomingShareRes = await apiRequest(
+        page,
+        `/api/orgs/${encodeURIComponent(orgB.id)}/shares`,
+        {
+          method: 'POST',
+          data: {
+            targetOrgId: orgA.id,
+            resourceType: 'view',
+            resourceId: `shared-view-inbound-${Date.now()}`,
+            resourceName: inboundResourceName,
+            accessRole: 'viewer',
+          },
+          headers: { 'Content-Type': 'application/json' },
+        },
+      );
+      expect(createIncomingShareRes.status()).toBe(201);
+      const createdIncomingShare = (await createIncomingShareRes.json()) as OutgoingShare;
+      expect(createdIncomingShare.status).toBe('pending');
 
       const outgoingRes = await apiRequest(page, `/api/orgs/${encodeURIComponent(orgA.id)}/shares`);
       expect(outgoingRes.ok()).toBeTruthy();
       const outgoingShares = (await outgoingRes.json()) as OutgoingShare[];
       const outgoingMatch = outgoingShares.find((share) => share.id === createdShare.id);
       expect(outgoingMatch?.accessRole).toBe('editor');
+      expect(outgoingMatch?.status).toBe('pending');
 
       const incomingRes = await apiRequest(
         page,
@@ -289,6 +320,37 @@ test.describe('Multi-tenant E2E flows', () => {
           share.resourceId === createdShare.resourceId,
       );
       expect(incomingMatch?.accessRole).toBe('editor');
+      expect(incomingMatch?.status).toBe('pending');
+
+      await switchOrg(page, orgA.id);
+      await page.goto('/settings/organization/sharing', { waitUntil: 'domcontentloaded' });
+      await page.waitForURL(/\/settings\/organization\/sharing/, { timeout: 15_000 });
+
+      await expect(page.getByRole('heading', { level: 1, name: 'Organization Sharing' })).toBeVisible();
+      await expect(page.getByText(outboundResourceName, { exact: true })).toBeVisible();
+      await expect(page.getByText(inboundResourceName, { exact: true })).toBeVisible();
+      await expect(page.getByText('Pending approval')).toHaveCount(2);
+
+      const incomingRow = page.locator('tr').filter({ hasText: inboundResourceName }).first();
+      await expect(incomingRow.getByRole('button', { name: 'Accept' })).toBeVisible();
+      await expect(incomingRow.getByRole('button', { name: 'Decline' })).toBeVisible();
+
+      await incomingRow.getByRole('button', { name: 'Accept' }).click();
+      await expect(incomingRow.getByText('Active')).toBeVisible();
+      await expect(incomingRow.getByRole('button', { name: 'Accept' })).toHaveCount(0);
+      await expect(incomingRow.getByRole('button', { name: 'Remove' })).toBeVisible();
+
+      const acceptedIncomingRes = await apiRequest(
+        page,
+        `/api/orgs/${encodeURIComponent(orgA.id)}/shares/incoming`,
+      );
+      expect(acceptedIncomingRes.ok()).toBeTruthy();
+      const acceptedIncomingShares = (await acceptedIncomingRes.json()) as IncomingShare[];
+      const acceptedIncomingMatch = acceptedIncomingShares.find(
+        (share) => share.resourceId === createdIncomingShare.resourceId,
+      );
+      expect(acceptedIncomingMatch?.status).toBe('accepted');
+      expect(acceptedIncomingMatch?.accessRole).toBe('viewer');
     } finally {
       await deleteOrg(page, orgB.id);
       await deleteOrg(page, orgA.id);

@@ -203,6 +203,15 @@ the canonical monitored-system blocked payload.
    and the Patrol runtime-remediation destination shared with `/api/settings/ai`, so summary actions and runtime-finding actions may reuse the governed provider-settings route while still presenting that destination to Patrol operators as Patrol provider configuration instead of generic `AI Settings` copy
    and the Patrol route-shell destination itself, so the thin page shell at `frontend-modern/src/pages/AIIntelligence.tsx` may continue to bridge the shared AI-runtime payload boundary while exposing `/patrol` as the canonical product route and preserving `/ai` only as a compatibility redirect
 9. Route frontend API-client parsed error propagation, API-error-status fallback handling, allowed-status handling, custom status-specific error handling, command-trigger success envelope handling, shared response parsing pipelines, missing-resource lookup handling, metadata CRUD routing, stream event consumption, response status, collection normalization, scalar payload coercion, and structured error normalization through canonical shared helpers under `frontend-modern/src/api/`
+   That same shared org-management client boundary now owns target-consent
+   sharing semantics across `frontend-modern/src/api/orgs.ts`,
+   `internal/api/org_handlers.go`, and the shared org route wiring. Cross-org
+   share creation must remain a pending request until the target organization
+   accepts it, the payload must preserve `status`, `acceptedAt`, and
+   `acceptedBy`, and widening an accepted share's requested role must reset the
+   share back to `pending`. Downstream settings surfaces must not infer live
+   access from share creation alone or recreate manager-only pending-share
+   visibility rules locally.
 10. Add or change API token scope, assignment, and revocation presentation through `frontend-modern/src/components/Settings/APITokenManager.tsx`, `frontend-modern/src/components/Settings/apiTokenManagerModel.ts`, and `frontend-modern/src/components/Settings/useAPITokenManagerState.ts`
     That same shared token contract also owns audit scope separation: audit event, verification, summary, export, and unified action/export audit reads must require the dedicated `audit:read` scope instead of reusing broader monitoring or settings-read token grants.
 11. Add or change infrastructure operations token generation, lookup, assignment, the pure unified-agent inventory/install model, the split infrastructure install state owner, the split direct-node/discovery infrastructure settings owners, the shared infrastructure-operations state provider/context shell, and install presentation through `frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx`, `frontend-modern/src/components/Settings/useInfrastructureConfiguredNodesState.ts`, `frontend-modern/src/components/Settings/useInfrastructureDiscoveryRuntimeState.ts`, `frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx`, and `frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx`. Phase 9 retired the InfrastructureOperationsController shell and the useInfrastructureReportingState reporting path; they must not be reintroduced, and aggregator-backed reporting reads are owned by `frontend-modern/src/components/Settings/useConnectionsLedger.ts` under the frontend-primitives contract.
@@ -2867,6 +2876,20 @@ semantics at the API boundary: `/api/orgs/{id}/shares/incoming` must hide
 shares whose `accessRole` exceeds the caller's effective role in the target
 organization instead of leaking share metadata that the caller cannot
 legitimately accept or use.
+That same inbound-sharing contract now also carries explicit target-org
+consent semantics. `POST /api/orgs/{id}/shares` must create pending share
+requests rather than granting live access immediately, target-org owners or
+admins must accept or decline those requests through
+`POST /api/orgs/{id}/shares/incoming/{shareId}/accept` and
+`DELETE /api/orgs/{id}/shares/incoming/{shareId}`, and
+`/api/orgs/{id}/shares/incoming` must expose pending requests only to those
+target-org managers. Once accepted, the payload must preserve `status`,
+`acceptedAt`, and `acceptedBy`, and accepted shares may remain visible only to
+members whose effective role satisfies the share's `accessRole`.
+Updating an already accepted share must also preserve that consent boundary:
+changing the requested `accessRole` resets the share to `pending` and clears
+the acceptance metadata so a source org cannot silently widen an approved
+grant without a new target-side approval.
 Organization membership and authorization payloads now also follow an explicit
 live-role contract: `/api/orgs` must list only organizations the caller
 currently belongs to, and org-management endpoints must reflect member

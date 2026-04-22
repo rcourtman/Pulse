@@ -4,6 +4,7 @@ import settingsDialogsSource from '../SettingsDialogs.tsx?raw';
 import settingsPageShellSource from '../SettingsPageShell.tsx?raw';
 import settingsHeaderMetaSource from '../settingsHeaderMeta.ts?raw';
 import settingsNavigationHookSource from '../useSettingsNavigation.ts?raw';
+import settingsPanelRegistryContextSource from '../settingsPanelRegistryContext.tsx?raw';
 import infrastructureWorkspaceSource from '../InfrastructureWorkspace.tsx?raw';
 import infrastructureWorkspaceModelSource from '../infrastructureWorkspaceModel.ts?raw';
 import connectionEditorSource from '../ConnectionEditor/ConnectionEditor.tsx?raw';
@@ -68,6 +69,18 @@ describe('settings architecture guardrails', () => {
     expect(settingsSource).toContain('const activeSettingsPanelEntry = createMemo(() => {');
     expect(settingsSource).toContain('if (!flatTabs().some((tab) => tab.id === currentTab)) {');
     expect(settingsSource).toContain('return settingsPanelRegistry()[currentTab];');
+    expect(settingsPanelRegistryContextSource).toContain(
+      'params.securityStatus()?.proxyAuthUsername',
+    );
+    expect(settingsPanelRegistryContextSource).toContain(
+      '|| params.securityStatus()?.ssoSessionUsername',
+    );
+    expect(settingsPanelRegistryContextSource).toContain(
+      '|| params.securityStatus()?.authUsername;',
+    );
+    expect(settingsPanelRegistryContextSource).toContain('getOrganizationOverviewPanelProps');
+    expect(settingsPanelRegistryContextSource).toContain('getOrganizationAccessPanelProps');
+    expect(settingsPanelRegistryContextSource).toContain('getOrganizationSharingPanelProps');
   });
 
   it('keeps the infrastructure add flow inline on ConnectionEditor instead of retired overlays', () => {

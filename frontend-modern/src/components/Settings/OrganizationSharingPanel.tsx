@@ -34,7 +34,7 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
       <div class="space-y-6">
         <SettingsPanel
           title="Organization Sharing"
-          description="Share views and resources across organizations with explicit role-based access."
+          description="Share views and resources across organizations with explicit role-based access and target-organization approval."
           icon={<Share2 class="w-5 h-5" />}
           noPadding
           bodyClass="divide-y divide-border"
