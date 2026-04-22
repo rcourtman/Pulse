@@ -167,6 +167,29 @@ func TestNew_UsesPinnedServerFingerprintForHTTPTransport(t *testing.T) {
 	}
 }
 
+func TestNew_InvalidCustomCABundleFailsClosed(t *testing.T) {
+	certPath := filepath.Join(t.TempDir(), "invalid.pem")
+	if err := os.WriteFile(certPath, []byte("not-a-cert"), 0o600); err != nil {
+		t.Fatalf("write cert: %v", err)
+	}
+
+	u := New(Config{
+		PulseURL:       "https://pulse.example.com",
+		CurrentVersion: "1.0.0",
+		CACertPath:     certPath,
+	})
+
+	if u.client != nil {
+		t.Fatal("expected updater HTTP client to remain disabled when the custom CA bundle is invalid")
+	}
+	if u.configErr == nil {
+		t.Fatal("expected invalid CA bundle to populate configErr")
+	}
+	if _, err := u.getServerVersion(context.Background()); err == nil || !strings.Contains(err.Error(), "invalid CA bundle") {
+		t.Fatalf("expected invalid CA bundle error, got %v", err)
+	}
+}
+
 func configureTrustedUpdateSigningKey(t *testing.T) ed25519.PrivateKey {
 	t.Helper()
 

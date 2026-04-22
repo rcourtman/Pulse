@@ -633,9 +633,11 @@
         "frontend-modern/src/utils/proxmoxSettingsPresentation.ts",
         "frontend-modern/src/utils/unifiedAgentInventoryPresentation.ts",
         "frontend-modern/src/utils/unifiedAgentStatusPresentation.ts",
+        "internal/agenttls/config.go",
         "internal/api/agent_install_command_shared.go",
         "internal/api/config_setup_handlers.go",
         "internal/api/unified_agent.go",
+        "internal/remoteconfig/client.go",
         "scripts/install.ps1",
         "scripts/install.sh"
       ],
@@ -692,6 +694,22 @@
               "internal/agentupdate/coverage_test.go",
               "internal/agentupdate/update_hostagent_integration_test.go",
               "internal/agentupdate/update_http_test.go"
+            ]
+          },
+          {
+            "id": "agent-runtime-transport-trust",
+            "label": "agent runtime transport trust proof",
+            "match_prefixes": [],
+            "match_files": [
+              "internal/agenttls/config.go",
+              "internal/remoteconfig/client.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/agenttls/config_test.go",
+              "internal/remoteconfig/client_additional_test.go",
+              "internal/remoteconfig/client_test.go"
             ]
           },
           {

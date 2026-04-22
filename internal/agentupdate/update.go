@@ -127,9 +127,10 @@ type Config struct {
 
 // Updater handles automatic updates for Pulse agents.
 type Updater struct {
-	cfg    Config
-	client *http.Client
-	logger zerolog.Logger
+	cfg       Config
+	client    *http.Client
+	logger    zerolog.Logger
+	configErr error
 
 	checkMu         sync.Mutex
 	checkInProgress bool
@@ -157,27 +158,36 @@ func New(cfg Config) *Updater {
 			Msg("Invalid agent update check interval; using default")
 	}
 
+	var (
+		client    *http.Client
+		configErr error
+	)
 	tlsConfig, err := agenttls.NewClientTLSConfig(cfg.CACertPath, cfg.InsecureSkipVerify, cfg.ServerFingerprint)
 	if err != nil {
-		logger.Warn().Err(err).Str("ca_cert_path", strings.TrimSpace(cfg.CACertPath)).Msg("Invalid custom CA bundle; continuing with default TLS roots")
-		tlsConfig, _ = agenttls.NewClientTLSConfig("", cfg.InsecureSkipVerify, cfg.ServerFingerprint)
-	}
-
-	transport := &http.Transport{
-		TLSClientConfig: tlsConfig,
-	}
-
-	u := &Updater{
-		cfg: cfg,
-		client: &http.Client{
+		configErr = fmt.Errorf("invalid CA bundle: %w", err)
+		logger.Error().
+			Err(err).
+			Str("ca_cert_path", strings.TrimSpace(cfg.CACertPath)).
+			Msg("Invalid custom CA bundle; refusing to fall back to default TLS roots")
+	} else {
+		transport := &http.Transport{
+			TLSClientConfig: tlsConfig,
+		}
+		client = &http.Client{
 			Transport: transport,
 			Timeout:   downloadTimeout,
 			CheckRedirect: func(req *http.Request, via []*http.Request) error {
 				// Prevent credential leakage (X-API-Token / Authorization) on redirects.
 				return fmt.Errorf("server returned redirect to %s", req.URL.Redacted())
 			},
-		},
-		logger: logger,
+		}
+	}
+
+	u := &Updater{
+		cfg:       cfg,
+		client:    client,
+		logger:    logger,
+		configErr: configErr,
 	}
 	u.performUpdateFn = u.performUpdate
 	u.initialDelay = 5 * time.Second
@@ -189,6 +199,11 @@ func New(cfg Config) *Updater {
 func (u *Updater) RunLoop(ctx context.Context) {
 	if u.cfg.Disabled {
 		u.logger.Info().Msg("auto-update disabled")
+		return
+	}
+
+	if u.configErr != nil {
+		u.logger.Error().Err(u.configErr).Msg("auto-update disabled due to invalid TLS client configuration")
 		return
 	}
 
@@ -242,6 +257,11 @@ func (u *Updater) CheckAndUpdate(ctx context.Context) {
 
 	if u.cfg.CurrentVersion == developmentVersion {
 		u.logger.Debug().Msg("Skipping update check - running in development mode")
+		return
+	}
+
+	if u.configErr != nil {
+		u.logger.Error().Err(u.configErr).Msg("Skipping update check - invalid TLS client configuration")
 		return
 	}
 
@@ -338,6 +358,9 @@ func (u *Updater) finishCheck() {
 
 // getServerVersion fetches the current version from the Pulse server.
 func (u *Updater) getServerVersion(ctx context.Context) (string, error) {
+	if u.configErr != nil {
+		return "", fmt.Errorf("invalid updater configuration: %w", u.configErr)
+	}
 	if err := u.validatePulseURL(); err != nil {
 		return "", fmt.Errorf("invalid Pulse URL: %w", err)
 	}
@@ -411,6 +434,13 @@ func (u *Updater) newAuthedGetRequest(ctx context.Context, requestURL string) (*
 }
 
 func (u *Updater) getWithRetry(ctx context.Context, requestURL, operation string) (*http.Response, error) {
+	if u.configErr != nil {
+		return nil, fmt.Errorf("invalid updater configuration: %w", u.configErr)
+	}
+	if u.client == nil {
+		return nil, fmt.Errorf("%s client is not configured", operation)
+	}
+
 	var lastErr error
 
 	for attempt := 1; attempt <= updateRequestMaxAttempts; attempt++ {

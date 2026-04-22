@@ -8,6 +8,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -232,6 +234,27 @@ func TestClientNew_UsesPinnedServerFingerprint(t *testing.T) {
 	}
 	if transport.TLSClientConfig.VerifyPeerCertificate == nil {
 		t.Fatal("expected VerifyPeerCertificate for pinned fingerprint mode")
+	}
+}
+
+func TestClientNew_InvalidCustomCABundleFailsClosed(t *testing.T) {
+	certPath := filepath.Join(t.TempDir(), "invalid.pem")
+	if err := os.WriteFile(certPath, []byte("not-a-cert"), 0o600); err != nil {
+		t.Fatalf("write cert: %v", err)
+	}
+
+	client := New(Config{
+		PulseURL:   "https://pulse.example",
+		APIToken:   "token",
+		AgentID:    "agent-1",
+		CACertPath: certPath,
+	})
+
+	if client.httpClient != nil {
+		t.Fatal("expected HTTP client to remain disabled when the custom CA bundle is invalid")
+	}
+	if _, _, err := client.Fetch(context.Background()); err == nil || !strings.Contains(err.Error(), "invalid CA bundle") {
+		t.Fatalf("expected invalid CA bundle error, got %v", err)
 	}
 }
 

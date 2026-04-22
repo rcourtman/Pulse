@@ -3,6 +3,7 @@ package remoteconfig
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 
@@ -69,28 +70,33 @@ const maxHTTPErrorBodyBytes = 4096
 // New creates a new remote config client.
 func New(cfg Config) *Client {
 	cfg, cfgErr := normalizeConfig(cfg)
+	configErr := cfgErr
 
+	var httpClient *http.Client
 	tlsConfig, err := agenttls.NewClientTLSConfig(cfg.CACertPath, cfg.InsecureSkipVerify, cfg.ServerFingerprint)
 	if err != nil {
-		cfg.Logger.Warn().Err(err).Str("ca_cert_path", strings.TrimSpace(cfg.CACertPath)).Msg("Invalid custom CA bundle; continuing with default TLS roots")
-		tlsConfig, _ = agenttls.NewClientTLSConfig("", cfg.InsecureSkipVerify, cfg.ServerFingerprint)
-	}
-
-	httpClient := &http.Client{
-		Timeout: 10 * time.Second,
-		Transport: &http.Transport{
-			Proxy:           http.ProxyFromEnvironment,
-			TLSClientConfig: tlsConfig,
-		},
-		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			return fmt.Errorf("server returned redirect to %s", req.URL)
-		},
+		cfg.Logger.Error().
+			Err(err).
+			Str("ca_cert_path", strings.TrimSpace(cfg.CACertPath)).
+			Msg("Invalid custom CA bundle; refusing to fall back to default TLS roots")
+		configErr = errors.Join(configErr, fmt.Errorf("invalid CA bundle: %w", err))
+	} else {
+		httpClient = &http.Client{
+			Timeout: 10 * time.Second,
+			Transport: &http.Transport{
+				Proxy:           http.ProxyFromEnvironment,
+				TLSClientConfig: tlsConfig,
+			},
+			CheckRedirect: func(req *http.Request, via []*http.Request) error {
+				return fmt.Errorf("server returned redirect to %s", req.URL)
+			},
+		}
 	}
 
 	return &Client{
 		cfg:        cfg,
 		httpClient: httpClient,
-		configErr:  cfgErr,
+		configErr:  configErr,
 	}
 }
 

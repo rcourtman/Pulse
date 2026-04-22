@@ -81,6 +81,8 @@ management, and fleet control surfaces.
 59. `frontend-modern/src/components/Settings/useVMwareSettingsPanelState.ts`
 60. `frontend-modern/src/components/Settings/MonitoredSystemAdmissionPreview.tsx`
 61. `internal/hostagent/proxmox_setup.go`
+62. `internal/remoteconfig/client.go`
+63. `internal/agenttls/config.go`
 
 ## Shared Boundaries
 
@@ -192,7 +194,7 @@ an add-only capacity posture.
    path must treat it as the existing system until live inventory rebuild
    catches up, rather than as a fresh enrolment competing for another
    monitored-system slot.
-4. Keep shared agent-side TLS identity fail-closed across `cmd/pulse-agent/main.go`, `internal/hostagent/`, `internal/agentupdate/`, and adjacent remote-config transport. Self-signed deployments may use a canonical pinned Pulse server certificate fingerprint, but lifecycle transport must route that pin through reporting, enrollment, command websocket, remote-config, and self-update clients instead of widening `PULSE_INSECURE_SKIP_VERIFY` into a blanket MITM carve-out.
+4. Keep shared agent-side TLS identity fail-closed across `cmd/pulse-agent/main.go`, `internal/hostagent/`, `internal/agentupdate/`, `internal/remoteconfig/client.go`, and `internal/agenttls/config.go`. Self-signed deployments may use a canonical pinned Pulse server certificate fingerprint, but lifecycle transport must route that pin through reporting, enrollment, command websocket, remote-config, and self-update clients instead of widening `PULSE_INSECURE_SKIP_VERIFY` into a blanket MITM carve-out. A configured custom CA bundle is part of that same trust boundary: if the bundle is unreadable or invalid, lifecycle transport must refuse the connection path rather than silently downgrading back to system roots.
 5. Keep release-grade updater trust fail-closed across `internal/agentupdate/`, `internal/dockeragent/`, and the shared `internal/api/unified_agent.go` download helpers. When release builds embed trusted update signing keys, published agent binaries and installer assets must carry detached `.sig` plus `.sshsig` sidecars; updater/runtime paths must require `X-Signature-Ed25519` in addition to `X-Checksum-Sha256`, and installer-owned download flows must require the matching base64-encoded `X-Signature-SSHSIG`, instead of silently downgrading to checksum-only trust.
 6. Keep shared `internal/api/` helper edits isolated from agent lifecycle semantics: Patrol-specific status transport or alert-trigger wiring changes in shared handlers must not bleed into auto-register, installer, or fleet-control behavior unless this contract moves in the same slice.
    The same isolation rule applies to AI settings payload work in `internal/api/ai_handlers.go`: provider auth fields, masked-secret echoes, and provider-test model selection remain AI/runtime plus API-contract ownership and must not be reinterpreted as lifecycle setup or registration semantics just because they share backend helper layers.
