@@ -3347,16 +3347,36 @@ installer_env=(
     "PULSE_UPDATE_SERVICE_PATH=\$PULSE_UPDATE_SERVICE_PATH"
     "PULSE_UPDATE_TIMER_PATH=\$PULSE_UPDATE_TIMER_PATH"
 )
-if [[ -f "\$MARKER_FILE" ]]; then
-    branch=\$(tr -d '\r\n' <"\$MARKER_FILE" 2>/dev/null || true)
-    if [[ -n "\$branch" ]]; then
-        extra_args+=(--source "\$branch")
+helper_args=()
+if [[ \$# -gt 0 ]]; then
+    helper_args=("\$@")
+fi
+auto_selector_allowed=true
+if [[ \${#helper_args[@]} -gt 0 ]]; then
+    for helper_arg in "\${helper_args[@]}"; do
+        case "\$helper_arg" in
+            -h|--help|--uninstall|--version|--rc|--pre|--stable|--source|--from-source|--branch|--archive|--archive=*)
+                auto_selector_allowed=false
+                break
+                ;;
+        esac
+    done
+fi
+if [[ "\$auto_selector_allowed" == "true" ]]; then
+    if [[ -f "\$MARKER_FILE" ]]; then
+        branch=\$(tr -d '\r\n' <"\$MARKER_FILE" 2>/dev/null || true)
+        if [[ -n "\$branch" ]]; then
+            extra_args+=(--source "\$branch")
+        fi
+    elif [[ -f "\${CONFIG_DIR}/system.json" ]]; then
+        configured_channel=\$(grep -o '"updateChannel"[[:space:]]*:[[:space:]]*"[^"]*"' "\${CONFIG_DIR}/system.json" 2>/dev/null | sed 's/.*"\([^"]*\)"$/\1/' || true)
+        if [[ "\$configured_channel" == "rc" ]]; then
+            extra_args+=(--rc)
+        fi
     fi
-elif [[ -f "\${CONFIG_DIR}/system.json" ]]; then
-    configured_channel=\$(grep -o '"updateChannel"[[:space:]]*:[[:space:]]*"[^"]*"' "\${CONFIG_DIR}/system.json" 2>/dev/null | sed 's/.*"\([^"]*\)"$/\1/' || true)
-    if [[ "\$configured_channel" == "rc" ]]; then
-        extra_args+=(--rc)
-    fi
+fi
+if [[ \${#helper_args[@]} -gt 0 ]]; then
+    extra_args+=("\${helper_args[@]}")
 fi
 
 echo "Updating Pulse..."
@@ -3786,9 +3806,8 @@ print_completion() {
 
 build_printed_management_command() {
     local action=$1
-    local download_cmd="curl -sSL https://github.com/$GITHUB_REPO/releases/latest/download/install.sh |"
+    local update_helper_path="${UPDATE_HELPER_PATH:-${PULSE_UPDATE_HELPER_PATH:-/bin/update}}"
     local -a args=()
-    local -a env_vars=()
 
     case "$action" in
         update)
@@ -3810,28 +3829,13 @@ build_printed_management_command() {
         args=(--rc "${args[@]}")
     fi
 
-    if [[ "$SERVICE_NAME_EXPLICIT" == "true" ]]; then
-        env_vars+=("PULSE_SERVICE_NAME=$SERVICE_NAME")
-    fi
-
-    printf '%s' "$download_cmd"
-    local env_var
-    if [[ ${#env_vars[@]} -gt 0 ]]; then
-        printf ' env'
-        for env_var in "${env_vars[@]}"; do
-            printf ' %q' "$env_var"
-        done
-        printf ' bash'
-    else
-        printf ' bash'
-    fi
+    printf '%q' "$update_helper_path"
 
     if [[ ${#args[@]} -eq 0 ]]; then
         printf '\n'
         return 0
     fi
 
-    printf ' -s --'
     local arg
     for arg in "${args[@]}"; do
         printf ' %q' "$arg"

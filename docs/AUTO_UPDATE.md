@@ -74,7 +74,7 @@ Auto-update preferences are stored in `system.json` and edited via the UI.
 
 ```bash
 # Pull latest image
-docker pull rcourtman/pulse:latest
+docker pull rcourtman/pulse:vX.Y.Z
 
 # Restart container
 docker compose down && docker compose up -d
@@ -85,18 +85,18 @@ If you use the legacy `docker-compose` binary, replace `docker compose` with `do
 ### ProxmoxVE LXC (Manual)
 
 ```bash
-curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install.sh | bash
+sudo /bin/update
 ```
 
-This script installs/updates the **Pulse server**. Agent updates use the `/install.sh` command generated in **Settings → Infrastructure → Install on a host**.
+`/bin/update` is installed by the supported Pulse server installer and preserves the signed-installer trust chain. If your host does not have it yet, use the signed server-installer flow in [INSTALL.md](INSTALL.md). Agent updates still use the `/install.sh` command generated in **Settings → Infrastructure → Install on a host**.
 
 ### Systemd Service (Manual)
 
 ```bash
-curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install.sh | bash
+sudo /bin/update
 ```
 
-This script installs/updates the **Pulse server**. Agent updates use the `/install.sh` command generated in **Settings → Infrastructure → Install on a host**.
+`/bin/update` is installed by the supported Pulse server installer and preserves the signed-installer trust chain. If your host does not have it yet, use the signed server-installer flow in [INSTALL.md](INSTALL.md). Agent updates still use the `/install.sh` command generated in **Settings → Infrastructure → Install on a host**.
 
 ### Source Build
 

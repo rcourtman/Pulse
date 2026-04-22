@@ -157,6 +157,8 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
     def test_upgrade_guide_points_at_current_rc_support_pack(self) -> None:
         upgrade_guide = read("docs/UPGRADE_v6.md")
         current_version = read("VERSION").strip()
+        self.assertIn("sudo /bin/update --version vX.Y.Z", upgrade_guide)
+        self.assertIn("follow the signed server-installer flow in [INSTALL.md](INSTALL.md)", upgrade_guide)
         if current_version == "6.0.0":
             self.assertIn("docs/releases/RELEASE_NOTES_v6.md", upgrade_guide)
             self.assertIn("docs/releases/V6_CHANGELOG.md", upgrade_guide)

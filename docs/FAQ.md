@@ -3,19 +3,11 @@
 ## 🛠️ Installation & Setup
 
 ### What's the easiest way to install?
-If you run Proxmox VE, use the official LXC installer (recommended):
-
-```bash
-curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install.sh | bash
-```
-
-Note: this installs the Pulse **server**. Agent installs use the command from **Settings → Infrastructure → Install on a host** (served from `/install.sh` on your Pulse server).
+If you run Proxmox VE, use the signed LXC installer flow in [INSTALL.md](INSTALL.md) and replace `vX.Y.Z` with the exact release tag you want.
 
 If you prefer Docker:
 
-```bash
-docker run -d --name pulse -p 7655:7655 -v pulse_data:/data rcourtman/pulse:latest
-```
+Use a pinned image tag such as `rcourtman/pulse:vX.Y.Z` instead of `:latest`.
 
 See [INSTALL.md](INSTALL.md) for all options (Docker Compose, Kubernetes, systemd).
 

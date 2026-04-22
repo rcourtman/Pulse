@@ -46,7 +46,6 @@ If an update fails:
 2.  The timer script keeps a temporary backup under `/tmp/pulse-backup-<timestamp>` during the update; failures auto-restore from that backup and then clean it up.
 3.  If you need to pin a specific version, re-run the installer with a version:
     ```bash
-    curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install.sh | \
-      sudo bash -s -- --version vX.Y.Z
+    sudo /bin/update --version vX.Y.Z
     ```
-    This installer updates the **Pulse server**. Agent updates use the `/install.sh` command generated in **Settings → Infrastructure → Install on a host**.
+    `/bin/update` is installed by the supported Pulse server installer. If your host does not have it yet, use the signed server-installer flow in [INSTALL.md](../INSTALL.md). Agent updates still use the `/install.sh` command generated in **Settings → Infrastructure → Install on a host**.

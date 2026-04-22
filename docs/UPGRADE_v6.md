@@ -21,19 +21,18 @@ Preferred path:
 
 - **Settings → System → Updates**
 
-If you prefer CLI, use the official installer for the target version:
+If you prefer CLI, use the installed update helper for the target version:
 
 ```bash
-curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install.sh | \
-  sudo bash -s -- --version vX.Y.Z
+sudo /bin/update --version vX.Y.Z
 ```
 
-This installer updates the **Pulse server**. Agent updates use the `/install.sh` command generated in **Settings → Infrastructure → Install on a host**.
+`/bin/update` is installed by the supported systemd and Proxmox LXC server installer. If your host does not have it yet, follow the signed server-installer flow in [INSTALL.md](INSTALL.md). Agent updates still use the `/install.sh` command generated in **Settings → Infrastructure → Install on a host**.
 
 ### Docker
 
 ```bash
-docker pull rcourtman/pulse:latest
+docker pull rcourtman/pulse:vX.Y.Z
 docker compose up -d
 ```
 

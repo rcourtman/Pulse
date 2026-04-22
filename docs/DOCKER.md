@@ -10,7 +10,7 @@ docker run -d \
   -p 7655:7655 \
   -v pulse_data:/data \
   --restart unless-stopped \
-  rcourtman/pulse:latest
+  rcourtman/pulse:vX.Y.Z
 ```
 
 Access at `http://<your-ip>:7655`.
@@ -24,7 +24,7 @@ Create a `docker-compose.yml` file:
 ```yaml
 services:
   pulse:
-    image: rcourtman/pulse:latest
+    image: rcourtman/pulse:vX.Y.Z
     container_name: pulse
     restart: unless-stopped
     ports:
@@ -86,10 +86,10 @@ services:
 
 ## 🔄 Updates
 
-To update Pulse to the latest version:
+To update Pulse to a specific release tag:
 
 ```bash
-docker pull rcourtman/pulse:latest
+docker pull rcourtman/pulse:vX.Y.Z
 docker stop pulse
 docker rm pulse
 # Re-run your docker run command
@@ -168,7 +168,7 @@ Pulse provides granular control over update features via environment variables o
 ```yaml
 services:
   pulse:
-    image: rcourtman/pulse:latest
+    image: rcourtman/pulse:vX.Y.Z
     environment:
       - PULSE_DISABLE_DOCKER_UPDATE_ACTIONS=true
 ```

@@ -67,10 +67,19 @@ Power-user shortcuts:
 ## ⚡ Quick Start
 
 ### Option 1: Proxmox LXC (Recommended)
-Run this one-liner on your Proxmox host to create a lightweight LXC container:
+Replace `vX.Y.Z` with the exact release tag you want, verify the signed installer, then run it on your Proxmox host:
 
 ```bash
-curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install.sh | bash
+export PULSE_VERSION=vX.Y.Z
+curl -fsSLO "https://github.com/rcourtman/Pulse/releases/download/${PULSE_VERSION}/install.sh"
+curl -fsSLO "https://github.com/rcourtman/Pulse/releases/download/${PULSE_VERSION}/install.sh.sshsig"
+ssh-keygen -Y verify \
+  -f <(printf '%s\n' 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDs21c5oPk2khrdHlsw1aZ9EJKoTsyalGzhb0hdwJrkV pulse-installer') \
+  -I pulse-installer \
+  -n pulse-install \
+  -s install.sh.sshsig < install.sh
+bash install.sh --version "${PULSE_VERSION}"
+rm -f install.sh install.sh.sshsig
 ```
 
 Note: this installs the Pulse **server**. Agent installs use the command generated in **Settings → Unified Agents → Installation commands** (served from `/install.sh` on your Pulse server).
@@ -82,7 +91,7 @@ docker run -d \
   -p 7655:7655 \
   -v pulse_data:/data \
   --restart unless-stopped \
-  rcourtman/pulse:latest
+  rcourtman/pulse:vX.Y.Z
 ```
 
 Access the dashboard at `http://<your-ip>:7655`.

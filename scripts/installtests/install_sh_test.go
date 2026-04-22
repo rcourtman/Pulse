@@ -1138,6 +1138,15 @@ func TestSetupUpdateCommandHonorsRCChannelAndCustomPaths(t *testing.T) {
 	if !strings.Contains(got, `CONFIG_DIR=/etc/pulse`) {
 		t.Fatalf("update helper missing config dir logic:\n%s", got)
 	}
+	if !strings.Contains(got, `helper_args=()`) || !strings.Contains(got, `helper_args=("$@")`) {
+		t.Fatalf("update helper missing passthrough helper args:\n%s", got)
+	}
+	if !strings.Contains(got, `-h|--help|--uninstall|--version|--rc|--pre|--stable|--source|--from-source|--branch|--archive|--archive=*)`) {
+		t.Fatalf("update helper missing auto-selector guard for explicit flags:\n%s", got)
+	}
+	if !strings.Contains(got, `extra_args+=("${helper_args[@]}")`) {
+		t.Fatalf("update helper missing forwarded helper args:\n%s", got)
+	}
 	if !strings.Contains(got, `extra_args+=(--rc)`) {
 		t.Fatalf("update helper missing rc channel forwarding:\n%s", got)
 	}
@@ -1925,10 +1934,10 @@ func TestBuildPrintedManagementCommandPreservesRCChannel(t *testing.T) {
 	if len(lines) != 3 {
 		t.Fatalf("expected 3 commands, got %d:\n%s", len(lines), out)
 	}
-	if !strings.Contains(lines[0], "| bash -s -- --rc") {
+	if got := lines[0]; got != "/bin/update --rc" {
 		t.Fatalf("update command missing rc flag: %s", lines[0])
 	}
-	if !strings.Contains(lines[1], "| bash -s -- --rc --reset") {
+	if got := lines[1]; got != "/bin/update --rc --reset" {
 		t.Fatalf("reset command missing rc flag: %s", lines[1])
 	}
 	if strings.Contains(lines[2], "--rc") {
@@ -1956,11 +1965,32 @@ func TestBuildPrintedManagementCommandPreservesForcedVersion(t *testing.T) {
 	if len(lines) != 2 {
 		t.Fatalf("expected 2 commands, got %d:\n%s", len(lines), out)
 	}
-	if !strings.Contains(lines[0], "| bash -s -- --version v1.2.3") {
+	if got := lines[0]; got != "/bin/update --version v1.2.3" {
 		t.Fatalf("update command missing version pin: %s", lines[0])
 	}
-	if !strings.Contains(lines[1], "| bash -s -- --version v1.2.3 --reset") {
+	if got := lines[1]; got != "/bin/update --version v1.2.3 --reset" {
 		t.Fatalf("reset command missing version pin: %s", lines[1])
+	}
+}
+
+func TestBuildPrintedManagementCommandUsesConfiguredHelperPath(t *testing.T) {
+	script := `
+		GITHUB_REPO="rcourtman/Pulse"
+		FORCE_VERSION=""
+		FORCE_CHANNEL=""
+		UPDATE_CHANNEL=""
+		UPDATE_HELPER_PATH="/usr/local/bin/update-pulse-preview"
+` + extractRootInstallShellFunction(t, "build_printed_management_command") + `
+		build_printed_management_command update
+	`
+
+	out, err := exec.Command("bash", "-c", script).CombinedOutput()
+	if err != nil {
+		t.Fatalf("bash: %v\n%s", err, out)
+	}
+
+	if got := strings.TrimSpace(string(out)); got != "/usr/local/bin/update-pulse-preview" {
+		t.Fatalf("printed command = %q, want configured helper path", got)
 	}
 }
 

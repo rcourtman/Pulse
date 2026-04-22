@@ -7,10 +7,19 @@ Pulse offers flexible installation options from Docker to enterprise-ready Kuber
 ### Proxmox VE (LXC installer)
 If you run Proxmox VE, the easiest and most “Pulse-native” deployment is the official installer which creates and configures a lightweight LXC container.
 
-Run this on your Proxmox host:
+Replace `vX.Y.Z` with the exact release tag you want, then run this on your Proxmox host:
 
 ```bash
-curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install.sh | bash
+export PULSE_VERSION=vX.Y.Z
+curl -fsSLO "https://github.com/rcourtman/Pulse/releases/download/${PULSE_VERSION}/install.sh"
+curl -fsSLO "https://github.com/rcourtman/Pulse/releases/download/${PULSE_VERSION}/install.sh.sshsig"
+ssh-keygen -Y verify \
+  -f <(printf '%s\n' 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDs21c5oPk2khrdHlsw1aZ9EJKoTsyalGzhb0hdwJrkV pulse-installer') \
+  -I pulse-installer \
+  -n pulse-install \
+  -s install.sh.sshsig < install.sh
+bash install.sh --version "${PULSE_VERSION}"
+rm -f install.sh install.sh.sshsig
 ```
 
 > **Note**: The GitHub `install.sh` is the **server** installer. The agent installer is served from your Pulse server at `/install.sh` (see **Settings → Infrastructure → Install on a host**).
@@ -24,7 +33,7 @@ docker run -d \
   -p 7655:7655 \
   -v pulse_data:/data \
   --restart unless-stopped \
-  rcourtman/pulse:latest
+  rcourtman/pulse:vX.Y.Z
 ```
 
 ### Docker Compose
@@ -33,7 +42,7 @@ Create a `docker-compose.yml` file:
 ```yaml
 services:
   pulse:
-    image: rcourtman/pulse:latest
+    image: rcourtman/pulse:vX.Y.Z
     container_name: pulse
     restart: unless-stopped
     ports:
@@ -71,7 +80,16 @@ See [KUBERNETES.md](KUBERNETES.md) for ingress and persistence configuration.
 For Linux servers (VM or bare metal), use the official installer:
 
 ```bash
-curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install.sh | sudo bash
+export PULSE_VERSION=vX.Y.Z
+curl -fsSLO "https://github.com/rcourtman/Pulse/releases/download/${PULSE_VERSION}/install.sh"
+curl -fsSLO "https://github.com/rcourtman/Pulse/releases/download/${PULSE_VERSION}/install.sh.sshsig"
+ssh-keygen -Y verify \
+  -f <(printf '%s\n' 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDs21c5oPk2khrdHlsw1aZ9EJKoTsyalGzhb0hdwJrkV pulse-installer') \
+  -I pulse-installer \
+  -n pulse-install \
+  -s install.sh.sshsig < install.sh
+sudo bash install.sh --version "${PULSE_VERSION}"
+rm -f install.sh install.sh.sshsig
 ```
 
 > **Note**: This installs the Pulse server. Use the `/install.sh` endpoint from **Settings → Infrastructure → Install on a host** for installing `pulse-agent` on monitored hosts.
@@ -149,9 +167,9 @@ Pulse can self-update to the latest stable version.
 
 | Platform | Command |
 |----------|---------|
-| **Docker** | `docker pull rcourtman/pulse:latest && docker restart pulse` |
+| **Docker** | `docker pull rcourtman/pulse:vX.Y.Z && docker restart pulse` |
 | **Kubernetes** | `helm repo update && helm upgrade pulse pulse/pulse -n pulse` |
-| **Systemd** | Re-download binary and restart service |
+| **Systemd / Proxmox LXC** | `sudo /bin/update` |
 
 ### Rollback
 If an update causes issues on systemd installations, backups are created automatically during the update process.

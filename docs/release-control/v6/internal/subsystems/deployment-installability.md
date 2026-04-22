@@ -513,6 +513,12 @@ root `install.sh`, its generated update helper, and
 installer scripts against the pinned release `.sshsig` sidecars before
 execution, rather than treating same-origin checksum files as a sufficient
 trust anchor.
+That same boundary also owns operator-facing management entry points for
+existing self-hosted installs: the installer's printed update/reset/uninstall
+commands and the active install or upgrade docs must route supported
+systemd/LXC servers through the installed local update helper (`/bin/update`
+or the service-scoped equivalent), rather than telling operators to pipe a
+freshly downloaded installer into `bash`.
 The local dev-runtime launcher and dependency manifest floor now sit on that
 same installability boundary.
 `scripts/hot-dev.sh` and `scripts/hot-dev-bg.sh` are the canonical owned entry

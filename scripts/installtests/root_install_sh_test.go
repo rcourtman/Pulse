@@ -241,8 +241,8 @@ func TestRootInstallScriptSupportsInstanceScopedServerInstalls(t *testing.T) {
 		`Environment="PULSE_INSTALL_DIR=$install_dir"`,
 		`Environment="PULSE_CONFIG_DIR=$config_dir"`,
 		`Environment="PULSE_UPDATE_TIMER_UNIT=$update_timer_unit"`,
-		`printf ' env'`,
-		`env_vars+=("PULSE_SERVICE_NAME=$SERVICE_NAME")`,
+		`local update_helper_path="${UPDATE_HELPER_PATH:-${PULSE_UPDATE_HELPER_PATH:-/bin/update}}"`,
+		`printf '%q' "$update_helper_path"`,
 	}
 	for _, needle := range required {
 		if !strings.Contains(script, needle) {
@@ -321,6 +321,39 @@ func TestPulseAutoUpdateScriptRequiresSignedInstallerDownloads(t *testing.T) {
 	for _, needle := range required {
 		if !strings.Contains(script, needle) {
 			t.Fatalf("pulse-auto-update.sh missing signed-installer verification contract: %s", needle)
+		}
+	}
+}
+
+func TestOperatorInstallDocsAvoidUnverifiedBootstrapAndFloatingImageTags(t *testing.T) {
+	files := []string{
+		filepath.Join("..", "..", "README.md"),
+		filepath.Join("..", "..", "docs", "INSTALL.md"),
+		filepath.Join("..", "..", "docs", "UPGRADE_v6.md"),
+		filepath.Join("..", "..", "docs", "UPGRADE_v5.md"),
+		filepath.Join("..", "..", "docs", "DOCKER.md"),
+		filepath.Join("..", "..", "docs", "AUTO_UPDATE.md"),
+		filepath.Join("..", "..", "docs", "operations", "AUTO_UPDATE.md"),
+		filepath.Join("..", "..", "docs", "FAQ.md"),
+	}
+	forbidden := []string{
+		`curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install.sh |`,
+		`curl -sL https://github.com/rcourtman/Pulse/releases/latest/download/install.sh |`,
+		`rcourtman/pulse:latest`,
+		`docker pull rcourtman/pulse:latest`,
+		`image: rcourtman/pulse:latest`,
+	}
+
+	for _, path := range files {
+		content, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("read %s: %v", path, err)
+		}
+		text := string(content)
+		for _, needle := range forbidden {
+			if strings.Contains(text, needle) {
+				t.Fatalf("%s preserved insecure operator guidance: %s", path, needle)
+			}
 		}
 	}
 }
