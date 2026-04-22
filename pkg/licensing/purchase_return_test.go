@@ -81,6 +81,11 @@ func TestValidatePurchaseReturnURL(t *testing.T) {
 			wantHost: "localhost",
 		},
 		{
+			name:     "http loopback ip allowed",
+			raw:      "http://127.0.0.1:7655/auth/license-purchase-activate",
+			wantHost: "127.0.0.1",
+		},
+		{
 			name:    "missing return url",
 			raw:     "",
 			wantErr: ErrPurchaseReturnReturnURLMissing,
@@ -88,6 +93,21 @@ func TestValidatePurchaseReturnURL(t *testing.T) {
 		{
 			name:    "http public host rejected",
 			raw:     "http://pulse.example.com/auth/license-purchase-activate",
+			wantErr: ErrPurchaseReturnReturnURLInvalid,
+		},
+		{
+			name:    "http private ip rejected",
+			raw:     "http://192.168.1.10:7655/auth/license-purchase-activate",
+			wantErr: ErrPurchaseReturnReturnURLInvalid,
+		},
+		{
+			name:    "http local domain rejected",
+			raw:     "http://pulse.local:7655/auth/license-purchase-activate",
+			wantErr: ErrPurchaseReturnReturnURLInvalid,
+		},
+		{
+			name:    "http bare host rejected",
+			raw:     "http://pulsebox:7655/auth/license-purchase-activate",
 			wantErr: ErrPurchaseReturnReturnURLInvalid,
 		},
 		{

@@ -861,6 +861,11 @@ runtime may keep the operator on the compare-plans prompt, but any visible
 `Compare plans` action must still route through owned
 `GET /auth/license-purchase-start?feature=self_hosted_plan` instead of
 constructing a direct Pulse Account URL in the browser.
+That same purchase-return contract also narrows the insecure local-development
+carve-out: signed purchase-return callbacks may use plain HTTP only for
+loopback hosts such as `localhost` or `127.0.0.1`. RFC1918, `.local`, and
+other LAN-visible hosts must use HTTPS so the token-bearing return state is
+not exposed to same-subnet sniffing during commercial checkout return.
 That destination split is canonical commercial truth, but navigation semantics
 are not owned here. `frontend-modern/src/utils/pricingHandoff.ts` and
 `frontend-modern/src/stores/license.ts` decide which href each commercial

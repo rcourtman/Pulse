@@ -3,6 +3,7 @@ package licensing
 import (
 	"errors"
 	"fmt"
+	"net"
 	"net/url"
 	"strings"
 	"time"
@@ -181,7 +182,7 @@ func ValidatePurchaseReturnURL(raw, expectedInstanceHost string) (string, error)
 	switch strings.ToLower(strings.TrimSpace(parsed.Scheme)) {
 	case "https":
 	case "http":
-		if !isAllowedInsecureTrialActivationReturnHost(host) {
+		if !isAllowedInsecurePurchaseReturnReturnHost(host) {
 			return "", ErrPurchaseReturnReturnURLInvalid
 		}
 	default:
@@ -193,4 +194,16 @@ func ValidatePurchaseReturnURL(raw, expectedInstanceHost string) (string, error)
 		return "", ErrPurchaseReturnHostMismatch
 	}
 	return host, nil
+}
+
+func isAllowedInsecurePurchaseReturnReturnHost(host string) bool {
+	host = strings.ToLower(strings.TrimSpace(host))
+	if host == "" {
+		return false
+	}
+	if host == "localhost" {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
 }
