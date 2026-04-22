@@ -1,6 +1,7 @@
 import { Show } from 'solid-js';
 
 import { SettingsPanel } from '@/components/shared/SettingsPanel';
+import { TlsVerificationWarningBanner } from '@/components/shared/TlsVerificationWarningBanner';
 import { Toggle } from '@/components/shared/Toggle';
 import {
   formControl,
@@ -207,6 +208,13 @@ export function AlertAppriseDestinationsSection(props: AlertAppriseDestinationsS
               <label class={labelClass('text-xs uppercase tracking-[0.08em]')}>
                 {ALERT_DESTINATIONS_APPRISE_TLS_LABEL}
               </label>
+              <Show when={props.config.skipTlsVerify}>
+                <TlsVerificationWarningBanner
+                  class="mb-3"
+                  subject="this Apprise API endpoint"
+                  remediation="Install a trusted certificate on the Apprise server before using this in production."
+                />
+              </Show>
               <label class="inline-flex items-center gap-2">
                 <input
                   type="checkbox"

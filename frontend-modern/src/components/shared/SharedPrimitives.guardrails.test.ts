@@ -78,6 +78,7 @@ import summaryMetricCardSource from '@/components/shared/SummaryMetricCard.tsx?r
 import summaryPanelSource from '@/components/shared/SummaryPanel.tsx?raw';
 import summarySynchronizedReadoutSource from '@/components/shared/SummarySynchronizedReadout.tsx?raw';
 import tagBadgesSource from '@/components/shared/TagBadges.tsx?raw';
+import tlsVerificationWarningBannerSource from '@/components/shared/TlsVerificationWarningBanner.tsx?raw';
 import commandPaletteStateSource from '@/components/shared/useCommandPaletteState.ts?raw';
 import columnPickerStateSource from '@/components/shared/useColumnPickerState.ts?raw';
 import tagInputStateSource from '@/components/shared/useTagInputState.ts?raw';
@@ -585,6 +586,14 @@ describe('shared primitive guardrails', () => {
     );
     expect(reportingPanelSource).toContain('CalloutCard');
     expect(reportingPanelSource).not.toContain('rounded-md border border-blue-200 bg-blue-50 p-6');
+  });
+
+  it('keeps TLS verification warnings in the shared primitive boundary', () => {
+    expect(tlsVerificationWarningBannerSource).toContain('role="alert"');
+    expect(tlsVerificationWarningBannerSource).toContain('TLS verification disabled.');
+    expect(tlsVerificationWarningBannerSource).toContain('controlled lab environments');
+    expect(tlsVerificationWarningBannerSource).toContain('Install a trusted certificate');
+    expect(tlsVerificationWarningBannerSource).not.toContain('CalloutCard');
   });
 
   it('keeps shared fleet limit banner copy on the monitored-system commercial term', () => {

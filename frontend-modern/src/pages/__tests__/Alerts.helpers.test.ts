@@ -9,6 +9,7 @@ import alertOverridesStateSource from '@/features/alerts/useAlertOverridesState.
 import alertDestinationsModelSource from '@/features/alerts/alertDestinationsModel.ts?raw';
 import alertDestinationsStateSource from '@/features/alerts/useAlertDestinationsState.ts?raw';
 import alertDestinationsTabStateSource from '@/features/alerts/useAlertDestinationsTabState.ts?raw';
+import alertAppriseDestinationsSectionSource from '@/features/alerts/AlertAppriseDestinationsSection.tsx?raw';
 import alertWebhookDestinationsStateSource from '@/features/alerts/useAlertWebhookDestinationsState.ts?raw';
 import alertAcknowledgementStateSource from '@/features/alerts/useAlertAcknowledgementState.ts?raw';
 import alertHistoryAdministrationCardSource from '@/features/alerts/AlertHistoryAdministrationCard.tsx?raw';
@@ -424,6 +425,11 @@ describe('tab path helpers', () => {
     expect(alertDestinationsTabSource).not.toContain('ALERT_DESTINATIONS_EMAIL_PANEL_TITLE');
     expect(alertDestinationsTabSource).not.toContain('ALERT_DESTINATIONS_APPRISE_PANEL_TITLE');
     expect(alertDestinationsTabSource).not.toContain('getAlertWebhooksSectionTitle');
+    expect(alertAppriseDestinationsSectionSource).toContain('TlsVerificationWarningBanner');
+    expect(alertAppriseDestinationsSectionSource).toContain('subject="this Apprise API endpoint"');
+    expect(alertAppriseDestinationsSectionSource).toContain(
+      'Install a trusted certificate on the Apprise server before using this in production.',
+    );
     expect(alertHistoryTabSource).not.toContain('useAlertIncidentTimelineState');
     expect(alertHistoryTabSource).not.toContain('AlertsAPI.getHistory');
     expect(alertHistoryTabSource).not.toContain('AlertsAPI.getIncidentsForResource');

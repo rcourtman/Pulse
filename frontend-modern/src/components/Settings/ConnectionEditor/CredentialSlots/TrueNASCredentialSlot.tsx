@@ -7,6 +7,7 @@ import {
   formLabel,
   formSelect,
 } from '@/components/shared/Form';
+import { TlsVerificationWarningBanner } from '@/components/shared/TlsVerificationWarningBanner';
 import { MonitoredSystemAdmissionPreview } from '../../MonitoredSystemAdmissionPreview';
 import type { TrueNASConnection } from '@/api/truenas';
 import type { TrueNASSettingsPanelState } from '../../useTrueNASSettingsPanelState';
@@ -191,6 +192,12 @@ export const TrueNASCredentialSlot: Component<TrueNASCredentialSlotProps> = (pro
             <span class={formHelpText}>Optional certificate pin for HTTPS connections.</span>
           </label>
           <div class="space-y-3 rounded-md border border-border bg-surface-alt px-4 py-3">
+            <Show when={props.state.form().insecureSkipVerify}>
+              <TlsVerificationWarningBanner
+                subject="this TrueNAS connection"
+                remediation="Install a trusted certificate or configure the TLS fingerprint before using this in production."
+              />
+            </Show>
             <label class="flex items-center gap-3">
               <input
                 type="checkbox"

@@ -11,6 +11,8 @@ import connectionEditorSource from '../ConnectionEditor/ConnectionEditor.tsx?raw
 import addressProbeStepSource from '../ConnectionEditor/AddressProbeStep.tsx?raw';
 import connectionEditorStateSource from '../ConnectionEditor/useConnectionEditor.ts?raw';
 import nodeCredentialSlotSource from '../ConnectionEditor/CredentialSlots/NodeCredentialSlot.tsx?raw';
+import trueNASCredentialSlotSource from '../ConnectionEditor/CredentialSlots/TrueNASCredentialSlot.tsx?raw';
+import vmwareCredentialSlotSource from '../ConnectionEditor/CredentialSlots/VMwareCredentialSlot.tsx?raw';
 import diagnosticsResultsPanelSource from '../DiagnosticsResultsPanel.tsx?raw';
 import diagnosticsModelSource from '../diagnosticsModel.ts?raw';
 
@@ -149,6 +151,18 @@ describe('settings architecture guardrails', () => {
     expect(nodeCredentialSlotSource).toContain('<NodeModalMonitoringSection');
     expect(nodeCredentialSlotSource).toContain('<NodeModalStatusFooter');
     expect(nodeCredentialSlotSource).not.toContain('<Dialog');
+
+    expect(vmwareCredentialSlotSource).toContain('TlsVerificationWarningBanner');
+    expect(vmwareCredentialSlotSource).toContain('subject="this vCenter connection"');
+    expect(vmwareCredentialSlotSource).toContain(
+      'Install a trusted certificate for vCenter before using this in production.',
+    );
+
+    expect(trueNASCredentialSlotSource).toContain('TlsVerificationWarningBanner');
+    expect(trueNASCredentialSlotSource).toContain('subject="this TrueNAS connection"');
+    expect(trueNASCredentialSlotSource).toContain(
+      'Install a trusted certificate or configure the TLS fingerprint before using this in production.',
+    );
   });
 
   it('keeps diagnostics commercial funnel rendering on the shared results/model boundary', () => {

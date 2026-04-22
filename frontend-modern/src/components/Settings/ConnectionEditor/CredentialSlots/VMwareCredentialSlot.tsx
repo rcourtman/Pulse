@@ -8,6 +8,7 @@ import {
   formHelpText,
   formLabel,
 } from '@/components/shared/Form';
+import { TlsVerificationWarningBanner } from '@/components/shared/TlsVerificationWarningBanner';
 import { MonitoredSystemAdmissionPreview } from '../../MonitoredSystemAdmissionPreview';
 import type { VMwareConnection } from '@/api/vmware';
 import type { VMwareSettingsPanelState } from '../../useVMwareSettingsPanelState';
@@ -141,6 +142,12 @@ export const VMwareCredentialSlot: Component<VMwareCredentialSlotProps> = (props
         </div>
 
         <div class="space-y-3 rounded-md border border-border bg-surface-alt px-4 py-3">
+          <Show when={props.state.form().insecureSkipVerify}>
+            <TlsVerificationWarningBanner
+              subject="this vCenter connection"
+              remediation="Install a trusted certificate for vCenter before using this in production."
+            />
+          </Show>
           <label class="flex items-center gap-3">
             <input
               type="checkbox"
