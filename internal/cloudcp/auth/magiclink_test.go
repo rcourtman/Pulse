@@ -225,6 +225,54 @@ func TestKeyPersistence(t *testing.T) {
 	}
 }
 
+func TestKeyPersistence_SecuresKeyFilePermissions(t *testing.T) {
+	dir := t.TempDir()
+
+	svc, err := NewService(dir)
+	if err != nil {
+		t.Fatalf("NewService: %v", err)
+	}
+	svc.Close()
+
+	info, err := os.Stat(filepath.Join(dir, hmacKeyFile))
+	if err != nil {
+		t.Fatalf("stat key file: %v", err)
+	}
+	if got := info.Mode().Perm(); got != 0o600 {
+		t.Fatalf("key file perms = %o, want %o", got, 0o600)
+	}
+}
+
+func TestNewService_RejectsShortExistingKeyFile(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, hmacKeyFile), make([]byte, hmacKeySize-1), 0o600); err != nil {
+		t.Fatalf("write short key file: %v", err)
+	}
+
+	_, err := NewService(dir)
+	if err == nil || !strings.Contains(err.Error(), "expected 32 bytes") {
+		t.Fatalf("expected invalid key length error, got %v", err)
+	}
+}
+
+func TestNewService_RejectsSymlinkedKeyFile(t *testing.T) {
+	dir := t.TempDir()
+	realKeyPath := filepath.Join(dir, "real.key")
+	if err := os.WriteFile(realKeyPath, make([]byte, hmacKeySize), 0o600); err != nil {
+		t.Fatalf("write real key: %v", err)
+	}
+
+	keyPath := filepath.Join(dir, hmacKeyFile)
+	if err := os.Symlink(realKeyPath, keyPath); err != nil {
+		t.Skipf("symlink not supported on this platform: %v", err)
+	}
+
+	_, err := NewService(dir)
+	if err == nil || !strings.Contains(err.Error(), "unsafe key file") {
+		t.Fatalf("expected unsafe key file error, got %v", err)
+	}
+}
+
 func TestNewService_SecuresDataDirPermissions(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "cp-data")
 

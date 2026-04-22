@@ -4428,9 +4428,11 @@ class SubsystemLookupTest(unittest.TestCase):
                 ["scripts/release_control/subsystem_lookup_test.py"],
             )
 
-    def test_lookup_paths_assigns_crypto_storage_hardening_to_security_privacy(self) -> None:
+    def test_lookup_paths_assigns_secure_storage_hardening_to_security_privacy(self) -> None:
         result = lookup_paths(
             [
+                "internal/cloudcp/auth/magiclink.go",
+                "internal/cloudcp/auth/magiclink_store.go",
                 "internal/crypto/crypto.go",
                 "internal/securityutil/secure_storage_dir.go",
             ]
@@ -4459,6 +4461,7 @@ class SubsystemLookupTest(unittest.TestCase):
             self.assertEqual(
                 match["verification_requirement"]["exact_files"],
                 [
+                    "internal/cloudcp/auth/magiclink_test.go",
                     "internal/crypto/crypto_test.go",
                     "internal/securityutil/secure_storage_dir_test.go",
                 ],

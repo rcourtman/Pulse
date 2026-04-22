@@ -51,7 +51,9 @@ visibility, and privacy controls to operators.
 25. `internal/api/router_routes_auth_security.go`
 26. `internal/crypto/crypto.go`
 27. `internal/securityutil/secure_storage_dir.go`
-28. `scripts/telemetry_adoption_report.py`
+28. `internal/cloudcp/auth/magiclink.go`
+29. `internal/cloudcp/auth/magiclink_store.go`
+30. `scripts/telemetry_adoption_report.py`
 
 ## Shared Boundaries
 
@@ -75,7 +77,7 @@ visibility, and privacy controls to operators.
 4. Change security/auth/token transport behavior through the shared `frontend-modern/src/api/security.ts`, `frontend-modern/src/components/Settings/APITokenManager.tsx`, `frontend-modern/src/components/Settings/apiTokenManagerModel.ts`, `frontend-modern/src/components/Settings/useAPITokenManagerState.ts`, `internal/api/security.go`, `internal/api/security_tokens.go`, and `internal/api/system_settings.go` boundary.
 5. Change security/privacy settings presentation through the shared `frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx`, `frontend-modern/src/components/Settings/SecurityAuthPanel.tsx`, `frontend-modern/src/components/Settings/SecurityOverviewPanel.tsx`, `frontend-modern/src/components/Settings/QuickSecuritySetup.tsx`, `frontend-modern/src/components/Settings/SecurityPostureSummary.tsx`, `frontend-modern/src/components/Settings/SSOProviderTypeIcon.tsx`, `frontend-modern/src/utils/securityAuthPresentation.ts`, `frontend-modern/src/utils/securityScorePresentation.ts`, `frontend-modern/src/utils/auditLogPresentation.ts`, and `frontend-modern/src/utils/auditWebhookPresentation.ts` boundary.
 6. Change operator-facing telemetry/adoption reporting through `scripts/telemetry_adoption_report.py` together with the privacy disclosure whenever release-identity interpretation changes.
-7. Change data-at-rest encryption-key storage-root hardening semantics through `internal/crypto/crypto.go` and `internal/securityutil/secure_storage_dir.go` together so writable-but-not-owned runtime storage mounts stay supported without weakening file-level secrecy.
+7. Change data-at-rest encryption-key or control-plane magic-link HMAC key and storage-root hardening semantics through `internal/crypto/crypto.go`, `internal/cloudcp/auth/magiclink.go`, `internal/cloudcp/auth/magiclink_store.go`, and `internal/securityutil/secure_storage_dir.go` together so writable-but-not-owned runtime storage mounts stay supported without weakening file-level secrecy.
 
 ## Forbidden Paths
 
@@ -90,7 +92,7 @@ visibility, and privacy controls to operators.
 3. Keep shared frontend settings proof routing aligned whenever security/privacy presentation changes.
 4. Keep the checked-in telemetry adoption report aligned with the same release-identity rules used by the runtime telemetry payload.
 5. Update this contract whenever a new canonical security, token, auth, or privacy surface becomes part of the governed trust boundary.
-6. Keep the shared storage-directory hardening helper and the crypto manager aligned whenever runtime data-root ownership assumptions change.
+6. Keep the shared storage-directory and secure storage-file hardening helper aligned with the crypto manager plus control-plane magic-link key and store handling whenever runtime data-root ownership assumptions change.
 
 ## Current State
 
@@ -105,6 +107,14 @@ adoption baselines. `scripts/telemetry_adoption_report.py` must emit
 windowed 24h, 72h, and 7d latest-install snapshots that split published
 versions from unpublished or development builds, so RC adoption reads stop
 depending on ad hoc SQL or one-off local helper scripts.
+That same storage hardening boundary now also owns secure regular-file
+handling for secret-bearing local trust material and the control-plane
+magic-link storage root. `internal/crypto/crypto.go`,
+`internal/cloudcp/auth/magiclink.go`, and
+`internal/cloudcp/auth/magiclink_store.go` must route encryption keys,
+magic-link HMAC keys, and the magic-link SQLite store path through the shared
+secure storage helpers so symlink, oversize, and non-regular file paths fail
+closed instead of slipping past directory-only hardening.
 
 Security-facing settings remain intentionally shared with `frontend-primitives`
 because shell framing and presentation consistency still belong there, but the

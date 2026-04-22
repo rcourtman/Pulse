@@ -6,12 +6,11 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
-	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 	"github.com/rs/zerolog/log"
 	_ "modernc.org/sqlite"
 )
@@ -26,10 +25,7 @@ const storeCleanupInterval = 5 * time.Minute
 const privateDirPerm = 0o700
 
 func ensureOwnerOnlyDir(dir string) error {
-	if err := os.MkdirAll(dir, privateDirPerm); err != nil {
-		return err
-	}
-	return os.Chmod(dir, privateDirPerm)
+	return securityutil.EnsureSecureStorageDir(dir, privateDirPerm)
 }
 
 // TokenRecord holds the data associated with a stored magic link token.
@@ -51,15 +47,18 @@ type Store struct {
 
 // NewStore opens (or creates) the magic link token database in dir.
 func NewStore(dir string) (*Store, error) {
-	dir = filepath.Clean(dir)
-	if strings.TrimSpace(dir) == "" {
-		return nil, fmt.Errorf("dir is required")
+	normalizedDir, err := securityutil.NormalizeStorageDir(dir)
+	if err != nil {
+		return nil, fmt.Errorf("dir is required: %w", err)
 	}
-	if err := ensureOwnerOnlyDir(dir); err != nil {
+	if err := ensureOwnerOnlyDir(normalizedDir); err != nil {
 		return nil, fmt.Errorf("create magic link store dir: %w", err)
 	}
 
-	dbPath := filepath.Join(dir, "cp_magic_links.db")
+	dbPath, err := securityutil.JoinStorageLeaf(normalizedDir, "cp_magic_links.db")
+	if err != nil {
+		return nil, fmt.Errorf("resolve magic link db path: %w", err)
+	}
 	dsn := dbPath + "?" + url.Values{
 		"_pragma": []string{
 			"busy_timeout(30000)",

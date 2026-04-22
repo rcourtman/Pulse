@@ -586,6 +586,46 @@ func TestGetOrCreateKeyAt_MigrateSuccess(t *testing.T) {
 	}
 }
 
+func TestGetOrCreateKeyAt_RejectsSymlinkedLegacyKeyPath(t *testing.T) {
+	legacyDir := t.TempDir()
+	legacyPath := filepath.Join(legacyDir, ".encryption.key")
+	withLegacyKeyPath(t, legacyPath)
+
+	realKeyPath := filepath.Join(legacyDir, "real-encryption.key")
+	oldKey := make([]byte, 32)
+	for i := range oldKey {
+		oldKey[i] = byte(i)
+	}
+	encoded := base64.StdEncoding.EncodeToString(oldKey)
+	if err := os.WriteFile(realKeyPath, []byte(encoded), 0o600); err != nil {
+		t.Fatalf("write real key: %v", err)
+	}
+	if err := os.Symlink(realKeyPath, legacyPath); err != nil {
+		t.Skipf("symlink not supported on this platform: %v", err)
+	}
+
+	_, err := getOrCreateKeyAt(t.TempDir())
+	if err == nil || !strings.Contains(err.Error(), "unsafe legacy encryption key path") {
+		t.Fatalf("expected unsafe legacy key path error, got %v", err)
+	}
+}
+
+func TestGetOrCreateKeyAt_RejectsOversizedLegacyKeyFile(t *testing.T) {
+	legacyDir := t.TempDir()
+	legacyPath := filepath.Join(legacyDir, ".encryption.key")
+	withLegacyKeyPath(t, legacyPath)
+
+	oversized := bytes.Repeat([]byte("A"), maxEncryptionKeyFileSize+1)
+	if err := os.WriteFile(legacyPath, oversized, 0o600); err != nil {
+		t.Fatalf("write oversized legacy key: %v", err)
+	}
+
+	_, err := getOrCreateKeyAt(t.TempDir())
+	if err == nil || !strings.Contains(err.Error(), "unsafe legacy encryption key path") {
+		t.Fatalf("expected unsafe legacy key path error, got %v", err)
+	}
+}
+
 func TestGetOrCreateKeyAt_IgnoresRelativeLegacyOverride(t *testing.T) {
 	legacyDir := t.TempDir()
 	legacyPath := filepath.Join(legacyDir, ".encryption.key")
@@ -647,7 +687,7 @@ func TestGetOrCreateKeyAt_MigrateMkdirError(t *testing.T) {
 	}
 }
 
-func TestGetOrCreateKeyAt_MigrateWriteError(t *testing.T) {
+func TestGetOrCreateKeyAt_RejectsUnsafePrimaryKeyPathBeforeMigration(t *testing.T) {
 	legacyDir := t.TempDir()
 	legacyPath := filepath.Join(legacyDir, ".encryption.key")
 	withLegacyKeyPath(t, legacyPath)
@@ -667,12 +707,9 @@ func TestGetOrCreateKeyAt_MigrateWriteError(t *testing.T) {
 		t.Fatalf("Failed to create key path dir: %v", err)
 	}
 
-	key, err := getOrCreateKeyAt(newDir)
-	if err != nil {
-		t.Fatalf("getOrCreateKeyAt() error: %v", err)
-	}
-	if !bytes.Equal(key, oldKey) {
-		t.Fatalf("expected legacy key on write error")
+	_, err := getOrCreateKeyAt(newDir)
+	if err == nil || !strings.Contains(err.Error(), "unsafe encryption key path") {
+		t.Fatalf("expected unsafe encryption key path error, got %v", err)
 	}
 }
 

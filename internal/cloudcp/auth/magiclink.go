@@ -5,22 +5,24 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"io"
 	"net/url"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 	"github.com/rs/zerolog/log"
 )
 
 const (
-	magicLinkTTL    = 15 * time.Minute
-	magicLinkPrefix = "ml1_"
-	hmacKeyFile     = ".cp_magic_link_key"
-	hmacKeySize     = 32
+	magicLinkTTL       = 15 * time.Minute
+	magicLinkPrefix    = "ml1_"
+	hmacKeyFile        = ".cp_magic_link_key"
+	hmacKeySize        = 32
+	maxHMACKeyFileSize = 64
 )
 
 type MagicLinkTarget string
@@ -50,16 +52,25 @@ type Service struct {
 // NewService creates a Service backed by a SQLite store in cpDataDir.
 // It loads (or generates) an HMAC key from {cpDataDir}/.cp_magic_link_key.
 func NewService(cpDataDir string) (*Service, error) {
-	if err := ensureOwnerOnlyDir(cpDataDir); err != nil {
+	normalizedDir, err := securityutil.NormalizeStorageDir(cpDataDir)
+	if err != nil {
+		return nil, fmt.Errorf("cp data dir is required: %w", err)
+	}
+	if err := ensureOwnerOnlyDir(normalizedDir); err != nil {
 		return nil, fmt.Errorf("ensure cp data dir: %w", err)
 	}
 
-	key, err := loadOrGenerateKey(filepath.Join(cpDataDir, hmacKeyFile))
+	keyPath, err := securityutil.JoinStorageLeaf(normalizedDir, hmacKeyFile)
+	if err != nil {
+		return nil, fmt.Errorf("resolve magic link hmac key path: %w", err)
+	}
+
+	key, err := loadOrGenerateKey(keyPath)
 	if err != nil {
 		return nil, fmt.Errorf("magic link hmac key: %w", err)
 	}
 
-	store, err := NewStore(cpDataDir)
+	store, err := NewStore(normalizedDir)
 	if err != nil {
 		return nil, fmt.Errorf("magic link store: %w", err)
 	}
@@ -178,11 +189,17 @@ func (s *Service) Close() {
 }
 
 func loadOrGenerateKey(path string) ([]byte, error) {
-	data, err := os.ReadFile(path)
-	if err == nil && len(data) >= hmacKeySize {
-		return data[:hmacKeySize], nil
+	data, err := securityutil.ReadSecureStorageFile(path, maxHMACKeyFileSize)
+	if err == nil {
+		if len(data) != hmacKeySize {
+			return nil, fmt.Errorf("invalid key file %s: expected %d bytes, got %d", path, hmacKeySize, len(data))
+		}
+		return append([]byte(nil), data...), nil
 	}
 	if err != nil && !os.IsNotExist(err) {
+		if errors.Is(err, securityutil.ErrUnsafeStorageFile) {
+			return nil, fmt.Errorf("unsafe key file %s: %w", path, err)
+		}
 		return nil, fmt.Errorf("read key file %s: %w", path, err)
 	}
 
@@ -190,7 +207,7 @@ func loadOrGenerateKey(path string) ([]byte, error) {
 	if _, err := io.ReadFull(rand.Reader, key); err != nil {
 		return nil, fmt.Errorf("generate key: %w", err)
 	}
-	if err := os.WriteFile(path, key, 0o600); err != nil {
+	if err := securityutil.WriteSecureStorageFile(path, key, privateDirPerm, 0o600); err != nil {
 		return nil, fmt.Errorf("write key file %s: %w", path, err)
 	}
 	log.Info().Str("path", path).Msg("Generated new magic link HMAC key")
