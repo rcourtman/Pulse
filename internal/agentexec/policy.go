@@ -36,7 +36,8 @@ func DefaultPolicy() *CommandPolicy {
 			`^uptime$`,
 			`^hostname$`,
 			`^uname(\s|$)`,
-			`^cat\s+/proc/`,
+			`^cat\s+/proc/(cpuinfo|meminfo|loadavg|uptime|version|diskstats|mdstat|swaps|mounts|filesystems|partitions)$`,
+			`^cat\s+/proc/net/(dev|route|tcp|tcp6|udp|udp6|unix)$`,
 			`^cat\s+/etc/os-release`,
 			`^lsof(\s|$)`,
 			`^netstat(\s|$)`,
@@ -197,6 +198,11 @@ func DefaultPolicy() *CommandPolicy {
 			// Clear system logs
 			`>\s*/var/log/`,
 			`truncate.*--size.*0.*/var/log/`,
+
+			// Sensitive procfs reads can expose credentials or kernel memory.
+			`^cat\s+/proc/(kcore|kallsyms|keys|timer_list|sched_debug)(\s|$)`,
+			`^cat\s+/proc/(self|[0-9]+)/(environ|mem)(\s|$)`,
+			`^cat\s+/proc/(self|[0-9]+)/(fd|fdinfo|root)(/|\s|$)`,
 		},
 	}
 

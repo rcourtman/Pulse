@@ -20,8 +20,12 @@ func TestDefaultPolicyEvaluate(t *testing.T) {
 		{"blocked", "rm -rf /", PolicyBlock},
 		{"blocked sudo", "sudo rm -rf /", PolicyBlock},
 		{"blocked sudo with flags", "sudo -u root rm -rf /", PolicyBlock},
+		{"blocked proc environ", "cat /proc/self/environ", PolicyBlock},
+		{"blocked proc kcore", "cat /proc/kcore", PolicyBlock},
 		{"auto approve", "df -h", PolicyAllow},
+		{"auto approve safe proc meminfo", "cat /proc/meminfo", PolicyAllow},
 		{"require approval", "systemctl restart nginx", PolicyRequireApproval},
+		{"generic proc read requires approval", "cat /proc/1/status", PolicyRequireApproval},
 		{"unknown defaults to approval", "echo hello", PolicyRequireApproval},
 		{"sudo with flags remains conservative", "sudo -u root df -h", PolicyRequireApproval},
 		{"compound command requires approval", "df -h && echo ok", PolicyRequireApproval},
@@ -57,10 +61,19 @@ func TestPolicyHelpers(t *testing.T) {
 	if !p.IsBlocked("sudo -u root rm -rf /") {
 		t.Fatalf("expected sudo -u root rm -rf / to be blocked")
 	}
+	if !p.IsBlocked("cat /proc/self/environ") {
+		t.Fatalf("expected cat /proc/self/environ to be blocked")
+	}
 	if !p.NeedsApproval("echo hello") {
 		t.Fatalf("expected echo hello to require approval by default")
 	}
+	if !p.NeedsApproval("cat /proc/1/status") {
+		t.Fatalf("expected cat /proc/1/status to require approval")
+	}
 	if !p.IsAutoApproved("df -h") {
 		t.Fatalf("expected df -h to be auto approved")
+	}
+	if !p.IsAutoApproved("cat /proc/meminfo") {
+		t.Fatalf("expected cat /proc/meminfo to be auto approved")
 	}
 }
