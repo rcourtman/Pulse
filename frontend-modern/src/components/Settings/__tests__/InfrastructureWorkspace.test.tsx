@@ -233,8 +233,8 @@ describe('InfrastructureWorkspace', () => {
 
     // The catalog landing leads with peer platform onboarding and keeps the
     // host install path available beneath it in the same shared editor.
-    const platformHeading = screen.getByText('Connect a platform');
-    const vmwareButton = screen.getByRole('button', { name: /VMware vCenter \/ ESXi/i });
+    const platformHeading = screen.getAllByText('Connect a supported platform')[0];
+    const vmwareButton = screen.getByRole('button', { name: /VMware vCenter/i });
     const trueNASButton = screen.getByRole('button', { name: /TrueNAS SCALE/i });
     const proxmoxButton = screen.getByRole('button', { name: /^Proxmox\b/i });
     const agentButton = screen.getByRole('button', { name: /Install Pulse Agent/i });
@@ -274,7 +274,7 @@ describe('InfrastructureWorkspace', () => {
     renderWorkspace();
 
     fireEvent.click(screen.getByRole('button', { name: /Add infrastructure/i }));
-    fireEvent.click(screen.getByRole('button', { name: /VMware vCenter \/ ESXi/i }));
+    fireEvent.click(screen.getByRole('button', { name: /VMware vCenter/i }));
 
     expect(screen.getByTestId('vmware-section')).toBeInTheDocument();
   });

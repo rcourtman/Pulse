@@ -7,6 +7,7 @@ import settingsNavigationHookSource from '../useSettingsNavigation.ts?raw';
 import settingsPanelRegistryContextSource from '../settingsPanelRegistryContext.tsx?raw';
 import infrastructureWorkspaceSource from '../InfrastructureWorkspace.tsx?raw';
 import infrastructureWorkspaceModelSource from '../infrastructureWorkspaceModel.ts?raw';
+import connectionsTableSource from '../ConnectionsTable.tsx?raw';
 import connectionEditorSource from '../ConnectionEditor/ConnectionEditor.tsx?raw';
 import addressProbeStepSource from '../ConnectionEditor/AddressProbeStep.tsx?raw';
 import connectionEditorStateSource from '../ConnectionEditor/useConnectionEditor.ts?raw';
@@ -15,6 +16,7 @@ import trueNASCredentialSlotSource from '../ConnectionEditor/CredentialSlots/Tru
 import vmwareCredentialSlotSource from '../ConnectionEditor/CredentialSlots/VMwareCredentialSlot.tsx?raw';
 import diagnosticsResultsPanelSource from '../DiagnosticsResultsPanel.tsx?raw';
 import diagnosticsModelSource from '../diagnosticsModel.ts?raw';
+import infrastructureOnboardingPresentationSource from '../../../utils/infrastructureOnboardingPresentation.ts?raw';
 
 describe('settings architecture guardrails', () => {
   it('keeps Settings on the canonical page shell boundary', () => {
@@ -111,13 +113,20 @@ describe('settings architecture guardrails', () => {
     expect(connectionEditorSource).toContain(
       "import { AddressProbeStep } from './AddressProbeStep';",
     );
+    expect(connectionEditorSource).toContain(
+      "from '@/utils/infrastructureOnboardingPresentation';",
+    );
+    expect(connectionsTableSource).toContain(
+      "from '@/utils/infrastructureOnboardingPresentation';",
+    );
     expect(connectionEditorSource).toContain('buildConnectionEditorCatalogEntries');
     expect(connectionEditorSource).toContain('selectedFamilyId');
     expect(connectionEditorSource).toContain('<AddressProbeStep');
-    expect(connectionEditorSource).toContain('Connect a platform');
+    expect(connectionEditorSource).toContain('Choose how Pulse should connect');
+    expect(connectionEditorSource).toContain('Connect a supported platform');
     expect(connectionEditorSource).toContain('Choose a {family.label} product');
     expect(connectionEditorSource).toContain('Back to platforms');
-    expect(connectionEditorSource).toContain('Install on a host instead');
+    expect(connectionEditorSource).toContain('Current admission path');
     expect(connectionEditorSource).toContain('other supported services');
     expect(connectionEditorSource).toContain('connects them when available');
     expect(connectionEditorSource).not.toContain('On supported Proxmox hosts');
@@ -130,8 +139,9 @@ describe('settings architecture guardrails', () => {
     // The no-match branch must name the agent alternative so a user who
     // probed bare-metal Linux / Unraid / FreeBSD is not left in a
     // Platform-API-only dead end.
-    expect(addressProbeStepSource).toContain('install the Unified Agent instead');
+    expect(addressProbeStepSource).toContain('install Pulse Agent instead');
     expect(addressProbeStepSource).toContain('bare-metal Linux');
+    expect(addressProbeStepSource).toContain('supported API-backed platform');
 
     expect(connectionEditorStateSource).toContain('ConnectionsAPI.probe(value)');
     expect(connectionEditorStateSource).toContain('export const CONNECTION_TYPE_LABELS');
@@ -144,6 +154,11 @@ describe('settings architecture guardrails', () => {
       'export function buildConnectionEditorCatalogEntries',
     );
     expect(connectionEditorStateSource).not.toContain('PROXMOX_FAMILY_TYPES');
+    expect(infrastructureOnboardingPresentationSource).toContain('getSourcePlatformManifestEntry');
+    expect(infrastructureOnboardingPresentationSource).toContain('currentAdmissionPath');
+    expect(infrastructureOnboardingPresentationSource).toContain(
+      'getInfrastructureSupportSummaryBadges',
+    );
 
     expect(nodeCredentialSlotSource).toContain('useNodeModalState(modalProps)');
     expect(nodeCredentialSlotSource).toContain('<NodeModalBasicInfoSection');

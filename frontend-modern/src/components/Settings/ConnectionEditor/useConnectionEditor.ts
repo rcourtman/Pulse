@@ -9,6 +9,10 @@ import {
   DEFAULT_INFRASTRUCTURE_SOURCE_ORDER,
   getSourcePlatformFamily,
 } from '@/utils/platformSupportManifest';
+import {
+  INFRASTRUCTURE_API_FAMILY_DESCRIPTIONS,
+  getInfrastructureOnboardingProductPresentation,
+} from '@/utils/infrastructureOnboardingPresentation';
 
 const PROBE_ERROR_FALLBACK = 'Probe failed. Try again or enter credentials manually.';
 
@@ -123,9 +127,9 @@ export const CONNECTION_TYPE_LABELS: Record<ConnectionType, string> = {
   pve: 'Proxmox VE',
   pbs: 'Proxmox Backup Server',
   pmg: 'Proxmox Mail Gateway',
-  vmware: 'VMware vCenter / ESXi',
-  truenas: 'TrueNAS SCALE',
-  agent: 'Pulse Unified Agent',
+  vmware: getInfrastructureOnboardingProductPresentation('vmware').label,
+  truenas: getInfrastructureOnboardingProductPresentation('truenas').label,
+  agent: 'Pulse Agent',
   docker: 'Docker',
   kubernetes: 'Kubernetes',
 };
@@ -142,14 +146,17 @@ const getCatalogFamilyLabel = (type: PlatformConnectionType): string | null =>
 const describeCatalogFamily = (
   familyLabel: string,
   childTypes: readonly PlatformConnectionType[],
-): string =>
-  childTypes
+): string => {
+  const curatedDescription = INFRASTRUCTURE_API_FAMILY_DESCRIPTIONS[familyLabel];
+  if (curatedDescription) return curatedDescription;
+  return childTypes
     .map((type) => {
       const label = CONNECTION_TYPE_LABELS[type];
       const prefix = `${familyLabel} `;
       return label.startsWith(prefix) ? label.slice(prefix.length) : label;
     })
     .join(', ');
+};
 
 export const DEFAULT_CONNECTION_EDITOR_CATALOG_ENTRIES: ConnectionEditorCatalogEntry[] = (() => {
   return buildConnectionEditorCatalogEntries(DEFAULT_CONNECTION_EDITOR_AVAILABLE_TYPES);

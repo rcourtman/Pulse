@@ -12,6 +12,7 @@ describe('useSettingsShellState', () => {
   afterEach(() => {
     presentationPolicyIsReadOnlyMock.mockReset();
     presentationPolicyIsReadOnlyMock.mockReturnValue(false);
+    vi.unstubAllGlobals();
   });
 
   it('uses reporting-focused infrastructure copy in read-only sessions', () => {
@@ -26,6 +27,20 @@ describe('useSettingsShellState', () => {
       expect(state.headerMeta().description).toBe(
         'Review the current top-level monitored systems and reporting posture. Setup changes stay unavailable in this read-only session.',
       );
+
+      dispose();
+    });
+  });
+
+  it('keeps the content pane visible on mobile-sized viewports by default', () => {
+    vi.stubGlobal('window', { innerWidth: 390 });
+
+    createRoot((dispose) => {
+      const state = useSettingsShellState({
+        activeTab: () => 'infrastructure-systems',
+      });
+
+      expect(state.isMobileMenuOpen()).toBe(false);
 
       dispose();
     });

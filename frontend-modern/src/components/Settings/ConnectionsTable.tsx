@@ -11,6 +11,10 @@ import {
 import type { Connection } from '@/api/connections';
 import type { InfrastructureSystemRow } from './connectionsTableModel';
 import type { ConnectionRowActions } from './useConnectionRowActions';
+import {
+  getInfrastructureEmptyStateDetail,
+  getInfrastructureEmptyStateSummary,
+} from '@/utils/infrastructureOnboardingPresentation';
 
 export interface ConnectionsTableHeaderAction {
   label: string;
@@ -45,8 +49,7 @@ const removeConfirmClass =
   'inline-flex items-center rounded-md bg-rose-600 px-2.5 py-1 text-xs font-medium text-white transition-colors hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-60';
 
 export const ConnectionsTable: Component<ConnectionsTableProps> = (props) => {
-  const hasActions = () =>
-    Boolean(props.actions) || Boolean(props.onEdit);
+  const hasActions = () => Boolean(props.actions) || Boolean(props.onEdit);
 
   const colSpan = () => (hasActions() ? 5 : 4);
 
@@ -55,7 +58,7 @@ export const ConnectionsTable: Component<ConnectionsTableProps> = (props) => {
       <div class="flex flex-col gap-3 border-b border-border px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h3 class="text-base font-semibold text-base-content">Monitored systems</h3>
-          <p class="text-xs text-muted">One row per top-level monitored system.</p>
+          <p class="text-xs text-muted">{getInfrastructureEmptyStateSummary()}</p>
         </div>
         <Show when={(props.headerActions?.length ?? 0) > 0}>
           <div class="flex flex-wrap items-center gap-2">
@@ -81,7 +84,12 @@ export const ConnectionsTable: Component<ConnectionsTableProps> = (props) => {
       <Show
         when={props.rows().length > 0}
         fallback={
-          <div class="px-4 py-10 text-center text-sm text-muted">No monitored systems yet.</div>
+          <div class="space-y-2 px-4 py-10 text-center">
+            <div class="text-sm font-medium text-base-content">Start monitoring infrastructure</div>
+            <div class="mx-auto max-w-3xl text-sm text-muted">
+              {getInfrastructureEmptyStateDetail()}
+            </div>
+          </div>
         }
       >
         <Table class="w-full table-fixed divide-y divide-border text-sm !whitespace-normal">
@@ -111,8 +119,7 @@ export const ConnectionsTable: Component<ConnectionsTableProps> = (props) => {
                 const isPauseBusy = () => props.actions?.pendingAction(row.id) === 'pause';
                 const isRemoveBusy = () => props.actions?.pendingAction(row.id) === 'remove';
                 const anyBusy = () => props.actions?.pendingAction(row.id) !== null;
-                const isConfirmingRemove = () =>
-                  Boolean(props.actions?.confirmingRemove(row.id));
+                const isConfirmingRemove = () => Boolean(props.actions?.confirmingRemove(row.id));
                 const rowError = () => props.actions?.actionError(row.id) ?? null;
 
                 return (
@@ -231,13 +238,15 @@ export const ConnectionsTable: Component<ConnectionsTableProps> = (props) => {
                       </TableRow>
                     </Show>
 
-                    <Show when={row.isAgent && isConfirmingRemove() && props.agentUninstallCommands}>
+                    <Show
+                      when={row.isAgent && isConfirmingRemove() && props.agentUninstallCommands}
+                    >
                       <TableRow>
                         <TableCell colspan={colSpan()} class="bg-surface-alt px-4 pb-4 pt-1">
                           <div class="space-y-3">
                             <p class="text-xs text-muted">
-                              Removing forgets this agent from the ledger; history is retained.
-                              To fully detach, run the uninstall command on the host:
+                              Removing forgets this agent from the ledger; history is retained. To
+                              fully detach, run the uninstall command on the host:
                             </p>
                             <div class="space-y-1">
                               <span class="text-xs font-medium text-muted">

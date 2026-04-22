@@ -219,7 +219,11 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
                 case 'pmg': {
                   const node = findEditableNode(connection);
                   return node
-                    ? { kind: 'node' as const, render: () => renderNodeSlot(connection.type as 'pve' | 'pbs' | 'pmg', node) }
+                    ? {
+                        kind: 'node' as const,
+                        render: () =>
+                          renderNodeSlot(connection.type as 'pve' | 'pbs' | 'pmg', node),
+                      }
                     : null;
                 }
                 case 'vmware': {
@@ -262,14 +266,12 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
             if (!editableSlot) {
               return (
                 <div class="space-y-4">
-                  <div class="flex items-center justify-between gap-3">
-                    <div class="text-base font-semibold text-base-content">
-                      Edit connection
-                    </div>
+                  <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div class="text-base font-semibold text-base-content">Edit connection</div>
                     <button
                       type="button"
                       onClick={exitEditMode}
-                      class="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-sm font-medium text-base-content transition-colors hover:bg-surface-hover"
+                      class="inline-flex w-full items-center justify-center gap-1 rounded-md border border-border px-3 py-1.5 text-sm font-medium text-base-content transition-colors hover:bg-surface-hover sm:w-auto"
                     >
                       ← Back to systems
                     </button>
@@ -286,7 +288,7 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
             }
             return (
               <div class="space-y-4">
-                <div class="flex items-center justify-between gap-3">
+                <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <div class="text-base font-semibold text-base-content">
                       Edit {connection.name}
@@ -296,7 +298,7 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
                   <button
                     type="button"
                     onClick={exitEditMode}
-                    class="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-sm font-medium text-base-content transition-colors hover:bg-surface-hover"
+                    class="inline-flex w-full items-center justify-center gap-1 rounded-md border border-border px-3 py-1.5 text-sm font-medium text-base-content transition-colors hover:bg-surface-hover sm:w-auto"
                   >
                     ← Back to systems
                   </button>
@@ -311,89 +313,91 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
         </Match>
 
         <Match when={mode() === 'add'}>
-        <div class="space-y-4">
-          <div class="flex items-center justify-between gap-3">
-            <div>
-              <div class="text-base font-semibold text-base-content">Add infrastructure</div>
-              <div class="mt-0.5 text-xs text-muted">
-                Paste an address to auto-detect, or pick your system from the catalog.
+          <div class="space-y-4">
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <div class="text-base font-semibold text-base-content">Add infrastructure</div>
+                <div class="mt-0.5 text-xs text-muted">
+                  Choose how Pulse should connect: supported platform API or Pulse Agent on a host.
+                </div>
               </div>
+              <button
+                type="button"
+                onClick={exitAddMode}
+                class="inline-flex w-full items-center justify-center gap-1 rounded-md border border-border px-3 py-1.5 text-sm font-medium text-base-content transition-colors hover:bg-surface-hover sm:w-auto"
+              >
+                ← Back to systems
+              </button>
             </div>
-            <button
-              type="button"
-              onClick={exitAddMode}
-              class="inline-flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-sm font-medium text-base-content transition-colors hover:bg-surface-hover"
-            >
-              ← Back to systems
-            </button>
-          </div>
 
-          <div class="rounded-lg border border-border bg-surface">
-            <ConnectionEditor
-              mode="add"
-              initialType={initialAddType() ?? undefined}
-              onClose={exitAddMode}
-              renderCredentialSlot={({ type }) => {
-                switch (type) {
-                  case 'pve':
-                  case 'pbs':
-                  case 'pmg':
-                    return renderNodeSlot(type);
-                  case 'truenas':
-                    return (
-                      <TrueNASCredentialSlot
-                        state={props.trueNASSettings}
-                        onCancel={exitAddMode}
-                        onSaved={exitAddMode}
-                      />
-                    );
-                  case 'vmware':
-                    return (
-                      <VMwareCredentialSlot
-                        state={props.vmwareSettings}
-                        onCancel={exitAddMode}
-                        onSaved={exitAddMode}
-                      />
-                    );
-                  case 'agent':
-                    return (
-                      <div class="space-y-4">
-                        <div class="flex items-center justify-end">
-                          <button
-                            type="button"
-                            onClick={() => setShowAgentProfiles((v) => !v)}
-                            class="inline-flex items-center rounded-md border border-border px-2.5 py-1 text-xs font-medium text-base-content transition-colors hover:bg-surface-hover"
-                          >
-                            {showAgentProfiles() ? 'Hide agent profiles' : 'Manage agent profiles'}
-                          </button>
-                        </div>
-                        <Show when={showAgentProfiles()}>
-                          <div class="rounded-xl border border-border bg-surface p-4 shadow-sm">
-                            <div class="mb-4 space-y-1">
-                              <div class="text-base font-semibold text-base-content">
-                                Agent profiles
-                              </div>
-                              <div class="text-sm text-muted">
-                                Manage reusable install defaults for agent-based systems.
-                              </div>
-                            </div>
-                            <AgentProfilesPanel />
+            <div class="rounded-lg border border-border bg-surface">
+              <ConnectionEditor
+                mode="add"
+                initialType={initialAddType() ?? undefined}
+                onClose={exitAddMode}
+                renderCredentialSlot={({ type }) => {
+                  switch (type) {
+                    case 'pve':
+                    case 'pbs':
+                    case 'pmg':
+                      return renderNodeSlot(type);
+                    case 'truenas':
+                      return (
+                        <TrueNASCredentialSlot
+                          state={props.trueNASSettings}
+                          onCancel={exitAddMode}
+                          onSaved={exitAddMode}
+                        />
+                      );
+                    case 'vmware':
+                      return (
+                        <VMwareCredentialSlot
+                          state={props.vmwareSettings}
+                          onCancel={exitAddMode}
+                          onSaved={exitAddMode}
+                        />
+                      );
+                    case 'agent':
+                      return (
+                        <div class="space-y-4">
+                          <div class="flex items-center justify-end">
+                            <button
+                              type="button"
+                              onClick={() => setShowAgentProfiles((v) => !v)}
+                              class="inline-flex items-center rounded-md border border-border px-2.5 py-1 text-xs font-medium text-base-content transition-colors hover:bg-surface-hover"
+                            >
+                              {showAgentProfiles()
+                                ? 'Hide agent profiles'
+                                : 'Manage agent profiles'}
+                            </button>
                           </div>
-                        </Show>
-                        <InfrastructureInstallerSection />
-                      </div>
-                    );
-                  default:
-                    return (
-                      <div class="text-sm text-muted">
-                        No credential form is wired up for the {type} type yet.
-                      </div>
-                    );
-                }
-              }}
-            />
+                          <Show when={showAgentProfiles()}>
+                            <div class="rounded-xl border border-border bg-surface p-4 shadow-sm">
+                              <div class="mb-4 space-y-1">
+                                <div class="text-base font-semibold text-base-content">
+                                  Agent profiles
+                                </div>
+                                <div class="text-sm text-muted">
+                                  Manage reusable install defaults for agent-based systems.
+                                </div>
+                              </div>
+                              <AgentProfilesPanel />
+                            </div>
+                          </Show>
+                          <InfrastructureInstallerSection />
+                        </div>
+                      );
+                    default:
+                      return (
+                        <div class="text-sm text-muted">
+                          No credential form is wired up for the {type} type yet.
+                        </div>
+                      );
+                  }
+                }}
+              />
+            </div>
           </div>
-        </div>
         </Match>
       </Switch>
     </div>

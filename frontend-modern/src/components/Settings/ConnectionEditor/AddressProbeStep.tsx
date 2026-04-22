@@ -3,6 +3,7 @@ import type { ProbeCandidate } from '@/api/connections';
 import { formControl, formField, formHelpText, formLabel } from '@/components/shared/Form';
 import type { ConnectionEditorState } from './useConnectionEditor';
 import { CONNECTION_TYPE_LABELS } from './useConnectionEditor';
+import { getInfrastructureAutoDetectLabels } from '@/utils/infrastructureOnboardingPresentation';
 
 export interface AddressProbeStepProps {
   state: ConnectionEditorState;
@@ -16,6 +17,8 @@ export const AddressProbeStep: Component<AddressProbeStepProps> = (props) => {
     void props.state.runProbe();
   };
 
+  const autoDetectLabels = getInfrastructureAutoDetectLabels();
+
   return (
     <form class="space-y-4" onSubmit={handleSubmit}>
       <div class={formField}>
@@ -26,7 +29,7 @@ export const AddressProbeStep: Component<AddressProbeStepProps> = (props) => {
           id="connection-address"
           type="text"
           class={formControl}
-          placeholder="vcenter.lab, truenas.lan, https://pve.lab:8006"
+          placeholder="vcenter.lab.local, truenas.lan, https://pve.lab:8006"
           value={props.state.address()}
           onInput={(event) => props.state.setAddress(event.currentTarget.value)}
           autocomplete="off"
@@ -34,8 +37,18 @@ export const AddressProbeStep: Component<AddressProbeStepProps> = (props) => {
           disabled={props.state.phase() === 'probing'}
         />
         <p class={formHelpText}>
-          Paste a hostname, IP, or URL. Pulse detects the product and asks for credentials next.
+          Paste a hostname, IP, or URL to identify a supported platform. Pulse validates the match
+          and asks for credentials next.
         </p>
+        <div class="mt-2 flex flex-wrap gap-1.5">
+          <For each={autoDetectLabels}>
+            {(label) => (
+              <span class="inline-flex items-center rounded-full border border-border bg-surface px-2 py-0.5 text-[11px] font-medium text-base-content">
+                {label}
+              </span>
+            )}
+          </For>
+        </div>
       </div>
 
       <div class="flex items-center gap-2">
@@ -56,20 +69,20 @@ export const AddressProbeStep: Component<AddressProbeStepProps> = (props) => {
 
       <Show when={props.state.phase() === 'no-match'}>
         <div class="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
-          <div class="font-medium">No supported product detected at that address.</div>
+          <div class="font-medium">No supported API-backed platform detected at that address.</div>
           <div class="mt-1 text-xs">
-            Pick your system from the catalog below, or if this is bare-metal Linux / Unraid /
-            FreeBSD,{' '}
+            Pick a supported product from the catalog below, or if this is bare-metal Linux / Unraid
+            / FreeBSD,{' '}
             <Show
               when={props.onInstallAgent}
-              fallback={<span class="font-medium">install the Unified Agent instead</span>}
+              fallback={<span class="font-medium">install Pulse Agent instead</span>}
             >
               <button
                 type="button"
                 onClick={props.onInstallAgent}
                 class="font-medium underline underline-offset-2 hover:text-amber-950 dark:hover:text-amber-50"
               >
-                install the Unified Agent instead
+                install Pulse Agent instead
               </button>
             </Show>
             .

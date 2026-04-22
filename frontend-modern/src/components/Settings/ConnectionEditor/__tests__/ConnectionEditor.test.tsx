@@ -34,7 +34,7 @@ describe('ConnectionEditor', () => {
     };
     mockedProbe.mockResolvedValueOnce(response);
 
-    const renderSlot = vi.fn(({ type }) => <div data-testid="slot">slot:{type}</div>);
+    const renderSlot = vi.fn((props) => <div data-testid="slot">slot:{props.type}</div>);
 
     render(() => <ConnectionEditor renderCredentialSlot={renderSlot} onClose={() => {}} />);
 
@@ -46,8 +46,8 @@ describe('ConnectionEditor', () => {
 
     await waitFor(() => expect(mockedProbe).toHaveBeenCalledWith('pve.lab'));
 
-    const candidateLabel = await screen.findAllByText('Proxmox VE');
-    const candidateButton = candidateLabel[0].closest('button');
+    const candidateHost = await screen.findByText('https://pve.lab:8006');
+    const candidateButton = candidateHost.closest('button');
     expect(candidateButton).not.toBeNull();
     fireEvent.click(candidateButton!);
 
@@ -62,7 +62,7 @@ describe('ConnectionEditor', () => {
   it('lets the user pick a product tile when probe returns no match', async () => {
     mockedProbe.mockResolvedValueOnce({ candidates: [], probedMs: 203 });
 
-    const renderSlot = vi.fn(({ type }) => <div data-testid="slot">slot:{type}</div>);
+    const renderSlot = vi.fn((props) => <div data-testid="slot">slot:{props.type}</div>);
 
     render(() => <ConnectionEditor renderCredentialSlot={renderSlot} onClose={() => {}} />);
 
@@ -72,7 +72,7 @@ describe('ConnectionEditor', () => {
     fireEvent.click(screen.getByRole('button', { name: /probe address/i }));
     await waitFor(() => expect(mockedProbe).toHaveBeenCalled());
 
-    await screen.findByText(/no supported product detected/i);
+    await screen.findByText(/no supported api-backed platform detected/i);
 
     // The catalog grid is always visible below the probe, so the user picks a
     // tile directly — no intermediate "enter credentials manually" toggle.
@@ -87,10 +87,10 @@ describe('ConnectionEditor', () => {
   it('renders a platform-first catalog with the host-install path beneath it', () => {
     render(() => <ConnectionEditor renderCredentialSlot={() => <div />} onClose={() => {}} />);
 
-    const platformHeading = screen.getByText('Connect a platform');
+    const platformHeading = screen.getAllByText('Connect a supported platform')[0];
     const agentButton = screen.getByRole('button', { name: /Install Pulse Agent/i });
     const probeButton = screen.getByRole('button', { name: /probe address/i });
-    const vmwareButton = screen.getByRole('button', { name: /VMware vCenter \/ ESXi/i });
+    const vmwareButton = screen.getByRole('button', { name: /VMware vCenter/i });
     const trueNASButton = screen.getByRole('button', { name: /TrueNAS SCALE/i });
     const proxmoxButton = screen.getByRole('button', { name: /^Proxmox\b/i });
 
@@ -106,12 +106,14 @@ describe('ConnectionEditor', () => {
     expectNodeBefore(vmwareButton, trueNASButton);
     expectNodeBefore(trueNASButton, proxmoxButton);
     expectNodeBefore(proxmoxButton, agentButton);
-    expect(screen.queryByText('Proxmox VE')).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Proxmox VE/i })).toBeNull();
     expect(screen.queryByText('Recommended')).toBeNull();
+    expect(screen.getAllByText('Current admission path').length).toBeGreaterThan(0);
+    expect(screen.getByText('What happens next')).toBeInTheDocument();
   });
 
   it('groups Proxmox products under one family step before entering credentials', async () => {
-    const renderSlot = vi.fn(({ type }) => <div data-testid="slot">slot:{type}</div>);
+    const renderSlot = vi.fn((props) => <div data-testid="slot">slot:{props.type}</div>);
 
     render(() => <ConnectionEditor renderCredentialSlot={renderSlot} onClose={() => {}} />);
 
@@ -144,7 +146,7 @@ describe('ConnectionEditor', () => {
   it('offers the agent path contextually when a probe returns no match', async () => {
     mockedProbe.mockResolvedValueOnce({ candidates: [], probedMs: 180 });
 
-    const renderSlot = vi.fn(({ type }) => <div data-testid="slot">slot:{type}</div>);
+    const renderSlot = vi.fn((props) => <div data-testid="slot">slot:{props.type}</div>);
 
     render(() => <ConnectionEditor renderCredentialSlot={renderSlot} onClose={() => {}} />);
 
@@ -157,7 +159,7 @@ describe('ConnectionEditor', () => {
     // the agent as a first-class alternative, so a user who probed the wrong
     // thing isn't left in a Platform-API-only dead end.
     const agentButton = await screen.findByRole('button', {
-      name: /install the unified agent instead/i,
+      name: /install pulse agent instead/i,
     });
     fireEvent.click(agentButton);
 
@@ -168,7 +170,7 @@ describe('ConnectionEditor', () => {
   });
 
   it('skips the probe step when an initialType is supplied (edit mode)', () => {
-    const renderSlot = vi.fn(({ type }) => <div data-testid="slot">slot:{type}</div>);
+    const renderSlot = vi.fn((props) => <div data-testid="slot">slot:{props.type}</div>);
 
     render(() => (
       <ConnectionEditor
@@ -201,7 +203,7 @@ describe('ConnectionEditor', () => {
   it('resets probe state when returning to the catalog from a credential slot', async () => {
     mockedProbe.mockResolvedValueOnce({ candidates: [], probedMs: 203 });
 
-    const renderSlot = vi.fn(({ type }) => <div data-testid="slot">slot:{type}</div>);
+    const renderSlot = vi.fn((props) => <div data-testid="slot">slot:{props.type}</div>);
 
     render(() => <ConnectionEditor renderCredentialSlot={renderSlot} onClose={() => {}} />);
 
@@ -210,7 +212,7 @@ describe('ConnectionEditor', () => {
     fireEvent.click(screen.getByRole('button', { name: /probe address/i }));
 
     await waitFor(() => expect(mockedProbe).toHaveBeenCalled());
-    await screen.findByText(/no supported product detected/i);
+    await screen.findByText(/no supported api-backed platform detected/i);
 
     fireEvent.click(screen.getByRole('button', { name: /TrueNAS SCALE/i }));
     await waitFor(() => expect(screen.getByTestId('slot').textContent).toBe('slot:truenas'));
@@ -219,7 +221,7 @@ describe('ConnectionEditor', () => {
 
     const resetInput = screen.getByPlaceholderText(/vcenter\.lab/) as HTMLInputElement;
     expect(resetInput.value).toBe('');
-    expect(screen.queryByText(/no supported product detected/i)).toBeNull();
+    expect(screen.queryByText(/no supported api-backed platform detected/i)).toBeNull();
     expect(screen.queryByTestId('slot')).toBeNull();
   });
 });
