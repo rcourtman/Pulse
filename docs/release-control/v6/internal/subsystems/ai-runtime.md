@@ -246,6 +246,14 @@ context accumulation, and org-switch clearing for the assistant drawer, while
 settings and model catalog reads. AI runtime consumers must not move drawer
 shell state into page-local signals or teach `aiChat.ts` to bootstrap its own
 `/api/settings/ai` or `/api/ai/models` reads.
+That same drawer boundary owns responsive presentation too. The canonical
+assistant drawer may dock and push the authenticated shell only when the
+viewport is wide enough to preserve a usable primary operating surface; once
+the available viewport drops below that shell threshold, the drawer must
+become an overlay owned by `frontend-modern/src/components/AI/Chat/index.tsx`
+instead of compressing Infrastructure, Dashboard, Storage, or other primary
+runtime pages into an unusable narrow column or forking page-local layout
+exceptions.
 Non-AI shell notices may coexist in `frontend-modern/src/AppLayout.tsx`, but
 they must remain presentation-only. Prerelease banners, billing callouts, or
 other header-adjacent notices must not fork assistant open state, gate on AI

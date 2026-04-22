@@ -258,6 +258,14 @@ regression protection.
     summary recomputation, or page-level layout churn that displaces the
     protected overview widgets.
 32. Keep infrastructure summary consumers on the compact dashboard overview rather than reopening the all-resources hook. `frontend-modern/src/hooks/useDashboardTrends.ts`, `frontend-modern/src/components/Infrastructure/useInfrastructureSummaryState.ts`, and adjacent dashboard summary consumers may derive chart identity and storage presence from the overview payload they were already given, but they must not call `useResources()` or mount a second unfiltered unified-resource fetch path inside the dashboard hot path. That rule also applies to globally mounted helpers such as `frontend-modern/src/components/AI/Chat/index.tsx`: closed assistant surfaces must read the live websocket snapshot or existing unified-resource cache rather than forcing the dashboard to pay for `all-resources` just because the shell component is mounted. When that assistant shell changes presentation, `frontend-modern/src/utils/aiChatPresentation.ts` must remain the canonical owner for launcher, drawer, session-menu, and empty-state copy so hot-path consumers do not grow one-off inline strings or extra state branches alongside the mounted shell. Blocking shared dialogs must also suppress closed assistant affordances through the shared dialog runtime instead of leaving the mounted shell clickable behind another overlay.
+    That same mounted-shell hot path must protect usable width on constrained
+    viewports. When the shared assistant drawer opens inside
+    `frontend-modern/src/components/AI/Chat/index.tsx`, it may not shrink the
+    infrastructure or dashboard operating surface below a workable narrow-width
+    floor just because the assistant stays mounted in the app shell; below the
+    canonical dock threshold, the assistant must switch to an overlay drawer so
+    table filters, grouped rows, and other hot-path controls keep their
+    existing layout budget instead of paying a second collapse cost.
 33. Keep hidden workload-route selector shells off the hot path. When the
     workloads route keeps `frontend-modern/src/components/shared/InfrastructureSelector.tsx`
     mounted only for layout parity, `frontend-modern/src/components/shared/useInfrastructureSelectorState.ts`

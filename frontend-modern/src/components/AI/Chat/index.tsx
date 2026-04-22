@@ -57,6 +57,7 @@ import {
   getPreferredResourceDisplayName,
   getPreferredResourceHostname,
 } from '@/utils/resourceIdentity';
+import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { useChat } from './hooks/useChat';
 import { ChatMessages } from './ChatMessages';
 import { ModelSelector } from './ModelSelector';
@@ -66,6 +67,7 @@ import { formatIdentifierLabel } from '@/utils/textPresentation';
 
 const MODEL_SESSION_STORAGE_KEY = 'pulse:ai_chat_models_by_session';
 const DEFAULT_SESSION_KEY = '__default__';
+const AI_CHAT_MIN_DOCKED_VIEWPORT_WIDTH = 1200;
 
 interface AIChatProps {
   onClose: () => void;
@@ -80,6 +82,7 @@ interface AIChatProps {
 export const AIChat: Component<AIChatProps> = (props) => {
   // UI state - use store's isOpenSignal for reactivity
   const isOpen = aiChatStore.isOpenSignal;
+  const { width } = useBreakpoint();
   const [input, setInput] = createSignal('');
   const [sessions, setSessions] = createSignal<ChatSession[]>([]);
   const [showSessions, setShowSessions] = createSignal(false);
@@ -181,6 +184,22 @@ export const AIChat: Component<AIChatProps> = (props) => {
   });
 
   const controlPresentation = createMemo(() => getAIChatControlLevelPresentation(controlLevel()));
+  const isOverlayLayout = createMemo(() => width() < AI_CHAT_MIN_DOCKED_VIEWPORT_WIDTH);
+  const rootClassName = createMemo(() => {
+    if (isOverlayLayout()) {
+      return `fixed inset-y-0 right-0 z-50 flex h-full w-full flex-col bg-surface transition-transform duration-300 sm:w-[480px] sm:max-w-[calc(100vw-1rem)] ${
+        isOpen()
+          ? 'translate-x-0 overflow-visible border-l border-border shadow-2xl'
+          : 'translate-x-full overflow-hidden border-l-0'
+      }`;
+    }
+
+    return `relative flex h-full flex-shrink-0 flex-col bg-surface transition-all duration-300 ${
+      isOpen()
+        ? 'w-full overflow-visible border-l border-border sm:w-[480px]'
+        : 'w-0 overflow-hidden border-l-0'
+    }`;
+  });
 
   const loadModels = async (notify = false) => {
     if (notify) {
@@ -449,7 +468,9 @@ export const AIChat: Component<AIChatProps> = (props) => {
       return resource.id;
     };
 
-    const parseLegacyVmid = (platformData: Record<string, unknown> | undefined): number | undefined => {
+    const parseLegacyVmid = (
+      platformData: Record<string, unknown> | undefined,
+    ): number | undefined => {
       const vmidRaw = platformData?.vmid;
       if (typeof vmidRaw === 'number' && Number.isFinite(vmidRaw) && vmidRaw > 0) return vmidRaw;
       if (typeof vmidRaw === 'string') {
@@ -818,289 +839,338 @@ export const AIChat: Component<AIChatProps> = (props) => {
   };
 
   return (
-    <div
-      class={`relative flex-shrink-0 h-full bg-surface border-l border-border flex flex-col transition-all duration-300 ${
-        isOpen() ? 'w-full sm:w-[480px] overflow-visible' : 'w-0 border-l-0 overflow-hidden'
-      }`}
-    >
-      <Show when={isOpen()}>
-        {/* Floating Close Handle (Desktop only) */}
+    <>
+      <Show when={isOpen() && isOverlayLayout()}>
         <button
+          type="button"
+          class="fixed inset-0 z-40 bg-slate-950/45 backdrop-blur-[1px]"
           onClick={props.onClose}
-          class="hidden sm:flex absolute left-0 top-1/2 -translate-x-full -translate-y-1/2 items-center justify-center w-8 py-3 rounded-l-xl bg-surface text-blue-600 dark:text-blue-400 shadow-sm border border-r-0 border-border hover:bg-surface-hover transition-colors z-50 cursor-pointer"
-          title={AI_CHAT_COLLAPSE_TITLE}
-        >
-          <svg
-            class="h-5 w-5 flex-shrink-0"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-            stroke-width="1.5"
-          >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 001.423 1.423l1.183.394-1.183.394a2.25 2.25 0 00-1.423 1.423z"
-            />
-          </svg>
-        </button>
-        {/* Header - wraps on mobile */}
-        <div class="flex flex-wrap items-center justify-between gap-2 px-4 py-3 border-b border-border bg-surface-alt">
-          <div class="flex items-center gap-3">
-            <div class="p-2 border border-border bg-surface rounded-md shadow-sm">
+          aria-label="Close Pulse Assistant"
+        />
+      </Show>
+      <div class={rootClassName()} data-layout-mode={isOverlayLayout() ? 'overlay' : 'docked'}>
+        <Show when={isOpen()}>
+          {/* Floating Close Handle (Desktop docked layout only) */}
+          <Show when={!isOverlayLayout()}>
+            <button
+              onClick={props.onClose}
+              class="hidden sm:flex absolute left-0 top-1/2 -translate-x-full -translate-y-1/2 items-center justify-center w-8 py-3 rounded-l-xl bg-surface text-blue-600 dark:text-blue-400 shadow-sm border border-r-0 border-border hover:bg-surface-hover transition-colors z-50 cursor-pointer"
+              title={AI_CHAT_COLLAPSE_TITLE}
+            >
               <svg
-                class="w-5 h-5 text-slate-500"
+                class="h-5 w-5 flex-shrink-0"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
+                stroke-width="1.5"
               >
                 <path
                   stroke-linecap="round"
                   stroke-linejoin="round"
-                  stroke-width="1.5"
                   d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 001.423 1.423l1.183.394-1.183.394a2.25 2.25 0 00-1.423 1.423z"
                 />
               </svg>
-            </div>
-            <div>
-              <h2 class="text-sm font-semibold text-base-content">{AI_CHAT_DRAWER_TITLE}</h2>
-              <p class="text-[11px] text-muted">{AI_CHAT_DRAWER_SUBTITLE}</p>
-            </div>
-          </div>
-
-          <div class="flex items-center gap-1.5">
-            {/* New chat */}
-            <button
-              onClick={handleNewConversation}
-              class="flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] text-muted hover:text-base-content rounded-md border border-border hover:border-border bg-surface transition-colors"
-              title={AI_CHAT_NEW_SESSION_BUTTON_TITLE}
-            >
-              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M12 4v16m8-8H4"
-                />
-              </svg>
-              <span class="font-medium">{AI_CHAT_NEW_SESSION_SHORT_LABEL}</span>
             </button>
+          </Show>
+          {/* Header - wraps on mobile */}
+          <div class="flex flex-wrap items-center justify-between gap-2 px-4 py-3 border-b border-border bg-surface-alt">
+            <div class="flex items-center gap-3">
+              <div class="p-2 border border-border bg-surface rounded-md shadow-sm">
+                <svg
+                  class="w-5 h-5 text-slate-500"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="1.5"
+                    d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 001.423 1.423l1.183.394-1.183.394a2.25 2.25 0 00-1.423 1.423z"
+                  />
+                </svg>
+              </div>
+              <div>
+                <h2 class="text-sm font-semibold text-base-content">{AI_CHAT_DRAWER_TITLE}</h2>
+                <p class="text-[11px] text-muted">{AI_CHAT_DRAWER_SUBTITLE}</p>
+              </div>
+            </div>
 
-            {/* Model selector */}
-            <ModelSelector
-              models={aiRuntimeModels()}
-              selectedModel={chat.model()}
-              defaultModelLabel={defaultModelLabel()}
-              chatOverrideModel={chatOverrideModel()}
-              chatOverrideLabel={chatOverrideLabel()}
-              isLoading={aiRuntimeModelsLoading()}
-              error={aiRuntimeModelsError()}
-              onModelSelect={selectModel}
-              onRefresh={() => loadModels(true)}
-            />
-
-            {/* Control mode toggle */}
-            <div class="relative" data-dropdown>
+            <div class="flex items-center gap-1.5">
+              {/* New chat */}
               <button
-                onClick={() => setShowControlMenu(!showControlMenu())}
-                class={`flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-medium rounded-md border transition-colors ${controlPresentation().pillClassName} ${controlSaving() ? 'opacity-70 cursor-wait' : 'hover:opacity-90'}`}
-                title="Control mode"
-                disabled={controlSaving()}
+                onClick={handleNewConversation}
+                class="flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] text-muted hover:text-base-content rounded-md border border-border hover:border-border bg-surface transition-colors"
+                title={AI_CHAT_NEW_SESSION_BUTTON_TITLE}
               >
-                <span
-                  class={`h-1.5 w-1.5 rounded-full ${controlPresentation().dotClassName}`}
-                />
-                <span>{controlPresentation().label}</span>
                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path
                     stroke-linecap="round"
                     stroke-linejoin="round"
                     stroke-width="2"
-                    d="M19 9l-7 7-7-7"
+                    d="M12 4v16m8-8H4"
                   />
                 </svg>
+                <span class="font-medium">{AI_CHAT_NEW_SESSION_SHORT_LABEL}</span>
               </button>
 
-              <Show when={showControlMenu()}>
-                <div class="absolute right-0 mt-2 w-60 rounded-md border border-border bg-surface shadow-sm z-50 overflow-hidden">
-                  <div class="px-3 py-2 text-[11px] text-muted border-b border-border">
-                    Control mode for this chat
-                  </div>
-                  <button
-                    class={`w-full text-left px-3 py-2.5 text-xs hover:bg-surface-hover transition-colors ${controlLevel() === 'read_only' ? getAIChatControlLevelPresentation('read_only').selectedClassName : ''}`}
-                    onClick={() => updateControlLevel('read_only')}
-                  >
-                    <div class="font-medium text-base-content">
-                      {getAIChatControlLevelPresentation('read_only').label}
-                    </div>
-                    <div class="text-[11px] text-muted">
-                      {getAIChatControlLevelPresentation('read_only').description}
-                    </div>
-                  </button>
-                  <button
-                    class={`w-full text-left px-3 py-2.5 text-xs hover:bg-surface-hover transition-colors ${controlLevel() === 'controlled' ? getAIChatControlLevelPresentation('controlled').selectedClassName : ''}`}
-                    onClick={() => updateControlLevel('controlled')}
-                  >
-                    <div class="font-medium text-base-content">
-                      {getAIChatControlLevelPresentation('controlled').label}
-                    </div>
-                    <div class="text-[11px] text-muted">
-                      {getAIChatControlLevelPresentation('controlled').description}
-                    </div>
-                  </button>
-                  <button
-                    class={`w-full text-left px-3 py-2.5 text-xs hover:bg-surface-hover transition-colors ${controlLevel() === 'autonomous' ? getAIChatControlLevelPresentation('autonomous').selectedClassName : ''}`}
-                    onClick={() => updateControlLevel('autonomous')}
-                  >
-                    <div class="font-medium text-base-content">
-                      {getAIChatControlLevelPresentation('autonomous').label}
-                    </div>
-                    <div class="text-[11px] text-muted">
-                      {getAIChatControlLevelPresentation('autonomous').description}
-                    </div>
-                  </button>
-                </div>
-              </Show>
-            </div>
+              {/* Model selector */}
+              <ModelSelector
+                models={aiRuntimeModels()}
+                selectedModel={chat.model()}
+                defaultModelLabel={defaultModelLabel()}
+                chatOverrideModel={chatOverrideModel()}
+                chatOverrideLabel={chatOverrideLabel()}
+                isLoading={aiRuntimeModelsLoading()}
+                error={aiRuntimeModelsError()}
+                onModelSelect={selectModel}
+                onRefresh={() => loadModels(true)}
+              />
 
-            {/* Session picker */}
-            <div class="relative" data-dropdown>
+              {/* Control mode toggle */}
+              <div class="relative" data-dropdown>
+                <button
+                  onClick={() => setShowControlMenu(!showControlMenu())}
+                  class={`flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-medium rounded-md border transition-colors ${controlPresentation().pillClassName} ${controlSaving() ? 'opacity-70 cursor-wait' : 'hover:opacity-90'}`}
+                  title="Control mode"
+                  disabled={controlSaving()}
+                >
+                  <span class={`h-1.5 w-1.5 rounded-full ${controlPresentation().dotClassName}`} />
+                  <span>{controlPresentation().label}</span>
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M19 9l-7 7-7-7"
+                    />
+                  </svg>
+                </button>
+
+                <Show when={showControlMenu()}>
+                  <div class="absolute right-0 mt-2 w-60 rounded-md border border-border bg-surface shadow-sm z-50 overflow-hidden">
+                    <div class="px-3 py-2 text-[11px] text-muted border-b border-border">
+                      Control mode for this chat
+                    </div>
+                    <button
+                      class={`w-full text-left px-3 py-2.5 text-xs hover:bg-surface-hover transition-colors ${controlLevel() === 'read_only' ? getAIChatControlLevelPresentation('read_only').selectedClassName : ''}`}
+                      onClick={() => updateControlLevel('read_only')}
+                    >
+                      <div class="font-medium text-base-content">
+                        {getAIChatControlLevelPresentation('read_only').label}
+                      </div>
+                      <div class="text-[11px] text-muted">
+                        {getAIChatControlLevelPresentation('read_only').description}
+                      </div>
+                    </button>
+                    <button
+                      class={`w-full text-left px-3 py-2.5 text-xs hover:bg-surface-hover transition-colors ${controlLevel() === 'controlled' ? getAIChatControlLevelPresentation('controlled').selectedClassName : ''}`}
+                      onClick={() => updateControlLevel('controlled')}
+                    >
+                      <div class="font-medium text-base-content">
+                        {getAIChatControlLevelPresentation('controlled').label}
+                      </div>
+                      <div class="text-[11px] text-muted">
+                        {getAIChatControlLevelPresentation('controlled').description}
+                      </div>
+                    </button>
+                    <button
+                      class={`w-full text-left px-3 py-2.5 text-xs hover:bg-surface-hover transition-colors ${controlLevel() === 'autonomous' ? getAIChatControlLevelPresentation('autonomous').selectedClassName : ''}`}
+                      onClick={() => updateControlLevel('autonomous')}
+                    >
+                      <div class="font-medium text-base-content">
+                        {getAIChatControlLevelPresentation('autonomous').label}
+                      </div>
+                      <div class="text-[11px] text-muted">
+                        {getAIChatControlLevelPresentation('autonomous').description}
+                      </div>
+                    </button>
+                  </div>
+                </Show>
+              </div>
+
+              {/* Session picker */}
+              <div class="relative" data-dropdown>
+                <button
+                  ref={sessionButtonRef}
+                  onClick={() => {
+                    const next = !showSessions();
+                    if (next && sessionButtonRef) {
+                      const rect = sessionButtonRef.getBoundingClientRect();
+                      setSessionDropdownPosition({
+                        top: rect.bottom + 4,
+                        right: window.innerWidth - rect.right,
+                      });
+                    }
+                    setShowSessions(next);
+                  }}
+                  class="p-2 hover:text-base-content rounded-md hover:bg-surface-hover transition-colors"
+                  title={AI_CHAT_SESSION_MENU_TITLE}
+                >
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
+                    />
+                  </svg>
+                </button>
+
+                <Show when={showSessions()}>
+                  <div
+                    class="fixed w-72 max-h-96 bg-surface rounded-md shadow-sm border border-border z-[9999] overflow-hidden"
+                    style={{
+                      top: `${sessionDropdownPosition().top}px`,
+                      right: `${sessionDropdownPosition().right}px`,
+                    }}
+                  >
+                    <button
+                      onClick={handleNewConversation}
+                      class="w-full px-3 py-2.5 text-left text-sm flex items-center gap-2 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900 border-b border-border"
+                    >
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          stroke-width="2"
+                          d="M12 4v16m8-8H4"
+                        />
+                      </svg>
+                      <span class="font-medium">{AI_CHAT_NEW_SESSION_MENU_LABEL}</span>
+                    </button>
+
+                    <div class="max-h-64 overflow-y-auto">
+                      <Show
+                        when={sessions().length > 0}
+                        fallback={
+                          <div class="px-3 py-6 text-center text-xs text-muted">
+                            {AI_CHAT_SESSION_EMPTY_STATE}
+                          </div>
+                        }
+                      >
+                        <For each={sessions()}>
+                          {(session) => (
+                            <div
+                              class={`group relative px-3 py-2.5 flex items-start gap-2 hover:bg-surface-hover cursor-pointer ${chat.sessionId() === session.id ? 'bg-blue-50 dark:bg-blue-900' : ''}`}
+                              onClick={() => handleLoadSession(session.id)}
+                            >
+                              <div class="flex-1 min-w-0">
+                                <div class="text-sm font-medium truncate text-base-content">
+                                  {session.title || 'Untitled'}
+                                </div>
+                                <div class="text-xs text-muted">
+                                  {session.message_count} messages
+                                </div>
+                              </div>
+                              <button
+                                type="button"
+                                class="flex-shrink-0 p-1 rounded opacity-0 group-hover:opacity-100 hover:bg-red-100 dark:hover:bg-red-900 hover:text-red-500 transition-opacity"
+                                onClick={(e) => handleDeleteSession(session.id, e)}
+                              >
+                                <svg
+                                  class="w-3.5 h-3.5"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  viewBox="0 0 24 24"
+                                >
+                                  <path
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                    stroke-width="2"
+                                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                                  />
+                                </svg>
+                              </button>
+                            </div>
+                          )}
+                        </For>
+                      </Show>
+                    </div>
+                  </div>
+                </Show>
+              </div>
+
+              {/* Close button (Always visible as fallback) */}
               <button
-                ref={sessionButtonRef}
-                onClick={() => {
-                  const next = !showSessions();
-                  if (next && sessionButtonRef) {
-                    const rect = sessionButtonRef.getBoundingClientRect();
-                    setSessionDropdownPosition({
-                      top: rect.bottom + 4,
-                      right: window.innerWidth - rect.right,
-                    });
-                  }
-                  setShowSessions(next);
+                onClick={(e) => {
+                  e.stopPropagation();
+                  props.onClose();
                 }}
                 class="p-2 hover:text-base-content rounded-md hover:bg-surface-hover transition-colors"
-                title={AI_CHAT_SESSION_MENU_TITLE}
+                title="Close panel"
               >
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path
                     stroke-linecap="round"
                     stroke-linejoin="round"
                     stroke-width="2"
-                    d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
+                    d="M6 18L18 6M6 6l12 12"
                   />
                 </svg>
               </button>
-
-              <Show when={showSessions()}>
-                <div
-                  class="fixed w-72 max-h-96 bg-surface rounded-md shadow-sm border border-border z-[9999] overflow-hidden"
-                  style={{
-                    top: `${sessionDropdownPosition().top}px`,
-                    right: `${sessionDropdownPosition().right}px`,
-                  }}
-                >
-                  <button
-                    onClick={handleNewConversation}
-                    class="w-full px-3 py-2.5 text-left text-sm flex items-center gap-2 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900 border-b border-border"
-                  >
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        stroke-width="2"
-                        d="M12 4v16m8-8H4"
-                      />
-                    </svg>
-                    <span class="font-medium">{AI_CHAT_NEW_SESSION_MENU_LABEL}</span>
-                  </button>
-
-                  <div class="max-h-64 overflow-y-auto">
-                    <Show
-                      when={sessions().length > 0}
-                      fallback={
-                        <div class="px-3 py-6 text-center text-xs text-muted">
-                          {AI_CHAT_SESSION_EMPTY_STATE}
-                        </div>
-                      }
-                    >
-                      <For each={sessions()}>
-                        {(session) => (
-                          <div
-                            class={`group relative px-3 py-2.5 flex items-start gap-2 hover:bg-surface-hover cursor-pointer ${chat.sessionId() === session.id ? 'bg-blue-50 dark:bg-blue-900' : ''}`}
-                            onClick={() => handleLoadSession(session.id)}
-                          >
-                            <div class="flex-1 min-w-0">
-                              <div class="text-sm font-medium truncate text-base-content">
-                                {session.title || 'Untitled'}
-                              </div>
-                              <div class="text-xs text-muted">{session.message_count} messages</div>
-                            </div>
-                            <button
-                              type="button"
-                              class="flex-shrink-0 p-1 rounded opacity-0 group-hover:opacity-100 hover:bg-red-100 dark:hover:bg-red-900 hover:text-red-500 transition-opacity"
-                              onClick={(e) => handleDeleteSession(session.id, e)}
-                            >
-                              <svg
-                                class="w-3.5 h-3.5"
-                                fill="none"
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                              >
-                                <path
-                                  stroke-linecap="round"
-                                  stroke-linejoin="round"
-                                  stroke-width="2"
-                                  d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                                />
-                              </svg>
-                            </button>
-                          </div>
-                        )}
-                      </For>
-                    </Show>
-                  </div>
-                </div>
-              </Show>
             </div>
-
-            {/* Close button (Always visible as fallback) */}
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                props.onClose();
-              }}
-              class="p-2 hover:text-base-content rounded-md hover:bg-surface-hover transition-colors"
-              title="Close panel"
-            >
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M6 18L18 6M6 6l12 12"
-                />
-              </svg>
-            </button>
           </div>
-        </div>
 
-        <Show when={controlLevel() === 'autonomous' && !autonomousBannerDismissed()}>
-          <div class="px-4 py-2 border-b border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900 flex items-center justify-between gap-3 text-[11px] text-red-700 dark:text-red-200">
-            <div class="flex items-center gap-2">
-              <span class="inline-flex h-2 w-2 rounded-full bg-red-500" />
-              <span class="font-medium">Autonomous mode</span>
-              <span class="text-red-600 dark:text-red-300">Commands execute without approval.</span>
+          <Show when={controlLevel() === 'autonomous' && !autonomousBannerDismissed()}>
+            <div class="px-4 py-2 border-b border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900 flex items-center justify-between gap-3 text-[11px] text-red-700 dark:text-red-200">
+              <div class="flex items-center gap-2">
+                <span class="inline-flex h-2 w-2 rounded-full bg-red-500" />
+                <span class="font-medium">Autonomous mode</span>
+                <span class="text-red-600 dark:text-red-300">
+                  Commands execute without approval.
+                </span>
+              </div>
+              <div class="flex items-center gap-2">
+                <button
+                  onClick={() => updateControlLevel('controlled')}
+                  class="px-2 py-1 rounded-md border border-red-200 dark:border-red-800 bg-surface dark:bg-red-900 text-[10px] font-medium text-red-700 dark:text-red-200 hover:bg-red-100 dark:hover:bg-red-900"
+                >
+                  Switch to Approval
+                </button>
+                <button
+                  onClick={() => setAutonomousBannerDismissed(true)}
+                  class="p-1 rounded-md text-red-400 hover:text-red-600 dark:hover:text-red-200 hover:bg-red-100 dark:hover:bg-red-900 transition-colors"
+                  title="Dismiss"
+                >
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M6 18L18 6M6 6l12 12"
+                    />
+                  </svg>
+                </button>
+              </div>
             </div>
-            <div class="flex items-center gap-2">
+          </Show>
+
+          {/* Discovery hint - show when discovery is disabled */}
+          <Show when={discoveryEnabled() === false && !discoveryHintDismissed()}>
+            <div class="px-4 py-2 border-b border-cyan-200 dark:border-cyan-800 bg-cyan-50 dark:bg-cyan-900 flex items-center justify-between gap-3 text-[11px] text-cyan-700 dark:text-cyan-200">
+              <div class="flex items-center gap-2">
+                <svg
+                  class="w-4 h-4 text-cyan-500 dark:text-cyan-400 flex-shrink-0"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
+                </svg>
+                <span>
+                  <span class="font-medium">{AI_CHAT_DISCOVERY_HINT_TITLE}</span>{' '}
+                  {AI_CHAT_DISCOVERY_HINT_BODY}
+                </span>
+              </div>
               <button
-                onClick={() => updateControlLevel('controlled')}
-                class="px-2 py-1 rounded-md border border-red-200 dark:border-red-800 bg-surface dark:bg-red-900 text-[10px] font-medium text-red-700 dark:text-red-200 hover:bg-red-100 dark:hover:bg-red-900"
-              >
-                Switch to Approval
-              </button>
-              <button
-                onClick={() => setAutonomousBannerDismissed(true)}
-                class="p-1 rounded-md text-red-400 hover:text-red-600 dark:hover:text-red-200 hover:bg-red-100 dark:hover:bg-red-900 transition-colors"
+                onClick={() => setDiscoveryHintDismissed(true)}
+                class="p-1 rounded hover:bg-cyan-100 dark:hover:bg-cyan-800 text-cyan-500 dark:text-cyan-400"
                 title="Dismiss"
               >
                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1113,226 +1183,187 @@ export const AIChat: Component<AIChatProps> = (props) => {
                 </svg>
               </button>
             </div>
-          </div>
-        </Show>
+          </Show>
 
-        {/* Discovery hint - show when discovery is disabled */}
-        <Show when={discoveryEnabled() === false && !discoveryHintDismissed()}>
-          <div class="px-4 py-2 border-b border-cyan-200 dark:border-cyan-800 bg-cyan-50 dark:bg-cyan-900 flex items-center justify-between gap-3 text-[11px] text-cyan-700 dark:text-cyan-200">
-            <div class="flex items-center gap-2">
-              <svg
-                class="w-4 h-4 text-cyan-500 dark:text-cyan-400 flex-shrink-0"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                />
-              </svg>
-              <span>
-                <span class="font-medium">{AI_CHAT_DISCOVERY_HINT_TITLE}</span>{' '}
-                {AI_CHAT_DISCOVERY_HINT_BODY}
-              </span>
-            </div>
-            <button
-              onClick={() => setDiscoveryHintDismissed(true)}
-              class="p-1 rounded hover:bg-cyan-100 dark:hover:bg-cyan-800 text-cyan-500 dark:text-cyan-400"
-              title="Dismiss"
-            >
-              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M6 18L18 6M6 6l12 12"
-                />
-              </svg>
-            </button>
-          </div>
-        </Show>
-
-        {/* Messages */}
-        <ChatMessages
-          messages={chat.messages()}
-          onApprove={handleApprove}
-          onSkip={handleSkip}
-          onAnswerQuestion={handleAnswerQuestion}
-          onSkipQuestion={handleSkipQuestion}
-          recentSessions={sessions()
-            .filter((s) => s.id !== chat.sessionId() && s.message_count > 0)
-            .slice(0, 3)}
-          onLoadSession={handleLoadSession}
-          emptyState={{
-            title: AI_CHAT_EMPTY_STATE_TITLE,
-            subtitle: AI_CHAT_EMPTY_STATE_SUBTITLE,
-            suggestions: getAIChatEmptyStateSuggestions(isCluster()),
-            onSuggestionClick: (s) => setInput(s),
-          }}
-        />
-
-        {/* Status indicator bar */}
-        <Show when={currentStatus()}>
-          <div class="px-4 py-2 bg-surface-alt border-t border-border flex items-center gap-2.5 text-xs">
-            {/* Status icon based on type */}
-            <Show when={currentStatus()?.type === 'thinking'}>
-              <div class="flex items-center justify-center w-4 h-4">
-                <svg
-                  class="w-3.5 h-3.5 text-blue-500 dark:text-blue-400 animate-pulse"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"
-                  />
-                </svg>
-              </div>
-            </Show>
-            <Show when={currentStatus()?.type === 'tool'}>
-              <div class="flex items-center justify-center w-4 h-4">
-                <svg
-                  class="w-3.5 h-3.5 text-blue-500 dark:text-blue-400 animate-spin"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                >
-                  <circle
-                    class="opacity-25"
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="currentColor"
-                    stroke-width="3"
-                  />
-                  <path
-                    class="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                  />
-                </svg>
-              </div>
-            </Show>
-            <Show when={currentStatus()?.type === 'generating'}>
-              <div class="flex items-center justify-center w-4 h-4">
-                <svg
-                  class="w-3.5 h-3.5 text-emerald-500 dark:text-emerald-400"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
-                  />
-                </svg>
-              </div>
-            </Show>
-
-            <span class="text-muted font-medium">{currentStatus()?.text}</span>
-
-            {/* Subtle animated dots */}
-            <div class="flex gap-0.5 ml-1">
-              <span
-                class="w-1 h-1 rounded-full bg-slate-400 animate-bounce"
-                style="animation-delay: 0ms; animation-duration: 1s"
-              />
-              <span
-                class="w-1 h-1 rounded-full bg-slate-400 animate-bounce"
-                style="animation-delay: 150ms; animation-duration: 1s"
-              />
-              <span
-                class="w-1 h-1 rounded-full bg-slate-400 animate-bounce"
-                style="animation-delay: 300ms; animation-duration: 1s"
-              />
-            </div>
-          </div>
-        </Show>
-
-        {/* Input */}
-        <div class="border-t border-border p-4 bg-surface">
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              handleSubmit();
+          {/* Messages */}
+          <ChatMessages
+            messages={chat.messages()}
+            onApprove={handleApprove}
+            onSkip={handleSkip}
+            onAnswerQuestion={handleAnswerQuestion}
+            onSkipQuestion={handleSkipQuestion}
+            recentSessions={sessions()
+              .filter((s) => s.id !== chat.sessionId() && s.message_count > 0)
+              .slice(0, 3)}
+            onLoadSession={handleLoadSession}
+            emptyState={{
+              title: AI_CHAT_EMPTY_STATE_TITLE,
+              subtitle: AI_CHAT_EMPTY_STATE_SUBTITLE,
+              suggestions: getAIChatEmptyStateSuggestions(isCluster()),
+              onSuggestionClick: (s) => setInput(s),
             }}
-            class="flex gap-2 relative"
-          >
-            <div class="flex-1 relative">
-              <textarea
-                ref={textareaRef}
-                value={input()}
-                onInput={handleInputChange}
-                onKeyDown={handleKeyDown}
-                placeholder={AI_CHAT_INPUT_PLACEHOLDER}
-                rows={2}
-                class="w-full px-4 py-3 text-sm rounded-md border border-border bg-surface text-base-content placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-              />
-              <div data-mention-autocomplete>
-                <MentionAutocomplete
-                  query={mentionQuery()}
-                  resources={mentionResources()}
-                  position={{ top: 60, left: 0 }}
-                  onSelect={handleMentionSelect}
-                  onClose={() => setMentionActive(false)}
-                  visible={mentionActive()}
-                />
-              </div>
-            </div>
-            <div class="flex gap-1.5 self-stretch">
-              <Show
-                when={!chat.isLoading()}
-                fallback={
-                  <button
-                    type="button"
-                    onClick={chat.stop}
-                    class="px-4 flex items-center justify-center border border-border hover:bg-surface-alt text-base-content rounded-md transition-colors shadow-sm"
-                    title="Stop"
+          />
+
+          {/* Status indicator bar */}
+          <Show when={currentStatus()}>
+            <div class="px-4 py-2 bg-surface-alt border-t border-border flex items-center gap-2.5 text-xs">
+              {/* Status icon based on type */}
+              <Show when={currentStatus()?.type === 'thinking'}>
+                <div class="flex items-center justify-center w-4 h-4">
+                  <svg
+                    class="w-3.5 h-3.5 text-blue-500 dark:text-blue-400 animate-pulse"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
                   >
-                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                      <rect x="6" y="6" width="12" height="12" rx="1" />
-                    </svg>
-                  </button>
-                }
-              >
-                <button
-                  type="submit"
-                  disabled={!input().trim()}
-                  class="px-4 flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white rounded-md disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
-                  title="Send"
-                >
-                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path
                       stroke-linecap="round"
                       stroke-linejoin="round"
                       stroke-width="2"
-                      d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
+                      d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"
                     />
                   </svg>
-                </button>
+                </div>
               </Show>
+              <Show when={currentStatus()?.type === 'tool'}>
+                <div class="flex items-center justify-center w-4 h-4">
+                  <svg
+                    class="w-3.5 h-3.5 text-blue-500 dark:text-blue-400 animate-spin"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                  >
+                    <circle
+                      class="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      stroke-width="3"
+                    />
+                    <path
+                      class="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                    />
+                  </svg>
+                </div>
+              </Show>
+              <Show when={currentStatus()?.type === 'generating'}>
+                <div class="flex items-center justify-center w-4 h-4">
+                  <svg
+                    class="w-3.5 h-3.5 text-emerald-500 dark:text-emerald-400"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
+                    />
+                  </svg>
+                </div>
+              </Show>
+
+              <span class="text-muted font-medium">{currentStatus()?.text}</span>
+
+              {/* Subtle animated dots */}
+              <div class="flex gap-0.5 ml-1">
+                <span
+                  class="w-1 h-1 rounded-full bg-slate-400 animate-bounce"
+                  style="animation-delay: 0ms; animation-duration: 1s"
+                />
+                <span
+                  class="w-1 h-1 rounded-full bg-slate-400 animate-bounce"
+                  style="animation-delay: 150ms; animation-duration: 1s"
+                />
+                <span
+                  class="w-1 h-1 rounded-full bg-slate-400 animate-bounce"
+                  style="animation-delay: 300ms; animation-duration: 1s"
+                />
+              </div>
             </div>
-          </form>
-          <div class="flex items-center justify-center gap-3 mt-2 text-[10px] text-muted">
-            <span>
-              <kbd class="font-sans px-1 rounded bg-surface-alt border border-border">Enter</kbd> to
-              send
-            </span>
-            <span class="text-muted">&middot;</span>
-            <span>
-              <span class="font-semibold text-muted">@</span> to mention resources
-            </span>
+          </Show>
+
+          {/* Input */}
+          <div class="border-t border-border p-4 bg-surface">
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleSubmit();
+              }}
+              class="flex gap-2 relative"
+            >
+              <div class="flex-1 relative">
+                <textarea
+                  ref={textareaRef}
+                  value={input()}
+                  onInput={handleInputChange}
+                  onKeyDown={handleKeyDown}
+                  placeholder={AI_CHAT_INPUT_PLACEHOLDER}
+                  rows={2}
+                  class="w-full px-4 py-3 text-sm rounded-md border border-border bg-surface text-base-content placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                />
+                <div data-mention-autocomplete>
+                  <MentionAutocomplete
+                    query={mentionQuery()}
+                    resources={mentionResources()}
+                    position={{ top: 60, left: 0 }}
+                    onSelect={handleMentionSelect}
+                    onClose={() => setMentionActive(false)}
+                    visible={mentionActive()}
+                  />
+                </div>
+              </div>
+              <div class="flex gap-1.5 self-stretch">
+                <Show
+                  when={!chat.isLoading()}
+                  fallback={
+                    <button
+                      type="button"
+                      onClick={chat.stop}
+                      class="px-4 flex items-center justify-center border border-border hover:bg-surface-alt text-base-content rounded-md transition-colors shadow-sm"
+                      title="Stop"
+                    >
+                      <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                        <rect x="6" y="6" width="12" height="12" rx="1" />
+                      </svg>
+                    </button>
+                  }
+                >
+                  <button
+                    type="submit"
+                    disabled={!input().trim()}
+                    class="px-4 flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white rounded-md disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
+                    title="Send"
+                  >
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
+                      />
+                    </svg>
+                  </button>
+                </Show>
+              </div>
+            </form>
+            <div class="flex items-center justify-center gap-3 mt-2 text-[10px] text-muted">
+              <span>
+                <kbd class="font-sans px-1 rounded bg-surface-alt border border-border">Enter</kbd>{' '}
+                to send
+              </span>
+              <span class="text-muted">&middot;</span>
+              <span>
+                <span class="font-semibold text-muted">@</span> to mention resources
+              </span>
+            </div>
           </div>
-        </div>
-      </Show>
-    </div>
+        </Show>
+      </div>
+    </>
   );
 };
 

@@ -202,10 +202,20 @@ function renderChat(onClose = vi.fn()) {
   return render(() => <AIChat onClose={onClose} />);
 }
 
+function setViewportWidth(width: number) {
+  Object.defineProperty(window, 'innerWidth', {
+    value: width,
+    writable: true,
+    configurable: true,
+  });
+  window.dispatchEvent(new Event('resize'));
+}
+
 // ── Setup / teardown ───────────────────────────────────────────────────────
 
 beforeEach(() => {
   vi.clearAllMocks();
+  setViewportWidth(1440);
   resetAIRuntimeState();
   mockAiChatStore.isOpenSignal.mockReturnValue(true);
   mockAiChatStore.context = { initialPrompt: undefined, findingId: undefined };
@@ -271,6 +281,26 @@ describe('AIChat', () => {
     it('renders New button', () => {
       renderChat();
       expect(screen.getByText('New')).toBeInTheDocument();
+    });
+
+    it('uses docked layout on wide viewports', () => {
+      renderChat();
+      expect(screen.getByText('Pulse Assistant').closest('[data-layout-mode]')).toHaveAttribute(
+        'data-layout-mode',
+        'docked',
+      );
+      expect(screen.getByTitle('Collapse Pulse Assistant')).toBeInTheDocument();
+    });
+
+    it('switches to overlay layout below the dock threshold', () => {
+      setViewportWidth(1024);
+      renderChat();
+      expect(screen.getByText('Pulse Assistant').closest('[data-layout-mode]')).toHaveAttribute(
+        'data-layout-mode',
+        'overlay',
+      );
+      expect(screen.queryByTitle('Collapse Pulse Assistant')).not.toBeInTheDocument();
+      expect(screen.getByLabelText('Close Pulse Assistant')).toBeInTheDocument();
     });
   });
 
@@ -615,7 +645,9 @@ describe('AIChat', () => {
         sourceType: 'truenas',
         tags: ['truenas', 'app'],
       };
-      mockByType.mockImplementation((type: string) => (type === 'app-container' ? [nextcloud] : []));
+      mockByType.mockImplementation((type: string) =>
+        type === 'app-container' ? [nextcloud] : [],
+      );
       mockResources.mockReturnValue([nextcloud]);
 
       renderChat();
@@ -724,9 +756,9 @@ describe('AIChat', () => {
       fireEvent.input(textarea, { target: { value: '@esxi' } });
 
       await waitFor(() => {
-        expect(screen.getByTestId('mention-autocomplete').getAttribute('data-resource-ids')).toContain(
-          'agent:vc-1:host:host-101',
-        );
+        expect(
+          screen.getByTestId('mention-autocomplete').getAttribute('data-resource-ids'),
+        ).toContain('agent:vc-1:host:host-101');
       });
 
       fireEvent.click(screen.getByTestId('mention-select-agent:vc-1:host:host-101'));
@@ -754,9 +786,9 @@ describe('AIChat', () => {
       fireEvent.input(textarea, { target: { value: '@app' } });
 
       await waitFor(() => {
-        expect(screen.getByTestId('mention-autocomplete').getAttribute('data-resource-ids')).toContain(
-          'vmware-vm-1',
-        );
+        expect(
+          screen.getByTestId('mention-autocomplete').getAttribute('data-resource-ids'),
+        ).toContain('vmware-vm-1');
       });
 
       fireEvent.click(screen.getByTestId('mention-select-vmware-vm-1'));
@@ -785,9 +817,9 @@ describe('AIChat', () => {
       fireEvent.input(textarea, { target: { value: '@nvme' } });
 
       await waitFor(() => {
-        expect(screen.getByTestId('mention-autocomplete').getAttribute('data-resource-ids')).toContain(
-          'vmware-datastore-1',
-        );
+        expect(
+          screen.getByTestId('mention-autocomplete').getAttribute('data-resource-ids'),
+        ).toContain('vmware-datastore-1');
       });
 
       fireEvent.click(screen.getByTestId('mention-select-vmware-datastore-1'));
