@@ -21,6 +21,7 @@ func fixedTimeForTest() time.Time {
 
 func resetTrustedProxyConfig() {
 	trustedProxyCIDRs = nil
+	trustedProxyConfigErr = nil
 	trustedProxyOnce = sync.Once{}
 }
 
@@ -73,6 +74,25 @@ func TestGetClientIPUsesXRealIPTrustedProxy(t *testing.T) {
 
 	if got := GetClientIP(req); got != "203.0.113.55" {
 		t.Fatalf("expected X-Real-IP for trusted proxy, got %q", got)
+	}
+}
+
+func TestValidateTrustedProxyCIDRsFromEnvRejectsWildcard(t *testing.T) {
+	t.Setenv("PULSE_TRUSTED_PROXY_CIDRS", "0.0.0.0/0")
+	resetTrustedProxyConfig()
+
+	err := ValidateTrustedProxyCIDRsFromEnv()
+	if err == nil || !strings.Contains(err.Error(), "wildcard trust range") {
+		t.Fatalf("expected wildcard trust range error, got %v", err)
+	}
+}
+
+func TestIsTrustedProxyIPRejectsWildcardCIDR(t *testing.T) {
+	t.Setenv("PULSE_TRUSTED_PROXY_CIDRS", "0.0.0.0/0")
+	resetTrustedProxyConfig()
+
+	if isTrustedProxyIP("203.0.113.10") {
+		t.Fatal("expected wildcard trusted proxy CIDR to fail closed")
 	}
 }
 

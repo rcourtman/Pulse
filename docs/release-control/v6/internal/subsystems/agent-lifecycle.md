@@ -784,7 +784,10 @@ That same shared `internal/api/` dependency also now assumes hosted runtime
 websocket upgrades trust the cloud proxy only through explicit tenant
 `PULSE_TRUSTED_PROXY_CIDRS` wiring, so first-session handoff and agent-facing
 live activity surfaces do not degrade into reconnect loops when a hosted
-workspace is opened through the control plane.
+workspace is opened through the control plane. That proxy-trust boundary must
+also reject wildcard trust ranges such as `0.0.0.0/0` or `::/0` at startup,
+and agent-adjacent forwarded-header reads must fail closed if invalid wildcard
+proxy trust configuration is present.
 That same shared helper layer also now assumes the Pulse Mobile relay runtime
 credential reaches only the explicit backend-owned route inventory, so
 lifecycle-adjacent setup and install flows cannot accidentally widen the

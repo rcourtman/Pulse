@@ -63,6 +63,23 @@ func newTokenRecord(t *testing.T, raw string, scopes []string, metadata map[stri
 	return *record
 }
 
+func TestSecurityRejectsWildcardTrustedProxyCIDR(t *testing.T) {
+	t.Setenv("PULSE_TRUSTED_PROXY_CIDRS", "0.0.0.0/0")
+	resetTrustedProxyConfig()
+
+	if err := ValidateTrustedProxyCIDRsFromEnv(); err == nil || !strings.Contains(err.Error(), "wildcard trust range") {
+		t.Fatalf("expected wildcard trusted proxy configuration to be rejected, got %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "http://pulse.local/api/state", nil)
+	req.RemoteAddr = "198.51.100.42:8443"
+	req.Header.Set("X-Forwarded-For", "203.0.113.10")
+
+	if got := GetClientIP(req); got != "198.51.100.42" {
+		t.Fatalf("expected forwarded headers to fail closed, got %q", got)
+	}
+}
+
 func readRegisteredPayload(t *testing.T, conn *websocket.Conn) agentexec.RegisteredPayload {
 	t.Helper()
 	_ = conn.SetReadDeadline(time.Now().Add(2 * time.Second))

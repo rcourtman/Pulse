@@ -131,6 +131,10 @@ The security transport surfaces remain intentionally shared with
 `api-contracts`: token, auth, and telemetry settings payloads are still API
 contracts, but they now also count as first-class security/privacy runtime
 behavior that `L14` must govern directly.
+That same shared auth and forwarded-header trust surface must reject wildcard
+proxy trust ranges in `PULSE_TRUSTED_PROXY_CIDRS` at startup, and runtime
+client-IP derivation must fail closed instead of trusting forwarded headers if
+an invalid wildcard proxy trust range is configured.
 That shared settings/auth boundary now also inherits the runtime-versus-
 commercial licensing split. Security/privacy settings may consume runtime
 capability truth where feature availability matters, but billing identity,

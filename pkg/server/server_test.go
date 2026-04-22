@@ -152,3 +152,20 @@ func TestServerRun_Shutdown(t *testing.T) {
 		t.Logf("Run returned: %v", err)
 	}
 }
+
+func TestServerRun_RejectsWildcardTrustedProxyCIDR(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("PULSE_DATA_DIR", tmpDir)
+	t.Setenv("PULSE_CONFIG_PATH", tmpDir)
+	t.Setenv("PULSE_TRUSTED_PROXY_CIDRS", "0.0.0.0/0")
+
+	configFile := filepath.Join(tmpDir, "config.yaml")
+	if err := os.WriteFile(configFile, []byte("bindAddress: 127.0.0.1\nfrontendPort: 0"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	err := Run(context.Background(), "test-version")
+	if err == nil || !strings.Contains(err.Error(), "wildcard trust range") {
+		t.Fatalf("expected wildcard trusted proxy configuration to be rejected, got %v", err)
+	}
+}

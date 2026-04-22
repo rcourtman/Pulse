@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/base64"
+	"fmt"
 	"net"
 	"net/http"
 	"strings"
@@ -219,51 +220,114 @@ var (
 	maxFailedAttempts = 5
 	lockoutDuration   = 15 * time.Minute
 
-	trustedProxyOnce  sync.Once
-	trustedProxyCIDRs []*net.IPNet
+	trustedProxyOnce      sync.Once
+	trustedProxyCIDRs     []*net.IPNet
+	trustedProxyConfigErr error
 )
 
 func loadTrustedProxyCIDRs() {
 	raw := utils.GetenvTrim("PULSE_TRUSTED_PROXY_CIDRS")
-	if raw == "" {
+	cidrs, err := parseTrustedProxyCIDRs(raw)
+	if err != nil {
+		trustedProxyConfigErr = err
+		log.Error().Err(err).Msg("Invalid trusted proxy configuration; refusing to trust forwarded headers")
+		trustedProxyCIDRs = nil
 		return
 	}
+	trustedProxyCIDRs = cidrs
+}
 
+// ValidateTrustedProxyCIDRsFromEnv rejects trusted-proxy wildcard trust ranges at startup.
+func ValidateTrustedProxyCIDRsFromEnv() error {
+	_, err := parseTrustedProxyCIDRs(utils.GetenvTrim("PULSE_TRUSTED_PROXY_CIDRS"))
+	return err
+}
+
+func parseTrustedProxyCIDRs(raw string) ([]*net.IPNet, error) {
+	if raw == "" {
+		return nil, nil
+	}
+
+	cidrs := make([]*net.IPNet, 0)
 	for _, entry := range strings.Split(raw, ",") {
 		entry = strings.TrimSpace(entry)
 		if entry == "" {
 			continue
 		}
 
+		var network *net.IPNet
 		if strings.Contains(entry, "/") {
-			_, network, parseErr := net.ParseCIDR(entry)
-			if parseErr == nil {
-				network.IP = network.IP.Mask(network.Mask)
-				trustedProxyCIDRs = append(trustedProxyCIDRs, network)
+			_, parsedNetwork, parseErr := net.ParseCIDR(entry)
+			if parseErr != nil {
+				log.Warn().
+					Str("cidr", entry).
+					Err(parseErr).
+					Msg("Ignoring invalid CIDR in PULSE_TRUSTED_PROXY_CIDRS")
 				continue
 			}
+			parsedNetwork.IP = parsedNetwork.IP.Mask(parsedNetwork.Mask)
+			network = parsedNetwork
+		} else {
+			ip := net.ParseIP(entry)
+			if ip == nil {
+				log.Warn().
+					Str("value", entry).
+					Msg("Ignoring invalid IP in PULSE_TRUSTED_PROXY_CIDRS")
+				continue
+			}
+
+			bits := 32
+			if ip.To4() == nil {
+				bits = 128
+			}
+			mask := net.CIDRMask(bits, bits)
+			network = &net.IPNet{IP: ip.Mask(mask), Mask: mask}
+		}
+
+		if err := validateTrustedProxyCIDR(entry, network); err != nil {
+			return nil, err
+		}
+		warnBroadTrustedProxyCIDR(entry, network)
+		cidrs = append(cidrs, network)
+	}
+
+	return cidrs, nil
+}
+
+func validateTrustedProxyCIDR(entry string, network *net.IPNet) error {
+	if network == nil {
+		return nil
+	}
+
+	ones, bits := network.Mask.Size()
+	if bits <= 0 {
+		return nil
+	}
+	if ones == 0 {
+		return fmt.Errorf("PULSE_TRUSTED_PROXY_CIDRS must not include wildcard trust range %q", entry)
+	}
+	return nil
+}
+
+func warnBroadTrustedProxyCIDR(entry string, network *net.IPNet) {
+	if network == nil {
+		return
+	}
+
+	ones, bits := network.Mask.Size()
+	switch bits {
+	case 32:
+		if ones > 0 && ones <= 16 {
 			log.Warn().
 				Str("cidr", entry).
-				Err(parseErr).
-				Msg("Ignoring invalid CIDR in PULSE_TRUSTED_PROXY_CIDRS")
-			continue
+				Msg("Trusted proxy CIDR is broad; prefer a narrower reverse-proxy range")
 		}
-
-		ip := net.ParseIP(entry)
-		if ip == nil {
+	case 128:
+		if ones > 0 && ones <= 64 {
 			log.Warn().
-				Str("value", entry).
-				Msg("Ignoring invalid IP in PULSE_TRUSTED_PROXY_CIDRS")
-			continue
+				Str("cidr", entry).
+				Msg("Trusted proxy CIDR is broad; prefer a narrower reverse-proxy range")
 		}
-
-		bits := 32
-		if ip.To4() == nil {
-			bits = 128
-		}
-		mask := net.CIDRMask(bits, bits)
-		network := &net.IPNet{IP: ip.Mask(mask), Mask: mask}
-		trustedProxyCIDRs = append(trustedProxyCIDRs, network)
 	}
 }
 
@@ -311,6 +375,9 @@ func isTrustedProxyIP(ipStr string) bool {
 	}
 
 	trustedProxyOnce.Do(loadTrustedProxyCIDRs)
+	if trustedProxyConfigErr != nil {
+		return false
+	}
 	if len(trustedProxyCIDRs) == 0 {
 		return false
 	}

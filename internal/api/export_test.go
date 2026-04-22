@@ -6,5 +6,6 @@ import "sync"
 // This must be called after setting PULSE_TRUSTED_PROXY_CIDRS env var.
 func ResetTrustedProxyConfigForTests() {
 	trustedProxyCIDRs = nil
+	trustedProxyConfigErr = nil
 	trustedProxyOnce = sync.Once{}
 }

@@ -126,6 +126,10 @@ func Run(ctx context.Context, version string) error {
 	})
 	defer logging.Shutdown()
 
+	if err := api.ValidateTrustedProxyCIDRsFromEnv(); err != nil {
+		return err
+	}
+
 	// Check for auto-import on first startup
 	if ShouldAutoImport() {
 		if err := PerformAutoImport(); err != nil {
