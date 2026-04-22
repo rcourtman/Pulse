@@ -1134,7 +1134,12 @@ arrivals may surface an upgrade callout that hands off into `Pulse Account`
 for self-hosted plan comparison and checkout before returning to the owned
 plan state through the runtime-owned activation callback. Pulse product routes
 keep ownership of license status, usage, and activation state; `Pulse Account`
-owns the commerce flow itself.
+owns the commerce flow itself. That same self-hosted settings surface is
+plan-owned rather than tier-owned: the navigation label is `Plans`, the
+surface title is `Plans & Activation`, and the canonical plan state must make
+the current unlocked tier plus capabilities immediately obvious so existing
+paid upgrades can confirm what their new key enabled without hunting through
+generic billing details.
 That same router-owned billing contract now also includes recovery as a plan
 detail state instead of a fragment alias. The canonical recovery arrival is
 `/settings/system/billing/plan?details=recovery`, while

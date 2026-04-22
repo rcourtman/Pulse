@@ -159,19 +159,19 @@ export function renderUpgradePanel(billingState: PortalBillingState, _bootstrap:
   }
   if (!portalHandoffID) {
     summaryItems.push(
-      '<div class="billing-status visible error">Open this upgrade from Pulse Pro billing so Pulse Account can verify the secure upgrade handoff before checkout.</div>',
+      '<div class="billing-status visible error">Open this upgrade from the Plans page in Pulse so Pulse Account can verify the secure plan upgrade handoff before checkout.</div>',
     );
   } else if (handoffState.status === 'loading') {
-    summaryItems.push('<div class="billing-status visible">Verifying the secure Pulse Pro upgrade handoff...</div>');
+    summaryItems.push('<div class="billing-status visible">Verifying the secure plan upgrade handoff...</div>');
   } else if (handoffState.status === 'error') {
-    summaryItems.push('<div class="billing-status visible error">' + escapeText(handoffState.error || 'Failed to verify the secure Pulse Pro upgrade handoff.') + '</div>');
+    summaryItems.push('<div class="billing-status visible error">' + escapeText(handoffState.error || 'Failed to verify the secure plan upgrade handoff.') + '</div>');
   } else if (handoffState.status === 'ready') {
     if (handoffLifecycle === 'completed') {
-      summaryItems.push('<div class="billing-status visible success">This secure upgrade handoff already completed. Return to Pulse Pro billing to review the live plan state.</div>');
+      summaryItems.push('<div class="billing-status visible success">This secure upgrade handoff already completed. Return to the Plans page in Pulse to review the live plan state.</div>');
     } else if (handoffLifecycle === 'checkout_started') {
       summaryItems.push('<div class="billing-status visible">Secure checkout is already prepared for this upgrade. Continue below if you still need to reopen it.</div>');
     } else {
-      summaryItems.push('<div class="billing-status visible success">Pulse Account will return completed checkout directly to Pulse Pro billing.</div>');
+      summaryItems.push('<div class="billing-status visible success">Pulse Account will return completed checkout directly to the Plans page in Pulse.</div>');
     }
   }
   if (pricingState.status === 'loading' && !pricingState.data) {
@@ -196,8 +196,8 @@ export function renderUpgradePanel(billingState: PortalBillingState, _bootstrap:
         : '') +
       '<div class="helper-text">' +
         ((featureKey === 'self_hosted_plan' || featureKey === 'max_monitored_systems')
-          ? 'Pulse Account keeps checkout tied to the Pulse instance that opened it, so completed Relay or Pro purchases return to the right billing surface automatically.'
-          : 'Pulse Account compares self-hosted tiers and sends completed checkout straight back to Pulse Pro billing.') +
+          ? 'Pulse Account keeps checkout tied to the Pulse instance that opened it, so completed Relay or Pro purchases return to the right Plans page automatically.'
+          : 'Pulse Account compares self-hosted tiers and sends completed checkout straight back to the Plans page in Pulse.') +
       '</div>' +
     '</div>';
 }

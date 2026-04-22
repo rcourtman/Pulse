@@ -40,11 +40,17 @@ interface ProLicensePlanSectionProps {
     summary: Array<{ label: string; value: string | number }>;
     details: Array<{ label: string; value: string | number }>;
   };
+  currentPlanSummary: {
+    title: string;
+    body: string;
+    badgeClass: string;
+    statusLabel: string;
+    unlockedFeatures: string[];
+  };
   entitlements: {
     in_grace_period?: boolean;
     grace_period_end?: string | null;
   } | null;
-  formattedFeatures: string[];
   grandfatheredPriceNotice: Notice | null;
   hasLicenseDetails: boolean;
   hasPaidFeatures: boolean;
@@ -60,10 +66,6 @@ interface ProLicensePlanSectionProps {
     destination: UpgradeDestination;
   } | null;
   onPurchaseActivationActionClick: () => void;
-  statusPresentation: {
-    badgeClass: string;
-    label: string;
-  };
   trialActivationNotice: Notice | null;
   trialEnded: boolean;
 }
@@ -114,6 +116,37 @@ export const ProLicensePlanSection: Component<ProLicensePlanSectionProps> = (pro
           </div>
         )}
       </Show>
+      <div class="mb-4 rounded-md border border-border bg-surface-alt p-4">
+        <div class="flex flex-wrap items-center gap-2">
+          <span
+            class={`px-2 py-1 text-xs font-medium rounded-full ${props.currentPlanSummary.badgeClass}`}
+          >
+            {props.currentPlanSummary.statusLabel}
+          </span>
+          <Show when={props.entitlements?.in_grace_period}>
+            <span class="text-xs text-amber-700 dark:text-amber-300">
+              Grace until {formatDate(props.entitlements?.grace_period_end)}
+            </span>
+          </Show>
+        </div>
+        <p class="mt-3 text-lg font-semibold text-base-content">{props.currentPlanSummary.title}</p>
+        <p class="mt-1 text-sm text-muted">{props.currentPlanSummary.body}</p>
+        <Show when={props.currentPlanSummary.unlockedFeatures.length > 0}>
+          <div class="mt-4">
+            <p class="text-xs uppercase tracking-wide text-muted mb-2">Unlocked on this instance</p>
+            <ul class="grid gap-2 sm:grid-cols-2">
+              <For each={props.currentPlanSummary.unlockedFeatures}>
+                {(feature) => (
+                  <li class="text-sm text-base-content flex items-center gap-2">
+                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                    {feature}
+                  </li>
+                )}
+              </For>
+            </ul>
+          </div>
+        </Show>
+      </div>
       <Show when={props.trialActivationNotice}>
         {(notice) => (
           <div class={`mb-4 rounded-md border p-3 text-sm ${notice().tone}`}>
@@ -227,19 +260,6 @@ export const ProLicensePlanSection: Component<ProLicensePlanSectionProps> = (pro
           when={!props.loading}
           fallback={<p class="text-sm ">{getLicenseStatusLoadingState().text}</p>}
         >
-          <div class="flex flex-wrap items-center gap-2">
-            <span
-              class={`px-2 py-1 text-xs font-medium rounded-full ${props.statusPresentation.badgeClass}`}
-            >
-              {props.statusPresentation.label}
-            </span>
-            <Show when={props.entitlements?.in_grace_period}>
-              <span class="text-xs text-amber-700 dark:text-amber-300">
-                Grace until {formatDate(props.entitlements?.grace_period_end)}
-              </span>
-            </Show>
-          </div>
-
           <Show
             when={props.hasLicenseDetails}
             fallback={<div class="text-sm text-muted">{getNoActiveProLicenseState().text}</div>}
@@ -257,21 +277,6 @@ export const ProLicensePlanSection: Component<ProLicensePlanSectionProps> = (pro
               </For>
             </div>
 
-            <Show when={props.formattedFeatures.length > 0}>
-              <div>
-                <p class="text-xs uppercase tracking-wide text-muted mb-2">Features</p>
-                <ul class="grid gap-2 sm:grid-cols-2">
-                  <For each={props.formattedFeatures}>
-                    {(feature) => (
-                      <li class="text-sm text-base-content flex items-center gap-2">
-                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-                        {feature}
-                      </li>
-                    )}
-                  </For>
-                </ul>
-              </div>
-            </Show>
           </Show>
 
         </Show>

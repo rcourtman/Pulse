@@ -27,6 +27,10 @@ const TIER_LABELS: Record<string, string> = {
   enterprise: 'Enterprise',
 };
 
+const SELF_HOSTED_PLAN_LABELS: Record<string, string> = {
+  pro: 'Pulse Pro',
+};
+
 const FEATURE_LABELS: Record<string, string> = {
   ai_patrol: 'Pulse Patrol',
   ai_alerts: 'Pulse Alert Analysis',
@@ -129,6 +133,12 @@ export const getLicenseTierLabel = (tier?: string | null): string => {
   const normalized = (tier || '').trim().toLowerCase();
   if (!normalized) return 'Unknown';
   return TIER_LABELS[normalized] || titleCaseDelimitedLabel(normalized);
+};
+
+export const getSelfHostedPlanLabel = (tier?: string | null): string => {
+  const normalized = (tier || '').trim().toLowerCase();
+  if (!normalized) return 'Unknown';
+  return SELF_HOSTED_PLAN_LABELS[normalized] || getLicenseTierLabel(normalized);
 };
 
 export const getLicenseFeatureLabel = (feature?: string | null): string => {
@@ -323,7 +333,7 @@ export const getTrialActivationNotice = (result?: string | null): LicenseInlineN
       return {
         tone: 'border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-900 text-red-900 dark:text-red-100',
         title: 'Activation link invalid',
-        body: 'That activation handoff is invalid or expired. Return to Pulse Pro on this instance and start a fresh secure trial handoff.',
+        body: 'That activation handoff is invalid or expired. Return to Plans on this instance and start a fresh secure trial handoff.',
       };
     case 'replayed':
       return {

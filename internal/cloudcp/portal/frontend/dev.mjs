@@ -624,11 +624,11 @@ function routeCommercialAPI(request, response, url, scenario) {
     readJSONBody(request).then(function(body) {
       const portalHandoffID = String(body.portal_handoff_id || '').trim();
       if (portalHandoffID === 'cph_preview_completed') {
-        sendJSON(response, 409, { error: 'This secure upgrade handoff already completed. Return to Pulse Pro billing to review the live plan state.' });
+        sendJSON(response, 409, { error: 'This secure upgrade handoff already completed. Return to the Plans page in Pulse to review the live plan state.' });
         return;
       }
       if (portalHandoffID !== 'cph_preview_upgrade') {
-        sendJSON(response, 400, { error: 'Pulse Account could not verify the secure Pulse Pro upgrade handoff.' });
+        sendJSON(response, 400, { error: 'Pulse Account could not verify the secure plan upgrade handoff.' });
         return;
       }
       const successURL = String(body.success_url || '').replace('{CHECKOUT_SESSION_ID}', 'cs_preview_success');

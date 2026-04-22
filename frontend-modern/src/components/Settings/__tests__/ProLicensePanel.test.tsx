@@ -188,7 +188,7 @@ describe('ProLicensePanel', () => {
     expect(loadCommercialPostureMock).not.toHaveBeenCalled();
     expect(screen.getByText('License and billing details are hidden')).toBeInTheDocument();
     expect(screen.getByText(/instead of creating a demo license/i)).toBeInTheDocument();
-    expect(screen.queryByText('Pulse Pro')).not.toBeInTheDocument();
+    expect(screen.queryByText('Plans & Activation')).not.toBeInTheDocument();
     expect(screen.queryByText('Monitored Systems')).not.toBeInTheDocument();
     expect(
       screen.queryByRole('button', { name: /start 14-day pro trial/i }),
@@ -202,7 +202,8 @@ describe('ProLicensePanel', () => {
       expect(loadLicenseEntitlementsMock).toHaveBeenCalled();
     });
 
-    expect(screen.getByText('Pulse Pro')).toBeInTheDocument();
+    expect(screen.getByText('Plans & Activation')).toBeInTheDocument();
+    expect(screen.getByText('Current plan: Community')).toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: 'Usage' })).not.toBeInTheDocument();
     expect(
       screen.queryByRole('button', { name: /start 14-day pro trial/i }),
@@ -217,6 +218,7 @@ describe('ProLicensePanel', () => {
     });
 
     expect(screen.getAllByText('Compare self-hosted plans').length).toBeGreaterThan(0);
+    expect(screen.getByText('Current plan: Community')).toBeInTheDocument();
     expect(trackPricingViewedMock).toHaveBeenCalledWith(
       'settings_self_hosted_billing_plan',
       SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_INTENT,
@@ -349,7 +351,7 @@ describe('ProLicensePanel', () => {
     expect(screen.getByText('V5 Lifetime Grandfathered')).toBeInTheDocument();
     expect(
       screen.getByText(
-        'Review your active plan, expiry, and whether this instance only monitors, reaches anywhere, or also helps investigate and fix issues.',
+        'See which self-hosted tier this instance unlocked, what capabilities are active, and how plan status or continuity affects this install.',
       ),
     ).toBeInTheDocument();
     expect(screen.queryByText('Included Monitored Systems')).not.toBeInTheDocument();
@@ -1023,6 +1025,8 @@ describe('ProLicensePanel', () => {
     expect(proLicensePlanSectionSource).toContain('getLicenseStatusLoadingState');
     expect(proLicensePlanSectionSource).toContain('getNoActiveProLicenseState');
     expect(proLicensePlanSectionSource).toContain('getTrialEndedProLicenseNotice');
+    expect(proLicensePlanSectionSource).toContain('currentPlanSummary.title');
+    expect(proLicensePlanSectionSource).toContain('Unlocked on this instance');
     expect(proLicensePlanSectionSource).not.toContain('getInactiveProUpsellNotice');
     expect(proLicensePlanSectionSource).not.toContain('MonitoredSystemDefinitionDisclosure');
     expect(proLicensePlanSectionSource).not.toContain('trialStartTitle');

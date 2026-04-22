@@ -213,7 +213,7 @@ export function installBillingRuntime(deps: BillingRuntimeDeps): void {
         failQueryState(
           nextBillingState.upgradePortalHandoff,
           null,
-          err instanceof Error ? err.message : 'Failed to verify the secure Pulse Pro upgrade handoff.',
+          err instanceof Error ? err.message : 'Failed to verify the secure plan upgrade handoff.',
         );
       });
     }
@@ -230,7 +230,7 @@ export function installBillingRuntime(deps: BillingRuntimeDeps): void {
       updateBillingState(function(nextBillingState) {
         failMutationState(
           nextBillingState.upgradeCheckout,
-          'Pulse Account could not verify the secure upgrade handoff. Reopen the upgrade flow from Pulse Pro billing.',
+          'Pulse Account could not verify the secure upgrade handoff. Reopen the upgrade flow from the Plans page in Pulse.',
         );
       });
       return;
@@ -239,7 +239,7 @@ export function installBillingRuntime(deps: BillingRuntimeDeps): void {
       updateBillingState(function(nextBillingState) {
         failMutationState(
           nextBillingState.upgradeCheckout,
-          'This secure upgrade handoff already completed. Return to Pulse Pro billing to review the live plan state.',
+          'This secure upgrade handoff already completed. Return to the Plans page in Pulse to review the live plan state.',
         );
       });
       return;

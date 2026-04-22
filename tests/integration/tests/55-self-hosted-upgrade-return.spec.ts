@@ -157,7 +157,7 @@ function renderActivationBridgePage(options: {
     portalHandoffID = PORTAL_HANDOFF_ID,
     feature = MONITORED_SYSTEM_FEATURE,
     purchaseReturnToken = PURCHASE_RETURN_TOKEN,
-    title = "Finalizing Pulse Pro upgrade",
+    title = "Finalizing plan upgrade",
   } = options;
   return (
     "<!doctype html><html><body>" +
@@ -187,7 +187,7 @@ function renderPurchaseStartFailurePage(message: string, redirectUrl: string): s
     "<!doctype html><html><body>" +
     "<h1>Pulse Account unavailable</h1>" +
     `<p id="purchase-start-status">${message}</p>` +
-    `<script>(function(){var redirectPath=${JSON.stringify(redirectUrl)};var statusEl=document.getElementById('purchase-start-status');var redirectedOriginalTab=false;try{if(window.opener&&!window.opener.closed){redirectedOriginalTab=true;window.opener.location.assign(redirectPath);}}catch(_){redirectedOriginalTab=false;}if(redirectedOriginalTab){setTimeout(function(){try{window.close();}catch(_){ }if(statusEl){statusEl.textContent='Pulse Pro billing has been reopened in the original tab. You can close this window if it stays open.';}},75);return;}if(statusEl){statusEl.textContent='Returning to Pulse Pro billing.';}setTimeout(function(){window.location.replace(redirectPath);},150);}());</script>` +
+    `<script>(function(){var redirectPath=${JSON.stringify(redirectUrl)};var statusEl=document.getElementById('purchase-start-status');var redirectedOriginalTab=false;try{if(window.opener&&!window.opener.closed){redirectedOriginalTab=true;window.opener.location.assign(redirectPath);}}catch(_){redirectedOriginalTab=false;}if(redirectedOriginalTab){setTimeout(function(){try{window.close();}catch(_){ }if(statusEl){statusEl.textContent='The Plans page has been reopened in the original tab. You can close this window if it stays open.';}},75);return;}if(statusEl){statusEl.textContent='Returning to Plans.';}setTimeout(function(){window.location.replace(redirectPath);},150);}());</script>` +
     "</body></html>"
   );
 }
@@ -382,11 +382,11 @@ test.describe("Self-hosted upgrade return flow", () => {
       purchaseStartURL = requestUrl.toString();
     });
     await configurePortalRedirectRoute(context, {
-      body: "Checkout complete. Returning to Pulse Pro.",
+      body: "Checkout complete. Returning to Plans.",
       redirectUrl: buildPurchaseReturnUrl(),
     });
     await configurePurchaseReturnRoute(context, {
-      completionTitle: "Pulse Pro activated",
+      completionTitle: "Plan activated",
       finalRedirectUrl: ACTIVATED_BILLING_URL,
     });
 
@@ -409,10 +409,10 @@ test.describe("Self-hosted upgrade return flow", () => {
       page.getByRole("heading", { name: "Pulse Account" }),
     ).toBeVisible();
     await expect(
-      page.getByText("Checkout complete. Returning to Pulse Pro."),
+      page.getByText("Checkout complete. Returning to Plans."),
     ).toBeVisible();
     await expect(
-      page.getByRole("button", { name: "Activate in Pulse Pro" }),
+      page.getByRole("button", { name: "Continue to Plans" }),
     ).toHaveCount(0);
     await expect(page).toHaveURL(FINAL_BILLING_URL);
     await expect(
@@ -436,7 +436,7 @@ test.describe("Self-hosted upgrade return flow", () => {
 
     await configurePurchaseStartRoute(context);
     await configurePortalRedirectRoute(context, {
-      body: "Checkout cancelled. Returning to Pulse Pro.",
+      body: "Checkout cancelled. Returning to Plans.",
       redirectUrl: CANCELLED_BILLING_URL,
     });
 
@@ -468,11 +468,11 @@ test.describe("Self-hosted upgrade return flow", () => {
 
     await configurePurchaseStartRoute(context);
     await configurePortalRedirectRoute(context, {
-      body: "Checkout complete. Returning to Pulse Pro.",
+      body: "Checkout complete. Returning to Plans.",
       redirectUrl: buildPurchaseReturnUrl(),
     });
     await configurePurchaseReturnRoute(context, {
-      bridgeTitle: "Confirming Pulse Pro activation state",
+      bridgeTitle: "Confirming plan activation state",
       completionTitle: "Purchase activation already completed",
       finalRedirectUrl: ACTIVATED_BILLING_URL,
     });
@@ -505,11 +505,11 @@ test.describe("Self-hosted upgrade return flow", () => {
 
     await configurePurchaseStartRoute(context);
     await configurePortalRedirectRoute(context, {
-      body: "Secure upgrade state expired. Returning to Pulse Pro.",
+      body: "Secure upgrade state expired. Returning to Plans.",
       redirectUrl: buildPurchaseReturnUrl(),
     });
     await configurePurchaseReturnRoute(context, {
-      bridgeTitle: "Verifying Pulse Pro checkout return",
+      bridgeTitle: "Verifying plan checkout return",
       completionTitle: "Upgrade return expired",
       finalRedirectUrl: EXPIRED_BILLING_URL,
     });
@@ -543,11 +543,11 @@ test.describe("Self-hosted upgrade return flow", () => {
 
     await configurePurchaseStartRoute(context);
     await configurePortalRedirectRoute(context, {
-      body: "Checkout complete, but Pulse Pro needs local recovery.",
+      body: "Checkout complete, but local plan activation needs attention.",
       redirectUrl: buildPurchaseReturnUrl(),
     });
     await configurePurchaseReturnRoute(context, {
-      bridgeTitle: "Finishing local Pulse Pro activation",
+      bridgeTitle: "Finishing local plan activation",
       completionTitle: "Activation needs attention",
       finalRedirectUrl: FAILED_BILLING_URL,
     });

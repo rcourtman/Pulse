@@ -1091,8 +1091,9 @@ stale no-match or detected-product state already rendered. Render-order proof
 for that landing belongs to DOM-backed settings tests, not raw source-string
 position checks, so lifecycle ownership continues to guard the operator-visible
 order after reasonable component extraction or copy refactors.
-When that infrastructure workspace needs to redirect operators to the Pulse Pro
-surface for billing, monitored-system limits, or license status, it must
+When that infrastructure workspace needs to redirect operators to the plan-
+owned self-hosted commercial surface for billing, monitored-system limits, or
+license status, it must
 consume the settings-owned referral copy from
 `frontend-modern/src/components/Settings/selfHostedBillingPresentation.ts`
 instead of carrying workspace-local commercial guidance or reaching back into
@@ -1192,9 +1193,10 @@ should use the canonical object when they need attribution for which grouped
 surface reported most recently. Retired flat alias fields must not reappear as
 parallel lifecycle signal inputs or contract language.
 Lifecycle-adjacent workspace copy must also keep the same commercial framing:
-infrastructure operations may point operators to Pulse Pro for billing, but it
-must describe that boundary in monitored-system, plan-limit, and license-status
-terms rather than reviving legacy agent-allocation language.
+infrastructure operations may point operators to Plans for billing, but it
+must describe that boundary in monitored-system, plan-limit, license-status,
+and unlocked-capability terms rather than reviving legacy agent-allocation
+language or treating the entire destination as the `Pulse Pro` tier page.
 That same direct-workspace boundary now also owns the shared customer-facing
 error copy for discovery and configured-node actions through
 `frontend-modern/src/utils/infrastructureSettingsPresentation.ts`, so direct

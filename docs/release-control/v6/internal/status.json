@@ -4334,7 +4334,21 @@
       ]
     }
   ],
-  "work_claims": [],
+  "work_claims": [
+    {
+      "id": "codex-lane-l1",
+      "agent_id": "codex",
+      "summary": "Guard forward release signing against accidental trust-root drift",
+      "target_id": "v6-product-lane-expansion",
+      "claimed_at": "2026-04-22T18:47:37Z",
+      "heartbeat_at": "2026-04-22T18:47:37Z",
+      "expires_at": "2026-04-22T20:47:37Z",
+      "work_item": {
+        "kind": "lane",
+        "id": "L1"
+      }
+    }
+  ],
   "open_decisions": [],
   "source_of_truth_file": "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md",
   "resolved_decisions": [
@@ -4823,6 +4837,21 @@
       ],
       "lane_ids": [
         "L6"
+      ]
+    },
+    {
+      "id": "self-hosted-plans-surface-entitlement-first",
+      "summary": "The self-hosted v6 commercial settings surface is plan-owned rather than tier-owned: the settings nav label is `Plans`, the page title is `Plans & Activation`, and the canonical plan state must foreground the current unlocked tier plus capabilities so paid upgrades can confirm their entitlement immediately after entering a new key.",
+      "kind": "pricing",
+      "decided_at": "2026-04-22",
+      "subsystem_ids": [
+        "cloud-paid",
+        "frontend-primitives"
+      ],
+      "lane_ids": [
+        "L3",
+        "L8",
+        "L9"
       ]
     }
   ]

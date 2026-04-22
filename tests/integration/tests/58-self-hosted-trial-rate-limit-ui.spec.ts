@@ -14,7 +14,7 @@ test.describe.serial('Self-hosted trial rate-limit UI', () => {
   test('shows Retry-After guidance on the Pulse Pro trial CTA', async ({ page }, testInfo) => {
     test.skip(
       testInfo.project.name.startsWith('mobile-'),
-      'Desktop-only Pulse Pro billing coverage',
+      'Desktop-only plans coverage',
     );
 
     await ensureAuthenticated(page);
@@ -45,7 +45,7 @@ test.describe.serial('Self-hosted trial rate-limit UI', () => {
     });
 
     await page.goto('/settings/system/billing');
-    await expect(page.getByRole('heading', { name: 'Pulse Pro' }).first()).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Plans & Activation' }).first()).toBeVisible();
 
     const startTrialButton = page.getByRole('button', { name: /start 14-day pro trial/i });
     await expect(startTrialButton).toBeVisible();

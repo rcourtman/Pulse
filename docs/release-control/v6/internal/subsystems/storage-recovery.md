@@ -327,6 +327,12 @@ querying, and the operator-facing storage health presentation layer.
     bypass the shared secure callback policy that limits self-hosted commercial
     return URLs to HTTPS instance origins or direct-loopback HTTP and keeps
     hosted commercial follow-up fetches on the restricted outbound client.
+    That same adjacent commercial boundary also owns the plan-owned callback
+    framing for those routes: storage and recovery may coexist beside
+    `/settings/system/billing/plan`, but they must treat `Plans` and
+    `Plans & Activation` as the canonical destination naming and must not
+    reinterpret purchase-return bridge titles, retry actions, or success
+    states as a recovery-local `Pulse Pro billing` surface.
     query state as a recovery-local contract once uncapped self-hosted
     monitoring is canonical.
     That same adjacent commercial

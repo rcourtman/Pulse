@@ -267,28 +267,28 @@ describe('services view', function() {
 
     expect(document.getElementById('upgrade-billing-root')?.innerHTML).toContain('Buy Annual');
     expect(document.getElementById('upgrade-billing-root')?.innerHTML).toContain(
-      'Pulse Account will return completed checkout directly to Pulse Pro billing.',
+      'Pulse Account will return completed checkout directly to the Plans page in Pulse.',
     );
     expect(document.getElementById('upgrade-billing-root')?.innerHTML).toContain(
-      'Pulse Account keeps checkout tied to the Pulse instance that opened it, so completed Relay or Pro purchases return to the right billing surface automatically.',
+      'Pulse Account keeps checkout tied to the Pulse instance that opened it, so completed Relay or Pro purchases return to the right Plans page automatically.',
     );
     expect(document.getElementById('upgrade-billing-root')?.innerHTML).toContain(
       'Community keeps monitoring free. Relay gets Pulse securely from anywhere. Pro adds root-cause analysis, safe remediation, and 90-day incident history.',
     );
-    expect(document.getElementById('upgrade-billing-root')?.innerHTML).not.toContain('Activate in Pulse Pro');
+    expect(document.getElementById('upgrade-billing-root')?.innerHTML).not.toContain('Continue to Plans');
     expect(document.getElementById('upgrade-billing-root')?.innerHTML).not.toContain('ppk_live_preview');
     expect(
       (document.querySelector('[data-account-billing-action="upgrade-start-checkout"]') as HTMLButtonElement).disabled,
     ).toBe(false);
   });
 
-  it('renders a blocked checkout state until the Pulse Pro handoff is verified', function() {
+  it('renders a blocked checkout state until the plan handoff is verified', function() {
     document.body.innerHTML = '<div id="upgrade-billing-root"></div>';
 
     var billingState = createPortalBillingState();
     billingState.upgradePortalHandoffID = 'cph_signed';
     billingState.upgradePortalHandoff.status = 'error';
-    billingState.upgradePortalHandoff.error = 'Pulse Account could not verify the secure upgrade handoff.';
+    billingState.upgradePortalHandoff.error = 'Pulse Account could not verify the secure plan upgrade handoff.';
     billingState.upgradePricing.status = 'ready';
     billingState.upgradePricing.data = {
       title: 'Pricing',
@@ -318,7 +318,7 @@ describe('services view', function() {
     renderUpgradePanel(billingState, createBootstrap());
 
     expect(document.getElementById('upgrade-billing-root')?.innerHTML).toContain(
-      'Pulse Account could not verify the secure upgrade handoff.',
+      'Pulse Account could not verify the secure plan upgrade handoff.',
     );
     expect(
       (document.querySelector('[data-account-billing-action="upgrade-start-checkout"]') as HTMLButtonElement).disabled,
@@ -365,7 +365,7 @@ describe('services view', function() {
     renderUpgradePanel(billingState, createBootstrap());
 
     expect(document.getElementById('upgrade-billing-root')?.innerHTML).toContain(
-      'This secure upgrade handoff already completed. Return to Pulse Pro billing to review the live plan state.',
+      'This secure upgrade handoff already completed. Return to the Plans page in Pulse to review the live plan state.',
     );
     expect(
       (document.querySelector('[data-account-billing-action="upgrade-start-checkout"]') as HTMLButtonElement).disabled,
@@ -405,7 +405,7 @@ describe('services view', function() {
     renderUpgradePanel(billingState, createBootstrap());
 
     expect(document.getElementById('upgrade-billing-root')?.innerHTML).toContain(
-      'Open this upgrade from Pulse Pro billing so Pulse Account can verify the secure upgrade handoff before checkout.',
+      'Open this upgrade from the Plans page in Pulse so Pulse Account can verify the secure plan upgrade handoff before checkout.',
     );
     expect(
       (document.querySelector('[data-account-billing-action="upgrade-start-checkout"]') as HTMLButtonElement).disabled,

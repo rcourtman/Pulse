@@ -469,7 +469,7 @@ func writeLicensePurchaseActivationFailurePage(
 	w.WriteHeader(statusCode)
 	_, _ = fmt.Fprintf(
 		w,
-		"<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><title>Pulse Pro activation</title></head><body><main style=\"max-width:32rem;margin:3rem auto;padding:0 1rem;font:16px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif\"><h1 style=\"margin-bottom:0.5rem\">Pulse Pro activation needs attention</h1><p id=\"purchase-return-status\" style=\"margin-bottom:1rem\">%s</p><p><a href=\"%s\">Open Pulse Pro billing</a></p></main><script>(function(){var redirectPath=%q;var statusEl=document.getElementById('purchase-return-status');var redirectedOriginalTab=false;try{if(window.opener&&!window.opener.closed){redirectedOriginalTab=true;window.opener.postMessage({type:'pulse-license-purchase-return',redirectPath:redirectPath,result:%q},window.location.origin);window.opener.location.assign(redirectPath);}}catch(_){redirectedOriginalTab=false;}if(redirectedOriginalTab){setTimeout(function(){try{window.close();}catch(_){ }if(statusEl){statusEl.textContent='Pulse Pro billing has been reopened in the original tab. You can close this window if it stays open.';}},75);return;}if(statusEl){statusEl.textContent='Returning to Pulse Pro billing.';}setTimeout(function(){window.location.replace(redirectPath);},150);}());</script></body></html>",
+		"<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><title>Plan activation</title></head><body><main style=\"max-width:32rem;margin:3rem auto;padding:0 1rem;font:16px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif\"><h1 style=\"margin-bottom:0.5rem\">Plan activation needs attention</h1><p id=\"purchase-return-status\" style=\"margin-bottom:1rem\">%s</p><p><a href=\"%s\">Open Plans</a></p></main><script>(function(){var redirectPath=%q;var statusEl=document.getElementById('purchase-return-status');var redirectedOriginalTab=false;try{if(window.opener&&!window.opener.closed){redirectedOriginalTab=true;window.opener.postMessage({type:'pulse-license-purchase-return',redirectPath:redirectPath,result:%q},window.location.origin);window.opener.location.assign(redirectPath);}}catch(_){redirectedOriginalTab=false;}if(redirectedOriginalTab){setTimeout(function(){try{window.close();}catch(_){ }if(statusEl){statusEl.textContent='The Plans page has been reopened in the original tab. You can close this window if it stays open.';}},75);return;}if(statusEl){statusEl.textContent='Returning to Plans.';}setTimeout(function(){window.location.replace(redirectPath);},150);}());</script></body></html>",
 		escapedMessage,
 		escapedLink,
 		redirectPath,
@@ -496,7 +496,7 @@ func writeLicensePurchaseStartFailurePage(
 	w.WriteHeader(statusCode)
 	_, _ = fmt.Fprintf(
 		w,
-		"<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><title>Pulse Account unavailable</title></head><body><main style=\"max-width:32rem;margin:3rem auto;padding:0 1rem;font:16px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif\"><h1 style=\"margin-bottom:0.5rem\">Pulse Account unavailable</h1><p id=\"purchase-start-status\" style=\"margin-bottom:1rem\">%s</p><p><a href=\"%s\">Return to Pulse Pro billing</a></p></main><script>(function(){var redirectPath=%q;var statusEl=document.getElementById('purchase-start-status');var redirectedOriginalTab=false;try{if(window.opener&&!window.opener.closed){redirectedOriginalTab=true;window.opener.postMessage({type:'pulse-license-purchase-start-unavailable',redirectPath:redirectPath,result:%q},window.location.origin);window.opener.location.assign(redirectPath);}}catch(_){redirectedOriginalTab=false;}if(redirectedOriginalTab){setTimeout(function(){try{window.close();}catch(_){ }if(statusEl){statusEl.textContent='Pulse Pro billing has been reopened in the original tab. You can close this window if it stays open.';}},75);return;}if(statusEl){statusEl.textContent='Returning to Pulse Pro billing.';}setTimeout(function(){window.location.replace(redirectPath);},150);}());</script></body></html>",
+		"<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><title>Pulse Account unavailable</title></head><body><main style=\"max-width:32rem;margin:3rem auto;padding:0 1rem;font:16px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif\"><h1 style=\"margin-bottom:0.5rem\">Pulse Account unavailable</h1><p id=\"purchase-start-status\" style=\"margin-bottom:1rem\">%s</p><p><a href=\"%s\">Return to Plans</a></p></main><script>(function(){var redirectPath=%q;var statusEl=document.getElementById('purchase-start-status');var redirectedOriginalTab=false;try{if(window.opener&&!window.opener.closed){redirectedOriginalTab=true;window.opener.postMessage({type:'pulse-license-purchase-start-unavailable',redirectPath:redirectPath,result:%q},window.location.origin);window.opener.location.assign(redirectPath);}}catch(_){redirectedOriginalTab=false;}if(redirectedOriginalTab){setTimeout(function(){try{window.close();}catch(_){ }if(statusEl){statusEl.textContent='The Plans page has been reopened in the original tab. You can close this window if it stays open.';}},75);return;}if(statusEl){statusEl.textContent='Returning to Plans.';}setTimeout(function(){window.location.replace(redirectPath);},150);}());</script></body></html>",
 		escapedMessage,
 		escapedLink,
 		redirectPath,
@@ -511,7 +511,7 @@ func writeLicensePurchaseActivationSuccessPage(w http.ResponseWriter, feature st
 	w.WriteHeader(http.StatusOK)
 	_, _ = fmt.Fprintf(
 		w,
-		"<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><title>Pulse Pro activated</title></head><body><main style=\"max-width:32rem;margin:3rem auto;padding:0 1rem;font:16px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif\"><h1 style=\"margin-bottom:0.5rem\">Pulse Pro activated</h1><p id=\"purchase-return-status\" style=\"margin-bottom:1rem\">Pulse is refreshing billing in the original tab.</p><p><a href=\"%s\">Return to Pulse Pro billing</a></p></main><script>(function(){var redirectPath=%q;var statusEl=document.getElementById('purchase-return-status');var redirectedOriginalTab=false;try{if(window.opener&&!window.opener.closed){redirectedOriginalTab=true;window.opener.postMessage({type:'pulse-license-purchase-activated',redirectPath:redirectPath},window.location.origin);window.opener.location.assign(redirectPath);}}catch(_){redirectedOriginalTab=false;}if(redirectedOriginalTab){setTimeout(function(){try{window.close();}catch(_){ }if(statusEl){statusEl.textContent='Pulse Pro is ready. You can close this tab if it stays open.';}},75);return;}if(statusEl){statusEl.textContent='Pulse Pro is ready. Returning to billing.';}setTimeout(function(){window.location.replace(redirectPath);},75);}());</script></body></html>",
+		"<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><title>Plan activated</title></head><body><main style=\"max-width:32rem;margin:3rem auto;padding:0 1rem;font:16px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif\"><h1 style=\"margin-bottom:0.5rem\">Plan activated</h1><p id=\"purchase-return-status\" style=\"margin-bottom:1rem\">Pulse is refreshing Plans in the original tab.</p><p><a href=\"%s\">Return to Plans</a></p></main><script>(function(){var redirectPath=%q;var statusEl=document.getElementById('purchase-return-status');var redirectedOriginalTab=false;try{if(window.opener&&!window.opener.closed){redirectedOriginalTab=true;window.opener.postMessage({type:'pulse-license-purchase-activated',redirectPath:redirectPath},window.location.origin);window.opener.location.assign(redirectPath);}}catch(_){redirectedOriginalTab=false;}if(redirectedOriginalTab){setTimeout(function(){try{window.close();}catch(_){ }if(statusEl){statusEl.textContent='Your plan is ready. You can close this tab if it stays open.';}},75);return;}if(statusEl){statusEl.textContent='Your plan is ready. Returning to Plans.';}setTimeout(function(){window.location.replace(redirectPath);},75);}());</script></body></html>",
 		escapedLink,
 		redirectPath,
 	)
@@ -540,7 +540,7 @@ func writeLicensePurchaseActivationContinuePage(
 	w.WriteHeader(http.StatusOK)
 	_, _ = fmt.Fprintf(
 		w,
-		"<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><title>Finalizing Pulse Pro upgrade</title></head><body><main style=\"max-width:32rem;margin:3rem auto;padding:0 1rem;font:16px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif\"><h1 style=\"margin-bottom:0.5rem\">Finalizing Pulse Pro upgrade</h1><p id=\"purchase-activation-continue-status\" style=\"margin-bottom:1rem\">Pulse is securely finalizing the completed checkout.</p><form id=\"purchase-activation-continue-form\" method=\"POST\" action=\"%s\"><input type=\"hidden\" name=\"%s\" value=\"%s\"><input type=\"hidden\" name=\"%s\" value=\"%s\">%s%s<button type=\"submit\">Continue to Pulse Pro</button></form></main><script>(function(){var form=document.getElementById('purchase-activation-continue-form');var statusEl=document.getElementById('purchase-activation-continue-status');if(statusEl){statusEl.textContent='Pulse is finishing the upgrade and returning you to billing.';}if(form&&typeof form.submit==='function'){setTimeout(function(){form.submit();},50);}}());</script></body></html>",
+		"<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><title>Finalizing plan upgrade</title></head><body><main style=\"max-width:32rem;margin:3rem auto;padding:0 1rem;font:16px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif\"><h1 style=\"margin-bottom:0.5rem\">Finalizing plan upgrade</h1><p id=\"purchase-activation-continue-status\" style=\"margin-bottom:1rem\">Pulse is securely finalizing the completed checkout.</p><form id=\"purchase-activation-continue-form\" method=\"POST\" action=\"%s\"><input type=\"hidden\" name=\"%s\" value=\"%s\"><input type=\"hidden\" name=\"%s\" value=\"%s\">%s%s<button type=\"submit\">Continue to Plans</button></form></main><script>(function(){var form=document.getElementById('purchase-activation-continue-form');var statusEl=document.getElementById('purchase-activation-continue-status');if(statusEl){statusEl.textContent='Pulse is finishing the upgrade and returning you to Plans.';}if(form&&typeof form.submit==='function'){setTimeout(function(){form.submit();},50);}}());</script></body></html>",
 		licensePurchaseActivationPath,
 		licensePurchaseSessionIDField,
 		escapedSessionID,
@@ -1710,13 +1710,13 @@ func (h *LicenseHandlers) HandleCheckoutActivation(w http.ResponseWriter, r *htt
 		feature := normalizeSelfHostedPurchaseFeature(r.URL.Query().Get("feature"))
 		returnToken := strings.TrimSpace(r.URL.Query().Get(licensePurchaseReturnTokenField))
 		if returnToken == "" || sessionID == "" {
-			writeLicensePurchaseActivationFailurePage(w, http.StatusBadRequest, feature, selfHostedBillingPurchaseExpired, "Purchase activation link expired or is missing required state. Reopen the upgrade flow from Pulse Pro billing.")
+			writeLicensePurchaseActivationFailurePage(w, http.StatusBadRequest, feature, selfHostedBillingPurchaseExpired, "Purchase activation link expired or is missing required state. Reopen the upgrade flow from Plans in Pulse.")
 			return
 		}
 		claims, err := h.verifiedPurchaseReturnClaims(r, returnToken)
 		if err != nil {
 			log.Warn().Err(err).Msg("Purchase return token verification failed during GET bridge")
-			writeLicensePurchaseActivationFailurePage(w, http.StatusBadRequest, feature, selfHostedBillingPurchaseExpired, "Purchase activation link expired or is invalid. Reopen the upgrade flow from Pulse Pro billing.")
+			writeLicensePurchaseActivationFailurePage(w, http.StatusBadRequest, feature, selfHostedBillingPurchaseExpired, "Purchase activation link expired or is invalid. Reopen the upgrade flow from Plans in Pulse.")
 			return
 		}
 		if claims != nil && strings.TrimSpace(claims.Feature) != "" {
@@ -1739,14 +1739,14 @@ func (h *LicenseHandlers) HandleCheckoutActivation(w http.ResponseWriter, r *htt
 	feature := normalizeSelfHostedPurchaseFeature(r.FormValue("feature"))
 	returnToken := strings.TrimSpace(r.FormValue(licensePurchaseReturnTokenField))
 	if returnToken == "" {
-		writeLicensePurchaseActivationFailurePage(w, http.StatusBadRequest, feature, selfHostedBillingPurchaseExpired, "Purchase activation link expired or is missing required state. Reopen the upgrade flow from Pulse Pro billing.")
+		writeLicensePurchaseActivationFailurePage(w, http.StatusBadRequest, feature, selfHostedBillingPurchaseExpired, "Purchase activation link expired or is missing required state. Reopen the upgrade flow from Plans in Pulse.")
 		return
 	}
 
 	claims, err := h.verifiedPurchaseReturnClaims(r, returnToken)
 	if err != nil {
 		log.Warn().Err(err).Msg("Purchase return token verification failed")
-		writeLicensePurchaseActivationFailurePage(w, http.StatusBadRequest, feature, selfHostedBillingPurchaseExpired, "Purchase activation link expired or is invalid. Reopen the upgrade flow from Pulse Pro billing.")
+		writeLicensePurchaseActivationFailurePage(w, http.StatusBadRequest, feature, selfHostedBillingPurchaseExpired, "Purchase activation link expired or is invalid. Reopen the upgrade flow from Plans in Pulse.")
 		return
 	}
 	if claims != nil && strings.TrimSpace(claims.Feature) != "" {
@@ -1807,7 +1807,7 @@ func (h *LicenseHandlers) HandleCheckoutActivation(w http.ResponseWriter, r *htt
 				Str("expected_portal_handoff_id", portalHandoffID).
 				Str("resolved_portal_handoff_id", resolvedPortalHandoffID).
 				Msg("Rejected checkout activation due to portal handoff binding mismatch")
-			writeLicensePurchaseActivationFailurePage(w, http.StatusConflict, feature, selfHostedBillingPurchaseExpired, "Purchase activation state did not match the completed upgrade flow. Reopen the upgrade flow from Pulse Pro billing.")
+			writeLicensePurchaseActivationFailurePage(w, http.StatusConflict, feature, selfHostedBillingPurchaseExpired, "Purchase activation state did not match the completed upgrade flow. Reopen the upgrade flow from Plans in Pulse.")
 			return
 		}
 	} else {
@@ -1817,7 +1817,7 @@ func (h *LicenseHandlers) HandleCheckoutActivation(w http.ResponseWriter, r *htt
 		log.Warn().
 			Str("checkout_session_id", sessionID).
 			Msg("Rejected checkout activation without canonical portal handoff binding")
-		writeLicensePurchaseActivationFailurePage(w, http.StatusConflict, feature, selfHostedBillingPurchaseExpired, "Purchase activation state did not match the completed upgrade flow. Reopen the upgrade flow from Pulse Pro billing.")
+		writeLicensePurchaseActivationFailurePage(w, http.StatusConflict, feature, selfHostedBillingPurchaseExpired, "Purchase activation state did not match the completed upgrade flow. Reopen the upgrade flow from Plans in Pulse.")
 		return
 	}
 	if expectedPurchaseReturnJTI == "" || resolvedPurchaseReturnJTI == "" || expectedPurchaseReturnJTI != resolvedPurchaseReturnJTI {
@@ -1826,7 +1826,7 @@ func (h *LicenseHandlers) HandleCheckoutActivation(w http.ResponseWriter, r *htt
 			Str("expected_purchase_return_jti", expectedPurchaseReturnJTI).
 			Str("resolved_purchase_return_jti", resolvedPurchaseReturnJTI).
 			Msg("Rejected checkout activation due to purchase return binding mismatch")
-		writeLicensePurchaseActivationFailurePage(w, http.StatusConflict, feature, selfHostedBillingPurchaseExpired, "Purchase activation state did not match the completed upgrade flow. Reopen the upgrade flow from Pulse Pro billing.")
+		writeLicensePurchaseActivationFailurePage(w, http.StatusConflict, feature, selfHostedBillingPurchaseExpired, "Purchase activation state did not match the completed upgrade flow. Reopen the upgrade flow from Plans in Pulse.")
 		return
 	}
 
@@ -1860,17 +1860,17 @@ func (h *LicenseHandlers) HandleCheckoutActivation(w http.ResponseWriter, r *htt
 	}
 	switch redemptionDecision {
 	case purchaseReturnRedemptionDecisionAlreadyActivated:
-		writeLicensePurchaseActivationFailurePage(w, http.StatusConflict, feature, selfHostedBillingPurchaseActivated, "This completed purchase was already returned to Pulse Pro. Reopen billing if you need to confirm the current entitlement.")
+		writeLicensePurchaseActivationFailurePage(w, http.StatusConflict, feature, selfHostedBillingPurchaseActivated, "This completed purchase was already returned to Plans. Reopen Plans if you need to confirm the current entitlement.")
 		return
 	case purchaseReturnRedemptionDecisionInProgress:
-		writeLicensePurchaseActivationFailurePage(w, http.StatusConflict, feature, selfHostedBillingPurchaseFailed, "Pulse is already finalizing this completed purchase. Reopen billing in a moment if this tab does not close automatically.")
+		writeLicensePurchaseActivationFailurePage(w, http.StatusConflict, feature, selfHostedBillingPurchaseFailed, "Pulse is already finalizing this completed purchase. Reopen Plans in a moment if this tab does not close automatically.")
 		return
 	case purchaseReturnRedemptionDecisionConflict:
 		log.Warn().
 			Str("checkout_session_id", sessionID).
 			Str("portal_handoff_id", portalHandoffID).
 			Msg("Rejected checkout activation due to local redemption binding conflict")
-		writeLicensePurchaseActivationFailurePage(w, http.StatusConflict, feature, selfHostedBillingPurchaseExpired, "Purchase activation state did not match the completed upgrade flow. Reopen the upgrade flow from Pulse Pro billing.")
+		writeLicensePurchaseActivationFailurePage(w, http.StatusConflict, feature, selfHostedBillingPurchaseExpired, "Purchase activation state did not match the completed upgrade flow. Reopen the upgrade flow from Plans in Pulse.")
 		return
 	}
 	recordFailure := func(reason string, activationErr error) {

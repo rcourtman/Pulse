@@ -3648,7 +3648,7 @@ class SubsystemLookupTest(unittest.TestCase):
                 {
                     "heading": "## Shared Boundaries",
                     "path": "internal/api/access_control_handlers.go",
-                    "line": 117,
+                    "line": 125,
                     "heading_line": 86,
                 }
             ],
@@ -4556,6 +4556,7 @@ class SubsystemLookupTest(unittest.TestCase):
                 "cloud-msp-price-id-propagation",
                 "cloud-msp-stripe-prices",
                 "legacy-grandfathering-eligibility-cutoff",
+                "self-hosted-plans-surface-entitlement-first",
                 "self-hosted-core-monitoring-free",
                 "self-hosted-paid-extras-packaging",
                 "stable-release-promotion-model",

@@ -3,6 +3,7 @@ import settingsSource from '../Settings.tsx?raw';
 import settingsDialogsSource from '../SettingsDialogs.tsx?raw';
 import settingsPageShellSource from '../SettingsPageShell.tsx?raw';
 import settingsHeaderMetaSource from '../settingsHeaderMeta.ts?raw';
+import settingsNavCatalogSource from '../settingsNavCatalog.ts?raw';
 import settingsNavigationHookSource from '../useSettingsNavigation.ts?raw';
 import settingsPanelRegistryContextSource from '../settingsPanelRegistryContext.tsx?raw';
 import infrastructureWorkspaceSource from '../InfrastructureWorkspace.tsx?raw';
@@ -19,6 +20,7 @@ import vmwareCredentialSlotSource from '../ConnectionEditor/CredentialSlots/VMwa
 import diagnosticsResultsPanelSource from '../DiagnosticsResultsPanel.tsx?raw';
 import diagnosticsModelSource from '../diagnosticsModel.ts?raw';
 import infrastructureOnboardingPresentationSource from '../../../utils/infrastructureOnboardingPresentation.ts?raw';
+import selfHostedBillingPresentationSource from '../selfHostedBillingPresentation.ts?raw';
 
 describe('settings architecture guardrails', () => {
   it('keeps Settings on the canonical page shell boundary', () => {
@@ -85,6 +87,26 @@ describe('settings architecture guardrails', () => {
     expect(settingsPanelRegistryContextSource).toContain('getOrganizationOverviewPanelProps');
     expect(settingsPanelRegistryContextSource).toContain('getOrganizationAccessPanelProps');
     expect(settingsPanelRegistryContextSource).toContain('getOrganizationSharingPanelProps');
+  });
+
+  it('keeps self-hosted commercial settings plan-owned under one shared presentation model', () => {
+    expect(selfHostedBillingPresentationSource).toContain("navLabel: 'Plans'");
+    expect(selfHostedBillingPresentationSource).toContain("shellTitle: 'Plans & Activation'");
+    expect(selfHostedBillingPresentationSource).toContain(
+      "shellDescription:\n    'Review your current self-hosted plan, activation status, and unlocked capabilities.'",
+    );
+    expect(selfHostedBillingPresentationSource).toContain("planSectionTitle: 'Current plan'");
+    expect(selfHostedBillingPresentationSource).toContain("recoverySectionTitle: 'Activation & Recovery'");
+
+    expect(settingsNavCatalogSource).toContain(
+      'label: SELF_HOSTED_PRO_BILLING_PRESENTATION.navLabel',
+    );
+    expect(settingsHeaderMetaSource).toContain(
+      'title: SELF_HOSTED_PRO_BILLING_PRESENTATION.shellTitle',
+    );
+    expect(settingsHeaderMetaSource).toContain(
+      'description: SELF_HOSTED_PRO_BILLING_PRESENTATION.shellDescription',
+    );
   });
 
   it('keeps infrastructure on a source-manager landing with route-backed dialogs', () => {

@@ -134,7 +134,7 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
       },
       {
         id: 'system-billing',
-        label: SELF_HOSTED_PRO_BILLING_PRESENTATION.shellTitle,
+        label: SELF_HOSTED_PRO_BILLING_PRESENTATION.navLabel,
         icon: PulseLogoIcon,
         hideWhenCommercialHidden: true,
       },

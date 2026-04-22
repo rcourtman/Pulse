@@ -329,7 +329,7 @@ base.describe('Demo mode commercial boundary', () => {
     await expect(page.getByText('Default Organization', { exact: true })).toHaveCount(0);
     await expect(settingsNavigation.getByText('Organization', { exact: true })).toHaveCount(0);
     await expect(
-      settingsNavigation.getByText('Pulse Pro', { exact: true }),
+      settingsNavigation.getByText('Plans', { exact: true }),
     ).toHaveCount(0);
     await expect(page.getByText('Pro Trial:', { exact: false })).toHaveCount(0);
     await expect(page.getByText('Monitored systems: 16/5', { exact: true })).toHaveCount(0);
@@ -451,7 +451,7 @@ base.describe('Managed demo runtime commercial boundary', () => {
         await expect(settingsNavigation).toBeVisible();
         await expect(page.getByText('Default Organization', { exact: true })).toHaveCount(0);
         await expect(settingsNavigation.getByText('Organization', { exact: true })).toHaveCount(0);
-        await expect(settingsNavigation.getByText('Pulse Pro', { exact: true })).toHaveCount(0);
+        await expect(settingsNavigation.getByText('Plans', { exact: true })).toHaveCount(0);
         await expect(page.getByText('Pro Trial:', { exact: false })).toHaveCount(0);
         await expect(page.getByText(/Monitored systems:\s*\d+\/\d+/)).toHaveCount(0);
         await expect(

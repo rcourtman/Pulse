@@ -879,7 +879,7 @@ func TestHandleCheckoutActivation_GETRendersAutoSubmitBridge(t *testing.T) {
 		t.Fatalf("status = %d, want %d (body=%q)", rec.Code, http.StatusOK, rec.Body.String())
 	}
 	body := rec.Body.String()
-	if !strings.Contains(body, "Finalizing Pulse Pro upgrade") {
+	if !strings.Contains(body, "Finalizing plan upgrade") {
 		t.Fatalf("body = %q, want activation bridge title", body)
 	}
 	if !strings.Contains(body, `method="POST" action="`+licensePurchaseActivationPath+`"`) {
@@ -966,7 +966,7 @@ func TestHandleCheckoutActivation_RedeemsCompletedCheckoutAndWritesSuccessBridge
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d (body=%q)", rec.Code, http.StatusOK, rec.Body.String())
 	}
-	if !strings.Contains(rec.Body.String(), "Pulse Pro activated") {
+	if !strings.Contains(rec.Body.String(), "Plan activated") {
 		t.Fatalf("body = %q, want success bridge title", rec.Body.String())
 	}
 	if !strings.Contains(rec.Body.String(), "window.opener.location.assign") {
@@ -1050,7 +1050,7 @@ func TestHandleCheckoutActivation_BlocksDuplicateRedemptionAfterSuccess(t *testi
 	if second.Code != http.StatusConflict {
 		t.Fatalf("second status = %d, want %d (body=%q)", second.Code, http.StatusConflict, second.Body.String())
 	}
-	if !strings.Contains(second.Body.String(), "already returned to Pulse Pro") {
+	if !strings.Contains(second.Body.String(), "already returned to Plans") {
 		t.Fatalf("second body = %q, want duplicate redemption message", second.Body.String())
 	}
 	if activateCalls != 1 {
@@ -1134,7 +1134,7 @@ func TestHandleCheckoutActivation_AllowsRetryAfterActivationFailure(t *testing.T
 	if second.Code != http.StatusOK {
 		t.Fatalf("second status = %d, want %d (body=%q)", second.Code, http.StatusOK, second.Body.String())
 	}
-	if !strings.Contains(second.Body.String(), "Pulse Pro activated") {
+	if !strings.Contains(second.Body.String(), "Plan activated") {
 		t.Fatalf("second body = %q, want activation success bridge", second.Body.String())
 	}
 	if activateCalls != 2 {

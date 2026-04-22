@@ -103,8 +103,8 @@ const ProLicensePanelContent: Component = () => {
                 <ProLicensePlanSection
                   commercialMigrationNotice={state.commercialMigrationNotice()}
                   commercialPlanModel={state.commercialPlanModel()}
+                  currentPlanSummary={state.currentPlanSummary()}
                   entitlements={state.entitlements()}
-                  formattedFeatures={state.formattedFeatures()}
                   grandfatheredPriceNotice={state.grandfatheredPriceNotice()}
                   hasLicenseDetails={state.hasLicenseDetails()}
                   hasPaidFeatures={state.hasPaidFeatures()}
@@ -117,7 +117,6 @@ const ProLicensePanelContent: Component = () => {
                   purchaseActivationAction={state.purchaseActivationAction()}
                   onPurchaseActivationActionClick={state.handlePurchaseActivationActionClick}
                   purchaseActivationNotice={state.purchaseActivationNotice()}
-                  statusPresentation={state.statusPresentation()}
                   trialActivationNotice={state.trialActivationNotice()}
                   trialEnded={state.trialEnded()}
                 />

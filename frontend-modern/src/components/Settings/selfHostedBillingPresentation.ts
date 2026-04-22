@@ -1,4 +1,5 @@
 export interface SelfHostedProBillingPresentation {
+  navLabel: string;
   shellTitle: string;
   shellDescription: string;
   infrastructureRouteReferral: string;
@@ -33,19 +34,20 @@ export interface SelfHostedProBillingPresentation {
 }
 
 export const SELF_HOSTED_PRO_BILLING_PRESENTATION: SelfHostedProBillingPresentation = {
-  shellTitle: 'Pulse Pro',
+  navLabel: 'Plans',
+  shellTitle: 'Plans & Activation',
   shellDescription:
-    'Manage self-hosted plans, activation, and how Pulse helps when something breaks.',
-  infrastructureRouteReferral: 'Billing and self-hosted plan changes live in Pulse Pro.',
+    'Review your current self-hosted plan, activation status, and unlocked capabilities.',
+  infrastructureRouteReferral: 'Billing and self-hosted plan changes live in Plans.',
   infrastructureWorkspaceReferral:
-    'Billing, self-hosted plan changes, and activation status live in Pulse Pro, not here.',
-  sectionSelectorAriaLabel: 'Pulse Pro billing section',
+    'Billing, self-hosted plan changes, activation status, and unlocked capabilities live in Plans, not here.',
+  sectionSelectorAriaLabel: 'Self-hosted plans section',
   refreshLabel: 'Refresh',
   planTabLabel: 'Plan',
   usageTabLabel: 'Usage',
-  planSectionTitle: 'Plan',
+  planSectionTitle: 'Current plan',
   planSectionDescription:
-    'Review your active plan, expiry, and whether this instance only monitors, reaches anywhere, or also helps investigate and fix issues.',
+    'See which self-hosted tier this instance unlocked, what capabilities are active, and how plan status or continuity affects this install.',
   usageSectionTitle: 'Usage',
   hiddenShellTitle: 'Demo mode',
   hiddenShellDescription: 'Commercial settings are hidden for this session.',
@@ -69,7 +71,7 @@ export const SELF_HOSTED_PRO_BILLING_PRESENTATION: SelfHostedProBillingPresentat
     'Start a 14-day Pro trial for root-cause analysis, safe auto-fix, and 90-day incident history on this organization.',
   trialStartIdleActionLabel: 'Start 14-day Pro Trial',
   trialStartPendingActionLabel: 'Starting...',
-  recoverySectionTitle: 'Recovery',
+  recoverySectionTitle: 'Activation & Recovery',
   recoverySectionDescription:
-    'Use recovery tools only when you already have an activation key or need to remove a local key from this instance.',
+    'Activate a purchased key, recover a previous self-hosted purchase, or clear a local key from this instance.',
 };

@@ -75,7 +75,7 @@ test.describe("Pulse Account upgrade bootstrap", () => {
 
     await expect(
       page.getByText(
-        "Pulse Account will return completed checkout directly to Pulse Pro billing.",
+        "Pulse Account will return completed checkout directly to the Plans page in Pulse.",
       ),
     ).toBeVisible();
     await expect(
@@ -85,12 +85,12 @@ test.describe("Pulse Account upgrade bootstrap", () => {
     ).toBeVisible();
     await expect(
       page.getByText(
-        "Pulse Account keeps checkout tied to the Pulse instance that opened it, so completed Relay or Pro purchases return to the right billing surface automatically.",
+        "Pulse Account keeps checkout tied to the Pulse instance that opened it, so completed Relay or Pro purchases return to the right Plans page automatically.",
       ),
     ).toBeVisible();
     await expect(
       page.getByText(
-        "Open this upgrade from Pulse Pro billing so Pulse Account can verify the secure upgrade handoff before checkout.",
+        "Open this upgrade from the Plans page in Pulse so Pulse Account can verify the secure plan upgrade handoff before checkout.",
       ),
     ).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Buy Annual" }).first()).toBeEnabled();
@@ -124,7 +124,7 @@ test.describe("Pulse Account upgrade bootstrap", () => {
 
     await expect(
       page.getByText(
-        "Open this upgrade from Pulse Pro billing so Pulse Account can verify the secure upgrade handoff before checkout.",
+        "Open this upgrade from the Plans page in Pulse so Pulse Account can verify the secure plan upgrade handoff before checkout.",
       ),
     ).toBeVisible();
     await expect(page.getByRole("button", { name: "Buy Annual" }).first()).toBeDisabled();
@@ -143,7 +143,7 @@ test.describe("Pulse Account upgrade bootstrap", () => {
 
     await expect(
       page.getByText(
-        "This secure upgrade handoff already completed. Return to Pulse Pro billing to review the live plan state.",
+        "This secure upgrade handoff already completed. Return to the Plans page in Pulse to review the live plan state.",
       ),
     ).toBeVisible();
     await expect(page.getByRole("button", { name: "Buy Annual" }).first()).toBeDisabled();

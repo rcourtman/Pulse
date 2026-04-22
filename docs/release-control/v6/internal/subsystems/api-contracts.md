@@ -141,6 +141,17 @@ Own canonical runtime payload shapes between backend and frontend.
     `/v1/activate`, `/v1/licenses/exchange`, and `/v1/grants/refresh` so
     migrated installs can be attributed to exact builds without inventing a
     second version source or trusting browser-supplied version hints.
+    That same shared licensing boundary also owns self-hosted purchase-return
+    framing. `/auth/license-purchase-start` and
+    `/auth/license-purchase-activate` may return operators only to the
+    canonical self-hosted settings route at
+    `/settings/system/billing/plan`, and the bridge pages must describe that
+    surface as a plan-owned destination (`Plans`, `Plan activated`,
+    `Finalizing plan upgrade`) rather than as a tier-owned `Pulse Pro billing`
+    page. Frontend callers may still render the unlocked tier name inside that
+    destination, but the browser/API contract must not reintroduce
+    Pulse-Pro-as-page-name copy in callback titles, actions, or retry
+    guidance.
 40. `internal/api/notifications.go` shared with `notifications`: notification handlers are both a notification delivery control surface and a canonical API payload contract boundary.
 41. `internal/api/org_handlers.go` shared with `organization-settings`: organization management handlers are both an organization settings control surface and a canonical API payload contract boundary.
 42. `internal/api/org_lifecycle_handlers.go` shared with `organization-settings`: organization lifecycle handlers are both an organization settings control surface and a canonical API payload contract boundary.

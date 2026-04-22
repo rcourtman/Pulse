@@ -157,7 +157,7 @@ function selfHostedUpgradeActionDescription(featureKey: string): string {
 
 function selfHostedUpgradeActionHighlights(featureKey: string): string[] {
   return isSelfHostedPlanUpgrade(featureKey)
-    ? ['Plan comparison', 'Pulse Pro checkout']
+    ? ['Plan comparison', 'Plan checkout']
     : ['Plan comparison', 'Checkout handoff'];
 }
 
@@ -177,11 +177,11 @@ function renderSelfHostedUpgradeActionRow(context: ShellViewContext): string {
 function renderSelfHostedUpgradeBillingPanel(context: ShellViewContext): string {
   var featureKey = normalizeUpgradeFeatureKey(context.billingState.upgradeFeatureKey);
   var helperCopy = isSelfHostedPlanUpgrade(featureKey)
-    ? 'Choose the self-hosted tier that fits how you run Pulse: Community monitors, Relay reaches anywhere, and Pro investigates and helps fix issues. Pulse Account will send completed checkout directly back to Pulse Pro billing.'
-    : 'Choose the self-hosted tier that fits this upgrade. Pulse Account will send completed checkout directly back to Pulse Pro billing.';
+    ? 'Choose the self-hosted tier that fits how you run Pulse: Community monitors, Relay reaches anywhere, and Pro investigates and helps fix issues. Pulse Account will send completed checkout directly back to the Plans page in Pulse.'
+    : 'Choose the self-hosted tier that fits this upgrade. Pulse Account will send completed checkout directly back to the Plans page in Pulse.';
   return renderBillingTaskPanel(
     selfHostedUpgradeActionTitle(featureKey),
-    'Pulse Account owns self-hosted plan selection and checkout for Pulse Pro upgrades.',
+    'Pulse Account owns self-hosted plan selection and checkout for self-hosted upgrades.',
     'upgrade-billing-panel',
     '<div id="upgrade-billing-root"></div>' +
     '<div class="helper-text">' + escapeHTML(helperCopy) + '</div>',

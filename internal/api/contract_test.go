@@ -6925,6 +6925,71 @@ func TestContract_SelfHostedPurchaseHandoffUnavailableJSONSnapshot(t *testing.T)
 	assertJSONSnapshot(t, got, want)
 }
 
+func TestContract_SelfHostedPurchaseActivationBridgeCopyStaysPlanOwned(t *testing.T) {
+	continueRec := httptest.NewRecorder()
+	writeLicensePurchaseActivationContinuePage(
+		continueRec,
+		"session_contract",
+		"token_contract",
+		"self_hosted_plan",
+		"portal_handoff_contract",
+	)
+
+	successRec := httptest.NewRecorder()
+	writeLicensePurchaseActivationSuccessPage(successRec, "self_hosted_plan")
+
+	failureRec := httptest.NewRecorder()
+	writeLicensePurchaseActivationFailurePage(
+		failureRec,
+		http.StatusConflict,
+		"self_hosted_plan",
+		selfHostedBillingPurchaseExpired,
+		"Reopen the upgrade flow from Plans in Pulse.",
+	)
+
+	got, err := json.MarshalIndent(struct {
+		ContinueTitle       bool `json:"continue_title"`
+		ContinueAction      bool `json:"continue_action"`
+		ContinueLegacyBrand bool `json:"continue_legacy_brand"`
+		SuccessTitle        bool `json:"success_title"`
+		SuccessReturnLabel  bool `json:"success_return_label"`
+		SuccessLegacyBrand  bool `json:"success_legacy_brand"`
+		FailureTitle        bool `json:"failure_title"`
+		FailureOpenLabel    bool `json:"failure_open_label"`
+		FailureGuidance     bool `json:"failure_guidance"`
+		FailureLegacyBrand  bool `json:"failure_legacy_brand"`
+	}{
+		ContinueTitle:       strings.Contains(continueRec.Body.String(), "Finalizing plan upgrade"),
+		ContinueAction:      strings.Contains(continueRec.Body.String(), "Continue to Plans"),
+		ContinueLegacyBrand: strings.Contains(continueRec.Body.String(), "Pulse Pro"),
+		SuccessTitle:        strings.Contains(successRec.Body.String(), "Plan activated"),
+		SuccessReturnLabel:  strings.Contains(successRec.Body.String(), "Return to Plans"),
+		SuccessLegacyBrand:  strings.Contains(successRec.Body.String(), "Pulse Pro"),
+		FailureTitle:        strings.Contains(failureRec.Body.String(), "Plan activation needs attention"),
+		FailureOpenLabel:    strings.Contains(failureRec.Body.String(), "Open Plans"),
+		FailureGuidance:     strings.Contains(failureRec.Body.String(), "Reopen the upgrade flow from Plans in Pulse."),
+		FailureLegacyBrand:  strings.Contains(failureRec.Body.String(), "Pulse Pro"),
+	}, "", "\t")
+	if err != nil {
+		t.Fatalf("marshal activation bridge snapshot: %v", err)
+	}
+
+	const want = `{
+		"continue_title": true,
+		"continue_action": true,
+		"continue_legacy_brand": false,
+		"success_title": true,
+		"success_return_label": true,
+		"success_legacy_brand": false,
+		"failure_title": true,
+		"failure_open_label": true,
+		"failure_guidance": true,
+		"failure_legacy_brand": false
+	}`
+
+	assertJSONSnapshot(t, got, want)
+}
+
 func TestContract_SelfHostedPurchaseHandoffRejectsInsecureNonLoopbackCallbackURL(t *testing.T) {
 	handler := createTestHandler(t)
 

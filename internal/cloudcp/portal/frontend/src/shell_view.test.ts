@@ -681,9 +681,9 @@ describe('shell view', function() {
     expect(html).toContain('Plan comparison');
     expect(html).toContain('id="upgrade-billing-root"');
     expect(html).toContain(
-      'Choose the self-hosted tier that fits how you run Pulse: Community monitors, Relay reaches anywhere, and Pro investigates and helps fix issues. Pulse Account will send completed checkout directly back to Pulse Pro billing.',
+      'Choose the self-hosted tier that fits how you run Pulse: Community monitors, Relay reaches anywhere, and Pro investigates and helps fix issues. Pulse Account will send completed checkout directly back to the Plans page in Pulse.',
     );
-    expect(html).toContain('Pulse Account owns self-hosted plan selection and checkout for Pulse Pro upgrades.');
+    expect(html).toContain('Pulse Account owns self-hosted plan selection and checkout for self-hosted upgrades.');
     expect(html).not.toContain('id="open-manage-billing"');
     expect(html).not.toContain('id="open-retrieve-billing"');
   });

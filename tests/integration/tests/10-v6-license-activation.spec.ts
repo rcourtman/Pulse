@@ -154,8 +154,8 @@ test.describe.serial('V6 license activation flow', () => {
 
     await ensureAuthenticated(page);
     await page.goto('/settings/system/billing');
-    await expect(page.getByRole('heading', { name: 'Pulse Pro' }).first()).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Activation' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Plans & Activation' }).first()).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Activation & Recovery' })).toBeVisible();
 
     // Fill in the activation key.
     const textarea = page.locator('#pulse-pro-license-key');
@@ -184,8 +184,9 @@ test.describe.serial('V6 license activation flow', () => {
 
     await ensureAuthenticated(page);
     await page.goto('/settings/system/billing');
-    await expect(page.getByRole('heading', { name: 'Pulse Pro' }).first()).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Plan' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Plans & Activation' }).first()).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Current plan' })).toBeVisible();
+    await expect(page.getByText('Current plan: Pulse Pro')).toBeVisible();
     await expect(page.getByText(/^Active$/).first()).toBeVisible({ timeout: 10_000 });
     await expect(page.getByText('No Pro license is active.')).toHaveCount(0);
     await expect(page.getByText('Unlimited').first()).toBeVisible();
@@ -288,8 +289,8 @@ test.describe.serial('V6 license activation flow', () => {
 
     await ensureAuthenticated(page);
     await page.goto('/settings/system/billing');
-    await expect(page.getByRole('heading', { name: 'Pulse Pro' }).first()).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Activation' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Plans & Activation' }).first()).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Activation & Recovery' })).toBeVisible();
 
     // Set up one-shot dialog handler for the native confirm() prompt.
     page.once('dialog', (dialog) => dialog.accept());

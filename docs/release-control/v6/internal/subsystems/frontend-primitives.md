@@ -473,6 +473,12 @@ work extends shared components instead of creating new local variants.
    and keep adjacent settings-shell referrals such as
    `InfrastructureWorkspace.tsx` on that same shared owner instead of
    reintroducing local “go to Pulse Pro” variants.
+   That same shared owner must also support explicit IA/title separation for
+   self-hosted commercial settings: the nav label may stay product-IA-first
+   (`Plans`) while the page shell stays task-first (`Plans & Activation`), and
+   the owned plan shell must foreground the active plan name plus unlocked
+   capabilities before secondary billing or recovery detail so paid upgrades
+   can confirm their entitlement immediately after activation.
 7. Keep hosted settings-shell framing imports safe for bundle initialization.
    Self-hosted billing titles, descriptions, and referral copy used by
    `settingsHeaderMeta.ts`, `settingsNavCatalog.ts`, and adjacent settings
@@ -2230,6 +2236,15 @@ toward Pulse Pro for billing, monitored-system limits, or license status, they
 must reuse the shared referral copy from
 `SELF_HOSTED_PRO_BILLING_PRESENTATION` rather than drafting local “go there
 for billing” variants.
+That same shared presentation owner now also carries the entitlement-first
+commercial summary contract for self-hosted settings. The top-level navigation
+entry stays product-IA owned through `navLabel` (`Plans`), while the page
+header and shell title stay task-owned through `shellTitle`
+(`Plans & Activation`), and the billing shell must foreground the active plan
+name plus unlocked capabilities before secondary billing or recovery detail.
+Paid upgrades should be able to confirm “Current plan: Pulse Pro” immediately
+after activation without hunting through generic billing language or a second
+page-local summary card model.
 That same shell boundary also has to stay safe for hosted tenant bundles.
 Settings-shell framing copy for self-hosted billing must route through
 `selfHostedBillingPresentation.ts`, with `settingsNavCatalog.ts`,

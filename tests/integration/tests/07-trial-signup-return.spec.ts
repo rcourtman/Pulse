@@ -84,7 +84,7 @@ test.describe.serial('Trial signup return flow', () => {
     // Verify UI still reflects the unactivated local state.
     await page.goto('/settings');
     await page.getByRole('button', { name: /pulse pro/i }).first().click();
-    await expect(page.getByRole('heading', { name: 'Pulse Pro' }).first()).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Plans & Activation' }).first()).toBeVisible();
     await expect(page.getByText(/No Pro license is active/i)).toBeVisible();
 
     // Verify duplicate initiation stays on the owned retry-burst contract.
