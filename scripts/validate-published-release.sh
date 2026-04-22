@@ -30,6 +30,23 @@ if ! "${curl_args[@]}" "${BASE_URL}/checksums.txt" >"$CHECKSUMS_PATH"; then
     exit 1
 fi
 
+RELEASE_SBOM="pulse-${TAG}-release.sbom.spdx.json"
+if ! awk '{print $2}' "$CHECKSUMS_PATH" | grep -Fx "$RELEASE_SBOM" >/dev/null 2>&1; then
+    echo "checksums.txt does not list ${RELEASE_SBOM} for ${TAG}" >&2
+    exit 1
+fi
+
+RELEASE_SBOM_PATH="${TMP_DIR}/${RELEASE_SBOM}"
+echo "Downloading ${BASE_URL}/${RELEASE_SBOM}"
+if ! "${curl_args[@]}" "${BASE_URL}/${RELEASE_SBOM}" >"$RELEASE_SBOM_PATH"; then
+    echo "Failed to download ${RELEASE_SBOM} for ${TAG}" >&2
+    exit 1
+fi
+if [[ ! -s "$RELEASE_SBOM_PATH" ]]; then
+    echo "${RELEASE_SBOM} is empty for ${TAG}" >&2
+    exit 1
+fi
+
 CHECKSUMS_SIG_PATH="${TMP_DIR}/checksums.txt.sshsig"
 echo "Downloading ${BASE_URL}/checksums.txt.sshsig"
 if ! "${curl_args[@]}" "${BASE_URL}/checksums.txt.sshsig" >"$CHECKSUMS_SIG_PATH"; then

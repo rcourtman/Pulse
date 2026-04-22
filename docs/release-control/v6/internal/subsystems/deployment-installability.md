@@ -87,6 +87,8 @@ server-side update execution surfaces.
 65. `tests/integration/tests/runtime-defaults.ts`
 66. `docker-compose.yml`
 67. `scripts/install-docker.sh`
+68. `scripts/validate-published-release.sh`
+69. `scripts/validate-release.sh`
 
 ## Shared Boundaries
 
@@ -98,7 +100,7 @@ server-side update execution surfaces.
 ## Extension Points
 
 1. Add or change deployment-type detection, update planning, or apply behavior through `internal/updates/`
-2. Add or change release-build metadata injection, Docker build-context allowlists, release artifact assembly, governed promotion metadata resolution, the canonical version file, operator-facing release packet content, prerelease feedback intake wording, or the canonical in-repo v6 upgrade guide through `scripts/build-release.sh`, `scripts/release_ldflags.sh`, `scripts/check-workflow-dispatch-inputs.py`, `scripts/release_control/render_release_body.py`, `scripts/release_control/resolve_release_promotion.py`, `scripts/release_control/record_rc_to_ga_rehearsal.py`, `scripts/release_control/internal/record_rc_to_ga_rehearsal.py`, `scripts/release_control/release_promotion_policy_support.py`, `.dockerignore`, `Dockerfile`, `.github/ISSUE_TEMPLATE/v6_rc_feedback.yml`, `docs/RELEASE_NOTES.md`, `docs/releases/`, `docs/UPGRADE_v6.md`, `docs/release-control/v6/internal/RELEASE_PROMOTION_POLICY.md`, `docs/release-control/v6/internal/PRE_RELEASE_CHECKLIST.md`, `docs/release-control/v6/internal/RC_TO_GA_REHEARSAL_TEMPLATE.md`, the operator dispatch helpers `scripts/trigger-release.sh` and `scripts/trigger-release-dry-run.sh`, and the governed release workflows `.github/workflows/create-release.yml`, `.github/workflows/deploy-demo-server.yml`, `.github/workflows/helm-pages.yml`, `.github/workflows/publish-docker.yml`, `.github/workflows/publish-helm-chart.yml`, `.github/workflows/promote-floating-tags.yml`, `.github/workflows/release-dry-run.yml`, and `.github/workflows/update-demo-server.yml`
+2. Add or change release-build metadata injection, Docker build-context allowlists, release artifact assembly, governed promotion metadata resolution, the canonical version file, operator-facing release packet content, prerelease feedback intake wording, or the canonical in-repo v6 upgrade guide through `scripts/build-release.sh`, `scripts/release_ldflags.sh`, `scripts/check-workflow-dispatch-inputs.py`, `scripts/release_control/render_release_body.py`, `scripts/release_control/resolve_release_promotion.py`, `scripts/release_control/record_rc_to_ga_rehearsal.py`, `scripts/release_control/internal/record_rc_to_ga_rehearsal.py`, `scripts/release_control/release_promotion_policy_support.py`, `.dockerignore`, `Dockerfile`, `.github/ISSUE_TEMPLATE/v6_rc_feedback.yml`, `docs/RELEASE_NOTES.md`, `docs/releases/`, `docs/UPGRADE_v6.md`, `docs/release-control/v6/internal/RELEASE_PROMOTION_POLICY.md`, `docs/release-control/v6/internal/PRE_RELEASE_CHECKLIST.md`, `docs/release-control/v6/internal/RC_TO_GA_REHEARSAL_TEMPLATE.md`, `scripts/validate-release.sh`, `scripts/validate-published-release.sh`, the operator dispatch helpers `scripts/trigger-release.sh` and `scripts/trigger-release-dry-run.sh`, and the governed release workflows `.github/workflows/create-release.yml`, `.github/workflows/deploy-demo-server.yml`, `.github/workflows/helm-pages.yml`, `.github/workflows/publish-docker.yml`, `.github/workflows/publish-helm-chart.yml`, `.github/workflows/promote-floating-tags.yml`, `.github/workflows/release-dry-run.yml`, and `.github/workflows/update-demo-server.yml`
 3. Add or change shell installer, Docker bootstrap installer, Windows installer, container-agent installer, repo-root compose defaults, or auto-update script behavior through `scripts/install.sh`, `scripts/install-docker.sh`, `scripts/install.ps1`, `scripts/install-container-agent.sh`, `docker-compose.yml`, and `scripts/pulse-auto-update.sh`
 4. Add or change server update transport through `internal/api/updates.go` and `frontend-modern/src/api/updates.ts`
 5. Add or change local dev-runtime orchestration, managed ownership, browser-runtime proof wiring, frontend/backend coherence diagnostics, canonical developer entry wrappers, dependency manifest floors, frontend build chunking, or dev-runtime helper control surfaces through `scripts/hot-dev.sh`, `scripts/hot-dev-bg.sh`, `scripts/dev-deploy-agent.sh`, `Makefile`, `package.json`, `package-lock.json`, `frontend-modern/package.json`, `frontend-modern/package-lock.json`, `frontend-modern/vite.config.ts`, `go.mod`, `go.sum`, `scripts/dev-check.sh`, `scripts/toggle-mock.sh`, `scripts/clean-mock-alerts.sh`, `scripts/dev-launchd-setup.sh`, `scripts/dev-launchd-wrapper.sh`, `scripts/run_demo_public_browser_smoke.sh`, `scripts/demo_public_browser_smoke.cjs`, `scripts/com.pulse.hot-dev.plist.template`, `tests/integration/scripts/managed-dev-runtime.mjs`, `tests/integration/playwright.config.ts`, `tests/integration/tests/helpers.ts`, `tests/integration/tests/runtime-defaults.ts`, `tests/integration/README.md`, and `tests/integration/QUICK_START.md`
@@ -1053,11 +1055,14 @@ installer signatures. `scripts/build-release.sh`,
 `scripts/validate-published-release.sh` must derive the embedded update trust
 root and installer SSH trust root from the governed release signing key,
 render release installers with that pinned SSH verifier, emit both `.sig` and
-`.sshsig` sidecars for shipped agent binaries and installer assets, upload
-those signatures with the matching release packet, and fail validation if any
-published artifact or `checksums.txt` is missing its `.sshsig` sidecar so
-published RC/stable downloads can keep the updater and installer trust chain
-fail-closed instead of downgrading to checksum-only trust.
+`.sshsig` sidecars for shipped agent binaries and installer assets, emit a
+standalone SPDX JSON SBOM for the assembled release packet, upload those
+security artifacts with the matching release packet, and fail validation if
+any published artifact or `checksums.txt` is missing its `.sshsig` sidecar or
+if the canonical release-packet SBOM is absent so published RC/stable
+downloads can keep the updater and installer trust chain fail-closed instead
+of downgrading to checksum-only trust and can publish a shareable non-image
+software inventory alongside the signed binaries.
 The shell-installer boundary now also owns the QNAP boot bootstrap and
 teardown contract end to end: `scripts/install.sh` must persist the wrapper on
 the writable data volume, write a flash-backed `autorun.sh` block that waits

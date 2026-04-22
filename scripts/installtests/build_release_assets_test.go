@@ -39,6 +39,11 @@ func TestBuildReleaseUsesV6InstallScripts(t *testing.T) {
 		`agent_ldflags="$(./scripts/release_ldflags.sh agent --version "v${VERSION}" "${update_ldflags_args[@]}")"`,
 		`server_ldflags="$(./scripts/release_ldflags.sh server --version "v${VERSION}" --build-time "${build_time}" --git-commit "${git_commit}" "${license_ldflags_args[@]}" "${update_ldflags_args[@]}")"`,
 		`PULSE_UPDATE_SIGNING_KEY`,
+		`RELEASE_PACKET_SBOM="pulse-v${VERSION}-release.sbom.spdx.json"`,
+		`generate_release_packet_sbom() {`,
+		`syft "dir:${RELEASE_DIR}" -o "spdx-json=${tmp_sbom}"`,
+		`generate_release_packet_sbom`,
+		`pulse-*.sbom.spdx.json`,
 		`go run ./scripts/release_update_key.go public-key --private-key "${PULSE_UPDATE_SIGNING_KEY}"`,
 		`go run ./scripts/release_update_key.go public-key-ssh --private-key "${PULSE_UPDATE_SIGNING_KEY}"`,
 		`go run ./scripts/release_update_key.go openssh-private-key --private-key "${PULSE_UPDATE_SIGNING_KEY}"`,
@@ -60,6 +65,11 @@ func TestCreateReleaseUploadsPowerShellInstaller(t *testing.T) {
 
 	workflow := string(content)
 	required := []string{
+		`SYFT_VERSION="1.42.4"`,
+		`SYFT_ARCHIVE="syft_${SYFT_VERSION}_linux_amd64.tar.gz"`,
+		`SYFT_SHA256="590650c2743b83f327d1bf9bec64f6f83b7fec504187bb84f500c862bf8f2a0f"`,
+		`install -m 0755 "${TMP_DIR}/syft" /usr/local/bin/syft`,
+		`gh release upload "${TAG}" release/*.sbom.spdx.json --clobber`,
 		`release/pulse-agent-linux-amd64`,
 		`release/pulse-agent-linux-arm64`,
 		`release/pulse-agent-linux-armv7`,
@@ -102,6 +112,10 @@ func TestReleaseValidationRequiresSignedSidecars(t *testing.T) {
 	}
 	localValidator := string(localValidatorBytes)
 	localRequired := []string{
+		`"pulse-v${PULSE_VERSION}-release.sbom.spdx.json"`,
+		`release_sbom="pulse-${PULSE_TAG}-release.sbom.spdx.json"`,
+		`error "checksums.txt is missing ${release_sbom}"`,
+		`success "Release SBOM is listed in checksums.txt"`,
 		`info "Validating SSH signature sidecars..."`,
 		`if [ ! -s "checksums.txt.sshsig" ]; then`,
 		`error "Missing or empty checksums.txt.sshsig"`,
@@ -121,6 +135,9 @@ func TestReleaseValidationRequiresSignedSidecars(t *testing.T) {
 	}
 	publishedValidator := string(publishedValidatorBytes)
 	publishedRequired := []string{
+		`RELEASE_SBOM="pulse-${TAG}-release.sbom.spdx.json"`,
+		`echo "Failed to download ${RELEASE_SBOM} for ${TAG}" >&2`,
+		`echo "${RELEASE_SBOM} is empty for ${TAG}" >&2`,
 		`CHECKSUMS_SIG_PATH="${TMP_DIR}/checksums.txt.sshsig"`,
 		`"${BASE_URL}/checksums.txt.sshsig"`,
 		`echo "Failed to download checksums.txt.sshsig for ${TAG}" >&2`,
@@ -141,10 +158,14 @@ func TestReleaseValidationRequiresSignedSidecars(t *testing.T) {
 	}
 	contract := string(contractBytes)
 	contractRequired := []string{
+		"`scripts/validate-release.sh`",
+		"`scripts/validate-published-release.sh`",
 		"`scripts/validate-release.sh`, and",
 		"`scripts/validate-published-release.sh` must derive the embedded update trust",
-		"fail validation if any",
+		"standalone SPDX JSON SBOM",
+		"and fail validation if",
 		"published artifact or `checksums.txt` is missing its `.sshsig` sidecar",
+		"canonical release-packet SBOM is absent",
 	}
 	for _, needle := range contractRequired {
 		if !strings.Contains(contract, needle) {

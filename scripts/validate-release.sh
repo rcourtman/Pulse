@@ -278,6 +278,7 @@ info "Checking required release assets..."
 required_assets=(
     "install.sh"
     "checksums.txt"
+    "pulse-v${PULSE_VERSION}-release.sbom.spdx.json"
     "pulse-v${PULSE_VERSION}.tar.gz"
     "pulse-v${PULSE_VERSION}-linux-amd64.tar.gz"
     "pulse-v${PULSE_VERSION}-linux-arm64.tar.gz"
@@ -363,6 +364,13 @@ success "macOS agent tarballs validated"
 info "Validating checksums..."
 sha256sum -c checksums.txt >/dev/null 2>&1 || { error "checksums.txt validation failed"; exit 1; }
 success "checksums.txt validated"
+
+release_sbom="pulse-${PULSE_TAG}-release.sbom.spdx.json"
+if ! grep -F "  ${release_sbom}" checksums.txt >/dev/null 2>&1; then
+    error "checksums.txt is missing ${release_sbom}"
+    exit 1
+fi
+success "Release SBOM is listed in checksums.txt"
 
 # Validate release signature sidecars
 info "Validating SSH signature sidecars..."

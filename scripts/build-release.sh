@@ -32,6 +32,7 @@ RELEASE_DIR="release"
 RENDERED_INSTALLERS_DIR="${BUILD_DIR}/rendered-installers"
 INSTALLER_SSH_SIGNER_IDENTITY="pulse-installer"
 INSTALLER_SSH_SIGNER_NAMESPACE="pulse-install"
+RELEASE_PACKET_SBOM="pulse-v${VERSION}-release.sbom.spdx.json"
 
 echo "Building Pulse v${VERSION}..."
 
@@ -138,6 +139,24 @@ sign_directory_release_assets() {
     while IFS= read -r -d '' file; do
         sign_release_file "${file}"
     done < <(find "${dir}" -maxdepth 1 -type f ! -name '*.sig' ! -name '*.sshsig' -print0)
+}
+
+generate_release_packet_sbom() {
+    local tmp_sbom=""
+    if ! command -v syft >/dev/null 2>&1; then
+        if [[ "${PULSE_ALLOW_MISSING_RELEASE_SBOM_TOOL:-false}" == "true" ]]; then
+            echo "Warning: syft not installed; skipping release-packet SBOM because PULSE_ALLOW_MISSING_RELEASE_SBOM_TOOL=true."
+            return 0
+        fi
+        echo "Error: syft is required to generate the release-packet SBOM." >&2
+        echo "Install syft or set PULSE_ALLOW_MISSING_RELEASE_SBOM_TOOL=true only for local non-release debugging." >&2
+        exit 1
+    fi
+
+    tmp_sbom="$(mktemp "${BUILD_DIR}/release-packet-sbom.XXXXXX")"
+    echo "Generating release-packet SBOM ${RELEASE_PACKET_SBOM}..."
+    syft "dir:${RELEASE_DIR}" -o "spdx-json=${tmp_sbom}"
+    mv "${tmp_sbom}" "${RELEASE_DIR}/${RELEASE_PACKET_SBOM}"
 }
 
 # Clean previous builds
@@ -427,6 +446,8 @@ cp "${RENDERED_INSTALLERS_DIR}/install.sh" "$RELEASE_DIR/install.sh"
 cp scripts/install-docker.sh "$RELEASE_DIR/"
 cp scripts/pulse-auto-update.sh "$RELEASE_DIR/"
 
+generate_release_packet_sbom
+
 # Generate checksums (include tarballs, zip files, helm chart, and install.sh)
 cd "$RELEASE_DIR"
 shopt -s nullglob extglob
@@ -440,6 +461,9 @@ if compgen -G "pulse-*.tgz" > /dev/null; then
 fi
 if compgen -G "pulse-*.zip" > /dev/null; then
     checksum_files+=( pulse-*.zip )
+fi
+if compgen -G "pulse-*.sbom.spdx.json" > /dev/null; then
+    checksum_files+=( pulse-*.sbom.spdx.json )
 fi
 if compgen -G "pulse-agent-linux-*" > /dev/null; then
     checksum_files+=( pulse-agent-linux-* )
