@@ -1147,6 +1147,11 @@ keys through the managed `ssh_known_hosts` store before any automated deploy
 fan-out writes a bootstrap token or runs the installer on a remote node, keep
 `StrictHostKeyChecking=yes`, and fail closed on key mismatch or missing-host-
 key state instead of downgrading to unauthenticated SSH during install.
+That same boundary also owns least-privilege peer deploy execution: when
+operators configure a non-root SSH user for deploy fan-out, privileged token
+write and install steps must escalate through non-interactive `sudo` on the
+remote node instead of hard-coding `root@` for every SSH hop or silently
+falling back to a second unaudited privilege path.
 That same transport boundary also keeps plaintext Pulse URLs loopback-only.
 `internal/securityutil/httpurl.go` owns the canonical Pulse transport
 normalization used by `internal/hostagent/agent.go`,

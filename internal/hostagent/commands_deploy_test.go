@@ -61,6 +61,40 @@ func TestValidateNodeIP(t *testing.T) {
 	}
 }
 
+func TestNormalizeDeploySSHUser(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		want    string
+		wantErr bool
+	}{
+		{name: "empty defaults to root", input: "", want: ""},
+		{name: "trimmed user", input: " pulse-deploy ", want: "pulse-deploy"},
+		{name: "underscore and dot", input: "ec2_user.ops", want: "ec2_user.ops"},
+		{name: "reject host separator", input: "user@example", wantErr: true},
+		{name: "reject option style", input: "-root", wantErr: true},
+		{name: "reject whitespace", input: "bad user", wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := NormalizeDeploySSHUser(tt.input)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("expected error for %q", tt.input)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("NormalizeDeploySSHUser(%q): %v", tt.input, err)
+			}
+			if got != tt.want {
+				t.Fatalf("NormalizeDeploySSHUser(%q) = %q, want %q", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestMakeSemaphore(t *testing.T) {
 	// Zero/negative defaults to 1.
 	sem := makeSemaphore(0)
@@ -178,6 +212,9 @@ func TestRunInstallSSH_IncludesEnrollAndEnableCommands(t *testing.T) {
 	if !strings.Contains(joined, "GlobalKnownHostsFile=/dev/null") {
 		t.Error("SSH install command does not isolate global known_hosts state")
 	}
+	if !strings.Contains(joined, "root@10.0.0.1") {
+		t.Error("SSH install command does not default to root user")
+	}
 }
 
 func TestRunInstallSSH_RejectsNonLoopbackPlainHTTP(t *testing.T) {
@@ -188,5 +225,73 @@ func TestRunInstallSSH_RejectsNonLoopbackPlainHTTP(t *testing.T) {
 
 	if _, _, err := c.runInstallSSH(context.Background(), "10.0.0.1", "http://10.0.0.1:7655"); err == nil {
 		t.Fatal("expected non-loopback plain HTTP Pulse URL to be rejected")
+	}
+}
+
+func TestRunInstallSSH_UsesConfiguredDeploySSHUserWithSudo(t *testing.T) {
+	origExec := execCommandContext
+	defer func() { execCommandContext = origExec }()
+
+	var capturedArgs []string
+	execCommandContext = func(ctx context.Context, name string, args ...string) *exec.Cmd {
+		capturedArgs = append([]string{name}, args...)
+		return exec.Command("true")
+	}
+
+	c := &CommandClient{
+		deploySSHUser: "pulse-deploy",
+		logger:        zerolog.New(zerolog.NewTestWriter(t)),
+		sshKnownHosts: stubKnownHostsManager{path: "/tmp/pulse-test-known-hosts"},
+	}
+
+	exitCode, _, err := c.runInstallSSH(context.Background(), "10.0.0.1", "https://10.0.0.1:7655")
+	if err != nil {
+		t.Fatalf("runInstallSSH error: %v", err)
+	}
+	if exitCode != 0 {
+		t.Fatalf("expected exit code 0, got %d", exitCode)
+	}
+
+	joined := strings.Join(capturedArgs, " ")
+	if !strings.Contains(joined, "pulse-deploy@10.0.0.1") {
+		t.Fatalf("SSH install command missing configured deploy user: %s", joined)
+	}
+	if strings.Contains(joined, "root@10.0.0.1") {
+		t.Fatalf("SSH install command unexpectedly used root user: %s", joined)
+	}
+	if !strings.Contains(joined, "sudo -n bash -lc") {
+		t.Fatalf("SSH install command missing sudo escalation for non-root deploy user: %s", joined)
+	}
+}
+
+func TestWriteTokenSSH_UsesConfiguredDeploySSHUserWithSudo(t *testing.T) {
+	origExec := execCommandContext
+	defer func() { execCommandContext = origExec }()
+
+	var capturedArgs []string
+	execCommandContext = func(ctx context.Context, name string, args ...string) *exec.Cmd {
+		capturedArgs = append([]string{name}, args...)
+		return exec.Command("true")
+	}
+
+	c := &CommandClient{
+		deploySSHUser: "pulse-deploy",
+		logger:        zerolog.New(zerolog.NewTestWriter(t)),
+		sshKnownHosts: stubKnownHostsManager{path: "/tmp/pulse-test-known-hosts"},
+	}
+
+	if err := c.writeTokenSSH(context.Background(), "10.0.0.1", "token"); err != nil {
+		t.Fatalf("writeTokenSSH error: %v", err)
+	}
+
+	joined := strings.Join(capturedArgs, " ")
+	if !strings.Contains(joined, "pulse-deploy@10.0.0.1") {
+		t.Fatalf("SSH token write missing configured deploy user: %s", joined)
+	}
+	if !strings.Contains(joined, "sudo -n bash -lc") {
+		t.Fatalf("SSH token write missing sudo escalation for non-root deploy user: %s", joined)
+	}
+	if !strings.Contains(joined, "/run/pulse-agent/bootstrap.token") {
+		t.Fatalf("SSH token write missing bootstrap token target path: %s", joined)
 	}
 }

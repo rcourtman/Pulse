@@ -62,6 +62,9 @@ type Config struct {
 	// State directory for persistent files (agent-id, proxmox registration, etc.)
 	StateDir string // Default: /var/lib/pulse-agent
 
+	// Deploy SSH configuration for peer-node install fan-out.
+	DeploySSHUser string // Default: root. Non-root users must support passwordless sudo for install steps.
+
 	// Network configuration
 	ReportIP    string // IP address to report instead of auto-detected (for multi-NIC systems)
 	DisableCeph bool   // If true, disables local Ceph status polling
@@ -165,6 +168,11 @@ func New(cfg Config) (*Agent, error) {
 	}
 
 	cfg.ReportIP, err = normalizeReportIP(cfg.ReportIP)
+	if err != nil {
+		return nil, err
+	}
+
+	cfg.DeploySSHUser, err = NormalizeDeploySSHUser(cfg.DeploySSHUser)
 	if err != nil {
 		return nil, err
 	}

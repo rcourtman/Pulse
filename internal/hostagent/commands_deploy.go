@@ -6,12 +6,15 @@ import (
 	"fmt"
 	"net"
 	"os/exec"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
 )
+
+var deploySSHUserPattern = regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9._-]{0,63}$`)
 
 // --- Agent-side payload types (mirrors agentexec types) ---
 
@@ -265,18 +268,26 @@ func (c *CommandClient) preflightTarget(
 	}
 
 	// 1. SSH reachability check.
+	sshCheckMessage := "Checking SSH connectivity"
+	sshFailureDetail := "SSH connection failed"
+	sshSuccessMessage := "SSH reachable"
+	if c.deployRequiresSudo() {
+		sshCheckMessage = fmt.Sprintf("Checking SSH and sudo connectivity as %s", c.deploySSHUserOrDefault())
+		sshFailureDetail = fmt.Sprintf("SSH or sudo access failed for user %s", c.deploySSHUserOrDefault())
+		sshSuccessMessage = fmt.Sprintf("SSH and sudo reachable as %s", c.deploySSHUserOrDefault())
+	}
 	c.sendDeployProgress(conn, requestID, jobID, target.TargetID,
-		"preflight_ssh", "started", "Checking SSH connectivity", "", false)
+		"preflight_ssh", "started", sshCheckMessage, "", false)
 
 	sshOK := c.checkSSH(tctx, target.NodeIP)
 	if !sshOK {
-		data := marshalPreflightResult(false, false, false, "", "SSH connection failed")
+		data := marshalPreflightResult(false, false, false, "", sshFailureDetail)
 		c.sendDeployProgress(conn, requestID, jobID, target.TargetID,
-			"preflight_complete", "failed", "SSH check failed", data, false)
+			"preflight_complete", "failed", sshFailureDetail, data, false)
 		return false
 	}
 	c.sendDeployProgress(conn, requestID, jobID, target.TargetID,
-		"preflight_ssh", "ok", "SSH reachable", "", false)
+		"preflight_ssh", "ok", sshSuccessMessage, "", false)
 
 	// 2. Architecture detection.
 	c.sendDeployProgress(conn, requestID, jobID, target.TargetID,
@@ -408,6 +419,38 @@ func (c *CommandClient) installTarget(
 
 // --- SSH helpers ---
 
+// NormalizeDeploySSHUser validates the optional SSH username used for peer-node
+// deploy fan-out. Empty input means "use the canonical root default".
+func NormalizeDeploySSHUser(raw string) (string, error) {
+	user := strings.TrimSpace(raw)
+	if user == "" {
+		return "", nil
+	}
+	if !deploySSHUserPattern.MatchString(user) {
+		return "", fmt.Errorf("invalid deploy SSH user %q", raw)
+	}
+	return user, nil
+}
+
+func (c *CommandClient) deploySSHUserOrDefault() string {
+	user, err := NormalizeDeploySSHUser(c.deploySSHUser)
+	if err != nil || user == "" {
+		return "root"
+	}
+	return user
+}
+
+func (c *CommandClient) deployRequiresSudo() bool {
+	return c.deploySSHUserOrDefault() != "root"
+}
+
+func (c *CommandClient) sshRemoteShellCommand(command string, privileged bool) string {
+	if privileged && c.deployRequiresSudo() {
+		return "sudo -n bash -lc " + shellescape(command)
+	}
+	return "bash -lc " + shellescape(command)
+}
+
 func (c *CommandClient) sshCommand(ctx context.Context, nodeIP string, remoteArgs ...string) (*exec.Cmd, error) {
 	if err := validateNodeIP(nodeIP); err != nil {
 		return nil, err
@@ -427,15 +470,23 @@ func (c *CommandClient) sshCommand(ctx context.Context, nodeIP string, remoteArg
 		"-o", fmt.Sprintf("UserKnownHostsFile=%s", hostKeys.Path()),
 		"-o", "GlobalKnownHostsFile=/dev/null",
 		"-o", "ConnectTimeout=10",
-		fmt.Sprintf("root@%s", nodeIP),
+		fmt.Sprintf("%s@%s", c.deploySSHUserOrDefault(), nodeIP),
 	}
 	args = append(args, remoteArgs...)
 	return execCommandContext(ctx, "ssh", args...), nil
 }
 
+func (c *CommandClient) sshShellCommand(ctx context.Context, nodeIP, command string, privileged bool) (*exec.Cmd, error) {
+	return c.sshCommand(ctx, nodeIP, c.sshRemoteShellCommand(command, privileged))
+}
+
 // checkSSH tests basic SSH connectivity to a peer node.
 func (c *CommandClient) checkSSH(ctx context.Context, nodeIP string) bool {
-	cmd, err := c.sshCommand(ctx, nodeIP, "true")
+	command := "true"
+	if c.deployRequiresSudo() {
+		command = "sudo -n true"
+	}
+	cmd, err := c.sshShellCommand(ctx, nodeIP, command, false)
 	if err != nil {
 		c.logger.Warn().Err(err).Str("node_ip", nodeIP).Msg("SSH connectivity check refused before execution")
 		return false
@@ -445,7 +496,7 @@ func (c *CommandClient) checkSSH(ctx context.Context, nodeIP string) bool {
 
 // detectArchSSH detects the architecture of a remote node via SSH.
 func (c *CommandClient) detectArchSSH(ctx context.Context, nodeIP string) string {
-	cmd, err := c.sshCommand(ctx, nodeIP, "uname -m")
+	cmd, err := c.sshShellCommand(ctx, nodeIP, "uname -m", false)
 	if err != nil {
 		c.logger.Warn().Err(err).Str("node_ip", nodeIP).Msg("SSH arch detection refused before execution")
 		return ""
@@ -467,7 +518,7 @@ func (c *CommandClient) detectArchSSH(ctx context.Context, nodeIP string) string
 
 // checkExistingAgentSSH checks if a Pulse agent is already installed on the target.
 func (c *CommandClient) checkExistingAgentSSH(ctx context.Context, nodeIP string) bool {
-	cmd, err := c.sshCommand(ctx, nodeIP, "systemctl is-active pulse-agent 2>/dev/null || test -f /usr/local/bin/pulse-agent")
+	cmd, err := c.sshShellCommand(ctx, nodeIP, "systemctl is-active pulse-agent 2>/dev/null || test -f /usr/local/bin/pulse-agent", false)
 	if err != nil {
 		c.logger.Warn().Err(err).Str("node_ip", nodeIP).Msg("SSH existing-agent check refused before execution")
 		return false
@@ -478,7 +529,7 @@ func (c *CommandClient) checkExistingAgentSSH(ctx context.Context, nodeIP string
 // checkPulseReachabilitySSH checks if the peer can reach the Pulse URL.
 func (c *CommandClient) checkPulseReachabilitySSH(ctx context.Context, nodeIP, pulseURL string) bool {
 	// Use curl with a short timeout to check connectivity.
-	cmd, err := c.sshCommand(ctx, nodeIP, fmt.Sprintf("curl -sf --connect-timeout 5 -o /dev/null %s/api/health || wget -q --timeout=5 -O /dev/null %s/api/health 2>/dev/null", shellescape(pulseURL), shellescape(pulseURL)))
+	cmd, err := c.sshShellCommand(ctx, nodeIP, fmt.Sprintf("curl -sf --connect-timeout 5 -o /dev/null %s/api/health || wget -q --timeout=5 -O /dev/null %s/api/health 2>/dev/null", shellescape(pulseURL), shellescape(pulseURL)), false)
 	if err != nil {
 		c.logger.Warn().Err(err).Str("node_ip", nodeIP).Msg("SSH Pulse reachability check refused before execution")
 		return false
@@ -488,7 +539,7 @@ func (c *CommandClient) checkPulseReachabilitySSH(ctx context.Context, nodeIP, p
 
 // writeTokenSSH writes a bootstrap token to a secure path on the target via SSH stdin.
 func (c *CommandClient) writeTokenSSH(ctx context.Context, nodeIP, token string) error {
-	cmd, err := c.sshCommand(ctx, nodeIP, "mkdir -p /run/pulse-agent && cat > /run/pulse-agent/bootstrap.token && chmod 600 /run/pulse-agent/bootstrap.token")
+	cmd, err := c.sshShellCommand(ctx, nodeIP, "mkdir -p /run/pulse-agent && cat > /run/pulse-agent/bootstrap.token && chmod 600 /run/pulse-agent/bootstrap.token", true)
 	if err != nil {
 		return err
 	}
@@ -514,8 +565,7 @@ func (c *CommandClient) runInstallSSH(ctx context.Context, nodeIP, pulseURL stri
 		"set -o pipefail; curl -sfL -- %s/install.sh | bash -s -- --non-interactive --token-file /run/pulse-agent/bootstrap.token --pulse-url %s --enroll --enable-commands --enable-proxmox",
 		escapedURL, escapedURL,
 	)
-	remoteCmd := "bash -c " + shellescape(innerCmd)
-	cmd, err := c.sshCommand(ctx, nodeIP, remoteCmd)
+	cmd, err := c.sshShellCommand(ctx, nodeIP, innerCmd, true)
 	if err != nil {
 		return -1, "", err
 	}

@@ -287,6 +287,7 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 			InsecureSkipVerify: cfg.InsecureSkipVerify,
 			CACertPath:         cfg.CACertPath,
 			ServerFingerprint:  cfg.ServerFingerprint,
+			DeploySSHUser:      cfg.DeploySSHUser,
 			LogLevel:           cfg.LogLevel,
 			Logger:             &logger,
 			EnableProxmox:      cfg.EnableProxmox,
@@ -528,6 +529,7 @@ type Config struct {
 	InsecureSkipVerify bool
 	CACertPath         string
 	ServerFingerprint  string
+	DeploySSHUser      string
 	LogLevel           zerolog.Level
 	Logger             *zerolog.Logger
 
@@ -584,6 +586,7 @@ func loadConfig(args []string, getenv func(string) string) (Config, error) {
 	envInsecure := strings.TrimSpace(getenv("PULSE_INSECURE_SKIP_VERIFY"))
 	envCACertPath := strings.TrimSpace(getenv("PULSE_CACERT"))
 	envServerFingerprint := strings.TrimSpace(getenv("PULSE_SERVER_FINGERPRINT"))
+	envDeploySSHUser := strings.TrimSpace(getenv("PULSE_DEPLOY_SSH_USER"))
 	envTags := strings.TrimSpace(getenv("PULSE_TAGS"))
 	envLogLevel := strings.TrimSpace(getenv("LOG_LEVEL"))
 	envEnableHost := strings.TrimSpace(getenv("PULSE_ENABLE_HOST"))
@@ -657,6 +660,7 @@ func loadConfig(args []string, getenv func(string) string) (Config, error) {
 	insecureFlag := fs.Bool("insecure", utils.ParseBool(envInsecure), "Skip TLS verification")
 	caCertFlag := fs.String("cacert", envCACertPath, "Path to custom CA bundle for agent HTTPS transport")
 	serverFingerprintFlag := fs.String("server-fingerprint", envServerFingerprint, "Expected Pulse server TLS certificate fingerprint (SHA256)")
+	deploySSHUserFlag := fs.String("deploy-ssh-user", envDeploySSHUser, "SSH user for peer deploy fan-out (default: root; non-root requires passwordless sudo)")
 	logLevelFlag := fs.String("log-level", defaultLogLevel(envLogLevel), "Log level")
 
 	enableHostFlag := fs.Bool("enable-host", defaultEnableHost, "Enable Host Agent module")
@@ -746,6 +750,10 @@ func loadConfig(args []string, getenv func(string) string) (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+	deploySSHUser, err := hostagent.NormalizeDeploySSHUser(*deploySSHUserFlag)
+	if err != nil {
+		return Config{}, err
+	}
 
 	tags := gatherTags(envTags, tagFlags)
 	kubeIncludeNamespaces := gatherCSV(envKubeIncludeNamespaces, kubeIncludeNamespaceFlags)
@@ -772,6 +780,7 @@ func loadConfig(args []string, getenv func(string) string) (Config, error) {
 		InsecureSkipVerify:        *insecureFlag,
 		CACertPath:                strings.TrimSpace(*caCertFlag),
 		ServerFingerprint:         strings.TrimSpace(*serverFingerprintFlag),
+		DeploySSHUser:             deploySSHUser,
 		LogLevel:                  logLevel,
 		EnableHost:                *enableHostFlag,
 		EnableDocker:              *enableDockerFlag,

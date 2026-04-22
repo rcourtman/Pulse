@@ -95,6 +95,7 @@ type CommandClient struct {
 	insecureSkipVerify bool
 	caCertPath         string
 	serverFingerprint  string
+	deploySSHUser      string
 	commandPolicy      *agentexec.CommandPolicy
 	sshKnownHosts      sshknownhosts.Manager
 	sshKnownHostsOnce  sync.Once
@@ -125,6 +126,7 @@ func NewCommandClient(cfg Config, agentID, hostname, platform, version string) *
 		insecureSkipVerify: cfg.InsecureSkipVerify,
 		caCertPath:         cfg.CACertPath,
 		serverFingerprint:  cfg.ServerFingerprint,
+		deploySSHUser:      cfg.DeploySSHUser,
 		commandPolicy:      agentexec.DefaultPolicy(),
 		logger:             logger,
 		done:               make(chan struct{}),

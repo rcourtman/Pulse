@@ -177,6 +177,7 @@ func TestNewCommandClient_SetsSecureCommandDefaults(t *testing.T) {
 	client := NewCommandClient(Config{
 		PulseURL:          "https://pulse.example",
 		ServerFingerprint: "aabbccdd",
+		DeploySSHUser:     "pulse-deploy",
 		Logger:            &logger,
 	}, "agent-1", "node-1", "linux", "1.0.0")
 
@@ -189,6 +190,9 @@ func TestNewCommandClient_SetsSecureCommandDefaults(t *testing.T) {
 	if client.serverFingerprint != "aabbccdd" {
 		t.Fatalf("serverFingerprint = %q, want %q", client.serverFingerprint, "aabbccdd")
 	}
+	if client.deploySSHUser != "pulse-deploy" {
+		t.Fatalf("deploySSHUser = %q, want %q", client.deploySSHUser, "pulse-deploy")
+	}
 
 	if err := client.authorizeCommand(executeCommandPayload{Command: "systemctl restart nginx"}); err == nil || !strings.Contains(err.Error(), "requires approval") {
 		t.Fatalf("expected approval-required command to fail closed, got %v", err)
@@ -198,6 +202,24 @@ func TestNewCommandClient_SetsSecureCommandDefaults(t *testing.T) {
 	}
 	if err := client.authorizeCommand(executeCommandPayload{Command: "rm -rf /"}); err == nil || !strings.Contains(err.Error(), "blocked by policy") {
 		t.Fatalf("expected blocked command to be rejected, got %v", err)
+	}
+}
+
+func TestNewRejectsInvalidDeploySSHUser(t *testing.T) {
+	mc := &mockCollector{
+		hostInfoFn: func(context.Context) (*gohost.InfoStat, error) {
+			return &gohost.InfoStat{Hostname: "host", HostID: "hid", KernelArch: runtime.GOARCH}, nil
+		},
+	}
+
+	_, err := New(Config{
+		APIToken:      "token",
+		DeploySSHUser: "bad user",
+		LogLevel:      zerolog.InfoLevel,
+		Collector:     mc,
+	})
+	if err == nil || !strings.Contains(err.Error(), "invalid deploy SSH user") {
+		t.Fatalf("expected invalid deploy SSH user error, got %v", err)
 	}
 }
 

@@ -806,6 +806,7 @@ func TestLoadConfig(t *testing.T) {
 			"PULSE_ENABLE_DOCKER":      "true",
 			"PULSE_CACERT":             "/etc/pulse/ca.pem",
 			"PULSE_SERVER_FINGERPRINT": "aabbccdd",
+			"PULSE_DEPLOY_SSH_USER":    "pulse-deploy",
 		}
 		cfg, err := loadConfig([]string{}, func(s string) string { return env[s] })
 		if err != nil {
@@ -829,10 +830,13 @@ func TestLoadConfig(t *testing.T) {
 		if cfg.ServerFingerprint != "aabbccdd" {
 			t.Errorf("expected server fingerprint from env, got %s", cfg.ServerFingerprint)
 		}
+		if cfg.DeploySSHUser != "pulse-deploy" {
+			t.Errorf("expected deploy SSH user from env, got %s", cfg.DeploySSHUser)
+		}
 	})
 
 	t.Run("flag overrides", func(t *testing.T) {
-		cfg, err := loadConfig([]string{"-url", "http://flag.example.com", "-token", "flag-token", "-enable-host=false", "-cacert", "/tmp/custom-ca.pem", "-server-fingerprint", "1122"}, func(s string) string { return "" })
+		cfg, err := loadConfig([]string{"-url", "http://flag.example.com", "-token", "flag-token", "-enable-host=false", "-cacert", "/tmp/custom-ca.pem", "-server-fingerprint", "1122", "-deploy-ssh-user", "pulse-deploy"}, func(s string) string { return "" })
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -850,6 +854,9 @@ func TestLoadConfig(t *testing.T) {
 		}
 		if cfg.ServerFingerprint != "1122" {
 			t.Errorf("expected server fingerprint from flag, got %s", cfg.ServerFingerprint)
+		}
+		if cfg.DeploySSHUser != "pulse-deploy" {
+			t.Errorf("expected deploy SSH user from flag, got %s", cfg.DeploySSHUser)
 		}
 	})
 
@@ -885,6 +892,13 @@ func TestLoadConfig(t *testing.T) {
 		_, err := loadConfig([]string{"-token", "test-token", "-log-level", "invalid"}, func(s string) string { return "" })
 		if err == nil {
 			t.Fatal("expected error for invalid log level")
+		}
+	})
+
+	t.Run("invalid deploy ssh user returns error", func(t *testing.T) {
+		_, err := loadConfig([]string{"-token", "test-token", "-deploy-ssh-user", "bad user"}, func(s string) string { return "" })
+		if err == nil {
+			t.Fatal("expected error for invalid deploy SSH user")
 		}
 	})
 
