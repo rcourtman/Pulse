@@ -15,8 +15,10 @@ func TestBuildReleaseUsesV6InstallScripts(t *testing.T) {
 
 	script := string(content)
 	required := []string{
-		`cp scripts/install.sh "$RELEASE_DIR/install.sh"`,
-		`[ -f "scripts/install.ps1" ] && cp "scripts/install.ps1" "$RELEASE_DIR/install.ps1"`,
+		`RENDERED_INSTALLERS_DIR="${BUILD_DIR}/rendered-installers"`,
+		`go run ./scripts/render_installers.go \`,
+		`cp "${RENDERED_INSTALLERS_DIR}/install.sh" "$RELEASE_DIR/install.sh"`,
+		`[ -f "${RENDERED_INSTALLERS_DIR}/install.ps1" ] && cp "${RENDERED_INSTALLERS_DIR}/install.ps1" "$RELEASE_DIR/install.ps1"`,
 		`cp "$BUILD_DIR/pulse-agent-linux-amd64" "$RELEASE_DIR/"`,
 		`cp "$BUILD_DIR/pulse-agent-linux-arm64" "$RELEASE_DIR/"`,
 		`cp "$BUILD_DIR/pulse-agent-linux-armv7" "$RELEASE_DIR/"`,
@@ -38,6 +40,9 @@ func TestBuildReleaseUsesV6InstallScripts(t *testing.T) {
 		`server_ldflags="$(./scripts/release_ldflags.sh server --version "v${VERSION}" --build-time "${build_time}" --git-commit "${git_commit}" "${license_ldflags_args[@]}" "${update_ldflags_args[@]}")"`,
 		`PULSE_UPDATE_SIGNING_KEY`,
 		`go run ./scripts/release_update_key.go public-key --private-key "${PULSE_UPDATE_SIGNING_KEY}"`,
+		`go run ./scripts/release_update_key.go public-key-ssh --private-key "${PULSE_UPDATE_SIGNING_KEY}"`,
+		`go run ./scripts/release_update_key.go openssh-private-key --private-key "${PULSE_UPDATE_SIGNING_KEY}"`,
+		`ssh-keygen -q -Y sign`,
 		`sign_release_file "${artifact}"`,
 	}
 	for _, needle := range requiredScriptWiring {
@@ -69,6 +74,7 @@ func TestCreateReleaseUploadsPowerShellInstaller(t *testing.T) {
 		`if [ -f release/install.ps1 ]; then`,
 		`gh release upload "${TAG}" release/install.ps1 --clobber`,
 		`gh release upload "${TAG}" release/*.sig --clobber`,
+		`gh release upload "${TAG}" release/*.sshsig --clobber`,
 		`uses: actions/attest@v4`,
 		`subject-path: release/*`,
 		`gh api "repos/${{ github.repository }}/releases?per_page=100" --paginate`,
@@ -97,10 +103,18 @@ func TestDockerAndDemoBuildsUseCanonicalReleaseLdflags(t *testing.T) {
 	dockerfile := string(dockerfileBytes)
 	dockerRequired := []string{
 		`COPY scripts/release_ldflags.sh ./scripts/release_ldflags.sh`,
+		`COPY scripts/release_update_key.go ./scripts/release_update_key.go`,
+		`COPY scripts/render_installers.go ./scripts/render_installers.go`,
 		`--mount=type=secret,id=pulse_license_public_key,required=false`,
+		`--mount=type=secret,id=pulse_update_signing_key,required=false`,
 		`LICENSE_PUBLIC_KEY="$(tr -d '\r\n' < /run/secrets/pulse_license_public_key)"`,
+		`UPDATE_PUBLIC_KEYS="$(go run ./scripts/release_update_key.go public-key --private-key "${UPDATE_SIGNING_KEY}")"`,
 		`./scripts/release_ldflags.sh server --version "${VERSION}" --build-time "${BUILD_TIME}" --git-commit "${GIT_COMMIT}"`,
 		`./scripts/release_ldflags.sh agent --version "${VERSION}"`,
+		`go run ./scripts/render_installers.go --source-dir ./scripts --output-dir /app/rendered-installers`,
+		`ssh-keygen -q -Y sign -f "${OPENSSH_SIGNING_KEY}" -n pulse-install`,
+		`COPY --from=backend-builder /app/rendered-installers/install.sh /opt/pulse/scripts/install.sh`,
+		`COPY --from=backend-builder /app/pulse-agent-* /opt/pulse/bin/`,
 	}
 	for _, needle := range dockerRequired {
 		if !strings.Contains(dockerfile, needle) {
@@ -138,8 +152,10 @@ func TestReleaseWorkflowsUseSecretSafeAttestedImageBuilds(t *testing.T) {
 		`sbom: true`,
 		`secrets: |`,
 		`pulse_license_public_key=${{ secrets.PULSE_LICENSE_PUBLIC_KEY }}`,
+		`pulse_update_signing_key=${{ secrets.PULSE_UPDATE_SIGNING_KEY }}`,
 		`DOCKER_BUILDKIT: 1`,
 		`--secret id=pulse_license_public_key,env=PULSE_LICENSE_PUBLIC_KEY`,
+		`--secret id=pulse_update_signing_key,env=PULSE_UPDATE_SIGNING_KEY`,
 		`id-token: write`,
 		`attestations: write`,
 		`uses: actions/attest@v4`,
@@ -163,6 +179,7 @@ func TestReleaseWorkflowsUseSecretSafeAttestedImageBuilds(t *testing.T) {
 		`sbom: true`,
 		`secrets: |`,
 		`pulse_license_public_key=${{ secrets.PULSE_LICENSE_PUBLIC_KEY }}`,
+		`pulse_update_signing_key=${{ secrets.PULSE_UPDATE_SIGNING_KEY }}`,
 		`subject-name: docker.io/rcourtman/pulse`,
 		`subject-name: ghcr.io/${{ github.repository_owner }}/pulse`,
 		`subject-name: docker.io/rcourtman/pulse-agent`,

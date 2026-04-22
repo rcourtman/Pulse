@@ -7728,6 +7728,9 @@ func TestContract_DownloadUnifiedAgentReleaseAssetIncludesSignatureHeader(t *tes
 	if err := os.WriteFile(binPath+".sig", []byte("signed-agent"), 0o644); err != nil {
 		t.Fatalf("write signature: %v", err)
 	}
+	if err := os.WriteFile(binPath+".sshsig", []byte("signed-agent-ssh"), 0o644); err != nil {
+		t.Fatalf("write ssh signature: %v", err)
+	}
 
 	req := httptest.NewRequest(http.MethodGet, "/api/install/agent?arch=linux-amd64", nil)
 	w := httptest.NewRecorder()
@@ -7735,6 +7738,9 @@ func TestContract_DownloadUnifiedAgentReleaseAssetIncludesSignatureHeader(t *tes
 
 	if got := w.Header().Get(signatureHeaderName); got != "signed-agent" {
 		t.Fatalf("agent download signature header = %q, want %q", got, "signed-agent")
+	}
+	if got := w.Header().Get(sshSignatureHeaderName); got != encodedTestSSHSignature("signed-agent-ssh") {
+		t.Fatalf("agent download SSH signature header = %q, want %q", got, encodedTestSSHSignature("signed-agent-ssh"))
 	}
 }
 
@@ -7749,6 +7755,9 @@ func TestContract_DownloadInstallScriptReleaseAssetIncludesSignatureHeader(t *te
 	if err := os.WriteFile(scriptPath+".sig", []byte("signed-install-script"), 0o644); err != nil {
 		t.Fatalf("write install signature: %v", err)
 	}
+	if err := os.WriteFile(scriptPath+".sshsig", []byte("signed-install-script-ssh"), 0o644); err != nil {
+		t.Fatalf("write install SSH signature: %v", err)
+	}
 
 	req := httptest.NewRequest(http.MethodGet, "/install.sh", nil)
 	w := httptest.NewRecorder()
@@ -7756,6 +7765,9 @@ func TestContract_DownloadInstallScriptReleaseAssetIncludesSignatureHeader(t *te
 
 	if got := w.Header().Get(signatureHeaderName); got != "signed-install-script" {
 		t.Fatalf("install script signature header = %q, want %q", got, "signed-install-script")
+	}
+	if got := w.Header().Get(sshSignatureHeaderName); got != encodedTestSSHSignature("signed-install-script-ssh") {
+		t.Fatalf("install script SSH signature header = %q, want %q", got, encodedTestSSHSignature("signed-install-script-ssh"))
 	}
 }
 

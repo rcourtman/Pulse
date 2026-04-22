@@ -74,6 +74,13 @@ querying, and the operator-facing storage health presentation layer.
    provider-backed recovery: storage and recovery must treat `truenas_disabled`
    as an explicit platform opt-out, not as the baseline onboarding state for a
    supported platform.
+   That same adjacent API boundary also owns signed release-asset download
+   continuity when shared helpers serve installer or unified-agent assets:
+   storage- and recovery-adjacent callers may reuse the shared
+   `internal/api/unified_agent.go` path, but they must not fork a second
+   checksum or detached-signature vocabulary away from the canonical
+   `X-Checksum-Sha256`, `X-Signature-Ed25519`, and base64-encoded
+   `X-Signature-SSHSIG` contract.
    That same adjacent API boundary also owns pre-auth local recovery
    containment. Storage- and recovery-adjacent quick setup or break-glass
    routes may exist before auth is configured, but they must stay

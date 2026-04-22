@@ -291,6 +291,7 @@ jobs:
             VERSION=${{ needs.prepare.outputs.tag }}
           secrets: |
             pulse_license_public_key=${{ secrets.PULSE_LICENSE_PUBLIC_KEY }}
+            pulse_update_signing_key=${{ secrets.PULSE_UPDATE_SIGNING_KEY }}
 
       - name: Build Pulse agent image (verify only)
         uses: docker/build-push-action@v6
@@ -308,6 +309,7 @@ jobs:
             VERSION=${{ needs.prepare.outputs.tag }}
           secrets: |
             pulse_license_public_key=${{ secrets.PULSE_LICENSE_PUBLIC_KEY }}
+            pulse_update_signing_key=${{ secrets.PULSE_UPDATE_SIGNING_KEY }}
 
   helm_smoke:
     needs: prepare
@@ -326,10 +328,12 @@ jobs:
         env:
           DOCKER_BUILDKIT: 1
           PULSE_LICENSE_PUBLIC_KEY: ${{ secrets.PULSE_LICENSE_PUBLIC_KEY }}
+          PULSE_UPDATE_SIGNING_KEY: ${{ secrets.PULSE_UPDATE_SIGNING_KEY }}
         run: |
           docker build \
             --target runtime \
             --secret id=pulse_license_public_key,env=PULSE_LICENSE_PUBLIC_KEY \
+            --secret id=pulse_update_signing_key,env=PULSE_UPDATE_SIGNING_KEY \
             --build-arg VERSION="${{ needs.prepare.outputs.tag }}" \
             -t pulse-helm-smoke:${{ needs.prepare.outputs.version }} \
             .
@@ -730,6 +734,9 @@ jobs:
           gh release upload "${TAG}" release/*.sha256 --clobber
           if ls release/*.sig 1> /dev/null 2>&1; then
             gh release upload "${TAG}" release/*.sig --clobber
+          fi
+          if ls release/*.sshsig 1> /dev/null 2>&1; then
+            gh release upload "${TAG}" release/*.sshsig --clobber
           fi
 
       - name: Upload release assets

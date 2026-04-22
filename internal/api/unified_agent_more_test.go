@@ -112,6 +112,7 @@ func TestDownloadUnifiedInstallScript_ProxyFallback(t *testing.T) {
 	router.installScriptClient = newTestInstallScriptClientSequence(t, []expectedHTTPExchange{
 		{Method: http.MethodGet, URL: expectedURL, Status: http.StatusOK, Body: payload},
 		{Method: http.MethodGet, URL: expectedURL + ".sig", Status: http.StatusOK, Body: "signed-install-script"},
+		{Method: http.MethodGet, URL: expectedURL + ".sshsig", Status: http.StatusOK, Body: "signed-install-script-ssh"},
 	})
 
 	req := httptest.NewRequest(http.MethodGet, "/install.sh", nil)
@@ -131,6 +132,9 @@ func TestDownloadUnifiedInstallScript_ProxyFallback(t *testing.T) {
 	if got := w.Header().Get(signatureHeaderName); got != "signed-install-script" {
 		t.Fatalf("unexpected signature header: %q", got)
 	}
+	if got := w.Header().Get(sshSignatureHeaderName); got != encodedTestSSHSignature("signed-install-script-ssh") {
+		t.Fatalf("unexpected SSH signature header: %q", got)
+	}
 	if !strings.Contains(w.Header().Get("Content-Disposition"), "install.sh") {
 		t.Fatalf("missing Content-Disposition filename")
 	}
@@ -149,6 +153,7 @@ func TestDownloadUnifiedInstallScript_ProxyFallbackUsesConfiguredRepo(t *testing
 	router.installScriptClient = newTestInstallScriptClientSequence(t, []expectedHTTPExchange{
 		{Method: http.MethodGet, URL: expectedURL, Status: http.StatusOK, Body: payload},
 		{Method: http.MethodGet, URL: expectedURL + ".sig", Status: http.StatusOK, Body: "signed-install-script"},
+		{Method: http.MethodGet, URL: expectedURL + ".sshsig", Status: http.StatusOK, Body: "signed-install-script-ssh"},
 	})
 
 	req := httptest.NewRequest(http.MethodGet, "/install.sh", nil)
@@ -169,6 +174,7 @@ func TestDownloadUnifiedInstallScriptPS_ProxyFallback(t *testing.T) {
 	router.installScriptClient = newTestInstallScriptClientSequence(t, []expectedHTTPExchange{
 		{Method: http.MethodGet, URL: expectedURL, Status: http.StatusOK, Body: payload},
 		{Method: http.MethodGet, URL: expectedURL + ".sig", Status: http.StatusOK, Body: "signed-install-script"},
+		{Method: http.MethodGet, URL: expectedURL + ".sshsig", Status: http.StatusOK, Body: "signed-install-script-ssh"},
 	})
 
 	req := httptest.NewRequest(http.MethodGet, "/install.ps1", nil)
@@ -266,6 +272,7 @@ func TestDownloadUnifiedInstallScript_ProxyFallbackPreservesHEAD(t *testing.T) {
 	router.installScriptClient = newTestInstallScriptClientSequence(t, []expectedHTTPExchange{
 		{Method: http.MethodHead, URL: expectedURL, Status: http.StatusOK, Body: ""},
 		{Method: http.MethodGet, URL: expectedURL + ".sig", Status: http.StatusOK, Body: "signed-install-script"},
+		{Method: http.MethodGet, URL: expectedURL + ".sshsig", Status: http.StatusOK, Body: "signed-install-script-ssh"},
 	})
 
 	req := httptest.NewRequest(http.MethodHead, "/install.sh", nil)
@@ -281,6 +288,9 @@ func TestDownloadUnifiedInstallScript_ProxyFallbackPreservesHEAD(t *testing.T) {
 	}
 	if got := w.Header().Get(signatureHeaderName); got != "signed-install-script" {
 		t.Fatalf("unexpected signature header: %q", got)
+	}
+	if got := w.Header().Get(sshSignatureHeaderName); got != encodedTestSSHSignature("signed-install-script-ssh") {
+		t.Fatalf("unexpected SSH signature header: %q", got)
 	}
 }
 

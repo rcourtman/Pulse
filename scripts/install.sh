@@ -87,6 +87,9 @@ NON_INTERACTIVE="false"
 TOKEN_FILE_PATH=""       # Path to file containing the token
 OUTPUT_FORMAT="text"     # "text" (default) or "json"
 PREFLIGHT_ONLY="false"
+INSTALL_SIGNATURE_NAMESPACE="pulse-install"
+INSTALL_SIGNATURE_IDENTITY="pulse-installer"
+PINNED_INSTALLER_SSH_PUBLIC_KEY="__PULSE_INSTALLER_SSH_PUBLIC_KEY__"
 
 # Track if flags were explicitly set (to override auto-detection)
 DOCKER_EXPLICIT="false"
@@ -168,6 +171,7 @@ EXIT_SERVICE_START_FAILED=13
 EXIT_PREFLIGHT_FAILED=14
 EXIT_ALREADY_INSTALLED=15    # Not a failure — used with --preflight-only
 EXIT_MISSING_ARGS=16
+EXIT_SIGNATURE_FAILED=17
 
 json_event() {
     # Usage: json_event <phase> <code> <message> [exitCode]
@@ -188,6 +192,63 @@ redact_token() {
         msg="${msg//$TOKEN_FILE_PATH/[token-file]}"
     fi
     echo "$msg"
+}
+
+has_pinned_installer_signature_key() {
+    [[ -n "$PINNED_INSTALLER_SSH_PUBLIC_KEY" && "$PINNED_INSTALLER_SSH_PUBLIC_KEY" != "__PULSE_INSTALLER_SSH_PUBLIC_KEY__" ]]
+}
+
+decode_base64_to_file() {
+    local encoded="$1"
+    local output="$2"
+
+    if command -v base64 >/dev/null 2>&1; then
+        if printf '%s' "$encoded" | base64 --decode > "$output" 2>/dev/null; then
+            return 0
+        fi
+        if printf '%s' "$encoded" | base64 -d > "$output" 2>/dev/null; then
+            return 0
+        fi
+        if printf '%s' "$encoded" | base64 -D > "$output" 2>/dev/null; then
+            return 0
+        fi
+    fi
+
+    fail "Base64 decoder is required to verify signed Pulse downloads." "$EXIT_SIGNATURE_FAILED"
+}
+
+verify_download_signature() {
+    local target_path="$1"
+    local signature_header="$2"
+
+    if ! has_pinned_installer_signature_key; then
+        return 0
+    fi
+    if [[ -z "$signature_header" ]]; then
+        fail "Server did not provide SSH signature metadata; refusing signed install." "$EXIT_SIGNATURE_FAILED"
+    fi
+    if ! command -v ssh-keygen >/dev/null 2>&1; then
+        fail "ssh-keygen is required to verify signed Pulse downloads." "$EXIT_SIGNATURE_FAILED"
+    fi
+
+    local allowed_signers signature_file
+    allowed_signers=$(mktemp)
+    signature_file=$(mktemp)
+    TMP_FILES+=("$allowed_signers" "$signature_file")
+
+    printf '%s %s\n' "$INSTALL_SIGNATURE_IDENTITY" "$PINNED_INSTALLER_SSH_PUBLIC_KEY" > "$allowed_signers"
+    decode_base64_to_file "$signature_header" "$signature_file"
+
+    if ! ssh-keygen -Y verify \
+        -f "$allowed_signers" \
+        -I "$INSTALL_SIGNATURE_IDENTITY" \
+        -n "$INSTALL_SIGNATURE_NAMESPACE" \
+        -s "$signature_file" < "$target_path" >/dev/null 2>&1; then
+        fail "Cryptographic signature verification failed for the downloaded agent binary." "$EXIT_SIGNATURE_FAILED"
+    fi
+
+    json_event "download" "signature_ok" "Binary signature verified"
+    log_info "Binary signature verified"
 }
 
 show_help() {
@@ -1465,7 +1526,7 @@ elif [[ "$OS" == "darwin" ]]; then
     fi
 fi
 
-# Checksum verification (when header is available)
+# Release metadata verification
 CHECKSUM_URL="${PULSE_URL}/download/${BINARY_NAME}?arch=${ARCH_PARAM}"
 TMP_HEADERS=$(mktemp)
 TMP_FILES+=("$TMP_HEADERS")
@@ -1474,8 +1535,24 @@ if [[ "$INSECURE" == "true" ]]; then HEADER_CURL_ARGS+=(-k); fi
 if [[ -n "$CURL_CA_BUNDLE" ]]; then HEADER_CURL_ARGS+=(--cacert "$CURL_CA_BUNDLE"); fi
 
 EXPECTED_SHA=""
+SSH_SIGNATURE_HEADER=""
+METADATA_FETCHED=false
 if curl "${HEADER_CURL_ARGS[@]}" "$CHECKSUM_URL" 2>/dev/null; then
+    METADATA_FETCHED=true
     EXPECTED_SHA=$(grep -i '^X-Checksum-Sha256:' "$TMP_HEADERS" 2>/dev/null | tr -d '\r' | awk '{print $2}' || true)
+    SSH_SIGNATURE_HEADER=$(grep -i '^X-Signature-SSHSIG:' "$TMP_HEADERS" 2>/dev/null | tr -d '\r' | sed 's/^[^:]*:[[:space:]]*//' || true)
+fi
+
+if has_pinned_installer_signature_key; then
+    if [[ "$METADATA_FETCHED" != "true" ]]; then
+        fail "Failed to fetch signed download metadata from the Pulse server." "$EXIT_SIGNATURE_FAILED"
+    fi
+    if [[ -z "$EXPECTED_SHA" ]]; then
+        fail "Server did not provide checksum header; refusing signed install." "$EXIT_CHECKSUM_FAILED"
+    fi
+    if [[ -z "$SSH_SIGNATURE_HEADER" ]]; then
+        fail "Server did not provide SSH signature header; refusing signed install." "$EXIT_SIGNATURE_FAILED"
+    fi
 fi
 
 if [[ -n "$EXPECTED_SHA" ]]; then
@@ -1486,6 +1563,8 @@ if [[ -n "$EXPECTED_SHA" ]]; then
     json_event "download" "checksum_ok" "Binary checksum verified"
     log_info "Binary checksum verified"
 fi
+
+verify_download_signature "$TMP_BIN" "$SSH_SIGNATURE_HEADER"
 
 chmod +x "$TMP_BIN"
 

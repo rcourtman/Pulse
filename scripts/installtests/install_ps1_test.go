@@ -239,3 +239,28 @@ func TestInstallPS1ClearsPersistedStateAfterUninstall(t *testing.T) {
 		}
 	}
 }
+
+func TestInstallPS1RequiresPinnedSignatureVerificationForReleaseDownloads(t *testing.T) {
+	content, err := os.ReadFile(repoFile("scripts", "install.ps1"))
+	if err != nil {
+		t.Fatalf("read install.ps1: %v", err)
+	}
+
+	script := string(content)
+	required := []string{
+		`$PinnedInstallerSshPublicKey = "__PULSE_INSTALLER_SSH_PUBLIC_KEY__"`,
+		`function Test-HasPinnedInstallerSignatureKey {`,
+		`function Invoke-InstallerSignatureVerification {`,
+		`Get-Command ssh-keygen.exe -ErrorAction SilentlyContinue`,
+		`$serverSshSignature = $webClient.ResponseHeaders[$InstallerSignatureHeaderName]`,
+		`Show-Error "Server did not provide checksum header; refusing signed install."`,
+		`Show-Error "Server did not provide SSH signature header; refusing signed install."`,
+		`Invoke-InstallerSignatureVerification -FilePath $TempPath -SignatureHeader $serverSshSignature`,
+		`-Y verify -f`,
+	}
+	for _, needle := range required {
+		if !strings.Contains(script, needle) {
+			t.Fatalf("install.ps1 missing signed-download verification contract: %s", needle)
+		}
+	}
+}

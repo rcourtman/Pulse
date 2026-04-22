@@ -9,6 +9,7 @@ import (
 	"encoding/pem"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -80,6 +81,39 @@ func TestPublicKeyString(t *testing.T) {
 	}
 	if len(decoded) != ed25519.PublicKeySize {
 		t.Fatalf("decoded public key length = %d, want %d", len(decoded), ed25519.PublicKeySize)
+	}
+}
+
+func TestAuthorizedPublicKeyString(t *testing.T) {
+	_, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("generate key: %v", err)
+	}
+
+	authorizedKey, err := AuthorizedPublicKeyString(privateKey, "pulse-installer")
+	if err != nil {
+		t.Fatalf("authorized public key string: %v", err)
+	}
+	if !strings.HasPrefix(authorizedKey, "ssh-ed25519 ") {
+		t.Fatalf("authorized public key missing ssh-ed25519 prefix: %q", authorizedKey)
+	}
+	if !strings.HasSuffix(authorizedKey, " pulse-installer") {
+		t.Fatalf("authorized public key missing comment: %q", authorizedKey)
+	}
+}
+
+func TestOpenSSHPrivateKeyPEM(t *testing.T) {
+	_, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("generate key: %v", err)
+	}
+
+	pemData, err := OpenSSHPrivateKeyPEM(privateKey, "pulse-installer")
+	if err != nil {
+		t.Fatalf("openssh private key pem: %v", err)
+	}
+	if !strings.Contains(pemData, "BEGIN OPENSSH PRIVATE KEY") {
+		t.Fatalf("openssh private key pem missing header: %q", pemData)
 	}
 }
 

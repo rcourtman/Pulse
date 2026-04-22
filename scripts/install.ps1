@@ -31,6 +31,10 @@ $StateDir = "$env:ProgramData\Pulse"
 $ConnectionStatePath = "$StateDir\connection.env"
 $LogFile = "$env:ProgramData\Pulse\pulse-agent.log"
 $DownloadTimeoutSec = 300
+$PinnedInstallerSshPublicKey = "__PULSE_INSTALLER_SSH_PUBLIC_KEY__"
+$InstallerSignatureNamespace = "pulse-install"
+$InstallerSignatureIdentity = "pulse-installer"
+$InstallerSignatureHeaderName = "X-Signature-SSHSIG"
 
 function Parse-Bool {
     param(
@@ -232,6 +236,70 @@ function Get-FileChecksum {
     } finally {
         $hasher.Dispose()
     }
+}
+
+function Test-HasPinnedInstallerSignatureKey {
+    return (-not [string]::IsNullOrWhiteSpace($PinnedInstallerSshPublicKey)) -and ($PinnedInstallerSshPublicKey -ne "__PULSE_INSTALLER_SSH_PUBLIC_KEY__")
+}
+
+function Get-SshKeygenPath {
+    $command = Get-Command ssh-keygen.exe -ErrorAction SilentlyContinue
+    if ($null -eq $command) {
+        $command = Get-Command ssh-keygen -ErrorAction SilentlyContinue
+    }
+    if ($null -eq $command) {
+        throw "ssh-keygen is required to verify signed Pulse downloads."
+    }
+    return $command.Source
+}
+
+function Invoke-InstallerSignatureVerification {
+    param(
+        [string]$FilePath,
+        [string]$SignatureHeader
+    )
+
+    if (-not (Test-HasPinnedInstallerSignatureKey)) {
+        return
+    }
+    if ([string]::IsNullOrWhiteSpace($SignatureHeader)) {
+        throw "Server did not provide SSH signature metadata; refusing signed install."
+    }
+
+    $allowedSignersPath = [System.IO.Path]::GetTempFileName()
+    $signaturePath = [System.IO.Path]::GetTempFileName()
+    $stdoutPath = [System.IO.Path]::GetTempFileName()
+    $stderrPath = [System.IO.Path]::GetTempFileName()
+    $script:TempFiles += @($allowedSignersPath, $signaturePath, $stdoutPath, $stderrPath)
+
+    [System.IO.File]::WriteAllText($allowedSignersPath, "$InstallerSignatureIdentity $PinnedInstallerSshPublicKey`n")
+    try {
+        [System.IO.File]::WriteAllBytes($signaturePath, [Convert]::FromBase64String($SignatureHeader.Trim()))
+    } catch {
+        throw "Server provided an invalid SSH signature payload."
+    }
+
+    $sshKeygen = Get-SshKeygenPath
+    $commandLine = "`"$sshKeygen`" -Y verify -f `"$allowedSignersPath`" -I `"$InstallerSignatureIdentity`" -n `"$InstallerSignatureNamespace`" -s `"$signaturePath`" < `"$FilePath`""
+    $process = Start-Process -FilePath "cmd.exe" `
+                             -ArgumentList "/d", "/s", "/c", $commandLine `
+                             -NoNewWindow `
+                             -Wait `
+                             -PassThru `
+                             -RedirectStandardOutput $stdoutPath `
+                             -RedirectStandardError $stderrPath
+    if ($process.ExitCode -ne 0) {
+        $stderr = ""
+        if (Test-Path $stderrPath) {
+            $stderr = (Get-Content $stderrPath -Raw -ErrorAction SilentlyContinue).Trim()
+        }
+        if ([string]::IsNullOrWhiteSpace($stderr)) {
+            throw "Cryptographic signature verification failed for the downloaded agent binary."
+        }
+        throw "Cryptographic signature verification failed for the downloaded agent binary. $stderr"
+    }
+
+    Write-Host "Cryptographic signature verified." -ForegroundColor Green
 }
 
 function Invoke-WithOptionalInsecureTls {
@@ -485,6 +553,8 @@ if (-not (Test-Path $InstallDir)) {
 $TempPath = [System.IO.Path]::GetTempFileName() + ".exe"
 $script:TempFiles += $TempPath
 $DestPath = "$InstallDir\$BinaryName"
+$serverChecksum = $null
+$serverSshSignature = $null
 
 try {
     # Configure TLS 1.2 minimum
@@ -507,6 +577,7 @@ try {
 
         # Get checksum from server response headers if available
         $serverChecksum = $webClient.ResponseHeaders["X-Checksum-Sha256"]
+        $serverSshSignature = $webClient.ResponseHeaders[$InstallerSignatureHeaderName]
     }
 
 } catch {
@@ -550,6 +621,26 @@ if (-not [string]::IsNullOrWhiteSpace($serverChecksum)) {
     Write-Host "Checksum verified: $localChecksum" -ForegroundColor Green
 } else {
     Write-Host "Warning: Server did not provide checksum header" -ForegroundColor Yellow
+}
+
+if (Test-HasPinnedInstallerSignatureKey) {
+    if ([string]::IsNullOrWhiteSpace($serverChecksum)) {
+        Cleanup
+        Show-Error "Server did not provide checksum header; refusing signed install."
+        Exit 1
+    }
+    if ([string]::IsNullOrWhiteSpace($serverSshSignature)) {
+        Cleanup
+        Show-Error "Server did not provide SSH signature header; refusing signed install."
+        Exit 1
+    }
+    try {
+        Invoke-InstallerSignatureVerification -FilePath $TempPath -SignatureHeader $serverSshSignature
+    } catch {
+        Cleanup
+        Show-Error "$_"
+        Exit 1
+    }
 }
 
 # --- Install Binary ---

@@ -7,8 +7,10 @@ import (
 	"compress/gzip"
 	"context"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -27,6 +29,7 @@ const (
 	defaultInstallScriptReleaseRepo = "rcourtman/Pulse"
 	checksumHeaderName              = "X-Checksum-Sha256"
 	signatureHeaderName             = "X-Signature-Ed25519"
+	sshSignatureHeaderName          = "X-Signature-SSHSIG"
 )
 
 func installScriptReleaseRepo() string {
@@ -80,8 +83,9 @@ func handleDownloadInstallScriptCommon(w http.ResponseWriter, req *http.Request,
 	}
 
 	signature, sigErr := readReleaseAssetSignature(scriptPath)
-	if sigErr != nil && isPublishedReleaseAssetVersion(serverVersion) {
-		log.Warn().Err(sigErr).Str("path", scriptPath).Msg("Signed install script unavailable locally, proxying from GitHub releases")
+	sshSignature, sshSigErr := readReleaseAssetSSHSignature(scriptPath)
+	if (sigErr != nil || sshSigErr != nil) && isPublishedReleaseAssetVersion(serverVersion) {
+		log.Warn().Err(errors.Join(sigErr, sshSigErr)).Str("path", scriptPath).Msg("Signed install script unavailable locally, proxying from GitHub releases")
 		fallbackProxy(w, req, scriptName)
 		return
 	}
@@ -90,6 +94,9 @@ func handleDownloadInstallScriptCommon(w http.ResponseWriter, req *http.Request,
 	w.Header().Set("Content-Disposition", "inline; filename=\""+scriptName+"\"")
 	if signature != "" {
 		w.Header().Set(signatureHeaderName, signature)
+	}
+	if sshSignature != "" {
+		w.Header().Set(sshSignatureHeaderName, sshSignature)
 	}
 	http.ServeFile(w, req, scriptPath)
 }
@@ -201,15 +208,19 @@ func (r *Router) handleDownloadUnifiedAgent(w http.ResponseWriter, req *http.Req
 		defer file.Close()
 
 		signature, sigErr := readReleaseAssetSignature(candidate)
-		if sigErr != nil && isPublishedReleaseAssetVersion(r.serverVersion) {
-			log.Warn().Err(sigErr).Str("path", candidate).Msg("Skipping unsigned local unified agent binary")
-			invalidCandidates = append(invalidCandidates, fmt.Sprintf("%s (%v)", candidate, sigErr))
+		sshSignature, sshSigErr := readReleaseAssetSSHSignature(candidate)
+		if (sigErr != nil || sshSigErr != nil) && isPublishedReleaseAssetVersion(r.serverVersion) {
+			log.Warn().Err(errors.Join(sigErr, sshSigErr)).Str("path", candidate).Msg("Skipping unsigned local unified agent binary")
+			invalidCandidates = append(invalidCandidates, fmt.Sprintf("%s (%v)", candidate, errors.Join(sigErr, sshSigErr)))
 			continue
 		}
 
 		w.Header().Set(checksumHeaderName, checksum)
 		if signature != "" {
 			w.Header().Set(signatureHeaderName, signature)
+		}
+		if sshSignature != "" {
+			w.Header().Set(sshSignatureHeaderName, sshSignature)
 		}
 		http.ServeContent(w, req, filepath.Base(candidate), info.ModTime(), file)
 		return
@@ -276,6 +287,7 @@ func (r *Router) proxyAgentBinaryFromGitHub(w http.ResponseWriter, req *http.Req
 	}
 	githubURL := githubReleaseDownloadURL(binaryName)
 	signatureURL := githubReleaseDownloadURL(binaryName + ".sig")
+	sshSignatureURL := githubReleaseDownloadURL(binaryName + ".sshsig")
 
 	log.Info().Str("arch", normalized).Str("url", githubURL).Msg("Local agent binary not found, proxying from GitHub releases")
 
@@ -307,7 +319,13 @@ func (r *Router) proxyAgentBinaryFromGitHub(w http.ResponseWriter, req *http.Req
 			http.Error(w, "Failed to fetch agent binary signature", http.StatusServiceUnavailable)
 			return
 		}
-		serveProxiedAgentBinaryWithSignature(w, content, checksum, strings.TrimSpace(string(signature)), "github-proxy")
+		sshSignature, sshSigErr := fetchReleaseAssetContent(req.Context(), client, sshSignatureURL, 64*1024)
+		if sshSigErr != nil {
+			log.Error().Err(sshSigErr).Str("url", sshSignatureURL).Msg("Failed to fetch agent binary SSH signature from GitHub")
+			http.Error(w, "Failed to fetch agent binary SSH signature", http.StatusServiceUnavailable)
+			return
+		}
+		serveProxiedAgentBinaryWithSignatures(w, content, checksum, strings.TrimSpace(string(signature)), encodeSSHSignatureForHeader(sshSignature), "github-proxy")
 		return
 	}
 
@@ -329,7 +347,13 @@ func (r *Router) proxyAgentBinaryFromGitHub(w http.ResponseWriter, req *http.Req
 		http.Error(w, "Failed to fetch agent binary signature", http.StatusServiceUnavailable)
 		return
 	}
-	serveProxiedAgentBinaryWithSignature(w, archiveContent, checksum, strings.TrimSpace(string(signature)), "github-proxy-archive")
+	sshSignature, sshSigErr := fetchReleaseAssetContent(req.Context(), client, sshSignatureURL, 64*1024)
+	if sshSigErr != nil {
+		log.Error().Err(sshSigErr).Str("url", sshSignatureURL).Msg("Failed to fetch agent binary SSH signature from GitHub")
+		http.Error(w, "Failed to fetch agent binary SSH signature", http.StatusServiceUnavailable)
+		return
+	}
+	serveProxiedAgentBinaryWithSignatures(w, archiveContent, checksum, strings.TrimSpace(string(signature)), encodeSSHSignatureForHeader(sshSignature), "github-proxy-archive")
 }
 
 const maxAgentBinarySize = 100 * 1024 * 1024
@@ -348,13 +372,16 @@ func readBinaryWithChecksum(body io.Reader) ([]byte, string, error) {
 }
 
 func serveProxiedAgentBinary(w http.ResponseWriter, content []byte, checksum, servedFrom string) {
-	serveProxiedAgentBinaryWithSignature(w, content, checksum, "", servedFrom)
+	serveProxiedAgentBinaryWithSignatures(w, content, checksum, "", "", servedFrom)
 }
 
-func serveProxiedAgentBinaryWithSignature(w http.ResponseWriter, content []byte, checksum, signature, servedFrom string) {
+func serveProxiedAgentBinaryWithSignatures(w http.ResponseWriter, content []byte, checksum, signature, sshSignature, servedFrom string) {
 	w.Header().Set(checksumHeaderName, checksum)
 	if strings.TrimSpace(signature) != "" {
 		w.Header().Set(signatureHeaderName, strings.TrimSpace(signature))
+	}
+	if strings.TrimSpace(sshSignature) != "" {
+		w.Header().Set(sshSignatureHeaderName, strings.TrimSpace(sshSignature))
 	}
 	w.Header().Set("X-Served-From", servedFrom)
 	w.Header().Set("Content-Type", "application/octet-stream")
@@ -464,6 +491,22 @@ func readReleaseAssetSignature(path string) (string, error) {
 		return "", fmt.Errorf("release signature %s is empty", signaturePath)
 	}
 	return signature, nil
+}
+
+func readReleaseAssetSSHSignature(path string) (string, error) {
+	signaturePath := path + ".sshsig"
+	data, err := os.ReadFile(signaturePath)
+	if err != nil {
+		return "", fmt.Errorf("read release ssh signature %s: %w", signaturePath, err)
+	}
+	if len(bytes.TrimSpace(data)) == 0 {
+		return "", fmt.Errorf("release ssh signature %s is empty", signaturePath)
+	}
+	return encodeSSHSignatureForHeader(data), nil
+}
+
+func encodeSSHSignatureForHeader(data []byte) string {
+	return base64.StdEncoding.EncodeToString(data)
 }
 
 func fetchReleaseAssetContent(ctx context.Context, client *http.Client, url string, limit int64) ([]byte, error) {
@@ -616,6 +659,12 @@ func (r *Router) proxyInstallScriptFromGitHub(w http.ResponseWriter, req *http.R
 		http.Error(w, "Failed to fetch install script signature", http.StatusServiceUnavailable)
 		return
 	}
+	sshSignatureContent, sshSigErr := fetchReleaseAssetContent(req.Context(), client, githubURL+".sshsig", 64*1024)
+	if sshSigErr != nil {
+		log.Error().Err(sshSigErr).Str("url", githubURL+".sshsig").Msg("Failed to fetch install script SSH signature from GitHub")
+		http.Error(w, "Failed to fetch install script SSH signature", http.StatusServiceUnavailable)
+		return
+	}
 
 	// Read the script content
 	content, err := io.ReadAll(resp.Body)
@@ -635,6 +684,7 @@ func (r *Router) proxyInstallScriptFromGitHub(w http.ResponseWriter, req *http.R
 	w.Header().Set("Content-Disposition", "inline; filename=\""+scriptName+"\"")
 	w.Header().Set("X-Served-From", "github-fallback")
 	w.Header().Set(signatureHeaderName, strings.TrimSpace(string(signatureContent)))
+	w.Header().Set(sshSignatureHeaderName, encodeSSHSignatureForHeader(sshSignatureContent))
 	if req.Method == http.MethodHead {
 		w.WriteHeader(http.StatusOK)
 		return

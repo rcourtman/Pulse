@@ -11,6 +11,8 @@ import (
 func usage() {
 	fmt.Fprintln(os.Stderr, "usage:")
 	fmt.Fprintln(os.Stderr, "  release_update_key.go public-key --private-key <base64-ed25519-key-or-seed>")
+	fmt.Fprintln(os.Stderr, "  release_update_key.go public-key-ssh --private-key <base64-ed25519-key-or-seed> [--comment <comment>]")
+	fmt.Fprintln(os.Stderr, "  release_update_key.go openssh-private-key --private-key <base64-ed25519-key-or-seed> [--comment <comment>]")
 	fmt.Fprintln(os.Stderr, "  release_update_key.go sign --private-key <base64-ed25519-key-or-seed> --file <path>")
 	os.Exit(1)
 }
@@ -35,6 +37,36 @@ func main() {
 			fail(err)
 		}
 		fmt.Println(encoded)
+	case "public-key-ssh":
+		publicKeyCmd := flag.NewFlagSet("public-key-ssh", flag.ExitOnError)
+		privateKey := publicKeyCmd.String("private-key", "", "base64-encoded Ed25519 private key or seed")
+		comment := publicKeyCmd.String("comment", "", "optional SSH key comment")
+		_ = publicKeyCmd.Parse(os.Args[2:])
+
+		key, err := updatesignature.DecodePrivateKey(*privateKey)
+		if err != nil {
+			fail(err)
+		}
+		encoded, err := updatesignature.AuthorizedPublicKeyString(key, *comment)
+		if err != nil {
+			fail(err)
+		}
+		fmt.Println(encoded)
+	case "openssh-private-key":
+		privateKeyCmd := flag.NewFlagSet("openssh-private-key", flag.ExitOnError)
+		privateKey := privateKeyCmd.String("private-key", "", "base64-encoded Ed25519 private key or seed")
+		comment := privateKeyCmd.String("comment", "", "optional SSH key comment")
+		_ = privateKeyCmd.Parse(os.Args[2:])
+
+		key, err := updatesignature.DecodePrivateKey(*privateKey)
+		if err != nil {
+			fail(err)
+		}
+		encoded, err := updatesignature.OpenSSHPrivateKeyPEM(key, *comment)
+		if err != nil {
+			fail(err)
+		}
+		fmt.Print(encoded)
 	case "sign":
 		signCmd := flag.NewFlagSet("sign", flag.ExitOnError)
 		privateKey := signCmd.String("private-key", "", "base64-encoded Ed25519 private key or seed")

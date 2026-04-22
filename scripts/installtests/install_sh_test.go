@@ -1255,6 +1255,30 @@ exit 1
 	}
 }
 
+func TestInstallSHRequiresPinnedSignatureVerificationForReleaseDownloads(t *testing.T) {
+	content, err := os.ReadFile(repoFile("scripts", "install.sh"))
+	if err != nil {
+		t.Fatalf("read install.sh: %v", err)
+	}
+
+	script := string(content)
+	required := []string{
+		`PINNED_INSTALLER_SSH_PUBLIC_KEY="__PULSE_INSTALLER_SSH_PUBLIC_KEY__"`,
+		`has_pinned_installer_signature_key() {`,
+		`grep -i '^X-Signature-SSHSIG:' "$TMP_HEADERS"`,
+		`if [[ "$METADATA_FETCHED" != "true" ]]; then`,
+		`Server did not provide checksum header; refusing signed install.`,
+		`Server did not provide SSH signature header; refusing signed install.`,
+		`ssh-keygen -Y verify`,
+		`Binary signature verified`,
+	}
+	for _, needle := range required {
+		if !strings.Contains(script, needle) {
+			t.Fatalf("install.sh missing signed-download verification contract: %s", needle)
+		}
+	}
+}
+
 func TestBuildContainerInstallCommandPreservesForcedVersion(t *testing.T) {
 	script := `
 		FORCE_VERSION="v1.2.3"

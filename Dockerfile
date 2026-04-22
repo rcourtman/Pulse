@@ -32,7 +32,7 @@ ARG VERSION
 WORKDIR /app
 
 # Install build dependencies
-RUN apk add --no-cache git
+RUN apk add --no-cache git openssh-client
 
 # Copy go mod files for better layer caching
 COPY go.mod go.sum ./
@@ -45,6 +45,10 @@ COPY cmd/ ./cmd/
 COPY internal/ ./internal/
 COPY pkg/ ./pkg/
 COPY scripts/release_ldflags.sh ./scripts/release_ldflags.sh
+COPY scripts/release_update_key.go ./scripts/release_update_key.go
+COPY scripts/render_installers.go ./scripts/render_installers.go
+COPY scripts/install.sh ./scripts/install.sh
+COPY scripts/install.ps1 ./scripts/install.ps1
 COPY VERSION ./
 
 # Copy the synced embed artifact from the frontend builder stage.
@@ -54,12 +58,17 @@ COPY --from=frontend-builder /app/internal/api/frontend-modern/dist ./internal/a
 RUN --mount=type=cache,id=pulse-go-mod,target=/go/pkg/mod \
     --mount=type=cache,id=pulse-go-build,target=/root/.cache/go-build \
     --mount=type=secret,id=pulse_license_public_key,required=false \
+    --mount=type=secret,id=pulse_update_signing_key,required=false \
     VERSION="${VERSION:-v$(cat VERSION | tr -d '\n')}" && \
     BUILD_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ") && \
     GIT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown") && \
     LICENSE_PUBLIC_KEY="" && \
+    UPDATE_SIGNING_KEY="" && \
+    UPDATE_PUBLIC_KEYS="" && \
     if [ -f /run/secrets/pulse_license_public_key ]; then LICENSE_PUBLIC_KEY="$(tr -d '\r\n' < /run/secrets/pulse_license_public_key)"; fi && \
-    SERVER_LDFLAGS="$(if [ -n "${LICENSE_PUBLIC_KEY}" ]; then ./scripts/release_ldflags.sh server --version "${VERSION}" --build-time "${BUILD_TIME}" --git-commit "${GIT_COMMIT}" --license-public-key "${LICENSE_PUBLIC_KEY}"; else ./scripts/release_ldflags.sh server --version "${VERSION}" --build-time "${BUILD_TIME}" --git-commit "${GIT_COMMIT}"; fi)" && \
+    if [ -f /run/secrets/pulse_update_signing_key ]; then UPDATE_SIGNING_KEY="$(tr -d '\r\n' < /run/secrets/pulse_update_signing_key)"; fi && \
+    if [ -n "${UPDATE_SIGNING_KEY}" ]; then UPDATE_PUBLIC_KEYS="$(go run ./scripts/release_update_key.go public-key --private-key "${UPDATE_SIGNING_KEY}")"; fi && \
+    SERVER_LDFLAGS="$(./scripts/release_ldflags.sh server --version "${VERSION}" --build-time "${BUILD_TIME}" --git-commit "${GIT_COMMIT}" $(if [ -n "${LICENSE_PUBLIC_KEY}" ]; then printf '%s %s' --license-public-key "${LICENSE_PUBLIC_KEY}"; fi) $(if [ -n "${UPDATE_PUBLIC_KEYS}" ]; then printf '%s %s' --update-public-keys "${UPDATE_PUBLIC_KEYS}"; fi))" && \
     CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
       -tags release \
       -ldflags="${SERVER_LDFLAGS}" \
@@ -76,8 +85,13 @@ RUN --mount=type=cache,id=pulse-go-mod,target=/go/pkg/mod \
 # Build unified agent binaries for all platforms (for download endpoint)
 RUN --mount=type=cache,id=pulse-go-mod,target=/go/pkg/mod \
     --mount=type=cache,id=pulse-go-build,target=/root/.cache/go-build \
+    --mount=type=secret,id=pulse_update_signing_key,required=false \
     VERSION="${VERSION:-v$(cat VERSION | tr -d '\n')}" && \
-    AGENT_LDFLAGS="$(./scripts/release_ldflags.sh agent --version "${VERSION}")" && \
+    UPDATE_SIGNING_KEY="" && \
+    UPDATE_PUBLIC_KEYS="" && \
+    if [ -f /run/secrets/pulse_update_signing_key ]; then UPDATE_SIGNING_KEY="$(tr -d '\r\n' < /run/secrets/pulse_update_signing_key)"; fi && \
+    if [ -n "${UPDATE_SIGNING_KEY}" ]; then UPDATE_PUBLIC_KEYS="$(go run ./scripts/release_update_key.go public-key --private-key "${UPDATE_SIGNING_KEY}")"; fi && \
+    AGENT_LDFLAGS="$(./scripts/release_ldflags.sh agent --version "${VERSION}" $(if [ -n "${UPDATE_PUBLIC_KEYS}" ]; then printf '%s %s' --update-public-keys "${UPDATE_PUBLIC_KEYS}"; fi))" && \
     CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
       -ldflags="${AGENT_LDFLAGS}" \
       -trimpath \
@@ -126,6 +140,31 @@ RUN --mount=type=cache,id=pulse-go-mod,target=/go/pkg/mod \
       -ldflags="${AGENT_LDFLAGS}" \
       -trimpath \
       -o pulse-agent-freebsd-arm64 ./cmd/pulse-agent
+
+RUN --mount=type=cache,id=pulse-go-mod,target=/go/pkg/mod \
+    --mount=type=cache,id=pulse-go-build,target=/root/.cache/go-build \
+    --mount=type=secret,id=pulse_update_signing_key,required=false \
+    mkdir -p /app/rendered-installers && \
+    UPDATE_SIGNING_KEY="" && \
+    INSTALLER_SSH_PUBLIC_KEY="" && \
+    if [ -f /run/secrets/pulse_update_signing_key ]; then UPDATE_SIGNING_KEY="$(tr -d '\r\n' < /run/secrets/pulse_update_signing_key)"; fi && \
+    if [ -n "${UPDATE_SIGNING_KEY}" ]; then INSTALLER_SSH_PUBLIC_KEY="$(go run ./scripts/release_update_key.go public-key-ssh --private-key "${UPDATE_SIGNING_KEY}" --comment pulse-installer)"; fi && \
+    go run ./scripts/render_installers.go --source-dir ./scripts --output-dir /app/rendered-installers --installer-ssh-public-key "${INSTALLER_SSH_PUBLIC_KEY}" && \
+    if [ -n "${UPDATE_SIGNING_KEY}" ]; then \
+      OPENSSH_SIGNING_KEY=/tmp/pulse-update-signing-key && \
+      go run ./scripts/release_update_key.go openssh-private-key --private-key "${UPDATE_SIGNING_KEY}" --comment pulse-installer > "${OPENSSH_SIGNING_KEY}" && \
+      chmod 600 "${OPENSSH_SIGNING_KEY}" && \
+      for file in /app/pulse-agent-* /app/rendered-installers/install.sh /app/rendered-installers/install.ps1; do \
+        ssh-keygen -q -Y sign -f "${OPENSSH_SIGNING_KEY}" -n pulse-install "${file}" >/dev/null && \
+        mv "${file}.sig" "${file}.sshsig" && \
+        go run ./scripts/release_update_key.go sign --private-key "${UPDATE_SIGNING_KEY}" --file "${file}" > "${file}.sig"; \
+      done && \
+      rm -f "${OPENSSH_SIGNING_KEY}"; \
+    else \
+      for file in /app/pulse-agent-* /app/rendered-installers/install.sh /app/rendered-installers/install.ps1; do \
+        : > "${file}.sig" && : > "${file}.sshsig"; \
+      done; \
+    fi
 
 
 # Runtime image for the Docker agent (offered via --target agent_runtime)
@@ -189,8 +228,12 @@ RUN chmod +x /docker-entrypoint.sh
 RUN mkdir -p /opt/pulse/scripts
 COPY scripts/install-container-agent.sh /opt/pulse/scripts/install-container-agent.sh
 COPY scripts/install-docker.sh /opt/pulse/scripts/install-docker.sh
-COPY scripts/install.sh /opt/pulse/scripts/install.sh
-COPY scripts/install.ps1 /opt/pulse/scripts/install.ps1
+COPY --from=backend-builder /app/rendered-installers/install.sh /opt/pulse/scripts/install.sh
+COPY --from=backend-builder /app/rendered-installers/install.sh.sig /opt/pulse/scripts/install.sh.sig
+COPY --from=backend-builder /app/rendered-installers/install.sh.sshsig /opt/pulse/scripts/install.sh.sshsig
+COPY --from=backend-builder /app/rendered-installers/install.ps1 /opt/pulse/scripts/install.ps1
+COPY --from=backend-builder /app/rendered-installers/install.ps1.sig /opt/pulse/scripts/install.ps1.sig
+COPY --from=backend-builder /app/rendered-installers/install.ps1.sshsig /opt/pulse/scripts/install.ps1.sshsig
 RUN chmod 755 /opt/pulse/scripts/*.sh /opt/pulse/scripts/*.ps1
 
 # Copy all binaries for download endpoint
@@ -206,19 +249,8 @@ RUN if [ "$TARGETARCH" = "arm64" ]; then \
     fi
 
 
-# Unified agent binaries (all platforms and architectures)
-COPY --from=backend-builder /app/pulse-agent-linux-amd64 /opt/pulse/bin/
-COPY --from=backend-builder /app/pulse-agent-linux-arm64 /opt/pulse/bin/
-COPY --from=backend-builder /app/pulse-agent-linux-armv7 /opt/pulse/bin/
-COPY --from=backend-builder /app/pulse-agent-linux-armv6 /opt/pulse/bin/
-COPY --from=backend-builder /app/pulse-agent-linux-386 /opt/pulse/bin/
-COPY --from=backend-builder /app/pulse-agent-darwin-amd64 /opt/pulse/bin/
-COPY --from=backend-builder /app/pulse-agent-darwin-arm64 /opt/pulse/bin/
-COPY --from=backend-builder /app/pulse-agent-windows-amd64.exe /opt/pulse/bin/
-COPY --from=backend-builder /app/pulse-agent-windows-arm64.exe /opt/pulse/bin/
-COPY --from=backend-builder /app/pulse-agent-windows-386.exe /opt/pulse/bin/
-COPY --from=backend-builder /app/pulse-agent-freebsd-amd64 /opt/pulse/bin/
-COPY --from=backend-builder /app/pulse-agent-freebsd-arm64 /opt/pulse/bin/
+# Unified agent binaries (all platforms and architectures) plus detached signatures
+COPY --from=backend-builder /app/pulse-agent-* /opt/pulse/bin/
 # Create symlinks for Windows without .exe extension
 RUN ln -s pulse-agent-windows-amd64.exe /opt/pulse/bin/pulse-agent-windows-amd64 && \
     ln -s pulse-agent-windows-arm64.exe /opt/pulse/bin/pulse-agent-windows-arm64 && \

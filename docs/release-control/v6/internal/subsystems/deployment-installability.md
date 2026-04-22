@@ -984,9 +984,12 @@ coverage: update transport changes must continue to carry the direct
 API-contract proof path.
 That same governed release-promotion boundary now also owns detached agent and
 installer signatures. `scripts/build-release.sh`,
-`scripts/release_update_key.go`, `scripts/release_ldflags.sh`, and
-`.github/workflows/create-release.yml` must derive the embedded update trust
-root from the governed release signing key, emit `.sig` sidecars for shipped
-agent binaries and installer assets, and upload those signatures with the
-matching release packet so published RC/stable downloads can keep the updater
-trust chain fail-closed instead of downgrading to checksum-only trust.
+`scripts/release_update_key.go`, `scripts/render_installers.go`,
+`scripts/release_ldflags.sh`, `Dockerfile`, `.github/workflows/create-release.yml`,
+and `.github/workflows/publish-docker.yml` must derive the embedded update
+trust root and installer SSH trust root from the governed release signing key,
+render release installers with that pinned SSH verifier, emit both `.sig` and
+`.sshsig` sidecars for shipped agent binaries and installer assets, and upload
+those signatures with the matching release packet so published RC/stable
+downloads can keep the updater and installer trust chain fail-closed instead
+of downgrading to checksum-only trust.

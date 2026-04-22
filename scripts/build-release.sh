@@ -29,6 +29,9 @@ export CGO_ENABLED=0
 VERSION=${1:-$(cat VERSION)}
 BUILD_DIR="build"
 RELEASE_DIR="release"
+RENDERED_INSTALLERS_DIR="${BUILD_DIR}/rendered-installers"
+INSTALLER_SSH_SIGNER_IDENTITY="pulse-installer"
+INSTALLER_SSH_SIGNER_NAMESPACE="pulse-install"
 
 echo "Building Pulse v${VERSION}..."
 
@@ -72,6 +75,8 @@ fi
 # Require update signing for release-grade agent and installer verification.
 # Explicitly opt out with PULSE_ALLOW_MISSING_UPDATE_SIGNING_KEY=true for local-only debugging.
 update_ldflags_args=()
+update_ssh_public_key=""
+update_ssh_private_key_file=""
 if [[ -z "${PULSE_UPDATE_SIGNING_KEY:-}" ]]; then
     if [[ "${PULSE_ALLOW_MISSING_UPDATE_SIGNING_KEY:-false}" == "true" ]]; then
         echo "Warning: PULSE_UPDATE_SIGNING_KEY not set; continuing because PULSE_ALLOW_MISSING_UPDATE_SIGNING_KEY=true."
@@ -86,14 +91,42 @@ else
         echo "Error: failed to derive update signing public key." >&2
         exit 1
     fi
+    if ! command -v ssh-keygen >/dev/null 2>&1; then
+        echo "Error: ssh-keygen is required to sign installer release assets." >&2
+        exit 1
+    fi
+    update_ssh_public_key=$(go run ./scripts/release_update_key.go public-key-ssh --private-key "${PULSE_UPDATE_SIGNING_KEY}" --comment "${INSTALLER_SSH_SIGNER_IDENTITY}")
+    if [[ -z "${update_ssh_public_key}" ]]; then
+        echo "Error: failed to derive installer SSH signing public key." >&2
+        exit 1
+    fi
+    update_ssh_private_key_file=$(mktemp)
+    trap 'rm -f "${update_ssh_private_key_file}"' EXIT
+    go run ./scripts/release_update_key.go openssh-private-key --private-key "${PULSE_UPDATE_SIGNING_KEY}" --comment "${INSTALLER_SSH_SIGNER_IDENTITY}" > "${update_ssh_private_key_file}"
+    chmod 600 "${update_ssh_private_key_file}"
     update_ldflags_args=(--update-public-keys "${update_public_key}")
 fi
+
+render_release_installers() {
+    local output_dir="$1"
+    mkdir -p "${output_dir}"
+    go run ./scripts/render_installers.go \
+        --source-dir ./scripts \
+        --output-dir "${output_dir}" \
+        --installer-ssh-public-key "${update_ssh_public_key}"
+}
 
 sign_release_file() {
     local file="$1"
     if [[ -z "${PULSE_UPDATE_SIGNING_KEY:-}" ]]; then
         return 0
     fi
+    rm -f "${file}.sig" "${file}.sshsig"
+    ssh-keygen -q -Y sign \
+        -f "${update_ssh_private_key_file}" \
+        -n "${INSTALLER_SSH_SIGNER_NAMESPACE}" \
+        "${file}" >/dev/null
+    mv "${file}.sig" "${file}.sshsig"
     go run ./scripts/release_update_key.go sign --private-key "${PULSE_UPDATE_SIGNING_KEY}" --file "${file}" > "${file}.sig"
 }
 
@@ -104,12 +137,13 @@ sign_directory_release_assets() {
     fi
     while IFS= read -r -d '' file; do
         sign_release_file "${file}"
-    done < <(find "${dir}" -maxdepth 1 -type f -print0)
+    done < <(find "${dir}" -maxdepth 1 -type f ! -name '*.sig' ! -name '*.sshsig' -print0)
 }
 
 # Clean previous builds
 rm -rf $BUILD_DIR $RELEASE_DIR
 mkdir -p $BUILD_DIR $RELEASE_DIR
+render_release_installers "${RENDERED_INSTALLERS_DIR}"
 
 # Build frontend
 echo "Building frontend..."
@@ -222,8 +256,8 @@ for build_name in "${build_order[@]}"; do
     # Copy scripts and VERSION metadata
     cp "scripts/install-container-agent.sh" "$staging_dir/scripts/install-container-agent.sh"
     cp "scripts/install-docker.sh" "$staging_dir/scripts/install-docker.sh"
-    cp "scripts/install.sh" "$staging_dir/scripts/install.sh"
-    [ -f "scripts/install.ps1" ] && cp "scripts/install.ps1" "$staging_dir/scripts/install.ps1"
+    cp "${RENDERED_INSTALLERS_DIR}/install.sh" "$staging_dir/scripts/install.sh"
+    [ -f "${RENDERED_INSTALLERS_DIR}/install.ps1" ] && cp "${RENDERED_INSTALLERS_DIR}/install.ps1" "$staging_dir/scripts/install.ps1"
     chmod 755 "$staging_dir/scripts/"*.sh
     chmod 755 "$staging_dir/scripts/"*.ps1 2>/dev/null || true
     echo "$VERSION" > "$staging_dir/VERSION"
@@ -255,8 +289,8 @@ done
 
 cp "scripts/install-container-agent.sh" "$universal_dir/scripts/install-container-agent.sh"
 cp "scripts/install-docker.sh" "$universal_dir/scripts/install-docker.sh"
-cp "scripts/install.sh" "$universal_dir/scripts/install.sh"
-[ -f "scripts/install.ps1" ] && cp "scripts/install.ps1" "$universal_dir/scripts/install.ps1"
+cp "${RENDERED_INSTALLERS_DIR}/install.sh" "$universal_dir/scripts/install.sh"
+[ -f "${RENDERED_INSTALLERS_DIR}/install.ps1" ] && cp "${RENDERED_INSTALLERS_DIR}/install.ps1" "$universal_dir/scripts/install.ps1"
 chmod 755 "$universal_dir/scripts/"*.sh
 chmod 755 "$universal_dir/scripts/"*.ps1 2>/dev/null || true
 
@@ -388,8 +422,8 @@ fi
 #   curl -fsSL https://github.com/rcourtman/Pulse/releases/latest/download/install.sh | bash
 # instead of pulling from main branch (which may have newer, incompatible changes)
 echo "Copying install scripts to release directory..."
-cp scripts/install.sh "$RELEASE_DIR/install.sh"
-[ -f "scripts/install.ps1" ] && cp "scripts/install.ps1" "$RELEASE_DIR/install.ps1"
+cp "${RENDERED_INSTALLERS_DIR}/install.sh" "$RELEASE_DIR/install.sh"
+[ -f "${RENDERED_INSTALLERS_DIR}/install.ps1" ] && cp "${RENDERED_INSTALLERS_DIR}/install.ps1" "$RELEASE_DIR/install.ps1"
 cp scripts/install-docker.sh "$RELEASE_DIR/"
 cp scripts/pulse-auto-update.sh "$RELEASE_DIR/"
 

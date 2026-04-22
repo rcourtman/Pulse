@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"os"
 	"strings"
+
+	"golang.org/x/crypto/ssh"
 )
 
 // EmbeddedTrustedPublicKeys is injected into release builds via ldflags.
@@ -53,6 +55,36 @@ func PublicKeyString(privateKey ed25519.PrivateKey) (string, error) {
 		return "", errors.New("failed to derive public key")
 	}
 	return base64.StdEncoding.EncodeToString(publicKey), nil
+}
+
+// AuthorizedPublicKeyString returns the OpenSSH authorized_keys line for the
+// Ed25519 public key derived from the signing key.
+func AuthorizedPublicKeyString(privateKey ed25519.PrivateKey, comment string) (string, error) {
+	if len(privateKey) != ed25519.PrivateKeySize {
+		return "", errors.New("invalid signing key")
+	}
+	publicKey, err := ssh.NewPublicKey(privateKey.Public())
+	if err != nil {
+		return "", fmt.Errorf("derive ssh public key: %w", err)
+	}
+	authorizedKey := strings.TrimSpace(string(ssh.MarshalAuthorizedKey(publicKey)))
+	if strings.TrimSpace(comment) == "" {
+		return authorizedKey, nil
+	}
+	return authorizedKey + " " + strings.TrimSpace(comment), nil
+}
+
+// OpenSSHPrivateKeyPEM returns the signing key encoded in the OpenSSH private
+// key PEM format so release tooling can use ssh-keygen -Y sign.
+func OpenSSHPrivateKeyPEM(privateKey ed25519.PrivateKey, comment string) (string, error) {
+	if len(privateKey) != ed25519.PrivateKeySize {
+		return "", errors.New("invalid signing key")
+	}
+	block, err := ssh.MarshalPrivateKey(privateKey, strings.TrimSpace(comment))
+	if err != nil {
+		return "", fmt.Errorf("marshal openssh private key: %w", err)
+	}
+	return string(pem.EncodeToMemory(block)), nil
 }
 
 // SignBytes signs a blob and returns a base64-encoded Ed25519 signature.

@@ -142,6 +142,7 @@ jobs:
             VERSION=${{ steps.version.outputs.tag }}
           secrets: |
             pulse_license_public_key=${{ secrets.PULSE_LICENSE_PUBLIC_KEY }}
+            pulse_update_signing_key=${{ secrets.PULSE_UPDATE_SIGNING_KEY }}
           tags: |
             rcourtman/pulse:${{ steps.version.outputs.tag }}
             rcourtman/pulse:${{ steps.version.outputs.version }}
@@ -182,6 +183,7 @@ jobs:
             VERSION=${{ steps.version.outputs.tag }}
           secrets: |
             pulse_license_public_key=${{ secrets.PULSE_LICENSE_PUBLIC_KEY }}
+            pulse_update_signing_key=${{ secrets.PULSE_UPDATE_SIGNING_KEY }}
           tags: |
             rcourtman/pulse-agent:${{ steps.version.outputs.tag }}
             rcourtman/pulse-agent:${{ steps.version.outputs.version }}
