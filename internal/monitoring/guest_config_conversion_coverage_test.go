@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	unifiedresources "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
@@ -793,6 +794,44 @@ func TestMonitorHostsSnapshot(t *testing.T) {
 		hosts := m.HostsSnapshot()
 		if len(hosts) != 0 {
 			t.Fatalf("expected empty hosts from live canonical read-state, got %#v", hosts)
+		}
+	})
+
+	t.Run("includes recent standalone host continuity when live read state is empty", func(t *testing.T) {
+		now := time.Now().UTC()
+		store := config.NewHostContinuityStore(t.TempDir(), nil)
+		if err := store.Upsert(config.HostContinuityEntry{
+			HostID:       "host-1",
+			ReportHostID: "machine-1",
+			Hostname:     "host-1.local",
+			DisplayName:  "Host One",
+			MachineID:    "machine-1",
+			AgentVersion: "1.2.3",
+			Platform:     "linux",
+			LastSeen:     now,
+		}); err != nil {
+			t.Fatalf("Upsert continuity: %v", err)
+		}
+
+		m := &Monitor{
+			state:               models.NewState(),
+			resourceStore:       unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(nil)),
+			hostContinuityStore: store,
+		}
+
+		hosts := m.HostsSnapshot()
+		if len(hosts) != 1 {
+			t.Fatalf("expected one continuity-backed host, got %#v", hosts)
+		}
+		host := hosts[0]
+		if host.ID != "host-1" || host.Hostname != "host-1.local" || host.DisplayName != "Host One" {
+			t.Fatalf("unexpected continuity-backed host identity: %#v", host)
+		}
+		if host.MachineID != "machine-1" || host.AgentVersion != "1.2.3" || host.Platform != "linux" {
+			t.Fatalf("unexpected continuity-backed host metadata: %#v", host)
+		}
+		if !host.LastSeen.Equal(now) {
+			t.Fatalf("continuity-backed host lastSeen = %v, want %v", host.LastSeen, now)
 		}
 	})
 }

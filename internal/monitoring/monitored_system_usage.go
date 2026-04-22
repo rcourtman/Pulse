@@ -55,7 +55,7 @@ func (m *Monitor) MonitoredSystemUsage() MonitoredSystemUsageSnapshot {
 		}
 	}
 
-	readState = m.monitoredSystemUsageReadStateWithHostContinuity(readState)
+	readState = m.readStateWithStandaloneHostContinuity(readState)
 
 	return MonitoredSystemUsageSnapshot{
 		Count:     unifiedresources.MonitoredSystemCount(readState),
@@ -64,7 +64,7 @@ func (m *Monitor) MonitoredSystemUsage() MonitoredSystemUsageSnapshot {
 	}
 }
 
-func (m *Monitor) monitoredSystemUsageReadStateWithHostContinuity(
+func (m *Monitor) readStateWithStandaloneHostContinuity(
 	readState unifiedresources.ReadState,
 ) unifiedresources.ReadState {
 	if m == nil || readState == nil {

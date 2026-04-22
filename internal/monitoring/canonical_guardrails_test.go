@@ -125,6 +125,8 @@ func TestMonitoredSystemUsageReadinessGuardrailsRemainCanonical(t *testing.T) {
 			"SupplementalInventoryReadyAt(m *Monitor, orgID string) (time.Time, bool)",
 			"hostContinuityStore        *config.HostContinuityStore",
 			"hostContinuityStore:        config.NewHostContinuityStore(cfg.DataPath, nil),",
+			"func (m *Monitor) HostsSnapshot() []models.Host {",
+			"readState = m.readStateWithStandaloneHostContinuity(readState)",
 		},
 		"monitored_system_usage.go": {
 			"MonitoredSystemUsageUnavailableMonitorState",
@@ -136,10 +138,10 @@ func TestMonitoredSystemUsageReadinessGuardrailsRemainCanonical(t *testing.T) {
 			"UnavailableReason: MonitoredSystemUsageUnavailableSupplementalInventoryUnsettled,",
 			"if freshness.IsZero() || freshness.Before(readyAt) {",
 			"UnavailableReason: MonitoredSystemUsageUnavailableSupplementalInventoryRebuildPending,",
-			"readState = m.monitoredSystemUsageReadStateWithHostContinuity(readState)",
+			"readState = m.readStateWithStandaloneHostContinuity(readState)",
 			"Count:     unifiedresources.MonitoredSystemCount(readState),",
 			"Available: true,",
-			"func (m *Monitor) monitoredSystemUsageReadStateWithHostContinuity(",
+			"func (m *Monitor) readStateWithStandaloneHostContinuity(",
 			"return unifiedresources.ReadStateWithRecords(readState, unifiedresources.SourceAgent, records)",
 		},
 		"truenas_poller.go": {

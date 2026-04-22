@@ -2776,6 +2776,7 @@ func (m *Monitor) HostsSnapshot() []models.Host {
 	if readState == nil {
 		return nil
 	}
+	readState = m.readStateWithStandaloneHostContinuity(readState)
 
 	hostViews := readState.Hosts()
 	if len(hostViews) == 0 {

@@ -238,6 +238,12 @@ back into the canonical read state through the unified-resources-owned overlay
 path instead of rebuilding registry truth locally. A server restart or v6
 upgrade must not briefly forget an already admitted standalone host and
 misclassify its next report as a brand-new counted system.
+That same standalone-host continuity boundary also owns host snapshot and
+connection-list continuity during monitor reloads. `internal/monitoring/monitor.go`
+must apply the same continuity overlay when `HostsSnapshot()` resolves its
+canonical read state, so settings and other host-list consumers do not blank
+previously admitted Pulse Agent rows during a config-driven monitor swap while
+fresh reports are still in flight.
 That same mock-runtime boundary also owns freshness while demos are running.
 The mock update loop must keep provider-backed TrueNAS and VMware records plus
 legacy PBS and PMG summaries on current `LastSeen` and health state each tick,
