@@ -5,7 +5,6 @@ import (
 	"os"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/license/entitlements"
 	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
@@ -101,10 +100,6 @@ func NewService() *Service {
 
 func ValidateLicense(licenseKey string) (*License, error) {
 	return pkglicensing.ValidateLicense(licenseKey)
-}
-
-func GenerateLicenseForTesting(email string, tier Tier, expiresIn time.Duration) (string, error) {
-	return pkglicensing.GenerateLicenseForTesting(email, tier, expiresIn)
 }
 
 func isLicenseValidationDevMode() bool {

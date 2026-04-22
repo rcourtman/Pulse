@@ -100,6 +100,16 @@ func TestServiceActivate_ExchangesLegacyJWTOutsideDevMode(t *testing.T) {
 	}
 }
 
+func TestTestingHelpersRemainNonReleaseOnly(t *testing.T) {
+	content, err := os.ReadFile("testing_helpers.go")
+	if err != nil {
+		t.Fatalf("read testing_helpers.go: %v", err)
+	}
+	if !strings.HasPrefix(string(content), "//go:build !release\n") {
+		t.Fatalf("testing_helpers.go must stay excluded from release builds")
+	}
+}
+
 func TestServiceActivateWithKey_SendsClientVersion(t *testing.T) {
 	t.Setenv("PULSE_LICENSE_DEV_MODE", "false")
 	setupTestPublicKey(t)

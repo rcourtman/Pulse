@@ -90,6 +90,7 @@ agreement, and cloud-specific enforcement rules.
 68. `pulse-pro:V6_LAUNCH_CHECKLIST.md`
 69. `pkg/licensing/trial_activation_public_key_override_dev.go`
 70. `pkg/licensing/trial_activation_public_key_override_release.go`
+71. `pkg/licensing/testing_helpers.go`
 
 ## Shared Boundaries
 
@@ -158,7 +159,7 @@ Community limit enforcement.
    facts line plus one next-action row before the list, but it must not turn
    that summary into a second overview deck, metric grid, or competing shell.
 7. Add or change Stripe provisioning plan resolution through `internal/cloudcp/stripe/provisioner.go`
-8. Add or change activation/grant lifecycle or dev-mode capability widening through `pkg/licensing/dev_mode_features.go`, `pkg/licensing/service.go`, `pkg/licensing/grant_refresh.go`, and `pkg/licensing/revocation_poll.go`
+8. Add or change activation/grant lifecycle, release build helper gating, or dev-mode capability widening through `pkg/licensing/dev_mode_features.go`, `pkg/licensing/service.go`, `pkg/licensing/testing_helpers.go`, `pkg/licensing/grant_refresh.go`, and `pkg/licensing/revocation_poll.go`
 9. Add or change license-server transport through `pkg/licensing/license_server_client.go` and `pkg/licensing/quickstart_bootstrap.go`
 10. Add or change encrypted activation persistence through `pkg/licensing/persistence.go` and `pkg/licensing/activation_store.go`
     That persistence boundary must encrypt new state only with the persistent
@@ -1598,6 +1599,10 @@ to `pkg/licensing/service.go`, `pkg/licensing/grant_refresh.go`,
 `pkg/licensing/persistence.go`, `pkg/licensing/activation_store.go`, and
 `pkg/licensing/trial_activation.go` should carry their dedicated proof files
 instead of relying only on the generic cloud runtime policy.
+That same activation-service boundary also owns test-only helper exclusion from
+release builds: legacy JWT fixtures and grant JWT generators used by tests must
+live in non-release build-tagged helpers instead of shipping inside the primary
+runtime service file.
 The remaining cloud-paid runtime families now follow the same rule as well:
 feature/limit primitives, billing and entitlement type shapes, commercial
 migration and trial flow, conversion telemetry, host lifecycle tracking, and
