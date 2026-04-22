@@ -95,6 +95,64 @@ func TestCreateReleaseUploadsPowerShellInstaller(t *testing.T) {
 	}
 }
 
+func TestReleaseValidationRequiresSignedSidecars(t *testing.T) {
+	localValidatorBytes, err := os.ReadFile(repoFile("scripts", "validate-release.sh"))
+	if err != nil {
+		t.Fatalf("read validate-release.sh: %v", err)
+	}
+	localValidator := string(localValidatorBytes)
+	localRequired := []string{
+		`info "Validating SSH signature sidecars..."`,
+		`if [ ! -s "checksums.txt.sshsig" ]; then`,
+		`error "Missing or empty checksums.txt.sshsig"`,
+		`if [ ! -s "${filename}.sshsig" ]; then`,
+		`error "Missing or empty ${filename}.sshsig"`,
+		`success "SSH signature sidecars validated"`,
+	}
+	for _, needle := range localRequired {
+		if !strings.Contains(localValidator, needle) {
+			t.Fatalf("validate-release.sh missing signed sidecar validation: %s", needle)
+		}
+	}
+
+	publishedValidatorBytes, err := os.ReadFile(repoFile("scripts", "validate-published-release.sh"))
+	if err != nil {
+		t.Fatalf("read validate-published-release.sh: %v", err)
+	}
+	publishedValidator := string(publishedValidatorBytes)
+	publishedRequired := []string{
+		`CHECKSUMS_SIG_PATH="${TMP_DIR}/checksums.txt.sshsig"`,
+		`"${BASE_URL}/checksums.txt.sshsig"`,
+		`echo "Failed to download checksums.txt.sshsig for ${TAG}" >&2`,
+		`sshsig_path="${TMP_DIR}/${filename}.sshsig"`,
+		`"${artifact_url}.sshsig"`,
+		`echo "Failed to download ${filename}.sshsig" >&2`,
+		`Published release assets for ${TAG} match checksums.txt, *.sha256 files, and required *.sshsig sidecars.`,
+	}
+	for _, needle := range publishedRequired {
+		if !strings.Contains(publishedValidator, needle) {
+			t.Fatalf("validate-published-release.sh missing signed sidecar validation: %s", needle)
+		}
+	}
+
+	contractBytes, err := os.ReadFile(repoFile("docs", "release-control", "v6", "internal", "subsystems", "deployment-installability.md"))
+	if err != nil {
+		t.Fatalf("read deployment-installability contract: %v", err)
+	}
+	contract := string(contractBytes)
+	contractRequired := []string{
+		"`scripts/validate-release.sh`, and",
+		"`scripts/validate-published-release.sh` must derive the embedded update trust",
+		"fail validation if any",
+		"published artifact or `checksums.txt` is missing its `.sshsig` sidecar",
+	}
+	for _, needle := range contractRequired {
+		if !strings.Contains(contract, needle) {
+			t.Fatalf("deployment-installability contract missing signed sidecar validation requirement: %s", needle)
+		}
+	}
+}
+
 func TestDockerAndDemoBuildsUseCanonicalReleaseLdflags(t *testing.T) {
 	dockerfileBytes, err := os.ReadFile(repoFile("Dockerfile"))
 	if err != nil {

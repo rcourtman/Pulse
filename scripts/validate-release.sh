@@ -364,11 +364,35 @@ info "Validating checksums..."
 sha256sum -c checksums.txt >/dev/null 2>&1 || { error "checksums.txt validation failed"; exit 1; }
 success "checksums.txt validated"
 
+# Validate release signature sidecars
+info "Validating SSH signature sidecars..."
+if [ ! -s "checksums.txt.sshsig" ]; then
+    error "Missing or empty checksums.txt.sshsig"
+    exit 1
+fi
+
+while IFS= read -r line; do
+    checksum=$(echo "$line" | awk '{print $1}')
+    filename=$(echo "$line" | awk '{print $2}')
+
+    [ -n "$checksum" ] || continue
+    [ -n "$filename" ] || continue
+
+    if [ ! -s "${filename}.sshsig" ]; then
+        error "Missing or empty ${filename}.sshsig"
+        exit 1
+    fi
+done < checksums.txt
+success "SSH signature sidecars validated"
+
 # Validate individual .sha256 files exist and match checksums.txt
 info "Validating individual .sha256 files..."
 while IFS= read -r line; do
     checksum=$(echo "$line" | awk '{print $1}')
     filename=$(echo "$line" | awk '{print $2}')
+
+    [ -n "$checksum" ] || continue
+    [ -n "$filename" ] || continue
 
     # Check .sha256 file exists
     if [ ! -f "${filename}.sha256" ]; then

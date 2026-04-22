@@ -2,9 +2,10 @@
 
 # Remote release validator.
 # Downloads the published (or draft) assets straight from GitHub Releases,
-# recalculates their SHA256 sums, and ensures checksums.txt and the *.sha256
-# helper files match what is actually live. This prevents broken updates when
-# artifacts are re-uploaded without regenerating checksums (see issue #698).
+# recalculates their SHA256 sums, and ensures checksums.txt, the *.sha256
+# helper files, and the required *.sshsig sidecars match the live release
+# packet. This prevents broken updates when artifacts are re-uploaded without
+# regenerating checksums or their pinned signature sidecars (see issue #698).
 
 set -euo pipefail
 
@@ -26,6 +27,17 @@ CHECKSUMS_PATH="${TMP_DIR}/checksums.txt"
 echo "Downloading ${BASE_URL}/checksums.txt"
 if ! "${curl_args[@]}" "${BASE_URL}/checksums.txt" >"$CHECKSUMS_PATH"; then
     echo "Failed to download checksums.txt for ${TAG}" >&2
+    exit 1
+fi
+
+CHECKSUMS_SIG_PATH="${TMP_DIR}/checksums.txt.sshsig"
+echo "Downloading ${BASE_URL}/checksums.txt.sshsig"
+if ! "${curl_args[@]}" "${BASE_URL}/checksums.txt.sshsig" >"$CHECKSUMS_SIG_PATH"; then
+    echo "Failed to download checksums.txt.sshsig for ${TAG}" >&2
+    exit 1
+fi
+if [[ ! -s "$CHECKSUMS_SIG_PATH" ]]; then
+    echo "checksums.txt.sshsig is empty for ${TAG}" >&2
     exit 1
 fi
 
@@ -66,6 +78,17 @@ while read -r checksum filename _; do
         echo "${filename}.sha256 content mismatch (expected '${expected_line}', got '${sha_content}')" >&2
         status=$((status + 1))
     fi
+
+    sshsig_path="${TMP_DIR}/${filename}.sshsig"
+    if ! "${curl_args[@]}" "${artifact_url}.sshsig" >"$sshsig_path"; then
+        echo "Failed to download ${filename}.sshsig" >&2
+        status=$((status + 1))
+        continue
+    fi
+    if [[ ! -s "$sshsig_path" ]]; then
+        echo "${filename}.sshsig is empty" >&2
+        status=$((status + 1))
+    fi
 done < "$CHECKSUMS_PATH"
 
 if [[ "$status" -ne 0 ]]; then
@@ -73,4 +96,4 @@ if [[ "$status" -ne 0 ]]; then
     exit 1
 fi
 
-echo "Published release assets for ${TAG} match checksums.txt and *.sha256 files."
+echo "Published release assets for ${TAG} match checksums.txt, *.sha256 files, and required *.sshsig sidecars."
