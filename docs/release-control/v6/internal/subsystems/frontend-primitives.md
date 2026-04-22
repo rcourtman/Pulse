@@ -232,6 +232,11 @@ work extends shared components instead of creating new local variants.
    helper plus runtime `monitored_system_capacity` reads rather than
    reconstructing raw `current / limit` slash math or `0 remaining` copy in
    the banner shell, state owner, or shared model.
+   Shared modal scroll containment follows that same owner split. The dialog
+   shell in `frontend-modern/src/components/shared/dialogModel.ts` must keep
+   shared panels `min-h-0`, and page-owned modal bodies may use
+   `overflow-y-auto` only under shrinkable flex columns instead of clipping
+   lower fields behind a fixed-height shell.
 5. Keep shared infrastructure shell state on the reusable settings boundary: `frontend-modern/src/components/Settings/useSettingsInfrastructurePanelProps.ts` and `frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx` must continue to derive provider counts, availability, and shared subtab copy from one infrastructure-settings source — via the unified aggregator through `frontend-modern/src/components/Settings/useConnectionsLedger.ts` — instead of creating provider-local summary fetches or VMware-only shell vocabulary. Phase 9 retired the old `PlatformConnectionsWorkspace` per-type shell, but setup guidance may still use `Platform connections` as the operator-facing label for the shared API-backed onboarding path.
    That same shared shell boundary now owns the default posture for
    `/settings/infrastructure`: the landing route should read as one
@@ -245,6 +250,10 @@ work extends shared components instead of creating new local variants.
    Those secondary views must stay under the same single `Infrastructure`
    sidebar destination, but they may open in governed modal/dialog chrome when
    that preserves the persistent source-manager page behind them.
+   That governed dialog chrome must also preserve inner form scrolling:
+   `InfrastructureWorkspace.tsx` and `ConnectionEditor.tsx` keep the add/edit
+   shell on `min-h-0` flex columns so long credential forms scroll inside the
+   modal body instead of trapping the lower fields below the fold.
    That same shared shell boundary now owns one canonical infrastructure
    destination in the Settings sidebar. `InfrastructureWorkspace.tsx` owns the
    source-manager landing inside that destination, while route-backed add flows

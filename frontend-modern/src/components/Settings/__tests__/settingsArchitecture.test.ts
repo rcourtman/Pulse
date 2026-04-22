@@ -112,6 +112,7 @@ describe('settings architecture guardrails', () => {
     expect(infrastructureWorkspaceSource).toContain('<InfrastructureSourceManager');
     expect(infrastructureWorkspaceSource).toContain('<InfrastructureSourcePicker');
     expect(infrastructureWorkspaceSource).not.toContain('<ConnectionsTable rows={rows} />');
+    expect(infrastructureWorkspaceSource).toContain('flex h-full min-h-0 flex-col');
     expect(infrastructureWorkspaceSource).toContain("showSlotHeader={false}");
     expect(infrastructureWorkspaceSource).toContain(
       "trackInitialCatalogSelection={activeAddType() !== 'agent'}",
@@ -146,6 +147,7 @@ describe('settings architecture guardrails', () => {
     expect(connectionEditorSource).toContain('<AddressProbeStep');
     expect(connectionEditorSource).toContain('Detect from address');
     expect(connectionEditorSource).toContain('Address probe');
+    expect(connectionEditorSource).toContain('flex h-full min-h-0 flex-col');
     expect(connectionEditorSource).toContain('Back to source types');
     expect(connectionEditorSource).toContain('Back to detect');
     expect(connectionEditorSource).toContain('What happens next');

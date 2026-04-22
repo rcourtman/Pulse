@@ -341,7 +341,11 @@ an add-only capacity posture.
     slot; it must not bypass the probe endpoint or fabricate probe
     candidates, and the agent credential slot must continue to reach
     `InfrastructureInstallerSection.tsx` so install handoffs remain on the
-    canonical unified-agent install path. For PVE, PBS, and PMG, the
+    canonical unified-agent install path. Those governed add/edit dialogs
+    must also keep their form body scrollable inside the modal:
+    `InfrastructureWorkspace.tsx` and `ConnectionEditor.tsx` keep the
+    content shell on `min-h-0` flex columns so long lifecycle forms do not
+    clip lower fields behind the dialog boundary. For PVE, PBS, and PMG, the
     credential slot is
     `frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/NodeCredentialSlot.tsx`,
     which reuses the existing `NodeModalBasicInfoSection`,

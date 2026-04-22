@@ -50,6 +50,7 @@ describe('Dialog', () => {
     ));
 
     expect(screen.getByRole('dialog')).toBeInTheDocument();
+    expect(screen.getByRole('dialog')).toHaveClass('min-h-0');
     const backdrop = document.querySelector('[data-dialog-backdrop]') as HTMLElement | null;
     expect(backdrop).not.toBeNull();
     if (!backdrop) return;

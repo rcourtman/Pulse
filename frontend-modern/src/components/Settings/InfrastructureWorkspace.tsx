@@ -641,7 +641,7 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
           ariaLabel={addDialogTitle()}
           panelClass={isAgentDialog() ? 'max-w-6xl' : 'max-w-5xl'}
         >
-          <div class="flex h-full flex-col">
+          <div class="flex h-full min-h-0 flex-col">
             <div class="flex items-start justify-between gap-4 border-b border-border bg-surface-alt px-4 py-4 sm:px-6">
               <div class="space-y-1">
                 <h2 class="text-base font-semibold text-base-content">{addDialogTitle()}</h2>
@@ -712,7 +712,7 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
               ariaLabel={editDialogTitle()}
               panelClass={connection.type === 'agent' ? 'max-w-5xl' : 'max-w-5xl'}
             >
-              <div class="flex h-full flex-col">
+              <div class="flex h-full min-h-0 flex-col">
                 <div class="flex items-start justify-between gap-4 border-b border-border bg-surface-alt px-4 py-4 sm:px-6">
                   <div class="space-y-1">
                     <h2 class="text-base font-semibold text-base-content">{editDialogTitle()}</h2>

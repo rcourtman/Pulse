@@ -29,7 +29,7 @@ export function getDialogAlignmentClass(layout: DialogLayout): string {
 }
 
 export function getDialogPanelClass(layout: DialogLayout, panelClass?: string): string {
-  return `relative flex w-full flex-col overflow-hidden bg-surface border border-border outline-none pointer-events-auto ${
+  return `relative flex min-h-0 w-full flex-col overflow-hidden bg-surface border border-border outline-none pointer-events-auto ${
     layout === 'drawer-right'
       ? 'h-dvh max-w-[720px] rounded-none border-y-0 border-r-0 animate-slide-up sm:h-full sm:max-h-dvh sm:rounded-l-xl sm:border-y sm:border-r-0'
       : 'max-h-[calc(100dvh-2rem)] rounded-md animate-slide-up'
