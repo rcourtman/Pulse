@@ -81,6 +81,15 @@ export function useAlertOverridesState(props: AlertOverridesStateProps) {
     }
 
     const rawConfig = rawOverridesConfig();
+    const storageResources = props
+      .allResources()
+      .filter((resource) => resource.type === 'storage' || resource.type === 'datastore');
+    const normalizedRawConfig = normalizeRawOverridesConfig(rawConfig, storageResources);
+    if (JSON.stringify(normalizedRawConfig) !== JSON.stringify(rawConfig)) {
+      setRawOverridesConfig(normalizedRawConfig);
+      return;
+    }
+
     if (Object.keys(rawConfig).length === 0) {
       if (overrides().length > 0) {
         setOverrides([]);
@@ -94,9 +103,6 @@ export function useAlertOverridesState(props: AlertOverridesStateProps) {
       ...props.byType('system-container'),
       ...props.byType('oci-container'),
     ];
-    const storageResources = props
-      .allResources()
-      .filter((resource) => resource.type === 'storage' || resource.type === 'datastore');
     const agentResourceList = agentResources();
     const overridesList = buildProjectedOverrides({
       rawConfig,
@@ -137,7 +143,10 @@ export function useAlertOverridesState(props: AlertOverridesStateProps) {
   });
 
   const replaceRawOverridesConfig = (value: Record<string, RawOverrideConfig>) => {
-    setRawOverridesConfig(normalizeRawOverridesConfig(value));
+    const storageResources = props
+      .allResources()
+      .filter((resource) => resource.type === 'storage' || resource.type === 'datastore');
+    setRawOverridesConfig(normalizeRawOverridesConfig(value, storageResources));
   };
 
   return {

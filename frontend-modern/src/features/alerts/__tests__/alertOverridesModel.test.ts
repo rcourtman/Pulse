@@ -31,6 +31,40 @@ describe('alertOverridesModel', () => {
     });
   });
 
+  it('normalizes legacy shared-storage override ids into canonical storage resource ids', () => {
+    const storage = makeResource({
+      id: 'Main-cluster-ceph-pool',
+      name: 'ceph-pool',
+      type: 'storage',
+      platformId: 'Main',
+      proxmox: {
+        instance: 'Main',
+        node: 'cluster',
+      },
+      storage: {
+        shared: true,
+        isCeph: true,
+        nodes: ['pve1', 'pve2'],
+        type: 'rbd',
+      },
+    });
+
+    expect(
+      normalizeRawOverridesConfig(
+        {
+          'Main-pve1-ceph-pool': {
+            usage: { trigger: 92, clear: 82 },
+          } as any,
+        },
+        [storage],
+      ),
+    ).toEqual({
+      'Main-cluster-ceph-pool': {
+        usage: { trigger: 92, clear: 82 },
+      },
+    });
+  });
+
   it('projects guest overrides without requiring agent-backed resources', () => {
     const guest = makeResource({
       id: 'cluster-a:node-2:100',
@@ -168,6 +202,57 @@ describe('alertOverridesModel', () => {
         node: 'TrueNAS Main',
         thresholds: {
           cpu: 95,
+        },
+      }),
+    ]);
+  });
+
+  it('projects shared-storage overrides through the canonical storage resource id', () => {
+    const storage = makeResource({
+      id: 'Main-cluster-ceph-pool',
+      name: 'ceph-pool',
+      displayName: 'ceph-pool',
+      type: 'storage',
+      platformId: 'Main',
+      proxmox: {
+        instance: 'Main',
+        node: 'cluster',
+      },
+      storage: {
+        shared: true,
+        isCeph: true,
+        nodes: ['pve1', 'pve2'],
+        type: 'rbd',
+      },
+      platformData: {
+        node: 'cluster',
+        instance: 'Main',
+      },
+    });
+
+    expect(
+      buildProjectedOverrides({
+        rawConfig: {
+          'Main-pve1-ceph-pool': {
+            usage: { trigger: 92, clear: 82 },
+          } as any,
+        },
+        nodeResources: [],
+        vmResources: [],
+        containerResources: [],
+        storageResources: [storage],
+        agentResourceList: [],
+        containerRuntimeResources: [],
+        getChildren: () => [],
+        pbsInstanceById: new Map(),
+      }),
+    ).toEqual([
+      expect.objectContaining({
+        id: 'Main-cluster-ceph-pool',
+        type: 'storage',
+        name: 'ceph-pool',
+        thresholds: {
+          usage: 92,
         },
       }),
     ]);

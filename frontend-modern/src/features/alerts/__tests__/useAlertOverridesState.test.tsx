@@ -123,6 +123,62 @@ describe('useAlertOverridesState', () => {
     expect(overviewOverrides()).toEqual([]);
   });
 
+  it('canonicalizes shared-storage overrides for the live thresholds surface', async () => {
+    const [hasUnsavedChanges] = createSignal(false);
+    const [overviewOverrides, setOverviewOverrides] = createSignal([]);
+    const resources = [
+      makeResource({
+        id: 'Main-cluster-ceph-pool',
+        name: 'ceph-pool',
+        displayName: 'ceph-pool',
+        type: 'storage',
+        platformId: 'Main',
+        proxmox: {
+          instance: 'Main',
+          node: 'cluster',
+        },
+        storage: {
+          shared: true,
+          isCeph: true,
+          nodes: ['pve1', 'pve2'],
+          type: 'rbd',
+        },
+        platformData: {
+          node: 'cluster',
+          instance: 'Main',
+        },
+      }),
+    ];
+
+    const { result } = renderHook(() =>
+      useAlertOverridesState({
+        allResources: () => resources,
+        byType: (resourceType) => resources.filter((resource) => resource.type === resourceType),
+        children: () => [],
+        hasUnsavedChanges,
+        setOverviewOverrides,
+      }),
+    );
+
+    result.replaceRawOverridesConfig({
+      'Main-pve1-ceph-pool': {
+        usage: { trigger: 92, clear: 82 },
+      } as any,
+    });
+
+    await waitFor(() => expect(result.overrides()).toHaveLength(1));
+
+    expect(Object.keys(result.rawOverridesConfig())).toEqual(['Main-cluster-ceph-pool']);
+    expect(result.overrides()[0]).toMatchObject({
+      id: 'Main-cluster-ceph-pool',
+      type: 'storage',
+      thresholds: {
+        usage: 92,
+      },
+    });
+    expect(overviewOverrides()).toEqual(result.overrides());
+  });
+
   it('exposes canonical container runtimes for TrueNAS-backed app workloads', async () => {
     const [hasUnsavedChanges] = createSignal(false);
     const [, setOverviewOverrides] = createSignal([]);

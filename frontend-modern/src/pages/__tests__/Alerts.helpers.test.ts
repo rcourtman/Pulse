@@ -89,6 +89,10 @@ import {
   unifiedTypeToAlertDisplayType,
 } from '@/features/alerts/helpers';
 import {
+  buildProjectedOverrides,
+  normalizeRawOverridesConfig,
+} from '@/features/alerts/alertOverridesModel';
+import {
   getAlertIncidentAcknowledgedBadgeClass,
   getAlertIncidentEventFilterActionButtonClass,
   getAlertIncidentEventFilterChipClass,
@@ -191,6 +195,69 @@ describe('alert resource display labels', () => {
     } as unknown as Resource;
 
     expect(getAlertResourceDisplayLabel(resource, 'abc123')).toBe('abc123');
+  });
+});
+
+describe('shared storage override migration', () => {
+  it('keeps legacy Ceph override ids visible on the v6 thresholds surface', () => {
+    const storage = {
+      id: 'Main-cluster-ceph-pool',
+      name: 'ceph-pool',
+      displayName: 'ceph-pool',
+      type: 'storage',
+      platformId: 'Main',
+      proxmox: {
+        instance: 'Main',
+        node: 'cluster',
+      },
+      storage: {
+        shared: true,
+        isCeph: true,
+        nodes: ['pve1', 'pve2'],
+        type: 'rbd',
+      },
+      platformData: {
+        instance: 'Main',
+        node: 'cluster',
+      },
+    } as Resource;
+
+    const rawConfig = normalizeRawOverridesConfig(
+      {
+        'Main-pve1-ceph-pool': {
+          usage: { trigger: 92, clear: 82 },
+        } as RawOverrideConfig,
+      },
+      [storage],
+    );
+
+    expect(rawConfig).toEqual({
+      'Main-cluster-ceph-pool': {
+        usage: { trigger: 92, clear: 82 },
+      },
+    });
+
+    expect(
+      buildProjectedOverrides({
+        rawConfig,
+        nodeResources: [],
+        vmResources: [],
+        containerResources: [],
+        storageResources: [storage],
+        agentResourceList: [],
+        containerRuntimeResources: [],
+        getChildren: () => [],
+        pbsInstanceById: new Map(),
+      }),
+    ).toEqual([
+      expect.objectContaining({
+        id: 'Main-cluster-ceph-pool',
+        type: 'storage',
+        thresholds: {
+          usage: 92,
+        },
+      }),
+    ]);
   });
 });
 
