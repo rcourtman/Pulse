@@ -19,6 +19,9 @@ on:
         description: Pulse API base URL (e.g. http://127.0.0.1:7655)
         required: true
 
+permissions:
+  contents: read
+
 jobs:
   eval:
     name: Model Matrix Eval

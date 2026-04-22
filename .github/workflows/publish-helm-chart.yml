@@ -12,6 +12,9 @@ on:
         description: "Application version to embed (defaults to chart version)"
         required: false
 
+permissions:
+  contents: read
+
 jobs:
   publish:
     name: Package and Push Helm Chart

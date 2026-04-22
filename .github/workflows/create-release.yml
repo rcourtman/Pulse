@@ -47,6 +47,9 @@ concurrency:
   group: release-${{ github.event.inputs.version || github.ref || github.run_id }}
   cancel-in-progress: false
 
+permissions:
+  contents: read
+
 jobs:
   # Combined version extraction and validation (saves a checkout)
   prepare:

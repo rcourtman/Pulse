@@ -9,6 +9,9 @@ on:
       - main
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   governance:
     runs-on: ubuntu-latest

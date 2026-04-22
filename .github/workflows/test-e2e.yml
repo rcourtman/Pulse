@@ -24,6 +24,9 @@ on:
 
 
 
+permissions:
+  contents: read
+
 jobs:
   e2e:
     name: Playwright Core E2E

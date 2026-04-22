@@ -37,6 +37,9 @@ on:
         required: false
         type: string
 
+permissions:
+  contents: read
+
 jobs:
   dry-run:
     name: Preflight Release Checks (No Publish)

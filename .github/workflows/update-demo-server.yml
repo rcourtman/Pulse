@@ -19,6 +19,9 @@ on:
           - stable
           - preview-v6
 
+permissions:
+  contents: read
+
 jobs:
   resolve:
     runs-on: ubuntu-latest

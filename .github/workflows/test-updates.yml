@@ -25,6 +25,9 @@ on:
 
 
 
+permissions:
+  contents: read
+
 jobs:
   integration-tests:
     name: Update Flow Integration Tests

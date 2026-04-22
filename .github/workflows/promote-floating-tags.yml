@@ -18,6 +18,9 @@ on:
         type: boolean
         default: false
 
+permissions:
+  contents: read
+
 jobs:
   promote-images:
     runs-on: ubuntu-latest

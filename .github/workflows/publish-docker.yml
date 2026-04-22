@@ -15,6 +15,9 @@ concurrency:
   group: docker-publish-${{ inputs.tag }}
   cancel-in-progress: false
 
+permissions:
+  contents: read
+
 jobs:
   publish:
     runs-on: ubuntu-latest
