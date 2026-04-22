@@ -951,6 +951,67 @@ func TestReadSessionCookie_SecureRequestAcceptsHostPrefix(t *testing.T) {
 	}
 }
 
+func TestValidateFreshBrowserSession_AllowsRecentBoundSession(t *testing.T) {
+	dir := t.TempDir()
+	InitSessionStore(dir)
+
+	sessionToken := generateSessionToken()
+	GetSessionStore().CreateSession(sessionToken, time.Hour, "browser", "127.0.0.1", "alice")
+
+	req := httptest.NewRequest(http.MethodPost, "/api/orgs/acme/members", nil)
+	req.AddCookie(&http.Cookie{Name: cookieNameSession, Value: sessionToken})
+
+	if authErr := validateFreshBrowserSession(req, "alice", "transfer ownership", privilegedBrowserSessionMaxAge); authErr != nil {
+		t.Fatalf("expected recent session to pass, got %#v", authErr)
+	}
+}
+
+func TestValidateFreshBrowserSession_RejectsStaleSession(t *testing.T) {
+	dir := t.TempDir()
+	InitSessionStore(dir)
+
+	sessionToken := generateSessionToken()
+	store := GetSessionStore()
+	store.CreateSession(sessionToken, time.Hour, "browser", "127.0.0.1", "alice")
+
+	store.mu.Lock()
+	store.sessions[sessionHash(sessionToken)].CreatedAt = time.Now().Add(-privilegedBrowserSessionMaxAge - time.Minute)
+	store.mu.Unlock()
+
+	req := httptest.NewRequest(http.MethodPost, "/api/orgs/acme/members", nil)
+	req.AddCookie(&http.Cookie{Name: cookieNameSession, Value: sessionToken})
+
+	authErr := validateFreshBrowserSession(req, "alice", "transfer ownership", privilegedBrowserSessionMaxAge)
+	if authErr == nil {
+		t.Fatal("expected stale session to be rejected")
+	}
+	if authErr.Status != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want %d", authErr.Status, http.StatusUnauthorized)
+	}
+	if authErr.Code != "fresh_session_required" {
+		t.Fatalf("code = %q, want fresh_session_required", authErr.Code)
+	}
+}
+
+func TestValidateFreshBrowserSession_RejectsUsernameMismatch(t *testing.T) {
+	dir := t.TempDir()
+	InitSessionStore(dir)
+
+	sessionToken := generateSessionToken()
+	GetSessionStore().CreateSession(sessionToken, time.Hour, "browser", "127.0.0.1", "alice")
+
+	req := httptest.NewRequest(http.MethodPost, "/api/orgs/acme/members", nil)
+	req.AddCookie(&http.Cookie{Name: cookieNameSession, Value: sessionToken})
+
+	authErr := validateFreshBrowserSession(req, "bob", "transfer ownership", privilegedBrowserSessionMaxAge)
+	if authErr == nil {
+		t.Fatal("expected mismatched session identity to be rejected")
+	}
+	if authErr.Code != "fresh_session_required" {
+		t.Fatalf("code = %q, want fresh_session_required", authErr.Code)
+	}
+}
+
 func TestCheckAuth_NoAuthConfigured(t *testing.T) {
 	cfg := &config.Config{
 		// No auth configured at all

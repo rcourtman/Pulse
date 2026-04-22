@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/logging"
@@ -405,6 +406,7 @@ func TestOrgHandlersOwnershipTransfer(t *testing.T) {
 	defer SetMultiTenantEnabled(false)
 	SetMultiTenantEnabled(true)
 
+	InitSessionStore(t.TempDir())
 	persistence := config.NewMultiTenantPersistence(t.TempDir())
 	h := NewOrgHandlers(persistence, nil)
 
@@ -425,6 +427,9 @@ func TestOrgHandlersOwnershipTransfer(t *testing.T) {
 		httptest.NewRequest(http.MethodPost, "/api/orgs/acme/members", bytes.NewBufferString(`{"userId":"bob","role":"owner"}`)),
 		"alice",
 	)
+	transferSession := generateSessionToken()
+	GetSessionStore().CreateSession(transferSession, time.Hour, "browser", "127.0.0.1", "alice")
+	transferReq.AddCookie(&http.Cookie{Name: cookieNameSession, Value: transferSession})
 	transferReq.SetPathValue("id", "acme")
 	transferRec := httptest.NewRecorder()
 	h.HandleInviteMember(transferRec, transferReq)
@@ -449,6 +454,70 @@ func TestOrgHandlersOwnershipTransfer(t *testing.T) {
 	}
 	if org.GetMemberRole("alice") != models.OrgRoleAdmin {
 		t.Fatalf("expected previous owner to become admin, got %q", org.GetMemberRole("alice"))
+	}
+}
+
+func TestOrgHandlersOwnershipTransferRequiresFreshSession(t *testing.T) {
+	t.Setenv("PULSE_DEV", "true")
+	defer SetMultiTenantEnabled(false)
+	SetMultiTenantEnabled(true)
+
+	InitSessionStore(t.TempDir())
+	persistence := config.NewMultiTenantPersistence(t.TempDir())
+	h := NewOrgHandlers(persistence, nil)
+
+	createReq := withUser(
+		httptest.NewRequest(http.MethodPost, "/api/orgs", bytes.NewBufferString(`{"id":"acme","displayName":"Acme"}`)),
+		"alice",
+	)
+	createRec := httptest.NewRecorder()
+	h.HandleCreateOrg(createRec, createReq)
+	if createRec.Code != http.StatusCreated {
+		t.Fatalf("create failed: %d %s", createRec.Code, createRec.Body.String())
+	}
+
+	inviteMemberForTest(t, h, "acme", "alice", "bob", "viewer", http.StatusAccepted)
+	acceptInvitationForTest(t, h, "acme", "bob")
+
+	transferSession := generateSessionToken()
+	store := GetSessionStore()
+	store.CreateSession(transferSession, time.Hour, "browser", "127.0.0.1", "alice")
+	store.mu.Lock()
+	store.sessions[sessionHash(transferSession)].CreatedAt = time.Now().Add(-privilegedBrowserSessionMaxAge - time.Minute)
+	store.mu.Unlock()
+
+	transferReq := withUser(
+		httptest.NewRequest(http.MethodPost, "/api/orgs/acme/members", bytes.NewBufferString(`{"userId":"bob","role":"owner"}`)),
+		"alice",
+	)
+	transferReq.AddCookie(&http.Cookie{Name: cookieNameSession, Value: transferSession})
+	transferReq.SetPathValue("id", "acme")
+	transferRec := httptest.NewRecorder()
+	h.HandleInviteMember(transferRec, transferReq)
+	if transferRec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 for stale owner-transfer session, got %d: %s", transferRec.Code, transferRec.Body.String())
+	}
+	if !strings.Contains(transferRec.Body.String(), "Sign in again to transfer ownership") {
+		t.Fatalf("expected fresh-session message, got %s", transferRec.Body.String())
+	}
+
+	getReq := withUser(httptest.NewRequest(http.MethodGet, "/api/orgs/acme", nil), "alice")
+	getReq.SetPathValue("id", "acme")
+	getRec := httptest.NewRecorder()
+	h.HandleGetOrg(getRec, getReq)
+	if getRec.Code != http.StatusOK {
+		t.Fatalf("get failed: %d %s", getRec.Code, getRec.Body.String())
+	}
+
+	var org models.Organization
+	if err := json.Unmarshal(getRec.Body.Bytes(), &org); err != nil {
+		t.Fatalf("decode org: %v", err)
+	}
+	if org.OwnerUserID != "alice" {
+		t.Fatalf("expected owner to remain alice, got %q", org.OwnerUserID)
+	}
+	if org.GetMemberRole("bob") != models.OrgRoleViewer {
+		t.Fatalf("expected bob to remain viewer, got %q", org.GetMemberRole("bob"))
 	}
 }
 

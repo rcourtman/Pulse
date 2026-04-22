@@ -481,6 +481,10 @@ func (h *OrgHandlers) HandleInviteMember(w http.ResponseWriter, r *http.Request)
 
 	// Ownership transfer: demote old owner to admin and promote target user to owner.
 	if req.Role == models.OrgRoleOwner && req.UserID != org.OwnerUserID {
+		if authErr := validateFreshBrowserSession(r, username, "transfer ownership", privilegedBrowserSessionMaxAge); authErr != nil {
+			writeErrorResponse(w, authErr.Status, authErr.Code, authErr.Message, nil)
+			return
+		}
 		if memberIndex < 0 {
 			writeErrorResponse(w, http.StatusBadRequest, "owner_transfer_requires_member", "Ownership can only be transferred to an existing member", nil)
 			return

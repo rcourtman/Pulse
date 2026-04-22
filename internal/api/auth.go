@@ -32,6 +32,14 @@ var (
 	}
 )
 
+const privilegedBrowserSessionMaxAge = 5 * time.Minute
+
+type authRequirementFailure struct {
+	Status  int
+	Code    string
+	Message string
+}
+
 type ssoOIDCProviderAuthSnapshot struct {
 	ProviderID    string
 	IssuerURL     string
@@ -378,6 +386,50 @@ func constantTimeStringEqual(a, b string) bool {
 		return false
 	}
 	return subtle.ConstantTimeCompare([]byte(a), []byte(b)) == 1
+}
+
+func validateFreshBrowserSession(r *http.Request, username, action string, maxAge time.Duration) *authRequirementFailure {
+	if maxAge <= 0 {
+		maxAge = privilegedBrowserSessionMaxAge
+	}
+	action = strings.TrimSpace(action)
+	if action == "" {
+		action = "continue"
+	}
+
+	cookie, err := readSessionCookie(r)
+	if err != nil || strings.TrimSpace(cookie.Value) == "" {
+		return &authRequirementFailure{
+			Status:  http.StatusUnauthorized,
+			Code:    "fresh_session_required",
+			Message: fmt.Sprintf("Sign in again to %s", action),
+		}
+	}
+	if !ValidateSession(cookie.Value) {
+		return &authRequirementFailure{
+			Status:  http.StatusUnauthorized,
+			Code:    "fresh_session_required",
+			Message: fmt.Sprintf("Sign in again to %s", action),
+		}
+	}
+
+	session := GetSessionStore().GetSession(cookie.Value)
+	if session == nil || strings.TrimSpace(session.Username) == "" || !constantTimeStringEqual(session.Username, username) {
+		return &authRequirementFailure{
+			Status:  http.StatusUnauthorized,
+			Code:    "fresh_session_required",
+			Message: fmt.Sprintf("Sign in again to %s", action),
+		}
+	}
+	if session.CreatedAt.IsZero() || time.Since(session.CreatedAt) > maxAge {
+		return &authRequirementFailure{
+			Status:  http.StatusUnauthorized,
+			Code:    "fresh_session_required",
+			Message: fmt.Sprintf("Sign in again to %s", action),
+		}
+	}
+
+	return nil
 }
 
 func requestMatchesRecoverySession(r *http.Request, session *SessionData) bool {

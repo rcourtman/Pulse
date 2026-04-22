@@ -239,7 +239,11 @@ the canonical monitored-system blocked payload.
     keep new-user adds on the canonical pending-invitation payload (`kind:"invitation"`) plus current-user
     accept/decline routes, rather than binding an arbitrary username directly into `org.Members`. Immediate role
     mutation remains valid only for already-accepted members, and owner transfer must fail closed unless the
-    target user is already a stored member.
+    target user is already a stored member. The same permanent-control boundary also requires a fresh browser
+    session for owner transfer: `internal/api/auth.go`, `internal/api/session_store.go`, and
+    `internal/api/org_handlers.go` must reject transfer attempts unless the request carries the bound
+    `pulse_session` cookie for the acting owner and that session was minted recently enough to represent an
+    explicit re-auth, rather than letting any long-lived hijacked session permanently reassign org ownership.
     That same shared auth boundary also owns pre-auth local setup and recovery containment. When no authentication is
     configured, anonymous fallback and bootstrap quick setup may run only on direct loopback, recovery tokens must bind
     to the generating client IP, and recovery may mint only a browser-bound localhost session rather than a shared

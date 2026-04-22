@@ -155,6 +155,11 @@ settings surfaces. The organization settings panels now also normalize org
 scope through `frontend-modern/src/utils/orgScope.ts` instead of carrying
 their own `getOrgID() || 'default'` fallbacks, so access, overview, and
 sharing views stay aligned with the shared multi-tenant org context contract.
+That same org-control surface also treats owner transfer as a re-auth-bound
+operation. Existing membership remains a prerequisite for the target user, and
+the acting owner must present a fresh browser session minted through the
+canonical login flow before `internal/api/org_handlers.go` will promote a new
+owner, instead of trusting any still-valid long-lived session cookie.
 That same settings surface now also inherits the runtime-versus-commercial
 licensing split. Organization settings may consume runtime capability truth
 from the shared runtime-capabilities contract, but billing identity and

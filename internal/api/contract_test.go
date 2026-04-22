@@ -7338,6 +7338,66 @@ func TestContract_OrganizationInvitationTransportJSONSnapshot(t *testing.T) {
 	assertJSONSnapshot(t, got, want)
 }
 
+func TestContract_OwnerTransferRequiresFreshSession(t *testing.T) {
+	t.Setenv("PULSE_DEV", "true")
+	defer SetMultiTenantEnabled(false)
+	SetMultiTenantEnabled(true)
+
+	configDir := t.TempDir()
+	resetSessionStoreForTests()
+	t.Cleanup(resetSessionStoreForTests)
+	InitSessionStore(configDir)
+
+	persistence := config.NewMultiTenantPersistence(t.TempDir())
+	h := NewOrgHandlers(persistence, nil)
+
+	createReq := withUser(
+		httptest.NewRequest(http.MethodPost, "/api/orgs", bytes.NewBufferString(`{"id":"acme","displayName":"Acme"}`)),
+		"alice",
+	)
+	createRec := httptest.NewRecorder()
+	h.HandleCreateOrg(createRec, createReq)
+	if createRec.Code != http.StatusCreated {
+		t.Fatalf("create org: status=%d body=%s", createRec.Code, createRec.Body.String())
+	}
+
+	inviteMemberForTest(t, h, "acme", "alice", "bob", "viewer", http.StatusAccepted)
+	acceptInvitationForTest(t, h, "acme", "bob")
+
+	sessionToken := generateSessionToken()
+	store := GetSessionStore()
+	store.CreateSession(sessionToken, time.Hour, "browser", "127.0.0.1", "alice")
+	store.mu.Lock()
+	store.sessions[sessionHash(sessionToken)].CreatedAt = time.Now().Add(-privilegedBrowserSessionMaxAge - time.Minute)
+	store.mu.Unlock()
+
+	transferReq := withUser(
+		httptest.NewRequest(http.MethodPost, "/api/orgs/acme/members", bytes.NewBufferString(`{"userId":"bob","role":"owner"}`)),
+		"alice",
+	)
+	transferReq.AddCookie(&http.Cookie{Name: cookieNameSession, Value: sessionToken})
+	transferReq.SetPathValue("id", "acme")
+	transferRec := httptest.NewRecorder()
+	h.HandleInviteMember(transferRec, transferReq)
+	if transferRec.Code != http.StatusUnauthorized {
+		t.Fatalf("status=%d, want %d: %s", transferRec.Code, http.StatusUnauthorized, transferRec.Body.String())
+	}
+
+	var payload APIError
+	if err := json.Unmarshal(transferRec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode error payload: %v", err)
+	}
+	if payload.Code != "fresh_session_required" {
+		t.Fatalf("code=%q, want fresh_session_required", payload.Code)
+	}
+	if payload.ErrorMessage != "Sign in again to transfer ownership" {
+		t.Fatalf("error=%q, want %q", payload.ErrorMessage, "Sign in again to transfer ownership")
+	}
+	if payload.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("status_code=%d, want %d", payload.StatusCode, http.StatusUnauthorized)
+	}
+}
+
 func TestContract_OnboardingQRResponseJSONSnapshot(t *testing.T) {
 	payload := onboardingQRResponse{
 		Schema:      onboardingSchemaVersion,

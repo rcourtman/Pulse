@@ -727,7 +727,10 @@ invitation record and become a real member only after the invited account
 accepts through the canonical invitation routes. Owner transfer remains an
 existing-member operation on that same boundary; lifecycle-adjacent flows may
 not treat an unaccepted invitation or arbitrary `userId` string as a
-member-shaped owner target.
+member-shaped owner target, and they may not complete owner transfer through a
+stale ambient browser cookie. The acting owner must re-enter through a fresh
+browser session on the shared auth boundary before lifecycle-adjacent surfaces
+can permanently reassign org ownership.
 That same shared `internal/api/` dependency also assumes telemetry
 transparency remains explicitly system-settings-owned. When lifecycle-adjacent
 setup or router work touches shared `internal/api/` files, telemetry preview

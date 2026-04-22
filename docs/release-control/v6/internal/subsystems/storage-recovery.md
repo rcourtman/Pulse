@@ -847,8 +847,10 @@ routes treat the operator as a tenant member. Recovery settings and related
 storage surfaces may observe `/api/orgs/{id}/members` mutations, but manager
 submissions for a new `userId` must stay pending invitations until the
 invited account explicitly accepts. Recovery-adjacent owner transfer therefore
-remains restricted to existing members and may not be satisfied by an
-unaccepted invitation record or a guessed account identifier.
+remains restricted to existing members, may not be satisfied by an unaccepted
+invitation record or a guessed account identifier, and must require a fresh
+browser session minted for the acting owner before the permanent ownership
+change is accepted.
 That shared `internal/api/` dependency now also assumes hosted tenant AI
 bootstrap and chat-runtime reads resolve through one effective hosted billing
 lease before storage- or recovery-adjacent runtime consumers inspect
