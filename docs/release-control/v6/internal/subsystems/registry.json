@@ -2429,6 +2429,7 @@
       "owned_files": [
         ".dockerignore",
         ".github/ISSUE_TEMPLATE/v6_rc_feedback.yml",
+        ".github/workflows/backfill-release-assets.yml",
         ".github/workflows/create-release.yml",
         ".github/workflows/deploy-demo-server.yml",
         ".github/workflows/helm-pages.yml",
@@ -2458,6 +2459,7 @@
         "Makefile",
         "package-lock.json",
         "package.json",
+        "scripts/backfill-release-assets.sh",
         "scripts/build-release.sh",
         "scripts/check-workflow-dispatch-inputs.py",
         "scripts/clean-mock-alerts.sh",
@@ -2474,6 +2476,7 @@
         "scripts/install.ps1",
         "scripts/install.sh",
         "scripts/pulse-auto-update.sh",
+        "scripts/release_asset_common.sh",
         "scripts/release_control/internal/record_rc_to_ga_rehearsal.py",
         "scripts/release_control/record_rc_to_ga_rehearsal.py",
         "scripts/release_control/release_promotion_policy_support.py",
@@ -2555,6 +2558,7 @@
             ],
             "match_files": [
               ".github/ISSUE_TEMPLATE/v6_rc_feedback.yml",
+              ".github/workflows/backfill-release-assets.yml",
               ".github/workflows/create-release.yml",
               ".github/workflows/helm-pages.yml",
               ".github/workflows/promote-floating-tags.yml",
@@ -2595,12 +2599,15 @@
               ".dockerignore",
               ".github/workflows/deploy-demo-server.yml",
               "Dockerfile",
+              "scripts/backfill-release-assets.sh",
               "scripts/build-release.sh",
+              "scripts/release_asset_common.sh",
               "scripts/release_ldflags.sh"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
+              "scripts/installtests/backfill_release_assets_test.go",
               "scripts/installtests/build_release_assets_test.go",
               "scripts/installtests/release_ldflags_test.go"
             ]

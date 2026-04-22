@@ -5,6 +5,13 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PULSE_SCRIPTS_DIR="${SCRIPT_DIR}"
+PULSE_REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+cd "${PULSE_REPO_ROOT}"
+
+source "${SCRIPT_DIR}/release_asset_common.sh"
+
 # Prefer the pinned toolchain from go.mod (toolchain directive).
 # If /usr/local/go exists (typical in CI images), prepend it to PATH.
 if [ -x /usr/local/go/bin/go ]; then
@@ -30,8 +37,6 @@ VERSION=${1:-$(cat VERSION)}
 BUILD_DIR="build"
 RELEASE_DIR="release"
 RENDERED_INSTALLERS_DIR="${BUILD_DIR}/rendered-installers"
-INSTALLER_SSH_SIGNER_IDENTITY="pulse-installer"
-INSTALLER_SSH_SIGNER_NAMESPACE="pulse-install"
 RELEASE_PACKET_SBOM="pulse-v${VERSION}-release.sbom.spdx.json"
 
 echo "Building Pulse v${VERSION}..."
@@ -76,36 +81,10 @@ fi
 # Require update signing for release-grade agent and installer verification.
 # Explicitly opt out with PULSE_ALLOW_MISSING_UPDATE_SIGNING_KEY=true for local-only debugging.
 update_ldflags_args=()
-update_ssh_public_key=""
-update_ssh_private_key_file=""
-if [[ -z "${PULSE_UPDATE_SIGNING_KEY:-}" ]]; then
-    if [[ "${PULSE_ALLOW_MISSING_UPDATE_SIGNING_KEY:-false}" == "true" ]]; then
-        echo "Warning: PULSE_UPDATE_SIGNING_KEY not set; continuing because PULSE_ALLOW_MISSING_UPDATE_SIGNING_KEY=true."
-    else
-        echo "Error: PULSE_UPDATE_SIGNING_KEY is required for release builds." >&2
-        echo "Set PULSE_ALLOW_MISSING_UPDATE_SIGNING_KEY=true only for local non-release debugging." >&2
-        exit 1
-    fi
-else
-    update_public_key=$(go run ./scripts/release_update_key.go public-key --private-key "${PULSE_UPDATE_SIGNING_KEY}")
-    if [[ -z "${update_public_key}" ]]; then
-        echo "Error: failed to derive update signing public key." >&2
-        exit 1
-    fi
-    if ! command -v ssh-keygen >/dev/null 2>&1; then
-        echo "Error: ssh-keygen is required to sign installer release assets." >&2
-        exit 1
-    fi
-    update_ssh_public_key=$(go run ./scripts/release_update_key.go public-key-ssh --private-key "${PULSE_UPDATE_SIGNING_KEY}" --comment "${INSTALLER_SSH_SIGNER_IDENTITY}")
-    if [[ -z "${update_ssh_public_key}" ]]; then
-        echo "Error: failed to derive installer SSH signing public key." >&2
-        exit 1
-    fi
-    update_ssh_private_key_file=$(mktemp)
-    trap 'rm -f "${update_ssh_private_key_file}"' EXIT
-    go run ./scripts/release_update_key.go openssh-private-key --private-key "${PULSE_UPDATE_SIGNING_KEY}" --comment "${INSTALLER_SSH_SIGNER_IDENTITY}" > "${update_ssh_private_key_file}"
-    chmod 600 "${update_ssh_private_key_file}"
-    update_ldflags_args=(--update-public-keys "${update_public_key}")
+pulse_release_prepare_signing_state "pulse-installer" "pulse-install"
+trap 'pulse_release_cleanup_signing_state' EXIT
+if [[ -n "${PULSE_RELEASE_UPDATE_PUBLIC_KEY:-}" ]]; then
+    update_ldflags_args=(--update-public-keys "${PULSE_RELEASE_UPDATE_PUBLIC_KEY}")
 fi
 
 render_release_installers() {
@@ -114,49 +93,7 @@ render_release_installers() {
     go run ./scripts/render_installers.go \
         --source-dir ./scripts \
         --output-dir "${output_dir}" \
-        --installer-ssh-public-key "${update_ssh_public_key}"
-}
-
-sign_release_file() {
-    local file="$1"
-    if [[ -z "${PULSE_UPDATE_SIGNING_KEY:-}" ]]; then
-        return 0
-    fi
-    rm -f "${file}.sig" "${file}.sshsig"
-    ssh-keygen -q -Y sign \
-        -f "${update_ssh_private_key_file}" \
-        -n "${INSTALLER_SSH_SIGNER_NAMESPACE}" \
-        "${file}" >/dev/null
-    mv "${file}.sig" "${file}.sshsig"
-    go run ./scripts/release_update_key.go sign --private-key "${PULSE_UPDATE_SIGNING_KEY}" --file "${file}" > "${file}.sig"
-}
-
-sign_directory_release_assets() {
-    local dir="$1"
-    if [[ -z "${PULSE_UPDATE_SIGNING_KEY:-}" ]]; then
-        return 0
-    fi
-    while IFS= read -r -d '' file; do
-        sign_release_file "${file}"
-    done < <(find "${dir}" -maxdepth 1 -type f ! -name '*.sig' ! -name '*.sshsig' -print0)
-}
-
-generate_release_packet_sbom() {
-    local tmp_sbom=""
-    if ! command -v syft >/dev/null 2>&1; then
-        if [[ "${PULSE_ALLOW_MISSING_RELEASE_SBOM_TOOL:-false}" == "true" ]]; then
-            echo "Warning: syft not installed; skipping release-packet SBOM because PULSE_ALLOW_MISSING_RELEASE_SBOM_TOOL=true."
-            return 0
-        fi
-        echo "Error: syft is required to generate the release-packet SBOM." >&2
-        echo "Install syft or set PULSE_ALLOW_MISSING_RELEASE_SBOM_TOOL=true only for local non-release debugging." >&2
-        exit 1
-    fi
-
-    tmp_sbom="$(mktemp "${BUILD_DIR}/release-packet-sbom.XXXXXX")"
-    echo "Generating release-packet SBOM ${RELEASE_PACKET_SBOM}..."
-    syft "dir:${RELEASE_DIR}" -o "spdx-json=${tmp_sbom}"
-    mv "${tmp_sbom}" "${RELEASE_DIR}/${RELEASE_PACKET_SBOM}"
+        --installer-ssh-public-key "${PULSE_RELEASE_UPDATE_SSH_PUBLIC_KEY}"
 }
 
 # Clean previous builds
@@ -280,9 +217,9 @@ for build_name in "${build_order[@]}"; do
     chmod 755 "$staging_dir/scripts/"*.sh
     chmod 755 "$staging_dir/scripts/"*.ps1 2>/dev/null || true
     echo "$VERSION" > "$staging_dir/VERSION"
-    sign_directory_release_assets "$staging_dir/bin"
-    sign_directory_release_assets "$staging_dir/scripts"
-    sign_release_file "$staging_dir/VERSION"
+    pulse_release_sign_directory_assets "$staging_dir/bin"
+    pulse_release_sign_directory_assets "$staging_dir/scripts"
+    pulse_release_sign_file "$staging_dir/VERSION"
 
     # Create tarball from staging directory
     cd "$staging_dir"
@@ -364,9 +301,9 @@ chmod +x "$universal_dir/bin/pulse-agent"
 
 # Add VERSION file
 echo "$VERSION" > "$universal_dir/VERSION"
-sign_directory_release_assets "$universal_dir/bin"
-sign_directory_release_assets "$universal_dir/scripts"
-sign_release_file "$universal_dir/VERSION"
+pulse_release_sign_directory_assets "$universal_dir/bin"
+pulse_release_sign_directory_assets "$universal_dir/scripts"
+pulse_release_sign_file "$universal_dir/VERSION"
 
 # Package standalone unified agent binaries (all platforms)
 # Linux
@@ -446,76 +383,9 @@ cp "${RENDERED_INSTALLERS_DIR}/install.sh" "$RELEASE_DIR/install.sh"
 cp scripts/install-docker.sh "$RELEASE_DIR/"
 cp scripts/pulse-auto-update.sh "$RELEASE_DIR/"
 
-generate_release_packet_sbom
-
-# Generate checksums (include tarballs, zip files, helm chart, and install.sh)
-cd "$RELEASE_DIR"
-shopt -s nullglob extglob
-checksum_files=()
-# Match all tarballs, zip files, exe files, and install scripts
-if compgen -G "pulse-*.tar.gz" > /dev/null; then
-    checksum_files+=( pulse-*.tar.gz )
-fi
-if compgen -G "pulse-*.tgz" > /dev/null; then
-    checksum_files+=( pulse-*.tgz )
-fi
-if compgen -G "pulse-*.zip" > /dev/null; then
-    checksum_files+=( pulse-*.zip )
-fi
-if compgen -G "pulse-*.sbom.spdx.json" > /dev/null; then
-    checksum_files+=( pulse-*.sbom.spdx.json )
-fi
-if compgen -G "pulse-agent-linux-*" > /dev/null; then
-    checksum_files+=( pulse-agent-linux-* )
-fi
-if compgen -G "pulse-agent-freebsd-*" > /dev/null; then
-    checksum_files+=( pulse-agent-freebsd-* )
-fi
-if compgen -G "pulse-*.exe" > /dev/null; then
-    checksum_files+=( pulse-*.exe )
-fi
-if [ -f "install.sh" ]; then
-    checksum_files+=( install.sh )
-fi
-if [ -f "install-docker.sh" ]; then
-    checksum_files+=( install-docker.sh )
-fi
-if [ -f "pulse-auto-update.sh" ]; then
-    checksum_files+=( pulse-auto-update.sh )
-fi
-if compgen -G "install*.ps1" > /dev/null; then
-    checksum_files+=( install*.ps1 )
-fi
-if [ ${#checksum_files[@]} -eq 0 ]; then
-    echo "Warning: no release artifacts found to checksum."
-else
-    # Generate checksums from a single sha256sum run for deterministic results (prevents #671 checksum mismatches)
-    checksum_output="$(sha256sum "${checksum_files[@]}" | sort -k 2)"
-    printf '%s\n' "$checksum_output" > checksums.txt
-
-    # Emit per-file .sha256 artifacts for backward compatibility while legacy installers transition off them
-    while read -r checksum filename; do
-        printf '%s  %s\n' "$checksum" "$filename" > "${filename}.sha256"
-    done <<< "$checksum_output"
-
-    for artifact in "${checksum_files[@]}" checksums.txt; do
-        sign_release_file "${artifact}"
-    done
-
-    if [ -n "${SIGNING_KEY_ID:-}" ]; then
-        if command -v gpg >/dev/null 2>&1; then
-            echo "Signing checksums with GPG key ${SIGNING_KEY_ID}..."
-            gpg --batch --yes --detach-sign --armor \
-                --local-user "${SIGNING_KEY_ID}" \
-                --output checksums.txt.asc \
-                checksums.txt
-        else
-            echo "SIGNING_KEY_ID is set but gpg is not installed; skipping signature."
-        fi
-    fi
-fi
-shopt -u nullglob
-cd ..
+pulse_release_generate_packet_sbom "${RELEASE_DIR}" "${RELEASE_PACKET_SBOM}"
+mapfile -t checksum_files < <(pulse_release_collect_checksum_files "${RELEASE_DIR}")
+pulse_release_write_checksums_and_signatures "${RELEASE_DIR}" "${checksum_files[@]}"
 
 echo
 echo "Release build complete!"

@@ -15,6 +15,10 @@ func TestBuildReleaseUsesV6InstallScripts(t *testing.T) {
 
 	script := string(content)
 	required := []string{
+		`SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"`,
+		`PULSE_REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"`,
+		`cd "${PULSE_REPO_ROOT}"`,
+		`source "${SCRIPT_DIR}/release_asset_common.sh"`,
 		`RENDERED_INSTALLERS_DIR="${BUILD_DIR}/rendered-installers"`,
 		`go run ./scripts/render_installers.go \`,
 		`cp "${RENDERED_INSTALLERS_DIR}/install.sh" "$RELEASE_DIR/install.sh"`,
@@ -38,21 +42,41 @@ func TestBuildReleaseUsesV6InstallScripts(t *testing.T) {
 	requiredScriptWiring := []string{
 		`agent_ldflags="$(./scripts/release_ldflags.sh agent --version "v${VERSION}" "${update_ldflags_args[@]}")"`,
 		`server_ldflags="$(./scripts/release_ldflags.sh server --version "v${VERSION}" --build-time "${build_time}" --git-commit "${git_commit}" "${license_ldflags_args[@]}" "${update_ldflags_args[@]}")"`,
-		`PULSE_UPDATE_SIGNING_KEY`,
 		`RELEASE_PACKET_SBOM="pulse-v${VERSION}-release.sbom.spdx.json"`,
-		`generate_release_packet_sbom() {`,
-		`syft "dir:${RELEASE_DIR}" -o "spdx-json=${tmp_sbom}"`,
-		`generate_release_packet_sbom`,
-		`pulse-*.sbom.spdx.json`,
-		`go run ./scripts/release_update_key.go public-key --private-key "${PULSE_UPDATE_SIGNING_KEY}"`,
-		`go run ./scripts/release_update_key.go public-key-ssh --private-key "${PULSE_UPDATE_SIGNING_KEY}"`,
-		`go run ./scripts/release_update_key.go openssh-private-key --private-key "${PULSE_UPDATE_SIGNING_KEY}"`,
-		`ssh-keygen -q -Y sign`,
-		`sign_release_file "${artifact}"`,
+		`pulse_release_prepare_signing_state "pulse-installer" "pulse-install"`,
+		`trap 'pulse_release_cleanup_signing_state' EXIT`,
+		`--installer-ssh-public-key "${PULSE_RELEASE_UPDATE_SSH_PUBLIC_KEY}"`,
+		`pulse_release_generate_packet_sbom "${RELEASE_DIR}" "${RELEASE_PACKET_SBOM}"`,
+		`mapfile -t checksum_files < <(pulse_release_collect_checksum_files "${RELEASE_DIR}")`,
+		`pulse_release_write_checksums_and_signatures "${RELEASE_DIR}" "${checksum_files[@]}"`,
 	}
 	for _, needle := range requiredScriptWiring {
 		if !strings.Contains(script, needle) {
 			t.Fatalf("build-release.sh missing canonical ldflags wiring: %s", needle)
+		}
+	}
+
+	helperBytes, err := os.ReadFile(repoFile("scripts", "release_asset_common.sh"))
+	if err != nil {
+		t.Fatalf("read release_asset_common.sh: %v", err)
+	}
+	helper := string(helperBytes)
+	helperRequired := []string{
+		`: "${PULSE_SCRIPTS_DIR:=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"`,
+		`: "${PULSE_REPO_ROOT:=$(cd "${PULSE_SCRIPTS_DIR}/.." && pwd)}"`,
+		`go -C "${PULSE_REPO_ROOT}" run "${PULSE_SCRIPTS_DIR}/release_update_key.go" "$@"`,
+		`pulse_release_go_run_update_key public-key --private-key "${PULSE_UPDATE_SIGNING_KEY}"`,
+		`pulse_release_go_run_update_key public-key-ssh --private-key "${PULSE_UPDATE_SIGNING_KEY}"`,
+		`pulse_release_go_run_update_key openssh-private-key --private-key "${PULSE_UPDATE_SIGNING_KEY}"`,
+		`pulse_release_go_run_update_key sign --private-key "${PULSE_UPDATE_SIGNING_KEY}" --file "${absolute_file}"`,
+		`ssh-keygen -q -Y sign`,
+		`"${resolved_tool}" "dir:${release_dir}" -o "spdx-json=${tmp_sbom}"`,
+		`if compgen -G "pulse-*.sbom.spdx.json" > /dev/null; then`,
+		`find . -maxdepth 1 -type f \( -name '*.sig' -o -name '*.sshsig' \) -delete`,
+	}
+	for _, needle := range helperRequired {
+		if !strings.Contains(helper, needle) {
+			t.Fatalf("release_asset_common.sh missing canonical release asset wiring: %s", needle)
 		}
 	}
 }
@@ -102,6 +126,61 @@ func TestCreateReleaseUploadsPowerShellInstaller(t *testing.T) {
 	}
 	if strings.Contains(workflow, `provenance: false`) {
 		t.Fatal("create-release.yml must not disable release-image provenance")
+	}
+}
+
+func TestBackfillReleaseWorkflowRepairsPublishedAssetsWithoutRebuilds(t *testing.T) {
+	scriptBytes, err := os.ReadFile(repoFile("scripts", "backfill-release-assets.sh"))
+	if err != nil {
+		t.Fatalf("read backfill-release-assets.sh: %v", err)
+	}
+	script := string(scriptBytes)
+	scriptRequired := []string{
+		`SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"`,
+		`PULSE_REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"`,
+		`cd "${PULSE_REPO_ROOT}"`,
+		`source "${SCRIPT_DIR}/release_asset_common.sh"`,
+		`gh release view "${TAG}" -R "${REPO}" --json isDraft,tagName`,
+		`Error: ${TAG} is still a draft release; use the normal release pipeline instead of historical backfill.`,
+		`gh release download "${TAG}" -R "${REPO}" --dir "${RELEASE_DIR}" --clobber`,
+		`pulse_release_prepare_signing_state "pulse-installer" "pulse-install"`,
+		`pulse_release_generate_packet_sbom "${PAYLOAD_DIR}" "${RELEASE_PACKET_SBOM}"`,
+		`pulse_release_write_checksums_and_signatures "${RELEASE_DIR}" "${checksum_files[@]}"`,
+		`gh release upload "${TAG}" "${RELEASE_DIR}/checksums.txt" --clobber`,
+		`gh release upload "${TAG}" "${RELEASE_DIR}"/*.sha256 --clobber`,
+		`gh release upload "${TAG}" "${RELEASE_DIR}"/*.sig --clobber`,
+		`gh release upload "${TAG}" "${RELEASE_DIR}"/*.sshsig --clobber`,
+		`gh release upload "${TAG}" "${RELEASE_DIR}/${RELEASE_PACKET_SBOM}" --clobber`,
+	}
+	for _, needle := range scriptRequired {
+		if !strings.Contains(script, needle) {
+			t.Fatalf("backfill-release-assets.sh missing required historical backfill step: %s", needle)
+		}
+	}
+
+	workflowBytes, err := os.ReadFile(repoFile(".github", "workflows", "backfill-release-assets.yml"))
+	if err != nil {
+		t.Fatalf("read backfill-release-assets.yml: %v", err)
+	}
+	workflow := string(workflowBytes)
+	workflowRequired := []string{
+		`name: Backfill Release Assets`,
+		`workflow_dispatch:`,
+		`contents: write`,
+		`runs-on: ubuntu-24.04`,
+		`uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4`,
+		`uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5`,
+		`SYFT_VERSION="1.42.4"`,
+		`SYFT_ARCHIVE="syft_${SYFT_VERSION}_linux_amd64.tar.gz"`,
+		`SYFT_SHA256="590650c2743b83f327d1bf9bec64f6f83b7fec504187bb84f500c862bf8f2a0f"`,
+		`./scripts/backfill-release-assets.sh --tag "${{ inputs.tag }}" --repo "${{ github.repository }}"`,
+		`PULSE_UPDATE_SIGNING_KEY: ${{ secrets.PULSE_UPDATE_SIGNING_KEY }}`,
+		`./scripts/validate-published-release.sh "${{ inputs.tag }}" "${{ github.repository }}"`,
+	}
+	for _, needle := range workflowRequired {
+		if !strings.Contains(workflow, needle) {
+			t.Fatalf("backfill-release-assets.yml missing required release-repair step: %s", needle)
+		}
 	}
 }
 
@@ -160,12 +239,18 @@ func TestReleaseValidationRequiresSignedSidecars(t *testing.T) {
 	contractRequired := []string{
 		"`scripts/validate-release.sh`",
 		"`scripts/validate-published-release.sh`",
+		"`scripts/backfill-release-assets.sh`",
+		"`.github/workflows/backfill-release-assets.yml`",
 		"`scripts/validate-release.sh`, and",
-		"`scripts/validate-published-release.sh` must derive the embedded update trust",
+		"`scripts/release_asset_common.sh`",
+		"must derive the embedded update trust root",
 		"standalone SPDX JSON SBOM",
+		"already-published packet",
+		"derived integrity assets",
 		"and fail validation if",
-		"published artifact or `checksums.txt` is missing its `.sshsig` sidecar",
-		"canonical release-packet SBOM is absent",
+		"published artifact or",
+		"`checksums.txt` is missing its `.sshsig` sidecar",
+		"release-packet SBOM is absent",
 	}
 	for _, needle := range contractRequired {
 		if !strings.Contains(contract, needle) {

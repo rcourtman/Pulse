@@ -1,0 +1,60 @@
+name: Backfill Release Assets
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Published release tag to repair (for example v6.0.0-rc.2)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: backfill-release-assets-${{ inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  backfill:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version: '1.25.9'
+          cache: true
+
+      - name: Install Syft
+        run: |
+          set -euo pipefail
+
+          SYFT_VERSION="1.42.4"
+          SYFT_ARCHIVE="syft_${SYFT_VERSION}_linux_amd64.tar.gz"
+          SYFT_SHA256="590650c2743b83f327d1bf9bec64f6f83b7fec504187bb84f500c862bf8f2a0f"
+          TMP_DIR="$(mktemp -d)"
+          trap 'rm -rf "$TMP_DIR"' EXIT
+
+          curl -fsSL "https://github.com/anchore/syft/releases/download/v${SYFT_VERSION}/${SYFT_ARCHIVE}" \
+            -o "${TMP_DIR}/${SYFT_ARCHIVE}"
+          printf '%s  %s\n' "${SYFT_SHA256}" "${TMP_DIR}/${SYFT_ARCHIVE}" | sha256sum --check --
+          tar -xzf "${TMP_DIR}/${SYFT_ARCHIVE}" -C "${TMP_DIR}" syft
+          install -m 0755 "${TMP_DIR}/syft" /usr/local/bin/syft
+          syft version
+
+      - name: Backfill published release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PULSE_UPDATE_SIGNING_KEY: ${{ secrets.PULSE_UPDATE_SIGNING_KEY }}
+        run: |
+          ./scripts/backfill-release-assets.sh --tag "${{ inputs.tag }}" --repo "${{ github.repository }}"
+
+      - name: Validate published release packet
+        run: |
+          ./scripts/validate-published-release.sh "${{ inputs.tag }}" "${{ github.repository }}"
