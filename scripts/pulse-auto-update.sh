@@ -14,6 +14,9 @@ CONFIG_DIR="${PULSE_CONFIG_DIR:-/etc/pulse}"
 UPDATE_TIMER_UNIT="${PULSE_UPDATE_TIMER_UNIT:-${SERVICE_NAME}-update.timer}"
 LOG_TAG="${PULSE_AUTO_UPDATE_LOG_TAG:-${SERVICE_NAME}-auto-update}"
 MAX_LOG_SIZE=10485760  # 10MB
+INSTALL_SIGNATURE_IDENTITY="pulse-installer"
+INSTALL_SIGNATURE_NAMESPACE="pulse-install"
+PINNED_RELEASE_SSH_PUBLIC_KEY="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDs21c5oPk2khrdHlsw1aZ9EJKoTsyalGzhb0hdwJrkV pulse-installer"
 
 # Logging function
 log() {
@@ -21,6 +24,48 @@ log() {
     shift
     logger -t "$LOG_TAG" -p "user.$level" "$@"
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] [$level] $@"
+}
+
+release_signature_key_available() {
+    [[ -n "${PINNED_RELEASE_SSH_PUBLIC_KEY:-}" ]]
+}
+
+require_release_signature_verifier() {
+    if ! release_signature_key_available; then
+        log error "Pinned release signature key is not configured"
+        return 1
+    fi
+    if ! command -v ssh-keygen >/dev/null 2>&1; then
+        log error "ssh-keygen is required to verify signed Pulse release assets"
+        return 1
+    fi
+}
+
+verify_release_signature() {
+    local target_path="$1"
+    local signature_path="$2"
+    local context="${3:-downloaded file}"
+    local allowed_signers=""
+
+    if ! require_release_signature_verifier; then
+        return 1
+    fi
+
+    allowed_signers=$(mktemp /tmp/pulse-release-signers.XXXXXX)
+    printf '%s %s\n' "$INSTALL_SIGNATURE_IDENTITY" "$PINNED_RELEASE_SSH_PUBLIC_KEY" > "$allowed_signers"
+
+    if ! ssh-keygen -Y verify \
+        -f "$allowed_signers" \
+        -I "$INSTALL_SIGNATURE_IDENTITY" \
+        -n "$INSTALL_SIGNATURE_NAMESPACE" \
+        -s "$signature_path" < "$target_path" >/dev/null 2>&1; then
+        rm -f "$allowed_signers"
+        log error "Cryptographic signature verification failed for ${context}"
+        return 1
+    fi
+
+    rm -f "$allowed_signers"
+    return 0
 }
 
 # Check if auto-updates are enabled
@@ -158,6 +203,8 @@ resolve_install_script_url() {
 perform_update() {
     local new_version=$1
     local service_name=$(detect_service_name)
+    local installer_tmp=""
+    local signature_tmp=""
     
     log info "Starting update to $new_version"
     
@@ -182,6 +229,7 @@ perform_update() {
     log info "Downloading and installing update"
     local install_script_url
     install_script_url=$(resolve_install_script_url "$new_version")
+    local install_signature_url="${install_script_url}.sshsig"
     
     # Run install script with specific version
     local marker_file="$INSTALL_DIR/BUILD_FROM_SOURCE"
@@ -194,12 +242,28 @@ perform_update() {
         fi
     fi
 
-    if curl -sSL "$install_script_url" | \
-       env \
+    installer_tmp=$(mktemp /tmp/pulse-update-installer.XXXXXX)
+    signature_tmp=$(mktemp /tmp/pulse-update-installer.sig.XXXXXX)
+    trap 'rm -f "$installer_tmp" "$signature_tmp"' RETURN
+
+    if ! curl -fsSL "$install_script_url" -o "$installer_tmp"; then
+        log error "Failed to download installer from $install_script_url"
+        return 1
+    fi
+    if ! curl -fsSL "$install_signature_url" -o "$signature_tmp"; then
+        log error "Failed to download installer signature from $install_signature_url"
+        return 1
+    fi
+    if ! verify_release_signature "$installer_tmp" "$signature_tmp" "downloaded Pulse installer"; then
+        return 1
+    fi
+    log info "Installer signature verified"
+
+    if env \
            "PULSE_SERVICE_NAME=$service_name" \
            "PULSE_INSTALL_DIR=$INSTALL_DIR" \
            "PULSE_CONFIG_DIR=$CONFIG_DIR" \
-           bash -s -- "${installer_args[@]}" 2>&1 | \
+           bash "$installer_tmp" "${installer_args[@]}" 2>&1 | \
        while IFS= read -r line; do
            log info "installer: $line"
        done; then

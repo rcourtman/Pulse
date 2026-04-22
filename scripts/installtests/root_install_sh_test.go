@@ -251,6 +251,32 @@ func TestRootInstallScriptSupportsInstanceScopedServerInstalls(t *testing.T) {
 	}
 }
 
+func TestRootInstallScriptRequiresSignedReleaseDownloads(t *testing.T) {
+	content, err := os.ReadFile(filepath.Join("..", "..", "install.sh"))
+	if err != nil {
+		t.Fatalf("read root install.sh: %v", err)
+	}
+
+	script := string(content)
+	required := []string{
+		`PINNED_RELEASE_SSH_PUBLIC_KEY="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDs21c5oPk2khrdHlsw1aZ9EJKoTsyalGzhb0hdwJrkV pulse-installer"`,
+		`require_release_signature_verifier() {`,
+		`verify_release_signature() {`,
+		`local signature_url="${download_url}.sshsig"`,
+		`Failed to download signature for Pulse release`,
+		`verify_release_signature "$archive_path" "$signature_file" "downloaded Pulse release"`,
+		`INSTALLER_SIG_URL="\${INSTALLER_URL}.sshsig"`,
+		`verify_release_signature "\$tmp_installer" "\$tmp_signature" "downloaded Pulse installer"`,
+		`Failed to download signature for pulse-auto-update.sh`,
+		`verify_release_signature "$dest" "$signature_file" "downloaded pulse-auto-update.sh"`,
+	}
+	for _, needle := range required {
+		if !strings.Contains(script, needle) {
+			t.Fatalf("root install.sh missing signed-release verification contract: %s", needle)
+		}
+	}
+}
+
 func TestPulseAutoUpdateScriptSupportsInstanceScopedServerInstalls(t *testing.T) {
 	content, err := os.ReadFile(filepath.Join("..", "..", "scripts", "pulse-auto-update.sh"))
 	if err != nil {
@@ -272,6 +298,29 @@ func TestPulseAutoUpdateScriptSupportsInstanceScopedServerInstalls(t *testing.T)
 	for _, needle := range required {
 		if !strings.Contains(script, needle) {
 			t.Fatalf("pulse-auto-update.sh missing instance-scoped install contract fragment: %s", needle)
+		}
+	}
+}
+
+func TestPulseAutoUpdateScriptRequiresSignedInstallerDownloads(t *testing.T) {
+	content, err := os.ReadFile(filepath.Join("..", "..", "scripts", "pulse-auto-update.sh"))
+	if err != nil {
+		t.Fatalf("read pulse-auto-update.sh: %v", err)
+	}
+
+	script := string(content)
+	required := []string{
+		`PINNED_RELEASE_SSH_PUBLIC_KEY="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDs21c5oPk2khrdHlsw1aZ9EJKoTsyalGzhb0hdwJrkV pulse-installer"`,
+		`require_release_signature_verifier() {`,
+		`verify_release_signature() {`,
+		`local install_signature_url="${install_script_url}.sshsig"`,
+		`Failed to download installer signature from $install_signature_url`,
+		`verify_release_signature "$installer_tmp" "$signature_tmp" "downloaded Pulse installer"`,
+		`Installer signature verified`,
+	}
+	for _, needle := range required {
+		if !strings.Contains(script, needle) {
+			t.Fatalf("pulse-auto-update.sh missing signed-installer verification contract: %s", needle)
 		}
 	}
 }

@@ -507,6 +507,12 @@ installs too: the root `install.sh`, generated update helper, and
 identity across install, update, reset, uninstall, and timer/service wiring so
 stable and preview Pulse runtimes can coexist on one host without drifting back
 onto the default `pulse.service` paths.
+That same server-installer boundary also owns release trust fail-closed: the
+root `install.sh`, its generated update helper, and
+`scripts/pulse-auto-update.sh` must verify downloaded release tarballs and
+installer scripts against the pinned release `.sshsig` sidecars before
+execution, rather than treating same-origin checksum files as a sufficient
+trust anchor.
 The local dev-runtime launcher and dependency manifest floor now sit on that
 same installability boundary.
 `scripts/hot-dev.sh` and `scripts/hot-dev-bg.sh` are the canonical owned entry

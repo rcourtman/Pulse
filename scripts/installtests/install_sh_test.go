@@ -1144,6 +1144,15 @@ func TestSetupUpdateCommandHonorsRCChannelAndCustomPaths(t *testing.T) {
 	if !strings.Contains(got, `INSTALLER_URL="https://github.com/example/pulse-fork/releases/latest/download/install.sh"`) {
 		t.Fatalf("update helper missing configured repo installer url:\n%s", got)
 	}
+	if !strings.Contains(got, `INSTALLER_SIG_URL="${INSTALLER_URL}.sshsig"`) {
+		t.Fatalf("update helper missing installer signature url:\n%s", got)
+	}
+	if !strings.Contains(got, `verify_release_signature "$tmp_installer" "$tmp_signature" "downloaded Pulse installer"`) {
+		t.Fatalf("update helper missing signed installer verification:\n%s", got)
+	}
+	if strings.Contains(got, `curl -fsSL "$INSTALLER_URL" |`) {
+		t.Fatalf("update helper still pipes installer directly to bash:\n%s", got)
+	}
 
 	profileContent, err := os.ReadFile(profilePath)
 	if err != nil {
@@ -1188,6 +1197,9 @@ func TestSetupUpdateCommandUsesConfiguredInstallerRepo(t *testing.T) {
 	}
 	if !strings.Contains(got, `INSTALLER_URL="https://github.com/example/pulse-fork/releases/latest/download/install.sh"`) {
 		t.Fatalf("update helper missing configured installer repo:\n%s", got)
+	}
+	if !strings.Contains(got, `INSTALLER_SIG_URL="${INSTALLER_URL}.sshsig"`) {
+		t.Fatalf("update helper missing signature sidecar url:\n%s", got)
 	}
 }
 
@@ -1605,7 +1617,7 @@ func TestResolveReleaseAssetBaseURLUsesLatestRelease(t *testing.T) {
 func TestDownloadAutoUpdateScriptUsesSelectedReleaseAssets(t *testing.T) {
 	tmpDir := t.TempDir()
 	curlPath := filepath.Join(tmpDir, "curl")
-	shaPath := filepath.Join(tmpDir, "sha256sum")
+	sshKeygenPath := filepath.Join(tmpDir, "ssh-keygen")
 	destPath := filepath.Join(tmpDir, "pulse-auto-update.sh")
 	logPath := filepath.Join(tmpDir, "curl.log")
 
@@ -1636,8 +1648,8 @@ case "$url" in
 	"https://github.com/rcourtman/Pulse/releases/download/v9.9.9/pulse-auto-update.sh")
 		printf '#!/usr/bin/env bash\nexit 0\n' > "$out"
 		;;
-	"https://github.com/rcourtman/Pulse/releases/download/v9.9.9/checksums.txt")
-		printf 'd98f1c4c7aa19d692f43085e0eb3b198e38724289c65e5a95f033c7f6df4c441  pulse-auto-update.sh\n' > "$out"
+	"https://github.com/rcourtman/Pulse/releases/download/v9.9.9/pulse-auto-update.sh.sshsig")
+		printf 'signed-payload\n' > "$out"
 		;;
 	*)
 		echo "unexpected url: $url" >&2
@@ -1649,11 +1661,11 @@ esac
 		t.Fatalf("write curl stub: %v", err)
 	}
 
-	shaStub := `#!/usr/bin/env bash
-printf 'd98f1c4c7aa19d692f43085e0eb3b198e38724289c65e5a95f033c7f6df4c441  %s\n' "$1"
+	sshKeygenStub := `#!/usr/bin/env bash
+exit 0
 `
-	if err := os.WriteFile(shaPath, []byte(shaStub), 0755); err != nil {
-		t.Fatalf("write sha256sum stub: %v", err)
+	if err := os.WriteFile(sshKeygenPath, []byte(sshKeygenStub), 0755); err != nil {
+		t.Fatalf("write ssh-keygen stub: %v", err)
 	}
 
 	script := `
@@ -1663,6 +1675,12 @@ printf 'd98f1c4c7aa19d692f43085e0eb3b198e38724289c65e5a95f033c7f6df4c441  %s\n' 
 		PULSE_AUTO_UPDATE_DEST="` + destPath + `"
 		print_warn() { :; }
 		print_info() { :; }
+		INSTALL_SIGNATURE_IDENTITY="pulse-installer"
+		INSTALL_SIGNATURE_NAMESPACE="pulse-install"
+		PINNED_RELEASE_SSH_PUBLIC_KEY="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDs21c5oPk2khrdHlsw1aZ9EJKoTsyalGzhb0hdwJrkV pulse-installer"
+` + extractRootInstallShellFunction(t, "release_signature_key_available") + `
+` + extractRootInstallShellFunction(t, "require_release_signature_verifier") + `
+` + extractRootInstallShellFunction(t, "verify_release_signature") + `
 ` + extractRootInstallShellFunction(t, "resolve_release_asset_base_url") + `
 ` + extractRootInstallShellFunction(t, "download_auto_update_script") + `
 		download_auto_update_script
@@ -1681,14 +1699,15 @@ printf 'd98f1c4c7aa19d692f43085e0eb3b198e38724289c65e5a95f033c7f6df4c441  %s\n' 
 	if !strings.Contains(got, "https://github.com/rcourtman/Pulse/releases/download/v9.9.9/pulse-auto-update.sh") {
 		t.Fatalf("missing versioned helper download:\n%s", got)
 	}
-	if !strings.Contains(got, "https://github.com/rcourtman/Pulse/releases/download/v9.9.9/checksums.txt") {
-		t.Fatalf("missing versioned checksum download:\n%s", got)
+	if !strings.Contains(got, "https://github.com/rcourtman/Pulse/releases/download/v9.9.9/pulse-auto-update.sh.sshsig") {
+		t.Fatalf("missing versioned signature download:\n%s", got)
 	}
 }
 
 func TestPulseAutoUpdatePerformUpdateUsesVersionedInstallerURL(t *testing.T) {
 	tmpDir := t.TempDir()
 	curlPath := filepath.Join(tmpDir, "curl")
+	sshKeygenPath := filepath.Join(tmpDir, "ssh-keygen")
 	logPath := filepath.Join(tmpDir, "curl.log")
 	installDir := filepath.Join(tmpDir, "install")
 
@@ -1703,11 +1722,39 @@ func TestPulseAutoUpdatePerformUpdateUsesVersionedInstallerURL(t *testing.T) {
 	}
 
 	curlStub := `#!/usr/bin/env bash
+set -e
 printf '%s\n' "$*" >> "` + logPath + `"
-printf '#!/usr/bin/env bash\nexit 0\n'
+out=""
+url=""
+while [[ $# -gt 0 ]]; do
+	case "$1" in
+		-o)
+			out="$2"
+			shift 2
+			;;
+		-fsSL)
+			shift
+			;;
+		*)
+			url="$1"
+			shift
+			;;
+	esac
+done
+case "$url" in
+	"https://github.com/rcourtman/Pulse/releases/download/v9.9.9/install.sh")
+		printf '#!/usr/bin/env bash\nexit 0\n' > "$out"
+		;;
+	"https://github.com/rcourtman/Pulse/releases/download/v9.9.9/install.sh.sshsig")
+		printf 'signed-payload\n' > "$out"
+		;;
+esac
 `
 	if err := os.WriteFile(curlPath, []byte(curlStub), 0755); err != nil {
 		t.Fatalf("write curl stub: %v", err)
+	}
+	if err := os.WriteFile(sshKeygenPath, []byte("#!/usr/bin/env bash\nexit 0\n"), 0755); err != nil {
+		t.Fatalf("write ssh-keygen stub: %v", err)
 	}
 
 	script := `
@@ -1718,6 +1765,12 @@ printf '#!/usr/bin/env bash\nexit 0\n'
 		detect_service_name() { echo pulse; }
 		get_current_version() { echo v9.9.9; }
 		systemctl() { return 0; }
+		INSTALL_SIGNATURE_IDENTITY="pulse-installer"
+		INSTALL_SIGNATURE_NAMESPACE="pulse-install"
+		PINNED_RELEASE_SSH_PUBLIC_KEY="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDs21c5oPk2khrdHlsw1aZ9EJKoTsyalGzhb0hdwJrkV pulse-installer"
+` + extractAutoUpdateFunction(t, "release_signature_key_available") + `
+` + extractAutoUpdateFunction(t, "require_release_signature_verifier") + `
+` + extractAutoUpdateFunction(t, "verify_release_signature") + `
 ` + extractAutoUpdateFunction(t, "resolve_install_script_url") + `
 ` + extractAutoUpdateFunction(t, "perform_update") + `
 		perform_update v9.9.9
@@ -1735,6 +1788,9 @@ printf '#!/usr/bin/env bash\nexit 0\n'
 	got := string(logContent)
 	if !strings.Contains(got, "https://github.com/rcourtman/Pulse/releases/download/v9.9.9/install.sh") {
 		t.Fatalf("perform_update did not use versioned installer url:\n%s", got)
+	}
+	if !strings.Contains(got, "https://github.com/rcourtman/Pulse/releases/download/v9.9.9/install.sh.sshsig") {
+		t.Fatalf("perform_update did not use versioned installer signature url:\n%s", got)
 	}
 	if strings.Contains(got, "releases/latest/download/install.sh") {
 		t.Fatalf("perform_update still used latest installer url:\n%s", got)

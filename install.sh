@@ -86,6 +86,9 @@ UPDATE_SERVICE_UNIT="$(basename "$UPDATE_SERVICE_PATH")"
 UPDATE_TIMER_UNIT="$(basename "$UPDATE_TIMER_PATH")"
 GITHUB_REPO="rcourtman/Pulse"
 DOCKER_IMAGE_REPO="${DOCKER_IMAGE_REPO:-rcourtman/pulse}"
+INSTALL_SIGNATURE_IDENTITY="pulse-installer"
+INSTALL_SIGNATURE_NAMESPACE="pulse-install"
+PINNED_RELEASE_SSH_PUBLIC_KEY="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDs21c5oPk2khrdHlsw1aZ9EJKoTsyalGzhb0hdwJrkV pulse-installer"
 BUILD_FROM_SOURCE=false
 SKIP_DOWNLOAD=false
 IN_CONTAINER=false
@@ -100,6 +103,48 @@ CURRENT_INSTALL_CTID=""
 CONTAINER_CREATED_FOR_CLEANUP=false
 BUILD_FROM_SOURCE_MARKER="$INSTALL_DIR/BUILD_FROM_SOURCE"
 DETECTED_CTID=""
+
+release_signature_key_available() {
+    [[ -n "${PINNED_RELEASE_SSH_PUBLIC_KEY:-}" ]]
+}
+
+require_release_signature_verifier() {
+    if ! release_signature_key_available; then
+        echo "Pinned release signature key is not configured." >&2
+        return 1
+    fi
+    if ! command -v ssh-keygen >/dev/null 2>&1; then
+        echo "ssh-keygen is required to verify signed Pulse release assets." >&2
+        return 1
+    fi
+}
+
+verify_release_signature() {
+    local target_path="$1"
+    local signature_path="$2"
+    local context="${3:-downloaded file}"
+    local allowed_signers=""
+
+    if ! require_release_signature_verifier; then
+        return 1
+    fi
+
+    allowed_signers=$(mktemp /tmp/pulse-release-signers.XXXXXX)
+    printf '%s %s\n' "$INSTALL_SIGNATURE_IDENTITY" "$PINNED_RELEASE_SSH_PUBLIC_KEY" > "$allowed_signers"
+
+    if ! ssh-keygen -Y verify \
+        -f "$allowed_signers" \
+        -I "$INSTALL_SIGNATURE_IDENTITY" \
+        -n "$INSTALL_SIGNATURE_NAMESPACE" \
+        -s "$signature_path" < "$target_path" >/dev/null 2>&1; then
+        rm -f "$allowed_signers"
+        echo "Cryptographic signature verification failed for ${context}." >&2
+        return 1
+    fi
+
+    rm -f "$allowed_signers"
+    return 0
+}
 
 # Installer version - the major version this script is bundled with
 INSTALLER_MAJOR_VERSION=5
@@ -2595,17 +2640,14 @@ download_release_archive() {
 
     local archive_name="pulse-${release}-linux-${pulse_arch}.tar.gz"
     local download_url="https://github.com/$GITHUB_REPO/releases/download/$release/${archive_name}"
-    local checksums_url="https://github.com/$GITHUB_REPO/releases/download/$release/checksums.txt"
-    local checksum_url=""
-    local checksum_file=""
-    local expected_checksum=""
-    local actual_checksum=""
+    local signature_url="${download_url}.sshsig"
+    local signature_file=""
 
     DOWNLOAD_URL="$download_url"
     print_info "Downloading from: $DOWNLOAD_URL"
 
-    if ! command -v sha256sum >/dev/null 2>&1; then
-        print_error "sha256sum is required but not installed"
+    if ! require_release_signature_verifier; then
+        print_error "Cannot verify signed Pulse release downloads"
         return 1
     fi
 
@@ -2616,34 +2658,20 @@ download_release_archive() {
         return 1
     fi
 
-    checksum_file=$(mktemp /tmp/pulse-checksum-XXXXXX)
-    if wget -q --timeout=60 --tries=2 -O "$checksum_file" "$checksums_url" 2>/dev/null; then
-        expected_checksum=$(grep -w "${archive_name}" "$checksum_file" 2>/dev/null | awk '{print $1}')
-    fi
-    rm -f "$checksum_file"
-
-    if [[ -z "$expected_checksum" ]]; then
-        checksum_url="${download_url}.sha256"
-        checksum_file=$(mktemp /tmp/pulse-checksum-XXXXXX)
-        if wget -q --timeout=60 --tries=2 -O "$checksum_file" "$checksum_url" 2>/dev/null; then
-            expected_checksum=$(awk '{print $1}' "$checksum_file")
-        fi
-        rm -f "$checksum_file"
-    fi
-
-    if [[ -z "$expected_checksum" ]]; then
-        print_error "Failed to download checksum for Pulse release"
-        print_info "Refusing to install without checksum verification"
+    signature_file=$(mktemp /tmp/pulse-release-signature.XXXXXX)
+    if ! wget -q --timeout=60 --tries=2 -O "$signature_file" "$signature_url"; then
+        rm -f "$signature_file" "$archive_path"
+        print_error "Failed to download signature for Pulse release"
+        print_info "Refusing to install without signature verification"
         return 1
     fi
 
-    actual_checksum=$(sha256sum "$archive_path" | awk '{print $1}')
-    if [[ "$actual_checksum" != "$expected_checksum" ]]; then
-        print_error "Checksum verification failed for downloaded Pulse release"
-        print_error "Expected: $expected_checksum"
-        print_error "Got: $actual_checksum"
+    if ! verify_release_signature "$archive_path" "$signature_file" "downloaded Pulse release"; then
+        rm -f "$signature_file" "$archive_path"
         return 1
     fi
+    rm -f "$signature_file"
+    print_info "Pulse release signature verified"
 
     return 0
 }
@@ -3300,6 +3328,13 @@ PULSE_UPDATE_HELPER_PATH=$(printf '%q' "$update_helper_path")
 PULSE_AUTO_UPDATE_DEST=$(printf '%q' "$auto_update_dest")
 PULSE_UPDATE_SERVICE_PATH=$(printf '%q' "$update_service_path")
 PULSE_UPDATE_TIMER_PATH=$(printf '%q' "$update_timer_path")
+INSTALLER_SIG_URL="\${INSTALLER_URL}.sshsig"
+INSTALL_SIGNATURE_IDENTITY=$(printf '%q' "$INSTALL_SIGNATURE_IDENTITY")
+INSTALL_SIGNATURE_NAMESPACE=$(printf '%q' "$INSTALL_SIGNATURE_NAMESPACE")
+PINNED_RELEASE_SSH_PUBLIC_KEY=$(printf '%q' "$PINNED_RELEASE_SSH_PUBLIC_KEY")
+$(declare -f release_signature_key_available)
+$(declare -f require_release_signature_verifier)
+$(declare -f verify_release_signature)
 
 extra_args=()
 installer_env=(
@@ -3325,10 +3360,24 @@ elif [[ -f "\${CONFIG_DIR}/system.json" ]]; then
 fi
 
 echo "Updating Pulse..."
+tmp_installer=\$(mktemp /tmp/pulse-update-installer.XXXXXX)
+tmp_signature=\$(mktemp /tmp/pulse-update-installer.sig.XXXXXX)
+trap 'rm -f "\$tmp_installer" "\$tmp_signature"' EXIT
+if ! curl -fsSL "\$INSTALLER_URL" -o "\$tmp_installer"; then
+    echo "Failed to download Pulse installer from \$INSTALLER_URL" >&2
+    exit 1
+fi
+if ! curl -fsSL "\$INSTALLER_SIG_URL" -o "\$tmp_signature"; then
+    echo "Failed to download Pulse installer signature from \$INSTALLER_SIG_URL" >&2
+    exit 1
+fi
+if ! verify_release_signature "\$tmp_installer" "\$tmp_signature" "downloaded Pulse installer"; then
+    exit 1
+fi
 if [[ \${#extra_args[@]} -gt 0 ]]; then
-    curl -fsSL "\$INSTALLER_URL" | env "\${installer_env[@]}" bash -s -- "\${extra_args[@]}"
+    env "\${installer_env[@]}" bash "\$tmp_installer" "\${extra_args[@]}"
 else
-    curl -fsSL "\$INSTALLER_URL" | env "\${installer_env[@]}" bash
+    env "\${installer_env[@]}" bash "\$tmp_installer"
 fi
 
 echo ""
@@ -3352,17 +3401,22 @@ download_auto_update_script() {
     local asset_base_url=""
     asset_base_url=$(resolve_release_asset_base_url)
     local url="${asset_base_url}/pulse-auto-update.sh"
-    local checksums_url="${asset_base_url}/checksums.txt"
-    local legacy_checksum_url="${url}.sha256"
+    local signature_url="${url}.sshsig"
     local dest="${AUTO_UPDATE_DEST:-${PULSE_AUTO_UPDATE_DEST:-/usr/local/bin/pulse-auto-update.sh}}"
     local attempts=0
     local max_attempts=3
     local connect_timeout=15
     local max_time=60
 
+    if ! require_release_signature_verifier; then
+        print_warn "Cannot verify signed auto-update helper downloads"
+        return 1
+    fi
+
     while (( attempts < max_attempts )); do
         ((attempts++))
         local curl_status=0
+        local signature_file=""
 
         if command -v timeout >/dev/null 2>&1; then
             if timeout $((max_time + 10)) curl -fsSL --connect-timeout "$connect_timeout" --max-time "$max_time" -o "$dest" "$url"; then
@@ -3379,54 +3433,24 @@ download_auto_update_script() {
         fi
 
         if [[ $curl_status -eq 0 ]]; then
-            if ! command -v sha256sum >/dev/null 2>&1; then
-                print_warn "sha256sum is unavailable; cannot verify auto-update script integrity"
-                rm -f "$dest"
-                return 1
-            fi
-
-            local checksum_file expected_checksum actual_checksum
-            checksum_file=$(mktemp /tmp/pulse-auto-update-checksum.XXXXXX)
-            expected_checksum=""
-
+            signature_file=$(mktemp /tmp/pulse-auto-update-signature.XXXXXX)
             if command -v timeout >/dev/null 2>&1; then
-                timeout $((max_time + 10)) curl -fsSL --connect-timeout "$connect_timeout" --max-time "$max_time" -o "$checksum_file" "$checksums_url" || true
+                timeout $((max_time + 10)) curl -fsSL --connect-timeout "$connect_timeout" --max-time "$max_time" -o "$signature_file" "$signature_url" || curl_status=$?
             else
-                curl -fsSL --connect-timeout "$connect_timeout" --max-time "$max_time" -o "$checksum_file" "$checksums_url" || true
+                curl -fsSL --connect-timeout "$connect_timeout" --max-time "$max_time" -o "$signature_file" "$signature_url" || curl_status=$?
             fi
 
-            if [[ -s "$checksum_file" ]]; then
-                expected_checksum=$(grep -w "pulse-auto-update.sh" "$checksum_file" 2>/dev/null | awk '{print $1}' | head -1)
-            fi
-
-            if [[ -z "$expected_checksum" ]]; then
-                if command -v timeout >/dev/null 2>&1; then
-                    timeout $((max_time + 10)) curl -fsSL --connect-timeout "$connect_timeout" --max-time "$max_time" -o "$checksum_file" "$legacy_checksum_url" || true
-                else
-                    curl -fsSL --connect-timeout "$connect_timeout" --max-time "$max_time" -o "$checksum_file" "$legacy_checksum_url" || true
-                fi
-
-                if [[ -s "$checksum_file" ]]; then
-                    expected_checksum=$(awk '{print $1}' "$checksum_file" | head -1)
-                fi
-            fi
-
-            rm -f "$checksum_file"
-
-            if [[ -z "$expected_checksum" ]]; then
-                print_warn "Failed to download checksum for pulse-auto-update.sh"
-                rm -f "$dest"
+            if [[ $curl_status -ne 0 ]]; then
+                print_warn "Failed to download signature for pulse-auto-update.sh"
+                rm -f "$signature_file" "$dest"
+            elif ! verify_release_signature "$dest" "$signature_file" "downloaded pulse-auto-update.sh"; then
+                rm -f "$signature_file" "$dest"
                 curl_status=1
             else
-                actual_checksum=$(sha256sum "$dest" | awk '{print $1}')
-                if [[ "$actual_checksum" != "$expected_checksum" ]]; then
-                    print_warn "pulse-auto-update.sh checksum verification failed"
-                    rm -f "$dest"
-                    curl_status=1
-                else
-                    chmod +x "$dest"
-                    return 0
-                fi
+                rm -f "$signature_file"
+                chmod +x "$dest"
+                print_info "pulse-auto-update.sh signature verified"
+                return 0
             fi
         fi
 
