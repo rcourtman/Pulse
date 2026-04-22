@@ -159,6 +159,8 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         current_version = read("VERSION").strip()
         self.assertIn("sudo /bin/update --version vX.Y.Z", upgrade_guide)
         self.assertIn("follow the signed server-installer flow in [INSTALL.md](INSTALL.md)", upgrade_guide)
+        self.assertIn("the historical Pulse update signer was not recovered", normalize_ws(upgrade_guide))
+        self.assertIn("manual reinstall or other explicit trust migration", normalize_ws(upgrade_guide))
         if current_version == "6.0.0":
             self.assertIn("docs/releases/RELEASE_NOTES_v6.md", upgrade_guide)
             self.assertIn("docs/releases/V6_CHANGELOG.md", upgrade_guide)
@@ -377,12 +379,15 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("Do not rewrite shipped RC notes in place", runbook)
         self.assertIn("`rc.1`, `rc.2`, and later prerelease", runbook)
         self.assertIn("The current RC release packet is prepared and internally linked", runbook)
+        self.assertIn("operators know the update signer changed", normalize_ws(runbook))
+        self.assertIn("manual reinstall or other explicit trust-migration path", normalize_ws(runbook))
         self.assertIn("points at the current in-repo draft packet", runbook)
         self.assertIn('export RC_VERSION="6.0.0-rc.2"', runbook)
         self.assertIn("printf '%s\\n' \"$RC_VERSION\" > VERSION", runbook)
         self.assertIn("markdown text from the current release-notes packet", runbook)
         self.assertIn("Keep the current release-notes, changelog, and operator-support packet in", runbook)
         self.assertIn("Published release bodies must also stay publication-safe", contract)
+        self.assertIn("must state the continuity impact explicitly", normalize_ws(contract))
         self.assertIn(
             "append the standardized installation and promotion metadata sections exactly once",
             normalize_ws(contract),

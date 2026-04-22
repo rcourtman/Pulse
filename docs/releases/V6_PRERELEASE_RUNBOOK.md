@@ -64,6 +64,10 @@ The workflow auto-marks `-rc.N`/`-alpha.N`/`-beta.N` as prerelease.
    - operator support pack
    - `docs/RELEASE_NOTES.md` points at the current in-repo draft packet
 4. `PULSE_LICENSE_PUBLIC_KEY` secret is present in GitHub Actions.
+5. For any build after `v6.0.0-rc.2`, operators know the update signer changed.
+   Hosts pinned to the historical `rc.2` trust root must not assume unattended
+   continuity into later prerelease or GA artifacts; use a manual reinstall or
+   other explicit trust-migration path before testing those newer packets.
 
 ## RC Release Steps
 

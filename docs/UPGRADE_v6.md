@@ -29,6 +29,11 @@ sudo /bin/update --version vX.Y.Z
 
 `/bin/update` is installed by the supported systemd and Proxmox LXC server installer. If your host does not have it yet, follow the signed server-installer flow in [INSTALL.md](INSTALL.md). Agent updates still use the `/install.sh` command generated in **Settings → Infrastructure → Install on a host**.
 
+Operator note for builds after `v6.0.0-rc.2`: the historical Pulse update
+signer was not recovered. Hosts pinned to the `rc.2` trust root should not
+assume unattended continuity into newer prerelease or GA artifacts; plan a
+manual reinstall or other explicit trust migration before testing those builds.
+
 ### Docker
 
 ```bash

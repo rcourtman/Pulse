@@ -226,6 +226,11 @@ server-side update execution surfaces.
    accept the active private signing key only alongside a non-secret expected
    public key or equivalent pinned identity, and they must fail closed before
    publication if the signer drifts from that expected trust root.
+11. When the governed update signer changes, the canonical operator-facing
+   release docs under `docs/releases/` and the governed upgrade guide
+   `docs/UPGRADE_v6.md` must state the continuity impact explicitly. Those docs
+   must not imply automatic updater continuity from a historical signer unless
+   the actual trust-migration path is already shipped and exercised.
 
 ## Current State
 
