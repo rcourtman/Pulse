@@ -385,6 +385,37 @@ func TestProxmoxGuestDiskCarryForwardUsesCanonicalStabilityHelper(t *testing.T) 
 	}
 }
 
+func TestProxmoxGuestDiskInventoryPrefersCanonicalLinkedHostAgentSource(t *testing.T) {
+	requiredSnippets := map[string][]string{
+		"guest_host_agent_fallback.go": {
+			"func resolveGuestDiskFromLinkedHostAgent(guestID string, vmIDToHostAgent map[string]models.Host) (models.Disk, []models.Disk, bool) {",
+			"summary, ok := models.AggregateDisk(host.Disks)",
+			"func preferLinkedHostAgentDiskInventory(",
+		},
+		"monitor_pve_guest_builders.go": {
+			"preferLinkedHostAgentDiskInventory(",
+			`Msg("QEMU disk: preferring linked Pulse host agent disk inventory")`,
+		},
+		"monitor_polling_vm.go": {
+			"preferLinkedHostAgentDiskInventory(",
+			`Msg("QEMU disk: preferring linked Pulse host agent disk inventory")`,
+		},
+	}
+
+	for file, snippets := range requiredSnippets {
+		data, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatalf("failed to read %s: %v", file, err)
+		}
+		source := string(data)
+		for _, snippet := range snippets {
+			if !strings.Contains(source, snippet) {
+				t.Fatalf("%s must contain %q", file, snippet)
+			}
+		}
+	}
+}
+
 func TestStoragePollingUsesCanonicalPoolMetadataForZFSAttachment(t *testing.T) {
 	data, err := os.ReadFile("monitor_polling_storage.go")
 	if err != nil {

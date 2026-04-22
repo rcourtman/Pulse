@@ -252,6 +252,12 @@ reports stale or zero I/O totals. `internal/monitoring/monitor_pve.go`,
 path before LXC rate calculation and must reuse the same prefetched status
 snapshot for metadata enrichment instead of paying disconnected metric and
 metadata status reads that can diverge.
+That same guest-monitoring boundary also owns linked host-agent precedence for
+Proxmox VMs. When a VM has a live linked Pulse host agent, the canonical disk
+inventory and aggregate disk summary must prefer that linked host-agent disk
+collection over the narrower QEMU guest-agent filesystem list, so VM overview
+surfaces keep the richer inside-guest storage truth instead of silently
+regressing to mount-only visibility.
 That same mock-runtime boundary also owns update cadence. Demo and preview
 environments may slow the configured tick interval to reduce visual churn, but
 that cadence must flow through the shared mock update loop and smoothing model

@@ -120,22 +120,6 @@ func (m *Monitor) applyVMStatusDetails(
 			Msg("VM does not have guest agent enabled in config")
 	}
 
-	if res.Status == "running" && !state.diskFromAgent {
-		if hostDisk, hostDisks, ok := resolveGuestDiskFromLinkedHostAgent(guestID, vmIDToHostAgent); ok && hostDisk.Total > 0 {
-			state.diskTotal = uint64(hostDisk.Total)
-			state.diskUsed = uint64(hostDisk.Used)
-			state.diskFree = uint64(hostDisk.Free)
-			state.diskUsage = hostDisk.Usage
-			state.individualDisks = hostDisks
-			state.diskStatusReason = ""
-			log.Debug().
-				Str("instance", instanceName).
-				Str("vm", res.Name).
-				Int("vmid", res.VMID).
-				Float64("usage", hostDisk.Usage).
-				Msg("QEMU disk: using linked Pulse host agent disk summary")
-		}
-	}
 }
 
 func (m *Monitor) buildVMFromClusterResource(
@@ -255,6 +239,27 @@ func (m *Monitor) buildVMFromClusterResource(
 			if len(fsDisks) > 0 {
 				state.individualDisks = fsDisks
 			}
+		}
+
+		var preferred bool
+		state.diskTotal, state.diskUsed, state.diskFree, state.diskUsage, state.individualDisks, state.diskStatusReason, preferred = preferLinkedHostAgentDiskInventory(
+			guestID,
+			vmIDToHostAgent,
+			state.diskTotal,
+			state.diskUsed,
+			state.diskFree,
+			state.diskUsage,
+			state.individualDisks,
+			state.diskStatusReason,
+		)
+		if preferred {
+			log.Debug().
+				Str("instance", instanceName).
+				Str("vm", res.Name).
+				Int("vmid", res.VMID).
+				Bool("guestAgentDiskAvailable", state.diskFromAgent).
+				Float64("usage", state.diskUsage).
+				Msg("QEMU disk: preferring linked Pulse host agent disk inventory")
 		}
 	}
 

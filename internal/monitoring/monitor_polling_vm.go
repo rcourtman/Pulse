@@ -451,21 +451,27 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, clu
 					}
 				}
 
-				if vm.Status == "running" && !diskFromAgent {
-					if hostDisk, hostDisks, ok := resolveGuestDiskFromLinkedHostAgent(guestID, vmIDToHostAgent); ok && hostDisk.Total > 0 {
-						diskTotal = uint64(hostDisk.Total)
-						diskUsed = uint64(hostDisk.Used)
-						diskFree = uint64(hostDisk.Free)
-						diskUsage = hostDisk.Usage
-						individualDisks = hostDisks
-						diskStatusReason = ""
+				if vm.Status == "running" {
+					var preferred bool
+					diskTotal, diskUsed, diskFree, diskUsage, individualDisks, diskStatusReason, preferred = preferLinkedHostAgentDiskInventory(
+						guestID,
+						vmIDToHostAgent,
+						diskTotal,
+						diskUsed,
+						diskFree,
+						diskUsage,
+						individualDisks,
+						diskStatusReason,
+					)
+					if preferred {
 						log.Debug().
 							Str("instance", instanceName).
 							Str("vm", vm.Name).
 							Str("node", n.Node).
 							Int("vmid", vm.VMID).
-							Float64("usage", hostDisk.Usage).
-							Msg("QEMU disk: using linked Pulse host agent disk summary")
+							Bool("guestAgentDiskAvailable", diskFromAgent).
+							Float64("usage", diskUsage).
+							Msg("QEMU disk: preferring linked Pulse host agent disk inventory")
 					}
 				}
 				diskTotal, diskUsed, diskFree, diskUsage, individualDisks, diskStatusReason = stabilizeGuestLowTrustDisk(

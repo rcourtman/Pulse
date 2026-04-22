@@ -1522,6 +1522,64 @@ func TestBuildVMFromClusterResource_UsesLinkedHostAgentDiskFallback(t *testing.T
 	}
 }
 
+func TestBuildVMFromClusterResource_PrefersLinkedHostAgentDiskInventoryOverGuestAgentFilesystems(t *testing.T) {
+	monitor := &Monitor{
+		rateTracker:          NewRateTracker(),
+		guestMetadataCache:   make(map[string]guestMetadataCacheEntry),
+		guestMetadataLimiter: make(map[string]time.Time),
+	}
+	client := &mockPVEClientExtra{
+		vmStatus: &proxmox.VMStatus{
+			Status: "running",
+			Agent:  proxmox.VMAgentField{Value: 1},
+		},
+		fsInfo: []proxmox.VMFileSystem{
+			{Mountpoint: "/", Type: "ext4", TotalBytes: 100, UsedBytes: 40, Disk: "/dev/vda1"},
+			{Mountpoint: "/mnt/datastore/repo-a", Type: "ext4", TotalBytes: 300, UsedBytes: 120, Disk: "/dev/vdb1"},
+		},
+	}
+	guestID := makeGuestID("cluster-a", "node-a", 101)
+
+	vm, _, _, _, _, ok := monitor.buildVMFromClusterResource(
+		context.Background(),
+		"cluster-a",
+		proxmox.ClusterResource{
+			Type:    "qemu",
+			Node:    "node-a",
+			Name:    "pbs-vm",
+			Status:  "running",
+			VMID:    101,
+			MaxCPU:  4,
+			MaxMem:  8192,
+			MaxDisk: 400,
+		},
+		client,
+		guestID,
+		map[string]models.Host{
+			guestID: {
+				ID:         "host-1",
+				LinkedVMID: guestID,
+				Status:     "online",
+				Disks: []models.Disk{
+					{Total: 100, Used: 40, Free: 60, Usage: 40, Mountpoint: "/", Type: "ext4", Device: "/dev/vda1"},
+					{Total: 300, Used: 120, Free: 180, Usage: 40, Mountpoint: "/mnt/datastore/repo-a", Type: "ext4", Device: "/dev/vdb1"},
+					{Total: 600, Used: 360, Free: 240, Usage: 60, Mountpoint: "/mnt/datastore/repo-b", Type: "zfs", Device: "/dev/vdc1"},
+				},
+			},
+		},
+		nil,
+	)
+	if !ok {
+		t.Fatal("expected VM to be built")
+	}
+	if vm.Disk.Total != 1000 || vm.Disk.Used != 520 || vm.Disk.Free != 480 || vm.Disk.Usage != 52 {
+		t.Fatalf("expected linked host aggregate disk summary to win, got %+v", vm.Disk)
+	}
+	if len(vm.Disks) != 3 || vm.Disks[2].Mountpoint != "/mnt/datastore/repo-b" {
+		t.Fatalf("expected linked host inventory to win, got %+v", vm.Disks)
+	}
+}
+
 func TestBuildVMFromClusterResource_MarksDiskUnknownWhenGuestFilesystemDataIsUnavailable(t *testing.T) {
 	monitor := &Monitor{
 		rateTracker:          NewRateTracker(),
@@ -1704,6 +1762,90 @@ func TestPollVMsWithNodes_CarriesForwardPreviousDiskSnapshot(t *testing.T) {
 	}
 	if vm.DiskStatusReason != "prev-no-filesystems" {
 		t.Fatalf("expected carried-forward disk status reason, got %q", vm.DiskStatusReason)
+	}
+}
+
+func TestPollVMsWithNodes_PrefersLinkedHostAgentDiskInventoryOverGuestAgentFilesystems(t *testing.T) {
+	t.Setenv("PULSE_DATA_DIR", t.TempDir())
+
+	m := &Monitor{
+		state:                    models.NewState(),
+		guestAgentFSInfoTimeout:  time.Second,
+		guestAgentRetries:        1,
+		guestAgentNetworkTimeout: time.Second,
+		guestAgentOSInfoTimeout:  time.Second,
+		guestAgentVersionTimeout: time.Second,
+		guestMetadataCache:       make(map[string]guestMetadataCacheEntry),
+		guestMetadataLimiter:     make(map[string]time.Time),
+		rateTracker:              NewRateTracker(),
+		metricsHistory:           NewMetricsHistory(100, time.Hour),
+		alertManager:             alerts.NewManager(),
+		stalenessTracker:         NewStalenessTracker(nil),
+		nodeRRDMemCache:          make(map[string]rrdMemCacheEntry),
+		vmRRDMemCache:            make(map[string]rrdMemCacheEntry),
+	}
+	defer m.alertManager.Stop()
+
+	guestID := makeGuestID("pve1", "node1", 100)
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestSnapshot(models.StateSnapshot{
+		Hosts: []models.Host{
+			{
+				ID:         "host-1",
+				Hostname:   "pbs01",
+				Status:     "online",
+				LinkedVMID: guestID,
+				LastSeen:   time.Now(),
+				Disks: []models.Disk{
+					{Total: 100, Used: 40, Free: 60, Usage: 40, Mountpoint: "/", Type: "ext4", Device: "/dev/vda1"},
+					{Total: 300, Used: 120, Free: 180, Usage: 40, Mountpoint: "/mnt/datastore/repo-a", Type: "ext4", Device: "/dev/vdb1"},
+					{Total: 600, Used: 360, Free: 240, Usage: 60, Mountpoint: "/mnt/datastore/repo-b", Type: "zfs", Device: "/dev/vdc1"},
+				},
+			},
+		},
+	})
+	m.resourceStore = unifiedresources.NewMonitorAdapter(registry)
+
+	client := &mockPVEClientExtra{
+		vms: []proxmox.VM{
+			{VMID: 100, Name: "pbs-vm", Node: "node1", Status: "running", MaxMem: 8 * 1024, Mem: 4 * 1024, MaxDisk: 400},
+		},
+		vmStatus: &proxmox.VMStatus{
+			Status: "running",
+			Agent:  proxmox.VMAgentField{Value: 1},
+			MaxMem: 8 * 1024,
+			Mem:    4 * 1024,
+		},
+		fsInfo: []proxmox.VMFileSystem{
+			{Mountpoint: "/", Type: "ext4", TotalBytes: 100, UsedBytes: 40, Disk: "/dev/vda1"},
+			{Mountpoint: "/mnt/datastore/repo-a", Type: "ext4", TotalBytes: 300, UsedBytes: 120, Disk: "/dev/vdb1"},
+		},
+	}
+
+	m.pollVMsWithNodes(
+		context.Background(),
+		"pve1",
+		"",
+		false,
+		client,
+		[]proxmox.Node{{Node: "node1", Status: "online"}},
+		map[string]string{"node1": "online"},
+	)
+
+	state := m.GetState()
+	if len(state.VMs) != 1 {
+		t.Fatalf("expected 1 VM, got %d", len(state.VMs))
+	}
+
+	vm := state.VMs[0]
+	if vm.Disk.Total != 1000 || vm.Disk.Used != 520 || vm.Disk.Free != 480 || vm.Disk.Usage != 52 {
+		t.Fatalf("expected linked host aggregate disk summary to win, got %+v", vm.Disk)
+	}
+	if len(vm.Disks) != 3 || vm.Disks[2].Mountpoint != "/mnt/datastore/repo-b" {
+		t.Fatalf("expected linked host inventory to win, got %+v", vm.Disks)
+	}
+	if vm.DiskStatusReason != "" {
+		t.Fatalf("expected empty disk status reason, got %q", vm.DiskStatusReason)
 	}
 }
 
