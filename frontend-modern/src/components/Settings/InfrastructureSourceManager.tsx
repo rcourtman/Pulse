@@ -1,5 +1,5 @@
 import { For, Show, createMemo, type Accessor, type Component } from 'solid-js';
-import { Plus, RotateCw, Search, Server, SlidersHorizontal } from 'lucide-solid';
+import { Plus, RotateCw, Server, SlidersHorizontal } from 'lucide-solid';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import {
   Table,
@@ -26,9 +26,9 @@ interface InfrastructureSourceManagerProps {
   discoveryEnabled: boolean;
   discoveryScanStatus: Accessor<DiscoveryScanStatus>;
   readOnly: boolean;
+  onOpenAddInfrastructure?: () => void;
   onAddSource?: (type: InfrastructureOnboardingConnectionType) => void;
   onRunDiscovery?: () => void;
-  onDetectFromAddress?: () => void;
   onOpenDiscoverySettings?: () => void;
   onOpenConnection?: (row: InfrastructureSystemRow) => void;
   onReviewDiscoveredSource?: (server: DiscoveredServer) => void;
@@ -277,14 +277,14 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                 </button>
               </Show>
 
-              <Show when={props.onDetectFromAddress}>
+              <Show when={props.onOpenAddInfrastructure}>
                 <button
                   type="button"
-                  onClick={props.onDetectFromAddress}
+                  onClick={props.onOpenAddInfrastructure}
                   class={utilityToolbarButtonClass}
                 >
-                  <Search class="h-4 w-4" />
-                  Detect from address
+                  <Plus class="h-4 w-4" />
+                  Add infrastructure
                 </button>
               </Show>
 

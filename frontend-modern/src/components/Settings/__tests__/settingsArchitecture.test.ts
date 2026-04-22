@@ -138,7 +138,7 @@ describe('settings architecture guardrails', () => {
     );
     expect(infrastructureWorkspaceSource).toContain('<InfrastructureDiscoverySettingsDialog');
     expect(infrastructureWorkspaceSource).toContain(
-      "onDetectFromAddress={readOnly() ? undefined : () => openAddFlow('detect')}",
+      "onOpenAddInfrastructure={readOnly() ? undefined : () => openAddFlow('pick')}",
     );
     expect(infrastructureWorkspaceSource).toContain('onReviewDiscoveredSource');
     expect(infrastructureWorkspaceSource).toContain('void props.loadDiscoveredNodes();');
@@ -158,7 +158,7 @@ describe('settings architecture guardrails', () => {
     expect(infrastructureWorkspaceSource).not.toContain('PlatformConnectionsWorkspace');
     expect(infrastructureSourceManagerSource).toContain('Infrastructure sources');
     expect(infrastructureSourceManagerSource).toContain('Run discovery');
-    expect(infrastructureSourceManagerSource).toContain('Detect from address');
+    expect(infrastructureSourceManagerSource).toContain('Add infrastructure');
     expect(infrastructureSourceManagerSource).toContain('Discovery settings');
     expect(infrastructureSourceManagerSource).toContain('Configured and discovered candidates grouped by platform.');
     expect(infrastructureSourceManagerSource).toContain('onReviewDiscoveredSource');
@@ -168,6 +168,7 @@ describe('settings architecture guardrails', () => {
     expect(infrastructureSourceManagerSource).toContain('aria-label={`Add ${product.label}`}');
     expect(infrastructureSourceManagerSource).toContain('Review');
     expect(infrastructureSourceManagerSource).toContain('Edit');
+    expect(infrastructureSourceManagerSource).not.toContain('Detect from address');
     expect(infrastructureSourceManagerSource).not.toContain('Connection types');
     expect(infrastructureSourcePickerSource).toContain('Choose a source type');
     expect(infrastructureSourcePickerSource).toContain('Detect from address');

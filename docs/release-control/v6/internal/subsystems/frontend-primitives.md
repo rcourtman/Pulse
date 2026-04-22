@@ -272,11 +272,14 @@ work extends shared components instead of creating new local variants.
    page-level workspaces at once.
    The source-manager landing now also owns the explicit discovery strip for
    that destination. `InfrastructureSourceManager.tsx` may expose `Run
-   discovery`, `Detect from address`, and `Discovery settings` actions from the
+   discovery`, `Add infrastructure`, and `Discovery settings` actions from the
    shared landing shell, but it must not start a network scan just because the
-   page rendered. Discovered API-backed candidates stay visible in the same
-   platform-group table as configured sources, using the existing tree/table
-   hierarchy instead of spawning a second discovery-only page or card stack.
+   page rendered. The direct address-probe utility is picker-owned rather than
+   landing-owned: `Detect from address` must stay inside the grouped add
+   dialog instead of competing with discovery actions on the page header.
+   Discovered API-backed candidates stay visible in the same platform-group
+   table as configured sources, using the existing tree/table hierarchy
+   instead of spawning a second discovery-only page or card stack.
    `InfrastructureWorkspace.tsx` must still open a new connection through
    `frontend-modern/src/components/Settings/ConnectionEditor/ConnectionEditor.tsx`,
    but the editor now serves as governed dialog content under the source

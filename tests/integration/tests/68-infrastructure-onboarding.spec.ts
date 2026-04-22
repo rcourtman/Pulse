@@ -183,12 +183,13 @@ test.describe('Infrastructure onboarding', () => {
 
     await expect(page.getByText('Infrastructure sources', { exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: /Run discovery/i })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Add infrastructure/i })).toBeVisible();
     await expect(page.getByRole('button', { name: /Discovery settings/i })).toBeVisible();
     await expect(page.getByText('VMware vCenter', { exact: true })).toBeVisible();
     await expect(page.getByText('TrueNAS SCALE', { exact: true })).toBeVisible();
     await expect(page.getByText('Proxmox VE', { exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: /Add TrueNAS SCALE/i })).toBeVisible();
-    await expect(page.getByRole('button', { name: /Detect from address/i })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Detect from address/i })).toHaveCount(0);
     await expect(page.getByText('Monitored systems', { exact: true })).toHaveCount(0);
     await expect(page.getByText('Connection types', { exact: true })).toHaveCount(0);
 
@@ -368,7 +369,7 @@ test.describe('Infrastructure onboarding', () => {
       .toBe(0);
   });
 
-  test('desktop detect utility records no-match agent fallback from the landing header action', async ({
+  test('desktop detect utility records no-match agent fallback from the add-infrastructure picker', async ({
     page,
   }, testInfo) => {
     test.skip(
@@ -398,6 +399,8 @@ test.describe('Infrastructure onboarding', () => {
 
     await page.goto('/settings/infrastructure', { waitUntil: 'domcontentloaded' });
     await page.waitForURL(/\/settings\/infrastructure(?:\?.*)?$/, { timeout: 15_000 });
+    await page.getByRole('button', { name: /Add infrastructure/i }).click();
+    await page.waitForURL(/\/settings\/infrastructure\?add=pick$/, { timeout: 15_000 });
     await page.getByRole('button', { name: /Detect from address/i }).click();
     await page.waitForURL(/\/settings\/infrastructure\?add=detect$/, { timeout: 15_000 });
 

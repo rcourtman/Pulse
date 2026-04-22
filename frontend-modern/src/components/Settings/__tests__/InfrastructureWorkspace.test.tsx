@@ -242,8 +242,9 @@ describe('InfrastructureWorkspace', () => {
 
     await waitFor(() => expect(screen.getByText('Infrastructure sources')).toBeInTheDocument());
     expect(screen.getByRole('button', { name: /Run discovery/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Add infrastructure/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Discovery settings/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Detect from address/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Detect from address/i })).toBeNull();
     expect(screen.getByText('VMware vCenter')).toBeInTheDocument();
     expect(screen.getByText('TrueNAS SCALE')).toBeInTheDocument();
     expect(screen.getByText('Proxmox VE')).toBeInTheDocument();
@@ -289,12 +290,12 @@ describe('InfrastructureWorkspace', () => {
     });
   });
 
-  it('opens the detect dialog from the source manager header action', () => {
+  it('opens the source picker from the source manager header action', () => {
     renderWorkspace();
 
-    fireEvent.click(screen.getByRole('button', { name: /Detect from address/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Add infrastructure/i }));
 
-    expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure?add=detect', {
+    expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure?add=pick', {
       scroll: false,
     });
   });
