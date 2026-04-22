@@ -414,7 +414,13 @@ the canonical monitored-system blocked payload.
     must also validate user-supplied addresses before probing, reject metadata,
     link-local, multicast, and unspecified destinations, and pin each outbound
     dial to the first permitted resolved IP so DNS rebinding cannot swap the
-    target between validation and connect time.
+    target between validation and connect time. That same `/api/connections`
+    payload now also owns the additive `systems[]` grouping contract for the
+    infrastructure settings source manager. Those grouped rows must stay
+    source-oriented and backend-authored: one primary source row may carry
+    attached collection methods such as a linked Pulse Agent, but attached
+    methods must not be emitted as duplicate peer rows when backend ownership
+    can prove they augment the same source.
 
 ## Forbidden Paths
 

@@ -26,10 +26,12 @@ const row = (overrides: Partial<InfrastructureSystemRow> = {}): InfrastructureSy
   const connection = overrides.connection ?? connectionFixture();
   return {
     id: overrides.id ?? connection.id,
+    ownerType: overrides.ownerType ?? connection.type,
     name: overrides.name ?? 'tower',
     subtitle: undefined,
     host: '10.0.0.1',
     coverageLabels: ['Host telemetry'],
+    sourceBadges: [],
     statusLabel: 'online',
     statusClassName: 'bg-green-100 text-green-800',
     lastActivityText: '5s ago',
@@ -39,6 +41,7 @@ const row = (overrides: Partial<InfrastructureSystemRow> = {}): InfrastructureSy
     canPause: connection.capabilities.supportsPause,
     canRemove: connection.type !== 'docker' && connection.type !== 'kubernetes',
     isAgent: connection.type === 'agent',
+    attachedConnections: [],
     connection,
     ...overrides,
   };
@@ -61,7 +64,9 @@ describe('ConnectionsTable', () => {
     render(() => <ConnectionsTable rows={() => []} />);
 
     expect(screen.getByText('Start monitoring infrastructure')).toBeInTheDocument();
-    expect(screen.getByText(/Supported today: TrueNAS SCALE/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Source types available: VMware vCenter, TrueNAS SCALE/i),
+    ).toBeInTheDocument();
     expect(screen.queryByRole('table')).toBeNull();
   });
 
@@ -107,9 +112,7 @@ describe('ConnectionsTable', () => {
 
   it('shows lastErrorMessage inline on the row when present', () => {
     render(() => (
-      <ConnectionsTable
-        rows={() => [row({ lastErrorMessage: 'certificate expired' })]}
-      />
+      <ConnectionsTable rows={() => [row({ lastErrorMessage: 'certificate expired' })]} />
     ));
 
     expect(screen.getByText('certificate expired')).toBeInTheDocument();
@@ -118,9 +121,7 @@ describe('ConnectionsTable', () => {
   it('renders Edit / Pause / Remove buttons when actions and onEdit are provided', () => {
     const onEdit = vi.fn();
     const actions = makeActions();
-    render(() => (
-      <ConnectionsTable rows={() => [row()]} actions={actions} onEdit={onEdit} />
-    ));
+    render(() => <ConnectionsTable rows={() => [row()]} actions={actions} onEdit={onEdit} />);
 
     expect(screen.getByRole('button', { name: 'Edit' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Pause' })).toBeInTheDocument();
@@ -148,11 +149,7 @@ describe('ConnectionsTable', () => {
     const actions = makeActions({ togglePause });
     const connection = connectionFixture();
     render(() => (
-      <ConnectionsTable
-        rows={() => [row({ connection })]}
-        actions={actions}
-        onEdit={vi.fn()}
-      />
+      <ConnectionsTable rows={() => [row({ connection })]} actions={actions} onEdit={vi.fn()} />
     ));
 
     fireEvent.click(screen.getByRole('button', { name: 'Pause' }));
@@ -174,18 +171,14 @@ describe('ConnectionsTable', () => {
 
   it('surfaces the row-specific actionError inside an alert', () => {
     const actions = makeActions({ actionError: () => 'permission denied' });
-    render(() => (
-      <ConnectionsTable rows={() => [row()]} actions={actions} onEdit={vi.fn()} />
-    ));
+    render(() => <ConnectionsTable rows={() => [row()]} actions={actions} onEdit={vi.fn()} />);
 
     expect(screen.getByRole('alert')).toHaveTextContent('permission denied');
   });
 
   it('swaps the remove button into a confirming state when confirmingRemove is true', () => {
     const actions = makeActions({ confirmingRemove: () => true });
-    render(() => (
-      <ConnectionsTable rows={() => [row()]} actions={actions} onEdit={vi.fn()} />
-    ));
+    render(() => <ConnectionsTable rows={() => [row()]} actions={actions} onEdit={vi.fn()} />);
 
     expect(screen.getByRole('button', { name: /Click again to confirm/i })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Remove' })).toBeNull();
@@ -207,7 +200,9 @@ describe('ConnectionsTable', () => {
     ));
 
     expect(screen.getByText(/history is retained/i)).toBeInTheDocument();
-    expect(screen.getByText(/Credentials on the platform itself are untouched/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Credentials on the platform itself are untouched/i),
+    ).toBeInTheDocument();
     // No uninstall block for Platform API rows — only agents get that courtesy.
     expect(screen.queryByText(/--uninstall/)).toBeNull();
   });
@@ -233,7 +228,8 @@ describe('ConnectionsTable', () => {
         onEdit={vi.fn()}
         agentUninstallCommands={{
           linux: 'curl -fsSL http://pulse/install.sh | bash -s -- --uninstall',
-          windows: '$env:PULSE_URL="http://pulse"; $env:PULSE_UNINSTALL="true"; iwr /install.ps1 | iex',
+          windows:
+            '$env:PULSE_URL="http://pulse"; $env:PULSE_UNINSTALL="true"; iwr /install.ps1 | iex',
         }}
       />
     ));
@@ -242,9 +238,7 @@ describe('ConnectionsTable', () => {
     expect(
       screen.getByText(/curl -fsSL http:\/\/pulse\/install\.sh \| bash -s -- --uninstall/),
     ).toBeInTheDocument();
-    expect(
-      screen.getByText(/\$env:PULSE_UNINSTALL="true"/),
-    ).toBeInTheDocument();
+    expect(screen.getByText(/\$env:PULSE_UNINSTALL="true"/)).toBeInTheDocument();
   });
 
   it('does not render action buttons when the row model forbids them', () => {

@@ -253,6 +253,12 @@ work extends shared components instead of creating new local variants.
    `InfrastructureWorkspace.tsx` and `ConnectionEditor.tsx` keep the add/edit
    shell on `min-h-0` flex columns so long credential forms scroll inside the
    modal body instead of trapping the lower fields below the fold.
+   The same shared shell boundary now also owns grouped source-row composition.
+   `useConnectionsLedger.ts`, `InfrastructureSourceManager.tsx`, and
+   `InfrastructureWorkspace.tsx` must render attached collection methods as
+   composition on the owning row, with explicit badges and edit-dialog detail,
+   instead of duplicating the same machine across multiple peer groups and
+   forcing operators to infer the relationship visually.
    That same shared shell boundary now owns one canonical infrastructure
    destination in the Settings sidebar. `InfrastructureWorkspace.tsx` owns the
    source-manager landing inside that destination, while route-backed add flows

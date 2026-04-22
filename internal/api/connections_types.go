@@ -78,7 +78,33 @@ type Connection struct {
 	Capabilities ConnectionCapabilities `json:"capabilities"`
 }
 
+type ConnectionSystemComponentRole string
+
+const (
+	ConnectionSystemComponentRolePrimary    ConnectionSystemComponentRole = "primary"
+	ConnectionSystemComponentRoleAttachment ConnectionSystemComponentRole = "attachment"
+)
+
+// ConnectionSystemComponent identifies one underlying connection that
+// contributes to a grouped infrastructure source row in settings.
+type ConnectionSystemComponent struct {
+	ConnectionID string                        `json:"connectionId"`
+	Type         ConnectionType                `json:"type"`
+	Role         ConnectionSystemComponentRole `json:"role"`
+}
+
+// ConnectionSystem is the source-oriented grouping contract for the settings
+// infrastructure manager. One row owns a primary connection and can carry
+// attached collection methods such as a unified agent augmenting a Proxmox
+// source.
+type ConnectionSystem struct {
+	ID         string                      `json:"id"`
+	Type       ConnectionType              `json:"type"`
+	Components []ConnectionSystemComponent `json:"components"`
+}
+
 // ConnectionsListResponse is the envelope for GET /api/connections.
 type ConnectionsListResponse struct {
-	Connections []Connection `json:"connections"`
+	Connections []Connection       `json:"connections"`
+	Systems     []ConnectionSystem `json:"systems,omitempty"`
 }

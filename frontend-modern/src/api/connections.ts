@@ -48,8 +48,23 @@ export interface Connection {
   capabilities: ConnectionCapabilities;
 }
 
+export type ConnectionSystemComponentRole = 'primary' | 'attachment';
+
+export interface ConnectionSystemComponent {
+  connectionId: string;
+  type: ConnectionType;
+  role: ConnectionSystemComponentRole;
+}
+
+export interface ConnectionSystem {
+  id: string;
+  type: ConnectionType;
+  components: ConnectionSystemComponent[];
+}
+
 export interface ConnectionsListResponse {
   connections: Connection[];
+  systems?: ConnectionSystem[];
 }
 
 export interface ProbeRequest {
@@ -71,9 +86,12 @@ export interface ProbeResponse {
 export class ConnectionsAPI {
   private static readonly baseUrl = '/api/connections';
 
-  static async list(): Promise<Connection[]> {
+  static async list(): Promise<ConnectionsListResponse> {
     const response: ConnectionsListResponse = await apiFetchJSON(this.baseUrl);
-    return response.connections ?? [];
+    return {
+      connections: response.connections ?? [],
+      systems: response.systems ?? [],
+    };
   }
 
   static async probe(address: string): Promise<ProbeResponse> {

@@ -19,6 +19,7 @@ import { InfrastructureDiscoverySettingsDialog } from './InfrastructureDiscovery
 import { InfrastructureInstallerSection } from './InfrastructureInstallerSection';
 import { InfrastructureSourceManager } from './InfrastructureSourceManager';
 import { InfrastructureSourcePicker } from './InfrastructureSourcePicker';
+import { connectionLastActivityText, type InfrastructureSystemRow } from './connectionsTableModel';
 import {
   buildInfrastructureOnboardingPath,
   buildInfrastructureWorkspacePath,
@@ -78,8 +79,9 @@ const describeManagedSourceType = (type: ConnectionType | null): string => {
     type === 'pbs' ||
     type === 'pmg'
   ) {
-    return getInfrastructureOnboardingProductPresentation(type as InfrastructureOnboardingConnectionType)
-      .label;
+    return getInfrastructureOnboardingProductPresentation(
+      type as InfrastructureOnboardingConnectionType,
+    ).label;
   }
   if (type === 'docker') return 'Docker';
   if (type === 'kubernetes') return 'Kubernetes';
@@ -94,7 +96,7 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
   const rowActions = useConnectionRowActions({ onMutated: () => ledger.reload() });
 
   const [showAgentProfiles, setShowAgentProfiles] = createSignal(false);
-  const [editingConnection, setEditingConnection] = createSignal<Connection | null>(null);
+  const [editingRow, setEditingRow] = createSignal<InfrastructureSystemRow | null>(null);
   const [showDiscoverySettings, setShowDiscoverySettings] = createSignal(false);
   const [selectedDiscoveredSource, setSelectedDiscoveredSource] =
     createSignal<DiscoveredServer | null>(null);
@@ -113,6 +115,10 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
     if (!step || step === 'pick' || step === 'detect') return null;
     return ADD_STEP_TO_TYPE[step as ManagedAddTypeStep];
   });
+  const editingConnection = createMemo<Connection | null>(() => editingRow()?.connection ?? null);
+  const attachedAgentConnections = createMemo(() =>
+    (editingRow()?.attachedConnections ?? []).filter((connection) => connection.type === 'agent'),
+  );
 
   const findEditableNode = (connection: Connection): NodeConfigWithStatus | null => {
     const accessor =
@@ -197,8 +203,11 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
     if (connection) {
       rowActions.cancelRemove(connection.id);
     }
+    for (const attached of attachedAgentConnections()) {
+      rowActions.cancelRemove(attached.id);
+    }
     resetInlineEditorState();
-    setEditingConnection(null);
+    setEditingRow(null);
   };
 
   const handleAddSaved = () => {
@@ -479,6 +488,86 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
     );
   };
 
+  const renderAttachedAgentAugmentations = (connections: readonly Connection[]) => {
+    if (connections.length === 0) return null;
+
+    return (
+      <section class="space-y-4 rounded-xl border border-border bg-surface p-4">
+        <div class="space-y-1">
+          <div class="text-sm font-semibold text-base-content">Pulse Agent augmentation</div>
+          <p class="text-xs text-muted">
+            This source is also collecting local host telemetry through the Pulse Agent. You can
+            remove the agent attachment here without removing the primary platform connection.
+          </p>
+        </div>
+
+        <div class="space-y-3">
+          {connections.map((connection) => {
+            const removePending = () => rowActions.pendingAction(connection.id) === 'remove';
+            const removeConfirming = () => rowActions.confirmingRemove(connection.id);
+            const error = () => rowActions.actionError(connection.id);
+
+            return (
+              <div class="rounded-lg border border-border bg-surface-alt px-4 py-4">
+                <div class="flex flex-wrap items-start justify-between gap-4">
+                  <div class="space-y-1">
+                    <div class="text-sm font-medium text-base-content">{connection.name}</div>
+                    <Show when={connection.address}>
+                      <div class="break-words text-xs text-muted">{connection.address}</div>
+                    </Show>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <span class="inline-flex items-center rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-medium text-green-800 dark:bg-green-900 dark:text-green-300">
+                      {connection.state === 'active' ? 'Active' : connection.state}
+                    </span>
+                    <span class="text-xs text-muted">{connectionLastActivityText(connection)}</span>
+                  </div>
+                </div>
+
+                <Show when={error()}>
+                  {(message) => (
+                    <div
+                      role="alert"
+                      class="mt-3 rounded-md border border-rose-300 bg-rose-50 px-3 py-2 text-xs text-rose-800 dark:border-rose-900 dark:bg-rose-950 dark:text-rose-200"
+                    >
+                      {message()}
+                    </div>
+                  )}
+                </Show>
+
+                <div class="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                  <button
+                    type="button"
+                    onClick={() => void handleCopy(agentUninstallCommands().linux)}
+                    class={buttonClass}
+                  >
+                    Copy uninstall command
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void rowActions.requestRemove(connection)}
+                    disabled={removePending()}
+                    class={
+                      removeConfirming()
+                        ? 'inline-flex min-h-10 sm:min-h-9 items-center justify-center rounded-md bg-rose-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-60'
+                        : 'inline-flex min-h-10 sm:min-h-9 items-center justify-center rounded-md border border-rose-300 px-3 py-2 text-sm font-medium text-rose-700 transition-colors hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-rose-900 dark:text-rose-300 dark:hover:bg-rose-950'
+                    }
+                  >
+                    {removePending()
+                      ? 'Removing…'
+                      : removeConfirming()
+                        ? 'Click again to confirm'
+                        : 'Remove Pulse Agent'}
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+    );
+  };
+
   const renderConnectionSlot = (context: {
     mode: 'add' | 'edit';
     type: ConnectionType;
@@ -664,11 +753,11 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
     const connection = editingConnection();
     if (!connection) return 'Update this source without leaving the infrastructure manager.';
     const label = describeManagedSourceType(connection.type);
-    return `${label}${connection.address ? ` · ${connection.address}` : ''}`;
+    const methods = attachedAgentConnections().length > 0 ? ' · API + Pulse Agent' : '';
+    return `${label}${connection.address ? ` · ${connection.address}` : ''}${methods}`;
   });
 
-  const isAgentDialog = () =>
-    activeAddType() === 'agent' || editingConnection()?.type === 'agent';
+  const isAgentDialog = () => activeAddType() === 'agent' || editingConnection()?.type === 'agent';
 
   return (
     <div class="space-y-6">
@@ -691,13 +780,11 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
               }
         }
         onDetectFromAddress={readOnly() ? undefined : () => openAddFlow('detect')}
-        onOpenDiscoverySettings={
-          readOnly()
-            ? undefined
-            : () => setShowDiscoverySettings(true)
+        onOpenDiscoverySettings={readOnly() ? undefined : () => setShowDiscoverySettings(true)}
+        onOpenConnection={readOnly() ? undefined : (row) => setEditingRow(row)}
+        onReviewDiscoveredSource={
+          readOnly() ? undefined : (server) => reviewDiscoveredSource(server)
         }
-        onOpenConnection={readOnly() ? undefined : (connection) => setEditingConnection(connection)}
-        onReviewDiscoveredSource={readOnly() ? undefined : (server) => reviewDiscoveredSource(server)}
       />
 
       <InfrastructureDiscoverySettingsDialog
@@ -823,16 +910,21 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
                   <Show
                     when={connection.type === 'agent'}
                     fallback={
-                      <ConnectionEditor
-                        mode="edit"
-                        initialType={connection.type}
-                        showSlotHeader={false}
-                        onClose={closeEditFlow}
-                        onSaved={handleEditSaved}
-                        renderCredentialSlot={({ type, onCancel, onSaved }) =>
-                          renderConnectionSlot({ mode: 'edit', type, onCancel, onSaved })
-                        }
-                      />
+                      <div class="space-y-4">
+                        <ConnectionEditor
+                          mode="edit"
+                          initialType={connection.type}
+                          showSlotHeader={false}
+                          onClose={closeEditFlow}
+                          onSaved={handleEditSaved}
+                          renderCredentialSlot={({ type, onCancel, onSaved }) =>
+                            renderConnectionSlot({ mode: 'edit', type, onCancel, onSaved })
+                          }
+                        />
+                        <Show when={attachedAgentConnections().length > 0}>
+                          {renderAttachedAgentAugmentations(attachedAgentConnections())}
+                        </Show>
+                      </div>
                     }
                   >
                     {renderAgentConnectionDetails(connection)}

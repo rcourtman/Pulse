@@ -13,7 +13,7 @@ describe('ConnectionsAPI', () => {
     vi.clearAllMocks();
   });
 
-  it('list() calls GET /api/connections and returns the connections array', async () => {
+  it('list() calls GET /api/connections and returns the canonical ledger envelope', async () => {
     const connections: Connection[] = [
       {
         id: 'pve-lab',
@@ -36,15 +36,15 @@ describe('ConnectionsAPI', () => {
     const result = await ConnectionsAPI.list();
 
     expect(mockedApiFetchJSON).toHaveBeenCalledWith('/api/connections');
-    expect(result).toEqual(connections);
+    expect(result).toEqual({ connections, systems: [] });
   });
 
-  it('list() returns [] when the backend omits the connections field', async () => {
+  it('list() normalizes missing fields to empty collections', async () => {
     mockedApiFetchJSON.mockResolvedValueOnce({} as { connections?: Connection[] });
 
     const result = await ConnectionsAPI.list();
 
-    expect(result).toEqual([]);
+    expect(result).toEqual({ connections: [], systems: [] });
   });
 
   it('probe() POSTs the address JSON and returns the candidates envelope', async () => {

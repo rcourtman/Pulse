@@ -233,6 +233,13 @@ querying, and the operator-facing storage health presentation layer.
     as a storage install prerequisite, provider-connection error, or
     recovery-capability verdict.
 21. Keep provider-backed recovery onboarding on the adjacent platform-connections contract. When `internal/api/` grows or changes TrueNAS connection CRUD, masked-secret preservation, saved-connection retest routes, edit-form saved-test payload overlays, or similar provider setup flows, storage and recovery may consume the resulting recovery points but must not absorb that connection-management ownership into storage/recovery-local handlers or page flows. That same adjacency also covers per-surface scope as it flows through the unified connections aggregator: when `internal/api/connections_aggregator.go` projects TrueNAS `MonitorDatasets`/`MonitorPools`/`MonitorReplication` flags into the aggregator's `scope` map, storage and recovery may observe that projection to explain dataset/pool/replication coverage to operators but must not reinterpret those flags as a recovery freshness verdict, restore-capability gate, or storage-local scope registry.
+   That same adjacent platform-connections boundary now also owns
+   source-oriented `systems[]` grouping on `/api/connections`. Storage and
+   recovery may observe grouped source composition to explain whether a
+   platform row is collecting additional host telemetry through Pulse Agent,
+   but they must not reinterpret attached agents as separate protected
+   systems, duplicate recovery inventory rows, or a storage-local ownership
+   taxonomy.
 22. Keep backend-native platform actions on the adjacent AI/runtime and platform contracts. When `internal/api/` wires native TrueNAS app control for Assistant, storage and recovery may consume the refreshed recovery points afterward, but they must not grow a parallel recovery-local action transport or action-specific payload shape.
 23. Keep backend-native platform diagnostics on the adjacent AI/runtime and platform contracts. When `internal/api/` wires native TrueNAS app log reads for Assistant, storage and recovery may use those diagnostics during investigation, but they must not grow a parallel recovery-local log transport or diagnostic payload shape.
 24. Keep backend-native platform configuration reads on the adjacent AI/runtime and platform contracts. When `internal/api/` wires native TrueNAS app config for Assistant, storage and recovery may use that runtime shape during investigation, but they must not grow a parallel recovery-local config transport or provider-shaped configuration payload.

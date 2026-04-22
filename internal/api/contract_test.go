@@ -165,7 +165,7 @@ func TestContract_WebSocketTrustedProxyHostedOrigin(t *testing.T) {
 }
 
 func TestContract_AIRelayTargetHostnameEquivalence(t *testing.T) {
-	server := agentexec.NewServer(func(string, string) bool { return true })
+	server := agentexec.NewServer(func(string, string, string) bool { return true })
 	ts := newIPv4HTTPServer(t, http.HandlerFunc(server.HandleWebSocket))
 	defer ts.Close()
 
@@ -11455,11 +11455,25 @@ func TestContract_ConnectionPayloadShapeStaysCanonical(t *testing.T) {
 		Source:       ConnectionSourceManual,
 		Capabilities: ConnectionCapabilities{SupportsPause: true, SupportsScope: true, SupportsTest: true},
 	}
-	body, err := json.Marshal(ConnectionsListResponse{Connections: []Connection{conn}})
+	system := ConnectionSystem{
+		ID:   "pve-lab",
+		Type: ConnectionTypePVE,
+		Components: []ConnectionSystemComponent{
+			{
+				ConnectionID: "pve-lab",
+				Type:         ConnectionTypePVE,
+				Role:         ConnectionSystemComponentRolePrimary,
+			},
+		},
+	}
+	body, err := json.Marshal(ConnectionsListResponse{
+		Connections: []Connection{conn},
+		Systems:     []ConnectionSystem{system},
+	})
 	if err != nil {
 		t.Fatalf("marshal Connection: %v", err)
 	}
-	want := `{"connections":[{"id":"pve-lab","type":"pve","name":"lab","address":"https://pve.lab:8006","state":"active","enabled":true,"surfaces":["vms","containers"],"scope":{"containers":true,"vms":true},"lastSeen":"2026-04-19T10:00:00Z","source":"manual","capabilities":{"supportsPause":true,"supportsScope":true,"supportsTest":true}}]}`
+	want := `{"connections":[{"id":"pve-lab","type":"pve","name":"lab","address":"https://pve.lab:8006","state":"active","enabled":true,"surfaces":["vms","containers"],"scope":{"containers":true,"vms":true},"lastSeen":"2026-04-19T10:00:00Z","source":"manual","capabilities":{"supportsPause":true,"supportsScope":true,"supportsTest":true}}],"systems":[{"id":"pve-lab","type":"pve","components":[{"connectionId":"pve-lab","type":"pve","role":"primary"}]}]}`
 	assertJSONSnapshot(t, body, want)
 }
 
@@ -11524,6 +11538,9 @@ func TestContract_ConnectionsListIncludesAgentHostsFromUnifiedReadState(t *testi
 	if len(resp.Connections) != 1 {
 		t.Fatalf("expected 1 connection from unified read-state, got %d", len(resp.Connections))
 	}
+	if len(resp.Systems) != 1 {
+		t.Fatalf("expected 1 grouped system from unified read-state, got %d", len(resp.Systems))
+	}
 
 	conn := resp.Connections[0]
 	if conn.ID != "agent:agent-1" {
@@ -11540,6 +11557,9 @@ func TestContract_ConnectionsListIncludesAgentHostsFromUnifiedReadState(t *testi
 	}
 	if conn.Source != ConnectionSourceAgent {
 		t.Fatalf("connection source = %q, want %q", conn.Source, ConnectionSourceAgent)
+	}
+	if resp.Systems[0].ID != "agent:agent-1" || resp.Systems[0].Type != ConnectionTypeAgent {
+		t.Fatalf("unexpected grouped system projection: %+v", resp.Systems[0])
 	}
 }
 

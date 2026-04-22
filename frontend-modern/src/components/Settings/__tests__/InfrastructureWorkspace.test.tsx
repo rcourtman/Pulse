@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Connection } from '@/api/connections';
+import type { InfrastructureSystemRow } from '../connectionsTableModel';
 import { InfrastructureWorkspace } from '../InfrastructureWorkspace';
 
 const routeState = vi.hoisted(() => ({
@@ -9,6 +10,7 @@ const routeState = vi.hoisted(() => ({
 }));
 const connectionState = vi.hoisted(() => ({
   connections: [] as Connection[],
+  rows: null as InfrastructureSystemRow[] | null,
 }));
 const navigateSpy = vi.hoisted(() => vi.fn());
 const presentationPolicyIsReadOnlyMock = vi.hoisted(() => vi.fn(() => false));
@@ -62,8 +64,10 @@ vi.mock('../useConnectionsLedger', () => ({
   useConnectionsLedger: () => ({
     connections: () => connectionState.connections,
     rows: () =>
+      connectionState.rows ??
       connectionState.connections.map((connection) => ({
         id: connection.id,
+        ownerType: connection.type,
         name: connection.name || connection.id,
         subtitle:
           connection.type === 'agent'
@@ -71,6 +75,7 @@ vi.mock('../useConnectionsLedger', () => ({
             : `Platform API · ${connection.type === 'truenas' ? 'TrueNAS SCALE' : connection.type}`,
         host: connection.address,
         coverageLabels: ['VMs'],
+        sourceBadges: connection.type === 'agent' ? ['Pulse Agent'] : ['API'],
         statusLabel: connection.state === 'paused' ? 'Paused' : 'Active',
         statusClassName: 'bg-green-100 text-green-800',
         lastActivityText: '1m ago',
@@ -80,6 +85,7 @@ vi.mock('../useConnectionsLedger', () => ({
         canPause: connection.capabilities.supportsPause,
         canRemove: connection.type !== 'docker' && connection.type !== 'kubernetes',
         isAgent: connection.type === 'agent',
+        attachedConnections: [],
         connection,
       })),
     findById: (id: string) =>
@@ -220,6 +226,7 @@ describe('InfrastructureWorkspace', () => {
     routeState.pathname = '/settings/infrastructure';
     routeState.search = '';
     connectionState.connections = [connectionFixture()];
+    connectionState.rows = null;
   });
 
   afterEach(() => {
@@ -232,9 +239,7 @@ describe('InfrastructureWorkspace', () => {
   it('renders the instance-first source manager as the only landing surface', async () => {
     renderWorkspace();
 
-    await waitFor(() =>
-      expect(screen.getByText('Infrastructure sources')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText('Infrastructure sources')).toBeInTheDocument());
     expect(screen.getByRole('button', { name: /Run discovery/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Discovery settings/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Detect from address/i })).toBeInTheDocument();
@@ -262,9 +267,7 @@ describe('InfrastructureWorkspace', () => {
       triggerDiscoveryScan,
     });
 
-    await waitFor(() =>
-      expect(screen.getByText('discovered-pve.lab')).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText('discovered-pve.lab')).toBeInTheDocument());
     expect(screen.getByText('Discovered')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /Run discovery/i }));
@@ -323,7 +326,9 @@ describe('InfrastructureWorkspace', () => {
     renderWorkspace();
 
     await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
-    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Detect from address' }));
+    fireEvent.click(
+      within(screen.getByRole('dialog')).getByRole('button', { name: 'Detect from address' }),
+    );
 
     expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure?add=detect', {
       scroll: false,
@@ -335,7 +340,9 @@ describe('InfrastructureWorkspace', () => {
     renderWorkspace();
 
     await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
-    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: /TrueNAS SCALE/i }));
+    fireEvent.click(
+      within(screen.getByRole('dialog')).getByRole('button', { name: /TrueNAS SCALE/i }),
+    );
 
     expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure?add=truenas', {
       scroll: false,
@@ -354,8 +361,12 @@ describe('InfrastructureWorkspace', () => {
       ),
     ).toBeInTheDocument();
     expect(screen.getAllByText('Detect from address').length).toBeGreaterThan(0);
-    expect(within(screen.getByRole('dialog')).getByRole('button', { name: /Back to source types/i })).toBeInTheDocument();
-    expect(within(screen.getByRole('dialog')).getByRole('button', { name: /Probe address/i })).toBeInTheDocument();
+    expect(
+      within(screen.getByRole('dialog')).getByRole('button', { name: /Back to source types/i }),
+    ).toBeInTheDocument();
+    expect(
+      within(screen.getByRole('dialog')).getByRole('button', { name: /Probe address/i }),
+    ).toBeInTheDocument();
   });
 
   it('renders the route-backed agent dialog when the agent query is present', async () => {
@@ -382,12 +393,65 @@ describe('InfrastructureWorkspace', () => {
       pveNodes: () => [{ name: 'zeus', host: 'https://10.0.0.1:8006' } as any],
     });
 
-    await waitFor(() => expect(screen.getByRole('button', { name: /^Edit$/i })).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /^Edit$/i })).toBeInTheDocument(),
+    );
     fireEvent.click(screen.getByRole('button', { name: /^Edit$/i }));
 
     await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
     expect(screen.getByText('Edit zeus')).toBeInTheDocument();
     expect(screen.getByTestId('proxmox-section')).toBeInTheDocument();
+  });
+
+  it('shows attached Pulse Agent augmentation details on a grouped platform source', async () => {
+    const primaryConnection = connectionFixture();
+    const attachedAgent = connectionFixture({
+      id: 'agent:zeus',
+      type: 'agent',
+      name: 'zeus-agent',
+      address: 'zeus.lab',
+      surfaces: ['host'],
+      scope: { host: true } as any,
+      lastSeen: new Date().toISOString(),
+      capabilities: { supportsPause: true, supportsScope: true, supportsTest: true },
+    });
+
+    connectionState.connections = [primaryConnection, attachedAgent];
+    connectionState.rows = [
+      {
+        id: primaryConnection.id,
+        ownerType: 'pve',
+        name: primaryConnection.name || primaryConnection.id,
+        subtitle: 'Platform API · pve',
+        host: primaryConnection.address,
+        coverageLabels: ['VMs', 'Host telemetry'],
+        sourceBadges: ['API', 'Pulse Agent'],
+        statusLabel: 'Active',
+        statusClassName: 'bg-green-100 text-green-800',
+        lastActivityText: '1m ago',
+        enabled: true,
+        canEdit: true,
+        canPause: true,
+        canRemove: true,
+        isAgent: false,
+        attachedConnections: [attachedAgent],
+        connection: primaryConnection,
+      },
+    ];
+
+    renderWorkspace({
+      pveNodes: () => [{ name: 'zeus', host: 'https://10.0.0.1:8006' } as any],
+    });
+
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /^Edit$/i })).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByRole('button', { name: /^Edit$/i }));
+
+    await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
+    expect(screen.getByText('Pulse Agent augmentation')).toBeInTheDocument();
+    expect(screen.getByText('zeus-agent')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Copy uninstall command/i })).toBeInTheDocument();
   });
 
   it('hides the add flow and source-manager actions in read-only mode', () => {

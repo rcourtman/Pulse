@@ -1,6 +1,5 @@
 import { For, Show, createMemo, type Accessor, type Component } from 'solid-js';
 import { Plus, RotateCw, Search, Server, SlidersHorizontal } from 'lucide-solid';
-import type { Connection } from '@/api/connections';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import {
   Table,
@@ -28,7 +27,7 @@ interface InfrastructureSourceManagerProps {
   onRunDiscovery?: () => void;
   onDetectFromAddress?: () => void;
   onOpenDiscoverySettings?: () => void;
-  onOpenConnection?: (connection: Connection) => void;
+  onOpenConnection?: (row: InfrastructureSystemRow) => void;
   onReviewDiscoveredSource?: (server: DiscoveredServer) => void;
 }
 
@@ -111,7 +110,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
     }
 
     for (const row of props.rows()) {
-      const productRows = next.get(row.connection.type as InfrastructureOnboardingConnectionType);
+      const productRows = next.get(row.ownerType as InfrastructureOnboardingConnectionType);
       if (!productRows) continue;
       productRows.push(row);
     }
@@ -366,11 +365,24 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                       <span class="absolute left-2 top-2.5 h-px w-3 bg-border" />
                                     </span>
                                     <div class="min-w-0">
-                                      <div
-                                        class="truncate text-[13px] text-base-content/80"
-                                        title={row.name}
-                                      >
-                                        {row.name}
+                                      <div class="flex min-w-0 items-center gap-2">
+                                        <div
+                                          class="truncate text-[13px] text-base-content/80"
+                                          title={row.name}
+                                        >
+                                          {row.name}
+                                        </div>
+                                        <Show when={row.sourceBadges.length > 0}>
+                                          <div class="flex items-center gap-1 whitespace-nowrap">
+                                            <For each={row.sourceBadges}>
+                                              {(badge) => (
+                                                <span class="inline-flex items-center rounded-full border border-border bg-surface-alt px-1.5 py-0.5 text-[10px] font-medium text-muted">
+                                                  {badge}
+                                                </span>
+                                              )}
+                                            </For>
+                                          </div>
+                                        </Show>
                                       </div>
                                     </div>
                                   </div>
@@ -426,7 +438,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                   >
                                     <button
                                       type="button"
-                                      onClick={() => props.onOpenConnection?.(row.connection)}
+                                      onClick={() => props.onOpenConnection?.(row)}
                                       class={inlineButtonClass}
                                     >
                                       Edit

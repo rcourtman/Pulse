@@ -73,8 +73,10 @@ func (h *ConnectionsHandlers) HandleList(w http.ResponseWriter, r *http.Request)
 		inputs.instanceHealth = map[string]monitoring.InstanceHealth{}
 	}
 
+	connections := buildConnections(inputs)
 	writeJSON(w, http.StatusOK, ConnectionsListResponse{
-		Connections: buildConnections(inputs),
+		Connections: connections,
+		Systems:     buildConnectionSystems(connections, monitor),
 	})
 }
 
