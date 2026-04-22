@@ -326,6 +326,11 @@ state. When `.github/workflows/create-release.yml` runs in `draft_only` mode,
 it must pass the real draft state into `.github/workflows/validate-release-assets.yml`
 so validation blocks or annotates the draft release as a draft, rather than
 misclassifying the run as post-publish revalidation.
+That same reusable-validation call boundary also owns permission handoff.
+`.github/workflows/create-release.yml` must explicitly grant the nested
+`.github/workflows/validate-release-assets.yml` call the write scopes it
+requests (`contents: write` and `issues: write`), rather than inheriting the
+release pipeline's top-level read-only default and failing at workflow startup.
 That same governed release boundary also owns unpublished draft retry
 reconciliation. Re-running `.github/workflows/create-release.yml` for the same
 unpublished tag must locate the existing draft release, retarget its git tag

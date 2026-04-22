@@ -916,6 +916,9 @@ jobs:
       - prepare
       - create_release
     if: ${{ needs.prepare.outputs.historical_asset_backfill_only != 'true' }}
+    permissions:
+      contents: write
+      issues: write
     uses: ./.github/workflows/validate-release-assets.yml
     secrets: inherit
     with:

@@ -119,6 +119,8 @@ func TestCreateReleaseUploadsPowerShellInstaller(t *testing.T) {
 		`historical_asset_backfill_only=${HISTORICAL_ASSET_BACKFILL_ONLY}`,
 		`if: ${{ needs.prepare.outputs.historical_asset_backfill_only != 'true' }}`,
 		`if: ${{ needs.prepare.outputs.historical_asset_backfill_only == 'true' }}`,
+		`permissions:`,
+		`issues: write`,
 		`./scripts/backfill-release-assets.sh --tag "${{ needs.prepare.outputs.tag }}" --repo "${{ github.repository }}"`,
 		`./scripts/validate-published-release.sh "${{ needs.prepare.outputs.tag }}" "${{ github.repository }}"`,
 	}
