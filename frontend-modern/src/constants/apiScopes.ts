@@ -2,7 +2,7 @@ export interface APIScopeOption {
   value: string;
   label: string;
   description?: string;
-  group: 'Monitoring' | 'Agents' | 'Settings';
+  group: 'Monitoring' | 'Agents' | 'Settings' | 'Security';
 }
 
 export const AGENT_REPORT_SCOPE = 'agent:report';
@@ -16,6 +16,7 @@ export const MONITORING_READ_SCOPE = 'monitoring:read';
 export const MONITORING_WRITE_SCOPE = 'monitoring:write';
 export const SETTINGS_READ_SCOPE = 'settings:read';
 export const SETTINGS_WRITE_SCOPE = 'settings:write';
+export const AUDIT_READ_SCOPE = 'audit:read';
 
 export const API_SCOPE_OPTIONS: APIScopeOption[] = [
   {
@@ -83,6 +84,12 @@ export const API_SCOPE_OPTIONS: APIScopeOption[] = [
     label: 'Settings (write)',
     description: 'Modify configuration, manage tokens, and trigger updates.',
     group: 'Settings',
+  },
+  {
+    value: AUDIT_READ_SCOPE,
+    label: 'Audit logs (read)',
+    description: 'Read audit events, verification status, summaries, and export history.',
+    group: 'Security',
   },
 ];
 

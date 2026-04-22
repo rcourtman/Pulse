@@ -36,7 +36,7 @@ func TestExpiredLicenseBlocksProFeature(t *testing.T) {
 	handler := createTestHandler(t)
 
 	// Activate a Pro license with a 24h expiry.
-	licenseKey, err := license.GenerateLicenseForTesting("expiry@example.com", license.TierPro, 24*time.Hour)
+	licenseKey, err := pkglicensing.GenerateLicenseForTesting("expiry@example.com", license.TierPro, 24*time.Hour)
 	if err != nil {
 		t.Fatalf("generate test license: %v", err)
 	}
@@ -93,7 +93,7 @@ func TestGracePeriodAllowsProFeature(t *testing.T) {
 
 	handler := createTestHandler(t)
 
-	licenseKey, err := license.GenerateLicenseForTesting("grace@example.com", license.TierPro, 24*time.Hour)
+	licenseKey, err := pkglicensing.GenerateLicenseForTesting("grace@example.com", license.TierPro, 24*time.Hour)
 	if err != nil {
 		t.Fatalf("generate test license: %v", err)
 	}
@@ -134,7 +134,7 @@ func TestExpiredLicenseFeaturesEndpoint(t *testing.T) {
 
 	handler := createTestHandler(t)
 
-	licenseKey, err := license.GenerateLicenseForTesting("features@example.com", license.TierPro, 24*time.Hour)
+	licenseKey, err := pkglicensing.GenerateLicenseForTesting("features@example.com", license.TierPro, 24*time.Hour)
 	if err != nil {
 		t.Fatalf("generate test license: %v", err)
 	}
@@ -278,7 +278,7 @@ func TestLicenseGatedEmptyResponseOnExpiry(t *testing.T) {
 
 	handler := createTestHandler(t)
 
-	licenseKey, err := license.GenerateLicenseForTesting("gated@example.com", license.TierPro, 24*time.Hour)
+	licenseKey, err := pkglicensing.GenerateLicenseForTesting("gated@example.com", license.TierPro, 24*time.Hour)
 	if err != nil {
 		t.Fatalf("generate test license: %v", err)
 	}

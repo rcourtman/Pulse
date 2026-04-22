@@ -144,7 +144,7 @@ func TestSecurityStatusExposesSettingsCapabilitiesForScopedToken(t *testing.T) {
 	defer auth.SetAuthorizer(prevAuthorizer)
 
 	rawToken := "status-cap-token-123.12345678"
-	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsRead, config.ScopeSettingsWrite}, nil)
+	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsRead, config.ScopeSettingsWrite, config.ScopeAuditRead}, nil)
 	cfg := newTestConfigWithTokens(t, record)
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
 
@@ -192,7 +192,7 @@ func TestSecurityStatusExposesSettingsCapabilitiesForScopedToken(t *testing.T) {
 	if payload.SettingsCapabilities.BillingAdmin {
 		t.Fatalf("did not expect billingAdmin capability for API token")
 	}
-	if len(payload.TokenScopes) != 2 {
+	if len(payload.TokenScopes) != 3 {
 		t.Fatalf("expected token scopes in response, got %#v", payload.TokenScopes)
 	}
 }
@@ -243,6 +243,45 @@ func TestSecurityStatusSplitsReadAndWriteSettingsCapabilities(t *testing.T) {
 	}
 	if !payload.SettingsCapabilities.RelayRead || payload.SettingsCapabilities.RelayWrite {
 		t.Fatalf("expected relay to be read-only, got %#v", payload.SettingsCapabilities)
+	}
+}
+
+func TestSecurityStatusRequiresAuditReadScopeForAuditLogCapability(t *testing.T) {
+	prevAuthorizer := auth.GetAuthorizer()
+	auth.SetAuthorizer(&allowRulesAuthorizer{
+		rules: map[string]bool{
+			"read:audit_logs":  true,
+			"admin:audit_logs": true,
+		},
+	})
+	defer auth.SetAuthorizer(prevAuthorizer)
+
+	rawToken := "status-audit-split-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsRead}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/security/status", nil)
+	req.Header.Set("X-API-Token", rawToken)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 for security status, got %d", rec.Code)
+	}
+
+	var payload struct {
+		SettingsCapabilities securityStatusSettingsCapabilities `json:"settingsCapabilities"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	if payload.SettingsCapabilities.AuditLog {
+		t.Fatalf("did not expect audit log capability without audit:read scope")
+	}
+	if !payload.SettingsCapabilities.AuditWebhooksRead {
+		t.Fatalf("expected audit webhook read capability to remain settings-scoped")
 	}
 }
 

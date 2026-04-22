@@ -215,7 +215,7 @@ func (r *Router) securityStatusSettingsCapabilitiesFromSnapshot(snapshot securit
 	canReadSettings := snapshot.canAccessAdminSurface(config.ScopeSettingsRead)
 	canManageUsers := r.canAccessPermissionSurface(snapshot, internalauth.ActionAdmin, internalauth.ResourceUsers)
 	canReadAudit := snapshot.passesPrivilegedSessionGate() &&
-		r.canAccessPermissionSurface(snapshot, internalauth.ActionRead, internalauth.ResourceAuditLogs, config.ScopeSettingsRead)
+		r.canAccessPermissionSurface(snapshot, internalauth.ActionRead, internalauth.ResourceAuditLogs, config.ScopeAuditRead)
 	canManageRoles := snapshot.passesPrivilegedSessionGate() && canManageUsers
 
 	return securityStatusSettingsCapabilities{

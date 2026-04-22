@@ -1079,6 +1079,10 @@ as adjacent governed API ownership rather than timeline-store ownership. The
 storage and recovery lanes still own their own persistence and query
 contracts, while the control-plane execution trail remains governed by the
 unified-resource and audit contracts.
+That adjacent audit-read surface also now requires the dedicated `audit:read`
+token scope rather than the broader `settings:read` scope, so storage- and
+recovery-adjacent settings visibility cannot silently expand into enterprise
+audit history reads.
 That same shared `internal/api/` dependency now also includes monitored-system
 ledger explanation reads: storage- and recovery-adjacent surfaces may coexist
 with counted monitored-system inventory, but any support-facing count

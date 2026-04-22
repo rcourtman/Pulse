@@ -290,6 +290,10 @@ That same trust boundary also governs API token scope identity: legacy
 migration boundaries, where they must be rewritten immediately into canonical
 `agent:*` scopes. Live token records and runtime scope checks may not keep the
 legacy scope names as an active second contract.
+That same token-scope boundary also owns audit-log least privilege: audit
+event, verification, summary, export, and unified action/export audit reads
+must require the dedicated `audit:read` scope instead of inheriting broader
+monitoring or settings-read token access.
 That same token-scope boundary now also governs Pulse Mobile relay runtime
 credentials: `internal/api/security_tokens.go` must mint only the dedicated
 backend-owned `relay:mobile:access` scope for new mobile relay tokens, and the

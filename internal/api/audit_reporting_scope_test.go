@@ -9,7 +9,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 )
 
-func TestAuditEndpointsRequireSettingsReadScope(t *testing.T) {
+func TestAuditEndpointsRequireAuditReadScope(t *testing.T) {
 	t.Setenv("PULSE_DEV", "true")
 
 	rawToken := "audit-scope-token-123.12345678"
@@ -30,10 +30,10 @@ func TestAuditEndpointsRequireSettingsReadScope(t *testing.T) {
 		rec := httptest.NewRecorder()
 		router.Handler().ServeHTTP(rec, req)
 		if rec.Code != http.StatusForbidden {
-			t.Fatalf("expected 403 for missing settings:read scope on %s, got %d", path, rec.Code)
+			t.Fatalf("expected 403 for missing audit:read scope on %s, got %d", path, rec.Code)
 		}
-		if !strings.Contains(rec.Body.String(), config.ScopeSettingsRead) {
-			t.Fatalf("expected missing scope response to mention %q, got %q", config.ScopeSettingsRead, rec.Body.String())
+		if !strings.Contains(rec.Body.String(), config.ScopeAuditRead) {
+			t.Fatalf("expected missing scope response to mention %q, got %q", config.ScopeAuditRead, rec.Body.String())
 		}
 	}
 }

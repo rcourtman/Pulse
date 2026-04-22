@@ -8471,6 +8471,76 @@ func TestContract_SecurityStatusPresentationPolicyDefaultsClosedOutsideDemo(t *t
 	}
 }
 
+func TestContract_SecurityStatusSplitsAuditLogCapabilityFromSettingsRead(t *testing.T) {
+	prevAuthorizer := authpkg.GetAuthorizer()
+	authpkg.SetAuthorizer(&allowRulesAuthorizer{
+		rules: map[string]bool{
+			"read:audit_logs":  true,
+			"admin:audit_logs": true,
+		},
+	})
+	defer authpkg.SetAuthorizer(prevAuthorizer)
+
+	cases := []struct {
+		name                  string
+		scopes                []string
+		wantAuditLog          bool
+		wantAuditWebhooksRead bool
+	}{
+		{
+			name:                  "settings read stays limited to audit webhooks",
+			scopes:                []string{config.ScopeSettingsRead},
+			wantAuditLog:          false,
+			wantAuditWebhooksRead: true,
+		},
+		{
+			name:                  "audit read unlocks audit log capability",
+			scopes:                []string{config.ScopeSettingsRead, config.ScopeAuditRead},
+			wantAuditLog:          true,
+			wantAuditWebhooksRead: true,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			rawToken := fmt.Sprintf("contract-audit-scope-%s.12345678", strings.ReplaceAll(tc.name, " ", "-"))
+			record := newTokenRecord(t, rawToken, tc.scopes, nil)
+			cfg := newTestConfigWithTokens(t, record)
+			router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+			req := httptest.NewRequest(http.MethodGet, "/api/security/status", nil)
+			req.Header.Set("X-API-Token", rawToken)
+			rec := httptest.NewRecorder()
+			router.Handler().ServeHTTP(rec, req)
+			if rec.Code != http.StatusOK {
+				t.Fatalf("security status = %d, want 200 (%s)", rec.Code, rec.Body.String())
+			}
+
+			var payload struct {
+				SettingsCapabilities securityStatusSettingsCapabilities `json:"settingsCapabilities"`
+				TokenScopes          []string                           `json:"tokenScopes"`
+			}
+			if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+				t.Fatalf("decode security status payload: %v", err)
+			}
+
+			if payload.SettingsCapabilities.AuditLog != tc.wantAuditLog {
+				t.Fatalf("settingsCapabilities.auditLog = %v, want %v", payload.SettingsCapabilities.AuditLog, tc.wantAuditLog)
+			}
+			if payload.SettingsCapabilities.AuditWebhooksRead != tc.wantAuditWebhooksRead {
+				t.Fatalf(
+					"settingsCapabilities.auditWebhooksRead = %v, want %v",
+					payload.SettingsCapabilities.AuditWebhooksRead,
+					tc.wantAuditWebhooksRead,
+				)
+			}
+			if !reflect.DeepEqual(payload.TokenScopes, tc.scopes) {
+				t.Fatalf("tokenScopes = %#v, want %#v", payload.TokenScopes, tc.scopes)
+			}
+		})
+	}
+}
+
 func TestContract_SetupScriptURLRejectsNonCanonicalRequestJSON(t *testing.T) {
 	handler := newTestConfigHandlers(t, &config.Config{DataPath: t.TempDir()})
 

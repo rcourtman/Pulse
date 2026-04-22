@@ -12,44 +12,28 @@ import (
 
 // Canonical API token scope strings.
 const (
-	ScopeWildcard          = "*"
-	ScopeMonitoringRead    = "monitoring:read"
-	ScopeMonitoringWrite   = "monitoring:write"
-	ScopeDockerReport      = "docker:report"
-	ScopeDockerManage      = "docker:manage"
-	ScopeKubernetesReport  = "kubernetes:report"
-	ScopeKubernetesManage  = "kubernetes:manage"
-	ScopeAgentReport       = "agent:report"
-	ScopeAgentConfigRead   = "agent:config:read"
-	ScopeAgentManage       = "agent:manage"
-	ScopeSettingsRead      = "settings:read"
-	ScopeSettingsWrite     = "settings:write"
-	ScopeAIExecute         = "ai:execute"          // Allows executing AI commands and remediation plans
-	ScopeAIChat            = "ai:chat"             // Allows AI chat participation
-	ScopeRelayMobileAccess = "relay:mobile:access" // Allows the governed Pulse Mobile relay runtime surface
-	ScopeAgentExec         = "agent:exec"          // Allows agent execution WebSocket connections
-	ScopeAgentEnroll       = "agent:enroll"        // Bootstrap enrollment only
+	ScopeWildcard          = auth.ScopeWildcard
+	ScopeMonitoringRead    = auth.ScopeMonitoringRead
+	ScopeMonitoringWrite   = auth.ScopeMonitoringWrite
+	ScopeDockerReport      = auth.ScopeDockerReport
+	ScopeDockerManage      = auth.ScopeDockerManage
+	ScopeKubernetesReport  = auth.ScopeKubernetesReport
+	ScopeKubernetesManage  = auth.ScopeKubernetesManage
+	ScopeAgentReport       = auth.ScopeAgentReport
+	ScopeAgentConfigRead   = auth.ScopeAgentConfigRead
+	ScopeAgentManage       = auth.ScopeAgentManage
+	ScopeSettingsRead      = auth.ScopeSettingsRead
+	ScopeSettingsWrite     = auth.ScopeSettingsWrite
+	ScopeAuditRead         = auth.ScopeAuditRead
+	ScopeAIExecute         = auth.ScopeAIExecute
+	ScopeAIChat            = auth.ScopeAIChat
+	ScopeRelayMobileAccess = auth.ScopeRelayMobileAccess
+	ScopeAgentExec         = auth.ScopeAgentExec
+	ScopeAgentEnroll       = auth.ScopeAgentEnroll
 )
 
 // AllKnownScopes enumerates scopes recognized by the backend (excluding the wildcard sentinel).
-var AllKnownScopes = []string{
-	ScopeMonitoringRead,
-	ScopeMonitoringWrite,
-	ScopeDockerReport,
-	ScopeDockerManage,
-	ScopeKubernetesReport,
-	ScopeKubernetesManage,
-	ScopeAgentReport,
-	ScopeAgentConfigRead,
-	ScopeAgentManage,
-	ScopeSettingsRead,
-	ScopeSettingsWrite,
-	ScopeAIExecute,
-	ScopeAIChat,
-	ScopeRelayMobileAccess,
-	ScopeAgentExec,
-	ScopeAgentEnroll,
-}
+var AllKnownScopes = append([]string(nil), auth.AllKnownScopes...)
 
 var scopeLookup = func() map[string]struct{} {
 	lookup := make(map[string]struct{}, len(AllKnownScopes))

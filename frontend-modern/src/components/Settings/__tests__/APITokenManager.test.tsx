@@ -3,7 +3,12 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/te
 
 import type { APITokenRecord } from '@/api/security';
 import type { Resource } from '@/types/resource';
-import { AGENT_REPORT_SCOPE, DOCKER_MANAGE_SCOPE, DOCKER_REPORT_SCOPE } from '@/constants/apiScopes';
+import {
+  AGENT_REPORT_SCOPE,
+  AUDIT_READ_SCOPE,
+  DOCKER_MANAGE_SCOPE,
+  DOCKER_REPORT_SCOPE,
+} from '@/constants/apiScopes';
 import { APITokenManager } from '../APITokenManager';
 
 const listTokensMock = vi.fn();
@@ -168,6 +173,39 @@ describe('APITokenManager', () => {
     });
   });
 
+  it('surfaces the dedicated audit scope in presets and grouped custom scopes', async () => {
+    createTokenMock.mockResolvedValueOnce({
+      token: 'pulse_audit_secret',
+      record: makeToken({
+        id: 'token-audit',
+        name: 'Audit export',
+        scopes: [AUDIT_READ_SCOPE],
+      }),
+    });
+
+    render(() => <APITokenManager onTokensChanged={vi.fn()} canManage />);
+
+    await waitFor(() => {
+      expect(listTokensMock).toHaveBeenCalledTimes(1);
+    });
+
+    expect(screen.getByRole('button', { name: 'Audit read' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('Custom scopes'));
+    expect(screen.getByText('Security')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Audit logs (read)' })).toBeInTheDocument();
+
+    fireEvent.input(screen.getByPlaceholderText('e.g. Container pipeline'), {
+      target: { value: 'Audit export' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Audit read' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Generate' }));
+
+    await waitFor(() => {
+      expect(createTokenMock).toHaveBeenCalledWith('Audit export', [AUDIT_READ_SCOPE]);
+    });
+  });
+
   it('maps token usage from unified resources and fans revocation out to affected runtimes and agents', async () => {
     listTokensMock.mockResolvedValue([
       makeToken({
@@ -217,10 +255,10 @@ describe('APITokenManager', () => {
     const runtimeName = await screen.findByText('Runtime token');
     const row = runtimeName.closest('tr');
     expect(row).toBeTruthy();
-    expect(within(row as HTMLTableRowElement).getByText('Docker Edge • Edge Agent')).toBeInTheDocument();
     expect(
-      within(row as HTMLTableRowElement).getByText('Agent reporting'),
+      within(row as HTMLTableRowElement).getByText('Docker Edge • Edge Agent'),
     ).toBeInTheDocument();
+    expect(within(row as HTMLTableRowElement).getByText('Agent reporting')).toBeInTheDocument();
 
     fireEvent.click(within(row as HTMLTableRowElement).getByRole('button', { name: 'Revoke' }));
 
@@ -291,9 +329,12 @@ describe('APITokenManager', () => {
 
   it('surfaces scope denial when token generation is blocked by caller scope', async () => {
     createTokenMock.mockRejectedValueOnce(
-      Object.assign(new Error('Cannot grant scope "monitoring:read": your token does not have this scope'), {
-        status: 403,
-      }),
+      Object.assign(
+        new Error('Cannot grant scope "monitoring:read": your token does not have this scope'),
+        {
+          status: 403,
+        },
+      ),
     );
 
     render(() => <APITokenManager onTokensChanged={vi.fn()} canManage />);

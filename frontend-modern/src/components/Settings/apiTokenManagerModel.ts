@@ -1,6 +1,7 @@
 import { unwrap } from 'solid-js/store';
 import type { APITokenRecord } from '@/api/security';
 import {
+  AUDIT_READ_SCOPE,
   AGENT_REPORT_SCOPE,
   API_SCOPE_OPTIONS,
   DOCKER_MANAGE_SCOPE,
@@ -35,7 +36,7 @@ export interface APITokenUsageEntry {
 type ScopeGroup = (typeof API_SCOPE_OPTIONS)[number]['group'];
 type ScopeOption = (typeof API_SCOPE_OPTIONS)[number];
 
-const API_TOKEN_SCOPE_GROUP_ORDER: ScopeGroup[] = ['Monitoring', 'Agents', 'Settings'];
+const API_TOKEN_SCOPE_GROUP_ORDER: ScopeGroup[] = ['Monitoring', 'Agents', 'Settings', 'Security'];
 
 export const getAPITokenScopePresets = (): APITokenPreset[] => [
   {
@@ -69,6 +70,11 @@ export const getAPITokenScopePresets = (): APITokenPreset[] => [
     label: 'Settings admin',
     scopes: [SETTINGS_READ_SCOPE, SETTINGS_WRITE_SCOPE],
     description: 'Full settings read/write – equivalent to automation with admin privileges.',
+  },
+  {
+    label: 'Audit read',
+    scopes: [AUDIT_READ_SCOPE],
+    description: 'Read audit events, verification history, summaries, and export activity.',
   },
 ];
 
@@ -192,6 +198,7 @@ export const groupAPITokenScopes = (): [ScopeGroup, ScopeOption[]][] => {
     Monitoring: [],
     Agents: [],
     Settings: [],
+    Security: [],
   };
   for (const option of API_SCOPE_OPTIONS) {
     grouped[option.group].push(option);

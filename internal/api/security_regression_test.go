@@ -2975,7 +2975,7 @@ func TestAIChatEndpointsRequireAIChatScope(t *testing.T) {
 
 func TestAuditEndpointsRequireLicenseFeature(t *testing.T) {
 	rawToken := "audit-license-token-123.12345678"
-	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsRead}, nil)
+	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsRead, config.ScopeAuditRead}, nil)
 	cfg := newTestConfigWithTokens(t, record)
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
 
@@ -2990,7 +2990,7 @@ func TestAuditEndpointsRequireLicenseFeature(t *testing.T) {
 
 func TestAuditVerifyRequiresLicenseFeature(t *testing.T) {
 	rawToken := "audit-verify-license-token-123.12345678"
-	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsRead}, nil)
+	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsRead, config.ScopeAuditRead}, nil)
 	cfg := newTestConfigWithTokens(t, record)
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
 
@@ -3264,7 +3264,7 @@ func TestPermissionProtectedEndpointsDenyWhenAuthorizerBlocks(t *testing.T) {
 	defer auth.SetAuthorizer(prevAuthorizer)
 
 	rawToken := "perm-deny-token-123.12345678"
-	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsRead}, nil)
+	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsRead, config.ScopeAuditRead}, nil)
 	cfg := newTestConfigWithTokens(t, record)
 	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
 

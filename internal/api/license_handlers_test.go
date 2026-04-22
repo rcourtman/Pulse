@@ -156,7 +156,7 @@ func TestHandleLicenseFeatures_WithActiveLicense(t *testing.T) {
 	t.Setenv("PULSE_LICENSE_DEV_MODE", "true")
 
 	handler := createTestHandler(t)
-	licenseKey, err := license.GenerateLicenseForTesting("test@example.com", license.TierPro, 24*time.Hour)
+	licenseKey, err := pkglicensing.GenerateLicenseForTesting("test@example.com", license.TierPro, 24*time.Hour)
 	if err != nil {
 		t.Fatalf("failed to generate test license: %v", err)
 	}
@@ -245,7 +245,7 @@ func TestHandleLicenseStatus_WithActiveLicense(t *testing.T) {
 	t.Setenv("PULSE_LICENSE_DEV_MODE", "true")
 
 	handler := createTestHandler(t)
-	licenseKey, err := license.GenerateLicenseForTesting("test@example.com", license.TierPro, 24*time.Hour)
+	licenseKey, err := pkglicensing.GenerateLicenseForTesting("test@example.com", license.TierPro, 24*time.Hour)
 	if err != nil {
 		t.Fatalf("failed to generate test license: %v", err)
 	}
@@ -450,7 +450,7 @@ func TestHandleActivateLicense_ExchangesLegacyJWTInStrictV6(t *testing.T) {
 			t.Setenv("PULSE_LICENSE_SERVER_URL", server.URL)
 
 			handler := createTestHandler(t)
-			licenseKey, err := license.GenerateLicenseForTesting("legacy-jwt@example.com", license.TierPro, 24*time.Hour)
+			licenseKey, err := pkglicensing.GenerateLicenseForTesting("legacy-jwt@example.com", license.TierPro, 24*time.Hour)
 			if err != nil {
 				t.Fatalf("failed to generate test license: %v", err)
 			}
@@ -644,7 +644,7 @@ func TestHandleActivateLicense_ActivationKeyClearsStaleLegacyPersistence(t *test
 		t.Fatalf("new license persistence: %v", err)
 	}
 
-	legacyKey, err := license.GenerateLicenseForTesting("legacy-stale@example.com", license.TierPro, 24*time.Hour)
+	legacyKey, err := pkglicensing.GenerateLicenseForTesting("legacy-stale@example.com", license.TierPro, 24*time.Hour)
 	if err != nil {
 		t.Fatalf("generate stale legacy license: %v", err)
 	}
@@ -697,7 +697,7 @@ func TestHandleActivateLicense_ValidKey(t *testing.T) {
 	t.Setenv("PULSE_LICENSE_DEV_MODE", "true")
 
 	handler := createTestHandler(t)
-	licenseKey, err := license.GenerateLicenseForTesting("pro@example.com", license.TierPro, 24*time.Hour)
+	licenseKey, err := pkglicensing.GenerateLicenseForTesting("pro@example.com", license.TierPro, 24*time.Hour)
 	if err != nil {
 		t.Fatalf("failed to generate test license: %v", err)
 	}
@@ -1434,7 +1434,7 @@ func TestHandleClearLicense_WithActiveLicense(t *testing.T) {
 	t.Setenv("PULSE_LICENSE_DEV_MODE", "true")
 
 	handler := createTestHandler(t)
-	licenseKey, err := license.GenerateLicenseForTesting("test@example.com", license.TierPro, 24*time.Hour)
+	licenseKey, err := pkglicensing.GenerateLicenseForTesting("test@example.com", license.TierPro, 24*time.Hour)
 	if err != nil {
 		t.Fatalf("failed to generate test license: %v", err)
 	}
@@ -1570,7 +1570,7 @@ func TestRequireLicenseFeature_WithLicense(t *testing.T) {
 	t.Setenv("PULSE_LICENSE_DEV_MODE", "true")
 
 	handler := createTestHandler(t)
-	licenseKey, err := license.GenerateLicenseForTesting("test@example.com", license.TierPro, 24*time.Hour)
+	licenseKey, err := pkglicensing.GenerateLicenseForTesting("test@example.com", license.TierPro, 24*time.Hour)
 	if err != nil {
 		t.Fatalf("failed to generate test license: %v", err)
 	}
@@ -1719,7 +1719,7 @@ func TestLicenseGatedEmptyResponse_WithLicense(t *testing.T) {
 	t.Setenv("PULSE_LICENSE_DEV_MODE", "true")
 
 	handler := createTestHandler(t)
-	licenseKey, err := license.GenerateLicenseForTesting("test@example.com", license.TierPro, 24*time.Hour)
+	licenseKey, err := pkglicensing.GenerateLicenseForTesting("test@example.com", license.TierPro, 24*time.Hour)
 	if err != nil {
 		t.Fatalf("failed to generate test license: %v", err)
 	}

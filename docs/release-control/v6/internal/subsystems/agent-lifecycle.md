@@ -765,6 +765,10 @@ and export audit reads alongside the enterprise audit surface. That read path
 belongs to the API and unified-resource contracts, not to lifecycle ownership,
 so the agent-install and registration lane stays focused on fleet continuity
 instead of adopting execution-history persistence as a side effect.
+That shared audit-read path also now requires the dedicated `audit:read`
+token scope instead of inheriting broader `settings:read` access, so
+lifecycle-adjacent install and registration surfaces cannot regain enterprise
+audit history just by holding general settings visibility.
 The connected-infrastructure reporting workspace also now treats API-backed
 platform surfaces as platform-connection-managed capabilities, not host-managed
 agent extensions. `frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx`,
