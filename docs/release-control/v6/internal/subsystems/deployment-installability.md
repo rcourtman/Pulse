@@ -201,6 +201,14 @@ server-side update execution surfaces.
    signup/billing Playwright evals with the hosted mobile onboarding proof, and
    avoid implicit production defaults or lane-local shell fragments that bypass
    the checked-in proof pack.
+9. Keep governed release, publish, and deployment automation supply-chain
+   pinned. The canonical workflow surface under `.github/workflows/` must use
+   immutable action SHAs, GitHub-hosted jobs must target an explicit Ubuntu LTS
+   runner image instead of `ubuntu-latest`, and checked-in CI/test Dockerfiles
+   under this subsystem must not depend on floating `:latest` base tags.
+   Whenever that policy changes, update the owning workflow/install proof files
+   in `scripts/installtests/build_release_assets_test.go` and
+   `scripts/release_control/release_promotion_policy_*` in the same slice.
 
 ## Current State
 

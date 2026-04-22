@@ -75,7 +75,7 @@ func TestCreateReleaseUploadsPowerShellInstaller(t *testing.T) {
 		`gh release upload "${TAG}" release/install.ps1 --clobber`,
 		`gh release upload "${TAG}" release/*.sig --clobber`,
 		`gh release upload "${TAG}" release/*.sshsig --clobber`,
-		`uses: actions/attest@v4`,
+		`uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4`,
 		`subject-path: release/*`,
 		`gh api "repos/${{ github.repository }}/releases?per_page=100" --paginate`,
 		`git push origin "refs/tags/${TAG}" --force`,
@@ -158,7 +158,7 @@ func TestReleaseWorkflowsUseSecretSafeAttestedImageBuilds(t *testing.T) {
 		`--secret id=pulse_update_signing_key,env=PULSE_UPDATE_SIGNING_KEY`,
 		`id-token: write`,
 		`attestations: write`,
-		`uses: actions/attest@v4`,
+		`uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4`,
 	}
 	for _, needle := range createReleaseRequired {
 		if !strings.Contains(createRelease, needle) {
@@ -292,7 +292,7 @@ func TestUpdateDemoWorkflowUsesGovernedNetworkPath(t *testing.T) {
 	workflow := string(workflowBytes)
 	required := []string{
 		`- name: Tailscale`,
-		`uses: tailscale/github-action@v2`,
+		`uses: tailscale/github-action@4e4c49acaa9818630ce0bd7a564372c17e33fb4d # v2`,
 		`authkey: ${{ secrets.TS_AUTHKEY }}`,
 		`Verify target host identity`,
 		`Demo environment points at host $REMOTE_HOSTNAME but expected $DEMO_EXPECTED_HOSTNAME.`,

@@ -20,10 +20,10 @@ permissions:
 
 jobs:
   close-timeouts:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Auto-close outdated retest issues
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
         env:
           STALE_DAYS: ${{ github.event.inputs.stale_days || '7' }}
           DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}

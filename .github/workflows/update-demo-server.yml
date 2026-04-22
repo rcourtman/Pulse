@@ -24,7 +24,7 @@ permissions:
 
 jobs:
   resolve:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       tag: ${{ steps.target.outputs.tag }}
       target: ${{ steps.target.outputs.target }}
@@ -87,7 +87,7 @@ jobs:
           echo "Resolved demo deployment: tag=${TAG}, target=${TARGET}, environment=${ENVIRONMENT_NAME}"
 
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           fetch-depth: 0
           fetch-tags: true
@@ -151,7 +151,7 @@ jobs:
   update-demo:
     needs: resolve
     if: needs.resolve.outputs.skip != 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     environment: ${{ needs.resolve.outputs.environment_name }}
     env:
       DEMO_EXPECTED_HOSTNAME: ${{ vars.DEMO_EXPECTED_HOSTNAME }}
@@ -183,7 +183,7 @@ jobs:
           [ -n "$DEMO_PUBLIC_HEALTH_URL" ] || { echo "::error::DEMO_PUBLIC_HEALTH_URL is required in the selected demo environment."; exit 1; }
 
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           fetch-depth: 0
           fetch-tags: true
@@ -230,7 +230,7 @@ jobs:
           chmod +x /tmp/pulse-install.sh
 
       - name: Tailscale
-        uses: tailscale/github-action@v2
+        uses: tailscale/github-action@4e4c49acaa9818630ce0bd7a564372c17e33fb4d # v2
         with:
           authkey: ${{ secrets.TS_AUTHKEY }}
 

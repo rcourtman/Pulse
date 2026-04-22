@@ -23,7 +23,7 @@ permissions:
 
 jobs:
   promote-images:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # Only run if workflow_dispatch OR if workflow_run completed successfully
     if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     permissions:
@@ -75,7 +75,7 @@ jobs:
           echo "Promoting floating tags for ${TAG} (prerelease: ${PRERELEASE})"
 
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           fetch-depth: 0
           fetch-tags: true
@@ -135,13 +135,13 @@ jobs:
           echo "[OK] ${TAG} validated against release line ${REQUIRED_BRANCH}"
 
       - name: Log in to Docker Hub
-        uses: docker/login-action@v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
       - name: Log in to GHCR
-        uses: docker/login-action@v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}

@@ -43,7 +43,7 @@ permissions:
 jobs:
   dry-run:
     name: Preflight Release Checks (No Publish)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 90
     permissions:
       contents: read
@@ -71,7 +71,7 @@ jobs:
           echo "[OK] Dry run executing on branch ${GITHUB_REF_NAME}"
 
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           fetch-depth: 0
 
@@ -152,7 +152,7 @@ jobs:
           echo "[OK] Rehearsal metadata validated for ${TAG}"
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '20'
           cache: 'npm'
@@ -183,7 +183,7 @@ jobs:
           sudo apt-get install -y docker-compose
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           go-version-file: go.mod
           cache: true
@@ -333,7 +333,7 @@ jobs:
 
       - name: Upload rehearsal summary artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: rc-to-ga-rehearsal-summary
           path: release-dry-run/rc-to-ga-rehearsal-summary.md

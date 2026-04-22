@@ -7,7 +7,7 @@ RUN go mod download
 COPY main.go ./
 RUN CGO_ENABLED=0 GOOS=linux go build -o mock-github-server .
 
-FROM alpine:latest
+FROM alpine:3.22.1
 RUN apk --no-cache add ca-certificates
 
 WORKDIR /app

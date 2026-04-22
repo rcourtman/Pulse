@@ -19,7 +19,7 @@ permissions:
 
 jobs:
   resolve:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       target: ${{ steps.target.outputs.target }}
       environment_name: ${{ steps.target.outputs.environment_name }}
@@ -48,7 +48,7 @@ jobs:
 
   deploy:
     needs: resolve
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     environment: ${{ needs.resolve.outputs.environment_name }}
     env:
       DEMO_EXPECTED_HOSTNAME: ${{ vars.DEMO_EXPECTED_HOSTNAME }}
@@ -75,16 +75,16 @@ jobs:
           [ -n "$DEMO_LOCAL_BASE_URL" ] || { echo "::error::DEMO_LOCAL_BASE_URL is required in the selected demo environment."; exit 1; }
           [ -n "$DEMO_PUBLIC_HEALTH_URL" ] || { echo "::error::DEMO_PUBLIC_HEALTH_URL is required in the selected demo environment."; exit 1; }
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           go-version: '1.25.9'
           cache: true
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '20'
           cache: 'npm'
@@ -94,7 +94,7 @@ jobs:
         run: npm --prefix frontend-modern ci
 
       - name: Restore frontend build cache
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: frontend-modern/dist
           key: frontend-build-${{ hashFiles('frontend-modern/package-lock.json', 'frontend-modern/src/**/*', 'frontend-modern/index.html', 'frontend-modern/postcss.config.cjs', 'frontend-modern/tailwind.config.cjs') }}
@@ -134,7 +134,7 @@ jobs:
             -o pulse ./cmd/pulse/
 
       - name: Tailscale
-        uses: tailscale/github-action@v2
+        uses: tailscale/github-action@4e4c49acaa9818630ce0bd7a564372c17e33fb4d # v2
         with:
           authkey: ${{ secrets.TS_AUTHKEY }}
 
