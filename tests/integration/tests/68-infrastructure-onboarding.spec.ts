@@ -1,0 +1,312 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { expect, test as base, type Page } from '@playwright/test';
+import { createAuthenticatedStorageState } from './helpers';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+type WorkerFixtures = {
+  authStorageStatePath: string;
+};
+
+type UpgradeMetricEventPayload = {
+  type: string;
+  surface: string;
+  capability?: string;
+  idempotency_key?: string;
+};
+
+type OverflowAudit = {
+  viewportWidth: number;
+  pageWidth: number;
+  overflowPx: number;
+  offenders: Array<{ tag: string; className: string; overflow: number }>;
+};
+
+const test = base.extend<{}, WorkerFixtures>({
+  storageState: async ({ authStorageStatePath }, use) => {
+    await use(authStorageStatePath);
+  },
+  authStorageStatePath: [async ({ browser }, use, workerInfo) => {
+    const storageStatePath = path.resolve(
+      __dirname,
+      '..',
+      '..',
+      'tmp',
+      'playwright-auth',
+      `infrastructure-onboarding-${workerInfo.project.name}.json`,
+    );
+    fs.mkdirSync(path.dirname(storageStatePath), { recursive: true });
+    await createAuthenticatedStorageState(browser, storageStatePath);
+    try {
+      await use(storageStatePath);
+    } finally {
+      fs.rmSync(storageStatePath, { force: true });
+    }
+  }, { scope: 'worker' }],
+});
+
+async function stubConnectionsList(page: Page): Promise<void> {
+  await page.route('**/api/connections', async (route) => {
+    const requestUrl = new URL(route.request().url());
+    if (route.request().method() !== 'GET' || requestUrl.pathname !== '/api/connections') {
+      await route.continue();
+      return;
+    }
+
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ connections: [] }),
+    });
+  });
+}
+
+async function recordUpgradeMetricEvents(page: Page): Promise<UpgradeMetricEventPayload[]> {
+  const events: UpgradeMetricEventPayload[] = [];
+
+  await page.route('**/api/upgrade-metrics/events', async (route) => {
+    const payload = route.request().postDataJSON() as UpgradeMetricEventPayload;
+    events.push(payload);
+    await route.fulfill({
+      status: 202,
+      contentType: 'application/json',
+      body: '{}',
+    });
+  });
+
+  return events;
+}
+
+async function prepareOnboardingPage(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    localStorage.setItem('pulse_whats_new_v2_shown', 'true');
+  });
+
+  await stubConnectionsList(page);
+}
+
+function countUpgradeEvents(
+  events: readonly UpgradeMetricEventPayload[],
+  type: string,
+  capability?: string,
+): number {
+  return events.filter((event) => {
+    if (event.surface !== 'settings_infrastructure_add') {
+      return false;
+    }
+    if (event.type !== type) {
+      return false;
+    }
+    if (capability !== undefined && event.capability !== capability) {
+      return false;
+    }
+    return true;
+  }).length;
+}
+
+async function scrollToBottom(page: Page): Promise<void> {
+  const viewportHeight = await page.evaluate(() => window.innerHeight || 800);
+  const step = Math.max(240, Math.floor(viewportHeight * 0.75));
+  let wheelSupported = true;
+
+  for (let i = 0; i < 20; i += 1) {
+    if (wheelSupported) {
+      try {
+        await page.mouse.wheel(0, step);
+      } catch {
+        wheelSupported = false;
+        await page.evaluate((deltaY) => window.scrollBy(0, deltaY), step);
+      }
+    } else {
+      await page.evaluate((deltaY) => window.scrollBy(0, deltaY), step);
+    }
+    await page.waitForTimeout(60);
+  }
+}
+
+async function auditHorizontalOverflow(page: Page): Promise<OverflowAudit> {
+  return page.evaluate(() => {
+    const viewportWidth = Math.max(document.documentElement.clientWidth, window.innerWidth || 0);
+    const pageWidth = Math.max(
+      document.body.scrollWidth,
+      document.documentElement.scrollWidth,
+      document.body.offsetWidth,
+      document.documentElement.offsetWidth,
+    );
+
+    const offenders = Array.from(document.querySelectorAll('body *'))
+      .map((el) => {
+        const rect = el.getBoundingClientRect();
+        if (rect.width <= 0 || rect.height <= 0) return null;
+        const style = window.getComputedStyle(el);
+        if (style.position === 'fixed' || style.position === 'absolute') return null;
+        const overflow = rect.right - viewportWidth;
+        if (overflow <= 1) return null;
+        return {
+          tag: el.tagName.toLowerCase(),
+          className: (el.getAttribute('class') || '').trim().slice(0, 120),
+          overflow: Number(overflow.toFixed(1)),
+        };
+      })
+      .filter((entry): entry is { tag: string; className: string; overflow: number } => Boolean(entry))
+      .slice(0, 8);
+
+    return {
+      viewportWidth,
+      pageWidth,
+      overflowPx: Number((pageWidth - viewportWidth).toFixed(1)),
+      offenders,
+    };
+  });
+}
+
+test.describe('Infrastructure onboarding', () => {
+  test.setTimeout(180_000);
+
+  test('desktop add flow renders the onboarding decision surface and records an open event', async ({
+    page,
+  }, testInfo) => {
+    test.skip(testInfo.project.name.startsWith('mobile-'), 'Desktop-only onboarding shell coverage');
+
+    const metricEvents = await recordUpgradeMetricEvents(page);
+    await prepareOnboardingPage(page);
+
+    await page.goto('/settings/infrastructure?add=pick', { waitUntil: 'domcontentloaded' });
+    await page.waitForURL(/\/settings\/infrastructure(?:\?.*)?$/, { timeout: 15_000 });
+
+    await expect(page.getByText('Add infrastructure', { exact: true }).first()).toBeVisible();
+    await expect(page.getByText('Choose how Pulse should connect', { exact: true })).toBeVisible();
+    await expect(page.getByText('Connect a supported platform', { exact: true }).first()).toBeVisible();
+    await expect(page.getByText('Install Pulse Agent', { exact: true }).first()).toBeVisible();
+    await expect(page.getByText('What happens next', { exact: true })).toBeVisible();
+
+    await expect
+      .poll(() => countUpgradeEvents(metricEvents, 'infrastructure_onboarding_opened'))
+      .toBe(1);
+  });
+
+  test('desktop catalog selection records the API onboarding path and credential handoff', async ({
+    page,
+  }, testInfo) => {
+    test.skip(
+      testInfo.project.name.startsWith('mobile-'),
+      'Desktop-only onboarding catalog instrumentation coverage',
+    );
+
+    const metricEvents = await recordUpgradeMetricEvents(page);
+    await prepareOnboardingPage(page);
+
+    await page.goto('/settings/infrastructure?add=pick', { waitUntil: 'domcontentloaded' });
+    await page.waitForURL(/\/settings\/infrastructure(?:\?.*)?$/, { timeout: 15_000 });
+
+    const catalog = page.locator('section').filter({
+      has: page.getByText('Supported platform catalog', { exact: true }),
+    });
+
+    await catalog.getByRole('button', { name: /TrueNAS SCALE/i }).click();
+    await expect(page.getByRole('button', { name: /Back to catalog/i })).toBeVisible();
+    await expect(page.getByText('TrueNAS SCALE', { exact: true }).first()).toBeVisible();
+
+    await expect
+      .poll(() => countUpgradeEvents(metricEvents, 'infrastructure_onboarding_path_selected', 'api'))
+      .toBe(1);
+    await expect
+      .poll(() =>
+        countUpgradeEvents(metricEvents, 'infrastructure_onboarding_catalog_selected', 'truenas'),
+      )
+      .toBe(1);
+    await expect
+      .poll(() =>
+        countUpgradeEvents(metricEvents, 'infrastructure_onboarding_credentials_opened', 'truenas'),
+      )
+      .toBe(1);
+  });
+
+  test('desktop no-match probe records the agent fallback path and credential handoff', async ({
+    page,
+  }, testInfo) => {
+    test.skip(
+      testInfo.project.name.startsWith('mobile-'),
+      'Desktop-only onboarding probe instrumentation coverage',
+    );
+
+    const metricEvents = await recordUpgradeMetricEvents(page);
+    await prepareOnboardingPage(page);
+
+    await page.route('**/api/connections/probe', async (route) => {
+      const requestUrl = new URL(route.request().url());
+      if (route.request().method() !== 'POST' || requestUrl.pathname !== '/api/connections/probe') {
+        await route.continue();
+        return;
+      }
+
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          candidates: [],
+          probedMs: 184,
+        }),
+      });
+    });
+
+    await page.goto('/settings/infrastructure?add=pick', { waitUntil: 'domcontentloaded' });
+    await page.waitForURL(/\/settings\/infrastructure(?:\?.*)?$/, { timeout: 15_000 });
+
+    await page.getByLabel('Address').fill('baremetal.lab');
+    await page.getByRole('button', { name: 'Probe address', exact: true }).click();
+
+    await expect(
+      page.getByText('No supported API-backed platform detected at that address.', { exact: true }),
+    ).toBeVisible();
+
+    await expect
+      .poll(() => countUpgradeEvents(metricEvents, 'infrastructure_onboarding_path_selected', 'api'))
+      .toBe(1);
+    await expect
+      .poll(() =>
+        countUpgradeEvents(metricEvents, 'infrastructure_onboarding_probe_result', 'no-match'),
+      )
+      .toBe(1);
+
+    await page.getByRole('button', { name: 'install Pulse Agent instead', exact: true }).click();
+    await expect(page.getByRole('button', { name: /Back to catalog/i })).toBeVisible();
+
+    await expect
+      .poll(() =>
+        countUpgradeEvents(metricEvents, 'infrastructure_onboarding_path_selected', 'agent'),
+      )
+      .toBe(1);
+    await expect
+      .poll(() =>
+        countUpgradeEvents(metricEvents, 'infrastructure_onboarding_credentials_opened', 'agent'),
+      )
+      .toBe(1);
+  });
+
+  test('mobile add flow keeps the onboarding surface inside the viewport', async ({
+    page,
+  }, testInfo) => {
+    test.skip(
+      !testInfo.project.name.startsWith('mobile-'),
+      'Mobile-only onboarding overflow coverage',
+    );
+
+    await prepareOnboardingPage(page);
+
+    await page.goto('/settings/infrastructure?add=pick', { waitUntil: 'domcontentloaded' });
+    await page.waitForURL(/\/settings\/infrastructure(?:\?.*)?$/, { timeout: 15_000 });
+    await expect(page.getByText('Add infrastructure', { exact: true }).first()).toBeVisible();
+    await expect(page.getByText('Choose how Pulse should connect', { exact: true })).toBeVisible();
+
+    await scrollToBottom(page);
+    const audit = await auditHorizontalOverflow(page);
+
+    expect(
+      audit.pageWidth,
+      `Mobile onboarding overflow (viewport=${audit.viewportWidth}, page=${audit.pageWidth}, offenders=${JSON.stringify(audit.offenders)})`,
+    ).toBeLessThanOrEqual(audit.viewportWidth + 1);
+  });
+});

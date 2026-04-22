@@ -54,6 +54,10 @@ End-to-end Playwright tests that validate critical user flows against a running 
 - `tests/18-patrol-runtime-state.spec.ts` — Patrol runtime-state browser guard:
   - Mocks a blocked Patrol runtime with stale healthy summary payloads
   - Proves the real `/ai` route shows Patrol as paused and suppresses stale healthy summary copy
+- `tests/68-infrastructure-onboarding.spec.ts` — infrastructure onboarding browser proof:
+  - Proves the add-infrastructure surface renders the decision-led API-vs-agent onboarding flow in the shared settings shell
+  - Verifies the onboarding funnel emits `opened`, API catalog handoff, and no-match-to-agent fallback metrics on the real browser runtime
+  - Verifies the mobile add-infrastructure flow fits the viewport without horizontal overflow
 
 ## Running Tests
 
