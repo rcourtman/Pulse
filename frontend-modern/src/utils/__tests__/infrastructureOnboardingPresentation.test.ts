@@ -3,7 +3,9 @@ import {
   getInfrastructureApiProductsByGovernanceState,
   getInfrastructureAutoDetectLabels,
   getInfrastructureEmptyStateDetail,
+  getInfrastructureEmptyStateSummary,
   getInfrastructureOnboardingProductPresentation,
+  getInfrastructureSourcePickerGroups,
   getInfrastructureSupportSummaryBadges,
 } from '@/utils/infrastructureOnboardingPresentation';
 
@@ -25,7 +27,44 @@ describe('infrastructureOnboardingPresentation', () => {
     ).toEqual(['VMware vCenter']);
   });
 
-  it('derives auto-detect copy and main-page support summary from the shared helper', () => {
+  it('derives picker groups, auto-detect copy, and landing summaries from the shared helper', () => {
+    expect(getInfrastructureSourcePickerGroups()).toEqual([
+      {
+        id: 'virtualization',
+        label: 'Virtualization',
+        description: 'Hypervisors, VM inventory, and cluster health.',
+        types: ['vmware', 'pve'],
+        products: [
+          expect.objectContaining({ type: 'vmware', label: 'VMware vCenter' }),
+          expect.objectContaining({ type: 'pve', label: 'Proxmox VE' }),
+        ],
+      },
+      {
+        id: 'storage',
+        label: 'Storage',
+        description: 'Storage appliances and dataset visibility.',
+        types: ['truenas'],
+        products: [expect.objectContaining({ type: 'truenas', label: 'TrueNAS SCALE' })],
+      },
+      {
+        id: 'backup-mail',
+        label: 'Backup and Mail',
+        description: 'Backup infrastructure and mail-gateway operations.',
+        types: ['pbs', 'pmg'],
+        products: [
+          expect.objectContaining({ type: 'pbs', label: 'Proxmox Backup Server' }),
+          expect.objectContaining({ type: 'pmg', label: 'Proxmox Mail Gateway' }),
+        ],
+      },
+      {
+        id: 'host-monitoring',
+        label: 'Host monitoring',
+        description: 'Machine telemetry and local service discovery.',
+        types: ['agent'],
+        products: [expect.objectContaining({ type: 'agent', label: 'Pulse Agent' })],
+      },
+    ]);
+
     expect(getInfrastructureAutoDetectLabels()).toEqual([
       'VMware vCenter',
       'TrueNAS SCALE',
@@ -48,7 +87,12 @@ describe('infrastructureOnboardingPresentation', () => {
       installPath: ['Linux', 'FreeBSD', 'Unraid', 'Pulse Agent hosts', 'Docker', 'Kubernetes'],
     });
 
-    expect(getInfrastructureEmptyStateDetail()).toContain('Supported today: TrueNAS SCALE');
+    expect(getInfrastructureEmptyStateSummary()).toBe(
+      'Add infrastructure sources to start monitoring your environment.',
+    );
+    expect(getInfrastructureEmptyStateDetail()).toContain('Source types available: VMware vCenter');
+    expect(getInfrastructureEmptyStateDetail()).toContain('Pulse Agent');
+    expect(getInfrastructureEmptyStateDetail()).toContain('Docker and Kubernetes are discovered');
     expect(getInfrastructureEmptyStateDetail()).toContain('VMware vCenter is also available now.');
   });
 });

@@ -92,18 +92,20 @@ function countUpgradeEvents(
   type: string,
   capability?: string,
 ): number {
-  return events.filter((event) => {
-    if (event.surface !== 'settings_infrastructure_add') {
-      return false;
-    }
-    if (event.type !== type) {
-      return false;
-    }
-    if (capability !== undefined && event.capability !== capability) {
-      return false;
-    }
-    return true;
-  }).length;
+  const matchingKeys = new Set<string>();
+
+  for (const event of events) {
+    if (event.surface !== 'settings_infrastructure_add') continue;
+    if (event.type !== type) continue;
+    if (capability !== undefined && event.capability !== capability) continue;
+
+    matchingKeys.add(
+      event.idempotency_key ??
+        `${event.type}:${event.surface}:${event.capability ?? ''}:${matchingKeys.size}`,
+    );
+  }
+
+  return matchingKeys.size;
 }
 
 async function scrollToBottom(page: Page): Promise<void> {
@@ -165,7 +167,7 @@ async function auditHorizontalOverflow(page: Page): Promise<OverflowAudit> {
 test.describe('Infrastructure onboarding', () => {
   test.setTimeout(180_000);
 
-  test('desktop manager landing keeps connection types visible without opening onboarding state', async ({
+  test('desktop landing shows platform sections before any onboarding flow opens', async ({
     page,
   }, testInfo) => {
     test.skip(
@@ -179,18 +181,21 @@ test.describe('Infrastructure onboarding', () => {
     await page.goto('/settings/infrastructure', { waitUntil: 'domcontentloaded' });
     await page.waitForURL(/\/settings\/infrastructure(?:\?.*)?$/, { timeout: 15_000 });
 
-    await expect(page.getByText('Connection types', { exact: true })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Detect from address', exact: true })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Add VMware vCenter', exact: true })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Add TrueNAS', exact: true })).toBeVisible();
-    await expect(page.getByText('Monitored systems', { exact: true })).toBeVisible();
+    await expect(page.getByText('Infrastructure sources', { exact: true })).toBeVisible();
+    await expect(page.getByText('VMware vCenter', { exact: true })).toBeVisible();
+    await expect(page.getByText('TrueNAS SCALE', { exact: true })).toBeVisible();
+    await expect(page.getByText('Proxmox VE', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Add TrueNAS SCALE/i })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Detect from address/i })).toBeVisible();
+    await expect(page.getByText('Monitored systems', { exact: true })).toHaveCount(0);
+    await expect(page.getByText('Connection types', { exact: true })).toHaveCount(0);
 
     await expect
       .poll(() => countUpgradeEvents(metricEvents, 'infrastructure_onboarding_opened'))
       .toBe(0);
   });
 
-  test('desktop direct source add opens a manager-backed dialog and records catalog-driven onboarding', async ({
+  test('desktop per-platform add opens the matching modal and records direct type onboarding', async ({
     page,
   }, testInfo) => {
     test.skip(
@@ -204,14 +209,17 @@ test.describe('Infrastructure onboarding', () => {
     await page.goto('/settings/infrastructure', { waitUntil: 'domcontentloaded' });
     await page.waitForURL(/\/settings\/infrastructure(?:\?.*)?$/, { timeout: 15_000 });
 
-    await page.getByRole('button', { name: 'Add TrueNAS', exact: true }).click();
+    await page.getByRole('button', { name: /Add TrueNAS SCALE/i }).click();
     await page.waitForURL(/\/settings\/infrastructure\?add=truenas$/, { timeout: 15_000 });
 
-    await expect(page.getByText('Connection types', { exact: true })).toBeVisible();
+    await expect(page.getByText('Infrastructure sources', { exact: true })).toBeVisible();
     await expect(page.getByRole('dialog')).toBeVisible();
-    await expect(page.getByText('Add TrueNAS SCALE', { exact: true })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Close add infrastructure dialog', exact: true })).toBeVisible();
-    await expect(page.getByRole('button', { name: /Back to catalog/i })).toHaveCount(0);
+    await expect(
+      page.getByRole('dialog').getByRole('heading', { name: 'Add TrueNAS SCALE', exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: 'Close add infrastructure dialog', exact: true }),
+    ).toBeVisible();
 
     await expect
       .poll(() => countUpgradeEvents(metricEvents, 'infrastructure_onboarding_opened'))
@@ -233,7 +241,7 @@ test.describe('Infrastructure onboarding', () => {
       .toBe(1);
   });
 
-  test('desktop no-match probe records the agent fallback path and credential handoff', async ({
+  test('desktop detect utility records no-match agent fallback from the landing header action', async ({
     page,
   }, testInfo) => {
     test.skip(
@@ -263,8 +271,8 @@ test.describe('Infrastructure onboarding', () => {
 
     await page.goto('/settings/infrastructure', { waitUntil: 'domcontentloaded' });
     await page.waitForURL(/\/settings\/infrastructure(?:\?.*)?$/, { timeout: 15_000 });
-    await page.getByRole('button', { name: 'Detect from address', exact: true }).click();
-    await page.waitForURL(/\/settings\/infrastructure\?add=pick$/, { timeout: 15_000 });
+    await page.getByRole('button', { name: /Detect from address/i }).click();
+    await page.waitForURL(/\/settings\/infrastructure\?add=detect$/, { timeout: 15_000 });
 
     await page.getByLabel('Address').fill('baremetal.lab');
     await page.getByRole('button', { name: 'Probe address', exact: true }).click();
@@ -283,7 +291,7 @@ test.describe('Infrastructure onboarding', () => {
       .toBe(1);
 
     await page.getByRole('button', { name: 'install Pulse Agent instead', exact: true }).click();
-    await expect(page.getByRole('button', { name: /Back to catalog/i })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Back to detect/i })).toBeVisible();
 
     await expect
       .poll(() =>
@@ -297,7 +305,7 @@ test.describe('Infrastructure onboarding', () => {
       .toBe(1);
   });
 
-  test('mobile add flow keeps the onboarding surface inside the viewport', async ({
+  test('mobile landing and grouped platform tables stay inside the viewport', async ({
     page,
   }, testInfo) => {
     test.skip(
@@ -309,8 +317,9 @@ test.describe('Infrastructure onboarding', () => {
 
     await page.goto('/settings/infrastructure', { waitUntil: 'domcontentloaded' });
     await page.waitForURL(/\/settings\/infrastructure(?:\?.*)?$/, { timeout: 15_000 });
-    await expect(page.getByText('Connection types', { exact: true })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Add TrueNAS', exact: true })).toBeVisible();
+    await expect(page.getByText('Infrastructure sources', { exact: true })).toBeVisible();
+    await expect(page.getByText('Pulse Agent', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Add Pulse Agent/i })).toBeVisible();
 
     await scrollToBottom(page);
     const audit = await auditHorizontalOverflow(page);

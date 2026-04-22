@@ -18,6 +18,9 @@ export interface NodeCredentialSlotProps {
   initialAddress?: string;
   onCancel: () => void;
   onSaved: () => void;
+  onToggleEnabled?: () => void;
+  togglePending?: boolean;
+  connectionEnabled?: boolean;
   onDelete?: () => void;
   deletePending?: boolean;
   deleteConfirming?: boolean;
@@ -67,6 +70,9 @@ export const NodeCredentialSlot: Component<NodeCredentialSlotProps> = (props) =>
       <NodeModalStatusFooter
         modalProps={modalProps}
         state={state}
+        onToggleEnabled={props.onToggleEnabled}
+        togglePending={props.togglePending}
+        connectionEnabled={props.connectionEnabled}
         onDelete={props.onDelete}
         deletePending={props.deletePending}
         deleteConfirming={props.deleteConfirming}

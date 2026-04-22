@@ -5,14 +5,7 @@ import {
   type ProbeCandidate,
   type ProbeResponse,
 } from '@/api/connections';
-import {
-  DEFAULT_INFRASTRUCTURE_SOURCE_ORDER,
-  getSourcePlatformFamily,
-} from '@/utils/platformSupportManifest';
-import {
-  INFRASTRUCTURE_API_FAMILY_DESCRIPTIONS,
-  getInfrastructureOnboardingProductPresentation,
-} from '@/utils/infrastructureOnboardingPresentation';
+import { getInfrastructureOnboardingProductPresentation } from '@/utils/infrastructureOnboardingPresentation';
 
 const PROBE_ERROR_FALLBACK = 'Probe failed. Try again or enter credentials manually.';
 
@@ -40,87 +33,6 @@ export interface ConnectionEditorState {
   runProbe: () => Promise<CompletedProbePhase>;
 }
 
-export type PlatformConnectionType = Extract<
-  ConnectionType,
-  'pve' | 'pbs' | 'pmg' | 'truenas' | 'vmware'
->;
-export type ConnectionEditorCatalogFamilyId = string;
-
-export interface ConnectionEditorCatalogTypeEntry {
-  kind: 'type';
-  type: PlatformConnectionType;
-}
-
-export interface ConnectionEditorCatalogFamilyEntry {
-  kind: 'family';
-  id: ConnectionEditorCatalogFamilyId;
-  label: string;
-  description: string;
-  childTypes: PlatformConnectionType[];
-}
-
-export type ConnectionEditorCatalogEntry =
-  | ConnectionEditorCatalogTypeEntry
-  | ConnectionEditorCatalogFamilyEntry;
-
-const CONNECTION_TYPE_TO_SOURCE_PLATFORM: Record<PlatformConnectionType, string> = {
-  vmware: 'vmware-vsphere',
-  truenas: 'truenas',
-  pve: 'proxmox-pve',
-  pbs: 'proxmox-pbs',
-  pmg: 'proxmox-pmg',
-};
-
-const SOURCE_PLATFORM_TO_CONNECTION_TYPE: Partial<Record<string, PlatformConnectionType>> = {
-  'vmware-vsphere': 'vmware',
-  truenas: 'truenas',
-  'proxmox-pve': 'pve',
-  'proxmox-pbs': 'pbs',
-  'proxmox-pmg': 'pmg',
-};
-
-// The supported-source manifest order is reused where it applies, but the
-// add-infrastructure catalog still needs to surface the admitted vSphere path.
-const CONNECTION_EDITOR_PRIORITY_TYPES: PlatformConnectionType[] = ['vmware'];
-
-const PLATFORM_CONNECTION_TYPE_FALLBACK_ORDER: PlatformConnectionType[] = [
-  'truenas',
-  'pve',
-  'pbs',
-  'pmg',
-];
-
-const DEFAULT_CONNECTION_EDITOR_AVAILABLE_TYPES: PlatformConnectionType[] = Array.from(
-  new Set([
-    ...CONNECTION_EDITOR_PRIORITY_TYPES,
-    ...DEFAULT_INFRASTRUCTURE_SOURCE_ORDER.flatMap((platformKey) => {
-      const type = SOURCE_PLATFORM_TO_CONNECTION_TYPE[platformKey];
-      return type ? [type] : [];
-    }),
-    ...PLATFORM_CONNECTION_TYPE_FALLBACK_ORDER,
-  ]),
-);
-
-function isPlatformConnectionType(value: ConnectionType): value is PlatformConnectionType {
-  return (
-    value === 'pve' ||
-    value === 'pbs' ||
-    value === 'pmg' ||
-    value === 'truenas' ||
-    value === 'vmware'
-  );
-}
-
-const platformTypeOrder = (type: PlatformConnectionType): number => {
-  const index = DEFAULT_CONNECTION_EDITOR_AVAILABLE_TYPES.indexOf(type);
-  return index === -1 ? DEFAULT_CONNECTION_EDITOR_AVAILABLE_TYPES.length : index;
-};
-
-const orderPlatformTypes = (types: readonly PlatformConnectionType[]): PlatformConnectionType[] =>
-  Array.from(new Set(types)).sort(
-    (left, right) => platformTypeOrder(left) - platformTypeOrder(right),
-  );
-
 // CONNECTION_TYPE_LABELS drives both the detected-candidate header copy and
 // the manual fallback menu. Keeping one table avoids drift between probe
 // results and the manual route labels.
@@ -134,77 +46,6 @@ export const CONNECTION_TYPE_LABELS: Record<ConnectionType, string> = {
   docker: 'Docker',
   kubernetes: 'Kubernetes',
 };
-
-const buildCatalogFamilyId = (familyLabel: string): ConnectionEditorCatalogFamilyId =>
-  familyLabel
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-');
-
-const getCatalogFamilyLabel = (type: PlatformConnectionType): string | null =>
-  getSourcePlatformFamily(CONNECTION_TYPE_TO_SOURCE_PLATFORM[type]);
-
-const describeCatalogFamily = (
-  familyLabel: string,
-  childTypes: readonly PlatformConnectionType[],
-): string => {
-  const curatedDescription = INFRASTRUCTURE_API_FAMILY_DESCRIPTIONS[familyLabel];
-  if (curatedDescription) return curatedDescription;
-  return childTypes
-    .map((type) => {
-      const label = CONNECTION_TYPE_LABELS[type];
-      const prefix = `${familyLabel} `;
-      return label.startsWith(prefix) ? label.slice(prefix.length) : label;
-    })
-    .join(', ');
-};
-
-export const DEFAULT_CONNECTION_EDITOR_CATALOG_ENTRIES: ConnectionEditorCatalogEntry[] = (() => {
-  return buildConnectionEditorCatalogEntries(DEFAULT_CONNECTION_EDITOR_AVAILABLE_TYPES);
-})();
-
-export function buildConnectionEditorCatalogEntries(
-  options?: readonly ConnectionType[],
-): ConnectionEditorCatalogEntry[] {
-  if (!options || options.length === 0) {
-    return DEFAULT_CONNECTION_EDITOR_CATALOG_ENTRIES;
-  }
-
-  const availableTypes = orderPlatformTypes(options.filter(isPlatformConnectionType));
-  const entries: ConnectionEditorCatalogEntry[] = [];
-  const consumedTypes = new Set<PlatformConnectionType>();
-
-  for (const type of availableTypes) {
-    if (consumedTypes.has(type)) continue;
-
-    const familyLabel = getCatalogFamilyLabel(type);
-    if (!familyLabel) {
-      entries.push({ kind: 'type', type });
-      consumedTypes.add(type);
-      continue;
-    }
-
-    const familyChildTypes = availableTypes.filter(
-      (candidateType) => getCatalogFamilyLabel(candidateType) === familyLabel,
-    );
-    if (familyChildTypes.length < 2) {
-      entries.push({ kind: 'type', type });
-      consumedTypes.add(type);
-      continue;
-    }
-
-    familyChildTypes.forEach((childType) => consumedTypes.add(childType));
-    entries.push({
-      kind: 'family',
-      id: buildCatalogFamilyId(familyLabel),
-      label: familyLabel,
-      description: describeCatalogFamily(familyLabel, familyChildTypes),
-      childTypes: familyChildTypes,
-    });
-  }
-
-  return entries;
-}
 
 // Validation on the client side is intentionally lenient: the backend is the
 // real authority on what constitutes a probeable address. We only reject the

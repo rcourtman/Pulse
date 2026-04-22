@@ -7,6 +7,7 @@ import settingsNavigationHookSource from '../useSettingsNavigation.ts?raw';
 import settingsPanelRegistryContextSource from '../settingsPanelRegistryContext.tsx?raw';
 import infrastructureWorkspaceSource from '../InfrastructureWorkspace.tsx?raw';
 import infrastructureSourceManagerSource from '../InfrastructureSourceManager.tsx?raw';
+import infrastructureSourcePickerSource from '../InfrastructureSourcePicker.tsx?raw';
 import infrastructureWorkspaceModelSource from '../infrastructureWorkspaceModel.ts?raw';
 import connectionsTableSource from '../ConnectionsTable.tsx?raw';
 import connectionEditorSource from '../ConnectionEditor/ConnectionEditor.tsx?raw';
@@ -38,9 +39,7 @@ describe('settings architecture guardrails', () => {
 
   it('keeps infrastructure onboarding route-backed under the shared settings shell', () => {
     expect(settingsHeaderMetaSource).toContain("'infrastructure-systems': {");
-    expect(settingsHeaderMetaSource).toContain(
-      'Manage platform connections, Pulse Agent installs, and monitored systems.',
-    );
+    expect(settingsHeaderMetaSource).toContain('Manage infrastructure sources.');
     expect(settingsHeaderMetaSource).toContain("'organization-access': {");
     expect(settingsHeaderMetaSource).toContain(
       'Manage organization invitations, member roles, and ownership transfers.',
@@ -95,75 +94,82 @@ describe('settings architecture guardrails', () => {
     expect(infrastructureWorkspaceSource).toContain(
       "import { InfrastructureSourceManager } from './InfrastructureSourceManager';",
     );
-    expect(infrastructureWorkspaceSource).toContain("import { Dialog } from '@/components/shared/Dialog';");
+    expect(infrastructureWorkspaceSource).toContain(
+      "import { InfrastructureSourcePicker } from './InfrastructureSourcePicker';",
+    );
+    expect(infrastructureWorkspaceSource).toContain(
+      "import { Dialog } from '@/components/shared/Dialog';",
+    );
     expect(infrastructureWorkspaceSource).toContain('NodeCredentialSlot');
     expect(infrastructureWorkspaceSource).toContain('TrueNASCredentialSlot');
     expect(infrastructureWorkspaceSource).toContain('VMwareCredentialSlot');
     expect(infrastructureWorkspaceSource).toContain(
-      'navigate(buildInfrastructureOnboardingPath(type), { scroll: false });',
+      ": (type) => openAddFlow(type === 'agent' ? 'agent' : (type as ManagedAddTypeStep))",
     );
     expect(infrastructureWorkspaceSource).toContain(
-      '<InfrastructureSourceManager',
+      "onDetectFromAddress={readOnly() ? undefined : () => openAddFlow('detect')}",
     );
-    expect(infrastructureWorkspaceSource).toContain(
-      '<ConnectionsTable rows={rows} />',
-    );
+    expect(infrastructureWorkspaceSource).toContain('<InfrastructureSourceManager');
+    expect(infrastructureWorkspaceSource).toContain('<InfrastructureSourcePicker');
+    expect(infrastructureWorkspaceSource).not.toContain('<ConnectionsTable rows={rows} />');
     expect(infrastructureWorkspaceSource).toContain("showSlotHeader={false}");
-    expect(infrastructureWorkspaceSource).toContain('trackInitialCatalogSelection={activeAddType() !== \'agent\'}');
+    expect(infrastructureWorkspaceSource).toContain(
+      "trackInitialCatalogSelection={activeAddType() !== 'agent'}",
+    );
+    expect(infrastructureWorkspaceSource).toContain("onDetectFromAddress={() => openAddFlow('detect')}");
+    expect(infrastructureWorkspaceSource).toContain("onBackToCatalog={() => openAddFlow('pick')}");
+    expect(infrastructureWorkspaceSource).toContain('recordCatalogSelection(type);');
+    expect(infrastructureWorkspaceSource).toContain('renderAgentConnectionDetails');
     expect(infrastructureWorkspaceSource).not.toContain('InfrastructureOperationsController');
     expect(infrastructureWorkspaceSource).not.toContain('PlatformConnectionsWorkspace');
+    expect(infrastructureSourceManagerSource).toContain('Infrastructure sources');
     expect(infrastructureSourceManagerSource).toContain('Detect from address');
-    expect(infrastructureSourceManagerSource).toContain('Connection types');
-    expect(infrastructureSourceManagerSource).toContain('{groupRows().length} configured');
+    expect(infrastructureSourceManagerSource).toContain('getInfrastructureSourceManagerProducts');
+    expect(infrastructureSourceManagerSource).toContain('TableHeader');
+    expect(infrastructureSourceManagerSource).toContain('aria-label={`Add ${product.label}`}');
+    expect(infrastructureSourceManagerSource).toContain('Edit');
+    expect(infrastructureSourceManagerSource).not.toContain('Connection types');
+    expect(infrastructureSourcePickerSource).toContain('Choose a source type');
+    expect(infrastructureSourcePickerSource).toContain('Detect from address');
+    expect(infrastructureSourcePickerSource).toContain('getInfrastructureSourcePickerGroups');
+    expect(infrastructureSourcePickerSource).toContain('group.label');
   });
 
-  it('keeps the platform-first add dialog and inline credential bodies on the shared editor model', () => {
+  it('keeps the detect-first editor and inline credential bodies on the shared editor model', () => {
     expect(connectionEditorSource).toContain(
       "import { AddressProbeStep } from './AddressProbeStep';",
     );
-    expect(connectionEditorSource).toContain(
-      "from '@/utils/infrastructureOnboardingPresentation';",
-    );
+    expect(connectionEditorSource).toContain("from '@/utils/infrastructureOnboardingPresentation';");
     expect(connectionsTableSource).toContain(
       "from '@/utils/infrastructureOnboardingPresentation';",
     );
-    expect(connectionEditorSource).toContain('buildConnectionEditorCatalogEntries');
-    expect(connectionEditorSource).toContain('selectedFamilyId');
     expect(connectionEditorSource).toContain('<AddressProbeStep');
-    expect(connectionEditorSource).toContain('Choose how Pulse should connect');
-    expect(connectionEditorSource).toContain('Connect a supported platform');
-    expect(connectionEditorSource).toContain('Choose a {family.label} product');
-    expect(connectionEditorSource).toContain('Back to platforms');
-    expect(connectionEditorSource).toContain('Available now');
-    expect(connectionEditorSource).toContain('other supported services');
-    expect(connectionEditorSource).toContain('connects them when available');
-    expect(connectionEditorSource).not.toContain('On supported Proxmox hosts');
-    expect(connectionEditorSource).not.toContain('register them automatically');
-    expect(connectionEditorSource).not.toContain('auto-registers the node');
-    expect(connectionEditorSource).not.toContain('Recommended');
+    expect(connectionEditorSource).toContain('Detect from address');
+    expect(connectionEditorSource).toContain('Address probe');
+    expect(connectionEditorSource).toContain('Back to source types');
+    expect(connectionEditorSource).toContain('Back to detect');
+    expect(connectionEditorSource).toContain('What happens next');
+    expect(connectionEditorSource).not.toContain('buildConnectionEditorCatalogEntries');
+    expect(connectionEditorSource).not.toContain('selectedFamilyId');
+    expect(connectionEditorSource).not.toContain('Choose how Pulse should connect');
+    expect(connectionEditorSource).not.toContain('Connect a supported platform');
+    expect(connectionEditorSource).not.toContain('Choose a {family.label} product');
+    expect(connectionEditorSource).not.toContain('Back to platforms');
     expect(connectionEditorSource).not.toContain('NodeModal');
 
     expect(addressProbeStepSource).toContain('Probe address');
-    // The no-match branch must name the agent alternative so a user who
-    // probed bare-metal Linux / Unraid / FreeBSD is not left in a
-    // Platform-API-only dead end.
     expect(addressProbeStepSource).toContain('install Pulse Agent instead');
+    expect(addressProbeStepSource).toContain('Choose a source type instead');
     expect(addressProbeStepSource).toContain('bare-metal Linux');
     expect(addressProbeStepSource).toContain('supported API-backed platform');
 
     expect(connectionEditorStateSource).toContain('ConnectionsAPI.probe(value)');
     expect(connectionEditorStateSource).toContain('export const CONNECTION_TYPE_LABELS');
-    expect(connectionEditorStateSource).toContain('DEFAULT_INFRASTRUCTURE_SOURCE_ORDER');
-    expect(connectionEditorStateSource).toContain('getSourcePlatformFamily');
-    expect(connectionEditorStateSource).toContain(
-      'export const DEFAULT_CONNECTION_EDITOR_CATALOG_ENTRIES',
-    );
-    expect(connectionEditorStateSource).toContain(
-      'export function buildConnectionEditorCatalogEntries',
-    );
-    expect(connectionEditorStateSource).not.toContain('PROXMOX_FAMILY_TYPES');
+    expect(connectionEditorStateSource).not.toContain('DEFAULT_CONNECTION_EDITOR_CATALOG_ENTRIES');
+    expect(connectionEditorStateSource).not.toContain('buildConnectionEditorCatalogEntries');
+    expect(connectionEditorStateSource).not.toContain('getSourcePlatformFamily');
     expect(infrastructureOnboardingPresentationSource).toContain('getSourcePlatformManifestEntry');
-    expect(infrastructureOnboardingPresentationSource).toContain('currentAdmissionPath');
+    expect(infrastructureOnboardingPresentationSource).toContain('getInfrastructureSourcePickerGroups');
     expect(infrastructureOnboardingPresentationSource).toContain(
       'getInfrastructureSupportSummaryBadges',
     );

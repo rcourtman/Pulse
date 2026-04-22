@@ -19,6 +19,13 @@ export interface InfrastructureOnboardingProductPresentation {
   governanceState: PlatformGovernanceState;
 }
 
+export interface InfrastructureSourcePickerGroupPresentation {
+  id: 'virtualization' | 'storage' | 'backup-mail' | 'host-monitoring';
+  label: string;
+  description: string;
+  types: InfrastructureOnboardingConnectionType[];
+}
+
 interface BaseProductPresentation {
   label: string;
   bestFor: string;
@@ -104,6 +111,11 @@ const API_PRODUCT_ORDER: InfrastructureOnboardingConnectionType[] = [
   'pmg',
 ];
 
+const SOURCE_MANAGER_PRODUCT_ORDER: InfrastructureOnboardingConnectionType[] = [
+  ...API_PRODUCT_ORDER,
+  'agent',
+];
+
 export const INFRASTRUCTURE_ONBOARDING_PATHS: Record<
   'api' | 'agent',
   InfrastructureOnboardingPathPresentation
@@ -140,9 +152,32 @@ export const INFRASTRUCTURE_AGENT_DISCOVERY_LABELS = [
 
 export const INFRASTRUCTURE_AGENT_HOST_LABELS = ['Linux', 'FreeBSD', 'Unraid'] as const;
 
-export const INFRASTRUCTURE_API_FAMILY_DESCRIPTIONS: Partial<Record<string, string>> = {
-  Proxmox: 'Virtualization, backup jobs, and mail-gateway health',
-};
+const SOURCE_PICKER_GROUPS: InfrastructureSourcePickerGroupPresentation[] = [
+  {
+    id: 'virtualization',
+    label: 'Virtualization',
+    description: 'Hypervisors, VM inventory, and cluster health.',
+    types: ['vmware', 'pve'],
+  },
+  {
+    id: 'storage',
+    label: 'Storage',
+    description: 'Storage appliances and dataset visibility.',
+    types: ['truenas'],
+  },
+  {
+    id: 'backup-mail',
+    label: 'Backup and Mail',
+    description: 'Backup infrastructure and mail-gateway operations.',
+    types: ['pbs', 'pmg'],
+  },
+  {
+    id: 'host-monitoring',
+    label: 'Host monitoring',
+    description: 'Machine telemetry and local service discovery.',
+    types: ['agent'],
+  },
+];
 
 export const getInfrastructureOnboardingProductPresentation = (
   type: InfrastructureOnboardingConnectionType,
@@ -156,12 +191,27 @@ export const getInfrastructureApiProductPresentations =
   (): InfrastructureOnboardingProductPresentation[] =>
     API_PRODUCT_ORDER.map((type) => getInfrastructureOnboardingProductPresentation(type));
 
+export const getInfrastructureSourceManagerProducts =
+  (): InfrastructureOnboardingProductPresentation[] =>
+    SOURCE_MANAGER_PRODUCT_ORDER.map((type) => getInfrastructureOnboardingProductPresentation(type));
+
 export const getInfrastructureApiProductsByGovernanceState = (
   governanceState: PlatformGovernanceState,
 ): InfrastructureOnboardingProductPresentation[] =>
   getInfrastructureApiProductPresentations().filter(
     (product) => product.governanceState === governanceState,
   );
+
+export const getInfrastructureSourcePickerGroups =
+  (): Array<
+    InfrastructureSourcePickerGroupPresentation & {
+      products: InfrastructureOnboardingProductPresentation[];
+    }
+  > =>
+    SOURCE_PICKER_GROUPS.map((group) => ({
+      ...group,
+      products: group.types.map((type) => getInfrastructureOnboardingProductPresentation(type)),
+    }));
 
 export const getInfrastructureAutoDetectLabels = (): string[] =>
   getInfrastructureApiProductPresentations()
@@ -184,7 +234,7 @@ export const getInfrastructureSupportSummaryBadges = (): {
 });
 
 export const getInfrastructureEmptyStateSummary = (): string =>
-  'Connect supported platforms by API, or install Pulse Agent on a host for machine telemetry and local runtime discovery.';
+  'Add infrastructure sources to start monitoring your environment.';
 
 export const getInfrastructureEmptyStateDetail = (): string =>
-  'Supported today: TrueNAS SCALE, Proxmox VE, Proxmox Backup Server, Proxmox Mail Gateway, Pulse Agent hosts, Docker, and Kubernetes. VMware vCenter is also available now.';
+  'Source types available: VMware vCenter, TrueNAS SCALE, Proxmox VE, Proxmox Backup Server, Proxmox Mail Gateway, and Pulse Agent. Docker and Kubernetes are discovered from supported agent hosts. VMware vCenter is also available now.';

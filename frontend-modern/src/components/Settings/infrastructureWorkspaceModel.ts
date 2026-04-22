@@ -1,4 +1,11 @@
-export type InfrastructureAddStep = 'agent' | 'pve' | 'pbs' | 'pmg' | 'truenas' | 'vmware';
+export type InfrastructureAddStep =
+  | 'agent'
+  | 'detect'
+  | 'pve'
+  | 'pbs'
+  | 'pmg'
+  | 'truenas'
+  | 'vmware';
 export type InfrastructurePanelStep = 'pick' | InfrastructureAddStep;
 
 const INFRASTRUCTURE_BASE_PATH = '/settings/infrastructure';
@@ -19,6 +26,7 @@ export function normalizeInfrastructurePanelStep(
 ): InfrastructurePanelStep | null {
   switch ((value || '').trim()) {
     case 'pick':
+    case 'detect':
     case 'agent':
     case 'pve':
     case 'pbs':

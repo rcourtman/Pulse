@@ -235,27 +235,28 @@ work extends shared components instead of creating new local variants.
 5. Keep shared infrastructure shell state on the reusable settings boundary: `frontend-modern/src/components/Settings/useSettingsInfrastructurePanelProps.ts` and `frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx` must continue to derive provider counts, availability, and shared subtab copy from one infrastructure-settings source — via the unified aggregator through `frontend-modern/src/components/Settings/useConnectionsLedger.ts` — instead of creating provider-local summary fetches or VMware-only shell vocabulary. Phase 9 retired the old `PlatformConnectionsWorkspace` per-type shell, but setup guidance may still use `Platform connections` as the operator-facing label for the shared API-backed onboarding path.
    That same shared shell boundary now owns the default posture for
    `/settings/infrastructure`: the landing route should read as one
-   source-manager workspace with product-type cards first and the monitored
-   systems ledger as secondary summary context. Configured platform
-   connections must stay visible on the landing route under those product
-   cards instead of hiding behind a separate add screen, while installer
-   tooling, probe/detect flows, and profile management remain secondary
-   interactions opened from the same destination instead of taking over the
-   whole page.
+   source-manager workspace with configured infrastructure instances first
+   and no redundant monitored-systems ledger beneath it. The landing route
+   must not lead with
+   connection-type explanations, onboarding-path copy, or separate detect
+   utilities. Existing sources stay visible on the page, and add, detect,
+   install, and edit flows open as secondary interactions from that same
+   destination instead of taking over the whole page.
    Those secondary views must stay under the same single `Infrastructure`
    sidebar destination, but they may open in governed modal/dialog chrome when
    that preserves the persistent source-manager page behind them.
    That same shared shell boundary now owns one canonical infrastructure
    destination in the Settings sidebar. `InfrastructureWorkspace.tsx` owns the
-   source-manager landing plus the subordinate monitored-systems summary inside
-   that destination, while route-backed add flows and local edit flows stay
-   single-purpose instead of stacking multiple page-level workspaces at once.
+   source-manager landing inside that destination, while route-backed add flows
+   and local edit flows stay single-purpose instead of stacking multiple
+   page-level workspaces at once.
    `InfrastructureWorkspace.tsx` must still open a new connection through
    `frontend-modern/src/components/Settings/ConnectionEditor/ConnectionEditor.tsx`,
    but the editor now serves as governed dialog content under the source
    manager rather than replacing the page inline. The `?add=pick` route owns
-   the generic detect/browse dialog, while product-type add buttons may jump
-   straight into the matching credential slot through `initialType`.
+   the grouped source-type picker, `?add=detect` owns the detect-from-address
+   utility, and typed add routes jump straight into the matching credential
+   slot through `initialType`.
    Credential slots are dispatched by the detected or manually-selected type
    and must still reach the canonical form body rather than diverging into a
    revived provider-specific workspace.
@@ -276,15 +277,14 @@ work extends shared components instead of creating new local variants.
    slot is exactly the ledger-inside-editor drift this contract forbids.
    The configured-connections summary and source-manager rows themselves must
    render exclusively from the aggregator.
-   `InfrastructureWorkspace.tsx` composes the source cards plus the subordinate
-   monitored-systems table from
+   `InfrastructureWorkspace.tsx` composes the instance-first source cards plus
+   the subordinate monitored-systems table from
    `frontend-modern/src/components/Settings/useConnectionsLedger.ts`
-   (polling `GET /api/connections`) and renders per-source Edit, Pause, and
-   Remove actions through
-   `frontend-modern/src/components/Settings/useConnectionRowActions.ts`;
-   last-error detail and agent uninstall commands surface on the source row or
-   in the governed edit dialog rather than behind a revived provider-specific
-   detail page.
+   (polling `GET /api/connections`). Source cards may open a governed edit
+   dialog for mutable sources, but pause, resume, remove, last-error detail,
+   and agent uninstall commands must live inside that owned edit surface or
+   the shared row-action owner rather than returning to inline landing-page
+   action clutter or a revived provider-specific detail page.
    Phase 9 retired the
    parallel reporting/inventory surface entirely:
    `useInfrastructureReportingState`, `InfrastructureOperationsController`,

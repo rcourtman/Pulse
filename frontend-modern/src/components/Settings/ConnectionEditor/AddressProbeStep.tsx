@@ -9,6 +9,7 @@ export interface AddressProbeStepProps {
   state: ConnectionEditorState;
   onSelectCandidate: (candidate: ProbeCandidate) => void;
   onInstallAgent?: () => void;
+  onChooseSourceTypeInstead?: () => void;
   onProbeSubmitted?: () => void;
   onProbeResolved?: (outcome: CompletedProbePhase) => void;
 }
@@ -79,8 +80,20 @@ export const AddressProbeStep: Component<AddressProbeStepProps> = (props) => {
         <div class="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
           <div class="font-medium">No supported API-backed platform detected at that address.</div>
           <div class="mt-1 text-xs">
-            Pick a supported product from the catalog below, or if this is bare-metal Linux / Unraid
-            / FreeBSD,{' '}
+            <Show
+              when={props.onChooseSourceTypeInstead}
+              fallback={<span>Pick a supported product from the catalog below, or if this is </span>}
+            >
+              <button
+                type="button"
+                onClick={props.onChooseSourceTypeInstead}
+                class="font-medium underline underline-offset-2 hover:text-amber-950 dark:hover:text-amber-50"
+              >
+                Choose a source type instead
+              </button>
+              <span>, or if this is </span>
+            </Show>
+            bare-metal Linux / Unraid / FreeBSD,{' '}
             <Show
               when={props.onInstallAgent}
               fallback={<span class="font-medium">install Pulse Agent instead</span>}

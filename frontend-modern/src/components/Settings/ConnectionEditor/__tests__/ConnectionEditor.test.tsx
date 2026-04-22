@@ -1,7 +1,7 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { render, fireEvent, screen, waitFor } from '@solidjs/testing-library';
-import { ConnectionEditor } from '../ConnectionEditor';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { ConnectionsAPI, type ProbeResponse } from '@/api/connections';
+import { ConnectionEditor } from '../ConnectionEditor';
 
 const connectionsApiMock = vi.hoisted(() => ({
   list: vi.fn(),
@@ -30,10 +30,6 @@ vi.mock('@/utils/infrastructureOnboardingMetrics', () => ({
 
 const mockedProbe = vi.mocked(ConnectionsAPI.probe);
 
-function expectNodeBefore(a: Node, b: Node) {
-  expect(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-}
-
 describe('ConnectionEditor', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -57,8 +53,7 @@ describe('ConnectionEditor', () => {
     const input = screen.getByPlaceholderText(/vcenter\.lab/) as HTMLInputElement;
     fireEvent.input(input, { target: { value: 'pve.lab' } });
 
-    const probeButton = screen.getByRole('button', { name: /probe address/i });
-    fireEvent.click(probeButton);
+    fireEvent.click(screen.getByRole('button', { name: /probe address/i }));
 
     await waitFor(() => expect(mockedProbe).toHaveBeenCalledWith('pve.lab'));
     await waitFor(() =>
@@ -66,107 +61,58 @@ describe('ConnectionEditor', () => {
     );
     expect(onboardingMetricsTrackerMock.recordPathSelected).toHaveBeenCalledWith('api');
 
-    const candidateHost = await screen.findByText('https://pve.lab:8006');
-    const candidateButton = candidateHost.closest('button');
-    expect(candidateButton).not.toBeNull();
-    fireEvent.click(candidateButton!);
+    fireEvent.click((await screen.findByText('https://pve.lab:8006')).closest('button')!);
 
     await waitFor(() => expect(screen.getByTestId('slot').textContent).toBe('slot:pve'));
     expect(onboardingMetricsTrackerMock.recordCredentialsOpened).toHaveBeenCalledWith('pve');
-    expect(renderSlot).toHaveBeenCalled();
     const lastCall = renderSlot.mock.calls.at(-1)![0];
     expect(lastCall.type).toBe('pve');
     expect(lastCall.candidate?.host).toBe('https://pve.lab:8006');
     expect(lastCall.mode).toBe('add');
   });
 
-  it('lets the user pick a product tile when probe returns no match', async () => {
-    mockedProbe.mockResolvedValueOnce({ candidates: [], probedMs: 203 });
+  it('renders the detect landing and can return to the source picker', () => {
+    const onBackToCatalog = vi.fn();
 
-    const renderSlot = vi.fn((props) => <div data-testid="slot">slot:{props.type}</div>);
-
-    render(() => <ConnectionEditor renderCredentialSlot={renderSlot} onClose={() => {}} />);
-
-    const input = screen.getByPlaceholderText(/vcenter\.lab/) as HTMLInputElement;
-    fireEvent.input(input, { target: { value: '192.168.1.50' } });
-
-    fireEvent.click(screen.getByRole('button', { name: /probe address/i }));
-    await waitFor(() => expect(mockedProbe).toHaveBeenCalled());
-    await waitFor(() =>
-      expect(onboardingMetricsTrackerMock.recordProbeResult).toHaveBeenCalledWith('no-match'),
-    );
-
-    await screen.findByText(/no supported api-backed platform detected/i);
-
-    // The catalog grid is always visible below the probe, so the user picks a
-    // tile directly — no intermediate "enter credentials manually" toggle.
-    fireEvent.click(screen.getByRole('button', { name: /TrueNAS SCALE/i }));
-
-    await waitFor(() => expect(screen.getByTestId('slot').textContent).toBe('slot:truenas'));
-    expect(onboardingMetricsTrackerMock.recordCatalogSelected).toHaveBeenCalledWith('truenas');
-    expect(onboardingMetricsTrackerMock.recordCredentialsOpened).toHaveBeenCalledWith('truenas');
-    const lastCall = renderSlot.mock.calls.at(-1)![0];
-    expect(lastCall.type).toBe('truenas');
-    expect(lastCall.candidate).toBeNull();
-  });
-
-  it('renders a platform-first catalog with the host-install path beneath it', () => {
-    render(() => <ConnectionEditor renderCredentialSlot={() => <div />} onClose={() => {}} />);
-
-    const platformHeading = screen.getAllByText('Connect a supported platform')[0];
-    const agentButton = screen.getByRole('button', { name: /Install Pulse Agent/i });
-    const probeButton = screen.getByRole('button', { name: /probe address/i });
-    const vmwareButton = screen.getByRole('button', { name: /VMware vCenter/i });
-    const trueNASButton = screen.getByRole('button', { name: /TrueNAS SCALE/i });
-    const proxmoxButton = screen.getByRole('button', { name: /^Proxmox\b/i });
-
-    // Catalog landing — lead with management-platform onboarding, then keep
-    // host install as a secondary path below it.
-    expect(platformHeading).toBeInTheDocument();
-    expect(agentButton).toBeInTheDocument();
-    expect(probeButton).toBeInTheDocument();
-    expect(vmwareButton).toBeInTheDocument();
-    expect(trueNASButton).toBeInTheDocument();
-    expect(proxmoxButton).toBeInTheDocument();
-    expectNodeBefore(platformHeading, probeButton);
-    expectNodeBefore(vmwareButton, trueNASButton);
-    expectNodeBefore(trueNASButton, proxmoxButton);
-    expectNodeBefore(proxmoxButton, agentButton);
-    expect(screen.queryByRole('button', { name: /^Proxmox VE/i })).toBeNull();
-    expect(screen.queryByText('Recommended')).toBeNull();
-    expect(screen.getAllByText('Available now').length).toBeGreaterThan(0);
-    expect(screen.getByText('What happens next')).toBeInTheDocument();
-  });
-
-  it('groups Proxmox products under one family step before entering credentials', async () => {
-    const renderSlot = vi.fn((props) => <div data-testid="slot">slot:{props.type}</div>);
-
-    render(() => <ConnectionEditor renderCredentialSlot={renderSlot} onClose={() => {}} />);
-
-    fireEvent.click(screen.getByRole('button', { name: /^Proxmox\b/i }));
-
-    expect(screen.getByText('Choose a Proxmox product')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /^Proxmox VE/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Proxmox Backup Server/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Proxmox Mail Gateway/i })).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: /^Proxmox VE/i }));
-
-    await waitFor(() => expect(screen.getByTestId('slot').textContent).toBe('slot:pve'));
-    expect(renderSlot.mock.calls.at(-1)![0].type).toBe('pve');
-  });
-
-  it('keeps a single available Proxmox product as a direct tile', () => {
     render(() => (
       <ConnectionEditor
-        manualTypeOptions={['pve']}
         renderCredentialSlot={() => <div />}
+        onBackToCatalog={onBackToCatalog}
         onClose={() => {}}
       />
     ));
 
-    expect(screen.getByRole('button', { name: /^Proxmox VE/i })).toBeInTheDocument();
-    expect(screen.queryByText('VE, Backup Server, Mail Gateway')).toBeNull();
+    expect(screen.getByText('Detect from address')).toBeInTheDocument();
+    expect(screen.getByText('Address probe')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Back to source types/i })).toBeInTheDocument();
+    expect(screen.getByText('What happens next')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Back to source types/i }));
+    expect(onBackToCatalog).toHaveBeenCalledTimes(1);
+  });
+
+  it('offers the source picker as a no-match escape hatch when provided', async () => {
+    mockedProbe.mockResolvedValueOnce({ candidates: [], probedMs: 203 });
+    const onBackToCatalog = vi.fn();
+
+    render(() => (
+      <ConnectionEditor
+        renderCredentialSlot={() => <div />}
+        onBackToCatalog={onBackToCatalog}
+        onClose={() => {}}
+      />
+    ));
+
+    const input = screen.getByPlaceholderText(/vcenter\.lab/) as HTMLInputElement;
+    fireEvent.input(input, { target: { value: '192.168.1.50' } });
+    fireEvent.click(screen.getByRole('button', { name: /probe address/i }));
+
+    await waitFor(() =>
+      expect(onboardingMetricsTrackerMock.recordProbeResult).toHaveBeenCalledWith('no-match'),
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /Choose a source type instead/i }));
+    expect(onBackToCatalog).toHaveBeenCalledTimes(1);
   });
 
   it('offers the agent path contextually when a probe returns no match', async () => {
@@ -181,9 +127,6 @@ describe('ConnectionEditor', () => {
     fireEvent.click(screen.getByRole('button', { name: /probe address/i }));
     await waitFor(() => expect(mockedProbe).toHaveBeenCalled());
 
-    // The no-match box names bare-metal Linux / Unraid / FreeBSD and offers
-    // the agent as a first-class alternative, so a user who probed the wrong
-    // thing isn't left in a Platform-API-only dead end.
     const agentButton = await screen.findByRole('button', {
       name: /install pulse agent instead/i,
     });
@@ -197,7 +140,62 @@ describe('ConnectionEditor', () => {
     expect(call.candidate).toBeNull();
   });
 
-  it('skips the probe step when an initialType is supplied (edit mode)', () => {
+  it('reopens the detect form from a selected credential slot', async () => {
+    mockedProbe.mockResolvedValueOnce({
+      candidates: [
+        { type: 'truenas', host: 'https://truenas.lab', port: 443, hints: { product: 'TrueNAS SCALE' } },
+      ],
+      probedMs: 142,
+    });
+
+    const renderSlot = vi.fn((props) => <div data-testid="slot">slot:{props.type}</div>);
+
+    render(() => <ConnectionEditor renderCredentialSlot={renderSlot} onClose={() => {}} />);
+
+    const input = screen.getByPlaceholderText(/vcenter\.lab/) as HTMLInputElement;
+    fireEvent.input(input, { target: { value: 'truenas.lab' } });
+    fireEvent.click(screen.getByRole('button', { name: /probe address/i }));
+
+    fireEvent.click((await screen.findByText('https://truenas.lab')).closest('button')!);
+    await waitFor(() => expect(screen.getByTestId('slot').textContent).toBe('slot:truenas'));
+
+    fireEvent.click(screen.getByRole('button', { name: /Back to detect/i }));
+
+    const resetInput = screen.getByPlaceholderText(/vcenter\.lab/) as HTMLInputElement;
+    expect(resetInput.value).toBe('');
+    expect(screen.queryByTestId('slot')).toBeNull();
+    expect(screen.getByText('Detect from address')).toBeInTheDocument();
+  });
+
+  it('uses an injected tracker for direct type routes without creating another one', async () => {
+    const externalTracker = {
+      recordOpened: vi.fn(),
+      recordPathSelected: vi.fn(),
+      recordProbeResult: vi.fn(),
+      recordCatalogSelected: vi.fn(),
+      recordCredentialsOpened: vi.fn(),
+    };
+    const renderSlot = vi.fn((props) => <div data-testid="slot">slot:{props.type}</div>);
+
+    render(() => (
+      <ConnectionEditor
+        initialType="truenas"
+        trackInitialCatalogSelection={true}
+        onboardingMetricsTracker={externalTracker}
+        renderCredentialSlot={renderSlot}
+        onClose={() => {}}
+      />
+    ));
+
+    await waitFor(() => expect(screen.getByTestId('slot').textContent).toBe('slot:truenas'));
+    expect(createInfrastructureOnboardingMetricsTrackerMock).not.toHaveBeenCalled();
+    expect(externalTracker.recordOpened).not.toHaveBeenCalled();
+    expect(externalTracker.recordPathSelected).toHaveBeenCalledWith('api');
+    expect(externalTracker.recordCatalogSelected).toHaveBeenCalledWith('truenas');
+    expect(externalTracker.recordCredentialsOpened).toHaveBeenCalledWith('truenas');
+  });
+
+  it('skips probe setup when an initialType is supplied in edit mode', () => {
     const renderSlot = vi.fn((props) => <div data-testid="slot">slot:{props.type}</div>);
 
     render(() => (
@@ -215,42 +213,5 @@ describe('ConnectionEditor', () => {
     expect(call.mode).toBe('edit');
     expect(call.type).toBe('vmware');
     expect(call.candidate).toBeNull();
-  });
-
-  it('can return from a provider family to the top-level platform catalog', () => {
-    render(() => <ConnectionEditor renderCredentialSlot={() => <div />} onClose={() => {}} />);
-
-    fireEvent.click(screen.getByRole('button', { name: /^Proxmox\b/i }));
-    expect(screen.getByText('Choose a Proxmox product')).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: /back to platforms/i }));
-
-    expect(screen.getByRole('button', { name: /^Proxmox\b/i })).toBeInTheDocument();
-    expect(screen.queryByText('Choose a Proxmox product')).toBeNull();
-  });
-
-  it('resets probe state when returning to the catalog from a credential slot', async () => {
-    mockedProbe.mockResolvedValueOnce({ candidates: [], probedMs: 203 });
-
-    const renderSlot = vi.fn((props) => <div data-testid="slot">slot:{props.type}</div>);
-
-    render(() => <ConnectionEditor renderCredentialSlot={renderSlot} onClose={() => {}} />);
-
-    const input = screen.getByPlaceholderText(/vcenter\.lab/) as HTMLInputElement;
-    fireEvent.input(input, { target: { value: '192.168.1.50' } });
-    fireEvent.click(screen.getByRole('button', { name: /probe address/i }));
-
-    await waitFor(() => expect(mockedProbe).toHaveBeenCalled());
-    await screen.findByText(/no supported api-backed platform detected/i);
-
-    fireEvent.click(screen.getByRole('button', { name: /TrueNAS SCALE/i }));
-    await waitFor(() => expect(screen.getByTestId('slot').textContent).toBe('slot:truenas'));
-
-    fireEvent.click(screen.getByRole('button', { name: /back to catalog/i }));
-
-    const resetInput = screen.getByPlaceholderText(/vcenter\.lab/) as HTMLInputElement;
-    expect(resetInput.value).toBe('');
-    expect(screen.queryByText(/no supported api-backed platform detected/i)).toBeNull();
-    expect(screen.queryByTestId('slot')).toBeNull();
   });
 });

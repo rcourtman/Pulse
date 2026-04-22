@@ -22,6 +22,9 @@ export interface TrueNASCredentialSlotProps {
   editingConnection?: TrueNASConnection | null;
   onCancel: () => void;
   onSaved: () => void;
+  onToggleEnabled?: () => void;
+  togglePending?: boolean;
+  connectionEnabled?: boolean;
   onDelete?: () => void;
   deletePending?: boolean;
   deleteConfirming?: boolean;
@@ -319,6 +322,27 @@ export const TrueNASCredentialSlot: Component<TrueNASCredentialSlotProps> = (pro
         </Show>
 
         <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <Show when={isEditing() && props.onToggleEnabled}>
+            <button
+              type="button"
+              class={buttonClass}
+              onClick={() => props.onToggleEnabled?.()}
+              disabled={
+                props.state.saving() ||
+                props.state.testing() ||
+                props.togglePending ||
+                props.deletePending
+              }
+            >
+              {props.togglePending
+                ? props.connectionEnabled
+                  ? 'Pausing…'
+                  : 'Resuming…'
+                : props.connectionEnabled
+                  ? 'Pause connection'
+                  : 'Resume connection'}
+            </button>
+          </Show>
           <Show when={isEditing() && props.onDelete}>
             <button
               type="button"
@@ -328,7 +352,12 @@ export const TrueNASCredentialSlot: Component<TrueNASCredentialSlotProps> = (pro
                   : 'inline-flex min-h-10 sm:min-h-9 items-center justify-center rounded-md border border-rose-300 px-3 py-2 text-sm font-medium text-rose-700 transition-colors hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-rose-900 dark:text-rose-300 dark:hover:bg-rose-950'
               }
               onClick={() => props.onDelete?.()}
-              disabled={props.state.saving() || props.state.testing() || props.deletePending}
+              disabled={
+                props.state.saving() ||
+                props.state.testing() ||
+                props.togglePending ||
+                props.deletePending
+              }
             >
               {props.deletePending
                 ? 'Deleting…'
@@ -341,7 +370,12 @@ export const TrueNASCredentialSlot: Component<TrueNASCredentialSlotProps> = (pro
             type="button"
             class={buttonClass}
             onClick={handleCancel}
-            disabled={props.state.saving() || props.state.testing() || props.deletePending}
+            disabled={
+              props.state.saving() ||
+              props.state.testing() ||
+              props.togglePending ||
+              props.deletePending
+            }
           >
             Cancel
           </button>
@@ -349,7 +383,12 @@ export const TrueNASCredentialSlot: Component<TrueNASCredentialSlotProps> = (pro
             type="button"
             class={buttonClass}
             onClick={() => void props.state.testCurrentForm()}
-            disabled={props.state.saving() || props.state.testing() || props.deletePending}
+            disabled={
+              props.state.saving() ||
+              props.state.testing() ||
+              props.togglePending ||
+              props.deletePending
+            }
           >
             {props.state.testing() ? 'Testing…' : 'Test connection'}
           </button>
@@ -371,6 +410,7 @@ export const TrueNASCredentialSlot: Component<TrueNASCredentialSlotProps> = (pro
               props.state.saving() ||
               props.state.testing() ||
               props.state.previewing() ||
+              props.togglePending ||
               props.deletePending ||
               props.state.monitoredSystemAdmissionSaveBlocked()
             }

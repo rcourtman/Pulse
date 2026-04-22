@@ -15,11 +15,16 @@ vi.mock('@/utils/upgradeMetrics', () => ({
   },
 }));
 
-import { createInfrastructureOnboardingMetricsTracker } from '@/utils/infrastructureOnboardingMetrics';
+import {
+  clearSharedInfrastructureOnboardingMetricsTracker,
+  createInfrastructureOnboardingMetricsTracker,
+  getSharedInfrastructureOnboardingMetricsTracker,
+} from '@/utils/infrastructureOnboardingMetrics';
 
 describe('infrastructureOnboardingMetrics', () => {
   beforeEach(() => {
     trackUpgradeMetricEventMock.mockClear();
+    clearSharedInfrastructureOnboardingMetricsTracker();
   });
 
   it('deduplicates flow-scoped onboarding steps inside one flow', () => {
@@ -83,5 +88,22 @@ describe('infrastructureOnboardingMetrics', () => {
     expect(firstProbe.idempotencyKey).not.toBe(secondFlowOpen.idempotencyKey);
     expect(firstProbe.capability).toBe('no-match');
     expect(secondProbe.capability).toBe('no-match');
+  });
+
+  it('reuses the shared tracker until the flow is cleared', () => {
+    const firstTracker = getSharedInfrastructureOnboardingMetricsTracker();
+    const secondTracker = getSharedInfrastructureOnboardingMetricsTracker();
+
+    expect(firstTracker).toBe(secondTracker);
+
+    firstTracker.recordOpened();
+    secondTracker.recordOpened();
+
+    expect(trackUpgradeMetricEventMock).toHaveBeenCalledTimes(1);
+
+    clearSharedInfrastructureOnboardingMetricsTracker();
+    const thirdTracker = getSharedInfrastructureOnboardingMetricsTracker();
+
+    expect(thirdTracker).not.toBe(firstTracker);
   });
 });
