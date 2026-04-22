@@ -284,7 +284,7 @@ func TestClientResolveAgentIDRequestErrors(t *testing.T) {
 	}
 
 	client = New(Config{
-		PulseURL: "http://example.com",
+		PulseURL: "https://example.com",
 		APIToken: "t",
 		Hostname: "host",
 	})
@@ -308,6 +308,15 @@ func TestClientFetchConfigValidation(t *testing.T) {
 				AgentID:  "agent-1",
 			},
 			wantText: "invalid remote config client configuration",
+		},
+		{
+			name: "private-network http rejected",
+			cfg: Config{
+				PulseURL: "http://10.0.0.5:7655",
+				APIToken: "token",
+				AgentID:  "agent-1",
+			},
+			wantText: "must use https unless host is loopback",
 		},
 		{
 			name: "missing API token",

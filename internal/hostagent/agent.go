@@ -9,7 +9,6 @@ import (
 	"net"
 	"net/http"
 	"net/netip"
-	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -22,6 +21,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agenttls"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentupdate"
+	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 	"github.com/rcourtman/pulse-go-rewrite/internal/sensors"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
@@ -845,56 +845,12 @@ func normalisePlatform(platform string) string {
 }
 
 func normalizePulseURL(rawURL string) (string, error) {
-	parsed, err := url.Parse(rawURL)
+	parsed, err := securityutil.NormalizePulseHTTPBaseURL(rawURL)
 	if err != nil {
-		return "", fmt.Errorf("pulse URL %q is invalid: %w", rawURL, err)
+		return "", err
 	}
-
-	if parsed.Scheme == "" {
-		return "", fmt.Errorf("pulse URL %q must include scheme (https:// or loopback http://)", rawURL)
-	}
-	if parsed.Host == "" {
-		return "", fmt.Errorf("pulse URL %q must include host", rawURL)
-	}
-	if parsed.User != nil {
-		return "", fmt.Errorf("pulse URL %q must not include user credentials", rawURL)
-	}
-	if parsed.RawQuery != "" || parsed.Fragment != "" {
-		return "", fmt.Errorf("pulse URL %q must not include query or fragment", rawURL)
-	}
-
-	scheme := strings.ToLower(parsed.Scheme)
-	switch scheme {
-	case "https":
-		// Always allowed.
-	case "http":
-		if !isLoopbackHost(parsed.Hostname()) {
-			return "", fmt.Errorf("pulse URL %q must use https unless host is loopback", rawURL)
-		}
-	default:
-		return "", fmt.Errorf("pulse URL %q has unsupported scheme %q", rawURL, parsed.Scheme)
-	}
-
-	parsed.Scheme = scheme
-	parsed.Path = strings.TrimRight(parsed.Path, "/")
-	parsed.RawPath = strings.TrimRight(parsed.RawPath, "/")
 
 	return parsed.String(), nil
-}
-
-// isLoopbackHost returns true for localhost and loopback IPs only. Plain HTTP
-// is never allowed for non-loopback Pulse URLs, even on private networks.
-func isLoopbackHost(host string) bool {
-	normalized := strings.ToLower(strings.Trim(host, "[]"))
-	if normalized == "localhost" || strings.HasSuffix(normalized, ".localhost") {
-		return true
-	}
-
-	ip := net.ParseIP(normalized)
-	if ip == nil {
-		return false
-	}
-	return ip.IsLoopback()
 }
 
 // collectTemperatures attempts to collect temperature data from the local system.

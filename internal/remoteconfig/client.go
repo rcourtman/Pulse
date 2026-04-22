@@ -3,17 +3,16 @@ package remoteconfig
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 
 	"net/http"
 	"net/url"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agenttls"
+	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rs/zerolog"
 )
@@ -367,33 +366,9 @@ func normalizeConfig(cfg Config) (Config, error) {
 }
 
 func normalizePulseURL(raw string) (string, error) {
-	parsed, err := url.Parse(raw)
+	parsed, err := securityutil.NormalizePulseHTTPBaseURL(raw)
 	if err != nil {
 		return "", fmt.Errorf("invalid pulse URL: %w", err)
 	}
-
-	switch parsed.Scheme {
-	case "http", "https":
-	default:
-		return "", fmt.Errorf("invalid pulse URL scheme %q: must be http or https", parsed.Scheme)
-	}
-
-	if parsed.Hostname() == "" {
-		return "", errors.New("invalid pulse URL: missing host")
-	}
-	if parsed.User != nil {
-		return "", errors.New("invalid pulse URL: userinfo is not allowed")
-	}
-	if parsed.RawQuery != "" || parsed.Fragment != "" {
-		return "", errors.New("invalid pulse URL: query and fragment are not allowed")
-	}
-
-	if port := parsed.Port(); port != "" {
-		portValue, err := strconv.Atoi(port)
-		if err != nil || portValue < 1 || portValue > 65535 {
-			return "", fmt.Errorf("invalid pulse URL port %q: must be between 1 and 65535", port)
-		}
-	}
-
 	return strings.TrimRight(parsed.String(), "/"), nil
 }

@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"path"
+	"strconv"
 	"strings"
 )
 
@@ -94,6 +96,122 @@ func NormalizeHTTPBaseURL(raw string, defaultScheme string) (*url.URL, error) {
 		parsed.Path = cleanedPath
 	}
 	parsed.RawPath = ""
+
+	return parsed, nil
+}
+
+// IsLoopbackHost reports whether host resolves to localhost or a loopback IP literal.
+func IsLoopbackHost(host string) bool {
+	normalized := strings.ToLower(strings.Trim(host, "[]"))
+	if normalized == "" {
+		return false
+	}
+	if normalized == "localhost" || strings.HasSuffix(normalized, ".localhost") {
+		return true
+	}
+
+	ip := net.ParseIP(normalized)
+	return ip != nil && ip.IsLoopback()
+}
+
+// NormalizePulseHTTPBaseURL validates a Pulse control-plane base URL.
+// HTTPS is required for non-loopback hosts; loopback localhost may use HTTP.
+func NormalizePulseHTTPBaseURL(raw string) (*url.URL, error) {
+	parsed, err := normalizePulseBaseURL(raw, false)
+	if err != nil {
+		return nil, err
+	}
+	return parsed, nil
+}
+
+// NormalizePulseWebSocketBaseURL validates a Pulse command-channel base URL.
+// Non-loopback hosts are normalized to WSS; loopback localhost may use WS.
+func NormalizePulseWebSocketBaseURL(raw string) (*url.URL, error) {
+	parsed, err := normalizePulseBaseURL(raw, true)
+	if err != nil {
+		return nil, err
+	}
+	return parsed, nil
+}
+
+func normalizePulseBaseURL(raw string, websocket bool) (*url.URL, error) {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return nil, fmt.Errorf("Pulse URL is required")
+	}
+
+	parsed, err := url.Parse(trimmed)
+	if err != nil {
+		return nil, fmt.Errorf("Pulse URL %q is invalid: %w", raw, err)
+	}
+	if parsed.Scheme == "" {
+		if websocket {
+			return nil, fmt.Errorf("Pulse URL %q must include scheme (https://, wss://, or loopback http:// / ws://)", raw)
+		}
+		return nil, fmt.Errorf("Pulse URL %q must include scheme (https:// or loopback http://)", raw)
+	}
+	if parsed.Host == "" {
+		return nil, fmt.Errorf("Pulse URL %q must include host", raw)
+	}
+	if parsed.Hostname() == "" {
+		return nil, fmt.Errorf("Pulse URL %q must include host", raw)
+	}
+	if parsed.User != nil {
+		return nil, fmt.Errorf("Pulse URL %q must not include user credentials", raw)
+	}
+	if parsed.RawQuery != "" || parsed.Fragment != "" {
+		return nil, fmt.Errorf("Pulse URL %q must not include query or fragment", raw)
+	}
+
+	if port := parsed.Port(); port != "" {
+		portNum, err := strconv.Atoi(port)
+		if err != nil || portNum < 1 || portNum > 65535 {
+			return nil, fmt.Errorf("invalid port %q: must be between 1 and 65535", port)
+		}
+	}
+
+	scheme := strings.ToLower(parsed.Scheme)
+	switch scheme {
+	case "https":
+		if websocket {
+			parsed.Scheme = "wss"
+		} else {
+			parsed.Scheme = "https"
+		}
+	case "http":
+		if !IsLoopbackHost(parsed.Hostname()) {
+			if websocket {
+				return nil, fmt.Errorf("Pulse URL %q must use https/wss unless host is loopback", raw)
+			}
+			return nil, fmt.Errorf("Pulse URL %q must use https unless host is loopback", raw)
+		}
+		if websocket {
+			parsed.Scheme = "ws"
+		} else {
+			parsed.Scheme = "http"
+		}
+	case "wss":
+		if !websocket {
+			return nil, fmt.Errorf("Pulse URL %q has unsupported scheme %q", raw, parsed.Scheme)
+		}
+		parsed.Scheme = "wss"
+	case "ws":
+		if !websocket {
+			return nil, fmt.Errorf("Pulse URL %q has unsupported scheme %q", raw, parsed.Scheme)
+		}
+		if !IsLoopbackHost(parsed.Hostname()) {
+			return nil, fmt.Errorf("Pulse URL %q must use https/wss unless host is loopback", raw)
+		}
+		parsed.Scheme = "ws"
+	default:
+		return nil, fmt.Errorf("Pulse URL %q has unsupported scheme %q", raw, parsed.Scheme)
+	}
+
+	parsed.Host = strings.ToLower(parsed.Host)
+	parsed.Path = strings.TrimRight(parsed.Path, "/")
+	parsed.RawPath = strings.TrimRight(parsed.RawPath, "/")
+	parsed.RawQuery = ""
+	parsed.Fragment = ""
 
 	return parsed, nil
 }

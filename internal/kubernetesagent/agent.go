@@ -15,12 +15,12 @@ import (
 	"net/url"
 	"os"
 	"sort"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/IGLOU-EU/go-wildcard/v2"
+	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	agentsk8s "github.com/rcourtman/pulse-go-rewrite/pkg/agents/kubernetes"
 	"github.com/rs/zerolog"
@@ -223,67 +223,12 @@ func New(cfg Config) (*Agent, error) {
 }
 
 func normalizePulseURL(rawURL string) (string, error) {
-	parsed, err := url.Parse(rawURL)
+	parsed, err := securityutil.NormalizePulseHTTPBaseURL(rawURL)
 	if err != nil {
-		return "", fmt.Errorf("pulse URL %q is invalid: %w", rawURL, err)
+		return "", err
 	}
-
-	if parsed.Scheme == "" {
-		return "", fmt.Errorf("pulse URL %q must include http:// or https:// scheme", rawURL)
-	}
-	if parsed.Host == "" {
-		return "", fmt.Errorf("pulse URL %q must include host", rawURL)
-	}
-	if parsed.User != nil {
-		return "", fmt.Errorf("pulse URL %q: userinfo is not supported", rawURL)
-	}
-	if parsed.RawQuery != "" {
-		return "", fmt.Errorf("pulse URL %q: query parameters are not supported", rawURL)
-	}
-	if parsed.Fragment != "" {
-		return "", fmt.Errorf("pulse URL %q: fragments are not supported", rawURL)
-	}
-
-	scheme := strings.ToLower(parsed.Scheme)
-	switch scheme {
-	case "https":
-		// Always allowed.
-	case "http":
-		if !isLoopbackOrPrivateHost(parsed.Hostname()) {
-			return "", fmt.Errorf("pulse URL %q must use https unless host is loopback or private network", rawURL)
-		}
-	default:
-		return "", fmt.Errorf("pulse URL %q has unsupported scheme %q", rawURL, parsed.Scheme)
-	}
-
-	if port := parsed.Port(); port != "" {
-		portNum, err := strconv.Atoi(port)
-		if err != nil || portNum < 1 || portNum > 65535 {
-			return "", fmt.Errorf("invalid port %q: must be between 1 and 65535", port)
-		}
-	}
-
-	parsed.Scheme = scheme
-	parsed.Host = strings.ToLower(parsed.Host)
-	parsed.Path = strings.TrimRight(parsed.Path, "/")
-	parsed.RawPath = strings.TrimRight(parsed.RawPath, "/")
 
 	return parsed.String(), nil
-}
-
-// isLoopbackOrPrivateHost returns true for loopback and RFC1918 private
-// network addresses.  HTTP (non-TLS) is safe over a local/private network;
-// the scheme guard only needs to prevent plaintext over the public internet.
-func isLoopbackOrPrivateHost(host string) bool {
-	if strings.EqualFold(host, "localhost") {
-		return true
-	}
-
-	ip := net.ParseIP(host)
-	if ip == nil {
-		return false
-	}
-	return ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast()
 }
 
 func buildRESTConfig(kubeconfigPath, kubeContext string) (*rest.Config, string, error) {

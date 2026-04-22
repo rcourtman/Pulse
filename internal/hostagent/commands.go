@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"math/rand"
 	"net"
-	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -21,6 +20,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agenttls"
+	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 	sshknownhosts "github.com/rcourtman/pulse-go-rewrite/internal/ssh/knownhosts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rs/zerolog"
@@ -351,44 +351,9 @@ func (c *CommandClient) connectAndHandle(ctx context.Context) error {
 }
 
 func (c *CommandClient) buildWebSocketURL() (string, error) {
-	parsed, err := url.Parse(c.pulseURL)
+	parsed, err := securityutil.NormalizePulseWebSocketBaseURL(c.pulseURL)
 	if err != nil {
-		return "", fmt.Errorf("pulse URL is invalid: %w", err)
-	}
-	if parsed.Host == "" {
-		return "", fmt.Errorf("missing host in pulse URL")
-	}
-
-	if parsed.Scheme == "" {
-		return "", fmt.Errorf("pulse URL %q must include scheme", c.pulseURL)
-	}
-	if parsed.Host == "" {
-		return "", fmt.Errorf("pulse URL %q must include host", c.pulseURL)
-	}
-	if parsed.User != nil {
-		return "", fmt.Errorf("pulse URL %q must not include user credentials", c.pulseURL)
-	}
-	if parsed.RawQuery != "" || parsed.Fragment != "" {
-		return "", fmt.Errorf("pulse URL %q must not include query or fragment", c.pulseURL)
-	}
-
-	switch strings.ToLower(parsed.Scheme) {
-	case "https":
-		parsed.Scheme = "wss"
-	case "http":
-		if !isLoopbackHost(parsed.Hostname()) {
-			return "", fmt.Errorf("pulse URL %q must use https/wss unless host is loopback", c.pulseURL)
-		}
-		parsed.Scheme = "ws"
-	case "wss":
-		parsed.Scheme = "wss"
-	case "ws":
-		if !isLoopbackHost(parsed.Hostname()) {
-			return "", fmt.Errorf("pulse URL %q must use https/wss unless host is loopback", c.pulseURL)
-		}
-		parsed.Scheme = "ws"
-	default:
-		return "", fmt.Errorf("unsupported URL scheme %q", parsed.Scheme)
+		return "", err
 	}
 
 	basePath := strings.TrimRight(parsed.Path, "/")

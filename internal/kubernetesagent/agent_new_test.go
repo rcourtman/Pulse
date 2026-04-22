@@ -124,9 +124,14 @@ func TestNormalizePulseURL(t *testing.T) {
 			want: "http://localhost:7655",
 		},
 		{
+			name:      "rejects private-network http",
+			raw:       "http://10.0.0.5:7655",
+			wantError: "must use https unless host is loopback",
+		},
+		{
 			name:      "missing scheme",
 			raw:       "pulse.example.com",
-			wantError: "must include http:// or https://",
+			wantError: "must include scheme",
 		},
 		{
 			name:      "unsupported scheme",
@@ -141,17 +146,17 @@ func TestNormalizePulseURL(t *testing.T) {
 		{
 			name:      "userinfo disallowed",
 			raw:       "https://user:pass@pulse.example.com",
-			wantError: "userinfo is not supported",
+			wantError: "must not include user credentials",
 		},
 		{
 			name:      "query disallowed",
 			raw:       "https://pulse.example.com?x=1",
-			wantError: "query parameters are not supported",
+			wantError: "must not include query or fragment",
 		},
 		{
 			name:      "fragment disallowed",
 			raw:       "https://pulse.example.com#frag",
-			wantError: "fragments are not supported",
+			wantError: "must not include query or fragment",
 		},
 	}
 

@@ -90,6 +90,7 @@ func TestNormalizeTargetsRejectsInsecureOrInvalidURLs(t *testing.T) {
 		url  string
 	}{
 		{name: "non-loopback http", url: "http://pulse.example.com"},
+		{name: "private-network http", url: "http://10.0.0.5:7655"},
 		{name: "unsupported scheme", url: "ftp://pulse.example.com"},
 		{name: "missing scheme", url: "pulse.example.com"},
 		{name: "query string", url: "https://pulse.example.com?x=1"},

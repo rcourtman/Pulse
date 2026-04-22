@@ -22,6 +22,148 @@ func TestNormalizeHTTPBaseURLRejectsQuery(t *testing.T) {
 	}
 }
 
+func TestIsLoopbackHost(t *testing.T) {
+	t.Run("true", func(t *testing.T) {
+		cases := []string{"localhost", "LOCALHOST", "agent.localhost", "127.0.0.1", "::1"}
+		for _, tc := range cases {
+			if !IsLoopbackHost(tc) {
+				t.Fatalf("expected loopback host for %q", tc)
+			}
+		}
+	})
+
+	t.Run("false", func(t *testing.T) {
+		cases := []string{"", "example.com", "192.168.1.10", "10.0.0.5"}
+		for _, tc := range cases {
+			if IsLoopbackHost(tc) {
+				t.Fatalf("expected non-loopback host for %q", tc)
+			}
+		}
+	})
+}
+
+func TestNormalizePulseHTTPBaseURL(t *testing.T) {
+	tests := []struct {
+		name      string
+		raw       string
+		want      string
+		wantError string
+	}{
+		{
+			name: "normalizes secure url",
+			raw:  "HTTPS://Pulse.Example.com:7655/base/",
+			want: "https://pulse.example.com:7655/base",
+		},
+		{
+			name: "allows loopback http",
+			raw:  "http://LOCALHOST:7655/",
+			want: "http://localhost:7655",
+		},
+		{
+			name:      "rejects private-network http",
+			raw:       "http://10.0.0.5:7655",
+			wantError: "must use https unless host is loopback",
+		},
+		{
+			name:      "rejects unsupported scheme",
+			raw:       "ftp://pulse.example.com",
+			wantError: "unsupported scheme",
+		},
+		{
+			name:      "rejects query",
+			raw:       "https://pulse.example.com?x=1",
+			wantError: "must not include query or fragment",
+		},
+		{
+			name:      "rejects bad port",
+			raw:       "https://pulse.example.com:70000",
+			wantError: "invalid port",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := NormalizePulseHTTPBaseURL(tt.raw)
+			if tt.wantError != "" {
+				if err == nil {
+					t.Fatalf("NormalizePulseHTTPBaseURL(%q) expected error", tt.raw)
+				}
+				if !strings.Contains(err.Error(), tt.wantError) {
+					t.Fatalf("NormalizePulseHTTPBaseURL(%q) error = %q, want substring %q", tt.raw, err.Error(), tt.wantError)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("NormalizePulseHTTPBaseURL(%q) error = %v", tt.raw, err)
+			}
+			if got.String() != tt.want {
+				t.Fatalf("NormalizePulseHTTPBaseURL(%q) = %q, want %q", tt.raw, got.String(), tt.want)
+			}
+		})
+	}
+}
+
+func TestNormalizePulseWebSocketBaseURL(t *testing.T) {
+	tests := []struct {
+		name      string
+		raw       string
+		want      string
+		wantError string
+	}{
+		{
+			name: "https becomes wss",
+			raw:  "https://example.invalid/pulse/",
+			want: "wss://example.invalid/pulse",
+		},
+		{
+			name: "loopback http becomes ws",
+			raw:  "http://localhost:7655",
+			want: "ws://localhost:7655",
+		},
+		{
+			name: "wss preserved",
+			raw:  "wss://example.invalid",
+			want: "wss://example.invalid",
+		},
+		{
+			name:      "non-loopback http rejected",
+			raw:       "http://example.invalid",
+			wantError: "must use https/wss unless host is loopback",
+		},
+		{
+			name:      "private-network ws rejected",
+			raw:       "ws://10.0.0.5:7655",
+			wantError: "must use https/wss unless host is loopback",
+		},
+		{
+			name:      "unsupported scheme rejected",
+			raw:       "ftp://example.invalid",
+			wantError: "unsupported scheme",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := NormalizePulseWebSocketBaseURL(tt.raw)
+			if tt.wantError != "" {
+				if err == nil {
+					t.Fatalf("NormalizePulseWebSocketBaseURL(%q) expected error", tt.raw)
+				}
+				if !strings.Contains(err.Error(), tt.wantError) {
+					t.Fatalf("NormalizePulseWebSocketBaseURL(%q) error = %q, want substring %q", tt.raw, err.Error(), tt.wantError)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("NormalizePulseWebSocketBaseURL(%q) error = %v", tt.raw, err)
+			}
+			if got.String() != tt.want {
+				t.Fatalf("NormalizePulseWebSocketBaseURL(%q) = %q, want %q", tt.raw, got.String(), tt.want)
+			}
+		})
+	}
+}
+
 func TestResolveRelativeURLRejectsAbsoluteURL(t *testing.T) {
 	base, err := NormalizeHTTPBaseURL("https://example.com/api", "")
 	if err != nil {

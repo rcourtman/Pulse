@@ -7,18 +7,16 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net"
 	"net/http"
-	"net/url"
 	"os"
 	"os/exec"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	systemtypes "github.com/moby/moby/api/types/system"
 	"github.com/moby/moby/client"
+	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
 	"github.com/rs/zerolog"
@@ -340,59 +338,10 @@ func normalizeTargets(raw []TargetConfig) ([]TargetConfig, error) {
 }
 
 func normalizeTargetURL(raw string) (string, error) {
-	raw = strings.TrimSpace(raw)
-
-	parsed, err := url.Parse(raw)
+	parsed, err := securityutil.NormalizePulseHTTPBaseURL(raw)
 	if err != nil {
 		return "", err
 	}
-
-	if parsed.Scheme == "" || parsed.Host == "" {
-		return "", errors.New("must include http:// or https:// with a valid host")
-	}
-
-	scheme := strings.ToLower(parsed.Scheme)
-	if scheme != "http" && scheme != "https" {
-		return "", fmt.Errorf("unsupported scheme %q", parsed.Scheme)
-	}
-
-	if scheme == "http" {
-		host := parsed.Hostname()
-		ip := net.ParseIP(host)
-		isLoopbackOrPrivate := strings.EqualFold(host, "localhost") ||
-			(ip != nil && (ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast()))
-		if !isLoopbackOrPrivate {
-			return "", fmt.Errorf("http is only allowed for loopback or private network addresses, use https for %s", host)
-		}
-	}
-
-	if parsed.User != nil {
-		return "", errors.New("userinfo is not supported")
-	}
-
-	if parsed.RawQuery != "" {
-		return "", errors.New("query parameters are not supported")
-	}
-
-	if parsed.Fragment != "" {
-		return "", errors.New("fragments are not supported")
-	}
-
-	if parsed.Hostname() == "" {
-		return "", errors.New("host is required")
-	}
-
-	if port := parsed.Port(); port != "" {
-		portNum, err := strconv.Atoi(port)
-		if err != nil || portNum < 1 || portNum > 65535 {
-			return "", fmt.Errorf("invalid port %q: must be between 1 and 65535", port)
-		}
-	}
-
-	parsed.Scheme = scheme
-	parsed.Host = strings.ToLower(parsed.Host)
-	parsed.Path = strings.TrimRight(parsed.Path, "/")
-	parsed.RawPath = ""
 
 	normalized := strings.TrimRight(parsed.String(), "/")
 	if normalized == "" {

@@ -11,9 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
-	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -23,6 +21,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agenttls"
+	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 	"github.com/rcourtman/pulse-go-rewrite/internal/updatesignature"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rs/zerolog"
@@ -559,52 +558,19 @@ func normalizeAgentName(agentName string) (string, error) {
 	return name, nil
 }
 
-func isLoopbackHost(host string) bool {
-	if host == "" {
-		return false
-	}
-
-	normalized := strings.ToLower(strings.Trim(host, "[]"))
-	if normalized == "localhost" || strings.HasSuffix(normalized, ".localhost") {
-		return true
-	}
-
-	ip := net.ParseIP(normalized)
-	return ip != nil && ip.IsLoopback()
-}
-
 func (u *Updater) validatePulseURL() error {
 	pulseURL := strings.TrimSpace(u.cfg.PulseURL)
 	if pulseURL == "" {
 		return fmt.Errorf("Pulse URL is empty")
 	}
 
-	parsed, err := url.Parse(pulseURL)
+	parsed, err := securityutil.NormalizePulseHTTPBaseURL(pulseURL)
 	if err != nil {
-		return fmt.Errorf("failed to parse Pulse URL: %w", err)
-	}
-	if parsed.Scheme == "" || parsed.Host == "" {
-		return fmt.Errorf("Pulse URL must include scheme and host")
-	}
-	if parsed.User != nil {
-		return fmt.Errorf("Pulse URL must not include user credentials")
-	}
-	if parsed.RawQuery != "" || parsed.Fragment != "" {
-		return fmt.Errorf("Pulse URL must not include query or fragment")
+		return fmt.Errorf("invalid Pulse URL: %w", err)
 	}
 
-	scheme := strings.ToLower(parsed.Scheme)
-	switch scheme {
-	case "https":
-		return nil
-	case "http":
-		if isLoopbackHost(parsed.Hostname()) {
-			return nil
-		}
-		return fmt.Errorf("HTTP Pulse URL is only allowed for localhost/loopback")
-	default:
-		return fmt.Errorf("unsupported Pulse URL scheme %q", parsed.Scheme)
-	}
+	u.cfg.PulseURL = parsed.String()
+	return nil
 }
 
 // performUpdate downloads and installs the new agent binary.

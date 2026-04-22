@@ -17,6 +17,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 )
 
 type roundTripperFunc func(*http.Request) (*http.Response, error)
@@ -174,7 +176,7 @@ func TestIsLoopbackHost(t *testing.T) {
 	t.Run("true", func(t *testing.T) {
 		cases := []string{"localhost", "LOCALHOST", "agent.localhost", "127.0.0.1", "::1"}
 		for _, tc := range cases {
-			if !isLoopbackHost(tc) {
+			if !securityutil.IsLoopbackHost(tc) {
 				t.Fatalf("expected loopback host for %q", tc)
 			}
 		}
@@ -183,7 +185,7 @@ func TestIsLoopbackHost(t *testing.T) {
 	t.Run("false", func(t *testing.T) {
 		cases := []string{"", "example.com", "192.168.1.10", "10.0.0.5"}
 		for _, tc := range cases {
-			if isLoopbackHost(tc) {
+			if securityutil.IsLoopbackHost(tc) {
 				t.Fatalf("expected non-loopback host for %q", tc)
 			}
 		}

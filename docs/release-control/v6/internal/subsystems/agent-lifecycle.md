@@ -1108,12 +1108,16 @@ fan-out writes a bootstrap token or runs the installer on a remote node, keep
 `StrictHostKeyChecking=yes`, and fail closed on key mismatch or missing-host-
 key state instead of downgrading to unauthenticated SSH during install.
 That same transport boundary also keeps plaintext Pulse URLs loopback-only.
-`internal/hostagent/agent.go`, `internal/hostagent/commands.go`, and
-`internal/agentupdate/update.go` may keep local-development `http://` or
-`ws://` only for loopback hosts, but private-network and remote Pulse URLs
-must still use HTTPS/WSS. `InsecureSkipVerify` may relax certificate
-verification on TLS transport; it must not reopen plaintext HTTP for
-private-network updater, websocket, or reporting paths.
+`internal/securityutil/httpurl.go` owns the canonical Pulse transport
+normalization used by `internal/hostagent/agent.go`,
+`internal/hostagent/commands.go`, `internal/agentupdate/update.go`,
+`internal/dockeragent/agent.go`, `internal/kubernetesagent/agent.go`, and
+`internal/remoteconfig/client.go`. Those runtime clients may keep local-
+development `http://` or `ws://` only for loopback hosts, but private-network
+and remote Pulse URLs must still use HTTPS/WSS. `InsecureSkipVerify` may
+relax certificate verification on TLS transport; it must not reopen plaintext
+HTTP for private-network updater, websocket, reporting, or remote-config
+paths.
 That same first-run lifecycle boundary also keeps unauthenticated setup local.
 Lifecycle-adjacent quick setup or recovery entrypoints may exist before an
 operator has configured auth, but they must stay direct-loopback only and any
