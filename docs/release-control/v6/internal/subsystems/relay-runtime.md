@@ -53,7 +53,8 @@ for Pulse instance bridging.
 ## Completion Obligations
 
 1. Update this contract when new desktop relay runtime or persistence entry points become canonical
-2. Keep relay client changes tied to explicit runtime proof in `internal/relay/client_test.go`
+2. Keep relay desktop runtime changes tied to explicit proof in
+   `internal/relay/client_test.go` and `internal/relay/encryption_test.go`
 3. Keep persisted relay config loading tied to explicit proof in `internal/config/persistence_relay_test.go`
 4. Keep backend-owned mobile capability inventory changes tied to explicit proof in `internal/api/relay_mobile_capability_test.go`
 5. Keep mobile relay runtime changes tied to explicit proof in `pulse-mobile:src/relay/__tests__/`
@@ -71,6 +72,11 @@ Inbound DATA handling is also part of this boundary: encrypted relay frames
 must be decrypted before they are handed to background stream handlers so the
 channel nonce guard stays monotonic and relay arrival order cannot trip false
 replay failures under concurrency.
+Relay channel key derivation is part of that same encryption boundary. The
+X25519 shared secret may not feed the generic nil-salt HKDF form: desktop
+relay runtime must domain-separate the channel KDF with the relay-owned salt
+`pulse-relay-e2e-channel-v1` together with the existing directional info
+strings before deriving AES-GCM keys.
 Relay status truthfulness is part of the same contract. If the client is in a
 governed reconnect or license-pause window, `ClientStatus.reconnect_in` must
 reflect that delay instead of silently presenting a disconnected state with no

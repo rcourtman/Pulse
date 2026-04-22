@@ -3,7 +3,12 @@ package relay
 import (
 	"bytes"
 	"crypto/ecdh"
+	"crypto/sha256"
 	"testing"
+
+	"io"
+
+	"golang.org/x/crypto/hkdf"
 )
 
 func TestGenerateEphemeralKeyPair(t *testing.T) {
@@ -69,6 +74,36 @@ func TestDeriveChannelKeys_Roundtrip(t *testing.T) {
 	}
 	if !bytes.Equal(plaintext2, decrypted2) {
 		t.Errorf("roundtrip instance→app: got %q, want %q", decrypted2, plaintext2)
+	}
+}
+
+func TestDeriveKeyUsesRelayDomainSalt(t *testing.T) {
+	secret := []byte("shared-secret-for-relay-kdf")
+	info := hkdfInfoAppToInstance
+
+	got, err := deriveKey(secret, info)
+	if err != nil {
+		t.Fatalf("deriveKey: %v", err)
+	}
+
+	withSaltReader := hkdf.New(sha256.New, secret, []byte(relayChannelHKDFSalt), []byte(info))
+	wantWithSalt := make([]byte, aesKeySize)
+	if _, err := io.ReadFull(withSaltReader, wantWithSalt); err != nil {
+		t.Fatalf("derive explicit salted HKDF: %v", err)
+	}
+
+	if !bytes.Equal(got, wantWithSalt) {
+		t.Fatal("deriveKey did not use the relay HKDF salt")
+	}
+
+	nilSaltReader := hkdf.New(sha256.New, secret, nil, []byte(info))
+	wantNilSalt := make([]byte, aesKeySize)
+	if _, err := io.ReadFull(nilSaltReader, wantNilSalt); err != nil {
+		t.Fatalf("derive explicit nil-salt HKDF: %v", err)
+	}
+
+	if bytes.Equal(got, wantNilSalt) {
+		t.Fatal("deriveKey still matches the nil-salt HKDF output")
 	}
 }
 

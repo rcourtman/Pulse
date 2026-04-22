@@ -4182,6 +4182,7 @@
           "internal/api/relay_mobile_capability_test.go",
           "internal/config/persistence_relay_test.go",
           "internal/relay/client_test.go",
+          "internal/relay/encryption_test.go",
           "pulse-mobile:src/relay/__tests__/channel.test.ts",
           "pulse-mobile:src/relay/__tests__/client-hardening.test.ts",
           "pulse-mobile:src/relay/__tests__/client.test.ts",
@@ -4203,7 +4204,8 @@
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
-              "internal/relay/client_test.go"
+              "internal/relay/client_test.go",
+              "internal/relay/encryption_test.go"
             ]
           },
           {

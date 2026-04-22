@@ -2152,7 +2152,10 @@ class SubsystemLookupTest(unittest.TestCase):
         )
         self.assertEqual(
             match["verification_requirement"]["exact_files"],
-            ["internal/relay/client_test.go"],
+            [
+                "internal/relay/client_test.go",
+                "internal/relay/encryption_test.go",
+            ],
         )
 
     def test_lookup_paths_assigns_relay_directory_root_to_relay_runtime(self) -> None:

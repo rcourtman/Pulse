@@ -22,6 +22,10 @@ const (
 	// nonceSize is the AES-256-GCM nonce size (12 bytes).
 	nonceSize = 12
 
+	// relayChannelHKDFSalt domain-separates the relay channel KDF from other
+	// HKDF uses that might share the same ECDH output shape.
+	relayChannelHKDFSalt = "pulse-relay-e2e-channel-v1"
+
 	// hkdfInfoAppToInstance is the HKDF info string for the app→instance direction.
 	hkdfInfoAppToInstance = "relay-e2e-app-to-instance"
 
@@ -105,7 +109,7 @@ func DeriveChannelKeys(myPrivate *ecdh.PrivateKey, theirPublic *ecdh.PublicKey, 
 }
 
 func deriveKey(secret []byte, info string) ([]byte, error) {
-	hkdfReader := hkdf.New(sha256.New, secret, nil, []byte(info))
+	hkdfReader := hkdf.New(sha256.New, secret, []byte(relayChannelHKDFSalt), []byte(info))
 	key := make([]byte, aesKeySize)
 	if _, err := io.ReadFull(hkdfReader, key); err != nil {
 		return nil, fmt.Errorf("hkdf read: %w", err)
