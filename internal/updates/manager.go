@@ -18,6 +18,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -26,6 +27,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 	"github.com/rs/zerolog/log"
+	godisk "github.com/shirou/gopsutil/v4/disk"
 )
 
 // UpdateStatus represents the current status of an update
@@ -71,6 +73,7 @@ var (
 	updateHTTPAttempts   = 3
 	updateHTTPBackoff    = 300 * time.Millisecond
 	updateHTTPMaxBackoff = 2 * time.Second
+	updateDiskUsage      = godisk.UsageWithContext
 )
 
 const (
@@ -79,6 +82,10 @@ const (
 	maxReleaseFeedBytes      int64  = 1 << 20   // 1 MiB
 	maxChecksumFileBytes     int64  = 1 << 20   // 1 MiB
 	maxUpdateDownloadBytes   int64  = 512 << 20 // 512 MiB
+	minUpdateTempFreeBytes   int64  = 128 << 20 // 128 MiB
+	updateBackupSafetyBytes  int64  = 32 << 20  // 32 MiB
+	updateExtractSafetyBytes int64  = 32 << 20  // 32 MiB
+	maxRetainedUpdateBackups int    = 3
 )
 
 func updateReleaseRepo() string {
@@ -209,8 +216,8 @@ func NewManager(cfg *config.Config) *Manager {
 		},
 	}
 
-	// Clean up old temp directories from previous failed/killed updates
-	go m.cleanupOldTempDirs()
+	// Clean up old temp directories and stale update backups from previous runs.
+	go m.cleanupOldUpdateArtifacts()
 
 	// Start heartbeat for SSE connections (every 30 seconds)
 	m.heartbeatWg.Add(1)
@@ -566,29 +573,12 @@ func (m *Manager) ApplyUpdate(ctx context.Context, req ApplyUpdateRequest) error
 		m.completeHistoryEntry(ctx, eventID, status, start, runErr)
 	}()
 
-	// Create temp directory in a location we can write to
-	// Try multiple locations in order of preference
-	var tempDir string
-	var err error
-
-	// Try the canonical runtime data directory first.
-	dataDir := resolveUpdateDataDir()
-
-	// Try to create temp dir in data directory
-	tempDir, err = os.MkdirTemp(dataDir, "pulse-update-*")
+	tempDir, err := m.createUpdateTempDir(ctx, minUpdateTempFreeBytes)
 	if err != nil {
-		// Fallback to /tmp
-		tempDir, err = os.MkdirTemp("/tmp", "pulse-update-*")
-		if err != nil {
-			// Last resort: current directory
-			tempDir, err = os.MkdirTemp(".", "pulse-update-*")
-			if err != nil {
-				tempErr := fmt.Errorf("failed to create temp directory in any location: %w", err)
-				m.updateStatus("error", 10, "Failed to create temp directory", tempErr)
-				runErr = tempErr
-				return tempErr
-			}
-		}
+		tempErr := fmt.Errorf("failed to create temp directory: %w", err)
+		m.updateStatus("error", 10, "Failed to create temp directory", tempErr)
+		runErr = tempErr
+		return tempErr
 	}
 	defer os.RemoveAll(tempDir)
 
@@ -619,6 +609,20 @@ func (m *Manager) ApplyUpdate(ctx context.Context, req ApplyUpdateRequest) error
 
 	m.updateStatus("extracting", 40, "Extracting update...")
 
+	extractBytes, err := estimateTarballExtractBytes(tarballPath)
+	if err != nil {
+		extractErr := fmt.Errorf("failed to size update archive: %w", err)
+		m.updateStatus("error", 40, "Failed to prepare update extraction", extractErr)
+		runErr = extractErr
+		return runErr
+	}
+	if err := ensureUpdatePathHasFreeSpace(ctx, tempDir, extractBytes+updateExtractSafetyBytes, "extract update archive"); err != nil {
+		extractErr := fmt.Errorf("insufficient disk space for update extraction: %w", err)
+		m.updateStatus("error", 40, "Not enough disk space to extract update", extractErr)
+		runErr = extractErr
+		return runErr
+	}
+
 	// Extract tarball
 	extractDir := filepath.Join(tempDir, "extracted")
 	if err := m.extractTarball(tarballPath, extractDir); err != nil {
@@ -631,7 +635,7 @@ func (m *Manager) ApplyUpdate(ctx context.Context, req ApplyUpdateRequest) error
 	m.updateStatus("backing-up", 60, "Creating backup...")
 
 	// Create backup
-	backupPath, err := m.createBackup()
+	backupPath, err := m.createBackup(ctx)
 	if err != nil {
 		backupErr := fmt.Errorf("failed to create backup: %w", err)
 		m.updateStatus("error", 60, "Failed to create backup", backupErr)
@@ -1466,22 +1470,27 @@ func (m *Manager) extractTarball(src, dest string) error {
 	return nil
 }
 
-// createBackup creates a backup of the current installation
-func (m *Manager) createBackup() (string, error) {
+// createBackup creates a backup of the current installation.
+func (m *Manager) createBackup(ctx context.Context) (string, error) {
 	timestamp := time.Now().Format("20060102-150405")
+	if err := m.pruneRetainedUpdateBackups(ctx); err != nil {
+		log.Warn().Err(err).Msg("Failed to prune retained update backups before creating a new backup")
+	}
 
-	// Try to create backup in a writable location.
-	dataDir := resolveUpdateDataDir()
+	backupBytes, err := estimateUpdateBackupBytes()
+	if err != nil {
+		return "", fmt.Errorf("estimate backup size: %w", err)
+	}
+	requiredBytes := backupBytes + updateBackupSafetyBytes
 
-	backupDir := filepath.Join(dataDir, fmt.Sprintf("backup-%s", timestamp))
+	backupRoot, err := selectUpdateRootWithSpace(ctx, managedUpdateBackupRoots(), requiredBytes)
+	if err != nil {
+		return "", fmt.Errorf("select backup directory: %w", err)
+	}
 
-	// Create backup directory
+	backupDir := managedUpdateBackupPath(backupRoot, timestamp)
 	if err := os.MkdirAll(backupDir, 0755); err != nil {
-		// Fallback to /tmp if data dir fails
-		backupDir = fmt.Sprintf("/tmp/pulse-backup-%s", timestamp)
-		if err := os.MkdirAll(backupDir, 0755); err != nil {
-			return "", fmt.Errorf("failed to create backup directory: %w", err)
-		}
+		return "", fmt.Errorf("create backup directory %q: %w", backupDir, err)
 	}
 
 	// Backup important directories
@@ -1529,6 +1538,10 @@ func (m *Manager) createBackup() (string, error) {
 		if err := m.copyFileSafe(versionSrc, versionDest); err != nil {
 			log.Warn().Err(err).Msg("Failed to backup VERSION file")
 		}
+	}
+
+	if err := m.pruneRetainedUpdateBackups(ctx); err != nil {
+		log.Warn().Err(err).Msg("Failed to prune retained update backups after creating a new backup")
 	}
 
 	return backupDir, nil
@@ -1872,6 +1885,374 @@ func configuredStageDelay() time.Duration {
 
 func resolveUpdateDataDir() string {
 	return config.ResolveRuntimeDataDir("")
+}
+
+type retainedUpdateBackup struct {
+	Path    string
+	ModTime time.Time
+}
+
+func managedUpdateBackupRoots() []string {
+	seen := make(map[string]struct{}, 2)
+	roots := make([]string, 0, 2)
+	for _, root := range []string{resolveUpdateDataDir(), "/tmp"} {
+		cleaned := strings.TrimSpace(filepath.Clean(root))
+		if cleaned == "" {
+			continue
+		}
+		if _, exists := seen[cleaned]; exists {
+			continue
+		}
+		seen[cleaned] = struct{}{}
+		roots = append(roots, cleaned)
+	}
+	return roots
+}
+
+func managedUpdateBackupPath(root string, timestamp string) string {
+	cleaned := filepath.Clean(strings.TrimSpace(root))
+	if cleaned == "/tmp" {
+		return filepath.Join(cleaned, fmt.Sprintf("pulse-backup-%s", timestamp))
+	}
+	return filepath.Join(cleaned, fmt.Sprintf("backup-%s", timestamp))
+}
+
+func managedUpdateBackupPrefix(root string) string {
+	if filepath.Clean(strings.TrimSpace(root)) == "/tmp" {
+		return "pulse-backup-"
+	}
+	return "backup-"
+}
+
+func managedUpdateTempRoots() []string {
+	return []string{resolveUpdateDataDir(), "/tmp", "."}
+}
+
+func formatUpdateBytes(bytes int64) string {
+	if bytes <= 0 {
+		return "0 B"
+	}
+	units := []string{"B", "KiB", "MiB", "GiB", "TiB"}
+	value := float64(bytes)
+	unit := units[0]
+	for i := 1; i < len(units) && value >= 1024; i++ {
+		value /= 1024
+		unit = units[i]
+	}
+	if unit == "B" {
+		return fmt.Sprintf("%d %s", bytes, unit)
+	}
+	return fmt.Sprintf("%.1f %s", value, unit)
+}
+
+func resolveDiskUsagePath(path string) string {
+	current := filepath.Clean(strings.TrimSpace(path))
+	if current == "" {
+		return "."
+	}
+	for {
+		if _, err := os.Stat(current); err == nil {
+			return current
+		}
+		parent := filepath.Dir(current)
+		if parent == current {
+			return current
+		}
+		current = parent
+	}
+}
+
+func updatePathFreeBytes(ctx context.Context, path string) (int64, error) {
+	usagePath := resolveDiskUsagePath(path)
+	usage, err := updateDiskUsage(ctx, usagePath)
+	if err != nil {
+		return 0, fmt.Errorf("inspect disk usage for %q: %w", usagePath, err)
+	}
+	return int64(usage.Free), nil
+}
+
+func ensureUpdatePathHasFreeSpace(ctx context.Context, path string, requiredBytes int64, activity string) error {
+	if requiredBytes <= 0 {
+		return nil
+	}
+	freeBytes, err := updatePathFreeBytes(ctx, path)
+	if err != nil {
+		return err
+	}
+	if freeBytes >= requiredBytes {
+		return nil
+	}
+	return fmt.Errorf(
+		"%s needs %s free at %s, only %s available",
+		activity,
+		formatUpdateBytes(requiredBytes),
+		resolveDiskUsagePath(path),
+		formatUpdateBytes(freeBytes),
+	)
+}
+
+func selectUpdateRootWithSpace(ctx context.Context, candidates []string, requiredBytes int64) (string, error) {
+	type insufficientSpaceCandidate struct {
+		Path string
+		Free int64
+		Err  error
+	}
+
+	seen := make(map[string]struct{}, len(candidates))
+	failures := make([]insufficientSpaceCandidate, 0, len(candidates))
+
+	for _, candidate := range candidates {
+		cleaned := strings.TrimSpace(filepath.Clean(candidate))
+		if cleaned == "" {
+			continue
+		}
+		if _, exists := seen[cleaned]; exists {
+			continue
+		}
+		seen[cleaned] = struct{}{}
+
+		if cleaned != "." {
+			if err := os.MkdirAll(cleaned, 0755); err != nil {
+				failures = append(failures, insufficientSpaceCandidate{Path: cleaned, Err: err})
+				continue
+			}
+		}
+
+		freeBytes, err := updatePathFreeBytes(ctx, cleaned)
+		if err != nil {
+			failures = append(failures, insufficientSpaceCandidate{Path: cleaned, Err: err})
+			continue
+		}
+		if freeBytes >= requiredBytes {
+			return cleaned, nil
+		}
+		failures = append(failures, insufficientSpaceCandidate{Path: cleaned, Free: freeBytes})
+	}
+
+	parts := make([]string, 0, len(failures))
+	for _, failure := range failures {
+		if failure.Err != nil {
+			parts = append(parts, fmt.Sprintf("%s unavailable (%v)", failure.Path, failure.Err))
+			continue
+		}
+		parts = append(parts, fmt.Sprintf("%s has %s free", failure.Path, formatUpdateBytes(failure.Free)))
+	}
+	if len(parts) == 0 {
+		return "", fmt.Errorf("no writable update directories available")
+	}
+	return "", fmt.Errorf("need %s free, candidates: %s", formatUpdateBytes(requiredBytes), strings.Join(parts, "; "))
+}
+
+func (m *Manager) createUpdateTempDir(ctx context.Context, requiredBytes int64) (string, error) {
+	tempRoot, err := selectUpdateRootWithSpace(ctx, managedUpdateTempRoots(), requiredBytes)
+	if err != nil {
+		return "", err
+	}
+	tempDir, err := os.MkdirTemp(tempRoot, "pulse-update-*")
+	if err != nil {
+		return "", fmt.Errorf("create temp directory in %q: %w", tempRoot, err)
+	}
+	return tempDir, nil
+}
+
+func estimatePathCopyBytes(path string) (int64, error) {
+	info, err := os.Lstat(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return 0, nil
+		}
+		return 0, err
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		return 0, nil
+	}
+	if !info.IsDir() {
+		return info.Size(), nil
+	}
+
+	var total int64
+	err = filepath.Walk(path, func(current string, currentInfo os.FileInfo, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if currentInfo.Mode()&os.ModeSymlink != 0 {
+			if currentInfo.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if currentInfo.IsDir() {
+			return nil
+		}
+		total += currentInfo.Size()
+		return nil
+	})
+	if err != nil {
+		return 0, err
+	}
+	return total, nil
+}
+
+func estimateUpdateBackupBytes() (int64, error) {
+	pulseDir := strings.TrimSpace(os.Getenv("PULSE_INSTALL_DIR"))
+	if pulseDir == "" {
+		pulseDir = "/opt/pulse"
+	}
+
+	paths := []string{
+		filepath.Join(pulseDir, "data"),
+		filepath.Join(pulseDir, "config"),
+		filepath.Join(pulseDir, ".env"),
+		filepath.Join(pulseDir, "VERSION"),
+	}
+	if binaryPath, err := os.Executable(); err == nil && strings.TrimSpace(binaryPath) != "" {
+		paths = append(paths, binaryPath)
+	}
+
+	var total int64
+	for _, path := range paths {
+		size, err := estimatePathCopyBytes(path)
+		if err != nil {
+			return 0, fmt.Errorf("measure %q: %w", path, err)
+		}
+		total += size
+	}
+	return total, nil
+}
+
+func estimateTarballExtractBytes(path string) (int64, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return 0, fmt.Errorf("open tarball %q: %w", path, err)
+	}
+	defer file.Close()
+
+	gzReader, err := gzip.NewReader(file)
+	if err != nil {
+		return 0, fmt.Errorf("open gzip reader for %q: %w", path, err)
+	}
+	defer gzReader.Close()
+
+	tarReader := tar.NewReader(gzReader)
+	var total int64
+	for {
+		header, err := tarReader.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return 0, fmt.Errorf("walk tarball %q: %w", path, err)
+		}
+		switch header.Typeflag {
+		case tar.TypeReg, tar.TypeRegA, tar.TypeGNUSparse:
+			if header.Size > 0 {
+				total += header.Size
+			}
+		}
+	}
+
+	return total, nil
+}
+
+func (m *Manager) collectManagedUpdateBackups() ([]retainedUpdateBackup, error) {
+	backups := make([]retainedUpdateBackup, 0)
+	for _, root := range managedUpdateBackupRoots() {
+		entries, err := os.ReadDir(root)
+		if err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
+			return nil, fmt.Errorf("read backup root %q: %w", root, err)
+		}
+		prefix := managedUpdateBackupPrefix(root)
+		for _, entry := range entries {
+			if !entry.IsDir() || !strings.HasPrefix(entry.Name(), prefix) {
+				continue
+			}
+			fullPath, err := securityutil.JoinStorageLeaf(root, entry.Name())
+			if err != nil {
+				log.Debug().Err(err).Str("root", root).Str("entry", entry.Name()).Msg("Skipping invalid update backup leaf")
+				continue
+			}
+			info, err := entry.Info()
+			if err != nil {
+				continue
+			}
+			backups = append(backups, retainedUpdateBackup{
+				Path:    fullPath,
+				ModTime: info.ModTime(),
+			})
+		}
+	}
+
+	sort.Slice(backups, func(i, j int) bool {
+		if backups[i].ModTime.Equal(backups[j].ModTime) {
+			return backups[i].Path > backups[j].Path
+		}
+		return backups[i].ModTime.After(backups[j].ModTime)
+	})
+	return backups, nil
+}
+
+func appendRetentionNote(notes string, prunedPath string) string {
+	retentionNote := fmt.Sprintf("Rollback backup pruned by retention: %s", prunedPath)
+	if strings.Contains(notes, retentionNote) {
+		return notes
+	}
+	trimmed := strings.TrimSpace(notes)
+	if trimmed == "" {
+		return retentionNote
+	}
+	return trimmed + "\n" + retentionNote
+}
+
+func (m *Manager) clearPrunedBackupHistoryReference(ctx context.Context, prunedPath string) {
+	if m.history == nil {
+		return
+	}
+
+	for _, entry := range m.history.ListEntries(HistoryFilter{}) {
+		if filepath.Clean(entry.BackupPath) != filepath.Clean(prunedPath) {
+			continue
+		}
+		if err := m.history.UpdateEntry(ctx, entry.EventID, func(existing *UpdateHistoryEntry) error {
+			existing.BackupPath = ""
+			existing.Notes = appendRetentionNote(existing.Notes, prunedPath)
+			return nil
+		}); err != nil {
+			log.Warn().
+				Err(err).
+				Str("event_id", entry.EventID).
+				Str("backup", prunedPath).
+				Msg("Failed to clear pruned backup reference from update history")
+		}
+	}
+}
+
+func (m *Manager) pruneRetainedUpdateBackups(ctx context.Context) error {
+	backups, err := m.collectManagedUpdateBackups()
+	if err != nil {
+		return err
+	}
+	if len(backups) <= maxRetainedUpdateBackups {
+		return nil
+	}
+
+	for _, backup := range backups[maxRetainedUpdateBackups:] {
+		if err := os.RemoveAll(backup.Path); err != nil {
+			return fmt.Errorf("remove retained backup %q: %w", backup.Path, err)
+		}
+		m.clearPrunedBackupHistoryReference(ctx, backup.Path)
+		log.Info().Str("path", backup.Path).Msg("Pruned retained update backup")
+	}
+	return nil
+}
+
+func (m *Manager) cleanupOldUpdateArtifacts() {
+	m.cleanupOldTempDirs()
+	if err := m.pruneRetainedUpdateBackups(context.Background()); err != nil {
+		log.Debug().Err(err).Msg("Failed to prune retained update backups during startup cleanup")
+	}
 }
 
 // cleanupOldTempDirs removes old pulse-update-* temp directories from previous runs

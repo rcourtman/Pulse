@@ -148,7 +148,7 @@ func TestManagerCloseAndBackup(t *testing.T) {
 		t.Fatalf("write config file: %v", err)
 	}
 
-	backupDir, err := manager.createBackup()
+	backupDir, err := manager.createBackup(context.Background())
 	if err != nil {
 		t.Fatalf("createBackup error: %v", err)
 	}

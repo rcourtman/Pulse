@@ -118,7 +118,7 @@ Pulse creates a backup before updating. If the update fails:
 3. Error details are logged
 
 ### Manual Rollback
-Update backups created by in-app updates are stored as `backup-<timestamp>/` folders inside the Pulse data directory (`/etc/pulse` or `/data`). If that directory is not writable, Pulse falls back to `/tmp/pulse-backup-<timestamp>`.
+Update backups created by in-app updates are stored as `backup-<timestamp>/` folders inside the Pulse data directory (`/etc/pulse` or `/data`). If that directory does not have enough free space, Pulse falls back to `/tmp/pulse-backup-<timestamp>`. Pulse keeps the most recent three in-app rollback snapshots and prunes older ones from retention.
 There is no rollback UI. To revert, stop Pulse, restore the backup contents to `/opt/pulse`, then restart.
 
 Example (systemd/LXC):
@@ -149,7 +149,7 @@ Systemd/LXC update runs write detailed logs to `/var/log/pulse/update-<timestamp
 ### Update failed
 1. Check the error message in the progress modal
 2. Review logs: `journalctl -u pulse -n 100` or `/var/log/pulse/update-<timestamp>.log`
-3. Verify disk space is available
+3. Verify disk space is available for both the extracted release payload and a rollback snapshot of your current install
 4. Check network connectivity to GitHub
 
 ### Service won't restart after update

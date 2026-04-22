@@ -277,6 +277,13 @@ jointly stage the canonical shipped docs set into the container build context
 before `npm run build` runs, rather than relying on a workstation-local
 checkout layout or leaving hosted runtime image builds unable to resolve
 `/app/docs/*.md`, `SECURITY.md`, or `TERMS.md`.
+That same update-runtime boundary now also owns bounded rollback retention and
+disk-space fail-closed behavior for self-hosted app updates. `internal/updates/`
+must prune stale retained rollback snapshots, clear history references when an
+old snapshot ages out of retention, choose a backup root with enough free
+space, and reject extraction/backup work early with a concrete space error
+instead of drifting into partial update failure on small LXC or single-disk
+installs.
 The same governed promotion path must now stay explicit too:
 `scripts/release_control/resolve_release_promotion.py` is the canonical owner
 for stable-versus-prerelease metadata validation shared by `.github/workflows/release-dry-run.yml`
