@@ -214,6 +214,27 @@ func TestClientNewDefaultsAndAgentLookupNotFound(t *testing.T) {
 	}
 }
 
+func TestClientNew_UsesPinnedServerFingerprint(t *testing.T) {
+	client := New(Config{
+		PulseURL:          "https://pulse.example",
+		ServerFingerprint: "aabbccdd",
+	})
+
+	transport, ok := client.httpClient.Transport.(*http.Transport)
+	if !ok {
+		t.Fatalf("transport type = %T, want *http.Transport", client.httpClient.Transport)
+	}
+	if transport.TLSClientConfig == nil {
+		t.Fatal("expected TLS config to be configured")
+	}
+	if !transport.TLSClientConfig.InsecureSkipVerify {
+		t.Fatal("expected fingerprint-pinned transport to bypass CA verification in favor of explicit pinning")
+	}
+	if transport.TLSClientConfig.VerifyPeerCertificate == nil {
+		t.Fatal("expected VerifyPeerCertificate for pinned fingerprint mode")
+	}
+}
+
 func TestClientFetchResolveAgentIDError(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.Contains(r.URL.Path, "/lookup") {

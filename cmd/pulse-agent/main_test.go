@@ -799,11 +799,12 @@ func TestLoadConfig(t *testing.T) {
 
 	t.Run("env overrides", func(t *testing.T) {
 		env := map[string]string{
-			"PULSE_URL":           "http://pulse.example.com",
-			"PULSE_TOKEN":         "my-token",
-			"PULSE_ENABLE_HOST":   "false",
-			"PULSE_ENABLE_DOCKER": "true",
-			"PULSE_CACERT":        "/etc/pulse/ca.pem",
+			"PULSE_URL":                "http://pulse.example.com",
+			"PULSE_TOKEN":              "my-token",
+			"PULSE_ENABLE_HOST":        "false",
+			"PULSE_ENABLE_DOCKER":      "true",
+			"PULSE_CACERT":             "/etc/pulse/ca.pem",
+			"PULSE_SERVER_FINGERPRINT": "aabbccdd",
 		}
 		cfg, err := loadConfig([]string{}, func(s string) string { return env[s] })
 		if err != nil {
@@ -824,10 +825,13 @@ func TestLoadConfig(t *testing.T) {
 		if cfg.CACertPath != "/etc/pulse/ca.pem" {
 			t.Errorf("expected CA cert path from env, got %s", cfg.CACertPath)
 		}
+		if cfg.ServerFingerprint != "aabbccdd" {
+			t.Errorf("expected server fingerprint from env, got %s", cfg.ServerFingerprint)
+		}
 	})
 
 	t.Run("flag overrides", func(t *testing.T) {
-		cfg, err := loadConfig([]string{"-url", "http://flag.example.com", "-token", "flag-token", "-enable-host=false", "-cacert", "/tmp/custom-ca.pem"}, func(s string) string { return "" })
+		cfg, err := loadConfig([]string{"-url", "http://flag.example.com", "-token", "flag-token", "-enable-host=false", "-cacert", "/tmp/custom-ca.pem", "-server-fingerprint", "1122"}, func(s string) string { return "" })
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -842,6 +846,9 @@ func TestLoadConfig(t *testing.T) {
 		}
 		if cfg.CACertPath != "/tmp/custom-ca.pem" {
 			t.Errorf("expected CA cert path from flag, got %s", cfg.CACertPath)
+		}
+		if cfg.ServerFingerprint != "1122" {
+			t.Errorf("expected server fingerprint from flag, got %s", cfg.ServerFingerprint)
 		}
 	})
 

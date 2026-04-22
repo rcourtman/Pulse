@@ -93,6 +93,7 @@ type CommandClient struct {
 	stateDir           string
 	insecureSkipVerify bool
 	caCertPath         string
+	serverFingerprint  string
 	commandPolicy      *agentexec.CommandPolicy
 	sshKnownHosts      sshknownhosts.Manager
 	sshKnownHostsOnce  sync.Once
@@ -122,6 +123,7 @@ func NewCommandClient(cfg Config, agentID, hostname, platform, version string) *
 		stateDir:           stateDir,
 		insecureSkipVerify: cfg.InsecureSkipVerify,
 		caCertPath:         cfg.CACertPath,
+		serverFingerprint:  cfg.ServerFingerprint,
 		commandPolicy:      agentexec.DefaultPolicy(),
 		logger:             logger,
 		done:               make(chan struct{}),
@@ -271,7 +273,7 @@ func (c *CommandClient) connectAndHandle(ctx context.Context) error {
 	c.logger.Debug().Str("url", wsURL).Msg("Connecting to Pulse command server")
 
 	// Create dialer with TLS config
-	tlsConfig, err := agenttls.NewClientTLSConfig(c.caCertPath, c.insecureSkipVerify)
+	tlsConfig, err := agenttls.NewClientTLSConfig(c.caCertPath, c.insecureSkipVerify, c.serverFingerprint)
 	if err != nil {
 		return fmt.Errorf("build websocket TLS config: %w", err)
 	}

@@ -108,6 +108,9 @@ type Config struct {
 	// CACertPath adds a custom CA bundle for agent transport
 	CACertPath string
 
+	// ServerFingerprint pins the Pulse server TLS certificate when CA validation is unavailable.
+	ServerFingerprint string
+
 	// Logger is the zerolog logger instance
 	Logger *zerolog.Logger
 
@@ -147,10 +150,10 @@ func New(cfg Config) *Updater {
 			Msg("Invalid agent update check interval; using default")
 	}
 
-	tlsConfig, err := agenttls.NewClientTLSConfig(cfg.CACertPath, cfg.InsecureSkipVerify)
+	tlsConfig, err := agenttls.NewClientTLSConfig(cfg.CACertPath, cfg.InsecureSkipVerify, cfg.ServerFingerprint)
 	if err != nil {
 		logger.Warn().Err(err).Str("ca_cert_path", strings.TrimSpace(cfg.CACertPath)).Msg("Invalid custom CA bundle; continuing with default TLS roots")
-		tlsConfig, _ = agenttls.NewClientTLSConfig("", cfg.InsecureSkipVerify)
+		tlsConfig, _ = agenttls.NewClientTLSConfig("", cfg.InsecureSkipVerify, cfg.ServerFingerprint)
 	}
 
 	transport := &http.Transport{

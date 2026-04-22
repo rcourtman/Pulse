@@ -1,7 +1,11 @@
 package agenttls
 
 import (
+	"crypto/sha256"
 	"crypto/tls"
+	"crypto/x509"
+	"encoding/hex"
+	"encoding/pem"
 	"os"
 	"path/filepath"
 	"testing"
@@ -27,7 +31,7 @@ ARKc3gwyVxyCX3h21kFcEU2rt7C7/RcXBCyWzQ==
 `
 
 func TestNewClientTLSConfig_Defaults(t *testing.T) {
-	cfg, err := NewClientTLSConfig("", false)
+	cfg, err := NewClientTLSConfig("", false, "")
 	if err != nil {
 		t.Fatalf("NewClientTLSConfig: %v", err)
 	}
@@ -48,7 +52,7 @@ func TestNewClientTLSConfig_LoadsCustomCABundle(t *testing.T) {
 		t.Fatalf("write cert: %v", err)
 	}
 
-	cfg, err := NewClientTLSConfig(certPath, false)
+	cfg, err := NewClientTLSConfig(certPath, false, "")
 	if err != nil {
 		t.Fatalf("NewClientTLSConfig: %v", err)
 	}
@@ -63,7 +67,36 @@ func TestNewClientTLSConfig_RejectsInvalidBundle(t *testing.T) {
 		t.Fatalf("write cert: %v", err)
 	}
 
-	if _, err := NewClientTLSConfig(certPath, false); err == nil {
+	if _, err := NewClientTLSConfig(certPath, false, ""); err == nil {
 		t.Fatal("expected invalid CA bundle to fail")
+	}
+}
+
+func TestNewClientTLSConfig_UsesPinnedFingerprint(t *testing.T) {
+	block, _ := pem.Decode([]byte(testPEMCertificate))
+	if block == nil {
+		t.Fatal("failed to decode test certificate")
+	}
+	cert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		t.Fatalf("ParseCertificate: %v", err)
+	}
+
+	sum := sha256.Sum256(cert.Raw)
+	cfg, err := NewClientTLSConfig("", false, hex.EncodeToString(sum[:]))
+	if err != nil {
+		t.Fatalf("NewClientTLSConfig: %v", err)
+	}
+	if !cfg.InsecureSkipVerify {
+		t.Fatal("expected pinned fingerprint mode to bypass CA verification in favor of explicit pinning")
+	}
+	if cfg.VerifyPeerCertificate == nil {
+		t.Fatal("expected VerifyPeerCertificate to be configured for fingerprint pinning")
+	}
+	if err := cfg.VerifyPeerCertificate([][]byte{cert.Raw}, nil); err != nil {
+		t.Fatalf("VerifyPeerCertificate: %v", err)
+	}
+	if err := cfg.VerifyPeerCertificate([][]byte{[]byte("mismatch")}, nil); err == nil {
+		t.Fatal("expected mismatched certificate fingerprint to be rejected")
 	}
 }

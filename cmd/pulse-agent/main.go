@@ -115,11 +115,16 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 	logger := zerolog.New(os.Stdout).Level(cfg.LogLevel).With().Timestamp().Logger()
 	cfg.Logger = &logger
 
-	if cfg.InsecureSkipVerify {
+	if cfg.InsecureSkipVerify && cfg.ServerFingerprint == "" {
 		logger.Warn().
 			Str("component", "startup").
 			Str("action", "tls_skip_verify_enabled").
 			Msg("TLS verification disabled for agent connections (self-signed cert mode)")
+	} else if cfg.ServerFingerprint != "" {
+		logger.Info().
+			Str("component", "startup").
+			Str("action", "tls_server_fingerprint_enabled").
+			Msg("Using pinned server certificate fingerprint for agent connections")
 	}
 
 	// 2a. Handle Self-Test
@@ -175,6 +180,7 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 			Hostname:           lookupHostname,
 			InsecureSkipVerify: cfg.InsecureSkipVerify,
 			CACertPath:         cfg.CACertPath,
+			ServerFingerprint:  cfg.ServerFingerprint,
 			Logger:             logger,
 		})
 		defer rc.Close()
@@ -255,6 +261,7 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 		CheckInterval:      1 * time.Hour,
 		InsecureSkipVerify: cfg.InsecureSkipVerify,
 		CACertPath:         cfg.CACertPath,
+		ServerFingerprint:  cfg.ServerFingerprint,
 		Logger:             &logger,
 		Disabled:           cfg.DisableAutoUpdate,
 	})
@@ -277,6 +284,7 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 			Tags:               cfg.Tags,
 			InsecureSkipVerify: cfg.InsecureSkipVerify,
 			CACertPath:         cfg.CACertPath,
+			ServerFingerprint:  cfg.ServerFingerprint,
 			LogLevel:           cfg.LogLevel,
 			Logger:             &logger,
 			EnableProxmox:      cfg.EnableProxmox,
@@ -517,6 +525,7 @@ type Config struct {
 	Tags               []string
 	InsecureSkipVerify bool
 	CACertPath         string
+	ServerFingerprint  string
 	LogLevel           zerolog.Level
 	Logger             *zerolog.Logger
 
@@ -572,6 +581,7 @@ func loadConfig(args []string, getenv func(string) string) (Config, error) {
 	envAgentID := strings.TrimSpace(getenv("PULSE_AGENT_ID"))
 	envInsecure := strings.TrimSpace(getenv("PULSE_INSECURE_SKIP_VERIFY"))
 	envCACertPath := strings.TrimSpace(getenv("PULSE_CACERT"))
+	envServerFingerprint := strings.TrimSpace(getenv("PULSE_SERVER_FINGERPRINT"))
 	envTags := strings.TrimSpace(getenv("PULSE_TAGS"))
 	envLogLevel := strings.TrimSpace(getenv("LOG_LEVEL"))
 	envEnableHost := strings.TrimSpace(getenv("PULSE_ENABLE_HOST"))
@@ -644,6 +654,7 @@ func loadConfig(args []string, getenv func(string) string) (Config, error) {
 	agentIDFlag := fs.String("agent-id", envAgentID, "Override agent identifier")
 	insecureFlag := fs.Bool("insecure", utils.ParseBool(envInsecure), "Skip TLS verification")
 	caCertFlag := fs.String("cacert", envCACertPath, "Path to custom CA bundle for agent HTTPS transport")
+	serverFingerprintFlag := fs.String("server-fingerprint", envServerFingerprint, "Expected Pulse server TLS certificate fingerprint (SHA256)")
 	logLevelFlag := fs.String("log-level", defaultLogLevel(envLogLevel), "Log level")
 
 	enableHostFlag := fs.Bool("enable-host", defaultEnableHost, "Enable Host Agent module")
@@ -758,6 +769,7 @@ func loadConfig(args []string, getenv func(string) string) (Config, error) {
 		Tags:                      tags,
 		InsecureSkipVerify:        *insecureFlag,
 		CACertPath:                strings.TrimSpace(*caCertFlag),
+		ServerFingerprint:         strings.TrimSpace(*serverFingerprintFlag),
 		LogLevel:                  logLevel,
 		EnableHost:                *enableHostFlag,
 		EnableDocker:              *enableDockerFlag,

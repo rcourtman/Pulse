@@ -189,7 +189,8 @@ an add-only capacity posture.
    path must treat it as the existing system until live inventory rebuild
    catches up, rather than as a fresh enrolment competing for another
    monitored-system slot.
-4. Keep shared `internal/api/` helper edits isolated from agent lifecycle semantics: Patrol-specific status transport or alert-trigger wiring changes in shared handlers must not bleed into auto-register, installer, or fleet-control behavior unless this contract moves in the same slice.
+4. Keep shared agent-side TLS identity fail-closed across `cmd/pulse-agent/main.go`, `internal/hostagent/`, `internal/agentupdate/`, and adjacent remote-config transport. Self-signed deployments may use a canonical pinned Pulse server certificate fingerprint, but lifecycle transport must route that pin through reporting, enrollment, command websocket, remote-config, and self-update clients instead of widening `PULSE_INSECURE_SKIP_VERIFY` into a blanket MITM carve-out.
+5. Keep shared `internal/api/` helper edits isolated from agent lifecycle semantics: Patrol-specific status transport or alert-trigger wiring changes in shared handlers must not bleed into auto-register, installer, or fleet-control behavior unless this contract moves in the same slice.
    The same isolation rule applies to AI settings payload work in `internal/api/ai_handlers.go`: provider auth fields, masked-secret echoes, and provider-test model selection remain AI/runtime plus API-contract ownership and must not be reinterpreted as lifecycle setup or registration semantics just because they share backend helper layers.
    The same shared-helper rule now covers SSO outbound discovery and metadata fetches plus credential-file loads in `internal/api/sso_outbound.go`, `internal/api/saml_service.go`, and `internal/api/oidc_service.go`: lifecycle-adjacent setup or auth work may depend on that shared trust boundary, but it must not fork a second HTTP client, redirect policy, or file-read rule inside lifecycle-local flows.
 5. Keep legacy Unified Agent compatibility names explicitly secondary when touching shared `internal/api/` runtime helpers: the legacy host-route family and `host-agent:*` scope names may remain as ingress or migration aliases, but they must not retake primary ownership in router state, live runtime scope checks, handler commentary, or operator-facing guidance.
@@ -1573,6 +1574,14 @@ The updater/runtime surfaces must preserve the one-shot `updated_from`
 continuity handoff and the non-TLS continuity path for supported self-hosted
 installs, so upgrade-safe agent behavior does not drift between install,
 restart, and reconnect paths.
+That same shared agent transport boundary must not force operators to choose
+between public-CA trust and blanket TLS disablement. `cmd/pulse-agent/main.go`,
+`internal/hostagent/`, `internal/agentupdate/`, and adjacent remote-config
+transport must accept a canonical pinned Pulse server certificate fingerprint
+for self-signed deployments, and that pin must flow through reporting,
+enrollment, command websocket, remote-config, and self-update transport
+instead of widening `PULSE_INSECURE_SKIP_VERIFY` into an all-path MITM
+carve-out.
 That same unified-agent runtime boundary also owns vendor-aware host identity.
 When gopsutil reports generic Linux platform fields on NAS appliances,
 `internal/hostagent/` must prefer canonical platform files such as Synology DSM

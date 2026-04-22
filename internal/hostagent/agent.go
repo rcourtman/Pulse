@@ -41,6 +41,7 @@ type Config struct {
 	Tags               []string
 	InsecureSkipVerify bool
 	CACertPath         string
+	ServerFingerprint  string
 	RunOnce            bool
 	LogLevel           zerolog.Level
 	Logger             *zerolog.Logger
@@ -229,7 +230,7 @@ func New(cfg Config) (*Agent, error) {
 	if arch == "" {
 		arch = runtime.GOARCH
 	}
-	tlsConfig, err := agenttls.NewClientTLSConfig(cfg.CACertPath, cfg.InsecureSkipVerify)
+	tlsConfig, err := agenttls.NewClientTLSConfig(cfg.CACertPath, cfg.InsecureSkipVerify, cfg.ServerFingerprint)
 	if err != nil {
 		return nil, fmt.Errorf("invalid CA bundle: %w", err)
 	}

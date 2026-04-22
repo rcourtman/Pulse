@@ -48,6 +48,7 @@ func (ws *windowsService) Execute(args []string, r <-chan svc.ChangeRequest, cha
 		CheckInterval:      1 * time.Hour,
 		InsecureSkipVerify: ws.cfg.InsecureSkipVerify,
 		CACertPath:         ws.cfg.CACertPath,
+		ServerFingerprint:  ws.cfg.ServerFingerprint,
 		Logger:             &ws.logger,
 		Disabled:           ws.cfg.DisableAutoUpdate,
 	})
@@ -70,6 +71,7 @@ func (ws *windowsService) Execute(args []string, r <-chan svc.ChangeRequest, cha
 			Tags:               ws.cfg.Tags,
 			InsecureSkipVerify: ws.cfg.InsecureSkipVerify,
 			CACertPath:         ws.cfg.CACertPath,
+			ServerFingerprint:  ws.cfg.ServerFingerprint,
 			LogLevel:           ws.cfg.LogLevel,
 			Logger:             &ws.logger,
 		}

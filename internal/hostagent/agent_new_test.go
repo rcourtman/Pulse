@@ -175,8 +175,9 @@ func TestNew_DefaultPulseURL(t *testing.T) {
 func TestNewCommandClient_SetsSecureCommandDefaults(t *testing.T) {
 	logger := zerolog.Nop()
 	client := NewCommandClient(Config{
-		PulseURL: "https://pulse.example",
-		Logger:   &logger,
+		PulseURL:          "https://pulse.example",
+		ServerFingerprint: "aabbccdd",
+		Logger:            &logger,
 	}, "agent-1", "node-1", "linux", "1.0.0")
 
 	if client.commandPolicy == nil {
@@ -184,6 +185,9 @@ func TestNewCommandClient_SetsSecureCommandDefaults(t *testing.T) {
 	}
 	if client.stateDir != defaultStateDir {
 		t.Fatalf("stateDir = %q, want %q", client.stateDir, defaultStateDir)
+	}
+	if client.serverFingerprint != "aabbccdd" {
+		t.Fatalf("serverFingerprint = %q, want %q", client.serverFingerprint, "aabbccdd")
 	}
 
 	if err := client.authorizeCommand(executeCommandPayload{Command: "systemctl restart nginx"}); err == nil || !strings.Contains(err.Error(), "requires approval") {
@@ -194,6 +198,39 @@ func TestNewCommandClient_SetsSecureCommandDefaults(t *testing.T) {
 	}
 	if err := client.authorizeCommand(executeCommandPayload{Command: "rm -rf /"}); err == nil || !strings.Contains(err.Error(), "blocked by policy") {
 		t.Fatalf("expected blocked command to be rejected, got %v", err)
+	}
+}
+
+func TestNew_UsesPinnedServerFingerprintForHTTPTransport(t *testing.T) {
+	mc := &mockCollector{
+		hostInfoFn: func(context.Context) (*gohost.InfoStat, error) {
+			return &gohost.InfoStat{Hostname: "host", HostID: "hid", KernelArch: runtime.GOARCH}, nil
+		},
+	}
+
+	agent, err := New(Config{
+		PulseURL:          "https://pulse.example",
+		APIToken:          "token",
+		ServerFingerprint: "aabbccdd",
+		LogLevel:          zerolog.InfoLevel,
+		Collector:         mc,
+	})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	httpTransport, ok := agent.httpClient.Transport.(*http.Transport)
+	if !ok {
+		t.Fatalf("expected *http.Transport, got %T", agent.httpClient.Transport)
+	}
+	if httpTransport.TLSClientConfig == nil {
+		t.Fatal("expected TLS config to be configured")
+	}
+	if !httpTransport.TLSClientConfig.InsecureSkipVerify {
+		t.Fatal("expected fingerprint-pinned transport to bypass CA verification in favor of explicit pinning")
+	}
+	if httpTransport.TLSClientConfig.VerifyPeerCertificate == nil {
+		t.Fatal("expected fingerprint-pinned transport to verify peer certificates explicitly")
 	}
 }
 

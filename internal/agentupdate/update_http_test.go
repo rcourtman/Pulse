@@ -140,6 +140,28 @@ func TestNew_UsesCustomCABundleForHTTPTransport(t *testing.T) {
 	}
 }
 
+func TestNew_UsesPinnedServerFingerprintForHTTPTransport(t *testing.T) {
+	u := New(Config{
+		PulseURL:          "https://pulse.example.com",
+		CurrentVersion:    "1.0.0",
+		ServerFingerprint: "aabbccdd",
+	})
+
+	transport, ok := u.client.Transport.(*http.Transport)
+	if !ok {
+		t.Fatalf("transport type = %T, want *http.Transport", u.client.Transport)
+	}
+	if transport.TLSClientConfig == nil {
+		t.Fatal("expected TLS config to be configured")
+	}
+	if !transport.TLSClientConfig.InsecureSkipVerify {
+		t.Fatal("expected fingerprint pinning to use explicit peer verification")
+	}
+	if transport.TLSClientConfig.VerifyPeerCertificate == nil {
+		t.Fatal("expected VerifyPeerCertificate to be configured for fingerprint pinning")
+	}
+}
+
 func TestUpdater_CheckAndUpdate_EarlyReturns(t *testing.T) {
 	u := New(Config{Disabled: true})
 	u.performUpdateFn = func(ctx context.Context) error {

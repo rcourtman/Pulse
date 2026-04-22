@@ -6,13 +6,20 @@ import (
 	"fmt"
 	"os"
 	"strings"
+
+	"github.com/rcourtman/pulse-go-rewrite/pkg/tlsutil"
 )
 
 // NewClientTLSConfig returns a client TLS config with optional insecure mode
 // and optional custom CA bundle support.
-func NewClientTLSConfig(caBundlePath string, insecureSkipVerify bool) (*tls.Config, error) {
+func NewClientTLSConfig(caBundlePath string, insecureSkipVerify bool, expectedServerFingerprint string) (*tls.Config, error) {
+	expectedServerFingerprint = strings.TrimSpace(expectedServerFingerprint)
+
 	tlsConfig := &tls.Config{MinVersion: tls.VersionTLS12}
-	if insecureSkipVerify {
+	if expectedServerFingerprint != "" {
+		tlsConfig = tlsutil.FingerprintVerifier(expectedServerFingerprint)
+		tlsConfig.MinVersion = tls.VersionTLS12
+	} else if insecureSkipVerify {
 		//nolint:gosec // Insecure mode is explicitly user-controlled.
 		tlsConfig.InsecureSkipVerify = true
 	}

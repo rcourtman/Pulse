@@ -33,6 +33,7 @@ type Config struct {
 	Hostname           string
 	InsecureSkipVerify bool
 	CACertPath         string
+	ServerFingerprint  string
 	Logger             zerolog.Logger
 }
 
@@ -70,10 +71,10 @@ const maxHTTPErrorBodyBytes = 4096
 func New(cfg Config) *Client {
 	cfg, cfgErr := normalizeConfig(cfg)
 
-	tlsConfig, err := agenttls.NewClientTLSConfig(cfg.CACertPath, cfg.InsecureSkipVerify)
+	tlsConfig, err := agenttls.NewClientTLSConfig(cfg.CACertPath, cfg.InsecureSkipVerify, cfg.ServerFingerprint)
 	if err != nil {
 		cfg.Logger.Warn().Err(err).Str("ca_cert_path", strings.TrimSpace(cfg.CACertPath)).Msg("Invalid custom CA bundle; continuing with default TLS roots")
-		tlsConfig, _ = agenttls.NewClientTLSConfig("", cfg.InsecureSkipVerify)
+		tlsConfig, _ = agenttls.NewClientTLSConfig("", cfg.InsecureSkipVerify, cfg.ServerFingerprint)
 	}
 
 	httpClient := &http.Client{
