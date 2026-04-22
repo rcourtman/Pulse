@@ -93,7 +93,7 @@ export default function HostedSignup() {
         return;
       }
       setStatus('success');
-      setMessage(result.data.message || 'Check your email for a Pulse Account sign-in link.');
+      setMessage(result.data.message || "If that email can finish signup, you'll receive a Pulse Account sign-in link shortly.");
       return;
     }
 

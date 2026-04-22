@@ -138,6 +138,11 @@ Own canonical runtime payload shapes between backend and frontend.
 42. `internal/api/org_lifecycle_handlers.go` shared with `organization-settings`: organization lifecycle handlers are both an organization settings control surface and a canonical API payload contract boundary.
 43. `internal/api/payments_webhook_handlers.go` shared with `cloud-paid`: commercial payment webhook handlers carry both API payload contract and cloud-paid billing boundary ownership.
 44. `internal/api/public_signup_handlers.go` shared with `cloud-paid`: hosted signup handlers carry both API payload contract and cloud-paid hosted provisioning boundary ownership.
+    That same shared boundary also owns public hosted-signup response privacy:
+    syntactically valid `/api/public/signup` requests must return one generic
+    `202 Accepted` Pulse Account message whether provisioning/email side effects
+    ran or were suppressed by the owner-email limiter, while invalid bodies and
+    true server failures remain explicit.
 45. `internal/api/relay_mobile_capability.go` shared with `relay-runtime`: the backend-owned Pulse Mobile relay capability inventory is both a relay runtime boundary and a canonical API payload contract surface.
 46. `internal/api/resources.go` shared with `unified-resources`: the unified resource endpoint is both a backend payload contract surface and a unified-resource runtime boundary.
 47. `internal/api/security.go` shared with `security-privacy`: the security handlers are both a security/privacy control surface and a canonical API payload contract boundary.
@@ -2777,6 +2782,11 @@ boundary: `internal/api/public_signup_handlers.go` owns request/response and
 magic-link payload semantics, while `internal/hosted/provisioner.go` owns the
 shared org bootstrap and rollback mechanics that the hosted signup handler
 invokes.
+That shared public-signup response contract is now intentionally uniform for
+syntactically valid requests: the route returns `202 Accepted` with one generic
+Pulse Account message whether provisioning/email side effects ran or were
+suppressed by the owner-email rate limiter, while invalid request bodies and
+true server failures remain explicit.
 The API token settings surface now also follows the same explicit ownership
 rule. Changes to `frontend-modern/src/components/Settings/APITokenManager.tsx`,
 `frontend-modern/src/components/Settings/apiTokenManagerModel.ts`, and

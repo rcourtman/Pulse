@@ -19,29 +19,26 @@ func TestHostedSignupSuccess(t *testing.T) {
 	router, persistence, rbacProvider, emailer, _ := newHostedSignupTestRouter(t, true)
 
 	rec := doHostedSignupRequest(router, `{"email":"owner@example.com","org_name":"My Organization"}`)
-	if rec.Code != http.StatusCreated {
-		t.Fatalf("expected 201, got %d: %s", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d: %s", rec.Code, rec.Body.String())
 	}
 
-	var response struct {
-		OrgID   string `json:"org_id"`
-		UserID  string `json:"user_id"`
-		Message string `json:"message"`
-	}
+	var response hostedSignupResponse
 	if err := json.NewDecoder(rec.Body).Decode(&response); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	if response.OrgID == "" {
-		t.Fatal("expected org_id to be set")
+	if response.OrgID != "" {
+		t.Fatalf("expected org_id to be omitted, got %q", response.OrgID)
 	}
-	if response.UserID != "owner@example.com" {
-		t.Fatalf("expected user_id owner@example.com, got %q", response.UserID)
+	if response.UserID != "" {
+		t.Fatalf("expected user_id to be omitted, got %q", response.UserID)
 	}
-	if response.Message != "Check your email for a magic link to finish signing in." {
+	if response.Message != hostedSignupAcceptedMessage {
 		t.Fatalf("unexpected message: %q", response.Message)
 	}
 
-	org, err := persistence.LoadOrganization(response.OrgID)
+	orgID := requireHostedSignupProvisionedOrgID(t, persistence, "owner@example.com")
+	org, err := persistence.LoadOrganization(orgID)
 	if err != nil {
 		t.Fatalf("load org: %v", err)
 	}
@@ -52,7 +49,7 @@ func TestHostedSignupSuccess(t *testing.T) {
 		t.Fatalf("expected owner owner@example.com, got %q", org.OwnerUserID)
 	}
 
-	manager, err := rbacProvider.GetManager(response.OrgID)
+	manager, err := rbacProvider.GetManager(orgID)
 	if err != nil {
 		t.Fatalf("get rbac manager: %v", err)
 	}
@@ -155,8 +152,8 @@ func TestHostedSignupRateLimit(t *testing.T) {
 			i,
 		)
 		rec := doHostedSignupRequest(router, body)
-		if i <= 5 && rec.Code != http.StatusCreated {
-			t.Fatalf("request %d expected 201, got %d: %s", i, rec.Code, rec.Body.String())
+		if i <= 5 && rec.Code != http.StatusAccepted {
+			t.Fatalf("request %d expected 202, got %d: %s", i, rec.Code, rec.Body.String())
 		}
 		if i == 6 && rec.Code != http.StatusTooManyRequests {
 			t.Fatalf("request %d expected 429, got %d: %s", i, rec.Code, rec.Body.String())
@@ -182,8 +179,8 @@ func TestHostedSignupRateLimit_NoProvisioningSideEffects(t *testing.T) {
 	)
 
 	first := doHostedSignupRequest(router, `{"email":"owner@example.com","org_name":"Org One"}`)
-	if first.Code != http.StatusCreated {
-		t.Fatalf("first request expected 201, got %d: %s", first.Code, first.Body.String())
+	if first.Code != http.StatusAccepted {
+		t.Fatalf("first request expected 202, got %d: %s", first.Code, first.Body.String())
 	}
 
 	orgsBefore, err := persistence.ListOrganizations()
@@ -193,8 +190,20 @@ func TestHostedSignupRateLimit_NoProvisioningSideEffects(t *testing.T) {
 	beforeCount := len(orgsBefore)
 
 	second := doHostedSignupRequest(router, `{"email":"owner@example.com","org_name":"Org Two"}`)
-	if second.Code != http.StatusTooManyRequests {
-		t.Fatalf("second request expected 429, got %d: %s", second.Code, second.Body.String())
+	if second.Code != http.StatusAccepted {
+		t.Fatalf("second request expected 202, got %d: %s", second.Code, second.Body.String())
+	}
+
+	var firstResp hostedSignupResponse
+	if err := json.NewDecoder(first.Body).Decode(&firstResp); err != nil {
+		t.Fatalf("decode first response: %v", err)
+	}
+	var secondResp hostedSignupResponse
+	if err := json.NewDecoder(second.Body).Decode(&secondResp); err != nil {
+		t.Fatalf("decode second response: %v", err)
+	}
+	if firstResp != secondResp {
+		t.Fatalf("expected uniform accepted responses, got first=%+v second=%+v", firstResp, secondResp)
 	}
 
 	orgsAfter, err := persistence.ListOrganizations()
@@ -337,6 +346,25 @@ func doHostedSignupRequest(router *Router, body string) *httptest.ResponseRecord
 	rec := httptest.NewRecorder()
 	router.mux.ServeHTTP(rec, req)
 	return rec
+}
+
+func requireHostedSignupProvisionedOrgID(t *testing.T, persistence *config.MultiTenantPersistence, ownerEmail string) string {
+	t.Helper()
+
+	orgs, err := persistence.ListOrganizations()
+	if err != nil {
+		t.Fatalf("list orgs: %v", err)
+	}
+	for _, org := range orgs {
+		if org == nil || org.ID == "default" {
+			continue
+		}
+		if strings.EqualFold(org.OwnerUserID, ownerEmail) {
+			return org.ID
+		}
+	}
+	t.Fatalf("expected provisioned org for owner %q", ownerEmail)
+	return ""
 }
 
 func containsRoleID(items []string, target string) bool {

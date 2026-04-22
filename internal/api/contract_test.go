@@ -2319,9 +2319,7 @@ func TestContract_ApprovalListResponseJSONSnapshot(t *testing.T) {
 
 func TestContract_HostedSignupResponseJSONSnapshot(t *testing.T) {
 	payload := hostedSignupResponse{
-		OrgID:   "org-123",
-		UserID:  "owner@example.com",
-		Message: "Check your email for a magic link to finish signing in.",
+		Message: hostedSignupAcceptedMessage,
 	}
 
 	got, err := json.Marshal(payload)
@@ -2330,9 +2328,7 @@ func TestContract_HostedSignupResponseJSONSnapshot(t *testing.T) {
 	}
 
 	const want = `{
-		"org_id":"org-123",
-		"user_id":"owner@example.com",
-		"message":"Check your email for a magic link to finish signing in."
+		"message":"If that email can finish signup, you'll receive a Pulse Account sign-in link shortly."
 	}`
 
 	assertJSONSnapshot(t, got, want)

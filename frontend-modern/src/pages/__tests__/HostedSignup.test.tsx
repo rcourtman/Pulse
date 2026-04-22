@@ -31,9 +31,9 @@ describe('HostedSignup', () => {
     requestMagicLinkMock.mockReset();
     signupMock.mockResolvedValue({
       ok: true,
-      status: 201,
+      status: 202,
       data: {
-        message: 'Check your email for a Pulse Account sign-in link.',
+        message: "If that email can finish signup, you'll receive a Pulse Account sign-in link shortly.",
       },
     });
     requestMagicLinkMock.mockResolvedValue({

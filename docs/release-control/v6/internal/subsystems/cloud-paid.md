@@ -116,6 +116,10 @@ agreement, and cloud-specific enforcement rules.
    zero-delta and removal-only TrueNAS or VMware previews as non-consuming or
    capacity-freeing changes rather than warning users that a disabled connection
    still grows monitored-system usage.
+   That same shared signup boundary also owns the public privacy floor:
+   syntactically valid `/api/public/signup` requests resolve to one uniform
+   `202 Accepted` Pulse Account response whether provisioning/email side
+   effects ran or were suppressed by owner-email throttling.
 
 The real `pulse-pro` license-server legacy checkout issuance, recurring
 renewals, manual issue, and legacy exchange flows are part of that same
@@ -1480,6 +1484,11 @@ That duplicate-owner-email rule is fail-closed and server-owned. Repeated
 hosted signup attempts for an email that already owns a tenant must resolve to
 the existing org identity instead of minting a second tenant and relying on
 later auth or billing surfaces to untangle the collision.
+That same public signup boundary must also stay privacy-safe at the browser
+edge: syntactically valid signup requests return one uniform `202 Accepted`
+Pulse Account message whether the backend provisioned/sent email or suppressed
+side effects due to the owner-email rate limit, so the route does not reveal
+prior email usage through `201` versus `429` drift.
 Hosted billing-state normalization now follows the same rule: a missing
 `plan_version` must remain missing instead of being synthesized from
 `subscription_state`, while explicit trial defaults remain explicit.

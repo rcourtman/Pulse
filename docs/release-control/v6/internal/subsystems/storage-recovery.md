@@ -146,6 +146,10 @@ querying, and the operator-facing storage health presentation layer.
    any adjacent recovery-rollup query, so hidden workload-route selectors do
    not hydrate storage/recovery transport on the protected hot path.
 6. Preserve API-owned node identity continuity in shared `internal/api/` helpers so storage and recovery transport attachments do not fork by hostname-versus-IP drift across the same runtime.
+   That same adjacent `internal/api/` boundary also keeps public hosted signup
+   commercial-only: storage and recovery surfaces must not infer tenant
+   existence, email issuance, or readiness from `/api/public/signup` response
+   codes or payload fields when shared backend API helpers change nearby.
 7. Preserve fail-closed API assignment and lookup behavior in shared `internal/api/` helpers so storage and recovery surfaces do not inherit orphaned profile or resource references from unrelated transport mutations.
 8. Preserve canonical configured public endpoint selection in shared `internal/api/` helpers so recovery and storage links do not inherit loopback-local scheme drift from admin-originated setup/install flows.
 9. Preserve trailing-slash normalization in those shared install-command helpers so recovery-adjacent transport and link surfaces do not inherit double-slash installer paths or slash-suffixed public endpoint drift from canonical backend install payloads.

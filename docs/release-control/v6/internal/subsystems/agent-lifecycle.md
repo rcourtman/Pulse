@@ -134,7 +134,10 @@ an add-only capacity posture.
    the signed entitlement lease already carried in canonical billing state.
    Lifecycle flows must not reintroduce anonymous bootstrap identity,
    tenant-local commercial-owner surrogates, or fake activation records when
-   they traverse those shared handlers.
+   they traverse those shared handlers. They also must not infer tenant
+   creation, email issuance, or public-route availability from
+   `/api/public/signup` response codes or payload fields just because that
+   commercial route lives under the shared `internal/api/` tree.
    That same shared quickstart boundary is vendor-neutral at the lifecycle
    edge too: lifecycle-adjacent consumers may observe the stable
    `quickstart:pulse-hosted` alias in AI settings payloads, but they must not

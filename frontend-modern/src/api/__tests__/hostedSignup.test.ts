@@ -17,11 +17,9 @@ describe('HostedSignupAPI', () => {
     vi.mocked(apiClient.fetch).mockResolvedValueOnce(
       new Response(
         JSON.stringify({
-          org_id: 'org-1',
-          user_id: 'owner@example.com',
-          message: 'Check your email.',
+          message: "If that email can finish signup, you'll receive a Pulse Account sign-in link shortly.",
         }),
-        { status: 201 },
+        { status: 202 },
       ),
     );
 
@@ -47,11 +45,9 @@ describe('HostedSignupAPI', () => {
     });
     expect(result).toEqual({
       ok: true,
-      status: 201,
+      status: 202,
       data: {
-        org_id: 'org-1',
-        user_id: 'owner@example.com',
-        message: 'Check your email.',
+        message: "If that email can finish signup, you'll receive a Pulse Account sign-in link shortly.",
       },
     });
   });

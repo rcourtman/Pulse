@@ -15,6 +15,8 @@ import (
 
 const hostedSignupRequestBodyLimit = 64 * 1024
 
+const hostedSignupAcceptedMessage = "If that email can finish signup, you'll receive a Pulse Account sign-in link shortly."
+
 type HostedRBACProvider interface {
 	GetManager(orgID string) (auth.ExtendedManager, error)
 	RemoveTenant(orgID string) error
@@ -35,8 +37,8 @@ type hostedSignupRequest struct {
 }
 
 type hostedSignupResponse struct {
-	OrgID   string `json:"org_id"`
-	UserID  string `json:"user_id"`
+	OrgID   string `json:"org_id,omitempty"`
+	UserID  string `json:"user_id,omitempty"`
 	Message string `json:"message"`
 }
 
@@ -103,7 +105,9 @@ func (h *HostedSignupHandlers) HandlePublicSignup(w http.ResponseWriter, r *http
 
 	// Enforce per-email rate limit before any provisioning side effects.
 	if !h.magicLinks.AllowRequest(req.Email) {
-		writeErrorResponse(w, http.StatusTooManyRequests, "rate_limited", "Too many magic link requests. Please wait and try again.", nil)
+		writeJSON(w, http.StatusAccepted, hostedSignupResponse{
+			Message: hostedSignupAcceptedMessage,
+		})
 		return
 	}
 
@@ -177,10 +181,8 @@ func (h *HostedSignupHandlers) HandlePublicSignup(w http.ResponseWriter, r *http
 
 	hosted.GetHostedMetrics().RecordSignup()
 	hosted.GetHostedMetrics().RecordProvisionStatus(hosted.ProvisionMetricStatusSuccess)
-	writeJSON(w, http.StatusCreated, hostedSignupResponse{
-		OrgID:   orgID,
-		UserID:  userID,
-		Message: "Check your email for a magic link to finish signing in.",
+	writeJSON(w, http.StatusAccepted, hostedSignupResponse{
+		Message: hostedSignupAcceptedMessage,
 	})
 }
 

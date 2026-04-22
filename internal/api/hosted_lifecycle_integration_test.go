@@ -38,27 +38,26 @@ func issueHostedLifecycleTrialInitiationToken(t *testing.T, h *LicenseHandlers, 
 
 func TestHostedLifecycle(t *testing.T) {
 	t.Run("Signup_SeedsTrialBillingState_ForBillingAdmin", func(t *testing.T) {
-		router, _, _, _, baseDir := newHostedSignupTestRouter(t, true)
+		router, persistence, _, _, baseDir := newHostedSignupTestRouter(t, true)
 
 		rec := doHostedSignupRequest(router, `{"email":"owner@example.com","org_name":"My Organization"}`)
-		if rec.Code != http.StatusCreated {
-			t.Fatalf("signup status=%d, want %d: %s", rec.Code, http.StatusCreated, rec.Body.String())
+		if rec.Code != http.StatusAccepted {
+			t.Fatalf("signup status=%d, want %d: %s", rec.Code, http.StatusAccepted, rec.Body.String())
 		}
 
-		var signupResp struct {
-			OrgID string `json:"org_id"`
-		}
+		var signupResp hostedSignupResponse
 		if err := json.NewDecoder(rec.Body).Decode(&signupResp); err != nil {
 			t.Fatalf("decode signup response: %v", err)
 		}
-		if signupResp.OrgID == "" {
-			t.Fatal("expected signup response org_id to be populated")
+		if signupResp.OrgID != "" || signupResp.UserID != "" {
+			t.Fatalf("expected signup response to omit identifiers, got %+v", signupResp)
 		}
+		orgID := requireHostedSignupProvisionedOrgID(t, persistence, "owner@example.com")
 
 		billingStore := config.NewFileBillingStore(baseDir)
-		stored, err := billingStore.GetBillingState(signupResp.OrgID)
+		stored, err := billingStore.GetBillingState(orgID)
 		if err != nil {
-			t.Fatalf("GetBillingState(%s) failed: %v", signupResp.OrgID, err)
+			t.Fatalf("GetBillingState(%s) failed: %v", orgID, err)
 		}
 		if stored == nil {
 			t.Fatal("expected seeded billing state after hosted signup")
@@ -91,8 +90,8 @@ func TestHostedLifecycle(t *testing.T) {
 		}
 
 		billingHandlers := NewBillingStateHandlers(billingStore, true)
-		req := httptest.NewRequest(http.MethodGet, "/api/admin/orgs/"+signupResp.OrgID+"/billing-state", nil)
-		req.SetPathValue("id", signupResp.OrgID)
+		req := httptest.NewRequest(http.MethodGet, "/api/admin/orgs/"+orgID+"/billing-state", nil)
+		req.SetPathValue("id", orgID)
 		rec2 := httptest.NewRecorder()
 		billingHandlers.HandleGetBillingState(rec2, req)
 		if rec2.Code != http.StatusOK {
@@ -120,34 +119,33 @@ func TestHostedLifecycle(t *testing.T) {
 		router, mtp, _, _, baseDir := newHostedSignupTestRouter(t, true)
 
 		rec := doHostedSignupRequest(router, `{"email":"owner@example.com","org_name":"My Organization"}`)
-		if rec.Code != http.StatusCreated {
-			t.Fatalf("signup status=%d, want %d: %s", rec.Code, http.StatusCreated, rec.Body.String())
+		if rec.Code != http.StatusAccepted {
+			t.Fatalf("signup status=%d, want %d: %s", rec.Code, http.StatusAccepted, rec.Body.String())
 		}
 
-		var signupResp struct {
-			OrgID string `json:"org_id"`
-		}
+		var signupResp hostedSignupResponse
 		if err := json.NewDecoder(rec.Body).Decode(&signupResp); err != nil {
 			t.Fatalf("decode signup response: %v", err)
 		}
-		if signupResp.OrgID == "" {
-			t.Fatal("expected signup response org_id to be populated")
+		if signupResp.OrgID != "" || signupResp.UserID != "" {
+			t.Fatalf("expected signup response to omit identifiers, got %+v", signupResp)
 		}
+		orgID := requireHostedSignupProvisionedOrgID(t, mtp, "owner@example.com")
 
 		// Write Pro billing state via the billing store.
 		billingStore := config.NewFileBillingStore(baseDir)
-		if err := billingStore.SaveBillingState(signupResp.OrgID, &entitlements.BillingState{
+		if err := billingStore.SaveBillingState(orgID, &entitlements.BillingState{
 			Capabilities:      append([]string(nil), license.TierFeatures[license.TierPro]...),
 			Limits:            map[string]int64{},
 			MetersEnabled:     []string{},
 			PlanVersion:       string(license.TierPro),
 			SubscriptionState: entitlements.SubStateActive,
 		}); err != nil {
-			t.Fatalf("SaveBillingState(%s) failed: %v", signupResp.OrgID, err)
+			t.Fatalf("SaveBillingState(%s) failed: %v", orgID, err)
 		}
 
 		handlers := NewLicenseHandlers(mtp, true)
-		ctx := context.WithValue(context.Background(), OrgIDContextKey, signupResp.OrgID)
+		ctx := context.WithValue(context.Background(), OrgIDContextKey, orgID)
 
 		// GET entitlements and verify capabilities match billing state.
 		entReq := httptest.NewRequest(http.MethodGet, "/api/license/entitlements", nil).WithContext(ctx)
