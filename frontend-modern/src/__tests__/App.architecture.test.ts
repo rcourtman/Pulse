@@ -144,6 +144,13 @@ describe('App architecture', () => {
     expect(appRuntimeStateSource).toContain("const checkBackendHealth = async () => {");
     expect(appRuntimeStateSource).toContain('const loadOrganizations = async () =>');
     expect(appRuntimeStateSource).toContain('const handleOrgSwitch = (nextOrgID: string) =>');
+    expect(appRuntimeStateSource).toContain('const handleOrganizationsChanged = () => {');
+    expect(appRuntimeStateSource).toContain(
+      "eventBus.on('organizations_changed', handleOrganizationsChanged);",
+    );
+    expect(appRuntimeStateSource).toContain(
+      "eventBus.off('organizations_changed', handleOrganizationsChanged);",
+    );
     expect(appRuntimeStateSource).toContain(
       "import {\n  isHostedModeEnabled,\n  isMultiTenantEnabled,\n  runtimeCapabilitiesLoaded,\n  loadRuntimeCapabilities,\n} from '@/stores/license';",
     );

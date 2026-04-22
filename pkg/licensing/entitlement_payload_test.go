@@ -627,6 +627,32 @@ func TestBuildRuntimeCapabilitiesPayload_NilStatusDefaultsToFreeTier(t *testing.
 	}
 }
 
+func TestBuildRuntimeCapabilitiesPayload_EmptyCollectionsRemainJSONArrays(t *testing.T) {
+	payload := BuildRuntimeCapabilitiesPayloadWithUsage(&LicenseStatus{
+		Valid:    true,
+		Tier:     TierFree,
+		Features: []string{},
+	}, "", EntitlementUsageSnapshot{})
+
+	if payload.Capabilities == nil {
+		t.Fatal("expected runtime capabilities to preserve empty capabilities as []")
+	}
+	if payload.Limits == nil {
+		t.Fatal("expected runtime capabilities to preserve empty limits as []")
+	}
+
+	body, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal runtime capabilities: %v", err)
+	}
+	if strings.Contains(string(body), `"capabilities":null`) {
+		t.Fatalf("runtime capabilities encoded null capabilities: %s", string(body))
+	}
+	if strings.Contains(string(body), `"limits":null`) {
+		t.Fatalf("runtime capabilities encoded null limits: %s", string(body))
+	}
+}
+
 func TestLimitState(t *testing.T) {
 	tests := []struct {
 		name    string

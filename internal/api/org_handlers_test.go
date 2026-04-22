@@ -223,9 +223,11 @@ func TestOrgHandlersCRUDLifecycle(t *testing.T) {
 	inviteReq.SetPathValue("id", "acme")
 	inviteRec := httptest.NewRecorder()
 	h.HandleInviteMember(inviteRec, inviteReq)
-	if inviteRec.Code != http.StatusOK {
-		t.Fatalf("expected 200 from invite, got %d: %s", inviteRec.Code, inviteRec.Body.String())
+	if inviteRec.Code != http.StatusAccepted {
+		t.Fatalf("expected 202 from invite, got %d: %s", inviteRec.Code, inviteRec.Body.String())
 	}
+
+	acceptInvitationForTest(t, h, "acme", "bob")
 
 	membersReq := withUser(httptest.NewRequest(http.MethodGet, "/api/orgs/acme/members", nil), "bob")
 	membersReq.SetPathValue("id", "acme")
@@ -284,9 +286,11 @@ func TestOrgHandlersViewerCannotManageOrg(t *testing.T) {
 	inviteReq.SetPathValue("id", "acme")
 	inviteRec := httptest.NewRecorder()
 	h.HandleInviteMember(inviteRec, inviteReq)
-	if inviteRec.Code != http.StatusOK {
+	if inviteRec.Code != http.StatusAccepted {
 		t.Fatalf("invite failed: %d %s", inviteRec.Code, inviteRec.Body.String())
 	}
+
+	acceptInvitationForTest(t, h, "acme", "bob")
 
 	updateReq := withUser(
 		httptest.NewRequest(http.MethodPut, "/api/orgs/acme", bytes.NewBufferString(`{"displayName":"Nope"}`)),
@@ -414,6 +418,9 @@ func TestOrgHandlersOwnershipTransfer(t *testing.T) {
 		t.Fatalf("create failed: %d %s", createRec.Code, createRec.Body.String())
 	}
 
+	inviteMemberForTest(t, h, "acme", "alice", "bob", "viewer", http.StatusAccepted)
+	acceptInvitationForTest(t, h, "acme", "bob")
+
 	transferReq := withUser(
 		httptest.NewRequest(http.MethodPost, "/api/orgs/acme/members", bytes.NewBufferString(`{"userId":"bob","role":"owner"}`)),
 		"alice",
@@ -463,16 +470,8 @@ func TestOrgHandlersRemoveMember(t *testing.T) {
 		t.Fatalf("create failed: %d %s", createRec.Code, createRec.Body.String())
 	}
 
-	inviteReq := withUser(
-		httptest.NewRequest(http.MethodPost, "/api/orgs/acme/members", bytes.NewBufferString(`{"userId":"bob","role":"editor"}`)),
-		"alice",
-	)
-	inviteReq.SetPathValue("id", "acme")
-	inviteRec := httptest.NewRecorder()
-	h.HandleInviteMember(inviteRec, inviteReq)
-	if inviteRec.Code != http.StatusOK {
-		t.Fatalf("invite failed: %d %s", inviteRec.Code, inviteRec.Body.String())
-	}
+	inviteMemberForTest(t, h, "acme", "alice", "bob", "editor", http.StatusAccepted)
+	acceptInvitationForTest(t, h, "acme", "bob")
 
 	removeReq := withUser(httptest.NewRequest(http.MethodDelete, "/api/orgs/acme/members/bob", nil), "alice")
 	removeReq.SetPathValue("id", "acme")
@@ -496,6 +495,108 @@ func TestOrgHandlersRemoveMember(t *testing.T) {
 	}
 	if len(members) != 1 || members[0].UserID != "alice" {
 		t.Fatalf("expected only alice after removal, got %+v", members)
+	}
+}
+
+func TestOrgHandlersInvitationsRequireAcceptance(t *testing.T) {
+	t.Setenv("PULSE_DEV", "true")
+	defer SetMultiTenantEnabled(false)
+	SetMultiTenantEnabled(true)
+
+	persistence := config.NewMultiTenantPersistence(t.TempDir())
+	h := NewOrgHandlers(persistence, nil)
+
+	createReq := withUser(
+		httptest.NewRequest(http.MethodPost, "/api/orgs", bytes.NewBufferString(`{"id":"acme","displayName":"Acme"}`)),
+		"alice",
+	)
+	createRec := httptest.NewRecorder()
+	h.HandleCreateOrg(createRec, createReq)
+	if createRec.Code != http.StatusCreated {
+		t.Fatalf("create failed: %d %s", createRec.Code, createRec.Body.String())
+	}
+
+	inviteRec := inviteMemberForTest(t, h, "acme", "alice", "bob", "admin", http.StatusAccepted)
+	var invitePayload organizationAccessMutationResponse
+	if err := json.Unmarshal(inviteRec.Body.Bytes(), &invitePayload); err != nil {
+		t.Fatalf("decode invite payload: %v", err)
+	}
+	if invitePayload.Kind != "invitation" || invitePayload.Invitation == nil {
+		t.Fatalf("expected invitation payload, got %+v", invitePayload)
+	}
+
+	bobGetReq := withUser(httptest.NewRequest(http.MethodGet, "/api/orgs/acme", nil), "bob")
+	bobGetReq.SetPathValue("id", "acme")
+	bobGetRec := httptest.NewRecorder()
+	h.HandleGetOrg(bobGetRec, bobGetReq)
+	if bobGetRec.Code != http.StatusForbidden {
+		t.Fatalf("expected bob to be blocked before accepting invite, got %d: %s", bobGetRec.Code, bobGetRec.Body.String())
+	}
+
+	myInvitesReq := withUser(httptest.NewRequest(http.MethodGet, "/api/org-invitations", nil), "bob")
+	myInvitesRec := httptest.NewRecorder()
+	h.HandleListMyInvitations(myInvitesRec, myInvitesReq)
+	if myInvitesRec.Code != http.StatusOK {
+		t.Fatalf("expected 200 from my invitations, got %d: %s", myInvitesRec.Code, myInvitesRec.Body.String())
+	}
+	var myInvites []organizationUserInvitationResponse
+	if err := json.Unmarshal(myInvitesRec.Body.Bytes(), &myInvites); err != nil {
+		t.Fatalf("decode my invitations: %v", err)
+	}
+	if len(myInvites) != 1 || myInvites[0].OrgID != "acme" {
+		t.Fatalf("unexpected invitation inbox: %+v", myInvites)
+	}
+
+	managerInvitesReq := withUser(httptest.NewRequest(http.MethodGet, "/api/orgs/acme/invitations", nil), "alice")
+	managerInvitesReq.SetPathValue("id", "acme")
+	managerInvitesRec := httptest.NewRecorder()
+	h.HandleListInvitations(managerInvitesRec, managerInvitesReq)
+	if managerInvitesRec.Code != http.StatusOK {
+		t.Fatalf("expected 200 from invitation list, got %d: %s", managerInvitesRec.Code, managerInvitesRec.Body.String())
+	}
+	var pending []models.OrganizationInvitation
+	if err := json.Unmarshal(managerInvitesRec.Body.Bytes(), &pending); err != nil {
+		t.Fatalf("decode pending invitations: %v", err)
+	}
+	if len(pending) != 1 || pending[0].UserID != "bob" {
+		t.Fatalf("unexpected pending invitations: %+v", pending)
+	}
+
+	acceptInvitationForTest(t, h, "acme", "bob")
+
+	orgAfterAccept, err := persistence.LoadOrganization("acme")
+	if err != nil {
+		t.Fatalf("load org after accept: %v", err)
+	}
+	if orgAfterAccept.GetMemberRole("bob") != models.OrgRoleAdmin {
+		t.Fatalf("expected bob to become admin after acceptance, got %q", orgAfterAccept.GetMemberRole("bob"))
+	}
+	if len(orgAfterAccept.PendingInvitations) != 0 {
+		t.Fatalf("expected invitations to be cleared after acceptance, got %+v", orgAfterAccept.PendingInvitations)
+	}
+}
+
+func TestOrgHandlersRejectOwnershipTransferToNonMember(t *testing.T) {
+	t.Setenv("PULSE_DEV", "true")
+	defer SetMultiTenantEnabled(false)
+	SetMultiTenantEnabled(true)
+
+	persistence := config.NewMultiTenantPersistence(t.TempDir())
+	h := NewOrgHandlers(persistence, nil)
+
+	createReq := withUser(
+		httptest.NewRequest(http.MethodPost, "/api/orgs", bytes.NewBufferString(`{"id":"acme","displayName":"Acme"}`)),
+		"alice",
+	)
+	createRec := httptest.NewRecorder()
+	h.HandleCreateOrg(createRec, createReq)
+	if createRec.Code != http.StatusCreated {
+		t.Fatalf("create failed: %d %s", createRec.Code, createRec.Body.String())
+	}
+
+	transferRec := inviteMemberForTest(t, h, "acme", "alice", "bob", "owner", http.StatusBadRequest)
+	if !strings.Contains(transferRec.Body.String(), "existing member") {
+		t.Fatalf("expected owner transfer rejection to explain member prerequisite, got %s", transferRec.Body.String())
 	}
 }
 
@@ -1026,4 +1127,31 @@ func TestHandleCreateShareRejectsUnsupportedCustomResourceType(t *testing.T) {
 
 func withUser(req *http.Request, username string) *http.Request {
 	return req.WithContext(internalauth.WithUser(req.Context(), username))
+}
+
+func inviteMemberForTest(t *testing.T, h *OrgHandlers, orgID, actor, userID, role string, wantStatus int) *httptest.ResponseRecorder {
+	t.Helper()
+	req := withUser(
+		httptest.NewRequest(http.MethodPost, "/api/orgs/"+orgID+"/members", bytes.NewBufferString(`{"userId":"`+userID+`","role":"`+role+`"}`)),
+		actor,
+	)
+	req.SetPathValue("id", orgID)
+	rec := httptest.NewRecorder()
+	h.HandleInviteMember(rec, req)
+	if rec.Code != wantStatus {
+		t.Fatalf("invite %s as %s returned %d, want %d: %s", userID, role, rec.Code, wantStatus, rec.Body.String())
+	}
+	return rec
+}
+
+func acceptInvitationForTest(t *testing.T, h *OrgHandlers, orgID, username string) *httptest.ResponseRecorder {
+	t.Helper()
+	req := withUser(httptest.NewRequest(http.MethodPost, "/api/org-invitations/"+orgID+"/accept", nil), username)
+	req.SetPathValue("id", orgID)
+	rec := httptest.NewRecorder()
+	h.HandleAcceptMyInvitation(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("accept invitation for %s returned %d: %s", username, rec.Code, rec.Body.String())
+	}
+	return rec
 }

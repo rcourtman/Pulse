@@ -129,6 +129,28 @@ export interface LicenseFeatureStatus {
   upgrade_url: string;
 }
 
+function normalizeRuntimeCapabilities(
+  payload: unknown,
+): LicenseRuntimeCapabilities {
+  const source =
+    payload && typeof payload === 'object'
+      ? (payload as Partial<LicenseRuntimeCapabilities>)
+      : {};
+
+  return {
+    ...source,
+    capabilities: Array.isArray(source.capabilities)
+      ? source.capabilities.filter((value): value is string => typeof value === 'string')
+      : [],
+    limits: Array.isArray(source.limits)
+      ? source.limits.filter(
+          (value): value is EntitlementLimitStatus =>
+            Boolean(value) && typeof value === 'object',
+        )
+      : [],
+  };
+}
+
 export class LicenseAPI {
   private static baseUrl = '/api/license';
 
@@ -137,9 +159,8 @@ export class LicenseAPI {
   }
 
   static async getRuntimeCapabilities(): Promise<LicenseRuntimeCapabilities> {
-    return apiFetchJSON(
-      `${this.baseUrl}/runtime-capabilities`,
-    ) as Promise<LicenseRuntimeCapabilities>;
+    const payload = await apiFetchJSON(`${this.baseUrl}/runtime-capabilities`);
+    return normalizeRuntimeCapabilities(payload);
   }
 
   static async getCommercialPosture(): Promise<LicenseCommercialPosture> {

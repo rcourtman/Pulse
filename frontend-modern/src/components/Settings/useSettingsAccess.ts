@@ -130,12 +130,14 @@ export function useSettingsAccess({
 
   createEffect(() => {
     const current = activeTab();
+    const currentItem = getSettingsNavItem(current);
     const requiresFeatureResolution = Boolean(tabFeatureRequirements[current]?.length);
-    const requiresCapabilityResolution = Boolean(getSettingsNavItem(current)?.requiredCapability);
+    const requiresCapabilityResolution = Boolean(currentItem?.requiredCapability);
     const requiresPresentationPolicyResolution = Boolean(
-      getSettingsNavItem(current)?.hideWhenCommercialHidden ||
-        getSettingsNavItem(current)?.hideWhenOrganizationHidden ||
-        getSettingsNavItem(current)?.hideWhenReadOnly,
+      currentItem?.hideWhenCommercialHidden ||
+        currentItem?.hideWhenOrganizationHidden ||
+        currentItem?.hideWhenReadOnly ||
+        currentItem?.hideWhenDemoMode,
     );
     if (
       (requiresFeatureResolution && !runtimeCapabilitiesLoaded()) ||
@@ -146,6 +148,51 @@ export function useSettingsAccess({
     }
 
     if (!flatTabs().some((tab) => tab.id === current)) {
+      const currentRouteStillAllowed = (() => {
+        if (!currentItem) {
+          return false;
+        }
+
+        if (currentItem.hostedOnly && !isHostedModeEnabled()) {
+          return false;
+        }
+
+        if (currentItem.hideWhenOrganizationHidden && organizationSurfacesHidden()) {
+          return false;
+        }
+        if (currentItem.hideWhenCommercialHidden && commercialSurfacesHidden()) {
+          return false;
+        }
+        if (currentItem.hideWhenDemoMode && demoMode()) {
+          return false;
+        }
+        if (currentItem.hideWhenReadOnly && readOnly()) {
+          return false;
+        }
+
+        const settingsCapabilities = securityStatus()?.settingsCapabilities ?? null;
+        const settingsCapabilitiesResolved = securityStatus() !== null;
+        if (
+          currentItem.requiredCapability &&
+          settingsCapabilitiesResolved &&
+          settingsCapabilities?.[currentItem.requiredCapability] !== true
+        ) {
+          return false;
+        }
+
+        if (currentItem.hideWhenUnavailable) {
+          const requiredFeatures = currentItem.features ?? [];
+          if (!requiredFeatures.every((feature) => hasFeature(feature))) {
+            return false;
+          }
+        }
+
+        return true;
+      })();
+
+      if (currentRouteStillAllowed) {
+        return;
+      }
       setActiveTab(DEFAULT_SETTINGS_TAB);
     }
   });

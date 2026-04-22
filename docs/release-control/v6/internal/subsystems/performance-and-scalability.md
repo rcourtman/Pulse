@@ -224,6 +224,12 @@ regression protection.
     `/api/state` and paying an avoidable `401`; once a local-login hint exists
     or the operator is on a protected route, that shared state probe remains
     the canonical runtime detector.
+    Invitation accept/revoke and other org-membership changes follow that same
+    hot-path contract: `frontend-modern/src/useAppRuntimeState.ts` may reload
+    the org list from the shared `organizations_changed` event, but that refresh
+    must stay event-driven and route-safe rather than expanding into a second
+    full app bootstrap, a pre-auth org probe, or a dashboard-route prewarm
+    that duplicates the canonical summary fetch path.
     into another summary-fetch or org-bootstrap hot path.
     The same protected hot path also owns Patrol route compatibility: if
     `frontend-modern/src/App.tsx` keeps `/ai` as a legacy alias while `/patrol`

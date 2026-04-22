@@ -22,6 +22,11 @@ const SETTINGS_SHELL_ROUTES = [
     description: 'Review organization metadata, membership footprint, and ownership.',
   },
   {
+    route: '/settings/organization/access',
+    title: 'Organization Access',
+    description: 'Manage organization invitations, member roles, and ownership transfers.',
+  },
+  {
     route: '/settings/organization/billing',
     title: 'Organization Billing',
     description: 'Track plan tier, usage, and upgrade options for multi-tenant deployments.',

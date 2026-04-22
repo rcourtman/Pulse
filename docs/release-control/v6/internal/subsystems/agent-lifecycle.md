@@ -708,6 +708,15 @@ membership and derive the bounded effective role before it lands in protected
 hosted routes. Direct opens must fail closed on missing membership, blank-owner
 orgs, or owner/admin role escalation attempts instead of diverging from the
 newer portal exchange path by repairing org metadata on arrival.
+That same shared `internal/api/` organization boundary also now assumes
+self-hosted org membership is consent-backed rather than manager-written for a
+target user ID. Lifecycle-adjacent setup, install, or hosted-entry surfaces
+may call `/api/orgs/{id}/members`, but a new user must land in a pending
+invitation record and become a real member only after the invited account
+accepts through the canonical invitation routes. Owner transfer remains an
+existing-member operation on that same boundary; lifecycle-adjacent flows may
+not treat an unaccepted invitation or arbitrary `userId` string as a
+member-shaped owner target.
 That same shared `internal/api/` dependency also assumes telemetry
 transparency remains explicitly system-settings-owned. When lifecycle-adjacent
 setup or router work touches shared `internal/api/` files, telemetry preview

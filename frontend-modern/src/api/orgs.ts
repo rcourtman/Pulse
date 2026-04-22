@@ -9,6 +9,24 @@ export interface OrganizationMember {
   addedBy?: string;
 }
 
+export interface OrganizationInvitation {
+  userId: string;
+  role: Exclude<OrganizationRole, 'owner'>;
+  invitedAt: string;
+  invitedBy: string;
+}
+
+export interface OrganizationAccessMutationResult {
+  kind: 'member' | 'invitation';
+  member?: OrganizationMember;
+  invitation?: OrganizationInvitation;
+}
+
+export interface UserOrganizationInvitation extends OrganizationInvitation {
+  orgId: string;
+  orgDisplayName: string;
+}
+
 export interface Organization {
   id: string;
   displayName: string;
@@ -69,19 +87,62 @@ export const OrgsAPI = {
       skipOrgContext: true,
     }),
 
+  listPendingInvitations: (id: string) =>
+    apiFetchJSON<OrganizationInvitation[]>(
+      `/api/orgs/${encodeURIComponent(id)}/invitations`,
+      {
+        skipOrgContext: true,
+      },
+    ),
+
+  listMyInvitations: () =>
+    apiFetchJSON<UserOrganizationInvitation[]>('/api/org-invitations', {
+      skipOrgContext: true,
+    }),
+
   inviteMember: (id: string, payload: { userId: string; role: OrganizationRole }) =>
-    apiFetchJSON<OrganizationMember>(`/api/orgs/${encodeURIComponent(id)}/members`, {
-      method: 'POST',
-      body: JSON.stringify(payload),
+    apiFetchJSON<OrganizationAccessMutationResult>(
+      `/api/orgs/${encodeURIComponent(id)}/members`,
+      {
+        method: 'POST',
+        body: JSON.stringify(payload),
+        skipOrgContext: true,
+      },
+    ),
+
+  acceptMyInvitation: (id: string) =>
+    apiFetchJSON<OrganizationAccessMutationResult>(
+      `/api/org-invitations/${encodeURIComponent(id)}/accept`,
+      {
+        method: 'POST',
+        skipOrgContext: true,
+      },
+    ),
+
+  declineMyInvitation: (id: string) =>
+    apiFetchJSON<void>(`/api/org-invitations/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
       skipOrgContext: true,
     }),
 
   updateMemberRole: (id: string, payload: { userId: string; role: OrganizationRole }) =>
-    apiFetchJSON<OrganizationMember>(`/api/orgs/${encodeURIComponent(id)}/members`, {
-      method: 'POST',
-      body: JSON.stringify(payload),
-      skipOrgContext: true,
-    }),
+    apiFetchJSON<OrganizationAccessMutationResult>(
+      `/api/orgs/${encodeURIComponent(id)}/members`,
+      {
+        method: 'POST',
+        body: JSON.stringify(payload),
+        skipOrgContext: true,
+      },
+    ),
+
+  revokeInvitation: (id: string, userId: string) =>
+    apiFetchJSON<void>(
+      `/api/orgs/${encodeURIComponent(id)}/invitations/${encodeURIComponent(userId)}`,
+      {
+        method: 'DELETE',
+        skipOrgContext: true,
+      },
+    ),
 
   removeMember: (id: string, userId: string) =>
     apiFetchJSON<void>(

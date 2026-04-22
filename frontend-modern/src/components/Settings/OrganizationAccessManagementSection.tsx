@@ -17,7 +17,7 @@ export const OrganizationAccessManagementSection: Component<
       <>
         <Show when={props.state.canManageCurrentOrg()}>
           <div class="rounded-md border border-border p-4 space-y-3">
-            <h4 class="text-sm font-semibold text-base-content">Add Member</h4>
+            <h4 class="text-sm font-semibold text-base-content">Invite Member</h4>
             <div class="grid gap-2 sm:grid-cols-[1fr_auto_auto]">
               <input
                 type="text"
@@ -48,7 +48,7 @@ export const OrganizationAccessManagementSection: Component<
                 disabled={props.state.saving()}
                 class="inline-flex w-full sm:w-auto items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {props.state.saving() ? 'Saving...' : 'Add'}
+                {props.state.saving() ? 'Saving...' : 'Invite'}
               </button>
             </div>
           </div>

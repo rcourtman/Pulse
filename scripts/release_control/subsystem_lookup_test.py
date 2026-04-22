@@ -3602,14 +3602,14 @@ class SubsystemLookupTest(unittest.TestCase):
                 {
                     "heading": "## Shared Boundaries",
                     "path": "frontend-modern/src/api/orgs.ts",
-                    "line": 61,
-                    "heading_line": 59,
+                    "line": 62,
+                    "heading_line": 60,
                 },
                 {
                     "heading": "## Extension Points",
                     "path": "frontend-modern/src/api/orgs.ts",
-                    "line": 72,
-                    "heading_line": 68,
+                    "line": 73,
+                    "heading_line": 69,
                 },
             ],
         )
@@ -3672,20 +3672,20 @@ class SubsystemLookupTest(unittest.TestCase):
                 {
                     "heading": "## Canonical Files",
                     "path": "internal/api/access_control_handlers.go",
-                    "line": 53,
+                    "line": 54,
                     "heading_line": 22,
                 },
                 {
                     "heading": "## Shared Boundaries",
                     "path": "internal/api/access_control_handlers.go",
-                    "line": 63,
-                    "heading_line": 59,
+                    "line": 64,
+                    "heading_line": 60,
                 },
                 {
                     "heading": "## Extension Points",
                     "path": "internal/api/access_control_handlers.go",
-                    "line": 74,
-                    "heading_line": 68,
+                    "line": 75,
+                    "heading_line": 69,
                 },
             ],
         )

@@ -36,6 +36,14 @@ export function getOrganizationAccessEmptyState(): string {
   return 'No organization members found.';
 }
 
+export function getOrganizationAccessPendingInvitationsEmptyState(): string {
+  return 'No pending invitations for this organization.';
+}
+
+export function getOrganizationAccessYourInvitationsEmptyState(): string {
+  return 'No invitations are waiting for you.';
+}
+
 export function getOrganizationOverviewMembersEmptyState(): string {
   return 'No members found.';
 }
@@ -64,6 +72,10 @@ export function getOrganizationMemberUserIdRequiredMessage(): string {
   return 'User ID is required';
 }
 
+export function getOrganizationAccessOwnerTransferMemberRequiredMessage(): string {
+  return 'Ownership can only be transferred to an existing member.';
+}
+
 export function getOrganizationAccessManageRequiredMessage(): string {
   return 'Admin or owner role required to manage organization access.';
 }
@@ -86,8 +98,31 @@ export function getOrganizationAccessMemberAddedMessage(
   return `Added ${userId} as ${role}.`;
 }
 
+export function getOrganizationAccessInvitationSentMessage(
+  userId: string,
+  role: Exclude<OrganizationRole, 'owner'>,
+): string {
+  return `Sent ${userId} an invitation for the ${role} role.`;
+}
+
+export function getOrganizationAccessInvitationAcceptedMessage(userId: string): string {
+  return `${userId} joined the organization.`;
+}
+
+export function getOrganizationAccessInvitationDeclinedMessage(orgId: string): string {
+  return `Declined the invitation for ${orgId}.`;
+}
+
+export function getOrganizationAccessInvitationRevokedMessage(userId: string): string {
+  return `Revoked ${userId}'s pending invitation.`;
+}
+
 export function getOrganizationAddMemberErrorMessage(message?: string): string {
   return message || 'Unable to add the member.';
+}
+
+export function getOrganizationInvitationActionErrorMessage(message?: string): string {
+  return message || 'Unable to update the invitation.';
 }
 
 export function getOrganizationMemberRemoveConfirmMessage(

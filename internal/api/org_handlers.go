@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -108,6 +109,18 @@ type updateOrganizationRequest struct {
 type inviteMemberRequest struct {
 	UserID string                  `json:"userId"`
 	Role   models.OrganizationRole `json:"role"`
+}
+
+type organizationAccessMutationResponse struct {
+	Kind       string                         `json:"kind"`
+	Member     *models.OrganizationMember     `json:"member,omitempty"`
+	Invitation *models.OrganizationInvitation `json:"invitation,omitempty"`
+}
+
+type organizationUserInvitationResponse struct {
+	models.OrganizationInvitation
+	OrgID          string `json:"orgId"`
+	OrgDisplayName string `json:"orgDisplayName"`
 }
 
 type createShareRequest struct {
@@ -463,9 +476,15 @@ func (h *OrgHandlers) HandleInviteMember(w http.ResponseWriter, r *http.Request)
 	}
 
 	now := time.Now().UTC()
+	memberIndex := findOrganizationMemberIndex(org.Members, req.UserID)
+	invitationIndex := findOrganizationInvitationIndex(org.PendingInvitations, req.UserID)
 
 	// Ownership transfer: demote old owner to admin and promote target user to owner.
 	if req.Role == models.OrgRoleOwner && req.UserID != org.OwnerUserID {
+		if memberIndex < 0 {
+			writeErrorResponse(w, http.StatusBadRequest, "owner_transfer_requires_member", "Ownership can only be transferred to an existing member", nil)
+			return
+		}
 		for i := range org.Members {
 			if org.Members[i].UserID == org.OwnerUserID {
 				org.Members[i].Role = models.OrgRoleAdmin
@@ -479,29 +498,45 @@ func (h *OrgHandlers) HandleInviteMember(w http.ResponseWriter, r *http.Request)
 		org.OwnerUserID = req.UserID
 	}
 
-	updated := false
-	for i := range org.Members {
-		if org.Members[i].UserID == req.UserID {
-			org.Members[i].Role = req.Role
-			org.Members[i].AddedBy = username
-			if org.Members[i].AddedAt.IsZero() {
-				org.Members[i].AddedAt = now
-			}
-			updated = true
-			break
+	if memberIndex >= 0 {
+		org.Members[memberIndex].Role = req.Role
+		org.Members[memberIndex].AddedBy = username
+		if org.Members[memberIndex].AddedAt.IsZero() {
+			org.Members[memberIndex].AddedAt = now
 		}
-	}
-	if !updated {
-		// Enforce max_users limit only for new member additions.
+		if invitationIndex >= 0 {
+			org.PendingInvitations = append(org.PendingInvitations[:invitationIndex], org.PendingInvitations[invitationIndex+1:]...)
+		}
+	} else {
 		if enforceUserLimitForMemberAdd(w, r.Context(), org) {
 			return
 		}
-		org.Members = append(org.Members, models.OrganizationMember{
-			UserID:  req.UserID,
-			Role:    req.Role,
-			AddedAt: now,
-			AddedBy: username,
+		invitation := models.OrganizationInvitation{
+			UserID:    req.UserID,
+			Role:      req.Role,
+			InvitedAt: now,
+			InvitedBy: username,
+		}
+		if invitationIndex >= 0 {
+			org.PendingInvitations[invitationIndex].Role = req.Role
+			org.PendingInvitations[invitationIndex].InvitedBy = username
+			if org.PendingInvitations[invitationIndex].InvitedAt.IsZero() {
+				org.PendingInvitations[invitationIndex].InvitedAt = now
+			}
+			invitation = org.PendingInvitations[invitationIndex]
+		} else {
+			org.PendingInvitations = append(org.PendingInvitations, invitation)
+		}
+		if err := h.persistence.SaveOrganization(org); err != nil {
+			writeErrorResponse(w, http.StatusInternalServerError, "invite_failed", "Failed to update organization members", nil)
+			return
+		}
+
+		writeJSON(w, http.StatusAccepted, organizationAccessMutationResponse{
+			Kind:       "invitation",
+			Invitation: organizationInvitationPointer(org.PendingInvitations, req.UserID),
 		})
+		return
 	}
 
 	if err := h.persistence.SaveOrganization(org); err != nil {
@@ -509,15 +544,10 @@ func (h *OrgHandlers) HandleInviteMember(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	normalizedMembers := normalizeOrganizationMembers(org.Members)
-	for _, member := range normalizedMembers {
-		if member.UserID == req.UserID {
-			writeJSON(w, http.StatusOK, member)
-			return
-		}
-	}
-
-	writeErrorResponse(w, http.StatusInternalServerError, "invite_failed", "Failed to update organization members", nil)
+	writeJSON(w, http.StatusOK, organizationAccessMutationResponse{
+		Kind:   "member",
+		Member: organizationMemberPointer(org.Members, req.UserID),
+	})
 }
 
 func (h *OrgHandlers) HandleRemoveMember(w http.ResponseWriter, r *http.Request) {
@@ -578,6 +608,251 @@ func (h *OrgHandlers) HandleRemoveMember(w http.ResponseWriter, r *http.Request)
 	org.Members = nextMembers
 	if err := h.persistence.SaveOrganization(org); err != nil {
 		writeErrorResponse(w, http.StatusInternalServerError, "member_remove_failed", "Failed to update organization members", nil)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *OrgHandlers) HandleListInvitations(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if !h.requireMultiTenantGate(w, r) {
+		return
+	}
+
+	orgID := strings.TrimSpace(r.PathValue("id"))
+	org, err := h.loadOrganization(orgID)
+	if err != nil {
+		h.writeLoadOrgError(w, err)
+		return
+	}
+
+	username := auth.GetUser(r.Context())
+	token := getAPITokenRecordFromRequest(r)
+	if token != nil || strings.HasPrefix(username, "token:") {
+		writeErrorResponse(w, http.StatusForbidden, "session_required", "Session-based user authentication is required", nil)
+		return
+	}
+	if !org.CanUserManage(username) {
+		writeErrorResponse(w, http.StatusForbidden, "access_denied", "Admin role required for this organization", nil)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, normalizeOrganizationInvitations(org.PendingInvitations, org.Members))
+}
+
+func (h *OrgHandlers) HandleRevokeInvitation(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodDelete {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if !h.requireMultiTenantGate(w, r) {
+		return
+	}
+
+	orgID := strings.TrimSpace(r.PathValue("id"))
+	userID := strings.TrimSpace(r.PathValue("userId"))
+	if userID == "" {
+		writeErrorResponse(w, http.StatusBadRequest, "invalid_user", "Invitation user ID is required", nil)
+		return
+	}
+
+	org, err := h.loadOrganization(orgID)
+	if err != nil {
+		h.writeLoadOrgError(w, err)
+		return
+	}
+
+	username := auth.GetUser(r.Context())
+	token := getAPITokenRecordFromRequest(r)
+	if token != nil || strings.HasPrefix(username, "token:") {
+		writeErrorResponse(w, http.StatusForbidden, "session_required", "Session-based user authentication is required", nil)
+		return
+	}
+	if !org.CanUserManage(username) {
+		writeErrorResponse(w, http.StatusForbidden, "access_denied", "Admin role required for this organization", nil)
+		return
+	}
+
+	index := findOrganizationInvitationIndex(org.PendingInvitations, userID)
+	if index < 0 {
+		writeErrorResponse(w, http.StatusNotFound, "invitation_not_found", "Invitation not found", nil)
+		return
+	}
+
+	org.PendingInvitations = append(org.PendingInvitations[:index], org.PendingInvitations[index+1:]...)
+	if err := h.persistence.SaveOrganization(org); err != nil {
+		writeErrorResponse(w, http.StatusInternalServerError, "invite_failed", "Failed to update organization invitations", nil)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *OrgHandlers) HandleListMyInvitations(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if !h.requireMultiTenantGate(w, r) {
+		return
+	}
+	if h.persistence == nil {
+		writeErrorResponse(w, http.StatusServiceUnavailable, "orgs_unavailable", "Organization persistence is not configured", nil)
+		return
+	}
+
+	username := auth.GetUser(r.Context())
+	token := getAPITokenRecordFromRequest(r)
+	if token != nil || strings.HasPrefix(username, "token:") {
+		writeErrorResponse(w, http.StatusForbidden, "session_required", "Session-based user authentication is required", nil)
+		return
+	}
+	if username == "" {
+		writeErrorResponse(w, http.StatusUnauthorized, "authentication_required", "Authentication required", nil)
+		return
+	}
+
+	orgs, err := h.persistence.ListOrganizations()
+	if err != nil {
+		writeErrorResponse(w, http.StatusInternalServerError, "list_failed", "Failed to list organizations", nil)
+		return
+	}
+
+	invitations := make([]organizationUserInvitationResponse, 0)
+	for _, org := range orgs {
+		if org == nil {
+			continue
+		}
+		normalizeOrganization(org)
+		if invitation, ok := organizationInvitationForUser(org.PendingInvitations, username); ok {
+			invitations = append(invitations, organizationUserInvitationResponse{
+				OrganizationInvitation: invitation,
+				OrgID:                  org.ID,
+				OrgDisplayName:         org.DisplayName,
+			})
+		}
+	}
+	sort.Slice(invitations, func(i, j int) bool {
+		if invitations[i].OrgID == invitations[j].OrgID {
+			return invitations[i].InvitedAt.Before(invitations[j].InvitedAt)
+		}
+		return invitations[i].OrgID < invitations[j].OrgID
+	})
+
+	writeJSON(w, http.StatusOK, invitations)
+}
+
+func (h *OrgHandlers) HandleAcceptMyInvitation(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if !h.requireMultiTenantGate(w, r) {
+		return
+	}
+
+	orgID := strings.TrimSpace(r.PathValue("id"))
+	org, err := h.loadOrganization(orgID)
+	if err != nil {
+		h.writeLoadOrgError(w, err)
+		return
+	}
+
+	username := auth.GetUser(r.Context())
+	token := getAPITokenRecordFromRequest(r)
+	if token != nil || strings.HasPrefix(username, "token:") {
+		writeErrorResponse(w, http.StatusForbidden, "session_required", "Session-based user authentication is required", nil)
+		return
+	}
+	if username == "" {
+		writeErrorResponse(w, http.StatusUnauthorized, "authentication_required", "Authentication required", nil)
+		return
+	}
+
+	if memberIndex := findOrganizationMemberIndex(org.Members, username); memberIndex >= 0 {
+		if invitationIndex := findOrganizationInvitationIndex(org.PendingInvitations, username); invitationIndex >= 0 {
+			org.PendingInvitations = append(org.PendingInvitations[:invitationIndex], org.PendingInvitations[invitationIndex+1:]...)
+			if err := h.persistence.SaveOrganization(org); err != nil {
+				writeErrorResponse(w, http.StatusInternalServerError, "invite_accept_failed", "Failed to update organization membership", nil)
+				return
+			}
+		}
+		writeJSON(w, http.StatusOK, organizationAccessMutationResponse{
+			Kind:   "member",
+			Member: organizationMemberPointer(org.Members, username),
+		})
+		return
+	}
+
+	invitationIndex := findOrganizationInvitationIndex(org.PendingInvitations, username)
+	if invitationIndex < 0 {
+		writeErrorResponse(w, http.StatusNotFound, "invitation_not_found", "Invitation not found", nil)
+		return
+	}
+	if enforceUserLimitForMemberAdd(w, r.Context(), org) {
+		return
+	}
+
+	invitation := org.PendingInvitations[invitationIndex]
+	now := time.Now().UTC()
+	org.Members = append(org.Members, models.OrganizationMember{
+		UserID:  username,
+		Role:    invitation.Role,
+		AddedAt: now,
+		AddedBy: invitation.InvitedBy,
+	})
+	org.PendingInvitations = append(org.PendingInvitations[:invitationIndex], org.PendingInvitations[invitationIndex+1:]...)
+	if err := h.persistence.SaveOrganization(org); err != nil {
+		writeErrorResponse(w, http.StatusInternalServerError, "invite_accept_failed", "Failed to update organization membership", nil)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, organizationAccessMutationResponse{
+		Kind:   "member",
+		Member: organizationMemberPointer(org.Members, username),
+	})
+}
+
+func (h *OrgHandlers) HandleDeclineMyInvitation(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodDelete {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if !h.requireMultiTenantGate(w, r) {
+		return
+	}
+
+	orgID := strings.TrimSpace(r.PathValue("id"))
+	org, err := h.loadOrganization(orgID)
+	if err != nil {
+		h.writeLoadOrgError(w, err)
+		return
+	}
+
+	username := auth.GetUser(r.Context())
+	token := getAPITokenRecordFromRequest(r)
+	if token != nil || strings.HasPrefix(username, "token:") {
+		writeErrorResponse(w, http.StatusForbidden, "session_required", "Session-based user authentication is required", nil)
+		return
+	}
+	if username == "" {
+		writeErrorResponse(w, http.StatusUnauthorized, "authentication_required", "Authentication required", nil)
+		return
+	}
+
+	invitationIndex := findOrganizationInvitationIndex(org.PendingInvitations, username)
+	if invitationIndex < 0 {
+		writeErrorResponse(w, http.StatusNotFound, "invitation_not_found", "Invitation not found", nil)
+		return
+	}
+
+	org.PendingInvitations = append(org.PendingInvitations[:invitationIndex], org.PendingInvitations[invitationIndex+1:]...)
+	if err := h.persistence.SaveOrganization(org); err != nil {
+		writeErrorResponse(w, http.StatusInternalServerError, "invite_decline_failed", "Failed to update organization invitations", nil)
 		return
 	}
 
@@ -925,22 +1200,29 @@ func normalizeOrganization(org *models.Organization) {
 		return
 	}
 	org.Members = normalizeOrganizationMembers(org.Members)
-	org.SharedResources = normalizeOrganizationShares(org.SharedResources)
 	if strings.TrimSpace(org.OwnerUserID) == "" {
+		org.PendingInvitations = normalizeOrganizationInvitations(org.PendingInvitations, org.Members)
+		org.SharedResources = normalizeOrganizationShares(org.SharedResources)
 		return
 	}
+	foundOwner := false
 	for i := range org.Members {
 		if org.Members[i].UserID == org.OwnerUserID {
 			org.Members[i].Role = models.OrgRoleOwner
-			return
+			foundOwner = true
+			break
 		}
 	}
-	org.Members = append(org.Members, models.OrganizationMember{
-		UserID:  org.OwnerUserID,
-		Role:    models.OrgRoleOwner,
-		AddedAt: time.Now().UTC(),
-		AddedBy: org.OwnerUserID,
-	})
+	if !foundOwner {
+		org.Members = append(org.Members, models.OrganizationMember{
+			UserID:  org.OwnerUserID,
+			Role:    models.OrgRoleOwner,
+			AddedAt: time.Now().UTC(),
+			AddedBy: org.OwnerUserID,
+		})
+	}
+	org.PendingInvitations = normalizeOrganizationInvitations(org.PendingInvitations, org.Members)
+	org.SharedResources = normalizeOrganizationShares(org.SharedResources)
 }
 
 func normalizeOrganizationMembers(members []models.OrganizationMember) []models.OrganizationMember {
@@ -955,6 +1237,34 @@ func normalizeOrganizationMembers(members []models.OrganizationMember) []models.
 			member.Role = models.OrgRoleViewer
 		}
 		normalized = append(normalized, member)
+	}
+	return normalized
+}
+
+func normalizeOrganizationInvitations(invites []models.OrganizationInvitation, members []models.OrganizationMember) []models.OrganizationInvitation {
+	if len(invites) == 0 {
+		return nil
+	}
+	memberSet := make(map[string]struct{}, len(members))
+	for _, member := range members {
+		memberSet[strings.TrimSpace(member.UserID)] = struct{}{}
+	}
+
+	normalized := make([]models.OrganizationInvitation, 0, len(invites))
+	for _, invite := range invites {
+		invite.UserID = strings.TrimSpace(invite.UserID)
+		if invite.UserID == "" {
+			continue
+		}
+		if _, exists := memberSet[invite.UserID]; exists {
+			continue
+		}
+		invite.Role = models.NormalizeOrganizationRole(invite.Role)
+		if !models.IsValidOrganizationRole(invite.Role) || invite.Role == models.OrgRoleOwner {
+			continue
+		}
+		invite.InvitedBy = strings.TrimSpace(invite.InvitedBy)
+		normalized = append(normalized, invite)
 	}
 	return normalized
 }
@@ -984,6 +1294,50 @@ func normalizeOrganizationShares(shares []models.OrganizationShare) []models.Org
 		normalized = append(normalized, share)
 	}
 	return normalized
+}
+
+func findOrganizationMemberIndex(members []models.OrganizationMember, userID string) int {
+	for i := range members {
+		if members[i].UserID == userID {
+			return i
+		}
+	}
+	return -1
+}
+
+func findOrganizationInvitationIndex(invitations []models.OrganizationInvitation, userID string) int {
+	for i := range invitations {
+		if invitations[i].UserID == userID {
+			return i
+		}
+	}
+	return -1
+}
+
+func organizationMemberPointer(members []models.OrganizationMember, userID string) *models.OrganizationMember {
+	memberIndex := findOrganizationMemberIndex(members, userID)
+	if memberIndex < 0 {
+		return nil
+	}
+	member := members[memberIndex]
+	return &member
+}
+
+func organizationInvitationPointer(invitations []models.OrganizationInvitation, userID string) *models.OrganizationInvitation {
+	invitationIndex := findOrganizationInvitationIndex(invitations, userID)
+	if invitationIndex < 0 {
+		return nil
+	}
+	invitation := invitations[invitationIndex]
+	return &invitation
+}
+
+func organizationInvitationForUser(invitations []models.OrganizationInvitation, userID string) (models.OrganizationInvitation, bool) {
+	invitationIndex := findOrganizationInvitationIndex(invitations, userID)
+	if invitationIndex < 0 {
+		return models.OrganizationInvitation{}, false
+	}
+	return invitations[invitationIndex], true
 }
 
 func generateOrganizationShareID() string {

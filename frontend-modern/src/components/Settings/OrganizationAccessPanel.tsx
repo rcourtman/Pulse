@@ -8,6 +8,7 @@ import {
 } from '@/utils/organizationSettingsPresentation';
 import Users from 'lucide-solid/icons/users';
 import { OrganizationAccessLoadingState } from './OrganizationAccessLoadingState';
+import { OrganizationAccessInvitationsSection } from './OrganizationAccessInvitationsSection';
 import { OrganizationAccessManagementSection } from './OrganizationAccessManagementSection';
 import { OrganizationAccessMembersSection } from './OrganizationAccessMembersSection';
 import { useOrganizationAccessPanelState } from './useOrganizationAccessPanelState';
@@ -33,12 +34,13 @@ export const OrganizationAccessPanel: Component<OrganizationAccessPanelProps> = 
       <div class="space-y-6">
         <SettingsPanel
           title="Organization Access"
-          description="Manage organization member roles and ownership transfers."
+          description="Manage organization invitations, member roles, and ownership transfers."
           icon={<Users class="w-5 h-5" />}
           bodyClass="space-y-5"
         >
           <Show when={!state.loading()} fallback={<OrganizationAccessLoadingState />}>
             <Show when={state.org()}>
+              <OrganizationAccessInvitationsSection state={state} />
               <OrganizationAccessManagementSection state={state} currentUser={props.currentUser} />
               <OrganizationAccessMembersSection state={state} currentUser={props.currentUser} />
             </Show>

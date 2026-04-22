@@ -10,7 +10,8 @@ export type EventType =
   | 'ai_discovery_progress'
   | 'theme_changed'
   | 'websocket_reconnected'
-  | 'org_switched';
+  | 'org_switched'
+  | 'organizations_changed';
 
 // Event data types
 export interface NodeAutoRegisteredData {
@@ -58,6 +59,7 @@ export type EventDataMap = {
   theme_changed: string; // 'light' or 'dark'
   websocket_reconnected: void; // Emitted when WebSocket successfully reconnects
   org_switched: string; // The new org ID
+  organizations_changed: void; // Emitted when org membership/invitation state changes
 };
 
 // Generic event handler

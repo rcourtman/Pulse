@@ -18,6 +18,11 @@ type OrganizationMember = {
   role: string;
 };
 
+type OrganizationInvitation = {
+  userId: string;
+  role: string;
+};
+
 type APITokenCreateResponse = {
   token?: string;
 };
@@ -114,19 +119,22 @@ test.describe('Multi-tenant E2E flows', () => {
           data: { userId: 'testuser', role: 'viewer' },
           headers: { 'Content-Type': 'application/json' },
         });
-        expect(addMemberRes.ok()).toBeTruthy();
+        expect(addMemberRes.status()).toBe(202);
 
-        const membersRes = await apiRequest(page, `/api/orgs/${encodeURIComponent(orgID)}/members`);
-        expect(membersRes.ok()).toBeTruthy();
-        const members = (await membersRes.json()) as OrganizationMember[];
-        expect(members.some((member) => member.userId === 'testuser')).toBeTruthy();
-
-        const removeMemberRes = await apiRequest(
+        const invitationsRes = await apiRequest(
           page,
-          `/api/orgs/${encodeURIComponent(orgID)}/members/testuser`,
+          `/api/orgs/${encodeURIComponent(orgID)}/invitations`,
+        );
+        expect(invitationsRes.ok()).toBeTruthy();
+        const invitations = (await invitationsRes.json()) as OrganizationInvitation[];
+        expect(invitations.some((invitation) => invitation.userId === 'testuser')).toBeTruthy();
+
+        const revokeInvitationRes = await apiRequest(
+          page,
+          `/api/orgs/${encodeURIComponent(orgID)}/invitations/testuser`,
           { method: 'DELETE' },
         );
-        expect(removeMemberRes.ok()).toBeTruthy();
+        expect(revokeInvitationRes.ok()).toBeTruthy();
 
         await deleteOrg(page, orgID);
 

@@ -5,22 +5,33 @@ import organizationAccessStateSource from '../useOrganizationAccessPanelState.ts
 
 const orgGetMock = vi.fn();
 const listMembersMock = vi.fn();
+const listPendingInvitationsMock = vi.fn();
+const listMyInvitationsMock = vi.fn();
 const updateMemberRoleMock = vi.fn();
 const inviteMemberMock = vi.fn();
+const acceptMyInvitationMock = vi.fn();
+const declineMyInvitationMock = vi.fn();
+const revokeInvitationMock = vi.fn();
 const removeMemberMock = vi.fn();
 const isMultiTenantEnabledMock = vi.fn();
 const getOrgIDMock = vi.fn();
 const notificationSuccessMock = vi.fn();
 const notificationErrorMock = vi.fn();
 const eventBusOnMock = vi.fn();
+const eventBusEmitMock = vi.fn();
 const loggerErrorMock = vi.fn();
 
 vi.mock('@/api/orgs', () => ({
   OrgsAPI: {
     get: (...args: unknown[]) => orgGetMock(...args),
     listMembers: (...args: unknown[]) => listMembersMock(...args),
+    listPendingInvitations: (...args: unknown[]) => listPendingInvitationsMock(...args),
+    listMyInvitations: (...args: unknown[]) => listMyInvitationsMock(...args),
     updateMemberRole: (...args: unknown[]) => updateMemberRoleMock(...args),
     inviteMember: (...args: unknown[]) => inviteMemberMock(...args),
+    acceptMyInvitation: (...args: unknown[]) => acceptMyInvitationMock(...args),
+    declineMyInvitation: (...args: unknown[]) => declineMyInvitationMock(...args),
+    revokeInvitation: (...args: unknown[]) => revokeInvitationMock(...args),
     removeMember: (...args: unknown[]) => removeMemberMock(...args),
   },
 }));
@@ -43,6 +54,7 @@ vi.mock('@/stores/notifications', () => ({
 vi.mock('@/stores/events', () => ({
   eventBus: {
     on: (...args: unknown[]) => eventBusOnMock(...args),
+    emit: (...args: unknown[]) => eventBusEmitMock(...args),
   },
 }));
 
@@ -86,14 +98,20 @@ const deferred = <T,>() => {
 beforeEach(() => {
   orgGetMock.mockReset();
   listMembersMock.mockReset();
+  listPendingInvitationsMock.mockReset();
+  listMyInvitationsMock.mockReset();
   updateMemberRoleMock.mockReset();
   inviteMemberMock.mockReset();
+  acceptMyInvitationMock.mockReset();
+  declineMyInvitationMock.mockReset();
+  revokeInvitationMock.mockReset();
   removeMemberMock.mockReset();
   isMultiTenantEnabledMock.mockReset();
   getOrgIDMock.mockReset();
   notificationSuccessMock.mockReset();
   notificationErrorMock.mockReset();
   eventBusOnMock.mockReset();
+  eventBusEmitMock.mockReset();
   loggerErrorMock.mockReset();
 
   isMultiTenantEnabledMock.mockReturnValue(true);
@@ -102,8 +120,13 @@ beforeEach(() => {
 
   orgGetMock.mockResolvedValue(baseOrg);
   listMembersMock.mockResolvedValue(baseMembers);
+  listPendingInvitationsMock.mockResolvedValue([]);
+  listMyInvitationsMock.mockResolvedValue([]);
   updateMemberRoleMock.mockResolvedValue(undefined);
-  inviteMemberMock.mockResolvedValue(undefined);
+  inviteMemberMock.mockResolvedValue({ kind: 'invitation' });
+  acceptMyInvitationMock.mockResolvedValue({ kind: 'member' });
+  declineMyInvitationMock.mockResolvedValue(undefined);
+  revokeInvitationMock.mockResolvedValue(undefined);
   removeMemberMock.mockResolvedValue(undefined);
 });
 
@@ -119,12 +142,12 @@ describe('OrganizationAccessPanel', () => {
     const { container } = renderPanel();
 
     expect(container.querySelector('.animate-pulse')).toBeTruthy();
-    expect(screen.queryByRole('heading', { name: 'Add Member' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Invite Member' })).not.toBeInTheDocument();
 
     orgDeferred.resolve(baseOrg);
 
     await waitFor(() => {
-      expect(screen.getByRole('heading', { name: 'Add Member' })).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Invite Member' })).toBeInTheDocument();
     });
   });
 

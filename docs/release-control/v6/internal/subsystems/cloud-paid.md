@@ -192,6 +192,18 @@ Community limit enforcement.
     trial-only shortcut.
 20. Add contract tests where runtime and pricing need to stay aligned
 21. Add or change hosted browser org-context bootstrap through `frontend-modern/src/App.tsx`, `frontend-modern/src/AppLayout.tsx`, `frontend-modern/src/useAppRuntimeState.ts`, and `frontend-modern/src/utils/apiClient.ts`
+    That same hosted bootstrap boundary also owns the runtime-capability JSON
+    shape that the app shell consumes before it decides whether organization
+    chrome and multi-tenant routes exist. `pkg/licensing/entitlement_payload.go`
+    must preserve empty `capabilities` and `limits` as JSON arrays, and
+    `frontend-modern/src/useAppRuntimeState.ts` plus the shared license API
+    adapter must treat those collections as canonical arrays rather than
+    letting `null` collapse hosted browser bootstrap into a free-tier fallback
+    that hides organization settings or discards a valid org context.
+    Organization membership changes that arrive through the self-hosted
+    invitation flow must therefore refresh org bootstrap through the shared
+    `organizations_changed` app-shell path instead of forking a second hosted
+    org bootstrap or pricing-aware shell reload.
 22. Keep the hosted account portal shell task-first and compact. Section
     headers, billing action rows, and the maintained portal bundle under
     `internal/cloudcp/portal/` may surface the facts an operator needs, but the

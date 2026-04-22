@@ -57,7 +57,7 @@ export const SETTINGS_HEADER_META: SettingsHeaderMetaMap = {
   },
   'organization-access': {
     title: 'Organization Access',
-    description: 'Manage organization members, roles, and ownership transfers.',
+    description: 'Manage organization invitations, member roles, and ownership transfers.',
   },
   'organization-sharing': {
     title: 'Organization Sharing',

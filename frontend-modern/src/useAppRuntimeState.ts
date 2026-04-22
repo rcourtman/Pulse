@@ -602,13 +602,20 @@ export const useAppRuntimeState = () => {
       void alertsActivation.refreshActiveAlerts();
     };
 
+    const handleOrganizationsChanged = () => {
+      logger.info('Organization membership changed, refreshing organization list');
+      void loadOrganizations();
+    };
+
     eventBus.on('theme_changed', handleRemoteThemeChange);
     eventBus.on('websocket_reconnected', handleWebSocketReconnected);
+    eventBus.on('organizations_changed', handleOrganizationsChanged);
 
     onCleanup(() => {
       mediaQuery.removeEventListener('change', systemThemeListener);
       eventBus.off('theme_changed', handleRemoteThemeChange);
       eventBus.off('websocket_reconnected', handleWebSocketReconnected);
+      eventBus.off('organizations_changed', handleOrganizationsChanged);
     });
   });
 

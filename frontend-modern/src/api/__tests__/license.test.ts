@@ -45,6 +45,20 @@ describe('LicenseAPI', () => {
     });
   });
 
+  it('normalizes null runtime capability collections to arrays', async () => {
+    vi.mocked(apiFetchJSON).mockResolvedValueOnce({
+      capabilities: null,
+      limits: null,
+      hosted_mode: false,
+      max_history_days: 7,
+    });
+
+    const result = await LicenseAPI.getRuntimeCapabilities();
+
+    expect(result.capabilities).toEqual([]);
+    expect(result.limits).toEqual([]);
+  });
+
   it('reads commercial entitlements from the commercial endpoint', async () => {
     vi.mocked(apiFetchJSON).mockResolvedValueOnce({
       tier: 'pro',

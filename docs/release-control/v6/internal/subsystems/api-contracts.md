@@ -219,6 +219,12 @@ the canonical monitored-system blocked payload.
     canonical invitation, membership-management, or explicit owner-transfer flows may create tenant membership or
     change the stored owner/admin role. Shared auth routes and downstream settings consumers must treat handoff role
     claims as bounded by the server-owned membership record, never as authority to elevate tenant privileges.
+    That same org-management transport now owns explicit acceptance for new self-hosted membership as well.
+    `internal/api/org_handlers.go`, `frontend-modern/src/api/orgs.ts`, and `internal/api/contract_test.go` must
+    keep new-user adds on the canonical pending-invitation payload (`kind:"invitation"`) plus current-user
+    accept/decline routes, rather than binding an arbitrary username directly into `org.Members`. Immediate role
+    mutation remains valid only for already-accepted members, and owner transfer must fail closed unless the
+    target user is already a stored member.
     That same shared auth boundary also owns pre-auth local setup and recovery containment. When no authentication is
     configured, anonymous fallback and bootstrap quick setup may run only on direct loopback, recovery tokens must bind
     to the generating client IP, and recovery may mint only a browser-bound localhost session rather than a shared

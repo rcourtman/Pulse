@@ -78,27 +78,20 @@ func TestUserLimitIsolation_ExistingMemberUpdateNotBlocked(t *testing.T) {
 	persistence := config.NewMultiTenantPersistence(t.TempDir())
 	h := NewOrgHandlers(persistence, nil)
 
-	createReq := withUser(
-		httptest.NewRequest(http.MethodPost, "/api/orgs", bytes.NewBufferString(`{"id":"acme","displayName":"Acme"}`)),
-		"alice",
-	)
-	createRec := httptest.NewRecorder()
-	h.HandleCreateOrg(createRec, createReq)
-	if createRec.Code != http.StatusCreated {
-		t.Fatalf("create failed: %d %s", createRec.Code, createRec.Body.String())
+	seedOrg := &models.Organization{
+		ID:          "acme",
+		DisplayName: "Acme",
+		OwnerUserID: "alice",
+		Members: []models.OrganizationMember{
+			{UserID: "alice", Role: models.OrgRoleOwner},
+			{UserID: "bob", Role: models.OrgRoleViewer},
+			{UserID: "charlie", Role: models.OrgRoleViewer},
+			{UserID: "dave", Role: models.OrgRoleViewer},
+			{UserID: "erin", Role: models.OrgRoleViewer},
+		},
 	}
-
-	for _, userID := range []string{"bob", "charlie", "dave", "erin"} {
-		inviteReq := withUser(
-			httptest.NewRequest(http.MethodPost, "/api/orgs/acme/members", bytes.NewBufferString(`{"userId":"`+userID+`","role":"viewer"}`)),
-			"alice",
-		)
-		inviteReq.SetPathValue("id", "acme")
-		inviteRec := httptest.NewRecorder()
-		h.HandleInviteMember(inviteRec, inviteReq)
-		if inviteRec.Code != http.StatusOK {
-			t.Fatalf("invite %s failed: %d %s", userID, inviteRec.Code, inviteRec.Body.String())
-		}
+	if err := persistence.SaveOrganization(seedOrg); err != nil {
+		t.Fatalf("seed org failed: %v", err)
 	}
 
 	orgBeforeUpdate, err := persistence.LoadOrganization("acme")

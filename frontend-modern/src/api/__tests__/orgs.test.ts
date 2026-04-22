@@ -98,10 +98,41 @@ describe('OrgsAPI', () => {
     });
   });
 
+  describe('listPendingInvitations', () => {
+    it('fetches pending organization invitations', async () => {
+      const mockInvitations = [{ userId: 'user-1', role: 'viewer' }];
+      vi.mocked(apiFetchJSON).mockResolvedValueOnce(mockInvitations);
+
+      const result = await OrgsAPI.listPendingInvitations('org-1');
+
+      expect(apiFetchJSON).toHaveBeenCalledWith('/api/orgs/org-1/invitations', {
+        skipOrgContext: true,
+      });
+      expect(result).toEqual(mockInvitations);
+    });
+  });
+
+  describe('listMyInvitations', () => {
+    it('fetches the current user invitation inbox', async () => {
+      const mockInvitations = [{ orgId: 'org-1', orgDisplayName: 'Org 1', userId: 'user-1' }];
+      vi.mocked(apiFetchJSON).mockResolvedValueOnce(mockInvitations);
+
+      const result = await OrgsAPI.listMyInvitations();
+
+      expect(apiFetchJSON).toHaveBeenCalledWith('/api/org-invitations', {
+        skipOrgContext: true,
+      });
+      expect(result).toEqual(mockInvitations);
+    });
+  });
+
   describe('inviteMember', () => {
     it('invites a member to organization', async () => {
-      const mockMember = { userId: 'user-1', role: 'viewer' };
-      vi.mocked(apiFetchJSON).mockResolvedValueOnce(mockMember);
+      const mockInvitation = {
+        kind: 'invitation',
+        invitation: { userId: 'user-1', role: 'viewer' },
+      };
+      vi.mocked(apiFetchJSON).mockResolvedValueOnce(mockInvitation);
 
       const result = await OrgsAPI.inviteMember('org-1', { userId: 'user-1', role: 'viewer' });
 
@@ -113,7 +144,57 @@ describe('OrgsAPI', () => {
           skipOrgContext: true,
         }),
       );
+      expect(result).toEqual(mockInvitation);
+    });
+  });
+
+  describe('acceptMyInvitation', () => {
+    it('accepts an invitation for the current user', async () => {
+      const mockMember = { kind: 'member', member: { userId: 'user-1', role: 'viewer' } };
+      vi.mocked(apiFetchJSON).mockResolvedValueOnce(mockMember);
+
+      const result = await OrgsAPI.acceptMyInvitation('org-1');
+
+      expect(apiFetchJSON).toHaveBeenCalledWith(
+        '/api/org-invitations/org-1/accept',
+        expect.objectContaining({
+          method: 'POST',
+          skipOrgContext: true,
+        }),
+      );
       expect(result).toEqual(mockMember);
+    });
+  });
+
+  describe('declineMyInvitation', () => {
+    it('declines an invitation for the current user', async () => {
+      vi.mocked(apiFetchJSON).mockResolvedValueOnce(undefined);
+
+      await OrgsAPI.declineMyInvitation('org-1');
+
+      expect(apiFetchJSON).toHaveBeenCalledWith(
+        '/api/org-invitations/org-1',
+        expect.objectContaining({
+          method: 'DELETE',
+          skipOrgContext: true,
+        }),
+      );
+    });
+  });
+
+  describe('revokeInvitation', () => {
+    it('revokes a pending invitation from an organization', async () => {
+      vi.mocked(apiFetchJSON).mockResolvedValueOnce(undefined);
+
+      await OrgsAPI.revokeInvitation('org-1', 'user-1');
+
+      expect(apiFetchJSON).toHaveBeenCalledWith(
+        '/api/orgs/org-1/invitations/user-1',
+        expect.objectContaining({
+          method: 'DELETE',
+          skipOrgContext: true,
+        }),
+      );
     });
   });
 

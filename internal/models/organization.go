@@ -109,6 +109,22 @@ type OrganizationMember struct {
 	AddedBy string `json:"addedBy,omitempty"`
 }
 
+// OrganizationInvitation represents pending organization access awaiting
+// explicit acceptance by the invited user.
+type OrganizationInvitation struct {
+	// UserID is the invited username.
+	UserID string `json:"userId"`
+
+	// Role is the role that will be granted on acceptance.
+	Role OrganizationRole `json:"role"`
+
+	// InvitedAt is when the invitation was created.
+	InvitedAt time.Time `json:"invitedAt"`
+
+	// InvitedBy is the user ID that created the invitation.
+	InvitedBy string `json:"invitedBy"`
+}
+
 // OrganizationShare represents a cross-organization resource/view share.
 type OrganizationShare struct {
 	// ID is a unique identifier for the share record.
@@ -159,6 +175,10 @@ type Organization struct {
 	// Members is the list of users who have access to this organization.
 	// This includes the owner (with OrgRoleOwner) and any additional members.
 	Members []OrganizationMember `json:"members,omitempty"`
+
+	// PendingInvitations contains invited users who must explicitly accept
+	// organization access before membership becomes active.
+	PendingInvitations []OrganizationInvitation `json:"pendingInvitations,omitempty"`
 
 	// SharedResources contains outgoing cross-organization shares.
 	SharedResources []OrganizationShare `json:"sharedResources,omitempty"`

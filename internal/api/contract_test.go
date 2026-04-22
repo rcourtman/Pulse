@@ -5559,6 +5559,46 @@ func TestContract_SelfHostedCommunityEntitlementsJSONSnapshot(t *testing.T) {
 	assertJSONSnapshot(t, got, want)
 }
 
+func TestContract_SelfHostedCommunityRuntimeCapabilitiesJSONSnapshot(t *testing.T) {
+	baseDir := t.TempDir()
+	mtp := config.NewMultiTenantPersistence(baseDir)
+	handlers := NewLicenseHandlers(mtp, false)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/license/runtime-capabilities", nil).
+		WithContext(context.WithValue(context.Background(), OrgIDContextKey, "default"))
+	rec := httptest.NewRecorder()
+	handlers.HandleRuntimeCapabilities(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf(
+			"runtime capabilities status=%d, want %d: %s",
+			rec.Code,
+			http.StatusOK,
+			rec.Body.String(),
+		)
+	}
+
+	var payload RuntimeCapabilitiesPayload
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode runtime capabilities: %v", err)
+	}
+
+	got, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal runtime capabilities payload: %v", err)
+	}
+
+	const want = `{
+		"capabilities":["update_alerts","sso","ai_patrol"],
+		"limits":[],
+		"hosted_mode":false,
+		"max_history_days":7,
+		"monitored_system_capacity":{"mode":"usage_unavailable","urgency":"ok","current":0,"limit":0,"current_available":false,"available_slots":0,"overage":0,"blocks_new_systems":false,"existing_monitoring_continues":false}
+	}`
+
+	assertJSONSnapshot(t, got, want)
+}
+
 func TestContract_EntitlementPayloadMonitoredSystemUsageUnavailableJSONSnapshot(t *testing.T) {
 	payload := buildEntitlementPayloadWithUsage(&licenseStatus{
 		Valid:               true,
@@ -7110,6 +7150,194 @@ func TestContract_APITokenDeleteRejectsScopeEscalation(t *testing.T) {
 	if len(router.config.APITokens) != 1 || router.config.APITokens[0].ID != "broad-token" {
 		t.Fatalf("expected broader token to remain configured, got %+v", router.config.APITokens)
 	}
+}
+
+func TestContract_OrganizationInvitationTransportJSONSnapshot(t *testing.T) {
+	t.Setenv("PULSE_DEV", "true")
+	defer SetMultiTenantEnabled(false)
+	SetMultiTenantEnabled(true)
+
+	persistence := config.NewMultiTenantPersistence(t.TempDir())
+	h := NewOrgHandlers(persistence, nil)
+
+	createReq := withUser(
+		httptest.NewRequest(http.MethodPost, "/api/orgs", bytes.NewBufferString(`{"id":"acme","displayName":"Acme"}`)),
+		"alice",
+	)
+	createRec := httptest.NewRecorder()
+	h.HandleCreateOrg(createRec, createReq)
+	if createRec.Code != http.StatusCreated {
+		t.Fatalf("create org: status=%d body=%s", createRec.Code, createRec.Body.String())
+	}
+
+	inviteReq := withUser(
+		httptest.NewRequest(http.MethodPost, "/api/orgs/acme/members", bytes.NewBufferString(`{"userId":"bob","role":"viewer"}`)),
+		"alice",
+	)
+	inviteReq.SetPathValue("id", "acme")
+	inviteRec := httptest.NewRecorder()
+	h.HandleInviteMember(inviteRec, inviteReq)
+	if inviteRec.Code != http.StatusAccepted {
+		t.Fatalf("invite member: status=%d body=%s", inviteRec.Code, inviteRec.Body.String())
+	}
+
+	var invitePayload organizationAccessMutationResponse
+	if err := json.Unmarshal(inviteRec.Body.Bytes(), &invitePayload); err != nil {
+		t.Fatalf("decode invite payload: %v", err)
+	}
+	if invitePayload.Kind != "invitation" || invitePayload.Invitation == nil {
+		t.Fatalf("unexpected invite payload: %+v", invitePayload)
+	}
+	if invitePayload.Invitation.InvitedAt.IsZero() {
+		t.Fatalf("expected invite payload to include invitedAt")
+	}
+
+	inboxReq := withUser(httptest.NewRequest(http.MethodGet, "/api/org-invitations", nil), "bob")
+	inboxRec := httptest.NewRecorder()
+	h.HandleListMyInvitations(inboxRec, inboxReq)
+	if inboxRec.Code != http.StatusOK {
+		t.Fatalf("list my invitations: status=%d body=%s", inboxRec.Code, inboxRec.Body.String())
+	}
+
+	var inboxPayload []organizationUserInvitationResponse
+	if err := json.Unmarshal(inboxRec.Body.Bytes(), &inboxPayload); err != nil {
+		t.Fatalf("decode invitation inbox: %v", err)
+	}
+	if len(inboxPayload) != 1 {
+		t.Fatalf("expected 1 invitation, got %d", len(inboxPayload))
+	}
+	if inboxPayload[0].InvitedAt.IsZero() {
+		t.Fatalf("expected inbox payload to include invitedAt")
+	}
+
+	acceptReq := withUser(httptest.NewRequest(http.MethodPost, "/api/org-invitations/acme/accept", nil), "bob")
+	acceptReq.SetPathValue("id", "acme")
+	acceptRec := httptest.NewRecorder()
+	h.HandleAcceptMyInvitation(acceptRec, acceptReq)
+	if acceptRec.Code != http.StatusOK {
+		t.Fatalf("accept invitation: status=%d body=%s", acceptRec.Code, acceptRec.Body.String())
+	}
+
+	var acceptPayload organizationAccessMutationResponse
+	if err := json.Unmarshal(acceptRec.Body.Bytes(), &acceptPayload); err != nil {
+		t.Fatalf("decode accept payload: %v", err)
+	}
+	if acceptPayload.Kind != "member" || acceptPayload.Member == nil {
+		t.Fatalf("unexpected accept payload: %+v", acceptPayload)
+	}
+	if acceptPayload.Member.AddedAt.IsZero() {
+		t.Fatalf("expected accept payload to include addedAt")
+	}
+
+	got, err := json.Marshal(struct {
+		Invite struct {
+			Kind       string `json:"kind"`
+			Invitation struct {
+				UserID    string `json:"userId"`
+				Role      string `json:"role"`
+				InvitedAt string `json:"invitedAt"`
+				InvitedBy string `json:"invitedBy"`
+			} `json:"invitation"`
+		} `json:"invite"`
+		Inbox []struct {
+			UserID         string `json:"userId"`
+			Role           string `json:"role"`
+			InvitedAt      string `json:"invitedAt"`
+			InvitedBy      string `json:"invitedBy"`
+			OrgID          string `json:"orgId"`
+			OrgDisplayName string `json:"orgDisplayName"`
+		} `json:"inbox"`
+		Accept struct {
+			Kind   string `json:"kind"`
+			Member struct {
+				UserID  string `json:"userId"`
+				Role    string `json:"role"`
+				AddedAt string `json:"addedAt"`
+				AddedBy string `json:"addedBy"`
+			} `json:"member"`
+		} `json:"accept"`
+	}{
+		Invite: struct {
+			Kind       string `json:"kind"`
+			Invitation struct {
+				UserID    string `json:"userId"`
+				Role      string `json:"role"`
+				InvitedAt string `json:"invitedAt"`
+				InvitedBy string `json:"invitedBy"`
+			} `json:"invitation"`
+		}{
+			Kind: invitePayload.Kind,
+			Invitation: struct {
+				UserID    string `json:"userId"`
+				Role      string `json:"role"`
+				InvitedAt string `json:"invitedAt"`
+				InvitedBy string `json:"invitedBy"`
+			}{
+				UserID:    invitePayload.Invitation.UserID,
+				Role:      string(invitePayload.Invitation.Role),
+				InvitedAt: "placeholder",
+				InvitedBy: invitePayload.Invitation.InvitedBy,
+			},
+		},
+		Inbox: []struct {
+			UserID         string `json:"userId"`
+			Role           string `json:"role"`
+			InvitedAt      string `json:"invitedAt"`
+			InvitedBy      string `json:"invitedBy"`
+			OrgID          string `json:"orgId"`
+			OrgDisplayName string `json:"orgDisplayName"`
+		}{
+			{
+				UserID:         inboxPayload[0].UserID,
+				Role:           string(inboxPayload[0].Role),
+				InvitedAt:      "placeholder",
+				InvitedBy:      inboxPayload[0].InvitedBy,
+				OrgID:          inboxPayload[0].OrgID,
+				OrgDisplayName: inboxPayload[0].OrgDisplayName,
+			},
+		},
+		Accept: struct {
+			Kind   string `json:"kind"`
+			Member struct {
+				UserID  string `json:"userId"`
+				Role    string `json:"role"`
+				AddedAt string `json:"addedAt"`
+				AddedBy string `json:"addedBy"`
+			} `json:"member"`
+		}{
+			Kind: acceptPayload.Kind,
+			Member: struct {
+				UserID  string `json:"userId"`
+				Role    string `json:"role"`
+				AddedAt string `json:"addedAt"`
+				AddedBy string `json:"addedBy"`
+			}{
+				UserID:  acceptPayload.Member.UserID,
+				Role:    string(acceptPayload.Member.Role),
+				AddedAt: "placeholder",
+				AddedBy: acceptPayload.Member.AddedBy,
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("marshal normalized invitation transport snapshot: %v", err)
+	}
+
+	const want = `{
+		"invite":{
+			"kind":"invitation",
+			"invitation":{"userId":"bob","role":"viewer","invitedAt":"placeholder","invitedBy":"alice"}
+		},
+		"inbox":[
+			{"userId":"bob","role":"viewer","invitedAt":"placeholder","invitedBy":"alice","orgId":"acme","orgDisplayName":"Acme"}
+		],
+		"accept":{
+			"kind":"member",
+			"member":{"userId":"bob","role":"viewer","addedAt":"placeholder","addedBy":"alice"}
+		}
+	}`
+
+	assertJSONSnapshot(t, got, want)
 }
 
 func TestContract_OnboardingQRResponseJSONSnapshot(t *testing.T) {

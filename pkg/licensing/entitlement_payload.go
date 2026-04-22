@@ -253,6 +253,20 @@ type LegacyConnectionCounts struct {
 	KubernetesClusters int64 `json:"kubernetes_clusters"`
 }
 
+func cloneCapabilityKeys(values []string) []string {
+	if len(values) == 0 {
+		return []string{}
+	}
+	return append([]string(nil), values...)
+}
+
+func cloneLimitStatuses(values []LimitStatus) []LimitStatus {
+	if len(values) == 0 {
+		return []LimitStatus{}
+	}
+	return append([]LimitStatus(nil), values...)
+}
+
 func (c LegacyConnectionCounts) Total() int64 {
 	return c.ProxmoxNodes + c.DockerHosts + c.KubernetesClusters
 }
@@ -324,8 +338,8 @@ func BuildRuntimeCapabilitiesPayloadWithUsage(
 ) RuntimeCapabilitiesPayload {
 	entitlementPayload := BuildEntitlementPayloadWithUsage(status, subscriptionState, usage, nil)
 	return RuntimeCapabilitiesPayload{
-		Capabilities:   append([]string(nil), entitlementPayload.Capabilities...),
-		Limits:         append([]LimitStatus(nil), entitlementPayload.Limits...),
+		Capabilities:   cloneCapabilityKeys(entitlementPayload.Capabilities),
+		Limits:         cloneLimitStatuses(entitlementPayload.Limits),
 		HostedMode:     entitlementPayload.HostedMode,
 		MaxHistoryDays: entitlementPayload.MaxHistoryDays,
 		MonitoredSystemCapacity: cloneMonitoredSystemCapacityStatus(

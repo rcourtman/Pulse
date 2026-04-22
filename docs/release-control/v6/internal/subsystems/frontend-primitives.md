@@ -180,6 +180,16 @@ work extends shared components instead of creating new local variants.
    session presentation policy says the operator cannot manage setup, `/settings`
    and sidebar navigation must land on the canonical reporting/control surface
    instead of setup-oriented install routes.
+   That same settings-shell boundary also owns explicit organization-route
+   stability. Deep links such as `/settings/organization`,
+   `/settings/organization/access`, and adjacent organization shells must keep
+   their canonical header and page frame when the route itself is allowed,
+   even while runtime capabilities or presentation policy are still settling.
+   Shared shell filtering may hide the sidebar item until the governing state
+   resolves, but `settingsHeaderMeta.ts`, `useSettingsAccess.ts`, and the
+   canonical settings-shell tests must not bounce an allowed organization
+   route back to `Infrastructure` just because nav filtering has not yet
+   surfaced that tab.
    That same shared session-presentation boundary also owns alerts read-only
    posture: `/alerts` may continue exposing reporting tabs such as overview and
    history, but activation controls plus configuration routes must collapse out

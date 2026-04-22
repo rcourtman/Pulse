@@ -35,6 +35,10 @@ describe('settings architecture guardrails', () => {
     expect(settingsHeaderMetaSource).toContain(
       'Review monitored systems and add new infrastructure to Pulse',
     );
+    expect(settingsHeaderMetaSource).toContain("'organization-access': {");
+    expect(settingsHeaderMetaSource).toContain(
+      'Manage organization invitations, member roles, and ownership transfers.',
+    );
 
     expect(settingsNavigationHookSource).toContain('deriveAddStepFromLegacyPath(path)');
     expect(settingsNavigationHookSource).toContain(
@@ -57,6 +61,13 @@ describe('settings architecture guardrails', () => {
     expect(infrastructureWorkspaceModelSource).toContain(
       'export function deriveAddStepFromSearch(',
     );
+  });
+
+  it('keeps allowed organization deep links on the canonical settings shell', () => {
+    expect(settingsSource).toContain("import { useSettingsAccess } from './useSettingsAccess';");
+    expect(settingsSource).toContain('const activeSettingsPanelEntry = createMemo(() => {');
+    expect(settingsSource).toContain('if (!flatTabs().some((tab) => tab.id === currentTab)) {');
+    expect(settingsSource).toContain('return settingsPanelRegistry()[currentTab];');
   });
 
   it('keeps the infrastructure add flow inline on ConnectionEditor instead of retired overlays', () => {

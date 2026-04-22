@@ -818,6 +818,14 @@ pre-existing owner/member record, not a freshly minted browser cookie created
 by appending missing members or upgrading roles from the handoff token.
 Missing tenant membership, blank-owner orgs, and role-escalation claims must
 all fail closed before protected recovery routes load.
+That same shared `internal/api/` organization boundary also assumes self-hosted
+org access changes require invited-user consent before recovery-adjacent
+routes treat the operator as a tenant member. Recovery settings and related
+storage surfaces may observe `/api/orgs/{id}/members` mutations, but manager
+submissions for a new `userId` must stay pending invitations until the
+invited account explicitly accepts. Recovery-adjacent owner transfer therefore
+remains restricted to existing members and may not be satisfied by an
+unaccepted invitation record or a guessed account identifier.
 That shared `internal/api/` dependency now also assumes hosted tenant AI
 bootstrap and chat-runtime reads resolve through one effective hosted billing
 lease before storage- or recovery-adjacent runtime consumers inspect
