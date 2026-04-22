@@ -13,6 +13,7 @@ func TestReleaseLdflagsServerIncludesCanonicalBuildMetadata(t *testing.T) {
 		"--build-time", "2026-03-15T20:00:00Z",
 		"--git-commit", "abcdef1",
 		"--license-public-key", "ZmFrZS1saWNlbnNlLWtleQ==",
+		"--update-public-keys", "ZmFrZS11cGRhdGUta2V5",
 	)
 
 	output, err := cmd.CombinedOutput()
@@ -29,6 +30,7 @@ func TestReleaseLdflagsServerIncludesCanonicalBuildMetadata(t *testing.T) {
 		"-X github.com/rcourtman/pulse-go-rewrite/internal/dockeragent.Version=v6.0.0-rc.1",
 		"-X github.com/rcourtman/pulse-go-rewrite/pkg/licensing.EmbeddedPublicKey=ZmFrZS1saWNlbnNlLWtleQ==",
 		"-X github.com/rcourtman/pulse-go-rewrite/internal/license.EmbeddedPublicKey=ZmFrZS1saWNlbnNlLWtleQ==",
+		"-X github.com/rcourtman/pulse-go-rewrite/internal/updatesignature.EmbeddedTrustedPublicKeys=ZmFrZS11cGRhdGUta2V5",
 	}
 	for _, needle := range required {
 		if !strings.Contains(ldflags, needle) {
@@ -41,6 +43,7 @@ func TestReleaseLdflagsAgentNormalizesVersionWithoutServerFields(t *testing.T) {
 	cmd := exec.Command(repoFile("scripts", "release_ldflags.sh"),
 		"agent",
 		"--version", "6.0.0",
+		"--update-public-keys", "ZmFrZS11cGRhdGUta2V5",
 	)
 
 	output, err := cmd.CombinedOutput()
@@ -51,6 +54,9 @@ func TestReleaseLdflagsAgentNormalizesVersionWithoutServerFields(t *testing.T) {
 	ldflags := strings.TrimSpace(string(output))
 	if !strings.Contains(ldflags, "-X main.Version=v6.0.0") {
 		t.Fatalf("agent ldflags missing normalized version: %q", ldflags)
+	}
+	if !strings.Contains(ldflags, "internal/updatesignature.EmbeddedTrustedPublicKeys=ZmFrZS11cGRhdGUta2V5") {
+		t.Fatalf("agent ldflags missing update public keys: %q", ldflags)
 	}
 	disallowed := []string{
 		"internal/updates.BuildVersion",

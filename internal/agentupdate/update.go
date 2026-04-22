@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agenttls"
+	"github.com/rcourtman/pulse-go-rewrite/internal/updatesignature"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rs/zerolog"
 )
@@ -43,6 +44,7 @@ const (
 	authorizationHeader  = "Authorization"
 	bearerTokenPrefix    = "Bearer "
 	checksumSHA256Header = "X-Checksum-Sha256"
+	signatureHeader      = "X-Signature-Ed25519"
 
 	// updateRequestMaxAttempts is the number of attempts for transient update HTTP failures.
 	updateRequestMaxAttempts = 3
@@ -659,6 +661,7 @@ func (u *Updater) performUpdateWithExecPath(ctx context.Context, execPath string
 
 	// Verify checksum if provided
 	checksumHeader := strings.TrimSpace(resp.Header.Get(checksumSHA256Header))
+	signatureHeaderValue := strings.TrimSpace(resp.Header.Get(signatureHeader))
 
 	// Resolve symlinks to get the real path for atomic rename
 	realExecPath, err := evalSymlinksFn(execPath)
@@ -720,6 +723,16 @@ func (u *Updater) performUpdateWithExecPath(ctx context.Context, execPath string
 		return fmt.Errorf("checksum mismatch: expected %s, got %s", expected, actual)
 	}
 	u.logger.Debug().Str("checksum", downloadChecksum).Msg("checksum verified")
+
+	if updatesignature.HasTrustedPublicKeys() {
+		if signatureHeaderValue == "" {
+			return fmt.Errorf("server did not provide signature header (%s); refusing update for security", signatureHeader)
+		}
+		if err := updatesignature.VerifyFile(tmpPath, signatureHeaderValue); err != nil {
+			return fmt.Errorf("signature verification failed: %w", err)
+		}
+		u.logger.Debug().Msg("signature verified")
+	}
 
 	// Make executable
 	if err := chmodFn(tmpPath, 0755); err != nil {

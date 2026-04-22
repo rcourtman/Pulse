@@ -4,7 +4,7 @@ set -eu
 
 usage() {
     cat >&2 <<'EOF'
-usage: release_ldflags.sh <server|agent> --version <version> [--build-time <ts>] [--git-commit <sha>] [--license-public-key <base64>]
+usage: release_ldflags.sh <server|agent> --version <version> [--build-time <ts>] [--git-commit <sha>] [--license-public-key <base64>] [--update-public-keys <csv>]
 EOF
     exit 1
 }
@@ -20,6 +20,7 @@ version=""
 build_time="unknown"
 git_commit="unknown"
 license_public_key=""
+update_public_keys=""
 
 while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -41,6 +42,11 @@ while [ "$#" -gt 0 ]; do
         --license-public-key)
             [ "$#" -ge 2 ] || usage
             license_public_key="$2"
+            shift 2
+            ;;
+        --update-public-keys)
+            [ "$#" -ge 2 ] || usage
+            update_public_keys="$2"
             shift 2
             ;;
         *)
@@ -74,8 +80,14 @@ case "$mode" in
             ldflags="${ldflags} -X github.com/rcourtman/pulse-go-rewrite/pkg/licensing.EmbeddedPublicKey=${license_public_key}"
             ldflags="${ldflags} -X github.com/rcourtman/pulse-go-rewrite/internal/license.EmbeddedPublicKey=${license_public_key}"
         fi
+        if [ -n "$update_public_keys" ]; then
+            ldflags="${ldflags} -X github.com/rcourtman/pulse-go-rewrite/internal/updatesignature.EmbeddedTrustedPublicKeys=${update_public_keys}"
+        fi
         ;;
     agent)
+        if [ -n "$update_public_keys" ]; then
+            ldflags="${ldflags} -X github.com/rcourtman/pulse-go-rewrite/internal/updatesignature.EmbeddedTrustedPublicKeys=${update_public_keys}"
+        fi
         ;;
     *)
         usage

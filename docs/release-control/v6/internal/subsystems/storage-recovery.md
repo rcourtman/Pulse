@@ -454,7 +454,10 @@ querying, and the operator-facing storage health presentation layer.
     versions such as `v6.0.0-dev` and build-metadata versions must not be
     treated as published GitHub release assets; only stable or explicit RC
     tags may back the shared installer fallback that those adjacent surfaces
-    inherit.
+    inherit. Published release-tagged local assets on that shared boundary
+    must also preserve their detached `.sig` sidecars so recovery- and
+    storage-adjacent flows do not silently downgrade installer or agent
+    download trust back to unsigned local files during upgrade or repair.
 15. Keep storage summary chart identity and sticky-shell behavior on the
     shared storage path. Pool rows, disk rows, storage summary cards, and
     storage detail charts must all address history through the canonical

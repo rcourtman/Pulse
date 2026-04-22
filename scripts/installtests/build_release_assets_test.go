@@ -34,8 +34,11 @@ func TestBuildReleaseUsesV6InstallScripts(t *testing.T) {
 	}
 
 	requiredScriptWiring := []string{
-		`agent_ldflags="$(./scripts/release_ldflags.sh agent --version "v${VERSION}")"`,
-		`server_ldflags="$(./scripts/release_ldflags.sh server --version "v${VERSION}" --build-time "${build_time}" --git-commit "${git_commit}" "${license_ldflags_args[@]}")"`,
+		`agent_ldflags="$(./scripts/release_ldflags.sh agent --version "v${VERSION}" "${update_ldflags_args[@]}")"`,
+		`server_ldflags="$(./scripts/release_ldflags.sh server --version "v${VERSION}" --build-time "${build_time}" --git-commit "${git_commit}" "${license_ldflags_args[@]}" "${update_ldflags_args[@]}")"`,
+		`PULSE_UPDATE_SIGNING_KEY`,
+		`go run ./scripts/release_update_key.go public-key --private-key "${PULSE_UPDATE_SIGNING_KEY}"`,
+		`sign_release_file "${artifact}"`,
 	}
 	for _, needle := range requiredScriptWiring {
 		if !strings.Contains(script, needle) {
@@ -65,6 +68,7 @@ func TestCreateReleaseUploadsPowerShellInstaller(t *testing.T) {
 		`gh release upload "${TAG}" release/install.sh --clobber`,
 		`if [ -f release/install.ps1 ]; then`,
 		`gh release upload "${TAG}" release/install.ps1 --clobber`,
+		`gh release upload "${TAG}" release/*.sig --clobber`,
 		`gh api "repos/${{ github.repository }}/releases?per_page=100" --paginate`,
 		`git push origin "refs/tags/${TAG}" --force`,
 		`-F target_commitish="${HEAD_SHA}"`,

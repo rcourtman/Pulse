@@ -137,6 +137,26 @@ func TestDownloadUnifiedAgent_Local_SpecificArch(t *testing.T) {
 	assert.Equal(t, string(binContent), w.Body.String())
 }
 
+func TestDownloadUnifiedAgent_LocalReleaseBinaryIncludesSignatureHeader(t *testing.T) {
+	router, tempDir := setupUnifiedAgentRouter(t)
+	router.serverVersion = "v6.0.0"
+
+	binContent := validTestUnifiedAgentBinary("linux-amd64")
+	binPath := filepath.Join(tempDir, "bin", "pulse-agent-linux-amd64")
+	err := os.WriteFile(binPath, binContent, 0755)
+	require.NoError(t, err)
+	err = os.WriteFile(binPath+".sig", []byte("signed-local-agent"), 0644)
+	require.NoError(t, err)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/install/agent?arch=linux-amd64", nil)
+	w := httptest.NewRecorder()
+
+	router.handleDownloadUnifiedAgent(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, "signed-local-agent", w.Header().Get(signatureHeaderName))
+}
+
 func TestDownloadUnifiedAgent_SkipsStaleLocalBinaryAndProxies(t *testing.T) {
 	router, tempDir := setupUnifiedAgentRouter(t)
 
@@ -145,7 +165,10 @@ func TestDownloadUnifiedAgent_SkipsStaleLocalBinaryAndProxies(t *testing.T) {
 
 	binaryContent := "fresh github binary"
 	expectedURL := "https://github.com/rcourtman/Pulse/releases/latest/download/pulse-agent-linux-amd64"
-	router.installScriptClient = newTestInstallScriptClient(t, http.MethodGet, expectedURL, http.StatusOK, binaryContent, nil)
+	router.installScriptClient = newTestInstallScriptClientSequence(t, []expectedHTTPExchange{
+		{Method: http.MethodGet, URL: expectedURL, Status: http.StatusOK, Body: binaryContent},
+		{Method: http.MethodGet, URL: expectedURL + ".sig", Status: http.StatusOK, Body: "signed-agent"},
+	})
 
 	req := httptest.NewRequest(http.MethodGet, "/api/install/agent?arch=linux-amd64", nil)
 	w := httptest.NewRecorder()
@@ -155,6 +178,7 @@ func TestDownloadUnifiedAgent_SkipsStaleLocalBinaryAndProxies(t *testing.T) {
 	require.Equal(t, http.StatusOK, w.Code)
 	assert.Equal(t, binaryContent, w.Body.String())
 	assert.Equal(t, "github-proxy", w.Header().Get("X-Served-From"))
+	assert.Equal(t, "signed-agent", w.Header().Get(signatureHeaderName))
 }
 
 func TestDownloadUnifiedAgent_DevModeRejectsStaleLocalBinary(t *testing.T) {
@@ -182,7 +206,10 @@ func TestDownloadUnifiedAgent_ProxyFromGitHub(t *testing.T) {
 	// Set up a mock HTTP client to simulate GitHub response
 	binaryContent := "fake binary content for proxy test"
 	expectedURL := "https://github.com/rcourtman/Pulse/releases/latest/download/pulse-agent-linux-amd64"
-	router.installScriptClient = newTestInstallScriptClient(t, http.MethodGet, expectedURL, http.StatusOK, binaryContent, nil)
+	router.installScriptClient = newTestInstallScriptClientSequence(t, []expectedHTTPExchange{
+		{Method: http.MethodGet, URL: expectedURL, Status: http.StatusOK, Body: binaryContent},
+		{Method: http.MethodGet, URL: expectedURL + ".sig", Status: http.StatusOK, Body: "signed-agent"},
+	})
 
 	req := httptest.NewRequest(http.MethodGet, "/api/install/agent?arch=linux-amd64", nil)
 	w := httptest.NewRecorder()
@@ -198,6 +225,7 @@ func TestDownloadUnifiedAgent_ProxyFromGitHub(t *testing.T) {
 	hash := sha256.Sum256([]byte(binaryContent))
 	expectedChecksum := hex.EncodeToString(hash[:])
 	assert.Equal(t, expectedChecksum, w.Header().Get("X-Checksum-Sha256"))
+	assert.Equal(t, "signed-agent", w.Header().Get(signatureHeaderName))
 }
 
 func TestDownloadUnifiedAgent_ProxyFromGitHub_UsesConfiguredRepo(t *testing.T) {
@@ -207,7 +235,10 @@ func TestDownloadUnifiedAgent_ProxyFromGitHub_UsesConfiguredRepo(t *testing.T) {
 
 	binaryContent := "fake binary content for proxy test"
 	expectedURL := "https://github.com/example/pulse-fork/releases/latest/download/pulse-agent-linux-amd64"
-	router.installScriptClient = newTestInstallScriptClient(t, http.MethodGet, expectedURL, http.StatusOK, binaryContent, nil)
+	router.installScriptClient = newTestInstallScriptClientSequence(t, []expectedHTTPExchange{
+		{Method: http.MethodGet, URL: expectedURL, Status: http.StatusOK, Body: binaryContent},
+		{Method: http.MethodGet, URL: expectedURL + ".sig", Status: http.StatusOK, Body: "signed-agent"},
+	})
 
 	req := httptest.NewRequest(http.MethodGet, "/api/install/agent?arch=linux-amd64", nil)
 	w := httptest.NewRecorder()
@@ -223,7 +254,10 @@ func TestDownloadUnifiedAgent_ProxyFromGitHub_Windows(t *testing.T) {
 
 	binaryContent := "MZ fake windows binary"
 	expectedURL := "https://github.com/rcourtman/Pulse/releases/latest/download/pulse-agent-windows-amd64.exe"
-	router.installScriptClient = newTestInstallScriptClient(t, http.MethodGet, expectedURL, http.StatusOK, binaryContent, nil)
+	router.installScriptClient = newTestInstallScriptClientSequence(t, []expectedHTTPExchange{
+		{Method: http.MethodGet, URL: expectedURL, Status: http.StatusOK, Body: binaryContent},
+		{Method: http.MethodGet, URL: expectedURL + ".sig", Status: http.StatusOK, Body: "signed-agent"},
+	})
 
 	req := httptest.NewRequest(http.MethodGet, "/api/install/agent?arch=windows-amd64", nil)
 	w := httptest.NewRecorder()
@@ -233,6 +267,7 @@ func TestDownloadUnifiedAgent_ProxyFromGitHub_Windows(t *testing.T) {
 	require.Equal(t, http.StatusOK, w.Code)
 	assert.Equal(t, binaryContent, w.Body.String())
 	assert.NotEmpty(t, w.Header().Get("X-Checksum-Sha256"))
+	assert.Equal(t, "signed-agent", w.Header().Get(signatureHeaderName))
 }
 
 func TestDownloadUnifiedAgent_ProxyFromGitHub_ArchiveFallback_Darwin(t *testing.T) {
@@ -241,6 +276,7 @@ func TestDownloadUnifiedAgent_ProxyFromGitHub_ArchiveFallback_Darwin(t *testing.
 	binaryContent := []byte("darwin arm64 binary payload")
 	archivePayload := buildTestTarGz(t, "pulse-agent-darwin-arm64", binaryContent)
 	binaryURL := "https://github.com/rcourtman/Pulse/releases/latest/download/pulse-agent-darwin-arm64"
+	signatureURL := binaryURL + ".sig"
 	latestURL := "https://api.github.com/repos/rcourtman/Pulse/releases/latest"
 	archiveURL := "https://github.com/rcourtman/Pulse/releases/download/v9.9.9/pulse-agent-v9.9.9-darwin-arm64.tar.gz"
 
@@ -268,6 +304,13 @@ func TestDownloadUnifiedAgent_ProxyFromGitHub_ArchiveFallback_Darwin(t *testing.
 					Header:     make(http.Header),
 					Body:       io.NopCloser(bytes.NewReader(archivePayload)),
 				}, nil
+			case signatureURL:
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Status:     "200 OK",
+					Header:     make(http.Header),
+					Body:       io.NopCloser(strings.NewReader("signed-agent")),
+				}, nil
 			default:
 				t.Fatalf("unexpected URL: %s", req.URL.String())
 				return nil, nil
@@ -287,6 +330,7 @@ func TestDownloadUnifiedAgent_ProxyFromGitHub_ArchiveFallback_Darwin(t *testing.
 	hash := sha256.Sum256(binaryContent)
 	expectedChecksum := hex.EncodeToString(hash[:])
 	assert.Equal(t, expectedChecksum, w.Header().Get("X-Checksum-Sha256"))
+	assert.Equal(t, "signed-agent", w.Header().Get(signatureHeaderName))
 }
 
 func TestDownloadUnifiedAgent_ProxyFromGitHub_ArchiveFallback_UsesConfiguredRepo(t *testing.T) {
@@ -297,6 +341,7 @@ func TestDownloadUnifiedAgent_ProxyFromGitHub_ArchiveFallback_UsesConfiguredRepo
 	binaryContent := []byte("darwin arm64 binary payload")
 	archivePayload := buildTestTarGz(t, "pulse-agent-darwin-arm64", binaryContent)
 	binaryURL := "https://github.com/example/pulse-fork/releases/latest/download/pulse-agent-darwin-arm64"
+	signatureURL := binaryURL + ".sig"
 	latestURL := "https://api.github.com/repos/example/pulse-fork/releases/latest"
 	archiveURL := "https://github.com/example/pulse-fork/releases/download/v9.9.9/pulse-agent-v9.9.9-darwin-arm64.tar.gz"
 
@@ -324,6 +369,13 @@ func TestDownloadUnifiedAgent_ProxyFromGitHub_ArchiveFallback_UsesConfiguredRepo
 					Header:     make(http.Header),
 					Body:       io.NopCloser(bytes.NewReader(archivePayload)),
 				}, nil
+			case signatureURL:
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Status:     "200 OK",
+					Header:     make(http.Header),
+					Body:       io.NopCloser(strings.NewReader("signed-agent")),
+				}, nil
 			default:
 				t.Fatalf("unexpected URL: %s", req.URL.String())
 				return nil, nil
@@ -339,13 +391,16 @@ func TestDownloadUnifiedAgent_ProxyFromGitHub_ArchiveFallback_UsesConfiguredRepo
 	require.Equal(t, http.StatusOK, w.Code)
 	assert.Equal(t, "github-proxy-archive", w.Header().Get("X-Served-From"))
 	assert.Equal(t, string(binaryContent), w.Body.String())
+	assert.Equal(t, "signed-agent", w.Header().Get(signatureHeaderName))
 }
 
 func TestDownloadUnifiedAgent_ProxyFromGitHub_NotFound(t *testing.T) {
 	router, _ := setupUnifiedAgentRouter(t)
 
-	// GitHub returns 404 for the binary
-	router.installScriptClient = newTestInstallScriptClient(t, http.MethodGet, "", http.StatusNotFound, "", nil)
+	router.installScriptClient = newTestInstallScriptClientSequence(t, []expectedHTTPExchange{
+		{Method: http.MethodGet, URL: "https://github.com/rcourtman/Pulse/releases/latest/download/pulse-agent-linux-amd64", Status: http.StatusNotFound, Body: ""},
+		{Method: http.MethodGet, URL: "https://api.github.com/repos/rcourtman/Pulse/releases/latest", Status: http.StatusNotFound, Body: ""},
+	})
 
 	req := httptest.NewRequest(http.MethodGet, "/api/install/agent?arch=linux-amd64", nil)
 	w := httptest.NewRecorder()
@@ -359,7 +414,7 @@ func TestDownloadUnifiedAgent_ProxyFromGitHub_Error(t *testing.T) {
 	router, _ := setupUnifiedAgentRouter(t)
 
 	// GitHub is unreachable
-	router.installScriptClient = newTestInstallScriptClient(t, http.MethodGet, "", 0, "", errors.New("connection refused"))
+	router.installScriptClient = newTestInstallScriptClient(t, http.MethodGet, "https://github.com/rcourtman/Pulse/releases/latest/download/pulse-agent-linux-amd64", 0, "", errors.New("connection refused"))
 
 	req := httptest.NewRequest(http.MethodGet, "/api/install/agent?arch=linux-amd64", nil)
 	w := httptest.NewRecorder()

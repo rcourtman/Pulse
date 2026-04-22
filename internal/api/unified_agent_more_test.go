@@ -40,6 +40,44 @@ func newTestInstallScriptClient(t *testing.T, expectedMethod, expectedURL string
 	}
 }
 
+type expectedHTTPExchange struct {
+	Method string
+	URL    string
+	Status int
+	Body   string
+	Err    error
+}
+
+func newTestInstallScriptClientSequence(t *testing.T, exchanges []expectedHTTPExchange) *http.Client {
+	t.Helper()
+
+	var index int
+	return &http.Client{
+		Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			if index >= len(exchanges) {
+				t.Fatalf("unexpected extra request: %s %s", req.Method, req.URL.String())
+			}
+			exchange := exchanges[index]
+			index++
+			if exchange.Method != "" && req.Method != exchange.Method {
+				t.Fatalf("unexpected method at request %d: %s", index, req.Method)
+			}
+			if exchange.URL != "" && req.URL.String() != exchange.URL {
+				t.Fatalf("unexpected URL at request %d: %s", index, req.URL.String())
+			}
+			if exchange.Err != nil {
+				return nil, exchange.Err
+			}
+			return &http.Response{
+				StatusCode: exchange.Status,
+				Status:     fmt.Sprintf("%d %s", exchange.Status, http.StatusText(exchange.Status)),
+				Header:     make(http.Header),
+				Body:       io.NopCloser(strings.NewReader(exchange.Body)),
+			}, nil
+		}),
+	}
+}
+
 func TestDownloadUnifiedInstallScript_MethodNotAllowed(t *testing.T) {
 	router := &Router{}
 
@@ -71,7 +109,10 @@ func TestDownloadUnifiedInstallScript_ProxyFallback(t *testing.T) {
 	router.serverVersion = "v6.0.0-rc.1"
 	expectedURL := "https://github.com/rcourtman/Pulse/releases/download/v6.0.0-rc.1/install.sh"
 	payload := "#!/bin/bash\necho hi"
-	router.installScriptClient = newTestInstallScriptClient(t, http.MethodGet, expectedURL, http.StatusOK, payload, nil)
+	router.installScriptClient = newTestInstallScriptClientSequence(t, []expectedHTTPExchange{
+		{Method: http.MethodGet, URL: expectedURL, Status: http.StatusOK, Body: payload},
+		{Method: http.MethodGet, URL: expectedURL + ".sig", Status: http.StatusOK, Body: "signed-install-script"},
+	})
 
 	req := httptest.NewRequest(http.MethodGet, "/install.sh", nil)
 	w := httptest.NewRecorder()
@@ -86,6 +127,9 @@ func TestDownloadUnifiedInstallScript_ProxyFallback(t *testing.T) {
 	}
 	if got := w.Header().Get("Content-Type"); got != "text/x-shellscript" {
 		t.Fatalf("unexpected Content-Type: %q", got)
+	}
+	if got := w.Header().Get(signatureHeaderName); got != "signed-install-script" {
+		t.Fatalf("unexpected signature header: %q", got)
 	}
 	if !strings.Contains(w.Header().Get("Content-Disposition"), "install.sh") {
 		t.Fatalf("missing Content-Disposition filename")
@@ -102,7 +146,10 @@ func TestDownloadUnifiedInstallScript_ProxyFallbackUsesConfiguredRepo(t *testing
 	router.serverVersion = "v6.0.0-rc.1"
 	expectedURL := "https://github.com/example/pulse-fork/releases/download/v6.0.0-rc.1/install.sh"
 	payload := "#!/bin/bash\necho hi"
-	router.installScriptClient = newTestInstallScriptClient(t, http.MethodGet, expectedURL, http.StatusOK, payload, nil)
+	router.installScriptClient = newTestInstallScriptClientSequence(t, []expectedHTTPExchange{
+		{Method: http.MethodGet, URL: expectedURL, Status: http.StatusOK, Body: payload},
+		{Method: http.MethodGet, URL: expectedURL + ".sig", Status: http.StatusOK, Body: "signed-install-script"},
+	})
 
 	req := httptest.NewRequest(http.MethodGet, "/install.sh", nil)
 	w := httptest.NewRecorder()
@@ -119,7 +166,10 @@ func TestDownloadUnifiedInstallScriptPS_ProxyFallback(t *testing.T) {
 	router.serverVersion = "6.0.0"
 	expectedURL := "https://github.com/rcourtman/Pulse/releases/download/v6.0.0/install.ps1"
 	payload := "Write-Host 'hi'"
-	router.installScriptClient = newTestInstallScriptClient(t, http.MethodGet, expectedURL, http.StatusOK, payload, nil)
+	router.installScriptClient = newTestInstallScriptClientSequence(t, []expectedHTTPExchange{
+		{Method: http.MethodGet, URL: expectedURL, Status: http.StatusOK, Body: payload},
+		{Method: http.MethodGet, URL: expectedURL + ".sig", Status: http.StatusOK, Body: "signed-install-script"},
+	})
 
 	req := httptest.NewRequest(http.MethodGet, "/install.ps1", nil)
 	w := httptest.NewRecorder()
@@ -213,7 +263,10 @@ func TestDownloadUnifiedInstallScript_ProxyFallbackPreservesHEAD(t *testing.T) {
 	router, _ := setupUnifiedAgentRouter(t)
 	router.serverVersion = "v6.0.0-rc.1"
 	expectedURL := "https://github.com/rcourtman/Pulse/releases/download/v6.0.0-rc.1/install.sh"
-	router.installScriptClient = newTestInstallScriptClient(t, http.MethodHead, expectedURL, http.StatusOK, "", nil)
+	router.installScriptClient = newTestInstallScriptClientSequence(t, []expectedHTTPExchange{
+		{Method: http.MethodHead, URL: expectedURL, Status: http.StatusOK, Body: ""},
+		{Method: http.MethodGet, URL: expectedURL + ".sig", Status: http.StatusOK, Body: "signed-install-script"},
+	})
 
 	req := httptest.NewRequest(http.MethodHead, "/install.sh", nil)
 	w := httptest.NewRecorder()
@@ -225,6 +278,9 @@ func TestDownloadUnifiedInstallScript_ProxyFallbackPreservesHEAD(t *testing.T) {
 	}
 	if w.Body.Len() != 0 {
 		t.Fatalf("expected empty HEAD response body")
+	}
+	if got := w.Header().Get(signatureHeaderName); got != "signed-install-script" {
+		t.Fatalf("unexpected signature header: %q", got)
 	}
 }
 

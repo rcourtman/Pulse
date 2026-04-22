@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/updatesignature"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 )
 
@@ -461,14 +462,14 @@ func (a *Agent) selfUpdate(ctx context.Context) error {
 
 	// Verify cryptographic signature (X-Signature-Ed25519 header)
 	signatureHeader := strings.TrimSpace(resp.Header.Get("X-Signature-Ed25519"))
-	if signatureHeader != "" {
+	if updatesignature.HasTrustedPublicKeys() {
+		if signatureHeader == "" {
+			return fmt.Errorf("server did not provide cryptographic signature (X-Signature-Ed25519); refusing update for security")
+		}
 		if err := verifyFileSignature(tmpPath, signatureHeader); err != nil {
 			return fmt.Errorf("signature verification failed: %w", err)
 		}
 		a.logger.Info().Msg("Self-update: cryptographic signature verified")
-	} else {
-		// For now, only warn if missing. In strict mode, we would error here.
-		a.logger.Warn().Msg("Self-update: server did not provide cryptographic signature (X-Signature-Ed25519)")
 	}
 
 	// Make temp file executable

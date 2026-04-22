@@ -2,6 +2,9 @@ package agentupdate
 
 import (
 	"context"
+	"crypto/ed25519"
+	"crypto/rand"
+	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -11,6 +14,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/updatesignature"
 )
 
 const testPEMCertificate = `-----BEGIN CERTIFICATE-----
@@ -159,6 +164,77 @@ func TestNew_UsesPinnedServerFingerprintForHTTPTransport(t *testing.T) {
 	}
 	if transport.TLSClientConfig.VerifyPeerCertificate == nil {
 		t.Fatal("expected VerifyPeerCertificate to be configured for fingerprint pinning")
+	}
+}
+
+func configureTrustedUpdateSigningKey(t *testing.T) ed25519.PrivateKey {
+	t.Helper()
+
+	original := updatesignature.EmbeddedTrustedPublicKeys
+	t.Cleanup(func() { updatesignature.EmbeddedTrustedPublicKeys = original })
+
+	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("generate signing key: %v", err)
+	}
+	updatesignature.EmbeddedTrustedPublicKeys = httpHeaderPublicKey(t, publicKey)
+	return privateKey
+}
+
+func httpHeaderPublicKey(t *testing.T, publicKey ed25519.PublicKey) string {
+	t.Helper()
+	return base64.StdEncoding.EncodeToString(publicKey)
+}
+
+func signedUpdateHeader(t *testing.T, data []byte, privateKey ed25519.PrivateKey) string {
+	t.Helper()
+	signature, err := updatesignature.SignBytes(data, privateKey)
+	if err != nil {
+		t.Fatalf("sign update: %v", err)
+	}
+	return signature
+}
+
+func TestUpdater_performUpdateWithExecPath_RequiresSignatureWhenTrustedKeysConfigured(t *testing.T) {
+	privateKey := configureTrustedUpdateSigningKey(t)
+	data := testBinary()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set(checksumSHA256Header, checksum(data))
+		w.Header().Set(signatureHeader, signedUpdateHeader(t, data, privateKey))
+		_, _ = w.Write(data)
+	}))
+	defer server.Close()
+
+	_, execPath := writeTempExec(t)
+	u := newUpdaterForTest(server.URL)
+	u.client = server.Client()
+
+	origRestart := restartProcessFn
+	t.Cleanup(func() { restartProcessFn = origRestart })
+	restartProcessFn = func(string) error { return nil }
+
+	if err := u.performUpdateWithExecPath(context.Background(), execPath); err != nil {
+		t.Fatalf("performUpdateWithExecPath: %v", err)
+	}
+}
+
+func TestUpdater_performUpdateWithExecPath_RejectsMissingSignatureWhenTrustedKeysConfigured(t *testing.T) {
+	_ = configureTrustedUpdateSigningKey(t)
+	data := testBinary()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set(checksumSHA256Header, checksum(data))
+		_, _ = w.Write(data)
+	}))
+	defer server.Close()
+
+	_, execPath := writeTempExec(t)
+	u := newUpdaterForTest(server.URL)
+	u.client = server.Client()
+
+	if err := u.performUpdateWithExecPath(context.Background(), execPath); err == nil || !strings.Contains(err.Error(), signatureHeader) {
+		t.Fatalf("expected missing signature error, got %v", err)
 	}
 }
 

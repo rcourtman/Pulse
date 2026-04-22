@@ -3,7 +3,10 @@ package dockeragent
 import (
 	"bytes"
 	"context"
+	"crypto/ed25519"
+	"crypto/rand"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"errors"
 	"io"
@@ -16,6 +19,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/updatesignature"
 	"github.com/rs/zerolog"
 )
 
@@ -456,6 +460,29 @@ func elfBytes() []byte {
 func sha256Hex(data []byte) string {
 	sum := sha256.Sum256(data)
 	return hex.EncodeToString(sum[:])
+}
+
+func configureTrustedUpdateKeys(t *testing.T) ed25519.PrivateKey {
+	t.Helper()
+
+	original := updatesignature.EmbeddedTrustedPublicKeys
+	t.Cleanup(func() { updatesignature.EmbeddedTrustedPublicKeys = original })
+
+	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("generate signing key: %v", err)
+	}
+	updatesignature.EmbeddedTrustedPublicKeys = base64.StdEncoding.EncodeToString(publicKey)
+	return privateKey
+}
+
+func signedSelfUpdateHeader(t *testing.T, body []byte, privateKey ed25519.PrivateKey) string {
+	t.Helper()
+	signature, err := updatesignature.SignBytes(body, privateKey)
+	if err != nil {
+		t.Fatalf("sign update body: %v", err)
+	}
+	return signature
 }
 
 func TestSelfUpdate(t *testing.T) {
@@ -1254,6 +1281,79 @@ func TestSelfUpdate(t *testing.T) {
 
 		if err := agent.selfUpdate(context.Background()); err != nil {
 			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("signature verified when trusted keys configured", func(t *testing.T) {
+		privateKey := configureTrustedUpdateKeys(t)
+		body := elfBytes()
+		client := &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(bytes.NewReader(body)),
+				Header: http.Header{
+					"X-Checksum-Sha256":   []string{sha256Hex(body)},
+					"X-Signature-Ed25519": []string{signedSelfUpdateHeader(t, body, privateKey)},
+				},
+			}, nil
+		})}
+
+		agent := &Agent{
+			logger:  zerolog.Nop(),
+			targets: []TargetConfig{{URL: "http://example.com", Token: "token"}},
+			httpClients: map[bool]*http.Client{
+				false: client,
+			},
+		}
+		dir := t.TempDir()
+		execPath := filepath.Join(dir, "exec")
+		if err := os.WriteFile(execPath, elfBytes(), 0700); err != nil {
+			t.Fatalf("write exec: %v", err)
+		}
+		swap(t, &osExecutableFn, func() (string, error) {
+			return execPath, nil
+		})
+		swap(t, &syscallExecFn, func(string, []string, []string) error {
+			return nil
+		})
+		swap(t, &execCommandContextFn, func(ctx context.Context, name string, arg ...string) *exec.Cmd {
+			return exec.Command("echo", "ok")
+		})
+
+		if err := agent.selfUpdate(context.Background()); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("signature missing when trusted keys configured", func(t *testing.T) {
+		_ = configureTrustedUpdateKeys(t)
+		body := elfBytes()
+		client := &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(bytes.NewReader(body)),
+				Header:     http.Header{"X-Checksum-Sha256": []string{sha256Hex(body)}},
+			}, nil
+		})}
+
+		agent := &Agent{
+			logger:  zerolog.Nop(),
+			targets: []TargetConfig{{URL: "http://example.com", Token: "token"}},
+			httpClients: map[bool]*http.Client{
+				false: client,
+			},
+		}
+		dir := t.TempDir()
+		execPath := filepath.Join(dir, "exec")
+		if err := os.WriteFile(execPath, elfBytes(), 0700); err != nil {
+			t.Fatalf("write exec: %v", err)
+		}
+		swap(t, &osExecutableFn, func() (string, error) {
+			return execPath, nil
+		})
+
+		if err := agent.selfUpdate(context.Background()); err == nil || !strings.Contains(err.Error(), "X-Signature-Ed25519") {
+			t.Fatalf("expected missing signature error, got %v", err)
 		}
 	})
 

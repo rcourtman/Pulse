@@ -7488,6 +7488,49 @@ func TestContract_ProxmoxInstallCommandNormalizesTrailingSlashBaseURL(t *testing
 	}
 }
 
+func TestContract_DownloadUnifiedAgentReleaseAssetIncludesSignatureHeader(t *testing.T) {
+	router, tempDir := setupUnifiedAgentRouter(t)
+	router.serverVersion = "v6.0.0"
+
+	binContent := validTestUnifiedAgentBinary("linux-amd64")
+	binPath := filepath.Join(tempDir, "bin", "pulse-agent-linux-amd64")
+	if err := os.WriteFile(binPath, binContent, 0o755); err != nil {
+		t.Fatalf("write binary: %v", err)
+	}
+	if err := os.WriteFile(binPath+".sig", []byte("signed-agent"), 0o644); err != nil {
+		t.Fatalf("write signature: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/install/agent?arch=linux-amd64", nil)
+	w := httptest.NewRecorder()
+	router.handleDownloadUnifiedAgent(w, req)
+
+	if got := w.Header().Get(signatureHeaderName); got != "signed-agent" {
+		t.Fatalf("agent download signature header = %q, want %q", got, "signed-agent")
+	}
+}
+
+func TestContract_DownloadInstallScriptReleaseAssetIncludesSignatureHeader(t *testing.T) {
+	router, tempDir := setupUnifiedAgentRouter(t)
+	router.serverVersion = "v6.0.0"
+
+	scriptPath := filepath.Join(tempDir, "scripts", "install.sh")
+	if err := os.WriteFile(scriptPath, []byte("#!/bin/sh\necho ok\n"), 0o755); err != nil {
+		t.Fatalf("write install script: %v", err)
+	}
+	if err := os.WriteFile(scriptPath+".sig", []byte("signed-install-script"), 0o644); err != nil {
+		t.Fatalf("write install signature: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/install.sh", nil)
+	w := httptest.NewRecorder()
+	router.handleDownloadUnifiedInstallScript(w, req)
+
+	if got := w.Header().Get(signatureHeaderName); got != "signed-install-script" {
+		t.Fatalf("install script signature header = %q, want %q", got, "signed-install-script")
+	}
+}
+
 func TestContract_SystemSettingsResponseJSONSnapshot(t *testing.T) {
 	payload := EmptySystemSettingsResponse()
 	payload.SystemSettings = config.SystemSettings{

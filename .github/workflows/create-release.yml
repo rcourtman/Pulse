@@ -560,6 +560,7 @@ jobs:
           ./scripts/build-release.sh ${{ needs.prepare.outputs.version }}
         env:
           PULSE_LICENSE_PUBLIC_KEY: ${{ secrets.PULSE_LICENSE_PUBLIC_KEY }}
+          PULSE_UPDATE_SIGNING_KEY: ${{ secrets.PULSE_UPDATE_SIGNING_KEY }}
 
       - name: Post-build health check
         run: |
@@ -713,6 +714,9 @@ jobs:
           TAG="${{ needs.prepare.outputs.tag }}"
           gh release upload "${TAG}" release/checksums.txt --clobber
           gh release upload "${TAG}" release/*.sha256 --clobber
+          if ls release/*.sig 1> /dev/null 2>&1; then
+            gh release upload "${TAG}" release/*.sig --clobber
+          fi
 
       - name: Upload release assets
         env:

@@ -266,6 +266,8 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn('git push origin "refs/tags/${TAG}" --force', content)
         self.assertIn('Retargeting existing draft tag ${TAG}', content)
         self.assertIn('-F target_commitish="${HEAD_SHA}"', content)
+        self.assertIn("PULSE_UPDATE_SIGNING_KEY: ${{ secrets.PULSE_UPDATE_SIGNING_KEY }}", content)
+        self.assertIn('gh release upload "${TAG}" release/*.sig --clobber', content)
         self.assertIn("Derived rollback command:", helper)
         self.assertIn("./scripts/install.sh --version", helper)
         self.assertIn("v6 GA date to publish with GA", helper)

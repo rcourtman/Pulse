@@ -69,6 +69,44 @@ else
     license_ldflags_args=(--license-public-key "${PULSE_LICENSE_PUBLIC_KEY}")
 fi
 
+# Require update signing for release-grade agent and installer verification.
+# Explicitly opt out with PULSE_ALLOW_MISSING_UPDATE_SIGNING_KEY=true for local-only debugging.
+update_ldflags_args=()
+if [[ -z "${PULSE_UPDATE_SIGNING_KEY:-}" ]]; then
+    if [[ "${PULSE_ALLOW_MISSING_UPDATE_SIGNING_KEY:-false}" == "true" ]]; then
+        echo "Warning: PULSE_UPDATE_SIGNING_KEY not set; continuing because PULSE_ALLOW_MISSING_UPDATE_SIGNING_KEY=true."
+    else
+        echo "Error: PULSE_UPDATE_SIGNING_KEY is required for release builds." >&2
+        echo "Set PULSE_ALLOW_MISSING_UPDATE_SIGNING_KEY=true only for local non-release debugging." >&2
+        exit 1
+    fi
+else
+    update_public_key=$(go run ./scripts/release_update_key.go public-key --private-key "${PULSE_UPDATE_SIGNING_KEY}")
+    if [[ -z "${update_public_key}" ]]; then
+        echo "Error: failed to derive update signing public key." >&2
+        exit 1
+    fi
+    update_ldflags_args=(--update-public-keys "${update_public_key}")
+fi
+
+sign_release_file() {
+    local file="$1"
+    if [[ -z "${PULSE_UPDATE_SIGNING_KEY:-}" ]]; then
+        return 0
+    fi
+    go run ./scripts/release_update_key.go sign --private-key "${PULSE_UPDATE_SIGNING_KEY}" --file "${file}" > "${file}.sig"
+}
+
+sign_directory_release_assets() {
+    local dir="$1"
+    if [[ -z "${PULSE_UPDATE_SIGNING_KEY:-}" ]]; then
+        return 0
+    fi
+    while IFS= read -r -d '' file; do
+        sign_release_file "${file}"
+    done < <(find "${dir}" -maxdepth 1 -type f -print0)
+}
+
 # Clean previous builds
 rm -rf $BUILD_DIR $RELEASE_DIR
 mkdir -p $BUILD_DIR $RELEASE_DIR
@@ -78,7 +116,7 @@ echo "Building frontend..."
 npm --prefix frontend-modern ci
 npm --prefix frontend-modern run build
 
-agent_ldflags="$(./scripts/release_ldflags.sh agent --version "v${VERSION}")"
+agent_ldflags="$(./scripts/release_ldflags.sh agent --version "v${VERSION}" "${update_ldflags_args[@]}")"
 
 # Build unified agents for every supported platform/architecture
 echo "Building unified agents for all platforms..."
@@ -142,7 +180,7 @@ for i in "${!build_order[@]}"; do
     build_time=$(date -u '+%Y-%m-%d_%H:%M:%S')
     git_commit=$(git rev-parse --short HEAD 2>/dev/null || echo 'unknown')
 
-    server_ldflags="$(./scripts/release_ldflags.sh server --version "v${VERSION}" --build-time "${build_time}" --git-commit "${git_commit}" "${license_ldflags_args[@]}")"
+    server_ldflags="$(./scripts/release_ldflags.sh server --version "v${VERSION}" --build-time "${build_time}" --git-commit "${git_commit}" "${license_ldflags_args[@]}" "${update_ldflags_args[@]}")"
 
     # Build backend binary with version info
     # -tags release disables dev-mode env-var bypasses (PULSE_DEV, PULSE_MOCK_MODE,
@@ -189,6 +227,9 @@ for build_name in "${build_order[@]}"; do
     chmod 755 "$staging_dir/scripts/"*.sh
     chmod 755 "$staging_dir/scripts/"*.ps1 2>/dev/null || true
     echo "$VERSION" > "$staging_dir/VERSION"
+    sign_directory_release_assets "$staging_dir/bin"
+    sign_directory_release_assets "$staging_dir/scripts"
+    sign_release_file "$staging_dir/VERSION"
 
     # Create tarball from staging directory
     cd "$staging_dir"
@@ -270,6 +311,9 @@ chmod +x "$universal_dir/bin/pulse-agent"
 
 # Add VERSION file
 echo "$VERSION" > "$universal_dir/VERSION"
+sign_directory_release_assets "$universal_dir/bin"
+sign_directory_release_assets "$universal_dir/scripts"
+sign_release_file "$universal_dir/VERSION"
 
 # Package standalone unified agent binaries (all platforms)
 # Linux
@@ -363,6 +407,12 @@ fi
 if compgen -G "pulse-*.zip" > /dev/null; then
     checksum_files+=( pulse-*.zip )
 fi
+if compgen -G "pulse-agent-linux-*" > /dev/null; then
+    checksum_files+=( pulse-agent-linux-* )
+fi
+if compgen -G "pulse-agent-freebsd-*" > /dev/null; then
+    checksum_files+=( pulse-agent-freebsd-* )
+fi
 if compgen -G "pulse-*.exe" > /dev/null; then
     checksum_files+=( pulse-*.exe )
 fi
@@ -389,6 +439,10 @@ else
     while read -r checksum filename; do
         printf '%s  %s\n' "$checksum" "$filename" > "${filename}.sha256"
     done <<< "$checksum_output"
+
+    for artifact in "${checksum_files[@]}" checksums.txt; do
+        sign_release_file "${artifact}"
+    done
 
     if [ -n "${SIGNING_KEY_ID:-}" ]; then
         if command -v gpg >/dev/null 2>&1; then

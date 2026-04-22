@@ -9,12 +9,14 @@ import (
 	"encoding/pem"
 	"os"
 	"testing"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/updatesignature"
 )
 
 func TestVerifySignature(t *testing.T) {
-	originalKeys := trustedPublicKeysPEM
+	originalKeys := updatesignature.EmbeddedTrustedPublicKeys
 	defer func() {
-		trustedPublicKeysPEM = originalKeys
+		updatesignature.EmbeddedTrustedPublicKeys = originalKeys
 	}()
 
 	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
@@ -25,7 +27,7 @@ func TestVerifySignature(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal public key: %v", err)
 	}
-	trustedPublicKeysPEM = []string{string(pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: pubBytes}))}
+	updatesignature.EmbeddedTrustedPublicKeys = string(pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: pubBytes}))
 
 	data := []byte("payload")
 	sig := ed25519.Sign(privateKey, data)
@@ -50,12 +52,12 @@ func TestVerifySignature(t *testing.T) {
 }
 
 func TestVerifySignatureInvalidKeys(t *testing.T) {
-	originalKeys := trustedPublicKeysPEM
+	originalKeys := updatesignature.EmbeddedTrustedPublicKeys
 	defer func() {
-		trustedPublicKeysPEM = originalKeys
+		updatesignature.EmbeddedTrustedPublicKeys = originalKeys
 	}()
 
-	trustedPublicKeysPEM = []string{"not-pem"}
+	updatesignature.EmbeddedTrustedPublicKeys = "not-pem"
 	if err := verifySignature([]byte("data"), base64.StdEncoding.EncodeToString([]byte("sig"))); err == nil {
 		t.Fatal("expected error for invalid pem")
 	}
@@ -68,7 +70,7 @@ func TestVerifySignatureInvalidKeys(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal rsa: %v", err)
 	}
-	trustedPublicKeysPEM = []string{string(pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: pubBytes}))}
+	updatesignature.EmbeddedTrustedPublicKeys = string(pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: pubBytes}))
 
 	if err := verifySignature([]byte("data"), base64.StdEncoding.EncodeToString([]byte("sig"))); err == nil {
 		t.Fatal("expected error for non-ed25519 key")
@@ -76,9 +78,9 @@ func TestVerifySignatureInvalidKeys(t *testing.T) {
 }
 
 func TestVerifyFileSignature(t *testing.T) {
-	originalKeys := trustedPublicKeysPEM
+	originalKeys := updatesignature.EmbeddedTrustedPublicKeys
 	defer func() {
-		trustedPublicKeysPEM = originalKeys
+		updatesignature.EmbeddedTrustedPublicKeys = originalKeys
 	}()
 
 	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
@@ -89,7 +91,7 @@ func TestVerifyFileSignature(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal public key: %v", err)
 	}
-	trustedPublicKeysPEM = []string{string(pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: pubBytes}))}
+	updatesignature.EmbeddedTrustedPublicKeys = string(pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: pubBytes}))
 
 	file := filepathJoin(t)
 	data := []byte("file")
