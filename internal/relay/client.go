@@ -43,11 +43,17 @@ const (
 // This prevents unbounded goroutine growth if the relay floods DATA frames.
 var maxConcurrentDataHandlers = 64
 
+// relayMaxRequestsPerChannelWindow limits proxied HTTP requests accepted from a
+// single relay channel within relayChannelRateLimitWindow.
+var relayMaxRequestsPerChannelWindow = 300
+
 const (
-	wsMaxMessageSize      = wsReadLimit
-	wsPongWait            = 60 * time.Second
-	proxyStreamTimeout    = 15 * time.Minute
-	relayOverloadedReason = "relay proxy overloaded"
+	wsMaxMessageSize            = wsReadLimit
+	wsPongWait                  = 60 * time.Second
+	proxyStreamTimeout          = 15 * time.Minute
+	relayOverloadedReason       = "relay proxy overloaded"
+	relayChannelRateLimitWindow = time.Minute
+	relayRateLimitedReason      = "relay proxy rate limited"
 )
 
 // TokenValidator validates an API token and returns the raw token if valid.
@@ -55,9 +61,60 @@ type TokenValidator func(token string) bool
 
 // channelState holds per-channel state including auth and encryption.
 type channelState struct {
-	apiToken   string
-	encryption *ChannelEncryption // nil until key exchange completes
-	ephemeral  *ecdh.PrivateKey   // ephemeral keypair, cleared after handshake
+	apiToken       string
+	encryption     *ChannelEncryption // nil until key exchange completes
+	ephemeral      *ecdh.PrivateKey   // ephemeral keypair, cleared after handshake
+	requestLimiter *relayChannelRequestLimiter
+}
+
+type relayChannelRequestLimiter struct {
+	mu       sync.Mutex
+	attempts []time.Time
+	limit    int
+	window   time.Duration
+}
+
+func newRelayChannelState(apiToken string) *channelState {
+	return &channelState{
+		apiToken:       apiToken,
+		requestLimiter: newRelayChannelRequestLimiter(relayMaxRequestsPerChannelWindow, relayChannelRateLimitWindow),
+	}
+}
+
+func newRelayChannelRequestLimiter(limit int, window time.Duration) *relayChannelRequestLimiter {
+	if limit <= 0 || window <= 0 {
+		return nil
+	}
+	return &relayChannelRequestLimiter{
+		limit:  limit,
+		window: window,
+	}
+}
+
+func (l *relayChannelRequestLimiter) Allow(now time.Time) bool {
+	if l == nil {
+		return true
+	}
+
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	cutoff := now.Add(-l.window)
+	keep := 0
+	for _, attempt := range l.attempts {
+		if attempt.After(cutoff) {
+			l.attempts[keep] = attempt
+			keep++
+		}
+	}
+	l.attempts = l.attempts[:keep]
+
+	if len(l.attempts) >= l.limit {
+		return false
+	}
+
+	l.attempts = append(l.attempts, now)
+	return true
 }
 
 // ClientDeps holds injectable dependencies for the relay client.
@@ -691,7 +748,7 @@ func (c *Client) handleChannelOpen(frame Frame, sendCh chan<- []byte) {
 
 	// Accept: store channel and echo CHANNEL_OPEN back
 	c.mu.Lock()
-	c.channels[payload.ChannelID] = &channelState{apiToken: payload.AuthToken}
+	c.channels[payload.ChannelID] = newRelayChannelState(payload.AuthToken)
 	c.mu.Unlock()
 
 	c.logger.Info().Uint32("channel", payload.ChannelID).Msg("channel opened")
@@ -714,9 +771,11 @@ func (c *Client) handleData(connCtx context.Context, frame Frame, sendCh chan<- 
 	state, ok := c.channels[channelID]
 	var enc *ChannelEncryption
 	var apiToken string
+	var requestLimiter *relayChannelRequestLimiter
 	if ok {
 		enc = state.encryption
 		apiToken = state.apiToken
+		requestLimiter = state.requestLimiter
 	}
 	c.mu.RUnlock()
 
@@ -736,6 +795,11 @@ func (c *Client) handleData(connCtx context.Context, frame Frame, sendCh chan<- 
 			return
 		}
 		payload = decrypted
+	}
+
+	if requestLimiter != nil && !requestLimiter.Allow(time.Now()) {
+		c.handleRateLimitedData(channelID, payload, enc, sendCh)
+		return
 	}
 
 	select {
@@ -789,6 +853,27 @@ func (c *Client) handleOverloadedData(channelID uint32, payload []byte, enc *Cha
 		Str("request_id", requestID).
 		Int("max_in_flight", maxConcurrentDataHandlers).
 		Msg("DATA handler limit reached, rejecting request")
+	queueFrame(sendCh, NewFrame(FrameData, channelID, respPayload), c.logger)
+}
+
+func (c *Client) handleRateLimitedData(channelID uint32, payload []byte, enc *ChannelEncryption, sendCh chan<- []byte) {
+	requestID := extractProxyRequestID(payload)
+	respPayload := c.proxy.errorResponse(requestID, http.StatusTooManyRequests, relayRateLimitedReason)
+	if enc != nil {
+		encrypted, err := enc.Encrypt(respPayload)
+		if err != nil {
+			c.logger.Warn().Err(err).Uint32("channel", channelID).Msg("Failed to encrypt rate-limit response")
+			return
+		}
+		respPayload = encrypted
+	}
+
+	c.logger.Warn().
+		Uint32("channel", channelID).
+		Str("request_id", requestID).
+		Int("limit", relayMaxRequestsPerChannelWindow).
+		Dur("window", relayChannelRateLimitWindow).
+		Msg("Relay DATA request rate limit reached for channel")
 	queueFrame(sendCh, NewFrame(FrameData, channelID, respPayload), c.logger)
 }
 

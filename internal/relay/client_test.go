@@ -1741,6 +1741,158 @@ func TestClient_OverloadedDataReturnsBusyResponse(t *testing.T) {
 	<-errCh
 }
 
+func TestClient_ChannelRateLimitReturnsTooManyRequests(t *testing.T) {
+	logger := zerolog.New(zerolog.NewTestWriter(t))
+
+	origLimit := relayMaxRequestsPerChannelWindow
+	relayMaxRequestsPerChannelWindow = 1
+	defer func() { relayMaxRequestsPerChannelWindow = origLimit }()
+
+	mockAPI := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{"path": r.URL.Path})
+	}))
+	defer mockAPI.Close()
+	localAddr := strings.TrimPrefix(mockAPI.URL, "http://")
+
+	rateLimitedRespCh := make(chan ProxyResponse, 1)
+
+	relayServer := mockRelayServer(t, func(conn *websocket.Conn) {
+		_, msg, _ := conn.ReadMessage()
+		frame, _ := DecodeFrame(msg)
+		if frame.Type != FrameRegister {
+			return
+		}
+		ack, _ := NewControlFrame(FrameRegisterAck, 0, RegisterAckPayload{
+			InstanceID:   "inst_rate_limit",
+			SessionToken: "sess_rate_limit",
+			ExpiresAt:    time.Now().Add(time.Hour).Unix(),
+		})
+		ackBytes, _ := EncodeFrame(ack)
+		_ = conn.WriteMessage(websocket.BinaryMessage, ackBytes)
+
+		time.Sleep(50 * time.Millisecond)
+		chOpen, _ := NewControlFrame(FrameChannelOpen, 1, ChannelOpenPayload{
+			ChannelID: 1,
+			AuthToken: "valid-token",
+		})
+		chOpenBytes, _ := EncodeFrame(chOpen)
+		_ = conn.WriteMessage(websocket.BinaryMessage, chOpenBytes)
+
+		_, msg, err := conn.ReadMessage()
+		if err != nil {
+			return
+		}
+		frame, _ = DecodeFrame(msg)
+		if frame.Type != FrameChannelOpen {
+			return
+		}
+
+		firstReqBytes, _ := json.Marshal(ProxyRequest{
+			ID:     "req_allowed",
+			Method: "GET",
+			Path:   "/api/allowed",
+		})
+		firstFrame := NewFrame(FrameData, 1, firstReqBytes)
+		firstData, _ := EncodeFrame(firstFrame)
+		_ = conn.WriteMessage(websocket.BinaryMessage, firstData)
+
+		_, msg, err = conn.ReadMessage()
+		if err != nil {
+			return
+		}
+		frame, _ = DecodeFrame(msg)
+		if frame.Type != FrameData {
+			return
+		}
+		var firstResp ProxyResponse
+		if err := json.Unmarshal(frame.Payload, &firstResp); err != nil {
+			return
+		}
+		if firstResp.ID != "req_allowed" || firstResp.Status != http.StatusOK {
+			return
+		}
+
+		secondReqBytes, _ := json.Marshal(ProxyRequest{
+			ID:     "req_limited",
+			Method: "GET",
+			Path:   "/api/limited",
+		})
+		secondFrame := NewFrame(FrameData, 1, secondReqBytes)
+		secondData, _ := EncodeFrame(secondFrame)
+		_ = conn.WriteMessage(websocket.BinaryMessage, secondData)
+
+		_ = conn.SetReadDeadline(time.Now().Add(3 * time.Second))
+		_, msg, err = conn.ReadMessage()
+		if err != nil {
+			return
+		}
+		frame, _ = DecodeFrame(msg)
+		if frame.Type != FrameData {
+			return
+		}
+		var resp ProxyResponse
+		if err := json.Unmarshal(frame.Payload, &resp); err != nil {
+			return
+		}
+		rateLimitedRespCh <- resp
+	})
+	defer relayServer.Close()
+
+	cfg := Config{
+		Enabled:   true,
+		ServerURL: wsURL(relayServer),
+	}
+
+	deps := ClientDeps{
+		LicenseTokenFunc: func() string { return "test-jwt" },
+		TokenValidator:   func(token string) bool { return token == "valid-token" },
+		LocalAddr:        localAddr,
+		ServerVersion:    "1.0.0",
+		IdentityPubKey:   "test-pub-key",
+	}
+
+	client := NewClient(cfg, deps, logger)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	errCh := make(chan error, 1)
+	go func() { errCh <- client.Run(ctx) }()
+
+	select {
+	case resp := <-rateLimitedRespCh:
+		if resp.ID != "req_limited" {
+			t.Errorf("response ID: got %q, want %q", resp.ID, "req_limited")
+		}
+		if resp.Status != http.StatusTooManyRequests {
+			t.Errorf("response status: got %d, want %d", resp.Status, http.StatusTooManyRequests)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("timed out waiting for rate-limited response")
+	}
+
+	cancel()
+	<-errCh
+}
+
+func TestRelayChannelRequestLimiterPrunesExpiredAttempts(t *testing.T) {
+	limiter := newRelayChannelRequestLimiter(2, time.Minute)
+	now := time.Now().UTC()
+
+	if !limiter.Allow(now.Add(-2 * time.Minute)) {
+		t.Fatal("expected first request to be allowed")
+	}
+	if !limiter.Allow(now) {
+		t.Fatal("expected second request to be allowed")
+	}
+	if !limiter.Allow(now.Add(30 * time.Second)) {
+		t.Fatal("expected expired attempt to be pruned before third request")
+	}
+	if limiter.Allow(now.Add(31 * time.Second)) {
+		t.Fatal("expected limiter to reject once the current window is full")
+	}
+}
+
 func TestNextConsecutiveFailures(t *testing.T) {
 	tests := []struct {
 		name      string

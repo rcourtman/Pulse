@@ -86,7 +86,11 @@ Pulse API request so trivial spacing drift does not cause a valid proxied
 operation to fail at the desktop boundary. The same normalization rule applies
 to allowlisted proxy header names, so safe headers like `Content-Type` are not
 silently stripped just because the upstream frame wrapped them in outer
-whitespace.
+whitespace. That same proxy boundary also owns per-channel abuse control: one
+relay channel may not consume an unbounded share of the local HTTP proxy, so
+desktop relay runtime must enforce a channel-local request budget and fail
+excess DATA frames with owned proxy backpressure instead of letting one
+channel starve the rest of the connection.
 Persisted relay config loading is part of the same owned surface. A missing
 `relay.enc` file must fall back cleanly to the canonical disabled default so a
 fresh v6 install or a partially migrated instance does not fail closed just
