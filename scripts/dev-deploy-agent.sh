@@ -16,7 +16,15 @@ GOARCH="${GOARCH:-amd64}"
 GOOS="${GOOS:-linux}"
 
 # SSH options
-SSH_OPTS="-o StrictHostKeyChecking=no -o ConnectTimeout=10"
+# Default to TOFU for new hosts while still failing closed on host-key changes.
+SSH_KNOWN_HOSTS_FILE="${PULSE_DEV_SSH_KNOWN_HOSTS_FILE:-$HOME/.ssh/known_hosts}"
+SSH_OPTS=(
+    -o BatchMode=yes
+    -o StrictHostKeyChecking=accept-new
+    -o UpdateHostKeys=yes
+    -o ConnectTimeout=10
+    -o "UserKnownHostsFile=$SSH_KNOWN_HOSTS_FILE"
+)
 
 # Remote paths
 REMOTE_AGENT_PATH="/usr/local/bin/pulse-agent"
@@ -76,7 +84,7 @@ for host in "${HOSTS[@]}"; do
     log_info "Deploying to $host..."
     
     # Check if host is reachable and get architecture
-    HOST_ARCH=$(ssh $SSH_OPTS "$host" "uname -m" 2>/dev/null || echo "unknown")
+    HOST_ARCH=$(ssh "${SSH_OPTS[@]}" "$host" "uname -m" 2>/dev/null || echo "unknown")
     if [ "$HOST_ARCH" == "unknown" ]; then
         log_error "Cannot connect to $host or determine architecture - skipping"
         FAILED_HOSTS+=("$host")
@@ -102,11 +110,11 @@ for host in "${HOSTS[@]}"; do
     
     # Stop the service
     log_info "  Stopping pulse-agent..."
-    ssh $SSH_OPTS "$host" "sudo systemctl stop $REMOTE_SERVICE 2>/dev/null || pkill -f pulse-agent || true"
+    ssh "${SSH_OPTS[@]}" "$host" "sudo systemctl stop $REMOTE_SERVICE 2>/dev/null || pkill -f pulse-agent || true"
     
     # Copy the binary
     log_info "  Copying binary..."
-    if ! scp $SSH_OPTS "$BINARY_PATH" "$host:/tmp/pulse-agent-new"; then
+    if ! scp "${SSH_OPTS[@]}" "$BINARY_PATH" "$host:/tmp/pulse-agent-new"; then
         log_error "  Failed to copy binary to $host"
         FAILED_HOSTS+=("$host")
         continue
@@ -114,7 +122,7 @@ for host in "${HOSTS[@]}"; do
     
     # Install the binary
     log_info "  Installing binary..."
-    if ! ssh $SSH_OPTS "$host" "sudo mv /tmp/pulse-agent-new $REMOTE_AGENT_PATH && sudo chmod +x $REMOTE_AGENT_PATH"; then
+    if ! ssh "${SSH_OPTS[@]}" "$host" "sudo mv /tmp/pulse-agent-new $REMOTE_AGENT_PATH && sudo chmod +x $REMOTE_AGENT_PATH"; then
         log_error "  Failed to install binary on $host"
         FAILED_HOSTS+=("$host")
         continue
@@ -123,25 +131,25 @@ for host in "${HOSTS[@]}"; do
     # Start the service
     log_info "  Starting pulse-agent..."
     # Try systemd first, then Unraid go.d script, then manual start via existing scripts
-    if ! ssh $SSH_OPTS "$host" "sudo systemctl start $REMOTE_SERVICE 2>/dev/null"; then
-        if ssh $SSH_OPTS "$host" "test -f /boot/config/go.d/pulse-agent.sh" 2>/dev/null; then
+    if ! ssh "${SSH_OPTS[@]}" "$host" "sudo systemctl start $REMOTE_SERVICE 2>/dev/null"; then
+        if ssh "${SSH_OPTS[@]}" "$host" "test -f /boot/config/go.d/pulse-agent.sh" 2>/dev/null; then
             log_info "  Using Unraid startup script..."
-            ssh $SSH_OPTS "$host" "bash /boot/config/go.d/pulse-agent.sh" >/dev/null 2>&1
-        elif ssh $SSH_OPTS "$host" "test -f /etc/init.d/pulse-agent" 2>/dev/null; then
+            ssh "${SSH_OPTS[@]}" "$host" "bash /boot/config/go.d/pulse-agent.sh" >/dev/null 2>&1
+        elif ssh "${SSH_OPTS[@]}" "$host" "test -f /etc/init.d/pulse-agent" 2>/dev/null; then
             log_info "  Using init.d script..."
-            ssh $SSH_OPTS "$host" "sudo /etc/init.d/pulse-agent start" >/dev/null 2>&1
+            ssh "${SSH_OPTS[@]}" "$host" "sudo /etc/init.d/pulse-agent start" >/dev/null 2>&1
         fi
     fi
     
     # Verify it's running
     sleep 2
-    if ssh $SSH_OPTS "$host" "pgrep -x pulse-agent >/dev/null 2>&1"; then
+    if ssh "${SSH_OPTS[@]}" "$host" "pgrep -x pulse-agent >/dev/null 2>&1"; then
         log_success "  Agent deployed and running on $host"
         SUCCESS_HOSTS+=("$host")
     else
         # Try one last ditch effort: run it via the background helper if we can find it
         log_warn "  Agent not running, checking logs..."
-        ssh $SSH_OPTS "$host" "tail -n 5 /var/log/pulse-agent.log /boot/logs/pulse-agent.log 2>/dev/null" | log_warn
+        ssh "${SSH_OPTS[@]}" "$host" "tail -n 5 /var/log/pulse-agent.log /boot/logs/pulse-agent.log 2>/dev/null" | log_warn
         FAILED_HOSTS+=("$host")
     fi
 done

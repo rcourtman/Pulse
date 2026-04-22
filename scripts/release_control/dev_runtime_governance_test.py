@@ -37,6 +37,32 @@ class DevRuntimeGovernanceTest(unittest.TestCase):
             match["verification_requirement"]["exact_files"],
         )
 
+    def test_lookup_maps_dev_agent_deploy_helper_to_installability(self) -> None:
+        result = lookup_paths(["scripts/dev-deploy-agent.sh"])
+        self.assertEqual(result["unowned_runtime_files"], [])
+        self.assertEqual(
+            {entry["subsystem"] for entry in result["impacted_subsystems"]},
+            {"deployment-installability"},
+        )
+
+        file_entry = result["files"][0]
+        self.assertEqual(file_entry["classification"], "runtime")
+        self.assertEqual(
+            {match["subsystem"] for match in file_entry["matches"]},
+            {"deployment-installability"},
+        )
+        match = file_entry["matches"][0]
+        self.assertEqual(
+            match["contract"],
+            "docs/release-control/v6/internal/subsystems/deployment-installability.md",
+        )
+        self.assertEqual(match["lane_context"]["lane_id"], "L1")
+        self.assertEqual(match["verification_requirement"]["id"], "dev-runtime-orchestration")
+        self.assertIn(
+            "scripts/release_control/ssh_host_key_policy_test.py",
+            match["verification_requirement"]["exact_files"],
+        )
+
     def test_lookup_maps_integration_browser_default_surfaces_to_installability(self) -> None:
         result = lookup_paths(
             [

@@ -231,6 +231,7 @@ scripts/release_control/*
 !scripts/release_control/generate_platform_support_frontend_module.py
 !scripts/release_control/control_plane_audit.py
 !scripts/release_control/control_plane_audit_test.py
+!scripts/release_control/dev_runtime_governance_test.py
 !scripts/release_control/documentation_currentness_test.py
 !scripts/release_control/format_staged_go.py
 !scripts/release_control/format_staged_go_test.py
@@ -266,6 +267,7 @@ scripts/release_control/*
 !scripts/release_control/subsystem_contracts_test.py
 !scripts/release_control/subsystem_lookup.py
 !scripts/release_control/subsystem_lookup_test.py
+!scripts/release_control/ssh_host_key_policy_test.py
 !scripts/release_control/work_claim.py
 !scripts/release_control/work_claim_test.py
 .agent/

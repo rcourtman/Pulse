@@ -2441,6 +2441,7 @@
         "scripts/com.pulse.hot-dev.plist.template",
         "scripts/demo_public_browser_smoke.cjs",
         "scripts/dev-check.sh",
+        "scripts/dev-deploy-agent.sh",
         "scripts/dev-launchd-setup.sh",
         "scripts/dev-launchd-wrapper.sh",
         "scripts/hot-dev-bg.sh",
@@ -2666,6 +2667,7 @@
               "scripts/clean-mock-alerts.sh",
               "scripts/com.pulse.hot-dev.plist.template",
               "scripts/dev-check.sh",
+              "scripts/dev-deploy-agent.sh",
               "scripts/dev-launchd-setup.sh",
               "scripts/dev-launchd-wrapper.sh",
               "scripts/hot-dev-bg.sh",
@@ -2681,6 +2683,7 @@
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
+              "scripts/release_control/ssh_host_key_policy_test.py",
               "scripts/tests/test-hot-dev-bg.sh",
               "scripts/tests/test-toggle-mock.sh",
               "tests/integration/tests/16-dev-runtime-recovery.spec.ts"
