@@ -46,6 +46,8 @@ interface ProLicensePlanSectionProps {
     badgeClass: string;
     statusLabel: string;
     unlockedFeatures: string[];
+    supplementalBadges: string[];
+    supplementalSummary?: string;
   };
   entitlements: {
     in_grace_period?: boolean;
@@ -123,6 +125,13 @@ export const ProLicensePlanSection: Component<ProLicensePlanSectionProps> = (pro
           >
             {props.currentPlanSummary.statusLabel}
           </span>
+          <For each={props.currentPlanSummary.supplementalBadges}>
+            {(badge) => (
+              <span class="px-2 py-1 text-xs font-medium rounded-full bg-surface text-base-content border border-border">
+                {badge}
+              </span>
+            )}
+          </For>
           <Show when={props.entitlements?.in_grace_period}>
             <span class="text-xs text-amber-700 dark:text-amber-300">
               Grace until {formatDate(props.entitlements?.grace_period_end)}
@@ -131,6 +140,9 @@ export const ProLicensePlanSection: Component<ProLicensePlanSectionProps> = (pro
         </div>
         <p class="mt-3 text-lg font-semibold text-base-content">{props.currentPlanSummary.title}</p>
         <p class="mt-1 text-sm text-muted">{props.currentPlanSummary.body}</p>
+        <Show when={props.currentPlanSummary.supplementalSummary}>
+          {(summary) => <p class="mt-2 text-xs text-muted">{summary()}</p>}
+        </Show>
         <Show when={props.currentPlanSummary.unlockedFeatures.length > 0}>
           <div class="mt-4">
             <p class="text-xs uppercase tracking-wide text-muted mb-2">Unlocked on this instance</p>

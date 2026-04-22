@@ -1139,7 +1139,11 @@ plan-owned rather than tier-owned: the navigation label is `Plans`, the
 surface title is `Plans & Activation`, and the canonical plan state must make
 the current unlocked tier plus capabilities immediately obvious so existing
 paid upgrades can confirm what their new key enabled without hunting through
-generic billing details.
+generic billing details. That entitlement-first summary must stay tier-
+specific and continuity-aware: Relay and Pulse Pro should describe the actual
+paid capabilities unlocked on this instance, while grandfathered pricing or
+captured monitored-system continuity must be visible in that same top summary
+instead of only in secondary billing detail blocks further down the page.
 That same router-owned billing contract now also includes recovery as a plan
 detail state instead of a fragment alias. The canonical recovery arrival is
 `/settings/system/billing/plan?details=recovery`, while

@@ -14,10 +14,10 @@ import {
   formatLicensePlanVersion,
   getCommercialMigrationNotice,
   getGrandfatheredPriceContinuityNotice,
+  getSelfHostedCurrentPlanPresentation,
   getLicenseFeatureLabel,
   getMonitoredSystemContinuityNotice,
   getPurchaseActivationNotice,
-  getSelfHostedPlanLabel,
   getLicenseSubscriptionStatusPresentation,
   getLicenseTierLabel,
   getTrialActivationNotice,
@@ -330,12 +330,6 @@ export function useProLicensePanelState() {
     if (!current) return 'Unknown';
     return getLicenseTierLabel(current.tier);
   });
-  const currentPlanLabel = createMemo(() => {
-    const current = entitlements();
-    if (!current) return 'Unknown';
-    return getSelfHostedPlanLabel(current.tier);
-  });
-
   const formattedPlanTerms = createMemo(() =>
     formatLicensePlanVersion(entitlements()?.plan_version),
   );
@@ -572,61 +566,14 @@ export function useProLicensePanelState() {
   );
   const currentPlanSummary = createMemo(() => {
     const status = statusPresentation();
-    const unlockedFeatures = formattedFeatures();
-    const current = entitlements();
-    const planLabel = currentPlanLabel();
-    const normalizedState = (subscriptionState() || '').trim().toLowerCase();
-
-    if (!current) {
-      return {
-        title: 'Current plan: Unknown',
-        body: 'Pulse is still loading the current self-hosted entitlement for this instance.',
-        badgeClass: status.badgeClass,
-        statusLabel: status.label,
-        unlockedFeatures: [] as string[],
-      };
-    }
-
-    if (normalizedState === 'trial') {
-      return {
-        title: `Current plan: ${planLabel} Trial`,
-        body:
-          unlockedFeatures.length > 0
-            ? `${planLabel} trial capabilities are active on this instance right now.`
-            : `${planLabel} trial activation is in progress on this instance.`,
-        badgeClass: status.badgeClass,
-        statusLabel: status.label,
-        unlockedFeatures,
-      };
-    }
-
-    if (unlockedFeatures.length > 0 && (normalizedState === 'active' || normalizedState === 'grace')) {
-      return {
-        title: `Current plan: ${planLabel}`,
-        body: `${planLabel} is active on this instance. These capabilities are unlocked right now.`,
-        badgeClass: status.badgeClass,
-        statusLabel: status.label,
-        unlockedFeatures,
-      };
-    }
-
-    if ((current.tier || '').trim().toLowerCase() === 'free') {
-      return {
-        title: 'Current plan: Community',
-        body:
-          'Community keeps self-hosted core monitoring free on this instance. Upgrade only when you want Relay or Pro capabilities.',
-        badgeClass: status.badgeClass,
-        statusLabel: status.label,
-        unlockedFeatures: [] as string[],
-      };
-    }
-
+    const summary = getSelfHostedCurrentPlanPresentation({
+      entitlements: entitlements(),
+      displayableCapabilities: formattedFeatures(),
+    });
     return {
-      title: `Current plan: ${planLabel}`,
-      body: 'Review the plan details below to confirm what this key unlocks on this instance.',
+      ...summary,
       badgeClass: status.badgeClass,
       statusLabel: status.label,
-      unlockedFeatures,
     };
   });
 

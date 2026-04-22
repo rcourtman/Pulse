@@ -61,12 +61,41 @@ describe('selfHostedPlans', () => {
     expect(SELF_HOSTED_PLAN_BY_TIER.community.billingExtrasSummary).toBe(
       'Patrol, alerts, and OIDC',
     );
+    expect(SELF_HOSTED_PLAN_BY_TIER.community.entitlementSummary).toContain(
+      'Core self-hosted monitoring stays free on this instance.',
+    );
+    expect(SELF_HOSTED_PLAN_BY_TIER.community.entitlementHighlights).toEqual([
+      'Unlimited self-hosted monitoring',
+      '7-day metric history',
+      'Pulse Patrol (BYOK)',
+      'Update alerts',
+    ]);
     expect(SELF_HOSTED_PLAN_BY_TIER.relay.billingExtrasSummary).toBe(
       'Remote access, mobile, and push',
     );
+    expect(SELF_HOSTED_PLAN_BY_TIER.relay.entitlementSummary).toContain(
+      'Remote access, mobile, push, and longer history are unlocked right now.',
+    );
+    expect(SELF_HOSTED_PLAN_BY_TIER.relay.entitlementHighlights).toEqual([
+      'Pulse Relay (Remote Access)',
+      'Mobile App Access',
+      'Push Notifications',
+      '14-day metric history',
+    ]);
     expect(SELF_HOSTED_PLAN_BY_TIER.pro.billingExtrasSummary).toBe(
       'AI operations and advanced admin',
     );
+    expect(SELF_HOSTED_PLAN_BY_TIER.pro.entitlementSummary).toContain(
+      'AI operations, advanced administration, and 90-day history are unlocked right now.',
+    );
+    expect(SELF_HOSTED_PLAN_BY_TIER.pro.entitlementHighlights).toEqual([
+      'Patrol Auto-Fix',
+      'Pulse Alert Analysis',
+      'Kubernetes Insights',
+      '90-day metric history',
+      'Role-Based Access Control (RBAC)',
+      'Audit Logging',
+    ]);
     expect(SELF_HOSTED_PLAN_BY_TIER.community.highlights).toEqual(
       expect.arrayContaining([
         'Unlimited self-hosted monitoring',

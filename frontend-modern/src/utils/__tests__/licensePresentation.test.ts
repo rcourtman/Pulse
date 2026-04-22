@@ -8,6 +8,7 @@ import {
   getCommercialMigrationNotice,
   getFeatureMinTierLabel,
   getGrandfatheredPriceContinuityNotice,
+  getSelfHostedCurrentPlanPresentation,
   getLicenseFeatureLabel,
   getLicenseStatusLoadingState,
   getLicenseSubscriptionStatusPresentation,
@@ -194,6 +195,89 @@ describe('licensePresentation', () => {
     expect(
       getGrandfatheredPriceContinuityNotice('v5_pro_monthly_grandfathered', 'expired'),
     ).toBeNull();
+  });
+
+  it('builds entitlement-first current-plan presentation for community, paid, and grandfathered installs', () => {
+    expect(
+      getSelfHostedCurrentPlanPresentation({
+        entitlements: {
+          tier: 'free',
+          subscription_state: 'expired',
+          capabilities: [],
+          limits: [],
+          upgrade_reasons: [],
+        },
+        displayableCapabilities: [],
+      }),
+    ).toEqual({
+      title: 'Current plan: Community',
+      body:
+        'Core self-hosted monitoring stays free on this instance. Upgrade only when you want Relay convenience or Pro operations features.',
+      unlockedFeatures: [
+        'Unlimited self-hosted monitoring',
+        '7-day metric history',
+        'Pulse Patrol (BYOK)',
+        'Update alerts',
+      ],
+      supplementalBadges: [],
+      supplementalSummary: '',
+    });
+
+    expect(
+      getSelfHostedCurrentPlanPresentation({
+        entitlements: {
+          tier: 'pro',
+          subscription_state: 'active',
+          capabilities: ['relay', 'mobile_app', 'ai_autofix'],
+          limits: [],
+          upgrade_reasons: [],
+        },
+        displayableCapabilities: [
+          'Pulse Relay (Remote Access)',
+          'Mobile App Access',
+          'Patrol Auto-Fix',
+        ],
+      }),
+    ).toEqual({
+      title: 'Current plan: Pulse Pro',
+      body:
+        'Pulse Pro is active on this instance. AI operations, advanced administration, and 90-day history are unlocked right now.',
+      unlockedFeatures: [
+        'Pulse Relay (Remote Access)',
+        'Mobile App Access',
+        'Patrol Auto-Fix',
+      ],
+      supplementalBadges: [],
+      supplementalSummary: '',
+    });
+
+    expect(
+      getSelfHostedCurrentPlanPresentation({
+        entitlements: {
+          tier: 'pro',
+          subscription_state: 'active',
+          plan_version: 'v5_pro_monthly_grandfathered',
+          capabilities: ['relay'],
+          limits: [],
+          upgrade_reasons: [],
+          monitored_system_continuity: {
+            plan_limit: 10,
+            grandfathered_floor: 23,
+            effective_limit: 23,
+            capture_pending: false,
+          },
+        },
+        displayableCapabilities: ['Pulse Relay (Remote Access)'],
+      }),
+    ).toEqual({
+      title: 'Current plan: Pulse Pro',
+      body:
+        'Pulse Pro is active on this instance. AI operations, advanced administration, and 90-day history are unlocked right now.',
+      unlockedFeatures: ['Pulse Relay (Remote Access)'],
+      supplementalBadges: ['Grandfathered price', 'Grandfathered floor'],
+      supplementalSummary:
+        'This migrated v5 subscription keeps its existing recurring price and uncapped guest capacity until cancellation. This installation keeps an effective monitored-system limit of 23 from the observed legacy estate.',
+    });
   });
 
   it('returns monitored-system continuity notices for pending verification and captured grandfathering', () => {

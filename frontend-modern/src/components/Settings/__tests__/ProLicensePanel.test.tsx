@@ -223,7 +223,10 @@ describe('ProLicensePanel', () => {
       'settings_self_hosted_billing_plan',
       SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_INTENT,
     );
-    expect(screen.getByText(/Community keeps monitoring free/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Core self-hosted monitoring stays free on this instance/i),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Unlimited self-hosted monitoring')).toBeInTheDocument();
     const compareLinks = screen.getAllByRole('link', { name: 'Compare plans' });
     expect(
       compareLinks.some(
@@ -400,6 +403,10 @@ describe('ProLicensePanel', () => {
 
       expect(screen.getByText(tc.expectedLabel)).toBeInTheDocument();
       expect(screen.getByText('Grandfathered v5 pricing')).toBeInTheDocument();
+      expect(screen.getByText('Grandfathered price')).toBeInTheDocument();
+      expect(
+        screen.getByText(/keeps its existing recurring price and uncapped guest capacity/i),
+      ).toBeInTheDocument();
       expect(
         screen.getByText(
           /keeps its existing recurring price and uncapped monitored-system and guest capacity until you cancel/i,
@@ -443,12 +450,47 @@ describe('ProLicensePanel', () => {
     expect(screen.getByText('Core Monitoring')).toBeInTheDocument();
     expect(screen.getByText('Metric History')).toBeInTheDocument();
     expect(screen.getByText('Included Extras')).toBeInTheDocument();
+    expect(screen.getByText('Current plan: Pulse Pro')).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Pulse Pro is active on this instance. AI operations, advanced administration, and 90-day history are unlocked right now.',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Patrol Auto-Fix')).toBeInTheDocument();
     expect(screen.getByText('90 days')).toBeInTheDocument();
     expect(screen.getByText('AI operations and advanced admin')).toBeInTheDocument();
     expect(screen.queryByText('Guest Capacity')).not.toBeInTheDocument();
     expect(screen.queryByText('Included Monitored Systems')).not.toBeInTheDocument();
     expect(screen.queryByText('Monitoring capacity')).not.toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: 'Usage' })).not.toBeInTheDocument();
+  });
+
+  it('shows Relay entitlement summaries from the paid capabilities unlocked on this instance', async () => {
+    mockEntitlements = {
+      capabilities: ['relay', 'mobile_app', 'push_notifications'],
+      limits: [],
+      subscription_state: 'active',
+      upgrade_reasons: [],
+      tier: 'relay',
+      plan_version: 'relay_monthly',
+      licensed_email: 'owner@example.com',
+      trial_eligible: false,
+    };
+
+    renderPanel();
+
+    await waitFor(() => {
+      expect(screen.getByText('Current plan: Relay')).toBeInTheDocument();
+    });
+
+    expect(
+      screen.getByText(
+        'Relay is active on this instance. Remote access, mobile, push, and longer history are unlocked right now.',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Pulse Relay (Remote Access)')).toBeInTheDocument();
+    expect(screen.getByText('Mobile App Access')).toBeInTheDocument();
+    expect(screen.getByText('Push Notifications')).toBeInTheDocument();
   });
 
   it('shows continuity verification while a bounded fallback migration is still pending', async () => {
@@ -497,8 +539,9 @@ describe('ProLicensePanel', () => {
     });
 
     expect(
-      screen.getByText(/verifying the grandfathered monitored-system floor/i),
-    ).toBeInTheDocument();
+      screen.getAllByText(/verifying the grandfathered monitored-system floor/i).length,
+    ).toBeGreaterThan(0);
+    expect(screen.getByText('Continuity pending')).toBeInTheDocument();
     expect(screen.getAllByText('Verifying…').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Unavailable').length).toBeGreaterThan(0);
     expect(screen.getByText('Plan Monitored System Limit')).toBeInTheDocument();
@@ -605,8 +648,9 @@ describe('ProLicensePanel', () => {
     });
 
     expect(
-      screen.getByText(/keeps an effective monitored-system limit of 23/i),
-    ).toBeInTheDocument();
+      screen.getAllByText(/keeps an effective monitored-system limit of 23/i).length,
+    ).toBeGreaterThan(0);
+    expect(screen.getByText('Grandfathered floor')).toBeInTheDocument();
     expect(screen.getAllByText('23 monitored systems').length).toBeGreaterThan(0);
     expect(screen.getByText('Monitoring capacity')).toBeInTheDocument();
     expect(
@@ -869,7 +913,9 @@ describe('ProLicensePanel', () => {
     renderPanel();
 
     expect(screen.getAllByText('Compare self-hosted plans').length).toBeGreaterThan(0);
-    expect(screen.getByText(/Community keeps monitoring free/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Core self-hosted monitoring stays free on this instance/i),
+    ).toBeInTheDocument();
     const compareLinks = screen.getAllByRole('link', { name: 'Compare plans' });
     expect(
       compareLinks.some(
@@ -1019,6 +1065,7 @@ describe('ProLicensePanel', () => {
     expect(proLicensePanelStateSource).toContain('loadCommercialPosture(true)');
     expect(proLicensePanelStateSource).toContain('loadRuntimeCapabilities(true)');
     expect(proLicensePanelStateSource).toContain('buildSelfHostedCommercialPlanModel');
+    expect(proLicensePanelStateSource).toContain('getSelfHostedCurrentPlanPresentation({');
     expect(proLicensePanelStateSource).toContain('runStartProTrialAction({');
     expect(proLicensePanelStateSource).not.toContain('startProTrial()');
     expect(proLicensePanelStateSource).toContain("'A license or activation key is required'");
@@ -1026,6 +1073,7 @@ describe('ProLicensePanel', () => {
     expect(proLicensePlanSectionSource).toContain('getNoActiveProLicenseState');
     expect(proLicensePlanSectionSource).toContain('getTrialEndedProLicenseNotice');
     expect(proLicensePlanSectionSource).toContain('currentPlanSummary.title');
+    expect(proLicensePlanSectionSource).toContain('currentPlanSummary.supplementalBadges');
     expect(proLicensePlanSectionSource).toContain('Unlocked on this instance');
     expect(proLicensePlanSectionSource).not.toContain('getInactiveProUpsellNotice');
     expect(proLicensePlanSectionSource).not.toContain('MonitoredSystemDefinitionDisclosure');

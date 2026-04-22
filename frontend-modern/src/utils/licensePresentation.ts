@@ -1,6 +1,7 @@
 import type { BillingState, HostedOrganizationSummary } from '@/api/billingAdmin';
 import type {
   CommercialMigrationStatus,
+  LicenseCommercialEntitlements,
   LicenseStatus,
   MonitoredSystemContinuityStatus,
 } from '@/api/license';
@@ -13,6 +14,7 @@ import {
   type MonitoredSystemCapacityStatus,
   type MonitoredSystemLimitUsageStatus,
 } from '@/utils/monitoredSystemPresentation';
+import { getSelfHostedPlanDefinitionForBillingTier } from '@/utils/selfHostedPlans';
 import { titleCaseDelimitedLabel } from '@/utils/textPresentation';
 
 const TIER_LABELS: Record<string, string> = {
@@ -104,6 +106,14 @@ export interface SelfHostedRecoveryPresentation {
   clearIdleLabel: string;
   clearPendingLabel: string;
   legacyNotice: SelfHostedActivationNoticeCopy;
+}
+
+export interface SelfHostedCurrentPlanPresentation {
+  title: string;
+  body: string;
+  unlockedFeatures: string[];
+  supplementalBadges: string[];
+  supplementalSummary?: string;
 }
 
 const GRANDFATHERED_V5_PLAN_LABELS: Record<string, string> = {
@@ -246,6 +256,114 @@ export const getMonitoredSystemContinuityNotice = (
   }
 
   return null;
+};
+
+export const getSelfHostedCurrentPlanPresentation = ({
+  entitlements,
+  displayableCapabilities,
+}: {
+  entitlements?: LicenseCommercialEntitlements | null;
+  displayableCapabilities: string[];
+}): SelfHostedCurrentPlanPresentation => {
+  const current = entitlements;
+  if (!current) {
+    return {
+      title: 'Current plan: Unknown',
+      body: 'Pulse is still loading the current self-hosted entitlement for this instance.',
+      unlockedFeatures: [],
+      supplementalBadges: [],
+    };
+  }
+
+  const normalizedState = (current.subscription_state || '').trim().toLowerCase();
+  const normalizedTier = (current.tier || '').trim().toLowerCase();
+  const planLabel = getSelfHostedPlanLabel(current.tier);
+  const planDefinition = getSelfHostedPlanDefinitionForBillingTier(current.tier);
+  const fallbackHighlights = [...(planDefinition?.entitlementHighlights ?? [])];
+  const unlockedFeatures =
+    normalizedTier === 'free'
+      ? fallbackHighlights
+      : displayableCapabilities.length > 0
+        ? displayableCapabilities
+        : fallbackHighlights;
+
+  const supplementalBadges: string[] = [];
+  const supplementalDetails: string[] = [];
+
+  if (isGrandfatheredRecurringV5PlanVersion(current.plan_version)) {
+    supplementalBadges.push('Grandfathered price');
+    supplementalDetails.push(
+      'This migrated v5 subscription keeps its existing recurring price and uncapped guest capacity until cancellation.',
+    );
+  } else if (current.is_lifetime && isUncappedGrandfatheredPlanVersion(current.plan_version, true)) {
+    supplementalBadges.push('Grandfathered lifetime');
+    supplementalDetails.push(
+      'This migrated lifetime install keeps uncapped monitored-system and guest capacity continuity.',
+    );
+  }
+
+  const continuity = current.monitored_system_continuity;
+  if (continuity?.capture_pending) {
+    supplementalBadges.push('Continuity pending');
+    supplementalDetails.push(
+      'Pulse is still verifying the grandfathered monitored-system floor for this migrated v5 installation.',
+    );
+  } else if (
+    continuity &&
+    typeof continuity.grandfathered_floor === 'number' &&
+    continuity.grandfathered_floor > 0 &&
+    continuity.effective_limit > continuity.plan_limit
+  ) {
+    supplementalBadges.push('Grandfathered floor');
+    supplementalDetails.push(
+      `This installation keeps an effective monitored-system limit of ${continuity.effective_limit} from the observed legacy estate.`,
+    );
+  }
+
+  if (normalizedState === 'trial') {
+    return {
+      title: `Current plan: ${planLabel} Trial`,
+      body:
+        unlockedFeatures.length > 0
+          ? `${planLabel} trial capabilities are active on this instance right now.`
+          : `${planLabel} trial activation is in progress on this instance.`,
+      unlockedFeatures,
+      supplementalBadges,
+      supplementalSummary: supplementalDetails.join(' '),
+    };
+  }
+
+  if (normalizedTier === 'free') {
+    return {
+      title: 'Current plan: Community',
+      body:
+        planDefinition?.entitlementSummary ||
+        'Community keeps self-hosted core monitoring free on this instance. Upgrade only when you want Relay or Pro capabilities.',
+      unlockedFeatures,
+      supplementalBadges,
+      supplementalSummary: supplementalDetails.join(' '),
+    };
+  }
+
+  if (normalizedState === 'active' || normalizedState === 'grace') {
+    return {
+      title: `Current plan: ${planLabel}`,
+      body:
+        planDefinition?.entitlementSummary ||
+        `${planLabel} is active on this instance. These capabilities are unlocked right now.`,
+      unlockedFeatures,
+      supplementalBadges,
+      supplementalSummary: supplementalDetails.join(' '),
+    };
+  }
+
+  return {
+    title: `Current plan: ${planLabel}`,
+    body: 'Review the plan details below to confirm what this key unlocks on this instance.',
+    unlockedFeatures,
+    supplementalBadges,
+    supplementalSummary: supplementalDetails.join(' '),
+  };
 };
 
 export const getCommercialMigrationActionText = (action?: string): string => {

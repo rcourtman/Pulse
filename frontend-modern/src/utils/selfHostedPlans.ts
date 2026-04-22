@@ -7,6 +7,8 @@ export interface SelfHostedPlanDefinition {
   subline: string;
   metricHistoryDays: number;
   billingExtrasSummary: string;
+  entitlementSummary: string;
+  entitlementHighlights: readonly string[];
   highlights: readonly string[];
 }
 
@@ -46,6 +48,14 @@ export const SELF_HOSTED_PLAN_DEFINITIONS: readonly SelfHostedPlanDefinition[] =
     subline: 'Unlimited self-hosted monitoring',
     metricHistoryDays: 7,
     billingExtrasSummary: 'Patrol, alerts, and OIDC',
+    entitlementSummary:
+      'Core self-hosted monitoring stays free on this instance. Upgrade only when you want Relay convenience or Pro operations features.',
+    entitlementHighlights: [
+      'Unlimited self-hosted monitoring',
+      '7-day metric history',
+      'Pulse Patrol (BYOK)',
+      'Update alerts',
+    ],
     highlights: [
       'Real-time monitoring',
       'Unlimited self-hosted monitoring',
@@ -64,6 +74,14 @@ export const SELF_HOSTED_PLAN_DEFINITIONS: readonly SelfHostedPlanDefinition[] =
     subline: 'or $39/year',
     metricHistoryDays: 14,
     billingExtrasSummary: 'Remote access, mobile, and push',
+    entitlementSummary:
+      'Relay is active on this instance. Remote access, mobile, push, and longer history are unlocked right now.',
+    entitlementHighlights: [
+      'Pulse Relay (Remote Access)',
+      'Mobile App Access',
+      'Push Notifications',
+      '14-day metric history',
+    ],
     highlights: [
       'Everything in Community',
       'Remote access via Relay',
@@ -80,6 +98,16 @@ export const SELF_HOSTED_PLAN_DEFINITIONS: readonly SelfHostedPlanDefinition[] =
     subline: 'or $79/year',
     metricHistoryDays: 90,
     billingExtrasSummary: 'AI operations and advanced admin',
+    entitlementSummary:
+      'Pulse Pro is active on this instance. AI operations, advanced administration, and 90-day history are unlocked right now.',
+    entitlementHighlights: [
+      'Patrol Auto-Fix',
+      'Pulse Alert Analysis',
+      'Kubernetes Insights',
+      '90-day metric history',
+      'Role-Based Access Control (RBAC)',
+      'Audit Logging',
+    ],
     highlights: [
       'Everything in Relay',
       'Patrol Auto-Fix & investigation',
