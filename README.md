@@ -109,6 +109,10 @@ and it proxies `/api` and `/ws` to the backend on `7655`. `7655` is the backend
 dependency for API and websocket traffic, not the primary browser URL for local
 frontend development.
 
+The managed dev runtime resets its local login to `admin` / `adminadminadmin`
+on startup unless you override it with `HOT_DEV_AUTH_USER` and
+`HOT_DEV_AUTH_PASS`.
+
 Canonical local dev commands:
 
 - `npm run dev` — start the managed runtime and reclaim the canonical dev ports if an older unmanaged session is still using them

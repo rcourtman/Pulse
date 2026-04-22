@@ -646,6 +646,15 @@ managed runtime, run the canonical browser recovery proof with the managed dev
 credentials and browser entrypoint defaults, and fail with ownership or health
 diagnostics instead of leaving operators to remember the exact Playwright
 command and env combination by hand.
+That same launcher boundary also owns the managed dev auth source of truth.
+`scripts/hot-dev.sh` must seed the watched runtime auth `.env` from one
+canonical managed-dev credential contract before it reloads runtime overrides,
+so stale quick-setup changes under `tmp/dev-config/.env` cannot silently
+change the default local login between launches. Repo-root developer docs,
+verification wrappers, and integration helper defaults must therefore advertise
+the same managed login and treat custom dev credentials as explicit
+`HOT_DEV_AUTH_*` or `PULSE_E2E_*` overrides instead of inheriting leftover auth
+state from a prior session.
 That same takeover path must remain safe on the default macOS Bash runtime and
 must not tear down the operator's current shell lineage while reclaiming a
 foreground `hot-dev.sh` session. When the canonical ports are already owned by
@@ -1040,13 +1049,15 @@ That same governed release-promotion boundary now also owns detached agent and
 installer signatures. `scripts/build-release.sh`,
 `scripts/release_update_key.go`, `scripts/render_installers.go`,
 `scripts/release_ldflags.sh`, `Dockerfile`, `.github/workflows/create-release.yml`,
-and `.github/workflows/publish-docker.yml` must derive the embedded update
-trust root and installer SSH trust root from the governed release signing key,
+`.github/workflows/publish-docker.yml`, `scripts/validate-release.sh`, and
+`scripts/validate-published-release.sh` must derive the embedded update trust
+root and installer SSH trust root from the governed release signing key,
 render release installers with that pinned SSH verifier, emit both `.sig` and
-`.sshsig` sidecars for shipped agent binaries and installer assets, and upload
-those signatures with the matching release packet so published RC/stable
-downloads can keep the updater and installer trust chain fail-closed instead
-of downgrading to checksum-only trust.
+`.sshsig` sidecars for shipped agent binaries and installer assets, upload
+those signatures with the matching release packet, and fail validation if any
+published artifact or `checksums.txt` is missing its `.sshsig` sidecar so
+published RC/stable downloads can keep the updater and installer trust chain
+fail-closed instead of downgrading to checksum-only trust.
 The shell-installer boundary now also owns the QNAP boot bootstrap and
 teardown contract end to end: `scripts/install.sh` must persist the wrapper on
 the writable data volume, write a flash-backed `autorun.sh` block that waits

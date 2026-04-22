@@ -11,6 +11,8 @@
 #   HOT_DEV_USE_PROD_DATA=true   Use /etc/pulse for data (sessions, config, etc.)
 #   HOT_DEV_USE_PRO=true         Build Pro binary (default: true if module available)
 #   HOT_DEV_ALLOW_OSS_FALLBACK=true  Allow fallback to OSS backend when Pro build fails
+#   HOT_DEV_AUTH_USER=admin      Override the managed dev auth username
+#   HOT_DEV_AUTH_PASS=...        Override the managed dev auth password or bcrypt hash
 #   PULSE_MOCK_MODE=true         Render mock UI data while keeping real metrics history intact
 #   PULSE_DATA_DIR=/path         Override data directory
 #   PULSE_DEV_API_PORT=7655      Backend API port (default: 7655)
@@ -35,6 +37,9 @@ ROOT_DIR=$(cd "${SCRIPT_DIR}/.." && pwd -P)
 DEFAULT_PULSE_REPOS_DIR=$(cd "${ROOT_DIR}/.." && pwd -P)
 SCRIPT_PATH="${SCRIPT_DIR}/$(basename "${BASH_SOURCE[0]}")"
 SCRIPT_MTIME=$(stat -c %Y "${SCRIPT_PATH}" 2>/dev/null || stat -f %m "${SCRIPT_PATH}")
+
+# shellcheck disable=SC1091
+source "${SCRIPT_DIR}/lib/hot-dev-auth.sh"
 
 # --- Helper Functions ---
 
@@ -130,6 +135,17 @@ load_runtime_env_overrides() {
     fi
 }
 
+sync_runtime_auth_env_overrides() {
+    local runtime_env="${PULSE_DATA_DIR}/.env"
+
+    if [[ "${HOT_DEV_USE_PROD_DATA:-false}" == "true" ]] || [[ "${PULSE_DATA_DIR}" == "/etc/pulse" ]]; then
+        return
+    fi
+
+    hot_dev_sync_auth_env_file "${runtime_env}" "${PULSE_AUTH_USER}" "${PULSE_AUTH_PASS}"
+    log_info "Seeded managed dev auth defaults in ${runtime_env}"
+}
+
 show_startup_banner() {
     cat <<BANNER
 =========================================
@@ -140,7 +156,7 @@ Frontend: http://${FRONTEND_DEV_HOST}:${FRONTEND_DEV_PORT} (Local)
           http://${LAN_IP}:${FRONTEND_DEV_PORT} (LAN)
 Backend API: ${PULSE_DEV_API_URL}
 
-Dev Credentials: admin / admin
+Dev Credentials: $(hot_dev_auth_banner_line "${PULSE_AUTH_USER:-}" "${PULSE_AUTH_PASS:-}")
 
 Mock Mode: ${PULSE_MOCK_MODE:-false}
 Toggle mock mode: npm run mock:on / npm run mock:off
@@ -327,9 +343,10 @@ PORT=${PULSE_DEV_API_PORT}
 PULSE_DEV=true  # Enable development mode features (needed for admin bypass etc)
 ALLOW_ADMIN_BYPASS=1  # Allow X-Admin-Bypass header in dev mode
 
-# Dev credentials: admin/admin (bcrypt hash of 'admin')
-PULSE_AUTH_USER="admin"
-PULSE_AUTH_PASS='$2a$12$j9/pl2RCHGVGvtv4wocrx.FGBczUw97ZAeO8im0.Ty.fXDGFOviWS'
+# Managed dev credentials default to admin/adminadminadmin unless
+# HOT_DEV_AUTH_USER / HOT_DEV_AUTH_PASS explicitly override them.
+PULSE_AUTH_USER="$(hot_dev_resolve_auth_user)"
+PULSE_AUTH_PASS="$(hot_dev_resolve_auth_pass)"
 export FRONTEND_PORT PULSE_DEV_API_PORT PORT PULSE_DEV ALLOW_ADMIN_BYPASS PULSE_AUTH_USER PULSE_AUTH_PASS
 
 # Data Directory Setup
@@ -347,6 +364,7 @@ else
     log_info "Using dev config directory: ${PULSE_DATA_DIR}"
 fi
 
+sync_runtime_auth_env_overrides
 load_runtime_env_overrides
 
 if [[ "${PULSE_DATA_DIR}" == "${ROOT_DIR}/tmp/dev-config" ]] && [[ ${PULSE_MOCK_MODE:-false} != "true" ]]; then
@@ -674,6 +692,7 @@ log_info "Starting backend file watcher..."
 
         # Re-source the canonical runtime .env so mock-mode changes take
         # effect without a full hot-dev restart.
+        sync_runtime_auth_env_overrides
         load_runtime_env_overrides
 
         # Kill ALL pulse processes (not just one) to prevent duplicates

@@ -17,7 +17,7 @@ Goal: every eval run starts from the exact same filesystem and runtime state, so
 
 - Proxmox host access (example: `ssh root@<pve-host>`)
 - LXC with Pulse + control plane binaries and env configured
-- Test credentials set (recommended for deterministic checks): `admin/admin`
+- Test credentials set (recommended for deterministic checks): `admin/adminadminadmin`
 - Required tools inside LXC: `curl`, `jq`, `ca-certificates`
 - Stripe sandbox keys and test recurring prices configured in control-plane env
 - Playwright runner host that can reach both Pulse (`:7655`) and control-plane (`:8443`)
@@ -87,7 +87,7 @@ Run inside container:
 
 ```bash
 pct push <ctid> tests/integration/scripts/trial-signup-contract.sh /tmp/trial-signup-contract.sh
-pct exec <ctid> -- sh -lc 'chmod +x /tmp/trial-signup-contract.sh && PULSE_E2E_USERNAME=admin PULSE_E2E_PASSWORD=admin /tmp/trial-signup-contract.sh'
+pct exec <ctid> -- sh -lc 'chmod +x /tmp/trial-signup-contract.sh && PULSE_E2E_USERNAME=admin PULSE_E2E_PASSWORD=adminadminadmin /tmp/trial-signup-contract.sh'
 ```
 
 ## Clean Eval Loop (Rollback -> Run)
@@ -97,7 +97,7 @@ Use this loop for repeatable runs:
 ```bash
 for i in 1 2 3; do
   pct rollback <ctid> pre-eval-baseline --start 1
-  pct exec <ctid> -- sh -lc 'PULSE_E2E_USERNAME=admin PULSE_E2E_PASSWORD=admin /tmp/trial-signup-contract.sh'
+  pct exec <ctid> -- sh -lc 'PULSE_E2E_USERNAME=admin PULSE_E2E_PASSWORD=adminadminadmin /tmp/trial-signup-contract.sh'
 done
 ```
 

@@ -46,6 +46,8 @@ npm run mock:on             # Optional: enable mock data
 Use `http://127.0.0.1:5173` in the browser for local frontend development. The
 frontend dev shell proxies `/api` and `/ws` to the backend on `:7655`; do not
 switch your browser to `:7655` unless you are debugging the backend directly.
+The managed dev runtime login defaults to `admin` / `adminadminadmin` unless
+you override it with `HOT_DEV_AUTH_USER` and `HOT_DEV_AUTH_PASS`.
 
 Backend-only hot reload (requires `air`):
 

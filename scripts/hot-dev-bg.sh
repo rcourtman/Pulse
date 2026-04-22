@@ -789,7 +789,7 @@ run_verify_proof_command() {
       cd "${integration_dir}"
       PULSE_E2E_USE_HOT_DEV=1 \
       PULSE_E2E_USERNAME="${PULSE_E2E_USERNAME:-admin}" \
-      PULSE_E2E_PASSWORD="${PULSE_E2E_PASSWORD:-admin}" \
+      PULSE_E2E_PASSWORD="${PULSE_E2E_PASSWORD:-adminadminadmin}" \
       HOT_DEV_VERIFY_LOCK_FILE="${HOT_DEV_VERIFY_LOCK}" \
       node ./scripts/run-playwright.mjs \
         tests/16-dev-runtime-recovery.spec.ts \
@@ -804,7 +804,7 @@ run_verify_proof_command() {
     cd "${ROOT_DIR}"
     PULSE_E2E_USE_HOT_DEV=1 \
     PULSE_E2E_USERNAME="${PULSE_E2E_USERNAME:-admin}" \
-    PULSE_E2E_PASSWORD="${PULSE_E2E_PASSWORD:-admin}" \
+    PULSE_E2E_PASSWORD="${PULSE_E2E_PASSWORD:-adminadminadmin}" \
     HOT_DEV_VERIFY_LOCK_FILE="${HOT_DEV_VERIFY_LOCK}" \
     bash -lc "${verify_command}"
   )

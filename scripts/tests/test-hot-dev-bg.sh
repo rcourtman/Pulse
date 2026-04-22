@@ -173,7 +173,7 @@ PY"
 
   assert_contains "verify proof forces managed hot-dev mode" "${output}" "mode=1"
   assert_contains "verify proof defaults username" "${output}" "username=admin"
-  assert_contains "verify proof defaults password" "${output}" "password=admin"
+  assert_contains "verify proof defaults password" "${output}" "password=adminadminadmin"
   assert_contains "verify proof passes the managed runtime lock path" "${output}" "lock=${ROOT_DIR}/tmp/hot-dev.verify.lock"
 }
 
