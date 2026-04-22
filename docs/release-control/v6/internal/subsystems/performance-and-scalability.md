@@ -282,7 +282,12 @@ regression protection.
     `/api/connections/probe` must keep those routes off the monitoring fan-out
     budget: `GET /api/connections` must resolve purely from
     `monitoring.Monitor.SchedulerHealth()` plus existing per-type config
-    stores without triggering any live network probes, and
+    stores without triggering any live network probes, and blocked metadata,
+    link-local, multicast, and unspecified probe destinations must be
+    rejected during request validation so the route does not spend dial budget
+    or become a side-channel scanner against forbidden targets. The probe path
+    must also keep the validated destination pinned through the restricted
+    outbound client so DNS rebinding cannot swap targets after admission, and
     `POST /api/connections/probe` must remain bounded at 3s total /
     2s dial / 1s read with at most 5 concurrent fingerprints so the probe
     endpoint cannot be repurposed into a slow-leak scanner that starves the

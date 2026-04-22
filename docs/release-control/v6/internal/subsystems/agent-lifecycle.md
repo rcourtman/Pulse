@@ -300,7 +300,11 @@ an add-only capacity posture.
     agent `Host.LastSeen`-backed rows on that ledger, but must not
     reinterpret derived `state` (active/paused/unauthorized/unreachable/
     stale/pending) as install authority or treat the probe response as
-    enrollment state; ledger writes still flow through the per-type config
+    enrollment state. Metadata, link-local, multicast, and unspecified
+    probe destinations must fail closed before any outbound dial, and
+    lifecycle surfaces must surface that canonical rejection instead of
+    retrying through lane-local probe helpers. Ledger writes still flow
+    through the per-type config
     endpoints that own admission checks, and the `Disabled` flag on
     PVE/PBS/PMG surfaced by that ledger must remain a pause-only signal
     rather than an installer pre-flight gate.

@@ -361,7 +361,11 @@ the canonical monitored-system blocked payload.
     (`monitoring.Monitor.SchedulerHealth()`) plus agent `Host.LastSeen`; the
     endpoint must not introduce new persisted per-connection state. The probe
     endpoint must remain admin-gated (`RequireAdmin` + `ScopeSettingsWrite`)
-    to block unauthenticated SSRF against internal hosts.
+    to block unauthenticated SSRF against internal hosts. That same probe path
+    must also validate user-supplied addresses before probing, reject metadata,
+    link-local, multicast, and unspecified destinations, and pin each outbound
+    dial to the first permitted resolved IP so DNS rebinding cannot swap the
+    target between validation and connect time.
 
 ## Forbidden Paths
 

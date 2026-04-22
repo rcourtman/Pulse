@@ -360,7 +360,11 @@ querying, and the operator-facing storage health presentation layer.
     storage and recovery consumers must not reinterpret the derived
     connection `state` (active/paused/unauthorized/unreachable/stale/pending)
     as storage health, backup-job posture, or recovery verification state;
-    storage and recovery UI must keep sourcing those signals from their
+    they also must not repurpose the shared probe route as a generic internal
+    reachability scanner. Metadata, link-local, multicast, and unspecified
+    destinations remain fail-closed before dial on that shared route, and any
+    future storage/recovery adjacency must preserve that same boundary.
+    Storage and recovery UI must keep sourcing those signals from their
     existing canonical page models instead of polling the connections
     ledger for per-datastore or per-backup truth.
 

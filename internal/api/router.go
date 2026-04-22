@@ -9285,6 +9285,28 @@ func (r *Router) handleSimpleStats(w http.ResponseWriter, req *http.Request) {
             const percent = ((used / total) * 100).toFixed(0);
             return usedGB + '/' + totalGB + ' GB (' + percent + '%)';
         }
+
+        function appendCell(row, value, className) {
+            const cell = document.createElement('td');
+            if (className) {
+                cell.className = className;
+            }
+            cell.textContent = value;
+            row.appendChild(cell);
+            return cell;
+        }
+
+        function appendStatusCell(row, status) {
+            const cell = document.createElement('td');
+            const badge = document.createElement('span');
+            badge.classList.add('status');
+            if (status === 'running' || status === 'stopped') {
+                badge.classList.add(status);
+            }
+            badge.textContent = status || 'unknown';
+            cell.appendChild(badge);
+            row.appendChild(cell);
+        }
         
         function updateTable(containers) {
             const tbody = document.querySelector('#containers tbody');
@@ -9294,15 +9316,19 @@ func (r *Router) handleSimpleStats(w http.ResponseWriter, req *http.Request) {
             
             containers.forEach(ct => {
                 const row = document.createElement('tr');
-                row.innerHTML = 
-                    '<td><strong>' + ct.name + '</strong></td>' +
-                    '<td><span class="status ' + ct.status + '">' + ct.status + '</span></td>' +
-                    '<td class="metric">' + (ct.cpu ? ct.cpu.toFixed(1) : '0.0') + '%</td>' +
-                    '<td class="metric">' + formatMemory(ct.mem || 0, ct.maxmem || 1) + '</td>' +
-                    '<td class="metric">' + formatBytes(ct.diskread) + '</td>' +
-                    '<td class="metric">' + formatBytes(ct.diskwrite) + '</td>' +
-                    '<td class="metric">' + formatBytes(ct.netin) + '</td>' +
-                    '<td class="metric">' + formatBytes(ct.netout) + '</td>';
+                const nameCell = document.createElement('td');
+                const nameStrong = document.createElement('strong');
+                nameStrong.textContent = ct.name || '';
+                nameCell.appendChild(nameStrong);
+                row.appendChild(nameCell);
+
+                appendStatusCell(row, ct.status);
+                appendCell(row, (ct.cpu ? ct.cpu.toFixed(1) : '0.0') + '%', 'metric');
+                appendCell(row, formatMemory(ct.mem || 0, ct.maxmem || 1), 'metric');
+                appendCell(row, formatBytes(ct.diskread), 'metric');
+                appendCell(row, formatBytes(ct.diskwrite), 'metric');
+                appendCell(row, formatBytes(ct.netin), 'metric');
+                appendCell(row, formatBytes(ct.netout), 'metric');
                 tbody.appendChild(row);
             });
         }

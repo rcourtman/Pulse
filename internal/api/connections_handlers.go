@@ -101,6 +101,10 @@ func (h *ConnectionsHandlers) HandleProbe(w http.ResponseWriter, r *http.Request
 		writeErrorResponse(w, http.StatusBadRequest, "invalid_address", err.Error(), nil)
 		return
 	}
+	if err := validateProbeHost(r.Context(), host); err != nil {
+		writeErrorResponse(w, http.StatusBadRequest, "invalid_address", err.Error(), nil)
+		return
+	}
 
 	candidates, elapsed := runProbe(r.Context(), host, port, probeHTTPClient())
 	writeJSON(w, http.StatusOK, ProbeResponse{

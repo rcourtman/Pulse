@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"crypto/tls"
+	"encoding/json"
 	"fmt"
 	"net"
 	"net/http"
@@ -330,5 +331,40 @@ func TestRunProbe_TotalBudgetEnforced(t *testing.T) {
 	}
 	if elapsed > 2*time.Second {
 		t.Fatalf("probe exceeded expected timeout: %s", elapsed)
+	}
+}
+
+func TestValidateProbeHostRejectsMetadataService(t *testing.T) {
+	err := validateProbeHost(context.Background(), "169.254.169.254")
+	if err == nil {
+		t.Fatal("expected metadata service address to be rejected")
+	}
+	if !strings.Contains(err.Error(), "metadata service") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestConnectionsHandlersHandleProbeRejectsBlockedAddress(t *testing.T) {
+	h := NewConnectionsHandlers(nil, nil, nil)
+	body := strings.NewReader(`{"address":"169.254.169.254"}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/connections/probe", body)
+	rec := httptest.NewRecorder()
+
+	h.HandleProbe(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d (%s)", rec.Code, http.StatusBadRequest, rec.Body.String())
+	}
+
+	var payload map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if payload["code"] != "invalid_address" {
+		t.Fatalf("code = %v, want invalid_address", payload["code"])
+	}
+	message, _ := payload["error"].(string)
+	if !strings.Contains(message, "metadata service") {
+		t.Fatalf("message = %q, want metadata-service guidance", message)
 	}
 }

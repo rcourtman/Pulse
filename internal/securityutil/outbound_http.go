@@ -47,6 +47,9 @@ func validateOutboundIP(ip net.IP, opts RestrictedOutboundHTTPOptions) error {
 	if ip.IsLoopback() && !opts.AllowLoopback {
 		return fmt.Errorf("loopback addresses are not allowed")
 	}
+	if ip.Equal(net.ParseIP("169.254.169.254")) {
+		return fmt.Errorf("metadata service address is not allowed")
+	}
 	if ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() {
 		return fmt.Errorf("link-local addresses are not allowed")
 	}
@@ -55,9 +58,6 @@ func validateOutboundIP(ip net.IP, opts RestrictedOutboundHTTPOptions) error {
 	}
 	if ip.IsUnspecified() {
 		return fmt.Errorf("unspecified addresses are not allowed")
-	}
-	if ip.Equal(net.ParseIP("169.254.169.254")) {
-		return fmt.Errorf("metadata service address is not allowed")
 	}
 	if !opts.AllowPrivateIPs && ip.IsPrivate() {
 		return fmt.Errorf("private addresses are not allowed")

@@ -82,7 +82,14 @@ func TestHandleSimpleStats(t *testing.T) {
 	if ct := rec.Header().Get("Content-Type"); ct != "text/html; charset=utf-8" {
 		t.Fatalf("expected text/html content type, got %q", ct)
 	}
-	if !strings.Contains(rec.Body.String(), "Simple Pulse Stats") {
-		t.Fatalf("expected stats page HTML, got %q", rec.Body.String())
+	body := rec.Body.String()
+	if !strings.Contains(body, "Simple Pulse Stats") {
+		t.Fatalf("expected stats page HTML, got %q", body)
+	}
+	if strings.Contains(body, "row.innerHTML") {
+		t.Fatalf("simple stats page should not use row.innerHTML for container rendering")
+	}
+	if !strings.Contains(body, "textContent") {
+		t.Fatalf("simple stats page should render container data with textContent")
 	}
 }

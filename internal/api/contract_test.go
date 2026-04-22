@@ -10858,6 +10858,49 @@ func TestContract_ProbePayloadShapeStaysCanonical(t *testing.T) {
 	assertJSONSnapshot(t, body, want)
 }
 
+func TestContract_ProbeRejectsBlockedMetadataAddress(t *testing.T) {
+	handler := NewConnectionsHandlers(nil, nil, nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/connections/probe", strings.NewReader(`{"address":"169.254.169.254"}`))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	handler.HandleProbe(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d (%s)", rec.Code, http.StatusBadRequest, rec.Body.String())
+	}
+
+	var payload APIError
+	if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode error payload: %v", err)
+	}
+	if payload.Code != "invalid_address" {
+		t.Fatalf("code = %q, want %q", payload.Code, "invalid_address")
+	}
+	if !strings.Contains(payload.ErrorMessage, "metadata service address is not allowed") {
+		t.Fatalf("error = %q, want metadata-service rejection", payload.ErrorMessage)
+	}
+}
+
+func TestContract_SimpleStatsUsesTextNodesForContainerFields(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/simple-stats", nil)
+	rec := httptest.NewRecorder()
+
+	var router Router
+	router.handleSimpleStats(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	body := rec.Body.String()
+	if strings.Contains(body, "row.innerHTML") {
+		t.Fatalf("simple stats page must not use row.innerHTML for container rendering")
+	}
+	if !strings.Contains(body, "textContent") {
+		t.Fatalf("simple stats page must use textContent for container rendering")
+	}
+}
+
 func mustStreamEvent(t *testing.T, eventType string, data interface{}) chat.StreamEvent {
 	t.Helper()
 

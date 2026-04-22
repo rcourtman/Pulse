@@ -15,6 +15,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 )
 
 // Probe budget. Per-candidate and whole-request ceilings are kept tight to
@@ -197,18 +199,37 @@ func targetsForPort(port int) []probeTarget {
 // because the whole point of probing is to talk to a server whose cert we
 // haven't trusted yet.
 func probeHTTPClient() *http.Client {
-	return &http.Client{
-		Transport: &http.Transport{
-			DialContext: (&net.Dialer{
-				Timeout: probeDialTimeout,
-			}).DialContext,
-			TLSHandshakeTimeout: probeDialTimeout,
-			TLSClientConfig:     &tls.Config{InsecureSkipVerify: true},
-			DisableKeepAlives:   true,
+	return securityutil.NewRestrictedOutboundHTTPClient(probeDialTimeout+time.Second, securityutil.RestrictedOutboundHTTPOptions{
+		AllowedSchemes:  []string{"https"},
+		AllowPrivateIPs: true,
+		AllowLoopback:   true,
+		TLSConfig: &tls.Config{
+			MinVersion:         tls.VersionTLS12,
+			InsecureSkipVerify: true, //nolint:gosec // Probing intentionally accepts untrusted certificates for fingerprint capture.
 		},
-		// Overall per-request ceiling is the dial + read budget.
-		Timeout: probeDialTimeout + time.Second,
+	})
+}
+
+func validateProbeHost(ctx context.Context, host string) error {
+	host = strings.TrimSpace(host)
+	if host == "" {
+		return fmt.Errorf("address is required")
 	}
+
+	urlHost := host
+	if ip := net.ParseIP(host); ip != nil && strings.Contains(host, ":") {
+		urlHost = "[" + host + "]"
+	}
+
+	_, err := securityutil.ValidateOutboundFetchURL(ctx, "https://"+urlHost+"/", securityutil.RestrictedOutboundHTTPOptions{
+		AllowedSchemes:  []string{"https"},
+		AllowPrivateIPs: true,
+		AllowLoopback:   true,
+	})
+	if err != nil {
+		return fmt.Errorf("address is not allowed: %w", err)
+	}
+	return nil
 }
 
 // runProbe fans out probe requests against every candidate target. It
