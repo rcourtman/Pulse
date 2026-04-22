@@ -3,7 +3,7 @@ ARG BUILD_AGENT=1
 
 # Build stage for frontend (must be built first for embedding)
 # Force amd64 platform to avoid slow QEMU emulation during multi-arch builds
-FROM --platform=linux/amd64 node:20-alpine AS frontend-builder
+FROM --platform=linux/amd64 node:20-alpine@sha256:fb4cd12c85ee03686f6af5362a0b0d56d50c58a04632e6c0fb8363f609372293 AS frontend-builder
 
 WORKDIR /app/frontend-modern
 
@@ -25,7 +25,7 @@ RUN --mount=type=cache,id=pulse-npm-cache,target=/root/.npm \
 # Build stage for Go backend
 # Force amd64 platform - Go cross-compiles for all targets anyway,
 # and this avoids slow QEMU emulation during multi-arch builds
-FROM --platform=linux/amd64 golang:1.25.9-alpine AS backend-builder
+FROM --platform=linux/amd64 golang:1.25.9-alpine@sha256:5caaf1cca9dc351e13deafbc3879fd4754801acba8653fa9540cea125d01a71f AS backend-builder
 
 ARG BUILD_AGENT
 ARG VERSION
@@ -168,7 +168,7 @@ RUN --mount=type=cache,id=pulse-go-mod,target=/go/pkg/mod \
 
 
 # Runtime image for the Docker agent (offered via --target agent_runtime)
-FROM alpine:3.20 AS agent_runtime
+FROM alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc AS agent_runtime
 
 # Use TARGETARCH to select the correct binary for the build platform
 ARG TARGETARCH
@@ -200,7 +200,7 @@ ENV PULSE_NO_AUTO_UPDATE=true
 ENTRYPOINT ["/usr/local/bin/pulse-agent", "--enable-docker", "--enable-host=false"]
 
 # Final stage (Pulse server runtime)
-FROM alpine:3.20 AS runtime
+FROM alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc AS runtime
 
 # Use TARGETARCH to select the correct binary for the build platform
 ARG TARGETARCH

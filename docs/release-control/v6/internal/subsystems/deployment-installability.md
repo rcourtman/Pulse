@@ -210,7 +210,8 @@ server-side update execution surfaces.
    pinned. The canonical workflow surface under `.github/workflows/` must use
    immutable action SHAs, GitHub-hosted jobs must target an explicit Ubuntu LTS
    runner image instead of `ubuntu-latest`, and checked-in CI/test Dockerfiles
-   under this subsystem must not depend on floating `:latest` base tags.
+   under this subsystem must pin base images by immutable `@sha256` digest and
+   must not depend on floating `:latest` base tags.
    Whenever that policy changes, update the owning workflow/install proof files
    in `scripts/installtests/build_release_assets_test.go` and
    `scripts/release_control/release_promotion_policy_*` in the same slice.
@@ -274,6 +275,10 @@ for the published server and agent images, attest the generated release packet
 assets from the `release/` directory, and pass the embedded license public key
 through BuildKit secret mounts instead of Docker build arguments so release
 metadata and image history cannot re-expose it.
+That same supply-chain boundary also owns the checked-in build roots
+themselves. `Dockerfile` must pin its Node, Go, and Alpine bases by immutable
+manifest-list digest so multi-arch release builds do not silently drift onto a
+different upstream filesystem just because a mutable tag was republished.
 That same dev-runtime dependency-manifest boundary now also owns the maintained
 Docker engine module floor. `go.mod`, `go.sum`, and
 `internal/cloudcp/docker/manager.go` must route hosted runtime orchestration

@@ -102,6 +102,10 @@ func TestDockerAndDemoBuildsUseCanonicalReleaseLdflags(t *testing.T) {
 	}
 	dockerfile := string(dockerfileBytes)
 	dockerRequired := []string{
+		`FROM --platform=linux/amd64 node:20-alpine@sha256:fb4cd12c85ee03686f6af5362a0b0d56d50c58a04632e6c0fb8363f609372293 AS frontend-builder`,
+		`FROM --platform=linux/amd64 golang:1.25.9-alpine@sha256:5caaf1cca9dc351e13deafbc3879fd4754801acba8653fa9540cea125d01a71f AS backend-builder`,
+		`FROM alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc AS agent_runtime`,
+		`FROM alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc AS runtime`,
 		`COPY scripts/release_ldflags.sh ./scripts/release_ldflags.sh`,
 		`COPY scripts/release_update_key.go ./scripts/release_update_key.go`,
 		`COPY scripts/render_installers.go ./scripts/render_installers.go`,
@@ -120,6 +124,12 @@ func TestDockerAndDemoBuildsUseCanonicalReleaseLdflags(t *testing.T) {
 		if !strings.Contains(dockerfile, needle) {
 			t.Fatalf("Dockerfile missing canonical release ldflags usage: %s", needle)
 		}
+	}
+	if strings.Contains(dockerfile, `FROM --platform=linux/amd64 node:20-alpine AS frontend-builder`) ||
+		strings.Contains(dockerfile, `FROM --platform=linux/amd64 golang:1.25.9-alpine AS backend-builder`) ||
+		strings.Contains(dockerfile, `FROM alpine:3.20 AS agent_runtime`) ||
+		strings.Contains(dockerfile, `FROM alpine:3.20 AS runtime`) {
+		t.Fatal("Dockerfile base images must be pinned by immutable @sha256 digests")
 	}
 
 	workflowBytes, err := os.ReadFile(repoFile(".github", "workflows", "deploy-demo-server.yml"))
