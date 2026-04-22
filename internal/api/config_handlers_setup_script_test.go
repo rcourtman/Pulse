@@ -363,6 +363,39 @@ func TestPVESetupScript_RemovesDiscoveredOldTokensFromBothUsers(t *testing.T) {
 	}
 }
 
+func TestPVESetupScript_RemovesMatchingPulseConnectionBeforeLocalCleanup(t *testing.T) {
+	tempDir := t.TempDir()
+	cfg := &config.Config{
+		DataPath:   tempDir,
+		ConfigPath: tempDir,
+	}
+
+	handlers := newTestConfigHandlers(t, cfg)
+
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/setup-script?type=pve&host=https://node.example.internal:8006&pulse_url=https://pulse.example.com:7655&setup_token=deadbeefdeadbeefdeadbeefdeadbeef",
+		nil,
+	)
+	rr := httptest.NewRecorder()
+
+	handlers.HandleSetupScript(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d (%s)", rr.Code, rr.Body.String())
+	}
+
+	script := rr.Body.String()
+	if !containsString(script, `echo "  • Removing Pulse connection from server..."`) {
+		t.Fatalf("expected teardown script to announce Pulse-side removal, got: %s", truncate(script, 900))
+	}
+	if !containsString(script, `curl -fsS -X POST "$PULSE_URL/api/auto-unregister"`) {
+		t.Fatalf("expected teardown script to use canonical /api/auto-unregister endpoint, got: %s", truncate(script, 900))
+	}
+	if !containsString(script, `"tokenId":"'"$PULSE_TOKEN_ID"'"`) {
+		t.Fatalf("expected teardown payload to bind the canonical token id, got: %s", truncate(script, 900))
+	}
+}
+
 func TestPVESetupScript_UsesCanonicalTokenPrefixForCleanupDiscovery(t *testing.T) {
 	tempDir := t.TempDir()
 	cfg := &config.Config{

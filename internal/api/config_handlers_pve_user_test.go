@@ -620,7 +620,7 @@ func TestValidateSetupToken(t *testing.T) {
 	t.Run("empty token returns false", func(t *testing.T) {
 		h := &ConfigHandlers{
 			setupTokens:       make(map[string]*SetupTokenRecord),
-			recentSetupTokens: make(map[string]time.Time),
+			recentSetupTokens: make(map[string]RecentSetupTokenRecord),
 		}
 
 		if h.ValidateSetupToken("") {
@@ -639,7 +639,7 @@ func TestValidateSetupToken(t *testing.T) {
 					Used:      false,
 				},
 			},
-			recentSetupTokens: make(map[string]time.Time),
+			recentSetupTokens: make(map[string]RecentSetupTokenRecord),
 		}
 
 		if !h.ValidateSetupToken(token) {
@@ -658,7 +658,7 @@ func TestValidateSetupToken(t *testing.T) {
 					Used:      false,
 				},
 			},
-			recentSetupTokens: make(map[string]time.Time),
+			recentSetupTokens: make(map[string]RecentSetupTokenRecord),
 		}
 
 		if h.ValidateSetupToken(token) {
@@ -677,7 +677,7 @@ func TestValidateSetupToken(t *testing.T) {
 					Used:      true, // Already used
 				},
 			},
-			recentSetupTokens: make(map[string]time.Time),
+			recentSetupTokens: make(map[string]RecentSetupTokenRecord),
 		}
 
 		if h.ValidateSetupToken(token) {
@@ -691,8 +691,8 @@ func TestValidateSetupToken(t *testing.T) {
 
 		h := &ConfigHandlers{
 			setupTokens: make(map[string]*SetupTokenRecord),
-			recentSetupTokens: map[string]time.Time{
-				tokenHash: time.Now().Add(1 * time.Hour), // Valid for another hour
+			recentSetupTokens: map[string]RecentSetupTokenRecord{
+				tokenHash: {ExpiresAt: time.Now().Add(1 * time.Hour)}, // Valid for another hour
 			},
 		}
 
@@ -707,8 +707,8 @@ func TestValidateSetupToken(t *testing.T) {
 
 		h := &ConfigHandlers{
 			setupTokens: make(map[string]*SetupTokenRecord),
-			recentSetupTokens: map[string]time.Time{
-				tokenHash: time.Now().Add(-1 * time.Hour), // Expired
+			recentSetupTokens: map[string]RecentSetupTokenRecord{
+				tokenHash: {ExpiresAt: time.Now().Add(-1 * time.Hour)}, // Expired
 			},
 		}
 
@@ -720,7 +720,7 @@ func TestValidateSetupToken(t *testing.T) {
 	t.Run("non-existent token returns false", func(t *testing.T) {
 		h := &ConfigHandlers{
 			setupTokens:       make(map[string]*SetupTokenRecord),
-			recentSetupTokens: make(map[string]time.Time),
+			recentSetupTokens: make(map[string]RecentSetupTokenRecord),
 		}
 
 		if h.ValidateSetupToken("non-existent-token") {
@@ -739,8 +739,8 @@ func TestValidateSetupToken(t *testing.T) {
 					Used:      false,
 				},
 			},
-			recentSetupTokens: map[string]time.Time{
-				tokenHash: time.Now().Add(1 * time.Hour),
+			recentSetupTokens: map[string]RecentSetupTokenRecord{
+				tokenHash: {ExpiresAt: time.Now().Add(1 * time.Hour)},
 			},
 		}
 
@@ -763,7 +763,7 @@ func TestValidateSetupTokenForOrg(t *testing.T) {
 				OrgID:     "org-a",
 			},
 		},
-		recentSetupTokens: make(map[string]time.Time),
+		recentSetupTokens: make(map[string]RecentSetupTokenRecord),
 	}
 
 	if !h.ValidateSetupTokenForOrg(token, "org-a") {
@@ -771,5 +771,28 @@ func TestValidateSetupTokenForOrg(t *testing.T) {
 	}
 	if h.ValidateSetupTokenForOrg(token, "org-b") {
 		t.Fatal("expected org-bound token to fail for different org")
+	}
+}
+
+func TestValidateSetupTokenForOrg_AllowsRecentTokenForMatchingOrg(t *testing.T) {
+	token := "recent-org-bound-token-12345"
+	tokenHash := auth.HashAPIToken(token)
+
+	h := &ConfigHandlers{
+		setupTokens: make(map[string]*SetupTokenRecord),
+		recentSetupTokens: map[string]RecentSetupTokenRecord{
+			tokenHash: {
+				ExpiresAt: time.Now().Add(1 * time.Hour),
+				OrgID:     "org-a",
+				NodeType:  "pve",
+			},
+		},
+	}
+
+	if !h.ValidateSetupTokenForOrg(token, "org-a") {
+		t.Fatal("expected recent org-bound token to validate for matching org")
+	}
+	if h.ValidateSetupTokenForOrg(token, "org-b") {
+		t.Fatal("expected recent org-bound token to fail for different org")
 	}
 }

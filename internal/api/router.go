@@ -3561,6 +3561,9 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			if normalizedPath == "/api/auto-register" {
 				isPublic = true
 			}
+			if normalizedPath == "/api/auto-unregister" {
+				isPublic = true
+			}
 
 			// Dev mode bypass for admin endpoints (disabled by default)
 			if adminBypassEnabled() {

@@ -127,6 +127,12 @@ an add-only capacity posture.
    the one-time `authToken` only and must not also send the long-lived
    `X-API-Token` header. The header-backed `agent:report` fallback exists only
    for update-only re-registration when setup-token fetch is unavailable.
+   That same lifecycle-owned setup path also owns script teardown behavior:
+   rerunning the governed setup script in remove mode must call canonical
+   `/api/auto-unregister` with `source:"script"` before local credentials are
+   deleted, and the short recent-setup-token grace window must remain valid for
+   that follow-up uninstall so operators can immediately back out a reviewed
+   script-managed Proxmox setup without leaving a stale node record in Pulse.
    That same shared `internal/api/` adjacency does not transfer ownership of
    Patrol quickstart bootstrap or mobile Patrol-provider bridging:
    `internal/api/ai_handlers.go` and `internal/api/chat_service_adapter.go`

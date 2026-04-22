@@ -631,6 +631,7 @@ func (r *Router) registerConfigSystemRoutes(updateHandlers *UpdateHandlers) {
 
 	// Auto-register route for setup scripts
 	r.mux.HandleFunc("/api/auto-register", r.configHandlers.HandleAutoRegister)
+	r.mux.HandleFunc("/api/auto-unregister", r.configHandlers.HandleAutoUnregister)
 	// Discovery endpoint
 	// Test endpoint for WebSocket notifications
 	// SECURITY: Require settings:write scope for test notifications to prevent unauthenticated broadcasting

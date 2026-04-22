@@ -286,6 +286,30 @@ type AutoRegisterResponse struct {
 	TokenValue string `json:"tokenValue,omitempty"`
 }
 
+// AutoUnregisterRequest represents a request from the setup script to tear down
+// a script-managed node connection after local credentials have been removed.
+type AutoUnregisterRequest struct {
+	Type       string `json:"type"`                 // "pve" or "pbs"
+	Host       string `json:"host"`                 // The canonical node host URL
+	TokenID    string `json:"tokenId,omitempty"`    // Full token ID like pulse-monitor@pve!pulse-token
+	ServerName string `json:"serverName,omitempty"` // Hostname or IP
+	AuthToken  string `json:"authToken,omitempty"`  // One-time setup token from the setup flow
+	Source     string `json:"source,omitempty"`     // Must be "script"
+}
+
+// AutoUnregisterResponse is the canonical success shape for /api/auto-unregister.
+type AutoUnregisterResponse struct {
+	Status   string `json:"status"`
+	Message  string `json:"message"`
+	Action   string `json:"action"`
+	Type     string `json:"type"`
+	Source   string `json:"source"`
+	Host     string `json:"host"`
+	NodeID   string `json:"nodeId,omitempty"`
+	NodeName string `json:"nodeName,omitempty"`
+	Removed  bool   `json:"removed"`
+}
+
 func isCanonicalAutoRegisterType(nodeType string) bool {
 	switch strings.TrimSpace(nodeType) {
 	case "pve", "pbs":
@@ -451,6 +475,202 @@ func canonicalAutoRegisterSuccessMessage(nodeName string, host string) string {
 		return fmt.Sprintf("Node %s registered successfully", trimmedNodeName)
 	}
 	return fmt.Sprintf("Node %s registered successfully at %s", trimmedNodeName, trimmedHost)
+}
+
+func canonicalAutoUnregisterMissingFieldsMessage(typeValue string, host string, serverName string) string {
+	missing := make([]string, 0, 3)
+	if strings.TrimSpace(typeValue) == "" {
+		missing = append(missing, "type")
+	}
+	if strings.TrimSpace(host) == "" {
+		missing = append(missing, "host")
+	}
+	if strings.TrimSpace(serverName) == "" {
+		missing = append(missing, "serverName")
+	}
+	if len(missing) == 0 {
+		return "Missing required canonical auto-unregister fields"
+	}
+	return "Missing required canonical auto-unregister fields: " + strings.Join(missing, ", ")
+}
+
+func canonicalAutoUnregisterSuccessMessage(nodeName string, host string, removed bool) string {
+	if !removed {
+		return fmt.Sprintf("No matching node is currently configured for %s", strings.TrimSpace(host))
+	}
+	trimmedNodeName := strings.TrimSpace(nodeName)
+	trimmedHost := strings.TrimSpace(host)
+	if trimmedNodeName == "" {
+		return fmt.Sprintf("Node removed successfully from %s", trimmedHost)
+	}
+	if trimmedHost == "" {
+		return fmt.Sprintf("Node %s removed successfully", trimmedNodeName)
+	}
+	return fmt.Sprintf("Node %s removed successfully from %s", trimmedNodeName, trimmedHost)
+}
+
+func buildCanonicalAutoUnregisterResponse(req *AutoUnregisterRequest, host string, actualName string, removed bool) AutoUnregisterResponse {
+	action := "noop"
+	if removed {
+		action = "remove_connection"
+	}
+	return AutoUnregisterResponse{
+		Status:   "success",
+		Message:  canonicalAutoUnregisterSuccessMessage(actualName, host, removed),
+		Action:   action,
+		Type:     strings.TrimSpace(req.Type),
+		Source:   strings.TrimSpace(req.Source),
+		Host:     strings.TrimSpace(host),
+		NodeID:   strings.TrimSpace(actualName),
+		NodeName: strings.TrimSpace(actualName),
+		Removed:  removed,
+	}
+}
+
+func (h *ConfigHandlers) authenticateSetupScriptTeardownRequest(r *http.Request, nodeType string, authToken string) (*http.Request, bool) {
+	setupToken := strings.TrimSpace(authToken)
+	if setupToken == "" {
+		return r, false
+	}
+
+	requestOrgID := GetOrgID(r.Context())
+	if !h.ValidateSetupTokenForOrg(setupToken, requestOrgID) {
+		return r, false
+	}
+
+	tokenHash := internalauth.HashAPIToken(setupToken)
+	now := time.Now()
+
+	h.codeMutex.Lock()
+	defer h.codeMutex.Unlock()
+
+	record, exists := h.setupTokens[tokenHash]
+	if exists {
+		if strings.TrimSpace(record.NodeType) != "" && strings.TrimSpace(record.NodeType) != strings.TrimSpace(nodeType) {
+			return r, false
+		}
+		if !record.Used && now.Before(record.ExpiresAt) {
+			record.Used = true
+			graceExpiry := recentSetupTokenGraceExpiry(record, now)
+			h.recentSetupTokens[tokenHash] = buildRecentSetupTokenRecord(record, graceExpiry)
+		}
+		if record.OrgID != "" {
+			r = r.WithContext(context.WithValue(r.Context(), OrgIDContextKey, record.OrgID))
+		}
+		return r, true
+	}
+
+	recentRecord, exists := h.recentSetupTokens[tokenHash]
+	if !exists || !now.Before(recentRecord.ExpiresAt) {
+		return r, false
+	}
+	if recentRecord.NodeType != "" && recentRecord.NodeType != strings.TrimSpace(nodeType) {
+		return r, false
+	}
+	if recentRecord.OrgID != "" {
+		r = r.WithContext(context.WithValue(r.Context(), OrgIDContextKey, recentRecord.OrgID))
+	}
+
+	return r, true
+}
+
+func autoUnregisterNodeMatch(nodeHost string, candidateHosts []string, nodeTokenID string, requestedTokenID string) bool {
+	if !autoRegisterHostMatchesCandidates(nodeHost, candidateHosts) {
+		return false
+	}
+	trimmedRequestedTokenID := strings.TrimSpace(requestedTokenID)
+	if trimmedRequestedTokenID == "" {
+		return true
+	}
+	return strings.TrimSpace(nodeTokenID) == trimmedRequestedTokenID
+}
+
+func (h *ConfigHandlers) removeAutoRegisteredNode(ctx context.Context, req *AutoUnregisterRequest, candidateHosts []string) (removed bool, actualName string, removedHost string) {
+	cfg := h.getConfig(ctx)
+	if cfg == nil {
+		return false, "", ""
+	}
+
+	switch strings.TrimSpace(req.Type) {
+	case "pve":
+		hostOnlyFallback := -1
+		for i, node := range cfg.PVEInstances {
+			if autoUnregisterNodeMatch(node.Host, candidateHosts, node.TokenName, req.TokenID) {
+				actualName = node.Name
+				removedHost = node.Host
+				cfg.PVEInstances = append(cfg.PVEInstances[:i], cfg.PVEInstances[i+1:]...)
+				h.normalizePVEConfigState(ctx)
+				return true, actualName, removedHost
+			}
+			if hostOnlyFallback == -1 && autoRegisterHostMatchesCandidates(node.Host, candidateHosts) && node.Source == "script" {
+				hostOnlyFallback = i
+			}
+		}
+		if hostOnlyFallback >= 0 {
+			node := cfg.PVEInstances[hostOnlyFallback]
+			actualName = node.Name
+			removedHost = node.Host
+			cfg.PVEInstances = append(cfg.PVEInstances[:hostOnlyFallback], cfg.PVEInstances[hostOnlyFallback+1:]...)
+			h.normalizePVEConfigState(ctx)
+			return true, actualName, removedHost
+		}
+	case "pbs":
+		hostOnlyFallback := -1
+		for i, node := range cfg.PBSInstances {
+			if autoUnregisterNodeMatch(node.Host, candidateHosts, node.TokenName, req.TokenID) {
+				actualName = node.Name
+				removedHost = node.Host
+				cfg.PBSInstances = append(cfg.PBSInstances[:i], cfg.PBSInstances[i+1:]...)
+				return true, actualName, removedHost
+			}
+			if hostOnlyFallback == -1 && autoRegisterHostMatchesCandidates(node.Host, candidateHosts) && node.Source == "script" {
+				hostOnlyFallback = i
+			}
+		}
+		if hostOnlyFallback >= 0 {
+			node := cfg.PBSInstances[hostOnlyFallback]
+			actualName = node.Name
+			removedHost = node.Host
+			cfg.PBSInstances = append(cfg.PBSInstances[:hostOnlyFallback], cfg.PBSInstances[hostOnlyFallback+1:]...)
+			return true, actualName, removedHost
+		}
+	}
+
+	return false, "", ""
+}
+
+func (h *ConfigHandlers) notifyAutoUnregisterSuccess(ctx context.Context, req *AutoUnregisterRequest) {
+	if h.getMonitor(ctx) != nil && h.getMonitor(ctx).GetDiscoveryService() != nil {
+		log.Info().Msg("Triggering discovery refresh after auto-unregister")
+		h.getMonitor(ctx).GetDiscoveryService().ForceRefresh()
+	}
+
+	if h.wsHub == nil {
+		return
+	}
+
+	h.wsHub.BroadcastMessage(websocket.Message{
+		Type: "node_deleted",
+		Data: map[string]interface{}{
+			"nodeType": strings.TrimSpace(req.Type),
+		},
+		Timestamp: time.Now().Format(time.RFC3339),
+	})
+
+	if h.getMonitor(ctx) != nil && h.getMonitor(ctx).GetDiscoveryService() != nil {
+		if result, _ := h.getMonitor(ctx).GetDiscoveryService().GetCachedResult(); result != nil {
+			h.wsHub.BroadcastMessage(websocket.Message{
+				Type: "discovery_update",
+				Data: map[string]interface{}{
+					"servers":           result.Servers,
+					"errors":            result.LegacyErrors(),
+					"structured_errors": result.StructuredErrors,
+					"timestamp":         time.Now().Unix(),
+				},
+				Timestamp: time.Now().Format(time.RFC3339),
+			})
+		}
+	}
 }
 
 type autoRegisterCheckResponse struct {
@@ -619,6 +839,107 @@ func (h *ConfigHandlers) notifyAutoRegistrationSuccess(ctx context.Context, req 
 		Msg("Broadcasted auto-registration success via WebSocket")
 }
 
+// HandleAutoUnregister removes a script-managed node connection after the host
+// has removed the Pulse-created credentials locally.
+func (h *ConfigHandlers) handleAutoUnregister(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req AutoUnregisterRequest
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to read auto-unregister request body")
+		http.Error(w, "Failed to read request body", http.StatusBadRequest)
+		return
+	}
+
+	if err := json.Unmarshal(body, &req); err != nil {
+		log.Error().Err(err).Str("body", string(body)).Msg("Failed to parse auto-unregister request")
+		http.Error(w, "Invalid request format", http.StatusBadRequest)
+		return
+	}
+
+	req.Type = strings.TrimSpace(req.Type)
+	req.Host = strings.TrimSpace(req.Host)
+	req.TokenID = strings.TrimSpace(req.TokenID)
+	req.ServerName = strings.TrimSpace(req.ServerName)
+	req.AuthToken = strings.TrimSpace(req.AuthToken)
+	req.Source = strings.TrimSpace(req.Source)
+
+	if req.Source == "" {
+		http.Error(w, "source is required", http.StatusBadRequest)
+		return
+	}
+	if req.Source != "script" {
+		http.Error(w, "source must be 'script'", http.StatusBadRequest)
+		return
+	}
+	if !isCanonicalAutoRegisterType(req.Type) {
+		http.Error(w, "type must be 'pve' or 'pbs'", http.StatusBadRequest)
+		return
+	}
+	if req.Type == "" || req.Host == "" || req.ServerName == "" {
+		http.Error(w, canonicalAutoUnregisterMissingFieldsMessage(req.Type, req.Host, req.ServerName), http.StatusBadRequest)
+		return
+	}
+
+	if req.TokenID != "" && !isCanonicalAutoRegisterTokenID(req.Type, req.TokenID) {
+		http.Error(w, "tokenId must be a canonical Pulse-managed token id", http.StatusBadRequest)
+		return
+	}
+
+	normalizedCandidates, err := normalizeAutoRegisterHostCandidates(req.Type, req.Host, nil)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	req.Host = normalizedCandidates[0]
+
+	updatedRequest, authenticated := h.authenticateSetupScriptTeardownRequest(r, req.Type, req.AuthToken)
+	if !authenticated {
+		if req.AuthToken == "" {
+			http.Error(w, "Pulse setup token required", http.StatusUnauthorized)
+		} else {
+			http.Error(w, "Invalid or expired setup token", http.StatusUnauthorized)
+		}
+		return
+	}
+	r = updatedRequest
+
+	removed, actualName, removedHost := h.removeAutoRegisteredNode(r.Context(), &req, normalizedCandidates)
+	if removed {
+		if err := h.getPersistence(r.Context()).SaveNodesConfigAllowEmpty(
+			h.getConfig(r.Context()).PVEInstances,
+			h.getConfig(r.Context()).PBSInstances,
+			h.getConfig(r.Context()).PMGInstances,
+		); err != nil {
+			log.Error().Err(err).Msg("Failed to save auto-unregistered node configuration")
+			http.Error(w, "Failed to save configuration", http.StatusInternalServerError)
+			return
+		}
+
+		if h.reloadFunc != nil {
+			if err := h.reloadFunc(); err != nil {
+				log.Error().Err(err).Msg("Failed to reload monitor after auto-unregister")
+				http.Error(w, "Configuration saved but failed to apply changes", http.StatusInternalServerError)
+				return
+			}
+		}
+
+		h.notifyAutoUnregisterSuccess(r.Context(), &req)
+	} else {
+		removedHost = req.Host
+		actualName = req.ServerName
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(buildCanonicalAutoUnregisterResponse(&req, removedHost, actualName, removed)); err != nil {
+		log.Error().Err(err).Msg("Failed to encode auto-unregister response")
+	}
+}
+
 // HandleAutoRegister receives token details from the setup script and auto-configures the node
 func (h *ConfigHandlers) handleAutoRegister(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -676,11 +997,8 @@ func (h *ConfigHandlers) handleAutoRegister(w http.ResponseWriter, r *http.Reque
 					r = r.WithContext(ctx)
 				}
 				// Allow a short grace period for follow-up actions without keeping tokens alive too long.
-				graceExpiry := time.Now().Add(1 * time.Minute)
-				if setupTokenRecord.ExpiresAt.Before(graceExpiry) {
-					graceExpiry = setupTokenRecord.ExpiresAt
-				}
-				h.recentSetupTokens[tokenHash] = graceExpiry
+				graceExpiry := recentSetupTokenGraceExpiry(setupTokenRecord, time.Now())
+				h.recentSetupTokens[tokenHash] = buildRecentSetupTokenRecord(setupTokenRecord, graceExpiry)
 				authenticated = true
 				log.Info().
 					Str("type", req.Type).
@@ -981,6 +1299,7 @@ func (h *ConfigHandlers) handleCanonicalAutoRegister(w http.ResponseWriter, r *h
 			MonitorSyncJobs:   true,
 			MonitorVerifyJobs: true,
 			MonitorPruneJobs:  true,
+			Source:            registrationSource,
 		}
 		// Deduplicate by host to keep canonical auto-registration idempotent on reruns.
 		existingIndex := -1
@@ -1022,6 +1341,9 @@ func (h *ConfigHandlers) handleCanonicalAutoRegister(w http.ResponseWriter, r *h
 			instance.Password = ""
 			instance.TokenName = pbsNode.TokenName
 			instance.TokenValue = pbsNode.TokenValue
+			if pbsNode.Source != "" {
+				instance.Source = pbsNode.Source
+			}
 			// Update TLS fingerprint only when one was captured; a failed
 			// FetchFingerprint must not erase a previously valid pin.
 			if pbsNode.Fingerprint != "" {

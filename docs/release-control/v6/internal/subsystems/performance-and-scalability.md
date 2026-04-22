@@ -150,6 +150,11 @@ regression protection.
 2. Add query-plan guardrails for DB-backed hot paths
 3. Optimize hot paths only when backed by benchmarks or proven query issues
 4. Keep shared auth gating in `internal/api/router.go` cheap and local: pre-auth quick-setup and recovery routing may short-circuit on loopback/session/token checks, but they must not trigger chart, metrics, or broad persistence fan-out on the protected request hot path.
+   The same rule applies to public setup-script lifecycle routes: `/api/auto-register`
+   and `/api/auto-unregister` may bypass the global auth wall so their handlers can
+   validate request-body setup tokens, but the router-level public-path check must
+   stay O(1) and must not front-run persistence loads, monitor refresh, or other
+   teardown/register side effects before the canonical handler owns the request.
 5. Extend dashboard hot-path filter, sort, grouping, and stats math through `frontend-modern/src/components/Dashboard/workloadSelectors.ts`, and extend workload identity, discovery routing, and node-topology helpers through `frontend-modern/src/components/Dashboard/workloadTopology.ts`, rather than duplicating selector or topology logic in `frontend-modern/src/components/Dashboard/Dashboard.tsx`
 6. Normalize dashboard workload view-mode aliases through `frontend-modern/src/utils/workloads.ts` instead of keeping local URL/storage parsing in `frontend-modern/src/components/Dashboard/Dashboard.tsx`
 7. Deduplicate dashboard workload rows by canonical workload ID from `frontend-modern/src/utils/workloads.ts` rather than via local pass-through wrappers in `frontend-modern/src/components/Dashboard/Dashboard.tsx`

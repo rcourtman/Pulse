@@ -208,6 +208,35 @@ if [[ $MAIN_ACTION =~ ^[2Rr]$ ]]; then
     echo "Removing Pulse monitoring components..."
     echo ""
 
+    SERVER_HOSTNAME=$(hostname -s 2>/dev/null || hostname)
+
+    if [ -n "$PULSE_SETUP_TOKEN" ]; then
+        echo "  • Removing Pulse connection from server..."
+        UNREGISTER_JSON='{"type":"pve","host":"'"$HOST_URL"'","serverName":"'"$SERVER_HOSTNAME"'","tokenId":"'"$PULSE_TOKEN_ID"'","authToken":"'"$PULSE_SETUP_TOKEN"'","source":"script"}'
+        UNREGISTER_RESPONSE=$(echo "$UNREGISTER_JSON" | curl -fsS -X POST "$PULSE_URL/api/auto-unregister" \
+            -H "Content-Type: application/json" \
+            -d @- 2>&1)
+        UNREGISTER_RC=$?
+        if [ "$UNREGISTER_RC" -ne 0 ]; then
+            echo "    ⚠️  Pulse server teardown request failed."
+            echo "       Response: $UNREGISTER_RESPONSE"
+            echo "       Remove the node from Pulse manually if it remains listed."
+        elif echo "$UNREGISTER_RESPONSE" | grep -Eq '"status"[[:space:]]*:[[:space:]]*"success"'; then
+            if echo "$UNREGISTER_RESPONSE" | grep -Eq '"removed"[[:space:]]*:[[:space:]]*true'; then
+                echo "    ✓ Removed matching Proxmox VE connection from Pulse"
+            else
+                echo "    ✓ Pulse confirmed there is no matching Proxmox VE connection to remove"
+            fi
+        else
+            echo "    ⚠️  Pulse server teardown did not confirm success."
+            echo "       Response: $UNREGISTER_RESPONSE"
+            echo "       Remove the node from Pulse manually if it remains listed."
+        fi
+    else
+        echo "  • No Pulse setup token available for server-side teardown"
+        echo "    Remove the node from Pulse manually if it remains listed."
+    fi
+
 
     # Always run manual removal for local services and files
     if true; then

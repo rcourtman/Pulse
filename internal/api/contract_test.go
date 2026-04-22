@@ -4688,8 +4688,14 @@ func TestContract_SetupScriptEmbedsFailFastGuidance(t *testing.T) {
 	if !strings.Contains(script, `curl -fsS -X POST "$PULSE_URL/api/auto-register"`) {
 		t.Fatalf("setup script missing fail-fast auto-register transport: %s", script)
 	}
+	if !strings.Contains(script, `curl -fsS -X POST "$PULSE_URL/api/auto-unregister"`) {
+		t.Fatalf("setup script missing fail-fast auto-unregister transport: %s", script)
+	}
 	if !strings.Contains(script, `"source":"script"`) {
 		t.Fatalf("setup script missing canonical /api/auto-register source marker: %s", script)
+	}
+	if !strings.Contains(script, `echo "  • Removing Pulse connection from server..."`) {
+		t.Fatalf("setup script missing canonical server-side teardown guidance: %s", script)
 	}
 	if !strings.Contains(script, `REGISTER_RC=$?`) {
 		t.Fatalf("setup script missing explicit auto-register curl exit-code handling: %s", script)
@@ -8189,6 +8195,33 @@ func TestContract_AutoRegisterCheckRequestJSONSnapshot(t *testing.T) {
 	assertJSONSnapshot(t, got, want)
 }
 
+func TestContract_AutoUnregisterRequestJSONSnapshot(t *testing.T) {
+	payload := AutoUnregisterRequest{
+		Type:       "pve",
+		Host:       "https://pve.local:8006",
+		TokenID:    "pulse-monitor@pve!pulse-homelab",
+		ServerName: "pve-node-1",
+		AuthToken:  "setup-token-123",
+		Source:     "script",
+	}
+
+	got, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal auto-unregister request: %v", err)
+	}
+
+	const want = `{
+		"type":"pve",
+		"host":"https://pve.local:8006",
+		"tokenId":"pulse-monitor@pve!pulse-homelab",
+		"serverName":"pve-node-1",
+		"authToken":"setup-token-123",
+		"source":"script"
+	}`
+
+	assertJSONSnapshot(t, got, want)
+}
+
 func TestContract_AutoRegisterScriptRequestRequiresExplicitSourceMarker(t *testing.T) {
 	payload := AutoRegisterRequest{
 		Type:       "pve",
@@ -8889,6 +8922,15 @@ func TestContract_CanonicalAutoRegisterMissingFieldsMessageContract(t *testing.T
 	}
 }
 
+func TestContract_CanonicalAutoUnregisterMissingFieldsMessageContract(t *testing.T) {
+	if got := canonicalAutoUnregisterMissingFieldsMessage("", "", ""); got != "Missing required canonical auto-unregister fields: type, host, serverName" {
+		t.Fatalf("all-missing auto-unregister message = %q", got)
+	}
+	if got := canonicalAutoUnregisterMissingFieldsMessage("pve", "https://pve.local:8006", ""); got != "Missing required canonical auto-unregister fields: serverName" {
+		t.Fatalf("serverName-only auto-unregister message = %q", got)
+	}
+}
+
 func TestContract_CanonicalAutoRegisterDirectValidationContract(t *testing.T) {
 	tempDir := t.TempDir()
 	t.Setenv("PULSE_DATA_DIR", tempDir)
@@ -8964,6 +9006,72 @@ func TestContract_AutoRegisterResponseJSONSnapshot(t *testing.T) {
 		"status":"success",
 		"tokenId":"pulse-monitor@pve!pulse-homelab",
 		"tokenValue":"secret-token",
+		"type":"pve"
+	}`
+
+	assertJSONSnapshot(t, got, want)
+}
+
+func TestContract_AutoUnregisterResponseJSONSnapshot(t *testing.T) {
+	payload := map[string]any{
+		"status":   "success",
+		"message":  "Node pve-node-1 removed successfully from https://pve.local:8006",
+		"action":   "remove_connection",
+		"type":     "pve",
+		"source":   "script",
+		"host":     "https://pve.local:8006",
+		"nodeId":   "pve-node-1",
+		"nodeName": "pve-node-1",
+		"removed":  true,
+	}
+
+	got, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal auto-unregister response: %v", err)
+	}
+
+	const want = `{
+		"action":"remove_connection",
+		"host":"https://pve.local:8006",
+		"message":"Node pve-node-1 removed successfully from https://pve.local:8006",
+		"nodeId":"pve-node-1",
+		"nodeName":"pve-node-1",
+		"removed":true,
+		"source":"script",
+		"status":"success",
+		"type":"pve"
+	}`
+
+	assertJSONSnapshot(t, got, want)
+}
+
+func TestContract_AutoUnregisterNoopResponseJSONSnapshot(t *testing.T) {
+	payload := map[string]any{
+		"status":   "success",
+		"message":  "No matching node is currently configured for https://pve.local:8006",
+		"action":   "noop",
+		"type":     "pve",
+		"source":   "script",
+		"host":     "https://pve.local:8006",
+		"nodeId":   "pve-node-1",
+		"nodeName": "pve-node-1",
+		"removed":  false,
+	}
+
+	got, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal auto-unregister noop response: %v", err)
+	}
+
+	const want = `{
+		"action":"noop",
+		"host":"https://pve.local:8006",
+		"message":"No matching node is currently configured for https://pve.local:8006",
+		"nodeId":"pve-node-1",
+		"nodeName":"pve-node-1",
+		"removed":false,
+		"source":"script",
+		"status":"success",
 		"type":"pve"
 	}`
 

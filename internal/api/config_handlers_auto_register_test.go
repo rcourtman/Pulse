@@ -73,6 +73,43 @@ func TestHandleAutoRegisterRejectsWithoutAuth(t *testing.T) {
 	}
 }
 
+func TestHandleAutoUnregisterRejectsWithoutAuth(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Setenv("PULSE_DATA_DIR", tempDir)
+
+	cfg := &config.Config{
+		DataPath:   tempDir,
+		ConfigPath: tempDir,
+	}
+
+	handler := newTestConfigHandlers(t, cfg)
+
+	reqBody := AutoUnregisterRequest{
+		Type:       "pve",
+		Host:       "https://pve.local:8006",
+		TokenID:    "pulse-monitor@pve!pulse-pve-local",
+		ServerName: "pve.local",
+		Source:     "script",
+	}
+
+	body, err := json.Marshal(reqBody)
+	if err != nil {
+		t.Fatalf("failed to marshal request: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/auto-unregister", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+
+	handler.HandleAutoUnregister(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected status 401, got %d, body=%s", rec.Code, rec.Body.String())
+	}
+	if body := rec.Body.String(); body != "Pulse setup token required\n" {
+		t.Fatalf("body = %q, want missing-auth guidance", body)
+	}
+}
+
 func TestHandleAutoRegisterRejectsInvalidSetupToken(t *testing.T) {
 	tempDir := t.TempDir()
 	t.Setenv("PULSE_DATA_DIR", tempDir)
@@ -163,6 +200,133 @@ func TestHandleAutoRegisterAcceptsWithSetupToken(t *testing.T) {
 	}
 	if cfg.PVEInstances[0].Source != "script" {
 		t.Fatalf("source = %q, want script", cfg.PVEInstances[0].Source)
+	}
+}
+
+func TestHandleAutoUnregisterAcceptsRecentSetupTokenAndRemovesMatchingPVEInstance(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Setenv("PULSE_DATA_DIR", tempDir)
+
+	cfg := &config.Config{
+		DataPath:   tempDir,
+		ConfigPath: tempDir,
+		PVEInstances: []config.PVEInstance{{
+			Name:      "pve.local",
+			Host:      "https://pve.local:8006",
+			TokenName: "pulse-monitor@pve!pulse-pve-local",
+			Source:    "script",
+		}},
+	}
+
+	handler := newTestConfigHandlers(t, cfg)
+
+	const tokenValue = "TEMP-TOKEN-REMOVE"
+	tokenHash := internalauth.HashAPIToken(tokenValue)
+	handler.codeMutex.Lock()
+	handler.setupTokens[tokenHash] = &SetupTokenRecord{
+		ExpiresAt: time.Now().Add(5 * time.Minute),
+		Used:      true,
+		NodeType:  "pve",
+		OrgID:     "default",
+	}
+	handler.recentSetupTokens[tokenHash] = RecentSetupTokenRecord{
+		ExpiresAt: time.Now().Add(1 * time.Minute),
+		NodeType:  "pve",
+		OrgID:     "default",
+	}
+	handler.codeMutex.Unlock()
+
+	reqBody := AutoUnregisterRequest{
+		Type:       "pve",
+		Host:       "https://pve.local:8006",
+		TokenID:    "pulse-monitor@pve!pulse-pve-local",
+		ServerName: "pve.local",
+		AuthToken:  tokenValue,
+		Source:     "script",
+	}
+
+	body, err := json.Marshal(reqBody)
+	if err != nil {
+		t.Fatalf("failed to marshal request: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/auto-unregister", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+
+	handler.HandleAutoUnregister(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d, body=%s", rec.Code, rec.Body.String())
+	}
+	if len(cfg.PVEInstances) != 0 {
+		t.Fatalf("expected PVE instance to be removed, got %d remaining", len(cfg.PVEInstances))
+	}
+
+	var resp AutoUnregisterResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if !resp.Removed {
+		t.Fatalf("removed = false, want true")
+	}
+	if resp.Action != "remove_connection" {
+		t.Fatalf("action = %q, want remove_connection", resp.Action)
+	}
+}
+
+func TestHandleAutoUnregisterIsIdempotentWhenNodeAlreadyMissing(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Setenv("PULSE_DATA_DIR", tempDir)
+
+	cfg := &config.Config{
+		DataPath:   tempDir,
+		ConfigPath: tempDir,
+	}
+
+	handler := newTestConfigHandlers(t, cfg)
+
+	const tokenValue = "TEMP-TOKEN-NOOP"
+	tokenHash := internalauth.HashAPIToken(tokenValue)
+	handler.codeMutex.Lock()
+	handler.setupTokens[tokenHash] = &SetupTokenRecord{
+		ExpiresAt: time.Now().Add(5 * time.Minute),
+		NodeType:  "pve",
+		OrgID:     "default",
+	}
+	handler.codeMutex.Unlock()
+
+	reqBody := AutoUnregisterRequest{
+		Type:       "pve",
+		Host:       "https://pve.local:8006",
+		TokenID:    "pulse-monitor@pve!pulse-pve-local",
+		ServerName: "pve.local",
+		AuthToken:  tokenValue,
+		Source:     "script",
+	}
+
+	body, err := json.Marshal(reqBody)
+	if err != nil {
+		t.Fatalf("failed to marshal request: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/auto-unregister", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+
+	handler.HandleAutoUnregister(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d, body=%s", rec.Code, rec.Body.String())
+	}
+
+	var resp AutoUnregisterResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if resp.Removed {
+		t.Fatalf("removed = true, want false")
+	}
+	if resp.Action != "noop" {
+		t.Fatalf("action = %q, want noop", resp.Action)
 	}
 }
 

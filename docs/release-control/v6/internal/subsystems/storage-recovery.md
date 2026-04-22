@@ -168,6 +168,12 @@ querying, and the operator-facing storage health presentation layer.
     surfaces may reflect zero-delta or removal-only monitored-system previews
     for disabled TrueNAS and VMware connections, but they must not reinterpret
     those responses as active counted storage capacity.
+    That same shared helper boundary also owns script teardown symmetry:
+    `/api/auto-unregister` must remove the matching script-managed PVE/PBS node
+    immediately, return the canonical success/noop envelope, and trigger the
+    same discovery-refresh plus node-deleted websocket side effects as a manual
+    delete so adjacent recovery/storage surfaces do not retain stale provider
+    context after Pulse credentials have been removed from the host.
 14. Preserve canonical /api/auto-register DHCP continuity in those shared helpers so a PVE or PBS node that reruns registration from a new IP with the same canonical node name and deterministic Pulse-managed token identity updates in place instead of duplicating the inventory record.
     That same shared helper boundary now also owns runtime-side Proxmox
     `candidateHosts` selection from Pulse's network view: storage and

@@ -181,6 +181,15 @@ type SetupTokenRecord struct {
 	OrgID     string // Organization ID creating this code
 }
 
+// RecentSetupTokenRecord preserves minimal identity metadata for the short
+// follow-up grace window after a setup token has been consumed.
+type RecentSetupTokenRecord struct {
+	ExpiresAt time.Time
+	NodeType  string
+	Host      string
+	OrgID     string
+}
+
 // ConfigHandlers handles configuration-related API endpoints
 type ConfigHandlers struct {
 	stateMu       sync.RWMutex
@@ -196,9 +205,9 @@ type ConfigHandlers struct {
 	mockModeChanged          func(bool)
 	wsHub                    *websocket.Hub
 	guestMetadataHandler     *GuestMetadataHandler
-	setupTokens              map[string]*SetupTokenRecord // Map of token hash -> setup token details
-	recentSetupTokens        map[string]time.Time         // Temporary map for recently used setup tokens (grace period)
-	codeMutex                sync.RWMutex                 // Mutex for thread-safe code access
+	setupTokens              map[string]*SetupTokenRecord      // Map of token hash -> setup token details
+	recentSetupTokens        map[string]RecentSetupTokenRecord // Temporary map for recently used setup tokens (grace period)
+	codeMutex                sync.RWMutex                      // Mutex for thread-safe code access
 	clusterDetectMutex       sync.Mutex
 	lastClusterDetection     map[string]time.Time
 	recentAutoRegistered     map[string]time.Time
@@ -237,7 +246,7 @@ func NewConfigHandlers(mtp *config.MultiTenantPersistence, mtm *monitoring.Multi
 		wsHub:                    wsHub,
 		guestMetadataHandler:     guestMetadataHandler,
 		setupTokens:              make(map[string]*SetupTokenRecord),
-		recentSetupTokens:        make(map[string]time.Time),
+		recentSetupTokens:        make(map[string]RecentSetupTokenRecord),
 		lastClusterDetection:     make(map[string]time.Time),
 		recentAutoRegistered:     make(map[string]time.Time),
 	}
@@ -372,13 +381,42 @@ func (h *ConfigHandlers) cleanupExpiredSetupTokens() {
 				log.Debug().Bool("was_used", tokenRecord.Used).Msg("Cleaned up setup token")
 			}
 		}
-		for tokenHash, expiresAt := range h.recentSetupTokens {
-			if now.After(expiresAt) {
+		for tokenHash, recentRecord := range h.recentSetupTokens {
+			if now.After(recentRecord.ExpiresAt) {
 				delete(h.recentSetupTokens, tokenHash)
 			}
 		}
 		h.codeMutex.Unlock()
 	}
+}
+
+func recentSetupTokenGraceExpiry(record *SetupTokenRecord, now time.Time) time.Time {
+	graceExpiry := now.Add(1 * time.Minute)
+	if record != nil && !record.ExpiresAt.IsZero() && record.ExpiresAt.Before(graceExpiry) {
+		graceExpiry = record.ExpiresAt
+	}
+	return graceExpiry
+}
+
+func buildRecentSetupTokenRecord(record *SetupTokenRecord, expiresAt time.Time) RecentSetupTokenRecord {
+	recentRecord := RecentSetupTokenRecord{
+		ExpiresAt: expiresAt,
+	}
+	if record == nil {
+		return recentRecord
+	}
+	recentRecord.NodeType = strings.TrimSpace(record.NodeType)
+	recentRecord.Host = strings.TrimSpace(record.Host)
+	recentRecord.OrgID = strings.TrimSpace(record.OrgID)
+	return recentRecord
+}
+
+func normalizeSetupTokenOrgID(orgID string) string {
+	trimmed := strings.TrimSpace(orgID)
+	if trimmed == "" {
+		return "default"
+	}
+	return trimmed
 }
 
 // ValidateSetupToken checks whether the provided temporary setup token is still valid.
@@ -399,7 +437,7 @@ func (h *ConfigHandlers) ValidateSetupToken(token string) bool {
 		}
 	}
 
-	if expiresAt, ok := h.recentSetupTokens[tokenHash]; ok && now.Before(expiresAt) {
+	if recentRecord, ok := h.recentSetupTokens[tokenHash]; ok && now.Before(recentRecord.ExpiresAt) {
 		return true
 	}
 
@@ -414,10 +452,7 @@ func (h *ConfigHandlers) ValidateSetupTokenForOrg(token, orgID string) bool {
 		return false
 	}
 
-	requestOrgID := strings.TrimSpace(orgID)
-	if requestOrgID == "" {
-		requestOrgID = "default"
-	}
+	requestOrgID := normalizeSetupTokenOrgID(orgID)
 
 	tokenHash := internalauth.HashAPIToken(token)
 	now := time.Now()
@@ -426,18 +461,23 @@ func (h *ConfigHandlers) ValidateSetupTokenForOrg(token, orgID string) bool {
 	defer h.codeMutex.RUnlock()
 
 	if tokenRecord, exists := h.setupTokens[tokenHash]; exists {
-		if tokenRecord.Used || !now.Before(tokenRecord.ExpiresAt) {
+		tokenOrgID := normalizeSetupTokenOrgID(tokenRecord.OrgID)
+		if tokenRecord.Used {
+			if recentRecord, ok := h.recentSetupTokens[tokenHash]; ok && now.Before(recentRecord.ExpiresAt) {
+				return normalizeSetupTokenOrgID(recentRecord.OrgID) == requestOrgID
+			}
 			return false
 		}
-		tokenOrgID := strings.TrimSpace(tokenRecord.OrgID)
-		if tokenOrgID == "" {
-			tokenOrgID = "default"
+		if !now.Before(tokenRecord.ExpiresAt) {
+			return false
 		}
 		return tokenOrgID == requestOrgID
 	}
 
-	// Recent setup token grace entries are intentionally not accepted here
-	// because they do not carry org binding information.
+	if recentRecord, ok := h.recentSetupTokens[tokenHash]; ok && now.Before(recentRecord.ExpiresAt) {
+		return normalizeSetupTokenOrgID(recentRecord.OrgID) == requestOrgID
+	}
+
 	return false
 }
 
@@ -1728,6 +1768,11 @@ func (h *ConfigHandlers) HandleUpdateMockMode(w http.ResponseWriter, r *http.Req
 // HandleAutoRegister receives token details from the setup script and auto-configures the node.
 func (h *ConfigHandlers) HandleAutoRegister(w http.ResponseWriter, r *http.Request) {
 	h.handleAutoRegister(w, r)
+}
+
+// HandleAutoUnregister receives teardown requests from the setup script and removes matching nodes.
+func (h *ConfigHandlers) HandleAutoUnregister(w http.ResponseWriter, r *http.Request) {
+	h.handleAutoUnregister(w, r)
 }
 
 // HandleAgentInstallCommand generates an API token and install command for agent-based Proxmox setup.
