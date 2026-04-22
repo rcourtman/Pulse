@@ -16,11 +16,20 @@ func TestResolveProTrialSignupURL_UsesValidOverride(t *testing.T) {
 	}
 }
 
+func TestResolveProTrialSignupURL_AllowsLoopbackHTTPOverride(t *testing.T) {
+	const override = "http://127.0.0.1:8080/start-pro-trial?src=test"
+
+	if got := ResolveProTrialSignupURL(override); got != override {
+		t.Fatalf("ResolveProTrialSignupURL() = %q, want %q", got, override)
+	}
+}
+
 func TestResolveProTrialSignupURL_RejectsInvalidOverrides(t *testing.T) {
 	testCases := []string{
 		"relative/path",
 		"javascript:alert(1)",
 		"https://",
+		"http://192.168.1.20/start-pro-trial",
 		"ftp://example.com/start-pro-trial",
 	}
 
@@ -47,11 +56,20 @@ func TestResolvePulseAccountPortalURL_UsesValidOverride(t *testing.T) {
 	}
 }
 
+func TestResolvePulseAccountPortalURL_AllowsLoopbackHTTPOverride(t *testing.T) {
+	const override = "http://localhost:8080/portal?src=test"
+
+	if got := ResolvePulseAccountPortalURL(override); got != override {
+		t.Fatalf("ResolvePulseAccountPortalURL() = %q, want %q", got, override)
+	}
+}
+
 func TestResolvePulseAccountPortalURL_RejectsInvalidOverrides(t *testing.T) {
 	testCases := []string{
 		"relative/path",
 		"javascript:alert(1)",
 		"https://",
+		"http://10.0.0.25/portal",
 		"ftp://example.com/portal",
 	}
 

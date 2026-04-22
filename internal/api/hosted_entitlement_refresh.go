@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 	"github.com/rs/zerolog/log"
 )
 
@@ -435,7 +436,11 @@ func (h *LicenseHandlers) requestHostedEntitlementLeaseRefresh(orgID, instanceHo
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := (&http.Client{Timeout: 5 * time.Second}).Do(req)
+	client := securityutil.NewRestrictedOutboundHTTPClient(5*time.Second, securityutil.RestrictedOutboundHTTPOptions{
+		AllowedSchemes: []string{"http", "https"},
+		AllowLoopback:  true,
+	})
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("post hosted entitlement refresh request: %w", err)
 	}

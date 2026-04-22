@@ -13,12 +13,15 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/pkg/securityutil"
 )
 
 // LicenseServerClient communicates with the Pulse license server for activation and grant refresh.
 type LicenseServerClient struct {
 	baseURL    string
 	httpClient *http.Client
+	initErr    error
 }
 
 // CheckoutSessionResult is the canonical purchase-fulfillment response returned
@@ -67,18 +70,48 @@ func NewLicenseServerClient(baseURL string) *LicenseServerClient {
 	if baseURL == "" {
 		baseURL = DefaultLicenseServerURL
 	}
-	baseURL = strings.TrimRight(baseURL, "/")
+
+	var initErr error
+	normalizedBaseURL, err := securityutil.NormalizeSecureHTTPBaseURL(baseURL)
+	if err != nil {
+		initErr = fmt.Errorf("license server URL %q is invalid: %w", baseURL, err)
+		baseURL = ""
+	} else {
+		baseURL = normalizedBaseURL.String()
+	}
 
 	return &LicenseServerClient{
 		baseURL: baseURL,
-		httpClient: &http.Client{
-			Timeout: 15 * time.Second,
-		},
+		httpClient: securityutil.NewRestrictedOutboundHTTPClient(15*time.Second, securityutil.RestrictedOutboundHTTPOptions{
+			AllowedSchemes: []string{"http", "https"},
+			AllowLoopback:  true,
+		}),
+		initErr: initErr,
 	}
+}
+
+func (c *LicenseServerClient) ready() error {
+	if c == nil {
+		return fmt.Errorf("license server client is nil")
+	}
+	if c.initErr != nil {
+		return c.initErr
+	}
+	if strings.TrimSpace(c.baseURL) == "" {
+		return fmt.Errorf("license server URL is unavailable")
+	}
+	if c.httpClient == nil {
+		return fmt.Errorf("license server HTTP client is unavailable")
+	}
+	return nil
 }
 
 // Activate calls the license server to create an installation and receive a relay grant.
 func (c *LicenseServerClient) Activate(ctx context.Context, req ActivateInstallationRequest) (*ActivateInstallationResponse, error) {
+	if err := c.ready(); err != nil {
+		return nil, err
+	}
+
 	body, err := json.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("marshal activate request: %w", err)
@@ -112,6 +145,10 @@ func (c *LicenseServerClient) Activate(ctx context.Context, req ActivateInstalla
 // The response shape matches normal activation so the runtime can persist activation
 // state and start using grant refresh immediately.
 func (c *LicenseServerClient) ExchangeLegacyLicense(ctx context.Context, req ExchangeLegacyLicenseRequest) (*ActivateInstallationResponse, error) {
+	if err := c.ready(); err != nil {
+		return nil, err
+	}
+
 	body, err := json.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("marshal exchange request: %w", err)
@@ -144,6 +181,10 @@ func (c *LicenseServerClient) ExchangeLegacyLicense(ctx context.Context, req Exc
 // RefreshGrant calls the license server to refresh a relay grant.
 // The installationToken is sent as a Bearer token in the Authorization header.
 func (c *LicenseServerClient) RefreshGrant(ctx context.Context, installationID, installationToken string, req RefreshGrantRequest) (*RefreshGrantResponse, error) {
+	if err := c.ready(); err != nil {
+		return nil, err
+	}
+
 	body, err := json.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("marshal refresh request: %w", err)
@@ -180,6 +221,10 @@ func (c *LicenseServerClient) RefreshGrant(ctx context.Context, installationID, 
 // GetCheckoutSessionResult resolves a commercial checkout session into its
 // authoritative fulfillment payload.
 func (c *LicenseServerClient) GetCheckoutSessionResult(ctx context.Context, sessionID string) (*CheckoutSessionResult, error) {
+	if err := c.ready(); err != nil {
+		return nil, err
+	}
+
 	sessionID = strings.TrimSpace(sessionID)
 	if sessionID == "" {
 		return nil, fmt.Errorf("checkout session id is required")
@@ -216,6 +261,10 @@ func (c *LicenseServerClient) GetCheckoutSessionResult(ctx context.Context, sess
 // CreateCheckoutPortalHandoff stores a server-owned Pulse Account bootstrap
 // record and returns an opaque portal_handoff_id for browser navigation.
 func (c *LicenseServerClient) CreateCheckoutPortalHandoff(ctx context.Context, req CheckoutPortalHandoffRequest) (*CheckoutPortalHandoffResponse, error) {
+	if err := c.ready(); err != nil {
+		return nil, err
+	}
+
 	body, err := json.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("marshal checkout portal handoff request: %w", err)
@@ -250,6 +299,10 @@ func (c *LicenseServerClient) CreateCheckoutPortalHandoff(ctx context.Context, r
 // Callers must pass a server-verified quickstart authority token as
 // bearerToken: either an installation token or a signed entitlement lease JWT.
 func (c *LicenseServerClient) BootstrapQuickstart(ctx context.Context, bearerToken string, req QuickstartBootstrapRequest) (*QuickstartBootstrapResponse, error) {
+	if err := c.ready(); err != nil {
+		return nil, err
+	}
+
 	if strings.TrimSpace(bearerToken) == "" {
 		return nil, &LicenseServerError{
 			StatusCode: http.StatusUnauthorized,
@@ -297,6 +350,10 @@ func (c *LicenseServerClient) BootstrapQuickstart(ctx context.Context, bearerTok
 // FetchRevocations polls the revocation feed for events after the given sequence number.
 // The feedToken authenticates access to the revocation feed.
 func (c *LicenseServerClient) FetchRevocations(ctx context.Context, feedToken string, sinceSeq int64, limit int) (*RevocationFeedResponse, error) {
+	if err := c.ready(); err != nil {
+		return nil, err
+	}
+
 	if limit <= 0 {
 		limit = 500
 	}

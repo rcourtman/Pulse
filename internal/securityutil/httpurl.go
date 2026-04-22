@@ -17,6 +17,10 @@ func NormalizeHTTPBaseURL(raw string, defaultScheme string) (*url.URL, error) {
 	return pubsec.NormalizeHTTPBaseURL(raw, defaultScheme)
 }
 
+func NormalizeSecureHTTPBaseURL(raw string) (*url.URL, error) {
+	return pubsec.NormalizeSecureHTTPBaseURL(raw)
+}
+
 func IsLoopbackHost(host string) bool {
 	return pubsec.IsLoopbackHost(host)
 }

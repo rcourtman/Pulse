@@ -186,6 +186,33 @@ func TestTrialStart_FailsClosedWithoutCallbackURL(t *testing.T) {
 	}
 }
 
+func TestTrialStart_FailsClosedOnInsecureNonLoopbackCallbackURL(t *testing.T) {
+	baseDir := t.TempDir()
+	mtp := config.NewMultiTenantPersistence(baseDir)
+	h := NewLicenseHandlers(mtp, false, &config.Config{
+		ProTrialSignupURL: "https://billing.example.com/start-pro-trial",
+	})
+
+	ctx := context.WithValue(context.Background(), OrgIDContextKey, "default")
+	req := httptest.NewRequest(http.MethodPost, "http://192.168.1.25:7655/api/license/trial/start", nil).WithContext(ctx)
+	req.Host = "192.168.1.25:7655"
+	req.RemoteAddr = "192.168.1.50:54321"
+	rec := httptest.NewRecorder()
+	h.HandleStartTrial(rec, req)
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status=%d, want %d: %s", rec.Code, http.StatusServiceUnavailable, rec.Body.String())
+	}
+
+	var resp APIError
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if resp.Code != "trial_signup_unavailable" {
+		t.Fatalf("code=%q, want %q", resp.Code, "trial_signup_unavailable")
+	}
+}
+
 func TestTrialStart_RejectsAlreadyUsedTrial(t *testing.T) {
 	baseDir := t.TempDir()
 	mtp := config.NewMultiTenantPersistence(baseDir)

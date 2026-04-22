@@ -270,6 +270,9 @@ an add-only capacity posture.
     lifecycle-adjacent surfaces may coexist with that shared browser route, but
     they must not strand install or fleet flows on a raw Pulse Account error
     tab, reinterpret `purchase=unavailable` as lifecycle repair state, or
+    bypass the shared secure callback policy that limits self-hosted commercial
+    return URLs to HTTPS instance origins or direct-loopback HTTP and keeps
+    hosted commercial follow-up fetches on the restricted outbound client.
     bypass the owned billing retry/recovery path.
     That same adjacent commercial/auth boundary also owns the canonical
     self-hosted purchase intent label: lifecycle-adjacent setup and install

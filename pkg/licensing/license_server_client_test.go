@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 )
@@ -31,6 +32,17 @@ func TestNewLicenseServerClient(t *testing.T) {
 		c := NewLicenseServerClient("")
 		if c.BaseURL() != "https://env.example.com" {
 			t.Errorf("BaseURL = %q, want env override", c.BaseURL())
+		}
+	})
+
+	t.Run("rejects insecure non loopback url", func(t *testing.T) {
+		c := NewLicenseServerClient("http://192.168.1.25:8081")
+		if c.BaseURL() != "" {
+			t.Fatalf("BaseURL = %q, want empty when URL is rejected", c.BaseURL())
+		}
+		_, err := c.GetCheckoutSessionResult(context.Background(), "cs_test_123")
+		if err == nil || !strings.Contains(err.Error(), "must use https unless host is loopback") {
+			t.Fatalf("expected insecure URL error, got %v", err)
 		}
 	})
 }

@@ -880,7 +880,11 @@ that same `portal_handoff_id` into Pulse's activation callback, and Pulse
 must compare both `portal_handoff_id` and `purchase_return_jti` against the
 commercial checkout-session result before redeeming the activation key, so
 browser form/query state and Stripe metadata alone never become the source of
-truth for a completed self-hosted upgrade. Once that commercial binding
+truth for a completed self-hosted upgrade. That same owned callback path must
+resolve only to HTTPS instance origins or a direct loopback HTTP origin, and
+the hosted trial/entitlement follow-up fetches behind that path must stay on
+the restricted outbound client instead of raw commercial HTTP calls. Once that
+commercial binding
 verifies, Pulse's owned callback must persist a dedicated local
 purchase-return redemption record keyed by `portal_handoff_id` plus
 `purchase_return_jti`, use explicit local redemption state

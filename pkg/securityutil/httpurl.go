@@ -120,6 +120,35 @@ func NormalizePulseHTTPBaseURL(raw string) (*url.URL, error) {
 	return normalizePulseBaseURL(raw, false)
 }
 
+// NormalizeSecureHTTPBaseURL validates a general-purpose HTTP(S) base URL.
+// HTTPS is required for non-loopback hosts; loopback localhost may use HTTP.
+func NormalizeSecureHTTPBaseURL(raw string) (*url.URL, error) {
+	parsed, err := NormalizeHTTPBaseURL(raw, "")
+	if err != nil {
+		return nil, err
+	}
+
+	switch strings.ToLower(parsed.Scheme) {
+	case "https":
+		parsed.Scheme = "https"
+	case "http":
+		if !IsLoopbackHost(parsed.Hostname()) {
+			return nil, fmt.Errorf("URL %q must use https unless host is loopback", raw)
+		}
+		parsed.Scheme = "http"
+	default:
+		return nil, fmt.Errorf("URL %q has unsupported scheme %q", raw, parsed.Scheme)
+	}
+
+	parsed.Host = strings.ToLower(parsed.Host)
+	parsed.Path = strings.TrimRight(parsed.Path, "/")
+	parsed.RawPath = strings.TrimRight(parsed.RawPath, "/")
+	parsed.RawQuery = ""
+	parsed.Fragment = ""
+
+	return parsed, nil
+}
+
 // NormalizePulseWebSocketBaseURL validates a Pulse command-channel base URL.
 // Non-loopback hosts are normalized to WSS; loopback localhost may use WS.
 func NormalizePulseWebSocketBaseURL(raw string) (*url.URL, error) {

@@ -170,6 +170,10 @@ Community limit enforcement.
 7. Add or change Stripe provisioning plan resolution through `internal/cloudcp/stripe/provisioner.go`
 8. Add or change activation/grant lifecycle, release build helper gating, or dev-mode capability widening through `pkg/licensing/dev_mode_features.go`, `pkg/licensing/service.go`, `pkg/licensing/testing_helpers.go`, `pkg/licensing/grant_refresh.go`, and `pkg/licensing/revocation_poll.go`
 9. Add or change license-server transport through `pkg/licensing/license_server_client.go` and `pkg/licensing/quickstart_bootstrap.go`
+   That transport boundary must use HTTPS for non-loopback commercial endpoints,
+   may allow plaintext only on direct loopback development targets, and must
+   route outbound license-server fetches through the restricted HTTP client so
+   DNS rebinding or private-network drift cannot silently reopen the boundary.
 10. Add or change encrypted activation persistence through `pkg/licensing/persistence.go` and `pkg/licensing/activation_store.go`
     That persistence boundary must encrypt new state only with the persistent
     random key file and the current HKDF-based derivation. Machine ID may

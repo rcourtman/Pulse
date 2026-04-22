@@ -324,6 +324,9 @@ querying, and the operator-facing storage health presentation layer.
     boundary also owns the canonical self-hosted purchase intent label:
     storage- and recovery-adjacent surfaces may observe `self_hosted_plan`, but
     they must not emit or reinterpret legacy `max_monitored_systems` intent or
+    bypass the shared secure callback policy that limits self-hosted commercial
+    return URLs to HTTPS instance origins or direct-loopback HTTP and keeps
+    hosted commercial follow-up fetches on the restricted outbound client.
     query state as a recovery-local contract once uncapped self-hosted
     monitoring is canonical.
     That same adjacent commercial

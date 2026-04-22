@@ -2364,6 +2364,57 @@ func TestContract_TrialStartHostedSignupRedirectContract(t *testing.T) {
 	}
 }
 
+func TestContract_TrialStartRejectsInsecureNonLoopbackCallbackURL(t *testing.T) {
+	baseDir := t.TempDir()
+	mtp := config.NewMultiTenantPersistence(baseDir)
+	h := NewLicenseHandlers(mtp, false, &config.Config{
+		ProTrialSignupURL: "https://billing.example.com/start-pro-trial?source=contract",
+	})
+
+	req := httptest.NewRequest(
+		http.MethodPost,
+		"http://192.168.1.25:7655/api/license/trial/start",
+		nil,
+	).WithContext(context.WithValue(context.Background(), OrgIDContextKey, "default"))
+	req.Host = "192.168.1.25:7655"
+	req.RemoteAddr = "192.168.1.50:54321"
+	rec := httptest.NewRecorder()
+	h.HandleStartTrial(rec, req)
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status=%d, want %d: %s", rec.Code, http.StatusServiceUnavailable, rec.Body.String())
+	}
+
+	var payload APIError
+	if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	payload = payload.NormalizeCollections()
+	got, err := json.Marshal(struct {
+		StatusCode int               `json:"status_code"`
+		Code       string            `json:"code"`
+		Error      string            `json:"error"`
+		Details    map[string]string `json:"details"`
+	}{
+		StatusCode: payload.StatusCode,
+		Code:       payload.Code,
+		Error:      payload.ErrorMessage,
+		Details:    payload.Details,
+	})
+	if err != nil {
+		t.Fatalf("marshal payload snapshot: %v", err)
+	}
+
+	const want = `{
+		"status_code":503,
+		"code":"trial_signup_unavailable",
+		"error":"Hosted trial signup is unavailable",
+		"details":{}
+	}`
+
+	assertJSONSnapshot(t, got, want)
+}
+
 func TestContract_TrialStartRateLimitContract(t *testing.T) {
 	baseDir := t.TempDir()
 	mtp := config.NewMultiTenantPersistence(baseDir)
@@ -6868,6 +6919,45 @@ func TestContract_SelfHostedPurchaseHandoffUnavailableJSONSnapshot(t *testing.T)
 		"status_code": 503,
 		"title_present": true,
 		"retry_message_present": true,
+		"owned_redirect_path": true
+	}`
+
+	assertJSONSnapshot(t, got, want)
+}
+
+func TestContract_SelfHostedPurchaseHandoffRejectsInsecureNonLoopbackCallbackURL(t *testing.T) {
+	handler := createTestHandler(t)
+
+	req := httptest.NewRequest(
+		http.MethodGet,
+		"http://192.168.1.25:7655"+licensePurchaseStartPath+"?feature=max_monitored_systems",
+		nil,
+	)
+	req.Host = "192.168.1.25:7655"
+	req.RemoteAddr = "192.168.1.50:54321"
+	rec := httptest.NewRecorder()
+
+	handler.HandleCheckoutStart(rec, req)
+
+	got, err := json.MarshalIndent(struct {
+		StatusCode           int  `json:"status_code"`
+		TitlePresent         bool `json:"title_present"`
+		SecureFailureMessage bool `json:"secure_failure_message"`
+		OwnedRedirectPath    bool `json:"owned_redirect_path"`
+	}{
+		StatusCode:           rec.Code,
+		TitlePresent:         strings.Contains(rec.Body.String(), "Pulse Account unavailable"),
+		SecureFailureMessage: strings.Contains(rec.Body.String(), "Pulse could not open Pulse Account from this instance right now"),
+		OwnedRedirectPath:    strings.Contains(rec.Body.String(), "/settings/system/billing/plan?intent=self_hosted_plan&purchase=unavailable"),
+	}, "", "\t")
+	if err != nil {
+		t.Fatalf("marshal insecure handoff snapshot: %v", err)
+	}
+
+	const want = `{
+		"status_code": 503,
+		"title_present": true,
+		"secure_failure_message": true,
 		"owned_redirect_path": true
 	}`
 

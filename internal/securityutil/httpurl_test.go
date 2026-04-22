@@ -103,6 +103,57 @@ func TestNormalizePulseHTTPBaseURL(t *testing.T) {
 	}
 }
 
+func TestNormalizeSecureHTTPBaseURL(t *testing.T) {
+	tests := []struct {
+		name      string
+		raw       string
+		want      string
+		wantError string
+	}{
+		{
+			name: "normalizes secure url",
+			raw:  "HTTPS://Billing.Example.com/api/",
+			want: "https://billing.example.com/api",
+		},
+		{
+			name: "allows loopback http",
+			raw:  "http://LOCALHOST:8080/portal/",
+			want: "http://localhost:8080/portal",
+		},
+		{
+			name:      "rejects private-network http",
+			raw:       "http://10.0.0.5:8080/portal",
+			wantError: "must use https unless host is loopback",
+		},
+		{
+			name:      "rejects unsupported scheme",
+			raw:       "ftp://billing.example.com/portal",
+			wantError: "scheme must be http or https",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := NormalizeSecureHTTPBaseURL(tt.raw)
+			if tt.wantError != "" {
+				if err == nil {
+					t.Fatalf("NormalizeSecureHTTPBaseURL(%q) expected error", tt.raw)
+				}
+				if !strings.Contains(err.Error(), tt.wantError) {
+					t.Fatalf("NormalizeSecureHTTPBaseURL(%q) error = %q, want substring %q", tt.raw, err.Error(), tt.wantError)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("NormalizeSecureHTTPBaseURL(%q) error = %v", tt.raw, err)
+			}
+			if got.String() != tt.want {
+				t.Fatalf("NormalizeSecureHTTPBaseURL(%q) = %q, want %q", tt.raw, got.String(), tt.want)
+			}
+		})
+	}
+}
+
 func TestNormalizePulseWebSocketBaseURL(t *testing.T) {
 	tests := []struct {
 		name      string

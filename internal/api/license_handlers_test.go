@@ -838,6 +838,28 @@ func TestHandleCheckoutStart_RedirectsToPulseAccountWithSignedReturnState(t *tes
 	}
 }
 
+func TestHandleCheckoutStart_FailsClosedOnInsecureNonLoopbackCallbackURL(t *testing.T) {
+	handler := createTestHandler(t)
+
+	req := httptest.NewRequest(
+		http.MethodGet,
+		"http://192.168.1.25:7655/auth/license-purchase-start?feature=relay",
+		nil,
+	)
+	req.Host = "192.168.1.25:7655"
+	req.RemoteAddr = "192.168.1.50:54321"
+	rec := httptest.NewRecorder()
+
+	handler.HandleCheckoutStart(rec, req)
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want %d (body=%q)", rec.Code, http.StatusServiceUnavailable, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "Pulse could not open Pulse Account from this instance right now") {
+		t.Fatalf("body = %q, want secure callback failure message", rec.Body.String())
+	}
+}
+
 func TestHandleCheckoutActivation_GETRendersAutoSubmitBridge(t *testing.T) {
 	handler := createTestHandler(t)
 	handler.SetConfig(&config.Config{PublicURL: "https://pulse.example.com"})

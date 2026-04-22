@@ -1,8 +1,9 @@
 package licensing
 
 import (
-	"net/url"
 	"strings"
+
+	"github.com/rcourtman/pulse-go-rewrite/pkg/securityutil"
 )
 
 // DefaultUpgradeURL is used when no feature-specific URL mapping exists.
@@ -49,19 +50,24 @@ func validateExternalUpgradeURLOverride(raw string) (string, bool) {
 		return "", false
 	}
 
-	parsed, err := url.Parse(raw)
+	parsed, err := securityutil.NormalizeAbsoluteHTTPURL(raw)
 	if err != nil {
 		return "", false
 	}
-	if !parsed.IsAbs() || strings.TrimSpace(parsed.Host) == "" {
-		return "", false
-	}
 	switch strings.ToLower(parsed.Scheme) {
-	case "http", "https":
-		return parsed.String(), true
+	case "https":
+		parsed.Scheme = "https"
+	case "http":
+		if !securityutil.IsLoopbackHost(parsed.Hostname()) {
+			return "", false
+		}
+		parsed.Scheme = "http"
 	default:
 		return "", false
 	}
+	parsed.Host = strings.ToLower(parsed.Host)
+	parsed.Fragment = ""
+	return parsed.String(), true
 }
 
 // UpgradeURLForFeature returns the canonical upgrade URL for a capability key.

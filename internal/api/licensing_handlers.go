@@ -20,6 +20,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/crypto"
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
+	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 	"github.com/rs/zerolog/log"
 )
 
@@ -219,8 +220,25 @@ func publicBaseURLForRequest(r *http.Request, cfg *config.Config) string {
 	return baseURL
 }
 
-func trialCallbackURLForRequest(r *http.Request, cfg *config.Config) string {
+func securePublicCallbackBaseURLForRequest(r *http.Request, cfg *config.Config) string {
 	baseURL := publicBaseURLForRequest(r, cfg)
+	if baseURL == "" {
+		return ""
+	}
+
+	parsed, err := securityutil.NormalizePulseHTTPBaseURL(baseURL)
+	if err != nil {
+		return ""
+	}
+	if parsed.Scheme == "http" && (r == nil || !isDirectLoopbackRequest(r)) {
+		return ""
+	}
+
+	return strings.TrimRight(parsed.String(), "/")
+}
+
+func trialCallbackURLForRequest(r *http.Request, cfg *config.Config) string {
+	baseURL := securePublicCallbackBaseURLForRequest(r, cfg)
 	if baseURL == "" {
 		return ""
 	}
@@ -228,7 +246,7 @@ func trialCallbackURLForRequest(r *http.Request, cfg *config.Config) string {
 }
 
 func licensePurchaseCallbackURLForRequest(r *http.Request, cfg *config.Config) string {
-	baseURL := publicBaseURLForRequest(r, cfg)
+	baseURL := securePublicCallbackBaseURLForRequest(r, cfg)
 	if baseURL == "" {
 		return ""
 	}
@@ -242,6 +260,29 @@ func purchaseReturnExpectedHost(r *http.Request, cfg *config.Config) string {
 	return normalizeHostForTrial(publicBaseURLForRequest(r, nil))
 }
 
+func parseHostedCommercialURL(raw string) (*url.URL, error) {
+	parsed, err := securityutil.NormalizeAbsoluteHTTPURL(strings.TrimSpace(raw))
+	if err != nil {
+		return nil, err
+	}
+
+	switch strings.ToLower(parsed.Scheme) {
+	case "https":
+		parsed.Scheme = "https"
+	case "http":
+		if !securityutil.IsLoopbackHost(parsed.Hostname()) {
+			return nil, fmt.Errorf("URL %q must use https unless host is loopback", raw)
+		}
+		parsed.Scheme = "http"
+	default:
+		return nil, fmt.Errorf("URL %q has unsupported scheme %q", raw, parsed.Scheme)
+	}
+
+	parsed.Host = strings.ToLower(parsed.Host)
+	parsed.Fragment = ""
+	return parsed, nil
+}
+
 func trialSignupActionURLForRequest(cfg *config.Config, orgID, returnURL, instanceToken string) (string, error) {
 	signupBaseURL := ""
 	if cfg != nil {
@@ -252,7 +293,7 @@ func trialSignupActionURLForRequest(cfg *config.Config, orgID, returnURL, instan
 		return "", fmt.Errorf("trial signup URL is unavailable")
 	}
 
-	parsed, err := url.Parse(signupURL)
+	parsed, err := parseHostedCommercialURL(signupURL)
 	if err != nil {
 		return "", fmt.Errorf("parse trial signup URL: %w", err)
 	}
@@ -348,7 +389,7 @@ func pulseAccountUpgradeURLForRequest(portalHandoffID string, query url.Values) 
 }
 
 func publicAbsoluteURLForPath(r *http.Request, cfg *config.Config, path string) (string, error) {
-	baseURL := publicBaseURLForRequest(r, cfg)
+	baseURL := securePublicCallbackBaseURLForRequest(r, cfg)
 	if baseURL == "" {
 		return "", fmt.Errorf("public base url is unavailable")
 	}
@@ -1242,7 +1283,10 @@ func (h *LicenseHandlers) acknowledgeHostedTrialRedemption(token string) (*hoste
 		return nil, fmt.Errorf("build trial redemption request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	client := &http.Client{Timeout: 5 * time.Second}
+	client := securityutil.NewRestrictedOutboundHTTPClient(5*time.Second, securityutil.RestrictedOutboundHTTPOptions{
+		AllowedSchemes: []string{"http", "https"},
+		AllowLoopback:  true,
+	})
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("post trial redemption acknowledgement: %w", err)
@@ -1273,7 +1317,7 @@ func trialSignupRedemptionURLFromConfig(cfg *config.Config) string {
 	if signupURL == "" {
 		return ""
 	}
-	parsed, err := url.Parse(signupURL)
+	parsed, err := parseHostedCommercialURL(signupURL)
 	if err != nil || parsed == nil {
 		return ""
 	}
@@ -1291,7 +1335,7 @@ func hostedEntitlementRefreshURLFromConfig(cfg *config.Config) string {
 	if signupURL == "" {
 		return ""
 	}
-	parsed, err := url.Parse(signupURL)
+	parsed, err := parseHostedCommercialURL(signupURL)
 	if err != nil || parsed == nil {
 		return ""
 	}
