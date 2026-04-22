@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 	"time"
 
@@ -295,5 +297,121 @@ func TestStripeWebhook_HandleEvent_ErrorsAndUnhandled(t *testing.T) {
 	}
 	if err := h.handleEvent(context.Background(), unhandled, nil); err != nil {
 		t.Fatalf("unexpected error for unhandled event: %v", err)
+	}
+}
+
+func TestStripeWebhookDeduperDoReturnsDuplicateAfterSuccessfulHandle(t *testing.T) {
+	t.Parallel()
+
+	d := newStripeWebhookDeduper(t.TempDir())
+	d.pruneTTL = 0
+
+	calls := 0
+	already, err := d.Do("evt_first", func() error {
+		calls++
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("first Do error: %v", err)
+	}
+	if already {
+		t.Fatal("first Do should not be treated as duplicate")
+	}
+	if calls != 1 {
+		t.Fatalf("handler calls = %d, want 1", calls)
+	}
+	if _, err := os.Stat(d.donePath("evt_first")); err != nil {
+		t.Fatalf("expected done marker to be written: %v", err)
+	}
+
+	already, err = d.Do("evt_first", func() error {
+		calls++
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("second Do error: %v", err)
+	}
+	if !already {
+		t.Fatal("second Do should be treated as duplicate")
+	}
+	if calls != 1 {
+		t.Fatalf("handler calls after duplicate = %d, want 1", calls)
+	}
+}
+
+func TestStripeWebhookDeduperDoReturnsInFlightWhenLockExists(t *testing.T) {
+	t.Parallel()
+
+	d := newStripeWebhookDeduper(t.TempDir())
+	if err := os.WriteFile(d.lockPath("evt_inflight"), []byte("lock"), 0o600); err != nil {
+		t.Fatalf("write lock file: %v", err)
+	}
+
+	calls := 0
+	already, err := d.Do("evt_inflight", func() error {
+		calls++
+		return nil
+	})
+	if already {
+		t.Fatal("in-flight event should not be treated as completed duplicate")
+	}
+	if !errors.Is(err, errStripeWebhookEventInFlight) {
+		t.Fatalf("Do error = %v, want %v", err, errStripeWebhookEventInFlight)
+	}
+	if calls != 0 {
+		t.Fatalf("handler calls = %d, want 0", calls)
+	}
+}
+
+func TestStripeWebhookDeduperDoPrunesExpiredArtifacts(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, time.April, 22, 12, 0, 0, 0, time.UTC)
+	d := newStripeWebhookDeduper(t.TempDir())
+	d.now = func() time.Time { return now }
+	d.doneTTL = 24 * time.Hour
+	d.lockTTL = 10 * time.Minute
+	d.pruneTTL = 0
+
+	writeArtifact := func(path string, modTime time.Time) {
+		t.Helper()
+		if err := os.WriteFile(path, []byte("artifact"), 0o600); err != nil {
+			t.Fatalf("write artifact %s: %v", path, err)
+		}
+		if err := os.Chtimes(path, modTime, modTime); err != nil {
+			t.Fatalf("chtimes %s: %v", path, err)
+		}
+	}
+
+	oldDone := d.donePath("evt_old_done")
+	recentDone := d.donePath("evt_recent_done")
+	oldLock := d.lockPath("evt_old_lock")
+	recentLock := d.lockPath("evt_recent_lock")
+	oldTmp := d.donePath("evt_old_tmp") + ".tmp"
+
+	writeArtifact(oldDone, now.Add(-d.doneTTL-time.Minute))
+	writeArtifact(recentDone, now.Add(-d.doneTTL+time.Minute))
+	writeArtifact(oldLock, now.Add(-d.lockTTL-time.Minute))
+	writeArtifact(recentLock, now.Add(-d.lockTTL+time.Minute))
+	writeArtifact(oldTmp, now.Add(-d.lockTTL-time.Minute))
+
+	already, err := d.Do("evt_new", func() error { return nil })
+	if err != nil {
+		t.Fatalf("Do error: %v", err)
+	}
+	if already {
+		t.Fatal("new event should not be treated as duplicate")
+	}
+
+	for _, path := range []string{oldDone, oldLock, oldTmp} {
+		if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("expected %s to be pruned, stat err=%v", path, err)
+		}
+	}
+
+	for _, path := range []string{recentDone, recentLock, d.donePath("evt_new")} {
+		if _, err := os.Stat(path); err != nil {
+			t.Fatalf("expected %s to remain, stat err=%v", path, err)
+		}
 	}
 }

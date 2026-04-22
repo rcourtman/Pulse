@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
@@ -21,7 +22,13 @@ import (
 	"github.com/stripe/stripe-go/v82/webhook"
 )
 
-const stripeWebhookBodyLimit = 1024 * 1024 // 1MiB
+const (
+	stripeWebhookBodyLimit = 1024 * 1024 // 1MiB
+	// Keep handled event markers long enough to cover Stripe's automatic retry
+	// window and operator-driven resends, but not forever.
+	stripeWebhookDoneRetention = 30 * 24 * time.Hour
+	stripeWebhookPruneInterval = time.Hour
+)
 
 var errStripeWebhookEventInFlight = errors.New("stripe webhook event is in-flight")
 
@@ -574,17 +581,23 @@ func resolvePulseDataDir(dataPath string) string {
 // stripeWebhookDeduper provides durable idempotency for Stripe webhook event IDs.
 // Stripe retries webhooks; without a persistent dedupe store, retries can provision duplicate tenants.
 type stripeWebhookDeduper struct {
-	dir      string
-	lockTTL  time.Duration
-	now      func() time.Time
-	hashSalt []byte
+	dir       string
+	lockTTL   time.Duration
+	doneTTL   time.Duration
+	pruneTTL  time.Duration
+	now       func() time.Time
+	hashSalt  []byte
+	pruneMu   sync.Mutex
+	lastPrune time.Time
 }
 
 func newStripeWebhookDeduper(dir string) *stripeWebhookDeduper {
 	return &stripeWebhookDeduper{
-		dir:     dir,
-		lockTTL: 10 * time.Minute,
-		now:     time.Now,
+		dir:      dir,
+		lockTTL:  10 * time.Minute,
+		doneTTL:  stripeWebhookDoneRetention,
+		pruneTTL: stripeWebhookPruneInterval,
+		now:      time.Now,
 		// Salt prevents event IDs from being used directly as filenames if they contain odd characters.
 		// (Event IDs are normally safe, but this keeps the filesystem contract tight.)
 		hashSalt: []byte("pulse-stripe-webhook-v1"),
@@ -655,6 +668,9 @@ func (d *stripeWebhookDeduper) Do(eventID string, fn func() error) (already bool
 			)
 		}
 		return false, fmt.Errorf("commit dedupe: %w", err)
+	}
+	if pruneErr := d.maybePruneArtifacts(); pruneErr != nil {
+		log.Warn().Err(pruneErr).Str("dir", d.dir).Msg("Stripe dedupe: failed to prune old webhook markers")
 	}
 
 	return false, nil
@@ -727,6 +743,86 @@ func (d *stripeWebhookDeduper) filenameForID(id string) string {
 	mac := hmac.New(sha256.New, d.hashSalt)
 	_, _ = mac.Write([]byte(id))
 	return hex.EncodeToString(mac.Sum(nil))
+}
+
+func (d *stripeWebhookDeduper) maybePruneArtifacts() error {
+	if d == nil || strings.TrimSpace(d.dir) == "" {
+		return nil
+	}
+
+	now := d.now()
+
+	d.pruneMu.Lock()
+	defer d.pruneMu.Unlock()
+
+	if d.pruneTTL > 0 && !d.lastPrune.IsZero() && now.Sub(d.lastPrune) < d.pruneTTL {
+		return nil
+	}
+
+	if err := d.pruneArtifacts(now); err != nil {
+		return err
+	}
+
+	d.lastPrune = now
+	return nil
+}
+
+func (d *stripeWebhookDeduper) pruneArtifacts(now time.Time) error {
+	entries, err := os.ReadDir(d.dir)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		return fmt.Errorf("read dedupe dir: %w", err)
+	}
+
+	doneCutoff := now.Add(-d.doneTTL)
+	lockCutoff := now.Add(-d.lockTTL)
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+
+		name := entry.Name()
+		path := filepath.Join(d.dir, name)
+
+		switch {
+		case strings.HasSuffix(name, ".done"):
+			if d.doneTTL <= 0 {
+				continue
+			}
+			info, infoErr := entry.Info()
+			if infoErr != nil {
+				if errors.Is(infoErr, os.ErrNotExist) {
+					continue
+				}
+				return fmt.Errorf("stat dedupe marker %s: %w", path, infoErr)
+			}
+			if info.ModTime().After(doneCutoff) || info.ModTime().Equal(doneCutoff) {
+				continue
+			}
+		case strings.HasSuffix(name, ".lock"), strings.HasSuffix(name, ".tmp"):
+			info, infoErr := entry.Info()
+			if infoErr != nil {
+				if errors.Is(infoErr, os.ErrNotExist) {
+					continue
+				}
+				return fmt.Errorf("stat dedupe artifact %s: %w", path, infoErr)
+			}
+			if info.ModTime().After(lockCutoff) || info.ModTime().Equal(lockCutoff) {
+				continue
+			}
+		default:
+			continue
+		}
+
+		if rmErr := os.Remove(path); rmErr != nil && !errors.Is(rmErr, os.ErrNotExist) {
+			return fmt.Errorf("remove dedupe artifact %s: %w", path, rmErr)
+		}
+	}
+
+	return nil
 }
 
 type stripeCustomerOrgIndex struct {
