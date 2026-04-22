@@ -150,10 +150,13 @@ func TestSetMultiTenantMonitor_WiresHandlers(t *testing.T) {
 	router := &Router{
 		alertHandlers:           &AlertHandlers{},
 		notificationHandlers:    &NotificationHandlers{},
+		configHandlers:          &ConfigHandlers{},
 		dockerAgentHandlers:     &DockerAgentHandlers{},
 		unifiedAgentHandlers:    &UnifiedAgentHandlers{},
 		kubernetesAgentHandlers: &KubernetesAgentHandlers{},
 		systemSettingsHandler:   &SystemSettingsHandler{},
+		aiSettingsHandler:       &AISettingsHandler{},
+		aiHandler:               &AIHandler{},
 		resourceHandlers:        &ResourceHandlers{},
 	}
 
@@ -171,6 +174,9 @@ func TestSetMultiTenantMonitor_WiresHandlers(t *testing.T) {
 	if router.notificationHandlers.mtMonitor != mtm {
 		t.Fatalf("expected notificationHandlers mtMonitor to be set")
 	}
+	if router.configHandlers.mtMonitor != mtm {
+		t.Fatalf("expected configHandlers mtMonitor to be set")
+	}
 	if router.dockerAgentHandlers.mtMonitor != mtm {
 		t.Fatalf("expected dockerAgentHandlers mtMonitor to be set")
 	}
@@ -182,6 +188,12 @@ func TestSetMultiTenantMonitor_WiresHandlers(t *testing.T) {
 	}
 	if router.systemSettingsHandler.mtMonitor != mtm {
 		t.Fatalf("expected systemSettingsHandler mtMonitor to be set")
+	}
+	if router.aiSettingsHandler.mtMonitor != mtm {
+		t.Fatalf("expected aiSettingsHandler mtMonitor to be set")
+	}
+	if router.aiHandler.mtMonitor != mtm {
+		t.Fatalf("expected aiHandler mtMonitor to be set")
 	}
 	if router.resourceHandlers.tenantStateProvider == nil {
 		t.Fatalf("expected tenant state provider to be set")

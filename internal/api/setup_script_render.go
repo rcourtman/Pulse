@@ -531,7 +531,7 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 echo ""
 
 SSH_SENSORS_PUBLIC_KEY="%s"
-SSH_SENSORS_KEY_ENTRY="command="sensors -j",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty $SSH_SENSORS_PUBLIC_KEY # pulse-sensors"
+SSH_SENSORS_KEY_ENTRY="command=\"sensors -j\",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty $SSH_SENSORS_PUBLIC_KEY # pulse-sensors"
 TEMPERATURE_ENABLED=false
 
 if [ -n "$SSH_SENSORS_PUBLIC_KEY" ]; then

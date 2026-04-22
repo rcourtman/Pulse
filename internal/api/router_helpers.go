@@ -82,6 +82,9 @@ func (p *MultiTenantStateProvider) UnifiedResourceSnapshotForTenant(orgID string
 // Used during reload.
 func (r *Router) SetMultiTenantMonitor(mtm *monitoring.MultiTenantMonitor) {
 	r.mtMonitor = mtm
+	if r.configHandlers != nil {
+		r.configHandlers.SetMultiTenantMonitor(mtm)
+	}
 	if r.alertHandlers != nil {
 		r.alertHandlers.SetMultiTenantMonitor(mtm)
 	}
@@ -99,6 +102,12 @@ func (r *Router) SetMultiTenantMonitor(mtm *monitoring.MultiTenantMonitor) {
 	}
 	if r.systemSettingsHandler != nil {
 		r.systemSettingsHandler.SetMultiTenantMonitor(mtm)
+	}
+	if r.aiSettingsHandler != nil {
+		r.aiSettingsHandler.SetMultiTenantMonitor(mtm)
+	}
+	if r.aiHandler != nil {
+		r.aiHandler.SetMultiTenantMonitor(mtm)
 	}
 	if mtm != nil {
 		if m, err := mtm.GetMonitor("default"); err == nil {

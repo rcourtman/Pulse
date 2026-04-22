@@ -150,6 +150,40 @@ func TestHandleSetupScriptUsesCanonicalShellDownloadHeaders(t *testing.T) {
 	}
 }
 
+func TestPVESetupScriptQuotesTemperatureMonitoringAuthorizedKeyEntry(t *testing.T) {
+	tempDir := t.TempDir()
+	cfg := &config.Config{
+		DataPath:   tempDir,
+		ConfigPath: tempDir,
+	}
+
+	handlers := newTestConfigHandlers(t, cfg)
+
+	req := httptest.NewRequest(
+		http.MethodGet,
+		"/api/setup-script?type=pve&host=https://node.example.internal:8006&pulse_url=https://pulse.example.com:7655",
+		nil,
+	)
+	rr := httptest.NewRecorder()
+
+	handlers.HandleSetupScript(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d (%s)", rr.Code, rr.Body.String())
+	}
+
+	script := rr.Body.String()
+	if !containsString(
+		script,
+		`SSH_SENSORS_KEY_ENTRY="command=\"sensors -j\",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty $SSH_SENSORS_PUBLIC_KEY # pulse-sensors"`,
+	) {
+		t.Fatalf("expected temperature monitoring key entry to escape forced-command quotes, got:\n%s", truncate(script, 900))
+	}
+	if containsString(script, `SSH_SENSORS_KEY_ENTRY="command="sensors -j",`) {
+		t.Fatalf("unexpected unescaped temperature monitoring key entry in generated script:\n%s", truncate(script, 900))
+	}
+}
+
 func TestHandleSetupScriptRejectsPBSBackupPerms(t *testing.T) {
 	tempDir := t.TempDir()
 	cfg := &config.Config{

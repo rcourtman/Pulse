@@ -22,6 +22,7 @@ func TestRouterSetMultiTenantMonitor(t *testing.T) {
 	router := &Router{
 		alertHandlers:           &AlertHandlers{},
 		notificationHandlers:    &NotificationHandlers{},
+		configHandlers:          &ConfigHandlers{},
 		dockerAgentHandlers:     &DockerAgentHandlers{},
 		unifiedAgentHandlers:    &UnifiedAgentHandlers{},
 		kubernetesAgentHandlers: &KubernetesAgentHandlers{},
@@ -36,6 +37,43 @@ func TestRouterSetMultiTenantMonitor(t *testing.T) {
 	}
 	if router.resourceHandlers.tenantStateProvider == nil {
 		t.Fatalf("tenantStateProvider should be set on resource handlers")
+	}
+}
+
+func TestRouterSetMultiTenantMonitorRefreshesConfigHandlerMonitorSource(t *testing.T) {
+	oldMonitor, _, _ := newTestMonitor(t)
+	newMonitor, _, _ := newTestMonitor(t)
+
+	oldConfig := &config.Config{DataPath: t.TempDir(), ConfigPath: t.TempDir()}
+	newConfig := &config.Config{DataPath: t.TempDir(), ConfigPath: t.TempDir()}
+	setUnexportedField(t, oldMonitor, "config", oldConfig)
+	setUnexportedField(t, newMonitor, "config", newConfig)
+
+	oldMTM := &monitoring.MultiTenantMonitor{}
+	setUnexportedField(t, oldMTM, "monitors", map[string]*monitoring.Monitor{
+		"default": oldMonitor,
+	})
+	newMTM := &monitoring.MultiTenantMonitor{}
+	setUnexportedField(t, newMTM, "monitors", map[string]*monitoring.Monitor{
+		"default": newMonitor,
+	})
+
+	router := &Router{
+		configHandlers: &ConfigHandlers{},
+	}
+	router.configHandlers.SetMultiTenantMonitor(oldMTM)
+
+	if got := router.configHandlers.getMonitor(context.Background()); got != oldMonitor {
+		t.Fatalf("precondition monitor = %#v, want old monitor %#v", got, oldMonitor)
+	}
+
+	router.SetMultiTenantMonitor(newMTM)
+
+	if got := router.configHandlers.getMonitor(context.Background()); got != newMonitor {
+		t.Fatalf("config handler monitor = %#v, want reloaded monitor %#v", got, newMonitor)
+	}
+	if got := router.configHandlers.getConfig(context.Background()); got != newConfig {
+		t.Fatalf("config handler config = %#v, want reloaded config %#v", got, newConfig)
 	}
 }
 
