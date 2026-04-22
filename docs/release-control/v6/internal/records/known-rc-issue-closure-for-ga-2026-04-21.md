@@ -83,6 +83,21 @@
    - Result:
      - the GA candidate no longer depends solely on the lower-fidelity container list counters when current LXC runtime counters are available from the status endpoint.
 
+9. `#1319` (`Proxmox clusters can show incorrect VM RAM and intermittently lose guest disk or network metrics`)
+   - Retested against the current `pulse/v6-release` candidate after reviewing the reporter screenshots that showed:
+     - Pulse and Proxmox both overstating VM memory versus the in-guest reading
+     - guest disk inventory disappearing intermittently
+     - guest network interfaces appearing late or dropping out temporarily
+   - The current v6 candidate already carries the canonical protections for that remaining issue scope:
+     - VM memory trust characterization prefers guest-agent / RRD-derived availability over inflated low-trust Proxmox status samples and preserves the last good sample when a healthy guest briefly falls back to a low-trust full-usage reading
+     - guest disk continuity carries forward the last good disk inventory when guest-agent filesystem calls transiently return no data
+     - guest metadata continuity preserves the last known guest network/interface payload when the guest agent is temporarily unavailable or returns an empty interface list
+   - Verification:
+     - `go test ./internal/monitoring -run 'TestHandleClusterVMResourceMemoryTrustCharacterization|TestPollVMsWithNodesMemoryTrustCharacterization|TestStabilizeGuestLowTrustMemoryUsesHealthyGuestAgentEvidence|TestFetchGuestAgentMetadataPreservesFreshCacheWhenAgentTemporarilyUnavailable|TestGuestDiskTrustCharacterizationCarriesForwardRecentSnapshot'`
+   - Result:
+     - the current v6 candidate no longer knowingly lacks protection for the specific RC-era RAM inflation, disappearing guest disk, or disappearing guest interface symptoms tracked in `#1319`.
+     - the GitHub issue may still remain open for reporter confirmation on a real v6 build, but it is no longer an unexamined RC3 blocker on the candidate itself.
+
 ## Outcome
 
 - The RC-era issue set admitted into the v6 GA bar on `2026-04-21` is now covered by the candidate.
