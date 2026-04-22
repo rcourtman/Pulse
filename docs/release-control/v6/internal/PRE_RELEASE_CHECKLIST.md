@@ -37,6 +37,7 @@ Use this as the final gate before cutting a Pulse v6 pre-release.
 
 ## Promotion Policy
 - [x] Record the previous stable tag and exact rollback pin command before publishing a new prerelease or stable release.
+- [ ] For any prerelease or stable publication, confirm the repo variable `PULSE_UPDATE_SIGNING_PUBLIC_KEY` is set to the intended active update signer public key and that the release workflows are consuming it alongside `PULSE_UPDATE_SIGNING_KEY`, so accidental trust-root rotation fails closed before publication.
 - [ ] For the GA/stable candidate, confirm the release pipeline has already been exercised on a real prerelease tag, not only linted or YAML-parsed.
 - [x] For stable promotion, confirm the candidate commit has already shipped on `rc`.
 - [x] For stable promotion, confirm the chosen `promoted_from_tag` is a prerelease that was actually published through the governed prerelease path, not an accidental git tag.

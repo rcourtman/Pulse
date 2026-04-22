@@ -12,10 +12,14 @@ pulse_release_go_run_update_key() {
 pulse_release_prepare_signing_state() {
     local signer_identity="${1:-pulse-installer}"
     local signer_namespace="${2:-pulse-install}"
+    local actual_fingerprint=""
+    local expected_public_key=""
+    local expected_fingerprint=""
 
     PULSE_RELEASE_SIGNER_IDENTITY="${signer_identity}"
     PULSE_RELEASE_SIGNER_NAMESPACE="${signer_namespace}"
     PULSE_RELEASE_UPDATE_PUBLIC_KEY=""
+    PULSE_RELEASE_UPDATE_PUBLIC_KEY_FINGERPRINT=""
     PULSE_RELEASE_UPDATE_SSH_PUBLIC_KEY=""
     PULSE_RELEASE_UPDATE_SSH_PRIVATE_KEY_FILE=""
 
@@ -33,6 +37,36 @@ pulse_release_prepare_signing_state() {
     if [[ -z "${PULSE_RELEASE_UPDATE_PUBLIC_KEY}" ]]; then
         echo "Error: failed to derive update signing public key." >&2
         exit 1
+    fi
+
+    PULSE_RELEASE_UPDATE_PUBLIC_KEY_FINGERPRINT="$(pulse_release_go_run_update_key fingerprint --public-key "${PULSE_RELEASE_UPDATE_PUBLIC_KEY}")"
+    if [[ -z "${PULSE_RELEASE_UPDATE_PUBLIC_KEY_FINGERPRINT}" ]]; then
+        echo "Error: failed to derive update signing public key fingerprint." >&2
+        exit 1
+    fi
+
+    expected_public_key="$(printf '%s' "${PULSE_UPDATE_SIGNING_PUBLIC_KEY:-}" | tr -d '\r\n[:space:]')"
+    if [[ -n "${expected_public_key}" && "${PULSE_RELEASE_UPDATE_PUBLIC_KEY}" != "${expected_public_key}" ]]; then
+        echo "Error: PULSE_UPDATE_SIGNING_KEY does not match PULSE_UPDATE_SIGNING_PUBLIC_KEY." >&2
+        echo "Expected public key: ${expected_public_key}" >&2
+        echo "Actual public key:   ${PULSE_RELEASE_UPDATE_PUBLIC_KEY}" >&2
+        exit 1
+    fi
+
+    expected_fingerprint="$(printf '%s' "${PULSE_UPDATE_SIGNING_PUBLIC_KEY_FINGERPRINT:-}" | tr -d '\r\n[:space:]')"
+    if [[ -n "${expected_fingerprint}" ]]; then
+        expected_fingerprint="${expected_fingerprint#SHA256:}"
+        actual_fingerprint="${PULSE_RELEASE_UPDATE_PUBLIC_KEY_FINGERPRINT#SHA256:}"
+        if [[ "${actual_fingerprint}" != "${expected_fingerprint}" ]]; then
+            echo "Error: PULSE_UPDATE_SIGNING_KEY fingerprint mismatch." >&2
+            echo "Expected: SHA256:${expected_fingerprint}" >&2
+            echo "Actual:   ${PULSE_RELEASE_UPDATE_PUBLIC_KEY_FINGERPRINT}" >&2
+            exit 1
+        fi
+    fi
+
+    if [[ -n "${expected_public_key}" || -n "${expected_fingerprint}" ]]; then
+        echo "Verified update signing public key fingerprint: ${PULSE_RELEASE_UPDATE_PUBLIC_KEY_FINGERPRINT}"
     fi
 
     if ! command -v ssh-keygen >/dev/null 2>&1; then

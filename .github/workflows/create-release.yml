@@ -302,6 +302,7 @@ jobs:
           cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/pulse:buildcache,mode=max
           build-args: |
             VERSION=${{ needs.prepare.outputs.tag }}
+            PULSE_UPDATE_SIGNING_PUBLIC_KEY=${{ vars.PULSE_UPDATE_SIGNING_PUBLIC_KEY }}
           secrets: |
             pulse_license_public_key=${{ secrets.PULSE_LICENSE_PUBLIC_KEY }}
             pulse_update_signing_key=${{ secrets.PULSE_UPDATE_SIGNING_KEY }}
@@ -320,6 +321,7 @@ jobs:
           cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/pulse-agent:buildcache,mode=max
           build-args: |
             VERSION=${{ needs.prepare.outputs.tag }}
+            PULSE_UPDATE_SIGNING_PUBLIC_KEY=${{ vars.PULSE_UPDATE_SIGNING_PUBLIC_KEY }}
           secrets: |
             pulse_license_public_key=${{ secrets.PULSE_LICENSE_PUBLIC_KEY }}
             pulse_update_signing_key=${{ secrets.PULSE_UPDATE_SIGNING_KEY }}
@@ -343,12 +345,14 @@ jobs:
           DOCKER_BUILDKIT: 1
           PULSE_LICENSE_PUBLIC_KEY: ${{ secrets.PULSE_LICENSE_PUBLIC_KEY }}
           PULSE_UPDATE_SIGNING_KEY: ${{ secrets.PULSE_UPDATE_SIGNING_KEY }}
+          PULSE_UPDATE_SIGNING_PUBLIC_KEY: ${{ vars.PULSE_UPDATE_SIGNING_PUBLIC_KEY }}
         run: |
           docker build \
             --target runtime \
             --secret id=pulse_license_public_key,env=PULSE_LICENSE_PUBLIC_KEY \
             --secret id=pulse_update_signing_key,env=PULSE_UPDATE_SIGNING_KEY \
             --build-arg VERSION="${{ needs.prepare.outputs.tag }}" \
+            --build-arg PULSE_UPDATE_SIGNING_PUBLIC_KEY="${PULSE_UPDATE_SIGNING_PUBLIC_KEY}" \
             -t pulse-helm-smoke:${{ needs.prepare.outputs.version }} \
             .
 
@@ -605,6 +609,7 @@ jobs:
         env:
           PULSE_LICENSE_PUBLIC_KEY: ${{ secrets.PULSE_LICENSE_PUBLIC_KEY }}
           PULSE_UPDATE_SIGNING_KEY: ${{ secrets.PULSE_UPDATE_SIGNING_KEY }}
+          PULSE_UPDATE_SIGNING_PUBLIC_KEY: ${{ vars.PULSE_UPDATE_SIGNING_PUBLIC_KEY }}
 
       - name: Post-build health check
         run: |
@@ -899,6 +904,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           PULSE_UPDATE_SIGNING_KEY: ${{ secrets.PULSE_UPDATE_SIGNING_KEY }}
+          PULSE_UPDATE_SIGNING_PUBLIC_KEY: ${{ vars.PULSE_UPDATE_SIGNING_PUBLIC_KEY }}
         run: |
           ./scripts/backfill-release-assets.sh --tag "${{ needs.prepare.outputs.tag }}" --repo "${{ github.repository }}"
 

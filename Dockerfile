@@ -29,6 +29,7 @@ FROM --platform=linux/amd64 golang:1.25.9-alpine@sha256:5caaf1cca9dc351e13deafbc
 
 ARG BUILD_AGENT
 ARG VERSION
+ARG PULSE_UPDATE_SIGNING_PUBLIC_KEY
 WORKDIR /app
 
 # Install build dependencies
@@ -68,6 +69,8 @@ RUN --mount=type=cache,id=pulse-go-mod,target=/go/pkg/mod \
     if [ -f /run/secrets/pulse_license_public_key ]; then LICENSE_PUBLIC_KEY="$(tr -d '\r\n' < /run/secrets/pulse_license_public_key)"; fi && \
     if [ -f /run/secrets/pulse_update_signing_key ]; then UPDATE_SIGNING_KEY="$(tr -d '\r\n' < /run/secrets/pulse_update_signing_key)"; fi && \
     if [ -n "${UPDATE_SIGNING_KEY}" ]; then UPDATE_PUBLIC_KEYS="$(go run ./scripts/release_update_key.go public-key --private-key "${UPDATE_SIGNING_KEY}")"; fi && \
+    if [ -n "${PULSE_UPDATE_SIGNING_PUBLIC_KEY:-}" ] && [ -z "${UPDATE_PUBLIC_KEYS}" ]; then echo "Error: PULSE_UPDATE_SIGNING_PUBLIC_KEY was provided but no update signing key was mounted." >&2; exit 1; fi && \
+    if [ -n "${PULSE_UPDATE_SIGNING_PUBLIC_KEY:-}" ] && [ "${UPDATE_PUBLIC_KEYS}" != "${PULSE_UPDATE_SIGNING_PUBLIC_KEY}" ]; then echo "Error: mounted update signing key does not match PULSE_UPDATE_SIGNING_PUBLIC_KEY." >&2; echo "Expected public key: ${PULSE_UPDATE_SIGNING_PUBLIC_KEY}" >&2; echo "Actual public key:   ${UPDATE_PUBLIC_KEYS}" >&2; exit 1; fi && \
     SERVER_LDFLAGS="$(./scripts/release_ldflags.sh server --version "${VERSION}" --build-time "${BUILD_TIME}" --git-commit "${GIT_COMMIT}" $(if [ -n "${LICENSE_PUBLIC_KEY}" ]; then printf '%s %s' --license-public-key "${LICENSE_PUBLIC_KEY}"; fi) $(if [ -n "${UPDATE_PUBLIC_KEYS}" ]; then printf '%s %s' --update-public-keys "${UPDATE_PUBLIC_KEYS}"; fi))" && \
     CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
       -tags release \
@@ -91,6 +94,8 @@ RUN --mount=type=cache,id=pulse-go-mod,target=/go/pkg/mod \
     UPDATE_PUBLIC_KEYS="" && \
     if [ -f /run/secrets/pulse_update_signing_key ]; then UPDATE_SIGNING_KEY="$(tr -d '\r\n' < /run/secrets/pulse_update_signing_key)"; fi && \
     if [ -n "${UPDATE_SIGNING_KEY}" ]; then UPDATE_PUBLIC_KEYS="$(go run ./scripts/release_update_key.go public-key --private-key "${UPDATE_SIGNING_KEY}")"; fi && \
+    if [ -n "${PULSE_UPDATE_SIGNING_PUBLIC_KEY:-}" ] && [ -z "${UPDATE_PUBLIC_KEYS}" ]; then echo "Error: PULSE_UPDATE_SIGNING_PUBLIC_KEY was provided but no update signing key was mounted." >&2; exit 1; fi && \
+    if [ -n "${PULSE_UPDATE_SIGNING_PUBLIC_KEY:-}" ] && [ "${UPDATE_PUBLIC_KEYS}" != "${PULSE_UPDATE_SIGNING_PUBLIC_KEY}" ]; then echo "Error: mounted update signing key does not match PULSE_UPDATE_SIGNING_PUBLIC_KEY." >&2; echo "Expected public key: ${PULSE_UPDATE_SIGNING_PUBLIC_KEY}" >&2; echo "Actual public key:   ${UPDATE_PUBLIC_KEYS}" >&2; exit 1; fi && \
     AGENT_LDFLAGS="$(./scripts/release_ldflags.sh agent --version "${VERSION}" $(if [ -n "${UPDATE_PUBLIC_KEYS}" ]; then printf '%s %s' --update-public-keys "${UPDATE_PUBLIC_KEYS}"; fi))" && \
     CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
       -ldflags="${AGENT_LDFLAGS}" \
@@ -147,7 +152,11 @@ RUN --mount=type=cache,id=pulse-go-mod,target=/go/pkg/mod \
     mkdir -p /app/rendered-installers && \
     UPDATE_SIGNING_KEY="" && \
     INSTALLER_SSH_PUBLIC_KEY="" && \
+    UPDATE_PUBLIC_KEYS="" && \
     if [ -f /run/secrets/pulse_update_signing_key ]; then UPDATE_SIGNING_KEY="$(tr -d '\r\n' < /run/secrets/pulse_update_signing_key)"; fi && \
+    if [ -n "${UPDATE_SIGNING_KEY}" ]; then UPDATE_PUBLIC_KEYS="$(go run ./scripts/release_update_key.go public-key --private-key "${UPDATE_SIGNING_KEY}")"; fi && \
+    if [ -n "${PULSE_UPDATE_SIGNING_PUBLIC_KEY:-}" ] && [ -z "${UPDATE_PUBLIC_KEYS}" ]; then echo "Error: PULSE_UPDATE_SIGNING_PUBLIC_KEY was provided but no update signing key was mounted." >&2; exit 1; fi && \
+    if [ -n "${PULSE_UPDATE_SIGNING_PUBLIC_KEY:-}" ] && [ "${UPDATE_PUBLIC_KEYS}" != "${PULSE_UPDATE_SIGNING_PUBLIC_KEY}" ]; then echo "Error: mounted update signing key does not match PULSE_UPDATE_SIGNING_PUBLIC_KEY." >&2; echo "Expected public key: ${PULSE_UPDATE_SIGNING_PUBLIC_KEY}" >&2; echo "Actual public key:   ${UPDATE_PUBLIC_KEYS}" >&2; exit 1; fi && \
     if [ -n "${UPDATE_SIGNING_KEY}" ]; then INSTALLER_SSH_PUBLIC_KEY="$(go run ./scripts/release_update_key.go public-key-ssh --private-key "${UPDATE_SIGNING_KEY}" --comment pulse-installer)"; fi && \
     go run ./scripts/render_installers.go --source-dir ./scripts --output-dir /app/rendered-installers --installer-ssh-public-key "${INSTALLER_SSH_PUBLIC_KEY}" && \
     if [ -n "${UPDATE_SIGNING_KEY}" ]; then \

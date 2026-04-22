@@ -221,6 +221,11 @@ server-side update execution surfaces.
    Whenever that policy changes, update the owning workflow/install proof files
    in `scripts/installtests/build_release_assets_test.go` and
    `scripts/release_control/release_promotion_policy_*` in the same slice.
+10. Keep forward release signing pinned to an explicit trust root. Governed
+   release scripts, Docker release builds, and historical backfill paths must
+   accept the active private signing key only alongside a non-secret expected
+   public key or equivalent pinned identity, and they must fail closed before
+   publication if the signer drifts from that expected trust root.
 
 ## Current State
 

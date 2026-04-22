@@ -140,6 +140,7 @@ jobs:
           cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/pulse:buildcache
           build-args: |
             VERSION=${{ steps.version.outputs.tag }}
+            PULSE_UPDATE_SIGNING_PUBLIC_KEY=${{ vars.PULSE_UPDATE_SIGNING_PUBLIC_KEY }}
           secrets: |
             pulse_license_public_key=${{ secrets.PULSE_LICENSE_PUBLIC_KEY }}
             pulse_update_signing_key=${{ secrets.PULSE_UPDATE_SIGNING_KEY }}
@@ -181,6 +182,7 @@ jobs:
           cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/pulse-agent:buildcache
           build-args: |
             VERSION=${{ steps.version.outputs.tag }}
+            PULSE_UPDATE_SIGNING_PUBLIC_KEY=${{ vars.PULSE_UPDATE_SIGNING_PUBLIC_KEY }}
           secrets: |
             pulse_license_public_key=${{ secrets.PULSE_LICENSE_PUBLIC_KEY }}
             pulse_update_signing_key=${{ secrets.PULSE_UPDATE_SIGNING_KEY }}

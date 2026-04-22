@@ -1,7 +1,12 @@
 package installtests
 
 import (
+	"crypto/ed25519"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/base64"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -66,9 +71,13 @@ func TestBuildReleaseUsesV6InstallScripts(t *testing.T) {
 		`: "${PULSE_REPO_ROOT:=$(cd "${PULSE_SCRIPTS_DIR}/.." && pwd)}"`,
 		`go -C "${PULSE_REPO_ROOT}" run "${PULSE_SCRIPTS_DIR}/release_update_key.go" "$@"`,
 		`pulse_release_go_run_update_key public-key --private-key "${PULSE_UPDATE_SIGNING_KEY}"`,
+		`pulse_release_go_run_update_key fingerprint --public-key "${PULSE_RELEASE_UPDATE_PUBLIC_KEY}"`,
 		`pulse_release_go_run_update_key public-key-ssh --private-key "${PULSE_UPDATE_SIGNING_KEY}"`,
 		`pulse_release_go_run_update_key openssh-private-key --private-key "${PULSE_UPDATE_SIGNING_KEY}"`,
 		`pulse_release_go_run_update_key sign --private-key "${PULSE_UPDATE_SIGNING_KEY}" --file "${absolute_file}"`,
+		`PULSE_UPDATE_SIGNING_PUBLIC_KEY`,
+		`PULSE_UPDATE_SIGNING_PUBLIC_KEY_FINGERPRINT`,
+		`Verified update signing public key fingerprint: ${PULSE_RELEASE_UPDATE_PUBLIC_KEY_FINGERPRINT}`,
 		`ssh-keygen -q -Y sign`,
 		`"${resolved_tool}" "dir:${release_dir}" -o "spdx-json=${tmp_sbom}"`,
 		`if compgen -G "pulse-*.sbom.spdx.json" > /dev/null; then`,
@@ -184,6 +193,7 @@ func TestBackfillReleaseWorkflowRepairsPublishedAssetsWithoutRebuilds(t *testing
 		`SYFT_SHA256="590650c2743b83f327d1bf9bec64f6f83b7fec504187bb84f500c862bf8f2a0f"`,
 		`./scripts/backfill-release-assets.sh --tag "${{ inputs.tag }}" --repo "${{ github.repository }}"`,
 		`PULSE_UPDATE_SIGNING_KEY: ${{ secrets.PULSE_UPDATE_SIGNING_KEY }}`,
+		`PULSE_UPDATE_SIGNING_PUBLIC_KEY: ${{ vars.PULSE_UPDATE_SIGNING_PUBLIC_KEY }}`,
 		`./scripts/validate-published-release.sh "${{ inputs.tag }}" "${{ github.repository }}"`,
 	}
 	for _, needle := range workflowRequired {
@@ -284,8 +294,10 @@ func TestDockerAndDemoBuildsUseCanonicalReleaseLdflags(t *testing.T) {
 		`COPY scripts/render_installers.go ./scripts/render_installers.go`,
 		`--mount=type=secret,id=pulse_license_public_key,required=false`,
 		`--mount=type=secret,id=pulse_update_signing_key,required=false`,
+		`ARG PULSE_UPDATE_SIGNING_PUBLIC_KEY`,
 		`LICENSE_PUBLIC_KEY="$(tr -d '\r\n' < /run/secrets/pulse_license_public_key)"`,
 		`UPDATE_PUBLIC_KEYS="$(go run ./scripts/release_update_key.go public-key --private-key "${UPDATE_SIGNING_KEY}")"`,
+		`mounted update signing key does not match PULSE_UPDATE_SIGNING_PUBLIC_KEY.`,
 		`./scripts/release_ldflags.sh server --version "${VERSION}" --build-time "${BUILD_TIME}" --git-commit "${GIT_COMMIT}"`,
 		`./scripts/release_ldflags.sh agent --version "${VERSION}"`,
 		`go run ./scripts/render_installers.go --source-dir ./scripts --output-dir /app/rendered-installers`,
@@ -334,11 +346,14 @@ func TestReleaseWorkflowsUseSecretSafeAttestedImageBuilds(t *testing.T) {
 		`provenance: mode=max`,
 		`sbom: true`,
 		`secrets: |`,
+		`PULSE_UPDATE_SIGNING_PUBLIC_KEY=${{ vars.PULSE_UPDATE_SIGNING_PUBLIC_KEY }}`,
 		`pulse_license_public_key=${{ secrets.PULSE_LICENSE_PUBLIC_KEY }}`,
 		`pulse_update_signing_key=${{ secrets.PULSE_UPDATE_SIGNING_KEY }}`,
+		`PULSE_UPDATE_SIGNING_PUBLIC_KEY: ${{ vars.PULSE_UPDATE_SIGNING_PUBLIC_KEY }}`,
 		`DOCKER_BUILDKIT: 1`,
 		`--secret id=pulse_license_public_key,env=PULSE_LICENSE_PUBLIC_KEY`,
 		`--secret id=pulse_update_signing_key,env=PULSE_UPDATE_SIGNING_KEY`,
+		`--build-arg PULSE_UPDATE_SIGNING_PUBLIC_KEY="${PULSE_UPDATE_SIGNING_PUBLIC_KEY}"`,
 		`id-token: write`,
 		`attestations: write`,
 		`uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4`,
@@ -361,6 +376,7 @@ func TestReleaseWorkflowsUseSecretSafeAttestedImageBuilds(t *testing.T) {
 		`provenance: mode=max`,
 		`sbom: true`,
 		`secrets: |`,
+		`PULSE_UPDATE_SIGNING_PUBLIC_KEY=${{ vars.PULSE_UPDATE_SIGNING_PUBLIC_KEY }}`,
 		`pulse_license_public_key=${{ secrets.PULSE_LICENSE_PUBLIC_KEY }}`,
 		`pulse_update_signing_key=${{ secrets.PULSE_UPDATE_SIGNING_KEY }}`,
 		`subject-name: docker.io/rcourtman/pulse`,
@@ -546,6 +562,58 @@ func TestDockerfileStagesShippedDocsForEmbeddedFrontendBuild(t *testing.T) {
 		if !strings.Contains(dockerignore, needle) {
 			t.Fatalf(".dockerignore missing shipped-doc allowlist entry: %s", needle)
 		}
+	}
+}
+
+func TestReleaseUpdateKeyFingerprintUsesCanonicalRawPublicKeyHash(t *testing.T) {
+	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("generate signing key: %v", err)
+	}
+
+	cmd := exec.Command("go", "run", "./scripts/release_update_key.go", "fingerprint", "--private-key", base64.StdEncoding.EncodeToString(privateKey))
+	cmd.Dir = repoFile()
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("release_update_key.go fingerprint failed: %v\n%s", err, output)
+	}
+
+	sum := sha256.Sum256(publicKey)
+	expected := "SHA256:" + base64.StdEncoding.EncodeToString(sum[:])
+	if got := strings.TrimSpace(string(output)); got != expected {
+		t.Fatalf("fingerprint mismatch: got %q want %q", got, expected)
+	}
+}
+
+func TestReleaseAssetCommonRejectsUnexpectedUpdateSigningPublicKey(t *testing.T) {
+	if _, err := exec.LookPath("bash"); err != nil {
+		t.Skip("bash not installed")
+	}
+	if _, err := exec.LookPath("go"); err != nil {
+		t.Skip("go not installed")
+	}
+
+	_, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("generate signing key: %v", err)
+	}
+	unexpectedPublicKey, _, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("generate unexpected public key: %v", err)
+	}
+
+	cmd := exec.Command("bash", "-lc", "source ./scripts/release_asset_common.sh; pulse_release_prepare_signing_state pulse-installer pulse-install")
+	cmd.Dir = repoFile()
+	cmd.Env = append(os.Environ(),
+		"PULSE_UPDATE_SIGNING_KEY="+base64.StdEncoding.EncodeToString(privateKey),
+		"PULSE_UPDATE_SIGNING_PUBLIC_KEY="+base64.StdEncoding.EncodeToString(unexpectedPublicKey),
+	)
+	output, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatalf("expected release_asset_common.sh to reject a mismatched signing public key:\n%s", output)
+	}
+	if !strings.Contains(string(output), "does not match PULSE_UPDATE_SIGNING_PUBLIC_KEY") {
+		t.Fatalf("expected mismatched signing public key error, got:\n%s", output)
 	}
 }
 

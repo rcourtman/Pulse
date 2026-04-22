@@ -277,6 +277,8 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn('./scripts/backfill-release-assets.sh --tag "${{ needs.prepare.outputs.tag }}" --repo "${{ github.repository }}"', content)
         self.assertIn('./scripts/validate-published-release.sh "${{ needs.prepare.outputs.tag }}" "${{ github.repository }}"', content)
         self.assertIn("PULSE_UPDATE_SIGNING_KEY: ${{ secrets.PULSE_UPDATE_SIGNING_KEY }}", content)
+        self.assertIn("PULSE_UPDATE_SIGNING_PUBLIC_KEY: ${{ vars.PULSE_UPDATE_SIGNING_PUBLIC_KEY }}", content)
+        self.assertIn("PULSE_UPDATE_SIGNING_PUBLIC_KEY=${{ vars.PULSE_UPDATE_SIGNING_PUBLIC_KEY }}", content)
         self.assertIn('SYFT_VERSION="1.42.4"', content)
         self.assertIn('SYFT_ARCHIVE="syft_${SYFT_VERSION}_linux_amd64.tar.gz"', content)
         self.assertIn('SYFT_SHA256="590650c2743b83f327d1bf9bec64f6f83b7fec504187bb84f500c862bf8f2a0f"', content)
@@ -306,9 +308,19 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn(': "${PULSE_REPO_ROOT:=$(cd "${PULSE_SCRIPTS_DIR}/.." && pwd)}"', release_asset_helper)
         self.assertIn('go -C "${PULSE_REPO_ROOT}" run "${PULSE_SCRIPTS_DIR}/release_update_key.go" "$@"', release_asset_helper)
         self.assertIn('pulse_release_go_run_update_key public-key --private-key "${PULSE_UPDATE_SIGNING_KEY}"', release_asset_helper)
+        self.assertIn(
+            'pulse_release_go_run_update_key fingerprint --public-key "${PULSE_RELEASE_UPDATE_PUBLIC_KEY}"',
+            release_asset_helper,
+        )
         self.assertIn('pulse_release_go_run_update_key public-key-ssh --private-key "${PULSE_UPDATE_SIGNING_KEY}"', release_asset_helper)
         self.assertIn('pulse_release_go_run_update_key openssh-private-key --private-key "${PULSE_UPDATE_SIGNING_KEY}"', release_asset_helper)
         self.assertIn('pulse_release_go_run_update_key sign --private-key "${PULSE_UPDATE_SIGNING_KEY}" --file "${absolute_file}"', release_asset_helper)
+        self.assertIn("PULSE_UPDATE_SIGNING_PUBLIC_KEY", release_asset_helper)
+        self.assertIn("PULSE_UPDATE_SIGNING_PUBLIC_KEY_FINGERPRINT", release_asset_helper)
+        self.assertIn(
+            "Verified update signing public key fingerprint: ${PULSE_RELEASE_UPDATE_PUBLIC_KEY_FINGERPRINT}",
+            release_asset_helper,
+        )
         self.assertIn('"${resolved_tool}" "dir:${release_dir}" -o "spdx-json=${tmp_sbom}"', release_asset_helper)
         self.assertIn('find . -maxdepth 1 -type f \\( -name \'*.sig\' -o -name \'*.sshsig\' \\) -delete', release_asset_helper)
         self.assertIn('source "${SCRIPT_DIR}/release_asset_common.sh"', backfill_script)
@@ -321,6 +333,7 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn('SYFT_VERSION="1.42.4"', backfill_workflow)
         self.assertIn('./scripts/backfill-release-assets.sh --tag "${{ inputs.tag }}" --repo "${{ github.repository }}"', backfill_workflow)
         self.assertIn('./scripts/validate-published-release.sh "${{ inputs.tag }}" "${{ github.repository }}"', backfill_workflow)
+        self.assertIn("PULSE_UPDATE_SIGNING_PUBLIC_KEY: ${{ vars.PULSE_UPDATE_SIGNING_PUBLIC_KEY }}", backfill_workflow)
         self.assertIn("pulse_license_public_key=${{ secrets.PULSE_LICENSE_PUBLIC_KEY }}", content)
         self.assertIn("pulse_update_signing_key=${{ secrets.PULSE_UPDATE_SIGNING_KEY }}", content)
         self.assertIn("--secret id=pulse_license_public_key,env=PULSE_LICENSE_PUBLIC_KEY", content)
@@ -397,6 +410,7 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("subject-name: ghcr.io/${{ github.repository_owner }}/pulse-agent", publish)
         self.assertIn("create-storage-record: false", publish)
         self.assertIn("pulse_license_public_key=${{ secrets.PULSE_LICENSE_PUBLIC_KEY }}", publish)
+        self.assertIn("PULSE_UPDATE_SIGNING_PUBLIC_KEY=${{ vars.PULSE_UPDATE_SIGNING_PUBLIC_KEY }}", publish)
         self.assertNotIn("provenance: false", publish)
         self.assertIn("control_plane.py --branch-for-version", promote)
         self.assertIn("control_plane.py --branch-for-version", demo)
