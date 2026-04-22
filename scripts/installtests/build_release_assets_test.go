@@ -69,6 +69,8 @@ func TestCreateReleaseUploadsPowerShellInstaller(t *testing.T) {
 		`if [ -f release/install.ps1 ]; then`,
 		`gh release upload "${TAG}" release/install.ps1 --clobber`,
 		`gh release upload "${TAG}" release/*.sig --clobber`,
+		`uses: actions/attest@v4`,
+		`subject-path: release/*`,
 		`gh api "repos/${{ github.repository }}/releases?per_page=100" --paginate`,
 		`git push origin "refs/tags/${TAG}" --force`,
 		`-F target_commitish="${HEAD_SHA}"`,
@@ -82,6 +84,9 @@ func TestCreateReleaseUploadsPowerShellInstaller(t *testing.T) {
 	if !strings.Contains(workflow, `draft: ${{ github.event.inputs.draft_only == 'true' }}`) {
 		t.Fatal("create-release.yml must pass the actual draft_only state into validate-release-assets")
 	}
+	if strings.Contains(workflow, `provenance: false`) {
+		t.Fatal("create-release.yml must not disable release-image provenance")
+	}
 }
 
 func TestDockerAndDemoBuildsUseCanonicalReleaseLdflags(t *testing.T) {
@@ -92,6 +97,8 @@ func TestDockerAndDemoBuildsUseCanonicalReleaseLdflags(t *testing.T) {
 	dockerfile := string(dockerfileBytes)
 	dockerRequired := []string{
 		`COPY scripts/release_ldflags.sh ./scripts/release_ldflags.sh`,
+		`--mount=type=secret,id=pulse_license_public_key,required=false`,
+		`LICENSE_PUBLIC_KEY="$(tr -d '\r\n' < /run/secrets/pulse_license_public_key)"`,
 		`./scripts/release_ldflags.sh server --version "${VERSION}" --build-time "${BUILD_TIME}" --git-commit "${GIT_COMMIT}"`,
 		`./scripts/release_ldflags.sh agent --version "${VERSION}"`,
 	}
@@ -117,6 +124,61 @@ func TestDockerAndDemoBuildsUseCanonicalReleaseLdflags(t *testing.T) {
 		if !strings.Contains(workflow, needle) {
 			t.Fatalf("deploy-demo-server workflow missing canonical release ldflags usage: %s", needle)
 		}
+	}
+}
+
+func TestReleaseWorkflowsUseSecretSafeAttestedImageBuilds(t *testing.T) {
+	createReleaseBytes, err := os.ReadFile(repoFile(".github", "workflows", "create-release.yml"))
+	if err != nil {
+		t.Fatalf("read create-release.yml: %v", err)
+	}
+	createRelease := string(createReleaseBytes)
+	createReleaseRequired := []string{
+		`provenance: mode=max`,
+		`sbom: true`,
+		`secrets: |`,
+		`pulse_license_public_key=${{ secrets.PULSE_LICENSE_PUBLIC_KEY }}`,
+		`DOCKER_BUILDKIT: 1`,
+		`--secret id=pulse_license_public_key,env=PULSE_LICENSE_PUBLIC_KEY`,
+		`id-token: write`,
+		`attestations: write`,
+		`uses: actions/attest@v4`,
+	}
+	for _, needle := range createReleaseRequired {
+		if !strings.Contains(createRelease, needle) {
+			t.Fatalf("create-release.yml missing attested secret-safe release build contract: %s", needle)
+		}
+	}
+	if strings.Contains(createRelease, `PULSE_LICENSE_PUBLIC_KEY=${{ secrets.PULSE_LICENSE_PUBLIC_KEY }}`) {
+		t.Fatal("create-release.yml must not pass the license public key through docker build args")
+	}
+
+	publishBytes, err := os.ReadFile(repoFile(".github", "workflows", "publish-docker.yml"))
+	if err != nil {
+		t.Fatalf("read publish-docker.yml: %v", err)
+	}
+	publish := string(publishBytes)
+	publishRequired := []string{
+		`provenance: mode=max`,
+		`sbom: true`,
+		`secrets: |`,
+		`pulse_license_public_key=${{ secrets.PULSE_LICENSE_PUBLIC_KEY }}`,
+		`subject-name: docker.io/rcourtman/pulse`,
+		`subject-name: ghcr.io/${{ github.repository_owner }}/pulse`,
+		`subject-name: docker.io/rcourtman/pulse-agent`,
+		`subject-name: ghcr.io/${{ github.repository_owner }}/pulse-agent`,
+		`push-to-registry: true`,
+		`create-storage-record: false`,
+		`id-token: write`,
+		`attestations: write`,
+	}
+	for _, needle := range publishRequired {
+		if !strings.Contains(publish, needle) {
+			t.Fatalf("publish-docker.yml missing attested secret-safe publish contract: %s", needle)
+		}
+	}
+	if strings.Contains(publish, `PULSE_LICENSE_PUBLIC_KEY=${{ secrets.PULSE_LICENSE_PUBLIC_KEY }}`) {
+		t.Fatal("publish-docker.yml must not pass the license public key through docker build args")
 	}
 }
 

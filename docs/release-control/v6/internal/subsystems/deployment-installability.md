@@ -243,6 +243,13 @@ demo-deploy workflow. Shipped binaries, installable container images, and
 governed deployment-build workflows must all carry the same build metadata
 contract rather than depending on whichever local ldflags string happened to be
 updated last.
+That same governed release lineage now also owns artifact attestation and
+secret-safe container builds. Release workflows must publish max-level image
+provenance plus SBOM attestations, push keyless GitHub/Sigstore attestations
+for the published server and agent images, attest the generated release packet
+assets from the `release/` directory, and pass the embedded license public key
+through BuildKit secret mounts instead of Docker build arguments so release
+metadata and image history cannot re-expose it.
 That same dev-runtime dependency-manifest boundary now also owns the maintained
 Docker engine module floor. `go.mod`, `go.sum`, and
 `internal/cloudcp/docker/manager.go` must route hosted runtime orchestration

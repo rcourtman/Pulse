@@ -25,6 +25,8 @@ jobs:
     permissions:
       contents: read
       packages: write
+      id-token: write
+      attestations: write
 
     steps:
       - name: Checkout repository
@@ -126,17 +128,20 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push Pulse server image (multi-arch)
+        id: build_server_image
         uses: docker/build-push-action@v6
         with:
           context: .
           target: runtime
           platforms: linux/amd64,linux/arm64
           push: true
-          provenance: false
+          provenance: mode=max
+          sbom: true
           cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/pulse:buildcache
           build-args: |
-            PULSE_LICENSE_PUBLIC_KEY=${{ secrets.PULSE_LICENSE_PUBLIC_KEY }}
             VERSION=${{ steps.version.outputs.tag }}
+          secrets: |
+            pulse_license_public_key=${{ secrets.PULSE_LICENSE_PUBLIC_KEY }}
           tags: |
             rcourtman/pulse:${{ steps.version.outputs.tag }}
             rcourtman/pulse:${{ steps.version.outputs.version }}
@@ -145,7 +150,24 @@ jobs:
             ghcr.io/${{ github.repository_owner }}/pulse:${{ steps.version.outputs.version }}
             ${{ steps.version.outputs.is_prerelease != 'true' && format('ghcr.io/{0}/pulse:latest', github.repository_owner) || '' }}
 
+      - name: Attest Pulse server image on Docker Hub
+        uses: actions/attest@v4
+        with:
+          subject-name: docker.io/rcourtman/pulse
+          subject-digest: ${{ steps.build_server_image.outputs.digest }}
+          push-to-registry: true
+          create-storage-record: false
+
+      - name: Attest Pulse server image on GHCR
+        uses: actions/attest@v4
+        with:
+          subject-name: ghcr.io/${{ github.repository_owner }}/pulse
+          subject-digest: ${{ steps.build_server_image.outputs.digest }}
+          push-to-registry: true
+          create-storage-record: false
+
       - name: Build and push Pulse agent image (multi-arch)
+        id: build_agent_image
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -153,11 +175,13 @@ jobs:
           target: agent_runtime
           platforms: linux/amd64,linux/arm64
           push: true
-          provenance: false
+          provenance: mode=max
+          sbom: true
           cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/pulse-agent:buildcache
           build-args: |
-            PULSE_LICENSE_PUBLIC_KEY=${{ secrets.PULSE_LICENSE_PUBLIC_KEY }}
             VERSION=${{ steps.version.outputs.tag }}
+          secrets: |
+            pulse_license_public_key=${{ secrets.PULSE_LICENSE_PUBLIC_KEY }}
           tags: |
             rcourtman/pulse-agent:${{ steps.version.outputs.tag }}
             rcourtman/pulse-agent:${{ steps.version.outputs.version }}
@@ -165,6 +189,22 @@ jobs:
             ghcr.io/${{ github.repository_owner }}/pulse-agent:${{ steps.version.outputs.tag }}
             ghcr.io/${{ github.repository_owner }}/pulse-agent:${{ steps.version.outputs.version }}
             ${{ steps.version.outputs.is_prerelease != 'true' && format('ghcr.io/{0}/pulse-agent:latest', github.repository_owner) || '' }}
+
+      - name: Attest Pulse agent image on Docker Hub
+        uses: actions/attest@v4
+        with:
+          subject-name: docker.io/rcourtman/pulse-agent
+          subject-digest: ${{ steps.build_agent_image.outputs.digest }}
+          push-to-registry: true
+          create-storage-record: false
+
+      - name: Attest Pulse agent image on GHCR
+        uses: actions/attest@v4
+        with:
+          subject-name: ghcr.io/${{ github.repository_owner }}/pulse-agent
+          subject-digest: ${{ steps.build_agent_image.outputs.digest }}
+          push-to-registry: true
+          create-storage-record: false
 
       - name: Output image information
         run: |

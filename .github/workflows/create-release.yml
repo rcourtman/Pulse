@@ -283,12 +283,14 @@ jobs:
           # amd64 only for prereleases (faster), multi-arch for stable releases
           platforms: ${{ needs.prepare.outputs.is_prerelease == 'true' && 'linux/amd64' || 'linux/amd64,linux/arm64' }}
           push: false  # Don't push staging images, just verify build
-          provenance: false
+          provenance: mode=max
+          sbom: true
           cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/pulse:buildcache
           cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/pulse:buildcache,mode=max
           build-args: |
-            PULSE_LICENSE_PUBLIC_KEY=${{ secrets.PULSE_LICENSE_PUBLIC_KEY }}
             VERSION=${{ needs.prepare.outputs.tag }}
+          secrets: |
+            pulse_license_public_key=${{ secrets.PULSE_LICENSE_PUBLIC_KEY }}
 
       - name: Build Pulse agent image (verify only)
         uses: docker/build-push-action@v6
@@ -298,12 +300,14 @@ jobs:
           target: agent_runtime
           platforms: ${{ needs.prepare.outputs.is_prerelease == 'true' && 'linux/amd64' || 'linux/amd64,linux/arm64' }}
           push: false
-          provenance: false
+          provenance: mode=max
+          sbom: true
           cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/pulse-agent:buildcache
           cache-to: type=registry,ref=ghcr.io/${{ github.repository_owner }}/pulse-agent:buildcache,mode=max
           build-args: |
-            PULSE_LICENSE_PUBLIC_KEY=${{ secrets.PULSE_LICENSE_PUBLIC_KEY }}
             VERSION=${{ needs.prepare.outputs.tag }}
+          secrets: |
+            pulse_license_public_key=${{ secrets.PULSE_LICENSE_PUBLIC_KEY }}
 
   helm_smoke:
     needs: prepare
@@ -319,10 +323,13 @@ jobs:
           version: v3.15.2
 
       - name: Build local Pulse runtime image for Helm smoke
+        env:
+          DOCKER_BUILDKIT: 1
+          PULSE_LICENSE_PUBLIC_KEY: ${{ secrets.PULSE_LICENSE_PUBLIC_KEY }}
         run: |
           docker build \
             --target runtime \
-            --build-arg PULSE_LICENSE_PUBLIC_KEY="${{ secrets.PULSE_LICENSE_PUBLIC_KEY }}" \
+            --secret id=pulse_license_public_key,env=PULSE_LICENSE_PUBLIC_KEY \
             --build-arg VERSION="${{ needs.prepare.outputs.tag }}" \
             -t pulse-helm-smoke:${{ needs.prepare.outputs.version }} \
             .
@@ -520,6 +527,8 @@ jobs:
     timeout-minutes: 30
     permissions:
       contents: write
+      id-token: write
+      attestations: write
     outputs:
       release_id: ${{ steps.create_release.outputs.release_id }}
       release_url: ${{ steps.create_release.outputs.release_url }}
@@ -569,6 +578,11 @@ jobs:
           elif [ -x ./cmd/pulse/pulse ]; then
             ./cmd/pulse/pulse --version
           fi
+
+      - name: Attest release assets
+        uses: actions/attest@v4
+        with:
+          subject-path: release/*
 
       - name: Prepare release notes
         id: generate_notes

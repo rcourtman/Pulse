@@ -1,6 +1,5 @@
 # syntax=docker/dockerfile:1.7-labs
 ARG BUILD_AGENT=1
-ARG PULSE_LICENSE_PUBLIC_KEY
 
 # Build stage for frontend (must be built first for embedding)
 # Force amd64 platform to avoid slow QEMU emulation during multi-arch builds
@@ -29,7 +28,6 @@ RUN --mount=type=cache,id=pulse-npm-cache,target=/root/.npm \
 FROM --platform=linux/amd64 golang:1.25.9-alpine AS backend-builder
 
 ARG BUILD_AGENT
-ARG PULSE_LICENSE_PUBLIC_KEY
 ARG VERSION
 WORKDIR /app
 
@@ -55,10 +53,13 @@ COPY --from=frontend-builder /app/internal/api/frontend-modern/dist ./internal/a
 # Build the main pulse binary for all target architectures
 RUN --mount=type=cache,id=pulse-go-mod,target=/go/pkg/mod \
     --mount=type=cache,id=pulse-go-build,target=/root/.cache/go-build \
+    --mount=type=secret,id=pulse_license_public_key,required=false \
     VERSION="${VERSION:-v$(cat VERSION | tr -d '\n')}" && \
     BUILD_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ") && \
     GIT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown") && \
-    SERVER_LDFLAGS="$(if [ -n "${PULSE_LICENSE_PUBLIC_KEY}" ]; then ./scripts/release_ldflags.sh server --version "${VERSION}" --build-time "${BUILD_TIME}" --git-commit "${GIT_COMMIT}" --license-public-key "${PULSE_LICENSE_PUBLIC_KEY}"; else ./scripts/release_ldflags.sh server --version "${VERSION}" --build-time "${BUILD_TIME}" --git-commit "${GIT_COMMIT}"; fi)" && \
+    LICENSE_PUBLIC_KEY="" && \
+    if [ -f /run/secrets/pulse_license_public_key ]; then LICENSE_PUBLIC_KEY="$(tr -d '\r\n' < /run/secrets/pulse_license_public_key)"; fi && \
+    SERVER_LDFLAGS="$(if [ -n "${LICENSE_PUBLIC_KEY}" ]; then ./scripts/release_ldflags.sh server --version "${VERSION}" --build-time "${BUILD_TIME}" --git-commit "${GIT_COMMIT}" --license-public-key "${LICENSE_PUBLIC_KEY}"; else ./scripts/release_ldflags.sh server --version "${VERSION}" --build-time "${BUILD_TIME}" --git-commit "${GIT_COMMIT}"; fi)" && \
     CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
       -tags release \
       -ldflags="${SERVER_LDFLAGS}" \
