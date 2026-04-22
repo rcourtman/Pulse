@@ -60,7 +60,8 @@ describe('ConnectionsTable', () => {
   it('renders an empty-state hint when no rows exist', () => {
     render(() => <ConnectionsTable rows={() => []} />);
 
-    expect(screen.getByText(/No monitored systems yet/i)).toBeInTheDocument();
+    expect(screen.getByText('Start monitoring infrastructure')).toBeInTheDocument();
+    expect(screen.getByText(/Supported today: TrueNAS SCALE/i)).toBeInTheDocument();
     expect(screen.queryByRole('table')).toBeNull();
   });
 

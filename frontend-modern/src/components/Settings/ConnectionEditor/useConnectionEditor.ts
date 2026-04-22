@@ -27,6 +27,7 @@ function describeProbeError(error: unknown): string {
 }
 
 export type ProbePhase = 'idle' | 'probing' | 'detected' | 'no-match' | 'error';
+export type CompletedProbePhase = Extract<ProbePhase, 'detected' | 'no-match' | 'error'>;
 
 export interface ConnectionEditorState {
   address: () => string;
@@ -36,7 +37,7 @@ export interface ConnectionEditorState {
   probedMs: () => number;
   errorMessage: () => string;
   reset: () => void;
-  runProbe: () => Promise<void>;
+  runProbe: () => Promise<CompletedProbePhase>;
 }
 
 export type PlatformConnectionType = Extract<
@@ -233,7 +234,7 @@ export function createConnectionEditorState(): ConnectionEditorState {
     if (!isSubmittableAddress(value)) {
       setErrorMessage('Enter an address to probe.');
       setPhase('error');
-      return;
+      return 'error';
     }
 
     setPhase('probing');
@@ -247,12 +248,14 @@ export function createConnectionEditorState(): ConnectionEditorState {
     } catch (error: unknown) {
       setErrorMessage(describeProbeError(error));
       setPhase('error');
-      return;
+      return 'error';
     }
 
     setProbedMs(response.probedMs);
     setCandidates(response.candidates);
-    setPhase(response.candidates.length > 0 ? 'detected' : 'no-match');
+    const nextPhase: CompletedProbePhase = response.candidates.length > 0 ? 'detected' : 'no-match';
+    setPhase(nextPhase);
+    return nextPhase;
   };
 
   return {

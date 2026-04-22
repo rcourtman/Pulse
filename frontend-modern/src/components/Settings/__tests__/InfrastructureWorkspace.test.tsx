@@ -14,6 +14,22 @@ const navigateSpy = vi.hoisted(() => vi.fn());
 const setSearchParamsSpy = vi.hoisted(() => vi.fn());
 const presentationPolicyIsReadOnlyMock = vi.hoisted(() => vi.fn(() => false));
 const probeSpy = vi.hoisted(() => vi.fn().mockResolvedValue({ candidates: [], probedMs: 0 }));
+const connectionsApiMock = vi.hoisted(() => ({
+  list: vi.fn(),
+  probe: probeSpy,
+  setEnabled: vi.fn(),
+  remove: vi.fn(),
+}));
+const onboardingMetricsTrackerMock = vi.hoisted(() => ({
+  recordOpened: vi.fn(),
+  recordPathSelected: vi.fn(),
+  recordProbeResult: vi.fn(),
+  recordCatalogSelected: vi.fn(),
+  recordCredentialsOpened: vi.fn(),
+}));
+const createInfrastructureOnboardingMetricsTrackerMock = vi.hoisted(() =>
+  vi.fn(() => onboardingMetricsTrackerMock),
+);
 
 vi.mock('@solidjs/router', async () => {
   const actual = await vi.importActual<typeof import('@solidjs/router')>('@solidjs/router');
@@ -91,16 +107,13 @@ vi.mock('../AgentProfilesPanel', () => ({
   AgentProfilesPanel: () => <div data-testid="agent-profiles">profiles</div>,
 }));
 
-vi.mock('@/api/connections', async () => {
-  const actual = await vi.importActual<typeof import('@/api/connections')>('@/api/connections');
-  return {
-    ...actual,
-    ConnectionsAPI: {
-      ...actual.ConnectionsAPI,
-      probe: probeSpy,
-    },
-  };
-});
+vi.mock('@/api/connections', () => ({
+  ConnectionsAPI: connectionsApiMock,
+}));
+
+vi.mock('@/utils/infrastructureOnboardingMetrics', () => ({
+  createInfrastructureOnboardingMetricsTracker: createInfrastructureOnboardingMetricsTrackerMock,
+}));
 
 const connectionFixture = (overrides: Partial<Connection> = {}): Connection => ({
   id: 'pve:zeus',

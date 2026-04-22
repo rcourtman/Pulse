@@ -1,4 +1,13 @@
-import { Component, For, type JSX, Show, createMemo, createSignal } from 'solid-js';
+import {
+  Component,
+  For,
+  type JSX,
+  Show,
+  createEffect,
+  createMemo,
+  createSignal,
+  onMount,
+} from 'solid-js';
 import { Archive, ArrowRight, Cpu, Database, Mail, Server, ServerCog } from 'lucide-solid';
 import type { ConnectionType, ProbeCandidate } from '@/api/connections';
 import { AddressProbeStep } from './AddressProbeStep';
@@ -19,6 +28,7 @@ import {
   getInfrastructureOnboardingProductPresentation,
   getInfrastructureSupportSummaryBadges,
 } from '@/utils/infrastructureOnboardingPresentation';
+import { createInfrastructureOnboardingMetricsTracker } from '@/utils/infrastructureOnboardingMetrics';
 
 export type ConnectionEditorMode = 'add' | 'edit';
 
@@ -69,6 +79,8 @@ export const ConnectionEditor: Component<ConnectionEditorProps> = (props) => {
   const [selectedCandidate, setSelectedCandidate] = createSignal<ProbeCandidate | null>(null);
   const [selectedFamilyId, setSelectedFamilyId] =
     createSignal<ConnectionEditorCatalogFamilyId | null>(null);
+  const onboardingMetrics =
+    (props.mode ?? 'add') === 'add' ? createInfrastructureOnboardingMetricsTracker() : null;
 
   const platformCatalogEntries = createMemo<ConnectionEditorCatalogEntry[]>(() =>
     buildConnectionEditorCatalogEntries(props.manualTypeOptions),
@@ -86,19 +98,48 @@ export const ConnectionEditor: Component<ConnectionEditorProps> = (props) => {
   const activeType = () => selectedType();
   const showCredentialSlot = () => activeType() !== null;
 
+  const recordPathSelectedForType = (type: ConnectionType) => {
+    onboardingMetrics?.recordPathSelected(type === 'agent' ? 'agent' : 'api');
+  };
+
+  onMount(() => {
+    if (!onboardingMetrics) return;
+    onboardingMetrics.recordOpened();
+    if (props.initialType) {
+      recordPathSelectedForType(props.initialType);
+    }
+  });
+
+  createEffect(() => {
+    const type = selectedType();
+    if (!onboardingMetrics || !type) return;
+    onboardingMetrics.recordCredentialsOpened(type);
+  });
+
   const chooseCandidate = (candidate: ProbeCandidate) => {
+    onboardingMetrics?.recordPathSelected('api');
     setSelectedCandidate(candidate);
     setSelectedFamilyId(null);
     setSelectedType(candidate.type);
   };
 
-  const chooseManualType = (type: ConnectionType) => {
+  const chooseManualType = (
+    type: ConnectionType,
+    options?: {
+      fromCatalog?: boolean;
+    },
+  ) => {
+    recordPathSelectedForType(type);
+    if (options?.fromCatalog && type !== 'agent') {
+      onboardingMetrics?.recordCatalogSelected(type);
+    }
     setSelectedCandidate(null);
     setSelectedFamilyId(null);
     setSelectedType(type);
   };
 
   const chooseFamily = (familyId: ConnectionEditorCatalogFamilyId) => {
+    onboardingMetrics?.recordPathSelected('api');
     setSelectedCandidate(null);
     setSelectedFamilyId(familyId);
   };
@@ -255,6 +296,8 @@ export const ConnectionEditor: Component<ConnectionEditorProps> = (props) => {
                 state={state}
                 onSelectCandidate={chooseCandidate}
                 onInstallAgent={() => chooseManualType('agent')}
+                onProbeSubmitted={() => onboardingMetrics?.recordPathSelected('api')}
+                onProbeResolved={(outcome) => onboardingMetrics?.recordProbeResult(outcome)}
               />
 
               <Show
@@ -283,7 +326,7 @@ export const ConnectionEditor: Component<ConnectionEditorProps> = (props) => {
                             return (
                               <button
                                 type="button"
-                                onClick={() => chooseManualType(entry.type)}
+                                onClick={() => chooseManualType(entry.type, { fromCatalog: true })}
                                 class="group flex h-full flex-col gap-2 rounded-lg border border-border bg-surface p-4 text-left transition-colors hover:border-blue-500 hover:bg-blue-50/40 dark:hover:bg-blue-950/20"
                               >
                                 <div class="flex items-center gap-2.5">
@@ -370,7 +413,7 @@ export const ConnectionEditor: Component<ConnectionEditorProps> = (props) => {
                             return (
                               <button
                                 type="button"
-                                onClick={() => chooseManualType(type)}
+                                onClick={() => chooseManualType(type, { fromCatalog: true })}
                                 class="group flex h-full flex-col gap-2 rounded-lg border border-border bg-surface-alt p-4 text-left transition-colors hover:border-blue-500 hover:bg-blue-50/40 dark:hover:bg-blue-950/20"
                               >
                                 <div class="flex items-center gap-2.5">

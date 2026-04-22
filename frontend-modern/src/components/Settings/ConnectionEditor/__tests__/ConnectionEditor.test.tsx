@@ -3,16 +3,30 @@ import { render, fireEvent, screen, waitFor } from '@solidjs/testing-library';
 import { ConnectionEditor } from '../ConnectionEditor';
 import { ConnectionsAPI, type ProbeResponse } from '@/api/connections';
 
-vi.mock('@/api/connections', async () => {
-  const actual = await vi.importActual<typeof import('@/api/connections')>('@/api/connections');
-  return {
-    ...actual,
-    ConnectionsAPI: {
-      list: vi.fn(),
-      probe: vi.fn(),
-    },
-  };
-});
+const connectionsApiMock = vi.hoisted(() => ({
+  list: vi.fn(),
+  probe: vi.fn(),
+  setEnabled: vi.fn(),
+  remove: vi.fn(),
+}));
+const onboardingMetricsTrackerMock = vi.hoisted(() => ({
+  recordOpened: vi.fn(),
+  recordPathSelected: vi.fn(),
+  recordProbeResult: vi.fn(),
+  recordCatalogSelected: vi.fn(),
+  recordCredentialsOpened: vi.fn(),
+}));
+const createInfrastructureOnboardingMetricsTrackerMock = vi.hoisted(() =>
+  vi.fn(() => onboardingMetricsTrackerMock),
+);
+
+vi.mock('@/api/connections', () => ({
+  ConnectionsAPI: connectionsApiMock,
+}));
+
+vi.mock('@/utils/infrastructureOnboardingMetrics', () => ({
+  createInfrastructureOnboardingMetricsTracker: createInfrastructureOnboardingMetricsTrackerMock,
+}));
 
 const mockedProbe = vi.mocked(ConnectionsAPI.probe);
 
@@ -37,6 +51,8 @@ describe('ConnectionEditor', () => {
     const renderSlot = vi.fn((props) => <div data-testid="slot">slot:{props.type}</div>);
 
     render(() => <ConnectionEditor renderCredentialSlot={renderSlot} onClose={() => {}} />);
+    expect(createInfrastructureOnboardingMetricsTrackerMock).toHaveBeenCalledTimes(1);
+    expect(onboardingMetricsTrackerMock.recordOpened).toHaveBeenCalledTimes(1);
 
     const input = screen.getByPlaceholderText(/vcenter\.lab/) as HTMLInputElement;
     fireEvent.input(input, { target: { value: 'pve.lab' } });
@@ -45,6 +61,10 @@ describe('ConnectionEditor', () => {
     fireEvent.click(probeButton);
 
     await waitFor(() => expect(mockedProbe).toHaveBeenCalledWith('pve.lab'));
+    await waitFor(() =>
+      expect(onboardingMetricsTrackerMock.recordProbeResult).toHaveBeenCalledWith('detected'),
+    );
+    expect(onboardingMetricsTrackerMock.recordPathSelected).toHaveBeenCalledWith('api');
 
     const candidateHost = await screen.findByText('https://pve.lab:8006');
     const candidateButton = candidateHost.closest('button');
@@ -52,6 +72,7 @@ describe('ConnectionEditor', () => {
     fireEvent.click(candidateButton!);
 
     await waitFor(() => expect(screen.getByTestId('slot').textContent).toBe('slot:pve'));
+    expect(onboardingMetricsTrackerMock.recordCredentialsOpened).toHaveBeenCalledWith('pve');
     expect(renderSlot).toHaveBeenCalled();
     const lastCall = renderSlot.mock.calls.at(-1)![0];
     expect(lastCall.type).toBe('pve');
@@ -71,6 +92,9 @@ describe('ConnectionEditor', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /probe address/i }));
     await waitFor(() => expect(mockedProbe).toHaveBeenCalled());
+    await waitFor(() =>
+      expect(onboardingMetricsTrackerMock.recordProbeResult).toHaveBeenCalledWith('no-match'),
+    );
 
     await screen.findByText(/no supported api-backed platform detected/i);
 
@@ -79,6 +103,8 @@ describe('ConnectionEditor', () => {
     fireEvent.click(screen.getByRole('button', { name: /TrueNAS SCALE/i }));
 
     await waitFor(() => expect(screen.getByTestId('slot').textContent).toBe('slot:truenas'));
+    expect(onboardingMetricsTrackerMock.recordCatalogSelected).toHaveBeenCalledWith('truenas');
+    expect(onboardingMetricsTrackerMock.recordCredentialsOpened).toHaveBeenCalledWith('truenas');
     const lastCall = renderSlot.mock.calls.at(-1)![0];
     expect(lastCall.type).toBe('truenas');
     expect(lastCall.candidate).toBeNull();
@@ -164,6 +190,8 @@ describe('ConnectionEditor', () => {
     fireEvent.click(agentButton);
 
     expect(screen.getByTestId('slot').textContent).toBe('slot:agent');
+    expect(onboardingMetricsTrackerMock.recordPathSelected).toHaveBeenCalledWith('agent');
+    expect(onboardingMetricsTrackerMock.recordCredentialsOpened).toHaveBeenCalledWith('agent');
     const call = renderSlot.mock.calls.at(-1)![0];
     expect(call.type).toBe('agent');
     expect(call.candidate).toBeNull();
@@ -181,6 +209,7 @@ describe('ConnectionEditor', () => {
       />
     ));
 
+    expect(createInfrastructureOnboardingMetricsTrackerMock).not.toHaveBeenCalled();
     expect(screen.getByTestId('slot').textContent).toBe('slot:vmware');
     const call = renderSlot.mock.calls.at(0)![0];
     expect(call.mode).toBe('edit');

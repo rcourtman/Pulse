@@ -14,6 +14,17 @@ export interface UpgradeMetricEvent {
   idempotency_key: string;
 }
 
+export interface TrackUpgradeMetricEventInput {
+  type: string;
+  surface: string;
+  capability?: string;
+  tenant_mode?: string;
+  limit_key?: string;
+  current_value?: number;
+  limit_value?: number;
+  idempotencyKey?: string;
+}
+
 export const UPGRADE_METRIC_EVENTS = {
   PRICING_VIEWED: 'pricing_viewed',
   PAYWALL_VIEWED: 'paywall_viewed',
@@ -27,6 +38,11 @@ export const UPGRADE_METRIC_EVENTS = {
   AGENT_INSTALL_COMMAND_COPIED: 'agent_install_command_copied',
   AGENT_INSTALL_PROFILE_SELECTED: 'agent_install_profile_selected',
   AGENT_FIRST_CONNECTED: 'agent_first_connected',
+  INFRASTRUCTURE_ONBOARDING_OPENED: 'infrastructure_onboarding_opened',
+  INFRASTRUCTURE_ONBOARDING_PATH_SELECTED: 'infrastructure_onboarding_path_selected',
+  INFRASTRUCTURE_ONBOARDING_PROBE_RESULT: 'infrastructure_onboarding_probe_result',
+  INFRASTRUCTURE_ONBOARDING_CATALOG_SELECTED: 'infrastructure_onboarding_catalog_selected',
+  INFRASTRUCTURE_ONBOARDING_CREDENTIALS_OPENED: 'infrastructure_onboarding_credentials_opened',
 } as const;
 
 const ONE_MINUTE_MS = 60_000;
@@ -42,14 +58,16 @@ function pruneExpiredKeys(now: number): void {
 }
 
 export function trackUpgradeMetricEvent(
-  event: Partial<UpgradeMetricEvent> & { type: string; surface: string },
+  event: TrackUpgradeMetricEventInput,
 ): void {
   if (shouldDisableLocalUpgradeMetrics()) {
     return;
   }
 
   const now = Date.now();
-  const idempotencyKey = `${event.type}:${event.surface}:${event.capability || ''}:${Math.floor(now / ONE_MINUTE_MS)}`;
+  const idempotencyKey =
+    event.idempotencyKey ??
+    `${event.type}:${event.surface}:${event.capability || ''}:${Math.floor(now / ONE_MINUTE_MS)}`;
 
   pruneExpiredKeys(now);
   if (recentlySentKeys.has(idempotencyKey)) {

@@ -70,6 +70,16 @@ func TestConversionEventValidate(t *testing.T) {
 			},
 		},
 		{
+			name: "valid infrastructure onboarding path event",
+			event: ConversionEvent{
+				Type:           EventInfrastructureOnboardingPathSelected,
+				Surface:        "settings_infrastructure_add",
+				Capability:     "api",
+				Timestamp:      now,
+				IdempotencyKey: "id-infra-onboarding-path-1",
+			},
+		},
+		{
 			name:      "limit warning requires limit key",
 			event:     ConversionEvent{Type: EventLimitWarningShown, Surface: "dashboard", Timestamp: now, IdempotencyKey: "id-1"},
 			wantError: "limit_key is required",

@@ -1,7 +1,7 @@
 import { Component, For, Show } from 'solid-js';
 import type { ProbeCandidate } from '@/api/connections';
 import { formControl, formField, formHelpText, formLabel } from '@/components/shared/Form';
-import type { ConnectionEditorState } from './useConnectionEditor';
+import type { CompletedProbePhase, ConnectionEditorState } from './useConnectionEditor';
 import { CONNECTION_TYPE_LABELS } from './useConnectionEditor';
 import { getInfrastructureAutoDetectLabels } from '@/utils/infrastructureOnboardingPresentation';
 
@@ -9,12 +9,20 @@ export interface AddressProbeStepProps {
   state: ConnectionEditorState;
   onSelectCandidate: (candidate: ProbeCandidate) => void;
   onInstallAgent?: () => void;
+  onProbeSubmitted?: () => void;
+  onProbeResolved?: (outcome: CompletedProbePhase) => void;
 }
 
 export const AddressProbeStep: Component<AddressProbeStepProps> = (props) => {
-  const handleSubmit = (event: SubmitEvent) => {
+  const handleSubmit = async (event: SubmitEvent) => {
     event.preventDefault();
-    void props.state.runProbe();
+    if (props.state.address().trim().length === 0) {
+      return;
+    }
+
+    props.onProbeSubmitted?.();
+    const outcome = await props.state.runProbe();
+    props.onProbeResolved?.(outcome);
   };
 
   const autoDetectLabels = getInfrastructureAutoDetectLabels();
@@ -100,31 +108,34 @@ export const AddressProbeStep: Component<AddressProbeStepProps> = (props) => {
           </div>
           <ul class="divide-y divide-border rounded-md border border-border">
             <For each={props.state.candidates()}>
-              {(candidate) => (
-                <li>
-                  <button
-                    type="button"
-                    class="flex w-full flex-col items-start gap-1 px-3 py-2.5 text-left transition-colors hover:bg-surface-hover"
-                    onClick={() => props.onSelectCandidate(candidate)}
-                  >
-                    <div class="text-sm font-medium text-base-content">
-                      {CONNECTION_TYPE_LABELS[candidate.type] ?? candidate.type}
-                    </div>
-                    <div class="text-xs text-muted">{candidate.host}</div>
-                    <Show when={candidate.hints && Object.keys(candidate.hints).length > 0}>
-                      <div class="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-muted">
-                        <For each={Object.entries(candidate.hints ?? {})}>
-                          {([key, value]) => (
-                            <span>
-                              <span class="font-medium">{key}:</span> {value}
-                            </span>
-                          )}
-                        </For>
+              {(candidate) => {
+                const hintEntries = Object.entries(candidate.hints ?? {});
+                return (
+                  <li>
+                    <button
+                      type="button"
+                      class="flex w-full flex-col items-start gap-1 px-3 py-2.5 text-left transition-colors hover:bg-surface-hover"
+                      onClick={() => props.onSelectCandidate(candidate)}
+                    >
+                      <div class="text-sm font-medium text-base-content">
+                        {CONNECTION_TYPE_LABELS[candidate.type] ?? candidate.type}
                       </div>
-                    </Show>
-                  </button>
-                </li>
-              )}
+                      <div class="text-xs text-muted">{candidate.host}</div>
+                      <Show when={hintEntries.length > 0}>
+                        <div class="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-muted">
+                          <For each={hintEntries}>
+                            {([key, value]) => (
+                              <span>
+                                <span class="font-medium">{key}:</span> {value}
+                              </span>
+                            )}
+                          </For>
+                        </div>
+                      </Show>
+                    </button>
+                  </li>
+                );
+              }}
             </For>
           </ul>
         </div>

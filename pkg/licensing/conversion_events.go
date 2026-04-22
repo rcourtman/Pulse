@@ -6,39 +6,49 @@ import (
 )
 
 const (
-	EventPricingViewed               = "pricing_viewed"
-	EventPaywallViewed               = "paywall_viewed"
-	EventTrialStarted                = "trial_started"
-	EventLicenseActivated            = "license_activated"
-	EventLicenseActivationFailed     = "license_activation_failed"
-	EventUpgradeClicked              = "upgrade_clicked"
-	EventCheckoutClicked             = "checkout_clicked"
-	EventCheckoutStarted             = "checkout_started"
-	EventCheckoutCompleted           = "checkout_completed"
-	EventLimitWarningShown           = "limit_warning_shown"
-	EventLimitBlocked                = "limit_blocked"
-	EventAgentInstallTokenGenerated  = "agent_install_token_generated"
-	EventAgentInstallCommandCopied   = "agent_install_command_copied"
-	EventAgentInstallProfileSelected = "agent_install_profile_selected"
-	EventAgentFirstConnected         = "agent_first_connected"
+	EventPricingViewed                             = "pricing_viewed"
+	EventPaywallViewed                             = "paywall_viewed"
+	EventTrialStarted                              = "trial_started"
+	EventLicenseActivated                          = "license_activated"
+	EventLicenseActivationFailed                   = "license_activation_failed"
+	EventUpgradeClicked                            = "upgrade_clicked"
+	EventCheckoutClicked                           = "checkout_clicked"
+	EventCheckoutStarted                           = "checkout_started"
+	EventCheckoutCompleted                         = "checkout_completed"
+	EventLimitWarningShown                         = "limit_warning_shown"
+	EventLimitBlocked                              = "limit_blocked"
+	EventAgentInstallTokenGenerated                = "agent_install_token_generated"
+	EventAgentInstallCommandCopied                 = "agent_install_command_copied"
+	EventAgentInstallProfileSelected               = "agent_install_profile_selected"
+	EventAgentFirstConnected                       = "agent_first_connected"
+	EventInfrastructureOnboardingOpened            = "infrastructure_onboarding_opened"
+	EventInfrastructureOnboardingPathSelected      = "infrastructure_onboarding_path_selected"
+	EventInfrastructureOnboardingProbeResult       = "infrastructure_onboarding_probe_result"
+	EventInfrastructureOnboardingCatalogSelected   = "infrastructure_onboarding_catalog_selected"
+	EventInfrastructureOnboardingCredentialsOpened = "infrastructure_onboarding_credentials_opened"
 )
 
 var supportedConversionEventTypes = map[string]struct{}{
-	EventPricingViewed:               {},
-	EventPaywallViewed:               {},
-	EventTrialStarted:                {},
-	EventLicenseActivated:            {},
-	EventLicenseActivationFailed:     {},
-	EventUpgradeClicked:              {},
-	EventCheckoutClicked:             {},
-	EventCheckoutStarted:             {},
-	EventCheckoutCompleted:           {},
-	EventLimitWarningShown:           {},
-	EventLimitBlocked:                {},
-	EventAgentInstallTokenGenerated:  {},
-	EventAgentInstallCommandCopied:   {},
-	EventAgentInstallProfileSelected: {},
-	EventAgentFirstConnected:         {},
+	EventPricingViewed:                             {},
+	EventPaywallViewed:                             {},
+	EventTrialStarted:                              {},
+	EventLicenseActivated:                          {},
+	EventLicenseActivationFailed:                   {},
+	EventUpgradeClicked:                            {},
+	EventCheckoutClicked:                           {},
+	EventCheckoutStarted:                           {},
+	EventCheckoutCompleted:                         {},
+	EventLimitWarningShown:                         {},
+	EventLimitBlocked:                              {},
+	EventAgentInstallTokenGenerated:                {},
+	EventAgentInstallCommandCopied:                 {},
+	EventAgentInstallProfileSelected:               {},
+	EventAgentFirstConnected:                       {},
+	EventInfrastructureOnboardingOpened:            {},
+	EventInfrastructureOnboardingPathSelected:      {},
+	EventInfrastructureOnboardingProbeResult:       {},
+	EventInfrastructureOnboardingCatalogSelected:   {},
+	EventInfrastructureOnboardingCredentialsOpened: {},
 }
 
 // ConversionEvent is the canonical conversion instrumentation envelope.

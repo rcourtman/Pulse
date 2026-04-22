@@ -15,6 +15,7 @@ import {
   trackAgentInstallCommandCopied,
   trackAgentInstallProfileSelected,
   trackAgentInstallTokenGenerated,
+  trackUpgradeMetricEvent,
 } from '@/utils/upgradeMetrics';
 
 function getPayloadForCall(index: number) {
@@ -48,6 +49,25 @@ describe('upgradeMetrics local-only UX metrics wrappers', () => {
     trackAgentInstallCommandCopied('settings_unified_agents', 'linux:auto:install:dedupe');
 
     expect(apiFetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('honors caller-supplied idempotency keys for distinct same-minute events', () => {
+    trackUpgradeMetricEvent({
+      type: 'agent_install_command_copied',
+      surface: 'settings_unified_agents',
+      capability: 'linux:auto:install:custom',
+      idempotencyKey: 'custom-1',
+    });
+    trackUpgradeMetricEvent({
+      type: 'agent_install_command_copied',
+      surface: 'settings_unified_agents',
+      capability: 'linux:auto:install:custom',
+      idempotencyKey: 'custom-2',
+    });
+
+    expect(apiFetchMock).toHaveBeenCalledTimes(2);
+    expect(getPayloadForCall(0).idempotency_key).toBe('custom-1');
+    expect(getPayloadForCall(1).idempotency_key).toBe('custom-2');
   });
 
   it('sends canonical pricing and checkout funnel events for self-hosted billing surfaces', () => {
