@@ -47,6 +47,8 @@ import (
 	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/reporting"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 )
 
 type resourceContractSnapshot struct {
@@ -8129,6 +8131,40 @@ func TestContract_BootstrapTokenPersistenceJSONSnapshot(t *testing.T) {
 	}
 	if strings.Contains(snapshot, token) {
 		t.Fatalf("bootstrap token snapshot leaked raw token: %s", snapshot)
+	}
+}
+
+func TestContract_InitializeBootstrapTokenLogsPathNotSecret(t *testing.T) {
+	tempDir := t.TempDir()
+	cfg := &config.Config{DataPath: tempDir}
+	router := &Router{config: cfg}
+
+	var logBuf bytes.Buffer
+	origLogger := log.Logger
+	log.Logger = zerolog.New(&logBuf)
+	t.Cleanup(func() {
+		log.Logger = origLogger
+	})
+
+	router.initializeBootstrapToken()
+
+	token, created, tokenPath, err := loadOrCreateBootstrapToken(tempDir)
+	if err != nil {
+		t.Fatalf("loadOrCreateBootstrapToken() error = %v", err)
+	}
+	if created {
+		t.Fatal("expected bootstrap token to already exist after initialization")
+	}
+
+	logOutput := logBuf.String()
+	if !strings.Contains(logOutput, tokenPath) {
+		t.Fatalf("bootstrap token log missing path %q in %q", tokenPath, logOutput)
+	}
+	if !strings.Contains(logOutput, "pulse bootstrap-token") {
+		t.Fatalf("bootstrap token log missing local reveal guidance: %q", logOutput)
+	}
+	if strings.Contains(logOutput, token) {
+		t.Fatalf("bootstrap token leaked into logs: %q", logOutput)
 	}
 }
 

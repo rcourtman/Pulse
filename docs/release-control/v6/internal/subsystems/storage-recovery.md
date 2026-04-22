@@ -592,6 +592,10 @@ forking separate row-local history reads or duplicate polling loops.
 This subsystem now sits under the dedicated storage and recovery lane so the
 operator-facing storage page, recovery timeline, and recovery-point persistence
 engine stop hiding inside broader monitoring and E2E buckets.
+That same first-session recovery boundary also treats the bootstrap token as a
+local secret, not a log artifact. Storage and recovery surfaces may surface the
+bootstrap token file path when first-run auth is missing, but automatic runtime
+logs must never print the bootstrap token value itself.
 Storage and recovery browser helpers now also keep one transport-tolerant
 normalization edge. Recovery display models must accept legacy subject-label
 fields and nullable mode/kind metadata before presenting canonical item labels,
@@ -2098,7 +2102,9 @@ That same shared dependency also assumes `/api/setup-script` keeps one
 bootstrap token name end to end: embedded setup-script bootstrap uses the
 canonical `setup_token` query and the rendered script body uses only
 `PULSE_SETUP_TOKEN`, so adjacent setup and recovery-linked reruns do not drift
-across alias variables or deleted query naming.
+across alias variables or deleted query naming. That same recovery-linked
+bootstrap path may surface the local token file path, but it must not print
+the bootstrap token value itself into automatic runtime logs.
 That same shared `internal/api/` dependency also assumes canonical /api/auto-register
 responses keep `nodeId` on the resolved stored node identity after name
 disambiguation, so adjacent setup and recovery-linked transport attachments do

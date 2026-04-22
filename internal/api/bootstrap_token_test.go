@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bytes"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -11,6 +12,8 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/bootstrap"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 )
 
 func TestLoadOrCreateBootstrapToken_EmptyDataPath(t *testing.T) {
@@ -421,6 +424,40 @@ func TestInitializeBootstrapToken_LoadOrCreateFails(t *testing.T) {
 	}
 	if r.bootstrapTokenPath != "" {
 		t.Errorf("expected empty bootstrapTokenPath when loadOrCreateBootstrapToken fails, got %q", r.bootstrapTokenPath)
+	}
+}
+
+func TestInitializeBootstrapToken_DoesNotLogSecretValue(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg := &config.Config{DataPath: tmpDir}
+	r := &Router{config: cfg}
+
+	var logBuf bytes.Buffer
+	origLogger := log.Logger
+	log.Logger = zerolog.New(&logBuf)
+	t.Cleanup(func() {
+		log.Logger = origLogger
+	})
+
+	r.initializeBootstrapToken()
+
+	token, created, tokenPath, err := loadOrCreateBootstrapToken(tmpDir)
+	if err != nil {
+		t.Fatalf("loadOrCreateBootstrapToken() error: %v", err)
+	}
+	if created {
+		t.Fatal("expected bootstrap token to already exist after initialization")
+	}
+
+	logOutput := logBuf.String()
+	if !strings.Contains(logOutput, tokenPath) {
+		t.Fatalf("expected bootstrap token log to include token path %q, got %q", tokenPath, logOutput)
+	}
+	if !strings.Contains(logOutput, "pulse bootstrap-token") {
+		t.Fatalf("expected bootstrap token log to mention local reveal command, got %q", logOutput)
+	}
+	if strings.Contains(logOutput, token) {
+		t.Fatalf("bootstrap token leaked into logs: %q", logOutput)
 	}
 }
 

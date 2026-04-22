@@ -577,7 +577,9 @@ the canonical monitored-system blocked payload.
     the status payload flips `hasAuthentication` to `false`, preserves
     `bootstrapTokenPath`, and allows browser-owned first-session proof to
     re-enter the real setup wizard instead of silently falling back to an
-    authenticated dashboard state.
+    authenticated dashboard state. That recovery transport may expose the
+    bootstrap token file path, but it must not emit the token value into
+    automatic runtime logs.
 30. Keep shared SSO test and metadata-preview transport fail-closed: SAML
     metadata URLs and OIDC issuer URLs must reject non-HTTP or userinfo-bearing
     inputs before any outbound request is attempted, and OIDC discovery must
