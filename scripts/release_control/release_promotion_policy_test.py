@@ -402,6 +402,13 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn('git checkout -B "$REQUIRED_BRANCH" "origin/$REQUIRED_BRANCH"', helm_pages)
         self.assertIn('git pull --rebase origin "$REQUIRED_BRANCH"', helm_pages)
         self.assertIn('git push origin HEAD:"$REQUIRED_BRANCH"', helm_pages)
+        self.assertIn('HELM_DOCS_VERSION="1.14.2"', helm_pages)
+        self.assertIn('HELM_DOCS_ARCHIVE="helm-docs_${HELM_DOCS_VERSION}_Linux_x86_64.tar.gz"', helm_pages)
+        self.assertIn(
+            'HELM_DOCS_SHA256="a8cf72ada34fad93285ba2a452b38bdc5bd52cc9a571236244ec31022928d6cc"',
+            helm_pages,
+        )
+        self.assertIn('printf \'%s  %s\\n\' "$HELM_DOCS_SHA256" "$HELM_DOCS_ARCHIVE" | sha256sum --check --', helm_pages)
         self.assertNotIn("git pull --rebase origin main", helm_pages)
         self.assertNotIn("git push origin main", helm_pages)
         self.assertNotIn("kind load docker-image", helm_pages)

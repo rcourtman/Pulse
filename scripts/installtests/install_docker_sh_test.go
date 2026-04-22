@@ -8,8 +8,22 @@ import (
 	"testing"
 )
 
+func currentReleaseVersion(t *testing.T) string {
+	t.Helper()
+	content, err := os.ReadFile(repoFile("VERSION"))
+	if err != nil {
+		t.Fatalf("read VERSION: %v", err)
+	}
+	version := strings.TrimSpace(string(content))
+	if version == "" {
+		t.Fatal("VERSION is empty")
+	}
+	return version
+}
+
 func TestInstallDockerScriptUsesConfiguredImageRepoDefault(t *testing.T) {
 	workDir := t.TempDir()
+	version := currentReleaseVersion(t)
 	runInstallDockerScript(t, workDir, "DOCKER_IMAGE_REPO=example/pulse-enterprise")
 
 	composePath := filepath.Join(workDir, "docker-compose.yml")
@@ -18,11 +32,11 @@ func TestInstallDockerScriptUsesConfiguredImageRepoDefault(t *testing.T) {
 		t.Fatalf("read docker-compose.yml: %v", err)
 	}
 	composeText := string(composeContent)
-	if !strings.Contains(composeText, "image: ${PULSE_IMAGE:-example/pulse-enterprise:latest}") {
+	if !strings.Contains(composeText, "image: ${PULSE_IMAGE:-example/pulse-enterprise:"+version+"}") {
 		t.Fatalf("docker-compose.yml missing configured image default:\n%s", composeText)
 	}
-	if strings.Contains(composeText, "rcourtman/pulse:latest") {
-		t.Fatalf("docker-compose.yml still hardcodes upstream image:\n%s", composeText)
+	if strings.Contains(composeText, ":latest") {
+		t.Fatalf("docker-compose.yml must not default to a floating latest tag:\n%s", composeText)
 	}
 
 	envPath := filepath.Join(workDir, ".env")
@@ -31,13 +45,14 @@ func TestInstallDockerScriptUsesConfiguredImageRepoDefault(t *testing.T) {
 		t.Fatalf("read .env: %v", err)
 	}
 	envText := string(envContent)
-	if !strings.Contains(envText, "PULSE_IMAGE=example/pulse-enterprise:latest") {
+	if !strings.Contains(envText, "PULSE_IMAGE=example/pulse-enterprise:"+version) {
 		t.Fatalf(".env missing configured image default:\n%s", envText)
 	}
 }
 
 func TestInstallDockerScriptPrefersExplicitPulseImage(t *testing.T) {
 	workDir := t.TempDir()
+	version := currentReleaseVersion(t)
 	runInstallDockerScript(
 		t,
 		workDir,
@@ -51,7 +66,7 @@ func TestInstallDockerScriptPrefersExplicitPulseImage(t *testing.T) {
 		t.Fatalf("read docker-compose.yml: %v", err)
 	}
 	composeText := string(composeContent)
-	if !strings.Contains(composeText, "image: ${PULSE_IMAGE:-example/pulse-enterprise:latest}") {
+	if !strings.Contains(composeText, "image: ${PULSE_IMAGE:-example/pulse-enterprise:"+version+"}") {
 		t.Fatalf("docker-compose.yml lost configured default image:\n%s", composeText)
 	}
 
@@ -63,6 +78,22 @@ func TestInstallDockerScriptPrefersExplicitPulseImage(t *testing.T) {
 	envText := string(envContent)
 	if !strings.Contains(envText, "PULSE_IMAGE=ghcr.io/example/pulse-enterprise:v9.9.9") {
 		t.Fatalf(".env did not preserve explicit image override:\n%s", envText)
+	}
+}
+
+func TestRepoDockerComposeDefaultPinsCurrentVersion(t *testing.T) {
+	version := currentReleaseVersion(t)
+	content, err := os.ReadFile(repoFile("docker-compose.yml"))
+	if err != nil {
+		t.Fatalf("read docker-compose.yml: %v", err)
+	}
+
+	text := string(content)
+	if !strings.Contains(text, "image: ${PULSE_IMAGE:-rcourtman/pulse:"+version+"}") {
+		t.Fatalf("repo docker-compose.yml must pin the current release version:\n%s", text)
+	}
+	if strings.Contains(text, ":latest") {
+		t.Fatalf("repo docker-compose.yml must not default to a floating latest tag:\n%s", text)
 	}
 }
 

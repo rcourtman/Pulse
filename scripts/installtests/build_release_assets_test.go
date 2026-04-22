@@ -199,6 +199,58 @@ func TestReleaseWorkflowsUseSecretSafeAttestedImageBuilds(t *testing.T) {
 	}
 }
 
+func TestDeploymentDefaultsPinVersionedImagesAndHelmDocsChecksum(t *testing.T) {
+	versionBytes, err := os.ReadFile(repoFile("VERSION"))
+	if err != nil {
+		t.Fatalf("read VERSION: %v", err)
+	}
+	version := strings.TrimSpace(string(versionBytes))
+	if version == "" {
+		t.Fatal("VERSION is empty")
+	}
+
+	composeBytes, err := os.ReadFile(repoFile("docker-compose.yml"))
+	if err != nil {
+		t.Fatalf("read docker-compose.yml: %v", err)
+	}
+	compose := string(composeBytes)
+	if !strings.Contains(compose, "image: ${PULSE_IMAGE:-rcourtman/pulse:"+version+"}") {
+		t.Fatalf("docker-compose.yml must pin the governed release version:\n%s", compose)
+	}
+	if strings.Contains(compose, ":latest") {
+		t.Fatalf("docker-compose.yml must not default to a floating latest tag:\n%s", compose)
+	}
+
+	installDockerBytes, err := os.ReadFile(repoFile("scripts", "install-docker.sh"))
+	if err != nil {
+		t.Fatalf("read install-docker.sh: %v", err)
+	}
+	installDocker := string(installDockerBytes)
+	if !strings.Contains(installDocker, `CANONICAL_DEFAULT_PULSE_VERSION="`+version+`"`) {
+		t.Fatalf("install-docker.sh must pin the governed release version:\n%s", installDocker)
+	}
+	if strings.Contains(installDocker, ":latest") {
+		t.Fatalf("install-docker.sh must not default to a floating latest tag:\n%s", installDocker)
+	}
+
+	helmPagesBytes, err := os.ReadFile(repoFile(".github", "workflows", "helm-pages.yml"))
+	if err != nil {
+		t.Fatalf("read helm-pages.yml: %v", err)
+	}
+	helmPages := string(helmPagesBytes)
+	required := []string{
+		`HELM_DOCS_VERSION="1.14.2"`,
+		`HELM_DOCS_ARCHIVE="helm-docs_${HELM_DOCS_VERSION}_Linux_x86_64.tar.gz"`,
+		`HELM_DOCS_SHA256="a8cf72ada34fad93285ba2a452b38bdc5bd52cc9a571236244ec31022928d6cc"`,
+		`sha256sum --check --`,
+	}
+	for _, needle := range required {
+		if !strings.Contains(helmPages, needle) {
+			t.Fatalf("helm-pages.yml missing checksum-verified helm-docs install step: %s", needle)
+		}
+	}
+}
+
 func TestDeployDemoWorkflowFailsClosedForPreviewAndVerifiesFrontendParity(t *testing.T) {
 	workflowBytes, err := os.ReadFile(repoFile(".github", "workflows", "deploy-demo-server.yml"))
 	if err != nil {

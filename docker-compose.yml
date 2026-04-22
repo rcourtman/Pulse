@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   pulse:
-    image: ${PULSE_IMAGE:-rcourtman/pulse:latest}
+    image: ${PULSE_IMAGE:-rcourtman/pulse:6.0.0}
     container_name: pulse
     restart: unless-stopped
     logging:

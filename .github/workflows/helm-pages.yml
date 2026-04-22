@@ -107,8 +107,12 @@ jobs:
       - name: Install helm-docs
         run: |
           cd /tmp
-          wget https://github.com/norwoodj/helm-docs/releases/download/v1.14.2/helm-docs_1.14.2_Linux_x86_64.tar.gz
-          tar -xzf helm-docs_1.14.2_Linux_x86_64.tar.gz
+          HELM_DOCS_VERSION="1.14.2"
+          HELM_DOCS_ARCHIVE="helm-docs_${HELM_DOCS_VERSION}_Linux_x86_64.tar.gz"
+          HELM_DOCS_SHA256="a8cf72ada34fad93285ba2a452b38bdc5bd52cc9a571236244ec31022928d6cc"
+          wget "https://github.com/norwoodj/helm-docs/releases/download/v${HELM_DOCS_VERSION}/${HELM_DOCS_ARCHIVE}"
+          printf '%s  %s\n' "$HELM_DOCS_SHA256" "$HELM_DOCS_ARCHIVE" | sha256sum --check --
+          tar -xzf "$HELM_DOCS_ARCHIVE"
           sudo mv helm-docs /usr/local/bin/
           helm-docs --version
 

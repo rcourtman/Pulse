@@ -4,8 +4,31 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 DOCKER_IMAGE_REPO="${DOCKER_IMAGE_REPO:-rcourtman/pulse}"
-DEFAULT_PULSE_IMAGE="${DOCKER_IMAGE_REPO}:latest"
+CANONICAL_DEFAULT_PULSE_VERSION="6.0.0"
+
+resolve_default_pulse_version() {
+    if [ -n "${PULSE_IMAGE_VERSION:-}" ]; then
+        printf '%s' "${PULSE_IMAGE_VERSION}"
+        return
+    fi
+
+    for candidate in "${PULSE_VERSION_FILE:-}" "${SCRIPT_DIR}/../VERSION" "${PWD}/VERSION"; do
+        if [ -n "${candidate}" ] && [ -f "${candidate}" ]; then
+            local version
+            version=$(tr -d '\r\n' < "${candidate}" 2>/dev/null || true)
+            if [ -n "${version}" ]; then
+                printf '%s' "${version}"
+                return
+            fi
+        fi
+    done
+
+    printf '%s' "${CANONICAL_DEFAULT_PULSE_VERSION}"
+}
+
+DEFAULT_PULSE_IMAGE="${DOCKER_IMAGE_REPO}:$(resolve_default_pulse_version)"
 PULSE_IMAGE="${PULSE_IMAGE:-${DEFAULT_PULSE_IMAGE}}"
 PULSE_PORT="${PULSE_PORT:-7655}"
 
