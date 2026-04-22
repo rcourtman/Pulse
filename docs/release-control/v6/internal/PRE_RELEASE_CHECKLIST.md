@@ -53,6 +53,7 @@ Use this as the final gate before cutting a Pulse v6 pre-release.
 ## RC Issue Closure
 - [ ] Materialize a dated RC issue-closure record for the actual GA candidate under `docs/release-control/v6/internal/records/`.
 - [ ] Confirm that record enumerates the labeled `affects-6.0.0-rc.*` issues plus any additional open v6 RC-soak issues the project owner still expects v6 GA to address.
+- [ ] Review the live RC feedback intake surface before GA signoff: newly opened issues, new issue comments, the pinned prerelease feedback hub, and equivalent actionable RC feedback must either be absorbed into the dated closure record or explicitly judged out of v6 GA scope.
 - [ ] For each item, record exactly one disposition: fixed in the candidate with proof, invalid with evidence, or conservatively superseded with the original user-visible failure resolved or explicitly narrowed.
 - [ ] Do not carry any open RC-era user-visible issue into GA as accepted “post-GA cleanup”.
 

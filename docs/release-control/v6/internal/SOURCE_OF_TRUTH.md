@@ -159,7 +159,9 @@ Pulse v6 is ready when these outcomes land together:
 4. Stable or GA promotion happens only after prerelease validation, not as the first
    customer exposure.
 5. Stable or GA does not knowingly carry unresolved RC-era user-visible issues
-   across the admitted v6 scope.
+   across the admitted v6 scope, regardless of whether that feedback arrived as
+   a labeled issue, a new issue, an issue comment, the pinned prerelease
+   feedback hub, or an equivalent RC feedback report.
 
 Pulse v6 GA is intended to be a feature-complete release for the
 monitoring-first, unified-resource product case proven during prerelease.

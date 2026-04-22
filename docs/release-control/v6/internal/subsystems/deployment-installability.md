@@ -130,6 +130,11 @@ server-side update execution surfaces.
    The prerelease feedback intake template and active demo/update metadata must
    also stay on generic or current-RC wording instead of hard-coding stale
    `rc.1` examples once later candidates exist.
+   GA signoff must also treat prerelease feedback intake as a live surface, not
+   a one-time issue export: the owned checklist and release runbook must force
+   a last-pass review of new issues, new issue comments, the pinned prerelease
+   feedback hub, and equivalent actionable RC reports before a candidate is
+   declared feature-complete.
    The repo-root VERSION file is part of the same governed boundary and must
    not drift as an
    unowned release-cut switch: changing the version string for a new RC or

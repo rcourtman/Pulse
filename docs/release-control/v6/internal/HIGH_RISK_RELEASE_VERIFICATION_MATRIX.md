@@ -172,22 +172,29 @@ Companion drill:
   1. Open or install the exact GA candidate being considered for promotion.
   2. Materialize the current dated RC issue-closure record and confirm it
      enumerates the full current RC issue set in scope for v6 GA.
-  3. For each issue, verify one of these dispositions on the affected surface:
-     fixed in candidate with proof, invalid with evidence, or conservatively
-     superseded with the original user-visible failure resolved or explicitly
-     narrowed.
-  4. Confirm no open RC-era user-visible issue is being accepted as normal
-     post-GA cleanup for the v6 line.
+  3. Review the active RC feedback intake surfaces for anything newer than the
+     dated record: newly opened issues, new comments on open RC-soak issues,
+     the pinned prerelease feedback hub, and equivalent actionable feedback
+     reports.
+  4. Fold any still-in-scope user-visible item from that intake back into the
+     dated RC issue-closure record before making the gate call.
+  5. For each issue or absorbed feedback item, verify one of these
+     dispositions on the affected surface: fixed in candidate with proof,
+     invalid with evidence, or conservatively superseded with the original
+     user-visible failure resolved or explicitly narrowed.
+  6. Confirm no open RC-era user-visible issue or still-in-scope RC feedback
+     item is being accepted as normal post-GA cleanup for the v6 line.
 - Pass when:
-  Every issue in the current RC closure set is fixed in the candidate with
-  proof, proven invalid with evidence, or conservatively superseded with the
-  original problem resolved or narrowed, and no user-visible RC-era issue
-  remains open as intended GA carryover.
+  Every issue or still-in-scope feedback item in the current RC closure set is
+  fixed in the candidate with proof, proven invalid with evidence, or
+  conservatively superseded with the original problem resolved or narrowed,
+  and no user-visible RC-era issue remains open as intended GA carryover.
 - Latest exercised record:
   `docs/release-control/v6/internal/records/known-rc-issue-closure-for-ga-blocked-2026-04-21.md`
 - Block release if:
-  Any RC-era issue in scope remains open, unverified, or hand-waved into
-  post-GA work, or if the dated RC issue-closure record is missing or stale.
+  Any RC-era issue or still-in-scope RC feedback item remains open,
+  unverified, or hand-waved into post-GA work, or if the dated RC
+  issue-closure record is missing or stale.
 
 ## Gate: `self-hosted-commercial-ga-coherence`
 
