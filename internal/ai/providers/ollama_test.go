@@ -6,10 +6,18 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func newTestOllamaClient(t *testing.T, model, baseURL, username, password string, timeout time.Duration) *OllamaClient {
+	t.Helper()
+	client, err := NewOllamaClient(model, baseURL, username, password, timeout)
+	require.NoError(t, err)
+	return client
+}
 
 func TestOllamaClient_ChatStream_Success(t *testing.T) {
 	// Mock Ollama Stream (NDJSON)
@@ -35,7 +43,7 @@ func TestOllamaClient_ChatStream_Success(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewOllamaClient("llama3", server.URL, "", "", 0)
+	client := newTestOllamaClient(t, "llama3", server.URL, "", "", 0)
 
 	var content string
 	var done bool
@@ -78,7 +86,7 @@ func TestOllamaClient_ChatStream_ToolCall(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewOllamaClient("llama3", server.URL, "", "", 0)
+	client := newTestOllamaClient(t, "llama3", server.URL, "", "", 0)
 
 	var toolsFound []string
 
@@ -111,7 +119,7 @@ func TestOllamaClient_ChatStream_Errors(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewOllamaClient("llama3", server.URL, "", "", 0)
+	client := newTestOllamaClient(t, "llama3", server.URL, "", "", 0)
 
 	err := client.ChatStream(context.Background(), ChatRequest{Messages: []Message{{Role: "user"}}}, func(e StreamEvent) {})
 	assert.Error(t, err)
@@ -132,7 +140,7 @@ func TestOllamaClient_ListModels(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewOllamaClient("llama3", server.URL, "", "", 0)
+	client := newTestOllamaClient(t, "llama3", server.URL, "", "", 0)
 	models, err := client.ListModels(context.Background())
 
 	require.NoError(t, err)
@@ -153,9 +161,15 @@ func TestNewOllamaClient_Normalization(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		client := NewOllamaClient("model", tt.input, "", "", 0)
+		client := newTestOllamaClient(t, "model", tt.input, "", "", 0)
 		assert.Equal(t, tt.expect, client.baseURL)
 	}
+}
+
+func TestNewOllamaClient_RejectsCredentialedBaseURL(t *testing.T) {
+	_, err := NewOllamaClient("llama3", "http://user:pass@localhost:11434", "", "", 0)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "userinfo is not allowed")
 }
 
 func TestOllamaClient_Chat_Success(t *testing.T) {
@@ -186,7 +200,7 @@ func TestOllamaClient_Chat_Success(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewOllamaClient("llama3", server.URL, "", "", 0)
+	client := newTestOllamaClient(t, "llama3", server.URL, "", "", 0)
 	resp, err := client.Chat(context.Background(), ChatRequest{
 		Messages: []Message{{Role: "user", Content: "Hi"}},
 		Tools: []Tool{
@@ -233,7 +247,7 @@ func TestOllamaClient_TestConnection(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewOllamaClient("llama3", server.URL, "unai", "secret", 0)
+	client := newTestOllamaClient(t, "llama3", server.URL, "unai", "secret", 0)
 	err := client.TestConnection(context.Background())
 	require.NoError(t, err)
 	assert.Equal(t, 1, versionHits)
@@ -241,10 +255,18 @@ func TestOllamaClient_TestConnection(t *testing.T) {
 }
 
 func TestOllamaClient_SupportsThinking(t *testing.T) {
-	client := NewOllamaClient("llama3", "http://localhost:11434", "", "", 0)
+	client := newTestOllamaClient(t, "llama3", "http://localhost:11434", "", "", 0)
 	if client.SupportsThinking("llama3") {
 		t.Fatal("expected SupportsThinking to be false")
 	}
+}
+
+func TestOllamaClient_TestConnection_BlocksMetadataServiceHost(t *testing.T) {
+	client := newTestOllamaClient(t, "llama3", "http://169.254.169.254:11434", "", "", 0)
+
+	err := client.TestConnection(context.Background())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "metadata service address is not allowed")
 }
 
 func TestOllamaClient_TestConnection_ModelUnavailable(t *testing.T) {
@@ -262,7 +284,7 @@ func TestOllamaClient_TestConnection_ModelUnavailable(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewOllamaClient("llama3", server.URL, "", "", 0)
+	client := newTestOllamaClient(t, "llama3", server.URL, "", "", 0)
 	err := client.TestConnection(context.Background())
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), `model "llama3" is not available`)

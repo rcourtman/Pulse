@@ -9,7 +9,17 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 )
+
+const defaultOllamaBaseURL = "http://localhost:11434"
+
+var ollamaOutboundHTTPOptions = securityutil.RestrictedOutboundHTTPOptions{
+	AllowedSchemes:  []string{"http", "https"},
+	AllowPrivateIPs: true,
+	AllowLoopback:   true,
+}
 
 // OllamaClient implements the Provider interface for Ollama's local API
 type OllamaClient struct {
@@ -23,36 +33,58 @@ type OllamaClient struct {
 
 // NewOllamaClient creates a new Ollama API client
 // timeout is optional - pass 0 to use the default 5 minute timeout
-func NewOllamaClient(model, baseURL, username, password string, timeout time.Duration) *OllamaClient {
-	if baseURL == "" {
-		baseURL = "http://localhost:11434"
+func NewOllamaClient(model, baseURL, username, password string, timeout time.Duration) (*OllamaClient, error) {
+	normalizedBaseURL, err := normalizeOllamaBaseURL(baseURL)
+	if err != nil {
+		return nil, err
 	}
-	// Normalize the URL: strip trailing slashes and /api suffix
-	// Users sometimes enter http://host:11434/ or http://host:11434/api
-	baseURL = strings.TrimSuffix(baseURL, "/")
-	baseURL = strings.TrimSuffix(baseURL, "/api")
-	baseURL = strings.TrimSuffix(baseURL, "/") // In case it was /api/
 	if timeout <= 0 {
 		timeout = 300 * time.Second // Default 5 minutes
 	}
 	return &OllamaClient{
-		model:    model,
-		baseURL:  baseURL,
-		username: username,
-		password: password,
-		client: &http.Client{
-			Timeout: timeout,
-		},
-		streamClient: &http.Client{
-			// No Timeout set — http.Client.Timeout covers the entire request lifecycle
-			// including reading the response body, which kills streaming responses from
-			// slow models (e.g. CPU-only inference). Context cancellation handles timeouts
-			// for streaming instead.
-			Transport: &http.Transport{
-				ResponseHeaderTimeout: timeout, // Still timeout if server never starts responding
-			},
-		},
+		model:        model,
+		baseURL:      normalizedBaseURL,
+		username:     username,
+		password:     password,
+		client:       newOllamaHTTPClient(timeout, false),
+		streamClient: newOllamaHTTPClient(timeout, true),
+	}, nil
+}
+
+func normalizeOllamaBaseURL(raw string) (string, error) {
+	if strings.TrimSpace(raw) == "" {
+		raw = defaultOllamaBaseURL
 	}
+
+	baseURL, err := securityutil.NormalizeHTTPBaseURL(raw, "")
+	if err != nil {
+		return "", fmt.Errorf("normalize Ollama base URL: %w", err)
+	}
+
+	baseURL.Path = strings.TrimSuffix(baseURL.Path, "/")
+	baseURL.Path = strings.TrimSuffix(baseURL.Path, "/api")
+	baseURL.Path = strings.TrimSuffix(baseURL.Path, "/")
+	baseURL.RawPath = ""
+
+	return baseURL.String(), nil
+}
+
+func newOllamaHTTPClient(timeout time.Duration, streaming bool) *http.Client {
+	clientTimeout := timeout
+	if streaming {
+		clientTimeout = 0
+	}
+
+	client := securityutil.NewRestrictedOutboundHTTPClient(clientTimeout, ollamaOutboundHTTPOptions)
+	if streaming {
+		if transport, ok := client.Transport.(*http.Transport); ok {
+			// Streaming relies on context cancellation instead of a full client timeout,
+			// but it should still fail if the server never starts responding.
+			transport.ResponseHeaderTimeout = timeout
+		}
+	}
+
+	return client
 }
 
 func (c *OllamaClient) applyAuth(req *http.Request) {

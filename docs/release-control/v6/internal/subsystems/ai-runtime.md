@@ -115,6 +115,12 @@ That backend/runtime ownership does not require the Patrol product surface to
 inherit `AI` as its canonical browser route: the customer-facing shell may use
 `/patrol` while shared AI transport, provider settings, and payload contracts
 remain the governed technical boundary behind it.
+Operator-configured provider base URLs remain part of that backend transport
+boundary. Ollama keeps supporting remote or local instances, but
+`internal/ai/providers/ollama.go` must normalize the configured base URL and
+route requests through the shared restricted outbound HTTP transport so
+metadata, link-local, and redirect-escape paths do not bypass the runtime's
+egress guardrails.
 That same operator-facing vocabulary rule applies to the runtime usage surface:
 `frontend-modern/src/components/AI/AICostDashboard.tsx` must present provider
 usage and spend backing Pulse Assistant and Patrol rather than generic `AI`
