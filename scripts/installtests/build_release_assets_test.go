@@ -89,6 +89,8 @@ func TestCreateReleaseUploadsPowerShellInstaller(t *testing.T) {
 
 	workflow := string(content)
 	required := []string{
+		`historical_asset_backfill_only:`,
+		`description: 'Repair an already-published release packet in place without rebuilding binaries'`,
 		`SYFT_VERSION="1.42.4"`,
 		`SYFT_ARCHIVE="syft_${SYFT_VERSION}_linux_amd64.tar.gz"`,
 		`SYFT_SHA256="590650c2743b83f327d1bf9bec64f6f83b7fec504187bb84f500c862bf8f2a0f"`,
@@ -114,6 +116,11 @@ func TestCreateReleaseUploadsPowerShellInstaller(t *testing.T) {
 		`gh api "repos/${{ github.repository }}/releases?per_page=100" --paginate`,
 		`git push origin "refs/tags/${TAG}" --force`,
 		`-F target_commitish="${HEAD_SHA}"`,
+		`historical_asset_backfill_only=${HISTORICAL_ASSET_BACKFILL_ONLY}`,
+		`if: ${{ needs.prepare.outputs.historical_asset_backfill_only != 'true' }}`,
+		`if: ${{ needs.prepare.outputs.historical_asset_backfill_only == 'true' }}`,
+		`./scripts/backfill-release-assets.sh --tag "${{ needs.prepare.outputs.tag }}" --repo "${{ github.repository }}"`,
+		`./scripts/validate-published-release.sh "${{ needs.prepare.outputs.tag }}" "${{ github.repository }}"`,
 	}
 	for _, needle := range required {
 		if !strings.Contains(workflow, needle) {

@@ -1071,8 +1071,9 @@ checksum-only trust and can publish a shareable non-image software inventory
 alongside the signed binaries.
 Historical published-release repair must flow through
 `scripts/backfill-release-assets.sh` and
-`.github/workflows/backfill-release-assets.yml`, which download the
-already-published packet and regenerate only the derived integrity assets
+`.github/workflows/backfill-release-assets.yml` or the canonical
+`.github/workflows/create-release.yml` historical backfill mode, which download
+the already-published packet and regenerate only the derived integrity assets
 (`checksums.txt`, `.sha256`, `.sig`, `.sshsig`, and the canonical
 release-packet SBOM`) from those shipped bytes instead of rebuilding binaries
 from the current branch tip.

@@ -37,6 +37,11 @@ on:
         description: 'Stable only: reason for hotfix soak exception'
         required: false
         type: string
+      historical_asset_backfill_only:
+        description: 'Repair an already-published release packet in place without rebuilding binaries'
+        required: false
+        type: boolean
+        default: false
       draft_only:
         description: 'Create draft release only (do not publish)'
         required: false
@@ -68,6 +73,7 @@ jobs:
       v5_eos_date: ${{ steps.promotion.outputs.v5_eos_date }}
       hotfix_exception: ${{ steps.promotion.outputs.hotfix_exception }}
       hotfix_reason: ${{ steps.promotion.outputs.hotfix_reason }}
+      historical_asset_backfill_only: ${{ steps.extract.outputs.historical_asset_backfill_only }}
     steps:
       - name: Extract version
         id: extract
@@ -91,11 +97,13 @@ jobs:
           fi
 
           SOURCE_BRANCH="${GITHUB_REF_NAME}"
+          HISTORICAL_ASSET_BACKFILL_ONLY=$(jq -r '.inputs.historical_asset_backfill_only // "false"' "$GITHUB_EVENT_PATH" 2>/dev/null || echo "false")
           echo "tag=${TAG}" >> $GITHUB_OUTPUT
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
           echo "is_prerelease=${IS_PRERELEASE}" >> $GITHUB_OUTPUT
           echo "source_branch=${SOURCE_BRANCH}" >> $GITHUB_OUTPUT
-          echo "Version: ${VERSION}, Tag: ${TAG}, Prerelease: ${IS_PRERELEASE}, Branch: ${SOURCE_BRANCH}"
+          echo "historical_asset_backfill_only=${HISTORICAL_ASSET_BACKFILL_ONLY}" >> $GITHUB_OUTPUT
+          echo "Version: ${VERSION}, Tag: ${TAG}, Prerelease: ${IS_PRERELEASE}, Branch: ${SOURCE_BRANCH}, HistoricalBackfillOnly: ${HISTORICAL_ASSET_BACKFILL_ONLY}"
 
       - name: Checkout repository
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -119,6 +127,7 @@ jobs:
           echo "[OK] Governed release branch for ${{ steps.extract.outputs.version }} is ${REQUIRED_BRANCH}"
 
       - name: Validate VERSION file
+        if: ${{ steps.extract.outputs.historical_asset_backfill_only != 'true' }}
         run: |
           FILE_VERSION=$(cat VERSION | tr -d '\n')
           REQUESTED_VERSION="${{ steps.extract.outputs.version }}"
@@ -130,6 +139,7 @@ jobs:
           echo "[OK] VERSION file matches requested version ($REQUESTED_VERSION)"
 
       - name: Validate promotion policy
+        if: ${{ steps.extract.outputs.historical_asset_backfill_only != 'true' }}
         id: promotion
         env:
           VERSION: ${{ steps.extract.outputs.version }}
@@ -176,6 +186,7 @@ jobs:
   # Frontend checks run in parallel with backend tests
   frontend_checks:
     needs: prepare
+    if: ${{ needs.prepare.outputs.historical_asset_backfill_only != 'true' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -204,6 +215,7 @@ jobs:
   # Backend tests run in parallel with frontend checks
   backend_tests:
     needs: prepare
+    if: ${{ needs.prepare.outputs.historical_asset_backfill_only != 'true' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     env:
@@ -252,6 +264,7 @@ jobs:
   # Docker build - amd64 only for prereleases, multi-arch for stable
   docker_build:
     needs: prepare
+    if: ${{ needs.prepare.outputs.historical_asset_backfill_only != 'true' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
@@ -313,6 +326,7 @@ jobs:
 
   helm_smoke:
     needs: prepare
+    if: ${{ needs.prepare.outputs.historical_asset_backfill_only != 'true' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -417,7 +431,7 @@ jobs:
     needs:
       - prepare
       - backend_tests
-    if: ${{ needs.prepare.outputs.is_prerelease != 'true' }}
+    if: ${{ needs.prepare.outputs.historical_asset_backfill_only != 'true' && needs.prepare.outputs.is_prerelease != 'true' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     env:
@@ -526,7 +540,7 @@ jobs:
       - helm_smoke
       - integration_tests
     # Run if integration_tests passed OR was skipped (prereleases)
-    if: ${{ always() && needs.frontend_checks.result == 'success' && needs.backend_tests.result == 'success' && needs.docker_build.result == 'success' && needs.helm_smoke.result == 'success' && (needs.integration_tests.result == 'success' || needs.integration_tests.result == 'skipped') }}
+    if: ${{ needs.prepare.outputs.historical_asset_backfill_only != 'true' && always() && needs.frontend_checks.result == 'success' && needs.backend_tests.result == 'success' && needs.docker_build.result == 'success' && needs.helm_smoke.result == 'success' && (needs.integration_tests.result == 'success' || needs.integration_tests.result == 'skipped') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
@@ -845,10 +859,63 @@ jobs:
           echo "Release: ${{ needs.prepare.outputs.tag }}"
           echo "URL: ${{ steps.create_release.outputs.release_url }}"
 
+  backfill_release_assets:
+    needs:
+      - prepare
+    if: ${{ needs.prepare.outputs.historical_asset_backfill_only == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version: '1.25.9'
+          cache: true
+
+      - name: Install Syft
+        run: |
+          set -euo pipefail
+
+          SYFT_VERSION="1.42.4"
+          SYFT_ARCHIVE="syft_${SYFT_VERSION}_linux_amd64.tar.gz"
+          SYFT_SHA256="590650c2743b83f327d1bf9bec64f6f83b7fec504187bb84f500c862bf8f2a0f"
+          TMP_DIR="$(mktemp -d)"
+          trap 'rm -rf "$TMP_DIR"' EXIT
+
+          curl -fsSL "https://github.com/anchore/syft/releases/download/v${SYFT_VERSION}/${SYFT_ARCHIVE}" \
+            -o "${TMP_DIR}/${SYFT_ARCHIVE}"
+          printf '%s  %s\n' "${SYFT_SHA256}" "${TMP_DIR}/${SYFT_ARCHIVE}" | sha256sum --check --
+          tar -xzf "${TMP_DIR}/${SYFT_ARCHIVE}" -C "${TMP_DIR}" syft
+          install -m 0755 "${TMP_DIR}/syft" /usr/local/bin/syft
+          syft version
+
+      - name: Backfill published release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PULSE_UPDATE_SIGNING_KEY: ${{ secrets.PULSE_UPDATE_SIGNING_KEY }}
+        run: |
+          ./scripts/backfill-release-assets.sh --tag "${{ needs.prepare.outputs.tag }}" --repo "${{ github.repository }}"
+
+      - name: Validate published release packet
+        run: |
+          ./scripts/validate-published-release.sh "${{ needs.prepare.outputs.tag }}" "${{ github.repository }}"
+
+      - name: Summary
+        run: |
+          echo "[SUCCESS] Historical release assets repaired"
+          echo "Release: ${{ needs.prepare.outputs.tag }}"
+
   validate_release_assets:
     needs:
       - prepare
       - create_release
+    if: ${{ needs.prepare.outputs.historical_asset_backfill_only != 'true' }}
     uses: ./.github/workflows/validate-release-assets.yml
     secrets: inherit
     with:
