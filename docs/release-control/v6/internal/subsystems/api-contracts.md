@@ -725,6 +725,12 @@ the origin root. Runtime SAML metadata refresh, runtime OIDC discovery, and
 admin-side SSO test/preview fetches must all use that same restricted outbound
 transport policy, including same-origin redirect validation and checked
 regular-file loads for any configured SSO credential or CA-bundle path.
+That same restricted outbound transport is also the canonical cross-product
+egress boundary. It is exported via `pkg/securityutil`, with
+`internal/securityutil` retaining Pulse-local wrappers, so adjacent products
+such as `pulse-enterprise` can reuse the same DNS-rebinding-safe dial and
+redirect policy for operator-configured audit webhooks instead of reintroducing
+raw `http.Client` egress paths.
 That same SSO boundary also owns manual SAML endpoint validation payloads.
 `internal/api/identity_sso_handlers.go`, `internal/api/saml_service.go`, and
 `internal/api/contract_test.go` must preserve both `idpSsoUrl` and optional

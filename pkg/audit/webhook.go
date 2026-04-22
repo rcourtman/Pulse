@@ -12,8 +12,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 	"github.com/rs/zerolog/log"
+
+	"github.com/rcourtman/pulse-go-rewrite/pkg/securityutil"
 )
 
 const (
