@@ -73,7 +73,10 @@ var (
 	runtimeGOARCH                = runtime.GOARCH
 	unameCommand                 = func() ([]byte, error) { return exec.Command("uname", "-m").Output() }
 	unraidVersionPath            = "/etc/unraid-version"
+	qnapGetcfgPath               = "/sbin/getcfg"
+	qnapQpkgConfPath             = "/etc/config/qpkg.conf"
 	unraidPersistentPathFn       = unraidPersistentPath
+	qnapPersistentPathFn         = qnapPersistentPath
 	restartProcessFn             = restartProcess
 	osExecutableFn               = os.Executable
 	evalSymlinksFn               = filepath.EvalSymlinks
@@ -99,6 +102,9 @@ type Config struct {
 
 	// CurrentVersion is the version currently running
 	CurrentVersion string
+
+	// StateDir is the persistent state directory used by the runtime installer.
+	StateDir string
 
 	// CheckInterval is how often to check for updates (default: 1 hour)
 	CheckInterval time.Duration
@@ -477,6 +483,14 @@ func isUnraid() bool {
 	return err == nil
 }
 
+func isQNAP() bool {
+	if _, err := os.Stat(qnapGetcfgPath); err == nil {
+		return true
+	}
+	_, err := os.Stat(qnapQpkgConfPath)
+	return err == nil
+}
+
 // verifyBinaryMagic checks that the file is a valid executable for the current platform
 func verifyBinaryMagic(path string) (retErr error) {
 	f, err := os.Open(path)
@@ -536,6 +550,18 @@ func verifyBinaryMagic(path string) (retErr error) {
 // unraidPersistentPath returns the path where the binary should be persisted on Unraid
 func unraidPersistentPath(agentName string) string {
 	return fmt.Sprintf("/boot/config/plugins/%s/%s", agentName, agentName)
+}
+
+func qnapPersistentPath(stateDir, agentName string) string {
+	name, err := normalizeAgentName(agentName)
+	if err != nil {
+		return ""
+	}
+	stateDir = strings.TrimSpace(stateDir)
+	if stateDir == "" {
+		return ""
+	}
+	return filepath.Join(stateDir, name)
 }
 
 func normalizeAgentName(agentName string) (string, error) {
@@ -738,32 +764,46 @@ func (u *Updater) performUpdateWithExecPath(ctx context.Context, execPath string
 	if isUnraid() {
 		persistPath := unraidPersistentPathFn(agentName)
 		if _, err := os.Stat(persistPath); err == nil {
-			// Persistent path exists, update it
-			u.logger.Debug().Str("path", persistPath).Msg("updating unraid persistent binary")
+			u.syncPersistentBinaryCopy(execPath, persistPath, "unraid")
+		}
+	}
 
-			// Read the newly installed binary
-			newBinary, err := readFileFn(execPath)
-			if err != nil {
-				u.logger.Warn().Err(err).Str("path", execPath).Msg("failed to read new binary for unraid persistence")
-			} else {
-				// Write to persistent storage (atomic via temp file)
-				tmpPersist := persistPath + ".tmp"
-				if err := writeFileFn(tmpPersist, newBinary, 0644); err != nil {
-					u.logger.Warn().Err(err).Str("path", tmpPersist).Msg("failed to write unraid persistent binary")
-				} else if err := renameFn(tmpPersist, persistPath); err != nil {
-					u.logger.Warn().Err(err).Msg("Failed to rename Unraid persistent binary")
-					if removeErr := os.Remove(tmpPersist); removeErr != nil && !errors.Is(removeErr, os.ErrNotExist) {
-						u.logger.Warn().Err(removeErr).Str("path", tmpPersist).Msg("Failed to remove temporary Unraid persistent binary")
-					}
-				} else {
-					u.logger.Info().Str("path", persistPath).Msg("updated unraid persistent binary")
-				}
+	if isQNAP() {
+		persistPath := qnapPersistentPathFn(u.cfg.StateDir, agentName)
+		if persistPath != "" {
+			if _, err := os.Stat(filepath.Dir(persistPath)); err == nil {
+				u.syncPersistentBinaryCopy(execPath, persistPath, "qnap")
 			}
 		}
 	}
 
 	// Restart the process using platform-specific implementation
 	return restartProcessFn(execPath)
+}
+
+func (u *Updater) syncPersistentBinaryCopy(execPath, persistPath, platform string) {
+	u.logger.Debug().Str("path", persistPath).Str("platform", platform).Msg("updating persistent binary")
+
+	newBinary, err := readFileFn(execPath)
+	if err != nil {
+		u.logger.Warn().Err(err).Str("path", execPath).Str("platform", platform).Msg("failed to read new binary for persistent update")
+		return
+	}
+
+	tmpPersist := persistPath + ".tmp"
+	if err := writeFileFn(tmpPersist, newBinary, 0644); err != nil {
+		u.logger.Warn().Err(err).Str("path", tmpPersist).Str("platform", platform).Msg("failed to write persistent binary")
+		return
+	}
+	if err := renameFn(tmpPersist, persistPath); err != nil {
+		u.logger.Warn().Err(err).Str("path", persistPath).Str("platform", platform).Msg("failed to replace persistent binary")
+		if removeErr := os.Remove(tmpPersist); removeErr != nil && !errors.Is(removeErr, os.ErrNotExist) {
+			u.logger.Warn().Err(removeErr).Str("path", tmpPersist).Str("platform", platform).Msg("failed to remove temporary persistent binary")
+		}
+		return
+	}
+
+	u.logger.Info().Str("path", persistPath).Str("platform", platform).Msg("updated persistent binary")
 }
 
 // GetUpdatedFromVersion checks if the agent was recently updated and returns the previous version.

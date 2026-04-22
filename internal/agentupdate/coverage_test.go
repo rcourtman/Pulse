@@ -1305,6 +1305,93 @@ func TestPerformUpdateUnraidPaths(t *testing.T) {
 	})
 }
 
+func TestPerformUpdateQNAPPaths(t *testing.T) {
+	data := testBinary()
+	check := checksum(data)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Checksum-Sha256", check)
+		_, _ = w.Write(data)
+	}))
+	t.Cleanup(server.Close)
+
+	_, execPath := writeTempExec(t)
+	u := newUpdaterForTest(server.URL)
+	u.client = server.Client()
+
+	origQnapGetcfg := qnapGetcfgPath
+	origQnapQpkgConf := qnapQpkgConfPath
+	origQnapPersist := qnapPersistentPathFn
+	origRead := readFileFn
+	origWrite := writeFileFn
+	origRename := renameFn
+	origRestart := restartProcessFn
+	t.Cleanup(func() {
+		qnapGetcfgPath = origQnapGetcfg
+		qnapQpkgConfPath = origQnapQpkgConf
+		qnapPersistentPathFn = origQnapPersist
+		readFileFn = origRead
+		writeFileFn = origWrite
+		renameFn = origRename
+		restartProcessFn = origRestart
+	})
+
+	tmpDir := t.TempDir()
+	qnapGetcfgPath = filepath.Join(tmpDir, "getcfg")
+	if err := os.WriteFile(qnapGetcfgPath, []byte("#!/bin/sh\n"), 0755); err != nil {
+		t.Fatalf("write qnap marker: %v", err)
+	}
+	qnapQpkgConfPath = filepath.Join(tmpDir, "qpkg.conf")
+
+	persistDir := filepath.Join(tmpDir, "state")
+	if err := os.MkdirAll(persistDir, 0755); err != nil {
+		t.Fatalf("mkdir qnap state: %v", err)
+	}
+	persistPath := filepath.Join(persistDir, "pulse-agent")
+	u.cfg.StateDir = persistDir
+	qnapPersistentPathFn = func(string, string) string { return persistPath }
+	restartProcessFn = func(string) error { return nil }
+
+	t.Run("WriteError", func(t *testing.T) {
+		readFileFn = func(string) ([]byte, error) { return []byte("new"), nil }
+		writeFileFn = func(string, []byte, os.FileMode) error { return errors.New("write fail") }
+		renameFn = os.Rename
+		if err := u.performUpdateWithExecPath(context.Background(), execPath); err != nil {
+			t.Fatalf("expected update success, got %v", err)
+		}
+	})
+
+	t.Run("RenameError", func(t *testing.T) {
+		readFileFn = func(string) ([]byte, error) { return []byte("new"), nil }
+		writeFileFn = os.WriteFile
+		renameFn = func(oldPath, newPath string) error {
+			if newPath == persistPath {
+				return errors.New("rename fail")
+			}
+			return os.Rename(oldPath, newPath)
+		}
+		if err := u.performUpdateWithExecPath(context.Background(), execPath); err != nil {
+			t.Fatalf("expected update success, got %v", err)
+		}
+	})
+
+	t.Run("Success", func(t *testing.T) {
+		readFileFn = func(string) ([]byte, error) { return []byte("new"), nil }
+		writeFileFn = os.WriteFile
+		renameFn = os.Rename
+		if err := u.performUpdateWithExecPath(context.Background(), execPath); err != nil {
+			t.Fatalf("expected update success, got %v", err)
+		}
+		got, err := os.ReadFile(persistPath)
+		if err != nil {
+			t.Fatalf("read qnap persistent binary: %v", err)
+		}
+		if string(got) != "new" {
+			t.Fatalf("qnap persistent binary = %q, want %q", string(got), "new")
+		}
+	})
+}
+
 type errorReader struct {
 	sent bool
 }

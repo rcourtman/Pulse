@@ -40,11 +40,12 @@ func (ws *windowsService) Execute(args []string, r <-chan svc.ChangeRequest, cha
 	g, ctx := errgroup.WithContext(ctx)
 
 	// Start Auto-Updater
-	updater := agentupdate.New(agentupdate.Config{
+	updater := newUpdater(agentupdate.Config{
 		PulseURL:           ws.cfg.PulseURL,
 		APIToken:           ws.cfg.APIToken,
 		AgentName:          "pulse-agent",
 		CurrentVersion:     Version,
+		StateDir:           ws.cfg.StateDir,
 		CheckInterval:      1 * time.Hour,
 		InsecureSkipVerify: ws.cfg.InsecureSkipVerify,
 		CACertPath:         ws.cfg.CACertPath,

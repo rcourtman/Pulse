@@ -98,6 +98,30 @@
      - the current v6 candidate no longer knowingly lacks protection for the specific RC-era RAM inflation, disappearing guest disk, or disappearing guest interface symptoms tracked in `#1319`.
      - the GitHub issue may still remain open for reporter confirmation on a real v6 build, but it is no longer an unexamined RC3 blocker on the candidate itself.
 
+10. `#1420` (`[Bug]: Pulse Agent does not auto-update on Qnap Platforms`)
+   - Fixed on the current `pulse/v6-release` candidate by restoring the canonical QNAP persistence contract across both installer bootstrap and self-update:
+     - `scripts/install.sh` again provisions a QNAP-specific persistent state directory and wrapper on the writable data volume instead of assuming `/usr/local/bin` survives reboot
+     - `internal/agentupdate/update.go` now updates that persisted QNAP binary copy after a successful self-update so the next reboot keeps the same version the live runtime just installed
+   - Verification:
+     - `bash -n scripts/install.sh`
+     - `go test ./internal/agentupdate`
+     - `go test ./scripts/installtests`
+     - `go test ./cmd/pulse-agent`
+   - Result:
+     - the current v6 candidate no longer knowingly carries the QNAP auto-update regression where the running agent could update in place but reboot back to the older persisted binary.
+
+11. `#1422` (`[Bug]: agent does not start on QNAP boot, fails due to hard drive encyption?`)
+   - Fixed on the current `pulse/v6-release` candidate by restoring the canonical QNAP boot path in a safer shape than the old implementation:
+     - the installer now writes the QNAP `autorun.sh` entry as a deferred bootstrap on the flash-backed config partition
+     - that bootstrap waits for the persistent data-volume wrapper to become available before launching it, instead of trying to execute the encrypted-volume wrapper directly during early boot
+     - uninstall now removes the same QNAP `autorun.sh` block and persistent state directory through the installer-owned lifecycle path
+   - Verification:
+     - `bash -n scripts/install.sh`
+     - `go test ./scripts/installtests`
+     - `go test ./cmd/pulse-agent`
+   - Result:
+     - the current v6 candidate no longer knowingly depends on the old early-boot QNAP startup path that could fail before the encrypted data volume was available.
+
 ## Outcome
 
 - The RC-era issue set admitted into the v6 GA bar on `2026-04-21` is now covered by the candidate.

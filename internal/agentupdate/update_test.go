@@ -82,6 +82,49 @@ func TestUnraidPersistentPath(t *testing.T) {
 	}
 }
 
+func TestQnapPersistentPath(t *testing.T) {
+	tests := []struct {
+		name      string
+		stateDir  string
+		agentName string
+		expected  string
+	}{
+		{
+			name:      "canonical qnap state dir",
+			stateDir:  "/share/CACHEDEV1_DATA/.pulse-agent",
+			agentName: "pulse-agent",
+			expected:  "/share/CACHEDEV1_DATA/.pulse-agent/pulse-agent",
+		},
+		{
+			name:      "trims state dir whitespace",
+			stateDir:  " /share/MD0_DATA/.pulse-agent ",
+			agentName: "custom-agent",
+			expected:  "/share/MD0_DATA/.pulse-agent/custom-agent",
+		},
+		{
+			name:      "empty state dir",
+			stateDir:  "",
+			agentName: "pulse-agent",
+			expected:  "",
+		},
+		{
+			name:      "invalid agent name",
+			stateDir:  "/share/CACHEDEV1_DATA/.pulse-agent",
+			agentName: "../pulse-agent",
+			expected:  "",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			result := qnapPersistentPath(tc.stateDir, tc.agentName)
+			if result != tc.expected {
+				t.Errorf("qnapPersistentPath(%q, %q) = %q, want %q", tc.stateDir, tc.agentName, result, tc.expected)
+			}
+		})
+	}
+}
+
 func TestVerifyBinaryMagic_ELF(t *testing.T) {
 	if runtime.GOOS != "linux" {
 		t.Skip("ELF verification test only runs on Linux")

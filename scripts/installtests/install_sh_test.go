@@ -448,6 +448,51 @@ func TestWriteTrueNASBootstrapScriptUsesCanonicalRenderer(t *testing.T) {
 	}
 }
 
+func TestInstallSHUsesCanonicalQNAPBootstrapRenderer(t *testing.T) {
+	content, err := os.ReadFile(repoFile("scripts", "install.sh"))
+	if err != nil {
+		t.Fatalf("read install.sh: %v", err)
+	}
+
+	script := string(content)
+	required := []string{
+		`detect_qnap_data_volume() {`,
+		`find_qnap_state_dir() {`,
+		`remove_qnap_autorun_block() {`,
+		`write_qnap_wrapper_script() {`,
+		`append_qnap_autorun_block() {`,
+		`STATE_DIR="${QNAP_VOL}/.pulse-agent"`,
+		`write_qnap_wrapper_script "$WRAPPER_SCRIPT" "$RUNTIME_BINARY" "$QNAP_STORED_BINARY"`,
+		`append_qnap_autorun_block "$AUTORUN_PATH" "$WRAPPER_SCRIPT" "$STATE_DIR"`,
+		`complete_installation_flow "$STATE_DIR" "Installation complete! Agent is running." "Upgrade complete! Agent is running." "tail -f /var/log/${AGENT_NAME}.log"`,
+	}
+	for _, needle := range required {
+		if !strings.Contains(script, needle) {
+			t.Fatalf("install.sh missing canonical QNAP bootstrap ownership: %s", needle)
+		}
+	}
+}
+
+func TestInstallSHUsesQNAPStateForUninstallRecovery(t *testing.T) {
+	content, err := os.ReadFile(repoFile("scripts", "install.sh"))
+	if err != nil {
+		t.Fatalf("read install.sh: %v", err)
+	}
+
+	script := string(content)
+	required := []string{
+		`qnap_state_dir=$(find_qnap_state_dir || true)`,
+		`aid_paths+=("$qnap_state_dir/agent-id")`,
+		`if [[ -n "$qnap_state_dir" ]] && [[ -f "$qnap_state_dir/connection.env" ]]; then`,
+		`remove_qnap_autorun_block "$AUTORUN_PATH"`,
+	}
+	for _, needle := range required {
+		if !strings.Contains(script, needle) {
+			t.Fatalf("install.sh missing QNAP uninstall continuity handling: %s", needle)
+		}
+	}
+}
+
 func TestInstallSHUsesSharedServiceRenderers(t *testing.T) {
 	content, err := os.ReadFile(repoFile("scripts", "install.sh"))
 	if err != nil {
@@ -487,6 +532,7 @@ func TestInstallSHUsesCanonicalCompletionHelper(t *testing.T) {
 		`json_event "complete" "installed_unhealthy" "Agent installed but not responding"`,
 		`complete_installation_flow "/var/lib/pulse-agent" "Installation complete! Agent is running." "Upgrade complete! Agent restarted with new configuration." "tail -f $LOG_FILE"`,
 		`complete_installation_flow "$UNRAID_STORAGE_DIR" "Installation complete! Agent is running." "Upgrade complete! Agent is running." "tail -f /var/log/${AGENT_NAME}.log"`,
+		`complete_installation_flow "$STATE_DIR" "Installation complete! Agent is running." "Upgrade complete! Agent is running." "tail -f /var/log/${AGENT_NAME}.log"`,
 		`complete_installation_flow "$TRUENAS_STATE_DIR" "Installation complete! Agent is running." "Upgrade complete! Agent is running." ""`,
 		`complete_installation_flow "/var/lib/pulse-agent" "Installation complete! Agent is running." "Upgrade complete! Agent restarted with new configuration." "tail -f /var/log/messages"`,
 		`complete_installation_flow "/var/lib/pulse-agent" "Installation complete! Agent is running." "Upgrade complete! Agent restarted with new configuration." "journalctl -u ${AGENT_NAME} --no-pager -n 20"`,

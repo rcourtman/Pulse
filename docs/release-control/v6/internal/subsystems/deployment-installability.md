@@ -1019,3 +1019,10 @@ render release installers with that pinned SSH verifier, emit both `.sig` and
 those signatures with the matching release packet so published RC/stable
 downloads can keep the updater and installer trust chain fail-closed instead
 of downgrading to checksum-only trust.
+The shell-installer boundary now also owns the QNAP boot bootstrap and
+teardown contract end to end: `scripts/install.sh` must persist the wrapper on
+the writable data volume, write a flash-backed `autorun.sh` block that waits
+for that volume before launching the wrapper, recover the same state during
+uninstall, and keep the persisted boot copy aligned with updater-owned runtime
+binary replacements instead of assuming `/usr/local/bin` survives reboot on
+QTS/QuTS hero.

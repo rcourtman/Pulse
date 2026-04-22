@@ -68,8 +68,9 @@ var (
 	newHostAgent func(hostagent.Config) (Runnable, error) = func(c hostagent.Config) (Runnable, error) {
 		return hostagent.New(c)
 	}
-	lookPath                = exec.LookPath
-	runAsWindowsServiceFunc = runAsWindowsService
+	newUpdater              func(agentupdate.Config) *agentupdate.Updater = agentupdate.New
+	lookPath                                                              = exec.LookPath
+	runAsWindowsServiceFunc                                               = runAsWindowsService
 
 	// For testing
 	retryInitialDelay = 5 * time.Second
@@ -253,11 +254,12 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 	}
 
 	// 7. Start Auto-Updater
-	updater := agentupdate.New(agentupdate.Config{
+	updater := newUpdater(agentupdate.Config{
 		PulseURL:           cfg.PulseURL,
 		APIToken:           cfg.APIToken,
 		AgentName:          "pulse-agent",
 		CurrentVersion:     Version,
+		StateDir:           cfg.StateDir,
 		CheckInterval:      1 * time.Hour,
 		InsecureSkipVerify: cfg.InsecureSkipVerify,
 		CACertPath:         cfg.CACertPath,

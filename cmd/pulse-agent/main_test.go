@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentupdate"
 	"github.com/rcourtman/pulse-go-rewrite/internal/dockeragent"
 	"github.com/rcourtman/pulse-go-rewrite/internal/hostagent"
 	"github.com/rcourtman/pulse-go-rewrite/internal/kubernetesagent"
@@ -1332,6 +1333,53 @@ func TestRun_Success(t *testing.T) {
 		}
 	case <-time.After(3 * time.Second):
 		t.Fatal("timeout waiting for run to finish")
+	}
+}
+
+func TestRun_PassesStateDirToUpdaterAndHostAgent(t *testing.T) {
+	origUpdater := newUpdater
+	origHost := newHostAgent
+	defer func() {
+		newUpdater = origUpdater
+		newHostAgent = origHost
+	}()
+
+	var updaterCfg agentupdate.Config
+	var hostCfg hostagent.Config
+
+	newUpdater = func(cfg agentupdate.Config) *agentupdate.Updater {
+		updaterCfg = cfg
+		return agentupdate.New(agentupdate.Config{
+			PulseURL:       "https://pulse.example.com",
+			AgentName:      cfg.AgentName,
+			CurrentVersion: "1.0.0",
+			StateDir:       cfg.StateDir,
+			Disabled:       true,
+		})
+	}
+	newHostAgent = func(cfg hostagent.Config) (Runnable, error) {
+		hostCfg = cfg
+		return &mockRunnable{}, nil
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+
+	err := run(ctx, []string{
+		"-token", "deadbeef",
+		"-enable-docker=false",
+		"-enable-kubernetes=false",
+		"-state-dir", "/share/CACHEDEV1_DATA/.pulse-agent",
+	}, func(string) string { return "" })
+	if err != nil && err != context.Canceled && err != context.DeadlineExceeded {
+		t.Fatalf("run returned error: %v", err)
+	}
+
+	if updaterCfg.StateDir != "/share/CACHEDEV1_DATA/.pulse-agent" {
+		t.Fatalf("updater state dir = %q, want %q", updaterCfg.StateDir, "/share/CACHEDEV1_DATA/.pulse-agent")
+	}
+	if hostCfg.StateDir != "/share/CACHEDEV1_DATA/.pulse-agent" {
+		t.Fatalf("host agent state dir = %q, want %q", hostCfg.StateDir, "/share/CACHEDEV1_DATA/.pulse-agent")
 	}
 }
 
