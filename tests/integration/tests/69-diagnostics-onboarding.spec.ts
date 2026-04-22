@@ -198,6 +198,43 @@ const DIAGNOSTICS_PAYLOAD = {
   memorySourceBreakdown: [],
 };
 
+const EXPORT_DIAGNOSTICS_PAYLOAD = {
+  ...DIAGNOSTICS_PAYLOAD,
+  nodes: [
+    {
+      id: 'node-raw-id',
+      name: 'pve-01',
+      host: '10.0.0.5',
+      type: 'pve',
+      authMethod: 'token',
+      connected: false,
+      error: 'dial tcp 10.0.0.5:8006: connect: connection refused',
+    },
+  ],
+  discovery: {
+    enabled: true,
+    configuredSubnet: '10.0.0.0/24',
+    activeSubnet: '10.0.1.0/24',
+    environmentOverride: 'PULSE_DISCOVERY_SUBNET=10.0.2.0/24',
+    subnetAllowlist: ['10.0.0.0/24'],
+    subnetBlocklist: ['10.0.3.0/24'],
+    history: [
+      {
+        startedAt: '2026-04-17T10:00:00Z',
+        completedAt: '2026-04-17T10:00:05Z',
+        duration: '5s',
+        durationMs: 5000,
+        subnet: '10.0.0.0/24',
+        serverCount: 3,
+        errorCount: 1,
+        blocklistLength: 1,
+        status: 'completed',
+      },
+    ],
+  },
+  errors: ['probe failed for 10.0.0.10 after timeout'],
+};
+
 const test = base.extend<{}, WorkerFixtures>({
   storageState: async ({ authStorageStatePath }, use) => {
     await use(authStorageStatePath);
@@ -221,7 +258,10 @@ const test = base.extend<{}, WorkerFixtures>({
   }, { scope: 'worker' }],
 });
 
-async function prepareDiagnosticsRoute(page: Page): Promise<void> {
+async function prepareDiagnosticsRoute(
+  page: Page,
+  payload = DIAGNOSTICS_PAYLOAD,
+): Promise<void> {
   await page.route('**/api/diagnostics', async (route) => {
     const requestUrl = new URL(route.request().url());
     if (route.request().method() !== 'GET' || requestUrl.pathname !== '/api/diagnostics') {
@@ -232,7 +272,7 @@ async function prepareDiagnosticsRoute(page: Page): Promise<void> {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify(DIAGNOSTICS_PAYLOAD),
+      body: JSON.stringify(payload),
     });
   });
 }
@@ -319,6 +359,80 @@ test.describe('Diagnostics onboarding analytics', () => {
         exact: true,
       }),
     ).toBeVisible();
+  });
+
+  test('desktop diagnostics exports full and sanitized onboarding analytics JSON', async ({
+    page,
+  }, testInfo) => {
+    test.skip(testInfo.project.name.startsWith('mobile-'), 'Desktop-only diagnostics export coverage');
+
+    await prepareDiagnosticsRoute(page, EXPORT_DIAGNOSTICS_PAYLOAD);
+
+    await page.goto('/settings/support/diagnostics', { waitUntil: 'domcontentloaded' });
+    await page.waitForURL(/\/settings\/support\/diagnostics$/, { timeout: 15_000 });
+
+    await page.getByRole('button', { name: 'Run Diagnostics', exact: true }).first().click();
+    await expect(page.getByText('Infrastructure Onboarding', { exact: true })).toBeVisible();
+
+    const [fullDownload] = await Promise.all([
+      page.waitForEvent('download'),
+      page.getByRole('button', { name: 'Full', exact: true }).click(),
+    ]);
+
+    expect(fullDownload.suggestedFilename()).toMatch(
+      new RegExp(`^pulse-diagnostics-full-${new Date().toISOString().slice(0, 10)}\\.json$`),
+    );
+
+    const fullPath = await fullDownload.path();
+    expect(fullPath).not.toBeNull();
+    const fullPayload = JSON.parse(fs.readFileSync(fullPath!, 'utf8')) as typeof EXPORT_DIAGNOSTICS_PAYLOAD;
+
+    expect(fullPayload.nodes[0]?.host).toBe('10.0.0.5');
+    expect(fullPayload.discovery?.configuredSubnet).toBe('10.0.0.0/24');
+    expect(fullPayload.infrastructureOnboarding?.summary.credentials_opened).toBe(1);
+    expect(fullPayload.infrastructureOnboarding?.platforms).toEqual([
+      expect.objectContaining({
+        key: 'truenas',
+        catalog_selected: 2,
+        credentials_opened: 1,
+      }),
+    ]);
+
+    const [sanitizedDownload] = await Promise.all([
+      page.waitForEvent('download'),
+      page.getByRole('button', { name: 'GitHub', exact: true }).click(),
+    ]);
+
+    expect(sanitizedDownload.suggestedFilename()).toMatch(
+      new RegExp(`^pulse-diagnostics-sanitized-${new Date().toISOString().slice(0, 10)}\\.json$`),
+    );
+
+    const sanitizedPath = await sanitizedDownload.path();
+    expect(sanitizedPath).not.toBeNull();
+    const sanitizedPayload = JSON.parse(fs.readFileSync(sanitizedPath!, 'utf8')) as typeof EXPORT_DIAGNOSTICS_PAYLOAD;
+
+    expect(sanitizedPayload.nodes[0]).toEqual(
+      expect.objectContaining({
+        id: 'node-1',
+        name: 'node-1',
+        host: 'node-1',
+      }),
+    );
+    expect(sanitizedPayload.discovery).toEqual(
+      expect.objectContaining({
+        configuredSubnet: '[REDACTED_SUBNET]',
+        activeSubnet: '[REDACTED_SUBNET]',
+        environmentOverride: '[REDACTED]',
+      }),
+    );
+    expect(sanitizedPayload.errors).toEqual(['probe failed for [REDACTED_IP] after timeout']);
+    expect(sanitizedPayload.infrastructureOnboarding?.summary).toEqual(
+      expect.objectContaining({
+        opened: 4,
+        api_path_selected: 2,
+        credentials_opened: 1,
+      }),
+    );
   });
 
   test('mobile diagnostics keeps the populated onboarding analytics page inside the viewport', async ({
