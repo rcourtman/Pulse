@@ -103,12 +103,6 @@ const Settings: Component<SettingsProps> = (props) => {
     setThemePreference: props.setThemePreference,
     initialLoadComplete: infrastructureSettings.initialLoadComplete,
     systemSettings,
-    discoverySettings: {
-      ...discoverySettings,
-      handleDiscoveryEnabledChange: infrastructureSettings.handleDiscoveryEnabledChange,
-      handleDiscoveryModeChange: infrastructureSettings.handleDiscoveryModeChange,
-      commitDiscoverySubnet: infrastructureSettings.commitDiscoverySubnet,
-    },
     backupTransferFlow,
     securityStatus,
   });

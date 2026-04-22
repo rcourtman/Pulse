@@ -17,7 +17,7 @@ export const SETTINGS_HEADER_META: SettingsHeaderMetaMap = {
   },
   'system-network': {
     title: 'Network',
-    description: 'Configure discovery, CORS, embedding, and webhook network boundaries.',
+    description: 'Configure the public URL, CORS, embedding, and webhook network boundaries.',
   },
   'system-updates': {
     title: 'Updates',

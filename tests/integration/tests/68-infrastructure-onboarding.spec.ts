@@ -197,6 +197,33 @@ test.describe('Infrastructure onboarding', () => {
       .toBe(0);
   });
 
+  test('desktop discovery settings open as an infrastructure-owned dialog', async ({
+    page,
+  }, testInfo) => {
+    test.skip(
+      testInfo.project.name.startsWith('mobile-'),
+      'Desktop-only infrastructure manager coverage',
+    );
+
+    await prepareOnboardingPage(page);
+
+    await page.goto('/settings/infrastructure', { waitUntil: 'domcontentloaded' });
+    await page.waitForURL(/\/settings\/infrastructure(?:\?.*)?$/, { timeout: 15_000 });
+
+    await page.getByRole('button', { name: /Discovery settings/i }).click();
+
+    const dialog = page.getByRole('dialog', { name: 'Discovery settings' });
+    await expect(dialog).toBeVisible();
+    await expect(
+      dialog.getByText(
+        'Configure the saved network scope and background scan behavior for infrastructure source discovery.',
+      ),
+    ).toBeVisible();
+    await expect(dialog.getByText('Automatic scanning')).toBeVisible();
+    await expect(dialog.getByRole('button', { name: 'Close discovery settings dialog' })).toBeVisible();
+    await expect(page).toHaveURL(/\/settings\/infrastructure(?:\?.*)?$/);
+  });
+
   test('desktop per-platform add opens the matching modal and records direct type onboarding', async ({
     page,
   }, testInfo) => {

@@ -144,6 +144,8 @@ const baseProps = () =>
     initialLoadComplete: () => true,
     discoveryEnabled: () => false,
     discoveryMode: () => 'auto',
+    discoverySubnetDraft: () => '',
+    discoverySubnetError: () => undefined,
     discoveryScanStatus: () => ({ scanning: false }),
     discoveredNodes: () => [],
     savingDiscoverySettings: () => false,
@@ -166,6 +168,17 @@ const baseProps = () =>
     triggerDiscoveryScan: vi.fn(),
     loadDiscoveredNodes: vi.fn(),
     handleDiscoveryEnabledChange: vi.fn(),
+    handleDiscoveryModeChange: vi.fn(),
+    setDiscoveryMode: vi.fn(),
+    setDiscoverySubnetDraft: vi.fn(),
+    setDiscoverySubnetError: vi.fn(),
+    setLastCustomSubnet: vi.fn(),
+    commitDiscoverySubnet: vi.fn(),
+    parseSubnetList: vi.fn(() => []),
+    normalizeSubnetList: vi.fn((value: string) => value),
+    isValidCIDR: vi.fn(() => true),
+    currentDraftSubnetValue: vi.fn(() => ''),
+    discoverySubnetInputRef: vi.fn(),
     testNodeConnection: vi.fn(),
     requestDeleteNode: vi.fn(),
     refreshClusterNodes: vi.fn(),
@@ -258,9 +271,10 @@ describe('InfrastructureWorkspace', () => {
     expect(triggerDiscoveryScan).toHaveBeenCalledTimes(1);
 
     fireEvent.click(screen.getByRole('button', { name: /Discovery settings/i }));
-    expect(navigateSpy).toHaveBeenCalledWith('/settings/system-network', {
-      scroll: false,
-    });
+    expect(screen.getByRole('dialog', { name: /Discovery settings/i })).toBeInTheDocument();
+    expect(
+      screen.getByText(/Configure the saved network scope and background scan behavior/i),
+    ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /^Review$/i }));
     expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure?add=pve', {

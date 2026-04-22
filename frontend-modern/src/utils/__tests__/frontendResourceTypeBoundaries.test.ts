@@ -137,8 +137,10 @@ import settingsTabSaveBehaviorSource from '@/components/Settings/settingsTabSave
 import settingsSystemPanelsSource from '@/components/Settings/useSettingsSystemPanels.tsx?raw';
 import settingsInfrastructurePanelPropsSource from '@/components/Settings/useSettingsInfrastructurePanelProps.ts?raw';
 import discoverySettingsStateSource from '@/components/Settings/useDiscoverySettingsState.ts?raw';
+import discoverySettingsFormSource from '@/components/Settings/DiscoverySettingsForm.tsx?raw';
+import discoverySettingsModelSource from '@/components/Settings/discoverySettingsModel.ts?raw';
+import infrastructureDiscoverySettingsDialogSource from '@/components/Settings/InfrastructureDiscoverySettingsDialog.tsx?raw';
 import networkBoundarySettingsSectionSource from '@/components/Settings/NetworkBoundarySettingsSection.tsx?raw';
-import networkDiscoverySectionSource from '@/components/Settings/NetworkDiscoverySection.tsx?raw';
 import networkSettingsPanelSource from '@/components/Settings/NetworkSettingsPanel.tsx?raw';
 import networkSettingsModelSource from '@/components/Settings/networkSettingsModel.ts?raw';
 import reportingPresentationSource from '@/utils/reportingPresentation.ts?raw';
@@ -1399,14 +1401,16 @@ describe('frontend resource type boundaries', () => {
     );
     expect(systemSettingsPresentationSource).toContain('export function getBackupIntervalSummary');
     expect(systemSettingsPresentationSource).toContain('export const COMMON_DISCOVERY_SUBNETS');
-    expect(networkSettingsPanelSource).toContain('./NetworkDiscoverySection');
     expect(networkSettingsPanelSource).toContain('./NetworkBoundarySettingsSection');
-    expect(networkDiscoverySectionSource).toContain('COMMON_DISCOVERY_SUBNETS');
+    expect(networkSettingsPanelSource).not.toContain('./NetworkDiscoverySection');
+    expect(discoverySettingsFormSource).toContain('COMMON_DISCOVERY_SUBNETS');
+    expect(infrastructureDiscoverySettingsDialogSource).toContain('./DiscoverySettingsForm');
     expect(networkBoundarySettingsSectionSource).toContain(
       'Allowed Private IP Ranges for Webhooks',
     );
-    expect(networkSettingsModelSource).toContain('export type NetworkDiscoverySectionProps');
+    expect(networkSettingsModelSource).not.toContain('export type NetworkDiscoverySectionProps');
     expect(networkSettingsModelSource).toContain('export type NetworkBoundarySettingsSectionProps');
+    expect(discoverySettingsModelSource).toContain('export interface DiscoverySettingsFormProps');
     expect(settingsShellSource).toContain('./useDiscoverySettingsState');
     expect(settingsShellSource).toContain('./useSettingsInfrastructurePanelProps');
     expect(settingsShellSource).toContain('./useSettingsPanelRegistry');
@@ -3321,15 +3325,15 @@ describe('frontend resource type boundaries', () => {
     expect(discoveryPresentationSource).toContain(
       'export function getNetworkDiscoverySubnetPresentation',
     );
-    expect(networkDiscoverySectionSource).toContain('getNetworkDiscoveryPriorityNotice');
-    expect(networkDiscoverySectionSource).toContain('getNetworkDiscoverySectionPresentation');
-    expect(networkDiscoverySectionSource).toContain('getNetworkDiscoveryModePresentation');
-    expect(networkDiscoverySectionSource).toContain('getNetworkDiscoverySubnetPresentation');
-    expect(networkDiscoverySectionSource).toContain('getDiscoverySubnetRequiredMessage');
-    expect(networkDiscoverySectionSource).toContain('getDiscoverySubnetInvalidFormatMessage');
-    expect(networkDiscoverySectionSource).not.toContain('Configuration priority');
-    expect(networkDiscoverySectionSource).not.toContain('Automatic scanning');
-    expect(networkDiscoverySectionSource).not.toContain(
+    expect(discoverySettingsFormSource).toContain('getNetworkDiscoveryPriorityNotice');
+    expect(discoverySettingsFormSource).toContain('getNetworkDiscoverySectionPresentation');
+    expect(discoverySettingsFormSource).toContain('getNetworkDiscoveryModePresentation');
+    expect(discoverySettingsFormSource).toContain('getNetworkDiscoverySubnetPresentation');
+    expect(discoverySettingsFormSource).toContain('getDiscoverySubnetRequiredMessage');
+    expect(discoverySettingsFormSource).toContain('getDiscoverySubnetInvalidFormatMessage');
+    expect(discoverySettingsFormSource).not.toContain('Configuration priority');
+    expect(discoverySettingsFormSource).not.toContain('Automatic scanning');
+    expect(discoverySettingsFormSource).not.toContain(
       'Discovery settings are locked by environment variables.',
     );
     expect(mailGatewaySource).toContain('getPMGThreatPresentation');

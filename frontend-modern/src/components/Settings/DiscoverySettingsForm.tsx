@@ -13,9 +13,9 @@ import {
   getNetworkDiscoverySubnetPresentation,
 } from '@/utils/discoveryPresentation';
 import { COMMON_DISCOVERY_SUBNETS } from '@/utils/systemSettingsPresentation';
-import type { NetworkDiscoverySectionProps } from './networkSettingsModel';
+import type { DiscoverySettingsFormProps } from './discoverySettingsModel';
 
-export const NetworkDiscoverySection: Component<NetworkDiscoverySectionProps> = (props) => {
+export const DiscoverySettingsForm: Component<DiscoverySettingsFormProps> = (props) => {
   const priorityNotice = getNetworkDiscoveryPriorityNotice();
   const sectionPresentation = () =>
     getNetworkDiscoverySectionPresentation(props.discoveryEnabled());
@@ -24,34 +24,32 @@ export const NetworkDiscoverySection: Component<NetworkDiscoverySectionProps> = 
   const subnetPresentation = () => getNetworkDiscoverySubnetPresentation(props.discoveryMode());
 
   return (
-    <>
-      <div class="p-4 sm:p-6">
-        <div class="rounded-md border border-blue-200 dark:border-blue-800 bg-blue-50/70 dark:bg-blue-950/40 p-4">
-          <div class="flex items-start gap-3">
-            <svg
-              class="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-              />
-            </svg>
-            <div class="text-sm text-blue-800 dark:text-blue-200">
-              <p class="font-medium mb-1">{priorityNotice.title}</p>
-              <ul class="space-y-1">
-                <For each={priorityNotice.items}>{(item) => <li>• {item}</li>}</For>
-              </ul>
-            </div>
+    <div class="space-y-5">
+      <div class="rounded-md border border-blue-200 bg-blue-50/70 p-4 dark:border-blue-800 dark:bg-blue-950/40">
+        <div class="flex items-start gap-3">
+          <svg
+            class="mt-0.5 h-5 w-5 flex-shrink-0 text-blue-600 dark:text-blue-400"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+            />
+          </svg>
+          <div class="text-sm text-blue-800 dark:text-blue-200">
+            <p class="mb-1 font-medium">{priorityNotice.title}</p>
+            <ul class="space-y-1">
+              <For each={priorityNotice.items}>{(item) => <li>• {item}</li>}</For>
+            </ul>
           </div>
         </div>
       </div>
 
-      <section class="p-4 sm:p-6 space-y-5">
+      <section class="space-y-5">
         <SectionHeader
           title={sectionPresentation().headerTitle}
           description={sectionPresentation().headerDescription}
@@ -111,7 +109,7 @@ export const NetworkDiscoverySection: Component<NetworkDiscoverySectionProps> = 
                       }
                     }}
                     disabled={props.envOverrides().discoverySubnet || props.savingDiscoverySettings()}
-                    class="mt-1 h-5 w-5 sm:h-4 sm:w-4 border-slate-300 text-blue-600 focus:ring-blue-500"
+                    class="mt-1 h-5 w-5 border-slate-300 text-blue-600 focus:ring-blue-500 sm:h-4 sm:w-4"
                   />
                   <div class="space-y-1">
                     <p class="text-sm font-medium text-base-content">{autoModePresentation.label}</p>
@@ -133,11 +131,11 @@ export const NetworkDiscoverySection: Component<NetworkDiscoverySectionProps> = 
                     checked={props.discoveryMode() === 'custom'}
                     onChange={() => {
                       if (props.discoveryMode() !== 'custom') {
-                        props.handleDiscoveryModeChange('custom');
+                        void props.handleDiscoveryModeChange('custom');
                       }
                     }}
                     disabled={props.envOverrides().discoverySubnet || props.savingDiscoverySettings()}
-                    class="mt-1 h-5 w-5 sm:h-4 sm:w-4 border-slate-300 text-blue-600 focus:ring-blue-500"
+                    class="mt-1 h-5 w-5 border-slate-300 text-blue-600 focus:ring-blue-500 sm:h-4 sm:w-4"
                   />
                   <div class="space-y-1">
                     <p class="text-sm font-medium text-base-content">
@@ -160,7 +158,11 @@ export const NetworkDiscoverySection: Component<NetworkDiscoverySectionProps> = 
                         return (
                           <button
                             type="button"
-                            class={`rounded border px-2.5 py-1 text-[0.7rem] transition-colors ${isActive ? 'border-blue-500 bg-blue-600 text-white dark:border-blue-400 dark:bg-blue-500' : 'border-border text-base-content hover:border-blue-400 hover:bg-blue-50 dark:hover:border-blue-500 dark:hover:bg-blue-900'}`}
+                            class={`rounded border px-2.5 py-1 text-[0.7rem] transition-colors ${
+                              isActive
+                                ? 'border-blue-500 bg-blue-600 text-white dark:border-blue-400 dark:bg-blue-500'
+                                : 'border-border text-base-content hover:border-blue-400 hover:bg-blue-50 dark:hover:border-blue-500 dark:hover:bg-blue-900'
+                            }`}
                             onClick={async () => {
                               if (props.envOverrides().discoverySubnet) {
                                 return;
@@ -190,8 +192,7 @@ export const NetworkDiscoverySection: Component<NetworkDiscoverySectionProps> = 
                             }}
                             disabled={props.envOverrides().discoverySubnet}
                             classList={{
-                              'cursor-not-allowed opacity-60':
-                                props.envOverrides().discoverySubnet,
+                              'cursor-not-allowed opacity-60': props.envOverrides().discoverySubnet,
                             }}
                           >
                             {preset}
@@ -232,9 +233,9 @@ export const NetworkDiscoverySection: Component<NetworkDiscoverySectionProps> = 
                 type="text"
                 value={props.discoverySubnetDraft()}
                 placeholder={subnetPresentation().placeholder}
-                class={`w-full min-h-10 sm:min-h-10 rounded-md border px-3 py-2.5 text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                class={`w-full min-h-10 rounded-md border px-3 py-2.5 text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 sm:min-h-10 ${
                   props.envOverrides().discoverySubnet
-                    ? 'border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-600 dark:bg-amber-900 dark:text-amber-200 cursor-not-allowed opacity-60'
+                    ? 'cursor-not-allowed border-amber-300 bg-amber-50 text-amber-800 opacity-60 dark:border-amber-600 dark:bg-amber-900 dark:text-amber-200'
                     : 'border-border bg-surface'
                 }`}
                 disabled={props.envOverrides().discoverySubnet}
@@ -303,6 +304,6 @@ export const NetworkDiscoverySection: Component<NetworkDiscoverySectionProps> = 
           </div>
         </Show>
       </section>
-    </>
+    </div>
   );
 };

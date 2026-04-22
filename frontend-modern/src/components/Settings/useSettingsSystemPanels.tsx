@@ -6,14 +6,7 @@ import type { RecoverySettingsPanelProps } from './RecoverySettingsPanel';
 import type { UpdatesSettingsPanelProps } from './UpdatesSettingsPanel';
 import { getSettingsConfigurationLoadingState } from '@/utils/settingsShellPresentation';
 import type { useBackupTransferFlow } from './useBackupTransferFlow';
-import type { useDiscoverySettingsState } from './useDiscoverySettingsState';
 import type { useSystemSettingsState } from './useSystemSettingsState';
-
-interface DiscoverySettingsPanelState extends ReturnType<typeof useDiscoverySettingsState> {
-  commitDiscoverySubnet: (rawValue: string) => Promise<boolean>;
-  handleDiscoveryEnabledChange: (enabled: boolean) => Promise<boolean>;
-  handleDiscoveryModeChange: (mode: 'auto' | 'custom') => Promise<void>;
-}
 
 interface UseSettingsSystemPanelsParams {
   darkMode: Accessor<boolean>;
@@ -21,7 +14,6 @@ interface UseSettingsSystemPanelsParams {
   setThemePreference: (pref: 'light' | 'dark' | 'system') => void;
   initialLoadComplete: Accessor<boolean>;
   systemSettings: ReturnType<typeof useSystemSettingsState>;
-  discoverySettings: DiscoverySettingsPanelState;
   backupTransferFlow: ReturnType<typeof useBackupTransferFlow>;
   securityStatus: Accessor<SecurityStatusInfo | null>;
 }
@@ -88,11 +80,6 @@ export function useSettingsSystemPanels(
   return {
     systemGeneralPanel,
     getNetworkPanelProps: () => ({
-      discoveryEnabled: params.discoverySettings.discoveryEnabled,
-      discoveryMode: params.discoverySettings.discoveryMode,
-      discoverySubnetDraft: params.discoverySettings.discoverySubnetDraft,
-      discoverySubnetError: params.discoverySettings.discoverySubnetError,
-      savingDiscoverySettings: params.discoverySettings.savingDiscoverySettings,
       envOverrides: params.systemSettings.envOverrides,
       allowedOrigins: params.systemSettings.allowedOrigins,
       setAllowedOrigins: params.systemSettings.setAllowedOrigins,
@@ -104,19 +91,7 @@ export function useSettingsSystemPanels(
       setWebhookAllowedPrivateCIDRs: params.systemSettings.setWebhookAllowedPrivateCIDRs,
       publicURL: params.systemSettings.publicURL,
       setPublicURL: params.systemSettings.setPublicURL,
-      handleDiscoveryEnabledChange: params.discoverySettings.handleDiscoveryEnabledChange,
-      handleDiscoveryModeChange: params.discoverySettings.handleDiscoveryModeChange,
-      setDiscoveryMode: params.discoverySettings.setDiscoveryMode,
-      setDiscoverySubnetDraft: params.discoverySettings.setDiscoverySubnetDraft,
-      setDiscoverySubnetError: params.discoverySettings.setDiscoverySubnetError,
-      setLastCustomSubnet: params.discoverySettings.setLastCustomSubnet,
-      commitDiscoverySubnet: params.discoverySettings.commitDiscoverySubnet,
       setHasUnsavedChanges: params.systemSettings.setHasUnsavedChanges,
-      parseSubnetList: params.discoverySettings.parseSubnetList,
-      normalizeSubnetList: params.discoverySettings.normalizeSubnetList,
-      isValidCIDR: params.discoverySettings.isValidCIDR,
-      currentDraftSubnetValue: params.discoverySettings.currentDraftSubnetValue,
-      discoverySubnetInputRef: params.discoverySettings.assignDiscoverySubnetInputRef,
     }),
     getUpdatesPanelProps: () => ({
       versionInfo: params.systemSettings.versionInfo,

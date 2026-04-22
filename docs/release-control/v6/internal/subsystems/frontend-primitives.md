@@ -109,35 +109,34 @@ work extends shared components instead of creating new local variants.
 83. `frontend-modern/src/utils/emptyStatePresentation.ts`
 84. `frontend-modern/src/utils/typeColumnPresentation.ts`
 85. `frontend-modern/src/pages/__tests__/Operations.helpers.test.ts`
-86. `frontend-modern/src/components/Settings/NetworkDiscoverySection.tsx`
-87. `frontend-modern/src/components/Settings/NetworkBoundarySettingsSection.tsx`
-88. `frontend-modern/src/components/Settings/networkSettingsModel.ts`
-89. `frontend-modern/src/components/Settings/useDiscoverySettingsState.ts`
-90. `frontend-modern/src/components/Settings/useSettingsInfrastructurePanelProps.ts`
-91. `frontend-modern/src/components/Settings/settingsPanelRegistryContext.tsx`
-92. `frontend-modern/src/components/Settings/settingsPanelRegistryLoaders.ts`
-93. `frontend-modern/src/components/Settings/settingsNavigationModel.ts`
-94. `frontend-modern/src/components/Settings/settingsNavCatalog.ts`
-95. `frontend-modern/src/components/Settings/settingsNavVisibility.ts`
-96. `frontend-modern/src/components/Settings/settingsRouting.ts`
-97. `frontend-modern/src/components/Settings/settingsTabSaveBehavior.ts`
-98. `frontend-modern/src/components/Settings/settingsTypes.ts`
-99. `frontend-modern/src/components/Settings/useSettingsNavigation.ts`
-100. `frontend-modern/src/components/Settings/useSettingsPanelRegistry.tsx`
-101. `frontend-modern/src/components/Settings/useSettingsSystemPanels.tsx`
-102. `frontend-modern/src/components/Settings/DockerRuntimeSettingsCard.tsx`
-103. `frontend-modern/src/components/shared/EnvironmentLockBadge.tsx`
-104. `frontend-modern/src/utils/environmentLockPresentation.ts`
-105. `frontend-modern/src/utils/docsLinks.ts`
-106. `tests/integration/tests/20-local-doc-links.spec.ts`
-107. `frontend-modern/src/index.css`
-108. `frontend-modern/src/components/shared/summaryInteractionA11y.ts`
-109. `frontend-modern/src/components/shared/SummaryRowActionButton.tsx`
-110. `frontend-modern/src/hooks/createNonSuspendingQuery.ts`
-111. `frontend-modern/src/components/shared/SummaryTableCardHeader.tsx`
-112. `frontend-modern/src/components/shared/UpgradeLink.tsx`
-113. `frontend-modern/src/components/shared/useUpgradeNavigation.ts`
-114. `frontend-modern/src/utils/upgradeNavigation.ts`
+86. `frontend-modern/src/components/Settings/NetworkBoundarySettingsSection.tsx`
+87. `frontend-modern/src/components/Settings/networkSettingsModel.ts`
+88. `frontend-modern/src/components/Settings/useDiscoverySettingsState.ts`
+89. `frontend-modern/src/components/Settings/useSettingsInfrastructurePanelProps.ts`
+90. `frontend-modern/src/components/Settings/settingsPanelRegistryContext.tsx`
+91. `frontend-modern/src/components/Settings/settingsPanelRegistryLoaders.ts`
+92. `frontend-modern/src/components/Settings/settingsNavigationModel.ts`
+93. `frontend-modern/src/components/Settings/settingsNavCatalog.ts`
+94. `frontend-modern/src/components/Settings/settingsNavVisibility.ts`
+95. `frontend-modern/src/components/Settings/settingsRouting.ts`
+96. `frontend-modern/src/components/Settings/settingsTabSaveBehavior.ts`
+97. `frontend-modern/src/components/Settings/settingsTypes.ts`
+98. `frontend-modern/src/components/Settings/useSettingsNavigation.ts`
+99. `frontend-modern/src/components/Settings/useSettingsPanelRegistry.tsx`
+100. `frontend-modern/src/components/Settings/useSettingsSystemPanels.tsx`
+101. `frontend-modern/src/components/Settings/DockerRuntimeSettingsCard.tsx`
+102. `frontend-modern/src/components/shared/EnvironmentLockBadge.tsx`
+103. `frontend-modern/src/utils/environmentLockPresentation.ts`
+104. `frontend-modern/src/utils/docsLinks.ts`
+105. `tests/integration/tests/20-local-doc-links.spec.ts`
+106. `frontend-modern/src/index.css`
+107. `frontend-modern/src/components/shared/summaryInteractionA11y.ts`
+108. `frontend-modern/src/components/shared/SummaryRowActionButton.tsx`
+109. `frontend-modern/src/hooks/createNonSuspendingQuery.ts`
+110. `frontend-modern/src/components/shared/SummaryTableCardHeader.tsx`
+111. `frontend-modern/src/components/shared/UpgradeLink.tsx`
+112. `frontend-modern/src/components/shared/useUpgradeNavigation.ts`
+113. `frontend-modern/src/utils/upgradeNavigation.ts`
 115. `frontend-modern/src/components/DemoBanner.tsx`
 116. `frontend-modern/src/components/Login.tsx`
 117. `frontend-modern/src/stores/demoMode.ts`
@@ -2200,7 +2199,6 @@ into section-local strings.
 `frontend-modern/src/components/Settings/AuditWebhookPanel.tsx`,
 `frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx`,
 `frontend-modern/src/components/Settings/NetworkSettingsPanel.tsx`,
-`frontend-modern/src/components/Settings/NetworkDiscoverySection.tsx`,
 `frontend-modern/src/components/Settings/NetworkBoundarySettingsSection.tsx`,
 `frontend-modern/src/components/Settings/networkSettingsModel.ts`,
 `frontend-modern/src/components/Settings/SecurityAuthPanel.tsx`,
@@ -2252,18 +2250,19 @@ Settings-shell framing copy for self-hosted billing must route through
 settings-owned adapter instead of importing generic commercial presentation
 helpers in ways that can reintroduce top-level bundle-init cycles.
 `frontend-modern/src/components/Settings/NetworkSettingsPanel.tsx` is now a
-shell only. `frontend-modern/src/components/Settings/NetworkDiscoverySection.tsx`
-owns discovery controls and shared subnet presets, while
+shell only for network-boundary controls.
 `frontend-modern/src/components/Settings/NetworkBoundarySettingsSection.tsx`
-owns the public URL, CORS, embedding, and webhook-boundary UI. Shared prop
-contracts for that surface must extend
+owns the public URL, CORS, embedding, and webhook-boundary UI, while the
+editable discovery configuration entry point is owned by the infrastructure
+workspace instead of the System/Network route. Shared prop contracts for the
+network-boundary surface must extend
 `frontend-modern/src/components/Settings/networkSettingsModel.ts` instead of
 re-expanding the shell or reintroducing page-local section types.
 `frontend-modern/src/utils/discoveryPresentation.ts` now owns the
 customer-facing discovery-section framing copy, scan-scope labels, subnet
 guidance, and environment-lock messaging so
-`frontend-modern/src/components/Settings/NetworkDiscoverySection.tsx` stays a
-settings section shell instead of re-accumulating that wording inline.
+`frontend-modern/src/components/Settings/DiscoverySettingsForm.tsx` stays a
+shared presentation shell instead of re-accumulating that wording inline.
 That same settings-shell boundary now also owns the shared settings
 presentation helpers that those panels consume. `frontend-modern/src/utils/systemSettingsPresentation.ts`
 is the canonical owner for shared system-settings presets, summaries, and

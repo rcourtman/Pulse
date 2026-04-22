@@ -8,6 +8,7 @@ import type {
   DiscoveryScanStatus,
   NodeType,
 } from './infrastructureSettingsModel';
+import type { DiscoverySettingsFormProps } from './discoverySettingsModel';
 import type { TrueNASSettingsPanelState } from './useTrueNASSettingsPanelState';
 import type { VMwareSettingsPanelState } from './useVMwareSettingsPanelState';
 
@@ -17,12 +18,14 @@ export interface InfrastructurePlatformSettingsProps {
   selectedAgent: Accessor<NodeType>;
   onSelectAgent: (agent: NodeType) => void;
   initialLoadComplete: Accessor<boolean>;
-  discoveryEnabled: Accessor<boolean>;
-  discoveryMode: Accessor<DiscoveryMode>;
+  discoveryEnabled: DiscoverySettingsFormProps['discoveryEnabled'];
+  discoveryMode: DiscoverySettingsFormProps['discoveryMode'];
+  discoverySubnetDraft: DiscoverySettingsFormProps['discoverySubnetDraft'];
+  discoverySubnetError: DiscoverySettingsFormProps['discoverySubnetError'];
   discoveryScanStatus: Accessor<DiscoveryScanStatus>;
   discoveredNodes: Accessor<DiscoveredServer[]>;
-  savingDiscoverySettings: Accessor<boolean>;
-  envOverrides: Accessor<Record<string, boolean>>;
+  savingDiscoverySettings: DiscoverySettingsFormProps['savingDiscoverySettings'];
+  envOverrides: DiscoverySettingsFormProps['envOverrides'];
   agentStateResources: Accessor<Resource[]>;
   pbsInstances: Accessor<PBSInstance[]>;
   pmgInstances: Accessor<PMGInstance[]>;
@@ -34,7 +37,18 @@ export interface InfrastructurePlatformSettingsProps {
   temperatureMonitoringEnabled: Accessor<boolean>;
   triggerDiscoveryScan: (options?: { quiet?: boolean }) => Promise<void>;
   loadDiscoveredNodes: () => Promise<void>;
-  handleDiscoveryEnabledChange: (enabled: boolean) => Promise<boolean>;
+  handleDiscoveryEnabledChange: DiscoverySettingsFormProps['handleDiscoveryEnabledChange'];
+  handleDiscoveryModeChange: DiscoverySettingsFormProps['handleDiscoveryModeChange'];
+  setDiscoveryMode: DiscoverySettingsFormProps['setDiscoveryMode'];
+  setDiscoverySubnetDraft: DiscoverySettingsFormProps['setDiscoverySubnetDraft'];
+  setDiscoverySubnetError: DiscoverySettingsFormProps['setDiscoverySubnetError'];
+  setLastCustomSubnet: DiscoverySettingsFormProps['setLastCustomSubnet'];
+  commitDiscoverySubnet: DiscoverySettingsFormProps['commitDiscoverySubnet'];
+  parseSubnetList: DiscoverySettingsFormProps['parseSubnetList'];
+  normalizeSubnetList: DiscoverySettingsFormProps['normalizeSubnetList'];
+  isValidCIDR: DiscoverySettingsFormProps['isValidCIDR'];
+  currentDraftSubnetValue: DiscoverySettingsFormProps['currentDraftSubnetValue'];
+  discoverySubnetInputRef?: DiscoverySettingsFormProps['discoverySubnetInputRef'];
   testNodeConnection: (nodeId: string) => void;
   requestDeleteNode: (node: NodeConfigWithStatus) => void;
   refreshClusterNodes: (nodeId: string) => Promise<void>;

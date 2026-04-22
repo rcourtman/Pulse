@@ -45,47 +45,50 @@ management, and fleet control surfaces.
 23. `frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx`
 24. `frontend-modern/src/components/Settings/InfrastructureSourceManager.tsx`
 25. `frontend-modern/src/components/Settings/InfrastructureSourcePicker.tsx`
-26. `frontend-modern/src/components/Settings/infrastructureWorkspaceModel.ts`
-27. `frontend-modern/src/components/Settings/proxmoxSettingsModel.ts`
-28. `frontend-modern/src/components/Settings/ConfiguredNodeTables.tsx`
-29. `frontend-modern/src/components/Settings/SettingsSectionNav.tsx`
-30. `frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx`
-31. `frontend-modern/src/components/Settings/useInfrastructureSettingsState.ts`
-32. `frontend-modern/src/components/Settings/NodeModalAuthenticationSection.tsx`
-33. `frontend-modern/src/components/Settings/NodeModalBasicInfoSection.tsx`
-34. `frontend-modern/src/components/Settings/nodeModalModel.ts`
-35. `frontend-modern/src/components/Settings/NodeModalMonitoringSection.tsx`
-36. `frontend-modern/src/components/Settings/NodeModalSetupGuideSection.tsx`
-37. `frontend-modern/src/components/Settings/NodeModalStatusFooter.tsx`
-38. `frontend-modern/src/components/Settings/useNodeModalState.ts`
-39. `frontend-modern/src/components/SetupWizard/SetupCompletionPanel.tsx`
-40. `frontend-modern/src/components/Infrastructure/deploy/ResultsStep.tsx`
-41. `frontend-modern/src/utils/agentProfilesPresentation.ts`
-42. `frontend-modern/src/utils/agentInstallCommand.ts`
-43. `frontend-modern/src/utils/infrastructureOnboardingPresentation.ts`
-44. `frontend-modern/src/api/nodes.ts`
-45. `frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx`
-46. `frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx`
-47. `frontend-modern/src/components/Settings/infrastructureSettingsModel.ts`
-48. `frontend-modern/src/components/Settings/useInfrastructureConfiguredNodesState.ts`
-49. `frontend-modern/src/components/Settings/useInfrastructureDiscoveryRuntimeState.ts`
-50. `frontend-modern/src/utils/infrastructureSettingsPresentation.ts`
-51. `frontend-modern/src/utils/agentCapabilityPresentation.ts`
-49. `frontend-modern/src/utils/agentProfileSuggestionPresentation.ts`
-50. `frontend-modern/src/utils/configuredNodeCapabilityPresentation.ts`
-51. `frontend-modern/src/utils/configuredNodeStatusPresentation.ts`
-52. `frontend-modern/src/utils/unifiedAgentInventoryPresentation.ts`
-53. `frontend-modern/src/utils/unifiedAgentStatusPresentation.ts`
-54. `frontend-modern/src/utils/clusterEndpointPresentation.ts`
-55. `frontend-modern/src/utils/nodeModalPresentation.ts`
-56. `frontend-modern/src/utils/proxmoxSettingsPresentation.ts`
-57. `frontend-modern/src/components/Settings/platformConnectionsModel.ts`
-58. `frontend-modern/src/components/Settings/useTrueNASSettingsPanelState.ts`
-59. `frontend-modern/src/components/Settings/useVMwareSettingsPanelState.ts`
-60. `frontend-modern/src/components/Settings/MonitoredSystemAdmissionPreview.tsx`
-61. `internal/hostagent/proxmox_setup.go`
-62. `internal/remoteconfig/client.go`
-63. `internal/agenttls/config.go`
+26. `frontend-modern/src/components/Settings/InfrastructureDiscoverySettingsDialog.tsx`
+27. `frontend-modern/src/components/Settings/DiscoverySettingsForm.tsx`
+28. `frontend-modern/src/components/Settings/discoverySettingsModel.ts`
+29. `frontend-modern/src/components/Settings/infrastructureWorkspaceModel.ts`
+30. `frontend-modern/src/components/Settings/proxmoxSettingsModel.ts`
+31. `frontend-modern/src/components/Settings/ConfiguredNodeTables.tsx`
+32. `frontend-modern/src/components/Settings/SettingsSectionNav.tsx`
+33. `frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx`
+34. `frontend-modern/src/components/Settings/useInfrastructureSettingsState.ts`
+35. `frontend-modern/src/components/Settings/NodeModalAuthenticationSection.tsx`
+36. `frontend-modern/src/components/Settings/NodeModalBasicInfoSection.tsx`
+37. `frontend-modern/src/components/Settings/nodeModalModel.ts`
+38. `frontend-modern/src/components/Settings/NodeModalMonitoringSection.tsx`
+39. `frontend-modern/src/components/Settings/NodeModalSetupGuideSection.tsx`
+40. `frontend-modern/src/components/Settings/NodeModalStatusFooter.tsx`
+41. `frontend-modern/src/components/Settings/useNodeModalState.ts`
+42. `frontend-modern/src/components/SetupWizard/SetupCompletionPanel.tsx`
+43. `frontend-modern/src/components/Infrastructure/deploy/ResultsStep.tsx`
+44. `frontend-modern/src/utils/agentProfilesPresentation.ts`
+45. `frontend-modern/src/utils/agentInstallCommand.ts`
+46. `frontend-modern/src/utils/infrastructureOnboardingPresentation.ts`
+47. `frontend-modern/src/api/nodes.ts`
+48. `frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx`
+49. `frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx`
+50. `frontend-modern/src/components/Settings/infrastructureSettingsModel.ts`
+51. `frontend-modern/src/components/Settings/useInfrastructureConfiguredNodesState.ts`
+52. `frontend-modern/src/components/Settings/useInfrastructureDiscoveryRuntimeState.ts`
+53. `frontend-modern/src/utils/infrastructureSettingsPresentation.ts`
+54. `frontend-modern/src/utils/agentCapabilityPresentation.ts`
+55. `frontend-modern/src/utils/agentProfileSuggestionPresentation.ts`
+56. `frontend-modern/src/utils/configuredNodeCapabilityPresentation.ts`
+57. `frontend-modern/src/utils/configuredNodeStatusPresentation.ts`
+58. `frontend-modern/src/utils/unifiedAgentInventoryPresentation.ts`
+59. `frontend-modern/src/utils/unifiedAgentStatusPresentation.ts`
+60. `frontend-modern/src/utils/clusterEndpointPresentation.ts`
+61. `frontend-modern/src/utils/nodeModalPresentation.ts`
+62. `frontend-modern/src/utils/proxmoxSettingsPresentation.ts`
+63. `frontend-modern/src/components/Settings/platformConnectionsModel.ts`
+64. `frontend-modern/src/components/Settings/useTrueNASSettingsPanelState.ts`
+65. `frontend-modern/src/components/Settings/useVMwareSettingsPanelState.ts`
+66. `frontend-modern/src/components/Settings/MonitoredSystemAdmissionPreview.tsx`
+67. `internal/hostagent/proxmox_setup.go`
+68. `internal/remoteconfig/client.go`
+69. `internal/agenttls/config.go`
 
 ## Shared Boundaries
 
@@ -223,6 +226,7 @@ an add-only capacity posture.
    Persistence-sensitive NAS targets must keep one canonical continuity model here: installer-owned bootstraps may use flash-backed or immutable-root launch hooks only as thin trampolines, while the durable wrapper, state, and reboot-surviving binary copy stay in the governed persistent state directory that updater continuity also refreshes.
 9. Add or change profile management, the extracted agent profiles runtime owner, the infrastructure source-manager landing, the pure unified-agent inventory/install model, the connections-ledger workspace shell, the unified ConnectionEditor and its per-type credential slots, route model, shared install section owner, the shared direct-node/discovery infrastructure settings owners plus their model, shared frontend install-command assembly, Proxmox setup/install API transport, TrueNAS platform-connection management, VMware platform-connection management, the shared monitored-system admission preview shell for those platform connections, setup-completion install handoff transport, deploy-fallback manual install transport, and fleet-control presentation through `frontend-modern/src/api/agentProfiles.ts`, `frontend-modern/src/api/nodes.ts`, `frontend-modern/src/components/Settings/AgentProfilesPanel.tsx`, `frontend-modern/src/components/Settings/useAgentProfilesPanelState.ts`, `frontend-modern/src/components/Settings/ConnectionsTable.tsx`, `frontend-modern/src/components/Settings/connectionsTableModel.ts`, `frontend-modern/src/components/Settings/useConnectionsLedger.ts`, `frontend-modern/src/components/Settings/useConnectionRowActions.ts`, `frontend-modern/src/components/Settings/ConnectionEditor/ConnectionEditor.tsx`, `frontend-modern/src/components/Settings/ConnectionEditor/AddressProbeStep.tsx`, `frontend-modern/src/components/Settings/ConnectionEditor/useConnectionEditor.ts`, `frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/NodeCredentialSlot.tsx`, `frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/TrueNASCredentialSlot.tsx`, `frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/VMwareCredentialSlot.tsx`, `frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx`, `frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx`, `frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx`, `frontend-modern/src/components/Settings/InfrastructureSourceManager.tsx`, `frontend-modern/src/components/Settings/infrastructureWorkspaceModel.ts`, `frontend-modern/src/components/Settings/MonitoredSystemAdmissionPreview.tsx`, `frontend-modern/src/components/Settings/platformConnectionsModel.ts`, `frontend-modern/src/components/Settings/useTrueNASSettingsPanelState.ts`, `frontend-modern/src/components/Settings/useVMwareSettingsPanelState.ts`, `frontend-modern/src/components/Settings/proxmoxSettingsModel.ts`, `frontend-modern/src/components/Settings/ConfiguredNodeTables.tsx`, `frontend-modern/src/components/Settings/SettingsSectionNav.tsx`, `frontend-modern/src/components/Settings/infrastructureSettingsModel.ts`, `frontend-modern/src/components/Settings/useInfrastructureConfiguredNodesState.ts`, `frontend-modern/src/components/Settings/useInfrastructureDiscoveryRuntimeState.ts`, `frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx`, `frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx`, `frontend-modern/src/components/Settings/useInfrastructureSettingsState.ts`, `frontend-modern/src/components/Settings/nodeModalModel.ts`, `frontend-modern/src/components/Settings/useNodeModalState.ts`, `frontend-modern/src/components/SetupWizard/SetupCompletionPanel.tsx`, and `frontend-modern/src/utils/agentInstallCommand.ts`. Phase 9 retired the legacy reporting/inventory surface (InfrastructureOperationsController, InfrastructureInventorySection, InfrastructureActiveRowDetails, InfrastructureIgnoredRowDetails, InfrastructureStopMonitoringDialog, useInfrastructureReportingState) and the per-type shells (PlatformConnectionsWorkspace, ProxmoxSettingsPanel, ProxmoxDirectWorkspace, ProxmoxConfiguredNodesTable, ProxmoxDirectConnectionsCard, ProxmoxDiscoveryResultsCard, ProxmoxDeleteNodeDialog, ProxmoxNodeModalStack, NodeModal shell, TrueNASSettingsPanel, VMwareSettingsPanel, useProxmoxDirectWorkspaceState); lifecycle extensions must route through the unified aggregator ledger, source-manager cards, and ConnectionEditor credential slots rather than reintroducing those retired surfaces.
    Those lifecycle-owned settings hooks may consume websocket state only through `frontend-modern/src/contexts/appRuntime.ts`; they must not import `frontend-modern/src/App.tsx` or recreate root-shell providers.
+   Discovery configuration is part of that same lifecycle-owned workspace boundary. `InfrastructureSourceManager.tsx` must open one canonical discovery editor through `InfrastructureDiscoverySettingsDialog.tsx`, `DiscoverySettingsForm.tsx`, and `discoverySettingsModel.ts`, while the System/Network shell stays limited to network-boundary controls instead of reintroducing a second editable discovery surface.
    Public demo and other read-only settings posture must stay reporting-first
    on that same lifecycle-owned workspace boundary: infrastructure workspace
    routes may retain install and platform setup surfaces for manageable

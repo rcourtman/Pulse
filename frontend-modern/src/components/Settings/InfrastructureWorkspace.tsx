@@ -15,6 +15,7 @@ import type { Connection, ConnectionType } from '@/api/connections';
 import type { TrueNASConnection } from '@/api/truenas';
 import type { VMwareConnection } from '@/api/vmware';
 import type { NodeConfig, NodeConfigWithStatus } from '@/types/nodes';
+import { InfrastructureDiscoverySettingsDialog } from './InfrastructureDiscoverySettingsDialog';
 import { InfrastructureInstallerSection } from './InfrastructureInstallerSection';
 import { InfrastructureSourceManager } from './InfrastructureSourceManager';
 import { InfrastructureSourcePicker } from './InfrastructureSourcePicker';
@@ -41,7 +42,6 @@ import {
   getInfrastructureOnboardingProductPresentation,
   type InfrastructureOnboardingConnectionType,
 } from '@/utils/infrastructureOnboardingPresentation';
-import { settingsTabPath } from './settingsNavigationModel';
 import type { DiscoveredServer } from './infrastructureSettingsModel';
 
 export type InfrastructureWorkspaceProps = InfrastructurePlatformSettingsProps;
@@ -95,6 +95,7 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
 
   const [showAgentProfiles, setShowAgentProfiles] = createSignal(false);
   const [editingConnection, setEditingConnection] = createSignal<Connection | null>(null);
+  const [showDiscoverySettings, setShowDiscoverySettings] = createSignal(false);
   const [selectedDiscoveredSource, setSelectedDiscoveredSource] =
     createSignal<DiscoveredServer | null>(null);
   const readOnly = createMemo(() => presentationPolicyIsReadOnly());
@@ -249,6 +250,12 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
   createEffect(() => {
     if (readOnly() && editingConnection()) {
       closeEditFlow();
+    }
+  });
+
+  createEffect(() => {
+    if (readOnly() && showDiscoverySettings()) {
+      setShowDiscoverySettings(false);
     }
   });
 
@@ -687,10 +694,33 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
         onOpenDiscoverySettings={
           readOnly()
             ? undefined
-            : () => navigate(settingsTabPath('system-network'), { scroll: false })
+            : () => setShowDiscoverySettings(true)
         }
         onOpenConnection={readOnly() ? undefined : (connection) => setEditingConnection(connection)}
         onReviewDiscoveredSource={readOnly() ? undefined : (server) => reviewDiscoveredSource(server)}
+      />
+
+      <InfrastructureDiscoverySettingsDialog
+        isOpen={showDiscoverySettings()}
+        onClose={() => setShowDiscoverySettings(false)}
+        discoveryEnabled={props.discoveryEnabled}
+        discoveryMode={props.discoveryMode}
+        discoverySubnetDraft={props.discoverySubnetDraft}
+        discoverySubnetError={props.discoverySubnetError}
+        savingDiscoverySettings={props.savingDiscoverySettings}
+        envOverrides={props.envOverrides}
+        handleDiscoveryEnabledChange={props.handleDiscoveryEnabledChange}
+        handleDiscoveryModeChange={props.handleDiscoveryModeChange}
+        setDiscoveryMode={props.setDiscoveryMode}
+        setDiscoverySubnetDraft={props.setDiscoverySubnetDraft}
+        setDiscoverySubnetError={props.setDiscoverySubnetError}
+        setLastCustomSubnet={props.setLastCustomSubnet}
+        commitDiscoverySubnet={props.commitDiscoverySubnet}
+        parseSubnetList={props.parseSubnetList}
+        normalizeSubnetList={props.normalizeSubnetList}
+        isValidCIDR={props.isValidCIDR}
+        currentDraftSubnetValue={props.currentDraftSubnetValue}
+        discoverySubnetInputRef={props.discoverySubnetInputRef}
       />
 
       <Show when={routeStep() !== null}>

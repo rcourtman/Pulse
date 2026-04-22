@@ -131,8 +131,12 @@ describe('settings architecture guardrails', () => {
     expect(infrastructureWorkspaceSource).toContain('reviewDiscoveredSource');
     expect(infrastructureWorkspaceSource).toContain('selectedDiscoveredSource');
     expect(infrastructureWorkspaceSource).toContain(
-      "navigate(settingsTabPath('system-network'), { scroll: false })",
+      "import { InfrastructureDiscoverySettingsDialog } from './InfrastructureDiscoverySettingsDialog';",
     );
+    expect(infrastructureWorkspaceSource).toContain(
+      "const [showDiscoverySettings, setShowDiscoverySettings] = createSignal(false);",
+    );
+    expect(infrastructureWorkspaceSource).toContain('<InfrastructureDiscoverySettingsDialog');
     expect(infrastructureWorkspaceSource).toContain(
       "onDetectFromAddress={readOnly() ? undefined : () => openAddFlow('detect')}",
     );
@@ -169,6 +173,9 @@ describe('settings architecture guardrails', () => {
     expect(infrastructureSourcePickerSource).toContain('Detect from address');
     expect(infrastructureSourcePickerSource).toContain('getInfrastructureSourcePickerGroups');
     expect(infrastructureSourcePickerSource).toContain('group.label');
+    expect(settingsHeaderMetaSource).toContain(
+      "description: 'Configure the public URL, CORS, embedding, and webhook network boundaries.'",
+    );
   });
 
   it('keeps the detect-first editor and inline credential bodies on the shared editor model', () => {
