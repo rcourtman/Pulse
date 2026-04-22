@@ -339,7 +339,12 @@ Insights`, rather than reviving generic `AI Patrol` or `AI ... analysis`
    `max_monitored_systems` entitlement row, and
    `monitored_system_capacity.mode = unlimited` once runtime usage is
    available.
-9. Keep the maintained Pulse Account portal bundle source-synced with
+9. Keep Stripe webhook idempotency state bounded in the control-plane
+   registry: `internal/cloudcp/registry/registry.go` may retain `stripe_events`
+   rows long enough to suppress duplicate deliveries and reclaim stale
+   in-flight work, but it must prune expired processed or abandoned rows so
+   webhook dedupe does not grow without bound on disk.
+10. Keep the maintained Pulse Account portal bundle source-synced with
    `internal/cloudcp/portal/frontend/`: any slice that changes the portal
    frontend hash or emitted manifest must rebuild
    `internal/cloudcp/portal/dist/build_manifest.json` and keep
@@ -1663,6 +1668,12 @@ checkout provisioning: long-running `checkout.session.completed` tenant
 provisioning must complete under an explicit background timeout instead of
 depending on the inbound Stripe request context surviving long enough for first
 boot and health polling.
+That same Stripe webhook boundary also owns bounded idempotency retention in
+the control-plane registry. `internal/cloudcp/registry/registry.go` may keep
+dedupe rows long enough to suppress duplicate Stripe deliveries and reclaim
+stale in-flight attempts, but it must prune expired processed or abandoned
+`stripe_events` rows instead of letting webhook idempotency state grow without
+bound on disk.
 That same paid relay onboarding boundary now also owns QR-token lifecycle on
 the supported Pulse Mobile pairing surface. `RelaySettingsPanel.tsx`,
 `RelayPairingSection.tsx`, and `useRelaySettingsPanelState.ts` may revoke a

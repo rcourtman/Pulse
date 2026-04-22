@@ -20,7 +20,11 @@ type TenantRegistry struct {
 	db *sql.DB
 }
 
-const stripeEventProcessingLeaseSeconds int64 = 120
+const (
+	stripeEventProcessingLeaseSeconds int64 = 120
+	stripeEventRetention                    = 30 * 24 * time.Hour
+	stripeEventRetentionSeconds       int64 = int64(stripeEventRetention / time.Second)
+)
 
 func canonicalizeRegistryPlanVersion(planVersion string) string {
 	return pkglicensing.CanonicalizePlanVersion(strings.TrimSpace(planVersion))
@@ -116,6 +120,8 @@ func (r *TenantRegistry) initSchema() error {
 		processed_at INTEGER,
 		processing_error TEXT
 	);
+	CREATE INDEX IF NOT EXISTS idx_stripe_events_processed_at ON stripe_events(processed_at);
+	CREATE INDEX IF NOT EXISTS idx_stripe_events_received_at ON stripe_events(received_at);
 
 	CREATE TABLE IF NOT EXISTS users (
 		id TEXT PRIMARY KEY,
@@ -281,6 +287,12 @@ func (r *TenantRegistry) initSchema() error {
 		if _, err := r.db.Exec(`ALTER TABLE stripe_events ADD COLUMN processing_started_at INTEGER`); err != nil {
 			return fmt.Errorf("migrate stripe_events: add processing_started_at: %w", err)
 		}
+	}
+	if _, err := r.db.Exec(`CREATE INDEX IF NOT EXISTS idx_stripe_events_processed_at ON stripe_events(processed_at)`); err != nil {
+		return fmt.Errorf("migrate stripe_events: add processed_at index: %w", err)
+	}
+	if _, err := r.db.Exec(`CREATE INDEX IF NOT EXISTS idx_stripe_events_received_at ON stripe_events(received_at)`); err != nil {
+		return fmt.Errorf("migrate stripe_events: add received_at index: %w", err)
 	}
 
 	// Migration: add grace_started_at to stripe_accounts if missing.
@@ -2011,6 +2023,9 @@ func (r *TenantRegistry) RecordStripeEvent(eventID, eventType string) (alreadyPr
 	}()
 
 	now := time.Now().UTC().Unix()
+	if err := pruneStripeEventsTx(tx, now); err != nil {
+		return false, err
+	}
 
 	// INSERT OR IGNORE avoids driver-specific error parsing for duplicates.
 	res, err := tx.Exec(`
@@ -2118,6 +2133,22 @@ func (r *TenantRegistry) MarkStripeEventProcessed(eventID string, processingErro
 	}
 	if affected == 0 {
 		return fmt.Errorf("stripe event %q not found", eventID)
+	}
+	return nil
+}
+
+func pruneStripeEventsTx(tx *sql.Tx, nowUnix int64) error {
+	if tx == nil {
+		return fmt.Errorf("stripe event prune transaction is required")
+	}
+	cutoff := nowUnix - stripeEventRetentionSeconds
+	if _, err := tx.Exec(`
+		DELETE FROM stripe_events
+		WHERE (processed_at IS NOT NULL AND processed_at < ?)
+		   OR (processed_at IS NULL AND received_at < ?)`,
+		cutoff, cutoff,
+	); err != nil {
+		return fmt.Errorf("prune stale stripe events: %w", err)
 	}
 	return nil
 }

@@ -1419,3 +1419,78 @@ func TestStripeEventReclaimsStaleInFlight(t *testing.T) {
 		t.Fatalf("expected stale in-flight event to be reclaimed for processing")
 	}
 }
+
+func TestStripeEventPrunesExpiredRows(t *testing.T) {
+	reg := newTestRegistry(t)
+
+	now := time.Now().UTC().Unix()
+	stale := now - stripeEventRetentionSeconds - 60
+	recent := now - stripeEventRetentionSeconds/2
+
+	for _, stmt := range []struct {
+		id                string
+		eventType         string
+		receivedAt        int64
+		processingStarted any
+		processedAt       any
+		processingError   any
+	}{
+		{
+			id:                "evt_stale_processed",
+			eventType:         "customer.subscription.updated",
+			receivedAt:        stale,
+			processingStarted: nil,
+			processedAt:       stale,
+			processingError:   nil,
+		},
+		{
+			id:                "evt_stale_pending",
+			eventType:         "invoice.payment_failed",
+			receivedAt:        stale,
+			processingStarted: nil,
+			processedAt:       nil,
+			processingError:   nil,
+		},
+		{
+			id:                "evt_recent_processed",
+			eventType:         "checkout.session.completed",
+			receivedAt:        recent,
+			processingStarted: nil,
+			processedAt:       recent,
+			processingError:   nil,
+		},
+	} {
+		if _, err := reg.db.Exec(`
+			INSERT INTO stripe_events (
+				stripe_event_id, event_type, received_at, processing_started_at, processed_at, processing_error
+			) VALUES (?, ?, ?, ?, ?, ?)`,
+			stmt.id, stmt.eventType, stmt.receivedAt, stmt.processingStarted, stmt.processedAt, stmt.processingError,
+		); err != nil {
+			t.Fatalf("insert seed stripe event %s: %v", stmt.id, err)
+		}
+	}
+
+	already, err := reg.RecordStripeEvent("evt_new", "customer.subscription.updated")
+	if err != nil {
+		t.Fatalf("RecordStripeEvent: %v", err)
+	}
+	if already {
+		t.Fatal("expected new event to remain processable")
+	}
+
+	assertStripeEventExists := func(eventID string, want bool) {
+		t.Helper()
+		var count int
+		if err := reg.db.QueryRow(`SELECT COUNT(*) FROM stripe_events WHERE stripe_event_id = ?`, eventID).Scan(&count); err != nil {
+			t.Fatalf("query stripe event %s: %v", eventID, err)
+		}
+		if got := count == 1; got != want {
+			t.Fatalf("stripe event %s exists=%v, want %v", eventID, got, want)
+		}
+	}
+
+	assertStripeEventExists("evt_stale_processed", false)
+	assertStripeEventExists("evt_stale_pending", false)
+	assertStripeEventExists("evt_recent_processed", true)
+	assertStripeEventExists("evt_new", true)
+}
