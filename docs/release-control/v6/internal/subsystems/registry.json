@@ -1703,9 +1703,11 @@
         "internal/cloudcp/stripe/provisioner.go",
         "internal/hosted/provisioner.go",
         "pulse-pro:.github/workflows/deploy-v6-preview-demo.yml",
+        "pulse-pro:landing-page/thanks.html",
         "pulse-pro:license-server/checkout_funnel.go",
         "pulse-pro:license-server/grandfathering.go",
         "pulse-pro:license-server/main.go",
+        "pulse-pro:license-server/v6_checkout.go",
         "pulse-pro:license-server/v6_handlers.go",
         "pulse-pro:scripts/audit_v6_preview_demo.sh",
         "pulse-pro:scripts/audit_v6_preview_demo_browser.cjs",
@@ -2062,12 +2064,15 @@
             "label": "purchase return handoff proof",
             "match_prefixes": [],
             "match_files": [
-              "pkg/licensing/purchase_return.go"
+              "pkg/licensing/purchase_return.go",
+              "pulse-pro:landing-page/thanks.html",
+              "pulse-pro:license-server/v6_checkout.go"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
-              "pkg/licensing/purchase_return_test.go"
+              "pkg/licensing/purchase_return_test.go",
+              "pulse-pro:license-server/v6_checkout_test.go"
             ]
           },
           {
