@@ -7,7 +7,9 @@ import (
 	"errors"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/bootstrap"
 	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
@@ -107,6 +109,30 @@ func (r *Router) handleValidateBootstrapToken(w http.ResponseWriter, req *http.R
 		return
 	}
 
+	clientIP := GetClientIP(req)
+	if clientIP == "" {
+		clientIP = extractRemoteIP(req.RemoteAddr)
+	}
+	if clientIP == "" {
+		clientIP = req.RemoteAddr
+	}
+
+	if limiter := r.bootstrapTokenLimiter(); limiter != nil {
+		if allowed, retryAfter := limiter.allowAt(clientIP, time.Now()); !allowed {
+			retrySeconds := int(retryAfter.Round(time.Second) / time.Second)
+			if retrySeconds < 1 {
+				retrySeconds = 1
+			}
+			w.Header().Set("Retry-After", strconv.Itoa(retrySeconds))
+			log.Warn().
+				Str("ip", clientIP).
+				Int("retry_after_seconds", retrySeconds).
+				Msg("Rejected bootstrap token validation request due to rate limit")
+			http.Error(w, "Too many bootstrap token validation attempts", http.StatusTooManyRequests)
+			return
+		}
+	}
+
 	if r.bootstrapTokenHash == "" {
 		http.Error(w, "Bootstrap token unavailable. Reload the page or restart Pulse.", http.StatusConflict)
 		return
@@ -132,11 +158,21 @@ func (r *Router) handleValidateBootstrapToken(w http.ResponseWriter, req *http.R
 
 	if !r.bootstrapTokenValid(token) {
 		log.Warn().
-			Str("ip", GetClientIP(req)).
+			Str("ip", clientIP).
 			Msg("Rejected invalid bootstrap token validation request")
 		http.Error(w, "Invalid bootstrap setup token", http.StatusUnauthorized)
 		return
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (r *Router) bootstrapTokenLimiter() *RateLimiter {
+	if r == nil {
+		return nil
+	}
+	if r.bootstrapTokenValidationLimiter == nil {
+		r.bootstrapTokenValidationLimiter = NewRateLimiter(10, 5*time.Minute)
+	}
+	return r.bootstrapTokenValidationLimiter
 }

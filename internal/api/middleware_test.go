@@ -1,8 +1,8 @@
 package api
 
 import (
-	"encoding/json"
 	"bufio"
+	"encoding/json"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -467,6 +467,68 @@ func TestErrorHandler_PanicRecovery(t *testing.T) {
 
 	if rec.Code != http.StatusInternalServerError {
 		t.Errorf("expected 500 after panic recovery, got %d", rec.Code)
+	}
+}
+
+func TestErrorHandler_PreservesSafeRequestIDHeader(t *testing.T) {
+	handler := ErrorHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	req.Header.Set("X-Request-ID", "client.trace-123:abc")
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if got := rec.Header().Get("X-Request-ID"); got != "client.trace-123:abc" {
+		t.Fatalf("X-Request-ID = %q, want %q", got, "client.trace-123:abc")
+	}
+}
+
+func TestErrorHandler_ReplacesUnsafeRequestIDHeader(t *testing.T) {
+	handler := ErrorHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	req.Header.Set("X-Request-ID", "bad\nrequest-id")
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	got := rec.Header().Get("X-Request-ID")
+	if got == "" {
+		t.Fatal("expected generated request id")
+	}
+	if got == "bad\nrequest-id" {
+		t.Fatalf("unsafe request id should not be preserved: %q", got)
+	}
+	if strings.ContainsAny(got, "\r\n") {
+		t.Fatalf("generated request id must not contain control characters: %q", got)
+	}
+}
+
+func TestSanitizeIncomingRequestID(t *testing.T) {
+	tests := []struct {
+		name string
+		raw  string
+		want string
+	}{
+		{name: "empty", raw: "", want: ""},
+		{name: "trimmed safe value", raw: "  trace-123._:abc  ", want: "trace-123._:abc"},
+		{name: "rejects newline", raw: "trace\n123", want: ""},
+		{name: "rejects space", raw: "trace 123", want: ""},
+		{name: "rejects slash", raw: "trace/123", want: ""},
+		{name: "rejects overly long value", raw: strings.Repeat("a", maxIncomingRequestIDLength+1), want: ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := sanitizeIncomingRequestID(tt.raw); got != tt.want {
+				t.Fatalf("sanitizeIncomingRequestID(%q) = %q, want %q", tt.raw, got, tt.want)
+			}
+		})
 	}
 }
 

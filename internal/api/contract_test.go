@@ -11220,6 +11220,61 @@ func TestContract_SimpleStatsUsesTextNodesForContainerFields(t *testing.T) {
 	}
 }
 
+func TestContract_APIRejectsUnsafeIncomingRequestIDHeader(t *testing.T) {
+	handler := ErrorHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/api/health", nil)
+	req.Header.Set("X-Request-ID", "bad\nrequest-id")
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	got := rec.Header().Get("X-Request-ID")
+	if got == "" {
+		t.Fatal("expected generated request id")
+	}
+	if got == "bad\nrequest-id" {
+		t.Fatalf("unsafe request id header must not round-trip: %q", got)
+	}
+	if strings.ContainsAny(got, "\r\n") {
+		t.Fatalf("response request id must not contain control characters: %q", got)
+	}
+}
+
+func TestContract_BootstrapTokenValidationRateLimitsPerClient(t *testing.T) {
+	dataDir := t.TempDir()
+	router := &Router{
+		config: &config.Config{
+			DataPath:   dataDir,
+			ConfigPath: dataDir,
+		},
+		bootstrapTokenValidationLimiter: NewRateLimiter(1, time.Hour),
+	}
+	t.Cleanup(router.bootstrapTokenValidationLimiter.Stop)
+	router.initializeBootstrapToken()
+
+	req := httptest.NewRequest(http.MethodPost, "/api/security/validate-bootstrap-token", strings.NewReader(`{"token":"deadbeef"}`))
+	req.RemoteAddr = "127.0.0.1:1234"
+	rec := httptest.NewRecorder()
+	router.handleValidateBootstrapToken(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusUnauthorized)
+	}
+
+	req = httptest.NewRequest(http.MethodPost, "/api/security/validate-bootstrap-token", strings.NewReader(`{"token":"deadbeef"}`))
+	req.RemoteAddr = "127.0.0.1:1234"
+	rec = httptest.NewRecorder()
+	router.handleValidateBootstrapToken(rec, req)
+	if rec.Code != http.StatusTooManyRequests {
+		t.Fatalf("status = %d, want %d (%s)", rec.Code, http.StatusTooManyRequests, rec.Body.String())
+	}
+	if retryAfter := rec.Header().Get("Retry-After"); retryAfter == "" {
+		t.Fatal("expected Retry-After header on bootstrap token validation rate limit")
+	}
+}
+
 func mustStreamEvent(t *testing.T, eventType string, data interface{}) chat.StreamEvent {
 	t.Helper()
 

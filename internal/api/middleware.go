@@ -24,6 +24,8 @@ type APIError struct {
 	Details      map[string]string `json:"details"`
 }
 
+const maxIncomingRequestIDLength = 128
+
 func EmptyAPIError() APIError {
 	return APIError{}.NormalizeCollections()
 }
@@ -55,8 +57,8 @@ func ErrorHandler(next http.Handler) http.Handler {
 			return
 		}
 
-		// Add request ID to context, honoring any incoming header value.
-		incomingID := strings.TrimSpace(r.Header.Get("X-Request-ID"))
+		// Add request ID to context, honoring only a bounded safe header value.
+		incomingID := sanitizeIncomingRequestID(r.Header.Get("X-Request-ID"))
 		ctxWithID, requestID := logging.WithRequestID(r.Context(), incomingID)
 		r = r.WithContext(ctxWithID)
 
@@ -120,6 +122,24 @@ func writeErrorResponse(w http.ResponseWriter, statusCode int, code, message str
 	if err := json.NewEncoder(w).Encode(resp); err != nil {
 		log.Error().Err(err).Msg("Failed to encode error response")
 	}
+}
+
+func sanitizeIncomingRequestID(raw string) string {
+	requestID := strings.TrimSpace(raw)
+	if requestID == "" || len(requestID) > maxIncomingRequestIDLength {
+		return ""
+	}
+	for i := 0; i < len(requestID); i++ {
+		b := requestID[i]
+		if (b >= 'a' && b <= 'z') ||
+			(b >= 'A' && b <= 'Z') ||
+			(b >= '0' && b <= '9') ||
+			b == '-' || b == '_' || b == '.' || b == ':' {
+			continue
+		}
+		return ""
+	}
+	return requestID
 }
 
 // sanitizeErrorForClient returns a generic, safe message for an internal error.

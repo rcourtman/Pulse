@@ -398,6 +398,11 @@ type oidcStateStore struct {
 	stopOnce    sync.Once
 }
 
+const (
+	oidcStateCleanupInterval = 5 * time.Minute
+	maxOIDCStateEntries      = 1024
+)
+
 type oidcStateEntry struct {
 	ProviderID    string // SSO provider ID (empty for legacy flow)
 	Nonce         string
@@ -415,7 +420,7 @@ func newOIDCStateStore() *oidcStateStore {
 
 	// Start cleanup routine to prevent memory leak from abandoned OIDC flows
 	go func() {
-		ticker := time.NewTicker(5 * time.Minute)
+		ticker := time.NewTicker(oidcStateCleanupInterval)
 		defer ticker.Stop()
 
 		for {
@@ -436,12 +441,7 @@ func (s *oidcStateStore) cleanup() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	now := time.Now()
-	for state, entry := range s.entries {
-		if now.After(entry.ExpiresAt) {
-			delete(s.entries, state)
-		}
-	}
+	s.cleanupExpiredLocked(time.Now())
 }
 
 // Stop stops the cleanup routine
@@ -454,7 +454,10 @@ func (s *oidcStateStore) Stop() {
 func (s *oidcStateStore) Put(state string, entry *oidcStateEntry) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
+	s.cleanupExpiredLocked(time.Now())
 	s.entries[state] = entry
+	s.evictOverflowLocked(maxOIDCStateEntries)
 }
 
 func (s *oidcStateStore) Consume(state string) (*oidcStateEntry, bool) {
@@ -472,6 +475,37 @@ func (s *oidcStateStore) Consume(state string) (*oidcStateEntry, bool) {
 	}
 
 	return entry, true
+}
+
+func (s *oidcStateStore) cleanupExpiredLocked(now time.Time) {
+	for state, entry := range s.entries {
+		if entry == nil || now.After(entry.ExpiresAt) {
+			delete(s.entries, state)
+		}
+	}
+}
+
+func (s *oidcStateStore) evictOverflowLocked(limit int) {
+	for len(s.entries) > limit {
+		oldestState := ""
+		var oldestExpiry time.Time
+
+		for state, entry := range s.entries {
+			expiry := time.Time{}
+			if entry != nil {
+				expiry = entry.ExpiresAt
+			}
+			if oldestState == "" || expiry.Before(oldestExpiry) || (expiry.Equal(oldestExpiry) && state < oldestState) {
+				oldestState = state
+				oldestExpiry = expiry
+			}
+		}
+
+		if oldestState == "" {
+			return
+		}
+		delete(s.entries, oldestState)
+	}
 }
 
 func generateRandomURLString(size int) (string, error) {

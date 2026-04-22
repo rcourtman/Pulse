@@ -170,6 +170,53 @@ func TestOIDCStateStoreCleanupAndConsume(t *testing.T) {
 	}
 }
 
+func TestOIDCStateStorePutEvictsEarliestExpiryWhenAtCapacity(t *testing.T) {
+	store := &oidcStateStore{entries: make(map[string]*oidcStateEntry), stopCleanup: make(chan struct{})}
+	base := time.Now().Add(time.Minute)
+
+	for i := 0; i < maxOIDCStateEntries; i++ {
+		store.Put(fmt.Sprintf("state-%04d", i), &oidcStateEntry{
+			ExpiresAt: base.Add(time.Duration(i) * time.Second),
+		})
+	}
+
+	store.Put("state-overflow", &oidcStateEntry{ExpiresAt: base.Add(24 * time.Hour)})
+
+	if len(store.entries) != maxOIDCStateEntries {
+		t.Fatalf("entry count = %d, want %d", len(store.entries), maxOIDCStateEntries)
+	}
+	if _, ok := store.entries["state-0000"]; ok {
+		t.Fatal("expected earliest-expiring entry to be evicted")
+	}
+	if _, ok := store.entries["state-overflow"]; !ok {
+		t.Fatal("expected newest entry to be retained after overflow eviction")
+	}
+}
+
+func TestOIDCStateStorePutDropsExpiredEntriesBeforeEvicting(t *testing.T) {
+	store := &oidcStateStore{entries: make(map[string]*oidcStateEntry), stopCleanup: make(chan struct{})}
+	store.entries["expired"] = &oidcStateEntry{ExpiresAt: time.Now().Add(-time.Minute)}
+
+	base := time.Now().Add(time.Minute)
+	for i := 0; i < maxOIDCStateEntries-1; i++ {
+		store.Put(fmt.Sprintf("active-%04d", i), &oidcStateEntry{
+			ExpiresAt: base.Add(time.Duration(i) * time.Second),
+		})
+	}
+
+	store.Put("active-new", &oidcStateEntry{ExpiresAt: base.Add(24 * time.Hour)})
+
+	if len(store.entries) != maxOIDCStateEntries {
+		t.Fatalf("entry count = %d, want %d", len(store.entries), maxOIDCStateEntries)
+	}
+	if _, ok := store.entries["expired"]; ok {
+		t.Fatal("expected expired entry to be removed before overflow eviction")
+	}
+	if _, ok := store.entries["active-0000"]; !ok {
+		t.Fatal("expected active entry to remain when expired entry provided capacity")
+	}
+}
+
 func TestOIDCStateStoreStop(t *testing.T) {
 	store := &oidcStateStore{entries: make(map[string]*oidcStateEntry), stopCleanup: make(chan struct{})}
 	store.Stop()

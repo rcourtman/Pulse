@@ -215,6 +215,45 @@ func TestValidateBootstrapTokenEndpoint(t *testing.T) {
 	}
 }
 
+func TestValidateBootstrapTokenEndpoint_RateLimited(t *testing.T) {
+	t.Setenv("PULSE_TRUSTED_PROXY_CIDRS", "")
+	resetTrustedProxyConfig()
+
+	dataDir := t.TempDir()
+	cfg := &config.Config{
+		DataPath:   dataDir,
+		ConfigPath: dataDir,
+	}
+
+	router := &Router{
+		config:                          cfg,
+		bootstrapTokenValidationLimiter: NewRateLimiter(1, time.Hour),
+	}
+	t.Cleanup(router.bootstrapTokenValidationLimiter.Stop)
+	router.initializeBootstrapToken()
+
+	handler := http.HandlerFunc(router.handleValidateBootstrapToken)
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/security/validate-bootstrap-token", strings.NewReader(`{"token":"deadbeef"}`))
+	req.RemoteAddr = "127.0.0.1:1234"
+	handler.ServeHTTP(rr, req)
+	if rr.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 for first invalid token, got %d (%s)", rr.Code, rr.Body.String())
+	}
+
+	rr = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodPost, "/api/security/validate-bootstrap-token", strings.NewReader(`{"token":"deadbeef"}`))
+	req.RemoteAddr = "127.0.0.1:1234"
+	handler.ServeHTTP(rr, req)
+	if rr.Code != http.StatusTooManyRequests {
+		t.Fatalf("expected 429 after exhausting bootstrap token validation limit, got %d (%s)", rr.Code, rr.Body.String())
+	}
+	if rr.Header().Get("Retry-After") == "" {
+		t.Fatal("expected Retry-After header on bootstrap token validation rate limit")
+	}
+}
+
 func TestQuickSecuritySetupAllowsRecoveryTokenRotation(t *testing.T) {
 	t.Setenv("PULSE_TRUSTED_PROXY_CIDRS", "")
 	resetTrustedProxyConfig()

@@ -1113,7 +1113,9 @@ rest and rewrite any legacy plaintext bootstrap-token file immediately into
 the encrypted canonical format on load. Automatic startup logs may surface the
 token file path for local recovery, but they must never print the bootstrap
 token value itself into stdout, systemd journal, Docker logs, or Kubernetes
-pod logs.
+pod logs. The validation endpoint for that same bootstrap token must also
+rate-limit per client and return an explicit `Retry-After` backoff instead of
+offering an unbounded brute-force surface during first-run setup.
 That same deploy/install runtime boundary also owns peer-node SSH trust.
 `internal/hostagent/commands_deploy.go` must resolve and persist peer host
 keys through the managed `ssh_known_hosts` store before any automated deploy

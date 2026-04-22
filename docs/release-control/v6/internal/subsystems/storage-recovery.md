@@ -595,7 +595,9 @@ engine stop hiding inside broader monitoring and E2E buckets.
 That same first-session recovery boundary also treats the bootstrap token as a
 local secret, not a log artifact. Storage and recovery surfaces may surface the
 bootstrap token file path when first-run auth is missing, but automatic runtime
-logs must never print the bootstrap token value itself.
+logs must never print the bootstrap token value itself. That same recovery
+surface must also keep bootstrap token validation rate-limited per client so
+the local recovery transport does not become an unbounded online guessing path.
 Storage and recovery browser helpers now also keep one transport-tolerant
 normalization edge. Recovery display models must accept legacy subject-label
 fields and nullable mode/kind metadata before presenting canonical item labels,

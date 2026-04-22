@@ -602,6 +602,13 @@ entry.
 
 The API layer already uses contract tests in many places, but every major live
 contract should continue moving toward canonical-only runtime shapes.
+That same shared `internal/api/` boundary now also keeps ephemeral auth flow
+state and request correlation fail-closed. OIDC authorization state storage
+must cap abandoned entries and evict the earliest-expiring state before
+unbounded growth, bootstrap token validation must enforce a per-client retry
+limit with an explicit `Retry-After` contract, and incoming `X-Request-ID`
+headers may only round-trip when they fit the bounded safe character set used
+for logs and response headers.
 That same shared settings/licensing contract now also owns the split usage-data
 payload model. `frontend-modern/src/api/settings.ts`,
 `internal/api/router_routes_licensing.go`, and adjacent settings callers must
