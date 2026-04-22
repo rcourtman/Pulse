@@ -14,7 +14,7 @@ export const CONNECTION_TYPE_LABELS: Record<ConnectionType, string> = {
   pbs: 'Proxmox Backup Server',
   pmg: 'Proxmox Mail Gateway',
   vmware: 'VMware vCenter',
-  truenas: 'TrueNAS',
+  truenas: 'TrueNAS SCALE',
   agent: 'Pulse Unified Agent',
   docker: 'Docker',
   kubernetes: 'Kubernetes',

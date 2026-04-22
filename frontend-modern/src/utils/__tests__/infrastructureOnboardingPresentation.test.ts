@@ -49,8 +49,6 @@ describe('infrastructureOnboardingPresentation', () => {
     });
 
     expect(getInfrastructureEmptyStateDetail()).toContain('Supported today: TrueNAS SCALE');
-    expect(getInfrastructureEmptyStateDetail()).toContain(
-      'VMware vCenter onboarding is also available on the current admission path.',
-    );
+    expect(getInfrastructureEmptyStateDetail()).toContain('VMware vCenter is also available now.');
   });
 });

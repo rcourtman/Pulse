@@ -18,6 +18,10 @@ export interface NodeCredentialSlotProps {
   initialAddress?: string;
   onCancel: () => void;
   onSaved: () => void;
+  onDelete?: () => void;
+  deletePending?: boolean;
+  deleteConfirming?: boolean;
+  deleteError?: string | null;
 }
 
 export const NodeCredentialSlot: Component<NodeCredentialSlotProps> = (props) => {
@@ -60,7 +64,14 @@ export const NodeCredentialSlot: Component<NodeCredentialSlotProps> = (props) =>
       <NodeModalBasicInfoSection modalProps={modalProps} state={state} />
       <NodeModalAuthenticationSection modalProps={modalProps} state={state} />
       <NodeModalMonitoringSection modalProps={modalProps} state={state} />
-      <NodeModalStatusFooter modalProps={modalProps} state={state} />
+      <NodeModalStatusFooter
+        modalProps={modalProps}
+        state={state}
+        onDelete={props.onDelete}
+        deletePending={props.deletePending}
+        deleteConfirming={props.deleteConfirming}
+        deleteError={props.deleteError}
+      />
     </form>
   );
 };

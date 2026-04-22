@@ -234,31 +234,31 @@ work extends shared components instead of creating new local variants.
    the banner shell, state owner, or shared model.
 5. Keep shared infrastructure shell state on the reusable settings boundary: `frontend-modern/src/components/Settings/useSettingsInfrastructurePanelProps.ts` and `frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx` must continue to derive provider counts, availability, and shared subtab copy from one infrastructure-settings source — via the unified aggregator through `frontend-modern/src/components/Settings/useConnectionsLedger.ts` — instead of creating provider-local summary fetches or VMware-only shell vocabulary. Phase 9 retired the old `PlatformConnectionsWorkspace` per-type shell, but setup guidance may still use `Platform connections` as the operator-facing label for the shared API-backed onboarding path.
    That same shared shell boundary now owns the default posture for
-   `/settings/infrastructure`: the landing route should read as one ledger-first
-   workspace with one row per top-level monitored system. Configured platform
-   connections must stay in their own management workspace instead of showing up
-   as peer rows in the default table, while installer tooling, provider setup
-   workspaces, and profile management remain secondary flows opened by explicit
-   deep links or dedicated workspace routes instead of being dumped inline underneath the default
-   table.
-   Those deep-linked secondary views must stay under the same single
-   `Infrastructure` sidebar destination, but they should render as normal page
-   content with explicit back navigation instead of modal or drawer overlays.
+   `/settings/infrastructure`: the landing route should read as one
+   source-manager workspace with product-type cards first and the monitored
+   systems ledger as secondary summary context. Configured platform
+   connections must stay visible on the landing route under those product
+   cards instead of hiding behind a separate add screen, while installer
+   tooling, probe/detect flows, and profile management remain secondary
+   interactions opened from the same destination instead of taking over the
+   whole page.
+   Those secondary views must stay under the same single `Infrastructure`
+   sidebar destination, but they may open in governed modal/dialog chrome when
+   that preserves the persistent source-manager page behind them.
    That same shared shell boundary now owns one canonical infrastructure
    destination in the Settings sidebar. `InfrastructureWorkspace.tsx` owns the
-   default ledger plus route-backed `Connections` and `Install` workspaces
-   inside that destination, while each secondary flow still stays
-   single-purpose instead of stacking multiple workspace surfaces at once.
-   `InfrastructureWorkspace.tsx` must open a new connection through
+   source-manager landing plus the subordinate monitored-systems summary inside
+   that destination, while route-backed add flows and local edit flows stay
+   single-purpose instead of stacking multiple page-level workspaces at once.
+   `InfrastructureWorkspace.tsx` must still open a new connection through
    `frontend-modern/src/components/Settings/ConnectionEditor/ConnectionEditor.tsx`,
-   not through a per-type picker or per-type step tree. The editor's probe
-   step is the canonical entry point; credential slots are dispatched by the
-   detected or manually-selected type and must reach an inline credential
-   form rather than diverging into a parallel add surface. The add flow
-   must render inline in place of the inventory table, not as a right-side
-   drawer, centered modal, or other overlay chrome — placing isolated
-   per-type forms behind a common drawer is re-wrapping, and the unified
-   add surface is specifically not allowed to reintroduce that pattern.
+   but the editor now serves as governed dialog content under the source
+   manager rather than replacing the page inline. The `?add=pick` route owns
+   the generic detect/browse dialog, while product-type add buttons may jump
+   straight into the matching credential slot through `initialType`.
+   Credential slots are dispatched by the detected or manually-selected type
+   and must still reach the canonical form body rather than diverging into a
+   revived provider-specific workspace.
    For PVE, PBS, and PMG, the credential slot is
    `frontend-modern/src/components/Settings/ConnectionEditor/CredentialSlots/NodeCredentialSlot.tsx`
    and it must compose `NodeModalBasicInfoSection`,
@@ -274,15 +274,17 @@ work extends shared components instead of creating new local variants.
    editor shell — no connection list, no row actions, no surrounding
    panel chrome. Showing a ledger of other systems inside the credential
    slot is exactly the ledger-inside-editor drift this contract forbids.
-   The configured-connections ledger itself must render exclusively from
-   the aggregator. `InfrastructureWorkspace.tsx` composes the default
-   table rows from
+   The configured-connections summary and source-manager rows themselves must
+   render exclusively from the aggregator.
+   `InfrastructureWorkspace.tsx` composes the source cards plus the subordinate
+   monitored-systems table from
    `frontend-modern/src/components/Settings/useConnectionsLedger.ts`
-   (polling `GET /api/connections`) and renders per-row Edit, Pause, and
-   Remove actions inline via
+   (polling `GET /api/connections`) and renders per-source Edit, Pause, and
+   Remove actions through
    `frontend-modern/src/components/Settings/useConnectionRowActions.ts`;
-   last-error detail and agent uninstall commands surface on the row
-   itself rather than behind a separate detail page or `Dialog` drawer.
+   last-error detail and agent uninstall commands surface on the source row or
+   in the governed edit dialog rather than behind a revived provider-specific
+   detail page.
    Phase 9 retired the
    parallel reporting/inventory surface entirely:
    `useInfrastructureReportingState`, `InfrastructureOperationsController`,

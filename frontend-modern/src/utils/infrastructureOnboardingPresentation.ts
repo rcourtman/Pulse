@@ -187,4 +187,4 @@ export const getInfrastructureEmptyStateSummary = (): string =>
   'Connect supported platforms by API, or install Pulse Agent on a host for machine telemetry and local runtime discovery.';
 
 export const getInfrastructureEmptyStateDetail = (): string =>
-  'Supported today: TrueNAS SCALE, Proxmox VE, Proxmox Backup Server, Proxmox Mail Gateway, Pulse Agent hosts, Docker, and Kubernetes. VMware vCenter onboarding is also available on the current admission path.';
+  'Supported today: TrueNAS SCALE, Proxmox VE, Proxmox Backup Server, Proxmox Mail Gateway, Pulse Agent hosts, Docker, and Kubernetes. VMware vCenter is also available now.';

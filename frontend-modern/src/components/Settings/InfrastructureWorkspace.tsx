@@ -1,10 +1,12 @@
 import { Component, Match, Show, Switch, createEffect, createMemo, createSignal } from 'solid-js';
-import { useLocation, useNavigate, useSearchParams } from '@solidjs/router';
+import { useLocation, useNavigate } from '@solidjs/router';
+import X from 'lucide-solid/icons/x';
 import { presentationPolicyIsReadOnly } from '@/stores/sessionPresentationPolicy';
 import { copyToClipboard } from '@/utils/clipboard';
 import { notificationStore } from '@/stores/notifications';
+import { Dialog } from '@/components/shared/Dialog';
 import { AgentProfilesPanel } from './AgentProfilesPanel';
-import { ConnectionsTable, type ConnectionsTableHeaderAction } from './ConnectionsTable';
+import { ConnectionsTable, type AgentUninstallCommands } from './ConnectionsTable';
 import { ConnectionEditor } from './ConnectionEditor/ConnectionEditor';
 import { NodeCredentialSlot } from './ConnectionEditor/CredentialSlots/NodeCredentialSlot';
 import { TrueNASCredentialSlot } from './ConnectionEditor/CredentialSlots/TrueNASCredentialSlot';
@@ -14,11 +16,11 @@ import type { TrueNASConnection } from '@/api/truenas';
 import type { VMwareConnection } from '@/api/vmware';
 import type { NodeConfigWithStatus } from '@/types/nodes';
 import { InfrastructureInstallerSection } from './InfrastructureInstallerSection';
+import { InfrastructureSourceManager } from './InfrastructureSourceManager';
 import {
+  buildInfrastructureOnboardingPath,
   buildInfrastructureWorkspacePath,
-  deriveAddStepFromSearch,
   deriveAddStepFromLocation,
-  INFRASTRUCTURE_ADD_QUERY_PARAM,
   type InfrastructureAddStep,
 } from './infrastructureWorkspaceModel';
 import type { InfrastructurePlatformSettingsProps } from './proxmoxSettingsModel';
@@ -28,6 +30,7 @@ import {
   InfrastructureOperationsStateProvider,
   useInfrastructureOperationsContext,
 } from './useInfrastructureOperationsState';
+import { getInfrastructureOnboardingProductPresentation } from '@/utils/infrastructureOnboardingPresentation';
 
 export type InfrastructureWorkspaceProps = InfrastructurePlatformSettingsProps;
 
@@ -40,19 +43,33 @@ const ADD_STEP_TO_TYPE: Record<InfrastructureAddStep, ConnectionType> = {
   vmware: 'vmware',
 };
 
+const closeButtonClass =
+  'inline-flex h-9 w-9 items-center justify-center rounded-md border border-border text-base-content transition-colors hover:bg-surface-hover';
+
+const describeManagedSourceType = (type: ConnectionType | null): string => {
+  if (!type) return 'Infrastructure';
+  return getInfrastructureOnboardingProductPresentation(type as InfrastructureAddStep).label;
+};
+
 const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = (props) => {
   const navigate = useNavigate();
   const location = useLocation();
-  const [, setSearchParams] = useSearchParams();
   const ledger = useConnectionsLedger();
   const operations = useInfrastructureOperationsContext();
   const rowActions = useConnectionRowActions({ onMutated: () => ledger.reload() });
 
-  const [addMode, setAddMode] = createSignal(false);
-  const [initialAddType, setInitialAddType] = createSignal<ConnectionType | null>(null);
   const [showAgentProfiles, setShowAgentProfiles] = createSignal(false);
   const [editingConnection, setEditingConnection] = createSignal<Connection | null>(null);
   const readOnly = createMemo(() => presentationPolicyIsReadOnly());
+  const routeStep = createMemo(() => {
+    if (readOnly()) return null;
+    return deriveAddStepFromLocation(location.pathname, location.search ?? '');
+  });
+  const activeAddType = createMemo<ConnectionType | null>(() => {
+    const step = routeStep();
+    if (!step || step === 'pick') return null;
+    return ADD_STEP_TO_TYPE[step];
+  });
 
   const findEditableNode = (connection: Connection): NodeConfigWithStatus | null => {
     const accessor =
@@ -82,64 +99,9 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
     return props.trueNASSettings.connections().find((conn) => conn.id === suffix) ?? null;
   };
 
-  // Redirect legacy deep links and pre-select the matching type in the editor.
-  createEffect(() => {
-    const path = location.pathname;
-    const queryStep = deriveAddStepFromSearch(location.search ?? '');
-    const step = deriveAddStepFromLocation(path, location.search ?? '');
-    if (path === '/settings/infrastructure' && !step) return;
-
-    if (queryStep) {
-      setSearchParams({ [INFRASTRUCTURE_ADD_QUERY_PARAM]: null }, { replace: true });
-    } else {
-      navigate(buildInfrastructureWorkspacePath(), { replace: true });
-    }
-    if (!readOnly() && step) {
-      setAddMode(true);
-      if (step === 'pick') {
-        setInitialAddType(null);
-      } else {
-        setInitialAddType(ADD_STEP_TO_TYPE[step]);
-      }
-      return;
-    }
-
-    setAddMode(false);
-    setInitialAddType(null);
-    setShowAgentProfiles(false);
-  });
-
-  // Drop add/edit mode in read-only sessions.
-  createEffect(() => {
-    if (readOnly() && addMode()) {
-      setAddMode(false);
-    }
-    if (readOnly() && editingConnection()) {
-      setEditingConnection(null);
-    }
-  });
-
   const rows = createMemo(() => ledger.rows());
 
-  const startAddInfrastructure = () => {
-    setInitialAddType(null);
-    setAddMode(true);
-    setShowAgentProfiles(false);
-  };
-
-  const headerActions = createMemo<ConnectionsTableHeaderAction[]>(() =>
-    readOnly()
-      ? []
-      : [
-          {
-            label: 'Add infrastructure',
-            onSelect: startAddInfrastructure,
-            tone: 'primary' as const,
-          },
-        ],
-  );
-
-  const agentUninstallCommands = createMemo(() => ({
+  const agentUninstallCommands = createMemo<AgentUninstallCommands>(() => ({
     linux: operations.getUninstallCommand(),
     windows: operations.getWindowsUninstallCommand(),
   }));
@@ -153,253 +115,395 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
     }
   };
 
-  const exitAddMode = () => {
-    setAddMode(false);
-    setInitialAddType(null);
+  const navigateToWorkspace = (replace = false) => {
+    navigate(buildInfrastructureWorkspacePath(), { replace, scroll: false });
+  };
+
+  const resetInlineEditorState = () => {
+    props.vmwareSettings.closeDialog();
+    props.trueNASSettings.closeDialog();
     setShowAgentProfiles(false);
   };
 
-  const exitEditMode = () => {
-    setEditingConnection(null);
+  const openAddFlow = (type: InfrastructureAddStep | 'pick') => {
+    navigate(buildInfrastructureOnboardingPath(type), { scroll: false });
   };
 
-  const handleEditConnection = (connection: Connection) => {
-    setEditingConnection(connection);
+  const closeAddFlow = () => {
+    resetInlineEditorState();
+    navigateToWorkspace(Boolean(routeStep()));
+  };
+
+  const closeEditFlow = () => {
+    const connection = editingConnection();
+    if (connection) {
+      rowActions.cancelRemove(connection.id);
+    }
+    resetInlineEditorState();
+    setEditingConnection(null);
   };
 
   const handleEditSaved = () => {
     ledger.reload();
-    exitEditMode();
+    closeEditFlow();
   };
+
+  createEffect(() => {
+    if (routeStep() !== 'pick') return;
+    setShowAgentProfiles(false);
+  });
+
+  createEffect(() => {
+    if (!editingConnection()) return;
+    if (ledger.loading()) return;
+    if (!ledger.findById(editingConnection()!.id)) {
+      closeEditFlow();
+    }
+  });
+
+  createEffect(() => {
+    if (readOnly() && editingConnection()) {
+      closeEditFlow();
+    }
+  });
 
   const renderNodeSlot = (
     type: 'pve' | 'pbs' | 'pmg',
     editingNode?: NodeConfigWithStatus | null,
+    editingRow?: Connection | null,
   ) => {
-    const onExit = editingNode ? exitEditMode : exitAddMode;
-    const onSaved = editingNode ? handleEditSaved : exitAddMode;
+    const connectionId = editingRow?.id ?? null;
     return (
       <NodeCredentialSlot
         nodeType={type}
         settings={props}
         editingNode={editingNode ?? null}
-        onCancel={onExit}
-        onSaved={onSaved}
+        onCancel={editingRow ? closeEditFlow : closeAddFlow}
+        onSaved={editingRow ? handleEditSaved : handleAddSaved}
+        onDelete={
+          editingRow
+            ? () => {
+                void rowActions.requestRemove(editingRow);
+              }
+            : undefined
+        }
+        deletePending={connectionId ? rowActions.pendingAction(connectionId) === 'remove' : false}
+        deleteConfirming={connectionId ? rowActions.confirmingRemove(connectionId) : false}
+        deleteError={connectionId ? rowActions.actionError(connectionId) : null}
       />
     );
   };
 
-  const mode = createMemo<'ledger' | 'add' | 'edit'>(() => {
-    if (editingConnection()) return 'edit';
-    if (addMode()) return 'add';
-    return 'ledger';
-  });
+  const handleAddSaved = () => {
+    ledger.reload();
+    closeAddFlow();
+  };
 
-  return (
-    <div class="space-y-8">
-      <Switch
-        fallback={
-          <ConnectionsTable
-            rows={rows}
-            headerActions={headerActions()}
-            actions={readOnly() ? undefined : rowActions}
-            onEdit={readOnly() ? undefined : handleEditConnection}
-            agentUninstallCommands={agentUninstallCommands()}
-            onCopyText={(text) => void handleCopy(text)}
-          />
+  const renderConnectionSlot = (context: {
+    mode: 'add' | 'edit';
+    type: ConnectionType;
+    onCancel: () => void;
+    onSaved: () => void;
+  }) => {
+    if (context.mode === 'edit') {
+      const connection = editingConnection();
+      if (!connection) {
+        return (
+          <div
+            role="alert"
+            class="rounded-md border border-rose-300 bg-rose-50 px-4 py-3 text-sm text-rose-800 dark:border-rose-900 dark:bg-rose-950 dark:text-rose-200"
+          >
+            The selected connection is no longer available. Reload and try again.
+          </div>
+        );
+      }
+
+      switch (context.type) {
+        case 'pve':
+        case 'pbs':
+        case 'pmg': {
+          const editableNode = findEditableNode(connection);
+          if (!editableNode) {
+            return (
+              <div
+                role="alert"
+                class="rounded-md border border-rose-300 bg-rose-50 px-4 py-3 text-sm text-rose-800 dark:border-rose-900 dark:bg-rose-950 dark:text-rose-200"
+              >
+                Couldn't find the saved configuration for {connection.name}. It may have already
+                been removed.
+              </div>
+            );
+          }
+          return renderNodeSlot(context.type, editableNode, connection);
         }
-      >
-        <Match when={mode() === 'edit' && editingConnection()}>
-          {(accessor) => {
-            const connection = accessor();
-            const editableSlot = (() => {
-              switch (connection.type) {
-                case 'pve':
-                case 'pbs':
-                case 'pmg': {
-                  const node = findEditableNode(connection);
-                  return node
-                    ? {
-                        kind: 'node' as const,
-                        render: () =>
-                          renderNodeSlot(connection.type as 'pve' | 'pbs' | 'pmg', node),
-                      }
-                    : null;
-                }
-                case 'vmware': {
-                  const vmware = findEditableVMware(connection);
-                  return vmware
-                    ? {
-                        kind: 'vmware' as const,
-                        render: () => (
-                          <VMwareCredentialSlot
-                            state={props.vmwareSettings}
-                            editingConnection={vmware}
-                            onCancel={exitEditMode}
-                            onSaved={handleEditSaved}
-                          />
-                        ),
-                      }
-                    : null;
-                }
-                case 'truenas': {
-                  const truenas = findEditableTrueNAS(connection);
-                  return truenas
-                    ? {
-                        kind: 'truenas' as const,
-                        render: () => (
-                          <TrueNASCredentialSlot
-                            state={props.trueNASSettings}
-                            editingConnection={truenas}
-                            onCancel={exitEditMode}
-                            onSaved={handleEditSaved}
-                          />
-                        ),
-                      }
-                    : null;
-                }
-                default:
-                  return null;
-              }
-            })();
+        case 'vmware': {
+          const vmware = findEditableVMware(connection);
+          if (!vmware) {
+            return (
+              <div
+                role="alert"
+                class="rounded-md border border-rose-300 bg-rose-50 px-4 py-3 text-sm text-rose-800 dark:border-rose-900 dark:bg-rose-950 dark:text-rose-200"
+              >
+                Couldn't find the saved VMware configuration for {connection.name}. It may have
+                already been removed.
+              </div>
+            );
+          }
+          return (
+            <VMwareCredentialSlot
+              state={props.vmwareSettings}
+              editingConnection={vmware}
+              onCancel={context.onCancel}
+              onSaved={context.onSaved}
+              onDelete={() => void rowActions.requestRemove(connection)}
+              deletePending={rowActions.pendingAction(connection.id) === 'remove'}
+              deleteConfirming={rowActions.confirmingRemove(connection.id)}
+              deleteError={rowActions.actionError(connection.id)}
+            />
+          );
+        }
+        case 'truenas': {
+          const truenas = findEditableTrueNAS(connection);
+          if (!truenas) {
+            return (
+              <div
+                role="alert"
+                class="rounded-md border border-rose-300 bg-rose-50 px-4 py-3 text-sm text-rose-800 dark:border-rose-900 dark:bg-rose-950 dark:text-rose-200"
+              >
+                Couldn't find the saved TrueNAS configuration for {connection.name}. It may have
+                already been removed.
+              </div>
+            );
+          }
+          return (
+            <TrueNASCredentialSlot
+              state={props.trueNASSettings}
+              editingConnection={truenas}
+              onCancel={context.onCancel}
+              onSaved={context.onSaved}
+              onDelete={() => void rowActions.requestRemove(connection)}
+              deletePending={rowActions.pendingAction(connection.id) === 'remove'}
+              deleteConfirming={rowActions.confirmingRemove(connection.id)}
+              deleteError={rowActions.actionError(connection.id)}
+            />
+          );
+        }
+        default:
+          return (
+            <div class="text-sm text-muted">
+              Editing is not available for the {context.type} source type here yet.
+            </div>
+          );
+      }
+    }
 
-            if (!editableSlot) {
-              return (
-                <div class="space-y-4">
-                  <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div class="text-base font-semibold text-base-content">Edit connection</div>
-                    <button
-                      type="button"
-                      onClick={exitEditMode}
-                      class="inline-flex w-full items-center justify-center gap-1 rounded-md border border-border px-3 py-1.5 text-sm font-medium text-base-content transition-colors hover:bg-surface-hover sm:w-auto"
-                    >
-                      ← Back to systems
-                    </button>
-                  </div>
-                  <div
-                    role="alert"
-                    class="rounded-md border border-rose-300 bg-rose-50 px-4 py-3 text-sm text-rose-800 dark:border-rose-900 dark:bg-rose-950 dark:text-rose-200"
-                  >
-                    Couldn't find the underlying configuration for {connection.name}. It may have
-                    been removed. Reload and try again.
+    switch (context.type) {
+      case 'pve':
+      case 'pbs':
+      case 'pmg':
+        return renderNodeSlot(context.type);
+      case 'truenas':
+        return (
+          <TrueNASCredentialSlot
+            state={props.trueNASSettings}
+            onCancel={context.onCancel}
+            onSaved={context.onSaved}
+          />
+        );
+      case 'vmware':
+        return (
+          <VMwareCredentialSlot
+            state={props.vmwareSettings}
+            onCancel={context.onCancel}
+            onSaved={context.onSaved}
+          />
+        );
+      case 'agent':
+        return (
+          <div class="space-y-4">
+            <div class="flex items-center justify-end">
+              <button
+                type="button"
+                onClick={() => setShowAgentProfiles((value) => !value)}
+                class="inline-flex items-center rounded-md border border-border px-2.5 py-1 text-xs font-medium text-base-content transition-colors hover:bg-surface-hover"
+              >
+                {showAgentProfiles() ? 'Hide agent profiles' : 'Manage agent profiles'}
+              </button>
+            </div>
+            <Show when={showAgentProfiles()}>
+              <div class="rounded-xl border border-border bg-surface p-4 shadow-sm">
+                <div class="mb-4 space-y-1">
+                  <div class="text-base font-semibold text-base-content">Agent profiles</div>
+                  <div class="text-sm text-muted">
+                    Manage reusable install defaults for agent-based systems.
                   </div>
                 </div>
-              );
-            }
-            return (
-              <div class="space-y-4">
-                <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <div class="text-base font-semibold text-base-content">
-                      Edit {connection.name}
-                    </div>
-                    <div class="mt-0.5 text-xs text-muted">{connection.address}</div>
+                <AgentProfilesPanel />
+              </div>
+            </Show>
+            <InfrastructureInstallerSection />
+          </div>
+        );
+      default:
+        return (
+          <div class="text-sm text-muted">
+            No credential form is wired up for the {context.type} source type yet.
+          </div>
+        );
+    }
+  };
+
+  const addDialogTitle = createMemo(() => {
+    const step = routeStep();
+    if (!step || step === 'pick') return 'Add infrastructure';
+    return `Add ${describeManagedSourceType(activeAddType())}`;
+  });
+
+  const addDialogDescription = createMemo(() => {
+    const step = routeStep();
+    if (!step || step === 'pick') {
+      return 'Detect a source from its address, or choose the source type you want to add.';
+    }
+    const presentation = getInfrastructureOnboardingProductPresentation(
+      activeAddType() as InfrastructureAddStep,
+    );
+    return `${presentation.bestFor}. ${presentation.coverage}.`;
+  });
+
+  const editDialogTitle = createMemo(() => {
+    const connection = editingConnection();
+    if (!connection) return 'Edit connection';
+    return `Edit ${connection.name}`;
+  });
+
+  const editDialogDescription = createMemo(() => {
+    const connection = editingConnection();
+    if (!connection) return 'Update this source without leaving the infrastructure manager.';
+    const label = describeManagedSourceType(connection.type);
+    return `${label}${connection.address ? ` · ${connection.address}` : ''}`;
+  });
+
+  const isAgentDialog = () =>
+    activeAddType() === 'agent' || editingConnection()?.type === 'agent';
+
+  return (
+    <div class="space-y-6">
+      <InfrastructureSourceManager
+        rows={rows}
+        readOnly={readOnly()}
+        actions={readOnly() ? undefined : rowActions}
+        onAddType={(type) => openAddFlow(type as InfrastructureAddStep)}
+        onEditConnection={readOnly() ? undefined : (connection) => setEditingConnection(connection)}
+        onDetectFromAddress={readOnly() ? undefined : () => openAddFlow('pick')}
+        agentUninstallCommands={agentUninstallCommands()}
+        onCopyText={(text) => void handleCopy(text)}
+      />
+
+      <ConnectionsTable rows={rows} />
+
+      <Show when={routeStep()}>
+        {(stepAccessor) => {
+          const step = stepAccessor();
+          return (
+            <Dialog
+              isOpen={true}
+              onClose={closeAddFlow}
+              ariaLabel={addDialogTitle()}
+              panelClass={isAgentDialog() ? 'max-w-6xl' : 'max-w-5xl'}
+            >
+              <div class="flex h-full flex-col">
+                <div class="flex items-start justify-between gap-4 border-b border-border bg-surface-alt px-4 py-4 sm:px-6">
+                  <div class="space-y-1">
+                    <h2 class="text-base font-semibold text-base-content">{addDialogTitle()}</h2>
+                    <p class="text-sm text-muted">{addDialogDescription()}</p>
                   </div>
                   <button
                     type="button"
-                    onClick={exitEditMode}
-                    class="inline-flex w-full items-center justify-center gap-1 rounded-md border border-border px-3 py-1.5 text-sm font-medium text-base-content transition-colors hover:bg-surface-hover sm:w-auto"
+                    onClick={closeAddFlow}
+                    class={closeButtonClass}
+                    aria-label="Close add infrastructure dialog"
                   >
-                    ← Back to systems
+                    <X class="h-4 w-4" />
                   </button>
                 </div>
 
-                <div class="rounded-lg border border-border bg-surface p-4">
-                  {editableSlot.render()}
+                <div class="min-h-0 flex-1 overflow-y-auto">
+                  <Switch>
+                    <Match when={step === 'pick'}>
+                      <ConnectionEditor
+                        mode="add"
+                        onClose={closeAddFlow}
+                        onSaved={handleAddSaved}
+                        renderCredentialSlot={({ type, onCancel, onSaved }) =>
+                          renderConnectionSlot({ mode: 'add', type, onCancel, onSaved })
+                        }
+                      />
+                    </Match>
+
+                    <Match when={Boolean(activeAddType())}>
+                      <ConnectionEditor
+                        mode="add"
+                        initialType={activeAddType() ?? undefined}
+                        showSlotHeader={false}
+                        trackInitialCatalogSelection={activeAddType() !== 'agent'}
+                        onClose={closeAddFlow}
+                        onSaved={handleAddSaved}
+                        renderCredentialSlot={({ type, onCancel, onSaved }) =>
+                          renderConnectionSlot({ mode: 'add', type, onCancel, onSaved })
+                        }
+                      />
+                    </Match>
+                  </Switch>
                 </div>
               </div>
-            );
-          }}
-        </Match>
+            </Dialog>
+          );
+        }}
+      </Show>
 
-        <Match when={mode() === 'add'}>
-          <div class="space-y-4">
-            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <div class="text-base font-semibold text-base-content">Add infrastructure</div>
-                <div class="mt-0.5 text-xs text-muted">
-                  Choose how Pulse should connect: supported platform API or Pulse Agent on a host.
+      <Show when={editingConnection()}>
+        {(connectionAccessor) => {
+          const connection = connectionAccessor();
+          return (
+            <Dialog
+              isOpen={true}
+              onClose={closeEditFlow}
+              ariaLabel={editDialogTitle()}
+              panelClass={connection.type === 'agent' ? 'max-w-6xl' : 'max-w-5xl'}
+            >
+              <div class="flex h-full flex-col">
+                <div class="flex items-start justify-between gap-4 border-b border-border bg-surface-alt px-4 py-4 sm:px-6">
+                  <div class="space-y-1">
+                    <h2 class="text-base font-semibold text-base-content">{editDialogTitle()}</h2>
+                    <p class="text-sm text-muted">{editDialogDescription()}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={closeEditFlow}
+                    class={closeButtonClass}
+                    aria-label="Close edit infrastructure dialog"
+                  >
+                    <X class="h-4 w-4" />
+                  </button>
+                </div>
+
+                <div class="min-h-0 flex-1 overflow-y-auto">
+                  <ConnectionEditor
+                    mode="edit"
+                    initialType={connection.type}
+                    showSlotHeader={false}
+                    onClose={closeEditFlow}
+                    onSaved={handleEditSaved}
+                    renderCredentialSlot={({ type, onCancel, onSaved }) =>
+                      renderConnectionSlot({ mode: 'edit', type, onCancel, onSaved })
+                    }
+                  />
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={exitAddMode}
-                class="inline-flex w-full items-center justify-center gap-1 rounded-md border border-border px-3 py-1.5 text-sm font-medium text-base-content transition-colors hover:bg-surface-hover sm:w-auto"
-              >
-                ← Back to systems
-              </button>
-            </div>
-
-            <div class="rounded-lg border border-border bg-surface">
-              <ConnectionEditor
-                mode="add"
-                initialType={initialAddType() ?? undefined}
-                onClose={exitAddMode}
-                renderCredentialSlot={({ type }) => {
-                  switch (type) {
-                    case 'pve':
-                    case 'pbs':
-                    case 'pmg':
-                      return renderNodeSlot(type);
-                    case 'truenas':
-                      return (
-                        <TrueNASCredentialSlot
-                          state={props.trueNASSettings}
-                          onCancel={exitAddMode}
-                          onSaved={exitAddMode}
-                        />
-                      );
-                    case 'vmware':
-                      return (
-                        <VMwareCredentialSlot
-                          state={props.vmwareSettings}
-                          onCancel={exitAddMode}
-                          onSaved={exitAddMode}
-                        />
-                      );
-                    case 'agent':
-                      return (
-                        <div class="space-y-4">
-                          <div class="flex items-center justify-end">
-                            <button
-                              type="button"
-                              onClick={() => setShowAgentProfiles((v) => !v)}
-                              class="inline-flex items-center rounded-md border border-border px-2.5 py-1 text-xs font-medium text-base-content transition-colors hover:bg-surface-hover"
-                            >
-                              {showAgentProfiles()
-                                ? 'Hide agent profiles'
-                                : 'Manage agent profiles'}
-                            </button>
-                          </div>
-                          <Show when={showAgentProfiles()}>
-                            <div class="rounded-xl border border-border bg-surface p-4 shadow-sm">
-                              <div class="mb-4 space-y-1">
-                                <div class="text-base font-semibold text-base-content">
-                                  Agent profiles
-                                </div>
-                                <div class="text-sm text-muted">
-                                  Manage reusable install defaults for agent-based systems.
-                                </div>
-                              </div>
-                              <AgentProfilesPanel />
-                            </div>
-                          </Show>
-                          <InfrastructureInstallerSection />
-                        </div>
-                      );
-                    default:
-                      return (
-                        <div class="text-sm text-muted">
-                          No credential form is wired up for the {type} type yet.
-                        </div>
-                      );
-                  }
-                }}
-              />
-            </div>
-          </div>
-        </Match>
-      </Switch>
+            </Dialog>
+          );
+        }}
+      </Show>
     </div>
   );
 };

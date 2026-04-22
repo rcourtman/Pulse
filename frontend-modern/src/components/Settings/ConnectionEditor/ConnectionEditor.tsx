@@ -46,6 +46,8 @@ export interface ConnectionEditorProps {
   mode?: ConnectionEditorMode;
   initialType?: ConnectionType;
   initialAddress?: string;
+  showSlotHeader?: boolean;
+  trackInitialCatalogSelection?: boolean;
   renderCredentialSlot: CredentialSlotRenderer;
   manualTypeOptions?: ConnectionType[];
   onClose: () => void;
@@ -107,6 +109,9 @@ export const ConnectionEditor: Component<ConnectionEditorProps> = (props) => {
     onboardingMetrics.recordOpened();
     if (props.initialType) {
       recordPathSelectedForType(props.initialType);
+      if (props.trackInitialCatalogSelection && props.initialType !== 'agent') {
+        onboardingMetrics.recordCatalogSelected(props.initialType);
+      }
     }
   });
 
@@ -230,7 +235,7 @@ export const ConnectionEditor: Component<ConnectionEditorProps> = (props) => {
                       <Show when={supportBadges().currentAdmissionPath.length > 0}>
                         <div class="space-y-1.5">
                           <div class="text-[11px] font-medium uppercase tracking-wide text-muted">
-                            Current admission path
+                            Available now
                           </div>
                           <div class="flex flex-wrap gap-1.5">
                             <For each={supportBadges().currentAdmissionPath}>
@@ -342,7 +347,7 @@ export const ConnectionEditor: Component<ConnectionEditorProps> = (props) => {
                                     </div>
                                     <Show when={product.governanceState === 'admitted'}>
                                       <span class="inline-flex items-center rounded-full border border-blue-200 bg-blue-100 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-blue-800 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-200">
-                                        Current admission path
+                                        Available now
                                       </span>
                                     </Show>
                                   </div>
@@ -429,7 +434,7 @@ export const ConnectionEditor: Component<ConnectionEditorProps> = (props) => {
                                     </div>
                                     <Show when={product.governanceState === 'admitted'}>
                                       <span class="inline-flex items-center rounded-full border border-blue-200 bg-blue-100 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-blue-800 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-200">
-                                        Current admission path
+                                        Available now
                                       </span>
                                     </Show>
                                   </div>
@@ -525,27 +530,29 @@ export const ConnectionEditor: Component<ConnectionEditorProps> = (props) => {
           </div>
         }
       >
-        <div class="flex items-center justify-between border-b border-border px-4 py-2">
-          <div class="text-sm">
-            <span class="font-semibold text-base-content">
-              {activeType() === 'agent'
-                ? 'Install Pulse Agent'
-                : (CONNECTION_TYPE_LABELS[activeType()!] ?? activeType())}
-            </span>
-            <Show when={selectedCandidate()}>
-              <span class="ml-2 text-xs text-muted">{selectedCandidate()!.host}</span>
+        <Show when={props.showSlotHeader ?? true}>
+          <div class="flex items-center justify-between border-b border-border px-4 py-2">
+            <div class="text-sm">
+              <span class="font-semibold text-base-content">
+                {activeType() === 'agent'
+                  ? 'Install Pulse Agent'
+                  : (CONNECTION_TYPE_LABELS[activeType()!] ?? activeType())}
+              </span>
+              <Show when={selectedCandidate()}>
+                <span class="ml-2 text-xs text-muted">{selectedCandidate()!.host}</span>
+              </Show>
+            </div>
+            <Show when={(props.mode ?? 'add') === 'add'}>
+              <button
+                type="button"
+                onClick={reopenProbe}
+                class="inline-flex items-center rounded-md border border-border px-2.5 py-1 text-xs font-medium text-base-content transition-colors hover:bg-surface-hover"
+              >
+                ← Back to catalog
+              </button>
             </Show>
           </div>
-          <Show when={(props.mode ?? 'add') === 'add'}>
-            <button
-              type="button"
-              onClick={reopenProbe}
-              class="inline-flex items-center rounded-md border border-border px-2.5 py-1 text-xs font-medium text-base-content transition-colors hover:bg-surface-hover"
-            >
-              ← Back to catalog
-            </button>
-          </Show>
-        </div>
+        </Show>
 
         <div class="flex-1 overflow-y-auto p-4">
           {props.renderCredentialSlot({

@@ -6,6 +6,10 @@ import { logger } from '@/utils/logger';
 interface NodeModalStatusFooterProps {
   modalProps: NodeModalProps;
   state: NodeModalState;
+  onDelete?: () => void;
+  deletePending?: boolean;
+  deleteConfirming?: boolean;
+  deleteError?: string | null;
 }
 
 export const NodeModalStatusFooter: Component<NodeModalStatusFooterProps> = (props) => {
@@ -107,17 +111,53 @@ export const NodeModalStatusFooter: Component<NodeModalStatusFooterProps> = (pro
         </div>
       </Show>
 
+      <Show when={props.deleteConfirming}>
+        <div class="mx-6 mb-2 rounded-md border border-border bg-surface-alt px-4 py-3 text-xs text-muted">
+          Removing forgets this connection from Pulse; credentials on the platform itself are
+          untouched.
+        </div>
+      </Show>
+
+      <Show when={props.deleteError}>
+        {(message) => (
+          <div
+            role="alert"
+            class="mx-6 mb-2 rounded-md border border-rose-300 bg-rose-50 px-4 py-3 text-sm text-rose-800 dark:border-rose-900 dark:bg-rose-950 dark:text-rose-200"
+          >
+            {message()}
+          </div>
+        )}
+      </Show>
+
       <div class="flex items-center justify-between px-6 py-4 border-t border-border">
         <button
           type="button"
           onClick={state.handleTestConnection}
-          disabled={state.isTesting()}
+          disabled={state.isTesting() || props.deletePending}
           class="px-4 py-2 text-sm border border-border text-base-content rounded-md hover:bg-surface-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {state.isTesting() ? 'Testing...' : 'Test Connection'}
         </button>
 
         <div class="flex items-center gap-3">
+          <Show when={state.isEditingExistingNode() && props.onDelete}>
+            <button
+              type="button"
+              onClick={props.onDelete}
+              disabled={props.deletePending}
+              class={`px-4 py-2 text-sm rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                props.deleteConfirming
+                  ? 'bg-rose-600 text-white hover:bg-rose-700'
+                  : 'border border-rose-300 text-rose-700 hover:bg-rose-50 dark:border-rose-900 dark:text-rose-300 dark:hover:bg-rose-950'
+              }`}
+            >
+              {props.deletePending
+                ? 'Deleting…'
+                : props.deleteConfirming
+                  ? 'Click again to confirm'
+                  : 'Delete connection'}
+            </button>
+          </Show>
           <Show when={modalProps.showBackToDiscovery && modalProps.onBackToDiscovery}>
             <button
               type="button"
@@ -144,13 +184,15 @@ export const NodeModalStatusFooter: Component<NodeModalStatusFooterProps> = (pro
           <button
             type="button"
             onClick={modalProps.onClose}
+            disabled={props.deletePending}
             class="px-4 py-2 text-sm border border-border text-base-content rounded-md hover:bg-surface-hover transition-colors"
           >
             Cancel
           </button>
           <button
             type="submit"
-            class="px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+            disabled={props.deletePending}
+            class="px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {state.isEditingExistingNode() ? 'Update' : 'Add'} Node
           </button>

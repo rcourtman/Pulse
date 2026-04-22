@@ -22,6 +22,10 @@ export interface TrueNASCredentialSlotProps {
   editingConnection?: TrueNASConnection | null;
   onCancel: () => void;
   onSaved: () => void;
+  onDelete?: () => void;
+  deletePending?: boolean;
+  deleteConfirming?: boolean;
+  deleteError?: string | null;
 }
 
 export const TrueNASCredentialSlot: Component<TrueNASCredentialSlotProps> = (props) => {
@@ -49,6 +53,8 @@ export const TrueNASCredentialSlot: Component<TrueNASCredentialSlotProps> = (pro
     props.state.closeDialog();
     props.onCancel();
   };
+
+  const isEditing = () => Boolean(props.editingConnection);
 
   return (
     <div class="space-y-6">
@@ -294,12 +300,48 @@ export const TrueNASCredentialSlot: Component<TrueNASCredentialSlotProps> = (pro
           errorTitle={props.state.monitoredSystemPreviewErrorTitle()}
         />
 
+        <Show when={props.deleteConfirming}>
+          <div class="rounded-md border border-border bg-surface-alt px-4 py-3 text-xs text-muted">
+            Removing forgets this connection from Pulse; credentials on the platform itself are
+            untouched.
+          </div>
+        </Show>
+
+        <Show when={props.deleteError}>
+          {(message) => (
+            <div
+              role="alert"
+              class="rounded-md border border-rose-300 bg-rose-50 px-4 py-3 text-sm text-rose-800 dark:border-rose-900 dark:bg-rose-950 dark:text-rose-200"
+            >
+              {message()}
+            </div>
+          )}
+        </Show>
+
         <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <Show when={isEditing() && props.onDelete}>
+            <button
+              type="button"
+              class={
+                props.deleteConfirming
+                  ? 'inline-flex min-h-10 sm:min-h-9 items-center justify-center rounded-md bg-rose-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-60'
+                  : 'inline-flex min-h-10 sm:min-h-9 items-center justify-center rounded-md border border-rose-300 px-3 py-2 text-sm font-medium text-rose-700 transition-colors hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-rose-900 dark:text-rose-300 dark:hover:bg-rose-950'
+              }
+              onClick={() => props.onDelete?.()}
+              disabled={props.state.saving() || props.state.testing() || props.deletePending}
+            >
+              {props.deletePending
+                ? 'Deleting…'
+                : props.deleteConfirming
+                  ? 'Click again to confirm'
+                  : 'Delete connection'}
+            </button>
+          </Show>
           <button
             type="button"
             class={buttonClass}
             onClick={handleCancel}
-            disabled={props.state.saving() || props.state.testing()}
+            disabled={props.state.saving() || props.state.testing() || props.deletePending}
           >
             Cancel
           </button>
@@ -307,7 +349,7 @@ export const TrueNASCredentialSlot: Component<TrueNASCredentialSlotProps> = (pro
             type="button"
             class={buttonClass}
             onClick={() => void props.state.testCurrentForm()}
-            disabled={props.state.saving() || props.state.testing()}
+            disabled={props.state.saving() || props.state.testing() || props.deletePending}
           >
             {props.state.testing() ? 'Testing…' : 'Test connection'}
           </button>
@@ -329,10 +371,17 @@ export const TrueNASCredentialSlot: Component<TrueNASCredentialSlotProps> = (pro
               props.state.saving() ||
               props.state.testing() ||
               props.state.previewing() ||
+              props.deletePending ||
               props.state.monitoredSystemAdmissionSaveBlocked()
             }
           >
-            {props.state.saving() ? 'Adding…' : 'Add connection'}
+            {props.state.saving()
+              ? isEditing()
+                ? 'Saving…'
+                : 'Adding…'
+              : isEditing()
+                ? 'Update connection'
+                : 'Add connection'}
           </button>
         </div>
       </Show>

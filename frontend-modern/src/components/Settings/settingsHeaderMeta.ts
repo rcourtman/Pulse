@@ -9,7 +9,7 @@ import {
 export const SETTINGS_HEADER_META: SettingsHeaderMetaMap = {
   'infrastructure-systems': {
     title: 'Infrastructure',
-    description: 'Review monitored systems and add new infrastructure to Pulse.',
+    description: 'Manage platform connections, Pulse Agent installs, and monitored systems.',
   },
   'system-general': {
     title: 'General',

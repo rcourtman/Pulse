@@ -134,7 +134,7 @@ describe('ConnectionEditor', () => {
     expectNodeBefore(proxmoxButton, agentButton);
     expect(screen.queryByRole('button', { name: /^Proxmox VE/i })).toBeNull();
     expect(screen.queryByText('Recommended')).toBeNull();
-    expect(screen.getAllByText('Current admission path').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Available now').length).toBeGreaterThan(0);
     expect(screen.getByText('What happens next')).toBeInTheDocument();
   });
 

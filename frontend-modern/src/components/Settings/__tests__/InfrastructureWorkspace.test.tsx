@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Connection } from '@/api/connections';
 import { InfrastructureWorkspace } from '../InfrastructureWorkspace';
@@ -11,25 +11,7 @@ const connectionState = vi.hoisted(() => ({
   connections: [] as Connection[],
 }));
 const navigateSpy = vi.hoisted(() => vi.fn());
-const setSearchParamsSpy = vi.hoisted(() => vi.fn());
 const presentationPolicyIsReadOnlyMock = vi.hoisted(() => vi.fn(() => false));
-const probeSpy = vi.hoisted(() => vi.fn().mockResolvedValue({ candidates: [], probedMs: 0 }));
-const connectionsApiMock = vi.hoisted(() => ({
-  list: vi.fn(),
-  probe: probeSpy,
-  setEnabled: vi.fn(),
-  remove: vi.fn(),
-}));
-const onboardingMetricsTrackerMock = vi.hoisted(() => ({
-  recordOpened: vi.fn(),
-  recordPathSelected: vi.fn(),
-  recordProbeResult: vi.fn(),
-  recordCatalogSelected: vi.fn(),
-  recordCredentialsOpened: vi.fn(),
-}));
-const createInfrastructureOnboardingMetricsTrackerMock = vi.hoisted(() =>
-  vi.fn(() => onboardingMetricsTrackerMock),
-);
 
 vi.mock('@solidjs/router', async () => {
   const actual = await vi.importActual<typeof import('@solidjs/router')>('@solidjs/router');
@@ -37,7 +19,6 @@ vi.mock('@solidjs/router', async () => {
     ...actual,
     useLocation: () => ({ pathname: routeState.pathname, search: routeState.search }),
     useNavigate: () => navigateSpy,
-    useSearchParams: () => [{}, setSearchParamsSpy],
   };
 });
 
@@ -61,11 +42,14 @@ vi.mock('../useConnectionsLedger', () => ({
       connectionState.connections.map((connection) => ({
         id: connection.id,
         name: connection.name || connection.id,
-        subtitle: connection.type,
+        subtitle:
+          connection.type === 'agent'
+            ? 'Pulse Unified Agent'
+            : `Platform API · ${connection.type === 'truenas' ? 'TrueNAS SCALE' : connection.type}`,
         host: connection.address,
         coverageLabels: ['VMs'],
         statusLabel: connection.state === 'paused' ? 'Paused' : 'Active',
-        statusClassName: '',
+        statusClassName: 'bg-green-100 text-green-800',
         lastActivityText: '1m ago',
         lastErrorMessage: connection.lastError?.message,
         enabled: connection.enabled,
@@ -107,12 +91,14 @@ vi.mock('../AgentProfilesPanel', () => ({
   AgentProfilesPanel: () => <div data-testid="agent-profiles">profiles</div>,
 }));
 
-vi.mock('@/api/connections', () => ({
-  ConnectionsAPI: connectionsApiMock,
-}));
-
 vi.mock('@/utils/infrastructureOnboardingMetrics', () => ({
-  createInfrastructureOnboardingMetricsTracker: createInfrastructureOnboardingMetricsTrackerMock,
+  createInfrastructureOnboardingMetricsTracker: () => ({
+    recordOpened: vi.fn(),
+    recordPathSelected: vi.fn(),
+    recordProbeResult: vi.fn(),
+    recordCatalogSelected: vi.fn(),
+    recordCredentialsOpened: vi.fn(),
+  }),
 }));
 
 const connectionFixture = (overrides: Partial<Connection> = {}): Connection => ({
@@ -132,10 +118,6 @@ const connectionFixture = (overrides: Partial<Connection> = {}): Connection => (
   ...overrides,
 });
 
-function expectNodeBefore(a: Node, b: Node) {
-  expect(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-}
-
 const baseProps = () =>
   ({
     selectedAgent: () => 'pve',
@@ -153,8 +135,14 @@ const baseProps = () =>
     pveNodes: () => [],
     pbsNodes: () => [],
     pmgNodes: () => [],
-    trueNASSettings: {} as any,
-    vmwareSettings: {} as any,
+    trueNASSettings: {
+      closeDialog: vi.fn(),
+      connections: () => [],
+    } as any,
+    vmwareSettings: {
+      closeDialog: vi.fn(),
+      connections: () => [],
+    } as any,
     temperatureMonitoringEnabled: () => false,
     triggerDiscoveryScan: vi.fn(),
     loadDiscoveredNodes: vi.fn(),
@@ -193,10 +181,8 @@ const baseProps = () =>
 describe('InfrastructureWorkspace', () => {
   beforeEach(() => {
     navigateSpy.mockReset();
-    setSearchParamsSpy.mockReset();
     presentationPolicyIsReadOnlyMock.mockReset();
     presentationPolicyIsReadOnlyMock.mockReturnValue(false);
-    probeSpy.mockClear();
     routeState.pathname = '/settings/infrastructure';
     routeState.search = '';
     connectionState.connections = [connectionFixture()];
@@ -209,216 +195,80 @@ describe('InfrastructureWorkspace', () => {
   const renderWorkspace = (propOverrides: Record<string, unknown> = {}) =>
     render(() => (<InfrastructureWorkspace {...{ ...baseProps(), ...propOverrides }} />) as any);
 
-  it('renders the inventory table at the base infrastructure route', async () => {
+  it('renders the source-manager landing and keeps the monitored systems summary below it', async () => {
     renderWorkspace();
 
     await waitFor(() =>
-      expect(screen.getByRole('heading', { name: 'Monitored systems' })).toBeInTheDocument(),
+      expect(screen.getByRole('heading', { name: 'Connection types' })).toBeInTheDocument(),
     );
-    expect(screen.getByRole('button', { name: 'Add infrastructure' })).toBeInTheDocument();
-    expect(screen.getByText('zeus')).toBeInTheDocument();
-    expect(screen.queryByTestId('install-section')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Detect from address' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add VMware vCenter' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add TrueNAS' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Monitored systems' })).toBeInTheDocument();
+    expect(screen.getAllByText('zeus').length).toBeGreaterThan(0);
   });
 
-  it('renders unified connection rows from the ledger', async () => {
-    connectionState.connections = [
-      connectionFixture({ id: 'pve:zeus', name: 'zeus', type: 'pve', state: 'active' }),
-      connectionFixture({
-        id: 'truenas:tower',
-        name: 'tower-nas',
-        type: 'truenas',
-        state: 'paused',
-        enabled: false,
-      }),
-    ];
+  it('opens the detect dialog through the canonical onboarding route', () => {
     renderWorkspace();
 
-    await waitFor(() => expect(screen.getByText('zeus')).toBeInTheDocument());
-    expect(screen.getByText('tower-nas')).toBeInTheDocument();
-    expect(screen.getByText('Active')).toBeInTheDocument();
-    expect(screen.getByText('Paused')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Detect from address' }));
+
+    expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure?add=pick', {
+      scroll: false,
+    });
   });
 
-  it('opens the catalog landing when Add infrastructure is clicked', () => {
+  it('opens a type-specific add route from the source cards', () => {
     renderWorkspace();
 
-    fireEvent.click(screen.getByRole('button', { name: /Add infrastructure/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add TrueNAS' }));
 
-    // The catalog landing leads with peer platform onboarding and keeps the
-    // host install path available beneath it in the same shared editor.
-    const platformHeading = screen.getAllByText('Connect a supported platform')[0];
-    const vmwareButton = screen.getByRole('button', { name: /VMware vCenter/i });
-    const trueNASButton = screen.getByRole('button', { name: /TrueNAS SCALE/i });
-    const proxmoxButton = screen.getByRole('button', { name: /^Proxmox\b/i });
-    const agentButton = screen.getByRole('button', { name: /Install Pulse Agent/i });
+    expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure?add=truenas', {
+      scroll: false,
+    });
+  });
 
-    expect(platformHeading).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Install Pulse Agent/i })).toBeInTheDocument();
+  it('renders the route-backed detect dialog when the canonical pick query is present', async () => {
+    routeState.search = '?add=pick';
+    renderWorkspace();
+
+    await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
+    expect(screen.getByText('Add infrastructure')).toBeInTheDocument();
+    expect(screen.getByText('Choose how Pulse should connect')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Probe address/i })).toBeInTheDocument();
-    expect(proxmoxButton).toBeInTheDocument();
-    expect(trueNASButton).toBeInTheDocument();
-    expect(vmwareButton).toBeInTheDocument();
-    expectNodeBefore(vmwareButton, trueNASButton);
-    expectNodeBefore(trueNASButton, proxmoxButton);
-    expectNodeBefore(proxmoxButton, agentButton);
-    expect(navigateSpy).not.toHaveBeenCalled();
-    expect(setSearchParamsSpy).not.toHaveBeenCalled();
   });
 
-  it('routes to the agent install slot when Install Pulse Agent tile is clicked', () => {
+  it('renders the route-backed agent dialog when the canonical agent query is present', async () => {
+    routeState.search = '?add=agent';
     renderWorkspace();
 
-    fireEvent.click(screen.getByRole('button', { name: /Add infrastructure/i }));
-    fireEvent.click(screen.getByRole('button', { name: /Install Pulse Agent/i }));
-
+    await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
+    expect(screen.getByText('Add Pulse Agent')).toBeInTheDocument();
     expect(screen.getByTestId('install-section')).toBeInTheDocument();
   });
 
-  it('routes to the TrueNAS credential slot when TrueNAS tile is clicked', () => {
-    renderWorkspace();
-
-    fireEvent.click(screen.getByRole('button', { name: /Add infrastructure/i }));
-    fireEvent.click(screen.getByRole('button', { name: /TrueNAS SCALE/i }));
-
-    expect(screen.getByTestId('truenas-section')).toBeInTheDocument();
-  });
-
-  it('routes to the VMware credential slot when VMware tile is clicked', () => {
-    renderWorkspace();
-
-    fireEvent.click(screen.getByRole('button', { name: /Add infrastructure/i }));
-    fireEvent.click(screen.getByRole('button', { name: /VMware vCenter/i }));
-
-    expect(screen.getByTestId('vmware-section')).toBeInTheDocument();
-  });
-
-  it('routes through the Proxmox family picker before opening the Proxmox credential slot', () => {
-    renderWorkspace();
-
-    fireEvent.click(screen.getByRole('button', { name: /Add infrastructure/i }));
-    fireEvent.click(screen.getByRole('button', { name: /^Proxmox\b/i }));
-    expect(screen.getByText('Choose a Proxmox product')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /^Proxmox VE/i }));
-
-    expect(screen.getByTestId('proxmox-section')).toBeInTheDocument();
-  });
-
-  it('can return to the catalog from a credential slot', () => {
-    renderWorkspace();
-
-    fireEvent.click(screen.getByRole('button', { name: /Add infrastructure/i }));
-    fireEvent.click(screen.getByRole('button', { name: /Install Pulse Agent/i }));
-    fireEvent.click(screen.getByRole('button', { name: /Back to catalog/i }));
-
-    expect(screen.getByRole('button', { name: /Probe address/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Install Pulse Agent/i })).toBeInTheDocument();
-    expect(screen.queryByTestId('install-section')).toBeNull();
-  });
-
-  it('toggles agent profiles inside the agent install slot', () => {
-    renderWorkspace();
-
-    fireEvent.click(screen.getByRole('button', { name: /Add infrastructure/i }));
-    fireEvent.click(screen.getByRole('button', { name: /Install Pulse Agent/i }));
-    fireEvent.click(screen.getByRole('button', { name: 'Manage agent profiles' }));
-
-    expect(screen.getByTestId('agent-profiles')).toBeInTheDocument();
-  });
-
-  it('exposes Edit / Pause / Remove on each ledger row directly', async () => {
-    renderWorkspace();
-
-    await waitFor(() => expect(screen.getByText('zeus')).toBeInTheDocument());
-    expect(screen.getByRole('button', { name: 'Edit' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Pause' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Remove' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'View details' })).toBeNull();
-  });
-
-  it('opens the inline edit flow when Edit is clicked on a pve row', async () => {
+  it('opens the edit dialog directly from an existing source row', async () => {
     renderWorkspace({
       pveNodes: () => [{ name: 'zeus', host: 'https://10.0.0.1:8006' } as any],
     });
 
-    await waitFor(() => expect(screen.getByText('zeus')).toBeInTheDocument());
-    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    await waitFor(() => expect(screen.getAllByText('zeus').length).toBeGreaterThan(0));
+    fireEvent.click(screen.getAllByRole('button', { name: 'Edit' })[0]);
 
-    await waitFor(() => expect(screen.getByTestId('proxmox-section')).toBeInTheDocument());
-    expect(screen.getByRole('button', { name: /Back to systems/i })).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
+    expect(screen.getByText('Edit zeus')).toBeInTheDocument();
+    expect(screen.getByTestId('proxmox-section')).toBeInTheDocument();
   });
 
-  // `within` was previously used for the detail panel test; retain a smoke reference so the
-  // import stays live until the broader test harness evolves.
-  it('isolates row content by cell', async () => {
-    renderWorkspace();
-    await waitFor(() => expect(screen.getByText('zeus')).toBeInTheDocument());
-    const table = screen.getByRole('table');
-    expect(within(table).getByText('zeus')).toBeInTheDocument();
-  });
-
-  it('redirects legacy install deep links and pre-selects the agent install slot', async () => {
-    routeState.pathname = '/settings/infrastructure/install';
-    renderWorkspace();
-
-    expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure', { replace: true });
-    expect(setSearchParamsSpy).not.toHaveBeenCalled();
-    await waitFor(() => expect(screen.getByTestId('install-section')).toBeInTheDocument());
-  });
-
-  it('clears the canonical query onboarding route and pre-selects the agent install slot', async () => {
-    routeState.search = '?add=agent';
-    renderWorkspace();
-
-    expect(setSearchParamsSpy).toHaveBeenCalledWith({ add: null }, { replace: true });
-    expect(navigateSpy).not.toHaveBeenCalled();
-    await waitFor(() => expect(screen.getByTestId('install-section')).toBeInTheDocument());
-  });
-
-  it('clears the canonical query onboarding route for platform picking and lands on the catalog', async () => {
-    routeState.search = '?add=pick';
-    renderWorkspace();
-
-    expect(setSearchParamsSpy).toHaveBeenCalledWith({ add: null }, { replace: true });
-    expect(navigateSpy).not.toHaveBeenCalled();
-    await waitFor(() =>
-      expect(screen.getByRole('button', { name: /Probe address/i })).toBeInTheDocument(),
-    );
-    // Catalog landing — the shared agent-led entry is visible again, and no
-    // credential slot has been entered yet.
-    expect(screen.getByRole('button', { name: /Install Pulse Agent/i })).toBeInTheDocument();
-    expect(screen.queryByTestId('install-section')).toBeNull();
-  });
-
-  it('keeps legacy platform-management paths out of add mode', async () => {
-    routeState.pathname = '/settings/infrastructure/platforms/truenas';
-    renderWorkspace();
-
-    expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure', { replace: true });
-    expect(setSearchParamsSpy).not.toHaveBeenCalled();
-    await waitFor(() =>
-      expect(screen.getByRole('heading', { name: 'Monitored systems' })).toBeInTheDocument(),
-    );
-    expect(screen.queryByRole('button', { name: /Probe address/i })).toBeNull();
-    expect(screen.queryByTestId('truenas-section')).toBeNull();
-  });
-
-  it('hides Add infrastructure and every add sub-flow in read-only mode', () => {
-    presentationPolicyIsReadOnlyMock.mockReturnValue(true);
-    renderWorkspace();
-
-    expect(screen.queryByRole('button', { name: /Add infrastructure/i })).toBeNull();
-    expect(screen.queryByRole('button', { name: /Install Pulse Agent/i })).toBeNull();
-    expect(screen.queryByRole('button', { name: /Probe address/i })).toBeNull();
-    expect(screen.queryByTestId('install-section')).toBeNull();
-  });
-
-  it('clears query onboarding but keeps read-only sessions on the inventory', () => {
+  it('hides source-manager actions and route-backed dialogs in read-only mode', () => {
     presentationPolicyIsReadOnlyMock.mockReturnValue(true);
     routeState.search = '?add=agent';
     renderWorkspace();
 
-    expect(setSearchParamsSpy).toHaveBeenCalledWith({ add: null }, { replace: true });
+    expect(screen.queryByRole('button', { name: 'Detect from address' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Add VMware vCenter' })).toBeNull();
+    expect(screen.queryByRole('dialog')).toBeNull();
     expect(screen.queryByTestId('install-section')).toBeNull();
-    expect(screen.queryByRole('button', { name: /Probe address/i })).toBeNull();
+    expect(screen.getByRole('heading', { name: 'Monitored systems' })).toBeInTheDocument();
   });
 });

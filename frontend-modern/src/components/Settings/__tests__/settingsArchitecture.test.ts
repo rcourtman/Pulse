@@ -6,6 +6,7 @@ import settingsHeaderMetaSource from '../settingsHeaderMeta.ts?raw';
 import settingsNavigationHookSource from '../useSettingsNavigation.ts?raw';
 import settingsPanelRegistryContextSource from '../settingsPanelRegistryContext.tsx?raw';
 import infrastructureWorkspaceSource from '../InfrastructureWorkspace.tsx?raw';
+import infrastructureSourceManagerSource from '../InfrastructureSourceManager.tsx?raw';
 import infrastructureWorkspaceModelSource from '../infrastructureWorkspaceModel.ts?raw';
 import connectionsTableSource from '../ConnectionsTable.tsx?raw';
 import connectionEditorSource from '../ConnectionEditor/ConnectionEditor.tsx?raw';
@@ -38,7 +39,7 @@ describe('settings architecture guardrails', () => {
   it('keeps infrastructure onboarding route-backed under the shared settings shell', () => {
     expect(settingsHeaderMetaSource).toContain("'infrastructure-systems': {");
     expect(settingsHeaderMetaSource).toContain(
-      'Review monitored systems and add new infrastructure to Pulse',
+      'Manage platform connections, Pulse Agent installs, and monitored systems.',
     );
     expect(settingsHeaderMetaSource).toContain("'organization-access': {");
     expect(settingsHeaderMetaSource).toContain(
@@ -87,29 +88,36 @@ describe('settings architecture guardrails', () => {
     expect(settingsPanelRegistryContextSource).toContain('getOrganizationSharingPanelProps');
   });
 
-  it('keeps the infrastructure add flow inline on ConnectionEditor instead of retired overlays', () => {
+  it('keeps infrastructure on a source-manager landing with route-backed dialogs', () => {
     expect(infrastructureWorkspaceSource).toContain(
       "import { ConnectionEditor } from './ConnectionEditor/ConnectionEditor';",
     );
+    expect(infrastructureWorkspaceSource).toContain(
+      "import { InfrastructureSourceManager } from './InfrastructureSourceManager';",
+    );
+    expect(infrastructureWorkspaceSource).toContain("import { Dialog } from '@/components/shared/Dialog';");
     expect(infrastructureWorkspaceSource).toContain('NodeCredentialSlot');
     expect(infrastructureWorkspaceSource).toContain('TrueNASCredentialSlot');
     expect(infrastructureWorkspaceSource).toContain('VMwareCredentialSlot');
     expect(infrastructureWorkspaceSource).toContain(
-      'navigate(buildInfrastructureWorkspacePath(), { replace: true });',
+      'navigate(buildInfrastructureOnboardingPath(type), { scroll: false });',
     );
     expect(infrastructureWorkspaceSource).toContain(
-      'const [, setSearchParams] = useSearchParams();',
+      '<InfrastructureSourceManager',
     );
     expect(infrastructureWorkspaceSource).toContain(
-      'setSearchParams({ [INFRASTRUCTURE_ADD_QUERY_PARAM]: null }, { replace: true });',
+      '<ConnectionsTable rows={rows} />',
     );
+    expect(infrastructureWorkspaceSource).toContain("showSlotHeader={false}");
+    expect(infrastructureWorkspaceSource).toContain('trackInitialCatalogSelection={activeAddType() !== \'agent\'}');
     expect(infrastructureWorkspaceSource).not.toContain('InfrastructureOperationsController');
     expect(infrastructureWorkspaceSource).not.toContain('PlatformConnectionsWorkspace');
-    expect(infrastructureWorkspaceSource).not.toContain('NodeModal');
-    expect(infrastructureWorkspaceSource).not.toContain('layout="drawer-right"');
+    expect(infrastructureSourceManagerSource).toContain('Detect from address');
+    expect(infrastructureSourceManagerSource).toContain('Connection types');
+    expect(infrastructureSourceManagerSource).toContain('{groupRows().length} configured');
   });
 
-  it('keeps the platform-first add landing and inline node credentials on the shared editor model', () => {
+  it('keeps the platform-first add dialog and inline credential bodies on the shared editor model', () => {
     expect(connectionEditorSource).toContain(
       "import { AddressProbeStep } from './AddressProbeStep';",
     );
@@ -126,7 +134,7 @@ describe('settings architecture guardrails', () => {
     expect(connectionEditorSource).toContain('Connect a supported platform');
     expect(connectionEditorSource).toContain('Choose a {family.label} product');
     expect(connectionEditorSource).toContain('Back to platforms');
-    expect(connectionEditorSource).toContain('Current admission path');
+    expect(connectionEditorSource).toContain('Available now');
     expect(connectionEditorSource).toContain('other supported services');
     expect(connectionEditorSource).toContain('connects them when available');
     expect(connectionEditorSource).not.toContain('On supported Proxmox hosts');
@@ -158,6 +166,9 @@ describe('settings architecture guardrails', () => {
     expect(infrastructureOnboardingPresentationSource).toContain('currentAdmissionPath');
     expect(infrastructureOnboardingPresentationSource).toContain(
       'getInfrastructureSupportSummaryBadges',
+    );
+    expect(infrastructureOnboardingPresentationSource).toContain(
+      'VMware vCenter is also available now.',
     );
 
     expect(nodeCredentialSlotSource).toContain('useNodeModalState(modalProps)');
