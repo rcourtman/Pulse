@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"regexp"
 	"strings"
@@ -41,14 +42,15 @@ var (
 const maxWebSocketMessageBytes int64 = 1 << 20 // 1 MiB
 
 const (
-	maxAgentIDLength                      = 128
-	maxRequestIDLength                    = 128
-	maxExecuteCommandLength               = 32 * 1024
-	maxTargetIDLength                     = 256
-	maxExecuteCommandTimeoutSeconds       = 3600
-	defaultReadFileMaxBytes         int64 = 1 << 20  // 1 MiB
-	maxReadFileMaxBytes             int64 = 10 << 20 // 10 MiB
-	maxReadFilePathLength                 = 4096
+	maxAgentIDLength                          = 128
+	maxRequestIDLength                        = 128
+	maxExecuteCommandLength                   = 32 * 1024
+	maxTargetIDLength                         = 256
+	maxExecuteCommandTimeoutSeconds           = 3600
+	defaultMaxWebSocketConnectionsPerIP       = 128
+	defaultReadFileMaxBytes             int64 = 1 << 20  // 1 MiB
+	maxReadFileMaxBytes                 int64 = 10 << 20 // 10 MiB
+	maxReadFilePathLength                     = 4096
 )
 
 var safeTargetIDPattern = regexp.MustCompile(`^[a-zA-Z0-9._-]+$`)
@@ -61,6 +63,8 @@ type Server struct {
 	deploySubs    map[string]chan DeployProgressPayload // deploySubKey(agentID, jobID) -> progress subscriber
 	validateToken func(token string, agentID string) bool
 	commandPolicy *CommandPolicy
+	ipConnCounts  map[string]int
+	maxConnsPerIP int
 	shutdown      chan struct{}
 	shutdownOnce  sync.Once
 	pingInterval  time.Duration
@@ -96,6 +100,8 @@ func NewServer(validateToken func(token string, agentID string) bool) *Server {
 		deploySubs:    make(map[string]chan DeployProgressPayload),
 		validateToken: validateToken,
 		commandPolicy: DefaultPolicy(),
+		ipConnCounts:  make(map[string]int),
+		maxConnsPerIP: defaultMaxWebSocketConnectionsPerIP,
 		shutdown:      make(chan struct{}),
 		pingInterval:  defaultPingInterval,
 	}
@@ -237,14 +243,71 @@ func isAllowedWebSocketOrigin(r *http.Request) bool {
 	return securityutil.SameHostWebSocketOrigin(origin, r.Host)
 }
 
+func normalizeWebSocketRemoteIP(remoteAddr string) string {
+	remoteAddr = strings.TrimSpace(remoteAddr)
+	if remoteAddr == "" {
+		return ""
+	}
+
+	host, _, err := net.SplitHostPort(remoteAddr)
+	if err == nil {
+		return strings.Trim(host, "[]")
+	}
+
+	return strings.Trim(remoteAddr, "[]")
+}
+
+func (s *Server) acquireWebSocketIPSlot(remoteIP string) bool {
+	if s == nil || s.maxConnsPerIP <= 0 || remoteIP == "" {
+		return true
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.ipConnCounts[remoteIP] >= s.maxConnsPerIP {
+		return false
+	}
+
+	s.ipConnCounts[remoteIP]++
+	return true
+}
+
+func (s *Server) releaseWebSocketIPSlot(remoteIP string) {
+	if s == nil || s.maxConnsPerIP <= 0 || remoteIP == "" {
+		return
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	count := s.ipConnCounts[remoteIP]
+	if count <= 1 {
+		delete(s.ipConnCounts, remoteIP)
+		return
+	}
+
+	s.ipConnCounts[remoteIP] = count - 1
+}
+
 // HandleWebSocket handles incoming WebSocket connections from agents
 func (s *Server) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	remoteAddr := r.RemoteAddr
+	remoteIP := normalizeWebSocketRemoteIP(remoteAddr)
 
 	if s.isShuttingDown() {
 		http.Error(w, "agent execution server is shutting down", http.StatusServiceUnavailable)
 		return
 	}
+	if !s.acquireWebSocketIPSlot(remoteIP) {
+		log.Warn().
+			Str("remote_ip", remoteIP).
+			Int("max_connections_per_ip", s.maxConnsPerIP).
+			Msg("Rejected agent websocket upgrade due to per-IP connection cap")
+		http.Error(w, "Too many agent websocket connections from this IP", http.StatusTooManyRequests)
+		return
+	}
+	defer s.releaseWebSocketIPSlot(remoteIP)
 
 	// CRITICAL: Clear http.Server deadlines BEFORE WebSocket upgrade.
 	// The http.Server.ReadTimeout sets a deadline on the underlying connection when

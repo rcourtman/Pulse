@@ -254,7 +254,9 @@ the canonical monitored-system blocked payload.
     `internal/api/contract_test.go` must mint agent-exec-capable runtime
     tokens with a server-owned `bound_agent_id` and reject websocket
     registration when the token is missing binding metadata or names a
-    different agent. Legacy `bound_hostname` metadata may be normalized only
+    different agent. That same websocket admission path must also cap
+    concurrent connections per client IP before upgrade so one source cannot
+    hold unbounded agent-exec sockets open. Legacy `bound_hostname` metadata may be normalized only
     as compatibility input into that same canonical `agent-<hostname>`
     binding, and unbound agent-exec tokens must fail closed instead of being
     treated as global command authority.

@@ -797,7 +797,9 @@ base URL through `internal/securityutil/websocket_origin.go`, and the agent
 receiver must reject missing or cross-host origins before registration.
 Runtime command sockets therefore stay on the same fail-closed host/proxy
 continuity contract as the browser websocket path instead of accepting
-originless upgrades.
+originless upgrades. That same receiver-owned admission path must also cap
+concurrent websocket connections per client IP before upgrade so one source
+cannot hold unbounded agent command sockets open.
 That same shared helper layer also now assumes the Pulse Mobile relay runtime
 credential reaches only the explicit backend-owned route inventory, so
 lifecycle-adjacent setup and install flows cannot accidentally widen the

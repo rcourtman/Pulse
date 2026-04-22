@@ -168,6 +168,64 @@ func TestHandleWebSocket_RejectsMissingOrigin(t *testing.T) {
 	}
 }
 
+func TestHandleWebSocket_RejectsPerIPConnectionFlood(t *testing.T) {
+	s := NewServer(allowAllTestTokens)
+	s.maxConnsPerIP = 1
+	ts := newWSServer(t, s)
+	defer ts.Close()
+
+	firstConn, _, err := dialAgentExecWebSocket(t, ts.URL)
+	if err != nil {
+		t.Fatalf("Dial first connection: %v", err)
+	}
+	defer firstConn.Close()
+
+	wsWriteMessage(t, firstConn, mustNewMessage(t, MsgTypeAgentRegister, "", AgentRegisterPayload{
+		AgentID:  "a1",
+		Hostname: "host1",
+		Version:  "1.2.3",
+		Platform: "linux",
+		Token:    "any",
+	}))
+	reg := wsReadRegisteredPayload(t, firstConn)
+	if !reg.Success {
+		t.Fatalf("first registration failed: %q", reg.Message)
+	}
+
+	secondConn, resp, err := dialAgentExecWebSocket(t, ts.URL)
+	if err == nil {
+		secondConn.Close()
+		t.Fatalf("expected second websocket upgrade to be rejected")
+	}
+	if resp == nil {
+		t.Fatalf("expected HTTP response for rejected websocket upgrade")
+	}
+	if resp.StatusCode != http.StatusTooManyRequests {
+		t.Fatalf("expected %d, got %d", http.StatusTooManyRequests, resp.StatusCode)
+	}
+
+	firstConn.Close()
+	waitFor(t, 2*time.Second, func() bool { return !s.IsAgentConnected("a1") })
+
+	thirdConn, _, err := dialAgentExecWebSocket(t, ts.URL)
+	if err != nil {
+		t.Fatalf("Dial third connection after release: %v", err)
+	}
+	defer thirdConn.Close()
+
+	wsWriteMessage(t, thirdConn, mustNewMessage(t, MsgTypeAgentRegister, "", AgentRegisterPayload{
+		AgentID:  "a2",
+		Hostname: "host2",
+		Version:  "1.2.3",
+		Platform: "linux",
+		Token:    "any",
+	}))
+	reg = wsReadRegisteredPayload(t, thirdConn)
+	if !reg.Success {
+		t.Fatalf("third registration failed after slot release: %q", reg.Message)
+	}
+}
+
 func TestHandleWebSocket_InvalidTokenRejected(t *testing.T) {
 	s := NewServer(func(string, string) bool { return false })
 	ts := newWSServer(t, s)
