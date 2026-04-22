@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 )
 
 type wsRawMessage struct {
@@ -29,6 +30,24 @@ func newWSServer(t *testing.T, s *Server) *httptest.Server {
 
 func wsURLForHTTP(serverURL string) string {
 	return "ws" + strings.TrimPrefix(serverURL, "http")
+}
+
+func wsHeadersForHTTP(t *testing.T, serverURL string) http.Header {
+	t.Helper()
+
+	origin, err := securityutil.HTTPOriginForWebSocketBaseURL(serverURL)
+	if err != nil {
+		t.Fatalf("failed to derive websocket origin: %v", err)
+	}
+
+	headers := http.Header{}
+	headers.Set("Origin", origin)
+	return headers
+}
+
+func dialAgentExecWebSocket(t *testing.T, serverURL string) (*websocket.Conn, *http.Response, error) {
+	t.Helper()
+	return websocket.DefaultDialer.Dial(wsURLForHTTP(serverURL), wsHeadersForHTTP(t, serverURL))
 }
 
 func wsWriteMessage(t *testing.T, conn *websocket.Conn, msg Message) {
@@ -103,7 +122,7 @@ func TestHandleWebSocket_RegistrationSuccessAndDisconnectRemovesAgent(t *testing
 	ts := newWSServer(t, s)
 	defer ts.Close()
 
-	conn, _, err := websocket.DefaultDialer.Dial(wsURLForHTTP(ts.URL), nil)
+	conn, _, err := dialAgentExecWebSocket(t, ts.URL)
 	if err != nil {
 		t.Fatalf("Dial: %v", err)
 	}
@@ -131,12 +150,30 @@ func TestHandleWebSocket_RegistrationSuccessAndDisconnectRemovesAgent(t *testing
 	waitFor(t, 2*time.Second, func() bool { return !s.IsAgentConnected("a1") })
 }
 
+func TestHandleWebSocket_RejectsMissingOrigin(t *testing.T) {
+	s := NewServer(allowAllTestTokens)
+	ts := newWSServer(t, s)
+	defer ts.Close()
+
+	conn, resp, err := websocket.DefaultDialer.Dial(wsURLForHTTP(ts.URL), nil)
+	if err == nil {
+		conn.Close()
+		t.Fatalf("expected websocket upgrade to reject missing Origin")
+	}
+	if resp == nil {
+		t.Fatalf("expected HTTP response for rejected websocket upgrade")
+	}
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("expected %d, got %d", http.StatusForbidden, resp.StatusCode)
+	}
+}
+
 func TestHandleWebSocket_InvalidTokenRejected(t *testing.T) {
 	s := NewServer(func(string, string) bool { return false })
 	ts := newWSServer(t, s)
 	defer ts.Close()
 
-	conn, _, err := websocket.DefaultDialer.Dial(wsURLForHTTP(ts.URL), nil)
+	conn, _, err := dialAgentExecWebSocket(t, ts.URL)
 	if err != nil {
 		t.Fatalf("Dial: %v", err)
 	}
@@ -169,7 +206,7 @@ func TestHandleWebSocket_MissingAgentIDRejected(t *testing.T) {
 	ts := newWSServer(t, s)
 	defer ts.Close()
 
-	conn, _, err := websocket.DefaultDialer.Dial(wsURLForHTTP(ts.URL), nil)
+	conn, _, err := dialAgentExecWebSocket(t, ts.URL)
 	if err != nil {
 		t.Fatalf("Dial: %v", err)
 	}
@@ -200,7 +237,7 @@ func TestHandleWebSocket_FirstMessageMustBeRegister(t *testing.T) {
 	ts := newWSServer(t, s)
 	defer ts.Close()
 
-	conn, _, err := websocket.DefaultDialer.Dial(wsURLForHTTP(ts.URL), nil)
+	conn, _, err := dialAgentExecWebSocket(t, ts.URL)
 	if err != nil {
 		t.Fatalf("Dial: %v", err)
 	}
@@ -220,7 +257,7 @@ func TestHandleWebSocket_RejectsOversizedRegistrationMessage(t *testing.T) {
 	ts := newWSServer(t, s)
 	defer ts.Close()
 
-	conn, _, err := websocket.DefaultDialer.Dial(wsURLForHTTP(ts.URL), nil)
+	conn, _, err := dialAgentExecWebSocket(t, ts.URL)
 	if err != nil {
 		t.Fatalf("Dial: %v", err)
 	}
@@ -243,7 +280,7 @@ func TestHandleWebSocket_AgentPingRespondsWithPong(t *testing.T) {
 	ts := newWSServer(t, s)
 	defer ts.Close()
 
-	conn, _, err := websocket.DefaultDialer.Dial(wsURLForHTTP(ts.URL), nil)
+	conn, _, err := dialAgentExecWebSocket(t, ts.URL)
 	if err != nil {
 		t.Fatalf("Dial: %v", err)
 	}
@@ -271,7 +308,7 @@ func TestExecuteCommand_RoundTripViaWebSocket(t *testing.T) {
 	ts := newWSServer(t, s)
 	defer ts.Close()
 
-	conn, _, err := websocket.DefaultDialer.Dial(wsURLForHTTP(ts.URL), nil)
+	conn, _, err := dialAgentExecWebSocket(t, ts.URL)
 	if err != nil {
 		t.Fatalf("Dial: %v", err)
 	}
@@ -358,7 +395,7 @@ func TestHandleWebSocket_ReconnectSameAgentIDClosesOldConnection(t *testing.T) {
 
 	dial := func() *websocket.Conn {
 		t.Helper()
-		conn, _, err := websocket.DefaultDialer.Dial(wsURLForHTTP(ts.URL), nil)
+		conn, _, err := dialAgentExecWebSocket(t, ts.URL)
 		if err != nil {
 			t.Fatalf("Dial: %v", err)
 		}

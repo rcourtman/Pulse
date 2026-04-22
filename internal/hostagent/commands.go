@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"math/rand"
 	"net"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -269,6 +270,10 @@ func (c *CommandClient) connectAndHandle(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("build websocket url: %w", err)
 	}
+	origin, err := c.buildWebSocketOrigin()
+	if err != nil {
+		return fmt.Errorf("build websocket origin: %w", err)
+	}
 
 	c.logger.Debug().Str("url", wsURL).Msg("Connecting to Pulse command server")
 
@@ -282,9 +287,11 @@ func (c *CommandClient) connectAndHandle(ctx context.Context) error {
 		TLSClientConfig:  tlsConfig,
 		HandshakeTimeout: 45 * time.Second,
 	}
+	headers := http.Header{}
+	headers.Set("Origin", origin)
 
 	// Connect
-	conn, _, err := dialer.DialContext(ctx, wsURL, nil)
+	conn, _, err := dialer.DialContext(ctx, wsURL, headers)
 	if err != nil {
 		return fmt.Errorf("dial websocket: %w", err)
 	}
@@ -366,6 +373,10 @@ func (c *CommandClient) buildWebSocketURL() (string, error) {
 	parsed.RawQuery = ""
 	parsed.Fragment = ""
 	return parsed.String(), nil
+}
+
+func (c *CommandClient) buildWebSocketOrigin() (string, error) {
+	return securityutil.HTTPOriginForWebSocketBaseURL(c.pulseURL)
 }
 
 func (c *CommandClient) sendRegistration(conn *websocket.Conn) error {

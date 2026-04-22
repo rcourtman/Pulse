@@ -151,3 +151,56 @@ func TestCommandClientBuildWebSocketURL(t *testing.T) {
 		})
 	}
 }
+
+func TestCommandClientBuildWebSocketOrigin(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		pulseURL string
+		want     string
+		wantErr  bool
+	}{
+		{
+			name:     "https becomes https origin",
+			pulseURL: "https://example.invalid/pulse/",
+			want:     "https://example.invalid",
+		},
+		{
+			name:     "loopback http stays http origin",
+			pulseURL: "http://localhost:7655/pulse",
+			want:     "http://localhost:7655",
+		},
+		{
+			name:     "wss becomes https origin",
+			pulseURL: "wss://example.invalid",
+			want:     "https://example.invalid",
+		},
+		{
+			name:     "non-loopback http rejected",
+			pulseURL: "http://example.invalid",
+			wantErr:  true,
+		},
+		{
+			name:     "missing host rejected",
+			pulseURL: "/relative/path",
+			wantErr:  true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := &CommandClient{pulseURL: tt.pulseURL}
+			got, err := client.buildWebSocketOrigin()
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("buildWebSocketOrigin() err = %v, wantErr %v", err, tt.wantErr)
+			}
+			if tt.wantErr {
+				return
+			}
+			if got != tt.want {
+				t.Fatalf("buildWebSocketOrigin() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}

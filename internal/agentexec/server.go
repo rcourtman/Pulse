@@ -5,9 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net"
 	"net/http"
-	"net/url"
 	"regexp"
 	"strings"
 	"sync"
@@ -15,6 +13,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
+	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rs/zerolog/log"
 )
@@ -232,35 +231,10 @@ func validateReadFilePayload(req *ReadFilePayload) error {
 func isAllowedWebSocketOrigin(r *http.Request) bool {
 	origin := strings.TrimSpace(r.Header.Get("Origin"))
 	if origin == "" {
-		// Non-browser clients (expected for agents) usually omit Origin.
-		return true
-	}
-
-	parsed, err := url.Parse(origin)
-	if err != nil || parsed.Host == "" {
-		return false
-	}
-	if parsed.Scheme != "http" && parsed.Scheme != "https" {
 		return false
 	}
 
-	return normalizeOriginHost(parsed.Host) == normalizeOriginHost(r.Host)
-}
-
-func normalizeOriginHost(host string) string {
-	normalized := strings.TrimSpace(strings.ToLower(host))
-	if normalized == "" {
-		return normalized
-	}
-
-	parsedHost, parsedPort, err := net.SplitHostPort(normalized)
-	if err != nil {
-		return normalized
-	}
-	if parsedPort == "80" || parsedPort == "443" {
-		return parsedHost
-	}
-	return net.JoinHostPort(parsedHost, parsedPort)
+	return securityutil.SameHostWebSocketOrigin(origin, r.Host)
 }
 
 // HandleWebSocket handles incoming WebSocket connections from agents

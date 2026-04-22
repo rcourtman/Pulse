@@ -74,6 +74,30 @@ func TestWebSocketOriginRejectedWhenNotAllowed(t *testing.T) {
 	}
 }
 
+func TestWebSocketOriginRejectedWhenMissing(t *testing.T) {
+	rawToken := "ws-origin-missing-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeMonitoringRead}, nil)
+
+	server, cleanup := newWebSocketRouter(t, []string{"*"}, record)
+	defer cleanup()
+
+	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/ws?org_id=default"
+	headers := http.Header{}
+	headers.Set("X-API-Token", rawToken)
+
+	conn, resp, err := websocket.DefaultDialer.Dial(wsURL, headers)
+	if err == nil {
+		conn.Close()
+		t.Fatalf("expected websocket origin rejection when Origin header is missing")
+	}
+	if resp == nil {
+		t.Fatalf("expected HTTP response for rejected websocket origin")
+	}
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("expected status %d, got %d", http.StatusForbidden, resp.StatusCode)
+	}
+}
+
 func TestWebSocketOriginAllowedWhenConfigured(t *testing.T) {
 	rawToken := "ws-origin-allow-123.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeMonitoringRead}, nil)

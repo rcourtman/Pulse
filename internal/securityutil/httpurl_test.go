@@ -164,6 +164,64 @@ func TestNormalizePulseWebSocketBaseURL(t *testing.T) {
 	}
 }
 
+func TestSameHostWebSocketOrigin(t *testing.T) {
+	tests := []struct {
+		name        string
+		origin      string
+		requestHost string
+		want        bool
+	}{
+		{name: "same host", origin: "https://tenant.example.com", requestHost: "tenant.example.com", want: true},
+		{name: "default port normalized", origin: "https://tenant.example.com:443", requestHost: "tenant.example.com", want: true},
+		{name: "different host", origin: "https://evil.example.com", requestHost: "tenant.example.com", want: false},
+		{name: "bad scheme", origin: "ws://tenant.example.com", requestHost: "tenant.example.com", want: false},
+		{name: "invalid origin", origin: "://bad", requestHost: "tenant.example.com", want: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := SameHostWebSocketOrigin(tt.origin, tt.requestHost); got != tt.want {
+				t.Fatalf("SameHostWebSocketOrigin(%q, %q) = %v, want %v", tt.origin, tt.requestHost, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestHTTPOriginForWebSocketBaseURL(t *testing.T) {
+	tests := []struct {
+		name      string
+		raw       string
+		want      string
+		wantError string
+	}{
+		{name: "wss becomes https origin", raw: "wss://example.invalid/pulse", want: "https://example.invalid"},
+		{name: "ws becomes http origin", raw: "ws://localhost:7655/pulse", want: "http://localhost:7655"},
+		{name: "https input becomes https origin", raw: "https://example.invalid/base", want: "https://example.invalid"},
+		{name: "rejects invalid input", raw: "ftp://example.invalid", wantError: "unsupported scheme"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := HTTPOriginForWebSocketBaseURL(tt.raw)
+			if tt.wantError != "" {
+				if err == nil {
+					t.Fatalf("HTTPOriginForWebSocketBaseURL(%q) expected error", tt.raw)
+				}
+				if !strings.Contains(err.Error(), tt.wantError) {
+					t.Fatalf("HTTPOriginForWebSocketBaseURL(%q) error = %q, want substring %q", tt.raw, err.Error(), tt.wantError)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("HTTPOriginForWebSocketBaseURL(%q) error = %v", tt.raw, err)
+			}
+			if got != tt.want {
+				t.Fatalf("HTTPOriginForWebSocketBaseURL(%q) = %q, want %q", tt.raw, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestResolveRelativeURLRejectsAbsoluteURL(t *testing.T) {
 	base, err := NormalizeHTTPBaseURL("https://example.com/api", "")
 	if err != nil {

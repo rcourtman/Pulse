@@ -10,7 +10,21 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 )
+
+func wsHeadersForHTTP(t *testing.T, serverURL string) http.Header {
+	t.Helper()
+
+	origin, err := securityutil.HTTPOriginForWebSocketBaseURL(serverURL)
+	if err != nil {
+		t.Fatalf("failed to derive websocket origin: %v", err)
+	}
+
+	headers := http.Header{}
+	headers.Set("Origin", origin)
+	return headers
+}
 
 func TestBroadcastStateEnqueuesRawData(t *testing.T) {
 	hub := NewHub(nil)
@@ -168,7 +182,7 @@ func TestHandleWebSocketPingPong(t *testing.T) {
 	defer server.Close()
 
 	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "?org_id=default"
-	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL, wsHeadersForHTTP(t, server.URL))
 	if err != nil {
 		t.Fatalf("dial websocket: %v", err)
 	}
@@ -214,7 +228,7 @@ func TestHandleWebSocket_ReadLimitExceededClosesConnection(t *testing.T) {
 		EnableCompression: false,
 	}
 
-	conn, _, err := dialer.Dial(wsURL, nil)
+	conn, _, err := dialer.Dial(wsURL, wsHeadersForHTTP(t, server.URL))
 	if err != nil {
 		t.Fatalf("dial websocket: %v", err)
 	}

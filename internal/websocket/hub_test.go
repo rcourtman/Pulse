@@ -708,12 +708,12 @@ func TestHub_CheckOrigin(t *testing.T) {
 		remoteAddr     string // Simulated peer IP for CSWSH checks
 		expected       bool
 	}{
-		// No origin header - always allowed for non-browser clients
+		// Browser-facing hub requires an explicit Origin header.
 		{
 			name:     "no origin header",
 			origin:   "",
 			host:     "localhost:8080",
-			expected: true,
+			expected: false,
 		},
 
 		// Same-origin requests

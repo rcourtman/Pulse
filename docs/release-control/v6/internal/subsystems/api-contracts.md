@@ -679,8 +679,11 @@ because the backend hop is plain HTTP. Forwarded host/proto headers may extend
 that same-origin boundary only after explicit trusted proxy CIDRs are injected,
 so hosted tenants and proxies that rewrite hostnames still fail closed onto the
 trusted forwarded-origin contract instead of weakening cross-site websocket
-checks. `PULSE_TRUSTED_PROXY_CIDRS` must also reject wildcard trust ranges such
-as `0.0.0.0/0` or `::/0` at startup, while runtime forwarded-header parsing
+checks. Browser-facing websocket upgrades must also require an explicit
+`Origin` header even when `allowedOrigins` is wildcarded, so missing-origin
+requests cannot silently bypass the cross-site websocket boundary.
+`PULSE_TRUSTED_PROXY_CIDRS` must also reject wildcard trust ranges such as
+`0.0.0.0/0` or `::/0` at startup, while runtime forwarded-header parsing
 fails closed if an invalid wildcard proxy trust range somehow reaches the
 process.
 That same shared boundary now also owns outbound SSO metadata and discovery

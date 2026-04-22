@@ -201,6 +201,53 @@ func TestNewCommandClient_SetsSecureCommandDefaults(t *testing.T) {
 	}
 }
 
+func TestNewCommandClient_BuildWebSocketOriginFollowsCanonicalPulseURL(t *testing.T) {
+	logger := zerolog.Nop()
+
+	tests := []struct {
+		name     string
+		pulseURL string
+		want     string
+		wantErr  bool
+	}{
+		{
+			name:     "hosted https origin",
+			pulseURL: "https://pulse.example/base/",
+			want:     "https://pulse.example",
+		},
+		{
+			name:     "loopback http origin",
+			pulseURL: "http://127.0.0.1:7655/pulse",
+			want:     "http://127.0.0.1:7655",
+		},
+		{
+			name:     "rejects non loopback plaintext",
+			pulseURL: "http://pulse.example",
+			wantErr:  true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := NewCommandClient(Config{
+				PulseURL: tt.pulseURL,
+				Logger:   &logger,
+			}, "agent-1", "node-1", "linux", "1.0.0")
+
+			got, err := client.buildWebSocketOrigin()
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("buildWebSocketOrigin() err = %v, wantErr %v", err, tt.wantErr)
+			}
+			if tt.wantErr {
+				return
+			}
+			if got != tt.want {
+				t.Fatalf("buildWebSocketOrigin() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestNew_UsesPinnedServerFingerprintForHTTPTransport(t *testing.T) {
 	mc := &mockCollector{
 		hostInfoFn: func(context.Context) (*gohost.InfoStat, error) {

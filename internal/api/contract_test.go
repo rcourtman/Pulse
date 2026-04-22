@@ -10315,7 +10315,7 @@ func TestContract_AgentExecWebSocketRejectsUnboundToken(t *testing.T) {
 	ts := newIPv4HTTPServer(t, router.Handler())
 	defer ts.Close()
 
-	conn, _, err := websocket.DefaultDialer.Dial(wsURLForHTTP(ts.URL)+"/api/agent/ws", nil)
+	conn, _, err := websocket.DefaultDialer.Dial(wsURLForHTTP(ts.URL)+"/api/agent/ws", wsHeadersForHTTP(t, ts.URL))
 	if err != nil {
 		t.Fatalf("Dial: %v", err)
 	}
@@ -10350,7 +10350,7 @@ func TestContract_AgentExecWebSocketAcceptsLegacyHostnameBinding(t *testing.T) {
 	ts := newIPv4HTTPServer(t, router.Handler())
 	defer ts.Close()
 
-	conn, _, err := websocket.DefaultDialer.Dial(wsURLForHTTP(ts.URL)+"/api/agent/ws", nil)
+	conn, _, err := websocket.DefaultDialer.Dial(wsURLForHTTP(ts.URL)+"/api/agent/ws", wsHeadersForHTTP(t, ts.URL))
 	if err != nil {
 		t.Fatalf("Dial: %v", err)
 	}

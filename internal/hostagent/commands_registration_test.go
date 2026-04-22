@@ -9,11 +9,25 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 	"github.com/rs/zerolog"
 )
 
 func wsURLForHTTP(serverURL string) string {
 	return "ws" + strings.TrimPrefix(serverURL, "http")
+}
+
+func wsHeadersForHTTP(t *testing.T, serverURL string) http.Header {
+	t.Helper()
+
+	origin, err := securityutil.HTTPOriginForWebSocketBaseURL(serverURL)
+	if err != nil {
+		t.Fatalf("failed to derive websocket origin: %v", err)
+	}
+
+	headers := http.Header{}
+	headers.Set("Origin", origin)
+	return headers
 }
 
 func TestCommandClient_sendRegistration_WritesExpectedPayload(t *testing.T) {
@@ -48,7 +62,7 @@ func TestCommandClient_sendRegistration_WritesExpectedPayload(t *testing.T) {
 	}))
 	defer server.Close()
 
-	conn, _, err := websocket.DefaultDialer.Dial(wsURLForHTTP(server.URL), nil)
+	conn, _, err := websocket.DefaultDialer.Dial(wsURLForHTTP(server.URL), wsHeadersForHTTP(t, server.URL))
 	if err != nil {
 		t.Fatalf("Dial: %v", err)
 	}
@@ -110,7 +124,7 @@ func TestCommandClient_waitForRegistration_AcceptsSuccess(t *testing.T) {
 	}))
 	defer server.Close()
 
-	conn, _, err := websocket.DefaultDialer.Dial(wsURLForHTTP(server.URL), nil)
+	conn, _, err := websocket.DefaultDialer.Dial(wsURLForHTTP(server.URL), wsHeadersForHTTP(t, server.URL))
 	if err != nil {
 		t.Fatalf("Dial: %v", err)
 	}
@@ -139,7 +153,7 @@ func TestCommandClient_waitForRegistration_RejectsFailure(t *testing.T) {
 	}))
 	defer server.Close()
 
-	conn, _, err := websocket.DefaultDialer.Dial(wsURLForHTTP(server.URL), nil)
+	conn, _, err := websocket.DefaultDialer.Dial(wsURLForHTTP(server.URL), wsHeadersForHTTP(t, server.URL))
 	if err != nil {
 		t.Fatalf("Dial: %v", err)
 	}
@@ -167,7 +181,7 @@ func TestCommandClient_waitForRegistration_UnexpectedMessageType(t *testing.T) {
 	}))
 	defer server.Close()
 
-	conn, _, err := websocket.DefaultDialer.Dial(wsURLForHTTP(server.URL), nil)
+	conn, _, err := websocket.DefaultDialer.Dial(wsURLForHTTP(server.URL), wsHeadersForHTTP(t, server.URL))
 	if err != nil {
 		t.Fatalf("Dial: %v", err)
 	}

@@ -40,7 +40,7 @@ func newConnPair(t *testing.T) (*websocket.Conn, *websocket.Conn, func()) {
 		serverConnCh <- conn
 	}))
 
-	clientConn, _, err := websocket.DefaultDialer.Dial(wsURLForHTTP(ts.URL), nil)
+	clientConn, _, err := dialAgentExecWebSocket(t, ts.URL)
 	if err != nil {
 		ts.Close()
 		t.Fatalf("Dial: %v", err)
@@ -75,7 +75,7 @@ func TestHandleWebSocket_RegistrationReadError(t *testing.T) {
 	ts := newWSServer(t, s)
 	defer ts.Close()
 
-	conn, _, err := websocket.DefaultDialer.Dial(wsURLForHTTP(ts.URL), nil)
+	conn, _, err := dialAgentExecWebSocket(t, ts.URL)
 	if err != nil {
 		t.Fatalf("Dial: %v", err)
 	}
@@ -87,7 +87,7 @@ func TestHandleWebSocket_RegistrationMessageJSONError(t *testing.T) {
 	ts := newWSServer(t, s)
 	defer ts.Close()
 
-	conn, _, err := websocket.DefaultDialer.Dial(wsURLForHTTP(ts.URL), nil)
+	conn, _, err := dialAgentExecWebSocket(t, ts.URL)
 	if err != nil {
 		t.Fatalf("Dial: %v", err)
 	}
@@ -108,7 +108,7 @@ func TestHandleWebSocket_RegistrationPayloadMissing(t *testing.T) {
 	ts := newWSServer(t, s)
 	defer ts.Close()
 
-	conn, _, err := websocket.DefaultDialer.Dial(wsURLForHTTP(ts.URL), nil)
+	conn, _, err := dialAgentExecWebSocket(t, ts.URL)
 	if err != nil {
 		t.Fatalf("Dial: %v", err)
 	}
@@ -127,7 +127,7 @@ func TestHandleWebSocket_RegistrationPayloadUnmarshalError(t *testing.T) {
 	ts := newWSServer(t, s)
 	defer ts.Close()
 
-	conn, _, err := websocket.DefaultDialer.Dial(wsURLForHTTP(ts.URL), nil)
+	conn, _, err := dialAgentExecWebSocket(t, ts.URL)
 	if err != nil {
 		t.Fatalf("Dial: %v", err)
 	}
@@ -154,7 +154,7 @@ func TestHandleWebSocket_InvalidTokenRejectionSendFailure(t *testing.T) {
 	ts := newWSServer(t, s)
 	defer ts.Close()
 
-	conn, _, err := websocket.DefaultDialer.Dial(wsURLForHTTP(ts.URL), nil)
+	conn, _, err := dialAgentExecWebSocket(t, ts.URL)
 	if err != nil {
 		t.Fatalf("Dial: %v", err)
 	}
@@ -184,7 +184,7 @@ func TestHandleWebSocket_RegistrationAckSendFailure(t *testing.T) {
 	ts := newWSServer(t, s)
 	defer ts.Close()
 
-	conn, _, err := websocket.DefaultDialer.Dial(wsURLForHTTP(ts.URL), nil)
+	conn, _, err := dialAgentExecWebSocket(t, ts.URL)
 	if err != nil {
 		t.Fatalf("Dial: %v", err)
 	}
@@ -212,7 +212,7 @@ func TestHandleWebSocket_PongHandler(t *testing.T) {
 	ts := newWSServer(t, s)
 	defer ts.Close()
 
-	conn, _, err := websocket.DefaultDialer.Dial(wsURLForHTTP(ts.URL), nil)
+	conn, _, err := dialAgentExecWebSocket(t, ts.URL)
 	if err != nil {
 		t.Fatalf("Dial: %v", err)
 	}
@@ -550,7 +550,7 @@ func TestReadFileRoundTrip(t *testing.T) {
 	ts := newWSServer(t, s)
 	defer ts.Close()
 
-	conn, _, err := websocket.DefaultDialer.Dial(wsURLForHTTP(ts.URL), nil)
+	conn, _, err := dialAgentExecWebSocket(t, ts.URL)
 	if err != nil {
 		t.Fatalf("Dial: %v", err)
 	}
@@ -651,7 +651,7 @@ func TestShutdownRejectsNewWebSocketConnections(t *testing.T) {
 	ts := newWSServer(t, s)
 	defer ts.Close()
 
-	conn, resp, err := websocket.DefaultDialer.Dial(wsURLForHTTP(ts.URL), nil)
+	conn, resp, err := dialAgentExecWebSocket(t, ts.URL)
 	if conn != nil {
 		conn.Close()
 	}
@@ -672,7 +672,7 @@ func TestShutdownClosesActiveConnectionsAndIsIdempotent(t *testing.T) {
 	ts := newWSServer(t, s)
 	defer ts.Close()
 
-	conn, _, err := websocket.DefaultDialer.Dial(wsURLForHTTP(ts.URL), nil)
+	conn, _, err := dialAgentExecWebSocket(t, ts.URL)
 	if err != nil {
 		t.Fatalf("Dial: %v", err)
 	}

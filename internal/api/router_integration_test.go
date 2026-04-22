@@ -24,6 +24,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
 	recoverymanager "github.com/rcourtman/pulse-go-rewrite/internal/recovery/manager"
+	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 	"github.com/rcourtman/pulse-go-rewrite/internal/updates"
 	internalws "github.com/rcourtman/pulse-go-rewrite/internal/websocket"
 	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
@@ -35,6 +36,19 @@ type integrationServer struct {
 	monitor *monitoring.Monitor
 	hub     *internalws.Hub
 	config  *config.Config
+}
+
+func wsHeadersForHTTP(t *testing.T, serverURL string) http.Header {
+	t.Helper()
+
+	origin, err := securityutil.HTTPOriginForWebSocketBaseURL(serverURL)
+	if err != nil {
+		t.Fatalf("failed to derive websocket origin: %v", err)
+	}
+
+	headers := http.Header{}
+	headers.Set("Origin", origin)
+	return headers
 }
 
 func newIntegrationServer(t *testing.T) *integrationServer {
@@ -1471,7 +1485,7 @@ func TestWebSocketSendsInitialState(t *testing.T) {
 
 	wsURL := "ws" + strings.TrimPrefix(srv.server.URL, "http") + "/ws?org_id=default"
 
-	conn, _, err := gorillaws.DefaultDialer.Dial(wsURL, nil)
+	conn, _, err := gorillaws.DefaultDialer.Dial(wsURL, wsHeadersForHTTP(t, srv.server.URL))
 	if err != nil {
 		t.Fatalf("websocket dial failed: %v", err)
 	}
@@ -1548,7 +1562,7 @@ func TestWebsocketPayloadContractShape(t *testing.T) {
 
 	wsURL := "ws" + strings.TrimPrefix(srv.server.URL, "http") + "/ws?org_id=default"
 
-	conn, _, err := gorillaws.DefaultDialer.Dial(wsURL, nil)
+	conn, _, err := gorillaws.DefaultDialer.Dial(wsURL, wsHeadersForHTTP(t, srv.server.URL))
 	if err != nil {
 		t.Fatalf("websocket dial failed: %v", err)
 	}
@@ -1657,7 +1671,7 @@ func TestWebsocketPayloadUsesCanonicalStateContract(t *testing.T) {
 
 	wsURL := "ws" + strings.TrimPrefix(srv.server.URL, "http") + "/ws?org_id=default"
 
-	conn, _, err := gorillaws.DefaultDialer.Dial(wsURL, nil)
+	conn, _, err := gorillaws.DefaultDialer.Dial(wsURL, wsHeadersForHTTP(t, srv.server.URL))
 	if err != nil {
 		t.Fatalf("websocket dial failed: %v", err)
 	}

@@ -17,6 +17,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/chat"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 )
 
@@ -597,10 +598,23 @@ func wsURLForHTTP(url string) string {
 	return "ws://" + strings.TrimPrefix(url, "http://")
 }
 
+func wsHeadersForHTTP(t *testing.T, url string) http.Header {
+	t.Helper()
+
+	origin, err := securityutil.HTTPOriginForWebSocketBaseURL(url)
+	if err != nil {
+		t.Fatalf("failed to derive websocket origin: %v", err)
+	}
+
+	headers := http.Header{}
+	headers.Set("Origin", origin)
+	return headers
+}
+
 func registerAgent(t *testing.T, url, agentID, hostname string) *websocket.Conn {
 	t.Helper()
 
-	conn, _, err := websocket.DefaultDialer.Dial(wsURLForHTTP(url), nil)
+	conn, _, err := websocket.DefaultDialer.Dial(wsURLForHTTP(url), wsHeadersForHTTP(t, url))
 	if err != nil {
 		t.Fatalf("failed to dial websocket: %v", err)
 	}

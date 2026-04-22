@@ -788,6 +788,13 @@ workspace is opened through the control plane. That proxy-trust boundary must
 also reject wildcard trust ranges such as `0.0.0.0/0` or `::/0` at startup,
 and agent-adjacent forwarded-header reads must fail closed if invalid wildcard
 proxy trust configuration is present.
+That same lifecycle-owned command websocket now derives an explicit
+same-origin HTTP `Origin` header for `/api/agent/ws` from the canonical Pulse
+base URL through `internal/securityutil/websocket_origin.go`, and the agent
+receiver must reject missing or cross-host origins before registration.
+Runtime command sockets therefore stay on the same fail-closed host/proxy
+continuity contract as the browser websocket path instead of accepting
+originless upgrades.
 That same shared helper layer also now assumes the Pulse Mobile relay runtime
 credential reaches only the explicit backend-owned route inventory, so
 lifecycle-adjacent setup and install flows cannot accidentally widen the

@@ -499,7 +499,7 @@ func TestAgentExecTokenBindingEnforced(t *testing.T) {
 	wsURL := wsURLForHTTP(ts.URL) + "/api/agent/ws"
 
 	// Mismatched agent ID should be rejected
-	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL, wsHeadersForHTTP(t, ts.URL))
 	if err != nil {
 		t.Fatalf("Dial: %v", err)
 	}
@@ -526,7 +526,7 @@ func TestAgentExecTokenBindingEnforced(t *testing.T) {
 	conn.Close()
 
 	// Matching agent ID should succeed
-	conn, _, err = websocket.DefaultDialer.Dial(wsURL, nil)
+	conn, _, err = websocket.DefaultDialer.Dial(wsURL, wsHeadersForHTTP(t, ts.URL))
 	if err != nil {
 		t.Fatalf("Dial: %v", err)
 	}
@@ -563,7 +563,7 @@ func TestSecurityTokens_AgentExecRejectsUnboundToken(t *testing.T) {
 	defer ts.Close()
 
 	wsURL := wsURLForHTTP(ts.URL) + "/api/agent/ws"
-	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL, wsHeadersForHTTP(t, ts.URL))
 	if err != nil {
 		t.Fatalf("Dial: %v", err)
 	}
@@ -600,7 +600,7 @@ func TestSecurityTokens_AgentExecRequiresAgentExecScope(t *testing.T) {
 	defer ts.Close()
 
 	wsURL := "ws" + strings.TrimPrefix(ts.URL, "http") + "/api/agent/ws"
-	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL, wsHeadersForHTTP(t, ts.URL))
 	if err != nil {
 		t.Fatalf("Dial: %v", err)
 	}
@@ -642,7 +642,7 @@ func TestSecurityTokens_AgentExecRejectsLegacySingleAPIToken(t *testing.T) {
 	defer ts.Close()
 
 	wsURL := wsURLForHTTP(ts.URL) + "/api/agent/ws"
-	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL, wsHeadersForHTTP(t, ts.URL))
 	if err != nil {
 		t.Fatalf("Dial: %v", err)
 	}
@@ -683,7 +683,7 @@ func TestWebSocketAllowsMonitoringReadScope(t *testing.T) {
 	defer ts.Close()
 
 	wsURL := "ws" + strings.TrimPrefix(ts.URL, "http") + "/ws?org_id=default"
-	headers := http.Header{}
+	headers := wsHeadersForHTTP(t, ts.URL)
 	headers.Set("X-API-Token", rawToken)
 	conn, _, err := websocket.DefaultDialer.Dial(wsURL, headers)
 	if err != nil {
@@ -706,7 +706,7 @@ func TestWebSocketAllowsBearerToken(t *testing.T) {
 	defer ts.Close()
 
 	wsURL := "ws" + strings.TrimPrefix(ts.URL, "http") + "/ws?org_id=default"
-	headers := http.Header{}
+	headers := wsHeadersForHTTP(t, ts.URL)
 	headers.Set("Authorization", "Bearer "+rawToken)
 	conn, _, err := websocket.DefaultDialer.Dial(wsURL, headers)
 	if err != nil {
@@ -729,7 +729,7 @@ func TestWebSocketAllowsTokenQueryParam(t *testing.T) {
 	defer ts.Close()
 
 	wsURL := "ws" + strings.TrimPrefix(ts.URL, "http") + "/ws?org_id=default&token=" + rawToken
-	conn, resp, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	conn, resp, err := websocket.DefaultDialer.Dial(wsURL, wsHeadersForHTTP(t, ts.URL))
 	if err != nil {
 		t.Fatalf("Dial: %v", err)
 	}
@@ -754,7 +754,7 @@ func TestWebSocketRejectsOrgQueryMismatchWithTenantContext(t *testing.T) {
 	defer ts.Close()
 
 	wsURL := "ws" + strings.TrimPrefix(ts.URL, "http") + "/ws?org_id=tenant-b&token=" + rawToken
-	conn, resp, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	conn, resp, err := websocket.DefaultDialer.Dial(wsURL, wsHeadersForHTTP(t, ts.URL))
 	if err == nil {
 		conn.Close()
 		t.Fatalf("expected websocket org mismatch rejection")
@@ -781,7 +781,7 @@ func TestWebSocketRejectsInvalidOrgQueryID(t *testing.T) {
 	defer ts.Close()
 
 	wsURL := "ws" + strings.TrimPrefix(ts.URL, "http") + "/ws?org_id=../tenant-b&token=" + rawToken
-	conn, resp, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	conn, resp, err := websocket.DefaultDialer.Dial(wsURL, wsHeadersForHTTP(t, ts.URL))
 	if err == nil {
 		conn.Close()
 		t.Fatalf("expected websocket invalid org rejection")
