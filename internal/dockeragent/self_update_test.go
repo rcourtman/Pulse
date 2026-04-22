@@ -1284,6 +1284,125 @@ func TestSelfUpdate(t *testing.T) {
 		}
 	})
 
+	t.Run("pre-flight self-test keeps token out of argv", func(t *testing.T) {
+		body := elfBytes()
+		client := &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(bytes.NewReader(body)),
+				Header:     http.Header{"X-Checksum-Sha256": []string{sha256Hex(body)}},
+			}, nil
+		})}
+
+		agent := &Agent{
+			logger: zerolog.Nop(),
+			cfg: Config{
+				APIToken: "live-secret-token",
+			},
+			targets: []TargetConfig{{URL: "http://example.com", Token: "token"}},
+			httpClients: map[bool]*http.Client{
+				false: client,
+			},
+		}
+		dir := t.TempDir()
+		execPath := filepath.Join(dir, "exec")
+		if err := os.WriteFile(execPath, elfBytes(), 0700); err != nil {
+			t.Fatalf("write exec: %v", err)
+		}
+		swap(t, &osExecutableFn, func() (string, error) {
+			return execPath, nil
+		})
+		swap(t, &syscallExecFn, func(string, []string, []string) error {
+			return nil
+		})
+
+		var capturedArgs []string
+		var capturedCmd *exec.Cmd
+		swap(t, &execCommandContextFn, func(ctx context.Context, name string, arg ...string) *exec.Cmd {
+			capturedArgs = append([]string{name}, arg...)
+			if len(arg) != 3 || arg[0] != "--self-test" || arg[1] != "--token-file" {
+				t.Fatalf("unexpected self-test args: %v", arg)
+			}
+			tokenFilePath := arg[2]
+			content, err := os.ReadFile(tokenFilePath)
+			if err != nil {
+				t.Fatalf("read token file: %v", err)
+			}
+			if strings.TrimSpace(string(content)) != agent.cfg.APIToken {
+				t.Fatalf("token file contents = %q, want %q", strings.TrimSpace(string(content)), agent.cfg.APIToken)
+			}
+
+			cmd := exec.Command("echo", "ok")
+			capturedCmd = cmd
+			return cmd
+		})
+
+		if err := agent.selfUpdate(context.Background()); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if strings.Contains(strings.Join(capturedArgs, " "), agent.cfg.APIToken) {
+			t.Fatalf("argv leaked API token: %v", capturedArgs)
+		}
+		tokenFilePath := capturedArgs[3]
+		if _, err := os.Stat(tokenFilePath); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("expected temporary token file to be removed, stat err = %v", err)
+		}
+		for _, env := range capturedCmd.Env {
+			if strings.Contains(env, agent.cfg.APIToken) {
+				t.Fatalf("environment leaked API token: %q", env)
+			}
+		}
+	})
+
+	t.Run("pre-flight self-test falls back to target token", func(t *testing.T) {
+		body := elfBytes()
+		client := &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(bytes.NewReader(body)),
+				Header:     http.Header{"X-Checksum-Sha256": []string{sha256Hex(body)}},
+			}, nil
+		})}
+
+		agent := &Agent{
+			logger:  zerolog.Nop(),
+			targets: []TargetConfig{{URL: "http://example.com", Token: "target-secret-token"}},
+			httpClients: map[bool]*http.Client{
+				false: client,
+			},
+		}
+		dir := t.TempDir()
+		execPath := filepath.Join(dir, "exec")
+		if err := os.WriteFile(execPath, elfBytes(), 0700); err != nil {
+			t.Fatalf("write exec: %v", err)
+		}
+		swap(t, &osExecutableFn, func() (string, error) {
+			return execPath, nil
+		})
+		swap(t, &syscallExecFn, func(string, []string, []string) error {
+			return nil
+		})
+
+		swap(t, &execCommandContextFn, func(ctx context.Context, name string, arg ...string) *exec.Cmd {
+			if len(arg) != 3 || arg[0] != "--self-test" || arg[1] != "--token-file" {
+				t.Fatalf("unexpected self-test args: %v", arg)
+			}
+			tokenFilePath := arg[2]
+			content, err := os.ReadFile(tokenFilePath)
+			if err != nil {
+				t.Fatalf("read token file: %v", err)
+			}
+			if strings.TrimSpace(string(content)) != agent.targets[0].Token {
+				t.Fatalf("token file contents = %q, want %q", strings.TrimSpace(string(content)), agent.targets[0].Token)
+			}
+			return exec.Command("echo", "ok")
+		})
+
+		if err := agent.selfUpdate(context.Background()); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
 	t.Run("signature verified when trusted keys configured", func(t *testing.T) {
 		privateKey := configureTrustedUpdateKeys(t)
 		body := elfBytes()

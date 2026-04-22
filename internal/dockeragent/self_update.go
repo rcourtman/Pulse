@@ -31,6 +31,54 @@ const (
 
 var selfUpdateRetrySleepFn = selfUpdateSleepWithContext
 
+func writeSelfTestTokenFile(token string) (string, error) {
+	trimmed := strings.TrimSpace(token)
+	if trimmed == "" {
+		return "", errors.New("self-update pre-flight requires API token")
+	}
+
+	file, err := osCreateTempFn("", "pulse-agent-selftest-token-*")
+	if err != nil {
+		return "", fmt.Errorf("create self-test token file: %w", err)
+	}
+	path := file.Name()
+	cleanupOnError := true
+	defer func() {
+		if cleanupOnError {
+			_ = closeFileFn(file)
+			_ = osRemoveFn(path)
+		}
+	}()
+
+	if _, err := file.WriteString(trimmed); err != nil {
+		return "", fmt.Errorf("write self-test token file: %w", err)
+	}
+	if err := closeFileFn(file); err != nil {
+		return "", fmt.Errorf("close self-test token file: %w", err)
+	}
+	if err := osChmodFn(path, 0o600); err != nil {
+		return "", fmt.Errorf("chmod self-test token file: %w", err)
+	}
+
+	cleanupOnError = false
+	return path, nil
+}
+
+func (a *Agent) selfTestToken(target TargetConfig) string {
+	if token := strings.TrimSpace(a.cfg.APIToken); token != "" {
+		return token
+	}
+	if token := strings.TrimSpace(target.Token); token != "" {
+		return token
+	}
+	for _, candidate := range a.targets {
+		if token := strings.TrimSpace(candidate.Token); token != "" {
+			return token
+		}
+	}
+	return ""
+}
+
 // checkForUpdates checks if a newer version is available and performs self-update if needed
 func (a *Agent) checkForUpdates(ctx context.Context) {
 	if !a.tryStartUpdateCheck() {
@@ -484,12 +532,17 @@ func (a *Agent) selfUpdate(ctx context.Context) error {
 	// and force --self-test
 	a.logger.Debug().Msg("Self-update: running pre-flight check on new binary...")
 
-	// Construct args for self-test. We need a valid token source for config load to pass.
-	// Since we are running on the same host, we can pass the token file or env.
-	// Simplest approach: pass --self-test and --token=dummy (if validation requires it)
-	// But our config loader checks token presence.
-	// Let's use the actual token configured to be safe.
-	checkCmd := execCommandContextFn(ctx, tmpPath, "--self-test", "--token", a.cfg.APIToken)
+	// Construct args for self-test using an ephemeral token file so the live
+	// credential never appears in argv.
+	tokenFilePath, err := writeSelfTestTokenFile(a.selfTestToken(target))
+	if err != nil {
+		return fmt.Errorf("prepare self-test token file: %w", err)
+	}
+	defer func() {
+		_ = osRemoveFn(tokenFilePath)
+	}()
+
+	checkCmd := execCommandContextFn(ctx, tmpPath, "--self-test", "--token-file", tokenFilePath)
 	if output, err := checkCmd.CombinedOutput(); err != nil {
 		a.logger.Error().
 			Err(err).

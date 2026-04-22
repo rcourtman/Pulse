@@ -1629,6 +1629,11 @@ the matching base64-encoded `X-Signature-SSHSIG`, and
 `internal/api/unified_agent.go` must only serve published release installers
 and agent binaries from local or proxied assets that carry the matching
 detached signature sidecars.
+That same self-update pre-flight must keep the live agent token out of process
+argv. `internal/dockeragent/self_update.go` may pass a short-lived `0600`
+token file into `cmd/pulse-agent/main.go --self-test --token-file`, but it
+must not revive `--token <secret>` argument passing that exposes the runtime
+credential through `/proc/*/cmdline`.
 That same unified-agent runtime boundary also owns vendor-aware host identity.
 When gopsutil reports generic Linux platform fields on NAS appliances,
 `internal/hostagent/` must prefer canonical platform files such as Synology DSM
