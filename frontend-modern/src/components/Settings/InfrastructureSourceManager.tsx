@@ -37,8 +37,8 @@ const addSectionButtonClass =
   'inline-flex items-center gap-1.5 rounded-md border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-200 dark:hover:bg-blue-900/40';
 const primaryToolbarButtonClass =
   'inline-flex items-center justify-center gap-2 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-medium text-blue-700 transition-colors hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-200 dark:hover:bg-blue-900/40';
-const secondaryToolbarButtonClass =
-  'inline-flex items-center justify-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-medium text-base-content transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-60';
+const utilityToolbarButtonClass =
+  'inline-flex items-center gap-1.5 rounded-md px-1 py-1 text-sm font-medium text-muted transition-colors hover:text-base-content disabled:cursor-not-allowed disabled:opacity-60';
 const childIndentClass = 'pl-4 sm:pl-6';
 const discoveryRowClass =
   'border-b border-border-subtle bg-blue-50/30 hover:bg-blue-50/40 dark:bg-blue-950/10 dark:hover:bg-blue-950/20';
@@ -172,39 +172,34 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
         badgeLabel: 'Scanning',
         badgeClass:
           'inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-medium text-blue-800 dark:bg-blue-950/40 dark:text-blue-200',
-        description:
-          'Scanning the saved network scope for Proxmox VE, Backup Server, and Mail Gateway endpoints.',
+        description: 'Scanning the saved discovery scope now.',
       };
     }
 
     if (props.discoveryEnabled) {
       return {
-        badgeLabel: 'Background on',
+        badgeLabel: 'Automatic',
         badgeClass:
           'inline-flex items-center rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-medium text-green-800 dark:bg-green-950/40 dark:text-green-200',
-        description:
-          'Background discovery is on. Run discovery here whenever you want to refresh the current candidates immediately.',
+        description: 'Automatic scanning is enabled.',
       };
     }
 
     return {
-      badgeLabel: 'Manual only',
+      badgeLabel: 'Manual',
       badgeClass:
         'inline-flex items-center rounded-full bg-surface-alt px-2 py-0.5 text-[11px] font-medium text-base-content',
-      description:
-        'Background discovery is off. Pulse only scans when you run discovery here or probe a specific address.',
+      description: 'Automatic scanning is off.',
     };
   });
 
   const discoverySummary = createMemo(() => {
     const parts: string[] = [];
     if (discoveredCount() > 0) {
-      parts.push(
-        `${discoveredCount()} discovered candidate${discoveredCount() === 1 ? '' : 's'} visible`,
-      );
+      parts.push(`${discoveredCount()} candidate${discoveredCount() === 1 ? '' : 's'} visible`);
     }
     if (lastDiscoveryResultText()) {
-      parts.push(`Last result ${lastDiscoveryResultText()}`);
+      parts.push(`Updated ${lastDiscoveryResultText()}`);
     }
     if (discoveryErrors().length > 0) {
       parts.push(
@@ -222,22 +217,24 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
       icon={<Server class="h-5 w-5" strokeWidth={2} />}
     >
       <div class="border-b border-border bg-surface-alt/40 px-3 py-3 sm:px-4">
-        <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-          <div class="min-w-0 space-y-1">
+        <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div class="min-w-0 space-y-1.5">
             <div class="flex flex-wrap items-center gap-2">
+              <h3 class="text-sm font-medium text-base-content">Discovery</h3>
               <span class={discoveryStatePresentation().badgeClass}>
                 {discoveryStatePresentation().badgeLabel}
               </span>
-              <span class="text-sm text-base-content">Discovery</span>
             </div>
-            <p class="text-sm text-muted">{discoveryStatePresentation().description}</p>
-            <Show when={discoverySummary().length > 0}>
-              <p class="text-xs text-muted">{discoverySummary().join(' · ')}</p>
-            </Show>
+            <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted">
+              <span>{discoveryStatePresentation().description}</span>
+              <Show when={discoverySummary().length > 0}>
+                <span class="text-xs text-muted">{discoverySummary().join(' · ')}</span>
+              </Show>
+            </div>
           </div>
 
           <Show when={!props.readOnly}>
-            <div class="flex flex-wrap items-center gap-2 lg:justify-end">
+            <div class="flex flex-wrap items-center gap-3 lg:justify-end">
               <Show when={props.onRunDiscovery}>
                 <button
                   type="button"
@@ -256,7 +253,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                 <button
                   type="button"
                   onClick={props.onDetectFromAddress}
-                  class={secondaryToolbarButtonClass}
+                  class={utilityToolbarButtonClass}
                 >
                   <Search class="h-4 w-4" />
                   Detect from address
@@ -267,7 +264,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                 <button
                   type="button"
                   onClick={props.onOpenDiscoverySettings}
-                  class={secondaryToolbarButtonClass}
+                  class={utilityToolbarButtonClass}
                 >
                   <SlidersHorizontal class="h-4 w-4" />
                   Discovery settings

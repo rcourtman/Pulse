@@ -269,6 +269,9 @@ describe('InfrastructureWorkspace', () => {
 
     await waitFor(() => expect(screen.getByText('discovered-pve.lab')).toBeInTheDocument());
     expect(screen.getByText('Discovered')).toBeInTheDocument();
+    expect(screen.getByText('Automatic scanning is off.')).toBeInTheDocument();
+    expect(screen.getByText(/1 candidate visible/i)).toBeInTheDocument();
+    expect(screen.getByText(/Updated /i)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /Run discovery/i }));
     expect(triggerDiscoveryScan).toHaveBeenCalledTimes(1);
