@@ -2,6 +2,7 @@ package config
 
 import (
 	"encoding/base64"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -239,6 +240,24 @@ func TestLoad_AuthPass_PreHashed(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, hash, cfg.AuthPass)
+}
+
+func TestLoad_AuthPass_HashFailureFailsClosed(t *testing.T) {
+	t.Setenv("PULSE_DATA_DIR", t.TempDir())
+	t.Setenv("PULSE_AUTH_PASS", "plainpass")
+
+	originalHashPasswordFn := hashPasswordFn
+	hashPasswordFn = func(string) (string, error) {
+		return "", errors.New("boom")
+	}
+	t.Cleanup(func() {
+		hashPasswordFn = originalHashPasswordFn
+	})
+
+	cfg, err := Load()
+	require.Error(t, err)
+	assert.Nil(t, cfg)
+	assert.ErrorContains(t, err, "hash PULSE_AUTH_PASS")
 }
 
 func TestLoad_Persistence(t *testing.T) {

@@ -47,13 +47,16 @@ visibility, and privacy controls to operators.
 21. `internal/api/security.go`
 22. `internal/api/security_tokens.go`
 23. `internal/api/system_settings.go`
-24. `internal/telemetry/telemetry.go`
-25. `internal/api/router_routes_auth_security.go`
-26. `internal/crypto/crypto.go`
-27. `internal/securityutil/secure_storage_dir.go`
-28. `internal/cloudcp/auth/magiclink.go`
-29. `internal/cloudcp/auth/magiclink_store.go`
-30. `scripts/telemetry_adoption_report.py`
+24. `internal/config/config.go`
+25. `internal/config/watcher.go`
+26. `internal/telemetry/telemetry.go`
+27. `internal/api/router_routes_auth_security.go`
+28. `internal/crypto/crypto.go`
+29. `internal/securityutil/secure_storage_dir.go`
+30. `internal/cloudcp/auth/magiclink.go`
+31. `internal/cloudcp/auth/magiclink_store.go`
+32. `pkg/tlsutil/fingerprint.go`
+33. `scripts/telemetry_adoption_report.py`
 
 ## Shared Boundaries
 
@@ -78,6 +81,7 @@ visibility, and privacy controls to operators.
 5. Change security/privacy settings presentation through the shared `frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx`, `frontend-modern/src/components/Settings/SecurityAuthPanel.tsx`, `frontend-modern/src/components/Settings/SecurityOverviewPanel.tsx`, `frontend-modern/src/components/Settings/QuickSecuritySetup.tsx`, `frontend-modern/src/components/Settings/SecurityPostureSummary.tsx`, `frontend-modern/src/components/Settings/SSOProviderTypeIcon.tsx`, `frontend-modern/src/utils/securityAuthPresentation.ts`, `frontend-modern/src/utils/securityScorePresentation.ts`, `frontend-modern/src/utils/auditLogPresentation.ts`, and `frontend-modern/src/utils/auditWebhookPresentation.ts` boundary.
 6. Change operator-facing telemetry/adoption reporting through `scripts/telemetry_adoption_report.py` together with the privacy disclosure whenever release-identity interpretation changes.
 7. Change data-at-rest encryption-key or control-plane magic-link HMAC key and storage-root hardening semantics through `internal/crypto/crypto.go`, `internal/cloudcp/auth/magiclink.go`, `internal/cloudcp/auth/magiclink_store.go`, and `internal/securityutil/secure_storage_dir.go` together so writable-but-not-owned runtime storage mounts stay supported without weakening file-level secrecy.
+8. Change auth-env password normalization or shared TLS fingerprint verification defaults through `internal/config/config.go`, `internal/config/watcher.go`, and `pkg/tlsutil/fingerprint.go` together so startup auth ingestion, live auth-env reloads, and pinned-fingerprint TLS clients keep one fail-closed security floor.
 
 ## Forbidden Paths
 
@@ -93,6 +97,7 @@ visibility, and privacy controls to operators.
 4. Keep the checked-in telemetry adoption report aligned with the same release-identity rules used by the runtime telemetry payload.
 5. Update this contract whenever a new canonical security, token, auth, or privacy surface becomes part of the governed trust boundary.
 6. Keep the shared storage-directory and secure storage-file hardening helper aligned with the crypto manager plus control-plane magic-link key and store handling whenever runtime data-root ownership assumptions change.
+7. Keep auth-env ingestion and shared fingerprint-verifier TLS defaults aligned whenever runtime auth loading or pinned-certificate transport behavior changes.
 
 ## Current State
 
@@ -199,6 +204,11 @@ surfaces may stay concise, but they must not claim a stronger privacy posture
 than the governed docs; if telemetry rows are retained for a fixed window and
 IP addresses are not stored rather than “never seen,” the summary copy must
 say that plainly.
+That same shared trust boundary now also owns the TLS floor used by pinned-
+fingerprint runtime clients. `pkg/tlsutil/fingerprint.go` may support
+certificate-fingerprint capture and verification for self-signed deployments,
+but every mode must still set an explicit minimum TLS version instead of
+silently inheriting whatever older protocol floor the host runtime would allow.
 That same rule also applies inside shipped security guidance itself:
 `SECURITY.md` and the synced `frontend-modern/public/docs/SECURITY.md` copy may
 not bounce the operator back to GitHub `main` for section references that the
@@ -357,6 +367,12 @@ state must otherwise come from the resolved `ConfigPath` / `DataPath` owner or
 the shared `PULSE_DATA_DIR` fallback. These surfaces may not probe `/etc/pulse`
 or `/data` independently and silently override the configured path authority
 just because those directories exist on the host.
+That same auth-env boundary must also fail closed on password normalization:
+`internal/config/config.go` and `internal/config/watcher.go` may auto-hash a
+plaintext `PULSE_AUTH_PASS`, but they must never preserve a raw plaintext value
+in runtime config just because hashing failed. Startup must return an explicit
+error, and live `.env` reloads must keep the previous runtime auth password
+until a valid replacement is available.
 That same rule also governs the auth `.env` file path itself: `router.go`,
 `router_routes_auth_security.go`, and `security_setup_fix.go` must derive the
 manual-auth env file through the shared auth-path helper instead of

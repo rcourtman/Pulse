@@ -2,7 +2,6 @@ package tlsutil
 
 import (
 	"crypto/sha256"
-	"crypto/tls"
 	"crypto/x509"
 	"encoding/hex"
 	"net/http"
@@ -35,6 +34,12 @@ func TestFingerprintVerifier_NormalizesFingerprint(t *testing.T) {
 	if config2.VerifyPeerCertificate == nil {
 		t.Error("FingerprintVerifier should set VerifyPeerCertificate")
 	}
+	if config1.MinVersion != minimumTLSVersion {
+		t.Errorf("FingerprintVerifier MinVersion = %v, want %v", config1.MinVersion, minimumTLSVersion)
+	}
+	if config2.MinVersion != minimumTLSVersion {
+		t.Errorf("FingerprintVerifier MinVersion = %v, want %v", config2.MinVersion, minimumTLSVersion)
+	}
 }
 
 func TestPeerCertificateCaptureTLSConfigRequiresPeerCertificate(t *testing.T) {
@@ -44,6 +49,9 @@ func TestPeerCertificateCaptureTLSConfigRequiresPeerCertificate(t *testing.T) {
 	}
 	if config.VerifyPeerCertificate == nil {
 		t.Fatal("PeerCertificateCaptureTLSConfig should install a peer-certificate verifier")
+	}
+	if config.MinVersion != minimumTLSVersion {
+		t.Fatalf("PeerCertificateCaptureTLSConfig MinVersion = %v, want %v", config.MinVersion, minimumTLSVersion)
 	}
 
 	err := config.VerifyPeerCertificate(nil, nil)
@@ -122,6 +130,9 @@ func TestCreateHTTPClient_InsecureMode(t *testing.T) {
 	if transport.TLSClientConfig.VerifyPeerCertificate == nil {
 		t.Fatal("insecure mode should still validate peer certificate structure")
 	}
+	if transport.TLSClientConfig.MinVersion != minimumTLSVersion {
+		t.Fatalf("TLSClientConfig.MinVersion = %v, want %v", transport.TLSClientConfig.MinVersion, minimumTLSVersion)
+	}
 }
 
 func TestCreateHTTPClient_FingerprintMode(t *testing.T) {
@@ -145,6 +156,9 @@ func TestCreateHTTPClient_FingerprintMode(t *testing.T) {
 	if transport.TLSClientConfig.VerifyPeerCertificate == nil {
 		t.Error("VerifyPeerCertificate should be set in fingerprint mode")
 	}
+	if transport.TLSClientConfig.MinVersion != minimumTLSVersion {
+		t.Fatalf("TLSClientConfig.MinVersion = %v, want %v", transport.TLSClientConfig.MinVersion, minimumTLSVersion)
+	}
 }
 
 func TestCreateHTTPClient_SecureMode(t *testing.T) {
@@ -159,10 +173,14 @@ func TestCreateHTTPClient_SecureMode(t *testing.T) {
 		t.Fatal("Transport is not *http.Transport")
 	}
 
-	// In secure mode, TLSClientConfig should either be nil (use defaults)
-	// or not have InsecureSkipVerify set
-	if transport.TLSClientConfig != nil && transport.TLSClientConfig.InsecureSkipVerify {
+	if transport.TLSClientConfig == nil {
+		t.Fatal("secure mode should install an explicit TLS client config")
+	}
+	if transport.TLSClientConfig.InsecureSkipVerify {
 		t.Error("InsecureSkipVerify should not be true in secure mode")
+	}
+	if transport.TLSClientConfig.MinVersion != minimumTLSVersion {
+		t.Fatalf("TLSClientConfig.MinVersion = %v, want %v", transport.TLSClientConfig.MinVersion, minimumTLSVersion)
 	}
 }
 
@@ -310,9 +328,7 @@ func TestFingerprintVerifier_TLSVersion(t *testing.T) {
 		t.Fatal("FingerprintVerifier returned nil config")
 	}
 
-	// MinVersion should not be set to an insecure version
-	// (default is fine, or TLS 1.2+)
-	if config.MinVersion != 0 && config.MinVersion < tls.VersionTLS12 {
-		t.Errorf("MinVersion should be 0 (default) or >= TLS 1.2, got %v", config.MinVersion)
+	if config.MinVersion != minimumTLSVersion {
+		t.Errorf("MinVersion should be %v, got %v", minimumTLSVersion, config.MinVersion)
 	}
 }

@@ -365,8 +365,10 @@ func (cw *ConfigWatcher) reloadConfig() {
 	}
 
 	// Apply auth password
-	newPass := strings.Trim(envMap["PULSE_AUTH_PASS"], "'\"")
-	if newPass != oldAuthPass {
+	newPass, err := normalizeEnvAuthPassword(envMap["PULSE_AUTH_PASS"])
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to normalize PULSE_AUTH_PASS from watched env file; keeping existing runtime auth password")
+	} else if newPass != oldAuthPass {
 		cw.config.AuthPass = newPass
 		if newPass == "" {
 			changes = append(changes, "auth password removed")

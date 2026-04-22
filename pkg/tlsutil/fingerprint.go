@@ -14,6 +14,8 @@ import (
 	"time"
 )
 
+const minimumTLSVersion = tls.VersionTLS12
+
 func verifyPresentedPeerCertificates(rawCerts [][]byte, _ [][]*x509.Certificate) error {
 	if len(rawCerts) == 0 {
 		return fmt.Errorf("no certificates presented by server")
@@ -32,6 +34,7 @@ func verifyPresentedPeerCertificates(rawCerts [][]byte, _ [][]*x509.Certificate)
 // blanket InsecureSkipVerify alone.
 func PeerCertificateCaptureTLSConfig() *tls.Config {
 	return &tls.Config{
+		MinVersion:            minimumTLSVersion,
 		InsecureSkipVerify:    true,
 		VerifyPeerCertificate: verifyPresentedPeerCertificates,
 	}
@@ -92,6 +95,7 @@ func FingerprintVerifier(fingerprint string) *tls.Config {
 	expectedFingerprint := strings.ToLower(strings.ReplaceAll(fingerprint, ":", ""))
 
 	return &tls.Config{
+		MinVersion:         minimumTLSVersion,
 		InsecureSkipVerify: true, // We'll do our own verification
 		VerifyPeerCertificate: func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
 			if len(rawCerts) == 0 {
@@ -133,6 +137,7 @@ func CreateHTTPClientWithTimeout(verifySSL bool, fingerprint string, timeout tim
 		TLSHandshakeTimeout:   10 * time.Second, // TLS handshake timeout
 		ResponseHeaderTimeout: 10 * time.Second, // Time to wait for response headers
 		ExpectContinueTimeout: 1 * time.Second,
+		TLSClientConfig:       &tls.Config{MinVersion: minimumTLSVersion},
 	}
 
 	if !verifySSL && fingerprint == "" {
@@ -142,7 +147,7 @@ func CreateHTTPClientWithTimeout(verifySSL bool, fingerprint string, timeout tim
 		// Fingerprint verification mode
 		transport.TLSClientConfig = FingerprintVerifier(fingerprint)
 	}
-	// else: default secure mode with system CA verification
+	// else: default secure mode with system CA verification and explicit TLS floor
 
 	// Use provided timeout, or default to 60 seconds if not specified
 	if timeout <= 0 {

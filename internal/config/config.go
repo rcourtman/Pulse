@@ -46,6 +46,7 @@ const (
 var (
 	osStat            = os.Stat
 	execCommand       = exec.Command
+	hashPasswordFn    = auth.HashPassword
 	netDial           = net.Dial
 	netInterfaceAddrs = net.InterfaceAddrs
 )
@@ -103,6 +104,33 @@ func IsPasswordHashed(password string) bool {
 	}
 
 	return false
+}
+
+func normalizeEnvAuthPassword(raw string) (string, error) {
+	password := strings.Trim(raw, "'\"")
+	if password == "" {
+		return "", nil
+	}
+
+	if !IsPasswordHashed(password) {
+		hashedPass, err := hashPasswordFn(password)
+		if err != nil {
+			return "", fmt.Errorf("hash PULSE_AUTH_PASS: %w", err)
+		}
+		return hashedPass, nil
+	}
+
+	if len(password) != 60 {
+		log.Error().
+			Int("length", len(password)).
+			Str("env_var", "PULSE_AUTH_PASS").
+			Msg("Bcrypt hash appears truncated; expected 60 characters; authentication may fail")
+		log.Error().
+			Str("env_var", "PULSE_AUTH_PASS").
+			Msg("Ensure the full bcrypt hash is enclosed in single quotes in your .env file or Docker environment")
+	}
+
+	return password, nil
 }
 
 // Config holds all application configuration
@@ -1295,30 +1323,14 @@ func load(initLogging bool) (*Config, error) {
 		log.Info().Msg("Overriding auth user from env var")
 	}
 	if authPass := os.Getenv("PULSE_AUTH_PASS"); authPass != "" {
-		// Auto-hash plain text passwords for security
-		if !IsPasswordHashed(authPass) {
-			// Plain text password - hash it immediately
-			hashedPass, err := auth.HashPassword(authPass)
-			if err != nil {
-				log.Error().Err(err).Msg("Failed to hash password from environment variable")
-				// Fall back to plain text if hashing fails (shouldn't happen)
-				cfg.AuthPass = authPass
-			} else {
-				cfg.AuthPass = hashedPass
-				log.Info().Msg("Auto-hashed plain text password from environment variable")
-			}
+		normalizedAuthPass, err := normalizeEnvAuthPassword(authPass)
+		if err != nil {
+			return nil, err
+		}
+		cfg.AuthPass = normalizedAuthPass
+		if !IsPasswordHashed(strings.Trim(authPass, "'\"")) {
+			log.Info().Msg("Auto-hashed plain text password from environment variable")
 		} else {
-			// Already hashed - validate it's complete
-			if len(authPass) != 60 {
-				log.Error().
-					Int("length", len(authPass)).
-					Str("env_var", "PULSE_AUTH_PASS").
-					Msg("Bcrypt hash appears truncated; expected 60 characters; authentication may fail")
-				log.Error().
-					Str("env_var", "PULSE_AUTH_PASS").
-					Msg("Ensure the full bcrypt hash is enclosed in single quotes in your .env file or Docker environment")
-			}
-			cfg.AuthPass = authPass
 			log.Debug().Msg("Loaded pre-hashed password from env var")
 		}
 	}

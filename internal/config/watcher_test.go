@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"sync/atomic"
@@ -105,7 +106,8 @@ PULSE_AUTH_PASS="secret"`
 
 	// Assert
 	assert.Equal(t, "admin", cfg.AuthUser)
-	assert.Equal(t, "secret", cfg.AuthPass)
+	assert.NotEqual(t, "secret", cfg.AuthPass)
+	assert.True(t, IsPasswordHashed(cfg.AuthPass))
 
 	// Test update
 	envContentUpdated := `PULSE_AUTH_USER="newadmin"
@@ -115,7 +117,8 @@ PULSE_AUTH_PASS="newsecret"`
 	cw.reloadConfig()
 
 	assert.Equal(t, "newadmin", cfg.AuthUser)
-	assert.Equal(t, "newsecret", cfg.AuthPass)
+	assert.NotEqual(t, "newsecret", cfg.AuthPass)
+	assert.True(t, IsPasswordHashed(cfg.AuthPass))
 }
 
 func TestConfigWatcher_ReloadConfig_MockSettings(t *testing.T) {
@@ -331,10 +334,13 @@ func TestConfigWatcher_ReloadConfig_Auth(t *testing.T) {
 
 	cfg := &Config{
 		AuthUser: "oldUser",
-		AuthPass: "oldPass",
 	}
 	cw, err := NewConfigWatcher(cfg)
 	require.NoError(t, err)
+
+	oldPass, err := hashPasswordFn("oldPass")
+	require.NoError(t, err)
+	cfg.AuthPass = oldPass
 
 	// Update auth
 	envContent := `PULSE_AUTH_USER="newUser"
@@ -344,7 +350,8 @@ PULSE_AUTH_PASS="newPass"`
 	cw.reloadConfig()
 
 	assert.Equal(t, "newUser", cfg.AuthUser)
-	assert.Equal(t, "newPass", cfg.AuthPass)
+	assert.NotEqual(t, "newPass", cfg.AuthPass)
+	assert.True(t, IsPasswordHashed(cfg.AuthPass))
 
 	// Remove auth
 	require.NoError(t, os.WriteFile(envPath, []byte(""), 0644))
@@ -352,6 +359,38 @@ PULSE_AUTH_PASS="newPass"`
 
 	assert.Equal(t, "", cfg.AuthUser)
 	assert.Equal(t, "", cfg.AuthPass)
+}
+
+func TestConfigWatcher_ReloadConfig_HashFailureKeepsExistingPassword(t *testing.T) {
+	tempDir := t.TempDir()
+	envPath := filepath.Join(tempDir, ".env")
+	t.Setenv("PULSE_AUTH_CONFIG_DIR", tempDir)
+
+	existingPass, err := hashPasswordFn("existingPass")
+	require.NoError(t, err)
+
+	cfg := &Config{
+		AuthUser: "admin",
+		AuthPass: existingPass,
+	}
+	cw, err := NewConfigWatcher(cfg)
+	require.NoError(t, err)
+
+	originalHashPasswordFn := hashPasswordFn
+	hashPasswordFn = func(string) (string, error) {
+		return "", errors.New("boom")
+	}
+	t.Cleanup(func() {
+		hashPasswordFn = originalHashPasswordFn
+	})
+
+	envContent := `PULSE_AUTH_USER="admin"
+PULSE_AUTH_PASS="newPass"`
+	require.NoError(t, os.WriteFile(envPath, []byte(envContent), 0644))
+
+	cw.reloadConfig()
+
+	assert.Equal(t, existingPass, cfg.AuthPass)
 }
 
 func TestConfigWatcher_ReloadConfig_Manual(t *testing.T) {

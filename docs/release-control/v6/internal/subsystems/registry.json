@@ -4242,9 +4242,12 @@
         "internal/api/system_settings.go",
         "internal/cloudcp/auth/magiclink.go",
         "internal/cloudcp/auth/magiclink_store.go",
+        "internal/config/config.go",
+        "internal/config/watcher.go",
         "internal/crypto/crypto.go",
         "internal/securityutil/secure_storage_dir.go",
         "internal/telemetry/telemetry.go",
+        "pkg/tlsutil/fingerprint.go",
         "scripts/telemetry_adoption_report.py",
         "SECURITY.md"
       ],
@@ -4264,7 +4267,10 @@
           "internal/api/security_tokens_test.go",
           "internal/api/system_settings_telemetry_test.go",
           "internal/cloudcp/auth/magiclink_test.go",
+          "internal/config/config_load_test.go",
+          "internal/config/watcher_test.go",
           "internal/telemetry/telemetry_test.go",
+          "pkg/tlsutil/tlsutil_test.go",
           "scripts/tests/test_telemetry_adoption_report.py"
         ],
         "require_explicit_path_policy_coverage": true,
@@ -4346,6 +4352,23 @@
             "test_prefixes": [],
             "exact_files": [
               "frontend-modern/src/utils/__tests__/apiTokenPresentation.test.ts"
+            ]
+          },
+          {
+            "id": "security-runtime-auth-config-and-tls",
+            "label": "security runtime auth config and TLS proof",
+            "match_prefixes": [],
+            "match_files": [
+              "internal/config/config.go",
+              "internal/config/watcher.go",
+              "pkg/tlsutil/fingerprint.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/config/config_load_test.go",
+              "internal/config/watcher_test.go",
+              "pkg/tlsutil/tlsutil_test.go"
             ]
           },
           {
