@@ -323,7 +323,7 @@ export const getTrialActivationNotice = (result?: string | null): LicenseInlineN
       return {
         tone: 'border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-900 text-red-900 dark:text-red-100',
         title: 'Activation link invalid',
-        body: 'That activation handoff is invalid or expired. Return to Plans & Billing on this instance and start a fresh secure trial handoff.',
+        body: 'That activation handoff is invalid or expired. Return to Pulse Pro on this instance and start a fresh secure trial handoff.',
       };
     case 'replayed':
       return {

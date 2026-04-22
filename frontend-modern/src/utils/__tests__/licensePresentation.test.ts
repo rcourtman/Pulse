@@ -63,13 +63,13 @@ describe('licensePresentation', () => {
       },
     });
     expect(SELF_HOSTED_PRO_BILLING_PRESENTATION).toEqual({
-      shellTitle: 'Plans & Billing',
+      shellTitle: 'Pulse Pro',
       shellDescription:
         'Manage self-hosted plans, activation, and how Pulse helps when something breaks.',
-      infrastructureRouteReferral: 'Billing and self-hosted plan changes live in Plans & Billing.',
+      infrastructureRouteReferral: 'Billing and self-hosted plan changes live in Pulse Pro.',
       infrastructureWorkspaceReferral:
-        'Billing, self-hosted plan changes, and activation status live in Plans & Billing, not here.',
-      sectionSelectorAriaLabel: 'Self-hosted billing section',
+        'Billing, self-hosted plan changes, and activation status live in Pulse Pro, not here.',
+      sectionSelectorAriaLabel: 'Pulse Pro billing section',
       refreshLabel: 'Refresh',
       planTabLabel: 'Plan',
       usageTabLabel: 'Usage',
@@ -295,7 +295,7 @@ describe('licensePresentation', () => {
     });
     expect(getTrialActivationNotice('invalid')).toMatchObject({
       title: 'Activation link invalid',
-      body: expect.stringContaining('Return to Plans & Billing'),
+      body: expect.stringContaining('Return to Pulse Pro'),
     });
     expect(getTrialActivationNotice('unavailable')).toMatchObject({
       title: 'Activation unavailable',

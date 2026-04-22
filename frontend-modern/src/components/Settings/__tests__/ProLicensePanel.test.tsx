@@ -188,7 +188,7 @@ describe('ProLicensePanel', () => {
     expect(loadCommercialPostureMock).not.toHaveBeenCalled();
     expect(screen.getByText('License and billing details are hidden')).toBeInTheDocument();
     expect(screen.getByText(/instead of creating a demo license/i)).toBeInTheDocument();
-    expect(screen.queryByText('Plans & Billing')).not.toBeInTheDocument();
+    expect(screen.queryByText('Pulse Pro')).not.toBeInTheDocument();
     expect(screen.queryByText('Monitored Systems')).not.toBeInTheDocument();
     expect(
       screen.queryByRole('button', { name: /start 14-day pro trial/i }),
@@ -202,7 +202,7 @@ describe('ProLicensePanel', () => {
       expect(loadLicenseEntitlementsMock).toHaveBeenCalled();
     });
 
-    expect(screen.getByText('Plans & Billing')).toBeInTheDocument();
+    expect(screen.getByText('Pulse Pro')).toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: 'Usage' })).not.toBeInTheDocument();
     expect(
       screen.queryByRole('button', { name: /start 14-day pro trial/i }),
