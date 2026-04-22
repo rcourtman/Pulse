@@ -20,6 +20,11 @@ import (
 	"golang.org/x/crypto/pbkdf2"
 )
 
+const (
+	currentExportCompatPBKDF2Iterations = 600000
+	legacyExportCompatPBKDF2Iterations  = 100000
+)
+
 func TestHandleImportConfigAcceptsLegacyVersion40Bundle(t *testing.T) {
 	targetDir := t.TempDir()
 	t.Setenv("PULSE_DATA_DIR", targetDir)
@@ -165,7 +170,7 @@ func encryptExportCompatPayload(plaintext []byte, passphrase string) ([]byte, er
 		return nil, err
 	}
 
-	key := pbkdf2.Key([]byte(passphrase), salt, 100000, 32, sha256.New)
+	key := pbkdf2.Key([]byte(passphrase), salt, legacyExportCompatPBKDF2Iterations, 32, sha256.New)
 	block, err := aes.NewCipher(key)
 	if err != nil {
 		return nil, err
@@ -193,22 +198,34 @@ func decryptExportCompatPayload(ciphertext []byte, passphrase string) ([]byte, e
 	salt := ciphertext[:32]
 	cipherbody := ciphertext[32:]
 
-	key := pbkdf2.Key([]byte(passphrase), salt, 100000, 32, sha256.New)
-	block, err := aes.NewCipher(key)
-	if err != nil {
-		return nil, err
+	var lastErr error
+	for _, iterations := range []int{currentExportCompatPBKDF2Iterations, legacyExportCompatPBKDF2Iterations} {
+		key := pbkdf2.Key([]byte(passphrase), salt, iterations, 32, sha256.New)
+		block, err := aes.NewCipher(key)
+		if err != nil {
+			return nil, err
+		}
+
+		gcm, err := cipher.NewGCM(block)
+		if err != nil {
+			return nil, err
+		}
+
+		if len(cipherbody) < gcm.NonceSize() {
+			return nil, io.ErrUnexpectedEOF
+		}
+
+		nonce := cipherbody[:gcm.NonceSize()]
+		payload := cipherbody[gcm.NonceSize():]
+		plaintext, err := gcm.Open(nil, nonce, payload, nil)
+		if err == nil {
+			return plaintext, nil
+		}
+		lastErr = err
 	}
 
-	gcm, err := cipher.NewGCM(block)
-	if err != nil {
-		return nil, err
+	if lastErr != nil {
+		return nil, lastErr
 	}
-
-	if len(cipherbody) < gcm.NonceSize() {
-		return nil, io.ErrUnexpectedEOF
-	}
-
-	nonce := cipherbody[:gcm.NonceSize()]
-	payload := cipherbody[gcm.NonceSize():]
-	return gcm.Open(nil, nonce, payload, nil)
+	return nil, io.ErrUnexpectedEOF
 }

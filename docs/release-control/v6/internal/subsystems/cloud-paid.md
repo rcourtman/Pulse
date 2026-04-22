@@ -161,6 +161,10 @@ Community limit enforcement.
 8. Add or change activation/grant lifecycle or dev-mode capability widening through `pkg/licensing/dev_mode_features.go`, `pkg/licensing/service.go`, `pkg/licensing/grant_refresh.go`, and `pkg/licensing/revocation_poll.go`
 9. Add or change license-server transport through `pkg/licensing/license_server_client.go` and `pkg/licensing/quickstart_bootstrap.go`
 10. Add or change encrypted activation persistence through `pkg/licensing/persistence.go` and `pkg/licensing/activation_store.go`
+    That persistence boundary must encrypt new state only with the persistent
+    random key file and the current HKDF-based derivation. Machine ID may
+    remain only as a compatibility loader for previously saved state, and
+    legacy derivations must never become the write path again.
 11. Add or change hosted trial or self-hosted purchase-return token semantics
     through `pkg/licensing/trial_activation.go` and
     `pkg/licensing/purchase_return.go`

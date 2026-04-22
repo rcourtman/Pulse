@@ -17,6 +17,11 @@ import (
 	"golang.org/x/crypto/pbkdf2"
 )
 
+const (
+	currentExportPBKDF2Iterations = 600000
+	legacyExportPBKDF2Iterations  = 100000
+)
+
 // ExportData contains all configuration data for export
 type ExportData struct {
 	Version       string                        `json:"version"`
@@ -241,7 +246,7 @@ func encryptWithPassphrase(plaintext []byte, passphrase string) ([]byte, error) 
 	}
 
 	// Derive key from passphrase using PBKDF2
-	key := pbkdf2.Key([]byte(passphrase), salt, 100000, 32, sha256.New)
+	key := pbkdf2.Key([]byte(passphrase), salt, currentExportPBKDF2Iterations, 32, sha256.New)
 
 	// Create cipher
 	block, err := aes.NewCipher(key)
@@ -283,33 +288,35 @@ func decryptWithPassphrase(ciphertext []byte, passphrase string) ([]byte, error)
 	ciphertext = ciphertext[32:]
 
 	// Derive key from passphrase
-	key := pbkdf2.Key([]byte(passphrase), salt, 100000, 32, sha256.New)
+	var lastErr error
+	for _, iterations := range []int{currentExportPBKDF2Iterations, legacyExportPBKDF2Iterations} {
+		key := pbkdf2.Key([]byte(passphrase), salt, iterations, 32, sha256.New)
 
-	// Create cipher
-	block, err := aes.NewCipher(key)
-	if err != nil {
-		return nil, err
+		block, err := aes.NewCipher(key)
+		if err != nil {
+			return nil, err
+		}
+
+		gcm, err := cipher.NewGCM(block)
+		if err != nil {
+			return nil, err
+		}
+
+		nonceSize := gcm.NonceSize()
+		if len(ciphertext) < nonceSize {
+			return nil, fmt.Errorf("ciphertext too short")
+		}
+
+		nonce, payload := ciphertext[:nonceSize], ciphertext[nonceSize:]
+		plaintext, err := gcm.Open(nil, nonce, payload, nil)
+		if err == nil {
+			return plaintext, nil
+		}
+		lastErr = err
 	}
 
-	// Use GCM mode
-	gcm, err := cipher.NewGCM(block)
-	if err != nil {
-		return nil, err
+	if lastErr != nil {
+		return nil, lastErr
 	}
-
-	// Extract nonce
-	nonceSize := gcm.NonceSize()
-	if len(ciphertext) < nonceSize {
-		return nil, fmt.Errorf("ciphertext too short")
-	}
-
-	nonce, ciphertext := ciphertext[:nonceSize], ciphertext[nonceSize:]
-
-	// Decrypt
-	plaintext, err := gcm.Open(nil, nonce, ciphertext, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return plaintext, nil
+	return nil, fmt.Errorf("failed to decrypt export payload")
 }

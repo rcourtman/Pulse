@@ -76,13 +76,7 @@ func (p *Persistence) LoadActivationState() (*ActivationState, error) {
 	migratedPlaintext := false
 
 	if encrypted, err := base64.StdEncoding.DecodeString(string(encoded)); err == nil {
-		// Try to decrypt with current encryption key.
-		decrypted, decErr := p.decrypt(encrypted)
-
-		// Fall back to machine-id if the current key doesn't work.
-		if decErr != nil && p.machineID != p.encryptionKey {
-			decrypted, decErr = p.decryptWithKey(encrypted, p.deriveKeyFrom(p.machineID))
-		}
+		decrypted, decErr := p.decryptWithCompatibleKeys(encrypted)
 		if decErr != nil {
 			return nil, fmt.Errorf("decrypt activation state: %w", decErr)
 		}

@@ -3,6 +3,7 @@ package licensing
 import (
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/hkdf"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
@@ -31,6 +32,11 @@ const (
 	persistencePrivateFilePerm = 0o600
 	maxPersistentKeyFileSize   = 4096
 	maxLicenseFileSize         = 1 << 20 // 1 MiB
+)
+
+var (
+	licenseKeyDerivationSalt = []byte("pulse-license-persistence-v2")
+	licenseKeyDerivationInfo = []byte("license-encryption")
 )
 
 var (
@@ -145,13 +151,13 @@ func writeOwnerOnlyPersistenceFileAtomic(path string, data []byte) error {
 // Persistence handles encrypted storage of license keys.
 type Persistence struct {
 	configDir     string
-	encryptionKey string // Primary key for encryption (persistent or machine-id)
-	machineID     string // Fallback for backwards compatibility
+	encryptionKey string // Primary persistent key for encryption
+	machineID     string // Legacy-only fallback for backwards compatibility
 }
 
 // NewPersistence creates a new license persistence handler.
-// It tries to use a persistent key stored in configDir first, then falls back
-// to machine-id for backwards compatibility with existing installations.
+// New writes always use a persistent random key; machine-id is retained only
+// as a compatibility fallback when loading older encrypted state.
 func NewPersistence(configDir string) (*Persistence, error) {
 	normalizedConfigDir, err := normalizePersistenceConfigDir(configDir)
 	if err != nil {
@@ -164,21 +170,15 @@ func NewPersistence(configDir string) (*Persistence, error) {
 		return nil, fmt.Errorf("failed to load persistent key: %w", err)
 	}
 
-	// Get machine-id as fallback for backwards compatibility
+	// Machine ID is legacy-only fallback material for existing installations.
 	machineID, err := getMachineID()
 	if err != nil {
-		machineID = "pulse-dev-fallback-machine-id"
-	}
-
-	// Use persistent key if available, otherwise machine-id
-	encryptionKey := persistentKey
-	if encryptionKey == "" {
-		encryptionKey = machineID
+		machineID = ""
 	}
 
 	return &Persistence{
 		configDir:     normalizedConfigDir,
-		encryptionKey: encryptionKey,
+		encryptionKey: persistentKey,
 		machineID:     machineID,
 	}, nil
 }
@@ -322,8 +322,8 @@ func (p *Persistence) Load() (string, error) {
 }
 
 // LoadWithMetadata reads and decrypts a license with metadata from disk.
-// It tries to decrypt with the current encryption key first, then falls back
-// to machine-id for backwards compatibility with existing installations.
+// It first tries the current HKDF-derived persistent key and then legacy
+// derivations for compatibility with older installations.
 func (p *Persistence) LoadWithMetadata() (PersistedLicense, error) {
 	licensePath, err := resolvePersistencePath(p.configDir, LicenseFileName)
 	if err != nil {
@@ -342,16 +342,7 @@ func (p *Persistence) LoadWithMetadata() (PersistedLicense, error) {
 	migratedPlaintext := false
 
 	if encrypted, err := base64.StdEncoding.DecodeString(strings.TrimSpace(string(encoded))); err == nil {
-		// Try to decrypt with current encryption key.
-		decrypted, decErr := p.decrypt(encrypted)
-
-		// If decryption failed and we have a different machine-id, try that as fallback.
-		// This handles the case where an existing license was encrypted with machine-id
-		// before the persistent key feature was added.
-		if decErr != nil && p.machineID != p.encryptionKey {
-			decrypted, decErr = p.decryptWithKey(encrypted, p.deriveKeyFrom(p.machineID))
-		}
-
+		decrypted, decErr := p.decryptWithCompatibleKeys(encrypted)
 		if decErr != nil {
 			return PersistedLicense{}, fmt.Errorf("failed to decrypt license: %w", decErr)
 		}
@@ -467,10 +458,69 @@ func (p *Persistence) deriveKey() []byte {
 	return p.deriveKeyFrom(p.encryptionKey)
 }
 
-// deriveKeyFrom derives a 32-byte key from a given key material.
+// deriveKeyFrom derives a 32-byte key from a given key material using HKDF.
 func (p *Persistence) deriveKeyFrom(keyMaterial string) []byte {
+	if strings.TrimSpace(keyMaterial) == "" {
+		return nil
+	}
+	key, err := hkdf.Key(sha256.New, []byte(keyMaterial), licenseKeyDerivationSalt, string(licenseKeyDerivationInfo), 32)
+	if err != nil {
+		return nil
+	}
+	return key
+}
+
+func (p *Persistence) deriveLegacyKeyFrom(keyMaterial string) []byte {
+	if strings.TrimSpace(keyMaterial) == "" {
+		return nil
+	}
 	hash := sha256.Sum256([]byte("pulse-license-" + keyMaterial))
 	return hash[:]
+}
+
+func (p *Persistence) compatibleKeyCandidates() [][]byte {
+	materials := []string{}
+	addMaterial := func(candidate string) {
+		candidate = strings.TrimSpace(candidate)
+		if candidate == "" {
+			return
+		}
+		for _, existing := range materials {
+			if existing == candidate {
+				return
+			}
+		}
+		materials = append(materials, candidate)
+	}
+
+	addMaterial(p.encryptionKey)
+	addMaterial(p.machineID)
+
+	keys := make([][]byte, 0, len(materials)*2)
+	for _, material := range materials {
+		if key := p.deriveKeyFrom(material); len(key) > 0 {
+			keys = append(keys, key)
+		}
+		if key := p.deriveLegacyKeyFrom(material); len(key) > 0 {
+			keys = append(keys, key)
+		}
+	}
+	return keys
+}
+
+func (p *Persistence) decryptWithCompatibleKeys(ciphertext []byte) ([]byte, error) {
+	var lastErr error
+	for _, key := range p.compatibleKeyCandidates() {
+		plaintext, err := p.decryptWithKey(ciphertext, key)
+		if err == nil {
+			return plaintext, nil
+		}
+		lastErr = err
+	}
+	if lastErr != nil {
+		return nil, lastErr
+	}
+	return nil, fmt.Errorf("no compatible decryption key available")
 }
 
 // getMachineID attempts to get a stable machine identifier.
@@ -489,12 +539,6 @@ func getMachineID() (string, error) {
 				return trimmed, nil
 			}
 		}
-	}
-
-	// Try hostname as fallback
-	hostname, err := os.Hostname()
-	if err == nil {
-		return hostname, nil
 	}
 
 	return "", errors.New("could not determine machine ID")

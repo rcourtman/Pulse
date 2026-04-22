@@ -2,8 +2,12 @@ package licensing
 
 import (
 	"bytes"
+	"crypto/aes"
+	"crypto/cipher"
+	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -165,7 +169,7 @@ func TestPersistence(t *testing.T) {
 		// Manually encrypt and save without creating persistent key
 		persisted := PersistedLicense{LicenseKey: testKey}
 		jsonData, _ := json.Marshal(persisted)
-		encrypted, err := pOld.encrypt(jsonData)
+		encrypted, err := encryptWithKey(jsonData, pOld.deriveLegacyKeyFrom(machineID))
 		if err != nil {
 			t.Fatalf("Failed to encrypt license: %v", err)
 		}
@@ -197,6 +201,48 @@ func TestPersistence(t *testing.T) {
 				"This means backwards compatibility is broken for existing Docker users", err)
 		}
 
+		if loaded.LicenseKey != testKey {
+			t.Errorf("Expected license key %s, got %s", testKey, loaded.LicenseKey)
+		}
+	})
+
+	t.Run("Backwards compatibility with legacy persistent-key derivation", func(t *testing.T) {
+		tmpDirCompat, _ := os.MkdirTemp("", "pulse-license-persistent-compat-*")
+		defer os.RemoveAll(tmpDirCompat)
+
+		testKey := "compat-persistent-key"
+		persistentKey := "persisted-random-key-material"
+
+		if err := os.WriteFile(filepath.Join(tmpDirCompat, PersistentKeyFileName), []byte(persistentKey), 0600); err != nil {
+			t.Fatalf("Failed to write persistent key file: %v", err)
+		}
+
+		pOld := &Persistence{
+			configDir:     tmpDirCompat,
+			encryptionKey: persistentKey,
+		}
+		persisted := PersistedLicense{LicenseKey: testKey}
+		jsonData, _ := json.Marshal(persisted)
+		encrypted, err := encryptWithKey(jsonData, pOld.deriveLegacyKeyFrom(persistentKey))
+		if err != nil {
+			t.Fatalf("Failed to encrypt license: %v", err)
+		}
+
+		licensePath := filepath.Join(tmpDirCompat, LicenseFileName)
+		encoded := base64.StdEncoding.EncodeToString(encrypted)
+		if err := os.WriteFile(licensePath, []byte(encoded), 0600); err != nil {
+			t.Fatalf("Failed to write legacy persistent-key license: %v", err)
+		}
+
+		pNew, err := NewPersistence(tmpDirCompat)
+		if err != nil {
+			t.Fatalf("Failed to create persistence: %v", err)
+		}
+
+		loaded, err := pNew.LoadWithMetadata()
+		if err != nil {
+			t.Fatalf("Failed to load license with legacy persistent-key derivation: %v", err)
+		}
 		if loaded.LicenseKey != testKey {
 			t.Errorf("Expected license key %s, got %s", testKey, loaded.LicenseKey)
 		}
@@ -253,6 +299,25 @@ func TestPersistence(t *testing.T) {
 			t.Fatal("license key should not remain in plaintext after migration rewrite")
 		}
 	})
+}
+
+func encryptWithKey(plaintext []byte, key []byte) ([]byte, error) {
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, err
+	}
+
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return nil, err
+	}
+
+	nonce := make([]byte, gcm.NonceSize())
+	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
+		return nil, err
+	}
+
+	return gcm.Seal(nonce, nonce, plaintext, nil), nil
 }
 
 func TestPersistenceEnforcesOwnerOnlyPermissions(t *testing.T) {

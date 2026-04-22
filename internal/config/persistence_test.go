@@ -1230,7 +1230,7 @@ func encryptExportPayload(plaintext []byte, passphrase string) ([]byte, error) {
 		return nil, err
 	}
 
-	key := pbkdf2.Key([]byte(passphrase), salt, 100000, 32, sha256.New)
+	key := pbkdf2.Key([]byte(passphrase), salt, 600000, 32, sha256.New)
 
 	block, err := aes.NewCipher(key)
 	if err != nil {
@@ -1260,7 +1260,7 @@ func decryptExportPayload(ciphertext []byte, passphrase string) ([]byte, error) 
 	salt := ciphertext[:32]
 	cipherbody := ciphertext[32:]
 
-	key := pbkdf2.Key([]byte(passphrase), salt, 100000, 32, sha256.New)
+	key := pbkdf2.Key([]byte(passphrase), salt, 600000, 32, sha256.New)
 
 	block, err := aes.NewCipher(key)
 	if err != nil {
