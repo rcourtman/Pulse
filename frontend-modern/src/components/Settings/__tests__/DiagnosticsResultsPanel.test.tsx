@@ -98,6 +98,61 @@ describe('DiagnosticsResultsPanel', () => {
         ],
         notes: ['Local pricing and activation events show at least one completed conversion.'],
       },
+      infrastructureOnboarding: {
+        enabled: true,
+        status: 'warning',
+        windowDays: 30,
+        summary: {
+          opened: 4,
+          api_path_selected: 2,
+          agent_path_selected: 1,
+          probe_detected: 1,
+          probe_no_match: 2,
+          probe_error: 0,
+          catalog_selected: 2,
+          credentials_opened: 1,
+          period: {
+            from: '2026-03-19T00:00:00Z',
+            to: '2026-04-18T00:00:00Z',
+          },
+        },
+        daily: [
+          {
+            day: '2026-04-17',
+            opened: 2,
+            api_path_selected: 1,
+            agent_path_selected: 1,
+            probe_detected: 0,
+            probe_no_match: 1,
+            probe_error: 0,
+            catalog_selected: 1,
+            credentials_opened: 0,
+          },
+          {
+            day: '2026-04-18',
+            opened: 2,
+            api_path_selected: 1,
+            agent_path_selected: 0,
+            probe_detected: 1,
+            probe_no_match: 1,
+            probe_error: 0,
+            catalog_selected: 1,
+            credentials_opened: 1,
+          },
+        ],
+        paths: [
+          { key: 'api', count: 2 },
+          { key: 'agent', count: 1 },
+        ],
+        platforms: [
+          {
+            key: 'truenas',
+            catalog_selected: 2,
+            credentials_opened: 1,
+          },
+        ],
+        notes: ['More probed addresses miss than detect a supported API-backed platform.'],
+      },
       errors: [],
     };
 
@@ -115,5 +170,9 @@ describe('DiagnosticsResultsPanel', () => {
     expect(screen.getByText('Self Hosted Plan')).toBeInTheDocument();
     expect(screen.getByText('Settings Self Hosted Billing Compare Prompt')).toBeInTheDocument();
     expect(screen.getByText(/Pricing 3/i)).toBeInTheDocument();
+    expect(screen.getByText('Infrastructure Onboarding')).toBeInTheDocument();
+    expect(screen.getByText('Credentials Opened')).toBeInTheDocument();
+    expect(screen.getByText('TrueNAS SCALE')).toBeInTheDocument();
+    expect(screen.getByText('API')).toBeInTheDocument();
   });
 });

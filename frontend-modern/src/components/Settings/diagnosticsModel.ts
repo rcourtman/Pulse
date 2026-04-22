@@ -126,6 +126,51 @@ export interface CommercialFunnelDiagnostic {
   error?: string;
 }
 
+export interface InfrastructureOnboardingStageCounts {
+  opened: number;
+  api_path_selected: number;
+  agent_path_selected: number;
+  probe_detected: number;
+  probe_no_match: number;
+  probe_error: number;
+  catalog_selected: number;
+  credentials_opened: number;
+}
+
+export interface InfrastructureOnboardingSummary extends InfrastructureOnboardingStageCounts {
+  period: {
+    from: string;
+    to: string;
+  };
+}
+
+export interface InfrastructureOnboardingDayBreakdown extends InfrastructureOnboardingStageCounts {
+  day: string;
+}
+
+export interface InfrastructureOnboardingPathBreakdown {
+  key: string;
+  count: number;
+}
+
+export interface InfrastructureOnboardingPlatformBreakdown {
+  key: string;
+  catalog_selected: number;
+  credentials_opened: number;
+}
+
+export interface InfrastructureOnboardingDiagnostic {
+  enabled: boolean;
+  status: 'active' | 'idle' | 'warning' | 'error' | 'unavailable';
+  windowDays: number;
+  summary: InfrastructureOnboardingSummary;
+  daily: InfrastructureOnboardingDayBreakdown[];
+  paths: InfrastructureOnboardingPathBreakdown[];
+  platforms: InfrastructureOnboardingPlatformBreakdown[];
+  notes?: string[];
+  error?: string;
+}
+
 export interface AIChatDiagnostic {
   enabled: boolean;
   running: boolean;
@@ -147,6 +192,7 @@ export interface DiagnosticsData {
   system: SystemDiagnostic;
   metricsStore?: MetricsStoreDiagnostic | null;
   commercialFunnel?: CommercialFunnelDiagnostic | null;
+  infrastructureOnboarding?: InfrastructureOnboardingDiagnostic | null;
   apiTokens?: APITokenDiagnostic | null;
   dockerAgents?: DockerAgentDiagnostic | null;
   alerts?: AlertsDiagnostic | null;

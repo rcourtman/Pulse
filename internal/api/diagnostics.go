@@ -28,20 +28,21 @@ import (
 
 // DiagnosticsInfo contains comprehensive diagnostic information
 type DiagnosticsInfo struct {
-	Version          string                      `json:"version"`
-	Runtime          string                      `json:"runtime"`
-	Uptime           float64                     `json:"uptime"`
-	Nodes            []NodeDiagnostic            `json:"nodes"`
-	PBS              []PBSDiagnostic             `json:"pbs"`
-	System           SystemDiagnostic            `json:"system"`
-	MetricsStore     *MetricsStoreDiagnostic     `json:"metricsStore,omitempty"`
-	CommercialFunnel *CommercialFunnelDiagnostic `json:"commercialFunnel,omitempty"`
-	Discovery        *DiscoveryDiagnostic        `json:"discovery,omitempty"`
-	APITokens        *APITokenDiagnostic         `json:"apiTokens,omitempty"`
-	DockerAgents     *DockerAgentDiagnostic      `json:"dockerAgents,omitempty"`
-	Alerts           *AlertsDiagnostic           `json:"alerts,omitempty"`
-	AIChat           *AIChatDiagnostic           `json:"aiChat,omitempty"`
-	Errors           []string                    `json:"errors"`
+	Version                  string                              `json:"version"`
+	Runtime                  string                              `json:"runtime"`
+	Uptime                   float64                             `json:"uptime"`
+	Nodes                    []NodeDiagnostic                    `json:"nodes"`
+	PBS                      []PBSDiagnostic                     `json:"pbs"`
+	System                   SystemDiagnostic                    `json:"system"`
+	MetricsStore             *MetricsStoreDiagnostic             `json:"metricsStore,omitempty"`
+	CommercialFunnel         *CommercialFunnelDiagnostic         `json:"commercialFunnel,omitempty"`
+	InfrastructureOnboarding *InfrastructureOnboardingDiagnostic `json:"infrastructureOnboarding,omitempty"`
+	Discovery                *DiscoveryDiagnostic                `json:"discovery,omitempty"`
+	APITokens                *APITokenDiagnostic                 `json:"apiTokens,omitempty"`
+	DockerAgents             *DockerAgentDiagnostic              `json:"dockerAgents,omitempty"`
+	Alerts                   *AlertsDiagnostic                   `json:"alerts,omitempty"`
+	AIChat                   *AIChatDiagnostic                   `json:"aiChat,omitempty"`
+	Errors                   []string                            `json:"errors"`
 	// NodeSnapshots captures the raw memory payload and derived usage Pulse last observed per node.
 	NodeSnapshots []monitoring.NodeMemorySnapshot `json:"nodeSnapshots"`
 	// GuestSnapshots captures recent per-guest memory breakdowns (VM/LXC) with the raw Proxmox fields.
@@ -91,6 +92,10 @@ func (d DiagnosticsInfo) NormalizeCollections() DiagnosticsInfo {
 	if d.CommercialFunnel != nil {
 		normalized := d.CommercialFunnel.NormalizeCollections()
 		d.CommercialFunnel = &normalized
+	}
+	if d.InfrastructureOnboarding != nil {
+		normalized := d.InfrastructureOnboarding.NormalizeCollections()
+		d.InfrastructureOnboarding = &normalized
 	}
 	if d.Discovery != nil {
 		normalized := d.Discovery.NormalizeCollections()
@@ -230,6 +235,34 @@ func (d CommercialFunnelDiagnostic) NormalizeCollections() CommercialFunnelDiagn
 	}
 	if d.Capabilities == nil {
 		d.Capabilities = []conversionFunnelDimensionBreakdown{}
+	}
+	if d.Notes == nil {
+		d.Notes = []string{}
+	}
+	return d
+}
+
+type InfrastructureOnboardingDiagnostic struct {
+	Enabled    bool                                                  `json:"enabled"`
+	Status     string                                                `json:"status"`
+	WindowDays int                                                   `json:"windowDays"`
+	Summary    conversionInfrastructureOnboardingSummary             `json:"summary"`
+	Daily      []conversionInfrastructureOnboardingDayBreakdown      `json:"daily"`
+	Paths      []conversionInfrastructureOnboardingPathBreakdown     `json:"paths"`
+	Platforms  []conversionInfrastructureOnboardingPlatformBreakdown `json:"platforms"`
+	Notes      []string                                              `json:"notes"`
+	Error      string                                                `json:"error,omitempty"`
+}
+
+func (d InfrastructureOnboardingDiagnostic) NormalizeCollections() InfrastructureOnboardingDiagnostic {
+	if d.Daily == nil {
+		d.Daily = []conversionInfrastructureOnboardingDayBreakdown{}
+	}
+	if d.Paths == nil {
+		d.Paths = []conversionInfrastructureOnboardingPathBreakdown{}
+	}
+	if d.Platforms == nil {
+		d.Platforms = []conversionInfrastructureOnboardingPlatformBreakdown{}
 	}
 	if d.Notes == nil {
 		d.Notes = []string{}
@@ -483,8 +516,84 @@ func buildCommercialFunnelDiagnostic(ctx context.Context, store *conversionStore
 	return &diag
 }
 
+func buildInfrastructureOnboardingDiagnostic(
+	ctx context.Context,
+	store *conversionStore,
+	now time.Time,
+) *InfrastructureOnboardingDiagnostic {
+	diag := (&InfrastructureOnboardingDiagnostic{
+		Enabled:    store != nil,
+		Status:     "idle",
+		WindowDays: infrastructureOnboardingDiagnosticsWindowDays,
+		Notes:      []string{},
+	}).NormalizeCollections()
+
+	if store == nil {
+		diag.Status = "unavailable"
+		diag.Error = "conversion store not initialized"
+		diag.Notes = append(diag.Notes, "Local infrastructure onboarding analytics are unavailable on this instance.")
+		return &diag
+	}
+
+	to := now.UTC().Truncate(24 * time.Hour).Add(24 * time.Hour)
+	from := to.AddDate(0, 0, -infrastructureOnboardingDiagnosticsWindowDays)
+	orgID := diagnosticsCommercialOrgID(ctx)
+
+	report, err := store.InfrastructureOnboardingReport(orgID, from, to)
+	if err != nil {
+		diag.Status = "error"
+		diag.Error = "failed to query local infrastructure onboarding analytics"
+		diag.Notes = append(diag.Notes, "Diagnostics could not read the local infrastructure onboarding report.")
+		return &diag
+	}
+
+	diag.Summary = report.Summary
+	diag.Daily = report.Daily
+	diag.Paths = report.Paths
+	diag.Platforms = report.Platforms
+
+	totalSignal := report.Summary.Opened +
+		report.Summary.APIPathSelected +
+		report.Summary.AgentPathSelected +
+		report.Summary.ProbeDetected +
+		report.Summary.ProbeNoMatch +
+		report.Summary.ProbeError +
+		report.Summary.CatalogSelected +
+		report.Summary.CredentialsOpened
+
+	switch {
+	case totalSignal == 0:
+		diag.Status = "idle"
+		diag.Notes = append(diag.Notes, "No infrastructure onboarding activity was recorded in the last 30 days.")
+	case report.Summary.Opened > 0 && report.Summary.CredentialsOpened == 0:
+		diag.Status = "warning"
+		diag.Notes = append(diag.Notes, "Infrastructure onboarding sessions are not reaching credential handoff in the current window.")
+	case report.Summary.ProbeNoMatch > report.Summary.ProbeDetected:
+		diag.Status = "warning"
+		diag.Notes = append(diag.Notes, "More probed addresses miss than detect a supported API-backed platform in the current window.")
+	case report.Summary.CredentialsOpened > 0:
+		diag.Status = "active"
+		diag.Notes = append(diag.Notes, "Infrastructure onboarding reached at least one credential handoff in the current window.")
+	default:
+		diag.Status = "active"
+	}
+
+	if report.Summary.ProbeNoMatch > 0 {
+		diag.Notes = append(diag.Notes, "Some probed addresses did not match a supported API-backed platform.")
+	}
+	if report.Summary.Opened > report.Summary.CredentialsOpened && report.Summary.CredentialsOpened > 0 {
+		diag.Notes = append(diag.Notes, "Some onboarding sessions drop before credentials open.")
+	}
+	if report.Summary.AgentPathSelected > 0 && report.Summary.APIPathSelected == 0 {
+		diag.Notes = append(diag.Notes, "Current onboarding activity is exclusively using the agent path.")
+	}
+
+	return &diag
+}
+
 const diagnosticsCacheTTL = 45 * time.Second
 const commercialFunnelDiagnosticsWindowDays = 30
+const infrastructureOnboardingDiagnosticsWindowDays = 30
 
 type cachedDiagnosticsEntry struct {
 	diag     DiagnosticsInfo
@@ -896,6 +1005,7 @@ func (r *Router) computeDiagnostics(ctx context.Context) DiagnosticsInfo {
 	diag.APITokens = buildAPITokenDiagnostic(r.config, r.monitor)
 	diag.MetricsStore = buildMetricsStoreDiagnostic(r.monitor)
 	diag.CommercialFunnel = buildCommercialFunnelDiagnostic(ctx, r.conversionStore, time.Now().UTC())
+	diag.InfrastructureOnboarding = buildInfrastructureOnboardingDiagnostic(ctx, r.conversionStore, time.Now().UTC())
 
 	// Test each configured node
 	for _, node := range r.config.PVEInstances {

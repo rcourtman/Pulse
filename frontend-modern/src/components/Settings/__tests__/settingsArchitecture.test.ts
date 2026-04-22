@@ -180,12 +180,15 @@ describe('settings architecture guardrails', () => {
     );
   });
 
-  it('keeps diagnostics commercial funnel rendering on the shared results/model boundary', () => {
+  it('keeps diagnostics funnel rendering on the shared results/model boundary', () => {
     expect(diagnosticsResultsPanelSource).toContain('Commercial Funnel');
+    expect(diagnosticsResultsPanelSource).toContain('Infrastructure Onboarding');
     expect(diagnosticsResultsPanelSource).toContain('titleCaseDelimitedLabel');
     expect(diagnosticsResultsPanelSource).not.toContain("apiFetchJSON('/api/diagnostics')");
 
     expect(diagnosticsModelSource).toContain('export interface CommercialFunnelDiagnostic');
     expect(diagnosticsModelSource).toContain('export interface CommercialFunnelSummary');
+    expect(diagnosticsModelSource).toContain('export interface InfrastructureOnboardingDiagnostic');
+    expect(diagnosticsModelSource).toContain('export interface InfrastructureOnboardingSummary');
   });
 });

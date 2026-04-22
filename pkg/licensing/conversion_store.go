@@ -71,6 +71,64 @@ type FunnelReport struct {
 	Capabilities []FunnelDimensionBreakdown `json:"capabilities"`
 }
 
+type InfrastructureOnboardingStageCounts struct {
+	Opened            int64 `json:"opened"`
+	APIPathSelected   int64 `json:"api_path_selected"`
+	AgentPathSelected int64 `json:"agent_path_selected"`
+	ProbeDetected     int64 `json:"probe_detected"`
+	ProbeNoMatch      int64 `json:"probe_no_match"`
+	ProbeError        int64 `json:"probe_error"`
+	CatalogSelected   int64 `json:"catalog_selected"`
+	CredentialsOpened int64 `json:"credentials_opened"`
+}
+
+type InfrastructureOnboardingSummary struct {
+	InfrastructureOnboardingStageCounts
+	Period struct {
+		From time.Time `json:"from"`
+		To   time.Time `json:"to"`
+	} `json:"period"`
+}
+
+type InfrastructureOnboardingDayBreakdown struct {
+	Day string `json:"day"`
+	InfrastructureOnboardingStageCounts
+}
+
+type InfrastructureOnboardingPathBreakdown struct {
+	Key   string `json:"key"`
+	Count int64  `json:"count"`
+}
+
+type InfrastructureOnboardingPlatformBreakdown struct {
+	Key               string `json:"key"`
+	CatalogSelected   int64  `json:"catalog_selected"`
+	CredentialsOpened int64  `json:"credentials_opened"`
+}
+
+type InfrastructureOnboardingReport struct {
+	Summary   InfrastructureOnboardingSummary             `json:"summary"`
+	Daily     []InfrastructureOnboardingDayBreakdown      `json:"daily"`
+	Paths     []InfrastructureOnboardingPathBreakdown     `json:"paths"`
+	Platforms []InfrastructureOnboardingPlatformBreakdown `json:"platforms"`
+}
+
+var infrastructureOnboardingEventTypes = []string{
+	EventInfrastructureOnboardingOpened,
+	EventInfrastructureOnboardingPathSelected,
+	EventInfrastructureOnboardingProbeResult,
+	EventInfrastructureOnboardingCatalogSelected,
+	EventInfrastructureOnboardingCredentialsOpened,
+}
+
+var infrastructureOnboardingPlatformCapabilities = map[string]struct{}{
+	"vmware":  {},
+	"truenas": {},
+	"pve":     {},
+	"pbs":     {},
+	"pmg":     {},
+}
+
 func applyFunnelStageCount(counts *FunnelStageCounts, eventType string, count int64) {
 	if counts == nil {
 		return
@@ -127,6 +185,90 @@ func compareFunnelBreakdowns(a, b FunnelDimensionBreakdown) int {
 	default:
 		return 0
 	}
+}
+
+func applyInfrastructureOnboardingStageCount(
+	counts *InfrastructureOnboardingStageCounts,
+	eventType string,
+	capability string,
+	count int64,
+) {
+	if counts == nil {
+		return
+	}
+
+	switch strings.TrimSpace(eventType) {
+	case EventInfrastructureOnboardingOpened:
+		counts.Opened += count
+	case EventInfrastructureOnboardingPathSelected:
+		switch strings.TrimSpace(capability) {
+		case "api":
+			counts.APIPathSelected += count
+		case "agent":
+			counts.AgentPathSelected += count
+		}
+	case EventInfrastructureOnboardingProbeResult:
+		switch strings.TrimSpace(capability) {
+		case "detected":
+			counts.ProbeDetected += count
+		case "no-match":
+			counts.ProbeNoMatch += count
+		case "error":
+			counts.ProbeError += count
+		}
+	case EventInfrastructureOnboardingCatalogSelected:
+		counts.CatalogSelected += count
+	case EventInfrastructureOnboardingCredentialsOpened:
+		counts.CredentialsOpened += count
+	}
+}
+
+func compareInfrastructureOnboardingPathBreakdowns(
+	a,
+	b InfrastructureOnboardingPathBreakdown,
+) int {
+	switch {
+	case a.Count != b.Count:
+		if a.Count > b.Count {
+			return -1
+		}
+		return 1
+	case a.Key < b.Key:
+		return -1
+	case a.Key > b.Key:
+		return 1
+	default:
+		return 0
+	}
+}
+
+func compareInfrastructureOnboardingPlatformBreakdowns(
+	a,
+	b InfrastructureOnboardingPlatformBreakdown,
+) int {
+	switch {
+	case a.CredentialsOpened != b.CredentialsOpened:
+		if a.CredentialsOpened > b.CredentialsOpened {
+			return -1
+		}
+		return 1
+	case a.CatalogSelected != b.CatalogSelected:
+		if a.CatalogSelected > b.CatalogSelected {
+			return -1
+		}
+		return 1
+	case a.Key < b.Key:
+		return -1
+	case a.Key > b.Key:
+		return 1
+	default:
+		return 0
+	}
+}
+
+func isInfrastructureOnboardingPlatformCapability(capability string) bool {
+	_, ok := infrastructureOnboardingPlatformCapabilities[strings.TrimSpace(capability)]
+	return ok
 }
 
 func ensureOwnerOnlyDir(dir string) error {
@@ -560,7 +702,7 @@ func (s *ConversionStore) FunnelDimensionBreakdown(orgID string, from, to time.T
 		}
 	}()
 
-	buckets := make(map[string]*FunnelDimensionBreakdown)
+	buckets := make(map[string]int)
 	for rows.Next() {
 		var key string
 		var eventType string
@@ -572,13 +714,13 @@ func (s *ConversionStore) FunnelDimensionBreakdown(orgID string, from, to time.T
 		if key == "" {
 			continue
 		}
-		entry, ok := buckets[key]
+		entryIndex, ok := buckets[key]
 		if !ok {
 			breakdown = append(breakdown, FunnelDimensionBreakdown{Key: key})
-			entry = &breakdown[len(breakdown)-1]
-			buckets[key] = entry
+			entryIndex = len(breakdown) - 1
+			buckets[key] = entryIndex
 		}
-		applyFunnelStageCount(&entry.FunnelStageCounts, eventType, count)
+		applyFunnelStageCount(&breakdown[entryIndex].FunnelStageCounts, eventType, count)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("failed to iterate funnel %s rows: %w", dimension, err)
@@ -615,6 +757,117 @@ func (s *ConversionStore) FunnelReport(orgID string, from, to time.Time) (*Funne
 		Surfaces:     surfaces,
 		Capabilities: capabilities,
 	}, nil
+}
+
+func (s *ConversionStore) InfrastructureOnboardingReport(
+	orgID string,
+	from,
+	to time.Time,
+) (*InfrastructureOnboardingReport, error) {
+	if s == nil || s.db == nil {
+		return nil, fmt.Errorf("conversion store is not initialized")
+	}
+	if from.IsZero() || to.IsZero() {
+		return nil, fmt.Errorf("from/to are required")
+	}
+
+	orgID = strings.TrimSpace(orgID)
+	if orgID == "" {
+		return nil, fmt.Errorf("org_id is required")
+	}
+
+	startDay := from.UTC().Truncate(24 * time.Hour)
+	endDay := to.UTC().Truncate(24 * time.Hour)
+	if !to.UTC().Equal(endDay) {
+		endDay = endDay.Add(24 * time.Hour)
+	}
+
+	report := &InfrastructureOnboardingReport{}
+	report.Summary.Period.From = from.UTC()
+	report.Summary.Period.To = to.UTC()
+
+	dayBuckets := make(map[string]*InfrastructureOnboardingDayBreakdown)
+	if startDay.Before(endDay) {
+		report.Daily = make([]InfrastructureOnboardingDayBreakdown, 0, int(endDay.Sub(startDay)/(24*time.Hour)))
+		for day := startDay; day.Before(endDay); day = day.Add(24 * time.Hour) {
+			entry := InfrastructureOnboardingDayBreakdown{Day: day.Format("2006-01-02")}
+			report.Daily = append(report.Daily, entry)
+			dayBuckets[entry.Day] = &report.Daily[len(report.Daily)-1]
+		}
+	}
+
+	pathBuckets := make(map[string]int)
+	platformBuckets := make(map[string]int)
+
+	recordEvent := func(event StoredConversionEvent) {
+		capability := strings.TrimSpace(event.Capability)
+		applyInfrastructureOnboardingStageCount(
+			&report.Summary.InfrastructureOnboardingStageCounts,
+			event.EventType,
+			capability,
+			1,
+		)
+
+		dayKey := event.CreatedAt.UTC().Format("2006-01-02")
+		if dayEntry := dayBuckets[dayKey]; dayEntry != nil {
+			applyInfrastructureOnboardingStageCount(
+				&dayEntry.InfrastructureOnboardingStageCounts,
+				event.EventType,
+				capability,
+				1,
+			)
+		}
+
+		if event.EventType == EventInfrastructureOnboardingPathSelected && capability != "" {
+			entryIndex, ok := pathBuckets[capability]
+			if !ok {
+				report.Paths = append(report.Paths, InfrastructureOnboardingPathBreakdown{Key: capability})
+				entryIndex = len(report.Paths) - 1
+				pathBuckets[capability] = entryIndex
+			}
+			report.Paths[entryIndex].Count++
+		}
+
+		if !isInfrastructureOnboardingPlatformCapability(capability) {
+			return
+		}
+		if event.EventType != EventInfrastructureOnboardingCatalogSelected &&
+			event.EventType != EventInfrastructureOnboardingCredentialsOpened {
+			return
+		}
+
+		entryIndex, ok := platformBuckets[capability]
+		if !ok {
+			report.Platforms = append(report.Platforms, InfrastructureOnboardingPlatformBreakdown{Key: capability})
+			entryIndex = len(report.Platforms) - 1
+			platformBuckets[capability] = entryIndex
+		}
+		switch event.EventType {
+		case EventInfrastructureOnboardingCatalogSelected:
+			report.Platforms[entryIndex].CatalogSelected++
+		case EventInfrastructureOnboardingCredentialsOpened:
+			report.Platforms[entryIndex].CredentialsOpened++
+		}
+	}
+
+	for _, eventType := range infrastructureOnboardingEventTypes {
+		events, err := s.Query(orgID, from, to, eventType)
+		if err != nil {
+			return nil, err
+		}
+		for _, event := range events {
+			recordEvent(event)
+		}
+	}
+
+	sort.SliceStable(report.Paths, func(i, j int) bool {
+		return compareInfrastructureOnboardingPathBreakdowns(report.Paths[i], report.Paths[j]) < 0
+	})
+	sort.SliceStable(report.Platforms, func(i, j int) bool {
+		return compareInfrastructureOnboardingPlatformBreakdowns(report.Platforms[i], report.Platforms[j]) < 0
+	})
+
+	return report, nil
 }
 
 func (s *ConversionStore) Close() error {
