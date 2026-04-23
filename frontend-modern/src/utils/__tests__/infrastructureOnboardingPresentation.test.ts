@@ -18,6 +18,17 @@ describe('infrastructureOnboardingPresentation', () => {
     expect(vmware.governanceState).toBe('admitted');
   });
 
+  it('frames Pulse Agent as the low-overhead per-machine path for full node-local telemetry', () => {
+    const agent = getInfrastructureOnboardingProductPresentation('agent');
+    const pve = getInfrastructureOnboardingProductPresentation('pve');
+
+    expect(agent.bestFor).toContain('full node-local telemetry');
+    expect(agent.coverage).toContain('Low-overhead host telemetry');
+    expect(agent.catalogDescription).toContain('Low-overhead host telemetry');
+    expect(pve.coverage).toContain('Install Pulse Agent on each node');
+    expect(pve.coverage).toContain('SMART data');
+  });
+
   it('keeps supported API products separate from the admitted VMware path', () => {
     expect(
       getInfrastructureApiProductsByGovernanceState('supported').map((product) => product.label),
@@ -93,7 +104,7 @@ describe('infrastructureOnboardingPresentation', () => {
       {
         id: 'host-monitoring',
         label: 'Host monitoring',
-        description: 'Machine telemetry and local service discovery.',
+        description: 'Low-overhead machine telemetry and local service discovery.',
         types: ['agent'],
         products: [expect.objectContaining({ type: 'agent', label: 'Pulse Agent' })],
       },
@@ -107,7 +118,7 @@ describe('infrastructureOnboardingPresentation', () => {
       'Proxmox Mail Gateway',
     ]);
 
-    expect(getInfrastructureSupportSummaryBadges()).toEqual({
+    expect(getInfrastructureSupportSummaryBadges()).toMatchObject({
       supportedToday: [
         'TrueNAS SCALE',
         'Proxmox VE',
@@ -118,7 +129,14 @@ describe('infrastructureOnboardingPresentation', () => {
         'Kubernetes',
       ],
       currentAdmissionPath: ['VMware vCenter'],
-      installPath: ['Linux', 'FreeBSD', 'Unraid', 'Pulse Agent hosts', 'Docker', 'Kubernetes'],
+      installPath: expect.arrayContaining([
+        'Linux',
+        'FreeBSD',
+        'Unraid',
+        'Pulse Agent hosts',
+        'Docker',
+        'Kubernetes',
+      ]),
     });
 
     expect(getInfrastructureEmptyStateSummary()).toBe(

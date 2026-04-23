@@ -137,6 +137,17 @@ export const InfrastructureInstallerSection: Component = () => {
       </Show>
 
       <div class="space-y-5">
+        <div class="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-950 dark:border-emerald-700 dark:bg-emerald-900 dark:text-emerald-50">
+          <p class="font-semibold">Recommended install model</p>
+          <p class="mt-1 text-xs text-emerald-800 dark:text-emerald-200">
+            Pulse Agent is a low-overhead background service. Install it on each machine where
+            you want full node-local telemetry such as temperatures, SMART disk health, services,
+            Docker, or Kubernetes coverage. For Proxmox clusters, keep the cluster API
+            connection for platform inventory and add the agent to each node for host-level
+            augmentation.
+          </p>
+        </div>
+
         <div class="space-y-3">
           <div class="space-y-1">
             <p class="text-sm font-semibold text-base-content">
@@ -310,8 +321,9 @@ export const InfrastructureInstallerSection: Component = () => {
                     Installation commands
                   </h4>
                   <p class={`mt-0.5 text-xs text-muted ${state.requiresToken() ? 'ml-6' : ''}`}>
-                    Copy the default command for the first host first. Open advanced options only if
-                    this machine needs custom connection or install settings.
+                    Copy the default command for the first host first, then repeat the install on
+                    each machine where you want full node-local telemetry. Open advanced options
+                    only if this machine needs custom connection or install settings.
                   </p>
                 </div>
               </div>

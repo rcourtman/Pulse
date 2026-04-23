@@ -296,7 +296,7 @@ export const INSTALL_PROFILE_OPTIONS: InstallProfileOption[] = [
     value: 'auto',
     label: 'Auto-detect (recommended)',
     description:
-      'Let the installer detect Docker, Kubernetes, and Proxmox automatically. On Proxmox hosts, auto mode leaves the type unpinned so the agent can register every detected PVE / PBS service.',
+      'Let the installer detect Docker, Kubernetes, and Proxmox automatically. This is the recommended low-overhead per-machine install path. On Proxmox hosts, auto mode leaves the type unpinned so the agent can register every detected PVE / PBS service.',
     flags: [],
   },
   {
@@ -314,13 +314,15 @@ export const INSTALL_PROFILE_OPTIONS: InstallProfileOption[] = [
   {
     value: 'proxmox-pve',
     label: 'Proxmox VE node',
-    description: 'Force Proxmox integration and register as a PVE node.',
+    description:
+      'Force Proxmox integration and register as a PVE node. Install on each cluster member when you want full node-local telemetry such as temperatures and SMART data.',
     flags: ['--enable-proxmox', '--proxmox-type pve'],
   },
   {
     value: 'proxmox-pbs',
     label: 'Proxmox Backup node',
-    description: 'Force Proxmox integration and register as a PBS node.',
+    description:
+      'Force Proxmox integration and register as a PBS node while keeping local host telemetry on that machine.',
     flags: ['--enable-proxmox', '--proxmox-type pbs'],
   },
 ];

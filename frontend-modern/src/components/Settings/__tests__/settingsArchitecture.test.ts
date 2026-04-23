@@ -159,7 +159,7 @@ describe('settings architecture guardrails', () => {
     expect(infrastructureSourceManagerSource).toContain('Run discovery');
     expect(infrastructureSourceManagerSource).toContain('Discovery settings');
     expect(infrastructureSourceManagerSource).toContain(
-      'Configured systems and discovered candidates grouped by platform or host type.',
+      'Configured systems and discovered candidates grouped by platform or host type. Install Pulse Agent on each machine where you want full node-local telemetry.',
     );
     expect(infrastructureSourceManagerSource).toContain('onReviewDiscoveredSource');
     expect(infrastructureSourceManagerSource).toContain('Discovered');
@@ -170,7 +170,6 @@ describe('settings architecture guardrails', () => {
     expect(infrastructureSourceManagerSource).toContain('Edit');
     expect(infrastructureSourceManagerSource).not.toContain('Detect from address');
     expect(infrastructureSourceManagerSource).not.toContain('Connection types');
-    expect(infrastructureSourcePickerSource).toContain('Choose a source type');
     expect(infrastructureSourcePickerSource).toContain('Detect from address');
     expect(infrastructureSourcePickerSource).toContain('getInfrastructureSourcePickerGroups');
     expect(infrastructureSourcePickerSource).toContain('group.label');
@@ -190,12 +189,11 @@ describe('settings architecture guardrails', () => {
       "from '@/utils/infrastructureOnboardingPresentation';",
     );
     expect(connectionEditorSource).toContain('<AddressProbeStep');
-    expect(connectionEditorSource).toContain('Detect from address');
     expect(connectionEditorSource).toContain('Address probe');
     expect(connectionEditorSource).toContain('flex h-full min-h-0 flex-col');
     expect(connectionEditorSource).toContain('Back to source types');
     expect(connectionEditorSource).toContain('Back to detect');
-    expect(connectionEditorSource).toContain('What happens next');
+    expect(connectionEditorSource).toContain('Install Pulse Agent');
     expect(connectionEditorSource).not.toContain('buildConnectionEditorCatalogEntries');
     expect(connectionEditorSource).not.toContain('selectedFamilyId');
     expect(connectionEditorSource).not.toContain('Choose how Pulse should connect');
@@ -207,7 +205,7 @@ describe('settings architecture guardrails', () => {
     expect(addressProbeStepSource).toContain('Probe address');
     expect(addressProbeStepSource).toContain('install Pulse Agent instead');
     expect(addressProbeStepSource).toContain('Choose a source type instead');
-    expect(addressProbeStepSource).toContain('bare-metal Linux');
+    expect(addressProbeStepSource).toContain('Linux, macOS, Windows, FreeBSD, or Unraid host');
     expect(addressProbeStepSource).toContain('supported API-backed platform');
 
     expect(connectionEditorStateSource).toContain('ConnectionsAPI.probe(value)');

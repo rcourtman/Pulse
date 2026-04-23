@@ -159,8 +159,18 @@ describe('infrastructure operations model', () => {
 
     expect(autoProfile).toBeDefined();
     expect(autoProfile?.flags).toEqual([]);
+    expect(autoProfile?.description).toContain('recommended low-overhead per-machine install path');
     expect(autoProfile?.description).toContain('leaves the type unpinned');
     expect(autoProfile?.description).toContain('every detected PVE / PBS service');
+  });
+
+  it('keeps Proxmox node profiles explicit about per-node telemetry coverage', () => {
+    const pveProfile = INSTALL_PROFILE_OPTIONS.find((option) => option.value === 'proxmox-pve');
+    const pbsProfile = INSTALL_PROFILE_OPTIONS.find((option) => option.value === 'proxmox-pbs');
+
+    expect(pveProfile?.description).toContain('each cluster member');
+    expect(pveProfile?.description).toContain('SMART data');
+    expect(pbsProfile?.description).toContain('local host telemetry');
   });
 
   it('keeps the embedded installer section on the canonical host-install framing', () => {
@@ -170,6 +180,12 @@ describe('infrastructure operations model', () => {
     expect(infrastructureInstallerSectionSource).toContain('Generate install token');
     expect(infrastructureInstallerSectionSource).toContain('Generate token');
     expect(infrastructureInstallerSectionSource).not.toContain('Add infrastructure');
+    expect(infrastructureInstallerSectionSource).toContain('Pulse Agent is a low-overhead background service.');
+    expect(infrastructureInstallerSectionSource).toContain(
+      'For Proxmox clusters, keep the cluster API',
+    );
+    expect(infrastructureInstallerSectionSource).toContain('host-level');
+    expect(infrastructureInstallerSectionSource).toContain('augmentation.');
   });
 
   it('does not reintroduce the retired reporting state hook on the operations state', async () => {

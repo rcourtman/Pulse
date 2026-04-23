@@ -195,7 +195,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
   return (
     <SettingsPanel
       title="Infrastructure systems"
-      description="Configured systems and discovered candidates grouped by platform or host type."
+      description="Configured systems and discovered candidates grouped by platform or host type. Install Pulse Agent on each machine where you want full node-local telemetry."
       noPadding
       icon={<Server class="h-5 w-5" strokeWidth={2} />}
     >

@@ -52,9 +52,10 @@ const PRODUCT_PRESENTATION: Record<
 > = {
   agent: {
     label: 'Pulse Agent',
-    bestFor: 'Linux, FreeBSD, and compatible hosts such as Unraid',
-    coverage: 'Host telemetry, SMART, services, Docker, Kubernetes',
-    catalogDescription: 'Host telemetry, services, Docker, Kubernetes',
+    bestFor:
+      'Linux, macOS, Windows, FreeBSD, and compatible hosts such as Unraid. Recommended on each machine where you want full node-local telemetry.',
+    coverage: 'Low-overhead host telemetry, SMART, services, Docker, and Kubernetes',
+    catalogDescription: 'Low-overhead host telemetry, services, Docker, Kubernetes',
     autoDetect: false,
   },
   vmware: {
@@ -76,7 +77,8 @@ const PRODUCT_PRESENTATION: Record<
   pve: {
     label: 'Proxmox VE',
     bestFor: 'Virtualization clusters and standalone hypervisors',
-    coverage: 'VMs, containers, storage, cluster health',
+    coverage:
+      'VMs, containers, storage, and cluster health. Install Pulse Agent on each node when you want full node-local telemetry such as temperatures and SMART data',
     catalogDescription: 'VMs, containers, storage, cluster health',
     autoDetect: true,
     sourcePlatformId: 'proxmox-pve',
@@ -149,9 +151,11 @@ export const INFRASTRUCTURE_ONBOARDING_PATHS: Record<
   agent: {
     title: 'Install Pulse Agent',
     description:
-      'Use the agent when you want machine telemetry, or when the system does not expose a management API Pulse can connect to directly.',
-    bestFor: 'Linux, FreeBSD, and compatible hosts such as Unraid',
-    coverage: 'CPU temperature, disk SMART, services, network metrics, Docker, Kubernetes',
+      'Use the agent when you want low-overhead machine telemetry, or when the system does not expose a management API Pulse can connect to directly.',
+    bestFor:
+      'Linux, macOS, Windows, FreeBSD, and compatible hosts such as Unraid. Recommended on each machine where you want full node-local telemetry.',
+    coverage:
+      'Low-overhead CPU temperature, disk SMART, services, network metrics, Docker, and Kubernetes telemetry',
   },
 };
 
@@ -193,7 +197,7 @@ const SOURCE_PICKER_GROUPS: InfrastructureSourcePickerGroupPresentation[] = [
   {
     id: 'host-monitoring',
     label: 'Host monitoring',
-    description: 'Machine telemetry and local service discovery.',
+    description: 'Low-overhead machine telemetry and local service discovery.',
     types: ['agent'],
   },
 ];

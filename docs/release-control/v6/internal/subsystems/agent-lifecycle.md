@@ -2040,6 +2040,14 @@ inventory. It may not present Docker, Kubernetes, Proxmox, or TrueNAS as
 competing primary onboarding paths, nor fall back to logo-led feature
 brochure copy that obscures the unified-resource contract the wizard is
 supposed to introduce.
+That same onboarding/install guidance must also preserve the simple fleet
+mental model for clustered and API-backed systems: platform connections own
+cluster or appliance inventory, while Pulse Agent remains the low-overhead
+per-machine install path for full node-local telemetry. Settings and first-run
+install copy may recommend installing the agent on every machine that needs
+temperatures, SMART disk data, services, Docker, or Kubernetes telemetry, but
+they may not imply that API-backed cluster visibility or best-effort peer
+augmentation is equivalent to a local agent install on that machine.
 That same connected-systems summary must preserve canonical local operator
 identity for newly connected infrastructure. When governed resources such as
 PBS or PMG appear in the setup-completion poll, the surface must show their
