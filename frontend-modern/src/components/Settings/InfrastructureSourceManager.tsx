@@ -44,15 +44,7 @@ const utilityToolbarButtonClass =
   'inline-flex items-center gap-1.5 rounded-md px-1 py-1 text-sm font-medium text-muted transition-colors hover:text-base-content disabled:cursor-not-allowed disabled:opacity-60';
 const discoveryRowClass =
   'border-b border-border-subtle bg-blue-50/30 hover:bg-blue-50/40 dark:bg-blue-950/10 dark:hover:bg-blue-950/20';
-const childTreeWrapperClass = 'relative min-w-0 pl-3 sm:pl-3.5';
 const wrappedFieldClass = 'whitespace-normal break-words leading-4';
-
-const childTreeBranch = (isLastChild: boolean) => (
-  <span aria-hidden="true" class="pointer-events-none absolute inset-y-0 left-0 w-3">
-    <span class={`absolute left-[5px] top-0 w-px bg-border ${isLastChild ? 'h-1/2' : 'h-full'}`} />
-    <span class="absolute left-[5px] top-1/2 h-px w-2 -translate-y-1/2 bg-border" />
-  </span>
-);
 
 const sortRows = (rows: readonly InfrastructureSystemRow[]): InfrastructureSystemRow[] =>
   [...rows].sort((left, right) => left.name.localeCompare(right.name));
@@ -374,44 +366,38 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
 
                   <Show when={configuredRows().length > 0}>
                     <For each={configuredRows()}>
-                      {(row, index) => {
-                        const isLastConfigured = () =>
-                          index() === configuredRows().length - 1 && discoveredRows().length === 0;
-
+                      {(row) => {
                         return (
                           <>
                             <TableRow class="border-b border-border-subtle">
                               <TableCell class="py-1 pl-3 pr-3 align-top">
-                                <div class={childTreeWrapperClass}>
-                                  {childTreeBranch(isLastConfigured())}
-                                  <div class="min-w-0 space-y-0.5">
-                                    <div class="min-w-0 flex-1">
-                                      <div
-                                        class={`text-[13px] text-base-content/80 ${wrappedFieldClass}`}
-                                        title={row.name}
-                                      >
-                                        {row.name}
-                                      </div>
+                                <div class="min-w-0 space-y-0.5">
+                                  <div class="min-w-0 flex-1">
+                                    <div
+                                      class={`text-[13px] text-base-content/80 ${wrappedFieldClass}`}
+                                      title={row.name}
+                                    >
+                                      {row.name}
                                     </div>
-                                    <Show when={row.sourceBadges.length > 0}>
-                                      <div class="flex flex-wrap items-center gap-1">
-                                        <For each={row.sourceBadges}>
-                                          {(badge) => (
-                                            <span
-                                              class="inline-flex items-center rounded-full border border-border bg-surface-alt px-1.5 py-0 text-[9px] font-medium leading-4 text-muted"
-                                              title={
-                                                badge === 'Pulse Agent'
-                                                  ? pulseAgentBadgeTitle(row)
-                                                  : undefined
-                                              }
-                                            >
-                                              {badge}
-                                            </span>
-                                          )}
-                                        </For>
-                                      </div>
-                                    </Show>
                                   </div>
+                                  <Show when={row.sourceBadges.length > 0}>
+                                    <div class="flex flex-wrap items-center gap-1">
+                                      <For each={row.sourceBadges}>
+                                        {(badge) => (
+                                          <span
+                                            class="inline-flex items-center rounded-full border border-border bg-surface-alt px-1.5 py-0 text-[9px] font-medium leading-4 text-muted"
+                                            title={
+                                              badge === 'Pulse Agent'
+                                                ? pulseAgentBadgeTitle(row)
+                                                : undefined
+                                            }
+                                          >
+                                            {badge}
+                                          </span>
+                                        )}
+                                      </For>
+                                    </div>
+                                  </Show>
                                 </div>
                               </TableCell>
 
@@ -504,20 +490,16 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
 
                   <Show when={discoveredRows().length > 0}>
                     <For each={discoveredRows()}>
-                      {(server, index) => {
-                        const isLastDiscovered = () => index() === discoveredRows().length - 1;
+                      {(server) => {
                         return (
                           <TableRow class={discoveryRowClass}>
                             <TableCell class="py-1 pl-3 pr-3 align-top">
-                              <div class={childTreeWrapperClass}>
-                                {childTreeBranch(isLastDiscovered())}
-                                <div class="min-w-0 flex-1">
-                                  <div
-                                    class={`text-[13px] text-base-content/85 ${wrappedFieldClass}`}
-                                    title={`${discoveredServerName(server)}${server.version ? ` · ${server.version}` : ''}`}
-                                  >
-                                    {discoveredServerName(server)}
-                                  </div>
+                              <div class="min-w-0 flex-1">
+                                <div
+                                  class={`text-[13px] text-base-content/85 ${wrappedFieldClass}`}
+                                  title={`${discoveredServerName(server)}${server.version ? ` · ${server.version}` : ''}`}
+                                >
+                                  {discoveredServerName(server)}
                                 </div>
                               </div>
                             </TableCell>
