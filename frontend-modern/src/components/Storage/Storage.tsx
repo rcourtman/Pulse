@@ -28,6 +28,7 @@ const Storage: Component = () => {
     setSearch,
     sourceFilter,
     setSourceFilter,
+    healthFilter,
     sortKey,
     setSortKey,
     sortDirection,
@@ -76,11 +77,7 @@ const Storage: Component = () => {
   } = useStoragePageModel();
 
   return (
-    <div
-      ref={setClearSurfaceRootRef}
-      class="space-y-4"
-      data-testid="storage-page"
-    >
+    <div ref={setClearSurfaceRootRef} class="space-y-4" data-testid="storage-page">
       <PageHeader
         title="Storage"
         description="Review capacity, node health, pools, and storage pressure across connected clusters and devices."
@@ -89,6 +86,9 @@ const Storage: Component = () => {
       <StickySummarySection desktopOnly={false}>
         <StoragePageSummary
           filteredRecords={filteredRecords}
+          search={search}
+          sourceFilter={sourceFilter}
+          healthFilter={healthFilter}
           selectedNodeId={selectedNodeId}
           nodeOptions={nodeOptions}
           physicalDisks={physicalDisks}
@@ -107,10 +107,11 @@ const Storage: Component = () => {
           onJumpToActiveRow={jumpToActiveStorageRow}
           onScopeToDegradedPools={() => {
             setView('pools');
-            setStorageFilterStatus('warning');
+            setStorageFilterStatus('attention');
           }}
           onScopeToFailingDisks={() => {
             setView('disks');
+            setStorageFilterStatus('attention');
           }}
         />
       </StickySummarySection>
@@ -154,6 +155,8 @@ const Storage: Component = () => {
           view={view}
           physicalDisks={physicalDisks}
           nodes={nodes}
+          sourceFilter={sourceFilter}
+          healthFilter={healthFilter}
           selectedNodeId={selectedNodeId}
           search={search}
           groupedRecords={groupedRecords}

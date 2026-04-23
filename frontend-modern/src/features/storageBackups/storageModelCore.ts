@@ -1,5 +1,6 @@
-import type { NormalizedHealth, StorageRecord } from './models';
+import type { NormalizedHealth, StorageHealthFilter, StorageRecord } from './models';
 import { normalizeStorageSourceKey, orderStorageSourceKeys } from '@/utils/storageSources';
+import { matchesStorageNodeTerms, parseStorageSearchQuery } from './storageSearchQuery';
 import {
   getStorageRecordActionSummary,
   getStorageRecordContent,
@@ -82,6 +83,11 @@ export const buildStorageSourceOptions = (records: StorageRecord[]): string[] =>
 
 export const matchesStorageRecordSearch = (record: StorageRecord, query: string): boolean => {
   if (!query) return true;
+  const parsed = parseStorageSearchQuery(query);
+  if (!matchesStorageNodeTerms(getStorageRecordNodeHints(record), parsed.nodeTerms)) {
+    return false;
+  }
+  if (parsed.freeTerms.length === 0) return true;
   const haystack = [
     record.name,
     record.category,
@@ -103,15 +109,26 @@ export const matchesStorageRecordSearch = (record: StorageRecord, query: string)
     .filter(Boolean)
     .join(' ')
     .toLowerCase();
-  return haystack.includes(query);
+  return parsed.freeTerms.every((term) => haystack.includes(term));
 };
 
 export interface FilterStorageRecordsOptions {
   sourceFilter: string;
-  healthFilter: 'all' | NormalizedHealth;
+  healthFilter: StorageHealthFilter;
   selectedNode: StorageNodeOption | null;
   search: string;
 }
+
+export const matchesStorageHealthFilter = (
+  health: NormalizedHealth,
+  filter: StorageHealthFilter,
+): boolean => {
+  if (filter === 'all') return true;
+  if (filter === 'attention') {
+    return health === 'warning' || health === 'critical' || health === 'offline';
+  }
+  return health === filter;
+};
 
 export const filterStorageRecords = (
   records: StorageRecord[],
@@ -125,9 +142,7 @@ export const filterStorageRecords = (
         ? true
         : normalizeStorageSourceKey(record.source.platform) === selectedSource,
     )
-    .filter((record) =>
-      options.healthFilter === 'all' ? true : record.health === options.healthFilter,
-    )
+    .filter((record) => matchesStorageHealthFilter(record.health, options.healthFilter))
     .filter((record) => matchesStorageRecordNode(record, options.selectedNode))
     .filter((record) => matchesStorageRecordSearch(record, query));
 };

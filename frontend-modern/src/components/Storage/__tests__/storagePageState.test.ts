@@ -1,7 +1,7 @@
 import { createSignal } from 'solid-js';
 import { describe, expect, it } from 'vitest';
 import type { Resource } from '@/types/resource';
-import type { NormalizedHealth, StorageRecord } from '@/features/storageBackups/models';
+import type { StorageHealthFilter, StorageRecord } from '@/features/storageBackups/models';
 import type { StorageGroupKey, StorageSortKey } from '@/components/Storage/useStorageModel';
 import {
   buildStorageNodeFilterOptions,
@@ -75,29 +75,29 @@ const makeDisk = (overrides: Partial<Resource> = {}): Resource =>
     ...overrides,
   }) as Resource;
 
-const makeStorageRecord = (overrides: Partial<StorageRecord> = {}): StorageRecord =>
-  ({
-    id: 'storage-1',
-    name: 'ceph-pool',
-    category: 'pool',
-    health: 'healthy',
-    location: { label: 'pve1', scope: 'node' },
-    capacity: { totalBytes: 100, usedBytes: 40, freeBytes: 60, usagePercent: 40 },
-    capabilities: ['capacity', 'replication'],
-    source: {
-      platform: 'proxmox-pve',
-      family: 'virtualization',
-      origin: 'resource',
-      adapterId: 'resource-storage',
-    },
-    observedAt: Date.now(),
-    details: { type: 'rbd' },
-    ...overrides,
-  });
+const makeStorageRecord = (overrides: Partial<StorageRecord> = {}): StorageRecord => ({
+  id: 'storage-1',
+  name: 'ceph-pool',
+  category: 'pool',
+  health: 'healthy',
+  location: { label: 'pve1', scope: 'node' },
+  capacity: { totalBytes: 100, usedBytes: 40, freeBytes: 60, usagePercent: 40 },
+  capabilities: ['capacity', 'replication'],
+  source: {
+    platform: 'proxmox-pve',
+    family: 'virtualization',
+    origin: 'resource',
+    adapterId: 'resource-storage',
+  },
+  observedAt: Date.now(),
+  details: { type: 'rbd' },
+  ...overrides,
+});
 
 describe('storagePageState', () => {
   it('normalizes storage query state canonically', () => {
     expect(normalizeStorageHealthFilter('available')).toBe('healthy');
+    expect(normalizeStorageHealthFilter('needs-attention')).toBe('attention');
     expect(normalizeStorageSortKey(' usage ')).toBe('usage');
     expect(normalizeStorageSortKey('usage')).toBe('usage');
     expect(normalizeStorageSortKey('weird')).toBe('priority');
@@ -112,7 +112,9 @@ describe('storagePageState', () => {
     expect(normalizeStorageSortDirection('bad')).toBe('desc');
     expect(getStorageFilterGroupBy('node')).toBe('node');
     expect(getStorageStatusFilterValue('healthy')).toBe('available');
+    expect(getStorageStatusFilterValue('attention')).toBe('attention');
     expect(toStorageHealthFilterValue('available')).toBe('healthy');
+    expect(toStorageHealthFilterValue('attention')).toBe('attention');
     expect(getStorageNodeFilterLabel('pools')).toBe('All Nodes');
     expect(getStorageNodeFilterLabel('disks')).toBe('All Disk Hosts');
     expect(DEFAULT_STORAGE_VIEW).toBe('pools');
@@ -129,6 +131,7 @@ describe('storagePageState', () => {
     ]);
     expect(STORAGE_STATUS_FILTER_OPTIONS.map((option) => option.value)).toEqual([
       'all',
+      'attention',
       'available',
       'warning',
       'critical',
@@ -145,7 +148,10 @@ describe('storagePageState', () => {
 
   it('derives canonical ceph and node state helpers', () => {
     const record = makeStorageRecord();
-    const nodes = [makeNode(), makeNode({ id: 'node-2', name: 'pve2', status: 'offline', uptime: 0 })];
+    const nodes = [
+      makeNode(),
+      makeNode({ id: 'node-2', name: 'pve2', status: 'offline', uptime: 0 }),
+    ];
     const nodeOptions = buildStorageNodeOptions(nodes);
     const diskNodeOptions = filterStorageDiskNodeOptions(nodeOptions, [makeDisk()]);
 
@@ -219,7 +225,7 @@ describe('storagePageState', () => {
   it('builds storage route fields from shared defaults and normalizers', () => {
     const [view, setView] = createSignal<'pools' | 'disks'>('pools');
     const [sourceFilter, setSourceFilter] = createSignal('all');
-    const [healthFilter, setHealthFilter] = createSignal<'all' | NormalizedHealth>('all');
+    const [healthFilter, setHealthFilter] = createSignal<StorageHealthFilter>('all');
     const [selectedNodeId, setSelectedNodeId] = createSignal('all');
     const [groupBy, setGroupBy] = createSignal<StorageGroupKey>('none');
     const [sortKey, setSortKey] = createSignal<StorageSortKey>('priority');
@@ -253,7 +259,9 @@ describe('storagePageState', () => {
     expect(fields.source?.write?.('all')).toBeNull();
     expect(fields.source?.write?.(' PVE ' as any)).toBe('proxmox-pve');
     expect(fields.status?.read({ status: 'available' } as any)).toBe('healthy');
+    expect(fields.status?.read({ status: 'attention' } as any)).toBe('attention');
     expect(fields.status?.write?.('healthy')).toBe('available');
+    expect(fields.status?.write?.('attention')).toBe('attention');
     expect(fields.status?.write?.('warning')).toBe('warning');
     expect(fields.status?.write?.('all')).toBeNull();
     expect(fields.node?.read({ node: ' node-1 ' } as any)).toBe('node-1');

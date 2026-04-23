@@ -1,5 +1,5 @@
 import type { Accessor } from 'solid-js';
-import type { NormalizedHealth, StorageRecord } from '@/features/storageBackups/models';
+import type { StorageHealthFilter, StorageRecord } from '@/features/storageBackups/models';
 import { isCephStorageRecord } from '@/features/storageBackups/cephRecordPresentation';
 import type { Resource } from '@/types/resource';
 import { getProxmoxData } from '@/utils/resourcePlatformData';
@@ -12,6 +12,7 @@ import type { StorageRouteStateFields } from './useStorageRouteState';
 export type StorageView = 'pools' | 'disks';
 export type StorageStatusFilterValue =
   | 'all'
+  | 'attention'
   | 'available'
   | 'warning'
   | 'critical'
@@ -56,6 +57,7 @@ export const DEFAULT_STORAGE_SORT_OPTIONS: Array<{ value: StorageSortKey; label:
 
 export const STORAGE_STATUS_FILTER_OPTIONS: StorageOption[] = [
   { value: 'all', label: 'All' },
+  { value: 'attention', label: 'Needs attention' },
   { value: 'available', label: 'Healthy' },
   { value: 'warning', label: 'Warning' },
   { value: 'critical', label: 'Critical' },
@@ -70,9 +72,18 @@ export const STORAGE_GROUP_BY_OPTIONS: StorageOption[] = [
   { value: 'status', label: 'By Status' },
 ];
 
-export const normalizeStorageHealthFilter = (value: string): 'all' | NormalizedHealth => {
+export const normalizeStorageHealthFilter = (value: string): StorageHealthFilter => {
   const normalized = (value || '').trim().toLowerCase();
   if (!normalized || normalized === 'all') return 'all';
+  if (
+    normalized === 'attention' ||
+    normalized === 'needs-attention' ||
+    normalized === 'issue' ||
+    normalized === 'issues' ||
+    normalized === 'unhealthy'
+  ) {
+    return 'attention';
+  }
   if (normalized === 'available' || normalized === 'online' || normalized === 'healthy') {
     return 'healthy';
   }
@@ -130,17 +141,19 @@ export const getStorageFilterGroupBy = (
   value === 'type' || value === 'status' || value === 'none' ? value : 'node';
 
 export const getStorageStatusFilterValue = (
-  value: 'all' | NormalizedHealth,
+  value: StorageHealthFilter,
 ): StorageStatusFilterValue => {
   if (value === 'all') return 'all';
+  if (value === 'attention') return 'attention';
   if (value === 'healthy') return 'available';
   return value;
 };
 
 export const toStorageHealthFilterValue = (
   value: StorageStatusFilterValue,
-): 'all' | NormalizedHealth => {
+): StorageHealthFilter => {
   if (value === 'all') return 'all';
+  if (value === 'attention') return 'attention';
   if (value === 'available') return 'healthy';
   return value;
 };
@@ -165,26 +178,21 @@ export const hasActiveStorageFilters = (state: StorageFilterActivityState): bool
 export const getStorageNodeFilterLabel = (view: StorageView): string =>
   view === 'disks' ? 'All Disk Hosts' : 'All Nodes';
 
-export const readStorageRouteValue = (
-  value: string | undefined,
-  defaultValue: string,
-): string => {
+export const readStorageRouteValue = (value: string | undefined, defaultValue: string): string => {
   const normalized = (value || '').trim();
   return normalized || defaultValue;
 };
 
-export const writeStorageRouteValue = (
-  value: string,
-  defaultValue: string,
-): string | null => (value !== defaultValue ? value : null);
+export const writeStorageRouteValue = (value: string, defaultValue: string): string | null =>
+  value !== defaultValue ? value : null;
 
 type StorageRouteFieldBuilderOptions = {
   view: Accessor<StorageView>;
   setView: (value: StorageView) => void;
   sourceFilter: Accessor<string>;
   setSourceFilter: (value: string) => void;
-  healthFilter: Accessor<'all' | NormalizedHealth>;
-  setHealthFilter: (value: 'all' | NormalizedHealth) => void;
+  healthFilter: Accessor<StorageHealthFilter>;
+  setHealthFilter: (value: StorageHealthFilter) => void;
   selectedNodeId: Accessor<string>;
   setSelectedNodeId: (value: string) => void;
   groupBy: Accessor<StorageGroupKey>;
@@ -223,12 +231,14 @@ export const buildStorageRouteFields = (
     get: options.healthFilter,
     set: options.setHealthFilter,
     read: (parsed) => normalizeStorageHealthFilter(parsed.status),
-    write: (value) => writeStorageRouteValue(getStorageStatusFilterValue(value), DEFAULT_STORAGE_STATUS_FILTER),
+    write: (value) =>
+      writeStorageRouteValue(getStorageStatusFilterValue(value), DEFAULT_STORAGE_STATUS_FILTER),
   },
   node: {
     get: options.selectedNodeId,
     set: options.setSelectedNodeId,
-    read: (parsed) => normalizeStorageRouteSelection(parsed.node) || DEFAULT_STORAGE_SELECTED_NODE_ID,
+    read: (parsed) =>
+      normalizeStorageRouteSelection(parsed.node) || DEFAULT_STORAGE_SELECTED_NODE_ID,
     write: (value) =>
       writeStorageRouteValue(
         normalizeStorageRouteSelection(value) || DEFAULT_STORAGE_SELECTED_NODE_ID,
@@ -353,10 +363,7 @@ export const syncExpandedStorageGroups = (
   return changed ? next : previous;
 };
 
-export const toggleExpandedStorageGroup = (
-  previous: Set<string>,
-  key: string,
-): Set<string> => {
+export const toggleExpandedStorageGroup = (previous: Set<string>, key: string): Set<string> => {
   const next = new Set(previous);
   if (next.has(key)) next.delete(key);
   else next.add(key);

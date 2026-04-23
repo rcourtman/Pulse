@@ -3,11 +3,10 @@ import { Card } from '@/components/shared/Card';
 import { SummaryTableCardHeader } from '@/components/shared/SummaryTableCardHeader';
 import { DiskList } from '@/components/Storage/DiskList';
 import StoragePoolsTable from '@/components/Storage/StoragePoolsTable';
-import {
-  STORAGE_CONTENT_CARD_BODY_CLASS,
-} from '@/features/storageBackups/storagePagePresentation';
+import { STORAGE_CONTENT_CARD_BODY_CLASS } from '@/features/storageBackups/storagePagePresentation';
 import type { StorageCapacityDeltaPresentation } from '@/features/storageBackups/storageCapacityDeltaPresentation';
 import type { Resource } from '@/types/resource';
+import type { StorageHealthFilter } from '@/features/storageBackups/models';
 import type { StorageGroupKey, StorageGroupedRecords } from './useStorageModel';
 import type { StorageAlertRowState } from '@/features/storageBackups/storageAlertState';
 import type { StorageView } from './storagePageState';
@@ -18,6 +17,8 @@ type StorageContentCardProps = {
   view: () => StorageView;
   physicalDisks: () => Resource[];
   nodes: () => Resource[];
+  sourceFilter: () => string;
+  healthFilter: () => StorageHealthFilter;
   selectedNodeId: () => string;
   search: () => string;
   groupedRecords: () => StorageGroupedRecords[];
@@ -74,6 +75,8 @@ export const StorageContentCard: Component<StorageContentCardProps> = (props) =>
           <DiskList
             disks={props.physicalDisks()}
             nodes={props.nodes()}
+            sourceFilter={props.sourceFilter()}
+            healthFilter={props.healthFilter()}
             selectedNode={model.selectedDiskNodeId()}
             searchTerm={props.search()}
             selectedDiskId={props.selectedDiskId()}

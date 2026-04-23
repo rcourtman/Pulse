@@ -11,6 +11,7 @@ import {
   DEFAULT_STORAGE_SORT_DIRECTION,
   DEFAULT_STORAGE_SORT_KEY,
   DEFAULT_STORAGE_SOURCE_FILTER,
+  DEFAULT_STORAGE_SELECTED_NODE_ID,
   DEFAULT_STORAGE_STATUS_FILTER,
   hasActiveStorageFilters,
   type StorageOption,
@@ -30,6 +31,8 @@ type UseStorageFilterToolbarModelOptions = {
   setStatusFilter?: (value: StorageStatusFilter) => void;
   sourceFilter?: Accessor<string | undefined>;
   setSourceFilter?: (value: string) => void;
+  selectedNodeId?: Accessor<string | undefined>;
+  setSelectedNodeId?: (value: string) => void;
   sortOptions?: StorageOption[];
   sourceOptions?: Accessor<StorageSourceOption[] | undefined>;
 };
@@ -37,26 +40,34 @@ type UseStorageFilterToolbarModelOptions = {
 export const useStorageFilterToolbarModel = (options: UseStorageFilterToolbarModelOptions) => {
   const [filtersOpen, setFiltersOpen] = createSignal(false);
 
-  const activeFilterCount = createMemo(() =>
-    countActiveStorageFilters({
-      search: options.search(),
-      sortKey: options.sortKey(),
-      sortDirection: options.sortDirection(),
-      groupBy: options.groupBy?.(),
-      statusFilter: options.statusFilter?.(),
-      sourceFilter: options.sourceFilter?.(),
-    }),
-  );
+  const activeFilterCount = createMemo(() => {
+    const nodeActive =
+      (options.selectedNodeId?.() || DEFAULT_STORAGE_SELECTED_NODE_ID) !==
+      DEFAULT_STORAGE_SELECTED_NODE_ID;
+    return (
+      countActiveStorageFilters({
+        search: options.search(),
+        sortKey: options.sortKey(),
+        sortDirection: options.sortDirection(),
+        groupBy: options.groupBy?.(),
+        statusFilter: options.statusFilter?.(),
+        sourceFilter: options.sourceFilter?.(),
+      }) + (nodeActive ? 1 : 0)
+    );
+  });
 
-  const showReset = createMemo(() =>
-    hasActiveStorageFilters({
-      search: options.search(),
-      sortKey: options.sortKey(),
-      sortDirection: options.sortDirection(),
-      groupBy: options.groupBy?.(),
-      statusFilter: options.statusFilter?.(),
-      sourceFilter: options.sourceFilter?.(),
-    }),
+  const showReset = createMemo(
+    () =>
+      hasActiveStorageFilters({
+        search: options.search(),
+        sortKey: options.sortKey(),
+        sortDirection: options.sortDirection(),
+        groupBy: options.groupBy?.(),
+        statusFilter: options.statusFilter?.(),
+        sourceFilter: options.sourceFilter?.(),
+      }) ||
+      (options.selectedNodeId?.() || DEFAULT_STORAGE_SELECTED_NODE_ID) !==
+        DEFAULT_STORAGE_SELECTED_NODE_ID,
   );
 
   const sortOptions = createMemo(() => options.sortOptions ?? []);
@@ -81,6 +92,7 @@ export const useStorageFilterToolbarModel = (options: UseStorageFilterToolbarMod
     if (options.setGroupBy) options.setGroupBy(DEFAULT_STORAGE_GROUP_KEY);
     if (options.setStatusFilter) options.setStatusFilter(DEFAULT_STORAGE_STATUS_FILTER);
     if (options.setSourceFilter) options.setSourceFilter(DEFAULT_STORAGE_SOURCE_FILTER);
+    if (options.setSelectedNodeId) options.setSelectedNodeId(DEFAULT_STORAGE_SELECTED_NODE_ID);
   };
 
   return {

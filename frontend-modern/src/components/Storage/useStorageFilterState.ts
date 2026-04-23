@@ -1,6 +1,7 @@
 import { createEffect, createMemo, type Accessor } from 'solid-js';
 import { buildStorageSourceOptionsFromKeys } from '@/utils/storageSources';
-import type { NormalizedHealth } from '@/features/storageBackups/models';
+import type { StorageHealthFilter } from '@/features/storageBackups/models';
+import { normalizeStorageSourceKey } from '@/utils/storageSources';
 import {
   buildStorageNodeFilterOptions,
   coerceSelectedStorageNodeId,
@@ -20,8 +21,11 @@ type UseStorageFilterStateOptions = {
   selectedNodeId: Accessor<string>;
   setSelectedNodeId: (value: string) => void;
   sourceOptions: Accessor<string[]>;
-  healthFilter: Accessor<'all' | NormalizedHealth>;
-  setHealthFilter: (value: 'all' | NormalizedHealth) => void;
+  diskSourceOptions?: Accessor<string[]>;
+  sourceFilter: Accessor<string>;
+  setSourceFilter: (value: string) => void;
+  healthFilter: Accessor<StorageHealthFilter>;
+  setHealthFilter: (value: StorageHealthFilter) => void;
   groupBy: Accessor<StorageGroupKey>;
 };
 
@@ -32,8 +36,13 @@ export const useStorageFilterState = (options: UseStorageFilterStateOptions) => 
   const nodeFilterOptions = createMemo(() =>
     buildStorageNodeFilterOptions(options.view(), activeNodeOptions()),
   );
+  const activeSourceKeys = createMemo(() =>
+    options.view() === 'disks' && options.diskSourceOptions
+      ? options.diskSourceOptions()
+      : options.sourceOptions(),
+  );
   const sourceFilterOptions = createMemo(() =>
-    buildStorageSourceOptionsFromKeys(options.sourceOptions()),
+    buildStorageSourceOptionsFromKeys(activeSourceKeys()),
   );
 
   const storageFilterGroupBy = (): StorageGroupByFilter => {
@@ -49,12 +58,22 @@ export const useStorageFilterState = (options: UseStorageFilterStateOptions) => 
   };
 
   createEffect(() => {
-    const next = coerceSelectedStorageNodeId(
-      options.selectedNodeId(),
-      activeNodeOptions(),
-    );
+    const next = coerceSelectedStorageNodeId(options.selectedNodeId(), activeNodeOptions());
     if (next !== options.selectedNodeId()) {
       options.setSelectedNodeId(next);
+    }
+  });
+
+  createEffect(() => {
+    const selectedSource = normalizeStorageSourceKey(options.sourceFilter());
+    if (selectedSource === 'all') {
+      return;
+    }
+    const availableSources = new Set(
+      activeSourceKeys().map((key) => normalizeStorageSourceKey(key)),
+    );
+    if (!availableSources.has(selectedSource)) {
+      options.setSourceFilter('all');
     }
   });
 

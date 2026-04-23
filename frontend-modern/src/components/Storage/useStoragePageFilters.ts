@@ -1,6 +1,6 @@
 import { createSignal } from 'solid-js';
 import { buildStoragePath } from '@/routing/resourceLinks';
-import type { NormalizedHealth } from '@/features/storageBackups/models';
+import type { StorageHealthFilter } from '@/features/storageBackups/models';
 import { useStorageRouteState } from './useStorageRouteState';
 import {
   buildStorageRouteFields,
@@ -25,12 +25,13 @@ type UseStoragePageFiltersOptions = {
 export const useStoragePageFilters = (options: UseStoragePageFiltersOptions) => {
   const [search, setSearch] = createSignal('');
   const [sourceFilter, setSourceFilter] = createSignal(DEFAULT_STORAGE_SOURCE_FILTER);
-  const [healthFilter, setHealthFilter] = createSignal<'all' | NormalizedHealth>('all');
+  const [healthFilter, setHealthFilter] = createSignal<StorageHealthFilter>('all');
   const [view, setView] = createSignal<StorageView>(DEFAULT_STORAGE_VIEW);
   const [selectedNodeId, setSelectedNodeId] = createSignal(DEFAULT_STORAGE_SELECTED_NODE_ID);
   const [sortKey, setSortKey] = createSignal<StorageSortKey>(DEFAULT_STORAGE_SORT_KEY);
-  const [sortDirection, setSortDirection] =
-    createSignal<'asc' | 'desc'>(DEFAULT_STORAGE_SORT_DIRECTION);
+  const [sortDirection, setSortDirection] = createSignal<'asc' | 'desc'>(
+    DEFAULT_STORAGE_SORT_DIRECTION,
+  );
   const [groupBy, setGroupBy] = createSignal<StorageGroupKey>(DEFAULT_STORAGE_GROUP_KEY);
 
   const isActiveStorageRoute = () => options.location.pathname === '/storage';
@@ -81,4 +82,3 @@ export const useStoragePageFilters = (options: UseStoragePageFiltersOptions) => 
     setGroupBy,
   };
 };
-

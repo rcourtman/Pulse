@@ -16,9 +16,11 @@ import {
   getPhysicalDiskHealthStatus,
   getPhysicalDiskHealthSummary,
   getPhysicalDiskHostLabel,
+  getPhysicalDiskNormalizedHealth,
   getPhysicalDiskParentLabel,
   getPhysicalDiskPlatformLabel,
   getPhysicalDiskRoleLabel,
+  getPhysicalDiskSourceKey,
   getPhysicalDiskSourceBadgePresentation,
   hasPhysicalDiskSmartWarning,
   matchesPhysicalDiskSearch,
@@ -116,6 +118,18 @@ describe('diskPresentation', () => {
       className:
         'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-400 inline-flex min-w-[3.25rem] justify-center px-1.5 py-px text-[9px] font-medium',
     });
+    expect(
+      getPhysicalDiskSourceKey({
+        platformType: 'agent',
+        platformData: { sources: ['agent', 'proxmox'] },
+      } as unknown as Resource),
+    ).toBe('proxmox-pve');
+    expect(
+      getPhysicalDiskSourceBadgePresentation({
+        platformType: 'agent',
+        platformData: { sources: ['agent', 'proxmox'] },
+      } as unknown as Resource).label,
+    ).toBe('PVE');
   });
 
   it('returns host, health summary, and empty-state presentation canonically', () => {
@@ -209,15 +223,33 @@ describe('diskPresentation', () => {
     expect(warningData.riskReasons).toEqual(['Pending sectors detected.']);
     expect(matchesPhysicalDiskSearch(warningDisk, warningData, 'cache')).toBe(true);
     expect(matchesPhysicalDiskSearch(warningDisk, warningData, 'tank')).toBe(true);
-    expect(comparePhysicalDiskPresentation(warningDisk, warningData, healthyDisk, healthyData)).toBeLessThan(0);
+    expect(matchesPhysicalDiskSearch(warningDisk, warningData, 'node:tower')).toBe(true);
+    expect(matchesPhysicalDiskSearch(warningDisk, warningData, 'node:pve1')).toBe(false);
+    expect(getPhysicalDiskSourceKey(warningDisk)).toBe('proxmox-pve');
+    expect(getPhysicalDiskNormalizedHealth(warningDisk, warningData)).toBe('warning');
+    expect(
+      comparePhysicalDiskPresentation(warningDisk, warningData, healthyDisk, healthyData),
+    ).toBeLessThan(0);
     expect(buildPhysicalDiskPresentationDataMap([warningDisk, healthyDisk]).size).toBe(2);
     expect(
       filterAndSortPhysicalDisks([warningDisk, healthyDisk], {
         selectedNode: null,
         searchTerm: 'cache',
+        sourceFilter: 'proxmox-pve',
+        healthFilter: 'attention',
         getDiskData: (disk) => (disk.id === warningDisk.id ? warningData : healthyData),
         matchesNode: () => true,
       }).map((disk) => disk.id),
     ).toEqual(['disk-warning']);
+    expect(
+      filterAndSortPhysicalDisks([warningDisk, healthyDisk], {
+        selectedNode: null,
+        searchTerm: '',
+        sourceFilter: 'agent',
+        healthFilter: 'all',
+        getDiskData: (disk) => (disk.id === warningDisk.id ? warningData : healthyData),
+        matchesNode: () => true,
+      }).map((disk) => disk.id),
+    ).toEqual([]);
   });
 });

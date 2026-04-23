@@ -1,5 +1,6 @@
 import { createMemo } from 'solid-js';
 import type { Resource } from '@/types/resource';
+import type { StorageHealthFilter } from '@/features/storageBackups/models';
 import {
   buildPhysicalDiskPresentationDataMap,
   extractPhysicalDiskPresentationData,
@@ -12,6 +13,8 @@ type UseDiskListModelOptions = {
   disks: () => Resource[];
   nodes: () => Resource[];
   selectedNode: () => string | null;
+  sourceFilter?: () => string;
+  healthFilter?: () => StorageHealthFilter;
   searchTerm: () => string;
   selectedDiskId: () => string | null;
   setSelectedDiskId: (diskId: string | null) => void;
@@ -32,6 +35,8 @@ export const useDiskListModel = (options: UseDiskListModelOptions) => {
   const filteredDisks = createMemo(() =>
     filterAndSortPhysicalDisks(options.disks(), {
       selectedNode: selectedNodeResource(),
+      sourceFilter: options.sourceFilter?.() ?? 'all',
+      healthFilter: options.healthFilter?.() ?? 'all',
       searchTerm: options.searchTerm(),
       getDiskData,
       matchesNode: matchesPhysicalDiskNode,

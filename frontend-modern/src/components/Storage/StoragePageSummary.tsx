@@ -3,7 +3,7 @@ import StorageSummary from '@/components/Storage/StorageSummary';
 import type { StorageSummaryChartsResponse } from '@/api/charts';
 import type { SummaryTimeRange } from '@/components/shared/summaryTimeRange';
 import type { Resource } from '@/types/resource';
-import type { StorageRecord } from '@/features/storageBackups/models';
+import type { StorageHealthFilter, StorageRecord } from '@/features/storageBackups/models';
 import type { SummarySeriesGroupScope } from '@/components/shared/summaryCardInteraction';
 import type { StoragePageNodeOption } from './storagePageState';
 import { useStoragePageSummary } from './useStoragePageSummary';
@@ -11,6 +11,9 @@ import type { SummaryChartHoverSync } from '@/components/shared/contextualFocus'
 
 type StoragePageSummaryProps = {
   filteredRecords: () => StorageRecord[];
+  search: () => string;
+  sourceFilter: () => string;
+  healthFilter: () => StorageHealthFilter;
   selectedNodeId: () => string;
   nodeOptions: () => StoragePageNodeOption[];
   physicalDisks: () => Resource[];
@@ -32,13 +35,11 @@ type StoragePageSummaryProps = {
 };
 
 export const StoragePageSummary: Component<StoragePageSummaryProps> = (props) => {
-  const {
-    poolCount,
-    diskCount,
-    poolsDegraded,
-    disksFailing,
-  } = useStoragePageSummary({
+  const { poolCount, diskCount, poolsDegraded, disksFailing } = useStoragePageSummary({
     filteredRecords: props.filteredRecords,
+    search: props.search,
+    sourceFilter: props.sourceFilter,
+    healthFilter: props.healthFilter,
     selectedNodeId: props.selectedNodeId,
     nodeOptions: props.nodeOptions,
     physicalDisks: props.physicalDisks,

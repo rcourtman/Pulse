@@ -1,11 +1,21 @@
 import { Accessor, createMemo } from 'solid-js';
 import type { Resource } from '@/types/resource';
-import type { StorageRecord } from '@/features/storageBackups/models';
+import type { StorageHealthFilter, StorageRecord } from '@/features/storageBackups/models';
 import type { StoragePageNodeOption } from './storagePageState';
-import { countVisiblePhysicalDisksForNode } from './storagePageState';
+import {
+  buildPhysicalDiskPresentationDataMap,
+  extractPhysicalDiskPresentationData,
+  getPhysicalDiskNormalizedHealth,
+  matchesPhysicalDiskFilterState,
+  matchesPhysicalDiskHealthFilter,
+} from '@/features/storageBackups/diskPresentation';
+import { matchesPhysicalDiskNode } from './diskResourceUtils';
 
 type UseStoragePageSummaryOptions = {
   filteredRecords: Accessor<StorageRecord[]>;
+  search: Accessor<string>;
+  sourceFilter: Accessor<string>;
+  healthFilter: Accessor<StorageHealthFilter>;
   selectedNodeId: Accessor<string>;
   nodeOptions: Accessor<StoragePageNodeOption[]>;
   physicalDisks: Accessor<Resource[]>;
@@ -15,33 +25,51 @@ const POOL_DEGRADED_HEALTHS = new Set(['warning', 'critical', 'offline']);
 
 export const useStoragePageSummary = (options: UseStoragePageSummaryOptions) => {
   const poolCount = createMemo(() => options.filteredRecords().length);
-  const diskCount = createMemo(() =>
-    countVisiblePhysicalDisksForNode(
-      options.selectedNodeId(),
-      options.nodeOptions(),
-      options.physicalDisks(),
-    ),
+  const diskDataById = createMemo(() =>
+    buildPhysicalDiskPresentationDataMap(options.physicalDisks()),
   );
+  const getDiskData = (disk: Resource) =>
+    diskDataById().get(disk.id) ?? extractPhysicalDiskPresentationData(disk);
+
+  const filteredPhysicalDisks = createMemo(() => {
+    const nodeId = options.selectedNodeId();
+    const selectedNode =
+      nodeId && nodeId !== 'all'
+        ? (options.nodeOptions().find((option) => option.id === nodeId) ?? null)
+        : null;
+
+    return options.physicalDisks().filter((disk) => {
+      if (
+        selectedNode &&
+        !matchesPhysicalDiskNode(disk, {
+          id: selectedNode.id,
+          name: selectedNode.label,
+          instance: selectedNode.instance,
+        })
+      ) {
+        return false;
+      }
+      return matchesPhysicalDiskFilterState(disk, getDiskData(disk), {
+        sourceFilter: options.sourceFilter(),
+        healthFilter: options.healthFilter(),
+        searchTerm: options.search(),
+      });
+    });
+  });
+
+  const diskCount = createMemo(() => filteredPhysicalDisks().length);
 
   const poolsDegraded = createMemo(
-    () => options.filteredRecords().filter((record) => POOL_DEGRADED_HEALTHS.has(record.health)).length,
+    () =>
+      options.filteredRecords().filter((record) => POOL_DEGRADED_HEALTHS.has(record.health)).length,
   );
   const disksFailing = createMemo(() => {
-    const nodeId = options.selectedNodeId();
-    const isForSelectedNode = (disk: Resource): boolean => {
-      if (!nodeId || nodeId === 'all') return true;
-      const nodeOption = options.nodeOptions().find((option) => option.id === nodeId);
-      if (!nodeOption) return true;
-      const hostname = disk.identity?.hostname ?? disk.canonicalIdentity?.hostname;
-      if (!hostname) return false;
-      if (nodeOption.label === hostname) return true;
-      return (nodeOption.aliases ?? []).includes(hostname);
-    };
-    return options.physicalDisks().filter((disk) => {
-      if (!isForSelectedNode(disk)) return false;
-      if (disk.status === 'degraded' || disk.status === 'offline') return true;
-      return (disk.alerts?.length ?? 0) > 0;
-    }).length;
+    return filteredPhysicalDisks().filter((disk) =>
+      matchesPhysicalDiskHealthFilter(
+        getPhysicalDiskNormalizedHealth(disk, getDiskData(disk)),
+        'attention',
+      ),
+    ).length;
   });
 
   return {

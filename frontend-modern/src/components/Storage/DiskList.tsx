@@ -69,6 +69,7 @@ import {
   getPhysicalDiskSourceBadgePresentation,
 } from '@/features/storageBackups/diskPresentation';
 import type { Resource } from '@/types/resource';
+import type { StorageHealthFilter } from '@/features/storageBackups/models';
 import { DiskDetail } from './DiskDetail';
 import { useDiskListModel } from './useDiskListModel';
 
@@ -76,6 +77,8 @@ interface DiskListProps {
   disks: Resource[];
   nodes: Resource[];
   selectedNode: string | null;
+  sourceFilter?: string;
+  healthFilter?: StorageHealthFilter;
   searchTerm: string;
   selectedDiskId: string | null;
   highlightedSummarySeriesId?: string | null;
@@ -88,6 +91,8 @@ export const DiskList: Component<DiskListProps> = (props) => {
     disks: () => props.disks,
     nodes: () => props.nodes,
     selectedNode: () => props.selectedNode,
+    sourceFilter: () => props.sourceFilter ?? 'all',
+    healthFilter: () => props.healthFilter ?? 'all',
     searchTerm: () => props.searchTerm,
     selectedDiskId: () => props.selectedDiskId,
     setSelectedDiskId: props.onSelectedDiskChange,
@@ -303,7 +308,6 @@ export const DiskList: Component<DiskListProps> = (props) => {
                               </span>
                             </Show>
                           </TableCell>
-
                         </TableRow>
                         <Show when={isSelected()}>
                           <TableRow data-inline-detail-for={summarySeriesId}>

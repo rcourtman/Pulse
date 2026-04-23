@@ -53,6 +53,8 @@ describe('useDiskListModel', () => {
     const [nodes] = createSignal<Resource[]>([buildNode('node-tower', 'tower')]);
     const [selectedNode] = createSignal<string | null>('node-tower');
     const [searchTerm] = createSignal('cache');
+    const [sourceFilter] = createSignal('proxmox-pve');
+    const [healthFilter] = createSignal('healthy' as const);
     const [selectedDiskId, setSelectedDiskId] = createSignal<string | null>(null);
 
     const { result } = renderHook(() =>
@@ -60,6 +62,8 @@ describe('useDiskListModel', () => {
         disks,
         nodes,
         selectedNode,
+        sourceFilter,
+        healthFilter,
         searchTerm,
         selectedDiskId,
         setSelectedDiskId,

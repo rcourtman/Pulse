@@ -10,6 +10,7 @@ export type StorageBackupPlatform = KnownStorageBackupPlatform | (string & {});
 export type PlatformFamily = 'onprem' | 'container' | 'virtualization' | 'cloud' | 'generic';
 
 export type NormalizedHealth = 'healthy' | 'warning' | 'critical' | 'offline' | 'unknown';
+export type StorageHealthFilter = 'all' | 'attention' | NormalizedHealth;
 
 export type StorageCategory =
   | 'pool'

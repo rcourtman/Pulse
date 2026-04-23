@@ -13,7 +13,12 @@ const makeRecord = (id: string, health: StorageRecord['health']): StorageRecord 
   location: { label: 'pve1', scope: 'node' },
   capacity: { totalBytes: null, usedBytes: null, freeBytes: null, usagePercent: null },
   capabilities: [],
-  source: { platform: 'proxmox-pve', family: 'virtualization', origin: 'resource', adapterId: 'test' },
+  source: {
+    platform: 'proxmox-pve',
+    family: 'virtualization',
+    origin: 'resource',
+    adapterId: 'test',
+  },
   observedAt: Date.now(),
 });
 
@@ -26,6 +31,9 @@ describe('useStoragePageSummary', () => {
       makeRecord('pool-d', 'healthy'),
     ]);
     const [selectedNodeId] = createSignal('node-1');
+    const [search] = createSignal('');
+    const [sourceFilter] = createSignal('all');
+    const [healthFilter] = createSignal('all' as const);
     const [nodeOptions] = createSignal([
       { id: 'node-1', label: 'pve1', aliases: ['pve1.local'] },
       { id: 'node-2', label: 'pve2' },
@@ -63,6 +71,9 @@ describe('useStoragePageSummary', () => {
     const { result } = renderHook(() =>
       useStoragePageSummary({
         filteredRecords,
+        search,
+        sourceFilter,
+        healthFilter,
         selectedNodeId,
         nodeOptions,
         physicalDisks,

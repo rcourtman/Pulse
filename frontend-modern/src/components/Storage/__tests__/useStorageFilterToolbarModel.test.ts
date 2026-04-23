@@ -12,6 +12,7 @@ describe('useStorageFilterToolbarModel', () => {
     const [sortDirection, setSortDirection] = createSignal<'asc' | 'desc'>('asc');
     const [statusFilter, setStatusFilter] = createSignal<'all' | 'warning'>('warning');
     const [sourceFilter, setSourceFilter] = createSignal('agent');
+    const [selectedNodeId, setSelectedNodeId] = createSignal('node-1');
 
     const { result } = renderHook(() =>
       useStorageFilterToolbarModel({
@@ -27,6 +28,8 @@ describe('useStorageFilterToolbarModel', () => {
         setStatusFilter,
         sourceFilter,
         setSourceFilter,
+        selectedNodeId,
+        setSelectedNodeId,
         sortOptions: [{ value: 'usage', label: 'Usage' }],
       }),
     );
@@ -48,6 +51,7 @@ describe('useStorageFilterToolbarModel', () => {
     expect(sortDirection()).toBe('desc');
     expect(statusFilter()).toBe('all');
     expect(sourceFilter()).toBe('all');
+    expect(selectedNodeId()).toBe('all');
   });
 
   it('keeps storage source options reactive for restored route state', () => {

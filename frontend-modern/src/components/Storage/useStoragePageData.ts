@@ -1,6 +1,7 @@
 import { Accessor, createMemo } from 'solid-js';
 import { buildStorageRecords } from '@/features/storageBackups/storageAdapters';
-import type { NormalizedHealth } from '@/features/storageBackups/models';
+import type { StorageHealthFilter } from '@/features/storageBackups/models';
+import { getPhysicalDiskSourceKey } from '@/features/storageBackups/diskPresentation';
 import type { State } from '@/types/api';
 import type { Resource } from '@/types/resource';
 import { useStorageAlertState } from './useStorageAlertState';
@@ -10,11 +11,7 @@ import {
   buildStorageNodeOptions,
   filterStorageDiskNodeOptions,
 } from './storagePageState';
-import {
-  type StorageGroupKey,
-  type StorageSortKey,
-  useStorageModel,
-} from './useStorageModel';
+import { type StorageGroupKey, type StorageSortKey, useStorageModel } from './useStorageModel';
 
 type UseStoragePageDataOptions = {
   state: Accessor<State>;
@@ -26,7 +23,7 @@ type UseStoragePageDataOptions = {
   cephResources: Accessor<Resource[]>;
   search: Accessor<string>;
   sourceFilter: Accessor<string>;
-  healthFilter: Accessor<'all' | NormalizedHealth>;
+  healthFilter: Accessor<StorageHealthFilter>;
   selectedNodeId: Accessor<string>;
   sortKey: Accessor<StorageSortKey>;
   sortDirection: Accessor<'asc' | 'desc'>;
@@ -64,6 +61,13 @@ export const useStoragePageData = (options: UseStoragePageDataOptions) => {
     groupBy: options.groupBy,
   });
 
+  const diskSourceOptions = createMemo(() => [
+    'all',
+    ...Array.from(new Set(options.physicalDisks().map((disk) => getPhysicalDiskSourceKey(disk))))
+      .filter((key) => key !== 'all')
+      .sort(),
+  ]);
+
   const { cephSummaryStats } = useStorageCephModel({
     records,
     cephResources: options.cephResources,
@@ -76,6 +80,7 @@ export const useStoragePageData = (options: UseStoragePageDataOptions) => {
     diskNodeOptions,
     nodeOnlineByLabel,
     sourceOptions,
+    diskSourceOptions,
     filteredRecords,
     groupedRecords,
     cephSummaryStats,

@@ -89,6 +89,8 @@ export const StorageControls: Component<StorageControlsProps> = (props) => {
         sourceFilter={props.sourceFilter}
         setSourceFilter={props.setSourceFilter}
         sourceOptions={props.sourceOptions}
+        selectedNodeId={props.selectedNodeId}
+        setSelectedNodeId={props.setSelectedNodeId}
         leadingFilters={leadingFilters()}
         mobileTrailing={props.mobileTrailing}
         utilityActions={props.utilityActions}

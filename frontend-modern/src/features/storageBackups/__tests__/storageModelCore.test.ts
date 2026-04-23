@@ -80,6 +80,9 @@ describe('storageModelCore', () => {
       'truenas',
     ]);
     expect(matchesStorageRecordSearch(makeRecord(), 'tank')).toBe(true);
+    expect(matchesStorageRecordSearch(makeRecord(), 'node:pve1')).toBe(true);
+    expect(matchesStorageRecordSearch(makeRecord(), 'node:pve1 tank')).toBe(true);
+    expect(matchesStorageRecordSearch(makeRecord(), 'node:pve2')).toBe(false);
     expect(matchesStorageRecordSearch(makeRecord(), 'missing')).toBe(false);
   });
 
@@ -101,22 +104,18 @@ describe('storageModelCore', () => {
     const records = filterStorageRecords([makeRecord(), warning], {
       search: '',
       sourceFilter: 'all',
-      healthFilter: 'all',
+      healthFilter: 'attention',
       selectedNode: node,
     });
 
     expect(sortStorageRecords(records, 'priority', 'desc').map((record) => record.id)).toEqual([
       'storage-2',
-      'storage-1',
     ]);
-    expect(groupStorageRecords(records, 'status').map((group) => group.key)).toEqual([
-      'available',
-      'degraded',
-    ]);
+    expect(groupStorageRecords(records, 'status').map((group) => group.key)).toEqual(['degraded']);
     expect(summarizeStorageRecords(records)).toMatchObject({
-      count: 2,
-      totalBytes: 200,
-      usedBytes: 80,
+      count: 1,
+      totalBytes: 100,
+      usedBytes: 40,
       usagePercent: 40,
     });
   });

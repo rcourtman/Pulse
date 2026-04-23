@@ -29,6 +29,7 @@ import { useStorageFilterToolbarModel } from './useStorageFilterToolbarModel';
 
 export type StorageStatusFilter =
   | 'all'
+  | 'attention'
   | 'available'
   | 'warning'
   | 'critical'
@@ -53,6 +54,8 @@ interface StorageFilterProps {
   sourceFilter?: () => string;
   setSourceFilter?: (value: string) => void;
   sourceOptions?: () => StorageSourceOption[];
+  selectedNodeId?: () => string;
+  setSelectedNodeId?: (value: string) => void;
   // Slot for page-specific filters (e.g., view toggle, node selector).
   leadingFilters?: JSX.Element;
   // Column visibility (optional)
@@ -92,6 +95,8 @@ export const StorageFilter: Component<StorageFilterProps> = (props) => {
     setStatusFilter: props.setStatusFilter,
     sourceFilter: props.sourceFilter,
     setSourceFilter: props.setSourceFilter,
+    selectedNodeId: props.selectedNodeId,
+    setSelectedNodeId: props.setSelectedNodeId,
     sortOptions: props.sortOptions ?? DEFAULT_STORAGE_SORT_OPTIONS,
     sourceOptions: props.sourceOptions,
   });

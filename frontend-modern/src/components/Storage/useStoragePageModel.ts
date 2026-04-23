@@ -1,6 +1,9 @@
 import { createEffect, createMemo, createSignal, onCleanup, untrack } from 'solid-js';
 import { useLocation, useNavigate } from '@solidjs/router';
-import { SUMMARY_TIME_RANGE_LABEL, type SummaryTimeRange } from '@/components/shared/summaryTimeRange';
+import {
+  SUMMARY_TIME_RANGE_LABEL,
+  type SummaryTimeRange,
+} from '@/components/shared/summaryTimeRange';
 import { buildStorageCapacityDeltaPresentation } from '@/features/storageBackups/storageCapacityDeltaPresentation';
 import {
   resolvePhysicalDiskMetricResourceId,
@@ -86,6 +89,7 @@ export const useStoragePageModel = () => {
     diskNodeOptions,
     nodeOnlineByLabel,
     sourceOptions,
+    diskSourceOptions,
     filteredRecords,
     groupedRecords,
     cephSummaryStats,
@@ -128,11 +132,15 @@ export const useStoragePageModel = () => {
     caller: 'useStoragePageModel',
   });
 
-  const { expandedGroups, expandedPoolId, setExpandedPoolId: setExpandedPoolIdRaw, toggleGroup } =
-    useStorageExpansionState({
-      groupedKeys: () => groupedRecords().map((group) => group.key),
-      view,
-    });
+  const {
+    expandedGroups,
+    expandedPoolId,
+    setExpandedPoolId: setExpandedPoolIdRaw,
+    toggleGroup,
+  } = useStorageExpansionState({
+    groupedKeys: () => groupedRecords().map((group) => group.key),
+    view,
+  });
   const storageRecordMetricIds = createMemo(() => {
     const ids = new Map<string, string>();
     for (const record of records()) {
@@ -150,9 +158,7 @@ export const useStoragePageModel = () => {
   const storageGrowthRangeLabel = createMemo(
     () => SUMMARY_TIME_RANGE_LABEL[summaryTimeRange()] ?? summaryTimeRange(),
   );
-  const storageGrowthColumnLabel = createMemo(
-    () => `Growth (${storageGrowthRangeLabel()})`,
-  );
+  const storageGrowthColumnLabel = createMemo(() => `Growth (${storageGrowthRangeLabel()})`);
   const storageGrowthBySeriesId = createMemo(() => {
     const growth = new Map<string, ReturnType<typeof buildStorageCapacityDeltaPresentation>>();
     const pools = storageSummaryCharts.data()?.pools ?? {};
@@ -255,8 +261,14 @@ export const useStoragePageModel = () => {
     const nextValue = typeof value === 'function' ? value(expandedPoolId()) : value;
     const focusedScope = focusedStorageGroupScope();
     const nextResourceId =
-      nextValue && storageRecordMetricIds().get(nextValue) ? storageRecordMetricIds().get(nextValue)! : null;
-    if (focusedScope && nextResourceId && !isSummarySeriesInGroupScope(focusedScope, nextResourceId)) {
+      nextValue && storageRecordMetricIds().get(nextValue)
+        ? storageRecordMetricIds().get(nextValue)!
+        : null;
+    if (
+      focusedScope &&
+      nextResourceId &&
+      !isSummarySeriesInGroupScope(focusedScope, nextResourceId)
+    ) {
       clearFocusedStorageGroup();
     }
     setExpandedPoolIdRaw(nextValue);
@@ -343,6 +355,9 @@ export const useStoragePageModel = () => {
     selectedNodeId,
     setSelectedNodeId,
     sourceOptions,
+    diskSourceOptions,
+    sourceFilter,
+    setSourceFilter,
     healthFilter,
     setHealthFilter,
     groupBy,
@@ -421,6 +436,7 @@ export const useStoragePageModel = () => {
     setSearch,
     sourceFilter,
     setSourceFilter,
+    healthFilter,
     sortKey,
     setSortKey,
     sortDirection,

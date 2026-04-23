@@ -1,5 +1,5 @@
 import { Accessor, createMemo } from 'solid-js';
-import type { NormalizedHealth, StorageRecord } from '@/features/storageBackups/models';
+import type { StorageHealthFilter, StorageRecord } from '@/features/storageBackups/models';
 import {
   buildStorageSourceOptions,
   filterStorageRecords,
@@ -26,7 +26,7 @@ type UseStorageModelOptions = {
   records: Accessor<StorageRecord[]>;
   search: Accessor<string>;
   sourceFilter: Accessor<string>;
-  healthFilter: Accessor<'all' | NormalizedHealth>;
+  healthFilter: Accessor<StorageHealthFilter>;
   selectedNodeId: Accessor<string>;
   nodeOptions: Accessor<StorageNodeOption[]>;
   sortKey: Accessor<StorageSortKey>;
