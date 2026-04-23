@@ -2840,6 +2840,7 @@
         "frontend-modern/src/features/dashboardOverview/ProblemResourcesTable.tsx",
         "frontend-modern/src/features/dashboardOverview/TrendCharts.tsx",
         "frontend-modern/src/hooks/createNonSuspendingQuery.ts",
+        "frontend-modern/src/index.css",
         "frontend-modern/src/pages/Operations.tsx",
         "frontend-modern/src/stores/aiChat.ts",
         "frontend-modern/src/utils/aiSettingsPresentation.ts",
@@ -2876,6 +2877,20 @@
         ],
         "require_explicit_path_policy_coverage": true,
         "path_policies": [
+          {
+            "id": "global-app-shell-css",
+            "label": "global app-shell css proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/index.css"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/__tests__/App.architecture.test.ts",
+              "frontend-modern/src/__tests__/AppLayout.test.tsx"
+            ]
+          },
           {
             "id": "page-controls-and-filters",
             "label": "page controls and filter proof",

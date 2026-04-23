@@ -138,6 +138,9 @@ export function AppLayout(props: AppLayoutProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const kioskMode = useKioskMode();
+  const brandMotionActive = createMemo(
+    () => props.connectionStatus().kind === 'connected' && props.dataUpdated(),
+  );
 
   const [headerVisible, setHeaderVisible] = createSignal(true);
   let headerEl: HTMLDivElement | undefined;
@@ -463,13 +466,16 @@ export function AppLayout(props: AppLayoutProps) {
       >
         <Show when={!kioskMode()}>
           <div class="flex items-center gap-2 sm:flex-initial sm:gap-2 sm:col-start-2 sm:col-end-3 sm:justify-self-center">
-            <div class="flex items-center gap-2">
+            <div
+              class={`pulse-brand-lockup flex items-center gap-2 ${brandMotionActive() ? 'animate-pulse-brand' : ''}`}
+              data-testid="pulse-brand-lockup"
+            >
               <svg
                 width="20"
                 height="20"
                 viewBox="0 0 256 256"
                 xmlns="http://www.w3.org/2000/svg"
-                class={`pulse-logo ${props.connectionStatus().kind === 'connected' && props.dataUpdated() ? 'animate-pulse-logo' : ''}`}
+                class="pulse-brand-logo"
               >
                 <title>Pulse Logo</title>
                 <circle
@@ -491,7 +497,7 @@ export function AppLayout(props: AppLayoutProps) {
                   r="26"
                 />
               </svg>
-              <span class="text-lg font-medium text-base-content">Pulse</span>
+              <span class="pulse-brand-wordmark text-lg font-medium text-base-content">Pulse</span>
               <Show when={props.versionInfo()?.channel === 'rc'}>
                 <span class="text-xs px-1.5 py-0.5 bg-orange-500 text-white rounded font-bold">
                   Preview

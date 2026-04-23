@@ -15,7 +15,7 @@ describe('AppLayout navigation icons', () => {
     cleanup();
   });
 
-  const renderLayout = () =>
+  const renderLayout = (options: { dataUpdated?: boolean } = {}) =>
     render(() => (
       <Router>
         <Route
@@ -28,7 +28,7 @@ describe('AppLayout navigation icons', () => {
                 detail: 'Backend and live data stream are connected.',
                 tone: 'healthy',
               })}
-              dataUpdated={() => false}
+              dataUpdated={() => options.dataUpdated ?? false}
               lastUpdateText={() => ''}
               versionInfo={() =>
                 ({
@@ -82,5 +82,15 @@ describe('AppLayout navigation icons', () => {
     });
 
     expect(container).toHaveTextContent('Dashboard body');
+  });
+
+  it('animates the full brand lockup when live data refreshes', () => {
+    const { container } = renderLayout({ dataUpdated: true });
+
+    const brandLockup = screen.getByTestId('pulse-brand-lockup');
+    expect(brandLockup).toHaveClass('animate-pulse-brand');
+    expect(brandLockup.querySelector('.pulse-brand-logo')).toBeTruthy();
+    expect(brandLockup.querySelector('.pulse-brand-wordmark')).toHaveTextContent('Pulse');
+    expect(container.querySelector('.animate-pulse-logo')).toBeNull();
   });
 });

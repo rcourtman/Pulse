@@ -76,6 +76,9 @@
     --color-border-base: theme('colors.slate.200');
     --color-text-base: theme('colors.slate.900');
     --color-text-muted: theme('colors.slate.500');
+    --color-brand-primary: theme('colors.blue.600');
+    --color-brand-primary-strong: theme('colors.blue.700');
+    --color-brand-primary-muted: rgba(37, 99, 235, 0.2);
     --color-summary-row-bg: rgba(14, 165, 233, 0.05);
     --color-summary-row-bg-hover: rgba(14, 165, 233, 0.08);
     --color-summary-row-border: rgba(14, 165, 233, 0.16);
@@ -98,6 +101,9 @@
     --color-border-base: theme('colors.slate.700');
     --color-text-base: theme('colors.slate.100');
     --color-text-muted: theme('colors.slate.400');
+    --color-brand-primary: theme('colors.blue.500');
+    --color-brand-primary-strong: theme('colors.blue.300');
+    --color-brand-primary-muted: rgba(96, 165, 250, 0.26);
     --color-summary-row-bg: rgba(56, 189, 248, 0.08);
     --color-summary-row-bg-hover: rgba(56, 189, 248, 0.12);
     --color-summary-row-border: rgba(56, 189, 248, 0.18);
@@ -398,43 +404,122 @@ body,
     border-color 150ms ease-in-out;
 }
 
-/* Pulse logo animation - subtle ripple effect */
-@keyframes pulse-logo {
+/* Pulse brand motion - a brief live-data acknowledgement, not decorative looping. */
+@keyframes pulse-brand-lockup {
   0% {
-    transform: scale(1);
+    transform: translate3d(0, 0, 0) scale(1);
   }
 
-  25% {
-    transform: scale(1.05);
+  18% {
+    transform: translate3d(0, -0.5px, 0) scale(1.012);
   }
 
-  50% {
-    transform: scale(1);
+  48%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
   }
 }
 
-@keyframes pulse-ring {
+@keyframes pulse-brand-logo {
+  0%,
+  100% {
+    filter: drop-shadow(0 0 0 transparent);
+    transform: scale(1);
+  }
+
+  28% {
+    filter: drop-shadow(0 1px 5px var(--color-brand-primary-muted));
+    transform: scale(1.035);
+  }
+}
+
+@keyframes pulse-brand-ring {
   0%,
   100% {
     opacity: 0.92;
     transform: scale(1);
+    stroke-width: 14;
   }
 
-  50% {
-    opacity: 0.6;
-    transform: scale(1.1);
+  36% {
+    opacity: 0.64;
+    transform: scale(1.16);
+    stroke-width: 10;
   }
 }
 
-.animate-pulse-logo {
-  animation: pulse-logo 0.8s cubic-bezier(0.4, 0, 0.6, 1);
-  transform-origin: center;
+@keyframes pulse-brand-center {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+
+  28% {
+    transform: scale(0.88);
+  }
+
+  58% {
+    transform: scale(1.06);
+  }
 }
 
-.animate-pulse-logo .pulse-ring {
-  animation: pulse-ring 0.8s cubic-bezier(0.4, 0, 0.6, 1);
+@keyframes pulse-brand-wordmark {
+  0%,
+  100% {
+    color: var(--color-text-base);
+    text-shadow: 0 0 0 transparent;
+  }
+
+  24% {
+    color: var(--color-brand-primary-strong);
+    text-shadow: 0 0 9px var(--color-brand-primary-muted);
+  }
+}
+
+.pulse-brand-lockup {
+  transform-origin: left center;
+}
+
+.pulse-brand-logo,
+.pulse-brand-logo .pulse-ring,
+.pulse-brand-logo .pulse-center {
   transform-origin: center;
   transform-box: fill-box;
+}
+
+.animate-pulse-brand {
+  animation: pulse-brand-lockup 0.9s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: transform;
+}
+
+.animate-pulse-brand .pulse-brand-logo {
+  animation: pulse-brand-logo 0.9s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: filter, transform;
+}
+
+.animate-pulse-brand .pulse-ring {
+  animation: pulse-brand-ring 0.9s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: opacity, stroke-width, transform;
+}
+
+.animate-pulse-brand .pulse-center {
+  animation: pulse-brand-center 0.9s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: transform;
+}
+
+.animate-pulse-brand .pulse-brand-wordmark {
+  animation: pulse-brand-wordmark 0.9s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: color, text-shadow;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-pulse-brand,
+  .animate-pulse-brand .pulse-brand-logo,
+  .animate-pulse-brand .pulse-ring,
+  .animate-pulse-brand .pulse-center,
+  .animate-pulse-brand .pulse-brand-wordmark {
+    animation: none;
+  }
 }
 
 /* Stable table layout */

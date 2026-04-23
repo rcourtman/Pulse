@@ -85,6 +85,10 @@ describe('App architecture', () => {
     expect(appLayoutSource).toContain(
       "props.connectionStatus().kind === 'connected' && props.dataUpdated()",
     );
+    expect(appLayoutSource).toContain('const brandMotionActive = createMemo(');
+    expect(appLayoutSource).toContain('pulse-brand-lockup');
+    expect(appLayoutSource).toContain('animate-pulse-brand');
+    expect(appLayoutSource).not.toContain('animate-pulse-logo');
     expect(appLayoutSource).toContain("props.versionInfo()?.channel === 'rc'");
     expect(appLayoutSource).toContain('Preview');
     expect(appLayoutSource).not.toContain(
