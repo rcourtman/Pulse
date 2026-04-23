@@ -192,13 +192,14 @@ describe('StorageSummary', () => {
 
       expect(poolCards).toHaveLength(3);
       for (const sparkline of sparklines) {
-        expect(sparkline.getAttribute('data-highlight-series-id')).toBe('pool:alpha');
         expect(sparkline.getAttribute('data-hover-sync-series-id')).toBe('pool:alpha');
       }
       for (const sparkline of poolCards) {
+        expect(sparkline.getAttribute('data-highlight-series-id')).toBe('pool:alpha');
         expect(sparkline.getAttribute('data-interaction-state')).toBe('active');
       }
-      expect(diskTempCard?.getAttribute('data-interaction-state')).toBe('inactive');
+      expect(diskTempCard?.getAttribute('data-highlight-series-id') ?? '').toBe('');
+      expect(diskTempCard?.getAttribute('data-interaction-state')).toBe('default');
     });
   });
 

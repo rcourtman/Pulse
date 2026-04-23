@@ -54,9 +54,7 @@ export const STORAGE_POOL_ROW_USAGE_BAR_WRAP_CLASS = 'min-w-[120px] flex-1';
 export const STORAGE_POOL_ROW_GROWTH_CELL_CLASS =
   'hidden lg:table-cell px-2 py-1 align-middle text-[11px]';
 export const STORAGE_POOL_ROW_GROWTH_TEXT_CLASS = 'block truncate font-mono font-semibold';
-export const STORAGE_POOL_ROW_IMPACT_CELL_CLASS =
-  'hidden lg:table-cell px-2 py-1 align-middle text-[11px] text-base-content';
-export const STORAGE_POOL_ROW_ISSUE_CELL_CLASS = 'px-2 py-1 align-middle text-[11px]';
+export const STORAGE_POOL_ROW_ISSUE_CELL_CLASS = 'px-2 py-1 align-middle text-[11px] max-w-[14rem]';
 export const STORAGE_POOL_ROW_ISSUE_TEXT_CLASS = 'block truncate text-[11px] font-semibold';
 export const STORAGE_POOL_ROW_PLACEHOLDER_CLASS = 'text-muted';
 export const STORAGE_POOL_ROW_USAGE_FALLBACK_CLASS = 'text-[11px] text-muted';
@@ -91,5 +89,3 @@ export const buildStoragePoolRowModel = (
   };
 };
 
-export const getStoragePoolImpactTextClass = (impact: string): string =>
-  `${STORAGE_POOL_ROW_TEXT_TRUNCATE_CLASS} ${impact === '—' ? STORAGE_POOL_ROW_PLACEHOLDER_CLASS : ''}`.trim();

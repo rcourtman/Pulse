@@ -91,14 +91,13 @@ describe('storagePagePresentation', () => {
     ]);
     expect(getStoragePoolTableColumns('Growth (24h)').map((column) => column.label)).toEqual([
       'Storage',
+      'Primary Issue',
       'Source',
       'Type',
       'Host',
       'Protection',
       'Usage',
       'Growth (24h)',
-      'Impact',
-      'Primary Issue',
     ]);
   });
 

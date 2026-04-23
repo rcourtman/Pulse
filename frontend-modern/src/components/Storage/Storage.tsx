@@ -105,6 +105,13 @@ const Storage: Component = () => {
           onChartHoverSyncChange={setChartHoverSync}
           showJumpToActiveRow={shouldShowJumpToActiveStorageRow}
           onJumpToActiveRow={jumpToActiveStorageRow}
+          onScopeToDegradedPools={() => {
+            setView('pools');
+            setStorageFilterStatus('warning');
+          }}
+          onScopeToFailingDisks={() => {
+            setView('disks');
+          }}
         />
       </StickySummarySection>
 

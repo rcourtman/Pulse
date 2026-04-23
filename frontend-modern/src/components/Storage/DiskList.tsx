@@ -287,9 +287,21 @@ export const DiskList: Component<DiskListProps> = (props) => {
                           </TableCell>
 
                           <TableCell class={PHYSICAL_DISK_CELL_SIZE_CLASS}>
-                            <span class={PHYSICAL_DISK_SIZE_VALUE_CLASS}>
-                              {formatBytes(data.size)}
-                            </span>
+                            <Show
+                              when={data.size > 0}
+                              fallback={
+                                <span
+                                  class={PHYSICAL_DISK_MUTED_PLACEHOLDER_CLASS}
+                                  title="Disk size not reported by SMART/agent"
+                                >
+                                  —
+                                </span>
+                              }
+                            >
+                              <span class={PHYSICAL_DISK_SIZE_VALUE_CLASS}>
+                                {formatBytes(data.size)}
+                              </span>
+                            </Show>
                           </TableCell>
 
                         </TableRow>

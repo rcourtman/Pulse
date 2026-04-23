@@ -30,6 +30,7 @@ type StorageChartsResponse = {
 };
 
 const ARTIFACTS_DIR = path.resolve(__dirname, '..', '..', 'tmp', 'storage-growth-column');
+const STORAGE_POOL_GROWTH_CELL_SELECTOR = 'td:nth-child(8)';
 
 const test = base.extend<{}, WorkerFixtures>({
   storageState: async ({ authStorageStatePath }, use) => {
@@ -165,7 +166,7 @@ test.describe.serial('Storage growth column', () => {
     const defaultPayload = (await defaultResponse.json()) as StorageChartsResponse;
     const defaultGrowth = await firstVisibleGrowthExpectation(page, defaultPayload);
     const defaultGrowthCell = page.locator(
-      `tr[data-summary-series-id="${defaultGrowth.seriesId}"] td:nth-child(7)`,
+      `tr[data-summary-series-id="${defaultGrowth.seriesId}"] ${STORAGE_POOL_GROWTH_CELL_SELECTOR}`,
     );
     await expect(defaultGrowthCell).toHaveText(defaultGrowth.label);
 
@@ -189,7 +190,7 @@ test.describe.serial('Storage growth column', () => {
 
     await expect(poolsTable.getByText('Growth (7d)', { exact: true })).toBeVisible();
     const sevenDayGrowthCell = page.locator(
-      `tr[data-summary-series-id="${defaultGrowth.seriesId}"] td:nth-child(7)`,
+      `tr[data-summary-series-id="${defaultGrowth.seriesId}"] ${STORAGE_POOL_GROWTH_CELL_SELECTOR}`,
     );
     await expect(sevenDayGrowthCell).toHaveText(
       growthLabelForPool(sevenDayPayload.pools?.[defaultGrowth.seriesId]),

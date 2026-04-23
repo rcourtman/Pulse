@@ -3,7 +3,6 @@ import type { StorageRecord } from '@/features/storageBackups/models';
 import {
   buildStoragePoolRowModel,
   STORAGE_POOL_ROW_GROWTH_TEXT_CLASS,
-  getStoragePoolImpactTextClass,
   STORAGE_POOL_ROW_CLASS,
   STORAGE_POOL_ROW_EXPANDED_CLASS,
   STORAGE_POOL_ROW_HEIGHT_CLASS,
@@ -68,6 +67,5 @@ describe('storage pool row presentation', () => {
     expect(model.compactIssue).toBe('Capacity Pressure');
     expect(model.compactImpact).toBe('—');
     expect(model.freeBytes).toBe(200);
-    expect(getStoragePoolImpactTextClass('—')).toContain('text-muted');
   });
 });

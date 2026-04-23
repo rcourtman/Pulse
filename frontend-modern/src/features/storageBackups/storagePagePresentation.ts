@@ -31,6 +31,10 @@ export const getStoragePoolTableColumns = (
     className: 'px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider',
   },
   {
+    label: 'Primary Issue',
+    className: 'px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider',
+  },
+  {
     label: 'Source',
     className: 'px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider',
   },
@@ -57,15 +61,6 @@ export const getStoragePoolTableColumns = (
     label: growthColumnLabel,
     className:
       'hidden lg:table-cell px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider',
-  },
-  {
-    label: 'Impact',
-    className:
-      'hidden xl:table-cell px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider',
-  },
-  {
-    label: 'Primary Issue',
-    className: 'px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider',
   },
 ];
 

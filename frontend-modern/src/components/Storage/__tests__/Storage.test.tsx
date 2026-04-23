@@ -542,7 +542,7 @@ describe('Storage', () => {
           '[data-highlight-series-active="true"][data-highlight-series-id="pool:alpha"][data-active-series-display="isolate"][data-rendered-series-count="1"]',
         ).length,
       ).toBe(3);
-      expect(summary.querySelectorAll('[data-summary-card-state="inactive"]').length).toBe(1);
+      expect(summary.querySelectorAll('[data-summary-card-state="inactive"]').length).toBe(0);
     });
 
     fireEvent.pointerLeave(alphaRow, { pointerType: 'mouse' });
@@ -588,7 +588,7 @@ describe('Storage', () => {
           '[data-highlight-series-active="true"][data-highlight-series-id="pool:alpha"]',
         ).length,
       ).toBe(3);
-      expect(summary.querySelectorAll('[data-summary-card-state="inactive"]').length).toBe(1);
+      expect(summary.querySelectorAll('[data-summary-card-state="inactive"]').length).toBe(0);
     });
 
     fireEvent.mouseLeave(poolUsageChart);
@@ -1175,7 +1175,7 @@ describe('Storage', () => {
           '[data-highlight-series-active="true"][data-highlight-series-id="pool:alpha"]',
         ).length,
       ).toBe(1);
-      expect(summary.querySelectorAll('[data-summary-card-state="inactive"]').length).toBe(3);
+      expect(summary.querySelectorAll('[data-summary-card-state="inactive"]').length).toBe(2);
       expect(
         screen
           .getByText('Used Capacity')

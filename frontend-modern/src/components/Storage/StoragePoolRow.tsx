@@ -8,13 +8,11 @@ import {
   buildStoragePoolRowModel,
   STORAGE_POOL_ROW_GROWTH_CELL_CLASS,
   STORAGE_POOL_ROW_GROWTH_TEXT_CLASS,
-  getStoragePoolImpactTextClass,
   STORAGE_POOL_ROW_CLASS,
   STORAGE_POOL_ROW_EXPANDED_CLASS,
   STORAGE_POOL_ROW_HEIGHT_CLASS,
   STORAGE_POOL_ROW_PLACEHOLDER_CLASS,
   STORAGE_POOL_ROW_HOST_CELL_CLASS,
-  STORAGE_POOL_ROW_IMPACT_CELL_CLASS,
   STORAGE_POOL_ROW_ISSUE_CELL_CLASS,
   STORAGE_POOL_ROW_ISSUE_TEXT_CLASS,
   STORAGE_POOL_ROW_NAME_CELL_CLASS,
@@ -101,6 +99,20 @@ export const StoragePoolRow: Component<StoragePoolRowProps> = (props) => {
           </div>
         </td>
 
+        <td class={STORAGE_POOL_ROW_ISSUE_CELL_CLASS}>
+          <Show
+            when={row().compactIssue !== '—'}
+            fallback={<span class={STORAGE_POOL_ROW_PLACEHOLDER_CLASS}>—</span>}
+          >
+            <span
+              class={`${STORAGE_POOL_ROW_ISSUE_TEXT_CLASS} ${getStoragePoolIssueTextClass(props.record)}`}
+              title={row().compactIssueSummary || row().compactIssue}
+            >
+              {row().compactIssue}
+            </span>
+          </Show>
+        </td>
+
         <td class={STORAGE_POOL_ROW_SOURCE_CELL_CLASS}>
           <span class={`${row().platformToneClass} ${STORAGE_POOL_ROW_SOURCE_BADGE_CLASS}`}>
             {row().platformLabel}
@@ -160,28 +172,6 @@ export const StoragePoolRow: Component<StoragePoolRowProps> = (props) => {
           </span>
         </td>
 
-        <td class={STORAGE_POOL_ROW_IMPACT_CELL_CLASS}>
-          <span
-            class={getStoragePoolImpactTextClass(row().compactImpact)}
-            title={row().compactImpact}
-          >
-            {row().compactImpact}
-          </span>
-        </td>
-
-        <td class={STORAGE_POOL_ROW_ISSUE_CELL_CLASS}>
-          <Show
-            when={row().compactIssue !== '—'}
-            fallback={<span class={STORAGE_POOL_ROW_PLACEHOLDER_CLASS}>—</span>}
-          >
-            <span
-              class={`${STORAGE_POOL_ROW_ISSUE_TEXT_CLASS} ${getStoragePoolIssueTextClass(props.record)}`}
-              title={row().compactIssueSummary || row().compactIssue}
-            >
-              {row().compactIssue}
-            </span>
-          </Show>
-        </td>
       </tr>
       <Show when={props.expanded}>
         <StoragePoolDetail

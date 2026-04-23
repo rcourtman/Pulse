@@ -45,6 +45,8 @@ interface StorageSummaryProps {
   onChartHoverSyncChange?: (value: SummaryChartHoverSync | null) => void;
   showJumpToActiveRow?: boolean;
   onJumpToActiveRow?: () => void;
+  onScopeToDegradedPools?: () => void;
+  onScopeToFailingDisks?: () => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -158,6 +160,44 @@ const StorageSummary: Component<StorageSummaryProps> = (props) => {
     summaryFocus.filterSeriesForActiveScope(allDiskTempSeries()),
   );
 
+  // Symmetric cross-card scoping: a pool-row hover scopes the three pool
+  // charts; a disk-row hover scopes the disk chart. The "foreign" cards
+  // fall back to default state instead of dimming, because the hovered
+  // entity has no representation in their dataset.
+  const poolSeriesIdSet = createMemo(() => {
+    const ids = new Set<string>();
+    for (const s of allPoolUsageSeries()) if (s.id) ids.add(s.id);
+    for (const s of allPoolUsedSeries()) if (s.id) ids.add(s.id);
+    for (const s of allPoolAvailSeries()) if (s.id) ids.add(s.id);
+    return ids;
+  });
+  const diskSeriesIdSet = createMemo(() => {
+    const ids = new Set<string>();
+    for (const s of allDiskTempSeries()) if (s.id) ids.add(s.id);
+    return ids;
+  });
+  type SeriesFamily = 'pool' | 'disk';
+  const activeFamily = (): SeriesFamily | null => {
+    const id = summaryFocus.activeSeriesId();
+    if (!id) return null;
+    if (poolSeriesIdSet().has(id)) return 'pool';
+    if (diskSeriesIdSet().has(id)) return 'disk';
+    return null;
+  };
+  const interactionStateForFamily = (
+    family: SeriesFamily,
+    series: InteractiveSparklineSeries[],
+  ) => {
+    const af = activeFamily();
+    if (af && af !== family) return 'default' as const;
+    return summaryFocus.interactionStateFor(series);
+  };
+  const highlightIdForFamily = (family: SeriesFamily) => {
+    const af = activeFamily();
+    if (af && af !== family) return null;
+    return summaryFocus.activeSeriesId();
+  };
+
   const hasPoolUsage = () => poolUsageSeries().length > 0;
   const hasDiskTemp = () => diskTempSeries().length > 0;
   const hasPoolUsed = () => poolUsedSeries().length > 0;
@@ -249,14 +289,42 @@ const StorageSummary: Component<StorageSummaryProps> = (props) => {
                 }
               >
                 <Show when={(props.poolsDegraded ?? 0) > 0}>
-                  <span class="text-amber-600 dark:text-amber-400">
-                    {props.poolsDegraded} degraded
-                  </span>
+                  <Show
+                    when={props.onScopeToDegradedPools}
+                    fallback={
+                      <span class="text-amber-600 dark:text-amber-400">
+                        {props.poolsDegraded} degraded
+                      </span>
+                    }
+                  >
+                    <button
+                      type="button"
+                      onClick={() => props.onScopeToDegradedPools?.()}
+                      title="Show degraded pools"
+                      class="text-amber-600 hover:text-amber-700 hover:underline focus:underline focus:outline-none dark:text-amber-400 dark:hover:text-amber-300"
+                    >
+                      {props.poolsDegraded} degraded
+                    </button>
+                  </Show>
                 </Show>
                 <Show when={(props.disksFailing ?? 0) > 0}>
-                  <span class="text-amber-600 dark:text-amber-400">
-                    {props.disksFailing} {props.disksFailing === 1 ? 'disk failing' : 'disks failing'}
-                  </span>
+                  <Show
+                    when={props.onScopeToFailingDisks}
+                    fallback={
+                      <span class="text-amber-600 dark:text-amber-400">
+                        {props.disksFailing} {props.disksFailing === 1 ? 'disk failing' : 'disks failing'}
+                      </span>
+                    }
+                  >
+                    <button
+                      type="button"
+                      onClick={() => props.onScopeToFailingDisks?.()}
+                      title="Show physical disks"
+                      class="text-amber-600 hover:text-amber-700 hover:underline focus:underline focus:outline-none dark:text-amber-400 dark:hover:text-amber-300"
+                    >
+                      {props.disksFailing} {props.disksFailing === 1 ? 'disk failing' : 'disks failing'}
+                    </button>
+                  </Show>
                 </Show>
               </Show>
               <Show when={props.showJumpToActiveRow && props.onJumpToActiveRow}>
@@ -274,7 +342,7 @@ const StorageSummary: Component<StorageSummaryProps> = (props) => {
             loaded={props.loaded}
             hasData={hasPoolUsage()}
             emptyMessage={emptyLabel()}
-            interactionState={summaryFocus.interactionStateFor(poolUsageSeries())}
+            interactionState={interactionStateForFamily('pool', poolUsageSeries())}
           >
             <InteractiveSparkline
               series={poolUsageSeries()}
@@ -285,8 +353,8 @@ const StorageSummary: Component<StorageSummaryProps> = (props) => {
               highlightNearestSeriesOnHover
               hoverSourceKey="pool-usage"
               hoverSync={chartHoverSync()}
-              highlightSeriesId={summaryFocus.activeSeriesId()}
-              interactionState={summaryFocus.interactionStateFor(poolUsageSeries())}
+              highlightSeriesId={highlightIdForFamily('pool')}
+              interactionState={interactionStateForFamily('pool', poolUsageSeries())}
               onHoverSyncChange={setChartHoverSync}
             />
           </SummaryMetricCard>
@@ -298,7 +366,7 @@ const StorageSummary: Component<StorageSummaryProps> = (props) => {
             loaded={props.loaded}
             hasData={hasDiskTemp()}
             emptyMessage={emptyLabel()}
-            interactionState={summaryFocus.interactionStateFor(diskTempSeries())}
+            interactionState={interactionStateForFamily('disk', diskTempSeries())}
           >
             <InteractiveSparkline
               series={diskTempSeries()}
@@ -311,8 +379,8 @@ const StorageSummary: Component<StorageSummaryProps> = (props) => {
               highlightNearestSeriesOnHover
               hoverSourceKey="disk-temperature"
               hoverSync={chartHoverSync()}
-              highlightSeriesId={summaryFocus.activeSeriesId()}
-              interactionState={summaryFocus.interactionStateFor(diskTempSeries())}
+              highlightSeriesId={highlightIdForFamily('disk')}
+              interactionState={interactionStateForFamily('disk', diskTempSeries())}
               onHoverSyncChange={setChartHoverSync}
             />
           </SummaryMetricCard>
@@ -324,7 +392,7 @@ const StorageSummary: Component<StorageSummaryProps> = (props) => {
             loaded={props.loaded}
             hasData={hasPoolUsed()}
             emptyMessage={emptyLabel()}
-            interactionState={summaryFocus.interactionStateFor(poolUsedSeries())}
+            interactionState={interactionStateForFamily('pool', poolUsedSeries())}
           >
             <InteractiveSparkline
               series={poolUsedSeries()}
@@ -337,8 +405,8 @@ const StorageSummary: Component<StorageSummaryProps> = (props) => {
               highlightNearestSeriesOnHover
               hoverSourceKey="used-capacity"
               hoverSync={chartHoverSync()}
-              highlightSeriesId={summaryFocus.activeSeriesId()}
-              interactionState={summaryFocus.interactionStateFor(poolUsedSeries())}
+              highlightSeriesId={highlightIdForFamily('pool')}
+              interactionState={interactionStateForFamily('pool', poolUsedSeries())}
               onHoverSyncChange={setChartHoverSync}
             />
           </SummaryMetricCard>
@@ -350,7 +418,7 @@ const StorageSummary: Component<StorageSummaryProps> = (props) => {
             loaded={props.loaded}
             hasData={hasPoolAvail()}
             emptyMessage={emptyLabel()}
-            interactionState={summaryFocus.interactionStateFor(poolAvailSeries())}
+            interactionState={interactionStateForFamily('pool', poolAvailSeries())}
           >
             <InteractiveSparkline
               series={poolAvailSeries()}
@@ -363,8 +431,8 @@ const StorageSummary: Component<StorageSummaryProps> = (props) => {
               highlightNearestSeriesOnHover
               hoverSourceKey="available-space"
               hoverSync={chartHoverSync()}
-              highlightSeriesId={summaryFocus.activeSeriesId()}
-              interactionState={summaryFocus.interactionStateFor(poolAvailSeries())}
+              highlightSeriesId={highlightIdForFamily('pool')}
+              interactionState={interactionStateForFamily('pool', poolAvailSeries())}
               onHoverSyncChange={setChartHoverSync}
             />
           </SummaryMetricCard>

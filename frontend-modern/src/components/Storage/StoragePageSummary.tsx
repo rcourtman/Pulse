@@ -27,6 +27,8 @@ type StoragePageSummaryProps = {
   onChartHoverSyncChange: (value: SummaryChartHoverSync | null) => void;
   showJumpToActiveRow: () => boolean;
   onJumpToActiveRow: () => void;
+  onScopeToDegradedPools?: () => void;
+  onScopeToFailingDisks?: () => void;
 };
 
 export const StoragePageSummary: Component<StoragePageSummaryProps> = (props) => {
@@ -61,6 +63,8 @@ export const StoragePageSummary: Component<StoragePageSummaryProps> = (props) =>
       onChartHoverSyncChange={props.onChartHoverSyncChange}
       showJumpToActiveRow={props.showJumpToActiveRow()}
       onJumpToActiveRow={props.onJumpToActiveRow}
+      onScopeToDegradedPools={props.onScopeToDegradedPools}
+      onScopeToFailingDisks={props.onScopeToFailingDisks}
     />
   );
 };
