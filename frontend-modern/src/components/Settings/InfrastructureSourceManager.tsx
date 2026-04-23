@@ -54,6 +54,7 @@ const utilityToolbarButtonClass =
 const discoveryRowClass =
   'border-b border-border-subtle bg-blue-50/30 hover:bg-blue-50/40 dark:bg-blue-950/10 dark:hover:bg-blue-950/20';
 const wrappedFieldClass = 'whitespace-normal break-words leading-4';
+const CARD_LAYOUT_MAX_WIDTH_PX = 767;
 
 const sortRows = (rows: readonly InfrastructureSystemRow[]): InfrastructureSystemRow[] =>
   [...rows].sort((left, right) => left.name.localeCompare(right.name));
@@ -124,6 +125,7 @@ const memberMethodTitleFor = (row: InfrastructureSystemRow, memberIndex: number)
 };
 
 export const InfrastructureSourceManager: Component<InfrastructureSourceManagerProps> = (props) => {
+  let layoutContainerRef: HTMLDivElement | undefined;
   const products = createMemo(() => getInfrastructureSourceManagerProducts());
   const productRank = createMemo(() => {
     const next = new Map<InfrastructureOnboardingConnectionType, number>();
@@ -204,15 +206,44 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
     formatRelativeTimestamp(props.discoveryScanStatus().lastResultAt),
   );
 
-  const [viewportWidth, setViewportWidth] = createSignal(
+  const [layoutWidth, setLayoutWidth] = createSignal(
     typeof window !== 'undefined' ? window.innerWidth : 1024,
   );
+
+  const updateLayoutWidth = (width: number) => {
+    if (!Number.isFinite(width) || width <= 0) return;
+    setLayoutWidth(Math.round(width));
+  };
+
+  const measureLayoutWidth = () => {
+    const width = layoutContainerRef?.getBoundingClientRect().width;
+    if (typeof width === 'number') {
+      updateLayoutWidth(width);
+    }
+  };
+
   onMount(() => {
-    const handler = () => setViewportWidth(window.innerWidth);
-    window.addEventListener('resize', handler);
-    onCleanup(() => window.removeEventListener('resize', handler));
+    measureLayoutWidth();
+
+    if (typeof ResizeObserver === 'undefined' || !layoutContainerRef) {
+      const handleResize = () => measureLayoutWidth();
+      window.addEventListener('resize', handleResize);
+      onCleanup(() => window.removeEventListener('resize', handleResize));
+      return;
+    }
+
+    const observer = new ResizeObserver((entries) => {
+      const entryWidth = entries[0]?.contentRect.width;
+      if (typeof entryWidth === 'number') {
+        updateLayoutWidth(entryWidth);
+        return;
+      }
+      measureLayoutWidth();
+    });
+    observer.observe(layoutContainerRef);
+    onCleanup(() => observer.disconnect());
   });
-  const useCardLayout = createMemo(() => viewportWidth() < 768);
+  const useCardLayout = createMemo(() => layoutWidth() <= CARD_LAYOUT_MAX_WIDTH_PX);
 
   const headerActions = () => (
     <Show when={!props.readOnly}>
@@ -250,12 +281,13 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
   );
 
   return (
-    <SettingsPanel
-      title="Infrastructure systems"
-      description="Configured systems and discovered candidates grouped by platform or host type. Install Pulse Agent on each machine where you want full node-local telemetry."
-      noPadding
-      action={headerActions()}
-    >
+    <div ref={layoutContainerRef} class="min-w-0">
+      <SettingsPanel
+        title="Infrastructure systems"
+        description="Configured systems and discovered candidates grouped by platform or host type. Install Pulse Agent on each machine where you want full node-local telemetry."
+        noPadding
+        action={headerActions()}
+      >
       <Show when={!useCardLayout()}>
       <Table class="w-full table-fixed text-sm">
         <TableHeader class="bg-surface-alt/60">
@@ -918,7 +950,8 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
         </Show>
       </div>
       </Show>
-    </SettingsPanel>
+      </SettingsPanel>
+    </div>
   );
 };
 

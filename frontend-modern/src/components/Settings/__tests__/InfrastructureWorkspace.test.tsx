@@ -38,6 +38,47 @@ const createInfrastructureOnboardingMetricsTrackerMock = vi.hoisted(() =>
   }),
 );
 
+const originalResizeObserver = globalThis.ResizeObserver;
+let latestResizeObserverCallback: ResizeObserverCallback | null = null;
+
+const installResizeObserverMock = () => {
+  latestResizeObserverCallback = null;
+  class MockResizeObserver {
+    constructor(callback: ResizeObserverCallback) {
+      latestResizeObserverCallback = callback;
+    }
+
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  }
+
+  Object.defineProperty(globalThis, 'ResizeObserver', {
+    configurable: true,
+    writable: true,
+    value: MockResizeObserver,
+  });
+};
+
+const emitResizeObserverWidth = (width: number) => {
+  latestResizeObserverCallback?.(
+    [{ contentRect: { width } } as ResizeObserverEntry],
+    {} as ResizeObserver,
+  );
+};
+
+const restoreResizeObserver = () => {
+  if (originalResizeObserver) {
+    Object.defineProperty(globalThis, 'ResizeObserver', {
+      configurable: true,
+      writable: true,
+      value: originalResizeObserver,
+    });
+    return;
+  }
+  delete (globalThis as any).ResizeObserver;
+};
+
 vi.mock('@solidjs/router', async () => {
   const actual = await vi.importActual<typeof import('@solidjs/router')>('@solidjs/router');
   return {
@@ -227,10 +268,16 @@ describe('InfrastructureWorkspace', () => {
     routeState.search = '';
     connectionState.connections = [connectionFixture()];
     connectionState.rows = null;
+    Object.defineProperty(window, 'innerWidth', {
+      configurable: true,
+      writable: true,
+      value: 1024,
+    });
   });
 
   afterEach(() => {
     cleanup();
+    restoreResizeObserver();
   });
 
   const renderWorkspace = (propOverrides: Record<string, unknown> = {}) =>
@@ -254,6 +301,30 @@ describe('InfrastructureWorkspace', () => {
     expect(screen.getByRole('button', { name: /^Add infrastructure$/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Edit/i })).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Monitored systems' })).not.toBeInTheDocument();
+  });
+
+  it('switches the source manager layout from measured container width during live resize', async () => {
+    installResizeObserverMock();
+    Object.defineProperty(window, 'innerWidth', {
+      configurable: true,
+      writable: true,
+      value: 1180,
+    });
+
+    renderWorkspace();
+
+    await waitFor(() =>
+      expect(screen.getByRole('columnheader', { name: 'System' })).toBeInTheDocument(),
+    );
+
+    emitResizeObserverWidth(640);
+
+    await waitFor(() =>
+      expect(screen.queryByRole('columnheader', { name: 'System' })).not.toBeInTheDocument(),
+    );
+    expect(screen.getByText('Proxmox VE')).toBeInTheDocument();
+    expect(screen.getByText('zeus')).toBeInTheDocument();
+    expect(screen.getByText('Active')).toBeInTheDocument();
   });
 
   it('routes discovery actions from the manager and shows discovered candidates in the matching platform group', async () => {
