@@ -208,7 +208,7 @@ export default function Dashboard() {
               {(() => {
                 const colors = [
                   'border-l-blue-500/40',
-                  'border-l-violet-500/40',
+                  'border-l-rose-500/40',
                   'border-l-cyan-500/40',
                   'border-l-amber-500/40',
                 ];

@@ -192,34 +192,40 @@ export const getUnifiedResourceTableShellClass = (isMobile: boolean): string =>
 export const getUnifiedResourceTableColumnPresentations = (
   isMobile: boolean,
 ): UnifiedResourceTableColumnPresentations => ({
+  // Mobile widths are percentages so visible columns fill the viewport without
+  // triggering horizontal scroll. Hidden columns retain placeholder widths that
+  // never render. Host rows show Resource + CPU + Memory + Disk (40/20/20/20 =
+  // 100%). Service (PBS/PMG) rows show Resource + Health + Action (40/36/24 =
+  // 100%). See UnifiedResourceHostTableCard / UnifiedResourcePBSTableSection /
+  // UnifiedResourcePMGTableSection for the matching visibility predicates.
   resourceColumn: isMobile
-    ? buildUnifiedResourceTableColumnPresentation('w-full min-w-[120px]', '100%')
+    ? buildUnifiedResourceTableColumnPresentation('', '40%')
     : buildUnifiedResourceTableColumnPresentation('min-w-[220px] max-w-[220px]', 220),
   metricColumn: isMobile
-    ? buildUnifiedResourceTableColumnPresentation('min-w-[65px]', 70)
+    ? buildUnifiedResourceTableColumnPresentation('', '20%')
     : buildUnifiedResourceTableColumnPresentation('min-w-[144px] max-w-[144px]', 144),
   ioColumn: isMobile
-    ? buildUnifiedResourceTableColumnPresentation('min-w-[180px]', 180)
+    ? buildUnifiedResourceTableColumnPresentation('', '20%')
     : buildUnifiedResourceTableColumnPresentation('min-w-[192px] max-w-[192px]', 192),
   sourceColumn: isMobile
-    ? buildUnifiedResourceTableColumnPresentation('min-w-[140px]', 140)
+    ? buildUnifiedResourceTableColumnPresentation('', '20%')
     : buildUnifiedResourceTableColumnPresentation('min-w-[144px] max-w-[144px]', 144),
   uptimeColumn: isMobile
-    ? buildUnifiedResourceTableColumnPresentation('min-w-[70px] max-w-[80px]', 70)
+    ? buildUnifiedResourceTableColumnPresentation('', '15%')
     : buildUnifiedResourceTableColumnPresentation('min-w-[80px] max-w-[80px]', 80),
   tempColumn: isMobile
-    ? buildUnifiedResourceTableColumnPresentation('min-w-[50px] max-w-[60px]', 50)
+    ? buildUnifiedResourceTableColumnPresentation('', '15%')
     : buildUnifiedResourceTableColumnPresentation('min-w-[60px] max-w-[70px]', 60),
   serviceCountColumn: isMobile
-    ? buildUnifiedResourceTableColumnPresentation('min-w-[80px] max-w-[90px]', 80)
+    ? buildUnifiedResourceTableColumnPresentation('', '20%')
     : buildUnifiedResourceTableColumnPresentation('min-w-[110px] max-w-[130px]', 110),
   serviceQueueColumn: isMobile
-    ? buildUnifiedResourceTableColumnPresentation('min-w-[88px] max-w-[104px]', 88)
+    ? buildUnifiedResourceTableColumnPresentation('', '20%')
     : buildUnifiedResourceTableColumnPresentation('min-w-[120px] max-w-[140px]', 120),
   serviceHealthColumn: isMobile
-    ? buildUnifiedResourceTableColumnPresentation('min-w-[100px] max-w-[120px]', 100)
+    ? buildUnifiedResourceTableColumnPresentation('', '36%')
     : buildUnifiedResourceTableColumnPresentation('min-w-[140px] max-w-[170px]', 140),
   serviceActionColumn: isMobile
-    ? buildUnifiedResourceTableColumnPresentation('min-w-[82px] max-w-[96px]', 82)
+    ? buildUnifiedResourceTableColumnPresentation('', '24%')
     : buildUnifiedResourceTableColumnPresentation('min-w-[120px] max-w-[140px]', 120),
 });

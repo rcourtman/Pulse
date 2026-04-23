@@ -430,7 +430,7 @@ const Ceph: Component = () => {
               <div class="flex items-center justify-between mb-2">
                 <span class="text-xs font-medium text-muted uppercase tracking-wide">Clusters</span>
                 <svg
-                  class="w-4 h-4 text-purple-500"
+                  class="w-4 h-4 text-indigo-500"
                   fill="none"
                   viewBox="0 0 24 24"
                   stroke="currentColor"
@@ -560,7 +560,7 @@ const Ceph: Component = () => {
                             </span>
                           </TableCell>
                           <TableCell class="px-2 py-2.5">
-                            <span class="inline-flex items-center gap-1 text-xs text-purple-600 dark:text-purple-400">
+                            <span class="inline-flex items-center gap-1 text-xs text-indigo-600 dark:text-indigo-400">
                               <CephServiceIcon type="mgr" class="w-3.5 h-3.5" />
                               <span class="font-semibold">{cluster.numMgrs || 0}</span>
                             </span>

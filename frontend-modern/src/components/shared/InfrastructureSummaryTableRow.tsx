@@ -198,7 +198,7 @@ export const InfrastructureSummaryTableRow: Component<InfrastructureSummaryTable
               </Show>
               <Show when={isPVEItem && node()!.linkedAgentId}>
                 <span
-                  class="text-[9px] px-1 py-0 rounded font-medium whitespace-nowrap bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-400"
+                  class="text-[9px] px-1 py-0 rounded font-medium whitespace-nowrap bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-400"
                   title="Pulse agent installed for enhanced metrics"
                 >
                   +Agent
@@ -224,7 +224,7 @@ export const InfrastructureSummaryTableRow: Component<InfrastructureSummaryTable
                 </span>
               </Show>
               <Show when={isPBSItem}>
-                <span class="text-[9px] px-1 py-0 rounded font-medium bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-400">
+                <span class="text-[9px] px-1 py-0 rounded font-medium bg-teal-100 text-teal-700 dark:bg-teal-900 dark:text-teal-400">
                   PBS
                 </span>
               </Show>

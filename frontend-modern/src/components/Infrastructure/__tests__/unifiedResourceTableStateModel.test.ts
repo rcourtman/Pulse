@@ -109,9 +109,17 @@ describe('unifiedResourceTableStateModel', () => {
     const desktopColumns = getUnifiedResourceTableColumnPresentations(false);
 
     expect(getUnifiedResourceTableShellClass(true)).toContain('table-fixed');
+    expect(getUnifiedResourceTableShellClass(true)).toContain('min-w-full');
     expect(getUnifiedResourceTableShellClass(false)).toContain('min-w-[max-content]');
-    expect(mobileColumns.resourceColumn.width).toBe('100%');
-    expect(mobileColumns.metricColumn.width).toBe(70);
+    // Mobile uses percentage widths so the visible-column set fills the
+    // viewport without horizontal overflow. Host rows render
+    // Resource + CPU + Memory + Disk = 40 + 3×20 = 100%; service (PBS/PMG)
+    // rows render Resource + Health + Action = 40 + 36 + 24 = 100%. Columns
+    // hidden at mobile keep placeholder percentages that never paint.
+    expect(mobileColumns.resourceColumn.width).toBe('40%');
+    expect(mobileColumns.metricColumn.width).toBe('20%');
+    expect(mobileColumns.serviceHealthColumn.width).toBe('36%');
+    expect(mobileColumns.serviceActionColumn.width).toBe('24%');
     expect(desktopColumns.resourceColumn.className).toContain('min-w-[220px]');
     expect(desktopColumns.resourceColumn.className).toContain('max-w-[220px]');
     expect(desktopColumns.resourceColumn.width).toBe(220);

@@ -88,7 +88,7 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                   width={table.metricColumn().width}
                   onClick={() => table.handleSort('memory')}
                 >
-                  Memory {table.renderSortIndicator('memory')}
+                  {table.isMobile() ? 'Mem' : 'Memory'} {table.renderSortIndicator('memory')}
                 </TableHead>
                 <TableHead
                   class={table.metricColumn().className}
@@ -331,7 +331,10 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                         onClick={() => table.toggleExpand(resource.id)}
                         {...resourceRowInteraction}
                       >
-                        <TableCell class="pr-1.5 sm:pr-2 py-0.5 align-middle overflow-hidden pl-2 sm:pl-3">
+                        <TableCell
+                          class={`pr-1.5 sm:pr-2 py-0.5 align-middle overflow-hidden pl-2 sm:pl-3 ${table.resourceColumn().className}`}
+                          width={table.resourceColumn().width}
+                        >
                           <div class="flex items-center gap-1.5 min-w-0">
                             <SummaryRowActionButton
                               kind="disclosure"

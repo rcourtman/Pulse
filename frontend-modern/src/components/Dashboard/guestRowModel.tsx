@@ -293,11 +293,18 @@ type GuestColumnWidthOverride = {
   maxWidth?: string | null;
 };
 
+// Mobile widths use percentages so the visible column set fills the viewport
+// without triggering horizontal scroll. The workload table's mobile-essential
+// columns (name + cpu + memory + disk + link) must sum to 100% at mobile:
+// 44 + 17 + 17 + 17 + 5 = 100. See useDashboardControlsState
+// `mobileEssentialColumns` for the visible set, and DashboardWorkloadTable for
+// the `table-fixed` class that makes these percentages authoritative.
 const GUEST_COLUMN_MOBILE_OVERRIDES: Record<string, GuestColumnWidthOverride> = {
-  name: { width: null, minWidth: '120px', maxWidth: null },
-  cpu: { width: '70px', minWidth: '60px', maxWidth: '70px' },
-  memory: { width: '70px', minWidth: '60px', maxWidth: '70px' },
-  disk: { width: '70px', minWidth: '60px', maxWidth: '70px' },
+  name: { width: '44%', minWidth: null, maxWidth: '44%' },
+  cpu: { width: '17%', minWidth: null, maxWidth: '17%' },
+  memory: { width: '17%', minWidth: null, maxWidth: '17%' },
+  disk: { width: '17%', minWidth: null, maxWidth: '17%' },
+  link: { width: '5%', minWidth: null, maxWidth: '5%' },
   netIo: { width: '170px', minWidth: '170px', maxWidth: '170px' },
   diskIo: { width: '170px', minWidth: '170px', maxWidth: '170px' },
 };

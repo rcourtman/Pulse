@@ -433,7 +433,7 @@ export function GuestRow(props: GuestRowProps) {
                   <Show when={ociImage()} fallback={<span class="text-xs text-slate-400">—</span>}>
                     {/* For OCI containers without guest agent, show image name in OS column */}
                     <span
-                      class="text-xs text-purple-600 dark:text-purple-400 truncate max-w-[100px]"
+                      class="text-xs text-cyan-600 dark:text-cyan-400 truncate max-w-[100px]"
                       title={`OCI Image: ${ociImage()}`}
                     >
                       {ociImage()}

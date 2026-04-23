@@ -74,7 +74,7 @@ export function DashboardWorkloadTable(props: DashboardWorkloadTableProps) {
         />
         <Table
           wrapperRef={props.setTableWrapperRef}
-          class={`workload-table min-w-full ${props.isMobile() ? 'workload-table--mobile' : 'workload-table--desktop table-fixed'}`}
+          class={`workload-table min-w-full table-fixed ${props.isMobile() ? 'workload-table--mobile' : 'workload-table--desktop'}`}
         >
           <colgroup>
             <For each={props.mobileVisibleColumns()}>

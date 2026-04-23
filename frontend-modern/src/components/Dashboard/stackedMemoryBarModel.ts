@@ -164,7 +164,7 @@ function getTooltipRows(
     rows.push({
       borderTop: true,
       label: 'Swap',
-      labelClass: 'text-purple-400',
+      labelClass: 'text-amber-400',
       value: `${formatBytes(props.swapUsed || 0)} / ${formatBytes(props.swapTotal || 0)}`,
     });
   }

@@ -59,28 +59,28 @@ export const UnifiedResourcePMGTableSection: Component<UnifiedResourcePMGTableSe
                 Resource
               </TableHead>
               <TableHead
-                classList={{ hidden: !table.isVisible('primary') && !table.isMobile() }}
+                classList={{ hidden: table.isMobile() || !table.isVisible('primary') }}
                 class={table.serviceQueueColumn().className}
                 width={table.serviceQueueColumn().width}
               >
                 Queue
               </TableHead>
               <TableHead
-                classList={{ hidden: !table.isVisible('secondary') && !table.isMobile() }}
+                classList={{ hidden: table.isMobile() || !table.isVisible('secondary') }}
                 class={table.serviceQueueColumn().className}
                 width={table.serviceQueueColumn().width}
               >
                 Deferred
               </TableHead>
               <TableHead
-                classList={{ hidden: !table.isVisible('supplementary') && !table.isMobile() }}
+                classList={{ hidden: table.isMobile() || !table.isVisible('supplementary') }}
                 class={table.serviceQueueColumn().className}
                 width={table.serviceQueueColumn().width}
               >
                 Hold
               </TableHead>
               <TableHead
-                classList={{ hidden: !table.isVisible('secondary') && !table.isMobile() }}
+                classList={{ hidden: table.isMobile() || !table.isVisible('secondary') }}
                 class={table.serviceCountColumn().className}
                 width={table.serviceCountColumn().width}
               >
@@ -93,14 +93,14 @@ export const UnifiedResourcePMGTableSection: Component<UnifiedResourcePMGTableSe
                 Health
               </TableHead>
               <TableHead
-                classList={{ hidden: !table.isVisible('secondary') && !table.isMobile() }}
+                classList={{ hidden: table.isMobile() || !table.isVisible('secondary') }}
                 class={table.sourceColumn().className}
                 width={table.sourceColumn().width}
               >
                 Source
               </TableHead>
               <TableHead
-                classList={{ hidden: !table.isVisible('supplementary') && !table.isMobile() }}
+                classList={{ hidden: table.isMobile() || !table.isVisible('supplementary') }}
                 class={table.uptimeColumn().className}
                 width={table.uptimeColumn().width}
               >
@@ -220,7 +220,7 @@ export const UnifiedResourcePMGTableSection: Component<UnifiedResourcePMGTableSe
                         </div>
                       </TableCell>
 
-                      <TableCell classList={{ hidden: !table.isVisible('primary') && !table.isMobile() }}>
+                      <TableCell classList={{ hidden: table.isMobile() || !table.isVisible('primary') }}>
                         <div class="flex justify-center">
                           <Show
                             when={pmgRow()?.queue != null}
@@ -231,7 +231,7 @@ export const UnifiedResourcePMGTableSection: Component<UnifiedResourcePMGTableSe
                         </div>
                       </TableCell>
 
-                      <TableCell classList={{ hidden: !table.isVisible('secondary') && !table.isMobile() }}>
+                      <TableCell classList={{ hidden: table.isMobile() || !table.isVisible('secondary') }}>
                         <div class="flex justify-center">
                           <Show
                             when={pmgRow()?.deferred != null}
@@ -242,7 +242,7 @@ export const UnifiedResourcePMGTableSection: Component<UnifiedResourcePMGTableSe
                         </div>
                       </TableCell>
 
-                      <TableCell classList={{ hidden: !table.isVisible('supplementary') && !table.isMobile() }}>
+                      <TableCell classList={{ hidden: table.isMobile() || !table.isVisible('supplementary') }}>
                         <div class="flex justify-center">
                           <Show
                             when={pmgRow()?.hold != null}
@@ -253,7 +253,7 @@ export const UnifiedResourcePMGTableSection: Component<UnifiedResourcePMGTableSe
                         </div>
                       </TableCell>
 
-                      <TableCell classList={{ hidden: !table.isVisible('secondary') && !table.isMobile() }}>
+                      <TableCell classList={{ hidden: table.isMobile() || !table.isVisible('secondary') }}>
                         <div class="flex justify-center">
                           <Show
                             when={pmgRow()?.nodes != null}
@@ -277,7 +277,7 @@ export const UnifiedResourcePMGTableSection: Component<UnifiedResourcePMGTableSe
                         </div>
                       </TableCell>
 
-                      <TableCell classList={{ hidden: !table.isVisible('secondary') && !table.isMobile() }}>
+                      <TableCell classList={{ hidden: table.isMobile() || !table.isVisible('secondary') }}>
                         <div class="flex items-center justify-center gap-1">
                           <Show
                             when={hasUnifiedSources()}
@@ -311,7 +311,7 @@ export const UnifiedResourcePMGTableSection: Component<UnifiedResourcePMGTableSe
                         </div>
                       </TableCell>
 
-                      <TableCell classList={{ hidden: !table.isVisible('supplementary') && !table.isMobile() }}>
+                      <TableCell classList={{ hidden: table.isMobile() || !table.isVisible('supplementary') }}>
                         <div class="flex justify-center">
                           <Show
                             when={resource.uptime}
