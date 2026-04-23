@@ -170,11 +170,17 @@ func TestBuildConnections_AgentHostAliasesIncludeReportedIdentityHints(t *testin
 	in := aggregatorInputs{
 		hosts: []models.Host{
 			{
-				ID:           "pi",
-				Hostname:     "pi",
-				ReportIP:     "192.168.0.2",
-				LastSeen:     now,
-				AgentVersion: "6.0.0",
+				ID:              "pi",
+				Hostname:        "pi",
+				Platform:        "unraid",
+				OSName:          "Unraid",
+				OSVersion:       "7.1.0",
+				KernelVersion:   "6.12.0",
+				Architecture:    "x86_64",
+				ReportIP:        "192.168.0.2",
+				LastSeen:        now,
+				AgentVersion:    "6.0.0",
+				CommandsEnabled: true,
 				NetworkInterfaces: []models.HostNetworkInterface{
 					{Name: "eth0", Addresses: []string{"192.168.0.2/24", "fe80::1/64"}},
 				},
@@ -190,6 +196,24 @@ func TestBuildConnections_AgentHostAliasesIncludeReportedIdentityHints(t *testin
 	}
 	if !reflect.DeepEqual(got[0].HostAliases, []string{"pi", "192.168.0.2", "fe80::1"}) {
 		t.Fatalf("agent host aliases = %+v, want %+v", got[0].HostAliases, []string{"pi", "192.168.0.2", "fe80::1"})
+	}
+	if got[0].AgentIdentity == nil {
+		t.Fatal("expected agent identity metadata")
+	}
+	if !reflect.DeepEqual(
+		got[0].AgentIdentity,
+		&ConnectionAgentIdentity{
+			Hostname:        "pi",
+			Platform:        "unraid",
+			OSName:          "Unraid",
+			OSVersion:       "7.1.0",
+			KernelVersion:   "6.12.0",
+			Architecture:    "x86_64",
+			ReportIP:        "192.168.0.2",
+			CommandsEnabled: true,
+		},
+	) {
+		t.Fatalf("agent identity = %+v", got[0].AgentIdentity)
 	}
 }
 

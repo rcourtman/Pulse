@@ -272,7 +272,11 @@ work extends shared components instead of creating new local variants.
    always-on version column for Pulse Agent; exact version text belongs in the
    edit/detail surfaces, while the landing table only surfaces a compact
    warning badge when an attached or standalone agent actually has an update
-   available.
+   available. That same table boundary must reuse the existing `System` and
+   `Endpoint` cells for compact standalone-agent identity such as
+   `Unraid 7.1.0` plus a reported host address; it must not add a new
+   diagnostics column just to surface host facts the unified agent already
+   reports.
    That same shared shell boundary now owns one canonical infrastructure
    destination in the Settings sidebar. `InfrastructureWorkspace.tsx` owns the
    source-manager landing inside that destination, while route-backed add flows

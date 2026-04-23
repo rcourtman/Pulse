@@ -104,6 +104,52 @@ describe('ConnectionsAPI', () => {
     });
   });
 
+  it('list() preserves agent identity metadata on agent-backed connections', async () => {
+    const connections: Connection[] = [
+      {
+        id: 'agent:tower',
+        type: 'agent',
+        name: 'Tower',
+        address: 'Tower',
+        state: 'active',
+        stateReason: '',
+        enabled: true,
+        surfaces: ['host'],
+        scope: { host: true },
+        lastSeen: '2026-04-23T13:00:00Z',
+        lastError: null,
+        source: 'agent',
+        agentIdentity: {
+          hostname: 'tower',
+          platform: 'unraid',
+          osName: 'Unraid',
+          osVersion: '7.1.0',
+          kernelVersion: '6.12.0',
+          architecture: 'x86_64',
+          reportIp: '192.168.0.10',
+          commandsEnabled: true,
+        },
+        capabilities: { supportsPause: false, supportsScope: false, supportsTest: false },
+      },
+    ];
+    mockedApiFetchJSON.mockResolvedValueOnce({ connections });
+
+    const result = await ConnectionsAPI.list();
+
+    expect(result.connections[0]).toMatchObject({
+      agentIdentity: {
+        hostname: 'tower',
+        platform: 'unraid',
+        osName: 'Unraid',
+        osVersion: '7.1.0',
+        kernelVersion: '6.12.0',
+        architecture: 'x86_64',
+        reportIp: '192.168.0.10',
+        commandsEnabled: true,
+      },
+    });
+  });
+
   it('list() preserves canonical host alias metadata on connections and grouped members', async () => {
     mockedApiFetchJSON.mockResolvedValueOnce({
       connections: [

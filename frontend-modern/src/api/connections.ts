@@ -32,6 +32,17 @@ export interface ConnectionError {
   at: string;
 }
 
+export interface ConnectionAgentIdentity {
+  hostname?: string;
+  platform?: string;
+  osName?: string;
+  osVersion?: string;
+  kernelVersion?: string;
+  architecture?: string;
+  reportIp?: string;
+  commandsEnabled?: boolean;
+}
+
 export interface Connection {
   id: string;
   type: ConnectionType;
@@ -46,6 +57,7 @@ export interface Connection {
   lastSeen: string | null;
   lastError: ConnectionError | null;
   source: ConnectionSource;
+  agentIdentity?: ConnectionAgentIdentity;
   agentVersion?: string;
   expectedAgentVersion?: string;
   agentUpdateAvailable?: boolean;

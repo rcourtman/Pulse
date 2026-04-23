@@ -20,6 +20,8 @@ import { InfrastructureInstallerSection } from './InfrastructureInstallerSection
 import { InfrastructureSourceManager } from './InfrastructureSourceManager';
 import { InfrastructureSourcePicker } from './InfrastructureSourcePicker';
 import {
+  connectionAgentEndpointDisplay,
+  connectionAgentIdentitySummary,
   connectionAgentVersionPresentation,
   connectionLastActivityText,
   type InfrastructureSystemRow,
@@ -376,6 +378,14 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
     const removeConfirming = () => rowActions.confirmingRemove(connection.id);
     const error = () => rowActions.actionError(connection.id);
     const versionPresentation = () => connectionAgentVersionPresentation(connection);
+    const identitySummary = () => connectionAgentIdentitySummary(connection);
+    const endpointDisplay = () => connectionAgentEndpointDisplay(connection);
+    const infoCard = (label: string, value: string) => (
+      <div class="rounded-lg border border-border bg-surface-alt px-3 py-3">
+        <div class="text-[11px] font-medium uppercase tracking-wide text-muted">{label}</div>
+        <div class="mt-1 text-sm text-base-content">{value}</div>
+      </div>
+    );
 
     return (
       <div class="space-y-6 p-4">
@@ -386,8 +396,11 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
                 Pulse Agent
               </div>
               <div class="text-lg font-semibold text-base-content">{connection.name}</div>
-              <Show when={connection.address && connection.address !== connection.name}>
-                <div class="break-words text-sm text-muted">{connection.address}</div>
+              <Show when={identitySummary()}>
+                {(summary) => <div class="text-sm text-muted">{summary()}</div>}
+              </Show>
+              <Show when={endpointDisplay()}>
+                {(endpoint) => <div class="break-words text-sm text-muted">{endpoint()}</div>}
               </Show>
             </div>
             <span class="inline-flex items-center rounded-full border border-border bg-surface-alt px-2.5 py-1 text-xs font-medium text-base-content">
@@ -395,21 +408,9 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
             </span>
           </div>
 
-          <div class="mt-4 grid gap-3 sm:grid-cols-2">
-            <div class="rounded-lg border border-border bg-surface-alt px-3 py-3">
-              <div class="text-[11px] font-medium uppercase tracking-wide text-muted">
-                Connection state
-              </div>
-              <div class="mt-1 text-sm text-base-content">{connection.state}</div>
-            </div>
-            <div class="rounded-lg border border-border bg-surface-alt px-3 py-3">
-              <div class="text-[11px] font-medium uppercase tracking-wide text-muted">
-                Last seen
-              </div>
-              <div class="mt-1 text-sm text-base-content">
-                {connection.lastSeen ? connection.lastSeen : 'No activity yet'}
-              </div>
-            </div>
+          <div class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {infoCard('Connection state', connection.state)}
+            {infoCard('Last seen', connection.lastSeen ? connection.lastSeen : 'No activity yet')}
             <Show when={versionPresentation()}>
               {(presentation) => (
                 <div class="rounded-lg border border-border bg-surface-alt px-3 py-3">
@@ -423,6 +424,27 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
                     </span>
                   </div>
                 </div>
+              )}
+            </Show>
+            <Show when={identitySummary()}>
+              {(summary) => infoCard('Operating system', summary())}
+            </Show>
+            <Show when={connection.agentIdentity?.hostname?.trim()}>
+              {(hostname) => infoCard('Reported hostname', hostname())}
+            </Show>
+            <Show when={connection.agentIdentity?.reportIp?.trim()}>
+              {(reportIp) => infoCard('Reported IP', reportIp())}
+            </Show>
+            <Show when={connection.agentIdentity?.kernelVersion?.trim()}>
+              {(kernelVersion) => infoCard('Kernel', kernelVersion())}
+            </Show>
+            <Show when={connection.agentIdentity?.architecture?.trim()}>
+              {(architecture) => infoCard('Architecture', architecture())}
+            </Show>
+            <Show when={connection.agentIdentity}>
+              {infoCard(
+                'Remote commands',
+                connection.agentIdentity?.commandsEnabled ? 'Enabled' : 'Not enabled',
               )}
             </Show>
           </div>

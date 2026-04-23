@@ -439,7 +439,12 @@ the canonical monitored-system blocked payload.
     carries the
     installed agent version, the current server-side target agent version when
     it is meaningful, and whether an update is available, so settings surfaces
-    do not invent frontend-local version comparison rules.
+    do not invent frontend-local version comparison rules. That same shared
+    contract also carries compact `agentIdentity` facts on agent-backed
+    connections, including the reported hostname, report IP, platform/OS,
+    kernel, architecture, and command capability, so settings surfaces can
+    render recognizable standalone-host identity without a second inventory
+    fetch or frontend-local host reconciliation rules.
 
 ## Forbidden Paths
 

@@ -8,6 +8,53 @@ describe('useConnectionsLedger', () => {
     vi.restoreAllMocks();
   });
 
+  it('renders standalone agent rows with compact host identity and endpoint context', async () => {
+    const connections: Connection[] = [
+      {
+        id: 'agent:tower',
+        type: 'agent',
+        name: 'Tower',
+        address: 'Tower',
+        state: 'active',
+        stateReason: '',
+        enabled: true,
+        surfaces: ['host'],
+        scope: { host: true },
+        lastSeen: '2026-04-23T12:00:00Z',
+        lastError: null,
+        source: 'agent',
+        agentIdentity: {
+          hostname: 'tower',
+          platform: 'unraid',
+          osName: 'Unraid',
+          osVersion: '7.1.0',
+          kernelVersion: '6.12.0',
+          architecture: 'x86_64',
+          reportIp: '192.168.0.10',
+          commandsEnabled: true,
+        },
+        capabilities: { supportsPause: false, supportsScope: false, supportsTest: false },
+      },
+    ];
+    vi.spyOn(ConnectionsAPI, 'list').mockResolvedValue({ connections, systems: [] });
+
+    const { result } = renderHook(() => useConnectionsLedger());
+
+    await waitFor(() => expect(result.rows()).toHaveLength(1));
+    expect(result.rows()[0]).toMatchObject({
+      id: 'agent:tower',
+      ownerType: 'agent',
+      name: 'Tower',
+      subtitle: 'via Pulse Agent',
+      identitySubtitle: 'Unraid 7.1.0',
+      source: 'agent',
+      host: '192.168.0.10',
+      isAgent: true,
+      isCluster: false,
+      coverageLabels: ['Host telemetry'],
+    });
+  });
+
   it('renders a Proxmox cluster row from the canonical system metadata', async () => {
     const connections: Connection[] = [
       {

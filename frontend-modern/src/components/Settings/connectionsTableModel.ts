@@ -19,6 +19,75 @@ export const lastActivityTextFromLastSeen = (lastSeen?: string | null): string =
 export const connectionLastActivityText = (connection: Connection): string =>
   lastActivityTextFromLastSeen(connection.lastSeen);
 
+const prettifyPlatform = (platform?: string | null): string | null => {
+  const normalized = platform?.trim().toLowerCase();
+  if (!normalized) return null;
+  switch (normalized) {
+    case 'linux':
+      return 'Linux';
+    case 'windows':
+      return 'Windows';
+    case 'darwin':
+    case 'macos':
+      return 'macOS';
+    case 'freebsd':
+      return 'FreeBSD';
+    case 'unraid':
+      return 'Unraid';
+    default:
+      return platform?.trim() ?? null;
+  }
+};
+
+const isIPv4Literal = (value: string): boolean => /^\d{1,3}(?:\.\d{1,3}){3}$/.test(value);
+
+const firstDistinctAgentIPv4Alias = (connection: Connection): string | null => {
+  const excluded = new Set(
+    [
+      connection.name,
+      connection.address,
+      connection.agentIdentity?.hostname,
+      connection.agentIdentity?.reportIp,
+    ]
+      .map((value) => value?.trim().toLowerCase())
+      .filter((value): value is string => Boolean(value)),
+  );
+
+  for (const candidate of connection.hostAliases ?? []) {
+    const trimmed = candidate.trim();
+    if (!trimmed || !isIPv4Literal(trimmed)) continue;
+    if (excluded.has(trimmed.toLowerCase())) continue;
+    return trimmed;
+  }
+  return null;
+};
+
+export const connectionAgentIdentitySummary = (connection: Connection): string | null => {
+  const osName = connection.agentIdentity?.osName?.trim();
+  const osVersion = connection.agentIdentity?.osVersion?.trim();
+  if (osName && osVersion) return `${osName} ${osVersion}`;
+  if (osName) return osName;
+  return prettifyPlatform(connection.agentIdentity?.platform);
+};
+
+export const connectionAgentEndpointDisplay = (connection: Connection): string | null => {
+  const normalizedName = connection.name.trim().toLowerCase();
+  const reportIp = connection.agentIdentity?.reportIp?.trim();
+  if (reportIp) return reportIp;
+
+  const aliasIPv4 = firstDistinctAgentIPv4Alias(connection);
+  if (aliasIPv4) return aliasIPv4;
+
+  const hostname = connection.agentIdentity?.hostname?.trim();
+  if (hostname && hostname.toLowerCase() !== normalizedName) {
+    return hostname;
+  }
+
+  const address = connection.address?.trim();
+  if (!address) return null;
+  return address.toLowerCase() !== normalizedName ? address : null;
+};
+
 export interface ConnectionAgentVersionPresentation {
   badgeClassName: string;
   badgeLabel: string;
@@ -146,6 +215,7 @@ export interface InfrastructureSystemRow {
   ownerType: ConnectionType;
   name: string;
   subtitle?: string;
+  identitySubtitle?: string;
   source: InfrastructureSourceKind;
   host?: string;
   coverageLabels: string[];

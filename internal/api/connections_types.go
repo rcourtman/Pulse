@@ -59,27 +59,43 @@ type ConnectionError struct {
 	Category string    `json:"category,omitempty"`
 }
 
+// ConnectionAgentIdentity carries host identity facts Pulse already knows for
+// an agent-backed source. The infrastructure settings surface uses this to
+// render compact standalone-host identity without forcing every consumer to
+// query the broader host inventory.
+type ConnectionAgentIdentity struct {
+	Hostname        string `json:"hostname,omitempty"`
+	Platform        string `json:"platform,omitempty"`
+	OSName          string `json:"osName,omitempty"`
+	OSVersion       string `json:"osVersion,omitempty"`
+	KernelVersion   string `json:"kernelVersion,omitempty"`
+	Architecture    string `json:"architecture,omitempty"`
+	ReportIP        string `json:"reportIp,omitempty"`
+	CommandsEnabled bool   `json:"commandsEnabled,omitempty"`
+}
+
 // Connection is the unified row the frontend consumes. It replaces the
 // per-type shapes that today require separate fetches and separate table
 // renderers.
 type Connection struct {
-	ID                   string                 `json:"id"`
-	Type                 ConnectionType         `json:"type"`
-	Name                 string                 `json:"name"`
-	Address              string                 `json:"address"`
-	HostAliases          []string               `json:"hostAliases,omitempty"`
-	State                ConnectionState        `json:"state"`
-	StateReason          string                 `json:"stateReason,omitempty"`
-	Enabled              bool                   `json:"enabled"`
-	Surfaces             []string               `json:"surfaces"`
-	Scope                map[string]bool        `json:"scope"`
-	LastSeen             *time.Time             `json:"lastSeen,omitempty"`
-	LastError            *ConnectionError       `json:"lastError,omitempty"`
-	Source               ConnectionSource       `json:"source"`
-	AgentVersion         string                 `json:"agentVersion,omitempty"`
-	ExpectedAgentVersion string                 `json:"expectedAgentVersion,omitempty"`
-	AgentUpdateAvailable bool                   `json:"agentUpdateAvailable,omitempty"`
-	Capabilities         ConnectionCapabilities `json:"capabilities"`
+	ID                   string                   `json:"id"`
+	Type                 ConnectionType           `json:"type"`
+	Name                 string                   `json:"name"`
+	Address              string                   `json:"address"`
+	HostAliases          []string                 `json:"hostAliases,omitempty"`
+	State                ConnectionState          `json:"state"`
+	StateReason          string                   `json:"stateReason,omitempty"`
+	Enabled              bool                     `json:"enabled"`
+	Surfaces             []string                 `json:"surfaces"`
+	Scope                map[string]bool          `json:"scope"`
+	LastSeen             *time.Time               `json:"lastSeen,omitempty"`
+	LastError            *ConnectionError         `json:"lastError,omitempty"`
+	Source               ConnectionSource         `json:"source"`
+	AgentIdentity        *ConnectionAgentIdentity `json:"agentIdentity,omitempty"`
+	AgentVersion         string                   `json:"agentVersion,omitempty"`
+	ExpectedAgentVersion string                   `json:"expectedAgentVersion,omitempty"`
+	AgentUpdateAvailable bool                     `json:"agentUpdateAvailable,omitempty"`
+	Capabilities         ConnectionCapabilities   `json:"capabilities"`
 }
 
 type ConnectionSystemComponentRole string

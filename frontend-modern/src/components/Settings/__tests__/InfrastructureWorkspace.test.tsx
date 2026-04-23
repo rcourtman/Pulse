@@ -465,6 +465,82 @@ describe('InfrastructureWorkspace', () => {
     expect(screen.getByTestId('proxmox-section')).toBeInTheDocument();
   });
 
+  it('shows standalone agent identity in the landing row and the agent detail drawer', async () => {
+    const towerAgent = connectionFixture({
+      id: 'agent:tower',
+      type: 'agent',
+      name: 'Tower',
+      address: 'Tower',
+      surfaces: ['host'],
+      scope: { host: true } as any,
+      source: 'agent',
+      agentVersion: '6.0.2',
+      agentIdentity: {
+        hostname: 'tower',
+        platform: 'unraid',
+        osName: 'Unraid',
+        osVersion: '7.1.0',
+        kernelVersion: '6.12.0',
+        architecture: 'x86_64',
+        reportIp: '192.168.0.10',
+        commandsEnabled: true,
+      },
+      capabilities: { supportsPause: false, supportsScope: false, supportsTest: false },
+    });
+
+    connectionState.connections = [towerAgent];
+    connectionState.rows = [
+      {
+        id: towerAgent.id,
+        ownerType: 'agent',
+        name: 'Tower',
+        subtitle: 'via Pulse Agent',
+        identitySubtitle: 'Unraid 7.1.0',
+        source: 'agent',
+        host: '192.168.0.10',
+        coverageLabels: ['Host telemetry'],
+        statusLabel: 'Active',
+        statusClassName: 'bg-green-100 text-green-800',
+        agentUpdateCount: 0,
+        lastActivityText: '0s ago',
+        enabled: true,
+        canEdit: false,
+        canPause: false,
+        canRemove: true,
+        isAgent: true,
+        isCluster: false,
+        attachedConnections: [],
+        members: [],
+        connection: towerAgent,
+      },
+    ];
+
+    renderWorkspace();
+
+    await waitFor(() => expect(screen.getByText('Standalone hosts')).toBeInTheDocument());
+    expect(screen.getByText('Tower')).toBeInTheDocument();
+    expect(screen.getByText('Unraid 7.1.0')).toBeInTheDocument();
+    expect(screen.getByText('192.168.0.10')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /^Edit$/i }));
+
+    await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
+    expect(screen.getByText('Pulse Agent version')).toBeInTheDocument();
+    expect(screen.getByText('6.0.2')).toBeInTheDocument();
+    expect(screen.getByText('Operating system')).toBeInTheDocument();
+    expect(screen.getAllByText('Unraid 7.1.0').length).toBeGreaterThan(0);
+    expect(screen.getByText('Reported hostname')).toBeInTheDocument();
+    expect(screen.getByText('tower')).toBeInTheDocument();
+    expect(screen.getByText('Reported IP')).toBeInTheDocument();
+    expect(screen.getAllByText('192.168.0.10').length).toBeGreaterThan(0);
+    expect(screen.getByText('Kernel')).toBeInTheDocument();
+    expect(screen.getByText('6.12.0')).toBeInTheDocument();
+    expect(screen.getByText('Architecture')).toBeInTheDocument();
+    expect(screen.getByText('x86_64')).toBeInTheDocument();
+    expect(screen.getByText('Remote commands')).toBeInTheDocument();
+    expect(screen.getAllByText('Enabled').length).toBeGreaterThan(0);
+  });
+
   it('shows attached Pulse Agent augmentation details on a grouped platform source', async () => {
     const primaryConnection = connectionFixture();
     const attachedAgent = connectionFixture({

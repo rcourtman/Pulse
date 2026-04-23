@@ -235,6 +235,11 @@ an add-only capacity posture.
    should only raise row-level attention when an attached or standalone agent
    has an update available, while the exact installed version belongs in the
    add/edit detail surfaces rather than as a permanent top-level table column.
+   Standalone host rows must still be recognizable at a glance, but that
+   identity belongs in the existing row cells rather than new diagnostics
+   columns: the landing table reuses the `System` and `Endpoint` cells for a
+   short host fact such as OS/platform plus a reported endpoint, while the
+   richer agent identity facts stay in the edit/detail surface.
    Public demo and other read-only settings posture must stay reporting-first
    on that same lifecycle-owned workspace boundary: infrastructure workspace
    routes may retain install and platform setup surfaces for manageable

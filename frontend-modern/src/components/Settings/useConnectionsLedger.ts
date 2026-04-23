@@ -8,6 +8,8 @@ import {
   type ConnectionType,
 } from '@/api/connections';
 import {
+  connectionAgentEndpointDisplay,
+  connectionAgentIdentitySummary,
   connectionLastActivityText,
   lastActivityTextFromLastSeen,
   surfaceLabel,
@@ -213,15 +215,18 @@ const buildRow = (
   const presentation = STATE_PRESENTATION[rolledState] ?? STATE_PRESENTATION.pending;
   const clusterName = system?.clusterName?.trim();
   const isCluster = ownerType === 'pve' && Boolean(clusterName) && members.length > 0;
+  const isStandaloneAgent = !isCluster && primaryConnection.type === 'agent';
   const name =
     ownerType === 'pve' && clusterName
       ? clusterName
       : primaryConnection.name || primaryConnection.address || primaryConnection.id;
   const host = isCluster
     ? undefined
-    : primaryConnection.address && primaryConnection.address !== name
-      ? primaryConnection.address
-      : undefined;
+    : isStandaloneAgent
+      ? (connectionAgentEndpointDisplay(primaryConnection) ?? undefined)
+      : primaryConnection.address && primaryConnection.address !== name
+        ? primaryConnection.address
+        : undefined;
   const attachedConnections = componentConnections.filter(
     (connection) => connection.id !== primaryConnection.id,
   );
@@ -236,12 +241,16 @@ const buildRow = (
   const subtitle = isCluster
     ? `Cluster · ${members.length} ${members.length === 1 ? 'node' : 'nodes'}`
     : subtitleFor(componentConnections, primaryConnection);
+  const identitySubtitle = isStandaloneAgent
+    ? (connectionAgentIdentitySummary(primaryConnection) ?? undefined)
+    : undefined;
 
   return {
     id: primaryConnection.id,
     ownerType,
     name,
     subtitle,
+    identitySubtitle,
     source,
     host,
     coverageLabels,

@@ -8,7 +8,7 @@ import {
   type Accessor,
   type Component,
 } from 'solid-js';
-import { Plus, RotateCw, Server, SlidersHorizontal } from 'lucide-solid';
+import { Plus, RotateCw, SlidersHorizontal } from 'lucide-solid';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import {
   Table,
@@ -254,7 +254,6 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
       title="Infrastructure systems"
       description="Configured systems and discovered candidates grouped by platform or host type. Install Pulse Agent on each machine where you want full node-local telemetry."
       noPadding
-      icon={<Server class="h-5 w-5" strokeWidth={2} />}
       action={headerActions()}
     >
       <Show when={!useCardLayout()}>
@@ -335,14 +334,30 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                       {(row) => {
                         return (
                           <>
-                            <TableRow class="border-b border-border-subtle">
+                            <TableRow
+                              class={`border-b border-border-subtle ${
+                                row.isCluster ? 'bg-surface-alt/40' : ''
+                              }`}
+                            >
                               <TableCell class="py-1 pl-3 pr-3 align-top">
                                 <div
-                                  class={`text-[13px] text-base-content/80 ${wrappedFieldClass}`}
+                                  class={`text-[13px] ${
+                                    row.isCluster
+                                      ? 'font-medium text-base-content'
+                                      : 'text-base-content/80'
+                                  } ${wrappedFieldClass}`}
                                   title={row.name}
                                 >
                                   {row.name}
                                 </div>
+                                <Show when={row.isCluster && row.subtitle}>
+                                  <div class="mt-0.5 text-[11px] text-muted">{row.subtitle}</div>
+                                </Show>
+                                <Show when={!row.isCluster && row.identitySubtitle}>
+                                  <div class="mt-0.5 text-[11px] text-muted">
+                                    {row.identitySubtitle}
+                                  </div>
+                                </Show>
                               </TableCell>
 
                               <TableCell class="px-3 py-1 align-top">
@@ -522,7 +537,9 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
 
                                       <Show when={actionColumnVisible()}>
                                         <TableCell class="px-3 py-1 align-top text-right">
-                                          <span class="text-xs text-muted">Managed by cluster</span>
+                                          <span class="text-xs text-muted" aria-hidden="true">
+                                            —
+                                          </span>
                                         </TableCell>
                                       </Show>
                                     </TableRow>
@@ -678,11 +695,21 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                     return (
                       <article class="rounded-md border border-border-subtle bg-surface p-3 shadow-sm">
                         <header class="flex items-start justify-between gap-2">
-                          <div
-                            class="min-w-0 flex-1 break-words text-[13px] font-medium text-base-content"
-                            title={row.name}
-                          >
-                            {row.name}
+                          <div class="min-w-0 flex-1">
+                            <div
+                              class="break-words text-[13px] font-medium text-base-content"
+                              title={row.name}
+                            >
+                              {row.name}
+                            </div>
+                            <Show when={row.isCluster && row.subtitle}>
+                              <div class="mt-0.5 text-[11px] text-muted">{row.subtitle}</div>
+                            </Show>
+                            <Show when={!row.isCluster && row.identitySubtitle}>
+                              <div class="mt-0.5 text-[11px] text-muted">
+                                {row.identitySubtitle}
+                              </div>
+                            </Show>
                           </div>
                           <span
                             class={`${presentation.badgeClassName} flex-shrink-0`}

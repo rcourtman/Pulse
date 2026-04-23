@@ -11549,17 +11549,27 @@ func TestContract_ConnectionSystemMembersPayloadShapeStaysCanonical(t *testing.T
 
 func TestContract_AgentConnectionPayloadIncludesVersionFields(t *testing.T) {
 	conn := Connection{
-		ID:                   "agent:host-1",
-		Type:                 ConnectionTypeAgent,
-		Name:                 "host-1",
-		Address:              "host-1",
-		HostAliases:          []string{"host-1", "192.168.0.2"},
-		State:                ConnectionStateActive,
-		Enabled:              true,
-		Surfaces:             []string{"host"},
-		Scope:                map[string]bool{"host": true},
-		LastSeen:             timePtr(time.Date(2026, 4, 22, 12, 0, 0, 0, time.UTC)),
-		Source:               ConnectionSourceAgent,
+		ID:          "agent:host-1",
+		Type:        ConnectionTypeAgent,
+		Name:        "host-1",
+		Address:     "host-1",
+		HostAliases: []string{"host-1", "192.168.0.2"},
+		State:       ConnectionStateActive,
+		Enabled:     true,
+		Surfaces:    []string{"host"},
+		Scope:       map[string]bool{"host": true},
+		LastSeen:    timePtr(time.Date(2026, 4, 22, 12, 0, 0, 0, time.UTC)),
+		Source:      ConnectionSourceAgent,
+		AgentIdentity: &ConnectionAgentIdentity{
+			Hostname:        "host-1",
+			Platform:        "unraid",
+			OSName:          "Unraid",
+			OSVersion:       "7.1.0",
+			KernelVersion:   "6.12.0",
+			Architecture:    "x86_64",
+			ReportIP:        "192.168.0.2",
+			CommandsEnabled: true,
+		},
 		AgentVersion:         "6.0.0",
 		ExpectedAgentVersion: "6.0.2",
 		AgentUpdateAvailable: true,
@@ -11575,7 +11585,7 @@ func TestContract_AgentConnectionPayloadIncludesVersionFields(t *testing.T) {
 		t.Fatalf("marshal agent Connection: %v", err)
 	}
 
-	want := `{"id":"agent:host-1","type":"agent","name":"host-1","address":"host-1","hostAliases":["host-1","192.168.0.2"],"state":"active","enabled":true,"surfaces":["host"],"scope":{"host":true},"lastSeen":"2026-04-22T12:00:00Z","source":"agent","agentVersion":"6.0.0","expectedAgentVersion":"6.0.2","agentUpdateAvailable":true,"capabilities":{"supportsPause":false,"supportsScope":false,"supportsTest":false}}`
+	want := `{"id":"agent:host-1","type":"agent","name":"host-1","address":"host-1","hostAliases":["host-1","192.168.0.2"],"state":"active","enabled":true,"surfaces":["host"],"scope":{"host":true},"lastSeen":"2026-04-22T12:00:00Z","source":"agent","agentIdentity":{"hostname":"host-1","platform":"unraid","osName":"Unraid","osVersion":"7.1.0","kernelVersion":"6.12.0","architecture":"x86_64","reportIp":"192.168.0.2","commandsEnabled":true},"agentVersion":"6.0.0","expectedAgentVersion":"6.0.2","agentUpdateAvailable":true,"capabilities":{"supportsPause":false,"supportsScope":false,"supportsTest":false}}`
 	assertJSONSnapshot(t, body, want)
 }
 

@@ -273,6 +273,7 @@ func buildAgentConnection(host models.Host, expectedAgentVersion string, now tim
 	if currentAgentVersion != "" && expectedAgentVersion != "" {
 		updateAvailable = pulseutils.CompareVersions(currentAgentVersion, expectedAgentVersion) < 0
 	}
+	agentIdentity := connectionAgentIdentityForHost(host)
 	switch {
 	case lastSeen == nil:
 		state = ConnectionStatePending
@@ -297,11 +298,36 @@ func buildAgentConnection(host models.Host, expectedAgentVersion string, now tim
 		LastSeen:             lastSeen,
 		LastError:            nil,
 		Source:               ConnectionSourceAgent,
+		AgentIdentity:        agentIdentity,
 		AgentVersion:         currentAgentVersion,
 		ExpectedAgentVersion: expectedAgentVersion,
 		AgentUpdateAvailable: updateAvailable,
 		Capabilities:         ConnectionCapabilities{SupportsPause: false, SupportsScope: false, SupportsTest: false},
 	}
+}
+
+func connectionAgentIdentityForHost(host models.Host) *ConnectionAgentIdentity {
+	identity := &ConnectionAgentIdentity{
+		Hostname:        strings.TrimSpace(host.Hostname),
+		Platform:        strings.TrimSpace(host.Platform),
+		OSName:          strings.TrimSpace(host.OSName),
+		OSVersion:       strings.TrimSpace(host.OSVersion),
+		KernelVersion:   strings.TrimSpace(host.KernelVersion),
+		Architecture:    strings.TrimSpace(host.Architecture),
+		ReportIP:        strings.TrimSpace(host.ReportIP),
+		CommandsEnabled: host.CommandsEnabled,
+	}
+	if identity.Hostname == "" &&
+		identity.Platform == "" &&
+		identity.OSName == "" &&
+		identity.OSVersion == "" &&
+		identity.KernelVersion == "" &&
+		identity.Architecture == "" &&
+		identity.ReportIP == "" &&
+		!identity.CommandsEnabled {
+		return nil
+	}
+	return identity
 }
 
 func connectionHostAliasesForAgent(host models.Host, name, address string) []string {
