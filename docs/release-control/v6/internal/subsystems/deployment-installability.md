@@ -68,26 +68,27 @@ server-side update execution surfaces.
 46. `scripts/release_control/release_promotion_policy_support.py`
 47. `scripts/release_control/resolve_release_promotion.py`
 48. `scripts/release_ldflags.sh`
-49. `scripts/run_demo_public_browser_smoke.sh`
-50. `scripts/demo_public_browser_smoke.cjs`
-51. `scripts/run_hosted_staging_smoke.sh`
-52. `scripts/trigger-release-dry-run.sh`
-53. `scripts/trigger-release.sh`
-54. `scripts/toggle-mock.sh`
-55. `deploy/helm/pulse/`
-56. `tests/integration/playwright.config.ts`
-57. `tests/integration/QUICK_START.md`
-58. `tests/integration/README.md`
-59. `tests/integration/scripts/bootstrap-hosted-mobile-onboarding.mjs`
-60. `tests/integration/scripts/hosted-mobile-token-runtime.mjs`
-61. `tests/integration/scripts/hosted-tenant-runtime.mjs`
-62. `tests/integration/scripts/managed-dev-runtime.mjs`
-63. `tests/integration/scripts/relay-mobile-token-helper.go`
-64. `tests/integration/tests/helpers.ts`
-65. `tests/integration/tests/runtime-defaults.ts`
-66. `docker-compose.yml`
-67. `scripts/install-docker.sh`
-68. `scripts/validate-published-release.sh`
+49. `scripts/run_cloud_public_signup_smoke.sh`
+50. `scripts/run_demo_public_browser_smoke.sh`
+51. `scripts/demo_public_browser_smoke.cjs`
+52. `scripts/run_hosted_staging_smoke.sh`
+53. `scripts/trigger-release-dry-run.sh`
+54. `scripts/trigger-release.sh`
+55. `scripts/toggle-mock.sh`
+56. `deploy/helm/pulse/`
+57. `tests/integration/playwright.config.ts`
+58. `tests/integration/QUICK_START.md`
+59. `tests/integration/README.md`
+60. `tests/integration/scripts/bootstrap-hosted-mobile-onboarding.mjs`
+61. `tests/integration/scripts/hosted-mobile-token-runtime.mjs`
+62. `tests/integration/scripts/hosted-tenant-runtime.mjs`
+63. `tests/integration/scripts/managed-dev-runtime.mjs`
+64. `tests/integration/scripts/relay-mobile-token-helper.go`
+65. `tests/integration/tests/helpers.ts`
+66. `tests/integration/tests/runtime-defaults.ts`
+67. `docker-compose.yml`
+68. `scripts/install-docker.sh`
+69. `scripts/validate-published-release.sh`
 69. `scripts/validate-release.sh`
 70. `scripts/release_asset_common.sh`
 71. `scripts/backfill-release-assets.sh`
@@ -174,8 +175,13 @@ server-side update execution surfaces.
    External helper binaries fetched by governed release workflows are part of
    the same supply-chain boundary and must be checksum-verified before they are
    executed.
-8. Add or change operator-facing hosted tenant runtime canary rollout, batch runtime contract reconciliation, canonical hosted route/public URL generation, or control-plane runtime-registry reconciliation through `cmd/pulse-control-plane/main.go`, `internal/cloudcp/docker/manager.go`, `internal/cloudcp/docker/labels.go`, and `internal/cloudcp/tenant_runtime_rollout.go`
-9. Add or change the canonical hosted staging smoke operator path through `scripts/run_hosted_staging_smoke.sh`, `tests/integration/scripts/bootstrap-hosted-mobile-onboarding.mjs`, `tests/integration/scripts/hosted-mobile-token-runtime.mjs`, `tests/integration/scripts/hosted-tenant-runtime.mjs`, and `tests/integration/scripts/relay-mobile-token-helper.go`
+8. Add or change the non-secret Pulse Cloud public signup route smoke through
+   `scripts/run_cloud_public_signup_smoke.sh`. That smoke must prove either
+   the open signup route contract or the intentionally closed redirect contract,
+   and valid magic-link probes must remain opt-in so routine public checks do
+   not send email accidentally.
+9. Add or change operator-facing hosted tenant runtime canary rollout, batch runtime contract reconciliation, canonical hosted route/public URL generation, or control-plane runtime-registry reconciliation through `cmd/pulse-control-plane/main.go`, `internal/cloudcp/docker/manager.go`, `internal/cloudcp/docker/labels.go`, and `internal/cloudcp/tenant_runtime_rollout.go`
+10. Add or change the canonical hosted staging smoke operator path through `scripts/run_hosted_staging_smoke.sh`, `tests/integration/scripts/bootstrap-hosted-mobile-onboarding.mjs`, `tests/integration/scripts/hosted-mobile-token-runtime.mjs`, `tests/integration/scripts/hosted-tenant-runtime.mjs`, and `tests/integration/scripts/relay-mobile-token-helper.go`
 
 ## Forbidden Paths
 

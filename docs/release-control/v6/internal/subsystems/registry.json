@@ -2569,6 +2569,7 @@
         "scripts/release_control/render_release_body.py",
         "scripts/release_control/resolve_release_promotion.py",
         "scripts/release_ldflags.sh",
+        "scripts/run_cloud_public_signup_smoke.sh",
         "scripts/run_demo_public_browser_smoke.sh",
         "scripts/run_hosted_staging_smoke.sh",
         "scripts/toggle-mock.sh",
@@ -2696,6 +2697,19 @@
               "scripts/installtests/backfill_release_assets_test.go",
               "scripts/installtests/build_release_assets_test.go",
               "scripts/installtests/release_ldflags_test.go"
+            ]
+          },
+          {
+            "id": "cloud-public-signup-smoke-runtime",
+            "label": "Cloud public signup smoke proof",
+            "match_prefixes": [],
+            "match_files": [
+              "scripts/run_cloud_public_signup_smoke.sh"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "scripts/tests/test-cloud-public-signup-smoke.sh"
             ]
           },
           {

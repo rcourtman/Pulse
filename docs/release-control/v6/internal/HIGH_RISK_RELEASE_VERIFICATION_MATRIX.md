@@ -96,6 +96,7 @@ Companion drill:
   `go test ./internal/hosted/... -count=1`
   `go test ./internal/api -run 'TestHostedLifecycle|TestHostedOrgAdminHandlers|TestHostedSignupSuccess|TestHostedSignupValidationFailures|TestHostedSignupHostedModeGate|TestHostedSignupRateLimit|TestHostedSignupRateLimit_NoProvisioningSideEffects|TestHostedSignupCleanupOnRBACFailure|TestHostedSignupFailsClosedWithoutPublicURL|TestStripeWebhook_' -count=1`
   `cd frontend-modern && npx vitest run src/pages/__tests__/HostedSignup.test.tsx src/components/Settings/__tests__/BillingAdminPanel.test.tsx src/components/Settings/__tests__/OrganizationBillingPanel.test.tsx`
+  `EXPECT_PUBLIC_SIGNUP_ENABLED=false scripts/run_cloud_public_signup_smoke.sh` while public signup is intentionally closed, or `EXPECT_PUBLIC_SIGNUP_ENABLED=true scripts/run_cloud_public_signup_smoke.sh` during the GA launch window when public signup is expected to be live.
 - Manual scenario:
   1. Start from a real hosted Pulse signup or an existing hosted tenant.
   2. Confirm the user can authenticate into the hosted Pulse app and reach a
