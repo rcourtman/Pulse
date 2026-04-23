@@ -35,7 +35,9 @@ describe('WhatsNewModal', () => {
     expect(whatsNewModalSource).not.toContain('createSignal');
     expect(whatsNewModalSource).not.toContain('WHATS_NEW_NAV_V2_SHOWN');
     expect(whatsNewModalSource).not.toContain('Migration guide');
-    expect(whatsNewModalSource).not.toContain('https://github.com/rcourtman/Pulse/blob/main/docs/PRIVACY.md');
+    expect(whatsNewModalSource).not.toContain(
+      'https://github.com/rcourtman/Pulse/blob/main/docs/PRIVACY.md',
+    );
     expect(whatsNewModalSource).not.toContain('bg-gradient');
     expect(whatsNewModalSource).not.toContain('backdrop-blur-sm');
 
@@ -60,8 +62,12 @@ describe('WhatsNewModal', () => {
     expect(whatsNewModalModelSource).toContain('WHATS_NEW_KICKER_LABEL');
     expect(whatsNewModalModelSource).toContain('WHATS_NEW_PROGRESS_PREFIX');
     expect(whatsNewModalModelSource).toContain("WHATS_NEW_PRIMARY_ACTION_LABEL = 'Done'");
-    expect(whatsNewModalModelSource).not.toContain('https://github.com/rcourtman/Pulse/blob/main/docs/README.md');
-    expect(whatsNewModalModelSource).not.toContain('https://github.com/rcourtman/Pulse/blob/main/docs/PRIVACY.md');
+    expect(whatsNewModalModelSource).not.toContain(
+      'https://github.com/rcourtman/Pulse/blob/main/docs/README.md',
+    );
+    expect(whatsNewModalModelSource).not.toContain(
+      'https://github.com/rcourtman/Pulse/blob/main/docs/PRIVACY.md',
+    );
     expect(whatsNewModalModelSource).toContain('WHATS_NEW_DOCS_LABEL');
     expect(whatsNewModalModelSource).toContain("title: 'Dashboard'");
   });
@@ -73,7 +79,9 @@ describe('WhatsNewModal', () => {
     expect(dialog).toBeInTheDocument();
     expect(within(dialog).getByText('Step 1 of 5')).toBeInTheDocument();
     expect(within(dialog).getByText('Nav guide')).toBeInTheDocument();
-    expect(within(dialog).getByText(/Start here for health, alerts, capacity/i)).toBeInTheDocument();
+    expect(
+      within(dialog).getByText(/Start here for the live estate overview/i),
+    ).toBeInTheDocument();
     expect(within(dialog).queryByText('Where Things Moved')).not.toBeInTheDocument();
     expect(within(dialog).getByRole('link', { name: 'Navigation guide' })).toBeInTheDocument();
     expect(within(dialog).getByRole('link', { name: 'Telemetry details' })).toBeInTheDocument();
@@ -129,26 +137,30 @@ describe('WhatsNewModal', () => {
   it('advances through the guided tour and finishes on the last step', async () => {
     render(() => <WhatsNewModal />);
 
-    expect(await screen.findByText(/Start here for health, alerts, capacity/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Start here for the live estate overview/i)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Next' }));
-    expect(await screen.findByText(/Use this for nodes, hosts, clusters/i)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/Use this to add and manage infrastructure sources/i),
+    ).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Next' }));
-    expect(await screen.findByText(/Use this for VMs, containers, and pods/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Use this for VMs, containers, pods/i)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Next' }));
-    expect(await screen.findByText(/Use this for datastores, pools, disks, and capacity/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Use this for pools, datastores, disks/i)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Next' }));
-    expect(await screen.findByText(/Use this for backups, snapshots, and replication/i)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/Use this for backup coverage, snapshots, replication/i),
+    ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Done' })).toBeInTheDocument();
   });
 
   it('lets the user jump to a tour stop directly from the stop map', async () => {
     render(() => <WhatsNewModal />);
 
-    expect(await screen.findByText(/Start here for health, alerts, capacity/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Start here for the live estate overview/i)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /Workloads/i }));
 
-    expect(await screen.findByText(/Use this for VMs, containers, and pods/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Use this for VMs, containers, pods/i)).toBeInTheDocument();
     expect(screen.getByText('Step 3 of 5')).toBeInTheDocument();
   });
 
@@ -166,6 +178,8 @@ describe('WhatsNewModal', () => {
 
     const dialog = await screen.findByRole('dialog', { name: 'Pulse navigation guide' });
     expect(within(dialog).getByText('Step 5 of 5')).toBeInTheDocument();
-    expect(within(dialog).getByText(/Use this for backups, snapshots, and replication/i)).toBeInTheDocument();
+    expect(
+      within(dialog).getByText(/Use this for backup coverage, snapshots, replication/i),
+    ).toBeInTheDocument();
   });
 });

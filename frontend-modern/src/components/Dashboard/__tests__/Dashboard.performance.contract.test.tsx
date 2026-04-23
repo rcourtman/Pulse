@@ -985,7 +985,7 @@ describe('Dashboard performance contract', () => {
       expect(workloadPanelSource).not.toContain('TableHead');
       expect(dashboardStateCardsSource).toContain('dashboardInfrastructureEmptyState().title');
       expect(dashboardStateCardsSource).toContain('dashboardDisconnectedState().actionLabel');
-      expect(dashboardStateCardsSource).toContain("buildInfrastructureOnboardingPath('agent')");
+      expect(dashboardStateCardsSource).toContain("buildInfrastructureOnboardingPath('pick')");
       expect(dashboardStatsStripSource).toContain('totalStats().running');
       expect(dashboardStatsStripSource).toContain('totalStats().stopped');
     });

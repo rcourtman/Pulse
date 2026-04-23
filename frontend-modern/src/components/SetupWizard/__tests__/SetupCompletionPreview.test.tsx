@@ -56,9 +56,9 @@ describe('SetupCompletionPreview', () => {
 
     expect(apiFetchJSONMock).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getAllByRole('button', { name: 'Open Infrastructure Install' })[0]);
+    fireEvent.click(screen.getByRole('button', { name: 'Add infrastructure' }));
 
-    expect(navigateMock).toHaveBeenCalledWith('/settings/infrastructure?add=agent');
+    expect(navigateMock).toHaveBeenCalledWith('/settings/infrastructure?add=pick');
   });
 
   it('renders the VMware-connected preview scenario without polling runtime state', () => {
@@ -69,6 +69,6 @@ describe('SetupCompletionPreview', () => {
     expect(apiFetchJSONMock).not.toHaveBeenCalled();
     expect(screen.getByText('First monitored system connected')).toBeInTheDocument();
     expect(screen.getByText('VMware vSphere')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Open Platform connections' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add infrastructure' })).toBeInTheDocument();
   });
 });

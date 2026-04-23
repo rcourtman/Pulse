@@ -145,7 +145,7 @@ export function InfrastructurePageSurface() {
                   actions={
                     <button
                       type="button"
-                      onClick={() => navigate(buildInfrastructureOnboardingPath('agent'))}
+                      onClick={() => navigate(buildInfrastructureOnboardingPath('pick'))}
                       class="inline-flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-1.5 text-xs font-medium text-base-content shadow-sm hover:bg-slate-50"
                     >
                       <SettingsIcon class="h-3.5 w-3.5" />

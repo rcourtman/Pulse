@@ -319,7 +319,7 @@ export const getInfrastructureSupportSummaryBadges = (): {
 });
 
 export const getInfrastructureEmptyStateSummary = (): string =>
-  'Add infrastructure systems to start monitoring your environment.';
+  'Choose an infrastructure source to start monitoring your environment.';
 
 export const getInfrastructureEmptyStateDetail = (): string =>
-  'Available system types: VMware vCenter, TrueNAS SCALE, Proxmox VE, Proxmox Backup Server, Proxmox Mail Gateway, and standalone hosts through Pulse Agent. Docker and Kubernetes are discovered from supported agent hosts. VMware vCenter is also available now.';
+  'Supported source types include VMware vCenter, TrueNAS SCALE, Proxmox VE, Proxmox Backup Server, Proxmox Mail Gateway, and standalone hosts through Pulse Agent. Docker and Kubernetes are discovered from supported agent hosts.';

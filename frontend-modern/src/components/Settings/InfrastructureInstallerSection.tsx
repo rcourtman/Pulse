@@ -39,7 +39,7 @@ export const InfrastructureInstallerSection: Component = () => {
               <div class="space-y-2">
                 <p class="font-semibold">Security configured. Save these first-run credentials now.</p>
                 <p class="text-xs text-emerald-800 dark:text-emerald-200">
-                  This is the canonical handoff from first-run setup into Infrastructure Install.
+                  This is the Pulse Agent handoff from first-run setup inside Add infrastructure.
                   <Show
                     when={state.setupHandoffAutoTokenPending()}
                     fallback={
@@ -475,8 +475,8 @@ export const InfrastructureInstallerSection: Component = () => {
                       {state.getSelectedInstallProfile().description}
                     </p>
                     <p class="mt-1.5 text-xs text-muted">
-                      API-backed platforms such as TrueNAS connect through Add connection →
-                      choose the platform type.
+                      API-backed platforms such as TrueNAS connect through Add infrastructure →
+                      choose source type.
                     </p>
                     <Show when={state.getInstallProfileFlags().length > 0}>
                       <p class="mt-1.5 text-xs text-muted">

@@ -54,7 +54,7 @@ describe('RuntimeHome', () => {
     expect(getDashboardSummaryMock).not.toHaveBeenCalled();
   });
 
-  it('routes hosted empty workspaces into infrastructure install', async () => {
+  it('routes hosted empty workspaces into the infrastructure source picker', async () => {
     getDashboardSummaryMock.mockResolvedValue({
       health: { totalResources: 0 },
     });
@@ -63,7 +63,7 @@ describe('RuntimeHome', () => {
 
     await waitFor(() => {
       expect(getDashboardSummaryMock).toHaveBeenCalledTimes(1);
-      expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure?add=agent', {
+      expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure?add=pick', {
         replace: true,
       });
     });

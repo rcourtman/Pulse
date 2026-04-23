@@ -204,13 +204,13 @@ describe('Dashboard page module contract', () => {
     ).toBeInTheDocument();
     expect(
       screen.getByText(
-        'The dashboard appears after Pulse receives its first monitored system. Add a Pulse Agent or platform API source from Infrastructure setup, then this page becomes the live estate overview.',
+        'The dashboard appears after Pulse receives its first monitored system. Add an infrastructure source with API inventory, Agent telemetry, or both, then this page becomes the live estate overview.',
       ),
     ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Add infrastructure source' }));
 
-    expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure?add=agent');
+    expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure?add=pick');
   });
 
   it('renders the governed storage and recovery dashboard panels', () => {

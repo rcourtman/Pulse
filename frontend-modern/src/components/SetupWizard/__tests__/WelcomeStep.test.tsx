@@ -65,7 +65,12 @@ describe('WelcomeStep', () => {
 
     expect(screen.getByText('Unlock this Pulse server')).toBeInTheDocument();
     expect(screen.getByText('Create the admin account')).toBeInTheDocument();
-    expect(screen.getByText('Install the first host')).toBeInTheDocument();
+    expect(screen.getByText('Choose the first source')).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Connect a platform API, install Pulse Agent, or use both for full coverage.',
+      ),
+    ).toBeInTheDocument();
     expect(screen.getByText('What this token does')).toBeInTheDocument();
     expect(
       screen.getByText(

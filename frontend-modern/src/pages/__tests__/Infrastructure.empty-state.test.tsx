@@ -40,27 +40,27 @@ describe('Infrastructure empty state', () => {
     navigateSpy.mockReset();
   });
 
-  it('shows empty state with direct install guidance when no resources exist', async () => {
+  it('shows empty state with source-strategy guidance when no resources exist', async () => {
     const { getByText } = render(() => <Infrastructure />);
 
     await waitFor(() => {
-      expect(getByText('No infrastructure resources yet')).toBeInTheDocument();
+      expect(getByText('No infrastructure sources yet')).toBeInTheDocument();
     });
 
-    const button = getByText('Open Infrastructure Install');
+    const button = getByText('Add infrastructure source');
     expect(button).toBeInTheDocument();
     expect(button.closest('button')).toBeInTheDocument();
   });
 
-  it('navigates to the install workspace when the empty-state button is clicked', async () => {
+  it('navigates to the source picker when the empty-state button is clicked', async () => {
     const { getByText } = render(() => <Infrastructure />);
 
     await waitFor(() => {
-      expect(getByText('Open Infrastructure Install')).toBeInTheDocument();
+      expect(getByText('Add infrastructure source')).toBeInTheDocument();
     });
 
-    fireEvent.click(getByText('Open Infrastructure Install'));
+    fireEvent.click(getByText('Add infrastructure source'));
 
-    expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure?add=agent');
+    expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure?add=pick');
   });
 });

@@ -176,7 +176,7 @@ export const WelcomeStep: Component<WelcomeStepProps> = (props) => {
         </p>
         <p class="mt-4 text-sm text-muted max-w-xl mx-auto animate-fade-in delay-300">
           You are about to do three things: unlock setup on this Pulse server, create your admin
-          account, and install the first system you want Pulse to monitor.
+          account, and choose the first infrastructure source Pulse should monitor.
         </p>
       </div>
 
@@ -203,9 +203,9 @@ export const WelcomeStep: Component<WelcomeStepProps> = (props) => {
           <div class="text-[11px] font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">
             Step 3
           </div>
-          <div class="mt-1 text-sm font-semibold text-base-content">Install the first host</div>
+          <div class="mt-1 text-sm font-semibold text-base-content">Choose the first source</div>
           <p class="mt-1 text-xs text-muted">
-            Open Infrastructure Install and connect the first system you want Pulse to monitor.
+            Connect a platform API, install Pulse Agent, or use both for full coverage.
           </p>
         </div>
       </div>
@@ -218,9 +218,9 @@ export const WelcomeStep: Component<WelcomeStepProps> = (props) => {
               Unlock Setup
             </h3>
             <p class="text-sm text-muted mb-6">
-              Run the following command on the Pulse server to retrieve the one-time bootstrap
-              token that unlocks this wizard. Do not paste the raw `.bootstrap_token` file
-              contents directly.
+              Run the following command on the Pulse server to retrieve the one-time bootstrap token
+              that unlocks this wizard. Do not paste the raw `.bootstrap_token` file contents
+              directly.
             </p>
 
             <div class="mb-4 rounded-md border border-blue-200 bg-blue-50 px-4 py-3 dark:border-blue-800 dark:bg-blue-950/40">

@@ -477,21 +477,21 @@ an add-only capacity posture.
 6. Keep Proxmox registration continuity self-healing: stale local registration markers must be verified against Pulse before the host agent skips setup, and a missing matching node on the Pulse side must drive canonical re-registration instead of asking operators to delete marker files manually.
 7. Keep first-session lifecycle handoff explicit: the live setup completion
    surface in `frontend-modern/src/components/SetupWizard/SetupCompletionPanel.tsx`
-   must route the primary CTA into `/settings/infrastructure/install`, frame
-   that route as the first-host install step, and present `Platform
-connections` as the named API-backed alternative for Proxmox, TrueNAS, and
-   future provider integrations rather than leaving post-setup next actions
-   implicit. That API-backed alternative must be a real first-run handoff
-   control, not prose-only guidance.
+   must route the primary CTA into `/settings/infrastructure?add=pick`, frame
+   that route as source strategy selection, and present platform API inventory
+   plus Pulse Agent telemetry as peer choices for Proxmox, TrueNAS, VMware,
+   standalone hosts, and future provider integrations rather than leaving
+   post-setup next actions implicit. A direct Pulse Agent handoff may remain as
+   a secondary control for operators who already know the first source is
+   agent-managed, but the primary first-run path is the unified source picker.
    Once the completion surface observes connected systems, that same handoff
    model must derive its follow-up actions from the canonical connected-system
    path classification rather than a raw connected-agent count. API-backed
-   first-session states must keep `Platform connections` visible without
-   hiding `Infrastructure Install` when the next system should run the unified
-   agent, and install-managed first-session states must not suppress the
-   explicit API-backed alternative when the runtime has already connected
-   platform-owned systems. The API-backed versus install-workspace split must
-   come from the governed onboarding paths in
+   first-session states must keep `Add infrastructure` visible for both
+   API-backed and agent-managed next systems instead of reviving separate
+   `Platform connections` and `Infrastructure Install` branches. The
+   API-backed versus agent-managed classification must come from the governed
+   onboarding paths in
    `docs/release-control/v6/internal/PLATFORM_SUPPORT_MANIFEST.json` through
    the shared frontend manifest helper, not from a Setup Wizard-local platform
    allowlist. When preview-only browser proof needs a deterministic connected
@@ -520,9 +520,10 @@ connections` as the named API-backed alternative for Proxmox, TrueNAS, and
    still belong to the reporting inventory and inline lifecycle detail, but
    they must not appear as peer connection rows on that top ledger. Adding a
    new system must stay a single entry point on that ledger:
-   one `Add connection` entry point that keeps `Install on a host` explicit
-   for the agent path while opening the saved-connection create flow for
-   API-backed platforms on the same page. `/settings/infrastructure/install`,
+   one `Add infrastructure` entry point that opens the source picker, keeps
+   `Install on a host` explicit only after the operator chooses Pulse Agent,
+   and opens the saved-connection create flow for API-backed platforms on the
+   same page. `/settings/infrastructure/install`,
    `/settings/infrastructure/platforms`, and
    `/settings/infrastructure/operations` remain valid deep links, but they
    must resolve to section focus on that same single-page workspace rather
@@ -544,15 +545,15 @@ connections` as the named API-backed alternative for Proxmox, TrueNAS, and
 11. Keep the dev first-session proof deterministic on the real wizard path:
     `tests/integration/tests/helpers.ts` and
     `tests/integration/tests/11-first-session.spec.ts` must refresh first-run
-    state through `/api/security/dev/reset-first-run`, then prove both the
-    canonical `Open Infrastructure Install` handoff and the explicit
-    `Open Platform connections` handoff against the live setup wizard instead
-    of relying on stale bootstrap tokens, dashboard fallbacks, or preview-only
-    coverage. That API-backed handoff may keep the operator-facing `Platform
-connections` label, but it must land on the shared infrastructure
-    onboarding contract at `/settings/infrastructure?add=pick` and normalize
-    back to `/settings/infrastructure` instead of reviving a separate
-    platform-management shell.
+    state through `/api/security/dev/reset-first-run`, then prove the
+    canonical `Add infrastructure` handoff and the explicit `Install Pulse
+    Agent` secondary handoff against the live setup wizard instead of relying
+    on stale bootstrap tokens, dashboard fallbacks, or preview-only coverage.
+    The primary handoff must land on the shared infrastructure onboarding
+    contract at `/settings/infrastructure?add=pick` and normalize back to
+    `/settings/infrastructure` instead of reviving a separate
+    platform-management shell. The secondary agent handoff must land on
+    `/settings/infrastructure?add=agent`.
     When the first host reports successfully, the install workflow must treat
     that as a completion handoff with direct navigation into `/dashboard` and
     `/settings/infrastructure/operations` instead of leaving operators on a
@@ -572,16 +573,19 @@ connections` label, but it must land on the shared infrastructure
     ordered around the actual first-run operator sequence: credentials that must
     be saved now should be visible before the operator leaves the screen, and
     the completion surface should present one canonical primary next-step path
-    into Infrastructure Install instead of repeating competing install or
-    dashboard CTAs across multiple sections. Once the first monitored host is
+    into Add infrastructure instead of repeating competing install or dashboard
+    CTAs across multiple sections. Once the first monitored system is
     already connected, that same surface must pivot its primary CTA and headline
     to `/` so the operator is sent to the dashboard rather than being told to
-    install the first host again. While the first host is still pending, that
-    same completion narrative must describe Infrastructure Install as the place
-    where the first-host scoped install token is prepared from setup handoff,
-    and when it names the shared settings workspace for follow-up lifecycle
-    control it must use the canonical `Infrastructure` label instead of
-    reviving the retired `Infrastructure Operations` wording.
+    connect the first source again. While the first source is still pending,
+    that same completion narrative must describe Add infrastructure as the
+    place where the operator chooses platform API inventory, Pulse Agent
+    telemetry, or both. If the operator selects the direct agent path from that
+    completion surface, the agent install body may prepare the first-host
+    scoped install token from setup handoff, and when it names the shared
+    settings workspace for follow-up lifecycle control it must use the
+    canonical `Infrastructure` label instead of reviving the retired
+    `Infrastructure Operations` wording.
     not as a second manual token-generation task the operator still needs to
     figure out.
 13. Keep API-backed platform onboarding explicit across
@@ -590,11 +594,12 @@ connections` label, but it must land on the shared infrastructure
     `frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx`,
     `frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx`, and
     `frontend-modern/src/components/SetupWizard/SetupCompletionPanel.tsx`.
-    TrueNAS must be presented as a Platform connections workflow first, not as
-    a dedicated Unified Agent install profile. The install workspace may remain
-    available for optional later agent augmentation on TrueNAS, but first-run
-    copy, alternative CTAs, and install-profile lists must not imply that an
-    agent install is the required bootstrap for TrueNAS support in Pulse.
+    TrueNAS must be presented as an API-backed source flow through Add
+    infrastructure first, not as a dedicated Unified Agent install profile. The
+    agent install path may remain available for optional later agent
+    augmentation on TrueNAS, but first-run copy, alternative CTAs, and
+    install-profile lists must not imply that an agent install is the required
+    bootstrap for TrueNAS support in Pulse.
 14. Keep first-session and lifecycle-adjacent frontend resource handling on the
     canonical unified-resource boundary. Top-level TrueNAS appliances may reach
     setup-completion or infrastructure lifecycle surfaces only as canonical
@@ -610,9 +615,10 @@ connections` label, but it must land on the shared infrastructure
 16. Keep onboarding ownership aligned with
     `docs/release-control/v6/internal/PLATFORM_SUPPORT_MODEL.md`: agent-backed
     first-class platforms belong to the install/reporting lifecycle path,
-    API-backed first-class platforms belong to Platform connections, and any
-    later unified-agent augmentation on an API-backed platform must remain an
-    optional secondary path instead of silently becoming the required bootstrap.
+    API-backed first-class platforms belong to the Add infrastructure API
+    source flow, and any later unified-agent augmentation on an API-backed
+    platform must remain an optional secondary path instead of silently
+    becoming the required bootstrap.
 
 ## Current State
 
@@ -753,12 +759,12 @@ just to decide whether to show assistant-adjacent UI.
 That same platform-connections ownership now also includes mock-runtime
 continuity for API-backed platforms. When `/api/system/mock-mode` flips a
 running server between real and mock data, the canonical TrueNAS and VMware
-settings routes must keep surfacing through the same Platform connections
-workspace and handoff URLs instead of depending on process-start-only wiring
-or a mock-only alternate shell.
+settings routes must keep surfacing through the same Add infrastructure source
+picker and handoff URLs instead of depending on process-start-only wiring or a
+mock-only alternate shell.
 That same lifecycle-owned mock path now also requires one shared fixture owner
 for API-backed platform onboarding. TrueNAS and VMware connection-list payloads
-shown in Platform connections must be assembled from the canonical
+shown in Add infrastructure must be assembled from the canonical
 `internal/mock/` platform fixture layer, so settings handoff metadata cannot
 drift from the runtime mock inventory and shared storage/recovery context.
 That same lifecycle-adjacent mock path must stay graph-first at the shared
@@ -1043,10 +1049,11 @@ Infrastructure workspace. `ConnectionsTable.tsx`,
 install/direct/reporting operator flow, with `ConnectionsTable.tsx` plus
 `connectionsTableModel.ts` as the canonical top-level infrastructure ledger
 and the governed add/edit modals as the API-backed add/edit surface.
-Operator-facing setup copy may still use `Platform connections`, but that
-label now means the shared Infrastructure onboarding path
-(`/settings/infrastructure?add=pick`) rather than a standalone
-`PlatformConnectionsWorkspace.tsx` shell.
+Operator-facing setup copy should use `Add infrastructure` and source-strategy
+language for the shared Infrastructure onboarding path
+(`/settings/infrastructure?add=pick`) rather than reviving the standalone
+`PlatformConnectionsWorkspace.tsx` shell or the old `Platform connections`
+label.
 That infrastructure destination now has one canonical mental model:
 configured infrastructure sources stay visible on the landing page as the
 primary objects the operator manages. The landing table is instance-first, not
@@ -1124,7 +1131,7 @@ surfaces grow a second VMware availability fetch or a VMware-only handoff
 path.
 That same infrastructure workspace boundary now also owns the first-run
 handoff copy for new operators. `InfrastructureWorkspace.tsx` must keep
-`Install on a host` and `Platform connections` explicit in the shared
+platform API inventory and Pulse Agent telemetry explicit in the shared
 workspace instead of leaving first-session guidance implicit in generic
 settings-shell prose or retreating to one provider's name or one onboarding
 mode as the primary story.
@@ -2107,17 +2114,17 @@ advertising automatic token rotation after each copy once the active transport
 is explicitly tokenless.
 The same first-session contract now also owns the landing handoff after secure
 setup: RC-proof and helpers must treat direct navigation into
-`/settings/infrastructure/install` as the canonical completion path, rather
-than assuming the legacy dashboard-only landing still defines successful
-wizard completion.
+`/settings/infrastructure?add=pick` as the canonical completion path, rather
+than assuming an agent-only install landing or the legacy dashboard-only
+landing still defines successful wizard completion.
 That same `SetupCompletionPanel` boundary must also stay on the direct
-`setup-completion-install-surface` proof path, rather than relying only on shared
-helper coverage or downstream install tests to catch lifecycle drift in the
-setup completion surface.
+`setup-completion-source-picker-surface` proof path, rather than relying only
+on shared helper coverage or downstream install tests to catch lifecycle drift
+in the setup completion surface.
 That same first-session browser proof must also exercise the explicit
-`Platform connections` completion action through the real setup wizard flow
-for API-backed starts like TrueNAS, rather than relying only on the preview
-route or prose-level assertions to represent the API-backed alternative.
+`Install Pulse Agent` secondary action through the real setup wizard flow,
+rather than relying only on the preview route or prose-level assertions to
+represent the agent-managed alternative.
 The same ownership also covers manual install fallback in the infrastructure
 settings surface: active and ignored Connected infrastructure rows must now
 come from the backend-owned `connectedInfrastructure` projection instead of a

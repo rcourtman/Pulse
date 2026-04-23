@@ -35,7 +35,7 @@ export default function RuntimeHome() {
     if (summaryFailed()) {
       return DASHBOARD_PATH;
     }
-    return summaryHasResources() ? DASHBOARD_PATH : buildInfrastructureOnboardingPath('agent');
+    return summaryHasResources() ? DASHBOARD_PATH : buildInfrastructureOnboardingPath('pick');
   });
 
   onMount(() => {

@@ -14,8 +14,8 @@ import {
   getPreferredResourceHostname,
 } from '@/utils/resourceIdentity';
 
-export type SetupCompletionConnectionPath = 'install' | 'platforms';
-export type SetupCompletionPrimaryAction = 'dashboard' | 'install';
+export type SetupCompletionConnectionPath = 'agent' | 'api';
+export type SetupCompletionPrimaryAction = 'dashboard' | 'sources';
 
 export interface ConnectedSetupSystem {
   id: string;
@@ -29,16 +29,16 @@ export interface SetupCompletionViewModel {
   connectedSummaryLabel: string;
   credentialsContinuationText: string;
   hasConnectedSystems: boolean;
-  hasInstallConnectedSystems: boolean;
-  hasPlatformConnectedSystems: boolean;
+  hasAgentConnectedSystems: boolean;
+  hasApiConnectedSystems: boolean;
   heroDescription: string;
   heroTitle: string;
   nextStepDetail: string;
   nextStepSummary: string;
   nextStepTitle: string;
   primaryAction: SetupCompletionPrimaryAction;
-  showInstallAction: boolean;
-  showPlatformConnectionsAction: boolean;
+  showAddInfrastructureAction: boolean;
+  showAgentInstallAction: boolean;
 }
 
 const asRecord = (value: unknown): Record<string, unknown> | undefined =>
@@ -65,14 +65,14 @@ const getSetupCompletionPlatformLabel = (resource: Resource): string | null => {
   return displayTokens[displayTokens.length - 1] || manifestPlatform.uiLabel;
 };
 
-const isPlatformConnectedSetupResource = (resource: Resource): boolean =>
+const isApiConnectedSetupResource = (resource: Resource): boolean =>
   sourcePlatformSupportsOnboardingPath(
     getSetupCompletionPlatformKey(resource),
     'platform-connections',
   );
 
-const isInstallConnectedSetupResource = (resource: Resource): boolean =>
-  isAgentFacetInfrastructureResource(resource) && !isPlatformConnectedSetupResource(resource);
+const isAgentConnectedSetupResource = (resource: Resource): boolean =>
+  isAgentFacetInfrastructureResource(resource) && !isApiConnectedSetupResource(resource);
 
 const getConnectedSetupSystemTypeLabel = (resource: Resource): string => {
   return getSetupCompletionPlatformLabel(resource) || 'Agent';
@@ -88,20 +88,17 @@ const getConnectedSetupSystemHost = (resource: Resource): string => {
   const vmware = asRecord(platformData?.vmware);
 
   return (
-    asString(proxmox?.instance) ||
-    asString(truenas?.hostname) ||
-    asString(vmware?.hostname) ||
-    ''
+    asString(proxmox?.instance) || asString(truenas?.hostname) || asString(vmware?.hostname) || ''
   );
 };
 
 const toConnectedSetupSystem = (resource: Resource): ConnectedSetupSystem | null => {
   if (!isSetupCompletionInfrastructureResource(resource)) return null;
 
-  const connectionPath = isPlatformConnectedSetupResource(resource)
-    ? 'platforms'
-    : isInstallConnectedSetupResource(resource)
-      ? 'install'
+  const connectionPath = isApiConnectedSetupResource(resource)
+    ? 'api'
+    : isAgentConnectedSetupResource(resource)
+      ? 'agent'
       : null;
   if (!connectionPath) return null;
 
@@ -130,8 +127,8 @@ export function buildSetupCompletionConnectedSystems(
       continue;
     }
 
-    if (existing.connectionPath === 'install' && nextSystem.connectionPath === 'platforms') {
-      existing.connectionPath = 'platforms';
+    if (existing.connectionPath === 'agent' && nextSystem.connectionPath === 'api') {
+      existing.connectionPath = 'api';
       existing.typeLabel = nextSystem.typeLabel;
     }
     if (!existing.host && nextSystem.host) {
@@ -148,57 +145,49 @@ export function buildSetupCompletionConnectedSystems(
 }
 
 const buildConnectedHeroDescription = (
-  hasInstallConnectedSystems: boolean,
-  hasPlatformConnectedSystems: boolean,
+  hasAgentConnectedSystems: boolean,
+  hasApiConnectedSystems: boolean,
 ): string => {
   const prefix =
     'Your admin account is ready and Pulse is already receiving telemetry. Open the dashboard to verify the first overview';
 
-  if (hasInstallConnectedSystems && hasPlatformConnectedSystems) {
-    return `${prefix}, then return to Platform connections or Infrastructure Install when you want to add more systems.`;
+  if (hasAgentConnectedSystems && hasApiConnectedSystems) {
+    return `${prefix}, then return to Add infrastructure when you want another platform API or Agent source.`;
   }
-  if (hasPlatformConnectedSystems) {
-    return `${prefix}, then return to Platform connections when you want to add more API-backed systems.`;
+  if (hasApiConnectedSystems) {
+    return `${prefix}, then return to Add infrastructure when you want another platform API or Pulse Agent source.`;
   }
-  return `${prefix}, then return to Infrastructure Install when you want to add more host-installed systems.`;
+  return `${prefix}, then return to Add infrastructure when you want another Pulse Agent or platform API source.`;
 };
 
 const buildCredentialsContinuationText = (
-  hasInstallConnectedSystems: boolean,
-  hasPlatformConnectedSystems: boolean,
+  _hasAgentConnectedSystems: boolean,
+  _hasApiConnectedSystems: boolean,
 ): string => {
-  if (hasInstallConnectedSystems && hasPlatformConnectedSystems) {
-    return 'the dashboard, Platform connections, or Infrastructure Install.';
-  }
-  if (hasPlatformConnectedSystems) {
-    return 'the dashboard, Platform connections, or Infrastructure Install.';
-  }
-  return 'the dashboard or Infrastructure Install.';
+  return 'the dashboard or Add infrastructure.';
 };
 
 const buildConnectedNextStepDetail = (
-  hasInstallConnectedSystems: boolean,
-  hasPlatformConnectedSystems: boolean,
+  hasAgentConnectedSystems: boolean,
+  hasApiConnectedSystems: boolean,
 ): string => {
-  if (hasInstallConnectedSystems && hasPlatformConnectedSystems) {
-    return 'Platform connections and Infrastructure Install both stay available any time you want to expand from this first system.';
+  if (hasAgentConnectedSystems && hasApiConnectedSystems) {
+    return 'Add infrastructure stays available any time you want to expand from this first system with another API source, Agent source, or both.';
   }
-  if (hasPlatformConnectedSystems) {
-    return 'Platform connections stays available any time you want to add more API-backed systems, and Infrastructure Install is ready when the next system should run the unified agent.';
+  if (hasApiConnectedSystems) {
+    return 'Add infrastructure stays available for more API-backed systems or Pulse Agent telemetry when a system needs node-local coverage.';
   }
-  return 'Infrastructure Install stays available any time you want to add more host-installed systems.';
+  return 'Add infrastructure stays available for more Pulse Agent systems or platform API inventory when a platform manages the estate.';
 };
 
 export function buildSetupCompletionViewModel(
   connectedSystems: readonly ConnectedSetupSystem[],
 ): SetupCompletionViewModel {
   const hasConnectedSystems = connectedSystems.length > 0;
-  const hasInstallConnectedSystems = connectedSystems.some(
-    (system) => system.connectionPath === 'install',
+  const hasAgentConnectedSystems = connectedSystems.some(
+    (system) => system.connectionPath === 'agent',
   );
-  const hasPlatformConnectedSystems = connectedSystems.some(
-    (system) => system.connectionPath === 'platforms',
-  );
+  const hasApiConnectedSystems = connectedSystems.some((system) => system.connectionPath === 'api');
 
   const connectedSystemNoun = connectedSystems.length === 1 ? 'system' : 'systems';
   const nextStepSummary =
@@ -209,45 +198,42 @@ export function buildSetupCompletionViewModel(
   if (!hasConnectedSystems) {
     return {
       connectedSummaryLabel: 'Connected (0 systems)',
-      credentialsContinuationText: 'Infrastructure Install or Platform connections.',
+      credentialsContinuationText: 'Add infrastructure.',
       hasConnectedSystems,
-      hasInstallConnectedSystems,
-      hasPlatformConnectedSystems,
+      hasAgentConnectedSystems,
+      hasApiConnectedSystems,
       heroDescription:
-        'Your admin account is ready. Next, choose the first infrastructure path: open Infrastructure Install for a host that should run the unified agent, or open Platform connections for API-backed platforms such as Proxmox, TrueNAS, and VMware.',
-      heroTitle: 'Connect your first monitored system',
+        'Your admin account is ready. Next, choose how the first system should enter the unified infrastructure model: platform API inventory, Pulse Agent telemetry, or both.',
+      heroTitle: 'Choose your first infrastructure source',
       nextStepDetail:
-        'If the first system is API-backed, use Platform connections instead of starting with host install.',
-      nextStepSummary: 'Open Infrastructure Install to bring your first monitored system into Pulse.',
-      nextStepTitle: 'Choose your first infrastructure path',
-      primaryAction: 'install',
-      showInstallAction: false,
-      showPlatformConnectionsAction: true,
+        'Start with a platform API when a platform manages the estate. Install Pulse Agent when the system itself should report node-local telemetry.',
+      nextStepSummary: 'Open Add infrastructure to choose a platform API, Pulse Agent, or both.',
+      nextStepTitle: 'Choose the first source strategy',
+      primaryAction: 'sources',
+      showAddInfrastructureAction: false,
+      showAgentInstallAction: true,
     };
   }
 
   return {
     connectedSummaryLabel: `Connected (${connectedSystems.length} ${connectedSystemNoun})`,
     credentialsContinuationText: buildCredentialsContinuationText(
-      hasInstallConnectedSystems,
-      hasPlatformConnectedSystems,
+      hasAgentConnectedSystems,
+      hasApiConnectedSystems,
     ),
     hasConnectedSystems,
-    hasInstallConnectedSystems,
-    hasPlatformConnectedSystems,
+    hasAgentConnectedSystems,
+    hasApiConnectedSystems,
     heroDescription: buildConnectedHeroDescription(
-      hasInstallConnectedSystems,
-      hasPlatformConnectedSystems,
+      hasAgentConnectedSystems,
+      hasApiConnectedSystems,
     ),
     heroTitle: 'First monitored system connected',
-    nextStepDetail: buildConnectedNextStepDetail(
-      hasInstallConnectedSystems,
-      hasPlatformConnectedSystems,
-    ),
+    nextStepDetail: buildConnectedNextStepDetail(hasAgentConnectedSystems, hasApiConnectedSystems),
     nextStepSummary,
     nextStepTitle: 'Open your first dashboard view',
     primaryAction: 'dashboard',
-    showInstallAction: hasConnectedSystems,
-    showPlatformConnectionsAction: hasPlatformConnectedSystems,
+    showAddInfrastructureAction: hasConnectedSystems,
+    showAgentInstallAction: false,
   };
 }

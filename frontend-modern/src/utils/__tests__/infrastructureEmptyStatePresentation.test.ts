@@ -8,10 +8,10 @@ import {
 describe('infrastructureEmptyStatePresentation', () => {
   it('returns the infrastructure onboarding empty state', () => {
     expect(getInfrastructureEmptyState()).toEqual({
-      title: 'No infrastructure resources yet',
+      title: 'No infrastructure sources yet',
       description:
-        'Start by opening Settings → Infrastructure → Install on a host and adding the first system you want Pulse to monitor. If you prefer an API-backed platform such as Proxmox or TrueNAS instead, use Platform connections.',
-      actionLabel: 'Open Infrastructure Install',
+        'Start in Settings → Infrastructure by choosing a source strategy. Connect a platform API for inventory and health, install Pulse Agent for host telemetry, or use both when you want full coverage.',
+      actionLabel: 'Add infrastructure source',
     });
   });
 

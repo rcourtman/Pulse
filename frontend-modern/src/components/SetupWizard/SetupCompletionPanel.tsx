@@ -1,12 +1,4 @@
-import {
-  Component,
-  createSignal,
-  createEffect,
-  createMemo,
-  onCleanup,
-  Show,
-  For,
-} from 'solid-js';
+import { Component, createSignal, createEffect, createMemo, onCleanup, Show, For } from 'solid-js';
 import { copyToClipboard } from '@/utils/clipboard';
 import { logger } from '@/utils/logger';
 import { apiFetchJSON } from '@/utils/apiClient';
@@ -30,33 +22,33 @@ interface CompleteStepProps {
 const UNIFIED_RESOURCE_GUIDANCE = {
   title: 'What happens next',
   description:
-    'Pulse is now secured. Next, choose the first infrastructure path: use Infrastructure Install for a host that should run the unified agent, or use Platform connections for API-backed platforms like Proxmox, TrueNAS, and VMware.',
+    'Pulse is now secured. Next, choose how the first system should enter the unified infrastructure model: platform API inventory, Pulse Agent telemetry, or both.',
   steps: [
     {
-      title: 'Open Infrastructure Install',
+      title: 'Open Add infrastructure',
       description:
-        'Use the canonical install workspace where Pulse prepares the first-host install token from setup and keeps Platform connections beside it when the first target is API-backed.',
+        'Review the supported source types in one place before choosing a platform API, Pulse Agent, or both.',
     },
     {
-      title: 'Copy the command for your target system',
+      title: 'Choose the source strategy',
       description:
-        'Choose Linux, macOS, Windows, or another supported target only when the first system should run the unified agent directly.',
+        'Connect a platform API for inventory and health, install Pulse Agent for node-local telemetry, or combine both where full coverage matters.',
     },
     {
-      title: 'Run it on the first host you want to monitor',
+      title: 'Save the source and confirm coverage',
       description:
-        'When that agent-managed host connects, Pulse creates your first monitored system and you can add more infrastructure from there.',
+        'When the source connects, Pulse creates the first monitored system and the dashboard becomes the live estate overview.',
     },
   ],
   inventoryFacts: [
-    'Start with one host, then add more systems later from the same install workspace.',
-    'Infrastructure Install owns the token, connection URL, TLS/CA settings, and platform-specific commands.',
-    'API-backed platforms like Proxmox, TrueNAS, and VMware use Platform connections instead of a dedicated install profile in Infrastructure Install.',
+    'Start with one source, then add more systems later from Settings → Infrastructure.',
+    'Platform APIs own inventory and health. Pulse Agent owns host telemetry, local services, Docker, and Kubernetes discovery.',
+    'VMware, TrueNAS, Proxmox, PBS, and PMG use API-backed source flows; standalone hosts use Pulse Agent.',
   ],
 } as const;
 
-const INFRASTRUCTURE_INSTALL_PATH = buildInfrastructureOnboardingPath('agent');
-const PLATFORM_CONNECTIONS_PATH = buildInfrastructureOnboardingPath('pick');
+const ADD_INFRASTRUCTURE_PATH = buildInfrastructureOnboardingPath('pick');
+const AGENT_INSTALL_PATH = buildInfrastructureOnboardingPath('agent');
 const SETUP_WIZARD_TELEMETRY_SURFACE = 'setup_wizard_complete';
 
 export const SetupCompletionPanel: Component<CompleteStepProps> = (props) => {
@@ -104,7 +96,7 @@ export const SetupCompletionPanel: Component<CompleteStepProps> = (props) => {
 
         if (
           !firstAgentConnectionTracked &&
-          nextConnectedSystems.some((system) => system.connectionPath === 'install')
+          nextConnectedSystems.some((system) => system.connectionPath === 'agent')
         ) {
           trackAgentFirstConnected(SETUP_WIZARD_TELEMETRY_SURFACE, 'first_agent');
           firstAgentConnectionTracked = true;
@@ -142,7 +134,7 @@ export const SetupCompletionPanel: Component<CompleteStepProps> = (props) => {
 
   const downloadCredentials = () => {
     const baseUrl = getPulseBaseUrl();
-    const infrastructureUrl = `${baseUrl.replace(/\/$/, '')}${INFRASTRUCTURE_INSTALL_PATH}`;
+    const infrastructureUrl = `${baseUrl.replace(/\/$/, '')}${ADD_INFRASTRUCTURE_PATH}`;
     const content = `Pulse Credentials
 ==================
 Generated: ${new Date().toISOString()}
@@ -161,8 +153,8 @@ Infrastructure:
 ---------------
 ${infrastructureUrl}
 
-Use Add connection to connect your first host or API-backed platform
-(Proxmox, TrueNAS, VMware, and others).
+Use Add infrastructure to choose a platform API, Pulse Agent, or both
+for the first system Pulse should monitor.
 
 Keep these credentials secure!
 `;
@@ -178,21 +170,19 @@ Keep these credentials secure!
     URL.revokeObjectURL(url);
   };
 
-  const handleOpenInstallWorkspace = () => {
-    props.onComplete(INFRASTRUCTURE_INSTALL_PATH);
+  const handleOpenAddInfrastructure = () => {
+    props.onComplete(ADD_INFRASTRUCTURE_PATH);
   };
 
-  const handleOpenPlatformConnections = () => {
-    props.onComplete(PLATFORM_CONNECTIONS_PATH);
+  const handleOpenAgentInstall = () => {
+    props.onComplete(AGENT_INSTALL_PATH);
   };
 
   const handleGoToDashboard = () => {
     props.onComplete('/');
   };
 
-  const completionViewModel = createMemo(() =>
-    buildSetupCompletionViewModel(connectedSystems()),
-  );
+  const completionViewModel = createMemo(() => buildSetupCompletionViewModel(connectedSystems()));
 
   return (
     <div class="max-w-2xl mx-auto bg-surface border border-border overflow-hidden animate-fade-in relative rounded-md p-6 sm:p-8 text-center text-base-content">
@@ -406,7 +396,7 @@ Keep these credentials secure!
                   Infrastructure
                 </div>
                 <code class="text-base-content font-mono text-xs break-all">
-                  {INFRASTRUCTURE_INSTALL_PATH}
+                  {ADD_INFRASTRUCTURE_PATH}
                 </code>
               </div>
 
@@ -507,8 +497,8 @@ Keep these credentials secure!
               </h3>
               <p class="mt-2 text-xs text-muted max-w-xl">
                 {completionViewModel().hasConnectedSystems
-                  ? 'Pulse already has a live monitored system. Open the dashboard to confirm the first overview, then return to Infrastructure when you want to continue with the next system path.'
-                  : 'The canonical install flow now lives in Infrastructure. Open that workspace to continue with the first-host install token Pulse prepares from setup, adjust the agent connection URL only if needed, configure TLS or custom CA options, and copy the correct command for the first system you want Pulse to monitor.'}
+                  ? 'Pulse already has a live monitored system. Open the dashboard to confirm the first overview, then return to Add infrastructure when you want to connect the next API or Agent source.'
+                  : 'Add infrastructure now owns the first source decision. Open the picker to choose a platform API for inventory, Pulse Agent for host telemetry, or both when the first system needs full coverage.'}
               </p>
             </div>
             <div class="rounded-sm bg-blue-50 px-2 py-1 text-[10px] font-medium text-blue-700 dark:bg-blue-900 dark:text-blue-300">
@@ -516,48 +506,43 @@ Keep these credentials secure!
             </div>
           </div>
           <div class="mt-4 rounded-md border border-border bg-surface-alt p-4">
-            <div class="text-[11px] font-medium uppercase tracking-wider text-muted">
-              Next step
-            </div>
+            <div class="text-[11px] font-medium uppercase tracking-wider text-muted">Next step</div>
             <div class="mt-2 text-sm text-base-content">
               {completionViewModel().nextStepSummary}
             </div>
-            <div class="mt-2 text-xs text-muted">
-              {completionViewModel().nextStepDetail}
-            </div>
+            <div class="mt-2 text-xs text-muted">{completionViewModel().nextStepDetail}</div>
           </div>
           <div class="mt-4 flex flex-col gap-3 sm:flex-row">
             <button
               onClick={() =>
                 completionViewModel().primaryAction === 'dashboard'
                   ? handleGoToDashboard()
-                  : handleOpenInstallWorkspace()
+                  : handleOpenAddInfrastructure()
               }
               class="inline-flex items-center justify-center gap-2 rounded-md bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-blue-700"
             >
               {completionViewModel().primaryAction === 'dashboard'
                 ? 'Go to Dashboard'
-                : 'Open Infrastructure Install'}
+                : 'Add infrastructure'}
             </button>
-            <Show when={completionViewModel().showPlatformConnectionsAction}>
+            <Show when={completionViewModel().showAddInfrastructureAction}>
               <button
-                onClick={handleOpenPlatformConnections}
+                onClick={handleOpenAddInfrastructure}
                 class="inline-flex items-center justify-center gap-2 rounded-md border border-border px-4 py-3 text-sm font-medium text-base-content transition-colors hover:bg-surface-hover"
               >
-                Open Platform connections
+                Add infrastructure
               </button>
             </Show>
-            <Show when={completionViewModel().showInstallAction}>
+            <Show when={completionViewModel().showAgentInstallAction}>
               <button
-                onClick={handleOpenInstallWorkspace}
+                onClick={handleOpenAgentInstall}
                 class="inline-flex items-center justify-center gap-2 rounded-md border border-border px-4 py-3 text-sm font-medium text-base-content transition-colors hover:bg-surface-hover"
               >
-                Open Infrastructure Install
+                Install Pulse Agent
               </button>
             </Show>
           </div>
         </div>
-
       </div>
     </div>
   );

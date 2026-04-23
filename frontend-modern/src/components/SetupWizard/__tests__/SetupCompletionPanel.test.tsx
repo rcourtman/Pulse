@@ -77,13 +77,14 @@ describe('SetupCompletionPanel', () => {
     vi.unstubAllGlobals();
   });
 
-  it('frames setup completion around the canonical infrastructure install workspace', async () => {
+  it('frames setup completion around the canonical add-infrastructure picker', async () => {
     render(() => <SetupCompletionPanel state={baseState} onComplete={vi.fn()} />);
 
-    expect(screen.getByText('Connect your first monitored system')).toBeInTheDocument();
+    expect(screen.getByText('Choose your first infrastructure source')).toBeInTheDocument();
     expect(screen.getByText('What happens next')).toBeInTheDocument();
-    expect(screen.getAllByText('Open Infrastructure Install').length).toBeGreaterThan(0);
-    expect(screen.getByRole('button', { name: 'Open Platform connections' })).toBeInTheDocument();
+    expect(screen.getAllByText('Open Add infrastructure').length).toBeGreaterThan(0);
+    expect(screen.getByRole('button', { name: 'Add infrastructure' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Install Pulse Agent' })).toBeInTheDocument();
     expect(screen.getByText('Credentials you must save now')).toBeInTheDocument();
     expect(screen.getByText('Shown during setup')).toBeInTheDocument();
     expect(screen.getByText('admin')).toBeInTheDocument();
@@ -92,17 +93,17 @@ describe('SetupCompletionPanel', () => {
     expect(screen.getByText('First system first')).toBeInTheDocument();
     expect(
       screen.getByText(
-        'Infrastructure Install owns the token, connection URL, TLS/CA settings, and platform-specific commands.',
+        'Platform APIs own inventory and health. Pulse Agent owns host telemetry, local services, Docker, and Kubernetes discovery.',
       ),
     ).toBeInTheDocument();
     expect(
       screen.getByText(
-        'Use the canonical install workspace where Pulse prepares the first-host install token from setup and keeps Platform connections beside it when the first target is API-backed.',
+        'Review the supported source types in one place before choosing a platform API, Pulse Agent, or both.',
       ),
     ).toBeInTheDocument();
     expect(
       screen.getByText(
-        'API-backed platforms like Proxmox, TrueNAS, and VMware use Platform connections instead of a dedicated install profile in Infrastructure Install.',
+        'VMware, TrueNAS, Proxmox, PBS, and PMG use API-backed source flows; standalone hosts use Pulse Agent.',
       ),
     ).toBeInTheDocument();
 
@@ -111,27 +112,27 @@ describe('SetupCompletionPanel', () => {
     expect(screen.queryByText('Windows (PowerShell as Administrator)')).not.toBeInTheDocument();
   });
 
-  it('hands install into the canonical infrastructure workspace', async () => {
+  it('hands the primary action into the canonical source picker', async () => {
     const onComplete = vi.fn();
 
     render(() => <SetupCompletionPanel state={baseState} onComplete={onComplete} />);
 
-    fireEvent.click(screen.getAllByRole('button', { name: 'Open Infrastructure Install' })[0]);
-
-    expect(onComplete).toHaveBeenCalledWith('/settings/infrastructure?add=agent');
-  });
-
-  it('hands API-backed starts into the canonical platform connections workspace', async () => {
-    const onComplete = vi.fn();
-
-    render(() => <SetupCompletionPanel state={baseState} onComplete={onComplete} />);
-
-    fireEvent.click(screen.getByRole('button', { name: 'Open Platform connections' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add infrastructure' }));
 
     expect(onComplete).toHaveBeenCalledWith('/settings/infrastructure?add=pick');
   });
 
-  it('downloads credentials that point operators to the install workspace instead of inline commands', async () => {
+  it('keeps a direct Pulse Agent handoff for operators who already know the first source', async () => {
+    const onComplete = vi.fn();
+
+    render(() => <SetupCompletionPanel state={baseState} onComplete={onComplete} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Install Pulse Agent' }));
+
+    expect(onComplete).toHaveBeenCalledWith('/settings/infrastructure?add=agent');
+  });
+
+  it('downloads credentials that point operators to the unified source picker instead of inline commands', async () => {
     const anchorClickMock = vi.fn();
     const createElementSpy = vi.spyOn(document, 'createElement').mockImplementation((tagName) => {
       const element = document.createElementNS('http://www.w3.org/1999/xhtml', tagName);
@@ -156,8 +157,8 @@ describe('SetupCompletionPanel', () => {
     expect(content).toContain('Web Login:');
     expect(content).toContain('Admin API Token:');
     expect(content).toContain('Infrastructure:');
-    expect(content).toContain('https://pulse.example.com/settings/infrastructure?add=agent');
-    expect(content).toContain('Use Add connection to connect');
+    expect(content).toContain('https://pulse.example.com/settings/infrastructure?add=pick');
+    expect(content).toContain('Use Add infrastructure to choose');
     expect(content).not.toContain('Example Install Command');
     expect(content).not.toContain('Example Windows Install Command');
 
@@ -201,7 +202,7 @@ describe('SetupCompletionPanel', () => {
     expect(screen.getByText('First monitored system connected')).toBeInTheDocument();
     expect(
       screen.getByText(
-        'Your admin account is ready and Pulse is already receiving telemetry. Open the dashboard to verify the first overview, then return to Infrastructure Install when you want to add more host-installed systems.',
+        'Your admin account is ready and Pulse is already receiving telemetry. Open the dashboard to verify the first overview, then return to Add infrastructure when you want another Pulse Agent or platform API source.',
       ),
     ).toBeInTheDocument();
     expect(
@@ -209,28 +210,30 @@ describe('SetupCompletionPanel', () => {
     ).toBeInTheDocument();
     expect(
       screen.getByText(
-        'Infrastructure Install stays available any time you want to add more host-installed systems.',
+        'Add infrastructure stays available for more Pulse Agent systems or platform API inventory when a platform manages the estate.',
       ),
     ).toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: 'Go to Dashboard' }).length).toBeGreaterThan(0);
-    expect(
-      screen.getAllByRole('button', { name: 'Open Infrastructure Install' }).length,
-    ).toBeGreaterThan(0);
-    expect(screen.queryByRole('button', { name: 'Open Platform connections' })).not.toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Add infrastructure' }).length).toBeGreaterThan(0);
+    expect(screen.queryByRole('button', { name: 'Install Pulse Agent' })).not.toBeInTheDocument();
     expect(trackAgentFirstConnectedMock).toHaveBeenCalledWith(
       'setup_wizard_complete',
       'first_agent',
     );
 
     const nextStepHeading = screen.getByRole('heading', { name: 'Open your first dashboard view' });
-    const nextStepCard = nextStepHeading.closest('div.bg-surface.rounded-md.border.border-border.p-6.text-left.mb-6');
+    const nextStepCard = nextStepHeading.closest(
+      'div.bg-surface.rounded-md.border.border-border.p-6.text-left.mb-6',
+    );
     expect(nextStepCard).not.toBeNull();
 
-    fireEvent.click(within(nextStepCard as HTMLElement).getByRole('button', { name: 'Go to Dashboard' }));
+    fireEvent.click(
+      within(nextStepCard as HTMLElement).getByRole('button', { name: 'Go to Dashboard' }),
+    );
     expect(onComplete).toHaveBeenCalledWith('/');
   });
 
-  it('keeps platform connections available for API-backed starts after the first system connects', async () => {
+  it('keeps add infrastructure available for API-backed starts after the first system connects', async () => {
     const onComplete = vi.fn();
     apiFetchJSONMock.mockResolvedValue({
       resources: [
@@ -262,26 +265,28 @@ describe('SetupCompletionPanel', () => {
     expect(screen.getByText('First monitored system connected')).toBeInTheDocument();
     expect(
       screen.getByText(
-        'Your admin account is ready and Pulse is already receiving telemetry. Open the dashboard to verify the first overview, then return to Platform connections when you want to add more API-backed systems.',
+        'Your admin account is ready and Pulse is already receiving telemetry. Open the dashboard to verify the first overview, then return to Add infrastructure when you want another platform API or Pulse Agent source.',
       ),
     ).toBeInTheDocument();
     expect(
       screen.getByText(
-        'Platform connections stays available any time you want to add more API-backed systems, and Infrastructure Install is ready when the next system should run the unified agent.',
+        'Add infrastructure stays available for more API-backed systems or Pulse Agent telemetry when a system needs node-local coverage.',
       ),
     ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Go to Dashboard' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Open Platform connections' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Open Infrastructure Install' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add infrastructure' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Install Pulse Agent' })).not.toBeInTheDocument();
     expect(trackAgentFirstConnectedMock).not.toHaveBeenCalled();
 
     const nextStepHeading = screen.getByRole('heading', { name: 'Open your first dashboard view' });
-    const nextStepCard = nextStepHeading.closest('div.bg-surface.rounded-md.border.border-border.p-6.text-left.mb-6');
+    const nextStepCard = nextStepHeading.closest(
+      'div.bg-surface.rounded-md.border.border-border.p-6.text-left.mb-6',
+    );
     expect(nextStepCard).not.toBeNull();
 
     fireEvent.click(
       within(nextStepCard as HTMLElement).getByRole('button', {
-        name: 'Open Platform connections',
+        name: 'Add infrastructure',
       }),
     );
     expect(onComplete).toHaveBeenCalledWith('/settings/infrastructure?add=pick');
@@ -318,16 +323,16 @@ describe('SetupCompletionPanel', () => {
     expect(screen.getByText('VMware vSphere')).toBeInTheDocument();
     expect(
       screen.getByText(
-        'Your admin account is ready and Pulse is already receiving telemetry. Open the dashboard to verify the first overview, then return to Platform connections when you want to add more API-backed systems.',
+        'Your admin account is ready and Pulse is already receiving telemetry. Open the dashboard to verify the first overview, then return to Add infrastructure when you want another platform API or Pulse Agent source.',
       ),
     ).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Open Platform connections' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add infrastructure' })).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Open Platform connections' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add infrastructure' }));
     expect(onComplete).toHaveBeenCalledWith('/settings/infrastructure?add=pick');
   });
 
-  it('keeps both continuation paths visible when install-managed and API-backed systems are already present', async () => {
+  it('keeps add infrastructure visible when agent and API-backed systems are already present', async () => {
     apiFetchJSONMock.mockResolvedValue({
       resources: [
         {
@@ -367,16 +372,16 @@ describe('SetupCompletionPanel', () => {
 
     expect(
       screen.getByText(
-        'Your admin account is ready and Pulse is already receiving telemetry. Open the dashboard to verify the first overview, then return to Platform connections or Infrastructure Install when you want to add more systems.',
+        'Your admin account is ready and Pulse is already receiving telemetry. Open the dashboard to verify the first overview, then return to Add infrastructure when you want another platform API or Agent source.',
       ),
     ).toBeInTheDocument();
     expect(
       screen.getByText(
-        'Platform connections and Infrastructure Install both stay available any time you want to expand from this first system.',
+        'Add infrastructure stays available any time you want to expand from this first system with another API source, Agent source, or both.',
       ),
     ).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Open Platform connections' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Open Infrastructure Install' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add infrastructure' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Install Pulse Agent' })).not.toBeInTheDocument();
     expect(trackAgentFirstConnectedMock).toHaveBeenCalledWith(
       'setup_wizard_complete',
       'first_agent',
@@ -438,9 +443,7 @@ describe('SetupCompletionPanel', () => {
     });
 
     expect(screen.queryByText('Monitor from Anywhere')).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole('button', { name: /start free trial/i }),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /start free trial/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /set up relay/i })).not.toBeInTheDocument();
   });
 });

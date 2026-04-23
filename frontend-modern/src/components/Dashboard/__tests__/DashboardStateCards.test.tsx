@@ -20,10 +20,10 @@ describe('DashboardStateCards', () => {
           description: 'No guests match your current filters',
         })}
         dashboardInfrastructureEmptyState={() => ({
-          title: 'No infrastructure hosts connected',
+          title: 'No infrastructure sources connected',
           description:
-            'To start using Pulse, first add your infrastructure in Settings → Infrastructure → Install on a host. If you want an API-backed platform such as Proxmox or TrueNAS instead, use Settings → Infrastructure → Platform connections.',
-          actionLabel: 'Open infrastructure setup',
+            'Start in Settings → Infrastructure by choosing a source strategy. Connect a platform API for inventory and health, install Pulse Agent for host telemetry, or use both when you want full coverage.',
+          actionLabel: 'Add infrastructure source',
         })}
         dashboardLoadingState={() => ({
           title: 'Loading dashboard data...',
@@ -45,8 +45,8 @@ describe('DashboardStateCards', () => {
       />
     ));
 
-    fireEvent.click(screen.getByRole('button', { name: 'Open infrastructure setup' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add infrastructure source' }));
 
-    expect(navigate).toHaveBeenCalledWith('/settings/infrastructure?add=agent');
+    expect(navigate).toHaveBeenCalledWith('/settings/infrastructure?add=pick');
   });
 });

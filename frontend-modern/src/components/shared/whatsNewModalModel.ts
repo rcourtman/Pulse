@@ -14,35 +14,37 @@ export const WHATS_NEW_PRIVACY_URL = PRIVACY_DOC_URL;
 export const WHATS_NEW_FEATURE_CARDS: WhatsNewFeatureCard[] = [
   {
     accent: 'border-indigo-200 bg-indigo-50 dark:border-indigo-800 dark:bg-indigo-900',
-    description: 'Start here for health, alerts, capacity, and recent activity.',
+    description:
+      'Start here for the live estate overview: health, alerts, capacity, and recent activity.',
     icon: 'dashboard',
     target: 'dashboard',
     title: 'Dashboard',
   },
   {
     accent: 'border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-900',
-    description: 'Use this for nodes, hosts, clusters, and other platform roots.',
+    description:
+      'Use this to add and manage infrastructure sources: platform API inventory, Pulse Agent telemetry, and discovered candidates.',
     icon: 'infrastructure',
     target: 'infrastructure',
     title: 'Infrastructure',
   },
   {
     accent: 'border-rose-200 bg-rose-50 dark:border-rose-800 dark:bg-rose-900',
-    description: 'Use this for VMs, containers, and pods.',
+    description: 'Use this for VMs, containers, pods, and other running workloads.',
     icon: 'workloads',
     target: 'workloads',
     title: 'Workloads',
   },
   {
     accent: 'border-emerald-200 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-900',
-    description: 'Use this for datastores, pools, disks, and capacity.',
+    description: 'Use this for pools, datastores, disks, datasets, and capacity.',
     icon: 'storage',
     target: 'storage',
     title: 'Storage',
   },
   {
     accent: 'border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-900',
-    description: 'Use this for backups, snapshots, and replication.',
+    description: 'Use this for backup coverage, snapshots, replication, and restore readiness.',
     icon: 'recovery',
     target: 'recovery',
     title: 'Recovery',

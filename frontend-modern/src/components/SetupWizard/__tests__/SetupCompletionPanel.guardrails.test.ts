@@ -3,29 +3,27 @@ import setupCompletionPanelSource from '../SetupCompletionPanel.tsx?raw';
 import setupCompletionModelSource from '../setupCompletionModel.ts?raw';
 
 describe('SetupCompletionPanel guardrails', () => {
-  it('keeps setup completion aligned with the canonical infrastructure install workspace', () => {
+  it('keeps setup completion aligned with the canonical add-infrastructure picker', () => {
     expect(setupCompletionPanelSource).toContain('buildInfrastructureOnboardingPath');
     expect(setupCompletionPanelSource).toContain(
-      "const INFRASTRUCTURE_INSTALL_PATH = buildInfrastructureOnboardingPath('agent');",
+      "const ADD_INFRASTRUCTURE_PATH = buildInfrastructureOnboardingPath('pick');",
     );
     expect(setupCompletionPanelSource).toContain(
-      "const PLATFORM_CONNECTIONS_PATH = buildInfrastructureOnboardingPath('pick');",
+      "const AGENT_INSTALL_PATH = buildInfrastructureOnboardingPath('agent');",
     );
-    expect(setupCompletionPanelSource).toContain('Open Infrastructure Install');
-    expect(setupCompletionPanelSource).toContain('Open Platform connections');
+    expect(setupCompletionPanelSource).toContain('Add infrastructure');
+    expect(setupCompletionPanelSource).toContain('Install Pulse Agent');
     expect(setupCompletionPanelSource).toContain('Credentials you must save now');
     expect(setupCompletionPanelSource).toContain('Shown during setup');
-    expect(setupCompletionPanelSource).toContain('props.onComplete(INFRASTRUCTURE_INSTALL_PATH);');
-    expect(setupCompletionPanelSource).toContain('props.onComplete(PLATFORM_CONNECTIONS_PATH);');
+    expect(setupCompletionPanelSource).toContain('props.onComplete(ADD_INFRASTRUCTURE_PATH);');
+    expect(setupCompletionPanelSource).toContain('props.onComplete(AGENT_INSTALL_PATH);');
     expect(setupCompletionPanelSource).toContain(
-      'Use Add connection to connect your first host or API-backed platform',
+      'Use Add infrastructure to choose a platform API, Pulse Agent, or both',
     );
     expect(setupCompletionPanelSource).toContain(
-      'continue with the first-host install token Pulse prepares from setup',
+      'Open the picker to choose a platform API for inventory, Pulse Agent for host telemetry',
     );
-    expect(setupCompletionPanelSource).not.toContain(
-      'Use Add infrastructure to connect your first host or API-backed platform',
-    );
+    expect(setupCompletionPanelSource).not.toContain('Use Add connection to connect');
     expect(setupCompletionPanelSource).not.toContain("from '@/stores/licenseCommercial';");
     expect(setupCompletionPanelSource).not.toContain('runStartProTrialAction');
     expect(setupCompletionPanelSource).not.toContain('loadCommercialPosture');
@@ -39,19 +37,19 @@ describe('SetupCompletionPanel guardrails', () => {
   it('describes setup completion through the unified resource model instead of legacy install-command copy', () => {
     expect(setupCompletionPanelSource).toContain("title: 'What happens next'");
     expect(setupCompletionPanelSource).toContain('Pulse is now secured.');
-    expect(setupCompletionPanelSource).toContain("title: 'Open Infrastructure Install'");
-    expect(setupCompletionPanelSource).toContain(
-      'Pulse prepares the first-host install token from setup',
-    );
-    expect(setupCompletionPanelSource).toContain("title: 'Run it on the first host you want to monitor'");
+    expect(setupCompletionPanelSource).toContain("title: 'Open Add infrastructure'");
+    expect(setupCompletionPanelSource).toContain('Review the supported source types in one place');
+    expect(setupCompletionPanelSource).toContain("title: 'Save the source and confirm coverage'");
     expect(setupCompletionPanelSource).toContain('What to expect');
     expect(setupCompletionPanelSource).toContain('First system first');
-    expect(setupCompletionPanelSource).toContain('Start with one host, then add more systems later from the same install workspace.');
     expect(setupCompletionPanelSource).toContain(
-      'API-backed platforms like Proxmox, TrueNAS, and VMware use Platform connections instead of a dedicated install profile in Infrastructure Install.',
+      'Start with one source, then add more systems later from Settings',
+    );
+    expect(setupCompletionPanelSource).toContain(
+      'Platform APIs own inventory and health. Pulse Agent owns host telemetry',
     );
     expect(setupCompletionModelSource).toContain(
-      'If the first system is API-backed, use Platform connections instead of starting with host install.',
+      'Start with a platform API when a platform manages the estate.',
     );
     expect(setupCompletionPanelSource).not.toContain('Smart Auto-Detection');
     expect(setupCompletionPanelSource).not.toContain('Agent Metrics');
@@ -61,14 +59,16 @@ describe('SetupCompletionPanel guardrails', () => {
   it('keeps connected infrastructure classification on the canonical setup model', () => {
     expect(setupCompletionPanelSource).toContain('buildSetupCompletionConnectedSystems');
     expect(setupCompletionPanelSource).toContain('buildSetupCompletionViewModel');
-    expect(setupCompletionPanelSource).toContain("props.connectedResourcesOverride !== undefined");
-    expect(setupCompletionPanelSource).toContain("setConnectedSystems(buildSetupCompletionConnectedSystems(props.connectedResourcesOverride));");
+    expect(setupCompletionPanelSource).toContain('props.connectedResourcesOverride !== undefined');
+    expect(setupCompletionPanelSource).toContain(
+      'setConnectedSystems(buildSetupCompletionConnectedSystems(props.connectedResourcesOverride));',
+    );
     expect(setupCompletionModelSource).toContain('isAgentFacetInfrastructureResource');
     expect(setupCompletionModelSource).toContain('getPreferredInfrastructureDisplayName');
     expect(setupCompletionModelSource).toContain('getPreferredResourceHostname');
     expect(setupCompletionModelSource).toContain('getSourcePlatformManifestEntry');
-    expect(setupCompletionModelSource).toContain("sourcePlatformSupportsOnboardingPath");
-    expect(setupCompletionModelSource).toContain("displayTokens[displayTokens.length - 1]");
+    expect(setupCompletionModelSource).toContain('sourcePlatformSupportsOnboardingPath');
+    expect(setupCompletionModelSource).toContain('displayTokens[displayTokens.length - 1]');
     expect(setupCompletionModelSource).not.toContain('PLATFORM_CONNECTION_PLATFORM_TYPES');
     expect(setupCompletionModelSource).not.toContain("resource.type === 'truenas'");
     expect(setupCompletionModelSource).not.toContain('getPreferredResourceDisplayName(resource)');
@@ -89,30 +89,36 @@ describe('SetupCompletionPanel guardrails', () => {
   });
 
   it('keeps setup completion on one primary next-step surface instead of repeated CTA sections', () => {
-    expect(setupCompletionPanelSource).toContain("const [showCredentials, setShowCredentials] = createSignal(true);");
-    expect(setupCompletionPanelSource).toContain('Save the admin login and API token before leaving this screen');
+    expect(setupCompletionPanelSource).toContain(
+      'const [showCredentials, setShowCredentials] = createSignal(true);',
+    );
+    expect(setupCompletionPanelSource).toContain(
+      'Save the admin login and API token before leaving this screen',
+    );
     expect(setupCompletionPanelSource).toContain('Recommended next step');
     expect(setupCompletionPanelSource).toContain('Go to Dashboard');
     expect(setupCompletionModelSource).toContain("heroTitle: 'First monitored system connected'");
-    expect(setupCompletionModelSource).toContain("heroTitle: 'Connect your first monitored system'");
+    expect(setupCompletionModelSource).toContain(
+      "heroTitle: 'Choose your first infrastructure source'",
+    );
     expect(setupCompletionPanelSource).toContain(
       "completionViewModel().primaryAction === 'dashboard'",
     );
     expect(setupCompletionPanelSource).toContain(
-      'completionViewModel().showPlatformConnectionsAction',
+      'completionViewModel().showAddInfrastructureAction',
     );
-    expect(setupCompletionPanelSource).toContain('completionViewModel().showInstallAction');
-    expect(setupCompletionPanelSource).toContain('handleOpenPlatformConnections');
+    expect(setupCompletionPanelSource).toContain('completionViewModel().showAgentInstallAction');
+    expect(setupCompletionPanelSource).toContain('handleOpenAddInfrastructure');
     expect(setupCompletionPanelSource).not.toContain('hasConnectedAgents');
     expect(setupCompletionPanelSource).not.toContain('connectedAgents().length');
     expect(setupCompletionPanelSource).not.toContain(
       'You can return here later from Connections & Inventory if you skip install for now.',
     );
     expect(setupCompletionPanelSource).toContain(
-      'The canonical install flow now lives in Infrastructure.',
+      'Add infrastructure now owns the first source decision.',
     );
     expect(setupCompletionPanelSource).toContain(
-      'then return to Infrastructure when you want to continue with the next system path.',
+      'then return to Add infrastructure when you want to connect the next API or Agent source.',
     );
   });
 });

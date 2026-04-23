@@ -161,11 +161,12 @@ describe('infrastructureOnboardingPresentation', () => {
     });
 
     expect(getInfrastructureEmptyStateSummary()).toBe(
-      'Add infrastructure systems to start monitoring your environment.',
+      'Choose an infrastructure source to start monitoring your environment.',
     );
-    expect(getInfrastructureEmptyStateDetail()).toContain('Available system types: VMware vCenter');
+    expect(getInfrastructureEmptyStateDetail()).toContain(
+      'Supported source types include VMware vCenter',
+    );
     expect(getInfrastructureEmptyStateDetail()).toContain('standalone hosts through Pulse Agent');
     expect(getInfrastructureEmptyStateDetail()).toContain('Docker and Kubernetes are discovered');
-    expect(getInfrastructureEmptyStateDetail()).toContain('VMware vCenter is also available now.');
   });
 });

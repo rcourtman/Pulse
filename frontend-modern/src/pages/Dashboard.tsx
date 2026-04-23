@@ -283,7 +283,7 @@ export default function Dashboard() {
             <p class="mt-2 text-sm text-muted">{dashboardNoResourcesState().description}</p>
             <button
               type="button"
-              onClick={() => navigate(buildInfrastructureOnboardingPath('agent'))}
+              onClick={() => navigate(buildInfrastructureOnboardingPath('pick'))}
               class="mt-4 inline-flex items-center rounded-md border border-transparent bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700"
             >
               {dashboardNoResourcesState().actionLabel}

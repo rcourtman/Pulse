@@ -256,11 +256,11 @@ assembly branch.
 5. Keep the infrastructure landing empty state on canonical first-run routing:
    when inventory is empty, `frontend-modern/src/features/infrastructure/InfrastructurePageSurface.tsx`
    and `frontend-modern/src/utils/infrastructureEmptyStatePresentation.ts`
-   must send operators directly to `/settings/infrastructure/install`, name
-   first-host install as the default next step, and keep `Platform connections`
-   as the explicit API-backed alternative for Proxmox, TrueNAS, and future
-   provider-backed platforms instead of regressing to generic settings-root
-   CTAs or provider-specific one-off routes.
+   must send operators directly to `/settings/infrastructure?add=pick`, name
+   source strategy selection as the default next step, and present platform
+   API inventory plus Pulse Agent telemetry as peer source options instead of
+   regressing to generic settings-root CTAs, an agent-only install jump, the
+   retired `Platform connections` split, or provider-specific one-off routes.
 6. Keep infrastructure route-backed source filters on canonical unified-resource
    truth. `frontend-modern/src/features/infrastructure/` must preserve a
    route-owned source such as `truenas` in the filter option set even when the

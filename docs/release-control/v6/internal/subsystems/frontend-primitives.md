@@ -244,7 +244,7 @@ work extends shared components instead of creating new local variants.
    The shared navigation guide owns route-aware first focus: when it opens
    from a top-level product route such as `/recovery`, the first highlighted
    step should match that route instead of always restarting at Dashboard.
-5. Keep shared infrastructure shell state on the reusable settings boundary: `frontend-modern/src/components/Settings/useSettingsInfrastructurePanelProps.ts` and `frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx` must continue to derive provider counts, availability, and shared subtab copy from one infrastructure-settings source — via the unified aggregator through `frontend-modern/src/components/Settings/useConnectionsLedger.ts` — instead of creating provider-local summary fetches or VMware-only shell vocabulary. Phase 9 retired the old `PlatformConnectionsWorkspace` per-type shell, but setup guidance may still use `Platform connections` as the operator-facing label for the shared API-backed onboarding path.
+5. Keep shared infrastructure shell state on the reusable settings boundary: `frontend-modern/src/components/Settings/useSettingsInfrastructurePanelProps.ts` and `frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx` must continue to derive provider counts, availability, and shared subtab copy from one infrastructure-settings source — via the unified aggregator through `frontend-modern/src/components/Settings/useConnectionsLedger.ts` — instead of creating provider-local summary fetches or VMware-only shell vocabulary. Phase 9 retired the old `PlatformConnectionsWorkspace` per-type shell; setup guidance should now use `Add infrastructure` plus source-strategy language for API-backed onboarding.
    That same shared shell boundary now owns the first-run posture for
    `/settings/infrastructure`: the landing route should read as one
    source-manager workspace with configured infrastructure instances first
@@ -584,16 +584,17 @@ work extends shared components instead of creating new local variants.
     path to the bare `/settings/infrastructure`, which renders the unified
     Connections table, not to a separate install subview or to reporting/
     control. The first-session story is owned by that table's own empty state
-    and the `Add connection` entry point on it, not by a second landing route,
+    and the `Add infrastructure` entry point on it, not by a second landing route,
     so first-time operators and returning operators see one consistent
     infrastructure surface by default.
 14. Keep dashboard onboarding copy on the shared presentation owner in
     `frontend-modern/src/utils/dashboardEmptyStatePresentation.ts`. Both the
     infrastructure empty state and the dashboard route's no-resources state
-    must name the canonical install workspace explicitly, keep `Platform
-connections` visible as the API-backed alternative for Proxmox and
-    TrueNAS, and expose the same first-host next step instead of falling back
-    to passive “nothing here yet” wording.
+    must route first-time operators into the canonical
+    `/settings/infrastructure?add=pick` source picker, describe platform API
+    inventory and Pulse Agent telemetry as equal source strategies, and avoid
+    falling back to either passive “nothing here yet” wording or the retired
+    install-first / `Platform connections` split.
 15. Keep cross-surface investigation handoffs on shared route ownership.
     Feature shells such as Alerts and Patrol may decide which governed
     destination chips to render, but canonical href, label, dedupe, and
@@ -642,9 +643,10 @@ connections` visible as the API-backed alternative for Proxmox and
     that helper instead of maintaining page-local copies of the same hover/focus
     rules.
     `frontend-modern/src/App.tsx` must land `/` on the dashboard shell and let
-    the governed dashboard empty state route first-time operators into
-    Infrastructure Install, instead of preserving a separate root-only jump to
-    `/infrastructure` that drifts from the rest of the onboarding contract.
+    the governed dashboard empty state route first-time operators into the
+    `Add infrastructure` source picker, instead of preserving a separate
+    root-only jump to `/infrastructure` or an agent-only install jump that
+    drifts from the rest of the onboarding contract.
     The same entry-shell contract must also canonicalize authenticated
     `/login`: once auth succeeds, the shared shell must resolve that route back
     onto the governed dashboard landing path instead of rendering a page-local
@@ -1446,6 +1448,9 @@ the new navigation in one pass without needing historical layout context.
 That copy should stay direct and present-tense. Each guided step should say
 what the destination does, not depend on v5 comparisons, migration framing, or
 older information architecture to make sense.
+The Infrastructure tour step must describe the source model directly: platform
+API inventory, Pulse Agent telemetry, and discovered candidates are managed as
+infrastructure sources in one place.
 That guided welcome surface should stay compact. The canonical shape is a
 coachmark-sized card centered on the current destination with one short
 step-specific sentence, a small clickable step strip, and minimal footer
@@ -1596,7 +1601,16 @@ implementation fallback language.
 The estate summary may surface resource and alert issue counts only as
 below-the-summary detail references; it must not claim the whole dashboard has
 no issues when storage or recovery widgets still own independent health
-signals.
+signals. Those detail references must use governed dashboard section anchors so
+the first viewport can move focus to Problem Resources or Alerts without
+inventing separate dashboard drill-down routes.
+The dashboard may add an optional Pulse Brief below that estate orientation
+only when Assistant and Patrol are actually enabled and configured. That brief
+must stay additive to the factual dashboard source of truth, derive its first
+render from the already-owned estate, overview, action, storage, and recovery
+facts, and hand off to Pulse Assistant through a structured context prompt
+instead of replacing the route's canonical numbers, tables, or lane-owned
+widgets with model prose.
 The recovery feature shell now also depends on the shared
 `frontend-modern/src/components/shared/Subtabs.tsx` primitive for its primary
 protected-items versus recovery-events workspace switch. The recovery lane may
@@ -2415,18 +2429,18 @@ reference cases, and
 `frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts`
 locks that direct-root contract so single-surface pages do not quietly regain
 redundant outer spacing chrome.
-The same shared settings-shell boundary now also owns the API-backed
-alternative path inside Infrastructure.
+The same shared settings-shell boundary now also owns the API-backed source
+path inside Infrastructure.
 `frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx`,
 `frontend-modern/src/components/Settings/settingsHeaderMeta.ts`,
 `frontend-modern/src/components/Settings/settingsNavigationModel.ts`,
 `frontend-modern/src/utils/dashboardEmptyStatePresentation.ts`,
 `frontend-modern/src/utils/infrastructureEmptyStatePresentation.ts`, and
-adjacent setup guidance may still use `Platform connections` as the
-operator-facing first-run label for API-backed onboarding, but that label must
-resolve to the shared `Infrastructure` destination and its inline
-`ConnectionEditor` add flow rather than reviving a standalone platform shell
-or provider-local route.
+adjacent setup guidance must use `Add infrastructure` as the operator-facing
+first-run label for API-backed onboarding, resolve that label to the shared
+`Infrastructure` destination and its inline `ConnectionEditor` add flow, and
+avoid reviving a standalone platform shell, `Platform connections` label, or
+provider-local route.
 That same settings-shell contract also owns the shared infrastructure summary
 state. `frontend-modern/src/components/Settings/useInfrastructureSettingsState.ts`,
 `frontend-modern/src/components/Settings/useSettingsInfrastructurePanelProps.ts`,
