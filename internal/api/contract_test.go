@@ -7865,6 +7865,28 @@ func TestContract_InstallScriptReleaseAssetURLRejectsDevPrereleaseBuild(t *testi
 	}
 }
 
+func TestContract_AgentBinaryReleaseAssetURL(t *testing.T) {
+	router := &Router{serverVersion: "v6.0.0-rc.1"}
+
+	got, err := router.agentBinaryReleaseAssetURL("linux-arm64")
+	if err != nil {
+		t.Fatalf("agent binary release asset URL: %v", err)
+	}
+
+	const want = "https://github.com/rcourtman/Pulse/releases/download/v6.0.0-rc.1/pulse-agent-linux-arm64"
+	if got != want {
+		t.Fatalf("agent binary release asset URL = %q, want %q", got, want)
+	}
+}
+
+func TestContract_AgentBinaryReleaseAssetURLRejectsDevPrereleaseBuild(t *testing.T) {
+	router := &Router{serverVersion: "v6.0.0-dev"}
+
+	if _, err := router.agentBinaryReleaseAssetURL("linux-arm64"); err == nil {
+		t.Fatalf("expected dev prerelease build to reject release asset lookup")
+	}
+}
+
 func TestContract_ProxmoxInstallCommandIncludesInsecureForPlainHTTP(t *testing.T) {
 	got := buildProxmoxAgentInstallCommand(agentInstallCommandOptions{
 		BaseURL:            "http://pulse.example.com:7655/",

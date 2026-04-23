@@ -9,7 +9,6 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -40,16 +39,8 @@ func installScriptReleaseRepo() string {
 	return repo
 }
 
-func githubReleaseDownloadURL(assetName string) string {
-	return fmt.Sprintf("https://github.com/%s/releases/latest/download/%s", installScriptReleaseRepo(), assetName)
-}
-
 func githubReleaseAssetURL(tag, assetName string) string {
 	return fmt.Sprintf("https://github.com/%s/releases/download/%s/%s", installScriptReleaseRepo(), strings.TrimSpace(tag), assetName)
-}
-
-func githubLatestReleaseAPIURL() string {
-	return fmt.Sprintf("https://api.github.com/repos/%s/releases/latest", installScriptReleaseRepo())
 }
 
 func (r *Router) handleDownloadUnifiedInstallScript(w http.ResponseWriter, req *http.Request) {
@@ -230,25 +221,25 @@ func (r *Router) handleDownloadUnifiedAgent(w http.ResponseWriter, req *http.Req
 		log.Warn().Strs("paths", invalidCandidates).Msg("Ignoring stale local unified agent binaries")
 	}
 
-	// In dev mode, never fall through to GitHub releases — the released binary
-	// would lack current fixes. Return a clear 404 with build instructions.
-	if r.serverVersion == "dev" {
-		reason := fmt.Sprintf("Agent binary not found for %q in dev mode.", normalized)
-		if len(invalidCandidates) > 0 {
-			reason = fmt.Sprintf("Local agent binary for %q is stale or incompatible in dev mode:\n  %s",
-				normalized,
-				strings.Join(invalidCandidates, "\n  "),
-			)
-		}
-		http.Error(w, reason+"\nBuild with:\n  GOOS=linux GOARCH=amd64 go build -o bin/pulse-agent-linux-amd64 ./cmd/pulse-agent", http.StatusNotFound)
-		return
-	}
-
 	// Fallback: proxy from GitHub releases for the binary
 	// This handles LXC/barebone installations that don't have agent binaries locally.
 	// We proxy instead of redirecting because agents require the X-Checksum-Sha256 header,
 	// which GitHub doesn't provide.
 	if normalized != "" {
+		// Outside published release builds, never fall through to GitHub releases —
+		// that would silently fetch the wrong channel. Return a clear 404 with build
+		// instructions instead.
+		if !isPublishedReleaseAssetVersion(r.serverVersion) {
+			reason := fmt.Sprintf("Agent binary not found for %q in dev mode.", normalized)
+			if len(invalidCandidates) > 0 {
+				reason = fmt.Sprintf("Local agent binary for %q is stale or incompatible in dev mode:\n  %s",
+					normalized,
+					strings.Join(invalidCandidates, "\n  "),
+				)
+			}
+			http.Error(w, reason+"\nBuild with:\n  GOOS=linux GOARCH=amd64 go build -o bin/pulse-agent-linux-amd64 ./cmd/pulse-agent", http.StatusNotFound)
+			return
+		}
 		r.proxyAgentBinaryFromGitHub(w, req, normalized)
 		return
 	}
@@ -281,13 +272,14 @@ func validateUnifiedAgentBinary(path string) error {
 // We must proxy instead of redirecting because the agent requires the checksum header
 // for security verification, and GitHub doesn't provide it.
 func (r *Router) proxyAgentBinaryFromGitHub(w http.ResponseWriter, req *http.Request, normalized string) {
-	binaryName := "pulse-agent-" + normalized
-	if strings.HasPrefix(normalized, "windows-") {
-		binaryName += ".exe"
+	githubURL, err := r.agentBinaryReleaseAssetURL(normalized)
+	if err != nil {
+		log.Error().Err(err).Str("server_version", strings.TrimSpace(r.serverVersion)).Str("arch", normalized).Msg("Agent binary fallback unavailable for current server build")
+		http.Error(w, "Agent binary unavailable for current server build", http.StatusServiceUnavailable)
+		return
 	}
-	githubURL := githubReleaseDownloadURL(binaryName)
-	signatureURL := githubReleaseDownloadURL(binaryName + ".sig")
-	sshSignatureURL := githubReleaseDownloadURL(binaryName + ".sshsig")
+	signatureURL := githubURL + ".sig"
+	sshSignatureURL := githubURL + ".sshsig"
 
 	log.Info().Str("arch", normalized).Str("url", githubURL).Msg("Local agent binary not found, proxying from GitHub releases")
 
@@ -389,7 +381,7 @@ func serveProxiedAgentBinaryWithSignatures(w http.ResponseWriter, content []byte
 }
 
 func (r *Router) fetchAgentBinaryFromReleaseArchive(client *http.Client, normalized string) ([]byte, string, error) {
-	tag, err := fetchLatestReleaseTag(client)
+	tag, err := r.releaseAssetTag()
 	if err != nil {
 		return nil, "", err
 	}
@@ -436,36 +428,6 @@ func (r *Router) fetchAgentBinaryFromReleaseArchive(client *http.Client, normali
 	}
 	sum := sha256.Sum256(binary)
 	return binary, hex.EncodeToString(sum[:]), nil
-}
-
-func fetchLatestReleaseTag(client *http.Client) (string, error) {
-	req, err := http.NewRequest(http.MethodGet, githubLatestReleaseAPIURL(), nil)
-	if err != nil {
-		return "", err
-	}
-	req.Header.Set("Accept", "application/vnd.github+json")
-	req.Header.Set("User-Agent", "pulse-agent-download-proxy")
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("latest release lookup returned status %d", resp.StatusCode)
-	}
-
-	var payload struct {
-		TagName string `json:"tag_name"`
-	}
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&payload); err != nil {
-		return "", fmt.Errorf("failed decoding latest release payload: %w", err)
-	}
-	tag := strings.TrimSpace(payload.TagName)
-	if tag == "" {
-		return "", fmt.Errorf("latest release payload missing tag_name")
-	}
-	return tag, nil
 }
 
 func isPublishedReleaseAssetVersion(rawVersion string) bool {
@@ -589,13 +551,13 @@ func extractFromZip(archive []byte, entryName string) ([]byte, error) {
 	return nil, fmt.Errorf("binary %q not found in zip", entryName)
 }
 
-func (r *Router) installScriptReleaseAssetURL(scriptName string) (string, error) {
+func (r *Router) releaseAssetTag() (string, error) {
 	rawVersion := strings.TrimSpace(r.serverVersion)
 	if rawVersion == "" {
 		return "", fmt.Errorf("server version is unavailable")
 	}
 	if strings.EqualFold(rawVersion, "dev") {
-		return "", fmt.Errorf("development builds must serve local install scripts")
+		return "", fmt.Errorf("development builds must serve local assets")
 	}
 
 	version, err := updates.ParseVersion(rawVersion)
@@ -606,12 +568,27 @@ func (r *Router) installScriptReleaseAssetURL(scriptName string) (string, error)
 		return "", fmt.Errorf("server version %q is not a published release asset version", rawVersion)
 	}
 
-	return fmt.Sprintf(
-		"https://github.com/%s/releases/download/v%s/%s",
-		installScriptReleaseRepo(),
-		version.String(),
-		scriptName,
-	), nil
+	return "v" + version.String(), nil
+}
+
+func (r *Router) releaseAssetURL(assetName string) (string, error) {
+	tag, err := r.releaseAssetTag()
+	if err != nil {
+		return "", err
+	}
+	return githubReleaseAssetURL(tag, assetName), nil
+}
+
+func (r *Router) installScriptReleaseAssetURL(scriptName string) (string, error) {
+	return r.releaseAssetURL(scriptName)
+}
+
+func (r *Router) agentBinaryReleaseAssetURL(normalized string) (string, error) {
+	binaryName := "pulse-agent-" + normalized
+	if strings.HasPrefix(normalized, "windows-") {
+		binaryName += ".exe"
+	}
+	return r.releaseAssetURL(binaryName)
 }
 
 // proxyInstallScriptFromGitHub fetches an install script from the exact GitHub
