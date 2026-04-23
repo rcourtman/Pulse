@@ -214,6 +214,17 @@ regression protection.
     while the window still reports a desktop breakpoint. Live resize proof must
     show the host and service tables dropping lower-priority columns without
     introducing horizontal overflow.
+    Dashboard workload table responsive behavior belongs to the same hot-path
+    owner. `frontend-modern/src/components/Dashboard/useDashboardControlsState.ts`
+    must derive workload table layout stages from live viewport width, and
+    `frontend-modern/src/components/Dashboard/guestRowModel.tsx` must own the
+    responsive workload column priority and width model. `DashboardWorkloadTable`,
+    `WorkloadTableHeader`, and `WorkloadPanel` must consume one shared
+    layout-visible column set so headers, colgroups, and rows stay aligned during
+    live resize. Tablet and compact workload stages must normalize active column
+    widths against the currently visible column IDs, show higher-priority workload
+    information before exposing detail-heavy Net I/O and Disk I/O columns, and
+    avoid horizontal overflow at mobile, tablet, compact, and full desktop widths.
 28. Keep summary-card hover emphasis on one bounded rendering budget: when a summary row is active, shared sparkline and density-map primitives must promote the selected series and demote background series through the same active-series ID rather than layering a second page-local highlight pass, so zoom-range and hover scrubbing stay visually coherent without reintroducing multi-series overdraw on the hot summary cards. Density maps on that hot path must stay overview-first under focus: preserve the multi-entity heatmap rows, layer focused-entity detail inside the card, and avoid swapping transient hover into a separate single-series chart path.
 29. Keep public self-hosted checkout handoff endpoints on the adjacent
     commercial/router boundary, not the summary-chart hot path. When
@@ -292,7 +303,10 @@ regression protection.
     first render may issue the existing non-blocking AI runtime settings
     readiness read and consume existing action-state signals, but it must not
     issue an LLM request, mount a second resource scan, or block estate/KPI
-    rendering just to produce prose.
+    rendering just to produce prose. Its Assistant handoff may add a scoped
+    `autonomous_mode:false` flag only when the operator submits the prefilled
+    prompt; that request-level safety override must not become a dashboard
+    render dependency or a persistent settings write on the hot path.
 32. Keep infrastructure summary consumers on the compact dashboard overview rather than reopening the all-resources hook. `frontend-modern/src/hooks/useDashboardTrends.ts`, `frontend-modern/src/components/Infrastructure/useInfrastructureSummaryState.ts`, and adjacent dashboard summary consumers may derive chart identity and storage presence from the overview payload they were already given, but they must not call `useResources()` or mount a second unfiltered unified-resource fetch path inside the dashboard hot path. That rule also applies to globally mounted helpers such as `frontend-modern/src/components/AI/Chat/index.tsx`: closed assistant surfaces must read the live websocket snapshot or existing unified-resource cache rather than forcing the dashboard to pay for `all-resources` just because the shell component is mounted. When that assistant shell changes presentation, `frontend-modern/src/utils/aiChatPresentation.ts` must remain the canonical owner for launcher, drawer, session-menu, and empty-state copy so hot-path consumers do not grow one-off inline strings or extra state branches alongside the mounted shell. Blocking shared dialogs must also suppress closed assistant affordances through the shared dialog runtime instead of leaving the mounted shell clickable behind another overlay.
     Approval presentation inside that mounted assistant shell must stay
     state-local to the existing drawer/session state and backend approval

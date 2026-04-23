@@ -9,17 +9,19 @@ type WorkloadTableHeaderProps = Pick<
   DashboardState,
   | 'handleSort'
   | 'isMobile'
-  | 'mobileVisibleColumns'
   | 'sortDirection'
   | 'sortKey'
   | 'visibleColumns'
+  | 'workloadTableLayoutMode'
+  | 'workloadTableVisibleColumnIds'
+  | 'workloadTableVisibleColumns'
 >;
 
 export function WorkloadTableHeader(props: WorkloadTableHeaderProps) {
   return (
     <TableHeader>
       <TableRow class="bg-surface-alt text-muted border-b border-border">
-        <For each={props.mobileVisibleColumns()}>
+        <For each={props.workloadTableVisibleColumns()}>
           {(col) => {
             const isFirst = () => col.id === props.visibleColumns()[0]?.id;
             const sortKeyForCol = col.sortKey as WorkloadSortKey | undefined;
@@ -32,7 +34,12 @@ export function WorkloadTableHeader(props: WorkloadTableHeaderProps) {
  ${isFirst() ? 'pl-2 sm:pl-3 pr-1.5 sm:pr-2 text-left' : 'px-1.5 sm:px-2 text-center'} align-middle
  ${isSortable ? 'cursor-pointer hover:bg-surface-hover' : ''}`}
                 data-workload-col={col.id}
-                style={getGuestColumnStyle(col.id, props.isMobile())}
+                style={getGuestColumnStyle(
+                  col.id,
+                  props.isMobile(),
+                  props.workloadTableLayoutMode(),
+                  props.workloadTableVisibleColumnIds(),
+                )}
                 onClick={() => isSortable && props.handleSort(sortKeyForCol!)}
                 title={col.icon ? col.label : undefined}
               >

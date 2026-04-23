@@ -894,7 +894,9 @@ describe('Dashboard performance contract', () => {
       expect(guestRowSource).toContain('useGuestRowState');
       expect(guestRowSource).toContain("from './GuestRowCells'");
       expect(guestRowSource).not.toContain('style={{');
-      expect(guestRowSource).toContain("style={getGuestColumnStyle('name', isMobile())}");
+      expect(guestRowSource).toContain('style={getGuestColumnStyle(');
+      expect(guestRowSource).toContain('props.workloadTableLayoutMode');
+      expect(guestRowSource).toContain('props.visibleColumnIds');
       expect(guestRowSource).not.toContain('export const GUEST_COLUMNS');
       expect(guestRowSource).not.toContain('const guestId = createMemo(');
       expect(guestRowSource).not.toContain('function NetworkInfoCell(');
@@ -952,18 +954,18 @@ describe('Dashboard performance contract', () => {
       expect(dashboardWorkloadTableSource).toContain('WorkloadTableHeader');
       expect(dashboardWorkloadTableSource).toContain('WorkloadPanel');
       expect(dashboardWorkloadTableSource).not.toContain('style={{');
-      expect(dashboardWorkloadTableSource).toContain(
-        'style={getGuestColumnWidthStyle(column.id, props.isMobile())}',
-      );
+      expect(dashboardWorkloadTableSource).toContain('style={getGuestColumnWidthStyle(');
+      expect(dashboardWorkloadTableSource).toContain('props.workloadTableLayoutMode()');
+      expect(dashboardWorkloadTableSource).toContain('props.workloadTableVisibleColumnIds()');
       expect(dashboardWorkloadTableSource).toContain('<colgroup>');
       expect(dashboardWorkloadTableSource).not.toContain('<TableHead');
       expect(dashboardWorkloadTableSource).not.toContain('NodeGroupHeader');
       expect(dashboardWorkloadTableSource).not.toContain('GuestDrawer');
       expect(workloadTableHeaderSource).toContain('TableHead');
       expect(workloadTableHeaderSource).toContain("col.sortKey as WorkloadSortKey");
-      expect(workloadTableHeaderSource).toContain(
-        "style={getGuestColumnStyle(col.id, props.isMobile())}",
-      );
+      expect(workloadTableHeaderSource).toContain('style={getGuestColumnStyle(');
+      expect(workloadTableHeaderSource).toContain('props.workloadTableLayoutMode()');
+      expect(workloadTableHeaderSource).toContain('props.workloadTableVisibleColumnIds()');
       expect(workloadTableHeaderSource).not.toContain('style={{');
       expect(workloadTableHeaderSource).not.toContain('NodeGroupHeader');
       expect(workloadPanelSource).toContain('NodeGroupHeader');

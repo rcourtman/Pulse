@@ -9,7 +9,12 @@ import { aiChatStore } from '@/stores/aiChat';
 import { isSummaryTimeRange } from '@/components/shared/summaryTimeRange';
 import type { ViewMode } from '@/types/workloads';
 
-import { GUEST_COLUMNS, VIEW_MODE_COLUMNS } from './guestRowModel';
+import {
+  GUEST_COLUMNS,
+  VIEW_MODE_COLUMNS,
+  getWorkloadTableLayoutMode,
+  getWorkloadVisibleColumnsForLayout,
+} from './guestRowModel';
 import {
   DEFAULT_DASHBOARD_SORT_DIRECTION,
   DEFAULT_DASHBOARD_SORT_KEY,
@@ -26,7 +31,9 @@ interface DashboardControlsStateOptions {
 }
 
 export function useDashboardControlsState(options: DashboardControlsStateOptions) {
-  const { isMobile } = useBreakpoint();
+  const breakpoint = useBreakpoint();
+  const workloadTableLayoutMode = createMemo(() => getWorkloadTableLayoutMode(breakpoint.width()));
+  const isMobile = createMemo(() => workloadTableLayoutMode() === 'mobile');
   const [search, setSearch] = createSignal('');
   const [isSearchLocked, setIsSearchLocked] = createSignal(false);
 
@@ -89,17 +96,13 @@ export function useDashboardControlsState(options: DashboardControlsStateOptions
   );
 
   const visibleColumns = columnVisibility.visibleColumns;
-  const visibleColumnIds = createMemo(() => visibleColumns().map((column) => column.id));
-  const mobileEssentialColumns = new Set(['name', 'cpu', 'memory', 'disk', 'link']);
-  const mobileVisibleColumns = createMemo(() =>
-    isMobile()
-      ? visibleColumns().filter((column) => mobileEssentialColumns.has(column.id))
-      : visibleColumns(),
+  const workloadTableVisibleColumns = createMemo(() =>
+    getWorkloadVisibleColumnsForLayout(visibleColumns(), workloadTableLayoutMode()),
   );
-  const mobileVisibleColumnIds = createMemo(() =>
-    isMobile() ? mobileVisibleColumns().map((column) => column.id) : visibleColumnIds(),
+  const workloadTableVisibleColumnIds = createMemo(() =>
+    workloadTableVisibleColumns().map((column) => column.id),
   );
-  const totalColumns = createMemo(() => mobileVisibleColumns().length);
+  const totalColumns = createMemo(() => workloadTableVisibleColumns().length);
 
   const handleSort = (key: DashboardSortKey) => {
     if (sortKey() === key) {
@@ -191,8 +194,6 @@ export function useDashboardControlsState(options: DashboardControlsStateOptions
     handleTagClick,
     isMobile,
     isSearchLocked,
-    mobileVisibleColumnIds,
-    mobileVisibleColumns,
     resetDashboardControls,
     search,
     setGroupingMode,
@@ -205,8 +206,11 @@ export function useDashboardControlsState(options: DashboardControlsStateOptions
     statusMode,
     totalColumns,
     visibleColumns,
+    workloadTableVisibleColumnIds,
+    workloadTableVisibleColumns,
     workloadsSummaryCollapsed,
     workloadsSummaryRange,
+    workloadTableLayoutMode,
     setWorkloadsSummaryCollapsed,
     setWorkloadsSummaryRange,
   } as const;

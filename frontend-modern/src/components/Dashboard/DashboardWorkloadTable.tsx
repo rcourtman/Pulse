@@ -31,8 +31,6 @@ type DashboardWorkloadTableProps = Pick<
   | 'focusedSummaryWorkloadGroupId'
   | 'hoveredSummaryWorkloadGroupScope'
   | 'isMobile'
-  | 'mobileVisibleColumnIds'
-  | 'mobileVisibleColumns'
   | 'nodeByInstance'
   | 'search'
   | 'selectedGuestId'
@@ -51,6 +49,9 @@ type DashboardWorkloadTableProps = Pick<
   | 'visibleGroupKeys'
   | 'windowedGroupedGuests'
   | 'workloadIOEmphasis'
+  | 'workloadTableLayoutMode'
+  | 'workloadTableVisibleColumnIds'
+  | 'workloadTableVisibleColumns'
 >;
 
 export function DashboardWorkloadTable(props: DashboardWorkloadTableProps) {
@@ -77,11 +78,16 @@ export function DashboardWorkloadTable(props: DashboardWorkloadTableProps) {
           class={`workload-table min-w-full table-fixed ${props.isMobile() ? 'workload-table--mobile' : 'workload-table--desktop'}`}
         >
           <colgroup>
-            <For each={props.mobileVisibleColumns()}>
+            <For each={props.workloadTableVisibleColumns()}>
               {(column) => (
                 <col
                   data-workload-col={column.id}
-                  style={getGuestColumnWidthStyle(column.id, props.isMobile())}
+                  style={getGuestColumnWidthStyle(
+                    column.id,
+                    props.isMobile(),
+                    props.workloadTableLayoutMode(),
+                    props.workloadTableVisibleColumnIds(),
+                  )}
                 />
               )}
             </For>
@@ -89,10 +95,12 @@ export function DashboardWorkloadTable(props: DashboardWorkloadTableProps) {
           <WorkloadTableHeader
             handleSort={props.handleSort}
             isMobile={props.isMobile}
-            mobileVisibleColumns={props.mobileVisibleColumns}
             sortDirection={props.sortDirection}
             sortKey={props.sortKey}
             visibleColumns={props.visibleColumns}
+            workloadTableLayoutMode={props.workloadTableLayoutMode}
+            workloadTableVisibleColumnIds={props.workloadTableVisibleColumnIds}
+            workloadTableVisibleColumns={props.workloadTableVisibleColumns}
           />
           <WorkloadPanel
             activeAlerts={props.activeAlerts}
@@ -111,7 +119,6 @@ export function DashboardWorkloadTable(props: DashboardWorkloadTableProps) {
             focusedSummaryWorkloadGroupScope={props.focusedSummaryWorkloadGroupScope}
             focusedSummaryWorkloadGroupId={props.focusedSummaryWorkloadGroupId}
             hoveredSummaryWorkloadGroupScope={props.hoveredSummaryWorkloadGroupScope}
-            mobileVisibleColumnIds={props.mobileVisibleColumnIds}
             nodeByInstance={props.nodeByInstance}
             search={props.search}
             selectedGuestId={props.selectedGuestId}
@@ -125,6 +132,8 @@ export function DashboardWorkloadTable(props: DashboardWorkloadTableProps) {
             visibleGroupKeys={props.visibleGroupKeys}
             windowedGroupedGuests={props.windowedGroupedGuests}
             workloadIOEmphasis={props.workloadIOEmphasis}
+            workloadTableLayoutMode={props.workloadTableLayoutMode}
+            workloadTableVisibleColumnIds={props.workloadTableVisibleColumnIds}
           />
         </Table>
       </Card>

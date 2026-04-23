@@ -38,7 +38,6 @@ type WorkloadPanelProps = Pick<
   | 'focusedSummaryWorkloadGroupScope'
   | 'focusedSummaryWorkloadGroupId'
   | 'hoveredSummaryWorkloadGroupScope'
-  | 'mobileVisibleColumnIds'
   | 'nodeByInstance'
   | 'search'
   | 'selectedGuestId'
@@ -52,6 +51,8 @@ type WorkloadPanelProps = Pick<
   | 'visibleGroupKeys'
   | 'windowedGroupedGuests'
   | 'workloadIOEmphasis'
+  | 'workloadTableLayoutMode'
+  | 'workloadTableVisibleColumnIds'
 >;
 
 export function WorkloadPanel(props: WorkloadPanelProps) {
@@ -183,7 +184,8 @@ export function WorkloadPanel(props: WorkloadPanelProps) {
                         parentNodeOnline={parentNodeOnline()}
                         onCustomUrlUpdate={props.handleCustomUrlUpdate}
                         isGroupedView={props.groupingMode() === 'grouped'}
-                        visibleColumnIds={props.mobileVisibleColumnIds()}
+                        visibleColumnIds={props.workloadTableVisibleColumnIds()}
+                        workloadTableLayoutMode={props.workloadTableLayoutMode()}
                         onClick={() =>
                           props.setSelectedGuestId(
                             props.selectedGuestId() === guestId() ? null : guestId(),

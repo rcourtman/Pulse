@@ -125,7 +125,12 @@ export function GuestRow(props: GuestRowProps) {
         <td
           class={`pr-1.5 sm:pr-2 py-0.5 align-middle whitespace-nowrap ${firstCellIndent()}`}
           data-workload-col="name"
-          style={getGuestColumnStyle('name', isMobile())}
+          style={getGuestColumnStyle(
+            'name',
+            isMobile(),
+            props.workloadTableLayoutMode,
+            props.visibleColumnIds,
+          )}
         >
           <div class="flex items-center gap-2 min-w-0">
             <Show when={props.onClick}>
@@ -338,7 +343,7 @@ export function GuestRow(props: GuestRowProps) {
                 </span>
                 <Show when={appContainerRuntimeLabel()}>
                   <span
-                    class="rounded bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 px-1 py-0.5 text-[9px] font-medium uppercase tracking-wide whitespace-nowrap"
+                    class="rounded border border-border bg-surface-alt px-1 py-0.5 text-[9px] font-medium uppercase tracking-wide text-muted whitespace-nowrap"
                     title={`${appContainerRuntimeLabel()} runtime`}
                   >
                     {appContainerRuntimeLabel()}

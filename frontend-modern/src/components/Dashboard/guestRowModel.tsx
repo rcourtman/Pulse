@@ -5,6 +5,42 @@ import type { SummaryGroupMemberInteractionState } from '@/components/shared/sum
 import type { WorkloadGuest, ViewMode } from '@/types/workloads';
 import { createVisibleCanonicalTypeColumn } from '@/utils/typeColumnDefinition';
 
+export type WorkloadTableLayoutMode = 'mobile' | 'tablet' | 'compact' | 'wide';
+
+export const WORKLOAD_TABLE_MOBILE_LAYOUT_WIDTH = 768;
+export const WORKLOAD_TABLE_TABLET_LAYOUT_WIDTH = 900;
+export const WORKLOAD_TABLE_WIDE_LAYOUT_WIDTH = 1440;
+
+const WORKLOAD_TABLE_LAYOUT_ORDER: Record<WorkloadTableLayoutMode, number> = {
+  mobile: 0,
+  tablet: 1,
+  compact: 2,
+  wide: 3,
+};
+
+const WORKLOAD_COLUMN_MIN_LAYOUT: Record<string, WorkloadTableLayoutMode> = {
+  name: 'mobile',
+  cpu: 'mobile',
+  memory: 'mobile',
+  disk: 'mobile',
+  link: 'mobile',
+  type: 'tablet',
+  info: 'tablet',
+  vmid: 'tablet',
+  uptime: 'compact',
+  backup: 'compact',
+  image: 'compact',
+  namespace: 'compact',
+  context: 'compact',
+  update: 'compact',
+  ip: 'wide',
+  node: 'wide',
+  tags: 'wide',
+  os: 'wide',
+  netIo: 'wide',
+  diskIo: 'wide',
+};
+
 export interface IODistributionStats {
   median: number;
   mad: number;
@@ -47,6 +83,7 @@ export interface GuestRowProps {
   isSummaryHighlighted?: boolean;
   summaryGroupMemberState?: SummaryGroupMemberInteractionState;
   ioEmphasis?: WorkloadIOEmphasis;
+  workloadTableLayoutMode?: WorkloadTableLayoutMode;
   onHoverChange?: (guestId: string | null) => void;
 }
 
@@ -72,10 +109,7 @@ export const EMPTY_IO_EMPHASIS: WorkloadIOEmphasis = {
 export const GROUPED_FIRST_CELL_INDENT = 'pl-3 sm:pl-5 lg:pl-8';
 export const DEFAULT_FIRST_CELL_INDENT = 'pl-2 sm:pl-3';
 
-export const getOutlierEmphasis = (
-  value: number,
-  stats: IODistributionStats,
-): IOEmphasis => {
+export const getOutlierEmphasis = (value: number, stats: IODistributionStats): IOEmphasis => {
   if (!Number.isFinite(value) || value <= 0 || stats.max <= 0) {
     return { className: 'text-muted', showOutlierHint: false };
   }
@@ -293,25 +327,78 @@ type GuestColumnWidthOverride = {
   maxWidth?: string | null;
 };
 
-// Mobile widths use percentages so the visible column set fills the viewport
-// without triggering horizontal scroll. The workload table's mobile-essential
-// columns (name + cpu + memory + disk + link) must sum to 100% at mobile:
-// 44 + 17 + 17 + 17 + 5 = 100. See useDashboardControlsState
-// `mobileEssentialColumns` for the visible set, and DashboardWorkloadTable for
-// the `table-fixed` class that makes these percentages authoritative.
-const GUEST_COLUMN_MOBILE_OVERRIDES: Record<string, GuestColumnWidthOverride> = {
-  name: { width: '44%', minWidth: null, maxWidth: '44%' },
-  cpu: { width: '17%', minWidth: null, maxWidth: '17%' },
-  memory: { width: '17%', minWidth: null, maxWidth: '17%' },
-  disk: { width: '17%', minWidth: null, maxWidth: '17%' },
-  link: { width: '5%', minWidth: null, maxWidth: '5%' },
-  netIo: { width: '170px', minWidth: '170px', maxWidth: '170px' },
-  diskIo: { width: '170px', minWidth: '170px', maxWidth: '170px' },
+const percentageColumn = (width: string): GuestColumnWidthOverride => ({
+  width,
+  minWidth: null,
+  maxWidth: width,
+});
+
+const formatPercentage = (value: number): string => `${Number(value.toFixed(4))}%`;
+
+// Responsive weights are normalized against the currently visible column set.
+// That keeps each workload view mode full-width without assuming one fixed set.
+const GUEST_COLUMN_RESPONSIVE_WEIGHTS: Record<
+  Exclude<WorkloadTableLayoutMode, 'wide'>,
+  Record<string, number>
+> = {
+  mobile: {
+    name: 44,
+    cpu: 17,
+    memory: 17,
+    disk: 17,
+    link: 5,
+  },
+  tablet: {
+    name: 30,
+    type: 8,
+    info: 8,
+    vmid: 8,
+    cpu: 17,
+    memory: 17,
+    disk: 17,
+    link: 3,
+  },
+  compact: {
+    name: 26,
+    type: 7,
+    info: 7,
+    vmid: 7,
+    cpu: 13,
+    memory: 14,
+    disk: 14,
+    uptime: 8,
+    backup: 5,
+    image: 18,
+    namespace: 11,
+    context: 13,
+    update: 6,
+    link: 6,
+  },
+};
+
+const getResponsiveColumnOverride = (
+  columnId: string,
+  layoutMode: WorkloadTableLayoutMode,
+  visibleColumnIds?: readonly string[],
+): GuestColumnWidthOverride | undefined => {
+  if (layoutMode === 'wide') return undefined;
+
+  const weights = GUEST_COLUMN_RESPONSIVE_WEIGHTS[layoutMode];
+  const columnWeight = weights[columnId];
+  if (!columnWeight) return undefined;
+
+  const activeIds = visibleColumnIds?.length ? visibleColumnIds : Object.keys(weights);
+  const totalWeight = activeIds.reduce((total, id) => total + (weights[id] ?? 0), 0);
+  if (totalWeight <= 0) return undefined;
+
+  return percentageColumn(formatPercentage((columnWeight / totalWeight) * 100));
 };
 
 const getGuestColumnSizing = (
   columnId: string,
   isMobile = false,
+  layoutMode: WorkloadTableLayoutMode = isMobile ? 'mobile' : 'wide',
+  visibleColumnIds?: readonly string[],
 ): Pick<ColumnDef, 'width' | 'minWidth' | 'maxWidth'> | undefined => {
   const column = GUEST_COLUMN_BY_ID.get(columnId);
   if (!column) return undefined;
@@ -322,7 +409,7 @@ const getGuestColumnSizing = (
     maxWidth: column.maxWidth,
   };
 
-  const override = isMobile ? GUEST_COLUMN_MOBILE_OVERRIDES[columnId] : undefined;
+  const override = getResponsiveColumnOverride(columnId, layoutMode, visibleColumnIds);
   if (override) {
     if ('width' in override) sizing.width = override.width ?? undefined;
     if ('minWidth' in override) sizing.minWidth = override.minWidth ?? undefined;
@@ -335,8 +422,10 @@ const getGuestColumnSizing = (
 export const getGuestColumnStyle = (
   columnId: string,
   isMobile = false,
+  layoutMode?: WorkloadTableLayoutMode,
+  visibleColumnIds?: readonly string[],
 ): JSX.CSSProperties | undefined => {
-  const sizing = getGuestColumnSizing(columnId, isMobile);
+  const sizing = getGuestColumnSizing(columnId, isMobile, layoutMode, visibleColumnIds);
   if (!sizing) return undefined;
 
   const style: JSX.CSSProperties = {};
@@ -351,10 +440,30 @@ export const getGuestColumnStyle = (
 export const getGuestColumnWidthStyle = (
   columnId: string,
   isMobile = false,
+  layoutMode?: WorkloadTableLayoutMode,
+  visibleColumnIds?: readonly string[],
 ): JSX.CSSProperties | undefined => {
-  const sizing = getGuestColumnSizing(columnId, isMobile);
+  const sizing = getGuestColumnSizing(columnId, isMobile, layoutMode, visibleColumnIds);
   if (!sizing?.width) return undefined;
   return { width: sizing.width };
+};
+
+export const getWorkloadTableLayoutMode = (width: number): WorkloadTableLayoutMode => {
+  if (!Number.isFinite(width) || width < WORKLOAD_TABLE_MOBILE_LAYOUT_WIDTH) return 'mobile';
+  if (width < WORKLOAD_TABLE_TABLET_LAYOUT_WIDTH) return 'tablet';
+  if (width < WORKLOAD_TABLE_WIDE_LAYOUT_WIDTH) return 'compact';
+  return 'wide';
+};
+
+export const getWorkloadVisibleColumnsForLayout = (
+  columns: ColumnDef[],
+  layoutMode: WorkloadTableLayoutMode,
+): ColumnDef[] => {
+  const layoutRank = WORKLOAD_TABLE_LAYOUT_ORDER[layoutMode];
+  return columns.filter((column) => {
+    const minimumLayout = WORKLOAD_COLUMN_MIN_LAYOUT[column.id] ?? 'wide';
+    return WORKLOAD_TABLE_LAYOUT_ORDER[minimumLayout] <= layoutRank;
+  });
 };
 
 export const VIEW_MODE_COLUMNS: Record<ViewMode, Set<string> | null> = {

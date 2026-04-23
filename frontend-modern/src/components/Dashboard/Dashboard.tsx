@@ -134,8 +134,6 @@ export function Dashboard(props: DashboardProps) {
             focusedSummaryWorkloadGroupId={state.focusedSummaryWorkloadGroupId}
             hoveredSummaryWorkloadGroupScope={state.hoveredSummaryWorkloadGroupScope}
             isMobile={state.isMobile}
-            mobileVisibleColumnIds={state.mobileVisibleColumnIds}
-            mobileVisibleColumns={state.mobileVisibleColumns}
             nodeByInstance={state.nodeByInstance}
             search={state.search}
             selectedGuestId={state.selectedGuestId}
@@ -154,6 +152,9 @@ export function Dashboard(props: DashboardProps) {
             visibleGroupKeys={state.visibleGroupKeys}
             windowedGroupedGuests={state.windowedGroupedGuests}
             workloadIOEmphasis={state.workloadIOEmphasis}
+            workloadTableLayoutMode={state.workloadTableLayoutMode}
+            workloadTableVisibleColumnIds={state.workloadTableVisibleColumnIds}
+            workloadTableVisibleColumns={state.workloadTableVisibleColumns}
           />
         </Show>
       </div>

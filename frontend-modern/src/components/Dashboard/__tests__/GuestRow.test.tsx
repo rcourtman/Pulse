@@ -124,6 +124,8 @@ import {
   VIEW_MODE_COLUMNS,
   getGuestColumnStyle,
   getGuestColumnWidthStyle,
+  getWorkloadTableLayoutMode,
+  getWorkloadVisibleColumnsForLayout,
   type WorkloadIOEmphasis,
 } from '../guestRowModel';
 
@@ -816,14 +818,88 @@ describe('GUEST_COLUMNS', () => {
   });
 
   it('derives mobile overrides from the canonical guest column model', () => {
-    expect(getGuestColumnStyle('name', true)).toEqual({ minWidth: '120px' });
+    expect(getGuestColumnStyle('name', true)).toEqual({ width: '44%', 'max-width': '44%' });
     expect(getGuestColumnStyle('cpu', true)).toEqual({
-      width: '70px',
-      minWidth: '60px',
-      maxWidth: '70px',
+      width: '17%',
+      'max-width': '17%',
     });
-    expect(getGuestColumnWidthStyle('name', true)).toBeUndefined();
+    expect(getGuestColumnWidthStyle('name', true)).toEqual({ width: '44%' });
     expect(getGuestColumnWidthStyle('diskIo', true)).toEqual({ width: '170px' });
+  });
+
+  it('derives normalized tablet and compact widths from the visible workload columns', () => {
+    const allModeColumns = GUEST_COLUMNS.filter((column) => VIEW_MODE_COLUMNS.all!.has(column.id));
+    const tabletColumns = getWorkloadVisibleColumnsForLayout(allModeColumns, 'tablet');
+    const compactColumns = getWorkloadVisibleColumnsForLayout(allModeColumns, 'compact');
+
+    expect(tabletColumns.map((column) => column.id)).toEqual([
+      'name',
+      'type',
+      'info',
+      'cpu',
+      'memory',
+      'disk',
+      'link',
+    ]);
+    expect(compactColumns.map((column) => column.id)).toEqual([
+      'name',
+      'type',
+      'info',
+      'cpu',
+      'memory',
+      'disk',
+      'uptime',
+      'backup',
+      'link',
+    ]);
+
+    expect(
+      getGuestColumnWidthStyle(
+        'name',
+        false,
+        'tablet',
+        tabletColumns.map((column) => column.id),
+      ),
+    ).toEqual({ width: '30%' });
+    expect(
+      getGuestColumnWidthStyle(
+        'name',
+        false,
+        'compact',
+        compactColumns.map((column) => column.id),
+      ),
+    ).toEqual({ width: '26%' });
+  });
+
+  it('normalizes compact widths for workload view modes with different column sets', () => {
+    const podColumns = GUEST_COLUMNS.filter((column) => VIEW_MODE_COLUMNS.pod!.has(column.id));
+    const compactPodColumns = getWorkloadVisibleColumnsForLayout(podColumns, 'compact');
+    const compactPodColumnIds = compactPodColumns.map((column) => column.id);
+
+    expect(compactPodColumnIds).toEqual([
+      'name',
+      'cpu',
+      'memory',
+      'image',
+      'namespace',
+      'context',
+      'link',
+    ]);
+    expect(getGuestColumnWidthStyle('name', false, 'compact', compactPodColumnIds)).toEqual({
+      width: '25.7426%',
+    });
+    expect(getGuestColumnWidthStyle('link', false, 'compact', compactPodColumnIds)).toEqual({
+      width: '5.9406%',
+    });
+  });
+
+  it('maps workload table layout modes to viewport width stages', () => {
+    expect(getWorkloadTableLayoutMode(767)).toBe('mobile');
+    expect(getWorkloadTableLayoutMode(768)).toBe('tablet');
+    expect(getWorkloadTableLayoutMode(899)).toBe('tablet');
+    expect(getWorkloadTableLayoutMode(900)).toBe('compact');
+    expect(getWorkloadTableLayoutMode(1439)).toBe('compact');
+    expect(getWorkloadTableLayoutMode(1440)).toBe('wide');
   });
 
   it('non-toggleable columns include core metrics', () => {
