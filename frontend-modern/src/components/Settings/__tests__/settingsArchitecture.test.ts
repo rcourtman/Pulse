@@ -178,6 +178,11 @@ describe('settings architecture guardrails', () => {
     expect(infrastructureSourceManagerSource).toContain('Install Pulse Agent');
     expect(infrastructureSourceManagerSource).toContain('Choose source type');
     expect(infrastructureSourceManagerSource).toContain('getInfrastructureEmptyStateSummary');
+    expect(infrastructureSourceManagerSource).toContain('Infrastructure readiness');
+    expect(infrastructureSourceManagerSource).toContain('Connected systems');
+    expect(infrastructureSourceManagerSource).toContain('API coverage');
+    expect(infrastructureSourceManagerSource).toContain('Agent coverage');
+    expect(infrastructureSourceManagerSource).toContain('setupConfidenceAction');
     expect(infrastructureSourceManagerSource).not.toContain('Connection types');
     expect(infrastructureSourcePickerSource).toContain('Detect from address');
     expect(infrastructureSourcePickerSource).toContain('getInfrastructureSourcePickerGroups');

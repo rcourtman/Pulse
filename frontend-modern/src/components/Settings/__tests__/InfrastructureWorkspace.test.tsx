@@ -296,6 +296,18 @@ describe('InfrastructureWorkspace', () => {
     expect(screen.getByRole('button', { name: /Detect from address/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Install Pulse Agent/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Choose source type/i })).toBeInTheDocument();
+    const readiness = screen.getByRole('region', {
+      name: /Infrastructure setup confidence/i,
+    });
+    expect(within(readiness).getByText('Infrastructure readiness')).toBeInTheDocument();
+    expect(within(readiness).getByText('Connected systems')).toBeInTheDocument();
+    expect(within(readiness).getByText('API coverage')).toBeInTheDocument();
+    expect(within(readiness).getByText('Agent coverage')).toBeInTheDocument();
+    expect(within(readiness).getByText('Discovery')).toBeInTheDocument();
+    expect(within(readiness).getAllByText('1 system')).toHaveLength(2);
+    expect(within(readiness).getByText('0 systems')).toBeInTheDocument();
+    expect(within(readiness).getByText('Discovery off')).toBeInTheDocument();
+    expect(within(readiness).getByRole('button', { name: /Install agents/i })).toBeInTheDocument();
     expect(screen.getByText('Proxmox VE')).toBeInTheDocument();
     expect(screen.getByText('Proxmox VE').closest('tr')?.className).toContain('bg-base');
     expect(screen.queryByText('VMware vCenter')).toBeNull();
@@ -320,6 +332,17 @@ describe('InfrastructureWorkspace', () => {
     });
 
     fireEvent.click(screen.getByRole('button', { name: /Install Pulse Agent/i }));
+    expect(navigateSpy).toHaveBeenLastCalledWith('/settings/infrastructure?add=agent', {
+      scroll: false,
+    });
+
+    fireEvent.click(
+      within(
+        screen.getByRole('region', {
+          name: /Infrastructure setup confidence/i,
+        }),
+      ).getByRole('button', { name: /Install agents/i }),
+    );
     expect(navigateSpy).toHaveBeenLastCalledWith('/settings/infrastructure?add=agent', {
       scroll: false,
     });
@@ -388,6 +411,15 @@ describe('InfrastructureWorkspace', () => {
 
     await waitFor(() => expect(screen.getByText('discovered-pve.lab')).toBeInTheDocument());
     expect(screen.getByText('Discovered')).toBeInTheDocument();
+    const readiness = screen.getByRole('region', {
+      name: /Infrastructure setup confidence/i,
+    });
+    expect(within(readiness).getByText('1 to review')).toBeInTheDocument();
+    expect(within(readiness).getByText(/1 candidate discovered and waiting/i)).toBeInTheDocument();
+    fireEvent.click(within(readiness).getByRole('button', { name: /Review candidate/i }));
+    expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure?add=pve', {
+      scroll: false,
+    });
 
     fireEvent.click(screen.getByRole('button', { name: /Run discovery/i }));
     expect(triggerDiscoveryScan).toHaveBeenCalledTimes(1);

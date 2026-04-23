@@ -251,8 +251,12 @@ work extends shared components instead of creating new local variants.
    and no redundant monitored-systems ledger beneath it. The landing route may
    include a compact guidance strip that explains platform APIs and host agents
    as Pulse 6 infrastructure sources and exposes `Detect from address`, `Install
-   Pulse Agent`, and `Choose source type` as first-run actions. Existing sources
-   stay visible on the page, and add, detect, install, and edit flows open as
+   Pulse Agent`, and `Choose source type` as first-run actions. It may also show
+   a compact readiness strip derived from the same unified connection rows and
+   discovered candidates so operators can confirm connected-system count,
+   API coverage, agent coverage, discovery review state, and the next setup
+   action without opening a tour or second ledger. Existing sources stay visible
+   on the page, and add, detect, install, review, and edit flows open as
    secondary interactions from that same destination instead of taking over the
    whole page.
    Those secondary views must stay under the same single `Infrastructure`
@@ -296,10 +300,10 @@ work extends shared components instead of creating new local variants.
    discovery status line plus `Run discovery` and `Discovery settings`
    actions from the shared landing shell, but it must not start a network scan
    just because the page rendered. New-source admission belongs on the table's
-   per-platform `Add` actions rather than in the discovery strip, and the
-   direct address-probe utility is picker-owned rather than landing-owned:
-   `Detect from address` must stay inside the grouped add dialog instead of
-   competing with discovery actions on the page header.
+   per-platform `Add` actions or the compact first-run/readiness actions rather
+   than in the discovery strip, and the direct address-probe utility may appear
+   as first-run setup guidance while header discovery actions remain dedicated
+   to saved network scanning.
    Discovered API-backed candidates stay visible in the same platform-group
    table as configured sources, using the existing tree/table hierarchy
    instead of spawning a second discovery-only page or card stack.
@@ -1576,6 +1580,11 @@ canonical connected-infrastructure projection, fall back only to the compact
 dashboard summary that the route already owns, and keep the explicit
 Infrastructure handoff above detailed problem, storage, recovery, or trend
 rows without restoring platform-special navigation.
+That first-viewport copy must distinguish system-level estate health from
+resource, alert, storage, or recovery issues that remain elsewhere on the
+dashboard, and partial/empty dashboard states must describe synchronization or
+infrastructure-source onboarding in operator terms instead of exposing
+implementation fallback language.
 The recovery feature shell now also depends on the shared
 `frontend-modern/src/components/shared/Subtabs.tsx` primitive for its primary
 protected-items versus recovery-events workspace switch. The recovery lane may

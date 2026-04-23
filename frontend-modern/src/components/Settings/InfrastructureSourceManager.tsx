@@ -134,6 +134,32 @@ const memberMethodTitleFor = (
   );
 };
 
+type SetupConfidenceActionKind = 'add' | 'agent' | 'detect' | 'review' | 'scan';
+
+interface SetupConfidenceAction {
+  kind: SetupConfidenceActionKind;
+  label: string;
+  detail: string;
+  onClick?: () => void;
+  disabled?: boolean;
+}
+
+const formatCount = (count: number, noun: string): string =>
+  `${count} ${noun}${count === 1 ? '' : 's'}`;
+
+const rowHasApiCoverage = (row: InfrastructureSystemRow): boolean =>
+  row.source === 'api' ||
+  row.source === 'both' ||
+  row.members.some((member) => member.source === 'api' || member.source === 'both');
+
+const rowHasAgentCoverage = (row: InfrastructureSystemRow): boolean =>
+  row.source === 'agent' ||
+  row.source === 'both' ||
+  row.attachedConnections.some((connection) => connection.type === 'agent') ||
+  row.members.some(
+    (member) => member.source === 'agent' || member.source === 'both' || member.agentConnection,
+  );
+
 export const InfrastructureSourceManager: Component<InfrastructureSourceManagerProps> = (props) => {
   let layoutContainerRef: HTMLDivElement | undefined;
   const products = createMemo(() => getInfrastructureSourceManagerProducts());
@@ -218,6 +244,79 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
   const lastDiscoveryResultText = createMemo(() =>
     formatRelativeTimestamp(props.discoveryScanStatus().lastResultAt),
   );
+  const connectedSystemCount = createMemo(() => props.rows().length);
+  const discoveredCandidateCount = createMemo(() => props.discoveredNodes().length);
+  const apiCoveredSystemCount = createMemo(
+    () => props.rows().filter((row) => rowHasApiCoverage(row)).length,
+  );
+  const agentCoveredSystemCount = createMemo(
+    () => props.rows().filter((row) => rowHasAgentCoverage(row)).length,
+  );
+  const apiOnlySystemCount = createMemo(
+    () => props.rows().filter((row) => rowHasApiCoverage(row) && !rowHasAgentCoverage(row)).length,
+  );
+  const discoveryReadinessLabel = createMemo(() => {
+    if (props.discoveryScanStatus().scanning) return 'Scanning now';
+    if (discoveredCandidateCount() > 0) return `${discoveredCandidateCount()} to review`;
+    const lastResult = lastDiscoveryResultText();
+    if (lastResult) return `Last scan ${lastResult}`;
+    return props.discoveryEnabled ? 'Ready to scan' : 'Discovery off';
+  });
+  const setupConfidenceAction = createMemo<SetupConfidenceAction>(() => {
+    const discoveredCandidates = props.discoveredNodes();
+    if (discoveredCandidates.length > 0 && props.onReviewDiscoveredSource) {
+      return {
+        kind: 'review',
+        label: discoveredCandidates.length === 1 ? 'Review candidate' : 'Review first candidate',
+        detail: `${formatCount(discoveredCandidates.length, 'candidate')} discovered and waiting to be attached to the infrastructure model.`,
+        onClick: () => props.onReviewDiscoveredSource?.(discoveredCandidates[0]),
+      };
+    }
+
+    if (connectedSystemCount() === 0) {
+      if (props.onDetectFromAddress) {
+        return {
+          kind: 'detect',
+          label: 'Detect first source',
+          detail: 'Probe an address so Pulse can identify the platform and open the right setup flow.',
+          onClick: props.onDetectFromAddress,
+        };
+      }
+
+      return {
+        kind: 'add',
+        label: 'Choose source type',
+        detail: 'Choose a supported platform API or install Pulse Agent to start building the unified infrastructure model.',
+        onClick: props.onAddInfrastructure,
+      };
+    }
+
+    if (apiOnlySystemCount() > 0 && props.onAddSource) {
+      return {
+        kind: 'agent',
+        label: 'Install agents',
+        detail: `Install Pulse Agent on ${formatCount(apiOnlySystemCount(), 'API-backed system')} when you want node-local telemetry such as temperatures, SMART data, and host identity.`,
+        onClick: () => props.onAddSource?.('agent'),
+      };
+    }
+
+    if (props.onRunDiscovery && props.discoveryEnabled && !lastDiscoveryResultText()) {
+      return {
+        kind: 'scan',
+        label: props.discoveryScanStatus().scanning ? 'Scanning networks' : 'Scan networks',
+        detail: 'Run discovery to check whether more platform APIs are waiting on the configured networks.',
+        onClick: props.onRunDiscovery,
+        disabled: props.discoveryScanStatus().scanning,
+      };
+    }
+
+    return {
+      kind: 'add',
+      label: 'Add another source',
+      detail: 'Coverage looks coherent for the connected systems. Add another source when the estate changes.',
+      onClick: props.onAddInfrastructure,
+    };
+  });
 
   const [layoutWidth, setLayoutWidth] = createSignal(
     typeof window !== 'undefined' ? window.innerWidth : 1024,
@@ -293,6 +392,87 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
     </Show>
   );
 
+  const setupConfidenceActionIcon = (kind: SetupConfidenceActionKind) => (
+    <>
+      <Show when={kind === 'agent'}>
+        <Cpu class="h-4 w-4" />
+      </Show>
+      <Show when={kind === 'detect' || kind === 'review'}>
+        <Search class="h-4 w-4" />
+      </Show>
+      <Show when={kind === 'scan'}>
+        <RotateCw
+          class={`h-4 w-4 ${props.discoveryScanStatus().scanning ? 'animate-spin' : ''}`}
+        />
+      </Show>
+      <Show when={kind === 'add'}>
+        <Plus class="h-4 w-4" />
+      </Show>
+    </>
+  );
+
+  const setupConfidenceBand = () => (
+    <section
+      aria-label="Infrastructure setup confidence"
+      class="border-b border-border bg-surface-alt/30 px-4 py-4"
+    >
+      <div class="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+        <div class="max-w-3xl">
+          <h3 class="text-sm font-semibold text-base-content">Infrastructure readiness</h3>
+          <p class="mt-1 text-sm leading-5 text-muted">
+            Systems are now built from infrastructure sources. Use this summary to confirm Pulse has
+            API inventory, agent telemetry, and discovery review covered for the estate.
+          </p>
+        </div>
+
+        <Show when={!props.readOnly && Boolean(setupConfidenceAction().onClick)}>
+            <button
+              type="button"
+              onClick={() => setupConfidenceAction().onClick?.()}
+              disabled={setupConfidenceAction().disabled}
+              class={`${onboardingSecondaryButtonClass} self-start`}
+            >
+            {setupConfidenceActionIcon(setupConfidenceAction().kind)}
+            {setupConfidenceAction().label}
+          </button>
+        </Show>
+      </div>
+
+      <dl class="mt-4 grid gap-0 border-y border-border-subtle sm:grid-cols-2 xl:grid-cols-4">
+        <div class="border-b border-border-subtle px-3 py-3 sm:border-r xl:border-b-0">
+          <dt class="text-[11px] font-medium uppercase tracking-[0.08em] text-muted">
+            Connected systems
+          </dt>
+          <dd class="mt-1 text-sm font-semibold text-base-content">
+            {formatCount(connectedSystemCount(), 'system')}
+          </dd>
+        </div>
+        <div class="border-b border-border-subtle px-3 py-3 xl:border-b-0 xl:border-r">
+          <dt class="text-[11px] font-medium uppercase tracking-[0.08em] text-muted">
+            API coverage
+          </dt>
+          <dd class="mt-1 text-sm font-semibold text-base-content">
+            {formatCount(apiCoveredSystemCount(), 'system')}
+          </dd>
+        </div>
+        <div class="border-b border-border-subtle px-3 py-3 sm:border-b-0 sm:border-r">
+          <dt class="text-[11px] font-medium uppercase tracking-[0.08em] text-muted">
+            Agent coverage
+          </dt>
+          <dd class="mt-1 text-sm font-semibold text-base-content">
+            {formatCount(agentCoveredSystemCount(), 'system')}
+          </dd>
+        </div>
+        <div class="px-3 py-3">
+          <dt class="text-[11px] font-medium uppercase tracking-[0.08em] text-muted">Discovery</dt>
+          <dd class="mt-1 text-sm font-semibold text-base-content">{discoveryReadinessLabel()}</dd>
+        </div>
+      </dl>
+
+      <p class="mt-3 text-xs leading-5 text-muted">{setupConfidenceAction().detail}</p>
+    </section>
+  );
+
   const onboardingBand = () => (
     <div class="border-b border-border bg-surface px-4 py-4">
       <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -362,6 +542,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
         action={headerActions()}
       >
         {onboardingBand()}
+        {setupConfidenceBand()}
 
         <Show when={!useCardLayout()}>
           <Table class="w-full table-fixed text-sm">
