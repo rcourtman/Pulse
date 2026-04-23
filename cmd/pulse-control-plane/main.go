@@ -172,6 +172,9 @@ func newTenantRuntimeReconcileCmd() *cobra.Command {
 					result.ActiveImageID,
 					result.ReconciledOnly,
 				)
+				if result.RestoredMissing {
+					fmt.Printf("restored_missing=%t\n", result.RestoredMissing)
+				}
 				if result.PreviousContainerID != "" {
 					fmt.Printf("previous_container_id=%s\n", result.PreviousContainerID)
 				}

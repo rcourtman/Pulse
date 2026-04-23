@@ -43,6 +43,7 @@ type TenantRuntimeRolloutResult struct {
 	ActiveImageID       string
 	BackupContainerName string
 	ReconciledOnly      bool
+	RestoredMissing     bool
 }
 
 type TenantRuntimeContractReconcilePlanOptions struct {
@@ -98,12 +99,15 @@ type tenantRuntimeRolloutService struct {
 	registry      tenantRuntimeRolloutRegistry
 	docker        tenantRuntimeRolloutDocker
 	tenantsDir    string
+	defaultImage  string
 	synchronizer  tenantRuntimeRolloutSynchronizer
 	now           func() time.Time
 	sleep         func(time.Duration)
 	healthTimeout time.Duration
 	healthPoll    time.Duration
 }
+
+var errTenantRuntimeMissing = errors.New("tenant runtime container missing")
 
 // RolloutTenantRuntime executes the canonical hosted tenant runtime rollout
 // path using the control plane's registry and Docker manager.
@@ -183,6 +187,7 @@ func newTenantRuntimeRolloutServiceFromConfig(
 		registry:      reg,
 		docker:        dockerMgr,
 		tenantsDir:    cfg.TenantsDir(),
+		defaultImage:  strings.TrimSpace(image),
 		synchronizer:  filesystemTenantRuntimeSynchronizer{},
 		now:           func() time.Time { return time.Now().UTC() },
 		sleep:         time.Sleep,
@@ -203,6 +208,9 @@ func (s *tenantRuntimeRolloutService) Rollout(ctx context.Context, opts TenantRu
 		return nil, fmt.Errorf("tenant id is required")
 	}
 	image := strings.TrimSpace(opts.Image)
+	if image == "" {
+		image = strings.TrimSpace(s.defaultImage)
+	}
 	if image == "" {
 		return nil, fmt.Errorf("image is required")
 	}
@@ -227,6 +235,9 @@ func (s *tenantRuntimeRolloutService) Rollout(ctx context.Context, opts TenantRu
 
 	live, err := s.resolveLiveContainer(ctx, tenant)
 	if err != nil {
+		if errors.Is(err, errTenantRuntimeMissing) {
+			return s.recreateMissingRuntime(ctx, tenant, image, healthTimeout, healthPoll)
+		}
 		return nil, err
 	}
 	if strings.TrimSpace(tenant.ContainerID) != "" && tenant.ContainerID != live.ID {
@@ -369,6 +380,59 @@ func (s *tenantRuntimeRolloutService) Rollout(ctx context.Context, opts TenantRu
 	}, nil
 }
 
+func (s *tenantRuntimeRolloutService) recreateMissingRuntime(
+	ctx context.Context,
+	tenant *registry.Tenant,
+	image string,
+	healthTimeout time.Duration,
+	healthPoll time.Duration,
+) (*TenantRuntimeRolloutResult, error) {
+	if tenant == nil {
+		return nil, fmt.Errorf("tenant is nil")
+	}
+	tenantID := strings.TrimSpace(tenant.ID)
+	if tenantID == "" {
+		return nil, fmt.Errorf("tenant id is required")
+	}
+
+	tenantDataDir := filepath.Join(s.tenantsDir, tenantID)
+	newContainerID, err := s.docker.CreateAndStart(ctx, tenantID, tenantDataDir)
+	if err != nil {
+		return nil, fmt.Errorf("recreate missing tenant runtime for %s using image %s: %w", tenantID, image, err)
+	}
+
+	healthy, err := s.waitForHealth(ctx, newContainerID, healthTimeout, healthPoll)
+	if err != nil || !healthy {
+		if err == nil {
+			err = fmt.Errorf("tenant runtime %s failed health checks", newContainerID)
+		}
+		if removeErr := s.docker.Remove(ctx, newContainerID); removeErr != nil {
+			return nil, fmt.Errorf("%w; cleanup failed for recreated container %s: %v", err, newContainerID, removeErr)
+		}
+		return nil, err
+	}
+
+	newInfo, err := s.resolveLiveContainer(ctx, tenant)
+	if err != nil {
+		return nil, fmt.Errorf("inspect recreated tenant runtime %s: %w", tenantID, err)
+	}
+	if newInfo.Name != tenantRuntimeContainerName(tenantID) {
+		return nil, fmt.Errorf("recreated tenant runtime is not using canonical container name %s", tenantRuntimeContainerName(tenantID))
+	}
+	if err := s.persistTenantRuntimeState(tenant, newInfo, true); err != nil {
+		return nil, err
+	}
+
+	return &TenantRuntimeRolloutResult{
+		TenantID:            tenantID,
+		PreviousContainerID: strings.TrimSpace(tenant.ContainerID),
+		ActiveContainerID:   newInfo.ID,
+		ActiveImageRef:      newInfo.ImageRef,
+		ActiveImageID:       newInfo.ImageID,
+		RestoredMissing:     true,
+	}, nil
+}
+
 func tenantRuntimeMatchesContract(
 	live *cpDocker.RuntimeContainerInfo,
 	canonicalName string,
@@ -404,8 +468,17 @@ func (s *tenantRuntimeRolloutService) PlanContractReconcile(
 		}
 		live, err := s.resolveLiveContainer(ctx, tenant)
 		if err != nil {
-			item.Action = tenantRuntimeContractActionSkip
-			item.Reason = err.Error()
+			if errors.Is(err, errTenantRuntimeMissing) {
+				desiredRouting := s.docker.DesiredRuntimeRouting(tenant.ID)
+				item.ImageRef = strings.TrimSpace(s.defaultImage)
+				item.DesiredRouteHost = desiredRouting.Host
+				item.DesiredPublicURL = desiredRouting.PublicURL
+				item.Action = tenantRuntimeContractActionRollout
+				item.Reason = "tenant runtime container is missing; recreate from existing tenant data"
+			} else {
+				item.Action = tenantRuntimeContractActionSkip
+				item.Reason = err.Error()
+			}
 			plan.Tenants = append(plan.Tenants, item)
 			continue
 		}
@@ -506,10 +579,13 @@ func (s *tenantRuntimeRolloutService) resolveLiveContainer(ctx context.Context, 
 
 	containerID := strings.TrimSpace(tenant.ContainerID)
 	if containerID == "" {
-		return nil, fmt.Errorf("tenant %s has no canonical runtime container and no registry container_id", tenant.ID)
+		return nil, fmt.Errorf("%w: tenant %s has no canonical runtime container and no registry container_id", errTenantRuntimeMissing, tenant.ID)
 	}
 	info, err = s.docker.Inspect(ctx, containerID)
 	if err != nil {
+		if cpDocker.IsNotFound(err) {
+			return nil, fmt.Errorf("%w: inspect tenant container %s: %w", errTenantRuntimeMissing, containerID, err)
+		}
 		return nil, fmt.Errorf("inspect tenant container %s: %w", containerID, err)
 	}
 	return info, nil

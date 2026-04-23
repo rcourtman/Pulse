@@ -192,6 +192,11 @@ server-side update execution surfaces.
    `cmd/pulse-control-plane/main.go`, `internal/cloudcp/docker/manager.go`,
    `internal/cloudcp/docker/labels.go`, and
    `internal/cloudcp/tenant_runtime_rollout.go`
+   The batch reconcile command must be restorative as well as corrective:
+   when a tenant registry row and tenant data remain but the canonical or
+   recorded Docker container is missing, dry-run must classify the tenant for
+   mutation and the live command must recreate the container, prove health, and
+   rewrite the registry runtime identity through the same control-plane path.
 10. Add or change the canonical hosted staging smoke operator path through `scripts/run_hosted_staging_smoke.sh`, `tests/integration/scripts/bootstrap-hosted-mobile-onboarding.mjs`, `tests/integration/scripts/hosted-mobile-token-runtime.mjs`, `tests/integration/scripts/hosted-tenant-runtime.mjs`, and `tests/integration/scripts/relay-mobile-token-helper.go`
 
 ## Forbidden Paths

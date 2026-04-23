@@ -141,6 +141,12 @@ cloud-specific enforcement rules.
    through the control-plane Docker manager so tenant runtime logging cannot
    fill the live Pulse Cloud host independently of tenant data quotas.
 10. `internal/cloudcp/tenant_runtime_rollout.go` shared with `deployment-installability`: hosted tenant runtime rollout is both a Pulse Cloud runtime contract boundary and a deployment-installability release-rollout boundary.
+    Hosted tenant runtime reconciliation must treat a registered tenant with
+    preserved tenant data but no live Docker runtime as a recoverable managed
+    state, not as a terminal skip. The control-plane-owned reconcile path must
+    recreate the canonical tenant container, health-check it, and persist the
+    new runtime identity before hosted billing/auth surfaces are considered
+    coherent.
 
 The real `pulse-pro` license-server legacy checkout issuance, recurring
 renewals, manual issue, and legacy exchange flows are part of that same

@@ -314,6 +314,59 @@ func TestTenantRuntimeRollout_RecreatesSameImageWhenRoutingContractDrifts(t *tes
 	}
 }
 
+func TestTenantRuntimeRollout_RecreatesMissingRuntimeFromTenantData(t *testing.T) {
+	tenant := &registry.Tenant{ID: "t-MISSING01", ContainerID: "removed-container"}
+	reg := &fakeTenantRuntimeRolloutRegistry{tenant: tenant}
+	docker := newFakeTenantRuntimeRolloutDocker()
+	routing := docker.DesiredRuntimeRouting(tenant.ID)
+	docker.queueCreate(&cpDocker.RuntimeContainerInfo{
+		ID:        "recreated-container",
+		Name:      tenantRuntimeContainerName(tenant.ID),
+		ImageRef:  "pulse-runtime:stable",
+		ImageID:   "sha256:stable",
+		Running:   true,
+		RouteHost: routing.Host,
+		PublicURL: routing.PublicURL,
+	}, nil)
+	docker.health["recreated-container"] = []bool{true}
+	sync := &fakeTenantRuntimeRolloutSynchronizer{}
+	clock := newFakeTenantRuntimeRolloutClock()
+
+	service := newTestTenantRuntimeRolloutService(reg, docker, sync, clock)
+	result, err := service.Rollout(context.Background(), TenantRuntimeRolloutOptions{
+		TenantID: tenant.ID,
+		Image:    "pulse-runtime:stable",
+	})
+	if err != nil {
+		t.Fatalf("Rollout() error = %v", err)
+	}
+
+	if !result.RestoredMissing {
+		t.Fatalf("RestoredMissing = false, want true")
+	}
+	if result.ReconciledOnly {
+		t.Fatalf("ReconciledOnly = true, want false")
+	}
+	if len(sync.snapshots) != 0 {
+		t.Fatalf("snapshot count = %d, want 0", len(sync.snapshots))
+	}
+	if len(docker.createCalls) != 1 {
+		t.Fatalf("create call count = %d, want 1", len(docker.createCalls))
+	}
+	if docker.createCalls[0].tenantDataDir != filepath.Join(tTempDirForRolloutService(), tenant.ID) {
+		t.Fatalf("created tenant data dir = %q", docker.createCalls[0].tenantDataDir)
+	}
+	if got := reg.updatedTenant.ContainerID; got != "recreated-container" {
+		t.Fatalf("updated tenant container id = %q, want recreated-container", got)
+	}
+	if got := reg.updatedTenant.CurrentImageDigest; got != "sha256:stable" {
+		t.Fatalf("updated tenant image digest = %q, want sha256:stable", got)
+	}
+	if !reg.updatedTenant.HealthCheckOK {
+		t.Fatalf("updated tenant health_check_ok = false, want true")
+	}
+}
+
 func TestTenantRuntimeContractReconcilePlan_AllTenantsClassifiesNoopRolloutAndSkip(t *testing.T) {
 	tenantNoop := &registry.Tenant{ID: "t-NOOP12345", ContainerID: "noop-live"}
 	tenantDrift := &registry.Tenant{ID: "t-Drift1234", ContainerID: "drift-live"}
@@ -366,8 +419,14 @@ func TestTenantRuntimeContractReconcilePlan_AllTenantsClassifiesNoopRolloutAndSk
 	if got[tenantDrift.ID].DesiredRouteHost != routingDrift.Host {
 		t.Fatalf("drift tenant desired route host = %q, want %q", got[tenantDrift.ID].DesiredRouteHost, routingDrift.Host)
 	}
-	if got[tenantMissing.ID].Action != tenantRuntimeContractActionSkip {
-		t.Fatalf("missing tenant action = %q, want %q", got[tenantMissing.ID].Action, tenantRuntimeContractActionSkip)
+	if got[tenantMissing.ID].Action != tenantRuntimeContractActionRollout {
+		t.Fatalf("missing tenant action = %q, want %q", got[tenantMissing.ID].Action, tenantRuntimeContractActionRollout)
+	}
+	if got[tenantMissing.ID].ImageRef != "pulse-runtime:stable" {
+		t.Fatalf("missing tenant image ref = %q, want pulse-runtime:stable", got[tenantMissing.ID].ImageRef)
+	}
+	if got[tenantMissing.ID].DesiredRouteHost == "" {
+		t.Fatalf("missing tenant desired route host is empty")
 	}
 }
 
@@ -416,6 +475,7 @@ func newTestTenantRuntimeRolloutService(
 		registry:      reg,
 		docker:        docker,
 		tenantsDir:    tTempDirForRolloutService(),
+		defaultImage:  "pulse-runtime:stable",
 		synchronizer:  sync,
 		now:           clock.Now,
 		sleep:         clock.Sleep,
