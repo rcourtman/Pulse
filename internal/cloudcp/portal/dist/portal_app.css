@@ -1068,6 +1068,7 @@ header .logout-btn:hover,
 }
 .billing-inline-support-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   margin-top: 8px;
 }
@@ -1351,13 +1352,16 @@ header .logout-btn:hover,
 }
 .portal-support-simple-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   padding-top: 12px;
 }
 .portal-support-link {
+  min-width: 0;
   color: var(--accent);
   font-size: 13px;
   font-weight: 500;
+  overflow-wrap: anywhere;
 }
 .portal-support-link:hover {
   text-decoration: underline;
