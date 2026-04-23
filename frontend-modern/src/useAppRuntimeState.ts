@@ -9,7 +9,6 @@ import {
 } from 'solid-js';
 import { getGlobalWebSocketStore } from '@/stores/websocket-global';
 import { logger } from '@/utils/logger';
-import { POLLING_INTERVALS } from '@/constants';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 import type { TimeRange } from '@/api/charts';
 import type { VersionInfo } from '@/api/updates';
@@ -220,7 +219,6 @@ export const useAppRuntimeState = () => {
   const state = (): State => wsStore()?.state || fallbackState;
   const connected = () => wsStore()?.connected() || false;
   const reconnecting = () => wsStore()?.reconnecting() || false;
-  const [dataUpdated, setDataUpdated] = createSignal(false);
   const [lastUpdateText, setLastUpdateText] = createSignal('');
   const [versionInfo, setVersionInfo] = createSignal<VersionInfo | null>(null);
   const connectionStatus = createMemo<AppConnectionStatus>(() => {
@@ -453,22 +451,10 @@ export const useAppRuntimeState = () => {
     });
   };
 
-  let updateTimeout: number | undefined;
   createEffect(() => {
     const updateTime = state().lastUpdate;
     if (updateTime > 0) {
-      setDataUpdated(true);
       setLastUpdateText(formatLastUpdate(updateTime));
-      if (updateTimeout !== undefined) {
-        window.clearTimeout(updateTimeout);
-      }
-      updateTimeout = window.setTimeout(() => setDataUpdated(false), POLLING_INTERVALS.DATA_FLASH);
-    }
-  });
-
-  onCleanup(() => {
-    if (updateTimeout !== undefined) {
-      window.clearTimeout(updateTimeout);
     }
   });
 
@@ -802,7 +788,6 @@ export const useAppRuntimeState = () => {
     backendHealthy,
     connectionStatus,
     reconnecting,
-    dataUpdated,
     lastUpdateText,
     versionInfo,
     showOrgSwitcher,

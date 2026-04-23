@@ -47,7 +47,6 @@ const NAV_TAB_ICON_CLASS = 'w-4 h-4 shrink-0';
 
 export interface AppLayoutProps {
   connectionStatus: () => AppConnectionStatus;
-  dataUpdated: () => boolean;
   lastUpdateText: () => string;
   versionInfo: () => VersionInfo | null;
   hasAuth: () => boolean;
@@ -138,9 +137,7 @@ export function AppLayout(props: AppLayoutProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const kioskMode = useKioskMode();
-  const brandMotionActive = createMemo(
-    () => props.connectionStatus().kind === 'connected' && props.dataUpdated(),
-  );
+  const brandMotionActive = createMemo(() => props.connectionStatus().tone === 'healthy');
 
   const [headerVisible, setHeaderVisible] = createSignal(true);
   let headerEl: HTMLDivElement | undefined;

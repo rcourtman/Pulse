@@ -1,9 +1,13 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import appSource from '@/App.tsx?raw';
 import appLayoutSource from '@/AppLayout.tsx?raw';
 import appRuntimeContextSource from '@/contexts/appRuntime.ts?raw';
 import routePreloadSource from '@/routing/routePreload.ts?raw';
 import appRuntimeStateSource from '@/useAppRuntimeState.ts?raw';
+
+const appStylesSource = readFileSync(join(process.cwd(), 'src/index.css'), 'utf8');
 
 describe('App architecture', () => {
   it('keeps App as the entry shell that delegates runtime and chrome ownership', () => {
@@ -82,13 +86,24 @@ describe('App architecture', () => {
     expect(appLayoutSource).toContain('<OrgSwitcher');
     expect(appLayoutSource).toContain('const status = () => props.connectionStatus();');
     expect(appLayoutSource).toContain("status().kind === 'sync-reconnecting' || status().kind === 'reconnecting'");
-    expect(appLayoutSource).toContain(
-      "props.connectionStatus().kind === 'connected' && props.dataUpdated()",
-    );
+    expect(appLayoutSource).toContain("props.connectionStatus().tone === 'healthy'");
     expect(appLayoutSource).toContain('const brandMotionActive = createMemo(');
     expect(appLayoutSource).toContain('pulse-brand-lockup');
     expect(appLayoutSource).toContain('animate-pulse-brand');
+    expect(appLayoutSource).toContain('pulse-brand-wordmark');
+    expect(appLayoutSource).not.toContain('dataUpdated: () => boolean');
     expect(appLayoutSource).not.toContain('animate-pulse-logo');
+    expect(appRuntimeStateSource).not.toContain('dataUpdated');
+    expect(appRuntimeStateSource).not.toContain('DATA_FLASH');
+    expect(appStylesSource).toContain('--pulse-brand-cycle: 4.8s;');
+    expect(appStylesSource).toContain(
+      'animation: pulse-brand-logo var(--pulse-brand-cycle) ease-in-out infinite;',
+    );
+    expect(appStylesSource).toContain(
+      'animation: pulse-brand-ring var(--pulse-brand-cycle) ease-in-out infinite;',
+    );
+    expect(appStylesSource).not.toContain('@keyframes pulse-brand-wordmark');
+    expect(appStylesSource).not.toContain('text-shadow');
     expect(appLayoutSource).toContain("props.versionInfo()?.channel === 'rc'");
     expect(appLayoutSource).toContain('Preview');
     expect(appLayoutSource).not.toContain(
