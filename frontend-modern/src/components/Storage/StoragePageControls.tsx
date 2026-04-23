@@ -5,6 +5,7 @@ import type { StorageGroupKey, StorageSortKey } from './useStorageModel';
 import type { StorageGroupByFilter, StorageStatusFilter } from './StorageFilter';
 import { useStoragePageControlsModel } from './useStoragePageControlsModel';
 import type { StorageSourceOption } from '@/utils/storageSources';
+import type { PhysicalDiskFilterOption } from '@/features/storageBackups/diskPresentation';
 
 type StoragePageControlsProps = {
   kioskMode: () => boolean;
@@ -24,6 +25,12 @@ type StoragePageControlsProps = {
   sourceFilter: () => string;
   setSourceFilter: (value: string) => void;
   sourceOptions: () => StorageSourceOption[];
+  diskRoleFilter?: () => string;
+  setDiskRoleFilter?: (value: string) => void;
+  diskRoleOptions?: () => PhysicalDiskFilterOption[];
+  diskGroupFilter?: () => string;
+  setDiskGroupFilter?: (value: string) => void;
+  diskGroupOptions?: () => PhysicalDiskFilterOption[];
   nodeFilterOptions: Array<{ value: string; label: string }>;
   selectedNodeId: () => string;
   setSelectedNodeId: (value: string) => void;
@@ -61,6 +68,12 @@ export const StoragePageControls: Component<StoragePageControlsProps> = (props) 
         sourceFilter={props.sourceFilter}
         setSourceFilter={props.setSourceFilter}
         sourceOptions={props.sourceOptions}
+        diskRoleFilter={props.diskRoleFilter}
+        setDiskRoleFilter={props.setDiskRoleFilter}
+        diskRoleOptions={props.diskRoleOptions}
+        diskGroupFilter={props.diskGroupFilter}
+        setDiskGroupFilter={props.setDiskGroupFilter}
+        diskGroupOptions={props.diskGroupOptions}
         nodeFilterOptions={props.nodeFilterOptions}
         selectedNodeId={props.selectedNodeId}
         setSelectedNodeId={props.setSelectedNodeId}

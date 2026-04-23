@@ -1,5 +1,9 @@
 import type { Accessor } from 'solid-js';
 import type { StorageHealthFilter, StorageRecord } from '@/features/storageBackups/models';
+import {
+  DEFAULT_PHYSICAL_DISK_FACET_FILTER,
+  normalizePhysicalDiskFacetFilter,
+} from '@/features/storageBackups/diskPresentation';
 import { isCephStorageRecord } from '@/features/storageBackups/cephRecordPresentation';
 import type { Resource } from '@/types/resource';
 import { getProxmoxData } from '@/utils/resourcePlatformData';
@@ -31,11 +35,15 @@ export interface StorageFilterActivityState {
   groupBy?: StorageGroupKey;
   statusFilter?: StorageStatusFilterValue;
   sourceFilter?: string;
+  diskRoleFilter?: string;
+  diskGroupFilter?: string;
 }
 
 export const DEFAULT_STORAGE_VIEW: StorageView = 'pools';
 export const DEFAULT_STORAGE_SELECTED_NODE_ID = 'all';
 export const DEFAULT_STORAGE_SOURCE_FILTER = 'all';
+export const DEFAULT_STORAGE_DISK_ROLE_FILTER = DEFAULT_PHYSICAL_DISK_FACET_FILTER;
+export const DEFAULT_STORAGE_DISK_GROUP_FILTER = DEFAULT_PHYSICAL_DISK_FACET_FILTER;
 export const DEFAULT_STORAGE_SORT_KEY: StorageSortKey = 'priority';
 export const DEFAULT_STORAGE_SORT_DIRECTION: 'asc' | 'desc' = 'desc';
 export const DEFAULT_STORAGE_GROUP_KEY: StorageGroupKey = 'none';
@@ -164,6 +172,15 @@ export const countActiveStorageFilters = (state: StorageFilterActivityState): nu
   if ((state.groupBy || 'none') !== 'none') count++;
   if ((state.statusFilter || 'all') !== 'all') count++;
   if ((state.sourceFilter || 'all') !== 'all') count++;
+  if (
+    (state.diskRoleFilter || DEFAULT_STORAGE_DISK_ROLE_FILTER) !== DEFAULT_STORAGE_DISK_ROLE_FILTER
+  )
+    count++;
+  if (
+    (state.diskGroupFilter || DEFAULT_STORAGE_DISK_GROUP_FILTER) !==
+    DEFAULT_STORAGE_DISK_GROUP_FILTER
+  )
+    count++;
   return count;
 };
 
@@ -173,7 +190,10 @@ export const hasActiveStorageFilters = (state: StorageFilterActivityState): bool
   state.sortDirection !== DEFAULT_STORAGE_SORT_DIRECTION ||
   (state.groupBy || DEFAULT_STORAGE_GROUP_KEY) !== DEFAULT_STORAGE_GROUP_KEY ||
   (state.statusFilter || DEFAULT_STORAGE_STATUS_FILTER) !== DEFAULT_STORAGE_STATUS_FILTER ||
-  (state.sourceFilter || DEFAULT_STORAGE_SOURCE_FILTER) !== DEFAULT_STORAGE_SOURCE_FILTER;
+  (state.sourceFilter || DEFAULT_STORAGE_SOURCE_FILTER) !== DEFAULT_STORAGE_SOURCE_FILTER ||
+  (state.diskRoleFilter || DEFAULT_STORAGE_DISK_ROLE_FILTER) !== DEFAULT_STORAGE_DISK_ROLE_FILTER ||
+  (state.diskGroupFilter || DEFAULT_STORAGE_DISK_GROUP_FILTER) !==
+    DEFAULT_STORAGE_DISK_GROUP_FILTER;
 
 export const getStorageNodeFilterLabel = (view: StorageView): string =>
   view === 'disks' ? 'All Disk Hosts' : 'All Nodes';
@@ -193,6 +213,10 @@ type StorageRouteFieldBuilderOptions = {
   setSourceFilter: (value: string) => void;
   healthFilter: Accessor<StorageHealthFilter>;
   setHealthFilter: (value: StorageHealthFilter) => void;
+  diskRoleFilter: Accessor<string>;
+  setDiskRoleFilter: (value: string) => void;
+  diskGroupFilter: Accessor<string>;
+  setDiskGroupFilter: (value: string) => void;
   selectedNodeId: Accessor<string>;
   setSelectedNodeId: (value: string) => void;
   groupBy: Accessor<StorageGroupKey>;
@@ -233,6 +257,26 @@ export const buildStorageRouteFields = (
     read: (parsed) => normalizeStorageHealthFilter(parsed.status),
     write: (value) =>
       writeStorageRouteValue(getStorageStatusFilterValue(value), DEFAULT_STORAGE_STATUS_FILTER),
+  },
+  diskRole: {
+    get: options.diskRoleFilter,
+    set: options.setDiskRoleFilter,
+    read: (parsed) => normalizePhysicalDiskFacetFilter(parsed.diskRole),
+    write: (value) =>
+      writeStorageRouteValue(
+        normalizePhysicalDiskFacetFilter(value),
+        DEFAULT_STORAGE_DISK_ROLE_FILTER,
+      ),
+  },
+  diskGroup: {
+    get: options.diskGroupFilter,
+    set: options.setDiskGroupFilter,
+    read: (parsed) => normalizePhysicalDiskFacetFilter(parsed.diskGroup),
+    write: (value) =>
+      writeStorageRouteValue(
+        normalizePhysicalDiskFacetFilter(value),
+        DEFAULT_STORAGE_DISK_GROUP_FILTER,
+      ),
   },
   node: {
     get: options.selectedNodeId,

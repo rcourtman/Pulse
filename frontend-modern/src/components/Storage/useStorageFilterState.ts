@@ -3,8 +3,15 @@ import { buildStorageSourceOptionsFromKeys } from '@/utils/storageSources';
 import type { StorageHealthFilter } from '@/features/storageBackups/models';
 import { normalizeStorageSourceKey } from '@/utils/storageSources';
 import {
+  DEFAULT_PHYSICAL_DISK_FACET_FILTER,
+  normalizePhysicalDiskFacetFilter,
+  type PhysicalDiskFilterOption,
+} from '@/features/storageBackups/diskPresentation';
+import {
   buildStorageNodeFilterOptions,
   coerceSelectedStorageNodeId,
+  DEFAULT_STORAGE_DISK_GROUP_FILTER,
+  DEFAULT_STORAGE_DISK_ROLE_FILTER,
   getActiveStorageNodeOptions,
   getStorageFilterGroupBy,
   getStorageStatusFilterValue,
@@ -22,10 +29,16 @@ type UseStorageFilterStateOptions = {
   setSelectedNodeId: (value: string) => void;
   sourceOptions: Accessor<string[]>;
   diskSourceOptions?: Accessor<string[]>;
+  diskRoleOptions?: Accessor<PhysicalDiskFilterOption[]>;
+  diskGroupOptions?: Accessor<PhysicalDiskFilterOption[]>;
   sourceFilter: Accessor<string>;
   setSourceFilter: (value: string) => void;
   healthFilter: Accessor<StorageHealthFilter>;
   setHealthFilter: (value: StorageHealthFilter) => void;
+  diskRoleFilter: Accessor<string>;
+  setDiskRoleFilter: (value: string) => void;
+  diskGroupFilter: Accessor<string>;
+  setDiskGroupFilter: (value: string) => void;
   groupBy: Accessor<StorageGroupKey>;
 };
 
@@ -43,6 +56,16 @@ export const useStorageFilterState = (options: UseStorageFilterStateOptions) => 
   );
   const sourceFilterOptions = createMemo(() =>
     buildStorageSourceOptionsFromKeys(activeSourceKeys()),
+  );
+  const diskRoleFilterOptions = createMemo(() =>
+    options.view() === 'disks' && options.diskRoleOptions
+      ? options.diskRoleOptions()
+      : [{ value: DEFAULT_PHYSICAL_DISK_FACET_FILTER, label: 'All Roles' }],
+  );
+  const diskGroupFilterOptions = createMemo(() =>
+    options.view() === 'disks' && options.diskGroupOptions
+      ? options.diskGroupOptions()
+      : [{ value: DEFAULT_PHYSICAL_DISK_FACET_FILTER, label: 'All Groups' }],
   );
 
   const storageFilterGroupBy = (): StorageGroupByFilter => {
@@ -77,10 +100,43 @@ export const useStorageFilterState = (options: UseStorageFilterStateOptions) => 
     }
   });
 
+  createEffect(() => {
+    if (options.view() !== 'disks') {
+      if (options.diskRoleFilter() !== DEFAULT_STORAGE_DISK_ROLE_FILTER) {
+        options.setDiskRoleFilter(DEFAULT_STORAGE_DISK_ROLE_FILTER);
+      }
+      if (options.diskGroupFilter() !== DEFAULT_STORAGE_DISK_GROUP_FILTER) {
+        options.setDiskGroupFilter(DEFAULT_STORAGE_DISK_GROUP_FILTER);
+      }
+      return;
+    }
+
+    const availableRoles = new Set(
+      diskRoleFilterOptions().map((option) => normalizePhysicalDiskFacetFilter(option.value)),
+    );
+    const selectedRole = normalizePhysicalDiskFacetFilter(options.diskRoleFilter());
+    if (selectedRole !== DEFAULT_STORAGE_DISK_ROLE_FILTER && !availableRoles.has(selectedRole)) {
+      options.setDiskRoleFilter(DEFAULT_STORAGE_DISK_ROLE_FILTER);
+    }
+
+    const availableGroups = new Set(
+      diskGroupFilterOptions().map((option) => normalizePhysicalDiskFacetFilter(option.value)),
+    );
+    const selectedGroup = normalizePhysicalDiskFacetFilter(options.diskGroupFilter());
+    if (
+      selectedGroup !== DEFAULT_STORAGE_DISK_GROUP_FILTER &&
+      !availableGroups.has(selectedGroup)
+    ) {
+      options.setDiskGroupFilter(DEFAULT_STORAGE_DISK_GROUP_FILTER);
+    }
+  });
+
   return {
     activeNodeOptions,
     nodeFilterOptions,
     sourceFilterOptions,
+    diskRoleFilterOptions,
+    diskGroupFilterOptions,
     storageFilterGroupBy,
     storageFilterStatus,
     setStorageFilterStatus,

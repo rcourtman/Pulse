@@ -95,9 +95,9 @@ describe('resource link routing contract', () => {
     expect(buildWorkloadsPath({ type: 'docker', platform: 'docker', agent: 'runtime-1' })).toBe(
       '/workloads?type=app-container&platform=docker&agent=runtime-1',
     );
-    expect(buildWorkloadsPath({ type: 'kubernetes', platform: 'kubernetes', context: 'cluster-a' })).toBe(
-      '/workloads?type=pod&platform=kubernetes&context=cluster-a',
-    );
+    expect(
+      buildWorkloadsPath({ type: 'kubernetes', platform: 'kubernetes', context: 'cluster-a' }),
+    ).toBe('/workloads?type=pod&platform=kubernetes&context=cluster-a');
   });
 
   it('builds and parses infrastructure query params', () => {
@@ -272,6 +272,8 @@ describe('resource link routing contract', () => {
       group: 'storage',
       source: 'pbs',
       status: 'available',
+      diskRole: 'nvme-disk',
+      diskGroup: 'data',
       node: 'cluster-main-pve1',
       query: 'local-lvm',
       resource: 'storage-1',
@@ -279,7 +281,7 @@ describe('resource link routing contract', () => {
       order: 'desc',
     });
     expect(href).toBe(
-      '/storage?tab=disks&group=storage&source=proxmox-pbs&status=available&node=cluster-main-pve1&q=local-lvm&resource=storage-1&sort=usage&order=desc',
+      '/storage?tab=disks&group=storage&source=proxmox-pbs&status=available&diskRole=nvme-disk&diskGroup=data&node=cluster-main-pve1&q=local-lvm&resource=storage-1&sort=usage&order=desc',
     );
 
     const parsed = parseStorageLinkSearch(href.slice('/storage'.length));
@@ -288,6 +290,8 @@ describe('resource link routing contract', () => {
       group: 'storage',
       source: 'proxmox-pbs',
       status: 'available',
+      diskRole: 'nvme-disk',
+      diskGroup: 'data',
       node: 'cluster-main-pve1',
       query: 'local-lvm',
       resource: 'storage-1',
@@ -298,6 +302,8 @@ describe('resource link routing contract', () => {
 
     expect(STORAGE_QUERY_PARAMS.tab).toBe('tab');
     expect(STORAGE_QUERY_PARAMS.group).toBe('group');
+    expect(STORAGE_QUERY_PARAMS.diskRole).toBe('diskRole');
+    expect(STORAGE_QUERY_PARAMS.diskGroup).toBe('diskGroup');
     expect(STORAGE_QUERY_PARAMS.query).toBe('q');
     expect(STORAGE_QUERY_PARAMS.resource).toBe('resource');
     expect(STORAGE_QUERY_PARAMS.sort).toBe('sort');

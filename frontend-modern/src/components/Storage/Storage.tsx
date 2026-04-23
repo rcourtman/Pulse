@@ -29,6 +29,12 @@ const Storage: Component = () => {
     sourceFilter,
     setSourceFilter,
     healthFilter,
+    diskRoleFilter,
+    setDiskRoleFilter,
+    diskRoleOptions,
+    diskGroupFilter,
+    setDiskGroupFilter,
+    diskGroupOptions,
     sortKey,
     setSortKey,
     sortDirection,
@@ -89,6 +95,8 @@ const Storage: Component = () => {
           search={search}
           sourceFilter={sourceFilter}
           healthFilter={healthFilter}
+          diskRoleFilter={diskRoleFilter}
+          diskGroupFilter={diskGroupFilter}
           selectedNodeId={selectedNodeId}
           nodeOptions={nodeOptions}
           physicalDisks={physicalDisks}
@@ -142,6 +150,12 @@ const Storage: Component = () => {
             sourceFilter={sourceFilter}
             setSourceFilter={setSourceFilter}
             sourceOptions={sourceFilterOptions}
+            diskRoleFilter={diskRoleFilter}
+            setDiskRoleFilter={setDiskRoleFilter}
+            diskRoleOptions={diskRoleOptions}
+            diskGroupFilter={diskGroupFilter}
+            setDiskGroupFilter={setDiskGroupFilter}
+            diskGroupOptions={diskGroupOptions}
             nodeFilterOptions={nodeFilterOptions()}
             selectedNodeId={selectedNodeId}
             setSelectedNodeId={setSelectedNodeId}
@@ -157,6 +171,8 @@ const Storage: Component = () => {
           nodes={nodes}
           sourceFilter={sourceFilter}
           healthFilter={healthFilter}
+          diskRoleFilter={diskRoleFilter}
+          diskGroupFilter={diskGroupFilter}
           selectedNodeId={selectedNodeId}
           search={search}
           groupedRecords={groupedRecords}

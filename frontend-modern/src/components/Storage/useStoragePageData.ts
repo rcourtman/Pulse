@@ -1,7 +1,11 @@
 import { Accessor, createMemo } from 'solid-js';
 import { buildStorageRecords } from '@/features/storageBackups/storageAdapters';
 import type { StorageHealthFilter } from '@/features/storageBackups/models';
-import { getPhysicalDiskSourceKey } from '@/features/storageBackups/diskPresentation';
+import {
+  buildPhysicalDiskGroupFilterOptions,
+  buildPhysicalDiskRoleFilterOptions,
+  getPhysicalDiskSourceKey,
+} from '@/features/storageBackups/diskPresentation';
 import type { State } from '@/types/api';
 import type { Resource } from '@/types/resource';
 import { useStorageAlertState } from './useStorageAlertState';
@@ -67,6 +71,12 @@ export const useStoragePageData = (options: UseStoragePageDataOptions) => {
       .filter((key) => key !== 'all')
       .sort(),
   ]);
+  const diskRoleOptions = createMemo(() =>
+    buildPhysicalDiskRoleFilterOptions(options.physicalDisks()),
+  );
+  const diskGroupOptions = createMemo(() =>
+    buildPhysicalDiskGroupFilterOptions(options.physicalDisks()),
+  );
 
   const { cephSummaryStats } = useStorageCephModel({
     records,
@@ -81,6 +91,8 @@ export const useStoragePageData = (options: UseStoragePageDataOptions) => {
     nodeOnlineByLabel,
     sourceOptions,
     diskSourceOptions,
+    diskRoleOptions,
+    diskGroupOptions,
     filteredRecords,
     groupedRecords,
     cephSummaryStats,

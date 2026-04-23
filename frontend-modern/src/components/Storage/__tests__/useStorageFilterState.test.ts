@@ -14,6 +14,8 @@ describe('useStorageFilterState', () => {
     const [sourceOptions] = createSignal(['all', 'truenas', 'proxmox-pve', 'agent']);
     const [sourceFilter, setSourceFilter] = createSignal('all');
     const [healthFilter, setHealthFilter] = createSignal<StorageHealthFilter>('all');
+    const [diskRoleFilter, setDiskRoleFilter] = createSignal('all');
+    const [diskGroupFilter, setDiskGroupFilter] = createSignal('all');
     const [groupBy] = createSignal<StorageGroupKey>('node');
 
     const { result } = renderHook(() =>
@@ -28,6 +30,10 @@ describe('useStorageFilterState', () => {
         setSourceFilter,
         healthFilter,
         setHealthFilter,
+        diskRoleFilter,
+        setDiskRoleFilter,
+        diskGroupFilter,
+        setDiskGroupFilter,
         groupBy,
       }),
     );
@@ -44,9 +50,11 @@ describe('useStorageFilterState', () => {
     ]);
     expect(result.storageFilterGroupBy()).toBe('node');
     expect(result.storageFilterStatus()).toBe('all');
+    expect(result.diskRoleFilterOptions()).toEqual([{ value: 'all', label: 'All Roles' }]);
+    expect(result.diskGroupFilterOptions()).toEqual([{ value: 'all', label: 'All Groups' }]);
   });
 
-  it('coerces stale selected nodes and maps status setters', () => {
+  it('coerces stale selected nodes and disk facets, and maps status setters', () => {
     const [view] = createSignal<'pools' | 'disks'>('disks');
     const [nodeOptions] = createSignal<StorageNodeOption[]>([{ id: 'all', label: 'All Nodes' }]);
     const [diskNodeOptions] = createSignal<StorageNodeOption[]>([
@@ -56,6 +64,8 @@ describe('useStorageFilterState', () => {
     const [sourceOptions] = createSignal(['all']);
     const [sourceFilter, setSourceFilter] = createSignal('missing-source');
     const [healthFilter, setHealthFilter] = createSignal<StorageHealthFilter>('all');
+    const [diskRoleFilter, setDiskRoleFilter] = createSignal('missing-role');
+    const [diskGroupFilter, setDiskGroupFilter] = createSignal('missing-group');
     const [groupBy] = createSignal<StorageGroupKey>('none');
 
     const { result } = renderHook(() =>
@@ -66,16 +76,30 @@ describe('useStorageFilterState', () => {
         selectedNodeId,
         setSelectedNodeId,
         sourceOptions,
+        diskRoleOptions: () => [
+          { value: 'all', label: 'All Roles' },
+          { value: 'nvme-disk', label: 'NVME Disk' },
+        ],
+        diskGroupOptions: () => [
+          { value: 'all', label: 'All Groups' },
+          { value: 'data', label: 'data' },
+        ],
         sourceFilter,
         setSourceFilter,
         healthFilter,
         setHealthFilter,
+        diskRoleFilter,
+        setDiskRoleFilter,
+        diskGroupFilter,
+        setDiskGroupFilter,
         groupBy,
       }),
     );
 
     expect(selectedNodeId()).toBe('all');
     expect(sourceFilter()).toBe('all');
+    expect(diskRoleFilter()).toBe('all');
+    expect(diskGroupFilter()).toBe('all');
     result.setStorageFilterStatus('critical');
     expect(healthFilter()).toBe('critical');
   });

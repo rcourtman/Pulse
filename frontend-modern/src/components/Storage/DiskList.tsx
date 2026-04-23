@@ -70,6 +70,7 @@ import {
 } from '@/features/storageBackups/diskPresentation';
 import type { Resource } from '@/types/resource';
 import type { StorageHealthFilter } from '@/features/storageBackups/models';
+import { getStorageSourceOption } from '@/utils/storageSources';
 import { DiskDetail } from './DiskDetail';
 import { useDiskListModel } from './useDiskListModel';
 
@@ -79,6 +80,8 @@ interface DiskListProps {
   selectedNode: string | null;
   sourceFilter?: string;
   healthFilter?: StorageHealthFilter;
+  roleFilter?: string;
+  groupFilter?: string;
   searchTerm: string;
   selectedDiskId: string | null;
   highlightedSummarySeriesId?: string | null;
@@ -93,6 +96,8 @@ export const DiskList: Component<DiskListProps> = (props) => {
     selectedNode: () => props.selectedNode,
     sourceFilter: () => props.sourceFilter ?? 'all',
     healthFilter: () => props.healthFilter ?? 'all',
+    roleFilter: () => props.roleFilter ?? 'all',
+    groupFilter: () => props.groupFilter ?? 'all',
     searchTerm: () => props.searchTerm,
     selectedDiskId: () => props.selectedDiskId,
     setSelectedDiskId: props.onSelectedDiskChange,
@@ -103,6 +108,21 @@ export const DiskList: Component<DiskListProps> = (props) => {
       searchTerm: props.searchTerm,
       diskCount: (props.disks || []).length,
       hasPVENodes: model.hasPVENodes(),
+      healthFilter: props.healthFilter ?? 'all',
+      sourceFilterLabel:
+        props.sourceFilter && props.sourceFilter !== 'all'
+          ? getStorageSourceOption(props.sourceFilter).label
+          : null,
+      roleFilterLabel:
+        props.roleFilter && props.roleFilter !== 'all'
+          ? (model.roleFilterOptions().find((option) => option.value === props.roleFilter)?.label ??
+            null)
+          : null,
+      groupFilterLabel:
+        props.groupFilter && props.groupFilter !== 'all'
+          ? (model.groupFilterOptions().find((option) => option.value === props.groupFilter)
+              ?.label ?? null)
+          : null,
     });
 
   return (
@@ -117,6 +137,9 @@ export const DiskList: Component<DiskListProps> = (props) => {
             <Show when={emptyState().searchMessage}>
               {(message) => <p class={PHYSICAL_DISK_EMPTY_MESSAGE_CLASS}>{message()}</p>}
             </Show>
+            <For each={emptyState().filterMessages}>
+              {(message) => <p class={PHYSICAL_DISK_EMPTY_MESSAGE_CLASS}>{message}</p>}
+            </For>
           </div>
           <Show when={!props.searchTerm && (props.disks || []).length === 0}>
             <Show

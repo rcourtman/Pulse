@@ -11,6 +11,8 @@ import {
   coerceSelectedStorageNodeId,
   countActiveStorageFilters,
   countVisiblePhysicalDisksForNode,
+  DEFAULT_STORAGE_DISK_GROUP_FILTER,
+  DEFAULT_STORAGE_DISK_ROLE_FILTER,
   DEFAULT_STORAGE_GROUP_KEY,
   DEFAULT_STORAGE_SORT_OPTIONS,
   DEFAULT_STORAGE_SORT_DIRECTION,
@@ -119,6 +121,8 @@ describe('storagePageState', () => {
     expect(getStorageNodeFilterLabel('disks')).toBe('All Disk Hosts');
     expect(DEFAULT_STORAGE_VIEW).toBe('pools');
     expect(DEFAULT_STORAGE_SOURCE_FILTER).toBe('all');
+    expect(DEFAULT_STORAGE_DISK_ROLE_FILTER).toBe('all');
+    expect(DEFAULT_STORAGE_DISK_GROUP_FILTER).toBe('all');
     expect(DEFAULT_STORAGE_SORT_KEY).toBe('priority');
     expect(DEFAULT_STORAGE_SORT_DIRECTION).toBe('desc');
     expect(DEFAULT_STORAGE_GROUP_KEY).toBe('none');
@@ -189,6 +193,8 @@ describe('storagePageState', () => {
         groupBy: 'none',
         statusFilter: 'all',
         sourceFilter: 'all',
+        diskRoleFilter: 'all',
+        diskGroupFilter: 'all',
       }),
     ).toBe(1);
 
@@ -200,6 +206,8 @@ describe('storagePageState', () => {
         groupBy: 'none',
         statusFilter: 'all',
         sourceFilter: 'all',
+        diskRoleFilter: 'all',
+        diskGroupFilter: 'all',
       }),
     ).toBe(false);
 
@@ -211,8 +219,23 @@ describe('storagePageState', () => {
         groupBy: 'none',
         statusFilter: 'all',
         sourceFilter: 'all',
+        diskRoleFilter: 'all',
+        diskGroupFilter: 'all',
       }),
     ).toBe(true);
+
+    expect(
+      countActiveStorageFilters({
+        search: '',
+        sortKey: 'priority',
+        sortDirection: 'desc',
+        groupBy: 'none',
+        statusFilter: 'all',
+        sourceFilter: 'all',
+        diskRoleFilter: 'nvme-disk',
+        diskGroupFilter: 'all',
+      }),
+    ).toBe(1);
 
     expect(readStorageRouteValue(undefined, 'all')).toBe('all');
     expect(readStorageRouteValue('   ', 'all')).toBe('all');
@@ -226,6 +249,8 @@ describe('storagePageState', () => {
     const [view, setView] = createSignal<'pools' | 'disks'>('pools');
     const [sourceFilter, setSourceFilter] = createSignal('all');
     const [healthFilter, setHealthFilter] = createSignal<StorageHealthFilter>('all');
+    const [diskRoleFilter, setDiskRoleFilter] = createSignal('all');
+    const [diskGroupFilter, setDiskGroupFilter] = createSignal('all');
     const [selectedNodeId, setSelectedNodeId] = createSignal('all');
     const [groupBy, setGroupBy] = createSignal<StorageGroupKey>('none');
     const [sortKey, setSortKey] = createSignal<StorageSortKey>('priority');
@@ -239,6 +264,10 @@ describe('storagePageState', () => {
       setSourceFilter,
       healthFilter,
       setHealthFilter,
+      diskRoleFilter,
+      setDiskRoleFilter,
+      diskGroupFilter,
+      setDiskGroupFilter,
       selectedNodeId,
       setSelectedNodeId,
       groupBy,
@@ -264,6 +293,12 @@ describe('storagePageState', () => {
     expect(fields.status?.write?.('attention')).toBe('attention');
     expect(fields.status?.write?.('warning')).toBe('warning');
     expect(fields.status?.write?.('all')).toBeNull();
+    expect(fields.diskRole?.read({ diskRole: ' NVME Disk ' } as any)).toBe('nvme-disk');
+    expect(fields.diskRole?.write?.('nvme-disk')).toBe('nvme-disk');
+    expect(fields.diskRole?.write?.('all')).toBeNull();
+    expect(fields.diskGroup?.read({ diskGroup: ' Data Pool ' } as any)).toBe('data-pool');
+    expect(fields.diskGroup?.write?.('data-pool')).toBe('data-pool');
+    expect(fields.diskGroup?.write?.('all')).toBeNull();
     expect(fields.node?.read({ node: ' node-1 ' } as any)).toBe('node-1');
     expect(fields.node?.read({ node: ' ALL ' } as any)).toBe('all');
     expect(fields.node?.write?.('all')).toBeNull();

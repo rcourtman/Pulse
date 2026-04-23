@@ -61,6 +61,8 @@ export const STORAGE_QUERY_PARAMS = {
   group: 'group',
   source: 'source',
   status: 'status',
+  diskRole: 'diskRole',
+  diskGroup: 'diskGroup',
   node: 'node',
   query: 'q',
   resource: 'resource',
@@ -140,6 +142,8 @@ type StorageLinkOptions = {
   group?: string | null;
   source?: string | null;
   status?: string | null;
+  diskRole?: string | null;
+  diskGroup?: string | null;
   node?: string | null;
   query?: string | null;
   resource?: string | null;
@@ -537,6 +541,8 @@ export const parseStorageLinkSearch = (search: string) => {
     group: normalizeQueryValue(params.get(STORAGE_QUERY_PARAMS.group)),
     source: normalizeStorageSourceKey(params.get(STORAGE_QUERY_PARAMS.source)),
     status: normalizeQueryValue(params.get(STORAGE_QUERY_PARAMS.status)),
+    diskRole: normalizeQueryValue(params.get(STORAGE_QUERY_PARAMS.diskRole)),
+    diskGroup: normalizeQueryValue(params.get(STORAGE_QUERY_PARAMS.diskGroup)),
     node: normalizeQueryValue(params.get(STORAGE_QUERY_PARAMS.node)),
     query: normalizeQueryValue(params.get(STORAGE_QUERY_PARAMS.query)),
     resource: normalizeQueryValue(params.get(STORAGE_QUERY_PARAMS.resource)),
@@ -552,6 +558,8 @@ export const buildStoragePath = (options: StorageLinkOptions = {}): string => {
   const group = normalizeQueryValue(options.group);
   const source = normalizeStorageSourceKey(options.source);
   const status = normalizeQueryValue(options.status);
+  const diskRole = normalizeQueryValue(options.diskRole);
+  const diskGroup = normalizeQueryValue(options.diskGroup);
   const node = normalizeQueryValue(options.node);
   const query = normalizeQueryValue(options.query);
   const resource = normalizeQueryValue(options.resource);
@@ -563,6 +571,8 @@ export const buildStoragePath = (options: StorageLinkOptions = {}): string => {
   if (group) params.set(STORAGE_QUERY_PARAMS.group, group);
   if (source) params.set(STORAGE_QUERY_PARAMS.source, source);
   if (status) params.set(STORAGE_QUERY_PARAMS.status, status);
+  if (diskRole) params.set(STORAGE_QUERY_PARAMS.diskRole, diskRole);
+  if (diskGroup) params.set(STORAGE_QUERY_PARAMS.diskGroup, diskGroup);
   if (node) params.set(STORAGE_QUERY_PARAMS.node, node);
   if (query) params.set(STORAGE_QUERY_PARAMS.query, query);
   if (resource) params.set(STORAGE_QUERY_PARAMS.resource, resource);

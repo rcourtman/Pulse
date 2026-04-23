@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import type { Resource } from '@/types/resource';
 import {
   buildPhysicalDiskPresentationDataMap,
+  buildPhysicalDiskGroupFilterOptions,
+  buildPhysicalDiskRoleFilterOptions,
   comparePhysicalDiskPresentation,
   extractPhysicalDiskPresentationData,
   filterAndSortPhysicalDisks,
@@ -20,10 +22,12 @@ import {
   getPhysicalDiskParentLabel,
   getPhysicalDiskPlatformLabel,
   getPhysicalDiskRoleLabel,
+  getPhysicalDiskRoleFilterValue,
   getPhysicalDiskSourceKey,
   getPhysicalDiskSourceBadgePresentation,
   hasPhysicalDiskSmartWarning,
   matchesPhysicalDiskSearch,
+  normalizePhysicalDiskFacetFilter,
   type PhysicalDiskPresentationData,
 } from '@/features/storageBackups/diskPresentation';
 
@@ -162,6 +166,7 @@ describe('diskPresentation', () => {
         tone: 'text-amber-700 dark:text-amber-300',
       }),
     ).toBe('Pending sectors detected.');
+    expect(getPhysicalDiskHealthStatus(makeDiskData({ health: 'UNKNOWN' })).label).toBe('Unknown');
 
     expect(
       getPhysicalDiskEmptyStatePresentation({
@@ -173,8 +178,26 @@ describe('diskPresentation', () => {
     ).toMatchObject({
       title: 'No physical disks found',
       nodeMessage: 'for node tower',
+      filterMessages: [],
       showRequirements: true,
       requirementsTitle: 'Physical disk monitoring requirements:',
+    });
+
+    expect(
+      getPhysicalDiskEmptyStatePresentation({
+        selectedNodeName: null,
+        searchTerm: '',
+        diskCount: 4,
+        hasPVENodes: true,
+        healthFilter: 'attention',
+        sourceFilterLabel: 'PVE',
+        roleFilterLabel: 'Cache Pool',
+        groupFilterLabel: 'tank',
+      }),
+    ).toMatchObject({
+      title: 'No disks need attention',
+      filterMessages: ['from PVE', 'with role Cache Pool', 'in tank'],
+      showRequirements: false,
     });
   });
 
@@ -226,6 +249,16 @@ describe('diskPresentation', () => {
     expect(matchesPhysicalDiskSearch(warningDisk, warningData, 'node:tower')).toBe(true);
     expect(matchesPhysicalDiskSearch(warningDisk, warningData, 'node:pve1')).toBe(false);
     expect(getPhysicalDiskSourceKey(warningDisk)).toBe('proxmox-pve');
+    expect(getPhysicalDiskRoleFilterValue(warningData)).toBe('cache-pool');
+    expect(normalizePhysicalDiskFacetFilter(' Cache Pool ')).toBe('cache-pool');
+    expect(buildPhysicalDiskRoleFilterOptions([warningDisk, healthyDisk])).toContainEqual({
+      value: 'cache-pool',
+      label: 'Cache Pool',
+    });
+    expect(buildPhysicalDiskGroupFilterOptions([warningDisk, healthyDisk])).toContainEqual({
+      value: 'tank',
+      label: 'tank',
+    });
     expect(getPhysicalDiskNormalizedHealth(warningDisk, warningData)).toBe('warning');
     expect(
       comparePhysicalDiskPresentation(warningDisk, warningData, healthyDisk, healthyData),
@@ -237,6 +270,8 @@ describe('diskPresentation', () => {
         searchTerm: 'cache',
         sourceFilter: 'proxmox-pve',
         healthFilter: 'attention',
+        roleFilter: 'cache-pool',
+        groupFilter: 'tank',
         getDiskData: (disk) => (disk.id === warningDisk.id ? warningData : healthyData),
         matchesNode: () => true,
       }).map((disk) => disk.id),

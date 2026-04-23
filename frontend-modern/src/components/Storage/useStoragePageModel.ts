@@ -29,6 +29,8 @@ import { useStorageSummaryCharts } from './useStorageSummaryCharts';
 import {
   DEFAULT_STORAGE_SELECTED_NODE_ID,
   DEFAULT_STORAGE_SOURCE_FILTER,
+  DEFAULT_STORAGE_DISK_GROUP_FILTER,
+  DEFAULT_STORAGE_DISK_ROLE_FILTER,
   isStorageRecordCeph,
 } from './storagePageState';
 import { buildStorageSummaryGroupScopeMap } from './storageSummaryGroups';
@@ -66,6 +68,10 @@ export const useStoragePageModel = () => {
     sourceFilter,
     setSourceFilter,
     healthFilter,
+    diskRoleFilter,
+    setDiskRoleFilter,
+    diskGroupFilter,
+    setDiskGroupFilter,
     setHealthFilter,
     view,
     setView,
@@ -90,6 +96,8 @@ export const useStoragePageModel = () => {
     nodeOnlineByLabel,
     sourceOptions,
     diskSourceOptions,
+    diskRoleOptions,
+    diskGroupOptions,
     filteredRecords,
     groupedRecords,
     cephSummaryStats,
@@ -247,6 +255,8 @@ export const useStoragePageModel = () => {
   const clearStorageFilters = () => {
     setSearch('');
     setSourceFilter(DEFAULT_STORAGE_SOURCE_FILTER);
+    setDiskRoleFilter(DEFAULT_STORAGE_DISK_ROLE_FILTER);
+    setDiskGroupFilter(DEFAULT_STORAGE_DISK_GROUP_FILTER);
     setStorageFilterStatus('all');
     setSelectedNodeId(DEFAULT_STORAGE_SELECTED_NODE_ID);
   };
@@ -345,6 +355,8 @@ export const useStoragePageModel = () => {
   const {
     nodeFilterOptions,
     sourceFilterOptions,
+    diskRoleFilterOptions,
+    diskGroupFilterOptions,
     storageFilterGroupBy,
     storageFilterStatus,
     setStorageFilterStatus,
@@ -356,10 +368,16 @@ export const useStoragePageModel = () => {
     setSelectedNodeId,
     sourceOptions,
     diskSourceOptions,
+    diskRoleOptions,
+    diskGroupOptions,
     sourceFilter,
     setSourceFilter,
     healthFilter,
     setHealthFilter,
+    diskRoleFilter,
+    setDiskRoleFilter,
+    diskGroupFilter,
+    setDiskGroupFilter,
     groupBy,
   });
 
@@ -437,6 +455,12 @@ export const useStoragePageModel = () => {
     sourceFilter,
     setSourceFilter,
     healthFilter,
+    diskRoleFilter,
+    setDiskRoleFilter,
+    diskRoleOptions: diskRoleFilterOptions,
+    diskGroupFilter,
+    setDiskGroupFilter,
+    diskGroupOptions: diskGroupFilterOptions,
     sortKey,
     setSortKey,
     sortDirection,

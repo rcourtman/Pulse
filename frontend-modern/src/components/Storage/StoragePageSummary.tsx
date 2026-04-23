@@ -14,6 +14,8 @@ type StoragePageSummaryProps = {
   search: () => string;
   sourceFilter: () => string;
   healthFilter: () => StorageHealthFilter;
+  diskRoleFilter: () => string;
+  diskGroupFilter: () => string;
   selectedNodeId: () => string;
   nodeOptions: () => StoragePageNodeOption[];
   physicalDisks: () => Resource[];
@@ -40,6 +42,8 @@ export const StoragePageSummary: Component<StoragePageSummaryProps> = (props) =>
     search: props.search,
     sourceFilter: props.sourceFilter,
     healthFilter: props.healthFilter,
+    diskRoleFilter: props.diskRoleFilter,
+    diskGroupFilter: props.diskGroupFilter,
     selectedNodeId: props.selectedNodeId,
     nodeOptions: props.nodeOptions,
     physicalDisks: props.physicalDisks,

@@ -16,6 +16,8 @@ type UseStoragePageSummaryOptions = {
   search: Accessor<string>;
   sourceFilter: Accessor<string>;
   healthFilter: Accessor<StorageHealthFilter>;
+  diskRoleFilter: Accessor<string>;
+  diskGroupFilter: Accessor<string>;
   selectedNodeId: Accessor<string>;
   nodeOptions: Accessor<StoragePageNodeOption[]>;
   physicalDisks: Accessor<Resource[]>;
@@ -52,6 +54,8 @@ export const useStoragePageSummary = (options: UseStoragePageSummaryOptions) => 
       return matchesPhysicalDiskFilterState(disk, getDiskData(disk), {
         sourceFilter: options.sourceFilter(),
         healthFilter: options.healthFilter(),
+        roleFilter: options.diskRoleFilter(),
+        groupFilter: options.diskGroupFilter(),
         searchTerm: options.search(),
       });
     });

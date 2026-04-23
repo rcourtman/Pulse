@@ -8,6 +8,8 @@ export type StorageManagedQueryKey =
   | 'group'
   | 'source'
   | 'status'
+  | 'diskRole'
+  | 'diskGroup'
   | 'node'
   | 'query'
   | 'sort'
@@ -46,6 +48,8 @@ const MANAGED_QUERY_KEYS: StorageManagedQueryKey[] = [
   'group',
   'source',
   'status',
+  'diskRole',
+  'diskGroup',
   'node',
   'query',
   'sort',

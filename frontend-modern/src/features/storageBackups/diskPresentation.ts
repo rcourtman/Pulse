@@ -19,11 +19,17 @@ export interface PhysicalDiskEmptyStatePresentation {
   title: string;
   nodeMessage: string | null;
   searchMessage: string | null;
+  filterMessages: string[];
   showRequirements: boolean;
   fallbackMessage: string;
   requirementsTitle: string;
   requirementsItems: string[];
   requirementsNote: string;
+}
+
+export interface PhysicalDiskFilterOption {
+  value: string;
+  label: string;
 }
 
 export interface PhysicalDiskPresentationData {
@@ -133,6 +139,22 @@ const titleize = (value: string | undefined | null): string =>
     .filter(Boolean)
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(' ');
+
+const slugifyPhysicalDiskFacetValue = (value: string): string =>
+  value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+
+export const DEFAULT_PHYSICAL_DISK_FACET_FILTER = 'all';
+
+export const normalizePhysicalDiskFacetFilter = (value: string | null | undefined): string => {
+  const normalized = slugifyPhysicalDiskFacetValue(value || '');
+  return normalized && normalized !== DEFAULT_PHYSICAL_DISK_FACET_FILTER
+    ? normalized
+    : DEFAULT_PHYSICAL_DISK_FACET_FILTER;
+};
 
 export function getPhysicalDiskPlatformLabel(_resource: Resource, fallbackLabel: string): string {
   return fallbackLabel || 'Unknown';
@@ -300,6 +322,8 @@ export function matchesPhysicalDiskFilterState(
   options: {
     sourceFilter?: string;
     healthFilter?: StorageHealthFilter;
+    roleFilter?: string;
+    groupFilter?: string;
     searchTerm?: string;
   },
 ): boolean {
@@ -316,6 +340,22 @@ export function matchesPhysicalDiskFilterState(
     return false;
   }
 
+  const selectedRole = normalizePhysicalDiskFacetFilter(options.roleFilter);
+  if (
+    selectedRole !== DEFAULT_PHYSICAL_DISK_FACET_FILTER &&
+    getPhysicalDiskRoleFilterValue(disk) !== selectedRole
+  ) {
+    return false;
+  }
+
+  const selectedGroup = normalizePhysicalDiskFacetFilter(options.groupFilter);
+  if (
+    selectedGroup !== DEFAULT_PHYSICAL_DISK_FACET_FILTER &&
+    getPhysicalDiskGroupFilterValue(disk) !== selectedGroup
+  ) {
+    return false;
+  }
+
   return matchesPhysicalDiskSearch(resource, disk, options.searchTerm || '');
 }
 
@@ -325,6 +365,8 @@ export function filterAndSortPhysicalDisks(
     selectedNode: Resource | null;
     sourceFilter?: string;
     healthFilter?: StorageHealthFilter;
+    roleFilter?: string;
+    groupFilter?: string;
     searchTerm: string;
     getDiskData: (disk: Resource) => PhysicalDiskPresentationData;
     matchesNode: (disk: Resource, node: { id: string; name: string; instance?: string }) => boolean;
@@ -346,6 +388,8 @@ export function filterAndSortPhysicalDisks(
     matchesPhysicalDiskFilterState(disk, options.getDiskData(disk), {
       sourceFilter: options.sourceFilter,
       healthFilter: options.healthFilter,
+      roleFilter: options.roleFilter,
+      groupFilter: options.groupFilter,
       searchTerm: options.searchTerm,
     }),
   );
@@ -395,8 +439,11 @@ export function getPhysicalDiskHealthStatus(
   }
 
   return {
-    label: normalizedHealth === 'PASSED' || normalizedHealth === 'GOOD' ? 'Healthy' : 'Monitor',
-    summary: 'No active disk-health issues.',
+    label: normalizedHealth === 'PASSED' || normalizedHealth === 'GOOD' ? 'Healthy' : 'Unknown',
+    summary:
+      normalizedHealth === 'PASSED' || normalizedHealth === 'GOOD'
+        ? 'No active disk-health issues.'
+        : 'Health state is not reported.',
     tone: 'text-base-content',
   };
 }
@@ -443,17 +490,94 @@ export function getPhysicalDiskParentLabel(disk: PhysicalDiskPresentationData): 
   return '';
 }
 
+export function getPhysicalDiskRoleFilterValue(disk: PhysicalDiskPresentationData): string {
+  return normalizePhysicalDiskFacetFilter(getPhysicalDiskRoleLabel(disk));
+}
+
+export function getPhysicalDiskGroupFilterValue(disk: PhysicalDiskPresentationData): string {
+  return normalizePhysicalDiskFacetFilter(getPhysicalDiskParentLabel(disk));
+}
+
+const buildPhysicalDiskFacetOptions = (
+  disks: Resource[],
+  allLabel: string,
+  getLabel: (disk: PhysicalDiskPresentationData) => string,
+): PhysicalDiskFilterOption[] => {
+  const byValue = new Map<string, string>();
+  for (const resource of disks || []) {
+    const label = getLabel(extractPhysicalDiskPresentationData(resource)).trim();
+    if (!label) continue;
+    byValue.set(normalizePhysicalDiskFacetFilter(label), label);
+  }
+
+  return [
+    { value: DEFAULT_PHYSICAL_DISK_FACET_FILTER, label: allLabel },
+    ...Array.from(byValue.entries())
+      .sort(([, labelA], [, labelB]) => labelA.localeCompare(labelB))
+      .map(([value, label]) => ({ value, label })),
+  ];
+};
+
+export const buildPhysicalDiskRoleFilterOptions = (disks: Resource[]): PhysicalDiskFilterOption[] =>
+  buildPhysicalDiskFacetOptions(disks, 'All Roles', getPhysicalDiskRoleLabel);
+
+export const buildPhysicalDiskGroupFilterOptions = (
+  disks: Resource[],
+): PhysicalDiskFilterOption[] =>
+  buildPhysicalDiskFacetOptions(disks, 'All Groups', getPhysicalDiskParentLabel);
+
+const getPhysicalDiskHealthFilterEmptyTitle = (filter: StorageHealthFilter): string | null => {
+  switch (filter) {
+    case 'attention':
+      return 'No disks need attention';
+    case 'healthy':
+      return 'No healthy disks found';
+    case 'warning':
+      return 'No warning disks found';
+    case 'critical':
+      return 'No critical disks found';
+    case 'offline':
+      return 'No offline disks found';
+    case 'unknown':
+      return 'No disks with unknown health';
+    default:
+      return null;
+  }
+};
+
 export function getPhysicalDiskEmptyStatePresentation(options: {
   selectedNodeName: string | null;
   searchTerm: string;
   diskCount: number;
   hasPVENodes: boolean;
+  healthFilter?: StorageHealthFilter;
+  sourceFilterLabel?: string | null;
+  roleFilterLabel?: string | null;
+  groupFilterLabel?: string | null;
 }): PhysicalDiskEmptyStatePresentation {
+  const healthFilter = options.healthFilter || 'all';
+  const hasScopedFilter = Boolean(
+    options.searchTerm ||
+    options.sourceFilterLabel ||
+    options.roleFilterLabel ||
+    options.groupFilterLabel ||
+    healthFilter !== 'all',
+  );
+  const filterMessages = [
+    options.sourceFilterLabel ? `from ${options.sourceFilterLabel}` : null,
+    options.roleFilterLabel ? `with role ${options.roleFilterLabel}` : null,
+    options.groupFilterLabel ? `in ${options.groupFilterLabel}` : null,
+  ].filter((message): message is string => Boolean(message));
+
   return {
-    title: 'No physical disks found',
+    title:
+      options.diskCount === 0
+        ? 'No physical disks found'
+        : getPhysicalDiskHealthFilterEmptyTitle(healthFilter) || 'No disks match these filters',
     nodeMessage: options.selectedNodeName ? `for node ${options.selectedNodeName}` : null,
     searchMessage: options.searchTerm ? `matching "${options.searchTerm}"` : null,
-    showRequirements: !options.searchTerm && options.diskCount === 0 && options.hasPVENodes,
+    filterMessages,
+    showRequirements: !hasScopedFilter && options.diskCount === 0 && options.hasPVENodes,
     fallbackMessage:
       'No Proxmox nodes configured. Add a Proxmox VE cluster in Settings to monitor physical disks.',
     requirementsTitle: 'Physical disk monitoring requirements:',

@@ -19,6 +19,8 @@ type StorageContentCardProps = {
   nodes: () => Resource[];
   sourceFilter: () => string;
   healthFilter: () => StorageHealthFilter;
+  diskRoleFilter: () => string;
+  diskGroupFilter: () => string;
   selectedNodeId: () => string;
   search: () => string;
   groupedRecords: () => StorageGroupedRecords[];
@@ -77,6 +79,8 @@ export const StorageContentCard: Component<StorageContentCardProps> = (props) =>
             nodes={props.nodes()}
             sourceFilter={props.sourceFilter()}
             healthFilter={props.healthFilter()}
+            roleFilter={props.diskRoleFilter()}
+            groupFilter={props.diskGroupFilter()}
             selectedNode={model.selectedDiskNodeId()}
             searchTerm={props.search()}
             selectedDiskId={props.selectedDiskId()}

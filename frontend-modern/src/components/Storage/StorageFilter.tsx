@@ -11,6 +11,7 @@ import type { ColumnDef } from '@/hooks/useColumnVisibility';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 import type { StorageSourceOption } from '@/utils/storageSources';
+import type { PhysicalDiskFilterOption } from '@/features/storageBackups/diskPresentation';
 import {
   STORAGE_FILTER_COMPACT_SELECT_CLASS,
   STORAGE_FILTER_RESET_ACTION_CLASS,
@@ -54,6 +55,12 @@ interface StorageFilterProps {
   sourceFilter?: () => string;
   setSourceFilter?: (value: string) => void;
   sourceOptions?: () => StorageSourceOption[];
+  diskRoleFilter?: () => string;
+  setDiskRoleFilter?: (value: string) => void;
+  diskRoleOptions?: () => PhysicalDiskFilterOption[];
+  diskGroupFilter?: () => string;
+  setDiskGroupFilter?: (value: string) => void;
+  diskGroupOptions?: () => PhysicalDiskFilterOption[];
   selectedNodeId?: () => string;
   setSelectedNodeId?: (value: string) => void;
   // Slot for page-specific filters (e.g., view toggle, node selector).
@@ -95,6 +102,10 @@ export const StorageFilter: Component<StorageFilterProps> = (props) => {
     setStatusFilter: props.setStatusFilter,
     sourceFilter: props.sourceFilter,
     setSourceFilter: props.setSourceFilter,
+    diskRoleFilter: props.diskRoleFilter,
+    setDiskRoleFilter: props.setDiskRoleFilter,
+    diskGroupFilter: props.diskGroupFilter,
+    setDiskGroupFilter: props.setDiskGroupFilter,
     selectedNodeId: props.selectedNodeId,
     setSelectedNodeId: props.setSelectedNodeId,
     sortOptions: props.sortOptions ?? DEFAULT_STORAGE_SORT_OPTIONS,
@@ -186,6 +197,52 @@ export const StorageFilter: Component<StorageFilterProps> = (props) => {
           >
             <For each={sourceOptions()}>
               {(option: StorageSourceOption) => <option value={option.key}>{option.label}</option>}
+            </For>
+          </LabeledFilterSelect>
+          <FilterDivider />
+        </Show>
+
+        <Show
+          when={
+            props.diskRoleFilter &&
+            props.setDiskRoleFilter &&
+            (props.diskRoleOptions?.().length ?? 0) > 1
+          }
+        >
+          <LabeledFilterSelect
+            id="storage-disk-role-filter"
+            label="Role"
+            value={props.diskRoleFilter!()}
+            onChange={(e) => props.setDiskRoleFilter!(e.currentTarget.value)}
+            selectClass={STORAGE_FILTER_COMPACT_SELECT_CLASS}
+          >
+            <For each={props.diskRoleOptions!()}>
+              {(option: PhysicalDiskFilterOption) => (
+                <option value={option.value}>{option.label}</option>
+              )}
+            </For>
+          </LabeledFilterSelect>
+          <FilterDivider />
+        </Show>
+
+        <Show
+          when={
+            props.diskGroupFilter &&
+            props.setDiskGroupFilter &&
+            (props.diskGroupOptions?.().length ?? 0) > 1
+          }
+        >
+          <LabeledFilterSelect
+            id="storage-disk-group-filter"
+            label="Group"
+            value={props.diskGroupFilter!()}
+            onChange={(e) => props.setDiskGroupFilter!(e.currentTarget.value)}
+            selectClass={STORAGE_FILTER_COMPACT_SELECT_CLASS}
+          >
+            <For each={props.diskGroupOptions!()}>
+              {(option: PhysicalDiskFilterOption) => (
+                <option value={option.value}>{option.label}</option>
+              )}
             </For>
           </LabeledFilterSelect>
           <FilterDivider />

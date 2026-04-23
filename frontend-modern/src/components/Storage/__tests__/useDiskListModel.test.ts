@@ -18,7 +18,13 @@ const buildNode = (id: string, name: string): Resource =>
     platformData: { proxmox: { instance: 'cluster-main' } },
   }) as Resource;
 
-const buildDisk = (id: string, nodeName: string, model = `Disk ${id}`): Resource =>
+const buildDisk = (
+  id: string,
+  nodeName: string,
+  model = `Disk ${id}`,
+  storageRole = '',
+  storageGroup = '',
+): Resource =>
   ({
     id,
     type: 'physical_disk',
@@ -41,6 +47,8 @@ const buildDisk = (id: string, nodeName: string, model = `Disk ${id}`): Resource
       sizeBytes: 2_000_000_000_000,
       health: 'PASSED',
       temperature: 41,
+      storageRole,
+      storageGroup,
     },
   }) as Resource;
 
@@ -48,13 +56,15 @@ describe('useDiskListModel', () => {
   it('builds filtered disk state canonically', () => {
     const [disks] = createSignal<Resource[]>([
       buildDisk('sda', 'tower', 'Archive HDD'),
-      buildDisk('sdb', 'tower', 'Cache SSD'),
+      buildDisk('sdb', 'tower', 'Cache SSD', 'cache', 'tank'),
     ]);
     const [nodes] = createSignal<Resource[]>([buildNode('node-tower', 'tower')]);
     const [selectedNode] = createSignal<string | null>('node-tower');
     const [searchTerm] = createSignal('cache');
     const [sourceFilter] = createSignal('proxmox-pve');
     const [healthFilter] = createSignal('healthy' as const);
+    const [roleFilter] = createSignal('cache');
+    const [groupFilter] = createSignal('tank');
     const [selectedDiskId, setSelectedDiskId] = createSignal<string | null>(null);
 
     const { result } = renderHook(() =>
@@ -64,6 +74,8 @@ describe('useDiskListModel', () => {
         selectedNode,
         sourceFilter,
         healthFilter,
+        roleFilter,
+        groupFilter,
         searchTerm,
         selectedDiskId,
         setSelectedDiskId,
@@ -73,6 +85,8 @@ describe('useDiskListModel', () => {
     expect(result.hasPVENodes()).toBe(true);
     expect(result.selectedNodeName()).toBe('tower');
     expect(result.filteredDisks().map((disk) => disk.id)).toEqual(['sdb']);
+    expect(result.roleFilterOptions().map((option) => option.value)).toContain('cache');
+    expect(result.groupFilterOptions().map((option) => option.value)).toContain('tank');
 
     result.toggleSelectedDisk(result.filteredDisks()[0]!);
     expect(result.selectedDisk()?.id).toBe('sdb');

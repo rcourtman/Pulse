@@ -34,6 +34,8 @@ describe('useStoragePageSummary', () => {
     const [search] = createSignal('');
     const [sourceFilter] = createSignal('all');
     const [healthFilter] = createSignal('all' as const);
+    const [diskRoleFilter] = createSignal('all');
+    const [diskGroupFilter] = createSignal('all');
     const [nodeOptions] = createSignal([
       { id: 'node-1', label: 'pve1', aliases: ['pve1.local'] },
       { id: 'node-2', label: 'pve2' },
@@ -74,6 +76,8 @@ describe('useStoragePageSummary', () => {
         search,
         sourceFilter,
         healthFilter,
+        diskRoleFilter,
+        diskGroupFilter,
         selectedNodeId,
         nodeOptions,
         physicalDisks,

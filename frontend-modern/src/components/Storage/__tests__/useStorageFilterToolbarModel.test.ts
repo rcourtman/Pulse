@@ -12,6 +12,8 @@ describe('useStorageFilterToolbarModel', () => {
     const [sortDirection, setSortDirection] = createSignal<'asc' | 'desc'>('asc');
     const [statusFilter, setStatusFilter] = createSignal<'all' | 'warning'>('warning');
     const [sourceFilter, setSourceFilter] = createSignal('agent');
+    const [diskRoleFilter, setDiskRoleFilter] = createSignal('nvme-disk');
+    const [diskGroupFilter, setDiskGroupFilter] = createSignal('data');
     const [selectedNodeId, setSelectedNodeId] = createSignal('node-1');
 
     const { result } = renderHook(() =>
@@ -28,6 +30,10 @@ describe('useStorageFilterToolbarModel', () => {
         setStatusFilter,
         sourceFilter,
         setSourceFilter,
+        diskRoleFilter,
+        setDiskRoleFilter,
+        diskGroupFilter,
+        setDiskGroupFilter,
         selectedNodeId,
         setSelectedNodeId,
         sortOptions: [{ value: 'usage', label: 'Usage' }],
@@ -51,6 +57,8 @@ describe('useStorageFilterToolbarModel', () => {
     expect(sortDirection()).toBe('desc');
     expect(statusFilter()).toBe('all');
     expect(sourceFilter()).toBe('all');
+    expect(diskRoleFilter()).toBe('all');
+    expect(diskGroupFilter()).toBe('all');
     expect(selectedNodeId()).toBe('all');
   });
 
