@@ -230,6 +230,7 @@ export type UnifiedResourceTableColumnPresentations = {
   metricColumn: UnifiedResourceTableColumnPresentation;
   ioColumn: UnifiedResourceTableColumnPresentation;
   sourceColumn: UnifiedResourceTableColumnPresentation;
+  serviceSourceColumn: UnifiedResourceTableColumnPresentation;
   uptimeColumn: UnifiedResourceTableColumnPresentation;
   tempColumn: UnifiedResourceTableColumnPresentation;
   serviceCountColumn: UnifiedResourceTableColumnPresentation;
@@ -350,7 +351,8 @@ export const getUnifiedResourceTableColumnPresentations = (
       serviceResourceColumn: buildUnifiedResourceTableColumnPresentation('', '28%'),
       metricColumn: buildUnifiedResourceTableColumnPresentation('', '20%'),
       ioColumn: buildUnifiedResourceTableColumnPresentation('', '20%'),
-      sourceColumn: buildUnifiedResourceTableColumnPresentation('', '10%'),
+      sourceColumn: buildUnifiedResourceTableColumnPresentation('', '20%'),
+      serviceSourceColumn: buildUnifiedResourceTableColumnPresentation('', '10%'),
       uptimeColumn: buildUnifiedResourceTableColumnPresentation('', '8%'),
       tempColumn: buildUnifiedResourceTableColumnPresentation('', '15%'),
       serviceCountColumn: buildUnifiedResourceTableColumnPresentation('', '11%'),
@@ -366,7 +368,8 @@ export const getUnifiedResourceTableColumnPresentations = (
       serviceResourceColumn: buildUnifiedResourceTableColumnPresentation('', '24%'),
       metricColumn: buildUnifiedResourceTableColumnPresentation('', '13%'),
       ioColumn: buildUnifiedResourceTableColumnPresentation('', '18%'),
-      sourceColumn: buildUnifiedResourceTableColumnPresentation('', '8%'),
+      sourceColumn: buildUnifiedResourceTableColumnPresentation('', '17%'),
+      serviceSourceColumn: buildUnifiedResourceTableColumnPresentation('', '8%'),
       uptimeColumn: buildUnifiedResourceTableColumnPresentation('', '7%'),
       tempColumn: buildUnifiedResourceTableColumnPresentation('', '6%'),
       serviceCountColumn: buildUnifiedResourceTableColumnPresentation('', '8%'),
@@ -383,6 +386,7 @@ export const getUnifiedResourceTableColumnPresentations = (
       metricColumn: buildUnifiedResourceTableColumnPresentation('', '10.5%'),
       ioColumn: buildUnifiedResourceTableColumnPresentation('', '13%'),
       sourceColumn: buildUnifiedResourceTableColumnPresentation('', '9.5%'),
+      serviceSourceColumn: buildUnifiedResourceTableColumnPresentation('', '9.5%'),
       uptimeColumn: buildUnifiedResourceTableColumnPresentation('', '8%'),
       tempColumn: buildUnifiedResourceTableColumnPresentation('', '7%'),
       serviceCountColumn: buildUnifiedResourceTableColumnPresentation('', '9.5%'),
@@ -398,6 +402,7 @@ export const getUnifiedResourceTableColumnPresentations = (
     metricColumn: buildUnifiedResourceTableColumnPresentation('', '10.5%'),
     ioColumn: buildUnifiedResourceTableColumnPresentation('', '12.5%'),
     sourceColumn: buildUnifiedResourceTableColumnPresentation('', '10%'),
+    serviceSourceColumn: buildUnifiedResourceTableColumnPresentation('', '10%'),
     uptimeColumn: buildUnifiedResourceTableColumnPresentation('', '8%'),
     tempColumn: buildUnifiedResourceTableColumnPresentation('', '7.5%'),
     serviceCountColumn: buildUnifiedResourceTableColumnPresentation('', '8.5%'),

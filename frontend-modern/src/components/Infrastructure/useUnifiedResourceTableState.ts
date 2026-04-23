@@ -233,6 +233,7 @@ export function useUnifiedResourceTableState(props: UnifiedResourceTableProps) {
     metricColumn: () => columnPresentations().metricColumn,
     ioColumn: () => columnPresentations().ioColumn,
     sourceColumn: () => columnPresentations().sourceColumn,
+    serviceSourceColumn: () => columnPresentations().serviceSourceColumn,
     uptimeColumn: () => columnPresentations().uptimeColumn,
     tempColumn: () => columnPresentations().tempColumn,
     showHostTable,

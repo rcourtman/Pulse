@@ -270,8 +270,7 @@ describe('UnifiedResourceTable performance contract', () => {
         expect(getByText('Src').closest('th')).not.toHaveClass('hidden');
         expect(getByText('Up').closest('th')).toHaveClass('hidden');
       });
-      expect(getByText('PBS')).toBeInTheDocument();
-      expect(getByText('Agent')).toBeInTheDocument();
+      expect(getByText('PBS+Agent')).toBeInTheDocument();
       expect(queryByText('+1')).toBeNull();
 
       emitResizeObserverWidth(660);

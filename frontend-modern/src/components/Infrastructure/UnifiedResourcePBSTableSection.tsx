@@ -81,8 +81,8 @@ export const UnifiedResourcePBSTableSection: Component<UnifiedResourcePBSTableSe
               </TableHead>
               <TableHead
                 classList={{ hidden: !table.isServiceVisible('secondary') }}
-                class={table.sourceColumn().className}
-                width={table.sourceColumn().width}
+                class={table.serviceSourceColumn().className}
+                width={table.serviceSourceColumn().width}
               >
                 {table.headerLabels().source}
               </TableHead>
