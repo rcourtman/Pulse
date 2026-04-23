@@ -860,6 +860,26 @@ func TestLoadConfig(t *testing.T) {
 		}
 	})
 
+	t.Run("token optional when enrollment disabled", func(t *testing.T) {
+		cfg, err := loadConfig([]string{"-url", "http://token-optional.example.com", "-enable-host"}, func(s string) string { return "" })
+		if err != nil {
+			t.Fatal(err)
+		}
+		if cfg.APIToken != "" {
+			t.Fatalf("expected empty token for token-optional config, got %q", cfg.APIToken)
+		}
+		if cfg.Enroll {
+			t.Fatal("expected enrollment to be disabled")
+		}
+	})
+
+	t.Run("enrollment requires token", func(t *testing.T) {
+		_, err := loadConfig([]string{"-url", "http://token-required.example.com", "-enroll"}, func(s string) string { return "" })
+		if err == nil || !strings.Contains(err.Error(), "required for enrollment") {
+			t.Fatalf("expected enrollment token requirement, got %v", err)
+		}
+	})
+
 	t.Run("invalid interval flag", func(t *testing.T) {
 		_, err := loadConfig([]string{"-interval", "invalid"}, func(s string) string { return "" })
 		if err == nil {

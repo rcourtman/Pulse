@@ -2,9 +2,30 @@ package installtests
 
 import (
 	"os"
+	"os/exec"
 	"strings"
 	"testing"
 )
+
+func TestInstallPS1ParsesWithPowerShell(t *testing.T) {
+	pwsh, err := exec.LookPath("pwsh")
+	if err != nil {
+		t.Skip("pwsh not installed")
+	}
+
+	scriptPath := repoFile("scripts", "install.ps1")
+	cmd := exec.Command(pwsh,
+		"-NoLogo",
+		"-NoProfile",
+		"-NonInteractive",
+		"-Command",
+		`$errors = $null; [System.Management.Automation.Language.Parser]::ParseFile($env:PULSE_INSTALL_PS1_PATH, [ref]$null, [ref]$errors) > $null; if ($errors.Count) { $errors | ForEach-Object { Write-Error $_.ToString() }; exit 1 }`,
+	)
+	cmd.Env = append(os.Environ(), "PULSE_INSTALL_PS1_PATH="+scriptPath)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("install.ps1 failed PowerShell parser check: %v\n%s", err, output)
+	}
+}
 
 func TestInstallPS1DockerModeDefaultsHostOff(t *testing.T) {
 	content, err := os.ReadFile(repoFile("scripts", "install.ps1"))

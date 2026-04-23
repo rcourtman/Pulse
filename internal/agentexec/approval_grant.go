@@ -19,6 +19,67 @@ const (
 	DefaultApprovalGrantTTL = 2 * time.Minute
 )
 
+const (
+	ApprovalGrantRejectionUnknown             = "unknown"
+	ApprovalGrantRejectionMissing             = "missing"
+	ApprovalGrantRejectionKeyUnavailable      = "key_unavailable"
+	ApprovalGrantRejectionVersionMismatch     = "version_mismatch"
+	ApprovalGrantRejectionApprovalIDMismatch  = "approval_id_mismatch"
+	ApprovalGrantRejectionRequestMismatch     = "request_mismatch"
+	ApprovalGrantRejectionAgentMismatch       = "agent_mismatch"
+	ApprovalGrantRejectionCommandHashMismatch = "command_hash_mismatch"
+	ApprovalGrantRejectionTargetTypeMismatch  = "target_type_mismatch"
+	ApprovalGrantRejectionTargetIDMismatch    = "target_id_mismatch"
+	ApprovalGrantRejectionExpired             = "expired"
+	ApprovalGrantRejectionIssuedAtInvalid     = "issued_at_invalid"
+	ApprovalGrantRejectionNonceMissing        = "nonce_missing"
+	ApprovalGrantRejectionSignatureInvalid    = "signature_invalid"
+)
+
+// ApprovalGrantVerificationError preserves a stable rejection reason for
+// metrics and logs while keeping the human-readable verification error.
+type ApprovalGrantVerificationError struct {
+	Reason string
+	Err    error
+}
+
+func (e *ApprovalGrantVerificationError) Error() string {
+	if e == nil || e.Err == nil {
+		return "approval grant verification failed"
+	}
+	return e.Err.Error()
+}
+
+func (e *ApprovalGrantVerificationError) Unwrap() error {
+	if e == nil {
+		return nil
+	}
+	return e.Err
+}
+
+func approvalGrantVerificationError(reason, message string, args ...interface{}) error {
+	if reason == "" {
+		reason = ApprovalGrantRejectionUnknown
+	}
+	return &ApprovalGrantVerificationError{
+		Reason: reason,
+		Err:    fmt.Errorf(message, args...),
+	}
+}
+
+// ApprovalGrantVerificationReason returns the stable metric/log label for a
+// verification error. Non-verification errors collapse to "unknown".
+func ApprovalGrantVerificationReason(err error) string {
+	if err == nil {
+		return ""
+	}
+	var verificationErr *ApprovalGrantVerificationError
+	if errors.As(err, &verificationErr) && strings.TrimSpace(verificationErr.Reason) != "" {
+		return verificationErr.Reason
+	}
+	return ApprovalGrantRejectionUnknown
+}
+
 // CommandApprovalGrant is a server-issued, token-bound grant that lets an agent
 // verify an approval-gated command before executing it.
 type CommandApprovalGrant struct {
@@ -90,7 +151,7 @@ func NewCommandApprovalGrant(key []byte, agentID string, cmd ExecuteCommandPaylo
 
 func VerifyCommandApprovalGrant(token string, agentID string, cmd ExecuteCommandPayload, now time.Time) error {
 	if cmd.ApprovalGrant == nil {
-		return errors.New("approval grant is required")
+		return approvalGrantVerificationError(ApprovalGrantRejectionMissing, "approval grant is required")
 	}
 	key := DeriveApprovalGrantKey(token)
 	return VerifyCommandApprovalGrantWithKey(key, agentID, cmd, now)
@@ -99,43 +160,43 @@ func VerifyCommandApprovalGrant(token string, agentID string, cmd ExecuteCommand
 func VerifyCommandApprovalGrantWithKey(key []byte, agentID string, cmd ExecuteCommandPayload, now time.Time) error {
 	grant := cmd.ApprovalGrant
 	if grant == nil {
-		return errors.New("approval grant is required")
+		return approvalGrantVerificationError(ApprovalGrantRejectionMissing, "approval grant is required")
 	}
 	if len(key) == 0 {
-		return errors.New("approval grant key is unavailable")
+		return approvalGrantVerificationError(ApprovalGrantRejectionKeyUnavailable, "approval grant key is unavailable")
 	}
 	if grant.Version != approvalGrantVersion {
-		return fmt.Errorf("unsupported approval grant version %d", grant.Version)
+		return approvalGrantVerificationError(ApprovalGrantRejectionVersionMismatch, "unsupported approval grant version %d", grant.Version)
 	}
 	if strings.TrimSpace(grant.ApprovalID) == "" || strings.TrimSpace(grant.ApprovalID) != strings.TrimSpace(cmd.ApprovalID) {
-		return errors.New("approval grant id does not match command")
+		return approvalGrantVerificationError(ApprovalGrantRejectionApprovalIDMismatch, "approval grant id does not match command")
 	}
 	if strings.TrimSpace(grant.RequestID) == "" || strings.TrimSpace(grant.RequestID) != strings.TrimSpace(cmd.RequestID) {
-		return errors.New("approval grant request does not match command")
+		return approvalGrantVerificationError(ApprovalGrantRejectionRequestMismatch, "approval grant request does not match command")
 	}
 	if strings.TrimSpace(grant.AgentID) == "" || strings.TrimSpace(grant.AgentID) != strings.TrimSpace(agentID) {
-		return errors.New("approval grant agent does not match command")
+		return approvalGrantVerificationError(ApprovalGrantRejectionAgentMismatch, "approval grant agent does not match command")
 	}
 	if strings.TrimSpace(grant.CommandHash) != ComputeCommandApprovalHash(cmd.Command, cmd.TargetType, cmd.TargetID) {
-		return errors.New("approval grant command hash does not match command")
+		return approvalGrantVerificationError(ApprovalGrantRejectionCommandHashMismatch, "approval grant command hash does not match command")
 	}
 	if strings.ToLower(strings.TrimSpace(grant.TargetType)) != strings.ToLower(strings.TrimSpace(cmd.TargetType)) {
-		return errors.New("approval grant target type does not match command")
+		return approvalGrantVerificationError(ApprovalGrantRejectionTargetTypeMismatch, "approval grant target type does not match command")
 	}
 	if strings.TrimSpace(grant.TargetID) != strings.TrimSpace(cmd.TargetID) {
-		return errors.New("approval grant target id does not match command")
+		return approvalGrantVerificationError(ApprovalGrantRejectionTargetIDMismatch, "approval grant target id does not match command")
 	}
 	if grant.ExpiresAt.IsZero() || now.UTC().After(grant.ExpiresAt.UTC()) {
-		return errors.New("approval grant has expired")
+		return approvalGrantVerificationError(ApprovalGrantRejectionExpired, "approval grant has expired")
 	}
 	if grant.IssuedAt.IsZero() || grant.IssuedAt.UTC().After(now.UTC().Add(30*time.Second)) {
-		return errors.New("approval grant issued_at is invalid")
+		return approvalGrantVerificationError(ApprovalGrantRejectionIssuedAtInvalid, "approval grant issued_at is invalid")
 	}
 	if strings.TrimSpace(grant.Nonce) == "" {
-		return errors.New("approval grant nonce is required")
+		return approvalGrantVerificationError(ApprovalGrantRejectionNonceMissing, "approval grant nonce is required")
 	}
 	if !hmac.Equal([]byte(strings.TrimSpace(grant.Signature)), []byte(signApprovalGrant(key, grant))) {
-		return errors.New("approval grant signature is invalid")
+		return approvalGrantVerificationError(ApprovalGrantRejectionSignatureInvalid, "approval grant signature is invalid")
 	}
 	return nil
 }

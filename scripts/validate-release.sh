@@ -69,6 +69,73 @@ check_tar_entries_nonempty() {
     done
 }
 
+http_header_value() {
+    local header_name="$1"
+    local headers_file="$2"
+    awk -v needle="$(printf '%s' "$header_name" | tr '[:upper:]' '[:lower:]')" '
+        BEGIN { value = "" }
+        {
+            line = $0
+            sub(/\r$/, "", line)
+            sub(/^[[:space:]]+/, "", line)
+            lower = tolower(line)
+            if (index(lower, needle ":") == 1) {
+                sub(/^[^:]*:[[:space:]]*/, "", line)
+                value = line
+            }
+        }
+        END { print value }
+    ' "$headers_file"
+}
+
+validate_download_binary_headers() {
+    local file_path="$1"
+    local headers_path="$2"
+    local label="$3"
+    local checksum_header signature_header ssh_signature_header actual_checksum
+
+    checksum_header="$(http_header_value "X-Checksum-Sha256" "$headers_path")"
+    signature_header="$(http_header_value "X-Signature-Ed25519" "$headers_path")"
+    ssh_signature_header="$(http_header_value "X-Signature-SSHSIG" "$headers_path")"
+
+    if [ -z "$checksum_header" ]; then
+        error "${label} missing X-Checksum-Sha256 header"
+        exit 1
+    fi
+    if [ -z "$signature_header" ]; then
+        error "${label} missing X-Signature-Ed25519 header"
+        exit 1
+    fi
+    if [ -z "$ssh_signature_header" ]; then
+        error "${label} missing X-Signature-SSHSIG header"
+        exit 1
+    fi
+
+    actual_checksum="$(sha256sum "$file_path" | awk '{print $1}')"
+    if [ "$actual_checksum" != "$checksum_header" ]; then
+        error "${label} checksum header mismatch: expected ${checksum_header}, got ${actual_checksum}"
+        exit 1
+    fi
+}
+
+validate_download_script_headers() {
+    local headers_path="$1"
+    local label="$2"
+    local signature_header ssh_signature_header
+
+    signature_header="$(http_header_value "X-Signature-Ed25519" "$headers_path")"
+    ssh_signature_header="$(http_header_value "X-Signature-SSHSIG" "$headers_path")"
+
+    if [ -z "$signature_header" ]; then
+        error "${label} missing X-Signature-Ed25519 header"
+        exit 1
+    fi
+    if [ -z "$ssh_signature_header" ]; then
+        error "${label} missing X-Signature-SSHSIG header"
+        exit 1
+    fi
+}
+
 if [ $# -lt 1 ]; then
     error "Usage: $0 <pulse-version> [image] [release-dir] [--skip-docker]"
     exit 1
@@ -193,13 +260,32 @@ if [ "$SKIP_DOCKER" = false ]; then
         "windows 386"
     )
 
+    for script_name in install.sh install.ps1; do
+        url="http://127.0.0.1:${HOST_PORT}/download/${script_name}"
+        tmp_file=$(mktemp)
+        tmp_headers=$(mktemp)
+        if ! curl -fsS -D "$tmp_headers" -o "$tmp_file" "$url"; then
+            docker logs "$SMOKE_CONTAINER" || true
+            error "Download failed for ${script_name}"
+            exit 1
+        fi
+        if [ ! -s "$tmp_file" ]; then
+            error "Downloaded empty ${script_name}"
+            exit 1
+        fi
+        validate_download_script_headers "$tmp_headers" "${script_name}"
+        rm -f "$tmp_file" "$tmp_headers"
+    done
+    success "Install script endpoints returned required signature headers"
+
     for entry in "${download_matrix[@]}"; do
         set -- $entry
         platform=$1
         arch=$2
         url="http://127.0.0.1:${HOST_PORT}/download/pulse-agent?arch=${platform}-${arch}"
         tmp_file=$(mktemp)
-        if ! curl -fsS -o "$tmp_file" "$url"; then
+        tmp_headers=$(mktemp)
+        if ! curl -fsS -D "$tmp_headers" -o "$tmp_file" "$url"; then
             docker logs "$SMOKE_CONTAINER" || true
             error "Download failed for $platform/$arch"
             exit 1
@@ -208,9 +294,10 @@ if [ "$SKIP_DOCKER" = false ]; then
             error "Downloaded empty binary for $platform/$arch"
             exit 1
         fi
-        rm -f "$tmp_file"
+        validate_download_binary_headers "$tmp_file" "$tmp_headers" "${platform}/${arch}"
+        rm -f "$tmp_file" "$tmp_headers"
     done
-    success "Download endpoints returned binaries for all platforms/architectures"
+    success "Download endpoints returned binaries with checksum and signature headers for all platforms/architectures"
 
     docker rm -f "$SMOKE_CONTAINER" >/dev/null 2>&1 || true
     smoke_container=""
@@ -243,7 +330,8 @@ if [ "$SKIP_DOCKER" = false ]; then
     done
 
     offline_tmp=$(mktemp)
-    if ! docker exec "$SMOKE_CONTAINER" wget -qO- "http://127.0.0.1:7655/download/pulse-agent?arch=linux-amd64" > "$offline_tmp"; then
+    offline_headers=$(mktemp)
+    if ! docker exec "$SMOKE_CONTAINER" sh -c "headers=\$(mktemp); wget -qS -O- 'http://127.0.0.1:7655/download/pulse-agent?arch=linux-amd64' 2>\"\$headers\"; status=\$?; cat \"\$headers\" >&2; rm -f \"\$headers\"; exit \$status" > "$offline_tmp" 2> "$offline_headers"; then
         docker logs "$SMOKE_CONTAINER" || true
         error "Offline self-heal failed: download endpoint returned error with no outbound network"
         exit 1
@@ -252,8 +340,9 @@ if [ "$SKIP_DOCKER" = false ]; then
         error "Offline self-heal failed: downloaded binary is empty"
         exit 1
     fi
-    rm -f "$offline_tmp"
-    success "Offline self-heal: download endpoint works without outbound network"
+    validate_download_binary_headers "$offline_tmp" "$offline_headers" "offline linux/amd64"
+    rm -f "$offline_tmp" "$offline_headers"
+    success "Offline self-heal: download endpoint works with checksum and signature headers without outbound network"
 
     docker rm -f "$SMOKE_CONTAINER" >/dev/null 2>&1 || true
     smoke_container=""

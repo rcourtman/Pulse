@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 )
 
@@ -223,6 +224,34 @@ func TestCommandClient_executeCommand_RequiresApprovalForUnknownCommand(t *testi
 	}
 	if result.Error != "command requires approval" {
 		t.Fatalf("error = %q, want %q", result.Error, "command requires approval")
+	}
+}
+
+func TestCommandClient_executeCommand_RecordsApprovalGrantRejectionMetric(t *testing.T) {
+	reason := agentexec.ApprovalGrantRejectionMissing
+	before := testutil.ToFloat64(commandApprovalGrantRejectionsTotal.WithLabelValues(reason))
+
+	c := &CommandClient{
+		apiToken: "runtime-token",
+		agentID:  "agent-1",
+	}
+	result := c.executeCommand(context.Background(), executeCommandPayload{
+		RequestID:  "r1",
+		Command:    "echo hello",
+		ApprovalID: "approval-1",
+		TargetType: "agent",
+		Timeout:    5,
+	})
+	if result.Success {
+		t.Fatalf("expected approval-grant failure, got %#v", result)
+	}
+	if !strings.Contains(result.Error, "approval grant is required") {
+		t.Fatalf("error = %q, want missing approval grant", result.Error)
+	}
+
+	after := testutil.ToFloat64(commandApprovalGrantRejectionsTotal.WithLabelValues(reason))
+	if after != before+1 {
+		t.Fatalf("approval grant rejection metric = %v, want %v", after, before+1)
 	}
 }
 

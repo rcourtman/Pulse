@@ -785,8 +785,8 @@ func loadConfig(args []string, getenv func(string) string) (Config, error) {
 		}
 	}
 
-	if token == "" && !*selfTest {
-		return Config{}, fmt.Errorf("Pulse API token is required (use --token, --token-file, PULSE_TOKEN env, or /var/lib/pulse-agent/token)")
+	if token == "" && *enrollFlag && !*selfTest {
+		return Config{}, fmt.Errorf("Pulse API token is required for enrollment (use --token, --token-file, PULSE_TOKEN env, or /var/lib/pulse-agent/token)")
 	}
 
 	logLevel, err := parseLogLevel(*logLevelFlag)

@@ -19,6 +19,8 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agenttls"
 	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
@@ -46,6 +48,11 @@ var (
 	reconnectMaxDelay    = 5 * time.Minute
 	reconnectJitterRatio = 0.1
 	reconnectRandFloat64 = rand.Float64
+
+	commandApprovalGrantRejectionsTotal = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "pulse_hostagent_command_approval_grant_rejections_total",
+		Help: "Total number of approval-required commands rejected by the host agent due to invalid approval grants.",
+	}, []string{"reason"})
 )
 
 type cappedBuffer struct {
@@ -638,6 +645,7 @@ func (c *CommandClient) authorizeCommand(payload executeCommandPayload) error {
 			return fmt.Errorf("command requires approval")
 		}
 		if err := agentexec.VerifyCommandApprovalGrant(c.apiToken, c.agentID, payload.toAgentExecPayload(), time.Now()); err != nil {
+			commandApprovalGrantRejectionsTotal.WithLabelValues(agentexec.ApprovalGrantVerificationReason(err)).Inc()
 			return fmt.Errorf("command approval grant invalid: %w", err)
 		}
 	}

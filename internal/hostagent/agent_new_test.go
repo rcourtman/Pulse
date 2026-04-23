@@ -13,6 +13,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus/testutil"
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/hostmetrics"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 	"github.com/rs/zerolog"
@@ -89,6 +91,34 @@ func TestNew_RequiresAPITokenWhenEnrollmentEnabled(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "api token is required when enrollment is enabled") {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestCommandApprovalGrantRejectionMetricClassifiesMissingGrant(t *testing.T) {
+	reason := agentexec.ApprovalGrantRejectionMissing
+	before := testutil.ToFloat64(commandApprovalGrantRejectionsTotal.WithLabelValues(reason))
+
+	client := &CommandClient{
+		apiToken: "runtime-token",
+		agentID:  "agent-1",
+	}
+	result := client.executeCommand(context.Background(), executeCommandPayload{
+		RequestID:  "req-1",
+		Command:    "echo hello",
+		ApprovalID: "approval-1",
+		TargetType: "agent",
+		Timeout:    5,
+	})
+	if result.Success {
+		t.Fatalf("expected approval-grant failure, got %#v", result)
+	}
+	if !strings.Contains(result.Error, "approval grant is required") {
+		t.Fatalf("error = %q, want missing approval grant", result.Error)
+	}
+
+	after := testutil.ToFloat64(commandApprovalGrantRejectionsTotal.WithLabelValues(reason))
+	if after != before+1 {
+		t.Fatalf("approval grant rejection metric = %v, want %v", after, before+1)
 	}
 }
 

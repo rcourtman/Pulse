@@ -220,6 +220,13 @@ func TestReleaseValidationRequiresSignedSidecars(t *testing.T) {
 		`if [ ! -s "${filename}.sshsig" ]; then`,
 		`error "Missing or empty ${filename}.sshsig"`,
 		`success "SSH signature sidecars validated"`,
+		`validate_download_binary_headers() {`,
+		`http_header_value "X-Checksum-Sha256"`,
+		`http_header_value "X-Signature-Ed25519"`,
+		`http_header_value "X-Signature-SSHSIG"`,
+		`Install script endpoints returned required signature headers`,
+		`Download endpoints returned binaries with checksum and signature headers for all platforms/architectures`,
+		`Offline self-heal: download endpoint works with checksum and signature headers without outbound network`,
 	}
 	for _, needle := range localRequired {
 		if !strings.Contains(localValidator, needle) {
@@ -270,6 +277,7 @@ func TestReleaseValidationRequiresSignedSidecars(t *testing.T) {
 		"published artifact or",
 		"`checksums.txt` is missing its `.sshsig` sidecar",
 		"release-packet SBOM is absent",
+		"download endpoints must return checksum and signature headers",
 	}
 	for _, needle := range contractRequired {
 		if !strings.Contains(contract, needle) {
