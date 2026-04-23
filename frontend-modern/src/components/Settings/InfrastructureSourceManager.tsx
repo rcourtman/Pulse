@@ -173,6 +173,11 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
 
   const sortedProducts = createMemo(() =>
     [...products()]
+      .filter((product) => {
+        const configuredCount = groupedConfiguredRows().get(product.type)?.length ?? 0;
+        const discoveredCount = groupedDiscoveredRows().get(product.type)?.length ?? 0;
+        return configuredCount + discoveredCount > 0;
+      })
       .sort((left, right) => {
         const configuredDifference =
           (groupedConfiguredRows().get(right.type)?.length ?? 0) -
@@ -284,7 +289,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
               const configuredRows = () => groupedConfiguredRows().get(product.type) ?? [];
               const discoveredRows = () => groupedDiscoveredRows().get(product.type) ?? [];
               const groupRowClass = () =>
-                'border-b border-border-subtle bg-surface-alt hover:bg-surface-alt dark:bg-base dark:hover:bg-base';
+                'border-b border-border-subtle bg-base hover:bg-base';
               const groupLabelClass = () => 'text-[15px] font-semibold text-base-content';
 
               return (

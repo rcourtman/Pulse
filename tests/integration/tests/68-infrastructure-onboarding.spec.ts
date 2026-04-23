@@ -184,7 +184,7 @@ async function auditHorizontalOverflow(page: Page): Promise<OverflowAudit> {
 test.describe("Infrastructure onboarding", () => {
   test.setTimeout(180_000);
 
-  test("desktop landing shows platform sections before any onboarding flow opens", async ({
+  test("desktop landing hides empty platform sections before any onboarding flow opens", async ({
     page,
   }, testInfo) => {
     test.skip(
@@ -194,6 +194,35 @@ test.describe("Infrastructure onboarding", () => {
 
     const metricEvents = await recordUpgradeMetricEvents(page);
     await prepareOnboardingPage(page);
+    await page.route("**/api/discover", async (route) => {
+      const requestUrl = new URL(route.request().url());
+      if (
+        route.request().method() !== "GET" ||
+        requestUrl.pathname !== "/api/discover"
+      ) {
+        await route.continue();
+        return;
+      }
+
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          servers: [
+            {
+              ip: "192.168.0.2",
+              port: 8006,
+              type: "pve",
+              version: "8.2.2",
+            },
+          ],
+          errors: [],
+          cached: true,
+          updated: 0,
+          age: 120,
+        }),
+      });
+    });
 
     await page.goto("/settings/infrastructure", {
       waitUntil: "domcontentloaded",
@@ -216,17 +245,17 @@ test.describe("Infrastructure onboarding", () => {
     ).toBeVisible();
     await expect(
       page.getByText("VMware vCenter", { exact: true }),
-    ).toBeVisible();
+    ).toHaveCount(0);
     await expect(
       page.getByText("TrueNAS SCALE", { exact: true }),
-    ).toBeVisible();
+    ).toHaveCount(0);
     await expect(page.getByText("Proxmox VE", { exact: true })).toBeVisible();
     await expect(
       page.getByText("Standalone hosts", { exact: true }),
-    ).toBeVisible();
+    ).toHaveCount(0);
     await expect(
       page.getByRole("button", { name: /Add TrueNAS SCALE/i }),
-    ).toBeVisible();
+    ).toHaveCount(0);
     await expect(
       page.getByRole("button", { name: /Detect from address/i }),
     ).toHaveCount(0);
@@ -277,7 +306,7 @@ test.describe("Infrastructure onboarding", () => {
     await expect(page).toHaveURL(/\/settings\/infrastructure(?:\?.*)?$/);
   });
 
-  test("desktop per-platform add opens the matching modal and records direct type onboarding", async ({
+  test("desktop picker add opens the matching modal and records type onboarding", async ({
     page,
   }, testInfo) => {
     test.skip(
@@ -295,7 +324,14 @@ test.describe("Infrastructure onboarding", () => {
       timeout: 15_000,
     });
 
-    await page.getByRole("button", { name: /Add TrueNAS SCALE/i }).click();
+    await page.getByRole("button", { name: /Add infrastructure/i }).click();
+    await page.waitForURL(/\/settings\/infrastructure\?add=pick$/, {
+      timeout: 15_000,
+    });
+    await page
+      .getByRole("dialog")
+      .getByRole("button", { name: /TrueNAS SCALE/i })
+      .click();
     await page.waitForURL(/\/settings\/infrastructure\?add=truenas$/, {
       timeout: 15_000,
     });

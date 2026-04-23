@@ -236,7 +236,7 @@ describe('InfrastructureWorkspace', () => {
   const renderWorkspace = (propOverrides: Record<string, unknown> = {}) =>
     render(() => (<InfrastructureWorkspace {...{ ...baseProps(), ...propOverrides }} />) as any);
 
-  it('renders the source manager landing with direct product sections', async () => {
+  it('renders the source manager landing without empty platform sections', async () => {
     renderWorkspace();
 
     await waitFor(() => expect(screen.getByText('Infrastructure systems')).toBeInTheDocument());
@@ -244,12 +244,13 @@ describe('InfrastructureWorkspace', () => {
     expect(screen.getByRole('button', { name: /Discovery settings/i })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Detect from address/i })).toBeNull();
     expect(screen.getByText('Proxmox VE')).toBeInTheDocument();
-    expect(screen.getByText('VMware vCenter')).toBeInTheDocument();
-    expect(screen.getByText('TrueNAS SCALE')).toBeInTheDocument();
-    expect(screen.getByText('Standalone hosts')).toBeInTheDocument();
+    expect(screen.getByText('Proxmox VE').closest('tr')?.className).toContain('bg-base');
+    expect(screen.queryByText('VMware vCenter')).toBeNull();
+    expect(screen.queryByText('TrueNAS SCALE')).toBeNull();
+    expect(screen.queryByText('Standalone hosts')).toBeNull();
     expect(screen.getByRole('button', { name: /Add Proxmox VE/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Add TrueNAS SCALE/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Add host/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Add TrueNAS SCALE/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Add host/i })).toBeNull();
     expect(screen.getByRole('button', { name: /^Add infrastructure$/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Edit/i })).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Monitored systems' })).not.toBeInTheDocument();
@@ -688,7 +689,7 @@ describe('InfrastructureWorkspace', () => {
     expect(screen.getByText('delly')).toBeInTheDocument();
     expect(screen.getByText('minipc')).toBeInTheDocument();
     expect(screen.getAllByText('Host telemetry').length).toBeGreaterThan(0);
-    expect(screen.getByText('Standalone hosts')).toBeInTheDocument();
+    expect(screen.queryByText('Standalone hosts')).toBeNull();
     expect(screen.getAllByText('delly')).toHaveLength(1);
     expect(screen.getAllByText('minipc')).toHaveLength(1);
   });
