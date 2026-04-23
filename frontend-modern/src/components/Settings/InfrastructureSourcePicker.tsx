@@ -28,28 +28,18 @@ export const InfrastructureSourcePicker: Component<InfrastructureSourcePickerPro
 
   return (
     <div class="space-y-6 p-4">
-      <section class="rounded-xl border border-border bg-surface-alt p-4">
-        <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div class="space-y-1">
-            <div class="text-sm font-semibold text-base-content">Choose a source type</div>
-            <p class="text-sm text-muted">
-              Add the kind of infrastructure you want Pulse to connect. Existing sources stay
-              visible on the page behind this dialog so you can open one, close it, and keep
-              managing the same list.
-            </p>
-          </div>
-          <Show when={props.onDetectFromAddress}>
-            <button
-              type="button"
-              onClick={props.onDetectFromAddress}
-              class={detectButtonClass}
-            >
-              <Search class="mr-2 h-4 w-4" />
-              Detect from address
-            </button>
-          </Show>
+      <Show when={props.onDetectFromAddress}>
+        <div class="flex justify-end">
+          <button
+            type="button"
+            onClick={props.onDetectFromAddress}
+            class={detectButtonClass}
+          >
+            <Search class="mr-2 h-4 w-4" />
+            Detect from address
+          </button>
         </div>
-      </section>
+      </Show>
 
       <For each={groups()}>
         {(group) => (

@@ -6,10 +6,7 @@ import {
   createConnectionEditorState,
   type ConnectionEditorState,
 } from './useConnectionEditor';
-import {
-  INFRASTRUCTURE_ONBOARDING_STEPS,
-  getInfrastructureAutoDetectLabels,
-} from '@/utils/infrastructureOnboardingPresentation';
+import { getInfrastructureAutoDetectLabels } from '@/utils/infrastructureOnboardingPresentation';
 import {
   createInfrastructureOnboardingMetricsTracker,
   type InfrastructureOnboardingMetricsTracker,
@@ -31,10 +28,13 @@ export interface ConnectionEditorProps {
   mode?: ConnectionEditorMode;
   initialType?: ConnectionType;
   initialAddress?: string;
+  initialCandidate?: ProbeCandidate | null;
   showSlotHeader?: boolean;
   trackInitialCatalogSelection?: boolean;
   onboardingMetricsTracker?: InfrastructureOnboardingMetricsTracker | null;
   onBackToCatalog?: () => void;
+  onSelectAgentRoute?: () => void;
+  onSelectCandidate?: (candidate: ProbeCandidate) => void;
   renderCredentialSlot: CredentialSlotRenderer;
   onClose: () => void;
   onSaved?: () => void;
@@ -49,7 +49,9 @@ export const ConnectionEditor: Component<ConnectionEditorProps> = (props) => {
   const [selectedType, setSelectedType] = createSignal<ConnectionType | null>(
     props.initialType ?? null,
   );
-  const [selectedCandidate, setSelectedCandidate] = createSignal<ProbeCandidate | null>(null);
+  const [selectedCandidate, setSelectedCandidate] = createSignal<ProbeCandidate | null>(
+    props.initialCandidate ?? null,
+  );
   const ownsOnboardingMetricsTracker =
     (props.mode ?? 'add') === 'add' && !props.onboardingMetricsTracker;
   const onboardingMetrics =
@@ -86,6 +88,10 @@ export const ConnectionEditor: Component<ConnectionEditorProps> = (props) => {
 
   const chooseCandidate = (candidate: ProbeCandidate) => {
     onboardingMetrics?.recordPathSelected('api');
+    if (props.onSelectCandidate) {
+      props.onSelectCandidate(candidate);
+      return;
+    }
     setSelectedCandidate(candidate);
     setSelectedType(candidate.type);
   };
@@ -94,6 +100,15 @@ export const ConnectionEditor: Component<ConnectionEditorProps> = (props) => {
     recordPathSelectedForType(type);
     setSelectedCandidate(null);
     setSelectedType(type);
+  };
+
+  const installAgent = () => {
+    if (props.onSelectAgentRoute) {
+      onboardingMetrics?.recordPathSelected('agent');
+      props.onSelectAgentRoute();
+      return;
+    }
+    chooseManualType('agent');
   };
 
   const reopenProbe = () => {
@@ -119,73 +134,50 @@ export const ConnectionEditor: Component<ConnectionEditorProps> = (props) => {
         when={showCredentialSlot()}
         fallback={
           <div class="space-y-6 p-4">
-            <section class="rounded-xl border border-border bg-surface-alt p-4">
-              <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <section class="space-y-4 rounded-xl border border-border bg-surface p-4">
+              <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div class="space-y-1">
-                  <div class="text-sm font-semibold text-base-content">Detect from address</div>
-                  <p class="text-sm text-muted">
-                    Enter a hostname, IP, or URL and Pulse will try to identify a supported
-                    platform automatically before opening the matching credential form.
+                  <div class="text-sm font-semibold text-base-content">Address probe</div>
+                  <p class="text-xs text-muted">
+                    Pulse can auto-detect these platforms from an address when their management API
+                    is reachable.
                   </p>
                 </div>
                 <Show when={props.onBackToCatalog}>
                   <button
                     type="button"
                     onClick={props.onBackToCatalog}
-                    class="inline-flex items-center rounded-md border border-border px-3 py-2 text-sm font-medium text-base-content transition-colors hover:bg-surface-hover"
+                    class="inline-flex items-center self-start rounded-md border border-border px-3 py-2 text-sm font-medium text-base-content transition-colors hover:bg-surface-hover"
                   >
                     ← Back to source types
                   </button>
                 </Show>
-              </div>
-            </section>
-
-            <section class="space-y-4 rounded-xl border border-border bg-surface p-4">
-              <div class="space-y-1">
-                <div class="text-sm font-semibold text-base-content">Address probe</div>
-                <p class="text-xs text-muted">
-                  Pulse can auto-detect these platforms from an address when their management API
-                  is reachable.
-                </p>
               </div>
 
               <div class="flex flex-wrap gap-1.5">
                 <For each={autoDetectLabels()}>{(label) => renderBadge(label)}</For>
               </div>
 
+              <p class="text-xs text-muted">
+                Not in this list?{' '}
+                <button
+                  type="button"
+                  onClick={installAgent}
+                  class="font-medium text-blue-600 underline underline-offset-2 hover:text-blue-500 dark:text-blue-300 dark:hover:text-blue-200"
+                >
+                  Install Pulse Agent
+                </button>{' '}
+                for Linux, macOS, Windows, FreeBSD, or Unraid hosts.
+              </p>
+
               <AddressProbeStep
                 state={state}
                 onSelectCandidate={chooseCandidate}
-                onInstallAgent={() => chooseManualType('agent')}
+                onInstallAgent={installAgent}
                 onChooseSourceTypeInstead={props.onBackToCatalog}
                 onProbeSubmitted={() => onboardingMetrics?.recordPathSelected('api')}
                 onProbeResolved={(outcome) => onboardingMetrics?.recordProbeResult(outcome)}
               />
-            </section>
-
-            <section class="rounded-xl border border-border bg-surface-alt p-4">
-              <div class="space-y-3">
-                <div class="space-y-1">
-                  <div class="text-sm font-semibold text-base-content">What happens next</div>
-                  <p class="text-xs text-muted">
-                    Pulse validates the connection before the system lands in the shared
-                    infrastructure ledger.
-                  </p>
-                </div>
-
-                <div class="grid grid-cols-1 gap-2 md:grid-cols-5">
-                  <For each={INFRASTRUCTURE_ONBOARDING_STEPS}>
-                    {(step, index) => (
-                      <div class="rounded-lg border border-border bg-surface px-3 py-3">
-                        <div class="text-[11px] font-medium uppercase tracking-wide text-muted">
-                          Step {index() + 1}
-                        </div>
-                        <div class="mt-1 text-sm font-medium text-base-content">{step}</div>
-                      </div>
-                    )}
-                  </For>
-                </div>
-              </div>
             </section>
           </div>
         }
@@ -211,6 +203,24 @@ export const ConnectionEditor: Component<ConnectionEditorProps> = (props) => {
                 ← Back to detect
               </button>
             </Show>
+          </div>
+        </Show>
+
+        <Show
+          when={
+            !(props.showSlotHeader ?? true) &&
+            (props.mode ?? 'add') === 'add' &&
+            props.onBackToCatalog
+          }
+        >
+          <div class="border-b border-border bg-surface-alt px-4 py-2">
+            <button
+              type="button"
+              onClick={props.onBackToCatalog}
+              class="inline-flex items-center rounded-md border border-border px-2.5 py-1 text-xs font-medium text-base-content transition-colors hover:bg-surface-hover"
+            >
+              ← Back to source types
+            </button>
           </div>
         </Show>
 

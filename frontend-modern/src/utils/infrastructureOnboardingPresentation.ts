@@ -17,6 +17,7 @@ export interface InfrastructureOnboardingProductPresentation {
   catalogDescription: string;
   autoDetect: boolean;
   governanceState: PlatformGovernanceState;
+  defaultSurfaceKeys: readonly string[];
 }
 
 export interface InfrastructureSourceManagerProductPresentation extends InfrastructureOnboardingProductPresentation {
@@ -37,6 +38,7 @@ interface BaseProductPresentation {
   catalogDescription: string;
   autoDetect: boolean;
   sourcePlatformId?: string;
+  defaultSurfaceKeys: readonly string[];
 }
 
 export interface InfrastructureOnboardingPathPresentation {
@@ -57,6 +59,7 @@ const PRODUCT_PRESENTATION: Record<
     coverage: 'Low-overhead host telemetry, SMART, services, Docker, and Kubernetes',
     catalogDescription: 'Low-overhead host telemetry, services, Docker, Kubernetes',
     autoDetect: false,
+    defaultSurfaceKeys: ['host'],
   },
   vmware: {
     label: 'VMware vCenter',
@@ -65,6 +68,7 @@ const PRODUCT_PRESENTATION: Record<
     catalogDescription: 'VM inventory, ESXi hosts, datastores',
     autoDetect: true,
     sourcePlatformId: 'vmware-vsphere',
+    defaultSurfaceKeys: ['vms', 'hosts', 'datastores'],
   },
   truenas: {
     label: 'TrueNAS SCALE',
@@ -73,6 +77,7 @@ const PRODUCT_PRESENTATION: Record<
     catalogDescription: 'Pools, datasets, apps, replications',
     autoDetect: true,
     sourcePlatformId: 'truenas',
+    defaultSurfaceKeys: ['datasets', 'pools', 'replication'],
   },
   pve: {
     label: 'Proxmox VE',
@@ -82,6 +87,7 @@ const PRODUCT_PRESENTATION: Record<
     catalogDescription: 'VMs, containers, storage, cluster health',
     autoDetect: true,
     sourcePlatformId: 'proxmox-pve',
+    defaultSurfaceKeys: ['vms', 'containers', 'storage', 'backups'],
   },
   pbs: {
     label: 'Proxmox Backup Server',
@@ -90,6 +96,7 @@ const PRODUCT_PRESENTATION: Record<
     catalogDescription: 'Backup jobs, sync, verify, prune, GC',
     autoDetect: true,
     sourcePlatformId: 'proxmox-pbs',
+    defaultSurfaceKeys: ['backups', 'datastores', 'syncJobs', 'verifyJobs', 'pruneJobs', 'garbageJobs'],
   },
   pmg: {
     label: 'Proxmox Mail Gateway',
@@ -98,6 +105,7 @@ const PRODUCT_PRESENTATION: Record<
     catalogDescription: 'Mail stats, queues, quarantine, relay health',
     autoDetect: true,
     sourcePlatformId: 'proxmox-pmg',
+    defaultSurfaceKeys: ['mailStats', 'queues', 'quarantine', 'domainStats'],
   },
 };
 
@@ -159,21 +167,19 @@ export const INFRASTRUCTURE_ONBOARDING_PATHS: Record<
   },
 };
 
-export const INFRASTRUCTURE_ONBOARDING_STEPS = [
-  'Probe address',
-  'Identify platform',
-  'Request credentials',
-  'Validate access',
-  'Start monitoring',
-] as const;
-
 export const INFRASTRUCTURE_AGENT_DISCOVERY_LABELS = [
   'Pulse Agent hosts',
   'Docker',
   'Kubernetes',
 ] as const;
 
-export const INFRASTRUCTURE_AGENT_HOST_LABELS = ['Linux', 'FreeBSD', 'Unraid'] as const;
+export const INFRASTRUCTURE_AGENT_HOST_LABELS = [
+  'Linux',
+  'macOS',
+  'Windows',
+  'FreeBSD',
+  'Unraid',
+] as const;
 
 const SOURCE_PICKER_GROUPS: InfrastructureSourcePickerGroupPresentation[] = [
   {

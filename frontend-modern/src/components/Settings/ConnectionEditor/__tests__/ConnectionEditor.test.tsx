@@ -82,10 +82,9 @@ describe('ConnectionEditor', () => {
       />
     ));
 
-    expect(screen.getByText('Detect from address')).toBeInTheDocument();
     expect(screen.getByText('Address probe')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Back to source types/i })).toBeInTheDocument();
-    expect(screen.getByText('What happens next')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Install Pulse Agent/i })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /Back to source types/i }));
     expect(onBackToCatalog).toHaveBeenCalledTimes(1);
@@ -164,7 +163,7 @@ describe('ConnectionEditor', () => {
     const resetInput = screen.getByPlaceholderText(/vcenter\.lab/) as HTMLInputElement;
     expect(resetInput.value).toBe('');
     expect(screen.queryByTestId('slot')).toBeNull();
-    expect(screen.getByText('Detect from address')).toBeInTheDocument();
+    expect(screen.getByText('Address probe')).toBeInTheDocument();
   });
 
   it('uses an injected tracker for direct type routes without creating another one', async () => {

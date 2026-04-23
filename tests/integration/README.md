@@ -55,10 +55,11 @@ End-to-end Playwright tests that validate critical user flows against a running 
   - Mocks a blocked Patrol runtime with stale healthy summary payloads
   - Proves the real `/ai` route shows Patrol as paused and suppresses stale healthy summary copy
 - `tests/68-infrastructure-onboarding.spec.ts` — infrastructure onboarding browser proof:
-  - Proves `/settings/infrastructure` behaves as the persistent source-manager landing in the shared settings shell
-  - Verifies direct type-add and detect-from-address both open managed dialogs while the source-manager surface remains visible underneath
-  - Verifies the onboarding funnel emits catalog-driven API handoff and no-match-to-agent fallback metrics on the real browser runtime
-  - Verifies the mobile infrastructure manager fits the viewport without horizontal overflow
+  - Proves `/settings/infrastructure` stays instance-first until the user opens the add flow
+  - Verifies the add tile opens a grouped source-type picker, with detect-from-address as a secondary utility inside that modal flow
+  - Verifies an explicit discovery run surfaces Proxmox-family candidates in the source-manager table and opens the matching prefilled review dialog
+  - Verifies the onboarding funnel emits picker-driven API handoff and no-match-to-agent fallback metrics on the real browser runtime
+  - Verifies the mobile landing and picker modal fit the viewport without horizontal overflow
 - `tests/69-diagnostics-onboarding.spec.ts` — diagnostics onboarding analytics browser proof:
   - Proves the Diagnostics & Health page renders the infrastructure onboarding analytics card after a real diagnostics run
   - Verifies the shared diagnostics surface shows onboarding path/platform attribution alongside the existing commercial funnel

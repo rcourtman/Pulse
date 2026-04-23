@@ -3,7 +3,6 @@ import type { ProbeCandidate } from '@/api/connections';
 import { formControl, formField, formHelpText, formLabel } from '@/components/shared/Form';
 import type { CompletedProbePhase, ConnectionEditorState } from './useConnectionEditor';
 import { CONNECTION_TYPE_LABELS } from './useConnectionEditor';
-import { getInfrastructureAutoDetectLabels } from '@/utils/infrastructureOnboardingPresentation';
 
 export interface AddressProbeStepProps {
   state: ConnectionEditorState;
@@ -26,8 +25,6 @@ export const AddressProbeStep: Component<AddressProbeStepProps> = (props) => {
     props.onProbeResolved?.(outcome);
   };
 
-  const autoDetectLabels = getInfrastructureAutoDetectLabels();
-
   return (
     <form class="space-y-4" onSubmit={handleSubmit}>
       <div class={formField}>
@@ -49,15 +46,6 @@ export const AddressProbeStep: Component<AddressProbeStepProps> = (props) => {
           Paste a hostname, IP, or URL to identify a supported platform. Pulse validates the match
           and asks for credentials next.
         </p>
-        <div class="mt-2 flex flex-wrap gap-1.5">
-          <For each={autoDetectLabels}>
-            {(label) => (
-              <span class="inline-flex items-center rounded-full border border-border bg-surface px-2 py-0.5 text-[11px] font-medium text-base-content">
-                {label}
-              </span>
-            )}
-          </For>
-        </div>
       </div>
 
       <div class="flex items-center gap-2">
@@ -93,7 +81,7 @@ export const AddressProbeStep: Component<AddressProbeStepProps> = (props) => {
               </button>
               <span>, or if this is </span>
             </Show>
-            bare-metal Linux / Unraid / FreeBSD,{' '}
+            a Linux, macOS, Windows, FreeBSD, or Unraid host,{' '}
             <Show
               when={props.onInstallAgent}
               fallback={<span class="font-medium">install Pulse Agent instead</span>}
