@@ -245,15 +245,16 @@ work extends shared components instead of creating new local variants.
    from a top-level product route such as `/recovery`, the first highlighted
    step should match that route instead of always restarting at Dashboard.
 5. Keep shared infrastructure shell state on the reusable settings boundary: `frontend-modern/src/components/Settings/useSettingsInfrastructurePanelProps.ts` and `frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx` must continue to derive provider counts, availability, and shared subtab copy from one infrastructure-settings source — via the unified aggregator through `frontend-modern/src/components/Settings/useConnectionsLedger.ts` — instead of creating provider-local summary fetches or VMware-only shell vocabulary. Phase 9 retired the old `PlatformConnectionsWorkspace` per-type shell, but setup guidance may still use `Platform connections` as the operator-facing label for the shared API-backed onboarding path.
-   That same shared shell boundary now owns the default posture for
+   That same shared shell boundary now owns the first-run posture for
    `/settings/infrastructure`: the landing route should read as one
    source-manager workspace with configured infrastructure instances first
-   and no redundant monitored-systems ledger beneath it. The landing route
-   must not lead with
-   connection-type explanations, onboarding-path copy, or separate detect
-   utilities. Existing sources stay visible on the page, and add, detect,
-   install, and edit flows open as secondary interactions from that same
-   destination instead of taking over the whole page.
+   and no redundant monitored-systems ledger beneath it. The landing route may
+   include a compact guidance strip that explains platform APIs and host agents
+   as Pulse 6 infrastructure sources and exposes `Detect from address`, `Install
+   Pulse Agent`, and `Choose source type` as first-run actions. Existing sources
+   stay visible on the page, and add, detect, install, and edit flows open as
+   secondary interactions from that same destination instead of taking over the
+   whole page.
    Those secondary views must stay under the same single `Infrastructure`
    sidebar destination, but they may open in governed modal/dialog chrome when
    that preserves the persistent source-manager page behind them.

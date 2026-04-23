@@ -15,6 +15,9 @@ import connectionEditorSource from '../ConnectionEditor/ConnectionEditor.tsx?raw
 import addressProbeStepSource from '../ConnectionEditor/AddressProbeStep.tsx?raw';
 import connectionEditorStateSource from '../ConnectionEditor/useConnectionEditor.ts?raw';
 import nodeCredentialSlotSource from '../ConnectionEditor/CredentialSlots/NodeCredentialSlot.tsx?raw';
+import nodeModalAuthenticationSectionSource from '../NodeModalAuthenticationSection.tsx?raw';
+import nodeModalStatusFooterSource from '../NodeModalStatusFooter.tsx?raw';
+import nodeModalStateSource from '../useNodeModalState.ts?raw';
 import trueNASCredentialSlotSource from '../ConnectionEditor/CredentialSlots/TrueNASCredentialSlot.tsx?raw';
 import vmwareCredentialSlotSource from '../ConnectionEditor/CredentialSlots/VMwareCredentialSlot.tsx?raw';
 import diagnosticsResultsPanelSource from '../DiagnosticsResultsPanel.tsx?raw';
@@ -168,7 +171,13 @@ describe('settings architecture guardrails', () => {
     expect(infrastructureSourceManagerSource).toContain('aria-label={product.actionLabel}');
     expect(infrastructureSourceManagerSource).toContain('Review');
     expect(infrastructureSourceManagerSource).toContain('Edit');
-    expect(infrastructureSourceManagerSource).not.toContain('Detect from address');
+    expect(infrastructureSourceManagerSource).toContain(
+      'Start by connecting what Pulse should monitor',
+    );
+    expect(infrastructureSourceManagerSource).toContain('Detect from address');
+    expect(infrastructureSourceManagerSource).toContain('Install Pulse Agent');
+    expect(infrastructureSourceManagerSource).toContain('Choose source type');
+    expect(infrastructureSourceManagerSource).toContain('getInfrastructureEmptyStateSummary');
     expect(infrastructureSourceManagerSource).not.toContain('Connection types');
     expect(infrastructureSourcePickerSource).toContain('Detect from address');
     expect(infrastructureSourcePickerSource).toContain('getInfrastructureSourcePickerGroups');
@@ -230,6 +239,11 @@ describe('settings architecture guardrails', () => {
     expect(nodeCredentialSlotSource).toContain('<NodeModalMonitoringSection');
     expect(nodeCredentialSlotSource).toContain('<NodeModalStatusFooter');
     expect(nodeCredentialSlotSource).not.toContain('<Dialog');
+    expect(nodeModalAuthenticationSectionSource).toContain(
+      "state.formData().setupMode === 'manual'",
+    );
+    expect(nodeModalStatusFooterSource).toContain('guidedSetupOnlyMode');
+    expect(nodeModalStateSource).toContain('data.setupMode !==');
 
     expect(vmwareCredentialSlotSource).toContain('TlsVerificationWarningBanner');
     expect(vmwareCredentialSlotSource).toContain('subject="this vCenter connection"');

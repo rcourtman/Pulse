@@ -123,6 +123,11 @@ Own canonical runtime payload shapes between backend and frontend.
 29. `frontend-modern/src/utils/apiTokenPresentation.ts` shared with `security-privacy`: the API token presentation helper is both a security/privacy control surface and a canonical API token management boundary.
 30. `frontend-modern/src/utils/infrastructureSettingsPresentation.ts` shared with `agent-lifecycle`: the infrastructure settings presentation helper is both an agent lifecycle control surface and an API-backed direct-node/discovery settings boundary.
 31. `internal/api/access_control_handlers.go` shared with `organization-settings`: RBAC role and user-assignment handlers are both an organization settings control surface and a canonical API payload contract boundary.
+    The shared node setup boundary above owns the guided/manual setup split
+    for PVE/PBS consumers: Agent Install and Direct Connection setup-script
+    modes are auto-registration paths, while Token ID/Value fields, Test
+    Connection, and Add Node are manual-token or existing-node edit controls
+    only.
 32. `internal/api/agent_install_command_shared.go` shared with `agent-lifecycle`: agent install command assembly is both an agent lifecycle control surface and a canonical API payload contract boundary.
 33. `internal/api/ai_handler.go` shared with `ai-runtime`: Pulse Assistant handlers are both an AI runtime control surface and a canonical API payload contract boundary.
 34. `internal/api/ai_handlers.go` shared with `ai-runtime`: AI settings and remediation handlers are both an AI runtime control surface and a canonical API payload contract boundary.
@@ -2281,6 +2286,11 @@ masked: copy-success messaging may not tell the operator to paste a token
 "shown below" once only `tokenHint` remains visible, and stale raw-token
 cleanup paths may not survive in one Proxmox branch after the shared UI state
 has moved to hint-only handling.
+That same shared settings consumer must keep command-driven setup and manual
+credential submission distinct. When a new PVE/PBS setup is in Agent Install or
+Direct Connection setup-script mode, the settings UI must not render Token
+ID/Value fields, Test Connection, or Add Node controls; those controls are only
+valid for Manual Token Setup or existing-node edit flows.
 That same shared frontend setup surface must also trim and validate the
 canonical `host` input before invoking `/api/setup-script` downloads, and the
 shared `frontend-modern/src/api/nodes.ts` helper must reject empty `host` or

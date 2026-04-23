@@ -17,6 +17,15 @@ interface NodeModalStatusFooterProps {
 
 export const NodeModalStatusFooter: Component<NodeModalStatusFooterProps> = (props) => {
   const { modalProps, state } = props;
+  const guidedSetupOnlyMode = () =>
+    !state.isEditingExistingNode() &&
+    modalProps.nodeType !== 'pmg' &&
+    state.formData().authType === 'token' &&
+    state.formData().setupMode !== 'manual';
+  const guidedSetupFooterHint = () =>
+    state.formData().setupMode === 'agent'
+      ? 'Run the generated command on the host. Pulse adds the node automatically after the agent starts.'
+      : 'Run the generated command on the host. Pulse adds the API connection automatically after the setup script finishes.';
 
   return (
     <>
@@ -84,7 +93,9 @@ export const NodeModalStatusFooter: Component<NodeModalStatusFooterProps> = (pro
                 <div class="mt-2 space-y-1">
                   <p class="text-xs font-semibold opacity-90">Warnings:</p>
                   <ul class="text-xs space-y-0.5 opacity-80">
-                    <For each={state.testResult()?.warnings}>{(warning) => <li>• {warning}</li>}</For>
+                    <For each={state.testResult()?.warnings}>
+                      {(warning) => <li>• {warning}</li>}
+                    </For>
                   </ul>
                 </div>
               </Show>
@@ -152,14 +163,21 @@ export const NodeModalStatusFooter: Component<NodeModalStatusFooterProps> = (pro
                   : 'Delete connection'}
             </button>
           </Show>
-          <button
-            type="button"
-            onClick={state.handleTestConnection}
-            disabled={state.isTesting() || props.togglePending || props.deletePending}
-            class="px-4 py-2 text-sm border border-border text-base-content rounded-md hover:bg-surface-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          <Show
+            when={!guidedSetupOnlyMode()}
+            fallback={
+              <p class="max-w-md text-xs leading-5 text-muted">{guidedSetupFooterHint()}</p>
+            }
           >
-            {state.isTesting() ? 'Testing...' : 'Test Connection'}
-          </button>
+            <button
+              type="button"
+              onClick={state.handleTestConnection}
+              disabled={state.isTesting() || props.togglePending || props.deletePending}
+              class="px-4 py-2 text-sm border border-border text-base-content rounded-md hover:bg-surface-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {state.isTesting() ? 'Testing...' : 'Test Connection'}
+            </button>
+          </Show>
         </div>
 
         <div class="flex items-center gap-3">
@@ -208,15 +226,17 @@ export const NodeModalStatusFooter: Component<NodeModalStatusFooterProps> = (pro
             disabled={props.togglePending || props.deletePending}
             class="px-4 py-2 text-sm border border-border text-base-content rounded-md hover:bg-surface-hover transition-colors"
           >
-            Cancel
+            {guidedSetupOnlyMode() ? 'Close' : 'Cancel'}
           </button>
-          <button
-            type="submit"
-            disabled={props.togglePending || props.deletePending}
-            class="px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {state.isEditingExistingNode() ? 'Update' : 'Add'} Node
-          </button>
+          <Show when={!guidedSetupOnlyMode()}>
+            <button
+              type="submit"
+              disabled={props.togglePending || props.deletePending}
+              class="px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {state.isEditingExistingNode() ? 'Update' : 'Add'} Node
+            </button>
+          </Show>
         </div>
       </div>
     </>

@@ -22,12 +22,7 @@ export const NodeModalAuthenticationSection: Component<NodeModalAuthenticationSe
 
   return (
     <div>
-      <SectionHeader
-        title="Authentication"
-        size="sm"
-        class="mb-4"
-        titleClass="text-base-content"
-      />
+      <SectionHeader title="Authentication" size="sm" class="mb-4" titleClass="text-base-content" />
 
       <div class="mb-4">
         <div class="flex gap-4">
@@ -62,8 +57,8 @@ export const NodeModalAuthenticationSection: Component<NodeModalAuthenticationSe
         <Show when={modalProps.nodeType === 'pmg'}>
           <p class="text-xs text-muted mt-2">
             Proxmox Mail Gateway does not support API tokens. Use a service account with password
-            authentication (for example <code>root@pam</code> or a dedicated{' '}
-            <code>api@pmg</code> user).
+            authentication (for example <code>root@pam</code> or a dedicated <code>api@pmg</code>{' '}
+            user).
           </p>
         </Show>
       </div>
@@ -98,7 +93,9 @@ export const NodeModalAuthenticationSection: Component<NodeModalAuthenticationSe
               type="password"
               value={state.formData().password}
               onInput={(event) => state.updateField('password', event.currentTarget.value)}
-              placeholder={state.isEditingExistingNode() ? 'Leave blank to keep existing' : 'Password'}
+              placeholder={
+                state.isEditingExistingNode() ? 'Leave blank to keep existing' : 'Password'
+              }
               required={state.formData().authType === 'password' && !state.isEditingExistingNode()}
               class={controlClass()}
             />
@@ -110,44 +107,58 @@ export const NodeModalAuthenticationSection: Component<NodeModalAuthenticationSe
         <div class="space-y-4">
           <NodeModalSetupGuideSection modalProps={modalProps} state={state} />
 
-          <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <div class={formField}>
-              <label class={labelClass()}>
-                Token ID <span class="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                value={state.formData().tokenName}
-                onInput={(event) => state.updateField('tokenName', event.currentTarget.value)}
-                placeholder={getNodeTokenIdPlaceholder(modalProps.nodeType)}
-                required={state.formData().authType === 'token'}
-                class={controlClass('font-mono')}
-              />
-              <p class={formHelpText}>Full token ID from Proxmox (user@realm!tokenname).</p>
+          <Show when={state.formData().setupMode === 'manual'}>
+            <div class="rounded-md border border-border bg-surface-alt px-3 py-2 text-xs leading-5 text-muted">
+              Use the manual token path only when you already created the API token yourself. The
+              automatic setup paths register the node without copying token credentials into this
+              form.
             </div>
 
-            <div class={formField}>
-              <label class={labelClass('flex items-center gap-2')}>
-                Token Value
-                <Show when={!state.isEditingExistingNode()}>
-                  <span class="text-red-500">*</span>
-                </Show>
-              </label>
-              <input
-                type="password"
-                value={state.formData().tokenValue}
-                onInput={(event) => state.updateField('tokenValue', event.currentTarget.value)}
-                placeholder={
-                  state.isEditingExistingNode()
-                    ? 'Leave blank to keep existing'
-                    : 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx'
-                }
-                required={state.formData().authType === 'token' && !state.isEditingExistingNode()}
-                class={controlClass('font-mono')}
-              />
-              <p class={formHelpText}>The secret value shown when creating the token.</p>
+            <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div class={formField}>
+                <label class={labelClass()}>
+                  Token ID <span class="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={state.formData().tokenName}
+                  onInput={(event) => state.updateField('tokenName', event.currentTarget.value)}
+                  placeholder={getNodeTokenIdPlaceholder(modalProps.nodeType)}
+                  required={
+                    state.formData().authType === 'token' && state.formData().setupMode === 'manual'
+                  }
+                  class={controlClass('font-mono')}
+                />
+                <p class={formHelpText}>Full token ID from Proxmox (user@realm!tokenname).</p>
+              </div>
+
+              <div class={formField}>
+                <label class={labelClass('flex items-center gap-2')}>
+                  Token Value
+                  <Show when={!state.isEditingExistingNode()}>
+                    <span class="text-red-500">*</span>
+                  </Show>
+                </label>
+                <input
+                  type="password"
+                  value={state.formData().tokenValue}
+                  onInput={(event) => state.updateField('tokenValue', event.currentTarget.value)}
+                  placeholder={
+                    state.isEditingExistingNode()
+                      ? 'Leave blank to keep existing'
+                      : 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx'
+                  }
+                  required={
+                    state.formData().authType === 'token' &&
+                    state.formData().setupMode === 'manual' &&
+                    !state.isEditingExistingNode()
+                  }
+                  class={controlClass('font-mono')}
+                />
+                <p class={formHelpText}>The secret value shown when creating the token.</p>
+              </div>
             </div>
-          </div>
+          </Show>
         </div>
       </Show>
     </div>

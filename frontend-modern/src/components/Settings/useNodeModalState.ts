@@ -96,10 +96,7 @@ export const useNodeModalState = (props: NodeModalProps) => {
     }
   };
 
-  const copyProxmoxAgentInstallCommand = async (
-    type: 'pve' | 'pbs',
-    successMessage: string,
-  ) => {
+  const copyProxmoxAgentInstallCommand = async (type: 'pve' | 'pbs', successMessage: string) => {
     try {
       setLoadingAgentCommand(true);
       setAgentCommandError(null);
@@ -355,6 +352,20 @@ export const useNodeModalState = (props: NodeModalProps) => {
   const handleSubmit = (event: Event) => {
     event.preventDefault();
     const data = formData();
+
+    if (
+      !isEditingExistingNode() &&
+      props.nodeType !== 'pmg' &&
+      data.authType === 'token' &&
+      data.setupMode !== 'manual'
+    ) {
+      const setupPath =
+        data.setupMode === 'agent' ? 'Pulse Agent install command' : 'setup command';
+      notificationStore.info(
+        `Run the ${setupPath} on the host. Pulse will add the node automatically.`,
+      );
+      return;
+    }
 
     const normalizedName = data.name.trim() || deriveNameFromHost(data.host);
     if (!normalizedName) {

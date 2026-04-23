@@ -287,9 +287,15 @@ describe('InfrastructureWorkspace', () => {
     renderWorkspace();
 
     await waitFor(() => expect(screen.getByText('Infrastructure systems')).toBeInTheDocument());
+    expect(screen.getByText('Start by connecting what Pulse should monitor')).toBeInTheDocument();
+    expect(
+      screen.getByText(/Pulse 6 treats platform APIs and host agents as infrastructure sources/i),
+    ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Run discovery/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Discovery settings/i })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /Detect from address/i })).toBeNull();
+    expect(screen.getByRole('button', { name: /Detect from address/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Install Pulse Agent/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Choose source type/i })).toBeInTheDocument();
     expect(screen.getByText('Proxmox VE')).toBeInTheDocument();
     expect(screen.getByText('Proxmox VE').closest('tr')?.className).toContain('bg-base');
     expect(screen.queryByText('VMware vCenter')).toBeNull();
@@ -301,6 +307,27 @@ describe('InfrastructureWorkspace', () => {
     expect(screen.getByRole('button', { name: /^Add infrastructure$/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Edit/i })).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Monitored systems' })).not.toBeInTheDocument();
+  });
+
+  it('routes first-run actions from the source manager guidance', async () => {
+    renderWorkspace();
+
+    await waitFor(() => expect(screen.getByText('Infrastructure systems')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole('button', { name: /Detect from address/i }));
+    expect(navigateSpy).toHaveBeenLastCalledWith('/settings/infrastructure?add=detect', {
+      scroll: false,
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /Install Pulse Agent/i }));
+    expect(navigateSpy).toHaveBeenLastCalledWith('/settings/infrastructure?add=agent', {
+      scroll: false,
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /Choose source type/i }));
+    expect(navigateSpy).toHaveBeenLastCalledWith('/settings/infrastructure?add=pick', {
+      scroll: false,
+    });
   });
 
   it('switches the source manager layout from measured container width during live resize', async () => {
@@ -325,6 +352,22 @@ describe('InfrastructureWorkspace', () => {
     expect(screen.getByText('Proxmox VE')).toBeInTheDocument();
     expect(screen.getByText('zeus')).toBeInTheDocument();
     expect(screen.getByText('Active')).toBeInTheDocument();
+  });
+
+  it('keeps onboarding copy visible in the empty infrastructure state', async () => {
+    connectionState.connections = [];
+    connectionState.rows = [];
+
+    renderWorkspace();
+
+    await waitFor(() =>
+      expect(screen.getByText('Start monitoring infrastructure')).toBeInTheDocument(),
+    );
+    expect(
+      screen.getByText('Add infrastructure systems to start monitoring your environment.'),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/Available system types: VMware vCenter/i)).toBeInTheDocument();
+    expect(screen.getByText(/standalone hosts through Pulse Agent/i)).toBeInTheDocument();
   });
 
   it('routes discovery actions from the manager and shows discovered candidates in the matching platform group', async () => {
