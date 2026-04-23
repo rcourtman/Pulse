@@ -323,7 +323,11 @@ work extends shared components instead of creating new local variants.
    dialog for mutable sources, but pause, resume, remove, last-error detail,
    and agent uninstall commands must live inside that owned edit surface or
    the shared row-action owner rather than returning to inline landing-page
-   action clutter or a revived provider-specific detail page.
+   action clutter or a revived provider-specific detail page. When the
+   backend marks a grouped Proxmox row with canonical cluster identity, the
+   table primitive must render that cluster moniker as the row title instead
+   of falling back to one sibling node hostname or reopening a standalone-host
+   presentation for cluster-member agents.
    Phase 9 retired the
    parallel reporting/inventory surface entirely:
    `useInfrastructureReportingState`, `InfrastructureOperationsController`,

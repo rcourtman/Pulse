@@ -11,10 +11,11 @@ import (
 )
 
 type connectionSystemGroup struct {
-	id         string
-	typ        ConnectionType
-	name       string
-	components map[string]ConnectionSystemComponent
+	id          string
+	typ         ConnectionType
+	name        string
+	clusterName string
+	components  map[string]ConnectionSystemComponent
 }
 
 func buildConnectionSystems(
@@ -30,6 +31,7 @@ func buildConnectionSystems(
 		connectionByID[connection.ID] = connection
 	}
 
+	clusterNames := buildProxmoxClusterNames(connectionByID, monitor)
 	hostIndex := buildConnectionHostIndex(connections)
 	agentAttachments := resolveAgentAttachments(connectionByID, hostIndex, monitor)
 
@@ -39,11 +41,17 @@ func buildConnectionSystems(
 		if group != nil {
 			return group
 		}
+		clusterName := strings.TrimSpace(clusterNames[primary.ID])
+		sortName := strings.ToLower(primary.Name)
+		if clusterName != "" {
+			sortName = strings.ToLower(clusterName)
+		}
 		group = &connectionSystemGroup{
-			id:         primary.ID,
-			typ:        primary.Type,
-			name:       strings.ToLower(primary.Name),
-			components: make(map[string]ConnectionSystemComponent, 2),
+			id:          primary.ID,
+			typ:         primary.Type,
+			name:        sortName,
+			clusterName: clusterName,
+			components:  make(map[string]ConnectionSystemComponent, 2),
 		}
 		group.components[primary.ID] = ConnectionSystemComponent{
 			ConnectionID: primary.ID,
@@ -91,9 +99,10 @@ func buildConnectionSystems(
 			return components[i].ConnectionID < components[j].ConnectionID
 		})
 		out = append(out, ConnectionSystem{
-			ID:         group.id,
-			Type:       group.typ,
-			Components: components,
+			ID:          group.id,
+			Type:        group.typ,
+			ClusterName: group.clusterName,
+			Components:  components,
 		})
 	}
 
@@ -133,17 +142,21 @@ func resolveAgentAttachments(
 		return attachments
 	}
 
-	register := func(agentID, primaryID string, allowOverride bool) {
+	register := func(agentID, primaryID string, allowOverride, allowClusterAttach bool) {
 		agentID = strings.TrimSpace(agentID)
 		primaryID = strings.TrimSpace(primaryID)
 		if agentID == "" || primaryID == "" || agentID == primaryID {
 			return
 		}
-		if _, ok := connectionByID[agentID]; !ok {
+		agent, ok := connectionByID[agentID]
+		if !ok {
 			return
 		}
 		primary, ok := connectionByID[primaryID]
 		if !ok || primary.Type == ConnectionTypeAgent {
+			return
+		}
+		if !allowClusterAttach && !connectionsShareHost(agent, primary) {
 			return
 		}
 
@@ -166,7 +179,12 @@ func resolveAgentAttachments(
 		if strings.TrimSpace(node.LinkedAgentID) == "" || strings.TrimSpace(node.Instance) == "" {
 			continue
 		}
-		register("agent:"+strings.TrimSpace(node.LinkedAgentID), "pve:"+strings.TrimSpace(node.Instance), false)
+		register(
+			"agent:"+strings.TrimSpace(node.LinkedAgentID),
+			"pve:"+strings.TrimSpace(node.Instance),
+			false,
+			true,
+		)
 	}
 
 	resources, _ := monitor.UnifiedResourceSnapshot()
@@ -182,7 +200,9 @@ func resolveAgentAttachments(
 			continue
 		}
 		if primaryID := primaryConnectionIDForResource(resource, hostIndex); primaryID != "" {
-			register(agentID, primaryID, false)
+			allowClusterAttach := resource.Proxmox != nil &&
+				strings.TrimSpace(resource.Agent.LinkedNodeID) != ""
+			register(agentID, primaryID, false, allowClusterAttach)
 		}
 	}
 
@@ -193,6 +213,49 @@ func resolveAgentAttachments(
 	}
 
 	return attachments
+}
+
+func buildProxmoxClusterNames(
+	connectionByID map[string]Connection,
+	monitor *monitoring.Monitor,
+) map[string]string {
+	clusterNames := make(map[string]string)
+	if monitor == nil {
+		return clusterNames
+	}
+
+	record := func(primaryID, clusterName string) {
+		primaryID = strings.TrimSpace(primaryID)
+		clusterName = strings.TrimSpace(clusterName)
+		if primaryID == "" || clusterName == "" {
+			return
+		}
+		primary, ok := connectionByID[primaryID]
+		if !ok || primary.Type != ConnectionTypePVE {
+			return
+		}
+		if _, exists := clusterNames[primaryID]; exists {
+			return
+		}
+		clusterNames[primaryID] = clusterName
+	}
+
+	for _, node := range monitor.NodesSnapshot() {
+		if !node.IsClusterMember {
+			continue
+		}
+		record("pve:"+strings.TrimSpace(node.Instance), node.ClusterName)
+	}
+
+	resources, _ := monitor.UnifiedResourceSnapshot()
+	for _, resource := range resources {
+		if resource.Proxmox == nil || !resource.Proxmox.IsClusterMember {
+			continue
+		}
+		record("pve:"+strings.TrimSpace(resource.Proxmox.Instance), resource.Proxmox.ClusterName)
+	}
+
+	return clusterNames
 }
 
 type connectionHostIndex struct {
@@ -275,6 +338,53 @@ func normalizedConnectionHost(connection Connection) string {
 		}
 	}
 	return ""
+}
+
+// connectionHostCandidates returns every distinct normalized host string a
+// connection could be reached as. Connections frequently carry both a name
+// (often a hostname) and an address (often a URL or IP), and we want any
+// overlap to count as "same host" for grouping purposes.
+func connectionHostCandidates(connection Connection) []string {
+	seen := make(map[string]struct{}, 2)
+	out := make([]string, 0, 2)
+	for _, candidate := range []string{connection.Address, connection.Name} {
+		normalized := normalizeHost(candidate)
+		if normalized == "" {
+			continue
+		}
+		if _, ok := seen[normalized]; ok {
+			continue
+		}
+		seen[normalized] = struct{}{}
+		out = append(out, normalized)
+	}
+	return out
+}
+
+// connectionsShareHost reports whether two connections appear to point at the
+// same physical host. Used to gate agent→primary attachment so that sibling
+// cluster members (e.g. a separate Proxmox node sharing the cluster API
+// connection) stay visible as their own systems instead of being absorbed
+// into the connection's primary row.
+func connectionsShareHost(a, b Connection) bool {
+	aHosts := connectionHostCandidates(a)
+	if len(aHosts) == 0 {
+		return false
+	}
+	bHosts := connectionHostCandidates(b)
+	if len(bHosts) == 0 {
+		return false
+	}
+	bSet := make(map[string]struct{}, len(bHosts))
+	for _, host := range bHosts {
+		bSet[host] = struct{}{}
+	}
+	for _, host := range aHosts {
+		if _, ok := bSet[host]; ok {
+			return true
+		}
+	}
+	return false
 }
 
 func normalizeHost(raw string) string {

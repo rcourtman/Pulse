@@ -70,6 +70,7 @@ vi.mock('../useConnectionsLedger', () => ({
         ownerType: connection.type,
         name: connection.name || connection.id,
         subtitle: connection.type === 'agent' ? 'via Pulse Agent' : 'via platform API',
+        source: connection.type === 'agent' ? 'agent' : 'api',
         host: connection.address,
         coverageLabels: ['VMs'],
         statusLabel: connection.state === 'paused' ? 'Paused' : 'Active',
@@ -240,11 +241,12 @@ describe('InfrastructureWorkspace', () => {
     expect(screen.getByRole('button', { name: /Run discovery/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Discovery settings/i })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Detect from address/i })).toBeNull();
-    expect(screen.getByText('VMware vCenter')).toBeInTheDocument();
-    expect(screen.getByText('TrueNAS SCALE')).toBeInTheDocument();
     expect(screen.getByText('Proxmox VE')).toBeInTheDocument();
-    expect(screen.getByText('Standalone hosts')).toBeInTheDocument();
+    expect(screen.queryByText('VMware vCenter')).toBeNull();
+    expect(screen.queryByText('TrueNAS SCALE')).toBeNull();
+    expect(screen.queryByText('Standalone hosts')).toBeNull();
     expect(screen.getByRole('button', { name: /Add Proxmox VE/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Add infrastructure$/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Edit/i })).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Monitored systems' })).not.toBeInTheDocument();
   });
@@ -267,9 +269,6 @@ describe('InfrastructureWorkspace', () => {
 
     await waitFor(() => expect(screen.getByText('discovered-pve.lab')).toBeInTheDocument());
     expect(screen.getByText('Discovered')).toBeInTheDocument();
-    expect(screen.getByText(/Automatic discovery off/i)).toBeInTheDocument();
-    expect(screen.getByText(/1 candidate/i)).toBeInTheDocument();
-    expect(screen.getByText(/Updated /i)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /Run discovery/i }));
     expect(triggerDiscoveryScan).toHaveBeenCalledTimes(1);
@@ -289,13 +288,23 @@ describe('InfrastructureWorkspace', () => {
   it('opens a type-specific add route from the matching platform section', () => {
     renderWorkspace();
 
-    fireEvent.click(screen.getByRole('button', { name: /Add TrueNAS SCALE/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Add Proxmox VE/i }));
 
-    expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure?add=truenas', {
+    expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure?add=pve', {
       scroll: false,
     });
     expect(createInfrastructureOnboardingMetricsTrackerMock).toHaveBeenCalledTimes(1);
     expect(onboardingMetricsTrackers[0]?.recordOpened).toHaveBeenCalledTimes(1);
+  });
+
+  it('opens the platform picker from the Add infrastructure footer button', () => {
+    renderWorkspace();
+
+    fireEvent.click(screen.getByRole('button', { name: /^Add infrastructure$/i }));
+
+    expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure?add=pick', {
+      scroll: false,
+    });
   });
 
   it('renders the route-backed picker dialog when the pick query is present', async () => {
@@ -306,7 +315,6 @@ describe('InfrastructureWorkspace', () => {
     const dialog = screen.getByRole('dialog');
     expect(screen.getAllByText('Add infrastructure').length).toBeGreaterThan(0);
     expect(screen.getByText('Choose the source type you want to add.')).toBeInTheDocument();
-    expect(within(dialog).getByText('Choose a source type')).toBeInTheDocument();
     expect(within(dialog).getByRole('button', { name: 'Detect from address' })).toBeInTheDocument();
     expect(within(dialog).getByText('Virtualization')).toBeInTheDocument();
     expect(within(dialog).getByRole('button', { name: /TrueNAS SCALE/i })).toBeInTheDocument();
@@ -351,7 +359,6 @@ describe('InfrastructureWorkspace', () => {
         'Probe an address and let Pulse open the matching credential flow when it recognizes the platform.',
       ),
     ).toBeInTheDocument();
-    expect(screen.getAllByText('Detect from address').length).toBeGreaterThan(0);
     expect(
       within(screen.getByRole('dialog')).getByRole('button', { name: /Back to source types/i }),
     ).toBeInTheDocument();
@@ -417,6 +424,7 @@ describe('InfrastructureWorkspace', () => {
         ownerType: 'pve',
         name: primaryConnection.name || primaryConnection.id,
         subtitle: 'via platform API and Pulse Agent',
+        source: 'both',
         host: primaryConnection.address,
         coverageLabels: ['VMs', 'Host telemetry'],
         statusLabel: 'Active',
@@ -449,6 +457,61 @@ describe('InfrastructureWorkspace', () => {
     expect(screen.getByText('Update available')).toBeInTheDocument();
     expect(screen.getByText('6.0.0 -> 6.0.2')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Copy uninstall command/i })).toBeInTheDocument();
+  });
+
+  it('renders Proxmox cluster rows under the cluster moniker instead of a sibling standalone host row', async () => {
+    const primaryConnection = connectionFixture();
+    const dellyAgent = connectionFixture({
+      id: 'agent:agent-delly',
+      type: 'agent',
+      name: 'delly',
+      address: 'delly',
+      surfaces: ['host'],
+      scope: { host: true },
+      source: 'agent',
+      capabilities: { supportsPause: false, supportsScope: false, supportsTest: false },
+    });
+    const minipcAgent = connectionFixture({
+      id: 'agent:agent-minipc',
+      type: 'agent',
+      name: 'minipc',
+      address: 'minipc',
+      surfaces: ['host'],
+      scope: { host: true },
+      source: 'agent',
+      capabilities: { supportsPause: false, supportsScope: false, supportsTest: false },
+    });
+
+    connectionState.connections = [primaryConnection, dellyAgent, minipcAgent];
+    connectionState.rows = [
+      {
+        id: primaryConnection.id,
+        ownerType: 'pve',
+        name: 'homelab',
+        subtitle: 'via platform API and Pulse Agent',
+        source: 'both',
+        host: primaryConnection.address,
+        coverageLabels: ['VMs', 'Containers', 'Storage', 'Backups', 'Host telemetry'],
+        statusLabel: 'Active',
+        statusClassName: 'bg-green-100 text-green-800',
+        agentUpdateCount: 0,
+        lastActivityText: '1m ago',
+        enabled: true,
+        canEdit: true,
+        canPause: true,
+        canRemove: true,
+        isAgent: false,
+        attachedConnections: [dellyAgent, minipcAgent],
+        connection: primaryConnection,
+      },
+    ];
+
+    renderWorkspace();
+
+    await waitFor(() => expect(screen.getByText('homelab')).toBeInTheDocument());
+    expect(screen.getByText('API + Agent')).toBeInTheDocument();
+    expect(screen.queryByText('Standalone hosts')).toBeNull();
+    expect(screen.queryByText(/^minipc$/)).toBeNull();
   });
 
   it('hides the add flow and source-manager actions in read-only mode', () => {

@@ -11456,8 +11456,9 @@ func TestContract_ConnectionPayloadShapeStaysCanonical(t *testing.T) {
 		Capabilities: ConnectionCapabilities{SupportsPause: true, SupportsScope: true, SupportsTest: true},
 	}
 	system := ConnectionSystem{
-		ID:   "pve-lab",
-		Type: ConnectionTypePVE,
+		ID:          "pve-lab",
+		Type:        ConnectionTypePVE,
+		ClusterName: "homelab",
 		Components: []ConnectionSystemComponent{
 			{
 				ConnectionID: "pve-lab",
@@ -11473,7 +11474,7 @@ func TestContract_ConnectionPayloadShapeStaysCanonical(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal Connection: %v", err)
 	}
-	want := `{"connections":[{"id":"pve-lab","type":"pve","name":"lab","address":"https://pve.lab:8006","state":"active","enabled":true,"surfaces":["vms","containers"],"scope":{"containers":true,"vms":true},"lastSeen":"2026-04-19T10:00:00Z","source":"manual","capabilities":{"supportsPause":true,"supportsScope":true,"supportsTest":true}}],"systems":[{"id":"pve-lab","type":"pve","components":[{"connectionId":"pve-lab","type":"pve","role":"primary"}]}]}`
+	want := `{"connections":[{"id":"pve-lab","type":"pve","name":"lab","address":"https://pve.lab:8006","state":"active","enabled":true,"surfaces":["vms","containers"],"scope":{"containers":true,"vms":true},"lastSeen":"2026-04-19T10:00:00Z","source":"manual","capabilities":{"supportsPause":true,"supportsScope":true,"supportsTest":true}}],"systems":[{"id":"pve-lab","type":"pve","clusterName":"homelab","components":[{"connectionId":"pve-lab","type":"pve","role":"primary"}]}]}`
 	assertJSONSnapshot(t, body, want)
 }
 

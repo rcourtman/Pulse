@@ -1,5 +1,10 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { ConnectionsAPI, type Connection, type ProbeResponse } from '../connections';
+import {
+  ConnectionsAPI,
+  type Connection,
+  type ConnectionSystem,
+  type ProbeResponse,
+} from '../connections';
 import { apiFetchJSON } from '@/utils/apiClient';
 
 vi.mock('@/utils/apiClient', () => ({
@@ -31,12 +36,20 @@ describe('ConnectionsAPI', () => {
         capabilities: { supportsPause: true, supportsScope: true, supportsTest: true },
       },
     ];
-    mockedApiFetchJSON.mockResolvedValueOnce({ connections });
+    const systems: ConnectionSystem[] = [
+      {
+        id: 'pve-lab',
+        type: 'pve',
+        clusterName: 'homelab',
+        components: [{ connectionId: 'pve-lab', type: 'pve', role: 'primary' }],
+      },
+    ];
+    mockedApiFetchJSON.mockResolvedValueOnce({ connections, systems });
 
     const result = await ConnectionsAPI.list();
 
     expect(mockedApiFetchJSON).toHaveBeenCalledWith('/api/connections');
-    expect(result).toEqual({ connections, systems: [] });
+    expect(result).toEqual({ connections, systems });
   });
 
   it('list() normalizes missing fields to empty collections', async () => {

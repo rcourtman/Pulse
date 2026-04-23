@@ -62,6 +62,7 @@ export interface ConnectionSystemComponent {
 export interface ConnectionSystem {
   id: string;
   type: ConnectionType;
+  clusterName?: string;
   components: ConnectionSystemComponent[];
 }
 

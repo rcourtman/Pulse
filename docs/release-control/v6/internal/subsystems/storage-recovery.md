@@ -239,7 +239,10 @@ querying, and the operator-facing storage health presentation layer.
    platform row is collecting additional host telemetry through Pulse Agent,
    but they must not reinterpret attached agents as separate protected
    systems, duplicate recovery inventory rows, or a storage-local ownership
-   taxonomy. The same shared `/api/connections` payload also owns any
+   taxonomy. When that grouped platform row is a Proxmox cluster, storage and
+   recovery must also treat the backend-authored cluster moniker as the
+   canonical row identity instead of re-expanding cluster-member agents into
+   sibling host rows or per-node storage owners. The same shared `/api/connections` payload also owns any
    agent-version/update facts carried alongside those grouped rows; adjacent
    storage or recovery surfaces may reuse that signal for operator context,
    but must not fork their own version-comparison semantics or another agent

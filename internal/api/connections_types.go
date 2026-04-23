@@ -101,9 +101,10 @@ type ConnectionSystemComponent struct {
 // attached collection methods such as a unified agent augmenting a Proxmox
 // source.
 type ConnectionSystem struct {
-	ID         string                      `json:"id"`
-	Type       ConnectionType              `json:"type"`
-	Components []ConnectionSystemComponent `json:"components"`
+	ID          string                      `json:"id"`
+	Type        ConnectionType              `json:"type"`
+	ClusterName string                      `json:"clusterName,omitempty"`
+	Components  []ConnectionSystemComponent `json:"components"`
 }
 
 // ConnectionsListResponse is the envelope for GET /api/connections.

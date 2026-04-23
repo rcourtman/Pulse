@@ -6,7 +6,14 @@ import {
   type ConnectionSystem,
   type ConnectionType,
 } from '@/api/connections';
-import { connectionLastActivityText, type InfrastructureSystemRow } from './connectionsTableModel';
+import {
+  connectionLastActivityText,
+  surfaceLabel,
+  type InfrastructureSourceKind,
+  type InfrastructureSystemRow,
+} from './connectionsTableModel';
+
+export { surfaceLabel };
 
 const POLL_INTERVAL_MS = 15000;
 
@@ -47,29 +54,6 @@ const STATE_PRESENTATION: Record<ConnectionState, { label: string; badgeClass: s
     badgeClass: 'bg-surface-alt text-base-content',
   },
 };
-
-const SURFACE_LABELS: Record<string, string> = {
-  vms: 'VMs',
-  containers: 'Containers',
-  storage: 'Storage',
-  backups: 'Backups',
-  datastores: 'Datastores',
-  syncJobs: 'Sync jobs',
-  verifyJobs: 'Verify jobs',
-  pruneJobs: 'Prune jobs',
-  garbageJobs: 'GC jobs',
-  mailStats: 'Mail stats',
-  queues: 'Queues',
-  quarantine: 'Quarantine',
-  domainStats: 'Domain stats',
-  host: 'Host telemetry',
-  hosts: 'Hosts',
-  datasets: 'Datasets',
-  pools: 'Pools',
-  replication: 'Replication',
-};
-
-export const surfaceLabel = (key: string): string => SURFACE_LABELS[key] ?? key;
 
 const PLATFORM_API_TYPES: ReadonlySet<ConnectionType> = new Set([
   'pve',
@@ -124,6 +108,15 @@ const subtitleFor = (connections: readonly Connection[], primaryConnection: Conn
   return `via ${productLabel}`;
 };
 
+const sourceFor = (connections: readonly Connection[]): InfrastructureSourceKind => {
+  const hasPlatformAPI = connections.some((connection) => PLATFORM_API_TYPES.has(connection.type));
+  const hasPulseAgent = connections.some((connection) => connection.type === 'agent');
+  if (hasPlatformAPI && hasPulseAgent) return 'both';
+  if (hasPlatformAPI) return 'api';
+  if (hasPulseAgent) return 'agent';
+  return 'unknown';
+};
+
 const agentUpdateCountFor = (connections: readonly Connection[]): number =>
   connections.filter(
     (connection) => connection.type === 'agent' && Boolean(connection.agentUpdateAvailable),
@@ -133,9 +126,14 @@ const buildRow = (
   ownerType: ConnectionType,
   primaryConnection: Connection,
   componentConnections: readonly Connection[],
+  system?: ConnectionSystem | null,
 ): InfrastructureSystemRow => {
   const presentation = STATE_PRESENTATION[primaryConnection.state] ?? STATE_PRESENTATION.pending;
-  const name = primaryConnection.name || primaryConnection.address || primaryConnection.id;
+  const clusterName = system?.clusterName?.trim();
+  const name =
+    ownerType === 'pve' && clusterName
+      ? clusterName
+      : primaryConnection.name || primaryConnection.address || primaryConnection.id;
   const host =
     primaryConnection.address && primaryConnection.address !== name
       ? primaryConnection.address
@@ -152,6 +150,7 @@ const buildRow = (
     ownerType,
     name,
     subtitle: subtitleFor(componentConnections, primaryConnection),
+    source: sourceFor(componentConnections),
     host,
     coverageLabels: coverageLabelsFor(componentConnections),
     statusLabel: presentation.label,
@@ -170,7 +169,7 @@ const buildRow = (
 };
 
 export const connectionToRow = (connection: Connection): InfrastructureSystemRow =>
-  buildRow(connection.type, connection, [connection]);
+  buildRow(connection.type, connection, [connection], null);
 
 const systemToRow = (
   system: ConnectionSystem,
@@ -187,7 +186,7 @@ const systemToRow = (
     componentConnections.push(primaryConnection);
   }
 
-  return buildRow(system.type, primaryConnection, componentConnections);
+  return buildRow(system.type, primaryConnection, componentConnections, system);
 };
 
 export interface ConnectionsLedger {

@@ -11,7 +11,7 @@ import { ConnectionEditor } from './ConnectionEditor/ConnectionEditor';
 import { NodeCredentialSlot } from './ConnectionEditor/CredentialSlots/NodeCredentialSlot';
 import { TrueNASCredentialSlot } from './ConnectionEditor/CredentialSlots/TrueNASCredentialSlot';
 import { VMwareCredentialSlot } from './ConnectionEditor/CredentialSlots/VMwareCredentialSlot';
-import type { Connection, ConnectionType } from '@/api/connections';
+import type { Connection, ConnectionType, ProbeCandidate } from '@/api/connections';
 import type { TrueNASConnection } from '@/api/truenas';
 import type { VMwareConnection } from '@/api/vmware';
 import type { NodeConfig, NodeConfigWithStatus } from '@/types/nodes';
@@ -104,6 +104,9 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
   const [showDiscoverySettings, setShowDiscoverySettings] = createSignal(false);
   const [selectedDiscoveredSource, setSelectedDiscoveredSource] =
     createSignal<DiscoveredServer | null>(null);
+  const [selectedProbeCandidate, setSelectedProbeCandidate] = createSignal<ProbeCandidate | null>(
+    null,
+  );
   const readOnly = createMemo(() => presentationPolicyIsReadOnly());
   const routeStep = createMemo<InfrastructurePanelStep | null>(() => {
     if (readOnly()) return null;
@@ -180,10 +183,22 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
 
   const openAddFlow = (step: InfrastructurePanelStep) => {
     setSelectedDiscoveredSource(null);
+    setSelectedProbeCandidate(null);
     if (!addFlowTracker()) {
       setAddFlowTracker(createOpenedOnboardingTracker());
     }
     navigate(buildInfrastructureOnboardingPath(step), { scroll: false });
+  };
+
+  const openAddFlowFromProbe = (candidate: ProbeCandidate) => {
+    setSelectedDiscoveredSource(null);
+    setSelectedProbeCandidate(candidate);
+    if (!addFlowTracker()) {
+      setAddFlowTracker(createOpenedOnboardingTracker());
+    }
+    navigate(buildInfrastructureOnboardingPath(candidate.type as ManagedAddTypeStep), {
+      scroll: false,
+    });
   };
 
   const reviewDiscoveredSource = (server: DiscoveredServer) => {
@@ -197,6 +212,7 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
   const closeAddFlow = () => {
     resetInlineEditorState();
     setSelectedDiscoveredSource(null);
+    setSelectedProbeCandidate(null);
     setAddFlowTracker(null);
     clearSharedInfrastructureOnboardingMetricsTracker();
     navigateToWorkspace(Boolean(routeStep()));
@@ -360,7 +376,7 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
                 Pulse Agent
               </div>
               <div class="text-lg font-semibold text-base-content">{connection.name}</div>
-              <Show when={connection.address}>
+              <Show when={connection.address && connection.address !== connection.name}>
                 <div class="break-words text-sm text-muted">{connection.address}</div>
               </Show>
             </div>
@@ -533,7 +549,7 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
                 <div class="flex flex-wrap items-start justify-between gap-4">
                   <div class="space-y-1">
                     <div class="text-sm font-medium text-base-content">{connection.name}</div>
-                    <Show when={connection.address}>
+                    <Show when={connection.address && connection.address !== connection.name}>
                       <div class="break-words text-xs text-muted">{connection.address}</div>
                     </Show>
                     <Show when={versionPresentation()}>
@@ -707,15 +723,32 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
 
     const discoveredPrefill = () => {
       const discovered = selectedDiscoveredSource();
-      if (!discovered || discovered.type !== context.type) {
-        return undefined;
+      if (discovered && discovered.type === context.type) {
+        return {
+          type: discovered.type,
+          name: discovered.hostname?.trim() || discovered.ip,
+          host: `https://${discovered.hostname?.trim() || discovered.ip}:${discovered.port}`,
+        } satisfies Partial<NodeConfig>;
       }
 
-      return {
-        type: discovered.type,
-        name: discovered.hostname?.trim() || discovered.ip,
-        host: `https://${discovered.hostname?.trim() || discovered.ip}:${discovered.port}`,
-      } satisfies Partial<NodeConfig>;
+      const probed = selectedProbeCandidate();
+      if (probed && probed.type === context.type) {
+        const url = (() => {
+          try {
+            return new URL(probed.host);
+          } catch {
+            return null;
+          }
+        })();
+        const derivedName = url?.hostname || probed.host.replace(/^https?:\/\//, '').split(':')[0];
+        return {
+          type: probed.type as NodeConfig['type'],
+          name: derivedName,
+          host: probed.host,
+        } satisfies Partial<NodeConfig>;
+      }
+
+      return undefined;
     };
 
     switch (context.type) {
@@ -770,6 +803,10 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
       const endpoint = `https://${discovered.hostname?.trim() || discovered.ip}:${discovered.port}`;
       return `Pulse discovered ${endpoint}. Review the endpoint, finish the credentials, and then save it as a monitored source.`;
     }
+    const probed = selectedProbeCandidate();
+    if (probed && probed.type === activeAddType()) {
+      return `Pulse detected ${probed.host}. Review the endpoint, finish the credentials, and then save it as a monitored source.`;
+    }
     const presentation = getInfrastructureOnboardingProductPresentation(
       activeAddType() as InfrastructureOnboardingConnectionType,
     );
@@ -777,9 +814,9 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
   });
 
   const editDialogTitle = createMemo(() => {
-    const connection = editingConnection();
-    if (!connection) return 'Edit source';
-    return `Edit ${connection.name}`;
+    const row = editingRow();
+    if (!row) return 'Edit source';
+    return `Edit ${row.name}`;
   });
 
   const editDialogDescription = createMemo(() => {
@@ -805,6 +842,7 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
             ? undefined
             : (type) => openAddFlow(type === 'agent' ? 'agent' : (type as ManagedAddTypeStep))
         }
+        onAddInfrastructure={readOnly() ? undefined : () => openAddFlow('pick')}
         onRunDiscovery={
           readOnly()
             ? undefined
@@ -882,6 +920,8 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
                     mode="add"
                     onboardingMetricsTracker={addFlowTracker()}
                     onBackToCatalog={() => openAddFlow('pick')}
+                    onSelectAgentRoute={() => openAddFlow('agent')}
+                    onSelectCandidate={openAddFlowFromProbe}
                     onClose={closeAddFlow}
                     onSaved={handleAddSaved}
                     renderCredentialSlot={({ type, onCancel, onSaved }) =>
@@ -894,11 +934,15 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
                   <ConnectionEditor
                     mode="add"
                     initialType={activeAddType() ?? undefined}
+                    initialCandidate={selectedProbeCandidate()}
                     showSlotHeader={false}
                     trackInitialCatalogSelection={
-                      activeAddType() !== 'agent' && !selectedDiscoveredSource()
+                      activeAddType() !== 'agent' &&
+                      !selectedDiscoveredSource() &&
+                      !selectedProbeCandidate()
                     }
                     onboardingMetricsTracker={addFlowTracker()}
+                    onBackToCatalog={() => openAddFlow('pick')}
                     onClose={closeAddFlow}
                     onSaved={handleAddSaved}
                     renderCredentialSlot={({ type, onCancel, onSaved }) =>
