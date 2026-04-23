@@ -26,6 +26,7 @@ import { getPreferredInfrastructureDisplayName } from '@/utils/resourceIdentity'
 import { shouldShowResourceAlternateName } from '@/utils/resourcePolicyPresentation';
 import { ResourceDetailDrawer } from './ResourceDetailDrawer';
 import { ResourceFacetSummary } from './ResourceFacetSummary';
+import { UnifiedResourceSourceBadgeCell } from './UnifiedResourceSourceBadgeCell';
 import {
   type UnifiedResourceTableProps,
   type UnifiedResourceTableState,
@@ -56,47 +57,47 @@ export const UnifiedResourcePBSTableSection: Component<UnifiedResourcePBSTableSe
                 class={`text-left pl-2 sm:pl-3 ${table.resourceColumn().className}`}
                 width={table.resourceColumn().width}
               >
-                Resource
+                {table.headerLabels().resource}
               </TableHead>
               <TableHead
                 classList={{ hidden: table.isMobile() || !table.isVisible('primary') }}
                 class={table.serviceCountColumn().className}
                 width={table.serviceCountColumn().width}
               >
-                Datastores
+                {table.headerLabels().datastores}
               </TableHead>
               <TableHead
                 classList={{ hidden: table.isMobile() || !table.isVisible('secondary') }}
                 class={table.serviceCountColumn().className}
                 width={table.serviceCountColumn().width}
               >
-                Activity
+                {table.headerLabels().activity}
               </TableHead>
               <TableHead
                 class={table.serviceHealthColumn().className}
                 width={table.serviceHealthColumn().width}
               >
-                Health
+                {table.headerLabels().health}
               </TableHead>
               <TableHead
                 classList={{ hidden: table.isMobile() || !table.isVisible('secondary') }}
                 class={table.sourceColumn().className}
                 width={table.sourceColumn().width}
               >
-                Source
+                {table.headerLabels().source}
               </TableHead>
               <TableHead
                 classList={{ hidden: table.isMobile() || !table.isVisible('supplementary') }}
                 class={table.uptimeColumn().className}
                 width={table.uptimeColumn().width}
               >
-                Uptime
+                {table.headerLabels().uptime}
               </TableHead>
               <TableHead
                 class={table.serviceActionColumn().className}
                 width={table.serviceActionColumn().width}
               >
-                Action
+                {table.headerLabels().action}
               </TableHead>
             </TableRow>
           </TableHeader>
@@ -110,9 +111,7 @@ export const UnifiedResourcePBSTableSection: Component<UnifiedResourcePBSTableSe
                 const displayName = createMemo(() =>
                   getPreferredInfrastructureDisplayName(resource),
                 );
-                const serviceLink = createMemo(
-                  () => buildServiceDetailLinks(resource)[0] ?? null,
-                );
+                const serviceLink = createMemo(() => buildServiceDetailLinks(resource)[0] ?? null);
                 const statusIndicator = createMemo(() =>
                   getAgentStatusIndicator({ status: resource.status }),
                 );
@@ -122,7 +121,6 @@ export const UnifiedResourcePBSTableSection: Component<UnifiedResourcePBSTableSe
                 const unifiedSourceBadges = createMemo(() =>
                   getUnifiedSourceBadges(table.getUnifiedSources(resource)),
                 );
-                const hasUnifiedSources = createMemo(() => unifiedSourceBadges().length > 0);
                 const healthClass = createMemo(
                   () =>
                     getServiceHealthSummaryPresentation(resource.status, pbsRow()?.health)
@@ -206,7 +204,9 @@ export const UnifiedResourcePBSTableSection: Component<UnifiedResourcePBSTableSe
                         </div>
                       </TableCell>
 
-                      <TableCell classList={{ hidden: table.isMobile() || !table.isVisible('primary') }}>
+                      <TableCell
+                        classList={{ hidden: table.isMobile() || !table.isVisible('primary') }}
+                      >
                         <div class="flex justify-center">
                           <Show
                             when={pbsRow()?.datastores != null}
@@ -217,7 +217,9 @@ export const UnifiedResourcePBSTableSection: Component<UnifiedResourcePBSTableSe
                         </div>
                       </TableCell>
 
-                      <TableCell classList={{ hidden: table.isMobile() || !table.isVisible('secondary') }}>
+                      <TableCell
+                        classList={{ hidden: table.isMobile() || !table.isVisible('secondary') }}
+                      >
                         <div class="flex justify-center">
                           <Show
                             when={pbsRow()?.activity}
@@ -253,41 +255,22 @@ export const UnifiedResourcePBSTableSection: Component<UnifiedResourcePBSTableSe
                         </div>
                       </TableCell>
 
-                      <TableCell classList={{ hidden: table.isMobile() || !table.isVisible('secondary') }}>
-                        <div class="flex items-center justify-center gap-1">
-                          <Show
-                            when={hasUnifiedSources()}
-                            fallback={
-                              <>
-                                <Show when={platformBadge()}>
-                                  {(badge) => (
-                                    <span class={badge().classes} title={badge().title}>
-                                      {badge().label}
-                                    </span>
-                                  )}
-                                </Show>
-                                <Show when={sourceBadge()}>
-                                  {(badge) => (
-                                    <span class={badge().classes} title={badge().title}>
-                                      {badge().label}
-                                    </span>
-                                  )}
-                                </Show>
-                              </>
-                            }
-                          >
-                            <For each={unifiedSourceBadges()}>
-                              {(badge) => (
-                                <span class={badge.classes} title={badge.title}>
-                                  {badge.label}
-                                </span>
-                              )}
-                            </For>
-                          </Show>
-                        </div>
+                      <TableCell
+                        classList={{ hidden: table.isMobile() || !table.isVisible('secondary') }}
+                      >
+                        <UnifiedResourceSourceBadgeCell
+                          unifiedBadges={unifiedSourceBadges()}
+                          platformBadge={platformBadge()}
+                          sourceBadge={sourceBadge()}
+                          layoutMode={table.layoutMode()}
+                        />
                       </TableCell>
 
-                      <TableCell classList={{ hidden: table.isMobile() || !table.isVisible('supplementary') }}>
+                      <TableCell
+                        classList={{
+                          hidden: table.isMobile() || !table.isVisible('supplementary'),
+                        }}
+                      >
                         <div class="flex justify-center">
                           <Show
                             when={resource.uptime}

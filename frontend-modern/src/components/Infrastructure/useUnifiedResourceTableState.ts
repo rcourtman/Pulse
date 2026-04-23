@@ -20,6 +20,8 @@ import {
   getHostSpacerHeights,
   getNextUnifiedResourceTableSortState,
   getUnifiedResourceTableColumnPresentations,
+  getUnifiedResourceTableHeaderLabels,
+  getUnifiedResourceTableLayoutMode,
   isUnifiedResourceTableColumnVisible,
   getUnifiedResourceTableShellClass,
   getUnifiedResourceTableSortIndicator,
@@ -101,6 +103,7 @@ export function useUnifiedResourceTableState(props: UnifiedResourceTableProps) {
   const tableLayoutWidth = createMemo(() =>
     normalizeUnifiedResourceTableLayoutWidth(tableContainerWidth(), fallbackViewportWidth()),
   );
+  const layoutMode = createMemo(() => getUnifiedResourceTableLayoutMode(tableLayoutWidth()));
   const isMobile = createMemo(() => shouldUseUnifiedResourceTableMobileLayout(tableLayoutWidth()));
   const isVisible = (priority: ColumnPriority) =>
     isUnifiedResourceTableColumnVisible(priority, tableLayoutWidth());
@@ -108,8 +111,12 @@ export function useUnifiedResourceTableState(props: UnifiedResourceTableProps) {
   const split = createMemo(() => splitPrimaryAndServiceResources(props.resources));
   const primaryResources = createMemo(() => split().primaryResources);
   const serviceResources = createMemo(() => split().services);
-  const primaryResourceIds = createMemo(() => new Set(primaryResources().map((resource) => resource.id)));
-  const serviceResourceIds = createMemo(() => new Set(serviceResources().map((resource) => resource.id)));
+  const primaryResourceIds = createMemo(
+    () => new Set(primaryResources().map((resource) => resource.id)),
+  );
+  const serviceResourceIds = createMemo(
+    () => new Set(serviceResources().map((resource) => resource.id)),
+  );
 
   const sortedResources = createMemo(() =>
     sortResources(primaryResources(), sortKey(), sortDirection()),
@@ -118,7 +125,9 @@ export function useUnifiedResourceTableState(props: UnifiedResourceTableProps) {
   const resolveResourceLabel = (resourceId: string): string | undefined =>
     resourceLabelById().get(resourceId);
 
-  const groupedResources = createMemo(() => groupResources(sortedResources(), props.groupingMode ?? 'grouped'));
+  const groupedResources = createMemo(() =>
+    groupResources(sortedResources(), props.groupingMode ?? 'grouped'),
+  );
   const hostTableItems = createMemo<HostTableItem[]>(() =>
     buildHostTableItems(groupedResources(), props.groupingMode),
   );
@@ -179,15 +188,18 @@ export function useUnifiedResourceTableState(props: UnifiedResourceTableProps) {
     props.onExpandedResourceChange(props.expandedResourceId === resourceId ? null : resourceId);
   };
 
-  const tableShellClass = createMemo(() => getUnifiedResourceTableShellClass(isMobile()));
-  const columnPresentations = createMemo(() => getUnifiedResourceTableColumnPresentations(isMobile()));
+  const tableShellClass = createMemo(() => getUnifiedResourceTableShellClass(layoutMode()));
+  const columnPresentations = createMemo(() =>
+    getUnifiedResourceTableColumnPresentations(layoutMode()),
+  );
+  const headerLabels = createMemo(() => getUnifiedResourceTableHeaderLabels(layoutMode()));
   const showHostTable = createMemo(() =>
     shouldShowUnifiedResourceHostTable(primaryResources().length, serviceResources().length),
   );
   const showHostClearAction = createMemo(() =>
     Boolean(
       props.focusedSummaryGroupId ||
-        (props.expandedResourceId && primaryResourceIds().has(props.expandedResourceId)),
+      (props.expandedResourceId && primaryResourceIds().has(props.expandedResourceId)),
     ),
   );
   const showServiceClearAction = createMemo(() =>
@@ -195,6 +207,7 @@ export function useUnifiedResourceTableState(props: UnifiedResourceTableProps) {
   );
 
   return {
+    layoutMode,
     isMobile,
     isVisible,
     handleSort,
@@ -210,6 +223,7 @@ export function useUnifiedResourceTableState(props: UnifiedResourceTableProps) {
     ioScale,
     ...viewportSync,
     tableShellClass,
+    headerLabels,
     resourceColumn: () => columnPresentations().resourceColumn,
     metricColumn: () => columnPresentations().metricColumn,
     ioColumn: () => columnPresentations().ioColumn,

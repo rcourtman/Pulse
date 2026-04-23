@@ -33,6 +33,7 @@ import { ResourceDetailDrawer } from './ResourceDetailDrawer';
 import { buildWorkloadsHref } from './workloadsLink';
 import { ClusterDeployBanner } from './ClusterDeployBanner';
 import { ResourceFacetSummary } from './ResourceFacetSummary';
+import { UnifiedResourceSourceBadgeCell } from './UnifiedResourceSourceBadgeCell';
 import type { SummarySeriesGroupScope } from '@/components/shared/summaryCardInteraction';
 import { resolveSummaryGroupMemberInteractionState } from '@/components/shared/summaryCardInteraction';
 import {
@@ -74,28 +75,28 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                   width={table.resourceColumn().width}
                   onClick={() => table.handleSort('name')}
                 >
-                  Resource {table.renderSortIndicator('name')}
+                  {table.headerLabels().resource} {table.renderSortIndicator('name')}
                 </TableHead>
                 <TableHead
                   class={table.metricColumn().className}
                   width={table.metricColumn().width}
                   onClick={() => table.handleSort('cpu')}
                 >
-                  CPU {table.renderSortIndicator('cpu')}
+                  {table.headerLabels().cpu} {table.renderSortIndicator('cpu')}
                 </TableHead>
                 <TableHead
                   class={table.metricColumn().className}
                   width={table.metricColumn().width}
                   onClick={() => table.handleSort('memory')}
                 >
-                  {table.isMobile() ? 'Mem' : 'Memory'} {table.renderSortIndicator('memory')}
+                  {table.headerLabels().memory} {table.renderSortIndicator('memory')}
                 </TableHead>
                 <TableHead
                   class={table.metricColumn().className}
                   width={table.metricColumn().width}
                   onClick={() => table.handleSort('disk')}
                 >
-                  Disk {table.renderSortIndicator('disk')}
+                  {table.headerLabels().disk} {table.renderSortIndicator('disk')}
                 </TableHead>
                 <TableHead
                   classList={{ hidden: table.isMobile() || !table.isVisible('secondary') }}
@@ -103,7 +104,7 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                   width={table.ioColumn().width}
                   onClick={() => table.handleSort('network')}
                 >
-                  Net I/O {table.renderSortIndicator('network')}
+                  {table.headerLabels().network} {table.renderSortIndicator('network')}
                 </TableHead>
                 <TableHead
                   classList={{ hidden: table.isMobile() || !table.isVisible('supplementary') }}
@@ -111,7 +112,7 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                   width={table.ioColumn().width}
                   onClick={() => table.handleSort('diskio')}
                 >
-                  Disk I/O {table.renderSortIndicator('diskio')}
+                  {table.headerLabels().diskIo} {table.renderSortIndicator('diskio')}
                 </TableHead>
                 <TableHead
                   classList={{ hidden: table.isMobile() || !table.isVisible('secondary') }}
@@ -119,7 +120,7 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                   width={table.sourceColumn().width}
                   onClick={() => table.handleSort('source')}
                 >
-                  Source {table.renderSortIndicator('source')}
+                  {table.headerLabels().source} {table.renderSortIndicator('source')}
                 </TableHead>
                 <TableHead
                   classList={{ hidden: table.isMobile() || !table.isVisible('supplementary') }}
@@ -127,7 +128,7 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                   width={table.uptimeColumn().width}
                   onClick={() => table.handleSort('uptime')}
                 >
-                  Uptime {table.renderSortIndicator('uptime')}
+                  {table.headerLabels().uptime} {table.renderSortIndicator('uptime')}
                 </TableHead>
                 <TableHead
                   classList={{ hidden: table.isMobile() || !table.isVisible('supplementary') }}
@@ -135,7 +136,7 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                   width={table.tempColumn().width}
                   onClick={() => table.handleSort('temp')}
                 >
-                  Temp {table.renderSortIndicator('temp')}
+                  {table.headerLabels().temp} {table.renderSortIndicator('temp')}
                 </TableHead>
               </TableRow>
             </TableHeader>
@@ -166,7 +167,9 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                     const handleGroupFocusToggle = () => {
                       const nextScope = groupSummaryScope();
                       tableProps.onGroupFocusChange?.(
-                        nextScope && tableProps.focusedSummaryGroupId === nextScope.id ? null : nextScope?.id ?? null,
+                        nextScope && tableProps.focusedSummaryGroupId === nextScope.id
+                          ? null
+                          : (nextScope?.id ?? null),
                       );
                     };
                     const groupRowInteraction = createSummaryInteractiveRowPreviewHandlers({
@@ -301,7 +304,6 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                   const unifiedSourceBadges = createMemo(() =>
                     getUnifiedSourceBadges(table.getUnifiedSources(resource)),
                   );
-                  const hasUnifiedSources = createMemo(() => unifiedSourceBadges().length > 0);
                   const policyBadges = createMemo(() =>
                     getResourcePolicyTableBadges(resource.policy),
                   );
@@ -497,10 +499,16 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                               </div>
                             }
                           >
-                            <div class="grid w-full grid-cols-[0.75rem_minmax(0,1fr)_0.75rem_minmax(0,1fr)] items-center gap-x-1 text-[11px] tabular-nums">
+                            <div
+                              class={
+                                table.layoutMode() === 'wide'
+                                  ? 'grid w-full grid-cols-[0.75rem_minmax(0,1fr)_0.75rem_minmax(0,1fr)] items-center gap-x-1 text-[11px] tabular-nums'
+                                  : 'grid w-full grid-cols-[0.75rem_minmax(0,1fr)] items-center gap-x-1 text-[10px] leading-tight tabular-nums'
+                              }
+                            >
                               <span class="inline-flex w-3 justify-center text-emerald-500">↓</span>
                               <span
-                                class={`min-w-0 whitespace-nowrap ${networkEmphasis().className}`}
+                                class={`min-w-0 overflow-hidden text-ellipsis whitespace-nowrap ${networkEmphasis().className}`}
                                 title={
                                   networkEmphasis().showOutlierHint
                                     ? `${formatSpeed(resource.network!.rxBytes)} (Top outlier)`
@@ -511,7 +519,7 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                               </span>
                               <span class="inline-flex w-3 justify-center text-orange-400">↑</span>
                               <span
-                                class={`min-w-0 whitespace-nowrap ${networkEmphasis().className}`}
+                                class={`min-w-0 overflow-hidden text-ellipsis whitespace-nowrap ${networkEmphasis().className}`}
                                 title={
                                   networkEmphasis().showOutlierHint
                                     ? `${formatSpeed(resource.network!.txBytes)} (Top outlier)`
@@ -537,12 +545,18 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                               </div>
                             }
                           >
-                            <div class="grid w-full grid-cols-[0.75rem_minmax(0,1fr)_0.75rem_minmax(0,1fr)] items-center gap-x-1 text-[11px] tabular-nums">
+                            <div
+                              class={
+                                table.layoutMode() === 'wide'
+                                  ? 'grid w-full grid-cols-[0.75rem_minmax(0,1fr)_0.75rem_minmax(0,1fr)] items-center gap-x-1 text-[11px] tabular-nums'
+                                  : 'grid w-full grid-cols-[0.75rem_minmax(0,1fr)] items-center gap-x-1 text-[10px] leading-tight tabular-nums'
+                              }
+                            >
                               <span class="inline-flex w-3 justify-center font-mono text-blue-500">
                                 R
                               </span>
                               <span
-                                class={`min-w-0 whitespace-nowrap ${diskIOEmphasis().className}`}
+                                class={`min-w-0 overflow-hidden text-ellipsis whitespace-nowrap ${diskIOEmphasis().className}`}
                                 title={
                                   diskIOEmphasis().showOutlierHint
                                     ? `${formatSpeed(resource.diskIO!.readRate)} (Top outlier)`
@@ -555,7 +569,7 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                                 W
                               </span>
                               <span
-                                class={`min-w-0 whitespace-nowrap ${diskIOEmphasis().className}`}
+                                class={`min-w-0 overflow-hidden text-ellipsis whitespace-nowrap ${diskIOEmphasis().className}`}
                                 title={
                                   diskIOEmphasis().showOutlierHint
                                     ? `${formatSpeed(resource.diskIO!.writeRate)} (Top outlier)`
@@ -571,37 +585,12 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                         <TableCell
                           classList={{ hidden: table.isMobile() || !table.isVisible('secondary') }}
                         >
-                          <div class="flex items-center justify-center gap-1">
-                            <Show
-                              when={hasUnifiedSources()}
-                              fallback={
-                                <>
-                                  <Show when={platformBadge()}>
-                                    {(badge) => (
-                                      <span class={badge().classes} title={badge().title}>
-                                        {badge().label}
-                                      </span>
-                                    )}
-                                  </Show>
-                                  <Show when={sourceBadge()}>
-                                    {(badge) => (
-                                      <span class={badge().classes} title={badge().title}>
-                                        {badge().label}
-                                      </span>
-                                    )}
-                                  </Show>
-                                </>
-                              }
-                            >
-                              <For each={unifiedSourceBadges()}>
-                                {(badge) => (
-                                  <span class={badge.classes} title={badge.title}>
-                                    {badge.label}
-                                  </span>
-                                )}
-                              </For>
-                            </Show>
-                          </div>
+                          <UnifiedResourceSourceBadgeCell
+                            unifiedBadges={unifiedSourceBadges()}
+                            platformBadge={platformBadge()}
+                            sourceBadge={sourceBadge()}
+                            layoutMode={table.layoutMode()}
+                          />
                         </TableCell>
 
                         <TableCell

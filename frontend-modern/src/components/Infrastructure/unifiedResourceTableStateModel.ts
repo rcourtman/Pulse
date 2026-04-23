@@ -36,14 +36,18 @@ export type HostTableItem = HostTableHeaderItem | HostTableResourceItem;
 export const HOST_TABLE_ESTIMATED_ROW_HEIGHT = 40;
 export const HOST_TABLE_WINDOW_SIZE = 137;
 export const UNIFIED_RESOURCE_TABLE_DEFAULT_LAYOUT_WIDTH = 1024;
-export const UNIFIED_RESOURCE_TABLE_MOBILE_LAYOUT_WIDTH = 768;
+export const UNIFIED_RESOURCE_TABLE_MOBILE_LAYOUT_WIDTH = 700;
+export const UNIFIED_RESOURCE_TABLE_COMPACT_LAYOUT_WIDTH = 900;
+export const UNIFIED_RESOURCE_TABLE_WIDE_LAYOUT_WIDTH = 1160;
 export const UNIFIED_RESOURCE_TABLE_COLUMN_BREAKPOINTS: Record<ColumnPriority, number> = {
   essential: 0,
   primary: 640,
-  secondary: 1120,
-  supplementary: 1360,
-  detailed: 1536,
+  secondary: UNIFIED_RESOURCE_TABLE_MOBILE_LAYOUT_WIDTH,
+  supplementary: UNIFIED_RESOURCE_TABLE_COMPACT_LAYOUT_WIDTH,
+  detailed: UNIFIED_RESOURCE_TABLE_WIDE_LAYOUT_WIDTH,
 };
+
+export type UnifiedResourceTableLayoutMode = 'mobile' | 'tablet' | 'compact' | 'wide';
 
 export const normalizeUnifiedResourceTableLayoutWidth = (
   width: number | null | undefined,
@@ -58,8 +62,19 @@ export const normalizeUnifiedResourceTableLayoutWidth = (
   return UNIFIED_RESOURCE_TABLE_DEFAULT_LAYOUT_WIDTH;
 };
 
+export const getUnifiedResourceTableLayoutMode = (
+  layoutWidth: number,
+): UnifiedResourceTableLayoutMode => {
+  const width = normalizeUnifiedResourceTableLayoutWidth(layoutWidth);
+
+  if (width < UNIFIED_RESOURCE_TABLE_MOBILE_LAYOUT_WIDTH) return 'mobile';
+  if (width < UNIFIED_RESOURCE_TABLE_COMPACT_LAYOUT_WIDTH) return 'tablet';
+  if (width < UNIFIED_RESOURCE_TABLE_WIDE_LAYOUT_WIDTH) return 'compact';
+  return 'wide';
+};
+
 export const shouldUseUnifiedResourceTableMobileLayout = (layoutWidth: number): boolean =>
-  normalizeUnifiedResourceTableLayoutWidth(layoutWidth) < UNIFIED_RESOURCE_TABLE_MOBILE_LAYOUT_WIDTH;
+  getUnifiedResourceTableLayoutMode(layoutWidth) === 'mobile';
 
 export const isUnifiedResourceTableColumnVisible = (
   priority: ColumnPriority,
@@ -173,10 +188,7 @@ export const getUnifiedResourceTableSortIndicator = (
   return activeDirection === 'asc' ? '▲' : '▼';
 };
 
-export const sortServiceResources = (
-  services: Resource[],
-  type: 'pbs' | 'pmg',
-): Resource[] =>
+export const sortServiceResources = (services: Resource[], type: 'pbs' | 'pmg'): Resource[] =>
   sortResources(
     services.filter((resource) => resource.type === type),
     'default',
@@ -211,6 +223,26 @@ export type UnifiedResourceTableColumnPresentations = {
   serviceActionColumn: UnifiedResourceTableColumnPresentation;
 };
 
+export type UnifiedResourceTableHeaderLabels = {
+  resource: string;
+  cpu: string;
+  memory: string;
+  disk: string;
+  network: string;
+  diskIo: string;
+  source: string;
+  uptime: string;
+  temp: string;
+  datastores: string;
+  activity: string;
+  queue: string;
+  deferred: string;
+  hold: string;
+  nodes: string;
+  health: string;
+  action: string;
+};
+
 const buildUnifiedResourceTableColumnPresentation = (
   className: string,
   width?: string | number,
@@ -219,46 +251,139 @@ const buildUnifiedResourceTableColumnPresentation = (
   width,
 });
 
-export const getUnifiedResourceTableShellClass = (isMobile: boolean): string =>
-  `table-fixed ${isMobile ? 'min-w-full' : 'min-w-[max-content]'}`;
+export const getUnifiedResourceTableShellClass = (
+  layoutMode: UnifiedResourceTableLayoutMode,
+): string => `table-fixed min-w-full${layoutMode === 'wide' ? '' : ' text-[11px] sm:text-xs'}`;
+
+export const getUnifiedResourceTableHeaderLabels = (
+  layoutMode: UnifiedResourceTableLayoutMode,
+): UnifiedResourceTableHeaderLabels => {
+  if (layoutMode === 'wide') {
+    return {
+      resource: 'Resource',
+      cpu: 'CPU',
+      memory: 'Memory',
+      disk: 'Disk',
+      network: 'Net I/O',
+      diskIo: 'Disk I/O',
+      source: 'Source',
+      uptime: 'Uptime',
+      temp: 'Temp',
+      datastores: 'Datastores',
+      activity: 'Activity',
+      queue: 'Queue',
+      deferred: 'Deferred',
+      hold: 'Hold',
+      nodes: 'Nodes',
+      health: 'Health',
+      action: 'Action',
+    };
+  }
+
+  if (layoutMode === 'compact') {
+    return {
+      resource: 'Resource',
+      cpu: 'CPU',
+      memory: 'Mem',
+      disk: 'Disk',
+      network: 'Net I/O',
+      diskIo: 'Disk I/O',
+      source: 'Src',
+      uptime: 'Up',
+      temp: 'Temp',
+      datastores: 'Stores',
+      activity: 'Activity',
+      queue: 'Queue',
+      deferred: 'Def',
+      hold: 'Hold',
+      nodes: 'Nodes',
+      health: 'Health',
+      action: 'Open',
+    };
+  }
+
+  return {
+    resource: 'Resource',
+    cpu: 'CPU',
+    memory: 'Mem',
+    disk: 'Disk',
+    network: 'Net',
+    diskIo: 'I/O',
+    source: 'Src',
+    uptime: 'Up',
+    temp: 'C',
+    datastores: 'Stores',
+    activity: 'Jobs',
+    queue: 'Queue',
+    deferred: 'Def',
+    hold: 'Hold',
+    nodes: 'Nodes',
+    health: 'Health',
+    action: 'Open',
+  };
+};
 
 export const getUnifiedResourceTableColumnPresentations = (
-  isMobile: boolean,
-): UnifiedResourceTableColumnPresentations => ({
-  // Mobile widths are percentages so visible columns fill the viewport without
-  // triggering horizontal scroll. Hidden columns retain placeholder widths that
-  // never render. Host rows show Resource + CPU + Memory + Disk (40/20/20/20 =
-  // 100%). Service (PBS/PMG) rows show Resource + Health + Action (40/36/24 =
-  // 100%). See UnifiedResourceHostTableCard / UnifiedResourcePBSTableSection /
-  // UnifiedResourcePMGTableSection for the matching visibility predicates.
-  resourceColumn: isMobile
-    ? buildUnifiedResourceTableColumnPresentation('', '40%')
-    : buildUnifiedResourceTableColumnPresentation('min-w-[220px] max-w-[220px]', 220),
-  metricColumn: isMobile
-    ? buildUnifiedResourceTableColumnPresentation('', '20%')
-    : buildUnifiedResourceTableColumnPresentation('min-w-[144px] max-w-[144px]', 144),
-  ioColumn: isMobile
-    ? buildUnifiedResourceTableColumnPresentation('', '20%')
-    : buildUnifiedResourceTableColumnPresentation('min-w-[192px] max-w-[192px]', 192),
-  sourceColumn: isMobile
-    ? buildUnifiedResourceTableColumnPresentation('', '20%')
-    : buildUnifiedResourceTableColumnPresentation('min-w-[144px] max-w-[144px]', 144),
-  uptimeColumn: isMobile
-    ? buildUnifiedResourceTableColumnPresentation('', '15%')
-    : buildUnifiedResourceTableColumnPresentation('min-w-[80px] max-w-[80px]', 80),
-  tempColumn: isMobile
-    ? buildUnifiedResourceTableColumnPresentation('', '15%')
-    : buildUnifiedResourceTableColumnPresentation('min-w-[60px] max-w-[70px]', 60),
-  serviceCountColumn: isMobile
-    ? buildUnifiedResourceTableColumnPresentation('', '20%')
-    : buildUnifiedResourceTableColumnPresentation('min-w-[110px] max-w-[130px]', 110),
-  serviceQueueColumn: isMobile
-    ? buildUnifiedResourceTableColumnPresentation('', '20%')
-    : buildUnifiedResourceTableColumnPresentation('min-w-[120px] max-w-[140px]', 120),
-  serviceHealthColumn: isMobile
-    ? buildUnifiedResourceTableColumnPresentation('', '36%')
-    : buildUnifiedResourceTableColumnPresentation('min-w-[140px] max-w-[170px]', 140),
-  serviceActionColumn: isMobile
-    ? buildUnifiedResourceTableColumnPresentation('', '24%')
-    : buildUnifiedResourceTableColumnPresentation('min-w-[120px] max-w-[140px]', 120),
-});
+  layoutMode: UnifiedResourceTableLayoutMode,
+): UnifiedResourceTableColumnPresentations => {
+  if (layoutMode === 'mobile') {
+    // Mobile widths are percentages so visible columns fill the viewport
+    // without horizontal scroll. Hidden columns keep placeholder widths that
+    // never render.
+    return {
+      resourceColumn: buildUnifiedResourceTableColumnPresentation('', '40%'),
+      metricColumn: buildUnifiedResourceTableColumnPresentation('', '20%'),
+      ioColumn: buildUnifiedResourceTableColumnPresentation('', '20%'),
+      sourceColumn: buildUnifiedResourceTableColumnPresentation('', '20%'),
+      uptimeColumn: buildUnifiedResourceTableColumnPresentation('', '15%'),
+      tempColumn: buildUnifiedResourceTableColumnPresentation('', '15%'),
+      serviceCountColumn: buildUnifiedResourceTableColumnPresentation('', '20%'),
+      serviceQueueColumn: buildUnifiedResourceTableColumnPresentation('', '20%'),
+      serviceHealthColumn: buildUnifiedResourceTableColumnPresentation('', '36%'),
+      serviceActionColumn: buildUnifiedResourceTableColumnPresentation('', '24%'),
+    };
+  }
+
+  if (layoutMode === 'tablet') {
+    return {
+      resourceColumn: buildUnifiedResourceTableColumnPresentation('', '26%'),
+      metricColumn: buildUnifiedResourceTableColumnPresentation('', '13%'),
+      ioColumn: buildUnifiedResourceTableColumnPresentation('', '18%'),
+      sourceColumn: buildUnifiedResourceTableColumnPresentation('', '17%'),
+      uptimeColumn: buildUnifiedResourceTableColumnPresentation('', '8%'),
+      tempColumn: buildUnifiedResourceTableColumnPresentation('', '6%'),
+      serviceCountColumn: buildUnifiedResourceTableColumnPresentation('', '8%'),
+      serviceQueueColumn: buildUnifiedResourceTableColumnPresentation('', '8%'),
+      serviceHealthColumn: buildUnifiedResourceTableColumnPresentation('', '16%'),
+      serviceActionColumn: buildUnifiedResourceTableColumnPresentation('', '17%'),
+    };
+  }
+
+  if (layoutMode === 'compact') {
+    return {
+      resourceColumn: buildUnifiedResourceTableColumnPresentation('', '18%'),
+      metricColumn: buildUnifiedResourceTableColumnPresentation('', '10.5%'),
+      ioColumn: buildUnifiedResourceTableColumnPresentation('', '13%'),
+      sourceColumn: buildUnifiedResourceTableColumnPresentation('', '9.5%'),
+      uptimeColumn: buildUnifiedResourceTableColumnPresentation('', '8%'),
+      tempColumn: buildUnifiedResourceTableColumnPresentation('', '7%'),
+      serviceCountColumn: buildUnifiedResourceTableColumnPresentation('', '9.5%'),
+      serviceQueueColumn: buildUnifiedResourceTableColumnPresentation('', '9.5%'),
+      serviceHealthColumn: buildUnifiedResourceTableColumnPresentation('', '14%'),
+      serviceActionColumn: buildUnifiedResourceTableColumnPresentation('', '12%'),
+    };
+  }
+
+  return {
+    resourceColumn: buildUnifiedResourceTableColumnPresentation('', '18%'),
+    metricColumn: buildUnifiedResourceTableColumnPresentation('', '10.5%'),
+    ioColumn: buildUnifiedResourceTableColumnPresentation('', '12.5%'),
+    sourceColumn: buildUnifiedResourceTableColumnPresentation('', '10%'),
+    uptimeColumn: buildUnifiedResourceTableColumnPresentation('', '8%'),
+    tempColumn: buildUnifiedResourceTableColumnPresentation('', '7.5%'),
+    serviceCountColumn: buildUnifiedResourceTableColumnPresentation('', '8.5%'),
+    serviceQueueColumn: buildUnifiedResourceTableColumnPresentation('', '8.5%'),
+    serviceHealthColumn: buildUnifiedResourceTableColumnPresentation('', '14%'),
+    serviceActionColumn: buildUnifiedResourceTableColumnPresentation('', '16%'),
+  };
+};

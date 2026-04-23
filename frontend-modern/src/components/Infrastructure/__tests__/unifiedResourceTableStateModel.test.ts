@@ -9,6 +9,8 @@ import {
   getHostSpacerHeights,
   getNextUnifiedResourceTableSortState,
   getUnifiedResourceTableColumnPresentations,
+  getUnifiedResourceTableHeaderLabels,
+  getUnifiedResourceTableLayoutMode,
   getUnifiedResourceTableShellClass,
   getUnifiedResourceTableSortIndicator,
   getUnifiedSources,
@@ -80,9 +82,11 @@ describe('unifiedResourceTableStateModel', () => {
     );
 
     expect(getVisibleHostTableItems(items, false, 1, 2)).toEqual(items);
-    expect(getVisibleHostTableItems(items, true, 1, 3).map((item) =>
-      item.type === 'row' ? item.resource.id : item.type,
-    )).toEqual(['b', 'c']);
+    expect(
+      getVisibleHostTableItems(items, true, 1, 3).map((item) =>
+        item.type === 'row' ? item.resource.id : item.type,
+      ),
+    ).toEqual(['b', 'c']);
     expect(getHostSpacerHeights(items.length, 1, 3, true, 40)).toEqual({
       top: 40,
       bottom: 0,
@@ -108,27 +112,37 @@ describe('unifiedResourceTableStateModel', () => {
   });
 
   it('derives responsive column presentations and host-table visibility as pure layout policy', () => {
-    const mobileColumns = getUnifiedResourceTableColumnPresentations(true);
-    const desktopColumns = getUnifiedResourceTableColumnPresentations(false);
+    const mobileColumns = getUnifiedResourceTableColumnPresentations('mobile');
+    const tabletColumns = getUnifiedResourceTableColumnPresentations('tablet');
+    const compactColumns = getUnifiedResourceTableColumnPresentations('compact');
+    const wideColumns = getUnifiedResourceTableColumnPresentations('wide');
 
-    expect(getUnifiedResourceTableShellClass(true)).toContain('table-fixed');
-    expect(getUnifiedResourceTableShellClass(true)).toContain('min-w-full');
-    expect(getUnifiedResourceTableShellClass(false)).toContain('min-w-[max-content]');
-    // Mobile uses percentage widths so the visible-column set fills the
-    // viewport without horizontal overflow. Host rows render
-    // Resource + CPU + Memory + Disk = 40 + 3×20 = 100%; service (PBS/PMG)
-    // rows render Resource + Health + Action = 40 + 36 + 24 = 100%. Columns
-    // hidden at mobile keep placeholder percentages that never paint.
+    expect(getUnifiedResourceTableShellClass('mobile')).toContain('table-fixed');
+    expect(getUnifiedResourceTableShellClass('mobile')).toContain('min-w-full');
+    expect(getUnifiedResourceTableShellClass('compact')).toContain('min-w-full');
+    expect(getUnifiedResourceTableShellClass('wide')).toContain('min-w-full');
+    expect(getUnifiedResourceTableShellClass('wide')).not.toContain('min-w-[max-content]');
+    // Mobile and tablet use percentage widths so the visible-column set fills
+    // the table surface without horizontal overflow. Wider modes keep all
+    // host columns visible while compressing their tracks before any
+    // lower-priority columns are dropped.
     expect(mobileColumns.resourceColumn.width).toBe('40%');
     expect(mobileColumns.metricColumn.width).toBe('20%');
     expect(mobileColumns.serviceHealthColumn.width).toBe('36%');
     expect(mobileColumns.serviceActionColumn.width).toBe('24%');
-    expect(desktopColumns.resourceColumn.className).toContain('min-w-[220px]');
-    expect(desktopColumns.resourceColumn.className).toContain('max-w-[220px]');
-    expect(desktopColumns.resourceColumn.width).toBe(220);
-    expect(desktopColumns.metricColumn.width).toBe(144);
-    expect(desktopColumns.ioColumn.width).toBe(192);
-    expect(desktopColumns.sourceColumn.width).toBe(144);
+    expect(tabletColumns.resourceColumn.width).toBe('26%');
+    expect(tabletColumns.ioColumn.width).toBe('18%');
+    expect(tabletColumns.sourceColumn.width).toBe('17%');
+    expect(compactColumns.resourceColumn.width).toBe('18%');
+    expect(compactColumns.metricColumn.width).toBe('10.5%');
+    expect(compactColumns.tempColumn.width).toBe('7%');
+    expect(wideColumns.resourceColumn.width).toBe('18%');
+    expect(wideColumns.ioColumn.width).toBe('12.5%');
+    expect(wideColumns.serviceActionColumn.width).toBe('16%');
+    expect(getUnifiedResourceTableHeaderLabels('wide').memory).toBe('Memory');
+    expect(getUnifiedResourceTableHeaderLabels('compact').memory).toBe('Mem');
+    expect(getUnifiedResourceTableHeaderLabels('tablet').network).toBe('Net');
+    expect(getUnifiedResourceTableHeaderLabels('mobile').datastores).toBe('Stores');
     expect(shouldShowUnifiedResourceHostTable(0, 0)).toBe(true);
     expect(shouldShowUnifiedResourceHostTable(0, 2)).toBe(false);
     expect(shouldShowUnifiedResourceHostTable(3, 2)).toBe(true);
@@ -137,20 +151,27 @@ describe('unifiedResourceTableStateModel', () => {
   it('derives infrastructure table breakpoints from the measured table surface width', () => {
     expect(normalizeUnifiedResourceTableLayoutWidth(820.4)).toBe(820);
     expect(normalizeUnifiedResourceTableLayoutWidth(null, 700)).toBe(700);
-    expect(shouldUseUnifiedResourceTableMobileLayout(767)).toBe(true);
-    expect(shouldUseUnifiedResourceTableMobileLayout(768)).toBe(false);
-    expect(isUnifiedResourceTableColumnVisible('primary', 700)).toBe(true);
-    expect(isUnifiedResourceTableColumnVisible('secondary', 1119)).toBe(false);
-    expect(isUnifiedResourceTableColumnVisible('secondary', 1120)).toBe(true);
-    expect(isUnifiedResourceTableColumnVisible('supplementary', 1359)).toBe(false);
-    expect(isUnifiedResourceTableColumnVisible('supplementary', 1360)).toBe(true);
+    expect(getUnifiedResourceTableLayoutMode(699)).toBe('mobile');
+    expect(getUnifiedResourceTableLayoutMode(700)).toBe('tablet');
+    expect(getUnifiedResourceTableLayoutMode(899)).toBe('tablet');
+    expect(getUnifiedResourceTableLayoutMode(900)).toBe('compact');
+    expect(getUnifiedResourceTableLayoutMode(1159)).toBe('compact');
+    expect(getUnifiedResourceTableLayoutMode(1160)).toBe('wide');
+    expect(shouldUseUnifiedResourceTableMobileLayout(699)).toBe(true);
+    expect(shouldUseUnifiedResourceTableMobileLayout(700)).toBe(false);
+    expect(isUnifiedResourceTableColumnVisible('primary', 640)).toBe(true);
+    expect(isUnifiedResourceTableColumnVisible('secondary', 699)).toBe(false);
+    expect(isUnifiedResourceTableColumnVisible('secondary', 700)).toBe(true);
+    expect(isUnifiedResourceTableColumnVisible('supplementary', 899)).toBe(false);
+    expect(isUnifiedResourceTableColumnVisible('supplementary', 900)).toBe(true);
+    expect(isUnifiedResourceTableColumnVisible('detailed', 1159)).toBe(false);
+    expect(isUnifiedResourceTableColumnVisible('detailed', 1160)).toBe(true);
   });
 
   it('reads unified source tags from platform data without hook state', () => {
-    expect(getUnifiedSources(makeResource('a', { platformData: { sources: ['proxmox', 'agent'] } }))).toEqual([
-      'proxmox',
-      'agent',
-    ]);
+    expect(
+      getUnifiedSources(makeResource('a', { platformData: { sources: ['proxmox', 'agent'] } })),
+    ).toEqual(['proxmox', 'agent']);
     expect(getUnifiedSources(makeResource('b', { platformData: {} }))).toEqual([]);
   });
 });

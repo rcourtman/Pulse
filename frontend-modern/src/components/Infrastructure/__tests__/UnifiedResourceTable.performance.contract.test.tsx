@@ -45,10 +45,7 @@ globalThis.ResizeObserver = class ResizeObserver {
 } as unknown as typeof ResizeObserver;
 const emitResizeObserverWidth = (width: number) => {
   for (const callback of resizeObserverCallbacks) {
-    callback(
-      [{ contentRect: { width } } as ResizeObserverEntry],
-      {} as ResizeObserver,
-    );
+    callback([{ contentRect: { width } } as ResizeObserverEntry], {} as ResizeObserver);
   }
 };
 if (typeof Element.prototype.scrollIntoView !== 'function') {
@@ -209,39 +206,44 @@ describe('UnifiedResourceTable performance contract', () => {
         expect(getByText('Net I/O')).toBeInTheDocument();
       });
 
-      emitResizeObserverWidth(900);
+      emitResizeObserverWidth(820);
 
       await waitFor(() => {
-        expect(getByText('Net I/O').closest('th')).toHaveClass('hidden');
-        expect(getByText('Source').closest('th')).toHaveClass('hidden');
+        expect(getByText('Net').closest('th')).not.toHaveClass('hidden');
+        expect(getByText('Src').closest('th')).not.toHaveClass('hidden');
+        expect(getByText('I/O').closest('th')).toHaveClass('hidden');
+        expect(getByText('Up').closest('th')).toHaveClass('hidden');
       });
       expect(getByText('CPU').closest('th')).not.toHaveClass('hidden');
-      expect(getByText('Memory')).toBeInTheDocument();
+      expect(getByText('Mem')).toBeInTheDocument();
       expect(getByText('Disk').closest('th')).not.toHaveClass('hidden');
+
+      emitResizeObserverWidth(980);
+
+      await waitFor(() => {
+        expect(getByText('Net I/O').closest('th')).not.toHaveClass('hidden');
+        expect(getByText('Disk I/O').closest('th')).not.toHaveClass('hidden');
+        expect(getByText('Src').closest('th')).not.toHaveClass('hidden');
+        expect(getByText('Up').closest('th')).not.toHaveClass('hidden');
+        expect(getByText('Temp').closest('th')).not.toHaveClass('hidden');
+      });
 
       emitResizeObserverWidth(1200);
 
       await waitFor(() => {
-        expect(getByText('Net I/O').closest('th')).not.toHaveClass('hidden');
+        expect(getByText('Memory')).toBeInTheDocument();
         expect(getByText('Source').closest('th')).not.toHaveClass('hidden');
-        expect(getByText('Uptime').closest('th')).toHaveClass('hidden');
-      });
-
-      emitResizeObserverWidth(1400);
-
-      await waitFor(() => {
         expect(getByText('Uptime').closest('th')).not.toHaveClass('hidden');
-        expect(getByText('Temp').closest('th')).not.toHaveClass('hidden');
       });
     });
 
     it('renders the shared facet summary component in timeline-only mode for canonical resource counts', async () => {
       const { getByText, queryByText } = render(() => (
-      <ResourceFacetSummary
-        counts={{
-          recentChanges: 3,
-          recentChangeKinds: {
-            restart: 2,
+        <ResourceFacetSummary
+          counts={{
+            recentChanges: 3,
+            recentChangeKinds: {
+              restart: 2,
               config_update: 1,
               metric_anomaly: 1,
             },
@@ -283,23 +285,33 @@ describe('UnifiedResourceTable performance contract', () => {
       expect(unifiedResourceTableSource).toContain('UnifiedResourceHostTableCard');
       expect(unifiedResourceTableSource).toContain('UnifiedResourceServiceInfrastructureCard');
       expect(unifiedResourceTableSource).toContain('data-summary-clear-surface');
-      expect(unifiedResourceTableSource).not.toContain('const sortedPBSResources = createMemo(() =>');
+      expect(unifiedResourceTableSource).not.toContain(
+        'const sortedPBSResources = createMemo(() =>',
+      );
       expect(unifiedResourceTableSource).not.toContain('const getOutlierEmphasis =');
       expect(unifiedResourceTableSource).not.toContain('const getPBSTableRow =');
       expect(unifiedResourceTableStateSource).toContain("from './unifiedResourceTableStateModel'");
       expect(unifiedResourceTableStateSource).toContain('buildHostTableItems');
-      expect(unifiedResourceTableStateSource).toContain('getUnifiedResourceTableColumnPresentations');
+      expect(unifiedResourceTableStateSource).toContain(
+        'getUnifiedResourceTableColumnPresentations',
+      );
+      expect(unifiedResourceTableStateSource).toContain('getUnifiedResourceTableHeaderLabels');
+      expect(unifiedResourceTableStateSource).toContain('getUnifiedResourceTableLayoutMode');
       expect(unifiedResourceTableStateSource).toContain('getUnifiedResourceTableShellClass');
       expect(unifiedResourceTableStateSource).toContain('useTableWindowing');
       expect(unifiedResourceTableStateSource).toContain('useUnifiedResourceTableViewportSync');
       expect(unifiedResourceTableStateSource).toContain('clearPinnedSummaryScope?: () => void;');
       expect(unifiedResourceTableStateSource).toContain('showHostClearAction');
       expect(unifiedResourceTableStateSource).toContain('showServiceClearAction');
-      expect(unifiedResourceTableStateSource).not.toContain('const resourceColumnStyle = createMemo(() =>');
+      expect(unifiedResourceTableStateSource).not.toContain(
+        'const resourceColumnStyle = createMemo(() =>',
+      );
       expect(unifiedResourceHostTableCardSource).not.toContain('style={');
       expect(unifiedResourcePBSTableSectionSource).not.toContain('style={');
       expect(unifiedResourcePMGTableSectionSource).not.toContain('style={');
-      expect(unifiedResourceTableStateSource).not.toContain("const showGroupHeaders = props.groupingMode === 'grouped'");
+      expect(unifiedResourceTableStateSource).not.toContain(
+        "const showGroupHeaders = props.groupingMode === 'grouped'",
+      );
       expect(unifiedResourceTableStateSource).not.toContain('const items: HostTableItem[] = [];');
       expect(unifiedResourceTableStateSource).not.toContain('window.addEventListener');
       expect(unifiedResourceTableStateSource).not.toContain('getBoundingClientRect');
@@ -315,6 +327,12 @@ describe('UnifiedResourceTable performance contract', () => {
         'export const getUnifiedResourceTableColumnPresentations',
       );
       expect(unifiedResourceTableStateModelSource).toContain(
+        'export const getUnifiedResourceTableHeaderLabels',
+      );
+      expect(unifiedResourceTableStateModelSource).toContain(
+        'export const getUnifiedResourceTableLayoutMode',
+      );
+      expect(unifiedResourceTableStateModelSource).toContain(
         'export const getUnifiedResourceTableShellClass',
       );
       expect(unifiedResourceTableStateModelSource).toContain(
@@ -324,7 +342,7 @@ describe('UnifiedResourceTable performance contract', () => {
 
     it('keeps PBS activity projection in the shared table-model owner', () => {
       expect(unifiedResourceTableModelSource).toContain('getPbsActivitySummary');
-      expect(unifiedResourcePBSTableSectionSource).toContain('Activity');
+      expect(unifiedResourcePBSTableSectionSource).toContain('headerLabels().activity');
       expect(unifiedResourcePBSTableSectionSource).not.toContain('backupJobs');
       expect(unifiedResourcePBSTableSectionSource).not.toContain('syncJobs');
       expect(unifiedResourcePBSTableSectionSource).not.toContain('getPbsActivitySummary');
@@ -351,13 +369,13 @@ describe('UnifiedResourceTable performance contract', () => {
       expect(infrastructureSummaryStateSource).not.toContain(
         'const match = allSeries.find((series) => series.id === focused);',
       );
-      expect(infrastructureSummaryStateSource).not.toContain(
-        "displaySeries().map((series) => ({",
-      );
+      expect(infrastructureSummaryStateSource).not.toContain('displaySeries().map((series) => ({');
       expect(infrastructureSummaryStateSource).not.toContain(
         "isAwaitingFirstSample() ? 'Gathering first sample…' : 'Building trend history…'",
       );
-      expect(infrastructureSummaryStateSource).not.toContain("fetchFailed() ? 'Trend data unavailable' : emptyHistoryLabel()");
+      expect(infrastructureSummaryStateSource).not.toContain(
+        "fetchFailed() ? 'Trend data unavailable' : emptyHistoryLabel()",
+      );
       expect(infrastructureSummaryModelSource).toContain(
         'export function buildInfrastructureSummarySeries',
       );
@@ -380,7 +398,9 @@ describe('UnifiedResourceTable performance contract', () => {
       expect(frontendIndexCssSource).toContain('--color-summary-row-bg');
       expect(frontendIndexCssSource).toContain('--color-summary-row-accent');
       expect(summaryInteractionA11ySource).toContain('createSummaryInteractiveRowPreviewHandlers');
-      expect(summaryInteractionA11ySource).toContain('createSummaryInteractiveActionKeydownHandler');
+      expect(summaryInteractionA11ySource).toContain(
+        'createSummaryInteractiveActionKeydownHandler',
+      );
       expect(summaryRowActionButtonSource).toContain('SummaryRowActionButton');
       expect(summaryRowActionButtonSource).toContain('aria-controls');
       expect(summaryRowActionButtonSource).toContain('aria-expanded');
@@ -400,7 +420,9 @@ describe('UnifiedResourceTable performance contract', () => {
 
       expect(unifiedResourceHostTableCardSource).not.toContain('kind="scope"');
       expect(unifiedResourceHostTableCardSource).toContain('SummaryTableCardHeader');
-      expect(unifiedResourceHostTableCardSource).toContain('onClear={tableProps.clearPinnedSummaryScope}');
+      expect(unifiedResourceHostTableCardSource).toContain(
+        'onClear={tableProps.clearPinnedSummaryScope}',
+      );
       expect(unifiedResourceServiceInfrastructureCardSource).toContain('SummaryTableCardHeader');
       expect(unifiedResourceServiceInfrastructureCardSource).toContain('showClearAction');
       expect(unifiedResourceServiceInfrastructureCardSource).toContain(
