@@ -17,11 +17,17 @@ export interface OrganizationInvitation {
   invitedBy: string;
 }
 
-export interface OrganizationAccessMutationResult {
-  kind: 'member' | 'invitation';
-  member?: OrganizationMember;
-  invitation?: OrganizationInvitation;
-}
+export type OrganizationAccessMutationResult =
+  | {
+      kind: 'member';
+      member: OrganizationMember;
+      invitation?: never;
+    }
+  | {
+      kind: 'invitation';
+      invitation: OrganizationInvitation;
+      member?: never;
+    };
 
 export interface UserOrganizationInvitation extends OrganizationInvitation {
   orgId: string;

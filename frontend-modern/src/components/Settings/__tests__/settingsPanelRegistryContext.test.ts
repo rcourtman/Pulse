@@ -36,7 +36,8 @@ function buildParams(
     savingHideLocalLogin: () => false,
     handleHideLocalLoginChange: vi.fn(async () => undefined),
     versionInfo: () => null,
-    getInfrastructurePanelProps: () => ({}),
+    getInfrastructurePanelProps: () =>
+      ({} as ReturnType<UseSettingsPanelRegistryParams['getInfrastructurePanelProps']>),
     systemPanels,
   };
 }

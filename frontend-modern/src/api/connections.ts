@@ -93,6 +93,11 @@ export interface ConnectionSystem {
 
 export interface ConnectionsListResponse {
   connections: Connection[];
+  systems: ConnectionSystem[];
+}
+
+interface ConnectionsListWireResponse {
+  connections?: Connection[];
   systems?: ConnectionSystem[];
 }
 
@@ -116,7 +121,7 @@ export class ConnectionsAPI {
   private static readonly baseUrl = '/api/connections';
 
   static async list(): Promise<ConnectionsListResponse> {
-    const response: ConnectionsListResponse = await apiFetchJSON(this.baseUrl);
+    const response: ConnectionsListWireResponse = await apiFetchJSON(this.baseUrl);
     return {
       connections: response.connections ?? [],
       systems: response.systems ?? [],

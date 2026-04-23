@@ -3,6 +3,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DiagnosticsData } from '@/components/Settings/diagnosticsModel';
 
 type UseDiagnosticsPanelStateModule = typeof import('../useDiagnosticsPanelState');
+type URLStaticWithBlobMethods = {
+  createObjectURL?: typeof URL.createObjectURL;
+  revokeObjectURL?: typeof URL.revokeObjectURL;
+};
 
 const createDiagnosticsData = (): DiagnosticsData => ({
   version: '6.0.0',
@@ -135,7 +139,7 @@ describe('useDiagnosticsPanelState', () => {
         value: originalCreateObjectURL,
       });
     } else {
-      delete (URL as URL & { createObjectURL?: typeof URL.createObjectURL }).createObjectURL;
+      delete (URL as unknown as URLStaticWithBlobMethods).createObjectURL;
     }
     if (originalRevokeObjectURL) {
       Object.defineProperty(URL, 'revokeObjectURL', {
@@ -143,7 +147,7 @@ describe('useDiagnosticsPanelState', () => {
         value: originalRevokeObjectURL,
       });
     } else {
-      delete (URL as URL & { revokeObjectURL?: typeof URL.revokeObjectURL }).revokeObjectURL;
+      delete (URL as unknown as URLStaticWithBlobMethods).revokeObjectURL;
     }
     vi.restoreAllMocks();
     vi.resetModules();

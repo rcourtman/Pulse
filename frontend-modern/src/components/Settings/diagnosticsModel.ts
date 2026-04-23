@@ -42,6 +42,20 @@ export interface DiscoveryDiagnostic {
   lastResultTimestamp?: string;
   lastResultServers?: number;
   lastResultErrors?: number;
+  history?: DiscoveryHistoryDiagnostic[];
+}
+
+export interface DiscoveryHistoryDiagnostic {
+  startedAt?: string;
+  completedAt?: string;
+  duration?: string;
+  durationMs?: number;
+  subnet?: string;
+  serverCount?: number;
+  errorCount?: number;
+  blocklistLength?: number;
+  status?: string;
+  [key: string]: unknown;
 }
 
 export interface APITokenDiagnostic {
@@ -246,11 +260,8 @@ export function sanitizeDiagnosticsData(raw: DiagnosticsData): DiagnosticsData {
       subnetBlocklist: data.discovery.subnetBlocklist?.map(() => '[REDACTED_SUBNET]'),
     };
 
-    const discovery = data.discovery as DiscoveryDiagnostic & {
-      history?: Array<Record<string, unknown>>;
-    };
-    if (Array.isArray(discovery.history)) {
-      discovery.history = discovery.history.map((historyEntry) => ({
+    if (Array.isArray(data.discovery.history)) {
+      data.discovery.history = data.discovery.history.map((historyEntry) => ({
         ...historyEntry,
         subnet: '[REDACTED_SUBNET]',
       }));

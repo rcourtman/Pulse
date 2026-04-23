@@ -207,6 +207,10 @@ describe('shared storage override migration', () => {
       displayName: 'ceph-pool',
       type: 'storage',
       platformId: 'Main',
+      platformType: 'proxmox-pve',
+      sourceType: 'api',
+      status: 'online',
+      lastSeen: Date.now(),
       proxmox: {
         instance: 'Main',
         node: 'cluster',

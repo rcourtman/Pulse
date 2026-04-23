@@ -125,7 +125,9 @@ export function useOrganizationAccessPanelState(props: OrganizationAccessPanelPr
 
       const result = await OrgsAPI.inviteMember(currentOrg.id, { userId, role });
       if (result.kind === 'invitation') {
-        notificationStore.success(getOrganizationAccessInvitationSentMessage(userId, role));
+        notificationStore.success(
+          getOrganizationAccessInvitationSentMessage(userId, result.invitation.role),
+        );
       } else {
         notificationStore.success(getOrganizationAccessMemberAddedMessage(userId, role));
       }
