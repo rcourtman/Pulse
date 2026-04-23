@@ -56,6 +56,25 @@ describe('ColumnPicker', () => {
     expect(onToggle).toHaveBeenCalledWith('subject');
   });
 
+  it('labels hidden column count with explicit context', () => {
+    render(() => (
+      <ColumnPicker
+        columns={[
+          { id: 'subject', label: 'Subject' },
+          { id: 'verified', label: 'Verified' },
+          { id: 'target', label: 'Target' },
+        ]}
+        isHidden={(columnId) => columnId !== 'subject'}
+        onToggle={vi.fn()}
+      />
+    ));
+
+    expect(
+      screen.getByRole('button', { name: /columns 2 hidden/i }),
+    ).toBeInTheDocument();
+    expect(screen.getByText('2 hidden')).toBeInTheDocument();
+  });
+
   it('closes when the user clicks outside the open picker', async () => {
     render(() => (
       <ColumnPicker

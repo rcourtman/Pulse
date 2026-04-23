@@ -1232,6 +1232,11 @@ shell, `frontend-modern/src/components/shared/useColumnPickerState.ts` owns
 dropdown open state and outside-click listener lifecycle, and
 `frontend-modern/src/components/shared/columnPickerModel.ts` owns hidden-column
 count, reset visibility policy, and column-option text-class/copy policy.
+Column-picker trigger badges must describe what the count means, such as
+`N hidden`, rather than exposing a bare number or ratio that competing table
+surfaces can interpret differently. Shared column-picker tests must cover that
+copy alongside the owner split so governed product tables do not regress to
+ambiguous utility badges.
 Future column-picker work should extend those owners instead of pushing
 document-level listener logic or column-count policy back into the shell.
 The shared tag input now follows that same owner split.

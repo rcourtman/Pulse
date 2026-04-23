@@ -26,6 +26,7 @@ import { getRecoveryPointPlatform } from '@/utils/recoveryPlatformModel';
 
 interface RecoveryPointDetailsProps {
   point: RecoveryPoint;
+  relatedPoints?: RecoveryPoint[];
 }
 
 const detailNumber = (p: RecoveryPoint, key: string): number | null => {
@@ -78,6 +79,103 @@ const labelForRef = (ref: RecoveryExternalRef | null | undefined): string => {
   if (ref.uid) parts.push(`uid=${ref.uid}`);
   if (ref.id) parts.push(`id=${ref.id}`);
   return parts.length > 0 ? parts.join(' ') : 'n/a';
+};
+
+type RecoveryChainStage = 'snapshot' | 'local' | 'remote';
+
+const CHAIN_STAGES: Array<{ id: RecoveryChainStage; label: string }> = [
+  { id: 'snapshot', label: 'Local snapshot' },
+  { id: 'local', label: 'Local copy' },
+  { id: 'remote', label: 'Remote copy' },
+];
+
+const normalizeDetailText = (value: unknown): string => {
+  if (typeof value === 'string') return value.trim();
+  if (typeof value === 'number' && Number.isFinite(value)) return String(value);
+  if (typeof value === 'boolean') return value ? 'true' : 'false';
+  return '';
+};
+
+const getPointTimestampMs = (p: RecoveryPoint): number => {
+  const raw = p.completedAt || p.startedAt || '';
+  const ms = raw ? Date.parse(raw) : 0;
+  return Number.isFinite(ms) ? ms : 0;
+};
+
+const getPointChainStage = (p: RecoveryPoint): RecoveryChainStage | null => {
+  const mode = String(p.mode || '').trim().toLowerCase();
+  const kind = String(p.kind || '').trim().toLowerCase();
+  if (mode === 'remote') return 'remote';
+  if (mode === 'local') return 'local';
+  if (mode === 'snapshot' || kind === 'snapshot') return 'snapshot';
+  return null;
+};
+
+const getPointItemIdentity = (p: RecoveryPoint): string => {
+  const refs = [p.itemRef, p.subjectRef];
+  const refKey = refs
+    .map((ref) => {
+      if (!ref) return '';
+      if (ref.uid) return `uid:${ref.uid}`;
+      if (ref.id) return `id:${ref.id}`;
+      return [ref.type, ref.namespace, ref.name].filter(Boolean).join(':');
+    })
+    .find(Boolean);
+  return (
+    String(p.itemResourceId || '').trim() ||
+    refKey ||
+    String(p.entityId || '').trim() ||
+    String(p.display?.itemLabel || p.display?.subjectLabel || '').trim() ||
+    p.id
+  );
+};
+
+const getLocalPlacementLabel = (p: RecoveryPoint): string =>
+  String(
+    p.display?.nodeHostLabel ||
+      p.display?.nodeAgentLabel ||
+      p.node ||
+      p.details?.node ||
+      p.details?.instance ||
+      '',
+  ).trim();
+
+const getArtifactSummaryLabel = (p: RecoveryPoint): string => {
+  const kindLabel = getRecoveryPointKindLabel(p.kind);
+  const modeLabel = getRecoveryPointModeLabel(p.mode);
+  return kindLabel === modeLabel ? kindLabel : `${kindLabel} / ${modeLabel}`;
+};
+
+const getTargetSummaryLabel = (p: RecoveryPoint): string => {
+  const repositoryLabel = getRecoveryPointRepositoryLabel(p);
+  if (repositoryLabel) return repositoryLabel;
+  const refLabel = labelForRef(p.repositoryRef);
+  if (refLabel !== 'n/a') return refLabel;
+
+  const placement = getLocalPlacementLabel(p);
+  const stage = getPointChainStage(p);
+  if (stage === 'snapshot') return placement ? `Local snapshot on ${placement}` : 'Local snapshot';
+  if (stage === 'local') return placement ? `Local copy on ${placement}` : 'Local copy';
+  if (stage === 'remote') return 'Remote target not recorded';
+  return 'Target not recorded';
+};
+
+const formatChainPointDetail = (p: RecoveryPoint): string => {
+  const timestamp = getPointTimestampMs(p);
+  const platform = getSourcePlatformLabel(
+    normalizeSourcePlatformQueryValue(getRecoveryPointPlatform(p)) || getRecoveryPointPlatform(p),
+  );
+  const target = getTargetSummaryLabel(p);
+  const verification =
+    p.verified === true ? 'Verified' : p.verified === false ? 'Verification failed' : '';
+  return [
+    target,
+    platform,
+    timestamp > 0 ? formatAbsoluteTime(timestamp) : '',
+    verification,
+  ]
+    .filter(Boolean)
+    .join(' · ');
 };
 
 const computeDatastoreUsagePercent = (datastore: PBSDatastore): number => {
@@ -187,12 +285,7 @@ export const RecoveryPointDetails: Component<RecoveryPointDetailsProps> = (props
     if (refLabel !== 'n/a') return refLabel;
     return point().itemResourceId || point().id;
   });
-  const targetLabel = createMemo(() => {
-    const repositoryLabel = getRecoveryPointRepositoryLabel(point());
-    if (repositoryLabel) return repositoryLabel;
-    const refLabel = labelForRef(point().repositoryRef);
-    return refLabel === 'n/a' ? 'No target recorded' : refLabel;
-  });
+  const targetLabel = createMemo(() => getTargetSummaryLabel(point()));
   const normalizedOutcome = createMemo(() => normalizeRecoveryOutcome(point().outcome));
   const outcomeLabel = createMemo(() => getRecoveryPointOutcomeLabel(point().outcome));
   const readiness = createMemo(() => {
@@ -239,12 +332,81 @@ export const RecoveryPointDetails: Component<RecoveryPointDetailsProps> = (props
     };
   });
   const failureDetail = createMemo(() => {
-    const error = detailString(point(), 'error');
-    if (error) return error;
-    const status = detailString(point(), 'status');
-    if (normalizedOutcome() === 'failed' && status) return status;
+    const p = point();
+    const directKeys = [
+      'error',
+      'errorMessage',
+      'failure',
+      'failureReason',
+      'message',
+      'taskError',
+      'taskStatus',
+      'statusMessage',
+      'lastError',
+    ];
+    for (const key of directKeys) {
+      const value = detailString(p, key);
+      if (value) return value;
+    }
+
+    const errors = p.details?.errors;
+    if (Array.isArray(errors)) {
+      const joined = errors
+        .map((entry) => normalizeDetailText(entry))
+        .filter(Boolean)
+        .slice(0, 3)
+        .join('; ');
+      if (joined) return joined;
+    }
+
+    const status = detailString(p, 'status');
+    if (normalizedOutcome() === 'failed' && status) {
+      const genericJobErrors = status.toLowerCase() === 'job errors';
+      if (genericJobErrors) {
+        const taskName = detailString(p, 'taskName');
+        const upid = detailString(p, 'upid') || detailString(p, 'taskId');
+        return [
+          'Source task reported job errors.',
+          taskName ? `Task: ${taskName}.` : '',
+          upid ? `UPID: ${upid}.` : '',
+          'Inspect the platform task log for the failing step.',
+        ]
+          .filter(Boolean)
+          .join(' ');
+      }
+      return status;
+    }
     return '';
   });
+  const protectionChain = createMemo(() => {
+    const selected = point();
+    const selectedIdentity = getPointItemIdentity(selected);
+    const byId = new Map<string, RecoveryPoint>();
+    byId.set(selected.id, selected);
+    for (const related of props.relatedPoints || []) {
+      if (getPointItemIdentity(related) !== selectedIdentity) continue;
+      byId.set(related.id, related);
+    }
+
+    const candidates = [...byId.values()];
+    return CHAIN_STAGES.map((stage) => {
+      const stagePoint =
+        candidates
+          .filter((candidate) => getPointChainStage(candidate) === stage.id)
+          .sort((left, right) => getPointTimestampMs(right) - getPointTimestampMs(left))[0] || null;
+      const outcome = stagePoint ? normalizeRecoveryOutcome(stagePoint.outcome) : null;
+      return {
+        ...stage,
+        point: stagePoint,
+        outcome,
+        outcomeLabel: stagePoint ? getRecoveryPointOutcomeLabel(stagePoint.outcome) : '',
+        detail: stagePoint ? formatChainPointDetail(stagePoint) : 'Not shown in current result set',
+      };
+    });
+  });
+  const hasProtectionChain = createMemo(() =>
+    protectionChain().some((stage) => stage.point !== null),
+  );
   const operatorSummaryPairs = createMemo(() => [
     {
       k: 'Outcome',
@@ -254,7 +416,7 @@ export const RecoveryPointDetails: Component<RecoveryPointDetailsProps> = (props
     },
     {
       k: 'Artifact',
-      v: `${getRecoveryPointKindLabel(point().kind)} / ${getRecoveryPointModeLabel(point().mode)}`,
+      v: getArtifactSummaryLabel(point()),
       valueClass: 'text-base-content',
       detail: itemLabel(),
     },
@@ -319,7 +481,10 @@ export const RecoveryPointDetails: Component<RecoveryPointDetailsProps> = (props
     for (const k of commonDetailKeys) {
       const v = p.details?.[k];
       if (v == null) continue;
-      pairs.push({ k: COMMON_DETAIL_LABELS[k] || k, v: String(v) });
+      const displayValue = normalizeDetailText(v);
+      if (!displayValue) continue;
+      if (k === 'vmid' && displayValue === '0') continue;
+      pairs.push({ k: COMMON_DETAIL_LABELS[k] || k, v: displayValue });
     }
 
     return pairs;
@@ -401,6 +566,46 @@ export const RecoveryPointDetails: Component<RecoveryPointDetailsProps> = (props
           <div class="mt-3 rounded border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-700 dark:text-rose-200">
             <div class="font-semibold">Failure detail</div>
             <div class="mt-1 break-words font-mono text-[11px]">{failureDetail()}</div>
+          </div>
+        </Show>
+        <Show when={hasProtectionChain()}>
+          <div class="mt-3 rounded border border-border bg-surface px-3 py-2 text-xs">
+            <div class="flex flex-wrap items-start justify-between gap-2">
+              <div>
+                <div class="font-semibold text-base-content">Protection chain</div>
+                <div class="mt-0.5 text-[11px] text-muted">
+                  Matching stages for this item in the current result set.
+                </div>
+              </div>
+            </div>
+            <div class="mt-2 grid gap-2 md:grid-cols-3">
+              <For each={protectionChain()}>
+                {(stage) => (
+                  <div class="rounded border border-border bg-surface-alt/45 px-2.5 py-2">
+                    <div class="flex items-center justify-between gap-2">
+                      <span class="font-medium text-base-content">{stage.label}</span>
+                      <Show
+                        when={stage.outcome}
+                        fallback={<span class="text-[10px] text-muted">Missing</span>}
+                      >
+                        {(outcome) => (
+                          <span
+                            class={`text-[10px] font-medium ${getRecoveryOutcomeTextClass(
+                              outcome(),
+                            )}`}
+                          >
+                            {stage.outcomeLabel}
+                          </span>
+                        )}
+                      </Show>
+                    </div>
+                    <div class="mt-1 text-[11px] leading-4 text-muted break-words">
+                      {stage.detail}
+                    </div>
+                  </div>
+                )}
+              </For>
+            </div>
           </div>
         </Show>
       </div>

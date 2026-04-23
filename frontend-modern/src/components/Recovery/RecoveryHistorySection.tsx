@@ -158,7 +158,7 @@ export const RecoveryHistorySection: Component<RecoveryHistorySectionProps> = (p
                     props.setCurrentPage(1);
                   }}
                 >
-                  All protected items
+                  All events
                 </button>
                 <span class="text-muted">/</span>
                 <span class="min-w-0 truncate font-medium text-base-content">

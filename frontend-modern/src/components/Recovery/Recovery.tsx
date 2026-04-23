@@ -10,6 +10,7 @@ import { EmptyState } from '@/components/shared/EmptyState';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { Subtabs } from '@/components/shared/Subtabs';
 import { useRecoverySurfaceState } from '@/features/recovery/useRecoverySurfaceState';
+import type { ProtectedStateFilter } from '@/features/recovery/useRecoverySurfaceState';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { useColumnVisibility } from '@/hooks/useColumnVisibility';
 import type { ColumnDef } from '@/hooks/useColumnVisibility';
@@ -37,6 +38,7 @@ import {
   getRecoveryArtifactColumnLabel,
   getRecoveryGroupNoTimestampLabel,
   getRecoveryArtifactTableMinWidth,
+  getRecoveryRollupInventoryStatus,
   STALE_ISSUE_THRESHOLD_MS,
 } from '@/utils/recoveryTablePresentation';
 import { getRecoveryTimelineLabelEvery } from '@/utils/recoveryTimelineChartPresentation';
@@ -70,7 +72,7 @@ const Recovery: Component = () => {
     namespaceOptions,
     nodeFilter,
     nodeOptions,
-    protectedStaleOnly,
+    protectedStateFilter,
     platformFilter,
     platformOptions,
     queryFilter,
@@ -91,7 +93,7 @@ const Recovery: Component = () => {
     setModeFilter,
     setNamespaceFilter,
     setNodeFilter,
-    setProtectedStaleOnly,
+    setProtectedStateFilter,
     setPlatformFilter,
     setQueryFilter,
     setRollupId,
@@ -181,24 +183,13 @@ const Recovery: Component = () => {
   const overallRollupsSummary = createMemo(() => summarizeRollups(rollups()));
 
   const filteredRollups = createMemo<ProtectionRollup[]>(() => {
-    const selectedOutcome = historyOutcomeFilter();
-    const staleOnly = protectedStaleOnly();
-    if (selectedOutcome === 'all' && !staleOnly) return baseRollups();
+    const selectedState = protectedStateFilter();
+    if (selectedState === 'all') return baseRollups();
 
     const nowMs = Date.now();
-    const staleThreshold = nowMs - STALE_ISSUE_THRESHOLD_MS;
 
     return baseRollups().filter((rollup) => {
-      if (selectedOutcome !== 'all' && normalizeOutcome(rollup.lastOutcome) !== selectedOutcome) {
-        return false;
-      }
-      if (!staleOnly) return true;
-
-      const attemptMs = rollup.lastAttemptAt ? Date.parse(rollup.lastAttemptAt) : 0;
-      const successMs = rollup.lastSuccessAt ? Date.parse(rollup.lastSuccessAt) : 0;
-      if (successMs > 0) return successMs < staleThreshold;
-      if (attemptMs > 0) return attemptMs < staleThreshold;
-      return false;
+      return getRecoveryRollupInventoryStatus(rollup, nowMs) === selectedState;
     });
   });
 
@@ -362,7 +353,7 @@ const Recovery: Component = () => {
   const artifactColumnVisibility = useColumnVisibility(
     STORAGE_KEYS.RECOVERY_HIDDEN_COLUMNS,
     artifactColumns,
-    ['entityId', 'cluster', 'nodeAgent', 'namespace', 'verified', 'size', 'repository', 'details'],
+    ['entityId', 'cluster', 'nodeAgent', 'namespace', 'size', 'details'],
     relevantArtifactColumnIDs,
     LEGACY_RECOVERY_COLUMN_ID_ALIASES,
   );
@@ -498,6 +489,7 @@ const Recovery: Component = () => {
       setNodeFilter('all');
       setNamespaceFilter('all');
       setVerificationFilter('all');
+      setProtectedStateFilter('all');
       setChartRangeDays(30);
       setSelectedDateKey(null);
       setCurrentPage(1);
@@ -508,6 +500,7 @@ const Recovery: Component = () => {
     batch(() => {
       setWorkspaceView('events');
       setRollupId(nextRollupId);
+      setProtectedStateFilter('all');
       setSelectedDateKey(null);
       setCurrentPage(1);
     });
@@ -521,6 +514,8 @@ const Recovery: Component = () => {
       if (nextView === 'inventory') {
         setRollupId('');
         setSelectedDateKey(null);
+      } else {
+        setProtectedStateFilter('all');
       }
     });
   };
@@ -607,6 +602,7 @@ const Recovery: Component = () => {
         onOpenEvents={() => {
           batch(() => {
             setWorkspaceView('events');
+            setProtectedStateFilter('all');
             setCurrentPage(1);
           });
         }}
@@ -615,12 +611,11 @@ const Recovery: Component = () => {
             setWorkspaceView('inventory');
             setRollupId('');
             setSelectedDateKey(null);
+            setHistoryOutcomeFilter('all');
             if ((overallRollupsSummary().counts.failed || 0) > 0) {
-              setHistoryOutcomeFilter('failed');
-              setProtectedStaleOnly(false);
+              setProtectedStateFilter('failed');
             } else {
-              setHistoryOutcomeFilter('all');
-              setProtectedStaleOnly(true);
+              setProtectedStateFilter('stale');
             }
             setCurrentPage(1);
           });
@@ -631,7 +626,7 @@ const Recovery: Component = () => {
             setRollupId('');
             setSelectedDateKey(null);
             setHistoryOutcomeFilter('all');
-            setProtectedStaleOnly(true);
+            setProtectedStateFilter('stale');
             setCurrentPage(1);
           });
         }}
@@ -646,13 +641,12 @@ const Recovery: Component = () => {
               <Show when={workspaceView() === 'inventory'}>
                 <RecoveryProtectedInventorySection
                   filteredRollups={filteredRollups}
-                  historyOutcomeFilter={historyOutcomeFilter}
                   isMobile={isMobile()}
                   kioskMode={kioskMode()}
                   loading={recoveryRollupsLoading}
                   error={() => recoveryRollups.rollups.error}
                   onSelectRollup={handleSelectRollup}
-                  protectedStaleOnly={protectedStaleOnly}
+                  protectedStateFilter={protectedStateFilter}
                   itemTypeFilter={itemTypeFilter}
                   itemTypeOptions={itemTypeOptions}
                   platformFilter={platformFilter}
@@ -661,9 +655,10 @@ const Recovery: Component = () => {
                   resourcesById={resourcesById}
                   rollups={rollups}
                   rollupsSummary={rollupsSummary}
-                  setHistoryOutcomeFilter={setHistoryOutcomeFilter}
                   setItemTypeFilter={setItemTypeFilter}
-                  setProtectedStaleOnly={setProtectedStaleOnly}
+                  setProtectedStateFilter={(value: ProtectedStateFilter) =>
+                    setProtectedStateFilter(value)
+                  }
                   setPlatformFilter={setPlatformFilter}
                   setQueryFilter={setQueryFilter}
                   setVerificationFilter={setVerificationFilter}

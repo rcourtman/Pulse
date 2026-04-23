@@ -31,13 +31,20 @@ import {
   getRecoveryItemTypePresentation,
   normalizeRecoveryItemTypeQueryValue,
 } from '@/utils/recoveryItemTypePresentation';
+import {
+  getRecoveryRollupInventoryStatus,
+  type RecoveryRollupInventoryStatus,
+} from '@/utils/recoveryTablePresentation';
+import { getRecoveryRollupInventoryStatusLabel } from '@/utils/recoveryStatusPresentation';
 import { normalizeRecoveryOutcome as normalizeOutcome } from '@/utils/recoveryOutcomePresentation';
 import type { RecoveryArtifactMode } from '@/utils/recoveryArtifactModePresentation';
 import { parseRecoveryDateKey } from '@/utils/recoveryDatePresentation';
+import { formatRelativeTime } from '@/utils/format';
 
 type ArtifactMode = RecoveryArtifactMode;
 type VerificationFilter = 'all' | 'verified' | 'unverified' | 'unknown';
 type RecoveryWorkspaceView = 'inventory' | 'events';
+export type ProtectedStateFilter = 'all' | RecoveryRollupInventoryStatus;
 
 const isRecoveryDateKey = (value: string): boolean => /^\d{4}-\d{2}-\d{2}$/.test(value);
 const isRecoveryRangeDays = (value: string): value is '7' | '30' | '90' | '365' =>
@@ -77,6 +84,37 @@ const normalizeRecoveryItemTypeSelection = (value: string | null | undefined): s
   return normalized || 'all';
 };
 
+const normalizeProtectedStateFilter = (
+  value: string | null | undefined,
+): ProtectedStateFilter => {
+  const normalized = normalizeRecoveryRouteValue(value).toLowerCase();
+  if (normalized === 'success') return 'healthy';
+  if (
+    normalized === 'healthy' ||
+    normalized === 'warning' ||
+    normalized === 'failed' ||
+    normalized === 'running' ||
+    normalized === 'stale' ||
+    normalized === 'never-succeeded' ||
+    normalized === 'unknown'
+  ) {
+    return normalized as ProtectedStateFilter;
+  }
+  return 'all';
+};
+
+const getRollupFreshnessLabel = (rollup: ProtectionRollup): string => {
+  const successMs = rollup.lastSuccessAt ? Date.parse(rollup.lastSuccessAt) : 0;
+  if (Number.isFinite(successMs) && successMs > 0) {
+    return `Last success ${formatRelativeTime(successMs)}`;
+  }
+  const attemptMs = rollup.lastAttemptAt ? Date.parse(rollup.lastAttemptAt) : 0;
+  if (Number.isFinite(attemptMs) && attemptMs > 0) {
+    return `Last attempt ${formatRelativeTime(attemptMs)}`;
+  }
+  return 'No attempts recorded';
+};
+
 export function useRecoverySurfaceState() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -101,7 +139,8 @@ export function useRecoverySurfaceState() {
   const [scopeFilter, setScopeFilter] = createSignal<'all' | 'workload'>('all');
   const [nodeFilter, setNodeFilter] = createSignal('all');
   const [namespaceFilter, setNamespaceFilter] = createSignal('all');
-  const [protectedStaleOnly, setProtectedStaleOnly] = createSignal(false);
+  const [protectedStateFilter, setProtectedStateFilter] =
+    createSignal<ProtectedStateFilter>('all');
   const [chartRangeDays, setChartRangeDays] = createSignal<7 | 30 | 90 | 365>(30);
   const [selectedDateKey, setSelectedDateKey] = createSignal<string | null>(null);
   const [currentPage, setCurrentPage] = createSignal(1);
@@ -218,11 +257,21 @@ export function useRecoverySurfaceState() {
         .map((platform) => getSourcePlatformLabel(String(platform || '').trim()))
         .filter(Boolean)
         .sort((left, right) => left.localeCompare(right));
+      const stateLabel = getRecoveryRollupInventoryStatusLabel(
+        getRecoveryRollupInventoryStatus(rollup),
+      );
       return {
         rollupId: rollup.rollupId,
         label: getRecoveryRollupItemLabel(rollup, resourceIndex),
         secondaryLabel: getRecoveryRollupItemSecondaryLabel(rollup),
-        contextLabel: [itemTypeLabel, platformLabels.join(', ')].filter(Boolean).join(' · '),
+        contextLabel: [
+          stateLabel,
+          getRollupFreshnessLabel(rollup),
+          itemTypeLabel,
+          platformLabels.join(', '),
+        ]
+          .filter(Boolean)
+          .join(' · '),
       };
     });
 
@@ -236,13 +285,23 @@ export function useRecoverySurfaceState() {
       .map((platform) => getSourcePlatformLabel(String(platform || '').trim()))
       .filter(Boolean)
       .sort((left, right) => left.localeCompare(right));
+    const stateLabel = getRecoveryRollupInventoryStatusLabel(
+      getRecoveryRollupInventoryStatus(selected),
+    );
 
     return [
       {
         rollupId: selected.rollupId,
         label: getRecoveryRollupItemLabel(selected, resourceIndex),
         secondaryLabel: getRecoveryRollupItemSecondaryLabel(selected),
-        contextLabel: [itemTypeLabel, platformLabels.join(', ')].filter(Boolean).join(' · '),
+        contextLabel: [
+          stateLabel,
+          getRollupFreshnessLabel(selected),
+          itemTypeLabel,
+          platformLabels.join(', '),
+        ]
+          .filter(Boolean)
+          .join(' · '),
       },
       ...options,
     ];
@@ -323,7 +382,6 @@ export function useRecoverySurfaceState() {
     const nextQuery = normalizeRecoveryRouteValue(parsed.query);
     const nextPlatform = normalizeRecoveryPlatformSelection(parsed.platform || '');
     const nextItemType = normalizeRecoveryItemTypeSelection(parsed.itemType || '');
-    const nextStaleOnly = normalizeRecoveryBooleanFlag(parsed.stale);
     const normalizedRange = normalizeRecoveryRouteValue(parsed.range);
     const nextRange = isRecoveryRangeDays(normalizedRange) ? Number(normalizedRange) : 30;
     const nextCluster = normalizeRecoveryRouteSelection(parsed.cluster || 'all') || 'all';
@@ -334,6 +392,7 @@ export function useRecoverySurfaceState() {
     const resolvedView = (nextView || derivedDefaultView) as RecoveryWorkspaceView;
     const visibleRollup = resolvedView === 'events' ? nextRollup : '';
     const visibleDay = resolvedView === 'events' ? nextDay : '';
+    const legacyStaleState = normalizeRecoveryBooleanFlag(parsed.stale) ? 'stale' : '';
     const nextMode = normalizeRecoveryModeQueryValue(parsed.mode);
     const rawScope = normalizeRecoveryRouteValue(parsed.scope).toLowerCase();
     const nextScope: 'all' | 'workload' = rawScope === 'workload' ? 'workload' : 'all';
@@ -341,13 +400,19 @@ export function useRecoverySurfaceState() {
     const nextNamespace = normalizeRecoveryRouteSelection(parsed.namespace || 'all') || 'all';
     const verificationValue = normalizeRecoveryRouteValue(parsed.verification).toLowerCase();
     const statusValue = normalizeRecoveryRouteValue(parsed.status).toLowerCase();
+    const nextProtectedState =
+      resolvedView === 'inventory'
+        ? normalizeProtectedStateFilter(parsed.state || legacyStaleState || statusValue)
+        : 'all';
 
     if (visibleRollup !== untrack(rollupId)) setRollupId(visibleRollup);
     if (resolvedView !== untrack(workspaceView)) setWorkspaceView(resolvedView);
     if (nextQuery !== untrack(queryFilter)) setQueryFilter(nextQuery);
     if (nextPlatform !== untrack(platformFilter)) setPlatformFilter(nextPlatform);
     if (nextItemType !== untrack(itemTypeFilter)) setItemTypeFilter(nextItemType);
-    if (nextStaleOnly !== untrack(protectedStaleOnly)) setProtectedStaleOnly(nextStaleOnly);
+    if (nextProtectedState !== untrack(protectedStateFilter)) {
+      setProtectedStateFilter(nextProtectedState);
+    }
     if (nextRange !== untrack(chartRangeDays)) setChartRangeDays(nextRange as 7 | 30 | 90 | 365);
     if (nextCluster !== untrack(clusterFilter)) setClusterFilter(nextCluster);
     if ((visibleDay || null) !== untrack(selectedDateKey)) setSelectedDateKey(visibleDay || null);
@@ -356,7 +421,10 @@ export function useRecoverySurfaceState() {
     if (nextNode !== untrack(nodeFilter)) setNodeFilter(nextNode);
     if (nextNamespace !== untrack(namespaceFilter)) setNamespaceFilter(nextNamespace);
 
-    if (
+    if (resolvedView === 'inventory') {
+      if (untrack(verificationFilter) !== 'all') setVerificationFilter('all');
+      if (untrack(historyOutcomeFilter) !== 'all') setHistoryOutcomeFilter('all');
+    } else if (
       verificationValue === 'verified' ||
       verificationValue === 'unverified' ||
       verificationValue === 'unknown'
@@ -395,6 +463,7 @@ export function useRecoverySurfaceState() {
     nodeFilter();
     namespaceFilter();
     scopeFilter();
+    protectedStateFilter();
     chartRangeDays();
     selectedDateKey();
     if (untrack(currentPage) !== 1) setCurrentPage(1);
@@ -414,7 +483,11 @@ export function useRecoverySurfaceState() {
       query: queryFilter().trim() || null,
       platform: platformFilter() !== 'all' ? platformFilter() : null,
       itemType: itemTypeFilter() !== 'all' ? itemTypeFilter() : null,
-      stale: protectedStaleOnly() ? '1' : null,
+      state:
+        workspaceView() === 'inventory' && protectedStateFilter() !== 'all'
+          ? protectedStateFilter()
+          : null,
+      stale: null,
       range: chartRangeDays() !== 30 ? String(chartRangeDays()) : null,
       cluster: clusterFilter() !== 'all' ? clusterFilter() : null,
       day: selectedDateKey(),
@@ -544,7 +617,7 @@ export function useRecoverySurfaceState() {
     namespaceOptions,
     nodeFilter,
     nodeOptions,
-    protectedStaleOnly,
+    protectedStateFilter,
     platformFilter,
     platformOptions,
     queryFilter,
@@ -566,7 +639,7 @@ export function useRecoverySurfaceState() {
     setModeFilter,
     setNamespaceFilter,
     setNodeFilter,
-    setProtectedStaleOnly,
+    setProtectedStateFilter,
     setPlatformFilter,
     setQueryFilter,
     setRollupId,

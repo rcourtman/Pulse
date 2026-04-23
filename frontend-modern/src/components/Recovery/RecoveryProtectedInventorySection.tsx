@@ -11,10 +11,9 @@ import { getSourcePlatformBadge } from '@/components/shared/sourcePlatformBadges
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/shared/Table';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 import { formatAbsoluteTime, formatRelativeTime } from '@/utils/format';
-import type { ProtectionRollup, RecoveryOutcome } from '@/types/recovery';
+import type { ProtectionRollup } from '@/types/recovery';
 import type { Resource } from '@/types/resource';
 import {
-  getRecoveryProtectedToggleClass,
   getRecoveryRollupInventoryStatusLabel,
   getRecoveryRollupInventoryStatusTextClass,
   getRecoveryRollupInventoryStatusVariant,
@@ -39,47 +38,44 @@ import {
   getRecoverySearchHistoryEmptyMessage,
   getRecoveryRollupTimestampMs,
   STALE_ISSUE_THRESHOLD_MS,
+  type RecoveryRollupInventoryStatus,
 } from '@/utils/recoveryTablePresentation';
-import {
-  normalizeRecoveryOutcome,
-} from '@/utils/recoveryOutcomePresentation';
+import { normalizeRecoveryOutcome } from '@/utils/recoveryOutcomePresentation';
 import { getRecoveryRollupPlatforms } from '@/utils/recoveryPlatformModel';
 import {
   getRecoveryRollupItemLabel,
   getRecoveryRollupItemSecondaryLabel,
 } from '@/utils/recoveryRecordPresentation';
 import { getSourcePlatformLabel, normalizeSourcePlatformQueryValue } from '@/utils/sourcePlatforms';
-import { titleCaseDelimitedLabel } from '@/utils/textPresentation';
 
 type VerificationFilter = 'all' | 'verified' | 'unverified' | 'unknown';
+type ProtectedStateFilter = 'all' | RecoveryRollupInventoryStatus;
 type ProtectedSortCol = 'item' | 'type' | 'platform' | 'lastBackup' | 'outcome';
 type SortDir = 'asc' | 'desc';
 
 interface RecoveryRollupSummary {
   total: number;
-  counts: Record<RecoveryOutcome, number>;
+  counts: Record<string, number>;
   stale: number;
   neverSucceeded: number;
 }
 
 interface RecoveryProtectedInventorySectionProps {
   filteredRollups: Accessor<ProtectionRollup[]>;
-  historyOutcomeFilter: Accessor<'all' | RecoveryOutcome>;
   itemTypeFilter: Accessor<string>;
   itemTypeOptions: Accessor<string[]>;
   isMobile: boolean;
   kioskMode: boolean;
   onSelectRollup: (rollupId: string) => void;
-  protectedStaleOnly: Accessor<boolean>;
+  protectedStateFilter: Accessor<ProtectedStateFilter>;
   platformFilter: Accessor<string>;
   platformOptions: Accessor<string[]>;
   queryFilter: Accessor<string>;
   resourcesById: Accessor<Map<string, Resource>>;
   rollups: Accessor<ProtectionRollup[]>;
   rollupsSummary: Accessor<RecoveryRollupSummary>;
-  setHistoryOutcomeFilter: (value: 'all' | RecoveryOutcome) => void;
   setItemTypeFilter: (value: string) => void;
-  setProtectedStaleOnly: (value: boolean | ((prev: boolean) => boolean)) => void;
+  setProtectedStateFilter: (value: ProtectedStateFilter) => void;
   setPlatformFilter: (value: string) => void;
   setQueryFilter: (value: string) => void;
   setVerificationFilter: (value: VerificationFilter) => void;
@@ -87,7 +83,16 @@ interface RecoveryProtectedInventorySectionProps {
   error: Accessor<unknown>;
 }
 
-const availableOutcomes = ['all', 'success', 'warning', 'failed', 'running'] as const;
+const availableProtectionStates = [
+  'all',
+  'healthy',
+  'stale',
+  'never-succeeded',
+  'failed',
+  'warning',
+  'running',
+  'unknown',
+] as const satisfies readonly ProtectedStateFilter[];
 const STALE_THRESHOLD_DAYS = Math.max(
   1,
   Math.round(STALE_ISSUE_THRESHOLD_MS / (24 * 60 * 60 * 1000)),
@@ -103,22 +108,30 @@ const getProtectionInsight = (
 
   if (inventoryStatus === 'never-succeeded') {
     return attemptMs > 0
-      ? `No successful point recorded after ${formatRelativeTime(attemptMs)}`
-      : 'No successful point recorded yet';
+      ? `No successful point recorded after ${formatRelativeTime(attemptMs)}; open events to inspect attempts`
+      : 'No successful point recorded yet; open events to confirm the first attempt';
   }
 
   if (inventoryStatus === 'stale') {
     if (successMs > 0 && Number.isFinite(successMs)) {
       const ageDays = Math.max(1, Math.floor((nowMs - successMs) / (24 * 60 * 60 * 1000)));
-      return `Last success is ${ageDays} days old; expected within ${STALE_THRESHOLD_DAYS} days`;
+      return `Last success is ${ageDays} days old; open events to inspect the latest point`;
     }
-    return `No successful point within ${STALE_THRESHOLD_DAYS} days`;
+    return `No successful point within ${STALE_THRESHOLD_DAYS} days; open events to inspect attempts`;
   }
 
-  if (inventoryStatus === 'failed') return 'Latest protection event failed';
-  if (inventoryStatus === 'warning') return 'Latest protection event completed with warnings';
-  if (inventoryStatus === 'running') return 'Protection event in progress';
+  if (inventoryStatus === 'failed') return 'Latest protection event failed; open event details';
+  if (inventoryStatus === 'warning') return 'Latest event completed with warnings; review details';
+  if (inventoryStatus === 'running') return 'Protection event in progress; check events for completion';
   return '';
+};
+
+const normalizeProtectedStateFilter = (value: string): ProtectedStateFilter => {
+  const normalized = value.trim().toLowerCase();
+  if (normalized === 'success') return 'healthy';
+  return availableProtectionStates.includes(normalized as ProtectedStateFilter)
+    ? (normalized as ProtectedStateFilter)
+    : 'all';
 };
 
 export const RecoveryProtectedInventorySection: Component<
@@ -142,8 +155,7 @@ export const RecoveryProtectedInventorySection: Component<
     if (props.queryFilter().trim() !== '') count += 1;
     if (props.platformFilter() !== 'all') count += 1;
     if (props.itemTypeFilter() !== 'all') count += 1;
-    if (props.historyOutcomeFilter() !== 'all') count += 1;
-    if (props.protectedStaleOnly()) count += 1;
+    if (props.protectedStateFilter() !== 'all') count += 1;
     return count;
   });
 
@@ -218,8 +230,7 @@ export const RecoveryProtectedInventorySection: Component<
     props.queryFilter();
     props.platformFilter();
     props.itemTypeFilter();
-    props.historyOutcomeFilter();
-    props.protectedStaleOnly();
+    props.protectedStateFilter();
     protectedSortCol();
     protectedSortDir();
   });
@@ -228,9 +239,8 @@ export const RecoveryProtectedInventorySection: Component<
     props.setQueryFilter('');
     props.setPlatformFilter('all');
     props.setItemTypeFilter('all');
-    props.setHistoryOutcomeFilter('all');
     props.setVerificationFilter('all');
-    props.setProtectedStaleOnly(false);
+    props.setProtectedStateFilter('all');
   };
 
   return (
@@ -315,34 +325,25 @@ export const RecoveryProtectedInventorySection: Component<
               <LabeledFilterSelect
                 id="recovery-protected-status-filter"
                 label="Protection state"
-                value={props.historyOutcomeFilter()}
+                value={props.protectedStateFilter()}
                 onChange={(event) => {
-                  const value = event.currentTarget.value as 'all' | RecoveryOutcome;
-                  props.setHistoryOutcomeFilter(value);
-                  if (value !== 'all') props.setVerificationFilter('all');
+                  const value = normalizeProtectedStateFilter(event.currentTarget.value);
+                  props.setProtectedStateFilter(value);
+                  props.setVerificationFilter('all');
                 }}
                 groupClass="gap-1.5 px-1.5 py-0.5"
                 selectClass="py-1 text-xs"
               >
-              <For each={availableOutcomes}>
-                  {(outcome) => (
-                    <option value={outcome}>
-                      {outcome === 'all' ? 'Any status' : titleCaseDelimitedLabel(outcome)}
+                <For each={availableProtectionStates}>
+                  {(state) => (
+                    <option value={state}>
+                      {state === 'all'
+                        ? 'Any state'
+                        : getRecoveryRollupInventoryStatusLabel(state)}
                     </option>
                   )}
                 </For>
               </LabeledFilterSelect>
-
-              <button
-                type="button"
-                aria-pressed={props.protectedStaleOnly()}
-                onClick={() => props.setProtectedStaleOnly((value) => !value)}
-                class={`rounded-md border px-2.5 py-1 text-xs font-medium transition-colors ${getRecoveryProtectedToggleClass(
-                  props.protectedStaleOnly(),
-                )}`}
-              >
-                Stale only
-              </button>
             </PageControls>
           </div>
         </Card>

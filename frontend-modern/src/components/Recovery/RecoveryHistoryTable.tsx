@@ -435,7 +435,7 @@ export const RecoveryHistoryTable: Component<RecoveryHistoryTableProps> = (props
                                 </button>
                               </div>
                               <div class="px-4">
-                                <RecoveryPointDetails point={point} />
+                                <RecoveryPointDetails point={point} relatedPoints={group.items} />
                               </div>
                             </TableCell>
                           </TableRow>

@@ -496,6 +496,7 @@ describe('resource link routing contract', () => {
     const href = buildRecoveryPath({
       view: 'events',
       platform: 'proxmox-pbs',
+      state: 'stale',
       stale: '1',
       range: '7',
       cluster: 'cluster-main',
@@ -513,6 +514,7 @@ describe('resource link routing contract', () => {
     expect(url.pathname).toBe('/recovery');
     expect(url.searchParams.get('view')).toBe('events');
     expect(url.searchParams.get('platform')).toBe('proxmox-pbs');
+    expect(url.searchParams.get('state')).toBe('stale');
     expect(url.searchParams.get('stale')).toBe('1');
     expect(url.searchParams.get('range')).toBe('7');
     expect(url.searchParams.get('cluster')).toBe('cluster-main');
@@ -531,6 +533,7 @@ describe('resource link routing contract', () => {
       rollupId: '',
       view: 'events',
       platform: 'proxmox-pbs',
+      state: 'stale',
       stale: '1',
       range: '7',
       cluster: 'cluster-main',
@@ -547,6 +550,7 @@ describe('resource link routing contract', () => {
 
     expect(RECOVERY_QUERY_PARAMS.platform).toBe('platform');
     expect(RECOVERY_QUERY_PARAMS.view).toBe('view');
+    expect(RECOVERY_QUERY_PARAMS.state).toBe('state');
     expect(RECOVERY_QUERY_PARAMS.stale).toBe('stale');
     expect(RECOVERY_QUERY_PARAMS.range).toBe('range');
     expect(RECOVERY_QUERY_PARAMS.cluster).toBe('cluster');

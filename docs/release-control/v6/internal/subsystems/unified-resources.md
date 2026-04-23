@@ -984,6 +984,11 @@ TrueNAS-backed top-level systems through canonical `/recovery` route state
 there, using owned `platform` and `node` queries instead of rebuilding
 drawer-local recovery links or assuming only PBS services can expose recovery
 handoffs from infrastructure.
+When shared recovery links include protected-inventory posture, they must use
+the recovery-owned `state` query instead of overloading event `status`. Event
+outcome `status` remains recovery-history state, and compatibility input such
+as legacy `stale=1` must be normalized by the recovery route owner before
+cross-surface links are rebuilt.
 That same shared routing boundary now also owns alert-investigation handoffs.
 Resource-incident panels and other alert-side resource drill-down consumers
 must route operators back through canonical infrastructure resource detail and
@@ -1561,10 +1566,11 @@ items and recovery events, canonical `/recovery` links must round-trip that
 `view` selection unless the active `rollupId` or selected day already implies
 the default recovery-events workspace.
 That same shared recovery route helper contract now also owns canonical
-boolean filter encoding for protected-inventory drill-down state. Visible
-recovery toggles such as `stale` must round-trip through the owned `stale=1`
-query form instead of leaking ad hoc truthy strings or disappearing from
-shared links on reload.
+protected-inventory posture encoding. Visible recovery inventory filters must
+round-trip through the owned `state=<value>` query form instead of leaking ad
+hoc booleans, overloading event `status`, or disappearing from shared links on
+reload. Legacy `stale=1` may be parsed only as compatibility input that
+rewrites to canonical inventory state.
 That same route contract now also owns the canonical recovery `itemType`
 query. `/recovery` links must round-trip a provider-neutral item category such
 as `vm`, `dataset`, or `pvc`, and

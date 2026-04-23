@@ -288,7 +288,7 @@ describe('Recovery', () => {
     expect(protectedSearch).toBeInTheDocument();
     expect(protectedSearch.closest('div.relative')?.className).toContain('w-full');
     expect(within(inventoryControls).queryByText(/^\d+ stale$/i)).not.toBeInTheDocument();
-    expect(within(inventoryControls).queryByText(/never succeeded/i)).not.toBeInTheDocument();
+    expect(within(inventoryControls).queryByText(/^\d+ never succeeded$/i)).not.toBeInTheDocument();
     expect(
       within(workspaceTablist).getByRole('tab', { name: 'Protected items' }).className,
     ).toContain('border-b-2');
@@ -437,7 +437,7 @@ describe('Recovery', () => {
     expect(within(historyTable).getByText('Platform')).toBeInTheDocument();
     expect(within(historyTable).queryByText('ITEM TYPE')).not.toBeInTheDocument();
     expect(within(historyTable).queryByText('PLATFORM')).not.toBeInTheDocument();
-    expect(within(historyTable).queryByText('Target')).not.toBeInTheDocument();
+    expect(within(historyTable).getByText('Target')).toBeInTheDocument();
     expect(within(historyTable).queryByText('Details')).not.toBeInTheDocument();
     const historyRow = within(historyTable).getByLabelText('Healthy').closest('tr');
     expect(historyRow).not.toBeNull();
@@ -1066,15 +1066,15 @@ describe('Recovery', () => {
     });
   });
 
-  it('uses one canonical outcome filter across protected items and history transport', async () => {
+  it('uses canonical protection state filtering for protected inventory', async () => {
     render(() => <Recovery />);
 
     const protectedStatus = await screen.findByLabelText('Protection state');
-    fireEvent.change(protectedStatus, { target: { value: 'failed' } });
+    fireEvent.change(protectedStatus, { target: { value: 'never-succeeded' } });
 
     await waitFor(() => {
       expect(navigateSpy).toHaveBeenCalledWith(
-        '/recovery?status=failed',
+        '/recovery?state=never-succeeded',
         ROUTE_STATE_REPLACE_OPTIONS,
       );
     });
@@ -1084,22 +1084,8 @@ describe('Recovery', () => {
       expect(screen.getByText('tank/apps')).toBeInTheDocument();
     });
 
-    await waitFor(() => {
-      const urls = apiFetchMock.mock.calls.map((call) => String(call[0] || ''));
-      const hasRollups = urls.some(
-        (url) => url.includes('/api/recovery/rollups') && url.includes('outcome=failed'),
-      );
-      const hasPoints = urls.some(
-        (url) => url.includes('/api/recovery/points') && url.includes('outcome=failed'),
-      );
-      const hasSeries = urls.some(
-        (url) => url.includes('/api/recovery/series') && url.includes('outcome=failed'),
-      );
-      const hasFacets = urls.some(
-        (url) => url.includes('/api/recovery/facets') && url.includes('outcome=failed'),
-      );
-      expect(hasRollups && hasPoints && hasSeries && hasFacets).toBe(true);
-    });
+    const urls = apiFetchMock.mock.calls.map((call) => String(call[0] || ''));
+    expect(urls.some((url) => url.includes('outcome=failed'))).toBe(false);
   });
 
   it('bounds the protected inventory surface with pagination for larger estates', async () => {
@@ -1161,19 +1147,36 @@ describe('Recovery', () => {
     expect(screen.queryByRole('button', { name: 'Prev' })).not.toBeInTheDocument();
   });
 
-  it('persists and restores the protected stale-only filter through the canonical recovery URL', async () => {
+  it('canonicalizes legacy stale flags into protected inventory state', async () => {
     mockLocationSearch = '?stale=%20TRUE%20';
 
     render(() => <Recovery />);
 
     await waitFor(() => {
-      expect(navigateSpy).toHaveBeenCalledWith('/recovery?stale=1', ROUTE_STATE_REPLACE_OPTIONS);
+      expect(navigateSpy).toHaveBeenCalledWith('/recovery?state=stale', ROUTE_STATE_REPLACE_OPTIONS);
     });
 
-    expect(screen.getByRole('button', { name: 'Stale only' })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    );
+    expect(screen.getByLabelText('Protection state')).toHaveValue('stale');
+  });
+
+  it('drops protected-only stale state when the recovery events view owns the route', async () => {
+    mockLocationSearch = '?view=events&stale=1&range=90&status=failed';
+
+    render(() => <Recovery />);
+
+    await waitFor(() => {
+      expect(navigateSpy).toHaveBeenCalledWith(
+        '/recovery?view=events&range=90&status=failed',
+        ROUTE_STATE_REPLACE_OPTIONS,
+      );
+    });
+
+    const controls = await screen.findByRole('group', { name: /recovery events controls/i });
+    fireEvent.click(within(controls).getByRole('button', { name: 'Reset all' }));
+
+    await waitFor(() => {
+      expect(navigateSpy).toHaveBeenCalledWith('/recovery?view=events', ROUTE_STATE_REPLACE_OPTIONS);
+    });
   });
 
   it('normalizes legacy provider aliases into canonical platform route state', async () => {

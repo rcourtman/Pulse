@@ -39,7 +39,7 @@ export const ColumnPicker: Component<ColumnPickerProps> = (props) => {
         </svg>
         <span>{COLUMN_PICKER_BUTTON_LABEL}</span>
         <Show when={state.hiddenCount() > 0}>
-          <span class={filterUtilityBadgeClass}>{state.hiddenCount()}</span>
+          <span class={filterUtilityBadgeClass}>{state.hiddenCount()} hidden</span>
         </Show>
       </FilterActionButton>
 

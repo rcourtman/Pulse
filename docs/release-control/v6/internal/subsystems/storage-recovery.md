@@ -68,6 +68,14 @@ querying, and the operator-facing storage health presentation layer.
 
 1. Add or change recovery-point persistence, rollups, or series derivation through `internal/recovery/`
 2. Add or change recovery page UX through `frontend-modern/src/components/Recovery/` and keep canonical route/query/filter state ownership in `frontend-modern/src/features/recovery/useRecoverySurfaceState.ts`
+   Recovery inventory protection posture and recovery-event outcome filtering
+   must stay separate in that owner: protected inventory uses the route-backed
+   `state` query for health, stale, failed, warning, running, unknown, and
+   never-succeeded states, while recovery events use `status` for event
+   outcomes. Legacy `stale=1` input may hydrate the inventory `state=stale`
+   compatibility path, but event views and event drill-ins must drop
+   protected-inventory-only state so hidden filters cannot make valid history
+   look empty.
 3. Add or change storage page UX through `frontend-modern/src/pages/Storage.tsx`, `frontend-modern/src/components/Storage/`, `frontend-modern/src/features/storageBackups/`, and the shared storage-source contract in `frontend-modern/src/utils/storageSources.ts`
 4. Route transport changes for storage and recovery endpoints through `internal/api/` and the owning `api-contracts` proof routes
    That same adjacent API boundary also owns TrueNAS feature-default semantics for
@@ -453,8 +461,8 @@ querying, and the operator-facing storage health presentation layer.
     11c. Letting route-owned recovery platform selections disappear while filter options are still hydrating; the recovery page state owner must keep the current canonical `platform` query value present in the platform option set until transport-backed facets and records arrive so shared filter selects keep the user-visible TrueNAS or other owned platform selection instead of flashing back to `All Platforms`
     11a. Letting adjacent workload-route changes in shared `frontend-modern/src/routing/resourceLinks.ts` perturb recovery parse/build semantics; expanding canonical `/workloads` platform scoping must not alter the owned `/recovery` `platform` and `itemType` vocabulary, legacy alias rewrites, or recovery drill-down workspace selection
     11b. Letting adjacent storage-link additions in shared `frontend-modern/src/routing/resourceLinks.ts` perturb recovery route semantics; expanding canonical `/storage` deep links for unified resources must not reuse recovery-owned query names or alter the owned `/recovery` parse/build contract while those surfaces continue sharing the same route-helper module
-12. Letting protected-item recovery outcome filtering fork from the canonical history status filter; the protected inventory status control must drive the same route-backed `status` field and the same rollups, points, series, and facets transport filters as the history surface instead of keeping a protected-only local outcome branch
-13. Letting visible protected-item filters fall out of shared recovery links; the protected `Stale only` toggle must restore from the canonical recovery URL and rewrite to one owned `stale=1` route form instead of disappearing on refresh or copy/paste
+12. Letting protected-inventory protection posture overload recovery-event outcome filtering; the protected inventory protection-state control must drive the route-backed `state` field and local rollup posture filtering, while the recovery events `status` field remains the canonical outcome filter for points, series, and facets transport filters
+13. Letting visible protected-item filters fall out of shared recovery links; protected inventory state such as stale, failed, warning, running, unknown, healthy, and never-succeeded must restore from the canonical recovery URL and rewrite to the owned `state=<value>` route form, with legacy `stale=1` accepted only as compatibility input
 14. Reintroducing stacked full-width recovery tables as the primary desktop layout; the governed recovery surface must expose one primary data region at a time with explicit protected-items versus recovery-events view switching so Pulse stays inventory-first for Proxmox operators without collapsing the page back into a single-platform backup screen
 15. Letting the primary recovery workspace tabs drift out of canonical route state; when operators explicitly switch between protected items and recovery events, the shared recovery link builder and page model must preserve that selection in route state unless the active `rollupId` or `day` context already implies the default workspace
 16. Treating a selected protected-item rollup as row-click-only or header-only state instead of a canonical history filter; when a protected-item row focuses recovery history, the governed recovery events controls must surface that focus inside the shared filter surface through the same user-creatable item filter control, count it with the rest of the active filters, and let the same filter reset path clear it

@@ -151,4 +151,75 @@ describe('RecoveryPointDetails', () => {
     expect(platformCard).not.toBeNull();
     expect(within(platformCard as HTMLDivElement).getByText('TrueNAS')).toBeInTheDocument();
   });
+
+  it('uses platform-aware PVE wording and suppresses meaningless task details', () => {
+    render(() => (
+      <RecoveryPointDetails
+        point={{
+          id: 'point-3',
+          platform: 'proxmox-pve',
+          itemResourceId: 'res:vm-105',
+          kind: 'snapshot',
+          mode: 'snapshot',
+          outcome: 'success',
+          completedAt: '2026-03-31T10:00:00Z',
+          details: {
+            instance: 'delly',
+            node: 'delly',
+            snapshotName: 'vzdump',
+            vmid: '105',
+          },
+        }}
+        relatedPoints={[
+          {
+            id: 'point-4',
+            platform: 'proxmox-pbs',
+            itemResourceId: 'res:vm-105',
+            kind: 'backup',
+            mode: 'remote',
+            outcome: 'success',
+            verified: true,
+            completedAt: '2026-03-31T10:10:00Z',
+            repositoryRef: {
+              type: 'pbs-datastore',
+              namespace: 'pbs-main',
+              name: 'fast-store',
+            },
+          },
+        ]}
+      />
+    ));
+
+    expect(screen.queryByText('Snapshot / Snapshot')).not.toBeInTheDocument();
+    expect(screen.getAllByText('Snapshot').length).toBeGreaterThan(0);
+    expect(screen.getByText('Local snapshot on delly')).toBeInTheDocument();
+    expect(screen.getByText('Protection chain')).toBeInTheDocument();
+    expect(screen.getByText('Remote copy')).toBeInTheDocument();
+    expect(screen.getByText(/Verified/)).toBeInTheDocument();
+  });
+
+  it('turns generic PVE job errors into actionable failure copy and hides VMID zero', () => {
+    render(() => (
+      <RecoveryPointDetails
+        point={{
+          id: 'point-5',
+          platform: 'proxmox-pve',
+          kind: 'backup',
+          mode: 'local',
+          outcome: 'failed',
+          completedAt: '2026-03-31T10:00:00Z',
+          details: {
+            status: 'job errors',
+            taskName: 'vzdump',
+            vmid: '0',
+          },
+        }}
+      />
+    ));
+
+    expect(screen.getByText('Failure detail')).toBeInTheDocument();
+    expect(screen.getByText(/Inspect the platform task log for the failing step/i)).toBeInTheDocument();
+    expect(screen.queryByText('VMID')).not.toBeInTheDocument();
+    expect(screen.queryByText('0')).not.toBeInTheDocument();
+  });
 });

@@ -73,6 +73,7 @@ export const RECOVERY_QUERY_PARAMS = {
   rollupId: 'rollupId',
   view: 'view',
   platform: 'platform',
+  state: 'state',
   stale: 'stale',
   range: 'range',
   cluster: 'cluster',
@@ -151,6 +152,7 @@ type RecoveryLinkOptions = {
   rollupId?: string | null;
   view?: string | null;
   platform?: string | null;
+  state?: string | null;
   stale?: string | null;
   range?: string | null;
   cluster?: string | null;
@@ -584,6 +586,7 @@ export const parseRecoveryLinkSearch = (search: string) => {
         params.get(RECOVERY_LEGACY_PLATFORM_QUERY_PARAM),
       ]),
     ),
+    state: normalizeQueryValue(params.get(RECOVERY_QUERY_PARAMS.state)),
     stale: normalizeQueryBooleanFlag(params.get(RECOVERY_QUERY_PARAMS.stale)),
     range: normalizeQueryValue(params.get(RECOVERY_QUERY_PARAMS.range)),
     cluster: normalizeQueryValue(params.get(RECOVERY_QUERY_PARAMS.cluster)),
@@ -604,6 +607,7 @@ export const buildRecoveryPath = (options: RecoveryLinkOptions = {}): string => 
   const rollupId = normalizeQueryValue(options.rollupId);
   const view = normalizeQueryValue(options.view);
   const platform = normalizeSourcePlatformQueryValue(options.platform);
+  const state = normalizeQueryValue(options.state);
   const stale = normalizeQueryBooleanFlag(options.stale);
   const range = normalizeQueryValue(options.range);
   const cluster = normalizeQueryValue(options.cluster);
@@ -620,6 +624,7 @@ export const buildRecoveryPath = (options: RecoveryLinkOptions = {}): string => 
   if (rollupId) params.set(RECOVERY_QUERY_PARAMS.rollupId, rollupId);
   if (view) params.set(RECOVERY_QUERY_PARAMS.view, view);
   if (platform) params.set(RECOVERY_QUERY_PARAMS.platform, platform);
+  if (state) params.set(RECOVERY_QUERY_PARAMS.state, state);
   if (stale) params.set(RECOVERY_QUERY_PARAMS.stale, stale);
   if (range) params.set(RECOVERY_QUERY_PARAMS.range, range);
   if (cluster) params.set(RECOVERY_QUERY_PARAMS.cluster, cluster);
