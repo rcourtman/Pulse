@@ -553,6 +553,90 @@ func TestAgentExecTokenBindingEnforced(t *testing.T) {
 	conn.Close()
 }
 
+// TestAgentExecTokenBindingAcceptsHostnameMatch covers the deploy/enroll flow
+// where the runtime token carries both bound_agent_id (server-canonical
+// "agent-<hostname>" form) and bound_hostname, but the agent's runtime
+// agent_id is derived locally from /etc/machine-id and does NOT match
+// bound_agent_id. The hostname is the authoritative binding — the agent
+// proves it is running on the bound host by registering with that hostname.
+//
+// Regression: prior to this test, the hardening commit 3ec2c0779 enforced
+// strict bound_agent_id equality, which silently rejected every deploy-flow
+// agent (they never produce "agent-<hostname>" as their runtime ID) and made
+// the AI command tool report "No agents are currently connected" despite
+// agents appearing online via HTTP reports.
+func TestAgentExecTokenBindingAcceptsHostnameMatch(t *testing.T) {
+	rawToken := "agent-deploy-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeAgentExec}, map[string]string{
+		"bound_agent_id": "agent-prox97",
+		"bound_hostname": "prox97",
+	})
+	cfg := newTestConfigWithTokens(t, record)
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	ts := newIPv4HTTPServer(t, router.Handler())
+	defer ts.Close()
+
+	wsURL := wsURLForHTTP(ts.URL) + "/api/agent/ws"
+
+	// Agent registers with machine-id-style agent_id that does NOT match
+	// bound_agent_id, but hostname matches bound_hostname. Must succeed.
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL, wsHeadersForHTTP(t, ts.URL))
+	if err != nil {
+		t.Fatalf("Dial: %v", err)
+	}
+	regMsg, err := agentexec.NewMessage(agentexec.MsgTypeAgentRegister, "", agentexec.AgentRegisterPayload{
+		AgentID:  "f0c1b2a3e4d5f60718293a4b5c6d7e8f",
+		Hostname: "prox97",
+		Version:  "1.0.0",
+		Platform: "linux",
+		Token:    rawToken,
+	})
+	if err != nil {
+		conn.Close()
+		t.Fatalf("NewMessage: %v", err)
+	}
+	if err := conn.WriteJSON(regMsg); err != nil {
+		conn.Close()
+		t.Fatalf("WriteJSON: %v", err)
+	}
+	reg := readRegisteredPayload(t, conn)
+	if !reg.Success {
+		conn.Close()
+		t.Fatalf("expected registration to be accepted when hostname matches bound_hostname, got %q", reg.Message)
+	}
+	conn.Close()
+
+	// Mismatched hostname AND mismatched agent_id must still be rejected —
+	// a leaked token cannot be used from a different host claiming a different
+	// agent_id.
+	conn, _, err = websocket.DefaultDialer.Dial(wsURL, wsHeadersForHTTP(t, ts.URL))
+	if err != nil {
+		t.Fatalf("Dial: %v", err)
+	}
+	regMsg, err = agentexec.NewMessage(agentexec.MsgTypeAgentRegister, "", agentexec.AgentRegisterPayload{
+		AgentID:  "attacker-id",
+		Hostname: "attacker-host",
+		Version:  "1.0.0",
+		Platform: "linux",
+		Token:    rawToken,
+	})
+	if err != nil {
+		conn.Close()
+		t.Fatalf("NewMessage: %v", err)
+	}
+	if err := conn.WriteJSON(regMsg); err != nil {
+		conn.Close()
+		t.Fatalf("WriteJSON: %v", err)
+	}
+	reg = readRegisteredPayload(t, conn)
+	if reg.Success {
+		conn.Close()
+		t.Fatalf("expected registration to be rejected when neither hostname nor agent_id match the binding")
+	}
+	conn.Close()
+}
+
 func TestSecurityTokens_AgentExecRejectsUnboundToken(t *testing.T) {
 	rawToken := "agent-unbound-token-123.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeAgentExec}, nil)

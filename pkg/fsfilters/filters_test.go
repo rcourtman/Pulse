@@ -321,3 +321,35 @@ func TestMatchesDeviceExclude(t *testing.T) {
 		})
 	}
 }
+
+func TestIsVirtualBlockDevice(t *testing.T) {
+	tests := []struct {
+		name     string
+		device   string
+		expected bool
+	}{
+		{"zfs zvol", "zd0", true},
+		{"zfs zvol numeric tail", "zd48", true},
+		{"zram device", "zram0", true},
+		{"loopback", "loop3", true},
+		{"device mapper", "dm-7", true},
+		{"raid md", "md0", true},
+		{"virtio disk", "vda", true},
+		{"xen disk", "xvda", true},
+		{"with dev prefix", "/dev/zram0", true},
+		{"uppercase prefix", "/DEV/ZD0", true},
+		{"sata disk", "sda", false},
+		{"sata partition-ish", "sdb3", false},
+		{"nvme", "nvme0n1", false},
+		{"empty", "", false},
+		{"whitespace", "   ", false},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := IsVirtualBlockDevice(tc.device); got != tc.expected {
+				t.Errorf("IsVirtualBlockDevice(%q) = %t, want %t", tc.device, got, tc.expected)
+			}
+		})
+	}
+}

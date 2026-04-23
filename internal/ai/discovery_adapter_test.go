@@ -50,7 +50,7 @@ func TestDiscoveryCommandAdapter_NilServer(t *testing.T) {
 }
 
 func TestDiscoveryCommandAdapter_ExecuteCommandNotConnected(t *testing.T) {
-	server := agentexec.NewServer(func(string, string) bool { return true })
+	server := agentexec.NewServer(func(string, string, string) bool { return true })
 	adapter := newDiscoveryCommandAdapter(server)
 
 	cmd := servicediscovery.ExecuteCommandPayload{
@@ -76,7 +76,7 @@ func TestDiscoveryCommandAdapter_ExecuteCommandNotConnected(t *testing.T) {
 }
 
 func TestDiscoveryCommandAdapter_ConnectedAgentsAndLookup(t *testing.T) {
-	server := agentexec.NewServer(func(string, string) bool { return true })
+	server := agentexec.NewServer(func(string, string, string) bool { return true })
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		server.HandleWebSocket(w, r)
 	}))
@@ -153,7 +153,7 @@ func TestDiscoveryCommandAdapter_ConnectedAgentsAndLookup(t *testing.T) {
 }
 
 func TestDiscoveryCommandAdapter_ExecuteCommandSuccess(t *testing.T) {
-	server := agentexec.NewServer(func(string, string) bool { return true })
+	server := agentexec.NewServer(func(string, string, string) bool { return true })
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		server.HandleWebSocket(w, r)
 	}))

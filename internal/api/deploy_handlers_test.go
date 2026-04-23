@@ -40,7 +40,7 @@ func newTestDeployHandlers(t *testing.T, nodes []models.Node, hosts []models.Hos
 		state.UpsertHost(h)
 	}
 
-	execServer := agentexec.NewServer(func(string, string) bool { return true })
+	execServer := agentexec.NewServer(func(string, string, string) bool { return true })
 	reservation := deploy.NewReservationManager()
 
 	cfg := &config.Config{

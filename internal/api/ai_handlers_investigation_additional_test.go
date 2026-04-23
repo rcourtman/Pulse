@@ -660,7 +660,7 @@ func registerAgent(t *testing.T, url, agentID, hostname string) *websocket.Conn 
 }
 
 func TestAgentCommandAdapter_FindAgentForTarget(t *testing.T) {
-	server := agentexec.NewServer(func(string, string) bool { return true })
+	server := agentexec.NewServer(func(string, string, string) bool { return true })
 	ts := newIPv4HTTPServer(t, http.HandlerFunc(server.HandleWebSocket))
 	defer ts.Close()
 

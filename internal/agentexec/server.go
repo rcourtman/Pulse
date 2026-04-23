@@ -61,7 +61,7 @@ type Server struct {
 	agents        map[string]*agentConn                 // agentID -> connection
 	pendingReqs   map[string]chan CommandResultPayload  // scoped request key -> response channel
 	deploySubs    map[string]chan DeployProgressPayload // deploySubKey(agentID, jobID) -> progress subscriber
-	validateToken func(token string, agentID string) bool
+	validateToken func(token string, agentID string, hostname string) bool
 	commandPolicy *CommandPolicy
 	ipConnCounts  map[string]int
 	maxConnsPerIP int
@@ -88,8 +88,18 @@ func (ac *agentConn) signalDone() {
 	})
 }
 
-// NewServer creates a new agent execution server
-func NewServer(validateToken func(token string, agentID string) bool) *Server {
+// NewServer creates a new agent execution server.
+//
+// validateToken is invoked during WebSocket agent registration with the token,
+// the agent-claimed agentID, and the hostname from the register payload. The
+// hostname is provided because enrollment-minted tokens bind to bound_hostname
+// rather than to a predictable agent ID: agents derive their runtime agentID
+// from /etc/machine-id (or an override), which the server cannot know when it
+// mints the token. Matching on hostname preserves the trust boundary ("the
+// bearer is running on the bound host") without requiring the agent to know a
+// server-canonical ID format. See internal/api/router.go for the production
+// validator.
+func NewServer(validateToken func(token string, agentID string, hostname string) bool) *Server {
 	if validateToken == nil {
 		panic("agentexec: validateToken is required")
 	}
@@ -414,7 +424,7 @@ func (s *Server) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Validate token
-	if !s.validateToken(reg.Token, reg.AgentID) {
+	if !s.validateToken(reg.Token, reg.AgentID, reg.Hostname) {
 		log.Warn().Str("agent_id", reg.AgentID).Msg("Agent registration rejected: invalid token")
 		rejectedMsg, err := NewMessage(MsgTypeRegistered, "", RegisteredPayload{Success: false, Message: "Invalid token"})
 		if err != nil {

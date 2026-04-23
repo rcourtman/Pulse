@@ -17,6 +17,8 @@ import (
 	"time"
 
 	"github.com/rs/zerolog/log"
+
+	"github.com/rcourtman/pulse-go-rewrite/pkg/fsfilters"
 )
 
 const smartctlComponent = "smartctl_collector"
@@ -355,6 +357,14 @@ func parseSmartctlScanOpenTargets(output []byte, diskExclude []string) []smartct
 		}
 
 		name := filepath.Base(path)
+		if fsfilters.IsVirtualBlockDevice(name) {
+			log.Debug().
+				Str("component", smartctlComponent).
+				Str("action", "skip_virtual_device").
+				Str("device", path).
+				Msg("Skipping non-physical device reported by smartctl --scan-open")
+			continue
+		}
 		if matchesDeviceExclude(name, path, diskExclude) {
 			continue
 		}

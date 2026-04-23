@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/fsfilters"
 )
 
 const autoMergeThreshold = 0.85
@@ -816,6 +817,9 @@ func (rr *ResourceRegistry) ingestHostSMARTDisks(host models.Host) {
 	hostParentID := rr.sourceResourceID(SourceAgent, host.ID)
 	unraidStorageID := rr.sourceResourceID(SourceAgent, hostUnraidStorageSourceID(host))
 	for _, disk := range host.Sensors.SMART {
+		if fsfilters.IsVirtualBlockDevice(disk.Device) {
+			continue
+		}
 		resource, identity := resourceFromHostSMARTDisk(host, disk)
 		if resource.PhysicalDisk == nil {
 			continue

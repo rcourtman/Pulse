@@ -236,6 +236,44 @@ func MatchesDiskExclude(device, mountpoint string, excludePatterns []string) boo
 	return false
 }
 
+// virtualBlockDevicePrefixes are device-name prefixes for virtual or
+// pseudo block devices that should never be treated as physical disks.
+// The list is shared between the host agent (which skips these during
+// SMART collection) and the server-side resource registry (which refuses
+// to surface them as physical_disk resources even if an older agent
+// reports them).
+var virtualBlockDevicePrefixes = []string{
+	"dm-",
+	"drbd",
+	"loop",
+	"md",
+	"nbd",
+	"pmem",
+	"ram",
+	"rbd",
+	"vd",
+	"xvd",
+	"zd",
+	"zram",
+}
+
+// IsVirtualBlockDevice reports whether a block-device name (with or
+// without the /dev/ prefix) looks like a virtual or pseudo device that
+// cannot provide SMART data or meaningful physical-disk metrics.
+func IsVirtualBlockDevice(name string) bool {
+	trimmed := strings.ToLower(strings.TrimSpace(name))
+	trimmed = strings.TrimPrefix(trimmed, "/dev/")
+	if trimmed == "" {
+		return false
+	}
+	for _, prefix := range virtualBlockDevicePrefixes {
+		if strings.HasPrefix(trimmed, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
 // MatchesDeviceExclude checks if a device name/path matches exclusion patterns.
 // For disk I/O collection where we only have device names (not mountpoints).
 func MatchesDeviceExclude(device string, excludePatterns []string) bool {

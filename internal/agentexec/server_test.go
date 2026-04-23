@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-func allowAllTestTokens(string, string) bool { return true }
+func allowAllTestTokens(string, string, string) bool { return true }
 
 func TestNewServerRequiresValidateToken(t *testing.T) {
 	defer func() {

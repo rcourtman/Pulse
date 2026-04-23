@@ -167,7 +167,7 @@ func TestDeployCancelPayloadRoundTrip(t *testing.T) {
 }
 
 func TestSubscribeDeployProgress(t *testing.T) {
-	s := NewServer(func(string, string) bool { return true })
+	s := NewServer(func(string, string, string) bool { return true })
 
 	ch := s.SubscribeDeployProgress("agent-1", "job-1", 10)
 	if ch == nil {
@@ -196,7 +196,7 @@ func TestSubscribeDeployProgress(t *testing.T) {
 }
 
 func TestSubscribeDeployProgressDefaultBuffer(t *testing.T) {
-	s := NewServer(func(string, string) bool { return true })
+	s := NewServer(func(string, string, string) bool { return true })
 	ch := s.SubscribeDeployProgress("agent-1", "job-2", 0)
 	if cap(ch) != 64 {
 		t.Errorf("expected default capacity 64, got %d", cap(ch))
@@ -205,7 +205,7 @@ func TestSubscribeDeployProgressDefaultBuffer(t *testing.T) {
 }
 
 func TestSubscribeDeployProgressAgentIsolation(t *testing.T) {
-	s := NewServer(func(string, string) bool { return true })
+	s := NewServer(func(string, string, string) bool { return true })
 
 	ch1 := s.SubscribeDeployProgress("agent-1", "job-1", 10)
 	ch2 := s.SubscribeDeployProgress("agent-2", "job-1", 10)
@@ -226,7 +226,7 @@ func TestSubscribeDeployProgressAgentIsolation(t *testing.T) {
 }
 
 func TestSendDeployPreflightAgentNotConnected(t *testing.T) {
-	s := NewServer(func(string, string) bool { return true })
+	s := NewServer(func(string, string, string) bool { return true })
 
 	err := s.SendDeployPreflight(nil, "missing-agent", DeployPreflightPayload{
 		RequestID: "req-1",
@@ -238,7 +238,7 @@ func TestSendDeployPreflightAgentNotConnected(t *testing.T) {
 }
 
 func TestSendDeployInstallAgentNotConnected(t *testing.T) {
-	s := NewServer(func(string, string) bool { return true })
+	s := NewServer(func(string, string, string) bool { return true })
 
 	err := s.SendDeployInstall(nil, "missing-agent", DeployInstallPayload{
 		RequestID: "req-1",
@@ -250,7 +250,7 @@ func TestSendDeployInstallAgentNotConnected(t *testing.T) {
 }
 
 func TestSendDeployCancelAgentNotConnected(t *testing.T) {
-	s := NewServer(func(string, string) bool { return true })
+	s := NewServer(func(string, string, string) bool { return true })
 
 	err := s.SendDeployCancel(nil, "missing-agent", DeployCancelPayload{
 		RequestID: "req-1",
@@ -262,7 +262,7 @@ func TestSendDeployCancelAgentNotConnected(t *testing.T) {
 }
 
 func TestSendDeployCommandEmptyAgentID(t *testing.T) {
-	s := NewServer(func(string, string) bool { return true })
+	s := NewServer(func(string, string, string) bool { return true })
 
 	err := s.SendDeployPreflight(nil, "", DeployPreflightPayload{RequestID: "req-1"})
 	if err == nil {

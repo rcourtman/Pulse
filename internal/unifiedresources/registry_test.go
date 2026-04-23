@@ -1276,6 +1276,40 @@ func TestResourceRegistry_IngestSnapshotCreatesPhysicalDisksFromHostSMART(t *tes
 	}
 }
 
+func TestResourceRegistry_IngestSnapshotSkipsVirtualBlockDevicesFromHostSMART(t *testing.T) {
+	rr := NewRegistry(nil)
+	now := time.Date(2026, 4, 23, 12, 0, 0, 0, time.UTC)
+
+	rr.IngestSnapshot(models.StateSnapshot{
+		Hosts: []models.Host{
+			{
+				ID:       "host-minipc",
+				Hostname: "minipc",
+				Status:   "online",
+				LastSeen: now,
+				Sensors: models.HostSensorSummary{
+					SMART: []models.HostDiskSMART{
+						{Device: "/dev/nvme0n1", Model: "Samsung 970 EVO", Serial: "REAL-DISK", Type: "nvme", Health: "PASSED"},
+						{Device: "/dev/zd0", Model: "", Serial: "", Type: ""},
+						{Device: "/dev/zd16", Model: "", Serial: "", Type: ""},
+						{Device: "zram0", Model: "", Serial: "", Type: ""},
+						{Device: "/dev/loop3", Model: "", Serial: "", Type: ""},
+						{Device: "/dev/dm-1", Model: "", Serial: "", Type: ""},
+					},
+				},
+			},
+		},
+	})
+
+	disks := rr.ListByType(ResourceTypePhysicalDisk)
+	if len(disks) != 1 {
+		t.Fatalf("expected 1 physical disk resource (virtual devices filtered), got %d", len(disks))
+	}
+	if disks[0].PhysicalDisk == nil || disks[0].PhysicalDisk.Serial != "REAL-DISK" {
+		t.Fatalf("expected only the real nvme disk, got %+v", disks[0].PhysicalDisk)
+	}
+}
+
 func TestResourceRegistry_IngestSnapshotMergesAgentAndProxmoxPhysicalDisksByIdentity(t *testing.T) {
 	rr := NewRegistry(nil)
 	now := time.Date(2026, 3, 7, 12, 0, 0, 0, time.UTC)

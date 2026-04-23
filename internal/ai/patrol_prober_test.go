@@ -82,7 +82,7 @@ func TestAgentExecProber_PingGuestsNilServer(t *testing.T) {
 }
 
 func TestAgentExecProber_PingGuestsEmptyIPs(t *testing.T) {
-	prober := NewAgentExecProber(agentexec.NewServer(func(string, string) bool { return true }))
+	prober := NewAgentExecProber(agentexec.NewServer(func(string, string, string) bool { return true }))
 	results, err := prober.PingGuests(context.Background(), "agent-1", nil)
 	if err != nil {
 		t.Fatalf("PingGuests with empty ips returned error: %v", err)
@@ -93,7 +93,7 @@ func TestAgentExecProber_PingGuestsEmptyIPs(t *testing.T) {
 }
 
 func TestAgentExecProber_RoundTripViaAgentExecServer(t *testing.T) {
-	server := agentexec.NewServer(func(string, string) bool { return true })
+	server := agentexec.NewServer(func(string, string, string) bool { return true })
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		server.HandleWebSocket(w, r)
 	}))

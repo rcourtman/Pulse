@@ -1826,7 +1826,7 @@ func TestHandleRunCommand_ConsumesApproval(t *testing.T) {
 	tmp := t.TempDir()
 	cfg := &config.Config{DataPath: tmp}
 	persistence := config.NewConfigPersistence(tmp)
-	handler := newTestAISettingsHandler(cfg, persistence, agentexec.NewServer(func(string, string) bool { return true }))
+	handler := newTestAISettingsHandler(cfg, persistence, agentexec.NewServer(func(string, string, string) bool { return true }))
 
 	store, err := approval.NewStore(approval.StoreConfig{
 		DataDir:            tmp,
@@ -1862,7 +1862,7 @@ func TestHandleRunCommand_RejectsCommandMismatch(t *testing.T) {
 	tmp := t.TempDir()
 	cfg := &config.Config{DataPath: tmp}
 	persistence := config.NewConfigPersistence(tmp)
-	handler := newTestAISettingsHandler(cfg, persistence, agentexec.NewServer(func(string, string) bool { return true }))
+	handler := newTestAISettingsHandler(cfg, persistence, agentexec.NewServer(func(string, string, string) bool { return true }))
 
 	store, err := approval.NewStore(approval.StoreConfig{
 		DataDir:            tmp,
@@ -1898,7 +1898,7 @@ func TestHandleRunCommand_RejectsUnsupportedTargetType(t *testing.T) {
 	tmp := t.TempDir()
 	cfg := &config.Config{DataPath: tmp}
 	persistence := config.NewConfigPersistence(tmp)
-	handler := newTestAISettingsHandler(cfg, persistence, agentexec.NewServer(func(string, string) bool { return true }))
+	handler := newTestAISettingsHandler(cfg, persistence, agentexec.NewServer(func(string, string, string) bool { return true }))
 
 	store, err := approval.NewStore(approval.StoreConfig{
 		DataDir:            tmp,
@@ -1935,7 +1935,7 @@ func TestHandleRunCommand_RejectsCrossOrgApproval(t *testing.T) {
 	tmp := t.TempDir()
 	cfg := &config.Config{DataPath: tmp}
 	persistence := config.NewConfigPersistence(tmp)
-	handler := newTestAISettingsHandler(cfg, persistence, agentexec.NewServer(func(string, string) bool { return true }))
+	handler := newTestAISettingsHandler(cfg, persistence, agentexec.NewServer(func(string, string, string) bool { return true }))
 
 	store, err := approval.NewStore(approval.StoreConfig{
 		DataDir:            tmp,

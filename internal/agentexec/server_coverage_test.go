@@ -150,7 +150,7 @@ func TestHandleWebSocket_InvalidTokenRejectionSendFailure(t *testing.T) {
 		return errors.New("write failure")
 	}
 
-	s := NewServer(func(string, string) bool { return false })
+	s := NewServer(func(string, string, string) bool { return false })
 	ts := newWSServer(t, s)
 	defer ts.Close()
 
