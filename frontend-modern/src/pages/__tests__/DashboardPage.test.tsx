@@ -143,6 +143,9 @@ describe('Dashboard page module contract', () => {
     overviewMock.storage.totalUsed = 0;
     overviewMock.storage.warningCount = 0;
     overviewMock.storage.criticalCount = 0;
+    overviewMock.alerts.activeCritical = 0;
+    overviewMock.alerts.activeWarning = 0;
+    overviewMock.alerts.total = 0;
     connectedInfrastructureMock.length = 0;
   });
 
@@ -171,12 +174,16 @@ describe('Dashboard page module contract', () => {
       "from '@/components/Recovery/DashboardRecoveryStatusPanel'",
     );
     expect(dashboardPageSource).toContain("from '@/components/Storage/DashboardStoragePanel'");
-    expect(dashboardPageSource).toContain('const overviewState = useDashboardOverview(alertsList);');
+    expect(dashboardPageSource).toContain(
+      'const overviewState = useDashboardOverview(alertsList);',
+    );
     expect(dashboardPageSource).not.toContain("cacheKey: 'all-resources'");
   });
 
   it('routes dashboard trend hydration through the shared dashboard resources snapshot', () => {
-    expect(dashboardPageSource).toContain('const trends = useDashboardTrends(overview, trendRange);');
+    expect(dashboardPageSource).toContain(
+      'const trends = useDashboardTrends(overview, trendRange);',
+    );
     expect(dashboardPageSource).not.toContain('const dashboardResources = useUnifiedResources');
   });
 
@@ -192,14 +199,16 @@ describe('Dashboard page module contract', () => {
   it('routes the empty dashboard state to infrastructure install', () => {
     render(() => <DashboardPage />);
 
-    expect(screen.getByRole('heading', { name: 'No resources yet' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: 'Connect your first infrastructure source' }),
+    ).toBeInTheDocument();
     expect(
       screen.getByText(
-        'Start by opening Settings → Infrastructure → Install on a host and connecting the first system you want Pulse to monitor. Your dashboard overview will appear here once that system starts reporting.',
+        'The dashboard appears after Pulse receives its first monitored system. Add a Pulse Agent or platform API source from Infrastructure setup, then this page becomes the live estate overview.',
       ),
     ).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Open infrastructure install' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add infrastructure source' }));
 
     expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure?add=agent');
   });
@@ -273,12 +282,54 @@ describe('Dashboard page module contract', () => {
     const problemHeading = screen.getByRole('heading', { name: 'Problem Resources' });
 
     expect(screen.getByText('1 system needs attention')).toBeInTheDocument();
+    expect(screen.getAllByText(/1 resource issue below/).length).toBeGreaterThan(0);
+    expect(screen.getByText('1 system needs review; details below')).toBeInTheDocument();
     expect(screen.getByText('2 active')).toBeInTheDocument();
     expect(screen.getByText(/Proxmox/)).toBeInTheDocument();
     expect(screen.getByText(/TrueNAS/)).toBeInTheDocument();
     expect(
       estateHeading.compareDocumentPosition(problemHeading) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+  });
+
+  it('keeps healthy system copy distinct from resource and alert issues', () => {
+    overviewMock.health.totalResources = 5;
+    overviewMock.infrastructure.total = 1;
+    overviewMock.infrastructure.byStatus = { online: 1 };
+    overviewMock.alerts.activeWarning = 2;
+    overviewMock.alerts.total = 2;
+    connectedInfrastructureMock.push({
+      id: 'homelab',
+      name: 'homelab',
+      status: 'active',
+      healthStatus: 'online',
+      lastSeen: Date.now(),
+      surfaces: [{ id: 'agent:homelab', kind: 'agent', label: 'Host telemetry' }],
+    });
+    overviewMock.problemResources = [
+      {
+        resource: {
+          id: 'container-1',
+          type: 'app-container',
+          name: 'Container 1',
+          displayName: 'Container 1',
+          platformId: 'container-1',
+          platformType: 'docker',
+          sourceType: 'api',
+          status: 'offline',
+          lastSeen: Date.now(),
+        } as DashboardOverview['problemResources'][number]['resource'],
+        problems: ['Offline'],
+        worstValue: 200,
+      },
+    ];
+
+    render(() => <DashboardPage />);
+
+    expect(screen.getByText('1 system reporting')).toBeInTheDocument();
+    expect(screen.getAllByText(/1 resource issue and 2 alerts below/).length).toBeGreaterThan(0);
+    expect(screen.getByText('Resource issues and alerts listed below')).toBeInTheDocument();
+    expect(screen.queryByText('No dashboard issues found')).toBeNull();
   });
 
   it('keeps the KPI strip above problem resources so the dashboard snapshot reads before detail', () => {
@@ -309,8 +360,8 @@ describe('Dashboard page module contract', () => {
     const kpiLabel = screen.getByText('Infrastructure');
     const problemHeading = screen.getByRole('heading', { name: 'Problem Resources' });
 
-    expect(kpiLabel.compareDocumentPosition(problemHeading) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
-      Node.DOCUMENT_POSITION_FOLLOWING,
-    );
+    expect(
+      kpiLabel.compareDocumentPosition(problemHeading) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
   });
 });

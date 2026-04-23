@@ -77,6 +77,10 @@ querying, and the operator-facing storage health presentation layer.
    protected-inventory-only state so hidden filters cannot make valid history
    look empty.
 3. Add or change storage page UX through `frontend-modern/src/pages/Storage.tsx`, `frontend-modern/src/components/Storage/`, `frontend-modern/src/features/storageBackups/`, and the shared storage-source contract in `frontend-modern/src/utils/storageSources.ts`
+   Dashboard route composition may place storage and recovery widgets beside
+   the estate summary, but estate-summary copy must not present storage or
+   recovery health as resolved. Storage and recovery readiness claims remain
+   owned by `DashboardStoragePanel` and `DashboardRecoveryStatusPanel`.
 4. Route transport changes for storage and recovery endpoints through `internal/api/` and the owning `api-contracts` proof routes
    That same adjacent API boundary also owns TrueNAS feature-default semantics for
    provider-backed recovery: storage and recovery must treat `truenas_disabled`

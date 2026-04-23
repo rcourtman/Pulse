@@ -36,7 +36,10 @@ import { buildDashboardEstateSummary } from '@/features/dashboardOverview/estate
 import { RecentAlertsPanel } from '@/components/Alerts/RecentAlertsPanel';
 import { DashboardRecoveryStatusPanel } from '@/components/Recovery/DashboardRecoveryStatusPanel';
 import { DashboardStoragePanel } from '@/components/Storage/DashboardStoragePanel';
-import type { DashboardWidgetDef, DashboardWidgetId } from '@/features/dashboardOverview/dashboardWidgets';
+import type {
+  DashboardWidgetDef,
+  DashboardWidgetId,
+} from '@/features/dashboardOverview/dashboardWidgets';
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -298,7 +301,11 @@ export default function Dashboard() {
             />
 
             {/* 2. Estate orientation — always visible once resources exist */}
-            <EstateSummaryPanel summary={estateSummary()} />
+            <EstateSummaryPanel
+              summary={estateSummary()}
+              resourceIssueCount={overview().problemResources.length}
+              activeAlertCount={overview().alerts.total}
+            />
 
             {/* 3. KPI Strip — always visible */}
             <KPIStrip

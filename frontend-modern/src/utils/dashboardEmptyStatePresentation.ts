@@ -57,9 +57,9 @@ export function getDashboardUnavailableState() {
 
 export function getDashboardNoResourcesState() {
   return {
-    title: 'No resources yet',
+    title: 'Connect your first infrastructure source',
     description:
-      'Start by opening Settings → Infrastructure → Install on a host and connecting the first system you want Pulse to monitor. Your dashboard overview will appear here once that system starts reporting.',
-    actionLabel: 'Open infrastructure install',
+      'The dashboard appears after Pulse receives its first monitored system. Add a Pulse Agent or platform API source from Infrastructure setup, then this page becomes the live estate overview.',
+    actionLabel: 'Add infrastructure source',
   } as const;
 }

@@ -31,6 +31,9 @@ test('dashboard first viewport preserves connected infrastructure orientation', 
     await expect(estateSummary.getByRole('link', { name: 'View infrastructure' })).toBeVisible();
     await expect(estateSummary.getByText(/systems? reporting|systems? need/)).toBeVisible();
     await expect(estateSummary.getByText('Resource summary fallback')).toHaveCount(0);
+    await expect(estateSummary.getByText('No system-level attention')).toHaveCount(0);
+    await expect(estateSummary.getByText('No source coverage yet')).toHaveCount(0);
+    await expect(estateSummary.getByText('No dashboard issues found')).toHaveCount(0);
 
     const estateBox = await estateSummary.boundingBox();
     const kpiBox = await page.getByTestId('dashboard-kpi-infrastructure').boundingBox();

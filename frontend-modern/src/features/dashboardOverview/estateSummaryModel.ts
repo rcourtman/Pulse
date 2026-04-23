@@ -118,15 +118,13 @@ function buildFallbackSummary(fallback: DashboardEstateFallback): DashboardEstat
     outdatedSystems: 0,
     attentionSystems: unknown,
     headline:
-      total === 0
-        ? 'No infrastructure reporting'
-        : `${pluralize(total, 'infrastructure resource')} reporting`,
+      total === 0 ? 'No infrastructure reporting' : `${pluralize(total, 'resource')} reporting`,
     detail:
       total === 0
         ? 'Connected systems appear here after the first infrastructure source reports.'
         : unknown > 0
-          ? `${pluralize(healthy, 'resource')} online, ${pluralize(unknown, 'resource')} not classified yet.`
-          : 'All reporting resources are online.',
+          ? `${pluralize(healthy, 'resource')} online while the system map syncs`
+          : 'System map still syncing',
     tone,
     surfaces: [],
     systems: [],

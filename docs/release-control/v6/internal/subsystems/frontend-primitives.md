@@ -1590,6 +1590,10 @@ resource, alert, storage, or recovery issues that remain elsewhere on the
 dashboard, and partial/empty dashboard states must describe synchronization or
 infrastructure-source onboarding in operator terms instead of exposing
 implementation fallback language.
+The estate summary may surface resource and alert issue counts only as
+below-the-summary detail references; it must not claim the whole dashboard has
+no issues when storage or recovery widgets still own independent health
+signals.
 The recovery feature shell now also depends on the shared
 `frontend-modern/src/components/shared/Subtabs.tsx` primitive for its primary
 protected-items versus recovery-events workspace switch. The recovery lane may

@@ -63,7 +63,8 @@ describe('buildDashboardEstateSummary', () => {
     expect(summary.totalSystems).toBe(4);
     expect(summary.healthySystems).toBe(3);
     expect(summary.unknownSystems).toBe(1);
-    expect(summary.detail).toBe('3 resources online, 1 resource not classified yet.');
+    expect(summary.headline).toBe('4 resources reporting');
+    expect(summary.detail).toBe('3 resources online while the system map syncs');
   });
 
   it('counts each active system needing attention once', () => {

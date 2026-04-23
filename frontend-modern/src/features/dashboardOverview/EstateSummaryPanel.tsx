@@ -14,6 +14,8 @@ import ServerIcon from 'lucide-solid/icons/server';
 
 interface EstateSummaryPanelProps {
   summary: DashboardEstateSummary;
+  resourceIssueCount?: number;
+  activeAlertCount?: number;
 }
 
 const toneDotClass: Record<DashboardEstateHealthTone, string> = {
@@ -31,7 +33,7 @@ const toneTextClass: Record<DashboardEstateHealthTone, string> = {
 };
 
 function formatSurfaceSummary(surfaces: DashboardEstateSurfaceSummary[]): string {
-  if (surfaces.length === 0) return 'No source coverage yet';
+  if (surfaces.length === 0) return 'No source links yet';
   return surfaces
     .slice(0, 4)
     .map((surface) =>
@@ -42,11 +44,58 @@ function formatSurfaceSummary(surfaces: DashboardEstateSurfaceSummary[]): string
     .join(' · ');
 }
 
+const pluralize = (count: number, singular: string, plural = `${singular}s`): string =>
+  `${count} ${count === 1 ? singular : plural}`;
+
+const reviewText = (count: number): string =>
+  `${pluralize(count, 'system')} ${count === 1 ? 'needs' : 'need'} review`;
+
+function dashboardIssueText(props: EstateSummaryPanelProps): string | null {
+  const resourceIssueCount = Math.max(0, Math.trunc(props.resourceIssueCount ?? 0));
+  const activeAlertCount = Math.max(0, Math.trunc(props.activeAlertCount ?? 0));
+
+  if (resourceIssueCount > 0 && activeAlertCount > 0) {
+    return `${pluralize(resourceIssueCount, 'resource issue')} and ${pluralize(activeAlertCount, 'alert')} below`;
+  }
+  if (resourceIssueCount > 0) return `${pluralize(resourceIssueCount, 'resource issue')} below`;
+  if (activeAlertCount > 0) return `${pluralize(activeAlertCount, 'alert')} active`;
+  return null;
+}
+
+function dashboardIssueSubtext(props: EstateSummaryPanelProps): string | null {
+  const resourceIssueCount = Math.max(0, Math.trunc(props.resourceIssueCount ?? 0));
+  const activeAlertCount = Math.max(0, Math.trunc(props.activeAlertCount ?? 0));
+
+  if (resourceIssueCount > 0 && activeAlertCount > 0)
+    return 'Resource issues and alerts listed below';
+  if (resourceIssueCount > 0) return 'Resource issues listed below';
+  if (activeAlertCount > 0) return 'Alerts listed below';
+  return null;
+}
+
+function latestSignalSubtext(props: EstateSummaryPanelProps): string {
+  const issueSubtext = dashboardIssueSubtext(props);
+
+  if (props.summary.attentionSystems > 0) {
+    if (issueSubtext) return `${reviewText(props.summary.attentionSystems)}; details below`;
+    return reviewText(props.summary.attentionSystems);
+  }
+  if (issueSubtext) return issueSubtext;
+  if (!props.summary.hasCanonicalProjection) return 'System map syncing';
+  return 'No infrastructure or alert issues found';
+}
+
 export function EstateSummaryPanel(props: EstateSummaryPanelProps) {
   const latestSeenLabel = () =>
     props.summary.latestSeen
       ? formatRelativeTime(props.summary.latestSeen, { compact: true })
-      : 'Waiting for signal';
+      : !props.summary.hasCanonicalProjection && props.summary.totalSystems > 0
+        ? 'Syncing'
+        : 'Waiting for signal';
+  const headlineDetail = () => {
+    const issueText = dashboardIssueText(props);
+    return issueText ? `${props.summary.detail} · ${issueText}` : props.summary.detail;
+  };
 
   return (
     <Card
@@ -69,7 +118,7 @@ export function EstateSummaryPanel(props: EstateSummaryPanelProps) {
               <span class={`font-medium ${toneTextClass[props.summary.tone]}`}>
                 {props.summary.headline}
               </span>
-              <span> · {props.summary.detail}</span>
+              <span> · {headlineDetail()}</span>
             </p>
           </div>
         </div>
@@ -91,16 +140,24 @@ export function EstateSummaryPanel(props: EstateSummaryPanelProps) {
           <p class="mt-0.5 text-xs text-muted">
             {props.summary.hasCanonicalProjection
               ? `${props.summary.activeSystems} active`
-              : 'Resource summary fallback'}
+              : 'System map syncing'}
           </p>
         </div>
 
         <div>
           <p class="text-[11px] font-medium uppercase tracking-wide text-muted">Source coverage</p>
           <p class="mt-1 truncate text-sm font-medium text-base-content">
-            {formatSurfaceSummary(props.summary.surfaces)}
+            {props.summary.hasCanonicalProjection
+              ? formatSurfaceSummary(props.summary.surfaces)
+              : 'Coverage syncing'}
           </p>
-          <p class="mt-0.5 text-xs text-muted">Grouped by monitored system</p>
+          <p class="mt-0.5 text-xs text-muted">
+            {props.summary.hasCanonicalProjection
+              ? props.summary.surfaces.length > 0
+                ? 'Grouped by monitored system'
+                : 'Add source coverage from Infrastructure'
+              : 'Awaiting connected-infrastructure map'}
+          </p>
         </div>
 
         <div>
@@ -109,11 +166,7 @@ export function EstateSummaryPanel(props: EstateSummaryPanelProps) {
             <ClockIcon class="h-3.5 w-3.5 text-muted" aria-hidden="true" />
             {latestSeenLabel()}
           </p>
-          <p class="mt-0.5 text-xs text-muted">
-            {props.summary.attentionSystems > 0
-              ? `${props.summary.attentionSystems} needing review`
-              : 'No system-level attention'}
-          </p>
+          <p class="mt-0.5 text-xs text-muted">{latestSignalSubtext(props)}</p>
         </div>
       </div>
 
