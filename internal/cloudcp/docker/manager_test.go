@@ -146,6 +146,29 @@ func TestTenantEnvOmitsPublicURLWithoutTenantContext(t *testing.T) {
 	}
 }
 
+func TestTenantRuntimeLogConfigBoundsJSONLogs(t *testing.T) {
+	t.Parallel()
+
+	got := tenantRuntimeLogConfig("", 0)
+	if got.Type != "json-file" {
+		t.Fatalf("LogConfig.Type = %q, want json-file", got.Type)
+	}
+	if got.Config["max-size"] != defaultTenantLogMaxSize {
+		t.Fatalf("max-size = %q, want %q", got.Config["max-size"], defaultTenantLogMaxSize)
+	}
+	if got.Config["max-file"] != "3" {
+		t.Fatalf("max-file = %q, want 3", got.Config["max-file"])
+	}
+
+	custom := tenantRuntimeLogConfig("25m", 4)
+	if custom.Config["max-size"] != "25m" {
+		t.Fatalf("custom max-size = %q, want 25m", custom.Config["max-size"])
+	}
+	if custom.Config["max-file"] != "4" {
+		t.Fatalf("custom max-file = %q, want 4", custom.Config["max-file"])
+	}
+}
+
 func TestCanonicalTrustedProxyCIDR(t *testing.T) {
 	t.Parallel()
 

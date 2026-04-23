@@ -137,6 +137,9 @@ cloud-specific enforcement rules.
 7. `internal/cloudcp/auth/magiclink_store.go` shared with `security-privacy`: control-plane magic-link persistence is both a Pulse Cloud account-access boundary and a security/privacy storage-hardening boundary.
 8. `internal/cloudcp/docker/labels.go` shared with `deployment-installability`: hosted tenant Docker labels are both a Pulse Cloud runtime contract boundary and a deployment-installability rollout boundary.
 9. `internal/cloudcp/docker/manager.go` shared with `deployment-installability`: hosted tenant container management is both a Pulse Cloud runtime contract boundary and a deployment-installability rollout boundary.
+   Hosted tenant container creation must also bound Docker `json-file` logs
+   through the control-plane Docker manager so tenant runtime logging cannot
+   fill the live Pulse Cloud host independently of tenant data quotas.
 10. `internal/cloudcp/tenant_runtime_rollout.go` shared with `deployment-installability`: hosted tenant runtime rollout is both a Pulse Cloud runtime contract boundary and a deployment-installability release-rollout boundary.
 
 The real `pulse-pro` license-server legacy checkout issuance, recurring
@@ -168,7 +171,10 @@ Community limit enforcement.
 2. Add or change hosted entitlement issuance through `internal/cloudcp/entitlements/service.go`
 3. Add or change control-plane plan storage through `internal/cloudcp/registry/models.go` and `internal/cloudcp/registry/registry.go`
 4. Add or change MSP account-scoped workspace provisioning entry handlers through `internal/cloudcp/account/tenant_handlers.go`
-5. Add or change public cloud self-serve signup price configuration or checkout gating through `internal/cloudcp/config.go` and `internal/cloudcp/public_cloud_signup_handlers.go`
+5. Add or change public cloud self-serve signup price configuration,
+   tenant-runtime capacity/log retention configuration, or checkout gating
+   through `internal/cloudcp/config.go` and
+   `internal/cloudcp/public_cloud_signup_handlers.go`
 6. Add or change the hosted account portal API, Pulse Account access/auth/session handling, task-first browser shell, maintained portal frontend/bundle, or account-scoped workspace/access/billing handoff through `internal/cloudcp/account/audit.go`, `internal/cloudcp/account/handlers.go`, `internal/cloudcp/auth/handlers.go`, `internal/cloudcp/auth/session.go`, `internal/cloudcp/portal/`, and `internal/cloudcp/routes.go`
    That same customer-entry boundary owns the canonical hosted Cloud handoff:
    public Cloud entry, secure checkout return, and returning-customer sign-in

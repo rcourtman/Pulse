@@ -29,6 +29,8 @@ type ManagerConfig struct {
 	TrustedProxyCIDRs        []string
 	MemoryLimit              int64 // bytes
 	CPUShares                int64
+	TenantLogMaxSize         string
+	TenantLogMaxFile         int
 	ContainerPort            int // port inside the container (default 7655)
 }
 
@@ -53,8 +55,10 @@ type RuntimeContainerInfo struct {
 const immutableOwnershipPathsEnv = "PULSE_IMMUTABLE_OWNERSHIP_PATHS"
 
 const (
-	tenantRuntimeUID = 1000
-	tenantRuntimeGID = 1000
+	tenantRuntimeUID        = 1000
+	tenantRuntimeGID        = 1000
+	defaultTenantLogMaxSize = "10m"
+	defaultTenantLogMaxFile = 3
 )
 
 // NewManager creates a Docker manager connected to the local daemon.
@@ -124,6 +128,7 @@ func (m *Manager) CreateAndStart(ctx context.Context, tenantID, tenantDataDir st
 		},
 		HostConfig: &container.HostConfig{
 			RestartPolicy: container.RestartPolicy{Name: "unless-stopped"},
+			LogConfig:     tenantRuntimeLogConfig(m.cfg.TenantLogMaxSize, m.cfg.TenantLogMaxFile),
 			Resources: container.Resources{
 				Memory:    m.cfg.MemoryLimit,
 				CPUShares: m.cfg.CPUShares,
@@ -152,6 +157,23 @@ func (m *Manager) CreateAndStart(ctx context.Context, tenantID, tenantDataDir st
 		Msg("Tenant container started")
 
 	return resp.ID, nil
+}
+
+func tenantRuntimeLogConfig(maxSize string, maxFile int) container.LogConfig {
+	maxSize = strings.TrimSpace(maxSize)
+	if maxSize == "" {
+		maxSize = defaultTenantLogMaxSize
+	}
+	if maxFile <= 0 {
+		maxFile = defaultTenantLogMaxFile
+	}
+	return container.LogConfig{
+		Type: "json-file",
+		Config: map[string]string{
+			"max-size": maxSize,
+			"max-file": fmt.Sprintf("%d", maxFile),
+		},
+	}
 }
 
 func tenantImmutableOwnershipPaths() []string {

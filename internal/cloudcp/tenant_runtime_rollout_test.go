@@ -121,6 +121,15 @@ func TestTenantRuntimeRollout_RollsForwardCanonically(t *testing.T) {
 	if docker.renameCalls[0].newName != "pulse-t-ROLLFWD.pre-aliasfix" {
 		t.Fatalf("rename target = %q, want pulse-t-ROLLFWD.pre-aliasfix", docker.renameCalls[0].newName)
 	}
+	if len(docker.createCalls) != 1 {
+		t.Fatalf("create call count = %d, want 1", len(docker.createCalls))
+	}
+	if docker.createCalls[0].tenantID != tenant.ID {
+		t.Fatalf("created tenant id = %q, want %q", docker.createCalls[0].tenantID, tenant.ID)
+	}
+	if docker.createCalls[0].tenantDataDir != filepath.Join(tTempDirForRolloutService(), tenant.ID) {
+		t.Fatalf("created tenant data dir = %q", docker.createCalls[0].tenantDataDir)
+	}
 }
 
 func TestTenantRuntimeRollout_RollsBackOnHealthFailure(t *testing.T) {

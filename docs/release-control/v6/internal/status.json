@@ -917,6 +917,11 @@
         },
         {
           "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/cloud-hosted-tier-runtime-readiness-storage-blocker-2026-04-23.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "docs/release-control/v6/internal/subsystems/cloud-paid.md",
           "kind": "file"
         },
@@ -3434,7 +3439,7 @@
       "owner": "project-owner",
       "blocking_level": "rc-ready",
       "minimum_evidence_tier": "real-external-e2e",
-      "status": "passed",
+      "status": "blocked",
       "verification_doc": "docs/release-control/v6/internal/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
       "lane_ids": [
         "L3",
@@ -3476,6 +3481,12 @@
         {
           "repo": "pulse",
           "path": "docs/release-control/v6/internal/records/cloud-hosted-tier-runtime-readiness-production-recovered-2026-03-26.md",
+          "kind": "file",
+          "evidence_tier": "real-external-e2e"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/cloud-hosted-tier-runtime-readiness-storage-blocker-2026-04-23.md",
           "kind": "file",
           "evidence_tier": "real-external-e2e"
         }

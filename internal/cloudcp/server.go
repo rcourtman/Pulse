@@ -60,6 +60,8 @@ func Run(ctx context.Context, version string) error {
 		TrustedProxyCIDRs:        cfg.TrustedProxyCIDRs,
 		MemoryLimit:              cfg.TenantMemoryLimit,
 		CPUShares:                cfg.TenantCPUShares,
+		TenantLogMaxSize:         cfg.TenantLogMaxSize,
+		TenantLogMaxFile:         cfg.TenantLogMaxFile,
 	})
 	if err != nil {
 		log.Warn().Err(err).Msg("Docker unavailable — container management disabled")

@@ -67,6 +67,12 @@ func TestLoadConfig_AllRequired(t *testing.T) {
 	if cfg.BindAddress != "0.0.0.0" {
 		t.Errorf("BindAddress = %q, want 0.0.0.0", cfg.BindAddress)
 	}
+	if cfg.TenantLogMaxSize != "10m" {
+		t.Errorf("TenantLogMaxSize = %q, want 10m", cfg.TenantLogMaxSize)
+	}
+	if cfg.TenantLogMaxFile != 3 {
+		t.Errorf("TenantLogMaxFile = %d, want 3", cfg.TenantLogMaxFile)
+	}
 }
 
 func TestLoadConfig_CustomValues(t *testing.T) {
@@ -78,6 +84,8 @@ func TestLoadConfig_CustomValues(t *testing.T) {
 	t.Setenv("CP_PORT", "9000")
 	t.Setenv("CP_DATA_DIR", "/custom/data")
 	t.Setenv("CP_BIND_ADDRESS", "127.0.0.1")
+	t.Setenv("CP_TENANT_LOG_MAX_SIZE", "25m")
+	t.Setenv("CP_TENANT_LOG_MAX_FILE", "4")
 
 	cfg, err := LoadConfig()
 	if err != nil {
@@ -91,6 +99,12 @@ func TestLoadConfig_CustomValues(t *testing.T) {
 	}
 	if cfg.BindAddress != "127.0.0.1" {
 		t.Errorf("BindAddress = %q", cfg.BindAddress)
+	}
+	if cfg.TenantLogMaxSize != "25m" {
+		t.Errorf("TenantLogMaxSize = %q", cfg.TenantLogMaxSize)
+	}
+	if cfg.TenantLogMaxFile != 4 {
+		t.Errorf("TenantLogMaxFile = %d, want 4", cfg.TenantLogMaxFile)
 	}
 }
 

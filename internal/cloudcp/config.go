@@ -35,6 +35,8 @@ type CPConfig struct {
 	TrustedProxyCIDRs                 []string
 	TenantMemoryLimit                 int64 // bytes
 	TenantCPUShares                   int64
+	TenantLogMaxSize                  string
+	TenantLogMaxFile                  int
 	AllowDockerlessProvisioning       bool
 	StripeWebhookSecret               string
 	StripeAPIKey                      string
@@ -76,6 +78,10 @@ func LoadConfig() (*CPConfig, error) {
 		return nil, err
 	}
 	tenantCPUShares, err := envOrDefaultInt64("CP_TENANT_CPU_SHARES", 256)
+	if err != nil {
+		return nil, err
+	}
+	tenantLogMaxFile, err := envOrDefaultInt("CP_TENANT_LOG_MAX_FILE", 3)
 	if err != nil {
 		return nil, err
 	}
@@ -124,6 +130,8 @@ func LoadConfig() (*CPConfig, error) {
 		TrustedProxyCIDRs:                 parseTrustedProxyCIDRValues("CP_TRUSTED_PROXY_CIDRS", "PULSE_TRUSTED_PROXY_CIDRS"),
 		TenantMemoryLimit:                 tenantMemoryLimit,
 		TenantCPUShares:                   tenantCPUShares,
+		TenantLogMaxSize:                  envOrDefault("CP_TENANT_LOG_MAX_SIZE", "10m"),
+		TenantLogMaxFile:                  tenantLogMaxFile,
 		AllowDockerlessProvisioning:       envOrDefaultBool("CP_ALLOW_DOCKERLESS_PROVISIONING", false),
 		StripeWebhookSecret:               strings.TrimSpace(os.Getenv("STRIPE_WEBHOOK_SECRET")),
 		StripeAPIKey:                      strings.TrimSpace(os.Getenv("STRIPE_API_KEY")),
@@ -187,6 +195,12 @@ func (c *CPConfig) validate() error {
 	}
 	if c.TenantCPUShares <= 0 {
 		return fmt.Errorf("CP_TENANT_CPU_SHARES must be greater than 0, got %d", c.TenantCPUShares)
+	}
+	if strings.TrimSpace(c.TenantLogMaxSize) == "" {
+		return fmt.Errorf("CP_TENANT_LOG_MAX_SIZE must not be empty")
+	}
+	if c.TenantLogMaxFile <= 0 {
+		return fmt.Errorf("CP_TENANT_LOG_MAX_FILE must be greater than 0")
 	}
 	if c.WebhookRateLimitPerMinute <= 0 {
 		return fmt.Errorf("CP_RL_WEBHOOK_PER_MINUTE must be greater than 0")
