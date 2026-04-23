@@ -323,8 +323,27 @@ export function useChat(options: UseChatOptions = {}) {
                 tool_name: string;
                 run_on_host: boolean;
                 target_host?: string;
+                target_type?: string;
+                target_id?: string;
                 risk?: string;
                 description?: string;
+                audit_id?: string;
+                plan?: {
+                  action_id?: string;
+                  request_id?: string;
+                  summary?: string;
+                  requires_approval: boolean;
+                  approval_policy?: string;
+                  blast_radius?: string;
+                  rollback_available: boolean;
+                  plan_hash?: string;
+                  expires_at?: string;
+                };
+                context_confidence?: {
+                  level?: string;
+                  summary?: string;
+                  evidence?: string[];
+                };
                 approval_id?: string;
               };
 
@@ -334,6 +353,8 @@ export function useChat(options: UseChatOptions = {}) {
                 toolName: data.tool_name,
                 runOnHost: data.run_on_host,
                 targetHost: data.target_host,
+                targetType: data.target_type,
+                targetId: data.target_id,
                 isExecuting: false,
                 approvalId: data.approval_id,
               };
@@ -342,6 +363,15 @@ export function useChat(options: UseChatOptions = {}) {
               }
               if (typeof data.description === 'string') {
                 approval.description = data.description;
+              }
+              if (typeof data.audit_id === 'string') {
+                approval.auditId = data.audit_id;
+              }
+              if (data.plan && typeof data.plan === 'object') {
+                approval.plan = data.plan;
+              }
+              if (data.context_confidence && typeof data.context_confidence === 'object') {
+                approval.contextConfidence = data.context_confidence;
               }
 
               // Add to streamEvents for chronological display

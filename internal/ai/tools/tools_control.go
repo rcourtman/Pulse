@@ -7,7 +7,9 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
+	"github.com/google/uuid"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/approval"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/safety"
@@ -195,11 +197,11 @@ func (e *PulseToolExecutor) executeNativeAppContainerControl(ctx context.Context
 	requiresApproval := !e.isAutonomous && (e.controlLevel == ControlLevelControlled || decision == agentexec.PolicyRequireApproval)
 
 	if !preApproved && decision == agentexec.PolicyRequireApproval && !e.isAutonomous {
-		approvalID = createApprovalRecordForOrg(e.orgID, command, approvalTargetType, approvalTargetID, resourceName, fmt.Sprintf("%s app-container %s", action, resourceName))
+		approvalID = e.createApprovalRecord(command, approvalTargetType, approvalTargetID, resourceName, fmt.Sprintf("%s app-container %s", action, resourceName))
 		return NewTextResult(formatAppContainerApprovalNeeded(resourceName, resourceHost, action, command, approvalID)), nil
 	}
 	if !preApproved && e.controlLevel == ControlLevelControlled {
-		approvalID = createApprovalRecordForOrg(e.orgID, command, approvalTargetType, approvalTargetID, resourceName, fmt.Sprintf("%s app-container %s", action, resourceName))
+		approvalID = e.createApprovalRecord(command, approvalTargetType, approvalTargetID, resourceName, fmt.Sprintf("%s app-container %s", action, resourceName))
 		return NewTextResult(formatAppContainerApprovalNeeded(resourceName, resourceHost, action, command, approvalID)), nil
 	}
 
@@ -395,7 +397,7 @@ func (e *PulseToolExecutor) executeRunCommand(ctx context.Context, args map[stri
 
 	// Skip approval checks if pre-approved or in autonomous mode.
 	if !preApproved && !e.isAutonomous && e.controlLevel == ControlLevelControlled {
-		approvalID := createApprovalRecordForOrg(e.orgID, command, approvalTargetType, approvalTargetID, approvalTargetName, "Control level requires approval")
+		approvalID := e.createApprovalRecord(command, approvalTargetType, approvalTargetID, approvalTargetName, "Control level requires approval")
 		return NewTextResult(formatApprovalNeeded(command, "Control level requires approval", approvalID)), nil
 	}
 	if e.isAutonomous {
@@ -405,7 +407,7 @@ func (e *PulseToolExecutor) executeRunCommand(ctx context.Context, args map[stri
 			Msg("Auto-approving command for autonomous investigation")
 	}
 	if !preApproved && decision == agentexec.PolicyRequireApproval && !e.isAutonomous {
-		approvalID := createApprovalRecordForOrg(e.orgID, command, approvalTargetType, approvalTargetID, approvalTargetName, "Security policy requires approval")
+		approvalID := e.createApprovalRecord(command, approvalTargetType, approvalTargetID, approvalTargetName, "Security policy requires approval")
 		return NewTextResult(formatApprovalNeeded(command, "Security policy requires approval", approvalID)), nil
 	}
 
@@ -601,7 +603,7 @@ func (e *PulseToolExecutor) executeControlGuest(ctx context.Context, args map[st
 		}
 		if decision == agentexec.PolicyRequireApproval && !e.isAutonomous {
 			// Use guest.Node (the Proxmox host) as targetName so approval execution can find the correct agent
-			approvalID := createApprovalRecordForOrg(e.orgID, command, guest.Type, approvalTargetID, guest.Node, fmt.Sprintf("%s guest %s", action, guest.Name))
+			approvalID := e.createApprovalRecord(command, guest.Type, approvalTargetID, guest.Node, fmt.Sprintf("%s guest %s", action, guest.Name))
 			return NewTextResult(formatControlApprovalNeeded(guest.Name, guest.VMID, action, command, approvalID)), nil
 		}
 	}
@@ -609,7 +611,7 @@ func (e *PulseToolExecutor) executeControlGuest(ctx context.Context, args map[st
 	// Check control level - this must be outside policy check since policy may be nil (skip if pre-approved)
 	if !preApproved && e.controlLevel == ControlLevelControlled {
 		// Use guest.Node (the Proxmox host) as targetName so approval execution can find the correct agent
-		approvalID := createApprovalRecordForOrg(e.orgID, command, guest.Type, approvalTargetID, guest.Node, fmt.Sprintf("%s guest %s", action, guest.Name))
+		approvalID := e.createApprovalRecord(command, guest.Type, approvalTargetID, guest.Node, fmt.Sprintf("%s guest %s", action, guest.Name))
 		return NewTextResult(formatControlApprovalNeeded(guest.Name, guest.VMID, action, command, approvalID)), nil
 	}
 
@@ -1351,28 +1353,138 @@ func createApprovalRecord(command, targetType, targetID, targetName, context str
 }
 
 func createApprovalRecordForOrg(orgID, command, targetType, targetID, targetName, context string) string {
+	return createApprovalRecordForOrgWithExecutor(nil, orgID, command, targetType, targetID, targetName, context)
+}
+
+func (e *PulseToolExecutor) createApprovalRecord(command, targetType, targetID, targetName, context string) string {
+	orgID := ""
+	if e != nil {
+		orgID = e.orgID
+	}
+	return createApprovalRecordForOrgWithExecutor(e, orgID, command, targetType, targetID, targetName, context)
+}
+
+func createApprovalRecordForOrgWithExecutor(e *PulseToolExecutor, orgID, command, targetType, targetID, targetName, context string) string {
 	store := approval.GetStore()
 	if store == nil {
 		log.Debug().Msg("approval store not available, approval will not be persisted")
 		return ""
 	}
 
+	approvalID := uuid.NewString()
+	now := time.Now().UTC()
+	capabilityName := approvalCapabilityForTargetType(targetType)
+	resourceID := approvalAuditResourceID(targetType, targetID, targetName)
+	actionID := uuid.NewString()
+	plan := unifiedresources.ActionPlan{
+		ActionID:             actionID,
+		RequestID:            approvalID,
+		Allowed:              true,
+		RequiresApproval:     true,
+		ApprovalPolicy:       unifiedresources.ApprovalAdmin,
+		PredictedBlastRadius: approvalBlastRadius(targetType, command),
+		RollbackAvailable:    approvalRollbackAvailable(targetType, command),
+		Message:              strings.TrimSpace(context),
+		PlannedAt:            now,
+		ExpiresAt:            now.Add(5 * time.Minute),
+		PlanHash:             approvalPlanHash(actionID, approvalID, capabilityName, resourceID, command, targetType, targetID, context),
+	}
+
 	req := &approval.ApprovalRequest{
+		ID:         approvalID,
 		OrgID:      strings.TrimSpace(orgID),
 		Command:    command,
 		TargetType: targetType,
 		TargetID:   targetID,
 		TargetName: targetName,
 		Context:    context,
+		Plan:       &plan,
 	}
+	req.ContextConfidence = approvalContextConfidence(req)
 
 	if err := store.CreateApproval(req); err != nil {
 		log.Warn().Err(err).Msg("failed to create approval record")
 		return ""
 	}
+	if req.Plan != nil {
+		req.Plan.ExpiresAt = req.ExpiresAt.UTC()
+		if req.Plan.Message == "" {
+			req.Plan.Message = strings.TrimSpace(req.Context)
+		}
+	}
 
 	log.Debug().Str("approval_id", req.ID).Str("command", command).Msg("created approval record")
+	if e != nil {
+		e.recordPendingApprovalAction(req)
+	}
 	return req.ID
+}
+
+func approvalBlastRadius(targetType, command string) []string {
+	targetType = strings.ToLower(strings.TrimSpace(targetType))
+	commandLower := strings.ToLower(strings.TrimSpace(command))
+	switch {
+	case strings.Contains(commandLower, "delete") || strings.HasPrefix(commandLower, "rm ") || strings.Contains(commandLower, " rm "):
+		return []string{"destructive target change"}
+	case strings.Contains(commandLower, "restart") || strings.Contains(commandLower, "reboot") || strings.Contains(commandLower, "shutdown"):
+		return []string{"service interruption on target"}
+	case targetType == "file":
+		return []string{"file contents on target"}
+	case targetType == "kubernetes":
+		return []string{"kubernetes workload state"}
+	case targetType == "docker":
+		return []string{"container runtime state"}
+	default:
+		return []string{"target resource state"}
+	}
+}
+
+func approvalRollbackAvailable(targetType, command string) bool {
+	targetType = strings.ToLower(strings.TrimSpace(targetType))
+	commandLower := strings.ToLower(strings.TrimSpace(command))
+	if targetType == "file" || strings.Contains(commandLower, "delete") || strings.HasPrefix(commandLower, "rm ") || strings.Contains(commandLower, " rm ") {
+		return false
+	}
+	return strings.Contains(commandLower, "restart") || strings.Contains(commandLower, "start") || strings.Contains(commandLower, "stop") || targetType == "docker"
+}
+
+func approvalContextConfidence(req *approval.ApprovalRequest) *approval.ContextConfidence {
+	if req == nil {
+		return nil
+	}
+	targetType := strings.TrimSpace(req.TargetType)
+	targetID := strings.TrimSpace(req.TargetID)
+	targetName := strings.TrimSpace(req.TargetName)
+	evidence := make([]string, 0, 3)
+	if targetType != "" {
+		evidence = append(evidence, fmt.Sprintf("Target type resolved as %s.", targetType))
+	}
+	if targetID != "" {
+		evidence = append(evidence, fmt.Sprintf("Target identifier bound to %s.", targetID))
+	}
+	if targetName != "" {
+		evidence = append(evidence, fmt.Sprintf("Display target resolved as %s.", targetName))
+	}
+
+	level := approval.ContextConfidenceUnknown
+	summary := "Pulse Assistant could not bind this action to a resolved target."
+	switch {
+	case targetType != "" && targetID != "":
+		level = approval.ContextConfidenceVerified
+		summary = "Target was resolved to a concrete resource before approval."
+	case targetType != "" && targetName != "":
+		level = approval.ContextConfidencePartial
+		summary = "Target type and display name were resolved before approval."
+	case targetType != "" || targetName != "":
+		level = approval.ContextConfidenceInferred
+		summary = "Target context was inferred from the requested action."
+	}
+
+	return &approval.ContextConfidence{
+		Level:    level,
+		Summary:  summary,
+		Evidence: evidence,
+	}
 }
 
 // isPreApproved checks if the args contain a valid, approved approval_id.
@@ -1444,6 +1556,53 @@ func consumeApprovalWithValidation(args map[string]interface{}, orgID, command, 
 
 // Formatting helpers for control tools
 
+func enrichApprovalRequiredPayload(payload map[string]interface{}, approvalID string) map[string]interface{} {
+	if payload == nil {
+		payload = map[string]interface{}{}
+	}
+	req := approvalRequestForID(approvalID)
+	if req == nil {
+		return payload
+	}
+	if _, ok := payload["risk"]; !ok && req.RiskLevel != "" {
+		payload["risk"] = string(req.RiskLevel)
+	}
+	if _, ok := payload["description"]; !ok && strings.TrimSpace(req.Context) != "" {
+		payload["description"] = strings.TrimSpace(req.Context)
+	}
+	if strings.TrimSpace(req.TargetType) != "" {
+		payload["target_type"] = strings.TrimSpace(req.TargetType)
+	}
+	if strings.TrimSpace(req.TargetID) != "" {
+		payload["target_id"] = strings.TrimSpace(req.TargetID)
+	}
+	if strings.TrimSpace(req.TargetName) != "" {
+		payload["target_name"] = strings.TrimSpace(req.TargetName)
+	}
+	if req.Plan != nil {
+		payload["audit_id"] = strings.TrimSpace(req.Plan.ActionID)
+		payload["plan"] = map[string]interface{}{
+			"action_id":          strings.TrimSpace(req.Plan.ActionID),
+			"request_id":         strings.TrimSpace(req.Plan.RequestID),
+			"summary":            strings.TrimSpace(req.Plan.Message),
+			"requires_approval":  req.Plan.RequiresApproval,
+			"approval_policy":    string(req.Plan.ApprovalPolicy),
+			"blast_radius":       strings.TrimSpace(strings.Join(req.Plan.PredictedBlastRadius, ", ")),
+			"rollback_available": req.Plan.RollbackAvailable,
+			"plan_hash":          strings.TrimSpace(req.Plan.PlanHash),
+			"expires_at":         req.Plan.ExpiresAt.UTC().Format(time.RFC3339),
+		}
+	}
+	if req.ContextConfidence != nil {
+		payload["context_confidence"] = map[string]interface{}{
+			"level":    string(req.ContextConfidence.Level),
+			"summary":  strings.TrimSpace(req.ContextConfidence.Summary),
+			"evidence": append([]string(nil), req.ContextConfidence.Evidence...),
+		}
+	}
+	return payload
+}
+
 func formatApprovalNeeded(command, reason, approvalID string) string {
 	payload := map[string]interface{}{
 		"type":           "approval_required",
@@ -1453,6 +1612,7 @@ func formatApprovalNeeded(command, reason, approvalID string) string {
 		"how_to_approve": "Click the approval button in the chat to execute this command.",
 		"do_not_retry":   true,
 	}
+	payload = enrichApprovalRequiredPayload(payload, approvalID)
 	b, _ := json.Marshal(payload)
 	return "APPROVAL_REQUIRED: " + string(b)
 }
@@ -1526,6 +1686,7 @@ func formatControlApprovalNeeded(name string, vmID int, action, command, approva
 		"how_to_approve": "Click the approval button in the chat to execute this action.",
 		"do_not_retry":   true,
 	}
+	payload = enrichApprovalRequiredPayload(payload, approvalID)
 	b, _ := json.Marshal(payload)
 	return "APPROVAL_REQUIRED: " + string(b)
 }
@@ -1541,6 +1702,7 @@ func formatDockerApprovalNeeded(name, host, action, command, approvalID string) 
 		"how_to_approve": "Click the approval button in the chat to execute this action.",
 		"do_not_retry":   true,
 	}
+	payload = enrichApprovalRequiredPayload(payload, approvalID)
 	b, _ := json.Marshal(payload)
 	return "APPROVAL_REQUIRED: " + string(b)
 }
@@ -1557,6 +1719,7 @@ func formatAppContainerApprovalNeeded(name, host, action, command, approvalID st
 		"how_to_approve": "Click the approval button in the chat to execute this action.",
 		"do_not_retry":   true,
 	}
+	payload = enrichApprovalRequiredPayload(payload, approvalID)
 	b, _ := json.Marshal(payload)
 	return "APPROVAL_REQUIRED: " + string(b)
 }

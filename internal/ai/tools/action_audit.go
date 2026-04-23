@@ -16,6 +16,8 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+const approvalAuditActor = "pulse_assistant"
+
 func (e *PulseToolExecutor) executeCommandWithAudit(
 	ctx context.Context,
 	capabilityName string,
@@ -38,6 +40,16 @@ func (e *PulseToolExecutor) executeCommandWithAudit(
 	}
 
 	now := time.Now().UTC()
+	approvalReq := approvalRequestForID(approvalID)
+	planFromApproval := approvalReq != nil && approvalReq.Plan != nil
+	if planFromApproval {
+		if approvedActionID := strings.TrimSpace(approvalReq.Plan.ActionID); approvedActionID != "" {
+			actionID = approvedActionID
+		}
+		if approvedRequestID := strings.TrimSpace(approvalReq.Plan.RequestID); approvedRequestID != "" {
+			requestCorrelationID = approvedRequestID
+		}
+	}
 	plan := unifiedresources.ActionPlan{
 		ActionID:         actionID,
 		RequestID:        requestCorrelationID,
@@ -55,6 +67,9 @@ func (e *PulseToolExecutor) executeCommandWithAudit(
 		PolicyVersion:   "",
 		PlanHash:        actionPlanHash(actionID, requestCorrelationID, capabilityName, resourceID, payload, reason),
 		Message:         reason,
+	}
+	if planFromApproval {
+		plan = mergeApprovedActionPlan(*approvalReq.Plan, plan)
 	}
 
 	record := unifiedresources.ActionAuditRecord{
@@ -79,25 +94,11 @@ func (e *PulseToolExecutor) executeCommandWithAudit(
 		},
 		Plan: plan,
 	}
+	record.Approvals = approvalRecordsForID(approvalID)
 
-	if approvalID != "" {
-		if store := approval.GetStore(); store != nil {
-			if req, ok := store.GetApproval(approvalID); ok && req != nil {
-				record.Approvals = append(record.Approvals, unifiedresources.ActionApprovalRecord{
-					Actor:     strings.TrimSpace(req.DecidedBy),
-					Method:    unifiedresources.MethodAPI,
-					Timestamp: approvalTimestamp(req),
-					Outcome:   unifiedresources.OutcomeApproved,
-					Reason:    strings.TrimSpace(req.Context),
-				})
-				if req.Status == approval.StatusDenied {
-					record.Approvals[len(record.Approvals)-1].Outcome = unifiedresources.OutcomeRejected
-				}
-			}
-		}
+	if !planFromApproval {
+		e.recordActionLifecycle(actionID, unifiedresources.ActionStatePlanned, requestedBy, reason)
 	}
-
-	e.recordActionLifecycle(actionID, unifiedresources.ActionStatePlanned, requestedBy, reason)
 	e.recordActionLifecycle(actionID, unifiedresources.ActionStateExecuting, requestedBy, fmt.Sprintf("dispatching command to agent %s", agentID))
 	e.recordActionAudit(record)
 
@@ -156,6 +157,16 @@ func (e *PulseToolExecutor) executeNativeActionWithAudit(
 	}
 
 	now := time.Now().UTC()
+	approvalReq := approvalRequestForID(approvalID)
+	planFromApproval := approvalReq != nil && approvalReq.Plan != nil
+	if planFromApproval {
+		if approvedActionID := strings.TrimSpace(approvalReq.Plan.ActionID); approvedActionID != "" {
+			actionID = approvedActionID
+		}
+		if approvedRequestID := strings.TrimSpace(approvalReq.Plan.RequestID); approvedRequestID != "" {
+			requestCorrelationID = approvedRequestID
+		}
+	}
 	plan := unifiedresources.ActionPlan{
 		ActionID:         actionID,
 		RequestID:        requestCorrelationID,
@@ -173,6 +184,9 @@ func (e *PulseToolExecutor) executeNativeActionWithAudit(
 		PolicyVersion:   "",
 		PlanHash:        actionPlanHashForParams(actionID, requestCorrelationID, capabilityName, resourceID, params, reason),
 		Message:         reason,
+	}
+	if planFromApproval {
+		plan = mergeApprovedActionPlan(*approvalReq.Plan, plan)
 	}
 
 	record := unifiedresources.ActionAuditRecord{
@@ -192,7 +206,9 @@ func (e *PulseToolExecutor) executeNativeActionWithAudit(
 	}
 	record.Approvals = approvalRecordsForID(approvalID)
 
-	e.recordActionLifecycle(actionID, unifiedresources.ActionStatePlanned, requestedBy, reason)
+	if !planFromApproval {
+		e.recordActionLifecycle(actionID, unifiedresources.ActionStatePlanned, requestedBy, reason)
+	}
 	e.recordActionLifecycle(actionID, unifiedresources.ActionStateExecuting, requestedBy, "dispatching native resource action")
 	e.recordActionAudit(record)
 
@@ -259,6 +275,156 @@ func (e *PulseToolExecutor) recordActionLifecycle(actionID string, state unified
 	}
 }
 
+// RecordApprovalDecision updates the unified action audit for an approval that
+// reached a terminal or pre-execution decision state.
+func (e *PulseToolExecutor) RecordApprovalDecision(approvalID string, state unifiedresources.ActionState, actor, message string) {
+	req := approvalRequestForID(approvalID)
+	if e == nil || req == nil || req.Plan == nil {
+		return
+	}
+	if strings.TrimSpace(actor) == "" {
+		actor = approvalDecisionActor(req, approvalAuditActor)
+	}
+	if strings.TrimSpace(message) == "" {
+		message = string(state)
+	}
+	record := actionAuditRecordFromApproval(req, state, actor)
+	record.Approvals = approvalRecordsForID(req.ID)
+	e.recordActionAudit(record)
+	e.recordActionLifecycle(req.Plan.ActionID, state, actor, message)
+}
+
+func (e *PulseToolExecutor) recordPendingApprovalAction(req *approval.ApprovalRequest) {
+	if e == nil || req == nil || req.Plan == nil {
+		return
+	}
+	record := actionAuditRecordFromApproval(req, unifiedresources.ActionStatePending, approvalAuditActor)
+	e.recordActionAudit(record)
+	e.recordActionLifecycle(req.Plan.ActionID, unifiedresources.ActionStatePlanned, approvalAuditActor, strings.TrimSpace(req.Context))
+	e.recordActionLifecycle(req.Plan.ActionID, unifiedresources.ActionStatePending, approvalAuditActor, "waiting for approval")
+}
+
+func mergeApprovedActionPlan(approved unifiedresources.ActionPlan, fallback unifiedresources.ActionPlan) unifiedresources.ActionPlan {
+	if strings.TrimSpace(approved.ActionID) == "" {
+		approved.ActionID = fallback.ActionID
+	}
+	if strings.TrimSpace(approved.RequestID) == "" {
+		approved.RequestID = fallback.RequestID
+	}
+	if approved.PlannedAt.IsZero() {
+		approved.PlannedAt = fallback.PlannedAt
+	}
+	if approved.ExpiresAt.IsZero() {
+		approved.ExpiresAt = fallback.ExpiresAt
+	}
+	if strings.TrimSpace(approved.PlanHash) == "" {
+		approved.PlanHash = fallback.PlanHash
+	}
+	if strings.TrimSpace(approved.Message) == "" {
+		approved.Message = fallback.Message
+	}
+	approved.Allowed = true
+	approved.RequiresApproval = approved.RequiresApproval || fallback.RequiresApproval
+	if approved.ApprovalPolicy == "" {
+		approved.ApprovalPolicy = fallback.ApprovalPolicy
+	}
+	return approved
+}
+
+func actionAuditRecordFromApproval(req *approval.ApprovalRequest, state unifiedresources.ActionState, actor string) unifiedresources.ActionAuditRecord {
+	now := time.Now().UTC()
+	plan := *req.Plan
+	createdAt := plan.PlannedAt
+	if createdAt.IsZero() {
+		createdAt = now
+	}
+	requestID := strings.TrimSpace(plan.RequestID)
+	if requestID == "" {
+		requestID = strings.TrimSpace(req.ID)
+	}
+	params := map[string]any{
+		"command":    req.Command,
+		"targetType": req.TargetType,
+		"targetId":   req.TargetID,
+		"targetName": req.TargetName,
+		"approvalId": req.ID,
+	}
+	if orgID := strings.TrimSpace(req.OrgID); orgID != "" {
+		params["orgId"] = orgID
+	}
+	return unifiedresources.ActionAuditRecord{
+		ID:        plan.ActionID,
+		CreatedAt: createdAt,
+		UpdatedAt: now,
+		State:     state,
+		Request: unifiedresources.ActionRequest{
+			RequestID:      requestID,
+			ResourceID:     approvalAuditResourceID(req.TargetType, req.TargetID, req.TargetName),
+			CapabilityName: approvalCapabilityForTargetType(req.TargetType),
+			Params:         params,
+			Reason:         strings.TrimSpace(req.Context),
+			RequestedBy:    actor,
+		},
+		Plan: plan,
+	}
+}
+
+func approvalRequestForID(approvalID string) *approval.ApprovalRequest {
+	approvalID = strings.TrimSpace(approvalID)
+	if approvalID == "" {
+		return nil
+	}
+	store := approval.GetStore()
+	if store == nil {
+		return nil
+	}
+	req, ok := store.GetApproval(approvalID)
+	if !ok || req == nil {
+		return nil
+	}
+	return req
+}
+
+func approvalDecisionActor(req *approval.ApprovalRequest, fallback string) string {
+	if req != nil {
+		if actor := strings.TrimSpace(req.DecidedBy); actor != "" {
+			return actor
+		}
+	}
+	if actor := strings.TrimSpace(fallback); actor != "" {
+		return actor
+	}
+	return approvalAuditActor
+}
+
+func approvalCapabilityForTargetType(targetType string) string {
+	switch strings.ToLower(strings.TrimSpace(targetType)) {
+	case "docker":
+		return "pulse_docker"
+	case "file":
+		return "pulse_file_edit"
+	case "kubernetes":
+		return "pulse_kubernetes"
+	default:
+		return "pulse_control"
+	}
+}
+
+func approvalAuditResourceID(targetType, targetID, targetName string) string {
+	targetType = strings.TrimSpace(targetType)
+	targetID = strings.TrimSpace(targetID)
+	if targetID == "" {
+		targetID = strings.TrimSpace(targetName)
+	}
+	if targetID == "" {
+		return strings.TrimSpace(targetType)
+	}
+	if targetType == "" || strings.Contains(targetID, ":") {
+		return targetID
+	}
+	return targetType + ":" + targetID
+}
+
 func actionPlanHash(actionID, requestID, capabilityName, resourceID string, payload agentexec.ExecuteCommandPayload, reason string) string {
 	sum := sha256.Sum256([]byte(strings.Join([]string{
 		actionID,
@@ -282,6 +448,20 @@ func actionPlanHashForParams(actionID, requestID, capabilityName, resourceID str
 		strings.TrimSpace(resourceID),
 		string(encoded),
 		reason,
+	}, "|")))
+	return hex.EncodeToString(sum[:])
+}
+
+func approvalPlanHash(actionID, requestID, capabilityName, resourceID, command, targetType, targetID, context string) string {
+	sum := sha256.Sum256([]byte(strings.Join([]string{
+		actionID,
+		requestID,
+		capabilityName,
+		strings.TrimSpace(resourceID),
+		command,
+		strings.TrimSpace(targetType),
+		strings.TrimSpace(targetID),
+		strings.TrimSpace(context),
 	}, "|")))
 	return hex.EncodeToString(sum[:])
 }

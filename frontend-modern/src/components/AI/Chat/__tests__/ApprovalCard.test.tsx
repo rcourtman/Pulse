@@ -28,18 +28,18 @@ describe('ApprovalCard', () => {
     expect(screen.getByText('Approval Required')).toBeInTheDocument();
   });
 
-  it('renders Run Command and Skip buttons', () => {
+  it('renders Approve & Run and Skip buttons', () => {
     render(() => <ApprovalCard approval={makeApproval()} onApprove={vi.fn()} onSkip={vi.fn()} />);
 
-    expect(screen.getByText('Run Command')).toBeInTheDocument();
+    expect(screen.getByText('Approve & Run')).toBeInTheDocument();
     expect(screen.getByText('Skip')).toBeInTheDocument();
   });
 
-  it('calls onApprove when Run Command is clicked', () => {
+  it('calls onApprove when Approve & Run is clicked', () => {
     const onApprove = vi.fn();
     render(() => <ApprovalCard approval={makeApproval()} onApprove={onApprove} onSkip={vi.fn()} />);
 
-    fireEvent.click(screen.getByText('Run Command'));
+    fireEvent.click(screen.getByText('Approve & Run'));
     expect(onApprove).toHaveBeenCalledOnce();
   });
 
@@ -123,7 +123,7 @@ describe('ApprovalCard', () => {
       ));
 
       expect(screen.getByText('Running...')).toBeInTheDocument();
-      expect(screen.queryByText('Run Command')).not.toBeInTheDocument();
+      expect(screen.queryByText('Approve & Run')).not.toBeInTheDocument();
     });
 
     it('disables both buttons when isExecuting is true', () => {
@@ -217,5 +217,40 @@ describe('ApprovalCard', () => {
     ).toBeInTheDocument();
     expect(screen.getByText('pulse_control')).toBeInTheDocument();
     expect(screen.getByText('web1')).toBeInTheDocument();
+  });
+
+  it('renders planned action and confidence details when provided', () => {
+    render(() => (
+      <ApprovalCard
+        approval={makeApproval({
+          auditId: 'action-123',
+          plan: {
+            action_id: 'action-123',
+            request_id: 'approval-123',
+            summary: 'Restart the nginx service.',
+            requires_approval: true,
+            approval_policy: 'admin',
+            blast_radius: 'service interruption on target',
+            rollback_available: true,
+            plan_hash: 'abcdef1234567890',
+            expires_at: '2026-04-23T12:30:00Z',
+          },
+          contextConfidence: {
+            level: 'verified',
+            summary: 'Target was resolved to a concrete resource before approval.',
+            evidence: ['Target identifier bound to agent-1.'],
+          },
+        })}
+        onApprove={vi.fn()}
+        onSkip={vi.fn()}
+      />
+    ));
+
+    expect(screen.getByText('Governed Plan')).toBeInTheDocument();
+    expect(screen.getByText('Restart the nginx service.')).toBeInTheDocument();
+    expect(screen.getByText('service interruption on target')).toBeInTheDocument();
+    expect(screen.getByText('VERIFIED')).toBeInTheDocument();
+    expect(screen.getByText('Target identifier bound to agent-1.')).toBeInTheDocument();
+    expect(screen.getByText(/Audit action-123/)).toBeInTheDocument();
   });
 });

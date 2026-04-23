@@ -193,6 +193,27 @@ export interface AIStreamApprovalNeededData {
   tool_name: string;
   run_on_host: boolean;
   target_host?: string; // Explicit host to route the command to
+  target_type?: string;
+  target_id?: string;
+  risk?: string;
+  description?: string;
+  audit_id?: string;
+  plan?: {
+    action_id?: string;
+    request_id?: string;
+    summary?: string;
+    requires_approval: boolean;
+    approval_policy?: string;
+    blast_radius?: string;
+    rollback_available: boolean;
+    plan_hash?: string;
+    expires_at?: string;
+  };
+  context_confidence?: {
+    level?: string;
+    summary?: string;
+    evidence?: string[];
+  };
 }
 
 export interface AIStreamEvent {

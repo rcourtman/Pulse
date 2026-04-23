@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 func TestNewStore(t *testing.T) {
@@ -108,6 +110,66 @@ func TestCreateApproval(t *testing.T) {
 	}
 	if req.ExpiresAt.IsZero() {
 		t.Error("CreateApproval() did not set ExpiresAt")
+	}
+}
+
+func TestCreateApproval_PreservesActionPlanAndContextConfidence(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "approval-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	store, _ := NewStore(StoreConfig{
+		DataDir:            tmpDir,
+		DefaultTimeout:     1 * time.Minute,
+		DisablePersistence: true,
+	})
+
+	req := &ApprovalRequest{
+		ID:         "approval-1",
+		Command:    "systemctl restart nginx",
+		TargetType: "agent",
+		TargetID:   "agent-1",
+		TargetName: "web1",
+		Context:    "Restart web service",
+		Plan: &unifiedresources.ActionPlan{
+			ActionID:         "action-1",
+			Allowed:          true,
+			RequiresApproval: true,
+			ApprovalPolicy:   unifiedresources.ApprovalAdmin,
+			Message:          "Restart web service",
+			PlanHash:         "hash-1",
+		},
+		ContextConfidence: &ContextConfidence{
+			Level:    ContextConfidenceVerified,
+			Summary:  "Target was resolved to a concrete resource before approval.",
+			Evidence: []string{"Target identifier bound to agent-1."},
+		},
+	}
+
+	if err := store.CreateApproval(req); err != nil {
+		t.Fatalf("CreateApproval() error = %v", err)
+	}
+
+	got, ok := store.GetApproval("approval-1")
+	if !ok {
+		t.Fatal("approval not found")
+	}
+	if got.Plan == nil {
+		t.Fatal("plan was not preserved")
+	}
+	if got.Plan.ActionID != "action-1" {
+		t.Fatalf("plan action id = %q, want action-1", got.Plan.ActionID)
+	}
+	if got.Plan.RequestID != "approval-1" {
+		t.Fatalf("plan request id = %q, want approval-1", got.Plan.RequestID)
+	}
+	if got.Plan.ExpiresAt.IsZero() {
+		t.Fatal("plan expiry should be populated")
+	}
+	if got.ContextConfidence == nil || got.ContextConfidence.Level != ContextConfidenceVerified {
+		t.Fatalf("unexpected context confidence: %+v", got.ContextConfidence)
 	}
 }
 

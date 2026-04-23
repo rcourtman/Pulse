@@ -13,6 +13,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/approval"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
+	unifiedresources "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rs/zerolog/log"
 )
 
@@ -1340,26 +1341,45 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 				approvalJSON = strings.TrimSpace(approvalJSON)
 
 				var approvalData struct {
-					ApprovalID  string `json:"approval_id"`
-					Command     string `json:"command"`
-					Risk        string `json:"risk"`
-					Description string `json:"description"`
+					ApprovalID        string                         `json:"approval_id"`
+					Command           string                         `json:"command"`
+					Risk              string                         `json:"risk"`
+					Description       string                         `json:"description"`
+					Reason            string                         `json:"reason"`
+					TargetHost        string                         `json:"target_host"`
+					Host              string                         `json:"host"`
+					DockerHost        string                         `json:"docker_host"`
+					ResourceHost      string                         `json:"resource_host"`
+					Cluster           string                         `json:"cluster"`
+					TargetName        string                         `json:"target_name"`
+					TargetType        string                         `json:"target_type"`
+					TargetID          string                         `json:"target_id"`
+					AuditID           string                         `json:"audit_id"`
+					Plan              *ApprovalPlanData              `json:"plan"`
+					ContextConfidence *ApprovalContextConfidenceData `json:"context_confidence"`
 				}
 				if err := json.Unmarshal([]byte(approvalJSON), &approvalData); err != nil {
 					log.Error().Err(err).Str("data", approvalJSON).Msg("failed to parse approval request")
 					resultText = "Error: failed to parse approval request"
 					isError = true
 				} else {
+					targetHost := firstNonEmptyTrimmed(approvalData.TargetHost, approvalData.Host, approvalData.DockerHost, approvalData.ResourceHost, approvalData.Cluster, approvalData.TargetName)
+					description := firstNonEmptyTrimmed(approvalData.Description, approvalData.Reason)
 					// Send approval_needed event
 					jsonData, _ := json.Marshal(ApprovalNeededData{
-						ApprovalID:  approvalData.ApprovalID,
-						ToolID:      tc.ID,
-						ToolName:    tc.Name,
-						Command:     approvalData.Command,
-						RunOnHost:   true, // Control commands run on host
-						TargetHost:  "",   // Will be filled from approval context if available
-						Risk:        approvalData.Risk,
-						Description: approvalData.Description,
+						ApprovalID:        approvalData.ApprovalID,
+						ToolID:            tc.ID,
+						ToolName:          tc.Name,
+						Command:           approvalData.Command,
+						RunOnHost:         true, // Control commands run on host
+						TargetHost:        targetHost,
+						TargetType:        approvalData.TargetType,
+						TargetID:          approvalData.TargetID,
+						Risk:              approvalData.Risk,
+						Description:       description,
+						AuditID:           approvalData.AuditID,
+						Plan:              approvalData.Plan,
+						ContextConfidence: approvalData.ContextConfidence,
 					})
 					callback(StreamEvent{Type: "approval_needed", Data: jsonData})
 
@@ -1386,9 +1406,15 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 							cancel()
 
 							if waitErr != nil {
+								if a.executor != nil {
+									a.executor.RecordApprovalDecision(approvalData.ApprovalID, unifiedresources.ActionStateFailed, "pulse_assistant", waitErr.Error())
+								}
 								resultText = fmt.Sprintf("Approval timeout or error: %v", waitErr)
 								isError = true
 							} else if decision.Status == approval.StatusApproved {
+								if a.executor != nil {
+									a.executor.RecordApprovalDecision(approvalData.ApprovalID, unifiedresources.ActionStateApproved, decision.DecidedBy, "approval granted")
+								}
 								// Re-execute the tool with approval granted
 								// Add approval_id to input so tool knows this is pre-approved
 								inputWithApproval := make(map[string]interface{})
@@ -1405,6 +1431,9 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 									isError = result.IsError
 								}
 							} else {
+								if a.executor != nil {
+									a.executor.RecordApprovalDecision(approvalData.ApprovalID, unifiedresources.ActionStateRejected, decision.DecidedBy, firstNonEmptyTrimmed(decision.DenyReason, "approval denied"))
+								}
 								resultText = fmt.Sprintf("Command denied: %s", decision.DenyReason)
 								isError = false
 							}

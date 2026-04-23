@@ -33,6 +33,11 @@ func TestCreateApprovalRecord(t *testing.T) {
 	assert.Equal(t, "h1", req.TargetID)
 	assert.Equal(t, "host1", req.TargetName)
 	assert.Equal(t, "ctx", req.Context)
+	require.NotNil(t, req.Plan)
+	assert.Equal(t, approvalID, req.Plan.RequestID)
+	assert.Equal(t, "ctx", req.Plan.Message)
+	require.NotNil(t, req.ContextConfidence)
+	assert.Equal(t, approval.ContextConfidenceVerified, req.ContextConfidence.Level)
 }
 
 func TestIsPreApproved(t *testing.T) {

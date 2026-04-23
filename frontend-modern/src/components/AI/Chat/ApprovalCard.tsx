@@ -1,4 +1,10 @@
-import { Component, Show } from 'solid-js';
+import { Component, For, Show } from 'solid-js';
+import AlertTriangleIcon from 'lucide-solid/icons/alert-triangle';
+import CheckIcon from 'lucide-solid/icons/check';
+import ClipboardCheckIcon from 'lucide-solid/icons/clipboard-check';
+import LoaderCircleIcon from 'lucide-solid/icons/loader-circle';
+import ShieldCheckIcon from 'lucide-solid/icons/shield-check';
+import XIcon from 'lucide-solid/icons/x';
 import type { PendingApproval } from './types';
 
 interface ApprovalCardProps {
@@ -12,20 +18,44 @@ const riskLabel = (risk?: string) => {
   return normalized ? normalized.toUpperCase() : 'REVIEW';
 };
 
+const confidenceLabel = (level?: string) => {
+  const normalized = level?.trim();
+  return normalized ? normalized.replace(/_/g, ' ').toUpperCase() : 'UNKNOWN';
+};
+
+const confidenceClasses = (level?: string) => {
+  switch (level) {
+    case 'verified':
+      return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-200';
+    case 'partial':
+      return 'bg-sky-100 text-sky-700 dark:bg-sky-900 dark:text-sky-200';
+    case 'inferred':
+      return 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-200';
+    default:
+      return 'bg-base-200 text-base-content';
+  }
+};
+
+const formatPlanHash = (hash?: string) => {
+  const trimmed = hash?.trim();
+  if (!trimmed) return '';
+  return trimmed.length > 12 ? trimmed.slice(0, 12) : trimmed;
+};
+
+const formatExpiry = (expiresAt?: string) => {
+  if (!expiresAt) return '';
+  const date = new Date(expiresAt);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+};
+
 export const ApprovalCard: Component<ApprovalCardProps> = (props) => {
   return (
     <div class="rounded-md border border-amber-300 dark:border-amber-700 overflow-hidden shadow-sm">
       {/* Header */}
       <div class="px-3 py-2 text-xs font-medium flex items-center gap-2 bg-amber-50 dark:bg-amber-900 text-amber-800 dark:text-amber-200 border-b border-amber-200 dark:border-amber-800">
         <div class="p-1 rounded bg-amber-100 dark:bg-amber-800">
-          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-            />
-          </svg>
+          <AlertTriangleIcon class="w-3.5 h-3.5" />
         </div>
         <span class="font-semibold">Approval Required</span>
         <span class="px-1.5 py-0.5 bg-amber-200 dark:bg-amber-800 rounded text-[10px] font-bold uppercase tracking-wider">
@@ -76,6 +106,103 @@ export const ApprovalCard: Component<ApprovalCardProps> = (props) => {
           </code>
         </div>
 
+        <Show
+          when={
+            props.approval.plan ||
+            props.approval.contextConfidence ||
+            props.approval.auditId ||
+            props.approval.targetType ||
+            props.approval.targetId
+          }
+        >
+          <div class="mb-3 rounded-md border border-amber-200 dark:border-amber-700 bg-white/70 dark:bg-black/10">
+            <div class="px-2.5 py-2 flex items-center gap-2 border-b border-amber-200 dark:border-amber-700 text-[11px] font-semibold uppercase text-amber-700 dark:text-amber-300">
+              <ClipboardCheckIcon class="w-3.5 h-3.5" />
+              <span>Governed Plan</span>
+            </div>
+            <div class="p-2.5 space-y-2 text-xs">
+              <Show when={props.approval.plan?.summary}>
+                <p class="leading-relaxed text-base-content">{props.approval.plan?.summary}</p>
+              </Show>
+
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
+                <div>
+                  <div class="uppercase font-semibold text-amber-700 dark:text-amber-300">
+                    Approval
+                  </div>
+                  <div class="text-base-content break-words">
+                    {props.approval.plan?.approval_policy || 'admin approval'}
+                  </div>
+                </div>
+                <div>
+                  <div class="uppercase font-semibold text-amber-700 dark:text-amber-300">
+                    Blast radius
+                  </div>
+                  <div class="text-base-content break-words">
+                    {props.approval.plan?.blast_radius || 'target resource state'}
+                  </div>
+                </div>
+                <div>
+                  <div class="uppercase font-semibold text-amber-700 dark:text-amber-300">
+                    Rollback
+                  </div>
+                  <div class="text-base-content">
+                    {props.approval.plan?.rollback_available ? 'Available' : 'Not declared'}
+                  </div>
+                </div>
+                <Show when={formatExpiry(props.approval.plan?.expires_at)}>
+                  <div>
+                    <div class="uppercase font-semibold text-amber-700 dark:text-amber-300">
+                      Approval window
+                    </div>
+                    <div class="text-base-content">
+                      Expires {formatExpiry(props.approval.plan?.expires_at)}
+                    </div>
+                  </div>
+                </Show>
+              </div>
+
+              <Show when={props.approval.contextConfidence}>
+                <div class="pt-2 border-t border-amber-200 dark:border-amber-700">
+                  <div class="flex items-center gap-2 mb-1">
+                    <ShieldCheckIcon class="w-3.5 h-3.5 text-amber-700 dark:text-amber-300" />
+                    <span
+                      class={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${confidenceClasses(
+                        props.approval.contextConfidence?.level,
+                      )}`}
+                    >
+                      {confidenceLabel(props.approval.contextConfidence?.level)}
+                    </span>
+                  </div>
+                  <Show when={props.approval.contextConfidence?.summary}>
+                    <p class="leading-relaxed text-base-content">
+                      {props.approval.contextConfidence?.summary}
+                    </p>
+                  </Show>
+                  <Show when={(props.approval.contextConfidence?.evidence || []).length > 0}>
+                    <ul class="mt-1.5 space-y-1 text-[11px] text-base-content/80">
+                      <For each={props.approval.contextConfidence?.evidence || []}>
+                        {(item) => <li class="break-words">{item}</li>}
+                      </For>
+                    </ul>
+                  </Show>
+                </div>
+              </Show>
+
+              <Show when={props.approval.auditId || props.approval.plan?.plan_hash}>
+                <div class="pt-2 border-t border-amber-200 dark:border-amber-700 text-[11px] text-base-content/80 break-all">
+                  <Show when={props.approval.auditId}>
+                    <span>Audit {props.approval.auditId}</span>
+                  </Show>
+                  <Show when={props.approval.plan?.plan_hash}>
+                    <span class="ml-2">Plan {formatPlanHash(props.approval.plan?.plan_hash)}</span>
+                  </Show>
+                </div>
+              </Show>
+            </div>
+          </div>
+        </Show>
+
         {/* Actions */}
         <div class="flex gap-2">
           <button
@@ -92,35 +219,14 @@ export const ApprovalCard: Component<ApprovalCardProps> = (props) => {
               when={!props.approval.isExecuting}
               fallback={
                 <span class="flex items-center justify-center gap-1.5">
-                  <svg class="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
-                    <circle
-                      class="opacity-25"
-                      cx="12"
-                      cy="12"
-                      r="10"
-                      stroke="currentColor"
-                      stroke-width="4"
-                    />
-                    <path
-                      class="opacity-75"
-                      fill="currentColor"
-                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                    />
-                  </svg>
+                  <LoaderCircleIcon class="w-3.5 h-3.5 animate-spin" />
                   Running...
                 </span>
               }
             >
               <span class="flex items-center justify-center gap-1.5">
-                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M5 13l4 4L19 7"
-                  />
-                </svg>
-                Run Command
+                <CheckIcon class="w-3.5 h-3.5" />
+                Approve & Run
               </span>
             </Show>
           </button>
@@ -131,14 +237,7 @@ export const ApprovalCard: Component<ApprovalCardProps> = (props) => {
             class="flex-1 px-3 py-2 text-xs font-semibold hover:bg-surface-hover text-base-content rounded-md transition-colors disabled:opacity-50"
           >
             <span class="flex items-center justify-center gap-1.5">
-              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M6 18L18 6M6 6l12 12"
-                />
-              </svg>
+              <XIcon class="w-3.5 h-3.5" />
               Skip
             </span>
           </button>

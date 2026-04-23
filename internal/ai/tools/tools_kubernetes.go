@@ -559,7 +559,7 @@ func (e *PulseToolExecutor) executeKubernetesScale(ctx context.Context, args map
 	// Request approval if needed
 	if !preApproved && !e.isAutonomous && e.controlLevel == ControlLevelControlled {
 		displayName := cluster.DisplayName
-		approvalID := createApprovalRecordForOrg(e.orgID, command, "kubernetes", approvalTargetID, displayName, fmt.Sprintf("Scale deployment %s to %d replicas", deployment, replicas))
+		approvalID := e.createApprovalRecord(command, "kubernetes", approvalTargetID, displayName, fmt.Sprintf("Scale deployment %s to %d replicas", deployment, replicas))
 		return NewTextResult(formatKubernetesApprovalNeeded("scale", deployment, namespace, displayName, command, approvalID)), nil
 	}
 
@@ -649,7 +649,7 @@ func (e *PulseToolExecutor) executeKubernetesRestart(ctx context.Context, args m
 	// Request approval if needed
 	if !preApproved && !e.isAutonomous && e.controlLevel == ControlLevelControlled {
 		displayName := cluster.DisplayName
-		approvalID := createApprovalRecordForOrg(e.orgID, command, "kubernetes", approvalTargetID, displayName, fmt.Sprintf("Restart deployment %s", deployment))
+		approvalID := e.createApprovalRecord(command, "kubernetes", approvalTargetID, displayName, fmt.Sprintf("Restart deployment %s", deployment))
 		return NewTextResult(formatKubernetesApprovalNeeded("restart", deployment, namespace, displayName, command, approvalID)), nil
 	}
 
@@ -739,7 +739,7 @@ func (e *PulseToolExecutor) executeKubernetesDeletePod(ctx context.Context, args
 	// Request approval if needed
 	if !preApproved && !e.isAutonomous && e.controlLevel == ControlLevelControlled {
 		displayName := cluster.DisplayName
-		approvalID := createApprovalRecordForOrg(e.orgID, command, "kubernetes", approvalTargetID, displayName, fmt.Sprintf("Delete pod %s", pod))
+		approvalID := e.createApprovalRecord(command, "kubernetes", approvalTargetID, displayName, fmt.Sprintf("Delete pod %s", pod))
 		return NewTextResult(formatKubernetesApprovalNeeded("delete_pod", pod, namespace, displayName, command, approvalID)), nil
 	}
 
@@ -839,7 +839,7 @@ func (e *PulseToolExecutor) executeKubernetesExec(ctx context.Context, args map[
 	// Request approval if needed
 	if !preApproved && !e.isAutonomous && e.controlLevel == ControlLevelControlled {
 		displayName := cluster.DisplayName
-		approvalID := createApprovalRecordForOrg(e.orgID, kubectlCmd, "kubernetes", approvalTargetID, displayName, fmt.Sprintf("Execute command in pod %s", pod))
+		approvalID := e.createApprovalRecord(kubectlCmd, "kubernetes", approvalTargetID, displayName, fmt.Sprintf("Execute command in pod %s", pod))
 		return NewTextResult(formatKubernetesApprovalNeeded("exec", pod, namespace, displayName, kubectlCmd, approvalID)), nil
 	}
 
@@ -971,6 +971,7 @@ func formatKubernetesApprovalNeeded(action, resource, namespace, cluster, comman
 		"how_to_approve": "Click the approval button in the chat to execute this action.",
 		"do_not_retry":   true,
 	}
+	payload = enrichApprovalRequiredPayload(payload, approvalID)
 	b, _ := json.Marshal(payload)
 	return "APPROVAL_REQUIRED: " + string(b)
 }

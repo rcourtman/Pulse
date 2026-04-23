@@ -294,8 +294,7 @@ func (e *PulseToolExecutor) executeFileAppend(ctx context.Context, path, content
 		if dockerContainer != "" {
 			target = fmt.Sprintf("%s (container: %s)", targetHost, dockerContainer)
 		}
-		approvalID := createApprovalRecordForOrg(
-			e.orgID,
+		approvalID := e.createApprovalRecord(
 			approvalCommand,
 			"file",
 			approvalTargetID,
@@ -448,8 +447,7 @@ func (e *PulseToolExecutor) executeFileWrite(ctx context.Context, path, content,
 		if dockerContainer != "" {
 			target = fmt.Sprintf("%s (container: %s)", targetHost, dockerContainer)
 		}
-		approvalID := createApprovalRecordForOrg(
-			e.orgID,
+		approvalID := e.createApprovalRecord(
 			approvalCommand,
 			"file",
 			approvalTargetID,
@@ -746,6 +744,7 @@ func formatFileApprovalNeeded(path, host, action string, size int, approvalID st
 		"size":        size,
 		"message":     fmt.Sprintf("File %s operation requires approval", action),
 	}
+	payload = enrichApprovalRequiredPayload(payload, approvalID)
 	b, _ := json.Marshal(payload)
 	return "APPROVAL_REQUIRED: " + string(b)
 }

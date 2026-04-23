@@ -143,16 +143,42 @@ type ToolEndData struct {
 	Success  bool   `json:"success"`
 }
 
+// ApprovalPlanData is the user-facing subset of the governed action plan.
+type ApprovalPlanData struct {
+	ActionID          string `json:"action_id,omitempty"`
+	RequestID         string `json:"request_id,omitempty"`
+	Summary           string `json:"summary,omitempty"`
+	RequiresApproval  bool   `json:"requires_approval"`
+	ApprovalPolicy    string `json:"approval_policy,omitempty"`
+	BlastRadius       string `json:"blast_radius,omitempty"`
+	RollbackAvailable bool   `json:"rollback_available"`
+	PlanHash          string `json:"plan_hash,omitempty"`
+	ExpiresAt         string `json:"expires_at,omitempty"`
+}
+
+// ApprovalContextConfidenceData describes how strongly a proposed action was
+// bound to a concrete target before approval.
+type ApprovalContextConfidenceData struct {
+	Level    string   `json:"level,omitempty"`
+	Summary  string   `json:"summary,omitempty"`
+	Evidence []string `json:"evidence,omitempty"`
+}
+
 // ApprovalNeededData is the data for "approval_needed" events
 type ApprovalNeededData struct {
-	ApprovalID  string `json:"approval_id"`
-	ToolID      string `json:"tool_id"`
-	ToolName    string `json:"tool_name"`
-	Command     string `json:"command"`
-	RunOnHost   bool   `json:"run_on_host"`
-	TargetHost  string `json:"target_host,omitempty"`
-	Risk        string `json:"risk,omitempty"`
-	Description string `json:"description,omitempty"`
+	ApprovalID        string                         `json:"approval_id"`
+	ToolID            string                         `json:"tool_id"`
+	ToolName          string                         `json:"tool_name"`
+	Command           string                         `json:"command"`
+	RunOnHost         bool                           `json:"run_on_host"`
+	TargetHost        string                         `json:"target_host,omitempty"`
+	TargetType        string                         `json:"target_type,omitempty"`
+	TargetID          string                         `json:"target_id,omitempty"`
+	Risk              string                         `json:"risk,omitempty"`
+	Description       string                         `json:"description,omitempty"`
+	AuditID           string                         `json:"audit_id,omitempty"`
+	Plan              *ApprovalPlanData              `json:"plan,omitempty"`
+	ContextConfidence *ApprovalContextConfidenceData `json:"context_confidence,omitempty"`
 }
 
 // QuestionData is the data for "question" events

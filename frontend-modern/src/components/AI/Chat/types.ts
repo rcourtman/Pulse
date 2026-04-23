@@ -20,10 +20,33 @@ export interface PendingApproval {
   toolName: string;
   runOnHost: boolean;
   targetHost?: string;
+  targetType?: string;
+  targetId?: string;
   risk?: string;
   description?: string;
+  auditId?: string;
+  plan?: ApprovalPlan;
+  contextConfidence?: ApprovalContextConfidence;
   isExecuting?: boolean;
   approvalId?: string; // ID of the approval record for API calls
+}
+
+export interface ApprovalPlan {
+  action_id?: string;
+  request_id?: string;
+  summary?: string;
+  requires_approval: boolean;
+  approval_policy?: string;
+  blast_radius?: string;
+  rollback_available: boolean;
+  plan_hash?: string;
+  expires_at?: string;
+}
+
+export interface ApprovalContextConfidence {
+  level?: string;
+  summary?: string;
+  evidence?: string[];
 }
 
 // Question from Pulse Assistant

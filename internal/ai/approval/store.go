@@ -39,6 +39,26 @@ const (
 	RiskHigh   RiskLevel = "high"
 )
 
+// ContextConfidenceLevel describes how strong the resolved action context is
+// before a user approves execution.
+type ContextConfidenceLevel string
+
+const (
+	ContextConfidenceVerified ContextConfidenceLevel = "verified"
+	ContextConfidencePartial  ContextConfidenceLevel = "partial"
+	ContextConfidenceInferred ContextConfidenceLevel = "inferred"
+	ContextConfidenceUnknown  ContextConfidenceLevel = "unknown"
+)
+
+// ContextConfidence captures the evidence Pulse Assistant used to bind an
+// approval to a concrete target. It is persisted with the approval so the
+// same context can be shown in chat and later audit views.
+type ContextConfidence struct {
+	Level    ContextConfidenceLevel `json:"level,omitempty"`
+	Summary  string                 `json:"summary,omitempty"`
+	Evidence []string               `json:"evidence,omitempty"`
+}
+
 // ApprovalRequest represents a pending command awaiting user approval.
 type ApprovalRequest struct {
 	ID          string         `json:"id"`
@@ -61,6 +81,10 @@ type ApprovalRequest struct {
 	CommandHash string `json:"commandHash,omitempty"`
 	// Consumed marks whether this approval has been used (single-use protection)
 	Consumed bool `json:"consumed,omitempty"`
+	// Plan is the governed action plan the user approved or denied.
+	Plan *unifiedresources.ActionPlan `json:"plan,omitempty"`
+	// ContextConfidence records how strongly the action target was resolved.
+	ContextConfidence *ContextConfidence `json:"contextConfidence,omitempty"`
 }
 
 // NormalizeOrgID normalizes tenant IDs used in approval records.
@@ -205,6 +229,23 @@ func (s *Store) CreateApproval(req *ApprovalRequest) error {
 	req.RequestedAt = time.Now()
 	if req.ExpiresAt.IsZero() {
 		req.ExpiresAt = req.RequestedAt.Add(s.defaultTimeout)
+	}
+	if req.Plan != nil {
+		if strings.TrimSpace(req.Plan.ActionID) == "" {
+			req.Plan.ActionID = uuid.New().String()
+		}
+		if strings.TrimSpace(req.Plan.RequestID) == "" {
+			req.Plan.RequestID = req.ID
+		}
+		if req.Plan.PlannedAt.IsZero() {
+			req.Plan.PlannedAt = req.RequestedAt.UTC()
+		}
+		if req.Plan.ExpiresAt.IsZero() {
+			req.Plan.ExpiresAt = req.ExpiresAt.UTC()
+		}
+		if req.Plan.ApprovalPolicy == "" && req.Plan.RequiresApproval {
+			req.Plan.ApprovalPolicy = unifiedresources.ApprovalAdmin
+		}
 	}
 
 	// Assess risk if not set

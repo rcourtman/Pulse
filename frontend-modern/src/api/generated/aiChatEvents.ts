@@ -3,6 +3,12 @@
 
 /* eslint-disable */
 
+export interface ApprovalContextConfidenceData {
+  level?: string;
+  summary?: string;
+  evidence?: string[];
+}
+
 export interface ApprovalNeededData {
   approval_id: string;
   tool_id: string;
@@ -10,8 +16,25 @@ export interface ApprovalNeededData {
   command: string;
   run_on_host: boolean;
   target_host?: string;
+  target_type?: string;
+  target_id?: string;
   risk?: string;
   description?: string;
+  audit_id?: string;
+  plan?: ApprovalPlanData;
+  context_confidence?: ApprovalContextConfidenceData;
+}
+
+export interface ApprovalPlanData {
+  action_id?: string;
+  request_id?: string;
+  summary?: string;
+  requires_approval: boolean;
+  approval_policy?: string;
+  blast_radius?: string;
+  rollback_available: boolean;
+  plan_hash?: string;
+  expires_at?: string;
 }
 
 export interface ContentData {
@@ -82,6 +105,7 @@ export type AIChatStreamEvent =
   | { type: 'tool_start'; data: ToolStartData }
   | { type: 'tool_end'; data: ToolEndData }
   | { type: 'approval_needed'; data: ApprovalNeededData }
-  | { type: 'question'; data: QuestionData & { session_id?: string } }
+  | { type: 'question'; data: (QuestionData & { session_id?: string }) }
   | { type: 'done'; data?: DoneData }
-  | { type: 'error'; data: ErrorData };
+  | { type: 'error'; data: ErrorData }
+;

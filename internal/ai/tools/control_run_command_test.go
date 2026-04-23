@@ -93,13 +93,15 @@ func TestPulseToolExecutor_ExecuteRunCommand(t *testing.T) {
 		require.NoError(t, err)
 		approval.SetStore(store)
 		defer approval.SetStore(nil)
+		actionStore := unifiedresources.NewMemoryStore()
 
 		agentSrv := &mockAgentServer{agents: []agentexec.ConnectedAgent{
 			{AgentID: "agent-1", Hostname: "tower"},
 		}}
 		exec := NewPulseToolExecutor(ExecutorConfig{
-			AgentServer:  agentSrv,
-			ControlLevel: ControlLevelControlled,
+			AgentServer:      agentSrv,
+			ControlLevel:     ControlLevelControlled,
+			ActionAuditStore: actionStore,
 		})
 		// Session context target must not influence command approval binding.
 		exec.SetContext("host", "session-target", false)
@@ -119,6 +121,25 @@ func TestPulseToolExecutor_ExecuteRunCommand(t *testing.T) {
 		assert.Equal(t, "agent", req.TargetType)
 		assert.Equal(t, "agent-1", req.TargetID)
 		assert.Equal(t, "tower", req.TargetName)
+		require.NotNil(t, req.Plan)
+		assert.Equal(t, approvalID, req.Plan.RequestID)
+		assert.True(t, req.Plan.RequiresApproval)
+		assert.Equal(t, unifiedresources.ApprovalAdmin, req.Plan.ApprovalPolicy)
+		require.NotNil(t, req.ContextConfidence)
+		assert.Equal(t, approval.ContextConfidenceVerified, req.ContextConfidence.Level)
+
+		audits, err := actionStore.GetActionAudits("", time.Time{}, 10)
+		require.NoError(t, err)
+		require.Len(t, audits, 1)
+		assert.Equal(t, unifiedresources.ActionStatePending, audits[0].State)
+		assert.Equal(t, req.Plan.ActionID, audits[0].ID)
+		assert.Equal(t, "pulse_control", audits[0].Request.CapabilityName)
+
+		events, err := actionStore.GetActionLifecycleEvents(req.Plan.ActionID, time.Time{}, 10)
+		require.NoError(t, err)
+		require.Len(t, events, 2)
+		assert.Equal(t, unifiedresources.ActionStatePending, events[0].State)
+		assert.Equal(t, unifiedresources.ActionStatePlanned, events[1].State)
 	})
 
 	t.Run("ControlledConsumesApprovedCommandWithResolvedRoutingTarget", func(t *testing.T) {
@@ -135,6 +156,15 @@ func TestPulseToolExecutor_ExecuteRunCommand(t *testing.T) {
 			Command:    "uptime",
 			TargetType: "agent",
 			TargetID:   "agent-1",
+			Plan: &unifiedresources.ActionPlan{
+				ActionID:         "action-1",
+				RequestID:        "approval-1",
+				Allowed:          true,
+				RequiresApproval: true,
+				ApprovalPolicy:   unifiedresources.ApprovalAdmin,
+				Message:          "run command",
+				PlanHash:         "hash-1",
+			},
 		}
 		require.NoError(t, store.CreateApproval(req))
 		_, err = store.Approve("approval-1", "tester")
@@ -156,9 +186,11 @@ func TestPulseToolExecutor_ExecuteRunCommand(t *testing.T) {
 			ExitCode: 0,
 		}, nil).Once()
 
+		actionStore := unifiedresources.NewMemoryStore()
 		exec := NewPulseToolExecutor(ExecutorConfig{
-			AgentServer:  agentSrv,
-			ControlLevel: ControlLevelControlled,
+			AgentServer:      agentSrv,
+			ControlLevel:     ControlLevelControlled,
+			ActionAuditStore: actionStore,
 		})
 		exec.SetContext("host", "different-session-target", false)
 
@@ -177,6 +209,13 @@ func TestPulseToolExecutor_ExecuteRunCommand(t *testing.T) {
 		consumed, found := store.GetApproval("approval-1")
 		require.True(t, found)
 		assert.True(t, consumed.Consumed)
+
+		audits, err := actionStore.GetActionAudits("", time.Time{}, 10)
+		require.NoError(t, err)
+		require.Len(t, audits, 1)
+		assert.Equal(t, "action-1", audits[0].ID)
+		assert.Equal(t, unifiedresources.ActionStateCompleted, audits[0].State)
+		assert.Equal(t, "hash-1", audits[0].Plan.PlanHash)
 	})
 
 	t.Run("ExecuteSuccess", func(t *testing.T) {

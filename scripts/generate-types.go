@@ -38,6 +38,8 @@ func main() {
 		reflect.TypeOf(chat.ExploreStatusData{}),
 		reflect.TypeOf(chat.ToolStartData{}),
 		reflect.TypeOf(chat.ToolEndData{}),
+		reflect.TypeOf(chat.ApprovalPlanData{}),
+		reflect.TypeOf(chat.ApprovalContextConfidenceData{}),
 		reflect.TypeOf(chat.ApprovalNeededData{}),
 		reflect.TypeOf(chat.QuestionData{}),
 		reflect.TypeOf(chat.Question{}),
