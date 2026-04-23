@@ -11500,6 +11500,52 @@ func TestContract_ConnectionPayloadShapeStaysCanonical(t *testing.T) {
 	assertJSONSnapshot(t, body, want)
 }
 
+func TestContract_ConnectionSystemMembersPayloadShapeStaysCanonical(t *testing.T) {
+	system := ConnectionSystem{
+		ID:          "pve-lab",
+		Type:        ConnectionTypePVE,
+		ClusterName: "homelab",
+		Components: []ConnectionSystemComponent{
+			{
+				ConnectionID: "pve-lab",
+				Type:         ConnectionTypePVE,
+				Role:         ConnectionSystemComponentRolePrimary,
+			},
+			{
+				ConnectionID: "agent:agent-lab",
+				Type:         ConnectionTypeAgent,
+				Role:         ConnectionSystemComponentRoleAttachment,
+			},
+		},
+		Members: []ConnectionSystemMember{
+			{
+				ID:                "node-lab",
+				Name:              "lab",
+				Endpoint:          "https://lab:8006",
+				State:             ConnectionStateActive,
+				LastSeen:          timePtr(time.Date(2026, 4, 23, 12, 0, 0, 0, time.UTC)),
+				Primary:           true,
+				AgentConnectionID: "agent:agent-lab",
+			},
+			{
+				ID:       "node-minipc",
+				Name:     "minipc",
+				Endpoint: "https://minipc:8006",
+				State:    ConnectionStateStale,
+				LastSeen: timePtr(time.Date(2026, 4, 23, 11, 55, 0, 0, time.UTC)),
+			},
+		},
+	}
+
+	body, err := json.Marshal(system)
+	if err != nil {
+		t.Fatalf("marshal ConnectionSystem with members: %v", err)
+	}
+
+	want := `{"id":"pve-lab","type":"pve","clusterName":"homelab","components":[{"connectionId":"pve-lab","type":"pve","role":"primary"},{"connectionId":"agent:agent-lab","type":"agent","role":"attachment"}],"members":[{"id":"node-lab","name":"lab","endpoint":"https://lab:8006","state":"active","lastSeen":"2026-04-23T12:00:00Z","primary":true,"agentConnectionId":"agent:agent-lab"},{"id":"node-minipc","name":"minipc","endpoint":"https://minipc:8006","state":"stale","lastSeen":"2026-04-23T11:55:00Z"}]}`
+	assertJSONSnapshot(t, body, want)
+}
+
 func TestContract_AgentConnectionPayloadIncludesVersionFields(t *testing.T) {
 	conn := Connection{
 		ID:                   "agent:host-1",

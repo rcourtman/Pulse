@@ -66,6 +66,25 @@ describe('useConnectionsLedger', () => {
           { connectionId: 'agent:agent-delly', type: 'agent', role: 'attachment' },
           { connectionId: 'agent:agent-minipc', type: 'agent', role: 'attachment' },
         ],
+        members: [
+          {
+            id: 'node-delly',
+            name: 'delly',
+            endpoint: 'https://delly:8006',
+            state: 'active',
+            lastSeen: '2026-04-23T12:00:00Z',
+            primary: true,
+            agentConnectionId: 'agent:agent-delly',
+          },
+          {
+            id: 'node-minipc',
+            name: 'minipc',
+            endpoint: 'https://minipc:8006',
+            state: 'active',
+            lastSeen: '2026-04-23T12:00:00Z',
+            agentConnectionId: 'agent:agent-minipc',
+          },
+        ],
       },
     ];
     vi.spyOn(ConnectionsAPI, 'list').mockResolvedValue({ connections, systems });
@@ -83,6 +102,28 @@ describe('useConnectionsLedger', () => {
     expect(result.rows()[0].attachedConnections.map((connection) => connection.id)).toEqual([
       'agent:agent-delly',
       'agent:agent-minipc',
+    ]);
+    expect(result.rows()[0].members).toMatchObject([
+      {
+        id: 'node-delly',
+        name: 'delly',
+        subtitle: 'Primary cluster node',
+        source: 'both',
+        host: 'https://delly:8006',
+        coverageLabels: ['Host telemetry'],
+        statusLabel: 'Active',
+        primary: true,
+      },
+      {
+        id: 'node-minipc',
+        name: 'minipc',
+        subtitle: 'Cluster member',
+        source: 'both',
+        host: 'https://minipc:8006',
+        coverageLabels: ['Host telemetry'],
+        statusLabel: 'Active',
+        primary: false,
+      },
     ]);
   });
 });

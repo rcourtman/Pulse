@@ -5,7 +5,9 @@ import (
 	"net/url"
 	"sort"
 	"strings"
+	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	unified "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
@@ -34,6 +36,7 @@ func buildConnectionSystems(
 	clusterNames := buildProxmoxClusterNames(connectionByID, monitor)
 	hostIndex := buildConnectionHostIndex(connections)
 	agentAttachments := resolveAgentAttachments(connectionByID, hostIndex, monitor)
+	systemMembers := buildConnectionSystemMembers(connectionByID, agentAttachments, monitor)
 
 	groups := make(map[string]*connectionSystemGroup, len(connections))
 	ensureGroup := func(primary Connection) *connectionSystemGroup {
@@ -103,6 +106,7 @@ func buildConnectionSystems(
 			Type:        group.typ,
 			ClusterName: group.clusterName,
 			Components:  components,
+			Members:     systemMembers[group.id],
 		})
 	}
 
@@ -119,6 +123,279 @@ func buildConnectionSystems(
 	})
 
 	return out
+}
+
+func buildConnectionSystemMembers(
+	connectionByID map[string]Connection,
+	agentAttachments map[string]string,
+	monitor *monitoring.Monitor,
+) map[string][]ConnectionSystemMember {
+	systemMembers := make(map[string][]ConnectionSystemMember)
+	if monitor == nil {
+		return systemMembers
+	}
+
+	bySystemKey := make(map[string]map[string]ConnectionSystemMember)
+	register := func(primaryID string, member ConnectionSystemMember) {
+		primaryID = strings.TrimSpace(primaryID)
+		member.Name = strings.TrimSpace(member.Name)
+		if primaryID == "" || member.Name == "" {
+			return
+		}
+		if _, ok := connectionByID[primaryID]; !ok {
+			return
+		}
+
+		memberKey := connectionSystemMemberKey(member)
+		if memberKey == "" {
+			return
+		}
+		member.ID = strings.TrimSpace(member.ID)
+		if member.ID == "" {
+			member.ID = memberKey
+		}
+
+		bucket := bySystemKey[primaryID]
+		if bucket == nil {
+			bucket = make(map[string]ConnectionSystemMember)
+			bySystemKey[primaryID] = bucket
+		}
+
+		existing, exists := bucket[memberKey]
+		if !exists {
+			bucket[memberKey] = member
+			return
+		}
+
+		bucket[memberKey] = mergeConnectionSystemMembers(existing, member)
+	}
+
+	for _, node := range monitor.NodesSnapshot() {
+		member, primaryID, ok := connectionSystemMemberFromNode(node, connectionByID, agentAttachments)
+		if !ok {
+			continue
+		}
+		register(primaryID, member)
+	}
+
+	resources, _ := monitor.UnifiedResourceSnapshot()
+	for _, resource := range resources {
+		member, primaryID, ok := connectionSystemMemberFromResource(resource, connectionByID, agentAttachments)
+		if !ok {
+			continue
+		}
+		register(primaryID, member)
+	}
+
+	for primaryID, membersByKey := range bySystemKey {
+		members := make([]ConnectionSystemMember, 0, len(membersByKey))
+		for _, member := range membersByKey {
+			members = append(members, member)
+		}
+		sort.Slice(members, func(i, j int) bool {
+			if members[i].Primary != members[j].Primary {
+				return members[i].Primary
+			}
+			leftName := strings.ToLower(strings.TrimSpace(members[i].Name))
+			rightName := strings.ToLower(strings.TrimSpace(members[j].Name))
+			if leftName == rightName {
+				return members[i].ID < members[j].ID
+			}
+			return leftName < rightName
+		})
+		systemMembers[primaryID] = members
+	}
+
+	return systemMembers
+}
+
+func connectionSystemMemberFromNode(
+	node models.Node,
+	connectionByID map[string]Connection,
+	agentAttachments map[string]string,
+) (ConnectionSystemMember, string, bool) {
+	if !node.IsClusterMember {
+		return ConnectionSystemMember{}, "", false
+	}
+	primaryID := "pve:" + strings.TrimSpace(node.Instance)
+	primary, ok := connectionByID[primaryID]
+	if !ok || primary.Type != ConnectionTypePVE {
+		return ConnectionSystemMember{}, "", false
+	}
+
+	var lastSeen *time.Time
+	if !node.LastSeen.IsZero() {
+		t := node.LastSeen
+		lastSeen = &t
+	}
+
+	return ConnectionSystemMember{
+		ID:                strings.TrimSpace(node.ID),
+		Name:              firstNonEmptyTrimmed(node.DisplayName, node.Name),
+		Endpoint:          strings.TrimSpace(node.Host),
+		State:             connectionSystemMemberStateFromNode(node),
+		LastSeen:          lastSeen,
+		Primary:           isPrimaryProxmoxSystemMember(primary, node.Name, node.Host),
+		AgentConnectionID: attachedAgentConnectionID(node.LinkedAgentID, primaryID, connectionByID, agentAttachments),
+	}, primaryID, true
+}
+
+func connectionSystemMemberFromResource(
+	resource unified.Resource,
+	connectionByID map[string]Connection,
+	agentAttachments map[string]string,
+) (ConnectionSystemMember, string, bool) {
+	if resource.Proxmox == nil || !resource.Proxmox.IsClusterMember {
+		return ConnectionSystemMember{}, "", false
+	}
+	nodeName := strings.TrimSpace(resource.Proxmox.NodeName)
+	if nodeName == "" {
+		return ConnectionSystemMember{}, "", false
+	}
+	primaryID := "pve:" + strings.TrimSpace(resource.Proxmox.Instance)
+	primary, ok := connectionByID[primaryID]
+	if !ok || primary.Type != ConnectionTypePVE {
+		return ConnectionSystemMember{}, "", false
+	}
+
+	linkedAgentID := resource.Proxmox.LinkedAgentID
+	if linkedAgentID == "" && resource.Agent != nil {
+		linkedAgentID = resource.Agent.AgentID
+	}
+
+	var lastSeen *time.Time
+	if !resource.LastSeen.IsZero() {
+		t := resource.LastSeen
+		lastSeen = &t
+	}
+
+	return ConnectionSystemMember{
+		ID:                strings.TrimSpace(resource.ID),
+		Name:              firstNonEmptyTrimmed(resource.Name, nodeName),
+		Endpoint:          strings.TrimSpace(resource.Proxmox.HostURL),
+		State:             connectionSystemMemberStateFromResource(resource),
+		LastSeen:          lastSeen,
+		Primary:           isPrimaryProxmoxSystemMember(primary, nodeName, resource.Proxmox.HostURL),
+		AgentConnectionID: attachedAgentConnectionID(linkedAgentID, primaryID, connectionByID, agentAttachments),
+	}, primaryID, true
+}
+
+func mergeConnectionSystemMembers(
+	existing ConnectionSystemMember,
+	candidate ConnectionSystemMember,
+) ConnectionSystemMember {
+	if strings.TrimSpace(existing.ID) == "" {
+		existing.ID = candidate.ID
+	}
+	if strings.TrimSpace(existing.Name) == "" {
+		existing.Name = candidate.Name
+	}
+	if strings.TrimSpace(existing.Endpoint) == "" {
+		existing.Endpoint = candidate.Endpoint
+	}
+	if existing.State == ConnectionStatePending && candidate.State != ConnectionStatePending {
+		existing.State = candidate.State
+	}
+	if existing.LastSeen == nil ||
+		(candidate.LastSeen != nil && candidate.LastSeen.After(*existing.LastSeen)) {
+		existing.LastSeen = candidate.LastSeen
+	}
+	if !existing.Primary && candidate.Primary {
+		existing.Primary = true
+	}
+	if strings.TrimSpace(existing.AgentConnectionID) == "" {
+		existing.AgentConnectionID = candidate.AgentConnectionID
+	}
+	return existing
+}
+
+func connectionSystemMemberKey(member ConnectionSystemMember) string {
+	for _, candidate := range []string{
+		strings.TrimSpace(member.Name),
+		strings.TrimSpace(member.Endpoint),
+		strings.TrimSpace(member.ID),
+	} {
+		if normalized := normalizeHost(candidate); normalized != "" {
+			return normalized
+		}
+		candidate = strings.ToLower(strings.TrimSpace(candidate))
+		if candidate != "" {
+			return candidate
+		}
+	}
+	return ""
+}
+
+func connectionSystemMemberStateFromNode(node models.Node) ConnectionState {
+	status := strings.ToLower(strings.TrimSpace(node.Status))
+	health := strings.ToLower(strings.TrimSpace(node.ConnectionHealth))
+	switch {
+	case status == "offline" || health == "error" || health == "offline" || health == "unhealthy":
+		return ConnectionStateUnreachable
+	case health == "degraded" || health == "unknown":
+		return ConnectionStateStale
+	case node.LastSeen.IsZero():
+		return ConnectionStatePending
+	default:
+		return ConnectionStateActive
+	}
+}
+
+func connectionSystemMemberStateFromResource(resource unified.Resource) ConnectionState {
+	switch resource.Status {
+	case unified.StatusOffline:
+		return ConnectionStateUnreachable
+	case unified.StatusWarning:
+		return ConnectionStateStale
+	case unified.StatusUnknown:
+		return ConnectionStatePending
+	default:
+		if resource.LastSeen.IsZero() {
+			return ConnectionStatePending
+		}
+		return ConnectionStateActive
+	}
+}
+
+func attachedAgentConnectionID(
+	rawAgentID string,
+	primaryID string,
+	connectionByID map[string]Connection,
+	agentAttachments map[string]string,
+) string {
+	agentID := strings.TrimSpace(rawAgentID)
+	if agentID == "" {
+		return ""
+	}
+	connectionID := "agent:" + agentID
+	connection, ok := connectionByID[connectionID]
+	if !ok || connection.Type != ConnectionTypeAgent {
+		return ""
+	}
+	if attachedPrimary := strings.TrimSpace(agentAttachments[connectionID]); attachedPrimary != "" &&
+		attachedPrimary != primaryID {
+		return ""
+	}
+	return connectionID
+}
+
+func isPrimaryProxmoxSystemMember(primary Connection, nodeName, endpoint string) bool {
+	nodeName = strings.TrimSpace(nodeName)
+	if nodeName != "" {
+		for _, candidate := range []string{
+			primary.Name,
+			strings.TrimPrefix(primary.ID, "pve:"),
+		} {
+			if strings.EqualFold(nodeName, strings.TrimSpace(candidate)) {
+				return true
+			}
+		}
+	}
+
+	return connectionsShareHost(
+		Connection{Name: nodeName, Address: strings.TrimSpace(endpoint)},
+		primary,
+	)
 }
 
 func connectionComponentRolePriority(role ConnectionSystemComponentRole) int {

@@ -84,6 +84,7 @@ vi.mock('../useConnectionsLedger', () => ({
         canRemove: connection.type !== 'docker' && connection.type !== 'kubernetes',
         isAgent: connection.type === 'agent',
         attachedConnections: [],
+        members: [],
         connection,
       })),
     findById: (id: string) =>
@@ -437,6 +438,7 @@ describe('InfrastructureWorkspace', () => {
         canRemove: true,
         isAgent: false,
         attachedConnections: [attachedAgent],
+        members: [],
         connection: primaryConnection,
       },
     ];
@@ -502,6 +504,34 @@ describe('InfrastructureWorkspace', () => {
         canRemove: true,
         isAgent: false,
         attachedConnections: [dellyAgent, minipcAgent],
+        members: [
+          {
+            id: 'node-delly',
+            name: 'delly',
+            subtitle: 'Primary cluster node',
+            source: 'both',
+            host: 'https://delly:8006',
+            coverageLabels: ['Host telemetry'],
+            statusLabel: 'Active',
+            statusClassName: 'bg-green-100 text-green-800',
+            lastActivityText: '1m ago',
+            primary: true,
+            agentConnection: dellyAgent,
+          },
+          {
+            id: 'node-minipc',
+            name: 'minipc',
+            subtitle: 'Cluster member',
+            source: 'both',
+            host: 'https://minipc:8006',
+            coverageLabels: ['Host telemetry'],
+            statusLabel: 'Active',
+            statusClassName: 'bg-green-100 text-green-800',
+            lastActivityText: '1m ago',
+            primary: false,
+            agentConnection: minipcAgent,
+          },
+        ],
         connection: primaryConnection,
       },
     ];
@@ -509,9 +539,11 @@ describe('InfrastructureWorkspace', () => {
     renderWorkspace();
 
     await waitFor(() => expect(screen.getByText('homelab')).toBeInTheDocument());
-    expect(screen.getByText('API + Agent')).toBeInTheDocument();
+    expect(screen.getAllByText('API + Agent').length).toBeGreaterThan(0);
+    expect(screen.getByText('delly')).toBeInTheDocument();
+    expect(screen.getByText('minipc')).toBeInTheDocument();
+    expect(screen.getAllByText('Host telemetry').length).toBeGreaterThan(0);
     expect(screen.queryByText('Standalone hosts')).toBeNull();
-    expect(screen.queryByText(/^minipc$/)).toBeNull();
   });
 
   it('hides the add flow and source-manager actions in read-only mode', () => {

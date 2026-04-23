@@ -423,7 +423,11 @@ the canonical monitored-system blocked payload.
     can prove they augment the same source. When the owning source is a
     Proxmox cluster, that same backend-authored system payload must also
     carry the canonical cluster identity so the frontend can label the row by
-    cluster moniker instead of by one endpoint node's hostname. Agent-backed
+    cluster moniker instead of by one endpoint node's hostname. That grouped
+    payload must also carry the backend-authored cluster member collection
+    with node identity, endpoint, node-local status, and any linked agent
+    connection id so the frontend can render child node composition without
+    reverse-engineering it from standalone agent rows. Agent-backed
     connections also own canonical version/update facts on that same payload:
     when a source or attachment is backed by Pulse Agent, `/api/connections`
     carries the

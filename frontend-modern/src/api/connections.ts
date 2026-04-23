@@ -59,11 +59,22 @@ export interface ConnectionSystemComponent {
   role: ConnectionSystemComponentRole;
 }
 
+export interface ConnectionSystemMember {
+  id: string;
+  name: string;
+  endpoint?: string;
+  state: ConnectionState;
+  lastSeen?: string | null;
+  primary?: boolean;
+  agentConnectionId?: string;
+}
+
 export interface ConnectionSystem {
   id: string;
   type: ConnectionType;
   clusterName?: string;
   components: ConnectionSystemComponent[];
+  members?: ConnectionSystemMember[];
 }
 
 export interface ConnectionsListResponse {

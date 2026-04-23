@@ -327,7 +327,10 @@ work extends shared components instead of creating new local variants.
    backend marks a grouped Proxmox row with canonical cluster identity, the
    table primitive must render that cluster moniker as the row title instead
    of falling back to one sibling node hostname or reopening a standalone-host
-   presentation for cluster-member agents.
+   presentation for cluster-member agents. When that grouped row also carries
+   backend-authored cluster members, the table primitive must render those
+   nodes as child composition beneath the cluster row rather than flattening
+   them back into peer top-level systems or hiding them entirely.
    Phase 9 retired the
    parallel reporting/inventory surface entirely:
    `useInfrastructureReportingState`, `InfrastructureOperationsController`,

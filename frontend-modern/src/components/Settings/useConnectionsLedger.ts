@@ -3,13 +3,16 @@ import {
   ConnectionsAPI,
   type Connection,
   type ConnectionState,
+  type ConnectionSystemMember,
   type ConnectionSystem,
   type ConnectionType,
 } from '@/api/connections';
 import {
   connectionLastActivityText,
+  lastActivityTextFromLastSeen,
   surfaceLabel,
   type InfrastructureSourceKind,
+  type InfrastructureSystemMemberRow,
   type InfrastructureSystemRow,
 } from './connectionsTableModel';
 
@@ -71,6 +74,15 @@ const EDITABLE_CONNECTION_TYPES: readonly ConnectionType[] = [
   'truenas',
 ];
 
+const CONNECTION_STATE_SEVERITY: Record<ConnectionState, number> = {
+  active: 0,
+  paused: 1,
+  pending: 2,
+  stale: 3,
+  unauthorized: 4,
+  unreachable: 5,
+};
+
 const coverageLabelsFor = (connections: readonly Connection[]): string[] => {
   const seen = new Set<string>();
   for (const connection of connections) {
@@ -122,11 +134,66 @@ const agentUpdateCountFor = (connections: readonly Connection[]): number =>
     (connection) => connection.type === 'agent' && Boolean(connection.agentUpdateAvailable),
   ).length;
 
+const moreSevereState = (
+  left: ConnectionState,
+  right?: ConnectionState | null,
+): ConnectionState => {
+  if (!right) return left;
+  return CONNECTION_STATE_SEVERITY[right] > CONNECTION_STATE_SEVERITY[left] ? right : left;
+};
+
+const memberSubtitleFor = (member: ConnectionSystemMember): string =>
+  member.primary ? 'Primary cluster node' : 'Cluster member';
+
+const buildMemberRow = (
+  ownerType: ConnectionType,
+  primaryConnection: Connection,
+  member: ConnectionSystemMember,
+  connectionsByID: Map<string, Connection>,
+): InfrastructureSystemMemberRow | null => {
+  const name = member.name?.trim();
+  if (!name) return null;
+
+  const agentConnection = member.agentConnectionId
+    ? connectionsByID.get(member.agentConnectionId)
+    : undefined;
+  const memberConnections = PLATFORM_API_TYPES.has(ownerType)
+    ? [primaryConnection, ...(agentConnection ? [agentConnection] : [])]
+    : agentConnection
+      ? [agentConnection]
+      : [];
+  const source =
+    memberConnections.length > 0
+      ? sourceFor(memberConnections)
+      : ('unknown' as InfrastructureSourceKind);
+  const state = moreSevereState(member.state, agentConnection?.state);
+  const presentation = STATE_PRESENTATION[state] ?? STATE_PRESENTATION.pending;
+  const lastSeen =
+    agentConnection && state === agentConnection.state
+      ? agentConnection.lastSeen
+      : (member.lastSeen ?? agentConnection?.lastSeen);
+
+  return {
+    id: member.id,
+    name,
+    subtitle: memberSubtitleFor(member),
+    source,
+    host: member.endpoint?.trim() || undefined,
+    coverageLabels: agentConnection ? coverageLabelsFor([agentConnection]) : [],
+    statusLabel: presentation.label,
+    statusClassName: presentation.badgeClass,
+    lastActivityText: lastActivityTextFromLastSeen(lastSeen),
+    primary: Boolean(member.primary),
+    agentConnection,
+  };
+};
+
 const buildRow = (
   ownerType: ConnectionType,
   primaryConnection: Connection,
   componentConnections: readonly Connection[],
   system?: ConnectionSystem | null,
+  members: InfrastructureSystemMemberRow[] = [],
 ): InfrastructureSystemRow => {
   const presentation = STATE_PRESENTATION[primaryConnection.state] ?? STATE_PRESENTATION.pending;
   const clusterName = system?.clusterName?.trim();
@@ -164,12 +231,13 @@ const buildRow = (
     canRemove: primaryConnection.type !== 'docker' && primaryConnection.type !== 'kubernetes',
     isAgent: primaryConnection.type === 'agent',
     attachedConnections,
+    members,
     connection: primaryConnection,
   };
 };
 
 export const connectionToRow = (connection: Connection): InfrastructureSystemRow =>
-  buildRow(connection.type, connection, [connection], null);
+  buildRow(connection.type, connection, [connection], null, []);
 
 const systemToRow = (
   system: ConnectionSystem,
@@ -186,7 +254,11 @@ const systemToRow = (
     componentConnections.push(primaryConnection);
   }
 
-  return buildRow(system.type, primaryConnection, componentConnections, system);
+  const members = (system.members ?? [])
+    .map((member) => buildMemberRow(system.type, primaryConnection, member, connectionsByID))
+    .filter((member): member is InfrastructureSystemMemberRow => Boolean(member));
+
+  return buildRow(system.type, primaryConnection, componentConnections, system, members);
 };
 
 export interface ConnectionsLedger {

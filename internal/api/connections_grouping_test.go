@@ -129,6 +129,7 @@ func TestBuildConnectionSystems_ClusterMemberAgentsAttachToOwningProxmoxSystem(t
 					NodeName:        "delly",
 					ClusterName:     "homelab",
 					IsClusterMember: true,
+					HostURL:         "https://delly:8006",
 					LinkedAgentID:   "agent-delly",
 				},
 				Agent: &unified.AgentData{
@@ -157,6 +158,7 @@ func TestBuildConnectionSystems_ClusterMemberAgentsAttachToOwningProxmoxSystem(t
 					NodeName:        "minipc",
 					ClusterName:     "homelab",
 					IsClusterMember: true,
+					HostURL:         "https://minipc:8006",
 					LinkedAgentID:   "agent-minipc",
 				},
 				Agent: &unified.AgentData{
@@ -229,6 +231,9 @@ func TestBuildConnectionSystems_ClusterMemberAgentsAttachToOwningProxmoxSystem(t
 	if len(system.Components) != 3 {
 		t.Fatalf("expected 3 system components, got %+v", system.Components)
 	}
+	if len(system.Members) != 2 {
+		t.Fatalf("expected 2 system members, got %+v", system.Members)
+	}
 
 	componentRoles := make(map[string]ConnectionSystemComponentRole, len(system.Components))
 	for _, component := range system.Components {
@@ -242,6 +247,45 @@ func TestBuildConnectionSystems_ClusterMemberAgentsAttachToOwningProxmoxSystem(t
 	}
 	if componentRoles["agent:agent-minipc"] != ConnectionSystemComponentRoleAttachment {
 		t.Fatalf("agent:agent-minipc role = %q, want %q", componentRoles["agent:agent-minipc"], ConnectionSystemComponentRoleAttachment)
+	}
+
+	membersByName := make(map[string]ConnectionSystemMember, len(system.Members))
+	for _, member := range system.Members {
+		membersByName[member.Name] = member
+	}
+
+	dellyMember, ok := membersByName["delly"]
+	if !ok {
+		t.Fatalf("expected delly member, got %+v", system.Members)
+	}
+	if !dellyMember.Primary {
+		t.Fatalf("expected delly to be the primary cluster member, got %+v", dellyMember)
+	}
+	if dellyMember.Endpoint != "https://delly:8006" {
+		t.Fatalf("delly endpoint = %q, want %q", dellyMember.Endpoint, "https://delly:8006")
+	}
+	if dellyMember.AgentConnectionID != "agent:agent-delly" {
+		t.Fatalf("delly agent connection = %q, want %q", dellyMember.AgentConnectionID, "agent:agent-delly")
+	}
+	if dellyMember.State != ConnectionStateActive {
+		t.Fatalf("delly state = %q, want %q", dellyMember.State, ConnectionStateActive)
+	}
+
+	minipcMember, ok := membersByName["minipc"]
+	if !ok {
+		t.Fatalf("expected minipc member, got %+v", system.Members)
+	}
+	if minipcMember.Primary {
+		t.Fatalf("minipc should not be marked primary: %+v", minipcMember)
+	}
+	if minipcMember.Endpoint != "https://minipc:8006" {
+		t.Fatalf("minipc endpoint = %q, want %q", minipcMember.Endpoint, "https://minipc:8006")
+	}
+	if minipcMember.AgentConnectionID != "agent:agent-minipc" {
+		t.Fatalf("minipc agent connection = %q, want %q", minipcMember.AgentConnectionID, "agent:agent-minipc")
+	}
+	if minipcMember.State != ConnectionStateActive {
+		t.Fatalf("minipc state = %q, want %q", minipcMember.State, ConnectionStateActive)
 	}
 }
 

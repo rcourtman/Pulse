@@ -242,7 +242,11 @@ querying, and the operator-facing storage health presentation layer.
    taxonomy. When that grouped platform row is a Proxmox cluster, storage and
    recovery must also treat the backend-authored cluster moniker as the
    canonical row identity instead of re-expanding cluster-member agents into
-   sibling host rows or per-node storage owners. The same shared `/api/connections` payload also owns any
+   sibling host rows or per-node storage owners. If the grouped row carries
+   backend-authored cluster member nodes, adjacent storage/recovery surfaces
+   may use that composition for explanatory UI only; they must not promote
+   those child nodes into a second top-level grouped-system taxonomy or infer
+   per-node storage ownership from the settings payload. The same shared `/api/connections` payload also owns any
    agent-version/update facts carried alongside those grouped rows; adjacent
    storage or recovery surfaces may reuse that signal for operator context,
    but must not fork their own version-comparison semantics or another agent

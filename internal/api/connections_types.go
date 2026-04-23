@@ -96,6 +96,20 @@ type ConnectionSystemComponent struct {
 	Role         ConnectionSystemComponentRole `json:"role"`
 }
 
+// ConnectionSystemMember identifies one runtime member that composes a grouped
+// infrastructure source row. For Proxmox clusters this carries the canonical
+// cluster node list so the frontend can render node composition beneath the
+// owning cluster source instead of reopening standalone host rows.
+type ConnectionSystemMember struct {
+	ID                string          `json:"id"`
+	Name              string          `json:"name"`
+	Endpoint          string          `json:"endpoint,omitempty"`
+	State             ConnectionState `json:"state"`
+	LastSeen          *time.Time      `json:"lastSeen,omitempty"`
+	Primary           bool            `json:"primary,omitempty"`
+	AgentConnectionID string          `json:"agentConnectionId,omitempty"`
+}
+
 // ConnectionSystem is the source-oriented grouping contract for the settings
 // infrastructure manager. One row owns a primary connection and can carry
 // attached collection methods such as a unified agent augmenting a Proxmox
@@ -105,6 +119,7 @@ type ConnectionSystem struct {
 	Type        ConnectionType              `json:"type"`
 	ClusterName string                      `json:"clusterName,omitempty"`
 	Components  []ConnectionSystemComponent `json:"components"`
+	Members     []ConnectionSystemMember    `json:"members,omitempty"`
 }
 
 // ConnectionsListResponse is the envelope for GET /api/connections.

@@ -42,6 +42,16 @@ describe('ConnectionsAPI', () => {
         type: 'pve',
         clusterName: 'homelab',
         components: [{ connectionId: 'pve-lab', type: 'pve', role: 'primary' }],
+        members: [
+          {
+            id: 'node-lab',
+            name: 'lab',
+            endpoint: 'https://lab:8006',
+            state: 'active',
+            lastSeen: '2026-04-23T12:00:00Z',
+            primary: true,
+          },
+        ],
       },
     ];
     mockedApiFetchJSON.mockResolvedValueOnce({ connections, systems });

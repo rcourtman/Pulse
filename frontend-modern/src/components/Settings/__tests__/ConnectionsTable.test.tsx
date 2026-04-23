@@ -29,6 +29,7 @@ const row = (overrides: Partial<InfrastructureSystemRow> = {}): InfrastructureSy
     ownerType: overrides.ownerType ?? connection.type,
     name: overrides.name ?? 'tower',
     subtitle: undefined,
+    source: 'api',
     host: '10.0.0.1',
     coverageLabels: ['Host telemetry'],
     statusLabel: 'online',
@@ -42,6 +43,7 @@ const row = (overrides: Partial<InfrastructureSystemRow> = {}): InfrastructureSy
     canRemove: connection.type !== 'docker' && connection.type !== 'kubernetes',
     isAgent: connection.type === 'agent',
     attachedConnections: [],
+    members: [],
     connection,
     ...overrides,
   };
