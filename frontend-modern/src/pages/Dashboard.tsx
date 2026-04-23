@@ -27,10 +27,12 @@ import type { Alert } from '@/types/api';
 import {
   ActionRequiredPanel,
   DashboardCustomizer,
+  EstateSummaryPanel,
   KPIStrip,
   ProblemResourcesTable,
   TrendCharts,
 } from '@/features/dashboardOverview';
+import { buildDashboardEstateSummary } from '@/features/dashboardOverview/estateSummaryModel';
 import { RecentAlertsPanel } from '@/components/Alerts/RecentAlertsPanel';
 import { DashboardRecoveryStatusPanel } from '@/components/Recovery/DashboardRecoveryStatusPanel';
 import { DashboardStoragePanel } from '@/components/Storage/DashboardStoragePanel';
@@ -38,7 +40,8 @@ import type { DashboardWidgetDef, DashboardWidgetId } from '@/features/dashboard
 
 export default function Dashboard() {
   const navigate = useNavigate();
-  const { connected, reconnecting, reconnect, activeAlerts } = useWebSocket();
+  const ws = useWebSocket();
+  const { connected, reconnecting, reconnect, activeAlerts } = ws;
 
   const alertsList = createMemo<Alert[]>(() =>
     Object.values(activeAlerts as Record<string, Alert | undefined>).filter(
@@ -53,6 +56,15 @@ export default function Dashboard() {
   const layout = useDashboardLayout();
   const actions = useDashboardActions(alertsList);
   const recoverySummary = useDashboardRecovery();
+  const connectedInfrastructure = createMemo(() =>
+    Array.isArray(ws.state.connectedInfrastructure) ? ws.state.connectedInfrastructure : [],
+  );
+  const estateSummary = createMemo(() =>
+    buildDashboardEstateSummary(connectedInfrastructure(), {
+      total: overview().infrastructure.total,
+      online: overview().infrastructure.byStatus.online ?? 0,
+    }),
+  );
 
   // Loading timeout: if REST fetch takes >30s, treat as connection error.
   const [loadingTimedOut, setLoadingTimedOut] = createSignal(false);
@@ -285,11 +297,14 @@ export default function Dashboard() {
               findingsNeedingAttention={actions.findingsNeedingAttention()}
             />
 
-            {/* 2. KPI Strip — always visible */}
+            {/* 2. Estate orientation — always visible once resources exist */}
+            <EstateSummaryPanel summary={estateSummary()} />
+
+            {/* 3. KPI Strip — always visible */}
             <KPIStrip
               infrastructure={{
-                total: overview().infrastructure.total,
-                online: overview().infrastructure.byStatus.online ?? 0,
+                total: estateSummary().totalSystems,
+                online: estateSummary().healthySystems,
               }}
               workloads={{
                 total: overview().workloads.total,
@@ -307,10 +322,10 @@ export default function Dashboard() {
               }}
             />
 
-            {/* 3. Problem Resources Table — only when problems exist */}
+            {/* 4. Problem Resources Table — only when problems exist */}
             <ProblemResourcesTable problems={overview().problemResources} />
 
-            {/* 4–5. Customizable widgets: Trend Charts, Recent Alerts */}
+            {/* 5–6. Customizable widgets: Trend Charts, Recent Alerts */}
             <For each={widgetGroups()}>
               {(group) =>
                 group.type === 'full' ? (

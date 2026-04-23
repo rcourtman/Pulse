@@ -2746,7 +2746,27 @@
         },
         {
           "repo": "pulse",
+          "path": "frontend-modern/src/features/dashboardOverview/estateSummaryModel.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/features/dashboardOverview/EstateSummaryPanel.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/pages/Dashboard.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "tests/integration/tests/11-first-session.spec.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "tests/integration/tests/71-dashboard-estate-orientation.spec.ts",
           "kind": "file"
         }
       ]
@@ -3907,7 +3927,7 @@
     },
     {
       "id": "first-session-post-rc-polish",
-      "summary": "Track broader first-session polish and parity work that is intentionally outside the RC stabilization floor.",
+      "summary": "Track broader first-session polish and parity work that is intentionally outside the RC stabilization floor, including the dashboard-home requirement that the first viewport preserves immediate estate orientation for v5-upgrade users through the canonical connected-infrastructure projection.",
       "owner": "project-owner",
       "status": "planned",
       "recorded_at": "2026-03-13",
@@ -4838,6 +4858,18 @@
         "L3",
         "L8",
         "L9"
+      ]
+    },
+    {
+      "id": "dashboard-home-estate-orientation-contract",
+      "summary": "The v6 dashboard remains the default landing surface only if its first viewport immediately proves that Pulse sees the operator's estate: the page must surface canonical connected-infrastructure system count, health, source coverage, freshness, and an explicit Infrastructure handoff before detailed dashboard rows, without restoring platform-special navigation or widening the dashboard hot path.",
+      "kind": "contract",
+      "decided_at": "2026-04-23",
+      "subsystem_ids": [
+        "frontend-primitives"
+      ],
+      "lane_ids": [
+        "L8"
       ]
     },
     {

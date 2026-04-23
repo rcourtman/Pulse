@@ -319,6 +319,12 @@ querying, and the operator-facing storage health presentation layer.
     adjacent composition only: they must not replace the recovery/storage
     dashboard panels, suppress the governed no-resources handoff, or move
     storage/recovery summary ownership out of the compact dashboard route.
+    Dashboard estate-orientation additions follow that same rule: they may
+    compose above the storage/recovery cards to prove Pulse sees the connected
+    estate, but they must consume `appRuntime` connected-infrastructure state
+    and the existing compact dashboard summary fallback rather than adding new
+    storage/recovery fetches or reclassifying storage/recovery widgets as
+    dashboard-owned summary panels.
 35. Keep shared `frontend-modern/src/App.tsx` public-route ownership explicit by
     surface. Storage/recovery preview entrypoints such as
     `/preview/setup-complete` may remain public app-shell routes, but unrelated

@@ -161,6 +161,12 @@ regression protection.
    filesystem walks, or other heavy work just to compute whether an attached
    agent is current.
 5. Extend dashboard hot-path filter, sort, grouping, and stats math through `frontend-modern/src/components/Dashboard/workloadSelectors.ts`, and extend workload identity, discovery routing, and node-topology helpers through `frontend-modern/src/components/Dashboard/workloadTopology.ts`, rather than duplicating selector or topology logic in `frontend-modern/src/components/Dashboard/Dashboard.tsx`
+   Dashboard landing-page estate orientation is part of that same hot-path
+   discipline. First-viewport system count, health, source coverage, and
+   freshness must be derived from app-runtime connected-infrastructure state
+   and the already-loaded compact dashboard summary fallback; it must not
+   introduce a new `useUnifiedResources()` subscription, platform-specific
+   fetch, or chart/history request just to make the dashboard feel oriented.
 6. Normalize dashboard workload view-mode aliases through `frontend-modern/src/utils/workloads.ts` instead of keeping local URL/storage parsing in `frontend-modern/src/components/Dashboard/Dashboard.tsx`
 7. Deduplicate dashboard workload rows by canonical workload ID from `frontend-modern/src/utils/workloads.ts` rather than via local pass-through wrappers in `frontend-modern/src/components/Dashboard/Dashboard.tsx`
 8. Render dashboard row identity directly from the shared canonical workload helper so row selection, hover, and fallback metadata lookup stay aligned with the same workload contract

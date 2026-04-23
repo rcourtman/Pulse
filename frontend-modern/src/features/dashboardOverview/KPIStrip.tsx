@@ -43,7 +43,7 @@ export function KPIStrip(props: KPIStripProps) {
 
   return (
     <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
-      <a href={INFRASTRUCTURE_PATH} class="group block">
+      <a href={INFRASTRUCTURE_PATH} class="group block" data-testid="dashboard-kpi-infrastructure">
         <Card
           hoverable
           padding="none"

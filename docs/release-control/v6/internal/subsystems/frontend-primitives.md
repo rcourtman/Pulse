@@ -1567,6 +1567,14 @@ owns the dashboard-specific action, KPI, problem-resource, trend, and
 customization surfaces. Lane-owned widgets like recent alerts, storage,
 and recovery must continue to route through their own subsystem owners instead
 of drifting back into a page-local dashboard panel cluster.
+That same dashboard overview boundary owns the first-viewport estate
+orientation contract for the v6 landing page. `EstateSummaryPanel.tsx` and
+`estateSummaryModel.ts` in `frontend-modern/src/features/dashboardOverview/`
+must derive system count, health, source coverage, and freshness from the
+canonical connected-infrastructure projection, fall back only to the compact
+dashboard summary that the route already owns, and keep the explicit
+Infrastructure handoff above detailed problem, storage, recovery, or trend
+rows without restoring platform-special navigation.
 The recovery feature shell now also depends on the shared
 `frontend-modern/src/components/shared/Subtabs.tsx` primitive for its primary
 protected-items versus recovery-events workspace switch. The recovery lane may

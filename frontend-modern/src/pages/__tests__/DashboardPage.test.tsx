@@ -9,6 +9,14 @@ let overviewLoading = false;
 let overviewError: unknown = undefined;
 let wsConnected = true;
 let wsReconnecting = false;
+const connectedInfrastructureMock: Array<{
+  id: string;
+  name: string;
+  status: 'active' | 'ignored';
+  healthStatus?: string;
+  lastSeen?: number;
+  surfaces: Array<{ id: string; kind: 'agent' | 'proxmox' | 'truenas'; label: string }>;
+}> = [];
 const reconnectSpy = vi.fn();
 const navigateSpy = vi.hoisted(() => vi.fn());
 const recoverySummaryMock: DashboardRecoverySummary = {
@@ -55,7 +63,12 @@ const overviewMock: DashboardOverview = {
 
 vi.mock('@/contexts/appRuntime', () => ({
   useWebSocket: () => ({
-    state: { resources: [] },
+    state: {
+      resources: [],
+      get connectedInfrastructure() {
+        return connectedInfrastructureMock;
+      },
+    },
     activeAlerts: {},
     connected: () => wsConnected,
     reconnecting: () => wsReconnecting,
@@ -130,6 +143,7 @@ describe('Dashboard page module contract', () => {
     overviewMock.storage.totalUsed = 0;
     overviewMock.storage.warningCount = 0;
     overviewMock.storage.criticalCount = 0;
+    connectedInfrastructureMock.length = 0;
   });
 
   it('exports a default component function', () => {
@@ -148,7 +162,7 @@ describe('Dashboard page module contract', () => {
     expect(dashboardPageSource).not.toContain("from '@/components/Dashboard/RelayOnboardingCard'");
     expect(dashboardPageSource).not.toContain('<RelayOnboardingCard />');
     expect(dashboardPageSource).toContain(
-      'ActionRequiredPanel,\n  DashboardCustomizer,\n  KPIStrip,\n  ProblemResourcesTable,\n  TrendCharts,',
+      'ActionRequiredPanel,\n  DashboardCustomizer,\n  EstateSummaryPanel,\n  KPIStrip,\n  ProblemResourcesTable,\n  TrendCharts,',
     );
   });
 
@@ -192,6 +206,8 @@ describe('Dashboard page module contract', () => {
 
   it('renders the governed storage and recovery dashboard panels', () => {
     overviewMock.health.totalResources = 4;
+    overviewMock.infrastructure.total = 4;
+    overviewMock.infrastructure.byStatus = { online: 4 };
     overviewMock.storage.total = 4;
     overviewMock.storage.totalCapacity = 4000;
     overviewMock.storage.totalUsed = 2000;
@@ -205,6 +221,64 @@ describe('Dashboard page module contract', () => {
     expect(screen.getByRole('heading', { name: /Storage/ })).toBeInTheDocument();
     expect(screen.getByText('Last recovery point over 24 hours ago')).toBeInTheDocument();
     expect(screen.getAllByText(/1\.95 KB \/ 3\.91 KB/i)).toHaveLength(2);
+  });
+
+  it('renders estate orientation before detailed dashboard problem rows', () => {
+    overviewMock.health.totalResources = 5;
+    overviewMock.infrastructure.total = 4;
+    overviewMock.infrastructure.byStatus = { online: 4 };
+    overviewMock.workloads.total = 9;
+    overviewMock.workloads.running = 7;
+    connectedInfrastructureMock.push(
+      {
+        id: 'homelab',
+        name: 'homelab',
+        status: 'active',
+        healthStatus: 'online',
+        lastSeen: Date.now(),
+        surfaces: [
+          { id: 'agent:homelab', kind: 'agent', label: 'Host telemetry' },
+          { id: 'proxmox:homelab', kind: 'proxmox', label: 'Proxmox VE data' },
+        ],
+      },
+      {
+        id: 'nas',
+        name: 'nas',
+        status: 'active',
+        healthStatus: 'degraded',
+        lastSeen: Date.now(),
+        surfaces: [{ id: 'truenas:nas', kind: 'truenas', label: 'TrueNAS API data' }],
+      },
+    );
+    overviewMock.problemResources = [
+      {
+        resource: {
+          id: 'storage-1',
+          type: 'storage',
+          name: 'Storage 1',
+          displayName: 'Storage 1',
+          platformId: 'storage-1',
+          platformType: 'truenas',
+          sourceType: 'api',
+          status: 'offline',
+        } as DashboardOverview['problemResources'][number]['resource'],
+        problems: ['Offline'],
+        worstValue: 200,
+      },
+    ];
+
+    render(() => <DashboardPage />);
+
+    const estateHeading = screen.getByRole('heading', { name: 'Connected infrastructure' });
+    const problemHeading = screen.getByRole('heading', { name: 'Problem Resources' });
+
+    expect(screen.getByText('1 system needs attention')).toBeInTheDocument();
+    expect(screen.getByText('2 active')).toBeInTheDocument();
+    expect(screen.getByText(/Proxmox/)).toBeInTheDocument();
+    expect(screen.getByText(/TrueNAS/)).toBeInTheDocument();
+    expect(
+      estateHeading.compareDocumentPosition(problemHeading) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
   });
 
   it('keeps the KPI strip above problem resources so the dashboard snapshot reads before detail', () => {
