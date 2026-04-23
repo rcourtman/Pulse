@@ -259,6 +259,12 @@ work extends shared components instead of creating new local variants.
    composition on the owning row, with explicit badges and edit-dialog detail,
    instead of duplicating the same machine across multiple peer groups and
    forcing operators to infer the relationship visually.
+   That same shared shell boundary owns the landing taxonomy too: the primary
+   grouping labels in the infrastructure manager must describe real
+   platform/system owners, not collection methods. Agent-only machines belong
+   in a standalone-host bucket, while `Pulse Agent` remains a badge, install
+   path, and detail-surface method label rather than a peer top-level
+   pseudo-platform beside Proxmox, VMware, and TrueNAS.
    That same shared shell boundary also owns compact version visibility for
    agent-backed rows. The infrastructure source table must not grow a dedicated
    always-on version column for Pulse Agent; exact version text belongs in the

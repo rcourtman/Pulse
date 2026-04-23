@@ -96,7 +96,9 @@ describe('settings architecture guardrails', () => {
       "shellDescription:\n    'Review your current self-hosted plan, activation status, and unlocked capabilities.'",
     );
     expect(selfHostedBillingPresentationSource).toContain("planSectionTitle: 'Current plan'");
-    expect(selfHostedBillingPresentationSource).toContain("recoverySectionTitle: 'Activation & Recovery'");
+    expect(selfHostedBillingPresentationSource).toContain(
+      "recoverySectionTitle: 'Activation & Recovery'",
+    );
 
     expect(settingsNavCatalogSource).toContain(
       'label: SELF_HOSTED_PRO_BILLING_PRESENTATION.navLabel',
@@ -134,7 +136,7 @@ describe('settings architecture guardrails', () => {
       "import { InfrastructureDiscoverySettingsDialog } from './InfrastructureDiscoverySettingsDialog';",
     );
     expect(infrastructureWorkspaceSource).toContain(
-      "const [showDiscoverySettings, setShowDiscoverySettings] = createSignal(false);",
+      'const [showDiscoverySettings, setShowDiscoverySettings] = createSignal(false);',
     );
     expect(infrastructureWorkspaceSource).toContain('<InfrastructureDiscoverySettingsDialog');
     expect(infrastructureWorkspaceSource).toContain(
@@ -146,26 +148,28 @@ describe('settings architecture guardrails', () => {
     expect(infrastructureWorkspaceSource).toContain('<InfrastructureSourcePicker');
     expect(infrastructureWorkspaceSource).not.toContain('<ConnectionsTable rows={rows} />');
     expect(infrastructureWorkspaceSource).toContain('flex h-full min-h-0 flex-col');
-    expect(infrastructureWorkspaceSource).toContain("showSlotHeader={false}");
+    expect(infrastructureWorkspaceSource).toContain('showSlotHeader={false}');
+    expect(infrastructureWorkspaceSource).toContain('trackInitialCatalogSelection={');
     expect(infrastructureWorkspaceSource).toContain(
-      "trackInitialCatalogSelection={",
+      "onDetectFromAddress={() => openAddFlow('detect')}",
     );
-    expect(infrastructureWorkspaceSource).toContain("onDetectFromAddress={() => openAddFlow('detect')}");
     expect(infrastructureWorkspaceSource).toContain("onBackToCatalog={() => openAddFlow('pick')}");
     expect(infrastructureWorkspaceSource).toContain('recordCatalogSelection(type);');
     expect(infrastructureWorkspaceSource).toContain('renderAgentConnectionDetails');
     expect(infrastructureWorkspaceSource).not.toContain('InfrastructureOperationsController');
     expect(infrastructureWorkspaceSource).not.toContain('PlatformConnectionsWorkspace');
-    expect(infrastructureSourceManagerSource).toContain('Infrastructure sources');
+    expect(infrastructureSourceManagerSource).toContain('Infrastructure systems');
     expect(infrastructureSourceManagerSource).toContain('Run discovery');
     expect(infrastructureSourceManagerSource).toContain('Add infrastructure');
     expect(infrastructureSourceManagerSource).toContain('Discovery settings');
-    expect(infrastructureSourceManagerSource).toContain('Configured and discovered candidates grouped by platform.');
+    expect(infrastructureSourceManagerSource).toContain(
+      'Configured systems and discovered candidates grouped by platform or host type.',
+    );
     expect(infrastructureSourceManagerSource).toContain('onReviewDiscoveredSource');
     expect(infrastructureSourceManagerSource).toContain('Discovered');
     expect(infrastructureSourceManagerSource).toContain('getInfrastructureSourceManagerProducts');
     expect(infrastructureSourceManagerSource).toContain('TableHeader');
-    expect(infrastructureSourceManagerSource).toContain('aria-label={`Add ${product.label}`}');
+    expect(infrastructureSourceManagerSource).toContain('aria-label={product.actionLabel}');
     expect(infrastructureSourceManagerSource).toContain('Review');
     expect(infrastructureSourceManagerSource).toContain('Edit');
     expect(infrastructureSourceManagerSource).not.toContain('Detect from address');
@@ -183,7 +187,9 @@ describe('settings architecture guardrails', () => {
     expect(connectionEditorSource).toContain(
       "import { AddressProbeStep } from './AddressProbeStep';",
     );
-    expect(connectionEditorSource).toContain("from '@/utils/infrastructureOnboardingPresentation';");
+    expect(connectionEditorSource).toContain(
+      "from '@/utils/infrastructureOnboardingPresentation';",
+    );
     expect(connectionsTableSource).toContain(
       "from '@/utils/infrastructureOnboardingPresentation';",
     );
@@ -214,7 +220,9 @@ describe('settings architecture guardrails', () => {
     expect(connectionEditorStateSource).not.toContain('buildConnectionEditorCatalogEntries');
     expect(connectionEditorStateSource).not.toContain('getSourcePlatformFamily');
     expect(infrastructureOnboardingPresentationSource).toContain('getSourcePlatformManifestEntry');
-    expect(infrastructureOnboardingPresentationSource).toContain('getInfrastructureSourcePickerGroups');
+    expect(infrastructureOnboardingPresentationSource).toContain(
+      'getInfrastructureSourcePickerGroups',
+    );
     expect(infrastructureOnboardingPresentationSource).toContain(
       'getInfrastructureSupportSummaryBadges',
     );

@@ -240,7 +240,7 @@ describe('InfrastructureWorkspace', () => {
   it('renders the instance-first source manager as the only landing surface', async () => {
     renderWorkspace();
 
-    await waitFor(() => expect(screen.getByText('Infrastructure sources')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Infrastructure systems')).toBeInTheDocument());
     expect(screen.getByRole('button', { name: /Run discovery/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Add infrastructure/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Discovery settings/i })).toBeInTheDocument();
@@ -248,6 +248,7 @@ describe('InfrastructureWorkspace', () => {
     expect(screen.getByText('VMware vCenter')).toBeInTheDocument();
     expect(screen.getByText('TrueNAS SCALE')).toBeInTheDocument();
     expect(screen.getByText('Proxmox VE')).toBeInTheDocument();
+    expect(screen.getByText('Standalone hosts')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Add Proxmox VE/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Edit/i })).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Monitored systems' })).not.toBeInTheDocument();
@@ -476,7 +477,7 @@ describe('InfrastructureWorkspace', () => {
     expect(screen.queryByRole('button', { name: /^Edit$/i })).toBeNull();
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(screen.queryByTestId('install-section')).toBeNull();
-    expect(screen.getByText('Infrastructure sources')).toBeInTheDocument();
+    expect(screen.getByText('Infrastructure systems')).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Monitored systems' })).not.toBeInTheDocument();
   });
 });

@@ -239,8 +239,8 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
 
   return (
     <SettingsPanel
-      title="Infrastructure sources"
-      description="Configured and discovered candidates grouped by platform."
+      title="Infrastructure systems"
+      description="Configured systems and discovered candidates grouped by platform or host type."
       noPadding
       icon={<Server class="h-5 w-5" strokeWidth={2} />}
     >
@@ -307,7 +307,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
         <TableHeader class="bg-surface-alt/60">
           <TableRow>
             <TableHead class="w-[24%] py-1.5 pl-3 pr-3 text-left text-[11px] font-medium text-muted whitespace-nowrap xl:w-[20%]">
-              Source
+              System
             </TableHead>
             <TableHead class="w-[26%] px-3 py-1.5 text-left text-[11px] font-medium text-muted whitespace-nowrap xl:w-[24%]">
               Endpoint
@@ -361,10 +361,10 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                             type="button"
                             onClick={() => props.onAddSource?.(product.type)}
                             class={`${addSectionButtonClass} whitespace-nowrap`}
-                            aria-label={`Add ${product.label}`}
+                            aria-label={product.actionLabel}
                           >
                             <Plus class="h-3.5 w-3.5" />
-                            Add
+                            {product.type === 'agent' ? 'Add host' : 'Add'}
                           </button>
                         </Show>
                       </TableCell>

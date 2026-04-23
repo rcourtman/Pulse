@@ -66,7 +66,7 @@ describe('ConnectionsTable', () => {
 
     expect(screen.getByText('Start monitoring infrastructure')).toBeInTheDocument();
     expect(
-      screen.getByText(/Source types available: VMware vCenter, TrueNAS SCALE/i),
+      screen.getByText(/Available system types: VMware vCenter, TrueNAS SCALE/i),
     ).toBeInTheDocument();
     expect(screen.queryByRole('table')).toBeNull();
   });

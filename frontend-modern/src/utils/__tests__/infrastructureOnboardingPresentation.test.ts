@@ -5,6 +5,7 @@ import {
   getInfrastructureEmptyStateDetail,
   getInfrastructureEmptyStateSummary,
   getInfrastructureOnboardingProductPresentation,
+  getInfrastructureSourceManagerProducts,
   getInfrastructureSourcePickerGroups,
   getInfrastructureSupportSummaryBadges,
 } from '@/utils/infrastructureOnboardingPresentation';
@@ -28,6 +29,39 @@ describe('infrastructureOnboardingPresentation', () => {
   });
 
   it('derives picker groups, auto-detect copy, and landing summaries from the shared helper', () => {
+    expect(getInfrastructureSourceManagerProducts()).toEqual([
+      expect.objectContaining({
+        type: 'vmware',
+        label: 'VMware vCenter',
+        actionLabel: 'Add VMware vCenter',
+      }),
+      expect.objectContaining({
+        type: 'truenas',
+        label: 'TrueNAS SCALE',
+        actionLabel: 'Add TrueNAS SCALE',
+      }),
+      expect.objectContaining({
+        type: 'pve',
+        label: 'Proxmox VE',
+        actionLabel: 'Add Proxmox VE',
+      }),
+      expect.objectContaining({
+        type: 'pbs',
+        label: 'Proxmox Backup Server',
+        actionLabel: 'Add Proxmox Backup Server',
+      }),
+      expect.objectContaining({
+        type: 'pmg',
+        label: 'Proxmox Mail Gateway',
+        actionLabel: 'Add Proxmox Mail Gateway',
+      }),
+      expect.objectContaining({
+        type: 'agent',
+        label: 'Standalone hosts',
+        actionLabel: 'Add host',
+      }),
+    ]);
+
     expect(getInfrastructureSourcePickerGroups()).toEqual([
       {
         id: 'virtualization',
@@ -88,10 +122,10 @@ describe('infrastructureOnboardingPresentation', () => {
     });
 
     expect(getInfrastructureEmptyStateSummary()).toBe(
-      'Add infrastructure sources to start monitoring your environment.',
+      'Add infrastructure systems to start monitoring your environment.',
     );
-    expect(getInfrastructureEmptyStateDetail()).toContain('Source types available: VMware vCenter');
-    expect(getInfrastructureEmptyStateDetail()).toContain('Pulse Agent');
+    expect(getInfrastructureEmptyStateDetail()).toContain('Available system types: VMware vCenter');
+    expect(getInfrastructureEmptyStateDetail()).toContain('standalone hosts through Pulse Agent');
     expect(getInfrastructureEmptyStateDetail()).toContain('Docker and Kubernetes are discovered');
     expect(getInfrastructureEmptyStateDetail()).toContain('VMware vCenter is also available now.');
   });

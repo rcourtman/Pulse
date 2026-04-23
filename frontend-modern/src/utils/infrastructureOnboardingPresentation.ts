@@ -19,6 +19,10 @@ export interface InfrastructureOnboardingProductPresentation {
   governanceState: PlatformGovernanceState;
 }
 
+export interface InfrastructureSourceManagerProductPresentation extends InfrastructureOnboardingProductPresentation {
+  actionLabel: string;
+}
+
 export interface InfrastructureSourcePickerGroupPresentation {
   id: 'virtualization' | 'storage' | 'backup-mail' | 'host-monitoring';
   label: string;
@@ -116,6 +120,21 @@ const SOURCE_MANAGER_PRODUCT_ORDER: InfrastructureOnboardingConnectionType[] = [
   'agent',
 ];
 
+const SOURCE_MANAGER_LABEL_OVERRIDES: Partial<
+  Record<
+    InfrastructureOnboardingConnectionType,
+    {
+      label: string;
+      actionLabel: string;
+    }
+  >
+> = {
+  agent: {
+    label: 'Standalone hosts',
+    actionLabel: 'Add host',
+  },
+};
+
 export const INFRASTRUCTURE_ONBOARDING_PATHS: Record<
   'api' | 'agent',
   InfrastructureOnboardingPathPresentation
@@ -192,8 +211,16 @@ export const getInfrastructureApiProductPresentations =
     API_PRODUCT_ORDER.map((type) => getInfrastructureOnboardingProductPresentation(type));
 
 export const getInfrastructureSourceManagerProducts =
-  (): InfrastructureOnboardingProductPresentation[] =>
-    SOURCE_MANAGER_PRODUCT_ORDER.map((type) => getInfrastructureOnboardingProductPresentation(type));
+  (): InfrastructureSourceManagerProductPresentation[] =>
+    SOURCE_MANAGER_PRODUCT_ORDER.map((type) => {
+      const product = getInfrastructureOnboardingProductPresentation(type);
+      const override = SOURCE_MANAGER_LABEL_OVERRIDES[type];
+      return {
+        ...product,
+        label: override?.label ?? product.label,
+        actionLabel: override?.actionLabel ?? `Add ${product.label}`,
+      };
+    });
 
 export const getInfrastructureApiProductsByGovernanceState = (
   governanceState: PlatformGovernanceState,
@@ -202,16 +229,15 @@ export const getInfrastructureApiProductsByGovernanceState = (
     (product) => product.governanceState === governanceState,
   );
 
-export const getInfrastructureSourcePickerGroups =
-  (): Array<
-    InfrastructureSourcePickerGroupPresentation & {
-      products: InfrastructureOnboardingProductPresentation[];
-    }
-  > =>
-    SOURCE_PICKER_GROUPS.map((group) => ({
-      ...group,
-      products: group.types.map((type) => getInfrastructureOnboardingProductPresentation(type)),
-    }));
+export const getInfrastructureSourcePickerGroups = (): Array<
+  InfrastructureSourcePickerGroupPresentation & {
+    products: InfrastructureOnboardingProductPresentation[];
+  }
+> =>
+  SOURCE_PICKER_GROUPS.map((group) => ({
+    ...group,
+    products: group.types.map((type) => getInfrastructureOnboardingProductPresentation(type)),
+  }));
 
 export const getInfrastructureAutoDetectLabels = (): string[] =>
   getInfrastructureApiProductPresentations()
@@ -234,7 +260,7 @@ export const getInfrastructureSupportSummaryBadges = (): {
 });
 
 export const getInfrastructureEmptyStateSummary = (): string =>
-  'Add infrastructure sources to start monitoring your environment.';
+  'Add infrastructure systems to start monitoring your environment.';
 
 export const getInfrastructureEmptyStateDetail = (): string =>
-  'Source types available: VMware vCenter, TrueNAS SCALE, Proxmox VE, Proxmox Backup Server, Proxmox Mail Gateway, and Pulse Agent. Docker and Kubernetes are discovered from supported agent hosts. VMware vCenter is also available now.';
+  'Available system types: VMware vCenter, TrueNAS SCALE, Proxmox VE, Proxmox Backup Server, Proxmox Mail Gateway, and standalone hosts through Pulse Agent. Docker and Kubernetes are discovered from supported agent hosts. VMware vCenter is also available now.';
