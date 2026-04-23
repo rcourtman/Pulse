@@ -24,7 +24,6 @@ export const SystemLogsPanel: Component = () => {
       <OperationsPanel
         title={SYSTEM_LOGS_PANEL_COPY.title}
         description={SYSTEM_LOGS_PANEL_COPY.description}
-        icon={<Terminal class="w-5 h-5" strokeWidth={2} />}
       >
         {/* Controls */}
         <div class="p-4 sm:p-6">

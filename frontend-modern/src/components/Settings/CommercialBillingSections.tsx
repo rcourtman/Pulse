@@ -33,7 +33,6 @@ interface CommercialUsageMetersProps {
 interface CommercialBillingShellProps {
   title: string;
   description: string;
-  icon: JSX.Element;
   action?: JSX.Element;
   loading?: boolean;
   loadingFallback?: JSX.Element;
@@ -103,7 +102,6 @@ export const CommercialBillingShell: Component<CommercialBillingShellProps> = (p
   <SettingsPanel
     title={props.title}
     description={props.description}
-    icon={props.icon}
     action={props.action}
     bodyClass="space-y-5"
   >

@@ -14,11 +14,11 @@ export function MobileNavBar(props: MobileNavBarProps) {
 
   return (
     <>
-      <nav class="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-surface pb-safe md:hidden">
+      <nav class="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-surface pb-safe lg:hidden">
         <div class="relative">
           <div
             ref={mobileNav.setNavRef}
-            class="flex items-center gap-1 overflow-x-auto scrollbar-hide px-2 py-1.5"
+            class="flex items-center gap-1 overflow-x-auto scrollbar-hide px-2 py-1.5 sm:gap-2 sm:overflow-x-visible sm:px-4 sm:justify-between"
             role="tablist"
             aria-label="Mobile navigation"
           >

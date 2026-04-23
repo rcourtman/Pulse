@@ -55,7 +55,6 @@ export const AuditWebhookPanel: Component<AuditWebhookPanelProps> = (props) => {
       <SettingsPanel
         title="Audit Webhooks"
         description="Configure real-time delivery of security audit events to external systems."
-        icon={<Globe class="w-5 h-5" strokeWidth={2} />}
       >
         <Show when={!loading()} fallback={<div class="text-sm text-muted">Loading...</div>}>
           <Card tone="info" padding="md">
@@ -99,7 +98,6 @@ export const AuditWebhookPanel: Component<AuditWebhookPanelProps> = (props) => {
       <SettingsPanel
         title="Audit Webhooks"
         description="Configure real-time delivery of security audit events to external systems."
-        icon={<Globe class="w-5 h-5" strokeWidth={2} />}
         noPadding
         bodyClass="divide-y divide-border"
       >

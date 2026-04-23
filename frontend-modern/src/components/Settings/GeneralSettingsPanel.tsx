@@ -5,14 +5,14 @@ import { EnvironmentLockBadge } from '@/components/shared/EnvironmentLockBadge';
 import { FilterButtonGroup, type FilterOption } from '@/components/shared/FilterButtonGroup';
 import type { TelemetryPreviewResponse } from '@/api/settings';
 import { DockerRuntimeSettingsCard } from './DockerRuntimeSettingsCard';
-import Sliders from 'lucide-solid/icons/sliders-horizontal';
-import Activity from 'lucide-solid/icons/activity';
 import Sun from 'lucide-solid/icons/sun';
 import Moon from 'lucide-solid/icons/moon';
 import Thermometer from 'lucide-solid/icons/thermometer';
 import Maximize2 from 'lucide-solid/icons/maximize-2';
+import Compass from 'lucide-solid/icons/compass';
 import { temperatureStore } from '@/utils/temperature';
 import { layoutStore } from '@/utils/layout';
+import { WHATS_NEW_REOPEN_EVENT } from '@/components/shared/whatsNewModalModel';
 import {
   PVE_POLLING_MAX_SECONDS,
   PVE_POLLING_MIN_SECONDS,
@@ -95,7 +95,6 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
       <SettingsPanel
         title="General"
         description="Manage appearance, layout, and default monitoring cadence."
-        icon={<Sliders class="w-5 h-5" strokeWidth={2} />}
         noPadding
         bodyClass="divide-y divide-border"
       >
@@ -124,7 +123,7 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
             </div>
           </div>
           <FilterButtonGroup
-            class="shrink-0 self-start sm:self-auto ml-12 sm:ml-0"
+            class="w-full sm:w-auto sm:shrink-0 max-w-full"
             options={THEME_PREFERENCE_OPTIONS}
             value={props.themePreference()}
             onChange={props.setThemePreference}
@@ -133,7 +132,7 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
         </div>
 
         {/* Temperature Unit Selector */}
-        <div class="flex items-center justify-between gap-4 p-4 sm:p-6">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 sm:p-6">
           <div class="flex items-center gap-3 min-w-0">
             <div class="shrink-0 p-2.5 rounded-md border border-border bg-surface">
               <Thermometer class="w-5 h-5" strokeWidth={2} />
@@ -146,7 +145,7 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
             </div>
           </div>
           <FilterButtonGroup
-            class="shrink-0"
+            class="w-full sm:w-auto sm:shrink-0 max-w-full"
             options={TEMPERATURE_UNIT_OPTIONS}
             value={temperatureStore.unit()}
             onChange={(value) => temperatureStore.setUnit(value)}
@@ -173,13 +172,37 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
             onChange={() => layoutStore.toggle()}
           />
         </div>
+
+        {/* Reopen Navigation Guide */}
+        <div class="flex items-center justify-between gap-4 p-4 sm:p-6">
+          <div class="flex items-center gap-3 min-w-0">
+            <div class="shrink-0 p-2.5 rounded-md border border-border bg-surface">
+              <Compass class="w-5 h-5 text-slate-500" strokeWidth={2} />
+            </div>
+            <div class="text-sm text-muted min-w-0">
+              <p class="font-medium text-base-content truncate">Navigation guide</p>
+              <p class="text-xs text-muted line-clamp-2">
+                Replay the five-stop walkthrough of Dashboard, Infrastructure, Workloads, Storage,
+                and Recovery.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              window.dispatchEvent(new CustomEvent(WHATS_NEW_REOPEN_EVENT));
+            }}
+            class="shrink-0 rounded-md border border-border bg-surface px-3 py-1.5 text-sm font-medium text-base-content transition-colors hover:bg-surface-hover"
+          >
+            Reopen
+          </button>
+        </div>
       </SettingsPanel>
 
       {/* Usage Data + Privacy Card */}
       <SettingsPanel
         title="Usage data and privacy"
         description="Control local-only usage events and anonymous outbound telemetry."
-        icon={<Sliders class="w-5 h-5" strokeWidth={2} />}
         noPadding
         bodyClass="divide-y divide-border"
       >
@@ -306,7 +329,6 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
       <SettingsPanel
         title="Monitoring cadence"
         description="Control how frequently Pulse polls Proxmox VE nodes."
-        icon={<Activity class="w-5 h-5" strokeWidth={2} />}
         noPadding
         bodyClass="divide-y divide-border"
       >

@@ -68,10 +68,10 @@ describe('WhatsNewModal', () => {
   it('renders when the navigation modal has not been seen yet', async () => {
     render(() => <WhatsNewModal />);
 
-    const dialog = await screen.findByRole('dialog', { name: 'Welcome to Pulse v6' });
+    const dialog = await screen.findByRole('dialog', { name: 'Pulse navigation guide' });
     expect(dialog).toBeInTheDocument();
     expect(within(dialog).getByText('Step 1 of 5')).toBeInTheDocument();
-    expect(within(dialog).getByText('Quick Tour')).toBeInTheDocument();
+    expect(within(dialog).getByText('Nav guide')).toBeInTheDocument();
     expect(within(dialog).getByText(/Start here for health, alerts, capacity/i)).toBeInTheDocument();
     expect(within(dialog).queryByText('Where Things Moved')).not.toBeInTheDocument();
     expect(within(dialog).getByRole('link', { name: 'Navigation guide' })).toBeInTheDocument();

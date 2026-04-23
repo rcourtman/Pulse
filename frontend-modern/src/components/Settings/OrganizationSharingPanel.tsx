@@ -6,7 +6,6 @@ import {
   ORGANIZATION_SETTINGS_UNAVAILABLE_CLASS,
   ORGANIZATION_SETTINGS_UNAVAILABLE_MESSAGE,
 } from '@/utils/organizationSettingsPresentation';
-import Share2 from 'lucide-solid/icons/share-2';
 import { OrganizationIncomingSharesSection } from './OrganizationIncomingSharesSection';
 import { OrganizationOutgoingSharesSection } from './OrganizationOutgoingSharesSection';
 import { OrganizationSharingCreateSection } from './OrganizationSharingCreateSection';
@@ -35,7 +34,6 @@ export const OrganizationSharingPanel: Component<OrganizationSharingPanelProps> 
         <SettingsPanel
           title="Organization Sharing"
           description="Share views and resources across organizations with explicit role-based access and target-organization approval."
-          icon={<Share2 class="w-5 h-5" />}
           noPadding
           bodyClass="divide-y divide-border"
         >

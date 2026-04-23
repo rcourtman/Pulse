@@ -2,6 +2,24 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * Neutralize a Tailwind color/font-size collision: the dead `base` alias in
+ * the color palette was making Tailwind emit `color: var(--color-bg-base)` on
+ * `.text-base` / `.sm\:text-base`, painting text the same color as the
+ * background. The alias has been removed from tailwind.config.js; this rule
+ * keeps things visible until the next dev-server restart picks up that change.
+ */
+@layer utilities {
+  .text-base,
+  .sm\:text-base,
+  .md\:text-base,
+  .lg\:text-base,
+  .xl\:text-base,
+  .\32xl\:text-base {
+    color: inherit;
+  }
+}
+
 /* Update banner animation */
 @keyframes slideDown {
   from {

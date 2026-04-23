@@ -6,7 +6,6 @@ import {
   ORGANIZATION_SETTINGS_UNAVAILABLE_CLASS,
   ORGANIZATION_SETTINGS_UNAVAILABLE_MESSAGE,
 } from '@/utils/organizationSettingsPresentation';
-import Users from 'lucide-solid/icons/users';
 import { OrganizationAccessLoadingState } from './OrganizationAccessLoadingState';
 import { OrganizationAccessInvitationsSection } from './OrganizationAccessInvitationsSection';
 import { OrganizationAccessManagementSection } from './OrganizationAccessManagementSection';
@@ -35,7 +34,6 @@ export const OrganizationAccessPanel: Component<OrganizationAccessPanelProps> = 
         <SettingsPanel
           title="Organization Access"
           description="Manage organization invitations, member roles, and ownership transfers."
-          icon={<Users class="w-5 h-5" />}
           bodyClass="space-y-5"
         >
           <Show when={!state.loading()} fallback={<OrganizationAccessLoadingState />}>

@@ -2,7 +2,6 @@ import { Component } from 'solid-js';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import { API_TOKEN_SCOPES_DOC_URL } from '@/utils/docsLinks';
 import APITokenManager from './APITokenManager';
-import BadgeCheck from 'lucide-solid/icons/badge-check';
 
 interface APIAccessPanelProps {
   currentTokenHint?: string;
@@ -17,7 +16,6 @@ export const APIAccessPanel: Component<APIAccessPanelProps> = (props) => {
       <SettingsPanel
         title="API Access"
         description="Generate and manage scoped tokens for agents and automation."
-        icon={<BadgeCheck class="w-5 h-5" strokeWidth={2} />}
         noPadding
       >
         <div class="space-y-3 p-4 sm:p-6 pb-6">

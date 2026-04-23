@@ -1,6 +1,5 @@
 import type { Component } from 'solid-js';
 import { For, Show, createSignal } from 'solid-js';
-import Server from 'lucide-solid/icons/server';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import { copyToClipboard } from '@/utils/clipboard';
 import { formatAbsoluteTime, formatRelativeTime } from '@/utils/format';
@@ -31,7 +30,6 @@ export const InfrastructureInstallerSection: Component = () => {
           ? 'Start here to add the first system you want Pulse to monitor, then expand into Docker, Kubernetes, Proxmox, and related infrastructure.'
           : 'Primary setup hub for installing Pulse on the first host you want to monitor, then expanding into Docker, Kubernetes, Proxmox, and related infrastructure.'
       }
-      icon={<Server class="h-5 w-5" strokeWidth={2} />}
       bodyClass="space-y-5"
     >
       <Show when={state.setupHandoff()}>

@@ -64,7 +64,7 @@ export function WhatsNewModal() {
               <div
                 data-tour-spotlight=""
                 data-tour-step={step().target}
-                class="pointer-events-none absolute rounded-[1.25rem] border border-blue-300/80 bg-white/5 transition-all duration-200 dark:border-blue-300/60"
+                class="pointer-events-none absolute rounded-[1.25rem] border border-blue-300/80 bg-white/10 transition-all duration-200 dark:border-blue-300/60"
                 style={style()}
               />
             )}

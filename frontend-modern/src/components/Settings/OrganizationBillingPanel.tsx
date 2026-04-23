@@ -3,7 +3,6 @@ import {
   ORGANIZATION_SETTINGS_UNAVAILABLE_CLASS,
   ORGANIZATION_SETTINGS_UNAVAILABLE_MESSAGE,
 } from '@/utils/organizationSettingsPresentation';
-import CreditCard from 'lucide-solid/icons/credit-card';
 import {
   CommercialBillingShell,
   CommercialSection,
@@ -33,7 +32,6 @@ export const OrganizationBillingPanel: Component<OrganizationBillingPanelProps> 
         <CommercialBillingShell
           title="Billing & Usage"
           description="Review your organization plan, usage against limits, and available upgrade paths."
-          icon={<CreditCard class="w-5 h-5" />}
           loading={loading()}
           loadingFallback={<OrganizationBillingLoadingState />}
         >

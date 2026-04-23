@@ -4,7 +4,6 @@ import {
   ORGANIZATION_SETTINGS_UNAVAILABLE_CLASS as ORGANIZATION_SETTINGS_PANEL_UNAVAILABLE_CLASS,
   ORGANIZATION_SETTINGS_UNAVAILABLE_MESSAGE as ORGANIZATION_SETTINGS_PANEL_UNAVAILABLE_MESSAGE,
 } from '@/utils/organizationSettingsPresentation';
-import CreditCard from 'lucide-solid/icons/credit-card';
 import { BillingAdminOrganizationsTable } from './BillingAdminOrganizationsTable';
 import { useBillingAdminPanelState } from './useBillingAdminPanelState';
 
@@ -23,7 +22,6 @@ export const BillingAdminPanel: Component = () => {
       <SettingsPanel
         title="Billing Admin"
         description="View and manage billing state across all tenants (hosted mode only)."
-        icon={<CreditCard class="w-5 h-5" />}
         action={
           <button
             type="button"

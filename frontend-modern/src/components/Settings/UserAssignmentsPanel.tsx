@@ -21,7 +21,6 @@ export const UserAssignmentsPanel: Component = () => {
       <SettingsPanel
         title="User Access"
         description="Assign roles to users and review effective permissions."
-        icon={<Users class="w-5 h-5" />}
         action={
           <SearchField
             placeholder="Search users..."

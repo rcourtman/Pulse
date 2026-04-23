@@ -4,7 +4,7 @@ import {
   presentationPolicyIsDemoMode,
   sessionPresentationPolicyResolved,
 } from '@/stores/sessionPresentationPolicy';
-import { WHATS_NEW_FEATURE_CARDS } from './whatsNewModalModel';
+import { WHATS_NEW_FEATURE_CARDS, WHATS_NEW_REOPEN_EVENT } from './whatsNewModalModel';
 
 type SpotlightRect = {
   top: number;
@@ -111,6 +111,16 @@ export function useWhatsNewModalState() {
     setStepIndex(clamp(index, 0, WHATS_NEW_FEATURE_CARDS.length - 1));
   };
 
+  if (typeof window !== 'undefined') {
+    const handleReopen = () => {
+      setHasSeen(false);
+      setDismissedForSession(false);
+      setStepIndex(0);
+    };
+    window.addEventListener(WHATS_NEW_REOPEN_EVENT, handleReopen);
+    onCleanup(() => window.removeEventListener(WHATS_NEW_REOPEN_EVENT, handleReopen));
+  }
+
   createEffect(() => {
     if (!isOpen()) return;
 
@@ -208,7 +218,7 @@ export function useWhatsNewModalState() {
       width: `${rect.width}px`,
       height: `${rect.height}px`,
       'box-shadow':
-        '0 0 0 9999px rgba(15, 23, 42, 0.68), 0 0 0 1px rgba(255, 255, 255, 0.18), 0 0 28px rgba(96, 165, 250, 0.55)',
+        '0 0 0 9999px rgba(15, 23, 42, 0.78), 0 0 0 2px rgba(255, 255, 255, 0.4), 0 0 40px rgba(96, 165, 250, 0.75)',
     };
   });
 

@@ -7,7 +7,6 @@ import { getRolesEmptyState } from '@/utils/rbacPresentation';
 import Plus from 'lucide-solid/icons/plus';
 import Pencil from 'lucide-solid/icons/pencil';
 import Trash2 from 'lucide-solid/icons/trash-2';
-import Shield from 'lucide-solid/icons/shield';
 import BadgeCheck from 'lucide-solid/icons/badge-check';
 import { PulseDataGrid } from '@/components/shared/PulseDataGrid';
 
@@ -19,7 +18,6 @@ export const RolesPanel: Component = () => {
       <SettingsPanel
         title="Roles"
         description="Manage built-in and custom roles with granular permissions."
-        icon={<Shield class="w-5 h-5" />}
         action={
           <button
             type="button"

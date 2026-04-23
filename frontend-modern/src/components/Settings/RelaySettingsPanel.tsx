@@ -38,7 +38,6 @@ export const RelaySettingsPanel: Component<RelaySettingsPanelProps> = (props) =>
       <SettingsPanel
         title="Remote Access"
         description={RELAY_SETTINGS_DESCRIPTION}
-        icon={<RadioTower size={20} strokeWidth={2} />}
       >
         <Show when={!state.loading()} fallback={<div class="text-sm ">Loading...</div>}>
           <Card tone="info" padding="md">
@@ -80,7 +79,6 @@ export const RelaySettingsPanel: Component<RelaySettingsPanelProps> = (props) =>
     <SettingsPanel
       title="Remote Access"
       description={RELAY_SETTINGS_DESCRIPTION}
-      icon={<RadioTower size={20} strokeWidth={2} />}
     >
       <Show
         when={!state.loading()}

@@ -100,7 +100,6 @@ export default function AuditLogPanel() {
     <SettingsPanel
       title="Audit Log"
       description="Persistent, searchable audit events with optional signature verification."
-      icon={<Shield class="w-5 h-5" strokeWidth={2} />}
       noPadding
       bodyClass="space-y-6 p-4 sm:p-6"
       action={

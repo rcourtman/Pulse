@@ -16,7 +16,6 @@ import {
   SECURITY_AUTH_SETUP_LABEL,
 } from '@/utils/securityAuthPresentation';
 import { QuickSecuritySetup } from './QuickSecuritySetup';
-import Lock from 'lucide-solid/icons/lock';
 import AlertTriangle from 'lucide-solid/icons/alert-triangle';
 import type { VersionInfo } from '@/api/updates';
 
@@ -60,7 +59,6 @@ export const SecurityAuthPanel: Component<SecurityAuthPanelProps> = (props) => {
     <SettingsPanel
       title="Authentication"
       description="Manage password-based authentication, login visibility, and credential rotation."
-      icon={<Lock class="w-5 h-5" strokeWidth={2} />}
       noPadding={showAuthenticationControls()}
       bodyClass={showAuthenticationControls() ? 'divide-y divide-border' : 'space-y-6'}
     >

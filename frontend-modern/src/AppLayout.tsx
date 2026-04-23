@@ -407,7 +407,7 @@ export function AppLayout(props: AppLayoutProps) {
 
   return (
     <div
-      class={`pulse-shell ${layoutStore.isFullWidth() || kioskMode() ? 'pulse-shell--full-width' : ''} ${!kioskMode() ? 'pb-safe-or-20 md:pb-0' : ''}`}
+      class={`pulse-shell ${layoutStore.isFullWidth() || kioskMode() ? 'pulse-shell--full-width' : ''} ${!kioskMode() ? 'pb-safe-or-20 lg:pb-0' : ''}`}
     >
       <Show when={kioskMode()}>
         <div
@@ -566,7 +566,7 @@ export function AppLayout(props: AppLayoutProps) {
 
       <Show when={!kioskMode()}>
         <div
-          class="tabs mb-2 hidden md:flex items-end gap-2 overflow-x-auto overflow-y-hidden whitespace-nowrap border-b border-border scrollbar-hide"
+          class="tabs mb-2 hidden lg:flex items-end gap-2 overflow-x-auto overflow-y-hidden whitespace-nowrap border-b border-border scrollbar-hide"
           role="tablist"
           aria-label="Primary navigation"
         >
@@ -760,7 +760,7 @@ export function AppLayout(props: AppLayoutProps) {
         <button
           type="button"
           onClick={() => aiChatStore.toggle()}
-          class="fixed right-0 top-1/2 -translate-y-1/2 z-40 flex min-h-10 sm:min-h-9 min-w-10 items-center justify-center px-2.5 py-2.5 rounded-l-xl bg-blue-600 text-white shadow-sm hover:bg-blue-700 transition-colors duration-200 group sm:top-1/2 sm:translate-y-[-50%] top-auto bottom-[calc(5rem+env(safe-area-inset-bottom,0px))] translate-y-0"
+          class="fixed right-0 top-1/2 -translate-y-1/2 z-40 flex min-h-10 sm:min-h-9 min-w-10 items-center justify-center px-2.5 py-2.5 rounded-l-lg border border-r-0 border-border bg-surface text-blue-600 dark:text-blue-400 hover:bg-surface-hover hover:text-blue-700 dark:hover:text-blue-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 transition-colors duration-200 group sm:top-1/2 sm:translate-y-[-50%] top-auto bottom-[calc(5rem+env(safe-area-inset-bottom,0px))] translate-y-0"
           title={getAIChatLauncherTitle(aiChatStore.context.context?.name)}
           aria-label={AI_CHAT_LAUNCHER_ARIA_LABEL}
         >

@@ -43,7 +43,9 @@ export function PageHeader(props: PageHeaderProps) {
             <Show when={local.titleMeta}>{local.titleMeta}</Show>
           </div>
           <Show when={local.description}>
-            <p class={`mt-1 text-sm font-medium text-muted ${local.descriptionClass ?? ''}`.trim()}>
+            <p
+              class={`mt-1 hidden text-sm font-medium text-muted sm:block ${local.descriptionClass ?? ''}`.trim()}
+            >
               {local.description}
             </p>
           </Show>

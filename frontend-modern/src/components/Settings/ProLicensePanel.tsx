@@ -1,6 +1,5 @@
 import { Show, type Component } from 'solid-js';
 import RefreshCw from 'lucide-solid/icons/refresh-cw';
-import { PulseLogoIcon } from '@/components/icons/PulseLogoIcon';
 import { MonitoredSystemLedgerPanel } from './MonitoredSystemLedgerPanel';
 import { CommercialBillingShell, CommercialSection } from './CommercialBillingSections';
 import { ProLicensePlanSection } from './ProLicensePlanSection';
@@ -23,7 +22,6 @@ const ProLicensePolicyLoadingPanel: Component = () => (
   <CommercialBillingShell
     title={SELF_HOSTED_PRO_BILLING_PRESENTATION.hiddenShellTitle}
     description={SELF_HOSTED_PRO_BILLING_PRESENTATION.hiddenShellDescription}
-    icon={<PulseLogoIcon class="w-5 h-5" />}
     loading={false}
   >
     <div class="rounded-lg border border-border bg-surface px-4 py-4 text-sm">
@@ -39,7 +37,6 @@ const ProLicenseHiddenPanel: Component = () => (
   <CommercialBillingShell
     title={SELF_HOSTED_PRO_BILLING_PRESENTATION.hiddenShellTitle}
     description={SELF_HOSTED_PRO_BILLING_PRESENTATION.hiddenShellDescription}
-    icon={<PulseLogoIcon class="w-5 h-5" />}
     loading={false}
   >
     <div class="rounded-lg border border-border bg-surface px-4 py-4 text-sm">
@@ -59,7 +56,6 @@ const ProLicensePanelContent: Component = () => {
       <CommercialBillingShell
         title={SELF_HOSTED_PRO_BILLING_PRESENTATION.shellTitle}
         description={SELF_HOSTED_PRO_BILLING_PRESENTATION.shellDescription}
-        icon={<PulseLogoIcon class="w-5 h-5" />}
         action={
           <button
             class="inline-flex min-h-10 sm:min-h-9 items-center gap-2 px-3 py-2 text-sm font-medium rounded-md border border-border text-base-content hover:bg-surface-hover transition-colors disabled:opacity-60"

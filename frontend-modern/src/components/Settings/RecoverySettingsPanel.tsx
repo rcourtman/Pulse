@@ -1,7 +1,6 @@
 import { Component, Show, For, Accessor, Setter } from 'solid-js';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import { SectionHeader } from '@/components/shared/SectionHeader';
-import Clock from 'lucide-solid/icons/clock';
 import {
   BACKUP_INTERVAL_MAX_MINUTES,
   BACKUP_INTERVAL_OPTIONS,
@@ -35,7 +34,6 @@ export const RecoverySettingsPanel: Component<RecoverySettingsPanelProps> = (pro
     <SettingsPanel
       title="Recovery"
       description="Manage backup/snapshot polling and configuration export/import."
-      icon={<Clock class="w-5 h-5" strokeWidth={2} />}
       noPadding
       bodyClass="divide-y divide-border"
     >

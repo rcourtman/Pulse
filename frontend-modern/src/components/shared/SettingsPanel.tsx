@@ -1,12 +1,10 @@
 import { JSX, Show, splitProps } from 'solid-js';
 import { Card } from '@/components/shared/Card';
-import { SectionHeader } from '@/components/shared/SectionHeader';
 
 type SettingsPanelProps = {
   title: JSX.Element;
   description?: JSX.Element;
   action?: JSX.Element;
-  icon?: JSX.Element;
   bodyClass?: string;
   tone?: 'default' | 'muted' | 'info' | 'success' | 'warning' | 'danger';
   padding?: 'none' | 'sm' | 'md' | 'lg';
@@ -18,7 +16,6 @@ export function SettingsPanel(props: SettingsPanelProps) {
     'title',
     'description',
     'action',
-    'icon',
     'bodyClass',
     'children',
     'class',
@@ -37,16 +34,15 @@ export function SettingsPanel(props: SettingsPanelProps) {
     >
       <div class="px-3 py-3 sm:px-6 sm:py-4 border-b border-border bg-surface-alt">
         <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
-          <div class="flex min-w-0 items-center gap-3 flex-1">
-            <Show when={local.icon}>
-              <div class="text-base-content dark:text-slate-100">{local.icon}</div>
+          <div class="flex min-w-0 flex-col gap-1 flex-1">
+            <h2 class="text-sm sm:text-base tracking-tight font-semibold text-base-content dark:text-slate-100">
+              {local.title}
+            </h2>
+            <Show when={local.description}>
+              <p class="text-xs sm:text-sm text-muted dark:text-slate-200">
+                {local.description}
+              </p>
             </Show>
-            <SectionHeader
-              title={local.title}
-              description={local.description}
-              size="sm"
-              class="min-w-0 flex-1"
-            />
           </div>
           <Show when={local.action}>
             <div class="w-full sm:w-auto">{local.action}</div>

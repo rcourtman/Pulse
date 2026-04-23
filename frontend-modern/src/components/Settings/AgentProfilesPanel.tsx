@@ -127,7 +127,6 @@ export const AgentProfilesPanel: Component = () => {
           <SettingsPanel
             title="Configuration Profiles"
             description="Reusable agent configurations"
-            icon={<Settings class="w-5 h-5" strokeWidth={2} />}
             action={
               <div class="flex items-center gap-2">
                 <button
@@ -236,7 +235,6 @@ export const AgentProfilesPanel: Component = () => {
           <SettingsPanel
             title="Agent Assignments"
             description="Assign profiles to connected agents"
-            icon={<Users class="w-5 h-5" strokeWidth={2} />}
             noPadding
             bodyClass="divide-y divide-border"
           >

@@ -27,7 +27,7 @@ export const WHATS_NEW_FEATURE_CARDS: WhatsNewFeatureCard[] = [
     title: 'Infrastructure',
   },
   {
-    accent: 'border-purple-200 bg-purple-50 dark:border-purple-800 dark:bg-purple-900',
+    accent: 'border-rose-200 bg-rose-50 dark:border-rose-800 dark:bg-rose-900',
     description: 'Use this for VMs, containers, and pods.',
     icon: 'workloads',
     target: 'workloads',
@@ -49,8 +49,10 @@ export const WHATS_NEW_FEATURE_CARDS: WhatsNewFeatureCard[] = [
   },
 ];
 
-export const WHATS_NEW_KICKER_LABEL = 'Quick Tour';
-export const WHATS_NEW_TITLE = 'Welcome to Pulse v6';
+export const WHATS_NEW_REOPEN_EVENT = 'pulse:reopen-nav-guide';
+
+export const WHATS_NEW_KICKER_LABEL = 'Nav guide';
+export const WHATS_NEW_TITLE = 'Pulse navigation guide';
 export const WHATS_NEW_PROGRESS_PREFIX = 'Step';
 export const WHATS_NEW_BACK_LABEL = 'Back';
 export const WHATS_NEW_CLOSE_LABEL = 'Close';

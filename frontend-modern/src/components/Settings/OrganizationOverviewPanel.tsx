@@ -6,7 +6,6 @@ import {
   ORGANIZATION_SETTINGS_UNAVAILABLE_CLASS,
   ORGANIZATION_SETTINGS_UNAVAILABLE_MESSAGE,
 } from '@/utils/organizationSettingsPresentation';
-import Building2 from 'lucide-solid/icons/building-2';
 import { OrganizationOverviewDetailsSection } from './OrganizationOverviewDetailsSection';
 import { OrganizationOverviewLoadingState } from './OrganizationOverviewLoadingState';
 import { OrganizationOverviewMembersSection } from './OrganizationOverviewMembersSection';
@@ -34,7 +33,6 @@ export const OrganizationOverviewPanel: Component<OrganizationOverviewPanelProps
         <SettingsPanel
           title="Organization Overview"
           description="Review organization metadata, membership footprint, and edit the display name."
-          icon={<Building2 class="w-5 h-5" />}
           noPadding
           bodyClass="divide-y divide-border"
         >

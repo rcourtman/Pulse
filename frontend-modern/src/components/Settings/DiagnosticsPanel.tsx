@@ -1,6 +1,5 @@
 import { Component, Show } from 'solid-js';
 import OperationsPanel from '@/components/Settings/OperationsPanel';
-import Activity from 'lucide-solid/icons/activity';
 import RefreshCw from 'lucide-solid/icons/refresh-cw';
 import Download from 'lucide-solid/icons/download';
 import { DiagnosticsResultsPanel } from '@/components/Settings/DiagnosticsResultsPanel';
@@ -17,7 +16,6 @@ export const DiagnosticsPanel: Component = () => {
       <OperationsPanel
         title={DIAGNOSTICS_PANEL_COPY.title}
         description={DIAGNOSTICS_PANEL_COPY.description}
-        icon={<Activity class="w-5 h-5 sm:w-5 sm:h-5" />}
         action={
           <div class="flex items-center justify-between sm:justify-end gap-3 flex-wrap">
             <Show when={diagnosticsData()}>

@@ -18,7 +18,6 @@ export default {
     extend: {
       colors: {
         // Semantic design system mapped to index.css
-        base: 'var(--color-bg-base)',
         surface: 'var(--color-bg-surface)',
         'surface-hover': 'var(--color-bg-surface-hover)',
         'surface-alt': 'var(--color-bg-surface-alt)',

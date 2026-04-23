@@ -185,7 +185,6 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
       <SettingsPanel
         title="Single Sign-On Providers"
         description="Configure OIDC and SAML identity providers."
-        icon={<Shield class="w-5 h-5" strokeWidth={2} />}
         action={
           <div class="flex flex-wrap justify-end gap-2">
             <button

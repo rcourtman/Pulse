@@ -102,7 +102,6 @@ export function ReportingPanel() {
         <OperationsPanel
           title="Reporting"
           description="Loading reporting surfaces..."
-          icon={<BarChart class="w-5 h-5" strokeWidth={2} />}
         >
           <div class="p-4 sm:p-6">
             <p class="text-sm text-muted">Loading reporting surfaces...</p>
@@ -114,7 +113,6 @@ export function ReportingPanel() {
         <OperationsPanel
           title="Reporting"
           description="Reporting surfaces are currently unavailable."
-          icon={<BarChart class="w-5 h-5" strokeWidth={2} />}
         >
           <div class="space-y-4 p-4 sm:p-6">
             <p class="text-sm text-warning">{reportingCatalogError()}</p>
@@ -135,7 +133,6 @@ export function ReportingPanel() {
         <OperationsPanel
           title={reportingCatalog()!.title}
           description={reportingCatalog()!.description}
-          icon={<BarChart class="w-5 h-5" strokeWidth={2} />}
         >
           <div class="p-4 sm:p-6">
             <div class="flex flex-col sm:flex-row items-center gap-4">
@@ -177,7 +174,6 @@ export function ReportingPanel() {
         <OperationsPanel
           title={reportingCatalog()!.title}
           description={reportingCatalog()!.description}
-          icon={<BarChart class="w-5 h-5" strokeWidth={2} />}
         >
           <div class="space-y-6 p-4 sm:p-6">
             <Show when={reportingCatalogLoading()}>

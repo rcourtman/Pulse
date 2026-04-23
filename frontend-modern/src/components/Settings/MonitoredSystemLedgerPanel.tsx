@@ -22,7 +22,6 @@ import type {
 } from '@/api/license';
 import { apiErrorCode, apiErrorDetailField } from '@/api/responseUtils';
 import { getSimpleStatusIndicator } from '@/utils/status';
-import { PulseLogoIcon } from '@/components/icons/PulseLogoIcon';
 import {
   formatMonitoredSystemGroupedSourcesLabel,
   formatMonitoredSystemLedgerUnavailableMessage,
@@ -519,7 +518,6 @@ export function MonitoredSystemLedgerPanel(props: MonitoredSystemLedgerPanelProp
     <SettingsPanel
       title={presentation.panelTitle}
       description={getMonitoredSystemLedgerDescription()}
-      icon={<PulseLogoIcon class="w-5 h-5" />}
       bodyClass="space-y-4"
     >
       {content}

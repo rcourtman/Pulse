@@ -90,7 +90,6 @@ export const UpdatesSettingsPanel: Component<UpdatesSettingsPanelProps> = (props
     <SettingsPanel
       title={UPDATES_PANEL_COPY.title}
       description={UPDATES_PANEL_COPY.description}
-      icon={<RefreshCw class="w-5 h-5" strokeWidth={2} />}
       noPadding
       bodyClass="divide-y divide-border"
     >
