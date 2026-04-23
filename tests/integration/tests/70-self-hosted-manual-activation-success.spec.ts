@@ -122,7 +122,22 @@ test.describe('Self-hosted manual activation success', () => {
     await ensureAuthenticated(page);
     await page.goto('/settings/system/billing/plan', { waitUntil: 'domcontentloaded' });
 
-    await expect(page.getByText('Current plan: Community')).toBeVisible();
+    const communityPlanCard = page
+      .locator('div.rounded-md.border.border-border.bg-surface-alt.p-4')
+      .filter({ has: page.getByText('Current plan: Community') })
+      .first();
+
+    await expect(communityPlanCard.getByText('Current plan: Community')).toBeVisible();
+    await expect(communityPlanCard.getByText('Community', { exact: true })).toBeVisible();
+    await expect(communityPlanCard.getByText('Expired', { exact: true })).toHaveCount(0);
+    await expect(
+      communityPlanCard.getByText(
+        'Community is active on this instance. It includes self-hosted monitoring, 7-day metric history, Pulse Patrol (BYOK), and update alerts.',
+      ),
+    ).toBeVisible();
+    await expect(page.getByText('If You Need More')).toBeVisible();
+    await expect(page.getByText('What Relay adds')).toBeVisible();
+    await expect(page.getByText('What Pulse Pro adds')).toBeVisible();
 
     await page.locator('summary').filter({ hasText: 'Redeem existing key' }).first().click();
     const activationField = page.locator('#pulse-pro-license-key');
@@ -146,10 +161,16 @@ test.describe('Self-hosted manual activation success', () => {
     await expect(activationSummary.getByText('Pulse Alert Analysis')).toBeVisible();
 
     await expect(page.getByText('Current plan: Pulse Pro')).toBeVisible();
+    const currentPlanCard = page
+      .locator('div.rounded-md.border.border-border.bg-surface-alt.p-4')
+      .filter({ has: page.getByText('Current plan: Pulse Pro') })
+      .first();
     await expect(
-      page.getByText(
-        'Pulse Pro is active on this instance. AI operations, advanced administration, and 90-day history are unlocked right now.',
+      currentPlanCard.getByText(
+        'Pulse Pro is active on this instance. Root-cause analysis, safe remediation, and 90-day history are unlocked right now.',
       ),
     ).toBeVisible();
+    await expect(currentPlanCard.getByText('Included extras')).toBeVisible();
+    await expect(page.getByText('If You Need More')).toHaveCount(0);
   });
 });

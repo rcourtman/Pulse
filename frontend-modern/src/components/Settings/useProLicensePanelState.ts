@@ -15,10 +15,12 @@ import {
   getSelfHostedActivationSuccessPresentation,
   getCommercialMigrationNotice,
   getGrandfatheredPriceContinuityNotice,
+  getSelfHostedPlanComparisonPresentation,
   getSelfHostedCurrentPlanPresentation,
   getLicenseFeatureLabel,
   getMonitoredSystemContinuityNotice,
   getPurchaseActivationNotice,
+  getSelfHostedCurrentPlanStatusPresentation,
   getLicenseSubscriptionStatusPresentation,
   getLicenseTierLabel,
   getTrialActivationNotice,
@@ -588,7 +590,7 @@ export function useProLicensePanelState() {
     }),
   );
   const currentPlanSummary = createMemo(() => {
-    const status = statusPresentation();
+    const status = getSelfHostedCurrentPlanStatusPresentation(entitlements());
     const summary = getSelfHostedCurrentPlanPresentation({
       entitlements: entitlements(),
       displayableCapabilities: formattedFeatures(),
@@ -597,6 +599,25 @@ export function useProLicensePanelState() {
       ...summary,
       badgeClass: status.badgeClass,
       statusLabel: status.label,
+    };
+  });
+  const planComparisonSummary = createMemo(() => {
+    const comparison = getSelfHostedPlanComparisonPresentation({
+      entitlements: entitlements(),
+    });
+    return {
+      ...comparison,
+      action:
+        comparison.cards.length > 0 &&
+        !showPlanSelectionPrompt() &&
+        purchaseActivationResult().trim().length === 0
+          ? {
+              label: SELF_HOSTED_PRO_BILLING_PRESENTATION.planComparisonActionLabel,
+              destination: resolveSelfHostedPurchaseStartDestination(
+                SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_INTENT,
+              ),
+            }
+          : null,
     };
   });
 
@@ -659,6 +680,7 @@ export function useProLicensePanelState() {
     commercialMigrationNotice,
     commercialPlanModel,
     currentPlanSummary,
+    planComparisonSummary,
     monitoredSystemCapacity,
     monitoredSystemCapacitySection,
     monitoredSystemContinuityNotice,

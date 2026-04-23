@@ -219,15 +219,21 @@ describe('ProLicensePanel', () => {
 
     expect(screen.getAllByText('Compare self-hosted plans').length).toBeGreaterThan(0);
     expect(screen.getByText('Current plan: Community')).toBeInTheDocument();
+    expect(screen.getByText(/^Community$/)).toBeInTheDocument();
+    expect(screen.queryByText(/^Expired$/)).not.toBeInTheDocument();
     expect(trackPricingViewedMock).toHaveBeenCalledWith(
       'settings_self_hosted_billing_plan',
       SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_INTENT,
     );
     expect(
-      screen.getByText(/Core self-hosted monitoring stays free on this instance/i),
+      screen.getByText(/Community is active on this instance/i),
     ).toBeInTheDocument();
+    expect(screen.getByText('If You Need More')).toBeInTheDocument();
+    expect(screen.getByText('What Relay adds')).toBeInTheDocument();
+    expect(screen.getByText('What Pulse Pro adds')).toBeInTheDocument();
     expect(screen.getByText('Unlimited self-hosted monitoring')).toBeInTheDocument();
     const compareLinks = screen.getAllByRole('link', { name: 'Compare plans' });
+    expect(compareLinks).toHaveLength(1);
     expect(
       compareLinks.some(
         (link) =>
@@ -453,12 +459,17 @@ describe('ProLicensePanel', () => {
     expect(screen.getByText('Current plan: Pulse Pro')).toBeInTheDocument();
     expect(
       screen.getByText(
-        'Pulse Pro is active on this instance. AI operations, advanced administration, and 90-day history are unlocked right now.',
+        'Pulse Pro is active on this instance. Root-cause analysis, safe remediation, and 90-day history are unlocked right now.',
       ),
     ).toBeInTheDocument();
+    expect(screen.getByText('Primary capabilities')).toBeInTheDocument();
+    expect(screen.getByText('Pulse Alert Analysis')).toBeInTheDocument();
     expect(screen.getByText('Patrol Auto-Fix')).toBeInTheDocument();
+    expect(screen.getByText('Included extras')).toBeInTheDocument();
+    expect(screen.getByText('Advanced SSO (SAML/Multi-Provider)')).toBeInTheDocument();
+    expect(screen.queryByText('If You Need More')).not.toBeInTheDocument();
     expect(screen.getByText('90 days')).toBeInTheDocument();
-    expect(screen.getByText('AI operations and advanced admin')).toBeInTheDocument();
+    expect(screen.getByText('Root-cause analysis, remediation, and admin extras')).toBeInTheDocument();
     expect(screen.queryByText('Guest Capacity')).not.toBeInTheDocument();
     expect(screen.queryByText('Included Monitored Systems')).not.toBeInTheDocument();
     expect(screen.queryByText('Monitoring capacity')).not.toBeInTheDocument();
@@ -488,6 +499,13 @@ describe('ProLicensePanel', () => {
         'Relay is active on this instance. Remote access, mobile, push, and longer history are unlocked right now.',
       ),
     ).toBeInTheDocument();
+    expect(screen.getByText('If You Need More')).toBeInTheDocument();
+    expect(screen.queryByText('What Relay adds')).not.toBeInTheDocument();
+    expect(screen.getByText('What Pulse Pro adds')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'See all plans' })).toHaveAttribute(
+      'href',
+      getSelfHostedPurchaseStartUrl(SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_INTENT),
+    );
     expect(screen.getByText('Pulse Relay (Remote Access)')).toBeInTheDocument();
     expect(screen.getByText('Mobile App Access')).toBeInTheDocument();
     expect(screen.getByText('Push Notifications')).toBeInTheDocument();
@@ -699,7 +717,7 @@ describe('ProLicensePanel', () => {
     expect(screen.getByText('Pulse Patrol')).toBeInTheDocument();
     expect(screen.getByText('Pulse Alert Analysis')).toBeInTheDocument();
     expect(screen.getByText('Patrol Auto-Fix')).toBeInTheDocument();
-    expect(screen.getByText('Kubernetes Insights')).toBeInTheDocument();
+    expect(screen.getByText('Kubernetes Analysis')).toBeInTheDocument();
     expect(screen.getByText('Update Alerts')).toBeInTheDocument();
     expect(screen.getByText('Advanced SSO (SAML/Multi-Provider)')).toBeInTheDocument();
     expect(screen.getByText('Role-Based Access Control (RBAC)')).toBeInTheDocument();
@@ -875,6 +893,7 @@ describe('ProLicensePanel', () => {
     ).toBeInTheDocument();
     expect(screen.queryByText('Compare self-hosted plans')).not.toBeInTheDocument();
     expect(screen.getAllByText('Patrol Auto-Fix').length).toBeGreaterThan(0);
+    expect(screen.queryByText('If You Need More')).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Review plan' })).not.toBeInTheDocument();
   });
 
@@ -952,7 +971,7 @@ describe('ProLicensePanel', () => {
 
     expect(screen.getAllByText('Compare self-hosted plans').length).toBeGreaterThan(0);
     expect(
-      screen.getByText(/Core self-hosted monitoring stays free on this instance/i),
+      screen.getByText(/Community is active on this instance/i),
     ).toBeInTheDocument();
     const compareLinks = screen.getAllByRole('link', { name: 'Compare plans' });
     expect(
@@ -1104,6 +1123,8 @@ describe('ProLicensePanel', () => {
     expect(proLicensePanelStateSource).toContain('loadRuntimeCapabilities(true)');
     expect(proLicensePanelStateSource).toContain('buildSelfHostedCommercialPlanModel');
     expect(proLicensePanelStateSource).toContain('getSelfHostedCurrentPlanPresentation({');
+    expect(proLicensePanelStateSource).toContain('getSelfHostedCurrentPlanStatusPresentation');
+    expect(proLicensePanelStateSource).toContain('getSelfHostedPlanComparisonPresentation({');
     expect(proLicensePanelStateSource).toContain('getSelfHostedActivationSuccessPresentation({');
     expect(proLicensePanelStateSource).toContain('runStartProTrialAction({');
     expect(proLicensePanelStateSource).not.toContain('startProTrial()');
@@ -1114,8 +1135,13 @@ describe('ProLicensePanel', () => {
     expect(proLicensePlanSectionSource).toContain('currentPlanSummary.title');
     expect(proLicensePlanSectionSource).toContain('currentPlanSummary.supplementalBadges');
     expect(proLicensePlanSectionSource).toContain('props.activationSuccessSummary');
+    expect(proLicensePlanSectionSource).toContain('props.planComparisonSummary.cards.length > 0');
+    expect(proLicensePlanSectionSource).toContain(
+      'SELF_HOSTED_PRO_BILLING_PRESENTATION.planComparisonSectionTitle',
+    );
     expect(proLicensePlanSectionSource).toContain('summary().highlightsLabel');
-    expect(proLicensePlanSectionSource).toContain('Unlocked on this instance');
+    expect(proLicensePlanSectionSource).toContain('currentPlanSummary.unlockedFeaturesLabel');
+    expect(proLicensePlanSectionSource).toContain('currentPlanSummary.includedExtras.length > 0');
     expect(proLicensePlanSectionSource).not.toContain('getInactiveProUpsellNotice');
     expect(proLicensePlanSectionSource).not.toContain('MonitoredSystemDefinitionDisclosure');
     expect(proLicensePlanSectionSource).not.toContain('trialStartTitle');

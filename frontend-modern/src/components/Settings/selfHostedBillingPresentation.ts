@@ -10,6 +10,8 @@ export interface SelfHostedProBillingPresentation {
   usageTabLabel: string;
   planSectionTitle: string;
   planSectionDescription: string;
+  planComparisonSectionTitle: string;
+  planComparisonActionLabel: string;
   usageSectionTitle: string;
   hiddenShellTitle: string;
   hiddenShellDescription: string;
@@ -48,6 +50,8 @@ export const SELF_HOSTED_PRO_BILLING_PRESENTATION: SelfHostedProBillingPresentat
   planSectionTitle: 'Current plan',
   planSectionDescription:
     'See which self-hosted tier this instance unlocked, what capabilities are active, and how plan status or continuity affects this install.',
+  planComparisonSectionTitle: 'If You Need More',
+  planComparisonActionLabel: 'See all plans',
   usageSectionTitle: 'Usage',
   hiddenShellTitle: 'Demo mode',
   hiddenShellDescription: 'Commercial settings are hidden for this session.',
@@ -59,7 +63,7 @@ export const SELF_HOSTED_PRO_BILLING_PRESENTATION: SelfHostedProBillingPresentat
     'Pulse waits for the session presentation policy before showing license, billing, or usage details.',
   planSelectionPromptTitle: 'Compare self-hosted plans',
   planSelectionPromptBody:
-    'Community keeps monitoring free. Compare Relay when you want secure access from anywhere, or Pro when you want root-cause answers, safe remediation, and 90-day incident history.',
+    'Community includes self-hosted monitoring. Look at Relay for secure access from anywhere, or Pulse Pro for root-cause answers, safe remediation, and 90-day incident history.',
   planSelectionPromptActionLabel: 'Compare plans',
   purchaseActivatedPlanActionLabel: 'Review plan',
   purchaseCancelledActionLabel: 'Compare plans',

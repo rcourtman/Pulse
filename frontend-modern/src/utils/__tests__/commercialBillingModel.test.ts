@@ -27,7 +27,7 @@ describe('commercialBillingModel', () => {
     expect(model.summary).toEqual([
       { label: 'Core Monitoring', value: 'Unlimited' },
       { label: 'Metric History', value: '90 days' },
-      { label: 'Included Extras', value: 'AI operations and advanced admin' },
+      { label: 'Included Extras', value: 'Root-cause analysis, remediation, and admin extras' },
     ]);
     expect(model.details.map((item) => item.label)).toEqual([
       'Tier',

@@ -8,6 +8,7 @@ import {
   getNoActiveProLicenseState,
   getTrialEndedProLicenseNotice,
 } from '@/utils/licensePresentation';
+import { SELF_HOSTED_PRO_BILLING_PRESENTATION } from './selfHostedBillingPresentation';
 import type { UpgradeDestination } from '@/utils/upgradeNavigation';
 import { CommercialStatGrid } from './CommercialBillingSections';
 
@@ -52,7 +53,10 @@ interface ProLicensePlanSectionProps {
     body: string;
     badgeClass: string;
     statusLabel: string;
+    unlockedFeaturesLabel: string;
     unlockedFeatures: string[];
+    includedExtrasLabel?: string;
+    includedExtras: string[];
     supplementalBadges: string[];
     supplementalSummary?: string;
   };
@@ -67,6 +71,17 @@ interface ProLicensePlanSectionProps {
   monitoredSystemCapacitySection: MonitoredSystemCapacitySection | null;
   monitoredSystemContinuityNotice: Notice | null;
   onReload: () => void;
+  planComparisonSummary: {
+    cards: Array<{
+      title: string;
+      body: string;
+      highlights: string[];
+    }>;
+    action: {
+      label: string;
+      destination: UpgradeDestination;
+    } | null;
+  };
   planSelectionPrompt: ActionNotice | null;
   onPlanSelectionPromptClick: () => void;
   purchaseActivationNotice: Notice | null;
@@ -177,7 +192,9 @@ export const ProLicensePlanSection: Component<ProLicensePlanSectionProps> = (pro
         </Show>
         <Show when={props.currentPlanSummary.unlockedFeatures.length > 0}>
           <div class="mt-4">
-            <p class="text-xs uppercase tracking-wide text-muted mb-2">Unlocked on this instance</p>
+            <p class="text-xs uppercase tracking-wide text-muted mb-2">
+              {props.currentPlanSummary.unlockedFeaturesLabel}
+            </p>
             <ul class="grid gap-2 sm:grid-cols-2">
               <For each={props.currentPlanSummary.unlockedFeatures}>
                 {(feature) => (
@@ -190,7 +207,62 @@ export const ProLicensePlanSection: Component<ProLicensePlanSectionProps> = (pro
             </ul>
           </div>
         </Show>
+        <Show when={props.currentPlanSummary.includedExtras.length > 0}>
+          <div class="mt-4">
+            <p class="text-xs uppercase tracking-wide text-muted mb-2">
+              {props.currentPlanSummary.includedExtrasLabel || 'Included extras'}
+            </p>
+            <ul class="grid gap-2 sm:grid-cols-2">
+              <For each={props.currentPlanSummary.includedExtras}>
+                {(feature) => (
+                  <li class="text-sm text-base-content flex items-center gap-2">
+                    <span class="w-1.5 h-1.5 rounded-full bg-primary"></span>
+                    {feature}
+                  </li>
+                )}
+              </For>
+            </ul>
+          </div>
+        </Show>
       </div>
+      <Show when={props.planComparisonSummary.cards.length > 0}>
+        <div class="mb-4 rounded-md border border-border bg-surface p-4">
+          <p class="text-sm font-medium text-base-content">
+            {SELF_HOSTED_PRO_BILLING_PRESENTATION.planComparisonSectionTitle}
+          </p>
+          <div class="mt-3 grid gap-3 lg:grid-cols-2">
+            <For each={props.planComparisonSummary.cards}>
+              {(card) => (
+                <div class="rounded-md border border-border bg-surface-alt p-3">
+                  <p class="text-sm font-medium text-base-content">{card.title}</p>
+                  <p class="mt-1 text-xs text-muted">{card.body}</p>
+                  <ul class="mt-3 grid gap-2">
+                    <For each={card.highlights}>
+                      {(feature) => (
+                        <li class="text-xs text-base-content flex items-center gap-2">
+                          <span class="w-1.5 h-1.5 rounded-full bg-primary"></span>
+                          {feature}
+                        </li>
+                      )}
+                    </For>
+                  </ul>
+                </div>
+              )}
+            </For>
+          </div>
+          <Show when={props.planComparisonSummary.action}>
+            {(action) => (
+              <UpgradeLink
+                class="inline-flex items-center gap-1 mt-4 min-h-10 sm:min-h-9 rounded-md border border-border px-3 py-2 text-xs font-medium text-base-content hover:bg-surface-hover"
+                destination={action().destination}
+                onClick={props.onPlanSelectionPromptClick}
+              >
+                {action().label}
+              </UpgradeLink>
+            )}
+          </Show>
+        </div>
+      </Show>
       <Show when={props.trialActivationNotice}>
         {(notice) => (
           <div class={`mb-4 rounded-md border p-3 text-sm ${notice().tone}`}>

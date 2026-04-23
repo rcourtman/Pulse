@@ -9,7 +9,9 @@ import {
   getFeatureMinTierLabel,
   getGrandfatheredPriceContinuityNotice,
   getSelfHostedActivationSuccessPresentation,
+  getSelfHostedPlanComparisonPresentation,
   getSelfHostedCurrentPlanPresentation,
+  getSelfHostedCurrentPlanStatusPresentation,
   getLicenseFeatureLabel,
   getLicenseStatusLoadingState,
   getLicenseSubscriptionStatusPresentation,
@@ -82,6 +84,8 @@ describe('licensePresentation', () => {
       planSectionTitle: 'Current plan',
       planSectionDescription:
         'See which self-hosted tier this instance unlocked, what capabilities are active, and how plan status or continuity affects this install.',
+      planComparisonSectionTitle: 'If You Need More',
+      planComparisonActionLabel: 'See all plans',
       usageSectionTitle: 'Usage',
       hiddenShellTitle: 'Demo mode',
       hiddenShellDescription: 'Commercial settings are hidden for this session.',
@@ -93,7 +97,7 @@ describe('licensePresentation', () => {
         'Pulse waits for the session presentation policy before showing license, billing, or usage details.',
       planSelectionPromptTitle: 'Compare self-hosted plans',
       planSelectionPromptBody:
-        'Community keeps monitoring free. Compare Relay when you want secure access from anywhere, or Pro when you want root-cause answers, safe remediation, and 90-day incident history.',
+        'Community includes self-hosted monitoring. Look at Relay for secure access from anywhere, or Pulse Pro for root-cause answers, safe remediation, and 90-day incident history.',
       planSelectionPromptActionLabel: 'Compare plans',
       purchaseActivatedPlanActionLabel: 'Review plan',
       purchaseCancelledActionLabel: 'Compare plans',
@@ -147,6 +151,24 @@ describe('licensePresentation', () => {
     expect(getLicenseSubscriptionStatusPresentation('mystery')).toMatchObject({
       label: 'Unknown',
       badgeClass: expect.stringContaining('bg-surface-alt'),
+    });
+    expect(
+      getSelfHostedCurrentPlanStatusPresentation({
+        tier: 'free',
+        subscription_state: 'expired',
+      }),
+    ).toEqual({
+      label: 'Community',
+      badgeClass: 'bg-surface text-base-content border border-border',
+    });
+    expect(
+      getSelfHostedCurrentPlanStatusPresentation({
+        tier: 'pro',
+        subscription_state: 'active',
+      }),
+    ).toMatchObject({
+      label: 'Active',
+      badgeClass: expect.stringContaining('green'),
     });
   });
 
@@ -213,13 +235,15 @@ describe('licensePresentation', () => {
     ).toEqual({
       title: 'Current plan: Community',
       body:
-        'Core self-hosted monitoring stays free on this instance. Upgrade only when you want Relay convenience or Pro operations features.',
+        'Community is active on this instance. It includes self-hosted monitoring, 7-day metric history, Pulse Patrol (BYOK), and update alerts.',
+      unlockedFeaturesLabel: 'Included on this instance',
       unlockedFeatures: [
         'Unlimited self-hosted monitoring',
         '7-day metric history',
         'Pulse Patrol (BYOK)',
         'Update alerts',
       ],
+      includedExtras: [],
       supplementalBadges: [],
       supplementalSummary: '',
     });
@@ -242,11 +266,16 @@ describe('licensePresentation', () => {
     ).toEqual({
       title: 'Current plan: Pulse Pro',
       body:
-        'Pulse Pro is active on this instance. AI operations, advanced administration, and 90-day history are unlocked right now.',
-      unlockedFeatures: [
-        'Pulse Relay (Remote Access)',
-        'Mobile App Access',
-        'Patrol Auto-Fix',
+        'Pulse Pro is active on this instance. Root-cause analysis, safe remediation, and 90-day history are unlocked right now.',
+      unlockedFeaturesLabel: 'Primary capabilities',
+      unlockedFeatures: ['Pulse Alert Analysis', 'Patrol Auto-Fix', '90-day metric history'],
+      includedExtrasLabel: 'Included extras',
+      includedExtras: [
+        'Advanced SSO (SAML/Multi-Provider)',
+        'Role-Based Access Control (RBAC)',
+        'Audit Logging',
+        'PDF/CSV Reporting',
+        'Centralized Agent Profiles',
       ],
       supplementalBadges: [],
       supplementalSummary: '',
@@ -273,12 +302,87 @@ describe('licensePresentation', () => {
     ).toEqual({
       title: 'Current plan: Pulse Pro',
       body:
-        'Pulse Pro is active on this instance. AI operations, advanced administration, and 90-day history are unlocked right now.',
-      unlockedFeatures: ['Pulse Relay (Remote Access)'],
+        'Pulse Pro is active on this instance. Root-cause analysis, safe remediation, and 90-day history are unlocked right now.',
+      unlockedFeaturesLabel: 'Primary capabilities',
+      unlockedFeatures: ['Pulse Alert Analysis', 'Patrol Auto-Fix', '90-day metric history'],
+      includedExtrasLabel: 'Included extras',
+      includedExtras: [
+        'Advanced SSO (SAML/Multi-Provider)',
+        'Role-Based Access Control (RBAC)',
+        'Audit Logging',
+        'PDF/CSV Reporting',
+        'Centralized Agent Profiles',
+      ],
       supplementalBadges: ['Grandfathered price', 'Grandfathered floor'],
       supplementalSummary:
         'This migrated v5 subscription keeps its existing recurring price and uncapped guest capacity until cancellation. This installation keeps an effective monitored-system limit of 23 from the observed legacy estate.',
     });
+  });
+
+  it('builds restrained higher-tier comparison cards for Community and Relay only', () => {
+    expect(
+      getSelfHostedPlanComparisonPresentation({
+        entitlements: {
+          tier: 'free',
+          subscription_state: 'expired',
+          capabilities: [],
+          limits: [],
+          upgrade_reasons: [],
+        },
+      }),
+    ).toEqual({
+      cards: [
+        {
+          title: 'What Relay adds',
+          body: 'Reach this Pulse instance securely from anywhere, check it from mobile, get push notifications, and keep 14 days of history.',
+          highlights: [
+            'Pulse Relay (Remote Access)',
+            'Mobile App Access',
+            'Push Notifications',
+            '14-day metric history',
+          ],
+        },
+        {
+          title: 'What Pulse Pro adds',
+          body:
+            'Move from monitoring into operations with root-cause answers, safe remediation, and 90-day history. Pulse Pro also includes SAML SSO, RBAC, audit logging, reporting, and agent profiles.',
+          highlights: ['Pulse Alert Analysis', 'Patrol Auto-Fix', '90-day metric history'],
+        },
+      ],
+    });
+
+    expect(
+      getSelfHostedPlanComparisonPresentation({
+        entitlements: {
+          tier: 'relay',
+          subscription_state: 'active',
+          capabilities: ['relay'],
+          limits: [],
+          upgrade_reasons: [],
+        },
+      }),
+    ).toEqual({
+      cards: [
+        {
+          title: 'What Pulse Pro adds',
+          body:
+            'Move from monitoring into operations with root-cause answers, safe remediation, and 90-day history. Pulse Pro also includes SAML SSO, RBAC, audit logging, reporting, and agent profiles.',
+          highlights: ['Pulse Alert Analysis', 'Patrol Auto-Fix', '90-day metric history'],
+        },
+      ],
+    });
+
+    expect(
+      getSelfHostedPlanComparisonPresentation({
+        entitlements: {
+          tier: 'pro',
+          subscription_state: 'active',
+          capabilities: ['ai_patrol'],
+          limits: [],
+          upgrade_reasons: [],
+        },
+      }),
+    ).toEqual({ cards: [] });
   });
 
   it('builds activation-success summaries for purchase, pasted-key, and trial activation paths', () => {
@@ -304,12 +408,7 @@ describe('licensePresentation', () => {
       title: 'Pulse Pro is now active',
       body: 'Checkout completed and this instance is now running Pulse Pro.',
       highlightsLabel: 'Available now on this instance',
-      highlights: [
-        'Patrol Auto-Fix',
-        'Pulse Alert Analysis',
-        'Kubernetes Insights',
-        '90-day metric history',
-      ],
+      highlights: ['Pulse Alert Analysis', 'Patrol Auto-Fix', '90-day metric history'],
     });
 
     expect(
@@ -358,12 +457,7 @@ describe('licensePresentation', () => {
       title: 'Pulse Pro trial is now active',
       body: 'The trial handoff completed and this instance now has Pulse Pro trial access.',
       highlightsLabel: 'Available during this trial',
-      highlights: [
-        'Patrol Auto-Fix',
-        'Pulse Alert Analysis',
-        'Kubernetes Insights',
-        '90-day metric history',
-      ],
+      highlights: ['Pulse Alert Analysis', 'Patrol Auto-Fix', '90-day metric history'],
     });
 
     expect(

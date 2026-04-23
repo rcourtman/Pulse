@@ -9,6 +9,8 @@ export interface SelfHostedPlanDefinition {
   billingExtrasSummary: string;
   entitlementSummary: string;
   entitlementHighlights: readonly string[];
+  includedExtras: readonly string[];
+  comparisonSummary: string;
   highlights: readonly string[];
 }
 
@@ -49,13 +51,15 @@ export const SELF_HOSTED_PLAN_DEFINITIONS: readonly SelfHostedPlanDefinition[] =
     metricHistoryDays: 7,
     billingExtrasSummary: 'Patrol, alerts, and OIDC',
     entitlementSummary:
-      'Core self-hosted monitoring stays free on this instance. Upgrade only when you want Relay convenience or Pro operations features.',
+      'Community is active on this instance. It includes self-hosted monitoring, 7-day metric history, Pulse Patrol (BYOK), and update alerts.',
     entitlementHighlights: [
       'Unlimited self-hosted monitoring',
       '7-day metric history',
       'Pulse Patrol (BYOK)',
       'Update alerts',
     ],
+    includedExtras: [],
+    comparisonSummary: 'Community covers self-hosted monitoring and core operations on this instance.',
     highlights: [
       'Real-time monitoring',
       'Unlimited self-hosted monitoring',
@@ -82,6 +86,9 @@ export const SELF_HOSTED_PLAN_DEFINITIONS: readonly SelfHostedPlanDefinition[] =
       'Push Notifications',
       '14-day metric history',
     ],
+    includedExtras: [],
+    comparisonSummary:
+      'Reach this Pulse instance securely from anywhere, check it from mobile, get push notifications, and keep 14 days of history.',
     highlights: [
       'Everything in Community',
       'Remote access via Relay',
@@ -97,22 +104,27 @@ export const SELF_HOSTED_PLAN_DEFINITIONS: readonly SelfHostedPlanDefinition[] =
     price: '$8.99/month',
     subline: 'or $79/year',
     metricHistoryDays: 90,
-    billingExtrasSummary: 'AI operations and advanced admin',
+    billingExtrasSummary: 'Root-cause analysis, remediation, and admin extras',
     entitlementSummary:
-      'Pulse Pro is active on this instance. AI operations, advanced administration, and 90-day history are unlocked right now.',
+      'Pulse Pro is active on this instance. Root-cause analysis, safe remediation, and 90-day history are unlocked right now.',
     entitlementHighlights: [
-      'Patrol Auto-Fix',
       'Pulse Alert Analysis',
-      'Kubernetes Insights',
+      'Patrol Auto-Fix',
       '90-day metric history',
+    ],
+    includedExtras: [
+      'Advanced SSO (SAML/Multi-Provider)',
       'Role-Based Access Control (RBAC)',
       'Audit Logging',
+      'PDF/CSV Reporting',
+      'Centralized Agent Profiles',
     ],
+    comparisonSummary:
+      'Move from monitoring into operations with root-cause answers, safe remediation, and 90-day history. Pulse Pro also includes SAML SSO, RBAC, audit logging, reporting, and agent profiles.',
     highlights: [
       'Everything in Relay',
-      'Patrol Auto-Fix & investigation',
       'Pulse Alert Analysis',
-      'Kubernetes Insights',
+      'Patrol Auto-Fix',
       '90-day metric history',
       'RBAC, audit logging, SAML SSO',
       'Agent profiles · PDF/CSV reports',
@@ -146,7 +158,7 @@ export function getSelfHostedPlanDefinitionForBillingTier(
 export const SELF_HOSTED_COMMERCIAL_PRESENTATION: SelfHostedCommercialPresentation = {
   pageTitle: 'Pricing',
   pageDescription:
-    'Core monitoring stays free for self-hosted Pulse. Relay adds remote access and mobile convenience, while Pro unlocks AI operations, automation, governance, and longer history.',
+    'Core monitoring is free for self-hosted Pulse. Relay adds secure remote access and mobile convenience, while Pro adds root-cause analysis, safe remediation, 90-day history, and admin/reporting extras.',
   mostPopularBadge: 'Most Popular',
   currentPlanLabel: 'Current Plan',
   includedLabel: 'Included',
@@ -243,13 +255,6 @@ export const SELF_HOSTED_FEATURE_ROWS: readonly SelfHostedFeatureRow[] = [
   {
     key: 'ai_alerts',
     name: 'Pulse Alert Analysis',
-    community: false,
-    relay: false,
-    pro: true,
-  },
-  {
-    key: 'kubernetes_ai',
-    name: 'Kubernetes Insights',
     community: false,
     relay: false,
     pro: true,

@@ -115,7 +115,7 @@ test.describe('Self-hosted plans entitlement summary', () => {
     await expect(currentPlanCard.getByText('Current plan: Pulse Pro')).toBeVisible();
     await expect(
       currentPlanCard.getByText(
-        'Pulse Pro is active on this instance. AI operations, advanced administration, and 90-day history are unlocked right now.',
+        'Pulse Pro is active on this instance. Root-cause analysis, safe remediation, and 90-day history are unlocked right now.',
       ),
     ).toBeVisible();
     await expect(currentPlanCard.getByText('Grandfathered price')).toBeVisible();
@@ -131,9 +131,10 @@ test.describe('Self-hosted plans entitlement summary', () => {
       ),
     ).toBeVisible();
     await expect(currentPlanCard.getByText(/effective monitored-system limit of 23/i)).toBeVisible();
-    await expect(currentPlanCard.getByText('Pulse Relay (Remote Access)')).toBeVisible();
-    await expect(currentPlanCard.getByText('Mobile App Access')).toBeVisible();
+    await expect(currentPlanCard.getByText('Primary capabilities')).toBeVisible();
+    await expect(currentPlanCard.getByText('Included extras')).toBeVisible();
     await expect(currentPlanCard.getByText('Patrol Auto-Fix')).toBeVisible();
     await expect(currentPlanCard.getByText('Pulse Alert Analysis')).toBeVisible();
+    await expect(currentPlanCard.getByText('Advanced SSO (SAML/Multi-Provider)')).toBeVisible();
   });
 });

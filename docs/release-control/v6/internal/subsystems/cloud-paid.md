@@ -283,15 +283,18 @@ Community limit enforcement.
     browser entrypoint must remain only a thin authenticated redirect rather
     than a second public handoff or a route that invites separate commercial
     posture logic.
-25. Keep self-hosted commercial plan copy aligned with the product-first
-    commercial feature labels. `frontend-modern/src/utils/selfHostedPlans.ts`
-    may still map onto internal entitlement keys such as `ai_patrol`,
-    `ai_alerts`, `ai_autofix`, and `kubernetes_ai`, but the customer-facing
-    plan cards, highlights, and comparison rows must use the canonical product
-    vocabulary already exposed elsewhere in the commercial shell: `Pulse
-Patrol`, `Pulse Alert Analysis`, `Patrol Auto-Fix`, and `Kubernetes
-Insights`, rather than reviving generic `AI Patrol` or `AI ... analysis`
-    branding inside self-hosted pricing surfaces.
+25. Keep self-hosted commercial plan copy aligned with the v6 operator-value
+    model instead of mirroring raw entitlement keys. `frontend-modern/src/
+    utils/selfHostedPlans.ts` may still map onto internal capabilities such as
+    `ai_patrol`, `ai_alerts`, `ai_autofix`, and `kubernetes_ai`, but the
+    customer-facing plan cards, top-summary highlights, and comparison rows
+    must lead with the canonical plan story: `Community = monitor`, `Relay =
+    reach Pulse from anywhere`, and `Pro = root-cause analysis, safe
+    remediation, and longer history`. Team/admin capabilities such as SAML
+    SSO, RBAC, audit logging, reporting, and agent profiles may appear as
+    secondary included extras, while platform-specific compatibility keys such
+    as `kubernetes_ai` must not be elevated into a marquee marketed Pro line
+    item on the self-hosted Plans surface.
 26. Keep hosted trial-activation verifier source selection compile-time owned.
     `pkg/licensing/trial_activation.go`,
     `pkg/licensing/trial_activation_public_key_override_dev.go`, and
@@ -1144,6 +1147,16 @@ specific and continuity-aware: Relay and Pulse Pro should describe the actual
 paid capabilities unlocked on this instance, while grandfathered pricing or
 captured monitored-system continuity must be visible in that same top summary
 instead of only in secondary billing detail blocks further down the page.
+That top card is plan-owned, not raw subscription-state-owned: Community copy
+should describe what is included on this instance in plain language, and the
+current-plan badge must not present the fallback Community state as `Expired`
+just because a prior paid subscription or trial ended.
+Upsell on the self-hosted Plans surface must stay contextual and subordinate
+to entitlement clarity. The top card confirms the current unlocked tier first;
+only below that may Pulse show a factual comparison section for the next higher
+tiers. Community may compare Relay and Pulse Pro, Relay may compare Pulse Pro,
+and active Pulse Pro should not show a promotional higher-tier block on this
+surface.
 Fresh activation is part of that same governed plan state. After a checkout
 return, trial handoff, or pasted-key activation succeeds, the owned plan
 surface must show an explicit success summary that names the unlocked tier

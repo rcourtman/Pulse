@@ -32,7 +32,7 @@ describe('selfHostedPlans', () => {
     expect(SELF_HOSTED_COMMERCIAL_PRESENTATION).toEqual({
       pageTitle: 'Pricing',
       pageDescription:
-        'Core monitoring stays free for self-hosted Pulse. Relay adds remote access and mobile convenience, while Pro unlocks AI operations, automation, governance, and longer history.',
+        'Core monitoring is free for self-hosted Pulse. Relay adds secure remote access and mobile convenience, while Pro adds root-cause analysis, safe remediation, 90-day history, and admin/reporting extras.',
       mostPopularBadge: 'Most Popular',
       currentPlanLabel: 'Current Plan',
       includedLabel: 'Included',
@@ -62,7 +62,10 @@ describe('selfHostedPlans', () => {
       'Patrol, alerts, and OIDC',
     );
     expect(SELF_HOSTED_PLAN_BY_TIER.community.entitlementSummary).toContain(
-      'Core self-hosted monitoring stays free on this instance.',
+      'Community is active on this instance.',
+    );
+    expect(SELF_HOSTED_PLAN_BY_TIER.community.comparisonSummary).toBe(
+      'Community covers self-hosted monitoring and core operations on this instance.',
     );
     expect(SELF_HOSTED_PLAN_BY_TIER.community.entitlementHighlights).toEqual([
       'Unlimited self-hosted monitoring',
@@ -70,11 +73,15 @@ describe('selfHostedPlans', () => {
       'Pulse Patrol (BYOK)',
       'Update alerts',
     ]);
+    expect(SELF_HOSTED_PLAN_BY_TIER.community.includedExtras).toEqual([]);
     expect(SELF_HOSTED_PLAN_BY_TIER.relay.billingExtrasSummary).toBe(
       'Remote access, mobile, and push',
     );
     expect(SELF_HOSTED_PLAN_BY_TIER.relay.entitlementSummary).toContain(
       'Remote access, mobile, push, and longer history are unlocked right now.',
+    );
+    expect(SELF_HOSTED_PLAN_BY_TIER.relay.comparisonSummary).toContain(
+      'Reach this Pulse instance securely from anywhere',
     );
     expect(SELF_HOSTED_PLAN_BY_TIER.relay.entitlementHighlights).toEqual([
       'Pulse Relay (Remote Access)',
@@ -82,19 +89,27 @@ describe('selfHostedPlans', () => {
       'Push Notifications',
       '14-day metric history',
     ]);
+    expect(SELF_HOSTED_PLAN_BY_TIER.relay.includedExtras).toEqual([]);
     expect(SELF_HOSTED_PLAN_BY_TIER.pro.billingExtrasSummary).toBe(
-      'AI operations and advanced admin',
+      'Root-cause analysis, remediation, and admin extras',
     );
     expect(SELF_HOSTED_PLAN_BY_TIER.pro.entitlementSummary).toContain(
-      'AI operations, advanced administration, and 90-day history are unlocked right now.',
+      'Root-cause analysis, safe remediation, and 90-day history are unlocked right now.',
+    );
+    expect(SELF_HOSTED_PLAN_BY_TIER.pro.comparisonSummary).toContain(
+      'safe remediation, and 90-day history',
     );
     expect(SELF_HOSTED_PLAN_BY_TIER.pro.entitlementHighlights).toEqual([
-      'Patrol Auto-Fix',
       'Pulse Alert Analysis',
-      'Kubernetes Insights',
+      'Patrol Auto-Fix',
       '90-day metric history',
+    ]);
+    expect(SELF_HOSTED_PLAN_BY_TIER.pro.includedExtras).toEqual([
+      'Advanced SSO (SAML/Multi-Provider)',
       'Role-Based Access Control (RBAC)',
       'Audit Logging',
+      'PDF/CSV Reporting',
+      'Centralized Agent Profiles',
     ]);
     expect(SELF_HOSTED_PLAN_BY_TIER.community.highlights).toEqual(
       expect.arrayContaining([

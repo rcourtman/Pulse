@@ -37,7 +37,7 @@ const FEATURE_LABELS: Record<string, string> = {
   ai_patrol: 'Pulse Patrol',
   ai_alerts: 'Pulse Alert Analysis',
   ai_autofix: 'Patrol Auto-Fix',
-  kubernetes_ai: 'Kubernetes Insights',
+  kubernetes_ai: 'Kubernetes Analysis',
   update_alerts: 'Update Alerts',
   sso: 'Basic SSO (OIDC)',
   advanced_sso: 'Advanced SSO (SAML/Multi-Provider)',
@@ -111,7 +111,10 @@ export interface SelfHostedRecoveryPresentation {
 export interface SelfHostedCurrentPlanPresentation {
   title: string;
   body: string;
+  unlockedFeaturesLabel: string;
   unlockedFeatures: string[];
+  includedExtrasLabel?: string;
+  includedExtras: string[];
   supplementalBadges: string[];
   supplementalSummary?: string;
 }
@@ -122,6 +125,16 @@ export interface SelfHostedActivationSuccessPresentation extends LicenseInlineNo
 }
 
 export type SelfHostedActivationSuccessSource = 'manual' | 'purchase' | 'trial';
+
+export interface SelfHostedPlanComparisonCardPresentation {
+  title: string;
+  body: string;
+  highlights: string[];
+}
+
+export interface SelfHostedPlanComparisonPresentation {
+  cards: SelfHostedPlanComparisonCardPresentation[];
+}
 
 const GRANDFATHERED_V5_PLAN_LABELS: Record<string, string> = {
   v5_lifetime_grandfathered: 'V5 Lifetime Grandfathered',
@@ -277,14 +290,25 @@ const getSelfHostedUnlockedFeatures = ({
     return [];
   }
 
-  const normalizedTier = (current.tier || '').trim().toLowerCase();
   const planDefinition = getSelfHostedPlanDefinitionForBillingTier(current.tier);
-  const fallbackHighlights = [...(planDefinition?.entitlementHighlights ?? [])];
-  return normalizedTier === 'free'
-    ? fallbackHighlights
-    : displayableCapabilities.length > 0
-      ? displayableCapabilities
-      : fallbackHighlights;
+  if (planDefinition) {
+    return [...planDefinition.entitlementHighlights];
+  }
+  return displayableCapabilities;
+};
+
+const getSelfHostedIncludedExtras = ({
+  entitlements,
+}: {
+  entitlements?: LicenseCommercialEntitlements | null;
+}): string[] => {
+  const current = entitlements;
+  if (!current) {
+    return [];
+  }
+
+  const planDefinition = getSelfHostedPlanDefinitionForBillingTier(current.tier);
+  return [...(planDefinition?.includedExtras ?? [])];
 };
 
 const getSelfHostedActivationHighlights = ({
@@ -315,6 +339,36 @@ const getSelfHostedActivationHighlights = ({
   return highlights;
 };
 
+export const getSelfHostedPlanComparisonPresentation = ({
+  entitlements,
+}: {
+  entitlements?: LicenseCommercialEntitlements | null;
+}): SelfHostedPlanComparisonPresentation => {
+  const normalizedTier = (entitlements?.tier || '').trim().toLowerCase();
+  const comparisonTiers =
+    normalizedTier === 'relay'
+      ? ['pro']
+      : normalizedTier === 'free' || normalizedTier === 'community' || !normalizedTier
+        ? ['relay', 'pro']
+        : [];
+
+  return {
+    cards: comparisonTiers
+      .map((tier) => {
+        const definition = getSelfHostedPlanDefinitionForBillingTier(tier);
+        if (!definition) {
+          return null;
+        }
+        return {
+          title: `What ${getSelfHostedPlanLabel(tier)} adds`,
+          body: definition.comparisonSummary,
+          highlights: [...definition.entitlementHighlights].slice(0, 4),
+        };
+      })
+      .filter((card): card is SelfHostedPlanComparisonCardPresentation => card !== null),
+  };
+};
+
 export const getSelfHostedCurrentPlanPresentation = ({
   entitlements,
   displayableCapabilities,
@@ -327,7 +381,9 @@ export const getSelfHostedCurrentPlanPresentation = ({
     return {
       title: 'Current plan: Unknown',
       body: 'Pulse is still loading the current self-hosted entitlement for this instance.',
+      unlockedFeaturesLabel: 'Unlocked on this instance',
       unlockedFeatures: [],
+      includedExtras: [],
       supplementalBadges: [],
     };
   }
@@ -340,6 +396,11 @@ export const getSelfHostedCurrentPlanPresentation = ({
     entitlements: current,
     displayableCapabilities,
   });
+  const includedExtras = getSelfHostedIncludedExtras({
+    entitlements: current,
+  });
+  const unlockedFeaturesLabel =
+    normalizedTier === 'free' ? 'Included on this instance' : 'Primary capabilities';
 
   const supplementalBadges: string[] = [];
   const supplementalDetails: string[] = [];
@@ -381,7 +442,10 @@ export const getSelfHostedCurrentPlanPresentation = ({
         unlockedFeatures.length > 0
           ? `${planLabel} trial capabilities are active on this instance right now.`
           : `${planLabel} trial activation is in progress on this instance.`,
+      unlockedFeaturesLabel,
       unlockedFeatures,
+      includedExtrasLabel: includedExtras.length > 0 ? 'Included extras' : undefined,
+      includedExtras,
       supplementalBadges,
       supplementalSummary: supplementalDetails.join(' '),
     };
@@ -392,8 +456,10 @@ export const getSelfHostedCurrentPlanPresentation = ({
       title: 'Current plan: Community',
       body:
         planDefinition?.entitlementSummary ||
-        'Community keeps self-hosted core monitoring free on this instance. Upgrade only when you want Relay or Pro capabilities.',
+        'Community is active on this instance. Self-hosted monitoring, 7-day metric history, Pulse Patrol (BYOK), and update alerts are included here.',
+      unlockedFeaturesLabel,
       unlockedFeatures,
+      includedExtras,
       supplementalBadges,
       supplementalSummary: supplementalDetails.join(' '),
     };
@@ -405,7 +471,10 @@ export const getSelfHostedCurrentPlanPresentation = ({
       body:
         planDefinition?.entitlementSummary ||
         `${planLabel} is active on this instance. These capabilities are unlocked right now.`,
+      unlockedFeaturesLabel,
       unlockedFeatures,
+      includedExtrasLabel: includedExtras.length > 0 ? 'Included extras' : undefined,
+      includedExtras,
       supplementalBadges,
       supplementalSummary: supplementalDetails.join(' '),
     };
@@ -414,7 +483,9 @@ export const getSelfHostedCurrentPlanPresentation = ({
   return {
     title: `Current plan: ${planLabel}`,
     body: 'Review the plan details below to confirm what this key unlocks on this instance.',
+    unlockedFeaturesLabel: 'Unlocked on this instance',
     unlockedFeatures,
+    includedExtras,
     supplementalBadges,
     supplementalSummary: supplementalDetails.join(' '),
   };
@@ -659,6 +730,19 @@ export const getLicenseSubscriptionStatusPresentation = (
         badgeClass: 'bg-surface-alt text-muted',
       };
   }
+};
+
+export const getSelfHostedCurrentPlanStatusPresentation = (
+  entitlements?: Pick<LicenseCommercialEntitlements, 'tier' | 'subscription_state'> | null,
+): LicenseSubscriptionStatusPresentation => {
+  const normalizedTier = (entitlements?.tier || '').trim().toLowerCase();
+  if (normalizedTier === 'free' || normalizedTier === 'community') {
+    return {
+      label: 'Community',
+      badgeClass: 'bg-surface text-base-content border border-border',
+    };
+  }
+  return getLicenseSubscriptionStatusPresentation(entitlements?.subscription_state);
 };
 
 export const getLicenseStatusLoadingState = (): LicenseLoadingStateCopy => ({
