@@ -554,6 +554,46 @@
       ]
     },
     {
+      "path": "internal/cloudcp/auth/magiclink.go",
+      "rationale": "control-plane magic-link HMAC handling is both a Pulse Cloud account-access boundary and a security/privacy token-secrecy boundary",
+      "subsystems": [
+        "cloud-paid",
+        "security-privacy"
+      ]
+    },
+    {
+      "path": "internal/cloudcp/auth/magiclink_store.go",
+      "rationale": "control-plane magic-link persistence is both a Pulse Cloud account-access boundary and a security/privacy storage-hardening boundary",
+      "subsystems": [
+        "cloud-paid",
+        "security-privacy"
+      ]
+    },
+    {
+      "path": "internal/cloudcp/docker/labels.go",
+      "rationale": "hosted tenant Docker labels are both a Pulse Cloud runtime contract boundary and a deployment-installability rollout boundary",
+      "subsystems": [
+        "cloud-paid",
+        "deployment-installability"
+      ]
+    },
+    {
+      "path": "internal/cloudcp/docker/manager.go",
+      "rationale": "hosted tenant container management is both a Pulse Cloud runtime contract boundary and a deployment-installability rollout boundary",
+      "subsystems": [
+        "cloud-paid",
+        "deployment-installability"
+      ]
+    },
+    {
+      "path": "internal/cloudcp/tenant_runtime_rollout.go",
+      "rationale": "hosted tenant runtime rollout is both a Pulse Cloud runtime contract boundary and a deployment-installability release-rollout boundary",
+      "subsystems": [
+        "cloud-paid",
+        "deployment-installability"
+      ]
+    },
+    {
       "path": "scripts/install.ps1",
       "rationale": "the Windows installer is both a deployment installability entry point and a canonical agent lifecycle runtime continuity boundary",
       "subsystems": [
@@ -1676,7 +1716,9 @@
         "internal/api/licensing_",
         "internal/api/payments_",
         "internal/api/stripe_",
+        "internal/cloudcp/",
         "internal/cloudcp/portal/",
+        "internal/hosted/",
         "pkg/licensing/"
       ],
       "owned_files": [
@@ -1971,6 +2013,24 @@
               "internal/cloudcp/stripe/cloud_lifecycle_integration_test.go",
               "internal/cloudcp/stripe/helpers_test.go",
               "internal/cloudcp/stripe/msp_lifecycle_integration_test.go"
+            ]
+          },
+          {
+            "id": "hosted-control-plane-runtime",
+            "label": "hosted control-plane runtime proof",
+            "match_prefixes": [
+              "internal/cloudcp/",
+              "internal/hosted/"
+            ],
+            "match_files": [],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [
+              "internal/cloudcp/",
+              "internal/hosted/"
+            ],
+            "exact_files": [
+              "internal/api/relay_hosted_runtime_test.go",
+              "pkg/licensing/hosted_subscription_test.go"
             ]
           },
           {

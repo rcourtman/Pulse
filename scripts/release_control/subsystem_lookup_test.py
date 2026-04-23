@@ -4443,15 +4443,25 @@ class SubsystemLookupTest(unittest.TestCase):
         self.assertEqual(result["unowned_runtime_files"], [])
         self.assertEqual(
             {item["subsystem"] for item in result["impacted_subsystems"]},
-            {"security-privacy"},
+            {"cloud-paid", "security-privacy"},
         )
+        expected_subsystems_by_path = {
+            "internal/cloudcp/auth/magiclink.go": {"cloud-paid", "security-privacy"},
+            "internal/cloudcp/auth/magiclink_store.go": {"cloud-paid", "security-privacy"},
+            "internal/crypto/crypto.go": {"security-privacy"},
+            "internal/securityutil/secure_storage_dir.go": {"security-privacy"},
+        }
         for file_entry in result["files"]:
             self.assertEqual(file_entry["classification"], "runtime")
             self.assertEqual(
                 {match["subsystem"] for match in file_entry["matches"]},
-                {"security-privacy"},
+                expected_subsystems_by_path[file_entry["path"]],
             )
-            match = file_entry["matches"][0]
+            match = next(
+                match
+                for match in file_entry["matches"]
+                if match["subsystem"] == "security-privacy"
+            )
             self.assertEqual(
                 match["contract"],
                 "docs/release-control/v6/internal/subsystems/security-privacy.md",

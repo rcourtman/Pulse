@@ -97,8 +97,11 @@ server-side update execution surfaces.
 
 1. `frontend-modern/src/api/updates.ts` shared with `api-contracts`: the updates frontend client is both a deployment-installability control surface and a canonical API payload contract boundary.
 2. `internal/api/updates.go` shared with `api-contracts`: update handlers are both a deployment-installability control surface and a canonical API payload contract boundary.
-3. `scripts/install.ps1` shared with `agent-lifecycle`: the Windows installer is both a deployment installability entry point and a canonical agent lifecycle runtime continuity boundary.
-4. `scripts/install.sh` shared with `agent-lifecycle`: the shell installer is both a deployment installability entry point and a canonical agent lifecycle runtime continuity boundary.
+3. `internal/cloudcp/docker/labels.go` shared with `cloud-paid`: hosted tenant Docker labels are both a Pulse Cloud runtime contract boundary and a deployment-installability rollout boundary.
+4. `internal/cloudcp/docker/manager.go` shared with `cloud-paid`: hosted tenant container management is both a Pulse Cloud runtime contract boundary and a deployment-installability rollout boundary.
+5. `internal/cloudcp/tenant_runtime_rollout.go` shared with `cloud-paid`: hosted tenant runtime rollout is both a Pulse Cloud runtime contract boundary and a deployment-installability release-rollout boundary.
+6. `scripts/install.ps1` shared with `agent-lifecycle`: the Windows installer is both a deployment installability entry point and a canonical agent lifecycle runtime continuity boundary.
+7. `scripts/install.sh` shared with `agent-lifecycle`: the shell installer is both a deployment installability entry point and a canonical agent lifecycle runtime continuity boundary.
 
 ## Extension Points
 

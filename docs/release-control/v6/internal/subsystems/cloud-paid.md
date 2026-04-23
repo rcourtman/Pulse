@@ -16,7 +16,8 @@
 ## Purpose
 
 Own cloud plan/version semantics, entitlement limits, hosted billing/runtime
-agreement, and cloud-specific enforcement rules.
+agreement, the Pulse Cloud control plane, hosted tenant lifecycle, and
+cloud-specific enforcement rules.
 
 ## Canonical Files
 
@@ -99,6 +100,15 @@ agreement, and cloud-specific enforcement rules.
 77. `pkg/licensing/self_hosted_feature_catalog.go`
 78. `frontend-modern/src/utils/selfHostedFeatureCatalog.generated.ts`
 79. `pulse-pro:license-server/self_hosted_feature_catalog.generated.go`
+80. `internal/cloudcp/server.go`, `internal/cloudcp/authz.go`, `internal/cloudcp/commercial_identity.go`, `internal/cloudcp/security.go`
+81. `internal/cloudcp/health_monitor.go`, `internal/cloudcp/health_stuck_provisioning.go`, `internal/cloudcp/tenant_state_metrics.go`, `internal/cloudcp/ratelimit.go`
+82. `internal/cloudcp/trial_signup_handlers.go`, `internal/cloudcp/trial_signup_store.go`, `internal/cloudcp/hosted_entitlement_handlers.go`
+83. `internal/cloudcp/admin/handlers.go`, `internal/cloudcp/admin/status.go`, `internal/cloudcp/auditlog/auditlog.go`
+84. `internal/cloudcp/cpmetrics/metrics.go`, `internal/cloudcp/cpsec/nonce.go`, `internal/cloudcp/static_assets.go`, `internal/cloudcp/favicon.svg`
+85. `internal/cloudcp/email/sender.go`, `internal/cloudcp/email/templates.go`
+86. `internal/cloudcp/handoff/handler.go`, `internal/cloudcp/handoff/handoff.go`
+87. `internal/cloudcp/stripe/grace_enforcer.go`, `internal/cloudcp/stripe/helpers.go`, `internal/cloudcp/stripe/reconciler.go`, `internal/cloudcp/stripe/webhook.go`
+88. `internal/hosted/hosted_metrics.go`, `internal/hosted/reaper.go`
 
 ## Shared Boundaries
 
@@ -123,6 +133,11 @@ agreement, and cloud-specific enforcement rules.
    syntactically valid `/api/public/signup` requests resolve to one uniform
    `202 Accepted` Pulse Account response whether provisioning/email side
    effects ran or were suppressed by owner-email throttling.
+6. `internal/cloudcp/auth/magiclink.go` shared with `security-privacy`: control-plane magic-link HMAC handling is both a Pulse Cloud account-access boundary and a security/privacy token-secrecy boundary.
+7. `internal/cloudcp/auth/magiclink_store.go` shared with `security-privacy`: control-plane magic-link persistence is both a Pulse Cloud account-access boundary and a security/privacy storage-hardening boundary.
+8. `internal/cloudcp/docker/labels.go` shared with `deployment-installability`: hosted tenant Docker labels are both a Pulse Cloud runtime contract boundary and a deployment-installability rollout boundary.
+9. `internal/cloudcp/docker/manager.go` shared with `deployment-installability`: hosted tenant container management is both a Pulse Cloud runtime contract boundary and a deployment-installability rollout boundary.
+10. `internal/cloudcp/tenant_runtime_rollout.go` shared with `deployment-installability`: hosted tenant runtime rollout is both a Pulse Cloud runtime contract boundary and a deployment-installability release-rollout boundary.
 
 The real `pulse-pro` license-server legacy checkout issuance, recurring
 renewals, manual issue, and legacy exchange flows are part of that same
@@ -319,6 +334,13 @@ Community limit enforcement.
     builds may keep the local override path, but release builds must resolve
     the verifier from the embedded build-time source of truth instead of
     honoring `PULSE_HOSTED_MODE` or other runtime wiring.
+27. Add or change the Cloud control-plane runtime, public signup lifecycle,
+    tenant health/reconciliation, control-plane metrics, email delivery,
+    hosted handoff, hosted entitlement refresh, or hosted tenant reaping through
+    `internal/cloudcp/` and `internal/hosted/`. Those paths must stay governed
+    by the Cloud paid subsystem even when a narrower support subsystem also
+    owns a deployment, security, or relay-specific file in the same package
+    tree.
 
 ## Forbidden Paths
 
