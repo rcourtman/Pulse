@@ -11,7 +11,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
 
   return (
     <div
-      ref={props.setTableRootRef}
+      ref={table.setTableRootRef}
       class="space-y-4"
       data-summary-clear-surface
       data-testid="infrastructure-table-surface"

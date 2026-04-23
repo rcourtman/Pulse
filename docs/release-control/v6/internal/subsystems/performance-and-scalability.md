@@ -205,6 +205,15 @@ regression protection.
     is previewed or pinned, member rows should take a restrained shared
     preview/pinned wash via `data-summary-group-member-active` rather than
     per-surface outlines, secondary buttons, or full-strength row fills.
+    Infrastructure table responsive behavior belongs to that same hot-path
+    owner. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts`
+    must derive column visibility from the measured table surface width, with
+    `frontend-modern/src/components/Infrastructure/unifiedResourceTableStateModel.ts`
+    owning the column-priority breakpoints. It must not rely on global viewport
+    width alone, because app chrome can leave the table with tablet-sized space
+    while the window still reports a desktop breakpoint. Live resize proof must
+    show the host and service tables dropping lower-priority columns without
+    introducing horizontal overflow.
 28. Keep summary-card hover emphasis on one bounded rendering budget: when a summary row is active, shared sparkline and density-map primitives must promote the selected series and demote background series through the same active-series ID rather than layering a second page-local highlight pass, so zoom-range and hover scrubbing stay visually coherent without reintroducing multi-series overdraw on the hot summary cards. Density maps on that hot path must stay overview-first under focus: preserve the multi-entity heatmap rows, layer focused-entity detail inside the card, and avoid swapping transient hover into a separate single-series chart path.
 29. Keep public self-hosted checkout handoff endpoints on the adjacent
     commercial/router boundary, not the summary-chart hot path. When

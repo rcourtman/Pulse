@@ -34,14 +34,23 @@ import {
 } from '@/components/Infrastructure/infrastructureSelectors';
 const resourceDetailDrawerMock = vi.hoisted(() => vi.fn());
 const frontendIndexCssSource = readFileSync(join(process.cwd(), 'src/index.css'), 'utf8');
-// Stub ResizeObserver for jsdom
-if (typeof globalThis.ResizeObserver === 'undefined') {
-  globalThis.ResizeObserver = class ResizeObserver {
-    observe() {}
-    unobserve() {}
-    disconnect() {}
-  } as unknown as typeof ResizeObserver;
-}
+const resizeObserverCallbacks: ResizeObserverCallback[] = [];
+globalThis.ResizeObserver = class ResizeObserver {
+  constructor(callback: ResizeObserverCallback) {
+    resizeObserverCallbacks.push(callback);
+  }
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+} as unknown as typeof ResizeObserver;
+const emitResizeObserverWidth = (width: number) => {
+  for (const callback of resizeObserverCallbacks) {
+    callback(
+      [{ contentRect: { width } } as ResizeObserverEntry],
+      {} as ResizeObserver,
+    );
+  }
+};
 if (typeof Element.prototype.scrollIntoView !== 'function') {
   Element.prototype.scrollIntoView = vi.fn();
 }
@@ -115,6 +124,7 @@ const getBodyRowCount = (container: HTMLElement) => container.querySelectorAll('
 describe('UnifiedResourceTable performance contract', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    resizeObserverCallbacks.length = 0;
     localStorage.clear();
   });
 
@@ -175,6 +185,54 @@ describe('UnifiedResourceTable performance contract', () => {
       });
 
       expect(container.querySelector('[style]')).toBeNull();
+    });
+
+    it('adapts host columns from the measured table surface width instead of the window width', async () => {
+      const resources = [
+        makeResource(1, {
+          network: { rxBytes: 1200, txBytes: 3400 },
+          diskIO: { readRate: 2000, writeRate: 800 },
+          uptime: 86400,
+          temperature: 42,
+        }),
+      ];
+      const { getByText } = render(() => (
+        <UnifiedResourceTable
+          resources={resources}
+          expandedResourceId={null}
+          onExpandedResourceChange={vi.fn()}
+          groupingMode="flat"
+        />
+      ));
+
+      await waitFor(() => {
+        expect(getByText('Net I/O')).toBeInTheDocument();
+      });
+
+      emitResizeObserverWidth(900);
+
+      await waitFor(() => {
+        expect(getByText('Net I/O').closest('th')).toHaveClass('hidden');
+        expect(getByText('Source').closest('th')).toHaveClass('hidden');
+      });
+      expect(getByText('CPU').closest('th')).not.toHaveClass('hidden');
+      expect(getByText('Memory')).toBeInTheDocument();
+      expect(getByText('Disk').closest('th')).not.toHaveClass('hidden');
+
+      emitResizeObserverWidth(1200);
+
+      await waitFor(() => {
+        expect(getByText('Net I/O').closest('th')).not.toHaveClass('hidden');
+        expect(getByText('Source').closest('th')).not.toHaveClass('hidden');
+        expect(getByText('Uptime').closest('th')).toHaveClass('hidden');
+      });
+
+      emitResizeObserverWidth(1400);
+
+      await waitFor(() => {
+        expect(getByText('Uptime').closest('th')).not.toHaveClass('hidden');
+        expect(getByText('Temp').closest('th')).not.toHaveClass('hidden');
+      });
     });
 
     it('renders the shared facet summary component in timeline-only mode for canonical resource counts', async () => {

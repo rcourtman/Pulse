@@ -226,7 +226,15 @@ assembly branch.
     `Analysis`, `Analysis Reasoning`, and `Safe Summary` rather than reviving
     generic `AI` or `AI-Safe` branding inside the resource drawer or discovery
     shell.
-14. Keep shared policy-posture framing on the unified-resource card owner.
+14. Keep the operator-facing unified resource table width-aware at the table
+    surface, not just at the browser viewport. `frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx`
+    must route its root ref through `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts`,
+    and `frontend-modern/src/components/Infrastructure/unifiedResourceTableStateModel.ts`
+    owns the column-priority breakpoints for host and service infrastructure
+    rows. When the app shell leaves tablet-sized space during live resize, the
+    table must hide lower-priority resource metadata columns rather than
+    publishing a horizontally scrolling canonical resource list.
+15. Keep shared policy-posture framing on the unified-resource card owner.
     `frontend-modern/src/components/Infrastructure/ResourcePolicySummary.tsx`
     may accept caller-owned subtitle or resource-count wording when Patrol or
     another shared surface needs to explain how the same governed policy counts

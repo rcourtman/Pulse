@@ -1,5 +1,6 @@
-import { createMemo, createSignal } from 'solid-js';
+import { createEffect, createMemo, createSignal, onCleanup } from 'solid-js';
 import type { Resource } from '@/types/resource';
+import type { ColumnPriority } from '@/hooks/useBreakpoint';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import {
   buildInfrastructureSummaryGroupScope,
@@ -19,13 +20,16 @@ import {
   getHostSpacerHeights,
   getNextUnifiedResourceTableSortState,
   getUnifiedResourceTableColumnPresentations,
+  isUnifiedResourceTableColumnVisible,
   getUnifiedResourceTableShellClass,
   getUnifiedResourceTableSortIndicator,
   getUnifiedSources,
   getVisibleHostTableItems,
   HOST_TABLE_ESTIMATED_ROW_HEIGHT,
   HOST_TABLE_WINDOW_SIZE,
+  normalizeUnifiedResourceTableLayoutWidth,
   shouldShowUnifiedResourceHostTable,
+  shouldUseUnifiedResourceTableMobileLayout,
   sortServiceResources,
   type HostTableItem,
   type UnifiedResourceTableSortKey as SortKey,
@@ -52,9 +56,54 @@ export interface UnifiedResourceTableProps {
 }
 
 export function useUnifiedResourceTableState(props: UnifiedResourceTableProps) {
-  const { isMobile, isVisible } = useBreakpoint();
+  const breakpoint = useBreakpoint();
+  const [tableContainerWidth, setTableContainerWidth] = createSignal<number | null>(null);
+  const [tableRootElement, setTableRootElement] = createSignal<HTMLDivElement | null>(null);
   const [sortKey, setSortKey] = createSignal<SortKey>('default');
   const [sortDirection, setSortDirection] = createSignal<'asc' | 'desc'>('asc');
+
+  const updateTableContainerWidth = (width: number | null | undefined) => {
+    if (typeof width === 'number' && Number.isFinite(width) && width > 0) {
+      setTableContainerWidth(Math.round(width));
+    }
+  };
+
+  const setTableRootRef = (element: HTMLDivElement | undefined) => {
+    setTableRootElement(element ?? null);
+    props.setTableRootRef?.(element);
+    if (element) {
+      updateTableContainerWidth(element.clientWidth);
+    } else {
+      setTableContainerWidth(null);
+    }
+  };
+
+  createEffect(() => {
+    const element = tableRootElement();
+    if (!element || typeof ResizeObserver === 'undefined') return;
+
+    const observer = new ResizeObserver((entries) => {
+      const entryWidth = entries[0]?.contentRect.width;
+      updateTableContainerWidth(entryWidth ?? element.clientWidth);
+    });
+    observer.observe(element);
+    onCleanup(() => observer.disconnect());
+  });
+
+  const fallbackViewportWidth = () => {
+    const widthAccessor = breakpoint.width as (() => number) | undefined;
+    const width = widthAccessor?.();
+    return normalizeUnifiedResourceTableLayoutWidth(
+      width,
+      typeof window !== 'undefined' ? window.innerWidth : undefined,
+    );
+  };
+  const tableLayoutWidth = createMemo(() =>
+    normalizeUnifiedResourceTableLayoutWidth(tableContainerWidth(), fallbackViewportWidth()),
+  );
+  const isMobile = createMemo(() => shouldUseUnifiedResourceTableMobileLayout(tableLayoutWidth()));
+  const isVisible = (priority: ColumnPriority) =>
+    isUnifiedResourceTableColumnVisible(priority, tableLayoutWidth());
 
   const split = createMemo(() => splitPrimaryAndServiceResources(props.resources));
   const primaryResources = createMemo(() => split().primaryResources);
@@ -151,6 +200,7 @@ export function useUnifiedResourceTableState(props: UnifiedResourceTableProps) {
     handleSort,
     renderSortIndicator,
     resolveResourceLabel,
+    setTableRootRef,
     visibleHostTableItems,
     hostTopSpacerHeight: () => hostSpacerHeights().top,
     hostBottomSpacerHeight: () => hostSpacerHeights().bottom,

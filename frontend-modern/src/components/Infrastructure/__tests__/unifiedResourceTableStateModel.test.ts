@@ -13,7 +13,10 @@ import {
   getUnifiedResourceTableSortIndicator,
   getUnifiedSources,
   getVisibleHostTableItems,
+  isUnifiedResourceTableColumnVisible,
+  normalizeUnifiedResourceTableLayoutWidth,
   shouldShowUnifiedResourceHostTable,
+  shouldUseUnifiedResourceTableMobileLayout,
 } from '@/components/Infrastructure/unifiedResourceTableStateModel';
 
 const makeResource = (id: string, overrides: Partial<Resource> = {}): Resource =>
@@ -129,6 +132,18 @@ describe('unifiedResourceTableStateModel', () => {
     expect(shouldShowUnifiedResourceHostTable(0, 0)).toBe(true);
     expect(shouldShowUnifiedResourceHostTable(0, 2)).toBe(false);
     expect(shouldShowUnifiedResourceHostTable(3, 2)).toBe(true);
+  });
+
+  it('derives infrastructure table breakpoints from the measured table surface width', () => {
+    expect(normalizeUnifiedResourceTableLayoutWidth(820.4)).toBe(820);
+    expect(normalizeUnifiedResourceTableLayoutWidth(null, 700)).toBe(700);
+    expect(shouldUseUnifiedResourceTableMobileLayout(767)).toBe(true);
+    expect(shouldUseUnifiedResourceTableMobileLayout(768)).toBe(false);
+    expect(isUnifiedResourceTableColumnVisible('primary', 700)).toBe(true);
+    expect(isUnifiedResourceTableColumnVisible('secondary', 1119)).toBe(false);
+    expect(isUnifiedResourceTableColumnVisible('secondary', 1120)).toBe(true);
+    expect(isUnifiedResourceTableColumnVisible('supplementary', 1359)).toBe(false);
+    expect(isUnifiedResourceTableColumnVisible('supplementary', 1360)).toBe(true);
   });
 
   it('reads unified source tags from platform data without hook state', () => {

@@ -1,4 +1,5 @@
 import type { Resource } from '@/types/resource';
+import type { ColumnPriority } from '@/hooks/useBreakpoint';
 import { getPreferredInfrastructureDisplayName } from '@/utils/resourceIdentity';
 import {
   sortResources,
@@ -34,6 +35,38 @@ export type HostTableItem = HostTableHeaderItem | HostTableResourceItem;
 
 export const HOST_TABLE_ESTIMATED_ROW_HEIGHT = 40;
 export const HOST_TABLE_WINDOW_SIZE = 137;
+export const UNIFIED_RESOURCE_TABLE_DEFAULT_LAYOUT_WIDTH = 1024;
+export const UNIFIED_RESOURCE_TABLE_MOBILE_LAYOUT_WIDTH = 768;
+export const UNIFIED_RESOURCE_TABLE_COLUMN_BREAKPOINTS: Record<ColumnPriority, number> = {
+  essential: 0,
+  primary: 640,
+  secondary: 1120,
+  supplementary: 1360,
+  detailed: 1536,
+};
+
+export const normalizeUnifiedResourceTableLayoutWidth = (
+  width: number | null | undefined,
+  fallback: number = UNIFIED_RESOURCE_TABLE_DEFAULT_LAYOUT_WIDTH,
+): number => {
+  if (typeof width === 'number' && Number.isFinite(width) && width > 0) {
+    return Math.round(width);
+  }
+  if (Number.isFinite(fallback) && fallback > 0) {
+    return Math.round(fallback);
+  }
+  return UNIFIED_RESOURCE_TABLE_DEFAULT_LAYOUT_WIDTH;
+};
+
+export const shouldUseUnifiedResourceTableMobileLayout = (layoutWidth: number): boolean =>
+  normalizeUnifiedResourceTableLayoutWidth(layoutWidth) < UNIFIED_RESOURCE_TABLE_MOBILE_LAYOUT_WIDTH;
+
+export const isUnifiedResourceTableColumnVisible = (
+  priority: ColumnPriority,
+  layoutWidth: number,
+): boolean =>
+  normalizeUnifiedResourceTableLayoutWidth(layoutWidth) >=
+  UNIFIED_RESOURCE_TABLE_COLUMN_BREAKPOINTS[priority];
 
 export const buildResourceLabelById = (resources: Resource[]): Map<string, string> => {
   const map = new Map<string, string>();
