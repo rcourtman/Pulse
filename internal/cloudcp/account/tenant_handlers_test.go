@@ -365,7 +365,13 @@ func TestCreateWorkspace_MSPStarterLimitEnforced(t *testing.T) {
 		}
 	}
 
-	// The 11th should be blocked.
+	if _, err := provisioner.ProvisionWorkspace(context.Background(), accountID, "Client 11 direct"); err == nil {
+		t.Fatal("expected registry-backed workspace limit to block direct provisioning")
+	} else if _, ok := registry.WorkspaceLimitExceeded(err); !ok {
+		t.Fatalf("direct provision error = %v, want workspace limit", err)
+	}
+
+	// The handler should also return the product-level limit response.
 	body := `{"display_name":"Client 11"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/accounts/"+accountID+"/tenants", bytes.NewBufferString(body))
 	rec := doRequest(t, mux, req)

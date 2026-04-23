@@ -250,11 +250,11 @@ func TestMSPLifecycle_AccountToPortal(t *testing.T) {
 	inviteRec := httptest.NewRecorder()
 	memberMux.ServeHTTP(inviteRec, inviteReq)
 
-	if inviteRec.Code != http.StatusCreated {
-		t.Fatalf("invite member: status = %d, want %d (body=%q)", inviteRec.Code, http.StatusCreated, inviteRec.Body.String())
+	if inviteRec.Code != http.StatusAccepted {
+		t.Fatalf("invite member: status = %d, want %d (body=%q)", inviteRec.Code, http.StatusAccepted, inviteRec.Body.String())
 	}
 
-	// Verify member list includes both users.
+	// Verify the access list includes the active owner and the pending tech invite.
 	listReq := httptest.NewRequest(http.MethodGet, "/api/accounts/"+accountID+"/members", nil)
 	listReq.Header.Set("X-Admin-Key", "secret-key")
 	listRec := httptest.NewRecorder()
@@ -265,22 +265,23 @@ func TestMSPLifecycle_AccountToPortal(t *testing.T) {
 	}
 
 	var members []struct {
-		Email string              `json:"email"`
-		Role  registry.MemberRole `json:"role"`
+		Email string                      `json:"email"`
+		Role  registry.MemberRole         `json:"role"`
+		State registry.AccountAccessState `json:"state"`
 	}
 	if err := json.Unmarshal(listRec.Body.Bytes(), &members); err != nil {
 		t.Fatalf("decode members: %v", err)
 	}
 	if len(members) != 2 {
-		t.Fatalf("expected 2 members, got %d (%+v)", len(members), members)
+		t.Fatalf("expected 2 access subjects, got %d (%+v)", len(members), members)
 	}
 
 	sort.Slice(members, func(i, j int) bool { return members[i].Email < members[j].Email })
-	if members[0].Email != "owner@acmemsp.com" || members[0].Role != registry.MemberRoleOwner {
-		t.Fatalf("member[0] = %+v, want owner@acmemsp.com/owner", members[0])
+	if members[0].Email != "owner@acmemsp.com" || members[0].Role != registry.MemberRoleOwner || members[0].State != registry.AccountAccessStateActive {
+		t.Fatalf("member[0] = %+v, want owner@acmemsp.com/owner/active", members[0])
 	}
-	if members[1].Email != "tech@acmemsp.com" || members[1].Role != registry.MemberRoleTech {
-		t.Fatalf("member[1] = %+v, want tech@acmemsp.com/tech", members[1])
+	if members[1].Email != "tech@acmemsp.com" || members[1].Role != registry.MemberRoleTech || members[1].State != registry.AccountAccessStatePending {
+		t.Fatalf("member[1] = %+v, want tech@acmemsp.com/tech/pending", members[1])
 	}
 
 	// ── Phase 4: Portal dashboard ──────────────────────────────────────

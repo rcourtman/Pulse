@@ -3653,6 +3653,12 @@
           "path": "docs/release-control/v6/internal/records/msp-provider-tenant-management-production-followup-2026-03-13.md",
           "kind": "file",
           "evidence_tier": "real-external-e2e"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/multi-tenant-ga-readiness-revalidation-2026-04-23.md",
+          "kind": "file",
+          "evidence_tier": "local-rehearsal"
         }
       ]
     },
@@ -3671,6 +3677,12 @@
         "L17"
       ],
       "evidence": [
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/multi-tenant-ga-readiness-revalidation-2026-04-23.md",
+          "kind": "file",
+          "evidence_tier": "local-rehearsal"
+        },
         {
           "repo": "pulse",
           "path": "docs/release-control/v6/internal/records/multi-tenant-runtime-isolation-and-coherence-2026-03-13.md",
@@ -3695,6 +3707,12 @@
         "L17"
       ],
       "evidence": [
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/multi-tenant-ga-readiness-revalidation-2026-04-23.md",
+          "kind": "file",
+          "evidence_tier": "local-rehearsal"
+        },
         {
           "repo": "pulse",
           "path": "docs/release-control/v6/internal/records/organization-user-scope-and-rbac-2026-03-12.md",

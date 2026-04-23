@@ -52,6 +52,22 @@ func TestRouterGetMonitor_WithTenant(t *testing.T) {
 	}
 }
 
+func TestRouterGetMonitor_NonDefaultWithoutTenantMonitorFailsClosed(t *testing.T) {
+	defaultMonitor, _, _ := newTestMonitor(t)
+	router := &Router{monitor: defaultMonitor}
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, "tenant-1"))
+
+	monitor, err := router.getMonitor(req)
+	if err == nil {
+		t.Fatal("expected non-default org without tenant monitor to fail closed")
+	}
+	if monitor != nil {
+		t.Fatalf("monitor = %#v, want nil", monitor)
+	}
+}
+
 func TestMultiTenantStateProvider_UnifiedReadStateForTenant(t *testing.T) {
 	defaultMonitor, defaultState, _ := newTestMonitor(t)
 	defaultState.Hosts = []models.Host{{ID: "host-default", Hostname: "default-host", Status: "online"}}

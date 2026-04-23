@@ -1460,19 +1460,19 @@
     }
     if (!portalHandoffID) {
       summaryItems.push(
-        '<div class="billing-status visible error">Open this upgrade from Pulse Pro billing so Pulse Account can verify the secure upgrade handoff before checkout.</div>'
+        '<div class="billing-status visible error">Open this upgrade from the Plans page in Pulse so Pulse Account can verify the secure plan upgrade handoff before checkout.</div>'
       );
     } else if (handoffState.status === "loading") {
-      summaryItems.push('<div class="billing-status visible">Verifying the secure Pulse Pro upgrade handoff...</div>');
+      summaryItems.push('<div class="billing-status visible">Verifying the secure plan upgrade handoff...</div>');
     } else if (handoffState.status === "error") {
-      summaryItems.push('<div class="billing-status visible error">' + escapeText(handoffState.error || "Failed to verify the secure Pulse Pro upgrade handoff.") + "</div>");
+      summaryItems.push('<div class="billing-status visible error">' + escapeText(handoffState.error || "Failed to verify the secure plan upgrade handoff.") + "</div>");
     } else if (handoffState.status === "ready") {
       if (handoffLifecycle === "completed") {
-        summaryItems.push('<div class="billing-status visible success">This secure upgrade handoff already completed. Return to Pulse Pro billing to review the live plan state.</div>');
+        summaryItems.push('<div class="billing-status visible success">This secure upgrade handoff already completed. Return to the Plans page in Pulse to review the live plan state.</div>');
       } else if (handoffLifecycle === "checkout_started") {
         summaryItems.push('<div class="billing-status visible">Secure checkout is already prepared for this upgrade. Continue below if you still need to reopen it.</div>');
       } else {
-        summaryItems.push('<div class="billing-status visible success">Pulse Account will return completed checkout directly to Pulse Pro billing.</div>');
+        summaryItems.push('<div class="billing-status visible success">Pulse Account will return completed checkout directly to the Plans page in Pulse.</div>');
       }
     }
     if (pricingState.status === "loading" && !pricingState.data) {
@@ -1486,7 +1486,7 @@
     if (explainer) {
       summaryItems.push('<div class="helper-text">' + explainer + "</div>");
     }
-    root.innerHTML = '<div class="billing-upgrade-root">' + summaryItems.join("") + renderUpgradePlansHTML(billingState) + (pricingState.status === "ready" && pricingState.data && pricingState.data.description ? '<div class="helper-text">' + escapeText(pricingState.data.description) + "</div>" : "") + '<div class="helper-text">' + (featureKey === "self_hosted_plan" || featureKey === "max_monitored_systems" ? "Pulse Account keeps checkout tied to the Pulse instance that opened it, so completed Relay or Pro purchases return to the right billing surface automatically." : "Pulse Account compares self-hosted tiers and sends completed checkout straight back to Pulse Pro billing.") + "</div></div>";
+    root.innerHTML = '<div class="billing-upgrade-root">' + summaryItems.join("") + renderUpgradePlansHTML(billingState) + (pricingState.status === "ready" && pricingState.data && pricingState.data.description ? '<div class="helper-text">' + escapeText(pricingState.data.description) + "</div>" : "") + '<div class="helper-text">' + (featureKey === "self_hosted_plan" || featureKey === "max_monitored_systems" ? "Pulse Account keeps checkout tied to the Pulse instance that opened it, so completed Relay or Pro purchases return to the right Plans page automatically." : "Pulse Account compares self-hosted tiers and sends completed checkout straight back to the Plans page in Pulse.") + "</div></div>";
   }
   function renderButton(id, disabled, label) {
     if (!id || !label) return;
@@ -1819,7 +1819,7 @@
           failQueryState(
             nextBillingState.upgradePortalHandoff,
             null,
-            err instanceof Error ? err.message : "Failed to verify the secure Pulse Pro upgrade handoff."
+            err instanceof Error ? err.message : "Failed to verify the secure plan upgrade handoff."
           );
         });
       }
@@ -1835,7 +1835,7 @@
         updateBillingState(function(nextBillingState) {
           failMutationState(
             nextBillingState.upgradeCheckout,
-            "Pulse Account could not verify the secure upgrade handoff. Reopen the upgrade flow from Pulse Pro billing."
+            "Pulse Account could not verify the secure upgrade handoff. Reopen the upgrade flow from the Plans page in Pulse."
           );
         });
         return;
@@ -1844,7 +1844,7 @@
         updateBillingState(function(nextBillingState) {
           failMutationState(
             nextBillingState.upgradeCheckout,
-            "This secure upgrade handoff already completed. Return to Pulse Pro billing to review the live plan state."
+            "This secure upgrade handoff already completed. Return to the Plans page in Pulse to review the live plan state."
           );
         });
         return;
@@ -2275,7 +2275,7 @@
     return isSelfHostedPlanUpgrade(featureKey) ? "Compare self-hosted plans as monitor, reach, or operate instead of by monitored-system volume." : "Compare self-hosted plans and continue into the commercial checkout path.";
   }
   function selfHostedUpgradeActionHighlights(featureKey) {
-    return isSelfHostedPlanUpgrade(featureKey) ? ["Plan comparison", "Pulse Pro checkout"] : ["Plan comparison", "Checkout handoff"];
+    return isSelfHostedPlanUpgrade(featureKey) ? ["Plan comparison", "Plan checkout"] : ["Plan comparison", "Checkout handoff"];
   }
   function renderSelfHostedUpgradeActionRow(context) {
     var featureKey = normalizeUpgradeFeatureKey(context.billingState.upgradeFeatureKey);
@@ -2291,10 +2291,10 @@
   }
   function renderSelfHostedUpgradeBillingPanel(context) {
     var featureKey = normalizeUpgradeFeatureKey(context.billingState.upgradeFeatureKey);
-    var helperCopy = isSelfHostedPlanUpgrade(featureKey) ? "Choose the self-hosted tier that fits how you run Pulse: Community monitors, Relay reaches anywhere, and Pro investigates and helps fix issues. Pulse Account will send completed checkout directly back to Pulse Pro billing." : "Choose the self-hosted tier that fits this upgrade. Pulse Account will send completed checkout directly back to Pulse Pro billing.";
+    var helperCopy = isSelfHostedPlanUpgrade(featureKey) ? "Choose the self-hosted tier that fits how you run Pulse: Community monitors, Relay reaches anywhere, and Pro investigates and helps fix issues. Pulse Account will send completed checkout directly back to the Plans page in Pulse." : "Choose the self-hosted tier that fits this upgrade. Pulse Account will send completed checkout directly back to the Plans page in Pulse.";
     return renderBillingTaskPanel(
       selfHostedUpgradeActionTitle(featureKey),
-      "Pulse Account owns self-hosted plan selection and checkout for Pulse Pro upgrades.",
+      "Pulse Account owns self-hosted plan selection and checkout for self-hosted upgrades.",
       "upgrade-billing-panel",
       '<div id="upgrade-billing-root"></div><div class="helper-text">' + escapeHTML(helperCopy) + "</div>"
     );

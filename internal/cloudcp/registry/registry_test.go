@@ -2,6 +2,7 @@ package registry
 
 import (
 	"database/sql"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -805,6 +806,42 @@ func TestListByAccountID(t *testing.T) {
 	}
 	if !seen["t-ACCNT0001"] || !seen["t-ACCNT0002"] {
 		t.Fatalf("expected tenants t-ACCNT0001 and t-ACCNT0002, got %+v", tenants)
+	}
+}
+
+func TestCreateWithAccountWorkspaceLimitEnforcesActiveCount(t *testing.T) {
+	reg := newTestRegistry(t)
+
+	accountID, err := GenerateAccountID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.CreateAccount(&Account{ID: accountID, Kind: AccountKindMSP, DisplayName: "Account"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.CreateWithAccountWorkspaceLimit(&Tenant{ID: "t-LIMIT001", AccountID: accountID, State: TenantStateActive}, 1); err != nil {
+		t.Fatalf("first create: %v", err)
+	}
+
+	err = reg.CreateWithAccountWorkspaceLimit(&Tenant{ID: "t-LIMIT002", AccountID: accountID, State: TenantStateProvisioning}, 1)
+	var limitErr *WorkspaceLimitExceededError
+	if !errors.As(err, &limitErr) {
+		t.Fatalf("second create error = %v, want WorkspaceLimitExceededError", err)
+	}
+	if limitErr.Current != 1 || limitErr.Limit != 1 {
+		t.Fatalf("limit error = %+v, want current=1 limit=1", limitErr)
+	}
+
+	first, err := reg.Get("t-LIMIT001")
+	if err != nil {
+		t.Fatalf("load first tenant: %v", err)
+	}
+	first.State = TenantStateDeleted
+	if err := reg.Update(first); err != nil {
+		t.Fatalf("mark first tenant deleted: %v", err)
+	}
+	if err := reg.CreateWithAccountWorkspaceLimit(&Tenant{ID: "t-LIMIT003", AccountID: accountID, State: TenantStateProvisioning}, 1); err != nil {
+		t.Fatalf("deleted tenant should free an active workspace slot: %v", err)
 	}
 }
 

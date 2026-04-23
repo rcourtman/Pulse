@@ -333,8 +333,14 @@ func (h *ConfigHandlers) getContextState(ctx context.Context) (*config.Config, *
 				p, _ = mtPersistence.GetPersistence(orgID)
 			}
 			return cfg, p, m
-		} else if err != nil {
-			log.Warn().Str("orgID", orgID).Err(err).Msg("Falling back to default-org config after tenant monitor lookup failure")
+		} else {
+			if orgID != "default" {
+				log.Warn().Str("orgID", orgID).Err(err).Msg("Tenant config resolution failed for non-default org")
+				return nil, nil, nil
+			}
+			if err != nil {
+				log.Warn().Str("orgID", orgID).Err(err).Msg("Falling back to default-org config after default tenant monitor lookup failure")
+			}
 		}
 	}
 

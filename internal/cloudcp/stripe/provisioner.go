@@ -897,7 +897,11 @@ func (p *Provisioner) ProvisionWorkspaceForOwner(ctx context.Context, accountID,
 		State:       registry.TenantStateProvisioning,
 		PlanVersion: planVersion,
 	}
-	if err := p.registry.Create(tenant); err != nil {
+	workspaceLimit, knownWorkspaceLimit := pkglicensing.WorkspaceLimitForPlan(planVersion)
+	if !knownWorkspaceLimit {
+		workspaceLimit = pkglicensing.UnknownPlanDefaultWorkspaceLimit
+	}
+	if err := p.registry.CreateWithAccountWorkspaceLimit(tenant, workspaceLimit); err != nil {
 		return nil, fmt.Errorf("create tenant record: %w", err)
 	}
 	cleanup.tenantID = tenantID

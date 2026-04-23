@@ -12,10 +12,9 @@ import (
 )
 
 // workspaceCreateLocks provides per-account serialization for workspace
-// creation to prevent check-then-create race conditions. Each account gets
-// its own mutex so that slow provisioning for one account does not block
-// other accounts. For multi-instance deployments, this should be replaced
-// with a DB-level constraint.
+// creation inside one control-plane process. The registry still enforces the
+// final workspace limit in the tenant-create transaction, so multi-instance
+// deployments share the same source of truth.
 var workspaceCreateLocks sync.Map // map[string]*sync.Mutex
 
 func accountCreateLock(accountID string) *sync.Mutex {
@@ -173,6 +172,22 @@ func HandleCreateTenant(reg *registry.TenantRegistry, provisioner WorkspaceProvi
 			return
 		}
 		if provisionErr != nil {
+			if limitErr, ok := registry.WorkspaceLimitExceeded(provisionErr); ok {
+				auditEvent(r, "cp_tenant_create", "failure").
+					Err(provisionErr).
+					Str("account_id", accountID).
+					Str("display_name", displayName).
+					Str("reason", "workspace_limit_reached").
+					Int("current_count", limitErr.Current).
+					Int("limit", limitErr.Limit).
+					Msg("Tenant creation blocked by registry workspace limit")
+				http.Error(
+					w,
+					fmt.Sprintf("workspace limit reached: %d of %d allowed", limitErr.Current, limitErr.Limit),
+					http.StatusForbidden,
+				)
+				return
+			}
 			auditEvent(r, "cp_tenant_create", "failure").
 				Err(provisionErr).
 				Str("account_id", accountID).

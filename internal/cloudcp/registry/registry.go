@@ -1,8 +1,10 @@
 package registry
 
 import (
+	"context"
 	"database/sql"
 	"database/sql/driver"
+	"errors"
 	"fmt"
 	"net/url"
 	"os"
@@ -28,6 +30,31 @@ const (
 
 func canonicalizeRegistryPlanVersion(planVersion string) string {
 	return pkglicensing.CanonicalizePlanVersion(strings.TrimSpace(planVersion))
+}
+
+// WorkspaceLimitExceededError is returned when an account has already reached
+// its allowed active workspace count.
+type WorkspaceLimitExceededError struct {
+	AccountID string
+	Current   int
+	Limit     int
+}
+
+func (e *WorkspaceLimitExceededError) Error() string {
+	if e == nil {
+		return "workspace limit exceeded"
+	}
+	return fmt.Sprintf("workspace limit reached for account %q: %d of %d allowed", e.AccountID, e.Current, e.Limit)
+}
+
+// WorkspaceLimitExceeded unwraps wrapped errors that represent a workspace
+// limit violation.
+func WorkspaceLimitExceeded(err error) (*WorkspaceLimitExceededError, bool) {
+	var limitErr *WorkspaceLimitExceededError
+	if errors.As(err, &limitErr) {
+		return limitErr, true
+	}
+	return nil, false
 }
 
 // NewTenantRegistry opens (or creates) the tenant registry database in dir.
@@ -515,14 +542,89 @@ func (r *TenantRegistry) Create(t *Tenant) error {
 	if t == nil {
 		return fmt.Errorf("tenant is nil")
 	}
+	prepareTenantForCreate(t)
+
+	if err := insertTenant(context.Background(), r.db, t); err != nil {
+		return fmt.Errorf("create tenant: %w", err)
+	}
+	return nil
+}
+
+// CreateWithAccountWorkspaceLimit inserts a tenant only if the account remains
+// below its active workspace limit. The check and insert happen under a SQLite
+// write transaction so multiple control-plane instances share the same final
+// source of truth instead of relying on per-process locks.
+func (r *TenantRegistry) CreateWithAccountWorkspaceLimit(t *Tenant, limit int) error {
+	if t == nil {
+		return fmt.Errorf("tenant is nil")
+	}
+	if strings.TrimSpace(t.AccountID) == "" {
+		return fmt.Errorf("account id is required")
+	}
+	if limit < 1 {
+		limit = 1
+	}
+	prepareTenantForCreate(t)
+
+	ctx := context.Background()
+	conn, err := r.db.Conn(ctx)
+	if err != nil {
+		return fmt.Errorf("open tenant registry connection: %w", err)
+	}
+	defer conn.Close()
+
+	if _, err := conn.ExecContext(ctx, "BEGIN IMMEDIATE"); err != nil {
+		return fmt.Errorf("begin tenant create transaction: %w", err)
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_, _ = conn.ExecContext(ctx, "ROLLBACK")
+		}
+	}()
+
+	var current int
+	if err := conn.QueryRowContext(ctx, `
+		SELECT COUNT(*) FROM tenants
+		WHERE account_id = ?
+		  AND state NOT IN ('deleting', 'deleted', 'canceled')`,
+		t.AccountID,
+	).Scan(&current); err != nil {
+		return fmt.Errorf("count active tenants for account %q: %w", t.AccountID, err)
+	}
+	if current >= limit {
+		return &WorkspaceLimitExceededError{
+			AccountID: t.AccountID,
+			Current:   current,
+			Limit:     limit,
+		}
+	}
+
+	if err := insertTenant(ctx, conn, t); err != nil {
+		return fmt.Errorf("create tenant: %w", err)
+	}
+	if _, err := conn.ExecContext(ctx, "COMMIT"); err != nil {
+		return fmt.Errorf("commit tenant create transaction: %w", err)
+	}
+	committed = true
+	return nil
+}
+
+type tenantInsertExecer interface {
+	ExecContext(context.Context, string, ...any) (sql.Result, error)
+}
+
+func prepareTenantForCreate(t *Tenant) {
 	now := time.Now().UTC()
 	if t.CreatedAt.IsZero() {
 		t.CreatedAt = now
 	}
 	t.PlanVersion = canonicalizeRegistryPlanVersion(t.PlanVersion)
 	t.UpdatedAt = now
+}
 
-	_, err := r.db.Exec(`
+func insertTenant(ctx context.Context, execer tenantInsertExecer, t *Tenant) error {
+	_, err := execer.ExecContext(ctx, `
 		INSERT INTO tenants (
 			id, account_id, email, display_name, state,
 			stripe_customer_id, stripe_subscription_id, stripe_price_id,
@@ -535,7 +637,7 @@ func (r *TenantRegistry) Create(t *Tenant) error {
 		t.CreatedAt.Unix(), t.UpdatedAt.Unix(), nullableTimeUnix(t.LastHealthCheck), boolToInt(t.HealthCheckOK),
 	)
 	if err != nil {
-		return fmt.Errorf("create tenant: %w", err)
+		return err
 	}
 	return nil
 }

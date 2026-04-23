@@ -1,6 +1,7 @@
 package api
 
 import (
+	"errors"
 	"net/http"
 	"time"
 
@@ -9,17 +10,18 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+var errTenantMonitorUnavailable = errors.New("tenant monitor unavailable")
+
 // getMonitor returns the tenant-specific monitor instance for the request.
 // It uses the OrgID from the context (injected by TenantMiddleware).
-// If no tenant monitor is found, or if not in multi-tenant mode, it returns the default monitor.
+// Non-default orgs fail closed when tenant monitor resolution is unavailable.
 func (r *Router) getMonitor(req *http.Request) (*monitoring.Monitor, error) {
-	if r.mtMonitor == nil {
+	orgID := GetOrgID(req.Context())
+	if orgID == "" || orgID == "default" {
 		return r.monitor, nil
 	}
-
-	orgID := GetOrgID(req.Context())
-	if orgID == "" {
-		return r.monitor, nil
+	if r.mtMonitor == nil {
+		return nil, errTenantMonitorUnavailable
 	}
 
 	return r.mtMonitor.GetMonitor(orgID)

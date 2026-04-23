@@ -77,6 +77,27 @@ func TestRouterSetMultiTenantMonitorRefreshesConfigHandlerMonitorSource(t *testi
 	}
 }
 
+func TestConfigHandlersNonDefaultMissingTenantMonitorFailsClosed(t *testing.T) {
+	defaultConfig := &config.Config{DataPath: t.TempDir(), ConfigPath: t.TempDir()}
+	defaultMonitor, _, _ := newTestMonitor(t)
+	mtp := config.NewMultiTenantPersistence(t.TempDir())
+	mtm := monitoring.NewMultiTenantMonitor(defaultConfig, mtp, nil)
+	defer mtm.Stop()
+
+	handler := &ConfigHandlers{
+		defaultConfig:      defaultConfig,
+		defaultPersistence: config.NewConfigPersistence(defaultConfig.ConfigPath),
+		defaultMonitor:     defaultMonitor,
+	}
+	handler.SetMultiTenantMonitor(mtm)
+
+	ctx := context.WithValue(context.Background(), OrgIDContextKey, "tenant-missing")
+	cfg, persistence, monitor := handler.getContextState(ctx)
+	if cfg != nil || persistence != nil || monitor != nil {
+		t.Fatalf("expected missing non-default tenant state to fail closed, got cfg=%#v persistence=%#v monitor=%#v", cfg, persistence, monitor)
+	}
+}
+
 func TestNewRouterWiresTenantResourceStateProvider(t *testing.T) {
 	cfg := &config.Config{
 		DataPath:   t.TempDir(),
