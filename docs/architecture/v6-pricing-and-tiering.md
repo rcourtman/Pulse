@@ -17,7 +17,7 @@ align with this document. If there is a conflict, this document wins.
 ## Design Principles
 
 1. **Free attracts, paid converts.** The free tier must be good enough to get users in the
-   door, but constrained enough that serious users feel upgrade pressure naturally.
+   door, while paid tiers must add obvious operational value for serious users.
 2. **Gate on action, not information.** Self-hosted AI Patrol is BYOK in steady state,
    with one Patrol-only quickstart allowance for activated or trial-backed installs during
    first-run activation. We never cap how many times users can run Patrol through their
@@ -57,8 +57,8 @@ gate.
 - any child resource discovered under a counted top-level system
 
 **Collection path does not matter:**
-- Agent-backed monitoring and API-backed monitoring consume the same cap
-- If the same underlying system is seen by both an agent and an API connection, it counts once
+- Agent-backed monitoring and API-backed monitoring resolve to the same monitored-system identity
+- If the same underlying system is seen by both an agent and an API connection, it is represented once
 - Deduplication must follow canonical unified-resource identity rather than transport-specific state
 
 **Why this model:** counting by monitored systems matches the product Pulse is actually
@@ -71,17 +71,18 @@ should still use this canonical unit rather than transport-specific counts.
 > system counts once in Pulse's inventory, no matter how Pulse collects it. Everything under
 > that system — VMs, containers, pods, disks, backups, and services — is included."
 
-**Counting stability:** a monitored system should only begin consuming the cap after it is
-stable enough to appear as a durable monitored root. Existing offline systems should release
-their slot only after a deliberate grace period, not on transient disconnects.
+**Counting stability:** when a hosted, MSP, or legacy continuity policy uses monitored-system
+capacity, a monitored system should only count after it is stable enough to appear as a
+durable monitored root. Existing offline systems should release their slot only after a
+deliberate grace period, not on transient disconnects.
 
 **Transparent ledger:** in-product UI must show the exact counted systems, their collection
-path, and their first-seen / last-seen state so users can understand why they are at X/Y.
+path, and their first-seen / last-seen state so users can understand Pulse's inventory truth.
 
-**Implementation transition note:** the current runtime still enforces `max_agents` and
-agent-backed counting in some paths. That is a transitional compatibility boundary, not the
-long-term commercial model. The canonical v6 destination is monitored-system identity and
-ledger truth, with self-hosted commercial surfaces treating core monitoring as unlimited.
+**Implementation transition note:** any remaining `max_agents` or agent-backed counting paths
+are compatibility boundaries for hosted, MSP, or legacy continuity logic, not the self-hosted
+commercial model. The canonical v6 destination is monitored-system identity and ledger truth,
+with self-hosted commercial surfaces treating core monitoring as unlimited.
 
 **Examples:**
 - A 3-node Proxmox cluster monitored node-by-node counts as **3 monitored systems**
@@ -290,10 +291,10 @@ All MSP tiers include everything in Pro + multi-tenant management UI + port sepa
 
 ## Conversion Mechanics
 
-### 1. Monitored-system cap ladder (5 → 8 → 15 → 50)
-Graduated upgrade pressure as infrastructure grows. In-product UI shows "5/5 monitored systems"
-with an upgrade CTA before hard block. The free tier must still fit one real small homelab end
-to end, while paid tiers make boundary crossings feel easy and fair.
+### 1. Operations-value ladder
+Self-hosted conversion should come from clear operational upgrades, not monitored-system
+capacity pressure. Community proves the core monitoring loop, Relay sells convenience,
+and Pro sells safe operations, longer history, and team/admin controls.
 
 ### 2. AI fix previews (strongest lever)
 Free/Relay users see exactly what Patrol found and how to fix it (specific commands), but
@@ -308,28 +309,29 @@ later unlocks auto-fix, alert analysis, and other paid operations features; it d
 replace BYOK for self-hosted AI runtime. Cost: ~$0.002–0.01 per run.
 
 ### 4. Relay as impulse buy ($39/yr)
-Fills the $0 → Pro gap. Relay is not the automation tier; it is the cheap convenience and
-headroom tier. Remote access + mobile + push notifications + custom URL + three extra counted
-systems should make it an easy purchase for users sitting on the Community boundary.
+Fills the $0 → Pro gap. Relay is not the automation tier and it is not a capacity tier.
+Remote access + mobile + push notifications + custom URL + 14-day history should make it
+an easy purchase for users who want Pulse available outside their LAN.
 
 ### 5. Contextual trial triggers
 14-day Pro trial offered at moments of maximum desire:
 - Patrol finds a fixable issue → "Apply this fix automatically? Start your free trial"
-- User hits monitored-system cap → "Need more room? Start your free trial"
+- An alert needs deeper explanation → "Let Pulse investigate this alert? Start your free trial"
 - User taps 30-day chart range → "See your full history — start your free trial"
-- User tries Relay from free tier → "Monitor from anywhere — upgrade to Relay ($49/yr) or
+- User tries Relay from free tier → "Monitor from anywhere — upgrade to Relay ($39/yr) or
   start a Pro trial"
 - 7+ days of active use → proactive "Experience the full power" nudge
 
-### 6. Onboarding overflow (+1 monitored system for 14 days)
-New free users get a temporary 6th counted-system slot for their first 14 days. Prevents hard-wall
-frustration during initial setup. One-time per workspace.
+### 6. No self-hosted monitored-system overflow gate
+Self-hosted Community users should not need a temporary monitored-system overflow path because
+core self-hosted monitoring is unlimited. Onboarding can still surface Relay and Pro value when
+users try remote access, push notifications, longer history, alert investigation, or auto-fix.
 
-### 7. Transparent counted-system ledger
-Always visible in the UI: "5/5 monitored systems." Link to the counted-system ledger showing
-exactly what's counted, which collection path is being used, and what is included under each
-system. Upgrade CTA appears before hard block, not
-after.
+### 7. Transparent monitored-system ledger
+The ledger remains important for inventory truth, hosted/MSP limits, and support. It should
+show exactly which top-level systems Pulse sees, which collection path is being used, and what
+is included under each system. On self-hosted Community/Relay/Pro, it must not create a false
+"X/Y systems" paywall or imply that users need to buy more monitoring room.
 
 ### 8. Upsell snooze (7-day, not permanent)
 Users can snooze upgrade prompts for 7 days. No permanent mute option. Power users who
@@ -349,12 +351,12 @@ want to self-host.
 - Exchange endpoint: `POST /v1/licenses/exchange`
 - Once migrated: renewal emails suppressed, legacy JWT disabled
 
-## Free-Tier Cap Migration
+## Self-Hosted Cap Migration
 
-- Existing free users who end up above the new counted-system cap must not be hard-broken on rollout day
-- Existing monitored coverage should continue during a defined grace period
-- During grace, Pulse should block only new counted-system additions until the user reduces usage or upgrades
-- The UI must explain the new counting model clearly and show the exact systems consuming the cap
+- There is no v6 self-hosted monitored-system cap migration for Community, Relay, Pro, or Pro+
+- Existing self-hosted users keep their monitored coverage through the v6 rollout
+- Hosted Cloud and MSP capacity limits remain plan-specific license claims, not self-hosted static tier defaults
+- The UI may still explain monitored-system identity, but it must not frame self-hosted growth as a capacity upsell
 
 ---
 
@@ -362,7 +364,7 @@ want to self-host.
 
 - **Duration:** 14 days
 - **Credit card:** Not required
-- **Available on:** Pro, Pro+, Cloud (all tiers)
+- **Available on:** Pro, Cloud, and legacy Pro+ continuity where applicable
 - **Not available on:** Relay (cheap enough to just buy)
 - **Features during trial:** Full Pro capabilities
 - **Activation paths:**
@@ -382,20 +384,21 @@ want to self-host.
 
 ## Pricing Page Layout
 
-### Main pricing page (self-hosted — 4 columns)
+### Main pricing page (self-hosted — 3 columns)
 
 ```
-  Free          Relay           Pro             Pro+
-  $0            $39/yr          $79/yr          $129/yr
-  5 systems     8 systems       15 systems      50 systems
+  Community     Relay           Pro
+  $0            $39/yr          $79/yr
+  Unlimited     Unlimited       Unlimited
+  monitoring    monitoring      monitoring
 
-  [Get Started] [Buy Relay]     [Start Trial]   [Start Trial]
+  [Get Started] [Buy Relay]     [Start Trial]
 ```
 
 Below the table:
 - "Need managed hosting? → See Cloud plans"
 - "Managing clients? → See MSP plans"
-- "Need 50+ systems? → Contact us"
+- "Need a custom commercial deployment? → Contact us"
 
 ### Cloud page (3 columns)
 
@@ -419,7 +422,8 @@ Below the table:
 
 ### Counted-unit explainer
 
-Use this exact idea everywhere pricing or cap enforcement is shown:
+Use this exact idea wherever pricing, inventory, or hosted/MSP limit enforcement needs to
+explain monitored-system identity:
 
 > "Pulse counts monitored systems, not everything underneath them. Each top-level machine or
 > cluster counts once, no matter how Pulse collects it. VMs, containers, pods, disks, backups,
@@ -427,16 +431,16 @@ Use this exact idea everywhere pricing or cap enforcement is shown:
 
 ### Plan taglines
 
-- **Community:** Monitor up to 5 systems for free.
-- **Relay:** Get a bit more room and monitor from anywhere.
+- **Community:** Monitor your self-hosted infrastructure for free.
+- **Relay:** Monitor from anywhere with remote access, mobile, push, and longer history.
 - **Pro:** Pulse does not just watch your infrastructure. It helps operate it.
-- **Pro+:** Everything in Pro, with more room for larger labs.
+- **Pro+:** Legacy continuity tier for existing holders.
 
 ### Boundary-upgrade copy
 
-- **Community → Relay:** Need a little more room? Upgrade to Relay for 3 extra monitored systems plus remote access, mobile, and push notifications.
+- **Community → Relay:** Want Pulse outside your LAN? Upgrade to Relay for secure remote access, mobile, push notifications, and 14-day history.
 - **Relay → Pro:** Want Pulse to do more than alert? Upgrade to Pro for AI investigation, auto-fix, and 90-day history.
-- **Free over cap grace:** Your existing monitoring will keep working for now, but new systems will not be added until you remove one or upgrade.
+- **Existing self-hosted monitoring:** Your monitored systems keep working. Paid self-hosted tiers add convenience and operations features, not more monitoring room.
 
 ---
 
@@ -447,15 +451,15 @@ Use this exact idea everywhere pricing or cap enforcement is shown:
 ### Self-Hosted
 
 > 2026-03-17 decision: the previous self-hosted v6 public prices are superseded.
-> New live Stripe prices still need to be created for the locked $4.99 / $8.99 / $14.99
-> monthly bands and their annual counterparts before public checkout is cut over.
+> New live Stripe prices still need to be created for the locked Relay and Pro
+> monthly/annual bands before public checkout is cut over. Pro+ is a continuity tier, not a
+> public self-hosted checkout column.
 
 - Relay Monthly: pending new live Stripe price ($4.99/mo)
 - Relay Annual: pending new live Stripe price ($39/yr)
 - Pro Monthly: pending new live Stripe price ($8.99/mo)
 - Pro Annual: pending new live Stripe price ($79/yr)
-- Pro+ Monthly: pending new live Stripe price ($14.99/mo)
-- Pro+ Annual: pending new live Stripe price ($129/yr)
+- Pro+ renewal/continuity prices: record only if still needed for existing holders
 
 ### Cloud (created 2026-02-28)
 - Cloud Starter Monthly: `price_1T5kflBrHBocJIGHUqPv1dzV` ($29/mo)
@@ -484,24 +488,24 @@ Use this exact idea everywhere pricing or cap enforcement is shown:
 
 ### Pulse runtime
 
-- [ ] Replace agent-only commercial enforcement with monitored-system counting derived from canonical unified-resource roots
-- [ ] Deduplicate agent-backed and API-backed monitoring of the same system into one counted unit
-- [ ] Preserve child-resource inclusion semantics (VMs, containers, pods, disks, backups do not count separately)
-- [ ] Introduce a migration-safe compatibility boundary from `max_agents` to a canonical counted-system limit
-- [ ] Add a free-tier grace path for existing installs that end up above the new cap
+- [x] Treat self-hosted Community / Relay / Pro / Pro+ tier defaults as unlimited core monitoring
+- [x] Preserve grandfathered v5 recurring plans as uncapped continuity states while subscriptions remain active
+- [x] Keep hosted Cloud / MSP capacity out of static self-hosted tier defaults and in plan-specific license claims
+- [ ] Keep refining monitored-system identity and ledger truth for inventory, hosted/MSP limits, and support workflows
 
 ### Frontend
 
-- [ ] Rename user-facing language from agents to monitored systems where the copy is commercial rather than technical
-- [ ] Replace the installed-agent ledger with a counted-system ledger
-- [ ] Update pricing, paywall, and upgrade copy to the locked $0 / $39 / $79 / $129 annual ladder
-- [ ] Keep the upgrade pressure points, but make the counted unit obvious and fair
+- [x] Remove self-hosted monitored-system cap pressure from billing and pricing surfaces
+- [x] Present the public self-hosted ladder as Community / Relay / Pro
+- [ ] Keep ledger and inventory language focused on what Pulse monitors, not paid capacity pressure
+- [ ] Keep upgrade prompts focused on Relay convenience, Pro investigation, Pro auto-fix, and history
 
 ### License server / checkout / landing pages (`pulse-pro`)
 
-- [ ] Create new self-hosted Stripe prices for Relay / Pro / Pro+ at the locked public bands
+- [ ] Create new self-hosted Stripe prices for Relay / Pro at the locked public bands
 - [ ] Update plan mappings, checkout flows, and renewal-safe migration logic without disturbing grandfathered v5 continuity
-- [ ] Cut the landing page, checkout copy, and purchase surfaces over to monitored-system language and the new price bands
+- [ ] Keep Pro+ out of the public checkout ladder unless a separate continuity requirement explicitly needs it
+- [ ] Cut the landing page, checkout copy, and purchase surfaces over to unlimited self-hosted monitoring language and the new price bands
 
 ### Cloud / MSP
 
@@ -517,7 +521,7 @@ Use this exact idea everywhere pricing or cap enforcement is shown:
 - Free → Pro trial start rate
 - Trial → paid conversion rate
 - Relay → Pro upgrade rate
-- Which paywall surfaces fire most (agent cap vs AI fix vs Relay vs history)
+- Which paywall surfaces fire most (Relay vs alert investigation vs auto-fix vs history)
 - Support load per tier
 
 ### 60-day post-launch review
@@ -533,6 +537,7 @@ Use this exact idea everywhere pricing or cap enforcement is shown:
 
 | Date | Change | Author |
 |---|---|---|
+| 2026-04-23 | Removed stale self-hosted monitored-system cap and Pro+ public-checkout language. Reaffirmed Community / Relay / Pro as unlimited self-hosted monitoring tiers, with Pro+ as continuity only and Pro value centered on operations, history, and admin controls. | Codex |
 | 2026-03-17 | Re-locked the self-hosted commercial model around monitored systems rather than installed agents. New self-hosted public pricing: Relay $4.99/$39, Pro $8.99/$79, Pro+ $14.99/$129. Added free-tier grace policy and marked the monitored-system counting migration as still required in code. | Codex + Richard |
 | 2026-02-25 | Initial v6 pricing structure finalized | Richard + Claude + Codex |
 | 2026-02-25 | Changed counting to agents-only model. Only installed Pulse Unified Agents count toward limits. PVE/PBS/PMG/Docker/K8s connections and discovered resources don't count. This makes limits much more generous in practice (5 agents can monitor an entire multi-node cluster). | Richard + Claude |

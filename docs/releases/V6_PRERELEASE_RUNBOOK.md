@@ -46,6 +46,20 @@ The Pulse release workflow in this repo (`.github/workflows/create-release.yml`)
 
 It does not automatically check out or build `pulse-enterprise`.
 
+That means public `pulse-v...` release archives are OSS runtime artifacts. They must not be
+described as including Pulse Pro runtime features unless a separate Pro package has been built
+from `pulse-enterprise` against the same Pulse ref and version.
+
+Paid-user GA is blocked until the Pro release artifacts are built and wired into the paid
+install/upgrade path. The current Pro packaging path lives in `pulse-enterprise`:
+
+- `.github/workflows/build-pro-release.yml`
+- `scripts/build-pro-release.sh`
+
+The paid-user promise is only satisfied when paid customers are directed to `pulse-pro-v...`
+artifacts, or to an explicitly verified paid container image, rather than the public OSS
+`pulse-v...` archives.
+
 ## Versioning Rules
 
 - v5 stable examples: `5.1.14`
@@ -68,6 +82,11 @@ The workflow auto-marks `-rc.N`/`-alpha.N`/`-beta.N` as prerelease.
    Hosts pinned to the historical `rc.2` trust root must not assume unattended
    continuity into later prerelease or GA artifacts; use a manual reinstall or
    other explicit trust-migration path before testing those newer packets.
+6. For paid-user GA, run the `pulse-enterprise` Pro release workflow against the
+   same Pulse ref/version, verify `pulse-pro-v...` archives exist, verify
+   `bin/pulse --version` identifies `Pulse Pro (Enterprise)`, and confirm the paid
+   install/upgrade docs point paid customers to the Pro artifacts or verified paid
+   container image.
 
 ## RC Release Steps
 

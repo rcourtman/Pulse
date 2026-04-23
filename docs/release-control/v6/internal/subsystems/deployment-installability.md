@@ -141,6 +141,12 @@ server-side update execution surfaces.
    a last-pass review of new issues, new issue comments, the pinned prerelease
    feedback hub, and equivalent actionable RC reports before a candidate is
    declared feature-complete.
+   Paid-user GA is part of that same release boundary: the public Pulse release
+   workflow builds OSS `pulse-v...` artifacts only, so release docs and runbooks
+   must require a same-ref/same-version `pulse-enterprise` Pro package, verify
+   `pulse-pro-v...` archives identify `Pulse Pro (Enterprise)`, and keep the
+   paid install/upgrade path pointed at Pro artifacts or a verified paid image
+   before any paid-user Pro runtime claim is made.
    The repo-root VERSION file is part of the same governed boundary and must
    not drift as an
    unowned release-cut switch: changing the version string for a new RC or
@@ -184,16 +190,21 @@ server-side update execution surfaces.
    historical filenames before reusing canonical stable names, keep
    `docs/RELEASE_NOTES.md` and `docs/UPGRADE_v6.md` coherent with that
    lineage, and prove the result through the release-promotion metadata path.
-5. Keep `deploy/helm/pulse/README.md` regenerated and release-matched whenever
+5. Keep paid Pro runtime packaging explicit whenever release runbooks, release
+   packets, or paid-user GA guidance changes: public OSS release archives are
+   not sufficient proof of paid self-hosted Pro readiness unless the matching
+   `pulse-enterprise` Pro artifact/image path is built, identified, and linked
+   for paid users.
+6. Keep `deploy/helm/pulse/README.md` regenerated and release-matched whenever
    chart metadata or the governed release version changes so packaged Helm docs
    remain on the same validated cut as `Chart.yaml`.
-6. Keep managed-runtime first-session helpers deterministic: shared browser
+7. Keep managed-runtime first-session helpers deterministic: shared browser
    helpers under `tests/integration/tests/helpers.ts` may only drive the live
    setup wizard through the current managed runtime after refreshing the
    canonical dev reset route, and any helper changes that rely on hot-dev
    browser/backend behavior must keep a managed-runtime recovery proof updated
    in the same slice.
-7. Keep root-level Playwright wrapper routing on the canonical managed browser
+8. Keep root-level Playwright wrapper routing on the canonical managed browser
    truth. `playwright.config.ts`, `tests/integration/playwright.config.ts`,
    and `tests/integration/tests/runtime-defaults.ts` must resolve the same
    browser base URL precedence so repo-root browser proofs attach to the live
@@ -206,13 +217,13 @@ server-side update execution surfaces.
    `PULSE_E2E_REPO_ROOT` for runtime-state and managed-session discovery so
    isolated verification harnesses can relocate managed runtime state without
    mutating the live repo root.
-8. Keep hosted staging smoke fail-closed and repo-tracked. `scripts/run_hosted_staging_smoke.sh`
+9. Keep hosted staging smoke fail-closed and repo-tracked. `scripts/run_hosted_staging_smoke.sh`
    and the hosted onboarding helpers under `tests/integration/scripts/` must
    require explicit target environment input, compose the canonical hosted
    signup/billing Playwright evals with the hosted mobile onboarding proof, and
    avoid implicit production defaults or lane-local shell fragments that bypass
    the checked-in proof pack.
-9. Keep governed release, publish, and deployment automation supply-chain
+10. Keep governed release, publish, and deployment automation supply-chain
    pinned. The canonical workflow surface under `.github/workflows/` must use
    immutable action SHAs, GitHub-hosted jobs must target an explicit Ubuntu LTS
    runner image instead of `ubuntu-latest`, and checked-in CI/test Dockerfiles
@@ -221,12 +232,12 @@ server-side update execution surfaces.
    Whenever that policy changes, update the owning workflow/install proof files
    in `scripts/installtests/build_release_assets_test.go` and
    `scripts/release_control/release_promotion_policy_*` in the same slice.
-10. Keep forward release signing pinned to an explicit trust root. Governed
+11. Keep forward release signing pinned to an explicit trust root. Governed
    release scripts, Docker release builds, and historical backfill paths must
    accept the active private signing key only alongside a non-secret expected
    public key or equivalent pinned identity, and they must fail closed before
    publication if the signer drifts from that expected trust root.
-11. When the governed update signer changes, the canonical operator-facing
+12. When the governed update signer changes, the canonical operator-facing
    release docs under `docs/releases/` and the governed upgrade guide
    `docs/UPGRADE_v6.md` must state the continuity impact explicitly. Those docs
    must not imply automatic updater continuity from a historical signer unless
