@@ -59,7 +59,7 @@ export const SetupWizard: Component<SetupWizardProps> = (props) => {
     setCurrentStep('completion');
   };
 
-  const stepLabels = ['Unlock server', 'Security', 'Install host'];
+  const stepLabels = ['Unlock server', 'Security', 'First source'];
 
   return (
     <div class="min-h-screen bg-base flex flex-col" role="main" aria-label="Pulse Setup Wizard">

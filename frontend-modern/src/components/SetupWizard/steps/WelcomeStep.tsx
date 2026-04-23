@@ -102,7 +102,6 @@ export const WelcomeStep: Component<WelcomeStepProps> = (props) => {
       }
 
       props.setIsUnlocked(true);
-      showSuccess('Token verified!');
       props.onNext();
     } catch (_error) {
       showError('Invalid bootstrap token. Please check and try again.');
@@ -232,7 +231,7 @@ export const WelcomeStep: Component<WelcomeStepProps> = (props) => {
                   {deploymentLabel()}
                 </span>
               </div>
-              <p class="mt-2 text-sm text-blue-900 dark:text-blue-100">{deploymentHint()}</p>
+              <p class="mt-2 text-sm text-base-content">{deploymentHint()}</p>
             </div>
 
             <div class="mb-8">
@@ -257,7 +256,7 @@ export const WelcomeStep: Component<WelcomeStepProps> = (props) => {
               <div class="text-[11px] font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
                 What this token does
               </div>
-              <p class="mt-2 text-sm text-emerald-900 dark:text-emerald-100">{unlockHelp()}</p>
+              <p class="mt-2 text-sm text-base-content">{unlockHelp()}</p>
             </div>
 
             <div class="space-y-4">

@@ -1,5 +1,5 @@
 import { Component, createSignal, Show } from 'solid-js';
-import { showError, showSuccess } from '@/utils/toast';
+import { showError } from '@/utils/toast';
 import { setApiToken as setApiClientToken, apiFetchJSON } from '@/utils/apiClient';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 import type { WizardState } from '../SetupWizard';
@@ -12,6 +12,10 @@ interface SecurityStepProps {
   onBack: () => void;
 }
 
+const GENERATED_PASSWORD_LENGTH = 20;
+const GENERATED_PASSWORD_CHARS =
+  'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$%';
+
 export const SecurityStep: Component<SecurityStepProps> = (props) => {
   const [username, setUsername] = createSignal(props.state.username || 'admin');
   const [useCustomPassword, setUseCustomPassword] = createSignal(false);
@@ -20,12 +24,20 @@ export const SecurityStep: Component<SecurityStepProps> = (props) => {
   const [isSettingUp, setIsSettingUp] = createSignal(false);
 
   const generatePassword = () => {
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$%';
-    let pass = '';
-    for (let i = 0; i < 16; i++) {
-      pass += chars.charAt(Math.floor(Math.random() * chars.length));
+    const password: string[] = [];
+    const maxUnbiasedByte = 256 - (256 % GENERATED_PASSWORD_CHARS.length);
+    const randomBytes = new Uint8Array(GENERATED_PASSWORD_LENGTH);
+
+    while (password.length < GENERATED_PASSWORD_LENGTH) {
+      crypto.getRandomValues(randomBytes);
+      for (const byte of randomBytes) {
+        if (byte >= maxUnbiasedByte) continue;
+        password.push(GENERATED_PASSWORD_CHARS[byte % GENERATED_PASSWORD_CHARS.length]);
+        if (password.length === GENERATED_PASSWORD_LENGTH) break;
+      }
     }
-    return pass;
+
+    return password.join('');
   };
 
   const generateToken = (): string => {
@@ -93,7 +105,6 @@ export const SecurityStep: Component<SecurityStepProps> = (props) => {
         }
       }
 
-      showSuccess('Security configured!');
       props.onComplete();
     } catch (error) {
       showError(`Setup failed: ${error}`);
@@ -108,8 +119,7 @@ export const SecurityStep: Component<SecurityStepProps> = (props) => {
       <div class="p-8 border-b border-border relative z-10 text-center">
         <h2 class="text-3xl font-bold tracking-tight text-base-content">Secure Your Dashboard</h2>
         <p class="text-slate-500 dark:text-blue-200 mt-2 font-light">
-          Create your root administrator account, then continue to install your first monitored
-          host.
+          Create your root administrator account, then choose the first infrastructure source.
         </p>
       </div>
       <div class="p-8 space-y-6 relative z-10">
@@ -175,7 +185,7 @@ export const SecurityStep: Component<SecurityStepProps> = (props) => {
           <Show when={!useCustomPassword()}>
             <div class="bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900 rounded-md p-4 animate-fade-in">
               <p class="text-sm text-blue-800 dark:text-blue-200 font-medium">
-                A secure 16-character password will be generated and shown after setup.
+                A secure 20-character password will be generated and shown after setup.
               </p>
             </div>
           </Show>
@@ -184,8 +194,8 @@ export const SecurityStep: Component<SecurityStepProps> = (props) => {
         {/* Info */}
         <div class="bg-base rounded-md p-4 border border-border">
           <p class="text-sm text-muted">
-            This creates your admin account and an API token for automation. Credentials will be
-            displayed once - save them securely!
+            This creates your admin account and an API token for automation. Credentials are
+            displayed once - save them securely.
           </p>
         </div>
       </div>

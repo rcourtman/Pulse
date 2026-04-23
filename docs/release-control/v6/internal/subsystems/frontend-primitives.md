@@ -245,6 +245,13 @@ work extends shared components instead of creating new local variants.
    from a top-level product route such as `/recovery`, the first highlighted
    step should match that route instead of always restarting at Dashboard.
 5. Keep shared infrastructure shell state on the reusable settings boundary: `frontend-modern/src/components/Settings/useSettingsInfrastructurePanelProps.ts` and `frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx` must continue to derive provider counts, availability, and shared subtab copy from one infrastructure-settings source — via the unified aggregator through `frontend-modern/src/components/Settings/useConnectionsLedger.ts` — instead of creating provider-local summary fetches or VMware-only shell vocabulary. Phase 9 retired the old `PlatformConnectionsWorkspace` per-type shell; setup guidance should now use `Add infrastructure` plus source-strategy language for API-backed onboarding.
+   The first-run setup wizard inherits that same source-strategy vocabulary:
+   step labels and completion copy must frame the final setup step as choosing
+   the first infrastructure source, not installing a host. Successful token
+   validation and security setup transitions should rely on the wizard progress
+   state instead of transient success toasts that can cover the credential
+   handoff. Generated first-run admin passwords must use browser cryptographic
+   randomness rather than `Math.random`.
    That same shared shell boundary now owns the first-run posture for
    `/settings/infrastructure`: the landing route should read as one
    source-manager workspace with configured infrastructure instances first
