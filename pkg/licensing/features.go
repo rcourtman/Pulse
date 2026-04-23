@@ -458,60 +458,8 @@ func GetFeatureMinTierName(feature string) string {
 
 // GetFeatureDisplayName returns a human-readable name for a feature.
 func GetFeatureDisplayName(feature string) string {
-	switch feature {
-	case FeatureAIPatrol:
-		return "Pulse Patrol (Background Health Checks)"
-	case FeatureAIAlerts:
-		return "Alert Analysis"
-	case FeatureAIAutoFix:
-		return "Pulse Patrol Auto-Fix"
-	case FeatureKubernetesAI:
-		return "Kubernetes AI Analysis (Compatibility)"
-	case FeatureUpdateAlerts:
-		return "Update Alerts (Container/Package Updates)"
-	case FeatureRBAC:
-		return "Role-Based Access Control (RBAC)"
-	case FeatureMultiUser:
-		return "Multi-User Mode"
-	case FeatureWhiteLabel:
-		return "White-Label Branding"
-	case FeatureMultiTenant:
-		return "Multi-Tenant Mode"
-	case FeatureUnlimited:
-		return "Unlimited Instances"
-	case FeatureDemoFixtures:
-		return "Demo Fixtures (Internal)"
-	case FeatureAgentProfiles:
-		return "Centralized Agent Profiles"
-	case FeatureAuditLogging:
-		return "Audit Logging"
-	case FeatureSSO:
-		return "Basic SSO (OIDC)"
-	case FeatureAdvancedSSO:
-		return "Advanced SSO (SAML/Multi-Provider)"
-	case FeatureRelay:
-		return "Pulse Relay (Remote Access)"
-	case FeatureMobileApp:
-		return "Mobile App Access"
-	case FeaturePushNotifications:
-		return "Push Notifications"
-	case FeatureAdvancedReporting:
-		return "PDF/CSV Reporting"
-	case FeatureLongTermMetrics:
-		return "Extended Metric History"
-	default:
-		return feature
+	if entry, ok := GetFeatureMetadata(feature); ok {
+		return entry.DisplayName
 	}
-}
-
-var compatibilityOnlyFeatures = map[string]struct{}{
-	FeatureKubernetesAI: {},
-}
-
-// IsCompatibilityOnlyFeature reports capability keys that remain valid runtime
-// contracts for backwards compatibility but should not be marketed as current
-// v6 commercial pillars or generic upgrade prompts.
-func IsCompatibilityOnlyFeature(feature string) bool {
-	_, ok := compatibilityOnlyFeatures[feature]
-	return ok
+	return feature
 }

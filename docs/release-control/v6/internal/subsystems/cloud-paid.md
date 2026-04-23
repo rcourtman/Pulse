@@ -96,6 +96,9 @@ agreement, and cloud-specific enforcement rules.
 74. `pkg/licensing/trial_activation_public_key_override_dev.go`
 75. `pkg/licensing/trial_activation_public_key_override_release.go`
 76. `pkg/licensing/testing_helpers.go`
+77. `pkg/licensing/self_hosted_feature_catalog.go`
+78. `frontend-modern/src/utils/selfHostedFeatureCatalog.generated.ts`
+79. `pulse-pro:license-server/self_hosted_feature_catalog.generated.go`
 
 ## Shared Boundaries
 
@@ -298,6 +301,16 @@ Community limit enforcement.
     `incident memory`, `scheduled remediations`, and `execution audit trail`
     must likewise stay out of current v6 commercial copy unless Pulse ships a
     first-class product surface that makes those names truthful again.
+    That same self-hosted pricing boundary now also owns canonical feature
+    classification metadata. `pkg/licensing/self_hosted_feature_catalog.go`
+    is the source of truth for customer-facing self-hosted feature labels,
+    comparison visibility, plan roles (`primary_pillar`, `included_extra`,
+    `compatibility_only`, and hidden/included states), and generic upgrade
+    reasons. `frontend-modern/src/utils/selfHostedFeatureCatalog.generated.ts`
+    and `pulse-pro:license-server/self_hosted_feature_catalog.generated.go`
+    are generated projections of that source for app and public-pricing
+    consumers; those projections must not drift through hand-maintained
+    parallel lists or page-local renaming.
 26. Keep hosted trial-activation verifier source selection compile-time owned.
     `pkg/licensing/trial_activation.go`,
     `pkg/licensing/trial_activation_public_key_override_dev.go`, and

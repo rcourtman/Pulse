@@ -109,3 +109,29 @@ func TestCompatibilityOnlyFeaturesStayOutOfGenericUpgradeReasons(t *testing.T) {
 		}
 	}
 }
+
+func TestUpgradeReasonMatrixDerivesFromCanonicalFeatureMetadata(t *testing.T) {
+	expectedOrder := []string{
+		FeatureMobileApp,
+		FeaturePushNotifications,
+		FeatureRelay,
+		FeatureLongTermMetrics,
+		FeatureAIAutoFix,
+		FeatureAIAlerts,
+		FeatureRBAC,
+		FeatureAgentProfiles,
+		FeatureAdvancedSSO,
+		FeatureAuditLogging,
+		FeatureAdvancedReporting,
+	}
+
+	if len(UpgradeReasonMatrix) != len(expectedOrder) {
+		t.Fatalf("UpgradeReasonMatrix length = %d, want %d", len(UpgradeReasonMatrix), len(expectedOrder))
+	}
+
+	for idx, feature := range expectedOrder {
+		if UpgradeReasonMatrix[idx].Feature != feature {
+			t.Fatalf("UpgradeReasonMatrix[%d].Feature = %q, want %q", idx, UpgradeReasonMatrix[idx].Feature, feature)
+		}
+	}
+}

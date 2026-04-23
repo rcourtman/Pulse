@@ -264,6 +264,46 @@ func TestIsCompatibilityOnlyFeature(t *testing.T) {
 	}
 }
 
+func TestSelfHostedFeatureMetadataKeepsCanonicalPlanLabelsAndVisibility(t *testing.T) {
+	updateAlerts, ok := GetFeatureMetadata(FeatureUpdateAlerts)
+	if !ok {
+		t.Fatalf("expected metadata for %q", FeatureUpdateAlerts)
+	}
+	if updateAlerts.DisplayName != "Update Alerts (Container/Package Updates)" {
+		t.Fatalf("DisplayName = %q, want detailed runtime label", updateAlerts.DisplayName)
+	}
+	if updateAlerts.ComparisonName != "Update Alerts" {
+		t.Fatalf("ComparisonName = %q, want customer-facing label", updateAlerts.ComparisonName)
+	}
+
+	relay, ok := GetFeatureMetadata(FeatureRelay)
+	if !ok {
+		t.Fatalf("expected metadata for %q", FeatureRelay)
+	}
+	if relay.ComparisonName != "Pulse Relay (Remote Access)" {
+		t.Fatalf("ComparisonName = %q, want canonical Relay marketing label", relay.ComparisonName)
+	}
+	if GetSelfHostedFeatureRole(FeatureRelay, TierRelay) != SelfHostedFeatureRolePrimaryPillar {
+		t.Fatalf("expected %q to stay a Relay primary pillar", FeatureRelay)
+	}
+
+	multiTenant, ok := GetFeatureMetadata(FeatureMultiTenant)
+	if !ok {
+		t.Fatalf("expected metadata for %q", FeatureMultiTenant)
+	}
+	if !multiTenant.DisplayableInPlanUI {
+		t.Fatalf("expected %q to remain customer-displayable for MSP/Enterprise surfaces", FeatureMultiTenant)
+	}
+
+	kubernetes, ok := GetFeatureMetadata(FeatureKubernetesAI)
+	if !ok {
+		t.Fatalf("expected metadata for %q", FeatureKubernetesAI)
+	}
+	if kubernetes.DisplayableInPlanUI {
+		t.Fatalf("did not expect compatibility-only %q to be displayable in plan UI", FeatureKubernetesAI)
+	}
+}
+
 func TestTierMonitoredSystemLimits(t *testing.T) {
 	tests := []struct {
 		tier Tier

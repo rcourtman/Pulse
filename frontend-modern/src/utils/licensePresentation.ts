@@ -15,6 +15,10 @@ import {
   type MonitoredSystemLimitUsageStatus,
 } from '@/utils/monitoredSystemPresentation';
 import { getSelfHostedPlanDefinitionForBillingTier } from '@/utils/selfHostedPlans';
+import {
+  getSelfHostedFeatureCatalogEntry,
+  isDisplayableSelfHostedFeatureKey,
+} from '@/utils/selfHostedFeatureCatalog.generated';
 import { titleCaseDelimitedLabel } from '@/utils/textPresentation';
 
 const TIER_LABELS: Record<string, string> = {
@@ -33,41 +37,12 @@ const SELF_HOSTED_PLAN_LABELS: Record<string, string> = {
   pro: 'Pulse Pro',
 };
 
-const FEATURE_LABELS: Record<string, string> = {
-  ai_patrol: 'Pulse Patrol',
-  ai_alerts: 'Pulse Alert Analysis',
-  ai_autofix: 'Patrol Auto-Fix',
-  kubernetes_ai: 'Kubernetes AI Analysis (Compatibility)',
-  update_alerts: 'Update Alerts',
-  sso: 'Basic SSO (OIDC)',
-  advanced_sso: 'Advanced SSO (SAML/Multi-Provider)',
-  rbac: 'Role-Based Access Control (RBAC)',
-  audit_logging: 'Audit Logging',
-  advanced_reporting: 'PDF/CSV Reporting',
-  agent_profiles: 'Centralized Agent Profiles',
-  relay: 'Pulse Relay (Remote Access)',
-  mobile_app: 'Mobile App Access',
-  push_notifications: 'Push Notifications',
-  long_term_metrics: 'Extended Metric History',
-  multi_user: 'Multi-User Mode',
-  white_label: 'White-Label Branding',
-  multi_tenant: 'Multi-Tenant Mode',
-  unlimited: 'Unlimited Instances',
-};
-
 const FEATURE_MIN_TIER_LABELS: Record<string, string> = {
   relay: 'Relay',
   mobile_app: 'Relay',
   push_notifications: 'Relay',
   multi_tenant: 'MSP',
 };
-
-const NON_DISPLAYABLE_FEATURES = new Set([
-  'kubernetes_ai',
-  'multi_user',
-  'white_label',
-  'unlimited',
-]);
 
 export interface LicenseSubscriptionStatusPresentation {
   label: string;
@@ -179,13 +154,14 @@ export const getSelfHostedPlanLabel = (tier?: string | null): string => {
 export const getLicenseFeatureLabel = (feature?: string | null): string => {
   const normalized = (feature || '').trim().toLowerCase();
   if (!normalized) return 'Unknown';
-  return FEATURE_LABELS[normalized] || titleCaseDelimitedLabel(normalized);
+  const entry = getSelfHostedFeatureCatalogEntry(normalized);
+  return entry?.comparisonName || titleCaseDelimitedLabel(normalized);
 };
 
 export const isDisplayableLicenseFeature = (feature?: string | null): boolean => {
   const normalized = (feature || '').trim().toLowerCase();
   if (!normalized) return false;
-  return !NON_DISPLAYABLE_FEATURES.has(normalized);
+  return isDisplayableSelfHostedFeatureKey(normalized);
 };
 
 export const getFeatureMinTierLabel = (feature?: string | null): string => {

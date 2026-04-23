@@ -1,3 +1,8 @@
+import {
+  SELF_HOSTED_FEATURE_CATALOG,
+  getSelfHostedFeaturesForRole,
+} from './selfHostedFeatureCatalog.generated';
+
 export type SelfHostedTierKey = 'community' | 'relay' | 'pro';
 
 export interface SelfHostedPlanDefinition {
@@ -42,6 +47,35 @@ export interface SelfHostedCommercialPresentation {
   footerLinks: readonly SelfHostedLinkCTA[];
 }
 
+const getTierMetricHistoryHighlight = (tier: SelfHostedTierKey, metricHistoryDays: number) =>
+  tier === 'relay' || tier === 'pro' ? `${metricHistoryDays}-day metric history` : null;
+
+const getTierEntitlementHighlights = (
+  tier: SelfHostedTierKey,
+  metricHistoryDays: number,
+): readonly string[] => {
+  const highlights = getSelfHostedFeaturesForRole(tier, 'primary_pillar').map((entry) =>
+    entry.key === 'long_term_metrics' ? `${metricHistoryDays}-day metric history` : entry.comparisonName,
+  );
+  const metricHistoryHighlight = getTierMetricHistoryHighlight(tier, metricHistoryDays);
+  if (!metricHistoryHighlight || highlights.includes(metricHistoryHighlight)) {
+    return highlights;
+  }
+  return [...highlights, metricHistoryHighlight];
+};
+
+const getTierIncludedExtras = (tier: SelfHostedTierKey): readonly string[] =>
+  getSelfHostedFeaturesForRole(tier, 'included_extra').map((entry) => entry.displayName);
+
+const buildSelfHostedComparisonFeatureRows = (): readonly SelfHostedFeatureRow[] =>
+  SELF_HOSTED_FEATURE_CATALOG.filter((entry) => entry.showInComparisonTable).map((entry) => ({
+    key: entry.key,
+    name: entry.comparisonName,
+    community: entry.includedIn.community,
+    relay: entry.includedIn.relay,
+    pro: entry.includedIn.pro,
+  }));
+
 export const SELF_HOSTED_PLAN_DEFINITIONS: readonly SelfHostedPlanDefinition[] = [
   {
     tier: 'community',
@@ -80,12 +114,7 @@ export const SELF_HOSTED_PLAN_DEFINITIONS: readonly SelfHostedPlanDefinition[] =
     billingExtrasSummary: 'Remote access, mobile, and push',
     entitlementSummary:
       'Relay is active on this instance. Remote access, mobile, push, and longer history are unlocked right now.',
-    entitlementHighlights: [
-      'Pulse Relay (Remote Access)',
-      'Mobile App Access',
-      'Push Notifications',
-      '14-day metric history',
-    ],
+    entitlementHighlights: getTierEntitlementHighlights('relay', 14),
     includedExtras: [],
     comparisonSummary:
       'Reach this Pulse instance securely from anywhere, check it from mobile, get push notifications, and keep 14 days of history.',
@@ -107,18 +136,8 @@ export const SELF_HOSTED_PLAN_DEFINITIONS: readonly SelfHostedPlanDefinition[] =
     billingExtrasSummary: 'Root-cause analysis, remediation, and admin extras',
     entitlementSummary:
       'Pulse Pro is active on this instance. Root-cause analysis, safe remediation, and 90-day history are unlocked right now.',
-    entitlementHighlights: [
-      'Pulse Alert Analysis',
-      'Patrol Auto-Fix',
-      '90-day metric history',
-    ],
-    includedExtras: [
-      'Advanced SSO (SAML/Multi-Provider)',
-      'Role-Based Access Control (RBAC)',
-      'Audit Logging',
-      'PDF/CSV Reporting',
-      'Centralized Agent Profiles',
-    ],
+    entitlementHighlights: getTierEntitlementHighlights('pro', 90),
+    includedExtras: getTierIncludedExtras('pro'),
     comparisonSummary:
       'Move from monitoring into operations with root-cause answers, safe remediation, and 90-day history. Pulse Pro also includes SAML SSO, RBAC, audit logging, reporting, and agent profiles.',
     highlights: [
@@ -203,95 +222,5 @@ export const SELF_HOSTED_FEATURE_ROWS: readonly SelfHostedFeatureRow[] = [
     relay: `${SELF_HOSTED_PLAN_BY_TIER.relay.metricHistoryDays} days`,
     pro: `${SELF_HOSTED_PLAN_BY_TIER.pro.metricHistoryDays} days`,
   },
-  {
-    key: 'update_alerts',
-    name: 'Update Alerts (Container/Package)',
-    community: true,
-    relay: true,
-    pro: true,
-  },
-  {
-    key: 'sso',
-    name: 'Basic SSO (OIDC)',
-    community: true,
-    relay: true,
-    pro: true,
-  },
-  {
-    key: 'relay',
-    name: 'Remote Access (Relay)',
-    community: false,
-    relay: true,
-    pro: true,
-  },
-  {
-    key: 'mobile_app',
-    name: 'Mobile App Access',
-    community: false,
-    relay: true,
-    pro: true,
-  },
-  {
-    key: 'push_notifications',
-    name: 'Push Notifications',
-    community: false,
-    relay: true,
-    pro: true,
-  },
-  {
-    key: 'ai_patrol',
-    name: 'Pulse Patrol',
-    community: true,
-    relay: true,
-    pro: true,
-  },
-  {
-    key: 'ai_autofix',
-    name: 'Patrol Auto-Fix',
-    community: false,
-    relay: false,
-    pro: true,
-  },
-  {
-    key: 'ai_alerts',
-    name: 'Pulse Alert Analysis',
-    community: false,
-    relay: false,
-    pro: true,
-  },
-  {
-    key: 'rbac',
-    name: 'Role-Based Access Control (RBAC)',
-    community: false,
-    relay: false,
-    pro: true,
-  },
-  {
-    key: 'audit_logging',
-    name: 'Audit Logging',
-    community: false,
-    relay: false,
-    pro: true,
-  },
-  {
-    key: 'advanced_sso',
-    name: 'Advanced SSO (SAML/Multi-Provider)',
-    community: false,
-    relay: false,
-    pro: true,
-  },
-  {
-    key: 'agent_profiles',
-    name: 'Centralized Agent Profiles',
-    community: false,
-    relay: false,
-    pro: true,
-  },
-  {
-    key: 'advanced_reporting',
-    name: 'PDF/CSV Reporting',
-    community: false,
-    relay: false,
-    pro: true,
-  },
+  ...buildSelfHostedComparisonFeatureRows(),
 ] as const;

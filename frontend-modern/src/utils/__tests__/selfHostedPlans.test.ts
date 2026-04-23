@@ -26,6 +26,26 @@ describe('selfHostedPlans', () => {
       relay: 'Unlimited',
       pro: 'Unlimited',
     });
+
+    expect(SELF_HOSTED_FEATURE_ROWS).toEqual(
+      expect.arrayContaining([
+        {
+          key: 'update_alerts',
+          name: 'Update Alerts',
+          community: true,
+          relay: true,
+          pro: true,
+        },
+        {
+          key: 'relay',
+          name: 'Pulse Relay (Remote Access)',
+          community: false,
+          relay: true,
+          pro: true,
+        },
+      ]),
+    );
+    expect(SELF_HOSTED_FEATURE_ROWS.find((row) => row.key === 'kubernetes_ai')).toBeUndefined();
   });
 
   it('keeps shared self-hosted commercial copy in the common contract', () => {

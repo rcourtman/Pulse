@@ -1710,6 +1710,7 @@
         "frontend-modern/src/utils/licensePresentation.ts",
         "frontend-modern/src/utils/monitoredSystemPresentation.ts",
         "frontend-modern/src/utils/pricingHandoff.ts",
+        "frontend-modern/src/utils/selfHostedFeatureCatalog.generated.ts",
         "frontend-modern/src/utils/selfHostedPlans.ts",
         "frontend-modern/src/utils/upgradePresentation.ts",
         "internal/api/public_signup_handlers.go",
@@ -1731,6 +1732,7 @@
         "pulse-pro:license-server/checkout_funnel.go",
         "pulse-pro:license-server/grandfathering.go",
         "pulse-pro:license-server/main.go",
+        "pulse-pro:license-server/self_hosted_feature_catalog.generated.go",
         "pulse-pro:license-server/v6_checkout.go",
         "pulse-pro:license-server/v6_handlers.go",
         "pulse-pro:scripts/audit_v6_preview_demo.sh",
@@ -1796,6 +1798,24 @@
             "exact_files": [
               "pkg/licensing/features_test.go",
               "pkg/licensing/grant_claims_contract_test.go"
+            ]
+          },
+          {
+            "id": "self-hosted-feature-catalog",
+            "label": "self-hosted feature catalog proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/utils/selfHostedFeatureCatalog.generated.ts",
+              "pkg/licensing/self_hosted_feature_catalog.go",
+              "pulse-pro:license-server/self_hosted_feature_catalog.generated.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/utils/__tests__/licensePresentation.test.ts",
+              "frontend-modern/src/utils/__tests__/selfHostedPlans.test.ts",
+              "pkg/licensing/features_test.go",
+              "pkg/licensing/upgrade_test.go"
             ]
           },
           {

@@ -118,6 +118,8 @@ describe('licensePresentation', () => {
   it('returns canonical feature labels', () => {
     expect(getLicenseFeatureLabel('ai_patrol')).toBe('Pulse Patrol');
     expect(getLicenseFeatureLabel('mobile_app')).toBe('Mobile App Access');
+    expect(getLicenseFeatureLabel('update_alerts')).toBe('Update Alerts');
+    expect(getLicenseFeatureLabel('relay')).toBe('Pulse Relay (Remote Access)');
     expect(getLicenseFeatureLabel('custom_feature')).toBe('Custom Feature');
   });
 
