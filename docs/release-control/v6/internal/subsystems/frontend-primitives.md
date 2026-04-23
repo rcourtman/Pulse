@@ -314,6 +314,9 @@ work extends shared components instead of creating new local variants.
    the grouped source-type picker, `?add=detect` owns the detect-from-address
    utility, and typed add routes jump straight into the matching credential
    slot through `initialType`.
+   The picker and typed add dialog must use the shared source-strategy
+   vocabulary so users choose between API inventory, Agent telemetry, and API
+   + Agent coverage rather than only choosing a product logo.
    Credential slots are dispatched by the detected or manually-selected type
    and must still reach the canonical form body rather than diverging into a
    revived provider-specific workspace.

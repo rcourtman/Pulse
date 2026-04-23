@@ -47,6 +47,7 @@ import {
 } from '@/utils/infrastructureOnboardingMetrics';
 import {
   getInfrastructureOnboardingProductPresentation,
+  getInfrastructureSourceStrategyPresentation,
   type InfrastructureOnboardingConnectionType,
 } from '@/utils/infrastructureOnboardingPresentation';
 import {
@@ -825,7 +826,7 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
   const addDialogDescription = createMemo(() => {
     const step = routeStep();
     if (!step || step === 'pick') {
-      return 'Choose the source type you want to add.';
+      return 'Choose how Pulse should collect from this system: platform API, Pulse Agent, or both.';
     }
     if (step === 'detect') {
       return 'Probe an address and let Pulse open the matching credential flow when it recognizes the platform.';
@@ -842,7 +843,8 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
     const presentation = getInfrastructureOnboardingProductPresentation(
       activeAddType() as InfrastructureOnboardingConnectionType,
     );
-    return `${presentation.bestFor}. ${presentation.coverage}.`;
+    const strategy = getInfrastructureSourceStrategyPresentation(presentation.sourceStrategy);
+    return `${strategy.label}. ${presentation.bestFor}. ${presentation.coverage}.`;
   });
 
   const editDialogTitle = createMemo(() => {

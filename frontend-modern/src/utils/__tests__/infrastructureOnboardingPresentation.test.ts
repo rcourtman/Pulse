@@ -7,6 +7,7 @@ import {
   getInfrastructureOnboardingProductPresentation,
   getInfrastructureSourceManagerProducts,
   getInfrastructureSourcePickerGroups,
+  getInfrastructureSourceStrategyPresentation,
   getInfrastructureSupportSummaryBadges,
 } from '@/utils/infrastructureOnboardingPresentation';
 
@@ -25,8 +26,28 @@ describe('infrastructureOnboardingPresentation', () => {
     expect(agent.bestFor).toContain('full node-local telemetry');
     expect(agent.coverage).toContain('Low-overhead host telemetry');
     expect(agent.catalogDescription).toContain('Low-overhead host telemetry');
+    expect(agent.sourceStrategy).toBe('agent');
+    expect(pve.sourceStrategy).toBe('api-agent');
     expect(pve.coverage).toContain('Install Pulse Agent on each node');
     expect(pve.coverage).toContain('SMART data');
+  });
+
+  it('keeps the shared source-strategy vocabulary explicit for add flows', () => {
+    expect(getInfrastructureSourceStrategyPresentation('api')).toMatchObject({
+      label: 'API inventory',
+      summary: 'Platform API',
+    });
+    expect(getInfrastructureSourceStrategyPresentation('agent')).toMatchObject({
+      label: 'Agent telemetry',
+      summary: 'Pulse Agent',
+    });
+    expect(getInfrastructureSourceStrategyPresentation('api-agent')).toMatchObject({
+      label: 'API + Agent',
+      summary: 'Platform API with Pulse Agent',
+    });
+
+    expect(getInfrastructureOnboardingProductPresentation('vmware').sourceStrategy).toBe('api');
+    expect(getInfrastructureOnboardingProductPresentation('pbs').sourceStrategy).toBe('api-agent');
   });
 
   it('keeps supported API products separate from the admitted VMware path', () => {

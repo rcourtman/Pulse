@@ -15,6 +15,7 @@ export interface InfrastructureOnboardingProductPresentation {
   bestFor: string;
   coverage: string;
   catalogDescription: string;
+  sourceStrategy: InfrastructureSourceStrategy;
   autoDetect: boolean;
   governanceState: PlatformGovernanceState;
   defaultSurfaceKeys: readonly string[];
@@ -36,9 +37,18 @@ interface BaseProductPresentation {
   bestFor: string;
   coverage: string;
   catalogDescription: string;
+  sourceStrategy: InfrastructureSourceStrategy;
   autoDetect: boolean;
   sourcePlatformId?: string;
   defaultSurfaceKeys: readonly string[];
+}
+
+export type InfrastructureSourceStrategy = 'api' | 'agent' | 'api-agent';
+
+export interface InfrastructureSourceStrategyPresentation {
+  label: string;
+  summary: string;
+  detail: string;
 }
 
 export interface InfrastructureOnboardingPathPresentation {
@@ -47,6 +57,28 @@ export interface InfrastructureOnboardingPathPresentation {
   bestFor: string;
   coverage: string;
 }
+
+const SOURCE_STRATEGY_PRESENTATION: Record<
+  InfrastructureSourceStrategy,
+  InfrastructureSourceStrategyPresentation
+> = {
+  api: {
+    label: 'API inventory',
+    summary: 'Platform API',
+    detail: 'Uses the platform API for inventory, health, and managed resources.',
+  },
+  agent: {
+    label: 'Agent telemetry',
+    summary: 'Pulse Agent',
+    detail: 'Installs Pulse Agent for host telemetry, local services, Docker, and Kubernetes.',
+  },
+  'api-agent': {
+    label: 'API + Agent',
+    summary: 'Platform API with Pulse Agent',
+    detail:
+      'Starts from platform inventory and adds Pulse Agent when node-local telemetry is needed.',
+  },
+};
 
 const PRODUCT_PRESENTATION: Record<
   InfrastructureOnboardingConnectionType,
@@ -58,6 +90,7 @@ const PRODUCT_PRESENTATION: Record<
       'Linux, macOS, Windows, FreeBSD, and compatible hosts such as Unraid. Recommended on each machine where you want full node-local telemetry.',
     coverage: 'Low-overhead host telemetry, SMART, services, Docker, and Kubernetes',
     catalogDescription: 'Low-overhead host telemetry, services, Docker, Kubernetes',
+    sourceStrategy: 'agent',
     autoDetect: false,
     defaultSurfaceKeys: ['host'],
   },
@@ -66,6 +99,7 @@ const PRODUCT_PRESENTATION: Record<
     bestFor: 'vCenter-managed VMware environments',
     coverage: 'VM inventory, ESXi host health, datastore status',
     catalogDescription: 'VM inventory, ESXi hosts, datastores',
+    sourceStrategy: 'api',
     autoDetect: true,
     sourcePlatformId: 'vmware-vsphere',
     defaultSurfaceKeys: ['vms', 'hosts', 'datastores'],
@@ -75,6 +109,7 @@ const PRODUCT_PRESENTATION: Record<
     bestFor: 'TrueNAS appliances with API-backed management',
     coverage: 'Pools, datasets, apps, replications',
     catalogDescription: 'Pools, datasets, apps, replications',
+    sourceStrategy: 'api',
     autoDetect: true,
     sourcePlatformId: 'truenas',
     defaultSurfaceKeys: ['datasets', 'pools', 'replication'],
@@ -85,6 +120,7 @@ const PRODUCT_PRESENTATION: Record<
     coverage:
       'VMs, containers, storage, and cluster health. Install Pulse Agent on each node when you want full node-local telemetry such as temperatures and SMART data',
     catalogDescription: 'VMs, containers, storage, cluster health',
+    sourceStrategy: 'api-agent',
     autoDetect: true,
     sourcePlatformId: 'proxmox-pve',
     defaultSurfaceKeys: ['vms', 'containers', 'storage', 'backups'],
@@ -94,15 +130,24 @@ const PRODUCT_PRESENTATION: Record<
     bestFor: 'Backup infrastructure and protected storage',
     coverage: 'Backup jobs, sync, verify, prune, GC',
     catalogDescription: 'Backup jobs, sync, verify, prune, GC',
+    sourceStrategy: 'api-agent',
     autoDetect: true,
     sourcePlatformId: 'proxmox-pbs',
-    defaultSurfaceKeys: ['backups', 'datastores', 'syncJobs', 'verifyJobs', 'pruneJobs', 'garbageJobs'],
+    defaultSurfaceKeys: [
+      'backups',
+      'datastores',
+      'syncJobs',
+      'verifyJobs',
+      'pruneJobs',
+      'garbageJobs',
+    ],
   },
   pmg: {
     label: 'Proxmox Mail Gateway',
     bestFor: 'Mail filtering and delivery operations',
     coverage: 'Mail stats, queues, quarantine, relay health',
     catalogDescription: 'Mail stats, queues, quarantine, relay health',
+    sourceStrategy: 'api',
     autoDetect: true,
     sourcePlatformId: 'proxmox-pmg',
     defaultSurfaceKeys: ['mailStats', 'queues', 'quarantine', 'domainStats'],
@@ -215,6 +260,10 @@ export const getInfrastructureOnboardingProductPresentation = (
   ...PRODUCT_PRESENTATION[type],
   governanceState: governanceStateForType(type),
 });
+
+export const getInfrastructureSourceStrategyPresentation = (
+  strategy: InfrastructureSourceStrategy,
+): InfrastructureSourceStrategyPresentation => SOURCE_STRATEGY_PRESENTATION[strategy];
 
 export const getInfrastructureApiProductPresentations =
   (): InfrastructureOnboardingProductPresentation[] =>

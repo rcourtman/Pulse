@@ -128,6 +128,9 @@ Own canonical runtime payload shapes between backend and frontend.
     modes are auto-registration paths, while Token ID/Value fields, Test
     Connection, and Add Node are manual-token or existing-node edit controls
     only.
+    That same client contract must expose the setup strategy before a token
+    path is chosen: Agent Install is API + Agent, Direct Connection is API
+    inventory, and Manual Token Setup is a manual API-token escape hatch.
 32. `internal/api/agent_install_command_shared.go` shared with `agent-lifecycle`: agent install command assembly is both an agent lifecycle control surface and a canonical API payload contract boundary.
 33. `internal/api/ai_handler.go` shared with `ai-runtime`: Pulse Assistant handlers are both an AI runtime control surface and a canonical API payload contract boundary.
 34. `internal/api/ai_handlers.go` shared with `ai-runtime`: AI settings and remediation handlers are both an AI runtime control surface and a canonical API payload contract boundary.

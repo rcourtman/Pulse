@@ -4,14 +4,53 @@ import {
   type NodeModalProps,
 } from '@/components/Settings/nodeModalModel';
 import type { NodeModalState } from '@/components/Settings/useNodeModalState';
+import type { NodeModalNodeType, NodeModalSetupMode } from '@/utils/nodeModalPresentation';
 
 interface NodeModalSetupGuideSectionProps {
   modalProps: NodeModalProps;
   state: NodeModalState;
 }
 
+const getNodeSetupStrategyPresentation = (
+  nodeType: NodeModalNodeType,
+  setupMode: NodeModalSetupMode,
+): { label: string; detail: string } => {
+  const productLabel = nodeType === 'pbs' ? 'Proxmox Backup Server' : 'Proxmox VE';
+
+  if (setupMode === 'agent') {
+    return {
+      label: 'API + Agent',
+      detail: `Recommended: creates the ${productLabel} API token, installs Pulse Agent, and registers the source automatically. No token fields are needed in this form.`,
+    };
+  }
+
+  if (setupMode === 'auto') {
+    return {
+      label: 'API inventory',
+      detail: `Advanced: creates the ${productLabel} API token and registers the API connection, but does not install Pulse Agent for node-local telemetry.`,
+    };
+  }
+
+  return {
+    label: 'Manual API token',
+    detail:
+      'Advanced escape hatch: use this only when you already created the API token yourself and want to paste the token details into Pulse.',
+  };
+};
+
 export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionProps> = (props) => {
   const { modalProps, state } = props;
+  const setupStrategy = () =>
+    getNodeSetupStrategyPresentation(modalProps.nodeType, state.formData().setupMode);
+  const setupStrategyPanel = () => (
+    <div class="rounded-md border border-blue-200 bg-surface px-3 py-2 dark:border-blue-800">
+      <div class="text-[10px] font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">
+        Source strategy
+      </div>
+      <div class="mt-1 text-sm font-semibold text-base-content">{setupStrategy().label}</div>
+      <p class="mt-1 text-xs leading-5 text-muted">{setupStrategy().detail}</p>
+    </div>
+  );
 
   return (
     <div class="space-y-4">
@@ -32,6 +71,7 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
               </svg>
               Connection Setup
             </h5>
+            {setupStrategyPanel()}
 
             <div class="space-y-3 text-xs">
               <div class="flex gap-2 flex-wrap">
@@ -96,8 +136,9 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
               <Show when={state.formData().setupMode === 'agent'}>
                 <div class="space-y-3">
                   <p class="text-xs text-muted">
-                    Install the Pulse agent on your Proxmox node. This single command sets
-                    everything up:
+                    Recommended API + Agent setup. This single command creates the API token,
+                    installs Pulse Agent, registers the node, and leaves Pulse waiting for the agent
+                    check-in:
                   </p>
                   <ul class="text-xs text-muted list-disc list-inside space-y-1">
                     <li>Creates monitoring user and API token automatically</li>
@@ -168,7 +209,8 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                     <p class="text-xs text-red-500">{state.agentCommandError()}</p>
                   </Show>
                   <p class="text-[11px] text-muted italic">
-                    The node will appear in Pulse automatically after the agent starts.
+                    No token fields are needed here. The node appears in Pulse automatically after
+                    the agent starts.
                   </p>
                 </div>
               </Show>
@@ -177,9 +219,9 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                 <div class="space-y-3">
                   <div class="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 dark:border-amber-700 dark:bg-amber-900">
                     <p class="text-xs text-amber-800 dark:text-amber-200">
-                      <strong>Direct connection mode:</strong> this path connects Pulse to Proxmox
-                      without installing the unified agent, so it does not include temperature
-                      monitoring or Pulse Patrol automation.
+                      <strong>Advanced API inventory path:</strong> this connects Pulse to Proxmox
+                      without installing the unified agent, so temperature monitoring and Pulse
+                      Patrol automation stay unavailable until an agent is installed.
                     </p>
                   </div>
                   <p class="text-blue-800 dark:text-blue-200">
@@ -323,7 +365,7 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                       </li>
                     </ul>
                     <p class="text-xs text-green-600 dark:text-green-400 mt-2 font-semibold">
-                      Fully automatic - no manual token copying needed!
+                      Fully automatic: no manual token copying needed.
                     </p>
                   </div>
                 </div>
@@ -332,7 +374,8 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
               <Show when={state.formData().setupMode === 'manual'}>
                 <div class="space-y-3">
                   <p class="text-blue-800 dark:text-blue-200 mb-2">
-                    Run these commands one by one on your Proxmox VE server:
+                    Advanced manual token setup. Run these commands one by one on your Proxmox VE
+                    server, then paste the token into the fields below:
                   </p>
 
                   <div class="space-y-3">
@@ -510,6 +553,7 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
               </svg>
               Connection Setup
             </h5>
+            {setupStrategyPanel()}
 
             <div class="space-y-3 text-xs">
               <div class="flex gap-2 flex-wrap">
@@ -574,8 +618,9 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
               <Show when={state.formData().setupMode === 'agent'}>
                 <div class="space-y-3">
                   <p class="text-xs text-muted">
-                    Install the Pulse agent on your Proxmox Backup Server. This is the recommended
-                    method as it provides:
+                    Recommended API + Agent setup. This single command creates the API token,
+                    installs Pulse Agent, registers the server, and leaves Pulse waiting for the
+                    agent check-in:
                   </p>
                   <ul class="text-xs text-muted list-disc list-inside space-y-1">
                     <li>One-command setup (creates API user and token automatically)</li>
@@ -646,13 +691,21 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                     <p class="text-xs text-red-500">{state.agentCommandError()}</p>
                   </Show>
                   <p class="text-xs text-muted">
-                    The node will automatically appear in Pulse once the agent connects.
+                    No token fields are needed here. The server appears in Pulse automatically after
+                    the agent connects.
                   </p>
                 </div>
               </Show>
 
               <Show when={state.formData().setupMode === 'auto'}>
                 <div class="space-y-3">
+                  <div class="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 dark:border-amber-700 dark:bg-amber-900">
+                    <p class="text-xs text-amber-800 dark:text-amber-200">
+                      <strong>Advanced API inventory path:</strong> this connects Pulse to Proxmox
+                      Backup Server without installing the unified agent, so host-local telemetry
+                      and agent-driven operations stay unavailable until an agent is installed.
+                    </p>
+                  </div>
                   <p class="text-blue-800 dark:text-blue-200">
                     Just copy and run this one command on your Proxmox Backup Server:
                   </p>
@@ -691,7 +744,7 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                           <code class="text-blue-400">
                             {state.formData().host
                               ? 'Click the copy button to generate the setup command'
-                              : '⚠️ Please enter the Endpoint URL above first'}
+                              : 'Please enter the Endpoint URL above first'}
                           </code>
                         }
                       >
@@ -729,7 +782,10 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                         </svg>
                         <div class="text-xs text-amber-700 dark:text-amber-300">
                           <p class="font-semibold mb-1">If the command doesn't work:</p>
-                          <p>Your PBS server may not be able to reach Pulse. Use the alternative method below.</p>
+                          <p>
+                            Your PBS server may not be able to reach Pulse. Use the alternative
+                            method below.
+                          </p>
                         </div>
                       </div>
                     </div>
@@ -792,7 +848,7 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                       </li>
                     </ul>
                     <p class="text-xs text-green-600 dark:text-green-400 mt-2 font-semibold">
-                      ✨ Fully automatic - no manual token copying needed!
+                      Fully automatic: no manual token copying needed.
                     </p>
                   </div>
                 </div>
@@ -801,7 +857,8 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
               <Show when={state.formData().setupMode === 'manual'}>
                 <div class="space-y-3">
                   <p class="text-blue-800 dark:text-blue-200 mb-2">
-                    Run these commands one by one on your Proxmox Backup Server:
+                    Advanced manual token setup. Run these commands one by one on your Proxmox
+                    Backup Server, then paste the token into the fields below:
                   </p>
 
                   <div class="space-y-3">
@@ -869,7 +926,7 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
                         </code>
                       </div>
                       <p class="text-amber-600 dark:text-amber-400 text-xs mt-1">
-                        ⚠️ Copy the token value immediately - it won't be shown again!
+                        Copy the token value immediately - it won't be shown again!
                       </p>
                     </div>
 
@@ -994,8 +1051,8 @@ export const NodeModalSetupGuideSection: Component<NodeModalSetupGuideSectionPro
             </li>
             <li>
               Copy the generated Token ID (e.g.{' '}
-              <code class="font-mono">pulse-monitor@pmg!pulse-edge</code>) and the secret value
-              into the fields below.
+              <code class="font-mono">pulse-monitor@pmg!pulse-edge</code>) and the secret value into
+              the fields below.
             </li>
           </ol>
           <p class="text-xs text-muted">

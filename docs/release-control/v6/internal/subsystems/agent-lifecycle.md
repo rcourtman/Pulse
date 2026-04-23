@@ -121,6 +121,10 @@ submission separate. For new PVE/PBS setup, Agent Install and Direct Connection
 setup-script modes are command-driven auto-registration paths; Token ID/Value
 fields, Test Connection, and Add Node submission belong only to Manual Token
 Setup or existing-node edit flows.
+The setup guide must also present the source strategy at action time: Agent
+Install is the recommended API + Agent path, Direct Connection is the advanced
+API inventory path, and Manual Token Setup is an advanced manual API-token
+escape hatch.
 
 That shared monitored-system admission preview boundary also owns the disabled
 platform-connection lifecycle state. Once a TrueNAS or VMware setup form marks

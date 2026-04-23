@@ -16,6 +16,7 @@ import addressProbeStepSource from '../ConnectionEditor/AddressProbeStep.tsx?raw
 import connectionEditorStateSource from '../ConnectionEditor/useConnectionEditor.ts?raw';
 import nodeCredentialSlotSource from '../ConnectionEditor/CredentialSlots/NodeCredentialSlot.tsx?raw';
 import nodeModalAuthenticationSectionSource from '../NodeModalAuthenticationSection.tsx?raw';
+import nodeModalSetupGuideSectionSource from '../NodeModalSetupGuideSection.tsx?raw';
 import nodeModalStatusFooterSource from '../NodeModalStatusFooter.tsx?raw';
 import nodeModalStateSource from '../useNodeModalState.ts?raw';
 import trueNASCredentialSlotSource from '../ConnectionEditor/CredentialSlots/TrueNASCredentialSlot.tsx?raw';
@@ -186,6 +187,10 @@ describe('settings architecture guardrails', () => {
     expect(infrastructureSourceManagerSource).not.toContain('Connection types');
     expect(infrastructureSourcePickerSource).toContain('Detect from address');
     expect(infrastructureSourcePickerSource).toContain('getInfrastructureSourcePickerGroups');
+    expect(infrastructureSourcePickerSource).toContain(
+      'getInfrastructureSourceStrategyPresentation',
+    );
+    expect(infrastructureSourcePickerSource).toContain('Unlocks');
     expect(infrastructureSourcePickerSource).toContain('group.label');
     expect(settingsHeaderMetaSource).toContain(
       "description: 'Configure the public URL, CORS, embedding, and webhook network boundaries.'",
@@ -232,6 +237,10 @@ describe('settings architecture guardrails', () => {
       'getInfrastructureSourcePickerGroups',
     );
     expect(infrastructureOnboardingPresentationSource).toContain(
+      'getInfrastructureSourceStrategyPresentation',
+    );
+    expect(infrastructureOnboardingPresentationSource).toContain('API + Agent');
+    expect(infrastructureOnboardingPresentationSource).toContain(
       'getInfrastructureSupportSummaryBadges',
     );
     expect(infrastructureOnboardingPresentationSource).toContain(
@@ -247,6 +256,12 @@ describe('settings architecture guardrails', () => {
     expect(nodeModalAuthenticationSectionSource).toContain(
       "state.formData().setupMode === 'manual'",
     );
+    expect(nodeModalAuthenticationSectionSource).toContain('Advanced manual token path');
+    expect(nodeModalSetupGuideSectionSource).toContain('Source strategy');
+    expect(nodeModalSetupGuideSectionSource).toContain('API + Agent');
+    expect(nodeModalSetupGuideSectionSource).toContain('API inventory');
+    expect(nodeModalSetupGuideSectionSource).toContain('Manual API token');
+    expect(nodeModalSetupGuideSectionSource).toContain('No token fields are needed');
     expect(nodeModalStatusFooterSource).toContain('guidedSetupOnlyMode');
     expect(nodeModalStateSource).toContain('data.setupMode !==');
 

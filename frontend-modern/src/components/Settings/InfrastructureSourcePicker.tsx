@@ -4,6 +4,7 @@ import type { InfrastructureOnboardingConnectionType } from '@/utils/infrastruct
 import {
   getInfrastructureSourcePickerGroups,
   getInfrastructureOnboardingProductPresentation,
+  getInfrastructureSourceStrategyPresentation,
 } from '@/utils/infrastructureOnboardingPresentation';
 
 interface InfrastructureSourcePickerProps {
@@ -29,11 +30,18 @@ export const InfrastructureSourcePicker: Component<InfrastructureSourcePickerPro
   return (
     <div class="space-y-6 p-4">
       <Show when={props.onDetectFromAddress}>
-        <div class="flex justify-end">
+        <div class="flex flex-col gap-3 rounded-md border border-border bg-surface-alt p-3 sm:flex-row sm:items-center sm:justify-between">
+          <div class="space-y-1">
+            <div class="text-sm font-medium text-base-content">Not sure which source to use?</div>
+            <p class="text-xs text-muted">
+              Probe an address and Pulse will open the matching API inventory flow when it
+              recognizes the platform.
+            </p>
+          </div>
           <button
             type="button"
             onClick={props.onDetectFromAddress}
-            class={detectButtonClass}
+            class={`${detectButtonClass} self-start sm:self-center`}
           >
             <Search class="mr-2 h-4 w-4" />
             Detect from address
@@ -54,11 +62,14 @@ export const InfrastructureSourcePicker: Component<InfrastructureSourcePickerPro
                 {(product) => {
                   const Icon = CARD_ICON[product.type];
                   const details = getInfrastructureOnboardingProductPresentation(product.type);
+                  const strategy = getInfrastructureSourceStrategyPresentation(
+                    details.sourceStrategy,
+                  );
                   return (
                     <button
                       type="button"
                       onClick={() => props.onSelectType(product.type)}
-                      class="group flex h-full flex-col gap-3 rounded-xl border border-border bg-surface p-4 text-left transition-colors hover:border-blue-500 hover:bg-blue-50/40 dark:hover:bg-blue-950/20"
+                      class="group flex h-full flex-col gap-3 rounded-md border border-border bg-surface p-4 text-left transition-colors hover:border-blue-500 hover:bg-blue-50/40 dark:hover:bg-blue-950/20"
                     >
                       <div class="flex items-start gap-3">
                         <div
@@ -72,6 +83,9 @@ export const InfrastructureSourcePicker: Component<InfrastructureSourcePickerPro
                             <div class="text-sm font-semibold text-base-content">
                               {details.label}
                             </div>
+                            <span class="inline-flex items-center rounded-full border border-border bg-surface-alt px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-base-content">
+                              {strategy.label}
+                            </span>
                             <Show when={details.governanceState === 'admitted'}>
                               <span class="inline-flex items-center rounded-full border border-blue-200 bg-blue-100 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-blue-800 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-200">
                                 Available now
@@ -82,7 +96,22 @@ export const InfrastructureSourcePicker: Component<InfrastructureSourcePickerPro
                         </div>
                       </div>
 
-                      <div class="text-[11px] text-muted">{details.bestFor}</div>
+                      <p class="text-[11px] text-muted">{strategy.detail}</p>
+
+                      <div class="grid gap-2 text-[11px] text-muted">
+                        <div>
+                          <div class="font-medium uppercase tracking-wide text-base-content">
+                            Best for
+                          </div>
+                          <div>{details.bestFor}</div>
+                        </div>
+                        <div>
+                          <div class="font-medium uppercase tracking-wide text-base-content">
+                            Unlocks
+                          </div>
+                          <div>{details.coverage}</div>
+                        </div>
+                      </div>
                     </button>
                   );
                 }}

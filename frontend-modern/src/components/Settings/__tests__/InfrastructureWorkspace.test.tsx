@@ -527,9 +527,17 @@ describe('InfrastructureWorkspace', () => {
     await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
     const dialog = screen.getByRole('dialog');
     expect(screen.getAllByText('Add infrastructure').length).toBeGreaterThan(0);
-    expect(screen.getByText('Choose the source type you want to add.')).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Choose how Pulse should collect from this system: platform API, Pulse Agent, or both.',
+      ),
+    ).toBeInTheDocument();
     expect(within(dialog).getByRole('button', { name: 'Detect from address' })).toBeInTheDocument();
     expect(within(dialog).getByText('Virtualization')).toBeInTheDocument();
+    expect(within(dialog).getAllByText('API inventory').length).toBeGreaterThan(0);
+    expect(within(dialog).getByText('Agent telemetry')).toBeInTheDocument();
+    expect(within(dialog).getAllByText('API + Agent').length).toBeGreaterThan(0);
+    expect(within(dialog).getAllByText('Unlocks').length).toBeGreaterThan(0);
     expect(within(dialog).getByRole('button', { name: /TrueNAS SCALE/i })).toBeInTheDocument();
   });
 
