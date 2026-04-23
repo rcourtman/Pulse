@@ -2104,6 +2104,11 @@ func (e *PulseToolExecutor) registerQueryTools() {
 		Handler: func(ctx context.Context, exec *PulseToolExecutor, args map[string]interface{}) (CallToolResult, error) {
 			return exec.executeQuery(ctx, args)
 		},
+		Governance: ToolGovernance{
+			ActionMode:     ToolActionRead,
+			ApprovalPolicy: "no approval required",
+			Summary:        "Resolves canonical infrastructure identity, topology, config, and health without changing state.",
+		},
 	})
 }
 

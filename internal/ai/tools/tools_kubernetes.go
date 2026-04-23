@@ -86,6 +86,11 @@ func (e *PulseToolExecutor) registerKubernetesTools() {
 		Handler: func(ctx context.Context, exec *PulseToolExecutor, args map[string]interface{}) (CallToolResult, error) {
 			return exec.executeKubernetes(ctx, args)
 		},
+		Governance: ToolGovernance{
+			ActionMode:     ToolActionMixed,
+			ApprovalPolicy: "read/list/log actions are safe; scale, restart, delete, and exec subactions require approval in controlled mode",
+			Summary:        "Reads Kubernetes topology and runs governed workload-control subactions.",
+		},
 	})
 }
 

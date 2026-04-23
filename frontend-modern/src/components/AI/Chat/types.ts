@@ -20,6 +20,8 @@ export interface PendingApproval {
   toolName: string;
   runOnHost: boolean;
   targetHost?: string;
+  risk?: string;
+  description?: string;
   isExecuting?: boolean;
   approvalId?: string; // ID of the approval record for API calls
 }

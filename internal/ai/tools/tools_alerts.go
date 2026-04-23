@@ -91,6 +91,11 @@ Examples:
 		Handler: func(ctx context.Context, exec *PulseToolExecutor, args map[string]interface{}) (CallToolResult, error) {
 			return exec.executeAlerts(ctx, args)
 		},
+		Governance: ToolGovernance{
+			ActionMode:     ToolActionMixed,
+			ApprovalPolicy: "read/list actions are safe; finding resolution and dismissal require the alerts governance path",
+			Summary:        "Reviews alert and finding state and records governed finding decisions.",
+		},
 	})
 }
 

@@ -67,6 +67,11 @@ func (e *PulseToolExecutor) registerDockerTools() {
 		Handler: func(ctx context.Context, exec *PulseToolExecutor, args map[string]interface{}) (CallToolResult, error) {
 			return exec.executeDocker(ctx, args)
 		},
+		Governance: ToolGovernance{
+			ActionMode:     ToolActionMixed,
+			ApprovalPolicy: "read/list actions are safe; control and update subactions require approval in controlled mode",
+			Summary:        "Lists Docker state and performs governed Docker control/update subactions.",
+		},
 	})
 }
 

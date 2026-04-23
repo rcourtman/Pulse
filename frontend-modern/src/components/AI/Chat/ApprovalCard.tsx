@@ -7,6 +7,11 @@ interface ApprovalCardProps {
   onSkip: () => void;
 }
 
+const riskLabel = (risk?: string) => {
+  const normalized = risk?.trim();
+  return normalized ? normalized.toUpperCase() : 'REVIEW';
+};
+
 export const ApprovalCard: Component<ApprovalCardProps> = (props) => {
   return (
     <div class="rounded-md border border-amber-300 dark:border-amber-700 overflow-hidden shadow-sm">
@@ -23,6 +28,9 @@ export const ApprovalCard: Component<ApprovalCardProps> = (props) => {
           </svg>
         </div>
         <span class="font-semibold">Approval Required</span>
+        <span class="px-1.5 py-0.5 bg-amber-200 dark:bg-amber-800 rounded text-[10px] font-bold uppercase tracking-wider">
+          {riskLabel(props.approval.risk)}
+        </span>
         <Show when={props.approval.runOnHost}>
           <span class="px-1.5 py-0.5 bg-amber-200 dark:bg-amber-800 rounded text-[10px] font-bold uppercase tracking-wider">
             Agent
@@ -37,6 +45,31 @@ export const ApprovalCard: Component<ApprovalCardProps> = (props) => {
 
       {/* Command */}
       <div class="px-3 py-3 bg-amber-50 dark:bg-amber-900">
+        <Show when={props.approval.description}>
+          <p class="mb-3 text-xs leading-relaxed text-amber-900 dark:text-amber-100">
+            {props.approval.description}
+          </p>
+        </Show>
+
+        <div class="mb-3 grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px]">
+          <div>
+            <div class="uppercase font-semibold text-amber-700 dark:text-amber-300">Tool</div>
+            <div class="text-base-content break-all">{props.approval.toolName}</div>
+          </div>
+          <div>
+            <div class="uppercase font-semibold text-amber-700 dark:text-amber-300">Target</div>
+            <div class="text-base-content break-all">
+              {props.approval.targetHost || 'Pulse runtime'}
+            </div>
+          </div>
+          <div>
+            <div class="uppercase font-semibold text-amber-700 dark:text-amber-300">Execution</div>
+            <div class="text-base-content">
+              {props.approval.runOnHost ? 'Agent routed' : 'Pulse API'}
+            </div>
+          </div>
+        </div>
+
         <div class="mb-3 p-2 bg-surface rounded border border-amber-200 dark:border-amber-700">
           <code class="text-xs font-mono text-base-content break-all">
             {props.approval.command}

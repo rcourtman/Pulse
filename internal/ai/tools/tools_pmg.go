@@ -30,6 +30,11 @@ func (e *PulseToolExecutor) registerPMGTools() {
 		Handler: func(ctx context.Context, exec *PulseToolExecutor, args map[string]interface{}) (CallToolResult, error) {
 			return exec.executePMG(ctx, args)
 		},
+		Governance: ToolGovernance{
+			ActionMode:     ToolActionRead,
+			ApprovalPolicy: "no approval required",
+			Summary:        "Reads Proxmox Mail Gateway status, queue, spam, and mail statistics.",
+		},
 	})
 }
 

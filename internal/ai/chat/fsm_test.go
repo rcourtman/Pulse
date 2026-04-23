@@ -238,6 +238,11 @@ func TestClassifyToolCall(t *testing.T) {
 		{"pulse_docker control", "pulse_docker", map[string]interface{}{"action": "control"}, ToolKindWrite},
 		{"pulse_docker update", "pulse_docker", map[string]interface{}{"action": "update"}, ToolKindWrite},
 
+		// Kubernetes - depends on action
+		{"pulse_kubernetes pods", "pulse_kubernetes", map[string]interface{}{"action": "pods"}, ToolKindRead},
+		{"pulse_kubernetes scale", "pulse_kubernetes", map[string]interface{}{"action": "scale"}, ToolKindWrite},
+		{"pulse_kubernetes exec", "pulse_kubernetes", map[string]interface{}{"action": "exec"}, ToolKindWrite},
+
 		// File edit - depends on action
 		{"pulse_file_edit read", "pulse_file_edit", map[string]interface{}{"action": "read"}, ToolKindRead},
 		{"pulse_file_edit write", "pulse_file_edit", map[string]interface{}{"action": "write"}, ToolKindWrite},

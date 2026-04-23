@@ -196,4 +196,26 @@ describe('ApprovalCard', () => {
 
     expect(screen.getByText(longCommand)).toBeInTheDocument();
   });
+
+  it('renders governed action context when provided', () => {
+    render(() => (
+      <ApprovalCard
+        approval={makeApproval({
+          risk: 'high',
+          description: 'Restart the web service after applying the new config.',
+          targetHost: 'web1',
+          toolName: 'pulse_control',
+        })}
+        onApprove={vi.fn()}
+        onSkip={vi.fn()}
+      />
+    ));
+
+    expect(screen.getByText('HIGH')).toBeInTheDocument();
+    expect(
+      screen.getByText('Restart the web service after applying the new config.'),
+    ).toBeInTheDocument();
+    expect(screen.getByText('pulse_control')).toBeInTheDocument();
+    expect(screen.getByText('web1')).toBeInTheDocument();
+  });
 });

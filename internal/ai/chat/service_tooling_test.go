@@ -161,6 +161,12 @@ func TestBuildSystemPrompt_DoesNotClaimGenericVMControl(t *testing.T) {
 	if !strings.Contains(prompt, "control only resources that explicitly support shared Pulse actions") {
 		t.Fatalf("expected system prompt to describe capability-bound pulse_control usage, got %q", prompt)
 	}
+	if !strings.Contains(prompt, "## AVAILABLE TOOL GOVERNANCE") {
+		t.Fatalf("expected system prompt to include generated tool governance section, got %q", prompt)
+	}
+	if !strings.Contains(prompt, "pulse_kubernetes") {
+		t.Fatalf("expected system prompt to include the governed Kubernetes tool contract, got %q", prompt)
+	}
 }
 
 func TestFilterToolsForPrompt_RecoveryOnlyKeepsStorage(t *testing.T) {

@@ -360,7 +360,12 @@ func classifyToolByName(toolName string, args map[string]interface{}) ToolKind {
 		return ToolKindRead
 
 	case "pulse_kubernetes":
-		return ToolKindRead
+		switch actionLower {
+		case "scale", "restart", "delete_pod", "exec":
+			return ToolKindWrite
+		default:
+			return ToolKindRead
+		}
 
 	case "pulse_knowledge":
 		// knowledge operations: remember is write, recall is read

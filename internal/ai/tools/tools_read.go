@@ -77,6 +77,11 @@ func (e *PulseToolExecutor) registerReadTools() {
 		Handler: func(ctx context.Context, exec *PulseToolExecutor, args map[string]interface{}) (CallToolResult, error) {
 			return exec.executeRead(ctx, args)
 		},
+		Governance: ToolGovernance{
+			ActionMode:     ToolActionRead,
+			ApprovalPolicy: "no approval required; write-like commands are rejected",
+			Summary:        "Runs read-only infrastructure inspection such as logs, file reads, tails, and safe exec.",
+		},
 		// Note: RequireControl is NOT set - this is a read-only tool
 		// It's available at all control levels including read_only
 	})

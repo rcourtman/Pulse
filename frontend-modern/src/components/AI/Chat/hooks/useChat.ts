@@ -7,6 +7,7 @@ import type {
   ChatMessage,
   ToolExecution,
   StreamDisplayEvent,
+  PendingApproval,
   PendingQuestion,
   PendingTool,
 } from '../types';
@@ -230,7 +231,9 @@ export function useChat(options: UseChatOptions = {}) {
               // Find the matching pending tool (prefer tool ID, then fall back to name).
               const resolvedPendingIndex = data.id
                 ? pendingTools.findIndex((t) => t.id === data.id)
-                : pendingTools.findIndex((t) => normalizeChatToolName(t.name) === normalizedEndName);
+                : pendingTools.findIndex(
+                    (t) => normalizeChatToolName(t.name) === normalizedEndName,
+                  );
               const updatedPending =
                 resolvedPendingIndex >= 0
                   ? [
@@ -320,10 +323,12 @@ export function useChat(options: UseChatOptions = {}) {
                 tool_name: string;
                 run_on_host: boolean;
                 target_host?: string;
+                risk?: string;
+                description?: string;
                 approval_id?: string;
               };
 
-              const approval = {
+              const approval: PendingApproval = {
                 command: data.command,
                 toolId: data.tool_id,
                 toolName: data.tool_name,
@@ -332,6 +337,12 @@ export function useChat(options: UseChatOptions = {}) {
                 isExecuting: false,
                 approvalId: data.approval_id,
               };
+              if (typeof data.risk === 'string') {
+                approval.risk = data.risk;
+              }
+              if (typeof data.description === 'string') {
+                approval.description = data.description;
+              }
 
               // Add to streamEvents for chronological display
               const updated = addStreamEvent(msg, { type: 'approval', approval });
@@ -678,44 +689,6 @@ export function useChat(options: UseChatOptions = {}) {
 
       // Remove the question card - it's been handled
       updateQuestion(messageId, questionId, { removed: true });
-
-      // After answering, check if the stream is still active.
-      // If it closed (e.g. on question), we force a re-connection to receive continuation events.
-      if (!isLoading()) {
-        logger.debug('[useChat] Stream closed, re-initiating to catch continuation', {
-          questionId,
-          messageId,
-        });
-
-        const currentSessionId = sessionId();
-        if (currentSessionId) {
-          setIsLoading(true);
-          abortControllerRef = new AbortController();
-
-          // Set the message back to streaming state to show the AI is working
-          setMessages((prev) =>
-            prev.map((m) => (m.id === messageId ? { ...m, isStreaming: true } : m)),
-          );
-
-          AIChatAPI.chat(
-            '', // Empty prompt - just resume listening for completion
-            currentSessionId,
-            model() || undefined,
-            (event) => {
-              processEvent(messageId, event);
-            },
-            abortControllerRef.signal,
-          )
-            .catch((err) => {
-              if (err instanceof Error && err.name === 'AbortError') return;
-              logger.error('[useChat] Re-connection failed:', err);
-            })
-            .finally(() => {
-              setIsLoading(false);
-              abortControllerRef = null;
-            });
-        }
-      }
 
       logger.debug('[useChat] Question answered, waiting for AI to continue', {
         questionId,

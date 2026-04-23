@@ -71,6 +71,11 @@ Returns: {"ok": true, "finding_id": "...", "is_new": true/false} on success.`,
 			},
 		},
 		Handler: handlePatrolReportFinding,
+		Governance: ToolGovernance{
+			ActionMode:     ToolActionWrite,
+			ApprovalPolicy: "patrol-only; records a governed finding after evidence collection",
+			Summary:        "Creates a structured patrol finding during autonomous investigation.",
+		},
 	})
 
 	// patrol_resolve_finding — LLM calls this to resolve an active finding
@@ -97,6 +102,11 @@ Returns: {"ok": true, "resolved": true} on success.`,
 			},
 		},
 		Handler: handlePatrolResolveFinding,
+		Governance: ToolGovernance{
+			ActionMode:     ToolActionWrite,
+			ApprovalPolicy: "patrol-only; resolves a finding after verification",
+			Summary:        "Marks a patrol finding resolved after current evidence supports closure.",
+		},
 	})
 
 	// patrol_get_findings — LLM calls this to check existing active findings
@@ -122,6 +132,11 @@ Returns a list of active findings with their IDs, severity, resource, and title.
 			},
 		},
 		Handler: handlePatrolGetFindings,
+		Governance: ToolGovernance{
+			ActionMode:     ToolActionRead,
+			ApprovalPolicy: "no approval required",
+			Summary:        "Reads active patrol findings for deduplication and investigation context.",
+		},
 	})
 }
 

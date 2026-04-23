@@ -56,6 +56,11 @@ func (e *PulseToolExecutor) registerDiscoveryTools() {
 		Handler: func(ctx context.Context, exec *PulseToolExecutor, args map[string]interface{}) (CallToolResult, error) {
 			return exec.executeDiscovery(ctx, args)
 		},
+		Governance: ToolGovernance{
+			ActionMode:     ToolActionRead,
+			ApprovalPolicy: "no approval required",
+			Summary:        "Reads discovered service paths, ports, and bind mounts for known resources.",
+		},
 	})
 }
 

@@ -67,6 +67,11 @@ func (e *PulseToolExecutor) registerControlTools() {
 			return exec.executeControl(ctx, args)
 		},
 		RequireControl: true,
+		Governance: ToolGovernance{
+			ActionMode:     ToolActionWrite,
+			ApprovalPolicy: "hidden in read-only mode; approval required in controlled mode",
+			Summary:        "Runs shared Pulse control actions and state-changing commands only against resources that advertise supported actions.",
+		},
 	})
 }
 

@@ -438,7 +438,7 @@ describe('AIChat', () => {
     it('opens control menu on click', () => {
       renderChat();
       fireEvent.click(screen.getByTitle('Control mode'));
-      expect(screen.getByText('Control mode for this chat')).toBeInTheDocument();
+      expect(screen.getByText('Default control mode')).toBeInTheDocument();
       expect(screen.getByText('No commands or control actions')).toBeInTheDocument();
       expect(screen.getByText('Ask before running commands')).toBeInTheDocument();
       expect(screen.getByText('Executes without approval (Pro)')).toBeInTheDocument();

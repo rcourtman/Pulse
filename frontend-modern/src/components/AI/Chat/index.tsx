@@ -818,8 +818,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
       chat.updateApproval(messageId, toolId, { removed: true });
     } catch (error) {
       logger.error('[AIChat] Skip/deny failed:', error);
-      // Still remove from UI even if API fails
-      chat.updateApproval(messageId, toolId, { removed: true });
+      notificationStore.error('Failed to skip approval');
     }
   };
 
@@ -929,7 +928,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
                 <Show when={showControlMenu()}>
                   <div class="absolute right-0 mt-2 w-60 rounded-md border border-border bg-surface shadow-sm z-50 overflow-hidden">
                     <div class="px-3 py-2 text-[11px] text-muted border-b border-border">
-                      Control mode for this chat
+                      Default control mode
                     </div>
                     <button
                       class={`w-full text-left px-3 py-2.5 text-xs hover:bg-surface-hover transition-colors ${controlLevel() === 'read_only' ? getAIChatControlLevelPresentation('read_only').selectedClassName : ''}`}

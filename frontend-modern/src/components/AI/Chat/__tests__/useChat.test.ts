@@ -551,6 +551,8 @@ describe('useChat', () => {
           tool_name: 'run_command',
           run_on_host: true,
           target_host: 'web1',
+          risk: 'high',
+          description: 'Restart web service',
           approval_id: 'appr-5',
         },
       });
@@ -563,6 +565,8 @@ describe('useChat', () => {
         toolName: 'run_command',
         runOnHost: true,
         targetHost: 'web1',
+        risk: 'high',
+        description: 'Restart web service',
         isExecuting: false,
         approvalId: 'appr-5',
       });
@@ -1128,7 +1132,7 @@ describe('useChat', () => {
       dispose();
     });
 
-    it('re-initiates stream when idle after answering (reconnection path)', async () => {
+    it('does not start a blank follow-up stream when idle after answering', async () => {
       let fireEvent!: TestStreamDispatch;
       let chatCallCount = 0;
       mockChat.mockImplementation(
@@ -1156,12 +1160,7 @@ describe('useChat', () => {
 
       await chat.answerQuestion(msgId, 'q-50', [{ id: 'q1', value: 'yes' }]);
 
-      // Should have called chat again with empty prompt for reconnection
-      expect(chatCallCount).toBeGreaterThan(chatCallsBefore);
-      // The reconnection call should use empty prompt and same session
-      const reconnectCall = mockChat.mock.calls[mockChat.mock.calls.length - 1];
-      expect(reconnectCall[0]).toBe('');
-      expect(reconnectCall[1]).toBe('s');
+      expect(chatCallCount).toBe(chatCallsBefore);
       dispose();
     });
 

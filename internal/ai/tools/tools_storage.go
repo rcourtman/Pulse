@@ -95,6 +95,11 @@ func (e *PulseToolExecutor) registerStorageTools() {
 		Handler: func(ctx context.Context, exec *PulseToolExecutor, args map[string]interface{}) (CallToolResult, error) {
 			return exec.executeStorage(ctx, args)
 		},
+		Governance: ToolGovernance{
+			ActionMode:     ToolActionRead,
+			ApprovalPolicy: "no approval required",
+			Summary:        "Reads storage, backup, recovery, Ceph, RAID, and disk-health state without changing infrastructure.",
+		},
 	})
 }
 

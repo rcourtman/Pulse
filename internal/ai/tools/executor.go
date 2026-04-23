@@ -934,6 +934,22 @@ func (e *PulseToolExecutor) ListTools() []Tool {
 	return available
 }
 
+// ListToolGovernance returns the governed manifest for currently available tools.
+func (e *PulseToolExecutor) ListToolGovernance() []ToolGovernanceDescriptor {
+	tools := e.registry.ListToolGovernance(e.controlLevel)
+	if len(tools) == 0 {
+		return tools
+	}
+
+	available := make([]ToolGovernanceDescriptor, 0, len(tools))
+	for _, tool := range tools {
+		if e.isToolAvailable(tool.Name) {
+			available = append(available, tool)
+		}
+	}
+	return available
+}
+
 func (e *PulseToolExecutor) isToolAvailable(name string) bool {
 	switch name {
 	// Check tool availability based on primary requirements

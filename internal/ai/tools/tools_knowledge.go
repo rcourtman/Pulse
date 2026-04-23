@@ -136,6 +136,11 @@ Examples:
 		Handler: func(ctx context.Context, exec *PulseToolExecutor, args map[string]interface{}) (CallToolResult, error) {
 			return exec.executeKnowledge(ctx, args)
 		},
+		Governance: ToolGovernance{
+			ActionMode:     ToolActionMixed,
+			ApprovalPolicy: "recall and analysis are safe; remember records operator-visible knowledge",
+			Summary:        "Reads operational memory and records governed knowledge notes when requested.",
+		},
 	})
 }
 

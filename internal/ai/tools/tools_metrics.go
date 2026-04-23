@@ -88,6 +88,11 @@ Examples:
 		Handler: func(ctx context.Context, exec *PulseToolExecutor, args map[string]interface{}) (CallToolResult, error) {
 			return exec.executeMetrics(ctx, args)
 		},
+		Governance: ToolGovernance{
+			ActionMode:     ToolActionRead,
+			ApprovalPolicy: "no approval required",
+			Summary:        "Reads performance, sensor, baseline, pattern, and disk-health data without changing state.",
+		},
 	})
 }
 

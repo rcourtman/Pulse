@@ -86,12 +86,19 @@ runtime cost control, and shared AI transport surfaces.
    platform-native reads or writes must extend the shared Assistant tool
    contracts, and read-only or augmentation-only platforms must stay explicit
    there instead of drifting into provider-local tools.
-8. Keep self-hosted Patrol quickstart messaging aligned with backend runtime
+8. Keep Pulse Assistant action governance canonical in the shared tool
+   registry. Tool prompts and approval surfaces must derive read, mixed, write,
+   and approval-policy claims from `internal/ai/tools/registry.go` and
+   `internal/ai/tools/executor.go` instead of maintaining hand-written
+   prompt-only tool lists, and frontend approval cards must surface backend
+   approval risk/description without hiding a pending approval when skip or
+   deny fails.
+9. Keep self-hosted Patrol quickstart messaging aligned with backend runtime
    truth: the governed quickstart contract is Patrol-only first-run
    acceleration on activated or trial-backed installs with server-authoritative
    run inventory, not a general hosted chat entitlement or a replacement for
    BYOK once Patrol leaves the quickstart path.
-9. Keep discovery-analysis prompt bounds and response budgets aligned across
+10. Keep discovery-analysis prompt bounds and response budgets aligned across
    `internal/ai/service.go` and the shared service-discovery prompt builders:
    the runtime must reserve enough output tokens for structured discovery JSON,
    and discovery prompts must cap fact/path/port fan-out explicitly instead of

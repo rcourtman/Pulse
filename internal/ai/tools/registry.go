@@ -6,6 +6,33 @@ import (
 	"sync"
 )
 
+// ToolActionMode describes the state-changing capability of a registered tool.
+type ToolActionMode string
+
+const (
+	ToolActionRead  ToolActionMode = "read"
+	ToolActionMixed ToolActionMode = "mixed"
+	ToolActionWrite ToolActionMode = "write"
+)
+
+// ToolGovernance records the operator-facing governance contract for a tool.
+type ToolGovernance struct {
+	ActionMode     ToolActionMode
+	ApprovalPolicy string
+	Summary        string
+}
+
+// ToolGovernanceDescriptor is the read-only manifest used by Assistant prompts
+// and action-governance surfaces.
+type ToolGovernanceDescriptor struct {
+	Name           string
+	Description    string
+	RequireControl bool
+	ActionMode     ToolActionMode
+	ApprovalPolicy string
+	Summary        string
+}
+
 // ToolHandler is a function that handles tool execution
 type ToolHandler func(ctx context.Context, e *PulseToolExecutor, args map[string]interface{}) (CallToolResult, error)
 
@@ -14,6 +41,7 @@ type RegisteredTool struct {
 	Definition     Tool
 	Handler        ToolHandler
 	RequireControl bool // If true, only available when control level is not read_only
+	Governance     ToolGovernance
 }
 
 // ToolRegistry manages tool registration and execution
@@ -58,6 +86,54 @@ func (r *ToolRegistry) ListTools(controlLevel ControlLevel) []Tool {
 		result = append(result, tool.Definition)
 	}
 	return result
+}
+
+// ListToolGovernance returns the governed tool manifest available at a control level.
+func (r *ToolRegistry) ListToolGovernance(controlLevel ControlLevel) []ToolGovernanceDescriptor {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	result := make([]ToolGovernanceDescriptor, 0, len(r.tools))
+	for _, name := range r.order {
+		tool := r.tools[name]
+		if tool.RequireControl && (controlLevel == ControlLevelReadOnly || controlLevel == "") {
+			continue
+		}
+		governance := normalizeToolGovernance(tool)
+		result = append(result, ToolGovernanceDescriptor{
+			Name:           tool.Definition.Name,
+			Description:    tool.Definition.Description,
+			RequireControl: tool.RequireControl,
+			ActionMode:     governance.ActionMode,
+			ApprovalPolicy: governance.ApprovalPolicy,
+			Summary:        governance.Summary,
+		})
+	}
+	return result
+}
+
+func normalizeToolGovernance(tool RegisteredTool) ToolGovernance {
+	governance := tool.Governance
+	if governance.ActionMode == "" {
+		if tool.RequireControl {
+			governance.ActionMode = ToolActionWrite
+		} else {
+			governance.ActionMode = ToolActionRead
+		}
+	}
+	if governance.ApprovalPolicy == "" {
+		if governance.ActionMode == ToolActionRead {
+			governance.ApprovalPolicy = "no approval required"
+		} else if tool.RequireControl {
+			governance.ApprovalPolicy = "hidden in read-only mode; approval required in controlled mode"
+		} else {
+			governance.ApprovalPolicy = "write subactions require the tool's governed approval path"
+		}
+	}
+	if governance.Summary == "" {
+		governance.Summary = tool.Definition.Description
+	}
+	return governance
 }
 
 // Execute runs a tool by name

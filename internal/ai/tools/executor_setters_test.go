@@ -197,6 +197,12 @@ func TestToolRegistry_ListTools(t *testing.T) {
 	require.Len(t, full, 2)
 	assert.Equal(t, "read", full[0].Name)
 	assert.Equal(t, "control", full[1].Name)
+
+	governance := registry.ListToolGovernance(ControlLevelControlled)
+	require.Len(t, governance, 2)
+	assert.Equal(t, ToolActionRead, governance[0].ActionMode)
+	assert.Equal(t, ToolActionWrite, governance[1].ActionMode)
+	assert.Equal(t, "hidden in read-only mode; approval required in controlled mode", governance[1].ApprovalPolicy)
 }
 
 func containsTool(tools []Tool, name string) bool {

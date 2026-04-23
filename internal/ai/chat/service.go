@@ -1429,13 +1429,7 @@ func (s *Service) applyChatContextSettings() {
 func (s *Service) buildSystemPrompt() string {
 	return `You are Pulse AI, a knowledgeable infrastructure assistant. You pair-program with the user on their homelab and infrastructure tasks.
 
-## CAPABILITIES
-- pulse_query: Find resources (VMs, containers, hosts) and their locations
-- pulse_discovery: Get service details, config paths, ports, bind mounts
-- pulse_control: Run commands on hosts and control only resources that explicitly support shared Pulse actions
-- pulse_docker: Manage Docker containers
-- pulse_file_edit: Read and edit configuration files
-- pulse_question: Ask the user for missing information using a structured prompt (interactive only)
+` + s.buildToolGovernancePromptSection() + `
 
 ## INFRASTRUCTURE TOPOLOGY
 - Resources are organized hierarchically: nodes → VMs/containers → Docker containers
@@ -1449,7 +1443,9 @@ func (s *Service) buildSystemPrompt() string {
 - Use pulse_discovery to find bind mount mappings
 
 ## TOOL SELECTION
-- pulse_control and pulse_docker are WRITE tools — they change infrastructure state.
+- Tool action modes and approval policies are generated from Pulse's tool registry. Treat that manifest as the source of truth for whether a tool is read-only, mixed, or write-capable.
+- pulse_control and pulse_file_edit are WRITE tools — they change infrastructure state.
+- pulse_docker, pulse_kubernetes, pulse_alerts, and pulse_knowledge are MIXED tools — their read subactions are safe, but their write or decision-recording subactions require the governed path described in the manifest.
 - Not every VM or container supports control. Some API-backed platforms are read-only even when the resource type is "vm" or "system-container".
 - ONLY use write tools when the user explicitly asks you to perform an action.
 - For status checks or monitoring, use pulse_query or pulse_read instead.
@@ -1473,6 +1469,99 @@ You are like a colleague doing pair programming on infrastructure tasks. Tool ca
 - After successful control actions, the system auto-verifies. Once verified, stop making tool calls and respond.
 - If a tool call is BLOCKED, read the error message carefully and follow its instructions exactly.
 - If told to call pulse_query or pulse_read first, you MUST do that before retrying the blocked action.`
+}
+
+func (s *Service) buildToolGovernancePromptSection() string {
+	manifest := []tools.ToolGovernanceDescriptor(nil)
+	if s != nil && s.executor != nil {
+		manifest = s.executor.ListToolGovernance()
+	}
+	if len(manifest) == 0 {
+		manifest = fallbackAssistantToolGovernance()
+	}
+
+	var b strings.Builder
+	b.WriteString("## AVAILABLE TOOL GOVERNANCE\n")
+	b.WriteString("This manifest is generated from Pulse's governed tool registry. Use only tools that are actually offered by the provider for the current turn.\n")
+	for _, tool := range manifest {
+		mode := tool.ActionMode
+		if mode == "" {
+			mode = tools.ToolActionRead
+		}
+		policy := strings.TrimSpace(tool.ApprovalPolicy)
+		if policy == "" {
+			policy = "no approval required"
+		}
+		summary := strings.TrimSpace(tool.Summary)
+		if summary == "" {
+			summary = firstPromptLine(tool.Description)
+		}
+		if summary != "" {
+			b.WriteString(fmt.Sprintf("- %s: mode=%s; approval=%s; %s\n", tool.Name, mode, policy, summary))
+		} else {
+			b.WriteString(fmt.Sprintf("- %s: mode=%s; approval=%s\n", tool.Name, mode, policy))
+		}
+	}
+	b.WriteString("- pulse_question: mode=interactive; approval=user answer required; asks the user for missing information using a structured prompt in interactive chat only.\n")
+	return strings.TrimRight(b.String(), "\n")
+}
+
+func fallbackAssistantToolGovernance() []tools.ToolGovernanceDescriptor {
+	return []tools.ToolGovernanceDescriptor{
+		{
+			Name:           "pulse_query",
+			ActionMode:     tools.ToolActionRead,
+			ApprovalPolicy: "no approval required",
+			Summary:        "Resolves canonical infrastructure identity, topology, config, and health without changing state.",
+		},
+		{
+			Name:           "pulse_read",
+			ActionMode:     tools.ToolActionRead,
+			ApprovalPolicy: "no approval required; write-like commands are rejected",
+			Summary:        "Runs read-only infrastructure inspection such as logs, file reads, tails, and safe exec.",
+		},
+		{
+			Name:           "pulse_discovery",
+			ActionMode:     tools.ToolActionRead,
+			ApprovalPolicy: "no approval required",
+			Summary:        "Reads discovered service details, config paths, ports, and bind mounts.",
+		},
+		{
+			Name:           "pulse_control",
+			ActionMode:     tools.ToolActionWrite,
+			ApprovalPolicy: "hidden in read-only mode; approval required in controlled mode",
+			Summary:        "Runs shared Pulse control actions and can control only resources that explicitly support shared Pulse actions.",
+		},
+		{
+			Name:           "pulse_file_edit",
+			ActionMode:     tools.ToolActionWrite,
+			ApprovalPolicy: "hidden in read-only mode; approval required in controlled mode",
+			Summary:        "Changes files through the governed file-edit path.",
+		},
+		{
+			Name:           "pulse_docker",
+			ActionMode:     tools.ToolActionMixed,
+			ApprovalPolicy: "read/list actions are safe; control and update subactions require approval in controlled mode",
+			Summary:        "Lists Docker state and performs governed Docker control/update subactions.",
+		},
+		{
+			Name:           "pulse_kubernetes",
+			ActionMode:     tools.ToolActionMixed,
+			ApprovalPolicy: "read/list/log actions are safe; scale, restart, delete, and exec subactions require approval in controlled mode",
+			Summary:        "Reads Kubernetes topology and runs governed workload-control subactions.",
+		},
+	}
+}
+
+func firstPromptLine(description string) string {
+	description = strings.TrimSpace(description)
+	if description == "" {
+		return ""
+	}
+	if idx := strings.Index(description, "\n"); idx >= 0 {
+		description = strings.TrimSpace(description[:idx])
+	}
+	return strings.Join(strings.Fields(description), " ")
 }
 
 var recentContextPronounPattern = regexp.MustCompile(`(?i)\b(it|its|that|those|this|them|previous|earlier|last|same|former|latter)\b`)
