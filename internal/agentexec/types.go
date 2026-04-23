@@ -90,12 +90,13 @@ type RegisteredPayload struct {
 
 // ExecuteCommandPayload is sent by server to request command execution
 type ExecuteCommandPayload struct {
-	RequestID  string `json:"request_id"`
-	Command    string `json:"command"`
-	ApprovalID string `json:"approval_id,omitempty"`
-	TargetType string `json:"target_type"`         // "agent", "container", "vm"
-	TargetID   string `json:"target_id,omitempty"` // VMID for container/VM
-	Timeout    int    `json:"timeout,omitempty"`   // seconds, 0 = default
+	RequestID     string                `json:"request_id"`
+	Command       string                `json:"command"`
+	ApprovalID    string                `json:"approval_id,omitempty"`
+	ApprovalGrant *CommandApprovalGrant `json:"approval_grant,omitempty"`
+	TargetType    string                `json:"target_type"`         // "agent", "container", "vm"
+	TargetID      string                `json:"target_id,omitempty"` // VMID for container/VM
+	Timeout       int                   `json:"timeout,omitempty"`   // seconds, 0 = default
 }
 
 // ReadFilePayload is sent by server to request file content

@@ -14,10 +14,14 @@ func main() {
 	sourceDir := flag.String("source-dir", "", "directory containing install.sh and install.ps1")
 	outputDir := flag.String("output-dir", "", "directory to write rendered installers into")
 	installerSSHPublicKey := flag.String("installer-ssh-public-key", "", "OpenSSH public key to pin into rendered installers")
+	allowEmptyInstallerSSHPublicKey := flag.Bool("allow-empty-installer-ssh-public-key", false, "allow unsigned/dev installer rendering without a pinned installer SSH public key")
 	flag.Parse()
 
 	if strings.TrimSpace(*sourceDir) == "" || strings.TrimSpace(*outputDir) == "" {
 		fail("source-dir and output-dir are required")
+	}
+	if strings.TrimSpace(*installerSSHPublicKey) == "" && !*allowEmptyInstallerSSHPublicKey {
+		fail("installer-ssh-public-key is required for rendered installers")
 	}
 
 	if err := os.MkdirAll(*outputDir, 0o755); err != nil {

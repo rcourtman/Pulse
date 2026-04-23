@@ -253,17 +253,64 @@ func (r *Router) handleDownloadUnifiedAgent(w http.ResponseWriter, req *http.Req
 }
 
 func validateUnifiedAgentBinary(path string) error {
-	content, err := os.ReadFile(path)
+	file, err := os.Open(path)
 	if err != nil {
-		return fmt.Errorf("read binary: %w", err)
+		return fmt.Errorf("open binary: %w", err)
 	}
-	if bytes.Contains(content, []byte(legacyUnifiedAgentReportPath)) {
+	defer file.Close()
+
+	hasCanonical, hasLegacy, err := scanUnifiedAgentBinaryContract(file)
+	if err != nil {
+		return fmt.Errorf("scan binary contract: %w", err)
+	}
+	if hasLegacy {
 		return fmt.Errorf("references deprecated host endpoint %s", legacyUnifiedAgentReportPath)
 	}
-	if !bytes.Contains(content, []byte(canonicalUnifiedAgentReportPath)) {
+	if !hasCanonical {
 		return fmt.Errorf("missing canonical host endpoint %s", canonicalUnifiedAgentReportPath)
 	}
 	return nil
+}
+
+func scanUnifiedAgentBinaryContract(r io.Reader) (hasCanonical bool, hasLegacy bool, err error) {
+	canonicalNeedle := []byte(canonicalUnifiedAgentReportPath)
+	legacyNeedle := []byte(legacyUnifiedAgentReportPath)
+	maxNeedleLen := len(canonicalNeedle)
+	if len(legacyNeedle) > maxNeedleLen {
+		maxNeedleLen = len(legacyNeedle)
+	}
+	overlap := maxNeedleLen - 1
+	if overlap < 0 {
+		overlap = 0
+	}
+
+	buf := make([]byte, 64*1024)
+	window := make([]byte, 0, len(buf)+overlap)
+	for {
+		n, readErr := r.Read(buf)
+		if n > 0 {
+			window = append(window, buf[:n]...)
+			if bytes.Contains(window, canonicalNeedle) {
+				hasCanonical = true
+			}
+			if bytes.Contains(window, legacyNeedle) {
+				hasLegacy = true
+			}
+			if hasCanonical && hasLegacy {
+				return true, true, nil
+			}
+			if len(window) > overlap {
+				window = append(window[:0], window[len(window)-overlap:]...)
+			}
+		}
+		if readErr == io.EOF {
+			break
+		}
+		if readErr != nil {
+			return false, false, readErr
+		}
+	}
+	return hasCanonical, hasLegacy, nil
 }
 
 // proxyAgentBinaryFromGitHub downloads an agent binary from GitHub releases and serves
@@ -349,6 +396,7 @@ func (r *Router) proxyAgentBinaryFromGitHub(w http.ResponseWriter, req *http.Req
 }
 
 const maxAgentBinarySize = 100 * 1024 * 1024
+const maxInstallScriptSize = 512 * 1024
 
 func readBinaryWithChecksum(body io.Reader) ([]byte, string, error) {
 	limitedReader := io.LimitReader(body, maxAgentBinarySize+1)
@@ -643,11 +691,17 @@ func (r *Router) proxyInstallScriptFromGitHub(w http.ResponseWriter, req *http.R
 		return
 	}
 
-	// Read the script content
-	content, err := io.ReadAll(resp.Body)
+	// Read the script content with a hard cap so a bad upstream response cannot
+	// exhaust memory while the server is proxying release assets.
+	content, err := io.ReadAll(io.LimitReader(resp.Body, maxInstallScriptSize+1))
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to read install script from GitHub")
 		http.Error(w, "Failed to read install script", http.StatusInternalServerError)
+		return
+	}
+	if len(content) > maxInstallScriptSize {
+		log.Error().Int("size", len(content)).Str("url", githubURL).Msg("Install script from GitHub exceeded size limit")
+		http.Error(w, "Install script exceeds size limit", http.StatusServiceUnavailable)
 		return
 	}
 

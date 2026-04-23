@@ -3640,12 +3640,6 @@ func (h *AISettingsHandler) HandleRunCommand(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// Gated for AI Auto-Fix (Pro feature)
-	if !h.GetAIService(r.Context()).HasLicenseFeature(ai.FeatureAIAutoFix) {
-		WriteLicenseRequired(w, ai.FeatureAIAutoFix, "Pulse Patrol Auto-Fix requires Pulse Pro")
-		return
-	}
-
 	// Parse request
 	r.Body = http.MaxBytesReader(w, r.Body, 16*1024)
 	bodyBytes, readErr := io.ReadAll(r.Body)
@@ -3658,7 +3652,7 @@ func (h *AISettingsHandler) HandleRunCommand(w http.ResponseWriter, r *http.Requ
 
 	var req AIRunCommandRequest
 	if err := json.Unmarshal(bodyBytes, &req); err != nil {
-		log.Error().Err(err).Str("body", string(bodyBytes)).Msg("Failed to decode JSON body")
+		log.Error().Err(err).Msg("Failed to decode JSON body")
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
@@ -3675,6 +3669,13 @@ func (h *AISettingsHandler) HandleRunCommand(w http.ResponseWriter, r *http.Requ
 	approvalTargetType, approvalTargetID, targetErr := normalizeRunCommandApprovalTarget(req)
 	if targetErr != nil {
 		http.Error(w, targetErr.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// Gated for AI Auto-Fix (Pro feature). Request shape is validated before the
+	// entitlement check so clients get deterministic 400s for malformed calls.
+	if !h.GetAIService(r.Context()).HasLicenseFeature(ai.FeatureAIAutoFix) {
+		WriteLicenseRequired(w, ai.FeatureAIAutoFix, "Pulse Patrol Auto-Fix requires Pulse Pro")
 		return
 	}
 
@@ -3697,7 +3698,7 @@ func (h *AISettingsHandler) HandleRunCommand(w http.ResponseWriter, r *http.Requ
 	}
 
 	log.Info().
-		Str("command", req.Command).
+		Str("command_hash", agentexec.ComputeCommandApprovalHash(req.Command, approvalTargetType, approvalTargetID)).
 		Str("approval_id", req.ApprovalID).
 		Str("target_type", approvalTargetType).
 		Str("target_id", approvalTargetID).

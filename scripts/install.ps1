@@ -29,6 +29,7 @@ $BinaryName = "pulse-agent.exe"
 $InstallDir = "C:\Program Files\Pulse"
 $StateDir = "$env:ProgramData\Pulse"
 $ConnectionStatePath = "$StateDir\connection.env"
+$TokenFilePath = "$StateDir\token"
 $LogFile = "$env:ProgramData\Pulse\pulse-agent.log"
 $DownloadTimeoutSec = 300
 $PinnedInstallerSshPublicKey = "__PULSE_INSTALLER_SSH_PUBLIC_KEY__"
@@ -337,8 +338,8 @@ function Invoke-WithOptionalInsecureTls {
 
 function Save-ConnectionState {
     $lines = @("PULSE_URL='$Url'")
-    if (-not [string]::IsNullOrWhiteSpace($Token)) {
-        $lines += "PULSE_TOKEN='$Token'"
+    if (Test-Path $TokenFilePath) {
+        $lines += "PULSE_TOKEN_FILE='$TokenFilePath'"
     }
     if (-not [string]::IsNullOrWhiteSpace($AgentId)) {
         $lines += "PULSE_AGENT_ID='$AgentId'"
@@ -355,6 +356,21 @@ function Save-ConnectionState {
 
     New-Item -ItemType Directory -Path $StateDir -Force | Out-Null
     Set-Content -Path $ConnectionStatePath -Value ($lines -join "`n") -Encoding UTF8
+}
+
+function Write-RuntimeTokenFile {
+    if ([string]::IsNullOrWhiteSpace($Token)) {
+        Remove-Item $TokenFilePath -Force -ErrorAction SilentlyContinue
+        return
+    }
+
+    New-Item -ItemType Directory -Path $StateDir -Force | Out-Null
+    Set-Content -Path $TokenFilePath -Value $Token -NoNewline -Encoding ASCII
+    try {
+        icacls.exe $TokenFilePath /inheritance:r /grant:r "SYSTEM:F" "Administrators:F" | Out-Null
+    } catch {
+        Write-Host "Warning: Failed to tighten token file ACLs: $_" -ForegroundColor Yellow
+    }
 }
 
 function Get-ConnectionStateValue {
@@ -385,6 +401,12 @@ if ($Uninstall) {
     }
     if ([string]::IsNullOrWhiteSpace($Token)) {
         $Token = Get-ConnectionStateValue "PULSE_TOKEN"
+    }
+    if ([string]::IsNullOrWhiteSpace($Token)) {
+        $savedTokenFile = Get-ConnectionStateValue "PULSE_TOKEN_FILE"
+        if (-not [string]::IsNullOrWhiteSpace($savedTokenFile) -and (Test-Path $savedTokenFile)) {
+            $Token = (Get-Content -Path $savedTokenFile -Raw).Trim()
+        }
     }
     if ([string]::IsNullOrWhiteSpace($AgentId)) {
         $AgentId = Get-ConnectionStateValue "PULSE_AGENT_ID"
@@ -438,8 +460,8 @@ if ($Uninstall) {
                     Invoke-WithOptionalInsecureTls -AllowInsecure $Insecure -CustomCaCertificate $customCaCertificate -Action {
                         $lookupResult = Invoke-RestMethod @lookupArgs
                     }
-                    if ($lookupResult -and -not [string]::IsNullOrWhiteSpace($lookupResult.id)) {
-                        $detectedAgentId = $lookupResult.id.Trim()
+                    if ($lookupResult -and $lookupResult.agent -and -not [string]::IsNullOrWhiteSpace($lookupResult.agent.id)) {
+                        $detectedAgentId = $lookupResult.agent.id.Trim()
                     }
                 } catch {
                     # Ignore lookup errors during uninstall
@@ -540,7 +562,15 @@ $Url = $Url.TrimEnd('/')
 
 # --- Download ---
 # Determine architecture
-$Arch = if ([Environment]::Is64BitOperatingSystem) { "amd64" } else { "386" }
+$processorArch = "$env:PROCESSOR_ARCHITECTURE"
+$processorArch64 = "$env:PROCESSOR_ARCHITEW6432"
+if ($processorArch -eq "ARM64" -or $processorArch64 -eq "ARM64") {
+    $Arch = "arm64"
+} elseif ([Environment]::Is64BitOperatingSystem) {
+    $Arch = "amd64"
+} else {
+    $Arch = "386"
+}
 $ArchParam = "windows-$Arch"
 $DownloadUrl = "$Url/download/pulse-agent?arch=$ArchParam"
 Write-Host "Downloading agent from $DownloadUrl..." -ForegroundColor Cyan
@@ -610,18 +640,19 @@ if (-not (Test-PEBinary $TempPath)) {
     Exit 1
 }
 
-# Verify checksum if server provided one
-if (-not [string]::IsNullOrWhiteSpace($serverChecksum)) {
-    $localChecksum = Get-FileChecksum $TempPath
-    if ($localChecksum -ne $serverChecksum.ToLower()) {
-        Cleanup
-        Show-Error "Checksum verification failed!`nExpected: $serverChecksum`nGot: $localChecksum"
-        Exit 1
-    }
-    Write-Host "Checksum verified: $localChecksum" -ForegroundColor Green
-} else {
-    Write-Host "Warning: Server did not provide checksum header" -ForegroundColor Yellow
+# Verify checksum from the same download response.
+if ([string]::IsNullOrWhiteSpace($serverChecksum)) {
+    Cleanup
+    Show-Error "Server did not provide checksum header; refusing install."
+    Exit 1
 }
+$localChecksum = Get-FileChecksum $TempPath
+if ($localChecksum -ne $serverChecksum.ToLower()) {
+    Cleanup
+    Show-Error "Checksum verification failed!`nExpected: $serverChecksum`nGot: $localChecksum"
+    Exit 1
+}
+Write-Host "Checksum verified: $localChecksum" -ForegroundColor Green
 
 if (Test-HasPinnedInstallerSignatureKey) {
     if ([string]::IsNullOrWhiteSpace($serverChecksum)) {
@@ -681,6 +712,7 @@ Remove-Item "$DestPath.backup" -Force -ErrorAction SilentlyContinue
 
 # --- Service Installation ---
 Write-Host "Configuring Windows Service..." -ForegroundColor Cyan
+Write-RuntimeTokenFile
 Save-ConnectionState
 
 # Build command line args (properly escaped)
@@ -688,7 +720,7 @@ $ServiceArgs = @(
     "--url", "`"$Url`"",
     "--interval", "`"$Interval`""
 )
-if (-not [string]::IsNullOrWhiteSpace($Token)) { $ServiceArgs += @("--token", "`"$Token`"") }
+if (-not [string]::IsNullOrWhiteSpace($Token)) { $ServiceArgs += @("--token-file", "`"$TokenFilePath`"") }
 if ($EnableHost) { $ServiceArgs += "--enable-host" } else { $ServiceArgs += "--enable-host=false" }
 if ($EnableDocker) { $ServiceArgs += "--enable-docker" }
 if ($EnableKubernetes) { $ServiceArgs += "--enable-kubernetes" }

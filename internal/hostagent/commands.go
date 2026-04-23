@@ -183,12 +183,13 @@ type registeredPayload struct {
 }
 
 type executeCommandPayload struct {
-	RequestID  string `json:"request_id"`
-	Command    string `json:"command"`
-	ApprovalID string `json:"approval_id,omitempty"`
-	TargetType string `json:"target_type"`
-	TargetID   string `json:"target_id,omitempty"`
-	Timeout    int    `json:"timeout,omitempty"`
+	RequestID     string                          `json:"request_id"`
+	Command       string                          `json:"command"`
+	ApprovalID    string                          `json:"approval_id,omitempty"`
+	ApprovalGrant *agentexec.CommandApprovalGrant `json:"approval_grant,omitempty"`
+	TargetType    string                          `json:"target_type"`
+	TargetID      string                          `json:"target_id,omitempty"`
+	Timeout       int                             `json:"timeout,omitempty"`
 }
 
 type commandResultPayload struct {
@@ -541,7 +542,7 @@ func (c *CommandClient) handleExecuteCommand(ctx context.Context, conn *websocke
 
 	c.logger.Info().
 		Str("request_id", payload.RequestID).
-		Str("command", payload.Command).
+		Str("command_hash", agentexec.ComputeCommandApprovalHash(payload.Command, normalizedCommandTargetType(payload.TargetType), payload.TargetID)).
 		Str("approval_id", payload.ApprovalID).
 		Str("target_type", payload.TargetType).
 		Str("target_id", payload.TargetID).
@@ -636,8 +637,31 @@ func (c *CommandClient) authorizeCommand(payload executeCommandPayload) error {
 		if strings.TrimSpace(payload.ApprovalID) == "" {
 			return fmt.Errorf("command requires approval")
 		}
+		if err := agentexec.VerifyCommandApprovalGrant(c.apiToken, c.agentID, payload.toAgentExecPayload(), time.Now()); err != nil {
+			return fmt.Errorf("command approval grant invalid: %w", err)
+		}
 	}
 	return nil
+}
+
+func (p executeCommandPayload) toAgentExecPayload() agentexec.ExecuteCommandPayload {
+	return agentexec.ExecuteCommandPayload{
+		RequestID:     strings.TrimSpace(p.RequestID),
+		Command:       p.Command,
+		ApprovalID:    strings.TrimSpace(p.ApprovalID),
+		ApprovalGrant: p.ApprovalGrant,
+		TargetType:    normalizedCommandTargetType(p.TargetType),
+		TargetID:      strings.TrimSpace(p.TargetID),
+		Timeout:       p.Timeout,
+	}
+}
+
+func normalizedCommandTargetType(targetType string) string {
+	normalized := strings.ToLower(strings.TrimSpace(targetType))
+	if normalized == "" || normalized == "host" {
+		return "agent"
+	}
+	return normalized
 }
 
 func (c *CommandClient) ensureSSHKnownHostsManager() (sshknownhosts.Manager, error) {

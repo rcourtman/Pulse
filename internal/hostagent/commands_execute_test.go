@@ -6,7 +6,40 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 )
+
+func testApprovedCommandPayload(t *testing.T, client *CommandClient, payload executeCommandPayload) executeCommandPayload {
+	t.Helper()
+	if client.apiToken == "" {
+		client.apiToken = "runtime-token"
+	}
+	if client.agentID == "" {
+		client.agentID = "agent-1"
+	}
+	if payload.RequestID == "" {
+		payload.RequestID = "req-1"
+	}
+	if payload.ApprovalID == "" {
+		payload.ApprovalID = "approval-1"
+	}
+	if payload.TargetType == "" {
+		payload.TargetType = "agent"
+	}
+	grant, err := agentexec.NewCommandApprovalGrant(
+		agentexec.DeriveApprovalGrantKey(client.apiToken),
+		client.agentID,
+		payload.toAgentExecPayload(),
+		time.Now(),
+		time.Minute,
+	)
+	if err != nil {
+		t.Fatalf("NewCommandApprovalGrant() error = %v", err)
+	}
+	payload.ApprovalGrant = grant
+	return payload
+}
 
 func TestWrapCommand_TargetWrapping(t *testing.T) {
 	tests := []struct {
@@ -68,12 +101,12 @@ func TestCommandClient_executeCommand_Success(t *testing.T) {
 	}
 
 	c := &CommandClient{}
-	result := c.executeCommand(context.Background(), executeCommandPayload{
-		RequestID:  "r1",
-		Command:    "echo hello",
-		ApprovalID: "approval-1",
-		Timeout:    5,
+	payload := testApprovedCommandPayload(t, c, executeCommandPayload{
+		RequestID: "r1",
+		Command:   "echo hello",
+		Timeout:   5,
 	})
+	result := c.executeCommand(context.Background(), payload)
 	if !result.Success || result.ExitCode != 0 {
 		t.Fatalf("expected success, got %#v", result)
 	}
@@ -88,12 +121,12 @@ func TestCommandClient_executeCommand_NonZeroExitCode(t *testing.T) {
 	}
 
 	c := &CommandClient{}
-	result := c.executeCommand(context.Background(), executeCommandPayload{
-		RequestID:  "r1",
-		Command:    "echo err 1>&2; exit 3",
-		ApprovalID: "approval-1",
-		Timeout:    5,
+	payload := testApprovedCommandPayload(t, c, executeCommandPayload{
+		RequestID: "r1",
+		Command:   "echo err 1>&2; exit 3",
+		Timeout:   5,
 	})
+	result := c.executeCommand(context.Background(), payload)
 	if result.Success {
 		t.Fatalf("expected failure, got %#v", result)
 	}
@@ -112,12 +145,12 @@ func TestCommandClient_executeCommand_TimeoutSetsError(t *testing.T) {
 
 	c := &CommandClient{}
 	start := time.Now()
-	result := c.executeCommand(context.Background(), executeCommandPayload{
-		RequestID:  "r1",
-		Command:    "sleep 2",
-		ApprovalID: "approval-1",
-		Timeout:    1,
+	payload := testApprovedCommandPayload(t, c, executeCommandPayload{
+		RequestID: "r1",
+		Command:   "sleep 2",
+		Timeout:   1,
 	})
+	result := c.executeCommand(context.Background(), payload)
 	if time.Since(start) > 3*time.Second {
 		t.Fatalf("timeout path took too long: %v", time.Since(start))
 	}
@@ -138,12 +171,12 @@ func TestCommandClient_executeCommand_TruncatesLargeOutput(t *testing.T) {
 	}
 
 	c := &CommandClient{}
-	result := c.executeCommand(context.Background(), executeCommandPayload{
-		RequestID:  "r1",
-		Command:    "head -c 1048580 /dev/zero | tr '\\0' 'a'",
-		ApprovalID: "approval-1",
-		Timeout:    5,
+	payload := testApprovedCommandPayload(t, c, executeCommandPayload{
+		RequestID: "r1",
+		Command:   "head -c 1048580 /dev/zero | tr '\\0' 'a'",
+		Timeout:   5,
 	})
+	result := c.executeCommand(context.Background(), payload)
 	if !result.Success {
 		t.Fatalf("expected success, got %#v", result)
 	}
@@ -161,12 +194,12 @@ func TestCommandClient_executeCommand_TruncatesLargeStderr(t *testing.T) {
 	}
 
 	c := &CommandClient{}
-	result := c.executeCommand(context.Background(), executeCommandPayload{
-		RequestID:  "r1",
-		Command:    "head -c 1048580 /dev/zero | tr '\\0' 'b' 1>&2",
-		ApprovalID: "approval-1",
-		Timeout:    5,
+	payload := testApprovedCommandPayload(t, c, executeCommandPayload{
+		RequestID: "r1",
+		Command:   "head -c 1048580 /dev/zero | tr '\\0' 'b' 1>&2",
+		Timeout:   5,
 	})
+	result := c.executeCommand(context.Background(), payload)
 	if !result.Success {
 		t.Fatalf("expected success, got %#v", result)
 	}

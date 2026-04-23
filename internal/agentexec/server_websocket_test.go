@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -400,6 +401,14 @@ func TestExecuteCommand_RoundTripViaWebSocket(t *testing.T) {
 			}
 			var payload ExecuteCommandPayload
 			if err := json.Unmarshal(*msg.Payload, &payload); err != nil {
+				agentErr <- err
+				return
+			}
+			if payload.ApprovalGrant == nil {
+				agentErr <- fmt.Errorf("missing approval grant")
+				return
+			}
+			if err := VerifyCommandApprovalGrant("any", "a1", payload, time.Now()); err != nil {
 				agentErr <- err
 				return
 			}

@@ -1807,3 +1807,13 @@ func TestRetryLogEvent_LevelThrottling(t *testing.T) {
 		}
 	}
 }
+
+func TestRemoteDurationSettingPreservesFractionalSeconds(t *testing.T) {
+	got, ok := remoteDurationSetting(map[string]interface{}{"interval": 0.25}, "interval")
+	if !ok {
+		t.Fatal("remoteDurationSetting() ok = false, want true")
+	}
+	if got != 250*time.Millisecond {
+		t.Fatalf("remoteDurationSetting() = %s, want 250ms", got)
+	}
+}

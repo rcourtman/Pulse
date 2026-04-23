@@ -34,7 +34,8 @@ func TestInstallPS1AllowsMissingTokenForOptionalAuth(t *testing.T) {
 	script := string(content)
 	required := []string{
 		`if (-not [string]::IsNullOrWhiteSpace($Token) -and -not (Test-ValidToken $Token)) {`,
-		`if (-not [string]::IsNullOrWhiteSpace($Token)) { $ServiceArgs += @("--token", "` + "`" + `"$Token` + "`" + `"") }`,
+		`function Write-RuntimeTokenFile {`,
+		`if (-not [string]::IsNullOrWhiteSpace($Token)) { $ServiceArgs += @("--token-file", "` + "`" + `"$TokenFilePath` + "`" + `"") }`,
 	}
 	for _, needle := range required {
 		if !strings.Contains(script, needle) {
@@ -178,15 +179,19 @@ func TestInstallPS1PersistsAndRecoversConnectionIdentity(t *testing.T) {
 	script := string(content)
 	required := []string{
 		`$ConnectionStatePath = "$StateDir\connection.env"`,
+		`$TokenFilePath = "$StateDir\token"`,
 		`Set-Content -Path $ConnectionStatePath -Value ($lines -join "` + "`n" + `") -Encoding UTF8`,
+		`$lines += "PULSE_TOKEN_FILE='$TokenFilePath'"`,
 		`$Url = Get-ConnectionStateValue "PULSE_URL"`,
 		`$Token = Get-ConnectionStateValue "PULSE_TOKEN"`,
+		`$savedTokenFile = Get-ConnectionStateValue "PULSE_TOKEN_FILE"`,
 		`$AgentId = Get-ConnectionStateValue "PULSE_AGENT_ID"`,
 		`$Hostname = Get-ConnectionStateValue "PULSE_HOSTNAME"`,
 		`$Insecure = Parse-Bool (Get-ConnectionStateValue "PULSE_INSECURE_SKIP_VERIFY") $Insecure`,
 		`$CACertPath = Get-ConnectionStateValue "PULSE_CACERT"`,
 		`$lines += "PULSE_INSECURE_SKIP_VERIFY='true'"`,
 		`$lines += "PULSE_CACERT='$CACertPath'"`,
+		`Write-RuntimeTokenFile`,
 		`Save-ConnectionState`,
 	}
 	for _, needle := range required {

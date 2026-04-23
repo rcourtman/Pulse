@@ -71,11 +71,12 @@ type Server struct {
 }
 
 type agentConn struct {
-	conn     *websocket.Conn
-	agent    ConnectedAgent
-	writeMu  sync.Mutex
-	done     chan struct{}
-	doneOnce sync.Once
+	conn             *websocket.Conn
+	agent            ConnectedAgent
+	approvalGrantKey []byte
+	writeMu          sync.Mutex
+	done             chan struct{}
+	doneOnce         sync.Once
 }
 
 func (ac *agentConn) signalDone() {
@@ -450,7 +451,8 @@ func (s *Server) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 			Tags:        reg.Tags,
 			ConnectedAt: time.Now(),
 		},
-		done: make(chan struct{}),
+		approvalGrantKey: DeriveApprovalGrantKey(reg.Token),
+		done:             make(chan struct{}),
 	}
 
 	// Clear deadline for normal operation - both on the WebSocket and underlying connection
@@ -850,6 +852,13 @@ func (s *Server) ExecuteCommand(ctx context.Context, agentID string, cmd Execute
 	}
 	if err := s.authorizeCommandPayload(cmd); err != nil {
 		return nil, err
+	}
+	if s.commandPolicy != nil && s.commandPolicy.Evaluate(cmd.Command) == PolicyRequireApproval && cmd.ApprovalGrant == nil && len(ac.approvalGrantKey) > 0 {
+		grant, grantErr := NewCommandApprovalGrant(ac.approvalGrantKey, agentID, cmd, time.Now(), DefaultApprovalGrantTTL)
+		if grantErr != nil {
+			return nil, fmt.Errorf("failed to issue approval grant: %w", grantErr)
+		}
+		cmd.ApprovalGrant = grant
 	}
 
 	execLog := log.With().

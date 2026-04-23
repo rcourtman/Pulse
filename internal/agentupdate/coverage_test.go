@@ -27,6 +27,15 @@ func (f roundTripperFunc) RoundTrip(r *http.Request) (*http.Response, error) {
 	return f(r)
 }
 
+func TestUpdateRetryBackoffUsesOperationalDelays(t *testing.T) {
+	if updateRetryBaseDelay < time.Second {
+		t.Fatalf("updateRetryBaseDelay = %s, want at least 1s", updateRetryBaseDelay)
+	}
+	if updateRetryMaxDelay < 30*time.Second {
+		t.Fatalf("updateRetryMaxDelay = %s, want at least 30s", updateRetryMaxDelay)
+	}
+}
+
 func testBinary() []byte {
 	switch runtime.GOOS {
 	case "darwin":

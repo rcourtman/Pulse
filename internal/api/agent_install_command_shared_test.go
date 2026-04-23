@@ -28,7 +28,9 @@ func TestBuildProxmoxAgentInstallCommand(t *testing.T) {
 		IncludeInstallType: true,
 	})
 	require.Contains(t, command, posixShellQuote("https://pulse.example.com/install.sh"))
-	require.Contains(t, command, "--token "+posixShellQuote("token-123"))
+	require.Contains(t, command, "printf %s "+posixShellQuote("token-123")+` > "$token_file"`)
+	require.Contains(t, command, `--token-file "$token_file"`)
+	require.Contains(t, command, `rm -f "$token_file"`)
 	require.Contains(t, command, "--proxmox-type "+posixShellQuote("pbs"))
 }
 
@@ -84,7 +86,8 @@ func TestBuildProxmoxAgentInstallCommand_ShellEscapesArguments(t *testing.T) {
 
 	require.Contains(t, command, posixShellQuote(baseURL+"/install.sh"))
 	require.Contains(t, command, "--url "+posixShellQuote(baseURL))
-	require.Contains(t, command, "--token "+posixShellQuote(token))
+	require.Contains(t, command, "printf %s "+posixShellQuote(token)+` > "$token_file"`)
+	require.Contains(t, command, `--token-file "$token_file"`)
 	require.Contains(t, command, "--proxmox-type "+posixShellQuote("pve"))
 }
 
@@ -98,6 +101,7 @@ func TestBuildProxmoxAgentInstallCommand_NormalizesTrailingSlashes(t *testing.T)
 
 	require.Contains(t, command, posixShellQuote("https://pulse.example.com/base/install.sh"))
 	require.Contains(t, command, "--url "+posixShellQuote("https://pulse.example.com/base"))
+	require.Contains(t, command, `--token-file "$token_file"`)
 	require.NotContains(t, command, "//install.sh")
 	require.NotContains(t, command, "--url "+posixShellQuote("https://pulse.example.com/base/"))
 }

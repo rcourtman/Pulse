@@ -1729,6 +1729,7 @@ func TestHandleRunCommand_InvalidBody(t *testing.T) {
 	handler := newTestAISettingsHandler(cfg, persistence, nil)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/ai/run-command", bytes.NewReader([]byte(`{invalid json}`)))
+	req.RemoteAddr = "127.0.0.1:12345"
 	rec := httptest.NewRecorder()
 	handler.HandleRunCommand(rec, req)
 

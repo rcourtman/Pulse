@@ -130,7 +130,7 @@ func TestAgent_collectCephStatus_GuardsAndConversion(t *testing.T) {
 			collector: mc,
 		}
 
-		if got := a.collectCephStatus(context.Background()); got != nil {
+		if got := a.collectCephStatus(context.Background(), a.cfg.DisableCeph); got != nil {
 			t.Fatalf("collectCephStatus() = %#v, want nil", got)
 		}
 		if called {
@@ -149,7 +149,7 @@ func TestAgent_collectCephStatus_GuardsAndConversion(t *testing.T) {
 		}
 		a := &Agent{logger: zerolog.Nop(), collector: mc}
 
-		if got := a.collectCephStatus(context.Background()); got != nil {
+		if got := a.collectCephStatus(context.Background(), false); got != nil {
 			t.Fatalf("collectCephStatus() = %#v, want nil", got)
 		}
 		if called {
@@ -164,7 +164,7 @@ func TestAgent_collectCephStatus_GuardsAndConversion(t *testing.T) {
 		}
 		a := &Agent{logger: zerolog.Nop(), collector: mc}
 
-		if got := a.collectCephStatus(context.Background()); got != nil {
+		if got := a.collectCephStatus(context.Background(), false); got != nil {
 			t.Fatalf("collectCephStatus() = %#v, want nil", got)
 		}
 	})
@@ -176,7 +176,7 @@ func TestAgent_collectCephStatus_GuardsAndConversion(t *testing.T) {
 		}
 		a := &Agent{logger: zerolog.Nop(), collector: mc}
 
-		if got := a.collectCephStatus(context.Background()); got != nil {
+		if got := a.collectCephStatus(context.Background(), false); got != nil {
 			t.Fatalf("collectCephStatus() = %#v, want nil", got)
 		}
 	})
@@ -242,7 +242,7 @@ func TestAgent_collectCephStatus_GuardsAndConversion(t *testing.T) {
 		}
 		a := &Agent{logger: zerolog.Nop(), collector: mc}
 
-		got := a.collectCephStatus(context.Background())
+		got := a.collectCephStatus(context.Background(), false)
 		if got == nil {
 			t.Fatal("collectCephStatus() returned nil")
 		}

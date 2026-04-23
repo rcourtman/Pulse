@@ -98,6 +98,8 @@ type Agent struct {
 	interval               time.Duration
 	stateDir               string
 	trimmedPulseURL        string
+	configMu               sync.RWMutex
+	remoteConfigChanged    chan struct{}
 	reportBuffer           *utils.Queue[agentshost.Report]
 	commandClient          *CommandClient
 	commandClientMu        sync.Mutex
@@ -290,29 +292,30 @@ func New(cfg Config) (*Agent, error) {
 	}
 
 	agent := &Agent{
-		cfg:              cfg,
-		logger:           logger,
-		httpClient:       client,
-		hostInfo:         info,
-		hostname:         hostname,
-		displayName:      displayName,
-		platform:         platform,
-		osName:           osName,
-		osVersion:        osVersion,
-		kernelVersion:    kernelVersion,
-		architecture:     arch,
-		machineID:        machineID,
-		agentID:          agentID,
-		agentVersion:     agentVersion,
-		updatedFrom:      updatedFrom,
-		reportIP:         cfg.ReportIP,
-		stateDir:         cfg.StateDir,
-		interval:         cfg.Interval,
-		trimmedPulseURL:  pulseURL,
-		reportBuffer:     utils.New[agentshost.Report](bufferCapacity),
-		collector:        collector,
-		newCommandClient: newCommandClientFn,
-		runCommandClient: runCommandClientFn,
+		cfg:                 cfg,
+		logger:              logger,
+		httpClient:          client,
+		hostInfo:            info,
+		hostname:            hostname,
+		displayName:         displayName,
+		platform:            platform,
+		osName:              osName,
+		osVersion:           osVersion,
+		kernelVersion:       kernelVersion,
+		architecture:        arch,
+		machineID:           machineID,
+		agentID:             agentID,
+		agentVersion:        agentVersion,
+		updatedFrom:         updatedFrom,
+		reportIP:            cfg.ReportIP,
+		stateDir:            cfg.StateDir,
+		interval:            cfg.Interval,
+		trimmedPulseURL:     pulseURL,
+		remoteConfigChanged: make(chan struct{}, 1),
+		reportBuffer:        utils.New[agentshost.Report](bufferCapacity),
+		collector:           collector,
+		newCommandClient:    newCommandClientFn,
+		runCommandClient:    runCommandClientFn,
 	}
 
 	// Create command client for AI command execution (only if enabled)
@@ -402,7 +405,7 @@ func (a *Agent) Run(ctx context.Context) error {
 	// Load any reports buffered from a previous shutdown
 	a.loadPersistedBuffer()
 
-	ticker := time.NewTicker(a.interval)
+	ticker := time.NewTicker(a.currentInterval())
 	defer ticker.Stop()
 	defer a.persistBuffer()
 
@@ -417,6 +420,8 @@ func (a *Agent) Run(ctx context.Context) error {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
+		case <-a.remoteConfigChanged:
+			ticker.Reset(a.currentInterval())
 		case <-ticker.C:
 			if err := a.process(ctx); err != nil {
 				if errors.Is(err, context.Canceled) {
@@ -428,6 +433,52 @@ func (a *Agent) Run(ctx context.Context) error {
 					Msg("Failed to process host report")
 			}
 		}
+	}
+}
+
+type runtimeConfigSnapshot struct {
+	agentType       string
+	interval        time.Duration
+	commandsEnabled bool
+	diskExclude     []string
+	tags            []string
+	reportIP        string
+	disableCeph     bool
+}
+
+func (a *Agent) currentInterval() time.Duration {
+	a.configMu.RLock()
+	defer a.configMu.RUnlock()
+	if a.interval <= 0 {
+		return time.Minute
+	}
+	return a.interval
+}
+
+func (a *Agent) currentReportIP() string {
+	a.configMu.RLock()
+	defer a.configMu.RUnlock()
+	return a.reportIP
+}
+
+func (a *Agent) runtimeConfigSnapshot() runtimeConfigSnapshot {
+	a.configMu.RLock()
+	defer a.configMu.RUnlock()
+	return runtimeConfigSnapshot{
+		agentType:       a.cfg.AgentType,
+		interval:        a.interval,
+		commandsEnabled: a.cfg.EnableCommands,
+		diskExclude:     append([]string(nil), a.cfg.DiskExclude...),
+		tags:            append([]string(nil), a.cfg.Tags...),
+		reportIP:        a.reportIP,
+		disableCeph:     a.cfg.DisableCeph,
+	}
+}
+
+func (a *Agent) signalRemoteConfigChanged() {
+	select {
+	case a.remoteConfigChanged <- struct{}{}:
+	default:
 	}
 }
 
@@ -636,11 +687,12 @@ func (a *Agent) buildReport(ctx context.Context) (agentshost.Report, error) {
 	collectCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
+	runtimeConfig := a.runtimeConfigSnapshot()
 	uptime, err := a.collector.HostUptime(collectCtx)
 	if err != nil {
 		a.logger.Debug().Err(err).Msg("Failed to collect host uptime; defaulting to 0")
 	}
-	snapshot, err := a.collector.Metrics(collectCtx, a.cfg.DiskExclude)
+	snapshot, err := a.collector.Metrics(collectCtx, runtimeConfig.diskExclude)
 	if err != nil {
 		return agentshost.Report{}, fmt.Errorf("collect metrics: %w", err)
 	}
@@ -649,7 +701,7 @@ func (a *Agent) buildReport(ctx context.Context) (agentshost.Report, error) {
 	sensorData := a.collectTemperatures(collectCtx)
 
 	// Collect S.M.A.R.T. disk data (best effort - don't fail if unavailable)
-	smartData := a.collectSMARTData(collectCtx)
+	smartData := a.collectSMARTData(collectCtx, runtimeConfig.diskExclude)
 	if len(smartData) > 0 {
 		sensorData.SMART = smartData
 	}
@@ -661,7 +713,7 @@ func (a *Agent) buildReport(ctx context.Context) (agentshost.Report, error) {
 	unraidData := a.collectUnraidStorage(collectCtx)
 
 	// Collect Ceph cluster data (best effort - only on Ceph nodes)
-	cephData := a.collectCephStatus(collectCtx)
+	cephData := a.collectCephStatus(collectCtx, runtimeConfig.disableCeph)
 
 	// Collect temperature data from Proxmox cluster peers via SSH (best effort).
 	// Uses parent ctx, not collectCtx — cluster SSH has its own 15s budget that
@@ -679,12 +731,12 @@ func (a *Agent) buildReport(ctx context.Context) (agentshost.Report, error) {
 		Agent: agentshost.AgentInfo{
 			ID:              a.agentID,
 			Version:         a.agentVersion,
-			Type:            a.cfg.AgentType,
-			IntervalSeconds: int(a.interval / time.Second),
+			Type:            runtimeConfig.agentType,
+			IntervalSeconds: int(runtimeConfig.interval / time.Second),
 			Hostname:        a.hostname,
 			UpdatedFrom:     updatedFrom,
-			CommandsEnabled: a.cfg.EnableCommands,
-			DiskExclude:     append([]string(nil), a.cfg.DiskExclude...),
+			CommandsEnabled: runtimeConfig.commandsEnabled,
+			DiskExclude:     append([]string(nil), runtimeConfig.diskExclude...),
 		},
 		Host: agentshost.HostInfo{
 			ID:            a.machineID,
@@ -700,7 +752,7 @@ func (a *Agent) buildReport(ctx context.Context) (agentshost.Report, error) {
 			CPUCount:      snapshot.CPUCount,
 			UptimeSeconds: int64(uptime),
 			LoadAverage:   append([]float64(nil), snapshot.LoadAverage...),
-			ReportIP:      a.reportIP,
+			ReportIP:      runtimeConfig.reportIP,
 		},
 		Metrics: agentshost.Metrics{
 			CPUUsagePercent: snapshot.CPUUsagePercent,
@@ -714,7 +766,7 @@ func (a *Agent) buildReport(ctx context.Context) (agentshost.Report, error) {
 		Unraid:         unraidData,
 		Ceph:           cephData,
 		ClusterSensors: clusterSensors,
-		Tags:           append([]string(nil), a.cfg.Tags...),
+		Tags:           append([]string(nil), runtimeConfig.tags...),
 		Timestamp:      a.collector.Now(),
 	}
 
@@ -814,19 +866,60 @@ func (a *Agent) persistAgentID(agentID string) {
 	}
 }
 
-// applyRemoteConfig applies server-side configuration overrides.
-// Currently handles enabling/disabling the command execution feature dynamically.
+// ApplyRemoteConfig applies server-side configuration overrides that can be
+// reconciled safely without restarting the agent process.
+func (a *Agent) ApplyRemoteConfig(settings map[string]interface{}, commandsEnabled *bool) {
+	if commandsEnabled != nil {
+		a.applyRemoteConfig(*commandsEnabled)
+	}
+	if interval, ok := remoteDurationSetting(settings, "interval"); ok && interval > 0 {
+		intervalChanged := false
+		a.configMu.Lock()
+		if a.interval != interval {
+			intervalChanged = true
+		}
+		a.interval = interval
+		a.cfg.Interval = interval
+		a.configMu.Unlock()
+		if intervalChanged {
+			a.signalRemoteConfigChanged()
+		}
+		a.logger.Info().Dur("interval", interval).Msg("Applied remote host report interval")
+	}
+	if reportIP, ok := remoteStringSetting(settings, "report_ip"); ok {
+		trimmedReportIP := strings.TrimSpace(reportIP)
+		a.configMu.Lock()
+		a.reportIP = trimmedReportIP
+		a.cfg.ReportIP = trimmedReportIP
+		a.configMu.Unlock()
+		a.logger.Info().Str("report_ip", trimmedReportIP).Msg("Applied remote host report IP override")
+	}
+	if disableCeph, ok := remoteBoolSetting(settings, "disable_ceph"); ok {
+		a.configMu.Lock()
+		a.cfg.DisableCeph = disableCeph
+		a.configMu.Unlock()
+		a.logger.Info().Bool("disable_ceph", disableCeph).Msg("Applied remote Ceph collection setting")
+	}
+}
+
+// applyRemoteConfig applies server-side command execution overrides.
 func (a *Agent) applyRemoteConfig(commandsEnabled bool) {
 	var (
 		clientToStart *CommandClient
+		commandCfg    Config
 		shouldStop    bool
 	)
+
+	a.configMu.Lock()
+	a.cfg.EnableCommands = commandsEnabled
+	commandCfg = a.cfg
+	a.configMu.Unlock()
 
 	a.commandClientMu.Lock()
 	currentlyEnabled := a.commandClient != nil
 	switch {
 	case commandsEnabled && !currentlyEnabled:
-		clientToStart = a.newCommandClient(a.cfg, a.agentID, a.hostname, a.platform, a.agentVersion)
+		clientToStart = a.newCommandClient(commandCfg, a.agentID, a.hostname, a.platform, a.agentVersion)
 		a.commandClient = clientToStart
 	case !commandsEnabled && currentlyEnabled:
 		shouldStop = true
@@ -839,6 +932,56 @@ func (a *Agent) applyRemoteConfig(commandsEnabled bool) {
 	} else if shouldStop {
 		a.logger.Info().Msg("Server disabled command execution - stopping command client")
 		a.stopCommandClient(true)
+	}
+}
+
+func remoteBoolSetting(settings map[string]interface{}, key string) (bool, bool) {
+	if settings == nil {
+		return false, false
+	}
+	value, ok := settings[key]
+	if !ok {
+		return false, false
+	}
+	parsed, ok := value.(bool)
+	return parsed, ok
+}
+
+func remoteStringSetting(settings map[string]interface{}, key string) (string, bool) {
+	if settings == nil {
+		return "", false
+	}
+	value, ok := settings[key]
+	if !ok {
+		return "", false
+	}
+	parsed, ok := value.(string)
+	return parsed, ok
+}
+
+func remoteDurationSetting(settings map[string]interface{}, key string) (time.Duration, bool) {
+	if settings == nil {
+		return 0, false
+	}
+	value, ok := settings[key]
+	if !ok {
+		return 0, false
+	}
+	switch typed := value.(type) {
+	case string:
+		parsed, err := time.ParseDuration(typed)
+		if err != nil {
+			return 0, false
+		}
+		return parsed, true
+	case float64:
+		return time.Duration(typed * float64(time.Second)), true
+	case int:
+		return time.Duration(typed) * time.Second, true
+	case int64:
+		return time.Duration(typed) * time.Second, true
+	default:
+		return 0, false
 	}
 }
 
@@ -1085,8 +1228,8 @@ func (a *Agent) collectUnraidStorage(ctx context.Context) *agentshost.UnraidStor
 
 // collectCephStatus attempts to collect Ceph cluster status.
 // Returns nil if Ceph is not available or not configured on this host.
-func (a *Agent) collectCephStatus(ctx context.Context) *agentshost.CephCluster {
-	if a.cfg.DisableCeph {
+func (a *Agent) collectCephStatus(ctx context.Context, disableCeph bool) *agentshost.CephCluster {
+	if disableCeph {
 		return nil
 	}
 	// Only collect on Linux
@@ -1206,13 +1349,13 @@ func (a *Agent) collectCephStatus(ctx context.Context) *agentshost.CephCluster {
 
 // collectSMARTData collects S.M.A.R.T. data from local disks.
 // Returns nil if smartctl is not available or no disks are found.
-func (a *Agent) collectSMARTData(ctx context.Context) []agentshost.DiskSMART {
+func (a *Agent) collectSMARTData(ctx context.Context, diskExclude []string) []agentshost.DiskSMART {
 	goos := a.collector.GOOS()
 	if goos != "linux" && goos != "freebsd" {
 		return nil
 	}
 
-	smartData, err := a.collector.SMARTLocal(ctx, a.cfg.DiskExclude)
+	smartData, err := a.collector.SMARTLocal(ctx, diskExclude)
 	if err != nil {
 		a.logger.Debug().Err(err).Msg("Failed to collect S.M.A.R.T. data (smartctl may not be installed)")
 		return nil
@@ -1278,7 +1421,7 @@ func (a *Agent) runProxmoxSetup(ctx context.Context) {
 		a.cfg.APIToken,
 		a.cfg.ProxmoxType,
 		a.hostname,
-		a.reportIP,
+		a.currentReportIP(),
 		a.stateDir,
 		a.cfg.InsecureSkipVerify,
 	)
@@ -1347,7 +1490,7 @@ func (a *Agent) runProxmoxHealthCheckLoop(ctx context.Context) {
 				a.cfg.APIToken,
 				a.cfg.ProxmoxType,
 				a.hostname,
-				a.reportIP,
+				a.currentReportIP(),
 				a.stateDir,
 				a.cfg.InsecureSkipVerify,
 			)

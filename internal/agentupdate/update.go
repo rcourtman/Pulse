@@ -49,10 +49,10 @@ const (
 	updateRequestMaxAttempts = 3
 
 	// updateRetryBaseDelay is the initial retry backoff delay for update HTTP failures.
-	updateRetryBaseDelay = 25 * time.Millisecond
+	updateRetryBaseDelay = 1 * time.Second
 
 	// updateRetryMaxDelay caps exponential backoff for update HTTP retries.
-	updateRetryMaxDelay = 250 * time.Millisecond
+	updateRetryMaxDelay = 30 * time.Second
 )
 
 type goOS string

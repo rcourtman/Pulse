@@ -198,6 +198,7 @@ func TestNewCommandClient_SetsSecureCommandDefaults(t *testing.T) {
 	logger := zerolog.Nop()
 	client := NewCommandClient(Config{
 		PulseURL:          "https://pulse.example",
+		APIToken:          "runtime-token",
 		ServerFingerprint: "aabbccdd",
 		DeploySSHUser:     "pulse-deploy",
 		Logger:            &logger,
@@ -219,11 +220,55 @@ func TestNewCommandClient_SetsSecureCommandDefaults(t *testing.T) {
 	if err := client.authorizeCommand(executeCommandPayload{Command: "systemctl restart nginx"}); err == nil || !strings.Contains(err.Error(), "requires approval") {
 		t.Fatalf("expected approval-required command to fail closed, got %v", err)
 	}
-	if err := client.authorizeCommand(executeCommandPayload{Command: "systemctl restart nginx", ApprovalID: "approval-1"}); err != nil {
+	approvedPayload := testApprovedCommandPayload(t, client, executeCommandPayload{RequestID: "r1", Command: "systemctl restart nginx"})
+	if err := client.authorizeCommand(approvedPayload); err != nil {
 		t.Fatalf("expected approved command to pass, got %v", err)
 	}
 	if err := client.authorizeCommand(executeCommandPayload{Command: "rm -rf /"}); err == nil || !strings.Contains(err.Error(), "blocked by policy") {
 		t.Fatalf("expected blocked command to be rejected, got %v", err)
+	}
+}
+
+func TestAgentApplyRemoteConfigUpdatesRuntimeSnapshot(t *testing.T) {
+	logger := zerolog.Nop()
+	commandsEnabled := false
+	agent := &Agent{
+		cfg: Config{
+			AgentType:      "unified",
+			EnableCommands: true,
+			Interval:       30 * time.Second,
+			DiskExclude:    []string{"/old"},
+			Tags:           []string{"edge"},
+		},
+		interval:            30 * time.Second,
+		reportIP:            "192.0.2.10",
+		remoteConfigChanged: make(chan struct{}, 1),
+		logger:              logger,
+	}
+
+	agent.ApplyRemoteConfig(map[string]interface{}{
+		"interval":     "45s",
+		"report_ip":    "192.0.2.20",
+		"disable_ceph": true,
+	}, &commandsEnabled)
+
+	snapshot := agent.runtimeConfigSnapshot()
+	if snapshot.interval != 45*time.Second {
+		t.Fatalf("interval = %s, want 45s", snapshot.interval)
+	}
+	if snapshot.reportIP != "192.0.2.20" {
+		t.Fatalf("reportIP = %q, want %q", snapshot.reportIP, "192.0.2.20")
+	}
+	if snapshot.commandsEnabled {
+		t.Fatal("commandsEnabled = true, want false")
+	}
+	if !snapshot.disableCeph {
+		t.Fatal("disableCeph = false, want true")
+	}
+	select {
+	case <-agent.remoteConfigChanged:
+	default:
+		t.Fatal("expected interval change signal")
 	}
 }
 

@@ -7900,6 +7900,9 @@ func TestContract_ProxmoxInstallCommandIncludesInsecureForPlainHTTP(t *testing.T
 	if !strings.Contains(got, "--insecure") {
 		t.Fatalf("install command missing insecure flag for plain HTTP Pulse URL: %s", got)
 	}
+	if !strings.Contains(got, `--token-file "$token_file"`) {
+		t.Fatalf("install command missing token-file transport: %s", got)
+	}
 }
 
 func TestContract_ProxmoxInstallCommandUsesPrivilegeEscalationWrapper(t *testing.T) {
@@ -7918,6 +7921,9 @@ func TestContract_ProxmoxInstallCommandUsesPrivilegeEscalationWrapper(t *testing
 	}
 	if strings.Contains(got, "| bash -s -- --url") {
 		t.Fatalf("install command preserved raw bash pipe instead of governed wrapper: %s", got)
+	}
+	if !strings.Contains(got, `rm -f "$token_file"`) {
+		t.Fatalf("install command missing ephemeral token cleanup: %s", got)
 	}
 }
 
@@ -7950,6 +7956,9 @@ func TestContract_ProxmoxInstallCommandNormalizesTrailingSlashBaseURL(t *testing
 	}
 	if !strings.Contains(got, "--url "+posixShellQuote("https://pulse.example.com/base")) {
 		t.Fatalf("install command missing normalized base URL: %s", got)
+	}
+	if !strings.Contains(got, `--token-file "$token_file"`) {
+		t.Fatalf("install command missing token-file transport: %s", got)
 	}
 	if strings.Contains(got, "//install.sh") {
 		t.Fatalf("install command preserved double-slash install path: %s", got)

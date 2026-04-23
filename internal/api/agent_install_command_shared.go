@@ -196,15 +196,21 @@ func resolveLoopbackAwarePublicBaseURL(req *http.Request, cfg *config.Config) st
 func buildProxmoxAgentInstallCommand(opts agentInstallCommandOptions) string {
 	baseURL := normalizeAgentInstallBaseURL(opts.BaseURL)
 	installScriptURL := baseURL + "/install.sh"
-	command := fmt.Sprintf(`curl -fsSL %s | bash -s -- \
+	token := strings.TrimSpace(opts.Token)
+	tokenSetup := ""
+	tokenArg := ""
+	tokenCleanup := ""
+	if token != "" {
+		tokenSetup = fmt.Sprintf(`token_file=$(mktemp) && chmod 600 "$token_file" && printf %%s %s > "$token_file" && `, posixShellQuote(token))
+		tokenArg = ` \
+  --token-file "$token_file"`
+		tokenCleanup = `; rc=$?; rm -f "$token_file"; exit $rc`
+	}
+	command := fmt.Sprintf(`%scurl -fsSL %s | bash -s -- \
   --url %s \
   --enable-proxmox`,
-		posixShellQuote(installScriptURL), posixShellQuote(baseURL))
-
-	if token := strings.TrimSpace(opts.Token); token != "" {
-		command += fmt.Sprintf(` \
-  --token %s`, posixShellQuote(token))
-	}
+		tokenSetup, posixShellQuote(installScriptURL), posixShellQuote(baseURL))
+	command += tokenArg
 
 	if installBaseURLRequiresInsecure(baseURL) {
 		command += ` \
@@ -216,7 +222,7 @@ func buildProxmoxAgentInstallCommand(opts agentInstallCommandOptions) string {
   --proxmox-type %s`, posixShellQuote(opts.InstallType))
 	}
 
-	return withPrivilegeEscalation(command)
+	return withPrivilegeEscalation(command) + tokenCleanup
 }
 
 func buildContainerRuntimeAgentInstallCommand(baseURL string, token string) string {

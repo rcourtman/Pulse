@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rs/zerolog"
 )
 
@@ -50,13 +51,26 @@ func TestCommandClient_connectAndHandle_ExecutesCommandAndReturnsResult(t *testi
 			return
 		}
 
-		execPayloadBytes, _ := json.Marshal(executeCommandPayload{
+		execPayload := executeCommandPayload{
 			RequestID:  "req-1",
 			Command:    "echo hello",
 			ApprovalID: "approval-1",
 			TargetType: "host",
 			Timeout:    5,
-		})
+		}
+		grant, err := agentexec.NewCommandApprovalGrant(
+			agentexec.DeriveApprovalGrantKey("token"),
+			"agent-1",
+			execPayload.toAgentExecPayload(),
+			time.Now(),
+			time.Minute,
+		)
+		if err != nil {
+			t.Errorf("approval grant: %v", err)
+			return
+		}
+		execPayload.ApprovalGrant = grant
+		execPayloadBytes, _ := json.Marshal(execPayload)
 		if err := conn.WriteJSON(wsMessage{Type: msgTypeExecuteCmd, ID: "req-1", Timestamp: time.Now(), Payload: execPayloadBytes}); err != nil {
 			t.Errorf("write execute_command: %v", err)
 			return

@@ -51,6 +51,10 @@ type Runnable interface {
 	Run(ctx context.Context) error
 }
 
+type RemoteConfigApplier interface {
+	ApplyRemoteConfig(settings map[string]interface{}, commandsEnabled *bool)
+}
+
 // Runnable closer for Docker agent which needs cleanup
 type RunnableCloser interface {
 	Runnable
@@ -73,8 +77,9 @@ var (
 	runAsWindowsServiceFunc                                               = runAsWindowsService
 
 	// For testing
-	retryInitialDelay = 5 * time.Second
-	retryMaxDelay     = 5 * time.Minute
+	retryInitialDelay           = 5 * time.Second
+	retryMaxDelay               = 5 * time.Minute
+	remoteConfigRefreshInterval = 1 * time.Minute
 )
 
 type multiValue []string
@@ -170,11 +175,14 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 		}
 	}
 
+	var remoteConfigClient *remoteconfig.Client
+	var remoteConfigAppliers []RemoteConfigApplier
+
 	// 2c. Fetch Remote Config
 	// Only if we have enough info to contact server
 	if cfg.PulseURL != "" && cfg.APIToken != "" && cfg.AgentID != "" {
 		logger.Debug().Msg("Fetching remote configuration...")
-		rc := remoteconfig.New(remoteconfig.Config{
+		remoteConfigClient = remoteconfig.New(remoteconfig.Config{
 			PulseURL:           cfg.PulseURL,
 			APIToken:           cfg.APIToken,
 			AgentID:            cfg.AgentID,
@@ -184,11 +192,11 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 			ServerFingerprint:  cfg.ServerFingerprint,
 			Logger:             logger,
 		})
-		defer rc.Close()
+		defer remoteConfigClient.Close()
 
 		// Use a short timeout for config fetch so we don't block startup too long
 		rcCtx, rcCancel := context.WithTimeout(ctx, 10*time.Second)
-		settings, commandsEnabled, err := rc.Fetch(rcCtx)
+		settings, commandsEnabled, err := remoteConfigClient.Fetch(rcCtx)
 		rcCancel()
 
 		if err != nil {
@@ -303,6 +311,9 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 		agent, err := newHostAgent(hostCfg)
 		if err != nil {
 			return fmt.Errorf("failed to initialize host agent: %w", err)
+		}
+		if applier, ok := agent.(RemoteConfigApplier); ok {
+			remoteConfigAppliers = append(remoteConfigAppliers, applier)
 		}
 
 		g.Go(func() error {
@@ -422,6 +433,13 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 		}
 	}
 
+	if remoteConfigClient != nil && len(remoteConfigAppliers) > 0 {
+		g.Go(func() error {
+			runRemoteConfigLoop(ctx, remoteConfigClient, remoteConfigAppliers, &logger)
+			return nil
+		})
+	}
+
 	// Mark as ready after all agents started
 	ready.Store(true)
 
@@ -439,6 +457,43 @@ func run(ctx context.Context, args []string, getenv func(string) string) error {
 
 	logger.Info().Msg("Pulse Unified Agent stopped")
 	return nil
+}
+
+func runRemoteConfigLoop(ctx context.Context, client *remoteconfig.Client, appliers []RemoteConfigApplier, logger *zerolog.Logger) {
+	if client == nil || len(appliers) == 0 {
+		return
+	}
+	ticker := time.NewTicker(remoteConfigRefreshInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
+
+		fetchCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		settings, commandsEnabled, err := client.Fetch(fetchCtx)
+		cancel()
+		if err != nil {
+			logger.Warn().
+				Err(err).
+				Str("component", "remote_config").
+				Str("action", "refresh_failed").
+				Msg("Failed to refresh remote config")
+			continue
+		}
+		for _, applier := range appliers {
+			applier.ApplyRemoteConfig(settings, commandsEnabled)
+		}
+		logger.Debug().
+			Str("component", "remote_config").
+			Str("action", "refresh_applied").
+			Int("settings_count", len(settings)).
+			Bool("commands_enabled_present", commandsEnabled != nil).
+			Msg("Applied refreshed remote config")
+	}
 }
 
 func cleanupDockerAgent(agent RunnableCloser, logger *zerolog.Logger) {
@@ -1215,34 +1270,6 @@ func applyRemoteSettings(cfg *Config, settings map[string]interface{}, logger *z
 			}
 		}
 	}
-	if d, ok := remoteDurationSetting(settings, "interval"); ok && d > 0 {
-		cfg.Interval = d
-		logger.Info().Dur("val", d).Msg("Remote config: interval")
-	}
-	if b, ok := remoteBoolSetting(settings, "disable_auto_update"); ok {
-		cfg.DisableAutoUpdate = b
-		logger.Info().Bool("val", b).Msg("Remote config: disable_auto_update")
-	}
-	if b, ok := remoteBoolSetting(settings, "disable_docker_update_checks"); ok {
-		cfg.DisableDockerUpdateChecks = b
-		logger.Info().Bool("val", b).Msg("Remote config: disable_docker_update_checks")
-	}
-	if b, ok := remoteBoolSetting(settings, "kube_include_all_pods"); ok {
-		cfg.KubeIncludeAllPods = b
-		logger.Info().Bool("val", b).Msg("Remote config: kube_include_all_pods")
-	}
-	if b, ok := remoteBoolSetting(settings, "kube_include_all_deployments"); ok {
-		cfg.KubeIncludeAllDeployments = b
-		logger.Info().Bool("val", b).Msg("Remote config: kube_include_all_deployments")
-	}
-	if s, ok := remoteStringSetting(settings, "report_ip"); ok {
-		cfg.ReportIP = s
-		logger.Info().Str("val", s).Msg("Remote config: report_ip")
-	}
-	if b, ok := remoteBoolSetting(settings, "disable_ceph"); ok {
-		cfg.DisableCeph = b
-		logger.Info().Bool("val", b).Msg("Remote config: disable_ceph")
-	}
 }
 
 func remoteBoolSetting(settings map[string]interface{}, key string) (bool, bool) {
@@ -1277,7 +1304,7 @@ func remoteDurationSetting(settings map[string]interface{}, key string) (time.Du
 		}
 		return parsed, true
 	case float64:
-		return time.Duration(typed) * time.Second, true
+		return time.Duration(typed * float64(time.Second)), true
 	case int:
 		return time.Duration(typed) * time.Second, true
 	case int64:

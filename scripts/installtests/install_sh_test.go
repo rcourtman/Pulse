@@ -23,7 +23,9 @@ func TestInstallSHAllowsMissingTokenForOptionalAuth(t *testing.T) {
 	script := string(content)
 	required := []string{
 		`build_exec_arg_items() {`,
-		`if [[ "$include_token" == "true" && -n "$PULSE_TOKEN" ]]; then EXEC_ARG_ITEMS+=(--token "$PULSE_TOKEN"); fi`,
+		`RUNTIME_TOKEN_FILE=""`,
+		`EXEC_ARG_ITEMS+=(--token-file "$RUNTIME_TOKEN_FILE")`,
+		`fail "Internal installer error: runtime token file was not prepared before service rendering." "$EXIT_GENERAL"`,
 		`build_exec_args_without_token() {`,
 		`build_exec_arg_items "false"`,
 		`build_exec_arg_items "true"`,
@@ -337,6 +339,7 @@ func TestInstallSHPersistsIdentityInConnectionEnv(t *testing.T) {
 		`read_connection_state_value() {`,
 		`recover_connection_state() {`,
 		`find_connection_state_file() {`,
+		`write_connection_state_value "$conn_env" "PULSE_TOKEN_FILE" "$RUNTIME_TOKEN_FILE"`,
 		`write_connection_state_value "$conn_env" "PULSE_AGENT_ID" "$AGENT_ID"`,
 		`write_connection_state_value "$conn_env" "PULSE_HOSTNAME" "$HOSTNAME_OVERRIDE"`,
 		`write_connection_state_value "$conn_env" "PULSE_INSECURE_SKIP_VERIFY" "true"`,
@@ -530,13 +533,13 @@ func TestInstallSHUsesCanonicalCompletionHelper(t *testing.T) {
 		`json_event "complete" "installed" "Installation installed"`,
 		`json_event "complete" "updated_unhealthy" "Agent updated but not responding"`,
 		`json_event "complete" "installed_unhealthy" "Agent installed but not responding"`,
-		`complete_installation_flow "/var/lib/pulse-agent" "Installation complete! Agent is running." "Upgrade complete! Agent restarted with new configuration." "tail -f $LOG_FILE"`,
+		`complete_installation_flow "$STATE_DIR" "Installation complete! Agent is running." "Upgrade complete! Agent restarted with new configuration." "tail -f $LOG_FILE"`,
 		`complete_installation_flow "$UNRAID_STORAGE_DIR" "Installation complete! Agent is running." "Upgrade complete! Agent is running." "tail -f /var/log/${AGENT_NAME}.log"`,
 		`complete_installation_flow "$STATE_DIR" "Installation complete! Agent is running." "Upgrade complete! Agent is running." "tail -f /var/log/${AGENT_NAME}.log"`,
 		`complete_installation_flow "$TRUENAS_STATE_DIR" "Installation complete! Agent is running." "Upgrade complete! Agent is running." ""`,
-		`complete_installation_flow "/var/lib/pulse-agent" "Installation complete! Agent is running." "Upgrade complete! Agent restarted with new configuration." "tail -f /var/log/messages"`,
-		`complete_installation_flow "/var/lib/pulse-agent" "Installation complete! Agent is running." "Upgrade complete! Agent restarted with new configuration." "journalctl -u ${AGENT_NAME} --no-pager -n 20"`,
-		`complete_installation_flow "/var/lib/pulse-agent" "Installation complete! Agent is running." "Upgrade complete! Agent restarted with new configuration." "tail -f /var/log/${AGENT_NAME}.log"`,
+		`complete_installation_flow "$STATE_DIR" "Installation complete! Agent is running." "Upgrade complete! Agent restarted with new configuration." "tail -f /var/log/messages"`,
+		`complete_installation_flow "$STATE_DIR" "Installation complete! Agent is running." "Upgrade complete! Agent restarted with new configuration." "journalctl -u ${AGENT_NAME} --no-pager -n 20"`,
+		`complete_installation_flow "$STATE_DIR" "Installation complete! Agent is running." "Upgrade complete! Agent restarted with new configuration." "tail -f /var/log/${AGENT_NAME}.log"`,
 	}
 	for _, needle := range required {
 		if !strings.Contains(script, needle) {
@@ -978,10 +981,11 @@ func TestBuildExecArgsArrayPersistsInsecureForPlainHTTPInstall(t *testing.T) {
 		ENABLE_KUBERNETES=""
 		KUBECONFIG_PATH=""
 		ENABLE_PROXMOX=""
-		PROXMOX_TYPE=""
-		INSECURE="false"
-		ENABLE_COMMANDS=""
-		ENROLL=""
+			PROXMOX_TYPE=""
+			INSECURE="false"
+			RUNTIME_TOKEN_FILE="/var/lib/pulse-agent/token"
+			ENABLE_COMMANDS=""
+			ENROLL=""
 		KUBE_INCLUDE_ALL_PODS=""
 		KUBE_INCLUDE_ALL_DEPLOYMENTS=""
 		AGENT_ID=""
@@ -1000,6 +1004,12 @@ func TestBuildExecArgsArrayPersistsInsecureForPlainHTTPInstall(t *testing.T) {
 	got := strings.TrimSpace(string(out))
 	if !strings.Contains(got, "--insecure") {
 		t.Fatalf("EXEC_ARGS_ARRAY missing --insecure: %s", got)
+	}
+	if !strings.Contains(got, "--token-file /var/lib/pulse-agent/token") {
+		t.Fatalf("EXEC_ARGS_ARRAY missing runtime token file: %s", got)
+	}
+	if strings.Contains(got, "--token deadbeef") {
+		t.Fatalf("EXEC_ARGS_ARRAY preserved raw token: %s", got)
 	}
 }
 
@@ -1333,8 +1343,7 @@ func TestInstallSHRequiresPinnedSignatureVerificationForReleaseDownloads(t *test
 		`PINNED_INSTALLER_SSH_PUBLIC_KEY="__PULSE_INSTALLER_SSH_PUBLIC_KEY__"`,
 		`has_pinned_installer_signature_key() {`,
 		`grep -i '^X-Signature-SSHSIG:' "$TMP_HEADERS"`,
-		`if [[ "$METADATA_FETCHED" != "true" ]]; then`,
-		`Server did not provide checksum header; refusing signed install.`,
+		`Server did not provide checksum header; refusing install.`,
 		`Server did not provide SSH signature header; refusing signed install.`,
 		`ssh-keygen -Y verify`,
 		`Binary signature verified`,

@@ -85,6 +85,7 @@ STATE_DIR="/var/lib/pulse-agent"  # Persistent state directory (overridden per p
 CURL_CA_BUNDLE="" # Path to CA bundle for curl and agent TLS (sets SSL_CERT_FILE)
 NON_INTERACTIVE="false"
 TOKEN_FILE_PATH=""       # Path to file containing the token
+RUNTIME_TOKEN_FILE=""    # Secure token file passed to the installed service
 OUTPUT_FORMAT="text"     # "text" (default) or "json"
 PREFLIGHT_ONLY="false"
 INSTALL_SIGNATURE_NAMESPACE="pulse-install"
@@ -319,6 +320,32 @@ restore_selinux_contexts() {
 # --- Post-Start Health Verification ---
 # After starting the agent service, poll its readiness endpoint to verify it
 # actually started. The agent exposes /readyz on :9191 once modules are initialized.
+verify_agent_server_registration() {
+    local lookup_hostname="${HOSTNAME_OVERRIDE}"
+    local lookup_resp=""
+    local lookup_args=(-fsSL --connect-timeout 5 --max-time 10)
+
+    if [[ -z "$PULSE_URL" ]]; then
+        return 1
+    fi
+    if [[ -z "$lookup_hostname" ]]; then
+        lookup_hostname=$(hostname 2>/dev/null || true)
+    fi
+    if [[ -z "$lookup_hostname" ]]; then
+        return 1
+    fi
+
+    if [[ -n "$PULSE_TOKEN" ]]; then lookup_args+=(-H "X-API-Token: ${PULSE_TOKEN}"); fi
+    if [[ "$INSECURE" == "true" ]]; then lookup_args+=(-k); fi
+    if [[ -n "$CURL_CA_BUNDLE" ]]; then lookup_args+=(--cacert "$CURL_CA_BUNDLE"); fi
+
+    lookup_resp=$(curl "${lookup_args[@]}" "${PULSE_URL}/api/agents/agent/lookup?hostname=$(url_encode "$lookup_hostname")" 2>/dev/null || true)
+    if echo "$lookup_resp" | grep -q '"agent"[[:space:]]*:' && echo "$lookup_resp" | grep -q '"id"[[:space:]]*:'; then
+        return 0
+    fi
+    return 1
+}
+
 verify_agent_started() {
     local health_url="http://127.0.0.1:9191/readyz"
     local max_iterations=8
@@ -334,7 +361,11 @@ verify_agent_started() {
     while [ $iteration -lt $max_iterations ]; do
         # Check the readiness endpoint first — this is the definitive signal
         if curl -sf --max-time 2 "$health_url" >/dev/null 2>&1; then
-            log_info "Agent is running and healthy."
+            if verify_agent_server_registration; then
+                log_info "Agent is running, healthy, and registered with Pulse."
+            else
+                log_warn "Agent local health is ready, but server registration was not confirmed yet."
+            fi
             return 0
         fi
 
@@ -1001,7 +1032,13 @@ build_exec_arg_items() {
     local include_token="${1:-true}"
 
     EXEC_ARG_ITEMS=(--url "$PULSE_URL" --interval "$INTERVAL")
-    if [[ "$include_token" == "true" && -n "$PULSE_TOKEN" ]]; then EXEC_ARG_ITEMS+=(--token "$PULSE_TOKEN"); fi
+    if [[ "$include_token" == "true" && -n "$PULSE_TOKEN" ]]; then
+        if [[ -n "$RUNTIME_TOKEN_FILE" ]]; then
+            EXEC_ARG_ITEMS+=(--token-file "$RUNTIME_TOKEN_FILE")
+        else
+            fail "Internal installer error: runtime token file was not prepared before service rendering." "$EXIT_GENERAL"
+        fi
+    fi
     # Always pass enable-host flag since agent defaults to true
     if [[ "$ENABLE_HOST" == "true" ]]; then
         EXEC_ARG_ITEMS+=(--enable-host)
@@ -1064,6 +1101,44 @@ build_exec_args_array() {
     EXEC_ARGS_ARRAY=("${EXEC_ARG_ITEMS[@]}")
 }
 
+ensure_runtime_token_file() {
+    local state_dir="${1:-$STATE_DIR}"
+    local token_file="${state_dir}/token"
+
+    RUNTIME_TOKEN_FILE=""
+    if [[ -z "$PULSE_TOKEN" ]]; then
+        rm -f "$token_file" 2>/dev/null || true
+        log_info "No API token provided; installer will configure token-optional agent runtime."
+        return 0
+    fi
+
+    mkdir -p "$state_dir"
+    local old_umask=""
+    old_umask=$(umask)
+    umask 077
+    if ! printf '%s' "$PULSE_TOKEN" > "$token_file"; then
+        umask "$old_umask"
+        fail "Failed to write runtime token file: $token_file" "$EXIT_GENERAL"
+    fi
+    umask "$old_umask"
+    chmod 600 "$token_file"
+    if [[ "$(id -u 2>/dev/null || echo 1)" == "0" ]]; then
+        chown root:root "$token_file" 2>/dev/null || true
+    fi
+    RUNTIME_TOKEN_FILE="$token_file"
+    log_info "Token stored securely at $token_file (mode 600)"
+}
+
+clear_proxmox_state_if_needed() {
+    if [[ "$ENABLE_PROXMOX" != "true" ]]; then
+        return 0
+    fi
+    log_info "Clearing Proxmox state for fresh registration..."
+    rm -f "${STATE_DIR}/proxmox-registered" 2>/dev/null || true
+    rm -f "${STATE_DIR}/proxmox-pve-registered" 2>/dev/null || true
+    rm -f "${STATE_DIR}/proxmox-pbs-registered" 2>/dev/null || true
+}
+
 write_connection_state_value() {
     local file="$1"
     local key="$2"
@@ -1103,6 +1178,13 @@ recover_connection_state() {
     fi
     if [[ -z "$PULSE_TOKEN" ]]; then
         PULSE_TOKEN=$(read_connection_state_value "$file" "PULSE_TOKEN")
+    fi
+    if [[ -z "$PULSE_TOKEN" ]]; then
+        local saved_token_file=""
+        saved_token_file=$(read_connection_state_value "$file" "PULSE_TOKEN_FILE")
+        if [[ -n "$saved_token_file" && -f "$saved_token_file" ]]; then
+            PULSE_TOKEN=$(cat "$saved_token_file")
+        fi
     fi
     if [[ -z "$AGENT_ID" ]]; then
         AGENT_ID=$(read_connection_state_value "$file" "PULSE_AGENT_ID")
@@ -1149,11 +1231,11 @@ save_connection_info() {
     mkdir -p "$state_dir"
     # Save connection details so uninstall can deregister without --url/--token.
     # Single-quote values to prevent shell interpretation on read-back.
-    # PULSE_URL is validated as ^https?:// and PULSE_TOKEN, when present, as
-    # ^[a-fA-F0-9]+$, so neither can contain single quotes.
+    # Legacy connection files may contain PULSE_TOKEN, but new installs persist
+    # only the protected token file path.
     : > "$conn_env"
     write_connection_state_value "$conn_env" "PULSE_URL" "$PULSE_URL"
-    write_connection_state_value "$conn_env" "PULSE_TOKEN" "$PULSE_TOKEN"
+    write_connection_state_value "$conn_env" "PULSE_TOKEN_FILE" "$RUNTIME_TOKEN_FILE"
     write_connection_state_value "$conn_env" "PULSE_AGENT_ID" "$AGENT_ID"
     write_connection_state_value "$conn_env" "PULSE_HOSTNAME" "$HOSTNAME_OVERRIDE"
     if [[ "$INSECURE" == "true" ]]; then
@@ -1678,13 +1760,15 @@ log_info "Downloading agent from ${DOWNLOAD_URL}..."
 # Create temp file and register for cleanup
 TMP_BIN=$(mktemp)
 TMP_FILES+=("$TMP_BIN")
+TMP_HEADERS=$(mktemp)
+TMP_FILES+=("$TMP_HEADERS")
 
 # Build curl arguments as array for proper quoting
-CURL_ARGS=(-fsSL --connect-timeout 30 --max-time 300)
+CURL_ARGS=(-fsSL --connect-timeout 30 --max-time 300 -D "$TMP_HEADERS" -o "$TMP_BIN")
 if [[ "$INSECURE" == "true" ]]; then CURL_ARGS+=(-k); fi
 if [[ -n "$CURL_CA_BUNDLE" ]]; then CURL_ARGS+=(--cacert "$CURL_CA_BUNDLE"); fi
 
-if ! curl "${CURL_ARGS[@]}" -o "$TMP_BIN" "$DOWNLOAD_URL"; then
+if ! curl "${CURL_ARGS[@]}" "$DOWNLOAD_URL"; then
     fail "Download failed. Check URL and connectivity." "$EXIT_DOWNLOAD_FAILED"
 fi
 
@@ -1695,7 +1779,8 @@ fi
 
 # Check if it's a valid executable (ELF for Linux, Mach-O for macOS)
 if [[ "$OS" == "linux" ]]; then
-    if ! head -c 4 "$TMP_BIN" | grep -q "ELF"; then
+    MAGIC=$(od -An -tx1 -N4 "$TMP_BIN" 2>/dev/null | tr -d ' \n' || true)
+    if [[ "$MAGIC" != "7f454c46" ]]; then
         fail "Downloaded file is not a valid Linux executable." "$EXIT_DOWNLOAD_FAILED"
     fi
 elif [[ "$OS" == "darwin" ]]; then
@@ -1707,42 +1792,28 @@ elif [[ "$OS" == "darwin" ]]; then
 fi
 
 # Release metadata verification
-CHECKSUM_URL="${PULSE_URL}/download/${BINARY_NAME}?arch=${ARCH_PARAM}"
-TMP_HEADERS=$(mktemp)
-TMP_FILES+=("$TMP_HEADERS")
-HEADER_CURL_ARGS=(-fsSL --connect-timeout 10 --max-time 30 -D "$TMP_HEADERS" -o /dev/null)
-if [[ "$INSECURE" == "true" ]]; then HEADER_CURL_ARGS+=(-k); fi
-if [[ -n "$CURL_CA_BUNDLE" ]]; then HEADER_CURL_ARGS+=(--cacert "$CURL_CA_BUNDLE"); fi
-
 EXPECTED_SHA=""
 SSH_SIGNATURE_HEADER=""
-METADATA_FETCHED=false
-if curl "${HEADER_CURL_ARGS[@]}" "$CHECKSUM_URL" 2>/dev/null; then
-    METADATA_FETCHED=true
-    EXPECTED_SHA=$(grep -i '^X-Checksum-Sha256:' "$TMP_HEADERS" 2>/dev/null | tr -d '\r' | awk '{print $2}' || true)
-    SSH_SIGNATURE_HEADER=$(grep -i '^X-Signature-SSHSIG:' "$TMP_HEADERS" 2>/dev/null | tr -d '\r' | sed 's/^[^:]*:[[:space:]]*//' || true)
+EXPECTED_SHA=$(grep -i '^X-Checksum-Sha256:' "$TMP_HEADERS" 2>/dev/null | tr -d '\r' | awk '{print $2}' || true)
+SSH_SIGNATURE_HEADER=$(grep -i '^X-Signature-SSHSIG:' "$TMP_HEADERS" 2>/dev/null | tr -d '\r' | sed 's/^[^:]*:[[:space:]]*//' || true)
+
+if [[ -z "$EXPECTED_SHA" ]]; then
+    fail "Server did not provide checksum header; refusing install." "$EXIT_CHECKSUM_FAILED"
 fi
 
-if has_pinned_installer_signature_key; then
-    if [[ "$METADATA_FETCHED" != "true" ]]; then
-        fail "Failed to fetch signed download metadata from the Pulse server." "$EXIT_SIGNATURE_FAILED"
-    fi
-    if [[ -z "$EXPECTED_SHA" ]]; then
-        fail "Server did not provide checksum header; refusing signed install." "$EXIT_CHECKSUM_FAILED"
-    fi
-    if [[ -z "$SSH_SIGNATURE_HEADER" ]]; then
-        fail "Server did not provide SSH signature header; refusing signed install." "$EXIT_SIGNATURE_FAILED"
-    fi
+if has_pinned_installer_signature_key && [[ -z "$SSH_SIGNATURE_HEADER" ]]; then
+    fail "Server did not provide SSH signature header; refusing signed install." "$EXIT_SIGNATURE_FAILED"
 fi
 
-if [[ -n "$EXPECTED_SHA" ]]; then
-    ACTUAL_SHA=$(sha256sum "$TMP_BIN" 2>/dev/null | awk '{print $1}' || shasum -a 256 "$TMP_BIN" 2>/dev/null | awk '{print $1}')
-    if [[ -n "$ACTUAL_SHA" && "$ACTUAL_SHA" != "$EXPECTED_SHA" ]]; then
-        fail "Checksum verification failed (expected: ${EXPECTED_SHA:0:16}..., got: ${ACTUAL_SHA:0:16}...)" "$EXIT_CHECKSUM_FAILED"
-    fi
-    json_event "download" "checksum_ok" "Binary checksum verified"
-    log_info "Binary checksum verified"
+ACTUAL_SHA=$(sha256sum "$TMP_BIN" 2>/dev/null | awk '{print $1}' || shasum -a 256 "$TMP_BIN" 2>/dev/null | awk '{print $1}')
+if [[ -z "$ACTUAL_SHA" ]]; then
+    fail "Could not compute binary checksum." "$EXIT_CHECKSUM_FAILED"
 fi
+if [[ "$ACTUAL_SHA" != "$EXPECTED_SHA" ]]; then
+    fail "Checksum verification failed (expected: ${EXPECTED_SHA:0:16}..., got: ${ACTUAL_SHA:0:16}...)" "$EXIT_CHECKSUM_FAILED"
+fi
+json_event "download" "checksum_ok" "Binary checksum verified"
+log_info "Binary checksum verified"
 
 verify_download_signature "$TMP_BIN" "$SSH_SIGNATURE_HEADER"
 
@@ -1787,19 +1858,12 @@ fi
 
 # --- Service Installation ---
 
-# If Proxmox mode is enabled, clear the state files to ensure fresh registration
-# This allows re-installation to re-create the Proxmox API tokens
-if [[ "$ENABLE_PROXMOX" == "true" ]]; then
-    log_info "Clearing Proxmox state for fresh registration..."
-    rm -f /var/lib/pulse-agent/proxmox-registered 2>/dev/null || true
-    rm -f /var/lib/pulse-agent/proxmox-pve-registered 2>/dev/null || true
-    rm -f /var/lib/pulse-agent/proxmox-pbs-registered 2>/dev/null || true
-fi
-
 # 1. macOS (Launchd)
 if [[ "$OS" == "darwin" ]]; then
     PLIST="/Library/LaunchDaemons/com.pulse.agent.plist"
     log_info "Configuring Launchd service at $PLIST..."
+    ensure_runtime_token_file "$STATE_DIR"
+    clear_proxmox_state_if_needed
 
     # Build program arguments array
     PLIST_ARGS="        <string>${INSTALL_DIR}/${BINARY_NAME}</string>
@@ -1807,10 +1871,10 @@ if [[ "$OS" == "darwin" ]]; then
         <string>${PULSE_URL}</string>
         <string>--interval</string>
         <string>${INTERVAL}</string>"
-    if [[ -n "$PULSE_TOKEN" ]]; then
+    if [[ -n "$RUNTIME_TOKEN_FILE" ]]; then
         PLIST_ARGS="${PLIST_ARGS}
-        <string>--token</string>
-        <string>${PULSE_TOKEN}</string>"
+        <string>--token-file</string>
+        <string>${RUNTIME_TOKEN_FILE}</string>"
     fi
 
     # Always pass enable-host flag since agent defaults to true
@@ -1906,7 +1970,7 @@ EOF
     chmod 644 "$PLIST"
     launchctl unload "$PLIST" 2>/dev/null || true
     launchctl load -w "$PLIST"
-    complete_installation_flow "/var/lib/pulse-agent" "Installation complete! Agent is running." "Upgrade complete! Agent restarted with new configuration." "tail -f $LOG_FILE"
+    complete_installation_flow "$STATE_DIR" "Installation complete! Agent is running." "Upgrade complete! Agent restarted with new configuration." "tail -f $LOG_FILE"
     exit 0
 fi
 
@@ -1918,6 +1982,8 @@ if [[ -d /usr/syno ]] && [[ -f /etc/VERSION ]]; then
     log_info "Detected Synology DSM ${DSM_MAJOR}..."
 
     # Build command line args
+    ensure_runtime_token_file "$STATE_DIR"
+    clear_proxmox_state_if_needed
     build_exec_args
 
     if [[ "$DSM_MAJOR" -ge 7 ]]; then
@@ -1953,7 +2019,7 @@ EOF
         initctl start "${AGENT_NAME}"
     fi
 
-    complete_installation_flow "/var/lib/pulse-agent" "Installation complete! Agent is running." "Upgrade complete! Agent restarted with new configuration." "tail -f $LOG_FILE"
+    complete_installation_flow "$STATE_DIR" "Installation complete! Agent is running." "Upgrade complete! Agent restarted with new configuration." "tail -f $LOG_FILE"
     exit 0
 fi
 
@@ -1980,6 +2046,8 @@ if [[ -f /etc/unraid-version ]]; then
     log_info "Installed binary to ${UNRAID_STORED_BINARY} (persistent) and ${RUNTIME_BINARY} (runtime)..."
 
     # Build command line args (string for wrapper script, array for direct execution)
+    ensure_runtime_token_file "$STATE_DIR"
+    clear_proxmox_state_if_needed
     build_exec_args
     build_exec_args_array
 
@@ -2093,6 +2161,8 @@ if [[ -f /sbin/getcfg ]] || [[ -f /etc/config/qpkg.conf ]]; then
 
     log_info "Installed binary to ${QNAP_STORED_BINARY} (persistent) and ${RUNTIME_BINARY} (runtime)..."
 
+    ensure_runtime_token_file "$STATE_DIR"
+    clear_proxmox_state_if_needed
     build_exec_args
 
     log_info "Stopping any existing pulse agents..."
@@ -2225,6 +2295,8 @@ if [[ "$TRUENAS" == true ]]; then
     fi
 
     # Build command line args
+    ensure_runtime_token_file "$STATE_DIR"
+    clear_proxmox_state_if_needed
     build_exec_args
 
     # Store service file in /data (persists across upgrades)
@@ -2250,7 +2322,7 @@ if [[ "$TRUENAS" == true ]]; then
     cat > "$TRUENAS_ENV_FILE" <<EOF
 # Pulse Agent configuration (for reference)
 PULSE_URL=${PULSE_URL}
-PULSE_TOKEN=${PULSE_TOKEN}
+PULSE_TOKEN_FILE=${RUNTIME_TOKEN_FILE}
 PULSE_INTERVAL=${INTERVAL}
 PULSE_ENABLE_HOST=${ENABLE_HOST}
 PULSE_ENABLE_DOCKER=${ENABLE_DOCKER}
@@ -2323,6 +2395,8 @@ if command -v rc-service >/dev/null 2>&1 && [[ -d /etc/init.d ]] && ! command -v
     log_info "Configuring OpenRC service at $INITSCRIPT..."
 
     # Build command line args
+    ensure_runtime_token_file "$STATE_DIR"
+    clear_proxmox_state_if_needed
     build_exec_args
 
     # Create OpenRC init script following Alpine best practices
@@ -2367,7 +2441,7 @@ INITEOF
 
     chmod +x "$INITSCRIPT"
     restart_openrc_agent_service
-    complete_installation_flow "/var/lib/pulse-agent" "Installation complete! Agent is running." "Upgrade complete! Agent restarted with new configuration." "tail -f $LOG_FILE"
+    complete_installation_flow "$STATE_DIR" "Installation complete! Agent is running." "Upgrade complete! Agent restarted with new configuration." "tail -f $LOG_FILE"
     exit 0
 fi
 
@@ -2377,6 +2451,8 @@ if [[ "$OS" == "freebsd" ]] || [[ -f /etc/rc.subr ]]; then
     log_info "Configuring FreeBSD rc.d service at $RCSCRIPT..."
 
     # Build command line args
+    ensure_runtime_token_file "$STATE_DIR"
+    clear_proxmox_state_if_needed
     build_exec_args
 
     render_freebsd_rc_agent_script "$RCSCRIPT" "${INSTALL_DIR}/${BINARY_NAME}" "${EXEC_ARGS}"
@@ -2401,7 +2477,7 @@ BOOTEOF
 
     # Stop existing agent if running
     restart_sysv_agent_service "$RCSCRIPT"
-    complete_installation_flow "/var/lib/pulse-agent" "Installation complete! Agent is running." "Upgrade complete! Agent restarted with new configuration." "tail -f /var/log/messages"
+    complete_installation_flow "$STATE_DIR" "Installation complete! Agent is running." "Upgrade complete! Agent restarted with new configuration." "tail -f /var/log/messages"
     log_info "To check status: $RCSCRIPT status"
     log_info "To view logs: tail -f /var/log/messages"
     exit 0
@@ -2410,24 +2486,15 @@ fi
 # 5. Linux (Systemd)
 if command -v systemctl >/dev/null 2>&1; then
     UNIT="/etc/systemd/system/${AGENT_NAME}.service"
-    TOKEN_DIR="/var/lib/pulse-agent"
+    TOKEN_DIR="$STATE_DIR"
     TOKEN_FILE="${TOKEN_DIR}/token"
     log_info "Configuring Systemd service at $UNIT..."
 
-    if [[ -n "$PULSE_TOKEN" ]]; then
-        # Write token to secure file (not visible in ps or service file)
-        mkdir -p "$TOKEN_DIR"
-        echo -n "$PULSE_TOKEN" > "$TOKEN_FILE"
-        chmod 600 "$TOKEN_FILE"
-        chown root:root "$TOKEN_FILE"
-        log_info "Token stored securely at $TOKEN_FILE (mode 600)"
-    else
-        rm -f "$TOKEN_FILE"
-        log_info "No API token provided; installer will configure token-optional agent runtime."
-    fi
+    ensure_runtime_token_file "$STATE_DIR"
+    clear_proxmox_state_if_needed
 
-    # Build command line args WITHOUT the token (token is read from file)
-    build_exec_args_without_token
+    # Build command line args with --token-file instead of the raw token.
+    build_exec_args
 
     render_systemd_agent_unit "$UNIT" "${INSTALL_DIR}/${BINARY_NAME}" "${EXEC_ARGS}" "network-online.target docker.service" "network-online.target" "root" ""
     # Restrict service file permissions (contains no secrets now, but good practice)
@@ -2437,7 +2504,7 @@ if command -v systemctl >/dev/null 2>&1; then
     restore_selinux_contexts
 
     restart_systemd_agent_service
-    complete_installation_flow "/var/lib/pulse-agent" "Installation complete! Agent is running." "Upgrade complete! Agent restarted with new configuration." "journalctl -u ${AGENT_NAME} --no-pager -n 20"
+    complete_installation_flow "$STATE_DIR" "Installation complete! Agent is running." "Upgrade complete! Agent restarted with new configuration." "journalctl -u ${AGENT_NAME} --no-pager -n 20"
     if [[ "$UPGRADE_MODE" != "true" && -n "$PULSE_TOKEN" ]]; then
         log_info "Token file: $TOKEN_FILE (mode 600, root only)"
     fi
@@ -2451,6 +2518,8 @@ if [[ -d /etc/init.d ]] && [[ -w /etc/init.d ]]; then
     log_info "Configuring SysV init script at $INITSCRIPT..."
 
     # Build command line args
+    ensure_runtime_token_file "$STATE_DIR"
+    clear_proxmox_state_if_needed
     build_exec_args
 
     # Create SysV init script following LSB conventions
@@ -2589,7 +2658,7 @@ INITEOF
 
     # Start the agent
     "$INITSCRIPT" start
-    complete_installation_flow "/var/lib/pulse-agent" "Installation complete! Agent is running." "Upgrade complete! Agent restarted with new configuration." "tail -f /var/log/${AGENT_NAME}.log"
+    complete_installation_flow "$STATE_DIR" "Installation complete! Agent is running." "Upgrade complete! Agent restarted with new configuration." "tail -f /var/log/${AGENT_NAME}.log"
     log_info "To check status: $INITSCRIPT status"
     log_info "To view logs: tail -f /var/log/${AGENT_NAME}.log"
     exit 0
