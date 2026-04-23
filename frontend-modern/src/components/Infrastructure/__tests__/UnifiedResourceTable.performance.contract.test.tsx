@@ -206,7 +206,7 @@ describe('UnifiedResourceTable performance contract', () => {
         expect(getByText('Net I/O')).toBeInTheDocument();
       });
 
-      emitResizeObserverWidth(820);
+      emitResizeObserverWidth(760);
 
       await waitFor(() => {
         expect(getByText('Net').closest('th')).not.toHaveClass('hidden');
@@ -217,6 +217,15 @@ describe('UnifiedResourceTable performance contract', () => {
       expect(getByText('CPU').closest('th')).not.toHaveClass('hidden');
       expect(getByText('Mem')).toBeInTheDocument();
       expect(getByText('Disk').closest('th')).not.toHaveClass('hidden');
+
+      emitResizeObserverWidth(820);
+
+      await waitFor(() => {
+        expect(getByText('Net').closest('th')).not.toHaveClass('hidden');
+        expect(getByText('I/O').closest('th')).not.toHaveClass('hidden');
+        expect(getByText('Src').closest('th')).not.toHaveClass('hidden');
+        expect(getByText('Up').closest('th')).toHaveClass('hidden');
+      });
 
       emitResizeObserverWidth(980);
 
@@ -270,7 +279,9 @@ describe('UnifiedResourceTable performance contract', () => {
         expect(getByText('Src').closest('th')).not.toHaveClass('hidden');
         expect(getByText('Up').closest('th')).toHaveClass('hidden');
       });
-      expect(getByText('PBS+Agent')).toBeInTheDocument();
+      expect(getByText('PBS')).toBeInTheDocument();
+      expect(getByText('Agent')).toBeInTheDocument();
+      expect(queryByText('PBS+Agent')).toBeNull();
       expect(queryByText('+1')).toBeNull();
 
       emitResizeObserverWidth(660);

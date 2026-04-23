@@ -37,6 +37,7 @@ export const HOST_TABLE_ESTIMATED_ROW_HEIGHT = 40;
 export const HOST_TABLE_WINDOW_SIZE = 137;
 export const UNIFIED_RESOURCE_TABLE_DEFAULT_LAYOUT_WIDTH = 1024;
 export const UNIFIED_RESOURCE_TABLE_MOBILE_LAYOUT_WIDTH = 700;
+export const UNIFIED_RESOURCE_TABLE_TABLET_DISK_IO_LAYOUT_WIDTH = 800;
 export const UNIFIED_RESOURCE_TABLE_COMPACT_LAYOUT_WIDTH = 900;
 export const UNIFIED_RESOURCE_TABLE_WIDE_LAYOUT_WIDTH = 1160;
 export const UNIFIED_RESOURCE_TABLE_COLUMN_BREAKPOINTS: Record<ColumnPriority, number> = {
@@ -96,6 +97,10 @@ export const isUnifiedResourceServiceColumnVisible = (
 ): boolean =>
   normalizeUnifiedResourceTableLayoutWidth(layoutWidth) >=
   UNIFIED_RESOURCE_SERVICE_COLUMN_BREAKPOINTS[priority];
+
+export const isUnifiedResourceHostDiskIoVisible = (layoutWidth: number): boolean =>
+  normalizeUnifiedResourceTableLayoutWidth(layoutWidth) >=
+  UNIFIED_RESOURCE_TABLE_TABLET_DISK_IO_LAYOUT_WIDTH;
 
 export const buildResourceLabelById = (resources: Resource[]): Map<string, string> => {
   const map = new Map<string, string>();
@@ -341,6 +346,7 @@ export const getUnifiedResourceTableHeaderLabels = (
 
 export const getUnifiedResourceTableColumnPresentations = (
   layoutMode: UnifiedResourceTableLayoutMode,
+  layoutWidth?: number,
 ): UnifiedResourceTableColumnPresentations => {
   if (layoutMode === 'mobile') {
     // Mobile widths are percentages so visible columns fill the viewport
@@ -363,12 +369,29 @@ export const getUnifiedResourceTableColumnPresentations = (
   }
 
   if (layoutMode === 'tablet') {
+    if (typeof layoutWidth === 'number' && isUnifiedResourceHostDiskIoVisible(layoutWidth)) {
+      return {
+        resourceColumn: buildUnifiedResourceTableColumnPresentation('', '28%'),
+        serviceResourceColumn: buildUnifiedResourceTableColumnPresentation('', '24%'),
+        metricColumn: buildUnifiedResourceTableColumnPresentation('', '12%'),
+        ioColumn: buildUnifiedResourceTableColumnPresentation('', '12%'),
+        sourceColumn: buildUnifiedResourceTableColumnPresentation('', '12%'),
+        serviceSourceColumn: buildUnifiedResourceTableColumnPresentation('', '8%'),
+        uptimeColumn: buildUnifiedResourceTableColumnPresentation('', '7%'),
+        tempColumn: buildUnifiedResourceTableColumnPresentation('', '6%'),
+        serviceCountColumn: buildUnifiedResourceTableColumnPresentation('', '8%'),
+        serviceQueueColumn: buildUnifiedResourceTableColumnPresentation('', '7.5%'),
+        serviceHealthColumn: buildUnifiedResourceTableColumnPresentation('', '14%'),
+        serviceActionColumn: buildUnifiedResourceTableColumnPresentation('', '13%'),
+      };
+    }
+
     return {
-      resourceColumn: buildUnifiedResourceTableColumnPresentation('', '26%'),
+      resourceColumn: buildUnifiedResourceTableColumnPresentation('', '34%'),
       serviceResourceColumn: buildUnifiedResourceTableColumnPresentation('', '24%'),
       metricColumn: buildUnifiedResourceTableColumnPresentation('', '13%'),
-      ioColumn: buildUnifiedResourceTableColumnPresentation('', '18%'),
-      sourceColumn: buildUnifiedResourceTableColumnPresentation('', '17%'),
+      ioColumn: buildUnifiedResourceTableColumnPresentation('', '14%'),
+      sourceColumn: buildUnifiedResourceTableColumnPresentation('', '13%'),
       serviceSourceColumn: buildUnifiedResourceTableColumnPresentation('', '8%'),
       uptimeColumn: buildUnifiedResourceTableColumnPresentation('', '7%'),
       tempColumn: buildUnifiedResourceTableColumnPresentation('', '6%'),

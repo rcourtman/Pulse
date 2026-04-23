@@ -107,7 +107,7 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                   {table.headerLabels().network} {table.renderSortIndicator('network')}
                 </TableHead>
                 <TableHead
-                  classList={{ hidden: table.isMobile() || !table.isVisible('supplementary') }}
+                  classList={{ hidden: table.isMobile() || !table.isHostDiskIoVisible() }}
                   class={table.ioColumn().className}
                   width={table.ioColumn().width}
                   onClick={() => table.handleSort('diskio')}
@@ -534,7 +534,7 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
 
                         <TableCell
                           classList={{
-                            hidden: table.isMobile() || !table.isVisible('supplementary'),
+                            hidden: table.isMobile() || !table.isHostDiskIoVisible(),
                           }}
                         >
                           <Show

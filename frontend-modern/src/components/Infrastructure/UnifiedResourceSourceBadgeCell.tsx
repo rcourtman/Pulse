@@ -16,6 +16,15 @@ const getVisibleSourceBadgeLimit = (layoutMode: UnifiedResourceTableLayoutMode):
 const compactSourceBadgeLabel = (label: string): string =>
   label === 'Containers' ? 'Cont' : label;
 
+const getCompactSourceDotClasses = (classes: string): string => {
+  const toneClasses = classes
+    .split(/\s+/)
+    .filter((className) => className.startsWith('bg-') || className.startsWith('dark:bg-'))
+    .join(' ');
+
+  return toneClasses || 'bg-muted';
+};
+
 export const UnifiedResourceSourceBadgeCell: Component<UnifiedResourceSourceBadgeCellProps> = (
   props,
 ) => {
@@ -31,34 +40,27 @@ export const UnifiedResourceSourceBadgeCell: Component<UnifiedResourceSourceBadg
   const hiddenBadges = createMemo(() => badges().slice(visibleBadges().length));
   const hiddenBadgeCount = createMemo(() => Math.max(0, badges().length - visibleBadges().length));
   const hiddenBadgeLabel = createMemo(() =>
-    hiddenBadgeCount() === 1 ? `+${hiddenBadges()[0]?.label ?? ''}` : `+${hiddenBadgeCount()}`,
+    hiddenBadgeCount() === 1
+      ? `+${compactSourceBadgeLabel(hiddenBadges()[0]?.label ?? '')}`
+      : `+${hiddenBadgeCount()}`,
   );
   const title = createMemo(() =>
     badges()
       .map((badge) => badge.title ?? badge.label)
       .join(', '),
   );
-  const summaryBadge = createMemo(() => {
-    const allBadges = badges();
-    if (props.layoutMode === 'wide' || allBadges.length === 0) return null;
-
-    const badge = allBadges[0];
-    if (!badge) return null;
-
-    const visibleLabels = allBadges
-      .slice(0, 2)
-      .map((badge) => compactSourceBadgeLabel(badge.label));
-    const hiddenCount = allBadges.length - visibleLabels.length;
-    return {
-      badge,
-      label: `${visibleLabels.join('+')}${hiddenCount > 0 ? `+${hiddenCount}` : ''}`,
-    };
-  });
+  const shouldUseCompactSourceList = createMemo(
+    () => props.layoutMode !== 'wide' && badges().length > 0,
+  );
 
   return (
-    <div class="flex min-w-0 max-w-full items-center justify-center gap-1 overflow-hidden">
+    <div
+      class="flex min-w-0 max-w-full items-center justify-start gap-1 overflow-hidden"
+      aria-label={title() ? `Sources: ${title()}` : undefined}
+      title={title()}
+    >
       <Show
-        when={summaryBadge()}
+        when={shouldUseCompactSourceList()}
         fallback={
           <>
             <For each={visibleBadges()}>
@@ -85,15 +87,33 @@ export const UnifiedResourceSourceBadgeCell: Component<UnifiedResourceSourceBadg
           </>
         }
       >
-        {(summary) => (
+        <For each={visibleBadges()}>
+          {(badge) => (
+            <span
+              class="inline-flex shrink-0 items-center gap-0.5 overflow-hidden rounded"
+              title={badge.title}
+            >
+              <span
+                class={`${getCompactSourceDotClasses(badge.classes)} h-1.5 w-1.5 shrink-0 rounded-full`}
+                aria-hidden="true"
+              />
+              <span class="whitespace-nowrap text-[10px] font-medium leading-none text-base-content">
+                {compactSourceBadgeLabel(badge.label)}
+              </span>
+            </span>
+          )}
+        </For>
+        <Show when={hiddenBadgeCount() > 0}>
           <span
-            class={`${summary().badge.classes} w-full min-w-0 max-w-full justify-center overflow-hidden px-1.5`}
-            aria-label={`Sources: ${title()}`}
+            class="shrink-0 whitespace-nowrap text-[10px] font-medium leading-none text-muted"
+            aria-label={`Additional sources: ${hiddenBadges()
+              .map((badge) => badge.title ?? badge.label)
+              .join(', ')}`}
             title={title()}
           >
-            <span class="min-w-0 truncate">{summary().label}</span>
+            {hiddenBadgeLabel()}
           </span>
-        )}
+        </Show>
       </Show>
     </div>
   );

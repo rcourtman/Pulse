@@ -15,6 +15,7 @@ import {
   getUnifiedResourceTableSortIndicator,
   getUnifiedSources,
   getVisibleHostTableItems,
+  isUnifiedResourceHostDiskIoVisible,
   isUnifiedResourceServiceColumnVisible,
   isUnifiedResourceTableColumnVisible,
   normalizeUnifiedResourceTableLayoutWidth,
@@ -114,7 +115,8 @@ describe('unifiedResourceTableStateModel', () => {
 
   it('derives responsive column presentations and host-table visibility as pure layout policy', () => {
     const mobileColumns = getUnifiedResourceTableColumnPresentations('mobile');
-    const tabletColumns = getUnifiedResourceTableColumnPresentations('tablet');
+    const narrowTabletColumns = getUnifiedResourceTableColumnPresentations('tablet', 760);
+    const tabletColumns = getUnifiedResourceTableColumnPresentations('tablet', 820);
     const compactColumns = getUnifiedResourceTableColumnPresentations('compact');
     const wideColumns = getUnifiedResourceTableColumnPresentations('wide');
 
@@ -134,10 +136,16 @@ describe('unifiedResourceTableStateModel', () => {
     expect(mobileColumns.serviceCountColumn.width).toBe('11%');
     expect(mobileColumns.serviceHealthColumn.width).toBe('13%');
     expect(mobileColumns.serviceActionColumn.width).toBe('14%');
-    expect(tabletColumns.resourceColumn.width).toBe('26%');
+    expect(narrowTabletColumns.resourceColumn.width).toBe('34%');
+    expect(narrowTabletColumns.ioColumn.width).toBe('14%');
+    expect(narrowTabletColumns.sourceColumn.width).toBe('13%');
+    expect(isUnifiedResourceHostDiskIoVisible(799)).toBe(false);
+    expect(isUnifiedResourceHostDiskIoVisible(800)).toBe(true);
+    expect(tabletColumns.resourceColumn.width).toBe('28%');
     expect(tabletColumns.serviceResourceColumn.width).toBe('24%');
-    expect(tabletColumns.ioColumn.width).toBe('18%');
-    expect(tabletColumns.sourceColumn.width).toBe('17%');
+    expect(tabletColumns.metricColumn.width).toBe('12%');
+    expect(tabletColumns.ioColumn.width).toBe('12%');
+    expect(tabletColumns.sourceColumn.width).toBe('12%');
     expect(tabletColumns.serviceSourceColumn.width).toBe('8%');
     expect(compactColumns.resourceColumn.width).toBe('18%');
     expect(compactColumns.serviceResourceColumn.width).toBe('18%');

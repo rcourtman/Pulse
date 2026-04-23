@@ -22,6 +22,7 @@ import {
   getUnifiedResourceTableColumnPresentations,
   getUnifiedResourceTableHeaderLabels,
   getUnifiedResourceTableLayoutMode,
+  isUnifiedResourceHostDiskIoVisible,
   isUnifiedResourceServiceColumnVisible,
   isUnifiedResourceTableColumnVisible,
   getUnifiedResourceTableShellClass,
@@ -106,6 +107,9 @@ export function useUnifiedResourceTableState(props: UnifiedResourceTableProps) {
   );
   const layoutMode = createMemo(() => getUnifiedResourceTableLayoutMode(tableLayoutWidth()));
   const isMobile = createMemo(() => shouldUseUnifiedResourceTableMobileLayout(tableLayoutWidth()));
+  const isHostDiskIoVisible = createMemo(() =>
+    isUnifiedResourceHostDiskIoVisible(tableLayoutWidth()),
+  );
   const isVisible = (priority: ColumnPriority) =>
     isUnifiedResourceTableColumnVisible(priority, tableLayoutWidth());
   const isServiceVisible = (priority: ColumnPriority) =>
@@ -193,7 +197,7 @@ export function useUnifiedResourceTableState(props: UnifiedResourceTableProps) {
 
   const tableShellClass = createMemo(() => getUnifiedResourceTableShellClass(layoutMode()));
   const columnPresentations = createMemo(() =>
-    getUnifiedResourceTableColumnPresentations(layoutMode()),
+    getUnifiedResourceTableColumnPresentations(layoutMode(), tableLayoutWidth()),
   );
   const headerLabels = createMemo(() => getUnifiedResourceTableHeaderLabels(layoutMode()));
   const showHostTable = createMemo(() =>
@@ -212,6 +216,7 @@ export function useUnifiedResourceTableState(props: UnifiedResourceTableProps) {
   return {
     layoutMode,
     isMobile,
+    isHostDiskIoVisible,
     isVisible,
     isServiceVisible,
     handleSort,
