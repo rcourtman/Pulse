@@ -42,9 +42,18 @@ const primaryToolbarButtonClass =
   'inline-flex items-center justify-center gap-2 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-medium text-blue-700 transition-colors hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-200 dark:hover:bg-blue-900/40';
 const utilityToolbarButtonClass =
   'inline-flex items-center gap-1.5 rounded-md px-1 py-1 text-sm font-medium text-muted transition-colors hover:text-base-content disabled:cursor-not-allowed disabled:opacity-60';
-const childIndentClass = 'pl-4 sm:pl-6';
 const discoveryRowClass =
   'border-b border-border-subtle bg-blue-50/30 hover:bg-blue-50/40 dark:bg-blue-950/10 dark:hover:bg-blue-950/20';
+const childTreeWrapperClass = 'relative min-w-0 pl-3 sm:pl-3.5';
+const wrappedFieldClass = 'whitespace-normal break-words leading-4';
+const wrappedEndpointClass = 'whitespace-normal break-all leading-4';
+
+const childTreeBranch = (isLastChild: boolean) => (
+  <span aria-hidden="true" class="pointer-events-none absolute inset-y-0 left-0 w-3">
+    <span class={`absolute left-[5px] top-0 w-px bg-border ${isLastChild ? 'h-1/2' : 'h-full'}`} />
+    <span class="absolute left-[5px] top-1/2 h-px w-2 -translate-y-1/2 bg-border" />
+  </span>
+);
 
 const sortRows = (rows: readonly InfrastructureSystemRow[]): InfrastructureSystemRow[] =>
   [...rows].sort((left, right) => left.name.localeCompare(right.name));
@@ -306,20 +315,20 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
       <Table class="w-full table-fixed text-sm">
         <TableHeader class="bg-surface-alt/60">
           <TableRow>
-            <TableHead class="w-[24%] py-1.5 pl-3 pr-3 text-left text-[11px] font-medium text-muted whitespace-nowrap xl:w-[20%]">
+            <TableHead class="w-[28%] py-1.5 pl-3 pr-3 text-left text-[11px] font-medium text-muted whitespace-nowrap xl:w-[24%]">
               System
             </TableHead>
-            <TableHead class="w-[26%] px-3 py-1.5 text-left text-[11px] font-medium text-muted whitespace-nowrap xl:w-[24%]">
+            <TableHead class="w-[22%] px-3 py-1.5 text-left text-[11px] font-medium text-muted whitespace-nowrap xl:w-[22%]">
               Endpoint
             </TableHead>
-            <TableHead class="w-[30%] px-3 py-1.5 text-left text-[11px] font-medium text-muted whitespace-nowrap xl:w-[28%]">
+            <TableHead class="w-[24%] px-3 py-1.5 text-left text-[11px] font-medium text-muted whitespace-nowrap xl:w-[26%]">
               Coverage
             </TableHead>
-            <TableHead class="w-[20%] px-3 py-1.5 text-left text-[11px] font-medium text-muted whitespace-nowrap xl:w-[16%]">
+            <TableHead class="w-[16%] px-3 py-1.5 text-left text-[11px] font-medium text-muted whitespace-nowrap xl:w-[16%]">
               Status
             </TableHead>
             <Show when={actionColumnVisible()}>
-              <TableHead class="w-[16%] px-3 py-1.5 text-right text-[11px] font-medium text-muted whitespace-nowrap xl:w-[12%]">
+              <TableHead class="w-[10%] px-3 py-1.5 text-right text-[11px] font-medium text-muted whitespace-nowrap xl:w-[12%]">
                 Actions
               </TableHead>
             </Show>
@@ -381,42 +390,35 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                           <>
                             <TableRow class="border-b border-border-subtle">
                               <TableCell class="py-1 pl-3 pr-3 align-top">
-                                <div class={`min-w-0 space-y-0.5 ${childIndentClass}`}>
-                                  <div class="flex min-w-0 items-center gap-2 whitespace-nowrap">
-                                    <span aria-hidden="true" class="relative h-5 w-5 flex-none">
-                                      <span
-                                        class={`absolute left-2 top-0 w-px bg-border ${isLastConfigured() ? 'h-2.5' : 'h-5'}`}
-                                      />
-                                      <span class="absolute left-2 top-2.5 h-px w-3 bg-border" />
-                                    </span>
-                                    <div class="min-w-0">
-                                      <div class="flex min-w-0 items-center gap-2">
-                                        <div
-                                          class="truncate text-[13px] text-base-content/80"
-                                          title={row.name}
-                                        >
-                                          {row.name}
-                                        </div>
-                                        <Show when={row.sourceBadges.length > 0}>
-                                          <div class="flex items-center gap-1 whitespace-nowrap">
-                                            <For each={row.sourceBadges}>
-                                              {(badge) => (
-                                                <span
-                                                  class="inline-flex items-center rounded-full border border-border bg-surface-alt px-1.5 py-0.5 text-[10px] font-medium text-muted"
-                                                  title={
-                                                    badge === 'Pulse Agent'
-                                                      ? pulseAgentBadgeTitle(row)
-                                                      : undefined
-                                                  }
-                                                >
-                                                  {badge}
-                                                </span>
-                                              )}
-                                            </For>
-                                          </div>
-                                        </Show>
+                                <div class={childTreeWrapperClass}>
+                                  {childTreeBranch(isLastConfigured())}
+                                  <div class="min-w-0 space-y-1">
+                                    <div class="min-w-0 flex-1">
+                                      <div
+                                        class={`text-[13px] text-base-content/80 ${wrappedFieldClass}`}
+                                        title={row.name}
+                                      >
+                                        {row.name}
                                       </div>
                                     </div>
+                                    <Show when={row.sourceBadges.length > 0}>
+                                      <div class="flex flex-wrap items-center gap-1">
+                                        <For each={row.sourceBadges}>
+                                          {(badge) => (
+                                            <span
+                                              class="inline-flex items-center rounded-full border border-border bg-surface-alt px-1.5 py-0.5 text-[10px] font-medium text-muted"
+                                              title={
+                                                badge === 'Pulse Agent'
+                                                  ? pulseAgentBadgeTitle(row)
+                                                  : undefined
+                                              }
+                                            >
+                                              {badge}
+                                            </span>
+                                          )}
+                                        </For>
+                                      </div>
+                                    </Show>
                                   </div>
                                 </div>
                               </TableCell>
@@ -427,7 +429,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                   fallback={<span class="text-xs text-muted">-</span>}
                                 >
                                   <div
-                                    class="truncate whitespace-nowrap text-[12px] text-muted"
+                                    class={`text-[12px] text-muted ${wrappedEndpointClass}`}
                                     title={row.host}
                                   >
                                     {row.host}
@@ -441,7 +443,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                   fallback={<span class="text-xs text-muted">-</span>}
                                 >
                                   <div
-                                    class="truncate whitespace-nowrap text-[12px] text-muted"
+                                    class={`text-[12px] text-muted ${wrappedFieldClass}`}
                                     title={row.coverageLabels.join(', ')}
                                   >
                                     {summarizeCoverage(row.coverageLabels)}
@@ -515,21 +517,14 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                         return (
                           <TableRow class={discoveryRowClass}>
                             <TableCell class="py-1 pl-3 pr-3 align-top">
-                              <div class={`min-w-0 space-y-0.5 ${childIndentClass}`}>
-                                <div class="flex min-w-0 items-center gap-2 whitespace-nowrap">
-                                  <span aria-hidden="true" class="relative h-5 w-5 flex-none">
-                                    <span
-                                      class={`absolute left-2 top-0 w-px bg-border ${isLastDiscovered() ? 'h-2.5' : 'h-5'}`}
-                                    />
-                                    <span class="absolute left-2 top-2.5 h-px w-3 bg-border" />
-                                  </span>
-                                  <div class="min-w-0">
-                                    <div
-                                      class="truncate text-[13px] text-base-content/85"
-                                      title={`${discoveredServerName(server)}${server.version ? ` · ${server.version}` : ''}`}
-                                    >
-                                      {discoveredServerName(server)}
-                                    </div>
+                              <div class={childTreeWrapperClass}>
+                                {childTreeBranch(isLastDiscovered())}
+                                <div class="min-w-0 flex-1">
+                                  <div
+                                    class={`text-[13px] text-base-content/85 ${wrappedFieldClass}`}
+                                    title={`${discoveredServerName(server)}${server.version ? ` · ${server.version}` : ''}`}
+                                  >
+                                    {discoveredServerName(server)}
                                   </div>
                                 </div>
                               </div>
@@ -537,7 +532,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
 
                             <TableCell class="px-3 py-1 align-top">
                               <div
-                                class="truncate whitespace-nowrap text-[12px] text-muted"
+                                class={`text-[12px] text-muted ${wrappedEndpointClass}`}
                                 title={discoveredServerEndpoint(server)}
                               >
                                 {discoveredServerEndpoint(server)}
@@ -546,7 +541,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
 
                             <TableCell class="px-3 py-1 align-top">
                               <div
-                                class="truncate whitespace-nowrap text-[12px] text-muted"
+                                class={`text-[12px] text-muted ${wrappedFieldClass}`}
                                 title={discoveredCoverageText(server)}
                               >
                                 {discoveredCoverageText(server)}
