@@ -31,7 +31,6 @@ const row = (overrides: Partial<InfrastructureSystemRow> = {}): InfrastructureSy
     subtitle: undefined,
     host: '10.0.0.1',
     coverageLabels: ['Host telemetry'],
-    sourceBadges: [],
     statusLabel: 'online',
     statusClassName: 'bg-green-100 text-green-800',
     agentUpdateCount: 0,
@@ -79,7 +78,7 @@ describe('ConnectionsTable', () => {
           row({
             id: 'truenas:nas',
             name: 'nas',
-            subtitle: 'Platform API · TrueNAS',
+            subtitle: 'via platform API',
             host: undefined,
             coverageLabels: ['Datasets'],
             statusLabel: 'Paused',
@@ -92,7 +91,7 @@ describe('ConnectionsTable', () => {
     expect(screen.getByRole('table')).toBeInTheDocument();
     expect(screen.getByText('tower')).toBeInTheDocument();
     expect(screen.getByText('nas')).toBeInTheDocument();
-    expect(screen.getByText('Platform API · TrueNAS')).toBeInTheDocument();
+    expect(screen.getByText('via platform API')).toBeInTheDocument();
     expect(screen.getByText('Datasets')).toBeInTheDocument();
     expect(screen.getByText('Paused')).toBeInTheDocument();
     expect(screen.getByText('online')).toBeInTheDocument();

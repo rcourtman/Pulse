@@ -255,15 +255,17 @@ work extends shared components instead of creating new local variants.
    modal body instead of trapping the lower fields below the fold.
    The same shared shell boundary now also owns grouped source-row composition.
    `useConnectionsLedger.ts`, `InfrastructureSourceManager.tsx`, and
-   `InfrastructureWorkspace.tsx` must render attached collection methods as
-   composition on the owning row, with explicit badges and edit-dialog detail,
-   instead of duplicating the same machine across multiple peer groups and
-   forcing operators to infer the relationship visually.
+   `InfrastructureWorkspace.tsx` must render attached collection methods as a
+   plain-language row subtitle on the owning row (`via platform API`, `via
+   Pulse Agent`, or `via platform API and Pulse Agent`), with fuller detail in
+   the edit dialog, instead of duplicating the same machine across multiple
+   peer groups or forcing operators to decode badge jargon.
    That same shared shell boundary owns the landing taxonomy too: the primary
    grouping labels in the infrastructure manager must describe real
    platform/system owners, not collection methods. Agent-only machines belong
-   in a standalone-host bucket, while `Pulse Agent` remains a badge, install
-   path, and detail-surface method label rather than a peer top-level
+   in a standalone-host bucket, while `Pulse Agent` remains a collection-
+   method label, install path, and detail-surface concept rather than a peer
+   top-level
    pseudo-platform beside Proxmox, VMware, and TrueNAS.
    That same shared shell boundary also owns compact version visibility for
    agent-backed rows. The infrastructure source table must not grow a dedicated
@@ -277,12 +279,14 @@ work extends shared components instead of creating new local variants.
    and local edit flows stay single-purpose instead of stacking multiple
    page-level workspaces at once.
    The source-manager landing now also owns the explicit discovery strip for
-   that destination. `InfrastructureSourceManager.tsx` may expose `Run
-   discovery`, `Add infrastructure`, and `Discovery settings` actions from the
-   shared landing shell, but it must not start a network scan just because the
-   page rendered. The direct address-probe utility is picker-owned rather than
-   landing-owned: `Detect from address` must stay inside the grouped add
-   dialog instead of competing with discovery actions on the page header.
+   that destination. `InfrastructureSourceManager.tsx` may expose a compact
+   discovery status line plus `Run discovery` and `Discovery settings`
+   actions from the shared landing shell, but it must not start a network scan
+   just because the page rendered. New-source admission belongs on the table's
+   per-platform `Add` actions rather than in the discovery strip, and the
+   direct address-probe utility is picker-owned rather than landing-owned:
+   `Detect from address` must stay inside the grouped add dialog instead of
+   competing with discovery actions on the page header.
    Discovered API-backed candidates stay visible in the same platform-group
    table as configured sources, using the existing tree/table hierarchy
    instead of spawning a second discovery-only page or card stack.
@@ -313,10 +317,9 @@ work extends shared components instead of creating new local variants.
    slot is exactly the ledger-inside-editor drift this contract forbids.
    The configured-connections summary and source-manager rows themselves must
    render exclusively from the aggregator.
-   `InfrastructureWorkspace.tsx` composes the instance-first source cards plus
-   the subordinate monitored-systems table from
-   `frontend-modern/src/components/Settings/useConnectionsLedger.ts`
-   (polling `GET /api/connections`). Source cards may open a governed edit
+   `InfrastructureWorkspace.tsx` composes the platform-banded systems table
+   from `frontend-modern/src/components/Settings/useConnectionsLedger.ts`
+   (polling `GET /api/connections`). Table rows may open a governed edit
    dialog for mutable sources, but pause, resume, remove, last-error detail,
    and agent uninstall commands must live inside that owned edit surface or
    the shared row-action owner rather than returning to inline landing-page

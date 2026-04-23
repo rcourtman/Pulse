@@ -69,13 +69,9 @@ vi.mock('../useConnectionsLedger', () => ({
         id: connection.id,
         ownerType: connection.type,
         name: connection.name || connection.id,
-        subtitle:
-          connection.type === 'agent'
-            ? 'Pulse Unified Agent'
-            : `Platform API · ${connection.type === 'truenas' ? 'TrueNAS SCALE' : connection.type}`,
+        subtitle: connection.type === 'agent' ? 'via Pulse Agent' : 'via platform API',
         host: connection.address,
         coverageLabels: ['VMs'],
-        sourceBadges: connection.type === 'agent' ? ['Pulse Agent'] : ['API'],
         statusLabel: connection.state === 'paused' ? 'Paused' : 'Active',
         statusClassName: 'bg-green-100 text-green-800',
         agentUpdateCount: 0,
@@ -242,7 +238,6 @@ describe('InfrastructureWorkspace', () => {
 
     await waitFor(() => expect(screen.getByText('Infrastructure systems')).toBeInTheDocument());
     expect(screen.getByRole('button', { name: /Run discovery/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Add infrastructure/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Discovery settings/i })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Detect from address/i })).toBeNull();
     expect(screen.getByText('VMware vCenter')).toBeInTheDocument();
@@ -272,8 +267,8 @@ describe('InfrastructureWorkspace', () => {
 
     await waitFor(() => expect(screen.getByText('discovered-pve.lab')).toBeInTheDocument());
     expect(screen.getByText('Discovered')).toBeInTheDocument();
-    expect(screen.getByText('Automatic scanning is off.')).toBeInTheDocument();
-    expect(screen.getByText(/1 candidate visible/i)).toBeInTheDocument();
+    expect(screen.getByText(/Automatic discovery off/i)).toBeInTheDocument();
+    expect(screen.getByText(/1 candidate/i)).toBeInTheDocument();
     expect(screen.getByText(/Updated /i)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /Run discovery/i }));
@@ -287,16 +282,6 @@ describe('InfrastructureWorkspace', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /^Review$/i }));
     expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure?add=pve', {
-      scroll: false,
-    });
-  });
-
-  it('opens the source picker from the source manager header action', () => {
-    renderWorkspace();
-
-    fireEvent.click(screen.getByRole('button', { name: /Add infrastructure/i }));
-
-    expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure?add=pick', {
       scroll: false,
     });
   });
@@ -431,10 +416,9 @@ describe('InfrastructureWorkspace', () => {
         id: primaryConnection.id,
         ownerType: 'pve',
         name: primaryConnection.name || primaryConnection.id,
-        subtitle: 'Platform API · pve',
+        subtitle: 'via platform API and Pulse Agent',
         host: primaryConnection.address,
         coverageLabels: ['VMs', 'Host telemetry'],
-        sourceBadges: ['API', 'Pulse Agent'],
         statusLabel: 'Active',
         statusClassName: 'bg-green-100 text-green-800',
         agentUpdateCount: 1,

@@ -1552,6 +1552,11 @@ API-backed lifecycle state. The retired
 `InfrastructureOperationsController.tsx` shell and
 `useInfrastructureReportingState.tsx` reporting path must not be reintroduced
 as parallel transport owners.
+That same `/api/connections` projection also owns collection-method truth for
+the infrastructure ledger: `useConnectionsLedger.ts` must derive one canonical
+subtitle (`via platform API`, `via Pulse Agent`, or `via platform API and
+Pulse Agent`) from the shared system/component payload instead of letting page-
+local tables invent their own API-versus-agent badge heuristics.
 That same shared infrastructure-settings boundary also owns install-profile
 semantics surfaced by
 `frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx`:

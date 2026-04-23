@@ -139,9 +139,6 @@ describe('settings architecture guardrails', () => {
       'const [showDiscoverySettings, setShowDiscoverySettings] = createSignal(false);',
     );
     expect(infrastructureWorkspaceSource).toContain('<InfrastructureDiscoverySettingsDialog');
-    expect(infrastructureWorkspaceSource).toContain(
-      "onOpenAddInfrastructure={readOnly() ? undefined : () => openAddFlow('pick')}",
-    );
     expect(infrastructureWorkspaceSource).toContain('onReviewDiscoveredSource');
     expect(infrastructureWorkspaceSource).toContain('void props.loadDiscoveredNodes();');
     expect(infrastructureWorkspaceSource).toContain('<InfrastructureSourceManager');
@@ -160,7 +157,6 @@ describe('settings architecture guardrails', () => {
     expect(infrastructureWorkspaceSource).not.toContain('PlatformConnectionsWorkspace');
     expect(infrastructureSourceManagerSource).toContain('Infrastructure systems');
     expect(infrastructureSourceManagerSource).toContain('Run discovery');
-    expect(infrastructureSourceManagerSource).toContain('Add infrastructure');
     expect(infrastructureSourceManagerSource).toContain('Discovery settings');
     expect(infrastructureSourceManagerSource).toContain(
       'Configured systems and discovered candidates grouped by platform or host type.',

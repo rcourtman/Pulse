@@ -87,12 +87,6 @@ const EDITABLE_CONNECTION_TYPES: readonly ConnectionType[] = [
   'truenas',
 ];
 
-const subtitleFor = (connection: Connection): string | undefined => {
-  if (connection.stateReason) return connection.stateReason;
-  const productLabel = CONNECTION_TYPE_LABELS[connection.type] ?? connection.type;
-  return PLATFORM_API_TYPES.has(connection.type) ? `Platform API · ${productLabel}` : productLabel;
-};
-
 const coverageLabelsFor = (connections: readonly Connection[]): string[] => {
   const seen = new Set<string>();
   for (const connection of connections) {
@@ -110,15 +104,24 @@ const coverageLabelsFor = (connections: readonly Connection[]): string[] => {
   return [...seen];
 };
 
-const sourceBadgesFor = (connections: readonly Connection[]): string[] => {
-  const badges: string[] = [];
-  if (connections.some((connection) => PLATFORM_API_TYPES.has(connection.type))) {
-    badges.push('API');
+const subtitleFor = (connections: readonly Connection[], primaryConnection: Connection): string => {
+  const hasPlatformAPI = connections.some((connection) => PLATFORM_API_TYPES.has(connection.type));
+  const hasPulseAgent = connections.some((connection) => connection.type === 'agent');
+
+  if (hasPlatformAPI && hasPulseAgent) {
+    return 'via platform API and Pulse Agent';
   }
-  if (connections.some((connection) => connection.type === 'agent')) {
-    badges.push('Pulse Agent');
+
+  if (hasPlatformAPI) {
+    return 'via platform API';
   }
-  return badges;
+
+  if (hasPulseAgent) {
+    return 'via Pulse Agent';
+  }
+
+  const productLabel = CONNECTION_TYPE_LABELS[primaryConnection.type] ?? primaryConnection.type;
+  return `via ${productLabel}`;
 };
 
 const agentUpdateCountFor = (connections: readonly Connection[]): number =>
@@ -148,10 +151,9 @@ const buildRow = (
     id: primaryConnection.id,
     ownerType,
     name,
-    subtitle: subtitleFor(primaryConnection),
+    subtitle: subtitleFor(componentConnections, primaryConnection),
     host,
     coverageLabels: coverageLabelsFor(componentConnections),
-    sourceBadges: sourceBadgesFor(componentConnections),
     statusLabel: presentation.label,
     statusClassName: presentation.badgeClass,
     agentUpdateCount: agentUpdateCountFor(componentConnections),

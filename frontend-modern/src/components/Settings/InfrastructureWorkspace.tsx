@@ -800,7 +800,6 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
         discoveryEnabled={props.discoveryEnabled()}
         discoveryScanStatus={props.discoveryScanStatus}
         readOnly={readOnly()}
-        onOpenAddInfrastructure={readOnly() ? undefined : () => openAddFlow('pick')}
         onAddSource={
           readOnly()
             ? undefined

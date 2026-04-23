@@ -26,7 +26,6 @@ interface InfrastructureSourceManagerProps {
   discoveryEnabled: boolean;
   discoveryScanStatus: Accessor<DiscoveryScanStatus>;
   readOnly: boolean;
-  onOpenAddInfrastructure?: () => void;
   onAddSource?: (type: InfrastructureOnboardingConnectionType) => void;
   onRunDiscovery?: () => void;
   onOpenDiscoverySettings?: () => void;
@@ -88,27 +87,16 @@ const discoveredServerEndpoint = (server: DiscoveredServer): string =>
 const discoveredCoverageText = (server: DiscoveredServer): string =>
   getInfrastructureOnboardingProductPresentation(server.type).coverage;
 
-const rowAgentConnections = (row: InfrastructureSystemRow) => {
-  const attachedAgents = row.attachedConnections.filter(
+const agentMethodTitleFor = (row: InfrastructureSystemRow): string | undefined => {
+  const agentConnections = row.attachedConnections.filter(
     (connection) => connection.type === 'agent',
   );
   if (row.connection.type === 'agent') {
-    return [row.connection, ...attachedAgents];
+    agentConnections.unshift(row.connection);
   }
-  return attachedAgents;
-};
-
-const pulseAgentBadgeTitle = (row: InfrastructureSystemRow): string | undefined => {
-  const agentConnections = rowAgentConnections(row);
   if (agentConnections.length === 0) return undefined;
   if (agentConnections.length === 1) {
     return connectionAgentVersionPresentation(agentConnections[0])?.title ?? 'Pulse Agent attached';
-  }
-  const updateCount = agentConnections.filter(
-    (connection) => connection.agentUpdateAvailable,
-  ).length;
-  if (updateCount > 0) {
-    return `${agentConnections.length} Pulse Agent attachments · ${updateCount} update available`;
   }
   return `${agentConnections.length} Pulse Agent attachments`;
 };
@@ -186,45 +174,20 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
   const lastDiscoveryResultText = createMemo(() =>
     formatRelativeTimestamp(props.discoveryScanStatus().lastResultAt),
   );
-  const discoveryStatePresentation = createMemo(() => {
-    if (props.discoveryScanStatus().scanning) {
-      return {
-        badgeLabel: 'Scanning',
-        badgeClass:
-          'inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-medium text-blue-800 dark:bg-blue-950/40 dark:text-blue-200',
-        description: 'Scanning the saved discovery scope now.',
-      };
-    }
-
-    if (props.discoveryEnabled) {
-      return {
-        badgeLabel: 'Automatic',
-        badgeClass:
-          'inline-flex items-center rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-medium text-green-800 dark:bg-green-950/40 dark:text-green-200',
-        description: 'Automatic scanning is enabled.',
-      };
-    }
-
-    return {
-      badgeLabel: 'Manual',
-      badgeClass:
-        'inline-flex items-center rounded-full bg-surface-alt px-2 py-0.5 text-[11px] font-medium text-base-content',
-      description: 'Automatic scanning is off.',
-    };
-  });
-
   const discoverySummary = createMemo(() => {
     const parts: string[] = [];
+    parts.push(props.discoveryEnabled ? 'Automatic discovery on' : 'Automatic discovery off');
+    if (props.discoveryScanStatus().scanning) {
+      parts.push('Scanning now');
+    }
     if (discoveredCount() > 0) {
-      parts.push(`${discoveredCount()} candidate${discoveredCount() === 1 ? '' : 's'} visible`);
+      parts.push(`${discoveredCount()} candidate${discoveredCount() === 1 ? '' : 's'}`);
     }
     if (lastDiscoveryResultText()) {
       parts.push(`Updated ${lastDiscoveryResultText()}`);
     }
     if (discoveryErrors().length > 0) {
-      parts.push(
-        `${discoveryErrors().length} discovery issue${discoveryErrors().length === 1 ? '' : 's'} reported`,
-      );
+      parts.push(`${discoveryErrors().length} issue${discoveryErrors().length === 1 ? '' : 's'}`);
     }
     return parts;
   });
@@ -236,20 +199,12 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
       noPadding
       icon={<Server class="h-5 w-5" strokeWidth={2} />}
     >
-      <div class="border-b border-border bg-surface-alt/40 px-3 py-3 sm:px-4">
-        <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div class="min-w-0 space-y-1.5">
-            <div class="flex flex-wrap items-center gap-2">
-              <h3 class="text-sm font-medium text-base-content">Discovery</h3>
-              <span class={discoveryStatePresentation().badgeClass}>
-                {discoveryStatePresentation().badgeLabel}
-              </span>
-            </div>
-            <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted">
-              <span>{discoveryStatePresentation().description}</span>
-              <Show when={discoverySummary().length > 0}>
-                <span class="text-xs text-muted">{discoverySummary().join(' · ')}</span>
-              </Show>
+      <div class="border-b border-border bg-surface-alt/40 px-3 py-2.5 sm:px-4">
+        <div class="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+          <div class="min-w-0">
+            <div class="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+              <span class="font-medium text-base-content">Discovery</span>
+              <span class="text-muted">{discoverySummary().join(' · ')}</span>
             </div>
           </div>
 
@@ -269,25 +224,16 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                 </button>
               </Show>
 
-              <Show when={props.onOpenAddInfrastructure}>
-                <button
-                  type="button"
-                  onClick={props.onOpenAddInfrastructure}
-                  class={utilityToolbarButtonClass}
-                >
-                  <Plus class="h-4 w-4" />
-                  Add infrastructure
-                </button>
-              </Show>
-
               <Show when={props.onOpenDiscoverySettings}>
                 <button
                   type="button"
                   onClick={props.onOpenDiscoverySettings}
                   class={utilityToolbarButtonClass}
+                  aria-label="Discovery settings"
+                  title="Discovery settings"
                 >
                   <SlidersHorizontal class="h-4 w-4" />
-                  Discovery settings
+                  Settings
                 </button>
               </Show>
             </div>
@@ -380,22 +326,12 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                       {row.name}
                                     </div>
                                   </div>
-                                  <Show when={row.sourceBadges.length > 0}>
-                                    <div class="flex flex-wrap items-center gap-1">
-                                      <For each={row.sourceBadges}>
-                                        {(badge) => (
-                                          <span
-                                            class="inline-flex items-center rounded-full border border-border bg-surface-alt px-1.5 py-0 text-[9px] font-medium leading-4 text-muted"
-                                            title={
-                                              badge === 'Pulse Agent'
-                                                ? pulseAgentBadgeTitle(row)
-                                                : undefined
-                                            }
-                                          >
-                                            {badge}
-                                          </span>
-                                        )}
-                                      </For>
+                                  <Show when={row.subtitle}>
+                                    <div
+                                      class="text-[11px] leading-4 text-muted"
+                                      title={agentMethodTitleFor(row) ?? row.subtitle}
+                                    >
+                                      {row.subtitle}
                                     </div>
                                   </Show>
                                 </div>

@@ -359,7 +359,11 @@ an add-only capacity posture.
     into the same typed add dialog with canonical prefills. Lifecycle flows
     must not fork a second discovery-specific credential wizard or treat
     discovery results as already-enrolled systems before the operator saves
-    the governed add form.
+    the governed add form. That same landing-owned shell now keeps discovery
+    compact: the persistent page may expose only a concise discovery status
+    line plus `Run discovery` / `Discovery settings` actions, while new-source
+    admission stays on the per-platform table actions instead of competing
+    with discovery at the top of the page.
     The editor's probe step calls the aggregator probe endpoint and
     dispatches the detected or manually-selected type into a credential
     slot; it must not bypass the probe endpoint or fabricate probe
@@ -1022,10 +1026,11 @@ label now means the shared Infrastructure onboarding path
 `PlatformConnectionsWorkspace.tsx` shell.
 That infrastructure destination now has one canonical mental model:
 configured infrastructure sources stay visible on the landing page as the
-primary objects the operator manages. The landing grid is instance-first, not
-type-first: existing connections or agent-backed hosts render as source cards,
-the same grid carries one `Add infrastructure` tile, and the monitored-system
-ledger remains secondary context below.
+primary objects the operator manages. The landing table is instance-first, not
+type-first: existing connections or agent-backed hosts render inside one
+platform-banded systems ledger, each platform section owns its own `Add`
+action, and the page does not fork back into a second monitored-systems ledger
+below.
 Adding infrastructure therefore happens in two governed steps. The
 `?add=pick` modal owns grouped source-type selection and may offer
 `Detect from address` as a secondary utility. The `?add=detect` modal owns
@@ -1035,6 +1040,12 @@ sidebar still owns only the top-level `Infrastructure` destination; movement
 between landing, picker, detect flow, add form, and edit form belongs to
 explicit actions inside `InfrastructureWorkspace.tsx`, not extra sidebar
 entries or body-replacing workspace subtabs.
+That same landing/table contract now also owns collection-method phrasing.
+`connectionsTableModel.ts`, `useConnectionsLedger.ts`,
+`InfrastructureSourceManager.tsx`, and `ConnectionsTable.tsx` must present the
+same plain-language subtitle (`via platform API`, `via Pulse Agent`, or `via
+platform API and Pulse Agent`) from the shared ledger contract instead of
+shipping badge-only heuristics that operators have to decode visually.
 That same lifecycle-owned platform onboarding boundary must keep API-backed
 provider state operationally useful, not CRUD-only.
 `useTrueNASSettingsPanelState.ts` and `useVMwareSettingsPanelState.ts` must

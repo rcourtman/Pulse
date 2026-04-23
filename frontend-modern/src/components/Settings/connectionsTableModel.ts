@@ -69,7 +69,6 @@ export interface InfrastructureSystemRow {
   subtitle?: string;
   host?: string;
   coverageLabels: string[];
-  sourceBadges: string[];
   statusLabel: string;
   statusClassName: string;
   agentUpdateCount: number;
