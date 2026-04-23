@@ -1379,6 +1379,11 @@ The shared license presentation owner also holds self-hosted Pro settings
 trial-ended notice copy for `ProLicensePlanSection.tsx`; that surface must
 consume canonical helper notices instead of carrying inline upgrade copy or
 local status-tone branches.
+That same `frontend-modern/src/utils/licensePresentation.ts` owner must treat
+compatibility-only capability keys such as `kubernetes_ai` as non-marketed
+technical facts: API/docs surfaces may still name the compatibility route, but
+customer-facing self-hosted current-plan summaries and unlocked-capability
+lists must not surface those keys as marquee Pro value.
 That same plan-section boundary must also defer notice resolution to component
 runtime. `frontend-modern/src/components/Settings/ProLicensePlanSection.tsx`
 may not compute trial-ended notices at module scope, because hosted settings

@@ -882,12 +882,14 @@ Streaming variant of execute (used by the UI for incremental responses).
 ### Question Answers
 - `POST /api/ai/question/{id}/answer`
 
-### Kubernetes AI Analysis (Pro)
+### Kubernetes AI Analysis (Compatibility)
 `POST /api/ai/kubernetes/analyze`
 ```json
 { "cluster_id": "cluster-id" }
 ```
-Requires Pro, Pro+, or Cloud with the `kubernetes_ai` feature enabled.
+Requires Pro, Pro+, or Cloud with the `kubernetes_ai` feature enabled. This route remains
+available for compatibility, but current v6 Pulse Pro marketing does not treat
+Kubernetes-specific analysis as a standalone plan pillar.
 
 ### Alert Investigation (Pro)
 `POST /api/ai/investigate-alert`

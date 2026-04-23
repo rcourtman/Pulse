@@ -62,7 +62,12 @@ const FEATURE_MIN_TIER_LABELS: Record<string, string> = {
   multi_tenant: 'MSP',
 };
 
-const NON_DISPLAYABLE_FEATURES = new Set(['multi_user', 'white_label', 'unlimited']);
+const NON_DISPLAYABLE_FEATURES = new Set([
+  'kubernetes_ai',
+  'multi_user',
+  'white_label',
+  'unlimited',
+]);
 
 export interface LicenseSubscriptionStatusPresentation {
   label: string;

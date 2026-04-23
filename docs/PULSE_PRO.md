@@ -87,9 +87,9 @@ This matrix is derived from the canonical table in `docs/architecture/ENTITLEMEN
 |---|---|---|:---:|:---:|:---:|:---:|:---:|---|
 | `FeatureAIPatrol` | `ai_patrol` | Pulse Patrol (Background Health Checks) | Y | Y | Y | Y | Y | Patrol itself is available on Community with BYOK. Activated or trial-backed installs can use 25 Patrol quickstart runs with no API key for first-run activation. Higher-autonomy outcomes and fix execution are separately gated. |
 | `FeatureRelay` | `relay` | Remote Access (Mobile Relay) | N | Y | Y | Y | Y | API route gating via `RequireLicenseFeature(..., relay, ...)` for relay settings and onboarding endpoints. |
-| `FeatureAIAlerts` | `ai_alerts` | Alert Analysis | N | N | Y | Y | Y | API route gating via `RequireLicenseFeature(..., ai_alerts, ...)`. |
+| `FeatureAIAlerts` | `ai_alerts` | Alert-Triggered Root-Cause Analysis | N | N | Y | Y | Y | API route gating via `RequireLicenseFeature(..., ai_alerts, ...)`. |
 | `FeatureAIAutoFix` | `ai_autofix` | Pulse Patrol Auto-Fix | N | N | Y | Y | Y | Required for fix execution and higher-autonomy actions. |
-| `FeatureKubernetesAI` | `kubernetes_ai` | Kubernetes Analysis | N | N | Y | Y | Y | API route gating via `RequireLicenseFeature(..., kubernetes_ai, ...)`. |
+| `FeatureKubernetesAI` | `kubernetes_ai` | Kubernetes AI Analysis (Compatibility) | N | N | Y | Y | Y | Legacy compatibility gate for `/api/ai/kubernetes/analyze`; not a primary marketed v6 Pro plan pillar. |
 | `FeatureAgentProfiles` | `agent_profiles` | Centralized Agent Profiles | N | N | Y | Y | Y | API route gating via `RequireLicenseFeature(..., agent_profiles, ...)`. |
 | `FeatureUpdateAlerts` | `update_alerts` | Update Alerts (Container/Package Updates) | Y | Y | Y | Y | Y | Included in Community tier per `TierFeatures[TierFree]`. |
 | `FeatureSSO` | `sso` | Basic SSO (OIDC) | Y | Y | Y | Y | Y | Basic SSO is included in Community tier. |
@@ -131,9 +131,8 @@ Patrol and the Assistant support tiered autonomy:
 
 ### Pro
 - Everything in Relay, plus:
-- AI alert analysis.
+- Alert-triggered root-cause analysis.
 - Auto-fix and higher autonomy.
-- Kubernetes AI analysis.
 - Centralized agent profiles.
 - Advanced SSO, RBAC, audit logging, and advanced reporting.
 - 90-day history.
@@ -161,7 +160,7 @@ Pulse plan upgrades are activated locally with a license key.
 You can inspect active feature gates via:
 - `GET /api/license/features` (authenticated)
 
-This returns a feature map including keys like `relay`, `ai_alerts`, `ai_autofix`, `kubernetes_ai`, and `multi_tenant` so you can conditionally enable paid workflows safely.
+This returns a feature map including keys like `relay`, `ai_alerts`, `ai_autofix`, `agent_profiles`, and `multi_tenant` so you can conditionally enable paid workflows safely.
 
 ## Deep Dives
 

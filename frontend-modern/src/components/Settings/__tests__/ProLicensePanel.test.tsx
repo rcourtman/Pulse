@@ -717,7 +717,6 @@ describe('ProLicensePanel', () => {
     expect(screen.getByText('Pulse Patrol')).toBeInTheDocument();
     expect(screen.getByText('Pulse Alert Analysis')).toBeInTheDocument();
     expect(screen.getByText('Patrol Auto-Fix')).toBeInTheDocument();
-    expect(screen.getByText('Kubernetes Analysis')).toBeInTheDocument();
     expect(screen.getByText('Update Alerts')).toBeInTheDocument();
     expect(screen.getByText('Advanced SSO (SAML/Multi-Provider)')).toBeInTheDocument();
     expect(screen.getByText('Role-Based Access Control (RBAC)')).toBeInTheDocument();
@@ -729,6 +728,7 @@ describe('ProLicensePanel', () => {
     expect(screen.getByText('Push Notifications')).toBeInTheDocument();
     expect(screen.getByText('Extended Metric History')).toBeInTheDocument();
     expect(screen.getByText('Multi-Tenant Mode')).toBeInTheDocument();
+    expect(screen.queryByText('Kubernetes Analysis')).not.toBeInTheDocument();
     expect(screen.queryByText('Multi-User Mode')).not.toBeInTheDocument();
     expect(screen.queryByText('White-Label Branding')).not.toBeInTheDocument();
     expect(screen.queryByText('Unlimited Instances')).not.toBeInTheDocument();

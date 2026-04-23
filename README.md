@@ -161,7 +161,7 @@ Self-hosted tiers:
 |---|---:|---|---:|---|
 | Community | Free | Unlimited | 7 days | Full self-hosted monitoring |
 | Relay | $4.99/mo or $39/yr | Unlimited | 14 days | Remote access, mobile, and push notifications |
-| Pro | $8.99/mo or $79/yr | Unlimited | 90 days | AI investigation, auto-fix, and operations tooling |
+| Pro | $8.99/mo or $79/yr | Unlimited | 90 days | Root-cause analysis, safe auto-fix, and operations tooling |
 
 Pulse still counts top-level monitored systems once no matter how they are
 collected. VMs, containers, pods, disks, backups, and other child resources
@@ -180,17 +180,16 @@ Runtime-aligned capability summary:
 |---|:---:|:---:|:---:|:---:|
 | Pulse Patrol (Background Health Checks) | ✅ | ✅ | ✅ | ✅ |
 | Remote Access / Mobile / Push | — | ✅ | ✅ | ✅ |
-| Alert Analysis | — | — | ✅ | ✅ |
+| Alert-Triggered Root-Cause Analysis | — | — | ✅ | ✅ |
 | Pulse Patrol Auto-Fix | — | — | ✅ | ✅ |
-| Kubernetes Analysis | — | — | ✅ | ✅ |
 | Centralized Agent Profiles | — | — | ✅ | ✅ |
 | Update Alerts (Container/Package Updates) | ✅ | ✅ | ✅ | ✅ |
 | Basic SSO (OIDC) | ✅ | ✅ | ✅ | ✅ |
-| Advanced SSO (SAML/Multi-Provider) | — | — | ✅ | ✅ | ✅ |
-| Role-Based Access Control (RBAC) | — | — | ✅ | ✅ | ✅ |
-| Enterprise Audit Logging | — | — | ✅ | ✅ | ✅ |
-| Advanced Infrastructure Reporting (PDF/CSV) | — | — | ✅ | ✅ | ✅ |
-| Extended Metric History | 7 days | 14 days | 90 days | 90 days | Hosted entitlements |
+| Advanced SSO (SAML/Multi-Provider) | — | — | ✅ | ✅ |
+| Role-Based Access Control (RBAC) | — | — | ✅ | ✅ |
+| Enterprise Audit Logging | — | — | ✅ | ✅ |
+| Advanced Infrastructure Reporting (PDF/CSV) | — | — | ✅ | ✅ |
+| Extended Metric History | 7 days | 14 days | 90 days | 90 days |
 
 Pulse Patrol runs on your schedule (every 10 minutes to every 7 days, default 6 hours) and finds:
 - ZFS pools approaching capacity
@@ -207,7 +206,7 @@ a trial, or use BYOK. Chat Assistant remains BYOK.
 
 Technical highlights:
 - Cross-system context (nodes, VMs, backups, containers, and metrics history)
-- LLM analysis with your provider + alert-triggered deep dives (Pro/Pro+/Cloud)
+- LLM analysis with your provider + alert-triggered root-cause investigations (Pro/Pro+/Cloud)
 - Optional auto-fix with command safety policies and audit trail
 - Centralized agent profiles for consistent fleet settings
 

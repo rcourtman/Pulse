@@ -31,8 +31,10 @@ align with this document. If there is a conflict, this document wins.
 
 ## Counted Unit
 
-**Rule:** Pulse sells monitored coverage. The counted unit is a **monitored system**, not
-an installed agent.
+**Rule:** Pulse tracks a **monitored system** as the canonical counted unit for product
+understanding, migrations, and any hosted or legacy continuity policy that still uses
+capacity semantics. On current self-hosted v6 plans, monitored systems are not the paid
+gate.
 
 **Counts as one monitored system:**
 - Proxmox PVE node
@@ -59,13 +61,14 @@ an installed agent.
 - If the same underlying system is seen by both an agent and an API connection, it counts once
 - Deduplication must follow canonical unified-resource identity rather than transport-specific state
 
-**Why this model:** charging by monitored systems matches the product Pulse is actually
-becoming. It closes the API loophole, keeps the commercial model honest, and still lets
-Pulse include all child resources under the counted system for free.
+**Why this model:** counting by monitored systems matches the product Pulse is actually
+becoming, keeps inventory honest across collection paths, and avoids turning child-resource
+sprawl into self-hosted upsell pressure. Any remaining hosted or continuity capacity logic
+should still use this canonical unit rather than transport-specific counts.
 
 **Definition (shown on pricing page, add-system UI, and docs):**
 > "A counted system is a top-level machine or cluster Pulse actively monitors. Each monitored
-> system counts once toward your plan limit, no matter how Pulse collects it. Everything under
+> system counts once in Pulse's inventory, no matter how Pulse collects it. Everything under
 > that system — VMs, containers, pods, disks, backups, and services — is included."
 
 **Counting stability:** a monitored system should only begin consuming the cap after it is
@@ -77,7 +80,8 @@ path, and their first-seen / last-seen state so users can understand why they ar
 
 **Implementation transition note:** the current runtime still enforces `max_agents` and
 agent-backed counting in some paths. That is a transitional compatibility boundary, not the
-long-term commercial model. The canonical v6 destination is monitored-system counting.
+long-term commercial model. The canonical v6 destination is monitored-system identity and
+ledger truth, with self-hosted commercial surfaces treating core monitoring as unlimited.
 
 **Examples:**
 - A 3-node Proxmox cluster monitored node-by-node counts as **3 monitored systems**
@@ -94,8 +98,7 @@ long-term commercial model. The canonical v6 destination is monitored-system cou
 
 | Element | Value |
 |---|---|
-| Monitored systems | **5** |
-| Onboarding overflow | +1 monitored system for 14 days (one-time per workspace) |
+| Monitoring scope | **Unlimited self-hosted monitoring** |
 | Monitoring | Full (Proxmox, Docker, K8s, agents) |
 | Alerts | Threshold-based |
 | SSO | Basic OIDC |
@@ -103,8 +106,8 @@ long-term commercial model. The canonical v6 destination is monitored-system cou
 | Metrics history | **7 days** |
 | AI Patrol | Monitor + root-cause summaries + fix suggestions (BYOK by default, with Patrol quickstart on activated or trial-backed installs) |
 | AI Quickstart Credits | **25 hosted Patrol runs** (activated or trial-backed installs only; no API key needed, Patrol only, powered by MiniMax 2.5M) |
-| AI Auto-Fix | **No** (must apply fixes manually) |
-| AI Alert Analysis | No |
+| Patrol Auto-Fix | **No** (must apply fixes manually) |
+| Alert-triggered root-cause analysis | No |
 | Relay | No |
 | Push notifications | No |
 | Custom URL | No |
@@ -143,33 +146,30 @@ suggestions but must apply fixes manually. Pro users click "Apply Fix."
 
 | Element | Value |
 |---|---|
-| Monitored systems | **8** |
+| Monitoring scope | **Unlimited self-hosted monitoring** |
 | Everything in Free | Yes |
 | Relay remote access | **Yes** |
 | Mobile app access | **Yes** |
 | Push notifications | **Yes** |
 | Custom URL | **yourlab.pulserelay.pro** |
 | Metrics history | **14 days** |
-| AI Auto-Fix | No |
-| AI Alert Analysis | No |
+| Patrol Auto-Fix | No |
+| Alert-triggered root-cause analysis | No |
 | RBAC/Audit/SAML | No |
 | Reporting | No |
 
-**Positioning:** The low-friction headroom tier. It should feel cheap enough to buy on the
-spot when someone is just over the Community boundary and wants remote access, mobile, and
-push at the same time.
+**Positioning:** The convenience tier. It should feel cheap enough to buy on the spot when
+someone wants secure remote access, mobile checks, push notifications, and longer history
+without changing their self-hosted monitoring scope.
 
 ### Pro — $8.99/month or $79/year
 
 | Element | Value |
 |---|---|
-| Monitored systems | **15** |
+| Monitoring scope | **Unlimited self-hosted monitoring** |
 | Everything in Relay | Yes |
-| AI Auto-Fix | **Yes** (one-click execution, safety preflight, rollback) |
-| AI Alert Analysis | **Yes** |
-| Kubernetes AI Analysis | **Yes** |
-| Scheduled remediations | **Yes** |
-| Execution audit trail | **Yes** |
+| Patrol Auto-Fix | **Yes** (one-click execution, safety preflight, rollback) |
+| Alert-triggered root-cause analysis | **Yes** |
 | Metrics history | **90 days** |
 | RBAC | **Yes** |
 | Audit logging | **Yes** |
@@ -178,25 +178,21 @@ push at the same time.
 | PDF/CSV reporting | **Yes** |
 | Trial | **14-day, no credit card** |
 
-**Positioning:** For serious homelabbers who want AI to manage their infrastructure and
-want full history. The marketing pitch focuses on three things:
-1. "AI that fixes your infrastructure" (Patrol auto-fix)
-2. "Monitor from anywhere" (Relay, inherited)
-3. "See your full history" (90-day metrics)
+**Positioning:** For serious self-hosted operators who want Pulse to move from monitoring
+into operations. The marketing pitch focuses on three things:
+1. "Explain what broke" (alert-triggered root-cause analysis)
+2. "Fix it safely" (Patrol auto-fix)
+3. "Keep longer operating memory" (90-day history)
 
-Enterprise features (RBAC, audit, SAML) are included but positioned as bonus value, not
-the headline.
+Relay convenience and the team extras (RBAC, audit logging, SAML, reporting, and agent
+profiles) are included, but they are supporting value rather than the headline.
 
-### Pro+ — $14.99/month or $129/year
+### Pro+ — Legacy continuity tier only
 
-| Element | Value |
-|---|---|
-| Monitored systems | **50** |
-| Everything in Pro | Yes |
-| Trial | **14-day, no credit card** |
-
-**Positioning:** For power users with large homelabs (15+ agents). Simple $50/yr bump from
-Pro. Anyone with 50+ agents should contact us (likely MSP or business).
+Existing Pro+ entitlements remain supported for continuity, but Pro+ is no longer part of
+the public v6 self-hosted ladder because monitored-system volume is not the paid boundary.
+Runtime feature access matches Pro, while grandfathered recurring or lifetime continuity can
+still preserve uncapped monitored-system and guest capacity where applicable.
 
 ---
 
