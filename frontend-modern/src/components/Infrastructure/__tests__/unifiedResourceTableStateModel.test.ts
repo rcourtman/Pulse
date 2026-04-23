@@ -15,6 +15,7 @@ import {
   getUnifiedResourceTableSortIndicator,
   getUnifiedSources,
   getVisibleHostTableItems,
+  isUnifiedResourceServiceColumnVisible,
   isUnifiedResourceTableColumnVisible,
   normalizeUnifiedResourceTableLayoutWidth,
   shouldShowUnifiedResourceHostTable,
@@ -128,21 +129,26 @@ describe('unifiedResourceTableStateModel', () => {
     // lower-priority columns are dropped.
     expect(mobileColumns.resourceColumn.width).toBe('40%');
     expect(mobileColumns.metricColumn.width).toBe('20%');
-    expect(mobileColumns.serviceHealthColumn.width).toBe('36%');
-    expect(mobileColumns.serviceActionColumn.width).toBe('24%');
+    expect(mobileColumns.serviceResourceColumn.width).toBe('28%');
+    expect(mobileColumns.serviceCountColumn.width).toBe('11%');
+    expect(mobileColumns.serviceHealthColumn.width).toBe('13%');
+    expect(mobileColumns.serviceActionColumn.width).toBe('14%');
     expect(tabletColumns.resourceColumn.width).toBe('26%');
+    expect(tabletColumns.serviceResourceColumn.width).toBe('24%');
     expect(tabletColumns.ioColumn.width).toBe('18%');
-    expect(tabletColumns.sourceColumn.width).toBe('17%');
+    expect(tabletColumns.sourceColumn.width).toBe('8%');
     expect(compactColumns.resourceColumn.width).toBe('18%');
+    expect(compactColumns.serviceResourceColumn.width).toBe('18%');
     expect(compactColumns.metricColumn.width).toBe('10.5%');
     expect(compactColumns.tempColumn.width).toBe('7%');
     expect(wideColumns.resourceColumn.width).toBe('18%');
+    expect(wideColumns.serviceResourceColumn.width).toBe('18%');
     expect(wideColumns.ioColumn.width).toBe('12.5%');
     expect(wideColumns.serviceActionColumn.width).toBe('16%');
     expect(getUnifiedResourceTableHeaderLabels('wide').memory).toBe('Memory');
     expect(getUnifiedResourceTableHeaderLabels('compact').memory).toBe('Mem');
     expect(getUnifiedResourceTableHeaderLabels('tablet').network).toBe('Net');
-    expect(getUnifiedResourceTableHeaderLabels('mobile').datastores).toBe('Stores');
+    expect(getUnifiedResourceTableHeaderLabels('mobile').datastores).toBe('Store');
     expect(shouldShowUnifiedResourceHostTable(0, 0)).toBe(true);
     expect(shouldShowUnifiedResourceHostTable(0, 2)).toBe(false);
     expect(shouldShowUnifiedResourceHostTable(3, 2)).toBe(true);
@@ -166,6 +172,14 @@ describe('unifiedResourceTableStateModel', () => {
     expect(isUnifiedResourceTableColumnVisible('supplementary', 900)).toBe(true);
     expect(isUnifiedResourceTableColumnVisible('detailed', 1159)).toBe(false);
     expect(isUnifiedResourceTableColumnVisible('detailed', 1160)).toBe(true);
+    expect(isUnifiedResourceServiceColumnVisible('primary', 499)).toBe(false);
+    expect(isUnifiedResourceServiceColumnVisible('primary', 500)).toBe(true);
+    expect(isUnifiedResourceServiceColumnVisible('secondary', 579)).toBe(false);
+    expect(isUnifiedResourceServiceColumnVisible('secondary', 580)).toBe(true);
+    expect(isUnifiedResourceServiceColumnVisible('supplementary', 639)).toBe(false);
+    expect(isUnifiedResourceServiceColumnVisible('supplementary', 640)).toBe(true);
+    expect(isUnifiedResourceServiceColumnVisible('detailed', 899)).toBe(false);
+    expect(isUnifiedResourceServiceColumnVisible('detailed', 900)).toBe(true);
   });
 
   it('reads unified source tags from platform data without hook state', () => {

@@ -54,34 +54,34 @@ export const UnifiedResourcePMGTableSection: Component<UnifiedResourcePMGTableSe
           <TableHeader>
             <TableRow class="bg-surface-alt text-muted border-b border-border">
               <TableHead
-                class={`text-left pl-2 sm:pl-3 ${table.resourceColumn().className}`}
-                width={table.resourceColumn().width}
+                class={`text-left pl-2 sm:pl-3 ${table.serviceResourceColumn().className}`}
+                width={table.serviceResourceColumn().width}
               >
                 {table.headerLabels().resource}
               </TableHead>
               <TableHead
-                classList={{ hidden: table.isMobile() || !table.isVisible('primary') }}
+                classList={{ hidden: !table.isServiceVisible('primary') }}
                 class={table.serviceQueueColumn().className}
                 width={table.serviceQueueColumn().width}
               >
                 {table.headerLabels().queue}
               </TableHead>
               <TableHead
-                classList={{ hidden: table.isMobile() || !table.isVisible('secondary') }}
+                classList={{ hidden: !table.isServiceVisible('secondary') }}
                 class={table.serviceQueueColumn().className}
                 width={table.serviceQueueColumn().width}
               >
                 {table.headerLabels().deferred}
               </TableHead>
               <TableHead
-                classList={{ hidden: table.isMobile() || !table.isVisible('supplementary') }}
+                classList={{ hidden: !table.isServiceVisible('detailed') }}
                 class={table.serviceQueueColumn().className}
                 width={table.serviceQueueColumn().width}
               >
                 {table.headerLabels().hold}
               </TableHead>
               <TableHead
-                classList={{ hidden: table.isMobile() || !table.isVisible('secondary') }}
+                classList={{ hidden: !table.isServiceVisible('secondary') }}
                 class={table.serviceCountColumn().className}
                 width={table.serviceCountColumn().width}
               >
@@ -94,14 +94,14 @@ export const UnifiedResourcePMGTableSection: Component<UnifiedResourcePMGTableSe
                 {table.headerLabels().health}
               </TableHead>
               <TableHead
-                classList={{ hidden: table.isMobile() || !table.isVisible('secondary') }}
+                classList={{ hidden: !table.isServiceVisible('secondary') }}
                 class={table.sourceColumn().className}
                 width={table.sourceColumn().width}
               >
                 {table.headerLabels().source}
               </TableHead>
               <TableHead
-                classList={{ hidden: table.isMobile() || !table.isVisible('supplementary') }}
+                classList={{ hidden: !table.isServiceVisible('supplementary') }}
                 class={table.uptimeColumn().className}
                 width={table.uptimeColumn().width}
               >
@@ -218,9 +218,7 @@ export const UnifiedResourcePMGTableSection: Component<UnifiedResourcePMGTableSe
                         </div>
                       </TableCell>
 
-                      <TableCell
-                        classList={{ hidden: table.isMobile() || !table.isVisible('primary') }}
-                      >
+                      <TableCell classList={{ hidden: !table.isServiceVisible('primary') }}>
                         <div class="flex justify-center">
                           <Show
                             when={pmgRow()?.queue != null}
@@ -233,9 +231,7 @@ export const UnifiedResourcePMGTableSection: Component<UnifiedResourcePMGTableSe
                         </div>
                       </TableCell>
 
-                      <TableCell
-                        classList={{ hidden: table.isMobile() || !table.isVisible('secondary') }}
-                      >
+                      <TableCell classList={{ hidden: !table.isServiceVisible('secondary') }}>
                         <div class="flex justify-center">
                           <Show
                             when={pmgRow()?.deferred != null}
@@ -248,7 +244,7 @@ export const UnifiedResourcePMGTableSection: Component<UnifiedResourcePMGTableSe
 
                       <TableCell
                         classList={{
-                          hidden: table.isMobile() || !table.isVisible('supplementary'),
+                          hidden: !table.isServiceVisible('detailed'),
                         }}
                       >
                         <div class="flex justify-center">
@@ -261,9 +257,7 @@ export const UnifiedResourcePMGTableSection: Component<UnifiedResourcePMGTableSe
                         </div>
                       </TableCell>
 
-                      <TableCell
-                        classList={{ hidden: table.isMobile() || !table.isVisible('secondary') }}
-                      >
+                      <TableCell classList={{ hidden: !table.isServiceVisible('secondary') }}>
                         <div class="flex justify-center">
                           <Show
                             when={pmgRow()?.nodes != null}
@@ -287,9 +281,7 @@ export const UnifiedResourcePMGTableSection: Component<UnifiedResourcePMGTableSe
                         </div>
                       </TableCell>
 
-                      <TableCell
-                        classList={{ hidden: table.isMobile() || !table.isVisible('secondary') }}
-                      >
+                      <TableCell classList={{ hidden: !table.isServiceVisible('secondary') }}>
                         <UnifiedResourceSourceBadgeCell
                           unifiedBadges={unifiedSourceBadges()}
                           platformBadge={platformBadge()}
@@ -300,7 +292,7 @@ export const UnifiedResourcePMGTableSection: Component<UnifiedResourcePMGTableSe
 
                       <TableCell
                         classList={{
-                          hidden: table.isMobile() || !table.isVisible('supplementary'),
+                          hidden: !table.isServiceVisible('supplementary'),
                         }}
                       >
                         <div class="flex justify-center">

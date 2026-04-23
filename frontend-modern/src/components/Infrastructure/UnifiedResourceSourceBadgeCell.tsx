@@ -11,7 +11,7 @@ interface UnifiedResourceSourceBadgeCellProps {
 }
 
 const getVisibleSourceBadgeLimit = (layoutMode: UnifiedResourceTableLayoutMode): number =>
-  layoutMode === 'wide' ? 3 : 1;
+  layoutMode === 'wide' ? 3 : 2;
 
 export const UnifiedResourceSourceBadgeCell: Component<UnifiedResourceSourceBadgeCellProps> = (
   props,
@@ -25,7 +25,11 @@ export const UnifiedResourceSourceBadgeCell: Component<UnifiedResourceSourceBadg
   const visibleBadges = createMemo(() =>
     badges().slice(0, getVisibleSourceBadgeLimit(props.layoutMode)),
   );
+  const hiddenBadges = createMemo(() => badges().slice(visibleBadges().length));
   const hiddenBadgeCount = createMemo(() => Math.max(0, badges().length - visibleBadges().length));
+  const hiddenBadgeLabel = createMemo(() =>
+    hiddenBadgeCount() === 1 ? `+${hiddenBadges()[0]?.label ?? ''}` : `+${hiddenBadgeCount()}`,
+  );
   const title = createMemo(() =>
     badges()
       .map((badge) => badge.title ?? badge.label)
@@ -47,9 +51,12 @@ export const UnifiedResourceSourceBadgeCell: Component<UnifiedResourceSourceBadg
       <Show when={hiddenBadgeCount() > 0}>
         <span
           class="inline-flex min-w-0 max-w-full items-center overflow-hidden rounded bg-surface-alt px-1 py-0.5 text-[10px] font-medium text-muted"
+          aria-label={`Additional sources: ${hiddenBadges()
+            .map((badge) => badge.title ?? badge.label)
+            .join(', ')}`}
           title={title()}
         >
-          +{hiddenBadgeCount()}
+          <span class="min-w-0 truncate">{hiddenBadgeLabel()}</span>
         </span>
       </Show>
     </div>

@@ -237,6 +237,50 @@ describe('UnifiedResourceTable performance contract', () => {
       });
     });
 
+    it('keeps service columns denser than host columns before hiding them', async () => {
+      const resources = [
+        makeResource(2, {
+          type: 'pbs',
+          name: 'pbs-docker',
+          displayName: 'pbs-docker',
+          platformType: 'proxmox-pbs',
+          sourceType: 'hybrid',
+          platformData: { sources: ['proxmox-pbs', 'agent'] },
+          uptime: 86400,
+        }),
+      ];
+      const { getByText, queryByText } = render(() => (
+        <UnifiedResourceTable
+          resources={resources}
+          expandedResourceId={null}
+          onExpandedResourceChange={vi.fn()}
+          groupingMode="flat"
+        />
+      ));
+
+      await waitFor(() => {
+        expect(getByText('Stores')).toBeInTheDocument();
+      });
+
+      emitResizeObserverWidth(600);
+
+      await waitFor(() => {
+        expect(getByText('Store').closest('th')).not.toHaveClass('hidden');
+        expect(getByText('Jobs').closest('th')).not.toHaveClass('hidden');
+        expect(getByText('Src').closest('th')).not.toHaveClass('hidden');
+        expect(getByText('Up').closest('th')).toHaveClass('hidden');
+      });
+      expect(getByText('PBS')).toBeInTheDocument();
+      expect(getByText('Agent')).toBeInTheDocument();
+      expect(queryByText('+1')).toBeNull();
+
+      emitResizeObserverWidth(660);
+
+      await waitFor(() => {
+        expect(getByText('Up').closest('th')).not.toHaveClass('hidden');
+      });
+    });
+
     it('renders the shared facet summary component in timeline-only mode for canonical resource counts', async () => {
       const { getByText, queryByText } = render(() => (
         <ResourceFacetSummary
@@ -297,6 +341,7 @@ describe('UnifiedResourceTable performance contract', () => {
       );
       expect(unifiedResourceTableStateSource).toContain('getUnifiedResourceTableHeaderLabels');
       expect(unifiedResourceTableStateSource).toContain('getUnifiedResourceTableLayoutMode');
+      expect(unifiedResourceTableStateSource).toContain('isUnifiedResourceServiceColumnVisible');
       expect(unifiedResourceTableStateSource).toContain('getUnifiedResourceTableShellClass');
       expect(unifiedResourceTableStateSource).toContain('useTableWindowing');
       expect(unifiedResourceTableStateSource).toContain('useUnifiedResourceTableViewportSync');
@@ -331,6 +376,9 @@ describe('UnifiedResourceTable performance contract', () => {
       );
       expect(unifiedResourceTableStateModelSource).toContain(
         'export const getUnifiedResourceTableLayoutMode',
+      );
+      expect(unifiedResourceTableStateModelSource).toContain(
+        'export const isUnifiedResourceServiceColumnVisible',
       );
       expect(unifiedResourceTableStateModelSource).toContain(
         'export const getUnifiedResourceTableShellClass',

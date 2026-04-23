@@ -22,6 +22,7 @@ import {
   getUnifiedResourceTableColumnPresentations,
   getUnifiedResourceTableHeaderLabels,
   getUnifiedResourceTableLayoutMode,
+  isUnifiedResourceServiceColumnVisible,
   isUnifiedResourceTableColumnVisible,
   getUnifiedResourceTableShellClass,
   getUnifiedResourceTableSortIndicator,
@@ -107,6 +108,8 @@ export function useUnifiedResourceTableState(props: UnifiedResourceTableProps) {
   const isMobile = createMemo(() => shouldUseUnifiedResourceTableMobileLayout(tableLayoutWidth()));
   const isVisible = (priority: ColumnPriority) =>
     isUnifiedResourceTableColumnVisible(priority, tableLayoutWidth());
+  const isServiceVisible = (priority: ColumnPriority) =>
+    isUnifiedResourceServiceColumnVisible(priority, tableLayoutWidth());
 
   const split = createMemo(() => splitPrimaryAndServiceResources(props.resources));
   const primaryResources = createMemo(() => split().primaryResources);
@@ -210,6 +213,7 @@ export function useUnifiedResourceTableState(props: UnifiedResourceTableProps) {
     layoutMode,
     isMobile,
     isVisible,
+    isServiceVisible,
     handleSort,
     renderSortIndicator,
     resolveResourceLabel,
@@ -225,6 +229,7 @@ export function useUnifiedResourceTableState(props: UnifiedResourceTableProps) {
     tableShellClass,
     headerLabels,
     resourceColumn: () => columnPresentations().resourceColumn,
+    serviceResourceColumn: () => columnPresentations().serviceResourceColumn,
     metricColumn: () => columnPresentations().metricColumn,
     ioColumn: () => columnPresentations().ioColumn,
     sourceColumn: () => columnPresentations().sourceColumn,
