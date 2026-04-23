@@ -332,6 +332,8 @@ export function useRecoverySurfaceState() {
     const derivedDefaultView: RecoveryWorkspaceView =
       nextRollup || nextDay ? 'events' : 'inventory';
     const resolvedView = (nextView || derivedDefaultView) as RecoveryWorkspaceView;
+    const visibleRollup = resolvedView === 'events' ? nextRollup : '';
+    const visibleDay = resolvedView === 'events' ? nextDay : '';
     const nextMode = normalizeRecoveryModeQueryValue(parsed.mode);
     const rawScope = normalizeRecoveryRouteValue(parsed.scope).toLowerCase();
     const nextScope: 'all' | 'workload' = rawScope === 'workload' ? 'workload' : 'all';
@@ -340,7 +342,7 @@ export function useRecoverySurfaceState() {
     const verificationValue = normalizeRecoveryRouteValue(parsed.verification).toLowerCase();
     const statusValue = normalizeRecoveryRouteValue(parsed.status).toLowerCase();
 
-    if (nextRollup !== untrack(rollupId)) setRollupId(nextRollup);
+    if (visibleRollup !== untrack(rollupId)) setRollupId(visibleRollup);
     if (resolvedView !== untrack(workspaceView)) setWorkspaceView(resolvedView);
     if (nextQuery !== untrack(queryFilter)) setQueryFilter(nextQuery);
     if (nextPlatform !== untrack(platformFilter)) setPlatformFilter(nextPlatform);
@@ -348,7 +350,7 @@ export function useRecoverySurfaceState() {
     if (nextStaleOnly !== untrack(protectedStaleOnly)) setProtectedStaleOnly(nextStaleOnly);
     if (nextRange !== untrack(chartRangeDays)) setChartRangeDays(nextRange as 7 | 30 | 90 | 365);
     if (nextCluster !== untrack(clusterFilter)) setClusterFilter(nextCluster);
-    if ((nextDay || null) !== untrack(selectedDateKey)) setSelectedDateKey(nextDay || null);
+    if ((visibleDay || null) !== untrack(selectedDateKey)) setSelectedDateKey(visibleDay || null);
     if (nextMode !== untrack(modeFilter)) setModeFilter(nextMode);
     if (nextScope !== untrack(scopeFilter)) setScopeFilter(nextScope);
     if (nextNode !== untrack(nodeFilter)) setNodeFilter(nextNode);

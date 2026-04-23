@@ -146,7 +146,7 @@ export const RecoveryHistorySection: Component<RecoveryHistorySectionProps> = (p
   return (
     <div class="flex flex-col gap-2">
       <Show when={!props.kioskMode}>
-        <Card padding="none" tone="card" class="overflow-hidden border-border-subtle bg-surface">
+        <Card padding="none" tone="card" class="overflow-visible border-border-subtle bg-surface">
           <div class="px-4 py-3 sm:px-5">
             <Show when={props.hasFocusedRollup() && props.selectedHistoryItemLabel()}>
               <div class="mb-3 flex min-w-0 flex-wrap items-center gap-2 text-sm">

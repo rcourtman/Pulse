@@ -27,6 +27,9 @@ export interface RecoverySummaryProps {
   };
   timeRange: () => RecoverySummaryTimeRange;
   onTimeRangeChange?: (range: RecoverySummaryTimeRange) => void;
+  onOpenEvents?: () => void;
+  onShowAttention?: () => void;
+  onShowStale?: () => void;
 }
 
 export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
@@ -110,6 +113,8 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
     if (!latestLabel) return undefined;
     return <span class="ml-auto truncate text-xs text-muted">{latestLabel}</span>;
   });
+  const summaryActionClass =
+    'mt-auto inline-flex w-fit rounded border border-border bg-surface px-2 py-1 text-[11px] font-medium text-base-content hover:bg-surface-hover';
   return (
     <Show when={!loaded() || hasRollups()}>
       <SummaryPanel
@@ -161,6 +166,11 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
               </div>
               <div class="text-[11px] text-muted">{primaryPostureMetric().label}</div>
             </div>
+            <Show when={attentionCount() > 0 && props.onShowAttention}>
+              <button type="button" class={summaryActionClass} onClick={() => props.onShowAttention?.()}>
+                Show attention
+              </button>
+            </Show>
           </div>
         </SummaryMetricCard>
 
@@ -178,6 +188,11 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
               </div>
               <div class="text-[11px] text-muted">fresh in 24h</div>
             </div>
+            <Show when={summary().stale > 0 && props.onShowStale}>
+              <button type="button" class={summaryActionClass} onClick={() => props.onShowStale?.()}>
+                Show stale
+              </button>
+            </Show>
           </div>
         </SummaryMetricCard>
 
@@ -195,6 +210,11 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
               </div>
               <div class="text-[11px] text-muted">types</div>
             </div>
+            <Show when={itemCoverage().primaryItemLabel}>
+              <div class="text-[11px] text-muted">
+                Primary: {itemCoverage().primaryItemLabel}
+              </div>
+            </Show>
           </div>
         </SummaryMetricCard>
 
@@ -213,6 +233,11 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
               </div>
               <div class="text-[11px] text-muted">points</div>
             </div>
+            <Show when={props.onOpenEvents}>
+              <button type="button" class={summaryActionClass} onClick={() => props.onOpenEvents?.()}>
+                Open events
+              </button>
+            </Show>
           </div>
         </SummaryMetricCard>
       </SummaryPanel>

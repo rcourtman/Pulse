@@ -1,7 +1,12 @@
 import { cleanup, render, screen, waitFor } from '@solidjs/testing-library';
 import { For, createSignal } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { FilterHeader, FilterSegmentedControl, LabeledFilterSelect } from './FilterToolbar';
+import {
+  FilterHeader,
+  FilterSegmentedControl,
+  LabeledFilterSelect,
+  filterPanelClass,
+} from './FilterToolbar';
 import toggleSource from './Toggle.tsx?raw';
 import toggleModelSource from './toggleModel.ts?raw';
 import toggleStateSource from './useToggleState.ts?raw';
@@ -93,5 +98,11 @@ describe('FilterHeader', () => {
     expect((screen.getByRole('option', { name: 'TrueNAS' }) as HTMLOptionElement).selected).toBe(
       true,
     );
+  });
+
+  it('keeps shared filter popovers above nested table and card shells', () => {
+    expect(filterPanelClass).toContain('absolute');
+    expect(filterPanelClass).toContain('z-[80]');
+    expect(filterPanelClass).toContain('w-[min(40rem,calc(100vw-2rem))]');
   });
 });

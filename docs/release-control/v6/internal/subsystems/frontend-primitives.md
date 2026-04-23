@@ -236,6 +236,14 @@ work extends shared components instead of creating new local variants.
    shared panels `min-h-0`, and page-owned modal bodies may use
    `overflow-y-auto` only under shrinkable flex columns instead of clipping
    lower fields behind a fixed-height shell.
+   Shared filter popovers follow the same primitive-level ownership. The
+   shared `FilterToolbar` panel class must render above nested card, table,
+   and empty-state shells, and feature pages embedding those controls must
+   make only their immediate control shell overflow-visible rather than
+   forking local z-index or popover positioning rules.
+   The shared navigation guide owns route-aware first focus: when it opens
+   from a top-level product route such as `/recovery`, the first highlighted
+   step should match that route instead of always restarting at Dashboard.
 5. Keep shared infrastructure shell state on the reusable settings boundary: `frontend-modern/src/components/Settings/useSettingsInfrastructurePanelProps.ts` and `frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx` must continue to derive provider counts, availability, and shared subtab copy from one infrastructure-settings source — via the unified aggregator through `frontend-modern/src/components/Settings/useConnectionsLedger.ts` — instead of creating provider-local summary fetches or VMware-only shell vocabulary. Phase 9 retired the old `PlatformConnectionsWorkspace` per-type shell, but setup guidance may still use `Platform connections` as the operator-facing label for the shared API-backed onboarding path.
    That same shared shell boundary now owns the default posture for
    `/settings/infrastructure`: the landing route should read as one

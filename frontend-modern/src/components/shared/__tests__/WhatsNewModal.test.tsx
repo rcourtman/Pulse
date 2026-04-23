@@ -16,6 +16,7 @@ vi.mock('@/stores/sessionPresentationPolicy', () => ({
 
 describe('WhatsNewModal', () => {
   beforeEach(() => {
+    window.history.pushState({}, '', '/');
     localStorage.clear();
     presentationPolicyIsDemoModeMock.mockReturnValue(false);
     sessionPresentationPolicyResolvedMock.mockReturnValue(true);
@@ -156,5 +157,15 @@ describe('WhatsNewModal', () => {
 
     const docsLink = await screen.findByRole('link', { name: 'Navigation guide' });
     expect(docsLink).toHaveAttribute('href', '/docs/MIGRATION_UNIFIED_NAV.md');
+  });
+
+  it('starts the navigation guide on recovery when opened from recovery', async () => {
+    window.history.pushState({}, '', '/recovery?rollupId=res%3Asystem-container-1');
+
+    render(() => <WhatsNewModal />);
+
+    const dialog = await screen.findByRole('dialog', { name: 'Pulse navigation guide' });
+    expect(within(dialog).getByText('Step 5 of 5')).toBeInTheDocument();
+    expect(within(dialog).getByText(/Use this for backups, snapshots, and replication/i)).toBeInTheDocument();
   });
 });

@@ -17,7 +17,7 @@ export const filterSelectClass =
   'rounded-md border border-border bg-surface px-2 py-1 text-xs font-medium text-base-content outline-none focus:border-blue-500';
 export const filterDividerClass = 'hidden h-5 w-px bg-surface-hover sm:block';
 export const filterPanelClass =
-  'absolute right-0 top-[calc(100%+0.5rem)] z-20 w-[min(40rem,calc(100vw-2rem))] rounded-md border border-border bg-surface p-3 shadow-lg';
+  'absolute right-0 top-[calc(100%+0.5rem)] z-[80] w-[min(40rem,calc(100vw-2rem))] rounded-md border border-border bg-surface p-3 shadow-lg';
 export const filterPanelTitleClass = 'text-sm font-medium text-base-content';
 export const filterPanelDescriptionClass = 'text-xs text-muted';
 export const mobileFiltersButtonClass =

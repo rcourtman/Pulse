@@ -8,9 +8,14 @@ import { formatAbsoluteTime, formatBytes, formatUptime } from '@/utils/format';
 import { getRecoveryItemTypeLabel, getRecoveryPointItemTypeKey } from '@/utils/recoveryItemTypePresentation';
 import { getRecoveryPointLocationEntries } from '@/utils/recoveryLocationPresentation';
 import {
+  getRecoveryOutcomeTextClass,
+  normalizeRecoveryOutcome,
+} from '@/utils/recoveryOutcomePresentation';
+import {
   getRecoveryPointKindLabel,
   getRecoveryPointModeLabel,
   getRecoveryPointOutcomeLabel,
+  getRecoveryPointRepositoryLabel,
 } from '@/utils/recoveryRecordPresentation';
 import { pbsInstanceFromResource } from '@/utils/resourceStateAdapters';
 import {
@@ -26,6 +31,29 @@ interface RecoveryPointDetailsProps {
 const detailNumber = (p: RecoveryPoint, key: string): number | null => {
   const value = p.details?.[key];
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
+};
+
+const detailString = (p: RecoveryPoint, key: string): string => {
+  const value = p.details?.[key];
+  return typeof value === 'string' ? value.trim() : '';
+};
+
+const COMMON_DETAIL_LABELS: Record<string, string> = {
+  instance: 'Instance',
+  vmid: 'VMID',
+  node: 'Node',
+  snapshotName: 'Snapshot',
+  volid: 'Volume',
+  datastore: 'Datastore',
+  namespace: 'Namespace',
+  storage: 'Storage',
+  taskName: 'Task',
+  phase: 'Phase',
+  hostname: 'Hostname',
+  dataset: 'Dataset',
+  k8sClusterName: 'Kubernetes Cluster',
+  storageLocation: 'Storage Location',
+  veleroName: 'Velero Backup',
 };
 
 const formatDurationFromISO = (
@@ -152,6 +180,97 @@ export const RecoveryPointDetails: Component<RecoveryPointDetailsProps> = (props
     if (typeof top === 'number' && Number.isFinite(top)) return top;
     return detailNumber(point(), 'sizeBytes');
   });
+  const itemLabel = createMemo(() => {
+    const displayLabel = String(point().display?.itemLabel || '').trim();
+    if (displayLabel) return displayLabel;
+    const refLabel = labelForRef(point().itemRef || point().subjectRef);
+    if (refLabel !== 'n/a') return refLabel;
+    return point().itemResourceId || point().id;
+  });
+  const targetLabel = createMemo(() => {
+    const repositoryLabel = getRecoveryPointRepositoryLabel(point());
+    if (repositoryLabel) return repositoryLabel;
+    const refLabel = labelForRef(point().repositoryRef);
+    return refLabel === 'n/a' ? 'No target recorded' : refLabel;
+  });
+  const normalizedOutcome = createMemo(() => normalizeRecoveryOutcome(point().outcome));
+  const outcomeLabel = createMemo(() => getRecoveryPointOutcomeLabel(point().outcome));
+  const readiness = createMemo(() => {
+    const outcome = normalizedOutcome();
+    if (outcome === 'failed') {
+      return {
+        label: 'Not restorable',
+        detail: 'This event did not produce a usable recovery point.',
+        className: 'text-rose-600 dark:text-rose-400',
+      };
+    }
+    if (outcome === 'running') {
+      return {
+        label: 'In progress',
+        detail: 'Recovery metadata is still being collected.',
+        className: 'text-blue-600 dark:text-blue-400',
+      };
+    }
+    if (point().verified === true) {
+      return {
+        label: 'Verified candidate',
+        detail: 'Verification completed for this recovery point.',
+        className: 'text-emerald-600 dark:text-emerald-400',
+      };
+    }
+    if (point().verified === false) {
+      return {
+        label: 'Verification failed',
+        detail: 'Treat this artifact as suspect until verification is rerun.',
+        className: 'text-amber-600 dark:text-amber-400',
+      };
+    }
+    if (outcome === 'success') {
+      return {
+        label: 'Available candidate',
+        detail: 'The event succeeded, but no verification result was recorded.',
+        className: 'text-emerald-600 dark:text-emerald-400',
+      };
+    }
+    return {
+      label: 'Review required',
+      detail: 'The event needs an operator review before restore use.',
+      className: 'text-amber-600 dark:text-amber-400',
+    };
+  });
+  const failureDetail = createMemo(() => {
+    const error = detailString(point(), 'error');
+    if (error) return error;
+    const status = detailString(point(), 'status');
+    if (normalizedOutcome() === 'failed' && status) return status;
+    return '';
+  });
+  const operatorSummaryPairs = createMemo(() => [
+    {
+      k: 'Outcome',
+      v: outcomeLabel(),
+      valueClass: getRecoveryOutcomeTextClass(normalizedOutcome()),
+      detail: formatDurationFromISO(point().startedAt, point().completedAt),
+    },
+    {
+      k: 'Artifact',
+      v: `${getRecoveryPointKindLabel(point().kind)} / ${getRecoveryPointModeLabel(point().mode)}`,
+      valueClass: 'text-base-content',
+      detail: itemLabel(),
+    },
+    {
+      k: 'Target',
+      v: targetLabel(),
+      valueClass: 'text-base-content',
+      detail: platformLabel() || 'n/a',
+    },
+    {
+      k: 'Restore readiness',
+      v: readiness().label,
+      valueClass: readiness().className,
+      detail: readiness().detail,
+    },
+  ]);
 
   const summaryPairs = createMemo(() => {
     const p = point();
@@ -200,7 +319,7 @@ export const RecoveryPointDetails: Component<RecoveryPointDetailsProps> = (props
     for (const k of commonDetailKeys) {
       const v = p.details?.[k];
       if (v == null) continue;
-      pairs.push({ k: `details.${k}`, v: String(v) });
+      pairs.push({ k: COMMON_DETAIL_LABELS[k] || k, v: String(v) });
     }
 
     return pairs;
@@ -243,6 +362,47 @@ export const RecoveryPointDetails: Component<RecoveryPointDetailsProps> = (props
             Copied
           </Show>
         </button>
+      </div>
+
+      <div class="rounded-md border border-border bg-surface-alt/40 p-3">
+        <div class="mb-3 flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <div class="text-[10px] font-semibold uppercase tracking-wide text-muted">
+              Recovery Point Summary
+            </div>
+            <div class="mt-1 text-sm font-medium text-base-content break-words">
+              {itemLabel()}
+            </div>
+          </div>
+          <Show when={platformBadge()}>
+            {(badge) => (
+              <span class={badge().classes} title={badge().title}>
+                {badge().label}
+              </span>
+            )}
+          </Show>
+        </div>
+        <div class="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-4">
+          <For each={operatorSummaryPairs()}>
+            {(pair) => (
+              <div class="rounded border border-border bg-surface px-3 py-2 text-xs">
+                <div class="text-[10px] font-semibold uppercase tracking-wide text-muted">
+                  {pair.k}
+                </div>
+                <div class={`mt-0.5 text-[13px] font-semibold ${pair.valueClass}`}>
+                  {pair.v}
+                </div>
+                <div class="mt-1 text-[11px] leading-4 text-muted break-words">{pair.detail}</div>
+              </div>
+            )}
+          </For>
+        </div>
+        <Show when={failureDetail()}>
+          <div class="mt-3 rounded border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-700 dark:text-rose-200">
+            <div class="font-semibold">Failure detail</div>
+            <div class="mt-1 break-words font-mono text-[11px]">{failureDetail()}</div>
+          </div>
+        </Show>
       </div>
 
       <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
@@ -479,12 +639,16 @@ export const RecoveryPointDetails: Component<RecoveryPointDetailsProps> = (props
         </div>
       </Show>
 
-      <div class="rounded border border-border bg-surface p-3">
-        <div class="text-[10px] font-semibold uppercase tracking-wide text-muted">Raw</div>
-        <pre class="mt-2 overflow-auto text-[11px] leading-relaxed text-base-content font-mono">
-          {prettyJSON()}
-        </pre>
-      </div>
+      <details class="rounded border border-border bg-surface">
+        <summary class="cursor-pointer px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-muted hover:bg-surface-hover">
+          Technical details
+        </summary>
+        <div class="border-t border-border px-3 py-2">
+          <pre class="overflow-auto text-[11px] leading-relaxed text-base-content font-mono">
+            {prettyJSON()}
+          </pre>
+        </div>
+      </details>
     </div>
   );
 };

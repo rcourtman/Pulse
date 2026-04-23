@@ -31,6 +31,20 @@ const MOBILE_TAB_SELECTOR_BY_TARGET = {
 
 const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
 
+const getInitialStepIndexForPath = (): number => {
+  if (typeof window === 'undefined') return 0;
+  const path = window.location.pathname.toLowerCase();
+  const target = (() => {
+    if (path.startsWith('/recovery')) return 'recovery';
+    if (path.startsWith('/storage')) return 'storage';
+    if (path.startsWith('/workloads')) return 'workloads';
+    if (path.startsWith('/infrastructure')) return 'infrastructure';
+    return 'dashboard';
+  })();
+  const index = WHATS_NEW_FEATURE_CARDS.findIndex((card) => card.target === target);
+  return index >= 0 ? index : 0;
+};
+
 const isVisibleElement = (element: Element | null): element is HTMLElement => {
   if (!(element instanceof HTMLElement)) return false;
   const rect = element.getBoundingClientRect();
@@ -58,7 +72,7 @@ export function useWhatsNewModalState() {
   );
   const [dontShowAgain, setDontShowAgain] = createSignal(true);
   const [dismissedForSession, setDismissedForSession] = createSignal(false);
-  const [stepIndex, setStepIndex] = createSignal(0);
+  const [stepIndex, setStepIndex] = createSignal(getInitialStepIndexForPath());
   const [panelRef, setPanelRef] = createSignal<HTMLDivElement | null>(null);
   const [spotlightRect, setSpotlightRect] = createSignal<SpotlightRect | null>(null);
 
@@ -77,7 +91,7 @@ export function useWhatsNewModalState() {
   const isLastStep = createMemo(() => stepIndex() >= WHATS_NEW_FEATURE_CARDS.length - 1);
 
   const resetTourState = () => {
-    setStepIndex(0);
+    setStepIndex(getInitialStepIndexForPath());
     setSpotlightRect(null);
   };
 
@@ -115,7 +129,7 @@ export function useWhatsNewModalState() {
     const handleReopen = () => {
       setHasSeen(false);
       setDismissedForSession(false);
-      setStepIndex(0);
+      setStepIndex(getInitialStepIndexForPath());
     };
     window.addEventListener(WHATS_NEW_REOPEN_EVENT, handleReopen);
     onCleanup(() => window.removeEventListener(WHATS_NEW_REOPEN_EVENT, handleReopen));

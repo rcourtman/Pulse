@@ -331,7 +331,7 @@ describe('Recovery', () => {
     expect(within(inventoryTable).getByText('Item')).toBeInTheDocument();
     expect(within(inventoryTable).getByText('Item Type')).toBeInTheDocument();
     expect(within(inventoryTable).getByText('Platform')).toBeInTheDocument();
-    expect(within(inventoryTable).getByText('Status')).toBeInTheDocument();
+    expect(within(inventoryTable).getByText('Protection State')).toBeInTheDocument();
     expect(within(inventoryTable).queryByText('ITEM TYPE')).not.toBeInTheDocument();
     expect(within(inventoryTable).queryByText('PLATFORM')).not.toBeInTheDocument();
     expect(inventoryBody?.className).toContain('divide-y');
@@ -417,7 +417,7 @@ describe('Recovery', () => {
       'min-w-[',
     );
     expect(within(inventoryControls).getByLabelText('Platform').className).not.toContain('min-w-[');
-    expect(within(inventoryControls).getByLabelText('Latest status').className).not.toContain(
+    expect(within(inventoryControls).getByLabelText('Protection state').className).not.toContain(
       'min-w-[',
     );
     expect(screen.getAllByText(/^1 event$/i)).toHaveLength(1);
@@ -1069,7 +1069,7 @@ describe('Recovery', () => {
   it('uses one canonical outcome filter across protected items and history transport', async () => {
     render(() => <Recovery />);
 
-    const protectedStatus = await screen.findByLabelText('Latest status');
+    const protectedStatus = await screen.findByLabelText('Protection state');
     fireEvent.change(protectedStatus, { target: { value: 'failed' } });
 
     await waitFor(() => {

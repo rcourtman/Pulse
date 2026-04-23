@@ -78,6 +78,9 @@ describe('RecoveryPointDetails', () => {
             owner: 'root@pam',
             files: ['vm/100/2026-03-10T10:00:00Z'],
             verificationState: 'ok',
+            vmid: '100',
+            datastore: 'fast-store',
+            namespace: 'Finance',
           },
         }}
       />
@@ -94,16 +97,20 @@ describe('RecoveryPointDetails', () => {
     expect(screen.getByText('Namespace / Group')).toBeInTheDocument();
     expect(screen.getByText('Point Type')).toBeInTheDocument();
     expect(screen.getByText('Method')).toBeInTheDocument();
-    expect(screen.getByText('Outcome')).toBeInTheDocument();
+    expect(screen.getAllByText('Outcome').length).toBeGreaterThan(0);
     expect(screen.getByText('VM')).toBeInTheDocument();
     expect(screen.getByText('Lab Cluster')).toBeInTheDocument();
     expect(screen.getByText('pve-01')).toBeInTheDocument();
-    expect(screen.getByText('Finance')).toBeInTheDocument();
+    expect(screen.getAllByText('Finance').length).toBeGreaterThan(0);
     expect(screen.getByText('Backup')).toBeInTheDocument();
     expect(screen.getByText('Remote Copy')).toBeInTheDocument();
     expect(screen.getAllByText('Success').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Verified').length).toBeGreaterThan(0);
     expect(screen.getByText('Target Ref')).toBeInTheDocument();
+    expect(screen.getByText('VMID')).toBeInTheDocument();
+    expect(screen.getByText('Datastore')).toBeInTheDocument();
+    expect(screen.getByText('Namespace')).toBeInTheDocument();
+    expect(screen.queryByText('details.vmid')).not.toBeInTheDocument();
 
     const platformCard = screen.getByText('Platform').parentElement?.parentElement;
     expect(platformCard).not.toBeNull();

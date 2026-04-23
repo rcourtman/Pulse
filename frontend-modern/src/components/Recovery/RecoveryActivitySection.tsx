@@ -1,4 +1,4 @@
-import { For, Show } from 'solid-js';
+import { For, Show, createMemo } from 'solid-js';
 import type { Accessor, Component, JSX } from 'solid-js';
 
 import { Card } from '@/components/shared/Card';
@@ -70,6 +70,58 @@ interface RecoveryActivitySectionProps {
 
 function RecoveryActivitySectionContent(props: RecoveryActivitySectionProps): JSX.Element {
   const timelineAxisTicks = () => getRecoveryTimelineAxisTicks(props.timeline().points.length);
+  const formatActivityAverage = (value: number): string => {
+    if (!Number.isFinite(value) || value <= 0) return '0/day';
+    if (value >= 10) return `${Math.round(value)}/day`;
+    return `${Number(value.toFixed(1))}/day`;
+  };
+  const selectedTimelinePoint = createMemo(() => {
+    const selected = props.selectedDateKey();
+    if (!selected) return null;
+    return props.timeline().points.find((point) => point.key === selected) || null;
+  });
+  const lowestActivePoint = createMemo(() => {
+    const active = props.timeline().points.filter((point) => point.total > 0);
+    if (active.length === 0) return null;
+    return active.reduce((lowest, point) => (point.total < lowest.total ? point : lowest), active[0]);
+  });
+  const activitySignal = createMemo(() => {
+    const selected = selectedTimelinePoint();
+    const average = props.activitySummary().averagePerDay;
+    if (selected) {
+      if (average > 0 && selected.total < average * 0.5) {
+        return {
+          tone: 'amber',
+          label: 'Below normal',
+          detail: `${selected.total} points vs ${formatActivityAverage(average)} average`,
+        };
+      }
+      return {
+        tone: 'base',
+        label: 'Selected day',
+        detail: `${selected.total} points`,
+      };
+    }
+
+    const lowest = lowestActivePoint();
+    if (lowest && average > 0 && lowest.total < average * 0.5) {
+      return {
+        tone: 'amber',
+        label: 'Lowest active day',
+        detail: `${getRecoveryPrettyDateLabel(lowest.key)}: ${lowest.total} points`,
+      };
+    }
+
+    return {
+      tone: 'base',
+      label: 'Average volume',
+      detail: formatActivityAverage(average),
+    };
+  });
+  const signalClass = () =>
+    activitySignal().tone === 'amber'
+      ? 'border-amber-500/30 bg-amber-500/10 text-amber-300'
+      : 'border-border bg-surface-alt text-muted';
 
   return (
     <>
@@ -89,7 +141,15 @@ function RecoveryActivitySectionContent(props: RecoveryActivitySectionProps): JS
               </span>
             </Show>
           </div>
-          <div class="flex flex-wrap items-center gap-2" />
+          <div class="flex flex-wrap items-center gap-2 text-[11px]">
+            <span class="rounded-md border border-border bg-surface-alt px-2 py-1 text-muted">
+              Avg {formatActivityAverage(props.activitySummary().averagePerDay)}
+            </span>
+            <span class={`rounded-md border px-2 py-1 ${signalClass()}`}>
+              <span class="font-medium">{activitySignal().label}</span>
+              <span class="ml-1"> {activitySignal().detail}</span>
+            </span>
+          </div>
         </div>
       </div>
 

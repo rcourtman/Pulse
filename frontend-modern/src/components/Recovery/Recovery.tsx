@@ -508,13 +508,27 @@ const Recovery: Component = () => {
     batch(() => {
       setWorkspaceView('events');
       setRollupId(nextRollupId);
+      setSelectedDateKey(null);
+      setCurrentPage(1);
+    });
+  };
+
+  const handleWorkspaceViewChange = (value: string) => {
+    const nextView = value as RecoveryWorkspaceView;
+    batch(() => {
+      setWorkspaceView(nextView);
+      setCurrentPage(1);
+      if (nextView === 'inventory') {
+        setRollupId('');
+        setSelectedDateKey(null);
+      }
     });
   };
 
   const workspaceControls = () => (
     <Subtabs
       value={workspaceView()}
-      onChange={(value) => setWorkspaceView(value as RecoveryWorkspaceView)}
+      onChange={handleWorkspaceViewChange}
       ariaLabel="Recovery data view"
       class="px-4 sm:px-5"
       tabs={[
@@ -590,6 +604,37 @@ const Recovery: Component = () => {
         summary={overallRollupsSummary}
         timeRange={summaryRange}
         onTimeRangeChange={setSummaryRange}
+        onOpenEvents={() => {
+          batch(() => {
+            setWorkspaceView('events');
+            setCurrentPage(1);
+          });
+        }}
+        onShowAttention={() => {
+          batch(() => {
+            setWorkspaceView('inventory');
+            setRollupId('');
+            setSelectedDateKey(null);
+            if ((overallRollupsSummary().counts.failed || 0) > 0) {
+              setHistoryOutcomeFilter('failed');
+              setProtectedStaleOnly(false);
+            } else {
+              setHistoryOutcomeFilter('all');
+              setProtectedStaleOnly(true);
+            }
+            setCurrentPage(1);
+          });
+        }}
+        onShowStale={() => {
+          batch(() => {
+            setWorkspaceView('inventory');
+            setRollupId('');
+            setSelectedDateKey(null);
+            setHistoryOutcomeFilter('all');
+            setProtectedStaleOnly(true);
+            setCurrentPage(1);
+          });
+        }}
       />
 
       {workspaceControls()}

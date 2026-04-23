@@ -38,6 +38,7 @@ import {
   getRecoveryProtectedSearchPlaceholder,
   getRecoverySearchHistoryEmptyMessage,
   getRecoveryRollupTimestampMs,
+  STALE_ISSUE_THRESHOLD_MS,
 } from '@/utils/recoveryTablePresentation';
 import {
   normalizeRecoveryOutcome,
@@ -87,6 +88,39 @@ interface RecoveryProtectedInventorySectionProps {
 }
 
 const availableOutcomes = ['all', 'success', 'warning', 'failed', 'running'] as const;
+const STALE_THRESHOLD_DAYS = Math.max(
+  1,
+  Math.round(STALE_ISSUE_THRESHOLD_MS / (24 * 60 * 60 * 1000)),
+);
+
+const getProtectionInsight = (
+  rollup: ProtectionRollup,
+  inventoryStatus: ReturnType<typeof getRecoveryRollupInventoryStatus>,
+  nowMs: number,
+): string => {
+  const successMs = rollup.lastSuccessAt ? Date.parse(rollup.lastSuccessAt) : 0;
+  const attemptMs = rollup.lastAttemptAt ? Date.parse(rollup.lastAttemptAt) : 0;
+
+  if (inventoryStatus === 'never-succeeded') {
+    return attemptMs > 0
+      ? `No successful point recorded after ${formatRelativeTime(attemptMs)}`
+      : 'No successful point recorded yet';
+  }
+
+  if (inventoryStatus === 'stale') {
+    if (successMs > 0 && Number.isFinite(successMs)) {
+      const ageDays = Math.max(1, Math.floor((nowMs - successMs) / (24 * 60 * 60 * 1000)));
+      return `Last success is ${ageDays} days old; expected within ${STALE_THRESHOLD_DAYS} days`;
+    }
+    return `No successful point within ${STALE_THRESHOLD_DAYS} days`;
+  }
+
+  if (inventoryStatus === 'failed') return 'Latest protection event failed';
+  if (inventoryStatus === 'warning') return 'Latest protection event completed with warnings';
+  if (inventoryStatus === 'running') return 'Protection event in progress';
+  return '';
+};
+
 export const RecoveryProtectedInventorySection: Component<
   RecoveryProtectedInventorySectionProps
 > = (props) => {
@@ -202,7 +236,7 @@ export const RecoveryProtectedInventorySection: Component<
   return (
     <div class="flex flex-col gap-2">
       <Show when={!props.kioskMode}>
-        <Card padding="none" tone="card" class="overflow-hidden border-border-subtle bg-surface">
+        <Card padding="none" tone="card" class="overflow-visible border-border-subtle bg-surface">
           <div class="px-4 py-3 sm:px-5">
             <PageControls
               role="group"
@@ -280,7 +314,7 @@ export const RecoveryProtectedInventorySection: Component<
 
               <LabeledFilterSelect
                 id="recovery-protected-status-filter"
-                label="Latest status"
+                label="Protection state"
                 value={props.historyOutcomeFilter()}
                 onChange={(event) => {
                   const value = event.currentTarget.value as 'all' | RecoveryOutcome;
@@ -378,7 +412,7 @@ export const RecoveryProtectedInventorySection: Component<
                     ['type', 'Item Type'],
                     ['platform', getRecoveryArtifactColumnLabel('platform', 'Platform')],
                     ['lastBackup', 'Latest Point'],
-                    ['outcome', 'Status'],
+                    ['outcome', 'Protection State'],
                   ] as const
                 ).map(([column, label]) => (
                   <TableHead
@@ -390,7 +424,7 @@ export const RecoveryProtectedInventorySection: Component<
                         : column === 'lastBackup'
                           ? ' w-[120px]'
                           : column === 'outcome'
-                            ? ' w-[70px]'
+                            ? ' w-[116px]'
                             : ''
                     }`}
                     onClick={() => toggleProtectedSort(column)}
@@ -431,6 +465,7 @@ export const RecoveryProtectedInventorySection: Component<
                     getRecoveryItemTypePresentation(getRecoveryRollupItemTypeKey(rollup)) || null;
                   const nowMs = Date.now();
                   const neverSucceeded = inventoryStatus === 'never-succeeded';
+                  const protectionInsight = getProtectionInsight(rollup, inventoryStatus, nowMs);
 
                   return (
                     <TableRow
@@ -459,6 +494,11 @@ export const RecoveryProtectedInventorySection: Component<
                               </Show>
                             </div>
                           </div>
+                          <Show when={protectionInsight}>
+                            <div class="pl-4 text-[10px] leading-4 text-muted">
+                              {protectionInsight}
+                            </div>
+                          </Show>
                           <div class="flex flex-wrap items-center gap-1.5 text-[10px] md:hidden">
                             <Show when={itemTypePresentation?.label}>
                               <span class={itemTypePresentation?.tableBadgeClasses}>
@@ -520,13 +560,22 @@ export const RecoveryProtectedInventorySection: Component<
                               : undefined
                         }
                       >
-                        {successMs > 0 ? (
-                          formatRelativeTime(successMs)
-                        ) : neverSucceeded ? (
-                          <span class={getRecoverySpecialOutcomeTextClass('never')}>never</span>
-                        ) : (
-                          '—'
-                        )}
+                        <div class="flex flex-col">
+                          <span>
+                            {successMs > 0 ? (
+                              formatRelativeTime(successMs)
+                            ) : neverSucceeded ? (
+                              <span class={getRecoverySpecialOutcomeTextClass('never')}>never</span>
+                            ) : (
+                              '—'
+                            )}
+                          </span>
+                          <Show when={inventoryStatus !== 'healthy' && attemptMs > 0}>
+                            <span class="text-[10px] font-normal text-muted">
+                              Attempt {formatRelativeTime(attemptMs)}
+                            </span>
+                          </Show>
+                        </div>
                       </TableCell>
 
                       <TableCell class="whitespace-nowrap px-3 py-1.5">
