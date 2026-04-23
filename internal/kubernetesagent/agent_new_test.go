@@ -162,7 +162,7 @@ func TestNormalizePulseURL(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := normalizePulseURL(tt.raw)
+			got, err := normalizePulseURL(tt.raw, false)
 			if tt.wantError != "" {
 				if err == nil {
 					t.Fatalf("normalizePulseURL(%q) expected error", tt.raw)
@@ -179,6 +179,16 @@ func TestNormalizePulseURL(t *testing.T) {
 				t.Fatalf("normalizePulseURL(%q) = %q, want %q", tt.raw, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestNormalizePulseURLAllowsInsecureRemoteHTTP(t *testing.T) {
+	got, err := normalizePulseURL("http://10.0.0.5:7655/base/", true)
+	if err != nil {
+		t.Fatalf("normalizePulseURL() error = %v", err)
+	}
+	if got != "http://10.0.0.5:7655/base" {
+		t.Fatalf("normalizePulseURL() = %q", got)
 	}
 }
 

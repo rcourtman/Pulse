@@ -129,6 +129,11 @@ func TestCommandClientBuildWebSocketURL(t *testing.T) {
 			wantErr:  true,
 		},
 		{
+			name:     "insecure remote http becomes ws",
+			pulseURL: "http://10.0.0.5:7655/pulse",
+			want:     "ws://10.0.0.5:7655/pulse/api/agent/ws",
+		},
+		{
 			name:     "missing host returns error",
 			pulseURL: "/relative/path",
 			wantErr:  true,
@@ -138,6 +143,9 @@ func TestCommandClientBuildWebSocketURL(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			client := &CommandClient{pulseURL: tt.pulseURL}
+			if tt.name == "insecure remote http becomes ws" {
+				client.insecureSkipVerify = true
+			}
 			got, err := client.buildWebSocketURL()
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("buildWebSocketURL() err = %v, wantErr %v", err, tt.wantErr)
@@ -186,11 +194,19 @@ func TestCommandClientBuildWebSocketOrigin(t *testing.T) {
 			pulseURL: "/relative/path",
 			wantErr:  true,
 		},
+		{
+			name:     "insecure remote http stays http origin",
+			pulseURL: "http://10.0.0.5:7655/pulse",
+			want:     "http://10.0.0.5:7655",
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			client := &CommandClient{pulseURL: tt.pulseURL}
+			if tt.name == "insecure remote http stays http origin" {
+				client.insecureSkipVerify = true
+			}
 			got, err := client.buildWebSocketOrigin()
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("buildWebSocketOrigin() err = %v, wantErr %v", err, tt.wantErr)

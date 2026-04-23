@@ -228,6 +228,35 @@ func TestRunInstallSSH_RejectsNonLoopbackPlainHTTP(t *testing.T) {
 	}
 }
 
+func TestRunInstallSSH_AllowsNonLoopbackPlainHTTPInInsecureMode(t *testing.T) {
+	origExec := execCommandContext
+	defer func() { execCommandContext = origExec }()
+
+	var capturedArgs []string
+	execCommandContext = func(ctx context.Context, name string, args ...string) *exec.Cmd {
+		capturedArgs = append([]string{name}, args...)
+		return exec.Command("true")
+	}
+
+	c := &CommandClient{
+		insecureSkipVerify: true,
+		logger:             zerolog.New(zerolog.NewTestWriter(t)),
+		sshKnownHosts:      stubKnownHostsManager{path: "/tmp/pulse-test-known-hosts"},
+	}
+
+	exitCode, _, err := c.runInstallSSH(context.Background(), "10.0.0.1", "http://10.0.0.1:7655")
+	if err != nil {
+		t.Fatalf("runInstallSSH error: %v", err)
+	}
+	if exitCode != 0 {
+		t.Fatalf("expected exit code 0, got %d", exitCode)
+	}
+	joined := strings.Join(capturedArgs, " ")
+	if !strings.Contains(joined, "http://10.0.0.1:7655") || !strings.Contains(joined, "/install.sh") {
+		t.Fatalf("SSH install command missing plain HTTP installer URL: %s", joined)
+	}
+}
+
 func TestRunInstallSSH_UsesConfiguredDeploySSHUserWithSudo(t *testing.T) {
 	origExec := execCommandContext
 	defer func() { execCommandContext = origExec }()

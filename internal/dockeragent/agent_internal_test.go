@@ -75,12 +75,35 @@ func TestNormalizeTargetsInvalid(t *testing.T) {
 }
 
 func TestNormalizeTargetURL(t *testing.T) {
-	normalized, err := normalizeTargetURL(" HTTPS://Pulse.EXAMPLE.com:443/api/ ")
+	normalized, err := normalizeTargetURL(" HTTPS://Pulse.EXAMPLE.com:443/api/ ", false)
 	if err != nil {
 		t.Fatalf("normalizeTargetURL returned error: %v", err)
 	}
 	if normalized != "https://pulse.example.com:443/api" {
 		t.Fatalf("unexpected normalized URL %q", normalized)
+	}
+}
+
+func TestNormalizeTargetURLAllowsInsecureRemoteHTTP(t *testing.T) {
+	normalized, err := normalizeTargetURL(" http://10.0.0.5:7655/api/ ", true)
+	if err != nil {
+		t.Fatalf("normalizeTargetURL returned error: %v", err)
+	}
+	if normalized != "http://10.0.0.5:7655/api" {
+		t.Fatalf("unexpected normalized URL %q", normalized)
+	}
+}
+
+func TestNormalizeTargetsAllowsInsecureRemoteHTTP(t *testing.T) {
+	targets, err := normalizeTargets([]TargetConfig{{URL: "http://10.0.0.5:7655", Token: "token", InsecureSkipVerify: true}})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(targets) != 1 {
+		t.Fatalf("expected 1 target, got %d", len(targets))
+	}
+	if targets[0].URL != "http://10.0.0.5:7655" {
+		t.Fatalf("unexpected target URL %q", targets[0].URL)
 	}
 }
 

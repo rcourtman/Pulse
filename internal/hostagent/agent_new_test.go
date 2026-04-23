@@ -54,6 +54,28 @@ func TestNew_AllowsMissingAPITokenWhenEnrollmentDisabled(t *testing.T) {
 	}
 }
 
+func TestNew_AllowsInsecureRemoteHTTPPulseURL(t *testing.T) {
+	mc := &mockCollector{
+		hostInfoFn: func(context.Context) (*gohost.InfoStat, error) {
+			return &gohost.InfoStat{Hostname: "host", HostID: "hid", KernelArch: runtime.GOARCH}, nil
+		},
+	}
+
+	agent, err := New(Config{
+		PulseURL:           "http://192.168.0.98:7655",
+		APIToken:           "token",
+		InsecureSkipVerify: true,
+		LogLevel:           zerolog.InfoLevel,
+		Collector:          mc,
+	})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	if agent.trimmedPulseURL != "http://192.168.0.98:7655" {
+		t.Fatalf("trimmedPulseURL = %q", agent.trimmedPulseURL)
+	}
+}
+
 func TestNew_RequiresAPITokenWhenEnrollmentEnabled(t *testing.T) {
 	mc := &mockCollector{
 		hostInfoFn: func(context.Context) (*gohost.InfoStat, error) {

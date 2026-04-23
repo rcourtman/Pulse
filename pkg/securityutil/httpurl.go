@@ -114,10 +114,24 @@ func IsLoopbackHost(host string) bool {
 	return ip != nil && ip.IsLoopback()
 }
 
+// PulseURLValidationOptions controls optional relaxations for Pulse runtime
+// transports. The default zero value preserves the strict production contract.
+type PulseURLValidationOptions struct {
+	// AllowInsecureHTTP permits plain HTTP/WS to non-loopback hosts. This is
+	// reserved for explicitly insecure agent/dev-runtime flows.
+	AllowInsecureHTTP bool
+}
+
 // NormalizePulseHTTPBaseURL validates a Pulse control-plane base URL.
 // HTTPS is required for non-loopback hosts; loopback localhost may use HTTP.
 func NormalizePulseHTTPBaseURL(raw string) (*url.URL, error) {
-	return normalizePulseBaseURL(raw, false)
+	return NormalizePulseHTTPBaseURLWithOptions(raw, PulseURLValidationOptions{})
+}
+
+// NormalizePulseHTTPBaseURLWithOptions validates a Pulse control-plane base URL
+// with explicit runtime validation options.
+func NormalizePulseHTTPBaseURLWithOptions(raw string, opts PulseURLValidationOptions) (*url.URL, error) {
+	return normalizePulseBaseURL(raw, false, opts)
 }
 
 // NormalizeSecureHTTPBaseURL validates a general-purpose HTTP(S) base URL.
@@ -152,10 +166,16 @@ func NormalizeSecureHTTPBaseURL(raw string) (*url.URL, error) {
 // NormalizePulseWebSocketBaseURL validates a Pulse command-channel base URL.
 // Non-loopback hosts are normalized to WSS; loopback localhost may use WS.
 func NormalizePulseWebSocketBaseURL(raw string) (*url.URL, error) {
-	return normalizePulseBaseURL(raw, true)
+	return NormalizePulseWebSocketBaseURLWithOptions(raw, PulseURLValidationOptions{})
 }
 
-func normalizePulseBaseURL(raw string, websocket bool) (*url.URL, error) {
+// NormalizePulseWebSocketBaseURLWithOptions validates a Pulse command-channel
+// base URL with explicit runtime validation options.
+func NormalizePulseWebSocketBaseURLWithOptions(raw string, opts PulseURLValidationOptions) (*url.URL, error) {
+	return normalizePulseBaseURL(raw, true, opts)
+}
+
+func normalizePulseBaseURL(raw string, websocket bool, opts PulseURLValidationOptions) (*url.URL, error) {
 	trimmed := strings.TrimSpace(raw)
 	if trimmed == "" {
 		return nil, fmt.Errorf("Pulse URL is required")
@@ -196,7 +216,7 @@ func normalizePulseBaseURL(raw string, websocket bool) (*url.URL, error) {
 			parsed.Scheme = "https"
 		}
 	case "http":
-		if !IsLoopbackHost(parsed.Hostname()) {
+		if !IsLoopbackHost(parsed.Hostname()) && !opts.AllowInsecureHTTP {
 			if websocket {
 				return nil, fmt.Errorf("Pulse URL %q must use https/wss unless host is loopback", raw)
 			}
@@ -216,7 +236,7 @@ func normalizePulseBaseURL(raw string, websocket bool) (*url.URL, error) {
 		if !websocket {
 			return nil, fmt.Errorf("Pulse URL %q has unsupported scheme %q", raw, parsed.Scheme)
 		}
-		if !IsLoopbackHost(parsed.Hostname()) {
+		if !IsLoopbackHost(parsed.Hostname()) && !opts.AllowInsecureHTTP {
 			return nil, fmt.Errorf("Pulse URL %q must use https/wss unless host is loopback", raw)
 		}
 		parsed.Scheme = "ws"

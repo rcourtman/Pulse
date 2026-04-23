@@ -342,6 +342,16 @@ func TestClientFetchConfigValidation(t *testing.T) {
 			wantText: "must use https unless host is loopback",
 		},
 		{
+			name: "private-network http allowed in insecure mode",
+			cfg: Config{
+				PulseURL:           "http://10.0.0.5:7655",
+				APIToken:           "token",
+				AgentID:            "agent-1",
+				InsecureSkipVerify: true,
+			},
+			wantText: "do request:",
+		},
+		{
 			name: "missing API token",
 			cfg: Config{
 				PulseURL: "https://example.com",

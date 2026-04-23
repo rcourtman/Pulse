@@ -9,6 +9,8 @@ import (
 	pubsec "github.com/rcourtman/pulse-go-rewrite/pkg/securityutil"
 )
 
+type PulseURLValidationOptions = pubsec.PulseURLValidationOptions
+
 func NormalizeAbsoluteHTTPURL(raw string) (*url.URL, error) {
 	return pubsec.NormalizeAbsoluteHTTPURL(raw)
 }
@@ -29,8 +31,16 @@ func NormalizePulseHTTPBaseURL(raw string) (*url.URL, error) {
 	return pubsec.NormalizePulseHTTPBaseURL(raw)
 }
 
+func NormalizePulseHTTPBaseURLWithOptions(raw string, opts PulseURLValidationOptions) (*url.URL, error) {
+	return pubsec.NormalizePulseHTTPBaseURLWithOptions(raw, opts)
+}
+
 func NormalizePulseWebSocketBaseURL(raw string) (*url.URL, error) {
 	return pubsec.NormalizePulseWebSocketBaseURL(raw)
+}
+
+func NormalizePulseWebSocketBaseURLWithOptions(raw string, opts PulseURLValidationOptions) (*url.URL, error) {
+	return pubsec.NormalizePulseWebSocketBaseURLWithOptions(raw, opts)
 }
 
 func AppendURLPath(base *url.URL, segments ...string) *url.URL {

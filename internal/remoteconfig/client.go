@@ -362,7 +362,7 @@ func normalizeConfig(cfg Config) (Config, error) {
 	cfg.AgentID = strings.TrimSpace(cfg.AgentID)
 	cfg.Hostname = strings.TrimSpace(cfg.Hostname)
 
-	normalizedPulseURL, err := normalizePulseURL(cfg.PulseURL)
+	normalizedPulseURL, err := normalizePulseURL(cfg.PulseURL, cfg.InsecureSkipVerify)
 	if err != nil {
 		return cfg, err
 	}
@@ -371,8 +371,10 @@ func normalizeConfig(cfg Config) (Config, error) {
 	return cfg, nil
 }
 
-func normalizePulseURL(raw string) (string, error) {
-	parsed, err := securityutil.NormalizePulseHTTPBaseURL(raw)
+func normalizePulseURL(raw string, allowInsecureHTTP bool) (string, error) {
+	parsed, err := securityutil.NormalizePulseHTTPBaseURLWithOptions(raw, securityutil.PulseURLValidationOptions{
+		AllowInsecureHTTP: allowInsecureHTTP,
+	})
 	if err != nil {
 		return "", fmt.Errorf("invalid pulse URL: %w", err)
 	}

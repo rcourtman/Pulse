@@ -103,6 +103,18 @@ func TestNormalizePulseHTTPBaseURL(t *testing.T) {
 	}
 }
 
+func TestNormalizePulseHTTPBaseURLWithOptions(t *testing.T) {
+	got, err := NormalizePulseHTTPBaseURLWithOptions("http://10.0.0.5:7655/pulse/", PulseURLValidationOptions{
+		AllowInsecureHTTP: true,
+	})
+	if err != nil {
+		t.Fatalf("NormalizePulseHTTPBaseURLWithOptions() error = %v", err)
+	}
+	if got.String() != "http://10.0.0.5:7655/pulse" {
+		t.Fatalf("NormalizePulseHTTPBaseURLWithOptions() = %q", got.String())
+	}
+}
+
 func TestNormalizeSecureHTTPBaseURL(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -215,6 +227,18 @@ func TestNormalizePulseWebSocketBaseURL(t *testing.T) {
 	}
 }
 
+func TestNormalizePulseWebSocketBaseURLWithOptions(t *testing.T) {
+	got, err := NormalizePulseWebSocketBaseURLWithOptions("http://10.0.0.5:7655/pulse", PulseURLValidationOptions{
+		AllowInsecureHTTP: true,
+	})
+	if err != nil {
+		t.Fatalf("NormalizePulseWebSocketBaseURLWithOptions() error = %v", err)
+	}
+	if got.String() != "ws://10.0.0.5:7655/pulse" {
+		t.Fatalf("NormalizePulseWebSocketBaseURLWithOptions() = %q", got.String())
+	}
+}
+
 func TestSameHostWebSocketOrigin(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -270,6 +294,18 @@ func TestHTTPOriginForWebSocketBaseURL(t *testing.T) {
 				t.Fatalf("HTTPOriginForWebSocketBaseURL(%q) = %q, want %q", tt.raw, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestHTTPOriginForWebSocketBaseURLWithOptions(t *testing.T) {
+	got, err := HTTPOriginForWebSocketBaseURLWithOptions("http://10.0.0.5:7655/pulse", PulseURLValidationOptions{
+		AllowInsecureHTTP: true,
+	})
+	if err != nil {
+		t.Fatalf("HTTPOriginForWebSocketBaseURLWithOptions() error = %v", err)
+	}
+	if got != "http://10.0.0.5:7655" {
+		t.Fatalf("HTTPOriginForWebSocketBaseURLWithOptions() = %q", got)
 	}
 }
 

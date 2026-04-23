@@ -217,8 +217,8 @@ func TestValidatePulseURL(t *testing.T) {
 	t.Run("RejectRemoteHTTPInInsecureMode", func(t *testing.T) {
 		u := newUpdaterForTest("http://pulse.example.com")
 		u.cfg.InsecureSkipVerify = true
-		if err := u.validatePulseURL(); err == nil {
-			t.Fatalf("expected remote http URL in insecure mode to be rejected")
+		if err := u.validatePulseURL(); err != nil {
+			t.Fatalf("expected remote http URL in insecure mode to be allowed, got %v", err)
 		}
 	})
 
@@ -226,6 +226,14 @@ func TestValidatePulseURL(t *testing.T) {
 		u := newUpdaterForTest("http://10.0.0.5:7655")
 		if err := u.validatePulseURL(); err == nil {
 			t.Fatalf("expected private-network http URL to be rejected")
+		}
+	})
+
+	t.Run("AllowPrivateNetworkHTTPInInsecureMode", func(t *testing.T) {
+		u := newUpdaterForTest("http://10.0.0.5:7655")
+		u.cfg.InsecureSkipVerify = true
+		if err := u.validatePulseURL(); err != nil {
+			t.Fatalf("expected private-network http URL in insecure mode to be allowed, got %v", err)
 		}
 	})
 

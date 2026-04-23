@@ -13,3 +13,7 @@ func SameHostWebSocketOrigin(origin string, requestHost string) bool {
 func HTTPOriginForWebSocketBaseURL(raw string) (string, error) {
 	return pubsec.HTTPOriginForWebSocketBaseURL(raw)
 }
+
+func HTTPOriginForWebSocketBaseURLWithOptions(raw string, opts PulseURLValidationOptions) (string, error) {
+	return pubsec.HTTPOriginForWebSocketBaseURLWithOptions(raw, opts)
+}

@@ -88,6 +88,16 @@ func TestParseProxmoxProductType(t *testing.T) {
 	}
 }
 
+func TestProxmoxSetupNormalizePulseURL_AllowsInsecureRemoteHTTP(t *testing.T) {
+	got, err := normalizePulseURL("http://10.0.0.5:7655/pulse/", true)
+	if err != nil {
+		t.Fatalf("normalizePulseURL() error = %v", err)
+	}
+	if got != "http://10.0.0.5:7655/pulse" {
+		t.Fatalf("normalizePulseURL() = %q", got)
+	}
+}
+
 func TestRegisterWithPulse_Payload(t *testing.T) {
 	var gotPayload autoRegisterRequest
 	var setupTokenHeader string

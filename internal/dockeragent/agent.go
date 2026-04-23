@@ -316,7 +316,7 @@ func normalizeTargets(raw []TargetConfig) ([]TargetConfig, error) {
 			return nil, fmt.Errorf("pulse target %s is missing API token", targetURL)
 		}
 
-		normalizedURL, err := normalizeTargetURL(targetURL)
+		normalizedURL, err := normalizeTargetURL(targetURL, target.InsecureSkipVerify)
 		if err != nil {
 			return nil, fmt.Errorf("invalid pulse target URL %q: %w", targetURL, err)
 		}
@@ -337,8 +337,10 @@ func normalizeTargets(raw []TargetConfig) ([]TargetConfig, error) {
 	return normalized, nil
 }
 
-func normalizeTargetURL(raw string) (string, error) {
-	parsed, err := securityutil.NormalizePulseHTTPBaseURL(raw)
+func normalizeTargetURL(raw string, allowInsecureHTTP bool) (string, error) {
+	parsed, err := securityutil.NormalizePulseHTTPBaseURLWithOptions(raw, securityutil.PulseURLValidationOptions{
+		AllowInsecureHTTP: allowInsecureHTTP,
+	})
 	if err != nil {
 		return "", err
 	}

@@ -39,7 +39,13 @@ func SameHostWebSocketOrigin(origin string, requestHost string) bool {
 
 // HTTPOriginForWebSocketBaseURL returns the http(s) Origin header for a Pulse websocket base URL.
 func HTTPOriginForWebSocketBaseURL(raw string) (string, error) {
-	parsed, err := NormalizePulseWebSocketBaseURL(raw)
+	return HTTPOriginForWebSocketBaseURLWithOptions(raw, PulseURLValidationOptions{})
+}
+
+// HTTPOriginForWebSocketBaseURLWithOptions returns the http(s) Origin header
+// for a Pulse websocket base URL with explicit runtime validation options.
+func HTTPOriginForWebSocketBaseURLWithOptions(raw string, opts PulseURLValidationOptions) (string, error) {
+	parsed, err := NormalizePulseWebSocketBaseURLWithOptions(raw, opts)
 	if err != nil {
 		return "", err
 	}
