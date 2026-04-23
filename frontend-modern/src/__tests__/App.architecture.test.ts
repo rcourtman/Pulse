@@ -95,7 +95,14 @@ describe('App architecture', () => {
     expect(appLayoutSource).not.toContain('animate-pulse-logo');
     expect(appRuntimeStateSource).not.toContain('dataUpdated');
     expect(appRuntimeStateSource).not.toContain('DATA_FLASH');
-    expect(appStylesSource).toContain('--pulse-brand-cycle: 4.8s;');
+    expect(appStylesSource).toContain('--pulse-brand-cycle: 3.4s;');
+    expect(appStylesSource).toContain('@keyframes pulse-brand-wave');
+    expect(appStylesSource).toContain(
+      'animation: pulse-brand-wave var(--pulse-brand-cycle) ease-in-out infinite;',
+    );
+    expect(appStylesSource).toContain(
+      'animation: pulse-brand-bg var(--pulse-brand-cycle) ease-in-out infinite;',
+    );
     expect(appStylesSource).toContain(
       'animation: pulse-brand-logo var(--pulse-brand-cycle) ease-in-out infinite;',
     );

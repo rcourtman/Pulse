@@ -398,30 +398,77 @@ body,
     border-color 150ms ease-in-out;
 }
 
-/* Pulse brand motion - continuous, low-amplitude live-state rhythm. */
+/* Pulse brand motion - visible, calm live-state rhythm. */
 @keyframes pulse-brand-logo {
   0%,
   100% {
     transform: scale(1);
   }
 
-  50% {
-    transform: scale(1.015);
+  46% {
+    transform: scale(1.035);
+  }
+
+  66% {
+    transform: scale(1.012);
+  }
+}
+
+@keyframes pulse-brand-wave {
+  0% {
+    opacity: 0.34;
+    transform: translateY(-50%) scale(0.9);
+  }
+
+  68%,
+  100% {
+    opacity: 0;
+    transform: translateY(-50%) scale(2);
+  }
+}
+
+@keyframes pulse-brand-bg {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  46% {
+    opacity: 0.96;
+    transform: scale(1.025);
   }
 }
 
 @keyframes pulse-brand-ring {
-  0%,
-  100% {
+  0% {
     opacity: 0.9;
-    transform: scale(1);
+    transform: scale(0.96);
     stroke-width: 14;
   }
 
-  50% {
-    opacity: 0.7;
-    transform: scale(1.08);
-    stroke-width: 11;
+  56% {
+    opacity: 0.22;
+    transform: scale(1.32);
+    stroke-width: 5;
+  }
+
+  74% {
+    opacity: 0;
+    transform: scale(1.36);
+    stroke-width: 4;
+  }
+
+  75% {
+    opacity: 0;
+    transform: scale(0.96);
+    stroke-width: 14;
+  }
+
+  100% {
+    opacity: 0.9;
+    transform: scale(0.96);
+    stroke-width: 14;
   }
 }
 
@@ -431,12 +478,40 @@ body,
     transform: scale(1);
   }
 
-  50% {
-    transform: scale(0.94);
+  46% {
+    transform: scale(0.86);
+  }
+
+  64% {
+    transform: scale(1.05);
   }
 }
 
+.pulse-brand-lockup {
+  --pulse-brand-wave-color: rgba(37, 99, 235, 0.34);
+  position: relative;
+}
+
+.dark .pulse-brand-lockup {
+  --pulse-brand-wave-color: rgba(96, 165, 250, 0.4);
+}
+
+.pulse-brand-lockup::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--pulse-brand-wave-color);
+  border-radius: 9999px;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-50%) scale(0.9);
+}
+
 .pulse-brand-logo,
+.pulse-brand-logo .pulse-bg,
 .pulse-brand-logo .pulse-ring,
 .pulse-brand-logo .pulse-center {
   transform-origin: center;
@@ -444,12 +519,21 @@ body,
 }
 
 .animate-pulse-brand {
-  --pulse-brand-cycle: 4.8s;
+  --pulse-brand-cycle: 3.4s;
+}
+
+.animate-pulse-brand::before {
+  animation: pulse-brand-wave var(--pulse-brand-cycle) ease-in-out infinite;
 }
 
 .animate-pulse-brand .pulse-brand-logo {
   animation: pulse-brand-logo var(--pulse-brand-cycle) ease-in-out infinite;
   will-change: transform;
+}
+
+.animate-pulse-brand .pulse-bg {
+  animation: pulse-brand-bg var(--pulse-brand-cycle) ease-in-out infinite;
+  will-change: opacity, transform;
 }
 
 .animate-pulse-brand .pulse-ring {
@@ -464,7 +548,9 @@ body,
 
 @media (prefers-reduced-motion: reduce) {
   .animate-pulse-brand,
+  .animate-pulse-brand::before,
   .animate-pulse-brand .pulse-brand-logo,
+  .animate-pulse-brand .pulse-bg,
   .animate-pulse-brand .pulse-ring,
   .animate-pulse-brand .pulse-center {
     animation: none;
