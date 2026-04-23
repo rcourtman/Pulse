@@ -14,9 +14,9 @@ describe('getRecoveryFilterChipPresentation', () => {
   it('returns the canonical namespace chip presentation', () => {
     expect(getRecoveryFilterChipPresentation('namespace')).toMatchObject({
       clearButtonClass:
-        'rounded px-1 py-0.5 text-[10px] hover:bg-violet-100 dark:hover:bg-violet-900',
+        'rounded px-1 py-0.5 text-[10px] hover:bg-indigo-100 dark:hover:bg-indigo-900',
       label: 'Namespace / Group',
     });
-    expect(getRecoveryFilterChipPresentation('namespace').className).toContain('border-violet-200');
+    expect(getRecoveryFilterChipPresentation('namespace').className).toContain('border-indigo-200');
   });
 });

@@ -91,7 +91,7 @@ const routingPresentation: Record<
   'local-only': {
     label: 'Local Only',
     title: 'This resource must remain within the local boundary.',
-    className: `${badgeBaseClass} bg-violet-100 text-violet-700 dark:bg-violet-900 dark:text-violet-300`,
+    className: `${badgeBaseClass} bg-teal-100 text-teal-700 dark:bg-teal-900 dark:text-teal-300`,
   },
 };
 

@@ -22,7 +22,7 @@ describe('dashboardKpiPresentation', () => {
     expect(getDashboardKpiPresentation('infrastructure').cardClassName).toContain(
       'border-l-blue-500',
     );
-    expect(getDashboardKpiPresentation('workloads').iconClassName).toContain('violet');
+    expect(getDashboardKpiPresentation('workloads').iconClassName).toContain('rose');
     expect(getDashboardKpiPresentation('storage').iconClassName).toContain('cyan');
     expect(getDashboardKpiPresentation('alerts').cardClassName).toContain('border-l-amber-500');
   });

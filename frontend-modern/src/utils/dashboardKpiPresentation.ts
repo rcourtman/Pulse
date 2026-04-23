@@ -26,8 +26,8 @@ const DASHBOARD_KPI_PRESENTATION: Record<DashboardKpiKey, DashboardKpiPresentati
     label: 'Workloads',
     supportingText: 'VMs, containers, and pods',
     cardClassName:
-      'h-full border-l-[3px] border-l-violet-500 dark:border-l-violet-400 bg-surface group-hover:bg-surface-hover transition-colors',
-    iconClassName: 'w-3.5 h-3.5 text-violet-500/50 dark:text-violet-400/50',
+      'h-full border-l-[3px] border-l-rose-500 dark:border-l-rose-400 bg-surface group-hover:bg-surface-hover transition-colors',
+    iconClassName: 'w-3.5 h-3.5 text-rose-500/50 dark:text-rose-400/50',
     icon: ContainerIcon,
   },
   storage: {

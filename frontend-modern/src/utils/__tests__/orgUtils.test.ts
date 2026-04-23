@@ -97,8 +97,8 @@ describe('canManageOrg', () => {
 describe('roleBadgeClass', () => {
   it('returns owner badge class', () => {
     const result = roleBadgeClass('owner');
-    expect(result).toContain('bg-purple-100');
-    expect(result).toContain('text-purple-800');
+    expect(result).toContain('bg-amber-100');
+    expect(result).toContain('text-amber-800');
   });
 
   it('returns admin badge class', () => {

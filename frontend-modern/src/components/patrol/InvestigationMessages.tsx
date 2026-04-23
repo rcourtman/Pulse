@@ -66,10 +66,10 @@ export const InvestigationMessages: Component<InvestigationMessagesProps> = (pro
                     {/* Reasoning content (extended thinking) */}
                     <Show when={msg.reasoning_content}>
                       <details class="mb-1">
-                        <summary class="text-[10px] text-purple-600 dark:text-purple-400 cursor-pointer hover:underline">
+                        <summary class="text-[10px] text-muted cursor-pointer hover:text-base-content hover:underline">
                           Show reasoning
                         </summary>
-                        <div class="mt-1 text-[10px] text-muted whitespace-pre-wrap break-words border-l-2 border-purple-200 dark:border-purple-800 pl-2">
+                        <div class="mt-1 text-[10px] text-muted whitespace-pre-wrap break-words border-l-2 border-border pl-2">
                           {msg.reasoning_content}
                         </div>
                       </details>

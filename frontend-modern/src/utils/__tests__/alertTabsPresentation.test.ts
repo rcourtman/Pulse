@@ -23,7 +23,7 @@ describe('alertTabsPresentation', () => {
 
   it('returns disabled mobile presentation', () => {
     expect(getAlertsMobileTabClass({ isActive: false, isDisabled: true })).toBe(
-      'flex-1 min-w-0 rounded-md px-2 py-1.5 text-[11px] font-medium transition-all sm:px-4 sm:py-2 sm:text-xs cursor-not-allowed bg-surface-alt text-muted',
+      'flex-shrink-0 whitespace-nowrap rounded-md px-3 py-1.5 text-[11px] font-medium transition-all sm:flex-1 sm:min-w-0 sm:px-4 sm:py-2 sm:text-xs cursor-not-allowed bg-surface-alt text-muted',
     );
   });
 

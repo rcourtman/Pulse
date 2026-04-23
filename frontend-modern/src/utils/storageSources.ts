@@ -7,7 +7,7 @@ export type StorageSourceTone =
   | 'orange'
   | 'indigo'
   | 'rose'
-  | 'violet'
+  | 'teal'
   | 'cyan'
   | 'blue';
 
@@ -27,7 +27,7 @@ const STORAGE_SOURCE_TONES: Record<string, StorageSourceTone> = {
   'proxmox-pve': 'orange',
   'proxmox-pbs': 'indigo',
   'proxmox-pmg': 'rose',
-  ceph: 'violet',
+  ceph: 'teal',
   truenas: 'blue',
   kubernetes: 'cyan',
 };

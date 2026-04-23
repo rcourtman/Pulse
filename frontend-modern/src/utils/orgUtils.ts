@@ -3,7 +3,7 @@ import type { Organization, OrganizationRole } from '@/api/orgs';
 const defaultBadgeClass = 'bg-slate-100 text-slate-700';
 
 const roleBadgeClasses: Record<OrganizationRole, string> = {
-  owner: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200',
+  owner: 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200',
   admin: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
   editor: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200',
   viewer: defaultBadgeClass,

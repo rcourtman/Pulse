@@ -114,13 +114,12 @@ Please:
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
         class={`${baseButtonClass} ${sizeClasses[props.size || 'sm']}
-          bg-purple-100 dark:bg-purple-950
-          hover:bg-purple-900
-          text-purple-600 dark:text-purple-400
-          hover:text-purple-700 dark:hover:text-purple-300
-          border border-purple-200 dark:border-purple-700
-          hover:border-purple-300 dark:hover:border-purple-600
-          ${isLocked() ? 'opacity-60 cursor-not-allowed hover:bg-purple-100 dark:hover:bg-purple-950' : ''}
+          bg-surface
+          hover:bg-surface-hover
+          text-blue-600 dark:text-blue-400
+          hover:text-blue-700 dark:hover:text-blue-300
+          border border-border
+          ${isLocked() ? 'opacity-60 cursor-not-allowed hover:bg-surface' : ''}
           ${props.class || ''}`}
         title={
           isLocked()
@@ -155,14 +154,13 @@ Please:
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
         class={`${baseButtonClass} px-2 py-1
-          bg-purple-100 dark:bg-purple-950
-          hover:bg-purple-900
-          text-purple-600 dark:text-purple-400
-          hover:text-purple-700 dark:hover:text-purple-300
-          border border-purple-200 dark:border-purple-700
-          hover:border-purple-300 dark:hover:border-purple-600
+          bg-surface
+          hover:bg-surface-hover
+          text-blue-600 dark:text-blue-400
+          hover:text-blue-700 dark:hover:text-blue-300
+          border border-border
           gap-1.5
-          ${isLocked() ? 'opacity-60 cursor-not-allowed hover:bg-purple-100 dark:hover:bg-purple-950' : ''}
+          ${isLocked() ? 'opacity-60 cursor-not-allowed hover:bg-surface' : ''}
           ${props.class || ''}`}
         title={
           isLocked()
@@ -192,12 +190,12 @@ Please:
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       class={`${baseButtonClass} px-3 py-1.5
-        bg-purple-500
-        hover:bg-purple-600
+        bg-blue-600
+        hover:bg-blue-700
         text-white font-medium
         shadow-sm hover:shadow-sm
         gap-2
-        ${isLocked() ? 'opacity-60 cursor-not-allowed hover:bg-purple-500' : ''}
+        ${isLocked() ? 'opacity-60 cursor-not-allowed hover:bg-blue-600' : ''}
         ${props.class || ''}`}
       title={
         isLocked()

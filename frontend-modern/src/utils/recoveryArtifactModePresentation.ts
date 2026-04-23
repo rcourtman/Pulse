@@ -22,8 +22,8 @@ export function getRecoveryArtifactModePresentation(
       return {
         label: 'Remote Copy',
         aggregateLabel: 'Remote Copies',
-        badgeClassName: 'bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300',
-        segmentClassName: 'bg-violet-500',
+        badgeClassName: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900 dark:text-indigo-300',
+        segmentClassName: 'bg-indigo-500',
       };
     default:
       return {

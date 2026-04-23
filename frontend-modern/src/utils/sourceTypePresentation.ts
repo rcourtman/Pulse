@@ -16,7 +16,7 @@ const SOURCE_TYPE_PRESENTATION: Record<SourceType, SourceTypePresentation> = {
   },
   hybrid: {
     label: 'Hybrid',
-    badgeClasses: 'bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-400',
+    badgeClasses: 'bg-teal-100 text-teal-700 dark:bg-teal-900 dark:text-teal-400',
   },
 };
 

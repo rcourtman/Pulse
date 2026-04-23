@@ -287,7 +287,7 @@ export function AlertResourceTableRow(props: AlertResourceTableRowProps) {
             </div>
           </Show>
           <Show when={props.resource.type === 'storage' && props.resource.node}>
-            <span class="rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300">
+            <span class="rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300">
               {props.resource.node}
             </span>
           </Show>

@@ -122,12 +122,12 @@ const RESOURCE_CHANGE_SOURCE_TYPE_PRESENTATIONS: Record<
   pulse_diff: {
     label: 'Pulse diff',
     plural: 'Pulse diffs',
-    className: 'bg-violet-100 text-violet-700 dark:bg-violet-900 dark:text-violet-300',
+    className: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900 dark:text-indigo-300',
   },
   heuristic: {
     label: 'Heuristic',
     plural: 'Heuristics',
-    className: 'bg-fuchsia-100 text-fuchsia-700 dark:bg-fuchsia-900 dark:text-fuchsia-300',
+    className: 'bg-rose-100 text-rose-700 dark:bg-rose-900 dark:text-rose-300',
   },
   user_action: {
     label: 'User action',

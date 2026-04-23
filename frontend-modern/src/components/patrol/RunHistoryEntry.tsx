@@ -285,7 +285,7 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
                   </span>
                 </Show>
                 <Show when={run.guests_checked > 0}>
-                  <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-purple-50 text-purple-700 dark:bg-purple-900 dark:text-purple-300">
+                  <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-rose-50 text-rose-700 dark:bg-rose-900 dark:text-rose-300">
                     <MonitorIcon class="w-3 h-3" /> {run.guests_checked} VM
                     {run.guests_checked !== 1 ? 's' : ''}
                   </span>

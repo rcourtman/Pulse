@@ -9,7 +9,7 @@ export function getAlertHistorySourcePresentation(source?: string | null): Alert
     return {
       label: 'Patrol',
       className:
-        'text-[10px] px-1.5 py-0.5 rounded font-medium bg-violet-100 dark:bg-violet-900 text-violet-700 dark:text-violet-300',
+        'text-[10px] px-1.5 py-0.5 rounded font-medium bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300',
     };
   }
 

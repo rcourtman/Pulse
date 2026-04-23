@@ -34,13 +34,13 @@ const CHIP_PRESENTATION: Record<RecoveryFilterChipKind, RecoveryFilterChipPresen
     label: 'Focused Item',
   },
   'item-type': {
-    clearButtonClass: `${CLEAR_BUTTON_BASE_CLASS} hover:bg-fuchsia-100 dark:hover:bg-fuchsia-900`,
-    className: `${CHIP_BASE_CLASS} border-fuchsia-200 bg-fuchsia-50 text-fuchsia-700 dark:border-fuchsia-700 dark:bg-fuchsia-900 dark:text-fuchsia-200`,
+    clearButtonClass: `${CLEAR_BUTTON_BASE_CLASS} hover:bg-rose-100 dark:hover:bg-rose-900`,
+    className: `${CHIP_BASE_CLASS} border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-700 dark:bg-rose-900 dark:text-rose-200`,
     label: 'Item Type',
   },
   namespace: {
-    clearButtonClass: `${CLEAR_BUTTON_BASE_CLASS} hover:bg-violet-100 dark:hover:bg-violet-900`,
-    className: `${CHIP_BASE_CLASS} border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-700 dark:bg-violet-900 dark:text-violet-200`,
+    clearButtonClass: `${CLEAR_BUTTON_BASE_CLASS} hover:bg-indigo-100 dark:hover:bg-indigo-900`,
+    className: `${CHIP_BASE_CLASS} border-indigo-200 bg-indigo-50 text-indigo-700 dark:border-indigo-700 dark:bg-indigo-900 dark:text-indigo-200`,
     label: getRecoveryLocationFacetLabel('namespace'),
   },
   node: {

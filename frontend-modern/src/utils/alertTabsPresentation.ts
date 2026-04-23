@@ -80,7 +80,7 @@ export function getAlertsMobileTabClass({
     : isActive
       ? 'bg-surface text-base-content shadow-sm'
       : 'text-muted hover:text-base-content';
-  return `flex-1 min-w-0 rounded-md px-2 py-1.5 text-[11px] font-medium transition-all sm:px-4 sm:py-2 sm:text-xs ${tone}`;
+  return `flex-shrink-0 whitespace-nowrap rounded-md px-3 py-1.5 text-[11px] font-medium transition-all sm:flex-1 sm:min-w-0 sm:px-4 sm:py-2 sm:text-xs ${tone}`;
 }
 
 export function getAlertsTabTitle({
