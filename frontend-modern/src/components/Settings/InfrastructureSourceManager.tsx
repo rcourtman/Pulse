@@ -35,9 +35,9 @@ interface InfrastructureSourceManagerProps {
 }
 
 const inlineButtonClass =
-  'inline-flex items-center rounded-md border border-border px-2.5 py-1 text-xs font-medium text-base-content transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-60';
+  'inline-flex min-w-[4.5rem] items-center justify-center rounded-md border border-border px-2.5 py-1 text-xs font-medium text-base-content transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-60';
 const addSectionButtonClass =
-  'inline-flex items-center gap-1.5 rounded-md border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-200 dark:hover:bg-blue-900/40';
+  'inline-flex min-w-[4.5rem] items-center justify-center gap-1.5 rounded-md border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-200 dark:hover:bg-blue-900/40';
 const primaryToolbarButtonClass =
   'inline-flex items-center justify-center gap-2 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-medium text-blue-700 transition-colors hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-200 dark:hover:bg-blue-900/40';
 const utilityToolbarButtonClass =
@@ -327,7 +327,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
               Status
             </TableHead>
             <Show when={actionColumnVisible()}>
-              <TableHead class="w-[10%] px-3 py-1.5 text-right text-[11px] font-medium text-muted whitespace-nowrap xl:w-[12%]">
+              <TableHead class="w-[12%] px-3 py-1.5 text-right text-[11px] font-medium text-muted whitespace-nowrap xl:w-[12%]">
                 Actions
               </TableHead>
             </Show>
@@ -370,9 +370,10 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                             onClick={() => props.onAddSource?.(product.type)}
                             class={`${addSectionButtonClass} whitespace-nowrap`}
                             aria-label={product.actionLabel}
+                            title={product.actionLabel}
                           >
                             <Plus class="h-3.5 w-3.5" />
-                            {product.type === 'agent' ? 'Add host' : 'Add'}
+                            Add
                           </button>
                         </Show>
                       </TableCell>
