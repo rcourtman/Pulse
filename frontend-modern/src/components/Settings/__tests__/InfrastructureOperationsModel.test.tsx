@@ -194,4 +194,12 @@ describe('infrastructure operations model', () => {
     ).then((mod) => (mod as { default: string }).default);
     expect(operationsStateSource).not.toContain('useInfrastructureReportingState');
   });
+
+  it('keeps discovered-node filtering anchored to canonical represented-host dedupe', async () => {
+    const discoveryStateSource = await import(
+      '../useInfrastructureDiscoveryRuntimeState?raw'
+    ).then((mod) => (mod as { default: string }).default);
+    expect(discoveryStateSource).toContain('filterRepresentedDiscoveredServers');
+    expect(discoveryStateSource).toContain('nodes()');
+  });
 });

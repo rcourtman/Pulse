@@ -98,6 +98,7 @@ func buildPVEConnection(inst config.PVEInstance, health map[string]monitoring.In
 		Type:         ConnectionTypePVE,
 		Name:         inst.Name,
 		Address:      inst.Host,
+		HostAliases:  appendNormalizedHosts(nil, inst.Name, inst.Host),
 		State:        state,
 		StateReason:  reason,
 		Enabled:      enabled,
@@ -128,6 +129,7 @@ func buildPBSConnection(inst config.PBSInstance, health map[string]monitoring.In
 		Type:         ConnectionTypePBS,
 		Name:         inst.Name,
 		Address:      inst.Host,
+		HostAliases:  appendNormalizedHosts(nil, inst.Name, inst.Host),
 		State:        state,
 		StateReason:  reason,
 		Enabled:      enabled,
@@ -156,6 +158,7 @@ func buildPMGConnection(inst config.PMGInstance, health map[string]monitoring.In
 		Type:         ConnectionTypePMG,
 		Name:         inst.Name,
 		Address:      inst.Host,
+		HostAliases:  appendNormalizedHosts(nil, inst.Name, inst.Host),
 		State:        state,
 		StateReason:  reason,
 		Enabled:      enabled,
@@ -187,6 +190,7 @@ func buildVMwareConnection(inst config.VMwareVCenterInstance, health map[string]
 		Type:         ConnectionTypeVMware,
 		Name:         inst.Name,
 		Address:      fmt.Sprintf("https://%s:%d", inst.Host, port),
+		HostAliases:  appendNormalizedHosts(nil, inst.Name, inst.Host),
 		State:        state,
 		StateReason:  reason,
 		Enabled:      enabled,
@@ -226,6 +230,7 @@ func buildTrueNASConnection(inst config.TrueNASInstance, health map[string]monit
 		Type:         ConnectionTypeTrueNAS,
 		Name:         inst.Name,
 		Address:      fmt.Sprintf("%s://%s:%d", scheme, inst.Host, port),
+		HostAliases:  appendNormalizedHosts(nil, inst.Name, inst.Host),
 		State:        state,
 		StateReason:  reason,
 		Enabled:      enabled,
@@ -283,6 +288,7 @@ func buildAgentConnection(host models.Host, expectedAgentVersion string, now tim
 		Type:                 ConnectionTypeAgent,
 		Name:                 name,
 		Address:              address,
+		HostAliases:          connectionHostAliasesForAgent(host, name, address),
 		State:                state,
 		StateReason:          reason,
 		Enabled:              true,
@@ -296,6 +302,14 @@ func buildAgentConnection(host models.Host, expectedAgentVersion string, now tim
 		AgentUpdateAvailable: updateAvailable,
 		Capabilities:         ConnectionCapabilities{SupportsPause: false, SupportsScope: false, SupportsTest: false},
 	}
+}
+
+func connectionHostAliasesForAgent(host models.Host, name, address string) []string {
+	values := []string{name, address, host.Hostname, host.ReportIP}
+	for _, iface := range host.NetworkInterfaces {
+		values = append(values, iface.Addresses...)
+	}
+	return appendNormalizedHosts(nil, values...)
 }
 
 // deriveConnectionState maps (Enabled, InstanceHealth) onto the unified state

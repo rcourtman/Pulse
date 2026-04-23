@@ -11522,17 +11522,19 @@ func TestContract_ConnectionSystemMembersPayloadShapeStaysCanonical(t *testing.T
 				ID:                "node-lab",
 				Name:              "lab",
 				Endpoint:          "https://lab:8006",
+				HostAliases:       []string{"lab", "192.168.0.2"},
 				State:             ConnectionStateActive,
 				LastSeen:          timePtr(time.Date(2026, 4, 23, 12, 0, 0, 0, time.UTC)),
 				Primary:           true,
 				AgentConnectionID: "agent:agent-lab",
 			},
 			{
-				ID:       "node-minipc",
-				Name:     "minipc",
-				Endpoint: "https://minipc:8006",
-				State:    ConnectionStateStale,
-				LastSeen: timePtr(time.Date(2026, 4, 23, 11, 55, 0, 0, time.UTC)),
+				ID:          "node-minipc",
+				Name:        "minipc",
+				Endpoint:    "https://minipc:8006",
+				HostAliases: []string{"minipc"},
+				State:       ConnectionStateStale,
+				LastSeen:    timePtr(time.Date(2026, 4, 23, 11, 55, 0, 0, time.UTC)),
 			},
 		},
 	}
@@ -11542,7 +11544,7 @@ func TestContract_ConnectionSystemMembersPayloadShapeStaysCanonical(t *testing.T
 		t.Fatalf("marshal ConnectionSystem with members: %v", err)
 	}
 
-	want := `{"id":"pve-lab","type":"pve","clusterName":"homelab","components":[{"connectionId":"pve-lab","type":"pve","role":"primary"},{"connectionId":"agent:agent-lab","type":"agent","role":"attachment"}],"members":[{"id":"node-lab","name":"lab","endpoint":"https://lab:8006","state":"active","lastSeen":"2026-04-23T12:00:00Z","primary":true,"agentConnectionId":"agent:agent-lab"},{"id":"node-minipc","name":"minipc","endpoint":"https://minipc:8006","state":"stale","lastSeen":"2026-04-23T11:55:00Z"}]}`
+	want := `{"id":"pve-lab","type":"pve","clusterName":"homelab","components":[{"connectionId":"pve-lab","type":"pve","role":"primary"},{"connectionId":"agent:agent-lab","type":"agent","role":"attachment"}],"members":[{"id":"node-lab","name":"lab","endpoint":"https://lab:8006","hostAliases":["lab","192.168.0.2"],"state":"active","lastSeen":"2026-04-23T12:00:00Z","primary":true,"agentConnectionId":"agent:agent-lab"},{"id":"node-minipc","name":"minipc","endpoint":"https://minipc:8006","hostAliases":["minipc"],"state":"stale","lastSeen":"2026-04-23T11:55:00Z"}]}`
 	assertJSONSnapshot(t, body, want)
 }
 
@@ -11552,6 +11554,7 @@ func TestContract_AgentConnectionPayloadIncludesVersionFields(t *testing.T) {
 		Type:                 ConnectionTypeAgent,
 		Name:                 "host-1",
 		Address:              "host-1",
+		HostAliases:          []string{"host-1", "192.168.0.2"},
 		State:                ConnectionStateActive,
 		Enabled:              true,
 		Surfaces:             []string{"host"},
@@ -11573,7 +11576,7 @@ func TestContract_AgentConnectionPayloadIncludesVersionFields(t *testing.T) {
 		t.Fatalf("marshal agent Connection: %v", err)
 	}
 
-	want := `{"id":"agent:host-1","type":"agent","name":"host-1","address":"host-1","state":"active","enabled":true,"surfaces":["host"],"scope":{"host":true},"lastSeen":"2026-04-22T12:00:00Z","source":"agent","agentVersion":"6.0.0","expectedAgentVersion":"6.0.2","agentUpdateAvailable":true,"capabilities":{"supportsPause":false,"supportsScope":false,"supportsTest":false}}`
+	want := `{"id":"agent:host-1","type":"agent","name":"host-1","address":"host-1","hostAliases":["host-1","192.168.0.2"],"state":"active","enabled":true,"surfaces":["host"],"scope":{"host":true},"lastSeen":"2026-04-22T12:00:00Z","source":"agent","agentVersion":"6.0.0","expectedAgentVersion":"6.0.2","agentUpdateAvailable":true,"capabilities":{"supportsPause":false,"supportsScope":false,"supportsTest":false}}`
 	assertJSONSnapshot(t, body, want)
 }
 

@@ -83,6 +83,7 @@ vi.mock('../useConnectionsLedger', () => ({
         canPause: connection.capabilities.supportsPause,
         canRemove: connection.type !== 'docker' && connection.type !== 'kubernetes',
         isAgent: connection.type === 'agent',
+        isCluster: false,
         attachedConnections: [],
         members: [],
         connection,
@@ -286,6 +287,68 @@ describe('InfrastructureWorkspace', () => {
     });
   });
 
+  it('hides discovered candidates already represented by the unified connections ledger member aliases', async () => {
+    connectionState.rows = [
+      {
+        id: 'pve:homelab',
+        ownerType: 'pve',
+        name: 'homelab',
+        subtitle: 'Cluster · 1 node',
+        source: 'api',
+        host: undefined,
+        coverageLabels: ['VMs', 'Containers', 'Storage', 'Backups'],
+        statusLabel: 'Active',
+        statusClassName: 'bg-green-100 text-green-800',
+        agentUpdateCount: 0,
+        lastActivityText: '3s ago',
+        enabled: true,
+        canEdit: true,
+        canPause: true,
+        canRemove: true,
+        isAgent: false,
+        isCluster: true,
+        attachedConnections: [],
+        members: [
+          {
+            id: 'node-pi',
+            name: 'pi',
+            subtitle: 'API contact',
+            source: 'agent',
+            host: 'https://pi:8006',
+            hostAliases: ['pi', '192.168.0.2'],
+            coverageLabels: ['Host telemetry'],
+            statusLabel: 'Active',
+            statusClassName: 'bg-green-100 text-green-800',
+            lastActivityText: '3s ago',
+            primary: true,
+          },
+        ],
+        connection: connectionFixture({
+          id: 'pve:homelab',
+          name: 'homelab',
+          address: 'https://pi:8006',
+        }),
+      },
+    ];
+
+    renderWorkspace({
+      discoveredNodes: () => [
+        {
+          ip: '192.168.0.2',
+          port: 8006,
+          type: 'pve',
+          version: '8.2.2',
+        },
+      ],
+      discoveryScanStatus: () => ({ scanning: false, lastResultAt: Date.now() }),
+    });
+
+    await waitFor(() => expect(screen.getByText('homelab')).toBeInTheDocument());
+    expect(screen.queryByText('192.168.0.2')).not.toBeInTheDocument();
+    expect(screen.queryByText('Discovered')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Review$/i })).toBeNull();
+  });
+
   it('opens a type-specific add route from the matching platform section', () => {
     renderWorkspace();
 
@@ -437,6 +500,7 @@ describe('InfrastructureWorkspace', () => {
         canPause: true,
         canRemove: true,
         isAgent: false,
+        isCluster: false,
         attachedConnections: [attachedAgent],
         members: [],
         connection: primaryConnection,
@@ -490,10 +554,10 @@ describe('InfrastructureWorkspace', () => {
         id: primaryConnection.id,
         ownerType: 'pve',
         name: 'homelab',
-        subtitle: 'via platform API and Pulse Agent',
-        source: 'both',
-        host: primaryConnection.address,
-        coverageLabels: ['VMs', 'Containers', 'Storage', 'Backups', 'Host telemetry'],
+        subtitle: 'Cluster · 2 nodes',
+        source: 'api',
+        host: undefined,
+        coverageLabels: ['VMs', 'Containers', 'Storage', 'Backups'],
         statusLabel: 'Active',
         statusClassName: 'bg-green-100 text-green-800',
         agentUpdateCount: 0,
@@ -503,13 +567,14 @@ describe('InfrastructureWorkspace', () => {
         canPause: true,
         canRemove: true,
         isAgent: false,
+        isCluster: true,
         attachedConnections: [dellyAgent, minipcAgent],
         members: [
           {
             id: 'node-delly',
             name: 'delly',
-            subtitle: 'Primary cluster node',
-            source: 'both',
+            subtitle: 'API contact',
+            source: 'agent',
             host: 'https://delly:8006',
             coverageLabels: ['Host telemetry'],
             statusLabel: 'Active',
@@ -522,7 +587,7 @@ describe('InfrastructureWorkspace', () => {
             id: 'node-minipc',
             name: 'minipc',
             subtitle: 'Cluster member',
-            source: 'both',
+            source: 'agent',
             host: 'https://minipc:8006',
             coverageLabels: ['Host telemetry'],
             statusLabel: 'Active',
@@ -539,7 +604,9 @@ describe('InfrastructureWorkspace', () => {
     renderWorkspace();
 
     await waitFor(() => expect(screen.getByText('homelab')).toBeInTheDocument());
-    expect(screen.getAllByText('API + Agent').length).toBeGreaterThan(0);
+    expect(screen.getByText('Cluster · 2 nodes')).toBeInTheDocument();
+    expect(screen.getByText('API contact')).toBeInTheDocument();
+    expect(screen.getAllByText('Agent').length).toBeGreaterThan(0);
     expect(screen.getByText('delly')).toBeInTheDocument();
     expect(screen.getByText('minipc')).toBeInTheDocument();
     expect(screen.getAllByText('Host telemetry').length).toBeGreaterThan(0);

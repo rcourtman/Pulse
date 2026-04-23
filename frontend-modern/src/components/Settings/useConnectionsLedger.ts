@@ -142,12 +142,32 @@ const moreSevereState = (
   return CONNECTION_STATE_SEVERITY[right] > CONNECTION_STATE_SEVERITY[left] ? right : left;
 };
 
+const oldestTimestamp = (
+  values: ReadonlyArray<string | null | undefined>,
+): string | undefined => {
+  let oldestMs: number | undefined;
+  let oldestRaw: string | undefined;
+  for (const value of values) {
+    if (!value) continue;
+    const ms = Date.parse(value);
+    if (Number.isNaN(ms)) continue;
+    if (oldestMs === undefined || ms < oldestMs) {
+      oldestMs = ms;
+      oldestRaw = value;
+    }
+  }
+  return oldestRaw;
+};
+
+interface ClusterRollup {
+  state: ConnectionState;
+  lastSeen?: string;
+}
+
 const memberSubtitleFor = (member: ConnectionSystemMember): string =>
-  member.primary ? 'Primary cluster node' : 'Cluster member';
+  member.primary ? 'API contact' : 'Cluster member';
 
 const buildMemberRow = (
-  ownerType: ConnectionType,
-  primaryConnection: Connection,
   member: ConnectionSystemMember,
   connectionsByID: Map<string, Connection>,
 ): InfrastructureSystemMemberRow | null => {
@@ -157,15 +177,7 @@ const buildMemberRow = (
   const agentConnection = member.agentConnectionId
     ? connectionsByID.get(member.agentConnectionId)
     : undefined;
-  const memberConnections = PLATFORM_API_TYPES.has(ownerType)
-    ? [primaryConnection, ...(agentConnection ? [agentConnection] : [])]
-    : agentConnection
-      ? [agentConnection]
-      : [];
-  const source =
-    memberConnections.length > 0
-      ? sourceFor(memberConnections)
-      : ('unknown' as InfrastructureSourceKind);
+  const source: InfrastructureSourceKind = agentConnection ? 'agent' : 'unknown';
   const state = moreSevereState(member.state, agentConnection?.state);
   const presentation = STATE_PRESENTATION[state] ?? STATE_PRESENTATION.pending;
   const lastSeen =
@@ -179,6 +191,7 @@ const buildMemberRow = (
     subtitle: memberSubtitleFor(member),
     source,
     host: member.endpoint?.trim() || undefined,
+    hostAliases: member.hostAliases?.filter((alias) => alias.trim().length > 0) ?? [],
     coverageLabels: agentConnection ? coverageLabelsFor([agentConnection]) : [],
     statusLabel: presentation.label,
     statusClassName: presentation.badgeClass,
@@ -194,15 +207,19 @@ const buildRow = (
   componentConnections: readonly Connection[],
   system?: ConnectionSystem | null,
   members: InfrastructureSystemMemberRow[] = [],
+  rollup?: ClusterRollup,
 ): InfrastructureSystemRow => {
-  const presentation = STATE_PRESENTATION[primaryConnection.state] ?? STATE_PRESENTATION.pending;
+  const rolledState = rollup?.state ?? primaryConnection.state;
+  const presentation = STATE_PRESENTATION[rolledState] ?? STATE_PRESENTATION.pending;
   const clusterName = system?.clusterName?.trim();
+  const isCluster = ownerType === 'pve' && Boolean(clusterName) && members.length > 0;
   const name =
     ownerType === 'pve' && clusterName
       ? clusterName
       : primaryConnection.name || primaryConnection.address || primaryConnection.id;
-  const host =
-    primaryConnection.address && primaryConnection.address !== name
+  const host = isCluster
+    ? undefined
+    : primaryConnection.address && primaryConnection.address !== name
       ? primaryConnection.address
       : undefined;
   const attachedConnections = componentConnections.filter(
@@ -211,25 +228,36 @@ const buildRow = (
   const lastErrorMessage =
     primaryConnection.lastError?.message ??
     attachedConnections.find((connection) => connection.lastError?.message)?.lastError?.message;
+  const hostTelemetryLabel = surfaceLabel('host');
+  const coverageLabels = isCluster
+    ? coverageLabelsFor(componentConnections).filter((label) => label !== hostTelemetryLabel)
+    : coverageLabelsFor(componentConnections);
+  const source: InfrastructureSourceKind = isCluster ? 'api' : sourceFor(componentConnections);
+  const subtitle = isCluster
+    ? `Cluster · ${members.length} ${members.length === 1 ? 'node' : 'nodes'}`
+    : subtitleFor(componentConnections, primaryConnection);
 
   return {
     id: primaryConnection.id,
     ownerType,
     name,
-    subtitle: subtitleFor(componentConnections, primaryConnection),
-    source: sourceFor(componentConnections),
+    subtitle,
+    source,
     host,
-    coverageLabels: coverageLabelsFor(componentConnections),
+    coverageLabels,
     statusLabel: presentation.label,
     statusClassName: presentation.badgeClass,
     agentUpdateCount: agentUpdateCountFor(componentConnections),
-    lastActivityText: connectionLastActivityText(primaryConnection),
+    lastActivityText: rollup
+      ? lastActivityTextFromLastSeen(rollup.lastSeen)
+      : connectionLastActivityText(primaryConnection),
     lastErrorMessage,
     enabled: primaryConnection.enabled,
     canEdit: EDITABLE_CONNECTION_TYPES.includes(primaryConnection.type),
     canPause: primaryConnection.capabilities.supportsPause,
     canRemove: primaryConnection.type !== 'docker' && primaryConnection.type !== 'kubernetes',
     isAgent: primaryConnection.type === 'agent',
+    isCluster,
     attachedConnections,
     members,
     connection: primaryConnection,
@@ -254,11 +282,38 @@ const systemToRow = (
     componentConnections.push(primaryConnection);
   }
 
-  const members = (system.members ?? [])
-    .map((member) => buildMemberRow(system.type, primaryConnection, member, connectionsByID))
+  const rawMembers = system.members ?? [];
+  const members = rawMembers
+    .map((member) => buildMemberRow(member, connectionsByID))
     .filter((member): member is InfrastructureSystemMemberRow => Boolean(member));
 
-  return buildRow(system.type, primaryConnection, componentConnections, system, members);
+  const isCluster =
+    system.type === 'pve' && Boolean(system.clusterName?.trim()) && members.length > 0;
+  let rollup: ClusterRollup | undefined;
+  if (isCluster) {
+    const memberAgents = rawMembers
+      .map((member) =>
+        member.agentConnectionId ? connectionsByID.get(member.agentConnectionId) : undefined,
+      )
+      .filter((connection): connection is Connection => Boolean(connection));
+    const states: ConnectionState[] = [
+      primaryConnection.state,
+      ...rawMembers.map((member) => member.state),
+      ...memberAgents.map((connection) => connection.state),
+    ];
+    const worstState = states.reduce<ConnectionState>(
+      (acc, state) => moreSevereState(acc, state),
+      'active',
+    );
+    const lastSeens: Array<string | null | undefined> = [
+      primaryConnection.lastSeen,
+      ...rawMembers.map((member) => member.lastSeen),
+      ...memberAgents.map((connection) => connection.lastSeen),
+    ];
+    rollup = { state: worstState, lastSeen: oldestTimestamp(lastSeens) };
+  }
+
+  return buildRow(system.type, primaryConnection, componentConnections, system, members, rollup);
 };
 
 export interface ConnectionsLedger {

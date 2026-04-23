@@ -427,7 +427,13 @@ the canonical monitored-system blocked payload.
     payload must also carry the backend-authored cluster member collection
     with node identity, endpoint, node-local status, and any linked agent
     connection id so the frontend can render child node composition without
-    reverse-engineering it from standalone agent rows. Agent-backed
+    reverse-engineering it from standalone agent rows. Those member records,
+    plus any primary or attached connection row that represents the same host,
+    must also carry canonical host aliases when the backend knows them, so
+    discovery and settings surfaces can reconcile hostname-only and IP-only
+    views of the same enrolled machine instead of showing a second
+    "discovered" candidate row for an already represented source member or
+    API-plus-agent source row. Agent-backed
     connections also own canonical version/update facts on that same payload:
     when a source or attachment is backed by Pulse Agent, `/api/connections`
     carries the

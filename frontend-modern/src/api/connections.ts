@@ -37,6 +37,7 @@ export interface Connection {
   type: ConnectionType;
   name: string;
   address: string;
+  hostAliases?: string[];
   state: ConnectionState;
   stateReason: string;
   enabled: boolean;
@@ -63,6 +64,7 @@ export interface ConnectionSystemMember {
   id: string;
   name: string;
   endpoint?: string;
+  hostAliases?: string[];
   state: ConnectionState;
   lastSeen?: string | null;
   primary?: boolean;

@@ -132,6 +132,7 @@ export interface InfrastructureSystemMemberRow {
   subtitle: string;
   source: InfrastructureSourceKind;
   host?: string;
+  hostAliases?: string[];
   coverageLabels: string[];
   statusLabel: string;
   statusClassName: string;
@@ -158,6 +159,7 @@ export interface InfrastructureSystemRow {
   canPause: boolean;
   canRemove: boolean;
   isAgent: boolean;
+  isCluster: boolean;
   attachedConnections: Connection[];
   members: InfrastructureSystemMemberRow[];
   connection: Connection;

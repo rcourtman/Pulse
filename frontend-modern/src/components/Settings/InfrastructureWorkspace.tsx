@@ -47,7 +47,10 @@ import {
   getInfrastructureOnboardingProductPresentation,
   type InfrastructureOnboardingConnectionType,
 } from '@/utils/infrastructureOnboardingPresentation';
-import type { DiscoveredServer } from './infrastructureSettingsModel';
+import {
+  filterRepresentedDiscoveredServers,
+  type DiscoveredServer,
+} from './infrastructureSettingsModel';
 
 export type InfrastructureWorkspaceProps = InfrastructurePlatformSettingsProps;
 
@@ -156,6 +159,13 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
   };
 
   const rows = createMemo(() => ledger.rows());
+  const visibleDiscoveredNodes = createMemo(() =>
+    filterRepresentedDiscoveredServers(
+      props.discoveredNodes(),
+      [...props.pveNodes(), ...props.pbsNodes(), ...props.pmgNodes()],
+      rows(),
+    ),
+  );
 
   const agentUninstallCommands = createMemo<AgentUninstallCommands>(() => ({
     linux: operations.getUninstallCommand(),
@@ -833,7 +843,7 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
     <div class="space-y-6">
       <InfrastructureSourceManager
         rows={rows}
-        discoveredNodes={props.discoveredNodes}
+        discoveredNodes={visibleDiscoveredNodes}
         discoveryEnabled={props.discoveryEnabled()}
         discoveryScanStatus={props.discoveryScanStatus}
         readOnly={readOnly()}

@@ -67,6 +67,7 @@ type Connection struct {
 	Type                 ConnectionType         `json:"type"`
 	Name                 string                 `json:"name"`
 	Address              string                 `json:"address"`
+	HostAliases          []string               `json:"hostAliases,omitempty"`
 	State                ConnectionState        `json:"state"`
 	StateReason          string                 `json:"stateReason,omitempty"`
 	Enabled              bool                   `json:"enabled"`
@@ -104,6 +105,7 @@ type ConnectionSystemMember struct {
 	ID                string          `json:"id"`
 	Name              string          `json:"name"`
 	Endpoint          string          `json:"endpoint,omitempty"`
+	HostAliases       []string        `json:"hostAliases,omitempty"`
 	State             ConnectionState `json:"state"`
 	LastSeen          *time.Time      `json:"lastSeen,omitempty"`
 	Primary           bool            `json:"primary,omitempty"`

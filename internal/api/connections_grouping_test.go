@@ -1,6 +1,7 @@
 package api
 
 import (
+	"reflect"
 	"testing"
 	"time"
 
@@ -121,8 +122,9 @@ func TestBuildConnectionSystems_ClusterMemberAgentsAttachToOwningProxmoxSystem(t
 				LastSeen: now,
 				Sources:  []unified.DataSource{unified.SourceProxmox, unified.SourceAgent},
 				Identity: unified.ResourceIdentity{
-					MachineID: "machine-delly",
-					Hostnames: []string{"delly"},
+					MachineID:   "machine-delly",
+					Hostnames:   []string{"delly"},
+					IPAddresses: []string{"192.168.0.10"},
 				},
 				Proxmox: &unified.ProxmoxData{
 					Instance:        "delly",
@@ -150,8 +152,9 @@ func TestBuildConnectionSystems_ClusterMemberAgentsAttachToOwningProxmoxSystem(t
 				LastSeen: now,
 				Sources:  []unified.DataSource{unified.SourceProxmox, unified.SourceAgent},
 				Identity: unified.ResourceIdentity{
-					MachineID: "machine-minipc",
-					Hostnames: []string{"minipc"},
+					MachineID:   "machine-minipc",
+					Hostnames:   []string{"minipc"},
+					IPAddresses: []string{"192.168.0.11"},
 				},
 				Proxmox: &unified.ProxmoxData{
 					Instance:        "delly",
@@ -264,6 +267,9 @@ func TestBuildConnectionSystems_ClusterMemberAgentsAttachToOwningProxmoxSystem(t
 	if dellyMember.Endpoint != "https://delly:8006" {
 		t.Fatalf("delly endpoint = %q, want %q", dellyMember.Endpoint, "https://delly:8006")
 	}
+	if !reflect.DeepEqual(dellyMember.HostAliases, []string{"delly", "192.168.0.10"}) {
+		t.Fatalf("delly host aliases = %+v, want %+v", dellyMember.HostAliases, []string{"delly", "192.168.0.10"})
+	}
 	if dellyMember.AgentConnectionID != "agent:agent-delly" {
 		t.Fatalf("delly agent connection = %q, want %q", dellyMember.AgentConnectionID, "agent:agent-delly")
 	}
@@ -280,6 +286,9 @@ func TestBuildConnectionSystems_ClusterMemberAgentsAttachToOwningProxmoxSystem(t
 	}
 	if minipcMember.Endpoint != "https://minipc:8006" {
 		t.Fatalf("minipc endpoint = %q, want %q", minipcMember.Endpoint, "https://minipc:8006")
+	}
+	if !reflect.DeepEqual(minipcMember.HostAliases, []string{"minipc", "192.168.0.11"}) {
+		t.Fatalf("minipc host aliases = %+v, want %+v", minipcMember.HostAliases, []string{"minipc", "192.168.0.11"})
 	}
 	if minipcMember.AgentConnectionID != "agent:agent-minipc" {
 		t.Fatalf("minipc agent connection = %q, want %q", minipcMember.AgentConnectionID, "agent:agent-minipc")

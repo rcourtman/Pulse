@@ -1,6 +1,7 @@
 package api
 
 import (
+	"reflect"
 	"testing"
 	"time"
 
@@ -161,6 +162,34 @@ func TestBuildConnections_AgentStateFromLastSeen(t *testing.T) {
 		if c.Capabilities.SupportsPause || c.Capabilities.SupportsScope {
 			t.Fatalf("agents must not advertise pause/scope capabilities: %+v", c)
 		}
+	}
+}
+
+func TestBuildConnections_AgentHostAliasesIncludeReportedIdentityHints(t *testing.T) {
+	now := time.Now()
+	in := aggregatorInputs{
+		hosts: []models.Host{
+			{
+				ID:           "pi",
+				Hostname:     "pi",
+				ReportIP:     "192.168.0.2",
+				LastSeen:     now,
+				AgentVersion: "6.0.0",
+				NetworkInterfaces: []models.HostNetworkInterface{
+					{Name: "eth0", Addresses: []string{"192.168.0.2/24", "fe80::1/64"}},
+				},
+			},
+		},
+		expectedAgentVersion: "6.0.1",
+		now:                  now,
+	}
+
+	got := buildConnections(in)
+	if len(got) != 1 {
+		t.Fatalf("expected 1 connection, got %d", len(got))
+	}
+	if !reflect.DeepEqual(got[0].HostAliases, []string{"pi", "192.168.0.2", "fe80::1"}) {
+		t.Fatalf("agent host aliases = %+v, want %+v", got[0].HostAliases, []string{"pi", "192.168.0.2", "fe80::1"})
 	}
 }
 

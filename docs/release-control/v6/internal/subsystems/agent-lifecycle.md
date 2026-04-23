@@ -404,7 +404,13 @@ an add-only capacity posture.
     must not reconstruct per-type health, scope, or last-seen columns
     from any retired reporting-local state for configured connection
     rows; the aggregator is the only configured-connections source of
-    truth. Per-row Edit, Pause/Resume, and Remove actions live directly
+    truth. That same aggregator-authored connection/member payload also owns
+    discovery reconciliation for already represented hosts: when a platform
+    row, its attached agent augmentation, or one of its child members already
+    carries canonical host aliases, the settings shell must suppress any
+    duplicate discovery candidate for that same platform instead of asking the
+    operator to review the same machine twice under a hostname row and an
+    IP-only candidate row. Per-row Edit, Pause/Resume, and Remove actions live directly
     on the `ConnectionsTable` row — wired through
     `frontend-modern/src/components/Settings/useConnectionRowActions.ts`
     which owns pause/remove API dispatch, two-click remove confirm, and

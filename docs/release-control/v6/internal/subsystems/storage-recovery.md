@@ -152,6 +152,15 @@ querying, and the operator-facing storage health presentation layer.
    any adjacent recovery-rollup query, so hidden workload-route selectors do
    not hydrate storage/recovery transport on the protected hot path.
 6. Preserve API-owned node identity continuity in shared `internal/api/` helpers so storage and recovery transport attachments do not fork by hostname-versus-IP drift across the same runtime.
+   That same adjacent `internal/api/` boundary also owns canonical
+   host-alias propagation on grouped-system and attached-connection payloads.
+   `internal/api/connections_types.go`,
+   `internal/api/connections_grouping.go`, and
+   `internal/api/connections_aggregator.go` must publish normalized
+   `hostAliases` whenever shared discovery or provider-backed inventory could
+   observe the same node by hostname and IP, so storage- and
+   recovery-adjacent consumers inherit one canonical represented-host identity
+   instead of inventing local merge heuristics.
    That same adjacent `internal/api/` boundary also keeps public hosted signup
    commercial-only: storage and recovery surfaces must not infer tenant
    existence, email issuance, or readiness from `/api/public/signup` response

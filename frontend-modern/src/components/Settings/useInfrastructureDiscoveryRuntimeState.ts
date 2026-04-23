@@ -5,7 +5,7 @@ import { SettingsAPI } from '@/api/settings';
 import type { EventDataMap, EventType } from '@/stores/events';
 import type { NodeConfigWithStatus } from '@/types/nodes';
 import {
-  collectConfiguredInfrastructureHosts,
+  filterRepresentedDiscoveredServers,
   type DiscoveryScanStatus,
   type DiscoveredServer,
 } from './infrastructureSettingsModel';
@@ -102,7 +102,6 @@ export const useInfrastructureDiscoveryRuntimeState = ({
       return;
     }
 
-    const { configuredHosts, clusterMemberIPs } = collectConfiguredInfrastructureHosts(nodes());
     const recognizedTypes = ['pve', 'pbs', 'pmg'] as const;
     type RecognizedType = (typeof recognizedTypes)[number];
     const isRecognizedType = (value: string): value is RecognizedType =>
@@ -142,26 +141,7 @@ export const useInfrastructureDiscoveryRuntimeState = ({
       })
       .filter((server): server is DiscoveredServer => server !== null);
 
-    const filtered = normalized.filter((server) => {
-      const serverIP = server.ip.toLowerCase();
-      const serverHostname = server.hostname?.toLowerCase();
-
-      if (
-        configuredHosts.has(serverIP) ||
-        (serverHostname && configuredHosts.has(serverHostname))
-      ) {
-        return false;
-      }
-
-      if (
-        clusterMemberIPs.has(serverIP) ||
-        (serverHostname && clusterMemberIPs.has(serverHostname))
-      ) {
-        return false;
-      }
-
-      return true;
-    });
+    const filtered = filterRepresentedDiscoveredServers(normalized, nodes());
 
     if (merge) {
       setDiscoveredNodes((previous) => {

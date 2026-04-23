@@ -25,6 +25,7 @@ describe('ConnectionsAPI', () => {
         type: 'pve',
         name: 'lab',
         address: 'https://pve.lab:8006',
+        hostAliases: ['lab', '192.168.0.2'],
         state: 'active',
         stateReason: '',
         enabled: true,
@@ -47,6 +48,7 @@ describe('ConnectionsAPI', () => {
             id: 'node-lab',
             name: 'lab',
             endpoint: 'https://lab:8006',
+            hostAliases: ['lab', '192.168.0.2'],
             state: 'active',
             lastSeen: '2026-04-23T12:00:00Z',
             primary: true,
@@ -100,6 +102,53 @@ describe('ConnectionsAPI', () => {
       expectedAgentVersion: '6.0.2',
       agentUpdateAvailable: true,
     });
+  });
+
+  it('list() preserves canonical host alias metadata on connections and grouped members', async () => {
+    mockedApiFetchJSON.mockResolvedValueOnce({
+      connections: [
+        {
+          id: 'agent:pi',
+          type: 'agent',
+          name: 'pi',
+          address: 'pi',
+          hostAliases: ['pi', '192.168.0.2'],
+          state: 'active',
+          stateReason: '',
+          enabled: true,
+          surfaces: ['host'],
+          scope: { host: true },
+          lastSeen: '2026-04-23T13:00:00Z',
+          lastError: null,
+          source: 'agent',
+          capabilities: { supportsPause: false, supportsScope: false, supportsTest: false },
+        },
+      ],
+      systems: [
+        {
+          id: 'pve:pi',
+          type: 'pve',
+          components: [
+            { connectionId: 'pve:pi', type: 'pve', role: 'primary' },
+            { connectionId: 'agent:pi', type: 'agent', role: 'attachment' },
+          ],
+          members: [
+            {
+              id: 'pve:pi:member',
+              name: 'pi',
+              endpoint: 'https://pi:8006',
+              hostAliases: ['pi', '192.168.0.2'],
+              state: 'active',
+            },
+          ],
+        },
+      ],
+    });
+
+    const result = await ConnectionsAPI.list();
+
+    expect(result.connections[0]?.hostAliases).toEqual(['pi', '192.168.0.2']);
+    expect(result.systems[0]?.members?.[0]?.hostAliases).toEqual(['pi', '192.168.0.2']);
   });
 
   it('probe() POSTs the address JSON and returns the candidates envelope', async () => {

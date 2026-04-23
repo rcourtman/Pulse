@@ -331,6 +331,14 @@ work extends shared components instead of creating new local variants.
    backend-authored cluster members, the table primitive must render those
    nodes as child composition beneath the cluster row rather than flattening
    them back into peer top-level systems or hiding them entirely.
+   That same landing-shell boundary also owns represented-host dedupe between
+   the unified ledger and the discovery strip. `InfrastructureWorkspace.tsx`,
+   `frontend-modern/src/components/Settings/useConnectionsLedger.ts`, and
+   `frontend-modern/src/components/Settings/infrastructureSettingsModel.ts`
+   must treat backend-authored hostname/IP aliases as canonical identity so an
+   already-represented platform row, attached agent augmentation, or grouped
+   member suppresses the matching discovered candidate instead of showing the
+   same machine twice under hostname-versus-IP drift.
    Phase 9 retired the
    parallel reporting/inventory surface entirely:
    `useInfrastructureReportingState`, `InfrastructureOperationsController`,

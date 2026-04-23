@@ -233,6 +233,7 @@ func connectionSystemMemberFromNode(
 		ID:                strings.TrimSpace(node.ID),
 		Name:              firstNonEmptyTrimmed(node.DisplayName, node.Name),
 		Endpoint:          strings.TrimSpace(node.Host),
+		HostAliases:       connectionSystemMemberHostAliasesFromNode(node),
 		State:             connectionSystemMemberStateFromNode(node),
 		LastSeen:          lastSeen,
 		Primary:           isPrimaryProxmoxSystemMember(primary, node.Name, node.Host),
@@ -273,6 +274,7 @@ func connectionSystemMemberFromResource(
 		ID:                strings.TrimSpace(resource.ID),
 		Name:              firstNonEmptyTrimmed(resource.Name, nodeName),
 		Endpoint:          strings.TrimSpace(resource.Proxmox.HostURL),
+		HostAliases:       connectionSystemMemberHostAliasesFromResource(resource),
 		State:             connectionSystemMemberStateFromResource(resource),
 		LastSeen:          lastSeen,
 		Primary:           isPrimaryProxmoxSystemMember(primary, nodeName, resource.Proxmox.HostURL),
@@ -306,7 +308,33 @@ func mergeConnectionSystemMembers(
 	if strings.TrimSpace(existing.AgentConnectionID) == "" {
 		existing.AgentConnectionID = candidate.AgentConnectionID
 	}
+	existing.HostAliases = appendNormalizedHosts(existing.HostAliases, candidate.HostAliases...)
 	return existing
+}
+
+func connectionSystemMemberHostAliasesFromNode(node models.Node) []string {
+	return appendNormalizedHosts(
+		nil,
+		node.Name,
+		node.DisplayName,
+		node.Host,
+	)
+}
+
+func connectionSystemMemberHostAliasesFromResource(resource unified.Resource) []string {
+	values := []string{
+		resource.Name,
+		canonicalResourceHostname(resource),
+	}
+	if resource.Proxmox != nil {
+		values = append(values, resource.Proxmox.NodeName, resource.Proxmox.HostURL)
+	}
+	if resource.Agent != nil {
+		values = append(values, resource.Agent.Hostname)
+	}
+	values = append(values, resource.Identity.Hostnames...)
+	values = append(values, resource.Identity.IPAddresses...)
+	return appendNormalizedHosts(nil, values...)
 }
 
 func connectionSystemMemberKey(member ConnectionSystemMember) string {
@@ -676,6 +704,10 @@ func normalizeHost(raw string) string {
 		value = host
 	}
 
+	if parsedIP, _, err := net.ParseCIDR(value); err == nil && parsedIP != nil {
+		return parsedIP.String()
+	}
+
 	if parsedIP := net.ParseIP(value); parsedIP != nil {
 		return parsedIP.String()
 	}
@@ -690,6 +722,34 @@ func canonicalResourceHostname(resource unified.Resource) string {
 		return ""
 	}
 	return strings.TrimSpace(resource.Canonical.Hostname)
+}
+
+func appendNormalizedHosts(existing []string, candidates ...string) []string {
+	seen := make(map[string]struct{}, len(existing)+len(candidates))
+	out := make([]string, 0, len(existing)+len(candidates))
+	for _, value := range existing {
+		normalized := normalizeHost(value)
+		if normalized == "" {
+			continue
+		}
+		if _, ok := seen[normalized]; ok {
+			continue
+		}
+		seen[normalized] = struct{}{}
+		out = append(out, normalized)
+	}
+	for _, candidate := range candidates {
+		normalized := normalizeHost(candidate)
+		if normalized == "" {
+			continue
+		}
+		if _, ok := seen[normalized]; ok {
+			continue
+		}
+		seen[normalized] = struct{}{}
+		out = append(out, normalized)
+	}
+	return out
 }
 
 func connectionTypePriority(typ ConnectionType) int {
