@@ -124,6 +124,7 @@ func convertUnifiedHostSMART(smart []unifiedresources.HostSMARTMeta) []models.Ho
 			Temperature: disk.Temperature,
 			Health:      disk.Health,
 			Standby:     disk.Standby,
+			Pool:        disk.Pool,
 			Attributes:  cloneSMARTAttributesModel(disk.Attributes),
 		}
 	}

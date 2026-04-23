@@ -368,6 +368,7 @@ type HostDiskSMART struct {
 	Temperature int              `json:"temperature"`       // Temperature in Celsius
 	Health      string           `json:"health,omitempty"`  // PASSED, FAILED, UNKNOWN
 	Standby     bool             `json:"standby,omitempty"` // True if disk was in standby
+	Pool        string           `json:"pool,omitempty"`    // ZFS pool this disk belongs to (empty if not a ZFS member)
 	Attributes  *SMARTAttributes `json:"attributes,omitempty"`
 }
 
@@ -1210,14 +1211,15 @@ type PhysicalDisk struct {
 	DevPath         string           `json:"devPath"` // /dev/nvme0n1, /dev/sda
 	Model           string           `json:"model"`
 	Serial          string           `json:"serial"`
-	WWN             string           `json:"wwn"`         // World Wide Name
-	Type            string           `json:"type"`        // nvme, sata, sas
-	Size            int64            `json:"size"`        // bytes
-	Health          string           `json:"health"`      // PASSED, FAILED, UNKNOWN
-	Wearout         int              `json:"wearout"`     // SSD wear metric from Proxmox (0-100, -1 when unavailable)
-	Temperature     int              `json:"temperature"` // Celsius (if available)
-	RPM             int              `json:"rpm"`         // 0 for SSDs
-	Used            string           `json:"used"`        // Filesystem or partition usage
+	WWN             string           `json:"wwn"`          // World Wide Name
+	Type            string           `json:"type"`         // nvme, sata, sas
+	Size            int64            `json:"size"`         // bytes
+	Health          string           `json:"health"`       // PASSED, FAILED, UNKNOWN
+	Wearout         int              `json:"wearout"`      // SSD wear metric from Proxmox (0-100, -1 when unavailable)
+	Temperature     int              `json:"temperature"`  // Celsius (if available)
+	RPM             int              `json:"rpm"`          // 0 for SSDs
+	Used            string           `json:"used"`         // Filesystem or partition usage
+	StorageGroup    string           `json:"storageGroup"` // Pool/VG/array this disk belongs to (e.g. ZFS pool name); empty if not matched
 	SmartAttributes *SMARTAttributes `json:"smartAttributes,omitempty"`
 	LastChecked     time.Time        `json:"lastChecked"`
 }

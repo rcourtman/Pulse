@@ -129,6 +129,7 @@ type DiskSMART struct {
 	Temperature int              `json:"temperature"`       // Temperature in Celsius
 	Health      string           `json:"health,omitempty"`  // PASSED, FAILED, UNKNOWN
 	Standby     bool             `json:"standby,omitempty"` // True if disk was in standby
+	Pool        string           `json:"pool,omitempty"`    // ZFS pool this disk belongs to (empty if not a ZFS member)
 	Attributes  *SMARTAttributes `json:"attributes,omitempty"`
 }
 

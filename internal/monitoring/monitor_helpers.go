@@ -365,6 +365,7 @@ func convertAgentSMARTToModels(smart []agentshost.DiskSMART) []models.HostDiskSM
 			Temperature: disk.Temperature,
 			Health:      disk.Health,
 			Standby:     disk.Standby,
+			Pool:        disk.Pool,
 		}
 		if disk.Attributes != nil {
 			entry.Attributes = convertAgentSMARTAttributes(disk.Attributes)

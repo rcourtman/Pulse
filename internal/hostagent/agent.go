@@ -1252,6 +1252,12 @@ func (a *Agent) collectSMARTData(ctx context.Context) []agentshost.DiskSMART {
 		result = append(result, entry)
 	}
 
+	if pools, err := ZFSDiskPoolMap(ctx); err != nil {
+		a.logger.Debug().Err(err).Msg("Failed to collect ZFS pool membership for SMART annotation")
+	} else if len(pools) > 0 {
+		annotateSMARTWithZFSPools(result, pools)
+	}
+
 	a.logger.Debug().
 		Int("diskCount", len(result)).
 		Msg("Collected S.M.A.R.T. disk data")

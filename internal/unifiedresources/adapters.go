@@ -188,6 +188,7 @@ func resourceFromHost(host models.Host) (Resource, ResourceIdentity) {
 					Temperature: s.Temperature,
 					Health:      s.Health,
 					Standby:     s.Standby,
+					Pool:        s.Pool,
 					Attributes:  cloneSMARTAttributes(s.Attributes),
 				}
 			}
@@ -506,6 +507,11 @@ func resourceFromHostSMARTDisk(host models.Host, disk models.HostDiskSMART) (Res
 	unraidDisk := matchUnraidDisk(host.Unraid, disk)
 	assessment := storagehealth.AssessHostSMARTDisk(disk)
 
+	storageGroup := unraidDiskGroup(unraidDisk)
+	if storageGroup == "" {
+		storageGroup = strings.TrimSpace(disk.Pool)
+	}
+
 	resource := Resource{
 		Type:      ResourceTypePhysicalDisk,
 		Name:      name,
@@ -524,7 +530,7 @@ func resourceFromHostSMARTDisk(host models.Host, disk models.HostDiskSMART) (Res
 			Temperature:  disk.Temperature,
 			Used:         used,
 			StorageRole:  unraidDiskRole(unraidDisk),
-			StorageGroup: unraidDiskGroup(unraidDisk),
+			StorageGroup: storageGroup,
 			StorageState: unraidDiskState(unraidDisk),
 			SMART:        convertSMARTAttributes(disk.Attributes),
 			Risk:         physicalDiskRiskFromAssessment(assessment),
@@ -1295,18 +1301,19 @@ func resourceFromPhysicalDisk(disk models.PhysicalDisk) (Resource, ResourceIdent
 	assessment := storagehealth.AssessPhysicalDisk(disk)
 
 	pdMeta := &PhysicalDiskMeta{
-		DevPath:     disk.DevPath,
-		Model:       disk.Model,
-		Serial:      disk.Serial,
-		WWN:         disk.WWN,
-		DiskType:    disk.Type,
-		SizeBytes:   disk.Size,
-		Health:      disk.Health,
-		Wearout:     disk.Wearout,
-		Temperature: disk.Temperature,
-		RPM:         disk.RPM,
-		Used:        disk.Used,
-		Risk:        physicalDiskRiskFromAssessment(assessment),
+		DevPath:      disk.DevPath,
+		Model:        disk.Model,
+		Serial:       disk.Serial,
+		WWN:          disk.WWN,
+		DiskType:     disk.Type,
+		SizeBytes:    disk.Size,
+		Health:       disk.Health,
+		Wearout:      disk.Wearout,
+		Temperature:  disk.Temperature,
+		RPM:          disk.RPM,
+		Used:         disk.Used,
+		StorageGroup: disk.StorageGroup,
+		Risk:         physicalDiskRiskFromAssessment(assessment),
 	}
 
 	if disk.SmartAttributes != nil {

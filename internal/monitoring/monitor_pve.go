@@ -798,6 +798,7 @@ func (m *Monitor) maybePollPhysicalDisksAsync(
 
 		var allDisks []models.PhysicalDisk
 		polledNodes := make(map[string]bool) // Track which nodes we successfully polled
+		zfsPoolingEnabled := zfsMonitoringEnabledFromEnv()
 
 		for _, node := range nodeList {
 			// Check if context timed out
@@ -843,6 +844,21 @@ func (m *Monitor) maybePollPhysicalDisksAsync(
 			// Mark this node as successfully polled
 			polledNodes[node.Node] = true
 
+			// Build a disk→pool assignment for this node so each physical disk
+			// knows which ZFS pool (if any) it belongs to. Errors are
+			// non-fatal; we simply leave StorageGroup empty.
+			var poolAssignment *diskPoolAssignment
+			if zfsPoolingEnabled {
+				if pools, pErr := pveClient.GetZFSPoolsWithDetails(diskCtx, node.Node); pErr == nil {
+					poolAssignment = buildDiskPoolAssignment(pools)
+				} else {
+					log.Debug().
+						Err(pErr).
+						Str("node", node.Node).
+						Msg("Could not fetch ZFS pool details for disk→pool mapping; StorageGroup will be empty")
+				}
+			}
+
 			// Record each disk; alert evaluation happens after host-agent SMART merges
 			// so the canonical disk view includes post-merge health/wearout data.
 			for _, disk := range disks {
@@ -862,6 +878,9 @@ func (m *Monitor) maybePollPhysicalDisksAsync(
 					RPM:         disk.RPM,
 					Used:        disk.Used,
 					LastChecked: time.Now(),
+				}
+				if poolAssignment != nil {
+					physicalDisk.StorageGroup = poolAssignment.lookup(physicalDisk)
 				}
 
 				allDisks = append(allDisks, physicalDisk)

@@ -452,6 +452,7 @@ type HostSMARTMeta struct {
 	Temperature int                     `json:"temperature"`
 	Health      string                  `json:"health"`
 	Standby     bool                    `json:"standby,omitempty"`
+	Pool        string                  `json:"pool,omitempty"`
 	Attributes  *models.SMARTAttributes `json:"attributes,omitempty"`
 }
 

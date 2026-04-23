@@ -3310,6 +3310,7 @@ func hostSensorsFromReadStateView(sensors *unifiedresources.HostSensorMeta) mode
 				Temperature: smart.Temperature,
 				Health:      smart.Health,
 				Standby:     smart.Standby,
+				Pool:        smart.Pool,
 				Attributes:  smartAttributesCopy(smart.Attributes),
 			})
 		}
