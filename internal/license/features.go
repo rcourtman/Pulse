@@ -76,3 +76,10 @@ func GetTierDisplayName(tier Tier) string {
 func GetFeatureDisplayName(feature string) string {
 	return licensing.GetFeatureDisplayName(feature)
 }
+
+// IsCompatibilityOnlyFeature reports capability keys that remain valid runtime
+// contracts for backwards compatibility but should not be marketed as current
+// v6 commercial pillars or generic upgrade prompts.
+func IsCompatibilityOnlyFeature(feature string) bool {
+	return licensing.IsCompatibilityOnlyFeature(feature)
+}

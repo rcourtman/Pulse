@@ -728,7 +728,7 @@ describe('ProLicensePanel', () => {
     expect(screen.getByText('Push Notifications')).toBeInTheDocument();
     expect(screen.getByText('Extended Metric History')).toBeInTheDocument();
     expect(screen.getByText('Multi-Tenant Mode')).toBeInTheDocument();
-    expect(screen.queryByText('Kubernetes Analysis')).not.toBeInTheDocument();
+    expect(screen.queryByText('Kubernetes AI Analysis (Compatibility)')).not.toBeInTheDocument();
     expect(screen.queryByText('Multi-User Mode')).not.toBeInTheDocument();
     expect(screen.queryByText('White-Label Branding')).not.toBeInTheDocument();
     expect(screen.queryByText('Unlimited Instances')).not.toBeInTheDocument();
@@ -1155,7 +1155,7 @@ describe('ProLicensePanel', () => {
     );
     expect(proLicensePlanSectionSource).not.toContain('Your Pro trial has ended');
     expect(proLicensePlanSectionSource).not.toContain(
-      'Turn alert noise into root-cause answers, safe fixes, and 90-day incident history.',
+      'Turn alert noise into root-cause answers, safe fixes, and 90-day history.',
     );
     expect(selfHostedCommercialRecoverySectionSource).toContain(
       'SELF_HOSTED_RECOVERY_PRESENTATION',

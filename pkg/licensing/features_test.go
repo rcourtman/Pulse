@@ -225,7 +225,7 @@ func TestGetFeatureDisplayName(t *testing.T) {
 		{FeatureAIPatrol, "Pulse Patrol (Background Health Checks)"},
 		{FeatureAIAlerts, "Alert Analysis"},
 		{FeatureAIAutoFix, "Pulse Patrol Auto-Fix"},
-		{FeatureKubernetesAI, "Kubernetes Analysis"},
+		{FeatureKubernetesAI, "Kubernetes AI Analysis (Compatibility)"},
 		{FeatureUpdateAlerts, "Update Alerts (Container/Package Updates)"},
 		{FeatureRBAC, "Role-Based Access Control (RBAC)"},
 		{FeatureMultiUser, "Multi-User Mode"},
@@ -252,6 +252,15 @@ func TestGetFeatureDisplayName(t *testing.T) {
 				t.Errorf("GetFeatureDisplayName(%q) = %q, want %q", tt.feature, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestIsCompatibilityOnlyFeature(t *testing.T) {
+	if !IsCompatibilityOnlyFeature(FeatureKubernetesAI) {
+		t.Fatalf("expected %q to remain compatibility-only", FeatureKubernetesAI)
+	}
+	if IsCompatibilityOnlyFeature(FeatureAIAlerts) {
+		t.Fatalf("did not expect %q to be compatibility-only", FeatureAIAlerts)
 	}
 }
 

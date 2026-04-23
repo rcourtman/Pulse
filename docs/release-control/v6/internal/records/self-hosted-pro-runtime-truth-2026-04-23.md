@@ -58,7 +58,7 @@ The following should not be treated as primary marketed Pro pillars:
    capability bundle and confirms that Community / Relay / Pro monitored-system
    limits are all uncapped.
 2. `pulse-pro/license-server/public_pricing.go` already markets Pro as
-   root-cause analysis, safe remediation, longer incident memory, and included
+   root-cause analysis, safe remediation, 90-day history, and included
    team extras.
 3. `frontend-modern/src/components/Alerts/InvestigateAlertButton.tsx` and
    `frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts` show

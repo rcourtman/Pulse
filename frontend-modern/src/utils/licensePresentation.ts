@@ -37,7 +37,7 @@ const FEATURE_LABELS: Record<string, string> = {
   ai_patrol: 'Pulse Patrol',
   ai_alerts: 'Pulse Alert Analysis',
   ai_autofix: 'Patrol Auto-Fix',
-  kubernetes_ai: 'Kubernetes Analysis',
+  kubernetes_ai: 'Kubernetes AI Analysis (Compatibility)',
   update_alerts: 'Update Alerts',
   sso: 'Basic SSO (OIDC)',
   advanced_sso: 'Advanced SSO (SAML/Multi-Provider)',
@@ -761,14 +761,14 @@ export const getNoActiveProLicenseState = (): LicenseLoadingStateCopy => ({
 export const getTrialEndedProLicenseNotice = (): LicenseActionNotice => ({
   tone: 'border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-900 text-red-900 dark:text-red-100',
   title: 'Your Pro trial has ended',
-  body: 'Upgrade to keep root-cause analysis, safe auto-fix, and 90-day incident history.',
+  body: 'Upgrade to keep root-cause analysis, safe auto-fix, and 90-day history.',
   actionLabel: 'View Pro plans',
 });
 
 export const getInactiveProUpsellNotice = (): LicenseActionNotice => ({
   tone: 'border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900 text-amber-800 dark:text-amber-200',
   title: 'Upgrade to Pro',
-  body: 'Turn alert noise into root-cause answers, safe fixes, and 90-day incident history.',
+  body: 'Turn alert noise into root-cause answers, safe fixes, and 90-day history.',
   actionLabel: 'View Pro plans',
 });
 

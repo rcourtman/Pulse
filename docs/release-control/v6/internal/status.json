@@ -4334,21 +4334,7 @@
       ]
     }
   ],
-  "work_claims": [
-    {
-      "id": "codex-lane-l1",
-      "agent_id": "codex",
-      "summary": "Guard forward release signing against accidental trust-root drift",
-      "target_id": "v6-product-lane-expansion",
-      "claimed_at": "2026-04-22T18:47:37Z",
-      "heartbeat_at": "2026-04-22T18:47:37Z",
-      "expires_at": "2026-04-22T20:47:37Z",
-      "work_item": {
-        "kind": "lane",
-        "id": "L1"
-      }
-    }
-  ],
+  "work_claims": [],
   "open_decisions": [],
   "source_of_truth_file": "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md",
   "resolved_decisions": [
@@ -4851,6 +4837,19 @@
       "lane_ids": [
         "L3",
         "L8",
+        "L9"
+      ]
+    },
+    {
+      "id": "self-hosted-paid-surface-classification",
+      "summary": "Current v6 self-hosted paid surfaces now classify commercial capabilities explicitly: only the primary Pro pillars (root-cause analysis, safe remediation, 90-day history, and included admin extras) may be marketed in customer-facing copy and upgrade prompts; compatibility-only gates such as `kubernetes_ai` remain valid runtime facts but non-marketed, and legacy claims such as `incident memory`, `scheduled remediations`, and `execution audit trail` stay retired unless rebuilt into first-class product surfaces.",
+      "kind": "pricing",
+      "decided_at": "2026-04-23",
+      "subsystem_ids": [
+        "cloud-paid"
+      ],
+      "lane_ids": [
+        "L3",
         "L9"
       ]
     }

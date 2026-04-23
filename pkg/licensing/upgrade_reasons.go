@@ -12,6 +12,8 @@ type ReasonEntry struct {
 
 // UpgradeReasonMatrix is the canonical feature-to-upgrade-reason mapping.
 // Relay features use "Upgrade to Relay" messaging; Pro features use "Upgrade to Pro".
+// Compatibility-only capabilities must not appear here as generic marketed
+// upgrade reasons.
 var UpgradeReasonMatrix = []ReasonEntry{
 	{
 		Feature:   FeatureRelay,
@@ -50,40 +52,34 @@ var UpgradeReasonMatrix = []ReasonEntry{
 		Priority:  4,
 	},
 	{
-		Feature:   FeatureKubernetesAI,
-		Reason:    "Upgrade to Pro so Pulse can explain cluster pressure, failing pods, and likely causes without manual Kubernetes triage.",
-		ActionURL: UpgradeURLForFeature(FeatureKubernetesAI),
-		Priority:  5,
-	},
-	{
 		Feature:   FeatureRBAC,
 		Reason:    "Upgrade to Pro when more than one operator needs safe access boundaries around infrastructure changes.",
 		ActionURL: UpgradeURLForFeature(FeatureRBAC),
-		Priority:  6,
+		Priority:  5,
 	},
 	{
 		Feature:   FeatureAgentProfiles,
 		Reason:    "Upgrade to Pro to standardize agent behavior across systems without reconfiguring every install by hand.",
 		ActionURL: UpgradeURLForFeature(FeatureAgentProfiles),
-		Priority:  7,
+		Priority:  6,
 	},
 	{
 		Feature:   FeatureAdvancedSSO,
 		Reason:    "Upgrade to Pro to connect your identity provider and keep operator access aligned with your existing auth controls.",
 		ActionURL: UpgradeURLForFeature(FeatureAdvancedSSO),
-		Priority:  8,
+		Priority:  7,
 	},
 	{
 		Feature:   FeatureAuditLogging,
 		Reason:    "Upgrade to Pro to keep a trustworthy action trail for incident review, accountability, and compliance.",
 		ActionURL: UpgradeURLForFeature(FeatureAuditLogging),
-		Priority:  9,
+		Priority:  8,
 	},
 	{
 		Feature:   FeatureAdvancedReporting,
 		Reason:    "Upgrade to Pro to turn live infrastructure state into shareable reports without manual screenshot work.",
 		ActionURL: UpgradeURLForFeature(FeatureAdvancedReporting),
-		Priority:  10,
+		Priority:  9,
 	},
 }
 

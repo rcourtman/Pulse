@@ -51,13 +51,13 @@ describe('licensePresentation', () => {
     expect(getTrialEndedProLicenseNotice()).toEqual({
       tone: 'border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-900 text-red-900 dark:text-red-100',
       title: 'Your Pro trial has ended',
-      body: 'Upgrade to keep root-cause analysis, safe auto-fix, and 90-day incident history.',
+      body: 'Upgrade to keep root-cause analysis, safe auto-fix, and 90-day history.',
       actionLabel: 'View Pro plans',
     });
     expect(getInactiveProUpsellNotice()).toEqual({
       tone: 'border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900 text-amber-800 dark:text-amber-200',
       title: 'Upgrade to Pro',
-      body: 'Turn alert noise into root-cause answers, safe fixes, and 90-day incident history.',
+      body: 'Turn alert noise into root-cause answers, safe fixes, and 90-day history.',
       actionLabel: 'View Pro plans',
     });
     expect(SELF_HOSTED_RECOVERY_PRESENTATION).toMatchObject({
@@ -97,7 +97,7 @@ describe('licensePresentation', () => {
         'Pulse waits for the session presentation policy before showing license, billing, or usage details.',
       planSelectionPromptTitle: 'Compare self-hosted plans',
       planSelectionPromptBody:
-        'Community includes self-hosted monitoring. Look at Relay for secure access from anywhere, or Pulse Pro for root-cause answers, safe remediation, and 90-day incident history.',
+        'Community includes self-hosted monitoring. Look at Relay for secure access from anywhere, or Pulse Pro for root-cause answers, safe remediation, and 90-day history.',
       planSelectionPromptActionLabel: 'Compare plans',
       purchaseActivatedPlanActionLabel: 'Review plan',
       purchaseCancelledActionLabel: 'Compare plans',
@@ -106,7 +106,7 @@ describe('licensePresentation', () => {
       purchaseUnavailableActionLabel: 'Try again',
       trialStartTitle: 'Try Pro for free',
       trialStartBody:
-        'Start a 14-day Pro trial for root-cause analysis, safe auto-fix, and 90-day incident history on this organization.',
+        'Start a 14-day Pro trial for root-cause analysis, safe auto-fix, and 90-day history on this organization.',
       trialStartIdleActionLabel: 'Start 14-day Pro Trial',
       trialStartPendingActionLabel: 'Starting...',
       recoverySectionTitle: 'Activation & Recovery',

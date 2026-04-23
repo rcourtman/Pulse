@@ -100,3 +100,12 @@ func TestOperatorOutcomeUpgradeReasonsRemainCanonical(t *testing.T) {
 		}
 	}
 }
+
+func TestCompatibilityOnlyFeaturesStayOutOfGenericUpgradeReasons(t *testing.T) {
+	reasons := GenerateUpgradeReasons(nil)
+	for _, entry := range reasons {
+		if entry.Feature == FeatureKubernetesAI {
+			t.Fatalf("compatibility-only feature %q should not produce a generic upgrade reason", entry.Feature)
+		}
+	}
+}

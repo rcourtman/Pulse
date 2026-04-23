@@ -75,6 +75,37 @@ Migration policy:
 Support rule:
 - If any self-hosted v6 install shows a bounded monitored-system cap after activation or migration, treat it as a bug rather than as intended policy. Guest limits still follow the active tier or continuity contract.
 
+## V6 Product Classification
+
+Pulse keeps some entitlement keys for compatibility, but not every Pro
+capability key is a primary v6 product pillar.
+
+### Build On In v6
+
+These are the current self-hosted Pro pillars that Pulse should keep
+investing in, surfacing, and marketing:
+- Alert-triggered root-cause analysis.
+- Safe remediation through Patrol auto-fix and higher-autonomy controls.
+- 90-day history.
+- Included team/admin extras: Advanced SSO (SAML), RBAC, audit logging,
+  reporting, and agent profiles.
+
+### Compatibility-Only In v6
+
+These remain valid runtime gates for backwards compatibility, but should not
+be elevated into headline Pro marketing or generic upgrade prompts:
+- `FeatureKubernetesAI` / `kubernetes_ai`
+  - Keeps the legacy `/api/ai/kubernetes/analyze` route gate intact.
+  - Do not present it as a primary Pulse Pro pillar on current v6 surfaces.
+
+### Legacy / Retired Claims
+
+These should not appear as current v6 Pro promises unless they are rebuilt
+into first-class product surfaces:
+- `incident memory` as a standalone feature name
+- `scheduled remediations`
+- `execution audit trail`
+
 ## Feature Matrix
 
 Legend:

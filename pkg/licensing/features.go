@@ -27,7 +27,7 @@ const (
 	// Pro tier features (everything in Relay, plus:)
 	FeatureAIAlerts          = "ai_alerts"          // AI analysis when alerts fire
 	FeatureAIAutoFix         = "ai_autofix"         // Automatic remediation (one-click apply)
-	FeatureKubernetesAI      = "kubernetes_ai"      // AI analysis of K8s (NOT basic monitoring)
+	FeatureKubernetesAI      = "kubernetes_ai"      // Legacy Kubernetes analysis compatibility gate (NOT basic monitoring)
 	FeatureAgentProfiles     = "agent_profiles"     // Centralized agent configuration profiles
 	FeatureRBAC              = "rbac"               // Role-Based Access Control
 	FeatureAuditLogging      = "audit_logging"      // Persistent audit logs with signing
@@ -466,7 +466,7 @@ func GetFeatureDisplayName(feature string) string {
 	case FeatureAIAutoFix:
 		return "Pulse Patrol Auto-Fix"
 	case FeatureKubernetesAI:
-		return "Kubernetes Analysis"
+		return "Kubernetes AI Analysis (Compatibility)"
 	case FeatureUpdateAlerts:
 		return "Update Alerts (Container/Package Updates)"
 	case FeatureRBAC:
@@ -502,4 +502,16 @@ func GetFeatureDisplayName(feature string) string {
 	default:
 		return feature
 	}
+}
+
+var compatibilityOnlyFeatures = map[string]struct{}{
+	FeatureKubernetesAI: {},
+}
+
+// IsCompatibilityOnlyFeature reports capability keys that remain valid runtime
+// contracts for backwards compatibility but should not be marketed as current
+// v6 commercial pillars or generic upgrade prompts.
+func IsCompatibilityOnlyFeature(feature string) bool {
+	_, ok := compatibilityOnlyFeatures[feature]
+	return ok
 }

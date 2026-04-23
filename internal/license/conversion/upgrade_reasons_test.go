@@ -118,5 +118,10 @@ func expectedProOnlyFeatureSet() map[string]struct{} {
 	for _, feature := range license.TierFeatures[license.TierFree] {
 		delete(proFeatures, feature)
 	}
+	for feature := range proFeatures {
+		if license.IsCompatibilityOnlyFeature(feature) {
+			delete(proFeatures, feature)
+		}
+	}
 	return proFeatures
 }

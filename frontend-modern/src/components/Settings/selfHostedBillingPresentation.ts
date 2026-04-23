@@ -63,7 +63,7 @@ export const SELF_HOSTED_PRO_BILLING_PRESENTATION: SelfHostedProBillingPresentat
     'Pulse waits for the session presentation policy before showing license, billing, or usage details.',
   planSelectionPromptTitle: 'Compare self-hosted plans',
   planSelectionPromptBody:
-    'Community includes self-hosted monitoring. Look at Relay for secure access from anywhere, or Pulse Pro for root-cause answers, safe remediation, and 90-day incident history.',
+    'Community includes self-hosted monitoring. Look at Relay for secure access from anywhere, or Pulse Pro for root-cause answers, safe remediation, and 90-day history.',
   planSelectionPromptActionLabel: 'Compare plans',
   purchaseActivatedPlanActionLabel: 'Review plan',
   purchaseCancelledActionLabel: 'Compare plans',
@@ -72,7 +72,7 @@ export const SELF_HOSTED_PRO_BILLING_PRESENTATION: SelfHostedProBillingPresentat
   purchaseUnavailableActionLabel: 'Try again',
   trialStartTitle: 'Try Pro for free',
   trialStartBody:
-    'Start a 14-day Pro trial for root-cause analysis, safe auto-fix, and 90-day incident history on this organization.',
+    'Start a 14-day Pro trial for root-cause analysis, safe auto-fix, and 90-day history on this organization.',
   trialStartIdleActionLabel: 'Start 14-day Pro Trial',
   trialStartPendingActionLabel: 'Starting...',
   recoverySectionTitle: 'Activation & Recovery',

@@ -261,7 +261,7 @@ Community limit enforcement.
     pricing contract, and owned upgrade reasons. Customer-facing self-hosted
     copy must keep the ladder explicit as `Community = monitor`, `Relay = reach
     Pulse from anywhere`, and `Pro = investigate root cause, apply safe
-    remediation, and retain longer incident memory`. Team/admin extras such as
+    remediation, and retain 90-day history`. Team/admin extras such as
     RBAC, SSO, audit logging, reporting, and agent profiles may remain present,
     but they are secondary included value and must not displace that operator
     outcome framing on owned commercial surfaces.
@@ -294,7 +294,10 @@ Community limit enforcement.
     SSO, RBAC, audit logging, reporting, and agent profiles may appear as
     secondary included extras, while platform-specific compatibility keys such
     as `kubernetes_ai` must not be elevated into a marquee marketed Pro line
-    item on the self-hosted Plans surface.
+    item on the self-hosted Plans surface. Legacy packaging nouns such as
+    `incident memory`, `scheduled remediations`, and `execution audit trail`
+    must likewise stay out of current v6 commercial copy unless Pulse ships a
+    first-class product surface that makes those names truthful again.
 26. Keep hosted trial-activation verifier source selection compile-time owned.
     `pkg/licensing/trial_activation.go`,
     `pkg/licensing/trial_activation_public_key_override_dev.go`, and
@@ -1334,7 +1337,8 @@ the no-cap monitored-system model as well. `ProLicensePanel.tsx`,
 self-hosted packages as unlimited core monitoring plus plan-specific extras:
 Community stays free for core monitoring, Relay adds remote access/mobile/push
 convenience and 14-day history, Pro adds Relay plus AI operations, automation,
-advanced administration, and 90-day history, while Pro+ remains legacy
+root-cause analysis, safe remediation, advanced administration, and 90-day
+history, while Pro+ remains legacy
 continuity only. Cloud/MSP pricing semantics stay separate, and grandfathered
 v5 continuity copy remains an explicit boundary policy.
 That same settings-owned presentation must distinguish between active
@@ -1383,7 +1387,10 @@ That same `frontend-modern/src/utils/licensePresentation.ts` owner must treat
 compatibility-only capability keys such as `kubernetes_ai` as non-marketed
 technical facts: API/docs surfaces may still name the compatibility route, but
 customer-facing self-hosted current-plan summaries and unlocked-capability
-lists must not surface those keys as marquee Pro value.
+lists must not surface those keys as marquee Pro value. The same rule applies
+to legacy claims such as `incident memory`: current v6 upgrade notices and
+commercial copy must use the canonical 90-day history framing until a distinct
+incident-memory product exists.
 That same plan-section boundary must also defer notice resolution to component
 runtime. `frontend-modern/src/components/Settings/ProLicensePlanSection.tsx`
 may not compute trial-ended notices at module scope, because hosted settings

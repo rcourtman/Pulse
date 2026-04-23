@@ -421,7 +421,7 @@ async function openMonitoredSystemUpgradeArrival(page: Page) {
   );
   await expect(
     page.getByText(
-      "Community includes self-hosted monitoring. Look at Relay for secure access from anywhere, or Pulse Pro for root-cause answers, safe remediation, and 90-day incident history.",
+      "Community includes self-hosted monitoring. Look at Relay for secure access from anywhere, or Pulse Pro for root-cause answers, safe remediation, and 90-day history.",
     ),
   ).toBeVisible();
   await expect(page.getByRole("button", { name: "Hide counting rules" })).toHaveCount(0);
