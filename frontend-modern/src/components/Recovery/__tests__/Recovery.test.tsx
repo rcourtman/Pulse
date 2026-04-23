@@ -825,6 +825,94 @@ describe('Recovery', () => {
     expect(within(detailsPanel as HTMLTableCellElement).getByText('Finance')).toBeInTheDocument();
   });
 
+  it('uses the current history result set for cross-day protection chain context', async () => {
+    const originalPoints = pointsByRollupId['res:vm-123'];
+    pointsByRollupId['res:vm-123'] = [
+      {
+        ...originalPoints[0],
+        id: 'p1-local',
+        itemResourceId: 'vm-123',
+        completedAt: '2026-02-14T10:00:00.000Z',
+      },
+      {
+        id: 'p1-remote',
+        platform: 'proxmox-pbs',
+        itemResourceId: 'vm-123',
+        kind: 'backup',
+        mode: 'remote',
+        outcome: 'success',
+        verified: true,
+        completedAt: '2026-02-13T09:30:00.000Z',
+        repositoryRef: {
+          type: 'pbs-datastore',
+          namespace: 'pbs-main',
+          name: 'fast-store',
+        },
+        display: {
+          itemType: 'vm',
+          subjectType: 'proxmox-vm',
+          entityIdLabel: '123',
+        },
+      },
+    ];
+
+    try {
+      render(() => <Recovery />);
+
+      fireEvent.click(await screen.findByText('VM 123'));
+      await screen.findByText(/Showing 1 - 2 of 2 recovery points/i);
+      fireEvent.click(screen.getByText('10:00'));
+
+      const detailsPanel = await screen.findByText('Recovery Point Details');
+      const detailsCell = detailsPanel.closest('td');
+      expect(detailsCell).not.toBeNull();
+      expect(
+        within(detailsCell as HTMLTableCellElement).getByText('Protection chain'),
+      ).toBeInTheDocument();
+      expect(
+        within(detailsCell as HTMLTableCellElement).getByText('Remote copy'),
+      ).toBeInTheDocument();
+      expect(
+        within(detailsCell as HTMLTableCellElement).getByText(/fast-store · PBS/i),
+      ).toBeInTheDocument();
+    } finally {
+      pointsByRollupId['res:vm-123'] = originalPoints;
+    }
+  });
+
+  it('keeps recovery event context visible when mobile columns collapse', async () => {
+    const originalWidth = window.innerWidth;
+    Object.defineProperty(window, 'innerWidth', {
+      configurable: true,
+      writable: true,
+      value: 500,
+    });
+
+    try {
+      render(() => <Recovery />);
+
+      fireEvent.click(await screen.findByText('VM 123'));
+      await screen.findByText(/Showing 1 - 1 of 1 recovery points/i);
+
+      const tables = await screen.findAllByRole('table');
+      const historyTable = tables[tables.length - 1];
+      const historyRow = within(historyTable).getByText('VMID 123').closest('tr');
+      expect(historyRow).not.toBeNull();
+      expect(within(historyRow!).getByText('Local Copy')).toBeInTheDocument();
+      expect(within(historyRow!).getByText('PVE')).toBeInTheDocument();
+      expect(within(historyRow!).getByText('fast-store')).toBeInTheDocument();
+      expect(within(historyRow!).getByText('Verification unknown')).toBeInTheDocument();
+      expect(within(historyTable).queryByText('Method')).not.toBeInTheDocument();
+      expect(within(historyTable).queryByText('Target')).not.toBeInTheDocument();
+    } finally {
+      Object.defineProperty(window, 'innerWidth', {
+        configurable: true,
+        writable: true,
+        value: originalWidth,
+      });
+    }
+  });
+
   it('keeps optional history placement columns on the neutral recovery vocabulary', async () => {
     facetsPayload.clusters = ['lab-cluster'];
     facetsPayload.nodesAgents = ['pve-01'];

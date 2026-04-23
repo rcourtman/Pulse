@@ -82,12 +82,34 @@ const labelForRef = (ref: RecoveryExternalRef | null | undefined): string => {
 };
 
 type RecoveryChainStage = 'snapshot' | 'local' | 'remote';
+type RestoreActionTone = 'success' | 'warning' | 'danger' | 'info';
 
 const CHAIN_STAGES: Array<{ id: RecoveryChainStage; label: string }> = [
   { id: 'snapshot', label: 'Local snapshot' },
   { id: 'local', label: 'Local copy' },
   { id: 'remote', label: 'Remote copy' },
 ];
+
+interface ProtectionChainStageSummary {
+  id: RecoveryChainStage;
+  label: string;
+  point: RecoveryPoint | null;
+  outcome: ReturnType<typeof normalizeRecoveryOutcome> | null;
+  outcomeLabel: string;
+  detail: string;
+}
+
+interface RestoreActionStep {
+  label: string;
+  detail: string;
+}
+
+interface RestoreActionPath {
+  label: string;
+  detail: string;
+  tone: RestoreActionTone;
+  steps: RestoreActionStep[];
+}
 
 const normalizeDetailText = (value: unknown): string => {
   if (typeof value === 'string') return value.trim();
@@ -146,6 +168,38 @@ const getArtifactSummaryLabel = (p: RecoveryPoint): string => {
   return kindLabel === modeLabel ? kindLabel : `${kindLabel} / ${modeLabel}`;
 };
 
+const getVerificationTimestampMs = (p: RecoveryPoint): number => {
+  const timestampKeys = [
+    'verifiedAt',
+    'lastVerifiedAt',
+    'verificationAt',
+    'verificationTime',
+    'verificationTimestamp',
+    'verificationStartedAt',
+    'verificationCompletedAt',
+  ];
+
+  for (const key of timestampKeys) {
+    const value = p.details?.[key];
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      const ms = value > 10_000_000_000 ? value : value * 1000;
+      if (Number.isFinite(ms) && ms > 0) return ms;
+    }
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      if (!trimmed) continue;
+      const parsed = Date.parse(trimmed);
+      if (Number.isFinite(parsed) && parsed > 0) return parsed;
+      const numeric = Number(trimmed);
+      if (Number.isFinite(numeric) && numeric > 0) {
+        return numeric > 10_000_000_000 ? numeric : numeric * 1000;
+      }
+    }
+  }
+
+  return 0;
+};
+
 const getTargetSummaryLabel = (p: RecoveryPoint): string => {
   const repositoryLabel = getRecoveryPointRepositoryLabel(p);
   if (repositoryLabel) return repositoryLabel;
@@ -176,6 +230,209 @@ const formatChainPointDetail = (p: RecoveryPoint): string => {
   ]
     .filter(Boolean)
     .join(' · ');
+};
+
+const getVerificationEvidenceLabel = (p: RecoveryPoint): string => {
+  const state = detailString(p, 'verificationState') || detailString(p, 'verificationStatus');
+  if (state) return `State: ${state}`;
+  const rawVerification =
+    detailString(p, 'verification') ||
+    detailString(p, 'verificationResult') ||
+    detailString(p, 'verifyResult');
+  if (rawVerification) return `Source: ${rawVerification}`;
+  const upid = detailString(p, 'verificationUpid') || detailString(p, 'verificationTaskId');
+  if (upid) return 'Verification task reference recorded';
+  if (p.verified === true) return 'Verified flag recorded by recovery ingest';
+  if (p.verified === false) return 'Failed verification flag recorded by recovery ingest';
+  return 'No verification evidence recorded';
+};
+
+const getVerificationMethodLabel = (p: RecoveryPoint): string => {
+  const explicit =
+    detailString(p, 'verificationMethod') ||
+    detailString(p, 'verificationSource') ||
+    detailString(p, 'verifier');
+  if (explicit) return explicit;
+
+  const platform = normalizeSourcePlatformQueryValue(getRecoveryPointPlatform(p));
+  if (platform === 'proxmox-pbs' && (detailString(p, 'verificationState') || detailString(p, 'verificationUpid'))) {
+    return 'PBS catalog verification';
+  }
+  if (detailString(p, 'verification')) return 'Backup metadata verification flag';
+  if (p.verified != null) return 'Recovery ingest verification flag';
+  return 'No verifier recorded';
+};
+
+const getVerificationConfidence = (
+  p: RecoveryPoint,
+  outcome: ReturnType<typeof normalizeRecoveryOutcome>,
+): { label: string; className: string } => {
+  if (p.verified === true) {
+    const hasSourceEvidence =
+      Boolean(detailString(p, 'verificationState')) ||
+      Boolean(detailString(p, 'verification')) ||
+      Boolean(detailString(p, 'verificationUpid'));
+    return {
+      label: hasSourceEvidence ? 'High confidence' : 'Recorded verified',
+      className: 'text-emerald-600 dark:text-emerald-400',
+    };
+  }
+  if (p.verified === false) {
+    return {
+      label: 'Failed verification',
+      className: 'text-rose-600 dark:text-rose-400',
+    };
+  }
+  if (outcome === 'success' || outcome === 'warning') {
+    return {
+      label: 'Needs verification',
+      className: 'text-amber-600 dark:text-amber-400',
+    };
+  }
+  return {
+    label: 'Not assessed',
+    className: 'text-muted',
+  };
+};
+
+const getRestoreActionPath = (
+  p: RecoveryPoint,
+  targetLabel: string,
+  platformLabel: string,
+  chain: ProtectionChainStageSummary[],
+  failureDetail: string,
+): RestoreActionPath => {
+  const outcome = normalizeRecoveryOutcome(p.outcome);
+  const presentStages = chain.filter((stage) => stage.point !== null);
+  const chainDetail =
+    presentStages.length > 1
+      ? `${presentStages.map((stage) => stage.label).join(', ')} present in current results.`
+      : presentStages.length === 1
+        ? `${presentStages[0].label} present in current results.`
+        : 'No adjacent chain stages are visible in the current results.';
+
+  if (outcome === 'failed') {
+    return {
+      label: 'Investigate source task',
+      detail: 'This event did not produce a usable recovery point.',
+      tone: 'danger',
+      steps: [
+        {
+          label: 'Open source task evidence',
+          detail: failureDetail || 'Inspect the source platform task or job log for the failing step.',
+        },
+        {
+          label: 'Re-run protection before restore planning',
+          detail: 'Use a newer successful point or complete a fresh protection run before relying on this item.',
+        },
+      ],
+    };
+  }
+
+  if (outcome === 'running') {
+    return {
+      label: 'Wait for completion',
+      detail: 'The event is still collecting recovery metadata.',
+      tone: 'info',
+      steps: [
+        {
+          label: 'Keep this point out of restore plans',
+          detail: 'Use the completed event row once the platform reports a terminal outcome.',
+        },
+        {
+          label: 'Check chain coverage after completion',
+          detail: chainDetail,
+        },
+      ],
+    };
+  }
+
+  if (p.verified === false) {
+    return {
+      label: 'Do not restore from this point yet',
+      detail: 'Verification failed, so the artifact should be treated as suspect.',
+      tone: 'warning',
+      steps: [
+        {
+          label: 'Rerun platform verification',
+          detail: 'Verify the artifact from the source platform before promoting it to a restore candidate.',
+        },
+        {
+          label: 'Prefer an older verified point',
+          detail: 'Use a known-good point if restore pressure is high.',
+        },
+      ],
+    };
+  }
+
+  if (p.verified === true) {
+    return {
+      label: 'Ready for restore planning',
+      detail: 'The recovery point is verified; restore still needs an operator-approved target and isolation decision.',
+      tone: 'success',
+      steps: [
+        {
+          label: 'Confirm target and retention',
+          detail: `${targetLabel} · ${chainDetail}`,
+        },
+        {
+          label: 'Plan an isolated test restore',
+          detail: 'Restore to an alternate location first when replacing production would be destructive.',
+        },
+        {
+          label: 'Execute from the source platform',
+          detail: `Use ${platformLabel || 'the source platform'} with this point's item and target identifiers.`,
+        },
+      ],
+    };
+  }
+
+  if (outcome === 'success' || outcome === 'warning') {
+    return {
+      label: 'Verify before restore use',
+      detail: 'The event completed, but no successful verification result is recorded.',
+      tone: 'warning',
+      steps: [
+        {
+          label: 'Run artifact verification',
+          detail: 'Use the platform verifier or a non-destructive test restore before treating this as a restore candidate.',
+        },
+        {
+          label: 'Confirm target and chain',
+          detail: `${targetLabel} · ${chainDetail}`,
+        },
+      ],
+    };
+  }
+
+  return {
+    label: 'Review before restore planning',
+    detail: 'The event outcome is not enough to trust this point automatically.',
+    tone: 'warning',
+    steps: [
+      {
+        label: 'Inspect platform details',
+        detail: 'Check the source platform state, target location, and any technical metadata before restore use.',
+      },
+      {
+        label: 'Prefer a verified point',
+        detail: 'Use a verified successful point where one exists for the same item.',
+      },
+    ],
+  };
+};
+
+const getRestoreActionToneClass = (tone: RestoreActionTone): string => {
+  switch (tone) {
+    case 'success':
+      return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200';
+    case 'danger':
+      return 'border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-200';
+    case 'info':
+      return 'border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-200';
+    default:
+      return 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-200';
+  }
 };
 
 const computeDatastoreUsagePercent = (datastore: PBSDatastore): number => {
@@ -389,7 +646,7 @@ export const RecoveryPointDetails: Component<RecoveryPointDetailsProps> = (props
     }
 
     const candidates = [...byId.values()];
-    return CHAIN_STAGES.map((stage) => {
+    return CHAIN_STAGES.map((stage): ProtectionChainStageSummary => {
       const stagePoint =
         candidates
           .filter((candidate) => getPointChainStage(candidate) === stage.id)
@@ -406,6 +663,44 @@ export const RecoveryPointDetails: Component<RecoveryPointDetailsProps> = (props
   });
   const hasProtectionChain = createMemo(() =>
     protectionChain().some((stage) => stage.point !== null),
+  );
+  const verificationTimestamp = createMemo(() => getVerificationTimestampMs(point()));
+  const verificationConfidence = createMemo(() =>
+    getVerificationConfidence(point(), normalizedOutcome()),
+  );
+  const verificationProvenancePairs = createMemo(() => [
+    {
+      k: 'Verifier',
+      v: getVerificationMethodLabel(point()),
+      valueClass: 'text-base-content',
+    },
+    {
+      k: 'Checked',
+      v:
+        verificationTimestamp() > 0
+          ? formatAbsoluteTime(verificationTimestamp())
+          : 'No verification timestamp recorded',
+      valueClass: 'text-base-content',
+    },
+    {
+      k: 'Evidence',
+      v: getVerificationEvidenceLabel(point()),
+      valueClass: 'text-base-content',
+    },
+    {
+      k: 'Confidence',
+      v: verificationConfidence().label,
+      valueClass: verificationConfidence().className,
+    },
+  ]);
+  const restoreActionPath = createMemo(() =>
+    getRestoreActionPath(
+      point(),
+      targetLabel(),
+      platformLabel(),
+      protectionChain(),
+      failureDetail(),
+    ),
   );
   const operatorSummaryPairs = createMemo(() => [
     {
@@ -608,6 +903,29 @@ export const RecoveryPointDetails: Component<RecoveryPointDetailsProps> = (props
             </div>
           </div>
         </Show>
+        <div
+          class={`mt-3 rounded border px-3 py-2 text-xs ${getRestoreActionToneClass(
+            restoreActionPath().tone,
+          )}`}
+        >
+          <div class="flex flex-wrap items-start justify-between gap-2">
+            <div>
+              <div class="font-semibold">Restore action path</div>
+              <div class="mt-0.5 text-[13px] font-semibold">{restoreActionPath().label}</div>
+              <div class="mt-1 text-[11px] leading-4">{restoreActionPath().detail}</div>
+            </div>
+          </div>
+          <div class="mt-2 grid gap-2 md:grid-cols-2">
+            <For each={restoreActionPath().steps}>
+              {(step) => (
+                <div class="rounded border border-current/15 bg-surface/70 px-2.5 py-2">
+                  <div class="font-medium">{step.label}</div>
+                  <div class="mt-1 text-[11px] leading-4">{step.detail}</div>
+                </div>
+              )}
+            </For>
+          </div>
+        </div>
       </div>
 
       <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
@@ -621,6 +939,36 @@ export const RecoveryPointDetails: Component<RecoveryPointDetailsProps> = (props
             </div>
           )}
         </For>
+      </div>
+
+      <div class="rounded border border-border bg-surface p-3">
+        <div class="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <div class="text-[10px] font-semibold uppercase tracking-wide text-muted">
+              Verification provenance
+            </div>
+            <div class="mt-1 text-xs text-muted">
+              Recorded verification evidence for this recovery point.
+            </div>
+          </div>
+          <span class={`text-xs font-semibold ${verificationConfidence().className}`}>
+            {verificationConfidence().label}
+          </span>
+        </div>
+        <div class="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          <For each={verificationProvenancePairs()}>
+            {(pair) => (
+              <div class="rounded border border-border bg-surface-alt/45 px-3 py-2 text-xs">
+                <div class="text-[10px] font-semibold uppercase tracking-wide text-muted">
+                  {pair.k}
+                </div>
+                <div class={`mt-0.5 text-[11px] leading-4 break-words ${pair.valueClass}`}>
+                  {pair.v}
+                </div>
+              </div>
+            )}
+          </For>
+        </div>
       </div>
 
       <div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs text-muted">

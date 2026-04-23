@@ -1388,9 +1388,20 @@ That same recovery drill-in surface now also keeps provider-specific metadata
 inside a provider-neutral detail shell through
 `frontend-modern/src/components/Recovery/RecoveryPointDetails.tsx`, so PBS
 datastore and verification enrichments remain available without presenting the
-event drawer itself as if PBS were the native recovery model. Operator-facing
-detail labels in that drawer should prefer neutral target wording such as
-`Target Ref`, `Target Resource`, and `Target Health`.
+details drawer as a PBS-only surface.
+The point-details drawer also owns restore-safe operator guidance. It may
+surface a next action path, verification provenance, and chain coverage for the
+selected point, but it must stay read-side until the backend exposes a governed
+restore execution contract; UI copy should guide verification, target
+confirmation, and isolated test-restore planning without inventing local
+restore buttons or implying an unsafe action has been approved. Chain context
+must be derived from the current recovery result set so mixed PVE/PBS/TrueNAS
+history can explain adjacent local snapshot, local copy, and remote copy
+stages without requiring all stages to land in the same day group.
+Provider-specific metadata must not recast the event drawer itself as if PBS
+were the native recovery model. Operator-facing detail labels in that drawer
+should prefer neutral target wording such as `Target Ref`, `Target Resource`,
+and `Target Health`.
 Those transport hooks are direct governed runtime surfaces, not just page
 implementation detail: `frontend-modern/src/hooks/useRecoveryPoints.ts`,
 `frontend-modern/src/hooks/useRecoveryPointsFacets.ts`,
@@ -1768,7 +1779,10 @@ monitoring-style scan path rather than a report-export path. Recovery events
 should default to the concise columns operators need to triage quickly, while
 secondary fields such as verification, size, target, and details remain
 available through the shared column picker instead of crowding the baseline
-grid.
+desktop view. When the responsive event table collapses columns on mobile, the
+primary item cell must retain enough method, platform, target, and verification
+context to preserve restore-readiness meaning rather than hiding all secondary
+evidence behind desktop-only columns in the desktop grid.
 That same event-row scan rule should mirror the protected-items table in the
 primary identity cell. `RecoveryHistoryTable.tsx` should lead each event row
 with a compact outcome status cue plus the canonical item name, so operators

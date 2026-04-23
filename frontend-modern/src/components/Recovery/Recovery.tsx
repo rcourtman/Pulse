@@ -713,6 +713,7 @@ const Recovery: Component = () => {
                     platformOptions={platformOptions}
                     queryFilter={queryFilter}
                     recoveryPoints={recoveryPointsModel}
+                    relatedPoints={sortedPoints}
                     resetAdvancedArtifactFilters={resetAdvancedArtifactFilters}
                     resetAllArtifactFilters={resetAllArtifactFilters}
                     resourcesById={resourcesById}

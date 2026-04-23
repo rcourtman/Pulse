@@ -14,7 +14,7 @@ import { PageControls } from '@/components/shared/PageControls';
 import { SearchInput } from '@/components/shared/SearchInput';
 import type { ColumnDef } from '@/hooks/useColumnVisibility';
 import { STORAGE_KEYS } from '@/utils/localStorage';
-import type { RecoveryOutcome } from '@/types/recovery';
+import type { RecoveryOutcome, RecoveryPoint } from '@/types/recovery';
 import type { Resource } from '@/types/resource';
 import {
   getRecoveryBreadcrumbLinkClass,
@@ -88,6 +88,7 @@ interface RecoveryHistorySectionProps {
   platformOptions: Accessor<string[]>;
   queryFilter: Accessor<string>;
   recoveryPoints: RecoveryPointsModel;
+  relatedPoints: Accessor<RecoveryPoint[]>;
   resetAdvancedArtifactFilters: () => void;
   resetAllArtifactFilters: () => void;
   resourcesById: Accessor<Map<string, Resource>>;
@@ -474,8 +475,10 @@ export const RecoveryHistorySection: Component<RecoveryHistorySectionProps> = (p
           currentPage={props.currentPage}
           groupedByDay={props.groupedByDay}
           hasActiveArtifactFilters={props.hasActiveArtifactFilters}
+          isMobile={props.isMobile}
           mobileVisibleArtifactColumns={props.mobileVisibleArtifactColumns}
           recoveryPoints={props.recoveryPoints}
+          relatedPoints={props.relatedPoints}
           resetAllArtifactFilters={props.resetAllArtifactFilters}
           resourcesById={props.resourcesById}
           selectedPoint={selectedPoint}

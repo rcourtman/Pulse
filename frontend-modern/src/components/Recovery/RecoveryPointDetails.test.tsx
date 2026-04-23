@@ -89,6 +89,11 @@ describe('RecoveryPointDetails', () => {
     expect(screen.getByText('Platform Details')).toBeInTheDocument();
     expect(screen.queryByText('PBS Details')).not.toBeInTheDocument();
     expect(screen.getByText('Platform-specific recovery metadata, verification state, and target health.')).toBeInTheDocument();
+    expect(screen.getByText('Restore action path')).toBeInTheDocument();
+    expect(screen.getByText('Ready for restore planning')).toBeInTheDocument();
+    expect(screen.getByText('Verification provenance')).toBeInTheDocument();
+    expect(screen.getByText('PBS catalog verification')).toBeInTheDocument();
+    expect(screen.getAllByText('High confidence').length).toBeGreaterThan(0);
     expect(screen.getByText('Target Health')).toBeInTheDocument();
     expect(screen.getByText('Verification')).toBeInTheDocument();
     expect(screen.getByText('Item Type')).toBeInTheDocument();
@@ -115,6 +120,34 @@ describe('RecoveryPointDetails', () => {
     const platformCard = screen.getByText('Platform').parentElement?.parentElement;
     expect(platformCard).not.toBeNull();
     expect(within(platformCard as HTMLDivElement).getByText('PBS')).toBeInTheDocument();
+  });
+
+  it('surfaces next restore actions when a successful point has not been verified', () => {
+    render(() => (
+      <RecoveryPointDetails
+        point={{
+          id: 'point-unverified',
+          platform: 'truenas',
+          kind: 'snapshot',
+          mode: 'snapshot',
+          outcome: 'success',
+          completedAt: '2026-03-10T10:00:00Z',
+          display: {
+            itemLabel: 'tank/apps',
+            itemType: 'dataset',
+            nodeHostLabel: 'tn-scale-01',
+          },
+        }}
+      />
+    ));
+
+    expect(screen.getByText('Restore action path')).toBeInTheDocument();
+    expect(screen.getByText('Verify before restore use')).toBeInTheDocument();
+    expect(screen.getByText('Run artifact verification')).toBeInTheDocument();
+    expect(screen.getByText('Confirm target and chain')).toBeInTheDocument();
+    expect(screen.getByText('Verification provenance')).toBeInTheDocument();
+    expect(screen.getAllByText('Needs verification').length).toBeGreaterThan(0);
+    expect(screen.getByText('No verification timestamp recorded')).toBeInTheDocument();
   });
 
   it('uses canonical platform labels without forcing provider detail panels for other platforms', () => {
@@ -218,7 +251,11 @@ describe('RecoveryPointDetails', () => {
     ));
 
     expect(screen.getByText('Failure detail')).toBeInTheDocument();
-    expect(screen.getByText(/Inspect the platform task log for the failing step/i)).toBeInTheDocument();
+    expect(
+      screen.getAllByText(/Inspect the platform task log for the failing step/i).length,
+    ).toBeGreaterThan(0);
+    expect(screen.getByText('Investigate source task')).toBeInTheDocument();
+    expect(screen.getByText('Open source task evidence')).toBeInTheDocument();
     expect(screen.queryByText('VMID')).not.toBeInTheDocument();
     expect(screen.queryByText('0')).not.toBeInTheDocument();
   });

@@ -77,8 +77,10 @@ interface RecoveryHistoryTableProps {
   currentPage: Accessor<number>;
   groupedByDay: Accessor<RecoveryPointGroup[]>;
   hasActiveArtifactFilters: Accessor<boolean>;
+  isMobile: boolean;
   mobileVisibleArtifactColumns: Accessor<ColumnDef[]>;
   recoveryPoints: RecoveryPointsModel;
+  relatedPoints: Accessor<RecoveryPoint[]>;
   resetAllArtifactFilters: () => void;
   resourcesById: Accessor<Map<string, Resource>>;
   selectedPoint: Accessor<RecoveryPoint | null>;
@@ -188,6 +190,12 @@ export const RecoveryHistoryTable: Component<RecoveryHistoryTableProps> = (props
                     })();
                     const repoLabel = getRecoveryPointRepositoryLabel(point);
                     const detailsSummary = getRecoveryPointDetailsSummary(point);
+                    const verificationLabel =
+                      point.verified === true
+                        ? 'Verified'
+                        : point.verified === false
+                          ? 'Verification failed'
+                          : 'Verification unknown';
                     const entityId = String(point.entityId || '').trim();
                     const cluster = String(
                       point.display?.clusterLabel || point.cluster || '',
@@ -247,14 +255,26 @@ export const RecoveryHistoryTable: Component<RecoveryHistoryTableProps> = (props
                                           title={getRecoveryOutcomeLabel(outcome)}
                                           ariaLabel={getRecoveryOutcomeLabel(outcome)}
                                         />
-                                        <div class="flex min-w-0 flex-1 items-baseline gap-1.5">
-                                          <span class="min-w-0 truncate text-[12px] font-medium">
-                                            {item}
-                                          </span>
-                                          <Show when={itemSecondary}>
-                                            <span class="shrink-0 text-[10px] font-mono tabular-nums text-muted">
-                                              {itemSecondary}
+                                        <div class="min-w-0 flex-1">
+                                          <div class="flex min-w-0 items-baseline gap-1.5">
+                                            <span class="min-w-0 truncate text-[12px] font-medium">
+                                              {item}
                                             </span>
+                                            <Show when={itemSecondary}>
+                                              <span class="shrink-0 text-[10px] font-mono tabular-nums text-muted">
+                                                {itemSecondary}
+                                              </span>
+                                            </Show>
+                                          </div>
+                                          <Show when={props.isMobile}>
+                                            <div class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] leading-4 text-muted">
+                                              <span>{getRecoveryPointModeLabel(point.mode)}</span>
+                                              <span>{getSourcePlatformLabel(platform)}</span>
+                                              <Show when={repoLabel}>
+                                                <span class="max-w-full truncate">{repoLabel}</span>
+                                              </Show>
+                                              <span>{verificationLabel}</span>
+                                            </div>
                                           </Show>
                                         </div>
                                       </div>
@@ -435,7 +455,10 @@ export const RecoveryHistoryTable: Component<RecoveryHistoryTableProps> = (props
                                 </button>
                               </div>
                               <div class="px-4">
-                                <RecoveryPointDetails point={point} relatedPoints={group.items} />
+                                <RecoveryPointDetails
+                                  point={point}
+                                  relatedPoints={props.relatedPoints()}
+                                />
                               </div>
                             </TableCell>
                           </TableRow>
