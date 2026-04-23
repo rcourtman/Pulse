@@ -64,14 +64,6 @@ const sortDiscoveredNodes = (nodes: readonly DiscoveredServer[]): DiscoveredServ
     return leftLabel.localeCompare(rightLabel);
   });
 
-const summarizeCoverage = (labels: readonly string[]): string => {
-  if (labels.length <= 3) {
-    return labels.join(', ');
-  }
-
-  return `${labels.slice(0, 3).join(', ')} +${labels.length - 3} more`;
-};
-
 const normalizeDiscoveryTimestamp = (value?: number): number | undefined => {
   if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
     return undefined;
@@ -443,10 +435,10 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                   fallback={<span class="text-xs text-muted">-</span>}
                                 >
                                   <div
-                                    class="truncate whitespace-nowrap text-[12px] text-muted"
+                                    class="whitespace-normal break-words text-[12px] leading-4 text-muted"
                                     title={row.coverageLabels.join(', ')}
                                   >
-                                    {summarizeCoverage(row.coverageLabels)}
+                                    {row.coverageLabels.join(', ')}
                                   </div>
                                 </Show>
                               </TableCell>
@@ -541,7 +533,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
 
                             <TableCell class="px-3 py-1 align-top">
                               <div
-                                class="truncate whitespace-nowrap text-[12px] text-muted"
+                                class="whitespace-normal break-words text-[12px] leading-4 text-muted"
                                 title={discoveredCoverageText(server)}
                               >
                                 {discoveredCoverageText(server)}
