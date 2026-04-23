@@ -147,11 +147,12 @@ describe('unifiedResourceTableStateModel', () => {
     expect(tabletColumns.ioColumn.width).toBe('12%');
     expect(tabletColumns.sourceColumn.width).toBe('12%');
     expect(tabletColumns.serviceSourceColumn.width).toBe('8%');
-    expect(compactColumns.resourceColumn.width).toBe('18%');
+    expect(compactColumns.resourceColumn.width).toBe('16%');
     expect(compactColumns.serviceResourceColumn.width).toBe('18%');
-    expect(compactColumns.metricColumn.width).toBe('10.5%');
+    expect(compactColumns.metricColumn.width).toBe('10%');
+    expect(compactColumns.sourceColumn.width).toBe('13%');
     expect(compactColumns.serviceSourceColumn.width).toBe('9.5%');
-    expect(compactColumns.tempColumn.width).toBe('7%');
+    expect(compactColumns.tempColumn.width).toBe('6.5%');
     expect(wideColumns.resourceColumn.width).toBe('18%');
     expect(wideColumns.serviceResourceColumn.width).toBe('18%');
     expect(wideColumns.serviceSourceColumn.width).toBe('10%');

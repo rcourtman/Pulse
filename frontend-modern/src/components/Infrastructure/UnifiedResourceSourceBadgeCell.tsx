@@ -16,6 +16,11 @@ const getVisibleSourceBadgeLimit = (layoutMode: UnifiedResourceTableLayoutMode):
 const compactSourceBadgeLabel = (label: string): string =>
   label === 'Containers' ? 'Cont' : label;
 
+const getSourceBadgeDisplayLabel = (
+  label: string,
+  layoutMode: UnifiedResourceTableLayoutMode,
+): string => (layoutMode === 'wide' ? label : compactSourceBadgeLabel(label));
+
 const getCompactSourceDotClasses = (classes: string): string => {
   const toneClasses = classes
     .split(/\s+/)
@@ -50,12 +55,12 @@ export const UnifiedResourceSourceBadgeCell: Component<UnifiedResourceSourceBadg
       .join(', '),
   );
   const shouldUseCompactSourceList = createMemo(
-    () => props.layoutMode !== 'wide' && badges().length > 0,
+    () => (props.layoutMode === 'mobile' || props.layoutMode === 'tablet') && badges().length > 0,
   );
 
   return (
     <div
-      class="flex min-w-0 max-w-full items-center justify-start gap-1 overflow-hidden"
+      class="flex min-w-0 max-w-full items-center justify-center gap-1 overflow-hidden"
       aria-label={title() ? `Sources: ${title()}` : undefined}
       title={title()}
     >
@@ -69,7 +74,9 @@ export const UnifiedResourceSourceBadgeCell: Component<UnifiedResourceSourceBadg
                   class={`${badge.classes} min-w-0 max-w-full overflow-hidden px-1`}
                   title={badge.title}
                 >
-                  <span class="min-w-0 truncate">{badge.label}</span>
+                  <span class="min-w-0 truncate">
+                    {getSourceBadgeDisplayLabel(badge.label, props.layoutMode)}
+                  </span>
                 </span>
               )}
             </For>

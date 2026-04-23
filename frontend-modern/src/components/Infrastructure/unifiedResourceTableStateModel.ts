@@ -404,14 +404,14 @@ export const getUnifiedResourceTableColumnPresentations = (
 
   if (layoutMode === 'compact') {
     return {
-      resourceColumn: buildUnifiedResourceTableColumnPresentation('', '18%'),
+      resourceColumn: buildUnifiedResourceTableColumnPresentation('', '16%'),
       serviceResourceColumn: buildUnifiedResourceTableColumnPresentation('', '18%'),
-      metricColumn: buildUnifiedResourceTableColumnPresentation('', '10.5%'),
-      ioColumn: buildUnifiedResourceTableColumnPresentation('', '13%'),
-      sourceColumn: buildUnifiedResourceTableColumnPresentation('', '9.5%'),
+      metricColumn: buildUnifiedResourceTableColumnPresentation('', '10%'),
+      ioColumn: buildUnifiedResourceTableColumnPresentation('', '12.5%'),
+      sourceColumn: buildUnifiedResourceTableColumnPresentation('', '13%'),
       serviceSourceColumn: buildUnifiedResourceTableColumnPresentation('', '9.5%'),
-      uptimeColumn: buildUnifiedResourceTableColumnPresentation('', '8%'),
-      tempColumn: buildUnifiedResourceTableColumnPresentation('', '7%'),
+      uptimeColumn: buildUnifiedResourceTableColumnPresentation('', '7.5%'),
+      tempColumn: buildUnifiedResourceTableColumnPresentation('', '6.5%'),
       serviceCountColumn: buildUnifiedResourceTableColumnPresentation('', '9.5%'),
       serviceQueueColumn: buildUnifiedResourceTableColumnPresentation('', '9.5%'),
       serviceHealthColumn: buildUnifiedResourceTableColumnPresentation('', '14%'),
