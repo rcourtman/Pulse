@@ -173,11 +173,6 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
 
   const sortedProducts = createMemo(() =>
     [...products()]
-      .filter((product) => {
-        const configuredCount = groupedConfiguredRows().get(product.type)?.length ?? 0;
-        const discoveredCount = groupedDiscoveredRows().get(product.type)?.length ?? 0;
-        return configuredCount + discoveredCount > 0;
-      })
       .sort((left, right) => {
         const configuredDifference =
           (groupedConfiguredRows().get(right.type)?.length ?? 0) -
