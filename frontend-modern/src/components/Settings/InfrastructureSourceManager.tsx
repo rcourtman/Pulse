@@ -46,7 +46,6 @@ const discoveryRowClass =
   'border-b border-border-subtle bg-blue-50/30 hover:bg-blue-50/40 dark:bg-blue-950/10 dark:hover:bg-blue-950/20';
 const childTreeWrapperClass = 'relative min-w-0 pl-3 sm:pl-3.5';
 const wrappedFieldClass = 'whitespace-normal break-words leading-4';
-const wrappedEndpointClass = 'whitespace-normal break-all leading-4';
 
 const childTreeBranch = (isLastChild: boolean) => (
   <span aria-hidden="true" class="pointer-events-none absolute inset-y-0 left-0 w-3">
@@ -315,13 +314,13 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
       <Table class="w-full table-fixed text-sm">
         <TableHeader class="bg-surface-alt/60">
           <TableRow>
-            <TableHead class="w-[28%] py-1.5 pl-3 pr-3 text-left text-[11px] font-medium text-muted whitespace-nowrap xl:w-[24%]">
+            <TableHead class="w-[30%] py-1.5 pl-3 pr-3 text-left text-[11px] font-medium text-muted whitespace-nowrap xl:w-[26%]">
               System
             </TableHead>
             <TableHead class="w-[22%] px-3 py-1.5 text-left text-[11px] font-medium text-muted whitespace-nowrap xl:w-[22%]">
               Endpoint
             </TableHead>
-            <TableHead class="w-[24%] px-3 py-1.5 text-left text-[11px] font-medium text-muted whitespace-nowrap xl:w-[26%]">
+            <TableHead class="w-[22%] px-3 py-1.5 text-left text-[11px] font-medium text-muted whitespace-nowrap xl:w-[24%]">
               Coverage
             </TableHead>
             <TableHead class="w-[16%] px-3 py-1.5 text-left text-[11px] font-medium text-muted whitespace-nowrap xl:w-[16%]">
@@ -392,7 +391,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                               <TableCell class="py-1 pl-3 pr-3 align-top">
                                 <div class={childTreeWrapperClass}>
                                   {childTreeBranch(isLastConfigured())}
-                                  <div class="min-w-0 space-y-1">
+                                  <div class="min-w-0 space-y-0.5">
                                     <div class="min-w-0 flex-1">
                                       <div
                                         class={`text-[13px] text-base-content/80 ${wrappedFieldClass}`}
@@ -406,7 +405,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                         <For each={row.sourceBadges}>
                                           {(badge) => (
                                             <span
-                                              class="inline-flex items-center rounded-full border border-border bg-surface-alt px-1.5 py-0.5 text-[10px] font-medium text-muted"
+                                              class="inline-flex items-center rounded-full border border-border bg-surface-alt px-1.5 py-0 text-[9px] font-medium leading-4 text-muted"
                                               title={
                                                 badge === 'Pulse Agent'
                                                   ? pulseAgentBadgeTitle(row)
@@ -429,7 +428,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                   fallback={<span class="text-xs text-muted">-</span>}
                                 >
                                   <div
-                                    class={`text-[12px] text-muted ${wrappedEndpointClass}`}
+                                    class="truncate whitespace-nowrap text-[12px] text-muted"
                                     title={row.host}
                                   >
                                     {row.host}
@@ -443,7 +442,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                   fallback={<span class="text-xs text-muted">-</span>}
                                 >
                                   <div
-                                    class={`text-[12px] text-muted ${wrappedFieldClass}`}
+                                    class="truncate whitespace-nowrap text-[12px] text-muted"
                                     title={row.coverageLabels.join(', ')}
                                   >
                                     {summarizeCoverage(row.coverageLabels)}
@@ -532,7 +531,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
 
                             <TableCell class="px-3 py-1 align-top">
                               <div
-                                class={`text-[12px] text-muted ${wrappedEndpointClass}`}
+                                class="truncate whitespace-nowrap text-[12px] text-muted"
                                 title={discoveredServerEndpoint(server)}
                               >
                                 {discoveredServerEndpoint(server)}
@@ -541,7 +540,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
 
                             <TableCell class="px-3 py-1 align-top">
                               <div
-                                class={`text-[12px] text-muted ${wrappedFieldClass}`}
+                                class="truncate whitespace-nowrap text-[12px] text-muted"
                                 title={discoveredCoverageText(server)}
                               >
                                 {discoveredCoverageText(server)}
