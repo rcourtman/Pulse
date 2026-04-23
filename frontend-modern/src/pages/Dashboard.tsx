@@ -30,9 +30,16 @@ import {
   EstateSummaryPanel,
   KPIStrip,
   ProblemResourcesTable,
+  PulseBriefPanel,
   TrendCharts,
+  useDashboardPulseBrief,
 } from '@/features/dashboardOverview';
 import { buildDashboardEstateSummary } from '@/features/dashboardOverview/estateSummaryModel';
+import {
+  DASHBOARD_ALERTS_SECTION_ID,
+  DASHBOARD_PROBLEM_RESOURCES_SECTION_ID,
+} from '@/features/dashboardOverview/dashboardSectionIds';
+import { aiChatStore } from '@/stores/aiChat';
 import { RecentAlertsPanel } from '@/components/Alerts/RecentAlertsPanel';
 import { DashboardRecoveryStatusPanel } from '@/components/Recovery/DashboardRecoveryStatusPanel';
 import { DashboardStoragePanel } from '@/components/Storage/DashboardStoragePanel';
@@ -125,6 +132,26 @@ export default function Dashboard() {
     return Math.max(0, Math.min(100, (totalUsed / totalCapacity) * 100));
   });
 
+  const pulseBrief = useDashboardPulseBrief({
+    estate: estateSummary,
+    overview,
+    storageCapacityPercent,
+    recovery: recoverySummary,
+    pendingApprovalCount: () => actions.pendingApprovals().length,
+    patrolFindingCount: () => actions.findingsNeedingAttention().length,
+  });
+
+  const openPulseBriefAssistant = () => {
+    const brief = pulseBrief();
+    if (!brief) return;
+    aiChatStore.open({
+      targetType: 'dashboard',
+      targetId: 'pulse-brief',
+      initialPrompt: brief.assistantPrompt,
+      context: brief.assistantContext,
+    });
+  };
+
   const renderWidget = (id: DashboardWidgetId) => {
     switch (id) {
       case 'trends':
@@ -137,7 +164,16 @@ export default function Dashboard() {
           />
         );
       case 'alerts':
-        return <RecentAlertsPanel alerts={alertsList()} />;
+        return (
+          <section
+            id={DASHBOARD_ALERTS_SECTION_ID}
+            data-testid="dashboard-alerts-section"
+            tabIndex={-1}
+            class="scroll-mt-4 rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50"
+          >
+            <RecentAlertsPanel alerts={alertsList()} />
+          </section>
+        );
       case 'recovery':
         return <DashboardRecoveryStatusPanel recovery={recoverySummary()} />;
       case 'storage':
@@ -307,7 +343,14 @@ export default function Dashboard() {
               activeAlertCount={overview().alerts.total}
             />
 
-            {/* 3. KPI Strip — always visible */}
+            {/* 3. Optional Pulse Brief — shown only when Assistant and Patrol are configured */}
+            <Show when={pulseBrief()}>
+              {(brief) => (
+                <PulseBriefPanel brief={brief()} onAskAssistant={openPulseBriefAssistant} />
+              )}
+            </Show>
+
+            {/* 4. KPI Strip — always visible */}
             <KPIStrip
               infrastructure={{
                 total: estateSummary().totalSystems,
@@ -329,10 +372,19 @@ export default function Dashboard() {
               }}
             />
 
-            {/* 4. Problem Resources Table — only when problems exist */}
-            <ProblemResourcesTable problems={overview().problemResources} />
+            {/* 5. Problem Resources Table — only when problems exist */}
+            <Show when={overview().problemResources.length > 0}>
+              <section
+                id={DASHBOARD_PROBLEM_RESOURCES_SECTION_ID}
+                data-testid="dashboard-problem-resources-section"
+                tabIndex={-1}
+                class="scroll-mt-4 rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50"
+              >
+                <ProblemResourcesTable problems={overview().problemResources} />
+              </section>
+            </Show>
 
-            {/* 5–6. Customizable widgets: Trend Charts, Recent Alerts */}
+            {/* 6–7. Customizable widgets: Trend Charts, Recent Alerts */}
             <For each={widgetGroups()}>
               {(group) =>
                 group.type === 'full' ? (

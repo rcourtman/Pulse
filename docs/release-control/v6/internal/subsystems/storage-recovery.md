@@ -80,7 +80,12 @@ querying, and the operator-facing storage health presentation layer.
    Dashboard route composition may place storage and recovery widgets beside
    the estate summary, but estate-summary copy must not present storage or
    recovery health as resolved. Storage and recovery readiness claims remain
-   owned by `DashboardStoragePanel` and `DashboardRecoveryStatusPanel`.
+   owned by `DashboardStoragePanel` and `DashboardRecoveryStatusPanel`; estate
+   summary anchors may focus the dashboard alerts or problem-resource sections
+   but must not redirect into storage or recovery ownership. Optional dashboard
+   Pulse Brief copy may summarize storage and recovery facts that are already on
+   the route, but it must not become the owner of storage capacity, storage
+   health, protected-item, or recovery-outcome readiness claims.
 4. Route transport changes for storage and recovery endpoints through `internal/api/` and the owning `api-contracts` proof routes
    That same adjacent API boundary also owns TrueNAS feature-default semantics for
    provider-backed recovery: storage and recovery must treat `truenas_disabled`

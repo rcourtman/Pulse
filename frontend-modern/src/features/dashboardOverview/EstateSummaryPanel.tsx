@@ -1,7 +1,11 @@
-import { For, Show } from 'solid-js';
+import { For, Show, type JSX } from 'solid-js';
 import { Card } from '@/components/shared/Card';
 import { INFRASTRUCTURE_PATH } from '@/routing/resourceLinks';
 import { formatRelativeTime } from '@/utils/format';
+import {
+  DASHBOARD_ALERTS_SECTION_ID,
+  DASHBOARD_PROBLEM_RESOURCES_SECTION_ID,
+} from './dashboardSectionIds';
 import type {
   DashboardEstateHealthTone,
   DashboardEstateSummary,
@@ -50,24 +54,94 @@ const pluralize = (count: number, singular: string, plural = `${singular}s`): st
 const reviewText = (count: number): string =>
   `${pluralize(count, 'system')} ${count === 1 ? 'needs' : 'need'} review`;
 
-function dashboardIssueText(props: EstateSummaryPanelProps): string | null {
-  const resourceIssueCount = Math.max(0, Math.trunc(props.resourceIssueCount ?? 0));
-  const activeAlertCount = Math.max(0, Math.trunc(props.activeAlertCount ?? 0));
+const sectionLinkClass =
+  'font-medium text-blue-600 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 dark:text-blue-400';
+
+function normalizedIssueCounts(props: EstateSummaryPanelProps): {
+  resourceIssueCount: number;
+  activeAlertCount: number;
+} {
+  return {
+    resourceIssueCount: Math.max(0, Math.trunc(props.resourceIssueCount ?? 0)),
+    activeAlertCount: Math.max(0, Math.trunc(props.activeAlertCount ?? 0)),
+  };
+}
+
+function focusDashboardSection(event: MouseEvent & { currentTarget: HTMLAnchorElement }) {
+  const targetId = event.currentTarget.hash.slice(1);
+  if (!targetId) return;
+
+  const target = document.getElementById(targetId);
+  if (!target) return;
+
+  event.preventDefault();
+  if (window.location.hash !== `#${targetId}`) {
+    window.history.pushState(null, '', `#${targetId}`);
+  }
+  target.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  target.focus({ preventScroll: true });
+}
+
+function DashboardSectionLink(props: { href: string; children: JSX.Element }) {
+  return (
+    <a href={props.href} onClick={focusDashboardSection} class={sectionLinkClass}>
+      {props.children}
+    </a>
+  );
+}
+
+function DashboardIssueLinks(props: EstateSummaryPanelProps) {
+  const { resourceIssueCount, activeAlertCount } = normalizedIssueCounts(props);
 
   if (resourceIssueCount > 0 && activeAlertCount > 0) {
-    return `${pluralize(resourceIssueCount, 'resource issue')} and ${pluralize(activeAlertCount, 'alert')} below`;
+    return (
+      <>
+        <DashboardSectionLink href={`#${DASHBOARD_PROBLEM_RESOURCES_SECTION_ID}`}>
+          {pluralize(resourceIssueCount, 'resource issue')}
+        </DashboardSectionLink>
+        <span> and </span>
+        <DashboardSectionLink href={`#${DASHBOARD_ALERTS_SECTION_ID}`}>
+          {pluralize(activeAlertCount, 'alert')}
+        </DashboardSectionLink>
+        <span> below</span>
+      </>
+    );
   }
-  if (resourceIssueCount > 0) return `${pluralize(resourceIssueCount, 'resource issue')} below`;
-  if (activeAlertCount > 0) return `${pluralize(activeAlertCount, 'alert')} active`;
+  if (resourceIssueCount > 0) {
+    return (
+      <>
+        <DashboardSectionLink href={`#${DASHBOARD_PROBLEM_RESOURCES_SECTION_ID}`}>
+          {pluralize(resourceIssueCount, 'resource issue')}
+        </DashboardSectionLink>
+        <span> below</span>
+      </>
+    );
+  }
+  if (activeAlertCount > 0) {
+    return (
+      <>
+        <DashboardSectionLink href={`#${DASHBOARD_ALERTS_SECTION_ID}`}>
+          {pluralize(activeAlertCount, 'alert')}
+        </DashboardSectionLink>
+        <span> below</span>
+      </>
+    );
+  }
   return null;
+}
+
+function hasDashboardIssueLinks(props: EstateSummaryPanelProps): boolean {
+  const { resourceIssueCount, activeAlertCount } = normalizedIssueCounts(props);
+  return resourceIssueCount > 0 || activeAlertCount > 0;
 }
 
 function dashboardIssueSubtext(props: EstateSummaryPanelProps): string | null {
   const resourceIssueCount = Math.max(0, Math.trunc(props.resourceIssueCount ?? 0));
   const activeAlertCount = Math.max(0, Math.trunc(props.activeAlertCount ?? 0));
 
-  if (resourceIssueCount > 0 && activeAlertCount > 0)
+  if (resourceIssueCount > 0 && activeAlertCount > 0) {
     return 'Resource issues and alerts listed below';
+  }
   if (resourceIssueCount > 0) return 'Resource issues listed below';
   if (activeAlertCount > 0) return 'Alerts listed below';
   return null;
@@ -92,10 +166,6 @@ export function EstateSummaryPanel(props: EstateSummaryPanelProps) {
       : !props.summary.hasCanonicalProjection && props.summary.totalSystems > 0
         ? 'Syncing'
         : 'Waiting for signal';
-  const headlineDetail = () => {
-    const issueText = dashboardIssueText(props);
-    return issueText ? `${props.summary.detail} · ${issueText}` : props.summary.detail;
-  };
 
   return (
     <Card
@@ -118,7 +188,11 @@ export function EstateSummaryPanel(props: EstateSummaryPanelProps) {
               <span class={`font-medium ${toneTextClass[props.summary.tone]}`}>
                 {props.summary.headline}
               </span>
-              <span> · {headlineDetail()}</span>
+              <span> · {props.summary.detail}</span>
+              <Show when={hasDashboardIssueLinks(props)}>
+                <span> · </span>
+                <DashboardIssueLinks {...props} />
+              </Show>
             </p>
           </div>
         </div>

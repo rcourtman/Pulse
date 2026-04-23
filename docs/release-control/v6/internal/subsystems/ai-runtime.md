@@ -882,6 +882,13 @@ The `/api/ai/intelligence/changes` endpoint should also route through the
 canonical unified-intelligence recent-change accessor before any
 patrol-local detector fallback, so the API surface reads the same unified
 timeline source that powers the summary payload.
+Dashboard Pulse Brief context follows the same monitoring-first AI boundary:
+Pulse may surface an Assistant-ready operator paragraph on the dashboard, but
+the first render must be fact-bound to governed dashboard, Patrol, storage,
+recovery, and alert summaries and must pass those facts as structured context
+when the operator asks Assistant to continue. Future server-generated dashboard
+briefs must keep that structured fact contract and policy boundary rather than
+letting an unbounded prompt become the dashboard's source of truth.
 Those backend AI and Patrol change summaries should derive their canonical
 labels and provenance fragments from
 `internal/unifiedresources/change_presentation.go`, so the resource-model

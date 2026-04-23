@@ -1617,7 +1617,9 @@ must stay additive to the factual dashboard source of truth, derive its first
 render from the already-owned estate, overview, action, storage, and recovery
 facts, and hand off to Pulse Assistant through a structured context prompt
 instead of replacing the route's canonical numbers, tables, or lane-owned
-widgets with model prose.
+widgets with model prose. `PulseBriefPanel.tsx`, `useDashboardPulseBrief.ts`,
+and `dashboardPulseBriefModel.ts` own that presentation and deterministic
+first-render summary contract under `frontend-modern/src/features/dashboardOverview/`.
 The recovery feature shell now also depends on the shared
 `frontend-modern/src/components/shared/Subtabs.tsx` primitive for its primary
 protected-items versus recovery-events workspace switch. The recovery lane may

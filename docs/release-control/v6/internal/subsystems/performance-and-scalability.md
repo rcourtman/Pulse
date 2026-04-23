@@ -285,7 +285,14 @@ regression protection.
     Estate-summary issue copy on that route must use the already-hydrated
     compact overview problem-resource and alert counts; it must not introduce a
     second resource scan, alert fetch, storage read, or recovery read just to
-    clarify first-viewport copy.
+    clarify first-viewport copy. In-page issue anchors must therefore remain
+    pure section focus links against already-rendered dashboard sections rather
+    than triggering new data hydration.
+    Dashboard Pulse Brief composition belongs to that same hot-path rule: the
+    first render may issue the existing non-blocking AI runtime settings
+    readiness read and consume existing action-state signals, but it must not
+    issue an LLM request, mount a second resource scan, or block estate/KPI
+    rendering just to produce prose.
 32. Keep infrastructure summary consumers on the compact dashboard overview rather than reopening the all-resources hook. `frontend-modern/src/hooks/useDashboardTrends.ts`, `frontend-modern/src/components/Infrastructure/useInfrastructureSummaryState.ts`, and adjacent dashboard summary consumers may derive chart identity and storage presence from the overview payload they were already given, but they must not call `useResources()` or mount a second unfiltered unified-resource fetch path inside the dashboard hot path. That rule also applies to globally mounted helpers such as `frontend-modern/src/components/AI/Chat/index.tsx`: closed assistant surfaces must read the live websocket snapshot or existing unified-resource cache rather than forcing the dashboard to pay for `all-resources` just because the shell component is mounted. When that assistant shell changes presentation, `frontend-modern/src/utils/aiChatPresentation.ts` must remain the canonical owner for launcher, drawer, session-menu, and empty-state copy so hot-path consumers do not grow one-off inline strings or extra state branches alongside the mounted shell. Blocking shared dialogs must also suppress closed assistant affordances through the shared dialog runtime instead of leaving the mounted shell clickable behind another overlay.
     Approval presentation inside that mounted assistant shell must stay
     state-local to the existing drawer/session state and backend approval

@@ -1,9 +1,20 @@
 import { fireEvent, render, screen } from '@solidjs/testing-library';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  DASHBOARD_ALERTS_SECTION_ID,
+  DASHBOARD_PROBLEM_RESOURCES_SECTION_ID,
+} from '@/features/dashboardOverview/dashboardSectionIds';
 import type { DashboardOverview } from '@/hooks/useDashboardOverview';
 import type { DashboardRecoverySummary } from '@/hooks/useDashboardRecovery';
 import DashboardPage from '@/pages/Dashboard';
 import dashboardPageSource from '@/pages/Dashboard.tsx?raw';
+
+const aiRuntimeMock = vi.hoisted(() => ({
+  featureEnabled: false,
+  settings: null as unknown,
+  loadSettings: vi.fn(async () => null),
+  openChat: vi.fn(),
+}));
 
 let overviewLoading = false;
 let overviewError: unknown = undefined;
@@ -85,6 +96,21 @@ vi.mock('@solidjs/router', async () => {
   };
 });
 
+vi.mock('@/stores/license', () => ({
+  hasFeature: (feature: string) => feature === 'ai_patrol' && aiRuntimeMock.featureEnabled,
+}));
+
+vi.mock('@/stores/aiRuntimeState', () => ({
+  aiRuntimeSettings: () => aiRuntimeMock.settings,
+  loadAIRuntimeSettings: () => aiRuntimeMock.loadSettings(),
+}));
+
+vi.mock('@/stores/aiChat', () => ({
+  aiChatStore: {
+    open: (context: unknown) => aiRuntimeMock.openChat(context),
+  },
+}));
+
 vi.mock('@/hooks/useDashboardOverview', () => ({
   useDashboardOverview: () => ({
     overview: () => overviewMock,
@@ -131,6 +157,10 @@ describe('Dashboard page module contract', () => {
     wsReconnecting = false;
     reconnectSpy.mockReset();
     navigateSpy.mockReset();
+    aiRuntimeMock.featureEnabled = false;
+    aiRuntimeMock.settings = null;
+    aiRuntimeMock.loadSettings.mockClear();
+    aiRuntimeMock.openChat.mockClear();
     overviewMock.health.totalResources = 0;
     overviewMock.infrastructure.total = 0;
     overviewMock.infrastructure.byStatus = {};
@@ -147,6 +177,7 @@ describe('Dashboard page module contract', () => {
     overviewMock.alerts.activeWarning = 0;
     overviewMock.alerts.total = 0;
     connectedInfrastructureMock.length = 0;
+    window.history.replaceState(null, '', '/');
   });
 
   it('exports a default component function', () => {
@@ -155,7 +186,8 @@ describe('Dashboard page module contract', () => {
 
   it('routes the alerts dashboard widget through the alert-owned surface', () => {
     expect(dashboardPageSource).toContain("from '@/components/Alerts/RecentAlertsPanel'");
-    expect(dashboardPageSource).toContain('return <RecentAlertsPanel alerts={alertsList()} />;');
+    expect(dashboardPageSource).toContain('<RecentAlertsPanel alerts={alertsList()} />');
+    expect(dashboardPageSource).toContain('id={DASHBOARD_ALERTS_SECTION_ID}');
     expect(dashboardPageSource).not.toContain('criticalCount={overview().alerts.activeCritical}');
     expect(dashboardPageSource).not.toContain('warningCount={overview().alerts.activeWarning}');
   });
@@ -165,7 +197,7 @@ describe('Dashboard page module contract', () => {
     expect(dashboardPageSource).not.toContain("from '@/components/Dashboard/RelayOnboardingCard'");
     expect(dashboardPageSource).not.toContain('<RelayOnboardingCard />');
     expect(dashboardPageSource).toContain(
-      'ActionRequiredPanel,\n  DashboardCustomizer,\n  EstateSummaryPanel,\n  KPIStrip,\n  ProblemResourcesTable,\n  TrendCharts,',
+      'ActionRequiredPanel,\n  DashboardCustomizer,\n  EstateSummaryPanel,\n  KPIStrip,\n  ProblemResourcesTable,\n  PulseBriefPanel,\n  TrendCharts,\n  useDashboardPulseBrief,',
     );
   });
 
@@ -282,7 +314,14 @@ describe('Dashboard page module contract', () => {
     const problemHeading = screen.getByRole('heading', { name: 'Problem Resources' });
 
     expect(screen.getByText('1 system needs attention')).toBeInTheDocument();
-    expect(screen.getAllByText(/1 resource issue below/).length).toBeGreaterThan(0);
+    expect(screen.getByRole('link', { name: '1 resource issue' })).toHaveAttribute(
+      'href',
+      `#${DASHBOARD_PROBLEM_RESOURCES_SECTION_ID}`,
+    );
+    expect(screen.getByTestId('dashboard-problem-resources-section')).toHaveAttribute(
+      'id',
+      DASHBOARD_PROBLEM_RESOURCES_SECTION_ID,
+    );
     expect(screen.getByText('1 system needs review; details below')).toBeInTheDocument();
     expect(screen.getByText('2 active')).toBeInTheDocument();
     expect(screen.getByText(/Proxmox/)).toBeInTheDocument();
@@ -327,9 +366,110 @@ describe('Dashboard page module contract', () => {
     render(() => <DashboardPage />);
 
     expect(screen.getByText('1 system reporting')).toBeInTheDocument();
-    expect(screen.getAllByText(/1 resource issue and 2 alerts below/).length).toBeGreaterThan(0);
+    const resourceIssueLink = screen.getByRole('link', { name: '1 resource issue' });
+    const alertIssueLink = screen.getByRole('link', { name: '2 alerts' });
+    expect(resourceIssueLink).toHaveAttribute('href', `#${DASHBOARD_PROBLEM_RESOURCES_SECTION_ID}`);
+    expect(alertIssueLink).toHaveAttribute('href', `#${DASHBOARD_ALERTS_SECTION_ID}`);
+    expect(screen.getByTestId('dashboard-alerts-section')).toHaveAttribute(
+      'id',
+      DASHBOARD_ALERTS_SECTION_ID,
+    );
     expect(screen.getByText('Resource issues and alerts listed below')).toBeInTheDocument();
     expect(screen.queryByText('No dashboard issues found')).toBeNull();
+
+    const previousScrollIntoView = HTMLElement.prototype.scrollIntoView;
+    const scrollIntoView = vi.fn();
+    HTMLElement.prototype.scrollIntoView = scrollIntoView;
+    try {
+      fireEvent.click(resourceIssueLink);
+      expect(window.location.hash).toBe(`#${DASHBOARD_PROBLEM_RESOURCES_SECTION_ID}`);
+      expect(scrollIntoView).toHaveBeenCalled();
+      expect(document.activeElement).toBe(
+        screen.getByTestId('dashboard-problem-resources-section'),
+      );
+    } finally {
+      HTMLElement.prototype.scrollIntoView = previousScrollIntoView;
+    }
+  });
+
+  it('shows the optional Pulse Brief when Assistant and Patrol are configured', async () => {
+    aiRuntimeMock.featureEnabled = true;
+    aiRuntimeMock.settings = {
+      enabled: true,
+      configured: true,
+      model: 'test-model',
+      custom_context: '',
+      auth_method: 'api_key',
+      oauth_connected: false,
+      anthropic_configured: false,
+      openai_configured: true,
+      openrouter_configured: false,
+      deepseek_configured: false,
+      gemini_configured: false,
+      ollama_configured: false,
+      ollama_base_url: '',
+      configured_providers: ['openai'],
+    };
+    overviewMock.health.totalResources = 5;
+    overviewMock.infrastructure.total = 1;
+    overviewMock.infrastructure.byStatus = { online: 1 };
+    overviewMock.workloads.total = 4;
+    overviewMock.workloads.running = 3;
+    overviewMock.alerts.activeCritical = 1;
+    overviewMock.alerts.total = 1;
+    connectedInfrastructureMock.push({
+      id: 'homelab',
+      name: 'homelab',
+      status: 'active',
+      healthStatus: 'online',
+      lastSeen: Date.now(),
+      surfaces: [{ id: 'agent:homelab', kind: 'agent', label: 'Host telemetry' }],
+    });
+    overviewMock.problemResources = [
+      {
+        resource: {
+          id: 'container-1',
+          type: 'app-container',
+          name: 'Container 1',
+          displayName: 'Container 1',
+          platformId: 'container-1',
+          platformType: 'docker',
+          sourceType: 'api',
+          status: 'offline',
+        } as DashboardOverview['problemResources'][number]['resource'],
+        problems: ['Offline'],
+        worstValue: 200,
+      },
+    ];
+
+    render(() => <DashboardPage />);
+
+    const brief = screen.getByTestId('dashboard-pulse-brief');
+    const estateHeading = screen.getByRole('heading', { name: 'Connected infrastructure' });
+    const kpiLabel = screen.getByText('Infrastructure');
+
+    expect(brief).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Pulse Brief' })).toBeInTheDocument();
+    expect(screen.getByText(/Review Container 1 \(Offline\) first/)).toBeInTheDocument();
+    expect(estateHeading.compareDocumentPosition(brief) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+    expect(brief.compareDocumentPosition(kpiLabel) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Ask Assistant' }));
+
+    expect(aiRuntimeMock.openChat).toHaveBeenCalledWith(
+      expect.objectContaining({
+        targetType: 'dashboard',
+        targetId: 'pulse-brief',
+        initialPrompt: expect.stringContaining('Summarize the current Pulse dashboard'),
+        context: expect.objectContaining({
+          dashboardBrief: expect.stringContaining('Review Container 1 (Offline) first'),
+        }),
+      }),
+    );
   });
 
   it('keeps the KPI strip above problem resources so the dashboard snapshot reads before detail', () => {
