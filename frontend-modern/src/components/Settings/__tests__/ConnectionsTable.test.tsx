@@ -42,6 +42,7 @@ const row = (overrides: Partial<InfrastructureSystemRow> = {}): InfrastructureSy
     canPause: connection.capabilities.supportsPause,
     canRemove: connection.type !== 'docker' && connection.type !== 'kubernetes',
     isAgent: connection.type === 'agent',
+    isCluster: false,
     attachedConnections: [],
     members: [],
     connection,

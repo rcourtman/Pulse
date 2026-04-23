@@ -6,6 +6,9 @@ import { logger } from '@/utils/logger';
 interface NodeModalStatusFooterProps {
   modalProps: NodeModalProps;
   state: NodeModalState;
+  onToggleEnabled?: () => void;
+  togglePending?: boolean;
+  connectionEnabled?: boolean;
   onDelete?: () => void;
   deletePending?: boolean;
   deleteConfirming?: boolean;
@@ -130,21 +133,12 @@ export const NodeModalStatusFooter: Component<NodeModalStatusFooterProps> = (pro
       </Show>
 
       <div class="flex items-center justify-between px-6 py-4 border-t border-border">
-        <button
-          type="button"
-          onClick={state.handleTestConnection}
-          disabled={state.isTesting() || props.deletePending}
-          class="px-4 py-2 text-sm border border-border text-base-content rounded-md hover:bg-surface-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {state.isTesting() ? 'Testing...' : 'Test Connection'}
-        </button>
-
         <div class="flex items-center gap-3">
           <Show when={state.isEditingExistingNode() && props.onDelete}>
             <button
               type="button"
               onClick={props.onDelete}
-              disabled={props.deletePending}
+              disabled={props.togglePending || props.deletePending}
               class={`px-4 py-2 text-sm rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
                 props.deleteConfirming
                   ? 'bg-rose-600 text-white hover:bg-rose-700'
@@ -156,6 +150,33 @@ export const NodeModalStatusFooter: Component<NodeModalStatusFooterProps> = (pro
                 : props.deleteConfirming
                   ? 'Click again to confirm'
                   : 'Delete connection'}
+            </button>
+          </Show>
+          <button
+            type="button"
+            onClick={state.handleTestConnection}
+            disabled={state.isTesting() || props.togglePending || props.deletePending}
+            class="px-4 py-2 text-sm border border-border text-base-content rounded-md hover:bg-surface-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {state.isTesting() ? 'Testing...' : 'Test Connection'}
+          </button>
+        </div>
+
+        <div class="flex items-center gap-3">
+          <Show when={state.isEditingExistingNode() && props.onToggleEnabled}>
+            <button
+              type="button"
+              onClick={props.onToggleEnabled}
+              disabled={props.togglePending || props.deletePending}
+              class="px-4 py-2 text-sm border border-border text-base-content rounded-md hover:bg-surface-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {props.togglePending
+                ? props.connectionEnabled
+                  ? 'Pausing…'
+                  : 'Resuming…'
+                : props.connectionEnabled
+                  ? 'Pause connection'
+                  : 'Resume connection'}
             </button>
           </Show>
           <Show when={modalProps.showBackToDiscovery && modalProps.onBackToDiscovery}>
@@ -184,14 +205,14 @@ export const NodeModalStatusFooter: Component<NodeModalStatusFooterProps> = (pro
           <button
             type="button"
             onClick={modalProps.onClose}
-            disabled={props.deletePending}
+            disabled={props.togglePending || props.deletePending}
             class="px-4 py-2 text-sm border border-border text-base-content rounded-md hover:bg-surface-hover transition-colors"
           >
             Cancel
           </button>
           <button
             type="submit"
-            disabled={props.deletePending}
+            disabled={props.togglePending || props.deletePending}
             class="px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {state.isEditingExistingNode() ? 'Update' : 'Add'} Node
