@@ -252,9 +252,6 @@ describe('AIChat', () => {
     it('renders the header with title when open', () => {
       renderChat();
       expect(screen.getByText('Pulse Assistant')).toBeInTheDocument();
-      expect(
-        screen.getByText('Observed context, provider-backed reasoning, and governed actions.'),
-      ).toBeInTheDocument();
     });
 
     it('renders the input textarea', () => {
@@ -929,7 +926,6 @@ describe('AIChat', () => {
       });
       renderChat();
       await waitFor(() => {
-        expect(screen.getByText('Autonomous mode')).toBeInTheDocument();
         expect(screen.getByText('Commands execute without approval.')).toBeInTheDocument();
       });
     });

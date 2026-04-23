@@ -102,11 +102,12 @@ export const ModelSelector: Component<ModelSelectorProps> = (props) => {
     }
   };
 
+  const isUsingDefault = createMemo(() => !props.selectedModel?.trim());
+
   const selectedLabel = createMemo(() => {
     const selected = props.selectedModel?.trim();
     if (!selected) {
-      const fallback = props.defaultModelLabel;
-      return fallback ? `Default (${fallback})` : 'Default';
+      return props.defaultModelLabel || 'Default';
     }
     const match = props.models.find((model) => model.id === selected);
     if (match) return match.name || match.id.split(':').pop() || match.id;
@@ -152,7 +153,15 @@ export const ModelSelector: Component<ModelSelectorProps> = (props) => {
             d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
           />
         </svg>
-        <span class="max-w-[120px] truncate font-medium">{selectedLabel()}</span>
+        <span class="max-w-[90px] sm:max-w-[180px] truncate font-medium">{selectedLabel()}</span>
+        <Show when={isUsingDefault() && props.defaultModelLabel}>
+          <span
+            class="text-[10px] font-normal text-muted"
+            title="Using the configured default model"
+          >
+            default
+          </span>
+        </Show>
         <Show when={props.isLoading}>
           <svg class="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
             <circle
@@ -193,7 +202,7 @@ export const ModelSelector: Component<ModelSelectorProps> = (props) => {
               onKeyDown={handleKeyDown}
               placeholder="Search or enter model ID"
               class="flex-1"
-              inputClass="py-1.5 text-xs focus:ring-purple-400"
+              inputClass="py-1.5 text-xs focus:ring-blue-400"
             />
             <Show when={props.onRefresh}>
               <button
@@ -232,7 +241,7 @@ export const ModelSelector: Component<ModelSelectorProps> = (props) => {
             {/* Default option */}
             <button
               onClick={() => handleSelect('')}
-              class={`w-full px-3 py-2 text-left text-sm hover:bg-surface-hover ${!props.selectedModel ? 'bg-purple-50 dark:bg-purple-900' : ''}`}
+              class={`w-full px-3 py-2 text-left text-sm hover:bg-surface-hover ${!props.selectedModel ? 'bg-blue-50 dark:bg-blue-900' : ''}`}
             >
               <div class="font-medium text-base-content">Default</div>
               <div class="text-[11px] text-muted">
@@ -246,7 +255,7 @@ export const ModelSelector: Component<ModelSelectorProps> = (props) => {
             <Show when={props.chatOverrideModel}>
               <button
                 onClick={() => handleSelect(props.chatOverrideModel!)}
-                class={`w-full px-3 py-2 text-left text-sm hover:bg-surface-hover ${props.selectedModel === props.chatOverrideModel ? 'bg-purple-50 dark:bg-purple-900' : ''}`}
+                class={`w-full px-3 py-2 text-left text-sm hover:bg-surface-hover ${props.selectedModel === props.chatOverrideModel ? 'bg-blue-50 dark:bg-blue-900' : ''}`}
               >
                 <div class="font-medium text-base-content">Chat override</div>
                 <div class="text-[11px] text-muted">
@@ -284,7 +293,7 @@ export const ModelSelector: Component<ModelSelectorProps> = (props) => {
                     {(model) => (
                       <button
                         onClick={() => handleSelect(model.id)}
-                        class={`w-full px-3 py-2 text-left text-sm hover:bg-surface-hover ${props.selectedModel === model.id ? 'bg-purple-50 dark:bg-purple-900' : ''}`}
+                        class={`w-full px-3 py-2 text-left text-sm hover:bg-surface-hover ${props.selectedModel === model.id ? 'bg-blue-50 dark:bg-blue-900' : ''}`}
                       >
                         <div class="flex items-center gap-1.5">
                           <span class="font-medium text-base-content">

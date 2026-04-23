@@ -59,7 +59,7 @@ describe('ModelSelector', () => {
     expect(screen.getByText('Default')).toBeInTheDocument();
   });
 
-  it('shows "Default (label)" when defaultModelLabel is provided and no selection', () => {
+  it('shows the default model label with a "default" indicator when no selection', () => {
     render(() => (
       <ModelSelector
         models={SAMPLE_MODELS}
@@ -69,7 +69,8 @@ describe('ModelSelector', () => {
       />
     ));
 
-    expect(screen.getByText('Default (Claude Sonnet 4)')).toBeInTheDocument();
+    expect(screen.getByText('Claude Sonnet 4')).toBeInTheDocument();
+    expect(screen.getByText('default')).toBeInTheDocument();
   });
 
   it('shows raw model ID when selectedModel is not in the models list', () => {
@@ -583,7 +584,7 @@ describe('ModelSelector', () => {
     const dropdownEntry = allGpt4o.find((el) => el.closest('.max-h-72') !== null);
     expect(dropdownEntry).toBeDefined();
     const modelButton = dropdownEntry!.closest('button');
-    expect(modelButton?.className).toContain('bg-purple-50');
+    expect(modelButton?.className).toContain('bg-blue-50');
   });
 
   // --- Model name display ---

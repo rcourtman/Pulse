@@ -27,7 +27,6 @@ import {
   AI_CHAT_COLLAPSE_TITLE,
   AI_CHAT_DISCOVERY_HINT_BODY,
   AI_CHAT_DISCOVERY_HINT_TITLE,
-  AI_CHAT_DRAWER_SUBTITLE,
   AI_CHAT_DRAWER_TITLE,
   AI_CHAT_EMPTY_STATE_SUBTITLE,
   AI_CHAT_EMPTY_STATE_TITLE,
@@ -854,7 +853,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
           <Show when={!isOverlayLayout()}>
             <button
               onClick={props.onClose}
-              class="hidden sm:flex absolute left-0 top-1/2 -translate-x-full -translate-y-1/2 items-center justify-center w-8 py-3 rounded-l-xl bg-surface text-blue-600 dark:text-blue-400 shadow-sm border border-r-0 border-border hover:bg-surface-hover transition-colors z-50 cursor-pointer"
+              class="hidden sm:flex absolute left-0 top-1/2 -translate-x-full -translate-y-1/2 items-center justify-center w-8 py-3 rounded-l-lg bg-surface text-blue-600 dark:text-blue-400 border border-r-0 border-border hover:bg-surface-hover hover:text-blue-700 dark:hover:text-blue-300 transition-colors z-50 cursor-pointer"
               title={AI_CHAT_COLLAPSE_TITLE}
             >
               <svg
@@ -874,27 +873,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
           </Show>
           {/* Header - wraps on mobile */}
           <div class="flex flex-wrap items-center justify-between gap-2 px-4 py-3 border-b border-border bg-surface-alt">
-            <div class="flex items-center gap-3">
-              <div class="p-2 border border-border bg-surface rounded-md shadow-sm">
-                <svg
-                  class="w-5 h-5 text-slate-500"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="1.5"
-                    d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 001.423 1.423l1.183.394-1.183.394a2.25 2.25 0 00-1.423 1.423z"
-                  />
-                </svg>
-              </div>
-              <div>
-                <h2 class="text-sm font-semibold text-base-content">{AI_CHAT_DRAWER_TITLE}</h2>
-                <p class="text-[11px] text-muted">{AI_CHAT_DRAWER_SUBTITLE}</p>
-              </div>
-            </div>
+            <h2 class="text-sm font-semibold text-base-content">{AI_CHAT_DRAWER_TITLE}</h2>
 
             <div class="flex items-center gap-1.5">
               {/* New chat */}
@@ -1114,13 +1093,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
 
           <Show when={controlLevel() === 'autonomous' && !autonomousBannerDismissed()}>
             <div class="px-4 py-2 border-b border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900 flex items-center justify-between gap-3 text-[11px] text-red-700 dark:text-red-200">
-              <div class="flex items-center gap-2">
-                <span class="inline-flex h-2 w-2 rounded-full bg-red-500" />
-                <span class="font-medium">Autonomous mode</span>
-                <span class="text-red-600 dark:text-red-300">
-                  Commands execute without approval.
-                </span>
-              </div>
+              <span>Commands execute without approval.</span>
               <div class="flex items-center gap-2">
                 <button
                   onClick={() => updateControlLevel('controlled')}

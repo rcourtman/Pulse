@@ -120,7 +120,7 @@ export const ToolExecutionBlock: Component<ToolExecutionBlockProps> = (props) =>
                 e.stopPropagation();
                 setShowOutput(!showOutput());
               }}
-              class="mt-1 text-[9px] text-purple-600 dark:text-purple-400 hover:underline"
+              class="mt-1 text-[9px] text-muted hover:text-base-content hover:underline"
             >
               {showOutput() ? 'Show less' : 'Show full output'}
             </button>
@@ -157,10 +157,10 @@ export const PendingToolBlock: Component<PendingToolBlockProps> = (props) => {
   });
 
   return (
-    <div class="my-0.5 font-mono text-[11px] flex items-center gap-1.5 px-2 py-1 rounded bg-purple-50 dark:bg-purple-900">
+    <div class="my-0.5 font-mono text-[11px] flex items-center gap-1.5 px-2 py-1 rounded bg-surface-alt border border-border">
       {/* Spinner */}
       <svg
-        class="w-3 h-3 text-purple-500 dark:text-purple-400 animate-spin"
+        class="w-3 h-3 text-blue-500 dark:text-blue-400 animate-spin"
         fill="none"
         viewBox="0 0 24 24"
       >
@@ -173,12 +173,12 @@ export const PendingToolBlock: Component<PendingToolBlockProps> = (props) => {
       </svg>
 
       {/* Tool label */}
-      <span class="text-purple-600 dark:text-purple-400 uppercase text-[9px] font-medium tracking-wider min-w-[50px]">
+      <span class="text-muted uppercase text-[9px] font-medium tracking-wider min-w-[50px]">
         {toolLabel()}
       </span>
 
       {/* Command - truncated */}
-      <code class="text-purple-700 dark:text-purple-300 truncate flex-1">
+      <code class="text-base-content truncate flex-1">
         {props.tool.input.length > 50
           ? props.tool.input.substring(0, 50) + '...'
           : props.tool.input}
@@ -212,7 +212,7 @@ export const PendingToolsList: Component<PendingToolsListProps> = (props) => {
       <Show when={shouldCollapse() && !expanded()}>
         <button
           onClick={() => setExpanded(true)}
-          class="w-full mt-0.5 py-1 text-[10px] text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900 rounded text-center font-medium"
+          class="w-full mt-0.5 py-1 text-[10px] text-muted hover:text-base-content hover:bg-surface-hover rounded text-center font-medium"
         >
           + {hiddenCount()} more tools running...
         </button>
