@@ -45,7 +45,9 @@ describe('settings architecture guardrails', () => {
 
   it('keeps infrastructure onboarding route-backed under the shared settings shell', () => {
     expect(settingsHeaderMetaSource).toContain("'infrastructure-systems': {");
-    expect(settingsHeaderMetaSource).toContain('Manage infrastructure sources.');
+    expect(settingsHeaderMetaSource).toContain(
+      'Add, discover, and verify the infrastructure Pulse monitors.',
+    );
     expect(settingsHeaderMetaSource).toContain("'organization-access': {");
     expect(settingsHeaderMetaSource).toContain(
       'Manage organization invitations, member roles, and ownership transfers.',
@@ -163,7 +165,7 @@ describe('settings architecture guardrails', () => {
     expect(infrastructureSourceManagerSource).toContain('Run discovery');
     expect(infrastructureSourceManagerSource).toContain('Discovery settings');
     expect(infrastructureSourceManagerSource).toContain(
-      'Configured systems and discovered candidates grouped by platform or host type. Install Pulse Agent on each machine where you want full node-local telemetry.',
+      "Add, discover, and verify the platform APIs plus Pulse Agent telemetry that make up Pulse's infrastructure model.",
     );
     expect(infrastructureSourceManagerSource).toContain('onReviewDiscoveredSource');
     expect(infrastructureSourceManagerSource).toContain('Discovered');
@@ -171,18 +173,16 @@ describe('settings architecture guardrails', () => {
     expect(infrastructureSourceManagerSource).toContain('TableHeader');
     expect(infrastructureSourceManagerSource).toContain('aria-label={product.actionLabel}');
     expect(infrastructureSourceManagerSource).toContain('Review');
-    expect(infrastructureSourceManagerSource).toContain('Edit');
-    expect(infrastructureSourceManagerSource).toContain(
-      'Start by connecting what Pulse should monitor',
-    );
-    expect(infrastructureSourceManagerSource).toContain('Detect from address');
-    expect(infrastructureSourceManagerSource).toContain('Install Pulse Agent');
+    expect(infrastructureSourceManagerSource).toContain('Manage');
+    expect(infrastructureSourceManagerSource).toContain('Detect address');
+    expect(infrastructureSourceManagerSource).toContain('Install agent');
     expect(infrastructureSourceManagerSource).toContain('Choose source type');
     expect(infrastructureSourceManagerSource).toContain('getInfrastructureEmptyStateSummary');
-    expect(infrastructureSourceManagerSource).toContain('Infrastructure readiness');
+    expect(infrastructureSourceManagerSource).toContain('Infrastructure coverage');
     expect(infrastructureSourceManagerSource).toContain('Connected systems');
     expect(infrastructureSourceManagerSource).toContain('API coverage');
     expect(infrastructureSourceManagerSource).toContain('Agent coverage');
+    expect(infrastructureSourceManagerSource).toContain('Needs agent');
     expect(infrastructureSourceManagerSource).toContain('setupConfidenceAction');
     expect(infrastructureSourceManagerSource).not.toContain('Connection types');
     expect(infrastructureSourcePickerSource).toContain('Detect from address');
@@ -244,7 +244,7 @@ describe('settings architecture guardrails', () => {
       'getInfrastructureSupportSummaryBadges',
     );
     expect(infrastructureOnboardingPresentationSource).toContain(
-      'VMware vCenter is also available now.',
+      'Supported source types include VMware vCenter',
     );
 
     expect(nodeCredentialSlotSource).toContain('useNodeModalState(modalProps)');

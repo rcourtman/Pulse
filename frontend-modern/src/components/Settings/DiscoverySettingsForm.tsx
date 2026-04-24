@@ -25,10 +25,10 @@ export const DiscoverySettingsForm: Component<DiscoverySettingsFormProps> = (pro
 
   return (
     <div class="space-y-5">
-      <div class="rounded-md border border-blue-200 bg-blue-50/70 p-4 dark:border-blue-800 dark:bg-blue-950/40">
+      <div class="rounded-md border border-amber-200 bg-amber-50/80 p-4 dark:border-amber-800 dark:bg-amber-950/40">
         <div class="flex items-start gap-3">
           <svg
-            class="mt-0.5 h-5 w-5 flex-shrink-0 text-blue-600 dark:text-blue-400"
+            class="mt-0.5 h-5 w-5 flex-shrink-0 text-amber-600 dark:text-amber-400"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -40,7 +40,7 @@ export const DiscoverySettingsForm: Component<DiscoverySettingsFormProps> = (pro
               d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
             />
           </svg>
-          <div class="text-sm text-blue-800 dark:text-blue-200">
+          <div class="text-sm text-amber-900 dark:text-amber-100">
             <p class="mb-1 font-medium">{priorityNotice.title}</p>
             <ul class="space-y-1">
               <For each={priorityNotice.items}>{(item) => <li>• {item}</li>}</For>
@@ -108,11 +108,15 @@ export const DiscoverySettingsForm: Component<DiscoverySettingsFormProps> = (pro
                         await props.handleDiscoveryModeChange('auto');
                       }
                     }}
-                    disabled={props.envOverrides().discoverySubnet || props.savingDiscoverySettings()}
+                    disabled={
+                      props.envOverrides().discoverySubnet || props.savingDiscoverySettings()
+                    }
                     class="mt-1 h-5 w-5 border-slate-300 text-blue-600 focus:ring-blue-500 sm:h-4 sm:w-4"
                   />
                   <div class="space-y-1">
-                    <p class="text-sm font-medium text-base-content">{autoModePresentation.label}</p>
+                    <p class="text-sm font-medium text-base-content">
+                      {autoModePresentation.label}
+                    </p>
                     <p class="text-xs text-muted">{autoModePresentation.description}</p>
                   </div>
                 </label>
@@ -134,7 +138,9 @@ export const DiscoverySettingsForm: Component<DiscoverySettingsFormProps> = (pro
                         void props.handleDiscoveryModeChange('custom');
                       }
                     }}
-                    disabled={props.envOverrides().discoverySubnet || props.savingDiscoverySettings()}
+                    disabled={
+                      props.envOverrides().discoverySubnet || props.savingDiscoverySettings()
+                    }
                     class="mt-1 h-5 w-5 border-slate-300 text-blue-600 focus:ring-blue-500 sm:h-4 sm:w-4"
                   />
                   <div class="space-y-1">
@@ -181,9 +187,7 @@ export const DiscoverySettingsForm: Component<DiscoverySettingsFormProps> = (pro
                                 return;
                               }
 
-                              const updatedValue = props.normalizeSubnetList(
-                                selections.join(', '),
-                              );
+                              const updatedValue = props.normalizeSubnetList(selections.join(', '));
                               props.setDiscoveryMode('custom');
                               props.setDiscoverySubnetDraft(updatedValue);
                               props.setLastCustomSubnet(updatedValue);

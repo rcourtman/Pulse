@@ -849,13 +849,13 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
 
   const editDialogTitle = createMemo(() => {
     const row = editingRow();
-    if (!row) return 'Edit source';
-    return `Edit ${row.name}`;
+    if (!row) return 'Manage source';
+    return `Manage ${row.name}`;
   });
 
   const editDialogDescription = createMemo(() => {
     const connection = editingConnection();
-    if (!connection) return 'Update this source without leaving the infrastructure manager.';
+    if (!connection) return 'Update source state, credentials, and lifecycle actions here.';
     const label = describeManagedSourceType(connection.type);
     const methods = attachedAgentConnections().length > 0 ? ' · API + Pulse Agent' : '';
     return `${label}${connection.address ? ` · ${connection.address}` : ''}${methods}`;

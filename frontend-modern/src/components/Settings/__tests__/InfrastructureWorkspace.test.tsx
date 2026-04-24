@@ -287,24 +287,24 @@ describe('InfrastructureWorkspace', () => {
     renderWorkspace();
 
     await waitFor(() => expect(screen.getByText('Infrastructure systems')).toBeInTheDocument());
-    expect(screen.getByText('Start by connecting what Pulse should monitor')).toBeInTheDocument();
     expect(
-      screen.getByText(/Pulse 6 treats platform APIs and host agents as infrastructure sources/i),
+      screen.getByText(/Add, discover, and verify the platform APIs plus Pulse Agent telemetry/i),
     ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Run discovery/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Discovery settings/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Detect from address/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Install Pulse Agent/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Choose source type/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Add infrastructure$/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Detect address/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Install agent$/i })).toBeInTheDocument();
     const readiness = screen.getByRole('region', {
       name: /Infrastructure setup confidence/i,
     });
-    expect(within(readiness).getByText('Infrastructure readiness')).toBeInTheDocument();
+    expect(within(readiness).getByText('Infrastructure coverage')).toBeInTheDocument();
     expect(within(readiness).getByText('Connected systems')).toBeInTheDocument();
     expect(within(readiness).getByText('API coverage')).toBeInTheDocument();
     expect(within(readiness).getByText('Agent coverage')).toBeInTheDocument();
+    expect(within(readiness).getByText('Needs agent')).toBeInTheDocument();
     expect(within(readiness).getByText('Discovery')).toBeInTheDocument();
-    expect(within(readiness).getAllByText('1 system')).toHaveLength(2);
+    expect(within(readiness).getAllByText('1 system')).toHaveLength(3);
     expect(within(readiness).getByText('0 systems')).toBeInTheDocument();
     expect(within(readiness).getByText('Discovery off')).toBeInTheDocument();
     expect(within(readiness).getByRole('button', { name: /Install agents/i })).toBeInTheDocument();
@@ -316,8 +316,7 @@ describe('InfrastructureWorkspace', () => {
     expect(screen.getByRole('button', { name: /Add Proxmox VE/i })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Add TrueNAS SCALE/i })).toBeNull();
     expect(screen.queryByRole('button', { name: /Add host/i })).toBeNull();
-    expect(screen.getByRole('button', { name: /^Add infrastructure$/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Edit/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Manage/i })).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Monitored systems' })).not.toBeInTheDocument();
   });
 
@@ -326,12 +325,12 @@ describe('InfrastructureWorkspace', () => {
 
     await waitFor(() => expect(screen.getByText('Infrastructure systems')).toBeInTheDocument());
 
-    fireEvent.click(screen.getByRole('button', { name: /Detect from address/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Detect address/i }));
     expect(navigateSpy).toHaveBeenLastCalledWith('/settings/infrastructure?add=detect', {
       scroll: false,
     });
 
-    fireEvent.click(screen.getByRole('button', { name: /Install Pulse Agent/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^Install agent$/i }));
     expect(navigateSpy).toHaveBeenLastCalledWith('/settings/infrastructure?add=agent', {
       scroll: false,
     });
@@ -347,10 +346,114 @@ describe('InfrastructureWorkspace', () => {
       scroll: false,
     });
 
-    fireEvent.click(screen.getByRole('button', { name: /Choose source type/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^Add infrastructure$/i }));
     expect(navigateSpy).toHaveBeenLastCalledWith('/settings/infrastructure?add=pick', {
       scroll: false,
     });
+  });
+
+  it('keeps source groups in the catalog order instead of count order', async () => {
+    const pveConnection = connectionFixture({
+      id: 'pve:zeus',
+      type: 'pve',
+      name: 'zeus',
+      address: 'https://10.0.0.1:8006',
+    });
+    const towerAgent = connectionFixture({
+      id: 'agent:tower',
+      type: 'agent',
+      name: 'Tower',
+      address: 'Tower',
+      source: 'agent',
+      capabilities: { supportsPause: false, supportsScope: false, supportsTest: false },
+    });
+    const miniAgent = connectionFixture({
+      id: 'agent:mini',
+      type: 'agent',
+      name: 'Mini',
+      address: 'Mini',
+      source: 'agent',
+      capabilities: { supportsPause: false, supportsScope: false, supportsTest: false },
+    });
+
+    connectionState.connections = [pveConnection, towerAgent, miniAgent];
+    connectionState.rows = [
+      {
+        id: pveConnection.id,
+        ownerType: 'pve',
+        name: 'zeus',
+        subtitle: 'via platform API',
+        source: 'api',
+        host: pveConnection.address,
+        coverageLabels: ['VMs'],
+        statusLabel: 'Active',
+        statusClassName: 'bg-green-100 text-green-800',
+        agentUpdateCount: 0,
+        lastActivityText: '1m ago',
+        enabled: true,
+        canEdit: true,
+        canPause: true,
+        canRemove: true,
+        isAgent: false,
+        isCluster: false,
+        attachedConnections: [],
+        members: [],
+        connection: pveConnection,
+      },
+      {
+        id: towerAgent.id,
+        ownerType: 'agent',
+        name: 'Tower',
+        subtitle: 'via Pulse Agent',
+        source: 'agent',
+        host: 'Tower',
+        coverageLabels: ['Host telemetry'],
+        statusLabel: 'Active',
+        statusClassName: 'bg-green-100 text-green-800',
+        agentUpdateCount: 0,
+        lastActivityText: '1m ago',
+        enabled: true,
+        canEdit: false,
+        canPause: false,
+        canRemove: true,
+        isAgent: true,
+        isCluster: false,
+        attachedConnections: [],
+        members: [],
+        connection: towerAgent,
+      },
+      {
+        id: miniAgent.id,
+        ownerType: 'agent',
+        name: 'Mini',
+        subtitle: 'via Pulse Agent',
+        source: 'agent',
+        host: 'Mini',
+        coverageLabels: ['Host telemetry'],
+        statusLabel: 'Active',
+        statusClassName: 'bg-green-100 text-green-800',
+        agentUpdateCount: 0,
+        lastActivityText: '1m ago',
+        enabled: true,
+        canEdit: false,
+        canPause: false,
+        canRemove: true,
+        isAgent: true,
+        isCluster: false,
+        attachedConnections: [],
+        members: [],
+        connection: miniAgent,
+      },
+    ];
+
+    renderWorkspace();
+
+    await waitFor(() => expect(screen.getByText('Proxmox VE')).toBeInTheDocument());
+    const pveGroup = screen.getByText('Proxmox VE');
+    const hostGroup = screen.getByText('Standalone hosts');
+    expect(pveGroup.compareDocumentPosition(hostGroup) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
   });
 
   it('switches the source manager layout from measured container width during live resize', async () => {
@@ -510,7 +613,7 @@ describe('InfrastructureWorkspace', () => {
     expect(onboardingMetricsTrackers[0]?.recordOpened).toHaveBeenCalledTimes(1);
   });
 
-  it('opens the platform picker from the Add infrastructure footer button', () => {
+  it('opens the platform picker from the Add infrastructure action', () => {
     renderWorkspace();
 
     fireEvent.click(screen.getByRole('button', { name: /^Add infrastructure$/i }));
@@ -607,18 +710,18 @@ describe('InfrastructureWorkspace', () => {
     expect(onboardingMetricsTrackers[0]?.recordOpened).toHaveBeenCalledTimes(1);
   });
 
-  it('opens the edit dialog directly from an existing source card', async () => {
+  it('opens the manage dialog directly from an existing source card', async () => {
     renderWorkspace({
       pveNodes: () => [{ name: 'zeus', host: 'https://10.0.0.1:8006' } as any],
     });
 
     await waitFor(() =>
-      expect(screen.getByRole('button', { name: /^Edit$/i })).toBeInTheDocument(),
+      expect(screen.getByRole('button', { name: /^Manage$/i })).toBeInTheDocument(),
     );
-    fireEvent.click(screen.getByRole('button', { name: /^Edit$/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^Manage$/i }));
 
     await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
-    expect(screen.getByText('Edit zeus')).toBeInTheDocument();
+    expect(screen.getByText('Manage zeus')).toBeInTheDocument();
     expect(screen.getByTestId('proxmox-section')).toBeInTheDocument();
   });
 
@@ -679,7 +782,7 @@ describe('InfrastructureWorkspace', () => {
     expect(screen.getByText('Unraid 7.1.0')).toBeInTheDocument();
     expect(screen.getByText('192.168.0.10')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: /^Edit$/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^Manage$/i }));
 
     await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
     expect(screen.getByText('Pulse Agent version')).toBeInTheDocument();
@@ -745,9 +848,9 @@ describe('InfrastructureWorkspace', () => {
     });
 
     await waitFor(() =>
-      expect(screen.getByRole('button', { name: /^Edit$/i })).toBeInTheDocument(),
+      expect(screen.getByRole('button', { name: /^Manage$/i })).toBeInTheDocument(),
     );
-    fireEvent.click(screen.getByRole('button', { name: /^Edit$/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^Manage$/i }));
 
     expect(screen.getByText('Agent update')).toBeInTheDocument();
     await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
@@ -853,9 +956,9 @@ describe('InfrastructureWorkspace', () => {
     routeState.search = '?add=agent';
     renderWorkspace();
 
-    expect(screen.queryByRole('button', { name: /Detect from address/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Detect address/i })).toBeNull();
     expect(screen.queryByRole('button', { name: /Add Proxmox VE/i })).toBeNull();
-    expect(screen.queryByRole('button', { name: /^Edit$/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Manage$/i })).toBeNull();
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(screen.queryByTestId('install-section')).toBeNull();
     expect(screen.getByText('Infrastructure systems')).toBeInTheDocument();

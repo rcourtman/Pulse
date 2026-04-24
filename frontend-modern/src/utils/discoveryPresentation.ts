@@ -64,11 +64,11 @@ export function getDiscoveryNotesEmptyState() {
 
 export function getNetworkDiscoveryPriorityNotice() {
   return {
-    title: 'Configuration precedence',
+    title: 'Network scan safety',
     items: [
       'Environment variables still override these settings.',
       'Changes made here are saved to system.json immediately.',
-      'These settings remain in effect until an environment override replaces them.',
+      'Automatic mode can scan every detected interface, including bridge or shared networks; use custom subnets when scope matters.',
     ],
   } as const;
 }
@@ -110,9 +110,7 @@ export function getNetworkDiscoverySubnetPresentation(mode: 'auto' | 'custom') {
     helpTooltip:
       'Use CIDR notation, for example 192.168.1.0/24 or 10.0.0.0/24. Smaller ranges finish more quickly.',
     placeholder:
-      mode === 'auto'
-        ? 'automatic (scan every detected network)'
-        : '192.168.1.0/24, 10.0.0.0/24',
+      mode === 'auto' ? 'automatic (scan every detected network)' : '192.168.1.0/24, 10.0.0.0/24',
     guidance:
       mode === 'auto'
         ? 'Automatic mode scans all host network interfaces, which can include shared or corporate networks. Switch to custom subnets for a faster, more targeted scan.'

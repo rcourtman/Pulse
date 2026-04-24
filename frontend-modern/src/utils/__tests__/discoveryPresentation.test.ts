@@ -64,11 +64,11 @@ describe('discoveryPresentation', () => {
 
   it('returns canonical network discovery settings copy', () => {
     expect(getNetworkDiscoveryPriorityNotice()).toEqual({
-      title: 'Configuration precedence',
+      title: 'Network scan safety',
       items: [
         'Environment variables still override these settings.',
         'Changes made here are saved to system.json immediately.',
-        'These settings remain in effect until an environment override replaces them.',
+        'Automatic mode can scan every detected interface, including bridge or shared networks; use custom subnets when scope matters.',
       ],
     });
 

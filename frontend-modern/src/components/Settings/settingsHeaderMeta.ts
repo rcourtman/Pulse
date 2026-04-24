@@ -9,7 +9,7 @@ import {
 export const SETTINGS_HEADER_META: SettingsHeaderMetaMap = {
   'infrastructure-systems': {
     title: 'Infrastructure',
-    description: 'Manage infrastructure sources.',
+    description: 'Add, discover, and verify the infrastructure Pulse monitors.',
   },
   'system-general': {
     title: 'General',
@@ -45,11 +45,13 @@ export const SETTINGS_HEADER_META: SettingsHeaderMetaMap = {
   },
   'support-reporting': {
     title: 'Data & Reports',
-    description: 'Export inventory data and generate performance reports from the canonical settings shell.',
+    description:
+      'Export inventory data and generate performance reports from the canonical settings shell.',
   },
   'support-logs': {
     title: 'System Logs',
-    description: 'Inspect the live Pulse log stream and download the captured buffer for support work.',
+    description:
+      'Inspect the live Pulse log stream and download the captured buffer for support work.',
   },
   'organization-overview': {
     title: 'Organization Overview',

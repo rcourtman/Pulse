@@ -37,7 +37,9 @@ export const InfrastructureInstallerSection: Component = () => {
           <div class="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-4 text-sm text-emerald-950 dark:border-emerald-700 dark:bg-emerald-900 dark:text-emerald-50">
             <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
               <div class="space-y-2">
-                <p class="font-semibold">Security configured. Save these first-run credentials now.</p>
+                <p class="font-semibold">
+                  Security configured. Save these first-run credentials now.
+                </p>
                 <p class="text-xs text-emerald-800 dark:text-emerald-200">
                   This is the Pulse Agent handoff from first-run setup inside Add infrastructure.
                   <Show
@@ -96,7 +98,10 @@ export const InfrastructureInstallerSection: Component = () => {
                 <button
                   type="button"
                   onClick={() =>
-                    void state.copySetupHandoffField(handoff().password, 'Copied first-run password.')
+                    void state.copySetupHandoffField(
+                      handoff().password,
+                      'Copied first-run password.',
+                    )
                   }
                   class="inline-flex items-center justify-center rounded-md border border-emerald-300 bg-white px-3 py-2 text-sm font-medium text-emerald-900 hover:bg-emerald-100 dark:border-emerald-700 dark:bg-emerald-950 dark:text-emerald-100 dark:hover:bg-emerald-800"
                 >
@@ -138,11 +143,10 @@ export const InfrastructureInstallerSection: Component = () => {
         <div class="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-950 dark:border-emerald-700 dark:bg-emerald-900 dark:text-emerald-50">
           <p class="font-semibold">Recommended install model</p>
           <p class="mt-1 text-xs text-emerald-800 dark:text-emerald-200">
-            Pulse Agent is a low-overhead background service. Install it on each machine where
-            you want full node-local telemetry such as temperatures, SMART disk health, services,
-            Docker, or Kubernetes coverage. For Proxmox clusters, keep the cluster API
-            connection for platform inventory and add the agent to each node for host-level
-            augmentation.
+            Pulse Agent is a low-overhead background service. Install it on each machine where you
+            want full node-local telemetry such as temperatures, SMART disk health, services,
+            Docker, or Kubernetes coverage. For Proxmox clusters, keep the cluster API connection
+            for platform inventory and add the agent to each node for host-level augmentation.
           </p>
         </div>
 
@@ -196,7 +200,13 @@ export const InfrastructureInstallerSection: Component = () => {
 
           <Show when={state.latestRecord()}>
             <div class="flex items-center gap-2 rounded-md border border-blue-200 bg-blue-50 px-4 py-2 text-xs text-blue-800 dark:border-blue-800 dark:bg-blue-900 dark:text-blue-200">
-              <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <svg
+                class="h-4 w-4"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
                 <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
               </svg>
               <span>
@@ -238,63 +248,33 @@ export const InfrastructureInstallerSection: Component = () => {
         </Show>
 
         <Show when={state.requiresToken() && !state.commandsUnlocked()}>
-          <div class="space-y-3">
-            <div>
+          <div class="space-y-3 rounded-md border border-border bg-surface-alt px-4 py-4">
+            <div class="space-y-1">
               <h4 class="text-sm font-semibold text-base-content">
                 <span class="mr-1.5 inline-flex h-5 w-5 items-center justify-center rounded-full bg-slate-400 text-xs font-bold text-white">
                   2
                 </span>
                 Installation commands
               </h4>
-              <p class="ml-6 mt-0.5 text-xs text-muted">
-                Preview — generate a token above to enable copying. The{' '}
-                <code class="rounded bg-surface-hover px-1">{'<api-token>'}</code> placeholder
-                below will be replaced automatically once a token exists.
+              <p class="ml-6 text-xs text-muted">
+                Generate an install token first. Pulse will then build copy-ready commands with the
+                credential inserted for the target host.
               </p>
             </div>
-            <div class="space-y-4">
+            <div class="grid gap-3 lg:grid-cols-2">
               <For each={state.commandSections()}>
                 {(section) => (
-                  <div class="space-y-3 rounded-md border border-border p-4 opacity-70">
+                  <div class="rounded-md border border-border bg-surface px-3 py-3">
                     <div class="space-y-1">
                       <h5 class="text-sm font-semibold text-base-content">{section.title}</h5>
                       <p class="text-xs text-muted">{section.description}</p>
                     </div>
-                    <div class="space-y-3">
+                    <div class="mt-3 flex flex-wrap gap-2">
                       <For each={section.snippets}>
                         {(snippet) => (
-                          <div class="space-y-2">
-                            <h6 class="text-xs font-semibold uppercase tracking-wide text-muted">
-                              {snippet.label}
-                            </h6>
-                            <div class="relative">
-                              <button
-                                type="button"
-                                disabled
-                                class="absolute right-2 top-2 inline-flex min-h-10 min-w-10 cursor-not-allowed items-center justify-center rounded-md bg-surface-hover p-2 opacity-50 sm:min-h-9 sm:min-w-9"
-                                title="Generate a token above to enable copying"
-                                aria-label="Copy disabled until an install token is generated"
-                              >
-                                <svg
-                                  width="16"
-                                  height="16"
-                                  viewBox="0 0 24 24"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  stroke-width="2"
-                                >
-                                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                                  <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
-                                </svg>
-                              </button>
-                              <pre class="overflow-x-auto rounded-md bg-base p-3 pr-12 text-xs text-base-content">
-                                <code>{snippet.command}</code>
-                              </pre>
-                            </div>
-                            <Show when={snippet.note}>
-                              <p class="text-xs text-muted">{snippet.note}</p>
-                            </Show>
-                          </div>
+                          <span class="inline-flex items-center rounded-full border border-border bg-surface-alt px-2.5 py-1 text-[11px] font-medium text-base-content">
+                            {snippet.label}
+                          </span>
                         )}
                       </For>
                     </div>
@@ -366,8 +346,8 @@ export const InfrastructureInstallerSection: Component = () => {
                       />
                     </div>
                     <p class="mt-1.5 text-xs text-muted">
-                      Override the address agents use to connect to this server (e.g., use IP address{' '}
-                      <code>http://192.0.2.50:7655</code> if DNS fails).
+                      Override the address agents use to connect to this server (e.g., use IP
+                      address <code>http://192.0.2.50:7655</code> if DNS fails).
                       <Show when={!state.customAgentUrl()}>
                         <span class="ml-1 opacity-75">
                           Currently using auto-detected: {state.agentUrl()}
@@ -399,16 +379,16 @@ export const InfrastructureInstallerSection: Component = () => {
                     </div>
                     <p class="mt-1.5 text-xs text-muted">
                       Preserves custom trust for copied install, upgrade, and uninstall commands.
-                      Shell commands pass <code>--cacert</code> to both the download and the installer.
-                      Windows commands set <code>PULSE_CACERT</code> and use a transport-aware
-                      PowerShell bootstrap for the initial script fetch.
+                      Shell commands pass <code>--cacert</code> to both the download and the
+                      installer. Windows commands set <code>PULSE_CACERT</code> and use a
+                      transport-aware PowerShell bootstrap for the initial script fetch.
                     </p>
                   </div>
 
                   <Show when={state.insecureMode()}>
                     <div class="rounded-md border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800 dark:border-amber-700 dark:bg-amber-900 dark:text-amber-200">
-                      <span class="font-medium">TLS verification disabled</span> — skip cert checks for
-                      self-signed setups. Not recommended for production.
+                      <span class="font-medium">TLS verification disabled</span> — skip cert checks
+                      for self-signed setups. Not recommended for production.
                     </div>
                   </Show>
 
@@ -440,15 +420,16 @@ export const InfrastructureInstallerSection: Component = () => {
 
                   <Show when={state.enableCommands()}>
                     <div class="rounded-md border border-blue-200 bg-blue-50 px-4 py-2 text-sm text-blue-800 dark:border-blue-700 dark:bg-blue-900 dark:text-blue-200">
-                      <span class="font-medium">Pulse commands enabled</span> — The agent will accept
-                      diagnostic and fix commands from Pulse Patrol features.
+                      <span class="font-medium">Pulse commands enabled</span> — The agent will
+                      accept diagnostic and fix commands from Pulse Patrol features.
                     </div>
                   </Show>
 
                   <div class="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-900 dark:border-emerald-700 dark:bg-emerald-900 dark:text-emerald-100">
-                    <span class="font-medium">Config signing (optional)</span> — Require signed remote
-                    config payloads with <code>PULSE_AGENT_CONFIG_SIGNATURE_REQUIRED=true</code>.
-                    Provide keys via <code>PULSE_AGENT_CONFIG_SIGNING_KEY</code> (Pulse) and{' '}
+                    <span class="font-medium">Config signing (optional)</span> — Require signed
+                    remote config payloads with{' '}
+                    <code>PULSE_AGENT_CONFIG_SIGNATURE_REQUIRED=true</code>. Provide keys via{' '}
+                    <code>PULSE_AGENT_CONFIG_SIGNING_KEY</code> (Pulse) and{' '}
                     <code>PULSE_AGENT_CONFIG_PUBLIC_KEYS</code> (agents).
                   </div>
 
@@ -463,7 +444,9 @@ export const InfrastructureInstallerSection: Component = () => {
                       id="install-profile-select"
                       value={state.installProfile()}
                       onChange={(event) =>
-                        state.handleInstallProfileChange(event.currentTarget.value as InstallProfile)
+                        state.handleInstallProfileChange(
+                          event.currentTarget.value as InstallProfile,
+                        )
                       }
                       class="w-full rounded-md border bg-surface px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:focus:border-blue-400 dark:focus:ring-blue-800"
                     >
@@ -598,7 +581,9 @@ export const InfrastructureInstallerSection: Component = () => {
                 />
               </div>
               <Show when={state.lookupError()}>
-                <p class="text-xs font-medium text-red-600 dark:text-red-300">{state.lookupError()}</p>
+                <p class="text-xs font-medium text-red-600 dark:text-red-300">
+                  {state.lookupError()}
+                </p>
               </Show>
               <Show when={state.lookupResult()}>
                 {(result) => {
@@ -618,7 +603,9 @@ export const InfrastructureInstallerSection: Component = () => {
                       <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                         <div class="space-y-1">
                           <div class="text-sm font-semibold">
-                            {isConnected() ? 'First host connected' : agent().displayName || agent().hostname}
+                            {isConnected()
+                              ? 'First host connected'
+                              : agent().displayName || agent().hostname}
                           </div>
                           <p
                             class={`text-xs ${
@@ -692,7 +679,9 @@ export const InfrastructureInstallerSection: Component = () => {
               </summary>
               <div class="mt-3 space-y-4">
                 <div>
-                  <p class="text-xs uppercase tracking-wide text-muted">Auto-detection not working?</p>
+                  <p class="text-xs uppercase tracking-wide text-muted">
+                    Auto-detection not working?
+                  </p>
                   <p class="mt-1 text-xs text-muted">
                     If Docker, Kubernetes, or Proxmox isn't detected automatically, add these flags
                     to the install command:
@@ -749,7 +738,14 @@ export const InfrastructureInstallerSection: Component = () => {
                   class="absolute right-2 top-2 inline-flex min-h-10 min-w-10 items-center justify-center rounded-md bg-surface-hover p-2 text-slate-400 transition-colors hover:bg-slate-700 hover:text-slate-200 sm:min-h-9 sm:min-w-9"
                   title="Copy command"
                 >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
                     <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
                     <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
                   </svg>
@@ -775,7 +771,9 @@ export const InfrastructureInstallerSection: Component = () => {
               )
             </p>
             <div class="space-y-1">
-              <span class="text-xs font-medium text-muted">Windows (PowerShell as Administrator)</span>
+              <span class="text-xs font-medium text-muted">
+                Windows (PowerShell as Administrator)
+              </span>
               <div class="relative">
                 <button
                   type="button"
@@ -790,7 +788,14 @@ export const InfrastructureInstallerSection: Component = () => {
                   class="absolute right-2 top-2 inline-flex min-h-10 min-w-10 items-center justify-center rounded-md bg-surface-hover p-2 text-slate-400 transition-colors hover:bg-slate-700 hover:text-slate-200 sm:min-h-9 sm:min-w-9"
                   title="Copy command"
                 >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  >
                     <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
                     <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
                   </svg>

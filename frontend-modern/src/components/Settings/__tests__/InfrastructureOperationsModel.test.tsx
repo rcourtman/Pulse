@@ -179,13 +179,23 @@ describe('infrastructure operations model', () => {
     );
     expect(infrastructureInstallerSectionSource).toContain('Generate install token');
     expect(infrastructureInstallerSectionSource).toContain('Generate token');
-    expect(infrastructureInstallerSectionSource).not.toContain('Add infrastructure');
+    expect(infrastructureInstallerSectionSource).toContain(
+      'This is the Pulse Agent handoff from first-run setup inside Add infrastructure.',
+    );
     expect(infrastructureInstallerSectionSource).toContain('Pulse Agent is a low-overhead background service.');
     expect(infrastructureInstallerSectionSource).toContain(
       'For Proxmox clusters, keep the cluster API',
     );
     expect(infrastructureInstallerSectionSource).toContain('host-level');
     expect(infrastructureInstallerSectionSource).toContain('augmentation.');
+    expect(infrastructureInstallerSectionSource).toContain('Installation commands');
+    expect(infrastructureInstallerSectionSource).toContain(
+      'Generate an install token first. Pulse will then build copy-ready commands',
+    );
+    expect(infrastructureInstallerSectionSource).not.toContain('<api-token>');
+    expect(infrastructureInstallerSectionSource).not.toContain(
+      'Copy disabled until an install token is generated',
+    );
   });
 
   it('does not reintroduce the retired reporting state hook on the operations state', async () => {

@@ -256,14 +256,16 @@ work extends shared components instead of creating new local variants.
    `/settings/infrastructure`: the landing route should read as one
    source-manager workspace with configured infrastructure instances first
    and no redundant monitored-systems ledger beneath it. The landing route may
-   include a compact guidance strip that explains platform APIs and host agents
-   as Pulse 6 infrastructure sources and exposes `Detect from address`, `Install
-   Pulse Agent`, and `Choose source type` as first-run actions. It may also show
-   a compact readiness strip derived from the same unified connection rows and
-   discovered candidates so operators can confirm connected-system count,
-   API coverage, agent coverage, discovery review state, and the next setup
-   action without opening a tour or second ledger. Existing sources stay visible
-   on the page, and add, detect, install, review, and edit flows open as
+   include a dedicated first-viewport toolbar that explains platform APIs and
+   Pulse Agent telemetry as infrastructure sources and exposes `Add
+   infrastructure`, `Detect address`, `Install agent`, `Run discovery`, and
+   `Discovery settings` inside the source manager. It may also show a compact
+   coverage strip derived from the same unified connection rows and discovered
+   candidates so operators can confirm connected-system count, API coverage,
+   agent coverage, sources that still need an agent, and discovery review state
+   without opening a tour or second ledger. Existing sources stay visible in
+   stable source-catalog order, and add, detect, install, review, and manage
+   flows open as
    secondary interactions from that same destination instead of taking over the
    whole page.
    Those secondary views must stay under the same single `Infrastructure`
