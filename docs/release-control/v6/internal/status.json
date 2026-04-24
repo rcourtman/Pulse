@@ -932,6 +932,11 @@
         },
         {
           "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/cloud-hosted-tier-runtime-readiness-storage-guardrails-production-2026-04-24.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "docs/release-control/v6/internal/subsystems/cloud-paid.md",
           "kind": "file"
         },
@@ -3509,6 +3514,12 @@
         {
           "repo": "pulse",
           "path": "docs/release-control/v6/internal/records/cloud-hosted-tier-runtime-readiness-storage-blocker-2026-04-23.md",
+          "kind": "file",
+          "evidence_tier": "real-external-e2e"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/cloud-hosted-tier-runtime-readiness-storage-guardrails-production-2026-04-24.md",
           "kind": "file",
           "evidence_tier": "real-external-e2e"
         }
