@@ -5,15 +5,17 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
+import { fileURLToPath } from 'node:url';
 
 import {
   restartHostedTenantRuntime,
+  shellQuote,
 } from './hosted-tenant-runtime.mjs';
 import { createHostedRelayMobileToken } from './hosted-mobile-token-runtime.mjs';
 
 const DEFAULT_POLL_INTERVAL_MS = 500;
 const DEFAULT_POLL_TIMEOUT_MS = 15_000;
-const REPO_ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..', '..', '..');
+const SCRIPT_PATH = fileURLToPath(import.meta.url);
 
 function usage(message) {
   if (message) {
@@ -96,16 +98,7 @@ function parseArgs(argv) {
   return parsed;
 }
 
-function runText(command, args, options = {}) {
-  return execFileSync(command, args, {
-    encoding: 'utf8',
-    maxBuffer: 32 * 1024 * 1024,
-    stdio: 'pipe',
-    ...options,
-  });
-}
-
-function deriveTenantBaseUrl(controlPlaneUrl, tenantId) {
+export function deriveTenantBaseUrl(controlPlaneUrl, tenantId) {
   const parsed = new URL(controlPlaneUrl);
   parsed.hostname = `${tenantId}.${parsed.hostname}`;
   parsed.pathname = '';
@@ -114,24 +107,105 @@ function deriveTenantBaseUrl(controlPlaneUrl, tenantId) {
   return parsed.toString().replace(/\/$/, '');
 }
 
-function curlJson(args) {
-  return JSON.parse(runText('curl', args));
+export function redactBearerTokens(value) {
+  return String(value).replace(/Bearer\s+[A-Za-z0-9._~+/-]+/g, 'Bearer [REDACTED]');
 }
 
-function fetchOnboardingPayload({ rawToken, tenantBaseUrl }) {
-  return curlJson([
-    '-fsS',
-    '-H',
-    `Authorization: Bearer ${rawToken}`,
-    `${tenantBaseUrl}/api/onboarding/qr`,
-  ]);
+export async function fetchOnboardingPayload({ fetchImpl = globalThis.fetch, rawToken, tenantBaseUrl }) {
+  if (typeof fetchImpl !== 'function') {
+    throw new Error('fetch is not available in this Node runtime');
+  }
+
+  const url = `${tenantBaseUrl}/api/onboarding/qr`;
+  let response;
+  try {
+    response = await fetchImpl(url, {
+      headers: {
+        Authorization: `Bearer ${rawToken}`,
+      },
+    });
+  } catch (error) {
+    throw new Error(`failed to fetch hosted onboarding payload from ${tenantBaseUrl}: ${redactBearerTokens(error instanceof Error ? error.message : String(error))}`);
+  }
+
+  const body = await response.text();
+  if (!response.ok) {
+    throw new Error(`hosted onboarding payload request returned HTTP ${response.status} from ${tenantBaseUrl}: ${redactBearerTokens(body.slice(0, 500))}`);
+  }
+
+  try {
+    return JSON.parse(body);
+  } catch (error) {
+    throw new Error(`hosted onboarding payload from ${tenantBaseUrl} was not valid JSON: ${redactBearerTokens(error instanceof Error ? error.message : String(error))}`);
+  }
+}
+
+const REMOTE_ONBOARDING_FETCH_PY = `
+import json
+import sys
+import urllib.error
+import urllib.request
+
+base_url = sys.argv[1].rstrip("/")
+token = sys.stdin.read().strip()
+request = urllib.request.Request(
+    base_url + "/api/onboarding/qr",
+    headers={"Authorization": "Bearer " + token},
+)
+try:
+    with urllib.request.urlopen(request, timeout=20) as response:
+        sys.stdout.write(response.read().decode("utf-8"))
+except urllib.error.HTTPError as exc:
+    body = exc.read().decode("utf-8", errors="replace")[:500]
+    sys.stderr.write(json.dumps({"status": exc.code, "body": body}))
+    sys.exit(22)
+except Exception as exc:
+    sys.stderr.write(str(exc))
+    sys.exit(1)
+`;
+
+export function fetchOnboardingPayloadViaCloudHost({
+  cloudHost,
+  rawToken,
+  runner = execFileSync,
+  tenantBaseUrl,
+}) {
+  const host = String(cloudHost ?? '').trim();
+  if (!host) {
+    throw new Error('cloud host is required for hosted onboarding remote fetch');
+  }
+  const command = `python3 -c ${shellQuote(REMOTE_ONBOARDING_FETCH_PY)} ${shellQuote(tenantBaseUrl)}`;
+  let output;
+  try {
+    output = runner('ssh', [host, command], {
+      encoding: 'utf8',
+      input: rawToken,
+      maxBuffer: 32 * 1024 * 1024,
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+  } catch (error) {
+    const detail = ['stderr', 'stdout']
+      .map((field) => error?.[field])
+      .filter((value) => value !== undefined && value !== null && String(value).trim() !== '')
+      .map((value) => String(value).trim())
+      .join('\n') || (error instanceof Error ? error.message : String(error));
+    throw new Error(`failed to fetch hosted onboarding payload via ${host}: ${redactBearerTokens(detail)}`);
+  }
+
+  try {
+    return JSON.parse(output);
+  } catch (error) {
+    throw new Error(`hosted onboarding payload fetched via ${host} was not valid JSON: ${redactBearerTokens(error instanceof Error ? error.message : String(error))}`);
+  }
 }
 
 function sleep(ms) {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 }
 
-function pollOnboardingPayload({
+async function pollOnboardingPayload({
+  cloudHost,
+  fetchImpl,
   pollIntervalMs,
   pollTimeoutMs,
   rawToken,
@@ -142,9 +216,16 @@ function pollOnboardingPayload({
 
   while (Date.now() <= deadline) {
     try {
-      return fetchOnboardingPayload({ rawToken, tenantBaseUrl });
+      return await fetchOnboardingPayload({ fetchImpl, rawToken, tenantBaseUrl });
     } catch (error) {
       lastError = error;
+      if (String(cloudHost ?? '').trim() !== '') {
+        try {
+          return fetchOnboardingPayloadViaCloudHost({ cloudHost, rawToken, tenantBaseUrl });
+        } catch (remoteError) {
+          lastError = remoteError;
+        }
+      }
       if (Date.now() >= deadline) {
         break;
       }
@@ -155,7 +236,7 @@ function pollOnboardingPayload({
   throw new Error(`timed out waiting for hosted onboarding payload from ${tenantBaseUrl}: ${String(lastError instanceof Error ? lastError.message : lastError)}`);
 }
 
-function main() {
+async function main() {
   const args = parseArgs(process.argv.slice(2));
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pulse-hosted-mobile-onboarding-'));
 
@@ -173,7 +254,8 @@ function main() {
     restartHostedTenantRuntime(args.cloudHost, args.tenantId);
 
     const tenantBaseUrl = deriveTenantBaseUrl(args.controlPlaneUrl, args.tenantId);
-    const qrPayload = pollOnboardingPayload({
+    const qrPayload = await pollOnboardingPayload({
+      cloudHost: args.cloudHost,
       pollIntervalMs: args.pollIntervalMs,
       pollTimeoutMs: args.pollTimeoutMs,
       rawToken,
@@ -216,4 +298,9 @@ function main() {
   }
 }
 
-main();
+if (process.argv[1] && path.resolve(process.argv[1]) === SCRIPT_PATH) {
+  main().catch((error) => {
+    console.error(redactBearerTokens(error instanceof Error ? error.message : String(error)));
+    process.exit(1);
+  });
+}

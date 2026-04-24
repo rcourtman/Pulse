@@ -4,6 +4,8 @@ import (
 	"context"
 	"crypto/ed25519"
 	"encoding/base64"
+	"net/http/httptest"
+	"net/url"
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
@@ -78,6 +80,36 @@ func TestLoadRelayConfigForRuntime_DoesNotOverrideExplicitDisabledRelayConfig(t 
 	}
 	if cfg.InstanceSecret == instanceHost {
 		t.Fatalf("expected explicit config to avoid hosted auto-bootstrap secret %q", instanceHost)
+	}
+}
+
+func TestHostedRelayRuntimeBuildsMobileOnboardingAppRelayURL(t *testing.T) {
+	router, _, _ := newHostedRelayRuntimeTestRouter(t)
+
+	relayCfg, err := router.loadRelayConfigForRuntime(context.Background())
+	if err != nil {
+		t.Fatalf("loadRelayConfigForRuntime() error = %v", err)
+	}
+
+	req := httptest.NewRequest("GET", "https://t-hostedrelay01.cloud.pulserelay.pro/api/onboarding/qr", nil)
+	payload, diagnostics := router.buildOnboardingPayload(req, relayCfg, "test-mobile-proof-token")
+	if hasOnboardingError(diagnostics) {
+		t.Fatalf("onboarding diagnostics contain errors: %#v", diagnostics)
+	}
+	if payload.Relay.URL != "wss://relay.pulserelay.pro/ws/app" {
+		t.Fatalf("mobile onboarding relay URL = %q", payload.Relay.URL)
+	}
+
+	deepLink, err := url.Parse(payload.DeepLink)
+	if err != nil {
+		t.Fatalf("parse deep link: %v", err)
+	}
+	query := deepLink.Query()
+	if query.Get("relay_url") != payload.Relay.URL {
+		t.Fatalf("deep-link relay_url = %q, want %q", query.Get("relay_url"), payload.Relay.URL)
+	}
+	if query.Get("auth_token") != "test-mobile-proof-token" {
+		t.Fatalf("deep-link auth_token did not preserve the proof token")
 	}
 }
 

@@ -24,9 +24,10 @@ server-side update execution surfaces.
 2. `internal/api/updates.go`
 3. `frontend-modern/src/api/updates.ts`
 4. `cmd/pulse-control-plane/main.go`
-5. `internal/cloudcp/docker/manager.go`
-6. `internal/cloudcp/docker/labels.go`
-7. `internal/cloudcp/tenant_runtime_rollout.go`
+5. `cmd/pulse-control-plane/mobile_proof_cmd.go`
+6. `internal/cloudcp/docker/manager.go`
+7. `internal/cloudcp/docker/labels.go`
+8. `internal/cloudcp/tenant_runtime_rollout.go`
 8. `.github/workflows/create-release.yml`
 9. `.github/workflows/deploy-demo-server.yml`
 10. `.github/workflows/helm-pages.yml`
@@ -81,11 +82,13 @@ server-side update execution surfaces.
 59. `tests/integration/README.md`
 60. `tests/integration/scripts/bootstrap-hosted-mobile-onboarding.mjs`
 61. `tests/integration/scripts/hosted-mobile-token-runtime.mjs`
-62. `tests/integration/scripts/hosted-tenant-runtime.mjs`
-63. `tests/integration/scripts/managed-dev-runtime.mjs`
-64. `tests/integration/scripts/relay-mobile-token-helper.go`
-65. `tests/integration/tests/helpers.ts`
-66. `tests/integration/tests/runtime-defaults.ts`
+62. `tests/integration/scripts/hosted-tenant-approval-store.mjs`
+63. `tests/integration/scripts/hosted-tenant-runtime.mjs`
+64. `tests/integration/scripts/hosted-tenant-runtime-restart.mjs`
+65. `tests/integration/scripts/managed-dev-runtime.mjs`
+66. `tests/integration/scripts/relay-mobile-token-helper.go`
+67. `tests/integration/tests/helpers.ts`
+68. `tests/integration/tests/runtime-defaults.ts`
 67. `docker-compose.yml`
 68. `scripts/install-docker.sh`
 69. `scripts/validate-published-release.sh`
@@ -197,7 +200,12 @@ server-side update execution surfaces.
    recorded Docker container is missing, dry-run must classify the tenant for
    mutation and the live command must recreate the container, prove health, and
    rewrite the registry runtime identity through the same control-plane path.
-10. Add or change the canonical hosted staging smoke operator path through `scripts/run_hosted_staging_smoke.sh`, `tests/integration/scripts/bootstrap-hosted-mobile-onboarding.mjs`, `tests/integration/scripts/hosted-mobile-token-runtime.mjs`, `tests/integration/scripts/hosted-tenant-runtime.mjs`, and `tests/integration/scripts/relay-mobile-token-helper.go`
+10. Add or change the canonical hosted staging smoke operator path through `scripts/run_hosted_staging_smoke.sh`, `tests/integration/scripts/bootstrap-hosted-mobile-onboarding.mjs`, `tests/integration/scripts/hosted-mobile-token-runtime.mjs`, `tests/integration/scripts/hosted-tenant-approval-store.mjs`, `tests/integration/scripts/hosted-tenant-runtime.mjs`, `tests/integration/scripts/hosted-tenant-runtime-restart.mjs`, and `tests/integration/scripts/relay-mobile-token-helper.go`.
+    Hosted mobile proof helpers must create and delete only disposable
+    proof-shaped workspaces through the normal control-plane provisioner,
+    fetch onboarding payloads without logging bearer tokens or mobile deep-link
+    secrets, and seed hosted approvals through a single explicit tenant runtime
+    restart when a release proof needs transactionally visible approval state.
 
 ## Forbidden Paths
 

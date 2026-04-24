@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
+import { pathToFileURL } from 'node:url';
 
 import {
   assertHostedTenantRuntimeExists,
@@ -22,12 +23,12 @@ function usage(message) {
   }
 
   console.error(
-    'usage: node ./tests/integration/scripts/hosted-tenant-approval-store.mjs <create|get> --tenant-id <id> [--org-id <id>] [--cloud-host <host>] [approval options]',
+    'usage: node ./tests/integration/scripts/hosted-tenant-approval-store.mjs <create|get> --tenant-id <id> [--org-id <id>] [--cloud-host <host>] [--no-restart] [approval options]',
   );
   process.exit(1);
 }
 
-function parseArgs(argv) {
+export function parseArgs(argv) {
   if (argv.length === 0) {
     usage('missing action');
   }
@@ -36,6 +37,7 @@ function parseArgs(argv) {
     action: argv[0],
     cloudHost: 'root@pulse-cloud',
     orgId: '',
+    restartAfterCreate: true,
     tenantId: '',
     passthrough: [],
   };
@@ -54,6 +56,10 @@ function parseArgs(argv) {
       case '--org-id':
         parsed.orgId = argv[index + 1] ?? usage('missing value for --org-id');
         index += 1;
+        break;
+      case '--no-restart':
+      case '--skip-restart':
+        parsed.restartAfterCreate = false;
         break;
       case '--help':
       case '-h':
@@ -131,12 +137,14 @@ function main() {
     const output = runRemote(args.cloudHost, remoteArgs.join(' '));
     const payload = JSON.parse(output);
 
-    if (args.action === 'create') {
+    if (args.action === 'create' && args.restartAfterCreate) {
       // Approval store state is loaded in-memory at runtime startup. Hosted proof
       // seeding edits the backing file out-of-band, so restart the tenant runtime
       // before returning to ensure the live process serves the seeded approval.
       restartHostedTenantRuntime(args.cloudHost, args.tenantId);
       payload.runtimeRestarted = true;
+    } else if (args.action === 'create') {
+      payload.runtimeRestarted = false;
     }
 
     process.stdout.write(`${JSON.stringify(payload, null, 2)}\n`);
@@ -148,9 +156,14 @@ function main() {
   }
 }
 
-try {
-  main();
-} catch (error) {
-  console.error(error instanceof Error ? error.message : String(error));
-  process.exit(1);
+const invokedAsScript = process.argv[1]
+  && import.meta.url === pathToFileURL(process.argv[1]).href;
+
+if (invokedAsScript) {
+  try {
+    main();
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exit(1);
+  }
 }

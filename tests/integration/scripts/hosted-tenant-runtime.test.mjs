@@ -7,7 +7,9 @@ import {
   hostedTenantRuntimeExistsScript,
   restartHostedTenantRuntime,
 } from './hosted-tenant-runtime.mjs';
+import { parseArgs as parseApprovalStoreArgs } from './hosted-tenant-approval-store.mjs';
 import { parseArgs as parseRuntimeCheckArgs } from './hosted-tenant-runtime-check.mjs';
+import { parseArgs as parseRuntimeRestartArgs } from './hosted-tenant-runtime-restart.mjs';
 
 test('hostedTenantContainerName derives the canonical runtime container name', () => {
   assert.equal(hostedTenantContainerName(' t-P62TP8K28Y '), 'pulse-t-P62TP8K28Y');
@@ -76,4 +78,38 @@ test('hosted tenant runtime check CLI defaults to the production cloud host', ()
 
   assert.equal(parsed.cloudHost, 'root@pulse-cloud');
   assert.equal(parsed.tenantId, 't-canary');
+});
+
+test('hosted tenant runtime restart CLI defaults to the production cloud host', () => {
+  const parsed = parseRuntimeRestartArgs(['--tenant-id', 't-canary']);
+
+  assert.equal(parsed.cloudHost, 'root@pulse-cloud');
+  assert.equal(parsed.tenantId, 't-canary');
+});
+
+test('hosted approval seeding keeps runtime restart enabled by default', () => {
+  const parsed = parseApprovalStoreArgs([
+    'create',
+    '--tenant-id',
+    't-canary',
+    '--approval-id',
+    'approval-123',
+  ]);
+
+  assert.equal(parsed.restartAfterCreate, true);
+  assert.deepEqual(parsed.passthrough, ['--approval-id', 'approval-123']);
+});
+
+test('hosted approval seeding can defer runtime restart for transactional proof setup', () => {
+  const parsed = parseApprovalStoreArgs([
+    'create',
+    '--tenant-id',
+    't-canary',
+    '--no-restart',
+    '--approval-id',
+    'approval-123',
+  ]);
+
+  assert.equal(parsed.restartAfterCreate, false);
+  assert.deepEqual(parsed.passthrough, ['--approval-id', 'approval-123']);
 });

@@ -373,6 +373,7 @@ func printCloudAuditReport(report *cloudcp.CloudAuditReport) {
 func init() {
 	rootCmd.AddCommand(versionCmd)
 	rootCmd.AddCommand(newCloudCmd())
+	rootCmd.AddCommand(newMobileProofCmd())
 	rootCmd.AddCommand(newTenantRuntimeCmd())
 }
 

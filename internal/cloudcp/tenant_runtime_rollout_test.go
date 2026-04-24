@@ -369,6 +369,22 @@ func TestTenantRuntimeRollout_RecreatesMissingRuntimeFromTenantData(t *testing.T
 	}
 }
 
+func TestTenantRuntimeRollout_MobileProofTenantUsesCanonicalRuntimeContract(t *testing.T) {
+	tenantID := "t-MobileProof01"
+	docker := newFakeTenantRuntimeRolloutDocker()
+	routing := docker.DesiredRuntimeRouting(tenantID)
+
+	if got := tenantRuntimeContainerName(tenantID); got != "pulse-t-MobileProof01" {
+		t.Fatalf("tenant runtime container name = %q, want pulse-t-MobileProof01", got)
+	}
+	if routing.Host != "t-mobileproof01.cloud.pulserelay.pro" {
+		t.Fatalf("proof tenant route host = %q", routing.Host)
+	}
+	if routing.PublicURL != "https://t-mobileproof01.cloud.pulserelay.pro" {
+		t.Fatalf("proof tenant public URL = %q", routing.PublicURL)
+	}
+}
+
 func TestTenantRuntimeRollout_AdmissionFailureStopsBeforeSnapshotOrContainerSwap(t *testing.T) {
 	tenant := &registry.Tenant{ID: "t-ADMIT01", ContainerID: "old-container"}
 	reg := &fakeTenantRuntimeRolloutRegistry{tenant: tenant}
