@@ -75,7 +75,7 @@ describe('storagePagePresentation', () => {
     expect(STORAGE_POOLS_EMPTY_STATE_CLASS).toBe('p-6 text-sm text-muted');
     expect(STORAGE_POOLS_LOADING_STATE_CLASS).toBe('p-6 text-sm text-muted');
     expect(STORAGE_POOLS_SCROLL_WRAP_CLASS).toBe('overflow-x-auto');
-    expect(STORAGE_POOLS_TABLE_CLASS).toBe('w-full text-xs');
+    expect(STORAGE_POOLS_TABLE_CLASS).toBe('w-full table-fixed text-xs');
     expect(STORAGE_POOLS_HEADER_ROW_CLASS).toContain('bg-surface-alt');
     expect(STORAGE_POOLS_BODY_CLASS).toBe('divide-y divide-border');
     expect(getStorageTableHeading('pools')).toBe('Storage Pools');
@@ -99,6 +99,13 @@ describe('storagePagePresentation', () => {
       'Usage',
       'Growth (24h)',
     ]);
+    expect(getStoragePoolTableColumns('Growth (24h)').map((column) => column.compactLabel)).toEqual(
+      ['Storage', 'Issue', 'Src', 'Type', 'Host', 'Prot', 'Used', '24h'],
+    );
+    expect(getStoragePoolTableColumns('Growth (24h)')[0].colClassName).toContain('xl:w-[18%]');
+    expect(getStoragePoolTableColumns('Growth (24h)')[3].className).toContain(
+      'hidden xl:table-cell',
+    );
   });
 
   it('shows the ceph summary card only for pool views with visible ceph records', () => {
@@ -112,8 +119,8 @@ describe('storagePagePresentation', () => {
     const record = makeRecord();
     expect(shouldShowCephSummaryCard('pools', summary, [record], () => true)).toBe(true);
     expect(shouldShowCephSummaryCard('disks', summary, [record], () => true)).toBe(false);
-    expect(shouldShowCephSummaryCard('pools', { ...summary, clusters: [] }, [record], () => true)).toBe(
-      false,
-    );
+    expect(
+      shouldShowCephSummaryCard('pools', { ...summary, clusters: [] }, [record], () => true),
+    ).toBe(false);
   });
 });

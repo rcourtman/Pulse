@@ -71,10 +71,28 @@ export const StoragePoolsTable: Component<StoragePoolsTableProps> = (props) => {
         >
           <div class={STORAGE_POOLS_SCROLL_WRAP_CLASS}>
             <Table class={STORAGE_POOLS_TABLE_CLASS}>
+              <colgroup>
+                <For each={getStoragePoolTableColumns(props.storageGrowthColumnLabel)}>
+                  {(column) => <col class={column.colClassName} />}
+                </For>
+              </colgroup>
               <TableHeader>
                 <TableRow class={STORAGE_POOLS_HEADER_ROW_CLASS}>
                   <For each={getStoragePoolTableColumns(props.storageGrowthColumnLabel)}>
-                    {(column) => <TableHead class={column.className}>{column.label}</TableHead>}
+                    {(column) => (
+                      <TableHead
+                        class={column.className}
+                        aria-label={column.label}
+                        title={column.label}
+                      >
+                        <span aria-hidden="true" class="hidden xl:inline">
+                          {column.label}
+                        </span>
+                        <span aria-hidden="true" class="xl:hidden">
+                          {column.compactLabel}
+                        </span>
+                      </TableHead>
+                    )}
                   </For>
                 </TableRow>
               </TableHeader>
@@ -84,7 +102,10 @@ export const StoragePoolsTable: Component<StoragePoolsTableProps> = (props) => {
                     <>
                       <Show when={group.showHeader}>
                         {(() => {
-                          const groupSummaryScope = buildStorageSummaryGroupScope(group, props.groupBy);
+                          const groupSummaryScope = buildStorageSummaryGroupScope(
+                            group,
+                            props.groupBy,
+                          );
                           return (
                             <StorageGroupRow
                               group={group}
@@ -92,7 +113,9 @@ export const StoragePoolsTable: Component<StoragePoolsTableProps> = (props) => {
                               expanded={group.expanded}
                               onToggle={() => props.toggleGroup(group.key)}
                               summaryGroupScope={groupSummaryScope}
-                              summaryActive={props.activeSummaryGroupScope?.id === groupSummaryScope?.id}
+                              summaryActive={
+                                props.activeSummaryGroupScope?.id === groupSummaryScope?.id
+                              }
                               summaryFocused={props.focusedSummaryGroupId === groupSummaryScope?.id}
                               onFocusChange={props.onGroupFocusChange}
                               onHoverChange={props.onGroupHoverChange}

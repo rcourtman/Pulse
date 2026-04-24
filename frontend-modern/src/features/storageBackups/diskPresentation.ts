@@ -79,8 +79,11 @@ export const PHYSICAL_DISK_EMPTY_REQUIREMENTS_LIST_CLASS =
 export const PHYSICAL_DISK_EMPTY_REQUIREMENTS_NOTE_CLASS =
   'mt-3 text-xs italic text-blue-700 dark:text-blue-300';
 
+const PHYSICAL_DISK_TABLE_HEADER_CLASS =
+  'overflow-hidden text-ellipsis whitespace-nowrap px-1 sm:px-1.5 lg:px-2 py-0.5 text-left text-[10px] sm:text-[11px] lg:text-xs font-medium uppercase tracking-wider';
+
 export const PHYSICAL_DISK_TABLE_SCROLL_CLASS = 'overflow-x-auto';
-export const PHYSICAL_DISK_TABLE_CLASS = 'w-full text-xs';
+export const PHYSICAL_DISK_TABLE_CLASS = 'w-full table-fixed text-xs';
 export const PHYSICAL_DISK_TABLE_HEADER_ROW_CLASS =
   'border-b border-border bg-surface-alt text-muted';
 export const PHYSICAL_DISK_TABLE_BODY_CLASS = 'divide-y divide-border';
@@ -90,45 +93,46 @@ export const PHYSICAL_DISK_TABLE_ROW_HOVER_CLASS = 'hover:bg-surface-hover';
 export const PHYSICAL_DISK_TABLE_ROW_STYLE = { height: '38px' } as const;
 export const PHYSICAL_DISK_DETAIL_ROW_CELL_CLASS =
   'border-b border-border-subtle bg-surface-alt px-4 py-4 shadow-inner';
-export const PHYSICAL_DISK_HEADER_DISK_CLASS =
-  'px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider md:min-w-[220px]';
-export const PHYSICAL_DISK_HEADER_SOURCE_CLASS =
-  'px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[72px]';
-export const PHYSICAL_DISK_HEADER_HOST_CLASS =
-  'px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider md:min-w-[120px]';
-export const PHYSICAL_DISK_HEADER_ROLE_CLASS =
-  'hidden xl:table-cell px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider';
-export const PHYSICAL_DISK_HEADER_PARENT_CLASS = PHYSICAL_DISK_HEADER_ROLE_CLASS;
-export const PHYSICAL_DISK_HEADER_HEALTH_CLASS =
-  'px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider md:min-w-[160px]';
-export const PHYSICAL_DISK_HEADER_TEMP_CLASS =
-  'hidden md:table-cell px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[72px]';
-export const PHYSICAL_DISK_HEADER_SIZE_CLASS =
-  'px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[96px]';
-export const PHYSICAL_DISK_CELL_DISK_CLASS =
-  'px-1.5 sm:px-2 py-1 align-middle text-xs md:min-w-[220px]';
-export const PHYSICAL_DISK_CELL_SOURCE_CLASS = 'px-1.5 sm:px-2 py-1 align-middle text-xs w-[72px]';
-export const PHYSICAL_DISK_CELL_HOST_CLASS =
-  'px-1.5 sm:px-2 py-1 align-middle text-xs md:min-w-[120px]';
-export const PHYSICAL_DISK_CELL_ROLE_CLASS =
-  'hidden xl:table-cell px-1.5 sm:px-2 py-1 align-middle text-xs';
-export const PHYSICAL_DISK_CELL_PARENT_CLASS = PHYSICAL_DISK_CELL_ROLE_CLASS;
-export const PHYSICAL_DISK_CELL_HEALTH_CLASS =
-  'px-1.5 sm:px-2 py-1 align-middle text-xs md:min-w-[160px]';
-export const PHYSICAL_DISK_CELL_TEMP_CLASS =
-  'hidden md:table-cell px-1.5 sm:px-2 py-1 align-middle text-xs whitespace-nowrap w-[72px]';
-export const PHYSICAL_DISK_CELL_SIZE_CLASS =
-  'px-1.5 sm:px-2 py-1 align-middle text-xs whitespace-nowrap w-[96px]';
+export const PHYSICAL_DISK_COL_DISK_CLASS = 'w-[42%] sm:w-[28%] md:w-[28%] xl:w-[22%]';
+export const PHYSICAL_DISK_COL_SOURCE_CLASS = 'w-[15%] sm:w-[11%] md:w-[9%] xl:w-[8%]';
+export const PHYSICAL_DISK_COL_HOST_CLASS =
+  'hidden sm:table-column sm:w-[18%] md:w-[14%] xl:w-[12%]';
+export const PHYSICAL_DISK_COL_ROLE_CLASS = 'hidden xl:table-column xl:w-[10%]';
+export const PHYSICAL_DISK_COL_PARENT_CLASS = 'hidden xl:table-column xl:w-[13%]';
+export const PHYSICAL_DISK_COL_HEALTH_CLASS = 'w-[25%] sm:w-[24%] md:w-[20%] xl:w-[16%]';
+export const PHYSICAL_DISK_COL_TEMP_CLASS = 'hidden md:table-column md:w-[9%] xl:w-[7%]';
+export const PHYSICAL_DISK_COL_SIZE_CLASS = 'w-[18%] sm:w-[19%] md:w-[20%] xl:w-[12%]';
+const PHYSICAL_DISK_CELL_HOST_RESPONSIVE_CLASS =
+  'hidden sm:table-cell sm:w-[18%] md:w-[14%] xl:w-[12%]';
+const PHYSICAL_DISK_CELL_ROLE_RESPONSIVE_CLASS = 'hidden xl:table-cell xl:w-[10%]';
+const PHYSICAL_DISK_CELL_PARENT_RESPONSIVE_CLASS = 'hidden xl:table-cell xl:w-[13%]';
+const PHYSICAL_DISK_CELL_TEMP_RESPONSIVE_CLASS = 'hidden md:table-cell md:w-[9%] xl:w-[7%]';
+export const PHYSICAL_DISK_HEADER_DISK_CLASS = `${PHYSICAL_DISK_TABLE_HEADER_CLASS} ${PHYSICAL_DISK_COL_DISK_CLASS}`;
+export const PHYSICAL_DISK_HEADER_SOURCE_CLASS = `${PHYSICAL_DISK_TABLE_HEADER_CLASS} ${PHYSICAL_DISK_COL_SOURCE_CLASS}`;
+export const PHYSICAL_DISK_HEADER_HOST_CLASS = `${PHYSICAL_DISK_TABLE_HEADER_CLASS} ${PHYSICAL_DISK_COL_HOST_CLASS}`;
+export const PHYSICAL_DISK_HEADER_ROLE_CLASS = `${PHYSICAL_DISK_TABLE_HEADER_CLASS} ${PHYSICAL_DISK_COL_ROLE_CLASS}`;
+export const PHYSICAL_DISK_HEADER_PARENT_CLASS = `${PHYSICAL_DISK_TABLE_HEADER_CLASS} ${PHYSICAL_DISK_COL_PARENT_CLASS}`;
+export const PHYSICAL_DISK_HEADER_HEALTH_CLASS = `${PHYSICAL_DISK_TABLE_HEADER_CLASS} ${PHYSICAL_DISK_COL_HEALTH_CLASS}`;
+export const PHYSICAL_DISK_HEADER_TEMP_CLASS = `${PHYSICAL_DISK_TABLE_HEADER_CLASS} ${PHYSICAL_DISK_COL_TEMP_CLASS}`;
+export const PHYSICAL_DISK_HEADER_SIZE_CLASS = `${PHYSICAL_DISK_TABLE_HEADER_CLASS} ${PHYSICAL_DISK_COL_SIZE_CLASS}`;
+export const PHYSICAL_DISK_CELL_DISK_CLASS = `${PHYSICAL_DISK_COL_DISK_CLASS} overflow-hidden px-1 sm:px-1.5 lg:px-2 py-1 align-middle text-xs`;
+export const PHYSICAL_DISK_CELL_SOURCE_CLASS = `${PHYSICAL_DISK_COL_SOURCE_CLASS} overflow-hidden px-1 sm:px-1.5 lg:px-2 py-1 align-middle text-xs`;
+export const PHYSICAL_DISK_CELL_HOST_CLASS = `${PHYSICAL_DISK_CELL_HOST_RESPONSIVE_CLASS} overflow-hidden px-1 sm:px-1.5 lg:px-2 py-1 align-middle text-xs`;
+export const PHYSICAL_DISK_CELL_ROLE_CLASS = `${PHYSICAL_DISK_CELL_ROLE_RESPONSIVE_CLASS} overflow-hidden px-1 sm:px-1.5 lg:px-2 py-1 align-middle text-xs`;
+export const PHYSICAL_DISK_CELL_PARENT_CLASS = `${PHYSICAL_DISK_CELL_PARENT_RESPONSIVE_CLASS} overflow-hidden px-1 sm:px-1.5 lg:px-2 py-1 align-middle text-xs`;
+export const PHYSICAL_DISK_CELL_HEALTH_CLASS = `${PHYSICAL_DISK_COL_HEALTH_CLASS} overflow-hidden px-1 sm:px-1.5 lg:px-2 py-1 align-middle text-xs`;
+export const PHYSICAL_DISK_CELL_TEMP_CLASS = `${PHYSICAL_DISK_CELL_TEMP_RESPONSIVE_CLASS} overflow-hidden px-1 sm:px-1.5 lg:px-2 py-1 align-middle text-xs whitespace-nowrap`;
+export const PHYSICAL_DISK_CELL_SIZE_CLASS = `${PHYSICAL_DISK_COL_SIZE_CLASS} overflow-hidden px-1 sm:px-1.5 lg:px-2 py-1 align-middle text-xs whitespace-nowrap`;
 export const PHYSICAL_DISK_NAME_WRAP_CLASS = 'flex min-w-0 items-center gap-1.5 whitespace-nowrap';
 export const PHYSICAL_DISK_NAME_TEXT_CLASS =
   'block min-w-0 truncate text-[12px] font-semibold text-base-content';
 export const PHYSICAL_DISK_SOURCE_BADGE_CLASS =
-  'inline-flex min-w-[3.25rem] justify-center px-1.5 py-px text-[9px] font-medium';
+  'inline-flex max-w-full min-w-0 justify-center overflow-hidden text-ellipsis px-1 sm:px-1.5 py-px text-[9px] font-medium';
 export const PHYSICAL_DISK_VALUE_TEXT_CLASS = 'block truncate text-[11px] text-base-content';
 export const PHYSICAL_DISK_MUTED_PLACEHOLDER_CLASS = 'text-[11px] text-muted';
 export const PHYSICAL_DISK_HEALTH_WRAP_CLASS =
   'flex min-w-0 items-center gap-1.5 whitespace-nowrap';
-export const PHYSICAL_DISK_HEALTH_LABEL_CLASS = 'shrink-0 text-[11px] font-semibold';
+export const PHYSICAL_DISK_HEALTH_LABEL_CLASS = 'min-w-0 truncate text-[11px] font-semibold';
 export const PHYSICAL_DISK_HEALTH_SUMMARY_CLASS = 'hidden xl:block truncate text-[11px] text-muted';
 export const PHYSICAL_DISK_TEMPERATURE_CLASS = 'text-[11px] font-medium';
 export const PHYSICAL_DISK_SIZE_VALUE_CLASS = 'text-[11px] text-base-content';

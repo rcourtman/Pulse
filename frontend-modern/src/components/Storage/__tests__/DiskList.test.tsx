@@ -101,7 +101,7 @@ describe('DiskList', () => {
       ],
       nodes: [buildNode('node-tower', 'tower')],
       selectedNode: null,
-      searchTerm: "",
+      searchTerm: '',
     });
 
     expect(screen.getByRole('columnheader', { name: 'Disk' })).toBeInTheDocument();
@@ -134,31 +134,31 @@ describe('DiskList', () => {
   it('keeps api-backed TrueNAS disks on the canonical physical-disk surface even without hardware ids', () => {
     renderDiskList({
       disks: [
-          ({
-            ...buildDisk('sda', 'truenas-main', {
-              model: 'Seagate IronWolf',
+        {
+          ...buildDisk('sda', 'truenas-main', {
+            model: 'Seagate IronWolf',
+            serial: '',
+            wwn: '',
+          }),
+          platformType: 'truenas',
+          metricsTarget: { resourceType: 'disk', resourceId: 'disk:truenas-main:sda' },
+          sourceType: 'api',
+          identity: { hostname: 'truenas-main' },
+          canonicalIdentity: { hostname: 'truenas-main' },
+          platformData: {
+            sources: ['truenas'],
+            physicalDisk: {
               serial: '',
               wwn: '',
-            }),
-            platformType: 'truenas',
-            metricsTarget: { resourceType: 'disk', resourceId: 'disk:truenas-main:sda' },
-            sourceType: 'api',
-            identity: { hostname: 'truenas-main' },
-            canonicalIdentity: { hostname: 'truenas-main' },
-            platformData: {
-              sources: ['truenas'],
-              physicalDisk: {
-                serial: '',
-                wwn: '',
-              },
             },
-          }) as Resource,
+          },
+        } as Resource,
       ],
       nodes: [
-          ({
-            ...buildNode('truenas-main', 'truenas-main'),
-            platformType: 'truenas',
-          }) as Resource,
+        {
+          ...buildNode('truenas-main', 'truenas-main'),
+          platformType: 'truenas',
+        } as Resource,
       ],
       selectedNode: null,
       searchTerm: '',

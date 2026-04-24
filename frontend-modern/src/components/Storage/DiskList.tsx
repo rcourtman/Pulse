@@ -25,6 +25,14 @@ import {
   PHYSICAL_DISK_CELL_SIZE_CLASS,
   PHYSICAL_DISK_CELL_SOURCE_CLASS,
   PHYSICAL_DISK_CELL_TEMP_CLASS,
+  PHYSICAL_DISK_COL_DISK_CLASS,
+  PHYSICAL_DISK_COL_HEALTH_CLASS,
+  PHYSICAL_DISK_COL_HOST_CLASS,
+  PHYSICAL_DISK_COL_PARENT_CLASS,
+  PHYSICAL_DISK_COL_ROLE_CLASS,
+  PHYSICAL_DISK_COL_SIZE_CLASS,
+  PHYSICAL_DISK_COL_SOURCE_CLASS,
+  PHYSICAL_DISK_COL_TEMP_CLASS,
   PHYSICAL_DISK_DETAIL_ROW_CELL_CLASS,
   PHYSICAL_DISK_EMPTY_CARD_CLASS,
   PHYSICAL_DISK_EMPTY_FALLBACK_CLASS,
@@ -175,13 +183,40 @@ export const DiskList: Component<DiskListProps> = (props) => {
             style={{ '-webkit-overflow-scrolling': 'touch' }}
           >
             <Table class={PHYSICAL_DISK_TABLE_CLASS}>
+              <colgroup>
+                <col class={PHYSICAL_DISK_COL_DISK_CLASS} />
+                <col class={PHYSICAL_DISK_COL_SOURCE_CLASS} />
+                <col class={PHYSICAL_DISK_COL_HOST_CLASS} />
+                <col class={PHYSICAL_DISK_COL_ROLE_CLASS} />
+                <col class={PHYSICAL_DISK_COL_PARENT_CLASS} />
+                <col class={PHYSICAL_DISK_COL_HEALTH_CLASS} />
+                <col class={PHYSICAL_DISK_COL_TEMP_CLASS} />
+                <col class={PHYSICAL_DISK_COL_SIZE_CLASS} />
+              </colgroup>
               <TableHeader>
                 <TableRow class={PHYSICAL_DISK_TABLE_HEADER_ROW_CLASS}>
                   <TableHead class={PHYSICAL_DISK_HEADER_DISK_CLASS}>Disk</TableHead>
-                  <TableHead class={PHYSICAL_DISK_HEADER_SOURCE_CLASS}>Source</TableHead>
+                  <TableHead
+                    class={PHYSICAL_DISK_HEADER_SOURCE_CLASS}
+                    aria-label="Source"
+                    title="Source"
+                  >
+                    <span aria-hidden="true" class="hidden sm:inline">
+                      Source
+                    </span>
+                    <span aria-hidden="true" class="sm:hidden">
+                      Src
+                    </span>
+                  </TableHead>
                   <TableHead class={PHYSICAL_DISK_HEADER_HOST_CLASS}>Host</TableHead>
                   <TableHead class={PHYSICAL_DISK_HEADER_ROLE_CLASS}>Role</TableHead>
-                  <TableHead class={PHYSICAL_DISK_HEADER_PARENT_CLASS}>Belongs To</TableHead>
+                  <TableHead
+                    class={PHYSICAL_DISK_HEADER_PARENT_CLASS}
+                    aria-label="Belongs To"
+                    title="Belongs To"
+                  >
+                    Belongs
+                  </TableHead>
                   <TableHead class={PHYSICAL_DISK_HEADER_HEALTH_CLASS}>Health</TableHead>
                   <TableHead class={PHYSICAL_DISK_HEADER_TEMP_CLASS}>Temp</TableHead>
                   <TableHead class={PHYSICAL_DISK_HEADER_SIZE_CLASS}>Size</TableHead>

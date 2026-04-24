@@ -15,8 +15,13 @@ export type StorageViewOption = {
 
 export type StoragePoolTableColumn = {
   label: string;
+  compactLabel: string;
   className: string;
+  colClassName: string;
 };
+
+const STORAGE_POOL_TABLE_HEADER_CLASS =
+  'overflow-hidden text-ellipsis whitespace-nowrap px-1 sm:px-1.5 lg:px-2 py-0.5 text-left text-[10px] sm:text-[11px] lg:text-xs font-medium uppercase tracking-wider';
 
 export const STORAGE_VIEW_OPTIONS: readonly StorageViewOption[] = [
   { value: 'pools', label: 'Pools' },
@@ -28,39 +33,51 @@ export const getStoragePoolTableColumns = (
 ): readonly StoragePoolTableColumn[] => [
   {
     label: 'Storage',
-    className: 'px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider',
+    compactLabel: 'Storage',
+    className: `${STORAGE_POOL_TABLE_HEADER_CLASS} w-[34%] sm:w-[26%] md:w-[23%] xl:w-[18%]`,
+    colClassName: 'w-[34%] sm:w-[26%] md:w-[23%] xl:w-[18%]',
   },
   {
     label: 'Primary Issue',
-    className: 'px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider',
+    compactLabel: 'Issue',
+    className: `${STORAGE_POOL_TABLE_HEADER_CLASS} w-[24%] sm:w-[20%] md:w-[17%] xl:w-[14%]`,
+    colClassName: 'w-[24%] sm:w-[20%] md:w-[17%] xl:w-[14%]',
   },
   {
     label: 'Source',
-    className: 'px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider',
+    compactLabel: 'Src',
+    className: `${STORAGE_POOL_TABLE_HEADER_CLASS} w-[13%] sm:w-[10%] md:w-[8%]`,
+    colClassName: 'w-[13%] sm:w-[10%] md:w-[8%]',
   },
   {
     label: 'Type',
-    className:
-      'hidden xl:table-cell px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider',
+    compactLabel: 'Type',
+    className: `${STORAGE_POOL_TABLE_HEADER_CLASS} hidden xl:table-cell xl:w-[8%]`,
+    colClassName: 'hidden xl:table-column xl:w-[8%]',
   },
   {
     label: 'Host',
-    className: 'px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider',
+    compactLabel: 'Host',
+    className: `${STORAGE_POOL_TABLE_HEADER_CLASS} hidden sm:table-cell sm:w-[13%] md:w-[12%] xl:w-[10%]`,
+    colClassName: 'hidden sm:table-column sm:w-[13%] md:w-[12%] xl:w-[10%]',
   },
   {
     label: 'Protection',
-    className:
-      'px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider md:min-w-[180px]',
+    compactLabel: 'Prot',
+    className: `${STORAGE_POOL_TABLE_HEADER_CLASS} hidden sm:table-cell sm:w-[15%] md:w-[15%] xl:w-[13%]`,
+    colClassName: 'hidden sm:table-column sm:w-[15%] md:w-[15%] xl:w-[13%]',
   },
   {
     label: 'Usage',
-    className:
-      'px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider md:min-w-[190px] xl:min-w-[220px]',
+    compactLabel: 'Used',
+    className: `${STORAGE_POOL_TABLE_HEADER_CLASS} w-[29%] sm:w-[16%] md:w-[25%] xl:w-[18%]`,
+    colClassName: 'w-[29%] sm:w-[16%] md:w-[25%] xl:w-[18%]',
   },
   {
     label: growthColumnLabel,
-    className:
-      'hidden lg:table-cell px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider',
+    compactLabel: growthColumnLabel.replace(/^Growth\s*\((.+)\)$/i, '$1'),
+    className: `${STORAGE_POOL_TABLE_HEADER_CLASS} hidden xl:table-cell xl:w-[11%]`,
+    colClassName: 'hidden xl:table-column xl:w-[11%]',
   },
 ];
 
@@ -81,7 +98,7 @@ export const STORAGE_CONTENT_CARD_BODY_CLASS = 'p-2';
 export const STORAGE_POOLS_EMPTY_STATE_CLASS = 'p-6 text-sm text-muted';
 export const STORAGE_POOLS_LOADING_STATE_CLASS = 'p-6 text-sm text-muted';
 export const STORAGE_POOLS_SCROLL_WRAP_CLASS = 'overflow-x-auto';
-export const STORAGE_POOLS_TABLE_CLASS = 'w-full text-xs';
+export const STORAGE_POOLS_TABLE_CLASS = 'w-full table-fixed text-xs';
 export const STORAGE_POOLS_HEADER_ROW_CLASS = 'bg-surface-alt text-muted border-b border-border';
 export const STORAGE_POOLS_BODY_CLASS = 'divide-y divide-border';
 
@@ -120,9 +137,7 @@ export const getStoragePageBannerMessage = (kind: StoragePageBannerKind): string
   }
 };
 
-export const getStoragePageBannerActionLabel = (
-  kind: StoragePageBannerKind,
-): string | null => {
+export const getStoragePageBannerActionLabel = (kind: StoragePageBannerKind): string | null => {
   if (kind === 'reconnecting') return 'Retry now';
   if (kind === 'disconnected') return 'Reconnect';
   return null;

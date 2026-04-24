@@ -56,10 +56,10 @@ function makeDiskData(
 describe('diskPresentation', () => {
   it('returns critical presentation for failed disks', () => {
     expect(PHYSICAL_DISK_EMPTY_CARD_CLASS).toBe('text-center');
-    expect(PHYSICAL_DISK_TABLE_CLASS).toBe('w-full text-xs');
+    expect(PHYSICAL_DISK_TABLE_CLASS).toBe('w-full table-fixed text-xs');
     expect(PHYSICAL_DISK_TABLE_ROW_HOVER_CLASS).toContain('hover:bg-surface-hover');
     expect(PHYSICAL_DISK_HEADER_DISK_CLASS).toContain('uppercase');
-    expect(PHYSICAL_DISK_HEADER_SOURCE_CLASS).toContain('w-[72px]');
+    expect(PHYSICAL_DISK_HEADER_SOURCE_CLASS).toContain('sm:w-[11%]');
     expect(PHYSICAL_DISK_NAME_TEXT_CLASS).toContain('font-semibold');
     expect(PHYSICAL_DISK_SOURCE_BADGE_CLASS).toContain('justify-center');
 
@@ -120,7 +120,7 @@ describe('diskPresentation', () => {
     ).toEqual({
       label: 'PVE',
       className:
-        'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-400 inline-flex min-w-[3.25rem] justify-center px-1.5 py-px text-[9px] font-medium',
+        'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-400 inline-flex max-w-full min-w-0 justify-center overflow-hidden text-ellipsis px-1 sm:px-1.5 py-px text-[9px] font-medium',
     });
     expect(
       getPhysicalDiskSourceKey({

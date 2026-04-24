@@ -75,6 +75,10 @@ let hookResources: Resource[] = [];
 let hookLoading = false;
 let hookError: unknown = undefined;
 let alertsActivationState: 'active' | 'pending_review' | 'snoozed' | null = 'active';
+
+const getStorageSourceSelect = (): HTMLSelectElement =>
+  screen.getByLabelText('Source', { selector: 'select' }) as HTMLSelectElement;
+
 const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
   const url =
     typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
@@ -707,7 +711,7 @@ describe('Storage', () => {
     );
     expect((screen.getByLabelText('Node') as HTMLSelectElement).value).toBe('node-2');
     expect((screen.getByLabelText('Sort By') as HTMLSelectElement).value).toBe('usage');
-    expect((screen.getByLabelText('Source') as HTMLSelectElement).value).toBe('proxmox-pve');
+    expect(getStorageSourceSelect().value).toBe('proxmox-pve');
     expect((screen.getByLabelText('Status') as HTMLSelectElement).value).toBe('warning');
 
     // Grouping controls are only shown on the Pools view.
@@ -749,7 +753,7 @@ describe('Storage', () => {
       'true',
     );
     expect((screen.getByLabelText('Node') as HTMLSelectElement).value).toBe('node-2');
-    expect((screen.getByLabelText('Source') as HTMLSelectElement).value).toBe('proxmox-pve');
+    expect(getStorageSourceSelect().value).toBe('proxmox-pve');
   });
 
   it('trims whitespace-padded storage URL params back to canonical state', async () => {
@@ -785,7 +789,7 @@ describe('Storage', () => {
       'true',
     );
     expect((screen.getByLabelText('Node') as HTMLSelectElement).value).toBe('node-2');
-    expect((screen.getByLabelText('Source') as HTMLSelectElement).value).toBe('proxmox-pve');
+    expect(getStorageSourceSelect().value).toBe('proxmox-pve');
     expect((screen.getByLabelText('Status') as HTMLSelectElement).value).toBe('available');
     expect((screen.getByLabelText('Sort By') as HTMLSelectElement).value).toBe('usage');
   });
@@ -803,7 +807,7 @@ describe('Storage', () => {
       );
     });
 
-    expect((screen.getByLabelText('Source') as HTMLSelectElement).value).toBe('proxmox-pve');
+    expect(getStorageSourceSelect().value).toBe('proxmox-pve');
   });
 
   it('collapses explicit all node sentinels in storage URL params back to canonical unset state', async () => {
@@ -832,9 +836,7 @@ describe('Storage', () => {
     render(() => <Storage />);
 
     await waitFor(() => {
-      expect(
-        document.querySelector('tr[data-summary-group-id="storage:node:pve1"]'),
-      ).toBeTruthy();
+      expect(document.querySelector('tr[data-summary-group-id="storage:node:pve1"]')).toBeTruthy();
     });
 
     let groupRow = document.querySelector(
@@ -876,9 +878,7 @@ describe('Storage', () => {
     render(() => <Storage />);
 
     await waitFor(() => {
-      expect(
-        document.querySelector('tr[data-summary-group-id="storage:node:pve1"]'),
-      ).toBeTruthy();
+      expect(document.querySelector('tr[data-summary-group-id="storage:node:pve1"]')).toBeTruthy();
     });
 
     const clearButton = within(screen.getByTestId('storage-content-surface')).getByRole('button', {
@@ -904,9 +904,7 @@ describe('Storage', () => {
     render(() => <Storage />);
 
     await waitFor(() => {
-      expect(
-        document.querySelector('tr[data-summary-group-id="storage:node:pve1"]'),
-      ).toBeTruthy();
+      expect(document.querySelector('tr[data-summary-group-id="storage:node:pve1"]')).toBeTruthy();
     });
 
     const groupRow = document.querySelector(
@@ -1121,10 +1119,8 @@ describe('Storage', () => {
             { timestamp: Date.now() - 60_000, value: 45 },
             { timestamp: Date.now(), value: 47 },
           ],
-          used: [
-          ],
-          avail: [
-          ],
+          used: [],
+          avail: [],
         },
         'pool:beta': {
           name: 'Beta-Store',
@@ -1544,12 +1540,12 @@ describe('Storage', () => {
     render(() => <Storage />);
 
     await waitFor(() => {
-      expect(screen.getByLabelText('Source')).toHaveValue('truenas');
+      expect(getStorageSourceSelect()).toHaveValue('truenas');
     });
 
     expect(screen.getByLabelText('Node')).toHaveValue('truenas-main');
     expect(
-      Array.from(screen.getByLabelText('Source').querySelectorAll('option')).map((option) => ({
+      Array.from(getStorageSourceSelect().querySelectorAll('option')).map((option) => ({
         value: option.value,
         label: option.textContent,
       })),
