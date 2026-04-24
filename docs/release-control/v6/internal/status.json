@@ -4519,7 +4519,20 @@
     }
   ],
   "work_claims": [],
-  "open_decisions": [],
+  "open_decisions": [
+    {
+      "id": "mobile-product-role-and-audience",
+      "summary": "Pulse Mobile's product role and target audience are not locked. Before GA, decide whether the app is for broad self-hosted monitoring, business or multi-tenant operations, Relay-backed remote access, push/notification continuity, approvals, or a deliberately narrower combination; do not continue polishing the current control-center shape as if the purpose were settled.",
+      "owner": "project-owner",
+      "blocking_level": "release-ready",
+      "status": "owner-action",
+      "opened_at": "2026-04-24",
+      "lane_ids": [
+        "L5"
+      ],
+      "subsystem_ids": []
+    }
+  ],
   "source_of_truth_file": "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md",
   "resolved_decisions": [
     {
