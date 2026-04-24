@@ -29,6 +29,7 @@ FROM --platform=linux/amd64 golang:1.25.9-alpine@sha256:5caaf1cca9dc351e13deafbc
 
 ARG BUILD_AGENT
 ARG VERSION
+ARG PULSE_LICENSE_PUBLIC_KEY_SHA256
 ARG PULSE_UPDATE_SIGNING_PUBLIC_KEY
 WORKDIR /app
 
@@ -64,9 +65,19 @@ RUN --mount=type=cache,id=pulse-go-mod,target=/go/pkg/mod \
     BUILD_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ") && \
     GIT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown") && \
     LICENSE_PUBLIC_KEY="" && \
+    EXPECTED_LICENSE_PUBLIC_KEY_SHA256="${PULSE_LICENSE_PUBLIC_KEY_SHA256#SHA256:}" && \
     UPDATE_SIGNING_KEY="" && \
     UPDATE_PUBLIC_KEYS="" && \
     if [ -f /run/secrets/pulse_license_public_key ]; then LICENSE_PUBLIC_KEY="$(tr -d '\r\n' < /run/secrets/pulse_license_public_key)"; fi && \
+    if [ -n "${LICENSE_PUBLIC_KEY}" ]; then \
+      LICENSE_PUBLIC_KEY_BYTES="$(printf '%s' "${LICENSE_PUBLIC_KEY}" | base64 -d | wc -c | tr -d ' ')" && \
+      if [ "${LICENSE_PUBLIC_KEY_BYTES}" != "32" ]; then echo "Error: mounted license public key must decode to 32 bytes." >&2; exit 1; fi; \
+    fi && \
+    if [ -n "${EXPECTED_LICENSE_PUBLIC_KEY_SHA256}" ]; then \
+      if [ -z "${LICENSE_PUBLIC_KEY}" ]; then echo "Error: PULSE_LICENSE_PUBLIC_KEY_SHA256 was provided but no license public key was mounted." >&2; exit 1; fi && \
+      ACTUAL_LICENSE_PUBLIC_KEY_SHA256="$(printf '%s' "${LICENSE_PUBLIC_KEY}" | base64 -d | sha256sum | awk '{print $1}')" && \
+      if [ "${ACTUAL_LICENSE_PUBLIC_KEY_SHA256}" != "${EXPECTED_LICENSE_PUBLIC_KEY_SHA256}" ]; then echo "Error: mounted license public key does not match PULSE_LICENSE_PUBLIC_KEY_SHA256." >&2; exit 1; fi; \
+    fi && \
     if [ -f /run/secrets/pulse_update_signing_key ]; then UPDATE_SIGNING_KEY="$(tr -d '\r\n' < /run/secrets/pulse_update_signing_key)"; fi && \
     if [ -n "${UPDATE_SIGNING_KEY}" ]; then UPDATE_PUBLIC_KEYS="$(go run ./scripts/release_update_key.go public-key --private-key "${UPDATE_SIGNING_KEY}")"; fi && \
     if [ -n "${PULSE_UPDATE_SIGNING_PUBLIC_KEY:-}" ] && [ -z "${UPDATE_PUBLIC_KEYS}" ]; then echo "Error: PULSE_UPDATE_SIGNING_PUBLIC_KEY was provided but no update signing key was mounted." >&2; exit 1; fi && \

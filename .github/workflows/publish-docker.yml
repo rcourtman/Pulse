@@ -127,6 +127,20 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Derive license public key Docker cache key
+        id: license_key_cache
+        env:
+          PULSE_LICENSE_PUBLIC_KEY: ${{ secrets.PULSE_LICENSE_PUBLIC_KEY }}
+        run: |
+          set -euo pipefail
+          decoded_len="$(printf '%s' "${PULSE_LICENSE_PUBLIC_KEY}" | base64 -d | wc -c | tr -d ' ')"
+          if [ "${decoded_len}" != "32" ]; then
+            echo "PULSE_LICENSE_PUBLIC_KEY must decode to 32 bytes." >&2
+            exit 1
+          fi
+          key_sha256="$(printf '%s' "${PULSE_LICENSE_PUBLIC_KEY}" | base64 -d | sha256sum | awk '{print $1}')"
+          echo "sha256=${key_sha256}" >> "${GITHUB_OUTPUT}"
+
       - name: Build and push Pulse server image (multi-arch)
         id: build_server_image
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
@@ -140,6 +154,7 @@ jobs:
           cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/pulse:buildcache
           build-args: |
             VERSION=${{ steps.version.outputs.tag }}
+            PULSE_LICENSE_PUBLIC_KEY_SHA256=${{ steps.license_key_cache.outputs.sha256 }}
             PULSE_UPDATE_SIGNING_PUBLIC_KEY=${{ vars.PULSE_UPDATE_SIGNING_PUBLIC_KEY }}
           secrets: |
             pulse_license_public_key=${{ secrets.PULSE_LICENSE_PUBLIC_KEY }}
@@ -182,6 +197,7 @@ jobs:
           cache-from: type=registry,ref=ghcr.io/${{ github.repository_owner }}/pulse-agent:buildcache
           build-args: |
             VERSION=${{ steps.version.outputs.tag }}
+            PULSE_LICENSE_PUBLIC_KEY_SHA256=${{ steps.license_key_cache.outputs.sha256 }}
             PULSE_UPDATE_SIGNING_PUBLIC_KEY=${{ vars.PULSE_UPDATE_SIGNING_PUBLIC_KEY }}
           secrets: |
             pulse_license_public_key=${{ secrets.PULSE_LICENSE_PUBLIC_KEY }}

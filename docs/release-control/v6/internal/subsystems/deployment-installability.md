@@ -341,7 +341,10 @@ the mounted license public key through `PULSE_LICENSE_PUBLIC_KEY_SHA256` and
 the `Dockerfile` must verify that fingerprint before embedding the key. A
 release image build must fail closed if the fingerprint is present but the
 secret is missing, malformed, or mismatched, so cached no-key binaries cannot
-be reused for release-grade hosted or self-hosted runtime images.
+be reused for release-grade hosted or self-hosted runtime images. The matching
+installability proof lives in `scripts/installtests/build_release_assets_test.go`
+and `scripts/release_control/release_promotion_policy_test.py`, and both must
+assert the secret mount and non-secret fingerprint argument together.
 That same supply-chain boundary also owns the checked-in build roots
 themselves. `Dockerfile` must pin its Node, Go, and Alpine bases by immutable
 manifest-list digest so multi-arch release builds do not silently drift onto a
