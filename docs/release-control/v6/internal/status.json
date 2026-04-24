@@ -3536,6 +3536,12 @@
         },
         {
           "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/cloud-hosted-tier-runtime-readiness-account-portal-proxy-2026-04-24.md",
+          "kind": "file",
+          "evidence_tier": "real-external-e2e"
+        },
+        {
+          "repo": "pulse",
           "path": "docs/release-control/v6/internal/records/cloud-hosted-tier-runtime-readiness-blocked-2026-03-25.md",
           "kind": "file",
           "evidence_tier": "real-external-e2e"
