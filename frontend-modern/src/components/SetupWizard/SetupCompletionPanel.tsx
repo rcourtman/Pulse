@@ -19,33 +19,20 @@ interface CompleteStepProps {
   connectedResourcesOverride?: readonly Resource[];
 }
 
-const UNIFIED_RESOURCE_GUIDANCE = {
-  title: 'What happens next',
-  description:
-    'Pulse is now secured. Next, choose how the first system should enter the unified infrastructure model: platform API inventory, Pulse Agent telemetry, or both.',
-  steps: [
-    {
-      title: 'Open Add infrastructure',
-      description:
-        'Review the supported source types in one place before choosing a platform API, Pulse Agent, or both.',
-    },
-    {
-      title: 'Choose the source strategy',
-      description:
-        'Connect a platform API for inventory and health, install Pulse Agent for node-local telemetry, or combine both where full coverage matters.',
-    },
-    {
-      title: 'Save the source and confirm coverage',
-      description:
-        'When the source connects, Pulse creates the first monitored system and the dashboard becomes the live estate overview.',
-    },
-  ],
-  inventoryFacts: [
-    'Start with one source, then add more systems later from Settings → Infrastructure.',
-    'Platform APIs own inventory and health. Pulse Agent owns host telemetry, local services, Docker, and Kubernetes discovery.',
-    'VMware, TrueNAS, Proxmox, PBS, and PMG use API-backed source flows; standalone hosts use Pulse Agent.',
-  ],
-} as const;
+const SOURCE_STRATEGY_OPTIONS = [
+  {
+    title: 'Platform API',
+    description: 'Inventory and health from Proxmox, TrueNAS, VMware, PBS, or PMG.',
+  },
+  {
+    title: 'Pulse Agent',
+    description: 'Node-local telemetry for standalone hosts, services, Docker, and Kubernetes.',
+  },
+  {
+    title: 'Use both',
+    description: 'Combine platform inventory with Agent telemetry when full coverage matters.',
+  },
+] as const;
 
 const ADD_INFRASTRUCTURE_PATH = buildInfrastructureOnboardingPath('pick');
 const AGENT_INSTALL_PATH = buildInfrastructureOnboardingPath('agent');
@@ -418,65 +405,10 @@ Keep these credentials secure!
           </Show>
         </div>
 
-        <div class="bg-surface rounded-md border border-border p-6 text-left mb-6">
-          <h3 class="text-sm font-semibold text-base-content mb-3 flex items-center gap-2">
-            <svg
-              class="w-4 h-4 text-blue-500"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"
-              />
-            </svg>
-            {UNIFIED_RESOURCE_GUIDANCE.title}
-          </h3>
-
-          <p class="text-muted text-xs mb-4">{UNIFIED_RESOURCE_GUIDANCE.description}</p>
-
-          <div class="grid gap-3 sm:grid-cols-3 mb-4">
-            <For each={UNIFIED_RESOURCE_GUIDANCE.steps}>
-              {(step, index) => (
-                <div class="rounded-md border border-border bg-surface-alt p-4">
-                  <div class="mb-3 flex items-center gap-3">
-                    <div class="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-slate-900 text-[11px] font-semibold text-white dark:bg-slate-100 dark:text-slate-900">
-                      {index() + 1}
-                    </div>
-                    <div class="text-sm font-semibold text-base-content">{step.title}</div>
-                  </div>
-                  <p class="text-xs leading-5 text-muted">{step.description}</p>
-                </div>
-              )}
-            </For>
-          </div>
-
-          <div class="rounded-md border border-border bg-surface-alt p-4">
-            <div class="mb-3 flex items-center justify-between gap-3">
-              <div class="text-xs font-semibold uppercase tracking-[0.14em] text-muted">
-                What to expect
-              </div>
-              <div class="rounded-sm bg-emerald-100 px-2 py-1 text-[10px] font-medium text-emerald-800 dark:bg-emerald-900 dark:text-emerald-300">
-                First system first
-              </div>
-            </div>
-            <div class="space-y-2">
-              <For each={UNIFIED_RESOURCE_GUIDANCE.inventoryFacts}>
-                {(fact) => (
-                  <div class="flex items-start gap-3">
-                    <div class="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500"></div>
-                    <p class="text-xs leading-5 text-muted">{fact}</p>
-                  </div>
-                )}
-              </For>
-            </div>
-          </div>
-        </div>
-
-        <div class="bg-surface rounded-md border border-border p-6 text-left mb-6">
+        <div
+          aria-label="Setup next step"
+          class="bg-surface rounded-md border border-border p-5 sm:p-6 text-left mb-6"
+        >
           <div class="flex items-start justify-between gap-4">
             <div>
               <h3 class="text-sm font-semibold text-base-content flex items-center gap-2">
@@ -495,11 +427,6 @@ Keep these credentials secure!
                 </svg>
                 {completionViewModel().nextStepTitle}
               </h3>
-              <p class="mt-2 text-xs text-muted max-w-xl">
-                {completionViewModel().hasConnectedSystems
-                  ? 'Pulse already has a live monitored system. Open the dashboard to confirm the first overview, then return to Add infrastructure when you want to connect the next API or Agent source.'
-                  : 'Add infrastructure now owns the first source decision. Open the picker to choose a platform API for inventory, Pulse Agent for host telemetry, or both when the first system needs full coverage.'}
-              </p>
             </div>
             <div class="rounded-sm bg-blue-50 px-2 py-1 text-[10px] font-medium text-blue-700 dark:bg-blue-900 dark:text-blue-300">
               Recommended next step
@@ -511,36 +438,51 @@ Keep these credentials secure!
               {completionViewModel().nextStepSummary}
             </div>
             <div class="mt-2 text-xs text-muted">{completionViewModel().nextStepDetail}</div>
-          </div>
-          <div class="mt-4 flex flex-col gap-3 sm:flex-row">
-            <button
-              onClick={() =>
-                completionViewModel().primaryAction === 'dashboard'
-                  ? handleGoToDashboard()
-                  : handleOpenAddInfrastructure()
-              }
-              class="inline-flex items-center justify-center gap-2 rounded-md bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-blue-700"
-            >
-              {completionViewModel().primaryAction === 'dashboard'
-                ? 'Go to Dashboard'
-                : 'Add infrastructure'}
-            </button>
-            <Show when={completionViewModel().showAddInfrastructureAction}>
+            <div class="mt-4 flex flex-col gap-3 sm:flex-row">
               <button
-                onClick={handleOpenAddInfrastructure}
-                class="inline-flex items-center justify-center gap-2 rounded-md border border-border px-4 py-3 text-sm font-medium text-base-content transition-colors hover:bg-surface-hover"
+                onClick={() =>
+                  completionViewModel().primaryAction === 'dashboard'
+                    ? handleGoToDashboard()
+                    : handleOpenAddInfrastructure()
+                }
+                class="inline-flex items-center justify-center gap-2 rounded-md bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-blue-700"
               >
-                Add infrastructure
+                {completionViewModel().primaryAction === 'dashboard'
+                  ? 'Go to Dashboard'
+                  : 'Add infrastructure'}
               </button>
-            </Show>
-            <Show when={completionViewModel().showAgentInstallAction}>
-              <button
-                onClick={handleOpenAgentInstall}
-                class="inline-flex items-center justify-center gap-2 rounded-md border border-border px-4 py-3 text-sm font-medium text-base-content transition-colors hover:bg-surface-hover"
-              >
-                Install Pulse Agent
-              </button>
-            </Show>
+              <Show when={completionViewModel().showAddInfrastructureAction}>
+                <button
+                  onClick={handleOpenAddInfrastructure}
+                  class="inline-flex items-center justify-center gap-2 rounded-md border border-border px-4 py-3 text-sm font-medium text-base-content transition-colors hover:bg-surface-hover"
+                >
+                  Add infrastructure
+                </button>
+              </Show>
+              <Show when={completionViewModel().showAgentInstallAction}>
+                <button
+                  onClick={handleOpenAgentInstall}
+                  class="inline-flex items-center justify-center gap-2 rounded-md border border-border px-4 py-3 text-sm font-medium text-base-content transition-colors hover:bg-surface-hover"
+                >
+                  Install Pulse Agent
+                </button>
+              </Show>
+            </div>
+            <div class="mt-4 border-t border-border-subtle pt-3">
+              <div class="text-[11px] font-medium uppercase tracking-wider text-muted">
+                Source choices
+              </div>
+              <div class="mt-2 grid gap-2 sm:grid-cols-3">
+                <For each={SOURCE_STRATEGY_OPTIONS}>
+                  {(option) => (
+                    <div class="rounded-md border border-border bg-surface px-3 py-2.5">
+                      <div class="text-xs font-semibold text-base-content">{option.title}</div>
+                      <p class="mt-1 text-[11px] leading-4 text-muted">{option.description}</p>
+                    </div>
+                  )}
+                </For>
+              </div>
+            </div>
           </div>
         </div>
       </div>

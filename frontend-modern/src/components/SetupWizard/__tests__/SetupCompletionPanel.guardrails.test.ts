@@ -20,8 +20,8 @@ describe('SetupCompletionPanel guardrails', () => {
     expect(setupCompletionPanelSource).toContain(
       'Use Add infrastructure to choose a platform API, Pulse Agent, or both',
     );
-    expect(setupCompletionPanelSource).toContain(
-      'Open the picker to choose a platform API for inventory, Pulse Agent for host telemetry',
+    expect(setupCompletionModelSource).toContain(
+      'Open Add infrastructure to choose a platform API, Pulse Agent, or both.',
     );
     expect(setupCompletionPanelSource).not.toContain('Use Add connection to connect');
     expect(setupCompletionPanelSource).not.toContain("from '@/stores/licenseCommercial';");
@@ -34,23 +34,26 @@ describe('SetupCompletionPanel guardrails', () => {
     expect(setupCompletionPanelSource).not.toContain('getUpgradeActionUrlOrFallback');
   });
 
-  it('describes setup completion through the unified resource model instead of legacy install-command copy', () => {
-    expect(setupCompletionPanelSource).toContain("title: 'What happens next'");
-    expect(setupCompletionPanelSource).toContain('Pulse is now secured.');
-    expect(setupCompletionPanelSource).toContain("title: 'Open Add infrastructure'");
-    expect(setupCompletionPanelSource).toContain('Review the supported source types in one place');
-    expect(setupCompletionPanelSource).toContain("title: 'Save the source and confirm coverage'");
-    expect(setupCompletionPanelSource).toContain('What to expect');
-    expect(setupCompletionPanelSource).toContain('First system first');
+  it('describes setup completion through one compact source-choice next-step surface', () => {
+    expect(setupCompletionPanelSource).toContain('SOURCE_STRATEGY_OPTIONS');
+    expect(setupCompletionPanelSource).toContain('Source choices');
+    expect(setupCompletionPanelSource).toContain("title: 'Platform API'");
+    expect(setupCompletionPanelSource).toContain("title: 'Pulse Agent'");
+    expect(setupCompletionPanelSource).toContain("title: 'Use both'");
     expect(setupCompletionPanelSource).toContain(
-      'Start with one source, then add more systems later from Settings',
+      'Inventory and health from Proxmox, TrueNAS, VMware, PBS, or PMG.',
     );
     expect(setupCompletionPanelSource).toContain(
-      'Platform APIs own inventory and health. Pulse Agent owns host telemetry',
+      'Node-local telemetry for standalone hosts, services, Docker, and Kubernetes.',
     );
     expect(setupCompletionModelSource).toContain(
       'Start with a platform API when a platform manages the estate.',
     );
+    expect(setupCompletionPanelSource).not.toContain("title: 'What happens next'");
+    expect(setupCompletionPanelSource).not.toContain("title: 'Open Add infrastructure'");
+    expect(setupCompletionPanelSource).not.toContain("title: 'Save the source and confirm coverage'");
+    expect(setupCompletionPanelSource).not.toContain('What to expect');
+    expect(setupCompletionPanelSource).not.toContain('First system first');
     expect(setupCompletionPanelSource).not.toContain('Smart Auto-Detection');
     expect(setupCompletionPanelSource).not.toContain('Agent Metrics');
     expect(setupCompletionPanelSource).not.toContain('ProxmoxIcon');
@@ -96,6 +99,7 @@ describe('SetupCompletionPanel guardrails', () => {
       'Save the admin login and API token before leaving this screen',
     );
     expect(setupCompletionPanelSource).toContain('Recommended next step');
+    expect(setupCompletionPanelSource).toContain('aria-label="Setup next step"');
     expect(setupCompletionPanelSource).toContain('Go to Dashboard');
     expect(setupCompletionModelSource).toContain("heroTitle: 'First monitored system connected'");
     expect(setupCompletionModelSource).toContain(
@@ -114,10 +118,10 @@ describe('SetupCompletionPanel guardrails', () => {
     expect(setupCompletionPanelSource).not.toContain(
       'You can return here later from Connections & Inventory if you skip install for now.',
     );
-    expect(setupCompletionPanelSource).toContain(
+    expect(setupCompletionPanelSource).not.toContain(
       'Add infrastructure now owns the first source decision.',
     );
-    expect(setupCompletionPanelSource).toContain(
+    expect(setupCompletionPanelSource).not.toContain(
       'then return to Add infrastructure when you want to connect the next API or Agent source.',
     );
   });

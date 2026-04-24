@@ -81,31 +81,28 @@ describe('SetupCompletionPanel', () => {
     render(() => <SetupCompletionPanel state={baseState} onComplete={vi.fn()} />);
 
     expect(screen.getByText('Choose your first infrastructure source')).toBeInTheDocument();
-    expect(screen.getByText('What happens next')).toBeInTheDocument();
-    expect(screen.getAllByText('Open Add infrastructure').length).toBeGreaterThan(0);
     expect(screen.getByRole('button', { name: 'Add infrastructure' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Install Pulse Agent' })).toBeInTheDocument();
     expect(screen.getByText('Credentials you must save now')).toBeInTheDocument();
     expect(screen.getByText('Shown during setup')).toBeInTheDocument();
     expect(screen.getByText('admin')).toBeInTheDocument();
     expect(screen.getByText('password')).toBeInTheDocument();
-    expect(screen.getByText('What to expect')).toBeInTheDocument();
-    expect(screen.getByText('First system first')).toBeInTheDocument();
+    expect(screen.getByText('Source choices')).toBeInTheDocument();
+    expect(screen.getByText('Platform API')).toBeInTheDocument();
+    expect(screen.getByText('Use both')).toBeInTheDocument();
     expect(
       screen.getByText(
-        'Platform APIs own inventory and health. Pulse Agent owns host telemetry, local services, Docker, and Kubernetes discovery.',
+        'Inventory and health from Proxmox, TrueNAS, VMware, PBS, or PMG.',
       ),
     ).toBeInTheDocument();
     expect(
       screen.getByText(
-        'Review the supported source types in one place before choosing a platform API, Pulse Agent, or both.',
+        'Node-local telemetry for standalone hosts, services, Docker, and Kubernetes.',
       ),
     ).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        'VMware, TrueNAS, Proxmox, PBS, and PMG use API-backed source flows; standalone hosts use Pulse Agent.',
-      ),
-    ).toBeInTheDocument();
+    expect(screen.queryByText('What happens next')).not.toBeInTheDocument();
+    expect(screen.queryByText('What to expect')).not.toBeInTheDocument();
+    expect(screen.queryByText('First system first')).not.toBeInTheDocument();
 
     expect(screen.queryByText('Connection URL (Agent → Pulse)')).not.toBeInTheDocument();
     expect(screen.queryByText('Custom CA certificate path (optional)')).not.toBeInTheDocument();
@@ -222,9 +219,7 @@ describe('SetupCompletionPanel', () => {
     );
 
     const nextStepHeading = screen.getByRole('heading', { name: 'Open your first dashboard view' });
-    const nextStepCard = nextStepHeading.closest(
-      'div.bg-surface.rounded-md.border.border-border.p-6.text-left.mb-6',
-    );
+    const nextStepCard = nextStepHeading.closest('[aria-label="Setup next step"]');
     expect(nextStepCard).not.toBeNull();
 
     fireEvent.click(
@@ -279,9 +274,7 @@ describe('SetupCompletionPanel', () => {
     expect(trackAgentFirstConnectedMock).not.toHaveBeenCalled();
 
     const nextStepHeading = screen.getByRole('heading', { name: 'Open your first dashboard view' });
-    const nextStepCard = nextStepHeading.closest(
-      'div.bg-surface.rounded-md.border.border-border.p-6.text-left.mb-6',
-    );
+    const nextStepCard = nextStepHeading.closest('[aria-label="Setup next step"]');
     expect(nextStepCard).not.toBeNull();
 
     fireEvent.click(
