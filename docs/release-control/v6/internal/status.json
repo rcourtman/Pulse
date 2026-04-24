@@ -2650,7 +2650,7 @@
       "status": "partial",
       "completion": {
         "state": "bounded-residual",
-        "summary": "Mobile is technically release-capable at the RC usefulness floor, but product GA is blocked: the current iPad experience does not yet make the normal self-hosted Pulse user value clear enough to justify public rollout. Store-capable work stays draft/TestFlight/internal-only until the mobile product purpose, first-run story, and primary operator jobs are explicit in the app and revalidated on device.",
+        "summary": "Mobile is technically release-capable at the RC usefulness floor, but product GA is blocked: the current iPad experience does not yet make the normal self-hosted Pulse user value clear enough to justify public rollout and does not establish monitoring as the primary mobile value normal self-hosted users expect. Store-capable work stays draft/TestFlight/internal-only until the mobile product purpose, first-run story, monitoring-first home experience, and secondary approval/recovery jobs are explicit in the app and revalidated on device.",
         "tracking": [
           {
             "kind": "lane-followup",
@@ -3715,7 +3715,7 @@
     },
     {
       "id": "mobile-product-purpose-and-first-run-clarity",
-      "summary": "Confirm Pulse Mobile communicates a clear self-hosted operator purpose in the actual app experience: a normal user should understand why the companion app exists, what jobs it handles away from the desktop, and how pairing, alerts, approvals, and recovery surfaces fit together before public rollout.",
+      "summary": "Confirm Pulse Mobile communicates a clear monitoring-first self-hosted operator purpose in the actual app experience: a normal user should understand that the companion app exists primarily to monitor Pulse away from the desktop, see current state and alerts, and only secondarily handle approvals or recovery actions before public rollout.",
       "owner": "project-owner",
       "blocking_level": "release-ready",
       "minimum_evidence_tier": "local-rehearsal",
