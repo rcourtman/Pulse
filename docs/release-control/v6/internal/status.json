@@ -3956,6 +3956,12 @@
           "path": "docs/release-control/v6/internal/records/self-hosted-commercial-ga-coherence-2026-04-20.md",
           "kind": "file",
           "evidence_tier": "real-external-e2e"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/self-hosted-commercial-ga-coherence-paid-runtime-docker-policy-2026-04-24.md",
+          "kind": "file",
+          "evidence_tier": "managed-runtime-exercise"
         }
       ]
     },
