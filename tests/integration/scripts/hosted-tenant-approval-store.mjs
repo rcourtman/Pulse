@@ -9,7 +9,7 @@ import { pathToFileURL } from 'node:url';
 
 import {
   assertHostedTenantRuntimeExists,
-  resolveHostedTenantOrgDataDir,
+  resolveHostedTenantRootDataDir,
   restartHostedTenantRuntime,
   runRemote,
   shellQuote,
@@ -83,6 +83,10 @@ export function parseArgs(argv) {
   return parsed;
 }
 
+export function resolveHostedTenantApprovalStoreDataDir(tenantId) {
+  return resolveHostedTenantRootDataDir(tenantId);
+}
+
 function buildLocalHelper(tempDir) {
   const binaryPath = path.join(tempDir, 'approval-store-helper');
   execFileSync('go', [
@@ -115,7 +119,7 @@ function main() {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pulse-hosted-approval-helper-'));
   const localBinaryPath = buildLocalHelper(tempDir);
   const remoteBinaryPath = `/tmp/approval-store-helper-${process.pid}-${Date.now()}`;
-  const tenantDataDir = resolveHostedTenantOrgDataDir(args.tenantId, args.orgId);
+  const tenantDataDir = resolveHostedTenantApprovalStoreDataDir(args.tenantId);
 
   try {
     execFileSync('scp', [localBinaryPath, `${args.cloudHost}:${remoteBinaryPath}`], {

@@ -7,7 +7,10 @@ import {
   hostedTenantRuntimeExistsScript,
   restartHostedTenantRuntime,
 } from './hosted-tenant-runtime.mjs';
-import { parseArgs as parseApprovalStoreArgs } from './hosted-tenant-approval-store.mjs';
+import {
+  parseArgs as parseApprovalStoreArgs,
+  resolveHostedTenantApprovalStoreDataDir,
+} from './hosted-tenant-approval-store.mjs';
 import { parseArgs as parseRuntimeCheckArgs } from './hosted-tenant-runtime-check.mjs';
 import { parseArgs as parseRuntimeRestartArgs } from './hosted-tenant-runtime-restart.mjs';
 
@@ -112,4 +115,11 @@ test('hosted approval seeding can defer runtime restart for transactional proof 
 
   assert.equal(parsed.restartAfterCreate, false);
   assert.deepEqual(parsed.passthrough, ['--approval-id', 'approval-123']);
+});
+
+test('hosted approval seeding targets the runtime approval store root', () => {
+  assert.equal(
+    resolveHostedTenantApprovalStoreDataDir('t-canary'),
+    '/data/tenants/t-canary',
+  );
 });
