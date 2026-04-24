@@ -2650,7 +2650,7 @@
       "status": "partial",
       "completion": {
         "state": "bounded-residual",
-        "summary": "Mobile is technically release-capable at the RC usefulness floor, but product GA is blocked: the current iPad experience does not yet make the normal self-hosted Pulse user value clear enough to justify public rollout and does not establish monitoring as the primary mobile value normal self-hosted users expect. Store-capable work stays draft/TestFlight/internal-only until the mobile product purpose, first-run story, monitoring-first home experience, and secondary approval/recovery jobs are explicit in the app and revalidated on device.",
+        "summary": "Mobile is technically release-capable at the RC usefulness floor, and the GA product role is now locked as a native companion for status, alerts, push/device trust, Relay-backed Open Pulse handoff, and contextual recovery. Public rollout remains blocked until the current app proves that role on physical device; store-capable work stays draft/TestFlight/internal-only until fresh hardware proof demonstrates the native companion value without release-team narration.",
         "tracking": [
           {
             "kind": "lane-followup",
@@ -3715,10 +3715,10 @@
     },
     {
       "id": "mobile-product-purpose-and-first-run-clarity",
-      "summary": "Confirm Pulse Mobile communicates a clear monitoring-first self-hosted operator purpose in the actual app experience: a normal user should understand that the companion app exists primarily to monitor Pulse away from the desktop, see current state and alerts, and only secondarily handle approvals or recovery actions before public rollout.",
+      "summary": "Confirm Pulse Mobile communicates its GA role in the actual app experience: a normal paired self-hosted or Relay-backed operator should understand it as a native companion for status, alerts, push/device trust, Relay-backed Open Pulse handoff, and contextual recovery, not as a miniature web dashboard or command-approval control center.",
       "owner": "project-owner",
       "blocking_level": "release-ready",
-      "minimum_evidence_tier": "local-rehearsal",
+      "minimum_evidence_tier": "real-external-e2e",
       "status": "blocked",
       "verification_doc": "docs/release-control/v6/internal/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
       "lane_ids": [
@@ -4104,7 +4104,7 @@
     },
     {
       "id": "mobile-post-rc-hardening",
-      "summary": "Track broader mobile go-live hardening beyond the RC usefulness floor, including non-public store-capable rehearsal while public rollout stays blocked until the actual app experience makes the self-hosted operator value, first-run story, and primary away-from-desk jobs clear enough to be judged product-ready.",
+      "summary": "Track broader mobile go-live hardening beyond the RC usefulness floor, including non-public store-capable rehearsal while public rollout stays blocked until the current app proves its native companion role on physical device: status, alerts, push/device trust, Relay-backed Open Pulse handoff, and contextual recovery must be understandable without release-team narration.",
       "owner": "project-owner",
       "status": "planned",
       "recorded_at": "2026-03-13",
@@ -4519,20 +4519,7 @@
     }
   ],
   "work_claims": [],
-  "open_decisions": [
-    {
-      "id": "mobile-product-role-and-audience",
-      "summary": "Pulse Mobile's product role and target audience are not locked. Before GA, decide whether the app is for broad self-hosted monitoring, business or multi-tenant operations, Relay-backed remote access, push/notification continuity, approvals, or a deliberately narrower combination; do not continue polishing the current control-center shape as if the purpose were settled.",
-      "owner": "project-owner",
-      "blocking_level": "release-ready",
-      "status": "owner-action",
-      "opened_at": "2026-04-24",
-      "lane_ids": [
-        "L5"
-      ],
-      "subsystem_ids": []
-    }
-  ],
+  "open_decisions": [],
   "source_of_truth_file": "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md",
   "resolved_decisions": [
     {
@@ -5060,6 +5047,16 @@
       "lane_ids": [
         "L3",
         "L9"
+      ]
+    },
+    {
+      "id": "mobile-product-role-and-audience",
+      "summary": "Pulse Mobile v6 GA is a native companion for paired status, alerts, push/device trust, Relay-backed Open Pulse handoff, and contextual recovery from notifications or deep links. Full monitoring depth remains in the mobile-optimized web app, and the native app must not read as a miniature dashboard or approvals-first control center.",
+      "kind": "governance",
+      "decided_at": "2026-04-24",
+      "subsystem_ids": [],
+      "lane_ids": [
+        "L5"
       ]
     }
   ]
