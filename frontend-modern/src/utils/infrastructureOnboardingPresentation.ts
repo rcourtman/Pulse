@@ -58,6 +58,11 @@ export interface InfrastructureOnboardingPathPresentation {
   coverage: string;
 }
 
+export interface InfrastructureCoverageCompleteActionPresentation {
+  label: string;
+  detail: string;
+}
+
 const SOURCE_STRATEGY_PRESENTATION: Record<
   InfrastructureSourceStrategy,
   InfrastructureSourceStrategyPresentation
@@ -186,7 +191,7 @@ const SOURCE_MANAGER_LABEL_OVERRIDES: Partial<
 > = {
   agent: {
     label: 'Standalone hosts',
-    actionLabel: 'Add host',
+    actionLabel: 'Install Pulse Agent',
   },
 };
 
@@ -323,3 +328,9 @@ export const getInfrastructureEmptyStateSummary = (): string =>
 
 export const getInfrastructureEmptyStateDetail = (): string =>
   'Supported source types include VMware vCenter, TrueNAS SCALE, Proxmox VE, Proxmox Backup Server, Proxmox Mail Gateway, and standalone hosts through Pulse Agent. Docker and Kubernetes are discovered from supported agent hosts.';
+
+export const getInfrastructureCoverageCompleteActionPresentation =
+  (): InfrastructureCoverageCompleteActionPresentation => ({
+    label: 'Coverage coherent',
+    detail: 'Coverage looks coherent for the connected systems.',
+  });

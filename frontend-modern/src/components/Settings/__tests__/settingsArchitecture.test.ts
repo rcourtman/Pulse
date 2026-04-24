@@ -174,8 +174,8 @@ describe('settings architecture guardrails', () => {
     expect(infrastructureSourceManagerSource).toContain('aria-label={product.actionLabel}');
     expect(infrastructureSourceManagerSource).toContain('Review');
     expect(infrastructureSourceManagerSource).toContain('Manage');
-    expect(infrastructureSourceManagerSource).toContain('Detect address');
-    expect(infrastructureSourceManagerSource).toContain('Install agent');
+    expect(infrastructureSourceManagerSource).not.toContain('Detect address');
+    expect(infrastructureSourceManagerSource).not.toContain("'Install agent'");
     expect(infrastructureSourceManagerSource).toContain('Choose source type');
     expect(infrastructureSourceManagerSource).toContain('getInfrastructureEmptyStateSummary');
     expect(infrastructureSourceManagerSource).toContain('Infrastructure coverage');

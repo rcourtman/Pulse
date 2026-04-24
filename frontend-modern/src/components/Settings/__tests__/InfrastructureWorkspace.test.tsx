@@ -293,8 +293,8 @@ describe('InfrastructureWorkspace', () => {
     expect(screen.getByRole('button', { name: /Run discovery/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Discovery settings/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^Add infrastructure$/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Detect address/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /^Install agent$/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Detect address$/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Install agent$/i })).toBeNull();
     const readiness = screen.getByRole('region', {
       name: /Infrastructure setup confidence/i,
     });
@@ -315,7 +315,7 @@ describe('InfrastructureWorkspace', () => {
     expect(screen.queryByText('Standalone hosts')).toBeNull();
     expect(screen.getByRole('button', { name: /Add Proxmox VE/i })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Add TrueNAS SCALE/i })).toBeNull();
-    expect(screen.queryByRole('button', { name: /Add host/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Install Pulse Agent/i })).toBeNull();
     expect(screen.getByRole('button', { name: /Manage/i })).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Monitored systems' })).not.toBeInTheDocument();
   });
@@ -324,16 +324,6 @@ describe('InfrastructureWorkspace', () => {
     renderWorkspace();
 
     await waitFor(() => expect(screen.getByText('Infrastructure systems')).toBeInTheDocument());
-
-    fireEvent.click(screen.getByRole('button', { name: /Detect address/i }));
-    expect(navigateSpy).toHaveBeenLastCalledWith('/settings/infrastructure?add=detect', {
-      scroll: false,
-    });
-
-    fireEvent.click(screen.getByRole('button', { name: /^Install agent$/i }));
-    expect(navigateSpy).toHaveBeenLastCalledWith('/settings/infrastructure?add=agent', {
-      scroll: false,
-    });
 
     fireEvent.click(
       within(

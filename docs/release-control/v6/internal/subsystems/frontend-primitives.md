@@ -258,10 +258,13 @@ work extends shared components instead of creating new local variants.
    and no redundant monitored-systems ledger beneath it. The landing route may
    include a dedicated first-viewport toolbar that explains platform APIs and
    Pulse Agent telemetry as infrastructure sources and exposes `Add
-   infrastructure`, `Detect address`, `Install agent`, `Run discovery`, and
-   `Discovery settings` inside the source manager. It may also show a compact
-   coverage strip derived from the same unified connection rows and discovered
-   candidates so operators can confirm connected-system count, API coverage,
+   infrastructure`, `Run discovery`, and `Discovery settings` inside the
+   source manager. Per-source add actions, including `Install Pulse Agent`,
+   belong on the governed source rows, and `Detect address` stays inside the
+   single add-flow probe path instead of a duplicate toolbar action. It may
+   also show a compact coverage strip derived from the same unified connection
+   rows and discovered candidates so operators can confirm connected-system
+   count, API coverage,
    agent coverage, sources that still need an agent, and discovery review state
    without opening a tour or second ledger. Existing sources stay visible in
    stable source-catalog order, and add, detect, install, review, and manage

@@ -26,6 +26,7 @@ import {
 } from './connectionsTableModel';
 import type { DiscoveredServer, DiscoveryScanStatus } from './infrastructureSettingsModel';
 import {
+  getInfrastructureCoverageCompleteActionPresentation,
   getInfrastructureEmptyStateDetail,
   getInfrastructureEmptyStateSummary,
   getInfrastructureOnboardingProductPresentation,
@@ -41,7 +42,6 @@ interface InfrastructureSourceManagerProps {
   readOnly: boolean;
   onAddSource?: (type: InfrastructureOnboardingConnectionType) => void;
   onAddInfrastructure?: () => void;
-  onDetectFromAddress?: () => void;
   onRunDiscovery?: () => void;
   onOpenDiscoverySettings?: () => void;
   onOpenConnection?: (row: InfrastructureSystemRow) => void;
@@ -250,16 +250,6 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
     }
 
     if (connectedSystemCount() === 0) {
-      if (props.onDetectFromAddress) {
-        return {
-          kind: 'detect',
-          label: 'Detect first source',
-          detail:
-            'Probe an address so Pulse can identify the platform and open the right setup flow.',
-          onClick: props.onDetectFromAddress,
-        };
-      }
-
       return {
         kind: 'add',
         label: 'Choose source type',
@@ -289,12 +279,11 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
       };
     }
 
+    const completeAction = getInfrastructureCoverageCompleteActionPresentation();
     return {
       kind: 'add',
-      label: 'Add another source',
-      detail:
-        'Coverage looks coherent for the connected systems. Add another source when the estate changes.',
-      onClick: props.onAddInfrastructure,
+      label: completeAction.label,
+      detail: completeAction.detail,
     };
   });
 
@@ -352,56 +341,36 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
             </button>
           </Show>
 
-          <Show when={props.onDetectFromAddress}>
-            <button
-              type="button"
-              onClick={props.onDetectFromAddress}
-              class={workspaceSecondaryButtonClass}
-            >
-              <Search class="h-4 w-4" />
-              Detect address
-            </button>
-          </Show>
+          <div class="ml-auto flex flex-wrap items-center gap-2">
+            <Show when={props.onRunDiscovery}>
+              <button
+                type="button"
+                onClick={props.onRunDiscovery}
+                disabled={props.discoveryScanStatus().scanning}
+                class={utilityToolbarButtonClass}
+                aria-label="Run discovery"
+                title="Run discovery"
+              >
+                <RotateCw
+                  class={`h-4 w-4 ${props.discoveryScanStatus().scanning ? 'animate-spin' : ''}`}
+                />
+                {props.discoveryScanStatus().scanning ? 'Scanning…' : 'Run discovery'}
+              </button>
+            </Show>
 
-          <Show when={props.onAddSource}>
-            <button
-              type="button"
-              onClick={() => props.onAddSource?.('agent')}
-              class={workspaceSecondaryButtonClass}
-            >
-              <Cpu class="h-4 w-4" />
-              Install agent
-            </button>
-          </Show>
-
-          <Show when={props.onRunDiscovery}>
-            <button
-              type="button"
-              onClick={props.onRunDiscovery}
-              disabled={props.discoveryScanStatus().scanning}
-              class={utilityToolbarButtonClass}
-              aria-label="Run discovery"
-              title="Run discovery"
-            >
-              <RotateCw
-                class={`h-4 w-4 ${props.discoveryScanStatus().scanning ? 'animate-spin' : ''}`}
-              />
-              {props.discoveryScanStatus().scanning ? 'Scanning…' : 'Run discovery'}
-            </button>
-          </Show>
-
-          <Show when={props.onOpenDiscoverySettings}>
-            <button
-              type="button"
-              onClick={props.onOpenDiscoverySettings}
-              class={utilityToolbarButtonClass}
-              aria-label="Discovery settings"
-              title="Discovery settings"
-            >
-              <SlidersHorizontal class="h-4 w-4" />
-              Settings
-            </button>
-          </Show>
+            <Show when={props.onOpenDiscoverySettings}>
+              <button
+                type="button"
+                onClick={props.onOpenDiscoverySettings}
+                class={utilityToolbarButtonClass}
+                aria-label="Discovery settings"
+                title="Discovery settings"
+              >
+                <SlidersHorizontal class="h-4 w-4" />
+                Discovery settings
+              </button>
+            </Show>
+          </div>
         </div>
       </div>
     </Show>
@@ -565,24 +534,22 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                           }
                         >
                           <TableRow class={groupRowClass()}>
-                            <TableCell colspan={5} class="px-3 py-1.5">
-                              <div class="flex items-center gap-2 whitespace-nowrap">
+                            <TableCell colspan={6} class="px-3 py-1.5">
+                              <div class="flex items-center justify-between gap-2 whitespace-nowrap">
                                 <span class={groupLabelClass()}>{product.label}</span>
+                                <Show when={!props.readOnly && props.onAddSource}>
+                                  <button
+                                    type="button"
+                                    onClick={() => props.onAddSource?.(product.type)}
+                                    class={`${addSectionButtonClass} whitespace-nowrap`}
+                                    aria-label={product.actionLabel}
+                                    title={product.actionLabel}
+                                  >
+                                    <Plus class="h-3.5 w-3.5" />
+                                    {product.actionLabel}
+                                  </button>
+                                </Show>
                               </div>
-                            </TableCell>
-                            <TableCell class="px-3 py-1.5 text-right">
-                              <Show when={!props.readOnly && props.onAddSource}>
-                                <button
-                                  type="button"
-                                  onClick={() => props.onAddSource?.(product.type)}
-                                  class={`${addSectionButtonClass} whitespace-nowrap`}
-                                  aria-label={product.actionLabel}
-                                  title={product.actionLabel}
-                                >
-                                  <Plus class="h-3.5 w-3.5" />
-                                  Add
-                                </button>
-                              </Show>
                             </TableCell>
                           </TableRow>
                         </Show>
@@ -931,7 +898,7 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                           title={product.actionLabel}
                         >
                           <Plus class="h-3.5 w-3.5" />
-                          Add
+                          {product.actionLabel}
                         </button>
                       </Show>
                     </header>

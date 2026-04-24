@@ -858,6 +858,11 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
     if (!connection) return 'Update source state, credentials, and lifecycle actions here.';
     const label = describeManagedSourceType(connection.type);
     const methods = attachedAgentConnections().length > 0 ? ' · API + Pulse Agent' : '';
+    const row = editingRow();
+    if (row?.isCluster) {
+      const contact = connection.name || connection.address || 'contact node';
+      return `${label} cluster · Editing via contact node ${contact}${connection.address ? ` (${connection.address})` : ''}${methods}`;
+    }
     return `${label}${connection.address ? ` · ${connection.address}` : ''}${methods}`;
   });
 
@@ -877,7 +882,6 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
             : (type) => openAddFlow(type === 'agent' ? 'agent' : (type as ManagedAddTypeStep))
         }
         onAddInfrastructure={readOnly() ? undefined : () => openAddFlow('pick')}
-        onDetectFromAddress={readOnly() ? undefined : () => openAddFlow('detect')}
         onRunDiscovery={
           readOnly()
             ? undefined

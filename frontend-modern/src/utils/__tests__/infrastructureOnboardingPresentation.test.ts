@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  getInfrastructureCoverageCompleteActionPresentation,
   getInfrastructureApiProductsByGovernanceState,
   getInfrastructureAutoDetectLabels,
   getInfrastructureEmptyStateDetail,
@@ -90,7 +91,7 @@ describe('infrastructureOnboardingPresentation', () => {
       expect.objectContaining({
         type: 'agent',
         label: 'Standalone hosts',
-        actionLabel: 'Add host',
+        actionLabel: 'Install Pulse Agent',
       }),
     ]);
 
@@ -168,5 +169,12 @@ describe('infrastructureOnboardingPresentation', () => {
     );
     expect(getInfrastructureEmptyStateDetail()).toContain('standalone hosts through Pulse Agent');
     expect(getInfrastructureEmptyStateDetail()).toContain('Docker and Kubernetes are discovered');
+  });
+
+  it('owns the source-manager coverage-complete copy outside the component', () => {
+    expect(getInfrastructureCoverageCompleteActionPresentation()).toEqual({
+      label: 'Coverage coherent',
+      detail: 'Coverage looks coherent for the connected systems.',
+    });
   });
 });
