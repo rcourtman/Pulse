@@ -2650,7 +2650,7 @@
       "status": "partial",
       "completion": {
         "state": "bounded-residual",
-        "summary": "Mobile is at the RC usefulness floor; broader go-live hardening remains post-RC follow-up, and store-capable work stays draft/TestFlight/internal-only until the current candidate is rerun on physical devices and explicitly judged product-ready.",
+        "summary": "Mobile is technically release-capable at the RC usefulness floor, but product GA is blocked: the current iPad experience does not yet make the normal self-hosted Pulse user value clear enough to justify public rollout. Store-capable work stays draft/TestFlight/internal-only until the mobile product purpose, first-run story, and primary operator jobs are explicit in the app and revalidated on device.",
         "tracking": [
           {
             "kind": "lane-followup",
@@ -2664,6 +2664,11 @@
         {
           "repo": "pulse",
           "path": "docs/release-control/v6/internal/PRE_RELEASE_CHECKLIST.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/mobile-product-purpose-ga-blocker-2026-04-24.md",
           "kind": "file"
         },
         {
@@ -3709,6 +3714,26 @@
       ]
     },
     {
+      "id": "mobile-product-purpose-and-first-run-clarity",
+      "summary": "Confirm Pulse Mobile communicates a clear self-hosted operator purpose in the actual app experience: a normal user should understand why the companion app exists, what jobs it handles away from the desktop, and how pairing, alerts, approvals, and recovery surfaces fit together before public rollout.",
+      "owner": "project-owner",
+      "blocking_level": "release-ready",
+      "minimum_evidence_tier": "local-rehearsal",
+      "status": "blocked",
+      "verification_doc": "docs/release-control/v6/internal/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
+      "lane_ids": [
+        "L5"
+      ],
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/mobile-product-purpose-ga-blocker-2026-04-24.md",
+          "kind": "file",
+          "evidence_tier": "local-rehearsal"
+        }
+      ]
+    },
+    {
       "id": "mobile-relay-auth-approvals",
       "summary": "Confirm pulse-mobile pairing, persistence, relay reconnect, auth transitions, and approval flows work against a real instance.",
       "owner": "project-owner",
@@ -4079,7 +4104,7 @@
     },
     {
       "id": "mobile-post-rc-hardening",
-      "summary": "Track broader mobile go-live hardening beyond the RC usefulness floor, including non-public store-capable rehearsal while public rollout stays blocked until the current candidate passes fresh physical-device proof and is judged product-ready.",
+      "summary": "Track broader mobile go-live hardening beyond the RC usefulness floor, including non-public store-capable rehearsal while public rollout stays blocked until the actual app experience makes the self-hosted operator value, first-run story, and primary away-from-desk jobs clear enough to be judged product-ready.",
       "owner": "project-owner",
       "status": "planned",
       "recorded_at": "2026-03-13",
