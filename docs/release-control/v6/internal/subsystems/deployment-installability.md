@@ -347,6 +347,15 @@ jointly stage the canonical shipped docs set into the container build context
 before `npm run build` runs, rather than relying on a workstation-local
 checkout layout or leaving hosted runtime image builds unable to resolve
 `/app/docs/*.md`, `SECURITY.md`, or `TERMS.md`.
+That same Docker build graph must keep hosted tenant runtime images separate
+from release-installer assembly. `Dockerfile` must expose a `hosted_runtime`
+target derived from the shared Pulse server runtime base that copies only the
+server runtime assets and does not depend on rendered installers, embedded
+agent binaries, or installer signing material. The published self-hosted
+`runtime` and `agent_runtime` targets must keep using the release-assets stage
+so official release images still carry signed installer and agent download
+assets, and any build that declares `PULSE_UPDATE_SIGNING_PUBLIC_KEY` must
+continue to fail closed unless the matching signing secret is mounted.
 That same update-runtime boundary now also owns bounded rollback retention and
 disk-space fail-closed behavior for self-hosted app updates. `internal/updates/`
 must prune stale retained rollback snapshots, clear history references when an

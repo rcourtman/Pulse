@@ -295,8 +295,11 @@ func TestDockerAndDemoBuildsUseCanonicalReleaseLdflags(t *testing.T) {
 	dockerRequired := []string{
 		`FROM --platform=linux/amd64 node:20-alpine@sha256:fb4cd12c85ee03686f6af5362a0b0d56d50c58a04632e6c0fb8363f609372293 AS frontend-builder`,
 		`FROM --platform=linux/amd64 golang:1.25.9-alpine@sha256:5caaf1cca9dc351e13deafbc3879fd4754801acba8653fa9540cea125d01a71f AS backend-builder`,
+		`FROM backend-builder AS release-assets-builder`,
 		`FROM alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc AS agent_runtime`,
-		`FROM alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc AS runtime`,
+		`FROM alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc AS pulse-runtime-base`,
+		`FROM pulse-runtime-base AS hosted_runtime`,
+		`FROM pulse-runtime-base AS runtime`,
 		`COPY scripts/release_ldflags.sh ./scripts/release_ldflags.sh`,
 		`COPY scripts/release_update_key.go ./scripts/release_update_key.go`,
 		`COPY scripts/render_installers.go ./scripts/render_installers.go`,
@@ -309,19 +312,29 @@ func TestDockerAndDemoBuildsUseCanonicalReleaseLdflags(t *testing.T) {
 		`./scripts/release_ldflags.sh server --version "${VERSION}" --build-time "${BUILD_TIME}" --git-commit "${GIT_COMMIT}"`,
 		`./scripts/release_ldflags.sh agent --version "${VERSION}"`,
 		`go run ./scripts/render_installers.go --source-dir ./scripts --output-dir /app/rendered-installers`,
+		`--allow-empty-installer-ssh-public-key`,
 		`ssh-keygen -q -Y sign -f "${OPENSSH_SIGNING_KEY}" -n pulse-install`,
-		`COPY --from=backend-builder /app/rendered-installers/install.sh /opt/pulse/scripts/install.sh`,
-		`COPY --from=backend-builder /app/pulse-agent-* /opt/pulse/bin/`,
+		`COPY --from=release-assets-builder /app/rendered-installers/install.sh /opt/pulse/scripts/install.sh`,
+		`COPY --from=release-assets-builder /app/pulse-agent-* /opt/pulse/bin/`,
 	}
 	for _, needle := range dockerRequired {
 		if !strings.Contains(dockerfile, needle) {
 			t.Fatalf("Dockerfile missing canonical release ldflags usage: %s", needle)
 		}
 	}
+	hostedStart := strings.Index(dockerfile, `FROM pulse-runtime-base AS hosted_runtime`)
+	runtimeStart := strings.Index(dockerfile, `FROM pulse-runtime-base AS runtime`)
+	if hostedStart == -1 || runtimeStart == -1 || hostedStart > runtimeStart {
+		t.Fatal("Dockerfile must define hosted_runtime from pulse-runtime-base before the full runtime stage")
+	}
+	hostedStage := dockerfile[hostedStart:runtimeStart]
+	if strings.Contains(hostedStage, "rendered-installers") || strings.Contains(hostedStage, "/opt/pulse/bin") {
+		t.Fatalf("hosted_runtime target must not depend on installer rendering or embedded agent artifacts:\n%s", hostedStage)
+	}
 	if strings.Contains(dockerfile, `FROM --platform=linux/amd64 node:20-alpine AS frontend-builder`) ||
 		strings.Contains(dockerfile, `FROM --platform=linux/amd64 golang:1.25.9-alpine AS backend-builder`) ||
 		strings.Contains(dockerfile, `FROM alpine:3.20 AS agent_runtime`) ||
-		strings.Contains(dockerfile, `FROM alpine:3.20 AS runtime`) {
+		strings.Contains(dockerfile, `FROM alpine:3.20 AS pulse-runtime-base`) {
 		t.Fatal("Dockerfile base images must be pinned by immutable @sha256 digests")
 	}
 

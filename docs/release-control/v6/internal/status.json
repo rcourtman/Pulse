@@ -922,6 +922,11 @@
         },
         {
           "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/cloud-hosted-tier-runtime-readiness-runtime-build-contract-2026-04-24.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "docs/release-control/v6/internal/records/cloud-hosted-tier-runtime-readiness-storage-blocker-2026-04-23.md",
           "kind": "file"
         },
@@ -3494,6 +3499,12 @@
           "path": "docs/release-control/v6/internal/records/cloud-hosted-tier-runtime-readiness-production-remediated-2026-04-24.md",
           "kind": "file",
           "evidence_tier": "real-external-e2e"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/cloud-hosted-tier-runtime-readiness-runtime-build-contract-2026-04-24.md",
+          "kind": "file",
+          "evidence_tier": "managed-runtime-exercise"
         },
         {
           "repo": "pulse",

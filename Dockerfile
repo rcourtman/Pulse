@@ -84,6 +84,7 @@ RUN --mount=type=cache,id=pulse-go-mod,target=/go/pkg/mod \
       -o pulse-linux-arm64 ./cmd/pulse
 
 
+FROM backend-builder AS release-assets-builder
 
 # Build unified agent binaries for all platforms (for download endpoint)
 RUN --mount=type=cache,id=pulse-go-mod,target=/go/pkg/mod \
@@ -158,7 +159,11 @@ RUN --mount=type=cache,id=pulse-go-mod,target=/go/pkg/mod \
     if [ -n "${PULSE_UPDATE_SIGNING_PUBLIC_KEY:-}" ] && [ -z "${UPDATE_PUBLIC_KEYS}" ]; then echo "Error: PULSE_UPDATE_SIGNING_PUBLIC_KEY was provided but no update signing key was mounted." >&2; exit 1; fi && \
     if [ -n "${PULSE_UPDATE_SIGNING_PUBLIC_KEY:-}" ] && [ "${UPDATE_PUBLIC_KEYS}" != "${PULSE_UPDATE_SIGNING_PUBLIC_KEY}" ]; then echo "Error: mounted update signing key does not match PULSE_UPDATE_SIGNING_PUBLIC_KEY." >&2; echo "Expected public key: ${PULSE_UPDATE_SIGNING_PUBLIC_KEY}" >&2; echo "Actual public key:   ${UPDATE_PUBLIC_KEYS}" >&2; exit 1; fi && \
     if [ -n "${UPDATE_SIGNING_KEY}" ]; then INSTALLER_SSH_PUBLIC_KEY="$(go run ./scripts/release_update_key.go public-key-ssh --private-key "${UPDATE_SIGNING_KEY}" --comment pulse-installer)"; fi && \
-    go run ./scripts/render_installers.go --source-dir ./scripts --output-dir /app/rendered-installers --installer-ssh-public-key "${INSTALLER_SSH_PUBLIC_KEY}" && \
+    if [ -n "${INSTALLER_SSH_PUBLIC_KEY}" ]; then \
+      go run ./scripts/render_installers.go --source-dir ./scripts --output-dir /app/rendered-installers --installer-ssh-public-key "${INSTALLER_SSH_PUBLIC_KEY}"; \
+    else \
+      go run ./scripts/render_installers.go --source-dir ./scripts --output-dir /app/rendered-installers --installer-ssh-public-key "" --allow-empty-installer-ssh-public-key; \
+    fi && \
     if [ -n "${UPDATE_SIGNING_KEY}" ]; then \
       OPENSSH_SIGNING_KEY=/tmp/pulse-update-signing-key && \
       go run ./scripts/release_update_key.go openssh-private-key --private-key "${UPDATE_SIGNING_KEY}" --comment pulse-installer > "${OPENSSH_SIGNING_KEY}" && \
@@ -188,7 +193,7 @@ RUN apk --no-cache add ca-certificates tzdata
 WORKDIR /app
 
 # Copy all unified agent binaries first
-COPY --from=backend-builder /app/pulse-agent-linux-* /tmp/
+COPY --from=release-assets-builder /app/pulse-agent-linux-* /tmp/
 
 # Select the appropriate architecture binary
 # Docker buildx automatically sets TARGETARCH (amd64, arm64, arm) and TARGETVARIANT (v7)
@@ -202,14 +207,14 @@ RUN if [ "$TARGETARCH" = "arm64" ]; then \
     chmod +x /usr/local/bin/pulse-agent && \
     rm -rf /tmp/pulse-agent-*
 
-COPY --from=backend-builder /app/VERSION /VERSION
+COPY --from=release-assets-builder /app/VERSION /VERSION
 
 ENV PULSE_NO_AUTO_UPDATE=true
 
 ENTRYPOINT ["/usr/local/bin/pulse-agent", "--enable-docker", "--enable-host=false"]
 
-# Final stage (Pulse server runtime)
-FROM alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc AS runtime
+# Base Pulse server runtime shared by self-hosted and hosted tenant images.
+FROM alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc AS pulse-runtime-base
 
 # Use TARGETARCH to select the correct binary for the build platform
 ARG TARGETARCH
@@ -233,16 +238,52 @@ COPY --from=backend-builder /app/VERSION .
 COPY docker-entrypoint.sh /docker-entrypoint.sh
 RUN chmod +x /docker-entrypoint.sh
 
+# Create config directory
+RUN mkdir -p /etc/pulse /data
+
+# Expose port
+EXPOSE 7655
+
+# Set environment variables
+# Only PULSE_DATA_DIR is used - all node config is done via web UI
+ENV PULSE_DATA_DIR=/data
+ENV PULSE_DOCKER=true
+
+# Create default user (will be adjusted by entrypoint if PUID/PGID are set)
+RUN adduser -D -u 1000 -g 1000 pulse && \
+    chown -R pulse:pulse /app /etc/pulse /data
+
+# Health check script (handles both HTTP and HTTPS)
+COPY docker-healthcheck.sh /docker-healthcheck.sh
+RUN chmod +x /docker-healthcheck.sh
+
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD /docker-healthcheck.sh
+
+# Use entrypoint script to handle UID/GID
+ENTRYPOINT ["/docker-entrypoint.sh"]
+
+# Run the binary
+CMD ["./pulse"]
+
+# Hosted tenant runtime excludes embedded release installer and agent artifacts.
+# Those endpoints can still proxy canonical release assets instead of requiring
+# production tenant hotfix builds to carry installer-signing material.
+FROM pulse-runtime-base AS hosted_runtime
+
+# Final stage (Pulse server runtime)
+FROM pulse-runtime-base AS runtime
+
 # Provide installer scripts for HTTP download endpoints
 RUN mkdir -p /opt/pulse/scripts
 COPY scripts/install-container-agent.sh /opt/pulse/scripts/install-container-agent.sh
 COPY scripts/install-docker.sh /opt/pulse/scripts/install-docker.sh
-COPY --from=backend-builder /app/rendered-installers/install.sh /opt/pulse/scripts/install.sh
-COPY --from=backend-builder /app/rendered-installers/install.sh.sig /opt/pulse/scripts/install.sh.sig
-COPY --from=backend-builder /app/rendered-installers/install.sh.sshsig /opt/pulse/scripts/install.sh.sshsig
-COPY --from=backend-builder /app/rendered-installers/install.ps1 /opt/pulse/scripts/install.ps1
-COPY --from=backend-builder /app/rendered-installers/install.ps1.sig /opt/pulse/scripts/install.ps1.sig
-COPY --from=backend-builder /app/rendered-installers/install.ps1.sshsig /opt/pulse/scripts/install.ps1.sshsig
+COPY --from=release-assets-builder /app/rendered-installers/install.sh /opt/pulse/scripts/install.sh
+COPY --from=release-assets-builder /app/rendered-installers/install.sh.sig /opt/pulse/scripts/install.sh.sig
+COPY --from=release-assets-builder /app/rendered-installers/install.sh.sshsig /opt/pulse/scripts/install.sh.sshsig
+COPY --from=release-assets-builder /app/rendered-installers/install.ps1 /opt/pulse/scripts/install.ps1
+COPY --from=release-assets-builder /app/rendered-installers/install.ps1.sig /opt/pulse/scripts/install.ps1.sig
+COPY --from=release-assets-builder /app/rendered-installers/install.ps1.sshsig /opt/pulse/scripts/install.ps1.sshsig
 RUN chmod 755 /opt/pulse/scripts/*.sh /opt/pulse/scripts/*.ps1
 
 # Copy all binaries for download endpoint
@@ -259,36 +300,9 @@ RUN if [ "$TARGETARCH" = "arm64" ]; then \
 
 
 # Unified agent binaries (all platforms and architectures) plus detached signatures
-COPY --from=backend-builder /app/pulse-agent-* /opt/pulse/bin/
+COPY --from=release-assets-builder /app/pulse-agent-* /opt/pulse/bin/
 # Create symlinks for Windows without .exe extension
 RUN ln -s pulse-agent-windows-amd64.exe /opt/pulse/bin/pulse-agent-windows-amd64 && \
     ln -s pulse-agent-windows-arm64.exe /opt/pulse/bin/pulse-agent-windows-arm64 && \
-    ln -s pulse-agent-windows-386.exe /opt/pulse/bin/pulse-agent-windows-386
-
-# Create config directory
-RUN mkdir -p /etc/pulse /data
-
-# Expose port
-EXPOSE 7655
-
-# Set environment variables
-# Only PULSE_DATA_DIR is used - all node config is done via web UI
-ENV PULSE_DATA_DIR=/data
-ENV PULSE_DOCKER=true
-
-# Create default user (will be adjusted by entrypoint if PUID/PGID are set)
-RUN adduser -D -u 1000 -g 1000 pulse && \
-    chown -R pulse:pulse /app /etc/pulse /data /opt/pulse
-
-# Health check script (handles both HTTP and HTTPS)
-COPY docker-healthcheck.sh /docker-healthcheck.sh
-RUN chmod +x /docker-healthcheck.sh
-
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD /docker-healthcheck.sh
-
-# Use entrypoint script to handle UID/GID
-ENTRYPOINT ["/docker-entrypoint.sh"]
-
-# Run the binary
-CMD ["./pulse"]
+    ln -s pulse-agent-windows-386.exe /opt/pulse/bin/pulse-agent-windows-386 && \
+    chown -R pulse:pulse /opt/pulse
