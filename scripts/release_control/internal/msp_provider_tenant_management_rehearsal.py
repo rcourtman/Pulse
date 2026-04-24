@@ -249,13 +249,13 @@ def invite_member_check(args: argparse.Namespace, headers: dict[str, str], email
         headers=headers,
         json_body={"email": email, "role": role},
     )
-    if status != 201:
+    if status not in (201, 202):
         return CheckResult(
             name=f"msp-invite-member:{email}",
             ok=False,
             detail=f"status={status}, payload={payload!r}",
         )
-    return CheckResult(name=f"msp-invite-member:{email}", ok=True, detail=f"role={role}")
+    return CheckResult(name=f"msp-invite-member:{email}", ok=True, detail=f"status={status} role={role}")
 
 
 def portal_dashboard_check(args: argparse.Namespace, headers: dict[str, str], expected_min_total: int) -> CheckResult:

@@ -45,7 +45,7 @@ class MSPProviderTenantManagementRehearsalTest(unittest.TestCase):
             if url.endswith("/api/accounts/acct_1/members") and method == "POST":
                 payload = kwargs["json_body"]
                 members_state.append({"email": payload["email"], "role": payload["role"]})
-                return 201, {"ok": True}
+                return 202, {"ok": True}
             if url.endswith("/api/accounts/acct_1/members") and method == "GET":
                 return 200, members_state
             if url.endswith("/api/portal/dashboard?account_id=acct_1"):
