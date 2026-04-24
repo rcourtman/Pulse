@@ -5,15 +5,8 @@ import {
   getRuntimeLimit,
   loadRuntimeCapabilities,
 } from '@/stores/license';
-import {
-  getUpgradeActionDestination,
-  hasMigrationGap,
-} from '@/stores/licenseCommercial';
+import { hasMigrationGap } from '@/stores/licenseCommercial';
 import { resolveUpgradeDestination } from '@/utils/upgradeNavigation';
-import {
-  scopeSelfHostedBillingDestination,
-  SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_INTENT,
-} from '@/utils/pricingHandoff';
 import {
   trackUpgradeClicked,
   trackUpgradeMetricEvent,
@@ -49,29 +42,12 @@ export function useMonitoredSystemLimitWarningBannerState() {
     getMonitoredSystemSummary(monitoredSystemLimit(), monitoredSystemCapacity()),
   );
   const toneClass = createMemo(() => getMonitoredSystemBannerToneClass(isUrgent()));
-  const suppressUpgrade = createMemo(
-    () =>
-      monitoredSystemCapacity()?.reason?.trim().toLowerCase() ===
-      'legacy_migration_capture_pending',
-  );
   const viewCapacityDestination = createMemo(() =>
     resolveUpgradeDestination(MONITORED_SYSTEM_LIMIT_VIEW_CAPACITY_HREF),
   );
   const installCollectorsDestination = createMemo(() =>
     resolveUpgradeDestination(MONITORED_SYSTEM_LIMIT_INSTALL_COLLECTORS_HREF),
   );
-  const upgradeDestination = createMemo(() =>
-    suppressUpgrade()
-      ? null
-      : scopeSelfHostedBillingDestination(
-          getUpgradeActionDestination(MONITORED_SYSTEM_LIMIT_KEY),
-          'plan',
-          {
-            intent: SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_INTENT,
-          },
-        ),
-  );
-
   let wasUrgent = false;
   createEffect(() => {
     const urgent = isUrgent();
@@ -96,13 +72,8 @@ export function useMonitoredSystemLimitWarningBannerState() {
     );
   };
 
-  const handleUpgradeClick = () => {
-    trackUpgradeClicked('monitored_system_limit_banner_upgrade', MONITORED_SYSTEM_LIMIT_KEY);
-  };
-
   return {
     handleInstallCollectorsClick,
-    handleUpgradeClick,
     installCollectorsDestination,
     isUrgent,
     viewCapacityDestination,
@@ -110,6 +81,5 @@ export function useMonitoredSystemLimitWarningBannerState() {
     monitoredSystemSummary,
     showBanner,
     toneClass,
-    upgradeDestination,
   };
 }

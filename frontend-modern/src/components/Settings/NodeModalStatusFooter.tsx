@@ -104,27 +104,6 @@ export const NodeModalStatusFooter: Component<NodeModalStatusFooterProps> = (pro
         </div>
       </Show>
 
-      <Show when={state.hostLimitReached()}>
-        <div class="mx-6 mb-2 rounded-md border border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-900/30 px-4 py-3">
-          <p class="text-sm font-medium text-amber-800 dark:text-amber-200">
-            Agent limit reached — you'll need to remove an agent or upgrade to add more.
-          </p>
-          <div class="mt-2 flex items-center gap-3">
-            <span class="text-xs text-amber-700 dark:text-amber-300">Need more agents?</span>
-            <Show when={state.canStartTrial()}>
-              <button
-                type="button"
-                class="text-xs font-semibold text-indigo-700 dark:text-indigo-300 hover:underline disabled:opacity-60"
-                disabled={state.startingTrial()}
-                onClick={state.handleStartTrial}
-              >
-                Start your free 14-day trial
-              </button>
-            </Show>
-          </div>
-        </div>
-      </Show>
-
       <Show when={props.deleteConfirming}>
         <div class="mx-6 mb-2 rounded-md border border-border bg-surface-alt px-4 py-3 text-xs text-muted">
           Removing forgets this connection from Pulse; credentials on the platform itself are

@@ -104,7 +104,6 @@ const ProLicensePanelContent: Component = () => {
                   entitlements={state.entitlements()}
                   grandfatheredPriceNotice={state.grandfatheredPriceNotice()}
                   hasLicenseDetails={state.hasLicenseDetails()}
-                  hasPaidFeatures={state.hasPaidFeatures()}
                   loading={state.loading()}
                   monitoredSystemCapacitySection={state.monitoredSystemCapacitySection()}
                   monitoredSystemContinuityNotice={state.monitoredSystemContinuityNotice()}

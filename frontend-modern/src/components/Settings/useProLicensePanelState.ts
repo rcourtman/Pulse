@@ -435,19 +435,9 @@ export function useProLicensePanelState() {
     if (!section) {
       return null;
     }
-    const posture = monitoredSystemCapacityPosture();
     return {
       ...section,
       reviewUsageDestination: resolveUpgradeDestination(SELF_HOSTED_PRO_BILLING_USAGE_HREF),
-      upgradeDestination:
-        posture?.blocks_new_systems === true &&
-        posture.reason !== 'legacy_migration_capture_pending'
-              ? resolveUpgradeDestination(
-                  getSelfHostedBillingHref('plan', {
-                    intent: SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_INTENT,
-                  }),
-                )
-              : null,
     };
   });
   const continuityCapturedAt = createMemo(() => {
@@ -549,10 +539,6 @@ export function useProLicensePanelState() {
     ),
   );
 
-  const hasPaidFeatures = createMemo(() => {
-    const state = subscriptionState();
-    return state === 'active' || state === 'trial' || state === 'grace';
-  });
   const showGuestCapacity = createMemo(() => {
     if (currentRetailPlanDefinition()) {
       return false;
@@ -691,7 +677,6 @@ export function useProLicensePanelState() {
     handleClear,
     handleStartTrial,
     hasLicenseDetails,
-    hasPaidFeatures,
     licenseKey,
     loadPanelData,
     loading,

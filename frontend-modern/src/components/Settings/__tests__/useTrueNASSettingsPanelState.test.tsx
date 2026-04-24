@@ -244,7 +244,7 @@ describe('useTrueNASSettingsPanelState', () => {
 
     expect(TrueNASAPI.createConnection).not.toHaveBeenCalled();
     expect(notificationStore.error).toHaveBeenCalledWith(
-      'Pulse must verify monitored-system capacity for this platform connection before it can be saved.',
+      'Pulse must verify the monitored-system policy for this platform connection before it can be saved.',
     );
   });
 
@@ -330,7 +330,7 @@ describe('useTrueNASSettingsPanelState', () => {
     expect(result.monitoredSystemPreview()).toBeNull();
     expect(result.monitoredSystemAdmissionSaveBlocked()).toBe(true);
     expect(result.monitoredSystemPreviewErrorTitle()).toBe(
-      'Monitored-system capacity is temporarily unavailable',
+      'Monitored-system verification is temporarily unavailable',
     );
     expect(result.monitoredSystemPreviewError()).toBe(
       'Pulse is still settling provider-owned inventory for this platform connection, so the monitored-system check is not safe yet. Retry preview after the first baseline finishes.',

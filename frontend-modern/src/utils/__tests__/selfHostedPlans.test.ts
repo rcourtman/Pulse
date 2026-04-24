@@ -9,7 +9,7 @@ import {
 } from '../selfHostedPlans';
 
 describe('selfHostedPlans', () => {
-  it('keeps self-hosted plan limits aligned across tier cards and comparison rows', () => {
+  it('keeps unlimited self-hosted monitoring aligned across tier cards and comparison rows', () => {
     expect(SELF_HOSTED_PLAN_DEFINITIONS.map((tier) => tier.name)).toEqual([
       'Community',
       'Relay',

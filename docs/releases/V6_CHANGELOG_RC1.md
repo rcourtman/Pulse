@@ -2,6 +2,11 @@
 
 _This changelog is based on the shipped `v6.0.0-rc.1` tag compared with `v5.1.27`. It does not describe later branch-only work on `pulse/v6-release`._
 
+_Pricing/limit note: this rc.1 note predates the later no-cap public self-hosted
+model. Current v6 Community, Relay, and Pro self-hosted plans keep core
+monitoring unlimited; paid self-hosted value is in Relay/mobile, history,
+AI operations, and admin features rather than monitored-system capacity._
+
 ## What v6 changes at a high level
 
 Pulse v6 changes both the shape of the product and the shape of the runtime behind it. Pulse v5 was organized mainly around Proxmox and separate platform-specific views. Pulse v6 is organized around five primary surfaces: `Dashboard`, `Infrastructure`, `Workloads`, `Storage`, and `Recovery`.
@@ -62,7 +67,7 @@ For existing Pulse v5 operators, this is not just a visual refresh. The default 
 
 - **Monitored-system counting is more deliberate.** Limits are applied to canonical top-level monitored systems, including cases where Pulse sees the same machine through more than one collection path.
 
-- **Grandfathering is explicit rather than implied.** When a migrated v5 installation qualifies for a higher monitored-system floor than the base v6 plan limit, that continuity state is tracked and surfaced in v6.
+- **Grandfathering is explicit rather than implied.** In `rc.1`, migrated paid installs could carry a higher monitored-system floor than the early capped self-hosted policy. Later v6 branch work replaced that public self-hosted capacity ladder with unlimited core monitoring while keeping paid-license continuity explicit.
 
 - **Released install assets are tied to the release tag.** For released builds, install-script resolution is pinned to the shipped release asset, not to later branch state.
 

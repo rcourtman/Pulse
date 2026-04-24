@@ -647,23 +647,23 @@ describe('shared primitive guardrails', () => {
     );
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('trackUpgradeMetricEvent');
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('hasMigrationGap');
-    expect(monitoredSystemLimitWarningBannerStateSource).toContain(
+    expect(monitoredSystemLimitWarningBannerStateSource).not.toContain(
       'scopeSelfHostedBillingDestination',
     );
-    expect(monitoredSystemLimitWarningBannerStateSource).toContain(
+    expect(monitoredSystemLimitWarningBannerStateSource).not.toContain(
       'SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_INTENT',
     );
     expect(monitoredSystemLimitWarningBannerStateSource).not.toContain(
       'SELF_HOSTED_PRO_BILLING_MONITORED_SYSTEM_INTENT',
     );
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('viewCapacityDestination');
-    expect(monitoredSystemLimitWarningBannerStateSource).toContain('handleUpgradeClick');
+    expect(monitoredSystemLimitWarningBannerStateSource).not.toContain('handleUpgradeClick');
     expect(monitoredSystemLimitWarningBannerStateSource).not.toContain("fetch('/api/health'");
 
     expect(monitoredSystemLimitWarningBannerModelSource).toContain(
       'getMonitoredSystemBannerToneClass',
     );
-    expect(monitoredSystemLimitWarningBannerModelSource).toContain(
+    expect(monitoredSystemLimitWarningBannerModelSource).not.toContain(
       'getMonitoredSystemLimitUpgradeLabel',
     );
     expect(monitoredSystemLimitWarningBannerModelSource).toContain(

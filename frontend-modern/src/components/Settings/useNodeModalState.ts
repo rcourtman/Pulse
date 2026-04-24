@@ -4,7 +4,6 @@ import type { NodeConfig } from '@/types/nodes';
 import { notificationStore } from '@/stores/notifications';
 import { NodesAPI } from '@/api/nodes';
 import type { ProxmoxSetupCommandResponse } from '@/api/nodes';
-import { canStartCommercialTrial } from '@/stores/licenseCommercial';
 import { copyToClipboard } from '@/utils/clipboard';
 import { logger } from '@/utils/logger';
 import {
@@ -13,7 +12,6 @@ import {
   getNodeModalTestResultPresentation,
   type NodeModalFormData,
 } from '@/utils/nodeModalPresentation';
-import { runStartProTrialAction } from '@/utils/trialStartAction';
 
 import { deriveNameFromHost, type NodeModalProps } from './nodeModalModel';
 
@@ -49,27 +47,6 @@ export const useNodeModalState = (props: NodeModalProps) => {
     typeof props.temperatureMonitoringEnabled === 'boolean';
   const temperatureMonitoringEnabledValue = () => props.temperatureMonitoringEnabled ?? true;
   const isEditingExistingNode = () => Boolean(props.editingNode?.id);
-
-  // API-managed PVE/PBS/PMG connections are governed when the connection is
-  // added, not from this install flow, so this modal never renders the
-  // monitored-system limit banner.
-  const [startingTrial, setStartingTrial] = createSignal(false);
-  const hostLimitReached = createMemo(() => false);
-  const canStartTrial = createMemo(() => canStartCommercialTrial());
-
-  const handleStartTrial = async () => {
-    if (startingTrial()) return;
-    setStartingTrial(true);
-    try {
-      await runStartProTrialAction({
-        branded: true,
-        showSuccess: notificationStore.success,
-        showError: notificationStore.error,
-      });
-    } finally {
-      setStartingTrial(false);
-    }
-  };
 
   const quickSetupExpiryLabel = () => {
     const expiry = quickSetupExpiry();
@@ -529,16 +506,13 @@ export const useNodeModalState = (props: NodeModalProps) => {
   return {
     agentCommandError,
     agentInstallCommand,
-    canStartTrial,
     copyCommand,
     copyProxmoxAgentInstallCommand,
     copyQuickSetupCommand,
     downloadProxmoxSetupScript,
     formData,
-    handleStartTrial,
     handleSubmit,
     handleTestConnection,
-    hostLimitReached,
     isAdvancedSetupMode,
     isEditingExistingNode,
     isTesting,
@@ -548,7 +522,6 @@ export const useNodeModalState = (props: NodeModalProps) => {
     quickSetupPreviewCommand,
     quickSetupTokenHint,
     showTemperatureMonitoringSection,
-    startingTrial,
     temperatureMonitoringEnabledValue,
     testResult,
     testResultPresentation,

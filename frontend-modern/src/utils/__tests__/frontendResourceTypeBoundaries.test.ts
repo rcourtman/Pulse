@@ -2967,11 +2967,11 @@ describe('frontend resource type boundaries', () => {
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('trackUpgradeMetricEvent');
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('hasMigrationGap');
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('viewCapacityDestination');
-    expect(monitoredSystemLimitWarningBannerStateSource).toContain('handleUpgradeClick');
+    expect(monitoredSystemLimitWarningBannerStateSource).not.toContain('handleUpgradeClick');
     expect(monitoredSystemLimitWarningBannerModelSource).toContain(
       'getMonitoredSystemBannerToneClass',
     );
-    expect(monitoredSystemLimitWarningBannerModelSource).toContain(
+    expect(monitoredSystemLimitWarningBannerModelSource).not.toContain(
       'MONITORED_SYSTEM_LIMIT_UPGRADE_LABEL',
     );
     expect(monitoredSystemLimitWarningBannerModelSource).toContain(

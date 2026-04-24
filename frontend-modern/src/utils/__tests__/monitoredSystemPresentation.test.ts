@@ -38,7 +38,6 @@ import {
   getMonitoredSystemLimitInstallCollectorsLabel,
   getMonitoredSystemLimitViewCapacityLabel,
   getMonitoredSystemLimitUnavailableReason,
-  getMonitoredSystemLimitUpgradeLabel,
   getMonitoredSystemLimitUsageSummary,
   getMonitoredSystemSourceLabel,
   resolveMonitoredSystemCapacityStatus,
@@ -61,7 +60,7 @@ describe('monitoredSystemPresentation', () => {
       disclosureDefinition:
         'A monitored system is a top-level monitored root such as a Docker host, Kubernetes cluster, Proxmox node, standalone host, or TrueNAS system. Each root counts once no matter how Pulse collects it. Child resources like VMs, containers, pods, disks, backups, and services underneath that root are included.',
       ledgerDescription:
-        'Review the top-level monitored systems currently counted against your plan limit.',
+        'Review the top-level monitored systems Pulse has identified for reporting and any applicable policy.',
       tableNameLabel: 'Name',
       tableStatusLabel: 'Status',
       tableLatestIncludedSignalLabel: 'Latest Included Signal',
@@ -98,12 +97,12 @@ describe('monitoredSystemPresentation', () => {
       policyLoadingState: {
         title: 'Checking monitored-system visibility',
         message:
-          'Pulse waits for the session presentation policy before loading usage or plan-limit data.',
+          'Pulse waits for the session presentation policy before loading monitored-system usage details.',
       },
       hiddenState: {
         title: 'Monitored-system usage is hidden in demo mode',
         message:
-          'The public demo uses sample infrastructure data, so Pulse hides counted-system totals, plan limits, and upgrade actions instead of creating a demo license.',
+          'The public demo uses sample infrastructure data, so Pulse hides counted-system totals and billing actions instead of creating a demo license.',
       },
       countingDetailsCollapsedLabel: 'View counting details',
       countingDetailsExpandedLabel: 'Hide counting details',
@@ -125,24 +124,22 @@ describe('monitoredSystemPresentation', () => {
       limitBanner: {
         viewCapacityLabel: 'View capacity',
         installCollectorsLabel: 'Install v6 collectors',
-        upgradeLabel: 'Upgrade to add more',
-        overflowSummaryPrefix:
-          'Community includes 5 monitored systems. 1 temporary setup slot is active',
+        overflowSummaryPrefix: 'A temporary setup slot is active',
         legacyConnectionSuffix:
-          'that count once toward your monitored-system cap when the same top-level system is discovered canonically.',
+          'that are folded into the canonical monitored-system ledger when the same top-level system is discovered canonically.',
       },
       admissionPreview: {
         requiredTitle: 'Preview monitored-system impact before saving',
         requiredMessage:
-          'Pulse must verify monitored-system capacity for this platform connection before it can be saved.',
-        unavailableTitle: 'Monitored-system capacity is temporarily unavailable',
+          'Pulse must verify the monitored-system policy for this platform connection before it can be saved.',
+        unavailableTitle: 'Monitored-system verification is temporarily unavailable',
         unavailableFallbackMessage:
-          'Pulse cannot verify monitored-system capacity right now, so this connection cannot be saved yet. Retry preview in a moment.',
+          'Pulse cannot verify monitored-system policy right now, so this connection cannot be saved yet. Retry preview in a moment.',
         unavailableUnsettledMessage:
           'Pulse is still settling provider-owned inventory for this platform connection, so the monitored-system check is not safe yet. Retry preview after the first baseline finishes.',
         unavailableRebuildPendingMessage:
           'Pulse has settled provider-owned inventory and is rebuilding the canonical monitored-system view, so this connection cannot be saved yet. Retry preview in a moment.',
-        saveBlockedLimitMessage: 'This change would exceed your monitored-system limit',
+        saveBlockedLimitMessage: 'This change would exceed the active monitored-system policy',
         saveBlockedLoadingMessage: 'Wait for the monitored-system impact preview to finish',
       },
     });
@@ -154,7 +151,7 @@ describe('monitoredSystemPresentation', () => {
     expect(getMonitoredSystemDisclosureDefinition()).toContain('Docker host');
     expect(getMonitoredSystemDisclosureDefinition()).toContain('Proxmox node');
     expect(getMonitoredSystemLedgerDescription()).toBe(
-      'Review the top-level monitored systems currently counted against your plan limit.',
+      'Review the top-level monitored systems Pulse has identified for reporting and any applicable policy.',
     );
     expect(getMonitoredSystemLedgerLoadingState()).toEqual({
       text: 'Loading monitored system usage…',
@@ -176,12 +173,12 @@ describe('monitoredSystemPresentation', () => {
     expect(getMonitoredSystemLedgerPolicyLoadingState()).toEqual({
       title: 'Checking monitored-system visibility',
       message:
-        'Pulse waits for the session presentation policy before loading usage or plan-limit data.',
+        'Pulse waits for the session presentation policy before loading monitored-system usage details.',
     });
     expect(getMonitoredSystemLedgerHiddenState()).toEqual({
       title: 'Monitored-system usage is hidden in demo mode',
       message:
-        'The public demo uses sample infrastructure data, so Pulse hides counted-system totals, plan limits, and upgrade actions instead of creating a demo license.',
+        'The public demo uses sample infrastructure data, so Pulse hides counted-system totals and billing actions instead of creating a demo license.',
     });
     expect(getMonitoredSystemCountingDetailsToggleLabel(false)).toBe('View counting details');
     expect(getMonitoredSystemCountingDetailsToggleLabel(true)).toBe('Hide counting details');
@@ -231,12 +228,11 @@ describe('monitoredSystemPresentation', () => {
   it('returns canonical monitored-system limit warning copy', () => {
     expect(getMonitoredSystemLimitViewCapacityLabel()).toBe('View capacity');
     expect(getMonitoredSystemLimitInstallCollectorsLabel()).toBe('Install v6 collectors');
-    expect(getMonitoredSystemLimitUpgradeLabel()).toBe('Upgrade to add more');
     expect(formatMonitoredSystemLimitSummary({ current: 5, limit: 6 })).toBe(
       '1 remaining. 5 monitored, 6 included.',
     );
     expect(formatMonitoredSystemLimitSummary({ current: 16, limit: 5, state: 'enforced' })).toBe(
-      'Over plan by 11. 16 monitored, 5 included.',
+      'Over policy by 11. 16 monitored, 5 included.',
     );
     expect(
       formatMonitoredSystemLimitSummary(
@@ -271,10 +267,10 @@ describe('monitoredSystemPresentation', () => {
         kubernetes_clusters: 0,
       }),
     ).toBe(
-      'You also have 3 resources connected via API or legacy collectors (2 Proxmox nodes, 1 Docker host) that count once toward your monitored-system cap when the same top-level system is discovered canonically.',
+      'You also have 3 resources connected via API or legacy collectors (2 Proxmox nodes, 1 Docker host) that are folded into the canonical monitored-system ledger when the same top-level system is discovered canonically.',
     );
     expect(formatMonitoredSystemOverflowSummary(14)).toBe(
-      'Community includes 5 monitored systems. 1 temporary setup slot is active (14d remaining)',
+      'A temporary setup slot is active (14d remaining)',
     );
     expect(formatMonitoredSystemOverflowSummary(undefined)).toBe('');
   });
@@ -291,13 +287,13 @@ describe('monitoredSystemPresentation', () => {
       stats: [
         { label: 'Monitored', value: '16 monitored systems' },
         { label: 'Included', value: '5' },
-        { label: 'Status', value: 'Over plan by 11' },
+        { label: 'Status', value: 'Over policy by 11' },
       ],
-      statusMessage: 'Existing monitoring continues. New monitored systems are blocked.',
-      detailMessage: 'Reduce usage or upgrade to add another monitored system.',
+      statusMessage: 'Existing monitoring continues. Additional monitored systems are paused.',
+      detailMessage: 'Reduce usage or resolve the applicable policy before adding another monitored system.',
       explanation: {
         label: 'Why am I over plan?',
-        body: 'This installation was already monitoring 16 monitored systems before Pulse started blocking net-new monitored systems at the current plan boundary. Pulse keeps those existing systems visible, but it blocks any additional monitored systems until usage is reduced or the plan is upgraded.',
+        body: 'This installation was already monitoring 16 monitored systems before Pulse paused net-new monitored-system admissions at the active finite policy boundary. Pulse keeps those existing systems visible, but additional monitored systems stay paused until usage is reduced or the policy changes.',
       },
     });
   });
@@ -372,7 +368,7 @@ describe('monitoredSystemPresentation', () => {
         state: 'enforced',
       }),
     ).toBe(
-      'Plan includes 10. Existing monitoring continues, but new monitored systems are blocked until capacity is freed or the plan is upgraded.',
+      'This finite policy includes 10. Existing monitoring continues; additional monitored systems stay paused until capacity is available or the policy changes.',
     );
     expect(
       getMonitoredSystemLimitContextSummary({
@@ -382,7 +378,7 @@ describe('monitoredSystemPresentation', () => {
         state: 'enforced',
       }),
     ).toBe(
-      'Plan includes 5. This installation is already over plan by 11 because it exceeded the current plan limit before new monitored systems were blocked. Existing monitoring continues, but new monitored systems are blocked until usage is reduced or the plan is upgraded.',
+      'This finite policy includes 5. This installation is already over policy by 11 because it was monitoring above that boundary before additional admissions paused. Existing monitoring continues; additional monitored systems stay paused until usage is reduced or the policy changes.',
     );
     expect(
       getMonitoredSystemLimitContextSummary(
@@ -406,7 +402,7 @@ describe('monitoredSystemPresentation', () => {
         },
       ),
     ).toBe(
-      'Plan includes 5. Pulse is still verifying the migrated v5 continuity floor for this installation. Existing monitoring continues while new monitored systems are temporarily blocked against the current plan limit until continuity capture finishes.',
+      'This finite policy includes 5. Pulse is still verifying the migrated v5 continuity floor for this installation. Existing monitoring continues while additional monitored-system admissions pause until continuity capture finishes.',
     );
     expect(
       isMonitoredSystemLimitUrgent({
@@ -436,10 +432,10 @@ describe('monitoredSystemPresentation', () => {
     expect(getMonitoredSystemAdmissionPreviewRequiredState()).toEqual({
       title: 'Preview monitored-system impact before saving',
       message:
-        'Pulse must verify monitored-system capacity for this platform connection before it can be saved.',
+        'Pulse must verify the monitored-system policy for this platform connection before it can be saved.',
     });
     expect(getMonitoredSystemAdmissionPreviewUnavailableTitle()).toBe(
-      'Monitored-system capacity is temporarily unavailable',
+      'Monitored-system verification is temporarily unavailable',
     );
     expect(
       formatMonitoredSystemAdmissionPreviewUnavailableMessage('supplemental_inventory_unsettled'),
@@ -456,7 +452,7 @@ describe('monitoredSystemPresentation', () => {
     expect(
       formatMonitoredSystemAdmissionPreviewUnavailableMessage('monitor_state_unavailable'),
     ).toBe(
-      'Pulse cannot verify monitored-system capacity right now, so this connection cannot be saved yet. Retry preview in a moment.',
+      'Pulse cannot verify monitored-system policy right now, so this connection cannot be saved yet. Retry preview in a moment.',
     );
     expect(
       buildMonitoredSystemAdmissionPreviewUnavailableState({
@@ -465,7 +461,7 @@ describe('monitoredSystemPresentation', () => {
       }),
     ).toEqual({
       reason: 'supplemental_inventory_unsettled',
-      title: 'Monitored-system capacity is temporarily unavailable',
+      title: 'Monitored-system verification is temporarily unavailable',
       message:
         'Pulse is still settling provider-owned inventory for this platform connection, so the monitored-system check is not safe yet. Retry preview after the first baseline finishes.',
     });
@@ -486,13 +482,13 @@ describe('monitoredSystemPresentation', () => {
       }),
     ).toBe(false);
     expect(getMonitoredSystemAdmissionPreviewSaveBlockedMessage({ preview: null })).toBe(
-      'Pulse must verify monitored-system capacity for this platform connection before it can be saved.',
+      'Pulse must verify the monitored-system policy for this platform connection before it can be saved.',
     );
     expect(
       getMonitoredSystemAdmissionPreviewSaveBlockedMessage({
         preview: { would_exceed_limit: true },
       }),
-    ).toBe('This change would exceed your monitored-system limit');
+    ).toBe('This change would exceed the active monitored-system policy');
     expect(
       getMonitoredSystemAdmissionPreviewSaveBlockedMessage({
         preview: { would_exceed_limit: false },

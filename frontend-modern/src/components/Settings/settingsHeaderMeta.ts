@@ -68,7 +68,7 @@ export const SETTINGS_HEADER_META: SettingsHeaderMetaMap = {
   'organization-billing': {
     title: 'Billing & Usage',
     description:
-      'Review your organization plan, usage against plan limits, and subscription status for paid access.',
+      'Review your organization plan, applicable usage policies, and subscription status for paid access.',
   },
   'organization-billing-admin': {
     title: 'Billing Admin',

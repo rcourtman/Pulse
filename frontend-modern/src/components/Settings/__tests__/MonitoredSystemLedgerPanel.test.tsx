@@ -78,7 +78,7 @@ describe('MonitoredSystemLedgerPanel', () => {
 
     expect(explainMock).not.toHaveBeenCalled();
     expect(screen.getByText('Checking monitored-system visibility')).toBeInTheDocument();
-    expect(screen.getByText(/before loading usage or plan-limit data/i)).toBeInTheDocument();
+    expect(screen.getByText(/before loading monitored-system usage details/i)).toBeInTheDocument();
   });
 
   it('hides monitored-system usage in demo mode without requesting the ledger', () => {
@@ -372,7 +372,7 @@ describe('MonitoredSystemLedgerPanel', () => {
     expect(screen.getAllByText('server-b (PBS Server via PBS)').length).toBeGreaterThan(0);
     expect(
       screen.getByText(
-        'Review the top-level monitored systems currently counted against your plan limit.',
+        'Review the top-level monitored systems Pulse has identified for reporting and any applicable policy.',
       ),
     ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'View counting rules' })).toBeInTheDocument();
@@ -392,7 +392,7 @@ describe('MonitoredSystemLedgerPanel', () => {
     expect(screen.getByText('server-b')).toBeInTheDocument();
     expect(screen.getByText('2 monitored systems')).toBeInTheDocument();
     expect(
-      screen.getByText('8 remaining before new monitored systems are blocked.'),
+      screen.getByText('8 remaining before additional monitored-system admissions pause.'),
     ).toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: 'View counting details' })).toHaveLength(2);
     fireEvent.click(screen.getAllByRole('button', { name: 'View counting details' })[1]!);

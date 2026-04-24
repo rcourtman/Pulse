@@ -5,7 +5,6 @@ import {
   formatMonitoredSystemOverflowSummary,
   getMonitoredSystemLimitInstallCollectorsLabel,
   getMonitoredSystemLimitViewCapacityLabel,
-  getMonitoredSystemLimitUpgradeLabel,
   isMonitoredSystemLimitUrgent as isCanonicalMonitoredSystemLimitUrgent,
   isMonitoredSystemLimitUsageAvailable as isCanonicalMonitoredSystemLimitUsageAvailable,
   type MonitoredSystemCapacityStatus,
@@ -27,7 +26,6 @@ export const MONITORED_SYSTEM_LIMIT_VIEW_CAPACITY_LABEL =
   getMonitoredSystemLimitViewCapacityLabel();
 export const MONITORED_SYSTEM_LIMIT_INSTALL_COLLECTORS_LABEL =
   getMonitoredSystemLimitInstallCollectorsLabel();
-export const MONITORED_SYSTEM_LIMIT_UPGRADE_LABEL = getMonitoredSystemLimitUpgradeLabel();
 
 export function isMonitoredSystemLimitUsageAvailable(limit: LimitState | undefined): boolean {
   return isCanonicalMonitoredSystemLimitUsageAvailable(limit);

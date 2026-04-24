@@ -368,7 +368,7 @@ describe('ProLicensePanel', () => {
     expect(screen.getByText('Core Monitoring')).toBeInTheDocument();
     expect(screen.queryByText('Monitored Systems')).not.toBeInTheDocument();
     expect(screen.queryByText('Capacity Status')).not.toBeInTheDocument();
-    expect(screen.queryByText('Monitoring capacity')).not.toBeInTheDocument();
+    expect(screen.queryByText('Monitored-system policy')).not.toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: 'Usage' })).not.toBeInTheDocument();
     expect(screen.getAllByText('Unlimited').length).toBeGreaterThan(0);
     expect(screen.queryByText('5 / 12')).not.toBeInTheDocument();
@@ -426,7 +426,7 @@ describe('ProLicensePanel', () => {
       expect(screen.queryByText('Capacity Status')).not.toBeInTheDocument();
       expect(screen.queryByText('Included Monitored Systems')).not.toBeInTheDocument();
       expect(screen.getByText('Guest Capacity')).toBeInTheDocument();
-      expect(screen.queryByText('Monitoring capacity')).not.toBeInTheDocument();
+      expect(screen.queryByText('Monitored-system policy')).not.toBeInTheDocument();
       expect(screen.queryByRole('tab', { name: 'Usage' })).not.toBeInTheDocument();
       expect(screen.getAllByText('Unlimited').length).toBeGreaterThan(0);
       expect(screen.queryByText('Plan Monitored System Limit')).not.toBeInTheDocument();
@@ -472,7 +472,7 @@ describe('ProLicensePanel', () => {
     expect(screen.getByText('Root-cause analysis, remediation, and admin extras')).toBeInTheDocument();
     expect(screen.queryByText('Guest Capacity')).not.toBeInTheDocument();
     expect(screen.queryByText('Included Monitored Systems')).not.toBeInTheDocument();
-    expect(screen.queryByText('Monitoring capacity')).not.toBeInTheDocument();
+    expect(screen.queryByText('Monitored-system policy')).not.toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: 'Usage' })).not.toBeInTheDocument();
   });
 
@@ -569,7 +569,7 @@ describe('ProLicensePanel', () => {
     expect(screen.queryByText('0 / 10')).not.toBeInTheDocument();
   });
 
-  it('explains why an over-plan migrated installation is still monitoring above the current plan limit', async () => {
+  it('explains why an over-policy migrated installation is still monitoring above the finite policy', async () => {
     mockEntitlements = {
       capabilities: ['relay'],
       limits: [
@@ -613,10 +613,10 @@ describe('ProLicensePanel', () => {
     });
 
     expect(screen.getAllByText(/already monitoring 23/i).length).toBeGreaterThan(0);
-    expect(screen.getByText('Monitoring capacity')).toBeInTheDocument();
+    expect(screen.getByText('Monitored-system policy')).toBeInTheDocument();
     expect(screen.getByText('Why is continuity still pending?')).toBeInTheDocument();
     expect(
-      screen.queryByText('Monitoring continues above the current plan limit'),
+      screen.queryByText('Monitoring continues above the current policy boundary'),
     ).not.toBeInTheDocument();
   });
 
@@ -670,9 +670,9 @@ describe('ProLicensePanel', () => {
     ).toBeGreaterThan(0);
     expect(screen.getByText('Grandfathered floor')).toBeInTheDocument();
     expect(screen.getAllByText('23 monitored systems').length).toBeGreaterThan(0);
-    expect(screen.getByText('Monitoring capacity')).toBeInTheDocument();
+    expect(screen.getByText('Monitored-system policy')).toBeInTheDocument();
     expect(
-      screen.getByText('Existing monitoring continues. New monitored systems are blocked.'),
+      screen.getByText('Existing monitoring continues. Additional monitored systems are paused.'),
     ).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Review monitored systems' })).toBeInTheDocument();
     expect(screen.getByText('Plan Monitored System Limit')).toBeInTheDocument();
@@ -990,7 +990,7 @@ describe('ProLicensePanel', () => {
 
     expect(screen.queryByRole('button', { name: 'View counting rules' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Hide counting rules' })).not.toBeInTheDocument();
-    expect(screen.queryByText('Monitoring capacity')).not.toBeInTheDocument();
+    expect(screen.queryByText('Monitored-system policy')).not.toBeInTheDocument();
   });
 
   it('navigates between plan and usage focus states through the billing subtabs when legacy capacity handling is active', async () => {

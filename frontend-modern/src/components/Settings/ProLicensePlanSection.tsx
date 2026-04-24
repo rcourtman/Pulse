@@ -32,7 +32,6 @@ interface MonitoredSystemCapacitySection {
     body: string;
   };
   reviewUsageDestination: UpgradeDestination;
-  upgradeDestination: UpgradeDestination | null;
 }
 
 interface ProLicensePlanSectionProps {
@@ -66,7 +65,6 @@ interface ProLicensePlanSectionProps {
   } | null;
   grandfatheredPriceNotice: Notice | null;
   hasLicenseDetails: boolean;
-  hasPaidFeatures: boolean;
   loading: boolean;
   monitoredSystemCapacitySection: MonitoredSystemCapacitySection | null;
   monitoredSystemContinuityNotice: Notice | null;
@@ -299,7 +297,7 @@ export const ProLicensePlanSection: Component<ProLicensePlanSectionProps> = (pro
         {(section) => (
           <div class="mb-4 rounded-md border border-border bg-surface-alt p-4">
             <div class="space-y-2">
-              <p class="text-sm font-medium text-base-content">Monitoring capacity</p>
+              <p class="text-sm font-medium text-base-content">Monitored-system policy</p>
               <p class="text-xs text-base-content">{section().statusMessage}</p>
               <Show when={section().detailMessage}>
                 {(detail) => <p class="text-xs text-muted">{detail()}</p>}
@@ -328,16 +326,6 @@ export const ProLicensePlanSection: Component<ProLicensePlanSectionProps> = (pro
               >
                 Review monitored systems
               </UpgradeLink>
-              <Show when={props.hasPaidFeatures ? section().upgradeDestination : null}>
-                {(destination) => (
-                  <UpgradeLink
-                    class="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
-                    destination={destination()}
-                  >
-                    Upgrade plan
-                  </UpgradeLink>
-                )}
-              </Show>
             </div>
           </div>
         )}

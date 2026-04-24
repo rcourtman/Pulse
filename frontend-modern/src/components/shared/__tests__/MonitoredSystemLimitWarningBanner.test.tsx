@@ -127,14 +127,14 @@ describe('MonitoredSystemLimitWarningBanner', () => {
     );
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('trackUpgradeMetricEvent');
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('hasMigrationGap');
-    expect(monitoredSystemLimitWarningBannerStateSource).toContain(
+    expect(monitoredSystemLimitWarningBannerStateSource).not.toContain(
       'scopeSelfHostedBillingDestination',
     );
-    expect(monitoredSystemLimitWarningBannerStateSource).toContain(
+    expect(monitoredSystemLimitWarningBannerStateSource).not.toContain(
       'SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_INTENT',
     );
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('viewCapacityDestination');
-    expect(monitoredSystemLimitWarningBannerStateSource).toContain('handleUpgradeClick');
+    expect(monitoredSystemLimitWarningBannerStateSource).not.toContain('handleUpgradeClick');
 
     expect(monitoredSystemLimitWarningBannerModelSource).toContain(
       '@/utils/monitoredSystemPresentation',
@@ -142,7 +142,7 @@ describe('MonitoredSystemLimitWarningBanner', () => {
     expect(monitoredSystemLimitWarningBannerModelSource).toContain(
       'getMonitoredSystemBannerToneClass',
     );
-    expect(monitoredSystemLimitWarningBannerModelSource).toContain(
+    expect(monitoredSystemLimitWarningBannerModelSource).not.toContain(
       'getMonitoredSystemLimitUpgradeLabel',
     );
     expect(monitoredSystemLimitWarningBannerModelSource).toContain(
@@ -208,11 +208,7 @@ describe('MonitoredSystemLimitWarningBanner', () => {
       'href',
       '/settings/system/billing/plan',
     );
-    expect(screen.getByText('Upgrade to add more')).toBeInTheDocument();
-    expect(screen.getByText('Upgrade to add more')).toHaveAttribute(
-      'href',
-      '/settings/system/billing/plan?intent=self_hosted_plan',
-    );
+    expect(screen.queryByText('Review options')).not.toBeInTheDocument();
     expect(screen.queryByText('Install v6 collectors')).not.toBeInTheDocument();
   });
 
@@ -234,7 +230,7 @@ describe('MonitoredSystemLimitWarningBanner', () => {
     ));
 
     expect(screen.queryByText(/Monitored systems:/i)).not.toBeInTheDocument();
-    expect(screen.queryByText('Upgrade to add more')).not.toBeInTheDocument();
+    expect(screen.queryByText('Review options')).not.toBeInTheDocument();
     expect(mockTrackUpgradeMetricEvent).not.toHaveBeenCalled();
   });
 
@@ -266,10 +262,7 @@ describe('MonitoredSystemLimitWarningBanner', () => {
       'href',
       '/settings/system/billing/plan',
     );
-    expect(screen.getByText('Upgrade to add more')).toHaveAttribute(
-      'href',
-      '/settings/system/billing/plan?intent=self_hosted_plan',
-    );
+    expect(screen.queryByText('Review options')).not.toBeInTheDocument();
   });
 
   it('stays hidden in demo mode even when usage is urgent', async () => {

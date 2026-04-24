@@ -60,10 +60,11 @@ docs promise.
 
 ### 4. Monitoring-capacity messaging is less misleading where finite continuity still matters
 
-For the remaining bounded fallback or continuity cases, the product now treats
-monitored-system overage as an admission-freeze state instead of presenting it
-like a hard runtime blackout. Existing monitoring continues; new monitored
-systems are the thing that gets blocked.
+For the remaining bounded fallback, hosted, MSP, or legacy-continuity cases,
+the product now treats monitored-system overage as an admission-freeze state
+instead of presenting it like a hard runtime blackout. Existing monitoring
+continues, and any finite admission freeze applies only to those explicit
+policy contexts. It is not a public self-hosted capacity upsell.
 
 For the normal current self-hosted Community / Relay / Pro path, the plan
 surface now simply treats core monitoring as unlimited instead of carrying stale

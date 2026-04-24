@@ -2,7 +2,6 @@ import { Component, Show } from 'solid-js';
 import {
   MONITORED_SYSTEM_LIMIT_INSTALL_COLLECTORS_LABEL,
   MONITORED_SYSTEM_LIMIT_VIEW_CAPACITY_LABEL,
-  MONITORED_SYSTEM_LIMIT_UPGRADE_LABEL,
 } from './monitoredSystemLimitWarningBannerModel';
 import { UpgradeLink } from './UpgradeLink';
 import { useMonitoredSystemLimitWarningBannerState } from './useMonitoredSystemLimitWarningBannerState';
@@ -32,15 +31,6 @@ export const MonitoredSystemLimitWarningBanner: Component = () => {
               onClick={state.handleInstallCollectorsClick}
             >
               {MONITORED_SYSTEM_LIMIT_INSTALL_COLLECTORS_LABEL}
-            </UpgradeLink>
-          </Show>
-          <Show when={state.isUrgent() && state.upgradeDestination()}>
-            <UpgradeLink
-              class="text-xs font-semibold underline underline-offset-2 hover:opacity-90"
-              destination={state.upgradeDestination()!}
-              onClick={state.handleUpgradeClick}
-            >
-              {MONITORED_SYSTEM_LIMIT_UPGRADE_LABEL}
             </UpgradeLink>
           </Show>
         </div>
