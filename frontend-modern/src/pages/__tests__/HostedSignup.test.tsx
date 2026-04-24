@@ -60,10 +60,14 @@ describe('HostedSignup', () => {
     ));
 
     expect(await screen.findByText('Workspace')).toBeInTheDocument();
-    expect(screen.getByText('Create your Pulse Cloud account and hosted workspace.')).toBeInTheDocument();
+    expect(
+      screen.getByText('Start your 14-day Pulse Cloud trial and hosted workspace.'),
+    ).toBeInTheDocument();
     expect(screen.getByText('Plan')).toBeInTheDocument();
     expect(screen.getByText('How it works')).toBeInTheDocument();
-    expect(screen.getByText('Choose a Cloud plan and complete secure checkout.')).toBeInTheDocument();
+    expect(
+      screen.getByText('Choose a Cloud plan and start the 14-day trial in secure checkout.'),
+    ).toBeInTheDocument();
     expect(screen.getByText('Already signed up?')).toBeInTheDocument();
     expect(screen.getByText('Request a fresh Pulse Account sign-in link.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Email Pulse Account Link' })).toBeInTheDocument();
@@ -74,7 +78,7 @@ describe('HostedSignup', () => {
     fireEvent.input(screen.getByLabelText('Organization Name'), {
       target: { value: 'Pulse Labs' },
     });
-    fireEvent.submit(screen.getByRole('button', { name: 'Continue to Checkout' }).closest('form')!);
+    fireEvent.submit(screen.getByRole('button', { name: 'Start Trial in Checkout' }).closest('form')!);
 
     await waitFor(() => {
       expect(signupMock).toHaveBeenCalledWith({

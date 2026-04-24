@@ -20,25 +20,27 @@ describe('CloudPricing', () => {
       </Router>
     ));
 
-    expect(await screen.findByRole('link', { name: 'Choose Starter' })).toHaveAttribute(
+    expect(await screen.findByRole('link', { name: 'Start Starter Trial' })).toHaveAttribute(
       'href',
       '/cloud/signup?tier=starter',
     );
     expect(screen.getByText('Founding rate')).toBeInTheDocument();
     expect(screen.getByText('$19')).toBeInTheDocument();
     expect(screen.getByText('$29/month')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Choose Power' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Start Power Trial' })).toHaveAttribute(
       'href',
       '/cloud/signup?tier=power',
     );
-    expect(screen.getByRole('link', { name: 'Choose Max' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Start Max Trial' })).toHaveAttribute(
       'href',
       '/cloud/signup?tier=max',
     );
     expect(screen.queryByText('Starter founding rate')).not.toBeInTheDocument();
     expect(screen.getAllByText('All Pro features')).toHaveLength(1);
     expect(screen.getByText('Managed hosting')).toBeInTheDocument();
-    expect(screen.getByText('Choose a Cloud plan and complete secure checkout.')).toBeInTheDocument();
+    expect(
+      screen.getByText('Choose a Cloud plan and start the 14-day trial in secure checkout.'),
+    ).toBeInTheDocument();
     expect(screen.getByText('How it works')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Open Pulse Account' })).toHaveAttribute(
       'href',

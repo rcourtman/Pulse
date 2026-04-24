@@ -234,6 +234,11 @@ Community limit enforcement.
     surfaces must describe the real commercial flow as secure checkout ->
     Pulse Account -> open workspace, not as an immediate workspace creation or
     trial-only shortcut.
+    Public hosted Cloud trial signup must state the trial duration and
+    checkout economics before Stripe handoff: Stripe may collect a payment
+    method, but the subscription starts with the configured trial period and no
+    upfront charge, then Pulse Account opens the provisioned workspace after
+    checkout completes.
 20. Add contract tests where runtime and pricing need to stay aligned
 21. Add or change hosted browser org-context bootstrap through `frontend-modern/src/App.tsx`, `frontend-modern/src/AppLayout.tsx`, `frontend-modern/src/useAppRuntimeState.ts`, and `frontend-modern/src/utils/apiClient.ts`
     That same hosted bootstrap boundary also owns the runtime-capability JSON

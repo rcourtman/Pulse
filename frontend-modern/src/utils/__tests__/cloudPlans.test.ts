@@ -32,7 +32,7 @@ describe('cloudPlans', () => {
   it('keeps shared cloud commercial copy in the common contract', () => {
     expect(CLOUD_COMMERCIAL_PRESENTATION).toEqual({
       pageTitle: 'Pulse Cloud',
-      pageDescription: 'Managed Pulse hosting with Pro features included.',
+      pageDescription: 'Managed Pulse hosting with Pro features included. Start with a 14-day trial.',
       includedInAllHeading: 'Included in every Cloud plan',
       includedInAllItems: [
         'All Pro features',
@@ -50,15 +50,15 @@ describe('cloudPlans', () => {
   it('keeps hosted signup commercial copy in the common contract', () => {
     expect(HOSTED_SIGNUP_PRESENTATION).toEqual({
       pageTitlePrefix: 'Pulse Cloud',
-      pageDescription: 'Create your Pulse Cloud account and hosted workspace.',
+      pageDescription: 'Start your 14-day Pulse Cloud trial and hosted workspace.',
       workspaceHeading: 'Workspace',
       planHeading: 'Plan',
       nextHeading: 'How it works',
       nextSteps: CLOUD_ACCOUNT_FLOW_STEPS,
       existingAccountHeading: 'Already signed up?',
       existingAccountDescription: 'Request a fresh Pulse Account sign-in link.',
-      createWorkspaceLabel: 'Continue to Checkout',
-      creatingWorkspaceLabel: 'Preparing Checkout...',
+      createWorkspaceLabel: 'Start Trial in Checkout',
+      creatingWorkspaceLabel: 'Preparing Trial Checkout...',
       emailSignInLinkLabel: 'Email Pulse Account Link',
       sendingSignInLinkLabel: 'Sending...',
     });

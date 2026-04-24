@@ -58,7 +58,7 @@ var publicCloudSignupPageTemplate = template.Must(template.New("public-cloud-sig
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Start Pulse Cloud</title>
+  <title>Start Pulse Cloud Trial</title>
   <style nonce="{{.Nonce}}">
     :root { color-scheme: light; }
     body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: linear-gradient(140deg, #f8fafc, #e2e8f0); color: #0f172a; }
@@ -83,8 +83,8 @@ var publicCloudSignupPageTemplate = template.Must(template.New("public-cloud-sig
 <body>
   <div class="wrap">
     <div class="card">
-      <h1>Start Pulse Cloud</h1>
-      <p>Create your hosted Pulse workspace. Checkout is secure and provisioning starts automatically after payment confirmation.</p>
+      <h1>Start your {{.TrialDays}}-day Pulse Cloud trial</h1>
+      <p>Create your hosted Pulse workspace. Stripe checkout securely collects a payment method, but the Cloud subscription starts with a {{.TrialDays}}-day trial and no upfront charge. Provisioning starts after checkout confirms the subscription.</p>
       {{if .ErrorMessage}}<div class="error">{{.ErrorMessage}}</div>{{end}}
       {{if .Cancelled}}<div class="note">Checkout was cancelled. You can start again below.</div>{{end}}
 
@@ -94,9 +94,9 @@ var publicCloudSignupPageTemplate = template.Must(template.New("public-cloud-sig
         {{if or .HasPower .HasMax}}
         <label>Plan</label>
         <div class="tier-group">
-          <label class="tier-option"><input type="radio" name="tier" value="starter" {{if eq .Tier "starter"}}checked{{end}}> <strong>Starter</strong> — 10 hosts, from $29/mo</label>
-          {{if .HasPower}}<label class="tier-option"><input type="radio" name="tier" value="power" {{if eq .Tier "power"}}checked{{end}}> <strong>Power</strong> — 30 hosts, from $49/mo</label>{{end}}
-          {{if .HasMax}}<label class="tier-option"><input type="radio" name="tier" value="max" {{if eq .Tier "max"}}checked{{end}}> <strong>Max</strong> — 75 hosts, from $79/mo</label>{{end}}
+          <label class="tier-option"><input type="radio" name="tier" value="starter" {{if eq .Tier "starter"}}checked{{end}}> <strong>Starter</strong> — 10 monitored systems, $29/mo after trial</label>
+          {{if .HasPower}}<label class="tier-option"><input type="radio" name="tier" value="power" {{if eq .Tier "power"}}checked{{end}}> <strong>Power</strong> — 30 monitored systems, $49/mo after trial</label>{{end}}
+          {{if .HasMax}}<label class="tier-option"><input type="radio" name="tier" value="max" {{if eq .Tier "max"}}checked{{end}}> <strong>Max</strong> — 75 monitored systems, $79/mo after trial</label>{{end}}
         </div>
         {{else}}
         <input type="hidden" name="tier" value="starter">
@@ -113,7 +113,7 @@ var publicCloudSignupPageTemplate = template.Must(template.New("public-cloud-sig
 
       <p class="fine">After checkout, we will email a Pulse Account sign-in link so you can open your hosted workspace.</p>
       <ol>
-        <li>Your Stripe checkout completes securely.</li>
+        <li>Stripe starts your {{.TrialDays}}-day Cloud trial securely.</li>
         <li>Pulse Cloud provisions your hosted workspace.</li>
         <li>The email link opens Pulse Account, where you open your workspace and continue setup.</li>
       </ol>
@@ -128,7 +128,7 @@ var publicCloudSignupCompleteTemplate = template.Must(template.New("public-cloud
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Pulse Cloud Checkout Complete</title>
+  <title>Pulse Cloud Trial Checkout Complete</title>
   <style nonce="{{.Nonce}}">
     :root { color-scheme: light; }
     body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #f8fafc; color: #0f172a; }
@@ -141,8 +141,8 @@ var publicCloudSignupCompleteTemplate = template.Must(template.New("public-cloud
 <body>
   <div class="wrap">
     <div class="card">
-      <h1>Checkout Complete</h1>
-      <p>Your checkout completed. Pulse Cloud is provisioning your hosted workspace.</p>
+      <h1>Trial checkout complete</h1>
+      <p>Your {{.TrialDays}}-day Pulse Cloud trial checkout completed. Pulse Cloud is provisioning your hosted workspace.</p>
       <p>Watch your inbox for a Pulse Account sign-in link. That link lands in Pulse Account, where you can open your workspace and continue setup.</p>
     </div>
   </div>
@@ -172,11 +172,13 @@ type publicCloudSignupPageData struct {
 	Nonce        string
 	HasPower     bool // true if Cloud Power price is configured
 	HasMax       bool // true if Cloud Max price is configured
+	TrialDays    int
 }
 
 // publicCloudSignupCompleteData carries nonce for the signup-complete page.
 type publicCloudSignupCompleteData struct {
-	Nonce string
+	Nonce     string
+	TrialDays int
 }
 
 type publicCloudSignupRequest struct {
@@ -269,6 +271,7 @@ func (h *PublicCloudSignupHandlers) HandleSignupPage(w http.ResponseWriter, r *h
 			Cancelled:  strings.EqualFold(strings.TrimSpace(r.URL.Query().Get("cancelled")), "1"),
 			HasPower:   h.cfg != nil && strings.TrimSpace(h.cfg.CloudPowerPriceID) != "",
 			HasMax:     h.cfg != nil && strings.TrimSpace(h.cfg.CloudMaxPriceID) != "",
+			TrialDays:  trialSignupTrialDays,
 		}
 		h.renderSignupPage(w, r, http.StatusOK, data)
 	case http.MethodPost:
@@ -290,6 +293,7 @@ func (h *PublicCloudSignupHandlers) HandleSignupPage(w http.ResponseWriter, r *h
 				ErrorMessage: "Invalid plan tier selected.",
 				HasPower:     h.cfg != nil && strings.TrimSpace(h.cfg.CloudPowerPriceID) != "",
 				HasMax:       h.cfg != nil && strings.TrimSpace(h.cfg.CloudMaxPriceID) != "",
+				TrialDays:    trialSignupTrialDays,
 			})
 			return
 		}
@@ -303,6 +307,7 @@ func (h *PublicCloudSignupHandlers) HandleSignupPage(w http.ResponseWriter, r *h
 				ErrorMessage: "A valid email address is required.",
 				HasPower:     h.cfg != nil && strings.TrimSpace(h.cfg.CloudPowerPriceID) != "",
 				HasMax:       h.cfg != nil && strings.TrimSpace(h.cfg.CloudMaxPriceID) != "",
+				TrialDays:    trialSignupTrialDays,
 			})
 			return
 		}
@@ -315,6 +320,7 @@ func (h *PublicCloudSignupHandlers) HandleSignupPage(w http.ResponseWriter, r *h
 				ErrorMessage: "Organization name must be 3-64 characters and cannot contain slashes.",
 				HasPower:     h.cfg != nil && strings.TrimSpace(h.cfg.CloudPowerPriceID) != "",
 				HasMax:       h.cfg != nil && strings.TrimSpace(h.cfg.CloudMaxPriceID) != "",
+				TrialDays:    trialSignupTrialDays,
 			})
 			return
 		}
@@ -327,6 +333,7 @@ func (h *PublicCloudSignupHandlers) HandleSignupPage(w http.ResponseWriter, r *h
 				ErrorMessage: "The selected plan tier is not currently available.",
 				HasPower:     h.cfg != nil && strings.TrimSpace(h.cfg.CloudPowerPriceID) != "",
 				HasMax:       h.cfg != nil && strings.TrimSpace(h.cfg.CloudMaxPriceID) != "",
+				TrialDays:    trialSignupTrialDays,
 			})
 			return
 		}
@@ -342,6 +349,7 @@ func (h *PublicCloudSignupHandlers) HandleSignupPage(w http.ResponseWriter, r *h
 				ErrorMessage: "Unable to create checkout session. Please try again.",
 				HasPower:     h.cfg != nil && strings.TrimSpace(h.cfg.CloudPowerPriceID) != "",
 				HasMax:       h.cfg != nil && strings.TrimSpace(h.cfg.CloudMaxPriceID) != "",
+				TrialDays:    trialSignupTrialDays,
 			})
 			return
 		}
@@ -358,7 +366,8 @@ func (h *PublicCloudSignupHandlers) HandleSignupComplete(w http.ResponseWriter, 
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := publicCloudSignupCompleteTemplate.Execute(w, publicCloudSignupCompleteData{
-		Nonce: cpsec.NonceFromContext(r.Context()),
+		Nonce:     cpsec.NonceFromContext(r.Context()),
+		TrialDays: trialSignupTrialDays,
 	}); err != nil {
 		log.Error().Err(err).Msg("public cloud signup complete page render failed")
 	}
@@ -407,7 +416,7 @@ func (h *PublicCloudSignupHandlers) HandlePublicSignup(w http.ResponseWriter, r 
 
 	writePublicSignupJSON(w, http.StatusCreated, map[string]any{
 		"checkout_url": checkoutURL,
-		"message":      "Checkout session created. Continue in Stripe to provision your Pulse Cloud workspace.",
+		"message":      fmt.Sprintf("Checkout session created. Continue in Stripe to start your %d-day Pulse Cloud trial and provision your workspace.", trialSignupTrialDays),
 	})
 }
 
@@ -553,6 +562,9 @@ func (h *PublicCloudSignupHandlers) buildCheckoutMetadata(priceID, orgName strin
 
 func (h *PublicCloudSignupHandlers) renderSignupPage(w http.ResponseWriter, r *http.Request, status int, data publicCloudSignupPageData) {
 	data.Nonce = cpsec.NonceFromContext(r.Context())
+	if data.TrialDays <= 0 {
+		data.TrialDays = trialSignupTrialDays
+	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(status)
 	if err := publicCloudSignupPageTemplate.Execute(w, data); err != nil {
