@@ -4481,21 +4481,7 @@
       ]
     }
   ],
-  "work_claims": [
-    {
-      "id": "codex-lane-followup-mobile-post-rc-hardening",
-      "agent_id": "codex",
-      "summary": "Harden Pulse Mobile GA proof tooling and run fresh iPad approval proof",
-      "target_id": "v6-product-lane-expansion",
-      "claimed_at": "2026-04-24T11:40:01Z",
-      "heartbeat_at": "2026-04-24T11:40:01Z",
-      "expires_at": "2026-04-24T13:40:01Z",
-      "work_item": {
-        "kind": "lane-followup",
-        "id": "mobile-post-rc-hardening"
-      }
-    }
-  ],
+  "work_claims": [],
   "open_decisions": [],
   "source_of_truth_file": "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md",
   "resolved_decisions": [
