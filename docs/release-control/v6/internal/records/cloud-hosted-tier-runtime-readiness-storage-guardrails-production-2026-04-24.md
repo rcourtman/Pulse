@@ -8,7 +8,7 @@
 - Environment:
   - External control plane: `https://cloud.pulserelay.pro`
   - Remote host: `root@pulse-cloud`
-  - Control-plane image: `pulse-control-plane:ga-storage-8fa98ad0a`
+  - Control-plane image: `pulse-control-plane:ga-audit-5fd645630`
   - Registry DB: `/data/control-plane/tenants.db`
   - Tenant runtime root: `/data/tenants`
 
@@ -27,7 +27,8 @@ storage inspection plus explicit production thresholds:
 - Docker storage available floor: `10GiB`
 - Docker build-cache ceiling: `2GiB`
 - stale proof tenant maximum age: `24h`
-- proof tenant matchers: `proof,canary,rehearsal`
+- proof tenant/account matchers:
+  `proof,canary,rehearsal,msp_prod,ownerseed,owner_seed`
 
 The operator proof command is:
 
@@ -59,7 +60,7 @@ proof_tenant_stale_count=0
 
 The public readiness endpoints returned `ok` and `ready`.
 
-## External Storage Canary
+## Initial External Storage Canary
 
 A fresh disposable MSP account was seeded only for this proof:
 
@@ -83,67 +84,109 @@ After the proof, cleanup verification showed zero remaining canary rows in
 `hosted_entitlements`. The two canary tenant directories were also absent from
 `/data/tenants`.
 
-## Live Tenant Boundary
+## Owner Classification Correction
 
-During the proof window, the restarted control plane also provisioned one
-non-proof tenant from a Stripe checkout event:
+After the initial proof, the project owner clarified that Pulse Cloud has no
+multi-tenant customers yet. The active tenant that had been provisioned from a
+Stripe checkout event was therefore reclassified as hosted-runtime residue, not
+live customer state. During that correction, one old MSP rehearsal account also
+recreated a hosted tenant, proving that stale proof account rows were still a
+real production risk.
 
-- Tenant: `t-6AQTH6A5B2`
-- Account: `a_W3PT2W0YFR`
-- State: `active`
-- Plan version: `stripe`
-- Runtime container: `08ebca7f70cb...`
-- Registry health: `health_check_ok=1`
+The control plane was stopped, `/data/control-plane/tenants.db` was backed up to
+`/root/tenants-pre-ga-empty-cleanup-20260424T111936Z.db`, and the hosted runtime
+state was cleaned to the correct empty-customer baseline:
 
-This tenant is live customer/prospect data, not a proof/canary/rehearsal tenant.
-It was intentionally retained. The final audit below is therefore a stronger
-post-proof state than an empty lab: the control plane passed admission and audit
-with a real active hosted tenant and its managed runtime present.
+- Removed hosted tenant rows:
+  - `t-6AQTH6A5B2`
+  - `t-W9WWCGBETH`
+- Removed the corresponding managed Docker runtime containers.
+- Removed the corresponding `/data/tenants/*` directories.
+- Removed `7` orphan paid hosted entitlement rows whose tenant rows no longer
+  existed.
+- Removed `4` stale MSP proof/rehearsal account rows:
+  - `a_msp_prod_20260313105601`
+  - `a_msp_prod_fix_20260313111348`
+  - `a_msp_owner_seed_20260313124930`
+  - `a_ownerseed_20260313T145927`
+
+The audit implementation was then tightened so this residue is no longer
+invisible: `pulse-control-plane cloud audit` now fails on stale proof accounts
+and paid hosted entitlements whose tenant rows are missing.
+
+## Corrected External Storage Canary
+
+A second disposable MSP canary was run after the empty-customer cleanup and
+after deploying `pulse-control-plane:ga-audit-5fd645630`:
+
+- Account: `a_ga_empty_canary_20260424T112557Z`
+- Created workspaces:
+  - `t-VXX6Z6W0KE`
+  - `t-NN991B67FY`
+
+The public HTTPS account and portal APIs passed:
+
+1. Initial tenant list returned `200` with `0` workspaces.
+2. Workspace creation returned an active tenant for both disposable workspaces.
+3. Follow-up tenant list returned `200` with `2` workspaces.
+4. Portal dashboard returned `200`, `kind=msp`, and `total=2`.
+5. Workspace detail returned `200`, `state=active`, and `plan=msp_starter`
+   for both workspaces.
+6. Workspace deletion returned `204` for both disposable workspaces.
+
+Post-canary cleanup verification showed:
+
+- `tenants=0`
+- `paid_entitlements=0`
+- `ga_empty_canary_accounts=0`
+- `stale_msp_proof_accounts=0`
+- no remaining directories under `/data/tenants`
 
 ## Final Audit
 
-The final production audit after canary cleanup passed:
+The final production audit after the corrected canary cleanup passed:
 
 ```text
 audit_ok=true
-tenant_total=1
-tenant_active=1
+tenant_total=0
+tenant_active=0
 tenant_registry_unhealthy_active=0
-docker_managed_total=1
-docker_managed_running=1
+docker_managed_total=0
+docker_managed_running=0
 docker_managed_unhealthy=0
 storage_guardrails_enabled=true
 storage_ok=true
 storage_root_status=ok
-storage_root_available_bytes=151487172608
+storage_root_available_bytes=149658189824
 storage_root_min_available_bytes=10737418240
 storage_data_status=ok
-storage_data_available_bytes=151487172608
+storage_data_available_bytes=149658189824
 storage_data_min_available_bytes=5368709120
 storage_docker_status=ok
-storage_docker_available_bytes=151487172608
+storage_docker_available_bytes=149658189824
 storage_docker_min_available_bytes=10737418240
 docker_build_cache_status=ok
-docker_build_cache_total_bytes=0
+docker_build_cache_total_bytes=1684280439
 docker_build_cache_max_bytes=2147483648
 proof_tenant_stale_count=0
+proof_account_stale_count=0
+hosted_paid_orphan_entitlement_count=0
 ```
 
 Host and Docker state at the same point:
 
 ```text
-/dev/vda1       154G   13G  142G   9% /
-Images          11        3         6.763GB   2.934GB reclaimable
-Containers      3         3         45.06kB   0B reclaimable
+/dev/vda1       154G   15G  140G  10% /
+Images          12        2         8.441GB   3.967GB reclaimable
+Containers      2         2         40.96kB   0B reclaimable
 Local Volumes   3         1         212.4MB   212.4MB reclaimable
-Build Cache     0         0         0B        0B
+Build Cache     16        0         1.684GB   1.593GB reclaimable
 ```
 
 Running managed/runtime services:
 
 ```text
-pulse-t-6AQTH6A5B2 pulse-runtime:ga-copyupfix-c4f1e8d7cb1f Up (healthy)
-pulse-cloud-control-plane-1 pulse-control-plane:ga-storage-8fa98ad0a Up
+pulse-cloud-control-plane-1 pulse-control-plane:ga-audit-5fd645630 Up
 pulse-cloud-traefik-1 a9890c898f37 Up
 ```
 
@@ -152,10 +195,14 @@ pulse-cloud-traefik-1 a9890c898f37 Up
 `cloud-hosted-tier-runtime-readiness` can be treated as `passed` for the current
 GA multi-tenant scope. The previous storage exhaustion blocker is no longer only
 manually cleaned up: hosted tenant provisioning and runtime rollout now have
-production admission guardrails, the live audit command proves the storage and
-stale-proof-tenant floor, and a fresh external MSP canary passed create, list,
-portal, detail, delete, and cleanup verification on the live public control
-plane.
+production admission guardrails, the live audit command proves the storage,
+stale-proof-tenant, stale-proof-account, and orphan-paid-entitlement floor, and a
+fresh external MSP canary passed create, list, portal, detail, delete, and
+cleanup verification on the live public control plane.
+
+The correct GA baseline for Pulse Cloud today is empty of hosted customer
+tenants. As of this record, that baseline is true in the registry, Docker, and
+`/data/tenants`.
 
 The remaining operational follow-up is to wire the audit command into recurring
 production monitoring/alerting so drift is surfaced before a human asks for a
