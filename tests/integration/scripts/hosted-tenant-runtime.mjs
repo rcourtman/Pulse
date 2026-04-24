@@ -24,11 +24,64 @@ export function resolveHostedTenantOrgDataDir(tenantId, orgId) {
   return `/data/tenants/${tenantId}/orgs/${scopedOrgId}`;
 }
 
-export function restartHostedTenantRuntime(cloudHost, tenantId) {
-  const containerName = `pulse-${tenantId}`;
+export function hostedTenantContainerName(tenantId) {
+  const normalizedTenantId = String(tenantId || '').trim();
+  if (!normalizedTenantId) {
+    throw new Error('tenantId is required');
+  }
+  return `pulse-${normalizedTenantId}`;
+}
+
+function remoteFailureOutput(error) {
+  const remoteOutput = ['stderr', 'stdout']
+    .map((field) => error?.[field])
+    .filter((value) => value !== undefined && value !== null && String(value).trim() !== '')
+    .map((value) => String(value).trim())
+    .join('\n');
+  if (remoteOutput) {
+    return remoteOutput;
+  }
+  return String(error?.message || '').trim();
+}
+
+export function hostedTenantRuntimeExistsScript(tenantId) {
+  const containerName = hostedTenantContainerName(tenantId);
+  return `
+set -eu
+container=${shellQuote(containerName)}
+if ! docker inspect "$container" >/dev/null 2>&1; then
+  echo "hosted tenant runtime container $container does not exist" >&2
+  echo "create or restore an active hosted tenant before running hosted mobile proof seeding" >&2
+  exit 72
+fi
+docker inspect --format '{{.Name}} {{.State.Status}} {{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$container"
+`;
+}
+
+export function assertHostedTenantRuntimeExists(cloudHost, tenantId, runner = runRemote) {
+  const containerName = hostedTenantContainerName(tenantId);
+  try {
+    return runner(cloudHost, `sh -lc ${shellQuote(hostedTenantRuntimeExistsScript(tenantId))}`);
+  } catch (error) {
+    const detail = remoteFailureOutput(error);
+    throw new Error([
+      `hosted tenant runtime ${containerName} is unavailable on ${cloudHost}`,
+      'Hosted mobile proof seeding requires an active hosted tenant container before it mutates approval or token data.',
+      detail,
+    ].filter(Boolean).join('\n'));
+  }
+}
+
+export function restartHostedTenantRuntime(cloudHost, tenantId, runner = runRemote) {
+  const containerName = hostedTenantContainerName(tenantId);
   const script = `
 set -eu
 container=${shellQuote(containerName)}
+if ! docker inspect "$container" >/dev/null 2>&1; then
+  echo "hosted tenant runtime container $container does not exist" >&2
+  echo "create or restore an active hosted tenant before restarting hosted mobile proof state" >&2
+  exit 72
+fi
 docker restart "$container" >/dev/null
 deadline=$(( $(date +%s) + 60 ))
 while [ "$(date +%s)" -lt "$deadline" ]; do
@@ -44,5 +97,13 @@ echo "timed out waiting for $container to become ready" >&2
 docker inspect --format '{{json .State}}' "$container" >&2 || true
 exit 1
 `;
-  runRemote(cloudHost, `sh -lc ${shellQuote(script)}`);
+  try {
+    runner(cloudHost, `sh -lc ${shellQuote(script)}`);
+  } catch (error) {
+    const detail = remoteFailureOutput(error);
+    throw new Error([
+      `failed to restart hosted tenant runtime ${containerName} on ${cloudHost}`,
+      detail,
+    ].filter(Boolean).join('\n'));
+  }
 }

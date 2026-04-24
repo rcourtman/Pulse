@@ -7,6 +7,7 @@ import path from 'node:path';
 import process from 'node:process';
 
 import {
+  assertHostedTenantRuntimeExists,
   resolveHostedTenantOrgDataDir,
   restartHostedTenantRuntime,
   runRemote,
@@ -83,7 +84,7 @@ function buildLocalHelper(tempDir) {
     '-buildvcs=false',
     '-o',
     binaryPath,
-    './tests/integration/scripts/approval-store-helper.go',
+    './tests/integration/scripts/approval-store-helper',
   ], {
     cwd: repoRoot,
     env: {
@@ -100,6 +101,11 @@ function buildLocalHelper(tempDir) {
 
 function main() {
   const args = parseArgs(process.argv.slice(2));
+
+  if (args.action === 'create') {
+    assertHostedTenantRuntimeExists(args.cloudHost, args.tenantId);
+  }
+
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pulse-hosted-approval-helper-'));
   const localBinaryPath = buildLocalHelper(tempDir);
   const remoteBinaryPath = `/tmp/approval-store-helper-${process.pid}-${Date.now()}`;
@@ -142,4 +148,9 @@ function main() {
   }
 }
 
-main();
+try {
+  main();
+} catch (error) {
+  console.error(error instanceof Error ? error.message : String(error));
+  process.exit(1);
+}
