@@ -39,7 +39,9 @@ describe('CloudPricing', () => {
     expect(screen.getAllByText('All Pro features')).toHaveLength(1);
     expect(screen.getByText('Managed hosting')).toBeInTheDocument();
     expect(
-      screen.getByText('Choose a Cloud plan and start the 14-day trial in secure checkout.'),
+      screen.getByText(
+        'Choose a Cloud plan, add a payment method, and start the 14-day trial with no upfront charge in secure checkout.',
+      ),
     ).toBeInTheDocument();
     expect(screen.getByText('How it works')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Open Pulse Account' })).toHaveAttribute(

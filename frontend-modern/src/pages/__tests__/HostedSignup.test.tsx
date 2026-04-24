@@ -61,12 +61,16 @@ describe('HostedSignup', () => {
 
     expect(await screen.findByText('Workspace')).toBeInTheDocument();
     expect(
-      screen.getByText('Start your 14-day Pulse Cloud trial and hosted workspace.'),
+      screen.getByText(
+        'Start your 14-day Pulse Cloud trial with no upfront charge. Stripe collects a payment method before provisioning.',
+      ),
     ).toBeInTheDocument();
     expect(screen.getByText('Plan')).toBeInTheDocument();
     expect(screen.getByText('How it works')).toBeInTheDocument();
     expect(
-      screen.getByText('Choose a Cloud plan and start the 14-day trial in secure checkout.'),
+      screen.getByText(
+        'Choose a Cloud plan, add a payment method, and start the 14-day trial with no upfront charge in secure checkout.',
+      ),
     ).toBeInTheDocument();
     expect(screen.getByText('Already signed up?')).toBeInTheDocument();
     expect(screen.getByText('Request a fresh Pulse Account sign-in link.')).toBeInTheDocument();

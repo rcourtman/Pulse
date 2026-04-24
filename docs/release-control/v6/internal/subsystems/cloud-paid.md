@@ -238,7 +238,10 @@ Community limit enforcement.
     checkout economics before Stripe handoff: Stripe may collect a payment
     method, but the subscription starts with the configured trial period and no
     upfront charge, then Pulse Account opens the provisioned workspace after
-    checkout completes.
+    checkout completes. The app-facing Cloud pricing and hosted-signup pages
+    must use the same shared copy contract so product, portal, and public entry
+    points do not drift on trial duration, payment-method collection, or upfront
+    charge expectations.
 20. Add contract tests where runtime and pricing need to stay aligned
 21. Add or change hosted browser org-context bootstrap through `frontend-modern/src/App.tsx`, `frontend-modern/src/AppLayout.tsx`, `frontend-modern/src/useAppRuntimeState.ts`, and `frontend-modern/src/utils/apiClient.ts`
     That same hosted bootstrap boundary also owns the runtime-capability JSON

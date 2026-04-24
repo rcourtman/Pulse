@@ -32,7 +32,8 @@ describe('cloudPlans', () => {
   it('keeps shared cloud commercial copy in the common contract', () => {
     expect(CLOUD_COMMERCIAL_PRESENTATION).toEqual({
       pageTitle: 'Pulse Cloud',
-      pageDescription: 'Managed Pulse hosting with Pro features included. Start with a 14-day trial.',
+      pageDescription:
+        'Managed Pulse hosting with Pro features included. Start with a 14-day trial and no upfront charge.',
       includedInAllHeading: 'Included in every Cloud plan',
       includedInAllItems: [
         'All Pro features',
@@ -50,7 +51,8 @@ describe('cloudPlans', () => {
   it('keeps hosted signup commercial copy in the common contract', () => {
     expect(HOSTED_SIGNUP_PRESENTATION).toEqual({
       pageTitlePrefix: 'Pulse Cloud',
-      pageDescription: 'Start your 14-day Pulse Cloud trial and hosted workspace.',
+      pageDescription:
+        'Start your 14-day Pulse Cloud trial with no upfront charge. Stripe collects a payment method before provisioning.',
       workspaceHeading: 'Workspace',
       planHeading: 'Plan',
       nextHeading: 'How it works',

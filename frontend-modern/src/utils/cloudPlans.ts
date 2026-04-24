@@ -46,7 +46,7 @@ export interface HostedSignupPresentation {
 }
 
 export const CLOUD_ACCOUNT_FLOW_STEPS = [
-  'Choose a Cloud plan and start the 14-day trial in secure checkout.',
+  'Choose a Cloud plan, add a payment method, and start the 14-day trial with no upfront charge in secure checkout.',
   'Use the email link to open Pulse Account.',
   'Open your workspace and connect systems.',
 ] as const;
@@ -104,7 +104,8 @@ export const CLOUD_PLAN_LABELS: Record<string, string> = {
 
 export const CLOUD_COMMERCIAL_PRESENTATION: CloudCommercialPresentation = {
   pageTitle: 'Pulse Cloud',
-  pageDescription: 'Managed Pulse hosting with Pro features included. Start with a 14-day trial.',
+  pageDescription:
+    'Managed Pulse hosting with Pro features included. Start with a 14-day trial and no upfront charge.',
   includedInAllHeading: 'Included in every Cloud plan',
   includedInAllItems: [
     'All Pro features',
@@ -120,7 +121,8 @@ export const CLOUD_COMMERCIAL_PRESENTATION: CloudCommercialPresentation = {
 
 export const HOSTED_SIGNUP_PRESENTATION: HostedSignupPresentation = {
   pageTitlePrefix: 'Pulse Cloud',
-  pageDescription: 'Start your 14-day Pulse Cloud trial and hosted workspace.',
+  pageDescription:
+    'Start your 14-day Pulse Cloud trial with no upfront charge. Stripe collects a payment method before provisioning.',
   workspaceHeading: 'Workspace',
   planHeading: 'Plan',
   nextHeading: 'How it works',
