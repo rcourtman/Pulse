@@ -335,6 +335,13 @@ for the published server and agent images, attest the generated release packet
 assets from the `release/` directory, and pass the embedded license public key
 through BuildKit secret mounts instead of Docker build arguments so release
 metadata and image history cannot re-expose it.
+Because BuildKit secret contents are intentionally excluded from layer cache
+keys, those Docker builds must also pass a non-secret SHA-256 fingerprint of
+the mounted license public key through `PULSE_LICENSE_PUBLIC_KEY_SHA256` and
+the `Dockerfile` must verify that fingerprint before embedding the key. A
+release image build must fail closed if the fingerprint is present but the
+secret is missing, malformed, or mismatched, so cached no-key binaries cannot
+be reused for release-grade hosted or self-hosted runtime images.
 That same supply-chain boundary also owns the checked-in build roots
 themselves. `Dockerfile` must pin its Node, Go, and Alpine bases by immutable
 manifest-list digest so multi-arch release builds do not silently drift onto a

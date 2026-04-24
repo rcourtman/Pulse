@@ -446,20 +446,21 @@ explain monitored-system identity:
 
 ## Stripe Price IDs
 
-> Updated 2026-02-28 with all v6 price IDs (Self-Hosted, Cloud, MSP).
+> Updated 2026-04-24 with the final public self-hosted Relay / Pro price IDs.
 
 ### Self-Hosted
 
-> 2026-03-17 decision: the previous self-hosted v6 public prices are superseded.
-> New live Stripe prices still need to be created for the locked Relay and Pro
-> monthly/annual bands before public checkout is cut over. Pro+ is a continuity tier, not a
-> public self-hosted checkout column.
+> 2026-04-24 implementation: the locked Relay and Pro monthly/annual prices now
+> exist in live Stripe and are the only self-hosted v6 prices marked
+> `public_checkout` in the live license-server plan map. The previous higher
+> pre-GA Relay / Pro prices remain non-public compatibility entries only. Pro+
+> is a continuity tier, not a public self-hosted checkout column.
 
-- Relay Monthly: pending new live Stripe price ($4.99/mo)
-- Relay Annual: pending new live Stripe price ($39/yr)
-- Pro Monthly: pending new live Stripe price ($8.99/mo)
-- Pro Annual: pending new live Stripe price ($79/yr)
-- Pro+ renewal/continuity prices: record only if still needed for existing holders
+- Relay Monthly: `price_1TPmE5BrHBocJIGHdwLp4tTA` ($4.99/mo)
+- Relay Annual: `price_1TPmE5BrHBocJIGH7P6JgMHP` ($39/yr)
+- Pro Monthly: `price_1TPmE6BrHBocJIGHHaPwluoM` ($8.99/mo)
+- Pro Annual: `price_1TPmE6BrHBocJIGHR8bMvjK8` ($79/yr)
+- Pro+ renewal/continuity prices: `price_1T51LIBrHBocJIGHkUjg7sgO` ($18/mo), `price_1T51LIBrHBocJIGHvVaoGsGF` ($149/yr), not public checkout
 
 ### Cloud (created 2026-02-28)
 - Cloud Starter Monthly: `price_1T5kflBrHBocJIGHUqPv1dzV` ($29/mo)
@@ -502,9 +503,9 @@ explain monitored-system identity:
 
 ### License server / checkout / landing pages (`pulse-pro`)
 
-- [ ] Create new self-hosted Stripe prices for Relay / Pro at the locked public bands
-- [ ] Update plan mappings, checkout flows, and renewal-safe migration logic without disturbing grandfathered v5 continuity
-- [ ] Keep Pro+ out of the public checkout ladder unless a separate continuity requirement explicitly needs it
+- [x] Create new self-hosted Stripe prices for Relay / Pro at the locked public bands
+- [x] Update plan mappings, checkout flows, and renewal-safe migration logic without disturbing grandfathered v5 continuity
+- [x] Keep Pro+ out of the public checkout ladder unless a separate continuity requirement explicitly needs it
 - [ ] Cut the landing page, checkout copy, and purchase surfaces over to unlimited self-hosted monitoring language and the new price bands
 
 ### Cloud / MSP
