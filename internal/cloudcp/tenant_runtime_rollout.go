@@ -96,15 +96,16 @@ type tenantRuntimeRolloutSynchronizer interface {
 }
 
 type tenantRuntimeRolloutService struct {
-	registry      tenantRuntimeRolloutRegistry
-	docker        tenantRuntimeRolloutDocker
-	tenantsDir    string
-	defaultImage  string
-	synchronizer  tenantRuntimeRolloutSynchronizer
-	now           func() time.Time
-	sleep         func(time.Duration)
-	healthTimeout time.Duration
-	healthPoll    time.Duration
+	registry       tenantRuntimeRolloutRegistry
+	docker         tenantRuntimeRolloutDocker
+	tenantsDir     string
+	defaultImage   string
+	synchronizer   tenantRuntimeRolloutSynchronizer
+	admissionCheck func(context.Context) error
+	now            func() time.Time
+	sleep          func(time.Duration)
+	healthTimeout  time.Duration
+	healthPoll     time.Duration
 }
 
 var errTenantRuntimeMissing = errors.New("tenant runtime container missing")
@@ -173,6 +174,8 @@ func newTenantRuntimeRolloutServiceFromConfig(
 		TrustedProxyCIDRs:        cfg.TrustedProxyCIDRs,
 		MemoryLimit:              cfg.TenantMemoryLimit,
 		CPUShares:                cfg.TenantCPUShares,
+		TenantLogMaxSize:         cfg.TenantLogMaxSize,
+		TenantLogMaxFile:         cfg.TenantLogMaxFile,
 	})
 	if err != nil {
 		_ = reg.Close()
@@ -184,11 +187,14 @@ func newTenantRuntimeRolloutServiceFromConfig(
 		_ = reg.Close()
 	}
 	service := &tenantRuntimeRolloutService{
-		registry:      reg,
-		docker:        dockerMgr,
-		tenantsDir:    cfg.TenantsDir(),
-		defaultImage:  strings.TrimSpace(image),
-		synchronizer:  filesystemTenantRuntimeSynchronizer{},
+		registry:     reg,
+		docker:       dockerMgr,
+		tenantsDir:   cfg.TenantsDir(),
+		defaultImage: strings.TrimSpace(image),
+		synchronizer: filesystemTenantRuntimeSynchronizer{},
+		admissionCheck: func(checkCtx context.Context) error {
+			return EnforceStorageAdmission(checkCtx, cfg, dockerMgr)
+		},
 		now:           func() time.Time { return time.Now().UTC() },
 		sleep:         time.Sleep,
 		healthTimeout: defaultTenantRuntimeRolloutHealthTimeout,
@@ -282,6 +288,9 @@ func (s *tenantRuntimeRolloutService) Rollout(ctx context.Context, opts TenantRu
 	}
 
 	tenantDataDir := filepath.Join(s.tenantsDir, tenantID)
+	if err := s.enforceAdmission(ctx, "tenant runtime rollout"); err != nil {
+		return nil, err
+	}
 	snapshotRoot := strings.TrimSpace(opts.SnapshotRoot)
 	if snapshotRoot == "" {
 		snapshotRoot = filepath.Join(filepath.Dir(s.tenantsDir), "backups", "rollout")
@@ -396,6 +405,9 @@ func (s *tenantRuntimeRolloutService) recreateMissingRuntime(
 	}
 
 	tenantDataDir := filepath.Join(s.tenantsDir, tenantID)
+	if err := s.enforceAdmission(ctx, "tenant runtime restore"); err != nil {
+		return nil, err
+	}
 	newContainerID, err := s.docker.CreateAndStart(ctx, tenantID, tenantDataDir)
 	if err != nil {
 		return nil, fmt.Errorf("recreate missing tenant runtime for %s using image %s: %w", tenantID, image, err)
@@ -431,6 +443,16 @@ func (s *tenantRuntimeRolloutService) recreateMissingRuntime(
 		ActiveImageID:       newInfo.ImageID,
 		RestoredMissing:     true,
 	}, nil
+}
+
+func (s *tenantRuntimeRolloutService) enforceAdmission(ctx context.Context, operation string) error {
+	if s == nil || s.admissionCheck == nil {
+		return nil
+	}
+	if err := s.admissionCheck(ctx); err != nil {
+		return fmt.Errorf("%s admission denied: %w", operation, err)
+	}
+	return nil
 }
 
 func tenantRuntimeMatchesContract(

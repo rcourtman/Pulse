@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp"
+	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/registry"
 	"github.com/spf13/cobra"
 )
 
@@ -46,6 +48,38 @@ func newTenantRuntimeCmd() *cobra.Command {
 	}
 	cmd.AddCommand(newTenantRuntimeRolloutCmd())
 	cmd.AddCommand(newTenantRuntimeReconcileCmd())
+	return cmd
+}
+
+func newCloudCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "cloud",
+		Short: "Audit Pulse Cloud operational readiness",
+	}
+	cmd.AddCommand(newCloudAuditCmd())
+	return cmd
+}
+
+func newCloudAuditCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "audit",
+		Short: "Report hosted tenant, container, proof-tenant, and storage guardrail state",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, err := cloudcp.LoadConfig()
+			if err != nil {
+				return fmt.Errorf("load control plane config: %w", err)
+			}
+			report, err := cloudcp.AuditCloud(cmd.Context(), cfg)
+			if err != nil {
+				return err
+			}
+			printCloudAuditReport(report)
+			if !report.OK {
+				return fmt.Errorf("cloud audit failed: %s", strings.Join(report.Failures, "; "))
+			}
+			return nil
+		},
+	}
 	return cmd
 }
 
@@ -239,8 +273,90 @@ func printTenantRuntimeReconcilePlan(plan *cloudcp.TenantRuntimeContractReconcil
 	fmt.Printf("summary_rollout=%d\nsummary_noop=%d\nsummary_skip=%d\nsummary_total=%d\n", rolloutCount, noopCount, skipCount, len(plan.Tenants))
 }
 
+func printCloudAuditReport(report *cloudcp.CloudAuditReport) {
+	if report == nil {
+		fmt.Println("audit_ok=false")
+		return
+	}
+	fmt.Printf("audit_ok=%t\n", report.OK)
+	fmt.Printf("tenant_total=%d\n", report.TenantTotal)
+	for _, state := range []registry.TenantState{
+		registry.TenantStateProvisioning,
+		registry.TenantStateActive,
+		registry.TenantStateSuspended,
+		registry.TenantStateCanceled,
+		registry.TenantStateDeleting,
+		registry.TenantStateDeleted,
+		registry.TenantStateFailed,
+	} {
+		fmt.Printf("tenant_%s=%d\n", state, report.TenantCounts[state])
+	}
+	fmt.Printf("tenant_registry_unhealthy_active=%d\n", report.RegistryUnhealthyActive)
+	fmt.Printf("docker_managed_total=%d\n", report.DockerManagedTotal)
+	fmt.Printf("docker_managed_running=%d\n", report.DockerManagedRunning)
+	fmt.Printf("docker_managed_unhealthy=%d\n", report.DockerManagedUnhealthy)
+	if report.DockerUnavailable != "" {
+		fmt.Printf("docker_unavailable=%s\n", report.DockerUnavailable)
+	}
+	if report.Storage != nil {
+		fmt.Printf("storage_guardrails_enabled=%t\n", report.Storage.Enabled)
+		fmt.Printf("storage_ok=%t\n", report.Storage.OK)
+		for _, fs := range report.Storage.Filesystems {
+			status := "ok"
+			if !fs.OK {
+				status = "fail"
+			}
+			fmt.Printf("storage_%s_status=%s\n", fs.Name, status)
+			fmt.Printf("storage_%s_path=%s\n", fs.Name, fs.Path)
+			fmt.Printf("storage_%s_available_bytes=%d\n", fs.Name, fs.AvailableBytes)
+			fmt.Printf("storage_%s_min_available_bytes=%d\n", fs.Name, fs.MinAvailableBytes)
+			fmt.Printf("storage_%s_total_bytes=%d\n", fs.Name, fs.TotalBytes)
+			if fs.Error != "" {
+				fmt.Printf("storage_%s_error=%s\n", fs.Name, fs.Error)
+			}
+		}
+		buildCacheStatus := "ok"
+		if !report.Storage.BuildCache.OK {
+			buildCacheStatus = "fail"
+		}
+		fmt.Printf("docker_build_cache_status=%s\n", buildCacheStatus)
+		fmt.Printf("docker_build_cache_total_bytes=%d\n", report.Storage.BuildCache.TotalBytes)
+		fmt.Printf("docker_build_cache_max_bytes=%d\n", report.Storage.BuildCache.MaxBytes)
+		fmt.Printf("docker_build_cache_reclaimable_bytes=%d\n", report.Storage.BuildCache.ReclaimableBytes)
+		if report.Storage.BuildCache.Error != "" {
+			fmt.Printf("docker_build_cache_error=%s\n", report.Storage.BuildCache.Error)
+		}
+	}
+	fmt.Printf("proof_tenant_stale_count=%d\n", len(report.StaleProofTenants))
+	for _, tenant := range report.StaleProofTenants {
+		fmt.Printf("proof_tenant_stale=%s state=%s account_id=%s email=%s age=%s\n",
+			tenant.TenantID,
+			tenant.State,
+			tenant.AccountID,
+			tenant.Email,
+			tenant.Age.Round(time.Second),
+		)
+	}
+	for _, container := range report.ManagedRuntimeContainers {
+		if container.State == "running" && (container.HealthStatus == "" || container.HealthStatus == "none" || container.HealthStatus == "healthy") {
+			continue
+		}
+		fmt.Printf("docker_unhealthy_container=%s name=%s state=%s health=%s status=%s\n",
+			container.ID,
+			container.Name,
+			container.State,
+			container.HealthStatus,
+			container.Status,
+		)
+	}
+	for _, failure := range report.Failures {
+		fmt.Printf("failure=%s\n", failure)
+	}
+}
+
 func init() {
 	rootCmd.AddCommand(versionCmd)
+	rootCmd.AddCommand(newCloudCmd())
 	rootCmd.AddCommand(newTenantRuntimeCmd())
 }
 

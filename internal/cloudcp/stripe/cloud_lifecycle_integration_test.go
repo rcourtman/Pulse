@@ -3,8 +3,10 @@ package stripe
 import (
 	"bytes"
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -229,6 +231,47 @@ func TestCloudLifecycle_CheckoutToBillingToMonitoredSystemLimits(t *testing.T) {
 				t.Fatalf("missing hosted runtime ownership paths: %v", wantOwnership)
 			}
 		})
+	}
+}
+
+func TestCloudLifecycle_AdmissionFailureBlocksCheckoutBeforeTenantOrAccountMutation(t *testing.T) {
+	reg := newStripeTestRegistry(t)
+	tenantsDir := t.TempDir()
+	provisioner := newTestProvisioner(t, reg, tenantsDir, nil, true)
+	provisioner.admissionCheck = func(context.Context) error {
+		return errors.New("storage pressure")
+	}
+
+	err := provisioner.HandleCheckout(context.Background(), CheckoutSession{
+		Customer:      "cus_storage_admission",
+		Subscription:  "sub_storage_admission",
+		CustomerEmail: "owner@example.com",
+		Metadata:      map[string]string{"plan_version": "cloud_starter"},
+	})
+	if err == nil || !strings.Contains(err.Error(), "storage pressure") {
+		t.Fatalf("HandleCheckout error = %v, want storage pressure", err)
+	}
+
+	tenants, err := reg.List()
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(tenants) != 0 {
+		t.Fatalf("tenant count = %d, want 0", len(tenants))
+	}
+	accounts, err := reg.ListAccounts()
+	if err != nil {
+		t.Fatalf("ListAccounts: %v", err)
+	}
+	if len(accounts) != 0 {
+		t.Fatalf("account count = %d, want 0", len(accounts))
+	}
+	entries, err := os.ReadDir(tenantsDir)
+	if err != nil {
+		t.Fatalf("ReadDir(%s): %v", tenantsDir, err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("tenant dir count = %d, want 0", len(entries))
 	}
 }
 

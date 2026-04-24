@@ -73,6 +73,9 @@ func TestLoadConfig_AllRequired(t *testing.T) {
 	if cfg.TenantLogMaxFile != 3 {
 		t.Errorf("TenantLogMaxFile = %d, want 3", cfg.TenantLogMaxFile)
 	}
+	if cfg.StorageGuardrailsEnabled {
+		t.Errorf("StorageGuardrailsEnabled = true in development, want false")
+	}
 }
 
 func TestLoadConfig_CustomValues(t *testing.T) {
@@ -86,6 +89,16 @@ func TestLoadConfig_CustomValues(t *testing.T) {
 	t.Setenv("CP_BIND_ADDRESS", "127.0.0.1")
 	t.Setenv("CP_TENANT_LOG_MAX_SIZE", "25m")
 	t.Setenv("CP_TENANT_LOG_MAX_FILE", "4")
+	t.Setenv("CP_STORAGE_GUARDRAILS_ENABLED", "true")
+	t.Setenv("CP_STORAGE_ROOT_PATH", "/host-root")
+	t.Setenv("CP_STORAGE_DATA_PATH", "/tenant-data")
+	t.Setenv("CP_STORAGE_DOCKER_PATH", "/host-var-lib-docker")
+	t.Setenv("CP_STORAGE_MIN_ROOT_AVAILABLE", "12GiB")
+	t.Setenv("CP_STORAGE_MIN_DATA_AVAILABLE", "6GiB")
+	t.Setenv("CP_STORAGE_MIN_DOCKER_AVAILABLE", "8GiB")
+	t.Setenv("CP_STORAGE_MAX_DOCKER_BUILD_CACHE", "1500MiB")
+	t.Setenv("CP_PROOF_TENANT_MAX_AGE", "6h")
+	t.Setenv("CP_PROOF_TENANT_MATCHERS", "proof,canary,proof")
 
 	cfg, err := LoadConfig()
 	if err != nil {
@@ -105,6 +118,65 @@ func TestLoadConfig_CustomValues(t *testing.T) {
 	}
 	if cfg.TenantLogMaxFile != 4 {
 		t.Errorf("TenantLogMaxFile = %d, want 4", cfg.TenantLogMaxFile)
+	}
+	if !cfg.StorageGuardrailsEnabled {
+		t.Errorf("StorageGuardrailsEnabled = false, want true")
+	}
+	if cfg.StorageRootPath != "/host-root" || cfg.StorageDataPath != "/tenant-data" || cfg.StorageDockerPath != "/host-var-lib-docker" {
+		t.Fatalf("storage paths = %q %q %q", cfg.StorageRootPath, cfg.StorageDataPath, cfg.StorageDockerPath)
+	}
+	if cfg.StorageMinRootAvailableBytes != 12*1024*1024*1024 {
+		t.Fatalf("StorageMinRootAvailableBytes = %d", cfg.StorageMinRootAvailableBytes)
+	}
+	if cfg.StorageMinDataAvailableBytes != 6*1024*1024*1024 {
+		t.Fatalf("StorageMinDataAvailableBytes = %d", cfg.StorageMinDataAvailableBytes)
+	}
+	if cfg.StorageMinDockerAvailableBytes != 8*1024*1024*1024 {
+		t.Fatalf("StorageMinDockerAvailableBytes = %d", cfg.StorageMinDockerAvailableBytes)
+	}
+	if cfg.StorageMaxDockerBuildCacheBytes != 1500*1024*1024 {
+		t.Fatalf("StorageMaxDockerBuildCacheBytes = %d", cfg.StorageMaxDockerBuildCacheBytes)
+	}
+	if cfg.ProofTenantMaxAge.String() != "6h0m0s" {
+		t.Fatalf("ProofTenantMaxAge = %s, want 6h", cfg.ProofTenantMaxAge)
+	}
+	if got := strings.Join(cfg.ProofTenantMatchers, ","); got != "proof,canary" {
+		t.Fatalf("ProofTenantMatchers = %q, want proof,canary", got)
+	}
+}
+
+func TestLoadConfig_EnablesStorageGuardrailsByDefaultInProduction(t *testing.T) {
+	setRequiredCPEnv(t)
+	t.Setenv("CP_ENV", "production")
+
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if !cfg.StorageGuardrailsEnabled {
+		t.Fatal("StorageGuardrailsEnabled = false, want true")
+	}
+	if cfg.StorageRootPath != "/" {
+		t.Fatalf("StorageRootPath = %q, want /", cfg.StorageRootPath)
+	}
+	if cfg.StorageDataPath != "/data" {
+		t.Fatalf("StorageDataPath = %q, want /data", cfg.StorageDataPath)
+	}
+	if cfg.StorageDockerPath != "/var/lib/docker" {
+		t.Fatalf("StorageDockerPath = %q, want /var/lib/docker", cfg.StorageDockerPath)
+	}
+}
+
+func TestLoadConfig_InvalidStorageByteSize(t *testing.T) {
+	setRequiredCPEnv(t)
+	t.Setenv("CP_STORAGE_MIN_ROOT_AVAILABLE", "not-a-size")
+
+	_, err := LoadConfig()
+	if err == nil {
+		t.Fatal("expected error for invalid storage byte size")
+	}
+	if !strings.Contains(err.Error(), "CP_STORAGE_MIN_ROOT_AVAILABLE must be a valid byte size") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 

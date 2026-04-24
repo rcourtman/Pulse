@@ -5,8 +5,10 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/base64"
+	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -149,6 +151,84 @@ func TestHandleCheckoutRollbackAllowsRetry(t *testing.T) {
 	}
 	if created.State != registry.TenantStateActive {
 		t.Fatalf("state = %q, want %q", created.State, registry.TenantStateActive)
+	}
+}
+
+func TestHandleCheckoutAdmissionFailureHasNoProvisioningSideEffects(t *testing.T) {
+	reg := newStripeTestRegistry(t)
+	tenantsDir := t.TempDir()
+	p := newTestProvisioner(t, reg, tenantsDir, nil, true)
+	p.admissionCheck = func(context.Context) error {
+		return errors.New("storage pressure")
+	}
+
+	err := p.HandleCheckout(context.Background(), CheckoutSession{
+		Customer:      "cus_admission_123",
+		Subscription:  "sub_admission_123",
+		CustomerEmail: "owner@example.com",
+	})
+	if err == nil || !strings.Contains(err.Error(), "storage pressure") {
+		t.Fatalf("HandleCheckout error = %v, want storage pressure", err)
+	}
+	tenants, listErr := reg.List()
+	if listErr != nil {
+		t.Fatalf("List: %v", listErr)
+	}
+	if len(tenants) != 0 {
+		t.Fatalf("tenant count = %d, want 0", len(tenants))
+	}
+	accounts, listAccountsErr := reg.ListAccounts()
+	if listAccountsErr != nil {
+		t.Fatalf("ListAccounts: %v", listAccountsErr)
+	}
+	if len(accounts) != 0 {
+		t.Fatalf("account count = %d, want 0", len(accounts))
+	}
+	entries, readErr := os.ReadDir(tenantsDir)
+	if readErr != nil {
+		t.Fatalf("ReadDir(%s): %v", tenantsDir, readErr)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("tenant dir count = %d, want 0", len(entries))
+	}
+}
+
+func TestProvisionWorkspaceAdmissionFailureHasNoProvisioningSideEffects(t *testing.T) {
+	reg := newStripeTestRegistry(t)
+	tenantsDir := t.TempDir()
+
+	accountID, err := registry.GenerateAccountID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.CreateAccount(&registry.Account{
+		ID:          accountID,
+		Kind:        registry.AccountKindMSP,
+		DisplayName: "Acme MSP",
+	}); err != nil {
+		t.Fatalf("CreateAccount: %v", err)
+	}
+
+	p := newTestProvisioner(t, reg, tenantsDir, nil, true)
+	p.admissionCheck = func(context.Context) error {
+		return errors.New("storage pressure")
+	}
+	if _, err := p.ProvisionWorkspace(context.Background(), accountID, "Tenant One"); err == nil || !strings.Contains(err.Error(), "storage pressure") {
+		t.Fatalf("ProvisionWorkspace error = %v, want storage pressure", err)
+	}
+	tenants, listErr := reg.ListByAccountID(accountID)
+	if listErr != nil {
+		t.Fatalf("ListByAccountID: %v", listErr)
+	}
+	if len(tenants) != 0 {
+		t.Fatalf("tenant count = %d, want 0", len(tenants))
+	}
+	entries, readErr := os.ReadDir(tenantsDir)
+	if readErr != nil {
+		t.Fatalf("ReadDir(%s): %v", tenantsDir, readErr)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("tenant dir count = %d, want 0", len(entries))
 	}
 }
 

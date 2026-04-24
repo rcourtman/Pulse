@@ -39,9 +39,12 @@ type Provisioner struct {
 	trialActivationPrivateKey string
 	hostedEntitlements        *entitlements.Service
 	chownFile                 func(string, int, int) error
+	admissionCheck            AdmissionCheck
 }
 
 type ProvisionerOption func(*Provisioner)
+
+type AdmissionCheck func(context.Context) error
 
 func WithTrialActivationPrivateKey(privateKey string) ProvisionerOption {
 	return func(p *Provisioner) {
@@ -49,6 +52,15 @@ func WithTrialActivationPrivateKey(privateKey string) ProvisionerOption {
 			return
 		}
 		p.trialActivationPrivateKey = strings.TrimSpace(privateKey)
+	}
+}
+
+func WithAdmissionCheck(check AdmissionCheck) ProvisionerOption {
+	return func(p *Provisioner) {
+		if p == nil {
+			return
+		}
+		p.admissionCheck = check
 	}
 }
 
@@ -455,6 +467,16 @@ func dockerUnavailableError(err error) bool {
 	}
 }
 
+func (p *Provisioner) enforceAdmission(ctx context.Context, operation string) error {
+	if p == nil || p.admissionCheck == nil {
+		return nil
+	}
+	if err := p.admissionCheck(ctx); err != nil {
+		return fmt.Errorf("%s admission denied: %w", operation, err)
+	}
+	return nil
+}
+
 func (p *Provisioner) ensureAccountOwnerMembership(accountID, email string) error {
 	accountID = strings.TrimSpace(accountID)
 	email = strings.ToLower(strings.TrimSpace(email))
@@ -604,6 +626,9 @@ func (p *Provisioner) HandleCheckout(ctx context.Context, session CheckoutSessio
 			Msg("Tenant already exists for Stripe customer, skipping provisioning")
 		skippedExisting = true
 		return nil
+	}
+	if err := p.enforceAdmission(ctx, "hosted checkout provisioning"); err != nil {
+		return err
 	}
 
 	// Generate tenant ID
@@ -844,6 +869,9 @@ func (p *Provisioner) ProvisionWorkspaceForOwner(ctx context.Context, accountID,
 	}
 	if displayName == "" {
 		return nil, fmt.Errorf("missing display name")
+	}
+	if err := p.enforceAdmission(ctx, "hosted workspace provisioning"); err != nil {
+		return nil, err
 	}
 
 	tenantID, err := registry.GenerateTenantID()

@@ -120,6 +120,9 @@ func Run(ctx context.Context, version string) error {
 		cfg.AllowDockerlessProvisioning,
 		cpstripe.WithHostedEntitlementService(hostedEntitlements),
 		cpstripe.WithTrialActivationPrivateKey(cfg.TrialActivationPrivateKey),
+		cpstripe.WithAdmissionCheck(func(checkCtx context.Context) error {
+			return EnforceStorageAdmission(checkCtx, cfg, dockerMgr)
+		}),
 	)
 	deps := &Deps{
 		Config:             cfg,

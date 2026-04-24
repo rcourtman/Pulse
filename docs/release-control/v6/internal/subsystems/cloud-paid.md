@@ -140,6 +140,11 @@ cloud-specific enforcement rules.
    Hosted tenant container creation must also bound Docker `json-file` logs
    through the control-plane Docker manager so tenant runtime logging cannot
    fill the live Pulse Cloud host independently of tenant data quotas.
+   Hosted checkout and MSP workspace provisioning must also pass the
+   control-plane storage admission guard before tenant/account mutation: root
+   filesystem, tenant data, Docker runtime store, and Docker build-cache
+   thresholds are part of the Cloud paid readiness contract rather than an
+   operator-only cleanup script.
 10. `internal/cloudcp/tenant_runtime_rollout.go` shared with `deployment-installability`: hosted tenant runtime rollout is both a Pulse Cloud runtime contract boundary and a deployment-installability release-rollout boundary.
     Hosted tenant runtime reconciliation must treat a registered tenant with
     preserved tenant data but no live Docker runtime as a recoverable managed
@@ -147,6 +152,8 @@ cloud-specific enforcement rules.
     recreate the canonical tenant container, health-check it, and persist the
     new runtime identity before hosted billing/auth surfaces are considered
     coherent.
+    Tenant runtime rollout and missing-runtime restore must fail closed on the
+    same storage admission guard before snapshotting or swapping containers.
 
 The real `pulse-pro` license-server legacy checkout issuance, recurring
 renewals, manual issue, and legacy exchange flows are part of that same

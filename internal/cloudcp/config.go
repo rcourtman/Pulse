@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/joho/godotenv"
 	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
@@ -38,6 +39,16 @@ type CPConfig struct {
 	TenantLogMaxSize                  string
 	TenantLogMaxFile                  int
 	AllowDockerlessProvisioning       bool
+	StorageGuardrailsEnabled          bool
+	StorageRootPath                   string
+	StorageDataPath                   string
+	StorageDockerPath                 string
+	StorageMinRootAvailableBytes      int64
+	StorageMinDataAvailableBytes      int64
+	StorageMinDockerAvailableBytes    int64
+	StorageMaxDockerBuildCacheBytes   int64
+	ProofTenantMaxAge                 time.Duration
+	ProofTenantMatchers               []string
 	StripeWebhookSecret               string
 	StripeAPIKey                      string
 	PublicCloudSignupEnabled          bool
@@ -69,6 +80,8 @@ func LoadConfig() (*CPConfig, error) {
 	// Best-effort .env loading (not required)
 	_ = godotenv.Load()
 
+	dataDir := envOrDefault("CP_DATA_DIR", "/data")
+	environment := normalizeCPEnvironment(envOrDefault("CP_ENV", "production"))
 	port, err := envOrDefaultInt("CP_PORT", 8443)
 	if err != nil {
 		return nil, err
@@ -109,10 +122,30 @@ func LoadConfig() (*CPConfig, error) {
 	if err != nil {
 		return nil, err
 	}
+	storageMinRootAvailable, err := envOrDefaultBytes("CP_STORAGE_MIN_ROOT_AVAILABLE", 10*1024*1024*1024)
+	if err != nil {
+		return nil, err
+	}
+	storageMinDataAvailable, err := envOrDefaultBytes("CP_STORAGE_MIN_DATA_AVAILABLE", 5*1024*1024*1024)
+	if err != nil {
+		return nil, err
+	}
+	storageMinDockerAvailable, err := envOrDefaultBytes("CP_STORAGE_MIN_DOCKER_AVAILABLE", 10*1024*1024*1024)
+	if err != nil {
+		return nil, err
+	}
+	storageMaxDockerBuildCache, err := envOrDefaultBytes("CP_STORAGE_MAX_DOCKER_BUILD_CACHE", 2*1024*1024*1024)
+	if err != nil {
+		return nil, err
+	}
+	proofTenantMaxAge, err := envOrDefaultDuration("CP_PROOF_TENANT_MAX_AGE", 24*time.Hour)
+	if err != nil {
+		return nil, err
+	}
 
 	cfg := &CPConfig{
-		DataDir:                           envOrDefault("CP_DATA_DIR", "/data"),
-		Environment:                       normalizeCPEnvironment(envOrDefault("CP_ENV", "production")),
+		DataDir:                           dataDir,
+		Environment:                       environment,
 		BindAddress:                       envOrDefault("CP_BIND_ADDRESS", "0.0.0.0"),
 		Port:                              port,
 		AdminKey:                          strings.TrimSpace(os.Getenv("CP_ADMIN_KEY")),
@@ -133,6 +166,16 @@ func LoadConfig() (*CPConfig, error) {
 		TenantLogMaxSize:                  envOrDefault("CP_TENANT_LOG_MAX_SIZE", "10m"),
 		TenantLogMaxFile:                  tenantLogMaxFile,
 		AllowDockerlessProvisioning:       envOrDefaultBool("CP_ALLOW_DOCKERLESS_PROVISIONING", false),
+		StorageGuardrailsEnabled:          envOrDefaultBool("CP_STORAGE_GUARDRAILS_ENABLED", environment != "development"),
+		StorageRootPath:                   envOrDefault("CP_STORAGE_ROOT_PATH", "/"),
+		StorageDataPath:                   envOrDefault("CP_STORAGE_DATA_PATH", dataDir),
+		StorageDockerPath:                 envOrDefault("CP_STORAGE_DOCKER_PATH", "/var/lib/docker"),
+		StorageMinRootAvailableBytes:      storageMinRootAvailable,
+		StorageMinDataAvailableBytes:      storageMinDataAvailable,
+		StorageMinDockerAvailableBytes:    storageMinDockerAvailable,
+		StorageMaxDockerBuildCacheBytes:   storageMaxDockerBuildCache,
+		ProofTenantMaxAge:                 proofTenantMaxAge,
+		ProofTenantMatchers:               parseCSVEnv("CP_PROOF_TENANT_MATCHERS", "proof,canary,rehearsal"),
 		StripeWebhookSecret:               strings.TrimSpace(os.Getenv("STRIPE_WEBHOOK_SECRET")),
 		StripeAPIKey:                      strings.TrimSpace(os.Getenv("STRIPE_API_KEY")),
 		PublicCloudSignupEnabled:          envOrDefaultBool("CP_PUBLIC_CLOUD_SIGNUP_ENABLED", false),
@@ -225,6 +268,32 @@ func (c *CPConfig) validate() error {
 	}
 	if c.Environment == "production" && c.AllowDockerlessProvisioning {
 		return fmt.Errorf("CP_ALLOW_DOCKERLESS_PROVISIONING must be false in production")
+	}
+	if c.StorageGuardrailsEnabled {
+		if strings.TrimSpace(c.StorageRootPath) == "" {
+			return fmt.Errorf("CP_STORAGE_ROOT_PATH is required when CP_STORAGE_GUARDRAILS_ENABLED=true")
+		}
+		if strings.TrimSpace(c.StorageDataPath) == "" {
+			return fmt.Errorf("CP_STORAGE_DATA_PATH is required when CP_STORAGE_GUARDRAILS_ENABLED=true")
+		}
+		if strings.TrimSpace(c.StorageDockerPath) == "" {
+			return fmt.Errorf("CP_STORAGE_DOCKER_PATH is required when CP_STORAGE_GUARDRAILS_ENABLED=true")
+		}
+		if c.StorageMinRootAvailableBytes <= 0 {
+			return fmt.Errorf("CP_STORAGE_MIN_ROOT_AVAILABLE must be greater than 0")
+		}
+		if c.StorageMinDataAvailableBytes <= 0 {
+			return fmt.Errorf("CP_STORAGE_MIN_DATA_AVAILABLE must be greater than 0")
+		}
+		if c.StorageMinDockerAvailableBytes <= 0 {
+			return fmt.Errorf("CP_STORAGE_MIN_DOCKER_AVAILABLE must be greater than 0")
+		}
+		if c.StorageMaxDockerBuildCacheBytes <= 0 {
+			return fmt.Errorf("CP_STORAGE_MAX_DOCKER_BUILD_CACHE must be greater than 0")
+		}
+	}
+	if c.ProofTenantMaxAge <= 0 {
+		return fmt.Errorf("CP_PROOF_TENANT_MAX_AGE must be greater than 0")
 	}
 	if c.RequireEmailProvider {
 		if strings.TrimSpace(c.ResendAPIKey) == "" {
@@ -347,6 +416,28 @@ func envOrDefaultInt64(key string, fallback int64) (int64, error) {
 	return fallback, nil
 }
 
+func envOrDefaultBytes(key string, fallback int64) (int64, error) {
+	if v := strings.TrimSpace(os.Getenv(key)); v != "" {
+		n, err := parseByteSize(v)
+		if err != nil {
+			return fallback, fmt.Errorf("%s must be a valid byte size: %w", key, err)
+		}
+		return n, nil
+	}
+	return fallback, nil
+}
+
+func envOrDefaultDuration(key string, fallback time.Duration) (time.Duration, error) {
+	if v := strings.TrimSpace(os.Getenv(key)); v != "" {
+		duration, err := time.ParseDuration(v)
+		if err != nil {
+			return fallback, fmt.Errorf("%s must be a valid duration: %w", key, err)
+		}
+		return duration, nil
+	}
+	return fallback, nil
+}
+
 func envOrDefaultBool(key string, fallback bool) bool {
 	v := strings.ToLower(strings.TrimSpace(os.Getenv(key)))
 	switch v {
@@ -357,6 +448,73 @@ func envOrDefaultBool(key string, fallback bool) bool {
 	default:
 		return fallback
 	}
+}
+
+func parseByteSize(raw string) (int64, error) {
+	value := strings.ToUpper(strings.ReplaceAll(strings.TrimSpace(raw), " ", ""))
+	if value == "" {
+		return 0, fmt.Errorf("empty value")
+	}
+	if n, err := strconv.ParseInt(value, 10, 64); err == nil {
+		return n, nil
+	}
+
+	i := 0
+	for i < len(value) {
+		ch := value[i]
+		if (ch >= '0' && ch <= '9') || ch == '.' {
+			i++
+			continue
+		}
+		break
+	}
+	if i == 0 || i == len(value) {
+		return 0, fmt.Errorf("expected number followed by unit")
+	}
+	number, err := strconv.ParseFloat(value[:i], 64)
+	if err != nil {
+		return 0, fmt.Errorf("parse number: %w", err)
+	}
+	if number < 0 {
+		return 0, fmt.Errorf("must not be negative")
+	}
+	multiplier := int64(0)
+	switch value[i:] {
+	case "B":
+		multiplier = 1
+	case "K", "KB", "KIB":
+		multiplier = 1024
+	case "M", "MB", "MIB":
+		multiplier = 1024 * 1024
+	case "G", "GB", "GIB":
+		multiplier = 1024 * 1024 * 1024
+	case "T", "TB", "TIB":
+		multiplier = 1024 * 1024 * 1024 * 1024
+	default:
+		return 0, fmt.Errorf("unsupported unit %q", value[i:])
+	}
+	return int64(number * float64(multiplier)), nil
+}
+
+func parseCSVEnv(key, fallback string) []string {
+	raw := strings.TrimSpace(os.Getenv(key))
+	if raw == "" {
+		raw = fallback
+	}
+	values := make([]string, 0)
+	seen := make(map[string]struct{})
+	for _, entry := range strings.Split(raw, ",") {
+		entry = strings.ToLower(strings.TrimSpace(entry))
+		if entry == "" {
+			continue
+		}
+		if _, ok := seen[entry]; ok {
+			continue
+		}
+		seen[entry] = struct{}{}
+		values = append(values, entry)
+	}
+	return values
 }
 
 func parseTrustedProxyCIDRValues(keys ...string) []string {

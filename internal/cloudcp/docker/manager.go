@@ -52,6 +52,31 @@ type RuntimeContainerInfo struct {
 	PublicURL string
 }
 
+type DiskUsageClass struct {
+	ActiveCount int64
+	TotalCount  int64
+	Reclaimable int64
+	TotalSize   int64
+}
+
+type DiskUsageSnapshot struct {
+	Images     DiskUsageClass
+	Containers DiskUsageClass
+	BuildCache DiskUsageClass
+	Volumes    DiskUsageClass
+}
+
+type RuntimeContainerSummary struct {
+	ID           string
+	Name         string
+	Image        string
+	ImageID      string
+	State        string
+	Status       string
+	HealthStatus string
+	Created      int64
+}
+
 const immutableOwnershipPathsEnv = "PULSE_IMMUTABLE_OWNERSHIP_PATHS"
 
 const (
@@ -88,6 +113,84 @@ func (m *Manager) DesiredRuntimeRouting(tenantID string) TenantRuntimeRoutingCon
 		return TenantRuntimeRoutingContract{}
 	}
 	return CanonicalTenantRuntimeRouting(tenantID, m.cfg.BaseDomain)
+}
+
+func (m *Manager) DiskUsage(ctx context.Context) (*DiskUsageSnapshot, error) {
+	if err := m.ensureDaemonReachable(ctx); err != nil {
+		return nil, err
+	}
+	usage, err := m.cli.DiskUsage(ctx, client.DiskUsageOptions{
+		Containers: true,
+		Images:     true,
+		BuildCache: true,
+		Volumes:    true,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("read docker disk usage: %w", err)
+	}
+	return &DiskUsageSnapshot{
+		Images: DiskUsageClass{
+			ActiveCount: usage.Images.ActiveCount,
+			TotalCount:  usage.Images.TotalCount,
+			Reclaimable: usage.Images.Reclaimable,
+			TotalSize:   usage.Images.TotalSize,
+		},
+		Containers: DiskUsageClass{
+			ActiveCount: usage.Containers.ActiveCount,
+			TotalCount:  usage.Containers.TotalCount,
+			Reclaimable: usage.Containers.Reclaimable,
+			TotalSize:   usage.Containers.TotalSize,
+		},
+		BuildCache: DiskUsageClass{
+			ActiveCount: usage.BuildCache.ActiveCount,
+			TotalCount:  usage.BuildCache.TotalCount,
+			Reclaimable: usage.BuildCache.Reclaimable,
+			TotalSize:   usage.BuildCache.TotalSize,
+		},
+		Volumes: DiskUsageClass{
+			ActiveCount: usage.Volumes.ActiveCount,
+			TotalCount:  usage.Volumes.TotalCount,
+			Reclaimable: usage.Volumes.Reclaimable,
+			TotalSize:   usage.Volumes.TotalSize,
+		},
+	}, nil
+}
+
+func (m *Manager) ListManagedRuntimeContainers(ctx context.Context) ([]RuntimeContainerSummary, error) {
+	if err := m.ensureDaemonReachable(ctx); err != nil {
+		return nil, err
+	}
+	filters := client.Filters{}
+	filters = filters.Add("label", "pulse.managed=true")
+	result, err := m.cli.ContainerList(ctx, client.ContainerListOptions{
+		All:     true,
+		Filters: filters,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("list managed tenant containers: %w", err)
+	}
+	containers := make([]RuntimeContainerSummary, 0, len(result.Items))
+	for _, item := range result.Items {
+		name := ""
+		if len(item.Names) > 0 {
+			name = strings.TrimPrefix(strings.TrimSpace(item.Names[0]), "/")
+		}
+		healthStatus := string(container.NoHealthcheck)
+		if item.Health != nil {
+			healthStatus = string(item.Health.Status)
+		}
+		containers = append(containers, RuntimeContainerSummary{
+			ID:           item.ID,
+			Name:         name,
+			Image:        item.Image,
+			ImageID:      item.ImageID,
+			State:        string(item.State),
+			Status:       item.Status,
+			HealthStatus: healthStatus,
+			Created:      item.Created,
+		})
+	}
+	return containers, nil
 }
 
 // IsNotFound reports whether Docker treated an identifier as missing.

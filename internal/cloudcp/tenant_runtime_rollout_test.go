@@ -2,9 +2,11 @@ package cloudcp
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -364,6 +366,62 @@ func TestTenantRuntimeRollout_RecreatesMissingRuntimeFromTenantData(t *testing.T
 	}
 	if !reg.updatedTenant.HealthCheckOK {
 		t.Fatalf("updated tenant health_check_ok = false, want true")
+	}
+}
+
+func TestTenantRuntimeRollout_AdmissionFailureStopsBeforeSnapshotOrContainerSwap(t *testing.T) {
+	tenant := &registry.Tenant{ID: "t-ADMIT01", ContainerID: "old-container"}
+	reg := &fakeTenantRuntimeRolloutRegistry{tenant: tenant}
+	docker := newFakeTenantRuntimeRolloutDocker()
+	routing := docker.DesiredRuntimeRouting(tenant.ID)
+	docker.addContainer(&cpDocker.RuntimeContainerInfo{
+		ID:        "old-container",
+		Name:      tenantRuntimeContainerName(tenant.ID),
+		ImageRef:  "pulse-runtime:old",
+		ImageID:   "sha256:old",
+		Running:   true,
+		RouteHost: routing.Host,
+		PublicURL: routing.PublicURL,
+	})
+	sync := &fakeTenantRuntimeRolloutSynchronizer{}
+	service := newTestTenantRuntimeRolloutService(reg, docker, sync, newFakeTenantRuntimeRolloutClock())
+	service.admissionCheck = func(context.Context) error {
+		return errors.New("storage pressure")
+	}
+
+	_, err := service.Rollout(context.Background(), TenantRuntimeRolloutOptions{
+		TenantID: tenant.ID,
+		Image:    "pulse-runtime:new",
+	})
+	if err == nil || !strings.Contains(err.Error(), "storage pressure") {
+		t.Fatalf("Rollout error = %v, want storage pressure", err)
+	}
+	if len(sync.snapshots) != 0 {
+		t.Fatalf("snapshot count = %d, want 0", len(sync.snapshots))
+	}
+	if len(docker.stopCalls) != 0 || len(docker.renameCalls) != 0 || len(docker.createCalls) != 0 {
+		t.Fatalf("docker mutated before admission failure: stops=%v renames=%v creates=%v", docker.stopCalls, docker.renameCalls, docker.createCalls)
+	}
+}
+
+func TestTenantRuntimeRollout_AdmissionFailureStopsMissingRuntimeRestore(t *testing.T) {
+	tenant := &registry.Tenant{ID: "t-ADMIT02", ContainerID: "removed-container"}
+	reg := &fakeTenantRuntimeRolloutRegistry{tenant: tenant}
+	docker := newFakeTenantRuntimeRolloutDocker()
+	service := newTestTenantRuntimeRolloutService(reg, docker, &fakeTenantRuntimeRolloutSynchronizer{}, newFakeTenantRuntimeRolloutClock())
+	service.admissionCheck = func(context.Context) error {
+		return errors.New("storage pressure")
+	}
+
+	_, err := service.Rollout(context.Background(), TenantRuntimeRolloutOptions{
+		TenantID: tenant.ID,
+		Image:    "pulse-runtime:stable",
+	})
+	if err == nil || !strings.Contains(err.Error(), "storage pressure") {
+		t.Fatalf("Rollout error = %v, want storage pressure", err)
+	}
+	if len(docker.createCalls) != 0 {
+		t.Fatalf("create call count = %d, want 0", len(docker.createCalls))
 	}
 }
 
