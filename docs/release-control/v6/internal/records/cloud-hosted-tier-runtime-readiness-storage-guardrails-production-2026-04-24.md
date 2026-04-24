@@ -157,16 +157,16 @@ docker_managed_unhealthy=0
 storage_guardrails_enabled=true
 storage_ok=true
 storage_root_status=ok
-storage_root_available_bytes=149658189824
+storage_root_available_bytes=151247638528
 storage_root_min_available_bytes=10737418240
 storage_data_status=ok
-storage_data_available_bytes=149658189824
+storage_data_available_bytes=151247638528
 storage_data_min_available_bytes=5368709120
 storage_docker_status=ok
-storage_docker_available_bytes=149658189824
+storage_docker_available_bytes=151247638528
 storage_docker_min_available_bytes=10737418240
 docker_build_cache_status=ok
-docker_build_cache_total_bytes=1684280439
+docker_build_cache_total_bytes=0
 docker_build_cache_max_bytes=2147483648
 proof_tenant_stale_count=0
 proof_account_stale_count=0
@@ -176,11 +176,11 @@ hosted_paid_orphan_entitlement_count=0
 Host and Docker state at the same point:
 
 ```text
-/dev/vda1       154G   15G  140G  10% /
-Images          12        2         8.441GB   3.967GB reclaimable
-Containers      2         2         40.96kB   0B reclaimable
+/dev/vda1       154G   14G  141G   9% /
+Images          12        2         6.882GB   2.407GB reclaimable
+Containers      2         2         30.97MB   0B reclaimable
 Local Volumes   3         1         212.4MB   212.4MB reclaimable
-Build Cache     16        0         1.684GB   1.593GB reclaimable
+Build Cache     0         0         0B        0B
 ```
 
 Running managed/runtime services:
