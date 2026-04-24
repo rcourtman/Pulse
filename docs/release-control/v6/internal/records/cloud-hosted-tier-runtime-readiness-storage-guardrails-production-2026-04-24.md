@@ -26,7 +26,7 @@ storage inspection plus explicit production thresholds:
 - tenant-data available floor: `5GiB`
 - Docker storage available floor: `10GiB`
 - Docker build-cache ceiling: `2GiB`
-- stale proof tenant maximum age: `24h`
+- stale proof tenant maximum age: `1s`
 - proof tenant/account matchers:
   `proof,canary,rehearsal,msp_prod,ownerseed,owner_seed`
 
@@ -142,6 +142,23 @@ Post-canary cleanup verification showed:
 - `stale_msp_proof_accounts=0`
 - no remaining directories under `/data/tenants`
 
+## Mobile Proof Residue Recheck
+
+After the corrected canary, a same-day disposable mobile proof run created one
+MSP proof workspace:
+
+- Account: `a_JJ8PBFMVN3`
+- Workspace: `t-RB6M98924S`
+
+The account display name and workspace display name both identified the state as
+Pulse Mobile GA proof residue, not customer state. The tenant registry was
+backed up to
+`/root/tenants-pre-ga-mobile-proof-cleanup-20260424T113639Z.db`, the proof
+tenant/account rows were removed, the managed runtime container and
+`/data/tenants/t-RB6M98924S` directory were removed, and production
+`CP_PROOF_TENANT_MAX_AGE` was tightened to `1s` so future proof residue is
+surfaced by `pulse-control-plane cloud audit` almost immediately.
+
 ## Final Audit
 
 The final production audit after the corrected canary cleanup passed:
@@ -157,13 +174,13 @@ docker_managed_unhealthy=0
 storage_guardrails_enabled=true
 storage_ok=true
 storage_root_status=ok
-storage_root_available_bytes=151247638528
+storage_root_available_bytes=151278604288
 storage_root_min_available_bytes=10737418240
 storage_data_status=ok
-storage_data_available_bytes=151247638528
+storage_data_available_bytes=151278604288
 storage_data_min_available_bytes=5368709120
 storage_docker_status=ok
-storage_docker_available_bytes=151247638528
+storage_docker_available_bytes=151278604288
 storage_docker_min_available_bytes=10737418240
 docker_build_cache_status=ok
 docker_build_cache_total_bytes=0
@@ -177,8 +194,8 @@ Host and Docker state at the same point:
 
 ```text
 /dev/vda1       154G   14G  141G   9% /
-Images          12        2         6.882GB   2.407GB reclaimable
-Containers      2         2         30.97MB   0B reclaimable
+Images          12        2         6.851GB   2.377GB reclaimable
+Containers      2         2         40.96kB   0B reclaimable
 Local Volumes   3         1         212.4MB   212.4MB reclaimable
 Build Cache     0         0         0B        0B
 ```
