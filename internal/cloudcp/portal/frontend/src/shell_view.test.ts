@@ -432,6 +432,7 @@ describe('shell view', function() {
     );
 
     expect(html).toContain('Tech');
+    expect(html).toContain('Review hosted workspace health here and open ready workspaces. An owner or admin must handle lifecycle changes.');
     expect(html).toContain('Review who has access. An owner or admin must make changes.');
     expect(html).toContain('An owner or admin on this account needs to open hosted billing.');
     expect(html).toContain('Try first');
@@ -444,6 +445,7 @@ describe('shell view', function() {
     expect(html).not.toContain('Self-hosted billing, licenses, refunds, and privacy stay in Billing.');
     expect(html).not.toContain('Use support only when the Workspaces, Access, or hosted Billing path has already stopped you.');
     expect(html).not.toContain('Workspace or access path failed');
+    expect(html).not.toContain('use Lifecycle only when an account-level change is required');
   });
 
   it('renders read-only account roles without leaking internal identifiers', function() {

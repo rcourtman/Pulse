@@ -680,10 +680,14 @@ function renderWorkspaceSummaryInline(
 }
 
 function workspaceSectionHeaderCopy(accounts: PortalAccountSummary[], entries: WorkspaceSummaryEntry[]): string {
+  var canManageAnyWorkspace = accounts.some(function(account) { return account.can_manage; });
   if (!entries.length) {
-    return accounts.some(function(account) { return account.can_manage; })
+    return canManageAnyWorkspace
       ? 'Review hosted workspaces here, then create the next workspace when you are ready.'
       : 'Review hosted workspace state here. An owner or admin must create or change hosted workspaces.';
+  }
+  if (!canManageAnyWorkspace) {
+    return 'Review hosted workspace health here and open ready workspaces. An owner or admin must handle lifecycle changes.';
   }
   return 'Review hosted workspace health here, open the next ready workspace, and use Lifecycle only when an account-level change is required.';
 }

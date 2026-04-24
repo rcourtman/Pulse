@@ -2577,10 +2577,14 @@
     return '<section class="workspace-summary-inline"><div class="workspace-summary-inline-copy"><p><strong>Next:</strong> ' + escapeHTML(decision.title) + "</p><p>" + escapeHTML(decision.description) + '</p></div><div class="workspace-summary-actions">' + decision.primaryAction + decision.secondaryAction + "</div></section>";
   }
   function workspaceSectionHeaderCopy(accounts, entries) {
+    var canManageAnyWorkspace = accounts.some(function(account) {
+      return account.can_manage;
+    });
     if (!entries.length) {
-      return accounts.some(function(account) {
-        return account.can_manage;
-      }) ? "Review hosted workspaces here, then create the next workspace when you are ready." : "Review hosted workspace state here. An owner or admin must create or change hosted workspaces.";
+      return canManageAnyWorkspace ? "Review hosted workspaces here, then create the next workspace when you are ready." : "Review hosted workspace state here. An owner or admin must create or change hosted workspaces.";
+    }
+    if (!canManageAnyWorkspace) {
+      return "Review hosted workspace health here and open ready workspaces. An owner or admin must handle lifecycle changes.";
     }
     return "Review hosted workspace health here, open the next ready workspace, and use Lifecycle only when an account-level change is required.";
   }

@@ -451,6 +451,11 @@ accessible from self-hosted environments.
 
 Cloud paid readiness is materially behind architecture work. The main concern is
 contract coherence between pricing, entitlements, and runtime enforcement.
+Pulse Account portal workspace copy is part of that same readiness contract:
+hosted view-only users may be invited to review workspace health and open ready
+workspaces, but workspace section lead copy must route lifecycle handling to an
+owner or admin instead of presenting Lifecycle as a live task for the current
+signed-in role.
 That public-demo commercial boundary also owns monitored-system preview
 unavailability wording. Browser presentation may keep the unavailable reason
 nullable until the formatting edge, but it must normalize the message through
