@@ -1102,6 +1102,17 @@ func TestHostedEntitlementLookupAndIssue(t *testing.T) {
 	if stored != "etr_paid_three" {
 		t.Fatalf("stored token after revoke = %q, want %q", stored, "etr_paid_three")
 	}
+
+	listed, err := reg.ListHostedEntitlements()
+	if err != nil {
+		t.Fatalf("ListHostedEntitlements: %v", err)
+	}
+	if len(listed) != 1 {
+		t.Fatalf("len(ListHostedEntitlements) = %d, want 1", len(listed))
+	}
+	if listed[0].ID != paidHostedEntitlementID(tenant.ID) || listed[0].RefreshToken != "etr_paid_three" {
+		t.Fatalf("listed entitlement = %#v, want current paid entitlement", listed[0])
+	}
 }
 
 func TestTenantRegistryCanonicalizesTenantPlanVersion(t *testing.T) {

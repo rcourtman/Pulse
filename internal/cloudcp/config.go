@@ -175,7 +175,7 @@ func LoadConfig() (*CPConfig, error) {
 		StorageMinDockerAvailableBytes:    storageMinDockerAvailable,
 		StorageMaxDockerBuildCacheBytes:   storageMaxDockerBuildCache,
 		ProofTenantMaxAge:                 proofTenantMaxAge,
-		ProofTenantMatchers:               parseCSVEnv("CP_PROOF_TENANT_MATCHERS", "proof,canary,rehearsal"),
+		ProofTenantMatchers:               parseCSVEnv("CP_PROOF_TENANT_MATCHERS", "proof,canary,rehearsal,msp_prod,ownerseed,owner_seed"),
 		StripeWebhookSecret:               strings.TrimSpace(os.Getenv("STRIPE_WEBHOOK_SECRET")),
 		StripeAPIKey:                      strings.TrimSpace(os.Getenv("STRIPE_API_KEY")),
 		PublicCloudSignupEnabled:          envOrDefaultBool("CP_PUBLIC_CLOUD_SIGNUP_ENABLED", false),

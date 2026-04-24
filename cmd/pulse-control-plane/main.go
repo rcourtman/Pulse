@@ -337,6 +337,22 @@ func printCloudAuditReport(report *cloudcp.CloudAuditReport) {
 			tenant.Age.Round(time.Second),
 		)
 	}
+	fmt.Printf("proof_account_stale_count=%d\n", len(report.StaleProofAccounts))
+	for _, account := range report.StaleProofAccounts {
+		fmt.Printf("proof_account_stale=%s kind=%s age=%s\n",
+			account.AccountID,
+			account.Kind,
+			account.Age.Round(time.Second),
+		)
+	}
+	fmt.Printf("hosted_paid_orphan_entitlement_count=%d\n", len(report.OrphanPaidHostedEntitlements))
+	for _, entitlement := range report.OrphanPaidHostedEntitlements {
+		fmt.Printf("hosted_paid_orphan_entitlement=%s tenant_id=%s kind=%s\n",
+			entitlement.EntitlementID,
+			entitlement.TenantID,
+			entitlement.Kind,
+		)
+	}
 	for _, container := range report.ManagedRuntimeContainers {
 		if container.State == "running" && (container.HealthStatus == "" || container.HealthStatus == "none" || container.HealthStatus == "healthy") {
 			continue

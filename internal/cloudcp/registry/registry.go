@@ -1251,6 +1251,34 @@ func (r *TenantRegistry) GetHostedEntitlementByTrialRequestID(requestID string) 
 	return loadHostedEntitlement(row)
 }
 
+// ListHostedEntitlements returns all hosted entitlement authority rows.
+func (r *TenantRegistry) ListHostedEntitlements() ([]*HostedEntitlement, error) {
+	rows, err := r.db.Query(`
+		SELECT id, kind, tenant_id, trial_request_id, org_id, email, return_url, instance_token, instance_host,
+		       trial_started_at, refresh_token, activation_token, issued_at, activation_issued_at, last_refreshed_at, redeemed_at, revoked_at
+		FROM hosted_entitlements
+		ORDER BY issued_at DESC`)
+	if err != nil {
+		return nil, fmt.Errorf("list hosted entitlements: %w", err)
+	}
+	defer rows.Close()
+
+	var out []*HostedEntitlement
+	for rows.Next() {
+		rec, scanErr := loadHostedEntitlement(rows)
+		if scanErr != nil {
+			return nil, scanErr
+		}
+		if rec != nil {
+			out = append(out, rec)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate hosted entitlements: %w", err)
+	}
+	return out, nil
+}
+
 // MarkHostedEntitlementRefreshed records the last successful hosted entitlement refresh time.
 func (r *TenantRegistry) MarkHostedEntitlementRefreshed(id string, refreshedAt time.Time) error {
 	id = strings.TrimSpace(id)

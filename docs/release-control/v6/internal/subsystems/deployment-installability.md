@@ -669,8 +669,9 @@ That deployment boundary also owns hosted storage admission: production
 control-plane deployments must mount host root and Docker runtime storage
 read-only for inspection, expose explicit root/data/Docker/build-cache
 thresholds, and provide `pulse-control-plane cloud audit` as the operator proof
-for tenant counts, unhealthy managed containers, disk pressure, and stale
-proof tenants before GA or rollout evidence is accepted.
+for tenant counts, unhealthy managed containers, disk pressure, stale proof
+tenants/accounts, and orphan paid hosted entitlements before GA or rollout
+evidence is accepted.
 That same verification contract also applies before Playwright attaches: if a
 managed hot-dev session is already running when the verify lock is active, the
 integration launcher must restart that session instead of silently attaching to

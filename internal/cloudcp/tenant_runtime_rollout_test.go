@@ -408,7 +408,8 @@ func TestTenantRuntimeRollout_AdmissionFailureStopsMissingRuntimeRestore(t *test
 	tenant := &registry.Tenant{ID: "t-ADMIT02", ContainerID: "removed-container"}
 	reg := &fakeTenantRuntimeRolloutRegistry{tenant: tenant}
 	docker := newFakeTenantRuntimeRolloutDocker()
-	service := newTestTenantRuntimeRolloutService(reg, docker, &fakeTenantRuntimeRolloutSynchronizer{}, newFakeTenantRuntimeRolloutClock())
+	sync := &fakeTenantRuntimeRolloutSynchronizer{}
+	service := newTestTenantRuntimeRolloutService(reg, docker, sync, newFakeTenantRuntimeRolloutClock())
 	service.admissionCheck = func(context.Context) error {
 		return errors.New("storage pressure")
 	}
@@ -422,6 +423,9 @@ func TestTenantRuntimeRollout_AdmissionFailureStopsMissingRuntimeRestore(t *test
 	}
 	if len(docker.createCalls) != 0 {
 		t.Fatalf("create call count = %d, want 0", len(docker.createCalls))
+	}
+	if len(sync.restores) != 0 {
+		t.Fatalf("restore count = %d, want 0", len(sync.restores))
 	}
 }
 

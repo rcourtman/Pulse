@@ -165,6 +165,9 @@ func TestLoadConfig_EnablesStorageGuardrailsByDefaultInProduction(t *testing.T) 
 	if cfg.StorageDockerPath != "/var/lib/docker" {
 		t.Fatalf("StorageDockerPath = %q, want /var/lib/docker", cfg.StorageDockerPath)
 	}
+	if got := strings.Join(cfg.ProofTenantMatchers, ","); got != "proof,canary,rehearsal,msp_prod,ownerseed,owner_seed" {
+		t.Fatalf("ProofTenantMatchers = %q", got)
+	}
 }
 
 func TestLoadConfig_InvalidStorageByteSize(t *testing.T) {

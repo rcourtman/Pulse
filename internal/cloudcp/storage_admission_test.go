@@ -119,3 +119,45 @@ func TestFindStaleProofTenantsUsesConfiguredMatchersAndAge(t *testing.T) {
 		t.Fatalf("stale[0].TenantID = %q, want t-OLDPROOF", stale[0].TenantID)
 	}
 }
+
+func TestFindOrphanPaidHostedEntitlementsFlagsMissingTenants(t *testing.T) {
+	issuedAt := time.Date(2026, 4, 24, 12, 0, 0, 0, time.UTC)
+	entitlements := []*registry.HostedEntitlement{
+		{ID: "paid:t-ACTIVE", Kind: registry.HostedEntitlementKindPaid, TenantID: "t-ACTIVE", IssuedAt: issuedAt},
+		{ID: "paid:t-MISSING", Kind: registry.HostedEntitlementKindPaid, TenantID: "t-MISSING", IssuedAt: issuedAt.Add(-time.Hour)},
+		{ID: "trial:req", Kind: registry.HostedEntitlementKindTrial, TenantID: "", IssuedAt: issuedAt},
+	}
+
+	orphaned := findOrphanPaidHostedEntitlements(entitlements, map[string]struct{}{
+		"t-ACTIVE": {},
+	})
+	if len(orphaned) != 1 {
+		t.Fatalf("len(orphaned) = %d, want 1 (%v)", len(orphaned), orphaned)
+	}
+	if orphaned[0].EntitlementID != "paid:t-MISSING" {
+		t.Fatalf("orphaned[0].EntitlementID = %q, want paid:t-MISSING", orphaned[0].EntitlementID)
+	}
+}
+
+func TestFindStaleProofAccountsUsesAccountAndStripeMatchers(t *testing.T) {
+	now := time.Date(2026, 4, 24, 12, 0, 0, 0, time.UTC)
+	old := now.Add(-48 * time.Hour)
+	fresh := now.Add(-1 * time.Hour)
+	accounts := []*registry.Account{
+		{ID: "a_rehearsal_old", Kind: registry.AccountKindMSP, DisplayName: "Production Rehearsal", CreatedAt: old},
+		{ID: "a_customer", Kind: registry.AccountKindIndividual, DisplayName: "Customer", CreatedAt: old},
+		{ID: "a_stripe_old", Kind: registry.AccountKindMSP, DisplayName: "Pulse", CreatedAt: old},
+		{ID: "a_rehearsal_fresh", Kind: registry.AccountKindMSP, DisplayName: "Canary", CreatedAt: fresh},
+	}
+	stripeAccounts := []*registry.StripeAccount{
+		{AccountID: "a_stripe_old", StripeCustomerID: "cus_msp_rehearsal_123", PlanVersion: "msp_starter"},
+	}
+
+	stale := findStaleProofAccounts(accounts, stripeAccounts, []string{"canary", "rehearsal"}, 24*time.Hour, now)
+	if len(stale) != 2 {
+		t.Fatalf("len(stale) = %d, want 2 (%v)", len(stale), stale)
+	}
+	if stale[0].AccountID != "a_rehearsal_old" || stale[1].AccountID != "a_stripe_old" {
+		t.Fatalf("stale account order = %#v, want rehearsal then stripe", stale)
+	}
+}

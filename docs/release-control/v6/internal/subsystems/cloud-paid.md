@@ -145,6 +145,9 @@ cloud-specific enforcement rules.
    filesystem, tenant data, Docker runtime store, and Docker build-cache
    thresholds are part of the Cloud paid readiness contract rather than an
    operator-only cleanup script.
+   The same cloud audit contract must fail on stale proof/canary account rows
+   and paid hosted entitlements whose tenant rows are missing, because either
+   residue can recreate or mask hosted runtime state after a cleanup.
 10. `internal/cloudcp/tenant_runtime_rollout.go` shared with `deployment-installability`: hosted tenant runtime rollout is both a Pulse Cloud runtime contract boundary and a deployment-installability release-rollout boundary.
     Hosted tenant runtime reconciliation must treat a registered tenant with
     preserved tenant data but no live Docker runtime as a recoverable managed
