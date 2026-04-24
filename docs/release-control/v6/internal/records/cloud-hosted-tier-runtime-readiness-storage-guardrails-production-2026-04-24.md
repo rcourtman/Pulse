@@ -159,9 +159,29 @@ tenant/account rows were removed, the managed runtime container and
 `CP_PROOF_TENANT_MAX_AGE` was tightened to `1s` so future proof residue is
 surfaced by `pulse-control-plane cloud audit` almost immediately.
 
+## Mobile Approval Proof Residue Recheck
+
+A later same-day mobile approval proof left one additional disposable proof
+workspace:
+
+- Account: `a_ZTYQ41MVYG`
+- Workspace: `t-KAQ6WKJX8V`
+
+The account display name identified the state as
+`Pulse Mobile GA Proof 20260424 Approval`. The recurring audit failed the
+baseline with `proof_tenant_stale_count=1` and
+`proof_account_stale_count=1`, proving the tightened proof-residue gate now
+catches this class of drift.
+
+The tenant registry was backed up to
+`/root/tenants-pre-ga-mobile-proof-approval-cleanup-20260424T135425Z.db`, the
+proof tenant/account rows were removed, the managed runtime container and
+`/data/tenants/t-KAQ6WKJX8V` directory were removed, and the audit returned to
+the empty hosted-customer baseline.
+
 ## Final Audit
 
-The final production audit after the corrected canary cleanup passed:
+The final production audit after proof-residue cleanup passed:
 
 ```text
 audit_ok=true
@@ -174,13 +194,13 @@ docker_managed_unhealthy=0
 storage_guardrails_enabled=true
 storage_ok=true
 storage_root_status=ok
-storage_root_available_bytes=151278604288
+storage_root_available_bytes=151212212224
 storage_root_min_available_bytes=10737418240
 storage_data_status=ok
-storage_data_available_bytes=151278604288
+storage_data_available_bytes=151212212224
 storage_data_min_available_bytes=5368709120
 storage_docker_status=ok
-storage_docker_available_bytes=151278604288
+storage_docker_available_bytes=151212212224
 storage_docker_min_available_bytes=10737418240
 docker_build_cache_status=ok
 docker_build_cache_total_bytes=0
@@ -194,8 +214,8 @@ Host and Docker state at the same point:
 
 ```text
 /dev/vda1       154G   14G  141G   9% /
-Images          12        2         6.851GB   2.377GB reclaimable
-Containers      2         2         40.96kB   0B reclaimable
+Images          12        2         6.882GB   2.407GB reclaimable
+Containers      2         2         30.98MB   0B reclaimable
 Local Volumes   3         1         212.4MB   212.4MB reclaimable
 Build Cache     0         0         0B        0B
 ```
@@ -207,20 +227,46 @@ pulse-cloud-control-plane-1 pulse-control-plane:ga-audit-5fd645630 Up
 pulse-cloud-traefik-1 a9890c898f37 Up
 ```
 
+## Recurring Audit Monitor
+
+The live host now has a recurring GA audit monitor installed:
+
+- Script: `/opt/pulse-cloud/cloud-audit-monitor.sh`
+- Unit: `/etc/systemd/system/pulse-cloud-audit.service`
+- Timer: `/etc/systemd/system/pulse-cloud-audit.timer`
+- Latest log: `/var/log/pulse-cloud-audit/latest.log`
+- Status file: `/var/lib/pulse-cloud-audit/status.env`
+- Prometheus textfile metric:
+  `/var/lib/node_exporter/textfile_collector/pulse_cloud_audit.prom`
+- Managed source:
+  `pulse-pro:ops/pulse-cloud/audit/`
+
+The timer runs every five minutes after boot and fails
+`pulse-cloud-audit.service` if `pulse-control-plane cloud audit` fails or does
+not print `audit_ok=true`.
+
+Live verification after installing the managed monitor returned:
+
+```text
+Result=success
+ExecMainStatus=0
+PULSE_CLOUD_AUDIT_STATUS=ok
+PULSE_CLOUD_AUDIT_EXIT_CODE=0
+PULSE_CLOUD_AUDIT_AUDIT_OK=true
+pulse_cloud_audit_success 1
+pulse_cloud_audit_exit_code 0
+```
+
 ## Conclusion
 
 `cloud-hosted-tier-runtime-readiness` can be treated as `passed` for the current
 GA multi-tenant scope. The previous storage exhaustion blocker is no longer only
 manually cleaned up: hosted tenant provisioning and runtime rollout now have
-production admission guardrails, the live audit command proves the storage,
-stale-proof-tenant, stale-proof-account, and orphan-paid-entitlement floor, and a
-fresh external MSP canary passed create, list, portal, detail, delete, and
-cleanup verification on the live public control plane.
+production admission guardrails, the recurring live audit monitor proves the
+storage, stale-proof-tenant, stale-proof-account, and orphan-paid-entitlement
+floor, and a fresh external MSP canary passed create, list, portal, detail,
+delete, and cleanup verification on the live public control plane.
 
 The correct GA baseline for Pulse Cloud today is empty of hosted customer
 tenants. As of this record, that baseline is true in the registry, Docker, and
 `/data/tenants`.
-
-The remaining operational follow-up is to wire the audit command into recurring
-production monitoring/alerting so drift is surfaced before a human asks for a
-GA proof again.

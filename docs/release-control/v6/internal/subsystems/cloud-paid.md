@@ -109,6 +109,7 @@ cloud-specific enforcement rules.
 86. `internal/cloudcp/handoff/handler.go`, `internal/cloudcp/handoff/handoff.go`
 87. `internal/cloudcp/stripe/grace_enforcer.go`, `internal/cloudcp/stripe/helpers.go`, `internal/cloudcp/stripe/reconciler.go`, `internal/cloudcp/stripe/webhook.go`
 88. `internal/hosted/hosted_metrics.go`, `internal/hosted/reaper.go`
+89. `pulse-pro:ops/pulse-cloud/audit/`
 
 ## Shared Boundaries
 
@@ -148,6 +149,10 @@ cloud-specific enforcement rules.
    The same cloud audit contract must fail on stale proof/canary account rows
    and paid hosted entitlements whose tenant rows are missing, because either
    residue can recreate or mask hosted runtime state after a cleanup.
+   The live production host must run that cloud audit through the private
+   Pulse Pro operations bundle on a recurring systemd timer, write durable
+   status/log output, and emit Prometheus textfile metrics so a clean GA
+   baseline is continuously monitored rather than manually rediscovered.
 10. `internal/cloudcp/tenant_runtime_rollout.go` shared with `deployment-installability`: hosted tenant runtime rollout is both a Pulse Cloud runtime contract boundary and a deployment-installability release-rollout boundary.
     Hosted tenant runtime reconciliation must treat a registered tenant with
     preserved tenant data but no live Docker runtime as a recoverable managed
