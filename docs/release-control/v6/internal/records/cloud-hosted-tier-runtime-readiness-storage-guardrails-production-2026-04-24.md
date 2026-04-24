@@ -257,6 +257,16 @@ pulse_cloud_audit_success 1
 pulse_cloud_audit_exit_code 0
 ```
 
+A later timer-fired run also succeeded without manual start:
+
+```text
+ExecMainStartTimestamp=Fri 2026-04-24 14:19:07 UTC
+ExecMainExitTimestamp=Fri 2026-04-24 14:19:08 UTC
+ExecMainStatus=0
+PULSE_CLOUD_AUDIT_CHECKED_AT=2026-04-24T14:19:07Z
+pulse_cloud_audit_success 1
+```
+
 ## Conclusion
 
 `cloud-hosted-tier-runtime-readiness` can be treated as `passed` for the current
