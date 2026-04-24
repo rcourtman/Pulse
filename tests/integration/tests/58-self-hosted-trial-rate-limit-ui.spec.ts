@@ -4,20 +4,40 @@ import { ensureAuthenticated } from './helpers';
 const FREE_TRIAL_ELIGIBLE_ENTITLEMENTS = {
   capabilities: [],
   limits: [],
-  subscription_state: 'expired',
+  subscription_state: 'active',
   upgrade_reasons: [],
   tier: 'free',
   trial_eligible: true,
 };
 
 test.describe.serial('Self-hosted trial rate-limit UI', () => {
-  test('shows Retry-After guidance on the Pulse Pro trial CTA', async ({ page }, testInfo) => {
+  test('shows Retry-After guidance on Pro feature-gate trial CTAs', async ({ page }, testInfo) => {
     test.skip(
       testInfo.project.name.startsWith('mobile-'),
-      'Desktop-only plans coverage',
+      'Desktop-only feature-gate coverage',
     );
 
     await ensureAuthenticated(page);
+
+    await page.route('**/api/license/runtime-capabilities', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          capabilities: [],
+          limits: [],
+          max_history_days: 7,
+        }),
+      });
+    });
+
+    await page.route('**/api/license/commercial-posture', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(FREE_TRIAL_ELIGIBLE_ENTITLEMENTS),
+      });
+    });
 
     await page.route('**/api/license/entitlements', async (route) => {
       await route.fulfill({
@@ -44,10 +64,10 @@ test.describe.serial('Self-hosted trial rate-limit UI', () => {
       });
     });
 
-    await page.goto('/settings/system/billing');
-    await expect(page.getByRole('heading', { name: 'Plans & Activation' }).first()).toBeVisible();
+    await page.goto('/settings/security-roles');
+    await expect(page.getByRole('heading', { name: 'Roles' }).first()).toBeVisible();
 
-    const startTrialButton = page.getByRole('button', { name: /start 14-day pro trial/i });
+    const startTrialButton = page.getByRole('button', { name: /start free trial/i });
     await expect(startTrialButton).toBeVisible();
     await startTrialButton.click();
 

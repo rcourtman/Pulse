@@ -52,6 +52,9 @@ test.describe.serial('Trial signup return flow', () => {
       pre.trial_eligible,
       'Expected trial_eligible=true before test.',
     ).toBe(true);
+    expect(pre.tier).toBe('free');
+    expect(pre.valid ?? false).toBe(false);
+    expect(pre.is_lifetime ?? false).toBe(false);
 
     // Start hosted trial via API.
     const startRes = await apiRequest(page, '/api/license/trial/start', {
@@ -71,19 +74,19 @@ test.describe.serial('Trial signup return flow', () => {
       expectTrialRateLimited(startPayload, startRetryAfterHeader);
     }
 
-    // Verify entitlements remain unchanged until the hosted flow returns.
+    // Verify commercial entitlements remain unchanged until the hosted flow returns.
     const postRes = await apiRequest(page, '/api/license/entitlements');
     expect(postRes.ok(), `entitlements post-check failed: HTTP ${postRes.status()}`).toBeTruthy();
     const post = (await postRes.json()) as EntitlementPayload;
-    expect(post.subscription_state).toBe('expired');
-    expect(post.tier).toBe('free');
-    expect(post.valid).toBe(false);
-    expect(post.is_lifetime ?? false).toBe(false);
+    expect(post.subscription_state).toBe(pre.subscription_state);
+    expect(post.tier).toBe(pre.tier);
+    expect(post.valid ?? false).toBe(pre.valid ?? false);
+    expect(post.is_lifetime ?? false).toBe(pre.is_lifetime ?? false);
+    expect(post.trial_days_remaining ?? 0).toBe(pre.trial_days_remaining ?? 0);
     expect(post.trial_eligible).toBe(true);
 
     // Verify UI still reflects the unactivated local state.
-    await page.goto('/settings');
-    await page.getByRole('button', { name: /pulse pro/i }).first().click();
+    await page.goto('/settings/system/billing');
     await expect(page.getByRole('heading', { name: 'Plans & Activation' }).first()).toBeVisible();
     await expect(page.getByText(/No Pro license is active/i)).toBeVisible();
 
