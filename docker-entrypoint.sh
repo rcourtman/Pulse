@@ -19,6 +19,10 @@ is_immutable_ownership_path() {
     return 1
 }
 
+path_owner() {
+    stat -c '%u:%g' "$1" 2>/dev/null || stat -f '%u:%g' "$1" 2>/dev/null || echo ""
+}
+
 chown_tree_skipping_immutable_paths() {
     owner="$1"
     root="$2"
@@ -43,6 +47,24 @@ chown_tree_skipping_immutable_paths() {
     chown "$owner" "$root"
 }
 
+chown_tree_if_owner_mismatch() {
+    owner="$1"
+    uid="$2"
+    gid="$3"
+    root="$4"
+
+    if [ ! -e "$root" ]; then
+        return 0
+    fi
+
+    current_owner=$(path_owner "$root")
+    if [ "$current_owner" = "$uid:$gid" ]; then
+        return 0
+    fi
+
+    chown -R "$owner" "$root"
+}
+
 # Only adjust permissions if running as root
 if [ "$(id -u)" = "0" ]; then
     echo "Starting with UID: $PUID, GID: $PGID"
@@ -50,8 +72,7 @@ if [ "$(id -u)" = "0" ]; then
     # If PUID is 0 (root), don't create a new user, just run as root
     if [ "$PUID" = "0" ]; then
         echo "Running as root user"
-        # Fix ownership to root
-        chown -R root:root /data /app /opt/pulse
+        chown_tree_if_owner_mismatch root:root 0 0 /data
         chown_tree_skipping_immutable_paths root:root /etc/pulse
         exec "$@"
     fi
@@ -71,8 +92,10 @@ if [ "$(id -u)" = "0" ]; then
         adduser -D -u "$PUID" -G pulse pulse
     fi
     
-    # Fix ownership of data directory
-    chown -R pulse:pulse /data /app /opt/pulse
+    # Only mutable data paths are recursively fixed at startup. Immutable image
+    # paths such as /app and /opt/pulse are owned during the image build; chowning
+    # them here causes overlayfs copy-up for every tenant container.
+    chown_tree_if_owner_mismatch pulse:pulse "$PUID" "$PGID" /data
     chown_tree_skipping_immutable_paths pulse:pulse /etc/pulse
     
     # Switch to pulse user

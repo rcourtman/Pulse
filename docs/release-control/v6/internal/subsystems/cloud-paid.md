@@ -1623,6 +1623,11 @@ control plane may bind-mount billing and handoff files into `/etc/pulse` as
 read-only inputs, but runtime startup ownership repair must treat those paths
 as immutable and skip `chown` attempts against them instead of aborting tenant
 provisioning.
+That startup repair boundary also treats image-owned runtime paths as
+immutable. The container entrypoint may repair writable tenant data paths, but
+it must not recursively `chown` built image paths such as `/app` or
+`/opt/pulse`, because doing so copy-ups the runtime image into every hosted
+tenant writable layer and turns fleet reconciliation into host-disk pressure.
 That same immutable-file boundary now also owns write-time runtime ownership:
 control-plane provisioning and later billing-state rewrites must leave
 `billing.json`, `secrets/handoff.key`, and `.cloud_handoff_key` readable by

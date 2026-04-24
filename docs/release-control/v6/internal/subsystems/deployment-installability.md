@@ -545,6 +545,10 @@ batch-reconcile path that preserves each tenant runtime's current image line,
 supports dry-run planning before mutation, and converges existing hosted
 tenants onto the canonical runtime contract without relying on ad hoc host
 scripts or one-off manual tenant loops.
+That same hosted runtime container boundary owns startup ownership repair:
+entrypoints may repair writable runtime data paths, but must not recursively
+`chown` immutable image paths such as `/app` or `/opt/pulse`, because overlayfs
+copy-up makes every tenant recreate consume image-sized writable disk.
 That same rule applies to live runtime behavior too: config loading and reload
 watching may not treat `mock.env` as a parallel primary-path control surface.
 Supported mock-mode runtime state must come from the canonical `.env` contract,

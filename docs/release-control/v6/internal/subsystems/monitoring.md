@@ -448,6 +448,10 @@ boundary. Hosted or managed tenant bootstrap changes must preserve safe startup
 when immutable read-only mounts are layered into `/etc/pulse`; the entrypoint
 may not reintroduce ownership mutation against those read-only files during
 container boot.
+That same startup path must avoid recursive ownership mutation of image-owned
+runtime directories such as `/app` and `/opt/pulse`; those paths are build-time
+artifacts, and copy-up into per-container writable layers is a monitoring and
+host-health regression, not a valid runtime repair.
 That same monitoring boundary now also owns Docker Swarm runtime truth at the
 collection seam. `internal/dockeragent/swarm.go` is the canonical manager-side
 filter for live Swarm services and tasks, so monitoring consumers do not ingest

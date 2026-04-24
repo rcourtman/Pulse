@@ -102,6 +102,60 @@ chown_tree_skipping_immutable_paths pulse:pulse "$root"
 	}
 }
 
+func TestDockerEntrypointDoesNotChownAlreadyOwnedTree(t *testing.T) {
+	repoRoot := repoRoot(t)
+	entrypointPath := filepath.Join(repoRoot, "docker-entrypoint.sh")
+
+	entrypoint, err := os.ReadFile(entrypointPath)
+	if err != nil {
+		t.Fatalf("read docker-entrypoint.sh: %v", err)
+	}
+
+	const marker = "# Only adjust permissions if running as root"
+	prefix, _, found := strings.Cut(string(entrypoint), marker)
+	if !found {
+		t.Fatalf("docker-entrypoint.sh missing marker %q", marker)
+	}
+
+	root := t.TempDir()
+	binDir := filepath.Join(t.TempDir(), "bin")
+	if err := os.MkdirAll(binDir, 0o755); err != nil {
+		t.Fatalf("mkdir bin dir: %v", err)
+	}
+	chownLog := filepath.Join(t.TempDir(), "chown.log")
+	chownStub := filepath.Join(binDir, "chown")
+	chownScript := `#!/bin/sh
+set -eu
+printf '%s\n' "$*" >> "$CHOWN_LOG"
+exit 0
+`
+	if err := os.WriteFile(chownStub, []byte(chownScript), 0o755); err != nil {
+		t.Fatalf("write chown stub: %v", err)
+	}
+
+	shell := prefix + `
+set -eu
+root="` + root + `"
+uid="$(id -u)"
+gid="$(id -g)"
+export CHOWN_LOG="` + chownLog + `"
+export PATH="` + binDir + `:$PATH"
+chown_tree_if_owner_mismatch pulse:pulse "$uid" "$gid" "$root"
+`
+
+	cmd := exec.Command("sh", "-c", shell)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("run helper: %v\n%s", err, out)
+	}
+
+	if logData, err := os.ReadFile(chownLog); err == nil && len(logData) > 0 {
+		t.Fatalf("already-owned tree was chowned:\n%s", logData)
+	} else if err != nil && !os.IsNotExist(err) {
+		t.Fatalf("read chown log: %v", err)
+	}
+}
+
 func repoRoot(t *testing.T) string {
 	t.Helper()
 
