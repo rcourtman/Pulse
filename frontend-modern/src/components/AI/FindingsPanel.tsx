@@ -237,18 +237,18 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
     const snapshotFindingIds = new Set(props.filterFindingIds);
     return allPatrolFindings().filter((finding) => snapshotFindingIds.has(finding.id));
   });
-  const useRunSnapshotScopedControls = createMemo(
-    () => props.runSnapshot !== undefined,
-  );
+  const useRunSnapshotScopedControls = createMemo(() => props.runSnapshot !== undefined);
   const scopedNeedsAttentionCount = createMemo(() => {
     const attentionIds = new Set(aiIntelligenceStore.findingsNeedingAttention.map((f) => f.id));
-    return runSnapshotScopedPatrolFindings().filter((finding) => attentionIds.has(finding.id)).length;
+    return runSnapshotScopedPatrolFindings().filter((finding) => attentionIds.has(finding.id))
+      .length;
   });
   const scopedPendingApprovalCount = createMemo(() => {
     const approvalIds = new Set(
       aiIntelligenceStore.findingsWithPendingApprovals.map((finding) => finding.id),
     );
-    return runSnapshotScopedPatrolFindings().filter((finding) => approvalIds.has(finding.id)).length;
+    return runSnapshotScopedPatrolFindings().filter((finding) => approvalIds.has(finding.id))
+      .length;
   });
   const filterCounts = createMemo(() => ({
     needsAttentionCount: useRunSnapshotScopedControls()
@@ -256,7 +256,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
       : aiIntelligenceStore.needsAttentionCount,
     pendingApprovalCount: useRunSnapshotScopedControls()
       ? scopedPendingApprovalCount()
-      : aiIntelligenceStore.pendingApprovalCount,
+      : aiIntelligenceStore.patrolPendingApprovalCount,
   }));
   const patrolFindings = createMemo(() =>
     filteredFindings().filter(
@@ -470,250 +470,252 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
 
     return (
       <div
-      id={`finding-${finding.id}`}
-      class={`p-3 cursor-pointer transition-colors ${
-        finding.status === 'active'
-          ? finding.acknowledgedAt
-            ? 'opacity-60 hover:opacity-80 bg-surface-alt'
-            : 'hover:bg-surface-hover'
-          : 'opacity-60 bg-surface-alt hover:opacity-80'
-      }`}
-      onClick={() => {
-        if (expandedId() === finding.id) {
-          setExpandedId(null);
-        } else {
-          setExpandedId(finding.id);
-        }
-        props.onFindingClick?.(finding);
-      }}
-    >
-      {/* Finding header */}
-      <div class="flex items-start justify-between gap-2">
-        <div class="flex-1 min-w-0">
-          <div class="flex items-center gap-2 flex-wrap">
-            {/* Status badge for non-active findings */}
-            <Show when={finding.status !== 'active'}>
+        id={`finding-${finding.id}`}
+        class={`p-3 cursor-pointer transition-colors ${
+          finding.status === 'active'
+            ? finding.acknowledgedAt
+              ? 'opacity-60 hover:opacity-80 bg-surface-alt'
+              : 'hover:bg-surface-hover'
+            : 'opacity-60 bg-surface-alt hover:opacity-80'
+        }`}
+        onClick={() => {
+          if (expandedId() === finding.id) {
+            setExpandedId(null);
+          } else {
+            setExpandedId(finding.id);
+          }
+          props.onFindingClick?.(finding);
+        }}
+      >
+        {/* Finding header */}
+        <div class="flex items-start justify-between gap-2">
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2 flex-wrap">
+              {/* Status badge for non-active findings */}
+              <Show when={finding.status !== 'active'}>
+                <span
+                  class={`px-1.5 py-0.5 border text-[10px] font-medium rounded ${getFindingStatusBadgeClasses(finding.status)}`}
+                >
+                  {getFindingStatusLabel(finding.status)}
+                </span>
+              </Show>
+              {/* Source badge - only show when requested */}
+              <Show when={showSourceBadge}>
+                <span
+                  class={`px-1.5 py-0.5 border text-[10px] font-medium rounded ${getFindingSourceBadgeClasses(finding.source)}`}
+                >
+                  {getFindingSourceLabel(finding.source)}
+                </span>
+              </Show>
+              {/* Severity badge */}
               <span
-                class={`px-1.5 py-0.5 border text-[10px] font-medium rounded ${getFindingStatusBadgeClasses(finding.status)}`}
+                class={`px-1.5 py-0.5 border text-[10px] font-medium rounded ${severityPresentation.uppercase ? 'uppercase' : ''} ${severityPresentation.badgeClasses}`}
               >
-                {getFindingStatusLabel(finding.status)}
+                {severityPresentation.label}
               </span>
-            </Show>
-            {/* Source badge - only show when requested */}
-            <Show when={showSourceBadge}>
-              <span
-                class={`px-1.5 py-0.5 border text-[10px] font-medium rounded ${getFindingSourceBadgeClasses(finding.source)}`}
-              >
-                {getFindingSourceLabel(finding.source)}
-              </span>
-            </Show>
-            {/* Severity badge */}
-            <span
-              class={`px-1.5 py-0.5 border text-[10px] font-medium rounded ${severityPresentation.uppercase ? 'uppercase' : ''} ${severityPresentation.badgeClasses}`}
-            >
-              {severityPresentation.label}
-            </span>
-            {/* Alert-triggered badge */}
-            <Show when={hasTriggeringAlert(finding)}>
-              <span
-                class="px-1.5 py-0.5 border text-[10px] font-medium rounded border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-900 text-amber-700 dark:text-amber-300"
-                title={
-                  finding.alertType
-                    ? `Alert: ${finding.alertType}`
-                    : `Alert Identifier: ${getFindingAlertIdentifier(finding)}`
+              {/* Alert-triggered badge */}
+              <Show when={hasTriggeringAlert(finding)}>
+                <span
+                  class="px-1.5 py-0.5 border text-[10px] font-medium rounded border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-900 text-amber-700 dark:text-amber-300"
+                  title={
+                    finding.alertType
+                      ? `Alert: ${finding.alertType}`
+                      : `Alert Identifier: ${getFindingAlertIdentifier(finding)}`
+                  }
+                >
+                  Alert-triggered
+                </span>
+              </Show>
+              <Show when={finding.acknowledgedAt && finding.status === 'active'}>
+                <span class="px-1.5 py-0.5 border text-[10px] font-medium rounded border-border bg-surface-hover text-muted">
+                  Acknowledged
+                </span>
+              </Show>
+              <Show
+                when={
+                  finding.status === 'active' &&
+                  finding.loopState &&
+                  !(finding.acknowledgedAt && finding.loopState === 'detected') &&
+                  !finding.investigationStatus &&
+                  !finding.investigationOutcome
                 }
               >
-                Alert-triggered
-              </span>
-            </Show>
-            <Show when={finding.acknowledgedAt && finding.status === 'active'}>
-              <span class="px-1.5 py-0.5 border text-[10px] font-medium rounded border-border bg-surface-hover text-muted">
-                Acknowledged
-              </span>
-            </Show>
-            <Show
-              when={
-                finding.status === 'active' &&
-                finding.loopState &&
-                !(finding.acknowledgedAt && finding.loopState === 'detected') &&
-                !finding.investigationStatus &&
-                !finding.investigationOutcome
-              }
-            >
-              <span
-                class={`px-1.5 py-0.5 border text-[10px] font-medium rounded ${getFindingLoopStateBadgeClasses(finding.loopState!)}`}
-                title={`Patrol loop: ${formatFindingLoopState(finding.loopState!)}`}
+                <span
+                  class={`px-1.5 py-0.5 border text-[10px] font-medium rounded ${getFindingLoopStateBadgeClasses(finding.loopState!)}`}
+                  title={`Patrol loop: ${formatFindingLoopState(finding.loopState!)}`}
+                >
+                  {formatFindingLoopState(finding.loopState!)}
+                </span>
+              </Show>
+              <Show when={isOutOfScope(finding)}>
+                <span
+                  class="px-1.5 py-0.5 border text-[10px] font-medium rounded border-amber-300 bg-amber-100 text-amber-900 dark:border-amber-800 dark:bg-amber-900 dark:text-amber-100"
+                  title="This finding references a resource outside the selected run scope."
+                >
+                  Out of scope
+                </span>
+              </Show>
+              {/* Investigation status badge — only when no outcome badge will show */}
+              <Show
+                when={
+                  finding.investigationStatus &&
+                  !(
+                    finding.investigationOutcome &&
+                    finding.investigationStatus !== 'running' &&
+                    finding.investigationStatus !== 'pending'
+                  )
+                }
               >
-                {formatFindingLoopState(finding.loopState!)}
-              </span>
-            </Show>
-            <Show when={isOutOfScope(finding)}>
-              <span
-                class="px-1.5 py-0.5 border text-[10px] font-medium rounded border-amber-300 bg-amber-100 text-amber-900 dark:border-amber-800 dark:bg-amber-900 dark:text-amber-100"
-                title="This finding references a resource outside the selected run scope."
-              >
-                Out of scope
-              </span>
-            </Show>
-            {/* Investigation status badge — only when no outcome badge will show */}
-            <Show
-              when={
-                finding.investigationStatus &&
-                !(
+                <span
+                  class={`px-1.5 py-0.5 border text-[10px] font-medium rounded flex items-center gap-1 ${getInvestigationStatusBadgeClasses(finding.investigationStatus!)}`}
+                  title={`Investigation: ${getInvestigationStatusLabel(finding.investigationStatus!)}`}
+                >
+                  <Show
+                    when={
+                      finding.investigationStatus === 'running' ||
+                      finding.investigationStatus === 'pending'
+                    }
+                  >
+                    <span
+                      class={`h-2 w-2 rounded-full ${finding.investigationStatus === 'running' ? 'border border-current border-t-transparent animate-spin' : 'bg-current animate-pulse'}`}
+                    />
+                  </Show>
+                  {getInvestigationStatusLabel(finding.investigationStatus!)}
+                </span>
+              </Show>
+              {/* Investigation outcome badge — replaces status badge when outcome is known */}
+              <Show
+                when={
                   finding.investigationOutcome &&
                   finding.investigationStatus !== 'running' &&
                   finding.investigationStatus !== 'pending'
-                )
-              }
-            >
-              <span
-                class={`px-1.5 py-0.5 border text-[10px] font-medium rounded flex items-center gap-1 ${getInvestigationStatusBadgeClasses(finding.investigationStatus!)}`}
-                title={`Investigation: ${getInvestigationStatusLabel(finding.investigationStatus!)}`}
+                }
               >
-                <Show
-                  when={
-                    finding.investigationStatus === 'running' ||
-                    finding.investigationStatus === 'pending'
-                  }
+                <span
+                  class={`px-1.5 py-0.5 border text-[10px] font-medium rounded ${getInvestigationOutcomeBadgeClasses(finding.investigationOutcome!)}`}
                 >
-                  <span
-                    class={`h-2 w-2 rounded-full ${finding.investigationStatus === 'running' ? 'border border-current border-t-transparent animate-spin' : 'bg-current animate-pulse'}`}
-                  />
-                </Show>
-                {getInvestigationStatusLabel(finding.investigationStatus!)}
-              </span>
-            </Show>
-            {/* Investigation outcome badge — replaces status badge when outcome is known */}
-            <Show
-              when={
-                finding.investigationOutcome &&
-                finding.investigationStatus !== 'running' &&
-                finding.investigationStatus !== 'pending'
-              }
-            >
+                  {getInvestigationOutcomeLabel(finding.investigationOutcome!)}
+                </span>
+              </Show>
+              {/* Title */}
               <span
-                class={`px-1.5 py-0.5 border text-[10px] font-medium rounded ${getInvestigationOutcomeBadgeClasses(finding.investigationOutcome!)}`}
+                class={`font-medium text-sm truncate ${
+                  finding.status === 'active' ? 'text-base-content' : 'text-muted'
+                }`}
               >
-                {getInvestigationOutcomeLabel(finding.investigationOutcome!)}
+                {title.label}
               </span>
+            </div>
+            {/* Resource info */}
+            <div class="text-xs text-muted mt-1">
+              {subject.label} - {recency.label} {formatTime(recency.timestamp)}
+              <Show when={finding.status === 'resolved' && finding.resolvedAt}>
+                <span class="ml-2 text-green-600 dark:text-green-400">
+                  {' · '}
+                  {getResolutionReason(finding)}
+                </span>
+              </Show>
+              <Show when={finding.dismissedReason}>
+                <span class="ml-2 text-muted">
+                  {' · '}({formatIdentifierLabel(finding.dismissedReason)})
+                </span>
+              </Show>
+              <Show when={finding.status === 'snoozed' && finding.snoozedUntil}>
+                <span class="ml-2 text-blue-500 dark:text-blue-400">
+                  {' · '}snoozed until {formatTime(finding.snoozedUntil!)}
+                </span>
+              </Show>
+              <Show when={finding.acknowledgedAt && finding.status === 'active'}>
+                <span class="ml-2 text-muted">
+                  {' · '}acknowledged {formatTime(finding.acknowledgedAt!)}
+                </span>
+              </Show>
+              <Show when={finding.status === 'active' && finding.lastInvestigatedAt}>
+                <span class="ml-2 text-muted">
+                  {' · '}last investigated {formatTime(finding.lastInvestigatedAt!)}
+                </span>
+              </Show>
+            </div>
+          </div>
+          {/* Actions */}
+          <div class="flex items-center gap-1 shrink-0">
+            <Show when={finding.status === 'active'}>
+              <Show when={manualControls.acknowledge && !finding.acknowledgedAt}>
+                <button
+                  type="button"
+                  onClick={(e) => handleAcknowledge(finding, e)}
+                  class="p-1 text-slate-400 hover:text-muted"
+                  title="Acknowledge"
+                  disabled={actionLoading() === finding.id}
+                >
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M9 12l2 2 4-4"
+                    />
+                  </svg>
+                </button>
+              </Show>
+              <Show when={manualControls.snooze}>
+                <button
+                  type="button"
+                  onClick={(e) => handleSnooze(finding, 24, e)}
+                  class="p-1 text-slate-400 hover:text-muted"
+                  title="Snooze 24h"
+                  disabled={actionLoading() === finding.id}
+                >
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                    />
+                  </svg>
+                </button>
+              </Show>
+              <Show when={manualControls.dismiss}>
+                <button
+                  type="button"
+                  onClick={(e) => handleStartDismiss(finding, 'will_fix_later', e)}
+                  class="p-1 text-slate-400 hover:text-muted"
+                  title="Dismiss"
+                  disabled={actionLoading() === finding.id}
+                >
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M6 18L18 6M6 6l12 12"
+                    />
+                  </svg>
+                </button>
+              </Show>
             </Show>
-            {/* Title */}
-            <span
-              class={`font-medium text-sm truncate ${
-                finding.status === 'active' ? 'text-base-content' : 'text-muted'
-              }`}
+            {/* Expand indicator */}
+            <svg
+              class={`w-4 h-4 text-slate-400 transition-transform ${expandedId() === finding.id ? 'rotate-180' : ''}`}
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
             >
-              {title.label}
-            </span>
-          </div>
-          {/* Resource info */}
-          <div class="text-xs text-muted mt-1">
-            {subject.label} - {recency.label} {formatTime(recency.timestamp)}
-            <Show when={finding.status === 'resolved' && finding.resolvedAt}>
-              <span class="ml-2 text-green-600 dark:text-green-400">
-                {' · '}
-                {getResolutionReason(finding)}
-              </span>
-            </Show>
-            <Show when={finding.dismissedReason}>
-              <span class="ml-2 text-muted">
-                {' · '}({formatIdentifierLabel(finding.dismissedReason)})
-              </span>
-            </Show>
-            <Show when={finding.status === 'snoozed' && finding.snoozedUntil}>
-              <span class="ml-2 text-blue-500 dark:text-blue-400">
-                {' · '}snoozed until {formatTime(finding.snoozedUntil!)}
-              </span>
-            </Show>
-            <Show when={finding.acknowledgedAt && finding.status === 'active'}>
-              <span class="ml-2 text-muted">
-                {' · '}acknowledged {formatTime(finding.acknowledgedAt!)}
-              </span>
-            </Show>
-            <Show when={finding.status === 'active' && finding.lastInvestigatedAt}>
-              <span class="ml-2 text-muted">
-                {' · '}last investigated {formatTime(finding.lastInvestigatedAt!)}
-              </span>
-            </Show>
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M19 9l-7 7-7-7"
+              />
+            </svg>
           </div>
         </div>
-        {/* Actions */}
-        <div class="flex items-center gap-1 shrink-0">
-          <Show when={finding.status === 'active'}>
-            <Show when={manualControls.acknowledge && !finding.acknowledgedAt}>
-              <button
-                type="button"
-                onClick={(e) => handleAcknowledge(finding, e)}
-                class="p-1 text-slate-400 hover:text-muted"
-                title="Acknowledge"
-                disabled={actionLoading() === finding.id}
-              >
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M9 12l2 2 4-4"
-                  />
-                </svg>
-              </button>
-            </Show>
-            <Show when={manualControls.snooze}>
-              <button
-                type="button"
-                onClick={(e) => handleSnooze(finding, 24, e)}
-                class="p-1 text-slate-400 hover:text-muted"
-                title="Snooze 24h"
-                disabled={actionLoading() === finding.id}
-              >
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-                  />
-                </svg>
-              </button>
-            </Show>
-            <Show when={manualControls.dismiss}>
-              <button
-                type="button"
-                onClick={(e) => handleStartDismiss(finding, 'will_fix_later', e)}
-                class="p-1 text-slate-400 hover:text-muted"
-                title="Dismiss"
-                disabled={actionLoading() === finding.id}
-              >
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    d="M6 18L18 6M6 6l12 12"
-                  />
-                </svg>
-              </button>
-            </Show>
-          </Show>
-          {/* Expand indicator */}
-          <svg
-            class={`w-4 h-4 text-slate-400 transition-transform ${expandedId() === finding.id ? 'rotate-180' : ''}`}
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M19 9l-7 7-7-7"
-            />
-          </svg>
-        </div>
-      </div>
 
-      {/* Expanded content */}
-      <Show when={expandedId() === finding.id}>{renderExpandedContent(finding, surfaceLinks)}</Show>
+        {/* Expanded content */}
+        <Show when={expandedId() === finding.id}>
+          {renderExpandedContent(finding, surfaceLinks)}
+        </Show>
       </div>
     );
   };
@@ -758,132 +760,97 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
           </div>
         </Show>
         <Show when={hasTriggeringAlert(finding)}>
-        <div class="text-xs text-amber-700 dark:text-amber-300 mb-2">
-          Triggered by alert{finding.alertType ? ` (${finding.alertType})` : ''} • Identifier{' '}
-          {getFindingAlertIdentifier(finding)}
-        </div>
+          <div class="text-xs text-amber-700 dark:text-amber-300 mb-2">
+            Triggered by alert{finding.alertType ? ` (${finding.alertType})` : ''} • Identifier{' '}
+            {getFindingAlertIdentifier(finding)}
+          </div>
         </Show>
         <p class="text-sm text-muted">{finding.description}</p>
         <Show when={finding.recommendation}>
-        <p class="text-sm text-base-content mt-2">
-          <span class="font-medium">Recommendation:</span> {finding.recommendation}
-        </p>
+          <p class="text-sm text-base-content mt-2">
+            <span class="font-medium">Recommendation:</span> {finding.recommendation}
+          </p>
         </Show>
         <Show when={(finding.regressionCount || 0) > 0}>
-        <p class="text-xs text-amber-700 dark:text-amber-300 mt-2">
-          Regressions: {finding.regressionCount}
-          <Show when={finding.lastRegressionAt}>
-            {' '}
-            (last {formatRelativeTime(finding.lastRegressionAt)})
-          </Show>
-        </p>
+          <p class="text-xs text-amber-700 dark:text-amber-300 mt-2">
+            Regressions: {finding.regressionCount}
+            <Show when={finding.lastRegressionAt}>
+              {' '}
+              (last {formatRelativeTime(finding.lastRegressionAt)})
+            </Show>
+          </p>
         </Show>
 
-      <Show when={finding.lifecycle && finding.lifecycle.length > 0}>
-        <div class="mt-3 p-2 rounded border border-border bg-surface-alt">
-          <div class="text-xs font-medium text-base-content mb-2">Lifecycle</div>
-          <div class="space-y-1">
-            <For each={[...(finding.lifecycle || [])].slice(-6).reverse()}>
-              {(event) => (
-                <div class="text-xs text-muted flex items-start justify-between gap-2">
-                  <span class="truncate">
-                    <span class="font-medium text-base-content">
-                      {formatFindingLifecycleType(event.type)}
-                    </span>
-                    <Show when={event.message}>
-                      {' '}
-                      <span>{event.message}</span>
-                    </Show>
-                    <Show when={event.from && event.to}>
-                      {' '}
-                      <span class="text-muted">
-                        ({event.from} {'->'} {event.to})
+        <Show when={finding.lifecycle && finding.lifecycle.length > 0}>
+          <div class="mt-3 p-2 rounded border border-border bg-surface-alt">
+            <div class="text-xs font-medium text-base-content mb-2">Lifecycle</div>
+            <div class="space-y-1">
+              <For each={[...(finding.lifecycle || [])].slice(-6).reverse()}>
+                {(event) => (
+                  <div class="text-xs text-muted flex items-start justify-between gap-2">
+                    <span class="truncate">
+                      <span class="font-medium text-base-content">
+                        {formatFindingLifecycleType(event.type)}
                       </span>
-                    </Show>
-                  </span>
-                  <span class="shrink-0">{formatRelativeTime(event.at)}</span>
-                </div>
-              )}
-            </For>
+                      <Show when={event.message}>
+                        {' '}
+                        <span>{event.message}</span>
+                      </Show>
+                      <Show when={event.from && event.to}>
+                        {' '}
+                        <span class="text-muted">
+                          ({event.from} {'->'} {event.to})
+                        </span>
+                      </Show>
+                    </span>
+                    <span class="shrink-0">{formatRelativeTime(event.at)}</span>
+                  </div>
+                )}
+              </For>
+            </div>
           </div>
-        </div>
-      </Show>
+        </Show>
 
-      {/* User note display / editor */}
+        {/* User note display / editor */}
         <Show when={editingNoteId() === finding.id}>
-        <div
-          class="mt-3 p-2 rounded border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <textarea
-            class="w-full text-sm rounded border border-border bg-surface text-base-content px-2 py-1.5 resize-none focus:outline-none focus:ring-1 focus:ring-blue-500"
-            rows={3}
-            value={noteText()}
-            onInput={(e) => setNoteText(e.currentTarget.value)}
-            placeholder="Add context for Patrol (e.g., 'PBS server was decommissioned last week')"
-          />
-          <div class="flex gap-2 mt-2">
-            <button
-              type="button"
-              onClick={(e) => handleSaveNote(finding, e)}
-              class="px-3 py-1 text-xs font-medium rounded bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50"
-              disabled={actionLoading() === finding.id}
-            >
-              Save
-            </button>
-            <button
-              type="button"
-              onClick={handleCancelNote}
-              class="px-3 py-1 text-xs font-medium rounded border border-border hover:bg-surface-hover"
-            >
-              Cancel
-            </button>
+          <div
+            class="mt-3 p-2 rounded border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <textarea
+              class="w-full text-sm rounded border border-border bg-surface text-base-content px-2 py-1.5 resize-none focus:outline-none focus:ring-1 focus:ring-blue-500"
+              rows={3}
+              value={noteText()}
+              onInput={(e) => setNoteText(e.currentTarget.value)}
+              placeholder="Add context for Patrol (e.g., 'PBS server was decommissioned last week')"
+            />
+            <div class="flex gap-2 mt-2">
+              <button
+                type="button"
+                onClick={(e) => handleSaveNote(finding, e)}
+                class="px-3 py-1 text-xs font-medium rounded bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50"
+                disabled={actionLoading() === finding.id}
+              >
+                Save
+              </button>
+              <button
+                type="button"
+                onClick={handleCancelNote}
+                class="px-3 py-1 text-xs font-medium rounded border border-border hover:bg-surface-hover"
+              >
+                Cancel
+              </button>
+            </div>
           </div>
-        </div>
         </Show>
         <Show when={editingNoteId() !== finding.id && finding.userNote}>
-        <div class="mt-3 p-2 rounded border border-border bg-surface-alt flex items-start gap-2">
-          <svg
-            class="w-4 h-4 text-muted mt-0.5 flex-shrink-0"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"
-            />
-          </svg>
-          <p class="text-sm text-muted flex-1">{finding.userNote}</p>
-          <button
-            type="button"
-            onClick={(e) => handleStartEditNote(finding, e)}
-            class="p-1 hover:text-base-content flex-shrink-0"
-            title="Edit note"
-          >
-            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
-              />
-            </svg>
-          </button>
-        </div>
-        </Show>
-
-        {/* Add Note / Discuss with Assistant buttons */}
-        <div class="mt-3 flex flex-wrap gap-2 text-xs">
-          <Show when={editingNoteId() !== finding.id && !finding.userNote}>
-          <button
-            type="button"
-            onClick={(e) => handleStartEditNote(finding, e)}
-            class="px-2 py-1 rounded border border-border hover:bg-surface-hover flex items-center gap-1"
-          >
-            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div class="mt-3 p-2 rounded border border-border bg-surface-alt flex items-start gap-2">
+            <svg
+              class="w-4 h-4 text-muted mt-0.5 flex-shrink-0"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
               <path
                 stroke-linecap="round"
                 stroke-linejoin="round"
@@ -891,226 +858,215 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
                 d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"
               />
             </svg>
-            Add Note
-          </button>
+            <p class="text-sm text-muted flex-1">{finding.userNote}</p>
+            <button
+              type="button"
+              onClick={(e) => handleStartEditNote(finding, e)}
+              class="p-1 hover:text-base-content flex-shrink-0"
+              title="Edit note"
+            >
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
+                />
+              </svg>
+            </button>
+          </div>
+        </Show>
+
+        {/* Add Note / Discuss with Assistant buttons */}
+        <div class="mt-3 flex flex-wrap gap-2 text-xs">
+          <Show when={editingNoteId() !== finding.id && !finding.userNote}>
+            <button
+              type="button"
+              onClick={(e) => handleStartEditNote(finding, e)}
+              class="px-2 py-1 rounded border border-border hover:bg-surface-hover flex items-center gap-1"
+            >
+              <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"
+                />
+              </svg>
+              Add Note
+            </button>
           </Show>
           <button
-          type="button"
-          onClick={(e) => handleDiscussWithAssistant(finding, e)}
-          class="px-2 py-1 rounded bg-blue-50 text-blue-700 dark:bg-blue-900 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900 flex items-center gap-1 transition-colors"
-        >
-          <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
-            />
-          </svg>
-          Discuss with Assistant
+            type="button"
+            onClick={(e) => handleDiscussWithAssistant(finding, e)}
+            class="px-2 py-1 rounded bg-blue-50 text-blue-700 dark:bg-blue-900 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900 flex items-center gap-1 transition-colors"
+          >
+            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+              />
+            </svg>
+            Discuss with Assistant
           </button>
         </div>
 
         <Show when={finding.status === 'active'}>
-        <div class="mt-3 flex flex-wrap gap-2 text-xs">
-          <Show when={manualControls.acknowledge && !finding.acknowledgedAt}>
-            <button
-              type="button"
-              onClick={(e) => handleAcknowledge(finding, e)}
-              class="px-2 py-1 rounded border border-border hover:bg-surface-hover"
-              disabled={actionLoading() === finding.id}
-            >
-              Acknowledge
-            </button>
-          </Show>
-          <Show when={manualControls.snooze}>
-            <>
+          <div class="mt-3 flex flex-wrap gap-2 text-xs">
+            <Show when={manualControls.acknowledge && !finding.acknowledgedAt}>
               <button
                 type="button"
-                onClick={(e) => handleSnooze(finding, 1, e)}
+                onClick={(e) => handleAcknowledge(finding, e)}
                 class="px-2 py-1 rounded border border-border hover:bg-surface-hover"
                 disabled={actionLoading() === finding.id}
               >
-                Snooze 1h
+                Acknowledge
               </button>
-              <button
-                type="button"
-                onClick={(e) => handleSnooze(finding, 24, e)}
-                class="px-2 py-1 rounded border border-border hover:bg-surface-hover"
-                disabled={actionLoading() === finding.id}
-              >
-                Snooze 24h
-              </button>
-              <button
-                type="button"
-                onClick={(e) => handleSnooze(finding, 168, e)}
-                class="px-2 py-1 rounded border border-border hover:bg-surface-hover"
-                disabled={actionLoading() === finding.id}
-              >
-                Snooze 7d
-              </button>
-            </>
-          </Show>
-          <Show when={manualControls.dismiss}>
-            <>
-              <button
-                type="button"
-                onClick={(e) => handleStartDismiss(finding, 'not_an_issue', e)}
-                class="px-2 py-1 rounded border border-border text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900"
-                disabled={actionLoading() === finding.id}
-              >
-                Dismiss: Not an issue
-              </button>
-              <button
-                type="button"
-                onClick={(e) => handleStartDismiss(finding, 'expected_behavior', e)}
-                class="px-2 py-1 rounded border border-border hover:bg-surface-hover"
-                disabled={actionLoading() === finding.id}
-              >
-                Dismiss: Expected
-              </button>
-              <button
-                type="button"
-                onClick={(e) => handleStartDismiss(finding, 'will_fix_later', e)}
-                class="px-2 py-1 rounded border border-border hover:bg-surface-hover"
-                disabled={actionLoading() === finding.id}
-              >
-                Dismiss: Later
-              </button>
-            </>
-          </Show>
-        </div>
+            </Show>
+            <Show when={manualControls.snooze}>
+              <>
+                <button
+                  type="button"
+                  onClick={(e) => handleSnooze(finding, 1, e)}
+                  class="px-2 py-1 rounded border border-border hover:bg-surface-hover"
+                  disabled={actionLoading() === finding.id}
+                >
+                  Snooze 1h
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => handleSnooze(finding, 24, e)}
+                  class="px-2 py-1 rounded border border-border hover:bg-surface-hover"
+                  disabled={actionLoading() === finding.id}
+                >
+                  Snooze 24h
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => handleSnooze(finding, 168, e)}
+                  class="px-2 py-1 rounded border border-border hover:bg-surface-hover"
+                  disabled={actionLoading() === finding.id}
+                >
+                  Snooze 7d
+                </button>
+              </>
+            </Show>
+            <Show when={manualControls.dismiss}>
+              <>
+                <button
+                  type="button"
+                  onClick={(e) => handleStartDismiss(finding, 'not_an_issue', e)}
+                  class="px-2 py-1 rounded border border-border text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900"
+                  disabled={actionLoading() === finding.id}
+                >
+                  Dismiss: Not an issue
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => handleStartDismiss(finding, 'expected_behavior', e)}
+                  class="px-2 py-1 rounded border border-border hover:bg-surface-hover"
+                  disabled={actionLoading() === finding.id}
+                >
+                  Dismiss: Expected
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => handleStartDismiss(finding, 'will_fix_later', e)}
+                  class="px-2 py-1 rounded border border-border hover:bg-surface-hover"
+                  disabled={actionLoading() === finding.id}
+                >
+                  Dismiss: Later
+                </button>
+              </>
+            </Show>
+          </div>
         </Show>
         {/* Inline dismiss confirmation */}
         <Show when={dismissingId() === finding.id}>
-        <div class="mt-2 p-2 rounded border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900">
-          <div class="flex items-center gap-2 mb-1.5">
-            <span class="text-xs font-medium text-red-700 dark:text-red-300">
-              Dismiss as: {formatIdentifierLabel(dismissReason())}
-            </span>
+          <div class="mt-2 p-2 rounded border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900">
+            <div class="flex items-center gap-2 mb-1.5">
+              <span class="text-xs font-medium text-red-700 dark:text-red-300">
+                Dismiss as: {formatIdentifierLabel(dismissReason())}
+              </span>
+            </div>
+            <textarea
+              class="w-full text-xs px-2 py-1.5 rounded border border-border bg-surface text-base-content resize-none focus:outline-none focus:ring-1 focus:ring-red-400"
+              rows={2}
+              placeholder="Optional note (for learning context)..."
+              value={dismissNote()}
+              onInput={(e) => setDismissNote(e.currentTarget.value)}
+              onClick={(e) => e.stopPropagation()}
+            />
+            <div class="flex items-center gap-2 mt-1.5">
+              <button
+                type="button"
+                onClick={(e) => handleConfirmDismiss(finding.id, e)}
+                disabled={actionLoading() === finding.id}
+                class="px-2.5 py-1 text-xs font-medium text-white bg-red-600 hover:bg-red-700 disabled:bg-red-400 rounded transition-colors"
+              >
+                Confirm Dismiss
+              </button>
+              <button
+                type="button"
+                onClick={handleCancelDismiss}
+                class="px-2.5 py-1 text-xs font-medium text-muted hover:bg-surface-hover rounded transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
           </div>
-          <textarea
-            class="w-full text-xs px-2 py-1.5 rounded border border-border bg-surface text-base-content resize-none focus:outline-none focus:ring-1 focus:ring-red-400"
-            rows={2}
-            placeholder="Optional note (for learning context)..."
-            value={dismissNote()}
-            onInput={(e) => setDismissNote(e.currentTarget.value)}
-            onClick={(e) => e.stopPropagation()}
-          />
-          <div class="flex items-center gap-2 mt-1.5">
-            <button
-              type="button"
-              onClick={(e) => handleConfirmDismiss(finding.id, e)}
-              disabled={actionLoading() === finding.id}
-              class="px-2.5 py-1 text-xs font-medium text-white bg-red-600 hover:bg-red-700 disabled:bg-red-400 rounded transition-colors"
-            >
-              Confirm Dismiss
-            </button>
-            <button
-              type="button"
-              onClick={handleCancelDismiss}
-              class="px-2.5 py-1 text-xs font-medium text-muted hover:bg-surface-hover rounded transition-colors"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
         </Show>
         <Show when={finding.correlatedFindingIds && finding.correlatedFindingIds.length > 0}>
-        <div class="mt-2 text-xs text-muted">
-          Related findings: {finding.correlatedFindingIds?.length}
-        </div>
+          <div class="mt-2 text-xs text-muted">
+            Related findings: {finding.correlatedFindingIds?.length}
+          </div>
         </Show>
 
         {/* Inline Investigation Section (replaces drawer) */}
         <Show when={hasFindingInvestigationDetails(finding)}>
-        <InvestigationSection
-          findingId={finding.id}
-          investigationStatus={finding.investigationStatus}
-          investigationOutcome={finding.investigationOutcome}
-          investigationAttempts={finding.investigationAttempts}
-        />
+          <InvestigationSection
+            findingId={finding.id}
+            investigationStatus={finding.investigationStatus}
+            investigationOutcome={finding.investigationOutcome}
+            investigationAttempts={finding.investigationAttempts}
+          />
         </Show>
 
         {/* Inline Approval Section (replaces manual approval JSX) */}
         <Show
-        when={
-          finding.status === 'active' &&
-          (finding.investigationOutcome === 'fix_queued' ||
-            finding.investigationOutcome === 'fix_executed' ||
-            finding.investigationOutcome === 'fix_failed' ||
-            finding.investigationOutcome === 'fix_verified' ||
-            finding.investigationOutcome === 'fix_verification_failed' ||
-            finding.investigationOutcome === 'fix_verification_unknown')
-        }
+          when={
+            finding.status === 'active' &&
+            (finding.investigationOutcome === 'fix_queued' ||
+              finding.investigationOutcome === 'fix_executed' ||
+              finding.investigationOutcome === 'fix_failed' ||
+              finding.investigationOutcome === 'fix_verified' ||
+              finding.investigationOutcome === 'fix_verification_failed' ||
+              finding.investigationOutcome === 'fix_verification_unknown')
+          }
         >
-        <ApprovalSection
-          findingId={finding.id}
-          investigationOutcome={finding.investigationOutcome}
-          findingTitle={getFindingTitlePresentation(finding).label}
-          resourceName={finding.resourceName}
-          resourceType={finding.resourceType}
-          resourceId={finding.resourceId}
-        />
+          <ApprovalSection
+            findingId={finding.id}
+            investigationOutcome={finding.investigationOutcome}
+            findingTitle={getFindingTitlePresentation(finding).label}
+            resourceName={finding.resourceName}
+            resourceType={finding.resourceType}
+            resourceId={finding.resourceId}
+          />
         </Show>
 
         {/* Remediation Plan artifact (generated by Patrol and/or an investigation) */}
         <Show when={finding.status === 'active' && plansByFindingId().get(finding.id)}>
-        {(plan) => (
-          <div class="mt-3 pt-3 border-t border-border-subtle">
-            {(() => {
-              const planRisk = getApprovalRiskPresentation(plan().risk_level);
-              return (
-                <>
-                  <div class="flex items-center gap-2 mb-2">
-                    <svg
-                      class="w-4 h-4 text-green-600 dark:text-green-400"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        stroke-width="2"
-                        d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"
-                      />
-                    </svg>
-                    <span class="text-sm font-medium text-base-content">Remediation Plan</span>
-                    <span
-                      class={`px-1.5 py-0.5 text-[10px] font-medium rounded ${planRisk.badgeClass}`}
-                    >
-                      {planRisk.label} risk
-                    </span>
-                  </div>
-                  <div class="space-y-2">
-                    <For each={plan().steps}>
-                      {(step) => (
-                        <div class="flex items-start gap-2 text-sm">
-                          <span class="flex-shrink-0 w-5 h-5 flex items-center justify-center rounded-full bg-surface-hover text-xs font-medium text-muted">
-                            {step.order}
-                          </span>
-                          <div class="flex-1 min-w-0">
-                            <div class="text-base-content">{step.action}</div>
-                            <Show when={step.command}>
-                              <div class="mt-1 font-mono text-[11px] whitespace-pre-wrap break-words text-muted bg-surface-alt px-2 py-1 rounded">
-                                {step.command}
-                              </div>
-                            </Show>
-                          </div>
-                        </div>
-                      )}
-                    </For>
-                  </div>
-
-                  <div class="flex items-center gap-2 mt-3 pt-3 border-t border-border-subtle">
-                    <button
-                      type="button"
-                      onClick={(e) => handleOpenPlanInAssistant(finding, plan(), e)}
-                      class="flex-1 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded flex items-center justify-center gap-1.5"
-                    >
+          {(plan) => (
+            <div class="mt-3 pt-3 border-t border-border-subtle">
+              {(() => {
+                const planRisk = getApprovalRiskPresentation(plan().risk_level);
+                return (
+                  <>
+                    <div class="flex items-center gap-2 mb-2">
                       <svg
-                        class="w-3.5 h-3.5"
+                        class="w-4 h-4 text-green-600 dark:text-green-400"
                         fill="none"
                         stroke="currentColor"
                         viewBox="0 0 24 24"
@@ -1119,24 +1075,70 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
                           stroke-linecap="round"
                           stroke-linejoin="round"
                           stroke-width="2"
-                          d="M7 8h10M7 12h10M7 16h10"
+                          d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"
                         />
                       </svg>
-                      Open In Assistant
-                    </button>
-                    <button
-                      type="button"
-                      onClick={(e) => handleDismissPlan(plan(), e)}
-                      class="px-3 py-1.5 hover:bg-surface-hover text-muted text-xs font-medium rounded"
-                    >
-                      Dismiss
-                    </button>
-                  </div>
-                </>
-              );
-            })()}
-          </div>
-        )}
+                      <span class="text-sm font-medium text-base-content">Remediation Plan</span>
+                      <span
+                        class={`px-1.5 py-0.5 text-[10px] font-medium rounded ${planRisk.badgeClass}`}
+                      >
+                        {planRisk.label} risk
+                      </span>
+                    </div>
+                    <div class="space-y-2">
+                      <For each={plan().steps}>
+                        {(step) => (
+                          <div class="flex items-start gap-2 text-sm">
+                            <span class="flex-shrink-0 w-5 h-5 flex items-center justify-center rounded-full bg-surface-hover text-xs font-medium text-muted">
+                              {step.order}
+                            </span>
+                            <div class="flex-1 min-w-0">
+                              <div class="text-base-content">{step.action}</div>
+                              <Show when={step.command}>
+                                <div class="mt-1 font-mono text-[11px] whitespace-pre-wrap break-words text-muted bg-surface-alt px-2 py-1 rounded">
+                                  {step.command}
+                                </div>
+                              </Show>
+                            </div>
+                          </div>
+                        )}
+                      </For>
+                    </div>
+
+                    <div class="flex items-center gap-2 mt-3 pt-3 border-t border-border-subtle">
+                      <button
+                        type="button"
+                        onClick={(e) => handleOpenPlanInAssistant(finding, plan(), e)}
+                        class="flex-1 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded flex items-center justify-center gap-1.5"
+                      >
+                        <svg
+                          class="w-3.5 h-3.5"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M7 8h10M7 12h10M7 16h10"
+                          />
+                        </svg>
+                        Open In Assistant
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => handleDismissPlan(plan(), e)}
+                        class="px-3 py-1.5 hover:bg-surface-hover text-muted text-xs font-medium rounded"
+                      >
+                        Dismiss
+                      </button>
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
+          )}
         </Show>
       </div>
     );
@@ -1157,11 +1159,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
                     type="button"
                     onClick={() => setFilter(option.value)}
                     class={`px-2 py-1 border ${
-                      isFirst()
-                        ? 'rounded-l border-r-0'
-                        : isLast()
-                          ? 'rounded-r'
-                          : 'border-r-0'
+                      isFirst() ? 'rounded-l border-r-0' : isLast() ? 'rounded-r' : 'border-r-0'
                     } ${segmentedButtonClass(filter() === option.value, false, option.tone ?? 'default')}`}
                   >
                     {option.label}

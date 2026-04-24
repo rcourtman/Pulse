@@ -167,6 +167,11 @@ regression protection.
    and the already-loaded compact dashboard summary fallback; it must not
    introduce a new `useUnifiedResources()` subscription, platform-specific
    fetch, or chart/history request just to make the dashboard feel oriented.
+   Dashboard Pulse Brief handoff belongs to that existing route state too:
+   `frontend-modern/src/pages/Dashboard.tsx` may open Assistant with the
+   already-derived compact prompt and a per-request approval-required override,
+   but it must not introduce extra dashboard polling, model/settings fetches,
+   or chart/history reads before the Assistant drawer is actually used.
 6. Normalize dashboard workload view-mode aliases through `frontend-modern/src/utils/workloads.ts` instead of keeping local URL/storage parsing in `frontend-modern/src/components/Dashboard/Dashboard.tsx`
 7. Deduplicate dashboard workload rows by canonical workload ID from `frontend-modern/src/utils/workloads.ts` rather than via local pass-through wrappers in `frontend-modern/src/components/Dashboard/Dashboard.tsx`
 8. Render dashboard row identity directly from the shared canonical workload helper so row selection, hover, and fallback metadata lookup stay aligned with the same workload contract

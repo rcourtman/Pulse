@@ -2,6 +2,7 @@ import { Component, Show, For, Switch, Match, createMemo } from 'solid-js';
 import { renderMarkdown } from '../aiChatUtils';
 import { ThinkingBlock } from './ThinkingBlock';
 import { ExploreStatusBlock } from './ExploreStatusBlock';
+import { WorkflowStatusBlock } from './WorkflowStatusBlock';
 import { ToolExecutionBlock } from './ToolExecutionBlock';
 import { ApprovalCard } from './ApprovalCard';
 import { QuestionCard } from './QuestionCard';
@@ -49,6 +50,12 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
 
       // Explore status events are kept separate
       if (evt.type === 'explore_status') {
+        grouped.push(evt);
+        continue;
+      }
+
+      // Workflow status events are kept separate
+      if (evt.type === 'workflow') {
         grouped.push(evt);
         continue;
       }
@@ -169,6 +176,10 @@ export const MessageItem: Component<MessageItemProps> = (props) => {
 
                       <Match when={evt.type === 'explore_status' && evt.exploreStatus}>
                         <ExploreStatusBlock status={evt.exploreStatus!} />
+                      </Match>
+
+                      <Match when={evt.type === 'workflow' && evt.workflow}>
+                        <WorkflowStatusBlock status={evt.workflow!} />
                       </Match>
 
                       <Match when={evt.type === 'pending_tool' && evt.pendingTool}>

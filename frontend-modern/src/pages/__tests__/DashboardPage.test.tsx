@@ -464,6 +464,7 @@ describe('Dashboard page module contract', () => {
       expect.objectContaining({
         targetType: 'dashboard',
         targetId: 'pulse-brief',
+        autonomousMode: false,
         initialPrompt: expect.stringContaining('Summarize the current Pulse dashboard'),
         context: expect.objectContaining({
           dashboardBrief: expect.stringContaining('Review Container 1 (Offline) first'),

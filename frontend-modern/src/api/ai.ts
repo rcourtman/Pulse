@@ -113,7 +113,9 @@ export class AIAPI {
     return {
       ...response,
       findings: arrayOrEmpty<UnifiedFindingRecord>(response.findings).map((finding) =>
-        promoteLegacyAlertIdentifier(finding as UnifiedFindingRecord & { alert_identifier?: string }),
+        promoteLegacyAlertIdentifier(
+          finding as UnifiedFindingRecord & { alert_identifier?: string },
+        ),
       ),
     };
   }
@@ -303,23 +305,30 @@ export class AIAPI {
 
   // Approve and execute an investigation fix
   static async approveInvestigationFix(approvalId: string): Promise<ApprovalExecutionResult> {
-    return apiFetchJSON(
-      `${this.baseUrl}/ai/approvals/${encodeURIComponent(approvalId)}/approve`,
-      {
-        method: 'POST',
-      },
-    ) as Promise<ApprovalExecutionResult>;
+    return apiFetchJSON(`${this.baseUrl}/ai/approvals/${encodeURIComponent(approvalId)}/approve`, {
+      method: 'POST',
+    }) as Promise<ApprovalExecutionResult>;
+  }
+
+  static async approvePendingApproval(approvalId: string): Promise<ApprovalDecisionResult> {
+    return apiFetchJSON(`${this.baseUrl}/ai/approvals/${encodeURIComponent(approvalId)}/approve`, {
+      method: 'POST',
+    }) as Promise<ApprovalDecisionResult>;
   }
 
   // Deny an investigation fix
   static async denyInvestigationFix(approvalId: string, reason?: string): Promise<ApprovalRequest> {
-    return apiFetchJSON(
-      `${this.baseUrl}/ai/approvals/${encodeURIComponent(approvalId)}/deny`,
-      {
-        method: 'POST',
-        body: JSON.stringify({ reason: reason || 'User declined' }),
-      },
-    ) as Promise<ApprovalRequest>;
+    return apiFetchJSON(`${this.baseUrl}/ai/approvals/${encodeURIComponent(approvalId)}/deny`, {
+      method: 'POST',
+      body: JSON.stringify({ reason: reason || 'User declined' }),
+    }) as Promise<ApprovalRequest>;
+  }
+
+  static async denyPendingApproval(approvalId: string, reason?: string): Promise<ApprovalRequest> {
+    return apiFetchJSON(`${this.baseUrl}/ai/approvals/${encodeURIComponent(approvalId)}/deny`, {
+      method: 'POST',
+      body: JSON.stringify({ reason: reason || 'User declined' }),
+    }) as Promise<ApprovalRequest>;
   }
 
   // Get investigation details for a finding (includes proposed fix)
@@ -334,12 +343,9 @@ export class AIAPI {
   static async reapproveInvestigationFix(
     findingId: string,
   ): Promise<{ approval_id: string; message: string }> {
-    return apiFetchJSON(
-      `${this.baseUrl}/ai/findings/${encodeURIComponent(findingId)}/reapprove`,
-      {
-        method: 'POST',
-      },
-    ) as Promise<{ approval_id: string; message: string }>;
+    return apiFetchJSON(`${this.baseUrl}/ai/findings/${encodeURIComponent(findingId)}/reapprove`, {
+      method: 'POST',
+    }) as Promise<{ approval_id: string; message: string }>;
   }
 }
 
@@ -483,8 +489,40 @@ export interface CircuitBreakerStatus {
 export type ApprovalStatus = 'pending' | 'approved' | 'denied' | 'expired';
 export type RiskLevel = 'low' | 'medium' | 'high';
 
+export interface ApprovalActionPlan {
+  actionId?: string;
+  requestId?: string;
+  summary?: string;
+  message?: string;
+  requiresApproval?: boolean;
+  approvalPolicy?: string;
+  blastRadius?: string;
+  predictedBlastRadius?: string[];
+  rollbackAvailable?: boolean;
+  planHash?: string;
+  expiresAt?: string;
+}
+
+export interface ApprovalContextConfidence {
+  level?: string;
+  summary?: string;
+  evidence?: string[];
+}
+
+export interface ApprovalActionPreflight {
+  target?: string;
+  currentState?: string;
+  intendedChange?: string;
+  dryRunAvailable: boolean;
+  dryRunSummary?: string;
+  safetyChecks?: string[];
+  verificationSteps?: string[];
+  generatedAt?: string;
+}
+
 export interface ApprovalRequest {
   id: string;
+  orgId?: string;
   executionId?: string;
   toolId: string; // "investigation_fix" for patrol findings
   command: string;
@@ -499,6 +537,11 @@ export interface ApprovalRequest {
   decidedAt?: string;
   decidedBy?: string;
   denyReason?: string;
+  commandHash?: string;
+  consumed?: boolean;
+  plan?: ApprovalActionPlan;
+  contextConfidence?: ApprovalContextConfidence;
+  preflight?: ApprovalActionPreflight;
 }
 
 export interface ApprovalExecutionResult {
@@ -511,6 +554,18 @@ export interface ApprovalExecutionResult {
   finding_id: string;
   message: string;
 }
+
+export type ApprovalDecisionResult =
+  | ApprovalExecutionResult
+  | {
+      approved: boolean;
+      executed?: boolean;
+      success?: boolean;
+      message?: string;
+      error?: string;
+      approval_id?: string;
+      request?: ApprovalRequest;
+    };
 
 // ============================================
 // Investigation Session Types

@@ -173,6 +173,7 @@ export type AIStreamEventType =
   | 'error'
   | 'complete'
   | 'approval_needed'
+  | 'workflow_state'
   | 'processing';
 
 export interface AIStreamToolStartData {
@@ -214,6 +215,23 @@ export interface AIStreamApprovalNeededData {
     summary?: string;
     evidence?: string[];
   };
+  preflight?: {
+    target?: string;
+    current_state?: string;
+    intended_change?: string;
+    dry_run_available: boolean;
+    dry_run_summary?: string;
+    safety_checks?: string[];
+    verification_steps?: string[];
+    generated_at?: string;
+  };
+}
+
+export interface AIStreamWorkflowStateData {
+  phase: string;
+  message: string;
+  state?: string;
+  tool?: string;
 }
 
 export interface AIStreamEvent {
@@ -223,7 +241,8 @@ export interface AIStreamEvent {
     | AIStreamToolStartData
     | AIStreamToolEndData
     | AIStreamCompleteData
-    | AIStreamApprovalNeededData;
+    | AIStreamApprovalNeededData
+    | AIStreamWorkflowStateData;
 }
 
 export interface AIStreamCompleteData {

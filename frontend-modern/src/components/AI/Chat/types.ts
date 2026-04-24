@@ -27,6 +27,7 @@ export interface PendingApproval {
   auditId?: string;
   plan?: ApprovalPlan;
   contextConfidence?: ApprovalContextConfidence;
+  preflight?: ApprovalPreflight;
   isExecuting?: boolean;
   approvalId?: string; // ID of the approval record for API calls
 }
@@ -47,6 +48,17 @@ export interface ApprovalContextConfidence {
   level?: string;
   summary?: string;
   evidence?: string[];
+}
+
+export interface ApprovalPreflight {
+  target?: string;
+  current_state?: string;
+  intended_change?: string;
+  dry_run_available: boolean;
+  dry_run_summary?: string;
+  safety_checks?: string[];
+  verification_steps?: string[];
+  generated_at?: string;
 }
 
 // Question from Pulse Assistant
@@ -77,10 +89,18 @@ export interface ExploreStatus {
   outcome?: string;
 }
 
+export interface WorkflowStatus {
+  phase: string;
+  message: string;
+  state?: string;
+  tool?: string;
+}
+
 // Unified event for chronological display
 export type StreamEventType =
   | 'thinking'
   | 'explore_status'
+  | 'workflow'
   | 'tool'
   | 'content'
   | 'pending_tool'
@@ -91,6 +111,7 @@ export interface StreamDisplayEvent {
   type: StreamEventType;
   thinking?: string;
   exploreStatus?: ExploreStatus;
+  workflow?: WorkflowStatus;
   tool?: ToolExecution;
   pendingTool?: PendingTool;
   content?: string;

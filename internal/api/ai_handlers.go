@@ -6493,11 +6493,33 @@ func getAuthUsername(cfg *config.Config, r *http.Request) string {
 }
 
 // ============================================================================
-// Approval Workflow Handlers (Pro Feature)
+// Approval Workflow Handlers
 // ============================================================================
 
-// HandleListApprovals has been moved to enterprise.
-// The route now delegates to aiAutoFixEndpoints.HandleListApprovals.
+// HandleListApprovals returns pending approval requests for the current org.
+// Pulse Assistant command approvals are a core chat workflow; investigation fix
+// approval execution remains gated by the auto-fix endpoint when approved.
+func (h *AISettingsHandler) HandleListApprovals(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	store := approval.GetStore()
+	if store == nil {
+		writeErrorResponse(w, http.StatusServiceUnavailable, "not_initialized", "Approval store not initialized", nil)
+		return
+	}
+
+	orgID := approval.NormalizeOrgID(GetOrgID(r.Context()))
+	response := map[string]interface{}{
+		"approvals": store.GetPendingApprovalsForOrg(orgID),
+		"stats":     store.GetStatsForOrg(orgID),
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}
 
 // HandleGetApproval returns a specific approval request.
 func (h *AISettingsHandler) HandleGetApproval(w http.ResponseWriter, r *http.Request) {

@@ -889,6 +889,12 @@ recovery, and alert summaries and must pass those facts as structured context
 when the operator asks Assistant to continue. Future server-generated dashboard
 briefs must keep that structured fact contract and policy boundary rather than
 letting an unbounded prompt become the dashboard's source of truth.
+The dashboard-to-Assistant handoff must also keep its execution mode scoped to
+the request. When a Pulse Brief opens Assistant from the dashboard, the drawer
+may prefill the governed dashboard prompt and context, but the submitted chat
+request must set `autonomous_mode:false`, preserve the operator's persistent
+Assistant control-level setting, and disclose the temporary approval-required
+mode in the drawer instead of showing the generic Autonomous warning.
 Those backend AI and Patrol change summaries should derive their canonical
 labels and provenance fragments from
 `internal/unifiedresources/change_presentation.go`, so the resource-model

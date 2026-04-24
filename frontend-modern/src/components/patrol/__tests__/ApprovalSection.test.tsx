@@ -36,6 +36,9 @@ vi.mock('@/stores/aiIntelligence', () => ({
     get pendingApprovals() {
       return state.pendingApprovals;
     },
+    get patrolPendingApprovals() {
+      return state.pendingApprovals;
+    },
     approveInvestigationFix: (...args: unknown[]) => approveInvestigationFixMock(...args),
     denyInvestigationFix: (...args: unknown[]) => denyInvestigationFixMock(...args),
   },

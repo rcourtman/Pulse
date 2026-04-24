@@ -147,8 +147,12 @@ describe('aiIntelligenceStore', () => {
     });
     expect(aiIntelligenceStore.intelligenceSummary?.recent_changes).toHaveLength(1);
     expect(aiIntelligenceStore.intelligenceSummary?.learning.correlations_learned).toBe(1);
-    expect(aiIntelligenceStore.intelligenceSummary?.policy_posture?.sensitivity_counts?.public).toBe(1);
-    expect(aiIntelligenceStore.intelligenceSummary?.policy_posture?.routing_counts?.['local-only']).toBe(1);
+    expect(
+      aiIntelligenceStore.intelligenceSummary?.policy_posture?.sensitivity_counts?.public,
+    ).toBe(1);
+    expect(
+      aiIntelligenceStore.intelligenceSummary?.policy_posture?.routing_counts?.['local-only'],
+    ).toBe(1);
   });
 
   it('normalizes the canonical intelligence summary at the store boundary', async () => {
@@ -339,7 +343,7 @@ describe('aiIntelligenceStore', () => {
     ]);
   });
 
-  it('keeps Patrol approval state scoped to investigation_fix approvals', async () => {
+  it('keeps Assistant approvals resumable while Patrol views stay scoped to investigation_fix approvals', async () => {
     vi.mocked(AIAPI.getPendingApprovals).mockResolvedValueOnce([
       {
         id: 'approval-chat',
@@ -372,9 +376,14 @@ describe('aiIntelligenceStore', () => {
     await aiIntelligenceStore.loadPendingApprovals();
 
     expect(aiIntelligenceStore.pendingApprovals.map((approval) => approval.id)).toEqual([
+      'approval-chat',
       'approval-fix',
     ]);
-    expect(aiIntelligenceStore.pendingApprovalCount).toBe(1);
+    expect(aiIntelligenceStore.patrolPendingApprovals.map((approval) => approval.id)).toEqual([
+      'approval-fix',
+    ]);
+    expect(aiIntelligenceStore.pendingApprovalCount).toBe(2);
+    expect(aiIntelligenceStore.patrolPendingApprovalCount).toBe(1);
   });
 
   it('fails Patrol approval polling closed in public demo mode', async () => {

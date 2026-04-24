@@ -147,7 +147,7 @@ function buildAssistantPrompt(input: DashboardPulseBriefInput, body: string): st
     .filter((label): label is string => label !== null);
 
   return [
-    'Summarize the current Pulse dashboard for an operator. Use only these dashboard facts unless you need to ask for more context.',
+    'Summarize the current Pulse dashboard for an operator. Use only these dashboard facts unless you need to ask for more context, and do not run commands or change anything unless the operator explicitly asks for a follow-up action.',
     '',
     `Current brief: ${body}`,
     `Systems: ${input.estate.totalSystems} total, ${input.estate.healthySystems} healthy, ${input.estate.attentionSystems} needing attention.`,

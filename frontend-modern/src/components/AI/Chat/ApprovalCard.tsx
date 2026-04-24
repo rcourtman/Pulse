@@ -110,6 +110,7 @@ export const ApprovalCard: Component<ApprovalCardProps> = (props) => {
           when={
             props.approval.plan ||
             props.approval.contextConfidence ||
+            props.approval.preflight ||
             props.approval.auditId ||
             props.approval.targetType ||
             props.approval.targetId
@@ -161,6 +162,81 @@ export const ApprovalCard: Component<ApprovalCardProps> = (props) => {
                   </div>
                 </Show>
               </div>
+
+              <Show when={props.approval.preflight}>
+                <div class="pt-2 border-t border-amber-200 dark:border-amber-700">
+                  <div class="flex items-center gap-2 mb-1">
+                    <ShieldCheckIcon class="w-3.5 h-3.5 text-amber-700 dark:text-amber-300" />
+                    <span class="text-[11px] font-semibold uppercase text-amber-700 dark:text-amber-300">
+                      Preflight
+                    </span>
+                    <span class="px-1.5 py-0.5 rounded bg-base-200 text-[10px] font-bold uppercase text-base-content">
+                      {props.approval.preflight?.dry_run_available ? 'Dry run' : 'No dry run'}
+                    </span>
+                  </div>
+
+                  <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
+                    <Show when={props.approval.preflight?.target}>
+                      <div>
+                        <div class="uppercase font-semibold text-amber-700 dark:text-amber-300">
+                          Target
+                        </div>
+                        <div class="text-base-content break-words">
+                          {props.approval.preflight?.target}
+                        </div>
+                      </div>
+                    </Show>
+                    <Show when={props.approval.preflight?.intended_change}>
+                      <div>
+                        <div class="uppercase font-semibold text-amber-700 dark:text-amber-300">
+                          Intended change
+                        </div>
+                        <div class="text-base-content break-words">
+                          {props.approval.preflight?.intended_change}
+                        </div>
+                      </div>
+                    </Show>
+                  </div>
+
+                  <Show when={props.approval.preflight?.current_state}>
+                    <p class="mt-1.5 leading-relaxed text-base-content">
+                      {props.approval.preflight?.current_state}
+                    </p>
+                  </Show>
+
+                  <Show when={props.approval.preflight?.dry_run_summary}>
+                    <p class="mt-1.5 leading-relaxed text-base-content">
+                      {props.approval.preflight?.dry_run_summary}
+                    </p>
+                  </Show>
+
+                  <Show when={(props.approval.preflight?.safety_checks || []).length > 0}>
+                    <div class="mt-2">
+                      <div class="text-[11px] font-semibold uppercase text-amber-700 dark:text-amber-300">
+                        Safety checks
+                      </div>
+                      <ul class="mt-1 space-y-1 text-[11px] text-base-content/80">
+                        <For each={props.approval.preflight?.safety_checks || []}>
+                          {(item) => <li class="break-words">{item}</li>}
+                        </For>
+                      </ul>
+                    </div>
+                  </Show>
+
+                  <Show when={(props.approval.preflight?.verification_steps || []).length > 0}>
+                    <div class="mt-2">
+                      <div class="text-[11px] font-semibold uppercase text-amber-700 dark:text-amber-300">
+                        Verification
+                      </div>
+                      <ul class="mt-1 space-y-1 text-[11px] text-base-content/80">
+                        <For each={props.approval.preflight?.verification_steps || []}>
+                          {(item) => <li class="break-words">{item}</li>}
+                        </For>
+                      </ul>
+                    </div>
+                  </Show>
+                </div>
+              </Show>
 
               <Show when={props.approval.contextConfidence}>
                 <div class="pt-2 border-t border-amber-200 dark:border-amber-700">

@@ -174,6 +174,13 @@ That same shared policy now also owns Patrol approval polling posture.
 empty queue from the shared store boundary itself, so dashboard and Patrol
 shells do not probe `/api/ai/approvals` after the read-only demo policy has
 resolved.
+That shared store may retain all pending approvals for dashboard and Assistant
+surfaces, but Patrol-owned presentation must consume only Patrol-scoped
+approval selectors. `frontend-modern/src/components/AI/FindingsPanel.tsx` and
+`frontend-modern/src/components/patrol/` must not count or render generic
+Assistant command approvals as Patrol finding approvals, and dashboard
+action-required affordances must use generic approval actions when the pending
+request is not tied to a Patrol finding.
 That same store-owned demo boundary also covers remediation artifacts.
 `frontend-modern/src/stores/aiIntelligence.ts` must fail
 `loadRemediationPlans()` closed in public demo mode and

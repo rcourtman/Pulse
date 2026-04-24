@@ -1401,6 +1401,7 @@ func createApprovalRecordForOrgWithExecutor(e *PulseToolExecutor, orgID, command
 		Plan:       &plan,
 	}
 	req.ContextConfidence = approvalContextConfidence(req)
+	req.Preflight = approvalPreflight(req)
 
 	if err := store.CreateApproval(req); err != nil {
 		log.Warn().Err(err).Msg("failed to create approval record")
@@ -1485,6 +1486,69 @@ func approvalContextConfidence(req *approval.ApprovalRequest) *approval.ContextC
 		Summary:  summary,
 		Evidence: evidence,
 	}
+}
+
+func approvalPreflight(req *approval.ApprovalRequest) *approval.ActionPreflight {
+	if req == nil {
+		return nil
+	}
+	target := approvalPreflightTarget(req)
+	intendedChange := strings.TrimSpace(req.Context)
+	if intendedChange == "" {
+		intendedChange = strings.TrimSpace(req.Command)
+	}
+	dryRunAvailable := approvalDryRunAvailable(req.TargetType, req.Command)
+	dryRunSummary := "No provider-supported dry run is available for this action; Pulse will hold execution until approval and validate the approval binding before dispatch."
+	if dryRunAvailable {
+		dryRunSummary = "Provider dry-run semantics are available for this action class before execution."
+	}
+
+	return &approval.ActionPreflight{
+		Target:          target,
+		CurrentState:    fmt.Sprintf("Resolved approval target: %s.", target),
+		IntendedChange:  intendedChange,
+		DryRunAvailable: dryRunAvailable,
+		DryRunSummary:   dryRunSummary,
+		SafetyChecks: []string{
+			"Approval is scoped to the current organization.",
+			"Command hash must match before execution.",
+			"Approval can be consumed only once.",
+			"Target type and identifier must match the planned action.",
+		},
+		VerificationSteps: []string{
+			"Persist unified action audit lifecycle.",
+			"Dispatch only after approval is granted.",
+			"Capture command result or execution error.",
+			"Require Assistant read-after-write verification before final response.",
+		},
+		GeneratedAt: time.Now().UTC(),
+	}
+}
+
+func approvalPreflightTarget(req *approval.ApprovalRequest) string {
+	if req == nil {
+		return "unknown target"
+	}
+	parts := make([]string, 0, 3)
+	if targetType := strings.TrimSpace(req.TargetType); targetType != "" {
+		parts = append(parts, targetType)
+	}
+	if targetName := strings.TrimSpace(req.TargetName); targetName != "" {
+		parts = append(parts, targetName)
+	}
+	if targetID := strings.TrimSpace(req.TargetID); targetID != "" {
+		parts = append(parts, targetID)
+	}
+	if len(parts) == 0 {
+		return "Pulse runtime"
+	}
+	return strings.Join(parts, " / ")
+}
+
+func approvalDryRunAvailable(targetType, command string) bool {
+	targetType = strings.ToLower(strings.TrimSpace(targetType))
+	commandLower := strings.ToLower(strings.TrimSpace(command))
+	return targetType == "kubernetes" && strings.Contains(commandLower, "--dry-run")
 }
 
 // isPreApproved checks if the args contain a valid, approved approval_id.
@@ -1598,6 +1662,18 @@ func enrichApprovalRequiredPayload(payload map[string]interface{}, approvalID st
 			"level":    string(req.ContextConfidence.Level),
 			"summary":  strings.TrimSpace(req.ContextConfidence.Summary),
 			"evidence": append([]string(nil), req.ContextConfidence.Evidence...),
+		}
+	}
+	if req.Preflight != nil {
+		payload["preflight"] = map[string]interface{}{
+			"target":             strings.TrimSpace(req.Preflight.Target),
+			"current_state":      strings.TrimSpace(req.Preflight.CurrentState),
+			"intended_change":    strings.TrimSpace(req.Preflight.IntendedChange),
+			"dry_run_available":  req.Preflight.DryRunAvailable,
+			"dry_run_summary":    strings.TrimSpace(req.Preflight.DryRunSummary),
+			"safety_checks":      append([]string(nil), req.Preflight.SafetyChecks...),
+			"verification_steps": append([]string(nil), req.Preflight.VerificationSteps...),
+			"generated_at":       req.Preflight.GeneratedAt.UTC().Format(time.RFC3339),
 		}
 	}
 	return payload

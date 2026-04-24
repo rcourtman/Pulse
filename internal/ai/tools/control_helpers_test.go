@@ -38,6 +38,9 @@ func TestCreateApprovalRecord(t *testing.T) {
 	assert.Equal(t, "ctx", req.Plan.Message)
 	require.NotNil(t, req.ContextConfidence)
 	assert.Equal(t, approval.ContextConfidenceVerified, req.ContextConfidence.Level)
+	require.NotNil(t, req.Preflight)
+	assert.Contains(t, req.Preflight.Target, "host1")
+	assert.Contains(t, req.Preflight.DryRunSummary, "dry run")
 }
 
 func TestIsPreApproved(t *testing.T) {

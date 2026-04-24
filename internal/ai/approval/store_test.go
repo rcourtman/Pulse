@@ -146,6 +146,16 @@ func TestCreateApproval_PreservesActionPlanAndContextConfidence(t *testing.T) {
 			Summary:  "Target was resolved to a concrete resource before approval.",
 			Evidence: []string{"Target identifier bound to agent-1."},
 		},
+		Preflight: &ActionPreflight{
+			Target:            "agent:web1 (agent-1)",
+			CurrentState:      "Resolved approval target: agent:web1 (agent-1).",
+			IntendedChange:    "Restart web service",
+			DryRunAvailable:   false,
+			DryRunSummary:     "No provider-supported dry run is available for this action.",
+			SafetyChecks:      []string{"Approval is scoped to this organization."},
+			VerificationSteps: []string{"Read back the target state after execution."},
+			GeneratedAt:       time.Now().UTC(),
+		},
 	}
 
 	if err := store.CreateApproval(req); err != nil {
@@ -170,6 +180,18 @@ func TestCreateApproval_PreservesActionPlanAndContextConfidence(t *testing.T) {
 	}
 	if got.ContextConfidence == nil || got.ContextConfidence.Level != ContextConfidenceVerified {
 		t.Fatalf("unexpected context confidence: %+v", got.ContextConfidence)
+	}
+	if got.Preflight == nil {
+		t.Fatal("preflight was not preserved")
+	}
+	if got.Preflight.Target != "agent:web1 (agent-1)" {
+		t.Fatalf("preflight target = %q, want agent:web1 (agent-1)", got.Preflight.Target)
+	}
+	if got.Preflight.DryRunAvailable {
+		t.Fatal("preflight dry run should remain false")
+	}
+	if len(got.Preflight.SafetyChecks) != 1 {
+		t.Fatalf("preflight safety checks = %+v, want one entry", got.Preflight.SafetyChecks)
 	}
 }
 

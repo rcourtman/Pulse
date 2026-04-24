@@ -127,6 +127,13 @@ func TestPulseToolExecutor_ExecuteRunCommand(t *testing.T) {
 		assert.Equal(t, unifiedresources.ApprovalAdmin, req.Plan.ApprovalPolicy)
 		require.NotNil(t, req.ContextConfidence)
 		assert.Equal(t, approval.ContextConfidenceVerified, req.ContextConfidence.Level)
+		require.NotNil(t, req.Preflight)
+		assert.Contains(t, req.Preflight.Target, "tower")
+		assert.False(t, req.Preflight.DryRunAvailable)
+		preflight, ok := payload["preflight"].(map[string]interface{})
+		require.True(t, ok, "approval payload should include preflight")
+		assert.Equal(t, false, preflight["dry_run_available"])
+		assert.Contains(t, preflight["target"].(string), "tower")
 
 		audits, err := actionStore.GetActionAudits("", time.Time{}, 10)
 		require.NoError(t, err)

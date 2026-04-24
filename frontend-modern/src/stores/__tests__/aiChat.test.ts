@@ -101,6 +101,23 @@ describe('aiChatStore', () => {
     expect(aiChatStore.context.targetId).toBe('vm-101');
   });
 
+  it('preserves scoped autonomous-mode overrides for pre-filled prompts', () => {
+    aiChatStore.openWithPrompt('brief me', {
+      targetType: 'dashboard',
+      targetId: 'pulse-brief',
+      autonomousMode: false,
+    });
+
+    expect(aiChatStore.isOpen).toBe(true);
+    expect(aiChatStore.context.initialPrompt).toBe('brief me');
+    expect(aiChatStore.context.autonomousMode).toBe(false);
+
+    aiChatStore.clearInitialPrompt();
+
+    expect(aiChatStore.context.initialPrompt).toBeUndefined();
+    expect(aiChatStore.context.autonomousMode).toBe(false);
+  });
+
   it('focusInput returns false when closed and true when open with a registered element', () => {
     const textarea = document.createElement('textarea');
     document.body.appendChild(textarea);

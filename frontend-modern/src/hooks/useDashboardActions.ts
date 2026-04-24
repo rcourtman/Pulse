@@ -29,11 +29,13 @@ export function useDashboardActions(
     (typeof window === 'undefined' || window.location.pathname === DASHBOARD_PATH);
   const hasPatrol = () => enabled() && hasFeature('ai_patrol');
 
-  // Load patrol data on mount when feature is enabled
+  // Load dashboard action data on mount when the dashboard is active.
   createEffect(() => {
+    if (enabled()) {
+      void aiIntelligenceStore.loadPendingApprovals();
+    }
     if (hasPatrol()) {
       void aiIntelligenceStore.loadFindings();
-      void aiIntelligenceStore.loadPendingApprovals();
     }
   });
 
@@ -44,7 +46,7 @@ export function useDashboardActions(
       window.clearInterval(refreshInterval);
       refreshInterval = undefined;
     }
-    if (hasPatrol()) {
+    if (enabled()) {
       refreshInterval = window.setInterval(() => {
         void aiIntelligenceStore.loadPendingApprovals();
       }, APPROVAL_REFRESH_INTERVAL_MS);
@@ -55,7 +57,7 @@ export function useDashboardActions(
   });
 
   const pendingApprovals = createMemo(() => {
-    if (!hasPatrol()) return [];
+    if (!enabled()) return [];
     return aiIntelligenceStore.pendingApprovals;
   });
 

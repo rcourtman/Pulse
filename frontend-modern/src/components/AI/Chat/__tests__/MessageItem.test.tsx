@@ -18,6 +18,12 @@ vi.mock('../ExploreStatusBlock', () => ({
   ),
 }));
 
+vi.mock('../WorkflowStatusBlock', () => ({
+  WorkflowStatusBlock: (props: { status: { phase: string; message: string } }) => (
+    <div data-testid="workflow-status-block">{props.status.message}</div>
+  ),
+}));
+
 vi.mock('../ToolExecutionBlock', () => ({
   ToolExecutionBlock: (props: {
     tool: { name: string; input: string; output: string; success: boolean };
@@ -363,6 +369,32 @@ describe('MessageItem', () => {
 
       expect(screen.getByTestId('explore-status-block')).toBeInTheDocument();
       expect(screen.getByText('Scanning infrastructure...')).toBeInTheDocument();
+    });
+
+    it('renders workflow status blocks', () => {
+      const events: StreamDisplayEvent[] = [
+        {
+          type: 'workflow',
+          workflow: {
+            phase: 'approve',
+            message: 'Waiting for approval before executing the planned action.',
+            state: 'VERIFYING',
+            tool: 'pulse_exec',
+          },
+        },
+      ];
+
+      render(() => (
+        <MessageItem
+          message={makeMessage({ role: 'assistant', streamEvents: events })}
+          {...makeHandlers()}
+        />
+      ));
+
+      expect(screen.getByTestId('workflow-status-block')).toBeInTheDocument();
+      expect(
+        screen.getByText('Waiting for approval before executing the planned action.'),
+      ).toBeInTheDocument();
     });
 
     it('renders tool execution blocks', () => {

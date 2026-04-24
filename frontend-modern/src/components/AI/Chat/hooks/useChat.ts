@@ -20,6 +20,10 @@ export interface UseChatOptions {
   onConversationChanged?: () => void | Promise<void>;
 }
 
+export interface SendMessageOptions {
+  autonomousMode?: boolean;
+}
+
 export function useChat(options: UseChatOptions = {}) {
   // Core state
   const [messages, setMessages] = createSignal<ChatMessage[]>([]);
@@ -174,6 +178,26 @@ export function useChat(options: UseChatOptions = {}) {
                   message,
                   model: data.model,
                   outcome: data.outcome,
+                },
+              });
+            }
+
+            case 'workflow_state': {
+              const data = (event.data || {}) as {
+                phase?: string;
+                message?: string;
+                state?: string;
+                tool?: string;
+              };
+              const message = typeof data.message === 'string' ? data.message.trim() : '';
+              if (!message) return msg;
+              return addStreamEvent(msg, {
+                type: 'workflow',
+                workflow: {
+                  phase: data.phase || 'unknown',
+                  message,
+                  state: data.state,
+                  tool: data.tool,
                 },
               });
             }
@@ -344,6 +368,16 @@ export function useChat(options: UseChatOptions = {}) {
                   summary?: string;
                   evidence?: string[];
                 };
+                preflight?: {
+                  target?: string;
+                  current_state?: string;
+                  intended_change?: string;
+                  dry_run_available: boolean;
+                  dry_run_summary?: string;
+                  safety_checks?: string[];
+                  verification_steps?: string[];
+                  generated_at?: string;
+                };
                 approval_id?: string;
               };
 
@@ -372,6 +406,9 @@ export function useChat(options: UseChatOptions = {}) {
               }
               if (data.context_confidence && typeof data.context_confidence === 'object') {
                 approval.contextConfidence = data.context_confidence;
+              }
+              if (data.preflight && typeof data.preflight === 'object') {
+                approval.preflight = data.preflight;
               }
 
               // Add to streamEvents for chronological display
@@ -451,6 +488,7 @@ export function useChat(options: UseChatOptions = {}) {
     prompt: string,
     mentions?: ChatMention[],
     findingId?: string,
+    sendOptions?: SendMessageOptions,
   ): Promise<boolean> => {
     if (!prompt.trim()) return false;
 
@@ -521,6 +559,7 @@ export function useChat(options: UseChatOptions = {}) {
         abortControllerRef?.signal,
         mentions,
         findingId,
+        sendOptions?.autonomousMode,
       );
       await notifyConversationChanged();
       return true;

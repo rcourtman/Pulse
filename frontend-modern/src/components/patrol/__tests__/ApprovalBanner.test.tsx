@@ -14,6 +14,9 @@ vi.mock('@/stores/aiIntelligence', () => ({
     get pendingApprovals() {
       return state.pendingApprovals;
     },
+    get patrolPendingApprovals() {
+      return state.pendingApprovals;
+    },
     get findingsWithPendingApprovals() {
       return state.findingsWithPendingApprovals;
     },

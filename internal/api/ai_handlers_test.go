@@ -2249,6 +2249,23 @@ func TestAISettingsHandler_Approvals(t *testing.T) {
 		assert.Equal(t, appID, resp.ID)
 	})
 
+	t.Run("HandleListApprovals", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/ai/approvals", nil)
+		rec := httptest.NewRecorder()
+		handler.HandleListApprovals(rec, req)
+
+		assert.Equal(t, http.StatusOK, rec.Code)
+		var resp struct {
+			Approvals []approval.ApprovalRequest `json:"approvals"`
+			Stats     map[string]int             `json:"stats"`
+		}
+		err := json.Unmarshal(rec.Body.Bytes(), &resp)
+		require.NoError(t, err)
+		require.Len(t, resp.Approvals, 1)
+		assert.Equal(t, appID, resp.Approvals[0].ID)
+		assert.Equal(t, 1, resp.Stats["pending"])
+	})
+
 	t.Run("HandleApproveCommand", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/api/ai/approvals/"+appID+"/approve", nil)
 		rec := httptest.NewRecorder()

@@ -15,24 +15,60 @@ import (
 // OSS/enterprise boundary. It mirrors the core approval.ApprovalRequest
 // fields needed by enterprise handlers and the frontend UI.
 type ApprovalInfo struct {
-	ID          string     `json:"id"`
-	OrgID       string     `json:"orgId,omitempty"`
-	ExecutionID string     `json:"executionId"`
-	ToolID      string     `json:"toolId"`
-	Command     string     `json:"command"`
-	TargetType  string     `json:"targetType"`
-	TargetID    string     `json:"targetId"`
-	TargetName  string     `json:"targetName"`
-	Context     string     `json:"context"`
-	RiskLevel   string     `json:"riskLevel"`
-	Status      string     `json:"status"`
-	RequestedAt time.Time  `json:"requestedAt"`
-	ExpiresAt   time.Time  `json:"expiresAt"`
-	DecidedAt   *time.Time `json:"decidedAt,omitempty"`
-	DecidedBy   string     `json:"decidedBy,omitempty"`
-	DenyReason  string     `json:"denyReason,omitempty"`
-	CommandHash string     `json:"commandHash,omitempty"`
-	Consumed    bool       `json:"consumed,omitempty"`
+	ID                string                 `json:"id"`
+	OrgID             string                 `json:"orgId,omitempty"`
+	ExecutionID       string                 `json:"executionId"`
+	ToolID            string                 `json:"toolId"`
+	Command           string                 `json:"command"`
+	TargetType        string                 `json:"targetType"`
+	TargetID          string                 `json:"targetId"`
+	TargetName        string                 `json:"targetName"`
+	Context           string                 `json:"context"`
+	RiskLevel         string                 `json:"riskLevel"`
+	Status            string                 `json:"status"`
+	RequestedAt       time.Time              `json:"requestedAt"`
+	ExpiresAt         time.Time              `json:"expiresAt"`
+	DecidedAt         *time.Time             `json:"decidedAt,omitempty"`
+	DecidedBy         string                 `json:"decidedBy,omitempty"`
+	DenyReason        string                 `json:"denyReason,omitempty"`
+	CommandHash       string                 `json:"commandHash,omitempty"`
+	Consumed          bool                   `json:"consumed,omitempty"`
+	Plan              *ActionPlanInfo        `json:"plan,omitempty"`
+	ContextConfidence *ContextConfidenceInfo `json:"contextConfidence,omitempty"`
+	Preflight         *ActionPreflightInfo   `json:"preflight,omitempty"`
+}
+
+type ActionPlanInfo struct {
+	ActionID             string    `json:"actionId,omitempty"`
+	RequestID            string    `json:"requestId,omitempty"`
+	Allowed              bool      `json:"allowed"`
+	RequiresApproval     bool      `json:"requiresApproval"`
+	ApprovalPolicy       string    `json:"approvalPolicy,omitempty"`
+	PredictedBlastRadius []string  `json:"predictedBlastRadius,omitempty"`
+	RollbackAvailable    bool      `json:"rollbackAvailable"`
+	Message              string    `json:"message,omitempty"`
+	PlannedAt            time.Time `json:"plannedAt,omitempty"`
+	ExpiresAt            time.Time `json:"expiresAt,omitempty"`
+	ResourceVersion      string    `json:"resourceVersion,omitempty"`
+	PolicyVersion        string    `json:"policyVersion,omitempty"`
+	PlanHash             string    `json:"planHash,omitempty"`
+}
+
+type ContextConfidenceInfo struct {
+	Level    string   `json:"level,omitempty"`
+	Summary  string   `json:"summary,omitempty"`
+	Evidence []string `json:"evidence,omitempty"`
+}
+
+type ActionPreflightInfo struct {
+	Target            string    `json:"target,omitempty"`
+	CurrentState      string    `json:"currentState,omitempty"`
+	IntendedChange    string    `json:"intendedChange,omitempty"`
+	DryRunAvailable   bool      `json:"dryRunAvailable"`
+	DryRunSummary     string    `json:"dryRunSummary,omitempty"`
+	SafetyChecks      []string  `json:"safetyChecks,omitempty"`
+	VerificationSteps []string  `json:"verificationSteps,omitempty"`
+	GeneratedAt       time.Time `json:"generatedAt,omitempty"`
 }
 
 // ApprovalStoreAccessor provides approval operations for enterprise handlers.

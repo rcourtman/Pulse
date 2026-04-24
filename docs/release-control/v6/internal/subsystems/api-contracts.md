@@ -1401,6 +1401,12 @@ structured mention payloads for canonical `agent`, `vm`, `storage`, and
 types, so VMware-backed reads stay on `/api/ai/*` and `/api/resources*`
 instead of introducing VMware-only mention payloads or provider-local
 inventory reads under `/api/vmware/*`.
+That same `/api/ai/chat` payload boundary owns per-request execution-mode
+overrides. Dashboard Pulse Brief and other scoped handoffs may include
+`autonomous_mode:false` on the chat request to force approval-required command
+execution for that exchange, but the transport must treat the field as a
+request override only and must not mutate the user's persistent AI control
+setting.
 That same backend API boundary now also owns the negative space around
 assistant control. Wiring native TrueNAS app actions into
 `internal/api/router.go`, `internal/api/ai_handler.go`, or adjacent backend

@@ -31,7 +31,7 @@ func (r *Router) registerAIRelayRoutesGroup() {
 	// the free adapters return 402 for all premium operations. Enterprise binders
 	// replace these with real handler implementations.
 	r.aiAutoFixEndpoints = resolveAIAutoFixEndpoints(
-		aiAutoFixFreeAdapter{},
+		aiAutoFixFreeAdapter{handler: r.aiSettingsHandler},
 		newAIAutoFixRuntime(r),
 	)
 	r.aiAlertAnalysisEndpoints = resolveAIAlertAnalysisEndpoints(
@@ -218,7 +218,9 @@ func (r *Router) registerAIRelayRoutesGroup() {
 // All methods return 402 "requires Pulse Pro". Enterprise binders replace this
 // with real handler implementations.
 
-type aiAutoFixFreeAdapter struct{}
+type aiAutoFixFreeAdapter struct {
+	handler *AISettingsHandler
+}
 
 var _ extensions.AIAutoFixEndpoints = aiAutoFixFreeAdapter{}
 
@@ -258,7 +260,11 @@ func (aiAutoFixFreeAdapter) HandleApproveInvestigationFix(w http.ResponseWriter,
 	WriteLicenseRequired(w, featureAIAutoFixKey, "Auto-Fix requires Pulse Pro")
 }
 
-func (aiAutoFixFreeAdapter) HandleListApprovals(w http.ResponseWriter, _ *http.Request) {
+func (a aiAutoFixFreeAdapter) HandleListApprovals(w http.ResponseWriter, req *http.Request) {
+	if a.handler != nil {
+		a.handler.HandleListApprovals(w, req)
+		return
+	}
 	WriteLicenseRequired(w, featureAIAutoFixKey, "Approval management requires Pulse Pro")
 }
 
@@ -448,14 +454,17 @@ func (a *approvalStoreAdapter) CreateApproval(info *aicontracts.ApprovalInfo) er
 		return fmt.Errorf("approval store not initialized")
 	}
 	req := &approval.ApprovalRequest{
-		OrgID:      info.OrgID,
-		ToolID:     info.ToolID,
-		Command:    info.Command,
-		TargetType: info.TargetType,
-		TargetID:   info.TargetID,
-		TargetName: info.TargetName,
-		Context:    info.Context,
-		RiskLevel:  approval.RiskLevel(info.RiskLevel),
+		OrgID:             info.OrgID,
+		ToolID:            info.ToolID,
+		Command:           info.Command,
+		TargetType:        info.TargetType,
+		TargetID:          info.TargetID,
+		TargetName:        info.TargetName,
+		Context:           info.Context,
+		RiskLevel:         approval.RiskLevel(info.RiskLevel),
+		Plan:              approvalPlanInfoToRequest(info.Plan),
+		ContextConfidence: contextConfidenceInfoToRequest(info.ContextConfidence),
+		Preflight:         preflightInfoToRequest(info.Preflight),
 	}
 	if err := store.CreateApproval(req); err != nil {
 		return err
@@ -496,24 +505,123 @@ func approvalRequestToInfo(req *approval.ApprovalRequest) *aicontracts.ApprovalI
 		return nil
 	}
 	return &aicontracts.ApprovalInfo{
-		ID:          req.ID,
-		OrgID:       req.OrgID,
-		ExecutionID: req.ExecutionID,
-		ToolID:      req.ToolID,
-		Command:     req.Command,
-		TargetType:  req.TargetType,
-		TargetID:    req.TargetID,
-		TargetName:  req.TargetName,
-		Context:     req.Context,
-		RiskLevel:   string(req.RiskLevel),
-		Status:      string(req.Status),
-		RequestedAt: req.RequestedAt,
-		ExpiresAt:   req.ExpiresAt,
-		DecidedAt:   req.DecidedAt,
-		DecidedBy:   req.DecidedBy,
-		DenyReason:  req.DenyReason,
-		CommandHash: req.CommandHash,
-		Consumed:    req.Consumed,
+		ID:                req.ID,
+		OrgID:             req.OrgID,
+		ExecutionID:       req.ExecutionID,
+		ToolID:            req.ToolID,
+		Command:           req.Command,
+		TargetType:        req.TargetType,
+		TargetID:          req.TargetID,
+		TargetName:        req.TargetName,
+		Context:           req.Context,
+		RiskLevel:         string(req.RiskLevel),
+		Status:            string(req.Status),
+		RequestedAt:       req.RequestedAt,
+		ExpiresAt:         req.ExpiresAt,
+		DecidedAt:         req.DecidedAt,
+		DecidedBy:         req.DecidedBy,
+		DenyReason:        req.DenyReason,
+		CommandHash:       req.CommandHash,
+		Consumed:          req.Consumed,
+		Plan:              approvalPlanRequestToInfo(req.Plan),
+		ContextConfidence: contextConfidenceRequestToInfo(req.ContextConfidence),
+		Preflight:         preflightRequestToInfo(req.Preflight),
+	}
+}
+
+func approvalPlanRequestToInfo(plan *unifiedresources.ActionPlan) *aicontracts.ActionPlanInfo {
+	if plan == nil {
+		return nil
+	}
+	return &aicontracts.ActionPlanInfo{
+		ActionID:             plan.ActionID,
+		RequestID:            plan.RequestID,
+		Allowed:              plan.Allowed,
+		RequiresApproval:     plan.RequiresApproval,
+		ApprovalPolicy:       string(plan.ApprovalPolicy),
+		PredictedBlastRadius: append([]string(nil), plan.PredictedBlastRadius...),
+		RollbackAvailable:    plan.RollbackAvailable,
+		Message:              plan.Message,
+		PlannedAt:            plan.PlannedAt,
+		ExpiresAt:            plan.ExpiresAt,
+		ResourceVersion:      plan.ResourceVersion,
+		PolicyVersion:        plan.PolicyVersion,
+		PlanHash:             plan.PlanHash,
+	}
+}
+
+func approvalPlanInfoToRequest(plan *aicontracts.ActionPlanInfo) *unifiedresources.ActionPlan {
+	if plan == nil {
+		return nil
+	}
+	return &unifiedresources.ActionPlan{
+		ActionID:             plan.ActionID,
+		RequestID:            plan.RequestID,
+		Allowed:              plan.Allowed,
+		RequiresApproval:     plan.RequiresApproval,
+		ApprovalPolicy:       unifiedresources.ActionApprovalLevel(plan.ApprovalPolicy),
+		PredictedBlastRadius: append([]string(nil), plan.PredictedBlastRadius...),
+		RollbackAvailable:    plan.RollbackAvailable,
+		Message:              plan.Message,
+		PlannedAt:            plan.PlannedAt,
+		ExpiresAt:            plan.ExpiresAt,
+		ResourceVersion:      plan.ResourceVersion,
+		PolicyVersion:        plan.PolicyVersion,
+		PlanHash:             plan.PlanHash,
+	}
+}
+
+func contextConfidenceRequestToInfo(conf *approval.ContextConfidence) *aicontracts.ContextConfidenceInfo {
+	if conf == nil {
+		return nil
+	}
+	return &aicontracts.ContextConfidenceInfo{
+		Level:    string(conf.Level),
+		Summary:  conf.Summary,
+		Evidence: append([]string(nil), conf.Evidence...),
+	}
+}
+
+func contextConfidenceInfoToRequest(conf *aicontracts.ContextConfidenceInfo) *approval.ContextConfidence {
+	if conf == nil {
+		return nil
+	}
+	return &approval.ContextConfidence{
+		Level:    approval.ContextConfidenceLevel(conf.Level),
+		Summary:  conf.Summary,
+		Evidence: append([]string(nil), conf.Evidence...),
+	}
+}
+
+func preflightRequestToInfo(preflight *approval.ActionPreflight) *aicontracts.ActionPreflightInfo {
+	if preflight == nil {
+		return nil
+	}
+	return &aicontracts.ActionPreflightInfo{
+		Target:            preflight.Target,
+		CurrentState:      preflight.CurrentState,
+		IntendedChange:    preflight.IntendedChange,
+		DryRunAvailable:   preflight.DryRunAvailable,
+		DryRunSummary:     preflight.DryRunSummary,
+		SafetyChecks:      append([]string(nil), preflight.SafetyChecks...),
+		VerificationSteps: append([]string(nil), preflight.VerificationSteps...),
+		GeneratedAt:       preflight.GeneratedAt,
+	}
+}
+
+func preflightInfoToRequest(preflight *aicontracts.ActionPreflightInfo) *approval.ActionPreflight {
+	if preflight == nil {
+		return nil
+	}
+	return &approval.ActionPreflight{
+		Target:            preflight.Target,
+		CurrentState:      preflight.CurrentState,
+		IntendedChange:    preflight.IntendedChange,
+		DryRunAvailable:   preflight.DryRunAvailable,
+		DryRunSummary:     preflight.DryRunSummary,
+		SafetyChecks:      append([]string(nil), preflight.SafetyChecks...),
+		VerificationSteps: append([]string(nil), preflight.VerificationSteps...),
+		GeneratedAt:       preflight.GeneratedAt,
 	}
 }
 

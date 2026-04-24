@@ -240,6 +240,16 @@ describe('ApprovalCard', () => {
             summary: 'Target was resolved to a concrete resource before approval.',
             evidence: ['Target identifier bound to agent-1.'],
           },
+          preflight: {
+            target: 'agent:web1 (agent-1)',
+            current_state: 'Resolved approval target: agent:web1 (agent-1).',
+            intended_change: 'Restart nginx',
+            dry_run_available: false,
+            dry_run_summary: 'No provider-supported dry run is available for this action.',
+            safety_checks: ['Approval is scoped to this organization.'],
+            verification_steps: ['Read back the target state after execution.'],
+            generated_at: '2026-04-23T12:29:00Z',
+          },
         })}
         onApprove={vi.fn()}
         onSkip={vi.fn()}
@@ -251,6 +261,11 @@ describe('ApprovalCard', () => {
     expect(screen.getByText('service interruption on target')).toBeInTheDocument();
     expect(screen.getByText('VERIFIED')).toBeInTheDocument();
     expect(screen.getByText('Target identifier bound to agent-1.')).toBeInTheDocument();
+    expect(screen.getByText('Preflight')).toBeInTheDocument();
+    expect(screen.getByText('No dry run')).toBeInTheDocument();
+    expect(screen.getByText('Restart nginx')).toBeInTheDocument();
+    expect(screen.getByText('Approval is scoped to this organization.')).toBeInTheDocument();
+    expect(screen.getByText('Read back the target state after execution.')).toBeInTheDocument();
     expect(screen.getByText(/Audit action-123/)).toBeInTheDocument();
   });
 });

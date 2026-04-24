@@ -83,6 +83,7 @@ describe('dashboard Pulse Brief model', () => {
     expect(brief.body).toContain('no pending approvals, active alerts, or Patrol findings');
     expect(brief.evidence).toContain('No active dashboard issues');
     expect(brief.assistantPrompt).toContain('Use only these dashboard facts');
+    expect(brief.assistantPrompt).toContain('do not run commands or change anything');
   });
 
   it('prioritizes concrete problem resources before lower-level context', () => {

@@ -119,6 +119,9 @@ vi.mock('@/stores/aiIntelligence', () => ({
     get pendingApprovalCount() {
       return 0;
     },
+    get patrolPendingApprovalCount() {
+      return 0;
+    },
     get remediationPlans() {
       return [];
     },
@@ -136,7 +139,10 @@ describe('FindingsPanel resource links', () => {
 
     if (typeof window.requestAnimationFrame !== 'function') {
       window.requestAnimationFrame = ((callback: FrameRequestCallback) =>
-        window.setTimeout(() => callback(performance.now()), 0)) as typeof window.requestAnimationFrame;
+        window.setTimeout(
+          () => callback(performance.now()),
+          0,
+        )) as typeof window.requestAnimationFrame;
     }
   });
 
@@ -149,10 +155,7 @@ describe('FindingsPanel resource links', () => {
 
     expect(
       screen.getByRole('link', { name: 'Open related infrastructure for Nextcloud' }),
-    ).toHaveAttribute(
-      'href',
-      '/infrastructure?resource=app-container%3Atruenas-main%3Anextcloud',
-    );
+    ).toHaveAttribute('href', '/infrastructure?resource=app-container%3Atruenas-main%3Anextcloud');
     expect(
       screen.getByRole('link', { name: 'Open related workloads for Nextcloud' }),
     ).toHaveAttribute(

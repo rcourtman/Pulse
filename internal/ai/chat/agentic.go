@@ -65,6 +65,32 @@ func isRetryableProviderStreamError(err error) bool {
 	return false
 }
 
+func emitWorkflowState(callback StreamCallback, phase, message, state, tool string) {
+	if callback == nil {
+		return
+	}
+	jsonData, _ := json.Marshal(WorkflowStateData{
+		Phase:   phase,
+		Message: message,
+		State:   state,
+		Tool:    tool,
+	})
+	callback(StreamEvent{Type: "workflow_state", Data: jsonData})
+}
+
+func sessionFSMState(fsm *SessionFSM) string {
+	if fsm == nil {
+		return ""
+	}
+	return string(fsm.State)
+}
+
+func (a *AgenticLoop) currentFSMState() string {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return sessionFSMState(a.sessionFSM)
+}
+
 func fallbackProviderStreamErrorMessage(err error) string {
 	const defaultMessage = "AI response stream interrupted before completion. Please retry."
 	if err == nil {
@@ -449,6 +475,9 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 			Str("session_id", sessionID).
 			Int("system_prompt_len", len(systemPrompt)).
 			Msg("[AgenticLoop] Calling provider.ChatStream")
+		if turn == 0 {
+			emitWorkflowState(callback, "investigate", "Inspecting infrastructure context and deciding the next step.", a.currentFSMState(), "")
+		}
 
 		const maxProviderAttempts = 2
 		err := error(nil)
@@ -776,6 +805,7 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 			}
 
 			log.Debug().Msg("agentic loop complete - no tool calls")
+			emitWorkflowState(callback, "complete", "Assistant response is ready.", sessionFSMState(fsm), "")
 			resultMessages = a.ensureFinalTextResponse(ctx, sessionID, resultMessages, providerMessages, callback)
 			return resultMessages, nil
 		}
@@ -819,6 +849,8 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 			}
 		}
 		if hasPulseQuestion {
+			emitWorkflowState(callback, "clarify", "Waiting for your answer before continuing.", sessionFSMState(fsm), pulseQuestionToolName)
+
 			for _, tc := range toolCalls {
 				log.Debug().
 					Str("tool", tc.Name).
@@ -1189,6 +1221,19 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 		// Tool execution is stateless I/O — safe to parallelize.
 		// Cap concurrency at 4 to avoid overwhelming infrastructure.
 		execResults := make([]parallelToolResult, len(pendingExec))
+		if len(pendingExec) > 0 {
+			executeMessage := "Running infrastructure checks."
+			workflowTool := pendingExec[0].tc.Name
+			for _, pe := range pendingExec {
+				if pe.toolKind == ToolKindWrite {
+					executeMessage = "Running the planned action through governed execution."
+					workflowTool = pe.tc.Name
+					emitWorkflowState(callback, "plan", "Planning governed action and safety checks before execution.", sessionFSMState(fsm), workflowTool)
+					break
+				}
+			}
+			emitWorkflowState(callback, "execute", executeMessage, sessionFSMState(fsm), workflowTool)
+		}
 
 		if len(pendingExec) > 1 {
 			log.Info().
@@ -1357,6 +1402,7 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 					AuditID           string                         `json:"audit_id"`
 					Plan              *ApprovalPlanData              `json:"plan"`
 					ContextConfidence *ApprovalContextConfidenceData `json:"context_confidence"`
+					Preflight         *ApprovalPreflightData         `json:"preflight"`
 				}
 				if err := json.Unmarshal([]byte(approvalJSON), &approvalData); err != nil {
 					log.Error().Err(err).Str("data", approvalJSON).Msg("failed to parse approval request")
@@ -1380,7 +1426,9 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 						AuditID:           approvalData.AuditID,
 						Plan:              approvalData.Plan,
 						ContextConfidence: approvalData.ContextConfidence,
+						Preflight:         approvalData.Preflight,
 					})
+					emitWorkflowState(callback, "approve", "Waiting for approval before executing the planned action.", sessionFSMState(fsm), tc.Name)
 					callback(StreamEvent{Type: "approval_needed", Data: jsonData})
 
 					// In autonomous mode (investigations), don't wait for approval.
@@ -1409,12 +1457,14 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 								if a.executor != nil {
 									a.executor.RecordApprovalDecision(approvalData.ApprovalID, unifiedresources.ActionStateFailed, "pulse_assistant", waitErr.Error())
 								}
+								emitWorkflowState(callback, "complete", "Approval wait ended before execution.", sessionFSMState(fsm), tc.Name)
 								resultText = fmt.Sprintf("Approval timeout or error: %v", waitErr)
 								isError = true
 							} else if decision.Status == approval.StatusApproved {
 								if a.executor != nil {
 									a.executor.RecordApprovalDecision(approvalData.ApprovalID, unifiedresources.ActionStateApproved, decision.DecidedBy, "approval granted")
 								}
+								emitWorkflowState(callback, "execute", "Approval granted. Executing the approved action.", sessionFSMState(fsm), tc.Name)
 								// Re-execute the tool with approval granted
 								// Add approval_id to input so tool knows this is pre-approved
 								inputWithApproval := make(map[string]interface{})
@@ -1434,6 +1484,7 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 								if a.executor != nil {
 									a.executor.RecordApprovalDecision(approvalData.ApprovalID, unifiedresources.ActionStateRejected, decision.DecidedBy, firstNonEmptyTrimmed(decision.DenyReason, "approval denied"))
 								}
+								emitWorkflowState(callback, "complete", "Approval denied. No action was executed.", sessionFSMState(fsm), tc.Name)
 								resultText = fmt.Sprintf("Command denied: %s", decision.DenyReason)
 								isError = false
 							}
@@ -1465,6 +1516,9 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 			// === FSM STATE TRANSITION: Update FSM after successful tool execution ===
 			if fsm != nil && !isError {
 				fsm.OnToolSuccess(toolKind, tc.Name)
+				if toolKind == ToolKindWrite && fsm.State == StateVerifying {
+					emitWorkflowState(callback, "verify", "Verifying the write before the Assistant responds.", sessionFSMState(fsm), tc.Name)
+				}
 
 				// If we just completed verification (read after write in VERIFYING), transition to READING
 				// This allows subsequent writes to proceed without being blocked

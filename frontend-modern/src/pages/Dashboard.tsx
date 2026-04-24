@@ -149,6 +149,7 @@ export default function Dashboard() {
       targetId: 'pulse-brief',
       initialPrompt: brief.assistantPrompt,
       context: brief.assistantContext,
+      autonomousMode: false,
     });
   };
 

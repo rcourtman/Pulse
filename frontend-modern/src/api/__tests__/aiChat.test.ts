@@ -74,4 +74,39 @@ describe('AIChatAPI', () => {
     expect(onEvent).toHaveBeenCalledWith({ type: 'done' });
     expect(releaseLock).toHaveBeenCalledTimes(1);
   });
+
+  it('includes a per-request autonomous override when supplied', async () => {
+    const read = vi.fn().mockResolvedValueOnce({ done: true, value: undefined });
+    const releaseLock = vi.fn();
+
+    apiFetchMock.mockResolvedValueOnce({
+      ok: true,
+      body: {
+        getReader: () => ({ read, releaseLock }),
+      },
+    } as unknown as Response);
+
+    await AIChatAPI.chat(
+      'summarize dashboard',
+      'session-1',
+      undefined,
+      vi.fn(),
+      undefined,
+      undefined,
+      undefined,
+      false,
+    );
+
+    expect(apiFetchMock).toHaveBeenCalledWith(
+      '/api/ai/chat',
+      expect.objectContaining({
+        body: JSON.stringify({
+          prompt: 'summarize dashboard',
+          session_id: 'session-1',
+          model: undefined,
+          autonomous_mode: false,
+        }),
+      }),
+    );
+  });
 });

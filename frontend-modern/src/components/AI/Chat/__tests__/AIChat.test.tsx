@@ -77,6 +77,7 @@ const {
     context: {
       initialPrompt: undefined as string | undefined,
       findingId: undefined as string | undefined,
+      autonomousMode: undefined as boolean | undefined,
     },
     clearInitialPrompt: vi.fn(),
     clearFindingId: vi.fn(),
@@ -218,7 +219,11 @@ beforeEach(() => {
   setViewportWidth(1440);
   resetAIRuntimeState();
   mockAiChatStore.isOpenSignal.mockReturnValue(true);
-  mockAiChatStore.context = { initialPrompt: undefined, findingId: undefined };
+  mockAiChatStore.context = {
+    initialPrompt: undefined,
+    findingId: undefined,
+    autonomousMode: undefined,
+  };
   mockChat.messages.mockReturnValue([]);
   mockChat.isLoading.mockReturnValue(false);
   mockChat.sessionId.mockReturnValue('');
@@ -943,6 +948,39 @@ describe('AIChat', () => {
         expect(screen.getByText('Switch to Approval')).toBeInTheDocument();
       });
     });
+
+    it('keeps scoped dashboard handoffs approval-required without showing the autonomous warning', async () => {
+      mockAIAPI.getSettings.mockResolvedValue({
+        model: 'gpt-4',
+        chat_model: '',
+        control_level: 'autonomous',
+        autonomous_mode: true,
+        discovery_enabled: true,
+      });
+      mockAiChatStore.context = {
+        initialPrompt: undefined,
+        findingId: undefined,
+        autonomousMode: false,
+      };
+
+      renderChat();
+
+      await waitFor(() => {
+        expect(screen.getByText(/Approval required for this dashboard brief/)).toBeInTheDocument();
+      });
+      expect(screen.queryByText('Commands execute without approval.')).not.toBeInTheDocument();
+
+      const textarea = screen.getByPlaceholderText('Ask about your infrastructure...');
+      fireEvent.input(textarea, { target: { value: 'summarize this dashboard' } });
+      fireEvent.keyDown(textarea, { key: 'Enter' });
+
+      expect(mockChat.sendMessage).toHaveBeenCalledWith(
+        'summarize this dashboard',
+        undefined,
+        undefined,
+        { autonomousMode: false },
+      );
+    });
   });
 
   // ── Discovery hint ───────────────────────────────────────────────────
@@ -1028,7 +1066,11 @@ describe('AIChat', () => {
 
   describe('finding ID context', () => {
     it('passes findingId from store context on first message', () => {
-      mockAiChatStore.context = { initialPrompt: undefined, findingId: 'finding-123' };
+      mockAiChatStore.context = {
+        initialPrompt: undefined,
+        findingId: 'finding-123',
+        autonomousMode: undefined,
+      };
       renderChat();
       const textarea = screen.getByPlaceholderText('Ask about your infrastructure...');
       fireEvent.input(textarea, { target: { value: 'investigate this' } });

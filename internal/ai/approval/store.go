@@ -59,6 +59,19 @@ type ContextConfidence struct {
 	Evidence []string               `json:"evidence,omitempty"`
 }
 
+// ActionPreflight is the deterministic pre-execution readout shown before
+// approval. It is intentionally explicit when no provider dry-run exists.
+type ActionPreflight struct {
+	Target            string    `json:"target,omitempty"`
+	CurrentState      string    `json:"currentState,omitempty"`
+	IntendedChange    string    `json:"intendedChange,omitempty"`
+	DryRunAvailable   bool      `json:"dryRunAvailable"`
+	DryRunSummary     string    `json:"dryRunSummary,omitempty"`
+	SafetyChecks      []string  `json:"safetyChecks,omitempty"`
+	VerificationSteps []string  `json:"verificationSteps,omitempty"`
+	GeneratedAt       time.Time `json:"generatedAt,omitempty"`
+}
+
 // ApprovalRequest represents a pending command awaiting user approval.
 type ApprovalRequest struct {
 	ID          string         `json:"id"`
@@ -85,6 +98,8 @@ type ApprovalRequest struct {
 	Plan *unifiedresources.ActionPlan `json:"plan,omitempty"`
 	// ContextConfidence records how strongly the action target was resolved.
 	ContextConfidence *ContextConfidence `json:"contextConfidence,omitempty"`
+	// Preflight records the pre-execution dry-run boundary and safety checks.
+	Preflight *ActionPreflight `json:"preflight,omitempty"`
 }
 
 // NormalizeOrgID normalizes tenant IDs used in approval records.

@@ -23,6 +23,7 @@ export interface ApprovalNeededData {
   audit_id?: string;
   plan?: ApprovalPlanData;
   context_confidence?: ApprovalContextConfidenceData;
+  preflight?: ApprovalPreflightData;
 }
 
 export interface ApprovalPlanData {
@@ -35,6 +36,17 @@ export interface ApprovalPlanData {
   rollback_available: boolean;
   plan_hash?: string;
   expires_at?: string;
+}
+
+export interface ApprovalPreflightData {
+  target?: string;
+  current_state?: string;
+  intended_change?: string;
+  dry_run_available: boolean;
+  dry_run_summary?: string;
+  safety_checks?: string[];
+  verification_steps?: string[];
+  generated_at?: string;
 }
 
 export interface ContentData {
@@ -98,10 +110,18 @@ export interface ToolStartData {
   raw_input?: string;
 }
 
+export interface WorkflowStateData {
+  phase: string;
+  message: string;
+  state?: string;
+  tool?: string;
+}
+
 export type AIChatStreamEvent =
   | { type: 'content'; data: ContentData }
   | { type: 'thinking'; data: ThinkingData }
   | { type: 'explore_status'; data: ExploreStatusData }
+  | { type: 'workflow_state'; data: WorkflowStateData }
   | { type: 'tool_start'; data: ToolStartData }
   | { type: 'tool_end'; data: ToolEndData }
   | { type: 'approval_needed'; data: ApprovalNeededData }

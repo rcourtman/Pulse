@@ -728,11 +728,12 @@ func canonicalizeChatMentionType(raw string) string {
 
 // ChatRequest represents a chat request
 type ChatRequest struct {
-	Prompt    string        `json:"prompt"`
-	SessionID string        `json:"session_id,omitempty"`
-	Model     string        `json:"model,omitempty"`
-	Mentions  []ChatMention `json:"mentions,omitempty"`
-	FindingID string        `json:"finding_id,omitempty"`
+	Prompt         string        `json:"prompt"`
+	SessionID      string        `json:"session_id,omitempty"`
+	Model          string        `json:"model,omitempty"`
+	Mentions       []ChatMention `json:"mentions,omitempty"`
+	FindingID      string        `json:"finding_id,omitempty"`
+	AutonomousMode *bool         `json:"autonomous_mode,omitempty"`
 }
 
 // HandleChat handles POST /api/ai/chat - streaming chat
@@ -915,11 +916,12 @@ func (h *AIHandler) HandleChat(w http.ResponseWriter, r *http.Request) {
 	// Stream from AI chat service
 	serviceSentDone := false
 	err := svc.ExecuteStream(ctx, chat.ExecuteRequest{
-		Prompt:    prompt,
-		SessionID: req.SessionID,
-		Model:     req.Model,
-		Mentions:  chatMentions,
-		FindingID: req.FindingID,
+		Prompt:         prompt,
+		SessionID:      req.SessionID,
+		Model:          req.Model,
+		Mentions:       chatMentions,
+		FindingID:      req.FindingID,
+		AutonomousMode: req.AutonomousMode,
 	}, func(event chat.StreamEvent) {
 		if event.Type == "done" {
 			serviceSentDone = true

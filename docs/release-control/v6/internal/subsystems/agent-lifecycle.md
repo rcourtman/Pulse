@@ -156,6 +156,11 @@ an add-only capacity posture.
    only authority for Patrol quickstart bootstrap: self-hosted installs use the
    shared installation-scoped `activation.enc`, while entitled hosted lanes use
    the signed entitlement lease already carried in canonical billing state.
+   Per-request `/api/ai/chat` execution-mode overrides follow that same
+   boundary: lifecycle-adjacent consumers may rely on Assistant approval
+   semantics, but scoped `autonomous_mode:false` chat requests must not be
+   reinterpreted as agent registration, assignment, installer, or connection
+   lifecycle state.
    Lifecycle flows must not reintroduce anonymous bootstrap identity,
    tenant-local commercial-owner surrogates, or fake activation records when
    they traverse those shared handlers. They also must not infer tenant

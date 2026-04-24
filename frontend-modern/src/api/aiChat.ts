@@ -199,6 +199,7 @@ export class AIChatAPI {
     signal?: AbortSignal,
     mentions?: ChatMention[],
     findingId?: string,
+    autonomousMode?: boolean,
   ): Promise<void> {
     logger.debug('[AI Chat] Starting chat stream', { prompt: prompt.substring(0, 50) });
 
@@ -212,6 +213,9 @@ export class AIChatAPI {
     }
     if (findingId) {
       body.finding_id = findingId;
+    }
+    if (typeof autonomousMode === 'boolean') {
+      body.autonomous_mode = autonomousMode;
     }
 
     const response = await apiFetch(`${this.baseUrl}/chat`, {

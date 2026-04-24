@@ -17,6 +17,7 @@ import type {
   UnifiedFindingRecord,
   ApprovalRequest,
   ApprovalExecutionResult,
+  ApprovalDecisionResult,
 } from '@/api/ai';
 import {
   doesFindingNeedAttention,
@@ -27,10 +28,7 @@ import {
 import { getApprovalExpiryTime, isLivePendingApproval } from '@/utils/approvalState';
 import { sortPendingApprovalsByUrgency } from '@/utils/approvalRiskPresentation';
 import { logger } from '@/utils/logger';
-import type {
-  CorrelationsResponse,
-  IntelligenceSummary,
-} from '@/types/aiIntelligence';
+import type { CorrelationsResponse, IntelligenceSummary } from '@/types/aiIntelligence';
 import { normalizeIntelligenceSummary } from './aiIntelligenceSummaryModel';
 import { presentationPolicyIsDemoMode } from './sessionPresentationPolicy';
 
@@ -203,9 +201,12 @@ function syncPendingApprovalExpiryTimer(approvals: ApprovalRequest[]) {
     return;
   }
 
-  pendingApprovalExpiryTimer = setTimeout(() => {
-    syncPendingApprovalExpiryTimer(pendingApprovals());
-  }, Math.max(0, nextExpiry - Date.now() + 1));
+  pendingApprovalExpiryTimer = setTimeout(
+    () => {
+      syncPendingApprovalExpiryTimer(pendingApprovals());
+    },
+    Math.max(0, nextExpiry - Date.now() + 1),
+  );
 }
 
 function setPendingApprovalsWithExpiryTracking(approvals: ApprovalRequest[]) {
@@ -216,6 +217,10 @@ function setPendingApprovalsWithExpiryTracking(approvals: ApprovalRequest[]) {
 function getLivePendingApprovals() {
   const now = pendingApprovalsNow();
   return pendingApprovals().filter((approval) => isLivePendingApproval(approval, now));
+}
+
+function getLivePatrolPendingApprovals() {
+  return getLivePendingApprovals().filter(isPatrolInvestigationFixApproval);
 }
 
 // ============================================
@@ -443,6 +448,9 @@ export const aiIntelligenceStore = {
   get pendingApprovals() {
     return sortPendingApprovalsByUrgency(getLivePendingApprovals());
   },
+  get patrolPendingApprovals() {
+    return sortPendingApprovalsByUrgency(getLivePatrolPendingApprovals());
+  },
   get approvalsError() {
     return approvalsError();
   },
@@ -451,9 +459,12 @@ export const aiIntelligenceStore = {
   get pendingApprovalCount() {
     return getLivePendingApprovals().length;
   },
+  get patrolPendingApprovalCount() {
+    return getLivePatrolPendingApprovals().length;
+  },
 
   get findingsWithPendingApprovals() {
-    const approvals = getLivePendingApprovals();
+    const approvals = getLivePatrolPendingApprovals();
     const approvalOrder = new Map(
       sortPendingApprovalsByUrgency(approvals).map((approval, index) => [approval.targetId, index]),
     );
@@ -467,7 +478,7 @@ export const aiIntelligenceStore = {
   },
 
   get findingsNeedingAttention() {
-    const approvals = getLivePendingApprovals();
+    const approvals = getLivePatrolPendingApprovals();
     return sortFindingsForAttentionQueue(
       unifiedFindings().filter((finding) => doesFindingNeedAttention(finding, approvals)),
     );
@@ -484,7 +495,7 @@ export const aiIntelligenceStore = {
       return;
     }
     try {
-      const approvals = (await AIAPI.getPendingApprovals()).filter(isPatrolInvestigationFixApproval);
+      const approvals = await AIAPI.getPendingApprovals();
       setPendingApprovalsWithExpiryTracking(approvals);
     } catch (e) {
       logger.error('Failed to load pending approvals:', e);
@@ -493,8 +504,13 @@ export const aiIntelligenceStore = {
   },
 
   async approveInvestigationFix(approvalId: string): Promise<ApprovalExecutionResult | null> {
+    const result = await this.approvePendingApproval(approvalId);
+    return result as ApprovalExecutionResult | null;
+  },
+
+  async approvePendingApproval(approvalId: string): Promise<ApprovalDecisionResult | null> {
     try {
-      const result = await AIAPI.approveInvestigationFix(approvalId);
+      const result = await AIAPI.approvePendingApproval(approvalId);
       await this.loadPendingApprovals();
       await this.loadFindings();
       return result;
@@ -505,8 +521,12 @@ export const aiIntelligenceStore = {
   },
 
   async denyInvestigationFix(approvalId: string, reason?: string) {
+    return this.denyPendingApproval(approvalId, reason);
+  },
+
+  async denyPendingApproval(approvalId: string, reason?: string) {
     try {
-      await AIAPI.denyInvestigationFix(approvalId, reason);
+      await AIAPI.denyPendingApproval(approvalId, reason);
       await this.loadPendingApprovals();
       await this.loadFindings();
       return true;
@@ -579,10 +599,7 @@ export const aiIntelligenceStore = {
 
   // Initialize - load all data
   async initialize() {
-    await Promise.all([
-      this.loadDashboardData(),
-      this.loadRemediationPlans(),
-    ]);
+    await Promise.all([this.loadDashboardData(), this.loadRemediationPlans()]);
   },
 
   // Refresh all data

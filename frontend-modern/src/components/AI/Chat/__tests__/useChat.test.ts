@@ -216,6 +216,20 @@ describe('useChat', () => {
       dispose();
     });
 
+    it('passes a scoped autonomous-mode override to the API', async () => {
+      mockChat.mockResolvedValue(undefined);
+
+      const { value: chat, dispose } = withRoot(() => useChat({ sessionId: 'sess' }));
+      await chat.sendMessage('summarize dashboard', undefined, undefined, {
+        autonomousMode: false,
+      });
+
+      const chatCall = mockChat.mock.calls[0];
+      expect(chatCall[0]).toBe('summarize dashboard');
+      expect(chatCall[7]).toBe(false);
+      dispose();
+    });
+
     it('aborts current stream when sending mid-stream', async () => {
       // First call: capture signal so we can verify it was aborted
       let capturedSignal: AbortSignal | undefined;
@@ -418,6 +432,35 @@ describe('useChat', () => {
       dispose();
     });
 
+    it('processes workflow_state events', async () => {
+      const { getFireEvent } = setupWithEventCapture();
+      const { value: chat, dispose } = withRoot(() => useChat({ sessionId: 's' }));
+
+      await chat.sendMessage('hi');
+      const fire = getFireEvent();
+
+      fire({
+        type: 'workflow_state',
+        data: {
+          phase: 'plan',
+          message: 'Planning governed action and safety checks before execution.',
+          state: 'READING',
+          tool: 'pulse_exec',
+        },
+      });
+
+      const assistant = chat.messages().find((m) => m.role === 'assistant')!;
+      const workflowEvents = assistant.streamEvents?.filter((e) => e.type === 'workflow') ?? [];
+      expect(workflowEvents).toHaveLength(1);
+      expect(workflowEvents[0].workflow).toEqual({
+        phase: 'plan',
+        message: 'Planning governed action and safety checks before execution.',
+        state: 'READING',
+        tool: 'pulse_exec',
+      });
+      dispose();
+    });
+
     it('processes tool_start events', async () => {
       const { getFireEvent } = setupWithEventCapture();
       const { value: chat, dispose } = withRoot(() => useChat({ sessionId: 's' }));
@@ -572,6 +615,16 @@ describe('useChat', () => {
             summary: 'Target was resolved to a concrete resource before approval.',
             evidence: ['Target identifier bound to agent-1.'],
           },
+          preflight: {
+            target: 'agent:web1 (agent-1)',
+            current_state: 'Resolved approval target: agent:web1 (agent-1).',
+            intended_change: 'Restart web service',
+            dry_run_available: false,
+            dry_run_summary: 'No provider-supported dry run is available for this action.',
+            safety_checks: ['Approval is scoped to this organization.'],
+            verification_steps: ['Read back the target state after execution.'],
+            generated_at: '2026-04-23T12:29:00Z',
+          },
           approval_id: 'appr-5',
         },
       });
@@ -604,6 +657,16 @@ describe('useChat', () => {
           level: 'verified',
           summary: 'Target was resolved to a concrete resource before approval.',
           evidence: ['Target identifier bound to agent-1.'],
+        },
+        preflight: {
+          target: 'agent:web1 (agent-1)',
+          current_state: 'Resolved approval target: agent:web1 (agent-1).',
+          intended_change: 'Restart web service',
+          dry_run_available: false,
+          dry_run_summary: 'No provider-supported dry run is available for this action.',
+          safety_checks: ['Approval is scoped to this organization.'],
+          verification_steps: ['Read back the target state after execution.'],
+          generated_at: '2026-04-23T12:29:00Z',
         },
         isExecuting: false,
         approvalId: 'appr-5',

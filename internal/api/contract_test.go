@@ -9684,6 +9684,16 @@ func TestContract_ChatStreamEventJSONSnapshots(t *testing.T) {
 			want: `{"type":"explore_status","data":{"phase":"started","message":"Explore pre-pass running (read-only context).","model":"openai:explore-fast"}}`,
 		},
 		{
+			name: "workflow_state",
+			event: mustStreamEvent(t, "workflow_state", chat.WorkflowStateData{
+				Phase:   "plan",
+				Message: "Planning governed action and safety checks before execution.",
+				State:   "READING",
+				Tool:    "pulse_exec",
+			}),
+			want: `{"type":"workflow_state","data":{"phase":"plan","message":"Planning governed action and safety checks before execution.","state":"READING","tool":"pulse_exec"}}`,
+		},
+		{
 			name: "tool_start",
 			event: mustStreamEvent(t, "tool_start", chat.ToolStartData{
 				ID:       "tool-1",
@@ -9735,8 +9745,18 @@ func TestContract_ChatStreamEventJSONSnapshots(t *testing.T) {
 					Summary:  "Target was resolved to a concrete resource before approval.",
 					Evidence: []string{"Target identifier bound to agent-1."},
 				},
+				Preflight: &chat.ApprovalPreflightData{
+					Target:            "agent:node-1 (agent-1)",
+					CurrentState:      "Resolved approval target: agent:node-1 (agent-1).",
+					IntendedChange:    "Restart web service",
+					DryRunAvailable:   false,
+					DryRunSummary:     "No provider-supported dry run is available for this action.",
+					SafetyChecks:      []string{"Approval is scoped to this organization."},
+					VerificationSteps: []string{"Read back the target state after execution."},
+					GeneratedAt:       "2026-04-23T12:29:00Z",
+				},
 			}),
-			want: `{"type":"approval_needed","data":{"approval_id":"approval-1","tool_id":"tool-2","tool_name":"pulse_exec","command":"systemctl restart nginx","run_on_host":true,"target_host":"node-1","target_type":"agent","target_id":"agent-1","risk":"high","description":"Restart web service","audit_id":"action-1","plan":{"action_id":"action-1","request_id":"approval-1","summary":"Restart web service","requires_approval":true,"approval_policy":"admin","blast_radius":"service interruption on target","rollback_available":true,"plan_hash":"hash-1","expires_at":"2026-04-23T12:30:00Z"},"context_confidence":{"level":"verified","summary":"Target was resolved to a concrete resource before approval.","evidence":["Target identifier bound to agent-1."]}}}`,
+			want: `{"type":"approval_needed","data":{"approval_id":"approval-1","tool_id":"tool-2","tool_name":"pulse_exec","command":"systemctl restart nginx","run_on_host":true,"target_host":"node-1","target_type":"agent","target_id":"agent-1","risk":"high","description":"Restart web service","audit_id":"action-1","plan":{"action_id":"action-1","request_id":"approval-1","summary":"Restart web service","requires_approval":true,"approval_policy":"admin","blast_radius":"service interruption on target","rollback_available":true,"plan_hash":"hash-1","expires_at":"2026-04-23T12:30:00Z"},"context_confidence":{"level":"verified","summary":"Target was resolved to a concrete resource before approval.","evidence":["Target identifier bound to agent-1."]},"preflight":{"target":"agent:node-1 (agent-1)","current_state":"Resolved approval target: agent:node-1 (agent-1).","intended_change":"Restart web service","dry_run_available":false,"dry_run_summary":"No provider-supported dry run is available for this action.","safety_checks":["Approval is scoped to this organization."],"verification_steps":["Read back the target state after execution."],"generated_at":"2026-04-23T12:29:00Z"}}}`,
 		},
 		{
 			name: "question",

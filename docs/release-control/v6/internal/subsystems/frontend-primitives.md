@@ -573,6 +573,12 @@ work extends shared components instead of creating new local variants.
     IDs into setup payloads. The shared settings shell should let the backend
     resolve the effective BYOK model and then render that returned state rather
     than guessing a model in the modal.
+    Scoped Assistant handoffs must keep request-local execution overrides in
+    drawer context. Dashboard and other route-owned entry points may open the
+    Assistant drawer with a pre-filled prompt, context, and
+    `autonomousMode:false`, but they must not mutate persistent AI control-level
+    settings or trigger background Assistant settings/model bootstrap before
+    the drawer is open.
 11. Keep shared filter primitives coherent with route-owned option hydration.
     Feature shells such as `frontend-modern/src/features/infrastructure/`
     must keep a route-owned canonical option visible in shared selects like

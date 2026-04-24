@@ -32,10 +32,8 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
   // Find the pending approval for this finding from the store
   const pendingApproval = createMemo(() => {
     return (
-      aiIntelligenceStore.pendingApprovals.find(
-        (a: ApprovalRequest) =>
-          a.toolId === 'investigation_fix' &&
-          a.targetId === props.findingId,
+      aiIntelligenceStore.patrolPendingApprovals.find(
+        (a: ApprovalRequest) => a.toolId === 'investigation_fix' && a.targetId === props.findingId,
       ) ?? null
     );
   });
@@ -437,16 +435,16 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
                       {fix.commands![0]}
                     </div>
                   </Show>
-                <Show when={fix.target_host}>
-                  <div class="text-xs text-muted">Target: {fix.target_host}</div>
-                </Show>
-              </div>
-              {renderRecoveryActions('Fix with Assistant', (e) =>
-                handleFixWithAssistant(null, fix, e),
-              )}
-            </>
-          );
-        })()}
+                  <Show when={fix.target_host}>
+                    <div class="text-xs text-muted">Target: {fix.target_host}</div>
+                  </Show>
+                </div>
+                {renderRecoveryActions('Fix with Assistant', (e) =>
+                  handleFixWithAssistant(null, fix, e),
+                )}
+              </>
+            );
+          })()}
         </Show>
 
         {/* Queued approval with missing detail payload - keep recovery path visible */}

@@ -85,7 +85,9 @@ querying, and the operator-facing storage health presentation layer.
    but must not redirect into storage or recovery ownership. Optional dashboard
    Pulse Brief copy may summarize storage and recovery facts that are already on
    the route, but it must not become the owner of storage capacity, storage
-   health, protected-item, or recovery-outcome readiness claims.
+   health, protected-item, or recovery-outcome readiness claims. The Assistant
+   handoff safety mode for that brief remains an AI runtime/API contract concern
+   and must not move storage or recovery readiness truth into model prose.
 4. Route transport changes for storage and recovery endpoints through `internal/api/` and the owning `api-contracts` proof routes
    That same adjacent API boundary also owns TrueNAS feature-default semantics for
    provider-backed recovery: storage and recovery must treat `truenas_disabled`

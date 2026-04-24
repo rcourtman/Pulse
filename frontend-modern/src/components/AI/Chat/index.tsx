@@ -310,6 +310,8 @@ export const AIChat: Component<AIChatProps> = (props) => {
     }
   });
 
+  const hasScopedApprovalHandoff = createMemo(() => aiChatStore.context.autonomousMode === false);
+
   // Compute current status for display
   const currentStatus = createMemo(() => {
     if (!chat.isLoading()) return null;
@@ -651,7 +653,12 @@ export const AIChat: Component<AIChatProps> = (props) => {
     // Pass findingId from context on the first message, clear after success
     const ctx = aiChatStore.context;
     const findingId = ctx.findingId;
-    chat.sendMessage(prompt, mentionsForAPI, findingId).then((ok) => {
+    const sendOptions =
+      typeof ctx.autonomousMode === 'boolean' ? { autonomousMode: ctx.autonomousMode } : undefined;
+    const sendPromise = sendOptions
+      ? chat.sendMessage(prompt, mentionsForAPI, findingId, sendOptions)
+      : chat.sendMessage(prompt, mentionsForAPI, findingId);
+    sendPromise.then((ok) => {
       if (ok && findingId) {
         aiChatStore.clearFindingId?.();
       }
@@ -1090,7 +1097,22 @@ export const AIChat: Component<AIChatProps> = (props) => {
             </div>
           </div>
 
-          <Show when={controlLevel() === 'autonomous' && !autonomousBannerDismissed()}>
+          <Show when={hasScopedApprovalHandoff() && controlLevel() === 'autonomous'}>
+            <div class="px-4 py-2 border-b border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950 flex items-center gap-2 text-[11px] text-blue-700 dark:text-blue-200">
+              <span>
+                Approval required for this dashboard brief. Commands will ask before running; your
+                default Assistant mode is unchanged.
+              </span>
+            </div>
+          </Show>
+
+          <Show
+            when={
+              controlLevel() === 'autonomous' &&
+              !autonomousBannerDismissed() &&
+              !hasScopedApprovalHandoff()
+            }
+          >
             <div class="px-4 py-2 border-b border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900 flex items-center justify-between gap-3 text-[11px] text-red-700 dark:text-red-200">
               <span>Commands execute without approval.</span>
               <div class="flex items-center gap-2">

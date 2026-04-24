@@ -55,14 +55,16 @@ function PendingApprovalRows(props: { approvals: ApprovalRequest[] }) {
   const handleApprove = async (approval: ApprovalRequest) => {
     setActionLoading(approval.id);
     try {
-      const result = await aiIntelligenceStore.approveInvestigationFix(approval.id);
-      if (result?.success) {
-        notificationStore.success('Fix executed successfully');
+      const result = await aiIntelligenceStore.approvePendingApproval(approval.id);
+      if (!result) {
+        notificationStore.error('Failed to approve action');
+      } else if (result.success === false || result.approved === false) {
+        notificationStore.error(result?.error || result?.message || 'Approval execution failed');
       } else {
-        notificationStore.error(result?.error || 'Fix execution failed');
+        notificationStore.success(result?.message || 'Approval granted');
       }
     } catch (err) {
-      notificationStore.error((err as Error).message || 'Failed to execute fix');
+      notificationStore.error((err as Error).message || 'Failed to approve action');
     } finally {
       setActionLoading(null);
     }
@@ -71,18 +73,35 @@ function PendingApprovalRows(props: { approvals: ApprovalRequest[] }) {
   const handleDeny = async (approval: ApprovalRequest) => {
     setActionLoading(approval.id);
     try {
-      const success = await aiIntelligenceStore.denyInvestigationFix(approval.id);
+      const success = await aiIntelligenceStore.denyPendingApproval(approval.id);
       if (success) {
-        notificationStore.success('Fix denied');
+        notificationStore.success('Approval denied');
       } else {
-        notificationStore.error('Failed to deny fix');
+        notificationStore.error('Failed to deny approval');
       }
     } catch (err) {
-      notificationStore.error((err as Error).message || 'Failed to deny fix');
+      notificationStore.error((err as Error).message || 'Failed to deny approval');
     } finally {
       setActionLoading(null);
     }
   };
+
+  const approvalKindLabel = (approval: ApprovalRequest) =>
+    approval.toolId === 'investigation_fix' ? 'Patrol fix' : 'Assistant action';
+
+  const approvalTitle = (approval: ApprovalRequest) =>
+    approval.context ||
+    approval.plan?.summary ||
+    approval.plan?.message ||
+    approval.preflight?.intendedChange ||
+    approval.command;
+
+  const approvalDetail = (approval: ApprovalRequest) =>
+    approval.preflight?.dryRunSummary ||
+    approval.plan?.message ||
+    approval.plan?.summary ||
+    approval.targetName ||
+    approval.command;
 
   return (
     <div class="space-y-1.5">
@@ -92,19 +111,34 @@ function PendingApprovalRows(props: { approvals: ApprovalRequest[] }) {
           {(approval) => {
             const approvalRisk = getApprovalRiskPresentation(approval.riskLevel);
             return (
-              <li class="flex items-center gap-2 py-1.5 px-2 -mx-2 rounded hover:bg-surface-hover transition-colors">
+              <li class="flex items-start gap-2 py-1.5 px-2 -mx-2 rounded hover:bg-surface-hover transition-colors">
                 <span
-                  class={`shrink-0 px-1.5 py-0.5 text-[10px] font-medium rounded ${approvalRisk.badgeClass}`}
+                  class={`mt-0.5 shrink-0 px-1.5 py-0.5 text-[10px] font-medium rounded ${approvalRisk.badgeClass}`}
                 >
                   {approvalRisk.label}
                 </span>
-                <p
-                  class="min-w-0 text-xs text-base-content truncate flex-1"
-                  title={approval.context}
-                >
-                  {approval.context || approval.command}
-                </p>
-                <span class="shrink-0 text-[10px] font-mono text-amber-600 dark:text-amber-400">
+                <div class="min-w-0 flex-1">
+                  <div class="flex min-w-0 items-center gap-1.5">
+                    <span class="shrink-0 rounded bg-surface-alt px-1.5 py-0.5 text-[10px] font-medium text-muted">
+                      {approvalKindLabel(approval)}
+                    </span>
+                    <p
+                      class="min-w-0 truncate text-xs text-base-content"
+                      title={approvalTitle(approval)}
+                    >
+                      {approvalTitle(approval)}
+                    </p>
+                  </div>
+                  <Show when={approvalDetail(approval) !== approvalTitle(approval)}>
+                    <p
+                      class="mt-0.5 truncate text-[11px] text-muted"
+                      title={approvalDetail(approval)}
+                    >
+                      {approvalDetail(approval)}
+                    </p>
+                  </Show>
+                </div>
+                <span class="mt-0.5 shrink-0 text-[10px] font-mono text-amber-600 dark:text-amber-400">
                   {timeRemaining(approval.expiresAt)}
                 </span>
                 <div class="shrink-0 flex items-center gap-1">
@@ -276,7 +310,10 @@ function FindingsAttentionRows(props: { findings: UnifiedFinding[] }) {
             return (
               <li class="flex items-center gap-2 py-1.5 px-2 -mx-2 rounded hover:bg-surface-hover transition-colors">
                 <span class={compactBadge.badgeClasses}>{compactBadge.label}</span>
-                <p class="min-w-0 text-xs font-medium text-base-content truncate flex-1" title={title}>
+                <p
+                  class="min-w-0 text-xs font-medium text-base-content truncate flex-1"
+                  title={title}
+                >
                   {title}
                 </p>
                 <Show when={finding.investigationOutcome}>
@@ -358,7 +395,7 @@ function FindingsAttentionRows(props: { findings: UnifiedFinding[] }) {
 // ─── Main Panel ─────────────────────────────────────────────────────
 export function ActionRequiredPanel(props: ActionRequiredPanelProps) {
   const hasPatrol = () => hasFeature('ai_patrol');
-  const hasApprovals = () => hasPatrol() && props.pendingApprovals.length > 0;
+  const hasApprovals = () => props.pendingApprovals.length > 0;
   const hasAlerts = () => props.unackedCriticalAlerts.length > 0;
   const hasFindings = () => hasPatrol() && props.findingsNeedingAttention.length > 0;
   const hasAny = () => hasApprovals() || hasAlerts() || hasFindings();

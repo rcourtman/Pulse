@@ -125,6 +125,14 @@ type ExploreStatusData struct {
 	Outcome string `json:"outcome,omitempty"` // success | failed | skipped_no_model | skipped_no_tools
 }
 
+// WorkflowStateData is the data for "workflow_state" events.
+type WorkflowStateData struct {
+	Phase   string `json:"phase"`           // investigate | clarify | plan | approve | execute | verify | complete
+	Message string `json:"message"`         // Human-readable status text for the UI
+	State   string `json:"state,omitempty"` // Backend workflow state, when available
+	Tool    string `json:"tool,omitempty"`  // Tool associated with this transition
+}
+
 // ToolStartData is the data for "tool_start" events
 type ToolStartData struct {
 	ID       string `json:"id"`
@@ -164,6 +172,18 @@ type ApprovalContextConfidenceData struct {
 	Evidence []string `json:"evidence,omitempty"`
 }
 
+// ApprovalPreflightData describes the pre-execution dry-run and verification boundary.
+type ApprovalPreflightData struct {
+	Target            string   `json:"target,omitempty"`
+	CurrentState      string   `json:"current_state,omitempty"`
+	IntendedChange    string   `json:"intended_change,omitempty"`
+	DryRunAvailable   bool     `json:"dry_run_available"`
+	DryRunSummary     string   `json:"dry_run_summary,omitempty"`
+	SafetyChecks      []string `json:"safety_checks,omitempty"`
+	VerificationSteps []string `json:"verification_steps,omitempty"`
+	GeneratedAt       string   `json:"generated_at,omitempty"`
+}
+
 // ApprovalNeededData is the data for "approval_needed" events
 type ApprovalNeededData struct {
 	ApprovalID        string                         `json:"approval_id"`
@@ -179,6 +199,7 @@ type ApprovalNeededData struct {
 	AuditID           string                         `json:"audit_id,omitempty"`
 	Plan              *ApprovalPlanData              `json:"plan,omitempty"`
 	ContextConfidence *ApprovalContextConfidenceData `json:"context_confidence,omitempty"`
+	Preflight         *ApprovalPreflightData         `json:"preflight,omitempty"`
 }
 
 // QuestionData is the data for "question" events

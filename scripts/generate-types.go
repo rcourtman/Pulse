@@ -36,10 +36,12 @@ func main() {
 		reflect.TypeOf(chat.ContentData{}),
 		reflect.TypeOf(chat.ThinkingData{}),
 		reflect.TypeOf(chat.ExploreStatusData{}),
+		reflect.TypeOf(chat.WorkflowStateData{}),
 		reflect.TypeOf(chat.ToolStartData{}),
 		reflect.TypeOf(chat.ToolEndData{}),
 		reflect.TypeOf(chat.ApprovalPlanData{}),
 		reflect.TypeOf(chat.ApprovalContextConfidenceData{}),
+		reflect.TypeOf(chat.ApprovalPreflightData{}),
 		reflect.TypeOf(chat.ApprovalNeededData{}),
 		reflect.TypeOf(chat.QuestionData{}),
 		reflect.TypeOf(chat.Question{}),
@@ -71,6 +73,7 @@ func main() {
 	buf.WriteString("  | { type: 'content'; data: ContentData }\n")
 	buf.WriteString("  | { type: 'thinking'; data: ThinkingData }\n")
 	buf.WriteString("  | { type: 'explore_status'; data: ExploreStatusData }\n")
+	buf.WriteString("  | { type: 'workflow_state'; data: WorkflowStateData }\n")
 	buf.WriteString("  | { type: 'tool_start'; data: ToolStartData }\n")
 	buf.WriteString("  | { type: 'tool_end'; data: ToolEndData }\n")
 	buf.WriteString("  | { type: 'approval_needed'; data: ApprovalNeededData }\n")

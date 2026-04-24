@@ -10,6 +10,8 @@ interface AIChatContext {
   context?: Record<string, unknown>;
   initialPrompt?: string;
   findingId?: string; // If opened from AI Insights "Get Help", the finding ID to resolve on success
+  // Per-request execution mode override; false keeps scoped handoffs approval-required.
+  autonomousMode?: boolean;
 }
 
 // A single context item that can be accumulated
