@@ -225,9 +225,22 @@ export default function Dashboard() {
       <PageHeader
         title="Dashboard"
         description="Track infrastructure health, active risks, storage pressure, and recovery readiness from one overview."
+        actions={
+          <Show when={initialLoadComplete() && hasCachedData() && !hasConnectionError()}>
+            <DashboardCustomizer
+              allWidgets={layout.allWidgetsOrdered}
+              isHidden={layout.isHidden}
+              toggleWidget={layout.toggleWidget}
+              moveUp={layout.moveUp}
+              moveDown={layout.moveDown}
+              resetToDefaults={layout.resetToDefaults}
+              isDefault={layout.isDefault}
+            />
+          </Show>
+        }
       />
 
-      {/* Connection warning banner — shown above all content, NOT a full-page takeover */}
+      {/* Connection warning banner: shown above all content, NOT a full-page takeover */}
       <Show when={hasConnectionError() && initialLoadComplete()}>
         <div
           class="flex items-center justify-between gap-3 rounded-md border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950 px-4 py-2.5"
@@ -330,50 +343,103 @@ export default function Dashboard() {
 
         <Match when={initialLoadComplete() && hasCachedData()}>
           <section class="space-y-5">
-            {/* 1. Action Required Panel — only when actions exist */}
+            {/* 1. Action Required Panel: only when actions exist */}
             <ActionRequiredPanel
               pendingApprovals={actions.pendingApprovals()}
               unackedCriticalAlerts={actions.unackedCriticalAlerts()}
               findingsNeedingAttention={actions.findingsNeedingAttention()}
             />
 
-            {/* 2. Estate orientation — always visible once resources exist */}
-            <EstateSummaryPanel
-              summary={estateSummary()}
-              resourceIssueCount={overview().problemResources.length}
-              activeAlertCount={overview().alerts.total}
-            />
-
-            {/* 3. Optional Pulse Brief — shown only when Assistant and Patrol are configured */}
-            <Show when={pulseBrief()}>
+            {/* 2+3+4. Estate orientation, KPI snapshot, and optional Pulse Brief.
+                When the AI brief is configured, Estate + KPI become the left
+                "snapshot" column and Brief becomes the right-rail companion so
+                the three stacked summary layers collapse into one horizontal
+                band with balanced column heights. */}
+            <Show
+              when={pulseBrief()}
+              fallback={
+                <>
+                  <EstateSummaryPanel
+                    summary={estateSummary()}
+                    resourceIssueCount={overview().problemResources.length}
+                    activeAlertCount={overview().alerts.total}
+                  />
+                  <KPIStrip
+                    infrastructure={{
+                      total: estateSummary().totalSystems,
+                      online: estateSummary().healthySystems,
+                      attention: estateSummary().attentionSystems,
+                    }}
+                    workloads={{
+                      total: overview().workloads.total,
+                      running: overview().workloads.running,
+                      stopped: overview().workloads.stopped,
+                    }}
+                    storage={{
+                      capacityPercent: storageCapacityPercent(),
+                      totalUsed: overview().storage.totalUsed,
+                      totalCapacity: overview().storage.totalCapacity,
+                    }}
+                    alerts={{
+                      activeCritical: overview().alerts.activeCritical,
+                      activeWarning: overview().alerts.activeWarning,
+                      total: overview().alerts.total,
+                    }}
+                  />
+                </>
+              }
+            >
               {(brief) => (
-                <PulseBriefPanel brief={brief()} onAskAssistant={openPulseBriefAssistant} />
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-5 items-stretch">
+                  <div class="lg:col-span-2 min-w-0 space-y-5">
+                    <EstateSummaryPanel
+                      summary={estateSummary()}
+                      resourceIssueCount={overview().problemResources.length}
+                      activeAlertCount={overview().alerts.total}
+                    />
+                    {/* When the Brief is present, Estate already covers
+                        infrastructure counts and the Alerts panel header below
+                        covers alert counts, so hide the infrastructure and
+                        alerts KPI cards to avoid showing the same datum three
+                        times on the first screen. Workloads + Storage stay
+                        because their details live further down the page. */}
+                    <KPIStrip
+                      exclude={['infrastructure', 'alerts']}
+                      infrastructure={{
+                        total: estateSummary().totalSystems,
+                        online: estateSummary().healthySystems,
+                        attention: estateSummary().attentionSystems,
+                      }}
+                      workloads={{
+                        total: overview().workloads.total,
+                        running: overview().workloads.running,
+                        stopped: overview().workloads.stopped,
+                      }}
+                      storage={{
+                        capacityPercent: storageCapacityPercent(),
+                        totalUsed: overview().storage.totalUsed,
+                        totalCapacity: overview().storage.totalCapacity,
+                      }}
+                      alerts={{
+                        activeCritical: overview().alerts.activeCritical,
+                        activeWarning: overview().alerts.activeWarning,
+                        total: overview().alerts.total,
+                      }}
+                    />
+                  </div>
+                  <div class="lg:col-span-1 min-w-0 flex">
+                    <PulseBriefPanel
+                      brief={brief()}
+                      onAskAssistant={openPulseBriefAssistant}
+                      compact
+                      class="flex-1"
+                    />
+                  </div>
+                </div>
               )}
             </Show>
 
-            {/* 4. KPI Strip — always visible */}
-            <KPIStrip
-              infrastructure={{
-                total: estateSummary().totalSystems,
-                online: estateSummary().healthySystems,
-              }}
-              workloads={{
-                total: overview().workloads.total,
-                running: overview().workloads.running,
-              }}
-              storage={{
-                capacityPercent: storageCapacityPercent(),
-                totalUsed: overview().storage.totalUsed,
-                totalCapacity: overview().storage.totalCapacity,
-              }}
-              alerts={{
-                activeCritical: overview().alerts.activeCritical,
-                activeWarning: overview().alerts.activeWarning,
-                total: overview().alerts.total,
-              }}
-            />
-
-            {/* 5. Problem Resources Table — only when problems exist */}
+            {/* 5. Problem Resources Table: only when problems exist */}
             <Show when={overview().problemResources.length > 0}>
               <section
                 id={DASHBOARD_PROBLEM_RESOURCES_SECTION_ID}
@@ -385,7 +451,9 @@ export default function Dashboard() {
               </section>
             </Show>
 
-            {/* 6–7. Customizable widgets: Trend Charts, Recent Alerts */}
+            {/* 6-7. Customizable widgets: Trend Charts, Recent Alerts.
+                The Customize control itself lives in the PageHeader actions
+                slot above so layout controls stay near the page title. */}
             <For each={widgetGroups()}>
               {(group) =>
                 group.type === 'full' ? (
@@ -397,19 +465,6 @@ export default function Dashboard() {
                 )
               }
             </For>
-
-            {/* Customize button at the bottom-right of widget area */}
-            <div class="flex justify-end">
-              <DashboardCustomizer
-                allWidgets={layout.allWidgetsOrdered}
-                isHidden={layout.isHidden}
-                toggleWidget={layout.toggleWidget}
-                moveUp={layout.moveUp}
-                moveDown={layout.moveDown}
-                resetToDefaults={layout.resetToDefaults}
-                isDefault={layout.isDefault}
-              />
-            </div>
           </section>
         </Match>
       </Switch>

@@ -95,7 +95,7 @@ function buildBody(input: DashboardPulseBriefInput, attentionParts: string[]): s
 
   const review =
     topProblem !== null
-      ? `Review ${topProblem} first because it is the strongest resource-level signal.`
+      ? `Review ${topProblem} first; it is the top-ranked problem resource.`
       : criticalAlerts > 0
         ? `Start with ${pluralize(criticalAlerts, 'critical alert')} before reviewing lower-severity work.`
         : activeAlerts > 0

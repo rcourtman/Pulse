@@ -1,4 +1,4 @@
-import { For, Show } from 'solid-js';
+import { createMemo, For, Show } from 'solid-js';
 import { Card } from '@/components/shared/Card';
 import { StatusDot } from '@/components/shared/StatusDot';
 import {
@@ -28,6 +28,15 @@ interface ProblemResourcesTableProps {
   problems: ProblemResource[];
 }
 
+interface ProblemResourceGroup {
+  representative: ProblemResource;
+  resources: ProblemResource[];
+  displayName: string;
+  typeLabel: string;
+  worstValue: number;
+  memberDisplayNames: string[];
+}
+
 function resourceLink(pr: ProblemResource): string {
   if (isInfrastructure(pr.resource)) {
     return buildInfrastructureResourceHref(pr.resource.id) ?? INFRASTRUCTURE_PATH;
@@ -38,7 +47,74 @@ function resourceLink(pr: ProblemResource): string {
   return buildWorkloadsPath({ resource: pr.resource.id });
 }
 
+function normalizeGroupValue(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+function problemResourceDisplayName(pr: ProblemResource): string {
+  return getPreferredResourceDisplayName(pr.resource) || pr.resource.id;
+}
+
+function problemGroupKey(pr: ProblemResource): string {
+  const displayName = problemResourceDisplayName(pr);
+  const problems = pr.problems.map(normalizeGroupValue).sort().join('|');
+  return [normalizeGroupValue(displayName), pr.resource.type, problems].join('::');
+}
+
+function problemResourceGroups(problems: ProblemResource[]): ProblemResourceGroup[] {
+  const groups = new Map<string, ProblemResourceGroup>();
+
+  for (const problem of problems) {
+    const key = problemGroupKey(problem);
+    const existing = groups.get(key);
+    if (existing) {
+      existing.resources.push(problem);
+      existing.worstValue = Math.max(existing.worstValue, problem.worstValue);
+      const memberName = problemResourceDisplayName(problem);
+      if (!existing.memberDisplayNames.includes(memberName)) {
+        existing.memberDisplayNames.push(memberName);
+      }
+      continue;
+    }
+
+    const displayName = problemResourceDisplayName(problem);
+    groups.set(key, {
+      representative: problem,
+      resources: [problem],
+      displayName,
+      typeLabel: getResourceTypeLabel(problem.resource.type) || problem.resource.type,
+      worstValue: problem.worstValue,
+      memberDisplayNames: [displayName || problem.resource.id],
+    });
+  }
+
+  return Array.from(groups.values());
+}
+
+function groupedResourceLink(group: ProblemResourceGroup): string {
+  if (group.resources.length === 1) {
+    return resourceLink(group.representative);
+  }
+  if (group.resources.every((problem) => isStorage(problem.resource))) {
+    return buildStoragePath();
+  }
+  if (group.resources.every((problem) => isInfrastructure(problem.resource))) {
+    return INFRASTRUCTURE_PATH;
+  }
+  return buildWorkloadsPath({ type: group.representative.resource.type });
+}
+
+function pluralizeTypeLabel(count: number, label: string): string {
+  const normalized = (label || 'resource').trim().toLowerCase();
+  if (count === 1) return normalized;
+  if (normalized.endsWith('s')) return normalized;
+  if (normalized.endsWith('y')) return `${normalized.slice(0, -1)}ies`;
+  return `${normalized}s`;
+}
+
 export function ProblemResourcesTable(props: ProblemResourcesTableProps) {
+  const groupedProblems = createMemo(() => problemResourceGroups(props.problems));
+
   return (
     <Show when={props.problems.length > 0}>
       <Card padding="none" tone="default" class="overflow-hidden">
@@ -65,33 +141,51 @@ export function ProblemResourcesTable(props: ProblemResourcesTableProps) {
             </TableRow>
           </TableHeader>
           <TableBody>
-            <For each={props.problems}>
-              {(pr) => (
+            <For each={groupedProblems()}>
+              {(group) => (
                 <TableRow>
                   <TableCell>
                     <StatusDot
-                      variant={getProblemResourceStatusVariant(pr.worstValue)}
+                      variant={getProblemResourceStatusVariant(group.worstValue)}
                       size="sm"
-                      pulse={pr.worstValue >= 200}
+                      pulse={group.worstValue >= 200}
                     />
                   </TableCell>
                   <TableCell>
-                    <a
-                      href={resourceLink(pr)}
-                      class="text-xs font-medium text-base-content hover:underline truncate block max-w-[200px]"
-                      title={getPreferredResourceDisplayName(pr.resource)}
+                    <Show
+                      when={group.resources.length > 1}
+                      fallback={
+                        <a
+                          href={groupedResourceLink(group)}
+                          class="text-xs font-medium text-base-content hover:underline truncate block max-w-[200px]"
+                          title={group.displayName}
+                        >
+                          {group.displayName}
+                        </a>
+                      }
                     >
-                      {getPreferredResourceDisplayName(pr.resource)}
-                    </a>
+                      <a
+                        href={groupedResourceLink(group)}
+                        class="text-xs font-medium text-base-content hover:underline truncate block max-w-[200px]"
+                        title={group.memberDisplayNames.join(', ')}
+                      >
+                        {group.resources.length}{' '}
+                        {pluralizeTypeLabel(group.resources.length, group.typeLabel)}
+                      </a>
+                      <span
+                        class="mt-0.5 block text-[10px] text-muted truncate max-w-[220px]"
+                        title={group.memberDisplayNames.join(', ')}
+                      >
+                        {group.memberDisplayNames.join(', ')}
+                      </span>
+                    </Show>
                   </TableCell>
                   <TableCell class="hidden sm:table-cell">
-                    <span class="text-xs text-muted">
-                      {getResourceTypeLabel(pr.resource.type) || pr.resource.type}
-                    </span>
+                    <span class="text-xs text-muted">{group.typeLabel}</span>
                   </TableCell>
                   <TableCell>
                     <div class="flex items-center gap-1.5 flex-wrap">
-                      <For each={pr.problems}>
+                      <For each={group.representative.problems}>
                         {(problem) => {
                           const indicator = getSimpleStatusIndicator(problem);
                           return (

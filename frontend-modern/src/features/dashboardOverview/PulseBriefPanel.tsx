@@ -9,6 +9,13 @@ import MessageCircleIcon from 'lucide-solid/icons/message-circle';
 interface PulseBriefPanelProps {
   brief: DashboardPulseBrief;
   onAskAssistant: () => void;
+  /**
+   * When true, the panel stacks its content, actions, and evidence vertically
+   * instead of flowing the actions to the right of the narrative. Use when
+   * placing the Brief in a narrow column alongside another header card.
+   */
+  compact?: boolean;
+  class?: string;
 }
 
 const toneClass: Record<DashboardPulseBriefTone, string> = {
@@ -27,10 +34,14 @@ export function PulseBriefPanel(props: PulseBriefPanelProps) {
   return (
     <Card
       padding="none"
-      class={`overflow-hidden border-l-[3px] ${toneClass[props.brief.tone]}`}
+      class={`overflow-hidden border-l-[3px] ${toneClass[props.brief.tone]} ${props.class ?? ''}`.trim()}
       data-testid="dashboard-pulse-brief"
     >
-      <div class="flex flex-col gap-3 px-4 py-3 lg:flex-row lg:items-start lg:justify-between">
+      <div
+        class={`flex h-full flex-col gap-3 px-4 py-3 ${
+          props.compact ? '' : 'lg:flex-row lg:items-start lg:justify-between'
+        }`}
+      >
         <div class="min-w-0 flex-1">
           <div class="flex flex-wrap items-center gap-2">
             <span class="inline-flex h-7 w-7 items-center justify-center rounded-md bg-cyan-50 text-cyan-700 dark:bg-cyan-900/40 dark:text-cyan-300">
@@ -49,7 +60,9 @@ export function PulseBriefPanel(props: PulseBriefPanelProps) {
             </span>
           </div>
 
-          <p class="mt-2 max-w-5xl text-sm leading-6 text-base-content">{props.brief.body}</p>
+          <p class={`mt-2 text-sm leading-6 text-base-content ${props.compact ? '' : 'max-w-5xl'}`}>
+            {props.brief.body}
+          </p>
 
           <div class="mt-2 flex flex-wrap gap-1.5">
             <For each={props.brief.evidence}>
@@ -62,7 +75,11 @@ export function PulseBriefPanel(props: PulseBriefPanelProps) {
           </div>
         </div>
 
-        <div class="flex shrink-0 flex-wrap items-center gap-2 lg:justify-end">
+        <div
+          class={`flex shrink-0 flex-wrap items-center gap-2 ${
+            props.compact ? '' : 'lg:justify-end'
+          }`}
+        >
           <button
             type="button"
             onClick={() => props.onAskAssistant()}

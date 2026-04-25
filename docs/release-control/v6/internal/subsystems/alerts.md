@@ -479,6 +479,10 @@ route through that same alert overview presentation owner and the alert-owned
 `frontend-modern/src/components/Alerts/RecentAlertsPanel.tsx` surface instead
 of living as a dashboard-page-local panel plus a second dashboard-only alert
 presentation helper.
+That same dashboard recent-alert surface must rank structural health warnings
+above state-only warning messages such as powered-off, stopped, or paused
+workloads before falling back to recency, so chosen workload state does not
+hide active infrastructure or storage problems on the first dashboard screen.
 
 Alert threshold and schedule surfaces must now also treat
 `discoveryTarget` as optional frontend input and keep grouping-card state on

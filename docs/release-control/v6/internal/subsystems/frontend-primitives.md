@@ -1642,6 +1642,10 @@ canonical connected-infrastructure projection, fall back only to the compact
 dashboard summary that the route already owns, and keep the explicit
 Infrastructure handoff above detailed problem, storage, recovery, or trend
 rows without restoring platform-special navigation.
+That compact fallback must keep speaking in system terms. When the connected
+projection has not arrived yet, estate orientation copy may say how many
+systems are reporting or syncing, but it must not slide back to generic
+resource-count language that blurs the v6 system model.
 That first-viewport copy must distinguish system-level estate health from
 resource, alert, storage, or recovery issues that remain elsewhere on the
 dashboard, and partial/empty dashboard states must describe synchronization or
@@ -1755,6 +1759,11 @@ recovery data warms.
 that same dashboard overview boundary so the problem-resource severity contract
 stays shared with `ProblemResourcesTable.tsx` instead of floating as an
 unowned helper.
+Problem-resource table readability belongs to that same owner. Repeated rows
+may collapse only when they share the same governed display label, resource
+type, and problem signal; the header count and Pulse Brief counts must continue
+to represent the underlying affected resources, and grouped links must route to
+the broad owning surface rather than inventing a synthetic resource target.
 That same dashboard overview boundary must consume the governed Patrol finding
 presentation helpers when it surfaces Patrol findings in compact form. In
 `frontend-modern/src/features/dashboardOverview/ActionRequiredPanel.tsx`,

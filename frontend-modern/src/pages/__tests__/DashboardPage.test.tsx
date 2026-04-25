@@ -446,7 +446,6 @@ describe('Dashboard page module contract', () => {
 
     const brief = screen.getByTestId('dashboard-pulse-brief');
     const estateHeading = screen.getByRole('heading', { name: 'Connected infrastructure' });
-    const kpiLabel = screen.getByText('Infrastructure');
 
     expect(brief).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Pulse Brief' })).toBeInTheDocument();
@@ -454,7 +453,19 @@ describe('Dashboard page module contract', () => {
     expect(estateHeading.compareDocumentPosition(brief) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
       Node.DOCUMENT_POSITION_FOLLOWING,
     );
-    expect(brief.compareDocumentPosition(kpiLabel) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
+    // When Brief is shown, Estate already carries the infrastructure count
+    // and the Alerts panel header carries the alert count, so those two KPI
+    // cards are suppressed to avoid triple-counting the same signal on the
+    // first screen. Workloads + Storage stay because their details live
+    // further down the page.
+    expect(screen.queryByTestId('dashboard-kpi-infrastructure')).toBeNull();
+    expect(screen.queryByTestId('dashboard-kpi-alerts')).toBeNull();
+    const workloadsKpi = screen.getByTestId('dashboard-kpi-workloads');
+    expect(workloadsKpi).toBeInTheDocument();
+    expect(screen.getByTestId('dashboard-kpi-storage')).toBeInTheDocument();
+    // Snapshot column (Estate + trimmed KPI) still precedes Brief in DOM
+    // order so screen readers read concrete counts before the narrative.
+    expect(workloadsKpi.compareDocumentPosition(brief) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
       Node.DOCUMENT_POSITION_FOLLOWING,
     );
 

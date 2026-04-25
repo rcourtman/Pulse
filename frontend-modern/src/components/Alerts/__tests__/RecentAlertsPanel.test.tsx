@@ -65,11 +65,43 @@ describe('RecentAlertsPanel', () => {
     expect(screen.getByText('No active alerts')).toBeInTheDocument();
   });
 
+  it('keeps structural warnings above state-only warnings of the same severity', () => {
+    render(() => (
+      <RecentAlertsPanel
+        alerts={[
+          makeAlert({
+            id: 'state-only',
+            level: 'warning',
+            resourceName: 'tails-anon',
+            message: "VM 'tails-anon' is powered off",
+            startTime: '2026-03-08T12:00:00Z',
+          }),
+          makeAlert({
+            id: 'structural',
+            level: 'warning',
+            resourceName: 'local-zfs',
+            message: 'ZFS device /dev/sda4 has errors',
+            startTime: '2026-03-08T09:00:00Z',
+          }),
+        ]}
+      />
+    ));
+
+    const structuralWarning = screen.getByText('ZFS device /dev/sda4 has errors');
+    const stateOnlyWarning = screen.getByText("VM 'tails-anon' is powered off");
+
+    expect(structuralWarning.compareDocumentPosition(stateOnlyWarning)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+  });
+
   it('routes single acknowledge actions through the shared alert acknowledgement owner', async () => {
     vi.mocked(AlertsAPI.acknowledge).mockResolvedValue(undefined as never);
 
     render(() => (
-      <RecentAlertsPanel alerts={[makeAlert(), makeAlert({ id: 'alert-2', message: 'Memory high' })]} />
+      <RecentAlertsPanel
+        alerts={[makeAlert(), makeAlert({ id: 'alert-2', message: 'Memory high' })]}
+      />
     ));
 
     await fireEvent.click(screen.getAllByText('Ack')[0]);
@@ -89,7 +121,9 @@ describe('RecentAlertsPanel', () => {
     } as never);
 
     render(() => (
-      <RecentAlertsPanel alerts={[makeAlert(), makeAlert({ id: 'alert-2', message: 'Memory high' })]} />
+      <RecentAlertsPanel
+        alerts={[makeAlert(), makeAlert({ id: 'alert-2', message: 'Memory high' })]}
+      />
     ));
 
     await fireEvent.click(screen.getByText('Ack All'));

@@ -55,6 +55,66 @@ describe('ProblemResourcesTable', () => {
     expect(storageLink.getAttribute('href')).toBe('/storage');
   });
 
+  it('groups repeated resource labels with the same type and problem signal', () => {
+    render(() => (
+      <ProblemResourcesTable
+        problems={['one', 'two', 'three'].map((id) => ({
+          resource: makeResource({
+            id: `container-${id}`,
+            type: 'system-container',
+            name: `container-${id}`,
+            displayName: 'Duplicate Container',
+          }),
+          problems: ['Offline'],
+          worstValue: 200,
+        }))}
+      />
+    ));
+
+    // Grouped row shows count-led primary label linking to the overflow page.
+    const resourceLink = screen.getByText('3 containers');
+    expect(resourceLink.tagName).toBe('A');
+    expect(resourceLink.getAttribute('href')).toBe('/workloads?type=system-container');
+    // The individual member display name is shown on the sub-line so the user
+    // can see what the group actually is. Duplicate names collapse to one.
+    const memberLine = screen.getByText('Duplicate Container');
+    expect(memberLine.tagName).toBe('SPAN');
+    expect(screen.getAllByText('Offline')).toHaveLength(1);
+  });
+
+  it('lists distinct member names on the sub-line when they differ', () => {
+    render(() => (
+      <ProblemResourcesTable
+        problems={[
+          {
+            resource: makeResource({
+              id: 'storage-delly',
+              type: 'storage',
+              name: 'storage-delly',
+              displayName: 'storage',
+            }),
+            problems: ['Offline'],
+            worstValue: 200,
+          },
+          {
+            resource: makeResource({
+              id: 'storage-minipc',
+              type: 'storage',
+              name: 'storage-minipc',
+              displayName: 'storage',
+            }),
+            problems: ['Offline'],
+            worstValue: 200,
+          },
+        ]}
+      />
+    ));
+
+    // Two storages with the same displayName group together; the primary
+    // reads "2 storages" instead of collapsing to "storage".
+    expect(screen.getByText('2 storages')).toBeInTheDocument();
+  });
+
   it('renders governed labels for policy-aware problem resources', () => {
     render(() => (
       <ProblemResourcesTable

@@ -21,9 +21,33 @@ interface RecentAlertsPanelProps {
   alerts: Alert[];
 }
 
-function sortByStartTimeDesc(alerts: Alert[]): Alert[] {
+// "State-only" alerts describe a state the operator typically chose (a VM that
+// is stopped, a container that is powered off). Mixed alongside structural
+// health signals like "ZFS device /dev/sda4 has errors" they drown out the
+// signal that actually requires attention. We still surface them below
+// structural warnings of the same level so the first screen leads with real
+// problems.
+const STATE_ONLY_MESSAGE_PATTERNS: RegExp[] = [/is powered off/i, /is stopped/i, /is paused/i];
+
+function isStateOnlyAlert(alert: Alert): boolean {
+  const message = alert.message ?? '';
+  return STATE_ONLY_MESSAGE_PATTERNS.some((pattern) => pattern.test(message));
+}
+
+function alertRank(alert: Alert): number {
+  // Lower rank = higher priority in the list.
+  if (alert.level === 'critical') return 0;
+  if (alert.level === 'warning') {
+    return isStateOnlyAlert(alert) ? 3 : 1;
+  }
+  return 2;
+}
+
+function sortAlertsForDashboard(alerts: Alert[]): Alert[] {
   const sorted = [...alerts];
   sorted.sort((a, b) => {
+    const rankDelta = alertRank(a) - alertRank(b);
+    if (rankDelta !== 0) return rankDelta;
     const aMs = Date.parse(a.startTime) || 0;
     const bMs = Date.parse(b.startTime) || 0;
     return bMs - aMs;
@@ -42,7 +66,7 @@ export function RecentAlertsPanel(props: RecentAlertsPanelProps) {
   } = useAlertAcknowledgementState({
     alerts: () => props.alerts,
   });
-  const recent = createMemo(() => sortByStartTimeDesc(effectiveAlerts()).slice(0, MAX_SHOWN));
+  const recent = createMemo(() => sortAlertsForDashboard(effectiveAlerts()).slice(0, MAX_SHOWN));
   const activeCriticalCount = createMemo(
     () =>
       effectiveAlerts().filter((alert) => !alert.acknowledged && alert.level === 'critical').length,
