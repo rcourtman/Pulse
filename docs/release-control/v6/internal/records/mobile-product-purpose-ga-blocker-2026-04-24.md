@@ -71,4 +71,16 @@ Results:
 - The connected iOS physical-device record still could not clear proof availability: `devicectl` listed the paired iPad as `tunnelState=unavailable`, with the same last connection timestamp from 2026-04-24.
 - ADB only listed the unsuitable Android TV emulator. The only discovered wireless ADB service (`192.168.0.119:45873`) refused connection, so no physical Android proof target was reachable.
 
+Later on 2026-04-25 UTC, a physical Android phone became reachable over ADB as `192.168.0.119:40467` (`2510DPC44G`, Android 16) with build 4 installed. The Android launch proof was rerun after correcting the proof helper in `pulse-mobile` commit `cc44408` to recognize Android 16 `ResumedActivity` dumps, capture the UI hierarchy, fail explicitly when Keyguard or NotificationShade covers the app, and ignore non-fatal `uiautomator` `AndroidRuntime` bootstrap logs.
+
+- `cd /Volumes/Development/pulse/repos/pulse-mobile && npm run test:scripts`
+- `cd /Volumes/Development/pulse/repos/pulse-mobile && npm run release:proof:android -- --serial 192.168.0.119:40467 --output-dir /Volumes/Development/pulse/.local-build-cache/pulse-mobile/tmp/android-build4-launch-proof-locked-filtered-20260425`
+
+Results:
+
+- Mobile script tests passed: 112 tests.
+- The installed Android package matched build 4 (`versionCode=4`, `versionName=1.0.0`) and the app reached `pro.pulserelay.mobile/.MainActivity` as the resumed foreground activity.
+- No Pulse-owned fatal Android runtime lines were detected.
+- The proof remained blocked because the phone keyguard or notification shade still covered the app (`deviceLocked=true`). This does not clear the Android physical-device launch proof; unlock the phone and rerun before using this evidence for GA readiness.
+
 The source and simulator-era product framing are coherent with the resolved companion role, but the release gate remains blocked. Passing this gate still requires fresh physical-device walkthrough/proof on the current candidate, including the native status, alerts, push/device trust, Relay-backed Open Pulse handoff, contextual recovery, and stale/revoked access behavior.
