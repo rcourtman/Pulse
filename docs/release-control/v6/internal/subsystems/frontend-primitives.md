@@ -634,6 +634,10 @@ work extends shared components instead of creating new local variants.
     as Patrol runs or Patrol-only activation support when that is the governed
     backend truth, and must not drift back to generic hosted-chat or generic
     AI-credit claims.
+    When a shared settings dialog describes hosted Quickstart transport, it
+    must match the governed privacy boundary: hosted Quickstart routes
+    policy-redacted prompts through Pulse infrastructure, while BYOK providers
+    go direct to the operator's chosen provider.
 19. Keep sparkline scrubbing source-local and sibling-sync timestamp-based. The chart a user is actively scrubbing in `frontend-modern/src/components/shared/InteractiveSparkline.tsx` and `frontend-modern/src/components/shared/useInteractiveSparklineState.ts` must keep its dashed hover cursor on the real local mouse `x`, while sibling cards may map the shared hover timestamp onto their own timelines. Shared cursor sync must not snap the source chart back onto the nearest sample timestamp, the rendered SVG/canvas hover cursor must bind to the actual numeric cursor coordinate rather than a boolean guard state, the time cursor must span the chart viewport instead of collapsing to the series height, and the hover tooltip must track the pointer instead of anchoring to the chart top edge while following the active theme rather than a hardcoded dark shell.
 20. Keep shared contextual focus canonical after adoption. Once a summary or table surface enters route-backed contextual focus, future additions must extend `frontend-modern/src/components/shared/contextualFocus.ts` and its guardrail tests rather than forking another helper for workload IDs, resource IDs, or scroll-preserving same-route selection.
 21. Keep shared infrastructure/resource selectors on the canonical agent-facet

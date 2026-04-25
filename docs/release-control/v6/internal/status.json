@@ -3555,6 +3555,102 @@
           "kind": "file"
         }
       ]
+    },
+    {
+      "id": "L18",
+      "name": "Policy-aware data governance",
+      "target_score": 6,
+      "current_score": 6,
+      "status": "partial",
+      "completion": {
+        "state": "bounded-residual",
+        "summary": "Policy-aware data governance now has a first-class governed floor: resource sensitivity, handling-boundary, and redaction posture are visible in Data Handling, non-local AI provider requests use the shared resource-policy sanitizer at the final model boundary, hosted quickstart requests carry a resource-policy marker that the proxy enforces, and privacy copy now reflects the runtime behavior. Broader enterprise DLP, provider-retention posture, and non-resource prompt-secret detection remain a named post-RC hardening track.",
+        "tracking": [
+          {
+            "kind": "lane-followup",
+            "id": "policy-aware-data-governance-post-rc-hardening"
+          }
+        ]
+      },
+      "blockers": [],
+      "subsystems": [],
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": "docs/PRIVACY.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/subsystems/ai-runtime.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/subsystems/security-privacy.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/public/docs/PRIVACY.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/components/Settings/AISettingsDialogs.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/components/Settings/DataHandlingPanel.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/utils/__tests__/quickstartCopyContract.test.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/ai/modelboundary/resource_policy_sanitizer.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/ai/modelboundary/resource_policy_sanitizer_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/ai/providers/quickstart.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/ai/providers/quickstart_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/unifiedresources/policy_metadata.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/unifiedresources/policy_metadata_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse-pro",
+          "path": "license-server/quickstart_proxy.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse-pro",
+          "path": "license-server/quickstart_proxy_test.go",
+          "kind": "file"
+        }
+      ]
     }
   ],
   "release_gates": [
@@ -4250,6 +4346,17 @@
         "L11"
       ],
       "subsystem_ids": []
+    },
+    {
+      "id": "policy-aware-data-governance-post-rc-hardening",
+      "summary": "Track broader policy-aware data-governance hardening beyond the current resource-policy floor, including enterprise DLP posture, provider-retention disclosure, non-resource prompt-secret detection, and additional external-model boundary proof where future paid or hosted AI surfaces add new data paths.",
+      "owner": "project-owner",
+      "status": "planned",
+      "recorded_at": "2026-04-25",
+      "lane_ids": [
+        "L18"
+      ],
+      "subsystem_ids": []
     }
   ],
   "coverage_gaps": [
@@ -4302,36 +4409,6 @@
         {
           "repo": "pulse",
           "path": "docs/release-control/v6/internal/subsystems/agent-lifecycle.md",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse",
-          "path": "docs/release-control/v6/internal/V6_BRIDGE_RELEASE_FOUNDATION_SPEC.md",
-          "kind": "file"
-        }
-      ]
-    },
-    {
-      "id": "policy-aware-data-governance",
-      "summary": "The current v6 map treats privacy and AI runtime as adjacent concerns, but it does not yet govern sensitivity classification, redaction, local-vs-cloud routing, or AI-safe summary boundaries as a first-class release surface.",
-      "owner": "project-owner",
-      "status": "planned",
-      "recorded_at": "2026-03-17",
-      "lane_ids": [
-        "L6",
-        "L14"
-      ],
-      "subsystem_ids": [
-        "ai-runtime",
-        "api-contracts",
-        "security-privacy"
-      ],
-      "proposed_resolution": "new-lane",
-      "coverage_impact": 15,
-      "evidence": [
-        {
-          "repo": "pulse",
-          "path": "docs/release-control/v6/internal/subsystems/security-privacy.md",
           "kind": "file"
         },
         {
@@ -4514,26 +4591,6 @@
       ],
       "subsystem_ids": [
         "agent-lifecycle"
-      ]
-    },
-    {
-      "id": "policy-aware-data-governance-lane",
-      "name": "Policy-aware data governance",
-      "summary": "Promote sensitivity classification, redaction, local-vs-cloud routing, and AI-safe summary boundaries into a governed product lane rather than leaving them split across privacy and AI runtime residue.",
-      "status": "planned",
-      "recorded_at": "2026-03-17",
-      "target_id": "v6-product-lane-expansion",
-      "current_lane_ids": [
-        "L6",
-        "L14"
-      ],
-      "coverage_gap_ids": [
-        "policy-aware-data-governance"
-      ],
-      "subsystem_ids": [
-        "ai-runtime",
-        "api-contracts",
-        "security-privacy"
       ]
     },
     {

@@ -36,4 +36,19 @@ describe('quickstart copy contract', () => {
     );
     expect(pricingSpec).toMatch(/it is not a general hosted\s+chat entitlement/);
   });
+
+  it('keeps hosted quickstart privacy copy aligned with resource-policy redaction', () => {
+    const privacy = readRepoFile('docs/PRIVACY.md');
+    const publicPrivacy = readRepoFile('frontend-modern/public/docs/PRIVACY.md');
+    const aiSettingsDialog = readRepoFile(
+      'frontend-modern/src/components/Settings/AISettingsDialogs.tsx',
+    );
+
+    for (const copy of [privacy, publicPrivacy]) {
+      expect(copy).toContain('resource-policy redaction is applied before the Quickstart request');
+      expect(copy).toContain('requests transit Pulse infrastructure');
+      expect(copy).toContain('To keep prompts off Pulse infrastructure entirely, use a BYOK provider');
+    }
+    expect(aiSettingsDialog).toContain('Hosted quickstart routes policy-redacted prompts');
+  });
 });

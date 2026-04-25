@@ -75,4 +75,12 @@ describe('systemSettings store', () => {
     expect(privacyDoc).toContain('uses client IP addresses transiently for abuse/rate limiting');
     expect(privacyDoc).toContain('Reset ID');
   });
+
+  it('documents hosted quickstart transport and resource-policy redaction in the privacy doc', () => {
+    const privacyDoc = readFileSync(path.join(repoRoot, 'docs', 'PRIVACY.md'), 'utf8');
+
+    expect(privacyDoc).toContain('requests transit Pulse infrastructure');
+    expect(privacyDoc).toContain('resource-policy redaction is applied before the Quickstart request');
+    expect(privacyDoc).toContain('To keep prompts off Pulse infrastructure entirely, use a BYOK provider');
+  });
 });

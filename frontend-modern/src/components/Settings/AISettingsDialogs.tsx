@@ -125,8 +125,8 @@ export const AISettingsDialogs: Component<AISettingsDialogsProps> = (props) => {
                       </p>
                       <p class="mt-1 text-xs text-blue-800 dark:text-blue-200">
                         Open the hosted quickstart handoff, or skip it and connect your own model
-                        provider below. Hosted quickstart routes prompts through Pulse
-                        infrastructure; BYOK providers go direct.
+                        provider below. Hosted quickstart routes policy-redacted prompts through
+                        Pulse infrastructure; BYOK providers go direct to your chosen provider.
                       </p>
                     </div>
                     <button

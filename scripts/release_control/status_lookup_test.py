@@ -12,7 +12,7 @@ REPORT = {
         },
     },
     "summary": {
-        "lane_count": 17,
+        "lane_count": 18,
     },
     "coverage_gaps": [
         {
