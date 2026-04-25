@@ -840,7 +840,7 @@ describe('AIIntelligence entitlement gating', () => {
         quickstart_credits_total: 25,
         quickstart_credits_remaining: 0,
         blocked_reason:
-          'Activate this install or start a trial to use Patrol quickstart. Otherwise connect your API key.',
+          'Connect your API key to use AI Patrol on this install. Hosted quickstart requires an activated entitlement.',
       }),
     );
 
@@ -850,7 +850,7 @@ describe('AIIntelligence entitlement gating', () => {
       expect(getPatrolStatusMock).toHaveBeenCalled();
       expect(
         screen.getAllByText(
-          'Activate this install or start a trial to use Patrol quickstart. Otherwise connect your API key.',
+          'Connect your API key to use AI Patrol on this install. Hosted quickstart requires an activated entitlement.',
         ).length,
       ).toBeGreaterThan(0);
     });

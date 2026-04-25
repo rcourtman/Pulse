@@ -390,8 +390,9 @@ Community limit enforcement.
 3. Add or tighten drift tests when a pricing/runtime mismatch is fixed
 4. Keep self-hosted pricing and public docs on runtime-backed commercial truth:
    Patrol quickstart may be presented only as Patrol-only first-run activation
-   support backed by the license server, while Relay and Pro remain the
-   canonical commercial story.
+   support backed by the license server and an activated entitlement, never as
+   a default self-hosted trial CTA, while Relay and Pro remain the canonical
+   commercial story.
 5. Treat grandfathered `lifetime` licenses as uncapped commercial entitlements:
    they keep the Pro feature set, but they must not inherit monitored-system or
    guest caps from recurring Pro contracts anywhere in runtime, issuance, or
@@ -2012,6 +2013,10 @@ only for explicit handoff/direct routes, activation or recovery state, hosted
 mode, or an already entitled install. Trial checkout plumbing may remain for
 support-only or externally initiated flows, but it is not a normal GA
 self-hosted app journey.
+Shared self-hosted plan presentation helpers must carry that same policy:
+Community copy may mention BYOK Patrol and hosted quickstart only as an
+activated-entitlement benefit, not as a default self-hosted trial CTA or a
+reason to put a paid prompt in front of ordinary users.
 That public-demo commercial boundary also owns monitored-system preview
 unavailability wording. Browser presentation may keep the unavailable reason
 nullable until the formatting edge, but it must normalize the message through

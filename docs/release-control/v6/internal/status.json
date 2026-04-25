@@ -4027,7 +4027,7 @@
     },
     {
       "id": "self-hosted-commercial-ga-coherence",
-      "summary": "Confirm the self-hosted GA commercial package is coherent end-to-end: public landing, in-app upgrade/trial path, checkout/account/license-management flows, and GA-facing guidance all describe the same Community / Relay / Pro product without legacy v5 bridge posture or contradictory plan copy.",
+      "summary": "Confirm the self-hosted GA commercial package is coherent end-to-end: public landing, explicit in-app commercial handoff, checkout/account/license-management flows, and GA-facing guidance all describe the same Community / Relay / Pro product without proactive self-hosted trial pressure, legacy v5 bridge posture, or contradictory plan copy.",
       "owner": "project-owner",
       "blocking_level": "release-ready",
       "minimum_evidence_tier": "real-external-e2e",

@@ -27,10 +27,6 @@ export interface SelfHostedProBillingPresentation {
   purchaseExpiredActionLabel: string;
   purchaseFailedActionLabel: string;
   purchaseUnavailableActionLabel: string;
-  trialStartTitle: string;
-  trialStartBody: string;
-  trialStartIdleActionLabel: string;
-  trialStartPendingActionLabel: string;
   recoverySectionTitle: string;
   recoverySectionDescription: string;
 }
@@ -67,14 +63,9 @@ export const SELF_HOSTED_PRO_BILLING_PRESENTATION: SelfHostedProBillingPresentat
   planSelectionPromptActionLabel: 'Compare plans',
   purchaseActivatedPlanActionLabel: 'Review plan',
   purchaseCancelledActionLabel: 'Compare plans',
-  purchaseExpiredActionLabel: 'Restart upgrade',
+  purchaseExpiredActionLabel: 'Compare plans',
   purchaseFailedActionLabel: 'Open recovery',
   purchaseUnavailableActionLabel: 'Try again',
-  trialStartTitle: 'Try Pro for free',
-  trialStartBody:
-    'Start a 14-day Pro trial for root-cause analysis, safe auto-fix, and 90-day history on this organization.',
-  trialStartIdleActionLabel: 'Start 14-day Pro Trial',
-  trialStartPendingActionLabel: 'Starting...',
   recoverySectionTitle: 'Activation & Recovery',
   recoverySectionDescription:
     'Activate a purchased key, recover a previous self-hosted purchase, or clear a local key from this instance.',

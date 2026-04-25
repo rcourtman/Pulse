@@ -182,8 +182,8 @@ Numeric intervals are **seconds** unless noted otherwise.
 | `metricsRetentionHourlyDays` | Hourly metrics retention (days) |
 | `metricsRetentionDailyDays` | Daily metrics retention (days) |
 | `disableDockerUpdateActions` | Hide Docker update actions in UI |
-| `reduceProUpsellNoise` | Reduce proactive Pro prompts (paywalls still appear when accessing gated features) |
-| `disableLocalUpgradeMetrics` | Disable local-only upgrade event collection |
+| `reduceProUpsellNoise` | Legacy compatibility preference for proactive commercial prompts. Default self-hosted v6 sessions already hide paid prompts unless the user enters an explicit commercial handoff or has an existing entitlement. |
+| `disableLocalUpgradeMetrics` | Disable local-only commercial handoff event collection |
 | `backendPort` | Legacy (unused) |
 | `frontendPort` | Legacy (ignored; use `FRONTEND_PORT`) |
 
@@ -219,7 +219,7 @@ Environment variables take precedence over `system.json`.
 | Variable | Description | Default |
 | ---------- | ------------- | --------- |
 | `PULSE_PUBLIC_URL` | URL for UI links, notifications, and OIDC. For reverse proxies, keep this as the public URL and use `PULSE_AGENT_CONNECT_URL` for agent installs if you need a direct/internal address. | Auto-detected |
-| `PULSE_PRO_TRIAL_SIGNUP_URL` | Hosted signup/checkout URL used when users click **Start Free Pro Trial**. Must be absolute `http(s)` URL. | `https://cloud.pulserelay.pro/start-pro-trial?...` |
+| `PULSE_PRO_TRIAL_SIGNUP_URL` | Support-only hosted trial signup URL used by explicit commercial handoff flows. Normal self-hosted v6 UI does not surface this path. Must be absolute `http(s)` URL. | `https://cloud.pulserelay.pro/start-pro-trial?...` |
 | `PULSE_AGENT_CONNECT_URL` | Dedicated direct URL for agents (overrides `PULSE_PUBLIC_URL` for agent install commands). Alias: `PULSE_AGENT_URL`. | *(unset)* |
 | `PULSE_AGENT_CONFIG_SIGNING_KEY` | Base64 Ed25519 private key used to sign remote agent config payloads. | *(unset)* |
 | `PULSE_AGENT_CONFIG_PUBLIC_KEYS` | Comma-separated base64 Ed25519 public keys (raw 32-byte or PKIX-encoded) trusted by agents. | *(unset)* |

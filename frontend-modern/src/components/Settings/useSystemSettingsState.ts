@@ -339,9 +339,12 @@ export function useSystemSettingsState({
     try {
       await SettingsAPI.updateSystemSettings({ reduceProUpsellNoise: enabled });
       updateReduceProUpsellNoiseSetting(enabled);
-      notificationStore.success(enabled ? 'Pro prompts reduced' : 'Pro prompts restored', 2000);
+      notificationStore.success(
+        enabled ? 'Commercial prompts reduced' : 'Commercial prompt preference restored',
+        2000,
+      );
     } catch (error) {
-      logger.error('Failed to update reduce upsell noise setting', error);
+      logger.error('Failed to update commercial prompt preference', error);
       notificationStore.error(
         getReduceUpsellNoiseUpdateErrorMessage(error instanceof Error ? error.message : undefined),
       );
@@ -364,11 +367,11 @@ export function useSystemSettingsState({
       await SettingsAPI.updateSystemSettings({ disableLocalUpgradeMetrics: disabled });
       updateDisableLocalUpgradeMetricsSetting(disabled);
       notificationStore.success(
-        disabled ? 'Local-only upgrade events disabled' : 'Local-only upgrade events enabled',
+        disabled ? 'Local-only commercial events disabled' : 'Local-only commercial events enabled',
         2000,
       );
     } catch (error) {
-      logger.error('Failed to update local-only upgrade events setting', error);
+      logger.error('Failed to update local-only commercial events setting', error);
       notificationStore.error(
         getLocalUpgradeMetricsUpdateErrorMessage(
           error instanceof Error ? error.message : undefined,

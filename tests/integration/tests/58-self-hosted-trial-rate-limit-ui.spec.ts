@@ -98,5 +98,8 @@ test.describe.serial('Self-hosted paid prompt visibility', () => {
     await expect(page.getByRole('button', { name: 'Plans & Activation' })).toHaveCount(0);
     await expect(page.getByRole('link', { name: /upgrade to pro/i })).toHaveCount(0);
     await expect(page.getByRole('button', { name: /start free trial/i })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /start trial/i })).toHaveCount(0);
+    await expect(page.getByText(/free 14-day trial/i)).toHaveCount(0);
+    await expect(page.getByText(/open hosted handoff/i)).toHaveCount(0);
   });
 });

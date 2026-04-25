@@ -501,7 +501,7 @@ describe('AISettings quickstart enablement flow', () => {
       quickstart_credits_remaining: 0,
       quickstart_credits_available: false,
       quickstart_blocked_reason:
-        'Activate this install or start a trial to use Patrol quickstart. Otherwise connect your API key.',
+        'Connect your API key to use AI Patrol on this install. Hosted quickstart requires an activated entitlement.',
     });
 
     renderComponent();
@@ -518,10 +518,10 @@ describe('AISettings quickstart enablement flow', () => {
     ).toBeInTheDocument();
     expect(
       screen.getAllByText(
-        'Activate this install or start a trial to use Patrol quickstart. Otherwise connect your API key.',
+        'Connect your API key to use AI Patrol on this install. Hosted quickstart requires an activated entitlement.',
       ),
     ).toHaveLength(2);
-    expect(screen.getByRole('button', { name: /start trial/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /open hosted handoff/i })).toBeInTheDocument();
   });
 
   it('hides trial setup guidance when self-hosted upgrade prompts are disabled', async () => {
@@ -534,7 +534,7 @@ describe('AISettings quickstart enablement flow', () => {
       quickstart_credits_remaining: 0,
       quickstart_credits_available: false,
       quickstart_blocked_reason:
-        'Activate this install or start a trial to use Patrol quickstart. Otherwise connect your API key.',
+        'Connect your API key to use AI Patrol on this install. Hosted quickstart requires an activated entitlement.',
     });
 
     renderComponent();
@@ -550,7 +550,7 @@ describe('AISettings quickstart enablement flow', () => {
     expect(
       screen.getByText('Connect a provider to power Pulse Assistant and Patrol.'),
     ).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /start trial/i })).not.toBeInTheDocument();
-    expect(screen.queryByText(/start a trial to use Patrol quickstart/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /open hosted handoff/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Hosted quickstart requires an activated entitlement/i)).not.toBeInTheDocument();
   });
 });

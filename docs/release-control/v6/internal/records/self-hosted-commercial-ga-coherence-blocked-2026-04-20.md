@@ -20,7 +20,7 @@
    `v5` track while the `v6` model is retained as preview data.
 5. The governed commercial lane (`L2`) had previously been treated as complete
    at the RC floor even though GA still lacks a named self-hosted commercial
-   package pass covering the public site, in-app upgrade/trial path,
+   package pass covering the public site, explicit in-app commercial handoff,
    checkout/account/license-management flow, and GA-facing guidance together.
 
 ## Why The Gate Cannot Be Cleared Yet

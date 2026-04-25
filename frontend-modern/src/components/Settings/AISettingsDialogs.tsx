@@ -3,7 +3,6 @@ import { Dialog } from '@/components/shared/Dialog';
 import { SelectionCardGroup } from '@/components/shared/SelectionCardGroup';
 import { getAISessionDiffStatusPresentation } from '@/utils/aiSessionDiffPresentation';
 import { getAISettingsSetupDialogPresentation } from '@/utils/aiSettingsPresentation';
-import { RELAY_ONBOARDING_TRIAL_STARTING_LABEL } from '@/utils/relayPresentation';
 import type { FileChange } from '@/api/aiChat';
 import type { AIProvider } from '@/types/ai';
 import {
@@ -122,11 +121,12 @@ export const AISettingsDialogs: Component<AISettingsDialogsProps> = (props) => {
                   <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                       <p class="text-sm font-medium text-blue-900 dark:text-blue-100">
-                        Start a Pro trial to unlock Patrol quickstart
+                        Use hosted quickstart for Patrol
                       </p>
                       <p class="mt-1 text-xs text-blue-800 dark:text-blue-200">
-                        Use the hosted quickstart path first, or skip it and connect your own model
-                        provider below.
+                        Open the hosted quickstart handoff, or skip it and connect your own model
+                        provider below. Hosted quickstart routes prompts through Pulse
+                        infrastructure; BYOK providers go direct.
                       </p>
                     </div>
                     <button
@@ -135,7 +135,7 @@ export const AISettingsDialogs: Component<AISettingsDialogsProps> = (props) => {
                       class="inline-flex min-h-10 sm:min-h-9 items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
                       disabled={props.startingTrial()}
                     >
-                      {props.startingTrial() ? RELAY_ONBOARDING_TRIAL_STARTING_LABEL : 'Start Trial'}
+                      {props.startingTrial() ? 'Opening handoff...' : 'Open hosted handoff'}
                     </button>
                   </div>
                 </div>

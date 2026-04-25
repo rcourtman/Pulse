@@ -18,7 +18,7 @@
 ## Purpose
 
 Own Pulse's canonical privacy disclosures, usage-data boundary (anonymous
-outbound telemetry plus local-only upgrade events), and the security-facing
+outbound telemetry plus local-only commercial handoff events), and the security-facing
 settings surfaces that expose authentication posture, token-management
 visibility, and privacy controls to operators.
 
@@ -107,7 +107,7 @@ This subsystem now gives `L14` an explicit governed home for privacy guidance
 and telemetry disclosures instead of leaving those trust surfaces as lane-level
 evidence with no subsystem ownership.
 That same governed home now also owns the single "usage data" vocabulary for
-anonymous outbound telemetry and local-only upgrade events, so Pulse stops
+anonymous outbound telemetry and local-only commercial handoff events, so Pulse stops
 describing those two privacy scopes as unrelated systems.
 That same operator-reporting boundary now also owns reusable latest-install
 adoption baselines. `scripts/telemetry_adoption_report.py` must emit

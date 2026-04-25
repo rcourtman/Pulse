@@ -137,7 +137,7 @@ export async function loadCommercialPosture(force = false): Promise<void> {
 }
 
 /**
- * Start a Pro trial for the current org, then refresh both runtime and commercial state.
+ * Start the explicit hosted trial handoff for the current org, then refresh runtime and commercial state.
  */
 export async function startProTrial(): Promise<StartProTrialResult> {
   if (
@@ -212,8 +212,8 @@ export const isPro = createRoot(() =>
 );
 
 /**
- * Used by non-billing upgrade surfaces that can render a trial CTA unless the
- * current posture explicitly denies trial eligibility.
+ * Used by explicit commercial surfaces that can render a trial CTA unless the
+ * presentation policy or current posture denies trial eligibility.
  */
 export function canOfferCommercialTrial(): boolean {
   if (presentationPolicyHidesUpgradePrompts()) return false;
@@ -221,8 +221,8 @@ export function canOfferCommercialTrial(): boolean {
 }
 
 /**
- * Used by surfaces that should only offer trial start when the current
- * commercial posture is loaded and not already active/trial-backed.
+ * Used by explicit commercial surfaces that should only offer trial start when
+ * the current commercial posture is loaded and not already active/trial-backed.
  */
 export function canStartCommercialTrial(): boolean {
   if (presentationPolicyHidesUpgradePrompts()) return false;

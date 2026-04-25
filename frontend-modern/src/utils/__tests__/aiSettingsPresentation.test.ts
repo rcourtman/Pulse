@@ -53,7 +53,7 @@ describe('aiSettingsPresentation', () => {
       ariaLabel: 'Activate quickstart or connect a provider',
       title: 'Activate quickstart or connect a provider',
       description:
-        'Start a trial to unlock Patrol quickstart, or connect your own provider for Pulse Assistant and Patrol.',
+        'Use an eligible hosted quickstart entitlement, or connect your own provider for Pulse Assistant and Patrol.',
       submitLabel: 'Enable Assistant & Patrol',
     });
   });
@@ -104,13 +104,13 @@ describe('aiSettingsPresentation', () => {
         quickstartCreditsRemaining: 0,
         quickstartCreditsTotal: 0,
         quickstartBlockedReason:
-          'Activate this install or start a trial to use Patrol quickstart. Otherwise connect your API key.',
+          'Connect your API key to use AI Patrol on this install. Hosted quickstart requires an activated entitlement.',
       }),
     ).toEqual({
       containerClassName: 'bg-amber-50 dark:bg-amber-900 text-amber-800 dark:text-amber-200',
       dotClassName: 'bg-amber-400',
       summary:
-        'Activate this install or start a trial to use Patrol quickstart. Otherwise connect your API key.',
+        'Connect your API key to use AI Patrol on this install. Hosted quickstart requires an activated entitlement.',
     });
   });
 

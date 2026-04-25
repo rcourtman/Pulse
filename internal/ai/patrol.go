@@ -90,7 +90,7 @@ const (
 
 const (
 	patrolQuickstartCreditsExhaustedReason   = "Quickstart credits exhausted. Connect your API key to continue using AI Patrol."
-	patrolQuickstartActivationRequiredReason = "Activate this install or start a trial to use AI Patrol quickstart. Otherwise connect your API key."
+	patrolQuickstartActivationRequiredReason = "Connect your API key to use AI Patrol on this install. Hosted quickstart requires an activated entitlement."
 	patrolQuickstartUnavailableReason        = "Quickstart credits require internet access. Connect your API key for offline AI Patrol."
 )
 

@@ -726,6 +726,11 @@ backend capability fact remains `sessionCapabilities.demoMode`, but storage
 and recovery browsers must consume the shared resolved `presentationPolicy`
 instead of inferring demo posture from headers, `/api/health`, or hostname
 heuristics.
+Shared licensing routes under `internal/api/` may retain legacy
+`upgrade-metrics` names for local commercial handoff telemetry, but storage and
+recovery surfaces must continue to consume the presentation policy instead of
+using those route names as a cue to render paid history prompts in ordinary
+self-hosted sessions.
 That same shared boundary now also owns the one runtime-safe exception:
 storage and recovery may inherit demo-safe `/api/license/runtime-capabilities`
 reads for capability and history-retention truth, but

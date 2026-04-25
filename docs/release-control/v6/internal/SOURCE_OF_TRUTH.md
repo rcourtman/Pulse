@@ -423,7 +423,9 @@ Assertion design rules:
    returning `409 trial_signup_required` while the hosted-signup retry burst
    remains open, then `429 trial_rate_limited` plus `Retry-After` backoff once
    that limiter engages; the local runtime may redeem signed trial activations
-   but must not mint local trial state directly.
+   but must not mint local trial state directly. This transport is support-only
+   or explicit-handoff plumbing for self-hosted v6 GA; ordinary self-hosted
+   runtime surfaces must not promote trial entry.
 4. v5 to v6 commercial migration must preserve unresolved paid-license state
    and downgrade safety.
 5. Cloud and MSP Stripe `price_*` IDs are operational fill-in items, not

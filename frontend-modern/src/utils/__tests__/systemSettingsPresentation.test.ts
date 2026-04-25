@@ -83,10 +83,10 @@ describe('systemSettingsPresentation', () => {
       'Unable to update container update actions.',
     );
     expect(getReduceUpsellNoiseUpdateErrorMessage()).toBe(
-      'Unable to update upgrade guidance preferences.',
+      'Unable to update commercial prompt preferences.',
     );
     expect(getLocalUpgradeMetricsUpdateErrorMessage()).toBe(
-      'Unable to update local-only upgrade events.',
+      'Unable to update local-only commercial events.',
     );
     expect(getTelemetryUpdateErrorMessage()).toBe('Unable to update anonymous telemetry.');
     expect(getTemperatureMonitoringUpdateErrorMessage()).toBe(

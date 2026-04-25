@@ -69,7 +69,7 @@ export function getAISettingsSetupDialogPresentation(
         ariaLabel: 'Activate quickstart or connect a provider',
         title: 'Activate quickstart or connect a provider',
         description:
-          'Start a trial to unlock Patrol quickstart, or connect your own provider for Pulse Assistant and Patrol.',
+          'Use an eligible hosted quickstart entitlement, or connect your own provider for Pulse Assistant and Patrol.',
         submitLabel: 'Enable Assistant & Patrol',
       };
     case 'provider-required':

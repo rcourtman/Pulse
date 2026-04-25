@@ -39,12 +39,8 @@ export const RELAY_ONBOARDING_TITLE = 'Pair Your Mobile Device';
 export const RELAY_ONBOARDING_DESCRIPTION =
   'Pulse Relay lets your phone securely connect to this Pulse instance for remote monitoring.';
 export const RELAY_ONBOARDING_UPGRADE_LABEL = 'Get Relay — $39/yr';
-export const RELAY_ONBOARDING_TRIAL_LABEL = 'or start a Pro trial';
-export const RELAY_ONBOARDING_TRIAL_STARTING_LABEL = 'Starting trial...';
 export const RELAY_ONBOARDING_SETUP_LABEL = 'Set Up Relay';
 export const RELAY_ONBOARDING_DISCONNECTED_LABEL = 'Relay is currently disconnected.';
-export const RELAY_ONBOARDING_SETUP_WIZARD_TRIAL_LABEL = 'Start Free Trial & Set Up Mobile';
-export const RELAY_ONBOARDING_TRIAL_HINT = '14-DAY PRO TRIAL · NO CREDIT CARD REQUIRED';
 
 export function getRelayDiagnosticClass(severity: 'warning' | 'error'): string {
   return severity === 'error'

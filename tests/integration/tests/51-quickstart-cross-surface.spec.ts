@@ -5,7 +5,7 @@ import { ensureAuthenticated } from "./helpers";
 const QUICKSTART_EXHAUSTED_REASON =
   "Quickstart credits exhausted. Connect your API key to continue using Patrol.";
 const QUICKSTART_ACTIVATION_REQUIRED_REASON =
-  "Activate this install or start a trial to use Patrol quickstart. Otherwise connect your API key.";
+  "Connect your API key to use AI Patrol on this install. Hosted quickstart requires an activated entitlement.";
 const QUICKSTART_OFFLINE_REASON =
   "Quickstart credits require internet access. Connect your API key to use Patrol offline.";
 

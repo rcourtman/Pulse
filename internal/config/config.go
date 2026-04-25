@@ -1049,7 +1049,7 @@ func load(initLogging bool) (*Config, error) {
 			cfg.DisableLocalUpgradeMetrics = disabled
 			cfg.EnvOverrides["PULSE_DISABLE_LOCAL_UPGRADE_METRICS"] = true
 			cfg.EnvOverrides["disableLocalUpgradeMetrics"] = true
-			log.Info().Bool("disabled", disabled).Msg("Overriding local-only upgrade events setting from environment")
+			log.Info().Bool("disabled", disabled).Msg("Overriding local-only commercial events setting from environment")
 		} else {
 			log.Warn().Str("value", disableLocalUpgradeMetricsStr).Msg("Invalid PULSE_DISABLE_LOCAL_UPGRADE_METRICS value, ignoring")
 		}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/ed25519"
 	"encoding/base64"
+	"strings"
 	"testing"
 	"time"
 
@@ -144,6 +145,9 @@ func TestQuickstartReasonExportsRemainCanonical(t *testing.T) {
 	}
 	if got := QuickstartActivationRequiredReason(); got != patrolQuickstartActivationRequiredReason {
 		t.Fatalf("QuickstartActivationRequiredReason() = %q, want %q", got, patrolQuickstartActivationRequiredReason)
+	}
+	if strings.Contains(strings.ToLower(QuickstartActivationRequiredReason()), "trial") {
+		t.Fatalf("activation-required quickstart reason must stay BYOK-first, got %q", QuickstartActivationRequiredReason())
 	}
 }
 

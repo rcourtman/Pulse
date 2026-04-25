@@ -12,9 +12,9 @@ import type { SystemConfig } from '@/types/config';
 
 // Server-side setting to hide Docker update buttons while still detecting updates
 const [disableDockerUpdateActions, setDisableDockerUpdateActions] = createSignal(false);
-// Server-side setting to reduce proactive Pro prompts (paywalls still appear when accessing gated features)
+// Server-side compatibility setting for proactive commercial prompts
 const [reduceProUpsellNoise, setReduceProUpsellNoise] = createSignal(false);
-// Server-side setting to disable local-only upgrade UX metrics collection
+// Server-side setting to disable local-only commercial handoff event collection
 const [disableLocalUpgradeMetrics, setDisableLocalUpgradeMetrics] = createSignal(false);
 
 // Track if settings have been loaded

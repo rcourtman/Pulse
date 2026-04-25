@@ -302,25 +302,34 @@ must apply manually. Pro users see the same information with an "Apply Fix" butt
 Patrol finding is a conversion moment.
 
 ### 3. AI Quickstart Credits (25 hosted Patrol runs)
-Activated or trial-backed installs get 25 Patrol runs powered by MiniMax 2.5M with no API
-key setup. This gives users one bounded Patrol-first activation path. Unactivated Community
-installs activate, start a trial, or connect their own key (BYOK, stays free). Upgrading
-later unlocks auto-fix, alert analysis, and other paid operations features; it does not
-replace BYOK for self-hosted AI runtime. Cost: ~$0.002–0.01 per run.
+Eligible activated installs get 25 Patrol runs powered by MiniMax 2.5M with no API key setup.
+This gives support and commercial handoff flows one bounded Patrol-first activation path.
+Ordinary self-hosted Community installs should connect their own key (BYOK, stays free) and
+must not be pushed into a trial just to use Patrol. Paid operations features such as auto-fix,
+alert analysis, and longer history remain opt-in extras; they do not replace BYOK for
+self-hosted AI runtime. Cost: ~$0.002-0.01 per run.
 
-### 4. Relay as impulse buy ($39/yr)
-Fills the $0 → Pro gap. Relay is not the automation tier and it is not a capacity tier.
+### 4. Relay as optional convenience ($39/yr)
+Gives remote-access and mobile users a small paid convenience option without turning core
+self-hosted monitoring into a capacity tier.
 Remote access + mobile + push notifications + custom URL + 14-day history should make it
 an easy purchase for users who want Pulse available outside their LAN.
 
-### 5. Contextual trial triggers
-14-day Pro trial offered at moments of maximum desire:
-- Patrol finds a fixable issue → "Apply this fix automatically? Start your free trial"
-- An alert needs deeper explanation → "Let Pulse investigate this alert? Start your free trial"
-- User taps 30-day chart range → "See your full history — start your free trial"
-- User tries Relay from free tier → "Monitor from anywhere — upgrade to Relay ($39/yr) or
-  start a Pro trial"
-- 7+ days of active use → proactive "Experience the full power" nudge
+### 5. Opt-in commercial discovery
+Default self-hosted v6 sessions must not present ordinary users with trial, paywall, or
+proactive paid-service prompts. Commercial discovery is allowed only when the user explicitly
+opens pricing/activation/recovery/support flows, when the session is hosted/cloud, or when an
+existing entitlement requires a clear renewal or recovery path.
+
+High-intent product moments should stay useful without becoming sales surfaces:
+- Patrol finds a fixable issue -> show the manual fix and BYOK/provider path first; auto-fix can
+  remain an opt-in Pro capability where commercial prompts are explicitly allowed.
+- An alert needs deeper explanation -> keep free investigation context useful; paid alert
+  analysis stays an optional, discoverable extra.
+- User taps a longer chart range -> explain the local retention state without implying a
+  monitoring capacity limit.
+- User wants remote access or mobile pairing -> point to Relay only inside the explicit Relay
+  setup/commercial handoff, not as a global nudge.
 
 ### 6. No self-hosted monitored-system overflow gate
 Self-hosted Community users should not need a temporary monitored-system overflow path because
@@ -333,9 +342,10 @@ show exactly which top-level systems Pulse sees, which collection path is being 
 is included under each system. On self-hosted Community/Relay/Pro, it must not create a false
 "X/Y systems" paywall or imply that users need to buy more monitoring room.
 
-### 8. Upsell snooze (7-day, not permanent)
-Users can snooze upgrade prompts for 7 days. No permanent mute option. Power users who
-use the product heavily are highest-potential converters — don't let them opt out forever.
+### 8. No default upsell cadence
+There is no proactive self-hosted upsell cadence in v6 GA. If older compatibility settings
+mention prompt reduction, treat them as legacy controls; the v6 default is already quiet unless
+the user enters an explicit commercial path or has an entitlement state that needs attention.
 
 ### 9. Cloud launches with v6
 Not behind a waitlist. Real pricing, real signup. Captures convenience buyers who don't
@@ -392,7 +402,7 @@ want to self-host.
   Unlimited     Unlimited       Unlimited
   monitoring    monitoring      monitoring
 
-  [Get Started] [Buy Relay]     [Start Trial]
+  [Get Started] [Buy Relay]     [Choose Pro]
 ```
 
 Below the table:
@@ -499,7 +509,7 @@ explain monitored-system identity:
 - [x] Remove self-hosted monitored-system cap pressure from billing and pricing surfaces
 - [x] Present the public self-hosted ladder as Community / Relay / Pro
 - [ ] Keep ledger and inventory language focused on what Pulse monitors, not paid capacity pressure
-- [ ] Keep upgrade prompts focused on Relay convenience, Pro investigation, Pro auto-fix, and history
+- [ ] Keep paid prompts out of ordinary self-hosted runtime surfaces; commercial copy belongs in explicit pricing, activation, recovery, hosted, or entitlement-aware paths
 
 ### License server / checkout / landing pages (`pulse-pro`)
 
@@ -518,11 +528,10 @@ explain monitored-system identity:
 ## Review Checkpoints
 
 ### 30-day post-launch review
-- Free → Relay conversion rate
-- Free → Pro trial start rate
-- Trial → paid conversion rate
+- Free → Relay opt-in purchase rate
+- Free → Pro opt-in purchase rate
 - Relay → Pro upgrade rate
-- Which paywall surfaces fire most (Relay vs alert investigation vs auto-fix vs history)
+- Which explicit commercial handoffs are used most (pricing, activation, recovery, hosted)
 - Support load per tier
 
 ### 60-day post-launch review

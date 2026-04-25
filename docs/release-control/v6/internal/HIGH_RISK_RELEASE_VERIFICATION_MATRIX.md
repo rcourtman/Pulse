@@ -46,17 +46,17 @@ Companion drill:
   `cd frontend-modern && npx vitest run src/pages/__tests__/HostedSignup.test.tsx src/components/Settings/__tests__/BillingAdminPanel.test.tsx`
   `cd tests/integration && PULSE_E2E_USE_LOCAL_BACKEND=1 PULSE_E2E_SKIP_PLAYWRIGHT_INSTALL=1 npm test -- tests/07-trial-signup-return.spec.ts --project=chromium`
   `cd tests/integration && PULSE_E2E_USE_LOCAL_BACKEND=1 PULSE_E2E_SKIP_PLAYWRIGHT_INSTALL=1 npm test -- tests/58-self-hosted-trial-rate-limit-ui.spec.ts --project=chromium`
-  The self-hosted handoff proof must keep the canonical trial-start transport
-  contract: `POST /api/license/trial/start` returns `409
-  trial_signup_required` while the hosted-signup retry burst remains open,
-  then transitions to `429 trial_rate_limited` plus `Retry-After` backoff once
-  the limiter actually engages. The Pulse Pro browser CTA proof on
-  `/settings/system/billing` must surface that same canonical `Retry-After`
-  backoff even when `details.retry_after_seconds` disagrees.
+  The self-hosted support/explicit-handoff proof must keep the canonical
+  trial-start transport contract: `POST /api/license/trial/start` returns `409
+  trial_signup_required` while the hosted-signup retry burst remains open, then
+  transitions to `429 trial_rate_limited` plus `Retry-After` backoff once the
+  limiter actually engages. Ordinary self-hosted runtime surfaces must still
+  suppress trial prompts unless an explicit commercial handoff or entitlement
+  state allows them.
 - Live rehearsal helper:
   `python3 scripts/release_control/hosted_signup_billing_replay_rehearsal.py --base-url <hosted-url> --signup-email <email> --org-name <org> ...`
 - Manual scenario:
-  1. Start a hosted signup from the self-hosted trial/upgrade path.
+  1. Start a hosted signup from an explicit self-hosted support/commercial handoff path.
   2. Confirm a missing hosted public URL fails closed before any org or RBAC
      tenant is created.
   3. Confirm the user is sent to hosted checkout instead of receiving a local
@@ -201,10 +201,11 @@ Companion drill:
 
 - Why this is risky:
   A technically promotable build is still a broken GA release if the
-  self-hosted commercial path reads like a bridge product. Public landing copy,
-  in-app upgrade and trial prompts, checkout, Pulse Account/license-management,
-  and GA-facing guidance all need to describe the same Community / Relay / Pro
-  offer without preview-only, legacy-v5, or contradictory framing.
+  self-hosted commercial path reads like a bridge product or puts paid prompts in
+  front of ordinary self-hosted users. Public landing copy, explicit in-app
+  commercial handoffs, checkout, Pulse Account/license-management, and GA-facing
+  guidance all need to describe the same Community / Relay / Pro offer without
+  preview-only, legacy-v5, or contradictory framing.
 - Primary runtime surfaces:
   `pulse-pro/landing-page/index.html`
   `pulse-pro/landing-page/README.md`
@@ -223,19 +224,19 @@ Companion drill:
   2. Confirm the public landing surface presents the actual v6 self-hosted
      Community / Relay / Pro ladder and product promise rather than a live v5
      bridge with preview-only v6 packaging.
-  3. Follow a real self-hosted upgrade or trial entry point from the app and
+  3. Follow a real explicit self-hosted commercial handoff from the app and
      confirm the wording, plan identity, and customer expectation match the
-     public site.
+     public site, while ordinary runtime pages stay free-first and quiet.
   4. Continue through the real checkout and Pulse Account/license-management
      path and confirm it stays on the same product story instead of switching
      back to legacy Pulse Pro framing or ambiguous plan rules.
   5. Review the GA-facing guidance/release communication intended to ship with
      promotion and confirm it matches the same package and customer path.
 - Pass when:
-  A new self-hosted customer can move from public understanding to upgrade or
-  trial entry, checkout/account management, and GA-facing guidance without
-  encountering contradictory plan copy, preview-only posture, or legacy-v5
-  bridge messaging.
+  A new self-hosted customer can move from public understanding to an explicit
+  paid-plan handoff, checkout/account management, and GA-facing guidance without
+  encountering proactive in-app trial pressure, contradictory plan copy,
+  preview-only posture, or legacy-v5 bridge messaging.
 - Latest exercised record:
   `docs/release-control/v6/internal/records/self-hosted-commercial-ga-coherence-2026-04-20.md`
 - Block release if:

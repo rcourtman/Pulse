@@ -7,9 +7,9 @@ Pulse is designed to run locally. By default, your monitoring data stays on your
 Pulse currently has two usage-data scopes:
 
 1. **Anonymous outbound telemetry** to help me understand active installations, release uptake, and feature use in aggregate.
-2. **Local-only upgrade events** to help debug and improve upgrade flows on the instance where they were recorded.
+2. **Local-only commercial handoff events** to help debug explicit paid-plan and activation handoffs on the instance where they were recorded.
 
-These are separate scopes on purpose. The outbound telemetry path stays coarse and anonymous. The local-only upgrade-event path stays on the Pulse instance and is not exported to third parties.
+These are separate scopes on purpose. The outbound telemetry path stays coarse and anonymous. The local-only commercial-event path stays on the Pulse instance and is not exported to third parties.
 
 ### Anonymous outbound telemetry
 
@@ -95,17 +95,17 @@ The telemetry implementation is in [`internal/telemetry/telemetry.go`](../intern
 
 Pulse can make outbound connections when you enable specific features:
 
-- **AI (BYOK)**: when AI features are enabled, Pulse sends only the context required for your request to the provider you configured (OpenAI, Anthropic, etc.). See `docs/AI.md`.
+- **AI (BYOK)**: when AI features are configured with your own API key, Pulse sends only the context required for your request directly to the provider you chose (OpenAI, Anthropic, etc.). Requests do not transit Pulse infrastructure. See `docs/AI.md`.
+- **AI (Quickstart)**: when the Pulse-hosted Quickstart provider is selected, your chat request — including messages, system prompt, and tool definitions — is forwarded through `license.pulserelay.pro/v1/quickstart/patrol` to the underlying model provider. This path exists so eligible quickstart users can try AI without their own API key; it means requests transit Pulse infrastructure. To keep prompts off Pulse infrastructure, use a BYOK provider instead.
 - **Relay / Remote Access**: when relay is enabled, Pulse connects to the configured relay endpoint to enable mobile access. See Settings → Remote Access.
 - **Update checks**: Pulse can check for new releases/updates (for example via GitHub release metadata) depending on your deployment and configuration.
 
-### Local-only upgrade events
+### Local-only commercial handoff events
 
-Pulse can record local-only usage events such as "paywall viewed" or "trial started" to improve and debug in-app upgrade flows.
+Pulse can record local-only usage events such as plan-link views or activation handoff attempts to improve and debug voluntary paid flows.
 
 - These events are stored locally and are not exported to third parties.
-- Disable via **Settings → System → General → Disable local-only upgrade events** or set:
+- Disable via **Settings → System → General → Disable local-only commercial events** or set:
   - `PULSE_DISABLE_LOCAL_UPGRADE_METRICS=true`
 
-If you prefer fewer upgrade prompts, you can also enable:
-- **Settings → System → General → Reduce Pro prompts**
+The legacy `reduceProUpsellNoise` preference remains for older proactive prompt behavior, but default self-hosted v6 sessions already hide paid prompts unless the user enters an explicit commercial handoff or has an existing entitlement.

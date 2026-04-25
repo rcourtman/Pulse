@@ -1177,6 +1177,10 @@ consume the settings-owned referral copy from
 `frontend-modern/src/components/Settings/selfHostedBillingPresentation.ts`
 instead of carrying workspace-local commercial guidance or reaching back into
 generic commercial presentation helpers from the hosted infrastructure route.
+Shared licensing routes under `internal/api/` may retain legacy
+`upgrade-metrics` route names for compatibility, but lifecycle-adjacent
+settings and install flows must treat them as local commercial handoff events,
+not as a reason to reintroduce default self-hosted upgrade prompts.
 That canonical /api/auto-register behavior now also includes hostname/IP continuity:
 reruns that arrive through a different canonical host form must reuse the same
 Pulse-managed node record and token instead of forking duplicate fleet entries.

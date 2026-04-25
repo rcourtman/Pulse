@@ -2,7 +2,7 @@ export const AI_QUICKSTART_EXHAUSTED_REASON =
   'Quickstart credits exhausted. Connect your API key to continue using Patrol.';
 
 export const AI_QUICKSTART_ACTIVATION_REQUIRED_REASON =
-  'Activate this install or start a trial to use Patrol quickstart. Otherwise connect your API key.';
+  'Connect your API key to use AI Patrol on this install. Hosted quickstart requires an activated entitlement.';
 
 export const AI_QUICKSTART_UNAVAILABLE_REASON =
   'Quickstart credits require internet access. Connect your API key to use Patrol offline.';

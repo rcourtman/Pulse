@@ -49,8 +49,8 @@ export interface SystemConfig {
   hideLocalLogin?: boolean; // Hide local login form (username/password)
   publicURL?: string; // Public URL for email notifications (e.g., http://198.51.100.100:8080)
   disableDockerUpdateActions?: boolean; // Hide Docker update buttons while still detecting updates (server-wide)
-  reduceProUpsellNoise?: boolean; // Hide proactive Pro prompts; paywalls still appear when accessing gated features
-  disableLocalUpgradeMetrics?: boolean; // Disable local-only upgrade UX metrics collection
+  reduceProUpsellNoise?: boolean; // Legacy compatibility preference for proactive commercial prompts
+  disableLocalUpgradeMetrics?: boolean; // Disable local-only commercial handoff event collection
   telemetryEnabled?: boolean; // Opt-in anonymous usage telemetry
 }
 

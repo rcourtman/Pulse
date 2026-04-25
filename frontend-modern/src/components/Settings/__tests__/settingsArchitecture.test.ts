@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import settingsSource from '../Settings.tsx?raw';
 import settingsDialogsSource from '../SettingsDialogs.tsx?raw';
 import settingsPageShellSource from '../SettingsPageShell.tsx?raw';
+import aiSettingsDialogsSource from '../AISettingsDialogs.tsx?raw';
+import generalSettingsPanelSource from '../GeneralSettingsPanel.tsx?raw';
 import settingsHeaderMetaSource from '../settingsHeaderMeta.ts?raw';
 import settingsNavCatalogSource from '../settingsNavCatalog.ts?raw';
 import settingsNavigationHookSource from '../useSettingsNavigation.ts?raw';
@@ -25,6 +27,7 @@ import diagnosticsResultsPanelSource from '../DiagnosticsResultsPanel.tsx?raw';
 import diagnosticsModelSource from '../diagnosticsModel.ts?raw';
 import infrastructureOnboardingPresentationSource from '../../../utils/infrastructureOnboardingPresentation.ts?raw';
 import selfHostedBillingPresentationSource from '../selfHostedBillingPresentation.ts?raw';
+import systemSettingsPresentationSource from '../../../utils/systemSettingsPresentation.ts?raw';
 
 describe('settings architecture guardrails', () => {
   it('keeps Settings on the canonical page shell boundary', () => {
@@ -119,6 +122,20 @@ describe('settings architecture guardrails', () => {
     );
     expect(settingsHeaderMetaSource).toContain(
       'description: SELF_HOSTED_PRO_BILLING_PRESENTATION.shellDescription',
+    );
+  });
+
+  it('keeps default self-hosted commercial copy opt-in from shared settings primitives', () => {
+    expect(aiSettingsDialogsSource).toContain('Open hosted handoff');
+    expect(aiSettingsDialogsSource).not.toContain('Start Trial');
+    expect(aiSettingsDialogsSource).not.toContain('RELAY_ONBOARDING_TRIAL_STARTING_LABEL');
+    expect(generalSettingsPanelSource).toContain('Disable local-only commercial events');
+    expect(generalSettingsPanelSource).not.toContain('Disable local-only upgrade events');
+    expect(systemSettingsPresentationSource).toContain(
+      'Unable to update local-only commercial events.',
+    );
+    expect(systemSettingsPresentationSource).toContain(
+      'Unable to update commercial prompt preferences.',
     );
   });
 

@@ -210,16 +210,16 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
           <div class="flex-1 min-w-0 space-y-1">
             <div class="flex items-center gap-2">
               <span class="text-sm font-medium text-base-content truncate">
-                Disable local-only upgrade events
+                Disable local-only commercial events
               </span>
               <Show when={props.disableLocalUpgradeMetricsLocked()}>
                 <EnvironmentLockBadge envVar="PULSE_DISABLE_LOCAL_UPGRADE_METRICS" />
               </Show>
             </div>
             <p class="text-xs text-muted line-clamp-2">
-              Records local-only upgrade events like "paywall viewed" and "trial started" to help
-              debug and improve upgrade flows. These events stay on this Pulse instance and are not
-              exported to third parties.
+              Records local-only commercial handoff events, such as plan-link views or activation
+              handoff attempts, to debug voluntary paid flows. These events stay on this Pulse
+              instance and are not exported to third parties.
             </p>
           </div>
           <Toggle

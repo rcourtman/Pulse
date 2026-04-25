@@ -42,6 +42,30 @@ journey.
 - `PULSE_E2E_USE_LOCAL_BACKEND=1 npm --prefix tests/integration test -- tests/58-self-hosted-trial-rate-limit-ui.spec.ts --project=chromium`
   - Result: pass in Chromium against a managed local backend.
 
+## Follow-Up Copy Audit
+
+The 2026-04-25 copy audit removed lingering trial-first language from the
+ordinary self-hosted quickstart reason, settings privacy labels, shared
+self-hosted plan presentation helpers, and current commercial strategy docs.
+The trial transport remains available for hosted/support handoffs, but default
+self-hosted runtime copy now points users to BYOK Patrol or explicit
+commercial/entitlement handoff paths instead of asking them to start a trial.
+
+- `npm --prefix frontend-modern test -- src/components/Settings/__tests__/AISettings.test.tsx src/components/Settings/__tests__/GeneralSettingsPanel.guardrails.test.ts src/utils/__tests__/aiSettingsPresentation.test.ts src/utils/__tests__/systemSettingsPresentation.test.ts src/utils/__tests__/relayPresentation.test.ts src/utils/__tests__/selfHostedPlans.test.ts src/utils/__tests__/licensePresentation.test.ts src/api/__tests__/patrol.test.ts src/pages/__tests__/AIIntelligence.test.tsx`
+  - Result: pass, 9 files and 86 tests.
+- `npm --prefix frontend-modern run type-check`
+  - Result: pass.
+- `go test ./internal/ai -run 'Test.*Quickstart|TestQuickstart|TestService.*Quickstart' -count=1`
+  - Result: pass.
+- `go test ./internal/config -count=1`
+  - Result: pass.
+- `PULSE_E2E_USE_LOCAL_BACKEND=1 PULSE_E2E_SKIP_PLAYWRIGHT_INSTALL=1 npm --prefix tests/integration test -- tests/58-self-hosted-trial-rate-limit-ui.spec.ts --project=chromium`
+  - Result: pass in Chromium against a managed local backend; the proof now also asserts that `Start Trial`, `free 14-day trial`, and `Open hosted handoff` do not appear in the default self-hosted UI.
+- `python3 scripts/release_control/documentation_currentness_test.py`
+  - Result: pass.
+- `python3 scripts/release_control/release_promotion_policy_test.py`
+  - Result: pass after regenerating the static blocked RC-to-GA record from current branch facts without creating any release, tag, or promotion artifact.
+
 ## Known Unrelated State
 
 - Repository-wide frontend format check still reports pre-existing warnings

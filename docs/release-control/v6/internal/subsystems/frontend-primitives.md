@@ -804,7 +804,7 @@ vocabulary. `frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx`,
 `frontend-modern/src/components/Settings/useSystemSettingsState.ts`, and
 `frontend-modern/src/utils/systemSettingsPresentation.ts` must present one
 explicit `Usage data and privacy` model with the separate labels
-`Anonymous outbound telemetry` and `Disable local-only upgrade events`, and
+`Anonymous outbound telemetry` and `Disable local-only commercial events`, and
 must describe telemetry with normalized release identity rather than falling
 back to ambiguous `telemetry`, `upgrade metrics`, or raw-version wording.
 Shared table, disclosure, and form primitives must also stay explicitly typed

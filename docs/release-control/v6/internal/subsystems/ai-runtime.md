@@ -95,9 +95,10 @@ runtime cost control, and shared AI transport surfaces.
    deny fails.
 9. Keep self-hosted Patrol quickstart messaging aligned with backend runtime
    truth: the governed quickstart contract is Patrol-only first-run
-   acceleration on activated or trial-backed installs with server-authoritative
-   run inventory, not a general hosted chat entitlement or a replacement for
-   BYOK once Patrol leaves the quickstart path.
+   acceleration on installs with an activated entitlement and
+   server-authoritative run inventory, not a trial prompt, a general hosted chat
+   entitlement, or a replacement for BYOK once Patrol leaves the quickstart
+   path.
 10. Keep discovery-analysis prompt bounds and response budgets aligned across
    `internal/ai/service.go` and the shared service-discovery prompt builders:
    the runtime must reserve enough output tokens for structured discovery JSON,

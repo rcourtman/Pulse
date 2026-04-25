@@ -42,7 +42,6 @@ export interface SelfHostedCommercialPresentation {
   freeLabel: string;
   buyRelayLabel: string;
   upgradeToProLabel: string;
-  startTrialLabel: string;
   featureComparisonHeading: string;
   footerLinks: readonly SelfHostedLinkCTA[];
 }
@@ -99,7 +98,7 @@ export const SELF_HOSTED_PLAN_DEFINITIONS: readonly SelfHostedPlanDefinition[] =
       'Unlimited self-hosted monitoring',
       '7-day metric history',
       'Pulse Patrol (BYOK)',
-      'Patrol quickstart after activation or trial: 25 runs, no API key',
+      'Hosted Patrol quickstart with activated entitlement: 25 runs, no API key',
       'Update alerts',
       'Basic SSO (OIDC)',
       'Community support',
@@ -183,8 +182,7 @@ export const SELF_HOSTED_COMMERCIAL_PRESENTATION: SelfHostedCommercialPresentati
   includedLabel: 'Included',
   freeLabel: 'Free',
   buyRelayLabel: 'Buy Relay',
-  upgradeToProLabel: 'Upgrade to Pro',
-  startTrialLabel: 'Start Free 14-day Trial',
+  upgradeToProLabel: 'Choose Pro',
   featureComparisonHeading: 'Feature Comparison',
   footerLinks: [
     {
