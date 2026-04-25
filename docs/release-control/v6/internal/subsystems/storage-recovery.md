@@ -1281,6 +1281,11 @@ Those resource timeline reads now also accept governed kind and source-type
 filters plus source-adapter filters, with filtered history counts owned by the
 unified-resource store so storage and recovery views can consume the same
 canonical history contract without re-deriving their own timeline slices.
+Those same dedicated timeline and facet reads are relationship-aware at the API
+boundary: storage and recovery detail views may consume direct changes plus
+changes whose `relatedResources` names the current canonical resource, but they
+must not rebuild a storage-local cross-resource timeline join or widen the
+direct-only history default used by non-resource-detail callers.
 Invalid `sourceAdapter` values are rejected at the API boundary, which keeps
 storage and recovery reads aligned with the canonical adapter set instead of
 turning the timeline filter into an arbitrary free-text escape hatch.

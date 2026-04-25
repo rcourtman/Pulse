@@ -699,8 +699,7 @@ func (s *SQLiteResourceStore) GetRecentChangesFiltered(canonicalID string, since
 	conditions := []string{}
 	canonicalID = CanonicalResourceID(canonicalID)
 	if canonicalID != "" {
-		conditions = append(conditions, "canonical_id = ?")
-		args = append(args, canonicalID)
+		conditions, args = appendRecentChangeResourceCondition(conditions, args, canonicalID, filters.IncludeRelated)
 	} else {
 		conditions = append(conditions, "observed_at >= ?")
 		args = append(args, since)
@@ -1218,7 +1217,7 @@ func (m *MemoryStore) GetRecentChangesFiltered(canonicalID string, since time.Ti
 	var out []ResourceChange
 	for i := len(m.changes) - 1; i >= 0; i-- {
 		change := m.changes[i]
-		if canonicalID != "" && CanonicalResourceID(change.ResourceID) != canonicalID {
+		if canonicalID != "" && !changeMatchesResource(change, canonicalID, filters.IncludeRelated) {
 			continue
 		}
 		if !since.IsZero() && change.ObservedAt.Before(since) {
@@ -1245,7 +1244,7 @@ func (m *MemoryStore) CountRecentChangesFiltered(canonicalID string, since time.
 	canonicalID = CanonicalResourceID(canonicalID)
 	count := 0
 	for _, change := range m.changes {
-		if canonicalID != "" && CanonicalResourceID(change.ResourceID) != canonicalID {
+		if canonicalID != "" && !changeMatchesResource(change, canonicalID, filters.IncludeRelated) {
 			continue
 		}
 		if !since.IsZero() && change.ObservedAt.Before(since) {
@@ -1269,7 +1268,7 @@ func (m *MemoryStore) CountRecentChangesByKindFiltered(canonicalID string, since
 	canonicalID = CanonicalResourceID(canonicalID)
 	counts := make(map[ChangeKind]int)
 	for _, change := range m.changes {
-		if canonicalID != "" && CanonicalResourceID(change.ResourceID) != canonicalID {
+		if canonicalID != "" && !changeMatchesResource(change, canonicalID, filters.IncludeRelated) {
 			continue
 		}
 		if !since.IsZero() && change.ObservedAt.Before(since) {
@@ -1296,7 +1295,7 @@ func (m *MemoryStore) CountRecentChangesBySourceTypeFiltered(canonicalID string,
 	canonicalID = CanonicalResourceID(canonicalID)
 	counts := make(map[ChangeSourceType]int)
 	for _, change := range m.changes {
-		if canonicalID != "" && CanonicalResourceID(change.ResourceID) != canonicalID {
+		if canonicalID != "" && !changeMatchesResource(change, canonicalID, filters.IncludeRelated) {
 			continue
 		}
 		if !since.IsZero() && change.ObservedAt.Before(since) {
@@ -1323,7 +1322,7 @@ func (m *MemoryStore) CountRecentChangesBySourceAdapterFiltered(canonicalID stri
 	canonicalID = CanonicalResourceID(canonicalID)
 	counts := make(map[ChangeSourceAdapter]int)
 	for _, change := range m.changes {
-		if canonicalID != "" && CanonicalResourceID(change.ResourceID) != canonicalID {
+		if canonicalID != "" && !changeMatchesResource(change, canonicalID, filters.IncludeRelated) {
 			continue
 		}
 		if !since.IsZero() && change.ObservedAt.Before(since) {
@@ -1347,8 +1346,7 @@ func buildRecentChangeCountQuery(canonicalID string, since time.Time, filters Re
 	args = append(args, since)
 	canonicalID = CanonicalResourceID(canonicalID)
 	if canonicalID != "" {
-		conditions = append(conditions, "canonical_id = ?")
-		args = append(args, canonicalID)
+		conditions, args = appendRecentChangeResourceCondition(conditions, args, canonicalID, filters.IncludeRelated)
 	}
 	if len(filters.Kinds) > 0 {
 		placeholders := make([]string, 0, len(filters.Kinds))
@@ -1376,6 +1374,32 @@ func buildRecentChangeCountQuery(canonicalID string, since time.Time, filters Re
 	}
 	query += ` WHERE ` + strings.Join(conditions, " AND ")
 	return query, args
+}
+
+func appendRecentChangeResourceCondition(conditions []string, args []any, canonicalID string, includeRelated bool) ([]string, []any) {
+	if !includeRelated {
+		return append(conditions, "canonical_id = ?"), append(args, canonicalID)
+	}
+	return append(conditions, `(canonical_id = ? OR EXISTS (
+			SELECT 1
+			FROM json_each(CASE WHEN json_valid(resource_changes.related_resources) THEN resource_changes.related_resources ELSE '[]' END)
+			WHERE TRIM(json_each.value) = ?
+		))`), append(args, canonicalID, canonicalID)
+}
+
+func changeMatchesResource(change ResourceChange, canonicalID string, includeRelated bool) bool {
+	if CanonicalResourceID(change.ResourceID) == canonicalID {
+		return true
+	}
+	if !includeRelated {
+		return false
+	}
+	for _, relatedID := range change.RelatedResources {
+		if CanonicalResourceID(relatedID) == canonicalID {
+			return true
+		}
+	}
+	return false
 }
 
 func (m *MemoryStore) RecordActionAudit(record ActionAuditRecord) error {

@@ -968,12 +968,19 @@ func TestResourceGetFacetsAndTimeline(t *testing.T) {
 			},
 		},
 	}
+	node := unified.Resource{
+		ID:       "node-1",
+		Type:     unified.ResourceTypeAgent,
+		Name:     "pve-node-1",
+		Status:   unified.StatusOnline,
+		LastSeen: now,
+	}
 
 	cfg := &config.Config{DataPath: t.TempDir()}
 	h := NewResourceHandlers(cfg)
 	h.SetStateProvider(resourceUnifiedSeedProvider{
 		snapshot:  models.StateSnapshot{LastUpdate: now},
-		resources: []unified.Resource{resource},
+		resources: []unified.Resource{resource, node},
 	})
 
 	store, err := h.getStore("default")
@@ -1015,6 +1022,18 @@ func TestResourceGetFacetsAndTimeline(t *testing.T) {
 		}); err != nil {
 			t.Fatalf("RecordChange extra %d: %v", i+1, err)
 		}
+	}
+	if err := store.RecordChange(unified.ResourceChange{
+		ID:            "chg-node-direct",
+		ResourceID:    "node-1",
+		ObservedAt:    now.Add(-30 * time.Second),
+		Kind:          unified.ChangeStateTransition,
+		SourceType:    unified.SourcePulseDiff,
+		SourceAdapter: unified.AdapterProxmox,
+		Confidence:    unified.ConfidenceMedium,
+		Reason:        "node state refreshed",
+	}); err != nil {
+		t.Fatalf("RecordChange node direct: %v", err)
 	}
 
 	t.Run("facets", func(t *testing.T) {
@@ -1080,6 +1099,32 @@ func TestResourceGetFacetsAndTimeline(t *testing.T) {
 		}
 		if got := payload.RecentChanges[0].RelatedResources; len(got) != 1 || got[0] != "node-1" {
 			t.Fatalf("unexpected timeline related resources: %#v", got)
+		}
+	})
+
+	t.Run("relationship-aware timeline", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/api/resources/node-1/timeline?limit=10", nil)
+		h.HandleResourceRoutes(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+		}
+		var payload struct {
+			ResourceID    string                   `json:"resourceId"`
+			RecentChanges []unified.ResourceChange `json:"recentChanges"`
+			Count         int                      `json:"count"`
+		}
+		if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
+			t.Fatalf("decode relationship-aware timeline: %v", err)
+		}
+		if payload.ResourceID != "node-1" || payload.Count != 4 || len(payload.RecentChanges) != 4 {
+			t.Fatalf("unexpected relationship-aware timeline payload: %#v", payload)
+		}
+		if payload.RecentChanges[0].ID != "chg-42" || payload.RecentChanges[1].ID != "chg-node-direct" {
+			t.Fatalf("relationship-aware timeline order = %#v, want related vm event then direct node event", payload.RecentChanges)
+		}
+		if got := payload.RecentChanges[0].ResourceID; got != "vm:42" {
+			t.Fatalf("related timeline preserves originating resource ID = %q, want vm:42", got)
 		}
 	})
 
@@ -1166,6 +1211,35 @@ func TestResourceGetFacetsAndTimeline(t *testing.T) {
 		}
 		if payload.RecentChanges[0].ID != "chg-42" {
 			t.Fatalf("unexpected filtered facets change: %#v", payload.RecentChanges[0])
+		}
+	})
+
+	t.Run("relationship-aware filtered facets", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/api/resources/node-1/facets?kind=restart&limit=10", nil)
+		h.HandleResourceRoutes(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+		}
+		var payload struct {
+			ResourceID    string                   `json:"resourceId"`
+			RecentChanges []unified.ResourceChange `json:"recentChanges"`
+			Counts        struct {
+				RecentChanges     int                        `json:"recentChanges"`
+				RecentChangeKinds map[unified.ChangeKind]int `json:"recentChangeKinds"`
+			} `json:"counts"`
+		}
+		if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
+			t.Fatalf("decode relationship-aware filtered facets: %v", err)
+		}
+		if payload.ResourceID != "node-1" || payload.Counts.RecentChanges != 1 || len(payload.RecentChanges) != 1 {
+			t.Fatalf("unexpected relationship-aware filtered facets payload: %#v", payload)
+		}
+		if payload.RecentChanges[0].ID != "chg-42" {
+			t.Fatalf("unexpected relationship-aware filtered facets change: %#v", payload.RecentChanges[0])
+		}
+		if got := payload.Counts.RecentChangeKinds[unified.ChangeRestart]; got != 1 {
+			t.Fatalf("relationship-aware restart facet count = %d, want 1", got)
 		}
 	})
 

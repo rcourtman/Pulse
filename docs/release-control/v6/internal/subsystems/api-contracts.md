@@ -212,7 +212,13 @@ the canonical monitored-system blocked payload.
    resource API JSON, and exercised with backend contract tests plus the
    canonical `useUnifiedResources` frontend hook proof whenever it changes.
 5. Route unified-resource action, lifecycle, and export audit reads through `internal/api/activity_audit_handlers.go`, `internal/api/router_routes_licensing.go`, and `internal/api/contract_test.go` together so the control-plane execution trail stays on a governed API contract instead of a store-only shape
-6. Route dedicated unified-resource timeline and facet-bundle reads through `frontend-modern/src/api/resources.ts`, `internal/api/resources.go`, and `internal/api/contract_test.go` together so the backend facet contract and the frontend client stay aligned on one timeline-first surface, while capability and relationship detail stays backend-owned for AI correlation and change detection
+6. Route dedicated unified-resource timeline and facet-bundle reads through `frontend-modern/src/api/resources.ts`, `internal/api/resources.go`, and `internal/api/contract_test.go` together so the backend facet contract and the frontend client stay aligned on one timeline-first surface, while capability and relationship detail stays backend-owned for AI correlation and change detection.
+   `/api/resources/{id}/timeline` and `/api/resources/{id}/facets` must keep
+   resource timelines relationship-aware by opting into the canonical
+   `ResourceChangeFilters.IncludeRelated` store path, so a resource timeline
+   includes direct changes and changes that name the resource in
+   `relatedResources` instead of hiding child or dependency activity from the
+   owning resource.
 7. Route unified-resource list ordering through `internal/api/resources.go`, `internal/api/contract_test.go`, and the owned unified-resource registry helpers together; list payloads must stay deterministic for equal-name resources by carrying one canonical `name -> type -> id` tie-break across cold seed, REST pagination, and websocket-backed refreshes instead of inheriting map order or page-local re-sorts
    That same shared API contract also owns the external resource `type`, canonical display name, and cluster identity published through `/api/resources` and `/api/state`; the websocket/state hydrate path must not emit legacy aliases or raw store labels once the unified resource contract has normalized them.
 8. Route unified-agent installer and binary download headers through `internal/api/unified_agent.go` and `internal/api/contract_test.go` together; published release downloads must keep the canonical `X-Checksum-Sha256` plus `X-Signature-Ed25519` contract for updater clients and the base64-encoded `X-Signature-SSHSIG` contract for installer clients whether the asset is served locally or proxied from the matching GitHub release, instead of leaving callers to infer trust from source location alone.

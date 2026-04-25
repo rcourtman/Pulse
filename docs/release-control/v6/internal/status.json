@@ -3651,6 +3651,122 @@
           "kind": "file"
         }
       ]
+    },
+    {
+      "id": "L19",
+      "name": "Resource change intelligence",
+      "target_score": 6,
+      "current_score": 6,
+      "status": "partial",
+      "completion": {
+        "state": "bounded-residual",
+        "summary": "Resource change intelligence now has a first-class governed floor: canonical resource relationships, durable resource-change envelopes, AI/Patrol recent-change presentation, dedicated resource timeline/facet reads, and relationship-aware resource timelines are all owned by the unified-resource and API-contract boundary. Broader surfaced timeline IA, relationship graph exploration, enterprise correlation depth, and cross-resource investigation workflows remain a named post-RC hardening track.",
+        "tracking": [
+          {
+            "kind": "lane-followup",
+            "id": "resource-change-intelligence-post-rc-hardening"
+          }
+        ]
+      },
+      "blockers": [],
+      "subsystems": [],
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/subsystems/api-contracts.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/subsystems/unified-resources.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/components/Infrastructure/ResourceChangeSummary.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/utils/resourceChangePresentation.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/ai/intelligence.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/ai/patrol_ai.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/resources.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/resources_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/unifiedresources/change_emission.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/unifiedresources/change_emission_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/unifiedresources/change_filters.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/unifiedresources/change_presentation.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/unifiedresources/change_presentation_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/unifiedresources/changes.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/unifiedresources/relationship_presentation.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/unifiedresources/relationship_presentation_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/unifiedresources/relationships.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/unifiedresources/store.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/unifiedresources/store_test.go",
+          "kind": "file"
+        }
+      ]
     }
   ],
   "release_gates": [
@@ -4357,6 +4473,17 @@
         "L18"
       ],
       "subsystem_ids": []
+    },
+    {
+      "id": "resource-change-intelligence-post-rc-hardening",
+      "summary": "Track broader resource-change intelligence hardening beyond the current canonical timeline floor, including surfaced cross-resource timeline IA, relationship graph exploration, enterprise correlation depth, and investigation workflows that promote relationship-aware timelines from backend foundation into a primary operator experience.",
+      "owner": "project-owner",
+      "status": "planned",
+      "recorded_at": "2026-04-25",
+      "lane_ids": [
+        "L19"
+      ],
+      "subsystem_ids": []
     }
   ],
   "coverage_gaps": [
@@ -4409,37 +4536,6 @@
         {
           "repo": "pulse",
           "path": "docs/release-control/v6/internal/subsystems/agent-lifecycle.md",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse",
-          "path": "docs/release-control/v6/internal/V6_BRIDGE_RELEASE_FOUNDATION_SPEC.md",
-          "kind": "file"
-        }
-      ]
-    },
-    {
-      "id": "resource-change-and-timeline",
-      "summary": "The current v6 lane map proves unified resources and monitoring floors, but the resource-change and cross-resource timeline work is now kept as hidden backend foundation for investigation and AI flows until the surfaced case is proven.",
-      "owner": "project-owner",
-      "status": "planned",
-      "recorded_at": "2026-03-17",
-      "lane_ids": [
-        "L6",
-        "L13"
-      ],
-      "subsystem_ids": [
-        "alerts",
-        "api-contracts",
-        "monitoring",
-        "unified-resources"
-      ],
-      "proposed_resolution": "lane-split",
-      "coverage_impact": 15,
-      "evidence": [
-        {
-          "repo": "pulse",
-          "path": "docs/release-control/v6/internal/subsystems/unified-resources.md",
           "kind": "file"
         },
         {
@@ -4591,27 +4687,6 @@
       ],
       "subsystem_ids": [
         "agent-lifecycle"
-      ]
-    },
-    {
-      "id": "resource-change-intelligence",
-      "name": "Resource change intelligence",
-      "summary": "Promote canonical resource relationships, first-class change envelopes, and cross-resource timelines into an explicit lane once the monitoring-first surface proves the case; keep the backend foundations hidden until then.",
-      "status": "planned",
-      "recorded_at": "2026-03-17",
-      "target_id": "v6-product-lane-expansion",
-      "current_lane_ids": [
-        "L6",
-        "L13"
-      ],
-      "coverage_gap_ids": [
-        "resource-change-and-timeline"
-      ],
-      "subsystem_ids": [
-        "alerts",
-        "api-contracts",
-        "monitoring",
-        "unified-resources"
       ]
     },
     {

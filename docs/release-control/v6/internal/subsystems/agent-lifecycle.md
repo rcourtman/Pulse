@@ -923,6 +923,11 @@ Those timeline reads also accept governed filters for change kind, source
 type, and source adapter, and the underlying store owns the filtered counts so
 agent lifecycle routing still stays on canonical fleet-continuity ownership
 instead of re-deriving resource history locally.
+Those dedicated resource timeline and facet reads are also relationship-aware
+at the API boundary: lifecycle-adjacent fleet views may consume the direct plus
+`relatedResources` history returned by `internal/api/resources.go`, but they
+must not rebuild cross-resource timeline joins inside lifecycle-owned routes or
+change the direct-only store default used by other callers.
 That same shared `internal/api/` boundary now also exposes a dedicated VM
 inventory export route for reporting. Fleet and install surfaces may coexist
 with that export, but `internal/api/reporting_inventory_handlers.go` and

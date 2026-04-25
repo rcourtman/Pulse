@@ -505,6 +505,175 @@ func TestRecordChange_RoundTrip(t *testing.T) {
 	}
 }
 
+func TestResourceChangeFiltersIncludeRelatedResources(t *testing.T) {
+	store := newTestStore(t)
+	now := time.Date(2026, 4, 25, 21, 10, 0, 0, time.UTC)
+	changes := []ResourceChange{
+		{
+			ID:               "chg-related-node",
+			ResourceID:       "vm:100",
+			ObservedAt:       now,
+			Kind:             ChangeRestart,
+			SourceType:       SourcePlatformEvent,
+			SourceAdapter:    AdapterProxmox,
+			Confidence:       ConfidenceHigh,
+			RelatedResources: []string{" node:1 "},
+			Reason:           "vm restarted on node",
+		},
+		{
+			ID:            "chg-direct-node",
+			ResourceID:    "node:1",
+			ObservedAt:    now.Add(-time.Minute),
+			Kind:          ChangeStateTransition,
+			SourceType:    SourcePulseDiff,
+			SourceAdapter: AdapterProxmox,
+			Confidence:    ConfidenceMedium,
+			Reason:        "node status refreshed",
+		},
+		{
+			ID:               "chg-related-storage",
+			ResourceID:       "storage:1",
+			ObservedAt:       now.Add(-2 * time.Minute),
+			Kind:             ChangeAnomaly,
+			SourceType:       SourcePulseDiff,
+			SourceAdapter:    AdapterTrueNAS,
+			Confidence:       ConfidenceMedium,
+			RelatedResources: []string{" node:1 "},
+			Reason:           "storage issue affects node",
+		},
+	}
+	for _, change := range changes {
+		if err := store.RecordChange(change); err != nil {
+			t.Fatalf("RecordChange(%s): %v", change.ID, err)
+		}
+	}
+
+	directOnly, err := store.GetRecentChangesFiltered("node:1", now.Add(-time.Hour), 10, ResourceChangeFilters{})
+	if err != nil {
+		t.Fatalf("GetRecentChangesFiltered direct: %v", err)
+	}
+	if len(directOnly) != 1 || directOnly[0].ID != "chg-direct-node" {
+		t.Fatalf("direct timeline = %#v, want only chg-direct-node", directOnly)
+	}
+
+	timeline, err := store.GetRecentChangesFiltered("node:1", now.Add(-time.Hour), 10, ResourceChangeFilters{IncludeRelated: true})
+	if err != nil {
+		t.Fatalf("GetRecentChangesFiltered include related: %v", err)
+	}
+	if got := changeIDs(timeline); !sameStringSet(got, []string{"chg-related-node", "chg-direct-node", "chg-related-storage"}) {
+		t.Fatalf("relationship-aware timeline IDs = %#v, want direct plus related changes", got)
+	}
+	if timeline[0].ID != "chg-related-node" || timeline[1].ID != "chg-direct-node" || timeline[2].ID != "chg-related-storage" {
+		t.Fatalf("timeline order = %#v, want observed_at desc across direct and related changes", changeIDs(timeline))
+	}
+
+	filtered, err := store.GetRecentChangesFiltered("node:1", now.Add(-time.Hour), 10, ResourceChangeFilters{
+		IncludeRelated: true,
+		Kinds:          []ChangeKind{ChangeAnomaly},
+	})
+	if err != nil {
+		t.Fatalf("GetRecentChangesFiltered related kind: %v", err)
+	}
+	if len(filtered) != 1 || filtered[0].ID != "chg-related-storage" {
+		t.Fatalf("filtered related timeline = %#v, want chg-related-storage", filtered)
+	}
+
+	count, err := store.CountRecentChangesFiltered("node:1", now.Add(-time.Hour), ResourceChangeFilters{IncludeRelated: true})
+	if err != nil {
+		t.Fatalf("CountRecentChangesFiltered include related: %v", err)
+	}
+	if count != 3 {
+		t.Fatalf("relationship-aware count = %d, want 3", count)
+	}
+
+	kindCounts, err := store.CountRecentChangesByKindFiltered("node:1", now.Add(-time.Hour), ResourceChangeFilters{IncludeRelated: true})
+	if err != nil {
+		t.Fatalf("CountRecentChangesByKindFiltered include related: %v", err)
+	}
+	if got := kindCounts[ChangeRestart]; got != 1 {
+		t.Fatalf("restart count = %d, want 1", got)
+	}
+	if got := kindCounts[ChangeStateTransition]; got != 1 {
+		t.Fatalf("state transition count = %d, want 1", got)
+	}
+	if got := kindCounts[ChangeAnomaly]; got != 1 {
+		t.Fatalf("anomaly count = %d, want 1", got)
+	}
+
+	sourceCounts, err := store.CountRecentChangesBySourceAdapterFiltered("node:1", now.Add(-time.Hour), ResourceChangeFilters{IncludeRelated: true})
+	if err != nil {
+		t.Fatalf("CountRecentChangesBySourceAdapterFiltered include related: %v", err)
+	}
+	if got := sourceCounts[AdapterProxmox]; got != 2 {
+		t.Fatalf("proxmox count = %d, want 2", got)
+	}
+	if got := sourceCounts[AdapterTrueNAS]; got != 1 {
+		t.Fatalf("truenas count = %d, want 1", got)
+	}
+}
+
+func TestMemoryStoreResourceChangeFiltersIncludeRelatedResources(t *testing.T) {
+	store := NewMemoryStore()
+	now := time.Date(2026, 4, 25, 21, 15, 0, 0, time.UTC)
+	for _, change := range []ResourceChange{
+		{
+			ID:               "mem-related",
+			ResourceID:       "vm:100",
+			ObservedAt:       now,
+			Kind:             ChangeRestart,
+			SourceType:       SourcePlatformEvent,
+			SourceAdapter:    AdapterProxmox,
+			Confidence:       ConfidenceHigh,
+			RelatedResources: []string{"node:1"},
+		},
+		{
+			ID:            "mem-direct",
+			ResourceID:    "node:1",
+			ObservedAt:    now.Add(-time.Minute),
+			Kind:          ChangeStateTransition,
+			SourceType:    SourcePulseDiff,
+			SourceAdapter: AdapterProxmox,
+			Confidence:    ConfidenceMedium,
+		},
+	} {
+		if err := store.RecordChange(change); err != nil {
+			t.Fatalf("RecordChange(%s): %v", change.ID, err)
+		}
+	}
+
+	directOnly, err := store.GetRecentChangesFiltered("node:1", now.Add(-time.Hour), 10, ResourceChangeFilters{})
+	if err != nil {
+		t.Fatalf("GetRecentChangesFiltered direct: %v", err)
+	}
+	if len(directOnly) != 1 || directOnly[0].ID != "mem-direct" {
+		t.Fatalf("direct memory timeline = %#v, want only mem-direct", directOnly)
+	}
+
+	timeline, err := store.GetRecentChangesFiltered("node:1", now.Add(-time.Hour), 10, ResourceChangeFilters{IncludeRelated: true})
+	if err != nil {
+		t.Fatalf("GetRecentChangesFiltered include related: %v", err)
+	}
+	if len(timeline) != 2 || timeline[0].ID != "mem-direct" || timeline[1].ID != "mem-related" {
+		t.Fatalf("relationship-aware memory timeline = %#v, want reverse insertion order direct plus related", timeline)
+	}
+
+	count, err := store.CountRecentChangesFiltered("node:1", now.Add(-time.Hour), ResourceChangeFilters{IncludeRelated: true})
+	if err != nil {
+		t.Fatalf("CountRecentChangesFiltered include related: %v", err)
+	}
+	if count != 2 {
+		t.Fatalf("relationship-aware memory count = %d, want 2", count)
+	}
+}
+
+func changeIDs(changes []ResourceChange) []string {
+	ids := make([]string, 0, len(changes))
+	for _, change := range changes {
+		ids = append(ids, change.ID)
+	}
+	return ids
+}
+
 func TestRecordChange_IgnoresDuplicateIDs(t *testing.T) {
 	store := newTestStore(t)
 	now := time.Date(2026, 3, 30, 18, 20, 0, 0, time.UTC)

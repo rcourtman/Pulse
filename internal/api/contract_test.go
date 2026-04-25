@@ -11283,6 +11283,112 @@ func TestContract_ResourceFacetsJSONSnapshot(t *testing.T) {
 	assertJSONSnapshot(t, got, want)
 }
 
+func TestContract_ResourceTimelineEndpointsIncludeRelatedChanges(t *testing.T) {
+	now := time.Date(2026, 4, 25, 22, 15, 0, 0, time.UTC)
+	h := NewResourceHandlers(&config.Config{DataPath: t.TempDir()})
+	h.SetStateProvider(resourceUnifiedSeedProvider{
+		snapshot: models.StateSnapshot{LastUpdate: now},
+		resources: []unifiedresources.Resource{
+			{
+				ID:       "node-contract-relationship",
+				Type:     unifiedresources.ResourceTypeAgent,
+				Name:     "node-contract-relationship",
+				Status:   unifiedresources.StatusOnline,
+				LastSeen: now,
+			},
+			{
+				ID:       "vm-contract-relationship",
+				Type:     unifiedresources.ResourceTypeVM,
+				Name:     "vm-contract-relationship",
+				Status:   unifiedresources.StatusOnline,
+				LastSeen: now,
+			},
+		},
+	})
+
+	store, err := h.getStore("default")
+	if err != nil {
+		t.Fatalf("get resource store: %v", err)
+	}
+	for _, change := range []unifiedresources.ResourceChange{
+		{
+			ID:               "change-related-contract",
+			ResourceID:       "vm-contract-relationship",
+			ObservedAt:       now,
+			Kind:             unifiedresources.ChangeRestart,
+			SourceType:       unifiedresources.SourcePlatformEvent,
+			SourceAdapter:    unifiedresources.AdapterProxmox,
+			Confidence:       unifiedresources.ConfidenceHigh,
+			RelatedResources: []string{" node-contract-relationship "},
+		},
+		{
+			ID:            "change-direct-contract",
+			ResourceID:    "node-contract-relationship",
+			ObservedAt:    now.Add(-time.Minute),
+			Kind:          unifiedresources.ChangeStateTransition,
+			SourceType:    unifiedresources.SourcePulseDiff,
+			SourceAdapter: unifiedresources.AdapterProxmox,
+			Confidence:    unifiedresources.ConfidenceMedium,
+		},
+	} {
+		if err := store.RecordChange(change); err != nil {
+			t.Fatalf("record %s: %v", change.ID, err)
+		}
+	}
+
+	timelineRec := httptest.NewRecorder()
+	timelineReq := httptest.NewRequest(http.MethodGet, "/api/resources/node-contract-relationship/timeline?limit=10", nil)
+	h.HandleResourceRoutes(timelineRec, timelineReq)
+	if timelineRec.Code != http.StatusOK {
+		t.Fatalf("timeline status = %d, body=%s", timelineRec.Code, timelineRec.Body.String())
+	}
+	var timeline struct {
+		ResourceID    string                            `json:"resourceId"`
+		RecentChanges []unifiedresources.ResourceChange `json:"recentChanges"`
+		Count         int                               `json:"count"`
+	}
+	if err := json.NewDecoder(timelineRec.Body).Decode(&timeline); err != nil {
+		t.Fatalf("decode relationship-aware timeline: %v", err)
+	}
+	if timeline.ResourceID != "node-contract-relationship" || timeline.Count != 2 || len(timeline.RecentChanges) != 2 {
+		t.Fatalf("unexpected relationship-aware timeline: %#v", timeline)
+	}
+	if timeline.RecentChanges[0].ID != "change-related-contract" || timeline.RecentChanges[0].ResourceID != "vm-contract-relationship" {
+		t.Fatalf("timeline did not preserve related originating resource: %#v", timeline.RecentChanges)
+	}
+
+	facetsRec := httptest.NewRecorder()
+	facetsReq := httptest.NewRequest(http.MethodGet, "/api/resources/node-contract-relationship/facets?kind=restart&limit=10", nil)
+	h.HandleResourceRoutes(facetsRec, facetsReq)
+	if facetsRec.Code != http.StatusOK {
+		t.Fatalf("facets status = %d, body=%s", facetsRec.Code, facetsRec.Body.String())
+	}
+	var facets struct {
+		ResourceID    string                            `json:"resourceId"`
+		RecentChanges []unifiedresources.ResourceChange `json:"recentChanges"`
+		Counts        struct {
+			RecentChanges     int                                          `json:"recentChanges"`
+			RecentChangeKinds map[unifiedresources.ChangeKind]int          `json:"recentChangeKinds"`
+			RecentAdapters    map[unifiedresources.ChangeSourceAdapter]int `json:"recentChangeSourceAdapters"`
+		} `json:"counts"`
+	}
+	if err := json.NewDecoder(facetsRec.Body).Decode(&facets); err != nil {
+		t.Fatalf("decode relationship-aware facets: %v", err)
+	}
+	if facets.ResourceID != "node-contract-relationship" || facets.Counts.RecentChanges != 1 || len(facets.RecentChanges) != 1 {
+		t.Fatalf("unexpected relationship-aware facets: %#v", facets)
+	}
+	if facets.RecentChanges[0].ID != "change-related-contract" {
+		t.Fatalf("facets did not include related restart: %#v", facets.RecentChanges)
+	}
+	if got := facets.Counts.RecentChangeKinds[unifiedresources.ChangeRestart]; got != 1 {
+		t.Fatalf("restart facet count = %d, want 1", got)
+	}
+	if got := facets.Counts.RecentAdapters[unifiedresources.AdapterProxmox]; got != 1 {
+		t.Fatalf("adapter facet count = %d, want 1", got)
+	}
+}
+
 func TestContract_ResourceTimelineRejectsInvalidSourceAdapter(t *testing.T) {
 	_, err := unifiedresources.ParseResourceChangeFilters(nil, nil, []string{"unsupported_adapter"})
 	if err == nil {

@@ -398,6 +398,7 @@ func (h *ResourceHandlers) HandleGetResourceFacets(w http.ResponseWriter, r *htt
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	filters.IncludeRelated = true
 
 	recentChanges, err := store.GetRecentChangesFiltered(resourceID, since, limit, filters)
 	if err != nil {
@@ -550,6 +551,7 @@ func (h *ResourceHandlers) HandleGetResourceTimeline(w http.ResponseWriter, r *h
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	filters.IncludeRelated = true
 
 	changes, err := store.GetRecentChangesFiltered(resourceID, since, limit, filters)
 	if err != nil {

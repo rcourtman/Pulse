@@ -60,6 +60,7 @@ type ResourceChangeFilters struct {
 	Kinds          []ChangeKind          `json:"kinds,omitempty"`
 	SourceTypes    []ChangeSourceType    `json:"sourceTypes,omitempty"`
 	SourceAdapters []ChangeSourceAdapter `json:"sourceAdapters,omitempty"`
+	IncludeRelated bool                  `json:"includeRelated,omitempty"`
 }
 
 func (filters ResourceChangeFilters) matches(change ResourceChange) bool {

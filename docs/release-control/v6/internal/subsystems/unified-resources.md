@@ -946,6 +946,12 @@ write when the target database still requires it.
 `/api/resources/{id}/timeline` reads, while the bundled `/api/resources/{id}/facets`
 surface keeps the facet summary and recent-change history available without
 forcing consumers to parse the full resource payload.
+Those resource-owned timeline and facet reads are relationship-aware at the
+API boundary: when the drawer requests a resource timeline, the store must
+return direct changes for that canonical ID plus changes whose
+`relatedResources` contains the same ID. The default store
+`GetRecentChanges` path remains direct-resource-only for incident and AI
+callers unless they explicitly opt into `ResourceChangeFilters.IncludeRelated`.
 Those filtered timeline reads are backed by dedicated `resource_changes`
 indexes on `canonical_id`, `kind`, `source_type`, and `observed_at`, so the
 canonical history path stays fast as the filtered timeline grows instead of

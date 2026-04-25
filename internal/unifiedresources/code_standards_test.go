@@ -297,6 +297,7 @@ func TestResourceAPIExposesDedicatedFacetReads(t *testing.T) {
 		"HandleGetResourceFacets",
 		"HandleGetResourceTimeline",
 		"unified.ParseResourceChangeFilters(r.URL.Query()[\"kind\"], r.URL.Query()[\"sourceType\"], r.URL.Query()[\"sourceAdapter\"])",
+		"filters.IncludeRelated = true",
 		"GetRecentChangesFiltered(resourceID, since, limit, filters)",
 		"CountRecentChangesFiltered(resourceID, since, filters)",
 		"CountRecentChangesByKindFiltered(resourceID, since, filters)",
