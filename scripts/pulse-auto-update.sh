@@ -110,15 +110,63 @@ get_current_version() {
     echo "${version:-unknown}"
 }
 
+# Determine whether a tag is a semver pre-release.
+#
+# Per semver 2.0.0, any identifier after the patch version introduced by a
+# hyphen (e.g. `v6.0.0-rc.2`, `v5.1.28-beta.1`, `v5.1.28-nightly`) is a
+# pre-release identifier. The unattended updater must refuse these on the
+# stable channel regardless of what GitHub's `/releases/latest` endpoint
+# returns, because that endpoint has, in the wild, briefly surfaced tags
+# that were later corrected to prerelease=true (see the 2026-04-16 incident
+# that bumped demo.pulserelay.pro from 5.1.27 to 6.0.0-rc.2).
+#
+# Returns 0 if the tag looks like a prerelease, 1 otherwise. Empty or
+# obviously-malformed input is treated as prerelease (fail-closed).
+is_prerelease_tag() {
+    local tag="${1:-}"
+    if [[ -z "$tag" ]]; then
+        return 0
+    fi
+    # Must look like semver: v?MAJOR.MINOR.PATCH with optional suffix.
+    if [[ ! "$tag" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+(-.*)?$ ]]; then
+        return 0
+    fi
+    # Any hyphen after the patch component is a prerelease identifier.
+    if [[ "$tag" == *-* ]]; then
+        return 0
+    fi
+    return 1
+}
+
 # Get latest stable release from GitHub
 get_latest_stable_version() {
     local latest_version=""
-    
-    # Get latest stable release (not pre-releases)
-    latest_version=$(curl -s "https://api.github.com/repos/$GITHUB_REPO/releases/latest" | \
-        grep '"tag_name":' | \
-        sed -E 's/.*"([^"]+)".*/\1/' || true)
-    
+    local release_json=""
+    local is_prerelease_flag=""
+
+    # Get latest stable release (not pre-releases). `/releases/latest`
+    # already skips prereleases on GitHub's side, but we still parse and
+    # enforce the `prerelease` flag ourselves as a second line of defense.
+    release_json=$(curl -s "https://api.github.com/repos/$GITHUB_REPO/releases/latest" || true)
+
+    if [[ -n "$release_json" ]] && [[ "$release_json" != *"rate limit"* ]]; then
+        latest_version=$(echo "$release_json" | \
+            grep '"tag_name":' | \
+            head -1 | \
+            sed -E 's/.*"tag_name":[[:space:]]*"([^"]+)".*/\1/' || true)
+        is_prerelease_flag=$(echo "$release_json" | \
+            grep '"prerelease":' | \
+            head -1 | \
+            sed -E 's/.*"prerelease":[[:space:]]*(true|false).*/\1/' || true)
+
+        # Refuse if the API explicitly flags this release as a prerelease.
+        if [[ "$is_prerelease_flag" == "true" ]]; then
+            log error "GitHub /releases/latest returned a prerelease ($latest_version); refusing on stable channel"
+            echo ""
+            return 0
+        fi
+    fi
+
     # Check if we got rate limited or failed
     if [[ -z "$latest_version" ]] || [[ "$latest_version" == *"rate limit"* ]]; then
         # Try direct GitHub latest URL as fallback
@@ -127,7 +175,18 @@ get_latest_stable_version() {
             sed -E 's|.*tag/([^[:space:]]+).*|\1|' | \
             tr -d '\r' || true)
     fi
-    
+
+    # Final belt-and-braces: never hand back a prerelease-shaped tag even
+    # if an upstream path told us it was stable. The channel-pinning policy
+    # lives in the Go server (EffectiveAutoUpdateEnabled gates this timer on
+    # stable only); refusing prerelease tag shapes here ensures the unattended
+    # script cannot cross the major-version boundary on a corrupted API reply.
+    if [[ -n "$latest_version" ]] && is_prerelease_tag "$latest_version"; then
+        log error "GitHub returned prerelease-shaped tag ($latest_version) as latest; refusing on stable channel"
+        echo ""
+        return 0
+    fi
+
     echo "${latest_version:-}"
 }
 
@@ -205,7 +264,15 @@ perform_update() {
     local service_name=$(detect_service_name)
     local installer_tmp=""
     local signature_tmp=""
-    
+
+    # Refuse to install a prerelease via the unattended updater. The stable
+    # channel must never cross onto a tag like v6.0.0-rc.2, even if every
+    # caller above this point thought it was safe.
+    if is_prerelease_tag "$new_version"; then
+        log error "Refusing to install prerelease version $new_version via unattended updater"
+        return 1
+    fi
+
     log info "Starting update to $new_version"
     
     # Create backup of current installation

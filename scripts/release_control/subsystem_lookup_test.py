@@ -4113,6 +4113,8 @@ class SubsystemLookupTest(unittest.TestCase):
             [
                 "scripts/installtests/install_docker_sh_test.go",
                 "scripts/installtests/install_ps1_test.go",
+                "scripts/installtests/install_sh_test.go",
+                "scripts/installtests/pulse_auto_update_test.go",
                 "scripts/installtests/root_install_sh_test.go",
             ],
         )
@@ -4145,6 +4147,8 @@ class SubsystemLookupTest(unittest.TestCase):
             [
                 "scripts/installtests/install_docker_sh_test.go",
                 "scripts/installtests/install_ps1_test.go",
+                "scripts/installtests/install_sh_test.go",
+                "scripts/installtests/pulse_auto_update_test.go",
                 "scripts/installtests/root_install_sh_test.go",
             ],
         )
@@ -4177,6 +4181,8 @@ class SubsystemLookupTest(unittest.TestCase):
             [
                 "scripts/installtests/install_docker_sh_test.go",
                 "scripts/installtests/install_ps1_test.go",
+                "scripts/installtests/install_sh_test.go",
+                "scripts/installtests/pulse_auto_update_test.go",
                 "scripts/installtests/root_install_sh_test.go",
             ],
         )

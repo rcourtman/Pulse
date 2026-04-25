@@ -600,6 +600,17 @@ root `install.sh`, its generated update helper, and
 installer scripts against the pinned release `.sshsig` sidecars before
 execution, rather than treating same-origin checksum files as a sufficient
 trust anchor.
+The unattended auto-update path is also fail-closed on prerelease channel
+crossing: `scripts/pulse-auto-update.sh` must refuse to act on any tag that
+carries a semver prerelease suffix (`-rc.N`, `-beta.N`, `-alpha.N`,
+`-nightly`, etc.) regardless of what GitHub's `/releases/latest` endpoint
+returns, and must also honour the response's explicit `"prerelease": true`
+flag. The release-selection, candidate-evaluation, and installer-invocation
+layers of the script must each enforce that guard independently, so a single
+miswritten upstream signal cannot cross a stable-channel install onto a
+preview tag. Dedicated prerelease-refusal tests in
+`scripts/installtests/pulse_auto_update_test.go` are the owned proof surface
+for that guard.
 That same boundary also owns operator-facing management entry points for
 existing self-hosted installs: the installer's printed update/reset/uninstall
 commands and the active install or upgrade docs must route supported
