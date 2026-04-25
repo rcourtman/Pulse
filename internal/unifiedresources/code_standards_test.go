@@ -606,6 +606,8 @@ func TestPolicyPostureSummaryIsOwnedByUnifiedResources(t *testing.T) {
 		filepath.Join(".", "policy_posture.go"): {
 			"type PolicyPostureSummary struct {",
 			"func SummarizePolicyPosture(resources []Resource) *PolicyPostureSummary",
+			"type ResourcePolicyPostureSummary struct {",
+			"func ResourcePolicyPostureContract(summary *PolicyPostureSummary) *ResourcePolicyPostureSummary",
 		},
 		filepath.Join("..", "ai", "intelligence.go"): {
 			"unifiedresources.PolicyPostureSummary",
@@ -613,6 +615,10 @@ func TestPolicyPostureSummaryIsOwnedByUnifiedResources(t *testing.T) {
 		},
 		filepath.Join("..", "ai", "resource_context.go"): {
 			"unifiedresources.SummarizePolicyPosture(allResources)",
+		},
+		filepath.Join("..", "api", "resources.go"): {
+			"resourcePolicyPostureAggregation(allResources)",
+			"unified.ResourcePolicyPostureContract(unified.SummarizePolicyPosture(canonicalResources))",
 		},
 	}
 

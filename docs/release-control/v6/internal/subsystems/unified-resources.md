@@ -101,6 +101,7 @@ cross-source deduplication.
 79. `frontend-modern/src/types/resource.ts`
 80. `frontend-modern/src/utils/sourcePlatforms.ts`
 81. `internal/unifiedresources/kubernetes_metric_ids.go`
+82. `internal/unifiedresources/policy_posture.go`
 
 ## Shared Boundaries
 
@@ -134,6 +135,11 @@ The canonical AI-safe summary builder now owns the sensitivity-specific suffix
 phrases for `sensitive` and `restricted` resources, so the backend policy
 contract controls those strings instead of duplicating them inside the summary
 assembly branch.
+Canonical policy posture aggregation is owned here as well. Resource API
+payloads may expose a camelCase transport projection, but the counts must be
+derived from `internal/unifiedresources/policy_posture.go` after canonical
+policy metadata has been refreshed, not recomputed from frontend labels,
+AI-only summary payloads, or page-local heuristics.
 4. Add metrics-target normalization or synthetic metrics support through `internal/unifiedresources/metrics_targets.go` and `internal/unifiedresources/metrics.go`
 5. Add platform registry, resolution, host-dedup, or monitored-system
    projection behavior through `internal/unifiedresources/registry.go`,

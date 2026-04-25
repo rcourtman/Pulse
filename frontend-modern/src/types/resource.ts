@@ -138,6 +138,13 @@ export interface ResourcePolicy {
   routing: ResourceRoutingPolicy;
 }
 
+export interface ResourcePolicyPostureSummary {
+  totalResources: number;
+  sensitivityCounts: Partial<Record<ResourceSensitivity, number>>;
+  routingCounts: Partial<Record<ResourceRoutingScope, number>>;
+  redactionCounts: Partial<Record<ResourceRedactionHint, number>>;
+}
+
 export const requiresGovernedResourceDisplay = (policy?: ResourcePolicy | null): boolean => {
   if (!policy) return false;
   return policy.routing.scope === 'local-only' || (policy.routing.redact?.length ?? 0) > 0;

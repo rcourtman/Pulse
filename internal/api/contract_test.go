@@ -10354,7 +10354,7 @@ func TestContract_TenantResourcesDoNotFallbackToRawSnapshotSeeding(t *testing.T)
 		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
 	}
 
-	const want = `{"data":[],"meta":{"page":1,"limit":50,"total":0,"totalPages":0},"aggregations":{"total":0,"byType":{},"byStatus":{},"bySource":{}}}`
+	const want = `{"data":[],"meta":{"page":1,"limit":50,"total":0,"totalPages":0},"aggregations":{"total":0,"byType":{},"byStatus":{},"bySource":{},"policyPosture":{"totalResources":0,"sensitivityCounts":{},"routingCounts":{},"redactionCounts":{}}}}`
 	if got := strings.TrimSpace(rec.Body.String()); got != want {
 		t.Fatalf("tenant resource fallback contract = %s, want %s", got, want)
 	}
@@ -10426,6 +10426,21 @@ func TestContract_ResourceListPolicyMetadata(t *testing.T) {
 	}
 	if got := resource.AISafeSummary; !strings.Contains(got, "virtual machine resource;") || !strings.Contains(got, "local-only context") {
 		t.Fatalf("aiSafeSummary = %q", got)
+	}
+	if resp.Aggregations.PolicyPosture == nil {
+		t.Fatal("expected policy posture aggregation in resource list contract")
+	}
+	if got := resp.Aggregations.PolicyPosture.TotalResources; got != 1 {
+		t.Fatalf("policyPosture.totalResources = %d, want 1", got)
+	}
+	if got := resp.Aggregations.PolicyPosture.SensitivityCounts[unifiedresources.ResourceSensitivityRestricted]; got != 1 {
+		t.Fatalf("policyPosture.sensitivityCounts[restricted] = %d, want 1", got)
+	}
+	if got := resp.Aggregations.PolicyPosture.RoutingCounts[unifiedresources.ResourceRoutingScopeLocalOnly]; got != 1 {
+		t.Fatalf("policyPosture.routingCounts[local-only] = %d, want 1", got)
+	}
+	if got := resp.Aggregations.PolicyPosture.RedactionCounts[unifiedresources.ResourceRedactionHostname]; got != 1 {
+		t.Fatalf("policyPosture.redactionCounts[hostname] = %d, want 1", got)
 	}
 }
 
@@ -10662,10 +10677,11 @@ func TestContract_ResourceListCarriesTimelineAndCapabilityContracts(t *testing.T
 			TotalPages: 1,
 		},
 		Aggregations: unifiedresources.ResourceStats{
-			Total:    1,
-			ByType:   map[unifiedresources.ResourceType]int{unifiedresources.ResourceTypeVM: 1},
-			ByStatus: map[unifiedresources.ResourceStatus]int{unifiedresources.StatusOnline: 1},
-			BySource: map[unifiedresources.DataSource]int{unifiedresources.SourceProxmox: 1},
+			Total:         1,
+			ByType:        map[unifiedresources.ResourceType]int{unifiedresources.ResourceTypeVM: 1},
+			ByStatus:      map[unifiedresources.ResourceStatus]int{unifiedresources.StatusOnline: 1},
+			BySource:      map[unifiedresources.DataSource]int{unifiedresources.SourceProxmox: 1},
+			PolicyPosture: unifiedresources.EmptyResourcePolicyPostureSummary(),
 		},
 	}
 
@@ -10738,7 +10754,7 @@ func TestContract_ResourceListCarriesTimelineAndCapabilityContracts(t *testing.T
 			}
 		],
 		"meta":{"page":1,"limit":50,"total":1,"totalPages":1},
-		"aggregations":{"total":1,"byType":{"vm":1},"byStatus":{"online":1},"bySource":{"proxmox":1}}
+		"aggregations":{"total":1,"byType":{"vm":1},"byStatus":{"online":1},"bySource":{"proxmox":1},"policyPosture":{"totalResources":0,"sensitivityCounts":{},"routingCounts":{},"redactionCounts":{}}}
 	}`
 
 	assertJSONSnapshot(t, got, want)

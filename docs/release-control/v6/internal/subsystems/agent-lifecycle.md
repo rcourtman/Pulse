@@ -177,6 +177,10 @@ an add-only capacity posture.
    order instead of inheriting map order or page-local re-sorts, so install
    and runtime hydration do not present one resource ordering at first load and
    a different ordering after the first live refresh.
+   Those lifecycle-adjacent reads may observe resource API
+   `policyPosture` aggregation as read-only data-governance context, but they
+   must not reinterpret sensitivity, routing, or redaction counts as install
+   capacity, registration eligibility, or agent assignment state.
    When lifecycle surfaces also hydrate from `/api/state`, that first-session
    snapshot must carry the same canonical resource types and display names as
    `/api/resources` instead of briefly showing legacy host aliases before the

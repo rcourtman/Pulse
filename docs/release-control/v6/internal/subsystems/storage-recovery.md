@@ -172,6 +172,10 @@ querying, and the operator-facing storage health presentation layer.
    `ResourceType` normalization for route/query filters, so storage subtypes
    such as `physical_disk` stay on the same cache-backed snapshot instead of
    relying on storage-local filter aliases.
+   Storage and recovery consumers that need estate data-governance posture
+   must read the hook's resource API-backed `policyPosture()` accessor rather
+   than deriving sensitivity, routing, or redaction counts from storage-local
+   tables, AI summary payloads, or route filters.
    Optional selector shells that only surface storage/recovery counts when they
    are visible must now pass an explicit enabled gate into that shared hook and
    any adjacent recovery-rollup query, so hidden workload-route selectors do

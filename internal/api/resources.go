@@ -142,6 +142,7 @@ func (h *ResourceHandlers) HandleListResources(w http.ResponseWriter, r *http.Re
 	// match the canonical REST resource contract.
 	stats := registry.Stats()
 	stats.ByType = computeResourceContractByType(allResources)
+	stats.PolicyPosture = resourcePolicyPostureAggregation(allResources)
 
 	applyResourceContractTypes(paged)
 
@@ -586,6 +587,7 @@ func (h *ResourceHandlers) HandleStats(w http.ResponseWriter, r *http.Request) {
 	allResources := registry.List()
 	stats := registry.Stats()
 	stats.ByType = computeResourceContractByType(allResources)
+	stats.PolicyPosture = resourcePolicyPostureAggregation(allResources)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(stats)
@@ -1100,6 +1102,11 @@ func EmptyResourcesResponse() ResourcesResponse {
 func (r ResourcesResponse) NormalizeCollections() ResourcesResponse {
 	if r.Data == nil {
 		r.Data = []unified.Resource{}
+	}
+	if r.Aggregations.PolicyPosture == nil {
+		r.Aggregations.PolicyPosture = unified.EmptyResourcePolicyPostureSummary()
+	} else {
+		r.Aggregations.PolicyPosture = r.Aggregations.PolicyPosture.NormalizeCollections()
 	}
 	if r.Aggregations.ByType == nil {
 		r.Aggregations.ByType = map[unified.ResourceType]int{}
@@ -2277,6 +2284,11 @@ func computeResourceContractByType(resources []unified.Resource) map[unified.Res
 		m[resourceContractType(r)]++
 	}
 	return m
+}
+
+func resourcePolicyPostureAggregation(resources []unified.Resource) *unified.ResourcePolicyPostureSummary {
+	canonicalResources := unified.RefreshCanonicalMetadataSlice(resources)
+	return unified.ResourcePolicyPostureContract(unified.SummarizePolicyPosture(canonicalResources))
 }
 
 func buildDiscoveryTarget(resource unified.Resource) *unified.DiscoveryTarget {

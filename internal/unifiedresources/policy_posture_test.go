@@ -78,3 +78,39 @@ func TestSummarizePolicyPosture(t *testing.T) {
 		t.Fatal("expected hostname redaction count")
 	}
 }
+
+func TestResourcePolicyPostureContractUsesCamelCaseNonNullCollections(t *testing.T) {
+	t.Parallel()
+
+	summary := &PolicyPostureSummary{
+		TotalResources: 2,
+		SensitivityCounts: map[ResourceSensitivity]int{
+			ResourceSensitivityRestricted: 1,
+		},
+		RoutingCounts: map[ResourceRoutingScope]int{
+			ResourceRoutingScopeLocalOnly: 1,
+		},
+	}
+
+	contract := ResourcePolicyPostureContract(summary)
+	if contract == nil {
+		t.Fatal("expected resource policy posture contract")
+	}
+	if contract.TotalResources != 2 {
+		t.Fatalf("total resources = %d, want 2", contract.TotalResources)
+	}
+	if got := contract.SensitivityCounts[ResourceSensitivityRestricted]; got != 1 {
+		t.Fatalf("restricted sensitivity count = %d, want 1", got)
+	}
+	if got := contract.RoutingCounts[ResourceRoutingScopeLocalOnly]; got != 1 {
+		t.Fatalf("local only routing count = %d, want 1", got)
+	}
+	if contract.RedactionCounts == nil {
+		t.Fatal("expected empty redaction counts map, got nil")
+	}
+
+	summary.SensitivityCounts[ResourceSensitivityRestricted] = 5
+	if got := contract.SensitivityCounts[ResourceSensitivityRestricted]; got != 1 {
+		t.Fatalf("contract mutated with source summary: got %d want 1", got)
+	}
+}

@@ -1125,8 +1125,9 @@ type DockerSwarmInfo struct {
 
 // ResourceStats contains aggregated stats for a set of resources.
 type ResourceStats struct {
-	Total    int                    `json:"total"`
-	ByType   map[ResourceType]int   `json:"byType"`
-	ByStatus map[ResourceStatus]int `json:"byStatus"`
-	BySource map[DataSource]int     `json:"bySource"`
+	Total         int                           `json:"total"`
+	ByType        map[ResourceType]int          `json:"byType"`
+	ByStatus      map[ResourceStatus]int        `json:"byStatus"`
+	BySource      map[DataSource]int            `json:"bySource"`
+	PolicyPosture *ResourcePolicyPostureSummary `json:"policyPosture,omitempty"`
 }

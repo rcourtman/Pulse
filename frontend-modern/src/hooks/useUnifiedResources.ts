@@ -13,6 +13,7 @@ import type {
   ResourceDiscoveryTarget,
   ResourceMetricsTarget,
   ResourcePBSMeta,
+  ResourcePolicyPostureSummary,
   ResourceStatus,
   ResourceStorageMeta,
   ResourceType,
@@ -442,10 +443,26 @@ type APIListResponse = {
   meta?: {
     totalPages?: number;
   };
+  aggregations?: {
+    policyPosture?: APIResourcePolicyPostureSummary;
+  };
+};
+
+type APIResourcePolicyPostureSummary = {
+  totalResources?: number;
+  sensitivityCounts?: Partial<Record<string, number>>;
+  routingCounts?: Partial<Record<string, number>>;
+  redactionCounts?: Partial<Record<string, number>>;
+};
+
+type UnifiedResourcesSnapshot = {
+  resources: Resource[];
+  policyPosture: ResourcePolicyPostureSummary | null;
 };
 
 type UnifiedResourcesCacheEntry = {
   resources: Resource[];
+  policyPosture: ResourcePolicyPostureSummary | null;
   hasSnapshot: boolean;
   cachedAt: number;
   lastFetchAt: number;
@@ -704,12 +721,57 @@ const buildUnifiedResourcesUrl = (query: string, page: number): string => {
   return `${UNIFIED_RESOURCES_BASE_URL}?${params.toString()}`;
 };
 
-const resolveResourcesPayload = (payload: unknown): { data: APIResource[]; totalPages: number } => {
+const normalizeNonNegativeCount = (value: unknown): number | undefined => {
+  const count = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(count)) {
+    return undefined;
+  }
+  return Math.max(0, Math.trunc(count));
+};
+
+const normalizeCountMap = <T extends string>(value: unknown): Partial<Record<T, number>> => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return {};
+  }
+
+  const counts: Partial<Record<T, number>> = {};
+  for (const [key, rawCount] of Object.entries(value as Record<string, unknown>)) {
+    const normalizedKey = asTrimmedString(key);
+    const normalizedCount = normalizeNonNegativeCount(rawCount);
+    if (normalizedKey && normalizedCount !== undefined) {
+      counts[normalizedKey as T] = normalizedCount;
+    }
+  }
+  return counts;
+};
+
+const normalizeResourcePolicyPosture = (
+  value?: APIResourcePolicyPostureSummary | null,
+): ResourcePolicyPostureSummary | null => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return null;
+  }
+
+  return {
+    totalResources: normalizeNonNegativeCount(value.totalResources) ?? 0,
+    sensitivityCounts: normalizeCountMap(value.sensitivityCounts),
+    routingCounts: normalizeCountMap(value.routingCounts),
+    redactionCounts: normalizeCountMap(value.redactionCounts),
+  };
+};
+
+const resolveResourcesPayload = (
+  payload: unknown,
+): {
+  data: APIResource[];
+  totalPages: number;
+  policyPosture: ResourcePolicyPostureSummary | null;
+} => {
   if (Array.isArray(payload)) {
-    return { data: payload as APIResource[], totalPages: 1 };
+    return { data: payload as APIResource[], totalPages: 1, policyPosture: null };
   }
   if (!payload || typeof payload !== 'object') {
-    return { data: [], totalPages: 1 };
+    return { data: [], totalPages: 1, policyPosture: null };
   }
   const record = payload as APIListResponse;
   const data = Array.isArray(record.data)
@@ -720,7 +782,11 @@ const resolveResourcesPayload = (payload: unknown): { data: APIResource[]; total
   const totalPages = Number.isFinite(record.meta?.totalPages)
     ? Math.max(1, Number(record.meta?.totalPages))
     : 1;
-  return { data, totalPages };
+  return {
+    data,
+    totalPages,
+    policyPosture: normalizeResourcePolicyPosture(record.aggregations?.policyPosture),
+  };
 };
 
 const dedupeResources = (resources: APIResource[]): APIResource[] => {
@@ -741,6 +807,7 @@ const getUnifiedResourcesCacheEntry = (cacheKey: string): UnifiedResourcesCacheE
   }
   const created: UnifiedResourcesCacheEntry = {
     resources: [],
+    policyPosture: null,
     hasSnapshot: false,
     cachedAt: 0,
     lastFetchAt: 0,
@@ -757,8 +824,10 @@ const setUnifiedResourcesCache = (
   entry: UnifiedResourcesCacheEntry,
   resources: Resource[],
   at = Date.now(),
+  policyPosture: ResourcePolicyPostureSummary | null = entry.policyPosture,
 ) => {
   entry.resources = resources;
+  entry.policyPosture = policyPosture;
   entry.hasSnapshot = true;
   entry.cachedAt = at;
 };
@@ -829,6 +898,7 @@ const seedUnifiedResourcesCacheFromAllResources = (
   entry.resources = allResourcesEntry.resources.filter((resource) =>
     typeFilter.has(resolveType(resource.type)),
   );
+  entry.policyPosture = allResourcesEntry.policyPosture;
   entry.hasSnapshot = true;
   entry.cachedAt = allResourcesEntry.cachedAt;
   entry.lastFetchAt = allResourcesEntry.lastFetchAt;
@@ -836,9 +906,10 @@ const seedUnifiedResourcesCacheFromAllResources = (
   return entry;
 };
 
-async function fetchUnifiedResources(query: string): Promise<Resource[]> {
+async function fetchUnifiedResources(query: string): Promise<UnifiedResourcesSnapshot> {
   const normalizedQuery = normalizeUnifiedResourcesQuery(query);
   const allRawResources: APIResource[] = [];
+  let policyPosture: ResourcePolicyPostureSummary | null = null;
   let totalPages = 1;
 
   for (let page = 1; page <= totalPages && page <= UNIFIED_RESOURCES_MAX_PAGES; page += 1) {
@@ -856,10 +927,14 @@ async function fetchUnifiedResources(query: string): Promise<Resource[]> {
     const payload = (await response.json()) as APIListResponse | APIResource[];
     const resolved = resolveResourcesPayload(payload);
     allRawResources.push(...resolved.data);
+    policyPosture = policyPosture ?? resolved.policyPosture;
     totalPages = Math.max(totalPages, resolved.totalPages);
   }
 
-  return dedupeResources(allRawResources).map((resource) => toResource(resource));
+  return {
+    resources: dedupeResources(allRawResources).map((resource) => toResource(resource)),
+    policyPosture,
+  };
 }
 
 const fetchUnifiedResourcesShared = async (
@@ -878,9 +953,9 @@ const fetchUnifiedResourcesShared = async (
   const request = (async () => {
     const fetched = await fetchUnifiedResources(query);
     const now = Date.now();
-    setUnifiedResourcesCache(entry, fetched, now);
+    setUnifiedResourcesCache(entry, fetched.resources, now, fetched.policyPosture);
     entry.lastFetchAt = now;
-    return fetched;
+    return fetched.resources;
   })();
 
   entry.sharedFetch = request;
@@ -938,9 +1013,13 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
     orgScope(),
   );
   const initialResources = cacheEntry.resources;
+  const initialPolicyPosture = cacheEntry.policyPosture;
   const hasCachedResources = cacheEntry.hasSnapshot;
 
   const [resources, setResources] = createStore<Resource[]>(initialResources);
+  const [policyPosture, setPolicyPosture] = createSignal<ResourcePolicyPostureSummary | null>(
+    initialPolicyPosture,
+  );
   const [loading, setLoading] = createSignal(!hasCachedResources);
   const [error, setError] = createSignal<unknown>(undefined);
   const wsStore = getGlobalWebSocketStore();
@@ -961,6 +1040,7 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
       return;
     }
     setResources(reconcile(next, { key: 'id' }));
+    setPolicyPosture(targetEntry.policyPosture);
   };
 
   const runRefetch = async (options?: {
@@ -1149,7 +1229,11 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
       wsResources,
       allResourcesEntry.resources,
     );
-    const projectedResources = filterCanonicalUnifiedResources(mergedWsResources, query, typeFilter);
+    const projectedResources = filterCanonicalUnifiedResources(
+      mergedWsResources,
+      query,
+      typeFilter,
+    );
     const now = Date.now();
     clearInitialHydrationTimeout();
     setUnifiedResourcesCache(allResourcesEntry, mergedWsResources, now);
@@ -1167,6 +1251,7 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
     cacheEntry.lastFetchAt = now;
     batch(() => {
       setResources(reconcile(mergedProjectedResources, { key: 'id' }));
+      setPolicyPosture(cacheEntry.policyPosture);
       setError(undefined);
       setLoading(false);
     });
@@ -1233,9 +1318,11 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
     clearInitialHydrationTimeout();
 
     const scopedResources = cacheEntry.resources;
+    const scopedPolicyPosture = cacheEntry.policyPosture;
     batch(() => {
       setError(undefined);
       setResources(reconcile(scopedResources, { key: 'id' }));
+      setPolicyPosture(scopedPolicyPosture);
       setLoading(enabled() && !cacheEntry.hasSnapshot);
     });
 
@@ -1256,6 +1343,7 @@ export function useUnifiedResources(options?: UseUnifiedResourcesOptions) {
 
   return {
     resources: () => resources,
+    policyPosture,
     refetch,
     mutate,
     loading,

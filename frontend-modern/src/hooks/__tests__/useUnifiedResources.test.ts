@@ -553,7 +553,9 @@ describe('useUnifiedResources', () => {
       readRate: 1_250_000,
       writeRate: 640_000,
     });
-    expect(result!.resources().find((resource) => resource.id === 'pbs-1')?.platformData?.pbs).toEqual(
+    expect(
+      result!.resources().find((resource) => resource.id === 'pbs-1')?.platformData?.pbs,
+    ).toEqual(
       expect.objectContaining({
         datastoreCount: 2,
         backupJobCount: 4,
@@ -586,7 +588,9 @@ describe('useUnifiedResources', () => {
       readRate: 1_250_000,
       writeRate: 640_000,
     });
-    expect(result!.resources().find((resource) => resource.id === 'pbs-1')?.platformData?.pbs).toEqual(
+    expect(
+      result!.resources().find((resource) => resource.id === 'pbs-1')?.platformData?.pbs,
+    ).toEqual(
       expect.objectContaining({
         datastoreCount: 2,
         backupJobCount: 4,
@@ -753,6 +757,59 @@ describe('useUnifiedResources', () => {
       },
     });
     expect(result!.resources()[0].aiSafeSummary).toBe('resource summary safe for remote AI use');
+
+    dispose();
+  });
+
+  it('passes resource policy posture aggregations through unchanged', async () => {
+    apiFetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        data: [v2Resource],
+        aggregations: {
+          policyPosture: {
+            totalResources: 3,
+            sensitivityCounts: {
+              restricted: 1,
+              sensitive: 2,
+            },
+            routingCounts: {
+              'local-only': 1,
+              'local-first': 2,
+            },
+            redactionCounts: {
+              hostname: 1,
+              'ip-address': 1,
+            },
+          },
+        },
+      }),
+    });
+
+    let dispose = () => {};
+    let result: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']> | undefined;
+    createRoot((d) => {
+      dispose = d;
+      result = useUnifiedResources();
+    });
+
+    await waitForValue(() => result!.policyPosture()?.totalResources, 3);
+    expect(apiFetchMock).toHaveBeenCalledTimes(1);
+    expect(result!.policyPosture()).toEqual({
+      totalResources: 3,
+      sensitivityCounts: {
+        restricted: 1,
+        sensitive: 2,
+      },
+      routingCounts: {
+        'local-only': 1,
+        'local-first': 2,
+      },
+      redactionCounts: {
+        hostname: 1,
+        'ip-address': 1,
+      },
+    });
 
     dispose();
   });
@@ -1553,7 +1610,7 @@ describe('useUnifiedResources', () => {
     expect(useUnifiedResourcesSource).toContain('supportsCanonicalWsHydration');
     expect(useUnifiedResourcesSource).toContain("initialHydration === 'prefer-ws'");
     expect(useUnifiedResourcesSource).toContain('wsStore.state.resources');
-    expect(useUnifiedResourcesSource).not.toContain('const DEFAULT_ORG_SCOPE = \'default\'');
+    expect(useUnifiedResourcesSource).not.toContain("const DEFAULT_ORG_SCOPE = 'default'");
     expect(useUnifiedResourcesSource).not.toContain('const normalizeOrgScope =');
     expect(useUnifiedResourcesSource).toContain('asTrimmedString');
     expect(useUnifiedResourcesSource).not.toContain(
