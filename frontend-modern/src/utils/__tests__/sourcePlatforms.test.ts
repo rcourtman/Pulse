@@ -8,6 +8,11 @@ import {
   resolvePlatformTypeFromSources,
   resolveSourceTypeFromSources,
 } from '@/utils/sourcePlatforms';
+import {
+  getSourcePlatformCanonicalProjections,
+  getSourcePlatformReadinessStage,
+  getSourcePlatformSupportFloor,
+} from '@/utils/platformSupportManifest';
 
 describe('sourcePlatforms', () => {
   describe('normalizeSourcePlatformKey', () => {
@@ -115,6 +120,23 @@ describe('sourcePlatforms', () => {
         hasPmg: false,
         hasTrueNAS: false,
         hasVMware: true,
+      });
+    });
+  });
+
+  describe('governed platform support projection', () => {
+    it('keeps admitted VMware on the first-lab-ready support floor', () => {
+      expect(getSourcePlatformReadinessStage('vmware')).toBe('first-lab-ready');
+      expect(getSourcePlatformCanonicalProjections('vmware')).toEqual(['agent', 'vm', 'storage']);
+      expect(getSourcePlatformSupportFloor('vmware')).toMatchObject({
+        setup: 'supported',
+        visibility: 'supported',
+        workloads: 'supported',
+        storage: 'supported',
+        recovery: 'n/a',
+        alerts: 'supported',
+        assistantRead: 'supported',
+        assistantControl: 'read-only',
       });
     });
   });

@@ -3858,6 +3858,187 @@
           "kind": "file"
         }
       ]
+    },
+    {
+      "id": "L21",
+      "name": "Platform admission execution",
+      "target_score": 6,
+      "current_score": 6,
+      "status": "partial",
+      "completion": {
+        "state": "bounded-residual",
+        "summary": "Platform admission execution now has a first-class governed floor: the platform support manifest carries readiness stage, primary mode, canonical projections, onboarding paths, and per-surface support-floor classification into a generated frontend projection, while VMware vSphere remains admitted at first-lab-ready instead of being mislabeled as fully supported. Live vCenter proof, deeper recovery/control coverage, and future admitted-platform runtime depth remain a named post-RC hardening track.",
+        "tracking": [
+          {
+            "kind": "lane-followup",
+            "id": "platform-admission-execution-post-rc-hardening"
+          }
+        ]
+      },
+      "blockers": [],
+      "subsystems": [],
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/PLATFORM_SUPPORT_MANIFEST.json",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/PLATFORM_SUPPORT_MODEL.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/vmware-vcenter-phase1-proof-blocked-2026-03-30.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/subsystems/agent-lifecycle.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/subsystems/ai-runtime.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/subsystems/alerts.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/subsystems/api-contracts.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/subsystems/frontend-primitives.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/subsystems/monitoring.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/subsystems/registry.json",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/subsystems/storage-recovery.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/subsystems/unified-resources.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/VMWARE_VCENTER_PHASE1_ALERTS_AND_ASSISTANT_SPEC.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/VMWARE_VCENTER_PHASE1_API_RUNTIME_SPEC.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/VMWARE_VCENTER_PHASE1_ONBOARDING_SPEC.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/VMWARE_VCENTER_PHASE1_PROOF_MATRIX.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/VMWARE_VCENTER_PHASE1_RESOURCE_PROJECTION_SPEC.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/scripts/canonical-platform-audit.mjs",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/types/__tests__/resource.test.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/utils/__tests__/infrastructureOnboardingPresentation.test.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/utils/__tests__/sourcePlatformOptions.test.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/utils/__tests__/sourcePlatforms.test.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/utils/infrastructureOnboardingPresentation.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/utils/platformSupportManifest.generated.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/utils/platformSupportManifest.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/utils/sourcePlatformOptions.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/utils/sourcePlatforms.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/vmware_handlers.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/mock/platform_support_contract_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/monitoring/vmware_poller.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/vmware/provider.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "scripts/release_control/generate_platform_support_frontend_module.py",
+          "kind": "file"
+        }
+      ]
     }
   ],
   "release_gates": [
@@ -4566,6 +4747,17 @@
       "subsystem_ids": []
     },
     {
+      "id": "platform-admission-execution-post-rc-hardening",
+      "summary": "Track broader platform-admission execution beyond the current first-lab-ready support-floor projection, including live vCenter proof before VMware can move to supported, recovery/control expansion, and future admitted-platform proof across setup, canonical projections, alerts, assistant read, and bounded control.",
+      "owner": "project-owner",
+      "status": "planned",
+      "recorded_at": "2026-04-25",
+      "lane_ids": [
+        "L21"
+      ],
+      "subsystem_ids": []
+    },
+    {
       "id": "policy-aware-data-governance-post-rc-hardening",
       "summary": "Track broader policy-aware data-governance hardening beyond the current resource-policy floor, including enterprise DLP posture, provider-retention disclosure, non-resource prompt-secret detection, and additional external-model boundary proof where future paid or hosted AI surfaces add new data paths.",
       "owner": "project-owner",
@@ -4615,110 +4807,6 @@
           "kind": "file"
         }
       ]
-    },
-    {
-      "id": "platform-admission-execution",
-      "summary": "The platform support model now governs admission decisions, and VMware vSphere is already the current admitted strategic next-platform direction, but the lane map still underrepresents the cross-surface work needed to carry an admitted first-class platform from architecture lock to a proved support floor across setup, canonical projections, alerts, assistant read, and bounded control classification.",
-      "owner": "project-owner",
-      "status": "planned",
-      "recorded_at": "2026-03-30",
-      "lane_ids": [
-        "L6",
-        "L13",
-        "L15"
-      ],
-      "subsystem_ids": [
-        "ai-runtime",
-        "alerts",
-        "api-contracts",
-        "monitoring",
-        "storage-recovery",
-        "unified-resources"
-      ],
-      "proposed_resolution": "new-lane",
-      "coverage_impact": 12,
-      "evidence": [
-        {
-          "repo": "pulse",
-          "path": "docs/release-control/v6/internal/PLATFORM_SUPPORT_MODEL.md",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse",
-          "path": "docs/release-control/v6/internal/records/vmware-vcenter-phase1-proof-blocked-2026-03-30.md",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse",
-          "path": "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse",
-          "path": "docs/release-control/v6/internal/subsystems/agent-lifecycle.md",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse",
-          "path": "docs/release-control/v6/internal/subsystems/ai-runtime.md",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse",
-          "path": "docs/release-control/v6/internal/subsystems/alerts.md",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse",
-          "path": "docs/release-control/v6/internal/subsystems/monitoring.md",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse",
-          "path": "docs/release-control/v6/internal/subsystems/storage-recovery.md",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse",
-          "path": "docs/release-control/v6/internal/subsystems/unified-resources.md",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse",
-          "path": "docs/release-control/v6/internal/VMWARE_VCENTER_PHASE1_ALERTS_AND_ASSISTANT_SPEC.md",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse",
-          "path": "docs/release-control/v6/internal/VMWARE_VCENTER_PHASE1_API_RUNTIME_SPEC.md",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse",
-          "path": "docs/release-control/v6/internal/VMWARE_VCENTER_PHASE1_ONBOARDING_SPEC.md",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse",
-          "path": "docs/release-control/v6/internal/VMWARE_VCENTER_PHASE1_PROOF_MATRIX.md",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse",
-          "path": "docs/release-control/v6/internal/VMWARE_VCENTER_PHASE1_PROOF_RECORD_TEMPLATE.md",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse",
-          "path": "docs/release-control/v6/internal/VMWARE_VCENTER_PHASE1_RESOURCE_PROJECTION_SPEC.md",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse",
-          "path": "docs/release-control/v6/internal/VMWARE_VSPHERE_PHASE1_EXECUTION_PLAN.md",
-          "kind": "file"
-        }
-      ]
     }
   ],
   "candidate_lanes": [
@@ -4737,30 +4825,6 @@
       ],
       "subsystem_ids": [
         "agent-lifecycle"
-      ]
-    },
-    {
-      "id": "platform-admission-execution",
-      "name": "Platform admission execution",
-      "summary": "Carry admitted first-class platform directions from architecture lock to proved support floors through one governed lane covering shared onboarding, canonical resource projection, support-floor proof, and bounded assistant/control classification, starting with the active VMware vSphere direction.",
-      "status": "accepted",
-      "recorded_at": "2026-03-30",
-      "target_id": "v6-product-lane-expansion",
-      "current_lane_ids": [
-        "L6",
-        "L13",
-        "L15"
-      ],
-      "coverage_gap_ids": [
-        "platform-admission-execution"
-      ],
-      "subsystem_ids": [
-        "ai-runtime",
-        "alerts",
-        "api-contracts",
-        "monitoring",
-        "storage-recovery",
-        "unified-resources"
       ]
     }
   ],

@@ -100,8 +100,9 @@ cross-source deduplication.
 78. `frontend-modern/src/hooks/useUnifiedResources.ts`
 79. `frontend-modern/src/types/resource.ts`
 80. `frontend-modern/src/utils/sourcePlatforms.ts`
-81. `internal/unifiedresources/kubernetes_metric_ids.go`
-82. `internal/unifiedresources/policy_posture.go`
+81. `frontend-modern/src/utils/platformSupportManifest.generated.ts`
+82. `internal/unifiedresources/kubernetes_metric_ids.go`
+83. `internal/unifiedresources/policy_posture.go`
 
 ## Shared Boundaries
 
@@ -119,7 +120,9 @@ cross-source deduplication.
 12. `frontend-modern/src/components/Infrastructure/useInfrastructureSummaryState.ts` shared with `performance-and-scalability`: infrastructure summary chart polling, cache hydration, and summary-state orchestration are both a canonical unified-resource consumer surface and a fleet-scale summary chart hot-path boundary.
 13. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts` shared with `performance-and-scalability`: unified resource table state, grouping, and windowing are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
 14. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableViewportSync.ts` shared with `performance-and-scalability`: unified resource table viewport sync and selected-row reveal are both a canonical unified-resource consumer surface and a fleet-scale performance hot-path boundary.
-15. `internal/api/resources.go` shared with `api-contracts`: the unified resource endpoint is both a backend payload contract surface and a unified-resource runtime boundary.
+15. `frontend-modern/src/utils/platformSupportManifest.generated.ts` shared with `frontend-primitives`: the generated platform support projection is both a canonical unified-resource platform union boundary and a shared frontend source/platform vocabulary boundary.
+16. `frontend-modern/src/utils/sourcePlatforms.ts` shared with `frontend-primitives`: the source platform normalizer is both a canonical unified-resource source adapter boundary and a shared frontend source/platform vocabulary boundary.
+17. `internal/api/resources.go` shared with `api-contracts`: the unified resource endpoint is both a backend payload contract surface and a unified-resource runtime boundary.
 
 ## Extension Points
 

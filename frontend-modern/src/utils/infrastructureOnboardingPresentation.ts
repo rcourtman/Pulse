@@ -2,6 +2,9 @@ import type { ConnectionType } from '@/api/connections';
 import {
   getSourcePlatformManifestEntry,
   type PlatformGovernanceState,
+  type PlatformPrimaryMode,
+  type PlatformReadinessStage,
+  type PlatformSupportFloor,
 } from '@/utils/platformSupportManifest';
 
 export type InfrastructureOnboardingConnectionType = Extract<
@@ -18,6 +21,10 @@ export interface InfrastructureOnboardingProductPresentation {
   sourceStrategy: InfrastructureSourceStrategy;
   autoDetect: boolean;
   governanceState: PlatformGovernanceState;
+  readinessStage: PlatformReadinessStage;
+  primaryMode: PlatformPrimaryMode;
+  canonicalProjections: readonly string[];
+  supportFloor: PlatformSupportFloor;
   defaultSurfaceKeys: readonly string[];
 }
 
@@ -167,6 +174,11 @@ const governanceStateForType = (
   return getSourcePlatformManifestEntry(sourcePlatformId)?.governanceState ?? 'supported';
 };
 
+const manifestEntryForType = (type: InfrastructureOnboardingConnectionType) => {
+  const sourcePlatformId = PRODUCT_PRESENTATION[type].sourcePlatformId;
+  return sourcePlatformId ? getSourcePlatformManifestEntry(sourcePlatformId) : null;
+};
+
 const API_PRODUCT_ORDER: InfrastructureOnboardingConnectionType[] = [
   'vmware',
   'truenas',
@@ -260,11 +272,29 @@ const SOURCE_PICKER_GROUPS: InfrastructureSourcePickerGroupPresentation[] = [
 
 export const getInfrastructureOnboardingProductPresentation = (
   type: InfrastructureOnboardingConnectionType,
-): InfrastructureOnboardingProductPresentation => ({
-  type,
-  ...PRODUCT_PRESENTATION[type],
-  governanceState: governanceStateForType(type),
-});
+): InfrastructureOnboardingProductPresentation => {
+  const manifestEntry = manifestEntryForType(type);
+  return {
+    type,
+    ...PRODUCT_PRESENTATION[type],
+    governanceState: manifestEntry?.governanceState ?? governanceStateForType(type),
+    readinessStage: manifestEntry?.readinessStage ?? 'supported',
+    primaryMode: manifestEntry?.primaryMode ?? 'agent-backed',
+    canonicalProjections: manifestEntry?.canonicalProjections ?? ['agent'],
+    supportFloor:
+      manifestEntry?.supportFloor ??
+      ({
+        setup: 'supported',
+        visibility: 'supported',
+        workloads: 'n/a',
+        storage: 'supported',
+        recovery: 'n/a',
+        alerts: 'supported',
+        assistantRead: 'supported',
+        assistantControl: 'supported',
+      } satisfies PlatformSupportFloor),
+  };
+};
 
 export const getInfrastructureSourceStrategyPresentation = (
   strategy: InfrastructureSourceStrategy,

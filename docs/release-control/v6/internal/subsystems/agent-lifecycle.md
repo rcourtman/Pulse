@@ -131,6 +131,14 @@ platform-connection lifecycle state. Once a TrueNAS or VMware setup form marks
 the connection disabled, lifecycle surfaces must treat a canonical zero-delta
 or removal-only preview as a valid save path instead of holding the dialog in
 an add-only capacity posture.
+The lifecycle-owned onboarding presentation helper must consume the governed
+platform support manifest for readiness stage, primary mode, canonical
+projections, and support-floor posture.
+`frontend-modern/src/utils/infrastructureOnboardingPresentation.ts` may adapt
+those facts into source-strategy copy, but it must not turn an admitted
+`first-lab-ready` platform such as VMware into a product-level supported
+claim, invent platform-local projections, or classify assistant control beyond
+the manifest's support-floor row.
 
 ## Extension Points
 

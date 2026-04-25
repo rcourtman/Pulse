@@ -6,6 +6,7 @@ import {
   PLATFORM_SUPPORT_MANIFEST_SOURCE,
   PRESENTATION_ONLY_PLATFORM_IDS,
   PLATFORM_SUPPORT_MANIFEST,
+  SOURCE_PLATFORM_CANONICAL_PROJECTIONS,
   SOURCE_PLATFORM_ONBOARDING_PATH_KEYS,
   SOURCE_PLATFORM_ONBOARDING_PATHS,
   SOURCE_PLATFORM_PRESENTATION,
@@ -14,11 +15,18 @@ import {
   SOURCE_PLATFORM_DISPLAY_TOKENS,
   SOURCE_PLATFORM_FAMILY,
   SOURCE_PLATFORM_MANIFEST_ENTRIES,
+  SOURCE_PLATFORM_PRIMARY_MODE,
+  SOURCE_PLATFORM_READINESS_STAGE,
   SOURCE_PLATFORM_STORAGE_FAMILY,
+  SOURCE_PLATFORM_SUPPORT_FLOOR,
   SUPPORTED_PLATFORM_IDS,
   type GeneratedKnownSourcePlatform,
   type GeneratedSourcePlatformOnboardingPath,
   type GeneratedSourcePlatformManifestEntry,
+  type PlatformPrimaryMode,
+  type PlatformReadinessStage,
+  type PlatformSupportFloor,
+  type PlatformSupportFloorValue,
   type PlatformGovernanceState,
   type SourcePlatformFamily,
   type SourcePlatformStorageFamily,
@@ -28,6 +36,10 @@ export type SourcePlatformManifestEntry = GeneratedSourcePlatformManifestEntry;
 export type {
   GeneratedKnownSourcePlatform,
   GeneratedSourcePlatformOnboardingPath as SourcePlatformOnboardingPath,
+  PlatformPrimaryMode,
+  PlatformReadinessStage,
+  PlatformSupportFloor,
+  PlatformSupportFloorValue,
   PlatformGovernanceState,
   SourcePlatformFamily,
   SourcePlatformStorageFamily,
@@ -46,6 +58,7 @@ export {
   PLATFORM_TYPE_KEYS,
   PRESENTATION_ONLY_PLATFORM_IDS,
   PLATFORM_SUPPORT_MANIFEST,
+  SOURCE_PLATFORM_CANONICAL_PROJECTIONS,
   SOURCE_PLATFORM_ONBOARDING_PATH_KEYS,
   SOURCE_PLATFORM_ONBOARDING_PATHS,
   SOURCE_PLATFORM_PRESENTATION,
@@ -54,6 +67,9 @@ export {
   SOURCE_PLATFORM_DISPLAY_TOKENS,
   SOURCE_PLATFORM_FAMILY,
   SOURCE_PLATFORM_MANIFEST_ENTRIES,
+  SOURCE_PLATFORM_PRIMARY_MODE,
+  SOURCE_PLATFORM_READINESS_STAGE,
+  SOURCE_PLATFORM_SUPPORT_FLOOR,
   SUPPORTED_PLATFORM_IDS,
 };
 
@@ -74,6 +90,38 @@ export const getSourcePlatformStorageFamily = (
   const manifestPlatform = getSourcePlatformManifestEntry(value);
   if (!manifestPlatform) return null;
   return SOURCE_PLATFORM_STORAGE_FAMILY[manifestPlatform.id];
+};
+
+export const getSourcePlatformReadinessStage = (
+  value: string | null | undefined,
+): PlatformReadinessStage | null => {
+  const manifestPlatform = getSourcePlatformManifestEntry(value);
+  if (!manifestPlatform) return null;
+  return SOURCE_PLATFORM_READINESS_STAGE[manifestPlatform.id];
+};
+
+export const getSourcePlatformPrimaryMode = (
+  value: string | null | undefined,
+): PlatformPrimaryMode | null => {
+  const manifestPlatform = getSourcePlatformManifestEntry(value);
+  if (!manifestPlatform) return null;
+  return SOURCE_PLATFORM_PRIMARY_MODE[manifestPlatform.id];
+};
+
+export const getSourcePlatformCanonicalProjections = (
+  value: string | null | undefined,
+): readonly string[] => {
+  const manifestPlatform = getSourcePlatformManifestEntry(value);
+  if (!manifestPlatform) return [];
+  return SOURCE_PLATFORM_CANONICAL_PROJECTIONS[manifestPlatform.id];
+};
+
+export const getSourcePlatformSupportFloor = (
+  value: string | null | undefined,
+): PlatformSupportFloor | null => {
+  const manifestPlatform = getSourcePlatformManifestEntry(value);
+  if (!manifestPlatform) return null;
+  return SOURCE_PLATFORM_SUPPORT_FLOOR[manifestPlatform.id];
 };
 
 export const getSourcePlatformOnboardingPaths = (

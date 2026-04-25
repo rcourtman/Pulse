@@ -1,6 +1,6 @@
 # Pulse v6 Platform Support Model
 
-Last updated: 2026-04-21
+Last updated: 2026-04-25
 Status: ACTIVE
 
 This file is the canonical governed model for platform support in Pulse v6.
@@ -221,17 +221,40 @@ Rules:
 5. `azure`
 6. `gcp`
 
+### Current support rows
+
+Support floor fields are recorded in this order: `setup`, `visibility`,
+`workloads`, `storage`, `recovery`, `alerts`, `assistant_read`,
+`assistant_control`.
+
+| Platform | Governance | Readiness | Primary mode | Onboarding | Canonical projections | Support floor |
+| --- | --- | --- | --- | --- | --- | --- |
+| `agent` | `supported` | `supported` | `agent-backed` | `install-workspace` | `agent`, `storage`, `physical-disk` | `setup=supported`; `visibility=supported`; `workloads=n/a`; `storage=supported`; `recovery=n/a`; `alerts=supported`; `assistant_read=supported`; `assistant_control=supported` |
+| `docker` | `supported` | `supported` | `agent-backed` | `install-workspace` | `agent`, `app-container`, `docker-service` | `setup=supported`; `visibility=supported`; `workloads=supported`; `storage=n/a`; `recovery=n/a`; `alerts=supported`; `assistant_read=supported`; `assistant_control=supported` |
+| `kubernetes` | `supported` | `supported` | `agent-backed` | `install-workspace` | `k8s-cluster`, `k8s-node`, `pod`, `k8s-deployment` | `setup=supported`; `visibility=supported`; `workloads=supported`; `storage=n/a`; `recovery=supported`; `alerts=supported`; `assistant_read=supported`; `assistant_control=supported` |
+| `proxmox-pve` | `supported` | `supported` | `api-backed` | `platform-connections` | `agent`, `vm`, `system-container`, `storage`, `ceph`, `physical-disk` | `setup=supported`; `visibility=supported`; `workloads=supported`; `storage=supported`; `recovery=supported`; `alerts=supported`; `assistant_read=supported`; `assistant_control=augmentation-only` |
+| `proxmox-pbs` | `supported` | `supported` | `api-backed` | `platform-connections` | `pbs`, `storage` | `setup=supported`; `visibility=supported`; `workloads=n/a`; `storage=supported`; `recovery=supported`; `alerts=supported`; `assistant_read=supported`; `assistant_control=read-only` |
+| `proxmox-pmg` | `supported` | `supported` | `api-backed` | `platform-connections` | `pmg` | `setup=supported`; `visibility=supported`; `workloads=n/a`; `storage=n/a`; `recovery=n/a`; `alerts=supported`; `assistant_read=supported`; `assistant_control=read-only` |
+| `truenas` | `supported` | `supported` | `api-backed` | `platform-connections` | `agent`, `app-container`, `storage`, `physical-disk` | `setup=supported`; `visibility=supported`; `workloads=supported`; `storage=supported`; `recovery=supported`; `alerts=supported`; `assistant_read=supported`; `assistant_control=supported` |
+| `vmware-vsphere` | `admitted` | `first-lab-ready` | `api-backed` | `platform-connections` | `agent`, `vm`, `storage` | `setup=supported`; `visibility=supported`; `workloads=supported`; `storage=supported`; `recovery=n/a`; `alerts=supported`; `assistant_read=supported`; `assistant_control=read-only` |
+
+Presentation-only platform vocabulary uses `governance=presentation-only`,
+`readiness=presentation-only`, `primary_mode=presentation-only`, no onboarding
+paths, no canonical projections, and `n/a` for every support-floor field.
+
 ### Machine-readable projection
 
 `PLATFORM_SUPPORT_MANIFEST.json` is the machine-readable projection of the
 supported, admitted, and presentation-only platform vocabulary declared here,
-plus the canonical platform-family and onboarding-path classification for
-supported and admitted platforms. Tests and shared frontend vocabulary may
-consume that manifest, and the tracked frontend projection in
+plus the canonical platform-family, readiness-stage, primary-mode,
+onboarding-path, projection, and support-floor classification for supported
+and admitted platforms. Tests and shared frontend vocabulary may consume that
+manifest, and the tracked frontend projection in
 `frontend-modern/src/utils/platformSupportManifest.generated.ts` must be
 generated from it, but neither projection may introduce platform ids or
-governance states or platform families or onboarding paths that are not
-declared in this document.
+governance states, platform families, readiness stages, primary modes,
+onboarding paths, projections, or support-floor claims that are not declared in
+this document.
 
 ### Runtime variants
 

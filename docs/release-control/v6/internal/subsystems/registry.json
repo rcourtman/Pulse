@@ -394,6 +394,22 @@
       ]
     },
     {
+      "path": "frontend-modern/src/utils/platformSupportManifest.generated.ts",
+      "rationale": "the generated platform support projection is both a canonical unified-resource platform union boundary and a shared frontend source/platform vocabulary boundary",
+      "subsystems": [
+        "frontend-primitives",
+        "unified-resources"
+      ]
+    },
+    {
+      "path": "frontend-modern/src/utils/sourcePlatforms.ts",
+      "rationale": "the source platform normalizer is both a canonical unified-resource source adapter boundary and a shared frontend source/platform vocabulary boundary",
+      "subsystems": [
+        "frontend-primitives",
+        "unified-resources"
+      ]
+    },
+    {
       "path": "internal/api/access_control_handlers.go",
       "rationale": "RBAC role and user-assignment handlers are both an organization settings control surface and a canonical API payload contract boundary",
       "subsystems": [
@@ -687,6 +703,7 @@
         "frontend-modern/src/utils/clusterEndpointPresentation.ts",
         "frontend-modern/src/utils/configuredNodeCapabilityPresentation.ts",
         "frontend-modern/src/utils/configuredNodeStatusPresentation.ts",
+        "frontend-modern/src/utils/infrastructureOnboardingPresentation.ts",
         "frontend-modern/src/utils/infrastructureSettingsPresentation.ts",
         "frontend-modern/src/utils/nodeModalPresentation.ts",
         "frontend-modern/src/utils/proxmoxSettingsPresentation.ts",
@@ -856,6 +873,20 @@
             "test_prefixes": [],
             "exact_files": [
               "frontend-modern/src/utils/__tests__/agentInstallCommand.test.ts"
+            ]
+          },
+          {
+            "id": "infrastructure-onboarding-presentation-helper",
+            "label": "infrastructure onboarding presentation helper proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/utils/infrastructureOnboardingPresentation.ts"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
+              "frontend-modern/src/utils/__tests__/infrastructureOnboardingPresentation.test.ts"
             ]
           },
           {
@@ -2859,6 +2890,7 @@
         "frontend-modern/src/components/shared/"
       ],
       "owned_files": [
+        "frontend-modern/scripts/canonical-platform-audit.mjs",
         "frontend-modern/scripts/header-audit.mjs",
         "frontend-modern/src/components/Settings/AIChatMaintenanceSection.tsx",
         "frontend-modern/src/components/Settings/AIModelSelectionSection.tsx",
@@ -2945,12 +2977,16 @@
         "frontend-modern/src/utils/discoveryPresentation.ts",
         "frontend-modern/src/utils/emptyStatePresentation.ts",
         "frontend-modern/src/utils/environmentLockPresentation.ts",
+        "frontend-modern/src/utils/platformSupportManifest.generated.ts",
+        "frontend-modern/src/utils/platformSupportManifest.ts",
         "frontend-modern/src/utils/problemResourcePresentation.ts",
         "frontend-modern/src/utils/reportableResourceTypes.ts",
         "frontend-modern/src/utils/reportingPresentation.ts",
         "frontend-modern/src/utils/reportingResourceTypes.ts",
         "frontend-modern/src/utils/semanticTonePresentation.ts",
         "frontend-modern/src/utils/settingsShellPresentation.ts",
+        "frontend-modern/src/utils/sourcePlatformOptions.ts",
+        "frontend-modern/src/utils/sourcePlatforms.ts",
         "frontend-modern/src/utils/ssoProviderPresentation.ts",
         "frontend-modern/src/utils/systemLogsPresentation.ts",
         "frontend-modern/src/utils/systemSettingsPresentation.ts",
@@ -3272,6 +3308,25 @@
             "test_prefixes": [],
             "exact_files": [
               "frontend-modern/src/utils/__tests__/updatesPresentation.test.ts"
+            ]
+          },
+          {
+            "id": "platform-support-manifest-frontend-projection",
+            "label": "platform support manifest frontend projection proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/scripts/canonical-platform-audit.mjs",
+              "frontend-modern/src/utils/platformSupportManifest.generated.ts",
+              "frontend-modern/src/utils/platformSupportManifest.ts",
+              "frontend-modern/src/utils/sourcePlatformOptions.ts",
+              "frontend-modern/src/utils/sourcePlatforms.ts"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/types/__tests__/resource.test.ts",
+              "frontend-modern/src/utils/__tests__/sourcePlatformOptions.test.ts",
+              "frontend-modern/src/utils/__tests__/sourcePlatforms.test.ts"
             ]
           },
           {
@@ -4841,6 +4896,7 @@
         "frontend-modern/src/types/resource.ts",
         "frontend-modern/src/utils/agentResources.ts",
         "frontend-modern/src/utils/canonicalResourceTypes.ts",
+        "frontend-modern/src/utils/platformSupportManifest.generated.ts",
         "frontend-modern/src/utils/resourceBadgePresentation.ts",
         "frontend-modern/src/utils/resourceChangePresentation.ts",
         "frontend-modern/src/utils/resourceCorrelationPresentation.ts",
@@ -4851,6 +4907,7 @@
         "frontend-modern/src/utils/resourceTypeCompat.ts",
         "frontend-modern/src/utils/resourceTypePresentation.ts",
         "frontend-modern/src/utils/serviceHealthPresentation.ts",
+        "frontend-modern/src/utils/sourcePlatforms.ts",
         "frontend-modern/src/utils/sourceTypePresentation.ts",
         "frontend-modern/src/utils/workloadTypePresentation.ts",
         "internal/api/resources.go"
@@ -4996,6 +5053,21 @@
             "test_prefixes": [],
             "exact_files": [
               "frontend-modern/src/utils/__tests__/resourceChangePresentation.test.ts"
+            ]
+          },
+          {
+            "id": "platform-support-resource-source-projection",
+            "label": "platform support resource source projection proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/utils/platformSupportManifest.generated.ts",
+              "frontend-modern/src/utils/sourcePlatforms.ts"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/types/__tests__/resource.test.ts",
+              "frontend-modern/src/utils/__tests__/sourcePlatforms.test.ts"
             ]
           },
           {

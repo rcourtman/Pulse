@@ -26,14 +26,18 @@ type platformSupportManifest struct {
 }
 
 type platformSupportManifestEntry struct {
-	ID              string   `json:"id"`
-	GovernanceState string   `json:"governance_state"`
-	OnboardingPaths []string `json:"onboarding_paths"`
-	UILabel         string   `json:"ui_label"`
-	UITone          string   `json:"ui_tone"`
-	Aliases         []string `json:"aliases"`
-	DisplayTokens   []string `json:"display_tokens"`
-	StorageFamily   string   `json:"storage_family"`
+	ID                   string            `json:"id"`
+	GovernanceState      string            `json:"governance_state"`
+	ReadinessStage       string            `json:"readiness_stage"`
+	PrimaryMode          string            `json:"primary_mode"`
+	OnboardingPaths      []string          `json:"onboarding_paths"`
+	CanonicalProjections []string          `json:"canonical_projections"`
+	SupportFloor         map[string]string `json:"support_floor"`
+	UILabel              string            `json:"ui_label"`
+	UITone               string            `json:"ui_tone"`
+	Aliases              []string          `json:"aliases"`
+	DisplayTokens        []string          `json:"display_tokens"`
+	StorageFamily        string            `json:"storage_family"`
 }
 
 func TestPlatformSupportManifestMatchesSupportModel(t *testing.T) {
@@ -125,6 +129,22 @@ func TestVMwareFixturesRemainAdmittedButNotSupported(t *testing.T) {
 	}
 	if !strings.Contains(model, "| `vmware-vsphere` | platform connections to `vCenter` only |") {
 		t.Fatal("expected platform support model to keep the vmware-vsphere platform-connections admission floor")
+	}
+	vmwareManifest := requireManifestPlatform(t, manifest, "vmware-vsphere")
+	if vmwareManifest.ReadinessStage != "first-lab-ready" {
+		t.Fatalf("vmware readiness stage = %q, want first-lab-ready", vmwareManifest.ReadinessStage)
+	}
+	if vmwareManifest.PrimaryMode != "api-backed" {
+		t.Fatalf("vmware primary mode = %q, want api-backed", vmwareManifest.PrimaryMode)
+	}
+	if diff := diffPlatformSets([]string{"agent", "storage", "vm"}, vmwareManifest.CanonicalProjections); diff != "" {
+		t.Fatalf("vmware canonical projections drifted from the admission model:\n%s", diff)
+	}
+	if got := vmwareManifest.SupportFloor["recovery"]; got != "n/a" {
+		t.Fatalf("vmware recovery support floor = %q, want n/a", got)
+	}
+	if got := vmwareManifest.SupportFloor["assistant_control"]; got != "read-only" {
+		t.Fatalf("vmware assistant control support floor = %q, want read-only", got)
 	}
 
 	graph := buildFixtureGraph(DefaultConfig, time.Date(2026, time.April, 10, 12, 0, 0, 0, time.UTC))
@@ -473,6 +493,18 @@ func manifestPlatformOnboardingPaths(manifest platformSupportManifest) map[strin
 		rows[platform.ID] = append([]string(nil), platform.OnboardingPaths...)
 	}
 	return rows
+}
+
+func requireManifestPlatform(t *testing.T, manifest platformSupportManifest, platformID string) platformSupportManifestEntry {
+	t.Helper()
+
+	for _, platform := range manifest.Platforms {
+		if platform.ID == platformID {
+			return platform
+		}
+	}
+	t.Fatalf("expected platform support manifest entry for %s", platformID)
+	return platformSupportManifestEntry{}
 }
 
 func requireNonEmptyPlatformList(t *testing.T, platforms []string, label string) []string {

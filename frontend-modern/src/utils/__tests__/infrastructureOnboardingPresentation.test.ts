@@ -18,6 +18,19 @@ describe('infrastructureOnboardingPresentation', () => {
 
     expect(vmware.label).toBe('VMware vCenter');
     expect(vmware.governanceState).toBe('admitted');
+    expect(vmware.readinessStage).toBe('first-lab-ready');
+    expect(vmware.primaryMode).toBe('api-backed');
+    expect(vmware.canonicalProjections).toEqual(['agent', 'vm', 'storage']);
+    expect(vmware.supportFloor).toMatchObject({
+      setup: 'supported',
+      visibility: 'supported',
+      workloads: 'supported',
+      storage: 'supported',
+      recovery: 'n/a',
+      alerts: 'supported',
+      assistantRead: 'supported',
+      assistantControl: 'read-only',
+    });
   });
 
   it('frames Pulse Agent as the low-overhead per-machine path for full node-local telemetry', () => {

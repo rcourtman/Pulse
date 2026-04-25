@@ -20,8 +20,21 @@ DEFAULT_GENERIC_PRESENTATION = {
     "tone": "bg-surface-alt text-base-content",
 }
 VALID_GOVERNANCE_STATES = {"supported", "admitted", "presentation-only"}
+VALID_PRIMARY_MODES = {"api-backed", "agent-backed", "hybrid", "presentation-only"}
+VALID_READINESS_STAGES = {"supported", "first-lab-ready", "presentation-only"}
 VALID_STORAGE_FAMILIES = {"onprem", "container", "virtualization", "cloud"}
 VALID_ONBOARDING_PATHS = {"install-workspace", "platform-connections"}
+SUPPORT_FLOOR_FIELDS = (
+    "setup",
+    "visibility",
+    "workloads",
+    "storage",
+    "recovery",
+    "alerts",
+    "assistant_read",
+    "assistant_control",
+)
+VALID_SUPPORT_FLOOR_VALUES = {"supported", "augmentation-only", "read-only", "n/a"}
 
 
 def require_dict(value: Any, label: str) -> dict[str, Any]:
@@ -124,6 +137,61 @@ def normalize_manifest(raw_manifest: dict[str, Any]) -> dict[str, Any]:
                 f"{governance_state} platform {platform_id} must declare at least one onboarding path"
             )
 
+        primary_mode = require_string(record.get("primary_mode"), f"platforms[{index}].primary_mode")
+        if primary_mode not in VALID_PRIMARY_MODES:
+            raise ValueError(
+                f"expected platforms[{index}].primary_mode to be one of {sorted(VALID_PRIMARY_MODES)}"
+            )
+        readiness_stage = require_string(
+            record.get("readiness_stage"), f"platforms[{index}].readiness_stage"
+        )
+        if readiness_stage not in VALID_READINESS_STAGES:
+            raise ValueError(
+                f"expected platforms[{index}].readiness_stage to be one of "
+                f"{sorted(VALID_READINESS_STAGES)}"
+            )
+        if governance_state == "supported" and readiness_stage != "supported":
+            raise ValueError(f"supported platform {platform_id} must use readiness_stage supported")
+        if governance_state == "admitted" and readiness_stage == "supported":
+            raise ValueError(f"admitted platform {platform_id} must not use readiness_stage supported")
+        if governance_state == "presentation-only":
+            if readiness_stage != "presentation-only":
+                raise ValueError(
+                    f"presentation-only platform {platform_id} must use readiness_stage presentation-only"
+                )
+            if primary_mode != "presentation-only":
+                raise ValueError(
+                    f"presentation-only platform {platform_id} must use primary_mode presentation-only"
+                )
+
+        canonical_projections = unique_preserve_order(
+            require_string_list(
+                record.get("canonical_projections"),
+                f"platforms[{index}].canonical_projections",
+            )
+        )
+        if governance_state != "presentation-only" and not canonical_projections:
+            raise ValueError(f"{governance_state} platform {platform_id} must declare projections")
+        if governance_state == "presentation-only" and canonical_projections:
+            raise ValueError(f"presentation-only platform {platform_id} must not declare projections")
+
+        support_floor_record = require_dict(record.get("support_floor"), f"platforms[{index}].support_floor")
+        support_floor: dict[str, str] = {}
+        for field in SUPPORT_FLOOR_FIELDS:
+            value = require_string(
+                support_floor_record.get(field),
+                f"platforms[{index}].support_floor.{field}",
+            )
+            if value not in VALID_SUPPORT_FLOOR_VALUES:
+                raise ValueError(
+                    f"expected platforms[{index}].support_floor.{field} to be one of "
+                    f"{sorted(VALID_SUPPORT_FLOOR_VALUES)}"
+                )
+            camel_field = field.split("_")[0] + "".join(part.title() for part in field.split("_")[1:])
+            support_floor[camel_field] = value
+        if governance_state == "presentation-only" and any(value != "n/a" for value in support_floor.values()):
+            raise ValueError(f"presentation-only platform {platform_id} support floor must be n/a")
+
         aliases = unique_preserve_order(
             [
                 require_lowercase_identifier(alias, f"platforms[{index}].aliases")
@@ -146,7 +214,11 @@ def normalize_manifest(raw_manifest: dict[str, Any]) -> dict[str, Any]:
                 "id": platform_id,
                 "family": require_string(record.get("family"), f"platforms[{index}].family"),
                 "governanceState": governance_state,
+                "readinessStage": readiness_stage,
+                "primaryMode": primary_mode,
                 "onboardingPaths": onboarding_paths,
+                "canonicalProjections": canonical_projections,
+                "supportFloor": support_floor,
                 "uiLabel": require_string(record.get("ui_label"), f"platforms[{index}].ui_label"),
                 "uiTone": require_string(record.get("ui_tone"), f"platforms[{index}].ui_tone"),
                 "aliases": aliases,
@@ -199,6 +271,18 @@ def normalize_manifest(raw_manifest: dict[str, Any]) -> dict[str, Any]:
     family_by_id = {
         platform["id"]: platform["family"] for platform in platforms
     }
+    readiness_stage_by_id = {
+        platform["id"]: platform["readinessStage"] for platform in platforms
+    }
+    primary_mode_by_id = {
+        platform["id"]: platform["primaryMode"] for platform in platforms
+    }
+    canonical_projections_by_id = {
+        platform["id"]: platform["canonicalProjections"] for platform in platforms
+    }
+    support_floor_by_id = {
+        platform["id"]: platform["supportFloor"] for platform in platforms
+    }
     onboarding_paths_by_id = {
         platform["id"]: platform["onboardingPaths"] for platform in platforms
     }
@@ -237,6 +321,10 @@ def normalize_manifest(raw_manifest: dict[str, Any]) -> dict[str, Any]:
         "displayTokens": display_tokens,
         "onboardingPathKeys": onboarding_path_keys,
         "familyById": family_by_id,
+        "readinessStageById": readiness_stage_by_id,
+        "primaryModeById": primary_mode_by_id,
+        "canonicalProjectionsById": canonical_projections_by_id,
+        "supportFloorById": support_floor_by_id,
         "onboardingPathsById": onboarding_paths_by_id,
         "presentation": {**presentation, "generic": DEFAULT_GENERIC_PRESENTATION},
         "storageFamilyById": storage_family_by_id,
@@ -284,11 +372,22 @@ def render_module(normalized: dict[str, Any], manifest_hash: str) -> str:
         render_const("SOURCE_PLATFORM_DISPLAY_TOKENS", normalized["displayTokens"]),
         render_const("SOURCE_PLATFORM_ONBOARDING_PATH_KEYS", normalized["onboardingPathKeys"]),
         render_const("SOURCE_PLATFORM_FAMILY", normalized["familyById"]),
+        render_const("SOURCE_PLATFORM_READINESS_STAGE", normalized["readinessStageById"]),
+        render_const("SOURCE_PLATFORM_PRIMARY_MODE", normalized["primaryModeById"]),
+        render_const("SOURCE_PLATFORM_CANONICAL_PROJECTIONS", normalized["canonicalProjectionsById"]),
+        render_const("SOURCE_PLATFORM_SUPPORT_FLOOR", normalized["supportFloorById"]),
         render_const("SOURCE_PLATFORM_ONBOARDING_PATHS", normalized["onboardingPathsById"]),
         render_const("SOURCE_PLATFORM_PRESENTATION", normalized["presentation"]),
         render_const("SOURCE_PLATFORM_STORAGE_FAMILY", normalized["storageFamilyById"]),
         "export type PlatformGovernanceState =\n"
         "  (typeof SOURCE_PLATFORM_MANIFEST_ENTRIES)[number]['governanceState'];\n",
+        "export type PlatformReadinessStage =\n"
+        "  (typeof SOURCE_PLATFORM_MANIFEST_ENTRIES)[number]['readinessStage'];\n",
+        "export type PlatformPrimaryMode =\n"
+        "  (typeof SOURCE_PLATFORM_MANIFEST_ENTRIES)[number]['primaryMode'];\n",
+        "export type PlatformSupportFloor =\n"
+        "  (typeof SOURCE_PLATFORM_MANIFEST_ENTRIES)[number]['supportFloor'];\n",
+        "export type PlatformSupportFloorValue = PlatformSupportFloor[keyof PlatformSupportFloor];\n",
         "export type GeneratedSourcePlatformOnboardingPath =\n"
         "  (typeof SOURCE_PLATFORM_ONBOARDING_PATH_KEYS)[number];\n",
         "export type SourcePlatformStorageFamily =\n"
