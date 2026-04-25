@@ -1,12 +1,7 @@
 import { createEffect, createMemo, createSignal, onCleanup, onMount } from 'solid-js';
-import {
-  hasFeature,
-  runtimeCapabilitiesLoaded,
-} from '@/stores/license';
-import {
-  canOfferCommercialTrial,
-  getUpgradeActionDestination,
-} from '@/stores/licenseCommercial';
+import { hasFeature, runtimeCapabilitiesLoaded } from '@/stores/license';
+import { canOfferCommercialTrial, getUpgradeActionDestination } from '@/stores/licenseCommercial';
+import { presentationPolicyHidesUpgradePrompts } from '@/stores/sessionPresentationPolicy';
 import { loadRuntimeCapabilities } from '@/stores/license';
 import { trackPaywallViewed } from '@/utils/upgradeMetrics';
 import { showError, showSuccess } from '@/utils/toast';
@@ -36,7 +31,8 @@ export function useRelaySettingsPanelState(props: RelaySettingsPanelProps) {
   const [startingTrial, setStartingTrial] = createSignal(false);
 
   const canManage = () => props.canManage !== false;
-  const canStartTrial = () => canOfferCommercialTrial();
+  const showUpgradePrompts = () => !presentationPolicyHidesUpgradePrompts();
+  const canStartTrial = () => showUpgradePrompts() && canOfferCommercialTrial();
   const relayEnabled = () => hasFeature('relay');
   const upgradeDestination = () => getUpgradeActionDestination('relay');
   const connectionPresentation = createMemo(() =>
@@ -46,7 +42,7 @@ export function useRelaySettingsPanelState(props: RelaySettingsPanelProps) {
 
   createEffect((wasPaywallVisible: boolean) => {
     const isPaywallVisible = runtimeCapabilitiesLoaded() && !relayEnabled();
-    if (isPaywallVisible && !wasPaywallVisible) {
+    if (showUpgradePrompts() && isPaywallVisible && !wasPaywallVisible) {
       trackPaywallViewed('relay', 'settings_relay_panel');
     }
     return isPaywallVisible;
@@ -287,6 +283,7 @@ export function useRelaySettingsPanelState(props: RelaySettingsPanelProps) {
     saving,
     serverUrl,
     setServerUrl,
+    showUpgradePrompts,
     showPairing,
     startingTrial,
     status,

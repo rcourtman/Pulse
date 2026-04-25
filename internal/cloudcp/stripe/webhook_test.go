@@ -39,6 +39,58 @@ func TestWebhookRetriesFailedEventInsteadOfSkippingDuplicate(t *testing.T) {
 	}
 }
 
+func TestWebhookIgnoresSelfHostedProTrialCheckoutSessions(t *testing.T) {
+	reg := newTestRegistry(t)
+	tenantsDir := t.TempDir()
+	provisioner := NewProvisioner(reg, tenantsDir, nil, nil, "https://cloud.example.com", nil, "", false)
+
+	const secret = "whsec_test_secret"
+	handler := NewWebhookHandler(secret, provisioner)
+
+	eventJSON := `{
+		"id":"evt_self_hosted_trial_123",
+		"object":"event",
+		"type":"checkout.session.completed",
+		"data":{
+			"object":{
+				"id":"cs_test_self_hosted_pro_trial",
+				"mode":"subscription",
+				"customer":"cus_selfhost_trial",
+				"subscription":"sub_selfhost_trial",
+				"customer_email":"trial@business.example",
+				"customer_details":{"email":"trial@business.example"},
+				"metadata":{
+					"signup_source":"pulse_pro_trial",
+					"org_id":"default",
+					"return_url":"https://pulse.example.com/auth/trial-activate",
+					"instance_token":"tsi_test"
+				}
+			}
+		}
+	}`
+	req := signedWebhookRequest(t, secret, eventJSON)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("delivery status=%d, want=%d, body=%q", rec.Code, http.StatusOK, rec.Body.String())
+	}
+
+	tenants, err := reg.List()
+	if err != nil {
+		t.Fatalf("List tenants: %v", err)
+	}
+	if len(tenants) != 0 {
+		t.Fatalf("tenant count=%d, want 0 for self-hosted Pro trial checkout", len(tenants))
+	}
+	stripeAccount, err := reg.GetStripeAccountByCustomerID("cus_selfhost_trial")
+	if err != nil {
+		t.Fatalf("GetStripeAccountByCustomerID: %v", err)
+	}
+	if stripeAccount != nil {
+		t.Fatalf("Stripe account mapping was created for self-hosted Pro trial checkout: %#v", stripeAccount)
+	}
+}
+
 func TestWebhookEventContext_DetachesCheckoutFromRequestContext(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/stripe/webhook", nil)
 	ctx, cancelReq := context.WithCancel(req.Context())

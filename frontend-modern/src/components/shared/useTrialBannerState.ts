@@ -4,7 +4,10 @@ import {
   getUpgradeActionDestination,
   isCommercialTrialActive,
 } from '@/stores/licenseCommercial';
-import { presentationPolicyHidesCommercialSurfaces } from '@/stores/sessionPresentationPolicy';
+import {
+  presentationPolicyHidesCommercialSurfaces,
+  presentationPolicyHidesUpgradePrompts,
+} from '@/stores/sessionPresentationPolicy';
 import { isUpsellSnoozed, snoozeUpsell } from '@/utils/snooze';
 import {
   getTrialBannerToneClass,
@@ -17,9 +20,7 @@ export function useTrialBannerState() {
   const [snoozed, setSnoozed] = createSignal(isUpsellSnoozed(TRIAL_BANNER_SNOOZE_KEY));
 
   const isTrial = createMemo(
-    () =>
-      !presentationPolicyHidesCommercialSurfaces() &&
-      isCommercialTrialActive(),
+    () => !presentationPolicyHidesCommercialSurfaces() && isCommercialTrialActive(),
   );
   const daysRemaining = createMemo(() =>
     normalizeTrialBannerDaysRemaining(commercialTrialDaysRemaining()),
@@ -38,7 +39,10 @@ export function useTrialBannerState() {
     daysRemaining,
     handleSnooze,
     isTrial,
-    showActions: () => !presentationPolicyHidesCommercialSurfaces() && !snoozed(),
+    showActions: () =>
+      !presentationPolicyHidesCommercialSurfaces() &&
+      !presentationPolicyHidesUpgradePrompts() &&
+      !snoozed(),
     toneClass,
     upgradeDestination,
   };

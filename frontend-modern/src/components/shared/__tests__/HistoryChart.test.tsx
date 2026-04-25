@@ -76,7 +76,9 @@ describe('HistoryChart', () => {
     expect(historyChartStateSource).toContain('export function useHistoryChartState');
     expect(historyChartStateSource).toContain('HISTORY_CHART_RANGES');
     expect(historyChartStateSource).toContain("'mock_synthetic' | null");
-    expect(historyChartStateSource).toContain('const canStartTrial = createMemo(() => canStartCommercialTrial());');
+    expect(historyChartStateSource).toContain(
+      'const canStartTrial = createMemo(() => canStartCommercialTrial());',
+    );
     expect(historyChartStateSource).toContain('runStartProTrialAction({');
     expect(historyChartStateSource).not.toContain('startProTrial()');
     expect(historyChartStateSource).not.toContain('getTrialAlreadyUsedMessage()');
@@ -95,7 +97,7 @@ describe('HistoryChart', () => {
     expect(historyChartOverlaySource).toContain('Collecting data... History will appear here.');
     expect(historyChartOverlaySource).toContain('Unlock {props.chart.lockTierLabel()} Features');
     expect(historyChartOverlaySource).toContain('presentationPolicyHidesUpgradePrompts');
-    expect(historyChartOverlaySource).toContain('Historical data beyond {props.chart.lockDays()} days is hidden in this demo.');
+    expect(historyChartOverlaySource).toContain('is not enabled on this');
     expect(historyChartOverlaySource).not.toContain('ChartsAPI.getMetricsHistory');
     expect(historyChartOverlaySource).not.toContain('setupCanvasDPR');
 
@@ -109,9 +111,7 @@ describe('HistoryChart', () => {
   });
 
   it('renders the default history label', () => {
-    render(() => (
-      <HistoryChart resourceType="agent" resourceId="node-1" metric="cpu" />
-    ));
+    render(() => <HistoryChart resourceType="agent" resourceId="node-1" metric="cpu" />);
 
     expect(screen.getByText('History')).toBeInTheDocument();
   });

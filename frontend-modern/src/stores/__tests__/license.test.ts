@@ -7,6 +7,7 @@ import {
 } from '@/api/license';
 import {
   presentationPolicyHidesCommercialSurfaces,
+  presentationPolicyHidesUpgradePrompts,
   sessionPresentationPolicyResolved,
 } from '@/stores/sessionPresentationPolicy';
 import { getUpgradeFallbackDestination } from '@/utils/pricingHandoff';
@@ -44,6 +45,7 @@ import {
 vi.mock('@/api/license');
 vi.mock('@/stores/sessionPresentationPolicy', () => ({
   presentationPolicyHidesCommercialSurfaces: vi.fn(() => false),
+  presentationPolicyHidesUpgradePrompts: vi.fn(() => false),
   sessionPresentationPolicyResolved: vi.fn(() => true),
 }));
 vi.mock('@/stores/events', () => ({
@@ -96,6 +98,7 @@ describe('license stores', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(presentationPolicyHidesCommercialSurfaces).mockReturnValue(false);
+    vi.mocked(presentationPolicyHidesUpgradePrompts).mockReturnValue(false);
     vi.mocked(sessionPresentationPolicyResolved).mockReturnValue(true);
   });
 
@@ -358,6 +361,17 @@ describe('license stores', () => {
       expect(LicenseAPI.startTrial).not.toHaveBeenCalled();
     });
 
+    it('startProTrial fails closed when upgrade prompts are hidden', async () => {
+      vi.mocked(presentationPolicyHidesUpgradePrompts).mockReturnValue(true);
+
+      await expect(startProTrial()).rejects.toMatchObject({
+        message: 'Trial activation unavailable under the current presentation policy',
+        status: 404,
+        code: 'presentation_policy_unavailable',
+      });
+      expect(LicenseAPI.startTrial).not.toHaveBeenCalled();
+    });
+
     it('startProTrial preserves backend error details for trial-not-available responses', async () => {
       vi.mocked(LicenseAPI.startTrial).mockResolvedValue({
         ok: false,
@@ -556,7 +570,9 @@ describe('license stores', () => {
     it('routes generic upgrade fallbacks to Pulse Account', async () => {
       vi.mocked(LicenseAPI.getCommercialPosture).mockResolvedValue(mockFreeCommercialPosture);
       await loadCommercialPosture(true);
-      expect(getUpgradeActionUrlOrFallback('upgrade')).toBe(getUpgradeFallbackDestination('upgrade'));
+      expect(getUpgradeActionUrlOrFallback('upgrade')).toBe(
+        getUpgradeFallbackDestination('upgrade'),
+      );
     });
 
     it('prefers a specific monitored-system upgrade action when provided', async () => {

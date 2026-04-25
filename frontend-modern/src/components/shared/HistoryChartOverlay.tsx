@@ -11,7 +11,9 @@ interface HistoryChartOverlayProps {
 export const HistoryChartOverlay: Component<HistoryChartOverlayProps> = (props) => {
   return (
     <>
-      <Show when={!props.chart.loading() && props.chart.data().length === 0 && !props.chart.error()}>
+      <Show
+        when={!props.chart.loading() && props.chart.data().length === 0 && !props.chart.error()}
+      >
         <div class="absolute inset-0 flex items-center justify-center bg-surface">
           <div class="text-center">
             <div class="text-slate-400 mb-2">
@@ -69,12 +71,15 @@ export const HistoryChartOverlay: Component<HistoryChartOverlayProps> = (props) 
               <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
             </svg>
           </div>
-          <h3 class="text-lg font-bold text-base-content mb-1">{props.chart.lockDays()}-Day History</h3>
+          <h3 class="text-lg font-bold text-base-content mb-1">
+            {props.chart.lockDays()}-Day History
+          </h3>
           <Show
             when={!presentationPolicyHidesUpgradePrompts()}
             fallback={
               <p class="text-sm text-muted text-center max-w-[220px] mb-4">
-                Historical data beyond {props.chart.lockDays()} days is hidden in this demo.
+                Historical data beyond {props.chart.lockDays()} days is not enabled on this
+                instance.
               </p>
             }
           >
@@ -85,7 +90,9 @@ export const HistoryChartOverlay: Component<HistoryChartOverlayProps> = (props) 
             <div class="flex flex-col items-center gap-2">
               <UpgradeLink
                 destination={props.chart.getUpgradeActionDestination('long_term_metrics')}
-                onClick={() => props.chart.trackUpgradeClicked('history_chart', 'long_term_metrics')}
+                onClick={() =>
+                  props.chart.trackUpgradeClicked('history_chart', 'long_term_metrics')
+                }
                 class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-md shadow-sm transition-colors"
               >
                 Unlock {props.chart.lockTierLabel()} Features

@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { deriveTabFromPath, settingsTabPath, type SettingsTab } from '../settingsNavigationModel';
 import { getTabLockReason, isTabLocked } from '../settingsFeatureGates';
+import { getSettingsNavItem } from '../settingsNavCatalog';
 import { shouldHideSettingsNavItem } from '../settingsNavVisibility';
 import { getSettingsTabSaveBehavior } from '../settingsTabSaveBehavior';
 import { updateDisableLocalUpgradeMetricsSetting } from '@/stores/systemSettings';
@@ -115,6 +116,38 @@ describe('settingsNavigation integration scaffold', () => {
         hostedModeEnabled: true,
       }),
     ).toBe(true);
+  });
+
+  it('keeps self-hosted billing as a direct route instead of a sidebar item', () => {
+    expect(deriveTabFromPath('/settings/system/billing/plan')).toBe('system-billing');
+    expect(settingsTabPath('system-billing')).toBe('/settings/system/billing/plan');
+    expect(getSettingsNavItem('system-billing')?.hideFromSidebar).toBe(true);
+  });
+
+  it('hides paid-only self-hosted tabs from free installs', () => {
+    for (const tab of [
+      'system-relay',
+      'security-roles',
+      'security-users',
+      'security-audit',
+      'security-webhooks',
+    ] as SettingsTab[]) {
+      expect(
+        shouldHideSettingsNavItem(tab, {
+          hasFeature: hasFeatures([]),
+          runtimeCapabilitiesLoaded: () => true,
+          hostedModeEnabled: false,
+          settingsCapabilitiesResolved: true,
+          settingsCapabilities: {
+            auditLog: true,
+            auditWebhooksRead: true,
+            relayRead: true,
+            roles: true,
+            users: true,
+          },
+        }),
+      ).toBe(true);
+    }
   });
 
   it('hides support tabs in demo mode and before demo policy resolves', () => {

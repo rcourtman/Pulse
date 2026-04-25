@@ -3,7 +3,7 @@ import patrolIntelligenceBannersSource from '../PatrolIntelligenceBanners.tsx?ra
 import patrolIntelligenceHeaderSource from '../PatrolIntelligenceHeader.tsx?raw';
 
 describe('patrol commercial boundary', () => {
-  it('suppresses patrol upgrade surfaces in demo mode', () => {
+  it('suppresses patrol upgrade surfaces when upgrade prompts are hidden', () => {
     expect(patrolIntelligenceBannersSource).toContain('presentationPolicyHidesUpgradePrompts');
     expect(patrolIntelligenceBannersSource).toContain(
       '!presentationPolicyHidesUpgradePrompts() && state.licenseRequired()',

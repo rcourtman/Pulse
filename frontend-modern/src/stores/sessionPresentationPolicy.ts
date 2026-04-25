@@ -10,26 +10,32 @@ const DEFAULT_SESSION_PRESENTATION_POLICY: SecurityStatusPresentationPolicy = {
   demoMode: false,
   readOnly: false,
   hideCommercial: false,
-  hideUpgrade: false,
+  hideUpgrade: true,
 };
 
 const [sessionPresentationPolicy, setSessionPresentationPolicy] =
   createSignal<SecurityStatusPresentationPolicy>({
     ...DEFAULT_SESSION_PRESENTATION_POLICY,
   });
-const [sessionPresentationPolicyResolved, setSessionPresentationPolicyResolved] = createSignal(false);
+const [sessionPresentationPolicyResolved, setSessionPresentationPolicyResolved] =
+  createSignal(false);
 
 function normalizeSessionPresentationPolicy(
   policy?: Partial<SecurityStatusPresentationPolicy> | null,
   sessionCapabilities?: Partial<SecurityStatusSessionCapabilities> | null,
 ): SecurityStatusPresentationPolicy {
   const demoMode = policy?.demoMode === true || sessionCapabilities?.demoMode === true;
+  const hideUpgrade =
+    demoMode ||
+    (typeof policy?.hideUpgrade === 'boolean'
+      ? policy.hideUpgrade
+      : DEFAULT_SESSION_PRESENTATION_POLICY.hideUpgrade);
   return {
     ...DEFAULT_SESSION_PRESENTATION_POLICY,
     demoMode,
     readOnly: policy?.readOnly === true || demoMode,
     hideCommercial: policy?.hideCommercial === true || demoMode,
-    hideUpgrade: policy?.hideUpgrade === true || demoMode,
+    hideUpgrade,
   };
 }
 

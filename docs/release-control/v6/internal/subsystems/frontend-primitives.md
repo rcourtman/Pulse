@@ -748,6 +748,14 @@ work extends shared components instead of creating new local variants.
     present in the shared app shell, top-level tab switches must reuse that
     state boundary instead of flashing a transient infrastructure page
     takeover between tabs.
+35. Keep self-hosted paid-service prompts opt-in at the shared shell layer.
+    `settingsNavCatalog.ts`, `settingsNavVisibility.ts`, shared upgrade link
+    primitives, trial banners, and history-lock overlays must honor
+    `presentationPolicy.hideUpgrade` by hiding paid prompts by default on
+    ordinary self-hosted installs. Direct activation/recovery routes may
+    render their owned content, but sidebar discovery, trial CTAs, plan upsells,
+    and feature upgrade links must require hosted mode, explicit handoff, or
+    active entitlement.
 
 ## Current State
 
@@ -2527,6 +2535,14 @@ response-header inference, hostname heuristics, or per-banner demo branching;
 the runtime bootstrap, shared session-capability store, and shared banner
 hooks stay on one canonical owner so suppression stays coherent across
 customer-facing surfaces.
+That same session-presentation boundary owns the non-promotional self-hosted
+v6 app posture. Settings navigation, shared upgrade links, trial banners,
+history-lock overlays, and paid-feature gate primitives must honor resolved
+`presentationPolicy.hideUpgrade` by hiding prompts by default on ordinary
+self-hosted installs. Direct activation/recovery routes may still render their
+owned content, but sidebar discovery, trial CTAs, plan upsells, and feature
+upgrade links must not appear unless an explicit handoff, hosted-mode policy,
+or active entitlement says they should.
 That same shared app-shell boundary now also owns assistant bootstrap silence
 on non-AI routes. `frontend-modern/src/useAppRuntimeState.ts`,
 `frontend-modern/src/App.tsx`,

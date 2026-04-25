@@ -309,13 +309,13 @@ func (c *CPConfig) validate() error {
 	if strings.TrimSpace(c.StripeAPIKey) != "" && strings.TrimSpace(c.TrialActivationPrivateKey) == "" {
 		return fmt.Errorf("CP_TRIAL_ACTIVATION_PRIVATE_KEY is required when STRIPE_API_KEY is configured")
 	}
-	if err := validateCloudStripePriceID("CP_TRIAL_SIGNUP_PRICE_ID", c.TrialSignupPriceID, "cloud_starter"); err != nil {
+	if err := validateCloudStripePriceID(c.Environment, c.StripeAPIKey, "CP_TRIAL_SIGNUP_PRICE_ID", c.TrialSignupPriceID, "cloud_starter"); err != nil {
 		return err
 	}
-	if err := validateCloudStripePriceID("CP_CLOUD_POWER_PRICE_ID", c.CloudPowerPriceID, "cloud_power"); err != nil {
+	if err := validateCloudStripePriceID(c.Environment, c.StripeAPIKey, "CP_CLOUD_POWER_PRICE_ID", c.CloudPowerPriceID, "cloud_power"); err != nil {
 		return err
 	}
-	if err := validateCloudStripePriceID("CP_CLOUD_MAX_PRICE_ID", c.CloudMaxPriceID, "cloud_max"); err != nil {
+	if err := validateCloudStripePriceID(c.Environment, c.StripeAPIKey, "CP_CLOUD_MAX_PRICE_ID", c.CloudMaxPriceID, "cloud_max"); err != nil {
 		return err
 	}
 	if strings.TrimSpace(c.LicenseServerURL) == "" && strings.TrimSpace(c.LicenseAdminToken) != "" {
@@ -348,10 +348,17 @@ func (c *CPConfig) validate() error {
 	return nil
 }
 
-func validateCloudStripePriceID(envName, priceID, wantPlanVersion string) error {
+func validateCloudStripePriceID(environment, stripeAPIKey, envName, priceID, wantPlanVersion string) error {
 	trimmed := strings.TrimSpace(priceID)
 	if trimmed == "" {
 		return nil
+	}
+
+	if environment != "production" && stripeSecretKeyMode(stripeAPIKey) == "test" {
+		if strings.HasPrefix(trimmed, "price_") {
+			return nil
+		}
+		return fmt.Errorf("%s must be a Stripe price id (price_...) in %s test mode, got %q", envName, environment, trimmed)
 	}
 
 	planVersion, ok := pkglicensing.PlanVersionForPriceID(trimmed)

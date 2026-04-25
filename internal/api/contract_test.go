@@ -8715,7 +8715,7 @@ func TestContract_SecurityStatusIncludesSessionCapabilitiesDemoMode(t *testing.T
 	}
 }
 
-func TestContract_SecurityStatusPresentationPolicyDefaultsClosedOutsideDemo(t *testing.T) {
+func TestContract_SecurityStatusPresentationPolicyDefaultsHideUpgradeOutsideHosted(t *testing.T) {
 	cfg := newTestConfigWithTokens(t)
 	cfg.DemoMode = false
 
@@ -8741,7 +8741,7 @@ func TestContract_SecurityStatusPresentationPolicyDefaultsClosedOutsideDemo(t *t
 		"demoMode":       false,
 		"readOnly":       false,
 		"hideCommercial": false,
-		"hideUpgrade":    false,
+		"hideUpgrade":    true,
 	} {
 		if got, _ := presentationPolicy[key].(bool); got != want {
 			t.Fatalf("presentationPolicy.%s = %v, want %v", key, presentationPolicy[key], want)

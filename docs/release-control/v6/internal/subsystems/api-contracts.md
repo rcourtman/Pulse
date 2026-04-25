@@ -835,6 +835,11 @@ as the canonical runtime contract for `demoMode`, `readOnly`,
 must therefore defer their first read until that policy has resolved, so
 public demos fail closed without probing hidden commercial routes during
 bootstrap.
+For ordinary self-hosted v6 installs, that same security-status contract owns
+the free-first commercial posture: `hideUpgrade` defaults to true outside
+hosted mode, and API consumers must treat it as a prompt-suppression contract
+for upgrade links, trial CTAs, plan upsells, and paid-only navigation rather
+than as a billing entitlement change.
 That same contract split also makes the licensing boundary explicit:
 `/api/license/runtime-capabilities` is the public runtime feature contract,
 `/api/license/commercial-posture` is the non-billing upgrade/trial posture

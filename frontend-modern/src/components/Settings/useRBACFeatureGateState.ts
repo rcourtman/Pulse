@@ -1,11 +1,7 @@
 import { Accessor, createEffect, createMemo, createSignal, onMount } from 'solid-js';
-import {
-  hasFeature,
-  runtimeCapabilitiesLoaded,
-} from '@/stores/license';
-import {
-  canOfferCommercialTrial,
-} from '@/stores/licenseCommercial';
+import { hasFeature, runtimeCapabilitiesLoaded } from '@/stores/license';
+import { canOfferCommercialTrial } from '@/stores/licenseCommercial';
+import { presentationPolicyHidesUpgradePrompts } from '@/stores/sessionPresentationPolicy';
 import { loadRuntimeCapabilities } from '@/stores/license';
 import { notificationStore } from '@/stores/notifications';
 import { getRBACFeatureGateCopy, type RBACFeatureGateCopy } from '@/utils/rbacPresentation';
@@ -13,9 +9,7 @@ import { trackPaywallViewed } from '@/utils/upgradeMetrics';
 import { runStartProTrialAction } from '@/utils/trialStartAction';
 
 export type RBACFeatureGateKind = 'roles' | 'user-assignments';
-export type RBACFeatureGateLocation =
-  | 'settings_roles_panel'
-  | 'settings_user_assignments_panel';
+export type RBACFeatureGateLocation = 'settings_roles_panel' | 'settings_user_assignments_panel';
 
 interface UseRBACFeatureGateStateOptions {
   kind: RBACFeatureGateKind;
@@ -30,7 +24,8 @@ export function useRBACFeatureGateState(options: UseRBACFeatureGateStateOptions)
     getRBACFeatureGateCopy(options.kind),
   );
   const licenseReady = createMemo(() => runtimeCapabilitiesLoaded());
-  const canStartTrial = createMemo(() => canOfferCommercialTrial());
+  const showUpgradePrompts = createMemo(() => !presentationPolicyHidesUpgradePrompts());
+  const canStartTrial = createMemo(() => showUpgradePrompts() && canOfferCommercialTrial());
   const rbacEnabled = createMemo(() => licenseReady() && hasFeature('rbac'));
   const paywallVisible = createMemo(
     () => licenseReady() && !hasFeature('rbac') && !options.loading(),
@@ -42,7 +37,7 @@ export function useRBACFeatureGateState(options: UseRBACFeatureGateStateOptions)
 
   createEffect((wasPaywallVisible) => {
     const isPaywallVisible = paywallVisible();
-    if (isPaywallVisible && !wasPaywallVisible) {
+    if (showUpgradePrompts() && isPaywallVisible && !wasPaywallVisible) {
       trackPaywallViewed('rbac', options.paywallLocation);
     }
     return isPaywallVisible;
@@ -68,6 +63,7 @@ export function useRBACFeatureGateState(options: UseRBACFeatureGateStateOptions)
     licenseReady,
     paywallVisible,
     rbacEnabled,
+    showUpgradePrompts,
     startingTrial,
   };
 }

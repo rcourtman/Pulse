@@ -32,6 +32,10 @@ vi.mock('@/stores/licenseCommercial', () => ({
   startProTrial: vi.fn(),
 }));
 
+vi.mock('@/stores/sessionPresentationPolicy', () => ({
+  presentationPolicyHidesUpgradePrompts: () => false,
+}));
+
 vi.mock('@/api/relay', () => ({
   RelayAPI: {
     getConfig: (...args: unknown[]) => getRelayConfigMock(...args),
@@ -310,13 +314,17 @@ describe('RelaySettingsPanel runtime', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Pair New Device' }));
 
     await waitFor(() => {
-      expect(screen.getByText('pulse://connect?instance_id=instance-local&auth_token=token-123')).toBeInTheDocument();
+      expect(
+        screen.getByText('pulse://connect?instance_id=instance-local&auth_token=token-123'),
+      ).toBeInTheDocument();
     });
 
     fireEvent.click(screen.getByRole('button', { name: 'Refresh QR Code' }));
 
     await waitFor(() => {
-      expect(screen.getByText('pulse://connect?instance_id=instance-local&auth_token=token-456')).toBeInTheDocument();
+      expect(
+        screen.getByText('pulse://connect?instance_id=instance-local&auth_token=token-456'),
+      ).toBeInTheDocument();
       expect(getTokenMock).toHaveBeenCalledWith('relay-token-1');
       expect(deleteTokenMock).toHaveBeenCalledWith('relay-token-1');
     });
@@ -365,15 +373,14 @@ describe('RelaySettingsPanel runtime', () => {
         auth_token: 'token-456',
         deep_link: 'pulse://connect?instance_id=instance-local&auth_token=token-456',
       });
-    getTokenMock
-      .mockResolvedValueOnce({
-        id: 'relay-token-1',
-        name: 'Pulse Mobile relay access first',
-        prefix: 'pmp_',
-        suffix: '1234',
-        createdAt: '',
-        lastUsedAt: '2026-03-24T12:00:00Z',
-      });
+    getTokenMock.mockResolvedValueOnce({
+      id: 'relay-token-1',
+      name: 'Pulse Mobile relay access first',
+      prefix: 'pmp_',
+      suffix: '1234',
+      createdAt: '',
+      lastUsedAt: '2026-03-24T12:00:00Z',
+    });
 
     render(() => <RelaySettingsPanel canManage />);
 
@@ -384,13 +391,17 @@ describe('RelaySettingsPanel runtime', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Pair New Device' }));
 
     await waitFor(() => {
-      expect(screen.getByText('pulse://connect?instance_id=instance-local&auth_token=token-123')).toBeInTheDocument();
+      expect(
+        screen.getByText('pulse://connect?instance_id=instance-local&auth_token=token-123'),
+      ).toBeInTheDocument();
     });
 
     fireEvent.click(screen.getByRole('button', { name: 'Refresh QR Code' }));
 
     await waitFor(() => {
-      expect(screen.getByText('pulse://connect?instance_id=instance-local&auth_token=token-456')).toBeInTheDocument();
+      expect(
+        screen.getByText('pulse://connect?instance_id=instance-local&auth_token=token-456'),
+      ).toBeInTheDocument();
       expect(getTokenMock).toHaveBeenCalledWith('relay-token-1');
     });
 
@@ -464,7 +475,9 @@ describe('RelaySettingsPanel runtime', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Pair New Device' }));
 
     await waitFor(() => {
-      expect(screen.getByText('pulse://connect?instance_id=instance-local&auth_token=token-123')).toBeInTheDocument();
+      expect(
+        screen.getByText('pulse://connect?instance_id=instance-local&auth_token=token-123'),
+      ).toBeInTheDocument();
     });
 
     fireEvent.click(screen.getByRole('button', { name: 'Refresh QR Code' }));
@@ -473,7 +486,9 @@ describe('RelaySettingsPanel runtime', () => {
       expect(deleteTokenMock).toHaveBeenCalledWith('relay-token-2');
     });
 
-    expect(screen.getByText('pulse://connect?instance_id=instance-local&auth_token=token-123')).toBeInTheDocument();
+    expect(
+      screen.getByText('pulse://connect?instance_id=instance-local&auth_token=token-123'),
+    ).toBeInTheDocument();
     expect(showErrorMock).toHaveBeenCalledWith('Failed to generate pairing QR code');
   });
 

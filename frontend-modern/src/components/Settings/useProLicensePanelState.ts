@@ -62,7 +62,6 @@ import {
   getMonitoredSystemLimitUsageSummary,
   resolveMonitoredSystemCapacityStatus,
 } from '@/utils/monitoredSystemPresentation';
-import { runStartProTrialAction } from '@/utils/trialStartAction';
 import { trackCheckoutClicked, trackPricingViewed } from '@/utils/upgradeMetrics';
 import { resolveUpgradeDestination, type UpgradeDestination } from '@/utils/upgradeNavigation';
 import { SELF_HOSTED_PRO_BILLING_PRESENTATION } from './selfHostedBillingPresentation';
@@ -91,7 +90,6 @@ export function useProLicensePanelState() {
   );
   const [activating, setActivating] = createSignal(false);
   const [clearing, setClearing] = createSignal(false);
-  const [startingTrial, setStartingTrial] = createSignal(false);
   const [trialActivationResult, setTrialActivationResult] = createSignal('');
   const [purchaseActivationResult, setPurchaseActivationResult] = createSignal('');
   const [purchaseActivationIntent, setPurchaseActivationIntent] =
@@ -216,7 +214,11 @@ export function useProLicensePanelState() {
 
   let trackedPlanPricingView = false;
   createEffect(() => {
-    const planVisible = panelDataSettled() && activeSection() === 'plan';
+    const planVisible =
+      panelDataSettled() &&
+      activeSection() === 'plan' &&
+      getSelfHostedBillingPlanIntent(location.search) ===
+        SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_INTENT;
     if (!planVisible) {
       trackedPlanPricingView = false;
       return;
@@ -224,7 +226,10 @@ export function useProLicensePanelState() {
     if (trackedPlanPricingView) {
       return;
     }
-    trackPricingViewed('settings_self_hosted_billing_plan', SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_INTENT);
+    trackPricingViewed(
+      'settings_self_hosted_billing_plan',
+      SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_INTENT,
+    );
     trackedPlanPricingView = true;
   });
 
@@ -253,27 +258,12 @@ export function useProLicensePanelState() {
       activeSection() === 'plan' &&
       getSelfHostedBillingPlanDetail(location.search) === SELF_HOSTED_PRO_BILLING_RECOVERY_DETAIL,
   );
-  const showDefaultPlanSelectionPrompt = createMemo(() => {
-    const current = entitlements();
-    if (!current) {
-      return false;
-    }
-    if (!panelDataSettled() || licenseEntitlementsLoadError()) {
-      return false;
-    }
-    if (current.commercial_migration?.state) {
-      return false;
-    }
-    const state = subscriptionState();
-    return state !== 'active' && state !== 'trial' && state !== 'grace';
-  });
   const showPlanSelectionPrompt = createMemo(
     () =>
       activeSection() === 'plan' &&
       purchaseActivationResult().trim().length === 0 &&
-      (getSelfHostedBillingPlanIntent(location.search) ===
-        SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_INTENT ||
-        showDefaultPlanSelectionPrompt()),
+      getSelfHostedBillingPlanIntent(location.search) ===
+        SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_INTENT,
   );
   const planSelectionPrompt = createMemo(() => {
     if (!showPlanSelectionPrompt()) {
@@ -295,31 +285,6 @@ export function useProLicensePanelState() {
       'settings_self_hosted_billing_compare_prompt',
       SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_INTENT,
     );
-  };
-
-  const showTrialStart = createMemo(() => {
-    const current = entitlements();
-    if (!current) return false;
-    if (current.commercial_migration?.state) return false;
-    if (typeof current.trial_eligible === 'boolean') {
-      return current.trial_eligible;
-    }
-    const state = subscriptionState();
-    return state !== 'active' && state !== 'trial' && !licenseEntitlementsLoadError();
-  });
-
-  const handleStartTrial = async () => {
-    if (startingTrial()) return;
-    setStartingTrial(true);
-    try {
-      await runStartProTrialAction({
-        branded: true,
-        showSuccess: notificationStore.success,
-        showError: notificationStore.error,
-      });
-    } finally {
-      setStartingTrial(false);
-    }
   };
 
   const statusPresentation = createMemo(() =>
@@ -588,15 +553,16 @@ export function useProLicensePanelState() {
     };
   });
   const planComparisonSummary = createMemo(() => {
+    if (!showPlanSelectionPrompt()) {
+      return { cards: [], action: null };
+    }
     const comparison = getSelfHostedPlanComparisonPresentation({
       entitlements: entitlements(),
     });
     return {
       ...comparison,
       action:
-        comparison.cards.length > 0 &&
-        !showPlanSelectionPrompt() &&
-        purchaseActivationResult().trim().length === 0
+        comparison.cards.length > 0 && purchaseActivationResult().trim().length === 0
           ? {
               label: SELF_HOSTED_PRO_BILLING_PRESENTATION.planComparisonActionLabel,
               destination: resolveSelfHostedPurchaseStartDestination(
@@ -675,7 +641,6 @@ export function useProLicensePanelState() {
     grandfatheredPriceNotice,
     handleActivate,
     handleClear,
-    handleStartTrial,
     hasLicenseDetails,
     licenseKey,
     loadPanelData,
@@ -691,8 +656,6 @@ export function useProLicensePanelState() {
     showUsageSection,
     showCountingRulesByDefault,
     showRecoveryByDefault,
-    showTrialStart,
-    startingTrial,
     statusPresentation,
     trialActivationNotice,
     trialEnded,

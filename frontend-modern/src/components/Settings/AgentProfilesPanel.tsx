@@ -54,6 +54,7 @@ export const AgentProfilesPanel: Component = () => {
     setFormName,
     setShowModal,
     setShowSuggestModal,
+    showUpgradePrompts,
     showModal,
     showSuggestModal,
     startingTrial,
@@ -83,43 +84,45 @@ export const AgentProfilesPanel: Component = () => {
       <Show
         when={hasAgentProfiles()}
         fallback={
-          <Card padding="lg" class="space-y-4">
-            <div class="flex items-center gap-3">
-              <div class="flex items-center justify-center w-10 h-10 rounded-md bg-amber-100 dark:bg-amber-900">
-                <Crown class="w-5 h-5 text-amber-600 dark:text-amber-400" />
+          <Show when={showUpgradePrompts()}>
+            <Card padding="lg" class="space-y-4">
+              <div class="flex items-center gap-3">
+                <div class="flex items-center justify-center w-10 h-10 rounded-md bg-amber-100 dark:bg-amber-900">
+                  <Crown class="w-5 h-5 text-amber-600 dark:text-amber-400" />
+                </div>
+                <div>
+                  <h3 class="text-base font-semibold text-base-content">Agent Profiles</h3>
+                  <p class="text-sm text-muted">Pro feature</p>
+                </div>
               </div>
-              <div>
-                <h3 class="text-base font-semibold text-base-content">Agent Profiles</h3>
-                <p class="text-sm text-muted">Pro feature</p>
-              </div>
-            </div>
-            <p class="text-sm text-muted">
-              Create reusable configuration profiles for your agents. Manage settings like Docker
-              monitoring, logging levels, and reporting intervals from a central location.
-            </p>
-            <div class="flex flex-wrap items-center gap-3">
-              <UpgradeLink
-                destination={getUpgradeActionDestination('agent_profiles')}
-                class={getUpgradeActionButtonClass({ tone: 'warning', mobileFullWidth: false })}
-                onClick={() =>
-                  trackUpgradeClicked('settings_agent_profiles_panel', 'agent_profiles')
-                }
-              >
-                <Crown class="w-4 h-4" />
-                {UPGRADE_ACTION_LABEL}
-              </UpgradeLink>
-              <Show when={canStartTrial()}>
-                <button
-                  type="button"
-                  onClick={handleStartTrial}
-                  disabled={startingTrial()}
-                  class={UPGRADE_TRIAL_LINK_CLASS}
+              <p class="text-sm text-muted">
+                Create reusable configuration profiles for your agents. Manage settings like Docker
+                monitoring, logging levels, and reporting intervals from a central location.
+              </p>
+              <div class="flex flex-wrap items-center gap-3">
+                <UpgradeLink
+                  destination={getUpgradeActionDestination('agent_profiles')}
+                  class={getUpgradeActionButtonClass({ tone: 'warning', mobileFullWidth: false })}
+                  onClick={() =>
+                    trackUpgradeClicked('settings_agent_profiles_panel', 'agent_profiles')
+                  }
                 >
-                  {UPGRADE_TRIAL_LABEL}
-                </button>
-              </Show>
-            </div>
-          </Card>
+                  <Crown class="w-4 h-4" />
+                  {UPGRADE_ACTION_LABEL}
+                </UpgradeLink>
+                <Show when={canStartTrial()}>
+                  <button
+                    type="button"
+                    onClick={handleStartTrial}
+                    disabled={startingTrial()}
+                    class={UPGRADE_TRIAL_LINK_CLASS}
+                  >
+                    {UPGRADE_TRIAL_LABEL}
+                  </button>
+                </Show>
+              </div>
+            </Card>
+          </Show>
         }
       >
         <div class="space-y-6">

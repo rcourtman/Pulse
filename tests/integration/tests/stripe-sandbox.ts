@@ -195,6 +195,15 @@ export async function completeStripeSandboxCheckout(
     if (hasLeftStripeCheckout(page)) {
       return { checkoutSessionID };
     }
+    const startedCardlessTrial = await clickFirstVisibleButton(page, /start trial|start free trial/i);
+    if (startedCardlessTrial) {
+      await page
+        .waitForURL((url) => !STRIPE_URL_PATTERN.test(String(url)), { timeout: 90_000 })
+        .catch(() => undefined);
+      if (hasLeftStripeCheckout(page)) {
+        return { checkoutSessionID };
+      }
+    }
     throw new Error('Unable to find Stripe card number input');
   }
 

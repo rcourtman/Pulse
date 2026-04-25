@@ -307,7 +307,7 @@
     },
     {
       "id": "RA5",
-      "summary": "Non-paid users do not see paid-only navigation or pages unless the surface is explicitly promotional.",
+      "summary": "Ordinary self-hosted v6 users do not see paid service prompts, trial CTAs, plan upsells, or paid-only navigation by default; commercial surfaces are reachable only through explicit handoff, direct route, hosted mode, or active entitlement/recovery state.",
       "kind": "invariant",
       "blocking_level": "rc-ready",
       "proof_type": "hybrid",
@@ -334,13 +334,47 @@
             "test",
             "--",
             "--run",
+            "src/stores/__tests__/sessionPresentationPolicy.test.ts",
+            "src/stores/__tests__/license.test.ts",
+            "src/components/Settings/__tests__/ProLicensePanel.test.tsx",
             "src/components/Settings/__tests__/RBACPaywallPanels.test.tsx",
             "src/components/Settings/__tests__/settingsNavigation.integration.test.tsx",
-            "src/pages/__tests__/AIIntelligence.test.tsx"
+            "src/components/Settings/__tests__/AISettings.test.tsx",
+            "src/components/Settings/__tests__/ReportingPanel.test.tsx",
+            "src/components/Settings/__tests__/RelaySettingsPanel.runtime.test.tsx",
+            "src/components/Settings/__tests__/AgentProfilesPanel.test.tsx",
+            "src/components/shared/__tests__/HistoryChart.test.tsx",
+            "src/components/shared/__tests__/TrialBanner.test.tsx",
+            "src/pages/__tests__/AIIntelligence.test.tsx",
+            "src/features/patrol/__tests__/patrolCommercialBoundary.test.ts"
+          ]
+        },
+        {
+          "id": "self-hosted-paid-prompt-browser-visibility",
+          "run": [
+            "env",
+            "PULSE_E2E_USE_LOCAL_BACKEND=1",
+            "npm",
+            "--prefix",
+            "tests/integration",
+            "test",
+            "--",
+            "tests/58-self-hosted-trial-rate-limit-ui.spec.ts",
+            "--project=chromium"
           ]
         }
       ],
       "evidence": [
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/self-hosted-paid-services-opt-in-surface-2026-04-25.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/components/Settings/__tests__/ProLicensePanel.test.tsx",
+          "kind": "file"
+        },
         {
           "repo": "pulse",
           "path": "frontend-modern/src/components/Settings/__tests__/RBACPaywallPanels.test.tsx",
@@ -353,7 +387,32 @@
         },
         {
           "repo": "pulse",
+          "path": "frontend-modern/src/components/Settings/useProLicensePanelState.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "frontend-modern/src/pages/__tests__/AIIntelligence.test.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/stores/__tests__/sessionPresentationPolicy.test.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/stores/licenseCommercial.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/stores/sessionPresentationPolicy.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "tests/integration/tests/58-self-hosted-trial-rate-limit-ui.spec.ts",
           "kind": "file"
         }
       ]
@@ -2540,7 +2599,7 @@
       "status": "partial",
       "completion": {
         "state": "bounded-residual",
-        "summary": "Commercial conversion surfaces are now coherent through the preview and app-side rehearsal path, while the production public flip and release-day rollout execution remain a separate promotion-time follow-up.",
+        "summary": "Commercial readiness is coherent for explicit preview, checkout handoff, paid-user activation/recovery, and hosted-mode paths, while default self-hosted app surfaces stay free-first and non-promotional; the production public flip and release-day rollout execution remain a separate promotion-time follow-up.",
         "tracking": [
           {
             "kind": "lane-followup",
@@ -2564,6 +2623,11 @@
         {
           "repo": "pulse",
           "path": "docs/release-control/v6/internal/records/self-hosted-commercial-ga-coherence-2026-04-20.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/self-hosted-paid-services-opt-in-surface-2026-04-25.md",
           "kind": "file"
         },
         {
@@ -4156,7 +4220,7 @@
     },
     {
       "id": "commercial-ga-promotion-package",
-      "summary": "Track the production public flip and release-day execution work for the self-hosted commercial package now that preview, in-app entry, checkout handoff, and Pulse Account coherence are already proved.",
+      "summary": "Track the production public flip and release-day execution work for the self-hosted commercial package now that preview, external checkout handoff, paid-user recovery paths, and Pulse Account coherence are proved; default self-hosted app surfaces must stay free-first and non-promotional.",
       "owner": "project-owner",
       "status": "planned",
       "recorded_at": "2026-04-20",

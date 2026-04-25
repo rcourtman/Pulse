@@ -14,10 +14,8 @@ import {
   runtimeCapabilitiesLoaded,
   runtimeCapabilitiesLoading,
 } from '@/stores/license';
-import {
-  canOfferCommercialTrial,
-  getUpgradeActionDestination,
-} from '@/stores/licenseCommercial';
+import { canOfferCommercialTrial, getUpgradeActionDestination } from '@/stores/licenseCommercial';
+import { presentationPolicyHidesUpgradePrompts } from '@/stores/sessionPresentationPolicy';
 import { loadRuntimeCapabilities } from '@/stores/license';
 import { aiChatStore } from '@/stores/aiChat';
 import type { ConnectedInfrastructureItem } from '@/types/api';
@@ -74,7 +72,8 @@ export const useAgentProfilesPanelState = () => {
   const checkingLicense = () => !runtimeCapabilitiesLoaded() || runtimeCapabilitiesLoading();
   const hasAgentProfiles = () => hasEntitlement('agent_profiles');
   const [startingTrial, setStartingTrial] = createSignal(false);
-  const canStartTrial = () => canOfferCommercialTrial();
+  const showUpgradePrompts = () => !presentationPolicyHidesUpgradePrompts();
+  const canStartTrial = () => showUpgradePrompts() && canOfferCommercialTrial();
 
   const aiAvailable = createMemo(() => aiChatStore.enabled === true);
   const [profiles, setProfiles] = createSignal<AgentProfile[]>([]);
@@ -226,7 +225,7 @@ export const useAgentProfilesPanelState = () => {
 
   createEffect((wasPaywallVisible) => {
     const isPaywallVisible = !checkingLicense() && !hasAgentProfiles();
-    if (isPaywallVisible && !wasPaywallVisible) {
+    if (showUpgradePrompts() && isPaywallVisible && !wasPaywallVisible) {
       trackPaywallViewed('agent_profiles', 'settings_agent_profiles_panel');
     }
     return isPaywallVisible;
@@ -338,10 +337,7 @@ export const useAgentProfilesPanelState = () => {
       await loadData();
     } catch (err) {
       logger.error('Failed to assign profile', err);
-      if (
-        err instanceof Error &&
-        err.message === MISSING_AGENT_PROFILE_ASSIGNMENT_MESSAGE
-      ) {
+      if (err instanceof Error && err.message === MISSING_AGENT_PROFILE_ASSIGNMENT_MESSAGE) {
         await loadData();
       }
       notificationStore.error(
@@ -393,6 +389,7 @@ export const useAgentProfilesPanelState = () => {
     setFormName,
     setShowModal,
     setShowSuggestModal,
+    showUpgradePrompts,
     showModal,
     showSuggestModal,
     startingTrial,

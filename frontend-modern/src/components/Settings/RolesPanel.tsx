@@ -37,6 +37,7 @@ export const RolesPanel: Component = () => {
             canStartTrial={state.featureGate.canStartTrial()}
             copy={state.featureGate.featureGateCopy()}
             paywallLocation="settings_roles_panel"
+            showUpgradePrompts={state.featureGate.showUpgradePrompts()}
             startingTrial={state.featureGate.startingTrial()}
             onStartTrial={state.featureGate.handleStartTrial}
           />

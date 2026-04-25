@@ -110,6 +110,7 @@ const getUpgradeActionDestinationMock = vi.fn();
 const getUpgradeActionUrlOrFallbackMock = vi.fn();
 const trackPaywallViewedMock = vi.fn();
 const trackUpgradeClickedMock = vi.fn();
+const presentationPolicyHidesUpgradePromptsMock = vi.fn();
 const notificationSuccessMock = vi.fn();
 const notificationErrorMock = vi.fn();
 
@@ -153,6 +154,10 @@ vi.mock('@/stores/licenseCommercial', () => ({
 vi.mock('@/utils/upgradeMetrics', () => ({
   trackPaywallViewed: (...args: unknown[]) => trackPaywallViewedMock(...args),
   trackUpgradeClicked: (...args: unknown[]) => trackUpgradeClickedMock(...args),
+}));
+
+vi.mock('@/stores/sessionPresentationPolicy', () => ({
+  presentationPolicyHidesUpgradePrompts: () => presentationPolicyHidesUpgradePromptsMock(),
 }));
 
 vi.mock('@/stores/notifications', () => ({
@@ -341,6 +346,7 @@ describe('AIIntelligence entitlement gating', () => {
     getUpgradeActionUrlOrFallbackMock.mockReset();
     trackPaywallViewedMock.mockReset();
     trackUpgradeClickedMock.mockReset();
+    presentationPolicyHidesUpgradePromptsMock.mockReset();
     notificationSuccessMock.mockReset();
     notificationErrorMock.mockReset();
     findingsPanelState.latestProps = null;
@@ -393,6 +399,7 @@ describe('AIIntelligence entitlement gating', () => {
     getUpgradeActionUrlOrFallbackMock.mockImplementation((feature?: string) =>
       getPublicPricingUrl(feature),
     );
+    presentationPolicyHidesUpgradePromptsMock.mockReturnValue(false);
     getCorrelationsMock.mockResolvedValue({
       correlations: [],
       count: 0,
@@ -564,6 +571,33 @@ describe('AIIntelligence entitlement gating', () => {
       expect(trackPaywallViewedMock).toHaveBeenCalledWith('ai_alerts', 'ai_intelligence');
       expect(trackPaywallViewedMock).toHaveBeenCalledWith('ai_autofix', 'ai_intelligence_banner');
     });
+  });
+
+  it('locks paid patrol controls without upgrade prompts in default self-hosted mode', async () => {
+    presentationPolicyHidesUpgradePromptsMock.mockReturnValue(true);
+    getPatrolStatusMock.mockResolvedValue(
+      defaultPatrolStatus({
+        license_required: true,
+      }),
+    );
+
+    render(() => <AIIntelligence />);
+
+    await waitFor(() => {
+      expect(loadLicenseStatusMock).toHaveBeenCalled();
+      expect(getPatrolStatusMock).toHaveBeenCalled();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Configure Patrol' }));
+
+    await screen.findByRole('button', { name: 'Investigate' });
+
+    expect(screen.getByRole('button', { name: 'Investigate' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Auto-fix' })).toBeDisabled();
+    expect(screen.queryByRole('link', { name: 'Upgrade to Pro' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Upgrade' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /start free trial/i })).not.toBeInTheDocument();
+    expect(trackPaywallViewedMock).not.toHaveBeenCalled();
   });
 
   it('unlocks paid patrol controls when the entitlement grants the features', async () => {

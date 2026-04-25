@@ -64,6 +64,7 @@ export function ReportingPanel() {
     setRange,
     setSelectedResources,
     setTitle,
+    showUpgradePrompts,
     startingTrial,
     title,
     upgradeDestination,
@@ -78,8 +79,7 @@ export function ReportingPanel() {
   const supportsCustomTitle = () => performanceReport()?.supportsCustomTitle ?? false;
   const selectedRange = (): ReportingRangeValue => range() ?? performanceReport()!.defaultRange;
   const selectedFormat = (): ReportingFormat => format() ?? performanceReport()!.defaultFormat;
-  const optionalFieldCount = () =>
-    Number(supportsMetricFilter()) + Number(supportsCustomTitle());
+  const optionalFieldCount = () => Number(supportsMetricFilter()) + Number(supportsCustomTitle());
   const optionalFieldGridClass = () =>
     optionalFieldCount() > 1 ? 'grid grid-cols-1 gap-6 md:grid-cols-2' : 'grid grid-cols-1 gap-6';
 
@@ -99,10 +99,7 @@ export function ReportingPanel() {
   return (
     <div class="space-y-6">
       <Show when={reportingCatalogLoading() && !catalogReady()}>
-        <OperationsPanel
-          title="Reporting"
-          description="Loading reporting surfaces..."
-        >
+        <OperationsPanel title="Reporting" description="Loading reporting surfaces...">
           <div class="p-4 sm:p-6">
             <p class="text-sm text-muted">Loading reporting surfaces...</p>
           </div>
@@ -146,25 +143,29 @@ export function ReportingPanel() {
                   )}
                 </Show>
               </div>
-              <div class="flex flex-col sm:flex-row items-center gap-2">
-                <UpgradeLink
-                  destination={upgradeDestination()}
-                  class={getUpgradeActionButtonClass()}
-                  onClick={() => trackUpgradeClicked('settings_reporting_panel', reportingCatalog()!.id)}
-                >
-                  {UPGRADE_ACTION_LABEL}
-                </UpgradeLink>
-                <Show when={canStartTrial()}>
-                  <button
-                    type="button"
-                    onClick={handleStartTrial}
-                    disabled={startingTrial()}
-                    class={UPGRADE_TRIAL_LINK_CLASS}
+              <Show when={showUpgradePrompts()}>
+                <div class="flex flex-col sm:flex-row items-center gap-2">
+                  <UpgradeLink
+                    destination={upgradeDestination()}
+                    class={getUpgradeActionButtonClass()}
+                    onClick={() =>
+                      trackUpgradeClicked('settings_reporting_panel', reportingCatalog()!.id)
+                    }
                   >
-                    {UPGRADE_TRIAL_LABEL}
-                  </button>
-                </Show>
-              </div>
+                    {UPGRADE_ACTION_LABEL}
+                  </UpgradeLink>
+                  <Show when={canStartTrial()}>
+                    <button
+                      type="button"
+                      onClick={handleStartTrial}
+                      disabled={startingTrial()}
+                      class={UPGRADE_TRIAL_LINK_CLASS}
+                    >
+                      {UPGRADE_TRIAL_LABEL}
+                    </button>
+                  </Show>
+                </div>
+              </Show>
             </div>
           </div>
         </OperationsPanel>

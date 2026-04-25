@@ -10,6 +10,7 @@ const loadCommercialPostureMock = vi.fn();
 const startProTrialMock = vi.fn();
 const commercialPostureMock = vi.fn();
 const entitlementsMock = vi.fn();
+const presentationPolicyHidesUpgradePromptsMock = vi.fn();
 const trackPaywallViewedMock = vi.fn();
 const trackUpgradeClickedMock = vi.fn();
 const getRolesMock = vi.fn();
@@ -38,6 +39,10 @@ vi.mock('@/stores/licenseCommercial', () => ({
   loadRuntimeCapabilities: (...args: unknown[]) => loadCommercialPostureMock(...args),
   startProTrial: (...args: unknown[]) => startProTrialMock(...args),
   entitlements: (...args: unknown[]) => entitlementsMock(...args),
+}));
+
+vi.mock('@/stores/sessionPresentationPolicy', () => ({
+  presentationPolicyHidesUpgradePrompts: () => presentationPolicyHidesUpgradePromptsMock(),
 }));
 
 vi.mock('@/utils/upgradeMetrics', () => ({
@@ -79,6 +84,7 @@ describe('RBAC paywall settings panels', () => {
     startProTrialMock.mockReset();
     commercialPostureMock.mockReset();
     entitlementsMock.mockReset();
+    presentationPolicyHidesUpgradePromptsMock.mockReset();
     trackPaywallViewedMock.mockReset();
     trackUpgradeClickedMock.mockReset();
     getRolesMock.mockReset();
@@ -95,6 +101,7 @@ describe('RBAC paywall settings panels', () => {
     startProTrialMock.mockResolvedValue({ outcome: 'started' });
     commercialPostureMock.mockReturnValue({ trial_eligible: false });
     entitlementsMock.mockReturnValue({ trial_eligible: false });
+    presentationPolicyHidesUpgradePromptsMock.mockReturnValue(false);
     getRolesMock.mockResolvedValue([
       {
         id: 'admin',
@@ -134,6 +141,22 @@ describe('RBAC paywall settings panels', () => {
     expect(screen.getByRole('button', { name: 'New Role' })).toBeDisabled();
     expect(getRolesMock).not.toHaveBeenCalled();
     expect(trackPaywallViewedMock).toHaveBeenCalledWith('rbac', 'settings_roles_panel');
+  });
+
+  it('keeps RBAC upgrade actions quiet when self-hosted upgrade prompts are hidden', async () => {
+    hasFeatureMock.mockImplementation((feature: string) => feature !== 'rbac');
+    presentationPolicyHidesUpgradePromptsMock.mockReturnValue(true);
+
+    render(() => <RolesPanel />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Custom Roles (Pro)')).toBeInTheDocument();
+    });
+
+    expect(screen.queryByRole('link', { name: 'Upgrade to Pro' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Start free trial' })).not.toBeInTheDocument();
+    expect(trackPaywallViewedMock).not.toHaveBeenCalled();
+    expect(getRolesMock).not.toHaveBeenCalled();
   });
 
   it('loads roles when the RBAC entitlement is granted', async () => {
@@ -184,7 +207,10 @@ describe('RBAC paywall settings panels', () => {
 
   it('shows the canonical update error when self role modification is denied', async () => {
     updateUserRolesMock.mockRejectedValueOnce(
-      Object.assign(new Error('Cannot modify your own role assignments'), { status: 403, code: 'self_modification_denied' }),
+      Object.assign(new Error('Cannot modify your own role assignments'), {
+        status: 403,
+        code: 'self_modification_denied',
+      }),
     );
 
     render(() => <UserAssignmentsPanel />);

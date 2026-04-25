@@ -1,20 +1,8 @@
-import {
-  createEffect,
-  createMemo,
-  createSignal,
-  onCleanup,
-  onMount,
-} from 'solid-js';
+import { createEffect, createMemo, createSignal, onCleanup, onMount } from 'solid-js';
 import { ChartsAPI, type HistoryTimeRange } from '@/api/charts';
-import {
-  isRangeLocked,
-  loadRuntimeCapabilities,
-  maxHistoryDays,
-} from '@/stores/license';
-import {
-  canStartCommercialTrial,
-  getUpgradeActionDestination,
-} from '@/stores/licenseCommercial';
+import { isRangeLocked, loadRuntimeCapabilities, maxHistoryDays } from '@/stores/license';
+import { canStartCommercialTrial, getUpgradeActionDestination } from '@/stores/licenseCommercial';
+import { presentationPolicyHidesUpgradePrompts } from '@/stores/sessionPresentationPolicy';
 import { calculateOptimalPoints } from '@/utils/downsample';
 import { setupCanvasDPR } from '@/utils/canvasRenderQueue';
 import { trackPaywallViewed, trackUpgradeClicked } from '@/utils/upgradeMetrics';
@@ -45,7 +33,9 @@ export function useHistoryChartState(props: HistoryChartProps, refs: HistoryChar
   const [data, setData] = createSignal(props.data ?? []);
   const [loading, setLoading] = createSignal(false);
   const [error, setError] = createSignal<string | null>(null);
-  const [source, setSource] = createSignal<'store' | 'memory' | 'live' | 'mock_synthetic' | null>(null);
+  const [source, setSource] = createSignal<'store' | 'memory' | 'live' | 'mock_synthetic' | null>(
+    null,
+  );
   const [maxPoints, setMaxPoints] = createSignal<number | null>(null);
   const [refreshTick, setRefreshTick] = createSignal(0);
   const [hasLoadedOnce, setHasLoadedOnce] = createSignal(false);
@@ -107,7 +97,7 @@ export function useHistoryChartState(props: HistoryChartProps, refs: HistoryChar
 
   createEffect((wasVisible) => {
     const visible = isLocked() && !props.hideLock;
-    if (visible && !wasVisible) {
+    if (!presentationPolicyHidesUpgradePrompts() && visible && !wasVisible) {
       trackPaywallViewed('long_term_metrics', 'history_chart');
     }
     return visible;
@@ -271,8 +261,7 @@ export function useHistoryChartState(props: HistoryChartProps, refs: HistoryChar
 
     const labelCount = 4;
     for (let index = 0; index < labelCount; index++) {
-      const timestamp =
-        points[0].timestamp + (geometry.timeSpan * index) / (labelCount - 1);
+      const timestamp = points[0].timestamp + (geometry.timeSpan * index) / (labelCount - 1);
       const x = geometry.getX(timestamp);
       ctx.fillText(formatHistoryChartTimeLabel(timestamp, range()), x, height - 2);
     }

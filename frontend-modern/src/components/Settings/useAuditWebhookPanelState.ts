@@ -2,14 +2,9 @@ import { createEffect, createSignal, onMount } from 'solid-js';
 import { apiFetchJSON } from '@/utils/apiClient';
 import { logger } from '@/utils/logger';
 import { showSuccess, showWarning } from '@/utils/toast';
-import {
-  hasFeature,
-  runtimeCapabilitiesLoaded,
-} from '@/stores/license';
-import {
-  canOfferCommercialTrial,
-  getUpgradeActionDestination,
-} from '@/stores/licenseCommercial';
+import { hasFeature, runtimeCapabilitiesLoaded } from '@/stores/license';
+import { canOfferCommercialTrial, getUpgradeActionDestination } from '@/stores/licenseCommercial';
+import { presentationPolicyHidesUpgradePrompts } from '@/stores/sessionPresentationPolicy';
 import { loadRuntimeCapabilities } from '@/stores/license';
 import { trackPaywallViewed } from '@/utils/upgradeMetrics';
 import {
@@ -28,7 +23,8 @@ export const useAuditWebhookPanelState = (canManageOverride?: boolean) => {
   const [startingTrial, setStartingTrial] = createSignal(false);
 
   const canManage = () => canManageOverride !== false;
-  const canStartTrial = () => canOfferCommercialTrial();
+  const showUpgradePrompts = () => !presentationPolicyHidesUpgradePrompts();
+  const canStartTrial = () => showUpgradePrompts() && canOfferCommercialTrial();
   const isAuditLoggingEnabled = () => hasFeature('audit_logging');
   const upgradeDestination = () => getUpgradeActionDestination('audit_logging');
 
@@ -105,7 +101,7 @@ export const useAuditWebhookPanelState = (canManageOverride?: boolean) => {
 
   createEffect((wasPaywallVisible: boolean) => {
     const isPaywallVisible = runtimeCapabilitiesLoaded() && !hasFeature('audit_logging');
-    if (isPaywallVisible && !wasPaywallVisible) {
+    if (showUpgradePrompts() && isPaywallVisible && !wasPaywallVisible) {
       trackPaywallViewed('audit_logging', 'settings_audit_webhook_panel');
     }
     return isPaywallVisible;
@@ -130,6 +126,7 @@ export const useAuditWebhookPanelState = (canManageOverride?: boolean) => {
     newUrl,
     saving,
     setNewUrl,
+    showUpgradePrompts,
     startingTrial,
     upgradeDestination,
     webhookUrls,

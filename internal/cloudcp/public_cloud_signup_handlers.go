@@ -247,7 +247,7 @@ func validatePublicCloudSignupPriceID(tier cloudTier, priceID string) error {
 	if wantPlanVersion == "" {
 		return fmt.Errorf("unsupported cloud tier %q", tier)
 	}
-	if err := validateCloudStripePriceID("public cloud signup price", priceID, wantPlanVersion); err != nil {
+	if err := validateCloudStripePriceID("production", "", "public cloud signup price", priceID, wantPlanVersion); err != nil {
 		return err
 	}
 	return nil

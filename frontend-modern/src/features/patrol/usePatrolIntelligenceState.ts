@@ -1,10 +1,4 @@
-import {
-  createEffect,
-  createMemo,
-  createSignal,
-  onCleanup,
-  onMount,
-} from 'solid-js';
+import { createEffect, createMemo, createSignal, onCleanup, onMount } from 'solid-js';
 import { AIAPI } from '@/api/ai';
 import {
   getPatrolAutonomySettings,
@@ -29,14 +23,9 @@ import { notificationStore } from '@/stores/notifications';
 import { hasTriggeringAlert } from '@/utils/findingAlertIdentity';
 import { usePatrolStream } from '@/hooks/usePatrolStream';
 import { createNonSuspendingQuery } from '@/hooks/createNonSuspendingQuery';
-import {
-  hasFeature,
-  loadRuntimeCapabilities,
-} from '@/stores/license';
-import {
-  canStartCommercialTrial,
-  getUpgradeActionDestination,
-} from '@/stores/licenseCommercial';
+import { hasFeature, loadRuntimeCapabilities } from '@/stores/license';
+import { canStartCommercialTrial, getUpgradeActionDestination } from '@/stores/licenseCommercial';
+import { presentationPolicyHidesUpgradePrompts } from '@/stores/sessionPresentationPolicy';
 import type { AISettings } from '@/types/ai';
 import { getCanonicalScopeResourceIds } from '@/utils/patrolFormat';
 import { buildPatrolInvestigationContextSummary } from './patrolInvestigationContextModel';
@@ -381,7 +370,7 @@ export function usePatrolIntelligenceState() {
 
   createEffect((wasAutoFixLocked) => {
     const isAutoFixLocked = autoFixLocked();
-    if (isAutoFixLocked && !wasAutoFixLocked) {
+    if (!presentationPolicyHidesUpgradePrompts() && isAutoFixLocked && !wasAutoFixLocked) {
       trackPaywallViewed('ai_autofix', 'ai_intelligence');
     }
     return isAutoFixLocked;
@@ -389,7 +378,11 @@ export function usePatrolIntelligenceState() {
 
   createEffect((wasAlertAnalysisLocked) => {
     const isAlertAnalysisLocked = alertAnalysisLocked();
-    if (isAlertAnalysisLocked && !wasAlertAnalysisLocked) {
+    if (
+      !presentationPolicyHidesUpgradePrompts() &&
+      isAlertAnalysisLocked &&
+      !wasAlertAnalysisLocked
+    ) {
       trackPaywallViewed('ai_alerts', 'ai_intelligence');
     }
     return isAlertAnalysisLocked;
@@ -397,7 +390,11 @@ export function usePatrolIntelligenceState() {
 
   createEffect((wasLicenseBannerVisible) => {
     const isLicenseBannerVisible = licenseRequired() && !showBlockedBanner();
-    if (isLicenseBannerVisible && !wasLicenseBannerVisible) {
+    if (
+      !presentationPolicyHidesUpgradePrompts() &&
+      isLicenseBannerVisible &&
+      !wasLicenseBannerVisible
+    ) {
       trackPaywallViewed('ai_autofix', 'ai_intelligence_banner');
     }
     return isLicenseBannerVisible;

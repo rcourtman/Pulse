@@ -254,10 +254,11 @@ func (r *Router) securityStatusSessionCapabilities(ctx context.Context) security
 
 func (r *Router) securityStatusPresentationPolicy() securityStatusPresentationPolicy {
 	demoMode := r != nil && r.config != nil && r.config.DemoMode
+	hideUpgrade := demoMode || r == nil || !r.hostedMode
 	return securityStatusPresentationPolicy{
 		DemoMode:       demoMode,
 		ReadOnly:       demoMode,
 		HideCommercial: demoMode,
-		HideUpgrade:    demoMode,
+		HideUpgrade:    hideUpgrade,
 	}
 }

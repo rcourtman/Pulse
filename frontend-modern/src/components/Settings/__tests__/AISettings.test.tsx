@@ -28,6 +28,7 @@ const entitlementsMock = vi.fn();
 const trackPaywallViewedMock = vi.fn();
 const trackUpgradeClickedMock = vi.fn();
 const runStartProTrialActionMock = vi.fn();
+const presentationPolicyHidesUpgradePromptsMock = vi.fn();
 
 vi.mock('@/api/ai', () => ({
   AIAPI: {
@@ -79,6 +80,10 @@ vi.mock('@/stores/licenseCommercial', () => ({
 
 vi.mock('@/utils/trialStartAction', () => ({
   runStartProTrialAction: (...args: unknown[]) => runStartProTrialActionMock(...args),
+}));
+
+vi.mock('@/stores/sessionPresentationPolicy', () => ({
+  presentationPolicyHidesUpgradePrompts: () => presentationPolicyHidesUpgradePromptsMock(),
 }));
 
 vi.mock('@/utils/upgradeMetrics', () => ({
@@ -133,6 +138,7 @@ const resetAllMocks = () => {
   trackPaywallViewedMock.mockReset();
   trackUpgradeClickedMock.mockReset();
   runStartProTrialActionMock.mockReset();
+  presentationPolicyHidesUpgradePromptsMock.mockReset();
 };
 
 const setupDefaultMocks = () => {
@@ -153,6 +159,7 @@ const setupDefaultMocks = () => {
   getSessionDiffMock.mockResolvedValue({ files: [], summary: '' });
   revertSessionMock.mockResolvedValue(undefined);
   runStartProTrialActionMock.mockResolvedValue('activated');
+  presentationPolicyHidesUpgradePromptsMock.mockReturnValue(false);
 };
 
 describe('AISettings model loading error states', () => {
@@ -337,7 +344,9 @@ describe('AISettings load failure error state', () => {
     });
 
     // Error banner should be gone
-    expect(screen.queryByText(/Unable to load Assistant & Patrol settings/)).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/Unable to load Assistant & Patrol settings/),
+    ).not.toBeInTheDocument();
 
     // Verify retry actually called getSettings again
     expect(getSettingsMock).toHaveBeenCalledTimes(2);
@@ -513,5 +522,35 @@ describe('AISettings quickstart enablement flow', () => {
       ),
     ).toHaveLength(2);
     expect(screen.getByRole('button', { name: /start trial/i })).toBeInTheDocument();
+  });
+
+  it('hides trial setup guidance when self-hosted upgrade prompts are disabled', async () => {
+    presentationPolicyHidesUpgradePromptsMock.mockReturnValue(true);
+    getSettingsMock.mockResolvedValue({
+      ...baseSettings(),
+      configured: false,
+      enabled: false,
+      quickstart_credits_total: 0,
+      quickstart_credits_remaining: 0,
+      quickstart_credits_available: false,
+      quickstart_blocked_reason:
+        'Activate this install or start a trial to use Patrol quickstart. Otherwise connect your API key.',
+    });
+
+    renderComponent();
+
+    await waitFor(() => {
+      expect(getSettingsMock).toHaveBeenCalledTimes(1);
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /enable assistant and patrol/i }));
+
+    expect(updateSettingsMock).not.toHaveBeenCalled();
+    expect(await screen.findByText('Set Up Assistant & Patrol')).toBeInTheDocument();
+    expect(
+      screen.getByText('Connect a provider to power Pulse Assistant and Patrol.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /start trial/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/start a trial to use Patrol quickstart/i)).not.toBeInTheDocument();
   });
 });

@@ -20,11 +20,7 @@ import FileText from 'lucide-solid/icons/file-text';
 import Terminal from 'lucide-solid/icons/terminal';
 import { PulseLogoIcon } from '@/components/icons/PulseLogoIcon';
 import { SELF_HOSTED_PRO_BILLING_PRESENTATION } from './selfHostedBillingPresentation';
-import type {
-  SettingsNavGroup,
-  SettingsNavItem,
-  SettingsTab,
-} from './settingsNavigationModel';
+import type { SettingsNavGroup, SettingsNavItem, SettingsTab } from './settingsNavigationModel';
 
 export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
   {
@@ -136,6 +132,7 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
         id: 'system-billing',
         label: SELF_HOSTED_PRO_BILLING_PRESENTATION.navLabel,
         icon: PulseLogoIcon,
+        hideFromSidebar: true,
         hideWhenCommercialHidden: true,
       },
     ],
@@ -202,6 +199,8 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
         label: 'Roles',
         icon: ShieldCheck,
         iconProps: { strokeWidth: 2 },
+        features: ['rbac'],
+        hideWhenUnavailable: true,
         requiredCapability: 'roles',
       },
       {
@@ -209,6 +208,8 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
         label: 'Users',
         icon: Users,
         iconProps: { strokeWidth: 2 },
+        features: ['rbac'],
+        hideWhenUnavailable: true,
         requiredCapability: 'users',
       },
       {
@@ -216,6 +217,8 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
         label: 'Audit Log',
         icon: Activity,
         iconProps: { strokeWidth: 2 },
+        features: ['audit_logging'],
+        hideWhenUnavailable: true,
         requiredCapability: 'auditLog',
       },
       {
@@ -224,6 +227,7 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
         icon: Globe,
         iconProps: { strokeWidth: 2 },
         features: ['audit_logging'],
+        hideWhenUnavailable: true,
         requiredCapability: 'auditWebhooksRead',
       },
       {
@@ -232,6 +236,7 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
         icon: RadioTower,
         iconProps: { strokeWidth: 2 },
         features: ['relay'],
+        hideWhenUnavailable: true,
         requiredCapability: 'relayRead',
       },
     ],

@@ -2,14 +2,9 @@ import { createEffect, createSignal, onMount } from 'solid-js';
 import { apiErrorFromResponse, apiFetch } from '@/utils/apiClient';
 import { showSuccess, showWarning } from '@/utils/toast';
 import type { SelectedResource } from '@/components/Settings/ResourcePicker';
-import {
-  hasFeature,
-  runtimeCapabilitiesLoaded,
-} from '@/stores/license';
-import {
-  canOfferCommercialTrial,
-  getUpgradeActionDestination,
-} from '@/stores/licenseCommercial';
+import { hasFeature, runtimeCapabilitiesLoaded } from '@/stores/license';
+import { canOfferCommercialTrial, getUpgradeActionDestination } from '@/stores/licenseCommercial';
+import { presentationPolicyHidesUpgradePrompts } from '@/stores/sessionPresentationPolicy';
 import { loadRuntimeCapabilities } from '@/stores/license';
 import { trackPaywallViewed } from '@/utils/upgradeMetrics';
 import {
@@ -27,9 +22,7 @@ import {
   getReportingRangeStart,
   type ReportingRangeValue,
 } from '@/components/Settings/reportingPanelModel';
-import {
-  buildVMInventoryExportRequest,
-} from '@/components/Settings/reportingInventoryExportModel';
+import { buildVMInventoryExportRequest } from '@/components/Settings/reportingInventoryExportModel';
 import {
   buildLegacyReportingCatalogFallback,
   buildReportingCatalogRequest,
@@ -52,16 +45,13 @@ export const useReportingPanelState = () => {
   const [title, setTitle] = createSignal('');
   const [startingTrial, setStartingTrial] = createSignal(false);
   const reportingFeatureId = () => reportingCatalog()?.id ?? '';
+  const showUpgradePrompts = () => !presentationPolicyHidesUpgradePrompts();
 
   const isLocked = () =>
-    runtimeCapabilitiesLoaded() &&
-    reportingFeatureId() !== '' &&
-    !hasFeature(reportingFeatureId());
-  const canStartTrial = () => canOfferCommercialTrial();
+    runtimeCapabilitiesLoaded() && reportingFeatureId() !== '' && !hasFeature(reportingFeatureId());
+  const canStartTrial = () => showUpgradePrompts() && canOfferCommercialTrial();
   const isReportingEnabled = () =>
-    runtimeCapabilitiesLoaded() &&
-    reportingFeatureId() !== '' &&
-    hasFeature(reportingFeatureId());
+    runtimeCapabilitiesLoaded() && reportingFeatureId() !== '' && hasFeature(reportingFeatureId());
   const upgradeDestination = () =>
     reportingFeatureId() === ''
       ? getUpgradeActionDestination('')
@@ -73,7 +63,7 @@ export const useReportingPanelState = () => {
 
   createEffect((wasVisible: boolean) => {
     const visible = isLocked();
-    if (visible && !wasVisible) {
+    if (showUpgradePrompts() && visible && !wasVisible) {
       trackPaywallViewed(reportingFeatureId(), 'settings_reporting_panel');
     }
     return visible;
@@ -181,15 +171,18 @@ export const useReportingPanelState = () => {
       const selectedFormat = format() ?? performanceReport.defaultFormat;
       const selectedRange = range() ?? performanceReport.defaultRange;
       const start = getReportingRangeStart(selectedRange, now, performanceReport);
-      const request = buildReportingRequest({
-        end: now.toISOString(),
-        format: selectedFormat,
-        metricType: metricType(),
-        now,
-        resources,
-        start: start.toISOString(),
-        title: title(),
-      }, performanceReport);
+      const request = buildReportingRequest(
+        {
+          end: now.toISOString(),
+          format: selectedFormat,
+          metricType: metricType(),
+          now,
+          resources,
+          start: start.toISOString(),
+          title: title(),
+        },
+        performanceReport,
+      );
 
       const response = await apiFetch(request.request.url, request.request.init);
       if (!response.ok) {
@@ -262,6 +255,7 @@ export const useReportingPanelState = () => {
     setSelectedResources,
     setTitle,
     startingTrial,
+    showUpgradePrompts,
     title,
     upgradeDestination,
   };

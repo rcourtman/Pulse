@@ -19,6 +19,7 @@ import (
 
 const webhookBodyLimit = 1024 * 1024 // 1 MiB
 const checkoutProvisioningTimeout = 2 * time.Minute
+const selfHostedProTrialSignupSource = "pulse_pro_trial"
 
 // WebhookHandler handles incoming Stripe webhook events.
 type WebhookHandler struct {
@@ -137,6 +138,12 @@ func (h *WebhookHandler) handleEvent(r *http.Request, event *stripelib.Event) er
 		if err := json.Unmarshal(event.Data.Raw, &session); err != nil {
 			return fmt.Errorf("decode checkout.session: %w", err)
 		}
+		if isSelfHostedProTrialCheckout(session) {
+			log.Info().
+				Str("session_id", strings.TrimSpace(session.ID)).
+				Msg("Stripe webhook ignored self-hosted Pro trial checkout; activation is owned by trial signup completion")
+			return nil
+		}
 		return h.provisioner.HandleCheckout(ctx, session)
 
 	case "customer.subscription.updated":
@@ -167,6 +174,13 @@ func (h *WebhookHandler) handleEvent(r *http.Request, event *stripelib.Event) er
 			Msg("Stripe webhook ignored (unhandled type)")
 		return nil
 	}
+}
+
+func isSelfHostedProTrialCheckout(session CheckoutSession) bool {
+	if session.Metadata == nil {
+		return false
+	}
+	return strings.EqualFold(strings.TrimSpace(session.Metadata["signup_source"]), selfHostedProTrialSignupSource)
 }
 
 func webhookEventContext(r *http.Request, eventType stripelib.EventType) (context.Context, context.CancelFunc) {

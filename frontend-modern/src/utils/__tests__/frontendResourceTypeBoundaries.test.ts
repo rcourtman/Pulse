@@ -3155,9 +3155,7 @@ describe('frontend resource type boundaries', () => {
     expect(historyChartOverlaySource).toContain('Collecting data... History will appear here.');
     expect(historyChartOverlaySource).toContain('presentationPolicyHidesUpgradePrompts');
     expect(historyChartOverlaySource).toContain('Unlock {props.chart.lockTierLabel()} Features');
-    expect(historyChartOverlaySource).toContain(
-      'Historical data beyond {props.chart.lockDays()} days is hidden in this demo.',
-    );
+    expect(historyChartOverlaySource).toContain('is not enabled on this');
     expect(historyChartTooltipSource).toContain('formatHistoryChartTooltipValue');
     expect(containerUpdateBadgeSource).toContain('useContainerUpdateButtonState');
     expect(containerUpdateBadgeSource).toContain('getUpdateButtonClass');

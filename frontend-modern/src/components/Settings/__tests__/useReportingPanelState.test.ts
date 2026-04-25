@@ -114,7 +114,9 @@ describe('useReportingPanelState', () => {
     }));
 
     vi.doMock('@/stores/license', () => ({
-      hasFeature: vi.fn((feature: string) => feature === 'advanced_reporting' && hasReportingFeature),
+      hasFeature: vi.fn(
+        (feature: string) => feature === 'advanced_reporting' && hasReportingFeature,
+      ),
       runtimeCapabilitiesLoaded: vi.fn(() => true),
       loadRuntimeCapabilities: loadRuntimeLicenseStatusMock,
     }));
@@ -129,6 +131,10 @@ describe('useReportingPanelState', () => {
       getUpgradeActionUrlOrFallback: vi.fn((feature?: string) => getPublicPricingUrl(feature)),
       loadCommercialPosture: loadCommercialLicenseStatusMock,
       startProTrial: vi.fn(),
+    }));
+
+    vi.doMock('@/stores/sessionPresentationPolicy', () => ({
+      presentationPolicyHidesUpgradePrompts: vi.fn(() => false),
     }));
 
     ({ useReportingPanelState } = await import('../useReportingPanelState'));
@@ -278,7 +284,9 @@ describe('useReportingPanelState', () => {
     }));
 
     vi.doMock('@/stores/license', () => ({
-      hasFeature: vi.fn((feature: string) => feature === 'advanced_reporting' && hasReportingFeature),
+      hasFeature: vi.fn(
+        (feature: string) => feature === 'advanced_reporting' && hasReportingFeature,
+      ),
       runtimeCapabilitiesLoaded: vi.fn(() => true),
       loadRuntimeCapabilities: loadRuntimeLicenseStatusMock,
     }));
@@ -319,7 +327,9 @@ describe('useReportingPanelState', () => {
     apiFetchMock = vi
       .fn()
       .mockResolvedValueOnce(
-        new Response(JSON.stringify({ error: 'Catalog is unavailable right now' }), { status: 503 }),
+        new Response(JSON.stringify({ error: 'Catalog is unavailable right now' }), {
+          status: 503,
+        }),
       );
 
     vi.doMock('@/utils/apiClient', async () => {
@@ -344,7 +354,9 @@ describe('useReportingPanelState', () => {
     }));
 
     vi.doMock('@/stores/license', () => ({
-      hasFeature: vi.fn((feature: string) => feature === 'advanced_reporting' && hasReportingFeature),
+      hasFeature: vi.fn(
+        (feature: string) => feature === 'advanced_reporting' && hasReportingFeature,
+      ),
       runtimeCapabilitiesLoaded: vi.fn(() => true),
       loadRuntimeCapabilities: loadRuntimeLicenseStatusMock,
     }));
@@ -375,7 +387,9 @@ describe('useReportingPanelState', () => {
   it('falls back to the legacy reporting transport when the catalog route is missing', async () => {
     vi.resetModules();
 
-    apiFetchMock = vi.fn().mockResolvedValueOnce(new Response('404 page not found', { status: 404 }));
+    apiFetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response('404 page not found', { status: 404 }));
 
     vi.doMock('@/utils/apiClient', async () => {
       const actual = await vi.importActual<typeof import('@/utils/apiClient')>('@/utils/apiClient');
@@ -399,7 +413,9 @@ describe('useReportingPanelState', () => {
     }));
 
     vi.doMock('@/stores/license', () => ({
-      hasFeature: vi.fn((feature: string) => feature === 'advanced_reporting' && hasReportingFeature),
+      hasFeature: vi.fn(
+        (feature: string) => feature === 'advanced_reporting' && hasReportingFeature,
+      ),
       runtimeCapabilitiesLoaded: vi.fn(() => true),
       loadRuntimeCapabilities: loadRuntimeLicenseStatusMock,
     }));
@@ -422,7 +438,9 @@ describe('useReportingPanelState', () => {
     await flushAsync();
 
     expect(hookState.reportingCatalogError()).toBe('');
-    expect(hookState.reportingCatalog()?.performanceReport.singleResourceEndpoint).toBe('/api/reporting');
+    expect(hookState.reportingCatalog()?.performanceReport.singleResourceEndpoint).toBe(
+      '/api/reporting',
+    );
     expect(hookState.reportingCatalog()?.vmInventoryExport).toBeNull();
 
     dispose();

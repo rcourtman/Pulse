@@ -38,7 +38,12 @@ export const AIRuntimeControlsSection: Component<AIRuntimeControlsSectionProps> 
           onClick={() => state.setShowDiscoverySettings(!state.showDiscoverySettings())}
         >
           <div class="flex items-center gap-2">
-            <svg class="w-4 h-4 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg
+              class="w-4 h-4 text-blue-600 dark:text-blue-400"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
               <path
                 stroke-linecap="round"
                 stroke-linejoin="round"
@@ -66,7 +71,12 @@ export const AIRuntimeControlsSection: Component<AIRuntimeControlsSectionProps> 
             stroke="currentColor"
             viewBox="0 0 24 24"
           >
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M19 9l-7 7-7-7"
+            />
           </svg>
         </button>
         <Show when={state.showDiscoverySettings()}>
@@ -74,10 +84,7 @@ export const AIRuntimeControlsSection: Component<AIRuntimeControlsSectionProps> 
             <div class="flex items-center justify-between gap-2">
               <label class="text-xs font-medium text-muted flex items-center gap-1.5">
                 Enable workload discovery
-                <HelpIcon
-                  inline={getAISettingsWorkloadDiscoveryHelpContent()}
-                  size="xs"
-                />
+                <HelpIcon inline={getAISettingsWorkloadDiscoveryHelpContent()} size="xs" />
               </label>
               <Toggle
                 checked={state.form.discoveryEnabled}
@@ -89,7 +96,9 @@ export const AIRuntimeControlsSection: Component<AIRuntimeControlsSectionProps> 
             <Show when={state.form.discoveryEnabled}>
               <div class="flex flex-col gap-1">
                 <div class="flex items-center gap-3">
-                  <label class="text-xs font-medium text-muted w-32 flex-shrink-0">Scan Interval</label>
+                  <label class="text-xs font-medium text-muted w-32 flex-shrink-0">
+                    Scan Interval
+                  </label>
                   <select
                     class="flex-1 px-2 py-1 text-sm border border-border rounded bg-surface"
                     value={state.form.discoveryIntervalHours}
@@ -114,15 +123,18 @@ export const AIRuntimeControlsSection: Component<AIRuntimeControlsSectionProps> 
               </div>
             </Show>
 
-            <p class="text-[10px] text-muted">
-              {getAISettingsWorkloadDiscoverySummary().text}
-            </p>
+            <p class="text-[10px] text-muted">{getAISettingsWorkloadDiscoverySummary().text}</p>
           </div>
         </Show>
       </div>
 
       <div class="flex items-center gap-3 p-3 rounded-md border border-border bg-surface-alt">
-        <svg class="w-4 h-4 text-muted flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg
+          class="w-4 h-4 text-muted flex-shrink-0"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
           <path
             stroke-linecap="round"
             stroke-linejoin="round"
@@ -145,7 +157,9 @@ export const AIRuntimeControlsSection: Component<AIRuntimeControlsSectionProps> 
           />
         </div>
         <Show when={parseFloat(state.form.costBudgetUSD30d) > 0}>
-          <span class="text-xs">≈ ${(parseFloat(state.form.costBudgetUSD30d) / 30).toFixed(2)}/day</span>
+          <span class="text-xs">
+            ≈ ${(parseFloat(state.form.costBudgetUSD30d) / 30).toFixed(2)}/day
+          </span>
         </Show>
         <Show when={!state.form.costBudgetUSD30d || parseFloat(state.form.costBudgetUSD30d) === 0}>
           <span class="text-[10px] text-muted">Set a budget to receive usage alerts</span>
@@ -153,7 +167,12 @@ export const AIRuntimeControlsSection: Component<AIRuntimeControlsSectionProps> 
       </div>
 
       <div class="flex items-center gap-3 p-3 rounded-md border border-border bg-surface-alt">
-        <svg class="w-4 h-4 text-muted flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg
+          class="w-4 h-4 text-muted flex-shrink-0"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
           <path
             stroke-linecap="round"
             stroke-linejoin="round"
@@ -189,9 +208,16 @@ export const AIRuntimeControlsSection: Component<AIRuntimeControlsSectionProps> 
         Increase for slower Ollama hardware (default: 300s / 5 min)
       </p>
 
-      <div class={`space-y-3 p-4 rounded-md border ${getAIControlLevelPanelClass(state.form.controlLevel)}`}>
+      <div
+        class={`space-y-3 p-4 rounded-md border ${getAIControlLevelPanelClass(state.form.controlLevel)}`}
+      >
         <div class="flex items-center gap-2">
-          <svg class="w-4 h-4 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg
+            class="w-4 h-4 text-blue-600 dark:text-blue-400"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
             <path
               stroke-linecap="round"
               stroke-linejoin="round"
@@ -203,7 +229,9 @@ export const AIRuntimeControlsSection: Component<AIRuntimeControlsSectionProps> 
             {AI_SETTINGS_ASSISTANT_PERMISSIONS_TITLE}
           </span>
           <Show when={state.form.controlLevel !== 'read_only'}>
-            <span class={`px-1.5 py-0.5 text-[10px] font-medium rounded ${getAIControlLevelBadgeClass(state.form.controlLevel)}`}>
+            <span
+              class={`px-1.5 py-0.5 text-[10px] font-medium rounded ${getAIControlLevelBadgeClass(state.form.controlLevel)}`}
+            >
               {state.form.controlLevel}
             </span>
           </Show>
@@ -218,8 +246,12 @@ export const AIRuntimeControlsSection: Component<AIRuntimeControlsSectionProps> 
             disabled={state.saving()}
           >
             <option value="read_only">Read Only - Pulse Assistant can only observe</option>
-            <option value="controlled">Controlled - Pulse Assistant executes with your approval</option>
-            <option value="autonomous">Autonomous - Pulse Assistant executes without approval (Pro)</option>
+            <option value="controlled">
+              Controlled - Pulse Assistant executes with your approval
+            </option>
+            <option value="autonomous">
+              Autonomous - Pulse Assistant executes without approval (Pro)
+            </option>
           </select>
         </div>
         <p class="text-[10px] text-muted ml-[7.5rem]">
@@ -240,7 +272,13 @@ export const AIRuntimeControlsSection: Component<AIRuntimeControlsSectionProps> 
             .
           </div>
         </Show>
-        <Show when={state.form.controlLevel === 'autonomous' && state.autoFixLocked()}>
+        <Show
+          when={
+            state.form.controlLevel === 'autonomous' &&
+            state.autoFixLocked() &&
+            state.showUpgradePrompts()
+          }
+        >
           <p class="text-xs text-muted">
             <UpgradeLink
               class="text-blue-600 dark:text-blue-400 font-medium hover:underline"

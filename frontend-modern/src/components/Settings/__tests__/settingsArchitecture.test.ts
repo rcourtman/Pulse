@@ -109,6 +109,11 @@ describe('settings architecture guardrails', () => {
     expect(settingsNavCatalogSource).toContain(
       'label: SELF_HOSTED_PRO_BILLING_PRESENTATION.navLabel',
     );
+    expect(settingsNavCatalogSource).toContain('hideFromSidebar: true');
+    expect(settingsNavCatalogSource).toContain("features: ['rbac']");
+    expect(settingsNavCatalogSource).toContain("features: ['audit_logging']");
+    expect(settingsNavCatalogSource).toContain("features: ['relay']");
+    expect(settingsNavCatalogSource).toContain('hideWhenUnavailable: true');
     expect(settingsHeaderMetaSource).toContain(
       'title: SELF_HOSTED_PRO_BILLING_PRESENTATION.shellTitle',
     );

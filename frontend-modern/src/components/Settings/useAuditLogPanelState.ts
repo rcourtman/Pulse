@@ -7,14 +7,9 @@ import {
 } from '@/utils/localStorage';
 import { apiFetch } from '@/utils/apiClient';
 import { showSuccess, showToast, showWarning } from '@/utils/toast';
-import {
-  hasFeature,
-  runtimeCapabilitiesLoaded,
-} from '@/stores/license';
-import {
-  canOfferCommercialTrial,
-  getUpgradeActionDestination,
-} from '@/stores/licenseCommercial';
+import { hasFeature, runtimeCapabilitiesLoaded } from '@/stores/license';
+import { canOfferCommercialTrial, getUpgradeActionDestination } from '@/stores/licenseCommercial';
+import { presentationPolicyHidesUpgradePrompts } from '@/stores/sessionPresentationPolicy';
 import { loadRuntimeCapabilities } from '@/stores/license';
 import { trackPaywallViewed, trackUpgradeClicked } from '@/utils/upgradeMetrics';
 import { runStartProTrialAction } from '@/utils/trialStartAction';
@@ -115,11 +110,14 @@ export const useAuditLogPanelState = () => {
   );
   const [startingTrial, setStartingTrial] = createSignal(false);
 
-  const auditLoggingEnabled = createMemo(() => runtimeCapabilitiesLoaded() && hasFeature('audit_logging'));
+  const auditLoggingEnabled = createMemo(
+    () => runtimeCapabilitiesLoaded() && hasFeature('audit_logging'),
+  );
+  const showUpgradePrompts = () => !presentationPolicyHidesUpgradePrompts();
   const showUpgradePaywall = createMemo(
     () => runtimeCapabilitiesLoaded() && !auditLoggingEnabled() && !loading(),
   );
-  const canStartTrial = () => canOfferCommercialTrial();
+  const canStartTrial = () => showUpgradePrompts() && canOfferCommercialTrial();
   const upgradeDestination = createMemo(() => getUpgradeActionDestination('audit_logging'));
 
   const fetchAuditEvents = async (options?: { limit?: number; offset?: number }) => {
@@ -535,7 +533,7 @@ export const useAuditLogPanelState = () => {
 
   createEffect((wasPaywallVisible) => {
     const isPaywallVisible = showUpgradePaywall();
-    if (isPaywallVisible && !wasPaywallVisible) {
+    if (showUpgradePrompts() && isPaywallVisible && !wasPaywallVisible) {
       trackPaywallViewed('audit_logging', 'settings_audit_log_panel');
     }
     return isPaywallVisible;
@@ -630,6 +628,7 @@ export const useAuditLogPanelState = () => {
     setUserFilter,
     setVerificationFilter,
     showUpgradePaywall,
+    showUpgradePrompts,
     startingTrial,
     submitPageInput,
     successFilter,

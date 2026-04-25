@@ -10,20 +10,21 @@ import { getPublicPricingUrl } from '@/utils/pricingHandoff';
 
 const {
   presentationPolicyHidesCommercialSurfacesMock,
+  presentationPolicyHidesUpgradePromptsMock,
   getUpgradeActionDestinationMock,
   getUpgradeActionUrlOrFallbackMock,
   commercialPostureMock,
   isUpsellSnoozedMock,
   snoozeUpsellMock,
-} =
-  vi.hoisted(() => ({
-    presentationPolicyHidesCommercialSurfacesMock: vi.fn(),
-    getUpgradeActionDestinationMock: vi.fn(),
-    getUpgradeActionUrlOrFallbackMock: vi.fn(),
-    commercialPostureMock: vi.fn(),
-    isUpsellSnoozedMock: vi.fn(),
-    snoozeUpsellMock: vi.fn(),
-  }));
+} = vi.hoisted(() => ({
+  presentationPolicyHidesCommercialSurfacesMock: vi.fn(),
+  presentationPolicyHidesUpgradePromptsMock: vi.fn(),
+  getUpgradeActionDestinationMock: vi.fn(),
+  getUpgradeActionUrlOrFallbackMock: vi.fn(),
+  commercialPostureMock: vi.fn(),
+  isUpsellSnoozedMock: vi.fn(),
+  snoozeUpsellMock: vi.fn(),
+}));
 
 vi.mock('@/stores/licenseCommercial', () => ({
   commercialTrialDaysRemaining: () => commercialPostureMock()?.trial_days_remaining ?? null,
@@ -34,8 +35,8 @@ vi.mock('@/stores/licenseCommercial', () => ({
 }));
 
 vi.mock('@/stores/sessionPresentationPolicy', () => ({
-  presentationPolicyHidesCommercialSurfaces: () =>
-    presentationPolicyHidesCommercialSurfacesMock(),
+  presentationPolicyHidesCommercialSurfaces: () => presentationPolicyHidesCommercialSurfacesMock(),
+  presentationPolicyHidesUpgradePrompts: () => presentationPolicyHidesUpgradePromptsMock(),
 }));
 
 vi.mock('@/utils/snooze', () => ({
@@ -44,15 +45,17 @@ vi.mock('@/utils/snooze', () => ({
 }));
 
 describe('TrialBanner', () => {
-  const renderBanner = () => render(() => (
-    <Router>
-      <Route path="/" component={() => <TrialBanner />} />
-    </Router>
-  ));
+  const renderBanner = () =>
+    render(() => (
+      <Router>
+        <Route path="/" component={() => <TrialBanner />} />
+      </Router>
+    ));
 
   beforeEach(() => {
     cleanup();
     presentationPolicyHidesCommercialSurfacesMock.mockReset();
+    presentationPolicyHidesUpgradePromptsMock.mockReset();
     getUpgradeActionDestinationMock.mockReset();
     getUpgradeActionUrlOrFallbackMock.mockReset();
     commercialPostureMock.mockReset();
@@ -63,6 +66,7 @@ describe('TrialBanner', () => {
       external: true,
     });
     presentationPolicyHidesCommercialSurfacesMock.mockReturnValue(false);
+    presentationPolicyHidesUpgradePromptsMock.mockReturnValue(false);
     getUpgradeActionUrlOrFallbackMock.mockReturnValue(getPublicPricingUrl('trial_banner'));
     isUpsellSnoozedMock.mockReturnValue(false);
   });
@@ -85,6 +89,7 @@ describe('TrialBanner', () => {
     expect(trialBannerStateSource).toContain('createMemo');
     expect(trialBannerStateSource).not.toContain('loadCommercialPosture');
     expect(trialBannerStateSource).toContain('presentationPolicyHidesCommercialSurfaces');
+    expect(trialBannerStateSource).toContain('presentationPolicyHidesUpgradePrompts');
     expect(trialBannerStateSource).toContain('isCommercialTrialActive');
     expect(trialBannerStateSource).toContain('commercialTrialDaysRemaining');
     expect(trialBannerStateSource).toContain('getUpgradeActionDestination');
@@ -134,6 +139,20 @@ describe('TrialBanner', () => {
     renderBanner();
 
     expect(screen.queryByRole('status')).toBeNull();
+  });
+
+  it('hides upgrade actions when self-hosted upgrade prompts are hidden', async () => {
+    presentationPolicyHidesUpgradePromptsMock.mockReturnValue(true);
+    commercialPostureMock.mockReturnValue({
+      subscription_state: 'trial',
+      trial_days_remaining: 2,
+    });
+
+    renderBanner();
+
+    expect(screen.getByRole('status')).toBeInTheDocument();
+    expect(screen.queryByText('Upgrade')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Snooze 7d' })).not.toBeInTheDocument();
   });
 
   it('snoozes and hides the action row', async () => {

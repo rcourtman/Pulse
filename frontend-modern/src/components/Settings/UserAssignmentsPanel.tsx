@@ -8,9 +8,7 @@ import Shield from 'lucide-solid/icons/shield';
 import Pencil from 'lucide-solid/icons/pencil';
 import { SearchField } from '@/components/shared/SearchField';
 import { PulseDataGrid } from '@/components/shared/PulseDataGrid';
-import {
-  getUserAssignmentsEmptyStateCopy,
-} from '@/utils/rbacPresentation';
+import { getUserAssignmentsEmptyStateCopy } from '@/utils/rbacPresentation';
 
 export const UserAssignmentsPanel: Component = () => {
   const state = useUserAssignmentsPanelState();
@@ -39,6 +37,7 @@ export const UserAssignmentsPanel: Component = () => {
             canStartTrial={state.featureGate.canStartTrial()}
             copy={state.featureGate.featureGateCopy()}
             paywallLocation="settings_user_assignments_panel"
+            showUpgradePrompts={state.featureGate.showUpgradePrompts()}
             startingTrial={state.featureGate.startingTrial()}
             onStartTrial={state.featureGate.handleStartTrial}
           />
@@ -60,9 +59,7 @@ export const UserAssignmentsPanel: Component = () => {
           <div class="text-center py-12 px-6">
             <Users class="w-12 h-12 mx-auto text-slate-300 mb-4" />
             <h4 class="text-base font-medium text-base-content mb-2">{emptyStateCopy().title}</h4>
-            <p class="text-sm text-muted max-w-md mx-auto">
-              {emptyStateCopy().body}
-            </p>
+            <p class="text-sm text-muted max-w-md mx-auto">{emptyStateCopy().body}</p>
             <div class="mt-6 flex flex-col sm:flex-row items-center justify-center gap-3 text-xs text-muted">
               <span class="flex items-center gap-1.5">
                 <Shield class="w-3.5 h-3.5" />

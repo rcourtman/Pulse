@@ -461,6 +461,13 @@ Community limit enforcement.
     from the local conversion store instead of exporting those event rows to
     the commercial service or reconstructing them from hosted checkout
     telemetry.
+14. Keep ordinary self-hosted v6 commercial prompts opt-in. Cloud-paid runtime
+    may keep checkout, activation, recovery, and support-only trial plumbing
+    available for explicit handoffs and entitled installs, but default
+    self-hosted browser surfaces must honor `presentationPolicy.hideUpgrade`
+    and suppress Relay/Pro plan comparison, Pro trial CTAs, paid-only settings
+    navigation, and feature upsells unless hosted mode, direct intent,
+    activation/recovery state, or active entitlement makes them relevant.
 
 ## Current State
 
@@ -1997,6 +2004,14 @@ public demos and other browser-first login surfaces do not emit avoidable
 `401` traffic before a session exists. Once the local login flow has written
 its bootstrap hint or the operator is landing on a protected route, the
 canonical state probe still owns authenticated runtime detection.
+That same presentation-policy contract now owns the default self-hosted v6
+commercial posture. Outside hosted mode, ordinary self-hosted installs must
+fail closed on in-app upgrade prompts: Relay/Pro plan comparison, Pro trial
+CTAs, paid-only settings navigation, and history/feature upsells may render
+only for explicit handoff/direct routes, activation or recovery state, hosted
+mode, or an already entitled install. Trial checkout plumbing may remain for
+support-only or externally initiated flows, but it is not a normal GA
+self-hosted app journey.
 That public-demo commercial boundary also owns monitored-system preview
 unavailability wording. Browser presentation may keep the unavailable reason
 nullable until the formatting edge, but it must normalize the message through

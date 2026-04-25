@@ -311,10 +311,11 @@ func TestLoadConfig_EmailProviderRequired(t *testing.T) {
 	}
 }
 
-func TestLoadConfig_RejectsNonCloudTrialSignupPriceID(t *testing.T) {
+func TestLoadConfig_RejectsNonCloudTrialSignupPriceIDInProductionCatalog(t *testing.T) {
 	setRequiredCPEnv(t)
 	setTrialSigningEnv(t)
-	t.Setenv("STRIPE_API_KEY", "sk_test_123")
+	t.Setenv("CP_ENV", "production")
+	t.Setenv("STRIPE_API_KEY", "sk_live_123")
 	t.Setenv("CP_TRIAL_SIGNUP_PRICE_ID", "price_1T47OVBrHBocJIGHg4sMHMV7")
 
 	_, err := LoadConfig()
@@ -322,6 +323,40 @@ func TestLoadConfig_RejectsNonCloudTrialSignupPriceID(t *testing.T) {
 		t.Fatal("expected error for non-cloud CP_TRIAL_SIGNUP_PRICE_ID")
 	}
 	if !strings.Contains(err.Error(), "CP_TRIAL_SIGNUP_PRICE_ID must map to the canonical cloud_starter Stripe price") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestLoadConfig_AllowsUnmappedTestPriceIDsInStaging(t *testing.T) {
+	setRequiredCPEnv(t)
+	setTrialSigningEnv(t)
+	t.Setenv("CP_ENV", "staging")
+	t.Setenv("STRIPE_API_KEY", "sk_test_123")
+	t.Setenv("CP_PUBLIC_CLOUD_SIGNUP_ENABLED", "true")
+	t.Setenv("CP_TRIAL_SIGNUP_PRICE_ID", "price_1SandboxTrial123")
+
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if cfg.TrialSignupPriceID != "price_1SandboxTrial123" {
+		t.Fatalf("TrialSignupPriceID=%q want staging sandbox price", cfg.TrialSignupPriceID)
+	}
+}
+
+func TestLoadConfig_RejectsInvalidTestPriceIDInStaging(t *testing.T) {
+	setRequiredCPEnv(t)
+	setTrialSigningEnv(t)
+	t.Setenv("CP_ENV", "staging")
+	t.Setenv("STRIPE_API_KEY", "sk_test_123")
+	t.Setenv("CP_PUBLIC_CLOUD_SIGNUP_ENABLED", "true")
+	t.Setenv("CP_TRIAL_SIGNUP_PRICE_ID", "not_a_price")
+
+	_, err := LoadConfig()
+	if err == nil {
+		t.Fatal("expected error for invalid staging CP_TRIAL_SIGNUP_PRICE_ID")
+	}
+	if !strings.Contains(err.Error(), "must be a Stripe price id") {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }

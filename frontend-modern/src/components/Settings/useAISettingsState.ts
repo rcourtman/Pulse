@@ -16,20 +16,12 @@ import {
   loadAIRuntimeModels,
   syncAIRuntimeSettings,
 } from '@/stores/aiRuntimeState';
-import {
-  hasFeature,
-  loadRuntimeCapabilities,
-} from '@/stores/license';
-import {
-  canOfferCommercialTrial,
-  getUpgradeActionDestination,
-} from '@/stores/licenseCommercial';
+import { hasFeature, loadRuntimeCapabilities } from '@/stores/license';
+import { canOfferCommercialTrial, getUpgradeActionDestination } from '@/stores/licenseCommercial';
+import { presentationPolicyHidesUpgradePrompts } from '@/stores/sessionPresentationPolicy';
 import { notificationStore } from '@/stores/notifications';
 import type { AISettings as AISettingsType, AIProvider, AuthMethod } from '@/types/ai';
-import {
-  normalizeAIControlLevel,
-  type AIControlLevel,
-} from '@/utils/aiControlLevelPresentation';
+import { normalizeAIControlLevel, type AIControlLevel } from '@/utils/aiControlLevelPresentation';
 import { getAIProviderDisplayName, getProviderFromModelId } from '@/utils/aiProviderPresentation';
 import {
   getAICredentialsClearErrorMessage,
@@ -126,6 +118,15 @@ export const useAISettingsState = () => {
     discoveryIntervalHours: 0,
   });
 
+  const showUpgradePrompts = () => !presentationPolicyHidesUpgradePrompts();
+  const visibleQuickstartBlockedReason = () => {
+    const normalized = normalizeQuickstartReason(settings()?.quickstart_blocked_reason);
+    if (normalized === AI_QUICKSTART_ACTIVATION_REQUIRED_REASON && !showUpgradePrompts()) {
+      return '';
+    }
+    return normalized;
+  };
+
   const settingsReadiness = createMemo(() =>
     getAISettingsReadinessPresentation({
       configured: Boolean(settings()?.configured),
@@ -134,7 +135,7 @@ export const useAISettingsState = () => {
       quickstartCreditsAvailable: Boolean(settings()?.quickstart_credits_available),
       quickstartCreditsRemaining: settings()?.quickstart_credits_remaining ?? 0,
       quickstartCreditsTotal: settings()?.quickstart_credits_total ?? 0,
-      quickstartBlockedReason: normalizeQuickstartReason(settings()?.quickstart_blocked_reason),
+      quickstartBlockedReason: visibleQuickstartBlockedReason(),
     }),
   );
   const autoFixLocked = createMemo(() => !hasFeature('ai_autofix'));
@@ -150,19 +151,19 @@ export const useAISettingsState = () => {
     const current = settings();
     return Boolean(
       current &&
-        (current.anthropic_configured ||
-          current.openai_configured ||
-          current.openrouter_configured ||
-          current.deepseek_configured ||
-          current.gemini_configured ||
-          current.ollama_configured),
+      (current.anthropic_configured ||
+        current.openai_configured ||
+        current.openrouter_configured ||
+        current.deepseek_configured ||
+        current.gemini_configured ||
+        current.ollama_configured),
     );
   });
-  const hasQuickstartAvailable = createMemo(() => Boolean(settings()?.quickstart_credits_available));
-  const quickstartBlockedReason = createMemo(() =>
-    normalizeQuickstartReason(settings()?.quickstart_blocked_reason),
+  const hasQuickstartAvailable = createMemo(() =>
+    Boolean(settings()?.quickstart_credits_available),
   );
-  const canStartTrial = () => canOfferCommercialTrial();
+  const quickstartBlockedReason = createMemo(visibleQuickstartBlockedReason);
+  const canStartTrial = () => showUpgradePrompts() && canOfferCommercialTrial();
   const upgradeAutofixDestination = () => getUpgradeActionDestination('ai_autofix');
 
   const hasProviderBackedModels = (data: AISettingsType | null | undefined) =>
@@ -181,7 +182,7 @@ export const useAISettingsState = () => {
 
   createEffect((wasPaywallVisible) => {
     const isPaywallVisible = form.controlLevel === 'autonomous' && autoFixLocked();
-    if (isPaywallVisible && !wasPaywallVisible) {
+    if (showUpgradePrompts() && isPaywallVisible && !wasPaywallVisible) {
       trackPaywallViewed('ai_autofix', 'settings_ai_patrol_autofix');
     }
     return isPaywallVisible;
@@ -333,7 +334,7 @@ export const useAISettingsState = () => {
 
   const openEnableSetupModal = () => {
     const blockedReason = quickstartBlockedReason();
-    if (blockedReason === AI_QUICKSTART_ACTIVATION_REQUIRED_REASON) {
+    if (blockedReason === AI_QUICKSTART_ACTIVATION_REQUIRED_REASON && showUpgradePrompts()) {
       setSetupMode('activation-or-provider');
     } else if (blockedReason) {
       setSetupMode('provider-required');
@@ -544,7 +545,9 @@ export const useAISettingsState = () => {
       setShowDiffModal(true);
     } catch (error) {
       logger.error('[AISettings] Failed to get session diff:', error);
-      notificationStore.error(getAISessionDiffErrorMessage(error instanceof Error ? error.message : ''));
+      notificationStore.error(
+        getAISessionDiffErrorMessage(error instanceof Error ? error.message : ''),
+      );
     } finally {
       setSessionActionLoading(null);
     }
@@ -704,7 +707,9 @@ export const useAISettingsState = () => {
       notificationStore.success('Assistant & Patrol settings saved');
     } catch (error) {
       logger.error('[AISettings] Failed to save settings:', error);
-      notificationStore.error(getAISettingsSaveErrorMessage(error instanceof Error ? error.message : ''));
+      notificationStore.error(
+        getAISettingsSaveErrorMessage(error instanceof Error ? error.message : ''),
+      );
     } finally {
       setSaving(false);
     }
@@ -811,7 +816,9 @@ export const useAISettingsState = () => {
       setSettings(updated);
       syncModelCatalogForSettings(updated);
       void runProviderPreflight(updated);
-      notificationStore.success(newValue ? 'Assistant & Patrol enabled' : 'Assistant & Patrol disabled');
+      notificationStore.success(
+        newValue ? 'Assistant & Patrol enabled' : 'Assistant & Patrol disabled',
+      );
     } catch (error) {
       setForm('enabled', !newValue);
       logger.error('[AISettings] Failed to toggle AI:', error);
@@ -922,6 +929,7 @@ export const useAISettingsState = () => {
     showDiffModal,
     showDiscoverySettings,
     showSetupModal,
+    showUpgradePrompts,
     startingTrial,
     testing,
     testingProvider,

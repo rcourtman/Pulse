@@ -43,6 +43,7 @@ export const AuditWebhookPanel: Component<AuditWebhookPanelProps> = (props) => {
     newUrl,
     saving,
     setNewUrl,
+    showUpgradePrompts,
     startingTrial,
     upgradeDestination,
     webhookUrls,
@@ -61,31 +62,31 @@ export const AuditWebhookPanel: Component<AuditWebhookPanelProps> = (props) => {
             <div class="flex flex-col sm:flex-row items-center gap-4">
               <div class="flex-1 text-center sm:text-left">
                 <p class="font-semibold text-base-content">{featureGateCopy().title}</p>
-                <p class="mt-1 text-sm text-muted">
-                  {featureGateCopy().body}
-                </p>
+                <p class="mt-1 text-sm text-muted">{featureGateCopy().body}</p>
               </div>
-              <div class="flex flex-col sm:flex-row items-center gap-2">
-                <UpgradeLink
-                  destination={upgradeDestination()}
-                  class={getUpgradeActionButtonClass()}
-                  onClick={() =>
-                    trackUpgradeClicked('settings_audit_webhook_panel', 'audit_logging')
-                  }
-                >
-                  {UPGRADE_ACTION_LABEL}
-                </UpgradeLink>
-                <Show when={canStartTrial()}>
-                  <button
-                    type="button"
-                    onClick={handleStartTrial}
-                    disabled={startingTrial()}
-                    class={UPGRADE_TRIAL_LINK_CLASS}
+              <Show when={showUpgradePrompts()}>
+                <div class="flex flex-col sm:flex-row items-center gap-2">
+                  <UpgradeLink
+                    destination={upgradeDestination()}
+                    class={getUpgradeActionButtonClass()}
+                    onClick={() =>
+                      trackUpgradeClicked('settings_audit_webhook_panel', 'audit_logging')
+                    }
                   >
-                    {UPGRADE_TRIAL_LABEL}
-                  </button>
-                </Show>
-              </div>
+                    {UPGRADE_ACTION_LABEL}
+                  </UpgradeLink>
+                  <Show when={canStartTrial()}>
+                    <button
+                      type="button"
+                      onClick={handleStartTrial}
+                      disabled={startingTrial()}
+                      class={UPGRADE_TRIAL_LINK_CLASS}
+                    >
+                      {UPGRADE_TRIAL_LABEL}
+                    </button>
+                  </Show>
+                </div>
+              </Show>
             </div>
           </Card>
         </Show>

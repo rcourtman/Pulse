@@ -51,6 +51,10 @@ vi.mock('@/stores/licenseCommercial', () => ({
   startProTrial: vi.fn(),
 }));
 
+vi.mock('@/stores/sessionPresentationPolicy', () => ({
+  presentationPolicyHidesUpgradePrompts: () => false,
+}));
+
 vi.mock('@/api/agentProfiles', () => ({
   MISSING_AGENT_PROFILE_ASSIGNMENT_MESSAGE:
     'Selected profile no longer exists. Refresh and choose another profile.',
@@ -233,7 +237,9 @@ beforeEach(() => {
     href: getPublicPricingUrl(feature),
     external: true,
   }));
-  getUpgradeActionUrlOrFallbackMock.mockImplementation((feature?: string) => getPublicPricingUrl(feature));
+  getUpgradeActionUrlOrFallbackMock.mockImplementation((feature?: string) =>
+    getPublicPricingUrl(feature),
+  );
   mockResources = [makeAgentResource()];
   mockWsStore = {
     state: {
@@ -642,7 +648,9 @@ describe('AgentProfilesPanel V6 agent ID handling', () => {
   });
 
   it('surfaces malformed profile list responses instead of failing open to an empty state', async () => {
-    listProfilesMock.mockRejectedValueOnce(new Error('Invalid agent profile list response from Pulse.'));
+    listProfilesMock.mockRejectedValueOnce(
+      new Error('Invalid agent profile list response from Pulse.'),
+    );
 
     render(() => <AgentProfilesPanel />);
 

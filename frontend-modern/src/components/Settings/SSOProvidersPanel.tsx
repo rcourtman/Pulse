@@ -82,12 +82,13 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
     fetchMetadataPreview,
     getUpgradeActionDestination,
     runtimeCapabilitiesLoaded,
+    showUpgradePrompts,
     trackUpgradeClicked,
   } = useSSOProvidersState(props);
 
   return (
     <div class="space-y-6">
-      <Show when={showSamlUpsell()}>
+      <Show when={showUpgradePrompts() && showSamlUpsell()}>
         <Dialog
           isOpen={true}
           onClose={() => setShowSamlUpsell(false)}
@@ -147,7 +148,11 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
       </Show>
 
       {/* License banner */}
-      <Show when={runtimeCapabilitiesLoaded() && !hasAdvancedSSO() && !loading()}>
+      <Show
+        when={
+          showUpgradePrompts() && runtimeCapabilitiesLoaded() && !hasAdvancedSSO() && !loading()
+        }
+      >
         <div class="p-4 bg-surface-alt border border-border rounded-md">
           <div class="flex flex-col sm:flex-row items-center gap-4">
             <div class="flex-1">
@@ -207,7 +212,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                 {getSSOProviderAddButtonLabel('saml')}
               </button>
             </Show>
-            <Show when={runtimeCapabilitiesLoaded() && !hasAdvancedSSO()}>
+            <Show when={showUpgradePrompts() && runtimeCapabilitiesLoaded() && !hasAdvancedSSO()}>
               <button
                 type="button"
                 onClick={() => setShowSamlUpsell(true)}
@@ -249,9 +254,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
           <div class="space-y-3">
             <For each={providers()}>
               {(provider) => (
-                <div
-                  class={getSSOProviderCardClass(provider.enabled)}
-                >
+                <div class={getSSOProviderCardClass(provider.enabled)}>
                   <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div class="flex items-center gap-3 min-w-0">
                       <div class="p-2 rounded-md bg-surface-hover">
@@ -266,9 +269,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                             {getSSOProviderTypeLabel(provider.type)}
                           </span>
                         </div>
-                        <p class="text-xs text-muted truncate">
-                          {getSSOProviderSummary(provider)}
-                        </p>
+                        <p class="text-xs text-muted truncate">{getSSOProviderSummary(provider)}</p>
                       </div>
                     </div>
                     <div class="flex items-center gap-2 self-end sm:self-auto">
@@ -580,9 +581,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
 
               {/* Test result display */}
               <Show when={testResult()}>
-                <div
-                  class={testResultPresentation()!.panelClass}
-                >
+                <div class={testResultPresentation()!.panelClass}>
                   <div class="flex items-start gap-3">
                     {testResult()?.success ? (
                       <CheckCircle class={testResultPresentation()!.iconClass} />
@@ -590,13 +589,9 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                       <XCircle class={testResultPresentation()!.iconClass} />
                     )}
                     <div class="flex-1 min-w-0">
-                      <p class={testResultPresentation()!.titleClass}>
-                        {testResult()?.message}
-                      </p>
+                      <p class={testResultPresentation()!.titleClass}>{testResult()?.message}</p>
                       <Show when={testResult()?.error}>
-                        <p class={testResultPresentation()!.errorClass}>
-                          {testResult()?.error}
-                        </p>
+                        <p class={testResultPresentation()!.errorClass}>{testResult()?.error}</p>
                       </Show>
                       <Show when={testResult()?.success && testResult()?.details}>
                         <dl class="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-xs">
@@ -640,20 +635,18 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                                     );
 
                                     return (
-                                    <div
-                                      class={certPresentation.containerClass}
-                                    >
-                                      <span class="font-medium">{cert.subject}</span>
-                                      <span class="mx-1">•</span>
-                                      <span>
-                                        Expires: {new Date(cert.notAfter).toLocaleDateString()}
-                                      </span>
-                                      <Show when={cert.isExpired}>
-                                        <span class={certPresentation.expiredLabelClass}>
-                                          {certPresentation.expiredLabel}
+                                      <div class={certPresentation.containerClass}>
+                                        <span class="font-medium">{cert.subject}</span>
+                                        <span class="mx-1">•</span>
+                                        <span>
+                                          Expires: {new Date(cert.notAfter).toLocaleDateString()}
                                         </span>
-                                      </Show>
-                                    </div>
+                                        <Show when={cert.isExpired}>
+                                          <span class={certPresentation.expiredLabelClass}>
+                                            {certPresentation.expiredLabel}
+                                          </span>
+                                        </Show>
+                                      </div>
                                     );
                                   }}
                                 </For>
@@ -853,18 +846,16 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                           );
 
                           return (
-                          <div
-                            class={certPresentation.containerClass}
-                          >
-                            <span class="font-medium">{cert.subject}</span>
-                            <span class="mx-1">•</span>
-                            <span>Expires: {new Date(cert.notAfter).toLocaleDateString()}</span>
-                            <Show when={cert.isExpired}>
-                              <span class={certPresentation.expiredLabelClass}>
-                                {certPresentation.expiredLabel}
-                              </span>
-                            </Show>
-                          </div>
+                            <div class={certPresentation.containerClass}>
+                              <span class="font-medium">{cert.subject}</span>
+                              <span class="mx-1">•</span>
+                              <span>Expires: {new Date(cert.notAfter).toLocaleDateString()}</span>
+                              <Show when={cert.isExpired}>
+                                <span class={certPresentation.expiredLabelClass}>
+                                  {certPresentation.expiredLabel}
+                                </span>
+                              </Show>
+                            </div>
                           );
                         }}
                       </For>

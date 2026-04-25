@@ -11,9 +11,11 @@ vi.mock('@/components/Settings/useReportingPanelState', () => ({
 }));
 
 vi.mock('../ResourcePicker', () => ({
-  ResourcePicker: (_props: { maxSelection?: number; selected: () => unknown[]; onSelectionChange: (items: unknown[]) => void }): JSX.Element => (
-    <div>Mock Resource Picker</div>
-  ),
+  ResourcePicker: (_props: {
+    maxSelection?: number;
+    selected: () => unknown[];
+    onSelectionChange: (items: unknown[]) => void;
+  }): JSX.Element => <div>Mock Resource Picker</div>,
 }));
 
 vi.mock('@/utils/upgradeMetrics', () => ({
@@ -95,6 +97,7 @@ function buildState(overrides: Record<string, unknown> = {}) {
     setRange: vi.fn(),
     setSelectedResources: vi.fn(),
     setTitle: vi.fn(),
+    showUpgradePrompts: () => true,
     startingTrial: () => false,
     title: () => '',
     upgradeDestination: () => ({

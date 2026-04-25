@@ -35,10 +35,7 @@ export const RelaySettingsPanel: Component<RelaySettingsPanelProps> = (props) =>
   // Pro feature gate
   if (!state.relayEnabled()) {
     return (
-      <SettingsPanel
-        title="Remote Access"
-        description={RELAY_SETTINGS_DESCRIPTION}
-      >
+      <SettingsPanel title="Remote Access" description={RELAY_SETTINGS_DESCRIPTION}>
         <Show when={!state.loading()} fallback={<div class="text-sm ">Loading...</div>}>
           <Card tone="info" padding="md">
             <div class="flex flex-col sm:flex-row items-center gap-4">
@@ -49,25 +46,27 @@ export const RelaySettingsPanel: Component<RelaySettingsPanelProps> = (props) =>
                   <p class="text-sm text-muted mt-1">{RELAY_LICENSE_REQUIRED_MESSAGE}</p>
                 </div>
               </div>
-              <div class="flex flex-col sm:flex-row items-center gap-2">
-                <UpgradeLink
-                  destination={state.upgradeDestination()}
-                  class={RELAY_PRIMARY_LINK_CLASS}
-                  onClick={() => trackUpgradeClicked('settings_relay_panel', 'relay')}
-                >
-                  Upgrade
-                </UpgradeLink>
-                <Show when={state.canStartTrial()}>
-                  <button
-                    type="button"
-                    onClick={state.handleStartTrial}
-                    disabled={state.startingTrial()}
-                    class={RELAY_INLINE_ACTION_CLASS}
+              <Show when={state.showUpgradePrompts()}>
+                <div class="flex flex-col sm:flex-row items-center gap-2">
+                  <UpgradeLink
+                    destination={state.upgradeDestination()}
+                    class={RELAY_PRIMARY_LINK_CLASS}
+                    onClick={() => trackUpgradeClicked('settings_relay_panel', 'relay')}
                   >
-                    {UPGRADE_TRIAL_LABEL}
-                  </button>
-                </Show>
-              </div>
+                    Upgrade
+                  </UpgradeLink>
+                  <Show when={state.canStartTrial()}>
+                    <button
+                      type="button"
+                      onClick={state.handleStartTrial}
+                      disabled={state.startingTrial()}
+                      class={RELAY_INLINE_ACTION_CLASS}
+                    >
+                      {UPGRADE_TRIAL_LABEL}
+                    </button>
+                  </Show>
+                </div>
+              </Show>
             </div>
           </Card>
         </Show>
@@ -76,20 +75,13 @@ export const RelaySettingsPanel: Component<RelaySettingsPanelProps> = (props) =>
   }
 
   return (
-    <SettingsPanel
-      title="Remote Access"
-      description={RELAY_SETTINGS_DESCRIPTION}
-    >
+    <SettingsPanel title="Remote Access" description={RELAY_SETTINGS_DESCRIPTION}>
       <Show
         when={!state.loading()}
         fallback={<div class="text-sm ">{getSettingsConfigurationLoadingState().text}</div>}
       >
         <Show when={!state.canManage()}>
-          <Card
-            tone="info"
-            padding="md"
-            class={RELAY_READONLY_NOTICE_CLASS}
-          >
+          <Card tone="info" padding="md" class={RELAY_READONLY_NOTICE_CLASS}>
             Remote access settings are read-only for this account.
           </Card>
         </Show>
@@ -108,7 +100,9 @@ export const RelaySettingsPanel: Component<RelaySettingsPanelProps> = (props) =>
               pulse={state.connectionPresentation().pulse}
             />
             <div class="flex-1">
-              <p class="text-sm font-medium text-base-content">{state.connectionPresentation().label}</p>
+              <p class="text-sm font-medium text-base-content">
+                {state.connectionPresentation().label}
+              </p>
               <Show when={state.status()?.instance_id}>
                 <p class="text-xs text-muted mt-0.5">Instance: {state.status()!.instance_id}</p>
               </Show>
@@ -121,9 +115,7 @@ export const RelaySettingsPanel: Component<RelaySettingsPanelProps> = (props) =>
             </div>
           </div>
           <Show when={state.status()?.last_error}>
-            <div class={RELAY_LAST_ERROR_CLASS}>
-              {state.status()!.last_error}
-            </div>
+            <div class={RELAY_LAST_ERROR_CLASS}>{state.status()!.last_error}</div>
           </Show>
         </Card>
 

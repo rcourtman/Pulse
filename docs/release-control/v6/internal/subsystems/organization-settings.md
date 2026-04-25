@@ -245,3 +245,8 @@ setup completion surface allowed to bootstrap posture outside that shell.
 RBAC paywall state should also consume intent-level selectors such as
 `canOfferCommercialTrial()` from `frontend-modern/src/stores/licenseCommercial.ts`
 instead of reading raw posture fields locally.
+Under the free-first self-hosted v6 policy, those RBAC gates must also honor
+`presentationPolicy.hideUpgrade`: ordinary self-hosted users should not see
+RBAC trial CTAs, upgrade copy, or paid-only Roles/Users/Audit navigation by
+default. Direct routes may recover to the canonical free settings surface, and
+entitled or hosted-mode installs may still render the governed RBAC surfaces.

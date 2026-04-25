@@ -15,6 +15,7 @@ interface RBACFeatureGateSectionProps {
   canStartTrial: boolean;
   copy: RBACFeatureGateCopy;
   paywallLocation: RBACFeatureGateLocation;
+  showUpgradePrompts: boolean;
   startingTrial: boolean;
   onStartTrial: () => void | Promise<void>;
 }
@@ -26,25 +27,27 @@ export const RBACFeatureGateSection: Component<RBACFeatureGateSectionProps> = (p
         <h4 class="text-base font-semibold text-base-content">{props.copy.title}</h4>
         <p class="text-sm text-muted mt-1">{props.copy.body}</p>
       </div>
-      <div class="flex flex-col sm:flex-row items-center gap-2">
-        <UpgradeLink
-          destination={getUpgradeActionDestination('rbac')}
-          class={getUpgradeActionButtonClass()}
-          onClick={() => trackUpgradeClicked(props.paywallLocation, 'rbac')}
-        >
-          {UPGRADE_ACTION_LABEL}
-        </UpgradeLink>
-        <Show when={props.canStartTrial}>
-          <button
-            type="button"
-            onClick={props.onStartTrial}
-            disabled={props.startingTrial}
-            class={UPGRADE_TRIAL_LINK_CLASS}
+      <Show when={props.showUpgradePrompts}>
+        <div class="flex flex-col sm:flex-row items-center gap-2">
+          <UpgradeLink
+            destination={getUpgradeActionDestination('rbac')}
+            class={getUpgradeActionButtonClass()}
+            onClick={() => trackUpgradeClicked(props.paywallLocation, 'rbac')}
           >
-            {UPGRADE_TRIAL_LABEL}
-          </button>
-        </Show>
-      </div>
+            {UPGRADE_ACTION_LABEL}
+          </UpgradeLink>
+          <Show when={props.canStartTrial}>
+            <button
+              type="button"
+              onClick={props.onStartTrial}
+              disabled={props.startingTrial}
+              class={UPGRADE_TRIAL_LINK_CLASS}
+            >
+              {UPGRADE_TRIAL_LABEL}
+            </button>
+          </Show>
+        </div>
+      </Show>
     </div>
   </div>
 );

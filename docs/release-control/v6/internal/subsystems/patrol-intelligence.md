@@ -196,6 +196,12 @@ but they must not trigger their own mount-time `loadCommercialPosture()`
 reads. Authenticated Patrol shells inherit that bootstrap from
 `frontend-modern/src/useAppRuntimeState.ts`, so Patrol-specific hooks do not
 quietly retake ownership of commercial fetch timing.
+Under ordinary self-hosted v6, Patrol commercial affordances must also honor
+the shared `presentationPolicy.hideUpgrade` contract. A free self-hosted
+install may show Patrol runtime availability and configuration gaps, but it
+must not show Pro trial CTAs, upgrade links, or paid helper copy unless hosted
+mode, an explicit commercial handoff, or an active entitlement makes those
+actions relevant.
 That degraded empty-state copy must also interpret the finding state rather
 than simply replaying the primary assessment sentence verbatim: when coverage
 is incomplete, the findings panel should tell the operator that Patrol has not

@@ -2,14 +2,9 @@ import { createEffect, createMemo, createSignal, onMount } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
-import {
-  hasFeature,
-  runtimeCapabilitiesLoaded,
-} from '@/stores/license';
-import {
-  canOfferCommercialTrial,
-  getUpgradeActionDestination,
-} from '@/stores/licenseCommercial';
+import { hasFeature, runtimeCapabilitiesLoaded } from '@/stores/license';
+import { canOfferCommercialTrial, getUpgradeActionDestination } from '@/stores/licenseCommercial';
+import { presentationPolicyHidesUpgradePrompts } from '@/stores/sessionPresentationPolicy';
 import { loadRuntimeCapabilities } from '@/stores/license';
 import { trackPaywallViewed, trackUpgradeClicked } from '@/utils/upgradeMetrics';
 import {
@@ -71,7 +66,8 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
 
   const hasAdvancedSSO = createMemo(() => hasFeature('advanced_sso'));
   const canManage = () => props.canManage !== false;
-  const canStartTrial = () => canOfferCommercialTrial();
+  const showUpgradePrompts = () => !presentationPolicyHidesUpgradePrompts();
+  const canStartTrial = () => showUpgradePrompts() && canOfferCommercialTrial();
 
   const handleStartTrial = async () => {
     if (startingTrial()) {
@@ -89,7 +85,8 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
   };
 
   createEffect((wasBannerVisible) => {
-    const isBannerVisible = runtimeCapabilitiesLoaded() && !hasAdvancedSSO() && !loading();
+    const isBannerVisible =
+      showUpgradePrompts() && runtimeCapabilitiesLoaded() && !hasAdvancedSSO() && !loading();
     if (isBannerVisible && !wasBannerVisible) {
       trackPaywallViewed('advanced_sso', 'settings_sso_providers_banner');
     }
@@ -97,7 +94,7 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
   }, false);
 
   createEffect((wasUpsellVisible) => {
-    const isUpsellVisible = showSamlUpsell();
+    const isUpsellVisible = showUpgradePrompts() && showSamlUpsell();
     if (isUpsellVisible && !wasUpsellVisible) {
       trackPaywallViewed('advanced_sso', 'settings_sso_providers_add_saml_gate');
     }
@@ -135,6 +132,9 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
 
   const openAddModal = (type: 'oidc' | 'saml') => {
     if (!canManage()) {
+      return;
+    }
+    if (type === 'saml' && !hasAdvancedSSO() && !showUpgradePrompts()) {
       return;
     }
     setEditingProvider(null);
@@ -175,7 +175,9 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
       const { apiFetch } = await import('@/utils/apiClient');
       const isEdit = Boolean(editingProvider());
       const response = await apiFetch(
-        isEdit ? `/api/security/sso/providers/${editingProvider()!.id}` : '/api/security/sso/providers',
+        isEdit
+          ? `/api/security/sso/providers/${editingProvider()!.id}`
+          : '/api/security/sso/providers',
         {
           method: isEdit ? 'PUT' : 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -341,6 +343,7 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
     publicUrl,
     showSamlUpsell,
     setShowSamlUpsell,
+    showUpgradePrompts,
     testing,
     testResult,
     setTestResult,

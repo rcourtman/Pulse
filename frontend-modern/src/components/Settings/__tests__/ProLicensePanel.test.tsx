@@ -40,6 +40,7 @@ const clearLicenseMock = vi.fn();
 const notificationSuccessMock = vi.fn();
 const notificationErrorMock = vi.fn();
 const presentationPolicyHidesCommercialSurfacesMock = vi.fn(() => false);
+const presentationPolicyHidesUpgradePromptsMock = vi.fn(() => true);
 const sessionPresentationPolicyResolvedMock = vi.fn(() => true);
 const useLocationMock = vi.fn(() => ({
   search: '',
@@ -79,6 +80,7 @@ vi.mock('@/stores/licenseEntitlements', () => ({
 
 vi.mock('@/stores/sessionPresentationPolicy', () => ({
   presentationPolicyHidesCommercialSurfaces: () => presentationPolicyHidesCommercialSurfacesMock(),
+  presentationPolicyHidesUpgradePrompts: () => presentationPolicyHidesUpgradePromptsMock(),
   sessionPresentationPolicyResolved: () => sessionPresentationPolicyResolvedMock(),
 }));
 
@@ -131,6 +133,7 @@ describe('ProLicensePanel', () => {
     notificationSuccessMock.mockReset();
     notificationErrorMock.mockReset();
     presentationPolicyHidesCommercialSurfacesMock.mockReset();
+    presentationPolicyHidesUpgradePromptsMock.mockReset();
     sessionPresentationPolicyResolvedMock.mockReset();
     useLocationMock.mockReset();
     navigateMock.mockReset();
@@ -144,6 +147,7 @@ describe('ProLicensePanel', () => {
     activateLicenseMock.mockResolvedValue({ success: true });
     clearLicenseMock.mockResolvedValue({ success: true });
     presentationPolicyHidesCommercialSurfacesMock.mockReturnValue(false);
+    presentationPolicyHidesUpgradePromptsMock.mockReturnValue(true);
     sessionPresentationPolicyResolvedMock.mockReturnValue(true);
     getUpgradeActionDestinationMock.mockImplementation((feature?: string) => ({
       href: getPublicPricingUrl(feature),
@@ -210,40 +214,30 @@ describe('ProLicensePanel', () => {
     ).not.toBeInTheDocument();
   });
 
-  it('shows the compare-plans prompt by default when no paid self-hosted plan is active', async () => {
+  it('keeps the self-hosted billing page non-promotional by default', async () => {
     renderPanel();
 
     await waitFor(() => {
       expect(loadLicenseEntitlementsMock).toHaveBeenCalled();
     });
 
-    expect(screen.getAllByText('Compare self-hosted plans').length).toBeGreaterThan(0);
     expect(screen.getByText('Current plan: Community')).toBeInTheDocument();
-    expect(screen.getByText(/^Community$/)).toBeInTheDocument();
     expect(screen.queryByText(/^Expired$/)).not.toBeInTheDocument();
-    expect(trackPricingViewedMock).toHaveBeenCalledWith(
-      'settings_self_hosted_billing_plan',
-      SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_INTENT,
-    );
-    expect(
-      screen.getByText(/Community is active on this instance/i),
-    ).toBeInTheDocument();
-    expect(screen.getByText('If You Need More')).toBeInTheDocument();
-    expect(screen.getByText('What Relay adds')).toBeInTheDocument();
-    expect(screen.getByText('What Pulse Pro adds')).toBeInTheDocument();
-    expect(screen.getByText('Unlimited self-hosted monitoring')).toBeInTheDocument();
-    const compareLinks = screen.getAllByRole('link', { name: 'Compare plans' });
-    expect(compareLinks).toHaveLength(1);
-    expect(
-      compareLinks.some(
-        (link) =>
-          link.getAttribute('href') ===
-          getSelfHostedPurchaseStartUrl(SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_INTENT),
-      ),
-    ).toBe(true);
+    expect(screen.queryByText('Compare self-hosted plans')).not.toBeInTheDocument();
+    expect(screen.queryByText('If You Need More')).not.toBeInTheDocument();
+    expect(screen.queryByText('What Relay adds')).not.toBeInTheDocument();
+    expect(screen.queryByText('What Pulse Pro adds')).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Compare plans' })).not.toBeInTheDocument();
+    expect(trackPricingViewedMock).not.toHaveBeenCalled();
   });
 
-  it('tracks compare-plan checkout intent from the self-hosted billing prompt', async () => {
+  it('tracks compare-plan checkout intent from the explicit self-hosted billing handoff', async () => {
+    useLocationMock.mockReturnValue({
+      search: `?intent=${SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_INTENT}`,
+      pathname: '/settings/system/billing/plan',
+      hash: '',
+    });
+
     renderPanel();
 
     await waitFor(() => {
@@ -469,7 +463,9 @@ describe('ProLicensePanel', () => {
     expect(screen.getByText('Advanced SSO (SAML/Multi-Provider)')).toBeInTheDocument();
     expect(screen.queryByText('If You Need More')).not.toBeInTheDocument();
     expect(screen.getByText('90 days')).toBeInTheDocument();
-    expect(screen.getByText('Root-cause analysis, remediation, and admin extras')).toBeInTheDocument();
+    expect(
+      screen.getByText('Root-cause analysis, remediation, and admin extras'),
+    ).toBeInTheDocument();
     expect(screen.queryByText('Guest Capacity')).not.toBeInTheDocument();
     expect(screen.queryByText('Included Monitored Systems')).not.toBeInTheDocument();
     expect(screen.queryByText('Monitored-system policy')).not.toBeInTheDocument();
@@ -499,13 +495,10 @@ describe('ProLicensePanel', () => {
         'Relay is active on this instance. Remote access, mobile, push, and longer history are unlocked right now.',
       ),
     ).toBeInTheDocument();
-    expect(screen.getByText('If You Need More')).toBeInTheDocument();
+    expect(screen.queryByText('If You Need More')).not.toBeInTheDocument();
     expect(screen.queryByText('What Relay adds')).not.toBeInTheDocument();
-    expect(screen.getByText('What Pulse Pro adds')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'See all plans' })).toHaveAttribute(
-      'href',
-      getSelfHostedPurchaseStartUrl(SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_INTENT),
-    );
+    expect(screen.queryByText('What Pulse Pro adds')).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'See all plans' })).not.toBeInTheDocument();
     expect(screen.getByText('Pulse Relay (Remote Access)')).toBeInTheDocument();
     expect(screen.getByText('Mobile App Access')).toBeInTheDocument();
     expect(screen.getByText('Push Notifications')).toBeInTheDocument();
@@ -767,9 +760,7 @@ describe('ProLicensePanel', () => {
     renderPanel();
 
     expect(screen.getByText('Pulse Pro trial is now active')).toBeInTheDocument();
-    expect(
-      screen.getByText(/this instance now has Pulse Pro trial access/i),
-    ).toBeInTheDocument();
+    expect(screen.getByText(/this instance now has Pulse Pro trial access/i)).toBeInTheDocument();
     expect(screen.getByText('Available during this trial')).toBeInTheDocument();
     expect(screen.getAllByText('Patrol Auto-Fix').length).toBeGreaterThan(0);
     expect(navigateMock).toHaveBeenCalledWith(SELF_HOSTED_PRO_BILLING_PLAN_HREF, {
@@ -931,7 +922,9 @@ describe('ProLicensePanel', () => {
 
     await waitFor(() => {
       expect(screen.getByRole('tab', { name: 'Usage' })).toHaveAttribute('aria-selected', 'true');
-      expect(document.getElementById(SELF_HOSTED_PRO_BILLING_PLAN_SECTION_ID)).not.toBeInTheDocument();
+      expect(
+        document.getElementById(SELF_HOSTED_PRO_BILLING_PLAN_SECTION_ID),
+      ).not.toBeInTheDocument();
       expect(document.getElementById(SELF_HOSTED_PRO_BILLING_USAGE_SECTION_ID)).toBeInTheDocument();
     });
     expect(screen.getByText('Monitored Systems')).toBeInTheDocument();
@@ -952,7 +945,9 @@ describe('ProLicensePanel', () => {
     });
 
     expect(screen.queryByRole('tab', { name: 'Usage' })).not.toBeInTheDocument();
-    expect(document.getElementById(SELF_HOSTED_PRO_BILLING_USAGE_SECTION_ID)).not.toBeInTheDocument();
+    expect(
+      document.getElementById(SELF_HOSTED_PRO_BILLING_USAGE_SECTION_ID),
+    ).not.toBeInTheDocument();
     expect(document.getElementById(SELF_HOSTED_PRO_BILLING_PLAN_SECTION_ID)).toBeInTheDocument();
     expect(navigateMock).toHaveBeenCalledWith(SELF_HOSTED_PRO_BILLING_PLAN_ROUTE, {
       replace: true,
@@ -970,9 +965,7 @@ describe('ProLicensePanel', () => {
     renderPanel();
 
     expect(screen.getAllByText('Compare self-hosted plans').length).toBeGreaterThan(0);
-    expect(
-      screen.getByText(/Community is active on this instance/i),
-    ).toBeInTheDocument();
+    expect(screen.getByText(/Community is active on this instance/i)).toBeInTheDocument();
     const compareLinks = screen.getAllByRole('link', { name: 'Compare plans' });
     expect(
       compareLinks.some(
@@ -1126,7 +1119,7 @@ describe('ProLicensePanel', () => {
     expect(proLicensePanelStateSource).toContain('getSelfHostedCurrentPlanStatusPresentation');
     expect(proLicensePanelStateSource).toContain('getSelfHostedPlanComparisonPresentation({');
     expect(proLicensePanelStateSource).toContain('getSelfHostedActivationSuccessPresentation({');
-    expect(proLicensePanelStateSource).toContain('runStartProTrialAction({');
+    expect(proLicensePanelStateSource).not.toContain('runStartProTrialAction({');
     expect(proLicensePanelStateSource).not.toContain('startProTrial()');
     expect(proLicensePanelStateSource).toContain("'A license or activation key is required'");
     expect(proLicensePlanSectionSource).toContain('getLicenseStatusLoadingState');

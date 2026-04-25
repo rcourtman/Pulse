@@ -686,6 +686,13 @@ capacity posture from public-preview runtime capabilities. Lifecycle-adjacent
 install or reporting surfaces may still depend on demo-safe capability flags,
 but they must not expect `monitored_system_capacity`, admission-freeze copy,
 or observed plan overage posture to survive the public-demo boundary.
+The same presentation-policy split now governs paid lifecycle extensions in
+ordinary self-hosted v6 installs. Agent profile management may remain an
+entitled lifecycle surface, but default Infrastructure navigation must not
+advertise agent-profile upgrades, trial prompts, or paid helper links while
+`presentationPolicy.hideUpgrade` is true; it should stay on the free source
+manager unless an explicit entitlement or recovery context makes the paid
+lifecycle surface relevant.
 That same demo-hidden API boundary also keeps runtime-admin operations out of
 public lifecycle flows: `/api/diagnostics`,
 `/api/diagnostics/docker/prepare-token`, and `/api/logs/*` must return `404`

@@ -10,14 +10,50 @@ const FREE_TRIAL_ELIGIBLE_ENTITLEMENTS = {
   trial_eligible: true,
 };
 
-test.describe.serial('Self-hosted trial rate-limit UI', () => {
-  test('shows Retry-After guidance on Pro feature-gate trial CTAs', async ({ page }, testInfo) => {
+const SELF_HOSTED_SECURITY_STATUS = {
+  hasAuthentication: true,
+  hideLocalLogin: false,
+  ssoProviders: [],
+  sessionCapabilities: {
+    demoMode: false,
+  },
+  presentationPolicy: {
+    demoMode: false,
+    readOnly: false,
+    hideCommercial: false,
+    hideUpgrade: true,
+  },
+  settingsCapabilities: {
+    apiAccessRead: true,
+    authenticationRead: true,
+    singleSignOnRead: true,
+    roles: true,
+    users: true,
+    auditLog: true,
+    auditWebhooksRead: true,
+    relayRead: true,
+    relayWrite: true,
+  },
+};
+
+test.describe.serial('Self-hosted paid prompt visibility', () => {
+  test('keeps paid-only navigation and trial CTAs out of the default self-hosted UI', async ({
+    page,
+  }, testInfo) => {
     test.skip(
       testInfo.project.name.startsWith('mobile-'),
-      'Desktop-only feature-gate coverage',
+      'Desktop-only settings navigation coverage',
     );
 
     await ensureAuthenticated(page);
+
+    await page.route('**/api/security/status', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(SELF_HOSTED_SECURITY_STATUS),
+      });
+    });
 
     await page.route('**/api/license/runtime-capabilities', async (route) => {
       await route.fulfill({
@@ -26,6 +62,7 @@ test.describe.serial('Self-hosted trial rate-limit UI', () => {
         body: JSON.stringify({
           capabilities: [],
           limits: [],
+          hosted_mode: false,
           max_history_days: 7,
         }),
       });
@@ -47,31 +84,19 @@ test.describe.serial('Self-hosted trial rate-limit UI', () => {
       });
     });
 
-    await page.route('**/api/license/trial/start', async (route) => {
-      await route.fulfill({
-        status: 429,
-        headers: {
-          'Content-Type': 'application/json',
-          'Retry-After': '120',
-        },
-        body: JSON.stringify({
-          code: 'trial_rate_limited',
-          error: 'Trial start rate limit exceeded',
-          details: {
-            retry_after_seconds: '45',
-          },
-        }),
-      });
-    });
-
     await page.goto('/settings/security-roles');
-    await expect(page.getByRole('heading', { name: 'Roles' }).first()).toBeVisible();
 
-    const startTrialButton = page.getByRole('button', { name: /start free trial/i });
-    await expect(startTrialButton).toBeVisible();
-    await startTrialButton.click();
-
-    await expect(page.getByText('Try again in about 2 minutes')).toBeVisible();
-    await expect(page.getByText('Try again in about a minute')).toHaveCount(0);
+    await expect(
+      page.getByRole('heading', { name: 'Infrastructure', exact: true }),
+    ).toBeVisible();
+    await expect(page.getByText('Custom Roles (Pro)')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Remote Access' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Roles' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Users' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Audit Log' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Audit Webhooks' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Plans & Activation' })).toHaveCount(0);
+    await expect(page.getByRole('link', { name: /upgrade to pro/i })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /start free trial/i })).toHaveCount(0);
   });
 });

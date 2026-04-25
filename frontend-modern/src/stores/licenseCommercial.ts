@@ -10,14 +10,12 @@ import {
   getUpgradeFallbackDestination,
   isSelfHostedPurchaseStartDestination,
 } from '@/utils/pricingHandoff';
-import {
-  resolveUpgradeDestination,
-  type UpgradeDestination,
-} from '@/utils/upgradeNavigation';
+import { resolveUpgradeDestination, type UpgradeDestination } from '@/utils/upgradeNavigation';
 import { loadRuntimeCapabilities } from '@/stores/license';
 import { loadLicenseEntitlements } from '@/stores/licenseEntitlements';
 import {
   presentationPolicyHidesCommercialSurfaces,
+  presentationPolicyHidesUpgradePrompts,
   sessionPresentationPolicyResolved,
 } from '@/stores/sessionPresentationPolicy';
 
@@ -142,7 +140,11 @@ export async function loadCommercialPosture(force = false): Promise<void> {
  * Start a Pro trial for the current org, then refresh both runtime and commercial state.
  */
 export async function startProTrial(): Promise<StartProTrialResult> {
-  if (!sessionPresentationPolicyResolved() || presentationPolicyHidesCommercialSurfaces()) {
+  if (
+    !sessionPresentationPolicyResolved() ||
+    presentationPolicyHidesCommercialSurfaces() ||
+    presentationPolicyHidesUpgradePrompts()
+  ) {
     const err = new Error(
       'Trial activation unavailable under the current presentation policy',
     ) as TrialStartRequestError;
@@ -214,6 +216,7 @@ export const isPro = createRoot(() =>
  * current posture explicitly denies trial eligibility.
  */
 export function canOfferCommercialTrial(): boolean {
+  if (presentationPolicyHidesUpgradePrompts()) return false;
   return commercialPostureState()?.trial_eligible !== false;
 }
 
@@ -222,6 +225,7 @@ export function canOfferCommercialTrial(): boolean {
  * commercial posture is loaded and not already active/trial-backed.
  */
 export function canStartCommercialTrial(): boolean {
+  if (presentationPolicyHidesUpgradePrompts()) return false;
   const current = commercialPostureState();
   if (!current) return false;
   if (current.subscription_state === 'active' || current.subscription_state === 'trial') {
@@ -262,7 +266,10 @@ export function getFirstUpgradeActionUrl(): string | undefined {
 export function getUpgradeActionDestination(key: string): UpgradeDestination {
   const productOwnedHref = key ? getUpgradeFallbackDestination(key) : undefined;
   const href =
-    productOwnedHref || getUpgradeActionUrl(key) || getFirstUpgradeActionUrl() || getUpgradeFallbackDestination(key);
+    productOwnedHref ||
+    getUpgradeActionUrl(key) ||
+    getFirstUpgradeActionUrl() ||
+    getUpgradeFallbackDestination(key);
 
   if (isSelfHostedPurchaseStartDestination(href)) {
     return resolveUpgradeDestination(href, {

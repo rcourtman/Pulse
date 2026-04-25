@@ -2,6 +2,7 @@ import { Component, Match, Show, Switch, createEffect, createMemo, createSignal 
 import { useLocation, useNavigate } from '@solidjs/router';
 import X from 'lucide-solid/icons/x';
 import { presentationPolicyIsReadOnly } from '@/stores/sessionPresentationPolicy';
+import { hasFeature, runtimeCapabilitiesLoaded } from '@/stores/license';
 import { copyToClipboard } from '@/utils/clipboard';
 import { notificationStore } from '@/stores/notifications';
 import { Dialog } from '@/components/shared/Dialog';
@@ -349,15 +350,17 @@ const InfrastructureWorkspaceContent: Component<InfrastructureWorkspaceProps> = 
 
   const renderAgentAddSlot = () => (
     <div class="space-y-4">
-      <div class="flex items-center justify-end">
-        <button
-          type="button"
-          onClick={() => setShowAgentProfiles((value) => !value)}
-          class="inline-flex items-center rounded-md border border-border px-2.5 py-1 text-xs font-medium text-base-content transition-colors hover:bg-surface-hover"
-        >
-          {showAgentProfiles() ? 'Hide agent profiles' : 'Manage agent profiles'}
-        </button>
-      </div>
+      <Show when={runtimeCapabilitiesLoaded() && hasFeature('agent_profiles')}>
+        <div class="flex items-center justify-end">
+          <button
+            type="button"
+            onClick={() => setShowAgentProfiles((value) => !value)}
+            class="inline-flex items-center rounded-md border border-border px-2.5 py-1 text-xs font-medium text-base-content transition-colors hover:bg-surface-hover"
+          >
+            {showAgentProfiles() ? 'Hide agent profiles' : 'Manage agent profiles'}
+          </button>
+        </div>
+      </Show>
       <Show when={showAgentProfiles()}>
         <div class="rounded-xl border border-border bg-surface p-4 shadow-sm">
           <div class="mb-4 space-y-1">
