@@ -85,6 +85,10 @@ runtime cost control, and shared AI transport surfaces.
    represented only as aggregate posture and omitted from detailed prompt
    sections, while sensitive alert text is scrubbed through the shared
    unified-resource redaction helper before it reaches a non-local model.
+   The final provider-bound chat, Patrol, investigation, tool-result, and
+   hosted-quickstart requests must also pass through that same resource-policy
+   sanitizer immediately before transport, so later agentic turns cannot
+   reintroduce local-only identifiers after the original context export.
 6. Keep AI resource and incident context aligned with the canonical unified-resource timeline before falling back to patrol-local change detectors
 7. Keep platform assistant read/control claims aligned with
    `docs/release-control/v6/internal/PLATFORM_SUPPORT_MODEL.md`. New
@@ -189,6 +193,11 @@ mobile-local adapter. That server-owned boundary must also own the real upstream
 vendor model selection explicitly through license-server configuration rather
 than through a baked runtime fallback, so model churn does not leak into the
 Pulse runtime or API contract.
+Every hosted quickstart provider call must carry the `resource-policy-v1`
+data-policy marker declaring client-side enforcement of aggregate-only
+local-only handling and exact resource-policy redaction. The public proxy must
+reject prompt relay requests that omit that marker so the Pulse-hosted route
+cannot silently become an ungoverned external-model bypass.
 That same Patrol quickstart boundary is now server-authoritative end to end.
 `internal/ai/quickstart.go` must bootstrap before the first Patrol-only
 quickstart use, resolve the strongest server-verified runtime authority in

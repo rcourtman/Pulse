@@ -187,6 +187,34 @@ func TestEnsureFinalTextResponse(t *testing.T) {
 	}
 }
 
+func TestEnsureFinalTextResponseAppliesRequestSanitizer(t *testing.T) {
+	provider := &stubStreamingProvider{}
+	loop := &AgenticLoop{provider: provider, baseSystemPrompt: "raw-host"}
+	loop.SetRequestSanitizer(func(req providers.ChatRequest) providers.ChatRequest {
+		req.System = strings.ReplaceAll(req.System, "raw-host", "[redacted]")
+		req.Messages = append([]providers.Message(nil), req.Messages...)
+		for i := range req.Messages {
+			req.Messages[i].Content = strings.ReplaceAll(req.Messages[i].Content, "raw-host", "[redacted]")
+		}
+		return req
+	})
+
+	loop.ensureFinalTextResponse(
+		context.Background(),
+		"session-sanitized",
+		[]Message{{Role: "assistant", Content: ""}},
+		[]providers.Message{{Role: "user", Content: "check raw-host"}},
+		func(event StreamEvent) {},
+	)
+
+	if strings.Contains(provider.lastRequest.System, "raw-host") {
+		t.Fatalf("summary system prompt was not sanitized: %q", provider.lastRequest.System)
+	}
+	if strings.Contains(provider.lastRequest.Messages[0].Content, "raw-host") {
+		t.Fatalf("summary message was not sanitized: %q", provider.lastRequest.Messages[0].Content)
+	}
+}
+
 func TestBuildAutomaticFallbackSummary(t *testing.T) {
 	summary := buildAutomaticFallbackSummary([]Message{
 		{Role: "user", ToolResult: &ToolResult{ToolUseID: "pulse_query_0", Content: "nodes ok", IsError: false}},

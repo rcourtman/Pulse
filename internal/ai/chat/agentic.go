@@ -167,6 +167,9 @@ type AgenticLoop struct {
 
 	// Budget checker called after each turn to enforce token spending limits
 	budgetChecker func() error
+
+	// Request sanitizer applied immediately before model-bound transport.
+	requestSanitizer func(providers.ChatRequest) providers.ChatRequest
 }
 
 // NewAgenticLoop creates a new agentic loop
@@ -193,6 +196,15 @@ func (a *AgenticLoop) UpdateTools() {
 	mcpTools := a.executor.ListTools()
 	tools := ConvertMCPToolsToProvider(mcpTools)
 	a.tools = append(tools, userQuestionTool())
+}
+
+// SetRequestSanitizer installs a model-bound request sanitizer. It is called
+// after compaction and before every provider turn so tool results from earlier
+// turns cannot bypass resource policy redaction.
+func (a *AgenticLoop) SetRequestSanitizer(fn func(providers.ChatRequest) providers.ChatRequest) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.requestSanitizer = fn
 }
 
 // SetOrgID sets the org scope used when validating approval decisions.
@@ -284,6 +296,7 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 		}
 		providerName := a.providerName
 		modelName := a.modelName
+		requestSanitizer := a.requestSanitizer
 		a.mu.Unlock()
 
 		// Record telemetry for loop iteration
@@ -477,6 +490,9 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 			Msg("[AgenticLoop] Calling provider.ChatStream")
 		if turn == 0 {
 			emitWorkflowState(callback, "investigate", "Inspecting infrastructure context and deciding the next step.", a.currentFSMState(), "")
+		}
+		if requestSanitizer != nil {
+			req = requestSanitizer(req)
 		}
 
 		const maxProviderAttempts = 2

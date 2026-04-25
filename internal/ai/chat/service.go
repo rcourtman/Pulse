@@ -12,6 +12,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/modelboundary"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
@@ -77,23 +78,24 @@ type Config struct {
 type Service struct {
 	mu sync.RWMutex
 
-	cfg                   *config.AIConfig
-	dataDir               string
-	stateProvider         StateProvider
-	readState             unifiedresources.ReadState
-	agentServer           AgentServer
-	executor              *tools.PulseToolExecutor
-	actionAuditStore      unifiedresources.ResourceStore
-	sessions              *SessionStore
-	agenticLoop           *AgenticLoop
-	provider              providers.StreamingProvider
-	providerFactory       func(modelStr string) (providers.StreamingProvider, error)
-	patrolProviderFactory func(modelStr string) (providers.StreamingProvider, error)
-	started               bool
-	autonomousMode        bool
-	contextPrefetcher     *ContextPrefetcher
-	budgetChecker         func() error // Optional mid-run budget enforcement
-	orgID                 string
+	cfg                     *config.AIConfig
+	dataDir                 string
+	stateProvider           StateProvider
+	readState               unifiedresources.ReadState
+	agentServer             AgentServer
+	executor                *tools.PulseToolExecutor
+	unifiedResourceProvider tools.UnifiedResourceProvider
+	actionAuditStore        unifiedresources.ResourceStore
+	sessions                *SessionStore
+	agenticLoop             *AgenticLoop
+	provider                providers.StreamingProvider
+	providerFactory         func(modelStr string) (providers.StreamingProvider, error)
+	patrolProviderFactory   func(modelStr string) (providers.StreamingProvider, error)
+	started                 bool
+	autonomousMode          bool
+	contextPrefetcher       *ContextPrefetcher
+	budgetChecker           func() error // Optional mid-run budget enforcement
+	orgID                   string
 
 	activeMu           sync.RWMutex
 	activeExecutions   map[string]map[*AgenticLoop]struct{}
@@ -451,6 +453,7 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 	autonomousMode := false
 	s.mu.RLock()
 	baseExecutor := s.executor
+	unifiedResourceProvider := s.unifiedResourceProvider
 	autonomousMode = s.autonomousMode
 	if s.cfg != nil {
 		configuredModel = strings.TrimSpace(s.cfg.GetChatModel())
@@ -495,6 +498,7 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 		loop.SetOrgID(s.orgID)
 	}
 	loop.SetAutonomousMode(autonomousMode)
+	loop.SetRequestSanitizer(modelboundary.RequestSanitizerForModel(selectedModel, unifiedResourceProvider))
 	s.registerActiveLoop(session.ID, loop)
 	defer s.unregisterActiveLoop(session.ID, loop)
 
@@ -763,6 +767,7 @@ func (s *Service) ExecutePatrolStream(ctx context.Context, req PatrolRequest, ca
 	}
 	sessions := s.sessions
 	baseExecutor := s.executor
+	unifiedResourceProvider := s.unifiedResourceProvider
 	cfg := s.cfg
 	s.mu.RUnlock()
 	executor := baseExecutor
@@ -797,6 +802,7 @@ func (s *Service) ExecutePatrolStream(ctx context.Context, req PatrolRequest, ca
 	tempLoop.SetOrgID(s.orgID)
 	tempLoop.SetAutonomousMode(true) // Patrol runs without approval prompts
 	tempLoop.SetExecutionID(req.ExecutionID)
+	tempLoop.SetRequestSanitizer(modelboundary.RequestSanitizerForModel(patrolModel, unifiedResourceProvider))
 	if req.MaxTurns > 0 {
 		tempLoop.SetMaxTurns(req.MaxTurns)
 	}
@@ -1264,6 +1270,7 @@ func (s *Service) SetKnowledgeStoreProvider(provider KnowledgeStoreProvider) {
 func (s *Service) SetUnifiedResourceProvider(provider tools.UnifiedResourceProvider) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.unifiedResourceProvider = provider
 	if s.executor != nil {
 		s.executor.SetUnifiedResourceProvider(provider)
 	}

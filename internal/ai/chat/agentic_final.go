@@ -59,6 +59,12 @@ func (a *AgenticLoop) ensureFinalTextResponse(
 		ToolChoice:  &providers.ToolChoice{Type: providers.ToolChoiceNone},
 		// No Tools field — completely omit tools to prevent hallucinated function calls
 	}
+	a.mu.Lock()
+	requestSanitizer := a.requestSanitizer
+	a.mu.Unlock()
+	if requestSanitizer != nil {
+		summaryReq = requestSanitizer(summaryReq)
+	}
 
 	var summaryBuilder strings.Builder
 

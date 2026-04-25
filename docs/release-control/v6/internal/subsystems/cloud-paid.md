@@ -110,6 +110,7 @@ cloud-specific enforcement rules.
 87. `internal/cloudcp/stripe/grace_enforcer.go`, `internal/cloudcp/stripe/helpers.go`, `internal/cloudcp/stripe/reconciler.go`, `internal/cloudcp/stripe/webhook.go`
 88. `internal/hosted/hosted_metrics.go`, `internal/hosted/reaper.go`
 89. `pulse-pro:ops/pulse-cloud/audit/`
+90. `pulse-pro:license-server/quickstart_proxy.go`
 
 ## Shared Boundaries
 
@@ -755,6 +756,12 @@ runtime may send an execution identifier for one higher-level Patrol run, and
 the license server must treat repeated proxy calls that share that execution
 identifier as one commercial quickstart run rather than charging once per
 agentic provider turn.
+That same public proxy boundary must accept hosted quickstart prompts only
+when the runtime attaches the `resource-policy-v1` data-policy marker proving
+client-side aggregate-only local-only handling and exact resource-policy
+redaction. Requests without that marker are invalid, because the Pulse-hosted
+route is commercial activation support, not an ungoverned external prompt
+relay.
 That quickstart allowance is therefore activation support, not the main
 commercial pitch: self-hosted pricing and docs may promise Patrol-only
 quickstart runs with no API key for activated or trial-backed installs, but

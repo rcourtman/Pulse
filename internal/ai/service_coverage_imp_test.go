@@ -65,6 +65,49 @@ func TestService_QuickAnalysis(t *testing.T) {
 	}
 }
 
+func TestService_QuickAnalysisSanitizesExternalModelRequest(t *testing.T) {
+	svc := NewService(nil, nil)
+	resource := unifiedresources.Resource{
+		ID:   "agent/pve-secret",
+		Type: unifiedresources.ResourceTypeAgent,
+		Name: "pve-secret",
+		Tags: []string{"restricted"},
+		Identity: unifiedresources.ResourceIdentity{
+			Hostnames:   []string{"pve-secret.lan"},
+			IPAddresses: []string{"10.0.0.5"},
+		},
+	}
+	svc.SetUnifiedResourceProvider(&mockUnifiedResourceProvider{
+		getAllFunc: func() []unifiedresources.Resource {
+			return []unifiedresources.Resource{resource}
+		},
+	})
+
+	var seen providers.ChatRequest
+	svc.provider = &mockProvider{
+		chatFunc: func(ctx context.Context, req providers.ChatRequest) (*providers.ChatResponse, error) {
+			seen = req
+			return &providers.ChatResponse{Content: "ok"}, nil
+		},
+	}
+	svc.cfg = &config.AIConfig{
+		Enabled:     true,
+		PatrolModel: "openai:gpt-4o",
+	}
+
+	if _, err := svc.QuickAnalysis(context.Background(), QuickAnalysisRequest{
+		Prompt: "check pve-secret at pve-secret.lan and 10.0.0.5",
+	}); err != nil {
+		t.Fatalf("QuickAnalysis failed: %v", err)
+	}
+	combined := seen.Messages[0].Content + "\n" + seen.Messages[1].Content
+	for _, raw := range []string{"pve-secret", "pve-secret.lan", "10.0.0.5"} {
+		if strings.Contains(combined, raw) {
+			t.Fatalf("provider request still contains %q: %s", raw, combined)
+		}
+	}
+}
+
 func TestService_AnalyzeForDiscovery(t *testing.T) {
 	svc := NewService(nil, nil)
 

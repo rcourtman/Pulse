@@ -106,7 +106,7 @@ visibility, and privacy controls to operators.
 6. Keep the shared storage-directory and secure storage-file hardening helper aligned with the crypto manager plus control-plane magic-link key and store handling whenever runtime data-root ownership assumptions change.
 7. Keep auth-env ingestion and shared fingerprint-verifier TLS defaults aligned whenever runtime auth loading or pinned-certificate transport behavior changes.
 8. Keep the Data Handling settings surface neutral and non-commercial: it may show resource policy posture, local-only counts, and redaction coverage, but it must not advertise trials, upgrades, paid plans, or monitoring limits.
-9. Keep operator-facing Data Handling posture aligned with runtime AI/context enforcement: `local-only` resource details must not be sent to external model prompts, and sensitive free-form alert text must use the shared resource-policy redaction helper before leaving the local trust boundary.
+9. Keep operator-facing Data Handling posture aligned with runtime AI/context enforcement: `local-only` resource details must not be sent to external model prompts, and sensitive free-form alert, tool-result, investigation, and hosted-quickstart text must use the shared resource-policy redaction helper before leaving the local trust boundary. All provider-bound AI requests to non-local models must use the shared resource-policy sanitizer immediately before transport so later agentic turns cannot bypass the advertised handling posture.
 
 ## Current State
 
@@ -139,6 +139,10 @@ policy posture. It may expose the canonical sensitivity, handling-boundary,
 and redaction counts that Pulse already applies to resources, but it must stay
 informational and non-commercial so free/self-hosted operators are not shown
 paywall, trial, upgrade, or monitoring-limit prompts inside a privacy surface.
+That posture is now enforced at the AI provider boundary too: non-local model
+requests must be sanitized from the same resource-policy metadata that powers
+the Data Handling surface, and hosted quickstart requests must carry an
+explicit `resource-policy-v1` marker before the public proxy accepts them.
 That shared settings boundary now also has an explicit split of responsibilities:
 `frontend-modern/src/components/Settings/useSystemSettingsState.ts` remains the
 canonical owner for telemetry, local-upgrade-metrics, and auth/privacy runtime

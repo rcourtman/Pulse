@@ -18,12 +18,14 @@ func TestQuickstartProxyURL_Default(t *testing.T) {
 
 func TestQuickstartClientChat_UsesOverrideProxyURL(t *testing.T) {
 	var seenLicenseID string
+	var seenDataPolicy quickstartDataPolicy
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req quickstartRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			t.Fatalf("decode request: %v", err)
 		}
 		seenLicenseID = req.LicenseID
+		seenDataPolicy = req.DataPolicy
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(quickstartResponse{
 			Content:    "hello",
@@ -47,6 +49,9 @@ func TestQuickstartClientChat_UsesOverrideProxyURL(t *testing.T) {
 	if seenLicenseID != "lic_test" {
 		t.Fatalf("license_id=%q want lic_test", seenLicenseID)
 	}
+	if seenDataPolicy.Version != quickstartDataPolicyVersion || !seenDataPolicy.ClientEnforced {
+		t.Fatalf("data_policy=%#v want enforced %s", seenDataPolicy, quickstartDataPolicyVersion)
+	}
 	if resp.Content != "hello" {
 		t.Fatalf("content=%q want hello", resp.Content)
 	}
@@ -56,6 +61,7 @@ func TestQuickstartClientWithToken_UsesBearerAuthAndSyncsServerState(t *testing.
 	var seenAuthorization string
 	var seenLicenseID string
 	var seenExecutionID string
+	var seenDataPolicy quickstartDataPolicy
 	var synced QuickstartServerState
 	var syncCalls int
 	remaining := 16
@@ -69,6 +75,7 @@ func TestQuickstartClientWithToken_UsesBearerAuthAndSyncsServerState(t *testing.
 		seenAuthorization = r.Header.Get("Authorization")
 		seenLicenseID = req.LicenseID
 		seenExecutionID = req.ExecutionID
+		seenDataPolicy = req.DataPolicy
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(quickstartResponse{
 			Content:                  "hello",
@@ -104,6 +111,9 @@ func TestQuickstartClientWithToken_UsesBearerAuthAndSyncsServerState(t *testing.
 	}
 	if seenExecutionID != "patrol-run-123" {
 		t.Fatalf("execution_id=%q want patrol-run-123", seenExecutionID)
+	}
+	if seenDataPolicy.Version != quickstartDataPolicyVersion || seenDataPolicy.LocalOnlyHandling != "aggregate_only" {
+		t.Fatalf("data_policy=%#v want local-only aggregate policy", seenDataPolicy)
 	}
 	if resp.Content != "hello" {
 		t.Fatalf("content=%q want hello", resp.Content)

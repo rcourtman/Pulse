@@ -27,6 +27,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/infradiscovery"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/knowledge"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/memory"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/modelboundary"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
@@ -1802,6 +1803,10 @@ func (s *Service) QuickAnalysis(ctx context.Context, req QuickAnalysisRequest) (
 	if cfg != nil && cfg.PatrolModel != "" {
 		model = cfg.PatrolModel
 	}
+	sanitizerModel := model
+	if sanitizerModel == "" && cfg != nil {
+		sanitizerModel = cfg.GetChatModel()
+	}
 
 	messages := []providers.Message{
 		{
@@ -1819,11 +1824,16 @@ func (s *Service) QuickAnalysis(ctx context.Context, req QuickAnalysisRequest) (
 		executionID = uuid.NewString()
 	}
 
-	resp, err := provider.Chat(ctx, providers.ChatRequest{
+	chatReq := providers.ChatRequest{
 		Messages:    messages,
 		Model:       model,
 		ExecutionID: executionID,
-	})
+	}
+	if sanitizer := s.requestSanitizerForModel(sanitizerModel); sanitizer != nil {
+		chatReq = sanitizer(chatReq)
+	}
+
+	resp, err := provider.Chat(ctx, chatReq)
 	if err != nil {
 		return "", fmt.Errorf("Pulse Assistant analysis failed: %w", err)
 	}
@@ -1833,6 +1843,13 @@ func (s *Service) QuickAnalysis(ctx context.Context, req QuickAnalysisRequest) (
 	}
 
 	return resp.Content, nil
+}
+
+func (s *Service) requestSanitizerForModel(model string) func(providers.ChatRequest) providers.ChatRequest {
+	s.mu.RLock()
+	urp := s.unifiedResourceProvider
+	s.mu.RUnlock()
+	return modelboundary.RequestSanitizerForModel(model, urp)
 }
 
 // GetConfig returns a copy of the current AI config
@@ -2089,6 +2106,7 @@ func (s *Service) Execute(ctx context.Context, req ExecuteRequest) (*ExecuteResp
 
 	// Determine the model to use for this request
 	modelString := s.getModelForRequest(req)
+	requestSanitizer := s.requestSanitizerForModel(modelString)
 
 	// Create a provider for this specific model (supports multi-provider switching)
 	provider, err := providers.NewForModel(cfg, modelString)
@@ -2170,13 +2188,18 @@ Always execute the commands rather than telling the user how to do it.`
 			return nil, err
 		}
 
-		resp, err := provider.Chat(ctx, providers.ChatRequest{
+		chatReq := providers.ChatRequest{
 			Messages:  messages,
-			Model:     s.getModelForRequest(req),
+			Model:     modelString,
 			System:    systemPrompt,
 			MaxTokens: 4096,
 			Tools:     tools,
-		})
+		}
+		if requestSanitizer != nil {
+			chatReq = requestSanitizer(chatReq)
+		}
+
+		resp, err := provider.Chat(ctx, chatReq)
 		if err != nil {
 			return nil, fmt.Errorf("Pulse Assistant request failed: %w", err)
 		}
@@ -2289,6 +2312,7 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 
 	// Determine the model to use for this request
 	modelString := s.getModelForRequest(req)
+	requestSanitizer := s.requestSanitizerForModel(modelString)
 
 	// Create a provider for this specific model (supports multi-provider switching)
 	provider, err := providers.NewForModel(cfg, modelString)
@@ -2401,13 +2425,18 @@ Always execute the commands rather than telling the user how to do it.`
 			return nil, err
 		}
 
-		resp, err := provider.Chat(ctx, providers.ChatRequest{
+		chatReq := providers.ChatRequest{
 			Messages:  messages,
-			Model:     s.getModelForRequest(req),
+			Model:     modelString,
 			System:    systemPrompt,
 			MaxTokens: 4096,
 			Tools:     tools,
-		})
+		}
+		if requestSanitizer != nil {
+			chatReq = requestSanitizer(chatReq)
+		}
+
+		resp, err := provider.Chat(ctx, chatReq)
 		if err != nil {
 			log.Error().Err(err).Int("iteration", iteration).Msg("AI provider call failed")
 			callback(StreamEvent{Type: "error", Data: map[string]string{"message": err.Error()}})
@@ -3568,11 +3597,15 @@ func (s *Service) AnalyzeForDiscovery(ctx context.Context, prompt string) (strin
 	const discoveryResponseTokenBudget = 8192
 
 	// Make the API call
-	resp, err := provider.Chat(ctx, providers.ChatRequest{
+	discoveryReq := providers.ChatRequest{
 		Messages:  messages,
 		Model:     model,
 		MaxTokens: discoveryResponseTokenBudget, // Discovery responses need room for structured JSON
-	})
+	}
+	if sanitizer := s.requestSanitizerForModel(model); sanitizer != nil {
+		discoveryReq = sanitizer(discoveryReq)
+	}
+	resp, err := provider.Chat(ctx, discoveryReq)
 
 	// If the primary provider fails (e.g., rate limited), try other configured providers
 	if err != nil {
@@ -3603,11 +3636,15 @@ func (s *Service) AnalyzeForDiscovery(ctx context.Context, prompt string) (strin
 				Str("fallback_model", altModel).
 				Msg("[Discovery] Primary provider failed, trying fallback")
 
-			resp, err = altProvider.Chat(ctx, providers.ChatRequest{
+			altReq := providers.ChatRequest{
 				Messages:  messages,
 				Model:     altModel,
 				MaxTokens: discoveryResponseTokenBudget,
-			})
+			}
+			if sanitizer := s.requestSanitizerForModel(altModel); sanitizer != nil {
+				altReq = sanitizer(altReq)
+			}
+			resp, err = altProvider.Chat(ctx, altReq)
 			if err == nil {
 				model = altModel
 				provider = altProvider

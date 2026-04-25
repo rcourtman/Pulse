@@ -24,6 +24,8 @@ const (
 	quickstartRequestTimeout = 300 * time.Second // 5 minutes
 	quickstartMaxRetries     = 2
 	quickstartInitialBackoff = 2 * time.Second
+
+	quickstartDataPolicyVersion = "resource-policy-v1"
 )
 
 // QuickstartClient implements the Provider interface for the Pulse-hosted
@@ -80,12 +82,20 @@ func NewQuickstartClientWithToken(quickstartToken string, onStateSync func(Quick
 
 // quickstartRequest is the payload sent to the hosted proxy.
 type quickstartRequest struct {
-	Messages    []Message `json:"messages"`
-	System      string    `json:"system,omitempty"`
-	Tools       []Tool    `json:"tools,omitempty"`
-	ExecutionID string    `json:"execution_id,omitempty"`
+	Messages    []Message            `json:"messages"`
+	System      string               `json:"system,omitempty"`
+	Tools       []Tool               `json:"tools,omitempty"`
+	ExecutionID string               `json:"execution_id,omitempty"`
+	DataPolicy  quickstartDataPolicy `json:"data_policy"`
 	// LicenseID is retained only for the legacy caller-chosen identity path.
 	LicenseID string `json:"license_id,omitempty"`
+}
+
+type quickstartDataPolicy struct {
+	Version               string `json:"version"`
+	ClientEnforced        bool   `json:"client_enforced"`
+	LocalOnlyHandling     string `json:"local_only_handling"`
+	ResourceRedactionMode string `json:"resource_redaction_mode"`
 }
 
 // quickstartResponse is the response from the hosted proxy.
@@ -170,6 +180,7 @@ func (c *QuickstartClient) Chat(ctx context.Context, req ChatRequest) (*ChatResp
 		System:      req.System,
 		Tools:       req.Tools,
 		ExecutionID: strings.TrimSpace(req.ExecutionID),
+		DataPolicy:  defaultQuickstartDataPolicy(),
 	}
 	if strings.TrimSpace(c.quickstartToken) == "" {
 		payload.LicenseID = c.licenseID
@@ -268,11 +279,18 @@ func (c *QuickstartClient) Chat(ctx context.Context, req ChatRequest) (*ChatResp
 // TestConnection validates connectivity to the quickstart proxy.
 func (c *QuickstartClient) TestConnection(ctx context.Context) error {
 	// Simple connectivity check — send a minimal request.
-	requestBody := `{"messages":[]}`
-	if strings.TrimSpace(c.quickstartToken) == "" {
-		requestBody = `{"messages":[],"license_id":"` + c.licenseID + `"}`
+	payload := quickstartRequest{
+		Messages:   []Message{},
+		DataPolicy: defaultQuickstartDataPolicy(),
 	}
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, quickstartProxyURL(), bytes.NewReader([]byte(requestBody)))
+	if strings.TrimSpace(c.quickstartToken) == "" {
+		payload.LicenseID = c.licenseID
+	}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("quickstart: marshal test request: %w", err)
+	}
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, quickstartProxyURL(), bytes.NewReader(body))
 	if err != nil {
 		return fmt.Errorf("quickstart: create test request: %w", err)
 	}
@@ -289,6 +307,15 @@ func (c *QuickstartClient) TestConnection(ctx context.Context) error {
 
 	// Any response (even 400) means the server is reachable.
 	return nil
+}
+
+func defaultQuickstartDataPolicy() quickstartDataPolicy {
+	return quickstartDataPolicy{
+		Version:               quickstartDataPolicyVersion,
+		ClientEnforced:        true,
+		LocalOnlyHandling:     "aggregate_only",
+		ResourceRedactionMode: "resource_policy_exact_values",
+	}
 }
 
 // Name returns the provider name.
