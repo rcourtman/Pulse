@@ -20,8 +20,10 @@ import {
 } from '@/components/shared/Table';
 import {
   connectionAgentVersionPresentation,
+  fleetSignalClassName,
   infrastructureSourcePresentation,
   surfaceLabel,
+  type FleetGovernanceSignal,
   type InfrastructureSystemRow,
 } from './connectionsTableModel';
 import type { DiscoveredServer, DiscoveryScanStatus } from './infrastructureSettingsModel';
@@ -160,6 +162,16 @@ const rowHasAgentCoverage = (row: InfrastructureSystemRow): boolean =>
     (member) => member.source === 'agent' || member.source === 'both' || member.agentConnection,
   );
 
+const rowFleetSignals = (row: InfrastructureSystemRow): FleetGovernanceSignal[] => [
+  ...row.fleetSignals,
+  ...row.members.flatMap((member) => member.fleetSignals),
+];
+
+const rowHasFleetTone = (
+  row: InfrastructureSystemRow,
+  predicate: (signal: FleetGovernanceSignal) => boolean,
+): boolean => rowFleetSignals(row).some(predicate);
+
 export const InfrastructureSourceManager: Component<InfrastructureSourceManagerProps> = (props) => {
   let layoutContainerRef: HTMLDivElement | undefined;
   const products = createMemo(() => getInfrastructureSourceManagerProducts());
@@ -230,6 +242,44 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
   );
   const apiOnlySystemCount = createMemo(
     () => props.rows().filter((row) => rowHasApiCoverage(row) && !rowHasAgentCoverage(row)).length,
+  );
+  const liveFleetSystemCount = createMemo(
+    () =>
+      props
+        .rows()
+        .filter((row) =>
+          rowHasFleetTone(row, (signal) => signal.key === 'liveness' && signal.tone === 'ok'),
+        ).length,
+  );
+  const fleetAttentionSystemCount = createMemo(
+    () =>
+      props
+        .rows()
+        .filter((row) =>
+          rowHasFleetTone(row, (signal) => signal.tone === 'warning' || signal.tone === 'critical'),
+        ).length,
+  );
+  const credentialIssueSystemCount = createMemo(
+    () =>
+      props
+        .rows()
+        .filter((row) =>
+          rowHasFleetTone(
+            row,
+            (signal) => signal.key === 'credentials' && signal.tone === 'critical',
+          ),
+        ).length,
+  );
+  const remoteControlEnabledSystemCount = createMemo(
+    () =>
+      props
+        .rows()
+        .filter((row) =>
+          rowHasFleetTone(
+            row,
+            (signal) => signal.key === 'remote-control' && signal.tone === 'info',
+          ),
+        ).length,
   );
   const discoveryReadinessLabel = createMemo(() => {
     if (props.discoveryScanStatus().scanning) return 'Scanning now';
@@ -461,6 +511,57 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
       </dl>
 
       <p class="mt-3 text-xs leading-5 text-muted">{setupConfidenceAction().detail}</p>
+
+      <div class="mt-5 border-t border-border-subtle pt-4">
+        <div class="max-w-3xl">
+          <h3 class="text-sm font-semibold text-base-content">Fleet governance</h3>
+          <p class="mt-1 text-sm leading-5 text-muted">
+            Enrollment, liveness, version drift, adapter health, config state, credentials, update
+            status, and remote-control posture come from the same governed connections ledger.
+          </p>
+        </div>
+
+        <dl class="mt-3 grid gap-0 border-y border-border-subtle sm:grid-cols-2 xl:grid-cols-5">
+          <div class="border-b border-border-subtle px-3 py-3 sm:border-r xl:border-b-0">
+            <dt class="text-[11px] font-medium uppercase tracking-[0.08em] text-muted">
+              Managed fleet
+            </dt>
+            <dd class="mt-1 text-sm font-semibold text-base-content">
+              {formatCount(connectedSystemCount(), 'system')}
+            </dd>
+          </div>
+          <div class="border-b border-border-subtle px-3 py-3 xl:border-b-0 xl:border-r">
+            <dt class="text-[11px] font-medium uppercase tracking-[0.08em] text-muted">Live</dt>
+            <dd class="mt-1 text-sm font-semibold text-base-content">
+              {formatCount(liveFleetSystemCount(), 'system')}
+            </dd>
+          </div>
+          <div class="border-b border-border-subtle px-3 py-3 sm:border-b-0 sm:border-r">
+            <dt class="text-[11px] font-medium uppercase tracking-[0.08em] text-muted">
+              Needs attention
+            </dt>
+            <dd class="mt-1 text-sm font-semibold text-base-content">
+              {formatCount(fleetAttentionSystemCount(), 'system')}
+            </dd>
+          </div>
+          <div class="border-b border-border-subtle px-3 py-3 sm:border-b-0 xl:border-r">
+            <dt class="text-[11px] font-medium uppercase tracking-[0.08em] text-muted">
+              Credential issues
+            </dt>
+            <dd class="mt-1 text-sm font-semibold text-base-content">
+              {formatCount(credentialIssueSystemCount(), 'system')}
+            </dd>
+          </div>
+          <div class="px-3 py-3">
+            <dt class="text-[11px] font-medium uppercase tracking-[0.08em] text-muted">
+              Remote control
+            </dt>
+            <dd class="mt-1 text-sm font-semibold text-base-content">
+              {formatCount(remoteControlEnabledSystemCount(), 'system')}
+            </dd>
+          </div>
+        </dl>
+      </div>
     </section>
   );
 
@@ -651,6 +752,18 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                           {row.lastActivityText}
                                         </span>
                                       </div>
+                                      <div class="mt-1 flex flex-wrap items-center gap-1">
+                                        <For each={row.fleetHighlights}>
+                                          {(signal) => (
+                                            <span
+                                              class={fleetSignalClassName(signal.tone)}
+                                              title={signal.detail}
+                                            >
+                                              {signal.label}
+                                            </span>
+                                          )}
+                                        </For>
+                                      </div>
                                     </TableCell>
 
                                     <Show when={actionColumnVisible()}>
@@ -764,6 +877,18 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                                 <span class="whitespace-nowrap text-[12px] text-muted/90">
                                                   {member.lastActivityText}
                                                 </span>
+                                              </div>
+                                              <div class="mt-1 flex flex-wrap items-center gap-1">
+                                                <For each={member.fleetHighlights}>
+                                                  {(signal) => (
+                                                    <span
+                                                      class={fleetSignalClassName(signal.tone)}
+                                                      title={signal.detail}
+                                                    >
+                                                      {signal.label}
+                                                    </span>
+                                                  )}
+                                                </For>
                                               </div>
                                             </TableCell>
 
@@ -1006,6 +1131,16 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                             <span class="text-[12px] text-muted/90">
                                               {member.lastActivityText}
                                             </span>
+                                            <For each={member.fleetHighlights}>
+                                              {(signal) => (
+                                                <span
+                                                  class={fleetSignalClassName(signal.tone)}
+                                                  title={signal.detail}
+                                                >
+                                                  {signal.label}
+                                                </span>
+                                              )}
+                                            </For>
                                           </div>
                                         </div>
                                       );
@@ -1032,6 +1167,16 @@ export const InfrastructureSourceManager: Component<InfrastructureSourceManagerP
                                 <span class="text-[12px] text-muted/90">
                                   {row.lastActivityText}
                                 </span>
+                                <For each={row.fleetHighlights}>
+                                  {(signal) => (
+                                    <span
+                                      class={fleetSignalClassName(signal.tone)}
+                                      title={signal.detail}
+                                    >
+                                      {signal.label}
+                                    </span>
+                                  )}
+                                </For>
                               </div>
                               <Show when={!props.readOnly && rowInteractive(row)}>
                                 <button

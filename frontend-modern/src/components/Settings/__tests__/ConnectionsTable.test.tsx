@@ -37,6 +37,8 @@ const row = (overrides: Partial<InfrastructureSystemRow> = {}): InfrastructureSy
     agentUpdateCount: 0,
     lastActivityText: '5s ago',
     lastErrorMessage: undefined,
+    fleetSignals: [],
+    fleetHighlights: [],
     enabled: connection.enabled,
     canEdit: true,
     canPause: connection.capabilities.supportsPause,

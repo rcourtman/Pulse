@@ -1615,6 +1615,13 @@ the infrastructure ledger: `useConnectionsLedger.ts` must derive one canonical
 subtitle (`via platform API`, `via Pulse Agent`, or `via platform API and
 Pulse Agent`) from the shared system/component payload instead of letting page-
 local tables invent their own API-versus-agent badge heuristics.
+That same `/api/connections` row contract now also owns the fleet-governance
+projection consumed by the infrastructure workspace. `Connection.fleet` is the
+canonical machine-readable source for enrollment state, liveness, version
+drift, adapter health, config rollout, credential status, update posture, and
+remote-control posture; frontend settings surfaces may format those facts, but
+must not infer a second fleet state from row labels, error-message text, or
+provider-local table heuristics.
 That same shared infrastructure-settings boundary also owns install-profile
 semantics surfaced by
 `frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx`:

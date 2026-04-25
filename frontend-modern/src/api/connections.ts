@@ -21,6 +21,24 @@ export type ConnectionState =
 
 export type ConnectionSource = 'manual' | 'agent' | 'script';
 
+export type ConnectionFleetEnrollmentState = 'configured' | 'enrolled' | 'paused' | 'pending';
+export type ConnectionFleetLivenessState = ConnectionState;
+export type ConnectionFleetVersionDrift = 'behind' | 'current' | 'unknown' | 'not-applicable';
+export type ConnectionFleetAdapterHealth =
+  | 'blocked'
+  | 'degraded'
+  | 'healthy'
+  | 'paused'
+  | 'unknown';
+export type ConnectionFleetConfigRollout = 'configured' | 'paused' | 'reported' | 'unknown';
+export type ConnectionFleetCredentialStatus = 'invalid' | 'paused' | 'unknown' | 'verified';
+export type ConnectionFleetUpdateStatus =
+  | 'current'
+  | 'not-applicable'
+  | 'unknown'
+  | 'update-available';
+export type ConnectionFleetRemoteControl = 'disabled' | 'enabled' | 'not-applicable';
+
 export interface ConnectionCapabilities {
   supportsPause: boolean;
   supportsScope: boolean;
@@ -30,6 +48,17 @@ export interface ConnectionCapabilities {
 export interface ConnectionError {
   message: string;
   at: string;
+}
+
+export interface ConnectionFleetGovernance {
+  enrollmentState: ConnectionFleetEnrollmentState;
+  livenessState: ConnectionFleetLivenessState;
+  versionDrift: ConnectionFleetVersionDrift;
+  adapterHealth: ConnectionFleetAdapterHealth;
+  configRollout: ConnectionFleetConfigRollout;
+  credentialStatus: ConnectionFleetCredentialStatus;
+  updateStatus: ConnectionFleetUpdateStatus;
+  remoteControl: ConnectionFleetRemoteControl;
 }
 
 export interface ConnectionAgentIdentity {
@@ -61,6 +90,7 @@ export interface Connection {
   agentVersion?: string;
   expectedAgentVersion?: string;
   agentUpdateAvailable?: boolean;
+  fleet?: ConnectionFleetGovernance;
   capabilities: ConnectionCapabilities;
 }
 

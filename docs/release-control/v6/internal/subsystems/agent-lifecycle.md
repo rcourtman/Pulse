@@ -269,6 +269,13 @@ the manifest's support-floor row.
    should only raise row-level attention when an attached or standalone agent
    has an update available, while the exact installed version belongs in the
    add/edit detail surfaces rather than as a permanent top-level table column.
+   That compact fleet-control presentation is now backed by the canonical
+   `/api/connections` `fleet` projection rather than page-local inference:
+   `connectionsTableModel.ts`, `useConnectionsLedger.ts`, and
+   `InfrastructureSourceManager.tsx` may format enrollment, liveness, version
+   drift, adapter health, config rollout, credential status, update posture,
+   and remote-control posture, but they must not reconstruct those facts from
+   table copy, status badge labels, or provider-local error strings.
    Standalone host rows must still be recognizable at a glance, but that
    identity belongs in the existing row cells rather than new diagnostics
    columns: the landing table reuses the `System` and `Endpoint` cells for a

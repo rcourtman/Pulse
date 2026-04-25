@@ -23,6 +23,16 @@ describe('useConnectionsLedger', () => {
         lastSeen: '2026-04-23T12:00:00Z',
         lastError: null,
         source: 'agent',
+        fleet: {
+          enrollmentState: 'enrolled',
+          livenessState: 'active',
+          versionDrift: 'behind',
+          adapterHealth: 'healthy',
+          configRollout: 'reported',
+          credentialStatus: 'verified',
+          updateStatus: 'update-available',
+          remoteControl: 'enabled',
+        },
         agentIdentity: {
           hostname: 'tower',
           platform: 'unraid',
@@ -53,6 +63,11 @@ describe('useConnectionsLedger', () => {
       isCluster: false,
       coverageLabels: ['Host telemetry'],
     });
+    expect(result.rows()[0].fleetHighlights.map((signal) => signal.label)).toEqual([
+      'Version behind',
+      'Update available',
+      'Remote control enabled',
+    ]);
   });
 
   it('renders a Proxmox cluster row from the canonical system metadata', async () => {

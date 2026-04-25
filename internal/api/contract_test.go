@@ -11652,18 +11652,28 @@ func TestContract_ShippedSecurityDocReferencesStayLocal(t *testing.T) {
 // commit.
 func TestContract_ConnectionPayloadShapeStaysCanonical(t *testing.T) {
 	conn := Connection{
-		ID:           "pve-lab",
-		Type:         ConnectionTypePVE,
-		Name:         "lab",
-		Address:      "https://pve.lab:8006",
-		State:        ConnectionStateActive,
-		StateReason:  "",
-		Enabled:      true,
-		Surfaces:     []string{"vms", "containers"},
-		Scope:        map[string]bool{"vms": true, "containers": true},
-		LastSeen:     timePtr(time.Date(2026, 4, 19, 10, 0, 0, 0, time.UTC)),
-		LastError:    nil,
-		Source:       ConnectionSourceManual,
+		ID:          "pve-lab",
+		Type:        ConnectionTypePVE,
+		Name:        "lab",
+		Address:     "https://pve.lab:8006",
+		State:       ConnectionStateActive,
+		StateReason: "",
+		Enabled:     true,
+		Surfaces:    []string{"vms", "containers"},
+		Scope:       map[string]bool{"vms": true, "containers": true},
+		LastSeen:    timePtr(time.Date(2026, 4, 19, 10, 0, 0, 0, time.UTC)),
+		LastError:   nil,
+		Source:      ConnectionSourceManual,
+		Fleet: ConnectionFleetGovernance{
+			EnrollmentState:  fleetStateConfigured,
+			LivenessState:    fleetStateActive,
+			VersionDrift:     fleetStateNotApplicable,
+			AdapterHealth:    fleetStateHealthy,
+			ConfigRollout:    fleetStateConfigured,
+			CredentialStatus: fleetStateVerified,
+			UpdateStatus:     fleetStateNotApplicable,
+			RemoteControl:    fleetStateNotApplicable,
+		},
 		Capabilities: ConnectionCapabilities{SupportsPause: true, SupportsScope: true, SupportsTest: true},
 	}
 	system := ConnectionSystem{
@@ -11685,7 +11695,7 @@ func TestContract_ConnectionPayloadShapeStaysCanonical(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal Connection: %v", err)
 	}
-	want := `{"connections":[{"id":"pve-lab","type":"pve","name":"lab","address":"https://pve.lab:8006","state":"active","enabled":true,"surfaces":["vms","containers"],"scope":{"containers":true,"vms":true},"lastSeen":"2026-04-19T10:00:00Z","source":"manual","capabilities":{"supportsPause":true,"supportsScope":true,"supportsTest":true}}],"systems":[{"id":"pve-lab","type":"pve","clusterName":"homelab","components":[{"connectionId":"pve-lab","type":"pve","role":"primary"}]}]}`
+	want := `{"connections":[{"id":"pve-lab","type":"pve","name":"lab","address":"https://pve.lab:8006","state":"active","enabled":true,"surfaces":["vms","containers"],"scope":{"containers":true,"vms":true},"lastSeen":"2026-04-19T10:00:00Z","source":"manual","fleet":{"enrollmentState":"configured","livenessState":"active","versionDrift":"not-applicable","adapterHealth":"healthy","configRollout":"configured","credentialStatus":"verified","updateStatus":"not-applicable","remoteControl":"not-applicable"},"capabilities":{"supportsPause":true,"supportsScope":true,"supportsTest":true}}],"systems":[{"id":"pve-lab","type":"pve","clusterName":"homelab","components":[{"connectionId":"pve-lab","type":"pve","role":"primary"}]}]}`
 	assertJSONSnapshot(t, body, want)
 }
 
@@ -11763,6 +11773,16 @@ func TestContract_AgentConnectionPayloadIncludesVersionFields(t *testing.T) {
 		AgentVersion:         "6.0.0",
 		ExpectedAgentVersion: "6.0.2",
 		AgentUpdateAvailable: true,
+		Fleet: ConnectionFleetGovernance{
+			EnrollmentState:  fleetStateEnrolled,
+			LivenessState:    fleetStateActive,
+			VersionDrift:     fleetStateBehind,
+			AdapterHealth:    fleetStateHealthy,
+			ConfigRollout:    fleetStateReported,
+			CredentialStatus: fleetStateVerified,
+			UpdateStatus:     fleetStateUpdateAvailable,
+			RemoteControl:    fleetStateEnabled,
+		},
 		Capabilities: ConnectionCapabilities{
 			SupportsPause: false,
 			SupportsScope: false,
@@ -11775,7 +11795,7 @@ func TestContract_AgentConnectionPayloadIncludesVersionFields(t *testing.T) {
 		t.Fatalf("marshal agent Connection: %v", err)
 	}
 
-	want := `{"id":"agent:host-1","type":"agent","name":"host-1","address":"host-1","hostAliases":["host-1","192.168.0.2"],"state":"active","enabled":true,"surfaces":["host"],"scope":{"host":true},"lastSeen":"2026-04-22T12:00:00Z","source":"agent","agentIdentity":{"hostname":"host-1","platform":"unraid","osName":"Unraid","osVersion":"7.1.0","kernelVersion":"6.12.0","architecture":"x86_64","reportIp":"192.168.0.2","commandsEnabled":true},"agentVersion":"6.0.0","expectedAgentVersion":"6.0.2","agentUpdateAvailable":true,"capabilities":{"supportsPause":false,"supportsScope":false,"supportsTest":false}}`
+	want := `{"id":"agent:host-1","type":"agent","name":"host-1","address":"host-1","hostAliases":["host-1","192.168.0.2"],"state":"active","enabled":true,"surfaces":["host"],"scope":{"host":true},"lastSeen":"2026-04-22T12:00:00Z","source":"agent","agentIdentity":{"hostname":"host-1","platform":"unraid","osName":"Unraid","osVersion":"7.1.0","kernelVersion":"6.12.0","architecture":"x86_64","reportIp":"192.168.0.2","commandsEnabled":true},"agentVersion":"6.0.0","expectedAgentVersion":"6.0.2","agentUpdateAvailable":true,"fleet":{"enrollmentState":"enrolled","livenessState":"active","versionDrift":"behind","adapterHealth":"healthy","configRollout":"reported","credentialStatus":"verified","updateStatus":"update-available","remoteControl":"enabled"},"capabilities":{"supportsPause":false,"supportsScope":false,"supportsTest":false}}`
 	assertJSONSnapshot(t, body, want)
 }
 

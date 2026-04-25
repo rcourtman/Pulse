@@ -11,11 +11,13 @@ import {
   connectionAgentEndpointDisplay,
   connectionAgentIdentitySummary,
   connectionLastActivityText,
+  fleetGovernanceSignalsForConnection,
   lastActivityTextFromLastSeen,
   surfaceLabel,
   type InfrastructureSourceKind,
   type InfrastructureSystemMemberRow,
   type InfrastructureSystemRow,
+  visibleFleetGovernanceSignals,
 } from './connectionsTableModel';
 
 export { surfaceLabel };
@@ -144,9 +146,7 @@ const moreSevereState = (
   return CONNECTION_STATE_SEVERITY[right] > CONNECTION_STATE_SEVERITY[left] ? right : left;
 };
 
-const oldestTimestamp = (
-  values: ReadonlyArray<string | null | undefined>,
-): string | undefined => {
+const oldestTimestamp = (values: ReadonlyArray<string | null | undefined>): string | undefined => {
   let oldestMs: number | undefined;
   let oldestRaw: string | undefined;
   for (const value of values) {
@@ -186,6 +186,7 @@ const buildMemberRow = (
     agentConnection && state === agentConnection.state
       ? agentConnection.lastSeen
       : (member.lastSeen ?? agentConnection?.lastSeen);
+  const fleetSignals = agentConnection ? fleetGovernanceSignalsForConnection(agentConnection) : [];
 
   return {
     id: member.id,
@@ -198,6 +199,8 @@ const buildMemberRow = (
     statusLabel: presentation.label,
     statusClassName: presentation.badgeClass,
     lastActivityText: lastActivityTextFromLastSeen(lastSeen),
+    fleetSignals,
+    fleetHighlights: visibleFleetGovernanceSignals(fleetSignals),
     primary: Boolean(member.primary),
     agentConnection,
   };
@@ -244,6 +247,9 @@ const buildRow = (
   const identitySubtitle = isStandaloneAgent
     ? (connectionAgentIdentitySummary(primaryConnection) ?? undefined)
     : undefined;
+  const fleetSignals = componentConnections.flatMap((connection) =>
+    fleetGovernanceSignalsForConnection(connection),
+  );
 
   return {
     id: primaryConnection.id,
@@ -261,6 +267,8 @@ const buildRow = (
       ? lastActivityTextFromLastSeen(rollup.lastSeen)
       : connectionLastActivityText(primaryConnection),
     lastErrorMessage,
+    fleetSignals,
+    fleetHighlights: visibleFleetGovernanceSignals(fleetSignals),
     enabled: primaryConnection.enabled,
     canEdit: EDITABLE_CONNECTION_TYPES.includes(primaryConnection.type),
     canPause: primaryConnection.capabilities.supportsPause,

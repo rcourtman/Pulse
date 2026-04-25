@@ -1,6 +1,19 @@
 import { describe, expect, it } from 'vitest';
 import { filterRepresentedDiscoveredServers } from '../infrastructureSettingsModel';
-import type { InfrastructureSystemRow } from '../connectionsTableModel';
+import type {
+  InfrastructureSystemMemberRow,
+  InfrastructureSystemRow,
+} from '../connectionsTableModel';
+
+const emptyFleetRow = {
+  fleetSignals: [],
+  fleetHighlights: [],
+} satisfies Pick<InfrastructureSystemRow, 'fleetSignals' | 'fleetHighlights'>;
+
+const emptyFleetMember = {
+  fleetSignals: [],
+  fleetHighlights: [],
+} satisfies Pick<InfrastructureSystemMemberRow, 'fleetSignals' | 'fleetHighlights'>;
 
 describe('filterRepresentedDiscoveredServers', () => {
   it('removes a discovered platform candidate when the same platform member is already represented by host aliases', () => {
@@ -17,6 +30,7 @@ describe('filterRepresentedDiscoveredServers', () => {
         statusClassName: 'bg-green-100 text-green-800',
         agentUpdateCount: 0,
         lastActivityText: '4s ago',
+        ...emptyFleetRow,
         enabled: true,
         canEdit: true,
         canPause: true,
@@ -36,6 +50,7 @@ describe('filterRepresentedDiscoveredServers', () => {
             statusLabel: 'Active',
             statusClassName: 'bg-green-100 text-green-800',
             lastActivityText: '4s ago',
+            ...emptyFleetMember,
             primary: true,
           },
         ],
@@ -87,6 +102,7 @@ describe('filterRepresentedDiscoveredServers', () => {
         statusClassName: 'bg-green-100 text-green-800',
         agentUpdateCount: 0,
         lastActivityText: '4s ago',
+        ...emptyFleetRow,
         enabled: true,
         canEdit: false,
         canPause: false,
@@ -145,6 +161,7 @@ describe('filterRepresentedDiscoveredServers', () => {
         statusClassName: 'bg-green-100 text-green-800',
         agentUpdateCount: 0,
         lastActivityText: '4s ago',
+        ...emptyFleetRow,
         enabled: true,
         canEdit: true,
         canPause: true,

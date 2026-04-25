@@ -268,6 +268,117 @@ func TestBuildConnections_AgentVersionUpdateAvailability(t *testing.T) {
 	}
 }
 
+func TestBuildConnections_AgentFleetGovernance(t *testing.T) {
+	now := time.Now()
+	in := aggregatorInputs{
+		hosts: []models.Host{
+			{
+				ID:              "current",
+				Hostname:        "current",
+				LastSeen:        now,
+				AgentVersion:    "6.0.2",
+				CommandsEnabled: true,
+			},
+			{
+				ID:           "outdated",
+				Hostname:     "outdated",
+				LastSeen:     now,
+				AgentVersion: "6.0.0",
+			},
+			{
+				ID:       "pending",
+				Hostname: "pending",
+			},
+		},
+		expectedAgentVersion: "6.0.2",
+		now:                  now,
+	}
+
+	got := buildConnections(in)
+	byID := map[string]Connection{}
+	for _, connection := range got {
+		byID[connection.ID] = connection
+	}
+
+	current := byID["agent:current"].Fleet
+	if current.EnrollmentState != fleetStateEnrolled ||
+		current.LivenessState != fleetStateActive ||
+		current.VersionDrift != fleetStateCurrent ||
+		current.AdapterHealth != fleetStateHealthy ||
+		current.ConfigRollout != fleetStateReported ||
+		current.CredentialStatus != fleetStateVerified ||
+		current.UpdateStatus != fleetStateCurrent ||
+		current.RemoteControl != fleetStateEnabled {
+		t.Fatalf("current agent fleet governance = %+v", current)
+	}
+
+	outdated := byID["agent:outdated"].Fleet
+	if outdated.VersionDrift != fleetStateBehind ||
+		outdated.UpdateStatus != fleetStateUpdateAvailable ||
+		outdated.RemoteControl != fleetStateDisabled {
+		t.Fatalf("outdated agent fleet governance = %+v", outdated)
+	}
+
+	pending := byID["agent:pending"].Fleet
+	if pending.EnrollmentState != fleetStatePending ||
+		pending.LivenessState != string(ConnectionStatePending) ||
+		pending.AdapterHealth != fleetStateDegraded ||
+		pending.ConfigRollout != fleetStateUnknown ||
+		pending.CredentialStatus != fleetStateUnknown {
+		t.Fatalf("pending agent fleet governance = %+v", pending)
+	}
+}
+
+func TestBuildConnections_PlatformFleetGovernance(t *testing.T) {
+	now := time.Now()
+	lastSuccess := now.Add(-30 * time.Second)
+	in := aggregatorInputs{
+		pveInstances: []config.PVEInstance{
+			{Name: "healthy", Host: "https://healthy.lan:8006"},
+			{Name: "bad-token", Host: "https://bad-token.lan:8006"},
+			{Name: "paused", Host: "https://paused.lan:8006", Disabled: true},
+		},
+		instanceHealth: map[string]monitoring.InstanceHealth{
+			"pve::healthy":   healthEntry(&lastSuccess, "", "", "closed"),
+			"pve::bad-token": healthEntry(&lastSuccess, "403 forbidden", "auth", "closed"),
+		},
+		now: now,
+	}
+
+	got := buildConnections(in)
+	byID := map[string]Connection{}
+	for _, connection := range got {
+		byID[connection.ID] = connection
+	}
+
+	healthy := byID["pve:healthy"].Fleet
+	if healthy.EnrollmentState != fleetStateConfigured ||
+		healthy.LivenessState != fleetStateActive ||
+		healthy.VersionDrift != fleetStateNotApplicable ||
+		healthy.AdapterHealth != fleetStateHealthy ||
+		healthy.ConfigRollout != fleetStateConfigured ||
+		healthy.CredentialStatus != fleetStateVerified ||
+		healthy.UpdateStatus != fleetStateNotApplicable ||
+		healthy.RemoteControl != fleetStateNotApplicable {
+		t.Fatalf("healthy platform fleet governance = %+v", healthy)
+	}
+
+	badToken := byID["pve:bad-token"].Fleet
+	if badToken.AdapterHealth != fleetStateBlocked ||
+		badToken.CredentialStatus != fleetStateInvalid ||
+		badToken.LivenessState != string(ConnectionStateUnauthorized) {
+		t.Fatalf("bad token fleet governance = %+v", badToken)
+	}
+
+	paused := byID["pve:paused"].Fleet
+	if paused.EnrollmentState != fleetStatePaused ||
+		paused.AdapterHealth != fleetStatePaused ||
+		paused.ConfigRollout != fleetStatePaused ||
+		paused.CredentialStatus != fleetStatePaused {
+		t.Fatalf("paused platform fleet governance = %+v", paused)
+	}
+}
+
 func TestBuildConnections_VMwareAndTrueNASEnabledFlag(t *testing.T) {
 	in := aggregatorInputs{
 		vmwareInstances: []config.VMwareVCenterInstance{{

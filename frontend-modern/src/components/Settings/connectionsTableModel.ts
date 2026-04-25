@@ -1,5 +1,16 @@
 import type { Connection } from '@/api/connections';
 import type { ConnectionType } from '@/api/connections';
+import type {
+  ConnectionFleetAdapterHealth,
+  ConnectionFleetConfigRollout,
+  ConnectionFleetCredentialStatus,
+  ConnectionFleetEnrollmentState,
+  ConnectionFleetGovernance,
+  ConnectionFleetLivenessState,
+  ConnectionFleetRemoteControl,
+  ConnectionFleetUpdateStatus,
+  ConnectionFleetVersionDrift,
+} from '@/api/connections';
 
 export const lastActivityTextFromLastSeen = (lastSeen?: string | null): string => {
   if (!lastSeen) return 'No activity yet';
@@ -195,6 +206,373 @@ export const infrastructureSourcePresentation = (
   source: InfrastructureSourceKind,
 ): InfrastructureSourcePresentation => SOURCE_PRESENTATION[source];
 
+export type FleetGovernanceSignalKey =
+  | 'enrollment'
+  | 'liveness'
+  | 'version'
+  | 'adapter'
+  | 'config'
+  | 'credentials'
+  | 'updates'
+  | 'remote-control';
+
+export type FleetGovernanceSignalTone = 'ok' | 'info' | 'warning' | 'critical' | 'muted';
+
+export interface FleetGovernanceSignal {
+  key: FleetGovernanceSignalKey;
+  label: string;
+  detail: string;
+  tone: FleetGovernanceSignalTone;
+}
+
+const DEFAULT_FLEET_GOVERNANCE: ConnectionFleetGovernance = {
+  enrollmentState: 'pending',
+  livenessState: 'pending',
+  versionDrift: 'unknown',
+  adapterHealth: 'unknown',
+  configRollout: 'unknown',
+  credentialStatus: 'unknown',
+  updateStatus: 'unknown',
+  remoteControl: 'not-applicable',
+};
+
+export const fleetGovernanceForConnection = (connection: Connection): ConnectionFleetGovernance =>
+  connection.fleet ?? DEFAULT_FLEET_GOVERNANCE;
+
+const fleetSignalClassNameByTone: Record<FleetGovernanceSignalTone, string> = {
+  ok: 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-200',
+  info: 'border-blue-200 bg-blue-50 text-blue-800 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-200',
+  warning:
+    'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200',
+  critical:
+    'border-rose-200 bg-rose-50 text-rose-800 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-200',
+  muted: 'border-border bg-surface-alt text-muted',
+};
+
+export const fleetSignalClassName = (tone: FleetGovernanceSignalTone): string =>
+  `inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium whitespace-nowrap ${fleetSignalClassNameByTone[tone]}`;
+
+const enrollmentSignal = (
+  state: ConnectionFleetEnrollmentState,
+  connection: Connection,
+): FleetGovernanceSignal => {
+  switch (state) {
+    case 'configured':
+      return {
+        key: 'enrollment',
+        label: 'Configured',
+        detail: 'This source is configured in the infrastructure ledger.',
+        tone: 'ok',
+      };
+    case 'enrolled':
+      return {
+        key: 'enrollment',
+        label: 'Enrolled',
+        detail: 'This agent has reported into the fleet ledger.',
+        tone: 'ok',
+      };
+    case 'paused':
+      return {
+        key: 'enrollment',
+        label: 'Paused',
+        detail: 'This source is present but currently paused.',
+        tone: 'muted',
+      };
+    case 'pending':
+      return {
+        key: 'enrollment',
+        label: 'Enrollment pending',
+        detail:
+          connection.type === 'agent'
+            ? 'Pulse has not received the first agent report yet.'
+            : 'Pulse has not confirmed this source yet.',
+        tone: 'warning',
+      };
+  }
+};
+
+const livenessSignal = (state: ConnectionFleetLivenessState): FleetGovernanceSignal => {
+  switch (state) {
+    case 'active':
+      return {
+        key: 'liveness',
+        label: 'Live',
+        detail: 'Pulse has recent activity for this source.',
+        tone: 'ok',
+      };
+    case 'paused':
+      return {
+        key: 'liveness',
+        label: 'Paused',
+        detail: 'Pulse is not polling this source while it is paused.',
+        tone: 'muted',
+      };
+    case 'stale':
+      return {
+        key: 'liveness',
+        label: 'Stale',
+        detail: 'Pulse has not seen recent activity from this source.',
+        tone: 'warning',
+      };
+    case 'pending':
+      return {
+        key: 'liveness',
+        label: 'Pending',
+        detail: 'Pulse is waiting for first activity from this source.',
+        tone: 'warning',
+      };
+    case 'unauthorized':
+      return {
+        key: 'liveness',
+        label: 'Unauthorized',
+        detail: 'The configured credential is being rejected.',
+        tone: 'critical',
+      };
+    case 'unreachable':
+      return {
+        key: 'liveness',
+        label: 'Unreachable',
+        detail: 'Pulse cannot currently reach this source.',
+        tone: 'critical',
+      };
+  }
+};
+
+const versionSignal = (state: ConnectionFleetVersionDrift): FleetGovernanceSignal => {
+  switch (state) {
+    case 'behind':
+      return {
+        key: 'version',
+        label: 'Version behind',
+        detail: 'This agent is behind the current Pulse Agent target.',
+        tone: 'warning',
+      };
+    case 'current':
+      return {
+        key: 'version',
+        label: 'Version current',
+        detail: 'This agent matches the current Pulse Agent target.',
+        tone: 'ok',
+      };
+    case 'unknown':
+      return {
+        key: 'version',
+        label: 'Version unknown',
+        detail: 'Pulse does not yet have enough version data for this agent.',
+        tone: 'muted',
+      };
+    case 'not-applicable':
+      return {
+        key: 'version',
+        label: 'No agent version',
+        detail: 'This source is not governed by the Pulse Agent binary version.',
+        tone: 'muted',
+      };
+  }
+};
+
+const adapterSignal = (state: ConnectionFleetAdapterHealth): FleetGovernanceSignal => {
+  switch (state) {
+    case 'healthy':
+      return {
+        key: 'adapter',
+        label: 'Adapter healthy',
+        detail: 'The collection adapter is operating normally.',
+        tone: 'ok',
+      };
+    case 'degraded':
+      return {
+        key: 'adapter',
+        label: 'Adapter degraded',
+        detail: 'The collection adapter needs attention or first confirmation.',
+        tone: 'warning',
+      };
+    case 'blocked':
+      return {
+        key: 'adapter',
+        label: 'Adapter blocked',
+        detail: 'The collection adapter cannot complete its current read path.',
+        tone: 'critical',
+      };
+    case 'paused':
+      return {
+        key: 'adapter',
+        label: 'Adapter paused',
+        detail: 'Collection is paused for this source.',
+        tone: 'muted',
+      };
+    case 'unknown':
+      return {
+        key: 'adapter',
+        label: 'Adapter unknown',
+        detail: 'Pulse has not classified adapter health yet.',
+        tone: 'muted',
+      };
+  }
+};
+
+const configSignal = (state: ConnectionFleetConfigRollout): FleetGovernanceSignal => {
+  switch (state) {
+    case 'configured':
+      return {
+        key: 'config',
+        label: 'Config set',
+        detail: 'This source has configured collection scope.',
+        tone: 'ok',
+      };
+    case 'reported':
+      return {
+        key: 'config',
+        label: 'Config reported',
+        detail: 'This agent is reporting its applied runtime configuration.',
+        tone: 'ok',
+      };
+    case 'paused':
+      return {
+        key: 'config',
+        label: 'Config paused',
+        detail: 'Config changes are not active while this source is paused.',
+        tone: 'muted',
+      };
+    case 'unknown':
+      return {
+        key: 'config',
+        label: 'Config unknown',
+        detail: 'Pulse has not received enough runtime configuration state yet.',
+        tone: 'warning',
+      };
+  }
+};
+
+const credentialSignal = (state: ConnectionFleetCredentialStatus): FleetGovernanceSignal => {
+  switch (state) {
+    case 'verified':
+      return {
+        key: 'credentials',
+        label: 'Credentials verified',
+        detail: 'The current credential path is accepted.',
+        tone: 'ok',
+      };
+    case 'invalid':
+      return {
+        key: 'credentials',
+        label: 'Credentials invalid',
+        detail: 'The current credential path is rejected by the source.',
+        tone: 'critical',
+      };
+    case 'paused':
+      return {
+        key: 'credentials',
+        label: 'Credentials paused',
+        detail: 'Credential checks are paused with this source.',
+        tone: 'muted',
+      };
+    case 'unknown':
+      return {
+        key: 'credentials',
+        label: 'Credentials unknown',
+        detail: 'Pulse has not verified this credential path yet.',
+        tone: 'warning',
+      };
+  }
+};
+
+const updateSignal = (state: ConnectionFleetUpdateStatus): FleetGovernanceSignal => {
+  switch (state) {
+    case 'update-available':
+      return {
+        key: 'updates',
+        label: 'Update available',
+        detail: 'A newer Pulse Agent binary is available for this system.',
+        tone: 'warning',
+      };
+    case 'current':
+      return {
+        key: 'updates',
+        label: 'Update current',
+        detail: 'This agent is already on the current target version.',
+        tone: 'ok',
+      };
+    case 'unknown':
+      return {
+        key: 'updates',
+        label: 'Update unknown',
+        detail: 'Pulse cannot yet compare this agent with the target version.',
+        tone: 'muted',
+      };
+    case 'not-applicable':
+      return {
+        key: 'updates',
+        label: 'No agent update',
+        detail: 'This source is not updated through the Pulse Agent binary rollout.',
+        tone: 'muted',
+      };
+  }
+};
+
+const remoteControlSignal = (state: ConnectionFleetRemoteControl): FleetGovernanceSignal => {
+  switch (state) {
+    case 'enabled':
+      return {
+        key: 'remote-control',
+        label: 'Remote control enabled',
+        detail: 'Pulse command execution is enabled for this agent.',
+        tone: 'info',
+      };
+    case 'disabled':
+      return {
+        key: 'remote-control',
+        label: 'Remote control off',
+        detail: 'Pulse command execution is disabled for this agent.',
+        tone: 'muted',
+      };
+    case 'not-applicable':
+      return {
+        key: 'remote-control',
+        label: 'No remote control',
+        detail: 'This source does not use Pulse Agent command execution.',
+        tone: 'muted',
+      };
+  }
+};
+
+export const fleetGovernanceSignalsForConnection = (
+  connection: Connection,
+): FleetGovernanceSignal[] => {
+  const fleet = fleetGovernanceForConnection(connection);
+  return [
+    enrollmentSignal(fleet.enrollmentState, connection),
+    livenessSignal(fleet.livenessState),
+    versionSignal(fleet.versionDrift),
+    adapterSignal(fleet.adapterHealth),
+    configSignal(fleet.configRollout),
+    credentialSignal(fleet.credentialStatus),
+    updateSignal(fleet.updateStatus),
+    remoteControlSignal(fleet.remoteControl),
+  ];
+};
+
+export const visibleFleetGovernanceSignals = (
+  signals: readonly FleetGovernanceSignal[],
+): FleetGovernanceSignal[] => {
+  const attention = signals.filter(
+    (signal) => signal.tone === 'critical' || signal.tone === 'warning',
+  );
+  const control = signals.filter((signal) => signal.tone === 'info');
+  if (attention.length + control.length > 0) {
+    return [...attention, ...control].slice(0, 3);
+  }
+  return [
+    {
+      key: 'liveness',
+      label: 'Fleet OK',
+      detail:
+        'Enrollment, liveness, adapter health, credentials, and rollout state have no current warnings.',
+      tone: 'ok',
+    },
+  ];
+};
+
 export interface InfrastructureSystemMemberRow {
   id: string;
   name: string;
@@ -206,6 +584,8 @@ export interface InfrastructureSystemMemberRow {
   statusLabel: string;
   statusClassName: string;
   lastActivityText: string;
+  fleetSignals: FleetGovernanceSignal[];
+  fleetHighlights: FleetGovernanceSignal[];
   primary: boolean;
   agentConnection?: Connection;
 }
@@ -224,6 +604,8 @@ export interface InfrastructureSystemRow {
   agentUpdateCount: number;
   lastActivityText: string;
   lastErrorMessage?: string;
+  fleetSignals: FleetGovernanceSignal[];
+  fleetHighlights: FleetGovernanceSignal[];
   enabled: boolean;
   canEdit: boolean;
   canPause: boolean;

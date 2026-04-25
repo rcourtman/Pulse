@@ -286,6 +286,10 @@ work extends shared components instead of creating new local variants.
    flows open as
    secondary interactions from that same destination instead of taking over the
    whole page.
+   The same source-manager workspace may show a compact fleet-governance strip
+   and row-level fleet attention badges, but those badges must be presentation
+   of the canonical `/api/connections` `fleet` object rather than another
+   frontend-owned lifecycle classifier.
    Those secondary views must stay under the same single `Infrastructure`
    sidebar destination, but they may open in governed modal/dialog chrome when
    that preserves the persistent source-manager page behind them.

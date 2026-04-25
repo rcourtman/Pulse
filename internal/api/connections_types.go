@@ -50,6 +50,20 @@ type ConnectionCapabilities struct {
 	SupportsTest  bool `json:"supportsTest"`
 }
 
+// ConnectionFleetGovernance is the canonical fleet-control projection for a
+// connection row. Every field is derived from existing connection/runtime
+// signals; the connections ledger does not persist a second fleet registry.
+type ConnectionFleetGovernance struct {
+	EnrollmentState  string `json:"enrollmentState"`
+	LivenessState    string `json:"livenessState"`
+	VersionDrift     string `json:"versionDrift"`
+	AdapterHealth    string `json:"adapterHealth"`
+	ConfigRollout    string `json:"configRollout"`
+	CredentialStatus string `json:"credentialStatus"`
+	UpdateStatus     string `json:"updateStatus"`
+	RemoteControl    string `json:"remoteControl"`
+}
+
 // ConnectionError is the runtime error shape surfaced on a connection row.
 // Mirrors monitoring.ErrorDetail but lives in the api package so the type
 // stays stable if the internal monitoring shape evolves.
@@ -78,24 +92,25 @@ type ConnectionAgentIdentity struct {
 // per-type shapes that today require separate fetches and separate table
 // renderers.
 type Connection struct {
-	ID                   string                   `json:"id"`
-	Type                 ConnectionType           `json:"type"`
-	Name                 string                   `json:"name"`
-	Address              string                   `json:"address"`
-	HostAliases          []string                 `json:"hostAliases,omitempty"`
-	State                ConnectionState          `json:"state"`
-	StateReason          string                   `json:"stateReason,omitempty"`
-	Enabled              bool                     `json:"enabled"`
-	Surfaces             []string                 `json:"surfaces"`
-	Scope                map[string]bool          `json:"scope"`
-	LastSeen             *time.Time               `json:"lastSeen,omitempty"`
-	LastError            *ConnectionError         `json:"lastError,omitempty"`
-	Source               ConnectionSource         `json:"source"`
-	AgentIdentity        *ConnectionAgentIdentity `json:"agentIdentity,omitempty"`
-	AgentVersion         string                   `json:"agentVersion,omitempty"`
-	ExpectedAgentVersion string                   `json:"expectedAgentVersion,omitempty"`
-	AgentUpdateAvailable bool                     `json:"agentUpdateAvailable,omitempty"`
-	Capabilities         ConnectionCapabilities   `json:"capabilities"`
+	ID                   string                    `json:"id"`
+	Type                 ConnectionType            `json:"type"`
+	Name                 string                    `json:"name"`
+	Address              string                    `json:"address"`
+	HostAliases          []string                  `json:"hostAliases,omitempty"`
+	State                ConnectionState           `json:"state"`
+	StateReason          string                    `json:"stateReason,omitempty"`
+	Enabled              bool                      `json:"enabled"`
+	Surfaces             []string                  `json:"surfaces"`
+	Scope                map[string]bool           `json:"scope"`
+	LastSeen             *time.Time                `json:"lastSeen,omitempty"`
+	LastError            *ConnectionError          `json:"lastError,omitempty"`
+	Source               ConnectionSource          `json:"source"`
+	AgentIdentity        *ConnectionAgentIdentity  `json:"agentIdentity,omitempty"`
+	AgentVersion         string                    `json:"agentVersion,omitempty"`
+	ExpectedAgentVersion string                    `json:"expectedAgentVersion,omitempty"`
+	AgentUpdateAvailable bool                      `json:"agentUpdateAvailable,omitempty"`
+	Fleet                ConnectionFleetGovernance `json:"fleet"`
+	Capabilities         ConnectionCapabilities    `json:"capabilities"`
 }
 
 type ConnectionSystemComponentRole string

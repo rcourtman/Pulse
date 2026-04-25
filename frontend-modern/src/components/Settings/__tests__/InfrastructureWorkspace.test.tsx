@@ -1,7 +1,10 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Connection } from '@/api/connections';
-import type { InfrastructureSystemRow } from '../connectionsTableModel';
+import type {
+  InfrastructureSystemMemberRow,
+  InfrastructureSystemRow,
+} from '../connectionsTableModel';
 import { InfrastructureWorkspace } from '../InfrastructureWorkspace';
 
 const routeState = vi.hoisted(() => ({
@@ -12,6 +15,20 @@ const connectionState = vi.hoisted(() => ({
   connections: [] as Connection[],
   rows: null as InfrastructureSystemRow[] | null,
 }));
+const emptyFleetRow = vi.hoisted(
+  () =>
+    ({
+      fleetSignals: [],
+      fleetHighlights: [],
+    }) as Pick<InfrastructureSystemRow, 'fleetSignals' | 'fleetHighlights'>,
+);
+const emptyFleetMember = vi.hoisted(
+  () =>
+    ({
+      fleetSignals: [],
+      fleetHighlights: [],
+    }) as Pick<InfrastructureSystemMemberRow, 'fleetSignals' | 'fleetHighlights'>,
+);
 const navigateSpy = vi.hoisted(() => vi.fn());
 const presentationPolicyIsReadOnlyMock = vi.hoisted(() => vi.fn(() => false));
 const onboardingMetricsTrackers = vi.hoisted(
@@ -119,6 +136,7 @@ vi.mock('../useConnectionsLedger', () => ({
         agentUpdateCount: 0,
         lastActivityText: '1m ago',
         lastErrorMessage: connection.lastError?.message,
+        ...emptyFleetRow,
         enabled: connection.enabled,
         canEdit: ['pve', 'pbs', 'pmg', 'vmware', 'truenas'].includes(connection.type),
         canPause: connection.capabilities.supportsPause,
@@ -304,8 +322,10 @@ describe('InfrastructureWorkspace', () => {
     expect(within(readiness).getByText('Agent coverage')).toBeInTheDocument();
     expect(within(readiness).getByText('Needs agent')).toBeInTheDocument();
     expect(within(readiness).getByText('Discovery')).toBeInTheDocument();
-    expect(within(readiness).getAllByText('1 system')).toHaveLength(3);
-    expect(within(readiness).getByText('0 systems')).toBeInTheDocument();
+    expect(within(readiness).getByText('Fleet governance')).toBeInTheDocument();
+    expect(within(readiness).getByText('Managed fleet')).toBeInTheDocument();
+    expect(within(readiness).getAllByText('1 system')).toHaveLength(4);
+    expect(within(readiness).getAllByText('0 systems')).toHaveLength(5);
     expect(within(readiness).getByText('Discovery off')).toBeInTheDocument();
     expect(within(readiness).getByRole('button', { name: /Install agents/i })).toBeInTheDocument();
     expect(screen.getByText('Proxmox VE')).toBeInTheDocument();
@@ -380,6 +400,7 @@ describe('InfrastructureWorkspace', () => {
         statusClassName: 'bg-green-100 text-green-800',
         agentUpdateCount: 0,
         lastActivityText: '1m ago',
+        ...emptyFleetRow,
         enabled: true,
         canEdit: true,
         canPause: true,
@@ -402,6 +423,7 @@ describe('InfrastructureWorkspace', () => {
         statusClassName: 'bg-green-100 text-green-800',
         agentUpdateCount: 0,
         lastActivityText: '1m ago',
+        ...emptyFleetRow,
         enabled: true,
         canEdit: false,
         canPause: false,
@@ -424,6 +446,7 @@ describe('InfrastructureWorkspace', () => {
         statusClassName: 'bg-green-100 text-green-800',
         agentUpdateCount: 0,
         lastActivityText: '1m ago',
+        ...emptyFleetRow,
         enabled: true,
         canEdit: false,
         canPause: false,
@@ -543,6 +566,7 @@ describe('InfrastructureWorkspace', () => {
         statusClassName: 'bg-green-100 text-green-800',
         agentUpdateCount: 0,
         lastActivityText: '3s ago',
+        ...emptyFleetRow,
         enabled: true,
         canEdit: true,
         canPause: true,
@@ -562,6 +586,7 @@ describe('InfrastructureWorkspace', () => {
             statusLabel: 'Active',
             statusClassName: 'bg-green-100 text-green-800',
             lastActivityText: '3s ago',
+            ...emptyFleetMember,
             primary: true,
           },
         ],
@@ -753,6 +778,7 @@ describe('InfrastructureWorkspace', () => {
         statusClassName: 'bg-green-100 text-green-800',
         agentUpdateCount: 0,
         lastActivityText: '0s ago',
+        ...emptyFleetRow,
         enabled: true,
         canEdit: false,
         canPause: false,
@@ -821,6 +847,7 @@ describe('InfrastructureWorkspace', () => {
         statusClassName: 'bg-green-100 text-green-800',
         agentUpdateCount: 1,
         lastActivityText: '1m ago',
+        ...emptyFleetRow,
         enabled: true,
         canEdit: true,
         canPause: true,
@@ -888,6 +915,7 @@ describe('InfrastructureWorkspace', () => {
         statusClassName: 'bg-green-100 text-green-800',
         agentUpdateCount: 0,
         lastActivityText: '1m ago',
+        ...emptyFleetRow,
         enabled: true,
         canEdit: true,
         canPause: true,
@@ -906,6 +934,7 @@ describe('InfrastructureWorkspace', () => {
             statusLabel: 'Active',
             statusClassName: 'bg-green-100 text-green-800',
             lastActivityText: '1m ago',
+            ...emptyFleetMember,
             primary: true,
             agentConnection: dellyAgent,
           },
@@ -919,6 +948,7 @@ describe('InfrastructureWorkspace', () => {
             statusLabel: 'Active',
             statusClassName: 'bg-green-100 text-green-800',
             lastActivityText: '1m ago',
+            ...emptyFleetMember,
             primary: false,
             agentConnection: minipcAgent,
           },

@@ -104,6 +104,50 @@ describe('ConnectionsAPI', () => {
     });
   });
 
+  it('list() preserves fleet governance metadata on connection rows', async () => {
+    const connections: Connection[] = [
+      {
+        id: 'agent:mini-pc',
+        type: 'agent',
+        name: 'mini-pc',
+        address: 'mini-pc',
+        state: 'active',
+        stateReason: '',
+        enabled: true,
+        surfaces: ['host'],
+        scope: { host: true },
+        lastSeen: '2026-04-22T20:00:00Z',
+        lastError: null,
+        source: 'agent',
+        fleet: {
+          enrollmentState: 'enrolled',
+          livenessState: 'active',
+          versionDrift: 'behind',
+          adapterHealth: 'healthy',
+          configRollout: 'reported',
+          credentialStatus: 'verified',
+          updateStatus: 'update-available',
+          remoteControl: 'enabled',
+        },
+        capabilities: { supportsPause: false, supportsScope: false, supportsTest: false },
+      },
+    ];
+    mockedApiFetchJSON.mockResolvedValueOnce({ connections });
+
+    const result = await ConnectionsAPI.list();
+
+    expect(result.connections[0]?.fleet).toEqual({
+      enrollmentState: 'enrolled',
+      livenessState: 'active',
+      versionDrift: 'behind',
+      adapterHealth: 'healthy',
+      configRollout: 'reported',
+      credentialStatus: 'verified',
+      updateStatus: 'update-available',
+      remoteControl: 'enabled',
+    });
+  });
+
   it('list() preserves agent identity metadata on agent-backed connections', async () => {
     const connections: Connection[] = [
       {

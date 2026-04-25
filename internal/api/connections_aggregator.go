@@ -25,6 +25,27 @@ const connectionStaleThreshold = 2 * time.Minute
 // state-derivation stays the same across types.
 var connectionAuthErrorPattern = regexp.MustCompile(`(?i)401|403|unauthori[sz]ed|forbidden|authentication|permission denied|invalid (credentials|token|api key)`)
 
+const (
+	fleetStateActive          = "active"
+	fleetStateBehind          = "behind"
+	fleetStateBlocked         = "blocked"
+	fleetStateConfigured      = "configured"
+	fleetStateCurrent         = "current"
+	fleetStateDegraded        = "degraded"
+	fleetStateDisabled        = "disabled"
+	fleetStateEnabled         = "enabled"
+	fleetStateEnrolled        = "enrolled"
+	fleetStateHealthy         = "healthy"
+	fleetStateInvalid         = "invalid"
+	fleetStateNotApplicable   = "not-applicable"
+	fleetStatePaused          = "paused"
+	fleetStatePending         = "pending"
+	fleetStateReported        = "reported"
+	fleetStateUnknown         = "unknown"
+	fleetStateUpdateAvailable = "update-available"
+	fleetStateVerified        = "verified"
+)
+
 // aggregatorInputs bundles everything the aggregator reads. Separating inputs
 // from the handler makes the aggregator unit-testable without spinning up a
 // monitor or persistence layer.
@@ -93,7 +114,7 @@ func buildPVEConnection(inst config.PVEInstance, health map[string]monitoring.In
 	}
 	h := health["pve::"+inst.Name]
 	state, reason, lastSeen, lastError := deriveConnectionState(enabled, h, now)
-	return Connection{
+	return withFleetGovernance(Connection{
 		ID:           "pve:" + inst.Name,
 		Type:         ConnectionTypePVE,
 		Name:         inst.Name,
@@ -108,7 +129,7 @@ func buildPVEConnection(inst config.PVEInstance, health map[string]monitoring.In
 		LastError:    lastError,
 		Source:       sourceFromString(inst.Source),
 		Capabilities: ConnectionCapabilities{SupportsPause: true, SupportsScope: true, SupportsTest: true},
-	}
+	})
 }
 
 func buildPBSConnection(inst config.PBSInstance, health map[string]monitoring.InstanceHealth, now time.Time) Connection {
@@ -124,7 +145,7 @@ func buildPBSConnection(inst config.PBSInstance, health map[string]monitoring.In
 	}
 	h := health["pbs::"+inst.Name]
 	state, reason, lastSeen, lastError := deriveConnectionState(enabled, h, now)
-	return Connection{
+	return withFleetGovernance(Connection{
 		ID:           "pbs:" + inst.Name,
 		Type:         ConnectionTypePBS,
 		Name:         inst.Name,
@@ -139,7 +160,7 @@ func buildPBSConnection(inst config.PBSInstance, health map[string]monitoring.In
 		LastError:    lastError,
 		Source:       sourceFromString(inst.Source),
 		Capabilities: ConnectionCapabilities{SupportsPause: true, SupportsScope: true, SupportsTest: true},
-	}
+	})
 }
 
 func buildPMGConnection(inst config.PMGInstance, health map[string]monitoring.InstanceHealth, now time.Time) Connection {
@@ -153,7 +174,7 @@ func buildPMGConnection(inst config.PMGInstance, health map[string]monitoring.In
 	}
 	h := health["pmg::"+inst.Name]
 	state, reason, lastSeen, lastError := deriveConnectionState(enabled, h, now)
-	return Connection{
+	return withFleetGovernance(Connection{
 		ID:           "pmg:" + inst.Name,
 		Type:         ConnectionTypePMG,
 		Name:         inst.Name,
@@ -168,7 +189,7 @@ func buildPMGConnection(inst config.PMGInstance, health map[string]monitoring.In
 		LastError:    lastError,
 		Source:       ConnectionSourceManual,
 		Capabilities: ConnectionCapabilities{SupportsPause: true, SupportsScope: true, SupportsTest: true},
-	}
+	})
 }
 
 func buildVMwareConnection(inst config.VMwareVCenterInstance, health map[string]monitoring.InstanceHealth, now time.Time) Connection {
@@ -185,7 +206,7 @@ func buildVMwareConnection(inst config.VMwareVCenterInstance, health map[string]
 	if port == 0 {
 		port = 443
 	}
-	return Connection{
+	return withFleetGovernance(Connection{
 		ID:           "vmware:" + inst.ID,
 		Type:         ConnectionTypeVMware,
 		Name:         inst.Name,
@@ -200,7 +221,7 @@ func buildVMwareConnection(inst config.VMwareVCenterInstance, health map[string]
 		LastError:    lastError,
 		Source:       ConnectionSourceManual,
 		Capabilities: ConnectionCapabilities{SupportsPause: true, SupportsScope: true, SupportsTest: true},
-	}
+	})
 }
 
 func buildTrueNASConnection(inst config.TrueNASInstance, health map[string]monitoring.InstanceHealth, now time.Time) Connection {
@@ -225,7 +246,7 @@ func buildTrueNASConnection(inst config.TrueNASInstance, health map[string]monit
 			port = 80
 		}
 	}
-	return Connection{
+	return withFleetGovernance(Connection{
 		ID:           "truenas:" + inst.ID,
 		Type:         ConnectionTypeTrueNAS,
 		Name:         inst.Name,
@@ -240,7 +261,7 @@ func buildTrueNASConnection(inst config.TrueNASInstance, health map[string]monit
 		LastError:    lastError,
 		Source:       ConnectionSourceManual,
 		Capabilities: ConnectionCapabilities{SupportsPause: true, SupportsScope: true, SupportsTest: true},
-	}
+	})
 }
 
 // buildAgentConnection derives a connection row from an agent Host record.
@@ -284,7 +305,7 @@ func buildAgentConnection(host models.Host, expectedAgentVersion string, now tim
 		state = ConnectionStateActive
 	}
 
-	return Connection{
+	return withFleetGovernance(Connection{
 		ID:                   "agent:" + host.ID,
 		Type:                 ConnectionTypeAgent,
 		Name:                 name,
@@ -303,7 +324,115 @@ func buildAgentConnection(host models.Host, expectedAgentVersion string, now tim
 		ExpectedAgentVersion: expectedAgentVersion,
 		AgentUpdateAvailable: updateAvailable,
 		Capabilities:         ConnectionCapabilities{SupportsPause: false, SupportsScope: false, SupportsTest: false},
+	})
+}
+
+func withFleetGovernance(conn Connection) Connection {
+	conn.Fleet = deriveConnectionFleetGovernance(conn)
+	return conn
+}
+
+func deriveConnectionFleetGovernance(conn Connection) ConnectionFleetGovernance {
+	return ConnectionFleetGovernance{
+		EnrollmentState:  connectionFleetEnrollmentState(conn),
+		LivenessState:    string(conn.State),
+		VersionDrift:     connectionFleetVersionDrift(conn),
+		AdapterHealth:    connectionFleetAdapterHealth(conn),
+		ConfigRollout:    connectionFleetConfigRollout(conn),
+		CredentialStatus: connectionFleetCredentialStatus(conn),
+		UpdateStatus:     connectionFleetUpdateStatus(conn),
+		RemoteControl:    connectionFleetRemoteControl(conn),
 	}
+}
+
+func connectionFleetEnrollmentState(conn Connection) string {
+	if conn.Type == ConnectionTypeAgent {
+		if conn.LastSeen == nil {
+			return fleetStatePending
+		}
+		return fleetStateEnrolled
+	}
+	if !conn.Enabled {
+		return fleetStatePaused
+	}
+	return fleetStateConfigured
+}
+
+func connectionFleetVersionDrift(conn Connection) string {
+	if conn.Type != ConnectionTypeAgent {
+		return fleetStateNotApplicable
+	}
+	if strings.TrimSpace(conn.AgentVersion) == "" || strings.TrimSpace(conn.ExpectedAgentVersion) == "" {
+		return fleetStateUnknown
+	}
+	if conn.AgentUpdateAvailable {
+		return fleetStateBehind
+	}
+	return fleetStateCurrent
+}
+
+func connectionFleetAdapterHealth(conn Connection) string {
+	switch conn.State {
+	case ConnectionStateActive:
+		return fleetStateHealthy
+	case ConnectionStateStale, ConnectionStatePending:
+		return fleetStateDegraded
+	case ConnectionStateUnauthorized, ConnectionStateUnreachable:
+		return fleetStateBlocked
+	case ConnectionStatePaused:
+		return fleetStatePaused
+	default:
+		return fleetStateUnknown
+	}
+}
+
+func connectionFleetConfigRollout(conn Connection) string {
+	if !conn.Enabled || conn.State == ConnectionStatePaused {
+		return fleetStatePaused
+	}
+	if conn.Type != ConnectionTypeAgent {
+		return fleetStateConfigured
+	}
+	if conn.LastSeen == nil {
+		return fleetStateUnknown
+	}
+	return fleetStateReported
+}
+
+func connectionFleetCredentialStatus(conn Connection) string {
+	switch conn.State {
+	case ConnectionStateUnauthorized:
+		return fleetStateInvalid
+	case ConnectionStatePending:
+		return fleetStateUnknown
+	case ConnectionStatePaused:
+		return fleetStatePaused
+	default:
+		return fleetStateVerified
+	}
+}
+
+func connectionFleetUpdateStatus(conn Connection) string {
+	if conn.Type != ConnectionTypeAgent {
+		return fleetStateNotApplicable
+	}
+	if conn.AgentUpdateAvailable {
+		return fleetStateUpdateAvailable
+	}
+	if strings.TrimSpace(conn.AgentVersion) == "" || strings.TrimSpace(conn.ExpectedAgentVersion) == "" {
+		return fleetStateUnknown
+	}
+	return fleetStateCurrent
+}
+
+func connectionFleetRemoteControl(conn Connection) string {
+	if conn.Type != ConnectionTypeAgent {
+		return fleetStateNotApplicable
+	}
+	if conn.AgentIdentity != nil && conn.AgentIdentity.CommandsEnabled {
+		return fleetStateEnabled
+	}
+	return fleetStateDisabled
 }
 
 func connectionAgentIdentityForHost(host models.Host) *ConnectionAgentIdentity {

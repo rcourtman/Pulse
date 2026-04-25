@@ -4039,6 +4039,112 @@
           "kind": "file"
         }
       ]
+    },
+    {
+      "id": "L22",
+      "name": "Fleet governance and rollout control",
+      "target_score": 6,
+      "current_score": 6,
+      "status": "partial",
+      "completion": {
+        "state": "bounded-residual",
+        "summary": "Fleet governance and rollout control now has a first-class governed floor: /api/connections carries enrollment, liveness, version drift, adapter health, config rollout, credential status, update posture, and remote-control posture as a canonical fleet projection, and Infrastructure systems surfaces those facts as a central fleet-governance strip plus row-level attention signals without paid-surface or monitor-count gating. Deeper desired-vs-applied config drift, staged rollout operations, richer credential rotation state, and command-policy enforcement remain a named post-RC hardening track.",
+        "tracking": [
+          {
+            "kind": "lane-followup",
+            "id": "fleet-governance-rollout-control-post-rc-hardening"
+          }
+        ]
+      },
+      "blockers": [],
+      "subsystems": [],
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/subsystems/agent-lifecycle.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/subsystems/api-contracts.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/subsystems/frontend-primitives.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/subsystems/registry.json",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/subsystems/storage-recovery.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/V6_BRIDGE_RELEASE_FOUNDATION_SPEC.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/api/__tests__/connections.test.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/api/connections.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/components/Settings/__tests__/InfrastructureSourceManager.test.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/components/Settings/__tests__/useConnectionsLedger.test.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/components/Settings/connectionsTableModel.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/components/Settings/InfrastructureSourceManager.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/components/Settings/useConnectionsLedger.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/connections_aggregator.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/connections_aggregator_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/connections_types.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/contract_test.go",
+          "kind": "file"
+        }
+      ]
     }
   ],
   "release_gates": [
@@ -4747,6 +4853,17 @@
       "subsystem_ids": []
     },
     {
+      "id": "fleet-governance-rollout-control-post-rc-hardening",
+      "summary": "Track broader fleet-governance rollout control beyond the current fleet projection floor, including desired-versus-applied config drift, staged config rollout state, richer credential rotation/expiry health, agent command-policy enforcement, and runtime proof across remote-control safety states.",
+      "owner": "project-owner",
+      "status": "planned",
+      "recorded_at": "2026-04-25",
+      "lane_ids": [
+        "L22"
+      ],
+      "subsystem_ids": []
+    },
+    {
       "id": "platform-admission-execution-post-rc-hardening",
       "summary": "Track broader platform-admission execution beyond the current first-lab-ready support-floor projection, including live vCenter proof before VMware can move to supported, recovery/control expansion, and future admitted-platform proof across setup, canonical projections, alerts, assistant read, and bounded control.",
       "owner": "project-owner",
@@ -4780,54 +4897,8 @@
       "subsystem_ids": []
     }
   ],
-  "coverage_gaps": [
-    {
-      "id": "fleet-governance-v1",
-      "summary": "L16 covers install and registration continuity, but the governed map still underrepresents fleet governance primitives such as enrollment state, version drift, adapter health, config rollout, credential status, and remote control-plane safety.",
-      "owner": "project-owner",
-      "status": "planned",
-      "recorded_at": "2026-03-17",
-      "lane_ids": [
-        "L16"
-      ],
-      "subsystem_ids": [
-        "agent-lifecycle"
-      ],
-      "proposed_resolution": "lane-expansion",
-      "coverage_impact": 10,
-      "evidence": [
-        {
-          "repo": "pulse",
-          "path": "docs/release-control/v6/internal/subsystems/agent-lifecycle.md",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse",
-          "path": "docs/release-control/v6/internal/V6_BRIDGE_RELEASE_FOUNDATION_SPEC.md",
-          "kind": "file"
-        }
-      ]
-    }
-  ],
-  "candidate_lanes": [
-    {
-      "id": "fleet-governance-rollout-control",
-      "name": "Fleet governance and rollout control",
-      "summary": "Expand the current fleet lane from install and lifecycle continuity into governed enrollment, drift, adapter-health, config-rollout, and credential-status control surfaces.",
-      "status": "planned",
-      "recorded_at": "2026-03-17",
-      "target_id": "v6-product-lane-expansion",
-      "current_lane_ids": [
-        "L16"
-      ],
-      "coverage_gap_ids": [
-        "fleet-governance-v1"
-      ],
-      "subsystem_ids": [
-        "agent-lifecycle"
-      ]
-    }
-  ],
+  "coverage_gaps": [],
+  "candidate_lanes": [],
   "work_claims": [],
   "open_decisions": [],
   "source_of_truth_file": "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md",
