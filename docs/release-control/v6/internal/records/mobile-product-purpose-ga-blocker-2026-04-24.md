@@ -52,3 +52,23 @@ On 2026-04-24, the redesigned candidate passed the iOS simulator release proof w
 - Result bundle: `/Volumes/Development/pulse/.local-build-cache/pulse-mobile/tmp/pulse-mobile-ios-proof-UeQIDD/PulseUITests.xcresult`
 
 The same-day physical iPad proof could not be rerun after the redesign because Xcode only reported the paired iPad as unavailable (`tunnelState=unavailable`, last connected at 2026-04-24T20:13:00.000Z). The gate therefore remains blocked on fresh physical-device proof for the current candidate.
+
+On 2026-04-25, the build 4 source and local proof harness were rechecked without generating a release or store submission:
+
+- `cd /Volumes/Development/pulse/repos/pulse-mobile && npm run release:readiness`
+- `cd /Volumes/Development/pulse/repos/pulse-mobile && npm run release:probe:ios:device -- --require-unlocked`
+- `cd /Volumes/Development/pulse/repos/pulse-mobile && adb devices -l`
+- `cd /Volumes/Development/pulse/repos/pulse-mobile && adb mdns services`
+- `cd /Volumes/Development/pulse/repos/pulse-mobile && npm run typecheck`
+- `cd /Volumes/Development/pulse/repos/pulse-mobile && npm test -- --runInBand`
+
+Results:
+
+- Release-readiness metadata still matches app build 4 and keeps public release blocked because physical Android and iOS evidence is stale after the companion-role redesign.
+- TypeScript passed.
+- Mobile app tests passed: 131 suites, 883 tests.
+- Mobile script tests passed: 109 tests.
+- The connected iOS physical-device record still could not clear proof availability: `devicectl` listed the paired iPad as `tunnelState=unavailable`, with the same last connection timestamp from 2026-04-24.
+- ADB only listed the unsuitable Android TV emulator. The only discovered wireless ADB service (`192.168.0.119:45873`) refused connection, so no physical Android proof target was reachable.
+
+The source and simulator-era product framing are coherent with the resolved companion role, but the release gate remains blocked. Passing this gate still requires fresh physical-device walkthrough/proof on the current candidate, including the native status, alerts, push/device trust, Relay-backed Open Pulse handoff, contextual recovery, and stale/revoked access behavior.
