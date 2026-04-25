@@ -582,6 +582,10 @@ approval consumers must treat the approval queue as `soonest expiry first`,
 then higher risk, then older request time, rather than inheriting raw API
 order. Approval-linked findings must follow that same ordering so multi-approval
 `Review` actions jump to the most urgent finding instead of an arbitrary one.
+Patrol fix approvals also inherit the unified action-governance preflight
+contract: queued fixes must keep their plan-level dry-run availability, safety
+checks, verification steps, approval policy, and action id in the shared
+approval/action-audit model instead of storing Patrol-only execution context.
 That same store now owns the Patrol dashboard load bundle as well, so the
 page refresh path stays aligned on a single orchestrated AI bundle instead of
 repeating the individual summary, findings, approval, and correlation fetches

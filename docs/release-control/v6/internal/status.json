@@ -3767,6 +3767,97 @@
           "kind": "file"
         }
       ]
+    },
+    {
+      "id": "L20",
+      "name": "Action governance and auditability",
+      "target_score": 6,
+      "current_score": 6,
+      "status": "partial",
+      "completion": {
+        "state": "bounded-residual",
+        "summary": "Action governance now has a first-class governed floor: tool capability declarations, approval-backed action plans, plan-level preflight and dry-run posture, fail-closed action-audit normalization, bounded lifecycle events, and API-visible action audit preflight are owned by the shared AI, API, security, Patrol, and unified-resource contracts. Broader enterprise policy execution, richer dry-run providers, multi-actor approvals, and surfaced action-history workflows remain a named post-RC hardening track.",
+        "tracking": [
+          {
+            "kind": "lane-followup",
+            "id": "action-governance-auditability-post-rc-hardening"
+          }
+        ]
+      },
+      "blockers": [],
+      "subsystems": [],
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/subsystems/ai-runtime.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/subsystems/api-contracts.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/subsystems/patrol-intelligence.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/subsystems/security-privacy.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/subsystems/unified-resources.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/V6_BRIDGE_RELEASE_FOUNDATION_SPEC.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/ai/approval/store.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/ai/approval/store_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/ai/tools/action_audit.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/contract_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/unifiedresources/actions.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/unifiedresources/actions_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/unifiedresources/store.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/unifiedresources/store_test.go",
+          "kind": "file"
+        }
+      ]
     }
   ],
   "release_gates": [
@@ -4464,6 +4555,17 @@
       "subsystem_ids": []
     },
     {
+      "id": "action-governance-auditability-post-rc-hardening",
+      "summary": "Track broader action-governance hardening beyond the current canonical action-audit floor, including richer provider dry-runs, enterprise policy execution, multi-actor or MFA approval chains, surfaced action-history workflows, and deeper safe-execution contracts for future controlled operations.",
+      "owner": "project-owner",
+      "status": "planned",
+      "recorded_at": "2026-04-25",
+      "lane_ids": [
+        "L20"
+      ],
+      "subsystem_ids": []
+    },
+    {
       "id": "policy-aware-data-governance-post-rc-hardening",
       "summary": "Track broader policy-aware data-governance hardening beyond the current resource-policy floor, including enterprise DLP posture, provider-retention disclosure, non-resource prompt-secret detection, and additional external-model boundary proof where future paid or hosted AI surfaces add new data paths.",
       "owner": "project-owner",
@@ -4487,37 +4589,6 @@
     }
   ],
   "coverage_gaps": [
-    {
-      "id": "action-governance-and-audit",
-      "summary": "v6 has approvals and AI surfaces, but it lacks a governed action model covering declared capabilities, planning and dry-run boundaries, approval requirements, audit trail ownership, and safe execution contracts.",
-      "owner": "project-owner",
-      "status": "planned",
-      "recorded_at": "2026-03-17",
-      "lane_ids": [
-        "L6",
-        "L14"
-      ],
-      "subsystem_ids": [
-        "ai-runtime",
-        "api-contracts",
-        "patrol-intelligence",
-        "security-privacy"
-      ],
-      "proposed_resolution": "new-lane",
-      "coverage_impact": 14,
-      "evidence": [
-        {
-          "repo": "pulse",
-          "path": "docs/release-control/v6/internal/subsystems/ai-runtime.md",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse",
-          "path": "docs/release-control/v6/internal/V6_BRIDGE_RELEASE_FOUNDATION_SPEC.md",
-          "kind": "file"
-        }
-      ]
-    },
     {
       "id": "fleet-governance-v1",
       "summary": "L16 covers install and registration continuity, but the governed map still underrepresents fleet governance primitives such as enrollment state, version drift, adapter health, config rollout, credential status, and remote control-plane safety.",
@@ -4651,27 +4722,6 @@
     }
   ],
   "candidate_lanes": [
-    {
-      "id": "action-governance-auditability",
-      "name": "Action governance and auditability",
-      "summary": "Promote action capability declaration, plan and dry-run state, approval requirements, safe execution boundaries, and audit ownership into a dedicated governed lane.",
-      "status": "planned",
-      "recorded_at": "2026-03-17",
-      "target_id": "v6-product-lane-expansion",
-      "current_lane_ids": [
-        "L6",
-        "L14"
-      ],
-      "coverage_gap_ids": [
-        "action-governance-and-audit"
-      ],
-      "subsystem_ids": [
-        "ai-runtime",
-        "api-contracts",
-        "patrol-intelligence",
-        "security-privacy"
-      ]
-    },
     {
       "id": "fleet-governance-rollout-control",
       "name": "Fleet governance and rollout control",

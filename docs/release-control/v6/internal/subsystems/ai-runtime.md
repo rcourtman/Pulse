@@ -101,7 +101,10 @@ runtime cost control, and shared AI transport surfaces.
    `internal/ai/tools/executor.go` instead of maintaining hand-written
    prompt-only tool lists, and frontend approval cards must surface backend
    approval risk/description without hiding a pending approval when skip or
-   deny fails.
+   deny fails. Action-producing tools must also persist the unified
+   `ActionPlan.Preflight` dry-run boundary through
+   `internal/ai/tools/action_audit.go` rather than leaving dry-run availability
+   as chat-only text.
 9. Keep self-hosted Patrol quickstart messaging aligned with backend runtime
    truth: the governed quickstart contract is Patrol-only first-run
    acceleration on installs with an activated entitlement and
@@ -403,6 +406,12 @@ runtime must carry that approval identifier into the final
 `agentexec.ExecuteCommandPayload` so the host agent can re-check the shared
 command policy locally and fail closed on blocked or still-unapproved commands
 instead of treating control-plane approval as an implicit bypass.
+The same action-audit boundary now also requires persisted action records to
+carry a normalized plan and preflight: action id, request id, capability,
+approval policy, dry-run availability, safety checks, verification steps, and
+timestamps are normalized before persistence by the unified-resource store, so
+runtime callers cannot publish an execution audit that skipped the canonical
+planning contract.
 The same ownership includes the Pulse query tool schema under
 `internal/ai/tools/`: topology-query input names must stay canonical inside
 the AI runtime itself, so new tool arguments such as `max_proxmox_nodes`

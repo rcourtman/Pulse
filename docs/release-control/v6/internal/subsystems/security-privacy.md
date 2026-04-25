@@ -318,6 +318,11 @@ That same token-scope boundary also owns audit-log least privilege: audit
 event, verification, summary, export, and unified action/export audit reads
 must require the dedicated `audit:read` scope instead of inheriting broader
 monitoring or settings-read token access.
+The same security boundary now depends on unified action-audit normalization:
+persisted action records must identify the requester, resource, capability,
+approval policy, preflight dry-run posture, and lifecycle state before they are
+read through audit APIs, so audit history cannot silently accept an unscoped or
+unplanned execution record.
 That same token-scope boundary now also governs Pulse Mobile relay runtime
 credentials: `internal/api/security_tokens.go` must mint only the dedicated
 backend-owned `relay:mobile:access` scope for new mobile relay tokens, and the

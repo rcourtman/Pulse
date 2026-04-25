@@ -395,6 +395,13 @@ AI-only summary payloads, or page-local heuristics.
 
 ## Current State
 
+`actions.go` now owns the canonical action preflight and audit-normalization
+contract. Action plans must carry dry-run availability, safety checks, and
+verification steps through `preflight`, and `RecordActionAudit` plus
+`RecordActionLifecycleEvent` must normalize action id, request id, resource,
+capability, approval policy, timestamps, lifecycle state, and requester before
+records reach durable audit history.
+
 `InfrastructureSummary.tsx` and `infrastructureSummaryModel.ts` now surface
 `degraded` and `alerting` resource counts alongside the existing `online` and
 `offline` totals. `buildInfrastructureResourceCounts` is the canonical owner of
@@ -1872,10 +1879,10 @@ for provider-read breadcrumbs such as VMware tasks and events, plus the
 change model instead of introducing a second event shape, and `RecordChange`
 must stay idempotent by canonical change ID so poller refreshes and replayed
 supplemental snapshots do not duplicate resource history.
-Action plans in `actions.go` now keep stale-plan protection to the canonical
-`resourceVersion`, `policyVersion`, and `planHash` fields, so the durable
-audit record stays minimal and does not need extra relationship-topology
-versioning.
+Action plans in `actions.go` still keep stale-plan protection to the canonical
+`resourceVersion`, `policyVersion`, and `planHash` fields, so stale execution
+checks stay in the shared resource action model rather than provider-local
+helpers.
 The shared change presentation helper also owns the canonical kind, source
 type, and source adapter labels for those timeline entries, so summary cards
 and drawer history surfaces both read the same badge vocabulary instead of

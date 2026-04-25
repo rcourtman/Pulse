@@ -1553,6 +1553,10 @@ The unified action, lifecycle, and export audit reads now also clamp oversized
 `limit` requests to the governed maximum of `1000`, so the control-plane audit
 surface stays bounded even when callers ask for arbitrarily large history
 pages.
+Unified action audit payloads must also expose the normalized action plan
+preflight through `plan.preflight`: API consumers should see whether a dry-run
+was available, what safety checks were recorded, and what verification steps
+remain, instead of inferring action safety from free-form result text.
 Those relationship and timeline payloads now also carry `lastSeenAt` freshness
 and optional metadata through the same owned contract, so the drawer can
 preserve provenance without inventing a separate relationship-detail schema.

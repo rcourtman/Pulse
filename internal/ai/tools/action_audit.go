@@ -67,6 +67,7 @@ func (e *PulseToolExecutor) executeCommandWithAudit(
 		PolicyVersion:   "",
 		PlanHash:        actionPlanHash(actionID, requestCorrelationID, capabilityName, resourceID, payload, reason),
 		Message:         reason,
+		Preflight:       actionAuditPreflight(resourceID, reason, now),
 	}
 	if planFromApproval {
 		plan = mergeApprovedActionPlan(*approvalReq.Plan, plan)
@@ -184,6 +185,7 @@ func (e *PulseToolExecutor) executeNativeActionWithAudit(
 		PolicyVersion:   "",
 		PlanHash:        actionPlanHashForParams(actionID, requestCorrelationID, capabilityName, resourceID, params, reason),
 		Message:         reason,
+		Preflight:       actionAuditPreflight(resourceID, reason, now),
 	}
 	if planFromApproval {
 		plan = mergeApprovedActionPlan(*approvalReq.Plan, plan)
@@ -475,6 +477,18 @@ func cloneActionParams(params map[string]any) map[string]any {
 		cloned[key] = value
 	}
 	return cloned
+}
+
+func actionAuditPreflight(resourceID, reason string, generatedAt time.Time) *unifiedresources.ActionPreflight {
+	return unifiedresources.NormalizeActionPreflight(&unifiedresources.ActionPreflight{
+		Target:            strings.TrimSpace(resourceID),
+		IntendedChange:    strings.TrimSpace(reason),
+		DryRunAvailable:   false,
+		DryRunSummary:     "No provider-supported dry run is available for this action.",
+		SafetyChecks:      []string{"Approval and execution are scoped to the resolved resource."},
+		VerificationSteps: []string{"Read back the target state after execution."},
+		GeneratedAt:       generatedAt,
+	}, unifiedresources.ActionRequest{ResourceID: resourceID, Reason: reason}, unifiedresources.ActionPlan{PlannedAt: generatedAt, Message: reason})
 }
 
 func approvalRecordsForID(approvalID string) []unifiedresources.ActionApprovalRecord {

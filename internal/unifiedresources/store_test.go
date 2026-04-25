@@ -1318,6 +1318,47 @@ func TestMemoryStore_RecordActionAudit_UpsertsByID(t *testing.T) {
 	}
 }
 
+func TestRecordActionAudit_NormalizesGovernedPlan(t *testing.T) {
+	store := newTestStore(t)
+	now := time.Date(2026, 4, 25, 22, 40, 0, 0, time.UTC)
+	record := ActionAuditRecord{
+		ID:        "action-governed-1",
+		CreatedAt: now,
+		UpdatedAt: now,
+		State:     ActionStateExecuting,
+		Request: ActionRequest{
+			ResourceID:     " vm:500 ",
+			CapabilityName: "pulse_control",
+			Reason:         "restart vm",
+			RequestedBy:    "pulse_assistant",
+		},
+	}
+
+	if err := store.RecordActionAudit(record); err != nil {
+		t.Fatalf("RecordActionAudit: %v", err)
+	}
+	results, err := store.GetActionAudits("vm:500", now.Add(-time.Hour), 10)
+	if err != nil {
+		t.Fatalf("GetActionAudits: %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("expected 1 normalized action audit, got %d", len(results))
+	}
+	got := results[0]
+	if got.Request.RequestID != "action-governed-1" || got.Plan.ActionID != "action-governed-1" || got.Plan.RequestID != "action-governed-1" {
+		t.Fatalf("normalized action identity = %#v", got)
+	}
+	if got.Request.ResourceID != "vm:500" {
+		t.Fatalf("normalized resource id = %q, want vm:500", got.Request.ResourceID)
+	}
+	if got.Plan.ApprovalPolicy != ApprovalNone {
+		t.Fatalf("approval policy = %q, want %q", got.Plan.ApprovalPolicy, ApprovalNone)
+	}
+	if got.Plan.Preflight == nil || got.Plan.Preflight.Target != "vm:500" || got.Plan.Preflight.DryRunAvailable {
+		t.Fatalf("normalized preflight = %#v", got.Plan.Preflight)
+	}
+}
+
 func TestSQLiteStore_GetActionAudits_AllWhenResourceIDBlank(t *testing.T) {
 	store := newTestStore(t)
 	now := time.Date(2026, 3, 18, 13, 45, 0, 0, time.UTC)

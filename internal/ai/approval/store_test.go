@@ -184,14 +184,71 @@ func TestCreateApproval_PreservesActionPlanAndContextConfidence(t *testing.T) {
 	if got.Preflight == nil {
 		t.Fatal("preflight was not preserved")
 	}
+	if got.Plan.Preflight == nil {
+		t.Fatal("plan preflight was not populated from approval preflight")
+	}
 	if got.Preflight.Target != "agent:web1 (agent-1)" {
 		t.Fatalf("preflight target = %q, want agent:web1 (agent-1)", got.Preflight.Target)
+	}
+	if got.Plan.Preflight.Target != got.Preflight.Target {
+		t.Fatalf("plan preflight target = %q, want %q", got.Plan.Preflight.Target, got.Preflight.Target)
 	}
 	if got.Preflight.DryRunAvailable {
 		t.Fatal("preflight dry run should remain false")
 	}
 	if len(got.Preflight.SafetyChecks) != 1 {
 		t.Fatalf("preflight safety checks = %+v, want one entry", got.Preflight.SafetyChecks)
+	}
+}
+
+func TestCreateApproval_PopulatesActionPlanPreflightWhenMissing(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "approval-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	store, _ := NewStore(StoreConfig{
+		DataDir:        tmpDir,
+		DefaultTimeout: 5 * time.Minute,
+	})
+
+	req := &ApprovalRequest{
+		ID:         "approval-plan-preflight",
+		Command:    "systemctl restart nginx",
+		TargetType: "agent",
+		TargetID:   "agent-1",
+		TargetName: "web1",
+		Context:    "Restart web service",
+		Plan: &unifiedresources.ActionPlan{
+			ActionID:         "action-plan-preflight",
+			Allowed:          true,
+			RequiresApproval: true,
+			ApprovalPolicy:   unifiedresources.ApprovalAdmin,
+			Message:          "Restart web service",
+			PlanHash:         "hash-plan-preflight",
+		},
+	}
+
+	if err := store.CreateApproval(req); err != nil {
+		t.Fatalf("CreateApproval() error = %v", err)
+	}
+
+	got, ok := store.GetApproval("approval-plan-preflight")
+	if !ok {
+		t.Fatal("approval not found")
+	}
+	if got.Plan == nil || got.Plan.Preflight == nil {
+		t.Fatalf("expected plan preflight to be populated: %+v", got.Plan)
+	}
+	if got.Preflight != got.Plan.Preflight {
+		t.Fatal("approval preflight should share the normalized plan preflight")
+	}
+	if got.Plan.Preflight.Target != "agent:agent-1" {
+		t.Fatalf("preflight target = %q, want agent:agent-1", got.Plan.Preflight.Target)
+	}
+	if got.Plan.Preflight.DryRunAvailable {
+		t.Fatal("generated preflight should explicitly mark dry-run unavailable")
 	}
 }
 

@@ -11428,6 +11428,16 @@ func TestContract_UnifiedActionAuditsJSONSnapshot(t *testing.T) {
 					ResourceVersion:   "rv-1",
 					PolicyVersion:     "pv-1",
 					PlanHash:          "hash-1",
+					Preflight: &unifiedresources.ActionPreflight{
+						Target:            "vm:42",
+						CurrentState:      "online",
+						IntendedChange:    "restart",
+						DryRunAvailable:   false,
+						DryRunSummary:     "No provider-supported dry run is available for this action.",
+						SafetyChecks:      []string{"Approval and execution are scoped to vm:42."},
+						VerificationSteps: []string{"Read back VM status after execution."},
+						GeneratedAt:       now,
+					},
 				},
 				Approvals: []unifiedresources.ActionApprovalRecord{
 					{
@@ -11478,7 +11488,17 @@ func TestContract_UnifiedActionAuditsJSONSnapshot(t *testing.T) {
 					"expiresAt":"2026-03-18T16:05:00Z",
 					"resourceVersion":"rv-1",
 					"policyVersion":"pv-1",
-					"planHash":"hash-1"
+					"planHash":"hash-1",
+					"preflight":{
+						"target":"vm:42",
+						"currentState":"online",
+						"intendedChange":"restart",
+						"dryRunAvailable":false,
+						"dryRunSummary":"No provider-supported dry run is available for this action.",
+						"safetyChecks":["Approval and execution are scoped to vm:42."],
+						"verificationSteps":["Read back VM status after execution."],
+						"generatedAt":"2026-03-18T16:00:00Z"
+					}
 				},
 				"approvals":[
 					{

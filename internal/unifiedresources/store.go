@@ -900,6 +900,12 @@ func (s *SQLiteResourceStore) CountRecentChangesBySourceAdapterFiltered(canonica
 }
 
 func (s *SQLiteResourceStore) RecordActionAudit(record ActionAuditRecord) error {
+	normalized, err := NormalizeActionAuditRecord(record)
+	if err != nil {
+		return err
+	}
+	record = normalized
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -1015,10 +1021,16 @@ func (s *SQLiteResourceStore) GetActionAudits(canonicalID string, since time.Tim
 }
 
 func (s *SQLiteResourceStore) RecordActionLifecycleEvent(event ActionLifecycleEvent) error {
+	normalized, err := NormalizeActionLifecycleEvent(event)
+	if err != nil {
+		return err
+	}
+	event = normalized
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	_, err := s.db.Exec(`
+	_, err = s.db.Exec(`
 		INSERT INTO action_lifecycle_events (action_id, timestamp, state, actor, message)
 		VALUES (?, ?, ?, ?, ?)
 	`, event.ActionID, event.Timestamp, string(event.State), event.Actor, event.Message)
@@ -1403,6 +1415,12 @@ func changeMatchesResource(change ResourceChange, canonicalID string, includeRel
 }
 
 func (m *MemoryStore) RecordActionAudit(record ActionAuditRecord) error {
+	normalized, err := NormalizeActionAuditRecord(record)
+	if err != nil {
+		return err
+	}
+	record = normalized
+
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	for i := range m.actionAudits {
@@ -1437,6 +1455,12 @@ func (m *MemoryStore) GetActionAudits(canonicalID string, since time.Time, limit
 }
 
 func (m *MemoryStore) RecordActionLifecycleEvent(event ActionLifecycleEvent) error {
+	normalized, err := NormalizeActionLifecycleEvent(event)
+	if err != nil {
+		return err
+	}
+	event = normalized
+
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.actionLifecycleEvents = append(m.actionLifecycleEvents, event)

@@ -84,7 +84,7 @@ class SubsystemLookupTest(unittest.TestCase):
             {"v6-rc-cut", "v6-rc-stabilization", "v6-ga-promotion", "v6-product-lane-expansion"},
         )
         self.assertEqual(result["scope"]["control_plane_repo"], "pulse")
-        self.assertEqual(result["status_summary"]["lane_count"], 19)
+        self.assertEqual(result["status_summary"]["lane_count"], 20)
 
         file_entry = result["files"][0]
         matches = {match["subsystem"] for match in file_entry["matches"]}

@@ -59,18 +59,9 @@ type ContextConfidence struct {
 	Evidence []string               `json:"evidence,omitempty"`
 }
 
-// ActionPreflight is the deterministic pre-execution readout shown before
-// approval. It is intentionally explicit when no provider dry-run exists.
-type ActionPreflight struct {
-	Target            string    `json:"target,omitempty"`
-	CurrentState      string    `json:"currentState,omitempty"`
-	IntendedChange    string    `json:"intendedChange,omitempty"`
-	DryRunAvailable   bool      `json:"dryRunAvailable"`
-	DryRunSummary     string    `json:"dryRunSummary,omitempty"`
-	SafetyChecks      []string  `json:"safetyChecks,omitempty"`
-	VerificationSteps []string  `json:"verificationSteps,omitempty"`
-	GeneratedAt       time.Time `json:"generatedAt,omitempty"`
-}
+// ActionPreflight is the unified action-governance preflight readout re-exported
+// here so existing approval API payloads keep their package-level type.
+type ActionPreflight = unifiedresources.ActionPreflight
 
 // ApprovalRequest represents a pending command awaiting user approval.
 type ApprovalRequest struct {
@@ -261,6 +252,20 @@ func (s *Store) CreateApproval(req *ApprovalRequest) error {
 		if req.Plan.ApprovalPolicy == "" && req.Plan.RequiresApproval {
 			req.Plan.ApprovalPolicy = unifiedresources.ApprovalAdmin
 		}
+		if req.Plan.Preflight == nil && req.Preflight != nil {
+			req.Plan.Preflight = req.Preflight
+		}
+		if req.Preflight == nil && req.Plan.Preflight != nil {
+			req.Preflight = req.Plan.Preflight
+		}
+		req.Plan.Preflight = unifiedresources.NormalizeActionPreflight(req.Plan.Preflight, unifiedresources.ActionRequest{
+			RequestID:      req.Plan.RequestID,
+			ResourceID:     approvalResourceID(req.TargetType, req.TargetID, req.TargetName),
+			CapabilityName: approvalCapabilityName(req.TargetType),
+			Reason:         req.Context,
+			RequestedBy:    "pulse_assistant",
+		}, *req.Plan)
+		req.Preflight = req.Plan.Preflight
 	}
 
 	// Assess risk if not set
@@ -910,6 +915,34 @@ func normalizeApprovalTargetType(targetType string) string {
 
 func isUnsupportedApprovalTargetType(targetType string) bool {
 	return unifiedresources.IsUnsupportedLegacyResourceTypeAlias(normalizeApprovalTargetType(targetType))
+}
+
+func approvalResourceID(targetType, targetID, targetName string) string {
+	targetType = strings.TrimSpace(targetType)
+	targetID = strings.TrimSpace(targetID)
+	if targetID == "" {
+		targetID = strings.TrimSpace(targetName)
+	}
+	if targetID == "" {
+		return targetType
+	}
+	if targetType == "" || strings.Contains(targetID, ":") {
+		return targetID
+	}
+	return targetType + ":" + targetID
+}
+
+func approvalCapabilityName(targetType string) string {
+	switch normalizeApprovalTargetType(targetType) {
+	case "docker":
+		return "pulse_docker"
+	case "file":
+		return "pulse_file_edit"
+	case "kubernetes":
+		return "pulse_kubernetes"
+	default:
+		return "pulse_control"
+	}
 }
 
 func canonicalizeApprovalRequest(req *ApprovalRequest) bool {
