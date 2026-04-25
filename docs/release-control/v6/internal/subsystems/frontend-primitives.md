@@ -146,13 +146,17 @@ work extends shared components instead of creating new local variants.
 121. `frontend-modern/src/useAppRuntimeState.ts`
 122. `frontend-modern/src/stores/aiChat.ts`
 123. `frontend-modern/scripts/header-audit.mjs`
+124. `frontend-modern/src/components/Settings/DataHandlingPanel.tsx`
+125. `frontend-modern/src/components/Settings/dataHandlingPanelModel.ts`
 
 ## Shared Boundaries
 
-1. `frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx` shared with `security-privacy`: the general settings privacy panel is both a security/privacy control surface and a canonical settings-shell presentation boundary.
-2. `frontend-modern/src/components/Settings/SecurityAuthPanel.tsx` shared with `security-privacy`: the authentication settings surface is both a security/privacy control surface and a canonical settings-shell presentation boundary.
-3. `frontend-modern/src/components/Settings/SecurityOverviewPanel.tsx` shared with `security-privacy`: the security overview settings surface is both a security/privacy control surface and a canonical settings-shell presentation boundary.
-4. `frontend-modern/src/stores/aiChat.ts` shared with `ai-runtime`: the assistant drawer and session store is both an AI runtime control surface and a canonical app-shell presentation boundary.
+1. `frontend-modern/src/components/Settings/DataHandlingPanel.tsx` shared with `security-privacy`: the data-handling settings surface is both a security/privacy trust surface and a canonical settings-shell presentation boundary.
+2. `frontend-modern/src/components/Settings/dataHandlingPanelModel.ts` shared with `security-privacy`: the data-handling settings model is both a security/privacy posture projection and a canonical settings-shell presentation boundary.
+3. `frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx` shared with `security-privacy`: the general settings privacy panel is both a security/privacy control surface and a canonical settings-shell presentation boundary.
+4. `frontend-modern/src/components/Settings/SecurityAuthPanel.tsx` shared with `security-privacy`: the authentication settings surface is both a security/privacy control surface and a canonical settings-shell presentation boundary.
+5. `frontend-modern/src/components/Settings/SecurityOverviewPanel.tsx` shared with `security-privacy`: the security overview settings surface is both a security/privacy control surface and a canonical settings-shell presentation boundary.
+6. `frontend-modern/src/stores/aiChat.ts` shared with `ai-runtime`: the assistant drawer and session store is both an AI runtime control surface and a canonical app-shell presentation boundary.
 
 ## Extension Points
 
@@ -207,6 +211,10 @@ work extends shared components instead of creating new local variants.
    legacy `/operations/*` links must resolve through the canonical Settings
    routing boundary instead of reviving a standalone Operations utility tab or
    route-local support shell.
+   Data Handling is a trust surface, not a commercial surface. The Settings
+   shell must keep it under the Security group, route it through the canonical
+   registry/header/navigation model, and avoid trial, upgrade, paid-plan, or
+   monitoring-limit copy when commercial presentation is hidden.
    Shared sparkline primitives must also stay CSP-safe by construction:
    `frontend-modern/src/components/shared/InteractiveSparkline.tsx` may use SVG
    attributes and shared state/model helpers for cursor, axis-label, and

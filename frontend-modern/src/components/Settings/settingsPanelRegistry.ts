@@ -112,6 +112,9 @@ export const createSettingsPanelRegistry = (
     component: SETTINGS_PANEL_REGISTRY_LOADERS.SecurityOverviewPanel,
     getProps: context.getSecurityOverviewPanelProps,
   },
+  'security-data-handling': {
+    component: SETTINGS_PANEL_REGISTRY_LOADERS.DataHandlingPanel,
+  },
   'security-auth': {
     component: SETTINGS_PANEL_REGISTRY_LOADERS.SecurityAuthPanel,
     getProps: context.getSecurityAuthPanelProps,

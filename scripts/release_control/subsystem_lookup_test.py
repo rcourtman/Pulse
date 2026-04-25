@@ -2924,7 +2924,10 @@ class SubsystemLookupTest(unittest.TestCase):
         )
         self.assertEqual(
             match["verification_requirement"]["exact_files"],
-            ["frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts"],
+            [
+                "frontend-modern/src/components/Settings/__tests__/dataHandlingPanelModel.test.ts",
+                "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
+            ],
         )
 
     def test_lookup_paths_assigns_settings_dialogs_to_frontend_primitives(self) -> None:
@@ -2952,7 +2955,10 @@ class SubsystemLookupTest(unittest.TestCase):
         )
         self.assertEqual(
             match["verification_requirement"]["exact_files"],
-            ["frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts"],
+            [
+                "frontend-modern/src/components/Settings/__tests__/dataHandlingPanelModel.test.ts",
+                "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
+            ],
         )
 
     def test_lookup_paths_assigns_settings_shell_state_to_frontend_primitives(self) -> None:
@@ -2980,7 +2986,10 @@ class SubsystemLookupTest(unittest.TestCase):
         )
         self.assertEqual(
             match["verification_requirement"]["exact_files"],
-            ["frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts"],
+            [
+                "frontend-modern/src/components/Settings/__tests__/dataHandlingPanelModel.test.ts",
+                "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
+            ],
         )
 
     def test_lookup_paths_assigns_network_settings_panel_to_frontend_primitives(self) -> None:
@@ -3008,7 +3017,10 @@ class SubsystemLookupTest(unittest.TestCase):
         )
         self.assertEqual(
             match["verification_requirement"]["exact_files"],
-            ["frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts"],
+            [
+                "frontend-modern/src/components/Settings/__tests__/dataHandlingPanelModel.test.ts",
+                "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
+            ],
         )
 
     def test_lookup_paths_assigns_network_settings_model_to_frontend_primitives(self) -> None:
@@ -3036,7 +3048,10 @@ class SubsystemLookupTest(unittest.TestCase):
         )
         self.assertEqual(
             match["verification_requirement"]["exact_files"],
-            ["frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts"],
+            [
+                "frontend-modern/src/components/Settings/__tests__/dataHandlingPanelModel.test.ts",
+                "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
+            ],
         )
 
     def test_lookup_paths_assigns_security_auth_panel_to_frontend_primitives(self) -> None:
@@ -3064,7 +3079,10 @@ class SubsystemLookupTest(unittest.TestCase):
         )
         self.assertEqual(
             match["verification_requirement"]["exact_files"],
-            ["frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts"],
+            [
+                "frontend-modern/src/components/Settings/__tests__/dataHandlingPanelModel.test.ts",
+                "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
+            ],
         )
         security_match = next(
             match for match in file_entry["matches"] if match["subsystem"] == "security-privacy"
@@ -3109,7 +3127,10 @@ class SubsystemLookupTest(unittest.TestCase):
         self._assert_environment_lock_lookup(
             "frontend-modern/src/components/Settings/DockerRuntimeSettingsCard.tsx",
             "settings-shell-and-framing",
-            ["frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts"],
+            [
+                "frontend-modern/src/components/Settings/__tests__/dataHandlingPanelModel.test.ts",
+                "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
+            ],
         )
 
     def test_lookup_paths_assigns_environment_lock_badge_to_frontend_primitives(self) -> None:
@@ -3188,7 +3209,10 @@ class SubsystemLookupTest(unittest.TestCase):
             )
             self.assertEqual(
                 match["verification_requirement"]["exact_files"],
-                ["frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts"],
+                [
+                    "frontend-modern/src/components/Settings/__tests__/dataHandlingPanelModel.test.ts",
+                    "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
+                ],
             )
 
     def test_lookup_paths_assigns_organization_sharing_panel_to_organization_settings(self) -> None:

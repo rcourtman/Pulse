@@ -8,6 +8,7 @@ import settingsHeaderMetaSource from '../settingsHeaderMeta.ts?raw';
 import settingsNavCatalogSource from '../settingsNavCatalog.ts?raw';
 import settingsNavigationHookSource from '../useSettingsNavigation.ts?raw';
 import settingsPanelRegistryContextSource from '../settingsPanelRegistryContext.tsx?raw';
+import dataHandlingPanelSource from '../DataHandlingPanel.tsx?raw';
 import infrastructureWorkspaceSource from '../InfrastructureWorkspace.tsx?raw';
 import infrastructureSourceManagerSource from '../InfrastructureSourceManager.tsx?raw';
 import infrastructureSourcePickerSource from '../InfrastructureSourcePicker.tsx?raw';
@@ -137,6 +138,10 @@ describe('settings architecture guardrails', () => {
     expect(systemSettingsPresentationSource).toContain(
       'Unable to update commercial prompt preferences.',
     );
+    expect(dataHandlingPanelSource).not.toContain('Start Trial');
+    expect(dataHandlingPanelSource).not.toContain('higher limits');
+    expect(dataHandlingPanelSource).not.toContain('Upgrade');
+    expect(dataHandlingPanelSource).not.toContain('Pro');
   });
 
   it('keeps infrastructure on a source-manager landing with route-backed dialogs', () => {

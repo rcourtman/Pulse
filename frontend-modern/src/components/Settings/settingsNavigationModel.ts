@@ -26,6 +26,7 @@ export type SettingsTab =
   | 'organization-sharing'
   | 'api'
   | 'security-overview'
+  | 'security-data-handling'
   | 'security-auth'
   | 'security-sso'
   | 'security-roles'
@@ -222,6 +223,7 @@ export function deriveTabFromPath(path: string): SettingsTab {
   if (canonicalPath.includes(LEGACY_INTEGRATIONS_API_PREFIX)) return 'api';
 
   if (canonicalPath.includes('/settings/security-overview')) return 'security-overview';
+  if (canonicalPath.includes('/settings/security-data-handling')) return 'security-data-handling';
   if (canonicalPath.includes('/settings/security-auth')) return 'security-auth';
   if (canonicalPath.includes('/settings/security-sso')) return 'security-sso';
   if (canonicalPath.includes('/settings/security-roles')) return 'security-roles';
@@ -336,6 +338,10 @@ export function deriveTabFromQuery(search: string): SettingsTab | null {
       return 'organization-billing-admin';
     case 'security-overview':
       return 'security-overview';
+    case 'security-data-handling':
+    case 'data-handling':
+    case 'resource-privacy':
+      return 'security-data-handling';
     case 'security-auth':
       return 'security-auth';
     case 'security-sso':

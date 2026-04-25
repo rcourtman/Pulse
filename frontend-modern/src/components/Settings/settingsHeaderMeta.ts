@@ -84,6 +84,11 @@ export const SETTINGS_HEADER_META: SettingsHeaderMetaMap = {
     title: 'Security Overview',
     description: 'View your security posture at a glance and monitor authentication status.',
   },
+  'security-data-handling': {
+    title: 'Data Handling',
+    description:
+      'Review resource classifications, handling boundaries, and redaction coverage.',
+  },
   'security-auth': {
     title: 'Authentication',
     description: 'Manage password-based authentication and credential rotation.',

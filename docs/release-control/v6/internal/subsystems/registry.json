@@ -210,6 +210,22 @@
       ]
     },
     {
+      "path": "frontend-modern/src/components/Settings/DataHandlingPanel.tsx",
+      "rationale": "the data-handling settings surface is both a security/privacy trust surface and a canonical settings-shell presentation boundary",
+      "subsystems": [
+        "frontend-primitives",
+        "security-privacy"
+      ]
+    },
+    {
+      "path": "frontend-modern/src/components/Settings/dataHandlingPanelModel.ts",
+      "rationale": "the data-handling settings model is both a security/privacy posture projection and a canonical settings-shell presentation boundary",
+      "subsystems": [
+        "frontend-primitives",
+        "security-privacy"
+      ]
+    },
+    {
       "path": "frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx",
       "rationale": "the general settings privacy panel is both a security/privacy control surface and a canonical settings-shell presentation boundary",
       "subsystems": [
@@ -2856,6 +2872,8 @@
         "frontend-modern/src/components/Settings/AuditLogPanel.tsx",
         "frontend-modern/src/components/Settings/AuditWebhookPanel.tsx",
         "frontend-modern/src/components/Settings/CopyCommandBlock.tsx",
+        "frontend-modern/src/components/Settings/DataHandlingPanel.tsx",
+        "frontend-modern/src/components/Settings/dataHandlingPanelModel.ts",
         "frontend-modern/src/components/Settings/diagnosticsModel.ts",
         "frontend-modern/src/components/Settings/DiagnosticsPanel.tsx",
         "frontend-modern/src/components/Settings/DiagnosticsResultsPanel.tsx",
@@ -3002,6 +3020,8 @@
               "frontend-modern/src/components/Settings/AuditLogPanel.tsx",
               "frontend-modern/src/components/Settings/AuditWebhookPanel.tsx",
               "frontend-modern/src/components/Settings/CopyCommandBlock.tsx",
+              "frontend-modern/src/components/Settings/DataHandlingPanel.tsx",
+              "frontend-modern/src/components/Settings/dataHandlingPanelModel.ts",
               "frontend-modern/src/components/Settings/diagnosticsModel.ts",
               "frontend-modern/src/components/Settings/DiagnosticsPanel.tsx",
               "frontend-modern/src/components/Settings/DiagnosticsResultsPanel.tsx",
@@ -3049,6 +3069,7 @@
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
+              "frontend-modern/src/components/Settings/__tests__/dataHandlingPanelModel.test.ts",
               "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts"
             ]
           },
@@ -4405,6 +4426,8 @@
         "frontend-modern/src/api/security.ts",
         "frontend-modern/src/components/Settings/APITokenManager.tsx",
         "frontend-modern/src/components/Settings/apiTokenManagerModel.ts",
+        "frontend-modern/src/components/Settings/DataHandlingPanel.tsx",
+        "frontend-modern/src/components/Settings/dataHandlingPanelModel.ts",
         "frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx",
         "frontend-modern/src/components/Settings/QuickSecuritySetup.tsx",
         "frontend-modern/src/components/Settings/SecurityAuthPanel.tsx",
@@ -4483,6 +4506,8 @@
             "match_files": [
               "frontend-modern/src/components/Settings/APITokenManager.tsx",
               "frontend-modern/src/components/Settings/apiTokenManagerModel.ts",
+              "frontend-modern/src/components/Settings/DataHandlingPanel.tsx",
+              "frontend-modern/src/components/Settings/dataHandlingPanelModel.ts",
               "frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx",
               "frontend-modern/src/components/Settings/SecurityAuthPanel.tsx",
               "frontend-modern/src/components/Settings/SecurityOverviewPanel.tsx",
@@ -4492,6 +4517,7 @@
             "test_prefixes": [],
             "exact_files": [
               "frontend-modern/src/components/Settings/__tests__/APITokenManager.test.tsx",
+              "frontend-modern/src/components/Settings/__tests__/dataHandlingPanelModel.test.ts",
               "frontend-modern/src/components/Settings/__tests__/SecurityPostureSummary.test.tsx",
               "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
               "frontend-modern/src/stores/__tests__/systemSettings.test.ts"

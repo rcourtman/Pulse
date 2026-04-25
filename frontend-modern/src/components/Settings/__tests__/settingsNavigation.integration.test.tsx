@@ -25,6 +25,7 @@ const canonicalTabPaths = {
   'organization-sharing': '/settings/organization/sharing',
   api: '/settings/security/api',
   'security-overview': '/settings/security-overview',
+  'security-data-handling': '/settings/security-data-handling',
   'security-auth': '/settings/security-auth',
   'security-sso': '/settings/security-sso',
   'security-roles': '/settings/security-roles',
@@ -122,6 +123,19 @@ describe('settingsNavigation integration scaffold', () => {
     expect(deriveTabFromPath('/settings/system/billing/plan')).toBe('system-billing');
     expect(settingsTabPath('system-billing')).toBe('/settings/system/billing/plan');
     expect(getSettingsNavItem('system-billing')?.hideFromSidebar).toBe(true);
+  });
+
+  it('keeps data handling visible as a non-commercial trust surface', () => {
+    expect(getSettingsNavItem('security-data-handling')?.hideWhenCommercialHidden).not.toBe(true);
+    expect(
+      shouldHideSettingsNavItem('security-data-handling', {
+        hasFeature: hasFeatures([]),
+        runtimeCapabilitiesLoaded: () => true,
+        presentationPolicyHidesCommercial: true,
+        presentationPolicyResolved: true,
+        hostedModeEnabled: false,
+      }),
+    ).toBe(false);
   });
 
   it('hides paid-only self-hosted tabs from free installs', () => {

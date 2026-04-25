@@ -35,6 +35,7 @@ const canonicalTabPaths = {
   'organization-sharing': '/settings/organization/sharing',
   api: '/settings/security/api',
   'security-overview': '/settings/security-overview',
+  'security-data-handling': '/settings/security-data-handling',
   'security-auth': '/settings/security-auth',
   'security-sso': '/settings/security-sso',
   'security-roles': '/settings/security-roles',
@@ -160,6 +161,8 @@ describe('settingsNavigationModel', () => {
       ['?tab=organization-overview', 'organization-overview'],
       ['?tab=organization-billing', 'organization-billing'],
       ['?tab=security-overview', 'security-overview'],
+      ['?tab=data-handling', 'security-data-handling'],
+      ['?tab=resource-privacy', 'security-data-handling'],
       ['?tab=unknown', null],
     ];
     for (const [query, expectedTab] of queryCases) {

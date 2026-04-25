@@ -175,6 +175,12 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
         iconProps: { strokeWidth: 2 },
       },
       {
+        id: 'security-data-handling',
+        label: 'Data Handling',
+        icon: FileText,
+        iconProps: { strokeWidth: 2 },
+      },
+      {
         id: 'api',
         label: 'API Access',
         icon: BadgeCheck,

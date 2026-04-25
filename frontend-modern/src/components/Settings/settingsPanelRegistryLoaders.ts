@@ -7,6 +7,9 @@ export const SETTINGS_PANEL_REGISTRY_LOADERS = {
   DiagnosticsPanel: lazy(() =>
     import('./DiagnosticsPanel').then((m) => ({ default: m.DiagnosticsPanel })),
   ),
+  DataHandlingPanel: lazy(() =>
+    import('./DataHandlingPanel').then((m) => ({ default: m.DataHandlingPanel })),
+  ),
   AuditLogPanel: lazy(() => import('./AuditLogPanel')),
   AuditWebhookPanel: lazy(() =>
     import('./AuditWebhookPanel').then((m) => ({ default: m.AuditWebhookPanel })),

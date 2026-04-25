@@ -2603,6 +2603,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                     "exact_files": [
                         "frontend-modern/src/components/Settings/__tests__/APITokenManager.test.tsx",
                         "frontend-modern/src/components/Settings/__tests__/SecurityPostureSummary.test.tsx",
+                        "frontend-modern/src/components/Settings/__tests__/dataHandlingPanelModel.test.ts",
                         "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
                         "frontend-modern/src/stores/__tests__/systemSettings.test.ts",
                     ],
@@ -3272,6 +3273,7 @@ index 1111111..2222222 100644
                     "allow_same_subsystem_tests": False,
                     "test_prefixes": [],
                     "exact_files": [
+                        "frontend-modern/src/components/Settings/__tests__/dataHandlingPanelModel.test.ts",
                         "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
                     ],
                 }
@@ -3296,6 +3298,7 @@ index 1111111..2222222 100644
                     "allow_same_subsystem_tests": False,
                     "test_prefixes": [],
                     "exact_files": [
+                        "frontend-modern/src/components/Settings/__tests__/dataHandlingPanelModel.test.ts",
                         "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
                     ],
                 }
@@ -3320,6 +3323,7 @@ index 1111111..2222222 100644
                     "allow_same_subsystem_tests": False,
                     "test_prefixes": [],
                     "exact_files": [
+                        "frontend-modern/src/components/Settings/__tests__/dataHandlingPanelModel.test.ts",
                         "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
                     ],
                 }
@@ -3350,6 +3354,7 @@ index 1111111..2222222 100644
                     "allow_same_subsystem_tests": False,
                     "test_prefixes": [],
                     "exact_files": [
+                        "frontend-modern/src/components/Settings/__tests__/dataHandlingPanelModel.test.ts",
                         "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
                     ],
                 }
@@ -3390,7 +3395,10 @@ index 1111111..2222222 100644
         self._assert_environment_lock_boundary_requires_frontend_primitives(
             "frontend-modern/src/components/Settings/DockerRuntimeSettingsCard.tsx",
             "settings-shell-and-framing",
-            ["frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts"],
+            [
+                "frontend-modern/src/components/Settings/__tests__/dataHandlingPanelModel.test.ts",
+                "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
+            ],
         )
 
     def test_environment_lock_badge_change_requires_frontend_primitives(self):
