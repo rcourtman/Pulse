@@ -106,6 +106,7 @@ visibility, and privacy controls to operators.
 6. Keep the shared storage-directory and secure storage-file hardening helper aligned with the crypto manager plus control-plane magic-link key and store handling whenever runtime data-root ownership assumptions change.
 7. Keep auth-env ingestion and shared fingerprint-verifier TLS defaults aligned whenever runtime auth loading or pinned-certificate transport behavior changes.
 8. Keep the Data Handling settings surface neutral and non-commercial: it may show resource policy posture, local-only counts, and redaction coverage, but it must not advertise trials, upgrades, paid plans, or monitoring limits.
+9. Keep operator-facing Data Handling posture aligned with runtime AI/context enforcement: `local-only` resource details must not be sent to external model prompts, and sensitive free-form alert text must use the shared resource-policy redaction helper before leaving the local trust boundary.
 
 ## Current State
 

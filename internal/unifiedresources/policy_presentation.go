@@ -264,6 +264,47 @@ func ResourcePolicyRedactedValue(value string, policy *ResourcePolicy, hints ...
 	return value
 }
 
+// ResourcePolicyRedactedText replaces exact resource identifiers that the
+// canonical resource policy marks for redaction. It is intentionally
+// value-based so alert, prompt, and export summaries cannot leak the same raw
+// hostname, IP, alias, platform ID, or path through nearby free-form text.
+func ResourcePolicyRedactedText(value string, resource Resource) string {
+	value = strings.TrimSpace(value)
+	if value == "" || resource.Policy == nil {
+		return value
+	}
+
+	candidates := resourcePolicyRedactionCandidates(resource)
+	if len(candidates) == 0 {
+		return value
+	}
+
+	sort.Slice(candidates, func(i, j int) bool {
+		if len(candidates[i].value) == len(candidates[j].value) {
+			return candidates[i].value < candidates[j].value
+		}
+		return len(candidates[i].value) > len(candidates[j].value)
+	})
+
+	redacted := value
+	seen := make(map[string]struct{}, len(candidates))
+	for _, candidate := range candidates {
+		if _, ok := seen[candidate.value]; ok {
+			continue
+		}
+		seen[candidate.value] = struct{}{}
+		if !resourcePolicyShouldRedactCandidate(resource.Policy, candidate.hint) {
+			continue
+		}
+		if len([]rune(candidate.value)) < 3 {
+			continue
+		}
+		redacted = strings.ReplaceAll(redacted, candidate.value, ResourcePolicyRedactedLabel)
+	}
+
+	return redacted
+}
+
 // ResourceDisplayName returns the canonical resource display name fallback.
 func ResourceDisplayName(resource Resource) string {
 	if resource.Canonical != nil {
@@ -331,4 +372,57 @@ func ResourcePolicyRequiresGovernedSummary(policy *ResourcePolicy) bool {
 		return true
 	}
 	return len(policy.Routing.Redact) > 0
+}
+
+type resourcePolicyRedactionCandidate struct {
+	hint  ResourceRedactionHint
+	value string
+}
+
+func resourcePolicyShouldRedactCandidate(policy *ResourcePolicy, hint ResourceRedactionHint) bool {
+	if policy == nil {
+		return false
+	}
+	if policy.Routing.Scope == ResourceRoutingScopeLocalOnly {
+		return true
+	}
+	return ResourcePolicyRedacts(policy, hint)
+}
+
+func resourcePolicyRedactionCandidates(resource Resource) []resourcePolicyRedactionCandidate {
+	var candidates []resourcePolicyRedactionCandidate
+	add := func(hint ResourceRedactionHint, values ...string) {
+		for _, value := range values {
+			if value = strings.TrimSpace(value); value != "" {
+				candidates = append(candidates, resourcePolicyRedactionCandidate{hint: hint, value: value})
+			}
+		}
+	}
+
+	add(ResourceRedactionHostname, resource.Name, canonicalHostname(resource))
+	add(ResourceRedactionHostname, resource.Identity.Hostnames...)
+	add(ResourceRedactionIPAddress, resource.Identity.IPAddresses...)
+
+	if resource.Canonical != nil {
+		add(ResourceRedactionHostname, resource.Canonical.DisplayName)
+		add(ResourceRedactionPlatformID, resource.Canonical.PlatformID, resource.Canonical.PrimaryID)
+		add(ResourceRedactionAlias, resource.Canonical.Aliases...)
+	}
+
+	add(ResourceRedactionPlatformID, canonicalPlatformID(resource), resource.ID)
+	add(ResourceRedactionAlias, resource.Identity.ClusterName)
+
+	if resource.Proxmox != nil {
+		add(ResourceRedactionHostname, resource.Proxmox.NodeName)
+		add(ResourceRedactionAlias, resource.Proxmox.ClusterName)
+	}
+	if resource.Kubernetes != nil {
+		add(ResourceRedactionPlatformID, resource.Kubernetes.ClusterID)
+		add(ResourceRedactionAlias, resource.Kubernetes.ClusterName, resource.Kubernetes.SourceName)
+	}
+	if resource.Storage != nil {
+		add(ResourceRedactionPath, resource.Storage.Path)
+	}
+
+	return candidates
 }

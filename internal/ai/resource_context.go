@@ -102,14 +102,16 @@ func (s *Service) buildUnifiedResourceContextForModel(destinationModel string) s
 		workloads := unifiedresources.RefreshCanonicalMetadataSlice(urp.GetWorkloads())
 		allResources := unifiedresources.RefreshCanonicalMetadataSlice(urp.GetAll())
 		policyPosture := unifiedresources.SummarizePolicyPosture(allResources)
-		policyContext := buildUnifiedResourcePolicyContext(policyPosture)
+		policyContext := buildUnifiedResourcePolicyContext(policyPosture, destinationModel)
+		detailedInfrastructure := policyContext.filterDetailedResources(infrastructure)
+		detailedWorkloads := policyContext.filterDetailedResources(workloads)
 		byResourceID := make(map[string]unifiedresources.Resource, len(allResources))
 		for _, resource := range allResources {
 			byResourceID[resource.ID] = resource
 		}
 		sections = policyContext.appendSummarySections(sections)
 
-		if len(infrastructure) > 0 {
+		if len(detailedInfrastructure) > 0 {
 			sections = append(sections, "\n### Infrastructure (Nodes & Hosts)")
 			sections = append(sections, "These are the physical/virtual machines that host workloads.")
 
@@ -120,7 +122,7 @@ func (s *Service) buildUnifiedResourceContextForModel(destinationModel string) s
 			k8sClusters := make([]unifiedresources.Resource, 0)
 			k8sNodes := make([]unifiedresources.Resource, 0)
 
-			for _, resource := range infrastructure {
+			for _, resource := range detailedInfrastructure {
 				switch {
 				case resource.Type == unifiedresources.ResourceTypeK8sCluster:
 					k8sClusters = append(k8sClusters, resource)
@@ -224,7 +226,7 @@ func (s *Service) buildUnifiedResourceContextForModel(destinationModel string) s
 				for _, host := range dockerHosts {
 					containerCount := 0
 					runningCount := 0
-					for _, workload := range workloads {
+					for _, workload := range detailedWorkloads {
 						if workload.ParentID == nil || *workload.ParentID != host.ID {
 							continue
 						}
@@ -288,12 +290,12 @@ func (s *Service) buildUnifiedResourceContextForModel(destinationModel string) s
 			}
 		}
 
-		if len(workloads) > 0 {
+		if len(detailedWorkloads) > 0 {
 			sections = append(sections, "\n### Workloads (VMs & Containers)")
 
 			byParent := make(map[string][]unifiedresources.Resource)
 			noParent := make([]unifiedresources.Resource, 0)
-			for _, workload := range workloads {
+			for _, workload := range detailedWorkloads {
 				if workload.ParentID != nil && strings.TrimSpace(*workload.ParentID) != "" {
 					byParent[*workload.ParentID] = append(byParent[*workload.ParentID], workload)
 					continue
@@ -301,8 +303,8 @@ func (s *Service) buildUnifiedResourceContextForModel(destinationModel string) s
 				noParent = append(noParent, workload)
 			}
 
-			infraMap := make(map[string]unifiedresources.Resource, len(infrastructure))
-			for _, resource := range infrastructure {
+			infraMap := make(map[string]unifiedresources.Resource, len(detailedInfrastructure))
+			for _, resource := range detailedInfrastructure {
 				infraMap[resource.ID] = resource
 			}
 
@@ -362,12 +364,15 @@ func (s *Service) buildUnifiedResourceContextForModel(destinationModel string) s
 
 		storagePools := make([]unifiedresources.Resource, 0)
 		for _, resource := range unifiedresources.RefreshCanonicalMetadataSlice(urp.GetByType(unifiedresources.ResourceTypeStorage)) {
+			if !policyContext.includeResourceDetails(resource) {
+				continue
+			}
 			if resource.Storage != nil && strings.EqualFold(strings.TrimSpace(resource.Storage.Topology), "dataset") {
 				continue
 			}
 			storagePools = append(storagePools, resource)
 		}
-		physicalDisks := unifiedresources.RefreshCanonicalMetadataSlice(urp.GetByType(unifiedresources.ResourceTypePhysicalDisk))
+		physicalDisks := policyContext.filterDetailedResources(unifiedresources.RefreshCanonicalMetadataSlice(urp.GetByType(unifiedresources.ResourceTypePhysicalDisk)))
 		if len(storagePools) > 0 || len(physicalDisks) > 0 {
 			sections = append(sections, "\n### Storage")
 
@@ -449,11 +454,18 @@ func (s *Service) buildUnifiedResourceContextForModel(destinationModel string) s
 
 		if len(activeAlerts) > 0 {
 			sections = append(sections, "\n### Resources with Active Alerts")
+			omittedLocalOnlyAlerts := 0
 			for _, alert := range activeAlerts {
 				displayName := strings.TrimSpace(alert.ResourceName)
+				message := strings.TrimSpace(alert.Message)
 				if resourceID := strings.TrimSpace(alert.ResourceID); resourceID != "" {
 					if resource, ok := byResourceID[resourceID]; ok {
+						if !policyContext.includeResourceDetails(resource) {
+							omittedLocalOnlyAlerts++
+							continue
+						}
 						displayName = unifiedresources.ResourcePolicyLabel(resource.Name, resource.AISafeSummary, resource.Policy)
+						message = unifiedresources.ResourcePolicyRedactedText(message, resource)
 					} else if displayName == "" {
 						displayName = resourceID
 					}
@@ -463,7 +475,10 @@ func (s *Service) buildUnifiedResourceContextForModel(destinationModel string) s
 				}
 
 				sections = append(sections, fmt.Sprintf("- **%s**: %s (%s)",
-					displayName, alert.Message, alert.Level))
+					displayName, message, alert.Level))
+			}
+			if omittedLocalOnlyAlerts > 0 {
+				sections = append(sections, fmt.Sprintf("- %d alerts on local-only resources omitted from external model context by policy.", omittedLocalOnlyAlerts))
 			}
 		}
 
@@ -528,7 +543,7 @@ func (s *Service) buildUnifiedResourceContextForModel(destinationModel string) s
 			}
 		}
 
-		topCPU := unifiedresources.RefreshCanonicalMetadataSlice(urp.GetTopByCPU(3, nil))
+		topCPU := policyContext.filterDetailedResources(unifiedresources.RefreshCanonicalMetadataSlice(urp.GetTopByCPU(3, nil)))
 		if len(topCPU) > 0 {
 			sections = append(sections, "\n### Top CPU Consumers")
 			for i, resource := range topCPU {
@@ -541,7 +556,7 @@ func (s *Service) buildUnifiedResourceContextForModel(destinationModel string) s
 			}
 		}
 
-		topMem := unifiedresources.RefreshCanonicalMetadataSlice(urp.GetTopByMemory(3, nil))
+		topMem := policyContext.filterDetailedResources(unifiedresources.RefreshCanonicalMetadataSlice(urp.GetTopByMemory(3, nil)))
 		if len(topMem) > 0 {
 			sections = append(sections, "\n### Top Memory Consumers")
 			for i, resource := range topMem {
@@ -554,7 +569,7 @@ func (s *Service) buildUnifiedResourceContextForModel(destinationModel string) s
 			}
 		}
 
-		topDisk := unifiedresources.RefreshCanonicalMetadataSlice(urp.GetTopByDisk(3, nil))
+		topDisk := policyContext.filterDetailedResources(unifiedresources.RefreshCanonicalMetadataSlice(urp.GetTopByDisk(3, nil)))
 		if len(topDisk) > 0 {
 			sections = append(sections, "\n### Top Disk Usage")
 			for i, resource := range topDisk {

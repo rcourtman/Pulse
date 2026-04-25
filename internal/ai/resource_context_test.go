@@ -315,9 +315,87 @@ func TestBuildUnifiedResourceContextUsesAISafeSummaryForLocalOnlyResources(t *te
 	}
 }
 
+func TestBuildUnifiedResourceContextForExternalModelOmitsLocalOnlyResourceDetails(t *testing.T) {
+	restricted := unifiedresources.Resource{
+		ID:     "mail-1",
+		Name:   "customer-mail-gateway",
+		Type:   unifiedresources.ResourceTypePMG,
+		Status: unifiedresources.StatusWarning,
+		PMG: &unifiedresources.PMGData{
+			Hostname: "mail-gateway.internal",
+		},
+	}
+	publicNode := unifiedresources.Resource{
+		ID:     "public-1",
+		Name:   "public-node",
+		Type:   unifiedresources.ResourceTypeAgent,
+		Status: unifiedresources.StatusOnline,
+		Tags:   []string{"public"},
+	}
+	resources := unifiedresources.RefreshCanonicalMetadataSlice([]unifiedresources.Resource{restricted, publicNode})
+
+	stats := unifiedresources.ResourceStats{
+		Total: 2,
+		ByType: map[unifiedresources.ResourceType]int{
+			unifiedresources.ResourceTypePMG:   1,
+			unifiedresources.ResourceTypeAgent: 1,
+		},
+		ByStatus: map[unifiedresources.ResourceStatus]int{
+			unifiedresources.StatusWarning: 1,
+			unifiedresources.StatusOnline:  1,
+		},
+	}
+
+	mockURP := &mockUnifiedResourceProvider{
+		getStatsFunc: func() unifiedresources.ResourceStats { return stats },
+		getInfrastructureFunc: func() []unifiedresources.Resource {
+			return resources
+		},
+		getAllFunc: func() []unifiedresources.Resource {
+			return resources
+		},
+		getTopCPUFunc: func(limit int, types []unifiedresources.ResourceType) []unifiedresources.Resource {
+			return []unifiedresources.Resource{restricted}
+		},
+	}
+
+	s := &Service{
+		unifiedResourceProvider: mockURP,
+		alertProvider: &resourceContextAlertProvider{
+			active: []AlertInfo{
+				{
+					ResourceID:   restricted.ID,
+					ResourceName: restricted.Name,
+					Message:      "customer-mail-gateway at mail-gateway.internal is degraded",
+					Level:        "warning",
+				},
+			},
+		},
+	}
+	got := s.buildUnifiedResourceContextForModel("openai:gpt-4o")
+
+	for _, raw := range []string{"customer-mail-gateway", "mail-gateway.internal", "mail gateway resource; status warning; local-only context"} {
+		if strings.Contains(got, raw) {
+			t.Fatalf("expected external context to omit local-only detail %q, got %q", raw, got)
+		}
+	}
+	if !strings.Contains(got, "Local-only resources: 1") {
+		t.Fatalf("expected aggregate local-only count, got %q", got)
+	}
+	if !strings.Contains(got, "External model handling: 1 local-only resources are represented only in aggregate and omitted from detailed context.") {
+		t.Fatalf("expected external model handling note, got %q", got)
+	}
+	if !strings.Contains(got, "1 alerts on local-only resources omitted from external model context by policy.") {
+		t.Fatalf("expected local-only alert omission note, got %q", got)
+	}
+	if strings.Contains(got, "Top CPU Consumers") {
+		t.Fatalf("expected local-only top consumers to be omitted, got %q", got)
+	}
+}
+
 func TestBuildUnifiedResourceContextUsesAISafeSummaryForSensitiveResources(t *testing.T) {
 	sensitiveVM := unifiedresources.Resource{
-		ID:     "vm-1",
+		ID:     "prod-west:101",
 		Name:   "finance-db",
 		Type:   unifiedresources.ResourceTypeVM,
 		Status: unifiedresources.StatusOnline,
@@ -373,6 +451,68 @@ func TestBuildUnifiedResourceContextUsesAISafeSummaryForSensitiveResources(t *te
 	}
 	if strings.Contains(got, "prod-west") {
 		t.Fatalf("expected sensitive cluster name to be hidden, got %q", got)
+	}
+}
+
+func TestBuildUnifiedResourceContextRedactsSensitiveAlertMessageText(t *testing.T) {
+	sensitiveVM := unifiedresources.Resource{
+		ID:     "prod-west:101",
+		Name:   "finance-db",
+		Type:   unifiedresources.ResourceTypeVM,
+		Status: unifiedresources.StatusWarning,
+		Identity: unifiedresources.ResourceIdentity{
+			Hostnames:   []string{"finance-db.internal"},
+			IPAddresses: []string{"10.10.0.5"},
+		},
+		Canonical: &unifiedresources.CanonicalIdentity{
+			PlatformID: "prod-west:101",
+			Aliases:    []string{"finance-db-primary"},
+		},
+	}
+	unifiedresources.RefreshCanonicalMetadata(&sensitiveVM)
+
+	stats := unifiedresources.ResourceStats{
+		Total: 1,
+		ByType: map[unifiedresources.ResourceType]int{
+			unifiedresources.ResourceTypeVM: 1,
+		},
+		ByStatus: map[unifiedresources.ResourceStatus]int{
+			unifiedresources.StatusWarning: 1,
+		},
+	}
+
+	mockURP := &mockUnifiedResourceProvider{
+		getStatsFunc: func() unifiedresources.ResourceStats { return stats },
+		getWorkloadsFunc: func() []unifiedresources.Resource {
+			return []unifiedresources.Resource{sensitiveVM}
+		},
+		getAllFunc: func() []unifiedresources.Resource {
+			return []unifiedresources.Resource{sensitiveVM}
+		},
+	}
+
+	s := &Service{
+		unifiedResourceProvider: mockURP,
+		alertProvider: &resourceContextAlertProvider{
+			active: []AlertInfo{
+				{
+					ResourceID:   sensitiveVM.ID,
+					ResourceName: sensitiveVM.Name,
+					Message:      "finance-db at finance-db.internal / 10.10.0.5 on prod-west:101 is degraded",
+					Level:        "critical",
+				},
+			},
+		},
+	}
+
+	got := s.buildUnifiedResourceContextForModel("anthropic:claude-3-5-sonnet-latest")
+	for _, raw := range []string{"finance-db", "finance-db.internal", "10.10.0.5", "prod-west:101"} {
+		if strings.Contains(got, raw) {
+			t.Fatalf("expected sensitive alert text to redact %q, got %q", raw, got)
+		}
+	}
+	if !strings.Contains(got, unifiedresources.ResourcePolicyRedactedLabel) {
+		t.Fatalf("expected redaction marker in alert context, got %q", got)
 	}
 }
 

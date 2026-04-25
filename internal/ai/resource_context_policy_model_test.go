@@ -48,7 +48,7 @@ func TestBuildUnifiedResourcePolicyContext(t *testing.T) {
 		},
 	})
 
-	context := buildUnifiedResourcePolicyContext(unifiedresources.SummarizePolicyPosture(resources))
+	context := buildUnifiedResourcePolicyContext(unifiedresources.SummarizePolicyPosture(resources), "")
 
 	if !context.hasGovernedResources() {
 		t.Fatal("expected governed posture")
@@ -83,5 +83,51 @@ func TestBuildUnifiedResourcePolicyContext(t *testing.T) {
 	}
 	if !strings.Contains(joined, "Redactions in use: Hostname, IP Address, Platform ID, Alias, Path") {
 		t.Fatalf("expected canonical redaction labels, got %q", joined)
+	}
+}
+
+func TestBuildUnifiedResourcePolicyContextExternalModel(t *testing.T) {
+	localOnly := unifiedresources.Resource{
+		ID:     "mail-1",
+		Name:   "customer-mail",
+		Type:   unifiedresources.ResourceTypePMG,
+		Status: unifiedresources.StatusWarning,
+		PMG:    &unifiedresources.PMGData{Hostname: "mail.internal"},
+	}
+	cloudSummary := unifiedresources.Resource{
+		ID:     "public-1",
+		Name:   "public-node",
+		Type:   unifiedresources.ResourceTypeAgent,
+		Status: unifiedresources.StatusOnline,
+		Tags:   []string{"public"},
+	}
+	resources := unifiedresources.RefreshCanonicalMetadataSlice([]unifiedresources.Resource{localOnly, cloudSummary})
+
+	context := buildUnifiedResourcePolicyContext(unifiedresources.SummarizePolicyPosture(resources), "openai:gpt-4o")
+
+	if !context.externalModel {
+		t.Fatal("expected external model handling")
+	}
+	if context.includeResourceDetails(resources[0]) {
+		t.Fatal("expected local-only resource details to be omitted")
+	}
+	if !context.includeResourceDetails(resources[1]) {
+		t.Fatal("expected cloud-summary resource details to remain available")
+	}
+	if filtered := context.filterDetailedResources(resources); len(filtered) != 1 || filtered[0].ID != "public-1" {
+		t.Fatalf("filtered resources = %#v, want only public-1", filtered)
+	}
+
+	joined := strings.Join(context.appendSummarySections(nil), "\n")
+	if !strings.Contains(joined, "External model handling: 1 local-only resources are represented only in aggregate and omitted from detailed context.") {
+		t.Fatalf("expected external handling summary, got %q", joined)
+	}
+
+	localContext := buildUnifiedResourcePolicyContext(unifiedresources.SummarizePolicyPosture(resources), "ollama:llama3")
+	if localContext.externalModel {
+		t.Fatal("expected ollama destination to stay local")
+	}
+	if !localContext.includeResourceDetails(resources[0]) {
+		t.Fatal("expected local model context to include local-only resource details")
 	}
 }

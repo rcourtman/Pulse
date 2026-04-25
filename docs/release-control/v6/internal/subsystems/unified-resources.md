@@ -135,6 +135,11 @@ The canonical AI-safe summary builder now owns the sensitivity-specific suffix
 phrases for `sensitive` and `restricted` resources, so the backend policy
 contract controls those strings instead of duplicating them inside the summary
 assembly branch.
+Canonical policy presentation and exact-value redaction helpers are owned in
+`internal/unifiedresources/policy_presentation.go`. AI, Patrol, alert, export,
+and prompt consumers must use those helpers for governed resource names,
+hostnames, IP addresses, platform IDs, aliases, and paths instead of inventing
+consumer-local scrubbers.
 Canonical policy posture aggregation is owned here as well. Resource API
 payloads may expose a camelCase transport projection, but the counts must be
 derived from `internal/unifiedresources/policy_posture.go` after canonical

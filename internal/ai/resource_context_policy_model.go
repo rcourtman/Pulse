@@ -5,11 +5,13 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	unifiedresources "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 type unifiedResourcePolicyContext struct {
 	posture           *unifiedresources.PolicyPostureSummary
+	externalModel     bool
 	sensitivityCounts map[unifiedresources.ResourceSensitivity]int
 	routingCounts     map[unifiedresources.ResourceRoutingScope]int
 	localOnlyCount    int
@@ -17,8 +19,9 @@ type unifiedResourcePolicyContext struct {
 	redactionLabels   []string
 }
 
-func buildUnifiedResourcePolicyContext(posture *unifiedresources.PolicyPostureSummary) unifiedResourcePolicyContext {
+func buildUnifiedResourcePolicyContext(posture *unifiedresources.PolicyPostureSummary, destinationModel string) unifiedResourcePolicyContext {
 	context := unifiedResourcePolicyContext{
+		externalModel:     unifiedResourceContextUsesExternalModel(destinationModel),
 		posture:           posture,
 		sensitivityCounts: map[unifiedresources.ResourceSensitivity]int{},
 		routingCounts:     map[unifiedresources.ResourceRoutingScope]int{},
@@ -41,8 +44,39 @@ func buildUnifiedResourcePolicyContext(posture *unifiedresources.PolicyPostureSu
 	return context
 }
 
+func unifiedResourceContextUsesExternalModel(destinationModel string) bool {
+	destinationModel = strings.TrimSpace(destinationModel)
+	if destinationModel == "" {
+		return false
+	}
+
+	provider, _ := config.ParseModelString(destinationModel)
+	return provider != config.AIProviderOllama
+}
+
 func (context unifiedResourcePolicyContext) hasGovernedResources() bool {
 	return context.posture != nil && context.posture.TotalResources > 0
+}
+
+func (context unifiedResourcePolicyContext) includeResourceDetails(resource unifiedresources.Resource) bool {
+	if !context.externalModel || resource.Policy == nil {
+		return true
+	}
+	return resource.Policy.Routing.Scope != unifiedresources.ResourceRoutingScopeLocalOnly
+}
+
+func (context unifiedResourcePolicyContext) filterDetailedResources(resources []unifiedresources.Resource) []unifiedresources.Resource {
+	if !context.externalModel || len(resources) == 0 {
+		return resources
+	}
+
+	filtered := make([]unifiedresources.Resource, 0, len(resources))
+	for _, resource := range resources {
+		if context.includeResourceDetails(resource) {
+			filtered = append(filtered, resource)
+		}
+	}
+	return filtered
 }
 
 func (context unifiedResourcePolicyContext) appendSummarySections(sections []string) []string {
@@ -58,6 +92,9 @@ func (context unifiedResourcePolicyContext) appendSummarySections(sections []str
 	routingParts := unifiedresources.ResourcePolicyRoutingSummaryFromCounts(context.routingCounts)
 	sections = append(sections, fmt.Sprintf("- Routing: %s", strings.Join(routingParts, ", ")))
 	sections = append(sections, fmt.Sprintf("- Local-only resources: %d", context.localOnlyCount))
+	if context.externalModel && context.localOnlyCount > 0 {
+		sections = append(sections, fmt.Sprintf("- External model handling: %d local-only resources are represented only in aggregate and omitted from detailed context.", context.localOnlyCount))
+	}
 
 	if len(context.redactionLabels) > 0 {
 		sections = append(sections, "\n### Policy Redaction Hints")

@@ -416,6 +416,53 @@ func TestResourcePolicyLabelHelpers(t *testing.T) {
 	}
 }
 
+func TestResourcePolicyRedactedText(t *testing.T) {
+	resource := Resource{
+		ID:   "vm:prod-west:101",
+		Name: "finance-db",
+		Type: ResourceTypeVM,
+		Identity: ResourceIdentity{
+			Hostnames:   []string{"finance-db.internal"},
+			IPAddresses: []string{"10.10.0.5"},
+			ClusterName: "prod-west",
+		},
+		Canonical: &CanonicalIdentity{
+			DisplayName: "finance-db",
+			PlatformID:  "prod-west:101",
+			Aliases:     []string{"finance-db-primary"},
+		},
+		Storage: &StorageMeta{
+			Path: "/mnt/pve/finance-db",
+		},
+		Policy: &ResourcePolicy{
+			Sensitivity: ResourceSensitivitySensitive,
+			Routing: ResourceRoutingPolicy{
+				Scope: ResourceRoutingScopeLocalFirst,
+				Redact: []ResourceRedactionHint{
+					ResourceRedactionHostname,
+					ResourceRedactionIPAddress,
+					ResourceRedactionPlatformID,
+					ResourceRedactionAlias,
+					ResourceRedactionPath,
+				},
+			},
+		},
+	}
+
+	got := ResourcePolicyRedactedText(
+		"finance-db at finance-db.internal / 10.10.0.5 moved from prod-west:101 alias finance-db-primary path /mnt/pve/finance-db",
+		resource,
+	)
+	for _, raw := range []string{"finance-db", "finance-db.internal", "10.10.0.5", "prod-west:101", "finance-db-primary", "/mnt/pve/finance-db"} {
+		if strings.Contains(got, raw) {
+			t.Fatalf("expected %q to be redacted from %q", raw, got)
+		}
+	}
+	if count := strings.Count(got, ResourcePolicyRedactedLabel); count < 5 {
+		t.Fatalf("expected redaction markers in %q", got)
+	}
+}
+
 func TestResourceRedactionLabelsFromHints(t *testing.T) {
 	got := ResourceRedactionLabelsFromHints([]ResourceRedactionHint{
 		ResourceRedactionPath,

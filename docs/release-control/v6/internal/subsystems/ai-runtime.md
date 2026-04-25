@@ -80,6 +80,11 @@ runtime cost control, and shared AI transport surfaces.
 3. Preserve explicit coverage for chat, Patrol, remediation, and cost-control behavior when AI runtime changes
 4. Keep discovery scheduling authoritative through `internal/config/ai.go`: `discovery_enabled` and `discovery_interval_hours` must govern both lightweight infrastructure discovery and deep service-discovery background loops
 5. Preserve auditability for outbound model-bound context exports and keep the export record aligned with the prompt boundary that actually reaches the provider
+   External provider-bound unified-resource context must enforce the same
+   data-handling policy the export audit records: `local-only` resources are
+   represented only as aggregate posture and omitted from detailed prompt
+   sections, while sensitive alert text is scrubbed through the shared
+   unified-resource redaction helper before it reaches a non-local model.
 6. Keep AI resource and incident context aligned with the canonical unified-resource timeline before falling back to patrol-local change detectors
 7. Keep platform assistant read/control claims aligned with
    `docs/release-control/v6/internal/PLATFORM_SUPPORT_MODEL.md`. New

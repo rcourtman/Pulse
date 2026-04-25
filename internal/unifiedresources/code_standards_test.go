@@ -562,6 +562,7 @@ func TestResourcePolicyLabelHelpersUsedByAIConsumers(t *testing.T) {
 		},
 		filepath.Join("..", "ai", "resource_context.go"): {
 			"unifiedresources.ResourcePolicyLabel(",
+			"unifiedresources.ResourcePolicyRedactedText(",
 			"unifiedresources.ResourceDisplayName(",
 			"unifiedresources.ResourceClusterName(",
 			"unifiedresources.ResourceIPSummary(",
@@ -577,6 +578,7 @@ func TestResourcePolicyLabelHelpersUsedByAIConsumers(t *testing.T) {
 			"return ResourcePolicyRequiresGovernedSummary(policy)",
 			"Policy: sensitivity=%s, routing=%s",
 			"func ResourcePolicyRedactedValue(value string, policy *ResourcePolicy, hints ...ResourceRedactionHint) string",
+			"func ResourcePolicyRedactedText(value string, resource Resource) string",
 			"const ResourcePolicyRedactedLabel = \"redacted by policy\"",
 			"func ResourceRedactionLabelsFromHints(hints []ResourceRedactionHint) []string",
 			"func ResourceClusterName(resource Resource) string",
