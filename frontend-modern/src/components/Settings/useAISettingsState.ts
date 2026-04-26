@@ -20,7 +20,7 @@ import { hasFeature, loadRuntimeCapabilities } from '@/stores/license';
 import { canOfferCommercialTrial, getUpgradeActionDestination } from '@/stores/licenseCommercial';
 import { presentationPolicyHidesUpgradePrompts } from '@/stores/sessionPresentationPolicy';
 import { notificationStore } from '@/stores/notifications';
-import type { AISettings as AISettingsType, AIProvider, AuthMethod } from '@/types/ai';
+import type { AISettings as AISettingsType, AIProvider, AuthMethod, ModelInfo } from '@/types/ai';
 import { normalizeAIControlLevel, type AIControlLevel } from '@/utils/aiControlLevelPresentation';
 import { getAIProviderDisplayName, getProviderFromModelId } from '@/utils/aiProviderPresentation';
 import {
@@ -53,9 +53,7 @@ export const useAISettingsState = () => {
   const [saving, setSaving] = createSignal(false);
   const [testing, setTesting] = createSignal(false);
 
-  const [availableModels, setAvailableModels] = createSignal<
-    { id: string; name: string; description?: string }[]
-  >([]);
+  const [availableModels, setAvailableModels] = createSignal<ModelInfo[]>([]);
   const [modelsLoading, setModelsLoading] = createSignal(false);
   const [modelsError, setModelsError] = createSignal('');
 

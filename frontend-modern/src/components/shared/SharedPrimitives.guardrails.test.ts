@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import calloutCardSource from '@/components/shared/CalloutCard.tsx?raw';
+import aiModelPickerSource from '@/components/shared/AIModelPicker.tsx?raw';
 import commandPaletteModalSource from '@/components/shared/CommandPaletteModal.tsx?raw';
 import commandPaletteModelSource from '@/components/shared/commandPaletteModel.ts?raw';
 import columnPickerSource from '@/components/shared/ColumnPicker.tsx?raw';
@@ -214,6 +215,21 @@ describe('shared primitive guardrails', () => {
     expect(updatesSettingsPanelSource).not.toContain(
       'class={`p-4 rounded-md border-2 transition-all text-left',
     );
+  });
+
+  it('keeps AI model picking on the shared searchable notable-first primitive', () => {
+    expect(aiModelPickerSource).toContain(
+      "import { SearchField } from '@/components/shared/SearchField';",
+    );
+    expect(aiModelPickerSource).toContain(
+      "import { AI_CHAT_MODEL_SELECTOR_EMPTY_STATE } from '@/utils/aiChatPresentation';",
+    );
+    expect(aiModelPickerSource).toContain('const notableModels = createMemo');
+    expect(aiModelPickerSource).toContain('return props.models.filter((model) => !model.notable');
+    expect(aiModelPickerSource).toContain('Show ${hiddenModelCount()} older models');
+    expect(aiModelPickerSource).toContain("if (!candidate.includes(':'))");
+    expect(aiModelPickerSource).not.toContain('No matching models.');
+    expect(aiModelPickerSource).not.toContain('<select');
   });
 
   it('keeps command palette on shell, runtime, and model owners', () => {

@@ -1,7 +1,7 @@
 import type { SelectionCardOption } from '@/components/shared/SelectionCardGroup';
 import type { AIProviderHealthStatus } from '@/utils/aiProviderHealthPresentation';
 import { getProviderFromModelId } from '@/utils/aiProviderPresentation';
-import type { AIProvider, AISettings as AISettingsType } from '@/types/ai';
+import type { AIProvider, AISettings as AISettingsType, ModelInfo } from '@/types/ai';
 
 export type AIProviderCredentialsFormState = {
   anthropicApiKey: string;
@@ -45,11 +45,7 @@ export type ProviderTestResult = {
   message: string;
 };
 
-export type AIAvailableModel = {
-  id: string;
-  name: string;
-  description?: string;
-};
+export type AIAvailableModel = ModelInfo;
 
 export const AI_PROVIDERS: AIProvider[] = [
   'anthropic',

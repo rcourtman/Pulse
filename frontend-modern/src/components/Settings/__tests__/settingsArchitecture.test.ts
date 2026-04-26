@@ -3,10 +3,13 @@ import settingsSource from '../Settings.tsx?raw';
 import settingsDialogsSource from '../SettingsDialogs.tsx?raw';
 import settingsPageShellSource from '../SettingsPageShell.tsx?raw';
 import aiSettingsDialogsSource from '../AISettingsDialogs.tsx?raw';
+import aiModelSelectionSectionSource from '../AIModelSelectionSection.tsx?raw';
+import aiSettingsModelSource from '../aiSettingsModel.ts?raw';
 import generalSettingsPanelSource from '../GeneralSettingsPanel.tsx?raw';
 import settingsHeaderMetaSource from '../settingsHeaderMeta.ts?raw';
 import settingsNavCatalogSource from '../settingsNavCatalog.ts?raw';
 import settingsNavigationHookSource from '../useSettingsNavigation.ts?raw';
+import aiSettingsStateSource from '../useAISettingsState.ts?raw';
 import settingsPanelRegistryContextSource from '../settingsPanelRegistryContext.tsx?raw';
 import dataHandlingPanelSource from '../DataHandlingPanel.tsx?raw';
 import infrastructureWorkspaceSource from '../InfrastructureWorkspace.tsx?raw';
@@ -143,6 +146,29 @@ describe('settings architecture guardrails', () => {
     expect(dataHandlingPanelSource).not.toContain('higher limits');
     expect(dataHandlingPanelSource).not.toContain('Upgrade');
     expect(dataHandlingPanelSource).not.toContain('Pro');
+  });
+
+  it('keeps system AI model catalogs on the shared searchable picker boundary', () => {
+    expect(aiModelSelectionSectionSource).toContain(
+      "import { AIModelPicker } from '@/components/shared/AIModelPicker';",
+    );
+    expect(aiModelSelectionSectionSource).toContain('const selectableModels =');
+    expect(aiModelSelectionSectionSource).toContain(
+      'isModelProviderConfigured(model.id, state.settings()) || model.id === selected',
+    );
+    expect(aiModelSelectionSectionSource).toContain(
+      'searchPlaceholder="Search configured provider models"',
+    );
+    expect(aiModelSelectionSectionSource).not.toContain('<select');
+    expect(aiModelSelectionSectionSource).not.toContain('<optgroup');
+
+    expect(aiSettingsModelSource).toContain(
+      'import type { AIProvider, AISettings as AISettingsType, ModelInfo }',
+    );
+    expect(aiSettingsModelSource).toContain('export type AIAvailableModel = ModelInfo;');
+    expect(aiSettingsStateSource).toContain(
+      'const [availableModels, setAvailableModels] = createSignal<ModelInfo[]>([]);',
+    );
   });
 
   it('keeps infrastructure on a source-manager landing with route-backed dialogs', () => {

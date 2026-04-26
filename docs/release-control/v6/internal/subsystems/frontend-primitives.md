@@ -543,6 +543,12 @@ work extends shared components instead of creating new local variants.
     the shared settings shell. Shared/default model choices may remain on the
     combined shell only when Assistant and Patrol overrides are presented as
     explicit per-surface overrides instead of a generic advanced AI bucket.
+    Provider model catalogs must remain curated on that same shell:
+    `frontend-modern/src/components/shared/AIModelPicker.tsx` owns the
+    searchable, notable-first model picker pattern, and
+    `AIModelSelectionSection.tsx` must feed it configured-provider models plus
+    the current manual selection instead of rendering raw provider catalogs as
+    plain select options.
 
 ## Forbidden Paths
 

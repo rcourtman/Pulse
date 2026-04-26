@@ -1,11 +1,8 @@
-import { Component, For, Show } from 'solid-js';
+import { Component, Show } from 'solid-js';
 import { AIProviderConfigurationSection } from '@/components/Settings/AIProviderConfigurationSection';
-import {
-  groupModelsByProvider,
-  isAIProviderConfigured,
-  isModelProviderConfigured,
-} from '@/components/Settings/aiSettingsModel';
+import { isModelProviderConfigured } from '@/components/Settings/aiSettingsModel';
 import type { AISettingsState } from '@/components/Settings/useAISettingsState';
+import { AIModelPicker } from '@/components/shared/AIModelPicker';
 import { formField, labelClass, controlClass } from '@/components/shared/Form';
 import { AI_SETTINGS_MODEL_OVERRIDES_TITLE } from '@/utils/aiSettingsPresentation';
 import { getAIProviderDisplayName, getProviderFromModelId } from '@/utils/aiProviderPresentation';
@@ -16,7 +13,31 @@ interface AIModelSelectionSectionProps {
 
 export const AIModelSelectionSection: Component<AIModelSelectionSectionProps> = (props) => {
   const { state } = props;
-  const groupedModels = () => Array.from(groupModelsByProvider(state.availableModels()).entries());
+  const modelLabel = (modelId: string) => {
+    const trimmed = modelId.trim();
+    if (!trimmed) {
+      return '';
+    }
+    const match = state.availableModels().find((model) => model.id === trimmed);
+    return match?.name || trimmed.split(':').pop() || trimmed;
+  };
+  const selectableModels = (selectedModel: string) => {
+    const selected = selectedModel.trim();
+    return state
+      .availableModels()
+      .filter(
+        (model) => isModelProviderConfigured(model.id, state.settings()) || model.id === selected,
+      );
+  };
+  const sharedModelOptions = () => selectableModels(state.form.model);
+  const chatModelOptions = () => selectableModels(state.form.chatModel);
+  const patrolModelOptions = () => selectableModels(state.form.patrolModel);
+  const pickerButtonClass = () =>
+    `${controlClass()} flex items-center gap-2 justify-between text-left disabled:cursor-not-allowed disabled:opacity-60`;
+  const pickerLabelClass = 'min-w-0 flex-1 truncate text-left font-normal';
+  const pickerDropdownClass = 'w-[calc(100vw-2rem)] max-w-xl';
+  const sharedDefaultDescription = () =>
+    state.form.model ? `Currently ${modelLabel(state.form.model)}` : 'No shared default model set';
 
   return (
     <>
@@ -50,7 +71,7 @@ export const AIModelSelectionSection: Component<AIModelSelectionSectionProps> = 
           </button>
         </div>
         <Show
-          when={state.availableModels().length > 0}
+          when={sharedModelOptions().length > 0}
           fallback={
             <input
               type="text"
@@ -62,61 +83,23 @@ export const AIModelSelectionSection: Component<AIModelSelectionSectionProps> = 
             />
           }
         >
-          <select
-            value={state.form.model}
-            onChange={(e) => state.setForm('model', e.currentTarget.value)}
-            class={controlClass()}
+          <AIModelPicker
+            models={sharedModelOptions()}
+            selectedModel={state.form.model}
+            onModelSelect={(modelId) => state.setForm('model', modelId)}
+            emptySelectionLabel="Select a model..."
+            title="Select shared default model"
+            searchPlaceholder="Search configured provider models"
+            customModelDescription="Custom provider:model ID"
             disabled={state.saving()}
-          >
-            <Show
-              when={
-                !state.form.model ||
-                !state.availableModels().some((model) => model.id === state.form.model)
-              }
-            >
-              <option value={state.form.model}>{state.form.model || 'Select a model...'}</option>
-            </Show>
-            <For
-              each={groupedModels().filter(([provider]) =>
-                isAIProviderConfigured(provider, state.settings()),
-              )}
-            >
-              {([provider, models]) => (
-                <optgroup label={getAIProviderDisplayName(provider) || provider}>
-                  <For each={models}>
-                    {(model) => (
-                      <option value={model.id} selected={model.id === state.form.model}>
-                        {model.name || model.id.split(':').pop()}
-                      </option>
-                    )}
-                  </For>
-                </optgroup>
-              )}
-            </For>
-            <For
-              each={groupedModels().filter(([provider]) =>
-                !isAIProviderConfigured(provider, state.settings()),
-              )}
-            >
-              {([provider, models]) => (
-                <optgroup
-                  label={`${getAIProviderDisplayName(provider) || provider} (not configured)`}
-                >
-                  <For each={models}>
-                    {(model) => (
-                      <option
-                        value={model.id}
-                        selected={model.id === state.form.model}
-                        class="text-slate-400"
-                      >
-                        {model.name || model.id.split(':').pop()}
-                      </option>
-                    )}
-                  </For>
-                </optgroup>
-              )}
-            </For>
-          </select>
+            isLoading={state.modelsLoading()}
+            error={state.modelsError()}
+            onRefresh={state.loadModels}
+            align="left"
+            buttonClass={pickerButtonClass()}
+            buttonLabelClass={pickerLabelClass}
+            dropdownClass={pickerDropdownClass}
+          />
         </Show>
         <Show when={state.modelsError()}>
           <p class="text-xs text-amber-600 dark:text-amber-400 mt-1 flex items-center gap-1">
@@ -137,7 +120,9 @@ export const AIModelSelectionSection: Component<AIModelSelectionSectionProps> = 
             provider:model-name) or click Refresh to retry.
           </p>
         </Show>
-        <Show when={state.form.model && !isModelProviderConfigured(state.form.model, state.settings())}>
+        <Show
+          when={state.form.model && !isModelProviderConfigured(state.form.model, state.settings())}
+        >
           <p class="text-xs text-amber-600 dark:text-amber-400 mt-1 flex items-center gap-1">
             <svg
               class="w-3.5 h-3.5 flex-shrink-0"
@@ -170,7 +155,12 @@ export const AIModelSelectionSection: Component<AIModelSelectionSectionProps> = 
           onClick={() => state.setShowAdvancedModels(!state.showAdvancedModels())}
         >
           <div class="flex items-center gap-2">
-            <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg
+              class="w-4 h-4 text-slate-500"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
               <path
                 stroke-linecap="round"
                 stroke-linejoin="round"
@@ -178,7 +168,9 @@ export const AIModelSelectionSection: Component<AIModelSelectionSectionProps> = 
                 d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"
               />
             </svg>
-            <span class="text-sm font-medium text-base-content">{AI_SETTINGS_MODEL_OVERRIDES_TITLE}</span>
+            <span class="text-sm font-medium text-base-content">
+              {AI_SETTINGS_MODEL_OVERRIDES_TITLE}
+            </span>
             <Show when={state.form.chatModel || state.form.patrolModel}>
               <span class="px-1.5 py-0.5 text-[10px] font-semibold bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded">
                 Customized
@@ -191,7 +183,12 @@ export const AIModelSelectionSection: Component<AIModelSelectionSectionProps> = 
             stroke="currentColor"
             viewBox="0 0 24 24"
           >
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M19 9l-7 7-7-7"
+            />
           </svg>
         </button>
         <Show when={state.showAdvancedModels()}>
@@ -201,12 +198,14 @@ export const AIModelSelectionSection: Component<AIModelSelectionSectionProps> = 
               shared default model.
             </p>
             <div>
-              <label class="block text-xs font-medium text-muted mb-0.5">Pulse Assistant Model</label>
+              <label class="block text-xs font-medium text-muted mb-0.5">
+                Pulse Assistant Model
+              </label>
               <p class="text-[11px] text-muted mb-1">
                 Used for live chat and approved fix execution — a more capable model is recommended.
               </p>
               <Show
-                when={state.availableModels().length > 0}
+                when={chatModelOptions().length > 0}
                 fallback={
                   <input
                     type="text"
@@ -218,27 +217,24 @@ export const AIModelSelectionSection: Component<AIModelSelectionSectionProps> = 
                   />
                 }
               >
-                <select
-                  value={state.form.chatModel}
-                  onChange={(e) => state.setForm('chatModel', e.currentTarget.value)}
-                  class={controlClass()}
+                <AIModelPicker
+                  models={chatModelOptions()}
+                  selectedModel={state.form.chatModel}
+                  onModelSelect={(modelId) => state.setForm('chatModel', modelId)}
+                  defaultOption={{
+                    label: 'Use shared default',
+                    description: sharedDefaultDescription(),
+                  }}
+                  emptySelectionLabel="Use shared default"
+                  title="Select Pulse Assistant model"
+                  searchPlaceholder="Search configured provider models"
+                  customModelDescription="Custom provider:model ID"
                   disabled={state.saving()}
-                >
-                  <option value="">
-                    Use shared default ({state.form.model?.split(':').pop() || 'not set'})
-                  </option>
-                  <For each={groupedModels()}>
-                    {([provider, models]) => (
-                      <optgroup label={getAIProviderDisplayName(provider) || provider}>
-                        <For each={models}>
-                          {(model) => (
-                            <option value={model.id}>{model.name || model.id.split(':').pop()}</option>
-                          )}
-                        </For>
-                      </optgroup>
-                    )}
-                  </For>
-                </select>
+                  align="left"
+                  buttonClass={pickerButtonClass()}
+                  buttonLabelClass={pickerLabelClass}
+                  dropdownClass={pickerDropdownClass}
+                />
               </Show>
             </div>
             <div>
@@ -250,7 +246,7 @@ export const AIModelSelectionSection: Component<AIModelSelectionSectionProps> = 
                 keeps costs low.
               </p>
               <Show
-                when={state.availableModels().length > 0}
+                when={patrolModelOptions().length > 0}
                 fallback={
                   <input
                     type="text"
@@ -262,27 +258,24 @@ export const AIModelSelectionSection: Component<AIModelSelectionSectionProps> = 
                   />
                 }
               >
-                <select
-                  value={state.form.patrolModel}
-                  onChange={(e) => state.setForm('patrolModel', e.currentTarget.value)}
-                  class={controlClass()}
+                <AIModelPicker
+                  models={patrolModelOptions()}
+                  selectedModel={state.form.patrolModel}
+                  onModelSelect={(modelId) => state.setForm('patrolModel', modelId)}
+                  defaultOption={{
+                    label: 'Use shared default',
+                    description: sharedDefaultDescription(),
+                  }}
+                  emptySelectionLabel="Use shared default"
+                  title="Select Patrol verification model"
+                  searchPlaceholder="Search configured provider models"
+                  customModelDescription="Custom provider:model ID"
                   disabled={state.saving()}
-                >
-                  <option value="">
-                    Use shared default ({state.form.model?.split(':').pop() || 'not set'})
-                  </option>
-                  <For each={groupedModels()}>
-                    {([provider, models]) => (
-                      <optgroup label={getAIProviderDisplayName(provider) || provider}>
-                        <For each={models}>
-                          {(model) => (
-                            <option value={model.id}>{model.name || model.id.split(':').pop()}</option>
-                          )}
-                        </For>
-                      </optgroup>
-                    )}
-                  </For>
-                </select>
+                  align="left"
+                  buttonClass={pickerButtonClass()}
+                  buttonLabelClass={pickerLabelClass}
+                  dropdownClass={pickerDropdownClass}
+                />
               </Show>
             </div>
           </div>

@@ -273,7 +273,7 @@ describe('AISettings model loading error states', () => {
 
     await waitFor(() => {
       expect(getModelsMock).toHaveBeenCalledTimes(1);
-      expect(screen.getByText('Claude Sonnet')).toBeInTheDocument();
+      expect(screen.getByTitle('Select shared default model')).toBeInTheDocument();
       expect(screen.getByRole('button', { name: /refresh/i })).not.toBeDisabled();
     });
 
@@ -289,6 +289,52 @@ describe('AISettings model loading error states', () => {
     expect(
       screen.getByPlaceholderText('Configure a provider below to see available models'),
     ).toBeInTheDocument();
+  });
+
+  it('keeps large provider catalogs searchable without dumping older models into settings', async () => {
+    getSettingsMock.mockResolvedValue({
+      ...baseSettings(),
+      configured: true,
+      model: 'openrouter:minimax/minimax-m2.5',
+      openrouter_configured: true,
+      configured_providers: ['openrouter'],
+    });
+    getModelsMock.mockResolvedValue({
+      models: [
+        {
+          id: 'openrouter:minimax/minimax-m2.5',
+          name: 'MiniMax: MiniMax M2.5',
+          notable: true,
+        },
+        {
+          id: 'openrouter:legacy/model-v1',
+          name: 'Legacy Model V1',
+          notable: false,
+        },
+        {
+          id: 'anthropic:claude-sonnet-4-20250514',
+          name: 'Claude Sonnet 4',
+          notable: true,
+        },
+      ],
+    });
+
+    renderComponent();
+
+    const pickerButton = await screen.findByTitle('Select shared default model');
+    expect(screen.getByText('MiniMax: MiniMax M2.5')).toBeInTheDocument();
+
+    fireEvent.click(pickerButton);
+
+    expect(screen.queryByText('Legacy Model V1')).not.toBeInTheDocument();
+    expect(screen.queryByText('Claude Sonnet 4')).not.toBeInTheDocument();
+    expect(screen.getByText('Show 1 older models')).toBeInTheDocument();
+
+    fireEvent.input(screen.getByPlaceholderText('Search configured provider models'), {
+      target: { value: 'legacy' },
+    });
+
+    expect(screen.getByText('Legacy Model V1')).toBeInTheDocument();
   });
 });
 
@@ -551,6 +597,8 @@ describe('AISettings quickstart enablement flow', () => {
       screen.getByText('Connect a provider to power Pulse Assistant and Patrol.'),
     ).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /open hosted handoff/i })).not.toBeInTheDocument();
-    expect(screen.queryByText(/Hosted quickstart requires an activated entitlement/i)).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/Hosted quickstart requires an activated entitlement/i),
+    ).not.toBeInTheDocument();
   });
 });
