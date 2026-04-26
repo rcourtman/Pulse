@@ -882,6 +882,11 @@ development-only admin bypass path. Lifecycle-adjacent setup or first-session
 flows may still run in non-release developer mode with `ALLOW_ADMIN_BYPASS`,
 but release binaries must compile that env override out instead of carrying a
 runtime branch that can be reopened after deployment.
+That same shared auth dependency now also assumes direct auth probes fail
+explicitly without overwriting narrower route-owned failures. Lifecycle-adjacent
+setup-token, recovery, and install helpers may depend on shared auth wrappers,
+but missing setup-token or API-token-only failures must preserve their specific
+response instead of being flattened into a second generic auth body.
 
 Agent lifecycle owns the install/register/update continuity surfaces, but it
 does not own unified-resource history or control-plane timeline persistence.
@@ -1478,6 +1483,10 @@ That same auth failure contract must also fail specifically on the canonical
 setup-token requirement: missing `authToken` input on `/api/auto-register` may
 not collapse back to a generic authentication message once the route is
 governed as setup-token-only.
+Shared router auth bypass for that setup-token route remains a handler-ownership
+mechanism only: lifecycle-adjacent routes may bypass global auth so they can
+return their route-specific setup-token failure, not so unauthenticated callers
+can fall through to a successful lifecycle mutation.
 That same canonical request contract must also keep field-validation failures
 specific: mismatched `tokenId`/`tokenValue` input may not collapse into
 generic missing-field output, and other missing canonical fields must return

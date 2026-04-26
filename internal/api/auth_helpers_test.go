@@ -4,6 +4,7 @@ import (
 	"crypto/tls"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -1035,5 +1036,11 @@ func TestCheckAuth_NoAuthConfiguredRejectsRemote(t *testing.T) {
 
 	if CheckAuth(cfg, w, req) {
 		t.Fatal("CheckAuth should reject remote access before auth is configured")
+	}
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("expected explicit unauthorized response, got %d: %s", w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "Authentication required") {
+		t.Fatalf("expected authentication-required body, got %q", w.Body.String())
 	}
 }

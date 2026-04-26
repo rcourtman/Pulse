@@ -113,7 +113,7 @@ func TestRouteExecute_NoAuth(t *testing.T) {
 	router.Handler().ServeHTTP(rec, req)
 
 	assert.Equal(t, http.StatusUnauthorized, rec.Code, "unauthenticated request should return 401")
-	assert.Contains(t, rec.Body.String(), "Authentication required", "body should indicate authentication is needed")
+	assert.Contains(t, rec.Body.String(), "API token required", "body should indicate token authentication is needed")
 }
 
 // TestRouteExecute_WrongScope verifies that a token without the ai:execute

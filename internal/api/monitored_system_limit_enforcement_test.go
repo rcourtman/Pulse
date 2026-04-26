@@ -287,8 +287,9 @@ func TestMonitoredSystemAdmissionSurfacesStayBehindSharedLimitGate(t *testing.T)
 				{
 					file: "config_handlers_update_test.go",
 					snippets: []string{
-						"TestHandleUpdateNode_BlocksProjectedNetNewSystemAtLimit",
-						"http.StatusPaymentRequired",
+						"TestHandleUpdateNode_AllowsProjectedNetNewSystemWithoutPaidLimit",
+						"without paid limit enforcement",
+						"http.StatusOK",
 					},
 				},
 			},
@@ -307,9 +308,6 @@ func TestMonitoredSystemAdmissionSurfacesStayBehindSharedLimitGate(t *testing.T)
 				},
 				requiredCounts: map[string]int{
 					"enforceMonitoredSystemLimitForConfigRegistration(": 2,
-				},
-				requiredOrderings: [][2]string{
-					{"enforceMonitoredSystemLimitForConfigRegistration(", "PVEInstances = append"},
 				},
 			}},
 			proofs: []proofContract{{

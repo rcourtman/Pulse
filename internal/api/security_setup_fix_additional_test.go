@@ -54,10 +54,9 @@ func TestHandleRegenerateAPIToken_DoesNotRequireEnvFile(t *testing.T) {
 	router := &Router{config: cfg}
 	handler := http.HandlerFunc(router.HandleRegenerateAPIToken)
 
-	authLimiter.Reset("198.51.100.9")
+	authLimiter.Reset("127.0.0.1")
 
-	req := httptest.NewRequest(http.MethodPost, "/api/security/regenerate-token", nil)
-	req.RemoteAddr = "198.51.100.9:54321"
+	req := newLoopbackRequest(http.MethodPost, "/api/security/regenerate-token", nil)
 	rec := httptest.NewRecorder()
 
 	handler.ServeHTTP(rec, req)
@@ -82,10 +81,9 @@ func TestHandleValidateAPIToken_InvalidJSON(t *testing.T) {
 	router := &Router{config: &config.Config{}}
 	handler := http.HandlerFunc(router.HandleValidateAPIToken)
 
-	authLimiter.Reset("198.51.100.10")
+	authLimiter.Reset("127.0.0.1")
 
-	req := httptest.NewRequest(http.MethodPost, "/api/security/validate-token", strings.NewReader("not-json"))
-	req.RemoteAddr = "198.51.100.10:54321"
+	req := newLoopbackRequest(http.MethodPost, "/api/security/validate-token", strings.NewReader("not-json"))
 	rec := httptest.NewRecorder()
 
 	handler.ServeHTTP(rec, req)
@@ -99,10 +97,9 @@ func TestHandleValidateAPIToken_MissingToken(t *testing.T) {
 	router := &Router{config: &config.Config{}}
 	handler := http.HandlerFunc(router.HandleValidateAPIToken)
 
-	authLimiter.Reset("198.51.100.11")
+	authLimiter.Reset("127.0.0.1")
 
-	req := httptest.NewRequest(http.MethodPost, "/api/security/validate-token", strings.NewReader(`{"token":""}`))
-	req.RemoteAddr = "198.51.100.11:54321"
+	req := newLoopbackRequest(http.MethodPost, "/api/security/validate-token", strings.NewReader(`{"token":""}`))
 	rec := httptest.NewRecorder()
 
 	handler.ServeHTTP(rec, req)
@@ -124,10 +121,9 @@ func TestHandleValidateAPIToken_NoTokensConfigured(t *testing.T) {
 	router := &Router{config: &config.Config{}}
 	handler := http.HandlerFunc(router.HandleValidateAPIToken)
 
-	authLimiter.Reset("198.51.100.12")
+	authLimiter.Reset("127.0.0.1")
 
-	req := httptest.NewRequest(http.MethodPost, "/api/security/validate-token", strings.NewReader(`{"token":"abc"}`))
-	req.RemoteAddr = "198.51.100.12:54321"
+	req := newLoopbackRequest(http.MethodPost, "/api/security/validate-token", strings.NewReader(`{"token":"abc"}`))
 	rec := httptest.NewRecorder()
 
 	handler.ServeHTTP(rec, req)

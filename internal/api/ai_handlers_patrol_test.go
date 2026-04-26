@@ -24,7 +24,7 @@ func TestAISettingsHandler_PatrolInterval_SpecificCheck(t *testing.T) {
 		body, _ := json.Marshal(AISettingsUpdateRequest{
 			PatrolIntervalMinutes: ptr(15),
 		})
-		req := httptest.NewRequest(http.MethodPut, "/api/settings/ai", bytes.NewReader(body))
+		req := newLoopbackRequest(http.MethodPut, "/api/settings/ai", bytes.NewReader(body))
 		rec := httptest.NewRecorder()
 		handler.HandleUpdateAISettings(rec, req)
 
@@ -46,7 +46,7 @@ func TestAISettingsHandler_PatrolInterval_SpecificCheck(t *testing.T) {
 
 	// Step 2: Verify persistence by fetching settings again
 	{
-		req := httptest.NewRequest(http.MethodGet, "/api/settings/ai", nil)
+		req := newLoopbackRequest(http.MethodGet, "/api/settings/ai", nil)
 		rec := httptest.NewRecorder()
 		handler.HandleGetAISettings(rec, req)
 
@@ -78,7 +78,7 @@ func TestAISettingsHandler_PatrolEnabled_ResponseReflectsToggleImmediately(t *te
 		body, _ := json.Marshal(AISettingsUpdateRequest{
 			PatrolEnabled: ptr(false),
 		})
-		req := httptest.NewRequest(http.MethodPut, "/api/settings/ai", bytes.NewReader(body))
+		req := newLoopbackRequest(http.MethodPut, "/api/settings/ai", bytes.NewReader(body))
 		rec := httptest.NewRecorder()
 		handler.HandleUpdateAISettings(rec, req)
 		if rec.Code != http.StatusOK {
@@ -98,7 +98,7 @@ func TestAISettingsHandler_PatrolEnabled_ResponseReflectsToggleImmediately(t *te
 		body, _ := json.Marshal(AISettingsUpdateRequest{
 			PatrolEnabled: ptr(true),
 		})
-		req := httptest.NewRequest(http.MethodPut, "/api/settings/ai", bytes.NewReader(body))
+		req := newLoopbackRequest(http.MethodPut, "/api/settings/ai", bytes.NewReader(body))
 		rec := httptest.NewRecorder()
 		handler.HandleUpdateAISettings(rec, req)
 		if rec.Code != http.StatusOK {
@@ -130,7 +130,7 @@ func TestAISettingsHandler_PatrolTriggerSettings_SplitAndLegacyCompatibility(t *
 			PatrolAlertTriggersEnabled:   ptr(false),
 			PatrolAnomalyTriggersEnabled: ptr(true),
 		})
-		req := httptest.NewRequest(http.MethodPut, "/api/settings/ai", bytes.NewReader(body))
+		req := newLoopbackRequest(http.MethodPut, "/api/settings/ai", bytes.NewReader(body))
 		rec := httptest.NewRecorder()
 		handler.HandleUpdateAISettings(rec, req)
 		if rec.Code != http.StatusOK {
@@ -156,7 +156,7 @@ func TestAISettingsHandler_PatrolTriggerSettings_SplitAndLegacyCompatibility(t *
 		body, _ := json.Marshal(AISettingsUpdateRequest{
 			PatrolEventTriggersEnabled: ptr(false),
 		})
-		req := httptest.NewRequest(http.MethodPut, "/api/settings/ai", bytes.NewReader(body))
+		req := newLoopbackRequest(http.MethodPut, "/api/settings/ai", bytes.NewReader(body))
 		rec := httptest.NewRecorder()
 		handler.HandleUpdateAISettings(rec, req)
 		if rec.Code != http.StatusOK {

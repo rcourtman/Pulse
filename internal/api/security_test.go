@@ -1551,7 +1551,7 @@ func TestRequireAdmin_NoAuthConfiguredAllowsAccess(t *testing.T) {
 	})
 
 	w := httptest.NewRecorder()
-	req := httptest.NewRequest("GET", "/api/admin/test", nil)
+	req := newLoopbackRequest("GET", "/api/admin/test", nil)
 	handler(w, req)
 
 	if !handlerCalled {
@@ -2030,7 +2030,7 @@ func TestRequireAuth_NoAuthConfiguredAllowsAccess(t *testing.T) {
 	})
 
 	w := httptest.NewRecorder()
-	req := httptest.NewRequest("GET", "/api/test", nil)
+	req := newLoopbackRequest("GET", "/api/test", nil)
 	handler(w, req)
 
 	if !handlerCalled {

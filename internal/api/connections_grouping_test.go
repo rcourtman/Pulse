@@ -141,6 +141,11 @@ func TestBuildConnectionSystems_ClusterMemberAgentsAttachToOwningProxmoxSystem(t
 					LinkedNodeID: "node-delly",
 				},
 			},
+			Identity: unified.ResourceIdentity{
+				MachineID:   "machine-delly",
+				Hostnames:   []string{"delly"},
+				IPAddresses: []string{"192.168.0.10"},
+			},
 		},
 		{
 			SourceID: "node-minipc",
@@ -170,6 +175,11 @@ func TestBuildConnectionSystems_ClusterMemberAgentsAttachToOwningProxmoxSystem(t
 					MachineID:    "machine-minipc",
 					LinkedNodeID: "node-minipc",
 				},
+			},
+			Identity: unified.ResourceIdentity{
+				MachineID:   "machine-minipc",
+				Hostnames:   []string{"minipc"},
+				IPAddresses: []string{"192.168.0.11"},
 			},
 		},
 	})

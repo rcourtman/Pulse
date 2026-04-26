@@ -117,6 +117,12 @@ querying, and the operator-facing storage health presentation layer.
    direct-loopback only, keep recovery-token validation bound to the
    generating client IP, and mint or clear browser recovery sessions instead
    of toggling a shared `.auth_recovery` file for every localhost caller.
+   Shared auth probes and router bypasses on that adjacent API boundary must
+   preserve route ownership: missing credentials must return an explicit auth
+   response, route-specific setup/recovery errors must not be overwritten by a
+   second generic auth body, and `/api/config/export` or `/api/config/import`
+   bypass entries must still leave public-network and credential decisions to
+   their route-local handlers.
    That same adjacent API boundary also owns monitored-system admission preview
    transport for provider-backed setup context. `/api/truenas/connections/preview`,
    `/api/truenas/connections/{id}/preview`, `/api/vmware/connections/preview`,

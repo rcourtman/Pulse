@@ -18,7 +18,7 @@ func TestHandleUpdateSystemSettingsAllowsTempsWithoutTransport(t *testing.T) {
 	persistence := config.NewConfigPersistence(tempDir)
 	handler := newTestSystemSettingsHandler(cfg, persistence, nil, nil, nil)
 
-	req := httptest.NewRequest(http.MethodPost, "/api/system/settings/update", bytes.NewBufferString(`{"temperatureMonitoringEnabled":true}`))
+	req := newLoopbackRequest(http.MethodPost, "/api/system/settings/update", bytes.NewBufferString(`{"temperatureMonitoringEnabled":true}`))
 	rec := httptest.NewRecorder()
 
 	handler.HandleUpdateSystemSettings(rec, req)
@@ -41,7 +41,7 @@ func TestHandleUpdateSystemSettingsRejectsInvalidPVEPollingInterval(t *testing.T
 	persistence := config.NewConfigPersistence(tempDir)
 	handler := newTestSystemSettingsHandler(cfg, persistence, nil, nil, nil)
 
-	req := httptest.NewRequest(http.MethodPost, "/api/system/settings/update", strings.NewReader(`{"pvePollingInterval":5}`))
+	req := newLoopbackRequest(http.MethodPost, "/api/system/settings/update", strings.NewReader(`{"pvePollingInterval":5}`))
 	rec := httptest.NewRecorder()
 
 	handler.HandleUpdateSystemSettings(rec, req)
@@ -65,7 +65,7 @@ func TestHandleUpdateSystemSettingsUpdatesPVEPollingInterval(t *testing.T) {
 		return nil
 	})
 
-	req := httptest.NewRequest(http.MethodPost, "/api/system/settings/update", strings.NewReader(`{"pvePollingInterval":30}`))
+	req := newLoopbackRequest(http.MethodPost, "/api/system/settings/update", strings.NewReader(`{"pvePollingInterval":30}`))
 	rec := httptest.NewRecorder()
 
 	handler.HandleUpdateSystemSettings(rec, req)

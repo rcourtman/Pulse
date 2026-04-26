@@ -59,7 +59,7 @@ func TestPprofEndpoints_AdminAccessSucceeds(t *testing.T) {
 	r.registerDebugRoutes()
 
 	// /debug/pprof/ (index) should return 200 when no auth is configured
-	req := httptest.NewRequest(http.MethodGet, "/debug/pprof/", nil)
+	req := newLoopbackRequest(http.MethodGet, "/debug/pprof/", nil)
 	rec := httptest.NewRecorder()
 	r.mux.ServeHTTP(rec, req)
 
@@ -77,7 +77,7 @@ func TestPprofEndpoints_SymbolPost(t *testing.T) {
 	}
 	r.registerDebugRoutes()
 
-	req := httptest.NewRequest(http.MethodPost, "/debug/pprof/symbol", nil)
+	req := newLoopbackRequest(http.MethodPost, "/debug/pprof/symbol", nil)
 	rec := httptest.NewRecorder()
 	r.mux.ServeHTTP(rec, req)
 
@@ -95,7 +95,7 @@ func TestPprofEndpoints_HeapProfile(t *testing.T) {
 	}
 	r.registerDebugRoutes()
 
-	req := httptest.NewRequest(http.MethodGet, "/debug/pprof/heap", nil)
+	req := newLoopbackRequest(http.MethodGet, "/debug/pprof/heap", nil)
 	rec := httptest.NewRecorder()
 	r.mux.ServeHTTP(rec, req)
 
@@ -118,7 +118,7 @@ func TestPprofEndpoints_RoutingPrefix(t *testing.T) {
 	}
 	r.registerDebugRoutes()
 
-	req := httptest.NewRequest(http.MethodGet, "/debug/pprof/goroutine?debug=1", nil)
+	req := newLoopbackRequest(http.MethodGet, "/debug/pprof/goroutine?debug=1", nil)
 	rec := httptest.NewRecorder()
 	r.mux.ServeHTTP(rec, req)
 

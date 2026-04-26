@@ -302,6 +302,11 @@ persistence: `recovery_tokens.go` may mint raw recovery secrets for immediate
 operator use, but persisted `recovery_tokens.json` state must store only token
 hashes and treat any legacy plaintext-token file as a one-time migration input
 that is rewritten immediately into hashed canonical persistence on load.
+Direct auth probes on that same boundary must fail closed with an explicit
+response: public-network or missing-credential calls into shared `CheckAuth`
+must emit the canonical auth-required error, while middleware-owned paths use
+shared response capture so setup, recovery, and API-token-specific handlers can
+preserve their stricter single response.
 That same recovery trust boundary also governs live use of those secrets:
 recovery tokens must bind to the generating client IP, may authorize only a
 direct-loopback browser recovery session, and must not reopen authentication

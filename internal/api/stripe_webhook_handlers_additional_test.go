@@ -215,8 +215,8 @@ func TestStripeWebhook_SubscriptionUpdated_RecognizesGrandfatheredRecurringPrice
 	if state.SubscriptionState != entitlements.SubStateActive {
 		t.Fatalf("subscription_state=%q, want %q", state.SubscriptionState, entitlements.SubStateActive)
 	}
-	if got := state.Limits["max_monitored_systems"]; got != 10 {
-		t.Fatalf("limits[max_monitored_systems]=%d, want %d", got, 10)
+	if got, ok := state.Limits["max_monitored_systems"]; ok && got != 0 {
+		t.Fatalf("limits[max_monitored_systems]=%d, want uncapped/absent", got)
 	}
 }
 

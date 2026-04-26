@@ -301,6 +301,9 @@ the canonical monitored-system blocked payload.
     configured, anonymous fallback and bootstrap quick setup may run only on direct loopback, recovery tokens must bind
     to the generating client IP, and recovery may mint only a browser-bound localhost session rather than a shared
     filesystem toggle that disables auth for every loopback client.
+    Direct `CheckAuth` callers must also fail explicitly: a non-loopback or missing-credential request may not fall
+    through as a silent `200`, and middleware wrappers must use shared response capture so route-specific auth errors
+    remain single-written rather than being replaced by a second generic auth body.
     The same shared auth boundary also owns release-build admin bypass gating.
     `internal/api/auth.go` may keep `ALLOW_ADMIN_BYPASS` for non-release
     development workflows, but release builds must compile that env override
@@ -729,12 +732,13 @@ only after canonical IDs have been resolved or a safe row-name fallback has
 been chosen. API-adjacent browser callers must not reinterpret missing IDs or
 preview arrays as authoritative empty success.
 Monitored-system commercial admission is now also part of that owned live
-contract. Add and update routes must project prospective candidates or
-previewed source records through the canonical monitored-system resolver
-before persistence, and `/api/license/entitlements` must expose
-`current_available` when an active monitored-system cap cannot resolve current
-usage so callers can fail closed without misreading unavailable usage as a
-real zero.
+contract only when a hosted, MSP, or private policy installs an active cap.
+Self-hosted Community/Relay/Pro core monitoring remains uncapped; any active
+cap path must still project prospective candidates or previewed source records
+through the canonical monitored-system resolver before persistence, and
+`/api/license/entitlements` must expose `current_available` when that cap
+cannot resolve current usage so callers can fail closed without misreading
+unavailable usage as a real zero.
 That same `current_available` truth now includes supplemental-provider startup
 readiness. API contracts must not serialize a live monitored-system count from
 the first store-backed read-state when provider-owned inventories such as
@@ -1004,6 +1008,10 @@ browser/runtime value. The older `max_monitored_systems` label may be accepted
 only as a backward-compatible alias during request or callback normalization,
 but Pulse and the license server must not emit it as the primary self-hosted
 purchase intent once the uncapped self-hosted model is canonical.
+Compatibility-only Pro capabilities and legacy monitored-system aliases must
+not become marketed upgrade reasons in the free-tier entitlement payload; the
+payload should describe paid surfaces that are actually being sold rather than
+recreating the retired monitored-infrastructure paywall.
 opener is available, the callback must still return the current tab to the
 owned billing route automatically instead of leaving the operator on a dead
 success page.
@@ -3177,6 +3185,10 @@ panicking on optional side effects. `/api/config/import` may be exercised from
 proof or setup contexts that do not yet have every long-lived runtime manager
 wired, but the contract must still leave the imported configuration readable
 through the canonical API surface.
+`/api/config/export` and `/api/config/import` are therefore router auth-bypass
+entries only so their handlers can own stricter route-local auth and
+public-network checks; global middleware must not preempt those handlers or
+mask their public-network `403` outcomes with a generic auth failure.
 That same shared infrastructure-settings API contract now also owns the
 connected-infrastructure distinction between machine-managed and
 platform-connections-managed reporting. `frontend-modern/src/types/api.ts`,

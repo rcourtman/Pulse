@@ -118,23 +118,6 @@ func ensureSettingsWriteScope(cfg *config.Config, w http.ResponseWriter, req *ht
 }
 
 // handleQuickSecuritySetupFixed is the fixed version of the Quick Security Setup
-type responseCapture struct {
-	http.ResponseWriter
-	wrote bool
-}
-
-func (rc *responseCapture) WriteHeader(statusCode int) {
-	if !rc.wrote {
-		rc.wrote = true
-	}
-	rc.ResponseWriter.WriteHeader(statusCode)
-}
-
-func (rc *responseCapture) Write(b []byte) (int, error) {
-	rc.wrote = true
-	return rc.ResponseWriter.Write(b)
-}
-
 func handleQuickSecuritySetupFixed(r *Router) http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
 		if req.Method != http.MethodPost {
@@ -196,7 +179,7 @@ func handleQuickSecuritySetupFixed(r *Router) http.HandlerFunc {
 		// Only require authentication if credentials are already configured.
 		if !authorized && authConfigured {
 			wrapped := &responseCapture{ResponseWriter: w}
-			if CheckAuth(r.config, wrapped, req) {
+			if checkAuth(r.config, wrapped, req, false) {
 				// If proxy auth is configured, require admin role for changes.
 				if r.config.ProxyAuthSecret != "" {
 					if valid, username, isAdmin := CheckProxyAuth(r.config, req); valid && !isAdmin {

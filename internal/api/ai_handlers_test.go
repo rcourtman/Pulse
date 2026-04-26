@@ -102,7 +102,7 @@ func TestAISettingsHandler_GetAndUpdateSettings_RoundTrip(t *testing.T) {
 
 	// GET should return defaults if no config has been saved yet.
 	{
-		req := httptest.NewRequest(http.MethodGet, "/api/settings/ai", nil)
+		req := newLoopbackRequest(http.MethodGet, "/api/settings/ai", nil)
 		rec := httptest.NewRecorder()
 		handler.HandleGetAISettings(rec, req)
 
@@ -134,7 +134,7 @@ func TestAISettingsHandler_GetAndUpdateSettings_RoundTrip(t *testing.T) {
 			OllamaUsername: ptr("unai"),
 			OllamaPassword: ptr("secret"),
 		})
-		req := httptest.NewRequest(http.MethodPut, "/api/settings/ai", bytes.NewReader(body))
+		req := newLoopbackRequest(http.MethodPut, "/api/settings/ai", bytes.NewReader(body))
 		rec := httptest.NewRecorder()
 		handler.HandleUpdateAISettings(rec, req)
 
@@ -165,7 +165,7 @@ func TestAISettingsHandler_GetAndUpdateSettings_RoundTrip(t *testing.T) {
 
 	// GET again should reflect persisted updates.
 	{
-		req := httptest.NewRequest(http.MethodGet, "/api/settings/ai", nil)
+		req := newLoopbackRequest(http.MethodGet, "/api/settings/ai", nil)
 		rec := httptest.NewRecorder()
 		handler.HandleGetAISettings(rec, req)
 
@@ -260,7 +260,7 @@ func TestAISettingsHandler_GetHostedSettings_AutoBootstrapsQuickstart(t *testing
 	handler := NewAISettingsHandler(mtp, nil, nil)
 	handler.defaultConfig = &config.Config{DataPath: tmp}
 
-	req := httptest.NewRequest(http.MethodGet, "/api/settings/ai", nil)
+	req := newLoopbackRequest(http.MethodGet, "/api/settings/ai", nil)
 	rec := httptest.NewRecorder()
 	handler.HandleGetAISettings(rec, req)
 
@@ -300,7 +300,7 @@ func TestAISettingsHandler_GetHostedTenantSettings_InheritsDefaultHostedBillingS
 	handler := NewAISettingsHandler(mtp, nil, nil)
 	handler.defaultConfig = &config.Config{DataPath: tmp}
 
-	req := httptest.NewRequest(http.MethodGet, "/api/settings/ai", nil)
+	req := newLoopbackRequest(http.MethodGet, "/api/settings/ai", nil)
 	req = req.WithContext(context.WithValue(req.Context(), OrgIDContextKey, "t-tenant"))
 	rec := httptest.NewRecorder()
 	handler.HandleGetAISettings(rec, req)
@@ -339,7 +339,7 @@ func TestAISettingsHandler_GetSettings_NormalizesLegacyQuickstartAliases(t *test
 	handler := NewAISettingsHandler(mtp, nil, nil)
 	handler.defaultConfig = &config.Config{DataPath: tmp}
 
-	req := httptest.NewRequest(http.MethodGet, "/api/settings/ai", nil)
+	req := newLoopbackRequest(http.MethodGet, "/api/settings/ai", nil)
 	rec := httptest.NewRecorder()
 	handler.HandleGetAISettings(rec, req)
 
@@ -365,7 +365,7 @@ func TestAISettingsHandler_GetSettings_QuickstartActivationRequiredSurface(t *te
 		func() *config.AIConfig { return &config.AIConfig{Enabled: true} },
 	))
 
-	req := httptest.NewRequest(http.MethodGet, "/api/settings/ai", nil)
+	req := newLoopbackRequest(http.MethodGet, "/api/settings/ai", nil)
 	rec := httptest.NewRecorder()
 	handler.HandleGetAISettings(rec, req)
 
@@ -470,7 +470,7 @@ func TestAISettingsHandler_UpdateSettings_ResolvesProviderModelWhenOmitted(t *te
 		Enabled:       ptr(true),
 		OllamaBaseURL: ptr(ollama.URL),
 	})
-	req := httptest.NewRequest(http.MethodPut, "/api/settings/ai/update", bytes.NewReader(body))
+	req := newLoopbackRequest(http.MethodPut, "/api/settings/ai/update", bytes.NewReader(body))
 	rec := httptest.NewRecorder()
 	handler.HandleUpdateAISettings(rec, req)
 
@@ -503,7 +503,7 @@ func TestAISettingsHandler_UpdateSettings_OpenRouterKeySetAndClear(t *testing.T)
 			OpenRouterAPIKey: ptr("  sk-or-test-key  "),
 			Model:            ptr("openrouter:openai/gpt-4o-mini"),
 		})
-		req := httptest.NewRequest(http.MethodPut, "/api/settings/ai/update", bytes.NewReader(body))
+		req := newLoopbackRequest(http.MethodPut, "/api/settings/ai/update", bytes.NewReader(body))
 		rec := httptest.NewRecorder()
 		handler.HandleUpdateAISettings(rec, req)
 
@@ -525,7 +525,7 @@ func TestAISettingsHandler_UpdateSettings_OpenRouterKeySetAndClear(t *testing.T)
 		body, _ := json.Marshal(AISettingsUpdateRequest{
 			ClearOpenRouterKey: ptr(true),
 		})
-		req := httptest.NewRequest(http.MethodPut, "/api/settings/ai/update", bytes.NewReader(body))
+		req := newLoopbackRequest(http.MethodPut, "/api/settings/ai/update", bytes.NewReader(body))
 		rec := httptest.NewRecorder()
 		handler.HandleUpdateAISettings(rec, req)
 
@@ -575,7 +575,7 @@ func TestAISettingsHandler_ListModels_Ollama(t *testing.T) {
 
 	handler := newTestAISettingsHandler(cfg, persistence, nil)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/ai/models", nil)
+	req := newLoopbackRequest(http.MethodGet, "/api/ai/models", nil)
 	rec := httptest.NewRecorder()
 	handler.HandleListModels(rec, req)
 
@@ -644,7 +644,7 @@ func TestAISettingsHandler_Execute_Ollama(t *testing.T) {
 	handler := newTestAISettingsHandler(cfg, persistence, nil)
 
 	body, _ := json.Marshal(AIExecuteRequest{Prompt: "hi"})
-	req := httptest.NewRequest(http.MethodPost, "/api/ai/execute", bytes.NewReader(body))
+	req := newLoopbackRequest(http.MethodPost, "/api/ai/execute", bytes.NewReader(body))
 	req = req.WithContext(context.Background())
 	rec := httptest.NewRecorder()
 	handler.HandleExecute(rec, req)
@@ -692,7 +692,7 @@ func TestHandleExecute_RejectsLegacyHostTargetType(t *testing.T) {
 	handler := newTestAISettingsHandler(cfg, persistence, nil)
 
 	body := []byte(`{"prompt":"hi","target_type":"host","target_id":"agent-1"}`)
-	req := httptest.NewRequest(http.MethodPost, "/api/ai/execute", bytes.NewReader(body))
+	req := newLoopbackRequest(http.MethodPost, "/api/ai/execute", bytes.NewReader(body))
 	rec := httptest.NewRecorder()
 	handler.HandleExecute(rec, req)
 
@@ -711,7 +711,7 @@ func TestHandleExecuteStream_RejectsLegacyHostTargetType(t *testing.T) {
 	handler := newTestAISettingsHandler(cfg, persistence, nil)
 
 	body := []byte(`{"prompt":"hi","target_type":"host","target_id":"agent-1"}`)
-	req := httptest.NewRequest(http.MethodPost, "/api/ai/execute/stream", bytes.NewReader(body))
+	req := newLoopbackRequest(http.MethodPost, "/api/ai/execute/stream", bytes.NewReader(body))
 	rec := httptest.NewRecorder()
 	handler.HandleExecuteStream(rec, req)
 
@@ -846,7 +846,7 @@ func TestAISettingsHandler_TestConnection_Ollama(t *testing.T) {
 
 	handler := newTestAISettingsHandler(cfg, persistence, nil)
 
-	req := httptest.NewRequest(http.MethodPost, "/api/ai/test", nil)
+	req := newLoopbackRequest(http.MethodPost, "/api/ai/test", nil)
 	rec := httptest.NewRecorder()
 	handler.HandleTestAIConnection(rec, req)
 
@@ -909,7 +909,7 @@ func TestAISettingsHandler_TestProvider_Ollama(t *testing.T) {
 
 	handler := newTestAISettingsHandler(cfg, persistence, nil)
 
-	req := httptest.NewRequest(http.MethodPost, "/api/ai/test/ollama", nil)
+	req := newLoopbackRequest(http.MethodPost, "/api/ai/test/ollama", nil)
 	rec := httptest.NewRecorder()
 	handler.HandleTestProvider(rec, req)
 
@@ -944,7 +944,7 @@ func TestAISettingsHandler_TestConnection_MethodNotAllowed(t *testing.T) {
 	persistence := config.NewConfigPersistence(tmp)
 	handler := newTestAISettingsHandler(cfg, persistence, nil)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/ai/test", nil)
+	req := newLoopbackRequest(http.MethodGet, "/api/ai/test", nil)
 	rec := httptest.NewRecorder()
 	handler.HandleTestAIConnection(rec, req)
 
@@ -974,7 +974,7 @@ func TestAISettingsHandler_TestConnection_Failure(t *testing.T) {
 
 	handler := newTestAISettingsHandler(cfg, persistence, nil)
 
-	req := httptest.NewRequest(http.MethodPost, "/api/ai/test", nil)
+	req := newLoopbackRequest(http.MethodPost, "/api/ai/test", nil)
 	rec := httptest.NewRecorder()
 	handler.HandleTestAIConnection(rec, req)
 
@@ -1000,7 +1000,7 @@ func TestAISettingsHandler_TestConnection_NoConfig(t *testing.T) {
 	// Don't save any AI config — service will have no configured provider
 	handler := newTestAISettingsHandler(cfg, persistence, nil)
 
-	req := httptest.NewRequest(http.MethodPost, "/api/ai/test", nil)
+	req := newLoopbackRequest(http.MethodPost, "/api/ai/test", nil)
 	rec := httptest.NewRecorder()
 	handler.HandleTestAIConnection(rec, req)
 
@@ -1028,7 +1028,7 @@ func TestAISettingsHandler_TestProvider_MethodNotAllowed(t *testing.T) {
 	persistence := config.NewConfigPersistence(tmp)
 	handler := newTestAISettingsHandler(cfg, persistence, nil)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/ai/test/ollama", nil)
+	req := newLoopbackRequest(http.MethodGet, "/api/ai/test/ollama", nil)
 	rec := httptest.NewRecorder()
 	handler.HandleTestProvider(rec, req)
 
@@ -1053,7 +1053,7 @@ func TestAISettingsHandler_TestProvider_NotConfigured(t *testing.T) {
 
 	handler := newTestAISettingsHandler(cfg, persistence, nil)
 
-	req := httptest.NewRequest(http.MethodPost, "/api/ai/test/openai", nil)
+	req := newLoopbackRequest(http.MethodPost, "/api/ai/test/openai", nil)
 	rec := httptest.NewRecorder()
 	handler.HandleTestProvider(rec, req)
 
@@ -1082,7 +1082,7 @@ func TestAISettingsHandler_TestProvider_NoAIConfig(t *testing.T) {
 	// for the default (empty) config.
 	handler := newTestAISettingsHandler(cfg, persistence, nil)
 
-	req := httptest.NewRequest(http.MethodPost, "/api/ai/test/ollama", nil)
+	req := newLoopbackRequest(http.MethodPost, "/api/ai/test/ollama", nil)
 	rec := httptest.NewRecorder()
 	handler.HandleTestProvider(rec, req)
 
@@ -1122,7 +1122,7 @@ func TestAISettingsHandler_TestProvider_ConnectionFailure(t *testing.T) {
 
 	handler := newTestAISettingsHandler(cfg, persistence, nil)
 
-	req := httptest.NewRequest(http.MethodPost, "/api/ai/test/ollama", nil)
+	req := newLoopbackRequest(http.MethodPost, "/api/ai/test/ollama", nil)
 	rec := httptest.NewRecorder()
 	handler.HandleTestProvider(rec, req)
 
@@ -1151,7 +1151,7 @@ func TestHandleGetAICostSummary_MethodNotAllowed(t *testing.T) {
 	persistence := config.NewConfigPersistence(tmp)
 	handler := newTestAISettingsHandler(cfg, persistence, nil)
 
-	req := httptest.NewRequest(http.MethodPost, "/api/ai/cost/summary", nil)
+	req := newLoopbackRequest(http.MethodPost, "/api/ai/cost/summary", nil)
 	rec := httptest.NewRecorder()
 	handler.HandleGetAICostSummary(rec, req)
 
@@ -1168,7 +1168,7 @@ func TestHandleGetAICostSummary_NoAIService(t *testing.T) {
 	persistence := config.NewConfigPersistence(tmp)
 	handler := newTestAISettingsHandler(cfg, persistence, nil)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/ai/cost/summary", nil)
+	req := newLoopbackRequest(http.MethodGet, "/api/ai/cost/summary", nil)
 	rec := httptest.NewRecorder()
 	handler.HandleGetAICostSummary(rec, req)
 
@@ -1196,7 +1196,7 @@ func TestHandleGetAICostSummary_CustomDays(t *testing.T) {
 	persistence := config.NewConfigPersistence(tmp)
 	handler := newTestAISettingsHandler(cfg, persistence, nil)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/ai/cost/summary?days=7", nil)
+	req := newLoopbackRequest(http.MethodGet, "/api/ai/cost/summary?days=7", nil)
 	rec := httptest.NewRecorder()
 	handler.HandleGetAICostSummary(rec, req)
 
@@ -1224,7 +1224,7 @@ func TestHandleGetAICostSummary_MaxDays(t *testing.T) {
 	handler := newTestAISettingsHandler(cfg, persistence, nil)
 
 	// Test that days > 365 is capped at 365
-	req := httptest.NewRequest(http.MethodGet, "/api/ai/cost/summary?days=1000", nil)
+	req := newLoopbackRequest(http.MethodGet, "/api/ai/cost/summary?days=1000", nil)
 	rec := httptest.NewRecorder()
 	handler.HandleGetAICostSummary(rec, req)
 
@@ -1251,7 +1251,7 @@ func TestHandleGetAICostSummary_NegativeDays(t *testing.T) {
 	persistence := config.NewConfigPersistence(tmp)
 	handler := newTestAISettingsHandler(cfg, persistence, nil)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/ai/cost/summary?days=-5", nil)
+	req := newLoopbackRequest(http.MethodGet, "/api/ai/cost/summary?days=-5", nil)
 	rec := httptest.NewRecorder()
 	handler.HandleGetAICostSummary(rec, req)
 
@@ -1278,7 +1278,7 @@ func TestHandleGetAICostSummary_ZeroDays(t *testing.T) {
 	persistence := config.NewConfigPersistence(tmp)
 	handler := newTestAISettingsHandler(cfg, persistence, nil)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/ai/cost/summary?days=0", nil)
+	req := newLoopbackRequest(http.MethodGet, "/api/ai/cost/summary?days=0", nil)
 	rec := httptest.NewRecorder()
 	handler.HandleGetAICostSummary(rec, req)
 
@@ -1305,7 +1305,7 @@ func TestHandleGetAICostSummary_NonNumericDays(t *testing.T) {
 	persistence := config.NewConfigPersistence(tmp)
 	handler := newTestAISettingsHandler(cfg, persistence, nil)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/ai/cost/summary?days=abc", nil)
+	req := newLoopbackRequest(http.MethodGet, "/api/ai/cost/summary?days=abc", nil)
 	rec := httptest.NewRecorder()
 	handler.HandleGetAICostSummary(rec, req)
 
@@ -1332,7 +1332,7 @@ func TestHandleGetAICostSummary_ResponseShape(t *testing.T) {
 	persistence := config.NewConfigPersistence(tmp)
 	handler := newTestAISettingsHandler(cfg, persistence, nil)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/ai/cost/summary", nil)
+	req := newLoopbackRequest(http.MethodGet, "/api/ai/cost/summary", nil)
 	rec := httptest.NewRecorder()
 	handler.HandleGetAICostSummary(rec, req)
 
@@ -1387,7 +1387,7 @@ func TestHandleGetAICostSummary_NoService_InvalidDays(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			req := httptest.NewRequest(http.MethodGet, "/api/ai/cost/summary"+tt.query, nil)
+			req := newLoopbackRequest(http.MethodGet, "/api/ai/cost/summary"+tt.query, nil)
 			rec := httptest.NewRecorder()
 			handler.HandleGetAICostSummary(rec, req)
 
@@ -1415,7 +1415,7 @@ func TestHandleGetAICostSummary_NoService_ResponseShape(t *testing.T) {
 	// nil persistence → nil defaultAIService → exercises no-service stub
 	handler := newTestAISettingsHandler(cfg, nil, nil)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/ai/cost/summary", nil)
+	req := newLoopbackRequest(http.MethodGet, "/api/ai/cost/summary", nil)
 	rec := httptest.NewRecorder()
 	handler.HandleGetAICostSummary(rec, req)
 
@@ -1479,7 +1479,7 @@ func TestHandleResetAICostHistory_MethodNotAllowed(t *testing.T) {
 	persistence := config.NewConfigPersistence(tmp)
 	handler := newTestAISettingsHandler(cfg, persistence, nil)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/ai/cost/reset", nil)
+	req := newLoopbackRequest(http.MethodGet, "/api/ai/cost/reset", nil)
 	rec := httptest.NewRecorder()
 	handler.HandleResetAICostHistory(rec, req)
 
@@ -1496,7 +1496,7 @@ func TestHandleResetAICostHistory_Success(t *testing.T) {
 	persistence := config.NewConfigPersistence(tmp)
 	handler := newTestAISettingsHandler(cfg, persistence, nil)
 
-	req := httptest.NewRequest(http.MethodPost, "/api/ai/cost/reset", nil)
+	req := newLoopbackRequest(http.MethodPost, "/api/ai/cost/reset", nil)
 	rec := httptest.NewRecorder()
 	handler.HandleResetAICostHistory(rec, req)
 
@@ -1527,7 +1527,7 @@ func TestHandleExportAICostHistory_MethodNotAllowed(t *testing.T) {
 	persistence := config.NewConfigPersistence(tmp)
 	handler := newTestAISettingsHandler(cfg, persistence, nil)
 
-	req := httptest.NewRequest(http.MethodPost, "/api/ai/cost/export", nil)
+	req := newLoopbackRequest(http.MethodPost, "/api/ai/cost/export", nil)
 	rec := httptest.NewRecorder()
 	handler.HandleExportAICostHistory(rec, req)
 
@@ -1548,7 +1548,7 @@ func TestHandleGetSuppressionRules_MethodNotAllowed(t *testing.T) {
 	persistence := config.NewConfigPersistence(tmp)
 	handler := newTestAISettingsHandler(cfg, persistence, nil)
 
-	req := httptest.NewRequest(http.MethodPost, "/api/ai/patrol/suppressions", nil)
+	req := newLoopbackRequest(http.MethodPost, "/api/ai/patrol/suppressions", nil)
 	rec := httptest.NewRecorder()
 	handler.HandleGetSuppressionRules(rec, req)
 
@@ -1569,7 +1569,7 @@ func TestHandleAddSuppressionRule_MethodNotAllowed(t *testing.T) {
 	persistence := config.NewConfigPersistence(tmp)
 	handler := newTestAISettingsHandler(cfg, persistence, nil)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/ai/patrol/suppressions", nil)
+	req := newLoopbackRequest(http.MethodGet, "/api/ai/patrol/suppressions", nil)
 	rec := httptest.NewRecorder()
 	handler.HandleAddSuppressionRule(rec, req)
 
@@ -1590,7 +1590,7 @@ func TestHandleDeleteSuppressionRule_MethodNotAllowed(t *testing.T) {
 	persistence := config.NewConfigPersistence(tmp)
 	handler := newTestAISettingsHandler(cfg, persistence, nil)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/ai/patrol/suppressions/rule-123", nil)
+	req := newLoopbackRequest(http.MethodGet, "/api/ai/patrol/suppressions/rule-123", nil)
 	rec := httptest.NewRecorder()
 	handler.HandleDeleteSuppressionRule(rec, req)
 
@@ -1611,7 +1611,7 @@ func TestHandleGetDismissedFindings_MethodNotAllowed(t *testing.T) {
 	persistence := config.NewConfigPersistence(tmp)
 	handler := newTestAISettingsHandler(cfg, persistence, nil)
 
-	req := httptest.NewRequest(http.MethodPost, "/api/ai/patrol/dismissed", nil)
+	req := newLoopbackRequest(http.MethodPost, "/api/ai/patrol/dismissed", nil)
 	rec := httptest.NewRecorder()
 	handler.HandleGetDismissedFindings(rec, req)
 
@@ -1637,7 +1637,7 @@ func TestHandleDebugContext_MethodNotAllowed(t *testing.T) {
 	persistence := config.NewConfigPersistence(tmp)
 	handler := newTestAISettingsHandler(cfg, persistence, nil)
 
-	req := httptest.NewRequest(http.MethodPost, "/api/ai/debug/context", nil)
+	req := newLoopbackRequest(http.MethodPost, "/api/ai/debug/context", nil)
 	rec := httptest.NewRecorder()
 	handler.HandleDebugContext(rec, req)
 
@@ -1658,7 +1658,7 @@ func TestHandleGetConnectedAgents_MethodNotAllowed(t *testing.T) {
 	persistence := config.NewConfigPersistence(tmp)
 	handler := newTestAISettingsHandler(cfg, persistence, nil)
 
-	req := httptest.NewRequest(http.MethodPost, "/api/ai/agents", nil)
+	req := newLoopbackRequest(http.MethodPost, "/api/ai/agents", nil)
 	rec := httptest.NewRecorder()
 	handler.HandleGetConnectedAgents(rec, req)
 
@@ -1676,7 +1676,7 @@ func TestHandleGetConnectedAgents_NoAgentServer(t *testing.T) {
 	// handler created with nil agentServer
 	handler := newTestAISettingsHandler(cfg, persistence, nil)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/ai/agents", nil)
+	req := newLoopbackRequest(http.MethodGet, "/api/ai/agents", nil)
 	rec := httptest.NewRecorder()
 	handler.HandleGetConnectedAgents(rec, req)
 
@@ -1711,7 +1711,7 @@ func TestHandleRunCommand_MethodNotAllowed(t *testing.T) {
 	persistence := config.NewConfigPersistence(tmp)
 	handler := newTestAISettingsHandler(cfg, persistence, nil)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/ai/run-command", nil)
+	req := newLoopbackRequest(http.MethodGet, "/api/ai/run-command", nil)
 	rec := httptest.NewRecorder()
 	handler.HandleRunCommand(rec, req)
 
@@ -1728,7 +1728,7 @@ func TestHandleRunCommand_InvalidBody(t *testing.T) {
 	persistence := config.NewConfigPersistence(tmp)
 	handler := newTestAISettingsHandler(cfg, persistence, nil)
 
-	req := httptest.NewRequest(http.MethodPost, "/api/ai/run-command", bytes.NewReader([]byte(`{invalid json}`)))
+	req := newLoopbackRequest(http.MethodPost, "/api/ai/run-command", bytes.NewReader([]byte(`{invalid json}`)))
 	req.RemoteAddr = "127.0.0.1:12345"
 	rec := httptest.NewRecorder()
 	handler.HandleRunCommand(rec, req)
@@ -1984,7 +1984,7 @@ func TestHandleAnalyzeKubernetesCluster_MethodNotAllowed(t *testing.T) {
 	persistence := config.NewConfigPersistence(tmp)
 	handler := newTestAISettingsHandler(cfg, persistence, nil)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/ai/kubernetes/analyze", nil)
+	req := newLoopbackRequest(http.MethodGet, "/api/ai/kubernetes/analyze", nil)
 	rec := httptest.NewRecorder()
 	handler.HandleAnalyzeKubernetesCluster(rec, req)
 
@@ -2001,7 +2001,7 @@ func TestHandleAnalyzeKubernetesCluster_InvalidBody(t *testing.T) {
 	persistence := config.NewConfigPersistence(tmp)
 	handler := newTestAISettingsHandler(cfg, persistence, nil)
 
-	req := httptest.NewRequest(http.MethodPost, "/api/ai/kubernetes/analyze", bytes.NewReader([]byte(`{invalid json}`)))
+	req := newLoopbackRequest(http.MethodPost, "/api/ai/kubernetes/analyze", bytes.NewReader([]byte(`{invalid json}`)))
 	rec := httptest.NewRecorder()
 	handler.HandleAnalyzeKubernetesCluster(rec, req)
 
@@ -2022,7 +2022,7 @@ func TestHandleInvestigateAlert_MethodNotAllowed(t *testing.T) {
 	persistence := config.NewConfigPersistence(tmp)
 	handler := newTestAISettingsHandler(cfg, persistence, nil)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/ai/investigate", nil)
+	req := newLoopbackRequest(http.MethodGet, "/api/ai/investigate", nil)
 	rec := httptest.NewRecorder()
 	handler.HandleInvestigateAlert(rec, req)
 
@@ -2039,7 +2039,7 @@ func TestHandleInvestigateAlert_InvalidBody(t *testing.T) {
 	persistence := config.NewConfigPersistence(tmp)
 	handler := newTestAISettingsHandler(cfg, persistence, nil)
 
-	req := httptest.NewRequest(http.MethodPost, "/api/ai/investigate", bytes.NewReader([]byte(`{invalid json}`)))
+	req := newLoopbackRequest(http.MethodPost, "/api/ai/investigate", bytes.NewReader([]byte(`{invalid json}`)))
 	rec := httptest.NewRecorder()
 	handler.HandleInvestigateAlert(rec, req)
 
@@ -2057,7 +2057,7 @@ func TestHandleInvestigateAlert_MissingAlertIdentifier(t *testing.T) {
 	handler := newTestAISettingsHandler(cfg, persistence, nil)
 
 	body := []byte(`{}`)
-	req := httptest.NewRequest(http.MethodPost, "/api/ai/investigate", bytes.NewReader(body))
+	req := newLoopbackRequest(http.MethodPost, "/api/ai/investigate", bytes.NewReader(body))
 	rec := httptest.NewRecorder()
 	handler.HandleInvestigateAlert(rec, req)
 
@@ -2077,7 +2077,7 @@ func TestHandleInvestigateAlert_RejectsLegacyHostResourceType(t *testing.T) {
 	handler := newTestAISettingsHandler(cfg, persistence, nil)
 
 	body := []byte(`{"alertIdentifier":"alert-1","resource_id":"agent-1","resource_name":"node-1","resource_type":"host","alert_type":"cpu","level":"warning","message":"high cpu"}`)
-	req := httptest.NewRequest(http.MethodPost, "/api/ai/investigate", bytes.NewReader(body))
+	req := newLoopbackRequest(http.MethodPost, "/api/ai/investigate", bytes.NewReader(body))
 	rec := httptest.NewRecorder()
 	handler.HandleInvestigateAlert(rec, req)
 
@@ -2097,7 +2097,7 @@ func TestHandleInvestigateAlert_AcceptsCanonicalAlertIdentifier(t *testing.T) {
 	handler := newTestAISettingsHandler(cfg, persistence, nil)
 
 	body := []byte(`{"alertIdentifier":"instance:node:100::metric/cpu","resource_id":"agent-1","resource_name":"node-1","resource_type":"host","alert_type":"cpu","level":"warning","message":"high cpu"}`)
-	req := httptest.NewRequest(http.MethodPost, "/api/ai/investigate", bytes.NewReader(body))
+	req := newLoopbackRequest(http.MethodPost, "/api/ai/investigate", bytes.NewReader(body))
 	rec := httptest.NewRecorder()
 	handler.HandleInvestigateAlert(rec, req)
 
@@ -2238,7 +2238,7 @@ func TestAISettingsHandler_Approvals(t *testing.T) {
 	})
 
 	t.Run("HandleGetApproval", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/api/ai/approvals/"+appID, nil)
+		req := newLoopbackRequest(http.MethodGet, "/api/ai/approvals/"+appID, nil)
 		rec := httptest.NewRecorder()
 		handler.HandleGetApproval(rec, req)
 
@@ -2250,7 +2250,7 @@ func TestAISettingsHandler_Approvals(t *testing.T) {
 	})
 
 	t.Run("HandleListApprovals", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/api/ai/approvals", nil)
+		req := newLoopbackRequest(http.MethodGet, "/api/ai/approvals", nil)
 		rec := httptest.NewRecorder()
 		handler.HandleListApprovals(rec, req)
 
@@ -2267,7 +2267,7 @@ func TestAISettingsHandler_Approvals(t *testing.T) {
 	})
 
 	t.Run("HandleApproveCommand", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/api/ai/approvals/"+appID+"/approve", nil)
+		req := newLoopbackRequest(http.MethodPost, "/api/ai/approvals/"+appID+"/approve", nil)
 		rec := httptest.NewRecorder()
 		handler.HandleApproveCommand(rec, req)
 
@@ -2285,7 +2285,7 @@ func TestAISettingsHandler_Approvals(t *testing.T) {
 		})
 
 		body, _ := json.Marshal(map[string]string{"reason": "too dangerous"})
-		req := httptest.NewRequest(http.MethodPost, "/api/ai/approvals/"+appID2+"/deny", bytes.NewReader(body))
+		req := newLoopbackRequest(http.MethodPost, "/api/ai/approvals/"+appID2+"/deny", bytes.NewReader(body))
 		rec := httptest.NewRecorder()
 		handler.HandleDenyCommand(rec, req)
 
@@ -2303,7 +2303,7 @@ func TestAISettingsHandler_Approvals(t *testing.T) {
 			Status:  approval.StatusPending,
 		})
 
-		req := httptest.NewRequest(http.MethodPost, "/api/ai/approvals/"+appID3+"/approve", nil)
+		req := newLoopbackRequest(http.MethodPost, "/api/ai/approvals/"+appID3+"/approve", nil)
 		record := config.APITokenRecord{ID: "relay-mobile-approve", Scopes: []string{config.ScopeRelayMobileAccess}}
 		attachAPITokenRecord(req, &record)
 		rec := httptest.NewRecorder()
@@ -2323,7 +2323,7 @@ func TestAISettingsHandler_Approvals(t *testing.T) {
 		})
 
 		body, _ := json.Marshal(map[string]string{"reason": "not now"})
-		req := httptest.NewRequest(http.MethodPost, "/api/ai/approvals/"+appID4+"/deny", bytes.NewReader(body))
+		req := newLoopbackRequest(http.MethodPost, "/api/ai/approvals/"+appID4+"/deny", bytes.NewReader(body))
 		record := config.APITokenRecord{ID: "relay-mobile-deny", Scopes: []string{config.ScopeRelayMobileAccess}}
 		attachAPITokenRecord(req, &record)
 		rec := httptest.NewRecorder()
@@ -2363,7 +2363,7 @@ func TestAISettingsHandler_Approvals_RejectCrossOrgAccess(t *testing.T) {
 		Command: "ls -la",
 	}))
 
-	getReq := withOrg(httptest.NewRequest(http.MethodGet, "/api/ai/approvals/cross-org-get", nil), "org-b")
+	getReq := withOrg(newLoopbackRequest(http.MethodGet, "/api/ai/approvals/cross-org-get", nil), "org-b")
 	getRec := httptest.NewRecorder()
 	handler.HandleGetApproval(getRec, getReq)
 	require.Equal(t, http.StatusNotFound, getRec.Code)
@@ -2374,7 +2374,7 @@ func TestAISettingsHandler_Approvals_RejectCrossOrgAccess(t *testing.T) {
 		Command: "uptime",
 	}))
 
-	approveReq := withOrg(httptest.NewRequest(http.MethodPost, "/api/ai/approvals/cross-org-approve/approve", nil), "org-b")
+	approveReq := withOrg(newLoopbackRequest(http.MethodPost, "/api/ai/approvals/cross-org-approve/approve", nil), "org-b")
 	approveRec := httptest.NewRecorder()
 	handler.HandleApproveCommand(approveRec, approveReq)
 	require.Equal(t, http.StatusNotFound, approveRec.Code)
@@ -2389,7 +2389,7 @@ func TestAISettingsHandler_Approvals_RejectCrossOrgAccess(t *testing.T) {
 	}))
 
 	denyReq := withOrg(
-		httptest.NewRequest(http.MethodPost, "/api/ai/approvals/cross-org-deny/deny", bytes.NewReader([]byte(`{"reason":"no"}`))),
+		newLoopbackRequest(http.MethodPost, "/api/ai/approvals/cross-org-deny/deny", bytes.NewReader([]byte(`{"reason":"no"}`))),
 		"org-b",
 	)
 	denyRec := httptest.NewRecorder()

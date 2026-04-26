@@ -25,13 +25,10 @@ func RequirePlatformAdmin(cfg *config.Config, handler http.HandlerFunc) http.Han
 			return
 		}
 
-		if !CheckAuth(cfg, w, r) {
-			if strings.HasPrefix(r.URL.Path, "/api/") || strings.Contains(r.Header.Get("Accept"), "application/json") {
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusUnauthorized)
-				_, _ = w.Write([]byte(`{"error":"Authentication required"}`))
-			} else {
-				http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		authWriter := &responseCapture{ResponseWriter: w}
+		if !checkAuth(cfg, authWriter, r, false) {
+			if !authWriter.wrote {
+				writeAuthenticationRequired(w, r)
 			}
 			return
 		}
@@ -90,14 +87,11 @@ func RequireOrgOwnerOrPlatformAdmin(cfg *config.Config, orgs OrgPersistenceProvi
 
 		// Authenticate first. We intentionally do not reuse RequireAdmin because
 		// RequireAdmin treats *all* authenticated non-proxy users as "admin".
-		if !CheckAuth(cfg, w, r) {
+		authWriter := &responseCapture{ResponseWriter: w}
+		if !checkAuth(cfg, authWriter, r, false) {
 			// Match RequireAdmin's behavior for API routes.
-			if strings.HasPrefix(r.URL.Path, "/api/") || strings.Contains(r.Header.Get("Accept"), "application/json") {
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusUnauthorized)
-				_, _ = w.Write([]byte(`{"error":"Authentication required"}`))
-			} else {
-				http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			if !authWriter.wrote {
+				writeAuthenticationRequired(w, r)
 			}
 			return
 		}

@@ -107,6 +107,7 @@ var publicPathsDynamicAllowlist = []string{}
 var publicPathsAllowlist = []string{
 	"/api/health",
 	"/api/security/status",
+	"/api/security/recovery",
 	"/api/security/validate-bootstrap-token",
 	"/api/security/quick-setup",
 	"/api/version",

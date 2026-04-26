@@ -47,7 +47,7 @@ func TestRequirePermission(t *testing.T) {
 			w.WriteHeader(http.StatusOK)
 		})
 
-		req := httptest.NewRequest("GET", "/api/test", nil)
+		req := newLoopbackRequest("GET", "/api/test", nil)
 		// Mock authentication bypass or setup
 		// Since CheckAuth is internal, we might need a way to mock it or set up what it expects.
 		// For this test, let's assume CheckAuth passes if no auth is configured.
@@ -70,7 +70,7 @@ func TestRequirePermission(t *testing.T) {
 			w.WriteHeader(http.StatusOK)
 		})
 
-		req := httptest.NewRequest("POST", "/api/test", nil)
+		req := newLoopbackRequest("POST", "/api/test", nil)
 		rr := httptest.NewRecorder()
 		handler.ServeHTTP(rr, req)
 
@@ -94,7 +94,7 @@ func TestRequirePermission(t *testing.T) {
 		})
 
 		// req with no auth -> CheckAuth sets "anonymous"
-		req := httptest.NewRequest("GET", "/api/test", nil)
+		req := newLoopbackRequest("GET", "/api/test", nil)
 		rr := httptest.NewRecorder()
 		handler.ServeHTTP(rr, req)
 

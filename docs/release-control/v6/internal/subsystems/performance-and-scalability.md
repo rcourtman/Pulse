@@ -155,6 +155,10 @@ regression protection.
    validate request-body setup tokens, but the router-level public-path check must
    stay O(1) and must not front-run persistence loads, monitor refresh, or other
    teardown/register side effects before the canonical handler owns the request.
+   `/api/config/export` and `/api/config/import` follow the same hot-path rule:
+   router auth bypass exists only to let their handlers make route-local auth and
+   public-network decisions, and the bypass check must remain a constant-time
+   path comparison rather than a persistence-backed authorization probe.
    Agent-version signaling follows that same hot-path rule. Shared helpers used
    by `/api/agent/version` and adjacent settings payloads may read the cached
    process version once, but they must not add per-request release lookups,

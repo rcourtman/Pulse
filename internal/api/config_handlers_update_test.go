@@ -171,7 +171,7 @@ func TestHandleUpdateNode(t *testing.T) {
 	}
 }
 
-func TestHandleUpdateNode_BlocksProjectedNetNewSystemAtLimit(t *testing.T) {
+func TestHandleUpdateNode_AllowsProjectedNetNewSystemWithoutPaidLimit(t *testing.T) {
 	setMaxMonitoredSystemsLicenseForTests(t, 1)
 
 	cfg := &config.Config{
@@ -236,10 +236,10 @@ func TestHandleUpdateNode_BlocksProjectedNetNewSystemAtLimit(t *testing.T) {
 
 	handler.HandleUpdateNode(rec, req)
 
-	if rec.Code != http.StatusPaymentRequired {
-		t.Fatalf("expected 402 when update would add a new monitored system, got %d: %s", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected update to remain allowed without monitored-system paid limits, got %d: %s", rec.Code, rec.Body.String())
 	}
-	if got := cfg.PVEInstances[0].Host; got != "https://tower.local:8006" {
-		t.Fatalf("expected blocked update to preserve original host, got %q", got)
+	if got := cfg.PVEInstances[0].Host; got != "https://backup.local:8006" {
+		t.Fatalf("expected update to apply new host without paid limit enforcement, got %q", got)
 	}
 }

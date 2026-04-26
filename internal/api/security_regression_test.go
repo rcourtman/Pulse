@@ -1757,6 +1757,36 @@ func TestSystemSettingsUpdateRequiresSettingsWriteScope(t *testing.T) {
 	}
 }
 
+func TestSystemSettingsUpdatePreservesAPIOnlyAuthError(t *testing.T) {
+	rawToken := "system-settings-api-only-token-123.12345678"
+	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsWrite}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	handler := NewSystemSettingsHandler(
+		cfg,
+		config.NewConfigPersistence(cfg.DataPath),
+		nil,
+		nil,
+		nil,
+		func() {},
+		func() error { return nil },
+	)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/system/settings/update", strings.NewReader(`{}`))
+	rec := httptest.NewRecorder()
+	handler.HandleUpdateSystemSettings(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 for missing API token, got %d", rec.Code)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, "API token required") {
+		t.Fatalf("expected API-token-specific auth response, got %q", body)
+	}
+	if strings.Contains(body, `"unauthorized"`) {
+		t.Fatalf("expected route to preserve API-token-specific auth response, got generic body %q", body)
+	}
+}
+
 func TestMockModeReadRequiresSettingsReadScope(t *testing.T) {
 	rawToken := "mock-mode-read-token-123.12345678"
 	record := newTokenRecord(t, rawToken, []string{config.ScopeMonitoringRead}, nil)

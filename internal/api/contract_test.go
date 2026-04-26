@@ -304,7 +304,7 @@ func TestContract_AISettingsUpdateQuickstartBootstrapJSONSnapshot(t *testing.T) 
 		},
 	))
 
-	req := httptest.NewRequest(http.MethodPut, "/api/settings/ai/update", strings.NewReader(`{
+	req := newLoopbackRequest(http.MethodPut, "/api/settings/ai/update", strings.NewReader(`{
 		"enabled": true
 	}`))
 	req.Header.Set("Content-Type", "application/json")
@@ -376,7 +376,7 @@ func TestContract_AISettingsUpdateProviderResolutionJSONSnapshot(t *testing.T) {
 	persistence := config.NewConfigPersistence(tmp)
 	handler := newTestAISettingsHandler(cfg, persistence, nil)
 
-	req := httptest.NewRequest(http.MethodPut, "/api/settings/ai/update", strings.NewReader(fmt.Sprintf(`{
+	req := newLoopbackRequest(http.MethodPut, "/api/settings/ai/update", strings.NewReader(fmt.Sprintf(`{
 		"enabled": true,
 		"ollama_base_url": %q
 	}`, ollama.URL)))

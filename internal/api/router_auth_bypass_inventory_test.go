@@ -75,6 +75,8 @@ func parseAuthBypassPaths(t *testing.T) []string {
 var authBypassAllowlist = []string{
 	"/api/auto-register",
 	"/api/auto-unregister",
+	"/api/config/export",
+	"/api/config/import",
 	"/api/setup-script",
 	"/api/system/ssh-config",
 	"/api/system/verify-temperature-ssh",

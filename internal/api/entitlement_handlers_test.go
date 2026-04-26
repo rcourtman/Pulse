@@ -65,10 +65,11 @@ func TestBuildEntitlementPayload_FreeTier(t *testing.T) {
 
 	payload := buildEntitlementPayload(status, "")
 
-	// Upgrade reasons should cover every Pro feature not in Free.
-	proMinusFree := countProMinusFreeFeatures()
-	if len(payload.UpgradeReasons) != proMinusFree {
-		t.Fatalf("expected %d upgrade reasons for free tier, got %d", proMinusFree, len(payload.UpgradeReasons))
+	// Upgrade reasons should cover marketed upgrade surfaces, not every
+	// compatibility-only capability that may exist in the Pro feature set.
+	wantReasons := pkglicensing.GenerateUpgradeReasons(status.Features)
+	if len(payload.UpgradeReasons) != len(wantReasons) {
+		t.Fatalf("expected %d upgrade reasons for free tier, got %d", len(wantReasons), len(payload.UpgradeReasons))
 	}
 	for _, reason := range payload.UpgradeReasons {
 		if reason.ActionURL == "" {

@@ -553,8 +553,52 @@ func CheckProxyAuth(cfg *config.Config, r *http.Request) (bool, string, bool) {
 	return true, username, isAdmin
 }
 
-// CheckAuth checks both basic auth and API token
+type responseCapture struct {
+	http.ResponseWriter
+	wrote bool
+}
+
+func (rc *responseCapture) WriteHeader(statusCode int) {
+	if !rc.wrote {
+		rc.wrote = true
+		rc.ResponseWriter.WriteHeader(statusCode)
+	}
+}
+
+func (rc *responseCapture) Write(b []byte) (int, error) {
+	rc.wrote = true
+	return rc.ResponseWriter.Write(b)
+}
+
+func wantsJSONAuthResponse(r *http.Request) bool {
+	if r == nil {
+		return false
+	}
+	if r.URL != nil && strings.HasPrefix(r.URL.Path, "/api/") {
+		return true
+	}
+	return strings.Contains(r.Header.Get("Accept"), "application/json")
+}
+
+func writeAuthenticationRequired(w http.ResponseWriter, r *http.Request) {
+	if w == nil {
+		return
+	}
+	if wantsJSONAuthResponse(r) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnauthorized)
+		_, _ = w.Write([]byte(`{"error":"Authentication required"}`))
+		return
+	}
+	http.Error(w, "Unauthorized", http.StatusUnauthorized)
+}
+
+// CheckAuth checks both basic auth and API token.
 func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool {
+	return checkAuth(cfg, w, r, true)
+}
+
+func checkAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request, writeDefaultFailure bool) bool {
 	// Dev mode bypass for all auth (disabled by default)
 	if adminBypassEnabled() {
 		if w != nil {
@@ -895,6 +939,9 @@ func CheckAuth(cfg *config.Config, w http.ResponseWriter, r *http.Request) bool 
 		}
 	}
 
+	if writeDefaultFailure {
+		writeAuthenticationRequired(w, r)
+	}
 	return false
 }
 
@@ -910,7 +957,8 @@ func RequireAuth(cfg *config.Config, handler http.HandlerFunc) http.HandlerFunc 
 			return
 		}
 
-		if CheckAuth(cfg, w, r) {
+		authWriter := &responseCapture{ResponseWriter: w}
+		if checkAuth(cfg, authWriter, r, false) {
 			handler(w, r)
 			return
 		}
@@ -922,15 +970,10 @@ func RequireAuth(cfg *config.Config, handler http.HandlerFunc) http.HandlerFunc 
 			Str("method", r.Method).
 			Msg("Unauthorized access attempt")
 
-		// Never send WWW-Authenticate header - we want to use our custom login page
-		// The frontend will detect 401 responses and show the login component
-		// Return JSON error for API requests, plain text for others
-		if strings.HasPrefix(r.URL.Path, "/api/") || strings.Contains(r.Header.Get("Accept"), "application/json") {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusUnauthorized)
-			w.Write([]byte(`{"error":"Authentication required"}`))
-		} else {
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		if !authWriter.wrote {
+			// Never send WWW-Authenticate header - we want to use our custom login page.
+			// The frontend will detect 401 responses and show the login component.
+			writeAuthenticationRequired(w, r)
 		}
 	}
 }
@@ -950,7 +993,8 @@ func RequireAdmin(cfg *config.Config, handler http.HandlerFunc) http.HandlerFunc
 		}
 
 		// First check if user is authenticated
-		if !CheckAuth(cfg, w, r) {
+		authWriter := &responseCapture{ResponseWriter: w}
+		if !checkAuth(cfg, authWriter, r, false) {
 			// Log the failed attempt
 			log.Warn().
 				Str("ip", r.RemoteAddr).
@@ -958,13 +1002,8 @@ func RequireAdmin(cfg *config.Config, handler http.HandlerFunc) http.HandlerFunc
 				Str("method", r.Method).
 				Msg("Unauthorized access attempt")
 
-			// Return authentication error
-			if strings.HasPrefix(r.URL.Path, "/api/") || strings.Contains(r.Header.Get("Accept"), "application/json") {
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusUnauthorized)
-				w.Write([]byte(`{"error":"Authentication required"}`))
-			} else {
-				http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			if !authWriter.wrote {
+				writeAuthenticationRequired(w, r)
 			}
 			return
 		}
@@ -1008,13 +1047,16 @@ func RequireAdmin(cfg *config.Config, handler http.HandlerFunc) http.HandlerFunc
 func RequirePermission(cfg *config.Config, authorizer auth.Authorizer, action, resource string, next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// First check if user is authenticated (using RequireAdmin logic as base)
-		if !CheckAuth(cfg, w, r) {
-			if strings.HasPrefix(r.URL.Path, "/api/") || strings.Contains(r.Header.Get("Accept"), "application/json") {
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusUnauthorized)
-				w.Write([]byte(`{"error":"authentication_required","message":"Authentication required"}`))
-			} else {
-				http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		authWriter := &responseCapture{ResponseWriter: w}
+		if !checkAuth(cfg, authWriter, r, false) {
+			if !authWriter.wrote {
+				if wantsJSONAuthResponse(r) {
+					w.Header().Set("Content-Type", "application/json")
+					w.WriteHeader(http.StatusUnauthorized)
+					w.Write([]byte(`{"error":"authentication_required","message":"Authentication required"}`))
+				} else {
+					http.Error(w, "Unauthorized", http.StatusUnauthorized)
+				}
 			}
 			return
 		}
