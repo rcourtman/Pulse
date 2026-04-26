@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
+import { fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
 import { describe, expect, it, vi } from 'vitest';
 import type { Component } from 'solid-js';
 import mobileNavBarSource from '@/components/shared/MobileNavBar.tsx?raw';
@@ -16,6 +16,12 @@ const DashboardIcon: Component<{ class?: string }> = (props) => <span class={pro
 const StorageIcon: Component<{ class?: string }> = (props) => <span class={props.class}>ST</span>;
 const AlertsIcon: Component<{ class?: string }> = (props) => <span class={props.class}>AL</span>;
 const SettingsIcon: Component<{ class?: string }> = (props) => <span class={props.class}>SE</span>;
+const PatrolIcon: Component<{ class?: string }> = (props) => (
+  <svg aria-label="Pulse Patrol" class={props.class} viewBox="0 0 24 24">
+    <title>Pulse Patrol</title>
+    <circle cx="12" cy="12" r="8" />
+  </svg>
+);
 
 describe('MobileNavBar', () => {
   it('keeps the mobile nav on shell, runtime, and model owners', () => {
@@ -35,6 +41,35 @@ describe('MobileNavBar', () => {
     expect(mobileNavBarModelSource).toContain('buildOrderedMobileNavUtilityTabs');
     expect(mobileNavBarModelSource).toContain('getMobileNavAlertBadgeCounts');
     expect(mobileNavBarModelSource).toContain('getMobileNavFadeState');
+  });
+
+  it('keeps decorative icon labels out of mobile tab accessible names', () => {
+    render(() => (
+      <MobileNavBar
+        activeTab={() => 'ai'}
+        platformTabs={() => []}
+        utilityTabs={() => [
+          {
+            id: 'ai',
+            label: 'Patrol',
+            route: '/patrol',
+            tooltip: 'Continuous verification',
+            badge: null,
+            count: undefined,
+            breakdown: undefined,
+            icon: PatrolIcon,
+          },
+        ]}
+        onPlatformClick={() => {}}
+        onUtilityClick={() => {}}
+      />
+    ));
+
+    const navList = screen.getByRole('tablist', { name: 'Mobile navigation' });
+    const patrolButton = within(navList).getByRole('button', { name: 'Patrol' });
+
+    expect(patrolButton).toHaveAttribute('data-tab-id', 'ai');
+    expect(within(navList).queryByRole('button', { name: 'Pulse Patrol Patrol' })).toBeNull();
   });
 
   it('orders tabs, renders alert badges, and shows fades from scroll state', async () => {

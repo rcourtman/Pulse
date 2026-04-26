@@ -37,7 +37,7 @@ export function MobileNavBar(props: MobileNavBarProps) {
                       enabled: platform.enabled,
                     })}
                   >
-                    <span class="relative flex items-center justify-center">
+                    <span aria-hidden="true" class="relative flex items-center justify-center">
                       <Icon class={tabIconClass} />
                     </span>
                     <span class="whitespace-nowrap">{platform.label}</span>
@@ -72,7 +72,9 @@ export function MobileNavBar(props: MobileNavBarProps) {
                     })}
                   >
                     <span class="relative flex items-center justify-center">
-                      <Icon class={tabIconClass} />
+                      <span aria-hidden="true" class="inline-flex items-center justify-center">
+                        <Icon class={tabIconClass} />
+                      </span>
                       <Show when={alertBadges()}>
                         {(badges) => (
                           <span class="absolute -right-2 -top-1 flex items-center gap-1">

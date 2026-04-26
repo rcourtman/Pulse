@@ -174,6 +174,10 @@ work extends shared components instead of creating new local variants.
    durable plan-capacity explanation, over-plan reasoning, and upgrade/review
    actions belong in the `cloud-paid` plan surface rather than permanent
    banner-local prose.
+   Mobile navigation under the same shared boundary owns tab accessible names:
+   icon components may keep their standalone labels, but the nav must treat
+   those icons as decorative inside tab buttons so names come from the tab
+   label plus meaningful badge counts, not duplicated icon titles.
 2. Route new top-level settings surfaces through the canonical settings shell
    instead of introducing page-local framing.
    Shared shells and primitives that need websocket or dark-mode context must
