@@ -20,8 +20,11 @@ import {
 import { getResourceTypeLabel } from '@/utils/resourceTypePresentation';
 import { getTypeColumnLabel } from '@/utils/typeColumnPresentation';
 import { getSimpleStatusIndicator, getStatusIndicatorBadgeToneClasses } from '@/utils/status';
-import { getProblemResourceStatusVariant } from '@/utils/problemResourcePresentation';
-import { getPreferredResourceDisplayName } from '@/utils/resourceIdentity';
+import {
+  getProblemResourceIssueLabel,
+  getProblemResourceMemberLabel,
+  getProblemResourceStatusVariant,
+} from '@/utils/problemResourcePresentation';
 import AlertTriangleIcon from 'lucide-solid/icons/alert-triangle';
 
 interface ProblemResourcesTableProps {
@@ -52,7 +55,11 @@ function normalizeGroupValue(value: string): string {
 }
 
 function problemResourceDisplayName(pr: ProblemResource): string {
-  return getPreferredResourceDisplayName(pr.resource) || pr.resource.id;
+  return getProblemResourceIssueLabel(pr.resource, pr.problems);
+}
+
+function problemResourceMemberDisplayName(pr: ProblemResource): string | null {
+  return getProblemResourceMemberLabel(pr.resource, pr.problems);
 }
 
 function problemGroupKey(pr: ProblemResource): string {
@@ -70,21 +77,22 @@ function problemResourceGroups(problems: ProblemResource[]): ProblemResourceGrou
     if (existing) {
       existing.resources.push(problem);
       existing.worstValue = Math.max(existing.worstValue, problem.worstValue);
-      const memberName = problemResourceDisplayName(problem);
-      if (!existing.memberDisplayNames.includes(memberName)) {
+      const memberName = problemResourceMemberDisplayName(problem);
+      if (memberName && !existing.memberDisplayNames.includes(memberName)) {
         existing.memberDisplayNames.push(memberName);
       }
       continue;
     }
 
     const displayName = problemResourceDisplayName(problem);
+    const memberName = problemResourceMemberDisplayName(problem);
     groups.set(key, {
       representative: problem,
       resources: [problem],
       displayName,
       typeLabel: getResourceTypeLabel(problem.resource.type) || problem.resource.type,
       worstValue: problem.worstValue,
-      memberDisplayNames: [displayName || problem.resource.id],
+      memberDisplayNames: memberName ? [memberName] : [],
     });
   }
 
@@ -168,17 +176,23 @@ export function ProblemResourcesTable(props: ProblemResourcesTableProps) {
                       <a
                         href={groupedResourceLink(group)}
                         class="text-xs font-medium text-base-content hover:underline truncate block max-w-[200px]"
-                        title={group.memberDisplayNames.join(', ')}
+                        title={
+                          group.memberDisplayNames.length > 0
+                            ? group.memberDisplayNames.join(', ')
+                            : `${group.resources.length} ${pluralizeTypeLabel(group.resources.length, group.typeLabel)}`
+                        }
                       >
                         {group.resources.length}{' '}
                         {pluralizeTypeLabel(group.resources.length, group.typeLabel)}
                       </a>
-                      <span
-                        class="mt-0.5 block text-[10px] text-muted truncate max-w-[220px]"
-                        title={group.memberDisplayNames.join(', ')}
-                      >
-                        {group.memberDisplayNames.join(', ')}
-                      </span>
+                      <Show when={group.memberDisplayNames.length > 0}>
+                        <span
+                          class="mt-0.5 block text-[10px] text-muted truncate max-w-[220px]"
+                          title={group.memberDisplayNames.join(', ')}
+                        >
+                          {group.memberDisplayNames.join(', ')}
+                        </span>
+                      </Show>
                     </Show>
                   </TableCell>
                   <TableCell class="hidden sm:table-cell">

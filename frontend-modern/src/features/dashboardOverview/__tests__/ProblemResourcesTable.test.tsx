@@ -113,6 +113,27 @@ describe('ProblemResourcesTable', () => {
     // Storage groups use resource wording instead of the awkward "storages".
     expect(screen.getByText('2 storage resources')).toBeInTheDocument();
     expect(screen.queryByText('2 storages')).toBeNull();
+    expect(screen.queryByText('storage')).toBeNull();
+  });
+
+  it('hides generated status-shaped member names on grouped rows', () => {
+    render(() => (
+      <ProblemResourcesTable
+        problems={['one', 'two'].map((id) => ({
+          resource: makeResource({
+            id: `container-${id}`,
+            type: 'system-container',
+            name: 'system container (offline)',
+            displayName: 'system container (offline)',
+          }),
+          problems: ['Offline'],
+          worstValue: 200,
+        }))}
+      />
+    ));
+
+    expect(screen.getByText('2 containers')).toBeInTheDocument();
+    expect(screen.queryByText('system container (offline)')).toBeNull();
   });
 
   it('renders governed labels for policy-aware problem resources', () => {

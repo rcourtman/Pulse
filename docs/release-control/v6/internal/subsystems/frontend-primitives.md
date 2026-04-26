@@ -1776,10 +1776,11 @@ may collapse only when they share the same governed display label, resource
 type, and problem signal; the header count and Pulse Brief counts must continue
 to represent the underlying affected resources, and grouped links must route to
 the broad owning surface rather than inventing a synthetic resource target.
-Pulse Brief problem-resource wording must not amplify generic status-shaped
-names such as `storage (offline)` into first-viewport prose; when the resource
-name is only a type plus status, the brief should summarize the type-level issue
-in operator language instead of repeating raw backend-shaped labels.
+Problem Resources and Pulse Brief wording must not amplify generic
+status-shaped names such as `storage (offline)` into first-viewport prose or
+grouped-row sublabels; when the resource name is only a type plus status, the
+surface should summarize the type-level issue in operator language instead of
+repeating raw backend-shaped labels.
 That same dashboard overview boundary must consume the governed Patrol finding
 presentation helpers when it surfaces Patrol findings in compact form. In
 `frontend-modern/src/features/dashboardOverview/ActionRequiredPanel.tsx`,
