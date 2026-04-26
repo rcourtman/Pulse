@@ -384,6 +384,17 @@ func TestTierFeatureInheritance(t *testing.T) {
 		}
 	}
 
+	// Pro+ is a legacy continuity tier, not a bigger self-hosted monitoring tier.
+	proPlusSet := asSet(TierFeatures[TierProPlus])
+	if len(proPlusSet) != len(proSet) {
+		t.Fatalf("Pro+ feature count = %d, want Pro feature count %d", len(proPlusSet), len(proSet))
+	}
+	for f := range proSet {
+		if !proPlusSet[f] {
+			t.Errorf("Pro+ tier missing Pro feature %q", f)
+		}
+	}
+
 	// MSP must include all Pro features.
 	mspSet := asSet(TierFeatures[TierMSP])
 	for f := range proSet {

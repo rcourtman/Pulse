@@ -301,7 +301,7 @@ var TierFeatures = map[Tier][]string{
 	TierFree:       freeFeatures,
 	TierRelay:      relayFeatures,
 	TierPro:        proFeatures,
-	TierProPlus:    proFeatures, // Same features as Pro, just higher host limit
+	TierProPlus:    proFeatures, // Legacy compatibility tier; same runtime features as Pro
 	TierProAnnual:  proFeatures, // Legacy: same features as Pro
 	TierLifetime:   proFeatures, // Legacy: same features as Pro
 	TierCloud:      proFeatures, // Cloud includes all Pro features + managed hosting
