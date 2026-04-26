@@ -38,6 +38,8 @@ describe('licensePresentation', () => {
     expect(getLicenseTierLabel('enterprise')).toBe('Enterprise');
     expect(getLicenseTierLabel('custom_tier')).toBe('Custom Tier');
     expect(getSelfHostedPlanLabel('pro')).toBe('Pulse Pro');
+    expect(getSelfHostedPlanLabel('pro_plus')).toBe('Pulse Pro+');
+    expect(getSelfHostedPlanLabel('lifetime')).toBe('Pulse Pro Lifetime');
     expect(getSelfHostedPlanLabel('relay')).toBe('Relay');
   });
 
@@ -282,6 +284,25 @@ describe('licensePresentation', () => {
     expect(
       getSelfHostedCurrentPlanPresentation({
         entitlements: {
+          tier: 'pro_plus',
+          subscription_state: 'active',
+          capabilities: ['relay', 'ai_autofix'],
+          limits: [],
+          upgrade_reasons: [],
+        },
+        displayableCapabilities: ['Pulse Relay (Remote Access)', 'Patrol Auto-Fix'],
+      }),
+    ).toMatchObject({
+      title: 'Current plan: Pulse Pro+',
+      body:
+        'Pulse Pro+ is active on this instance. Root-cause analysis, safe remediation, and 90-day history are unlocked right now.',
+      unlockedFeaturesLabel: 'Primary capabilities',
+      unlockedFeatures: ['Pulse Alert Analysis', 'Patrol Auto-Fix', '90-day metric history'],
+    });
+
+    expect(
+      getSelfHostedCurrentPlanPresentation({
+        entitlements: {
           tier: 'pro',
           subscription_state: 'active',
           plan_version: 'v5_pro_monthly_grandfathered',
@@ -311,9 +332,9 @@ describe('licensePresentation', () => {
         'PDF/CSV Reporting',
         'Centralized Agent Profiles',
       ],
-      supplementalBadges: ['Grandfathered price', 'Grandfathered floor'],
+      supplementalBadges: ['Grandfathered price'],
       supplementalSummary:
-        'This migrated v5 subscription keeps its existing recurring price and uncapped guest capacity until cancellation. This installation keeps an effective monitored-system limit of 23 from the observed legacy estate.',
+        'This migrated v5 subscription keeps its existing recurring price and uncapped guest capacity until cancellation.',
     });
   });
 
@@ -534,6 +555,37 @@ describe('licensePresentation', () => {
       body: expect.stringContaining('already monitoring 23'),
       tone: expect.stringContaining('amber'),
     });
+    expect(
+      getMonitoredSystemContinuityNotice(
+        {
+          plan_limit: 10,
+          grandfathered_floor: 23,
+          effective_limit: 23,
+          capture_pending: false,
+          captured_at: 123,
+        },
+        {
+          current_available: true,
+        },
+        {
+          mode: 'at_limit_blocking_new',
+          urgency: 'enforced',
+          current: 23,
+          limit: 23,
+          current_available: true,
+          available_slots: 0,
+          overage: 0,
+          reason: 'limit_reached',
+          blocks_new_systems: true,
+          existing_monitoring_continues: true,
+        },
+        {
+          planVersion: 'v5_pro_monthly_grandfathered',
+          isLifetime: false,
+          subscriptionState: 'active',
+        },
+      ),
+    ).toBeNull();
     expect(
       getMonitoredSystemContinuityNotice(
         {

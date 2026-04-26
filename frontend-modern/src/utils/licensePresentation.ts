@@ -35,6 +35,9 @@ const TIER_LABELS: Record<string, string> = {
 
 const SELF_HOSTED_PLAN_LABELS: Record<string, string> = {
   pro: 'Pulse Pro',
+  pro_annual: 'Pulse Pro Annual',
+  pro_plus: 'Pulse Pro+',
+  lifetime: 'Pulse Pro Lifetime',
 };
 
 const FEATURE_MIN_TIER_LABELS: Record<string, string> = {
@@ -139,6 +142,49 @@ export const isUncappedGrandfatheredPlanVersion = (
   return isGrandfatheredRecurringV5PlanVersion(planVersion);
 };
 
+const isActiveOrGraceSubscription = (subscriptionState?: string | null): boolean => {
+  const normalized = (subscriptionState || '').trim().toLowerCase();
+  return normalized === 'active' || normalized === 'grace';
+};
+
+export const hasActiveUncappedSelfHostedContinuity = ({
+  planVersion,
+  isLifetime,
+  subscriptionState,
+}: {
+  planVersion?: string | null;
+  isLifetime?: boolean | null;
+  subscriptionState?: string | null;
+}): boolean => {
+  if (isLifetime) {
+    return true;
+  }
+  return (
+    isActiveOrGraceSubscription(subscriptionState) &&
+    isGrandfatheredRecurringV5PlanVersion(planVersion)
+  );
+};
+
+export const getDisplayableMonitoredSystemContinuity = ({
+  continuity,
+  planVersion,
+  isLifetime,
+  subscriptionState,
+}: {
+  continuity?: MonitoredSystemContinuityStatus | null;
+  planVersion?: string | null;
+  isLifetime?: boolean | null;
+  subscriptionState?: string | null;
+}): MonitoredSystemContinuityStatus | null => {
+  if (!continuity) {
+    return null;
+  }
+  if (hasActiveUncappedSelfHostedContinuity({ planVersion, isLifetime, subscriptionState })) {
+    return null;
+  }
+  return continuity;
+};
+
 export const getLicenseTierLabel = (tier?: string | null): string => {
   const normalized = (tier || '').trim().toLowerCase();
   if (!normalized) return 'Unknown';
@@ -204,10 +250,24 @@ export const getMonitoredSystemContinuityNotice = (
   continuity?: MonitoredSystemContinuityStatus | null,
   limit?: MonitoredSystemLimitUsageStatus | null,
   capacity?: MonitoredSystemCapacityStatus | null,
+  context?: {
+    planVersion?: string | null;
+    isLifetime?: boolean | null;
+    subscriptionState?: string | null;
+  },
 ): LicenseInlineNotice | null => {
+  const displayContinuity = getDisplayableMonitoredSystemContinuity({
+    continuity,
+    planVersion: context?.planVersion,
+    isLifetime: context?.isLifetime,
+    subscriptionState: context?.subscriptionState,
+  });
+  if (!displayContinuity) {
+    return null;
+  }
   const resolvedCapacity = resolveMonitoredSystemCapacityStatus(capacity, limit);
 
-  if (continuity?.capture_pending) {
+  if (displayContinuity.capture_pending) {
     if (!resolvedCapacity?.current_available) {
       return {
         tone: 'border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-900 text-amber-900 dark:text-amber-100',
@@ -222,7 +282,7 @@ export const getMonitoredSystemContinuityNotice = (
       return {
         tone: 'border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-900 text-amber-900 dark:text-amber-100',
         title: 'Migration continuity verification pending',
-        body: `Pulse is still verifying the grandfathered monitored-system floor for this migrated v5 installation. The finite policy includes ${continuity.plan_limit}, while this installation is already monitoring ${resolvedCapacity.current}. Existing monitoring continues while additional monitored-system admissions pause until continuity capture finishes.`,
+        body: `Pulse is still verifying the grandfathered monitored-system floor for this migrated v5 installation. The finite policy includes ${displayContinuity.plan_limit}, while this installation is already monitoring ${resolvedCapacity.current}. Existing monitoring continues while additional monitored-system admissions pause until continuity capture finishes.`,
       };
     }
 
@@ -244,15 +304,14 @@ export const getMonitoredSystemContinuityNotice = (
   }
 
   if (
-    continuity &&
-    typeof continuity.grandfathered_floor === 'number' &&
-    continuity.grandfathered_floor > 0 &&
-    continuity.effective_limit > continuity.plan_limit
+    typeof displayContinuity.grandfathered_floor === 'number' &&
+    displayContinuity.grandfathered_floor > 0 &&
+    displayContinuity.effective_limit > displayContinuity.plan_limit
   ) {
     return {
       tone: 'border-green-200 dark:border-green-900 bg-green-50 dark:bg-green-900 text-green-900 dark:text-green-100',
       title: 'Grandfathered monitored-system floor',
-      body: `This migrated v5 installation keeps an effective monitored-system limit of ${continuity.effective_limit}. The current plan includes ${continuity.plan_limit}, and the observed legacy estate was grandfathered at ${continuity.grandfathered_floor}.`,
+      body: `This migrated v5 installation keeps an effective monitored-system limit of ${displayContinuity.effective_limit}. The current plan includes ${displayContinuity.plan_limit}, and the observed legacy estate was grandfathered at ${displayContinuity.grandfathered_floor}.`,
     };
   }
 
@@ -320,6 +379,22 @@ const getSelfHostedActivationHighlights = ({
   return highlights;
 };
 
+const getSelfHostedActivePlanSummary = (
+  planLabel: string,
+  planDefinition: ReturnType<typeof getSelfHostedPlanDefinitionForBillingTier>,
+): string | null => {
+  switch (planDefinition?.tier) {
+    case 'community':
+      return `${planLabel} is active on this instance. It includes self-hosted monitoring, 7-day metric history, Pulse Patrol (BYOK), and update alerts.`;
+    case 'relay':
+      return `${planLabel} is active on this instance. Remote access, mobile, push, and longer history are unlocked right now.`;
+    case 'pro':
+      return `${planLabel} is active on this instance. Root-cause analysis, safe remediation, and 90-day history are unlocked right now.`;
+    default:
+      return null;
+  }
+};
+
 export const getSelfHostedPlanComparisonPresentation = ({
   entitlements,
 }: {
@@ -373,6 +448,11 @@ export const getSelfHostedCurrentPlanPresentation = ({
   const normalizedTier = (current.tier || '').trim().toLowerCase();
   const planLabel = getSelfHostedPlanLabel(current.tier);
   const planDefinition = getSelfHostedPlanDefinitionForBillingTier(current.tier);
+  const hasUncappedContinuity = hasActiveUncappedSelfHostedContinuity({
+    planVersion: current.plan_version,
+    isLifetime: current.is_lifetime,
+    subscriptionState: current.subscription_state,
+  });
   const unlockedFeatures = getSelfHostedUnlockedFeatures({
     entitlements: current,
     displayableCapabilities,
@@ -386,19 +466,27 @@ export const getSelfHostedCurrentPlanPresentation = ({
   const supplementalBadges: string[] = [];
   const supplementalDetails: string[] = [];
 
-  if (isGrandfatheredRecurringV5PlanVersion(current.plan_version)) {
+  if (
+    isActiveOrGraceSubscription(current.subscription_state) &&
+    isGrandfatheredRecurringV5PlanVersion(current.plan_version)
+  ) {
     supplementalBadges.push('Grandfathered price');
     supplementalDetails.push(
       'This migrated v5 subscription keeps its existing recurring price and uncapped guest capacity until cancellation.',
     );
-  } else if (current.is_lifetime && isUncappedGrandfatheredPlanVersion(current.plan_version, true)) {
+  } else if (hasUncappedContinuity && current.is_lifetime) {
     supplementalBadges.push('Grandfathered lifetime');
     supplementalDetails.push(
       'This migrated lifetime install keeps uncapped monitored-system and guest capacity continuity.',
     );
   }
 
-  const continuity = current.monitored_system_continuity;
+  const continuity = getDisplayableMonitoredSystemContinuity({
+    continuity: current.monitored_system_continuity,
+    planVersion: current.plan_version,
+    isLifetime: current.is_lifetime,
+    subscriptionState: current.subscription_state,
+  });
   if (continuity?.capture_pending) {
     supplementalBadges.push('Continuity pending');
     supplementalDetails.push(
@@ -436,7 +524,7 @@ export const getSelfHostedCurrentPlanPresentation = ({
     return {
       title: 'Current plan: Community',
       body:
-        planDefinition?.entitlementSummary ||
+        getSelfHostedActivePlanSummary('Community', planDefinition) ||
         'Community is active on this instance. Self-hosted monitoring, 7-day metric history, Pulse Patrol (BYOK), and update alerts are included here.',
       unlockedFeaturesLabel,
       unlockedFeatures,
@@ -450,7 +538,7 @@ export const getSelfHostedCurrentPlanPresentation = ({
     return {
       title: `Current plan: ${planLabel}`,
       body:
-        planDefinition?.entitlementSummary ||
+        getSelfHostedActivePlanSummary(planLabel, planDefinition) ||
         `${planLabel} is active on this instance. These capabilities are unlocked right now.`,
       unlockedFeaturesLabel,
       unlockedFeatures,

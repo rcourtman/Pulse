@@ -297,7 +297,7 @@ describe('ProLicensePanel', () => {
     expect(screen.getByText('Patrol Auto-Fix')).toBeInTheDocument();
   });
 
-  it('shows migrated plan terms when plan_version is present', async () => {
+  it('shows active recurring v5 plan terms as uncapped even if stale limit metadata is present', async () => {
     mockEntitlements = {
       capabilities: ['ai_patrol'],
       limits: [{ key: 'max_monitored_systems', limit: 12, current: 5, state: 'ok' }],
@@ -308,6 +308,24 @@ describe('ProLicensePanel', () => {
       licensed_email: 'owner@example.com',
       is_lifetime: false,
       trial_eligible: false,
+      monitored_system_continuity: {
+        plan_limit: 12,
+        grandfathered_floor: 23,
+        effective_limit: 23,
+        capture_pending: false,
+      },
+      monitored_system_capacity: {
+        mode: 'at_limit_blocking_new',
+        urgency: 'enforced',
+        current: 23,
+        limit: 23,
+        current_available: true,
+        available_slots: 0,
+        overage: 0,
+        reason: 'limit_reached',
+        blocks_new_systems: true,
+        existing_monitoring_continues: true,
+      },
     };
 
     renderPanel();
@@ -316,20 +334,19 @@ describe('ProLicensePanel', () => {
       expect(screen.getByText('Plan Terms')).toBeInTheDocument();
     });
 
-    expect(screen.getAllByText('5 monitored systems').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('7 remaining').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Active').length).toBeGreaterThan(0);
     expect(screen.getByText('V5 Pro Monthly (Grandfathered)')).toBeInTheDocument();
-    expect(screen.getByText('Included Monitored Systems')).toBeInTheDocument();
+    expect(screen.getByText('Core Monitoring')).toBeInTheDocument();
+    expect(
+      within(screen.getByText('Core Monitoring').parentElement as HTMLElement).getByText(
+        'Unlimited',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Included Monitored Systems')).not.toBeInTheDocument();
+    expect(screen.queryByText('Grandfathered monitored-system floor')).not.toBeInTheDocument();
+    expect(screen.queryByText('Plan Monitored System Limit')).not.toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Plan' })).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByRole('tab', { name: 'Usage' })).toHaveAttribute('aria-selected', 'false');
-
-    fireEvent.click(screen.getByRole('tab', { name: 'Usage' }));
-
-    expect(navigateMock).toHaveBeenCalledWith(SELF_HOSTED_PRO_BILLING_USAGE_HREF, {
-      replace: false,
-      scroll: false,
-    });
+    expect(screen.queryByRole('tab', { name: 'Usage' })).not.toBeInTheDocument();
   });
 
   it('shows lifetime grandfathered plans as uncapped', async () => {
@@ -788,7 +805,7 @@ describe('ProLicensePanel', () => {
     {
       purchase: SELF_HOSTED_PRO_BILLING_PURCHASE_EXPIRED,
       title: 'Upgrade return expired',
-      actionLabel: 'Restart upgrade',
+      actionLabel: 'Compare plans',
       actionHref: getSelfHostedPurchaseStartUrl(),
     },
     {

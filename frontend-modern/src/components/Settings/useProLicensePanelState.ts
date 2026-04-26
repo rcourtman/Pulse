@@ -24,8 +24,9 @@ import {
   getLicenseSubscriptionStatusPresentation,
   getLicenseTierLabel,
   getTrialActivationNotice,
+  getDisplayableMonitoredSystemContinuity,
+  hasActiveUncappedSelfHostedContinuity,
   isDisplayableLicenseFeature,
-  isUncappedGrandfatheredPlanVersion,
 } from '@/utils/licensePresentation';
 import {
   getSelfHostedBillingHref,
@@ -157,16 +158,38 @@ export function useProLicensePanelState() {
   );
 
   const limitStatus = (key: string) => entitlements()?.limits?.find((entry) => entry.key === key);
-  const monitoredSystemLimitStatus = createMemo(() => limitStatus('max_monitored_systems'));
-  const monitoredSystemCapacity = createMemo(() => entitlements()?.monitored_system_capacity);
   const monitoredSystemContinuity = createMemo(() => entitlements()?.monitored_system_continuity);
+  const uncappedGrandfatheredPlan = createMemo(() =>
+    hasActiveUncappedSelfHostedContinuity({
+      planVersion: entitlements()?.plan_version,
+      isLifetime: entitlements()?.is_lifetime,
+      subscriptionState: entitlements()?.subscription_state,
+    }),
+  );
+  const monitoredSystemLimitStatus = createMemo(() =>
+    uncappedGrandfatheredPlan() ? undefined : limitStatus('max_monitored_systems'),
+  );
+  const monitoredSystemCapacity = createMemo(() =>
+    uncappedGrandfatheredPlan() ? undefined : entitlements()?.monitored_system_capacity,
+  );
+  const guestLimitStatus = createMemo(() =>
+    uncappedGrandfatheredPlan() ? undefined : limitStatus('max_guests'),
+  );
+  const displayableMonitoredSystemContinuity = createMemo(() =>
+    getDisplayableMonitoredSystemContinuity({
+      continuity: monitoredSystemContinuity(),
+      planVersion: entitlements()?.plan_version,
+      isLifetime: entitlements()?.is_lifetime,
+      subscriptionState: entitlements()?.subscription_state,
+    }),
+  );
 
   const showUsageSection = createMemo(() => {
     if (!panelDataSettled()) {
       return true;
     }
 
-    const continuity = monitoredSystemContinuity();
+    const continuity = displayableMonitoredSystemContinuity();
     if (continuity) {
       if (continuity.capture_pending) {
         return true;
@@ -351,9 +374,6 @@ export function useProLicensePanelState() {
     return segments.length === 3 && segments.every((segment) => segment.length > 0);
   });
 
-  const uncappedGrandfatheredPlan = createMemo(() =>
-    isUncappedGrandfatheredPlanVersion(entitlements()?.plan_version, entitlements()?.is_lifetime),
-  );
   const monitoredSystemUsageSummary = createMemo(() => {
     const limit = monitoredSystemLimitStatus();
     const capacity = monitoredSystemCapacity();
@@ -374,7 +394,7 @@ export function useProLicensePanelState() {
     resolveMonitoredSystemCapacityStatus(monitoredSystemCapacity(), monitoredSystemLimitStatus()),
   );
   const currentRetailPlanDefinition = createMemo(() => {
-    if (monitoredSystemContinuity()) {
+    if (displayableMonitoredSystemContinuity()) {
       return null;
     }
     if (uncappedGrandfatheredPlan()) {
@@ -390,6 +410,11 @@ export function useProLicensePanelState() {
       monitoredSystemContinuity(),
       monitoredSystemLimitStatus(),
       monitoredSystemCapacity(),
+      {
+        planVersion: entitlements()?.plan_version,
+        isLifetime: entitlements()?.is_lifetime,
+        subscriptionState: entitlements()?.subscription_state,
+      },
     ),
   );
   const monitoredSystemCapacitySection = createMemo(() => {
@@ -406,7 +431,7 @@ export function useProLicensePanelState() {
     };
   });
   const continuityCapturedAt = createMemo(() => {
-    const capturedAt = monitoredSystemContinuity()?.captured_at;
+    const capturedAt = displayableMonitoredSystemContinuity()?.captured_at;
     return typeof capturedAt === 'number' && capturedAt > 0
       ? formatUnixDate(capturedAt)
       : undefined;
@@ -511,7 +536,7 @@ export function useProLicensePanelState() {
     if (uncappedGrandfatheredPlan()) {
       return true;
     }
-    const guestLimit = limitStatus('max_guests')?.limit;
+    const guestLimit = guestLimitStatus()?.limit;
     return typeof guestLimit === 'number' && guestLimit > 0;
   });
 
@@ -526,17 +551,17 @@ export function useProLicensePanelState() {
       monitoredSystemsSummary: monitoredSystemUsageSummary(),
       capacityStatusSummary: monitoredSystemCapacityStatusSummary(),
       maxMonitoredSystems:
-        typeof limitStatus('max_monitored_systems')?.limit === 'number' &&
-        limitStatus('max_monitored_systems')!.limit > 0
-          ? limitStatus('max_monitored_systems')!.limit
+        typeof monitoredSystemLimitStatus()?.limit === 'number' &&
+        monitoredSystemLimitStatus()!.limit > 0
+          ? monitoredSystemLimitStatus()!.limit
           : 'Unlimited',
       guestCapacity:
-        typeof limitStatus('max_guests')?.limit === 'number' && limitStatus('max_guests')!.limit > 0
-          ? limitStatus('max_guests')!.limit
+        typeof guestLimitStatus()?.limit === 'number' && guestLimitStatus()!.limit > 0
+          ? guestLimitStatus()!.limit
           : 'Unlimited',
       retailPlanDefinition: currentRetailPlanDefinition(),
       showGuestCapacity: showGuestCapacity(),
-      monitoredSystemContinuity: monitoredSystemContinuity() ?? null,
+      monitoredSystemContinuity: displayableMonitoredSystemContinuity() ?? null,
       continuityCapturedAt: continuityCapturedAt(),
     }),
   );
@@ -634,6 +659,8 @@ export function useProLicensePanelState() {
     currentPlanSummary,
     planComparisonSummary,
     monitoredSystemCapacity,
+    monitoredSystemLimitStatus,
+    displayableMonitoredSystemContinuity,
     monitoredSystemCapacitySection,
     monitoredSystemContinuityNotice,
     entitlements,

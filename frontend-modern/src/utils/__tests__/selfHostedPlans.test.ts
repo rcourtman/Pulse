@@ -157,6 +157,15 @@ describe('selfHostedPlans', () => {
     expect(getSelfHostedPlanDefinitionForBillingTier('pro')).toBe(
       SELF_HOSTED_PLAN_BY_TIER.pro,
     );
+    expect(getSelfHostedPlanDefinitionForBillingTier('pro_annual')).toBe(
+      SELF_HOSTED_PLAN_BY_TIER.pro,
+    );
+    expect(getSelfHostedPlanDefinitionForBillingTier('pro_plus')).toBe(
+      SELF_HOSTED_PLAN_BY_TIER.pro,
+    );
+    expect(getSelfHostedPlanDefinitionForBillingTier('lifetime')).toBe(
+      SELF_HOSTED_PLAN_BY_TIER.pro,
+    );
     expect(getSelfHostedPlanDefinitionForBillingTier('enterprise')).toBeNull();
   });
 });

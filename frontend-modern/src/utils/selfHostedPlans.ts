@@ -167,6 +167,9 @@ export function getSelfHostedPlanDefinitionForBillingTier(
     case 'relay':
       return SELF_HOSTED_PLAN_BY_TIER.relay;
     case 'pro':
+    case 'pro_annual':
+    case 'pro_plus':
+    case 'lifetime':
       return SELF_HOSTED_PLAN_BY_TIER.pro;
     default:
       return null;

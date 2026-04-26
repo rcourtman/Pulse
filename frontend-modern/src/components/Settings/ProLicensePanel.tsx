@@ -143,13 +143,9 @@ const ProLicensePanelContent: Component = () => {
             >
               <MonitoredSystemLedgerPanel
                 embedded
-                monitoredSystemCapacity={state.entitlements()?.monitored_system_capacity}
-                monitoredSystemContinuity={state.entitlements()?.monitored_system_continuity}
-                monitoredSystemLimit={
-                  state
-                    .entitlements()
-                    ?.limits?.find((entry) => entry.key === 'max_monitored_systems') ?? null
-                }
+                monitoredSystemCapacity={state.monitoredSystemCapacity()}
+                monitoredSystemContinuity={state.displayableMonitoredSystemContinuity()}
+                monitoredSystemLimit={state.monitoredSystemLimitStatus() ?? null}
                 showCountingRulesByDefault={state.showCountingRulesByDefault()}
               />
             </CommercialSection>
