@@ -494,6 +494,9 @@ self-hosted billing plan page instead of the Pulse Account purchase-start
 handoff. The purchase-start handoff requires a `PublicURL` and fails on local
 instances; routing these keys to the in-product billing plan keeps upgrades
 accessible from self-hosted environments.
+The monitored-system app-shell warning CTA now follows that same self-hosted
+commercial boundary by reviewing finite-policy usage on the usage ledger rather
+than sending operators to the plan-selection surface with capacity-shaped copy.
 
 Cloud paid readiness is materially behind architecture work. The main concern is
 contract coherence between pricing, entitlements, and runtime enforcement.
@@ -1549,6 +1552,10 @@ plan is full, the section must explain that existing monitoring continues
 while new monitored systems are blocked; when an installation is already above
 the current plan, it must explain that Pulse is in an over-plan frozen state
 rather than implying a hard runtime blackout.
+The app-shell monitored-system warning entry point must also use that same
+shape: urgent finite-policy states review the usage-owned policy ledger, not
+the plan-selection surface, and the CTA must not revive "View capacity" copy as
+an upsell-shaped monitored-system prompt.
 Community overflow/setup-slot messaging must still explain the included
 monitored systems plus the temporary setup slot in customer terms rather than
 compressing the contract into slash-style quota strings that imply Pulse is

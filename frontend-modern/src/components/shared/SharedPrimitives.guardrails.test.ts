@@ -646,7 +646,7 @@ describe('shared primitive guardrails', () => {
     );
     expect(monitoredSystemLimitWarningBannerSource).toContain('UpgradeLink');
     expect(monitoredSystemLimitWarningBannerSource).toContain(
-      'MONITORED_SYSTEM_LIMIT_VIEW_CAPACITY_LABEL',
+      'MONITORED_SYSTEM_LIMIT_REVIEW_POLICY_LABEL',
     );
     expect(monitoredSystemLimitWarningBannerSource).not.toContain('createEffect');
     expect(monitoredSystemLimitWarningBannerSource).not.toContain('createMemo');
@@ -677,7 +677,7 @@ describe('shared primitive guardrails', () => {
     expect(monitoredSystemLimitWarningBannerStateSource).not.toContain(
       'SELF_HOSTED_PRO_BILLING_MONITORED_SYSTEM_INTENT',
     );
-    expect(monitoredSystemLimitWarningBannerStateSource).toContain('viewCapacityDestination');
+    expect(monitoredSystemLimitWarningBannerStateSource).toContain('reviewPolicyDestination');
     expect(monitoredSystemLimitWarningBannerStateSource).not.toContain('handleUpgradeClick');
     expect(monitoredSystemLimitWarningBannerStateSource).not.toContain("fetch('/api/health'");
 
@@ -705,6 +705,9 @@ describe('shared primitive guardrails', () => {
     expect(monitoredSystemLimitWarningBannerModelSource).not.toContain('current / limit');
     expect(monitoredSystemLimitWarningBannerModelSource).not.toContain('0 remaining');
     expect(monitoredSystemLimitWarningBannerModelSource).toContain(
+      'SELF_HOSTED_PRO_BILLING_USAGE_HREF',
+    );
+    expect(monitoredSystemLimitWarningBannerModelSource).not.toContain(
       'SELF_HOSTED_PRO_BILLING_PLAN_HREF',
     );
   });

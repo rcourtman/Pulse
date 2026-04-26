@@ -4,14 +4,14 @@ import {
   formatMonitoredSystemMigrationMessage,
   formatMonitoredSystemOverflowSummary,
   getMonitoredSystemLimitInstallCollectorsLabel,
-  getMonitoredSystemLimitViewCapacityLabel,
+  getMonitoredSystemLimitReviewPolicyLabel,
   isMonitoredSystemLimitUrgent as isCanonicalMonitoredSystemLimitUrgent,
   isMonitoredSystemLimitUsageAvailable as isCanonicalMonitoredSystemLimitUsageAvailable,
   type MonitoredSystemCapacityStatus,
   type MonitoredSystemLimitUsageStatus,
   type MonitoredSystemLegacyConnectionCounts,
 } from '@/utils/monitoredSystemPresentation';
-import { SELF_HOSTED_PRO_BILLING_PLAN_HREF } from '@/utils/pricingHandoff';
+import { SELF_HOSTED_PRO_BILLING_USAGE_HREF } from '@/utils/pricingHandoff';
 
 type LimitState = MonitoredSystemLimitUsageStatus & {
   current: number;
@@ -20,10 +20,10 @@ type LimitState = MonitoredSystemLimitUsageStatus & {
 };
 
 export const MONITORED_SYSTEM_LIMIT_KEY = 'max_monitored_systems';
-export const MONITORED_SYSTEM_LIMIT_VIEW_CAPACITY_HREF = SELF_HOSTED_PRO_BILLING_PLAN_HREF;
+export const MONITORED_SYSTEM_LIMIT_REVIEW_POLICY_HREF = SELF_HOSTED_PRO_BILLING_USAGE_HREF;
 export const MONITORED_SYSTEM_LIMIT_INSTALL_COLLECTORS_HREF = '/settings';
-export const MONITORED_SYSTEM_LIMIT_VIEW_CAPACITY_LABEL =
-  getMonitoredSystemLimitViewCapacityLabel();
+export const MONITORED_SYSTEM_LIMIT_REVIEW_POLICY_LABEL =
+  getMonitoredSystemLimitReviewPolicyLabel();
 export const MONITORED_SYSTEM_LIMIT_INSTALL_COLLECTORS_LABEL =
   getMonitoredSystemLimitInstallCollectorsLabel();
 

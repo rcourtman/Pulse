@@ -37,7 +37,7 @@ import {
   getMonitoredSystemLedgerPolicyLoadingState,
   getMonitoredSystemLedgerUnavailableState,
   getMonitoredSystemLimitInstallCollectorsLabel,
-  getMonitoredSystemLimitViewCapacityLabel,
+  getMonitoredSystemLimitReviewPolicyLabel,
   getMonitoredSystemLimitUnavailableReason,
   getMonitoredSystemLimitUsageSummary,
   getMonitoredSystemSourceLabel,
@@ -123,7 +123,7 @@ describe('monitoredSystemPresentation', () => {
         unknown: 'Pulse cannot determine a canonical runtime status for this monitored system yet.',
       },
       limitBanner: {
-        viewCapacityLabel: 'View capacity',
+        reviewPolicyLabel: 'Review policy',
         installCollectorsLabel: 'Install v6 collectors',
         overflowSummaryPrefix: 'A temporary setup slot is active',
         legacyConnectionSuffix:
@@ -232,7 +232,7 @@ describe('monitoredSystemPresentation', () => {
   });
 
   it('returns canonical monitored-system limit warning copy', () => {
-    expect(getMonitoredSystemLimitViewCapacityLabel()).toBe('View capacity');
+    expect(getMonitoredSystemLimitReviewPolicyLabel()).toBe('Review policy');
     expect(getMonitoredSystemLimitInstallCollectorsLabel()).toBe('Install v6 collectors');
     expect(formatMonitoredSystemLimitSummary({ current: 5, limit: 6 })).toBe(
       '1 remaining. 5 monitored, 6 included.',

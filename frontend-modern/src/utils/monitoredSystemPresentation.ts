@@ -80,7 +80,7 @@ const MONITORED_SYSTEM_LEDGER_PRESENTATION = {
     unknown: 'Pulse cannot determine a canonical runtime status for this monitored system yet.',
   },
   limitBanner: {
-    viewCapacityLabel: 'View capacity',
+    reviewPolicyLabel: 'Review policy',
     installCollectorsLabel: 'Install v6 collectors',
     overflowSummaryPrefix: 'A temporary setup slot is active',
     legacyConnectionSuffix:
@@ -580,8 +580,8 @@ export function getMonitoredSystemStatusFallbackSummary(
   return MONITORED_SYSTEM_LEDGER_PRESENTATION.statusSummaryByStatus[status];
 }
 
-export function getMonitoredSystemLimitViewCapacityLabel(): string {
-  return MONITORED_SYSTEM_LEDGER_PRESENTATION.limitBanner.viewCapacityLabel;
+export function getMonitoredSystemLimitReviewPolicyLabel(): string {
+  return MONITORED_SYSTEM_LEDGER_PRESENTATION.limitBanner.reviewPolicyLabel;
 }
 
 export function getMonitoredSystemLimitInstallCollectorsLabel(): string {

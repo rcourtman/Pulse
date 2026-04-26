@@ -18,7 +18,7 @@ import {
   isMonitoredSystemLimitUrgent,
   MONITORED_SYSTEM_LIMIT_INSTALL_COLLECTORS_HREF,
   MONITORED_SYSTEM_LIMIT_KEY,
-  MONITORED_SYSTEM_LIMIT_VIEW_CAPACITY_HREF,
+  MONITORED_SYSTEM_LIMIT_REVIEW_POLICY_HREF,
   shouldShowMonitoredSystemLimitBanner,
 } from './monitoredSystemLimitWarningBannerModel';
 
@@ -42,8 +42,8 @@ export function useMonitoredSystemLimitWarningBannerState() {
     getMonitoredSystemSummary(monitoredSystemLimit(), monitoredSystemCapacity()),
   );
   const toneClass = createMemo(() => getMonitoredSystemBannerToneClass(isUrgent()));
-  const viewCapacityDestination = createMemo(() =>
-    resolveUpgradeDestination(MONITORED_SYSTEM_LIMIT_VIEW_CAPACITY_HREF),
+  const reviewPolicyDestination = createMemo(() =>
+    resolveUpgradeDestination(MONITORED_SYSTEM_LIMIT_REVIEW_POLICY_HREF),
   );
   const installCollectorsDestination = createMemo(() =>
     resolveUpgradeDestination(MONITORED_SYSTEM_LIMIT_INSTALL_COLLECTORS_HREF),
@@ -76,7 +76,7 @@ export function useMonitoredSystemLimitWarningBannerState() {
     handleInstallCollectorsClick,
     installCollectorsDestination,
     isUrgent,
-    viewCapacityDestination,
+    reviewPolicyDestination,
     migrationGap,
     monitoredSystemSummary,
     showBanner,

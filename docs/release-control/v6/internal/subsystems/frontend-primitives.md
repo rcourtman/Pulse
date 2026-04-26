@@ -806,6 +806,9 @@ work extends shared components instead of creating new local variants.
 `settingsNavCatalog.ts`, `settingsPanelRegistry.ts`, and
 `settingsNavigationModel.ts` replaces both. Panel routing within the
 infrastructure area uses `InfrastructurePanelStep` in-page state.
+The shared monitored-system warning banner now uses a neutral policy-review
+CTA and `reviewPolicyDestination` state, keeping the render shell pointed at
+the usage-owned policy ledger instead of plan-selection or capacity wording.
 Shared alert presentation surfaces (`OverviewTab.tsx`, `HistoryTab.tsx`,
 `AlertOverviewActiveAlertsSection.tsx`, `AlertHistoryTableSection.tsx`,
 `AlertHistoryTableAlertRow.tsx`, `AlertOverviewAlertCard.tsx`) no longer accept
@@ -2104,19 +2107,20 @@ agent-era banner filename or component name as the primary primitive.
 That shared monitored-system warning banner now also follows the shell/runtime/model
 owner split. `frontend-modern/src/components/shared/MonitoredSystemLimitWarningBanner.tsx`
 stays the render shell, `frontend-modern/src/components/shared/useMonitoredSystemLimitWarningBannerState.ts`
-owns entitlement load, warning metric emission, migration/upgrade click tracking,
-and upgrade-link runtime, and
+owns entitlement load, warning metric emission, migration click tracking, and
+policy-review plus collector-link runtime, and
 `frontend-modern/src/components/shared/monitoredSystemLimitWarningBannerModel.ts`
 owns monitored-system warning policy, count aggregation, and tone/text-class
 policy while sourcing customer-facing monitored-system copy from the canonical
 `frontend-modern/src/utils/monitoredSystemPresentation.ts` helper. Future
 warning-banner work should extend those owners instead of pushing entitlement
 state or route selection back into the render shell. When the warning points at
-Pulse Pro billing, the shared primitive must stay a compact pointer rather
-than re-expanding into a full policy explainer. The banner may signal the
-current monitored-system posture and link into the owned billing surface, but
-the longer over-plan or continuity explanation belongs in the plan-surface
-capacity section owned by `cloud-paid`, not in permanent app-shell banner copy.
+the self-hosted commercial surface, the shared primitive must stay a compact
+policy-review pointer into the usage-owned ledger rather than a plan-selection
+or "capacity" CTA. The banner may signal the current monitored-system posture
+and link into the owned usage surface, but the longer over-plan or continuity
+explanation belongs in the bounded legacy usage ledger and commercial detail
+sections owned by `cloud-paid`, not in permanent app-shell banner copy.
 That same shared warning boundary now also owns the monitored-system capacity
 posture vocabulary. Shared banners, plan summaries, and ledger headers must
 describe the canonical admission-freeze model from

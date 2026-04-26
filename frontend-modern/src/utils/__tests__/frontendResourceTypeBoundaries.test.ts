@@ -1145,7 +1145,9 @@ describe('frontend resource type boundaries', () => {
     expect(recoverySource).toContain('getRecoveryCompactAxisLabel');
     expect(recoverySource).toContain('formatRecoveryTimeOnly');
     expect(recoverySource).toContain('getRecoveryNiceAxisMax');
-    expect(recoverySource).toContain('getRecoveryProtectedToggleClass');
+    expect(recoveryProtectedInventorySectionSource).toContain(
+      'getRecoveryRollupInventoryStatusTextClass',
+    );
     expect(recoverySource).toContain('getRecoverySpecialOutcomeTextClass');
     expect(recoverySource).toContain('getRecoveryBreadcrumbLinkClass');
     expect(recoverySource).toContain('getRecoveryFilterPanelClearClass');
@@ -1936,7 +1938,7 @@ describe('frontend resource type boundaries', () => {
     expect(storagePageModelSource).toContain('useStoragePageStatus');
     expect(storagePageModelSource).toContain('useStorageResourceHighlight');
     expect(storagePageSummaryHookSource).toContain('export const useStoragePageSummary');
-    expect(storagePageSummaryHookSource).toContain('countVisiblePhysicalDisksForNode');
+    expect(storagePageSummaryHookSource).toContain('matchesPhysicalDiskNode');
     expect(storagePageFiltersSource).toContain('export const useStoragePageFilters');
     expect(storagePageFiltersSource).toContain('useStorageRouteState');
     expect(storagePageFiltersSource).toContain('buildStorageRouteFields');
@@ -2396,7 +2398,7 @@ describe('frontend resource type boundaries', () => {
     expect(storagePageStateSource).toContain('export const buildStorageNodeOnlineByLabel');
     expect(storagePageStateSource).toContain('export const syncExpandedStorageGroups');
     expect(storagePageStateSource).toContain('export const toggleExpandedStorageGroup');
-    expect(storagePageStateSource).toContain('export const countVisiblePhysicalDisksForNode');
+    expect(storagePageStateSource).toContain('export const DEFAULT_STORAGE_SELECTED_NODE_ID');
     expect(storagePageStateSource).toContain('export const DEFAULT_STORAGE_SORT_OPTIONS');
     expect(storagePageStateSource).toContain('export const STORAGE_STATUS_FILTER_OPTIONS');
     expect(storagePageStateSource).toContain('export const STORAGE_GROUP_BY_OPTIONS');
@@ -2954,7 +2956,7 @@ describe('frontend resource type boundaries', () => {
       'useMonitoredSystemLimitWarningBannerState',
     );
     expect(monitoredSystemLimitWarningBannerSource).toContain(
-      'MONITORED_SYSTEM_LIMIT_VIEW_CAPACITY_LABEL',
+      'MONITORED_SYSTEM_LIMIT_REVIEW_POLICY_LABEL',
     );
     expect(monitoredSystemLimitWarningBannerSource).not.toContain('createEffect');
     expect(monitoredSystemLimitWarningBannerSource).not.toContain('createMemo');
@@ -2966,7 +2968,7 @@ describe('frontend resource type boundaries', () => {
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('loadRuntimeCapabilities');
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('trackUpgradeMetricEvent');
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('hasMigrationGap');
-    expect(monitoredSystemLimitWarningBannerStateSource).toContain('viewCapacityDestination');
+    expect(monitoredSystemLimitWarningBannerStateSource).toContain('reviewPolicyDestination');
     expect(monitoredSystemLimitWarningBannerStateSource).not.toContain('handleUpgradeClick');
     expect(monitoredSystemLimitWarningBannerModelSource).toContain(
       'getMonitoredSystemBannerToneClass',
@@ -3025,7 +3027,7 @@ describe('frontend resource type boundaries', () => {
     expect(whatsNewModalStateSource).toContain('handleNext');
     expect(whatsNewModalStateSource).toContain('spotlightStyle');
     expect(whatsNewModalModelSource).toContain('WHATS_NEW_FEATURE_CARDS');
-    expect(whatsNewModalModelSource).toContain('WHATS_NEW_TELEMETRY_TITLE');
+    expect(whatsNewModalModelSource).toContain('WHATS_NEW_TELEMETRY_LINK_LABEL');
     expect(whatsNewModalModelSource).toContain('WHATS_NEW_DOCS_URL');
     expect(whatsNewModalModelSource).toContain('WHATS_NEW_PRIVACY_URL');
     expect(whatsNewModalModelSource).toContain('WHATS_NEW_DOCS_LABEL');
@@ -3439,7 +3441,7 @@ describe('frontend resource type boundaries', () => {
     expect(nodeModalMonitoringSectionSource).toContain('title="Monitoring coverage"');
     expect(nodeModalMonitoringSectionSource).toContain('getNodeMonitoringCoverageCopy');
     expect(nodeModalMonitoringSectionSource).toContain('getTemperatureMonitoringLockedCopy');
-    expect(nodeModalStatusFooterSource).toContain('Start your free 14-day trial');
+    expect(nodeModalStatusFooterSource).not.toContain('Start your free 14-day trial');
     expect(nodeModalPresentationSource).toContain('export function getNodeModalDefaultFormData');
     expect(nodeModalPresentationSource).toContain('export function getNodeProductName');
     expect(nodeModalPresentationSource).toContain('export function getNodeEndpointPlaceholder');

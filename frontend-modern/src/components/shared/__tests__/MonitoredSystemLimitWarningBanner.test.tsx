@@ -107,7 +107,7 @@ describe('MonitoredSystemLimitWarningBanner', () => {
       'useMonitoredSystemLimitWarningBannerState',
     );
     expect(monitoredSystemLimitWarningBannerSource).toContain(
-      'MONITORED_SYSTEM_LIMIT_VIEW_CAPACITY_LABEL',
+      'MONITORED_SYSTEM_LIMIT_REVIEW_POLICY_LABEL',
     );
     expect(monitoredSystemLimitWarningBannerSource).not.toContain('createEffect');
     expect(monitoredSystemLimitWarningBannerSource).not.toContain('createMemo');
@@ -133,7 +133,7 @@ describe('MonitoredSystemLimitWarningBanner', () => {
     expect(monitoredSystemLimitWarningBannerStateSource).not.toContain(
       'SELF_HOSTED_PRO_BILLING_PLAN_SELECTION_INTENT',
     );
-    expect(monitoredSystemLimitWarningBannerStateSource).toContain('viewCapacityDestination');
+    expect(monitoredSystemLimitWarningBannerStateSource).toContain('reviewPolicyDestination');
     expect(monitoredSystemLimitWarningBannerStateSource).not.toContain('handleUpgradeClick');
 
     expect(monitoredSystemLimitWarningBannerModelSource).toContain(
@@ -204,9 +204,9 @@ describe('MonitoredSystemLimitWarningBanner', () => {
     ));
 
     expect(screen.getByText('1 remaining. 5 monitored, 6 included.')).toBeInTheDocument();
-    expect(screen.getByText('View capacity')).toHaveAttribute(
+    expect(screen.getByText('Review policy')).toHaveAttribute(
       'href',
-      '/settings/system/billing/plan',
+      '/settings/system/billing/usage',
     );
     expect(screen.queryByText('Review options')).not.toBeInTheDocument();
     expect(screen.queryByText('Install v6 collectors')).not.toBeInTheDocument();
@@ -258,9 +258,9 @@ describe('MonitoredSystemLimitWarningBanner', () => {
 
     expect(screen.getByText('1 remaining. 5 monitored, 6 included.')).toBeInTheDocument();
     expect(screen.getByText('Install v6 collectors')).toHaveAttribute('href', '/settings');
-    expect(screen.getByText('View capacity')).toHaveAttribute(
+    expect(screen.getByText('Review policy')).toHaveAttribute(
       'href',
-      '/settings/system/billing/plan',
+      '/settings/system/billing/usage',
     );
     expect(screen.queryByText('Review options')).not.toBeInTheDocument();
   });
