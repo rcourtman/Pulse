@@ -267,6 +267,74 @@ PULSE_CLOUD_AUDIT_CHECKED_AT=2026-04-24T14:19:07Z
 pulse_cloud_audit_success 1
 ```
 
+## 2026-04-26 Proof Residue Recheck
+
+During Android mobile post-RC proof work on 2026-04-26, the local `pulse-cloud`
+tailnet access path was restored and the live production audit was rerun before
+creating any new proof tenants:
+
+```text
+audit_ok=false
+tenant_total=9
+tenant_active=4
+tenant_deleted=5
+docker_managed_total=4
+docker_managed_running=4
+docker_managed_unhealthy=0
+proof_tenant_stale_count=5
+proof_account_stale_count=3
+hosted_paid_orphan_entitlement_count=0
+```
+
+The five stale tenants and three stale accounts were all explicitly
+Pulse-Mobile-GA-proof-marked rows left in `deleted` state:
+
+- Accounts: `a_GP70XHW7TA`, `a_0QC7VA1EZP`, `a_G9DMEV61ZZ`
+- Tenants: `t-SEK9WF2KAR`, `t-RMPAM7NMHH`, `t-BC4D71RAT3`,
+  `t-0TBZW586WM`, `t-Z5VEE1EVDZ`
+
+The four active non-proof hosted tenants and their managed containers were not
+touched.
+
+Cleanup was performed with a live SQLite backup and server-side archive:
+
+- Backup: `/root/tenants-pre-ga-mobile-stale-proof-cleanup-20260426T070157Z.db`
+- Archive: `/data/tenants.archived-mobile-stale-proof-cleanup-20260426T070157Z`
+
+The cleanup removed only the proof-marked hosted entitlement rows, deleted
+tenant rows, proof accounts, and any associated invitation/membership/Stripe
+account rows for the exact proof IDs above. Post-cleanup verification showed
+`remaining_accounts=0`, `remaining_tenants=0`, and
+`remaining_entitlements=0` for those proof IDs; the former live tenant
+directories were no longer present under `/data/tenants`.
+
+The production audit then returned to a clean current baseline:
+
+```text
+audit_ok=true
+tenant_total=4
+tenant_active=4
+tenant_deleted=0
+tenant_registry_unhealthy_active=0
+docker_managed_total=4
+docker_managed_running=4
+docker_managed_unhealthy=0
+storage_guardrails_enabled=true
+storage_ok=true
+proof_tenant_stale_count=0
+proof_account_stale_count=0
+hosted_paid_orphan_entitlement_count=0
+```
+
+Runtime reconciliation also converged without planned rollout:
+
+```text
+summary_rollout=0
+summary_noop=4
+summary_skip=0
+summary_total=4
+```
+
 ## Conclusion
 
 `cloud-hosted-tier-runtime-readiness` can be treated as `passed` for the current
@@ -277,6 +345,9 @@ storage, stale-proof-tenant, stale-proof-account, and orphan-paid-entitlement
 floor, and a fresh external MSP canary passed create, list, portal, detail,
 delete, and cleanup verification on the live public control plane.
 
-The correct GA baseline for Pulse Cloud today is empty of hosted customer
-tenants. As of this record, that baseline is true in the registry, Docker, and
-`/data/tenants`.
+At the original 2026-04-24 cleanup point, the correct GA baseline was empty of
+hosted customer tenants. As of the 2026-04-26 recheck, Pulse Cloud has four
+active non-proof hosted tenants, and the current correct baseline is: no stale
+proof tenants or proof accounts, no orphan hosted paid entitlements, all active
+tenant runtime containers healthy, and no pending tenant-runtime reconcile
+rollout.
