@@ -38,6 +38,13 @@ const DEFAULT_BUTTON_CLASS =
 const DEFAULT_LABEL_CLASS = 'max-w-[90px] truncate font-medium sm:max-w-[180px]';
 const DEFAULT_DROPDOWN_CLASS = 'w-80';
 const DEFAULT_EMPTY_STATE = AI_CHAT_MODEL_SELECTOR_EMPTY_STATE;
+const DEFAULT_DROPDOWN_MAX_HEIGHT = 384;
+const DEFAULT_LIST_MAX_HEIGHT = 288;
+const MIN_DROPDOWN_MAX_HEIGHT = 120;
+const MOBILE_BOTTOM_CLEARANCE = 88;
+const DESKTOP_BOTTOM_CLEARANCE = 16;
+const SEARCH_HEADER_HEIGHT = 52;
+const ERROR_ROW_HEIGHT = 36;
 
 function groupModelsByProvider(models: ModelInfo[]): Map<string, ModelInfo[]> {
   const grouped = new Map<string, ModelInfo[]>();
@@ -56,7 +63,13 @@ export const AIModelPicker: Component<AIModelPickerProps> = (props) => {
   const [isOpen, setIsOpen] = createSignal(false);
   const [showAllModels, setShowAllModels] = createSignal(false);
   const [searchQuery, setSearchQuery] = createSignal('');
-  const [dropdownPosition, setDropdownPosition] = createSignal({ top: 0, left: 0, right: 0 });
+  const [dropdownPosition, setDropdownPosition] = createSignal({
+    top: 0,
+    left: 0,
+    right: 0,
+    maxHeight: DEFAULT_DROPDOWN_MAX_HEIGHT,
+    listMaxHeight: DEFAULT_LIST_MAX_HEIGHT,
+  });
   let containerRef: HTMLDivElement | undefined;
   let buttonRef: HTMLButtonElement | undefined;
 
@@ -133,10 +146,11 @@ export const AIModelPicker: Component<AIModelPickerProps> = (props) => {
 
   const dropdownStyle = createMemo(() => {
     const position = dropdownPosition();
+    const base = { top: `${position.top}px`, 'max-height': `${position.maxHeight}px` };
     if (props.align === 'left') {
-      return { top: `${position.top}px`, left: `${position.left}px` };
+      return { ...base, left: `${position.left}px` };
     }
-    return { top: `${position.top}px`, right: `${position.right}px` };
+    return { ...base, right: `${position.right}px` };
   });
 
   const updateDropdownPosition = () => {
@@ -144,10 +158,20 @@ export const AIModelPicker: Component<AIModelPickerProps> = (props) => {
       return;
     }
     const rect = buttonRef.getBoundingClientRect();
+    const bottomClearance =
+      window.innerWidth < 1024 ? MOBILE_BOTTOM_CLEARANCE : DESKTOP_BOTTOM_CLEARANCE;
+    const availableHeight = window.innerHeight - rect.bottom - bottomClearance;
+    const maxHeight = Math.max(
+      MIN_DROPDOWN_MAX_HEIGHT,
+      Math.min(DEFAULT_DROPDOWN_MAX_HEIGHT, availableHeight),
+    );
+    const nonListHeight = SEARCH_HEADER_HEIGHT + (props.error ? ERROR_ROW_HEIGHT : 0);
     setDropdownPosition({
       top: rect.bottom + 4,
       left: rect.left,
       right: window.innerWidth - rect.right,
+      maxHeight,
+      listMaxHeight: Math.max(80, maxHeight - nonListHeight),
     });
   };
 
@@ -188,8 +212,17 @@ export const AIModelPicker: Component<AIModelPickerProps> = (props) => {
         closePicker();
       }
     };
+    const handleViewportChange = () => {
+      if (isOpen()) {
+        updateDropdownPosition();
+      }
+    };
     document.addEventListener('mousedown', handlePointerDown);
-    onCleanup(() => document.removeEventListener('mousedown', handlePointerDown));
+    window.addEventListener('resize', handleViewportChange);
+    onCleanup(() => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      window.removeEventListener('resize', handleViewportChange);
+    });
   });
 
   return (
@@ -214,7 +247,7 @@ export const AIModelPicker: Component<AIModelPickerProps> = (props) => {
 
       <Show when={isOpen()}>
         <div
-          class={`fixed max-h-96 overflow-hidden rounded-md border border-border bg-surface shadow-sm z-[9999] ${props.dropdownClass || DEFAULT_DROPDOWN_CLASS}`}
+          class={`fixed overflow-hidden rounded-md border border-border bg-surface shadow-sm z-[9999] ${props.dropdownClass || DEFAULT_DROPDOWN_CLASS}`}
           style={dropdownStyle()}
         >
           <div class="flex items-center gap-2 border-b border-border px-3 py-2">
@@ -245,7 +278,11 @@ export const AIModelPicker: Component<AIModelPickerProps> = (props) => {
             </div>
           </Show>
 
-          <div class="max-h-72 overflow-y-auto py-1" role="listbox">
+          <div
+            class="overflow-y-auto py-1"
+            role="listbox"
+            style={{ 'max-height': `${dropdownPosition().listMaxHeight}px` }}
+          >
             <Show when={props.defaultOption}>
               <button
                 type="button"

@@ -3,7 +3,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AIModelPicker } from '@/components/shared/AIModelPicker';
 import type { ModelInfo } from '@/types/ai';
 
-afterEach(cleanup);
+afterEach(() => {
+  vi.restoreAllMocks();
+  cleanup();
+});
 
 const models: ModelInfo[] = [
   {
@@ -42,6 +45,38 @@ describe('AIModelPicker', () => {
     expect(screen.getByText('GPT-5.1 Mini')).toBeInTheDocument();
     expect(screen.queryByText('Legacy Model V1')).not.toBeInTheDocument();
     expect(screen.getByText('Show 1 older models')).toBeInTheDocument();
+  });
+
+  it('constrains the dropdown to the available mobile viewport height', () => {
+    vi.spyOn(window, 'innerWidth', 'get').mockReturnValue(760);
+    vi.spyOn(window, 'innerHeight', 'get').mockReturnValue(850);
+    render(() => (
+      <AIModelPicker
+        models={models}
+        selectedModel="openrouter:minimax/minimax-m2.5"
+        onModelSelect={vi.fn()}
+        title="Select shared default model"
+      />
+    ));
+
+    const button = screen.getByTitle('Select shared default model');
+    vi.spyOn(button, 'getBoundingClientRect').mockReturnValue({
+      bottom: 470,
+      height: 40,
+      left: 24,
+      right: 624,
+      top: 430,
+      width: 600,
+      x: 24,
+      y: 430,
+      toJSON: () => ({}),
+    } as DOMRect);
+
+    fireEvent.click(button);
+
+    const dropdown = document.querySelector('[data-ai-model-picker] .fixed') as HTMLElement;
+    expect(dropdown.style.maxHeight).toBe('292px');
+    expect(screen.getByRole('listbox').style.maxHeight).toBe('240px');
   });
 
   it('searches the full catalog without requiring the older-model disclosure first', () => {

@@ -548,7 +548,9 @@ work extends shared components instead of creating new local variants.
     searchable, notable-first model picker pattern, and
     `AIModelSelectionSection.tsx` must feed it configured-provider models plus
     the current manual selection instead of rendering raw provider catalogs as
-    plain select options.
+    plain select options. The picker must also constrain its dropdown and
+    internal result list to the available viewport height so settings model
+    catalogs remain usable on mobile and tablet layouts with bottom navigation.
 
 ## Forbidden Paths
 

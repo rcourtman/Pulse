@@ -228,6 +228,11 @@ describe('shared primitive guardrails', () => {
     expect(aiModelPickerSource).toContain('return props.models.filter((model) => !model.notable');
     expect(aiModelPickerSource).toContain('Show ${hiddenModelCount()} older models');
     expect(aiModelPickerSource).toContain("if (!candidate.includes(':'))");
+    expect(aiModelPickerSource).toContain('MOBILE_BOTTOM_CLEARANCE');
+    expect(aiModelPickerSource).toContain('availableHeight = window.innerHeight');
+    expect(aiModelPickerSource).toContain(
+      "style={{ 'max-height': `${dropdownPosition().listMaxHeight}px` }}",
+    );
     expect(aiModelPickerSource).not.toContain('No matching models.');
     expect(aiModelPickerSource).not.toContain('<select');
   });
