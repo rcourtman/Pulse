@@ -279,6 +279,12 @@ become an overlay owned by `frontend-modern/src/components/AI/Chat/index.tsx`
 instead of compressing Infrastructure, Dashboard, Storage, or other primary
 runtime pages into an unusable narrow column or forking page-local layout
 exceptions.
+The closed assistant launcher follows the same shared-shell rule. While the
+mobile navigation shell is active, `frontend-modern/src/AppLayout.tsx` must
+present the launcher as a bottom floating affordance that clears the mobile
+nav instead of restoring the desktop right-edge rail at an earlier breakpoint.
+The edge-mounted launcher is only valid at the desktop shell breakpoint where
+the primary navigation and page chrome are also desktop-mode.
 Non-AI shell notices may coexist in `frontend-modern/src/AppLayout.tsx`, but
 they must remain presentation-only. Prerelease banners, billing callouts, or
 other header-adjacent notices must not fork assistant open state, gate on AI

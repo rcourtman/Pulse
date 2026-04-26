@@ -155,6 +155,13 @@ describe('App architecture', () => {
     expect(appLayoutSource).toContain('!dialogStackHasBlockingDialog()');
     expect(appLayoutSource).toContain('onClick={() => aiChatStore.toggle()}');
     expect(appLayoutSource).toContain('getAIChatLauncherTitle');
+    expect(appLayoutSource).toContain('const AI_CHAT_LAUNCHER_BUTTON_CLASS =');
+    expect(appLayoutSource).toContain(
+      'bottom-[calc(5rem+env(safe-area-inset-bottom,0px))]',
+    );
+    expect(appLayoutSource).toContain('lg:top-1/2');
+    expect(appLayoutSource).toContain('lg:bottom-auto');
+    expect(appLayoutSource).not.toContain('sm:top-1/2');
     expect(appLayoutSource).not.toContain('Pulse Assistant (⌘K)');
     expect(appSource).not.toContain("eventBus.on('theme_changed'");
     expect(appSource).not.toContain("eventBus.on('websocket_reconnected'");

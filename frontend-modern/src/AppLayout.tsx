@@ -10,6 +10,7 @@ import BellIcon from 'lucide-solid/icons/bell';
 import SettingsIcon from 'lucide-solid/icons/settings';
 import Maximize2Icon from 'lucide-solid/icons/maximize-2';
 import Minimize2Icon from 'lucide-solid/icons/minimize-2';
+import SparklesIcon from 'lucide-solid/icons/sparkles';
 import {
   MobileNavBar,
   type MobileNavBarPlatformTab as PlatformTab,
@@ -44,6 +45,8 @@ import type { AppConnectionStatus } from '@/useAppRuntimeState';
 const ROOT_INFRASTRUCTURE_PATH = buildInfrastructurePath();
 const ROOT_WORKLOADS_PATH = buildWorkloadsPath();
 const NAV_TAB_ICON_CLASS = 'w-4 h-4 shrink-0';
+const AI_CHAT_LAUNCHER_BUTTON_CLASS =
+  'fixed right-4 bottom-[calc(5rem+env(safe-area-inset-bottom,0px))] z-40 flex h-11 w-11 items-center justify-center rounded-full border border-border bg-surface text-blue-600 shadow-lg transition-colors duration-200 hover:bg-surface-hover hover:text-blue-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 dark:text-blue-400 dark:hover:text-blue-300 lg:right-0 lg:top-1/2 lg:bottom-auto lg:h-auto lg:w-auto lg:min-h-9 lg:min-w-10 lg:-translate-y-1/2 lg:rounded-l-lg lg:rounded-r-none lg:border-r-0 lg:px-2.5 lg:py-2.5 lg:shadow-none';
 
 export interface AppLayoutProps {
   connectionStatus: () => AppConnectionStatus;
@@ -763,23 +766,11 @@ export function AppLayout(props: AppLayoutProps) {
         <button
           type="button"
           onClick={() => aiChatStore.toggle()}
-          class="fixed right-0 top-1/2 -translate-y-1/2 z-40 flex min-h-10 sm:min-h-9 min-w-10 items-center justify-center px-2.5 py-2.5 rounded-l-lg border border-r-0 border-border bg-surface text-blue-600 dark:text-blue-400 hover:bg-surface-hover hover:text-blue-700 dark:hover:text-blue-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 transition-colors duration-200 group sm:top-1/2 sm:translate-y-[-50%] top-auto bottom-[calc(5rem+env(safe-area-inset-bottom,0px))] translate-y-0"
+          class={AI_CHAT_LAUNCHER_BUTTON_CLASS}
           title={getAIChatLauncherTitle(aiChatStore.context.context?.name)}
           aria-label={AI_CHAT_LAUNCHER_ARIA_LABEL}
         >
-          <svg
-            class="h-5 w-5 flex-shrink-0"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-            stroke-width="1.5"
-          >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 001.423 1.423l1.183.394-1.183.394a2.25 2.25 0 00-1.423 1.423z"
-            />
-          </svg>
+          <SparklesIcon class="h-5 w-5 flex-shrink-0" />
         </button>
       </Show>
     </div>

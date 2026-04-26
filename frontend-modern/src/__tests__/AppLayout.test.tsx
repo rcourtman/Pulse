@@ -3,15 +3,20 @@ import { Route, Router } from '@solidjs/router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { State } from '@/types/api';
 import { AppLayout } from '@/AppLayout';
+import { aiChatStore } from '@/stores/aiChat';
 
 HTMLElement.prototype.scrollIntoView = vi.fn();
 
 describe('AppLayout navigation icons', () => {
   beforeEach(() => {
     window.history.replaceState({}, '', '/dashboard');
+    aiChatStore.close();
+    aiChatStore.setEnabled(true);
   });
 
   afterEach(() => {
+    aiChatStore.close();
+    aiChatStore.setEnabled(false);
     cleanup();
   });
 
@@ -93,5 +98,20 @@ describe('AppLayout navigation icons', () => {
     expect(wordmark).toHaveTextContent('Pulse');
     expect(wordmark).not.toHaveClass('animate-pulse-brand');
     expect(container.querySelector('.animate-pulse-logo')).toBeNull();
+  });
+
+  it('keeps the assistant launcher clear of the mobile navigation breakpoint', () => {
+    renderLayout();
+
+    const launcher = screen.getByRole('button', { name: 'Expand Pulse Assistant' });
+    const launcherClass = launcher.getAttribute('class') ?? '';
+
+    expect(launcherClass).toContain('right-4');
+    expect(launcherClass).toContain('bottom-[calc(5rem+env(safe-area-inset-bottom,0px))]');
+    expect(launcherClass).toContain('rounded-full');
+    expect(launcherClass).toContain('lg:right-0');
+    expect(launcherClass).toContain('lg:top-1/2');
+    expect(launcherClass).toContain('lg:bottom-auto');
+    expect(launcherClass).not.toContain('sm:top-1/2');
   });
 });
