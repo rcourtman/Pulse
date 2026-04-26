@@ -385,6 +385,51 @@ proof_account_stale_count=0
 hosted_paid_orphan_entitlement_count=0
 ```
 
+## 2026-04-26 Hosted Android GA Proof Cleanup
+
+Later on 2026-04-26, a second disposable hosted Android proof account and two
+proof tenants were created on the live production control plane to complete the
+Android build 4 hosted mobile evidence:
+
+- Account: `a_CPKXJFZ6Z4`
+- Primary tenant: `t-73QPV6ZKVR`
+- Secondary tenant: `t-MNS2QY8A22`
+
+The proof pass covered fresh Android hosted pairing, reconnect, approval
+actions, FCM push routing, instance switching, and hosted relay-mobile token
+revocation. After the proof completed, both workspaces were deleted through the
+temporary `mobile-proof delete-workspace` helper, moving each tenant from
+`active` to `deleted`.
+
+A live SQLite backup and server-side tenant-directory archive were then taken
+before removing only the exact proof-marked account, tenant, membership,
+invitation, hosted entitlement, and Stripe account rows:
+
+- Backup:
+  `/root/tenants-pre-ga-mobile-hosted-proof-cleanup-20260426T094703Z.db`
+- Archive:
+  `/data/tenants.archived-mobile-hosted-proof-cleanup-20260426T094703Z`
+
+The temporary mobile-proof helper binary was removed from both `/root` on the
+host and `/usr/local/bin` inside the control-plane container. The live
+production audit returned to the clean current baseline:
+
+```text
+audit_ok=true
+tenant_total=4
+tenant_active=4
+tenant_deleted=0
+tenant_registry_unhealthy_active=0
+docker_managed_total=4
+docker_managed_running=4
+docker_managed_unhealthy=0
+storage_guardrails_enabled=true
+storage_ok=true
+proof_tenant_stale_count=0
+proof_account_stale_count=0
+hosted_paid_orphan_entitlement_count=0
+```
+
 ## Conclusion
 
 `cloud-hosted-tier-runtime-readiness` can be treated as `passed` for the current

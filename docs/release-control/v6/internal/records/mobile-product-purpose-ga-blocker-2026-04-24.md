@@ -133,4 +133,53 @@ the attempt. This keeps the proof harness ready for the next reachable physical
 Android session, but it does not add live hosted pairing or instance-switching
 evidence for GA.
 
-The source and simulator-era product framing are coherent with the resolved companion role, but the release gate remains blocked. Passing this gate still requires fresh physical-device walkthrough/proof on the current candidate, including the native status, alerts, push/device trust, Relay-backed Open Pulse handoff, contextual recovery, and stale/revoked access behavior.
+Later on 2026-04-26, the physical Android phone came back over wireless ADB as
+`192.168.0.119:45003`, and the build 4 hosted Android proof lane was completed
+against a fresh disposable Pulse Cloud proof account and two hosted tenants.
+
+Current Android hosted proof evidence:
+
+- Fresh hosted pairing and instance switching passed from a clean app state:
+  `/Volumes/Development/pulse/.local-build-cache/pulse-mobile/tmp/android-build4-instance-switching-20260426b-fixed/summary.md`
+- Relaunch reconnect passed with the same active hosted instance restored after
+  force-stop and relaunch, and diagnostics showing Relay client active and
+  Encrypted API ready:
+  `/Volumes/Development/pulse/.local-build-cache/pulse-mobile/tmp/android-build4-reconnect-20260426b-fixed2/summary.md`
+- Live approval-actions passed from the Status action surface, with hosted
+  approve and deny actions reconciling to the expected backend terminal states:
+  `/Volumes/Development/pulse/.local-build-cache/pulse-mobile/tmp/android-build4-approval-actions-20260426b-fixed/summary.md`
+- Live FCM push-routing passed through the dedicated relay sender credential,
+  with the notification tap opening the current Alert recovery surface:
+  `/Volumes/Development/pulse/.local-build-cache/pulse-mobile/tmp/android-build4-push-routing-20260426b-fixed/summary.md`
+- Hosted relay-mobile token revocation passed from a single clean pairing,
+  with Access failing closed to the empty safe state after the exact proof token
+  was deleted and the tenant runtime restarted:
+  `/Volumes/Development/pulse/.local-build-cache/pulse-mobile/tmp/android-build4-revoked-access-20260426b-fixed2/summary.md`
+
+The Android proof harness was hardened during this pass to match the current
+companion IA and OS behavior:
+
+- Approval proof now enters pending actions from the Status action surface
+  instead of the removed public Approvals tab.
+- Reconnect proof captures relay readiness, paired access, and follow-up
+  diagnostics across separate scroll positions so proof does not depend on one
+  viewport containing every row.
+- Push-routing proof recognizes the current Alert recovery copy.
+- A new hosted Android revoked-access proof pairs one tenant, deletes the exact
+  proof relay-mobile token, restarts the tenant runtime, and verifies the empty
+  Access state.
+- The revoked-access proof pre-grants or dismisses the Android notification
+  permission prompt after `pm clear`, so the OS prompt cannot mask pairing or
+  revocation state.
+
+Verification:
+
+- `cd /Volumes/Development/pulse/repos/pulse-mobile && npm run test:scripts`
+  passed with 113 script tests.
+- `cd /Volumes/Development/pulse/repos/pulse-mobile && npm run release:readiness`
+  now reports all Android build 4 physical-device evidence as passed and keeps
+  public release blocked only on stale iOS physical-device gates.
+
+The source, simulator-era product framing, and Android physical-device lane are
+coherent with the resolved companion role, but the mobile public-release gate
+remains blocked until the iOS physical-device lane is rerun on build 4.
