@@ -111,7 +111,7 @@ sudo pulse bootstrap-token
 ### Relay / Mobile
 
 #### Relay showing "Disconnected"
-- Confirm a valid Relay, Pro, Pro+, or Cloud license is active (**Settings → License**).
+- Confirm a valid Relay, Pro, grandfathered Pro+, or Cloud license is active (**Settings → Plans & Activation**).
 - Check Pulse server can reach the relay server (outbound WebSocket to `relay.pulserelay.pro`).
 - Review logs: `journalctl -u pulse | grep relay` or `docker logs pulse | grep relay`.
 

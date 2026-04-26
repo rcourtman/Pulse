@@ -31,7 +31,7 @@ When using OIDC/SSO, roles can be automatically assigned based on group membersh
 
 ## Quick Start
 
-1. Activate a Pro, Pro+, or Cloud license in **Settings → License**.
+1. Activate a Pro, grandfathered Pro+, or Cloud license in **Settings → Plans & Activation**.
 2. Go to **Settings → Security → Access Control**.
 3. Create roles with the permissions you need.
 4. Assign roles to users.
