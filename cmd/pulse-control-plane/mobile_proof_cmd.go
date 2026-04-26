@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -35,6 +36,7 @@ func newMobileProofCmd() *cobra.Command {
 	cmd.AddCommand(newMobileProofCreateAccountCmd())
 	cmd.AddCommand(newMobileProofCreateWorkspaceCmd())
 	cmd.AddCommand(newMobileProofDeleteWorkspaceCmd())
+	cmd.AddCommand(newMobileProofPurgeAccountCmd())
 	return cmd
 }
 
@@ -211,6 +213,89 @@ func newMobileProofDeleteWorkspaceCmd() *cobra.Command {
 	return cmd
 }
 
+func newMobileProofPurgeAccountCmd() *cobra.Command {
+	var accountID string
+	var allowNonProofAccount bool
+	var allowNonProofTenant bool
+
+	cmd := &cobra.Command{
+		Use:   "purge-account",
+		Short: "Hard-delete a disposable Pulse Mobile proof account and its workspaces",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			rt, err := newMobileProofRuntime(cmd.Context())
+			if err != nil {
+				return err
+			}
+			defer rt.close()
+
+			accountID = strings.TrimSpace(accountID)
+			if accountID == "" {
+				return fmt.Errorf("--account-id is required")
+			}
+
+			account, err := rt.registry.GetAccount(accountID)
+			if err != nil {
+				return fmt.Errorf("load proof account %s: %w", accountID, err)
+			}
+			if account == nil {
+				return fmt.Errorf("account %s not found", accountID)
+			}
+			if !allowNonProofAccount && !looksLikeMobileProofAccount(account) {
+				return fmt.Errorf("refusing to purge non-proof account %s; pass --allow-non-proof-account only after confirming this is not a customer account", accountID)
+			}
+
+			tenants, err := rt.registry.ListByAccountID(accountID)
+			if err != nil {
+				return fmt.Errorf("list proof account workspaces: %w", err)
+			}
+			for _, tenant := range tenants {
+				if tenant == nil {
+					continue
+				}
+				if !allowNonProofTenant && !looksLikeMobileProofTenant(tenant, account) {
+					return fmt.Errorf("refusing to purge non-proof tenant %s; pass --allow-non-proof-tenant only after confirming this is not a customer workspace", tenant.ID)
+				}
+			}
+
+			purgedTenants := 0
+			for _, tenant := range tenants {
+				if tenant == nil {
+					continue
+				}
+				previousState := tenant.State
+				if err := rt.provisioner.DeprovisionWorkspaceContainer(cmd.Context(), tenant); err != nil {
+					return fmt.Errorf("deprovision tenant %s container: %w", tenant.ID, err)
+				}
+				tenantDataDir, err := safeMobileProofTenantDataDir(rt.cfg.TenantsDir(), tenant.ID)
+				if err != nil {
+					return err
+				}
+				if err := os.RemoveAll(tenantDataDir); err != nil {
+					return fmt.Errorf("remove tenant %s data dir: %w", tenant.ID, err)
+				}
+				if err := rt.registry.Delete(tenant.ID); err != nil {
+					return fmt.Errorf("delete tenant %s registry row: %w", tenant.ID, err)
+				}
+				purgedTenants++
+				fmt.Printf("tenant_purged=%s previous_state=%s account_id=%s\n", tenant.ID, previousState, tenant.AccountID)
+			}
+
+			if err := rt.registry.DeleteAccount(accountID); err != nil {
+				return fmt.Errorf("delete proof account %s: %w", accountID, err)
+			}
+
+			fmt.Printf("account_purged=%s\n", account.ID)
+			fmt.Printf("tenant_purged_count=%d\n", purgedTenants)
+			return nil
+		},
+	}
+
+	cmd.Flags().StringVar(&accountID, "account-id", "", "Disposable proof account ID to purge")
+	cmd.Flags().BoolVar(&allowNonProofAccount, "allow-non-proof-account", false, "Allow purging an account that does not look like a proof account")
+	cmd.Flags().BoolVar(&allowNonProofTenant, "allow-non-proof-tenant", false, "Allow purging a tenant that does not look like a proof tenant")
+	return cmd
+}
+
 func newMobileProofRuntime(ctx context.Context) (*mobileProofRuntime, error) {
 	cfg, err := cloudcp.LoadConfig()
 	if err != nil {
@@ -267,6 +352,26 @@ func newMobileProofRuntime(ctx context.Context) (*mobileProofRuntime, error) {
 		docker:      dockerMgr,
 		provisioner: provisioner,
 	}, nil
+}
+
+func safeMobileProofTenantDataDir(tenantsDir, tenantID string) (string, error) {
+	tenantsDir = strings.TrimSpace(tenantsDir)
+	tenantID = strings.TrimSpace(tenantID)
+	if tenantsDir == "" {
+		return "", fmt.Errorf("tenants dir is required")
+	}
+	if tenantID == "" || strings.ContainsAny(tenantID, `/\`) {
+		return "", fmt.Errorf("unsafe tenant id %q", tenantID)
+	}
+	cleanTenantsDir, err := filepath.Abs(tenantsDir)
+	if err != nil {
+		return "", fmt.Errorf("resolve tenants dir: %w", err)
+	}
+	candidate := filepath.Join(cleanTenantsDir, tenantID)
+	if !strings.HasPrefix(candidate, cleanTenantsDir+string(os.PathSeparator)) {
+		return "", fmt.Errorf("tenant data dir escaped tenants dir")
+	}
+	return candidate, nil
 }
 
 func (rt *mobileProofRuntime) close() {

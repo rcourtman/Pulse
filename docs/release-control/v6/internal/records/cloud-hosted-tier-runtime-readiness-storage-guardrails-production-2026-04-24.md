@@ -430,6 +430,62 @@ proof_account_stale_count=0
 hosted_paid_orphan_entitlement_count=0
 ```
 
+## 2026-04-26 Hosted iOS GA Proof Cleanup
+
+Later on 2026-04-26, a disposable hosted iOS proof account and three proof
+tenants were created on the live production control plane to complete the iOS
+build 4 hosted mobile evidence:
+
+- Account: `a_QMX5Z4W10R`
+- Primary tenant: `t-J4HTS14PNC`
+- Secondary tenant: `t-AEFSEYXRBV`
+- Revoked-access tenant: `t-TTM8JXWSNP`
+
+The proof pass covered fresh iOS hosted pairing, reconnect, approval actions,
+APNs push routing, instance switching, and hosted relay-mobile token
+revocation. After the proof completed, all three workspaces were deleted
+through the temporary `mobile-proof delete-workspace` helper, moving each
+tenant from `active` to `deleted`.
+
+That still left soft-deleted proof tenant rows and the proof account visible to
+`pulse-control-plane cloud audit`, so the mobile-proof lifecycle was extended
+with a guarded `mobile-proof purge-account` command. The command refuses
+customer-shaped accounts by default, lists all account-owned workspaces, checks
+they are proof-shaped, deprovisions containers, removes the account-owned tenant
+data directories, hard-deletes tenant rows and hosted entitlements through the
+registry API, and only then removes the proof account metadata.
+
+The production cleanup used the linux/amd64 temporary helper binary inside the
+live control-plane container and did not pass any customer override flags:
+
+```text
+tenant_purged=t-J4HTS14PNC previous_state=deleted account_id=a_QMX5Z4W10R
+tenant_purged=t-AEFSEYXRBV previous_state=deleted account_id=a_QMX5Z4W10R
+tenant_purged=t-TTM8JXWSNP previous_state=deleted account_id=a_QMX5Z4W10R
+account_purged=a_QMX5Z4W10R
+tenant_purged_count=3
+```
+
+The temporary helper binary was removed from both `/root` on the host and
+`/usr/local/bin` inside the control-plane container. The live production audit
+returned to the clean current baseline:
+
+```text
+audit_ok=true
+tenant_total=4
+tenant_active=4
+tenant_deleted=0
+tenant_registry_unhealthy_active=0
+docker_managed_total=4
+docker_managed_running=4
+docker_managed_unhealthy=0
+storage_guardrails_enabled=true
+storage_ok=true
+proof_tenant_stale_count=0
+proof_account_stale_count=0
+hosted_paid_orphan_entitlement_count=0
+```
+
 ## Conclusion
 
 `cloud-hosted-tier-runtime-readiness` can be treated as `passed` for the current

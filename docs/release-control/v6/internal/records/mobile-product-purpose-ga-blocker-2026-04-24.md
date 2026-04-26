@@ -183,3 +183,70 @@ Verification:
 The source, simulator-era product framing, and Android physical-device lane are
 coherent with the resolved companion role, but the mobile public-release gate
 remains blocked until the iOS physical-device lane is rerun on build 4.
+
+Later on 2026-04-26, the physical iPad became reachable again through
+`devicectl` as `00008120-0004286224E14032`, and the build 4 iOS hosted proof
+lane was completed against a fresh disposable Pulse Cloud proof account and
+three hosted tenants.
+
+Current iOS hosted proof evidence:
+
+- Fresh hosted pairing passed from a clean app state against primary tenant
+  `t-J4HTS14PNC` / `relay_2e1b0929e6fd7c52`:
+  `/Volumes/Development/pulse/.local-build-cache/pulse-mobile/tmp/ios-build4-fresh-pairing-20260426/summary.md`
+- Relaunch reconnect passed against the same primary tenant, with diagnostics
+  showing Relay client active and Encrypted API ready before and after live app
+  relaunch:
+  `/Volumes/Development/pulse/.local-build-cache/pulse-mobile/tmp/ios-build4-relaunch-reconnect-20260426/summary.md`
+- Live approval-actions passed against secondary tenant `t-AEFSEYXRBV` /
+  `relay_4e7a9c8524bfdd4d`, with the hosted backend reconciling approve and
+  deny actions to the expected terminal states:
+  `/Volumes/Development/pulse/.local-build-cache/pulse-mobile/tmp/ios-build4-approval-actions-20260426/summary.md`
+- Live hosted two-tenant instance switching passed between the primary and
+  secondary tenants:
+  `/Volumes/Development/pulse/.local-build-cache/pulse-mobile/tmp/ios-build4-instance-switching-20260426/summary.md`
+- APNs sandbox push-routing passed against the secondary tenant; APNs accepted
+  the request with apns-id `12FD5E57-01A9-6A11-6E97-D0163904D00E`, and the app
+  opened the current alert recovery surface:
+  `/Volumes/Development/pulse/.local-build-cache/pulse-mobile/tmp/ios-build4-push-routing-20260426/summary.md`
+- Hosted relay-mobile token revocation passed against revoked tenant
+  `t-TTM8JXWSNP` / `relay_80060260c4e6fe64`. The proof first paired the tenant
+  from a clean app state, then deleted the exact hosted relay-mobile token,
+  restarted the tenant runtime, relaunched the app from preserved local state,
+  and verified Access failed closed to the empty safe state:
+  `/Volumes/Development/pulse/.local-build-cache/pulse-mobile/tmp/ios-build4-revoked-prepair-20260426/summary.md`
+  and
+  `/Volumes/Development/pulse/.local-build-cache/pulse-mobile/tmp/ios-build4-revoked-access-20260426/summary.md`
+
+The iOS proof harness was hardened during this pass to match the current
+companion IA and physical-device behavior:
+
+- The local device lock wait now tolerates transient `devicectl` read failures
+  while preserving hard timeout reporting.
+- The iOS release proof can reuse a build-for-testing artifact for follow-on
+  hosted cases without resyncing native files between each proof.
+- Fresh pairing, relaunch reconnect, approval-actions, instance-switching,
+  push-routing, and revoked-access fail-closed cases are first-class physical
+  device proof cases.
+- Revoked-access proof can use a pre-paired evidence summary so the app keeps
+  its local pairing state while the exact hosted relay-mobile token is deleted
+  server-side.
+- Diagnostics rows expose stable test identifiers so proof can assert Relay
+  client and encrypted API readiness without depending on fragile text layout.
+
+Verification:
+
+- `cd /Volumes/Development/pulse/repos/pulse-mobile && npm run test:scripts`
+  passed with 120 script tests.
+- `cd /Volumes/Development/pulse/repos/pulse-mobile && npm run release:readiness`
+  reports all required Android and iOS build 4 physical-device evidence as
+  passed.
+- Disposable hosted proof tenants and the proof account were purged from Pulse
+  Cloud through the guarded `mobile-proof purge-account` helper, and production
+  `pulse-control-plane cloud audit` returned `audit_ok=true` with
+  `proof_tenant_stale_count=0`, `proof_account_stale_count=0`, and
+  `hosted_paid_orphan_entitlement_count=0`.
+
+This clears the mobile readiness blocker for the current build 4 candidate. It
+does not publish GA, create a tag, or submit either app store lane; it means the
+mobile evidence no longer blocks a separately controlled v6 GA promotion.

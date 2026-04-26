@@ -150,6 +150,12 @@ cloud-specific enforcement rules.
    The same cloud audit contract must fail on stale proof/canary account rows
    and paid hosted entitlements whose tenant rows are missing, because either
    residue can recreate or mask hosted runtime state after a cleanup.
+   Disposable proof-account cleanup must use the control-plane registry as the
+   source of truth rather than ad hoc SQL: account deletion must refuse accounts
+   that still own tenant rows, remove account-owned membership, invitation, and
+   Stripe account metadata in one registry transaction, and leave user identity
+   rows intact unless a separately governed identity-retention rule says
+   otherwise.
    The live production host must run that cloud audit through the private
    Pulse Pro operations bundle on a recurring systemd timer, write durable
    status/log output, and emit Prometheus textfile metrics so a clean GA

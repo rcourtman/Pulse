@@ -1,6 +1,7 @@
 package main
 
 import (
+	"path/filepath"
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/registry"
@@ -130,9 +131,29 @@ func TestMobileProofCommandExposesAccountAndWorkspaceLifecycle(t *testing.T) {
 	for _, sub := range cmd.Commands() {
 		found[sub.Name()] = true
 	}
-	for _, name := range []string{"create-account", "create-workspace", "delete-workspace"} {
+	for _, name := range []string{"create-account", "create-workspace", "delete-workspace", "purge-account"} {
 		if !found[name] {
 			t.Fatalf("mobile-proof subcommand %q is not registered", name)
 		}
+	}
+}
+
+func TestSafeMobileProofTenantDataDir(t *testing.T) {
+	root := t.TempDir()
+	got, err := safeMobileProofTenantDataDir(root, "t-TEST00001")
+	if err != nil {
+		t.Fatalf("safeMobileProofTenantDataDir: %v", err)
+	}
+	want := filepath.Join(root, "t-TEST00001")
+	if got != want {
+		t.Fatalf("safeMobileProofTenantDataDir = %q, want %q", got, want)
+	}
+
+	for _, tenantID := range []string{"", "../escape", "nested/t-TEST00001", `nested\t-TEST00001`} {
+		t.Run(tenantID, func(t *testing.T) {
+			if _, err := safeMobileProofTenantDataDir(root, tenantID); err == nil {
+				t.Fatalf("expected unsafe tenant id %q to fail", tenantID)
+			}
+		})
 	}
 }

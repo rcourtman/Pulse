@@ -2714,7 +2714,7 @@
       "status": "partial",
       "completion": {
         "state": "bounded-residual",
-        "summary": "Mobile is technically release-capable at the RC usefulness floor, and the GA product role is now locked as a native companion for status, alerts, push/device trust, Relay-backed Open Pulse handoff, and contextual recovery. Public rollout remains blocked until the current app proves that role on physical device; store-capable work stays draft/TestFlight/internal-only until fresh hardware proof demonstrates the native companion value without release-team narration.",
+        "summary": "Mobile go-live readiness is at the current GA floor: the build 4 candidate has current simulator/emulator evidence plus physical Android and iOS proof for the native companion role, hosted pairing, reconnect, push routing, approval actions, instance switching, and revoked-access fail-closed behavior. The remaining bounded residual is explicit store-publication execution and post-GA mobile hardening, not a release-readiness blocker.",
         "tracking": [
           {
             "kind": "lane-followup",
@@ -2738,6 +2738,11 @@
         {
           "repo": "pulse-mobile",
           "path": "store/listing.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse-mobile",
+          "path": "store/release-readiness.json",
           "kind": "file"
         },
         {
@@ -4373,7 +4378,7 @@
       "owner": "project-owner",
       "blocking_level": "release-ready",
       "minimum_evidence_tier": "real-external-e2e",
-      "status": "blocked",
+      "status": "passed",
       "verification_doc": "docs/release-control/v6/internal/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md",
       "lane_ids": [
         "L5"
@@ -4383,7 +4388,13 @@
           "repo": "pulse",
           "path": "docs/release-control/v6/internal/records/mobile-product-purpose-ga-blocker-2026-04-24.md",
           "kind": "file",
-          "evidence_tier": "local-rehearsal"
+          "evidence_tier": "real-external-e2e"
+        },
+        {
+          "repo": "pulse-mobile",
+          "path": "store/release-readiness.json",
+          "kind": "file",
+          "evidence_tier": "real-external-e2e"
         }
       ]
     },
@@ -4758,7 +4769,7 @@
     },
     {
       "id": "mobile-post-rc-hardening",
-      "summary": "Track broader mobile go-live hardening beyond the RC usefulness floor, including non-public store-capable rehearsal while public rollout stays blocked until the current app proves its native companion role on physical device: status, alerts, push/device trust, Relay-backed Open Pulse handoff, and contextual recovery must be understandable without release-team narration.",
+      "summary": "Track explicit Pulse Mobile store-publication execution and post-GA mobile hardening beyond the current proof floor. Build 4 has current physical Android and iOS companion-role proof; public rollout still requires a separate human-triggered release operation, and future mobile hardening must not reopen the GA readiness gate unless new evidence regresses.",
       "owner": "project-owner",
       "status": "planned",
       "recorded_at": "2026-03-13",
@@ -5203,7 +5214,7 @@
     },
     {
       "id": "mobile-public-release-stays-non-public-until-product-ready",
-      "summary": "Pulse Mobile may complete store setup and candidate submission plumbing before GA, but until the product bar is met it must stay non-public: App Store builds remain in App Store Connect/TestFlight, Google Play stays on the internal track, and public rollout waits for fresh physical-device proof on the current candidate plus an explicit product-ready judgment.",
+      "summary": "Pulse Mobile may complete store setup and candidate submission plumbing before GA, but public rollout stays non-public until a human explicitly runs the separate release operation. The build 4 product bar was met on 2026-04-26 through fresh physical Android and iOS proof plus the explicit product-ready judgment recorded in the mobile blocker record.",
       "kind": "release-policy",
       "decided_at": "2026-03-28",
       "subsystem_ids": [],
@@ -5234,7 +5245,7 @@
     },
     {
       "id": "mobile-incident-companion-ia-v1",
-      "summary": "Pulse Mobile's primary product job is anywhere incident awareness, incident triage, and safe governed action away from the desk. The public-facing IA centers on Home, Findings, Instances, Approvals, and More, while Chat remains a contextual investigation tool rather than a top-level destination.",
+      "summary": "Superseded for GA by `mobile-product-role-and-audience`: Pulse Mobile's public-facing IA now centers on Status, Alerts, Open Pulse, Access, and Settings as a native companion for paired status, alert recovery, push/device trust, Relay-backed dashboard handoff, and safe contextual action. The earlier Home/Findings/Instances/Approvals/More incident-companion shape is not the current GA surface.",
       "kind": "governance",
       "decided_at": "2026-03-30",
       "subsystem_ids": [],

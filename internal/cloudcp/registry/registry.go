@@ -1476,6 +1476,60 @@ func (r *TenantRegistry) ListAccounts() ([]*Account, error) {
 	return scanAccounts(rows)
 }
 
+// DeleteAccount removes an account and account-owned metadata after all
+// workspaces have already been removed.
+func (r *TenantRegistry) DeleteAccount(accountID string) error {
+	accountID = strings.TrimSpace(accountID)
+	if accountID == "" {
+		return fmt.Errorf("account id is required")
+	}
+
+	tx, err := r.db.Begin()
+	if err != nil {
+		return fmt.Errorf("begin account delete tx: %w", err)
+	}
+	defer func() {
+		if tx != nil {
+			_ = tx.Rollback()
+		}
+	}()
+
+	var tenantCount int
+	if err := tx.QueryRow(`SELECT COUNT(1) FROM tenants WHERE account_id = ?`, accountID).Scan(&tenantCount); err != nil {
+		return fmt.Errorf("count account tenants: %w", err)
+	}
+	if tenantCount > 0 {
+		return fmt.Errorf("account %q still owns %d tenant(s)", accountID, tenantCount)
+	}
+
+	if _, err := tx.Exec(`DELETE FROM account_invitations WHERE account_id = ?`, accountID); err != nil {
+		return fmt.Errorf("delete account invitations: %w", err)
+	}
+	if _, err := tx.Exec(`DELETE FROM account_memberships WHERE account_id = ?`, accountID); err != nil {
+		return fmt.Errorf("delete account memberships: %w", err)
+	}
+	if _, err := tx.Exec(`DELETE FROM stripe_accounts WHERE account_id = ?`, accountID); err != nil {
+		return fmt.Errorf("delete stripe account: %w", err)
+	}
+	res, err := tx.Exec(`DELETE FROM accounts WHERE id = ?`, accountID)
+	if err != nil {
+		return fmt.Errorf("delete account: %w", err)
+	}
+	affected, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("get rows affected: %w", err)
+	}
+	if affected == 0 {
+		return fmt.Errorf("account %q not found", accountID)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit account delete tx: %w", err)
+	}
+	tx = nil
+	return nil
+}
+
 // CreateUser inserts a new user record.
 func (r *TenantRegistry) CreateUser(u *User) error {
 	if u == nil {

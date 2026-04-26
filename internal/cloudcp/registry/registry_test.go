@@ -345,6 +345,118 @@ func TestAccountCRUD(t *testing.T) {
 	}
 }
 
+func TestDeleteAccountRemovesAccountOwnedMetadata(t *testing.T) {
+	reg := newTestRegistry(t)
+
+	accountID, err := GenerateAccountID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	account := &Account{
+		ID:          accountID,
+		Kind:        AccountKindMSP,
+		DisplayName: "Disposable Proof Account",
+	}
+	if err := reg.CreateAccount(account); err != nil {
+		t.Fatalf("CreateAccount: %v", err)
+	}
+
+	userID, err := GenerateUserID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.CreateUser(&User{ID: userID, Email: "proof@example.com"}); err != nil {
+		t.Fatalf("CreateUser: %v", err)
+	}
+	if err := reg.CreateMembership(&AccountMembership{AccountID: accountID, UserID: userID, Role: MemberRoleOwner}); err != nil {
+		t.Fatalf("CreateMembership: %v", err)
+	}
+
+	invitationID, err := GenerateAccountInvitationID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.UpsertInvitation(&AccountInvitation{ID: invitationID, AccountID: accountID, Email: "invitee@example.com", Role: MemberRoleTech}); err != nil {
+		t.Fatalf("UpsertInvitation: %v", err)
+	}
+
+	if err := reg.CreateStripeAccount(&StripeAccount{
+		AccountID:         accountID,
+		StripeCustomerID:  "cus_proof_delete",
+		PlanVersion:       "cloud",
+		SubscriptionState: "active",
+		UpdatedAt:         time.Now().UTC().Unix(),
+	}); err != nil {
+		t.Fatalf("CreateStripeAccount: %v", err)
+	}
+
+	if err := reg.DeleteAccount(accountID); err != nil {
+		t.Fatalf("DeleteAccount: %v", err)
+	}
+
+	got, err := reg.GetAccount(accountID)
+	if err != nil {
+		t.Fatalf("GetAccount after delete: %v", err)
+	}
+	if got != nil {
+		t.Fatalf("expected account to be deleted, got %+v", got)
+	}
+	membership, err := reg.GetMembership(accountID, userID)
+	if err != nil {
+		t.Fatalf("GetMembership after account delete: %v", err)
+	}
+	if membership != nil {
+		t.Fatalf("expected account membership to be deleted, got %+v", membership)
+	}
+	invitations, err := reg.ListInvitationsByAccount(accountID)
+	if err != nil {
+		t.Fatalf("ListInvitationsByAccount after account delete: %v", err)
+	}
+	if len(invitations) != 0 {
+		t.Fatalf("expected account invitations to be deleted, got %d", len(invitations))
+	}
+	stripeAccount, err := reg.GetStripeAccount(accountID)
+	if err != nil {
+		t.Fatalf("GetStripeAccount after account delete: %v", err)
+	}
+	if stripeAccount != nil {
+		t.Fatalf("expected stripe account to be deleted, got %+v", stripeAccount)
+	}
+	user, err := reg.GetUser(userID)
+	if err != nil {
+		t.Fatalf("GetUser after account delete: %v", err)
+	}
+	if user == nil {
+		t.Fatal("DeleteAccount should not remove the user identity")
+	}
+}
+
+func TestDeleteAccountRefusesAccountWithTenants(t *testing.T) {
+	reg := newTestRegistry(t)
+
+	accountID, err := GenerateAccountID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.CreateAccount(&Account{ID: accountID, Kind: AccountKindMSP, DisplayName: "Account With Workspace"}); err != nil {
+		t.Fatalf("CreateAccount: %v", err)
+	}
+	if err := reg.Create(&Tenant{ID: "t-ACCOUNT001", AccountID: accountID, Email: "owner@example.com", DisplayName: "Workspace"}); err != nil {
+		t.Fatalf("Create tenant: %v", err)
+	}
+
+	if err := reg.DeleteAccount(accountID); err == nil {
+		t.Fatal("DeleteAccount should refuse accounts that still own tenants")
+	}
+	got, err := reg.GetAccount(accountID)
+	if err != nil {
+		t.Fatalf("GetAccount after refused delete: %v", err)
+	}
+	if got == nil {
+		t.Fatal("account should remain after refused delete")
+	}
+}
+
 func TestUserCRUD(t *testing.T) {
 	reg := newTestRegistry(t)
 
