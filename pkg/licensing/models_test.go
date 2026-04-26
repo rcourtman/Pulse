@@ -118,6 +118,17 @@ func TestClaims_EffectiveLimits(t *testing.T) {
 			expected: map[string]int64{},
 		},
 		{
+			name: "grandfathered_monthly_v5_strips_new_v6_caps",
+			claims: Claims{
+				Tier:                TierPro,
+				PlanVersion:         "v5_pro_monthly_grandfathered",
+				Limits:              map[string]int64{"max_monitored_systems": 15, "max_guests": 5},
+				MaxMonitoredSystems: 15,
+				MaxGuests:           5,
+			},
+			expected: map[string]int64{},
+		},
+		{
 			name: "community_plan_strips_legacy_v5_cap_after_upgrade",
 			claims: Claims{
 				Tier:                TierFree,

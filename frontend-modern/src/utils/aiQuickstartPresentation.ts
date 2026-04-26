@@ -20,7 +20,7 @@ export function getAIQuickstartCreditsPresentation(
       className:
         'bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300',
       summary: `Patrol quickstart: ${remaining}/${total} runs left`,
-      title: `${remaining} of ${total} Patrol quickstart runs remaining on this activated or trial-backed install. No API key needed for initial Patrol quickstart.`,
+      title: `${remaining} of ${total} Patrol quickstart runs remaining on this activated Pulse Account install. No API key needed for initial Patrol quickstart.`,
     };
   }
 
@@ -29,6 +29,6 @@ export function getAIQuickstartCreditsPresentation(
       'bg-amber-50 dark:bg-amber-950 border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300',
     summary: 'Patrol quickstart exhausted',
     title:
-      'Patrol quickstart on this activated or trial-backed install is exhausted. Connect your API key to continue using Patrol.',
+      'Patrol quickstart on this activated Pulse Account install is exhausted. Connect your API key to continue using Patrol.',
   };
 }

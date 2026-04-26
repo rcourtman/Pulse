@@ -383,6 +383,44 @@ func TestBillingState_SaveCanonicalizesCloudPlanContract(t *testing.T) {
 	assert.False(t, hasOld)
 }
 
+func TestBillingState_GrandfatheredRecurringSelfHostedPlanStaysUncapped(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("PULSE_LEGACY_KEY_PATH", filepath.Join(t.TempDir(), ".encryption.key"))
+	writeTestEncryptionKey(t, dir)
+
+	store := NewFileBillingStore(dir)
+	state := &entitlements.BillingState{
+		PlanVersion:       "v5_pro_monthly_grandfathered",
+		SubscriptionState: entitlements.SubStateActive,
+		Limits: map[string]int64{
+			pkglicensing.MaxMonitoredSystemsLicenseGateKey: 10,
+			"max_guests": 5,
+			"max_nodes":  99,
+		},
+	}
+
+	require.NoError(t, store.SaveBillingState("default", state))
+
+	loaded, err := store.GetBillingState("default")
+	require.NoError(t, err)
+	require.NotNil(t, loaded)
+	assert.Equal(t, "v5_pro_monthly_grandfathered", loaded.PlanVersion)
+	assert.NotContains(t, loaded.Limits, pkglicensing.MaxMonitoredSystemsLicenseGateKey)
+	assert.NotContains(t, loaded.Limits, "max_guests")
+	assert.NotContains(t, loaded.Limits, "max_nodes")
+
+	data, err := os.ReadFile(filepath.Join(dir, "billing.json"))
+	require.NoError(t, err)
+
+	var raw map[string]any
+	require.NoError(t, json.Unmarshal(data, &raw))
+	rawLimits, ok := raw["limits"].(map[string]any)
+	require.True(t, ok)
+	assert.NotContains(t, rawLimits, pkglicensing.MaxMonitoredSystemsLicenseGateKey)
+	assert.NotContains(t, rawLimits, "max_guests")
+	assert.NotContains(t, rawLimits, "max_nodes")
+}
+
 func TestBillingState_CapabilityOrderIndependent(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("PULSE_LEGACY_KEY_PATH", filepath.Join(t.TempDir(), ".encryption.key"))

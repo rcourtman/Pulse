@@ -904,7 +904,7 @@ describe('AIIntelligence entitlement gating', () => {
       expect(getPatrolStatusMock).toHaveBeenCalled();
       expect(
         screen.getByTitle(
-          '12 of 25 Patrol quickstart runs remaining on this activated or trial-backed install. No API key needed for initial Patrol quickstart.',
+          '12 of 25 Patrol quickstart runs remaining on this activated Pulse Account install. No API key needed for initial Patrol quickstart.',
         ),
       ).toBeInTheDocument();
     });

@@ -76,19 +76,21 @@ describe('patrol api', () => {
   });
 
   it('preserves the activation-required quickstart blocked reason payload', async () => {
+    const activationRequiredReason =
+      'Connect your API key to use AI Patrol on this install. Hosted quickstart requires an activated entitlement.';
+
     apiFetchJSONMock.mockResolvedValueOnce({
       runtime_state: 'blocked',
-      blocked_reason:
-        'Connect your API key to use AI Patrol on this install. Hosted quickstart requires an activated entitlement.',
+      blocked_reason: activationRequiredReason,
       healthy: false,
     } as any);
 
     await expect(getPatrolStatus()).resolves.toMatchObject({
       runtime_state: 'blocked',
-      blocked_reason:
-        'Connect your API key to use AI Patrol on this install. Hosted quickstart requires an activated entitlement.',
+      blocked_reason: activationRequiredReason,
       healthy: false,
     });
+    expect(activationRequiredReason.toLowerCase()).not.toContain('trial');
   });
 
   it('preserves activation-gated quickstart status without inventing inventory', async () => {

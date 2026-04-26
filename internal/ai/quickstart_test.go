@@ -149,6 +149,11 @@ func TestQuickstartReasonExportsRemainCanonical(t *testing.T) {
 	if strings.Contains(strings.ToLower(QuickstartActivationRequiredReason()), "trial") {
 		t.Fatalf("activation-required quickstart reason must stay BYOK-first, got %q", QuickstartActivationRequiredReason())
 	}
+	if err := quickstartActivationRequiredError(); strings.Contains(strings.ToLower(err.Error()), "trial") {
+		t.Fatalf("activation-required quickstart error must not mention trials, got %q", err.Error())
+	} else if !strings.Contains(err.Error(), "Pulse Account activation") {
+		t.Fatalf("activation-required quickstart error = %q, want Pulse Account activation guidance", err.Error())
+	}
 }
 
 func TestPersistentQuickstartCreditManager_LoadsPersistedTokenWithoutBootstrap(t *testing.T) {

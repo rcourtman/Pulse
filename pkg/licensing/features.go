@@ -175,6 +175,11 @@ func IsSelfHostedCommunityPlanVersion(planVersion string) bool {
 	}
 }
 
+func IsSelfHostedCoreMonitoringUncappedPlanVersion(planVersion string) bool {
+	return IsSelfHostedCommunityPlanVersion(planVersion) ||
+		IsGrandfatheredRecurringV5PlanVersion(planVersion)
+}
+
 func stripLegacyCommercialCaps(limits map[string]int64) {
 	delete(limits, MaxMonitoredSystemsLicenseGateKey)
 	delete(limits, "max_guests")

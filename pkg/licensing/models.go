@@ -81,10 +81,7 @@ func (c Claims) shouldScrubLegacyCommercialCaps() bool {
 	if c.Tier == TierLifetime {
 		return true
 	}
-	if IsSelfHostedCommunityPlanVersion(c.PlanVersion) {
-		return true
-	}
-	if IsGrandfatheredRecurringV5PlanVersion(c.PlanVersion) {
+	if IsSelfHostedCoreMonitoringUncappedPlanVersion(c.PlanVersion) {
 		return true
 	}
 	return false

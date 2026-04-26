@@ -24,17 +24,17 @@ describe('quickstart copy contract', () => {
     const pulsePro = readRepoFile('docs/PULSE_PRO.md');
     const pricingSpec = readRepoFile('docs/architecture/v6-pricing-and-tiering.md');
 
-    expect(readme).toContain('Activated or trial-backed installs can use 25 Patrol quickstart runs');
-    expect(readme).toMatch(
-      /Unactivated Community installs should activate, start\s+a trial, or use BYOK\./,
+    expect(readme).toContain(
+      'optional managed quickstart runs are available only after explicit Pulse Account activation',
     );
+    expect(readme).toContain('if you explicitly activate through Pulse Account, Pulse can use 25');
     expect(pulsePro).toContain(
-      'Activated or trial-backed installs can use 25 Patrol quickstart runs with no API key for first-run activation.',
+      'Optional Patrol quickstart after explicit Pulse Account activation: 25 Patrol runs with no API key on a server-verified install.',
     );
     expect(pricingSpec).toMatch(
-      /Activated or trial-backed\s+installs with the server-verified installation identity get 25 hosted Patrol runs/,
+      /optional Patrol-only quickstart allowance after explicit Pulse Account\s+activation/,
     );
-    expect(pricingSpec).toMatch(/it is not a general hosted\s+chat entitlement/);
+    expect(pricingSpec).toMatch(/it is not a general\s+hosted chat entitlement/);
   });
 
   it('keeps hosted quickstart privacy copy aligned with resource-policy redaction', () => {

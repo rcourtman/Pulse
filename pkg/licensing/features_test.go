@@ -677,6 +677,30 @@ func TestIsSelfHostedCommunityPlanVersion(t *testing.T) {
 	}
 }
 
+func TestIsSelfHostedCoreMonitoringUncappedPlanVersion(t *testing.T) {
+	tests := []struct {
+		plan string
+		want bool
+	}{
+		{plan: "community", want: true},
+		{plan: "free", want: true},
+		{plan: "v5_pro_monthly_grandfathered", want: true},
+		{plan: "v5_pro_annual_grandfathered", want: true},
+		{plan: "cloud_starter", want: false},
+		{plan: "msp_starter", want: false},
+		{plan: "pro-v2", want: false},
+		{plan: "", want: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.plan, func(t *testing.T) {
+			if got := IsSelfHostedCoreMonitoringUncappedPlanVersion(tt.plan); got != tt.want {
+				t.Fatalf("IsSelfHostedCoreMonitoringUncappedPlanVersion(%q) = %v, want %v", tt.plan, got, tt.want)
+			}
+		})
+	}
+}
+
 // TestPriceIDToPlanVersion_AllMapToKnownPlans ensures every plan version in the
 // price→plan map is recognized by LimitsForCloudPlan (fail-closed safety net).
 func TestPriceIDToPlanVersion_AllMapToKnownPlans(t *testing.T) {

@@ -222,7 +222,7 @@ export function canOfferCommercialTrial(): boolean {
 
 /**
  * Used by explicit commercial surfaces that should only offer trial start when
- * the current commercial posture is loaded and not already active/trial-backed.
+ * the current commercial posture is loaded and not already active or trialing.
  */
 export function canStartCommercialTrial(): boolean {
   if (presentationPolicyHidesUpgradePrompts()) return false;

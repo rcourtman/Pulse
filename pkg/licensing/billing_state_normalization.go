@@ -48,7 +48,7 @@ func NormalizeBillingState(state *BillingState) *BillingState {
 	normalized.CommercialMigration = NormalizeCommercialMigrationStatus(normalized.CommercialMigration)
 
 	normalized.Limits = NormalizeMonitoredSystemLimits(normalized.Limits)
-	if IsSelfHostedCommunityPlanVersion(normalized.PlanVersion) {
+	if IsSelfHostedCoreMonitoringUncappedPlanVersion(normalized.PlanVersion) {
 		stripLegacyCommercialCaps(normalized.Limits)
 	}
 
@@ -81,11 +81,8 @@ func NormalizeBillingState(state *BillingState) *BillingState {
 
 func billingStateStoredMonitoredSystemLimit(planVersion string) (int, bool) {
 	planVersion = CanonicalizePlanVersion(planVersion)
-	if IsSelfHostedCommunityPlanVersion(planVersion) {
+	if IsSelfHostedCoreMonitoringUncappedPlanVersion(planVersion) {
 		return 0, false
-	}
-	if IsGrandfatheredRecurringV5PlanVersion(planVersion) {
-		return UnknownPlanDefaultMonitoredSystemLimit, true
 	}
 	limit, known := CloudPlanMonitoredSystemLimits[planVersion]
 	if !known || limit <= 0 {

@@ -321,7 +321,7 @@ the canonical monitored-system blocked payload.
     treated as global command authority.
 21. Keep hosted billing-state quickstart payload fields on the shared API contract: `internal/api/hosted_entitlement_refresh.go`, `internal/api/subscription_state_handlers.go`, and `internal/api/contract_test.go` must preserve `quickstart_credits_granted`, `quickstart_credits_used`, and `quickstart_credits_granted_at` through hosted signup, hosted lease refresh, and billing-state reads instead of letting lease rewrites silently erase seeded quickstart inventory.
 22. Keep hosted AI settings bootstrap on the shared API contract: `internal/api/ai_hosted_runtime.go`, `internal/api/ai_handlers.go`, `internal/api/ai_handler.go`, and `internal/api/contract_test.go` must treat a missing `ai.enc` in hosted mode as a canonical bootstrap condition, persist one machine-owned quickstart-backed AI config with the Pulse-owned alias `quickstart:pulse-hosted` when hosted entitlements grant AI capability, and preserve that configured settings payload as the same public contract that Chat, Patrol, and AI Settings consume instead of embedding a third-party model ID in the transport contract.
-    That same hosted bootstrap surface must also preserve the secure quickstart-identity contract: hosted or trial-backed AI settings reads and enablement may bootstrap Patrol quickstart from the effective signed entitlement lease when no self-hosted installation token exists, but they must not fabricate installation-scoped activation state or anonymous client identity to satisfy `/v1/quickstart/bootstrap`.
+    That same hosted bootstrap surface must also preserve the secure quickstart-identity contract: hosted entitlement-backed AI settings reads and enablement may bootstrap Patrol quickstart from the effective signed entitlement lease when no self-hosted installation token exists, but they must not fabricate installation-scoped activation state or anonymous client identity to satisfy `/v1/quickstart/bootstrap`.
 23. Keep post-boot AI enablement contract-backed on the shared AI/mobile approval surface: `internal/api/ai_handler.go`, `internal/api/ai_handlers.go`, `internal/api/router_routes_ai_relay.go`, and `internal/api/contract_test.go` must turn the governed approvals-list API into the canonical empty-list payload as soon as settings-driven AI enablement succeeds, rather than leaving that surface on `503 Approval store not initialized` until some separate startup-only side effect happens.
 24. Keep infrastructure summary chart transport contract-backed on the shared API surface: `internal/api/router.go`, `internal/api/contract_test.go`, and frontend infrastructure summary consumers must normalize long-range mixed-cadence history into equal-time summary buckets before shipping the infrastructure charts API payload, so 7-day and 30-day summary cards do not expose compressed right-edge tails just because recent samples arrive at a finer storage resolution.
 25. Keep long-range workload chart transport time-proportional on the shared API surface: `internal/api/router.go`, `internal/api/contract_test.go`, and workload chart consumers must cap mixed-cadence workload history by equal-time buckets rather than raw point index for the per-workload and aggregate workload chart APIs, so 7-day and 30-day workload cards do not bunch recent samples at the right edge just because recent telemetry is stored more densely.
@@ -514,7 +514,7 @@ the canonical monitored-system blocked payload.
    client-authored commercial identity or synthetic credits when the quickstart
    server is unavailable
    and the activation-gated availability rule, so missing installation
-   activation/trial identity must surface as the canonical activation-required
+   activation or entitlement identity must surface as the canonical activation-required
    quickstart block reason for Patrol and AI settings enablement rather than
    silently attempting anonymous bootstrap
    and the Pulse-owned hosted model alias rule, so persisted legacy hosted
@@ -527,9 +527,9 @@ the canonical monitored-system blocked payload.
    Patrol and must clear that field when a provider-backed path is active or
    quickstart is genuinely usable
    and the public interpretation rule, so those fields describe Patrol-only
-   quickstart inventory and active runtime source on activated or trial-backed
-   installs rather than a generic hosted AI quota, anonymous Community
-   entitlement, or full-chat entitlement
+   quickstart inventory and active runtime source on activated Pulse Account
+   installs or effective hosted entitlements rather than a generic hosted AI
+   quota, anonymous Community entitlement, trial CTA, or full-chat entitlement
    and the Patrol execution billing rule, so shared runtime bridges such as
    `internal/api/chat_service_adapter.go` must preserve the stable Patrol
    execution identifier that the hosted quickstart contract uses to charge
@@ -2620,9 +2620,9 @@ force a blocked or exhausted operator presentation while Patrol is active on a
 configured non-quickstart provider path.
 Those same transport fields now also define the only public quickstart promise:
 when pricing, README, or Patrol header copy references them, it must describe
-Patrol-only quickstart runs and no-key Patrol activation on activated or
-trial-backed installs rather than generic AI credits, anonymous bootstrap, or
-hosted-chat access.
+Patrol-only quickstart runs and no-key Patrol activation on activated Pulse
+Account installs or effective hosted entitlements rather than generic AI
+credits, anonymous bootstrap, trial CTAs, or hosted-chat access.
 Hosted billing-state payloads now also carry the canonical quickstart grant
 metadata used by hosted bootstrap and refresh flows. Billing reads and contract
 proofs must preserve `quickstart_credits_granted`,

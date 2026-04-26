@@ -212,7 +212,8 @@ quickstart use, resolve the strongest server-verified runtime authority in
 this order, and refuse bootstrap entirely when neither exists: installation
 identity from installation-scoped `activation.enc` for activated self-hosted
 installs, then signed entitlement-lease identity from the effective
-entitlement-backed billing state for hosted or trial-backed runtimes. Tenant-
+entitlement-backed billing state for hosted entitlement-backed runtimes,
+including hosted trial leases. Tenant-
 local Patrol persistence must therefore reuse installation-scoped activation
 state where it exists and must fall back to the shared entitlement lease
 without inventing shadow activation files or anonymous client identity.
@@ -246,9 +247,9 @@ that inventory is known, rather than forcing the runtime to infer exhaustion
 from absent fields or resetting credits to zero after transient upstream
 errors.
 Public-facing copy that reflects those runtime fields must therefore speak in
-Patrol quickstart runs on activated or trial-backed installs and Patrol-only
-no-key activation, not in generic AI credits, anonymous Community bootstrap,
-or a promise of full hosted chat.
+Patrol quickstart runs on activated Pulse Account installs or effective hosted
+entitlements and Patrol-only no-key activation, not in generic AI credits,
+anonymous Community bootstrap, trial CTAs, or a promise of full hosted chat.
 That same runtime-backed contract now governs AI settings enablement too:
 quickstart-ready installs may enable Patrol directly without opening provider
 setup, while activation-required or offline quickstart states must surface one

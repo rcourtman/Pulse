@@ -306,7 +306,7 @@ func TestNormalizeBillingState_CanonicalizesCloudPlanVersionAndLimits(t *testing
 	}
 }
 
-func TestNormalizeBillingState_GrandfatheredRecurringPlanUsesStoredBillingBaseline(t *testing.T) {
+func TestNormalizeBillingState_GrandfatheredRecurringPlanStripsLegacyCommercialCaps(t *testing.T) {
 	state := &BillingState{
 		PlanVersion: " v5_pro_monthly_grandfathered ",
 		Limits: map[string]int64{
@@ -321,11 +321,11 @@ func TestNormalizeBillingState_GrandfatheredRecurringPlanUsesStoredBillingBaseli
 	if normalized.PlanVersion != "v5_pro_monthly_grandfathered" {
 		t.Fatalf("plan_version=%q, want %q", normalized.PlanVersion, "v5_pro_monthly_grandfathered")
 	}
-	if got := normalized.Limits["max_monitored_systems"]; got != UnknownPlanDefaultMonitoredSystemLimit {
-		t.Fatalf("limits[max_monitored_systems]=%d, want %d", got, UnknownPlanDefaultMonitoredSystemLimit)
+	if _, ok := normalized.Limits["max_monitored_systems"]; ok {
+		t.Fatalf("expected max_monitored_systems to be scrubbed, got %v", normalized.Limits)
 	}
-	if got := normalized.Limits["max_guests"]; got != 50 {
-		t.Fatalf("limits[max_guests]=%d, want %d", got, 50)
+	if _, ok := normalized.Limits["max_guests"]; ok {
+		t.Fatalf("expected max_guests to be scrubbed, got %v", normalized.Limits)
 	}
 	if _, hasOld := normalized.Limits["max_nodes"]; hasOld {
 		t.Fatal("expected max_nodes to be deleted during normalization")

@@ -243,8 +243,7 @@ func normalizeDatabaseSourceState(state BillingState) BillingState {
 	normalized.CommercialMigration = NormalizeCommercialMigrationStatus(normalized.CommercialMigration)
 
 	normalized.Limits = NormalizeMonitoredSystemLimits(normalized.Limits)
-	if IsSelfHostedCommunityPlanVersion(normalized.PlanVersion) ||
-		IsGrandfatheredRecurringV5PlanVersion(normalized.PlanVersion) {
+	if IsSelfHostedCoreMonitoringUncappedPlanVersion(normalized.PlanVersion) {
 		stripLegacyCommercialCaps(normalized.Limits)
 	}
 

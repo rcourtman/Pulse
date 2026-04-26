@@ -751,16 +751,17 @@ quickstart token plus the authoritative quickstart credit snapshot. The Pulse
 runtime must authenticate that bootstrap with one of the server-verified
 commercial authorities owned by the shared commercial boundary: an
 installation token from installation-scoped activation state for activated
-self-hosted installs, or a signed hosted entitlement lease for entitlement-
-backed trial/cloud runtimes. There is no anonymous `client_installation_id`
-fallback in the v6 runtime contract, and hosted/trial quickstart must not fake
-self-hosted `activation.enc` just to satisfy the bootstrap path. Local runtime
-cache files may memoize the returned token and counts but may not treat those
-cached counts as commercial authority. The transport must also remain
-mixed-version compatible while quickstart rolls out: Pulse may send optional
-binding metadata such as `instance_name` and `use_case=patrol`, and the server
-must not reject that additive metadata or rely on one expiry field spelling
-only when returning the quickstart token snapshot.
+self-hosted installs, or a signed hosted entitlement lease for hosted
+entitlement-backed runtimes, including hosted trial leases. There is no
+anonymous `client_installation_id` fallback in the v6 runtime contract, and
+hosted quickstart must not fake self-hosted `activation.enc` just to satisfy
+the bootstrap path. Local runtime cache files may memoize the returned token
+and counts but may not treat those cached counts as commercial authority. The
+transport must also remain mixed-version compatible while quickstart rolls out:
+Pulse may send optional binding metadata such as `instance_name` and
+`use_case=patrol`, and the server must not reject that additive metadata or
+rely on one expiry field spelling only when returning the quickstart token
+snapshot.
 `POST /v1/quickstart/patrol` also owns the Patrol-run billing boundary: the
 runtime may send an execution identifier for one higher-level Patrol run, and
 the license server must treat repeated proxy calls that share that execution
@@ -774,9 +775,10 @@ route is commercial activation support, not an ungoverned external prompt
 relay.
 That quickstart allowance is therefore activation support, not the main
 commercial pitch: self-hosted pricing and docs may promise Patrol-only
-quickstart runs with no API key for activated or trial-backed installs, but
-they must not market that bootstrap as anonymous Community entitlement or a
-general hosted chat plan while Relay and Pro carry the paid story.
+quickstart runs with no API key for activated Pulse Account installs or
+effective hosted entitlements, but they must not market that bootstrap as
+anonymous Community entitlement, a trial CTA, or a general hosted chat plan
+while Relay and Pro carry the paid story.
 The self-hosted commercial counted unit is now also locked to monitored
 systems rather than agent installs. `max_monitored_systems` is the live
 runtime and UI contract, while legacy `max_agents` / `max_nodes` aliases are

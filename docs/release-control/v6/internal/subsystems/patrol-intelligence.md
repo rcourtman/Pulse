@@ -78,8 +78,8 @@ Patrol-specific presentation helpers.
 4. Keep Patrol header quickstart copy Patrol-scoped and runtime-backed: the
    Patrol header may promise only the server-authoritative quickstart
    inventory, phrase availability as Patrol runs with no API key on activated
-   or trial-backed installs, and avoid implying broader hosted chat, generic
-   AI credits, or anonymous Community entitlement.
+   Pulse Account installs or effective hosted entitlements, and avoid implying
+   broader hosted chat, generic AI credits, or anonymous Community entitlement.
 5. Keep customer-facing Patrol naming product-first: page titles, route chrome,
    summary copy, actions, and empty states should lead with `Patrol` or
    `Pulse Patrol` rather than generic `AI` branding. Reserve `AI` terminology
@@ -485,7 +485,8 @@ exhaustion, not merely because the stored credit counter reached zero while a
 configured provider path keeps Patrol active.
 That same header copy must stay Patrol-only in operator-facing language:
 available inventory should read as free Patrol quickstart runs with no API
-key for Patrol on the current activated or trial-backed install, and
+key for Patrol on the current activated Pulse Account install or effective
+hosted entitlement, and
 activation-required states must trust the canonical blocked reason instead of
 relabeling stale counters as exhausted. Exhaustion should direct the operator
 toward BYOK for Patrol rather than implying a broader hosted AI allowance.

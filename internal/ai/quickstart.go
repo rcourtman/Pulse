@@ -514,7 +514,7 @@ func QuickstartUnavailableReason() string {
 }
 
 // QuickstartActivationRequiredReason returns the canonical Patrol quickstart
-// availability message shown when the install is not activated or trial-backed.
+// availability message shown when the install is not activated.
 func QuickstartActivationRequiredReason() string {
 	return patrolQuickstartActivationRequiredReason
 }
@@ -523,7 +523,7 @@ func quickstartActivationRequiredError() error {
 	return &pkglicensing.LicenseServerError{
 		StatusCode: http.StatusUnauthorized,
 		Code:       "activation_required",
-		Message:    "Quickstart bootstrap requires an activated or trial-backed installation",
+		Message:    "Quickstart bootstrap requires Pulse Account activation",
 		Retryable:  false,
 	}
 }
