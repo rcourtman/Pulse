@@ -2963,6 +2963,8 @@
         "frontend-modern/src/components/Toast/Toast.tsx",
         "frontend-modern/src/features/dashboardOverview/ActionRequiredPanel.tsx",
         "frontend-modern/src/features/dashboardOverview/DashboardCustomizer.tsx",
+        "frontend-modern/src/features/dashboardOverview/estateSummaryModel.ts",
+        "frontend-modern/src/features/dashboardOverview/EstateSummaryPanel.tsx",
         "frontend-modern/src/features/dashboardOverview/index.ts",
         "frontend-modern/src/features/dashboardOverview/KPIStrip.tsx",
         "frontend-modern/src/features/dashboardOverview/ProblemResourcesTable.tsx",
@@ -3366,6 +3368,8 @@
             "match_files": [
               "frontend-modern/src/features/dashboardOverview/ActionRequiredPanel.tsx",
               "frontend-modern/src/features/dashboardOverview/DashboardCustomizer.tsx",
+              "frontend-modern/src/features/dashboardOverview/estateSummaryModel.ts",
+              "frontend-modern/src/features/dashboardOverview/EstateSummaryPanel.tsx",
               "frontend-modern/src/features/dashboardOverview/index.ts",
               "frontend-modern/src/features/dashboardOverview/KPIStrip.tsx",
               "frontend-modern/src/features/dashboardOverview/ProblemResourcesTable.tsx",

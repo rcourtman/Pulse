@@ -8,6 +8,7 @@ import type { DashboardOverview } from '@/hooks/useDashboardOverview';
 import type { DashboardRecoverySummary } from '@/hooks/useDashboardRecovery';
 import DashboardPage from '@/pages/Dashboard';
 import dashboardPageSource from '@/pages/Dashboard.tsx?raw';
+import type { ConnectedInfrastructureSurface } from '@/types/api';
 
 const aiRuntimeMock = vi.hoisted(() => ({
   featureEnabled: false,
@@ -26,7 +27,7 @@ const connectedInfrastructureMock: Array<{
   status: 'active' | 'ignored';
   healthStatus?: string;
   lastSeen?: number;
-  surfaces: Array<{ id: string; kind: 'agent' | 'proxmox' | 'truenas'; label: string }>;
+  surfaces: Array<{ id: string; kind: ConnectedInfrastructureSurface['kind']; label: string }>;
 }> = [];
 const reconnectSpy = vi.fn();
 const navigateSpy = vi.hoisted(() => vi.fn());
@@ -324,7 +325,10 @@ describe('Dashboard page module contract', () => {
     );
     expect(screen.getByText('1 system needs review; details below')).toBeInTheDocument();
     expect(screen.getByText('2 active')).toBeInTheDocument();
-    expect(screen.getByText(/Proxmox/)).toBeInTheDocument();
+    const sourceCoverage = screen.getByText(/Proxmox/);
+    expect(sourceCoverage).toBeInTheDocument();
+    expect(sourceCoverage).toHaveClass('break-words');
+    expect(sourceCoverage).not.toHaveClass('truncate');
     expect(screen.getByText(/TrueNAS/)).toBeInTheDocument();
     expect(
       estateHeading.compareDocumentPosition(problemHeading) & Node.DOCUMENT_POSITION_FOLLOWING,

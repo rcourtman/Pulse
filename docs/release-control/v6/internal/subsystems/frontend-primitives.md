@@ -1642,6 +1642,10 @@ canonical connected-infrastructure projection, fall back only to the compact
 dashboard summary that the route already owns, and keep the explicit
 Infrastructure handoff above detailed problem, storage, recovery, or trend
 rows without restoring platform-special navigation.
+Source coverage is part of that first-viewport proof and must remain readable
+at mobile and tablet shell widths; the estate summary may wrap that provider
+inventory across lines, but it must not truncate the canonical source mix with
+ellipsis in the default dashboard viewport.
 That compact fallback must keep speaking in system terms. When the connected
 projection has not arrived yet, estate orientation copy may say how many
 systems are reporting or syncing, but it must not slide back to generic

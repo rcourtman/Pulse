@@ -220,7 +220,7 @@ export function EstateSummaryPanel(props: EstateSummaryPanelProps) {
 
         <div>
           <p class="text-[11px] font-medium uppercase tracking-wide text-muted">Source coverage</p>
-          <p class="mt-1 truncate text-sm font-medium text-base-content">
+          <p class="mt-1 break-words text-sm font-medium leading-snug text-base-content">
             {props.summary.hasCanonicalProjection
               ? formatSurfaceSummary(props.summary.surfaces)
               : 'Coverage syncing'}
