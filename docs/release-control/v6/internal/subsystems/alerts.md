@@ -157,6 +157,11 @@ the canonical `ai_alerts` destination from the shared license/commercial
 contract, but it must delegate the actual open behavior to the
 `frontend-primitives` typed upgrade-navigation owner instead of reintroducing
 alert-local `window.open(...)` or raw external-tab assumptions.
+That same alert button must also honor the ordinary self-hosted prompt
+suppression policy: when `presentationPolicy.hideUpgrade` is true, a locked
+alert-investigation action may remain visibly unavailable, but it must not
+show Pro-required tooltip copy, track upgrade clicks, or open the commercial
+handoff route.
 Alert-adjacent shared helpers also inherit the runtime-versus-commercial split
 now carried by the shared licensing stores. Alert pages may consume runtime
 feature truth from `frontend-modern/src/stores/license.ts`, but any

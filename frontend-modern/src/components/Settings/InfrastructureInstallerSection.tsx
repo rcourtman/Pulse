@@ -407,7 +407,7 @@ export const InfrastructureInstallerSection: Component = () => {
 
                   <label
                     class="inline-flex cursor-pointer items-center gap-2 text-sm text-base-content"
-                    title="Allow Pulse Patrol to execute diagnostic and fix commands on this agent (auto-fix requires Pulse Pro)"
+                    title="Allow Pulse Patrol to execute diagnostic and fix commands on this agent"
                   >
                     <input
                       type="checkbox"

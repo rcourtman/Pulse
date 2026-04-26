@@ -6,6 +6,7 @@ import { getCanonicalAlertId } from '@/features/alerts/identity';
 import { formatAlertValue } from '@/utils/alertFormatters';
 import { resolveAlertTargetType } from '@/utils/alertTargetTypes';
 import { getUpgradeActionDestination } from '@/stores/licenseCommercial';
+import { presentationPolicyHidesUpgradePrompts } from '@/stores/sessionPresentationPolicy';
 import { trackUpgradeClicked } from '@/utils/upgradeMetrics';
 
 interface InvestigateAlertButtonProps {
@@ -27,6 +28,13 @@ export function InvestigateAlertButton(props: InvestigateAlertButtonProps) {
   const [isHovered, setIsHovered] = createSignal(false);
   const openUpgradeDestination = useUpgradeNavigation();
   const isLocked = () => props.licenseLocked === true;
+  const canShowUpgradePrompt = () => !presentationPolicyHidesUpgradePrompts();
+  const lockedTitle = () =>
+    canShowUpgradePrompt()
+      ? 'Pro required to investigate alerts with Pulse Assistant'
+      : 'Pulse Assistant alert investigation is not available for this alert';
+  const buttonTitle = () =>
+    isLocked() ? lockedTitle() : 'Ask Pulse Assistant to investigate this alert';
   // Don't render if AI is not enabled
   if (aiChatStore.enabled !== true) {
     return null;
@@ -36,6 +44,9 @@ export function InvestigateAlertButton(props: InvestigateAlertButtonProps) {
     e.stopPropagation();
     e.preventDefault();
     if (isLocked()) {
+      if (!canShowUpgradePrompt()) {
+        return;
+      }
       trackUpgradeClicked('investigate_alert_button', 'ai_alerts');
       openUpgradeDestination(getUpgradeActionDestination('ai_alerts'));
       return;
@@ -121,11 +132,7 @@ Please:
           border border-border
           ${isLocked() ? 'opacity-60 cursor-not-allowed hover:bg-surface' : ''}
           ${props.class || ''}`}
-        title={
-          isLocked()
-            ? 'Pro required to investigate alerts with Pulse Assistant'
-            : 'Ask Pulse Assistant to investigate this alert'
-        }
+        title={buttonTitle()}
         aria-disabled={isLocked()}
       >
         <svg
@@ -162,11 +169,7 @@ Please:
           gap-1.5
           ${isLocked() ? 'opacity-60 cursor-not-allowed hover:bg-surface' : ''}
           ${props.class || ''}`}
-        title={
-          isLocked()
-            ? 'Pro required to investigate alerts with Pulse Assistant'
-            : 'Ask Pulse Assistant to investigate this alert'
-        }
+        title={buttonTitle()}
         aria-disabled={isLocked()}
       >
         <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -197,11 +200,7 @@ Please:
         gap-2
         ${isLocked() ? 'opacity-60 cursor-not-allowed hover:bg-blue-600' : ''}
         ${props.class || ''}`}
-      title={
-        isLocked()
-          ? 'Pro required to investigate alerts with Pulse Assistant'
-          : 'Ask Pulse Assistant to investigate this alert'
-      }
+      title={buttonTitle()}
       aria-disabled={isLocked()}
     >
       <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">

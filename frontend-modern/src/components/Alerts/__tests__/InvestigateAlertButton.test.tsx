@@ -15,6 +15,7 @@ const {
   mockAiChatStore,
   getUpgradeActionDestinationMock,
   getUpgradeActionUrlOrFallbackMock,
+  presentationPolicyHidesUpgradePromptsMock,
 } =
   vi.hoisted(() => {
     const openWithPromptMock = vi.fn();
@@ -25,6 +26,7 @@ const {
     );
     const getUpgradeActionDestinationMock = vi.fn();
     const getUpgradeActionUrlOrFallbackMock = vi.fn();
+    const presentationPolicyHidesUpgradePromptsMock = vi.fn();
     const mockAiChatStore = {
       enabled: true as boolean | null,
       openWithPrompt: (...args: unknown[]) => openWithPromptMock(...args),
@@ -37,6 +39,7 @@ const {
       mockAiChatStore,
       getUpgradeActionDestinationMock,
       getUpgradeActionUrlOrFallbackMock,
+      presentationPolicyHidesUpgradePromptsMock,
     };
   });
 
@@ -47,6 +50,10 @@ vi.mock('@/stores/aiChat', () => ({
 vi.mock('@/stores/licenseCommercial', () => ({
   getUpgradeActionDestination: (...args: unknown[]) => getUpgradeActionDestinationMock(...args),
   getUpgradeActionUrlOrFallback: (...args: unknown[]) => getUpgradeActionUrlOrFallbackMock(...args),
+}));
+
+vi.mock('@/stores/sessionPresentationPolicy', () => ({
+  presentationPolicyHidesUpgradePrompts: () => presentationPolicyHidesUpgradePromptsMock(),
 }));
 
 vi.mock('@/components/shared/useUpgradeNavigation', () => ({
@@ -103,7 +110,9 @@ beforeEach(() => {
   openUpgradeDestinationMock.mockReset();
   getUpgradeActionDestinationMock.mockReset();
   getUpgradeActionUrlOrFallbackMock.mockReset();
+  presentationPolicyHidesUpgradePromptsMock.mockReset();
   mockAiChatStore.enabled = true;
+  presentationPolicyHidesUpgradePromptsMock.mockReturnValue(false);
   getUpgradeActionDestinationMock.mockReturnValue({
     href: getPublicPricingUrl('ai_alerts'),
     external: true,
@@ -232,6 +241,24 @@ describe('InvestigateAlertButton', () => {
         href: getPublicPricingUrl('ai_alerts'),
         external: true,
       });
+      expect(openWithPromptMock).not.toHaveBeenCalled();
+    });
+
+    it('keeps the locked state non-promotional when upgrade prompts are hidden', async () => {
+      presentationPolicyHidesUpgradePromptsMock.mockReturnValue(true);
+
+      render(() => <InvestigateAlertButton alert={makeAlert()} licenseLocked={true} />);
+      const button = screen.getByRole('button');
+
+      expect(button).toHaveAttribute(
+        'title',
+        'Pulse Assistant alert investigation is not available for this alert',
+      );
+
+      await fireEvent.click(button);
+
+      expect(trackUpgradeClickedMock).not.toHaveBeenCalled();
+      expect(openUpgradeDestinationMock).not.toHaveBeenCalled();
       expect(openWithPromptMock).not.toHaveBeenCalled();
     });
 

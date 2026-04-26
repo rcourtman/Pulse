@@ -718,6 +718,10 @@ advertise agent-profile upgrades, trial prompts, or paid helper links while
 `presentationPolicy.hideUpgrade` is true; it should stay on the free source
 manager unless an explicit entitlement or recovery context makes the paid
 lifecycle surface relevant.
+The normal Infrastructure installer also follows that contract. Agent-command
+execution controls may describe the runtime trust and command-execution effect,
+but their default labels and tooltips must not mention Pro requirements or paid
+upgrade posture while they are part of the ordinary host-install workflow.
 That same demo-hidden API boundary also keeps runtime-admin operations out of
 public lifecycle flows: `/api/diagnostics`,
 `/api/diagnostics/docker/prepare-token`, and `/api/logs/*` must return `404`

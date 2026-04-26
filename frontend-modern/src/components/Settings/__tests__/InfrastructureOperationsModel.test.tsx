@@ -192,6 +192,10 @@ describe('infrastructure operations model', () => {
     expect(infrastructureInstallerSectionSource).toContain(
       'Generate an install token first. Pulse will then build copy-ready commands',
     );
+    expect(infrastructureInstallerSectionSource).toContain(
+      'Allow Pulse Patrol to execute diagnostic and fix commands on this agent',
+    );
+    expect(infrastructureInstallerSectionSource).not.toContain('auto-fix requires Pulse Pro');
     expect(infrastructureInstallerSectionSource).not.toContain('<api-token>');
     expect(infrastructureInstallerSectionSource).not.toContain(
       'Copy disabled until an install token is generated',
