@@ -48,6 +48,16 @@ const NAV_TAB_ICON_CLASS = 'w-4 h-4 shrink-0';
 const AI_CHAT_LAUNCHER_BUTTON_CLASS =
   'fixed right-4 bottom-[calc(5rem+env(safe-area-inset-bottom,0px))] z-40 flex h-11 w-11 items-center justify-center rounded-full border border-border bg-surface text-blue-600 shadow-lg transition-colors duration-200 hover:bg-surface-hover hover:text-blue-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 dark:text-blue-400 dark:hover:text-blue-300 lg:right-0 lg:top-1/2 lg:bottom-auto lg:h-auto lg:w-auto lg:min-h-9 lg:min-w-10 lg:-translate-y-1/2 lg:rounded-l-lg lg:rounded-r-none lg:border-r-0 lg:px-2.5 lg:py-2.5 lg:shadow-none';
 
+function getDesktopUtilityTabAriaLabel(tab: UtilityTab): string {
+  if (tab.id === 'alerts') {
+    const count = tab.count ?? 0;
+    if (count > 0) {
+      return `${count} ${tab.label}`;
+    }
+  }
+  return tab.label;
+}
+
 export interface AppLayoutProps {
   connectionStatus: () => AppConnectionStatus;
   lastUpdateText: () => string;
@@ -604,12 +614,15 @@ export function AppLayout(props: AppLayoutProps) {
                   <div
                     class={className()}
                     role="tab"
+                    aria-label={platform.label}
                     aria-disabled={disabled()}
                     onMouseEnter={() => warmNavigationTarget(getPlatformTargetRoute(platform))}
                     onClick={() => handlePlatformClick(platform)}
                     title={title()}
                   >
-                    <Icon class={NAV_TAB_ICON_CLASS} />
+                    <span aria-hidden="true" class="inline-flex items-center justify-center">
+                      <Icon class={NAV_TAB_ICON_CLASS} />
+                    </span>
                     <span class="hidden xs:inline-flex items-center gap-1">
                       <span>{platform.label}</span>
                       <Show when={platform.badge}>
@@ -644,12 +657,15 @@ export function AppLayout(props: AppLayoutProps) {
                     <div
                       class={className()}
                       role="tab"
+                      aria-label={getDesktopUtilityTabAriaLabel(tab)}
                       aria-disabled={false}
                       onMouseEnter={() => warmNavigationTarget(tab.route)}
                       onClick={() => handleUtilityClick(tab)}
                       title={tab.tooltip}
                     >
-                      <Icon class={NAV_TAB_ICON_CLASS} />
+                      <span aria-hidden="true" class="inline-flex items-center justify-center">
+                        <Icon class={NAV_TAB_ICON_CLASS} />
+                      </span>
                       <span class="flex items-center gap-1">
                         <span class="hidden xs:inline">{tab.label}</span>
                         <span class="xs:hidden">{tab.label.charAt(0)}</span>

@@ -66,6 +66,11 @@ runtime cost control, and shared AI transport surfaces.
    cache for assistant context and suggestions, but it must not reopen
    `useResources()` or trigger a second unfiltered `all-resources` REST fetch
    just because the drawer component is present in the app shell.
+   The same app-shell boundary keeps Patrol/Assistant utility navigation
+   accessible-name safe: labelled icon SVGs may remain meaningful when rendered
+   standalone, but `frontend-modern/src/AppLayout.tsx` must treat them as
+   decorative inside tabs so the announced tab name comes from product chrome
+   and meaningful badge text.
 
 ## Forbidden Paths
 

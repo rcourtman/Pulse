@@ -77,6 +77,15 @@ describe('AppLayout navigation icons', () => {
     desktopTabs.forEach((tab) => {
       expect(tab.querySelector('svg')).toBeTruthy();
     });
+    const desktopPatrolTab = within(systemGroup as HTMLElement).getByRole('tab', {
+      name: 'Patrol',
+    });
+    expect(desktopPatrolTab.querySelector('svg')).toBeTruthy();
+    expect(within(systemGroup as HTMLElement).getByRole('tab', { name: '1 Alerts' })).toBeTruthy();
+    expect(
+      within(systemGroup as HTMLElement).queryByRole('tab', { name: 'Pulse Patrol Patrol' }),
+    ).toBeNull();
+    expect(within(systemGroup as HTMLElement).queryByRole('tab', { name: 'Patrol P' })).toBeNull();
 
     const mobileTablist = screen.getByRole('tablist', { name: 'Mobile navigation' });
     ['alerts', 'ai', 'settings'].forEach((tabId) => {
@@ -84,6 +93,8 @@ describe('AppLayout navigation icons', () => {
       expect(button).toBeTruthy();
       expect(button?.querySelector('svg')).toBeTruthy();
     });
+    const mobilePatrolTab = within(mobileTablist).getByRole('button', { name: 'Patrol' });
+    expect(mobilePatrolTab.querySelector('svg')).toBeTruthy();
 
     expect(container).toHaveTextContent('Dashboard body');
   });

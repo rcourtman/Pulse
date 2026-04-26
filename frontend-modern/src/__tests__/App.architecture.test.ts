@@ -130,9 +130,14 @@ describe('App architecture', () => {
       "type MobileNavBarPlatformTab as PlatformTab,\n  type MobileNavBarUtilityTab as UtilityTab,",
     );
     expect(appLayoutSource).toContain("const NAV_TAB_ICON_CLASS = 'w-4 h-4 shrink-0';");
+    expect(appLayoutSource).toContain('function getDesktopUtilityTabAriaLabel(tab: UtilityTab)');
+    expect(appLayoutSource).toContain('return `${count} ${tab.label}`;');
     expect(appLayoutSource).toContain('const platformTabs = createMemo<PlatformTab[]>(() =>');
     expect(appLayoutSource).toContain('const Icon = platform.icon;');
     expect(appLayoutSource).toContain('const Icon = tab.icon;');
+    expect(appLayoutSource).toContain('aria-label={platform.label}');
+    expect(appLayoutSource).toContain('aria-label={getDesktopUtilityTabAriaLabel(tab)}');
+    expect(appLayoutSource).toContain('<span aria-hidden="true" class="inline-flex items-center justify-center">');
     expect(appLayoutSource).toContain('<Icon class={NAV_TAB_ICON_CLASS} />');
     expect(appLayoutSource).not.toContain('type PlatformTab = {');
     expect(appLayoutSource).not.toContain('type UtilityTab = {');
