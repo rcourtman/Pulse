@@ -59,7 +59,7 @@ All other documents are supporting references unless explicitly required for evi
 - **[Proxy Auth](PROXY_AUTH.md)** – Authentik/Authelia/Cloudflare proxy authentication configuration.
 - **[Agent Security](AGENT_SECURITY.md)** – Agent self-update verification and API security.
 
-## 📖 Advanced Topics (Relay / Pro / Pro+ / Cloud)
+## 📖 Advanced Topics (Relay / Pro / legacy Pro+ / Cloud)
 
 - **[AI Autonomy & Safety](AI_AUTONOMY.md)** – Configure patrol autonomy levels, assistant control levels, investigation tuning, and safety guardrails.
 - **[Role-Based Access Control (RBAC)](RBAC.md)** – Define custom roles, assign permissions, and integrate with OIDC group mapping.

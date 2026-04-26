@@ -692,7 +692,7 @@ Test/preview request contract:
 
 ---
 
-## 💳 License (Relay / Pro / Pro+ / Cloud)
+## 💳 License (Relay / Pro / legacy Pro+ / Cloud)
 
 ### License Status (Admin)
 `GET /api/license/status`
@@ -833,7 +833,7 @@ Revoke a resource share. Admin or owner role required.
 
 ## 🤖 Pulse AI
 
-**Paid gating:** endpoints labeled with a paid plan require the relevant Relay, Pro, Pro+, or Cloud capability and return `402 Payment Required` if the feature is not licensed.
+**Paid gating:** endpoints labeled with a paid plan require the relevant Relay, Pro, legacy Pro+, or Cloud capability and return `402 Payment Required` if the feature is not licensed.
 
 ### Get AI Settings
 `GET /api/settings/ai`
@@ -887,7 +887,7 @@ Streaming variant of execute (used by the UI for incremental responses).
 ```json
 { "cluster_id": "cluster-id" }
 ```
-Requires Pro, Pro+, or Cloud with the `kubernetes_ai` feature enabled. This route remains
+Requires Pro, legacy Pro+, or Cloud with the `kubernetes_ai` feature enabled. This route remains
 available for compatibility, but current v6 Pulse Pro marketing does not treat
 Kubernetes-specific analysis as a standalone plan pillar.
 
@@ -997,7 +997,7 @@ Query params:
 - `range` (optional): `1h`, `6h`, `12h`, `24h`, `1d`, `7d`, `30d`, `90d` (default `24h`; duration strings also accepted)
 - `maxPoints` (optional): Downsample to a target number of points
 
-> **License**: Requests beyond Community's `7d` floor require the paid `long_term_metrics` entitlement. Relay unlocks `14d`, Pro and Pro+ unlock `90d`, and requests beyond the active tier's limit return `402 Payment Required`.
+> **License**: Requests beyond Community's `7d` floor require the paid `long_term_metrics` entitlement. Relay unlocks `14d`, Pro and legacy Pro+ unlock `90d`, and requests beyond the active tier's limit return `402 Payment Required`.
 > **Aliases**: `guest` (VM/LXC) and `docker` (Docker container) are accepted, but persistent store data uses the canonical types above.
 
 ---

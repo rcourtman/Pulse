@@ -2,7 +2,7 @@
 
 RBAC lets you define custom roles with granular permissions and assign them to users. This restricts what each user can see and do in Pulse.
 
-**Requires:** Pro, Pro+, or Cloud license with the `rbac` capability.
+**Requires:** Pro, legacy Pro+, or Cloud license with the `rbac` capability.
 
 For plan details, see [PULSE_PRO.md](PULSE_PRO.md). For API endpoints, see [API Reference](API.md#-rbac--role-management-pro).
 

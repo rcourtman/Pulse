@@ -6,7 +6,7 @@ Pulse uses a split-configuration model to ensure security and flexibility.
 | ------ | --------- | ---------------- |
 | `.env` | Authentication & Secrets | 🔒 **Critical** (Read-only by owner) |
 | `.encryption.key` | Encryption key for `.enc` files | 🔒 **Critical** |
-| `.audit-signing.key` | Audit log signing key (Pro/Pro+/Cloud, encrypted) | 🔒 **Sensitive** |
+| `.audit-signing.key` | Audit log signing key (Pro/legacy Pro+/Cloud, encrypted) | 🔒 **Sensitive** |
 | `system.json` | General Settings | 📝 Standard |
 | `nodes.enc` | Node Credentials | 🔒 **Encrypted** (AES-256-GCM) |
 | `alerts.json` | Alert Rules | 📝 Standard |
@@ -21,20 +21,20 @@ Pulse uses a split-configuration model to ensure security and flexibility.
 | `ai_patrol_runs.json` | AI Patrol run history | 📝 Standard |
 | `ai_usage_history.json` | AI usage history | 📝 Standard |
 | `ai_chat_sessions.json` | Legacy AI chat sessions (UI sync) | 📝 Standard |
-| `license.enc` | Relay/Pro/Pro+/Cloud license key | 🔒 **Encrypted** |
+| `license.enc` | Relay/Pro/legacy Pro+/Cloud license key | 🔒 **Encrypted** |
 | `host_metadata.json` | Host notes, tags, and AI command overrides | 📝 Standard |
 | `docker_metadata.json` | Docker metadata cache | 📝 Standard |
 | `guest_metadata.json` | Guest notes and metadata | 📝 Standard |
-| `agent_profiles.json` | Agent configuration profiles (Pro/Pro+/Cloud) | 📝 Standard |
-| `agent_profile_assignments.json` | Agent profile assignments (Pro/Pro+/Cloud) | 📝 Standard |
-| `profile-versions.json` | Agent profile version history (Pro/Pro+/Cloud) | 📝 Standard |
-| `profile-deployments.json` | Agent profile deployment status (Pro/Pro+/Cloud) | 📝 Standard |
-| `profile-changelog.json` | Agent profile change log (Pro/Pro+/Cloud) | 📝 Standard |
+| `agent_profiles.json` | Agent configuration profiles (Pro/legacy Pro+/Cloud) | 📝 Standard |
+| `agent_profile_assignments.json` | Agent profile assignments (Pro/legacy Pro+/Cloud) | 📝 Standard |
+| `profile-versions.json` | Agent profile version history (Pro/legacy Pro+/Cloud) | 📝 Standard |
+| `profile-deployments.json` | Agent profile deployment status (Pro/legacy Pro+/Cloud) | 📝 Standard |
+| `profile-changelog.json` | Agent profile change log (Pro/legacy Pro+/Cloud) | 📝 Standard |
 | `recovery_tokens.json` | Recovery tokens (short-lived) | 🔒 **Sensitive** |
 | `sessions.json` | Persistent sessions (includes OIDC refresh tokens) | 🔒 **Sensitive** |
 | `update-history.jsonl` | Update history log (in-app updates) | 📝 Standard |
 | `metrics.db` | Persistent metrics history (SQLite) | 📝 Standard |
-| `audit.db` | Audit log database (Pro/Pro+/Cloud, SQLite) | 🔒 **Sensitive** |
+| `audit.db` | Audit log database (Pro/legacy Pro+/Cloud, SQLite) | 🔒 **Sensitive** |
 | `baselines.json` | AI baseline data for anomaly detection | 📝 Standard |
 | `ai_correlations.json` | AI correlation analysis cache | 📝 Standard |
 | `ai_patterns.json` | AI pattern detection data | 📝 Standard |
@@ -106,7 +106,7 @@ Environment overrides (lock the corresponding UI fields):
 | `OIDC_ALLOWED_GROUPS` | Allowed groups (space or comma-separated) |
 | `OIDC_ALLOWED_DOMAINS` | Allowed email domains (space or comma-separated) |
 | `OIDC_ALLOWED_EMAILS` | Allowed emails (space or comma-separated) |
-| `OIDC_GROUP_ROLE_MAPPINGS` | Comma-separated group=role mappings (Pro/Pro+/Cloud) |
+| `OIDC_GROUP_ROLE_MAPPINGS` | Comma-separated group=role mappings (Pro/legacy Pro+/Cloud) |
 | `OIDC_CA_BUNDLE` | Custom CA bundle path |
 
 </details>
@@ -514,6 +514,6 @@ The relay protocol provides end-to-end encrypted remote access foundations for P
 - All data is encrypted end-to-end using ECDH key exchange.
 - The relay server never sees plaintext monitoring data.
 - Each mobile session has its own encryption channel.
-- Requires a valid Relay, Pro, Pro+, or Cloud license (gated by the `relay` feature key).
+- Requires a valid Relay, Pro, legacy Pro+, or Cloud license (gated by the `relay` feature key).
 
 Relay config is stored encrypted in `relay.enc`.

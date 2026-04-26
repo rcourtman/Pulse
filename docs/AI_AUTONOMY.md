@@ -24,14 +24,14 @@ Patrol autonomy controls how aggressively Patrol responds to findings.
 | Level | Key | Detect | Investigate | Fix (Warning) | Fix (Critical) | Plan |
 |-------|-----|:------:|:-----------:|:-------------:|:--------------:|------|
 | **Monitor** | `monitor` | Yes | No | No | No | Community |
-| **Approval** | `approval` | Yes | Yes | Approval required | Approval required | Pro / Pro+ / Cloud |
-| **Assisted** | `assisted` | Yes | Yes | Auto-fix | Approval required | Pro / Pro+ / Cloud |
-| **Full** | `full` | Yes | Yes | Auto-fix | Auto-fix | Pro / Pro+ / Cloud |
+| **Approval** | `approval` | Yes | Yes | Approval required | Approval required | Pro / legacy Pro+ / Cloud |
+| **Assisted** | `assisted` | Yes | Yes | Auto-fix | Approval required | Pro / legacy Pro+ / Cloud |
+| **Full** | `full` | Yes | Yes | Auto-fix | Auto-fix | Pro / legacy Pro+ / Cloud |
 
 - **Monitor** (default): Patrol creates findings but takes no action. This is the Community and Relay baseline. Suitable for learning what Patrol detects before enabling investigation or remediation.
 - **Approval** (Pro and above): Patrol investigates findings and proposes fixes. All fixes queue for manual approval before execution.
-- **Assisted** (Pro and above): Warning-level findings are auto-fixed. Critical findings still require approval. This is the recommended starting point for most Pro and Pro+ users who enable fix execution.
-- **Full** (Pro and above): All findings are auto-fixed without approval. Requires an explicit toggle and a Pro, Pro+, or Cloud license. Recommended only for environments with thorough alert coverage.
+- **Assisted** (Pro and above): Warning-level findings are auto-fixed. Critical findings still require approval. This is the recommended starting point for most Pro and legacy Pro+ users who enable fix execution.
+- **Full** (Pro and above): All findings are auto-fixed without approval. Requires an explicit toggle and a Pro, legacy Pro+, or Cloud license. Recommended only for environments with thorough alert coverage.
 
 ### Configuration
 
@@ -52,7 +52,7 @@ curl -X PUT http://localhost:7655/api/ai/patrol/autonomy \
 ### License Requirements
 
 - `monitor`: Available on all plans. Community and Relay can run Patrol with BYOK.
-- `approval`, `assisted`, and `full`: Require the `ai_autofix` capability (Pro, Pro+, or Cloud license).
+- `approval`, `assisted`, and `full`: Require the `ai_autofix` capability (Pro, legacy Pro+, or Cloud license).
 
 Without the `ai_autofix` capability, the effective autonomy level is clamped to `monitor` at runtime, regardless of the saved configuration. If you previously had a Pro license and downgraded, your saved setting is preserved but enforcement reverts to `monitor`.
 
@@ -66,11 +66,11 @@ Control levels govern what the interactive Pulse Assistant can do during chat se
 |-------|-----|:-----:|:----------------:|------|
 | **Read-only** | `read_only` | Yes | No | Community |
 | **Controlled** | `controlled` | Yes | With approval | Community |
-| **Autonomous** | `autonomous` | Yes | Yes | Pro / Pro+ / Cloud |
+| **Autonomous** | `autonomous` | Yes | Yes | Pro / legacy Pro+ / Cloud |
 
 - **Read-only** (default): The assistant can query metrics, storage, and resource status but cannot execute any control actions.
 - **Controlled**: The assistant can propose commands but pauses for your explicit approval before execution. Each command shows a detailed approval card in the chat UI.
-- **Autonomous**: The assistant executes commands without prompting. Requires a Pro, Pro+, or Cloud license.
+- **Autonomous**: The assistant executes commands without prompting. Requires a Pro, legacy Pro+, or Cloud license.
 
 ### Configuration
 

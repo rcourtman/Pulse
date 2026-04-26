@@ -39,7 +39,7 @@ Never copy `/etc/pulse` (or `/data` in Docker/Kubernetes) manually. Encryption k
 | — | Agent profiles and assignments |
 | — | AI settings and findings (`ai.enc`, `ai_findings.json`, `ai_patrol_runs.json`, `ai_usage_history.json`) |
 | — | RBAC roles (`rbac_roles.json`) — re-create after import |
-| — | Relay/Pro/Pro+/Cloud license (`license.enc`) |
+| — | Relay/Pro/legacy Pro+/Cloud license (`license.enc`) |
 | — | Server sessions (`sessions.json`) |
 | — | Update history (`update-history.jsonl`) |
 
@@ -67,7 +67,7 @@ Because local login credentials are stored in `.env` (not part of exports), you 
     *   **Unified Agent**: Update the `--token` flag in your service definition.
     *   **Containerized agent**: Update `PULSE_TOKEN` in the agent container environment.
     *   *Tip: Use **Settings → Infrastructure → Install on a host** to generate updated install commands.*
-4.  **Relay/Pro/Pro+/Cloud**: Re-activate your license key after migration (license files are not included in exports).
+4.  **Relay/Pro/legacy Pro+/Cloud**: Re-activate your license key after migration (license files are not included in exports).
 
 ## 🔒 Security
 

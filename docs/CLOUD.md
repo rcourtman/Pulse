@@ -114,7 +114,7 @@ Yes. Use the export/import workflow described above. Your monitoring configurati
 
 ## See Also
 
-- [Plans & Entitlements](PULSE_PRO.md) — feature comparison across Community, Relay, Pro, Pro+, and Cloud
+- [Plans & Entitlements](PULSE_PRO.md) — feature comparison across Community, Relay, Pro, legacy Pro+, and Cloud
 - [Installation (Self-Hosted)](INSTALL.md) — self-hosted installation guide
 - [Relay / Mobile Access](RELAY.md) — relay setup and mobile rollout status (pre-configured on Cloud)
 - [Multi-Tenant](MULTI_TENANT.md) — multi-tenant mode (Cloud Enterprise)

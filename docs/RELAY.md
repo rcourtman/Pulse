@@ -27,7 +27,7 @@ Pulse Relay provides **end-to-end encrypted remote access** foundations for Puls
 
 ## Requirements
 
-- **Relay, Pro, Pro+, or Cloud license** — relay is gated by the `relay` feature key.
+- **Relay, Pro, legacy Pro+, or Cloud license** — relay is gated by the `relay` feature key.
 - **Outbound WebSocket** — Pulse must be able to reach `relay.pulserelay.pro` (port 443).
 - **No inbound ports** — you do not need to open any ports on your firewall.
 

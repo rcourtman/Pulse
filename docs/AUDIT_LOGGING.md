@@ -2,7 +2,7 @@
 
 Pulse's audit log records security-relevant events with tamper-evident signatures. Use it for compliance, incident investigation, and tracking who did what.
 
-**Requires:** Pro, Pro+, or Cloud license with the `audit_logging` capability to query, export, and verify events via the API. Events are recorded on all plans, but the API endpoints are license-gated.
+**Requires:** Pro, legacy Pro+, or Cloud license with the `audit_logging` capability to query, export, and verify events via the API. Events are recorded on all plans, but the API endpoints are license-gated.
 
 For plan details, see [PULSE_PRO.md](PULSE_PRO.md). For API endpoints, see [API Reference](API.md#-audit-log-pro).
 
@@ -133,7 +133,7 @@ See [Multi-Tenant Organizations](MULTI_TENANT.md) for details.
 
 ## Community vs Pro Behavior
 
-| Capability | Community | Pro / Pro+ / Cloud |
+| Capability | Community | Pro / legacy Pro+ / Cloud |
 |------------|-----------|-------------|
 | Events captured | Yes | Yes |
 | Persistent storage (SQLite) | Yes | Yes |

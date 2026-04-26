@@ -1,6 +1,6 @@
-# Centralized Agent Management (Pro/Pro+/Cloud)
+# Centralized Agent Management (Pro/legacy Pro+/Cloud)
 
-Pro, Pro+, and Cloud support centralized management of agent configurations, allowing administrators to define "Configuration Profiles" and assign them to specific agents. This enables bulk updates and consistent configuration across your fleet without manually editing configuration files on each host.
+Pro, legacy Pro+, and Cloud support centralized management of agent configurations, allowing administrators to define "Configuration Profiles" and assign them to specific agents. This enables bulk updates and consistent configuration across your fleet without manually editing configuration files on each host.
 
 Profiles are managed in the UI: **Settings → Unified Agents → Agent Profiles**.
 
@@ -38,7 +38,7 @@ Notes:
 
 ## API Usage
 
-All endpoints require **Admin** authentication and a Pro, Pro+, or Cloud license.
+All endpoints require **Admin** authentication and a Pro, legacy Pro+, or Cloud license.
 
 ### 1. Create a Profile
 
