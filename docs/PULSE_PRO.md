@@ -144,7 +144,7 @@ Patrol and the Assistant support tiered autonomy:
 | Mode | Behavior | Plan |
 |---|---|---|
 | **Monitor** | Detect issues only. No investigation or fixes. | Community / Relay |
-| **Investigate** | Investigates findings and proposes fixes. All fixes require approval. | Community / Relay |
+| **Investigate** | Investigates findings and proposes fixes. All fixes require approval. | Pro / hosted Cloud |
 | **Auto-fix** | Automatically fixes issues and verifies. Critical findings require approval by default. | Pro / hosted Cloud |
 | **Full autonomy** | Auto-fix for all findings including critical, without approval (explicit toggle). | Pro / hosted Cloud |
 

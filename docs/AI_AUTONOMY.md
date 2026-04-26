@@ -28,9 +28,9 @@ Patrol autonomy controls how aggressively Patrol responds to findings.
 | **Assisted** | `assisted` | Yes | Yes | Auto-fix | Approval required | Pro / Pro+ / Cloud |
 | **Full** | `full` | Yes | Yes | Auto-fix | Auto-fix | Pro / Pro+ / Cloud |
 
-- **Monitor** (default): Patrol creates findings but takes no action. This is the only level available on the Community plan. Suitable for learning what Patrol detects before enabling automation.
-- **Approval** (Pro and above): Patrol investigates every finding and proposes fixes. All fixes queue for manual approval before execution.
-- **Assisted** (Pro and above): Warning-level findings are auto-fixed. Critical findings still require approval. This is the recommended starting point for most Pro and Pro+ users.
+- **Monitor** (default): Patrol creates findings but takes no action. This is the Community and Relay baseline. Suitable for learning what Patrol detects before enabling investigation or remediation.
+- **Approval** (Pro and above): Patrol investigates findings and proposes fixes. All fixes queue for manual approval before execution.
+- **Assisted** (Pro and above): Warning-level findings are auto-fixed. Critical findings still require approval. This is the recommended starting point for most Pro and Pro+ users who enable fix execution.
 - **Full** (Pro and above): All findings are auto-fixed without approval. Requires an explicit toggle and a Pro, Pro+, or Cloud license. Recommended only for environments with thorough alert coverage.
 
 ### Configuration
@@ -51,7 +51,7 @@ curl -X PUT http://localhost:7655/api/ai/patrol/autonomy \
 
 ### License Requirements
 
-- `monitor`: Available on all plans (Community with BYOK).
+- `monitor`: Available on all plans. Community and Relay can run Patrol with BYOK.
 - `approval`, `assisted`, and `full`: Require the `ai_autofix` capability (Pro, Pro+, or Cloud license).
 
 Without the `ai_autofix` capability, the effective autonomy level is clamped to `monitor` at runtime, regardless of the saved configuration. If you previously had a Pro license and downgraded, your saved setting is preserved but enforcement reverts to `monitor`.
@@ -147,8 +147,8 @@ After executing any control action, the assistant must verify the result with a 
 For new deployments, we recommend gradually increasing autonomy:
 
 1. **Start with Monitor** — Run Patrol for a few cycles to see what it detects. Dismiss false positives.
-2. **Move to Approval** — Enable investigation. Review proposed fixes to build confidence.
-3. **Upgrade to Assisted** — Let Patrol auto-fix warnings while you approve critical fixes.
+2. **Move to Approval where available** — Enable investigation. Review proposed fixes to build confidence.
+3. **Use Assisted when fix execution is enabled** — Let Patrol auto-fix warnings while you approve critical fixes.
 4. **Consider Full** — Only if your environment has comprehensive alerting and you trust the fix patterns.
 
 ---

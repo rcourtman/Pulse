@@ -107,6 +107,37 @@ class DocumentationCurrentnessTest(unittest.TestCase):
                 msg=f"{rel} should not be part of source precedence while marked as historical",
             )
 
+    def test_public_ai_autonomy_docs_keep_free_first_boundary(self) -> None:
+        ai_doc = read("docs/AI.md")
+        autonomy_doc = read("docs/AI_AUTONOMY.md")
+        pulse_pro_doc = read("docs/PULSE_PRO.md")
+
+        self.assertIn(
+            "| **Investigate** | Investigates findings and proposes fixes. All fixes require approval before execution. | Pro / hosted Cloud |",
+            ai_doc,
+        )
+        self.assertIn(
+            "Community and Relay installs can still run scheduled Patrol findings with BYOK.",
+            ai_doc,
+        )
+        self.assertNotIn(
+            "| **Investigate** | Investigates findings and proposes fixes. All fixes require approval before execution. | Community (BYOK) |",
+            ai_doc,
+        )
+        self.assertIn(
+            "`approval`, `assisted`, and `full`: Require the `ai_autofix` capability",
+            autonomy_doc,
+        )
+        self.assertNotIn("Upgrade to Assisted", autonomy_doc)
+        self.assertIn(
+            "| **Investigate** | Investigates findings and proposes fixes. All fixes require approval. | Pro / hosted Cloud |",
+            pulse_pro_doc,
+        )
+        self.assertNotIn(
+            "| **Investigate** | Investigates findings and proposes fixes. All fixes require approval. | Community / Relay |",
+            pulse_pro_doc,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -167,8 +167,12 @@ Patrol supports three autonomy modes that control how much action it can take:
 | Mode | Behavior | Plan |
 |------|----------|------|
 | **Monitor** | Detect issues only. No investigation or fixes. | Community (BYOK) |
-| **Investigate** | Investigates findings and proposes fixes. All fixes require approval before execution. | Community (BYOK) |
+| **Investigate** | Investigates findings and proposes fixes. All fixes require approval before execution. | Pro / hosted Cloud |
 | **Auto-fix** | Automatically fixes issues and verifies results. Critical findings still require approval by default. | Pro / hosted Cloud |
+
+Community and Relay installs can still run scheduled Patrol findings with BYOK.
+Investigation, proposed remediation, and fix execution are paid AI-operations
+capabilities rather than a core monitoring limit.
 
 ### Investigation Flow
 

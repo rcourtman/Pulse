@@ -1536,6 +1536,11 @@ investigation, 30/90-day history ranges, Patrol AI autonomy modes, or
 Settings panels whose feature the user opened themselves) remains in scope
 for that feature's owning subsystem — those are user-initiated discovery
 paths, not blanket funnels, and are not required to be removed.
+Public AI and entitlement docs must use the same boundary: Community/Relay may
+describe Patrol background findings with BYOK, while investigation, proposed
+remediation, auto-fix, and higher autonomy remain paid AI-operations features.
+Those docs should describe moving between available modes, not tell readers to
+"upgrade" as part of an ordinary safety progression.
 That same counted-unit boundary also owns the disclosure rule for retail copy:
 default billing and pricing surfaces should use concise monitored-system copy,
 while the full counted-unit definition appears only behind explicit disclosure
