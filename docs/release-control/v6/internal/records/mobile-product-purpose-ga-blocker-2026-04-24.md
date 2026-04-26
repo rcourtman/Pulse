@@ -83,4 +83,18 @@ Results:
 - No Pulse-owned fatal Android runtime lines were detected.
 - The proof remained blocked because the phone keyguard or notification shade still covered the app (`deviceLocked=true`). This does not clear the Android physical-device launch proof; unlock the phone and rerun before using this evidence for GA readiness.
 
+On 2026-04-26, the same physical Android phone was manually unlocked and the build 4 Android launch proof passed:
+
+- `cd /Volumes/Development/pulse/repos/pulse-mobile && npm run release:proof:android -- --serial 192.168.0.119:40467 --output-dir /Volumes/Development/pulse/.local-build-cache/pulse-mobile/tmp/android-build4-launch-proof-unlocked-20260426`
+
+Results:
+
+- The installed Android package still matched build 4 (`versionCode=4`, `versionName=1.0.0`).
+- The app reached `pro.pulserelay.mobile/.MainActivity` as the resumed foreground activity.
+- The proof captured `deviceLocked=false` and 0 Pulse-owned fatal Android runtime lines.
+- Summary: `/Volumes/Development/pulse/.local-build-cache/pulse-mobile/tmp/android-build4-launch-proof-unlocked-20260426/summary.md`
+- Screenshot: `/Volumes/Development/pulse/.local-build-cache/pulse-mobile/tmp/android-build4-launch-proof-unlocked-20260426/screenshot.png`
+
+This clears the Android physical-device launch proof only. The mobile GA gate remains blocked until the remaining current-candidate live Android pairing/reconnect/fail-closed/push/approval/instance-switching evidence and the iOS physical-device evidence are rerun, and until the physical-device walkthrough proves the companion role without release-team narration.
+
 The source and simulator-era product framing are coherent with the resolved companion role, but the release gate remains blocked. Passing this gate still requires fresh physical-device walkthrough/proof on the current candidate, including the native status, alerts, push/device trust, Relay-backed Open Pulse handoff, contextual recovery, and stale/revoked access behavior.
