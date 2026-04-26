@@ -2,6 +2,7 @@ import { For, Show, type Component } from 'solid-js';
 import type { MonitoredSystemLedgerPreviewResponse } from '@/api/monitoredSystemLedger';
 import { CalloutCard } from '@/components/shared/CalloutCard';
 import {
+  formatMonitoredSystemAdmissionPreviewSummary,
   formatMonitoredSystemSurfaceAttribution,
   getMonitoredSystemAdmissionPreviewTitle,
   getMonitoredSystemAdmissionPreviewRequiredState,
@@ -14,36 +15,8 @@ interface MonitoredSystemAdmissionPreviewProps {
   errorTitle?: string | null;
 }
 
-const formatUsage = (count: number, limit: number): string =>
-  limit > 0 ? `${count} / ${limit}` : `${count}`;
-
-const formatDelta = (count: number): string => {
-  if (count > 0) return `+${count}`;
-  return `${count}`;
-};
-
-const previewUsageDelta = (preview: MonitoredSystemLedgerPreviewResponse): number =>
-  preview.projected_count - preview.current_count;
-
 const previewTone = (preview: MonitoredSystemLedgerPreviewResponse | null) =>
   preview?.would_exceed_limit ? 'warning' : 'info';
-
-const previewSummary = (preview: MonitoredSystemLedgerPreviewResponse): string => {
-  const before = formatUsage(preview.current_count, preview.limit);
-  const after = formatUsage(preview.projected_count, preview.limit);
-  const delta = previewUsageDelta(preview);
-  if (delta > 0) {
-    return `Current usage ${before}. Saving this change would move usage to ${after} (${formatDelta(
-      delta,
-    )}).`;
-  }
-  if (delta < 0) {
-    return `Current usage ${before}. Saving this change would move usage to ${after} (${formatDelta(
-      delta,
-    )}).`;
-  }
-  return `Current usage ${before}. Saving this change keeps usage at ${after}.`;
-};
 
 export const MonitoredSystemAdmissionPreview: Component<MonitoredSystemAdmissionPreviewProps> = (
   props,
@@ -83,7 +56,7 @@ export const MonitoredSystemAdmissionPreview: Component<MonitoredSystemAdmission
             title={getMonitoredSystemAdmissionPreviewTitle(preview())}
             description={
               <div class="space-y-3 text-sm">
-                <p>{previewSummary(preview())}</p>
+                <p>{formatMonitoredSystemAdmissionPreviewSummary(preview())}</p>
                 <Show when={preview().current_systems.length > 0}>
                   <div class="space-y-1">
                     <p class="text-xs font-medium uppercase tracking-wide text-muted">

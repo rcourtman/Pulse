@@ -222,6 +222,11 @@ describe('settings architecture guardrails', () => {
     expect(monitoredSystemAdmissionPreviewSource).toContain(
       'getMonitoredSystemAdmissionPreviewTitle',
     );
+    expect(monitoredSystemAdmissionPreviewSource).toContain(
+      'formatMonitoredSystemAdmissionPreviewSummary',
+    );
+    expect(monitoredSystemAdmissionPreviewSource).not.toContain('Current usage');
+    expect(monitoredSystemAdmissionPreviewSource).not.toContain(' / ');
     expect(monitoredSystemAdmissionPreviewSource).not.toContain(
       'reuses your current monitored-system capacity',
     );

@@ -460,10 +460,9 @@ work extends shared components instead of creating new local variants.
     presentation helper and suppress usage summaries, upgrade pressure, and
     upgrade-impression telemetry rather than rendering stale `current/limit`
     counts or paid-plan CTAs from banner-local availability checks. When the
-    banner does need an upgrade destination, it must scope the operator into
-    the cloud-paid plan-selection intent (`intent=self_hosted_plan`) rather
-    than reintroducing browser symbols or CTA copy that frame the flow as
-    monitored-system-cap expansion.
+    banner does need a review destination, it must scope the operator into the
+    usage-owned policy ledger rather than plan-selection intent or CTA copy
+    that frames the flow as monitored-system-cap expansion.
 16. Keep assistant availability bootstrap on the shared app-shell boundary.
     `frontend-modern/src/useAppRuntimeState.ts`,
     `frontend-modern/src/App.tsx`,

@@ -180,6 +180,20 @@ export type MonitoredSystemAdmissionPreviewTitleInput = {
   would_exceed_limit?: boolean | null;
 };
 
+export type MonitoredSystemAdmissionPreviewSummaryInput =
+  MonitoredSystemAdmissionPreviewTitleInput & {
+    limit?: number | null;
+  };
+
+const normalizeAdmissionPreviewCount = (count: number | null | undefined): number =>
+  typeof count === 'number' && Number.isFinite(count) ? Math.max(0, count) : 0;
+
+const formatAdmissionPreviewCount = (count: number): string =>
+  `${count} monitored ${count === 1 ? 'system' : 'systems'}`;
+
+const formatAdmissionPreviewDelta = (delta: number): string =>
+  delta > 0 ? `+${delta}` : `${delta}`;
+
 export function getMonitoredSystemLedgerPresentation() {
   return MONITORED_SYSTEM_LEDGER_PRESENTATION;
 }
@@ -609,19 +623,43 @@ export function getMonitoredSystemAdmissionPreviewTitle(
   if (!preview) return presentation.fallbackTitle;
   if (preview.would_exceed_limit) return presentation.exceedsPolicyTitle;
 
-  const current =
-    typeof preview.current_count === 'number' && Number.isFinite(preview.current_count)
-      ? preview.current_count
-      : 0;
+  const current = normalizeAdmissionPreviewCount(preview.current_count);
   const projected =
     typeof preview.projected_count === 'number' && Number.isFinite(preview.projected_count)
-      ? preview.projected_count
+      ? normalizeAdmissionPreviewCount(preview.projected_count)
       : current;
   const delta = projected - current;
 
   if (delta > 0) return presentation.addsSystemsTitle;
   if (delta < 0) return presentation.removesSystemsTitle;
   return presentation.unchangedTitle;
+}
+
+export function formatMonitoredSystemAdmissionPreviewSummary(
+  preview: MonitoredSystemAdmissionPreviewSummaryInput,
+): string {
+  const current = normalizeAdmissionPreviewCount(preview.current_count);
+  const projected =
+    typeof preview.projected_count === 'number' && Number.isFinite(preview.projected_count)
+      ? normalizeAdmissionPreviewCount(preview.projected_count)
+      : current;
+  const limit = normalizeAdmissionPreviewCount(preview.limit);
+  const delta = projected - current;
+  const policySuffix =
+    preview.would_exceed_limit && limit > 0
+      ? `, above the active policy of ${formatAdmissionPreviewCount(limit)}`
+      : '';
+  const currentSummary = `Pulse currently counts ${formatAdmissionPreviewCount(current)}.`;
+
+  if (delta !== 0) {
+    return `${currentSummary} Saving this change would bring the count to ${formatAdmissionPreviewCount(
+      projected,
+    )} (${formatAdmissionPreviewDelta(delta)})${policySuffix}.`;
+  }
+
+  return `${currentSummary} Saving this change would keep the count at ${formatAdmissionPreviewCount(
+    projected,
+  )}${policySuffix}.`;
 }
 
 export function formatMonitoredSystemAdmissionPreviewUnavailableMessage(reason?: string): string {

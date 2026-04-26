@@ -448,8 +448,8 @@ Community limit enforcement.
    monitored-system volume itself as the primary paid gate.
    Monitored-system admission-preview copy must follow the same rule: ordinary
    connection previews may describe count impact and active policy checks, but
-   they must not use capacity-style titles that imply self-hosted monitoring
-   volume is the product being sold.
+   they must not use capacity-style titles or slash-style quota summaries that
+   imply self-hosted monitoring volume is the product being sold.
 11. Keep migrated self-hosted Community/free billing state uncapped even when
    the persisted file still carries legacy v5 commercial limit keys:
    `pkg/licensing/billing_state_normalization.go` and
@@ -1144,6 +1144,8 @@ That same helper also owns preview-impact copy and current/projected
 source-label wording for pre-save monitored-system admission UI, so the
 TrueNAS and VMware settings panels do not drift into provider-local billing
 phrasing when they surface canonical preview results before save.
+Admission preview summaries must also come from that helper and describe
+current/projected count impact without raw `current / limit` quota math.
 That same helper-owned admission-preview contract now also owns required-
 preview, unavailable-capacity, and save-blocking messages. Provider settings
 panels must map `monitored_system_usage_unavailable` plus backend

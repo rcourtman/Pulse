@@ -667,6 +667,10 @@ route. `buildInfrastructureWorkspacePath()` always returns the base path;
 `deriveAddStepFromLegacyPath()` maps legacy sub-paths to in-page panel state.
 `SetupCompletionPanel.tsx` uses one `INFRASTRUCTURE_PATH` constant for all
 install and platform CTAs.
+The shared monitored-system admission preview now formats save-impact
+summaries through `frontend-modern/src/utils/monitoredSystemPresentation.ts`
+so infrastructure setup screens describe count impact and active-policy
+failures without raw slash-quota rendering.
 
 This subsystem now sits under the dedicated agent lifecycle and fleet
 operations lane so install, registration, update continuity, profile
@@ -1524,8 +1528,9 @@ so provider-specific panels must not fork their own monitored-system preview
 copy or inline projected-usage rendering.
 That shared shell must use neutral count-impact language for ordinary platform
 connection previews. Finite policy failures may say the active policy would be
-exceeded, but unchanged or removal previews should not describe "capacity" as
-the operator-facing mental model for self-hosted monitoring.
+exceeded, but unchanged or removal previews should not describe "capacity" or
+raw `current / limit` quota math as the operator-facing mental model for
+self-hosted monitoring.
 That same commercial readiness boundary now also assumes settled canonical
 usage, not the first non-nil monitor view. Lifecycle-owned setup or first-host
 surfaces may not seal migrated-v5 continuity, display counted-system totals as

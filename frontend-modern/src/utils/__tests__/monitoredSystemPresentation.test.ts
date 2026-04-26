@@ -8,6 +8,7 @@ import monitoredSystemPresentationSource from '@/utils/monitoredSystemPresentati
 import {
   buildMonitoredSystemCapacitySectionModel,
   buildMonitoredSystemAdmissionPreviewUnavailableState,
+  formatMonitoredSystemAdmissionPreviewSummary,
   formatMonitoredSystemAdmissionPreviewUnavailableMessage,
   formatMonitoredSystemGroupedSourcesLabel,
   formatMonitoredSystemLegacyConnectionBreakdown,
@@ -532,6 +533,28 @@ describe('monitoredSystemPresentation', () => {
         would_exceed_limit: true,
       }),
     ).toBe('This change exceeds the active monitored-system policy');
+  });
+
+  it('formats monitored-system admission preview summaries without quota math', () => {
+    expect(
+      formatMonitoredSystemAdmissionPreviewSummary({
+        current_count: 4,
+        projected_count: 4,
+        limit: 10,
+      }),
+    ).toBe(
+      'Pulse currently counts 4 monitored systems. Saving this change would keep the count at 4 monitored systems.',
+    );
+    expect(
+      formatMonitoredSystemAdmissionPreviewSummary({
+        current_count: 9,
+        projected_count: 11,
+        limit: 10,
+        would_exceed_limit: true,
+      }),
+    ).toBe(
+      'Pulse currently counts 9 monitored systems. Saving this change would bring the count to 11 monitored systems (+2), above the active policy of 10 monitored systems.',
+    );
   });
 
   it('returns canonical monitored-system ledger unavailable copy', () => {

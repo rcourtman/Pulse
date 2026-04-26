@@ -32,7 +32,9 @@ describe('MonitoredSystemAdmissionPreview', () => {
       screen.getByText('This change keeps monitored-system count unchanged'),
     ).toBeInTheDocument();
     expect(
-      screen.getByText('Current usage 4 / 10. Saving this change keeps usage at 4 / 10.'),
+      screen.getByText(
+        'Pulse currently counts 4 monitored systems. Saving this change would keep the count at 4 monitored systems.',
+      ),
     ).toBeInTheDocument();
   });
 
@@ -49,7 +51,32 @@ describe('MonitoredSystemAdmissionPreview', () => {
 
     expect(screen.getByText('This change removes monitored systems')).toBeInTheDocument();
     expect(
-      screen.getByText('Current usage 1 / 10. Saving this change would move usage to 0 / 10 (-1).'),
+      screen.getByText(
+        'Pulse currently counts 1 monitored system. Saving this change would bring the count to 0 monitored systems (-1).',
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it('describes active-policy failures without slash quota copy', () => {
+    render(() => (
+      <MonitoredSystemAdmissionPreview
+        preview={buildPreview({
+          current_count: 9,
+          projected_count: 11,
+          additional_count: 2,
+          would_exceed_limit: true,
+          effect: 'creates_multiple',
+        })}
+      />
+    ));
+
+    expect(
+      screen.getByText('This change exceeds the active monitored-system policy'),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Pulse currently counts 9 monitored systems. Saving this change would bring the count to 11 monitored systems (+2), above the active policy of 10 monitored systems.',
+      ),
     ).toBeInTheDocument();
   });
 });
