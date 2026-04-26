@@ -97,4 +97,19 @@ Results:
 
 This clears the Android physical-device launch proof only. The mobile GA gate remains blocked until the remaining current-candidate live Android pairing/reconnect/fail-closed/push/approval/instance-switching evidence and the iOS physical-device evidence are rerun, and until the physical-device walkthrough proves the companion role without release-team narration.
 
+Also on 2026-04-26, the build 4 Android diagnostics/supportability proof passed on the same physical phone after `pulse-mobile` commit `cddcb62` hardened the proof harness for both healthy and repair-state diagnostics views:
+
+- `cd /Volumes/Development/pulse/repos/pulse-mobile && npm run test:scripts`
+- `cd /Volumes/Development/pulse/repos/pulse-mobile && npm run release:proof:android:diagnostics -- --serial 192.168.0.119:40467 --output-dir /Volumes/Development/pulse/.local-build-cache/pulse-mobile/tmp/android-build4-diagnostics-20260426-fixed2 --wait-timeout-ms 20000`
+
+Results:
+
+- Mobile script tests passed: 112 tests.
+- The installed release build exposed Settings -> Diagnostics on the physical Android phone.
+- The stale hosted pairing state rendered the fail-closed supportability path rather than pretending the instance was healthy: `Relay path needs repair`, `Repair in Access`, and `Share Summary`.
+- Diagnostics captured non-secret phone view, relay, push, follow-up, paired-access, security, and build sections across separate scroll positions.
+- Summary: `/Volumes/Development/pulse/.local-build-cache/pulse-mobile/tmp/android-build4-diagnostics-20260426-fixed2/summary.md`
+
+This adds current Android supportability and repair-path evidence, but it does not clear the live pairing, reconnect, fail-closed revocation, push-routing, approval-action, instance-switching, or iOS physical-device proof requirements.
+
 The source and simulator-era product framing are coherent with the resolved companion role, but the release gate remains blocked. Passing this gate still requires fresh physical-device walkthrough/proof on the current candidate, including the native status, alerts, push/device trust, Relay-backed Open Pulse handoff, contextual recovery, and stale/revoked access behavior.
