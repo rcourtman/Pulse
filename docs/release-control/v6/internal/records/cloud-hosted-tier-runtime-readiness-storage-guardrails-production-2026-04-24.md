@@ -335,6 +335,56 @@ summary_skip=0
 summary_total=4
 ```
 
+## 2026-04-26 Hosted Mobile Proof Cleanup
+
+Later on 2026-04-26, a disposable hosted Android mobile instance-switching
+proof account and two proof tenants were created on the live production control
+plane so the Android candidate could be tested against real Pulse Cloud
+workspaces:
+
+- Account: `a_FMEHPC44FJ`
+- Primary tenant: `t-X4KX4WM1ZT`
+- Secondary tenant: `t-G18JTM0W30`
+
+The Android proof could not complete because the physical phone's wireless ADB
+transport dropped and the newly advertised wireless-debugging port refused
+connection. Before stopping the slice, the disposable hosted state was cleaned
+from production rather than leaving stale proof residue behind.
+
+The two workspaces were first deleted through the temporary
+`mobile-proof delete-workspace` helper inside the live control-plane container,
+which moved both tenants from `active` to `deleted`. A live SQLite backup and
+server-side tenant-directory archive were then taken before removing only the
+exact proof-marked account, tenant, and hosted entitlement rows:
+
+- Backup:
+  `/root/tenants-pre-ga-mobile-hosted-proof-cleanup-20260426T090206Z.db`
+- Archive:
+  `/data/tenants.archived-mobile-hosted-proof-cleanup-20260426T090206Z`
+
+Post-cleanup verification showed no rows remaining for the proof account,
+tenants, or hosted entitlements. The temporary mobile-proof helper binary was
+also removed from both `/root` on the host and `/usr/local/bin` inside the
+control-plane container.
+
+The live production audit returned to the clean current baseline:
+
+```text
+audit_ok=true
+tenant_total=4
+tenant_active=4
+tenant_deleted=0
+tenant_registry_unhealthy_active=0
+docker_managed_total=4
+docker_managed_running=4
+docker_managed_unhealthy=0
+storage_guardrails_enabled=true
+storage_ok=true
+proof_tenant_stale_count=0
+proof_account_stale_count=0
+hosted_paid_orphan_entitlement_count=0
+```
+
 ## Conclusion
 
 `cloud-hosted-tier-runtime-readiness` can be treated as `passed` for the current

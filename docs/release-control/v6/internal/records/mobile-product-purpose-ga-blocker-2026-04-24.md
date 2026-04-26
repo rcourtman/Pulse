@@ -112,4 +112,25 @@ Results:
 
 This adds current Android supportability and repair-path evidence, but it does not clear the live pairing, reconnect, fail-closed revocation, push-routing, approval-action, instance-switching, or iOS physical-device proof requirements.
 
+Also on 2026-04-26, the Android hosted instance-switching proof harness was
+hardened in `pulse-mobile` commit `1b48ce6` after the first live run exposed
+two proof-script assumptions rather than an app crash:
+
+- `npm run release:proof:android:instance-switching` now has a package script.
+- The proof can run with `--reset-app-data` so fresh hosted pairing proof starts
+  from a clean app state on the physical phone.
+- The proof accepts the real Access summary state where one instance is active
+  and another is highlighted, instead of requiring two full instance cards to
+  be visible at the same scroll position.
+- Mobile script tests passed: 113 tests.
+
+The live hosted proof itself did not complete. The physical Android phone's
+previous ADB serial (`192.168.0.119:40467`) disappeared, and the newly
+advertised wireless-debugging endpoint (`192.168.0.119:45873`) refused
+connection after restarting the local ADB server. The disposable hosted proof
+account and tenants were deleted and cleaned from Pulse Cloud before stopping
+the attempt. This keeps the proof harness ready for the next reachable physical
+Android session, but it does not add live hosted pairing or instance-switching
+evidence for GA.
+
 The source and simulator-era product framing are coherent with the resolved companion role, but the release gate remains blocked. Passing this gate still requires fresh physical-device walkthrough/proof on the current candidate, including the native status, alerts, push/device trust, Relay-backed Open Pulse handoff, contextual recovery, and stale/revoked access behavior.
