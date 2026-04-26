@@ -1,6 +1,7 @@
 import type { DashboardRecoverySummary } from '@/hooks/useDashboardRecovery';
 import type { DashboardOverview, ProblemResource } from '@/hooks/useDashboardOverview';
 import { getPreferredResourceDisplayName } from '@/utils/resourceIdentity';
+import { getResourceTypeLabel } from '@/utils/resourceTypePresentation';
 import type { DashboardEstateSummary } from './estateSummaryModel';
 
 export type DashboardPulseBriefTone = 'healthy' | 'attention' | 'critical';
@@ -42,12 +43,34 @@ function problemResourceLabel(problem: ProblemResource | undefined): string | nu
   const name = getPreferredResourceDisplayName(problem.resource).trim();
   if (!name) return null;
   const normalizedName = name.toLowerCase();
+  const typeLabel = getResourceTypeLabel(problem.resource.type)?.trim();
+  const typeNoun =
+    typeLabel && typeLabel === typeLabel.toUpperCase() ? typeLabel : typeLabel?.toLowerCase();
+  const normalizedTypeLabel = typeLabel?.toLowerCase();
+  const normalizedRawType = problem.resource.type.trim().toLowerCase().replace(/[-_]+/g, ' ');
+  const genericStatusNames = new Set(
+    [normalizedTypeLabel, normalizedRawType]
+      .filter((value): value is string => Boolean(value))
+      .flatMap((value) => [
+        value,
+        ...problem.problems.map((reason) => `${value} (${reason.toLowerCase()})`),
+      ]),
+  );
+  const displayName =
+    typeNoun && genericStatusNames.has(normalizedName) ? `the ${typeNoun} issue` : name;
+  const normalizedDisplayName = displayName.toLowerCase();
   const reasons = problem.problems
-    .filter((reason) => !normalizedName.includes(reason.toLowerCase()))
+    .filter((reason) => {
+      const normalizedReason = reason.toLowerCase();
+      return (
+        !normalizedName.includes(normalizedReason) &&
+        !normalizedDisplayName.includes(normalizedReason)
+      );
+    })
     .slice(0, 2)
     .join(', ')
     .trim();
-  return reasons ? `${name} (${reasons})` : name;
+  return reasons ? `${displayName} (${reasons})` : displayName;
 }
 
 function buildAttentionParts(input: DashboardPulseBriefInput): string[] {

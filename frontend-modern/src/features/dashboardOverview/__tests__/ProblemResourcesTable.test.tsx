@@ -110,9 +110,9 @@ describe('ProblemResourcesTable', () => {
       />
     ));
 
-    // Two storages with the same displayName group together; the primary
-    // reads "2 storages" instead of collapsing to "storage".
-    expect(screen.getByText('2 storages')).toBeInTheDocument();
+    // Storage groups use resource wording instead of the awkward "storages".
+    expect(screen.getByText('2 storage resources')).toBeInTheDocument();
+    expect(screen.queryByText('2 storages')).toBeNull();
   });
 
   it('renders governed labels for policy-aware problem resources', () => {

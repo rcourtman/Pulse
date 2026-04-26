@@ -122,7 +122,7 @@ describe('dashboard Pulse Brief model', () => {
     ]);
   });
 
-  it('does not duplicate a problem reason that is already in the resource name', () => {
+  it('normalizes generic status-shaped problem resource names', () => {
     const brief = buildDashboardPulseBrief({
       estate: estate({ headline: '1 system needs attention', attentionSystems: 1 }),
       overview: overview({
@@ -146,7 +146,8 @@ describe('dashboard Pulse Brief model', () => {
       patrolFindingCount: 0,
     });
 
-    expect(brief.body).toContain('Review storage (offline) first');
+    expect(brief.body).toContain('Review the storage issue first');
+    expect(brief.body).not.toContain('Review storage (offline) first');
     expect(brief.body).not.toContain('storage (offline) (Offline)');
   });
 });

@@ -107,6 +107,7 @@ function groupedResourceLink(group: ProblemResourceGroup): string {
 function pluralizeTypeLabel(count: number, label: string): string {
   const normalized = (label || 'resource').trim().toLowerCase();
   if (count === 1) return normalized;
+  if (normalized === 'storage') return 'storage resources';
   if (normalized.endsWith('s')) return normalized;
   if (normalized.endsWith('y')) return `${normalized.slice(0, -1)}ies`;
   return `${normalized}s`;

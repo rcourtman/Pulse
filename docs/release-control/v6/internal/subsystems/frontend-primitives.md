@@ -178,6 +178,10 @@ work extends shared components instead of creating new local variants.
    icon components may keep their standalone labels, but the nav must treat
    those icons as decorative inside tab buttons so names come from the tab
    label plus meaningful badge counts, not duplicated icon titles.
+   Dashboard overview primitives under `frontend-modern/src/features/` must keep
+   grouped resource labels operator-readable: count-led labels may aggregate
+   repeated resources, but uncountable or category-like resource types such as
+   storage must use resource wording instead of naive pluralization.
 2. Route new top-level settings surfaces through the canonical settings shell
    instead of introducing page-local framing.
    Shared shells and primitives that need websocket or dark-mode context must
@@ -1772,6 +1776,10 @@ may collapse only when they share the same governed display label, resource
 type, and problem signal; the header count and Pulse Brief counts must continue
 to represent the underlying affected resources, and grouped links must route to
 the broad owning surface rather than inventing a synthetic resource target.
+Pulse Brief problem-resource wording must not amplify generic status-shaped
+names such as `storage (offline)` into first-viewport prose; when the resource
+name is only a type plus status, the brief should summarize the type-level issue
+in operator language instead of repeating raw backend-shaped labels.
 That same dashboard overview boundary must consume the governed Patrol finding
 presentation helpers when it surfaces Patrol findings in compact form. In
 `frontend-modern/src/features/dashboardOverview/ActionRequiredPanel.tsx`,
