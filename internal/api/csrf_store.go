@@ -24,7 +24,7 @@ type CSRFToken struct {
 
 // CSRFTokenStore handles persistent CSRF token storage
 type CSRFTokenStore struct {
-	tokens     map[string]*CSRFToken
+	tokens     map[string][]*CSRFToken
 	mu         sync.RWMutex
 	saveMu     sync.Mutex // Serializes disk writes to prevent save corruption
 	dataPath   string
@@ -33,6 +33,8 @@ type CSRFTokenStore struct {
 	workerDone chan struct{}
 	stopOnce   sync.Once
 }
+
+const maxCSRFTokensPerSession = 8
 
 func csrfSessionKey(sessionID string) string {
 	return sessionHash(sessionID)
@@ -76,10 +78,10 @@ func (c *CSRFTokenStore) migrateLegacyTokens(data []byte, now time.Time) (bool, 
 			continue
 		}
 
-		c.tokens[csrfSessionKey(sessionID)] = &CSRFToken{
+		c.addTokenUnsafe(csrfSessionKey(sessionID), &CSRFToken{
 			Hash:    csrfTokenHash(record.Token),
 			Expires: record.ExpiresAt,
-		}
+		}, now)
 		loaded++
 	}
 
@@ -117,7 +119,7 @@ func ensureCSRFStore(dataPath string) *CSRFTokenStore {
 
 	oldStore := csrfStore
 	csrfStore = &CSRFTokenStore{
-		tokens:     make(map[string]*CSRFToken),
+		tokens:     make(map[string][]*CSRFToken),
 		dataPath:   newDataPath,
 		stopChan:   make(chan bool),
 		workerDone: make(chan struct{}),
@@ -204,11 +206,12 @@ func (c *CSRFTokenStore) GenerateCSRFToken(sessionID string) string {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
+	now := time.Now()
 	key := csrfSessionKey(sessionID)
-	c.tokens[key] = &CSRFToken{
+	c.addTokenUnsafe(key, &CSRFToken{
 		Hash:    csrfTokenHash(token),
-		Expires: time.Now().Add(4 * time.Hour),
-	}
+		Expires: now.Add(4 * time.Hour),
+	}, now)
 
 	// Save immediately for important operations
 	c.saveUnsafe()
@@ -221,16 +224,24 @@ func (c *CSRFTokenStore) ValidateCSRFToken(sessionID, token string) bool {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	csrfToken, exists := c.tokens[csrfSessionKey(sessionID)]
+	candidates, exists := c.tokens[csrfSessionKey(sessionID)]
 	if !exists {
 		return false
 	}
 
-	if time.Now().After(csrfToken.Expires) {
-		return false
+	now := time.Now()
+	tokenHash := csrfTokenHash(token)
+	valid := false
+	for _, csrfToken := range candidates {
+		if csrfToken == nil || now.After(csrfToken.Expires) {
+			continue
+		}
+		if subtle.ConstantTimeCompare([]byte(csrfToken.Hash), []byte(tokenHash)) == 1 {
+			valid = true
+		}
 	}
 
-	return subtle.ConstantTimeCompare([]byte(csrfToken.Hash), []byte(csrfTokenHash(token))) == 1
+	return valid
 }
 
 // DeleteCSRFToken removes a CSRF token
@@ -242,16 +253,67 @@ func (c *CSRFTokenStore) DeleteCSRFToken(sessionID string) {
 	c.saveUnsafe()
 }
 
+func (c *CSRFTokenStore) addTokenUnsafe(sessionKey string, token *CSRFToken, now time.Time) {
+	if token == nil || sessionKey == "" {
+		return
+	}
+
+	tokens := c.pruneSessionTokensUnsafe(sessionKey, now)
+	tokens = append(tokens, token)
+	if len(tokens) > maxCSRFTokensPerSession {
+		tokens = tokens[len(tokens)-maxCSRFTokensPerSession:]
+	}
+	c.tokens[sessionKey] = tokens
+}
+
+func (c *CSRFTokenStore) pruneSessionTokensUnsafe(sessionKey string, now time.Time) []*CSRFToken {
+	tokens := c.tokens[sessionKey]
+	if len(tokens) == 0 {
+		delete(c.tokens, sessionKey)
+		return nil
+	}
+
+	kept := tokens[:0]
+	for _, token := range tokens {
+		if token == nil || now.After(token.Expires) {
+			continue
+		}
+		kept = append(kept, token)
+	}
+	if len(kept) == 0 {
+		delete(c.tokens, sessionKey)
+		return nil
+	}
+	if len(kept) > maxCSRFTokensPerSession {
+		kept = kept[len(kept)-maxCSRFTokensPerSession:]
+	}
+	c.tokens[sessionKey] = kept
+	return kept
+}
+
+func (c *CSRFTokenStore) tokenRecordCountUnsafe() int {
+	count := 0
+	for _, tokens := range c.tokens {
+		count += len(tokens)
+	}
+	return count
+}
+
 // cleanup removes expired CSRF tokens
 func (c *CSRFTokenStore) cleanup() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	now := time.Now()
-	for sessionKey, token := range c.tokens {
-		if now.After(token.Expires) {
-			delete(c.tokens, sessionKey)
-			log.Debug().Str("sessionKey", safePrefixForLog(sessionKey, 8)+"...").Msg("Cleaned up expired CSRF token")
+	for sessionKey, tokens := range c.tokens {
+		before := len(tokens)
+		kept := c.pruneSessionTokensUnsafe(sessionKey, now)
+		removed := before - len(kept)
+		if removed > 0 {
+			log.Debug().
+				Str("sessionKey", safePrefixForLog(sessionKey, 8)+"...").
+				Int("removed", removed).
+				Msg("Cleaned up expired CSRF tokens")
 		}
 	}
 }
@@ -278,13 +340,18 @@ func (c *CSRFTokenStore) saveUnsafe() {
 	}
 
 	// Convert to serializable format
-	persisted := make([]*CSRFTokenData, 0, len(c.tokens))
-	for sessionKey, token := range c.tokens {
-		persisted = append(persisted, &CSRFTokenData{
-			TokenHash:  token.Hash,
-			SessionKey: sessionKey,
-			ExpiresAt:  token.Expires,
-		})
+	persisted := make([]*CSRFTokenData, 0, c.tokenRecordCountUnsafe())
+	for sessionKey, tokens := range c.tokens {
+		for _, token := range tokens {
+			if token == nil {
+				continue
+			}
+			persisted = append(persisted, &CSRFTokenData{
+				TokenHash:  token.Hash,
+				SessionKey: sessionKey,
+				ExpiresAt:  token.Expires,
+			})
+		}
 	}
 
 	// Marshal tokens
@@ -307,7 +374,10 @@ func (c *CSRFTokenStore) saveUnsafe() {
 		return
 	}
 
-	log.Debug().Int("count", len(c.tokens)).Msg("CSRF tokens saved to disk")
+	log.Debug().
+		Int("sessions", len(c.tokens)).
+		Int("tokens", len(persisted)).
+		Msg("CSRF tokens saved to disk")
 }
 
 // load reads CSRF tokens from disk
@@ -322,22 +392,25 @@ func (c *CSRFTokenStore) load() {
 		return
 	}
 
-	c.tokens = make(map[string]*CSRFToken)
+	c.tokens = make(map[string][]*CSRFToken)
 
 	var current []*CSRFTokenData
 	if err := json.Unmarshal(data, &current); err == nil {
 		now := time.Now()
+		loaded := 0
 		for _, record := range current {
-			if record == nil || now.After(record.ExpiresAt) {
+			if record == nil || record.SessionKey == "" || record.TokenHash == "" || now.After(record.ExpiresAt) {
 				continue
 			}
-			c.tokens[record.SessionKey] = &CSRFToken{
+			c.addTokenUnsafe(record.SessionKey, &CSRFToken{
 				Hash:    record.TokenHash,
 				Expires: record.ExpiresAt,
-			}
+			}, now)
+			loaded++
 		}
 		log.Info().
-			Int("loaded", len(c.tokens)).
+			Int("loaded", loaded).
+			Int("sessions", len(c.tokens)).
 			Int("total", len(current)).
 			Msg("CSRF tokens loaded from disk (hashed format)")
 		return

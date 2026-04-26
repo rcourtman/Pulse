@@ -179,6 +179,13 @@ Own canonical runtime payload shapes between backend and frontend.
 45. `internal/api/relay_mobile_capability.go` shared with `relay-runtime`: the backend-owned Pulse Mobile relay capability inventory is both a relay runtime boundary and a canonical API payload contract surface.
 46. `internal/api/resources.go` shared with `unified-resources`: the unified resource endpoint is both a backend payload contract surface and a unified-resource runtime boundary.
 47. `internal/api/security.go` shared with `security-privacy`: the security handlers are both a security/privacy control surface and a canonical API payload contract boundary.
+    That same shared security/API boundary owns CSRF replacement-token
+    concurrency. When parallel browser mutations arrive with stale or missing
+    CSRF tokens for the same session, `internal/api/csrf_store.go` may retain
+    a bounded set of recent unexpired token hashes so each server-issued
+    replacement can validate its retry. Logout, password-change, and explicit
+    session revocation must still delete the full session token set rather than
+    leaving any retained replacement token valid.
 48. `internal/api/security_tokens.go` shared with `security-privacy`: the security token handlers are both a security/privacy control surface and a canonical API payload contract boundary.
 49. `internal/api/slo.go` shared with `performance-and-scalability`: the SLO endpoint is both an API contract surface and a protected performance hot-path boundary.
 50. `internal/api/system_settings.go` shared with `security-privacy`: the system settings telemetry and auth controls are both a security/privacy control surface and a canonical API payload contract boundary.

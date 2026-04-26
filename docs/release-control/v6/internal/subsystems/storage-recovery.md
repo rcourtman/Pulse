@@ -89,6 +89,11 @@ querying, and the operator-facing storage health presentation layer.
    handoff safety mode for that brief remains an AI runtime/API contract concern
    and must not move storage or recovery readiness truth into model prose.
 4. Route transport changes for storage and recovery endpoints through `internal/api/` and the owning `api-contracts` proof routes
+   That same adjacent API/security boundary owns CSRF replacement-token
+   concurrency for browser mutations. Storage and recovery forms may benefit
+   from the shared retry behavior when parallel requests receive replacement
+   CSRF cookies, but they must not define storage-local CSRF retention,
+   alternate retry tokens, or recovery-specific auth bypass semantics.
    That same adjacent API boundary also owns TrueNAS feature-default semantics for
    provider-backed recovery: storage and recovery must treat `truenas_disabled`
    as an explicit platform opt-out, not as the baseline onboarding state for a

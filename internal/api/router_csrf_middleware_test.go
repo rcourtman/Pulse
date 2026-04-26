@@ -103,6 +103,46 @@ func TestRouterCSRFAllowsValidToken(t *testing.T) {
 	}
 }
 
+func TestRouterCSRFRetainsConcurrentReplacementTokens(t *testing.T) {
+	router, sessionToken := newRouterWithSession(t)
+
+	router.mux.HandleFunc("/api/secure", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	replacementTokens := make([]string, 0, 2)
+	for _, staleToken := range []string{"stale-token-a", "stale-token-b"} {
+		req := httptest.NewRequest(http.MethodPost, "/api/secure", nil)
+		req.AddCookie(&http.Cookie{Name: "pulse_session", Value: sessionToken})
+		req.Header.Set("X-CSRF-Token", staleToken)
+		rec := httptest.NewRecorder()
+
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("expected status %d for stale token, got %d (%s)", http.StatusForbidden, rec.Code, rec.Body.String())
+		}
+		replacementToken := rec.Header().Get("X-CSRF-Token")
+		if replacementToken == "" {
+			t.Fatal("expected replacement CSRF token header after stale token")
+		}
+		replacementTokens = append(replacementTokens, replacementToken)
+	}
+
+	for i, replacementToken := range replacementTokens {
+		req := httptest.NewRequest(http.MethodPost, "/api/secure", nil)
+		req.AddCookie(&http.Cookie{Name: "pulse_session", Value: sessionToken})
+		req.Header.Set("X-CSRF-Token", replacementToken)
+		rec := httptest.NewRecorder()
+
+		router.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("replacement token %d should remain valid, got status %d (%s)", i, rec.Code, rec.Body.String())
+		}
+	}
+}
+
 func TestRouterCSRFBlocksCrossSiteProxyAuthMutation(t *testing.T) {
 	router := newRouterWithProxyAuth(t)
 

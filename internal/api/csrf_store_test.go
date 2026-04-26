@@ -160,7 +160,7 @@ func TestCSRFTokenStore_GenerateAndValidate(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	store := &CSRFTokenStore{
-		tokens:   make(map[string]*CSRFToken),
+		tokens:   make(map[string][]*CSRFToken),
 		dataPath: tmpDir,
 	}
 
@@ -192,7 +192,7 @@ func TestCSRFTokenStore_DeleteToken(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	store := &CSRFTokenStore{
-		tokens:   make(map[string]*CSRFToken),
+		tokens:   make(map[string][]*CSRFToken),
 		dataPath: tmpDir,
 	}
 
@@ -217,22 +217,22 @@ func TestCSRFTokenStore_DeleteToken(t *testing.T) {
 
 func TestCSRFTokenStore_Cleanup(t *testing.T) {
 	store := &CSRFTokenStore{
-		tokens: make(map[string]*CSRFToken),
+		tokens: make(map[string][]*CSRFToken),
 	}
 
 	// Add expired token
 	expiredKey := csrfSessionKey("expired-session")
-	store.tokens[expiredKey] = &CSRFToken{
+	store.tokens[expiredKey] = []*CSRFToken{{
 		Hash:    "expired-hash",
 		Expires: time.Now().Add(-1 * time.Hour), // Expired
-	}
+	}}
 
 	// Add valid token
 	validKey := csrfSessionKey("valid-session")
-	store.tokens[validKey] = &CSRFToken{
+	store.tokens[validKey] = []*CSRFToken{{
 		Hash:    "valid-hash",
 		Expires: time.Now().Add(1 * time.Hour), // Not expired
-	}
+	}}
 
 	// Run cleanup
 	store.cleanup()
@@ -248,9 +248,41 @@ func TestCSRFTokenStore_Cleanup(t *testing.T) {
 	}
 }
 
+func TestCSRFTokenStore_CleanupPrunesExpiredTokensWithinSession(t *testing.T) {
+	store := &CSRFTokenStore{
+		tokens: make(map[string][]*CSRFToken),
+	}
+
+	sessionID := "mixed-session"
+	expiredToken := "expired-token"
+	validToken := "valid-token"
+	store.tokens[csrfSessionKey(sessionID)] = []*CSRFToken{
+		{
+			Hash:    csrfTokenHash(expiredToken),
+			Expires: time.Now().Add(-1 * time.Hour),
+		},
+		{
+			Hash:    csrfTokenHash(validToken),
+			Expires: time.Now().Add(1 * time.Hour),
+		},
+	}
+
+	store.cleanup()
+
+	if store.ValidateCSRFToken(sessionID, expiredToken) {
+		t.Fatal("expired token should be pruned from the session")
+	}
+	if !store.ValidateCSRFToken(sessionID, validToken) {
+		t.Fatal("valid token should remain after pruning expired session tokens")
+	}
+	if got := len(store.tokens[csrfSessionKey(sessionID)]); got != 1 {
+		t.Fatalf("expected 1 retained token, got %d", got)
+	}
+}
+
 func TestCSRFTokenStore_ExpiredTokenInvalid(t *testing.T) {
 	store := &CSRFTokenStore{
-		tokens: make(map[string]*CSRFToken),
+		tokens: make(map[string][]*CSRFToken),
 	}
 
 	sessionID := "test-session-789"
@@ -258,10 +290,10 @@ func TestCSRFTokenStore_ExpiredTokenInvalid(t *testing.T) {
 
 	// Add token that is already expired
 	key := csrfSessionKey(sessionID)
-	store.tokens[key] = &CSRFToken{
+	store.tokens[key] = []*CSRFToken{{
 		Hash:    csrfTokenHash(token),
 		Expires: time.Now().Add(-1 * time.Second), // Already expired
-	}
+	}}
 
 	// Should be invalid
 	if store.ValidateCSRFToken(sessionID, token) {
@@ -271,7 +303,7 @@ func TestCSRFTokenStore_ExpiredTokenInvalid(t *testing.T) {
 
 func TestCSRFTokenStore_NonexistentSession(t *testing.T) {
 	store := &CSRFTokenStore{
-		tokens: make(map[string]*CSRFToken),
+		tokens: make(map[string][]*CSRFToken),
 	}
 
 	// Should return false for nonexistent session
@@ -284,7 +316,7 @@ func TestCSRFTokenStore_MultipleTokens(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	store := &CSRFTokenStore{
-		tokens:   make(map[string]*CSRFToken),
+		tokens:   make(map[string][]*CSRFToken),
 		dataPath: tmpDir,
 	}
 
@@ -318,7 +350,7 @@ func TestCSRFTokenStore_RegenerateToken(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	store := &CSRFTokenStore{
-		tokens:   make(map[string]*CSRFToken),
+		tokens:   make(map[string][]*CSRFToken),
 		dataPath: tmpDir,
 	}
 
@@ -327,7 +359,7 @@ func TestCSRFTokenStore_RegenerateToken(t *testing.T) {
 	// Generate first token
 	token1 := store.GenerateCSRFToken(sessionID)
 
-	// Generate second token for same session (replaces first)
+	// Generate second token for same session.
 	token2 := store.GenerateCSRFToken(sessionID)
 
 	// Tokens should be different
@@ -335,12 +367,45 @@ func TestCSRFTokenStore_RegenerateToken(t *testing.T) {
 		t.Error("Regenerated token should be different")
 	}
 
-	// Only new token should be valid
-	if store.ValidateCSRFToken(sessionID, token1) {
-		t.Error("Old token should be invalid after regeneration")
+	// Recent tokens remain valid so concurrent browser retries do not invalidate
+	// one another when the server has to issue replacement CSRF cookies.
+	if !store.ValidateCSRFToken(sessionID, token1) {
+		t.Error("First token should remain valid after bounded regeneration")
 	}
 	if !store.ValidateCSRFToken(sessionID, token2) {
 		t.Error("New token should be valid")
+	}
+
+	if got := len(store.tokens[csrfSessionKey(sessionID)]); got != 2 {
+		t.Fatalf("expected 2 recent tokens for session, got %d", got)
+	}
+}
+
+func TestCSRFTokenStore_BoundsRecentTokensPerSession(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	store := &CSRFTokenStore{
+		tokens:   make(map[string][]*CSRFToken),
+		dataPath: tmpDir,
+	}
+
+	sessionID := "bounded-session"
+	generated := make([]string, 0, maxCSRFTokensPerSession+1)
+	for i := 0; i < maxCSRFTokensPerSession+1; i++ {
+		generated = append(generated, store.GenerateCSRFToken(sessionID))
+	}
+
+	if store.ValidateCSRFToken(sessionID, generated[0]) {
+		t.Fatal("oldest token should be evicted once the per-session limit is exceeded")
+	}
+	for i, token := range generated[1:] {
+		if !store.ValidateCSRFToken(sessionID, token) {
+			t.Fatalf("recent token %d should remain valid", i+1)
+		}
+	}
+
+	if got := len(store.tokens[csrfSessionKey(sessionID)]); got != maxCSRFTokensPerSession {
+		t.Fatalf("expected %d retained tokens, got %d", maxCSRFTokensPerSession, got)
 	}
 }
 
@@ -349,12 +414,13 @@ func TestCSRFTokenStore_SaveAndLoad(t *testing.T) {
 
 	// Create store and add a token
 	store1 := &CSRFTokenStore{
-		tokens:   make(map[string]*CSRFToken),
+		tokens:   make(map[string][]*CSRFToken),
 		dataPath: tmpDir,
 	}
 
 	sessionID := "persist-session"
 	token := store1.GenerateCSRFToken(sessionID)
+	replacementToken := store1.GenerateCSRFToken(sessionID)
 
 	// Explicitly save
 	store1.save()
@@ -367,7 +433,7 @@ func TestCSRFTokenStore_SaveAndLoad(t *testing.T) {
 
 	// Create new store and load
 	store2 := &CSRFTokenStore{
-		tokens:   make(map[string]*CSRFToken),
+		tokens:   make(map[string][]*CSRFToken),
 		dataPath: tmpDir,
 	}
 	store2.load()
@@ -376,13 +442,16 @@ func TestCSRFTokenStore_SaveAndLoad(t *testing.T) {
 	if !store2.ValidateCSRFToken(sessionID, token) {
 		t.Error("Token should be valid after save/load")
 	}
+	if !store2.ValidateCSRFToken(sessionID, replacementToken) {
+		t.Error("Replacement token should be valid after save/load")
+	}
 }
 
 func TestCSRFTokenStore_LoadNonexistentFile(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	store := &CSRFTokenStore{
-		tokens:   make(map[string]*CSRFToken),
+		tokens:   make(map[string][]*CSRFToken),
 		dataPath: filepath.Join(tmpDir, "nonexistent"),
 	}
 
@@ -396,7 +465,7 @@ func TestCSRFTokenStore_LoadNonexistentFile(t *testing.T) {
 
 func TestCSRFTokenStore_EmptyTokensMap(t *testing.T) {
 	store := &CSRFTokenStore{
-		tokens: make(map[string]*CSRFToken),
+		tokens: make(map[string][]*CSRFToken),
 	}
 
 	// Cleanup on empty map should not panic
@@ -418,15 +487,15 @@ func TestCSRFTokenStore_SaveUnsafe_MkdirAllError(t *testing.T) {
 	}
 
 	store := &CSRFTokenStore{
-		tokens:   make(map[string]*CSRFToken),
+		tokens:   make(map[string][]*CSRFToken),
 		dataPath: blockedPath, // This is a file, not a directory
 	}
 
 	// Add a token to save
-	store.tokens["testkey"] = &CSRFToken{
+	store.tokens["testkey"] = []*CSRFToken{{
 		Hash:    "testhash",
 		Expires: time.Now().Add(time.Hour),
-	}
+	}}
 
 	// saveUnsafe should handle error gracefully (logs but doesn't panic)
 	store.saveUnsafe()
@@ -454,15 +523,15 @@ func TestCSRFTokenStore_SaveUnsafe_WriteFileError(t *testing.T) {
 	}
 
 	store := &CSRFTokenStore{
-		tokens:   make(map[string]*CSRFToken),
+		tokens:   make(map[string][]*CSRFToken),
 		dataPath: readOnlyDir,
 	}
 
 	// Add a token
-	store.tokens["testkey"] = &CSRFToken{
+	store.tokens["testkey"] = []*CSRFToken{{
 		Hash:    "testhash",
 		Expires: time.Now().Add(time.Hour),
-	}
+	}}
 
 	// Make directory read-only after it exists (MkdirAll succeeds, WriteFile fails)
 	if err := os.Chmod(readOnlyDir, 0555); err != nil {
@@ -493,15 +562,15 @@ func TestCSRFTokenStore_SaveUnsafe_RenameError(t *testing.T) {
 	}
 
 	store := &CSRFTokenStore{
-		tokens:   make(map[string]*CSRFToken),
+		tokens:   make(map[string][]*CSRFToken),
 		dataPath: tmpDir,
 	}
 
 	// Add a token
-	store.tokens["testkey"] = &CSRFToken{
+	store.tokens["testkey"] = []*CSRFToken{{
 		Hash:    "testhash",
 		Expires: time.Now().Add(time.Hour),
-	}
+	}}
 
 	// saveUnsafe should handle rename error gracefully
 	store.saveUnsafe()
@@ -526,7 +595,7 @@ func TestCSRFTokenStore_Load_ReadError(t *testing.T) {
 	}
 
 	store := &CSRFTokenStore{
-		tokens:   make(map[string]*CSRFToken),
+		tokens:   make(map[string][]*CSRFToken),
 		dataPath: tmpDir,
 	}
 
@@ -548,7 +617,7 @@ func TestCSRFTokenStore_Load_InvalidJSON(t *testing.T) {
 	}
 
 	store := &CSRFTokenStore{
-		tokens:   make(map[string]*CSRFToken),
+		tokens:   make(map[string][]*CSRFToken),
 		dataPath: tmpDir,
 	}
 
@@ -575,7 +644,7 @@ func TestCSRFTokenStore_Load_MigratesLegacyFormat(t *testing.T) {
 	}
 
 	store := &CSRFTokenStore{
-		tokens:   make(map[string]*CSRFToken),
+		tokens:   make(map[string][]*CSRFToken),
 		dataPath: tmpDir,
 	}
 
@@ -632,7 +701,7 @@ func TestCSRFTokenStore_Load_CurrentFormat_SkipsNilAndExpired(t *testing.T) {
 	}
 
 	store := &CSRFTokenStore{
-		tokens:   make(map[string]*CSRFToken),
+		tokens:   make(map[string][]*CSRFToken),
 		dataPath: tmpDir,
 	}
 
@@ -647,6 +716,50 @@ func TestCSRFTokenStore_Load_CurrentFormat_SkipsNilAndExpired(t *testing.T) {
 	// Verify the valid token was loaded
 	if _, exists := store.tokens["key1"]; !exists {
 		t.Error("expected key1 to be loaded")
+	}
+}
+
+func TestCSRFTokenStore_Load_CurrentFormat_RetainsRecentTokensForSession(t *testing.T) {
+	tmpDir := t.TempDir()
+	sessionID := "persisted-concurrent-session"
+	sessionKey := csrfSessionKey(sessionID)
+	records := []*CSRFTokenData{
+		{
+			TokenHash:  csrfTokenHash("token-one"),
+			SessionKey: sessionKey,
+			ExpiresAt:  time.Now().Add(time.Hour),
+		},
+		{
+			TokenHash:  csrfTokenHash("token-two"),
+			SessionKey: sessionKey,
+			ExpiresAt:  time.Now().Add(time.Hour),
+		},
+	}
+
+	data, err := json.Marshal(records)
+	if err != nil {
+		t.Fatalf("failed to marshal current format records: %v", err)
+	}
+	csrfFile := filepath.Join(tmpDir, "csrf_tokens.json")
+	if err := os.WriteFile(csrfFile, data, 0600); err != nil {
+		t.Fatalf("failed to write current format JSON: %v", err)
+	}
+
+	store := &CSRFTokenStore{
+		tokens:   make(map[string][]*CSRFToken),
+		dataPath: tmpDir,
+	}
+
+	store.load()
+
+	if !store.ValidateCSRFToken(sessionID, "token-one") {
+		t.Fatal("first persisted token should validate")
+	}
+	if !store.ValidateCSRFToken(sessionID, "token-two") {
+		t.Fatal("second persisted token should validate")
+	}
+	if got := len(store.tokens[sessionKey]); got != 2 {
+		t.Fatalf("expected 2 retained tokens for session, got %d", got)
 	}
 }
 
