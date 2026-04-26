@@ -82,4 +82,14 @@ describe('PulsePatrolLogo', () => {
     const titleEl = svg!.querySelector('title');
     expect(titleEl!.textContent).toBe('');
   });
+
+  it('renders as decorative when the surrounding UI already provides the label', () => {
+    const { container } = render(() => <PulsePatrolLogo decorative />);
+
+    const svg = container.querySelector('svg');
+    expect(svg).not.toBeNull();
+    expect(svg).toHaveAttribute('aria-hidden', 'true');
+    expect(svg).not.toHaveAttribute('aria-label');
+    expect(svg!.querySelector('title')).toBeNull();
+  });
 });

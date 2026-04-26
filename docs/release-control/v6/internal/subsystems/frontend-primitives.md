@@ -518,7 +518,10 @@ work extends shared components instead of creating new local variants.
     `frontend-modern/src/App.tsx` and `frontend-modern/src/AppLayout.tsx` must
     likewise expose `/patrol` as the canonical route and navigation target,
     keeping legacy `/ai` entry points as thin compatibility redirects rather
-    than a second Patrol-branded primary route. The Patrol-owned supporting-context
+    than a second Patrol-branded primary route. `PatrolIntelligenceHeader.tsx`
+    must also keep the page heading's accessible name singular: when the
+    `PulsePatrolLogo` appears beside visible Patrol heading text, it is
+    decorative rather than a second label source. The Patrol-owned supporting-context
     presenter must also keep the disclosure toggle plus evidence-boundary copy
     centralized instead of letting the workspace reintroduce inline shell-local
     trust wording.

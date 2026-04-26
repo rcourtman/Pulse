@@ -72,7 +72,7 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
             class="inline-flex items-center gap-3"
             title="Pulse Patrol continuously verifies your infrastructure, surfaces actionable findings, and can automatically fix issues based on your autonomy settings."
           >
-            <PulsePatrolLogo class="w-6 h-6 text-base-content" />
+            <PulsePatrolLogo class="w-6 h-6 text-base-content" decorative />
             <span>{headerMeta.title}</span>
           </span>
         }

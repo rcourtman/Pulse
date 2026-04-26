@@ -301,7 +301,13 @@ vi.mock('@/components/shared/Toggle', () => ({
 }));
 
 vi.mock('@/components/Brand/PulsePatrolLogo', () => ({
-  PulsePatrolLogo: () => <div data-testid="pulse-patrol-logo" />,
+  PulsePatrolLogo: (props: { decorative?: boolean; title?: string }) => (
+    <svg
+      data-testid="pulse-patrol-logo"
+      aria-hidden={props.decorative ? 'true' : undefined}
+      aria-label={props.decorative ? undefined : (props.title ?? 'Pulse Patrol')}
+    />
+  ),
 }));
 
 const defaultPatrolStatus = (overrides: Record<string, unknown> = {}) => ({
@@ -404,6 +410,19 @@ describe('AIIntelligence entitlement gating', () => {
       correlations: [],
       count: 0,
     });
+  });
+
+  it('keeps the Patrol page heading accessible name singular when the logo is present', async () => {
+    getPatrolStatusMock.mockResolvedValue(defaultPatrolStatus({ license_required: false }));
+
+    render(() => <AIIntelligence />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Patrol' })).toBeInTheDocument();
+    });
+
+    expect(screen.queryByRole('heading', { name: 'Pulse Patrol Patrol' })).not.toBeInTheDocument();
+    expect(screen.getByTestId('pulse-patrol-logo')).toHaveAttribute('aria-hidden', 'true');
   });
 
   it('renders canonical learned correlations in the summary page through the correlation card', async () => {

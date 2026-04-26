@@ -86,6 +86,10 @@ Patrol-specific presentation helpers.
    for explicit provider/configuration settings, shared runtime internals, or
    other technical capability boundaries where the underlying ownership really
    is AI runtime rather than the Patrol product surface.
+6. Keep Patrol brand icon accessibility contextual: `PulsePatrolLogo` remains
+   label-bearing when the icon stands alone, but Patrol headings and actions
+   that already include visible Patrol text must render the logo as decorative
+   so accessible names do not repeat as `Pulse Patrol Patrol`.
 
 ## Current State
 
