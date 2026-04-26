@@ -25,7 +25,7 @@ const TIER_LABELS: Record<string, string> = {
   free: 'Community',
   relay: 'Relay',
   pro: 'Pro',
-  pro_plus: 'Pro+',
+  pro_plus: 'Legacy Pro+',
   pro_annual: 'Pro Annual',
   lifetime: 'Lifetime',
   cloud: 'Cloud',
@@ -36,8 +36,12 @@ const TIER_LABELS: Record<string, string> = {
 const SELF_HOSTED_PLAN_LABELS: Record<string, string> = {
   pro: 'Pulse Pro',
   pro_annual: 'Pulse Pro Annual',
-  pro_plus: 'Pulse Pro+',
+  pro_plus: 'Legacy Pulse Pro+',
   lifetime: 'Pulse Pro Lifetime',
+};
+
+const LEGACY_PLAN_VERSION_LABELS: Record<string, string> = {
+  pro_plus: 'Legacy Pro Plus',
 };
 
 const FEATURE_MIN_TIER_LABELS: Record<string, string> = {
@@ -221,6 +225,8 @@ export const formatLicensePlanVersion = (value?: string | null): string | null =
   if (!normalized) return null;
   const grandfathered = GRANDFATHERED_V5_PLAN_LABELS[normalized.toLowerCase()];
   if (grandfathered) return grandfathered;
+  const legacy = LEGACY_PLAN_VERSION_LABELS[normalized.toLowerCase()];
+  if (legacy) return legacy;
   const canonical = CLOUD_PLAN_LABELS[normalized.toLowerCase()];
   if (canonical) return canonical;
   return titleCaseDelimitedLabel(normalized);

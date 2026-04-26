@@ -34,11 +34,11 @@ import { SELF_HOSTED_PRO_BILLING_PRESENTATION } from '@/components/Settings/self
 describe('licensePresentation', () => {
   it('returns canonical tier labels', () => {
     expect(getLicenseTierLabel('free')).toBe('Community');
-    expect(getLicenseTierLabel('pro_plus')).toBe('Pro+');
+    expect(getLicenseTierLabel('pro_plus')).toBe('Legacy Pro+');
     expect(getLicenseTierLabel('enterprise')).toBe('Enterprise');
     expect(getLicenseTierLabel('custom_tier')).toBe('Custom Tier');
     expect(getSelfHostedPlanLabel('pro')).toBe('Pulse Pro');
-    expect(getSelfHostedPlanLabel('pro_plus')).toBe('Pulse Pro+');
+    expect(getSelfHostedPlanLabel('pro_plus')).toBe('Legacy Pulse Pro+');
     expect(getSelfHostedPlanLabel('lifetime')).toBe('Pulse Pro Lifetime');
     expect(getSelfHostedPlanLabel('relay')).toBe('Relay');
   });
@@ -173,7 +173,7 @@ describe('licensePresentation', () => {
   });
 
   it('formats plan versions and commercial migration notices canonically', () => {
-    expect(formatLicensePlanVersion('pro_plus')).toBe('Pro Plus');
+    expect(formatLicensePlanVersion('pro_plus')).toBe('Legacy Pro Plus');
     expect(formatLicensePlanVersion('cloud_founding')).toBe('Cloud Starter (Founding)');
     expect(formatLicensePlanVersion('msp_growth')).toBe('MSP Growth');
     expect(formatLicensePlanVersion('v5_pro_monthly_grandfathered')).toBe(
@@ -293,9 +293,9 @@ describe('licensePresentation', () => {
         displayableCapabilities: ['Pulse Relay (Remote Access)', 'Patrol Auto-Fix'],
       }),
     ).toMatchObject({
-      title: 'Current plan: Pulse Pro+',
+      title: 'Current plan: Legacy Pulse Pro+',
       body:
-        'Pulse Pro+ is active on this instance. Root-cause analysis, safe remediation, and 90-day history are unlocked right now.',
+        'Legacy Pulse Pro+ is active on this instance. Root-cause analysis, safe remediation, and 90-day history are unlocked right now.',
       unlockedFeaturesLabel: 'Primary capabilities',
       unlockedFeatures: ['Pulse Alert Analysis', 'Patrol Auto-Fix', '90-day metric history'],
     });

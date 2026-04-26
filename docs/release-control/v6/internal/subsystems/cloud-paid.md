@@ -415,7 +415,10 @@ Community limit enforcement.
    continuous, and only new v6 retail purchases or post-cancellation re-entry
    may take the current Community / Relay / Pro no-cap self-hosted packaging,
    with Pro+ remaining legacy continuity only.
-7. Keep persisted billing baselines and live recurring continuity distinct:
+7. Keep Pro+ app presentation continuity-only: customer-facing tier, plan, and
+   plan-version labels for `pro_plus` must include legacy framing while still
+   mapping the entitlement to the Pro runtime feature set.
+8. Keep persisted billing baselines and live recurring continuity distinct:
    `pkg/licensing/billing_state_normalization.go` must store the canonical
    monitored-system billing baseline for recognized grandfathered recurring
    v5/v1 Stripe plans so webhook persistence and admin-visible hosted billing
@@ -423,7 +426,7 @@ Community limit enforcement.
    `pkg/licensing/models.go`, and downstream runtime entitlement evaluation
    must strip that stored cap before enforcement so active recurring
    grandfathered continuity remains uncapped until cancellation.
-8. Keep legacy migration fallback continuity audit-only on self-hosted v6:
+9. Keep legacy migration fallback continuity audit-only on self-hosted v6:
    `legacy_migration_fallback` may preserve `plan_limit`,
    `grandfathered_floor`, and related support telemetry, but runtime status
    and entitlement enforcement must keep self-hosted monitoring uncapped.
@@ -431,17 +434,17 @@ Community limit enforcement.
    `max_monitored_systems` entitlement row, and
    `monitored_system_capacity.mode = unlimited` once runtime usage is
    available.
-9. Keep Stripe webhook idempotency state bounded in the control-plane
+10. Keep Stripe webhook idempotency state bounded in the control-plane
    registry: `internal/cloudcp/registry/registry.go` may retain `stripe_events`
    rows long enough to suppress duplicate deliveries and reclaim stale
    in-flight work, but it must prune expired processed or abandoned rows so
    webhook dedupe does not grow without bound on disk.
-10. Keep the maintained Pulse Account portal bundle source-synced with
+11. Keep the maintained Pulse Account portal bundle source-synced with
    `internal/cloudcp/portal/frontend/`: any slice that changes the portal
    frontend hash or emitted manifest must rebuild
    `internal/cloudcp/portal/dist/build_manifest.json` and keep
    `internal/cloudcp/portal/frontend_sync_test.go` green in the same change.
-10. Before GA, treat self-hosted core monitoring as free for homelab use:
+12. Before GA, treat self-hosted core monitoring as free for homelab use:
    monitored systems remain the canonical counted unit, but self-hosted paid
    value must come from optional extras, hosted convenience, business
    workflow, support, or similar non-core surfaces rather than using
@@ -450,7 +453,7 @@ Community limit enforcement.
    connection previews may describe count impact and active policy checks, but
    they must not use capacity-style titles or slash-style quota summaries that
    imply self-hosted monitoring volume is the product being sold.
-11. Keep migrated self-hosted Community/free billing state uncapped even when
+13. Keep migrated self-hosted Community/free billing state uncapped even when
    the persisted file still carries legacy v5 commercial limit keys:
    `pkg/licensing/billing_state_normalization.go` and
    `pkg/licensing/database_source.go` must scrub stale
@@ -459,7 +462,7 @@ Community limit enforcement.
    warning-banner payloads are built, while leaving non-community plan labels
    available for bounded hosted or legacy continuity contracts that still
    carry explicit monitored-system ceilings.
-12. Keep self-hosted commercial funnel stage ownership explicit:
+14. Keep self-hosted commercial funnel stage ownership explicit:
     `pkg/licensing/conversion_events.go`,
     `pkg/licensing/conversion_store.go`, and
     `frontend-modern/src/utils/upgradeMetrics.ts` own in-app `Plans & Billing`
@@ -469,7 +472,7 @@ Community limit enforcement.
     portal stages from referrer state, and the commercial service must keep
     those self-hosted handoffs on release track `v6` even while the public
     site remains on `v5` before GA.
-13. Keep local commercial funnel reporting inside the self-hosted privacy
+15. Keep local commercial funnel reporting inside the self-hosted privacy
     boundary: `internal/api/diagnostics.go` and
     `frontend-modern/src/components/Settings/DiagnosticsResultsPanel.tsx`
     may expose org-scoped local upgrade-metric summaries, daily buckets, and
@@ -477,7 +480,7 @@ Community limit enforcement.
     from the local conversion store instead of exporting those event rows to
     the commercial service or reconstructing them from hosted checkout
     telemetry.
-14. Keep ordinary self-hosted v6 commercial prompts opt-in. Cloud-paid runtime
+16. Keep ordinary self-hosted v6 commercial prompts opt-in. Cloud-paid runtime
     may keep checkout, activation, recovery, and support-only trial plumbing
     available for explicit handoffs and entitled installs, but default
     self-hosted browser surfaces must honor `presentationPolicy.hideUpgrade`
@@ -1495,7 +1498,10 @@ surface bundle summary and metric-history facts for current uncapped
 self-hosted tiers, so `commercialBillingModel.ts` and
 `useProLicensePanelState.ts` do not regress back to legacy guest-capacity or
 meter-style entitlement fields on retail Community, Relay, or Pro plans. Pro+
-may appear only as a legacy continuity tier.
+may appear only as a legacy continuity tier, and
+`frontend-modern/src/utils/licensePresentation.ts` must label `pro_plus`
+accordingly in tier, plan, and plan-version presentation instead of rendering
+it as a current public Pulse Pro+ package.
 The shared license presentation owner also holds self-hosted Pro settings
 trial-ended notice copy for `ProLicensePlanSection.tsx`; that surface must
 consume canonical helper notices instead of carrying inline upgrade copy or
