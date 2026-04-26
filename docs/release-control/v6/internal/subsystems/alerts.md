@@ -118,6 +118,11 @@ or QNAP md arrays are vendor-managed system volumes rather than customer-facing
 storage, and alerts runtime must use those shared rules both to suppress new
 RAID incidents and to clear stale suppressed alert IDs even after monitoring
 has already normalized those arrays out of canonical host state.
+Storage alert runtime also owns operator-facing resource labels for storage
+incidents. ZFS device alert labels must preserve raw device names such as
+`/dev/sda4`, but must not join pool and device labels with a raw slash because
+device paths can already begin with `/`; browser alert surfaces consume the
+runtime `resourceName` as authored rather than patching storage labels locally.
 
 Alert history persistence is also part of that canonical boundary. The history
 manager may choose the owned runtime data directory, but it must normalize that

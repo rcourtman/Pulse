@@ -6887,7 +6887,7 @@ func (m *Manager) checkZFSPoolHealth(storage models.Storage) {
 			AlertType:      "zfs-device",
 			SpecResourceID: storage.ID + "/zfs-pool:" + sanitizeHostComponent(pool.Name) + "/device:" + sanitizeHostComponent(device.Name),
 			ResourceID:     storage.ID,
-			ResourceName:   fmt.Sprintf("%s (%s/%s)", storage.Name, pool.Name, device.Name),
+			ResourceName:   formatZFSDeviceResourceName(storage.Name, pool.Name, device.Name),
 			ResourceType:   unifiedresources.ResourceTypeStorage,
 			Node:           storage.Node,
 			Instance:       storage.Instance,
@@ -6906,6 +6906,25 @@ func (m *Manager) checkZFSPoolHealth(storage models.Storage) {
 				Msg("ZFS device has issues")
 		}
 	}
+}
+
+func formatZFSDeviceResourceName(storageName, poolName, deviceName string) string {
+	storageName = strings.TrimSpace(storageName)
+	if storageName == "" {
+		storageName = "storage"
+	}
+
+	parts := make([]string, 0, 2)
+	if poolName = strings.TrimSpace(poolName); poolName != "" {
+		parts = append(parts, poolName)
+	}
+	if deviceName = strings.TrimSpace(deviceName); deviceName != "" {
+		parts = append(parts, deviceName)
+	}
+	if len(parts) == 0 {
+		return storageName
+	}
+	return fmt.Sprintf("%s (%s)", storageName, strings.Join(parts, ", "))
 }
 
 // clearAlert removes an alert if it exists

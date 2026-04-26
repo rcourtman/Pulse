@@ -11350,6 +11350,40 @@ func TestCheckZFSPoolHealth(t *testing.T) {
 		}
 	})
 
+	t.Run("device path resource name separates pool and device", func(t *testing.T) {
+		m := newTestManager(t)
+
+		storage := models.Storage{
+			ID:   "local-zfs",
+			Name: "local-zfs",
+			Node: "pve-node1",
+			ZFSPool: &models.ZFSPool{
+				Name:  "data",
+				State: "ONLINE",
+				Devices: []models.ZFSDevice{
+					{Name: "/dev/sda4", State: "ONLINE", ReadErrors: 3, WriteErrors: 0, ChecksumErrors: 5},
+				},
+			},
+		}
+
+		m.checkZFSPoolHealth(storage)
+
+		devicePathAlertID := buildCanonicalStateID(
+			"local-zfs/zfs-pool:data/device:dev-sda4",
+			"local-zfs/zfs-pool:data/device:dev-sda4-health",
+		)
+		m.mu.RLock()
+		alert := testRequireActiveAlert(t, m, devicePathAlertID)
+		m.mu.RUnlock()
+
+		if alert.ResourceName != "local-zfs (data, /dev/sda4)" {
+			t.Fatalf("expected resource name to preserve device path without path-joining labels, got %q", alert.ResourceName)
+		}
+		if strings.Contains(alert.ResourceName, "//") {
+			t.Fatalf("expected resource name not to contain doubled slash, got %q", alert.ResourceName)
+		}
+	})
+
 	t.Run("device in FAULTED state creates critical alert", func(t *testing.T) {
 		// t.Parallel()
 		m := newTestManager(t)
