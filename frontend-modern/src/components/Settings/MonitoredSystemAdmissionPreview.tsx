@@ -3,6 +3,7 @@ import type { MonitoredSystemLedgerPreviewResponse } from '@/api/monitoredSystem
 import { CalloutCard } from '@/components/shared/CalloutCard';
 import {
   formatMonitoredSystemSurfaceAttribution,
+  getMonitoredSystemAdmissionPreviewTitle,
   getMonitoredSystemAdmissionPreviewRequiredState,
 } from '@/utils/monitoredSystemPresentation';
 
@@ -26,21 +27,6 @@ const previewUsageDelta = (preview: MonitoredSystemLedgerPreviewResponse): numbe
 
 const previewTone = (preview: MonitoredSystemLedgerPreviewResponse | null) =>
   preview?.would_exceed_limit ? 'warning' : 'info';
-
-const previewTitle = (preview: MonitoredSystemLedgerPreviewResponse | null) => {
-  if (!preview) return 'Monitored-system impact';
-  if (preview.would_exceed_limit) {
-    return 'This change exceeds your monitored-system limit';
-  }
-  const delta = previewUsageDelta(preview);
-  if (delta > 0) {
-    return 'This change adds monitored systems';
-  }
-  if (delta < 0) {
-    return 'This change frees monitored-system capacity';
-  }
-  return 'This change reuses your current monitored-system capacity';
-};
 
 const previewSummary = (preview: MonitoredSystemLedgerPreviewResponse): string => {
   const before = formatUsage(preview.current_count, preview.limit);
@@ -94,7 +80,7 @@ export const MonitoredSystemAdmissionPreview: Component<MonitoredSystemAdmission
         {(preview) => (
           <CalloutCard
             tone={previewTone(preview())}
-            title={previewTitle(preview())}
+            title={getMonitoredSystemAdmissionPreviewTitle(preview())}
             description={
               <div class="space-y-3 text-sm">
                 <p>{previewSummary(preview())}</p>

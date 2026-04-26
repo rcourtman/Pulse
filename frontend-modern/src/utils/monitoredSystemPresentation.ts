@@ -90,6 +90,11 @@ const MONITORED_SYSTEM_LEDGER_PRESENTATION = {
     requiredTitle: 'Preview monitored-system impact before saving',
     requiredMessage:
       'Pulse must verify the monitored-system policy for this platform connection before it can be saved.',
+    fallbackTitle: 'Monitored-system impact',
+    exceedsPolicyTitle: 'This change exceeds the active monitored-system policy',
+    addsSystemsTitle: 'This change adds monitored systems',
+    removesSystemsTitle: 'This change removes monitored systems',
+    unchangedTitle: 'This change keeps monitored-system count unchanged',
     unavailableTitle: 'Monitored-system verification is temporarily unavailable',
     unavailableFallbackMessage:
       'Pulse cannot verify monitored-system policy right now, so this connection cannot be saved yet. Retry preview in a moment.',
@@ -167,6 +172,12 @@ export type MonitoredSystemAdmissionPreviewSaveState = {
   unavailableState?: MonitoredSystemAdmissionPreviewUnavailableState | null;
   error?: string | null;
   loading?: boolean | null;
+};
+
+export type MonitoredSystemAdmissionPreviewTitleInput = {
+  current_count?: number | null;
+  projected_count?: number | null;
+  would_exceed_limit?: boolean | null;
 };
 
 export function getMonitoredSystemLedgerPresentation() {
@@ -589,6 +600,28 @@ export function getMonitoredSystemAdmissionPreviewRequiredState(): {
     title: MONITORED_SYSTEM_LEDGER_PRESENTATION.admissionPreview.requiredTitle,
     message: MONITORED_SYSTEM_LEDGER_PRESENTATION.admissionPreview.requiredMessage,
   };
+}
+
+export function getMonitoredSystemAdmissionPreviewTitle(
+  preview: MonitoredSystemAdmissionPreviewTitleInput | null | undefined,
+): string {
+  const presentation = MONITORED_SYSTEM_LEDGER_PRESENTATION.admissionPreview;
+  if (!preview) return presentation.fallbackTitle;
+  if (preview.would_exceed_limit) return presentation.exceedsPolicyTitle;
+
+  const current =
+    typeof preview.current_count === 'number' && Number.isFinite(preview.current_count)
+      ? preview.current_count
+      : 0;
+  const projected =
+    typeof preview.projected_count === 'number' && Number.isFinite(preview.projected_count)
+      ? preview.projected_count
+      : current;
+  const delta = projected - current;
+
+  if (delta > 0) return presentation.addsSystemsTitle;
+  if (delta < 0) return presentation.removesSystemsTitle;
+  return presentation.unchangedTitle;
 }
 
 export function formatMonitoredSystemAdmissionPreviewUnavailableMessage(reason?: string): string {

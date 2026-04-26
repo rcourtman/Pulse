@@ -21,6 +21,7 @@ import {
   formatMonitoredSystemSurfaceAttribution,
   getMonitoredSystemAdmissionPreviewRequiredState,
   getMonitoredSystemAdmissionPreviewSaveBlockedMessage,
+  getMonitoredSystemAdmissionPreviewTitle,
   getMonitoredSystemAdmissionPreviewUnavailableTitle,
   getMonitoredSystemCountingDetailsToggleLabel,
   getMonitoredSystemDisclosureDefinition,
@@ -132,6 +133,11 @@ describe('monitoredSystemPresentation', () => {
         requiredTitle: 'Preview monitored-system impact before saving',
         requiredMessage:
           'Pulse must verify the monitored-system policy for this platform connection before it can be saved.',
+        fallbackTitle: 'Monitored-system impact',
+        exceedsPolicyTitle: 'This change exceeds the active monitored-system policy',
+        addsSystemsTitle: 'This change adds monitored systems',
+        removesSystemsTitle: 'This change removes monitored systems',
+        unchangedTitle: 'This change keeps monitored-system count unchanged',
         unavailableTitle: 'Monitored-system verification is temporarily unavailable',
         unavailableFallbackMessage:
           'Pulse cannot verify monitored-system policy right now, so this connection cannot be saved yet. Retry preview in a moment.',
@@ -494,6 +500,38 @@ describe('monitoredSystemPresentation', () => {
         preview: { would_exceed_limit: false },
       }),
     ).toBeNull();
+  });
+
+  it('returns neutral monitored-system admission preview titles', () => {
+    expect(getMonitoredSystemAdmissionPreviewTitle(null)).toBe('Monitored-system impact');
+    expect(
+      getMonitoredSystemAdmissionPreviewTitle({
+        current_count: 4,
+        projected_count: 5,
+        would_exceed_limit: false,
+      }),
+    ).toBe('This change adds monitored systems');
+    expect(
+      getMonitoredSystemAdmissionPreviewTitle({
+        current_count: 4,
+        projected_count: 3,
+        would_exceed_limit: false,
+      }),
+    ).toBe('This change removes monitored systems');
+    expect(
+      getMonitoredSystemAdmissionPreviewTitle({
+        current_count: 4,
+        projected_count: 4,
+        would_exceed_limit: false,
+      }),
+    ).toBe('This change keeps monitored-system count unchanged');
+    expect(
+      getMonitoredSystemAdmissionPreviewTitle({
+        current_count: 4,
+        projected_count: 11,
+        would_exceed_limit: true,
+      }),
+    ).toBe('This change exceeds the active monitored-system policy');
   });
 
   it('returns canonical monitored-system ledger unavailable copy', () => {

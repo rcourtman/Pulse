@@ -446,6 +446,10 @@ Community limit enforcement.
    value must come from optional extras, hosted convenience, business
    workflow, support, or similar non-core surfaces rather than using
    monitored-system volume itself as the primary paid gate.
+   Monitored-system admission-preview copy must follow the same rule: ordinary
+   connection previews may describe count impact and active policy checks, but
+   they must not use capacity-style titles that imply self-hosted monitoring
+   volume is the product being sold.
 11. Keep migrated self-hosted Community/free billing state uncapped even when
    the persisted file still carries legacy v5 commercial limit keys:
    `pkg/licensing/billing_state_normalization.go` and

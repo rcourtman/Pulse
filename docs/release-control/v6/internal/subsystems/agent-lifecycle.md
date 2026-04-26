@@ -1522,6 +1522,10 @@ setup-local transport fields. `frontend-modern/src/components/Settings/Monitored
 is the shared shell for that explanation inside platform-connections settings,
 so provider-specific panels must not fork their own monitored-system preview
 copy or inline projected-usage rendering.
+That shared shell must use neutral count-impact language for ordinary platform
+connection previews. Finite policy failures may say the active policy would be
+exceeded, but unchanged or removal previews should not describe "capacity" as
+the operator-facing mental model for self-hosted monitoring.
 That same commercial readiness boundary now also assumes settled canonical
 usage, not the first non-nil monitor view. Lifecycle-owned setup or first-host
 surfaces may not seal migrated-v5 continuity, display counted-system totals as

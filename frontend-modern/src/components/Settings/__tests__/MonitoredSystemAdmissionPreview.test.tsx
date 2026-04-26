@@ -25,18 +25,18 @@ describe('MonitoredSystemAdmissionPreview', () => {
     cleanup();
   });
 
-  it('describes unchanged usage when a preview has no capacity impact', () => {
+  it('describes unchanged usage when a preview has no count impact', () => {
     render(() => <MonitoredSystemAdmissionPreview preview={buildPreview()} />);
 
     expect(
-      screen.getByText('This change reuses your current monitored-system capacity'),
+      screen.getByText('This change keeps monitored-system count unchanged'),
     ).toBeInTheDocument();
     expect(
       screen.getByText('Current usage 4 / 10. Saving this change keeps usage at 4 / 10.'),
     ).toBeInTheDocument();
   });
 
-  it('describes freed capacity when a preview reduces monitored-system usage', () => {
+  it('describes removed systems when a preview reduces monitored-system usage', () => {
     render(() => (
       <MonitoredSystemAdmissionPreview
         preview={buildPreview({
@@ -47,7 +47,7 @@ describe('MonitoredSystemAdmissionPreview', () => {
       />
     ));
 
-    expect(screen.getByText('This change frees monitored-system capacity')).toBeInTheDocument();
+    expect(screen.getByText('This change removes monitored systems')).toBeInTheDocument();
     expect(
       screen.getByText('Current usage 1 / 10. Saving this change would move usage to 0 / 10 (-1).'),
     ).toBeInTheDocument();

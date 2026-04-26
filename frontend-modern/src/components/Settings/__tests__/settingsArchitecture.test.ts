@@ -17,6 +17,7 @@ import infrastructureSourceManagerSource from '../InfrastructureSourceManager.ts
 import infrastructureSourcePickerSource from '../InfrastructureSourcePicker.tsx?raw';
 import infrastructureWorkspaceModelSource from '../infrastructureWorkspaceModel.ts?raw';
 import connectionsTableSource from '../ConnectionsTable.tsx?raw';
+import monitoredSystemAdmissionPreviewSource from '../MonitoredSystemAdmissionPreview.tsx?raw';
 import connectionEditorSource from '../ConnectionEditor/ConnectionEditor.tsx?raw';
 import addressProbeStepSource from '../ConnectionEditor/AddressProbeStep.tsx?raw';
 import connectionEditorStateSource from '../ConnectionEditor/useConnectionEditor.ts?raw';
@@ -218,6 +219,15 @@ describe('settings architecture guardrails', () => {
     expect(infrastructureSourceManagerSource).toContain('Infrastructure systems');
     expect(infrastructureSourceManagerSource).toContain('Run discovery');
     expect(infrastructureSourceManagerSource).toContain('Discovery settings');
+    expect(monitoredSystemAdmissionPreviewSource).toContain(
+      'getMonitoredSystemAdmissionPreviewTitle',
+    );
+    expect(monitoredSystemAdmissionPreviewSource).not.toContain(
+      'reuses your current monitored-system capacity',
+    );
+    expect(monitoredSystemAdmissionPreviewSource).not.toContain(
+      'frees monitored-system capacity',
+    );
     expect(infrastructureSourceManagerSource).toContain(
       "Add, discover, and verify the platform APIs plus Pulse Agent telemetry that make up Pulse's infrastructure model.",
     );
