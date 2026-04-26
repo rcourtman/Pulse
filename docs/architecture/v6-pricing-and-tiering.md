@@ -19,10 +19,9 @@ align with this document. If there is a conflict, this document wins.
 1. **Free attracts, paid converts.** The free tier must be good enough to get users in the
    door, while paid tiers must add obvious operational value for serious users.
 2. **Gate on action, not information.** Self-hosted AI Patrol is BYOK in steady state,
-   with one Patrol-only quickstart allowance for activated or trial-backed installs during
-   first-run activation. We never cap how many times users can run Patrol through their
-   own API keys. The paid gate is on auto-execution of fixes, not on analysis or
-   suggestions.
+   with one optional Patrol-only quickstart allowance after explicit Pulse Account
+   activation. We never cap how many times users can run Patrol through their own API
+   keys. The paid gate is on auto-execution of fixes, not on analysis or suggestions.
 3. **Smooth upgrade ladder.** No large price gaps. Every step up has a clear reason.
 4. **Simple to understand.** A homelabber should know which tier is right for them in
    under 10 seconds.
@@ -105,8 +104,8 @@ with self-hosted commercial surfaces treating core monitoring as unlimited.
 | SSO | Basic OIDC |
 | Update notifications | Yes |
 | Metrics history | **7 days** |
-| AI Patrol | Monitor + root-cause summaries + fix suggestions (BYOK by default, with Patrol quickstart on activated or trial-backed installs) |
-| AI Quickstart Credits | **25 hosted Patrol runs** (activated or trial-backed installs only; no API key needed, Patrol only, powered by MiniMax 2.5M) |
+| AI Patrol | Monitor + root-cause summaries + fix suggestions (BYOK by default, with optional Patrol quickstart after explicit Pulse Account activation) |
+| AI Quickstart Credits | **25 hosted Patrol runs** (explicit Pulse Account activation only; no API key needed, Patrol only, powered by MiniMax 2.5M) |
 | Patrol Auto-Fix | **No** (must apply fixes manually) |
 | Alert-triggered root-cause analysis | No |
 | Relay | No |
@@ -120,13 +119,14 @@ with self-hosted commercial surfaces treating core monitoring as unlimited.
 
 **AI Patrol in free tier:** Two modes of operation:
 
-1. **Quickstart Credits (Patrol only, no API key needed):** Activated or trial-backed
-   installs with the server-verified installation identity get 25 hosted Patrol runs
-   powered by MiniMax 2.5M. This gives users a bounded way to try Patrol before adding a
-   provider. Unactivated Community installs start a trial, activate, or use their own API
-   key instead. After credits are exhausted, users connect their own API key to continue
-   self-hosted Patrol. Quickstart is activation support only: it is not a general hosted
-   chat entitlement and it does not replace BYOK for ongoing self-hosted AI use.
+1. **Quickstart Credits (Patrol only, no API key needed):** Installs with an
+   explicit Pulse Account activation and server-verified installation identity get
+   25 hosted Patrol runs powered by MiniMax 2.5M. This gives users who deliberately
+   enter the commercial/account path a bounded way to try Patrol before adding a
+   provider. Community installs that do not activate continue with their own API key
+   instead. After credits are exhausted, users connect their own API key to continue
+   self-hosted Patrol. Quickstart is activation support only: it is not a general
+   hosted chat entitlement and it does not replace BYOK for ongoing self-hosted AI use.
 
 2. **BYOK (after credits or by choice):** Users provide their own API key
    (OpenAI/Anthropic/etc.). No commercial quota — it's their API key, their money. Only
@@ -374,7 +374,8 @@ want to self-host.
 
 - **Duration:** 14 days
 - **Credit card:** Not required
-- **Available on:** Pro, Cloud, and legacy Pro+ continuity where applicable
+- **Available on:** Pro and hosted Cloud. Legacy Pro+ continuity may still satisfy
+  the same runtime capability for existing holders, but it is not a public plan.
 - **Not available on:** Relay (cheap enough to just buy)
 - **Features during trial:** Full Pro capabilities
 - **Activation paths:**
@@ -499,7 +500,7 @@ explain monitored-system identity:
 
 ### Pulse runtime
 
-- [x] Treat self-hosted Community / Relay / Pro / Pro+ tier defaults as unlimited core monitoring
+- [x] Treat self-hosted Community / Relay / Pro and legacy Pro+ continuity defaults as unlimited core monitoring
 - [x] Preserve grandfathered v5 recurring plans as uncapped continuity states while subscriptions remain active
 - [x] Keep hosted Cloud / MSP capacity out of static self-hosted tier defaults and in plan-specific license claims
 - [ ] Keep refining monitored-system identity and ledger truth for inventory, hosted/MSP limits, and support workflows
@@ -553,4 +554,4 @@ explain monitored-system identity:
 | 2026-02-25 | Changed counting to agents-only model. Only installed Pulse Unified Agents count toward limits. PVE/PBS/PMG/Docker/K8s connections and discovered resources don't count. This makes limits much more generous in practice (5 agents can monitor an entire multi-node cluster). | Richard + Claude |
 | 2026-02-26 | Updated Code Changes Required section — marked Pulse core backend and frontend as DONE, narrowed remaining work to license server (pulse-pro) and cloud control plane. | Claude |
 | 2026-02-26 | Marked license server work as DONE (Stripe products created, max_nodes→max_agents complete, plan definitions configured, tests added). Only Cloud control plane Stripe products remain. | Claude |
-| 2026-02-27 | Frontend gating audit completed. Backend enforcement is correct for all features. 5 frontend UX gaps identified (ReportingPanel missing license check, several panels missing upgrade links/trial buttons). Details in `feature-capability-audit-2026-02.md` section 9 and `ENTITLEMENT_MATRIX.md` "Frontend Gating Status" section. | Claude |
+| 2026-02-27 | Frontend gating audit completed. Backend enforcement is correct for all features. Historical frontend UX gaps were identified before the later free-first commercial-surface policy narrowed where upgrade handoffs belong. Details in `feature-capability-audit-2026-02.md` section 9. | Claude |

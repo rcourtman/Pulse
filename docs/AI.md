@@ -1,6 +1,6 @@
 # Pulse AI
 
-Pulse Patrol is available to everyone on the Community plan with BYOK (your own AI provider). Pro, Pro+, and Cloud unlock auto-fix and advanced analysis. Learn more at <https://pulserelay.pro> or see [PULSE_PRO.md](PULSE_PRO.md).
+Pulse Patrol is available to everyone on the Community plan with BYOK (your own AI provider). Pro adds auto-fix and advanced operations analysis, while hosted Cloud carries those capabilities for hosted environments. Learn more at <https://pulserelay.pro> or see [PULSE_PRO.md](PULSE_PRO.md).
 
 ---
 
@@ -168,7 +168,7 @@ Patrol supports three autonomy modes that control how much action it can take:
 |------|----------|------|
 | **Monitor** | Detect issues only. No investigation or fixes. | Community (BYOK) |
 | **Investigate** | Investigates findings and proposes fixes. All fixes require approval before execution. | Community (BYOK) |
-| **Auto-fix** | Automatically fixes issues and verifies results. Critical findings still require approval by default. | Pro / Pro+ / Cloud |
+| **Auto-fix** | Automatically fixes issues and verifies results. Critical findings still require approval by default. | Pro / hosted Cloud |
 
 ### Investigation Flow
 
@@ -275,7 +275,7 @@ The assistant enforces multiple safety gates:
 |-------|----------|---------|
 | **Read-only** | AI can observe and query data only | Community |
 | **Controlled** | AI asks for approval before executing commands | Community |
-| **Autonomous** | AI executes actions without prompting | Pro / Pro+ / Cloud |
+| **Autonomous** | AI executes actions without prompting | Pro / hosted Cloud |
 
 ### Using Approvals (Controlled Mode)
 
@@ -473,4 +473,4 @@ Pulse tracks token usage and costs:
 
 - [Architecture: Pulse Assistant (Safety Gates)](architecture/pulse-assistant.md) — Detailed FSM states, tool protocol, and invariants
 - [API Reference](API.md) — Complete API endpoint documentation
-- [Plans and entitlements](PULSE_PRO.md) — Community/Relay/Pro/Pro+/Cloud features and licensing
+- [Plans and entitlements](PULSE_PRO.md) — Community/Relay/Pro/Cloud features and licensing

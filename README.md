@@ -46,8 +46,8 @@ Power-user shortcuts:
 
 ### AI-Powered
 - **Chat Assistant (BYOK)**: Ask questions about your infrastructure in natural language
-- **Patrol**: Background health checks that generate findings on a schedule. Activated or trial-backed installs can use 25 Patrol quickstart runs with no API key for initial Patrol setup; otherwise self-hosted use is BYOK.
-- **Alert Analysis (Pro/Pro+/Cloud)**: Optional AI analysis when alerts fire
+- **Patrol**: Background health checks that generate findings on a schedule. Community self-hosted installs can run Patrol with your own AI provider, and optional managed quickstart runs are available only after explicit Pulse Account activation.
+- **Alert Analysis (Pro / hosted Cloud)**: Optional AI analysis when alerts fire
 - **Cost Tracking**: Track usage and costs per provider/model
 
 ### Multi-Platform
@@ -168,11 +168,11 @@ collected. VMs, containers, pods, disks, backups, and other child resources
 under that system are included rather than counted separately, but that count is
 no longer the self-hosted paid gate.
 
-Community keeps Patrol available with BYOK. Activated or trial-backed installs can also use
-Patrol quickstart for first-run activation: 25 Patrol runs with no API key on a
-server-verified install. Without activation, self-hosted Patrol continues with your
-configured provider. Relay remains the convenience tier, and Pro is the paid
-operations tier.
+Community keeps Patrol available with BYOK. Managed Patrol quickstart is an
+optional Pulse Account activation path: 25 server-verified Patrol runs with no
+API key for first-run setup. It is not required for Community monitoring or
+steady-state self-hosted Patrol. Relay remains the convenience tier, and Pro is
+the paid operations tier.
 
 Runtime-aligned capability summary:
 
@@ -198,15 +198,15 @@ Pulse Patrol runs on your schedule (every 10 minutes to every 7 days, default 6 
 - Clock drift across cluster nodes
 - Container health check failures
 
-On self-hosted installs, Pulse Patrol's steady-state path uses your configured provider
-(BYOK) from your Pulse server. The one hosted exception is Patrol quickstart: activated or
-trial-backed installs get 25 Patrol runs through the managed quickstart proxy so you can
-try Patrol before adding an API key. Unactivated Community installs should activate, start
-a trial, or use BYOK. Chat Assistant remains BYOK.
+On self-hosted installs, Pulse Patrol's steady-state path uses your configured
+provider (BYOK) from your Pulse server. The managed exception is optional Patrol
+quickstart: if you explicitly activate through Pulse Account, Pulse can use 25
+managed Patrol runs for first-run setup before you add an API key. Otherwise,
+Community installs continue with BYOK. Chat Assistant remains BYOK.
 
 Technical highlights:
 - Cross-system context (nodes, VMs, backups, containers, and metrics history)
-- LLM analysis with your provider + alert-triggered root-cause investigations (Pro/Pro+/Cloud)
+- LLM analysis with your provider plus alert-triggered root-cause investigations (Pro / hosted Cloud)
 - Optional auto-fix with command safety policies and audit trail
 - Centralized agent profiles for consistent fleet settings
 

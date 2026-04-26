@@ -17,6 +17,7 @@ User-facing plans map to internal tiers as follows:
 
 Notes:
 - `lifetime` keeps the same runtime feature set as Pro, but lifetime and grandfathered recurring legacy entitlements remain uncapped for monitored systems and guest access. Other migrated legacy paid installs can still carry cohort continuity metadata for support and audit, but self-hosted monitoring volume is no longer the paid gate.
+- `pro_plus` remains a legacy compatibility tier for existing holders. It is not a current public self-hosted plan because monitored-system volume is no longer the paid boundary.
 - Items marked **Cloud*** require the `enterprise` tier rather than the base `msp` tier.
 - If you are self-hosting, you can use capability keys and `GET /api/license/features` to discover exactly what is active in your instance.
 
@@ -53,7 +54,10 @@ Not counted separately:
 - other child resources under a counted top-level system
 
 Runtime rules:
-- API-backed monitoring and agent-backed monitoring consume the same cap.
+- API-backed monitoring and agent-backed monitoring use the same counted-system
+  model. Self-hosted public plans leave core monitoring unlimited; finite
+  capacity policies apply only where a hosted, enterprise, or explicit
+  compatibility policy says so.
 - If the same system is seen through both paths, it counts once.
 - Deduplication follows canonical unified-resource identity rather than transport-specific state.
 
@@ -114,24 +118,24 @@ Legend:
 
 This matrix is derived from the canonical table in `docs/architecture/ENTITLEMENT_MATRIX.md` plus runtime history/limit semantics exposed through entitlements.
 
-| Constant | Capability Key | Display Name | Community | Relay | Pro | Pro+ | Cloud | Primary Gating Mechanism / Notes |
-|---|---|---|:---:|:---:|:---:|:---:|:---:|---|
-| `FeatureAIPatrol` | `ai_patrol` | Pulse Patrol (Background Health Checks) | Y | Y | Y | Y | Y | Patrol itself is available on Community with BYOK. Activated or trial-backed installs can use 25 Patrol quickstart runs with no API key for first-run activation. Higher-autonomy outcomes and fix execution are separately gated. |
-| `FeatureRelay` | `relay` | Remote Access (Mobile Relay) | N | Y | Y | Y | Y | API route gating via `RequireLicenseFeature(..., relay, ...)` for relay settings and onboarding endpoints. |
-| `FeatureAIAlerts` | `ai_alerts` | Alert-Triggered Root-Cause Analysis | N | N | Y | Y | Y | API route gating via `RequireLicenseFeature(..., ai_alerts, ...)`. |
-| `FeatureAIAutoFix` | `ai_autofix` | Pulse Patrol Auto-Fix | N | N | Y | Y | Y | Required for fix execution and higher-autonomy actions. |
-| `FeatureKubernetesAI` | `kubernetes_ai` | Kubernetes AI Analysis (Compatibility) | N | N | Y | Y | Y | Legacy compatibility gate for `/api/ai/kubernetes/analyze`; not a primary marketed v6 Pro plan pillar. |
-| `FeatureAgentProfiles` | `agent_profiles` | Centralized Agent Profiles | N | N | Y | Y | Y | API route gating via `RequireLicenseFeature(..., agent_profiles, ...)`. |
-| `FeatureUpdateAlerts` | `update_alerts` | Update Alerts (Container/Package Updates) | Y | Y | Y | Y | Y | Included in Community tier per `TierFeatures[TierFree]`. |
-| `FeatureSSO` | `sso` | Basic SSO (OIDC) | Y | Y | Y | Y | Y | Basic SSO is included in Community tier. |
-| `FeatureAdvancedSSO` | `advanced_sso` | Advanced SSO (SAML/Multi-Provider) | N | N | Y | Y | Y | Used to gate advanced SSO capabilities such as SAML and multi-provider flows. |
-| `FeatureRBAC` | `rbac` | Role-Based Access Control (RBAC) | N | N | Y | Y | Y | API route gating via `RequireLicenseFeature(..., rbac, ...)`. |
-| `FeatureAuditLogging` | `audit_logging` | Audit Logging | N | N | Y | Y | Y | API route gating for audit query, verify, and export endpoints. |
-| `FeatureAdvancedReporting` | `advanced_reporting` | PDF/CSV Reporting | N | N | Y | Y | Y | API route gating via `RequireLicenseFeature(..., advanced_reporting, ...)`. |
-| `FeatureLongTermMetrics` | `long_term_metrics` | Extended Metric History | N | Y | Y | Y | Y | Runtime history limits are tier-aware through `max_history_days`: Community `7`, Relay `14`, Pro/Pro+ `90`. |
-| `FeatureMultiUser` | `multi_user` | Multi-User Mode | N | N | N | N | Y* | Cloud Enterprise only. |
-| `FeatureMultiTenant` | `multi_tenant` | Multi-Tenant Mode | N | N | N | N | Y* | Requires both `PULSE_MULTI_TENANT_ENABLED=true` and the `multi_tenant` capability for non-default orgs. |
-| `FeatureUnlimited` | `unlimited` | Unlimited Instances | N | N | N | N | Y | Used for hosted volume and instance limit removal. |
+| Constant | Capability Key | Display Name | Community | Relay | Pro | Cloud | Primary Gating Mechanism / Notes |
+|---|---|---|:---:|:---:|:---:|:---:|---|
+| `FeatureAIPatrol` | `ai_patrol` | Pulse Patrol (Background Health Checks) | Y | Y | Y | Y | Patrol itself is available on Community with BYOK. Optional managed quickstart runs are available only after explicit Pulse Account activation. Higher-autonomy outcomes and fix execution are separately gated. |
+| `FeatureRelay` | `relay` | Remote Access (Mobile Relay) | N | Y | Y | Y | API route gating via `RequireLicenseFeature(..., relay, ...)` for relay settings and onboarding endpoints. |
+| `FeatureAIAlerts` | `ai_alerts` | Alert-Triggered Root-Cause Analysis | N | N | Y | Y | API route gating via `RequireLicenseFeature(..., ai_alerts, ...)`. |
+| `FeatureAIAutoFix` | `ai_autofix` | Pulse Patrol Auto-Fix | N | N | Y | Y | Required for fix execution and higher-autonomy actions. |
+| `FeatureKubernetesAI` | `kubernetes_ai` | Kubernetes AI Analysis (Compatibility) | N | N | Y | Y | Legacy compatibility gate for `/api/ai/kubernetes/analyze`; not a primary marketed v6 Pro plan pillar. |
+| `FeatureAgentProfiles` | `agent_profiles` | Centralized Agent Profiles | N | N | Y | Y | API route gating via `RequireLicenseFeature(..., agent_profiles, ...)`. |
+| `FeatureUpdateAlerts` | `update_alerts` | Update Alerts (Container/Package Updates) | Y | Y | Y | Y | Included in Community tier per `TierFeatures[TierFree]`. |
+| `FeatureSSO` | `sso` | Basic SSO (OIDC) | Y | Y | Y | Y | Basic SSO is included in Community tier. |
+| `FeatureAdvancedSSO` | `advanced_sso` | Advanced SSO (SAML/Multi-Provider) | N | N | Y | Y | Used to gate advanced SSO capabilities such as SAML and multi-provider flows. |
+| `FeatureRBAC` | `rbac` | Role-Based Access Control (RBAC) | N | N | Y | Y | API route gating via `RequireLicenseFeature(..., rbac, ...)`. |
+| `FeatureAuditLogging` | `audit_logging` | Audit Logging | N | N | Y | Y | API route gating for audit query, verify, and export endpoints. |
+| `FeatureAdvancedReporting` | `advanced_reporting` | PDF/CSV Reporting | N | N | Y | Y | API route gating via `RequireLicenseFeature(..., advanced_reporting, ...)`. |
+| `FeatureLongTermMetrics` | `long_term_metrics` | Extended Metric History | N | Y | Y | Y | Runtime history limits are tier-aware through `max_history_days`: Community `7`, Relay `14`, Pro `90`. |
+| `FeatureMultiUser` | `multi_user` | Multi-User Mode | N | N | N | Y* | Cloud Enterprise only. |
+| `FeatureMultiTenant` | `multi_tenant` | Multi-Tenant Mode | N | N | N | Y* | Requires both `PULSE_MULTI_TENANT_ENABLED=true` and the `multi_tenant` capability for non-default orgs. |
+| `FeatureUnlimited` | `unlimited` | Hosted Capacity Policy | N | N | N | Y | Hosted/enterprise capacity policy only; not a self-hosted core monitoring gate. |
 
 ## Autonomy Levels (AI Safety)
 
@@ -141,8 +145,8 @@ Patrol and the Assistant support tiered autonomy:
 |---|---|---|
 | **Monitor** | Detect issues only. No investigation or fixes. | Community / Relay |
 | **Investigate** | Investigates findings and proposes fixes. All fixes require approval. | Community / Relay |
-| **Auto-fix** | Automatically fixes issues and verifies. Critical findings require approval by default. | Pro / Pro+ / Cloud |
-| **Full autonomy** | Auto-fix for all findings including critical, without approval (explicit toggle). | Pro / Pro+ / Cloud |
+| **Auto-fix** | Automatically fixes issues and verifies. Critical findings require approval by default. | Pro / hosted Cloud |
+| **Full autonomy** | Auto-fix for all findings including critical, without approval (explicit toggle). | Pro / hosted Cloud |
 
 ## What You Get (By Plan)
 
@@ -150,7 +154,7 @@ Patrol and the Assistant support tiered autonomy:
 - Unlimited self-hosted core monitoring.
 - 7-day history.
 - Pulse Patrol with BYOK.
-- Patrol quickstart after activation or trial: 25 Patrol runs with no API key on a server-verified install.
+- Optional Patrol quickstart after explicit Pulse Account activation: 25 Patrol runs with no API key on a server-verified install.
 - Quickstart is Patrol-only activation support, not a general hosted chat entitlement.
 - Basic SSO and update alerts.
 
