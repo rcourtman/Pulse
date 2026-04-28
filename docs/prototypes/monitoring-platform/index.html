@@ -1,0 +1,958 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Pulse Monitoring Prototype</title>
+    <style>
+      :root {
+        --bg: #f7f8fb;
+        --surface: #ffffff;
+        --surface-soft: #f1f4f8;
+        --line: #d8e0ec;
+        --text: #172033;
+        --muted: #667085;
+        --blue: #2563eb;
+        --green: #15803d;
+        --amber: #a16207;
+        --red: #c2410c;
+        --purple: #6d28d9;
+        --cyan: #0e7490;
+        --slate: #475569;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font: 14px/1.35 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+
+      button,
+      input {
+        font: inherit;
+      }
+
+      button {
+        border: 1px solid var(--line);
+        background: var(--surface);
+        color: var(--text);
+        border-radius: 6px;
+        padding: 7px 10px;
+        cursor: pointer;
+      }
+
+      button:hover,
+      button.active {
+        border-color: var(--blue);
+        background: #eef4ff;
+        color: var(--blue);
+      }
+
+      .page {
+        max-width: 1580px;
+        margin: 0 auto;
+        padding: 18px;
+      }
+
+      .header {
+        display: flex;
+        justify-content: space-between;
+        gap: 14px;
+        margin-bottom: 12px;
+      }
+
+      h1,
+      p {
+        margin: 0;
+      }
+
+      h1 {
+        font-size: 24px;
+        letter-spacing: 0;
+      }
+
+      .subtitle {
+        margin-top: 4px;
+        color: var(--muted);
+      }
+
+      .summary {
+        display: grid;
+        grid-template-columns: repeat(6, minmax(130px, 1fr));
+        gap: 10px;
+        margin-bottom: 12px;
+      }
+
+      .card {
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        box-shadow: 0 8px 24px rgba(16, 24, 40, 0.06);
+      }
+
+      .summary-card {
+        padding: 10px 12px;
+      }
+
+      .label {
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .big-number {
+        display: flex;
+        align-items: baseline;
+        gap: 6px;
+        margin-top: 4px;
+        font-size: 23px;
+        font-weight: 750;
+      }
+
+      .note {
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .toolbar {
+        display: grid;
+        gap: 9px;
+        padding: 10px;
+        margin-bottom: 12px;
+      }
+
+      .toolbar input {
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        padding: 8px 10px;
+        width: 100%;
+      }
+
+      .filter-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+
+      .filter-label {
+        width: 84px;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 700;
+        text-transform: uppercase;
+      }
+
+      .filter-buttons {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+
+      .table-card {
+        overflow: hidden;
+      }
+
+      .table-wrap {
+        overflow: auto;
+      }
+
+      table {
+        width: 100%;
+        min-width: 1240px;
+        border-collapse: collapse;
+      }
+
+      th,
+      td {
+        border-bottom: 1px solid var(--line);
+        padding: 7px 9px;
+        vertical-align: middle;
+        text-align: left;
+      }
+
+      th {
+        position: sticky;
+        top: 0;
+        z-index: 2;
+        background: var(--surface-soft);
+        color: var(--muted);
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0;
+      }
+
+      tbody tr {
+        background: var(--surface);
+      }
+
+      tbody tr:hover {
+        background: #eef4ff;
+      }
+
+      tr.host-row {
+        background: #fbfcfe;
+      }
+
+      tr.host-row td {
+        padding-top: 10px;
+        padding-bottom: 10px;
+      }
+
+      tr.group-row {
+        background: #f8fafc;
+      }
+
+      tr.leaf-row td {
+        padding-top: 5px;
+        padding-bottom: 5px;
+        font-size: 12px;
+      }
+
+      .resource-cell {
+        display: grid;
+        grid-template-columns: 8px minmax(0, 1fr);
+        align-items: center;
+        gap: 9px;
+        min-width: 0;
+      }
+
+      .rail {
+        width: 4px;
+        height: 32px;
+        border-radius: 999px;
+        background: var(--blue);
+      }
+
+      .depth-1 .rail {
+        height: 24px;
+        background: var(--slate);
+      }
+
+      .depth-2 .rail {
+        height: 18px;
+      }
+
+      .resource-main {
+        min-width: 0;
+      }
+
+      .resource-line {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        min-width: 0;
+      }
+
+      .name {
+        font-weight: 700;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .host-row .name {
+        font-size: 14px;
+      }
+
+      .group-row .name {
+        font-size: 13px;
+      }
+
+      .leaf-row .name {
+        font-size: 12px;
+        font-weight: 650;
+      }
+
+      .meta {
+        margin-top: 2px;
+        color: var(--muted);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .leaf-row .meta {
+        font-size: 11px;
+      }
+
+      .indent-0 {
+        padding-left: 0;
+      }
+
+      .indent-1 {
+        padding-left: 24px;
+      }
+
+      .indent-2 {
+        padding-left: 50px;
+      }
+
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        padding: 2px 7px;
+        font-size: 12px;
+        line-height: 1.25;
+        white-space: nowrap;
+      }
+
+      .platform-label {
+        display: block;
+        margin-top: 3px;
+        color: var(--muted);
+        font-size: 10px;
+        font-weight: 650;
+        text-transform: uppercase;
+      }
+
+      .host {
+        color: var(--blue);
+        background: #eff6ff;
+        border-color: #bfdbfe;
+      }
+
+      .workload {
+        color: var(--purple);
+        background: #f5f3ff;
+        border-color: #ddd6fe;
+      }
+
+      .storage {
+        color: var(--cyan);
+        background: #ecfeff;
+        border-color: #a5f3fc;
+      }
+
+      .recovery {
+        color: var(--slate);
+        background: #f8fafc;
+        border-color: #cbd5e1;
+      }
+
+      .ok {
+        color: var(--green);
+        background: #f0fdf4;
+        border-color: #bbf7d0;
+      }
+
+      .warning {
+        color: var(--amber);
+        background: #fffbeb;
+        border-color: #fde68a;
+      }
+
+      .critical {
+        color: var(--red);
+        background: #fff7ed;
+        border-color: #fed7aa;
+      }
+
+      .metric {
+        min-width: 88px;
+      }
+
+      .metric-label {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 3px;
+        font-size: 12px;
+      }
+
+      .leaf-row .metric-label {
+        font-size: 11px;
+      }
+
+      .track {
+        height: 6px;
+        border-radius: 999px;
+        background: #e6ebf2;
+        overflow: hidden;
+      }
+
+      .leaf-row .track {
+        height: 5px;
+      }
+
+      .fill {
+        height: 100%;
+        border-radius: inherit;
+        background: var(--green);
+      }
+
+      .fill.warning {
+        background: var(--amber);
+      }
+
+      .fill.critical {
+        background: var(--red);
+      }
+
+      .rollup-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(58px, 1fr));
+        gap: 5px;
+      }
+
+      .rollup {
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        padding: 3px 5px;
+        background: #fbfcfe;
+      }
+
+      .rollup strong {
+        display: block;
+        font-size: 12px;
+      }
+
+      .rollup span {
+        color: var(--muted);
+        font-size: 10px;
+      }
+
+      .signals {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+        max-width: 300px;
+      }
+
+      .signal {
+        max-width: 210px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .change {
+        color: var(--muted);
+        max-width: 230px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .empty-state {
+        padding: 26px;
+        text-align: center;
+        color: var(--muted);
+      }
+
+      @media (max-width: 1100px) {
+        .summary {
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+      }
+
+      @media (max-width: 700px) {
+        .page {
+          padding: 14px;
+        }
+
+        .header {
+          flex-direction: column;
+        }
+
+        .summary {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .toolbar input {
+          width: 100%;
+        }
+
+        .filter-row {
+          align-items: flex-start;
+        }
+
+        .filter-label {
+          width: 100%;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <header class="header">
+        <div>
+          <h1>Monitoring</h1>
+          <p class="subtitle">Everything is visible by default: hosts, child workloads, storage, recovery posture, and active signals in one scan-first hierarchy.</p>
+        </div>
+        <button id="simulateIncident" type="button">Simulate disk incident</button>
+      </header>
+
+      <section class="summary" aria-label="Monitoring summary">
+        <article class="card summary-card">
+          <div class="label">Hosts</div>
+          <div class="big-number"><span id="hostCount">0</span><span class="note">top level</span></div>
+        </article>
+        <article class="card summary-card">
+          <div class="label">Resources</div>
+          <div class="big-number"><span id="resourceCount">0</span><span class="note">visible rows</span></div>
+        </article>
+        <article class="card summary-card">
+          <div class="label">Needs Attention</div>
+          <div class="big-number"><span id="signalCount">0</span><span class="note">resources</span></div>
+        </article>
+        <article class="card summary-card">
+          <div class="label">Workloads</div>
+          <div class="big-number"><span id="workloadCount">0</span><span class="note">VMs, CTs, pods</span></div>
+        </article>
+        <article class="card summary-card">
+          <div class="label">Capacity Risk</div>
+          <div class="big-number"><span id="capacityRiskCount">0</span><span class="note">storage items</span></div>
+        </article>
+        <article class="card summary-card">
+          <div class="label">Recovery Gaps</div>
+          <div class="big-number"><span id="recoveryGapCount">0</span><span class="note">items</span></div>
+        </article>
+      </section>
+
+      <section class="card toolbar" aria-label="Monitoring filters">
+        <input id="search" type="search" placeholder="Search host, platform, VM, container, pod, pool, disk, backup job..." />
+        <div class="filter-row">
+          <span class="filter-label">Layer</span>
+          <div class="filter-buttons">
+            <button class="view active" type="button" data-view="all">All</button>
+            <button class="view" type="button" data-view="host">Hosts</button>
+            <button class="view" type="button" data-view="workload">Workloads</button>
+            <button class="view" type="button" data-view="storage">Storage</button>
+            <button class="view" type="button" data-view="recovery">Recovery</button>
+            <button class="view" type="button" data-view="problems">Problems</button>
+          </div>
+        </div>
+        <div class="filter-row">
+          <span class="filter-label">Platform</span>
+          <div class="filter-buttons">
+            <button class="platform active" type="button" data-platform="any">Any</button>
+            <button class="platform" type="button" data-platform="proxmox">Proxmox</button>
+            <button class="platform" type="button" data-platform="docker">Docker</button>
+            <button class="platform" type="button" data-platform="kubernetes">Kubernetes</button>
+            <button class="platform" type="button" data-platform="truenas">TrueNAS</button>
+          </div>
+        </div>
+        <div class="filter-row">
+          <span class="filter-label">Type</span>
+          <div class="filter-buttons">
+            <button class="type active" type="button" data-type="any">Any</button>
+            <button class="type" type="button" data-type="vm">VMs</button>
+            <button class="type" type="button" data-type="container">Containers</button>
+            <button class="type" type="button" data-type="pod">Pods</button>
+            <button class="type" type="button" data-type="disk">Disks</button>
+            <button class="type" type="button" data-type="pool">Pools</button>
+            <button class="type" type="button" data-type="backup">Backups</button>
+          </div>
+        </div>
+      </section>
+
+      <article class="card table-card">
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Resource</th>
+                <th>Platform / Kind</th>
+                <th>Status</th>
+                <th>CPU</th>
+                <th>Memory</th>
+                <th>Disk</th>
+                <th>Children</th>
+                <th>Recovery</th>
+                <th>Signals</th>
+                <th>Recent Change</th>
+              </tr>
+            </thead>
+            <tbody id="rows"></tbody>
+          </table>
+          <div id="empty" class="empty-state" hidden>No resources match this view.</div>
+        </div>
+      </article>
+    </main>
+
+    <script>
+      const tree = [
+        host("pve-a", "pve-a", "Proxmox host / cluster lab-pve", "proxmox", "critical", 86, 77, 94, "Stale", ["Root disk above 90%", "3 child resources affected"], ["local-zfs crossed critical threshold 11 minutes ago", "Kernel update waiting for reboot"], [
+          group("pve-a-workloads", "Workloads", "VMs and containers on pve-a", "workload", [
+            item("vm-pulse-db", "vm-210 pulse-db", "Postgres primary", "workload", "VM", "critical", 71, 93, 81, "Stale", ["Memory pressure", "Backup missed 2 runs"], ["Memory rose 18% over 24h"]),
+            item("vm-grafana", "vm-214 grafana", "Observability", "workload", "VM", "ok", 22, 41, 38, "Protected", [], ["Backup verified 02:12"]),
+            item("ct-redis", "ct-117 redis-cache", "LXC cache tier", "workload", "Container", "warning", 47, 78, 61, "Protected", ["Restarted 4 times in 6h"], ["Restart loop stopped 18 minutes ago"]),
+          ]),
+          group("pve-a-storage", "Storage", "Pools, volumes, and physical disks owned by pve-a", "storage", [
+            item("pool-local-zfs", "local-zfs", "ZFS pool", "storage", "Pool", "critical", null, null, 94, "N/A", ["Free space below 8%", "Snapshots growing faster than pruning"], ["Capacity rose 6% today"]),
+            item("disk-nvme0", "nvme0n1", "Samsung 970 EVO", "storage", "Disk", "warning", null, null, 88, "N/A", ["Temperature 69 C", "SMART warning count increased"], ["SMART media error count changed"]),
+          ]),
+          group("pve-a-recovery", "Recovery", "Backup and restore coverage for pve-a", "recovery", [
+            item("pbs-job-pve-a", "nightly-pve-a", "PBS job", "recovery", "Backup Job", "critical", null, null, null, "Missed", ["Last successful backup 38h ago"], ["Job failed after datastore timeout"]),
+          ]),
+        ]),
+        host("pve-b", "pve-b", "Proxmox host / cluster lab-pve", "proxmox", "ok", 38, 62, 70, "Protected", [], ["Ceph placement groups clean"], [
+          group("pve-b-workloads", "Workloads", "VMs and containers on pve-b", "workload", [
+            item("vm-homeassistant", "vm-104 home-assistant", "Automation", "workload", "VM", "ok", 12, 36, 44, "Protected", [], ["Backup verified 02:10"]),
+            item("ct-nginx", "ct-130 nginx-edge", "Reverse proxy", "workload", "Container", "warning", 64, 55, 47, "Protected", ["TLS certificate expires in 9 days"], ["New public route added"]),
+          ]),
+          group("pve-b-storage", "Storage", "Ceph and local storage", "storage", [
+            item("pool-ceph-fast", "ceph-fast", "Replicated SSD pool", "storage", "Pool", "ok", null, null, 63, "N/A", [], ["Placement groups clean"]),
+          ]),
+          group("pve-b-recovery", "Recovery", "PBS coverage", "recovery", [
+            item("pbs-job-pve-b", "nightly-pve-b", "PBS job", "recovery", "Backup Job", "ok", null, null, null, "Protected", [], ["Restore point verified overnight"]),
+          ]),
+        ]),
+        host("core-nas-01", "core-nas-01", "TrueNAS host / primary storage", "truenas", "warning", 31, 68, 79, "Protected", ["One disk has SMART pre-fail attribute"], ["Replication lag reduced to 14 minutes"], [
+          group("nas-storage", "Storage", "Pools, datasets, and physical disks", "storage", [
+            item("pool-tank", "tank", "Main ZFS pool", "storage", "Pool", "warning", null, null, 79, "Snapshots", ["One mirror member is degrading"], ["Scrub completed with 1 repaired block"]),
+            item("dataset-media", "tank/media", "Media dataset", "storage", "Dataset", "ok", null, null, 74, "Snapshots", [], ["Snapshot policy retained 31 points"]),
+            item("disk-sda", "sda", "8 TB Seagate", "storage", "Disk", "critical", null, null, 81, "N/A", ["SMART pre-fail attribute changed", "Replacement recommended"], ["Reallocated sector count increased"]),
+          ]),
+          group("nas-recovery", "Recovery", "Snapshot and replication posture", "recovery", [
+            item("replication-offsite", "offsite-replication", "TrueNAS replication", "recovery", "Replication", "ok", null, null, null, "Current", [], ["Last transfer completed 14 minutes ago"]),
+          ]),
+        ]),
+        host("edge-k8s", "edge-k8s", "Kubernetes cluster", "kubernetes", "warning", 58, 74, 66, "Partial", ["One namespace has degraded pods"], ["Deployment rollout paused by policy"], [
+          group("k8s-workloads", "Workloads", "Pods, deployments, and services", "workload", [
+            item("deploy-api", "deployment/api", "production namespace", "workload", "Deployment", "warning", 74, 82, null, "Manifest", ["2 pods not ready"], ["Rollout paused after readiness failures"]),
+            item("pod-api-7d9", "pod/api-7d9c8", "production/api", "workload", "Pod", "critical", 91, 89, null, "Ephemeral", ["CrashLoopBackOff", "CPU throttling"], ["Restarted 12 times"]),
+          ]),
+          group("k8s-storage", "Storage", "PVC and storage class health", "storage", [
+            item("pvc-api-data", "pvc/api-data", "production namespace", "storage", "Volume", "ok", null, null, 52, "Snapshot", [], ["Expanded from 100 GB to 150 GB"]),
+          ]),
+          group("k8s-recovery", "Recovery", "Cluster backup and policy status", "recovery", [
+            item("velero-prod", "velero-production", "Namespace backup policy", "recovery", "Backup Job", "warning", null, null, null, "Partial", ["One PVC snapshot skipped"], ["Policy changed to include secrets"]),
+          ]),
+        ]),
+        host("docker-host-01", "docker-host-01", "Agent host / Docker", "docker", "ok", 24, 45, 57, "Protected", [], ["Agent upgraded to 6.0.0-rc"], [
+          group("docker-workloads", "Workloads", "Docker containers", "workload", [
+            item("container-immich", "container/immich", "Photo service", "workload", "Container", "ok", 33, 66, 58, "Protected", [], ["Image updated 3 days ago"]),
+            item("container-paperless", "container/paperless", "Document service", "workload", "Container", "ok", 17, 52, 49, "Protected", [], ["No drift detected"]),
+          ]),
+          group("docker-storage", "Storage", "Volumes and disk usage", "storage", [
+            item("volume-immich-library", "volume/immich-library", "Local Docker volume", "storage", "Volume", "warning", null, null, 83, "Protected", ["Projected to fill in 18 days"], ["Growth trend increased this week"]),
+          ]),
+          group("docker-recovery", "Recovery", "Container backup jobs", "recovery", [
+            item("restic-docker", "restic-docker-volumes", "Volume backup job", "recovery", "Backup Job", "ok", null, null, null, "Protected", [], ["Last backup completed 03:40"]),
+          ]),
+        ]),
+      ];
+
+      assignInheritedPlatforms(tree);
+
+      let view = "all";
+      let platformView = "any";
+      let typeView = "any";
+      let query = "";
+
+      function host(id, name, subtitle, platform, status, cpu, memory, disk, recovery, signals, changes, children) {
+        return { id, name, subtitle, platform, domain: "host", kind: "Host", status, cpu, memory, disk, recovery, signals, changes, children };
+      }
+
+      function group(id, name, subtitle, domain, children) {
+        return {
+          id,
+          name,
+          subtitle,
+          domain,
+          kind: "Group",
+          status: worstStatus(children),
+          cpu: null,
+          memory: null,
+          disk: null,
+          recovery: "",
+          signals: children.flatMap((child) => child.signals || []),
+          changes: children.flatMap((child) => child.changes || []).slice(0, 2),
+          children,
+          isGroup: true,
+        };
+      }
+
+      function item(id, name, subtitle, domain, kind, status, cpu, memory, disk, recovery, signals, changes) {
+        return { id, name, subtitle, domain, kind, status, cpu, memory, disk, recovery, signals, changes, children: [] };
+      }
+
+      function assignInheritedPlatforms(nodes, inheritedPlatform = null) {
+        for (const node of nodes) {
+          node.platform = node.platform || inheritedPlatform || "unknown";
+          assignInheritedPlatforms(node.children || [], node.platform);
+        }
+      }
+
+      function rank(status) {
+        return status === "critical" ? 3 : status === "warning" ? 2 : status === "ok" ? 1 : 0;
+      }
+
+      function worstStatus(items) {
+        return items.reduce((worst, item) => (rank(item.status) > rank(worst) ? item.status : worst), "ok");
+      }
+
+      function walk(nodes, callback, parents = []) {
+        for (const node of nodes) {
+          callback(node, parents);
+          if (node.children && node.children.length) walk(node.children, callback, parents.concat(node));
+        }
+      }
+
+      function descendants(node) {
+        const result = [];
+        walk(node.children || [], (child) => result.push(child));
+        return result;
+      }
+
+      function hasSignal(node) {
+        return (node.signals || []).length > 0;
+      }
+
+      function hasMatchingDescendant(node, predicate) {
+        return (node.children || []).some((child) => predicate(child) || hasMatchingDescendant(child, predicate));
+      }
+
+      function searchText(node) {
+        return [node.name, node.subtitle, node.platform, node.kind, node.domain, node.status, node.recovery, ...(node.signals || []), ...(node.changes || [])]
+          .join(" ")
+          .toLowerCase();
+      }
+
+      function ownMatchesSearch(node) {
+        return !query || searchText(node).includes(query);
+      }
+
+      function matchesSearchContext(node) {
+        return ownMatchesSearch(node) || hasMatchingDescendant(node, ownMatchesSearch);
+      }
+
+      function ownMatchesView(node) {
+        if (view === "all") return true;
+        if (view === "problems") return hasSignal(node);
+        return node.domain === view;
+      }
+
+      function matchesViewContext(node) {
+        return ownMatchesView(node) || hasMatchingDescendant(node, ownMatchesView);
+      }
+
+      function normalizedKind(node) {
+        return String(node.kind || "").toLowerCase().replace(/\\s+/g, "-");
+      }
+
+      function ownMatchesPlatform(node) {
+        if (platformView === "any") return true;
+        if (["proxmox", "docker", "kubernetes", "truenas"].includes(platformView)) {
+          return node.platform === platformView;
+        }
+        return false;
+      }
+
+      function matchesPlatformContext(node) {
+        return ownMatchesPlatform(node) || hasMatchingDescendant(node, ownMatchesPlatform);
+      }
+
+      function ownMatchesType(node) {
+        if (typeView === "any") return true;
+        if (typeView === "vm") return node.kind === "VM";
+        if (typeView === "container") return node.kind === "Container";
+        if (typeView === "pod") return node.kind === "Pod";
+        if (typeView === "disk") return node.kind === "Disk";
+        if (typeView === "pool") return node.kind === "Pool";
+        if (typeView === "backup") return ["Backup Job", "Replication"].includes(node.kind);
+        return normalizedKind(node) === typeView;
+      }
+
+      function matchesTypeContext(node) {
+        return ownMatchesType(node) || hasMatchingDescendant(node, ownMatchesType);
+      }
+
+      function visibleRows(nodes, depth = 0, output = []) {
+        for (const node of nodes) {
+          if (!matchesSearchContext(node) || !matchesViewContext(node) || !matchesPlatformContext(node) || !matchesTypeContext(node)) continue;
+          const contextOnly = !ownMatchesView(node) || !ownMatchesPlatform(node) || !ownMatchesType(node) || !ownMatchesSearch(node);
+          output.push({ node, depth, contextOnly });
+          visibleRows(node.children || [], depth + 1, output);
+        }
+        return output;
+      }
+
+      function escapeHtml(value) {
+        return String(value)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;");
+      }
+
+      function metric(value, label) {
+        if (value === null || value === undefined) return '<span class="note">-</span>';
+        const tone = value >= 90 ? "critical" : value >= 75 ? "warning" : "";
+        return `
+          <div class="metric" aria-label="${label} ${value}%">
+            <div class="metric-label"><span>${value}%</span></div>
+            <div class="track"><div class="fill ${tone}" style="width:${Math.max(0, Math.min(100, value))}%"></div></div>
+          </div>
+        `;
+      }
+
+      function signalCell(node) {
+        if (!hasSignal(node)) return '<span class="note">None</span>';
+        return `<div class="signals">${node.signals.slice(0, 2).map((signal) => `<span class="pill critical signal">${escapeHtml(signal)}</span>`).join("")}</div>`;
+      }
+
+      function childRollup(node) {
+        const all = descendants(node).filter((child) => !child.isGroup);
+        if (!all.length) return '<span class="note">-</span>';
+        const workloads = all.filter((child) => child.domain === "workload").length;
+        const storage = all.filter((child) => child.domain === "storage").length;
+        const recovery = all.filter((child) => child.domain === "recovery").length;
+        return `
+          <div class="rollup-grid">
+            <div class="rollup"><strong>${workloads}</strong><span>workloads</span></div>
+            <div class="rollup"><strong>${storage}</strong><span>storage</span></div>
+            <div class="rollup"><strong>${recovery}</strong><span>recovery</span></div>
+          </div>
+        `;
+      }
+
+      function groupCount(node) {
+        const leaves = descendants(node).filter((child) => !child.isGroup);
+        return leaves.length ? `<span class="note">${leaves.length} rows</span>` : '<span class="note">-</span>';
+      }
+
+      function childrenCell(node) {
+        if (node.domain === "host") return childRollup(node);
+        if (node.isGroup) return groupCount(node);
+        return '<span class="note">-</span>';
+      }
+
+      function rowClass(node) {
+        if (node.domain === "host") return "host-row";
+        if (node.isGroup) return "group-row";
+        return "leaf-row";
+      }
+
+      function domainPillClass(node) {
+        return node.domain === "host" ? "host" : node.domain;
+      }
+
+      function platformLabel(platform) {
+        const labels = {
+          proxmox: "Proxmox",
+          docker: "Docker",
+          kubernetes: "Kubernetes",
+          truenas: "TrueNAS",
+        };
+        return labels[platform] || platform || "Unknown";
+      }
+
+      function kindCell(node) {
+        return `
+          <span class="pill ${domainPillClass(node)}">${escapeHtml(node.kind)}</span>
+          <span class="platform-label">${escapeHtml(platformLabel(node.platform))}</span>
+        `;
+      }
+
+      function renderRows() {
+        const rows = visibleRows(tree);
+        document.getElementById("rows").innerHTML = rows
+          .map(({ node, depth, contextOnly }) => {
+            const faded = contextOnly ? ' style="opacity:.62"' : "";
+            const indentClass = `indent-${Math.min(depth, 2)}`;
+            const depthClass = `depth-${Math.min(depth, 2)}`;
+            return `
+              <tr class="${rowClass(node)}" data-id="${node.id}"${faded}>
+                <td>
+                  <div class="resource-cell ${indentClass} ${depthClass}">
+                    <span class="rail"></span>
+                    <div class="resource-main">
+                      <div class="resource-line">
+                        <span class="name">${escapeHtml(node.name)}</span>
+                      </div>
+                      <div class="meta">${escapeHtml(node.subtitle || "")}</div>
+                    </div>
+                  </div>
+                </td>
+                <td>${kindCell(node)}</td>
+                <td><span class="pill ${node.status}">${escapeHtml(node.status)}</span></td>
+                <td>${metric(node.cpu, "CPU")}</td>
+                <td>${metric(node.memory, "Memory")}</td>
+                <td>${metric(node.disk, "Disk")}</td>
+                <td>${childrenCell(node)}</td>
+                <td>${escapeHtml(node.recovery || "-")}</td>
+                <td>${signalCell(node)}</td>
+                <td><div class="change">${escapeHtml((node.changes || [])[0] || "No recent change")}</div></td>
+              </tr>
+            `;
+          })
+          .join("");
+        document.getElementById("empty").hidden = rows.length > 0;
+      }
+
+      function renderSummary() {
+        const nodes = [];
+        walk(tree, (node) => {
+          if (!node.isGroup) nodes.push(node);
+        });
+        document.getElementById("hostCount").textContent = tree.length;
+        document.getElementById("resourceCount").textContent = nodes.length;
+        document.getElementById("signalCount").textContent = nodes.filter(hasSignal).length;
+        document.getElementById("workloadCount").textContent = nodes.filter((node) => node.domain === "workload").length;
+        document.getElementById("capacityRiskCount").textContent = nodes.filter((node) => node.domain === "storage" && (node.disk || 0) >= 75).length;
+        document.getElementById("recoveryGapCount").textContent = nodes.filter((node) => ["Stale", "Missed", "Partial"].includes(node.recovery)).length;
+      }
+
+      function render() {
+        renderSummary();
+        renderRows();
+      }
+
+      document.getElementById("search").addEventListener("input", (event) => {
+        query = event.currentTarget.value.trim().toLowerCase();
+        render();
+      });
+
+      document.querySelectorAll(".view").forEach((button) => {
+        button.addEventListener("click", () => {
+          view = button.getAttribute("data-view");
+          document.querySelectorAll(".view").forEach((other) => other.classList.remove("active"));
+          button.classList.add("active");
+          render();
+        });
+      });
+
+      document.querySelectorAll(".platform").forEach((button) => {
+        button.addEventListener("click", () => {
+          platformView = button.getAttribute("data-platform");
+          document.querySelectorAll(".platform").forEach((other) => other.classList.remove("active"));
+          button.classList.add("active");
+          render();
+        });
+      });
+
+      document.querySelectorAll(".type").forEach((button) => {
+        button.addEventListener("click", () => {
+          typeView = button.getAttribute("data-type");
+          document.querySelectorAll(".type").forEach((other) => other.classList.remove("active"));
+          button.classList.add("active");
+          render();
+        });
+      });
+
+      document.getElementById("simulateIncident").addEventListener("click", () => {
+        let target = null;
+        walk(tree, (node) => {
+          if (node.id === "volume-immich-library") target = node;
+        });
+        if (!target) return;
+        target.status = "critical";
+        target.disk = 92;
+        target.signals = ["Projected to fill in 4 days", "Backup target will exceed retention budget"];
+        target.changes.unshift("Disk growth accelerated in the last hour");
+        render();
+      });
+
+      render();
+    </script>
+  </body>
+</html>
