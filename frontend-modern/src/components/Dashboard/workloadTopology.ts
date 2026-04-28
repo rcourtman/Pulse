@@ -6,6 +6,28 @@ import {
   resolveWorkloadType,
 } from '@/utils/workloads';
 
+const firstTrimmed = (values: Array<string | null | undefined>): string => {
+  for (const value of values) {
+    const trimmed = (value || '').trim();
+    if (trimmed) return trimmed;
+  }
+  return '';
+};
+
+const dedupeTrimmed = (values: Array<string | null | undefined>): string[] => {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const value of values) {
+    const trimmed = (value || '').trim();
+    if (!trimmed) continue;
+    const key = trimmed.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(trimmed);
+  }
+  return result;
+};
+
 export const workloadNodeScopeId = (guest: WorkloadGuest): string =>
   `${(guest.instance || '').trim()}-${(guest.node || '').trim()}`;
 
@@ -29,7 +51,31 @@ export const getWorkloadDockerHostId = (guest: WorkloadGuest): string => {
 export const getWorkloadContainerHostId = (guest: WorkloadGuest): string => {
   const type = resolveWorkloadType(guest);
   if (type !== 'app-container') return '';
-  return (guest.dockerHostId || guest.node || guest.instance || '').trim();
+  return firstTrimmed([guest.dockerHostId, guest.contextLabel, guest.node, guest.instance]);
+};
+
+export const workloadHostScopeId = (guest: WorkloadGuest): string => {
+  const type = resolveWorkloadType(guest);
+  if (type === 'pod') return '';
+  if (type === 'app-container') return getWorkloadContainerHostId(guest);
+  return workloadNodeScopeId(guest);
+};
+
+export const getWorkloadHostLabel = (guest: WorkloadGuest): string => {
+  const type = resolveWorkloadType(guest);
+  if (type === 'app-container') {
+    return firstTrimmed([guest.contextLabel, guest.node, guest.instance, guest.dockerHostId]);
+  }
+  return (guest.node || '').trim();
+};
+
+export const getWorkloadHostHintCandidates = (guest: WorkloadGuest): string[] => {
+  const type = resolveWorkloadType(guest);
+  if (type === 'pod') return [];
+  if (type === 'app-container') {
+    return dedupeTrimmed([guest.dockerHostId, guest.contextLabel, guest.node, guest.instance]);
+  }
+  return dedupeTrimmed([guest.node, guest.instance, guest.contextLabel]);
 };
 
 export const getDiscoveryHostIdForWorkload = (guest: WorkloadGuest): string => {

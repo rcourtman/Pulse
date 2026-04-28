@@ -2,7 +2,11 @@ import type { WorkloadGuest, ViewMode } from '@/types/workloads';
 import { normalizeWorkloadViewModeParam, resolveWorkloadType } from '@/utils/workloads';
 import { buildSourcePlatformOptions } from '@/utils/sourcePlatformOptions';
 import type { DashboardFilterSelectOption } from './dashboardFilterModel';
-import { getKubernetesContextKey, workloadNodeScopeId } from './workloadTopology';
+import {
+  getKubernetesContextKey,
+  getWorkloadHostLabel,
+  workloadHostScopeId,
+} from './workloadTopology';
 
 export type DashboardWorkloadNodeOption = DashboardFilterSelectOption;
 
@@ -15,27 +19,42 @@ export const buildDashboardWorkloadNodeOptions = (
   guests: WorkloadGuest[],
 ): DashboardWorkloadNodeOption[] => {
   const labelsByScope = new Map<string, string>();
-  const nodeNameCounts = new Map<string, number>();
+  const scopesByLabel = new Map<string, Set<string>>();
 
   for (const guest of guests) {
     const type = resolveWorkloadType(guest);
     if (type === 'pod') continue;
-    const scope = workloadNodeScopeId(guest);
+    const scope = workloadHostScopeId(guest);
     if (!scope || scope === '-') continue;
     const nodeName = (guest.node || '').trim();
-    if (!nodeName) continue;
-    nodeNameCounts.set(nodeName, (nodeNameCounts.get(nodeName) || 0) + 1);
+    const label = getWorkloadHostLabel(guest);
+    if (!label) continue;
+    const disambiguationLabel = type === 'app-container' ? label : nodeName;
+    if (!disambiguationLabel) continue;
+    const scopes = scopesByLabel.get(disambiguationLabel) ?? new Set<string>();
+    scopes.add(scope);
+    scopesByLabel.set(disambiguationLabel, scopes);
   }
 
   for (const guest of guests) {
     const type = resolveWorkloadType(guest);
     if (type === 'pod') continue;
-    const scope = workloadNodeScopeId(guest);
+    const scope = workloadHostScopeId(guest);
     if (!scope || scope === '-' || labelsByScope.has(scope)) continue;
+    if (type === 'app-container') {
+      const hostLabel = getWorkloadHostLabel(guest);
+      if (!hostLabel) continue;
+      const hasDuplicateHostLabel = (scopesByLabel.get(hostLabel)?.size ?? 0) > 1;
+      labelsByScope.set(
+        scope,
+        hasDuplicateHostLabel && scope !== hostLabel ? `${hostLabel} (${scope})` : hostLabel,
+      );
+      continue;
+    }
     const nodeName = (guest.node || '').trim();
     const instance = (guest.instance || '').trim();
     if (!nodeName) continue;
-    const hasDuplicateNodeName = (nodeNameCounts.get(nodeName) || 0) > 1;
+    const hasDuplicateNodeName = (scopesByLabel.get(nodeName)?.size ?? 0) > 1;
     const label = hasDuplicateNodeName && instance ? `${nodeName} (${instance})` : nodeName;
     labelsByScope.set(scope, label);
   }

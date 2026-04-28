@@ -9,7 +9,12 @@ import { DEGRADED_HEALTH_STATUSES, OFFLINE_HEALTH_STATUSES } from '@/utils/statu
 import { getNodeDisplayName } from '@/utils/nodes';
 import { getCanonicalWorkloadId, resolveWorkloadType } from '@/utils/workloads';
 import { getWorkloadTypePresentation } from '@/utils/workloadTypePresentation';
-import { buildNodeByInstance, getKubernetesContextKey, workloadNodeScopeId } from './workloadTopology';
+import {
+  buildNodeByInstance,
+  getKubernetesContextKey,
+  getWorkloadHostHintCandidates,
+  workloadHostScopeId,
+} from './workloadTopology';
 
 export interface FilterWorkloadsParams {
   guests: WorkloadGuest[];
@@ -55,15 +60,16 @@ export const filterWorkloads = ({
 
   const nodeScope = selectedNode;
   if (nodeScope && viewMode !== 'pod') {
-    guests = guests.filter((g) => workloadNodeScopeId(g) === nodeScope);
+    guests = guests.filter((g) => workloadHostScopeId(g) === nodeScope);
   }
 
   const hostHint = (selectedHostHint || '').trim().toLowerCase();
   if (!nodeScope && hostHint && viewMode !== 'pod') {
     guests = guests.filter((g) => {
       if (resolveWorkloadType(g) === 'pod') return false;
-      const candidates = [g.node, g.instance, g.contextLabel];
-      return candidates.some((candidate) => (candidate || '').toLowerCase().includes(hostHint));
+      return getWorkloadHostHintCandidates(g).some((candidate) =>
+        candidate.toLowerCase().includes(hostHint),
+      );
     });
   }
 

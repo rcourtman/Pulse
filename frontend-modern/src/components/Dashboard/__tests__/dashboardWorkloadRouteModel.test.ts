@@ -61,6 +61,44 @@ describe('dashboardWorkloadRouteModel', () => {
     ]);
   });
 
+  it('builds app-container host options from Docker host ids and host labels', () => {
+    const options = buildDashboardWorkloadNodeOptions([
+      makeGuest({
+        id: 'docker-a',
+        type: 'app-container',
+        workloadType: 'app-container',
+        node: '',
+        instance: '',
+        contextLabel: 'tower.local',
+        dockerHostId: 'docker-host-1',
+      }),
+      makeGuest({
+        id: 'docker-b',
+        type: 'app-container',
+        workloadType: 'app-container',
+        node: '',
+        instance: '',
+        contextLabel: 'tower.local',
+        dockerHostId: 'docker-host-1',
+      }),
+      makeGuest({
+        id: 'truenas-nextcloud',
+        type: 'app-container',
+        workloadType: 'app-container',
+        node: '',
+        instance: 'nextcloud',
+        contextLabel: 'truenas-main',
+        dockerHostId: '',
+        platformType: 'truenas',
+      }),
+    ]);
+
+    expect(options).toEqual([
+      { value: 'docker-host-1', label: 'tower.local' },
+      { value: 'truenas-main', label: 'truenas-main' },
+    ]);
+  });
+
   it('builds kubernetes context and namespace options from canonical pod scope', () => {
     const guests = [
       makeGuest({

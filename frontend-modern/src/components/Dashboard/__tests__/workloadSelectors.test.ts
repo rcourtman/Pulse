@@ -248,6 +248,67 @@ describe('workloadSelectors', () => {
 
       expect(result.map((guest) => guest.name)).toEqual(['nextcloud']);
     });
+
+    it('filters app containers by Docker host id from related-workload links', () => {
+      const guests = [
+        makeGuest(1, {
+          name: 'grafana',
+          type: 'app-container',
+          workloadType: 'app-container',
+          platformType: 'docker',
+          dockerHostId: 'docker-host-1',
+          contextLabel: 'tower.local',
+          node: '',
+          instance: '',
+        }),
+        makeGuest(2, {
+          name: 'prometheus',
+          type: 'app-container',
+          workloadType: 'app-container',
+          platformType: 'docker',
+          dockerHostId: 'docker-host-1',
+          contextLabel: 'tower.local',
+          node: '',
+          instance: '',
+        }),
+        makeGuest(3, {
+          name: 'redis',
+          type: 'app-container',
+          workloadType: 'app-container',
+          platformType: 'docker',
+          dockerHostId: 'docker-host-2',
+          contextLabel: 'edge.local',
+          node: '',
+          instance: '',
+        }),
+      ];
+
+      const byCanonicalHostScope = filterWorkloads({
+        guests,
+        viewMode: 'app-container',
+        statusMode: 'all',
+        searchTerm: '',
+        selectedNode: 'docker-host-1',
+        selectedHostHint: null,
+        selectedPlatform: 'docker',
+        selectedKubernetesContext: null,
+      });
+
+      expect(byCanonicalHostScope.map((guest) => guest.name)).toEqual(['grafana', 'prometheus']);
+
+      const byRouteHostHint = filterWorkloads({
+        guests,
+        viewMode: 'app-container',
+        statusMode: 'all',
+        searchTerm: '',
+        selectedNode: null,
+        selectedHostHint: 'docker-host-2',
+        selectedPlatform: 'docker',
+        selectedKubernetesContext: null,
+      });
+
+      expect(byRouteHostHint.map((guest) => guest.name)).toEqual(['redis']);
+    });
   });
 
   describe('createWorkloadSortComparator', () => {

@@ -157,11 +157,21 @@ describe('workloadTopology', () => {
         node: 'truenas-main',
         instance: 'truenas-main',
       });
+      const appContainerWithHostLabel = makeGuest(4, {
+        type: 'app-container',
+        workloadType: 'app-container',
+        platformType: 'docker',
+        dockerHostId: '',
+        contextLabel: 'tower.local',
+        node: 'node-c',
+        instance: 'inst-c',
+      });
       expect(getWorkloadDockerHostId(dockerWithHostId)).toBe('docker-host-1');
       expect(getWorkloadDockerHostId(dockerFallback)).toBe('');
       expect(getWorkloadDockerHostId(truenasApp)).toBe('');
       expect(getWorkloadContainerHostId(dockerFallback)).toBe('node-b');
       expect(getWorkloadContainerHostId(truenasApp)).toBe('truenas-main');
+      expect(getWorkloadContainerHostId(appContainerWithHostLabel)).toBe('tower.local');
     });
 
     it('maps discovery host and resource IDs for app-container, pod, and vm', () => {
