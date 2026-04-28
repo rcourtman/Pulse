@@ -220,13 +220,6 @@ type Service struct {
 
 	// License checker for Pro feature gating
 	licenseChecker LicenseChecker
-
-	// Quickstart credit manager for free hosted patrol runs
-	quickstartCredits QuickstartCreditManager
-	// usingQuickstart tracks whether the current provider was set via quickstart credits
-	usingQuickstart bool
-	// quickstartBlockedReason captures why Patrol-only quickstart is currently unavailable.
-	quickstartBlockedReason string
 }
 
 type executionLimits struct {
@@ -512,9 +505,6 @@ func (s *Service) initPatrolServiceLocked() {
 	if s.discoveryStore != nil {
 		s.patrolService.SetDiscoveryStore(s.discoveryStore)
 	}
-	if s.quickstartCredits != nil {
-		s.patrolService.SetQuickstartCredits(s.quickstartCredits)
-	}
 	if s.readState != nil {
 		s.patrolService.SetReadState(s.readState)
 	}
@@ -640,7 +630,7 @@ func (s *Service) SetChatService(cs ChatServiceProvider) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.chatService = cs
-	s.configurePatrolQuickstartProviderFactoryLocked()
+	s.configurePatrolProviderFactoryLocked()
 }
 
 // GetChatService returns the chat service for investigation orchestrator
@@ -1521,8 +1511,6 @@ func (s *Service) LoadConfig() error {
 		s.mu.Lock()
 		s.provider = nil
 		s.cfg = nil
-		s.usingQuickstart = false
-		s.quickstartBlockedReason = ""
 		s.mu.Unlock()
 		return fmt.Errorf("Pulse Assistant config persistence unavailable")
 	}
@@ -1533,8 +1521,6 @@ func (s *Service) LoadConfig() error {
 	}
 	modelResolutionCtx := context.Background()
 	var providerClient providers.Provider
-	usingQuickstart := false
-	blockedReason := ""
 
 	// Don't initialize provider if AI is not enabled or not configured
 	if cfg == nil || !cfg.Enabled || !cfg.IsConfigured() {
@@ -1600,8 +1586,6 @@ func (s *Service) LoadConfig() error {
 	s.mu.Lock()
 	s.cfg = cfg
 	s.provider = providerClient
-	s.usingQuickstart = usingQuickstart
-	s.quickstartBlockedReason = blockedReason
 	s.initInfraDiscoveryServiceLocked()
 	s.initDiscoveryServiceLocked()
 	s.mu.Unlock()
@@ -1626,44 +1610,11 @@ func (s *Service) IsEnabled() bool {
 	return false
 }
 
-// IsUsingQuickstart returns true if the current provider is the quickstart proxy.
-func (s *Service) IsUsingQuickstart() bool {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	return s.usingQuickstart
-}
-
-// QuickstartBlockedReason returns the current Patrol quickstart blocking reason.
-func (s *Service) QuickstartBlockedReason() string {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	return strings.TrimSpace(s.quickstartBlockedReason)
-}
-
-// SetQuickstartCredits sets the quickstart credit manager on both the
-// service and its patrol sub-service so credit checks work at runtime.
-func (s *Service) SetQuickstartCredits(mgr QuickstartCreditManager) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.quickstartCredits = mgr
-	if s.patrolService != nil {
-		s.patrolService.SetQuickstartCredits(mgr)
-	}
-	s.configurePatrolQuickstartProviderFactoryLocked()
-}
-
-// GetQuickstartCredits returns the quickstart credit manager.
-func (s *Service) GetQuickstartCredits() QuickstartCreditManager {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	return s.quickstartCredits
-}
-
 type patrolProviderFactorySetter interface {
 	SetPatrolProviderFactory(func(modelStr string) (providers.StreamingProvider, error))
 }
 
-func (s *Service) configurePatrolQuickstartProviderFactoryLocked() {
+func (s *Service) configurePatrolProviderFactoryLocked() {
 	setter, ok := s.chatService.(patrolProviderFactorySetter)
 	if !ok {
 		return
@@ -4366,7 +4317,6 @@ func (s *Service) TestConnection(ctx context.Context) error {
 	cfg := s.cfg
 	defaultProvider := s.provider
 	persistence := s.persistence
-	isQuickstart := s.usingQuickstart
 	s.mu.RUnlock()
 
 	// Load config if not available
@@ -4382,10 +4332,6 @@ func (s *Service) TestConnection(ctx context.Context) error {
 	}
 
 	if cfg == nil || !cfg.IsConfigured() {
-		// If using quickstart credits, test the quickstart proxy instead.
-		if isQuickstart && defaultProvider != nil {
-			return defaultProvider.TestConnection(ctx)
-		}
 		return fmt.Errorf("no provider configured")
 	}
 

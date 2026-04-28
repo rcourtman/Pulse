@@ -22,8 +22,8 @@ type BillingState struct {
 	// The overflow window is 14 days from this timestamp.
 	OverflowGrantedAt *int64 `json:"overflow_granted_at,omitempty"`
 
-	// Quickstart credits: 25 free hosted Patrol runs for every new workspace.
-	// No API key needed — uses the Pulse-hosted MiniMax proxy.
+	// Historical hosted-AI quickstart fields retained for old billing-state
+	// compatibility. New v6 workspaces must not grant or consume these values.
 	QuickstartCreditsGranted   bool   `json:"quickstart_credits_granted,omitempty"`
 	QuickstartCreditsUsed      int    `json:"quickstart_credits_used,omitempty"`
 	QuickstartCreditsGrantedAt *int64 `json:"quickstart_credits_granted_at,omitempty"`

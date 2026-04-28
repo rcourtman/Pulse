@@ -304,7 +304,8 @@ type billingIntegrityPayload struct {
 	TrialEndsAt             *int64                                  `json:"trial_ends_at"`
 	TrialExtendedAt         *int64                                  `json:"trial_extended_at"`
 	OverflowGrantedAt       *int64                                  `json:"overflow_granted_at"`
-	// Quickstart credits gate free hosted Patrol runs — must be HMAC-protected.
+	// Historical hosted-AI quickstart fields remain HMAC-protected so old
+	// billing-state files can be verified without reintroducing active credits.
 	QuickstartCreditsGranted   bool   `json:"quickstart_credits_granted"`
 	QuickstartCreditsUsed      int    `json:"quickstart_credits_used"`
 	QuickstartCreditsGrantedAt *int64 `json:"quickstart_credits_granted_at"`

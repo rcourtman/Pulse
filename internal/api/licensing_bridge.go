@@ -361,9 +361,6 @@ func recordConversionEventMetric(eventType, surface string) {
 // licenseTierFreeValue is the canonical free-tier constant for use outside the bridge.
 const licenseTierFreeValue = pkglicensing.TierFree
 
-// quickstartCreditsTotalFromLicensing returns the total quickstart credits granted per workspace.
-const quickstartCreditsTotalFromLicensing = pkglicensing.QuickstartCreditsTotal
-
 // overflowBonusFromLicensing returns the number of bonus host slots granted by the onboarding overflow.
 func overflowBonusFromLicensing(tier licenseTier, overflowGrantedAt *int64, now time.Time) int {
 	return pkglicensing.OverflowBonus(tier, overflowGrantedAt, now)

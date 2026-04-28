@@ -3,7 +3,6 @@ package api
 import (
 	"fmt"
 	"os"
-	"strings"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 )
@@ -24,24 +23,7 @@ func shouldAutoBootstrapHostedAIConfig(hostedMode bool, persistence *config.Conf
 	return false
 }
 
-func ensureHostedAIQuickstartBillingState(billingBaseDir, orgID string) (*billingState, error) {
-	state, _, err := config.LoadEffectiveEntitlementBillingState(billingBaseDir, orgID)
-	return state, err
-}
-
 func hostedAIAutoBootstrapEligible(state *billingState) bool {
-	return false
-}
-
-func hasBillingCapability(state *billingState, feature string) bool {
-	if state == nil || strings.TrimSpace(feature) == "" {
-		return false
-	}
-	for _, capability := range state.Capabilities {
-		if capability == feature {
-			return true
-		}
-	}
 	return false
 }
 

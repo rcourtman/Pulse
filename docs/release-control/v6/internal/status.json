@@ -1961,12 +1961,11 @@
     },
     {
       "id": "RA21",
-      "summary": "Pulse-owned hosted AI contracts stay vendor-neutral: quickstart runtime and API payloads expose the stable alias `quickstart:pulse-hosted`, while the license server requires explicit upstream model configuration instead of hardcoded vendor defaults.",
+      "summary": "Legacy Pulse-hosted AI aliases are retired for v6 GA: settings and runtime payloads must clear `quickstart:*` model strings, fail closed on the retired provider, and route operators to BYOK or local-provider setup instead of a managed-model promise.",
       "kind": "invariant",
       "blocking_level": "repo-ready",
       "proof_type": "automated",
       "lane_ids": [
-        "L3",
         "L6"
       ],
       "subsystem_ids": [
@@ -1998,7 +1997,7 @@
             "./internal/ai",
             "./internal/api",
             "-run",
-            "Quickstart|DefaultModelForProvider|HostedAISettings|HostedTenantAISettings|ServiceLoadConfig_PrefersBYOKProviderOverQuickstart|ServiceLoadConfig_TracksQuickstartActivationRequirement|HandleGetPatrolStatus|AISettingsHandler_",
+            "Quickstart|DefaultModelForProvider|HostedAISettings|HostedTenantAISettings|HandleGetPatrolStatus|AISettingsHandler_",
             "-count=1"
           ]
         },
@@ -2053,26 +2052,6 @@
         {
           "repo": "pulse",
           "path": "tests/integration/tests/51-quickstart-cross-surface.spec.ts",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse-pro",
-          "path": "license-server/main.go",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse-pro",
-          "path": "license-server/quickstart_proxy.go",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse-pro",
-          "path": "license-server/quickstart_proxy_test.go",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse-pro",
-          "path": "license-server/secrets.env.template",
           "kind": "file"
         }
       ]
@@ -2191,30 +2170,27 @@
     },
     {
       "id": "RA23",
-      "summary": "Patrol quickstart credits are billed per higher-level Patrol execution, not per internal provider turn: the runtime must propagate one stable execution ID across retries, agentic turns, and the evaluation pass, and the license server must treat repeated quickstart proxy calls for that execution as one commercial run.",
+      "summary": "Patrol agentic execution keeps one stable execution identifier across retries, agentic turns, and evaluation so runtime traces and follow-up work describe a single Patrol run without depending on retired hosted quickstart billing.",
       "kind": "invariant",
       "blocking_level": "repo-ready",
       "proof_type": "automated",
       "lane_ids": [
-        "L3",
         "L6"
       ],
       "subsystem_ids": [
-        "ai-runtime",
-        "cloud-paid"
+        "ai-runtime"
       ],
       "release_gate_ids": [],
       "proof_commands": [
         {
-          "id": "patrol-quickstart-execution-contract-tests",
+          "id": "patrol-execution-identity-contract-tests",
           "run": [
             "go",
             "test",
-            "./internal/ai/providers",
             "./internal/ai/chat",
             "./internal/ai",
             "-run",
-            "Quickstart|ExecutePatrolStream|RunEvaluationPass|RetriesWithProviderDerivedSeedBudget",
+            "ExecutePatrolStream|RunEvaluationPass|RetriesWithProviderDerivedSeedBudget",
             "-count=1"
           ]
         }
@@ -2228,11 +2204,6 @@
         {
           "repo": "pulse",
           "path": "docs/release-control/v6/internal/subsystems/ai-runtime.md",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse",
-          "path": "docs/release-control/v6/internal/subsystems/cloud-paid.md",
           "kind": "file"
         },
         {
@@ -2253,36 +2224,6 @@
         {
           "repo": "pulse",
           "path": "internal/ai/patrol_ai_more_test.go",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse",
-          "path": "internal/ai/providers/quickstart.go",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse",
-          "path": "internal/ai/providers/quickstart_test.go",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse-pro",
-          "path": "license-server/quickstart_proxy.go",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse-pro",
-          "path": "license-server/quickstart_proxy_test.go",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse-pro",
-          "path": "license-server/quickstart_store.go",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse-pro",
-          "path": "license-server/v6_schema.go",
           "kind": "file"
         }
       ]
@@ -2343,7 +2284,7 @@
     },
     {
       "id": "RA25",
-      "summary": "Patrol quickstart bootstrap must resolve a real server-verified commercial principal, never synthetic local identity: activated installs use installation tokens, while entitlement-backed trial or hosted runtimes use signed entitlement leases without fabricating installation-scoped activation state.",
+      "summary": "Hosted and self-hosted v6 AI bootstrap must stay BYOK/local-provider only: commercial billing state may authorize hosted tenancy, but it must not create quickstart credits, mint hosted-model tokens, or persist a managed-model AI config.",
       "kind": "invariant",
       "blocking_level": "repo-ready",
       "proof_type": "automated",
@@ -2359,27 +2300,14 @@
       "release_gate_ids": [],
       "proof_commands": [
         {
-          "id": "quickstart-dual-principal-license-server-tests",
-          "run": [
-            "go",
-            "-C",
-            "../pulse-pro/license-server",
-            "test",
-            "-run",
-            "TestHandleQuickstartBootstrap_.*HostedEntitlement|TestHandleQuickstartBootstrap_IssuesTokenForVerifiedInstallation|TestHandleQuickstartBootstrap_RequiresAuth",
-            "-count=1"
-          ]
-        },
-        {
-          "id": "quickstart-dual-principal-runtime-tests",
+          "id": "hosted-ai-bootstrap-retirement-runtime-tests",
           "run": [
             "go",
             "test",
-            "./internal/ai",
             "./internal/api",
             "./pkg/licensing",
             "-run",
-            "Quickstart|AISettingsHandler_GetHostedSettings_AutoBootstrapsQuickstart|AISettingsHandler_GetHostedTenantSettings_InheritsDefaultHostedBillingState|AISettingsHandler_UpdateSettings_QuickstartBootstrapBeforeEnableUsesActivationIdentity|ClientBootstrapQuickstart",
+            "Quickstart|HostedAISettings|HostedTenantAISettings|HostedEntitlement|TrialStart|BillingState",
             "-count=1"
           ]
         }
@@ -2407,16 +2335,6 @@
         },
         {
           "repo": "pulse",
-          "path": "internal/ai/quickstart.go",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse",
-          "path": "internal/ai/quickstart_test.go",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse",
           "path": "internal/api/ai_handlers_test.go",
           "kind": "file"
         },
@@ -2428,36 +2346,6 @@
         {
           "repo": "pulse",
           "path": "pkg/licensing/license_server_client.go",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse",
-          "path": "pkg/licensing/quickstart_bootstrap.go",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse-pro",
-          "path": "license-server/quickstart_entitlement.go",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse-pro",
-          "path": "license-server/quickstart_proxy.go",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse-pro",
-          "path": "license-server/quickstart_proxy_test.go",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse-pro",
-          "path": "license-server/quickstart_store.go",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse-pro",
-          "path": "license-server/secrets.env.template",
           "kind": "file"
         }
       ]
@@ -3573,7 +3461,7 @@
       "status": "partial",
       "completion": {
         "state": "bounded-residual",
-        "summary": "Policy-aware data governance now has a first-class governed floor: resource sensitivity, handling-boundary, and redaction posture are visible in Data Handling, non-local AI provider requests use the shared resource-policy sanitizer at the final model boundary, hosted quickstart requests carry a resource-policy marker that the proxy enforces, and privacy copy now reflects the runtime behavior. Broader enterprise DLP, provider-retention posture, and non-resource prompt-secret detection remain a named post-RC hardening track.",
+        "summary": "Policy-aware data governance now has a first-class governed floor: resource sensitivity, handling-boundary, and redaction posture are visible in Data Handling, non-local AI provider requests use the shared resource-policy sanitizer at the final model boundary, and privacy copy now reflects the runtime behavior. Broader enterprise DLP, provider-retention posture, and non-resource prompt-secret detection remain a named post-RC hardening track.",
         "tracking": [
           {
             "kind": "lane-followup",
@@ -3631,32 +3519,12 @@
         },
         {
           "repo": "pulse",
-          "path": "internal/ai/providers/quickstart.go",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse",
-          "path": "internal/ai/providers/quickstart_test.go",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse",
           "path": "internal/unifiedresources/policy_metadata.go",
           "kind": "file"
         },
         {
           "repo": "pulse",
           "path": "internal/unifiedresources/policy_metadata_test.go",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse-pro",
-          "path": "license-server/quickstart_proxy.go",
-          "kind": "file"
-        },
-        {
-          "repo": "pulse-pro",
-          "path": "license-server/quickstart_proxy_test.go",
           "kind": "file"
         }
       ]
@@ -4914,7 +4782,21 @@
   ],
   "coverage_gaps": [],
   "candidate_lanes": [],
-  "work_claims": [],
+  "work_claims": [
+    {
+      "id": "codex-lane-l6",
+      "agent_id": "codex",
+      "summary": "Remove remaining hosted-AI quickstart provider/runtime plumbing so v6 self-hosted AI is BYOK/local-only and quickstart survives only as inert historical compatibility.",
+      "target_id": "v6-product-lane-expansion",
+      "claimed_at": "2026-04-28T14:53:29Z",
+      "heartbeat_at": "2026-04-28T14:53:29Z",
+      "expires_at": "2026-04-28T16:53:29Z",
+      "work_item": {
+        "kind": "lane",
+        "id": "L6"
+      }
+    }
+  ],
   "open_decisions": [],
   "source_of_truth_file": "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md",
   "resolved_decisions": [

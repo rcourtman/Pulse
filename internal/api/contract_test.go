@@ -369,25 +369,18 @@ func TestContract_AISettingsUpdateProviderResolutionJSONSnapshot(t *testing.T) {
 }
 
 func TestContract_PatrolStatusDoesNotSurfaceQuickstartActivation(t *testing.T) {
-	handler, _, _, _ := setupAIHandlerWithPatrol(t)
+	handler, patrol, _, _ := setupAIHandlerWithPatrol(t)
 	persistence := handler.defaultPersistence
 	aiCfg := config.NewDefaultAIConfig()
 	aiCfg.Enabled = true
 	if err := persistence.SaveAIConfig(*aiCfg); err != nil {
 		t.Fatalf("SaveAIConfig: %v", err)
 	}
-
-	handler.defaultAIService.SetQuickstartCredits(ai.NewPersistentQuickstartCreditManager(
-		persistence,
-		"default",
-		func() *config.AIConfig {
-			cfg, _ := persistence.LoadAIConfig()
-			return cfg
-		},
-	))
 	if err := handler.defaultAIService.LoadConfig(); err != nil {
 		t.Fatalf("LoadConfig: %v", err)
 	}
+	setUnexportedField(t, patrol, "lastBlockedReason", "Quickstart credits exhausted. Connect your API key to continue using AI Patrol.")
+	setUnexportedField(t, patrol, "lastBlockedAt", time.Now().UTC())
 
 	req := httptest.NewRequest(http.MethodGet, "/api/ai/patrol/status", nil)
 	rec := httptest.NewRecorder()
@@ -420,11 +413,6 @@ func TestContract_AISettingsDoesNotExposeQuickstartActivation(t *testing.T) {
 	cfg := &config.Config{DataPath: tmp}
 	persistence := config.NewConfigPersistence(tmp)
 	handler := newTestAISettingsHandler(cfg, persistence, nil)
-	handler.defaultAIService.SetQuickstartCredits(ai.NewPersistentQuickstartCreditManager(
-		persistence,
-		"default",
-		func() *config.AIConfig { return &config.AIConfig{Enabled: true} },
-	))
 
 	req := httptest.NewRequest(http.MethodGet, "/api/settings/ai", nil)
 	rec := httptest.NewRecorder()
@@ -460,10 +448,6 @@ func TestContract_AISettingsBYOKOverrideDoesNotExposeQuickstartInventoryJSONSnap
 	}
 
 	handler := newTestAISettingsHandler(cfg, persistence, nil)
-	handler.defaultAIService.SetQuickstartCredits(&stubQuickstartCreditManager{
-		remaining: 12,
-		total:     pkglicensing.QuickstartCreditsTotal,
-	})
 
 	req := httptest.NewRequest(http.MethodGet, "/api/settings/ai", nil)
 	rec := httptest.NewRecorder()

@@ -19,7 +19,6 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
-	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -52,43 +51,6 @@ func saveEnabledTestAIConfig(t *testing.T, persistence *config.ConfigPersistence
 	aiCfg.Model = "ollama:llama3"
 	aiCfg.OllamaBaseURL = "http://127.0.0.1:11434"
 	require.NoError(t, persistence.SaveAIConfig(*aiCfg))
-}
-
-func useTestQuickstartBootstrapServer(t *testing.T, assertRequest func(*http.Request, map[string]any)) {
-	t.Helper()
-
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		require.Equal(t, http.MethodPost, r.Method)
-		require.Equal(t, "/v1/quickstart/bootstrap", r.URL.Path)
-
-		var reqBody map[string]any
-		require.NoError(t, json.NewDecoder(r.Body).Decode(&reqBody))
-		if assertRequest != nil {
-			assertRequest(r, reqBody)
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		require.NoError(t, json.NewEncoder(w).Encode(map[string]any{
-			"quickstart_token":            "qst_live_handler_test",
-			"quickstart_token_expires_at": time.Now().Add(30 * time.Minute).UTC().Format(time.RFC3339),
-			"credits_remaining":           25,
-			"credits_total":               25,
-		}))
-	}))
-	t.Cleanup(server.Close)
-	t.Setenv("PULSE_LICENSE_SERVER_URL", server.URL)
-}
-
-func persistQuickstartActivationState(t *testing.T, persistence *config.ConfigPersistence) {
-	t.Helper()
-
-	licensePersistence, err := pkglicensing.NewPersistence(persistence.GetConfigDir())
-	require.NoError(t, err)
-	require.NoError(t, licensePersistence.SaveActivationState(&pkglicensing.ActivationState{
-		InstallationID:      "inst_live_test",
-		InstallationToken:   "pit_live_test",
-		InstanceFingerprint: "fp-live-test",
-	}))
 }
 
 func TestAIHandlersUseSafeRemediationCommercialCopy(t *testing.T) {
@@ -343,11 +305,6 @@ func TestAISettingsHandler_GetSettings_DoesNotExposeQuickstartSurface(t *testing
 	cfg := &config.Config{DataPath: tmp}
 	persistence := config.NewConfigPersistence(tmp)
 	handler := newTestAISettingsHandler(cfg, persistence, nil)
-	handler.defaultAIService.SetQuickstartCredits(ai.NewPersistentQuickstartCreditManager(
-		persistence,
-		"default",
-		func() *config.AIConfig { return &config.AIConfig{Enabled: true} },
-	))
 
 	req := newLoopbackRequest(http.MethodGet, "/api/settings/ai", nil)
 	rec := httptest.NewRecorder()
@@ -383,7 +340,6 @@ func TestAISettingsHandler_UpdateSettings_DoesNotBootstrapQuickstartWithActivati
 	tmp := t.TempDir()
 	cfg := &config.Config{DataPath: tmp}
 	persistence := config.NewConfigPersistence(tmp)
-	persistQuickstartActivationState(t, persistence)
 
 	handler := newTestAISettingsHandler(cfg, persistence, nil)
 

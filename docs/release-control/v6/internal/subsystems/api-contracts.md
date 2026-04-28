@@ -529,8 +529,8 @@ the canonical monitored-system blocked payload.
    `quickstart_credits_total`, `quickstart_credits_available`,
    `quickstart_blocked_reason`, or `using_quickstart` as ordinary v6 GA fields,
    and shared handlers must not invent client-authored commercial identity,
-   synthetic credits, or quickstart-backed config when the legacy server path is
-   unavailable
+   synthetic credits, or quickstart-backed config now that the hosted
+   quickstart bootstrap path is retired
    and the provider-first availability rule, so missing managed-model activation
    identity must not block ordinary BYOK/local setup and must not silently
    attempt anonymous bootstrap

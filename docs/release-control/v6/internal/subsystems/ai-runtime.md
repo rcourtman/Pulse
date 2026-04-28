@@ -159,8 +159,8 @@ title, empty/loading states, budget note, and reset/export history messaging so
 settings shells and runtime widgets do not fork their own usage wording.
 
 `internal/ai/` is the live backend AI engine. It owns chat execution, Patrol
-orchestration, findings generation, investigation support, quickstart and
-provider selection, remediation flow, and cost persistence.
+orchestration, findings generation, investigation support, provider selection,
+remediation flow, and cost persistence.
 That Patrol runtime ownership includes seed-context admission control.
 `internal/ai/patrol_ai.go` must build Patrol and triage prompts from
 canonical seed sections, size them against the runtime budget model, and when
@@ -195,21 +195,17 @@ selection may fall back only to the provider-owned default declared in
 `internal/config/ai.go`. Runtime startup, connection-test, and load-config
 paths may not return an empty effective model or borrow another provider's
 selection just because live model discovery was unavailable.
-Retired quickstart ownership is now a compatibility boundary, not a normal
-self-hosted GA runtime path. `internal/ai/providers/quickstart.go` and
-`internal/ai/quickstart.go` may remain parseable for mixed-version runtimes,
-hosted compatibility, or support migration while that backend code exists, but
-ordinary self-hosted Assistant, Patrol, and AI Settings flows must prefer the
+Retired quickstart ownership is now an inert compatibility boundary, not a
+self-hosted GA runtime path. The old quickstart provider, bootstrap manager,
+and local token-cache persistence API are removed from the Pulse runtime;
+ordinary self-hosted Assistant, Patrol, and AI Settings flows must use the
 operator's configured provider or local model and must not bootstrap managed
-credits from the frontend. Any retained compatibility traffic must still use the
-owned commercial API edge, authenticate with server-verified commercial
-authority, avoid anonymous local identity, and carry the `resource-policy-v1`
-data-policy marker so legacy prompt relay cannot become an ungoverned
-external-model bypass.
-Public-facing copy that reflects those legacy runtime fields must normalize
-back to provider or local-model setup. It must not promise managed credits,
-account activation support, trial CTAs, anonymous Community bootstrap, or full
-hosted chat access in ordinary self-hosted v6 GA flows.
+credits, hosted-model tokens, or quickstart-backed provider clients from the
+frontend.
+Public-facing copy that reflects old quickstart fields must normalize back to
+provider or local-model setup. It must not promise managed credits, account
+activation support, trial CTAs, anonymous Community bootstrap, or full hosted
+chat access in ordinary self-hosted v6 GA flows.
 That same runtime-backed contract now governs AI settings enablement too:
 unconfigured installs open provider setup, while stale managed-credit or
 activation-required states are treated as compatibility metadata rather than a

@@ -2,7 +2,6 @@ package api
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -12,10 +11,8 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/learning"
-	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/unified"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
-	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 )
 
 func setupAIHandlerWithPatrol(t *testing.T) (*AISettingsHandler, *ai.PatrolService, *unified.UnifiedStore, *learning.LearningStore) {
@@ -113,88 +110,6 @@ func addUnifiedRuntimeFinding(store *unified.UnifiedStore, id string, detectedAt
 	}
 	store.AddFromAI(finding)
 	return finding
-}
-
-type stubQuickstartCreditManager struct {
-	remaining int
-	total     int
-	provider  providers.Provider
-}
-
-func (m *stubQuickstartCreditManager) EnsureBootstrap(context.Context) error { return nil }
-func (m *stubQuickstartCreditManager) HasCredits() bool                      { return m.remaining > 0 }
-func (m *stubQuickstartCreditManager) CreditsRemaining() int                 { return m.remaining }
-func (m *stubQuickstartCreditManager) CreditsTotal() int {
-	if m.total > 0 {
-		return m.total
-	}
-	return pkglicensing.QuickstartCreditsTotal
-}
-func (m *stubQuickstartCreditManager) HasBYOK() bool { return false }
-func (m *stubQuickstartCreditManager) GetProvider() providers.Provider {
-	if m.provider != nil {
-		return m.provider
-	}
-	if m.remaining <= 0 {
-		return nil
-	}
-	return providers.NewQuickstartClientWithToken("qst_live_test", nil, nil)
-}
-
-func TestHandleGetPatrolStatus_DoesNotExposeQuickstartFields(t *testing.T) {
-	handler, _, _, _ := setupAIHandlerWithPatrol(t)
-
-	handler.defaultAIService.SetQuickstartCredits(&stubQuickstartCreditManager{remaining: 7})
-	setUnexportedField(t, handler.defaultAIService, "usingQuickstart", true)
-
-	req := newLoopbackRequest(http.MethodGet, "/api/ai/patrol/status", nil)
-	rec := httptest.NewRecorder()
-
-	handler.HandleGetPatrolStatus(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d, want 200", rec.Code)
-	}
-
-	var resp PatrolStatusResponse
-	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
-		t.Fatalf("decode response: %v", err)
-	}
-
-	body := rec.Body.String()
-	if strings.Contains(body, "quickstart_credits") || strings.Contains(body, "using_quickstart") {
-		t.Fatalf("patrol status must not expose retired quickstart fields: %s", body)
-	}
-}
-
-func TestHandleGetPatrolStatus_DoesNotSurfaceExhaustedQuickstartCredits(t *testing.T) {
-	handler, _, _, _ := setupAIHandlerWithPatrol(t)
-
-	handler.defaultAIService.SetQuickstartCredits(&stubQuickstartCreditManager{remaining: 0})
-
-	req := newLoopbackRequest(http.MethodGet, "/api/ai/patrol/status", nil)
-	rec := httptest.NewRecorder()
-
-	handler.HandleGetPatrolStatus(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d, want 200", rec.Code)
-	}
-
-	var resp PatrolStatusResponse
-	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
-		t.Fatalf("decode response: %v", err)
-	}
-
-	if resp.RuntimeState == ai.PatrolRuntimeStateBlocked {
-		t.Fatalf("runtime_state = %q, want non-blocked for retired quickstart", resp.RuntimeState)
-	}
-	if strings.Contains(strings.ToLower(resp.BlockedReason), "quickstart") {
-		t.Fatalf("blocked_reason must not expose retired quickstart copy, got %q", resp.BlockedReason)
-	}
-	if !resp.Healthy {
-		t.Fatal("expected retired quickstart state to remain healthy on the public status surface")
-	}
 }
 
 func TestHandleGetPatrolStatus_DistinguishesLastFullPatrolFromLastActivity(t *testing.T) {

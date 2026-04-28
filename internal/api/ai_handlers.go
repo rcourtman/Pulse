@@ -4775,8 +4775,7 @@ func writePatrolServiceUnavailableResponse(w http.ResponseWriter) {
 }
 
 func retireQuickstartPatrolStatus(status ai.PatrolStatus) ai.PatrolStatus {
-	switch strings.TrimSpace(status.BlockedReason) {
-	case ai.QuickstartCreditsExhaustedReason(), ai.QuickstartActivationRequiredReason():
+	if isRetiredQuickstartBlockedReason(status.BlockedReason) {
 		status.BlockedReason = ""
 		status.BlockedAt = nil
 		if status.RuntimeState == ai.PatrolRuntimeStateBlocked {
@@ -4789,6 +4788,12 @@ func retireQuickstartPatrolStatus(status ai.PatrolStatus) ai.PatrolStatus {
 		}
 	}
 	return status
+}
+
+func isRetiredQuickstartBlockedReason(reason string) bool {
+	normalized := strings.ToLower(strings.TrimSpace(reason))
+	return strings.Contains(normalized, "quickstart credits exhausted") ||
+		strings.Contains(normalized, "hosted quickstart requires")
 }
 
 // HandleGetPatrolStatus returns the current patrol status (GET /api/ai/patrol/status)

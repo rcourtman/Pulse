@@ -253,33 +253,26 @@ querying, and the operator-facing storage health presentation layer.
 19. Preserve shipped local security-doc guidance in shared `internal/api/` config/setup helpers so storage- and recovery-adjacent transport surfaces do not reintroduce GitHub `main` security links when the running build already serves its own local security documentation route.
 20. Keep shared `internal/api/` Patrol transport and alert-trigger edits feature-isolated: Patrol-specific recency fields, callback fan-out, or alert-bridge wiring changes must not leak into recovery queries, storage links, or recovery-adjacent install/setup flows unless this contract changes in the same slice.
     The same adjacency rule applies to AI settings transport in `internal/api/ai_handlers.go`: provider auth state, masked-secret payload fields, and provider-test model selection remain AI/runtime plus API-contract concerns and must not be absorbed into storage/recovery transport ownership just because those handlers live under the shared backend API tree.
-    That same adjacent boundary also owns the server-authoritative Patrol
-    quickstart contract: bootstrap-triggered `quickstart_credits_remaining`,
-    `quickstart_credits_total`, `using_quickstart`, and cached bearer-token
-    state exposed through shared AI handlers are transport facts owned by the
-    AI/runtime plus API-contract lanes, and storage/recovery surfaces must not
-    reintroduce local quickstart accounting, token lifecycle, anonymous
-    bootstrap identity, fake activation records, or commercial identity rules.
-    That shared AI settings payload is also intentionally vendor-neutral:
-    storage/recovery-adjacent consumers may react to the stable
-    `quickstart:pulse-hosted` alias, but they must not treat vendor model IDs
-    or quickstart upstream-model defaults as part of storage/recovery transport
+    That same adjacent boundary also keeps the retired Patrol quickstart
+    contract out of storage/recovery ownership: shared AI handlers no longer
+    expose active quickstart credit, token, or hosted-model provider state, and
+    storage/recovery surfaces must not reintroduce local quickstart accounting,
+    token lifecycle, anonymous bootstrap identity, fake activation records, or
+    commercial identity rules. That shared AI settings payload is also
+    intentionally vendor-neutral: storage/recovery-adjacent consumers may see
+    old `quickstart:*` values only as compatibility data being cleared by the
+    shared settings helpers, and they must not treat vendor model IDs or
+    quickstart upstream-model defaults as part of storage/recovery transport
     ownership or route behavior.
-    Self-hosted installation activation and hosted entitlement lease authority
-    for quickstart bootstrap remain owned by the shared AI/runtime boundary;
-    storage/recovery-adjacent helpers may consume the resulting state, but they
-    must not mint alternate installation surrogates or duplicate entitlement
-    verification logic.
-    That same adjacent `internal/api/` boundary also now carries Patrol-run
-    execution identity for hosted quickstart billing. Storage and recovery may
-    observe shared Patrol transport through `internal/api/chat_service_adapter.go`,
-    but they must not drop, rewrite, or reinterpret the execution identifier
-    that lets the server-authoritative quickstart ledger charge once per Patrol
-    run instead of once per agentic provider turn.
-    Activation-required quickstart block reasons exposed on that same shared
-    AI settings surface are likewise not storage/recovery onboarding truth;
-    adjacent pages may react to the message, but they must not reinterpret it
-    as a storage install prerequisite, provider-connection error, or
+    That same adjacent `internal/api/` boundary still carries Patrol-run
+    execution identity. Storage and recovery may observe shared Patrol
+    transport through `internal/api/chat_service_adapter.go`, but they must not
+    drop, rewrite, or reinterpret the execution identifier that describes one
+    Patrol run across agentic provider turns.
+    Retired quickstart block reasons exposed through stale compatibility state
+    are likewise not storage/recovery onboarding truth; adjacent pages may
+    normalize the message, but they must not reinterpret it as a storage install
+    prerequisite, provider-connection error, or
     recovery-capability verdict.
 21. Keep provider-backed recovery onboarding on the adjacent platform-connections contract. When `internal/api/` grows or changes TrueNAS connection CRUD, masked-secret preservation, saved-connection retest routes, edit-form saved-test payload overlays, or similar provider setup flows, storage and recovery may consume the resulting recovery points but must not absorb that connection-management ownership into storage/recovery-local handlers or page flows. That same adjacency also covers per-surface scope as it flows through the unified connections aggregator: when `internal/api/connections_aggregator.go` projects TrueNAS `MonitorDatasets`/`MonitorPools`/`MonitorReplication` flags into the aggregator's `scope` map, storage and recovery may observe that projection to explain dataset/pool/replication coverage to operators but must not reinterpret those flags as a recovery freshness verdict, restore-capability gate, or storage-local scope registry.
    That same adjacent platform-connections boundary now also owns
@@ -602,9 +595,8 @@ querying, and the operator-facing storage health presentation layer.
 17. Keep adjacent AI settings persistence vendor-neutral on the shared
     `internal/api/` boundary. When storage- or recovery-adjacent hosted flows
     load or save AI settings through shared helpers, any historical hosted
-    quickstart model IDs must be normalized back to the governed alias
-    `quickstart:pulse-hosted` before adjacent surfaces read or re-emit that
-    state.
+    quickstart model IDs must be cleared before adjacent surfaces read or
+    re-emit that state.
     When operators hover or focus pools versus physical disks, the storage
     summary must reuse one resolved active-series ID across card state and
     chart highlighting so pool-only cards demote cleanly during disk focus and
@@ -1209,16 +1201,14 @@ ledger explanation reads: storage- and recovery-adjacent surfaces may coexist
 with counted monitored-system inventory, but any support-facing count
 reasoning must come from the canonical unified-resource grouping explanation
 payload rather than from storage or recovery heuristics.
-That same shared hosted-entitlement refresh path must also preserve the
-canonical quickstart grant metadata carried in billing state. Storage- and
+That same shared hosted-entitlement refresh path must preserve historical
+quickstart fields only as billing-state compatibility. Storage- and
 recovery-adjacent hosted tenants may share Patrol-backed investigation and
 recovery context with the rest of the app, but the shared `internal/api/`
-lease refresh must not clear quickstart inventory and leave adjacent product
-surfaces inferring a fake "unavailable" runtime from rewritten billing state.
-That same canonical billing state is also the hosted quickstart authority, so
-recovery-adjacent code must not compensate for missing install activation by
-fabricating local activation state when the lease-backed runtime already has a
-server-verifiable principal.
+lease refresh must not turn old quickstart inventory into active AI runtime
+state or lead adjacent product surfaces to infer a hosted-model entitlement.
+Recovery-adjacent code must not compensate for missing AI provider setup by
+fabricating local activation state or a quickstart-backed runtime.
 That adjacent ledger read must also preserve canonical grouped system status,
 including `warning`, so recovery- and storage-adjacent support views do not
 flatten governed degraded state into a fake `unknown` label when the shared
@@ -2417,12 +2407,10 @@ localhost caller.
 That same shared `internal/api/` boundary also owns hosted AI bootstrap
 continuity. Storage- and recovery-adjacent hosted flows may surface Patrol-
 backed investigation or AI-assisted recovery guidance before an operator has
-ever opened AI Settings, so the shared hosted runtime helper must persist the
-canonical quickstart-backed `ai.enc` from entitled billing state when no
-explicit AI config exists. Adjacent recovery surfaces must not invent their
-own "AI disabled until configured" fallback or synthetic activation state when
-the hosted runtime already has enough entitlement proof to bootstrap the
-machine-owned default.
+ever opened AI Settings, but the shared hosted runtime helper must return the
+same unconfigured provider-setup state as self-hosted unless an explicit AI
+config exists. Adjacent recovery surfaces must not invent their own hosted AI
+fallback, synthetic activation state, or quickstart-backed machine default.
 That same hosted entitlement continuity also depends on the shared refresh path
 repairing the correct billing owner. When recovery-adjacent hosted requests run
 under a tenant org without org-local billing state, `internal/api/` must
@@ -2430,12 +2418,11 @@ refresh, persist, and re-evaluate the instance-level `default` lease instead of
 rewriting the empty tenant org. Otherwise AI-assisted recovery can degrade to a
 false free-tier state even though the hosted machine still has a valid refresh
 token and signed entitlement lease.
-That same shared persistence path must also rewrite historical hosted
-quickstart model IDs to the Pulse-owned alias before adjacent recovery or
-storage flows read AI settings state. Support and recovery surfaces may
-observe `quickstart:pulse-hosted`, but they must not inherit or re-emit stale
-vendor IDs from old `ai.enc` payloads just because the shared settings helper
-touched persistence on the way through.
+That same shared persistence path must also clear historical hosted quickstart
+model IDs before adjacent recovery or storage flows read AI settings state.
+Support and recovery surfaces must not inherit or re-emit stale vendor IDs from
+old `ai.enc` payloads just because the shared settings helper touched
+persistence on the way through.
 That same shared settings helper layer must then preserve canonical
 org-management privilege for non-default tenant requests. Storage- and
 recovery-adjacent hosted flows that reuse settings-bound helpers must allow

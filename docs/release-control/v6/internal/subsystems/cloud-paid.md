@@ -110,7 +110,6 @@ cloud-specific enforcement rules.
 87. `internal/cloudcp/stripe/grace_enforcer.go`, `internal/cloudcp/stripe/helpers.go`, `internal/cloudcp/stripe/reconciler.go`, `internal/cloudcp/stripe/webhook.go`
 88. `internal/hosted/hosted_metrics.go`, `internal/hosted/reaper.go`
 89. `pulse-pro:ops/pulse-cloud/audit/`
-90. `pulse-pro:license-server/quickstart_proxy.go`
 
 ## Shared Boundaries
 
@@ -221,7 +220,7 @@ Community limit enforcement.
    that summary into a second overview deck, metric grid, or competing shell.
 7. Add or change Stripe provisioning plan resolution through `internal/cloudcp/stripe/provisioner.go`
 8. Add or change activation/grant lifecycle, release build helper gating, or dev-mode capability widening through `pkg/licensing/dev_mode_features.go`, `pkg/licensing/service.go`, `pkg/licensing/testing_helpers.go`, `pkg/licensing/grant_refresh.go`, and `pkg/licensing/revocation_poll.go`
-9. Add or change license-server transport through `pkg/licensing/license_server_client.go` and `pkg/licensing/quickstart_bootstrap.go`
+9. Add or change license-server transport through `pkg/licensing/license_server_client.go`
    That transport boundary must use HTTPS for non-loopback commercial endpoints,
    may allow plaintext only on direct loopback development targets, and must
    route outbound license-server fetches through the restricted HTTP client so
@@ -770,24 +769,11 @@ fixtures. Future exchange-path changes must not reintroduce a split contract
 where the shared Pulse runtime and the real `pulse-pro/license-server` disagree
 on the activation payload shape.
 That same license-server transport boundary now treats Patrol quickstart
-bootstrap as legacy/support compatibility rather than a normal self-hosted v6
-GA journey. `pkg/licensing/license_server_client.go` and
-`pkg/licensing/quickstart_bootstrap.go` may continue to understand
-`POST /v1/quickstart/bootstrap` payloads for mixed-version runtimes and support
-cases, but ordinary self-hosted frontend flows must not initiate that path.
-If the compatibility path is retained, the Pulse runtime must authenticate it
-with one of the server-verified commercial authorities owned by the shared
-commercial boundary and must not invent anonymous local identity or fake
-self-hosted `activation.enc` state. Local runtime cache files may memoize
-returned tokens and counts but may not treat those cached counts as commercial
-authority or customer-facing entitlement.
-That same public proxy boundary remains privacy-constrained for any legacy
-traffic that still reaches it: requests must carry the `resource-policy-v1`
-data-policy marker proving client-side aggregate-only local-only handling and
-exact resource-policy redaction. Pricing, docs, and normal self-hosted runtime
-UI must not present this compatibility path as Community entitlement, a trial
-CTA, account activation support, or a general hosted chat plan while Relay and
-Pro carry the paid story.
+bootstrap as retired, not as a mixed-version runtime extension point. The
+Pulse runtime must not call `POST /v1/quickstart/bootstrap`, must not persist
+quickstart-backed AI config, and must not mint hosted-model tokens from hosted
+or self-hosted billing state. Historical quickstart credit fields may remain
+parseable in billing state only so old HMAC-protected files can still load.
 The self-hosted commercial counted unit is now also locked to monitored
 systems rather than agent installs. `max_monitored_systems` is the live
 runtime and UI contract, while legacy `max_agents` / `max_nodes` aliases are

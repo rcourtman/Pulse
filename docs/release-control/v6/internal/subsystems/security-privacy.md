@@ -153,8 +153,9 @@ informational and non-commercial so free/self-hosted operators are not shown
 paywall, trial, upgrade, or monitoring-limit prompts inside a privacy surface.
 That posture is now enforced at the AI provider boundary too: non-local model
 requests must be sanitized from the same resource-policy metadata that powers
-the Data Handling surface, and hosted quickstart requests must carry an
-explicit `resource-policy-v1` marker before the public proxy accepts them.
+the Data Handling surface. Hosted quickstart traffic is retired from the Pulse
+runtime, so privacy governance must not describe a live public hosted-model
+proxy for normal self-hosted v6 installs.
 That shared settings boundary now also has an explicit split of responsibilities:
 `frontend-modern/src/components/Settings/useSystemSettingsState.ts` remains the
 canonical owner for telemetry, local-upgrade-metrics, and auth/privacy runtime

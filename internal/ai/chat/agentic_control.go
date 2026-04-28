@@ -47,8 +47,8 @@ func (a *AgenticLoop) SetProviderInfo(provider, model string) {
 }
 
 // SetExecutionID binds a stable higher-level execution identifier to all
-// provider calls made by this loop. Patrol quickstart billing uses this to
-// charge once per Patrol run instead of once per provider turn.
+// provider calls made by this loop so Patrol traces one logical run across
+// agentic turns.
 func (a *AgenticLoop) SetExecutionID(executionID string) {
 	a.mu.Lock()
 	a.executionID = executionID

@@ -933,31 +933,6 @@ func TestService_TestConnection_Extended(t *testing.T) {
 		t.Errorf("Expected 'no provider configured' error, got: %v", err)
 	}
 
-	// 2. Quickstart provider fallback
-	mockProv := &mockProvider{
-		testConnectionFunc: func(ctx context.Context) error {
-			return nil
-		},
-	}
-	svc.provider = mockProv
-	svc.usingQuickstart = true
-	svc.cfg = &config.AIConfig{
-		Enabled: true,
-	}
-
-	err = svc.TestConnection(context.Background())
-	if err != nil {
-		t.Errorf("TestConnection failed: %v", err)
-	}
-
-	// 3. Provider error
-	mockProv.testConnectionFunc = func(ctx context.Context) error {
-		return fmt.Errorf("connection failed")
-	}
-	err = svc.TestConnection(context.Background())
-	if err == nil || !strings.Contains(err.Error(), "connection failed") {
-		t.Errorf("Expected 'connection failed' error, got: %v", err)
-	}
 }
 
 func TestService_ExecuteTool_ResolveFinding(t *testing.T) {

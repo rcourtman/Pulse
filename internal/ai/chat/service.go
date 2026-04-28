@@ -103,8 +103,8 @@ type Service struct {
 }
 
 // SetPatrolProviderFactory installs a Patrol-only provider factory override.
-// This lets Patrol use a different quickstart contract without changing normal
-// interactive chat provider selection in the same slice.
+// This lets Patrol resolve provider-scoped model strings without changing
+// normal interactive chat provider selection in the same slice.
 func (s *Service) SetPatrolProviderFactory(factory func(modelStr string) (providers.StreamingProvider, error)) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

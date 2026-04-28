@@ -13,7 +13,6 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/circuit"
-	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
@@ -362,42 +361,15 @@ func (p *PatrolService) runPatrolWithTrigger(ctx context.Context, trigger Trigge
 	aiServiceEnabled := p.aiService != nil && p.aiService.IsEnabled()
 	canRunLLM := aiServiceEnabled && llmAllowed
 
-	// Check quickstart credit status for messaging
-	p.mu.RLock()
-	qsMgr := p.quickstartCredits
-	p.mu.RUnlock()
-
 	// Check if we can run LLM analysis (AI-only patrol)
 	if !canRunLLM {
 		reason := "AI not configured - set up a provider in Settings > Pulse Assistant"
-		if !aiServiceEnabled {
-			if p.aiService != nil && strings.TrimSpace(p.aiService.QuickstartBlockedReason()) != "" {
-				reason = p.aiService.QuickstartBlockedReason()
-			} else if qsMgr != nil && !qsMgr.HasBYOK() && !qsMgr.HasCredits() {
-				// Distinguish between exhausted credits and no AI configured.
-				reason = patrolQuickstartCreditsExhaustedReason
-			} else {
-				reason = "AI not configured - set up a provider in Settings > Pulse Assistant"
-			}
-		} else if !llmAllowed {
+		if aiServiceEnabled && !llmAllowed {
 			reason = "circuit breaker is open"
 			GetPatrolMetrics().RecordCircuitBlock()
 		}
 		p.setBlockedReason(reason)
 		log.Info().Str("reason", reason).Msg("AI Patrol: Skipping run - AI unavailable")
-		return
-	}
-
-	// Check if using quickstart credits — verify credits remain before starting
-	usingQuickstart := p.aiService != nil && p.aiService.IsUsingQuickstart()
-	if usingQuickstart && p.aiService != nil && strings.TrimSpace(p.aiService.QuickstartBlockedReason()) != "" {
-		p.setBlockedReason(p.aiService.QuickstartBlockedReason())
-		log.Info().Str("reason", p.aiService.QuickstartBlockedReason()).Msg("AI Patrol: Skipping run - quickstart unavailable")
-		return
-	}
-	if usingQuickstart && qsMgr != nil && !qsMgr.HasCredits() {
-		p.setBlockedReason(patrolQuickstartCreditsExhaustedReason)
-		log.Info().Msg("AI Patrol: Skipping run - quickstart credits exhausted")
 		return
 	}
 
@@ -415,11 +387,7 @@ func (p *PatrolService) runPatrolWithTrigger(ctx context.Context, trigger Trigge
 			// Create a finding to surface this error to the user
 			errMsg := aiErr.Error()
 			var title, description, recommendation string
-			if usingQuickstart && (strings.Contains(errMsg, "dial tcp") || strings.Contains(errMsg, "no such host") || strings.Contains(errMsg, "connection refused") || strings.Contains(errMsg, "i/o timeout")) {
-				title = "Pulse Patrol: Quickstart credits require internet"
-				description = "Pulse Patrol cannot reach the quickstart proxy server. Quickstart credits require an internet connection."
-				recommendation = patrolQuickstartUnavailableReason
-			} else if strings.Contains(errMsg, "Insufficient Balance") || strings.Contains(errMsg, "402") {
+			if strings.Contains(errMsg, "Insufficient Balance") || strings.Contains(errMsg, "402") {
 				title = "Pulse Patrol: Provider billing or quota issue"
 				description = "Pulse Patrol cannot analyze your infrastructure because the configured AI provider rejected the request for billing or quota reasons."
 				recommendation = "Resolve the billing or quota issue with your AI provider, or switch to a different provider or local model in Pulse Assistant settings."
@@ -453,15 +421,6 @@ func (p *PatrolService) runPatrolWithTrigger(ctx context.Context, trigger Trigge
 				LastSeenAt:     time.Now(),
 			}
 			trackFinding(errorFinding)
-
-			if usingQuickstart {
-				switch {
-				case providers.IsQuickstartCreditsExhausted(aiErr):
-					p.setBlockedReason(patrolQuickstartCreditsExhaustedReason)
-				case providers.IsQuickstartUnavailable(aiErr), quickstartBootstrapUnavailable(aiErr):
-					p.setBlockedReason(patrolQuickstartUnavailableReason)
-				}
-			}
 		} else if aiResult != nil {
 			runStats.aiAnalysis = aiResult
 			runStats.rejectedFindings = aiResult.RejectedFindings
@@ -833,38 +792,14 @@ func (p *PatrolService) runScopedPatrol(ctx context.Context, scope PatrolScope) 
 	aiServiceEnabled := p.aiService != nil && p.aiService.IsEnabled()
 	canRunLLM := aiServiceEnabled && llmAllowed
 
-	// Check quickstart credit status for scoped runs
-	p.mu.RLock()
-	scopedQsMgr := p.quickstartCredits
-	p.mu.RUnlock()
-	scopedUsingQuickstart := p.aiService != nil && p.aiService.IsUsingQuickstart()
-
 	if !canRunLLM {
 		reason := "AI not configured - set up a provider in Settings > Pulse Assistant"
-		if !aiServiceEnabled {
-			if p.aiService != nil && strings.TrimSpace(p.aiService.QuickstartBlockedReason()) != "" {
-				reason = p.aiService.QuickstartBlockedReason()
-			} else if scopedQsMgr != nil && !scopedQsMgr.HasBYOK() && !scopedQsMgr.HasCredits() {
-				reason = patrolQuickstartCreditsExhaustedReason
-			}
-		} else if !llmAllowed {
+		if aiServiceEnabled && !llmAllowed {
 			reason = "circuit breaker is open"
 			GetPatrolMetrics().RecordCircuitBlock()
 		}
 		p.setBlockedReason(reason)
 		log.Info().Str("reason", reason).Msg("AI Patrol: Skipping scoped run - AI unavailable")
-		return
-	}
-
-	// Check if using quickstart credits — verify credits remain before starting
-	if scopedUsingQuickstart && p.aiService != nil && strings.TrimSpace(p.aiService.QuickstartBlockedReason()) != "" {
-		p.setBlockedReason(p.aiService.QuickstartBlockedReason())
-		log.Info().Str("reason", p.aiService.QuickstartBlockedReason()).Msg("AI Patrol: Skipping scoped run - quickstart unavailable")
-		return
-	}
-	if scopedUsingQuickstart && scopedQsMgr != nil && !scopedQsMgr.HasCredits() {
-		p.setBlockedReason(patrolQuickstartCreditsExhaustedReason)
-		log.Info().Msg("AI Patrol: Skipping scoped run - quickstart credits exhausted")
 		return
 	}
 
@@ -879,14 +814,6 @@ func (p *PatrolService) runScopedPatrol(ctx context.Context, scope PatrolScope) 
 		if aiErr != nil {
 			log.Warn().Err(aiErr).Msg("AI Patrol (scoped): LLM analysis failed")
 			runStats.errors++
-			if scopedUsingQuickstart {
-				switch {
-				case providers.IsQuickstartCreditsExhausted(aiErr):
-					p.setBlockedReason(patrolQuickstartCreditsExhaustedReason)
-				case providers.IsQuickstartUnavailable(aiErr), quickstartBootstrapUnavailable(aiErr):
-					p.setBlockedReason(patrolQuickstartUnavailableReason)
-				}
-			}
 		} else if aiResult != nil {
 			runStats.aiAnalysis = aiResult
 			runStats.rejectedFindings = aiResult.RejectedFindings
@@ -1578,31 +1505,6 @@ func (p *PatrolService) GetStatus() PatrolStatus {
 	if p.triggerManager != nil {
 		triggerStatus := p.triggerManager.GetStatus()
 		status.TriggerStatus = &triggerStatus
-	}
-
-	if p.quickstartCredits != nil {
-		status.QuickstartCreditsRemaining = p.quickstartCredits.CreditsRemaining()
-		status.QuickstartCreditsTotal = p.quickstartCredits.CreditsTotal()
-		status.UsingQuickstart = p.aiService != nil && p.aiService.IsUsingQuickstart()
-	}
-
-	quickstartReason := ""
-	if p.aiService != nil {
-		quickstartReason = strings.TrimSpace(p.aiService.QuickstartBlockedReason())
-	}
-	if quickstartReason == "" &&
-		p.config.Enabled &&
-		p.quickstartCredits != nil &&
-		!p.quickstartCredits.HasBYOK() &&
-		!p.quickstartCredits.HasCredits() {
-		quickstartReason = patrolQuickstartCreditsExhaustedReason
-	}
-	if quickstartReason != "" {
-		status.BlockedReason = quickstartReason
-	} else if strings.TrimSpace(status.BlockedReason) == patrolQuickstartCreditsExhaustedReason ||
-		strings.TrimSpace(status.BlockedReason) == patrolQuickstartActivationRequiredReason ||
-		strings.TrimSpace(status.BlockedReason) == patrolQuickstartUnavailableReason {
-		status.BlockedReason = ""
 	}
 
 	switch {
