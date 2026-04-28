@@ -17,7 +17,7 @@ IN NO EVENT UNLESS REQUIRED BY APPLICABLE LAW WILL THE AUTHOR, OR ANY OTHER PART
 **OUR TOTAL LIABILITY TO YOU FOR ALL CLAIMS ARISING OUT OF OR RELATED TO THIS AGREEMENT SHALL NOT EXCEED THE TOTAL AMOUNT PAID BY YOU FOR THE SOFTWARE DURING THE TWELVE (12) MONTHS PRIOR TO THE ACCRUAL OF THE FIRST CLAIM.**
 
 ## 4. AI AUTOMATION & AUTONOMOUS MODE
-The Software includes features ("AI Patrol", "Auto-Fix", "Autonomous Mode") that use Artificial Intelligence to execute commands on your infrastructure.
+The Software includes features ("AI Patrol", "safe remediation workflows", "Autonomous Mode") that use Artificial Intelligence to execute commands on your infrastructure.
 *   **User Responsibility**: You acknowledge that AI models can hallucinate or produce incorrect commands. You are solely responsible for verifying the actions recommended or taken by the Software.
 *   **High-Risk Environments**: Use in production or mission-critical environments is at your own risk. We strongly recommend using "Approval Mode" rather than "Autonomous Mode".
 

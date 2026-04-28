@@ -17,7 +17,7 @@ import {
   syncAIRuntimeSettings,
 } from '@/stores/aiRuntimeState';
 import { hasFeature, loadRuntimeCapabilities } from '@/stores/license';
-import { canOfferCommercialTrial, getUpgradeActionDestination } from '@/stores/licenseCommercial';
+import { getUpgradeActionDestination } from '@/stores/licenseCommercial';
 import { presentationPolicyHidesUpgradePrompts } from '@/stores/sessionPresentationPolicy';
 import { notificationStore } from '@/stores/notifications';
 import type { AISettings as AISettingsType, AIProvider, AuthMethod, ModelInfo } from '@/types/ai';
@@ -40,8 +40,6 @@ import {
   normalizeQuickstartReason,
 } from '@/utils/aiQuickstartContract';
 import { logger } from '@/utils/logger';
-import { showSuccess, showWarning } from '@/utils/toast';
-import { runStartProTrialAction } from '@/utils/trialStartAction';
 import { trackPaywallViewed } from '@/utils/upgradeMetrics';
 
 type AISetupMode = 'provider' | 'activation-or-provider' | 'provider-required';
@@ -80,7 +78,6 @@ export const useAISettingsState = () => {
   const [preflightRunning, setPreflightRunning] = createSignal(false);
   const [preflightLastCheckedAt, setPreflightLastCheckedAt] = createSignal<number | null>(null);
 
-  const [startingTrial, setStartingTrial] = createSignal(false);
   const [showSetupModal, setShowSetupModal] = createSignal(false);
   const [setupMode, setSetupMode] = createSignal<AISetupMode>('provider');
   const [setupProvider, setSetupProvider] = createSignal<AIProvider>('anthropic');
@@ -119,7 +116,7 @@ export const useAISettingsState = () => {
   const showUpgradePrompts = () => !presentationPolicyHidesUpgradePrompts();
   const visibleQuickstartBlockedReason = () => {
     const normalized = normalizeQuickstartReason(settings()?.quickstart_blocked_reason);
-    if (normalized === AI_QUICKSTART_ACTIVATION_REQUIRED_REASON && !showUpgradePrompts()) {
+    if (normalized === AI_QUICKSTART_ACTIVATION_REQUIRED_REASON) {
       return '';
     }
     return normalized;
@@ -161,7 +158,6 @@ export const useAISettingsState = () => {
     Boolean(settings()?.quickstart_credits_available),
   );
   const quickstartBlockedReason = createMemo(visibleQuickstartBlockedReason);
-  const canStartTrial = () => showUpgradePrompts() && canOfferCommercialTrial();
   const upgradeAutofixDestination = () => getUpgradeActionDestination('ai_autofix');
 
   const hasProviderBackedModels = (data: AISettingsType | null | undefined) =>
@@ -306,23 +302,6 @@ export const useAISettingsState = () => {
   };
 
   const formatDiffStats = (change: FileChange) => `+${change.added} -${change.removed}`;
-
-  const handleStartTrial = async () => {
-    if (startingTrial()) return;
-    setStartingTrial(true);
-    try {
-      const outcome = await runStartProTrialAction({
-        showSuccess,
-        showError: showWarning,
-      });
-      if (outcome === 'activated') {
-        setShowSetupModal(false);
-        await loadSettings();
-      }
-    } finally {
-      setStartingTrial(false);
-    }
-  };
 
   const handleCloseSetupModal = () => {
     setShowSetupModal(false);
@@ -861,7 +840,6 @@ export const useAISettingsState = () => {
   return {
     autoFixLocked,
     availableModels,
-    canStartTrial,
     chatSessions,
     chatSessionsError,
     chatSessionsLoading,
@@ -881,7 +859,6 @@ export const useAISettingsState = () => {
     handleSessionRevert,
     handleSessionSummarize,
     handleSetupSubmit,
-    handleStartTrial,
     handleTest,
     handleTestProvider,
     hasConfiguredProvider,
@@ -928,7 +905,6 @@ export const useAISettingsState = () => {
     showDiscoverySettings,
     showSetupModal,
     showUpgradePrompts,
-    startingTrial,
     testing,
     testingProvider,
     quickstartBlockedReason,

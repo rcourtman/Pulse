@@ -12,7 +12,6 @@ import {
   RELAY_ENABLE_HELP_TEXT,
   RELAY_INFO_MESSAGE_CLASS,
   RELAY_INFO_TITLE_CLASS,
-  RELAY_INLINE_ACTION_CLASS,
   RELAY_LAST_ERROR_CLASS,
   RELAY_LICENSE_REQUIRED_MESSAGE,
   RELAY_PAIRING_AVAILABILITY_MESSAGE,
@@ -22,7 +21,6 @@ import {
   RELAY_READONLY_NOTICE_CLASS,
   RELAY_SETTINGS_DESCRIPTION,
 } from '@/utils/relayPresentation';
-import { UPGRADE_TRIAL_LABEL } from '@/utils/upgradePresentation';
 import { RelayPairingSection } from './RelayPairingSection';
 import {
   useRelaySettingsPanelState,
@@ -53,18 +51,8 @@ export const RelaySettingsPanel: Component<RelaySettingsPanelProps> = (props) =>
                     class={RELAY_PRIMARY_LINK_CLASS}
                     onClick={() => trackUpgradeClicked('settings_relay_panel', 'relay')}
                   >
-                    Upgrade
+                    View plans
                   </UpgradeLink>
-                  <Show when={state.canStartTrial()}>
-                    <button
-                      type="button"
-                      onClick={state.handleStartTrial}
-                      disabled={state.startingTrial()}
-                      class={RELAY_INLINE_ACTION_CLASS}
-                    >
-                      {UPGRADE_TRIAL_LABEL}
-                    </button>
-                  </Show>
                 </div>
               </Show>
             </div>

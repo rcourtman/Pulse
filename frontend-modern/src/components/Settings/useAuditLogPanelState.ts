@@ -8,11 +8,10 @@ import {
 import { apiFetch } from '@/utils/apiClient';
 import { showSuccess, showToast, showWarning } from '@/utils/toast';
 import { hasFeature, runtimeCapabilitiesLoaded } from '@/stores/license';
-import { canOfferCommercialTrial, getUpgradeActionDestination } from '@/stores/licenseCommercial';
+import { getUpgradeActionDestination } from '@/stores/licenseCommercial';
 import { presentationPolicyHidesUpgradePrompts } from '@/stores/sessionPresentationPolicy';
 import { loadRuntimeCapabilities } from '@/stores/license';
 import { trackPaywallViewed, trackUpgradeClicked } from '@/utils/upgradeMetrics';
-import { runStartProTrialAction } from '@/utils/trialStartAction';
 
 export interface AuditEvent {
   id: string;
@@ -108,7 +107,6 @@ export const useAuditLogPanelState = () => {
   const [verifyControllers, setVerifyControllers] = createSignal<Record<string, AbortController>>(
     {},
   );
-  const [startingTrial, setStartingTrial] = createSignal(false);
 
   const auditLoggingEnabled = createMemo(
     () => runtimeCapabilitiesLoaded() && hasFeature('audit_logging'),
@@ -117,7 +115,6 @@ export const useAuditLogPanelState = () => {
   const showUpgradePaywall = createMemo(
     () => runtimeCapabilitiesLoaded() && !auditLoggingEnabled() && !loading(),
   );
-  const canStartTrial = () => showUpgradePrompts() && canOfferCommercialTrial();
   const upgradeDestination = createMemo(() => getUpgradeActionDestination('audit_logging'));
 
   const fetchAuditEvents = async (options?: { limit?: number; offset?: number }) => {
@@ -518,19 +515,6 @@ export const useAuditLogPanelState = () => {
     trackUpgradeClicked('settings_audit_log_panel', 'audit_logging');
   };
 
-  const handleStartTrial = async () => {
-    if (startingTrial()) return;
-    setStartingTrial(true);
-    try {
-      await runStartProTrialAction({
-        showSuccess,
-        showError: showWarning,
-      });
-    } finally {
-      setStartingTrial(false);
-    }
-  };
-
   createEffect((wasPaywallVisible) => {
     const isPaywallVisible = showUpgradePaywall();
     if (showUpgradePrompts() && isPaywallVisible && !wasPaywallVisible) {
@@ -591,7 +575,6 @@ export const useAuditLogPanelState = () => {
     auditLoggingEnabled,
     autoVerifyEnabled,
     autoVerifyLimit,
-    canStartTrial,
     cancelVerification,
     clearFilterChip,
     clearFilters,
@@ -603,7 +586,6 @@ export const useAuditLogPanelState = () => {
     goToLastPage,
     goToNextPage,
     goToPreviousPage,
-    handleStartTrial,
     handleUpgradeClick,
     hasNextPage,
     hasResumeEvents,
@@ -629,7 +611,6 @@ export const useAuditLogPanelState = () => {
     setVerificationFilter,
     showUpgradePaywall,
     showUpgradePrompts,
-    startingTrial,
     submitPageInput,
     successFilter,
     totalEvents,

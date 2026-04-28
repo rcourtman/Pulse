@@ -1,6 +1,6 @@
 import { createEffect, createMemo, createSignal, onCleanup, onMount } from 'solid-js';
 import { hasFeature, runtimeCapabilitiesLoaded } from '@/stores/license';
-import { canOfferCommercialTrial, getUpgradeActionDestination } from '@/stores/licenseCommercial';
+import { getUpgradeActionDestination } from '@/stores/licenseCommercial';
 import { presentationPolicyHidesUpgradePrompts } from '@/stores/sessionPresentationPolicy';
 import { loadRuntimeCapabilities } from '@/stores/license';
 import { trackPaywallViewed } from '@/utils/upgradeMetrics';
@@ -10,7 +10,6 @@ import { OnboardingAPI, type OnboardingQRResponse } from '@/api/onboarding';
 import { SecurityAPI, type APITokenRecord } from '@/api/security';
 import { logger } from '@/utils/logger';
 import { getRelayConnectionPresentation } from '@/utils/relayPresentation';
-import { runStartProTrialAction } from '@/utils/trialStartAction';
 import QRCode from 'qrcode';
 
 export interface RelaySettingsPanelProps {
@@ -28,11 +27,9 @@ export function useRelaySettingsPanelState(props: RelaySettingsPanelProps) {
   const [pairingPayload, setPairingPayload] = createSignal<OnboardingQRResponse | null>(null);
   const [pairingQRCode, setPairingQRCode] = createSignal<string | null>(null);
   const [pairingTokenId, setPairingTokenId] = createSignal<string | null>(null);
-  const [startingTrial, setStartingTrial] = createSignal(false);
 
   const canManage = () => props.canManage !== false;
   const showUpgradePrompts = () => !presentationPolicyHidesUpgradePrompts();
-  const canStartTrial = () => showUpgradePrompts() && canOfferCommercialTrial();
   const relayEnabled = () => hasFeature('relay');
   const upgradeDestination = () => getUpgradeActionDestination('relay');
   const connectionPresentation = createMemo(() =>
@@ -147,20 +144,6 @@ export function useRelaySettingsPanelState(props: RelaySettingsPanelProps) {
     void deletePairingTokenIfUnused(pairingTokenId());
   });
 
-  const handleStartTrial = async () => {
-    if (startingTrial()) return;
-    setStartingTrial(true);
-    try {
-      await runStartProTrialAction({
-        successMessage: 'Remote access trial started',
-        showSuccess,
-        showError,
-      });
-    } finally {
-      setStartingTrial(false);
-    }
-  };
-
   const handleToggleEnabled = async (enabled: boolean) => {
     if (!canManage()) return;
     setSaving(true);
@@ -266,14 +249,12 @@ export function useRelaySettingsPanelState(props: RelaySettingsPanelProps) {
   return {
     canManage,
     canShowPairing,
-    canStartTrial,
     config,
     connectionPresentation,
     handleCopyPairingPayload,
     handleHidePairing,
     handlePairNewDevice,
     handleSaveServerUrl,
-    handleStartTrial,
     handleToggleEnabled,
     loading,
     pairingLoading,
@@ -285,7 +266,6 @@ export function useRelaySettingsPanelState(props: RelaySettingsPanelProps) {
     setServerUrl,
     showUpgradePrompts,
     showPairing,
-    startingTrial,
     status,
     upgradeDestination,
   };

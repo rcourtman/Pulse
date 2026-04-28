@@ -1032,12 +1032,16 @@ The dedicated profile client now also routes list, schema, and validation
 parsing through shared response helpers in `frontend-modern/src/api/agentProfiles.ts`,
 so profile transport stays aligned with the governed API contract instead of
 reintroducing local array or JSON parsing rules.
-That same lifecycle-owned install/profile surface now also routes trial-start
-CTA orchestration through `frontend-modern/src/utils/trialStartAction.ts`.
-Agent profile paywalls, NodeModal upgrade prompts, and setup-completion trial
-actions may choose their own success copy, but they must use the shared helper
-for hosted trial redirects and canonical denial handling instead of open-coding
-`startProTrial()` branches in each lifecycle surface.
+That same lifecycle-owned install/profile surface now also keeps trial-start
+CTA orchestration out of ordinary authenticated self-hosted feature gates.
+Agent profile paywalls may describe the entitled lifecycle capability and link
+to neutral plan review, but they must not call
+`frontend-modern/src/utils/trialStartAction.ts` directly or present direct
+trial-start copy inside the normal Settings flow. Trial-start orchestration
+through that helper remains limited to explicit first-run, hosted, activation,
+recovery, or support handoff contexts that own redirect, success-notification,
+and canonical denial handling instead of open-coding `startProTrial()`
+branches in each lifecycle surface.
 
 The owned backend API surfaces must preserve the exact-release installer
 fallback, canonical /api/auto-register behavior, and hosted org install-command

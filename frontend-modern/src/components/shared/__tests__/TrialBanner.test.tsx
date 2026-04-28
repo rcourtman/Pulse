@@ -112,7 +112,7 @@ describe('TrialBanner', () => {
     expect(screen.getByRole('status')).toBeInTheDocument();
     expect(screen.getByText('Pro Trial:')).toBeInTheDocument();
     expect(screen.getByText('4 days remaining')).toBeInTheDocument();
-    expect(screen.getByText('Upgrade').closest('a')).toHaveAttribute(
+    expect(screen.getByText('Manage plan').closest('a')).toHaveAttribute(
       'href',
       getPublicPricingUrl('trial_banner'),
     );
@@ -151,7 +151,7 @@ describe('TrialBanner', () => {
     renderBanner();
 
     expect(screen.getByRole('status')).toBeInTheDocument();
-    expect(screen.queryByText('Upgrade')).not.toBeInTheDocument();
+    expect(screen.queryByText('Manage plan')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Snooze 7d' })).not.toBeInTheDocument();
   });
 

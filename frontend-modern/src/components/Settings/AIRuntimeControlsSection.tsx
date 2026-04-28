@@ -16,11 +16,7 @@ import {
   getAISettingsWorkloadDiscoverySummary,
 } from '@/utils/aiSettingsPresentation';
 import { trackUpgradeClicked } from '@/utils/upgradeMetrics';
-import {
-  UPGRADE_ACTION_LABEL,
-  UPGRADE_TRIAL_LABEL,
-  UPGRADE_TRIAL_LINK_CLASS,
-} from '@/utils/upgradePresentation';
+import { UPGRADE_ACTION_LABEL } from '@/utils/upgradePresentation';
 
 interface AIRuntimeControlsSectionProps {
   state: AISettingsState;
@@ -287,18 +283,7 @@ export const AIRuntimeControlsSection: Component<AIRuntimeControlsSectionProps> 
             >
               {UPGRADE_ACTION_LABEL}
             </UpgradeLink>{' '}
-            to enable autonomous mode.
-            <Show when={state.canStartTrial()}>
-              {' '}
-              <button
-                type="button"
-                onClick={state.handleStartTrial}
-                disabled={state.startingTrial()}
-                class={UPGRADE_TRIAL_LINK_CLASS}
-              >
-                {UPGRADE_TRIAL_LABEL}
-              </button>
-            </Show>
+            to review autonomous-mode options.
           </p>
         </Show>
 

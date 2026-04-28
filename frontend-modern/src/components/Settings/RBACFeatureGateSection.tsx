@@ -6,18 +6,13 @@ import { trackUpgradeClicked } from '@/utils/upgradeMetrics';
 import {
   getUpgradeActionButtonClass,
   UPGRADE_ACTION_LABEL,
-  UPGRADE_TRIAL_LABEL,
-  UPGRADE_TRIAL_LINK_CLASS,
 } from '@/utils/upgradePresentation';
 import type { RBACFeatureGateLocation } from './useRBACFeatureGateState';
 
 interface RBACFeatureGateSectionProps {
-  canStartTrial: boolean;
   copy: RBACFeatureGateCopy;
   paywallLocation: RBACFeatureGateLocation;
   showUpgradePrompts: boolean;
-  startingTrial: boolean;
-  onStartTrial: () => void | Promise<void>;
 }
 
 export const RBACFeatureGateSection: Component<RBACFeatureGateSectionProps> = (props) => (
@@ -36,16 +31,6 @@ export const RBACFeatureGateSection: Component<RBACFeatureGateSectionProps> = (p
           >
             {UPGRADE_ACTION_LABEL}
           </UpgradeLink>
-          <Show when={props.canStartTrial}>
-            <button
-              type="button"
-              onClick={props.onStartTrial}
-              disabled={props.startingTrial}
-              class={UPGRADE_TRIAL_LINK_CLASS}
-            >
-              {UPGRADE_TRIAL_LABEL}
-            </button>
-          </Show>
         </div>
       </Show>
     </div>

@@ -14,7 +14,7 @@ import {
   runtimeCapabilitiesLoaded,
   runtimeCapabilitiesLoading,
 } from '@/stores/license';
-import { canOfferCommercialTrial, getUpgradeActionDestination } from '@/stores/licenseCommercial';
+import { getUpgradeActionDestination } from '@/stores/licenseCommercial';
 import { presentationPolicyHidesUpgradePrompts } from '@/stores/sessionPresentationPolicy';
 import { loadRuntimeCapabilities } from '@/stores/license';
 import { aiChatStore } from '@/stores/aiChat';
@@ -25,11 +25,8 @@ import { logger } from '@/utils/logger';
 import {
   getUpgradeActionButtonClass,
   UPGRADE_ACTION_LABEL,
-  UPGRADE_TRIAL_LABEL,
-  UPGRADE_TRIAL_LINK_CLASS,
 } from '@/utils/upgradePresentation';
 import { trackPaywallViewed, trackUpgradeClicked } from '@/utils/upgradeMetrics';
-import { runStartProTrialAction } from '@/utils/trialStartAction';
 import { KNOWN_SETTINGS } from './agentProfileSettings';
 import {
   getActionableAgentIdFromResource,
@@ -71,9 +68,7 @@ export const useAgentProfilesPanelState = () => {
 
   const checkingLicense = () => !runtimeCapabilitiesLoaded() || runtimeCapabilitiesLoading();
   const hasAgentProfiles = () => hasEntitlement('agent_profiles');
-  const [startingTrial, setStartingTrial] = createSignal(false);
   const showUpgradePrompts = () => !presentationPolicyHidesUpgradePrompts();
-  const canStartTrial = () => showUpgradePrompts() && canOfferCommercialTrial();
 
   const aiAvailable = createMemo(() => aiChatStore.enabled === true);
   const [profiles, setProfiles] = createSignal<AgentProfile[]>([]);
@@ -207,19 +202,6 @@ export const useAgentProfilesPanelState = () => {
       notificationStore.error(err instanceof Error ? err.message : 'Failed to load agent profiles');
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleStartTrial = async () => {
-    if (startingTrial()) return;
-    setStartingTrial(true);
-    try {
-      await runStartProTrialAction({
-        showSuccess: notificationStore.success,
-        showError: notificationStore.error,
-      });
-    } finally {
-      setStartingTrial(false);
     }
   };
 
@@ -359,7 +341,6 @@ export const useAgentProfilesPanelState = () => {
 
   return {
     aiAvailable,
-    canStartTrial,
     checkingLicense,
     connectedAgents,
     formDescription,
@@ -378,7 +359,6 @@ export const useAgentProfilesPanelState = () => {
     handleDelete,
     handleEdit,
     handleSave,
-    handleStartTrial,
     handleSuggest,
     handleSuggestionAccepted,
     hasAgentProfiles,
@@ -392,7 +372,6 @@ export const useAgentProfilesPanelState = () => {
     showUpgradePrompts,
     showModal,
     showSuggestModal,
-    startingTrial,
     trackUpgradeClicked,
     unknownKeys,
     updateSetting,
@@ -402,7 +381,5 @@ export const useAgentProfilesPanelState = () => {
     formatRelativeTime,
     getAgentStatusIndicator,
     UPGRADE_ACTION_LABEL,
-    UPGRADE_TRIAL_LABEL,
-    UPGRADE_TRIAL_LINK_CLASS,
   };
 };

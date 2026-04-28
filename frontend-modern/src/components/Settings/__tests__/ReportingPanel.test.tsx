@@ -76,13 +76,11 @@ const baseCatalog = {
 
 function buildState(overrides: Record<string, unknown> = {}) {
   return {
-    canStartTrial: () => false,
     exportingInventory: () => false,
     format: () => 'pdf' as const,
     handleExportVMInventory: vi.fn(),
     generating: () => false,
     handleGenerate: vi.fn(),
-    handleStartTrial: vi.fn(),
     isLocked: () => false,
     isReportingEnabled: () => true,
     metricType: () => '',
@@ -98,7 +96,6 @@ function buildState(overrides: Record<string, unknown> = {}) {
     setSelectedResources: vi.fn(),
     setTitle: vi.fn(),
     showUpgradePrompts: () => true,
-    startingTrial: () => false,
     title: () => '',
     upgradeDestination: () => ({
       href: getPublicPricingUrl('advanced_reporting'),

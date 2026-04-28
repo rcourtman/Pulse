@@ -156,7 +156,7 @@ describe('RelaySettingsPanel runtime', () => {
 
   it('relies on shared commercial posture bootstrap for relay settings', () => {
     expect(relaySettingsPanelStateSource).not.toContain('loadCommercialPosture(');
-    expect(relaySettingsPanelStateSource).toContain('canOfferCommercialTrial');
+    expect(relaySettingsPanelStateSource).not.toContain('canOfferCommercialTrial');
     expect(relaySettingsPanelStateSource).not.toContain('commercialPosture()?.trial_eligible');
   });
 
@@ -174,7 +174,7 @@ describe('RelaySettingsPanel runtime', () => {
         'Remote access via Pulse Relay requires a Relay license or above. Pair supported Pulse Mobile clients with this instance using a QR code or deep link.',
       ),
     ).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Upgrade' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'View plans' })).toHaveAttribute(
       'href',
       'https://example.com/upgrade',
     );
@@ -495,8 +495,8 @@ describe('RelaySettingsPanel runtime', () => {
   it('keeps relay settings split into shell, runtime, and pairing owners', () => {
     expect(relaySettingsPanelSource).toContain('./useRelaySettingsPanelState');
     expect(relaySettingsPanelSource).toContain('./RelayPairingSection');
-    expect(relaySettingsPanelSource).toContain('@/utils/upgradePresentation');
-    expect(relaySettingsPanelSource).toContain('UPGRADE_TRIAL_LABEL');
+    expect(relaySettingsPanelSource).not.toContain('@/utils/upgradePresentation');
+    expect(relaySettingsPanelSource).not.toContain('UPGRADE_TRIAL_LABEL');
     expect(relaySettingsPanelSource).not.toContain('createSignal(');
     expect(relaySettingsPanelSource).not.toContain('QRCode.toDataURL(');
     expect(relaySettingsPanelSource).not.toContain('>Start free trial<');

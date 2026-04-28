@@ -26,12 +26,9 @@ export interface AISettingsDialogsProps {
   setupOllamaUrl: Accessor<string>;
   setSetupOllamaUrl: Setter<string>;
   setupSaving: Accessor<boolean>;
-  startingTrial: Accessor<boolean>;
   quickstartBlockedReason: Accessor<string>;
   handleCloseSetupModal: () => void;
   handleSetupSubmit: () => Promise<void>;
-  canStartTrial: () => boolean;
-  handleStartTrial: () => Promise<void>;
 }
 
 export const AISettingsDialogs: Component<AISettingsDialogsProps> = (props) => {
@@ -113,31 +110,6 @@ export const AISettingsDialogs: Component<AISettingsDialogsProps> = (props) => {
               <Show when={props.quickstartBlockedReason()}>
                 <div class="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
                   {props.quickstartBlockedReason()}
-                </div>
-              </Show>
-
-              <Show when={props.setupMode() === 'activation-or-provider' && props.canStartTrial()}>
-                <div class="rounded-md border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-950/40">
-                  <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                      <p class="text-sm font-medium text-blue-900 dark:text-blue-100">
-                        Use hosted quickstart for Patrol
-                      </p>
-                      <p class="mt-1 text-xs text-blue-800 dark:text-blue-200">
-                        Open the hosted quickstart handoff, or skip it and connect your own model
-                        provider below. Hosted quickstart routes policy-redacted prompts through
-                        Pulse infrastructure; BYOK providers go direct to your chosen provider.
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => void props.handleStartTrial()}
-                      class="inline-flex min-h-10 sm:min-h-9 items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-                      disabled={props.startingTrial()}
-                    >
-                      {props.startingTrial() ? 'Opening handoff...' : 'Open hosted handoff'}
-                    </button>
-                  </div>
                 </div>
               </Show>
 

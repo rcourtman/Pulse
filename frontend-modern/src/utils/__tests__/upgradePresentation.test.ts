@@ -14,8 +14,8 @@ import {
 
 describe('upgradePresentation', () => {
   it('returns canonical upgrade labels', () => {
-    expect(UPGRADE_ACTION_LABEL).toBe('Upgrade to Pro');
-    expect(UPGRADE_TRIAL_LABEL).toBe('Start free trial');
+    expect(UPGRADE_ACTION_LABEL).toBe('View plans');
+    expect(UPGRADE_TRIAL_LABEL).toBe('Start trial');
     expect(UPGRADE_TRIAL_LINK_CLASS).toContain('text-indigo-500');
   });
 

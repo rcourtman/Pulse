@@ -3,7 +3,7 @@ import { createStore } from 'solid-js/store';
 import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
 import { hasFeature, runtimeCapabilitiesLoaded } from '@/stores/license';
-import { canOfferCommercialTrial, getUpgradeActionDestination } from '@/stores/licenseCommercial';
+import { getUpgradeActionDestination } from '@/stores/licenseCommercial';
 import { presentationPolicyHidesUpgradePrompts } from '@/stores/sessionPresentationPolicy';
 import { loadRuntimeCapabilities } from '@/stores/license';
 import { trackPaywallViewed, trackUpgradeClicked } from '@/utils/upgradeMetrics';
@@ -24,7 +24,6 @@ import {
   getSSOProvidersLoadErrorMessage,
   getSSOTestResultPresentation,
 } from '@/utils/ssoProviderPresentation';
-import { runStartProTrialAction } from '@/utils/trialStartAction';
 import type {
   MetadataPreview,
   ProviderForm,
@@ -62,27 +61,10 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
   const [showMetadataPreview, setShowMetadataPreview] = createSignal(false);
   const [metadataPreview, setMetadataPreview] = createSignal<MetadataPreview | null>(null);
   const [loadingPreview, setLoadingPreview] = createSignal(false);
-  const [startingTrial, setStartingTrial] = createSignal(false);
 
   const hasAdvancedSSO = createMemo(() => hasFeature('advanced_sso'));
   const canManage = () => props.canManage !== false;
   const showUpgradePrompts = () => !presentationPolicyHidesUpgradePrompts();
-  const canStartTrial = () => showUpgradePrompts() && canOfferCommercialTrial();
-
-  const handleStartTrial = async () => {
-    if (startingTrial()) {
-      return;
-    }
-    setStartingTrial(true);
-    try {
-      await runStartProTrialAction({
-        showSuccess: notificationStore.success,
-        showError: notificationStore.error,
-      });
-    } finally {
-      setStartingTrial(false);
-    }
-  };
 
   createEffect((wasBannerVisible) => {
     const isBannerVisible =
@@ -353,9 +335,6 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
     loadingPreview,
     hasAdvancedSSO,
     canManage,
-    startingTrial,
-    canStartTrial,
-    handleStartTrial,
     openAddModal,
     openEditModal,
     handleSave,

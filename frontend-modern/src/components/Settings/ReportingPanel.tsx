@@ -15,8 +15,6 @@ import { trackUpgradeClicked } from '@/utils/upgradeMetrics';
 import {
   getUpgradeActionButtonClass,
   UPGRADE_ACTION_LABEL,
-  UPGRADE_TRIAL_LABEL,
-  UPGRADE_TRIAL_LINK_CLASS,
 } from '@/utils/upgradePresentation';
 import { ResourcePicker } from './ResourcePicker';
 
@@ -43,13 +41,11 @@ function FormField(props: FormFieldProps) {
 
 export function ReportingPanel() {
   const {
-    canStartTrial,
     exportingInventory,
     format,
     handleExportVMInventory,
     generating,
     handleGenerate,
-    handleStartTrial,
     isLocked,
     isReportingEnabled,
     metricType,
@@ -65,7 +61,6 @@ export function ReportingPanel() {
     setSelectedResources,
     setTitle,
     showUpgradePrompts,
-    startingTrial,
     title,
     upgradeDestination,
   } = useReportingPanelState();
@@ -154,16 +149,6 @@ export function ReportingPanel() {
                   >
                     {UPGRADE_ACTION_LABEL}
                   </UpgradeLink>
-                  <Show when={canStartTrial()}>
-                    <button
-                      type="button"
-                      onClick={handleStartTrial}
-                      disabled={startingTrial()}
-                      class={UPGRADE_TRIAL_LINK_CLASS}
-                    >
-                      {UPGRADE_TRIAL_LABEL}
-                    </button>
-                  </Show>
                 </div>
               </Show>
             </div>

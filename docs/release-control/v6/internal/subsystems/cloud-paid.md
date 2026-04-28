@@ -848,11 +848,13 @@ truth. Trial initiation surfaces must preserve backend denial messages when the
 request is blocked for migration, active commercial state, or other operational
 reasons, and only map the explicit canonical cases (`trial_already_used`,
 rate-limit retry) to fixed copy.
-That same helper boundary also owns generic settings-paywall CTA labels such as
-`Upgrade to Pro` and `Start free trial`; feature panels like
-`AIRuntimeControlsSection.tsx` and `RelaySettingsPanel.tsx` must consume the
-shared upgrade presentation owner instead of embedding those CTA strings
-locally.
+That same helper boundary also owns generic settings-paywall CTA labels. Under
+the v6 free-first self-hosted policy, non-billing feature gates must stay
+factual and route deliberate commercial intent to Plans with neutral "View
+plans" copy; they must not start a Pro trial directly or embed local
+`Upgrade to Pro` / `Start free trial` strings. Direct trial-start actions stay
+owned by explicit billing, hosted, activation, recovery, and support handoff
+surfaces where the operator has already chosen the commercial path.
 The same shared self-hosted commercial presentation boundary also owns the
 recovery-surface copy for `SelfHostedCommercialRecoverySection.tsx`,
 including the existing-key field label/help text and legacy-key exchange

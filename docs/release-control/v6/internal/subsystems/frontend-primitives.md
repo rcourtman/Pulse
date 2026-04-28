@@ -1174,20 +1174,16 @@ later" message; user-facing CTA surfaces must therefore inherit
 `Retry-After`-backed copy through the shared helper path rather than
 inventing lane-local 429 wording.
 That same shared primitive boundary now also owns intent-level commercial
-selectors for non-billing surfaces. Leaf/shared state such as
-`useTrialBannerState.ts`,
-`useMonitoredSystemLimitWarningBannerState.ts`, settings panel state, and
-Patrol approval/header shells must consume selector helpers from
+selectors for surfaces that are allowed to show commercial state. Trial status
+surfaces such as `useTrialBannerState.ts` must consume selector helpers from
 `frontend-modern/src/stores/licenseCommercial.ts` such as
-`canOfferCommercialTrial()`, `canStartCommercialTrial()`,
 `isCommercialTrialActive()`, `commercialTrialDaysRemaining()`, and
 `commercialOverflowDaysRemaining()` instead of branching directly on raw
-`subscription_state`, `trial_eligible`, or day-count fields.
-That same owner also holds generic settings-paywall CTA labels. Runtime shells
-such as `AIRuntimeControlsSection.tsx` and `RelaySettingsPanel.tsx` must source
-shared labels like `Upgrade to Pro` and `Start free trial` from
-`upgradePresentation.ts` rather than embedding local CTA strings in the panel
-markup.
+`subscription_state`, `trial_eligible`, or day-count fields. Non-billing
+feature gates must not consume `canOfferCommercialTrial()` or call
+`runStartProTrialAction()` directly; they may show neutral "View plans" links
+through `upgradePresentation.ts`, while trial starts remain owned by explicit
+Plans, hosted, activation, recovery, or support handoff surfaces.
 Top-level route files are now also expected to stay thin when a feature owns
 the real product surface. `frontend-modern/src/pages/Infrastructure.tsx` now
 acts only as the route boundary, while

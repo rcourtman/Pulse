@@ -5,8 +5,8 @@ export interface UpgradeActionButtonOptions {
   mobileFullWidth?: boolean;
 }
 
-export const UPGRADE_ACTION_LABEL = 'Upgrade to Pro';
-export const UPGRADE_TRIAL_LABEL = 'Start free trial';
+export const UPGRADE_ACTION_LABEL = 'View plans';
+export const UPGRADE_TRIAL_LABEL = 'Start trial';
 export const UPGRADE_TRIAL_LINK_CLASS =
   'text-sm text-indigo-500 hover:underline disabled:opacity-50';
 

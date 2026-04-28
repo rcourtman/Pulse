@@ -231,10 +231,11 @@ lane-local `startProTrial()` branch once that shared helper covers the same
 runtime contract.
 That same RBAC paywall surface now also depends on the runtime-versus-
 commercial license split: RBAC enablement must stay on the runtime capability
-store, while free-trial eligibility and upgrade routing stay on the canonical
-commercial-posture store backed by `/api/license/commercial-posture`.
-Organization settings must not collapse those two concerns back into one
-payload just because the same paywall shell renders both.
+store, while commercial routing stays on the canonical upgrade destination
+helper backed by the shared commercial boundary. Organization settings must
+not collapse those concerns back into one payload just because the same
+paywall shell renders both, and RBAC feature gates must not start trials
+directly.
 That same posture split now also fixes RBAC bootstrap ownership.
 `frontend-modern/src/components/Settings/useRBACFeatureGateState.ts` may
 consume the resolved commercial-posture store for trial and upgrade copy, but
@@ -242,11 +243,11 @@ it must not issue its own mount-time `loadCommercialPosture()` read.
 Authenticated-shell bootstrap belongs to
 `frontend-modern/src/useAppRuntimeState.ts`, with only the governed first-run
 setup completion surface allowed to bootstrap posture outside that shell.
-RBAC paywall state should also consume intent-level selectors such as
-`canOfferCommercialTrial()` from `frontend-modern/src/stores/licenseCommercial.ts`
-instead of reading raw posture fields locally.
+RBAC paywall state should not read raw commercial posture fields locally or
+offer direct trial-start actions from non-billing feature gates.
 Under the free-first self-hosted v6 policy, those RBAC gates must also honor
 `presentationPolicy.hideUpgrade`: ordinary self-hosted users should not see
-RBAC trial CTAs, upgrade copy, or paid-only Roles/Users/Audit navigation by
-default. Direct routes may recover to the canonical free settings surface, and
-entitled or hosted-mode installs may still render the governed RBAC surfaces.
+RBAC trial CTAs, hard-sell upgrade copy, or paid-only Roles/Users/Audit
+navigation by default. Direct routes may recover to the canonical free
+settings surface, and entitled or hosted-mode installs may still render the
+governed RBAC surfaces.

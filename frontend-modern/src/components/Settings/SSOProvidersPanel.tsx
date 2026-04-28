@@ -30,8 +30,6 @@ import {
 import {
   getUpgradeActionButtonClass,
   UPGRADE_ACTION_LABEL,
-  UPGRADE_TRIAL_LABEL,
-  UPGRADE_TRIAL_LINK_CLASS,
 } from '@/utils/upgradePresentation';
 import { ALERT_EMAIL_REPLY_TO_PLACEHOLDER } from '@/utils/alertEmailPresentation';
 import { useSSOProvidersState } from '@/components/Settings/useSSOProvidersState';
@@ -67,9 +65,6 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
     loadingPreview,
     hasAdvancedSSO,
     canManage,
-    startingTrial,
-    canStartTrial,
-    handleStartTrial,
     openAddModal,
     openEditModal,
     handleSave,
@@ -131,16 +126,6 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                   {UPGRADE_ACTION_LABEL}
                   <ExternalLink class="w-4 h-4" />
                 </UpgradeLink>
-                <Show when={canStartTrial()}>
-                  <button
-                    type="button"
-                    onClick={handleStartTrial}
-                    disabled={startingTrial()}
-                    class={UPGRADE_TRIAL_LINK_CLASS}
-                  >
-                    {UPGRADE_TRIAL_LABEL}
-                  </button>
-                </Show>
               </div>
             </div>
           </div>
@@ -171,16 +156,6 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                 {UPGRADE_ACTION_LABEL}
                 <ExternalLink class="w-4 h-4" />
               </UpgradeLink>
-              <Show when={canStartTrial()}>
-                <button
-                  type="button"
-                  onClick={handleStartTrial}
-                  disabled={startingTrial()}
-                  class={UPGRADE_TRIAL_LINK_CLASS}
-                >
-                  {UPGRADE_TRIAL_LABEL}
-                </button>
-              </Show>
             </div>
           </div>
         </div>

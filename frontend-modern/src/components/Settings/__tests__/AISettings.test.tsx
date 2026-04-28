@@ -538,7 +538,7 @@ describe('AISettings quickstart enablement flow', () => {
     expect(notificationSuccessMock).toHaveBeenCalledWith('Assistant & Patrol enabled');
   });
 
-  it('shows activation-aware setup guidance instead of generic provider setup when quickstart is blocked', async () => {
+  it('keeps activation-required quickstart guidance out of default provider setup', async () => {
     getSettingsMock.mockResolvedValue({
       ...baseSettings(),
       configured: false,
@@ -559,18 +559,17 @@ describe('AISettings quickstart enablement flow', () => {
     fireEvent.click(screen.getByRole('button', { name: /enable assistant and patrol/i }));
 
     expect(updateSettingsMock).not.toHaveBeenCalled();
+    expect(await screen.findByText('Set Up Assistant & Patrol')).toBeInTheDocument();
     expect(
-      await screen.findByText('Activate quickstart or connect a provider'),
+      screen.getByText('Connect a provider to power Pulse Assistant and Patrol.'),
     ).toBeInTheDocument();
     expect(
-      screen.getAllByText(
-        'Connect your API key to use AI Patrol on this install. Hosted quickstart requires an activated entitlement.',
-      ),
-    ).toHaveLength(2);
-    expect(screen.getByRole('button', { name: /open hosted handoff/i })).toBeInTheDocument();
+      screen.queryByText(/Hosted quickstart requires an activated entitlement/i),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /open hosted handoff/i })).not.toBeInTheDocument();
   });
 
-  it('hides trial setup guidance when self-hosted upgrade prompts are disabled', async () => {
+  it('keeps activation-required quickstart guidance hidden when upgrade prompts are disabled', async () => {
     presentationPolicyHidesUpgradePromptsMock.mockReturnValue(true);
     getSettingsMock.mockResolvedValue({
       ...baseSettings(),

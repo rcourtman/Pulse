@@ -54,13 +54,13 @@ describe('licensePresentation', () => {
     expect(getTrialEndedProLicenseNotice()).toEqual({
       tone: 'border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-900 text-red-900 dark:text-red-100',
       title: 'Your Pro trial has ended',
-      body: 'Upgrade to keep root-cause analysis, safe remediation workflows, and 90-day history.',
+      body: 'Choose a paid plan to keep root-cause analysis, safe remediation workflows, and 90-day history on this instance.',
       actionLabel: 'View Pro plans',
     });
     expect(getInactiveProUpsellNotice()).toEqual({
       tone: 'border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900 text-amber-800 dark:text-amber-200',
-      title: 'Upgrade to Pro',
-      body: 'Turn alert noise into root-cause analysis, safe remediation workflows, and 90-day history.',
+      title: 'Pro options available',
+      body: 'Pro adds root-cause analysis, safe remediation workflows, and 90-day history without changing the free self-hosted monitoring scope.',
       actionLabel: 'View Pro plans',
     });
     expect(SELF_HOSTED_RECOVERY_PRESENTATION).toMatchObject({

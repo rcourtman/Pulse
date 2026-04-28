@@ -168,7 +168,7 @@ Patrol supports three autonomy modes that control how much action it can take:
 |------|----------|------|
 | **Monitor** | Detect issues only. No investigation or fixes. | Community (BYOK) |
 | **Investigate** | Investigates findings and proposes fixes. All fixes require approval before execution. | Pro / hosted Cloud |
-| **Auto-fix** | Automatically fixes issues and verifies results. Critical findings still require approval by default. | Pro / hosted Cloud |
+| **Remediate** | Runs governed remediation actions and verifies results. Critical findings still require approval by default. | Pro / hosted Cloud |
 
 Community and Relay installs can still run scheduled Patrol findings with BYOK.
 Investigation, proposed remediation, and fix execution are paid AI-operations
@@ -176,7 +176,7 @@ capabilities rather than a core monitoring limit.
 
 ### Investigation Flow
 
-When a finding is created in Investigate or Auto-fix mode:
+When a finding is created in Investigate or Remediate mode:
 
 ```
 Finding created
@@ -314,7 +314,7 @@ Pulse uses model identifiers in the form: `provider:model-name`
 You can set separate models for:
 - Chat (`chat_model`)
 - Patrol (`patrol_model`)
-- Auto-fix remediation (`auto_fix_model`)
+- Safe remediation model (`auto_fix_model`)
 
 ### Storage
 

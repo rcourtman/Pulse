@@ -34,12 +34,9 @@ export const UserAssignmentsPanel: Component = () => {
       >
         <Show when={state.featureGate.paywallVisible()}>
           <RBACFeatureGateSection
-            canStartTrial={state.featureGate.canStartTrial()}
             copy={state.featureGate.featureGateCopy()}
             paywallLocation="settings_user_assignments_panel"
             showUpgradePrompts={state.featureGate.showUpgradePrompts()}
-            startingTrial={state.featureGate.startingTrial()}
-            onStartTrial={state.featureGate.handleStartTrial}
           />
         </Show>
 

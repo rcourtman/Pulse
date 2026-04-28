@@ -1477,7 +1477,7 @@ describe('frontend resource type boundaries', () => {
     expect(reportingPanelSource).toContain('@/components/Settings/reportingPanelModel');
     expect(reportingPanelSource).toContain('getUpgradeActionButtonClass');
     expect(reportingPanelSource).toContain('UPGRADE_ACTION_LABEL');
-    expect(reportingPanelSource).toContain('UPGRADE_TRIAL_LABEL');
+    expect(reportingPanelSource).not.toContain('UPGRADE_TRIAL_LABEL');
     expect(reportingPanelSource).not.toContain('>Upgrade to Pro<');
     expect(reportingPanelSource).not.toContain('>Start free trial<');
     expect(reportingPanelSource).not.toContain('window.URL.createObjectURL');
@@ -3155,8 +3155,8 @@ describe('frontend resource type boundaries', () => {
     expect(historyChartModelSource).toContain('getHistoryChartScale');
     expect(historyChartHeaderSource).toContain('formatHistoryChartTooltipValue');
     expect(historyChartOverlaySource).toContain('Collecting data... History will appear here.');
-    expect(historyChartOverlaySource).toContain('presentationPolicyHidesUpgradePrompts');
-    expect(historyChartOverlaySource).toContain('Unlock {props.chart.lockTierLabel()} Features');
+    expect(historyChartOverlaySource).not.toContain('presentationPolicyHidesUpgradePrompts');
+    expect(historyChartOverlaySource).not.toContain('Unlock {props.chart.lockTierLabel()} Features');
     expect(historyChartOverlaySource).toContain('is not enabled on this');
     expect(historyChartTooltipSource).toContain('formatHistoryChartTooltipValue');
     expect(containerUpdateBadgeSource).toContain('useContainerUpdateButtonState');
@@ -4346,9 +4346,8 @@ describe('frontend resource type boundaries', () => {
     expect(patrolIntelligenceSurfaceSource).toContain('./PatrolIntelligenceSummary');
     expect(patrolIntelligenceSurfaceSource).toContain('./PatrolIntelligenceWorkspace');
     expect(patrolIntelligenceBannersSource).toContain('presentationPolicyHidesUpgradePrompts');
-    expect(patrolIntelligenceBannersSource).toContain(
-      '!presentationPolicyHidesUpgradePrompts() && state.licenseRequired()',
-    );
+    expect(patrolIntelligenceBannersSource).toContain('!presentationPolicyHidesUpgradePrompts()');
+    expect(patrolIntelligenceBannersSource).toContain('state.licenseRequired()');
     expect(patrolIntelligenceHeaderSource).toContain('presentationPolicyHidesUpgradePrompts');
     expect(patrolIntelligenceHeaderSource).toContain(
       '!presentationPolicyHidesUpgradePrompts() && state.autoFixLocked()',
@@ -4374,7 +4373,7 @@ describe('frontend resource type boundaries', () => {
     expect(patrolIntelligenceStateSource).toContain('export type PatrolIntelligenceState =');
     expect(patrolIntelligenceStateSource).toContain('getPatrolStatus');
     expect(patrolIntelligenceStateSource).toContain('usePatrolStream');
-    expect(patrolIntelligenceStateSource).toContain('trackPaywallViewed');
+    expect(patrolIntelligenceStateSource).not.toContain('trackPaywallViewed');
     expect(aiIntelligenceStoreSource).toContain(
       "import { normalizeIntelligenceSummary } from './aiIntelligenceSummaryModel';",
     );
@@ -4400,7 +4399,7 @@ describe('frontend resource type boundaries', () => {
     expect(patrolIntelligenceSummarySource).toContain('getPatrolAssessmentPresentation');
     expect(patrolIntelligenceWorkspaceSource).toContain('ApprovalBanner');
     expect(patrolIntelligenceWorkspaceSource).toContain('FindingsPanel');
-    expect(patrolIntelligenceBannersSource).toContain('trackUpgradeClicked');
+    expect(patrolIntelligenceBannersSource).not.toContain('trackUpgradeClicked');
     expect(patrolIntelligenceSurfaceSource).not.toContain(
       "summaryStats().criticalFindings > 0\n                        ? 'bg-red-50 dark:bg-red-900 border-red-200 dark:border-red-800'",
     );

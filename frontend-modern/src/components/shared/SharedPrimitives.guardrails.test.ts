@@ -471,6 +471,8 @@ describe('shared primitive guardrails', () => {
     expect(trialBannerModelSource).toContain('getTrialBannerToneClass');
     expect(trialBannerModelSource).toContain('getTrialBannerStatusLabel');
     expect(trialBannerModelSource).toContain('TRIAL_BANNER_UPGRADE_LABEL');
+    expect(trialBannerModelSource).toContain("TRIAL_BANNER_UPGRADE_LABEL = 'Manage plan'");
+    expect(trialBannerModelSource).not.toContain("TRIAL_BANNER_UPGRADE_LABEL = 'Upgrade'");
   });
 
   it('keeps upgrade navigation split across shell, runtime, and utility owners', () => {

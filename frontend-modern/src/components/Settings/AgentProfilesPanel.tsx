@@ -22,7 +22,6 @@ import { useAgentProfilesPanelState } from './useAgentProfilesPanelState';
 export const AgentProfilesPanel: Component = () => {
   const {
     aiAvailable,
-    canStartTrial,
     checkingLicense,
     connectedAgents,
     editingProfile,
@@ -43,7 +42,6 @@ export const AgentProfilesPanel: Component = () => {
     handleDelete,
     handleEdit,
     handleSave,
-    handleStartTrial,
     handleSuggest,
     handleSuggestionAccepted,
     hasAgentProfiles,
@@ -57,14 +55,11 @@ export const AgentProfilesPanel: Component = () => {
     showUpgradePrompts,
     showModal,
     showSuggestModal,
-    startingTrial,
     trackUpgradeClicked,
     unknownKeys,
     updateSetting,
     formatRelativeTime,
     UPGRADE_ACTION_LABEL,
-    UPGRADE_TRIAL_LABEL,
-    UPGRADE_TRIAL_LINK_CLASS,
   } = useAgentProfilesPanelState();
 
   // License gate - using Show components for proper SolidJS reactivity
@@ -110,16 +105,6 @@ export const AgentProfilesPanel: Component = () => {
                   <Crown class="w-4 h-4" />
                   {UPGRADE_ACTION_LABEL}
                 </UpgradeLink>
-                <Show when={canStartTrial()}>
-                  <button
-                    type="button"
-                    onClick={handleStartTrial}
-                    disabled={startingTrial()}
-                    class={UPGRADE_TRIAL_LINK_CLASS}
-                  >
-                    {UPGRADE_TRIAL_LABEL}
-                  </button>
-                </Show>
               </div>
             </Card>
           </Show>

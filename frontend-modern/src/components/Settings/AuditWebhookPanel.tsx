@@ -22,8 +22,6 @@ import { trackUpgradeClicked } from '@/utils/upgradeMetrics';
 import {
   getUpgradeActionButtonClass,
   UPGRADE_ACTION_LABEL,
-  UPGRADE_TRIAL_LABEL,
-  UPGRADE_TRIAL_LINK_CLASS,
 } from '@/utils/upgradePresentation';
 import { useAuditWebhookPanelState } from '@/components/Settings/useAuditWebhookPanelState';
 
@@ -34,17 +32,14 @@ interface AuditWebhookPanelProps {
 export const AuditWebhookPanel: Component<AuditWebhookPanelProps> = (props) => {
   const {
     canManage,
-    canStartTrial,
     handleAddWebhook,
     handleRemoveWebhook,
-    handleStartTrial,
     isAuditLoggingEnabled,
     loading,
     newUrl,
     saving,
     setNewUrl,
     showUpgradePrompts,
-    startingTrial,
     upgradeDestination,
     webhookUrls,
   } = useAuditWebhookPanelState(props.canManage);
@@ -75,16 +70,6 @@ export const AuditWebhookPanel: Component<AuditWebhookPanelProps> = (props) => {
                   >
                     {UPGRADE_ACTION_LABEL}
                   </UpgradeLink>
-                  <Show when={canStartTrial()}>
-                    <button
-                      type="button"
-                      onClick={handleStartTrial}
-                      disabled={startingTrial()}
-                      class={UPGRADE_TRIAL_LINK_CLASS}
-                    >
-                      {UPGRADE_TRIAL_LABEL}
-                    </button>
-                  </Show>
                 </div>
               </Show>
             </div>

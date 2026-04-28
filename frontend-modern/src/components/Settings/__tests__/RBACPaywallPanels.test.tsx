@@ -134,7 +134,7 @@ describe('RBAC paywall settings panels', () => {
       expect(screen.getByText('Custom Roles (Pro)')).toBeInTheDocument();
     });
 
-    expect(screen.getByRole('link', { name: 'Upgrade to Pro' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'View plans' })).toHaveAttribute(
       'href',
       'https://example.com/upgrade?feature=rbac',
     );
@@ -153,8 +153,8 @@ describe('RBAC paywall settings panels', () => {
       expect(screen.getByText('Custom Roles (Pro)')).toBeInTheDocument();
     });
 
-    expect(screen.queryByRole('link', { name: 'Upgrade to Pro' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Start free trial' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'View plans' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Start trial' })).not.toBeInTheDocument();
     expect(trackPaywallViewedMock).not.toHaveBeenCalled();
     expect(getRolesMock).not.toHaveBeenCalled();
   });
@@ -181,7 +181,7 @@ describe('RBAC paywall settings panels', () => {
       expect(screen.getByText('Centralized Access Control (Pro)')).toBeInTheDocument();
     });
 
-    expect(screen.getByRole('link', { name: 'Upgrade to Pro' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'View plans' })).toHaveAttribute(
       'href',
       'https://example.com/upgrade?feature=rbac',
     );
@@ -235,32 +235,19 @@ describe('RBAC paywall settings panels', () => {
     expect(screen.getByRole('dialog', { name: 'Manage access: alice' })).toBeInTheDocument();
   });
 
-  it('surfaces backend trial-start messages instead of collapsing every conflict into already-used', async () => {
+  it('keeps trial start out of RBAC feature gates', async () => {
     hasFeatureMock.mockImplementation((feature: string) => feature !== 'rbac');
     commercialPostureMock.mockReturnValue({ trial_eligible: true });
     entitlementsMock.mockReturnValue({ trial_eligible: true });
-    startProTrialMock.mockRejectedValueOnce(
-      Object.assign(
-        new Error('Trial cannot be started while a paid v5 license migration is pending'),
-        {
-          status: 409,
-          code: 'trial_not_available',
-        },
-      ),
-    );
 
     render(() => <RolesPanel />);
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Start free trial' })).toBeInTheDocument();
+      expect(screen.getByText('Custom Roles (Pro)')).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Start free trial' }));
-
-    await waitFor(() => {
-      expect(notificationErrorMock).toHaveBeenCalledWith(
-        'Trial cannot be started while a paid v5 license migration is pending',
-      );
-    });
+    expect(screen.getByRole('link', { name: 'View plans' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Start trial' })).not.toBeInTheDocument();
+    expect(startProTrialMock).not.toHaveBeenCalled();
   });
 });

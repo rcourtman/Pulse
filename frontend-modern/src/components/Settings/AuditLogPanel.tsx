@@ -25,8 +25,6 @@ import {
 import {
   getUpgradeActionButtonClass,
   UPGRADE_ACTION_LABEL,
-  UPGRADE_TRIAL_LABEL,
-  UPGRADE_TRIAL_LINK_CLASS,
 } from '@/utils/upgradePresentation';
 import { useAuditLogPanelState } from '@/components/Settings/useAuditLogPanelState';
 
@@ -38,7 +36,6 @@ export default function AuditLogPanel() {
     auditLoggingEnabled,
     autoVerifyEnabled,
     autoVerifyLimit,
-    canStartTrial,
     cancelVerification,
     clearFilterChip,
     clearFilters,
@@ -49,7 +46,6 @@ export default function AuditLogPanel() {
     goToLastPage,
     goToNextPage,
     goToPreviousPage,
-    handleStartTrial,
     handleUpgradeClick,
     hasNextPage,
     hasResumeEvents,
@@ -74,7 +70,6 @@ export default function AuditLogPanel() {
     setVerificationFilter,
     showUpgradePaywall,
     showUpgradePrompts,
-    startingTrial,
     submitPageInput,
     successFilter,
     totalEvents,
@@ -175,16 +170,6 @@ export default function AuditLogPanel() {
                 >
                   {UPGRADE_ACTION_LABEL}
                 </UpgradeLink>
-                <Show when={canStartTrial()}>
-                  <button
-                    type="button"
-                    onClick={handleStartTrial}
-                    disabled={startingTrial()}
-                    class={UPGRADE_TRIAL_LINK_CLASS}
-                  >
-                    {UPGRADE_TRIAL_LABEL}
-                  </button>
-                </Show>
               </div>
             </Show>
           </div>

@@ -2,7 +2,7 @@ export const TRIAL_BANNER_SNOOZE_KEY = 'pulse_trial_banner_snoozed';
 export const TRIAL_BANNER_UPGRADE_REASON = 'trial_banner';
 export const TRIAL_BANNER_TITLE = 'Pro Trial:';
 export const TRIAL_BANNER_ACTIVE_LABEL = 'Active';
-export const TRIAL_BANNER_UPGRADE_LABEL = 'Upgrade';
+export const TRIAL_BANNER_UPGRADE_LABEL = 'Manage plan';
 export const TRIAL_BANNER_SNOOZE_LABEL = 'Snooze 7d';
 
 export function normalizeTrialBannerDaysRemaining(raw: unknown): number | null {

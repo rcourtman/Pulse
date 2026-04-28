@@ -144,12 +144,9 @@ export const AISettings: Component = () => {
         setSetupOllamaUrl={state.setSetupOllamaUrl}
         setupMode={state.setupMode}
         setupSaving={state.setupSaving}
-        startingTrial={state.startingTrial}
         quickstartBlockedReason={state.quickstartBlockedReason}
         handleCloseSetupModal={state.handleCloseSetupModal}
         handleSetupSubmit={state.handleSetupSubmit}
-        canStartTrial={state.canStartTrial}
-        handleStartTrial={state.handleStartTrial}
       />
     </>
   );

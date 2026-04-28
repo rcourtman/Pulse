@@ -3,7 +3,7 @@ import { apiFetchJSON } from '@/utils/apiClient';
 import { logger } from '@/utils/logger';
 import { showSuccess, showWarning } from '@/utils/toast';
 import { hasFeature, runtimeCapabilitiesLoaded } from '@/stores/license';
-import { canOfferCommercialTrial, getUpgradeActionDestination } from '@/stores/licenseCommercial';
+import { getUpgradeActionDestination } from '@/stores/licenseCommercial';
 import { presentationPolicyHidesUpgradePrompts } from '@/stores/sessionPresentationPolicy';
 import { loadRuntimeCapabilities } from '@/stores/license';
 import { trackPaywallViewed } from '@/utils/upgradeMetrics';
@@ -13,33 +13,17 @@ import {
   getAuditWebhookSaveErrorMessage,
   getAuditWebhookSaveSuccessMessage,
 } from '@/utils/auditWebhookPresentation';
-import { runStartProTrialAction } from '@/utils/trialStartAction';
 
 export const useAuditWebhookPanelState = (canManageOverride?: boolean) => {
   const [webhookUrls, setWebhookUrls] = createSignal<string[]>([]);
   const [newUrl, setNewUrl] = createSignal('');
   const [saving, setSaving] = createSignal(false);
   const [loading, setLoading] = createSignal(true);
-  const [startingTrial, setStartingTrial] = createSignal(false);
 
   const canManage = () => canManageOverride !== false;
   const showUpgradePrompts = () => !presentationPolicyHidesUpgradePrompts();
-  const canStartTrial = () => showUpgradePrompts() && canOfferCommercialTrial();
   const isAuditLoggingEnabled = () => hasFeature('audit_logging');
   const upgradeDestination = () => getUpgradeActionDestination('audit_logging');
-
-  const handleStartTrial = async () => {
-    if (startingTrial()) return;
-    setStartingTrial(true);
-    try {
-      await runStartProTrialAction({
-        showSuccess,
-        showError: showWarning,
-      });
-    } finally {
-      setStartingTrial(false);
-    }
-  };
 
   const fetchWebhooks = async () => {
     try {
@@ -117,17 +101,14 @@ export const useAuditWebhookPanelState = (canManageOverride?: boolean) => {
 
   return {
     canManage,
-    canStartTrial,
     handleAddWebhook,
     handleRemoveWebhook,
-    handleStartTrial,
     isAuditLoggingEnabled,
     loading,
     newUrl,
     saving,
     setNewUrl,
     showUpgradePrompts,
-    startingTrial,
     upgradeDestination,
     webhookUrls,
   };

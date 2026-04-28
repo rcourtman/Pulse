@@ -1,12 +1,9 @@
-import { Accessor, createEffect, createMemo, createSignal, onMount } from 'solid-js';
+import { Accessor, createEffect, createMemo, onMount } from 'solid-js';
 import { hasFeature, runtimeCapabilitiesLoaded } from '@/stores/license';
-import { canOfferCommercialTrial } from '@/stores/licenseCommercial';
 import { presentationPolicyHidesUpgradePrompts } from '@/stores/sessionPresentationPolicy';
 import { loadRuntimeCapabilities } from '@/stores/license';
-import { notificationStore } from '@/stores/notifications';
 import { getRBACFeatureGateCopy, type RBACFeatureGateCopy } from '@/utils/rbacPresentation';
 import { trackPaywallViewed } from '@/utils/upgradeMetrics';
-import { runStartProTrialAction } from '@/utils/trialStartAction';
 
 export type RBACFeatureGateKind = 'roles' | 'user-assignments';
 export type RBACFeatureGateLocation = 'settings_roles_panel' | 'settings_user_assignments_panel';
@@ -18,14 +15,11 @@ interface UseRBACFeatureGateStateOptions {
 }
 
 export function useRBACFeatureGateState(options: UseRBACFeatureGateStateOptions) {
-  const [startingTrial, setStartingTrial] = createSignal(false);
-
   const featureGateCopy = createMemo<RBACFeatureGateCopy>(() =>
     getRBACFeatureGateCopy(options.kind),
   );
   const licenseReady = createMemo(() => runtimeCapabilitiesLoaded());
   const showUpgradePrompts = createMemo(() => !presentationPolicyHidesUpgradePrompts());
-  const canStartTrial = createMemo(() => showUpgradePrompts() && canOfferCommercialTrial());
   const rbacEnabled = createMemo(() => licenseReady() && hasFeature('rbac'));
   const paywallVisible = createMemo(
     () => licenseReady() && !hasFeature('rbac') && !options.loading(),
@@ -43,27 +37,11 @@ export function useRBACFeatureGateState(options: UseRBACFeatureGateStateOptions)
     return isPaywallVisible;
   }, false);
 
-  const handleStartTrial = async () => {
-    if (startingTrial()) return;
-    setStartingTrial(true);
-    try {
-      await runStartProTrialAction({
-        showSuccess: notificationStore.success,
-        showError: notificationStore.error,
-      });
-    } finally {
-      setStartingTrial(false);
-    }
-  };
-
   return {
-    canStartTrial,
     featureGateCopy,
-    handleStartTrial,
     licenseReady,
     paywallVisible,
     rbacEnabled,
     showUpgradePrompts,
-    startingTrial,
   };
 }

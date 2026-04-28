@@ -273,7 +273,8 @@ afterEach(() => {
 describe('AgentProfilesPanel V6 agent ID handling', () => {
   it('relies on shared commercial posture bootstrap instead of local posture loads', () => {
     expect(agentProfilesPanelStateSource).not.toContain('loadCommercialPosture(');
-    expect(agentProfilesPanelStateSource).toContain('canOfferCommercialTrial');
+    expect(agentProfilesPanelStateSource).not.toContain('canOfferCommercialTrial');
+    expect(agentProfilesPanelSource).not.toContain('UPGRADE_TRIAL_LABEL');
     expect(agentProfilesPanelStateSource).not.toContain('commercialPosture()?.trial_eligible');
   });
 

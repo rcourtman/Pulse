@@ -3,7 +3,7 @@ import { apiErrorFromResponse, apiFetch } from '@/utils/apiClient';
 import { showSuccess, showWarning } from '@/utils/toast';
 import type { SelectedResource } from '@/components/Settings/ResourcePicker';
 import { hasFeature, runtimeCapabilitiesLoaded } from '@/stores/license';
-import { canOfferCommercialTrial, getUpgradeActionDestination } from '@/stores/licenseCommercial';
+import { getUpgradeActionDestination } from '@/stores/licenseCommercial';
 import { presentationPolicyHidesUpgradePrompts } from '@/stores/sessionPresentationPolicy';
 import { loadRuntimeCapabilities } from '@/stores/license';
 import { trackPaywallViewed } from '@/utils/upgradeMetrics';
@@ -16,7 +16,6 @@ import {
   getReportingInventoryExportSuccessMessage,
   resolveReportingDownloadFilename,
 } from '@/utils/reportingPresentation';
-import { runStartProTrialAction } from '@/utils/trialStartAction';
 import {
   buildReportingRequest,
   getReportingRangeStart,
@@ -43,13 +42,11 @@ export const useReportingPanelState = () => {
   const [reportingCatalogError, setReportingCatalogError] = createSignal('');
   const [reportingCatalogAttempted, setReportingCatalogAttempted] = createSignal(false);
   const [title, setTitle] = createSignal('');
-  const [startingTrial, setStartingTrial] = createSignal(false);
   const reportingFeatureId = () => reportingCatalog()?.id ?? '';
   const showUpgradePrompts = () => !presentationPolicyHidesUpgradePrompts();
 
   const isLocked = () =>
     runtimeCapabilitiesLoaded() && reportingFeatureId() !== '' && !hasFeature(reportingFeatureId());
-  const canStartTrial = () => showUpgradePrompts() && canOfferCommercialTrial();
   const isReportingEnabled = () =>
     runtimeCapabilitiesLoaded() && reportingFeatureId() !== '' && hasFeature(reportingFeatureId());
   const upgradeDestination = () =>
@@ -125,19 +122,6 @@ export const useReportingPanelState = () => {
       setRange(performanceReport.defaultRange);
     }
   });
-
-  const handleStartTrial = async () => {
-    if (startingTrial()) return;
-    setStartingTrial(true);
-    try {
-      await runStartProTrialAction({
-        showSuccess,
-        showError: showWarning,
-      });
-    } finally {
-      setStartingTrial(false);
-    }
-  };
 
   const downloadResponseBlob = async (filename: string, response: Response) => {
     const blob = await response.blob();
@@ -228,13 +212,11 @@ export const useReportingPanelState = () => {
   };
 
   return {
-    canStartTrial,
     exportingInventory,
     format,
     handleExportVMInventory,
     generating,
     handleGenerate,
-    handleStartTrial,
     isLocked,
     isReportingEnabled,
     metricType,
@@ -254,7 +236,6 @@ export const useReportingPanelState = () => {
     setRange,
     setSelectedResources,
     setTitle,
-    startingTrial,
     showUpgradePrompts,
     title,
     upgradeDestination,
