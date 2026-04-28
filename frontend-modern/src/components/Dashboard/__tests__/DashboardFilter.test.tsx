@@ -109,6 +109,45 @@ describe('DashboardFilter', () => {
       expect(screen.getByText('List')).toBeInTheDocument();
     });
 
+    it('allows dense workload toolbar controls to wrap instead of clipping trailing actions', () => {
+      const props = makeProps({
+        viewMode: vi.fn(() => 'app-container' as const),
+        hostFilter: {
+          label: 'Node',
+          value: '',
+          options: [{ value: '', label: 'All nodes' }],
+          onChange: vi.fn(),
+        },
+        platformFilter: {
+          label: 'Platform',
+          value: '',
+          options: [{ value: '', label: 'All platforms' }],
+          onChange: vi.fn(),
+        },
+        containerRuntimeFilter: {
+          label: 'Runtime',
+          value: '',
+          options: [{ value: '', label: 'All runtimes' }],
+          onChange: vi.fn(),
+        },
+        columnVisibility: {
+          availableColumns: [{ id: 'image', label: 'Image' }],
+          isColumnHidden: vi.fn(() => false),
+          onColumnToggle: vi.fn(),
+        },
+        chartsCollapsed: vi.fn(() => false),
+        onChartsToggle: vi.fn(),
+      });
+      const { container } = render(() => <DashboardFilter {...props} />);
+
+      expect(screen.getByTestId('column-picker')).toBeInTheDocument();
+      expect(
+        Array.from(container.querySelectorAll('.dashboard-filter *')).some((element) =>
+          (element.getAttribute('class') ?? '').includes('lg:flex-nowrap'),
+        ),
+      ).toBe(false);
+    });
+
     it('does not show the Reset button when all filters are at defaults', () => {
       const props = makeProps();
       render(() => <DashboardFilter {...props} />);

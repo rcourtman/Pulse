@@ -65,7 +65,6 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
           ),
         }}
         showFilters={showToolbarFilters()}
-        toolbarClass="lg:flex-nowrap"
       >
         <Show when={props.hostFilter}>
           {(hostFilter) => (

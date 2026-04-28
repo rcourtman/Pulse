@@ -782,7 +782,10 @@ toolbar defaults, active-filter counting, and reset semantics live in
 Dashboard table-mode controls must also keep their accessible group name aligned
 with the shared table presentation contract by using `Group by` for the
 grouped/list selector instead of reintroducing local `Group By` casing or
-platform-specific cluster wording.
+platform-specific cluster wording. Dense workload toolbar variants must keep
+that same row wrap-capable so optional runtime, chart, column, and reset
+controls remain reachable on desktop instead of forcing a single no-wrap row
+that clips trailing actions.
 The dashboard-owned filter-config assembly now lives in
 `frontend-modern/src/components/Dashboard/useDashboardState.ts`, so future
 filter runtime changes must extend through those owners instead of
