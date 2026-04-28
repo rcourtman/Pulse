@@ -1,5 +1,8 @@
 import { createEffect, createMemo, onMount } from 'solid-js';
-import { presentationPolicyHidesCommercialSurfaces } from '@/stores/sessionPresentationPolicy';
+import {
+  presentationPolicyHidesCommercialSurfaces,
+  presentationPolicyHidesUpgradePrompts,
+} from '@/stores/sessionPresentationPolicy';
 import {
   getRuntimeMonitoredSystemCapacity,
   getRuntimeLimit,
@@ -35,6 +38,7 @@ export function useMonitoredSystemLimitWarningBannerState() {
   const showBanner = createMemo(
     () =>
       !presentationPolicyHidesCommercialSurfaces() &&
+      !presentationPolicyHidesUpgradePrompts() &&
       shouldShowMonitoredSystemLimitBanner(monitoredSystemLimit(), monitoredSystemCapacity()),
   );
   const migrationGap = createMemo(() => hasMigrationGap());

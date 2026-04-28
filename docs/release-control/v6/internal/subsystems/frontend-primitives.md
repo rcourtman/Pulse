@@ -808,6 +808,9 @@ infrastructure area uses `InfrastructurePanelStep` in-page state.
 The shared monitored-system warning banner now uses a neutral policy-review
 CTA and `reviewPolicyDestination` state, keeping the render shell pointed at
 the usage-owned policy ledger instead of plan-selection or capacity wording.
+It also follows the resolved session-presentation upgrade policy, so ordinary
+self-hosted sessions with `presentationPolicy.hideUpgrade` do not render the
+banner, its plan-review link, or its upgrade-impression telemetry.
 Shared alert presentation surfaces (`OverviewTab.tsx`, `HistoryTab.tsx`,
 `AlertOverviewActiveAlertsSection.tsx`, `AlertHistoryTableSection.tsx`,
 `AlertHistoryTableAlertRow.tsx`, `AlertOverviewAlertCard.tsx`) no longer accept
@@ -2600,12 +2603,13 @@ hooks stay on one canonical owner so suppression stays coherent across
 customer-facing surfaces.
 That same session-presentation boundary owns the non-promotional self-hosted
 v6 app posture. Settings navigation, shared upgrade links, trial banners,
-history-lock overlays, and paid-feature gate primitives must honor resolved
-`presentationPolicy.hideUpgrade` by hiding prompts by default on ordinary
-self-hosted installs. Direct activation/recovery routes may still render their
-owned content, but sidebar discovery, trial CTAs, plan upsells, and feature
-upgrade links must not appear unless an explicit handoff, hosted-mode policy,
-or active entitlement says they should.
+monitored-system warning banners, history-lock overlays, and paid-feature gate
+primitives must honor resolved `presentationPolicy.hideUpgrade` by hiding
+prompts by default on ordinary self-hosted installs. Direct
+activation/recovery routes may still render their owned content, but sidebar
+discovery, trial CTAs, plan-review links, plan upsells, and feature upgrade
+links must not appear unless an explicit handoff, hosted-mode policy, or active
+entitlement says they should.
 That same shared app-shell boundary now also owns assistant bootstrap silence
 on non-AI routes. `frontend-modern/src/useAppRuntimeState.ts`,
 `frontend-modern/src/App.tsx`,

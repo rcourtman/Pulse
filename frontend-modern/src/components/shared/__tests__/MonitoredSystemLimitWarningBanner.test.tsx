@@ -35,6 +35,7 @@ const mockTrackUpgradeMetricEvent = vi.hoisted(() => vi.fn());
 const mockTrackUpgradeClicked = vi.hoisted(() => vi.fn());
 const mockLoadRuntimeLicenseStatus = vi.hoisted(() => vi.fn());
 const mockPresentationPolicyHidesCommercialSurfaces = vi.hoisted(() => vi.fn(() => false));
+const mockPresentationPolicyHidesUpgradePrompts = vi.hoisted(() => vi.fn(() => false));
 const mockGetUpgradeActionDestination = vi.hoisted(() => vi.fn());
 const mockGetUpgradeActionUrlOrFallback = vi.hoisted(() => vi.fn());
 
@@ -54,6 +55,7 @@ vi.mock('@/stores/licenseCommercial', () => ({
 
 vi.mock('@/stores/sessionPresentationPolicy', () => ({
   presentationPolicyHidesCommercialSurfaces: () => mockPresentationPolicyHidesCommercialSurfaces(),
+  presentationPolicyHidesUpgradePrompts: () => mockPresentationPolicyHidesUpgradePrompts(),
 }));
 
 vi.mock('@/utils/upgradeMetrics', () => ({
@@ -84,6 +86,8 @@ describe('MonitoredSystemLimitWarningBanner', () => {
     });
     mockPresentationPolicyHidesCommercialSurfaces.mockReset();
     mockPresentationPolicyHidesCommercialSurfaces.mockReturnValue(false);
+    mockPresentationPolicyHidesUpgradePrompts.mockReset();
+    mockPresentationPolicyHidesUpgradePrompts.mockReturnValue(false);
     mockLoadRuntimeLicenseStatus.mockReset();
     mockLoadRuntimeLicenseStatus.mockResolvedValue(undefined);
     mockGetUpgradeActionDestination.mockReset();
@@ -124,6 +128,9 @@ describe('MonitoredSystemLimitWarningBanner', () => {
     expect(monitoredSystemLimitWarningBannerStateSource).not.toContain('loadCommercialPosture');
     expect(monitoredSystemLimitWarningBannerStateSource).toContain(
       'presentationPolicyHidesCommercialSurfaces',
+    );
+    expect(monitoredSystemLimitWarningBannerStateSource).toContain(
+      'presentationPolicyHidesUpgradePrompts',
     );
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('trackUpgradeMetricEvent');
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('hasMigrationGap');
@@ -267,6 +274,28 @@ describe('MonitoredSystemLimitWarningBanner', () => {
 
   it('stays hidden in demo mode even when usage is urgent', async () => {
     mockPresentationPolicyHidesCommercialSurfaces.mockReturnValue(true);
+    mockGetLimit.mockReturnValue({
+      key: 'max_monitored_systems',
+      limit: 6,
+      current: 5,
+      state: 'warning',
+    });
+
+    const mod = await import('../MonitoredSystemLimitWarningBanner');
+    render(() => (
+      <Router>
+        <Route path="/" component={mod.MonitoredSystemLimitWarningBanner} />
+      </Router>
+    ));
+
+    expect(
+      screen.queryByText('1 remaining. 5 monitored, 6 included.'),
+    ).not.toBeInTheDocument();
+    expect(mockTrackUpgradeMetricEvent).not.toHaveBeenCalled();
+  });
+
+  it('stays hidden when self-hosted upgrade prompts are suppressed', async () => {
+    mockPresentationPolicyHidesUpgradePrompts.mockReturnValue(true);
     mockGetLimit.mockReturnValue({
       key: 'max_monitored_systems',
       limit: 6,

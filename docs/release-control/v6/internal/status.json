@@ -344,6 +344,7 @@
             "src/components/Settings/__tests__/RelaySettingsPanel.runtime.test.tsx",
             "src/components/Settings/__tests__/AgentProfilesPanel.test.tsx",
             "src/components/shared/__tests__/HistoryChart.test.tsx",
+            "src/components/shared/__tests__/MonitoredSystemLimitWarningBanner.test.tsx",
             "src/components/shared/__tests__/TrialBanner.test.tsx",
             "src/pages/__tests__/AIIntelligence.test.tsx",
             "src/features/patrol/__tests__/patrolCommercialBoundary.test.ts"

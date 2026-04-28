@@ -666,6 +666,9 @@ describe('shared primitive guardrails', () => {
     expect(monitoredSystemLimitWarningBannerStateSource).toContain(
       'presentationPolicyHidesCommercialSurfaces',
     );
+    expect(monitoredSystemLimitWarningBannerStateSource).toContain(
+      'presentationPolicyHidesUpgradePrompts',
+    );
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('trackUpgradeMetricEvent');
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('hasMigrationGap');
     expect(monitoredSystemLimitWarningBannerStateSource).not.toContain(
