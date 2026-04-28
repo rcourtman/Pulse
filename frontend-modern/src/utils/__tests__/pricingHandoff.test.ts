@@ -48,8 +48,9 @@ describe('pricingHandoff', () => {
 
   it('does not keep retired trial-expired as an owned in-product billing intent', () => {
     expect(getPricingRouteDestination('?feature=trial_expired')).toBe(
-      getSelfHostedPurchaseStartUrl('trial_expired', new URLSearchParams('feature=trial_expired')),
+      SELF_HOSTED_PRO_BILLING_PLAN_HREF,
     );
+    expect(getUpgradeFallbackDestination('trial_expired')).toBe(SELF_HOSTED_PRO_BILLING_PLAN_HREF);
   });
 
   it('routes unknown feature upgrades to Pulse Account purchase start', () => {

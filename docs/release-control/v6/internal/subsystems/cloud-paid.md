@@ -511,6 +511,9 @@ accessible from self-hosted environments.
 Retired trial-acquisition intents such as `trial_expired` must not be owned
 pricing handoff destinations; no ordinary self-hosted runtime path should emit
 them as an upgrade reason or plan-page CTA.
+Legacy browser arrivals carrying that stale feature may land on the neutral
+Plans & Activation surface, but must not preserve `trial_expired` into a Pulse
+Account purchase-start handoff or trial-shaped checkout feature.
 The monitored-system app-shell warning CTA now follows that same commercial
 boundary by rendering only in hosted mode. Ordinary self-hosted installs must
 not see finite monitored-system pressure in the global app shell; when hosted
