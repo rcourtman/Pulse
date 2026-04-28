@@ -826,7 +826,7 @@ test.describe("TrueNAS platform connections settings", () => {
           contentType: "application/json",
           body: JSON.stringify({
             error: "license_required",
-            message: "Monitored-system limit reached (10/9)",
+            message: "Monitored-system capacity reached (10/9)",
             feature: "max_monitored_systems",
             monitored_system_preview: {
               current_count: 9,

@@ -18,7 +18,7 @@ describe('DeployStatusBadge', () => {
     ['failed_retryable', 'Failed'],
     ['failed_permanent', 'Failed'],
     ['skipped_already_agent', 'Already monitored'],
-    ['skipped_license', 'License limit'],
+    ['skipped_license', 'Workspace capacity'],
     ['canceled', 'Canceled'],
   ];
 
@@ -58,7 +58,7 @@ describe('DeployStatusBadge', () => {
       ['failed_retryable', 'Failed'],
       ['failed_permanent', 'Failed'],
       ['skipped_already_agent', 'Already monitored'],
-      ['skipped_license', 'License limit'],
+      ['skipped_license', 'Workspace capacity'],
       ['canceled', 'Canceled'],
     ];
     for (const [status, label] of nonProgress) {
@@ -103,7 +103,7 @@ describe('DeployStatusBadge', () => {
   it('applies amber classes to skipped statuses', () => {
     for (const status of ['skipped_already_agent', 'skipped_license'] as DeployTargetStatus[]) {
       const { unmount } = render(() => <DeployStatusBadge status={status} />);
-      const label = status === 'skipped_already_agent' ? 'Already monitored' : 'License limit';
+      const label = status === 'skipped_already_agent' ? 'Already monitored' : 'Workspace capacity';
       const badge = screen.getByText(label);
       expect(badge.className).toContain('bg-amber-100');
       expect(badge.className).toContain('text-amber-700');

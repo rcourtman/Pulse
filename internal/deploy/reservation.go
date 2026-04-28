@@ -6,13 +6,13 @@ import (
 	"time"
 )
 
-// ReservationManager tracks license slot reservations for in-flight deployments.
+// ReservationManager tracks monitored-system capacity reservations for in-flight deployments.
 type ReservationManager struct {
 	mu           sync.Mutex
 	reservations map[string]*Reservation
 }
 
-// Reservation represents a set of license slots reserved for a deployment job.
+// Reservation represents capacity reserved for a deployment job.
 type Reservation struct {
 	JobID     string
 	OrgID     string
@@ -28,7 +28,7 @@ func NewReservationManager() *ReservationManager {
 	}
 }
 
-// Reserve allocates license slots for a deployment job. Returns an error if
+// Reserve allocates monitored-system capacity for a deployment job. Returns an error if
 // the job already has a reservation.
 func (rm *ReservationManager) Reserve(jobID, orgID string, slots int, ttl time.Duration) error {
 	rm.mu.Lock()

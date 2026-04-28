@@ -35,7 +35,7 @@ func TestExceedsMonitoredSystemLimit(t *testing.T) {
 
 func TestMonitoredSystemLimitExceededMessage(t *testing.T) {
 	got := MonitoredSystemLimitExceededMessage(6, 5)
-	want := "Monitored system limit reached (6/5). Remove a monitored system or upgrade your plan."
+	want := "Monitored-system capacity reached (6/5). Remove a monitored system before adding more."
 	if got != want {
 		t.Fatalf("expected %q, got %q", want, got)
 	}

@@ -12,27 +12,29 @@ export const ConfirmStep: Component<ConfirmStepProps> = (props) => {
 
   const selectedCount = createMemo(() => w.confirmSelectedNodeIds().size);
   const maxSlots = createMemo(() => w.maxAgentSlots());
-  const exceedsLicense = createMemo(() => maxSlots() > 0 && selectedCount() > maxSlots());
+  const exceedsCapacity = createMemo(() => maxSlots() > 0 && selectedCount() > maxSlots());
+  const excessNodeCount = createMemo(() => Math.max(0, selectedCount() - maxSlots()));
+  const excessNodeLabel = createMemo(() => (excessNodeCount() === 1 ? 'node' : 'nodes'));
 
   return (
     <div class="space-y-4">
-      {/* License slot summary */}
+      {/* Workspace capacity summary */}
       <Show when={maxSlots() > 0}>
         <div
           role="status"
           class={`rounded-md p-3 text-sm flex items-start gap-2 ${
-            exceedsLicense()
+            exceedsCapacity()
               ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300'
               : 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300'
           }`}
         >
           <AlertCircleIcon class="w-4 h-4 mt-0.5 shrink-0" />
           <span>
-            {maxSlots()} license slots available, {selectedCount()} nodes selected.
-            <Show when={exceedsLicense()}>
+            Workspace capacity: {maxSlots()} monitored systems, {selectedCount()} nodes selected.
+            <Show when={exceedsCapacity()}>
               {' '}
-              Only {maxSlots()} nodes can be deployed. Remove {selectedCount() - maxSlots()} nodes
-              or upgrade your plan.
+              This workspace can deploy {maxSlots()} nodes at its current capacity. Remove{' '}
+              {excessNodeCount()} {excessNodeLabel()} before continuing.
             </Show>
           </span>
         </div>

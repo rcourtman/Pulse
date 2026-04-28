@@ -2,14 +2,14 @@
 //
 // HostLifecycleTracker implements the v6 host counting rules:
 //
-//   - H2: A host is only counted toward the license limit after 10+ minutes
-//     of stable heartbeat (prevents transient connections from consuming slots).
+//   - H2: A host is only counted toward monitored-system capacity after 10+
+//     minutes of stable heartbeat (prevents transient connections from consuming capacity).
 //   - H3: A host slot is released after 72 hours of inactivity (no heartbeat).
 //
 // Wiring instructions:
 //
 //   - node_limit.go should call tracker.StableActiveHosts() to filter which
-//     hosts count toward the license limit, instead of counting all hosts
+//     hosts count toward monitored-system capacity, instead of counting all hosts
 //     unconditionally.
 //   - The monitor's update loop (where host heartbeats arrive) should call
 //     tracker.RecordHeartbeat(hostID) on every heartbeat.
@@ -31,7 +31,7 @@ import (
 
 const (
 	// HostStabilizationPeriod is the minimum duration of heartbeats before a
-	// host is considered "stable" and counted toward the license limit.
+	// host is considered "stable" and counted toward monitored-system capacity.
 	HostStabilizationPeriod = 10 * time.Minute
 
 	// HostInactivityTimeout is the duration after which a host with no

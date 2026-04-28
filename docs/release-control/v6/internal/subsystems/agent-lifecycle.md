@@ -662,6 +662,12 @@ the manifest's support-floor row.
 
 ## Current State
 
+Deploy selection and retry capacity feedback now follows the API/cloud-paid
+workspace-capacity terminology boundary. Lifecycle-owned deploy surfaces keep
+stable backend compatibility identifiers, but the user-facing confirmation,
+preflight, retry, and status labels must not revive license-slot or plan-upgrade
+wording for monitored-system capacity.
+
 The infrastructure workspace collapsed to a single `/settings/infrastructure`
 route. `buildInfrastructureWorkspacePath()` always returns the base path;
 `deriveAddStepFromLegacyPath()` maps legacy sub-paths to in-page panel state.
@@ -2217,6 +2223,10 @@ installer contract. That fallback surface must consume the shared validated
 `NodesAPI.getAgentInstallCommand` response, so malformed backend payloads fail
 closed and the raw backend install token stays inside the shared client
 boundary rather than leaking into deploy UI state.
+Deploy selection and retry capacity feedback may consume the monitored-system
+capacity boundary owned by API/cloud-paid, but lifecycle UI must label that
+state as workspace capacity and must not reintroduce legacy license-slot or
+plan-upgrade language in deploy confirmation, preflight, or retry surfaces.
 That same `ResultsStep` boundary must also stay on the direct
 `deploy-fallback-install-surface` proof path, rather than relying only on the
 shared install helper or downstream deploy tests to catch lifecycle drift in

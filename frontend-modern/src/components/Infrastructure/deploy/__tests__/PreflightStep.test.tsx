@@ -370,13 +370,13 @@ describe('PreflightStep', () => {
       expect(screen.getByText('Already monitored')).toBeInTheDocument();
     });
 
-    it('shows "License limit" badge for skipped_license targets', () => {
+    it('shows "Workspace capacity" badge for skipped_license targets', () => {
       const wizard = createMockWizard({
         preflightTargets: [makeTarget({ status: 'skipped_license' })],
       });
       render(() => <PreflightStep wizard={wizard} />);
 
-      expect(screen.getByText('License limit')).toBeInTheDocument();
+      expect(screen.getByText('Workspace capacity')).toBeInTheDocument();
     });
   });
 

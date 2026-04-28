@@ -55,7 +55,7 @@ func TestNewHostIsNotStable(t *testing.T) {
 	}
 }
 
-func TestHostBecomesStableAfter10Min(t *testing.T) {
+func TestHostBecomesCapacityEligibleAfter10Min(t *testing.T) {
 	clock := newTestClock(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))
 	tracker := newTestTracker(clock)
 

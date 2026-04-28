@@ -17,6 +17,7 @@ import {
   getLicenseSubscriptionStatusPresentation,
   getSelfHostedPlanLabel,
   getLicenseTierLabel,
+  getDisplayableMonitoredSystemContinuity,
   getMonitoredSystemContinuityNotice,
   getNoActiveProLicenseState,
   getOrganizationBillingLicenseStatusLabel,
@@ -217,6 +218,21 @@ describe('licensePresentation', () => {
     expect(getGrandfatheredPriceContinuityNotice('v5_lifetime_grandfathered', 'active')).toBeNull();
     expect(
       getGrandfatheredPriceContinuityNotice('v5_pro_monthly_grandfathered', 'expired'),
+    ).toBeNull();
+  });
+
+  it('hides monitored-system continuity when self-hosted effective capacity is uncapped', () => {
+    expect(
+      getDisplayableMonitoredSystemContinuity({
+        continuity: {
+          plan_limit: 10,
+          effective_limit: 0,
+          capture_pending: true,
+        },
+        planVersion: 'legacy_migration_fallback',
+        isLifetime: false,
+        subscriptionState: 'active',
+      }),
     ).toBeNull();
   });
 

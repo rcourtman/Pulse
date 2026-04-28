@@ -72,7 +72,7 @@ describe('apiClient org context', () => {
       new Response(
         JSON.stringify({
           error: 'license_required',
-          message: 'Monitored-system limit reached (6/5)',
+          message: 'Monitored-system capacity reached (6/5)',
           feature: 'max_monitored_systems',
           monitored_system_preview: {
             current_count: 5,
@@ -105,7 +105,7 @@ describe('apiClient org context', () => {
     await expect(
       apiFetchJSON('/api/truenas/connections', { method: 'POST', body: '{}' }),
     ).rejects.toMatchObject({
-      message: 'Monitored-system limit reached (6/5)',
+      message: 'Monitored-system capacity reached (6/5)',
       status: 402,
       feature: 'max_monitored_systems',
       monitored_system_preview: {

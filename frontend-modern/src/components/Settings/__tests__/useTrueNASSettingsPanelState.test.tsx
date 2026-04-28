@@ -348,7 +348,7 @@ describe('useTrueNASSettingsPanelState', () => {
     vi.mocked(TrueNASAPI.listConnections).mockResolvedValueOnce([] as never);
     vi.mocked(TrueNASAPI.previewConnection).mockResolvedValueOnce(safeTrueNASPreview() as never);
     vi.mocked(TrueNASAPI.createConnection).mockRejectedValueOnce(
-      Object.assign(new Error('Monitored-system limit reached (10/9)'), {
+      Object.assign(new Error('Monitored-system capacity reached (10/9)'), {
         status: 402,
         feature: 'max_monitored_systems',
         monitored_system_preview: {
@@ -384,7 +384,7 @@ describe('useTrueNASSettingsPanelState', () => {
     await result.previewCurrentForm();
     await result.saveCurrentForm();
 
-    expect(notificationStore.error).toHaveBeenCalledWith('Monitored-system limit reached (10/9)');
+    expect(notificationStore.error).toHaveBeenCalledWith('Monitored-system capacity reached (10/9)');
     expect(result.monitoredSystemPreview()).toMatchObject({
       would_exceed_limit: true,
       projected_count: 10,

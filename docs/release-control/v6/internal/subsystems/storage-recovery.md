@@ -720,9 +720,10 @@ operator-facing protection state.
 That same shared `internal/api/` dependency now also expects replacement-aware
 monitored-system admission and fail-closed usage availability. Storage- or
 recovery-adjacent setup, deploy, and API-backed update helpers may reuse the
-canonical monitored-system cap boundary, but they must preserve remaining
-grouped sources on a counted host and must not reinterpret unavailable usage as
-an empty estate.
+canonical monitored-system capacity boundary, but they must preserve remaining
+grouped sources on a counted host, must not reinterpret unavailable usage as
+an empty estate, and must not surface that adjacent boundary as license-slot or
+upgrade-plan copy inside storage or recovery-adjacent flows.
 Configured Proxmox, PBS, and PMG node replacements on that adjacent API
 boundary must identify the replaced source-owned surface through the shared
 monitored-system replacement selector, not storage- or recovery-local matching

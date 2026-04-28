@@ -186,6 +186,9 @@ export const getDisplayableMonitoredSystemContinuity = ({
   if (hasActiveUncappedSelfHostedContinuity({ planVersion, isLifetime, subscriptionState })) {
     return null;
   }
+  if (typeof continuity.effective_limit === 'number' && continuity.effective_limit <= 0) {
+    return null;
+  }
   return continuity;
 };
 

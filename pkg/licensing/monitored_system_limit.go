@@ -22,7 +22,7 @@ func ExceedsMonitoredSystemLimit(current, additions, limit int) bool {
 }
 
 func MonitoredSystemLimitExceededMessage(current, limit int) string {
-	return fmt.Sprintf("Monitored system limit reached (%d/%d). Remove a monitored system or upgrade your plan.", current, limit)
+	return fmt.Sprintf("Monitored-system capacity reached (%d/%d). Remove a monitored system before adding more.", current, limit)
 }
 
 // InstalledUnifiedAgentCount returns the number of installed Pulse Unified

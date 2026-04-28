@@ -66,12 +66,12 @@ describe('ConfirmStep', () => {
     cleanup();
   });
 
-  // --- License slot summary ---
+  // --- Workspace capacity summary ---
 
-  describe('license slot summary', () => {
-    it('does not show license info when maxAgentSlots is 0', () => {
+  describe('workspace capacity summary', () => {
+    it('does not show capacity info when maxAgentSlots is 0', () => {
       renderConfirm({ maxAgentSlots: 0, readyNodes: [makeTarget()] });
-      expect(screen.queryByText(/license slots available/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/Workspace capacity/)).not.toBeInTheDocument();
     });
 
     it('shows slot count and selected count when maxSlots > 0', () => {
@@ -80,10 +80,12 @@ describe('ConfirmStep', () => {
         confirmSelectedNodeIds: new Set(['a', 'b']),
         readyNodes: [makeTarget({ nodeId: 'a' }), makeTarget({ nodeId: 'b' })],
       });
-      expect(screen.getByText(/5 license slots available, 2 nodes selected/)).toBeInTheDocument();
+      expect(
+        screen.getByText(/Workspace capacity: 5 monitored systems, 2 nodes selected/),
+      ).toBeInTheDocument();
     });
 
-    it('shows warning when selection exceeds license slots', () => {
+    it('shows warning when selection exceeds workspace capacity', () => {
       renderConfirm({
         maxAgentSlots: 2,
         confirmSelectedNodeIds: new Set(['a', 'b', 'c']),
@@ -93,8 +95,10 @@ describe('ConfirmStep', () => {
           makeTarget({ nodeId: 'c' }),
         ],
       });
-      expect(screen.getByText(/Only 2 nodes can be deployed/)).toBeInTheDocument();
-      expect(screen.getByText(/Remove 1 nodes/)).toBeInTheDocument();
+      expect(
+        screen.getByText(/This workspace can deploy 2 nodes at its current capacity/),
+      ).toBeInTheDocument();
+      expect(screen.getByText(/Remove 1 node before continuing/)).toBeInTheDocument();
     });
 
     it('does not show exceeds warning when selection is within limit', () => {
@@ -103,7 +107,7 @@ describe('ConfirmStep', () => {
         confirmSelectedNodeIds: new Set(['a', 'b']),
         readyNodes: [makeTarget({ nodeId: 'a' }), makeTarget({ nodeId: 'b' })],
       });
-      expect(screen.queryByText(/Only \d+ nodes can be deployed/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/current capacity/)).not.toBeInTheDocument();
     });
 
     it('does not show exceeds warning when selection equals limit exactly', () => {
@@ -112,20 +116,22 @@ describe('ConfirmStep', () => {
         confirmSelectedNodeIds: new Set(['a', 'b']),
         readyNodes: [makeTarget({ nodeId: 'a' }), makeTarget({ nodeId: 'b' })],
       });
-      expect(screen.queryByText(/Only \d+ nodes can be deployed/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/current capacity/)).not.toBeInTheDocument();
     });
 
-    it('shows license banner with 0 selected when maxSlots > 0 and nothing selected', () => {
+    it('shows capacity banner with 0 selected when maxSlots > 0 and nothing selected', () => {
       renderConfirm({
         maxAgentSlots: 10,
         confirmSelectedNodeIds: new Set(),
         readyNodes: [],
       });
-      expect(screen.getByText(/10 license slots available, 0 nodes selected/)).toBeInTheDocument();
-      expect(screen.queryByText(/Only \d+ nodes can be deployed/)).not.toBeInTheDocument();
+      expect(
+        screen.getByText(/Workspace capacity: 10 monitored systems, 0 nodes selected/),
+      ).toBeInTheDocument();
+      expect(screen.queryByText(/current capacity/)).not.toBeInTheDocument();
     });
 
-    it('applies amber styling when exceeding license slots', () => {
+    it('applies amber styling when exceeding workspace capacity', () => {
       const { container } = renderConfirm({
         maxAgentSlots: 1,
         confirmSelectedNodeIds: new Set(['a', 'b']),
@@ -135,7 +141,7 @@ describe('ConfirmStep', () => {
       expect(banner).toBeInTheDocument();
     });
 
-    it('applies blue styling when within license slots', () => {
+    it('applies blue styling when within workspace capacity', () => {
       const { container } = renderConfirm({
         maxAgentSlots: 5,
         confirmSelectedNodeIds: new Set(['a']),
@@ -343,7 +349,7 @@ describe('ConfirmStep', () => {
       // Only the outer wrapper div exists, with no visible child content
       expect(screen.queryByText(/Ready to deploy/)).not.toBeInTheDocument();
       expect(screen.queryByText(/Cannot deploy/)).not.toBeInTheDocument();
-      expect(screen.queryByText(/license slots/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/Workspace capacity/)).not.toBeInTheDocument();
     });
   });
 

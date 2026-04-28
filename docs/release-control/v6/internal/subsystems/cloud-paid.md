@@ -1469,7 +1469,10 @@ Only bounded legacy fallback migrations may render the base plan limit, the
 effective monitored-system limit, any grandfathered floor, and whether
 continuity capture is still pending. When monitored-system usage is
 unavailable during fallback continuity verification, the shell must present a
-verification state rather than implying `0 / limit`.
+verification state rather than implying `0 / limit`. If the effective
+monitored-system limit is `0`/unlimited, the self-hosted fallback continuity is
+audit-only and must not render plan-limit, finite-policy, or grandfathered-floor
+copy to ordinary self-hosted users.
 That same pricing boundary now also owns the shared frontend plan-definition
 models. `frontend-modern/src/utils/cloudPlans.ts` and
 `frontend-modern/src/utils/selfHostedPlans.ts` are the canonical frontend

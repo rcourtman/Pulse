@@ -1090,7 +1090,7 @@ func (h *DeployHandlers) HandleCreateJob(w http.ResponseWriter, r *http.Request)
 		acceptedPfTargets = append(acceptedPfTargets, pfTgt)
 	}
 
-	// License slot check.
+	// Workspace capacity check.
 	maxLimit := maxMonitoredSystemsLimitForContext(ctx)
 	if maxLimit > 0 {
 		decision := monitoredSystemLimitDecisionForAdditionalSlots(ctx, h.monitor, 0)
@@ -1222,10 +1222,10 @@ func (h *DeployHandlers) HandleCreateJob(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// Reserve license slots based on actual dispatched target count.
+	// Reserve workspace capacity based on actual dispatched target count.
 	if err := h.reservation.Reserve(jobID, orgID, len(installTargets), 1*time.Hour); err != nil {
-		log.Error().Err(err).Str("job_id", jobID).Msg("Failed to reserve license slots")
-		// Non-fatal — continue. The reservation is for proactive slot tracking.
+		log.Error().Err(err).Str("job_id", jobID).Msg("Failed to reserve workspace capacity")
+		// Non-fatal — continue. The reservation is for proactive capacity tracking.
 	}
 
 	// Transition to running.
@@ -1590,7 +1590,7 @@ func (h *DeployHandlers) HandleRetryJob(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// License slot re-check.
+	// Workspace capacity re-check.
 	maxLimit := maxMonitoredSystemsLimitForContext(ctx)
 	if maxLimit > 0 {
 		decision := monitoredSystemLimitDecisionForAdditionalSlots(ctx, h.monitor, 0)
@@ -1607,7 +1607,7 @@ func (h *DeployHandlers) HandleRetryJob(w http.ResponseWriter, r *http.Request) 
 		}
 		if len(retryTargets) == 0 {
 			writeErrorResponse(w, http.StatusConflict, "license_limit",
-				"No license slots available for retry", nil)
+				"No workspace capacity available for retry", nil)
 			return
 		}
 	}
@@ -1685,9 +1685,9 @@ func (h *DeployHandlers) HandleRetryJob(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// Reserve license slots based on actual dispatch count (after token minting).
+	// Reserve workspace capacity based on actual dispatch count (after token minting).
 	if err := h.reservation.Reserve(jobID+"-retry", orgID, len(installTargets), 1*time.Hour); err != nil {
-		log.Warn().Err(err).Str("job_id", jobID).Msg("Failed to reserve license slots for retry")
+		log.Warn().Err(err).Str("job_id", jobID).Msg("Failed to reserve workspace capacity for retry")
 	}
 
 	// Append retry event.

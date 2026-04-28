@@ -1035,7 +1035,7 @@ func TestHandleCreateJob_Success(t *testing.T) {
 		t.Fatalf("expected 0 skipped targets, got %d", len(resp.SkippedTargets))
 	}
 	if resp.ReservedLicenseSlots != 2 {
-		t.Fatalf("expected 2 reserved license slots, got %d", resp.ReservedLicenseSlots)
+		t.Fatalf("expected 2 reserved workspace capacity slots, got %d", resp.ReservedLicenseSlots)
 	}
 	if resp.EventsURL == "" {
 		t.Fatal("expected non-empty eventsUrl")
@@ -1224,7 +1224,7 @@ func TestHandleCreateJob_TruncatesTargetsToAvailableLicenseSlots(t *testing.T) {
 		t.Fatalf("expected deterministic accepted node_pve-b, got %q", resp.AcceptedTargets[0])
 	}
 	if resp.ReservedLicenseSlots != 1 {
-		t.Fatalf("expected 1 reserved license slot, got %d", resp.ReservedLicenseSlots)
+		t.Fatalf("expected 1 reserved workspace capacity slot, got %d", resp.ReservedLicenseSlots)
 	}
 	if len(resp.SkippedTargets) != 1 {
 		t.Fatalf("expected 1 skipped target, got %d", len(resp.SkippedTargets))

@@ -490,7 +490,7 @@ describe('useDeployWizard', () => {
       dispose();
     });
 
-    it('maxAgentSlots returns limit from license store', async () => {
+    it('maxAgentSlots returns monitored-system capacity from runtime limits', async () => {
       getLimitMock.mockReturnValue({ limit: 10 });
       apiMock.getCandidates.mockResolvedValue({ nodes: [], sourceAgents: [] });
 
@@ -501,7 +501,7 @@ describe('useDeployWizard', () => {
       dispose();
     });
 
-    it('maxAgentSlots returns 0 when no license limit', async () => {
+    it('maxAgentSlots returns 0 when no monitored-system capacity limit exists', async () => {
       getLimitMock.mockReturnValue(null);
       apiMock.getCandidates.mockResolvedValue({ nodes: [], sourceAgents: [] });
 

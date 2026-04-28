@@ -508,7 +508,7 @@ describe('useVMwareSettingsPanelState', () => {
     vi.mocked(VMwareAPI.listConnections).mockResolvedValueOnce([] as never);
     vi.mocked(VMwareAPI.previewConnection).mockResolvedValueOnce(safeVMwarePreview() as never);
     vi.mocked(VMwareAPI.createConnection).mockRejectedValueOnce(
-      Object.assign(new Error('Monitored-system limit reached (7/6)'), {
+      Object.assign(new Error('Monitored-system capacity reached (7/6)'), {
         status: 402,
         feature: 'max_monitored_systems',
         monitored_system_preview: {
@@ -558,7 +558,7 @@ describe('useVMwareSettingsPanelState', () => {
     await result.previewCurrentForm();
     await result.saveCurrentForm();
 
-    expect(notificationStore.error).toHaveBeenCalledWith('Monitored-system limit reached (7/6)');
+    expect(notificationStore.error).toHaveBeenCalledWith('Monitored-system capacity reached (7/6)');
     expect(result.monitoredSystemPreview()).toMatchObject({
       would_exceed_limit: true,
       projected_count: 7,

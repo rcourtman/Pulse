@@ -702,6 +702,11 @@ the canonical monitored-system blocked payload.
 
 ## Current State
 
+Deploy-job monitored-system denials now keep compatibility wire identifiers
+such as `skipped_license` and `license_limit`, while user-visible retry errors
+and frontend deploy labels must describe the state as monitored-system or
+workspace capacity rather than license slots or plan-upgrade pressure.
+
 `useInfrastructureDiscoveryRuntimeState.ts` no longer gates `/api/discover`
 polling on a settings tab name; polling is mount-scoped. The tab guard was
 removed when the infrastructure nav collapsed to one `infrastructure-systems`
@@ -1759,6 +1764,10 @@ monitored-system ledger endpoint, and TrueNAS/API-backed registration must all
 reflect deduped top-level monitored systems rather than agent-only
 installation count, and `legacy_connections` / `has_migration_gap` may not
 imply that API-backed monitoring sits outside the commercial cap.
+Deploy-job compatibility enums such as `skipped_license` and `license_limit`
+may remain stable wire identifiers, but human-readable retry errors and
+frontend deploy labels must describe the condition as monitored-system or
+workspace capacity rather than as license slots or a plan upgrade prompt.
 That same contract now also owns prospective admission and replacement
 projection. Config-backed PVE/PBS/PMG, TrueNAS, VMware, and other API-backed
 registration or update routes must project candidates or preview records

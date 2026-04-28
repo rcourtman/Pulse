@@ -1136,7 +1136,7 @@ test.describe("VMware platform connections settings", () => {
           contentType: "application/json",
           body: JSON.stringify({
             error: "license_required",
-            message: "Monitored-system limit reached (7/6)",
+            message: "Monitored-system capacity reached (7/6)",
             feature: "max_monitored_systems",
             monitored_system_preview: {
               current_count: 5,

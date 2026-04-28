@@ -12006,6 +12006,20 @@ func TestContract_BootstrapTokenValidationRateLimitsPerClient(t *testing.T) {
 	}
 }
 
+func TestContract_DeployCapacityDenialUsesWorkspaceCapacityCopy(t *testing.T) {
+	source, err := os.ReadFile("deploy_handlers.go")
+	if err != nil {
+		t.Fatalf("read deploy handlers: %v", err)
+	}
+	text := string(source)
+	if !strings.Contains(text, `"No workspace capacity available for retry"`) {
+		t.Fatal("deploy retry capacity denial must use workspace-capacity copy")
+	}
+	if strings.Contains(text, "No license slots available") {
+		t.Fatal("deploy retry capacity denial must not surface legacy license-slot copy")
+	}
+}
+
 func mustStreamEvent(t *testing.T, eventType string, data interface{}) chat.StreamEvent {
 	t.Helper()
 
