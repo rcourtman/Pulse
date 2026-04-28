@@ -102,8 +102,8 @@ export const RelaySettingsPanel: Component<RelaySettingsPanelProps> = (props) =>
               </Show>
             </div>
           </div>
-          <Show when={state.status()?.last_error}>
-            <div class={RELAY_LAST_ERROR_CLASS}>{state.status()!.last_error}</div>
+          <Show when={state.statusErrorMessage()}>
+            {(message) => <div class={RELAY_LAST_ERROR_CLASS}>{message()}</div>}
           </Show>
         </Card>
 

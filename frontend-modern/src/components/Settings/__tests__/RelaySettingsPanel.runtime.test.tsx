@@ -241,6 +241,29 @@ describe('RelaySettingsPanel runtime', () => {
     expect(getQRPayloadMock).not.toHaveBeenCalled();
   });
 
+  it('shows activation-required copy instead of raw missing-token relay errors', async () => {
+    getRelayStatusMock.mockResolvedValueOnce({
+      connected: false,
+      instance_id: 'instance-local',
+      active_channels: 0,
+      last_error: 'register: no license token available',
+    });
+
+    render(() => <RelaySettingsPanel canManage />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Activation required')).toBeInTheDocument();
+    });
+
+    expect(
+      screen.getByText(
+        'Remote Access is enabled, but this instance does not have an active Relay token. Activate Relay or turn Remote Access off before pairing mobile clients.',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('register: no license token available')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Pair New Device' })).not.toBeInTheDocument();
+  });
+
   it('deletes the minted pairing token when onboarding payload generation fails', async () => {
     getQRPayloadMock.mockRejectedValueOnce(new Error('missing auth token'));
 

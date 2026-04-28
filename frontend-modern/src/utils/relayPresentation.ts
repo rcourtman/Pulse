@@ -7,6 +7,8 @@ export interface RelayConnectionPresentation {
   pulse: boolean;
 }
 
+const RELAY_MISSING_TOKEN_ERROR = /\b(?:no license token available|license token provider not configured)\b/i;
+
 export const RELAY_READONLY_NOTICE_CLASS =
   'border border-blue-200 text-xs text-blue-800 dark:border-blue-800 dark:text-blue-200';
 export const RELAY_PRIMARY_BUTTON_CLASS =
@@ -35,6 +37,9 @@ export const RELAY_PAIRING_AVAILABILITY_MESSAGE =
   'Supported Pulse Mobile clients connect to this Pulse instance with a QR code or deep link over end-to-end encrypted relay connectivity.';
 export const RELAY_ENABLE_HELP_TEXT =
   'Connect this Pulse instance to the relay server for secure remote access and Pulse Mobile pairing.';
+export const RELAY_ACTIVATION_REQUIRED_LABEL = 'Activation required';
+export const RELAY_ACTIVATION_REQUIRED_MESSAGE =
+  'Remote Access is enabled, but this instance does not have an active Relay token. Activate Relay or turn Remote Access off before pairing mobile clients.';
 
 export function getRelayDiagnosticClass(severity: 'warning' | 'error'): string {
   return severity === 'error'
@@ -62,9 +67,32 @@ export function getRelayConnectionPresentation(
     };
   }
 
+  if (isRelayMissingTokenError(status?.last_error)) {
+    return {
+      variant: 'danger',
+      label: RELAY_ACTIVATION_REQUIRED_LABEL,
+      pulse: false,
+    };
+  }
+
   return {
     variant: 'danger',
     label: 'Disconnected',
     pulse: false,
   };
+}
+
+export function getRelayStatusErrorMessage(status?: RelayStatus | null): string | null {
+  const error = status?.last_error?.trim();
+  if (!error) {
+    return null;
+  }
+  if (isRelayMissingTokenError(error)) {
+    return RELAY_ACTIVATION_REQUIRED_MESSAGE;
+  }
+  return error;
+}
+
+function isRelayMissingTokenError(error?: string | null): boolean {
+  return RELAY_MISSING_TOKEN_ERROR.test(error ?? '');
 }

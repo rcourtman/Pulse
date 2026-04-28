@@ -9,7 +9,10 @@ import { RelayAPI, type RelayConfig, type RelayStatus } from '@/api/relay';
 import { OnboardingAPI, type OnboardingQRResponse } from '@/api/onboarding';
 import { SecurityAPI, type APITokenRecord } from '@/api/security';
 import { logger } from '@/utils/logger';
-import { getRelayConnectionPresentation } from '@/utils/relayPresentation';
+import {
+  getRelayConnectionPresentation,
+  getRelayStatusErrorMessage,
+} from '@/utils/relayPresentation';
 import QRCode from 'qrcode';
 
 export interface RelaySettingsPanelProps {
@@ -35,6 +38,7 @@ export function useRelaySettingsPanelState(props: RelaySettingsPanelProps) {
   const connectionPresentation = createMemo(() =>
     getRelayConnectionPresentation(config(), status()),
   );
+  const statusErrorMessage = createMemo(() => getRelayStatusErrorMessage(status()));
   const canShowPairing = createMemo(() => Boolean(config()?.enabled && status()?.connected));
 
   createEffect((wasPaywallVisible: boolean) => {
@@ -267,6 +271,7 @@ export function useRelaySettingsPanelState(props: RelaySettingsPanelProps) {
     showUpgradePrompts,
     showPairing,
     status,
+    statusErrorMessage,
     upgradeDestination,
   };
 }

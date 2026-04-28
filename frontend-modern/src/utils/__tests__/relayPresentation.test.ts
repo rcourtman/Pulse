@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
+  getRelayStatusErrorMessage,
   getRelayConnectionPresentation,
   getRelayDiagnosticClass,
+  RELAY_ACTIVATION_REQUIRED_LABEL,
+  RELAY_ACTIVATION_REQUIRED_MESSAGE,
   RELAY_CODE_BLOCK_CLASS,
   RELAY_ENABLE_HELP_TEXT,
   RELAY_INFO_MESSAGE_CLASS,
@@ -49,6 +52,42 @@ describe('relayPresentation', () => {
     });
   });
 
+  it('returns activation-required presentation for missing Relay token errors', () => {
+    expect(
+      getRelayConnectionPresentation(
+        { enabled: true } as never,
+        {
+          connected: false,
+          active_channels: 0,
+          last_error: 'register: no license token available',
+        },
+      ),
+    ).toEqual({
+      variant: 'danger',
+      label: RELAY_ACTIVATION_REQUIRED_LABEL,
+      pulse: false,
+    });
+  });
+
+  it('translates missing Relay token errors while preserving other diagnostics', () => {
+    expect(
+      getRelayStatusErrorMessage({
+        connected: false,
+        active_channels: 0,
+        last_error: 'register: no license token available',
+      }),
+    ).toBe(RELAY_ACTIVATION_REQUIRED_MESSAGE);
+
+    expect(
+      getRelayStatusErrorMessage({
+        connected: false,
+        active_channels: 0,
+        last_error: 'relay handshake failed',
+      }),
+    ).toBe('relay handshake failed');
+    expect(getRelayStatusErrorMessage(null)).toBeNull();
+  });
+
   it('centralizes relay action and diagnostics styling', () => {
     expect(RELAY_READONLY_NOTICE_CLASS).toContain('border-blue-200');
     expect(RELAY_PRIMARY_BUTTON_CLASS).toContain('bg-blue-600');
@@ -71,6 +110,8 @@ describe('relayPresentation', () => {
     expect(RELAY_PAIRING_AVAILABILITY_TITLE).toBe('Pair Pulse Mobile through Relay');
     expect(RELAY_PAIRING_AVAILABILITY_MESSAGE).toContain('QR code or deep link');
     expect(RELAY_ENABLE_HELP_TEXT).toContain('Pulse Mobile pairing');
+    expect(RELAY_ACTIVATION_REQUIRED_LABEL).toBe('Activation required');
+    expect(RELAY_ACTIVATION_REQUIRED_MESSAGE).toContain('active Relay token');
   });
 
   it('does not retain retired Relay price or trial-era onboarding copy', () => {

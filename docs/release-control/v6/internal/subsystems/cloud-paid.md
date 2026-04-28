@@ -251,6 +251,10 @@ Community limit enforcement.
     Public demo and other read-only presentation policy states must suppress
     relay setup and upsell onboarding instead of inviting pairing or commercial
     action from a governed non-manageable surface.
+    Relay settings must also translate internal registration-token failures
+    into an operator-actionable activation-required state. Customer-facing
+    Relay settings must not render raw `register:` or license-token-provider
+    diagnostics from the relay client as the primary status message.
 19. Add or change cloud plan presentation through `frontend-modern/src/pages/CloudPricing.tsx`
     That same presentation boundary also owns truthful customer-entry copy for
     hosted Cloud pricing and signup. Cloud CTA labels, setup steps, and
