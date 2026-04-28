@@ -1,0 +1,1451 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Pulse Monitoring Prototype v2</title>
+    <style>
+      :root {
+        --bg: #0d1627;
+        --surface: #172236;
+        --surface-soft: #24334b;
+        --surface-row: #18243a;
+        --section: #101a2b;
+        --line: #33445d;
+        --line-strong: #52677f;
+        --text: #e8eef8;
+        --muted: #9aa8bd;
+        --blue: #5aa2ff;
+        --green: #36c275;
+        --amber: #f2b84b;
+        --red: #ef6f61;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      [hidden] {
+        display: none !important;
+      }
+
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font: 12px/1.25 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+
+      button,
+      input {
+        font: inherit;
+      }
+
+      button {
+        border: 1px solid var(--line);
+        background: var(--surface);
+        color: var(--text);
+        border-radius: 4px;
+        padding: 5px 9px;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+
+      button:hover,
+      button.active {
+        border-color: var(--blue);
+        background: #123159;
+        color: var(--blue);
+      }
+
+      button[aria-disabled="true"] {
+        cursor: default;
+      }
+
+      .page {
+        max-width: 1720px;
+        margin: 0 auto;
+        padding: 12px;
+      }
+
+      .header {
+        display: flex;
+        justify-content: space-between;
+        gap: 14px;
+        margin-bottom: 8px;
+      }
+
+      h1,
+      p {
+        margin: 0;
+      }
+
+      h1 {
+        font-size: 21px;
+        letter-spacing: 0;
+      }
+
+      .subtitle {
+        margin-top: 3px;
+        color: var(--muted);
+      }
+
+      .summary {
+        display: grid;
+        grid-template-columns: repeat(6, minmax(130px, 1fr));
+        gap: 8px;
+        margin-bottom: 8px;
+      }
+
+      .card {
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        box-shadow: 0 10px 28px rgba(0, 0, 0, 0.16);
+      }
+
+      .summary-card {
+        padding: 7px 10px;
+      }
+
+      .label {
+        color: var(--muted);
+        font-size: 11px;
+      }
+
+      .big-number {
+        display: flex;
+        align-items: baseline;
+        gap: 6px;
+        margin-top: 3px;
+        font-size: 20px;
+        font-weight: 750;
+      }
+
+      .note {
+        color: var(--muted);
+        font-size: 11px;
+      }
+
+      .toolbar {
+        display: grid;
+        gap: 6px;
+        padding: 8px;
+        margin-bottom: 8px;
+      }
+
+      .toolbar input {
+        width: 100%;
+        border: 1px solid var(--line);
+        border-radius: 4px;
+        padding: 6px 9px;
+        background: #111c2f;
+        color: var(--text);
+      }
+
+      .filter-row {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        flex-wrap: wrap;
+      }
+
+      .filter-label {
+        width: 76px;
+        color: var(--muted);
+        font-size: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+      }
+
+      .filter-buttons {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        flex-wrap: wrap;
+      }
+
+      .table-card {
+        overflow: hidden;
+      }
+
+      .table-wrap {
+        overflow: auto;
+      }
+
+      table {
+        width: 100%;
+        min-width: 1480px;
+        border-collapse: collapse;
+        table-layout: fixed;
+      }
+
+      th,
+      td {
+        border-bottom: 1px solid var(--line);
+        height: 25px;
+        padding: 3px 8px;
+        vertical-align: middle;
+        text-align: left;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      th {
+        position: sticky;
+        top: 0;
+        z-index: 2;
+        background: var(--surface-soft);
+        color: var(--muted);
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0;
+      }
+
+      tbody tr {
+        background: var(--surface-row);
+      }
+
+      tbody tr:hover {
+        background: #203454;
+      }
+
+      tr.section-row td {
+        height: 30px;
+        padding: 5px 8px;
+        background: var(--section);
+        border-top: 2px solid var(--line-strong);
+        border-bottom: 1px solid #32435a;
+      }
+
+      tr.section-row.platform td {
+        height: 31px;
+        background: var(--surface-soft);
+      }
+
+      tr.section-row.top td {
+        height: 28px;
+        background: #111d31;
+        border-top: 1px solid var(--line-strong);
+      }
+
+      tr.section-row.lane td {
+        height: 22px;
+        padding-left: 28px;
+        background: #152136;
+        border-top: 1px solid #2a3a52;
+      }
+
+      tr.section-row.group td {
+        height: 25px;
+        background: #142033;
+        border-top: 1px solid var(--line);
+      }
+
+      .section {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-width: 0;
+      }
+
+      .section-mark {
+        width: 4px;
+        height: 15px;
+        border-radius: 4px;
+        background: var(--blue);
+      }
+
+      tr.section-row.group .section-mark {
+        height: 12px;
+        opacity: 0.72;
+      }
+
+      tr.section-row.top .section-mark {
+        height: 14px;
+        background: #8fb8e8;
+        opacity: 0.8;
+      }
+
+      tr.section-row.lane .section-mark {
+        width: 3px;
+        height: 10px;
+        background: #6f819b;
+        opacity: 0.82;
+      }
+
+      .section-title {
+        color: #e3ebf7;
+        font-size: 11px;
+        font-weight: 800;
+        line-height: 1;
+        text-transform: uppercase;
+        white-space: nowrap;
+      }
+
+      tr.section-row.top .section-title {
+        font-size: 12px;
+        text-transform: none;
+      }
+
+      tr.section-row.lane .section-title {
+        color: #c5d1df;
+        font-size: 10px;
+      }
+
+      .section-meta {
+        color: var(--muted);
+        font-size: 10px;
+        font-weight: 650;
+        white-space: nowrap;
+      }
+
+      tr.data-row td {
+        height: 25px;
+        font-size: 11px;
+      }
+
+      tr.data-row.area-top td {
+        height: 27px;
+        background: #1a283f;
+        font-size: 11.5px;
+      }
+
+      tr.data-row.area-workload td,
+      tr.data-row.area-storage td,
+      tr.data-row.area-recovery td {
+        height: 23px;
+      }
+
+      tr.data-row.area-workload td:first-child,
+      tr.data-row.area-storage td:first-child,
+      tr.data-row.area-recovery td:first-child {
+        padding-left: 22px;
+      }
+
+      tr.data-row.related-row td {
+        height: 21px;
+        background: #162238;
+        color: #bdc8d6;
+      }
+
+      tr.data-row.related-row td:first-child {
+        padding-left: 44px;
+      }
+
+      tr.data-row.related-row .name {
+        font-weight: 650;
+      }
+
+      tr.data-row.related-row .state-dot {
+        width: 6px;
+        height: 6px;
+        opacity: 0.85;
+      }
+
+      .relation {
+        flex: 0 0 auto;
+        width: 42px;
+        color: var(--muted);
+        font-size: 9px;
+        font-weight: 750;
+        text-transform: uppercase;
+      }
+
+      .resource {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        min-width: 0;
+      }
+
+      .state-dot {
+        flex: 0 0 auto;
+        width: 8px;
+        height: 8px;
+        border-radius: 999px;
+        background: var(--green);
+        box-shadow: 0 0 0 1px rgba(54, 194, 117, 0.75);
+      }
+
+      .state-dot.state-issue {
+        background: var(--amber);
+        box-shadow: 0 0 0 1px rgba(242, 184, 75, 0.75);
+      }
+
+      .state-dot.state-off {
+        background: var(--red);
+        box-shadow: 0 0 0 1px rgba(239, 111, 97, 0.75);
+      }
+
+      .name {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-weight: 720;
+      }
+
+      .subtle {
+        color: var(--muted);
+      }
+
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        border: 1px solid var(--line);
+        border-radius: 4px;
+        padding: 1px 5px;
+        font-size: 9px;
+        line-height: 1.15;
+        white-space: nowrap;
+      }
+
+      .metric {
+        display: grid;
+        grid-template-columns: 31px minmax(0, 1fr);
+        align-items: center;
+        gap: 5px;
+        min-width: 0;
+      }
+
+      .track {
+        height: 5px;
+        border-radius: 2px;
+        background: #2d3b51;
+        overflow: hidden;
+      }
+
+      .fill {
+        height: 100%;
+        border-radius: inherit;
+        background: var(--green);
+      }
+
+      .fill.warning {
+        background: var(--amber);
+      }
+
+      .fill.critical {
+        background: var(--red);
+      }
+
+      .signals {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        min-width: 0;
+      }
+
+      .signal-count {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 16px;
+        height: 15px;
+        border-radius: 3px;
+        background: #2a3446;
+        color: #d8e1ee;
+        font-size: 10px;
+        font-weight: 700;
+      }
+
+      tr.row-issue .signal-count {
+        background: #3a2c12;
+        color: var(--amber);
+      }
+
+      tr.row-off .signal-count {
+        background: #44201d;
+        color: var(--red);
+      }
+
+      .signal-text {
+        display: block;
+        max-width: 230px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        color: #c6d0df;
+        white-space: nowrap;
+      }
+
+      .empty-state {
+        padding: 28px;
+        color: var(--muted);
+        text-align: center;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <header class="header">
+        <div>
+          <h1>Monitoring v2</h1>
+          <p class="subtitle">Dense unified table with platform, resource, and operational lane segmentation.</p>
+        </div>
+      </header>
+
+      <section class="summary" aria-label="Monitoring summary">
+        <article class="card summary-card">
+          <div class="label">Platforms</div>
+          <div class="big-number"><span id="platformCount">0</span><span class="note">supported</span></div>
+        </article>
+        <article class="card summary-card">
+          <div class="label">Top Level</div>
+          <div class="big-number"><span id="topLevelCount">0</span><span class="note">resources</span></div>
+        </article>
+        <article class="card summary-card">
+          <div class="label">Workloads</div>
+          <div class="big-number"><span id="workloadCount">0</span><span class="note">guests, pods, containers</span></div>
+        </article>
+        <article class="card summary-card">
+          <div class="label">Storage</div>
+          <div class="big-number"><span id="storageCount">0</span><span class="note">items</span></div>
+        </article>
+        <article class="card summary-card">
+          <div class="label">Recovery</div>
+          <div class="big-number"><span id="recoveryCount">0</span><span class="note">policies</span></div>
+        </article>
+        <article class="card summary-card">
+          <div class="label">Needs Attention</div>
+          <div class="big-number"><span id="attentionCount">0</span><span class="note">resources</span></div>
+        </article>
+      </section>
+
+      <section class="card toolbar" aria-label="Monitoring controls">
+        <input id="search" type="search" placeholder="Search resources, platforms, hosts, guests, storage, backup jobs..." />
+        <div class="filter-row">
+          <span class="filter-label">Platform</span>
+          <div id="platformButtons" class="filter-buttons"></div>
+        </div>
+        <div class="filter-row">
+          <span class="filter-label">View</span>
+          <div id="viewButtons" class="filter-buttons"></div>
+        </div>
+        <div class="filter-row">
+          <span class="filter-label">Show</span>
+          <div id="layerButtons" class="filter-buttons"></div>
+        </div>
+      </section>
+
+      <article class="card table-card">
+        <div class="table-wrap">
+          <table>
+            <colgroup id="cols"></colgroup>
+            <thead id="head"></thead>
+            <tbody id="body"></tbody>
+          </table>
+          <div id="empty" class="empty-state" hidden>No resources match this view.</div>
+        </div>
+      </article>
+    </main>
+
+    <script>
+      const views = {
+        global: [
+          { id: "overview", label: "Overview" },
+          { id: "recovery", label: "Recovery" },
+          { id: "problems", label: "Problems" },
+        ],
+        proxmox: [
+          { id: "overview", label: "Overview" },
+          { id: "guests", label: "Guests" },
+          { id: "storage", label: "Storage" },
+          { id: "backups", label: "Backups" },
+          { id: "problems", label: "Problems" },
+        ],
+        docker: [
+          { id: "overview", label: "Overview" },
+          { id: "containers", label: "Containers" },
+          { id: "volumes", label: "Volumes" },
+          { id: "backups", label: "Backups" },
+          { id: "problems", label: "Problems" },
+        ],
+        kubernetes: [
+          { id: "overview", label: "Overview" },
+          { id: "workloads", label: "Workloads" },
+          { id: "storage", label: "Storage" },
+          { id: "backups", label: "Backups" },
+          { id: "problems", label: "Problems" },
+        ],
+        truenas: [
+          { id: "overview", label: "Overview" },
+          { id: "pools", label: "Pools" },
+          { id: "datasets", label: "Datasets" },
+          { id: "disks", label: "Disks" },
+          { id: "replication", label: "Replication" },
+          { id: "problems", label: "Problems" },
+        ],
+        vsphere: [
+          { id: "overview", label: "Overview" },
+          { id: "vms", label: "VMs" },
+          { id: "datastores", label: "Datastores" },
+          { id: "backups", label: "Backups" },
+          { id: "problems", label: "Problems" },
+        ],
+      };
+
+      const layerOptions = [
+        { id: "top", label: "Hosts" },
+        { id: "workload", label: "Workloads" },
+        { id: "storage", label: "Storage" },
+        { id: "recovery", label: "Recovery" },
+      ];
+
+      // Displayed fields stay inside unified resource model concerns: identity,
+      // kind, placement, liveness state, metrics, recovery state, and health signals.
+      const columns = {
+        overview: [
+          { key: "name", label: "Resource", width: 260, type: "resource" },
+          { key: "kind", label: "Kind", width: 120 },
+          { key: "info", label: "Info", width: 300 },
+          { key: "cpu", label: "CPU", width: 100, type: "metric" },
+          { key: "memory", label: "Memory", width: 100, type: "metric" },
+          { key: "disk", label: "Disk", width: 100, type: "metric" },
+          { key: "recovery", label: "Recovery", width: 110 },
+          { key: "signals", label: "Signals", width: 330, type: "signals" },
+        ],
+        workloads: [
+          { key: "name", label: "Workload", width: 270, type: "resource" },
+          { key: "kind", label: "Kind", width: 125 },
+          { key: "placement", label: "Placement", width: 180 },
+          { key: "cpu", label: "CPU", width: 100, type: "metric" },
+          { key: "memory", label: "Memory", width: 100, type: "metric" },
+          { key: "disk", label: "Disk", width: 100, type: "metric" },
+          { key: "recovery", label: "Recovery", width: 120 },
+          { key: "signals", label: "Signals", width: 340, type: "signals" },
+        ],
+        storage: [
+          { key: "name", label: "Storage", width: 270, type: "resource" },
+          { key: "kind", label: "Kind", width: 130 },
+          { key: "info", label: "Backing / Role", width: 310 },
+          { key: "disk", label: "Used", width: 100, type: "metric" },
+          { key: "size", label: "Size", width: 120 },
+          { key: "temp", label: "Temp", width: 90 },
+          { key: "recovery", label: "Recovery", width: 120 },
+          { key: "signals", label: "Signals", width: 340, type: "signals" },
+        ],
+        backups: [
+          { key: "name", label: "Protected Item", width: 280, type: "resource" },
+          { key: "kind", label: "Kind", width: 130 },
+          { key: "placement", label: "Placement", width: 190 },
+          { key: "target", label: "Target", width: 220 },
+          { key: "lastRun", label: "Last Run", width: 130 },
+          { key: "verification", label: "Verification", width: 145 },
+          { key: "recovery", label: "Recovery", width: 120 },
+          { key: "signals", label: "Signals", width: 360, type: "signals" },
+        ],
+        problems: [
+          { key: "name", label: "Resource", width: 290, type: "resource" },
+          { key: "platformLabel", label: "Platform", width: 125 },
+          { key: "kind", label: "Kind", width: 130 },
+          { key: "placement", label: "Placement", width: 220 },
+          { key: "recovery", label: "Recovery", width: 120 },
+          { key: "signal", label: "Signal", width: 420 },
+        ],
+      };
+
+      const data = {
+        proxmox: {
+          label: "Proxmox",
+          topLabel: "hosts",
+          top: [
+            { name: "pve-a", kind: "Host", info: "instance lab-pve / cluster member", status: "critical", cpu: 86, memory: 77, disk: 94, recovery: "Stale", signals: ["Root disk above 90%", "3 child resources affected"] },
+            { name: "pve-b", kind: "Host", info: "instance lab-pve / cluster member", status: "ok", cpu: 38, memory: 62, disk: 70, recovery: "Protected", signals: [] },
+          ],
+          workloads: [
+            { name: "vm-210 pulse-db", kind: "VM", placement: "pve-a", info: "vmid 210 / qemu", status: "critical", cpu: 71, memory: 93, disk: 81, recovery: "Missed", signals: ["Memory pressure", "Backup missed 2 runs"] },
+            { name: "vm-214 grafana", kind: "VM", placement: "pve-a", info: "vmid 214 / qemu", status: "offline", state: "off", cpu: null, memory: null, disk: null, recovery: "Protected", signals: ["Guest powered off"] },
+            { name: "ct-117 redis-cache", kind: "LXC", placement: "pve-a", info: "vmid 117 / lxc", status: "warning", cpu: 47, memory: 78, disk: 61, recovery: "Protected", signals: ["Restarted 4 times in 6h"] },
+            { name: "vm-104 home-assistant", kind: "VM", placement: "pve-b", info: "vmid 104 / qemu", status: "ok", cpu: 12, memory: 36, disk: 44, recovery: "Protected", signals: [] },
+            { name: "ct-130 nginx-edge", kind: "LXC", placement: "pve-b", info: "vmid 130 / lxc", status: "warning", cpu: 64, memory: 55, disk: 47, recovery: "Protected", signals: ["TLS certificate expires in 9 days"] },
+          ],
+          storage: [
+            { name: "local-zfs", kind: "Pool", placement: "pve-a", info: "VM datastore", status: "critical", disk: 94, size: "3.5 TB", temp: "-", recovery: "N/A", signals: ["Free space below 8%", "Snapshots growing faster than pruning"] },
+            { name: "vm-210/scsi0", kind: "VM Disk", placement: "pve-a / vm-210", info: "VirtIO disk on local-zfs", status: "warning", disk: 82, size: "220 GB", temp: "-", recovery: "Protected", signals: ["Guest disk above 80%"] },
+            { name: "vm-210/sata-pass", kind: "Passthrough Disk", placement: "pve-a / vm-210", info: "Passed-through SATA disk", status: "warning", disk: 80, size: "4 TB", temp: "52 C", recovery: "N/A", signals: ["Temperature 52 C"] },
+            { name: "ct-117/rootfs", kind: "CT Volume", placement: "pve-a / ct-117", info: "LXC rootfs on local-zfs", status: "ok", disk: 48, size: "64 GB", temp: "-", recovery: "Protected", signals: [] },
+            { name: "nvme0n1", kind: "Disk", placement: "pve-a", info: "Samsung 970 EVO / local-zfs member", status: "warning", disk: 88, size: "2 TB", temp: "69 C", recovery: "N/A", signals: ["Temperature 69 C", "SMART warning count increased"] },
+            { name: "ceph-fast", kind: "Pool", placement: "pve-b", info: "Replicated SSD pool / VM datastore", status: "ok", disk: 63, size: "8 TB", temp: "-", recovery: "N/A", signals: [] },
+            { name: "vm-104/scsi0", kind: "VM Disk", placement: "pve-b / vm-104", info: "Ceph RBD disk", status: "ok", disk: 58, size: "160 GB", temp: "-", recovery: "Protected", signals: [] },
+            { name: "sdb", kind: "Disk", placement: "pve-b", info: "Intel DC SSD / ceph-fast OSD", status: "ok", disk: 61, size: "2 TB", temp: "41 C", recovery: "N/A", signals: [] },
+          ],
+          backups: [
+            { name: "vm-210 pulse-db", kind: "VM Backup", placement: "pve-a / vm-210", target: "PBS nightly-pve-a", lastRun: "38h ago", verification: "not current", status: "critical", recovery: "Missed", signals: ["Last successful backup 38h ago"] },
+            { name: "vm-214 grafana", kind: "VM Backup", placement: "pve-a / vm-214", target: "PBS nightly-pve-a", lastRun: "02:12", verification: "verified", status: "ok", recovery: "Protected", signals: [] },
+            { name: "ct-117 redis-cache", kind: "CT Backup", placement: "pve-a / ct-117", target: "PBS nightly-pve-a", lastRun: "02:09", verification: "verified", status: "ok", recovery: "Protected", signals: [] },
+            { name: "vm-104 home-assistant", kind: "VM Backup", placement: "pve-b / vm-104", target: "PBS nightly-pve-b", lastRun: "02:10", verification: "verified", status: "ok", recovery: "Protected", signals: [] },
+            { name: "ct-130 nginx-edge", kind: "CT Backup", placement: "pve-b / ct-130", target: "PBS nightly-pve-b", lastRun: "02:08", verification: "verified", status: "ok", recovery: "Protected", signals: [] },
+          ],
+        },
+        docker: {
+          label: "Docker",
+          topLabel: "hosts",
+          top: [
+            { name: "docker-host-01", kind: "Host", info: "docker engine / agent source", status: "ok", cpu: 24, memory: 45, disk: 57, recovery: "Protected", signals: [] },
+            { name: "edge-apps-01", kind: "Host", info: "docker engine / remote source", status: "warning", cpu: 44, memory: 69, disk: 72, recovery: "Partial", signals: ["One container restart loop"] },
+          ],
+          workloads: [
+            { name: "container/immich", kind: "Container", placement: "docker-host-01", info: "image ghcr.io/immich-app/immich-server", status: "ok", cpu: 33, memory: 66, disk: 58, recovery: "Protected", signals: [] },
+            { name: "container/paperless", kind: "Container", placement: "docker-host-01", info: "image ghcr.io/paperless-ngx/paperless-ngx", status: "ok", cpu: 17, memory: 52, disk: 49, recovery: "Protected", signals: [] },
+            { name: "container/watchtower", kind: "Container", placement: "edge-apps-01", info: "image containrrr/watchtower", status: "warning", cpu: 12, memory: 22, disk: 18, recovery: "N/A", signals: ["Restarted 6 times in 3h"] },
+          ],
+          storage: [
+            { name: "volume/immich-library", kind: "Volume", placement: "docker-host-01 / immich", info: "Local Docker volume", status: "warning", disk: 83, size: "4 TB", temp: "-", recovery: "Protected", signals: ["Projected to fill in 18 days"] },
+            { name: "volume/postgres-data", kind: "Volume", placement: "docker-host-01 / paperless", info: "Database volume", status: "ok", disk: 52, size: "500 GB", temp: "-", recovery: "Protected", signals: [] },
+            { name: "bind/edge-config", kind: "Bind Mount", placement: "edge-apps-01", info: "Config mount", status: "warning", disk: 71, size: "40 GB", temp: "-", recovery: "Partial", signals: ["Backup excludes one path"] },
+          ],
+          backups: [
+            { name: "immich volumes", kind: "Volume Backup", placement: "docker-host-01 / immich", target: "restic-docker", lastRun: "03:40", verification: "sampled", status: "ok", recovery: "Protected", signals: [] },
+            { name: "paperless volumes", kind: "Volume Backup", placement: "docker-host-01 / paperless", target: "restic-docker", lastRun: "03:42", verification: "sampled", status: "ok", recovery: "Protected", signals: [] },
+            { name: "edge bind mounts", kind: "File Backup", placement: "edge-apps-01", target: "restic-edge", lastRun: "16h ago", verification: "not sampled", status: "warning", recovery: "Partial", signals: ["One excluded path"] },
+          ],
+        },
+        kubernetes: {
+          label: "Kubernetes",
+          topLabel: "clusters",
+          top: [
+            { name: "edge-k8s", kind: "Cluster", info: "context edge-k8s / v1.30", status: "warning", cpu: 58, memory: 74, disk: 66, recovery: "Partial", signals: ["One namespace has degraded pods"] },
+            { name: "prod-euw1", kind: "Cluster", info: "context prod-euw1 / v1.30", status: "ok", cpu: 42, memory: 63, disk: 51, recovery: "Protected", signals: [] },
+          ],
+          workloads: [
+            { name: "deployment/api", kind: "Deployment", placement: "edge-k8s / production", info: "desired 6 / ready 4", status: "warning", cpu: 74, memory: 82, disk: null, recovery: "Manifest", signals: ["2 pods not ready"] },
+            { name: "pod/api-7d9c8", kind: "Pod", placement: "edge-k8s / production", info: "phase Running / CrashLoopBackOff", status: "critical", cpu: 91, memory: 89, disk: null, recovery: "Ephemeral", signals: ["CrashLoopBackOff", "CPU throttling"] },
+            { name: "deployment/checkout", kind: "Deployment", placement: "prod-euw1 / apps", info: "desired 8 / ready 8", status: "ok", cpu: 37, memory: 44, disk: null, recovery: "Manifest", signals: [] },
+          ],
+          storage: [
+            { name: "pvc/api-data", kind: "PVC", placement: "edge-k8s / production", info: "fast-rwo", status: "ok", disk: 52, size: "150 GB", temp: "-", recovery: "Snapshot", signals: [] },
+            { name: "pvc/checkout-cache", kind: "PVC", placement: "prod-euw1 / apps", info: "standard-rwo", status: "ok", disk: 46, size: "80 GB", temp: "-", recovery: "Snapshot", signals: [] },
+            { name: "storageclass/local-path", kind: "StorageClass", placement: "edge-k8s", info: "node local", status: "warning", disk: 68, size: "-", temp: "-", recovery: "Partial", signals: ["One PVC snapshot skipped"] },
+          ],
+          backups: [
+            { name: "production namespace", kind: "Velero Backup", placement: "edge-k8s / production", target: "velero-production", lastRun: "04:15", verification: "policy only", status: "warning", recovery: "Partial", signals: ["One PVC snapshot skipped"] },
+            { name: "apps namespace", kind: "Velero Backup", placement: "prod-euw1 / apps", target: "velero-prod-euw1", lastRun: "03:55", verification: "policy only", status: "ok", recovery: "Protected", signals: [] },
+          ],
+        },
+        truenas: {
+          label: "TrueNAS",
+          topLabel: "systems",
+          top: [
+            { name: "core-nas-01", kind: "System", info: "hostname core-nas-01 / 24.10", status: "warning", cpu: 31, memory: 68, disk: 79, recovery: "Protected", signals: ["One disk has SMART pre-fail attribute"] },
+            { name: "backup-vault", kind: "System", info: "hostname backup-vault / 24.10", status: "ok", cpu: 18, memory: 41, disk: 62, recovery: "Current", signals: [] },
+          ],
+          workloads: [],
+          storage: [
+            { name: "tank", kind: "Pool", placement: "core-nas-01", info: "Main ZFS pool", status: "warning", disk: 79, size: "20 TB", temp: "-", recovery: "Snapshots", signals: ["One mirror member is degrading"] },
+            { name: "tank/media", kind: "Dataset", placement: "core-nas-01 / tank", info: "Media dataset", status: "ok", disk: 74, size: "12 TB", temp: "-", recovery: "Snapshots", signals: [] },
+            { name: "tank/apps", kind: "Dataset", placement: "core-nas-01 / tank", info: "Application dataset", status: "ok", disk: 48, size: "3 TB", temp: "-", recovery: "Snapshots", signals: [] },
+            { name: "sda", kind: "Disk", placement: "core-nas-01 / tank", info: "8 TB Seagate", status: "critical", disk: 81, size: "8 TB", temp: "57 C", recovery: "N/A", signals: ["SMART pre-fail attribute changed"] },
+            { name: "backup-pool", kind: "Pool", placement: "backup-vault", info: "PBS and replication target", status: "ok", disk: 62, size: "18 TB", temp: "-", recovery: "Snapshots", signals: [] },
+          ],
+          backups: [
+            { name: "tank replication", kind: "Replication", placement: "core-nas-01 / tank", target: "backup-vault", lastRun: "14m ago", verification: "checksum", status: "ok", recovery: "Current", signals: [] },
+            { name: "apps snapshots", kind: "Snapshot Task", placement: "core-nas-01 / tank/apps", target: "core-nas-01", lastRun: "28m ago", verification: "policy", status: "ok", recovery: "Current", signals: [] },
+          ],
+        },
+        vsphere: {
+          label: "vSphere",
+          topLabel: "clusters",
+          top: [
+            { name: "vsphere-lab", kind: "Cluster", info: "vCenter vcsa-lab / cluster", status: "warning", cpu: 46, memory: 67, disk: 58, recovery: "Partial", signals: ["Active datastore latency alarm"] },
+            { name: "esxi-edge", kind: "Host", info: "ESXi host / connected", status: "ok", cpu: 34, memory: 52, disk: 49, recovery: "Protected", signals: [] },
+          ],
+          workloads: [
+            { name: "vmware/ad-01", kind: "VM", placement: "vsphere-lab", info: "guest windowsServer64Guest", status: "ok", cpu: 29, memory: 57, disk: 46, recovery: "Protected", signals: [] },
+            { name: "vmware/files-02", kind: "VM", placement: "vsphere-lab", info: "guest linux64Guest", status: "warning", cpu: 67, memory: 73, disk: 72, recovery: "Partial", signals: ["Snapshot policy not confirmed"] },
+            { name: "vmware/vcenter", kind: "VM", placement: "esxi-edge", info: "guest vmwarePhoton64Guest", status: "ok", cpu: 25, memory: 49, disk: 41, recovery: "Protected", signals: [] },
+          ],
+          storage: [
+            { name: "datastore-fast-01", kind: "Datastore", placement: "vsphere-lab", info: "VMFS datastore", status: "warning", disk: 76, size: "6 TB", temp: "-", recovery: "N/A", signals: ["Datastore latency rose 9 minutes ago"] },
+            { name: "datastore-edge", kind: "Datastore", placement: "esxi-edge", info: "Local datastore", status: "ok", disk: 49, size: "2 TB", temp: "-", recovery: "N/A", signals: [] },
+          ],
+          backups: [
+            { name: "vmware/ad-01", kind: "VM Backup", placement: "vsphere-lab / ad-01", target: "veeam-vsphere-nightly", lastRun: "01:50", verification: "verified", status: "ok", recovery: "Protected", signals: [] },
+            { name: "vmware/files-02", kind: "VM Backup", placement: "vsphere-lab / files-02", target: "veeam-vsphere-nightly", lastRun: "01:55", verification: "not exercised", status: "warning", recovery: "Partial", signals: ["Restore verification not yet exercised"] },
+            { name: "vmware/vcenter", kind: "VM Backup", placement: "esxi-edge / vcenter", target: "veeam-edge", lastRun: "02:20", verification: "verified", status: "ok", recovery: "Protected", signals: [] },
+          ],
+        },
+      };
+
+      const state = {
+        view: "overview",
+        selectedPlatforms: new Set(),
+        layers: new Set(layerOptions.map((layer) => layer.id)),
+        query: "",
+      };
+
+      function platformIds() {
+        return Object.keys(data);
+      }
+
+      function currentViews() {
+        const focusedPlatform = focusedPlatformScope();
+        if (focusedPlatform) return views[focusedPlatform];
+        return views.global;
+      }
+
+      function requiredLayerForView(view) {
+        if (["guests", "containers", "workloads", "vms"].includes(view)) return "workload";
+        if (["storage", "volumes", "pools", "datasets", "disks", "datastores"].includes(view)) return "storage";
+        if (["recovery", "backups", "replication"].includes(view)) return "recovery";
+        return "";
+      }
+
+      function ensureRequiredLayer() {
+        const required = requiredLayerForView(state.view);
+        if (required) state.layers.add(required);
+      }
+
+      function layerEnabled(layer) {
+        return state.layers.has(layer) || requiredLayerForView(state.view) === layer;
+      }
+
+      function selectedPlatformIds() {
+        return state.selectedPlatforms.size ? Array.from(state.selectedPlatforms) : platformIds();
+      }
+
+      function focusedPlatformScope() {
+        if (state.selectedPlatforms.size !== 1) return "";
+        return Array.from(state.selectedPlatforms)[0];
+      }
+
+      function allRows(platformId) {
+        const platform = data[platformId];
+        return [
+          ...platform.top.map((row) => normalizeRow(platformId, "top", row)),
+          ...platform.workloads.map((row) => normalizeRow(platformId, "workload", row)),
+          ...platform.storage.map((row) => normalizeRow(platformId, "storage", row)),
+          ...platform.backups.map((row) => normalizeRow(platformId, "recovery", row)),
+        ];
+      }
+
+      function normalizeRow(platformId, area, row) {
+        const recoveryInfo = area === "recovery"
+          ? [row.target, row.lastRun, row.verification].filter(Boolean).join(" / ")
+          : "";
+        const runtimeState = resolveRuntimeState(row);
+        return {
+          ...row,
+          info: row.info || recoveryInfo,
+          runtimeState: runtimeState.id,
+          runtimeStateLabel: runtimeState.label,
+          platform: platformId,
+          platformLabel: data[platformId].label,
+          area,
+          signal: (row.signals || [])[0] || "None",
+        };
+      }
+
+      function resolveRuntimeState(row) {
+        if (row.state === "off" || row.status === "offline") return { id: "off", label: "Off" };
+        if (row.state === "on" || row.status === "ok") {
+          if ((row.signals || []).length > 0) return { id: "issue", label: "Issue" };
+          return { id: "on", label: "On" };
+        }
+        return { id: "issue", label: "Issue" };
+      }
+
+      function hasProblem(row) {
+        return row.runtimeState === "off" || row.runtimeState === "issue" || row.status === "critical" || row.status === "warning" || (row.signals || []).length > 0;
+      }
+
+      function matchesSearch(row) {
+        if (!state.query) return true;
+        return [row.name, row.kind, row.info, row.placement, row.platformLabel, row.status, row.runtimeStateLabel, row.recovery, row.target, row.lastRun, row.verification, ...(row.signals || [])]
+          .join(" ")
+          .toLowerCase()
+          .includes(state.query);
+      }
+
+      function section(title, meta = "", level = "group") {
+        return { section: true, title, meta, level };
+      }
+
+      function rowsForScope() {
+        const focusedPlatform = focusedPlatformScope();
+        if (state.view === "recovery" && !focusedPlatform) return recoveryRows();
+        if (focusedPlatform) return platformRows(focusedPlatform);
+        return globalRows();
+      }
+
+      function globalRows() {
+        if (state.view === "overview") return segmentedOverviewRows(selectedPlatformIds(), true);
+        if (state.view === "problems") return globalProblemRows();
+
+        const rows = [];
+        for (const platformId of selectedPlatformIds()) {
+          const platform = data[platformId];
+          const platformRows = platform.top.map((row) => normalizeRow(platformId, "top", row)).filter(matchesGlobalView).filter(matchesSearch);
+          const extraProblems = state.view === "problems" ? allRows(platformId).filter((row) => row.area !== "top").filter(hasProblem).filter(matchesSearch) : [];
+          const visible = state.view === "problems" ? [...platformRows, ...extraProblems] : platformRows;
+          if (!visible.length) continue;
+          rows.push(section(platform.label, `${platform.top.length} ${platform.topLabel}`, "platform"), ...visible);
+        }
+        return { columns: state.view === "problems" ? columns.problems : columns.overview, rows };
+      }
+
+      function segmentedOverviewRows(platforms, includePlatformSections) {
+        const relationshipMode = true;
+        const rows = [];
+        for (const platformId of platforms) {
+          const platform = data[platformId];
+          const platformStart = rows.length;
+          if (includePlatformSections) rows.push(section(platform.label, `${platform.top.length} ${platform.topLabel}`, "platform"));
+
+          for (const top of platform.top) {
+            appendTopOverviewRows(rows, platformId, top, relationshipMode);
+          }
+
+          if (includePlatformSections && rows.length === platformStart + 1) rows.splice(platformStart, 1);
+        }
+        return { columns: columns.overview, rows };
+      }
+
+      function appendTopOverviewRows(rows, platformId, top, relationshipMode) {
+        if (relationshipMode) {
+          appendRelationshipOverviewRows(rows, platformId, top);
+          return;
+        }
+
+        const topRow = normalizeRow(platformId, "top", top);
+        const lanes = overviewLanes(platformId, top).map((lane) => ({
+          ...lane,
+          rows: lane.rows.filter(matchesSearch),
+        }));
+        const hasVisibleChildren = lanes.some((lane) => lane.rows.length > 0);
+        if (state.query && !matchesSearch(topRow) && !hasVisibleChildren) return;
+
+        rows.push(section(top.name, top.info, "top"));
+        rows.push(topRow);
+
+        for (const lane of lanes) {
+          if (!lane.rows.length) continue;
+          rows.push(section(lane.title, lane.meta, `lane lane-${lane.id}`), ...lane.rows);
+        }
+      }
+
+      function appendRelationshipOverviewRows(rows, platformId, top) {
+        const topRow = normalizeRow(platformId, "top", top);
+        const model = relationshipModel(platformId, top);
+        const visibleWorkloads = layerEnabled("workload")
+          ? model.workloads
+            .map((entry) => visibleWorkloadEntry(entry, layerEnabled("storage"), layerEnabled("recovery")))
+            .filter(Boolean)
+          : [];
+        const visibleHostStorage = layerEnabled("storage") ? visibleRowsForSearch(model.hostStorage) : [];
+        const visibleHostRecovery = layerEnabled("recovery") ? visibleRowsForSearch(model.hostRecovery) : [];
+        const hasVisibleChildren = visibleWorkloads.length || visibleHostStorage.length || visibleHostRecovery.length;
+        if ((state.query || !layerEnabled("top")) && !matchesSearch(topRow) && !hasVisibleChildren) return;
+
+        rows.push(section(top.name, top.info, "top"));
+        if (layerEnabled("top")) rows.push(topRow);
+
+        if (visibleWorkloads.length) {
+          const workloadCount = model.workloads.length;
+          rows.push(section("Workloads", laneMeta(model.workloads.map((entry) => entry.workload), "resource"), "lane lane-workload"));
+          for (const entry of visibleWorkloads) {
+            rows.push(entry.workload, ...entry.storage, ...entry.recovery);
+          }
+        }
+
+        if (visibleHostStorage.length) {
+          rows.push(section("Host Storage", laneMeta(model.hostStorage, "item"), "lane lane-storage"), ...visibleHostStorage);
+        }
+
+        if (visibleHostRecovery.length) {
+          rows.push(section("Recovery", laneMeta(model.hostRecovery, "policy"), "lane lane-recovery"), ...visibleHostRecovery);
+        }
+      }
+
+      function relationshipModel(platformId, top) {
+        const platform = data[platformId];
+        const byTop = (row) => belongsToTop(row, top.name);
+        const workloads = platform.workloads.filter(byTop).map((row) => normalizeRow(platformId, "workload", row));
+        const storage = platform.storage.filter(byTop).map((row) => normalizeRow(platformId, "storage", row));
+        const recovery = platform.backups.map((row) => normalizeRow(platformId, "recovery", row)).filter(byTop);
+        const assignedStorage = new Set();
+        const assignedRecovery = new Set();
+        const workloadEntries = workloads.map((workload) => {
+          const relatedStorage = storage
+            .filter((row) => !assignedStorage.has(row) && relatesToWorkload(row, workload))
+            .map((row) => markRelated(row, "storage"));
+          relatedStorage.forEach((row) => assignedStorage.add(row.sourceRow));
+
+          const relatedRecovery = recovery
+            .filter((row) => !assignedRecovery.has(row) && relatesToWorkload(row, workload))
+            .map((row) => markRelated(row, "backup"));
+          relatedRecovery.forEach((row) => assignedRecovery.add(row.sourceRow));
+
+          return { workload, storage: relatedStorage, recovery: relatedRecovery };
+        });
+
+        return {
+          workloads: workloadEntries,
+          hostStorage: storage.filter((row) => !assignedStorage.has(row)),
+          hostRecovery: recovery.filter((row) => !assignedRecovery.has(row)),
+        };
+      }
+
+      function visibleWorkloadEntry(entry, includeStorage = true, includeRecovery = true) {
+        const matchingStorage = includeStorage ? visibleRowsForSearch(entry.storage) : [];
+        const matchingRecovery = includeRecovery ? visibleRowsForSearch(entry.recovery) : [];
+        const workloadMatches = matchesSearch(entry.workload);
+        if (state.query && !workloadMatches && !matchingStorage.length && !matchingRecovery.length) return null;
+        return {
+          workload: entry.workload,
+          storage: state.query && !workloadMatches ? matchingStorage : includeStorage ? entry.storage : [],
+          recovery: state.query && !workloadMatches ? matchingRecovery : includeRecovery ? entry.recovery : [],
+        };
+      }
+
+      function visibleRowsForSearch(rows) {
+        return state.query ? rows.filter(matchesSearch) : rows;
+      }
+
+      function markRelated(row, relation) {
+        return {
+          ...row,
+          related: true,
+          relation,
+          sourceRow: row,
+        };
+      }
+
+      function relatesToWorkload(row, workload) {
+        const text = [row.name, row.placement, row.info, row.target, row.recovery].join(" ").toLowerCase();
+        return relationshipKeys(workload).some((key) => text.includes(key));
+      }
+
+      function relationshipKeys(row) {
+        const values = [row.name].filter(Boolean).map((value) => String(value).toLowerCase());
+        const keys = new Set();
+        const add = (value) => {
+          const cleaned = String(value || "").trim().toLowerCase();
+          if (cleaned.length >= 3) keys.add(cleaned);
+        };
+        for (const value of values) {
+          add(value);
+          value.split(/[\s/:-]+/).forEach(add);
+          add(value.split(" ")[0]);
+          add(value.split("/").pop());
+        }
+        const vmid = values.join(" ").match(/vmid\s+(\d+)/);
+        if (vmid) {
+          add(`vm-${vmid[1]}`);
+          add(`ct-${vmid[1]}`);
+          add(vmid[1]);
+        }
+        return Array.from(keys).filter((key) => !["pod", "vm", "ct", "lxc", "qemu", "vmid", "container", "deployment", "image", "guest"].includes(key));
+      }
+
+      function overviewLanes(platformId, top) {
+        const platform = data[platformId];
+        const byTop = (row) => belongsToTop(row, top.name);
+        const workloads = platform.workloads.filter(byTop).map((row) => normalizeRow(platformId, "workload", row));
+        const storage = platform.storage.filter(byTop).map((row) => normalizeRow(platformId, "storage", row));
+        const recovery = platform.backups.map((row) => normalizeRow(platformId, "recovery", row)).filter(byTop);
+        return [
+          { id: "workload", title: "Workloads", meta: laneMeta(workloads, "resource"), rows: workloads },
+          { id: "storage", title: "Storage", meta: laneMeta(storage, "item"), rows: storage },
+          { id: "recovery", title: "Recovery", meta: laneMeta(recovery, "policy"), rows: recovery },
+        ];
+      }
+
+      function laneMeta(rows, noun) {
+        return `${rows.length} ${rows.length === 1 ? noun : `${noun}s`}`;
+      }
+
+      function matchesGlobalView(row) {
+        return state.view === "problems" ? hasProblem(row) : true;
+      }
+
+      function platformRows(platformId) {
+        if (state.view === "overview") return segmentedOverviewRows([platformId], false);
+        if (["guests", "containers", "workloads", "vms"].includes(state.view)) return workloadIntentRows(platformId);
+        if (["storage", "volumes", "pools", "datasets", "disks", "datastores"].includes(state.view)) return storageIntentRows(platformId);
+        if (["backups", "replication"].includes(state.view)) return recoveryIntentRows(platformId);
+        if (state.view === "problems") return problemIntentRows(platformId);
+        return segmentedOverviewRows([platformId], false);
+      }
+
+      function workloadIntentRows(platformId) {
+        const rows = [];
+        for (const top of data[platformId].top) {
+          const topRow = normalizeRow(platformId, "top", top);
+          const model = relationshipModel(platformId, top);
+          const entries = model.workloads
+            .filter((entry) => workloadMatchesIntent(entry.workload))
+            .map((entry) => visibleWorkloadEntry(entry, layerEnabled("storage"), layerEnabled("recovery")))
+            .filter(Boolean);
+          if (state.query && !matchesSearch(topRow) && !entries.length) continue;
+
+          rows.push(section(top.name, top.info, "top"), topRow);
+          if (!layerEnabled("top")) rows.pop();
+          if (!entries.length) continue;
+          rows.push(section("Workloads", laneMeta(entries.map((entry) => entry.workload), "resource"), "lane lane-workload"));
+          for (const entry of entries) rows.push(entry.workload, ...entry.storage, ...entry.recovery);
+        }
+        return { columns: columns.overview, rows };
+      }
+
+      function storageIntentRows(platformId) {
+        const rows = [];
+        for (const top of data[platformId].top) {
+          const topRow = normalizeRow(platformId, "top", top);
+          const model = relationshipModel(platformId, top);
+          const guestStorage = model.workloads
+            .map((entry) => ({
+              workload: entry.workload,
+              storage: visibleRowsForSearch(entry.storage.filter(storageMatchesIntent)),
+            }))
+            .filter((entry) => entry.storage.length > 0 || (state.query && matchesSearch(entry.workload)));
+          const hostStorage = visibleRowsForSearch(model.hostStorage.filter(storageMatchesIntent));
+          if (state.query && !matchesSearch(topRow) && !guestStorage.length && !hostStorage.length) continue;
+
+          rows.push(section(top.name, top.info, "top"), topRow);
+          if (!layerEnabled("top")) rows.pop();
+          if (guestStorage.length) {
+            rows.push(section("Attached Storage", laneMeta(guestStorage.flatMap((entry) => entry.storage), "item"), "lane lane-storage"));
+            for (const entry of guestStorage) rows.push(...(layerEnabled("workload") ? [entry.workload] : []), ...entry.storage);
+          }
+          if (hostStorage.length) rows.push(section("Host Storage", laneMeta(hostStorage, "item"), "lane lane-storage"), ...hostStorage);
+        }
+        return { columns: columns.storage, rows };
+      }
+
+      function recoveryIntentRows(platformId) {
+        const rows = [];
+        for (const top of data[platformId].top) {
+          const topRow = normalizeRow(platformId, "top", top);
+          const model = relationshipModel(platformId, top);
+          const protectedWorkloads = model.workloads
+            .map((entry) => ({
+              workload: entry.workload,
+              recovery: visibleRowsForSearch(entry.recovery.filter(recoveryMatchesIntent)),
+            }))
+            .filter((entry) => entry.recovery.length > 0 || (state.query && matchesSearch(entry.workload)));
+          const hostRecovery = visibleRowsForSearch(model.hostRecovery.filter(recoveryMatchesIntent));
+          if (state.query && !matchesSearch(topRow) && !protectedWorkloads.length && !hostRecovery.length) continue;
+
+          rows.push(section(top.name, top.info, "top"), topRow);
+          if (!layerEnabled("top")) rows.pop();
+          if (protectedWorkloads.length) {
+            rows.push(section("Protected Workloads", laneMeta(protectedWorkloads.flatMap((entry) => entry.recovery), "policy"), "lane lane-recovery"));
+            for (const entry of protectedWorkloads) rows.push(...(layerEnabled("workload") ? [entry.workload] : []), ...entry.recovery);
+          }
+          if (hostRecovery.length) rows.push(section("Host Recovery", laneMeta(hostRecovery, "policy"), "lane lane-recovery"), ...hostRecovery);
+        }
+        return { columns: columns.backups, rows };
+      }
+
+      function problemIntentRows(platformId) {
+        const rows = [];
+        for (const top of data[platformId].top) {
+          const topRow = normalizeRow(platformId, "top", top);
+          const model = relationshipModel(platformId, top);
+          const affectedWorkloads = model.workloads
+            .map((entry) => {
+              const relatedProblems = [
+                ...(layerEnabled("storage") ? entry.storage : []),
+                ...(layerEnabled("recovery") ? entry.recovery : []),
+              ].filter(hasProblem);
+              const includeWorkload = (layerEnabled("workload") && hasProblem(entry.workload)) || relatedProblems.length > 0;
+              if (!includeWorkload) return null;
+              return { workload: entry.workload, related: relatedProblems };
+            })
+            .filter(Boolean)
+            .map((entry) => ({
+              workload: entry.workload,
+              related: visibleRowsForSearch(entry.related),
+            }))
+            .filter((entry) => !state.query || matchesSearch(entry.workload) || entry.related.length > 0);
+          const hostStorage = layerEnabled("storage") ? visibleRowsForSearch(model.hostStorage.filter(hasProblem)) : [];
+          const hostRecovery = layerEnabled("recovery") ? visibleRowsForSearch(model.hostRecovery.filter(hasProblem)) : [];
+          const hasTopProblem = layerEnabled("top") && hasProblem(topRow);
+          if (state.query && !matchesSearch(topRow) && !affectedWorkloads.length && !hostStorage.length && !hostRecovery.length) continue;
+          if (!hasTopProblem && !affectedWorkloads.length && !hostStorage.length && !hostRecovery.length) continue;
+
+          rows.push(section(top.name, top.info, "top"), topRow);
+          if (!layerEnabled("top")) rows.pop();
+          if (affectedWorkloads.length) {
+            rows.push(section("Affected Workloads", laneMeta(affectedWorkloads.map((entry) => entry.workload), "resource"), "lane lane-workload"));
+            for (const entry of affectedWorkloads) rows.push(...(layerEnabled("workload") ? [entry.workload] : []), ...entry.related);
+          }
+          if (hostStorage.length) rows.push(section("Host Storage", laneMeta(hostStorage, "item"), "lane lane-storage"), ...hostStorage);
+          if (hostRecovery.length) rows.push(section("Recovery", laneMeta(hostRecovery, "policy"), "lane lane-recovery"), ...hostRecovery);
+        }
+        return { columns: columns.overview, rows };
+      }
+
+      function globalProblemRows() {
+        const rows = [];
+        for (const platformId of selectedPlatformIds()) {
+          const result = problemIntentRows(platformId);
+          if (!result.rows.length) continue;
+          rows.push(section(data[platformId].label, `${result.rows.filter((row) => !row.section).length} affected rows`, "platform"), ...result.rows);
+        }
+        return { columns: columns.overview, rows };
+      }
+
+      function workloadMatchesIntent(row) {
+        if (state.view === "vms") return row.kind === "VM";
+        if (state.view === "containers") return row.kind === "Container";
+        return true;
+      }
+
+      function storageMatchesIntent(row) {
+        if (state.view === "volumes") return ["Volume", "Bind Mount"].includes(row.kind);
+        if (state.view === "pools") return row.kind === "Pool";
+        if (state.view === "datasets") return row.kind === "Dataset";
+        if (state.view === "disks") return row.kind === "Disk";
+        if (state.view === "datastores") return row.kind === "Datastore";
+        return true;
+      }
+
+      function recoveryMatchesIntent(row) {
+        if (state.view === "replication") return row.kind === "Replication";
+        return true;
+      }
+
+      function platformColumnSet(platformId, view) {
+        if (view === "overview") return columns.overview;
+        if (view === "problems") return columns.problems;
+        if (["backups", "replication"].includes(view)) return columns.backups;
+        if (["storage", "volumes", "pools", "datasets", "disks", "datastores"].includes(view)) return columns.storage;
+        return columns.workloads;
+      }
+
+      function platformGroups(platformId, view) {
+        const platform = data[platformId];
+        if (view === "overview") {
+          return platform.top.map((top) => ({
+            title: top.name,
+            meta: top.info,
+            rows: [
+              normalizeRow(platformId, "top", top),
+              ...platform.workloads.filter((row) => row.placement && row.placement.includes(top.name)).map((row) => normalizeRow(platformId, "workload", row)),
+              ...platform.storage.filter((row) => row.placement && row.placement.includes(top.name)).map((row) => normalizeRow(platformId, "storage", row)),
+              ...platform.backups.map((row) => normalizeRow(platformId, "recovery", row)).filter((row) => belongsToTop(row, top.name)),
+            ],
+          }));
+        }
+        if (view === "problems") {
+          return groupByProblemState(allRows(platformId).filter(hasProblem));
+        }
+        if (["backups", "replication"].includes(view)) {
+          return [{ title: `${platform.label} recovery`, meta: `${platform.backups.length} policies`, rows: platform.backups.map((row) => normalizeRow(platformId, "recovery", row)) }];
+        }
+        if (platformId === "truenas") {
+          if (view === "pools") return [{ title: "Pools", meta: "capacity and health", rows: platform.storage.filter((row) => row.kind === "Pool").map((row) => normalizeRow(platformId, "storage", row)) }];
+          if (view === "datasets") return [{ title: "Datasets", meta: "dataset usage and snapshots", rows: platform.storage.filter((row) => row.kind === "Dataset").map((row) => normalizeRow(platformId, "storage", row)) }];
+          if (view === "disks") return [{ title: "Disks", meta: "physical media", rows: platform.storage.filter((row) => row.kind === "Disk").map((row) => normalizeRow(platformId, "storage", row)) }];
+        }
+        if (["storage", "volumes", "datastores"].includes(view)) {
+          return groupByPlacement(platform.storage.map((row) => normalizeRow(platformId, "storage", row)));
+        }
+        return groupByPlacement(platform.workloads.map((row) => normalizeRow(platformId, "workload", row)));
+      }
+
+      function belongsToTop(row, topName) {
+        const rootPlacement = (row.placement || "").split(" / ")[0];
+        if (rootPlacement === topName) return true;
+        const text = [row.name, row.target, row.placement, row.info].join(" ").toLowerCase();
+        return text.includes(topName.toLowerCase());
+      }
+
+      function groupByPlacement(rows) {
+        const groups = new Map();
+        for (const row of rows) {
+          const key = (row.placement || row.platformLabel || "Unassigned").split(" / ")[0];
+          if (!groups.has(key)) groups.set(key, []);
+          groups.get(key).push(row);
+        }
+        return Array.from(groups, ([title, groupedRows]) => ({ title, meta: `${groupedRows.length} resources`, rows: groupedRows }));
+      }
+
+      function groupByProblemState(rows) {
+        const groups = new Map();
+        for (const row of rows) {
+          const key = row.runtimeState === "off" ? "Off" : row.status === "critical" ? "Critical" : "Issue";
+          if (!groups.has(key)) groups.set(key, []);
+          groups.get(key).push(row);
+        }
+        return Array.from(groups, ([title, groupedRows]) => ({ title, meta: `${groupedRows.length} resources`, rows: groupedRows }));
+      }
+
+      function recoveryRows() {
+        const rows = [];
+        for (const platformId of selectedPlatformIds()) {
+          const platform = data[platformId];
+          const backups = platform.backups.map((row) => normalizeRow(platformId, "recovery", row)).filter(matchesSearch);
+          if (!backups.length) continue;
+          rows.push(section(platform.label, `${backups.length} policies`, "platform"), ...backups);
+        }
+        return { columns: columns.backups, rows };
+      }
+
+      function metricCell(value) {
+        if (value === null || value === undefined) return '<span class="subtle">-</span>';
+        const tone = value >= 90 ? "critical" : value >= 75 ? "warning" : "";
+        return `
+          <div class="metric">
+            <strong>${value}%</strong>
+            <div class="track"><div class="fill ${tone}" style="width:${Math.max(0, Math.min(100, value))}%"></div></div>
+          </div>
+        `;
+      }
+
+      function signalsCell(row) {
+        const signals = row.signals || [];
+        if (!signals.length) return '<span class="subtle">None</span>';
+        const suffix = signals.length > 1 ? ` +${signals.length - 1}` : "";
+        return `
+          <div class="signals">
+            <span class="signal-count">${signals.length}</span>
+            <span class="signal-text">${escapeHtml(signals[0])}${suffix}</span>
+          </div>
+        `;
+      }
+
+      function cell(row, col) {
+        if (col.type === "resource") {
+          return `
+            <div class="resource">
+              <span class="state-dot state-${escapeHtml(row.runtimeState)}" title="${escapeHtml(row.runtimeStateLabel)}"></span>
+              ${row.relation ? `<span class="relation">${escapeHtml(row.relation)}</span>` : ""}
+              <span class="name">${escapeHtml(row[col.key] || "")}</span>
+            </div>
+          `;
+        }
+        if (col.type === "metric") return metricCell(row[col.key]);
+        if (col.type === "signals") return signalsCell(row);
+        return escapeHtml(row[col.key] ?? "-");
+      }
+
+      function escapeHtml(value) {
+        return String(value)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;");
+      }
+
+      function renderControls() {
+        ensureRequiredLayer();
+
+        document.getElementById("platformButtons").innerHTML = [
+          `<button class="platform ${state.selectedPlatforms.size === 0 ? "active" : ""}" type="button" data-platform="any">All Platforms</button>`,
+          ...platformIds().map((id) => `<button class="platform ${state.selectedPlatforms.has(id) ? "active" : ""}" type="button" data-platform="${id}">${data[id].label}</button>`),
+        ].join("");
+
+        const availableViews = currentViews();
+        if (!availableViews.some((view) => view.id === state.view)) state.view = availableViews[0].id;
+        document.getElementById("viewButtons").innerHTML = availableViews
+          .map((view) => `<button class="view ${state.view === view.id ? "active" : ""}" type="button" data-view="${view.id}">${view.label}</button>`)
+          .join("");
+
+        const requiredLayer = requiredLayerForView(state.view);
+        document.getElementById("layerButtons").innerHTML = layerOptions
+          .map((layer) => {
+            const active = layerEnabled(layer.id);
+            const required = requiredLayer === layer.id;
+            return `<button class="layer ${active ? "active" : ""}" type="button" data-layer="${layer.id}" aria-pressed="${active}" ${required ? 'aria-disabled="true"' : ""}>${layer.label}</button>`;
+          })
+          .join("");
+      }
+
+      function renderTable() {
+        const result = rowsForScope();
+        const visibleRows = result.rows;
+        document.getElementById("cols").innerHTML = result.columns.map((col) => `<col style="width:${col.width}px" />`).join("");
+        document.getElementById("head").innerHTML = `<tr>${result.columns.map((col) => `<th>${col.label}</th>`).join("")}</tr>`;
+        document.getElementById("body").innerHTML = visibleRows
+          .map((row) => {
+            if (row.section) {
+              return `
+                <tr class="section-row ${escapeHtml(row.level || "group")}">
+                  <td colspan="${result.columns.length}">
+                    <div class="section">
+                      <span class="section-mark"></span>
+                      <span class="section-title">${escapeHtml(row.title)}</span>
+                      <span class="section-meta">${escapeHtml(row.meta)}</span>
+                    </div>
+                  </td>
+                </tr>
+              `;
+            }
+            const classes = [
+              "data-row",
+              `row-${escapeHtml(row.runtimeState)}`,
+              `area-${escapeHtml(row.area || "unknown")}`,
+              row.related ? "related-row" : "",
+            ].filter(Boolean).join(" ");
+            return `<tr class="${classes}">${result.columns.map((col) => `<td>${cell(row, col)}</td>`).join("")}</tr>`;
+          })
+          .join("");
+        document.getElementById("empty").hidden = visibleRows.length > 0;
+      }
+
+      function renderSummary() {
+        const rows = platformIds().flatMap(allRows);
+        document.getElementById("platformCount").textContent = platformIds().length;
+        document.getElementById("topLevelCount").textContent = platformIds().reduce((count, id) => count + data[id].top.length, 0);
+        document.getElementById("workloadCount").textContent = platformIds().reduce((count, id) => count + data[id].workloads.length, 0);
+        document.getElementById("storageCount").textContent = platformIds().reduce((count, id) => count + data[id].storage.length, 0);
+        document.getElementById("recoveryCount").textContent = platformIds().reduce((count, id) => count + data[id].backups.length, 0);
+        document.getElementById("attentionCount").textContent = rows.filter(hasProblem).length;
+      }
+
+      function render() {
+        renderSummary();
+        renderControls();
+        renderTable();
+        bindControls();
+      }
+
+      function bindControls() {
+        document.querySelectorAll(".platform").forEach((button) => {
+          button.addEventListener("click", () => {
+            const platform = button.dataset.platform;
+            if (platform === "any") {
+              state.selectedPlatforms.clear();
+            } else if (state.selectedPlatforms.has(platform)) {
+              state.selectedPlatforms.delete(platform);
+            } else {
+              state.selectedPlatforms.add(platform);
+            }
+            render();
+          });
+        });
+        document.querySelectorAll(".view").forEach((button) => {
+          button.addEventListener("click", () => {
+            state.view = button.dataset.view;
+            ensureRequiredLayer();
+            render();
+          });
+        });
+        document.querySelectorAll(".layer").forEach((button) => {
+          button.addEventListener("click", () => {
+            const layer = button.dataset.layer;
+            if (requiredLayerForView(state.view) === layer) return;
+            if (state.layers.has(layer) && state.layers.size > 1) {
+              state.layers.delete(layer);
+            } else {
+              state.layers.add(layer);
+            }
+            render();
+          });
+        });
+      }
+
+      document.getElementById("search").addEventListener("input", (event) => {
+        state.query = event.currentTarget.value.trim().toLowerCase();
+        renderTable();
+      });
+
+      render();
+    </script>
+  </body>
+</html>
