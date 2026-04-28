@@ -500,7 +500,10 @@ Community limit enforcement.
     and suppress Relay/Pro plan comparison, Pro trial CTAs, monitored-system
     limit pressure, paid-only settings navigation, and feature upsells unless
     hosted mode, direct intent, activation/recovery state, or active entitlement
-    makes them relevant.
+    makes them relevant. The authenticated app shell must also skip background
+    `/api/license/commercial-posture` bootstrap while `presentationPolicy.hideUpgrade`
+    is true; explicit Plans/Activation and hosted or prompt-allowed flows may
+    still refresh the shared posture store.
 17. Keep hosted and trial billing construction separate from retired hosted-AI
     quickstart inventory: `pkg/licensing/trial_start.go` and hosted
     entitlement refresh paths may preserve historical billing fields for old
@@ -630,12 +633,15 @@ staging, never an ordinary live refresh.
 That same licensing/browser boundary now also owns authenticated commercial
 posture bootstrap and the prohibition on non-billing entitlement reads.
 `frontend-modern/src/useAppRuntimeState.ts` is the canonical authenticated
-owner for the first `/api/license/commercial-posture` read, while
+owner for the first `/api/license/commercial-posture` read when upgrade prompts
+are allowed, while
 `frontend-modern/src/AppLayout.tsx`,
 `frontend-modern/src/components/Settings/Settings.tsx`,
 `frontend-modern/src/components/Settings/useRelaySettingsPanelState.ts`, and
 other non-billing feature hooks may consume the resolved posture store but
-must not each trigger their own mount-time posture fetch. Billing-owned
+must not each trigger their own mount-time posture fetch. Ordinary self-hosted
+sessions where `presentationPolicy.hideUpgrade` is true must not perform that
+background posture read from the app shell at all. Billing-owned
 surfaces such as `frontend-modern/src/components/Settings/useProLicensePanelState.ts`
 may still force refresh through the same shared store when plan, activation, or
 recovery actions mutate commercial truth.

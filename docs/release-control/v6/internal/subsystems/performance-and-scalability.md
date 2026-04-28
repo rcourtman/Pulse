@@ -296,7 +296,9 @@ regression protection.
     non-hot-path UI. Retired self-hosted trial or managed-model acquisition
     surfaces must not be reintroduced into `frontend-modern/src/App.tsx` as
     always-mounted chrome that preloads commercial posture or adds route-global
-    render work to ordinary monitoring sessions.
+    render work to ordinary monitoring sessions. The authenticated app shell
+    must also avoid background commercial-posture bootstrap while
+    `presentationPolicy.hideUpgrade` suppresses upgrade prompts.
     Invitation accept/revoke and other org-membership changes follow that same
     hot-path contract: `frontend-modern/src/useAppRuntimeState.ts` may reload
     the org list from the shared `organizations_changed` event, but that refresh

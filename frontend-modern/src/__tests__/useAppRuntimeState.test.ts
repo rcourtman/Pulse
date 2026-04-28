@@ -14,6 +14,7 @@ describe('useAppRuntimeState', () => {
   let apiFetchMock: ReturnType<typeof vi.fn>;
   let orgsListMock: ReturnType<typeof vi.fn>;
   let loadLicenseStatusMock: ReturnType<typeof vi.fn>;
+  let loadCommercialPostureMock: ReturnType<typeof vi.fn>;
   let isMultiTenantEnabledMock: ReturnType<typeof vi.fn>;
   let isHostedModeEnabledMock: ReturnType<typeof vi.fn>;
   let getOrgIDMock: ReturnType<typeof vi.fn>;
@@ -66,6 +67,7 @@ describe('useAppRuntimeState', () => {
     });
     orgsListMock = vi.fn().mockResolvedValue([{ id: 'acme', displayName: 'Acme' }]);
     loadLicenseStatusMock = vi.fn().mockResolvedValue(undefined);
+    loadCommercialPostureMock = vi.fn().mockResolvedValue(undefined);
     isMultiTenantEnabledMock = vi.fn().mockReturnValue(false);
     isHostedModeEnabledMock = vi.fn().mockReturnValue(false);
     getOrgIDMock = vi.fn().mockReturnValue('default');
@@ -216,6 +218,10 @@ describe('useAppRuntimeState', () => {
       },
     }));
 
+    vi.doMock('@/stores/licenseCommercial', () => ({
+      loadCommercialPosture: loadCommercialPostureMock,
+    }));
+
     vi.doMock('@/utils/layout', () => ({
       layoutStore: {
         loadFromServer: vi.fn(),
@@ -318,6 +324,76 @@ describe('useAppRuntimeState', () => {
       { id: 'default', displayName: 'Default Organization' },
     ]);
     expect(hookState.showOrgSwitcher()).toBe(false);
+
+    dispose();
+  });
+
+  it('skips commercial posture bootstrap when upgrade prompts are hidden', async () => {
+    apiFetchMock.mockImplementation(async (url: string) => {
+      if (url === '/api/security/status') {
+        return new Response(
+          JSON.stringify({
+            hasAuthentication: true,
+            presentationPolicy: {
+              demoMode: false,
+              readOnly: false,
+              hideCommercial: false,
+              hideUpgrade: true,
+            },
+          }),
+          { status: 200 },
+        );
+      }
+      if (url === '/api/state') {
+        return new Response('{}', { status: 200 });
+      }
+      if (url === '/api/health') {
+        return new Response('{}', { status: 200 });
+      }
+      throw new Error(`Unhandled apiFetch URL: ${url}`);
+    });
+
+    const { dispose } = mountHook();
+
+    await flushAsync();
+    await flushAsync();
+
+    expect(loadCommercialPostureMock).not.toHaveBeenCalled();
+
+    dispose();
+  });
+
+  it('loads commercial posture during bootstrap when upgrade prompts are allowed', async () => {
+    apiFetchMock.mockImplementation(async (url: string) => {
+      if (url === '/api/security/status') {
+        return new Response(
+          JSON.stringify({
+            hasAuthentication: true,
+            presentationPolicy: {
+              demoMode: false,
+              readOnly: false,
+              hideCommercial: false,
+              hideUpgrade: false,
+            },
+          }),
+          { status: 200 },
+        );
+      }
+      if (url === '/api/state') {
+        return new Response('{}', { status: 200 });
+      }
+      if (url === '/api/health') {
+        return new Response('{}', { status: 200 });
+      }
+      throw new Error(`Unhandled apiFetch URL: ${url}`);
+    });
+
+    const { dispose } = mountHook();
+
+    await flushAsync();
+    await flushAsync();
+
+    expect(loadCommercialPostureMock).toHaveBeenCalledOnce();
 
     dispose();
   });

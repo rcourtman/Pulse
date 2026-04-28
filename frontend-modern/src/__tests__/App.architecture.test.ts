@@ -216,9 +216,11 @@ describe('App architecture', () => {
       "import { loadCommercialPosture } from '@/stores/licenseCommercial';",
     );
     expect(appRuntimeStateSource).toContain('presentationPolicyHidesOrganizationSurfaces');
+    expect(appRuntimeStateSource).toContain('presentationPolicyHidesUpgradePrompts');
     expect(appRuntimeStateSource).toContain('const [activeOrgID, setActiveOrgID] = createSignal(');
     expect(appRuntimeStateSource).toContain('onMount(() => {');
     expect(appRuntimeStateSource).toContain('onMount(async () => {');
+    expect(appRuntimeStateSource).toContain('if (!presentationPolicyHidesUpgradePrompts()) {');
     expect(appRuntimeStateSource).toContain('void loadCommercialPosture();');
     expect(appRuntimeStateSource).toContain('const hasLocalAuthBootstrapHint = (): boolean => {');
     expect(appRuntimeStateSource).toContain(

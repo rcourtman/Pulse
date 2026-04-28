@@ -56,6 +56,7 @@ import { aiChatStore } from '@/stores/aiChat';
 import { loadCommercialPosture } from '@/stores/licenseCommercial';
 import {
   presentationPolicyHidesOrganizationSurfaces,
+  presentationPolicyHidesUpgradePrompts,
   syncSessionPresentationPolicy,
 } from '@/stores/sessionPresentationPolicy';
 import { layoutStore } from '@/utils/layout';
@@ -320,8 +321,10 @@ export const useAppRuntimeState = () => {
     setWsStore(acquireWsStore());
     setBackendHealthy(true);
     await loadSystemSettingsAndLayout();
-    // Shared commercial posture bootstraps once per authenticated app shell.
-    void loadCommercialPosture();
+    // Shared commercial posture stays off ordinary self-hosted app shells.
+    if (!presentationPolicyHidesUpgradePrompts()) {
+      void loadCommercialPosture();
+    }
   };
 
   const checkBackendHealth = async () => {
