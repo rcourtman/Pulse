@@ -176,6 +176,13 @@ work extends shared components instead of creating new local variants.
    product-table frame, section header band, and light/dark border treatment
    belong to frontend primitives so Infrastructure, Workloads, Storage, and
    Recovery do not drift visually.
+   Product-table subgroup/header rows must likewise consume the shared
+   `frontend-modern/src/components/shared/groupedTableRowPresentation.ts`
+   helper and `.grouped-table-row` CSS token contract instead of local
+   `bg-surface-alt` or page-specific hover fills. This applies to grouped
+   rows across Infrastructure, Workloads, Storage, Recovery, alert history,
+   and alert threshold tables; feature owners may own group content and
+   behavior, but not duplicate the subgroup band styling.
    Shared monitored-system warning primitives under that path must stay compact
    app-shell pointers into the owned Pulse Pro billing surface. The shared
    banner may announce posture and route to the relevant billing tab, but

@@ -135,6 +135,8 @@ import recoveryComponentSource from '@/components/Recovery/Recovery.tsx?raw';
 import recoveryHistorySectionSource from '@/components/Recovery/RecoveryHistorySection.tsx?raw';
 import recoveryProtectedInventorySectionSource from '@/components/Recovery/RecoveryProtectedInventorySection.tsx?raw';
 import recoveryTablePresentationSource from '@/utils/recoveryTablePresentation.ts?raw';
+import alertHistoryTableGroupRowSource from '@/features/alerts/AlertHistoryTableGroupRow.tsx?raw';
+import alertResourceTableDesktopSource from '@/components/Alerts/AlertResourceTableDesktop.tsx?raw';
 import resourceDetailDrawerOverviewSource from '@/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx?raw';
 import aiSettingsDialogsSource from '@/components/Settings/AISettingsDialogs.tsx?raw';
 import generalSettingsPanelSource from '@/components/Settings/GeneralSettingsPanel.tsx?raw';
@@ -464,6 +466,9 @@ describe('shared primitive guardrails', () => {
     expect(workloadPanelSource).toContain('getInteractiveGroupedTableRowClass');
     expect(unifiedResourceHostTableCardSource).toContain('getInteractiveGroupedTableRowClass');
     expect(recoveryTablePresentationSource).toContain('GROUPED_TABLE_ROW_BASE_CLASS');
+    expect(alertHistoryTableGroupRowSource).toContain('getGroupedTableRowClass');
+    expect(alertHistoryTableGroupRowSource).not.toContain('class="bg-surface-alt"');
+    expect(alertResourceTableDesktopSource).toContain('getGroupedTableRowClass');
     expect(unifiedResourceHostTableCardSource).toContain('data-summary-group-member-active');
   });
 

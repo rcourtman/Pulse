@@ -975,6 +975,8 @@ describe('Dashboard performance contract', () => {
       expect(workloadTableHeaderSource).toContain('style={getGuestColumnStyle(');
       expect(workloadTableHeaderSource).toContain('props.workloadTableLayoutMode()');
       expect(workloadTableHeaderSource).toContain('props.workloadTableVisibleColumnIds()');
+      expect(workloadTableHeaderSource).toContain('aria-hidden="true"');
+      expect(workloadTableHeaderSource).toContain('<span class="sr-only">{col.label}</span>');
       expect(workloadTableHeaderSource).not.toContain('style={{');
       expect(workloadTableHeaderSource).not.toContain('NodeGroupHeader');
       expect(workloadPanelSource).toContain('NodeGroupHeader');

@@ -13,6 +13,7 @@ import {
 } from '@/components/shared/Table';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 import { HelpIcon } from '@/components/shared/HelpIcon';
+import { getGroupedTableRowClass } from '@/components/shared/groupedTableRowPresentation';
 import { AlertResourceTableRow } from './AlertResourceTableRow';
 import { AlertResourceGroupHeader } from './AlertResourceGroupHeader';
 import {
@@ -441,7 +442,7 @@ export function AlertResourceTableDesktop(props: AlertResourceTableDesktopProps)
             >
               {([nodeName, resources]) => (
                 <>
-                  <TableRow class="bg-surface-alt">
+                  <TableRow class={getGroupedTableRowClass()}>
                     <TableCell
                       colspan={totalColumnCount()}
                       class="p-1 px-2 text-xs font-medium text-muted"

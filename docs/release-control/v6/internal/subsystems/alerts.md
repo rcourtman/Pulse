@@ -217,6 +217,13 @@ Future alert configuration or history presentation work should
 extend those helpers instead of rebuilding alert-specific semantics in pages,
 dashboard surfaces, feature hooks, or thresholds shells.
 
+Alert history and threshold resource tables also inherit the shared product
+table subgroup-row contract. `AlertHistoryTableGroupRow` and grouped rows in
+`AlertResourceTableDesktop` must route their date/resource group bands through
+`frontend-modern/src/components/shared/groupedTableRowPresentation.ts` instead
+of local `bg-surface-alt` fills, so alert subgroup hierarchy stays visually
+consistent with Infrastructure, Workloads, Storage, and Recovery tables.
+
 The alert webhook service chooser also now derives its service set from the
 backend webhook template registry, rather than keeping a second frontend-only
 list of services, labels, descriptions, and mention-copy metadata.

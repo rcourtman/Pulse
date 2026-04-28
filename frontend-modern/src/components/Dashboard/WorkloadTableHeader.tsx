@@ -46,7 +46,16 @@ export function WorkloadTableHeader(props: WorkloadTableHeaderProps) {
                 <div
                   class={`flex min-h-[14px] items-center gap-0.5 ${isFirst() ? 'justify-start' : 'justify-center'}`}
                 >
-                  {col.icon ? <span class="flex items-center">{col.icon}</span> : col.label}
+                  {col.icon ? (
+                    <>
+                      <span class="flex items-center" aria-hidden="true">
+                        {col.icon}
+                      </span>
+                      <span class="sr-only">{col.label}</span>
+                    </>
+                  ) : (
+                    col.label
+                  )}
                   {isSorted() && (props.sortDirection() === 'asc' ? ' ▲' : ' ▼')}
                 </div>
               </TableHead>

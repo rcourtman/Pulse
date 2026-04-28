@@ -1,4 +1,5 @@
 import { TableCell, TableRow } from '@/components/shared/Table';
+import { getGroupedTableRowClass } from '@/components/shared/groupedTableRowPresentation';
 
 import type { AlertHistoryState } from './useAlertHistoryState';
 
@@ -27,7 +28,7 @@ function getGroupSummaryLabel(group: AlertHistoryGroup) {
 
 export function AlertHistoryTableGroupRow(props: AlertHistoryTableGroupRowProps) {
   return (
-    <TableRow class="bg-surface-alt">
+    <TableRow class={getGroupedTableRowClass()}>
       <TableCell colspan={10} class="py-1.5 pr-3 pl-4 text-[12px] font-semibold sm:text-sm">
         <div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
           <span class="truncate" title={props.group.fullLabel}>

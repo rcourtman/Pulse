@@ -35,6 +35,7 @@ import alertScheduleTabSource from '@/features/alerts/tabs/ScheduleTab.tsx?raw';
 import alertThresholdsTabSource from '@/features/alerts/tabs/ThresholdsTab.tsx?raw';
 import thresholdsTabModelSource from '@/features/alerts/thresholds/thresholdsTabModel.ts?raw';
 import recentAlertsPanelSource from '@/components/Alerts/RecentAlertsPanel.tsx?raw';
+import alertResourceTableDesktopSource from '@/components/Alerts/AlertResourceTableDesktop.tsx?raw';
 import thresholdsTableSource from '@/components/Alerts/ThresholdsTable.tsx?raw';
 import thresholdsTableAgentDisksSectionSource from '@/components/Alerts/ThresholdsTableAgentDisksSection.tsx?raw';
 import thresholdsTableAgentsTabSource from '@/components/Alerts/ThresholdsTableAgentsTab.tsx?raw';
@@ -466,6 +467,8 @@ describe('tab path helpers', () => {
     expect(alertHistoryTableSectionSource).not.toContain('InvestigateAlertButton');
     expect(alertHistoryTableGroupRowSource).toContain('export function AlertHistoryTableGroupRow');
     expect(alertHistoryTableGroupRowSource).toContain('getGroupSummaryLabel');
+    expect(alertHistoryTableGroupRowSource).toContain('getGroupedTableRowClass');
+    expect(alertResourceTableDesktopSource).toContain('getGroupedTableRowClass');
     expect(alertHistoryTableAlertRowSource).toContain('export function AlertHistoryTableAlertRow');
     expect(alertHistoryTableAlertRowSource).toContain('IncidentTimelinePanel');
     expect(alertHistoryTableAlertRowSource).toContain('InvestigateAlertButton');
