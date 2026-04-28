@@ -129,6 +129,14 @@ cross-source deduplication.
 1. Add new resource types and identity fields in `internal/unifiedresources/types.go`
 2. Add typed accessors and views in `internal/unifiedresources/views.go`
 3. Add source ingestion/adaptation in the adapter layer only
+   Infrastructure table platform presentation extends through
+   `frontend-modern/src/utils/resourceBadgePresentation.ts`,
+   `frontend-modern/src/components/Infrastructure/resourceBadges.ts`, and the
+   unified resource table sections. Visible infrastructure table headers,
+   filters, sort keys, and compact row badges must present the owning
+   infrastructure platform first, while full merged-source detail remains
+   available for tooltips, accessibility metadata, and routing. Agent telemetry
+   is collection-method detail when a provider/API platform is also present.
 
 Resource detail mappers now reuse the shared
 `frontend-modern/src/utils/textPresentation.ts` title-case helper for sensor
@@ -1792,6 +1800,15 @@ sources, `frontend-modern/src/utils/sourcePlatforms.ts` must still resolve the
 platform as `truenas` and the source mode as `hybrid`, so workload and
 infrastructure consumers do not collapse API-backed TrueNAS systems or apps
 back onto the generic agent path just because host telemetry is also present.
+That same boundary also owns the infrastructure table's operator-facing
+platform vocabulary. `frontend-modern/src/utils/resourceBadgePresentation.ts`,
+`frontend-modern/src/components/Infrastructure/resourceBadges.ts`, and the
+unified resource table sections may preserve full merged-source detail in
+tooltips and accessibility metadata, but visible table headers, filters, sort
+keys, and row badges must present the owning infrastructure platform first.
+Agent telemetry is collection-method detail when a stronger platform source is
+present, not a peer platform label that should crowd the table or drive the
+primary platform sort.
 The route file `frontend-modern/src/pages/Infrastructure.tsx` is now only the
 navigation boundary for that surface; canonical infrastructure filter, search,
 deep-link, and expansion state now live behind the dedicated infrastructure

@@ -19,6 +19,7 @@ import { StackedDiskBar } from '@/components/Dashboard/StackedDiskBar';
 import { StackedMemoryBar } from '@/components/Dashboard/StackedMemoryBar';
 import { buildMetricKeyForUnifiedResource } from '@/utils/metricsKeys';
 import {
+  getInfrastructurePlatformBadges,
   getPlatformBadge,
   getSourceBadge,
   getUnifiedSourceBadges,
@@ -301,8 +302,10 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                   });
                   const platformBadge = createMemo(() => getPlatformBadge(resource.platformType));
                   const sourceBadge = createMemo(() => getSourceBadge(resource.sourceType));
-                  const unifiedSourceBadges = createMemo(() =>
-                    getUnifiedSourceBadges(table.getUnifiedSources(resource)),
+                  const unifiedSources = createMemo(() => table.getUnifiedSources(resource));
+                  const sourceBadges = createMemo(() => getUnifiedSourceBadges(unifiedSources()));
+                  const platformBadges = createMemo(() =>
+                    getInfrastructurePlatformBadges(unifiedSources()),
                   );
                   const policyBadges = createMemo(() =>
                     getResourcePolicyTableBadges(resource.policy),
@@ -586,9 +589,10 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                           classList={{ hidden: table.isMobile() || !table.isVisible('secondary') }}
                         >
                           <UnifiedResourceSourceBadgeCell
-                            unifiedBadges={unifiedSourceBadges()}
+                            unifiedBadges={platformBadges()}
                             platformBadge={platformBadge()}
                             sourceBadge={sourceBadge()}
+                            titleBadges={sourceBadges()}
                             layoutMode={table.layoutMode()}
                           />
                         </TableCell>

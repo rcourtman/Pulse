@@ -119,7 +119,7 @@ describe('Infrastructure PBS/PMG integration', () => {
   it('syncs source filter selection to query params', async () => {
     const { getByLabelText } = render(() => <Infrastructure />);
 
-    fireEvent.change(getByLabelText('Source'), { target: { value: 'proxmox-pmg' } });
+    fireEvent.change(getByLabelText('Platform'), { target: { value: 'proxmox-pmg' } });
 
     await waitFor(() => {
       expect(navigateSpy).toHaveBeenCalled();

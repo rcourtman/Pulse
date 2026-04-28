@@ -7,6 +7,7 @@ interface UnifiedResourceSourceBadgeCellProps {
   unifiedBadges: ResourceBadge[];
   platformBadge: ResourceBadge | null;
   sourceBadge: ResourceBadge | null;
+  titleBadges?: ResourceBadge[];
   layoutMode: UnifiedResourceTableLayoutMode;
 }
 
@@ -21,24 +22,18 @@ const getSourceBadgeDisplayLabel = (
   layoutMode: UnifiedResourceTableLayoutMode,
 ): string => (layoutMode === 'wide' ? label : compactSourceBadgeLabel(label));
 
-const getCompactSourceDotClasses = (classes: string): string => {
-  const toneClasses = classes
-    .split(/\s+/)
-    .filter((className) => className.startsWith('bg-') || className.startsWith('dark:bg-'))
-    .join(' ');
-
-  return toneClasses || 'bg-muted';
-};
-
 export const UnifiedResourceSourceBadgeCell: Component<UnifiedResourceSourceBadgeCellProps> = (
   props,
 ) => {
   const badges = createMemo(() => {
     if (props.unifiedBadges.length > 0) return props.unifiedBadges;
-    return [props.platformBadge, props.sourceBadge].filter((badge): badge is ResourceBadge =>
-      Boolean(badge),
+    return [props.platformBadge, props.platformBadge ? null : props.sourceBadge].filter(
+      (badge): badge is ResourceBadge => Boolean(badge),
     );
   });
+  const titleBadges = createMemo(() =>
+    props.titleBadges && props.titleBadges.length > 0 ? props.titleBadges : badges(),
+  );
   const visibleBadges = createMemo(() =>
     badges().slice(0, getVisibleSourceBadgeLimit(props.layoutMode)),
   );
@@ -50,77 +45,39 @@ export const UnifiedResourceSourceBadgeCell: Component<UnifiedResourceSourceBadg
       : `+${hiddenBadgeCount()}`,
   );
   const title = createMemo(() =>
-    badges()
+    titleBadges()
       .map((badge) => badge.title ?? badge.label)
       .join(', '),
-  );
-  const shouldUseCompactSourceList = createMemo(
-    () => (props.layoutMode === 'mobile' || props.layoutMode === 'tablet') && badges().length > 0,
   );
 
   return (
     <div
       class="flex min-w-0 max-w-full items-center justify-center gap-1 overflow-hidden"
-      aria-label={title() ? `Sources: ${title()}` : undefined}
+      aria-label={title() ? `Platform: ${title()}` : undefined}
       title={title()}
     >
-      <Show
-        when={shouldUseCompactSourceList()}
-        fallback={
-          <>
-            <For each={visibleBadges()}>
-              {(badge) => (
-                <span
-                  class={`${badge.classes} min-w-0 max-w-full overflow-hidden px-1`}
-                  title={badge.title}
-                >
-                  <span class="min-w-0 truncate">
-                    {getSourceBadgeDisplayLabel(badge.label, props.layoutMode)}
-                  </span>
-                </span>
-              )}
-            </For>
-            <Show when={hiddenBadgeCount() > 0}>
-              <span
-                class="inline-flex min-w-0 max-w-full items-center overflow-hidden rounded bg-surface-alt px-1 py-0.5 text-[10px] font-medium text-muted"
-                aria-label={`Additional sources: ${hiddenBadges()
-                  .map((badge) => badge.title ?? badge.label)
-                  .join(', ')}`}
-                title={title()}
-              >
-                <span class="min-w-0 truncate">{hiddenBadgeLabel()}</span>
-              </span>
-            </Show>
-          </>
-        }
-      >
-        <For each={visibleBadges()}>
-          {(badge) => (
-            <span
-              class="inline-flex shrink-0 items-center gap-0.5 overflow-hidden rounded"
-              title={badge.title}
-            >
-              <span
-                class={`${getCompactSourceDotClasses(badge.classes)} h-1.5 w-1.5 shrink-0 rounded-full`}
-                aria-hidden="true"
-              />
-              <span class="whitespace-nowrap text-[10px] font-medium leading-none text-base-content">
-                {compactSourceBadgeLabel(badge.label)}
-              </span>
-            </span>
-          )}
-        </For>
-        <Show when={hiddenBadgeCount() > 0}>
+      <For each={visibleBadges()}>
+        {(badge) => (
           <span
-            class="shrink-0 whitespace-nowrap text-[10px] font-medium leading-none text-muted"
-            aria-label={`Additional sources: ${hiddenBadges()
-              .map((badge) => badge.title ?? badge.label)
-              .join(', ')}`}
-            title={title()}
+            class={`${badge.classes} min-w-0 max-w-full overflow-hidden px-1`}
+            title={badge.title}
           >
-            {hiddenBadgeLabel()}
+            <span class="min-w-0 truncate">
+              {getSourceBadgeDisplayLabel(badge.label, props.layoutMode)}
+            </span>
           </span>
-        </Show>
+        )}
+      </For>
+      <Show when={hiddenBadgeCount() > 0}>
+        <span
+          class="inline-flex min-w-0 max-w-full items-center overflow-hidden rounded bg-surface-alt px-1 py-0.5 text-[10px] font-medium text-muted"
+          aria-label={`Additional sources: ${hiddenBadges()
+            .map((badge) => badge.title ?? badge.label)
+            .join(', ')}`}
+          title={title()}
+        >
+          <span class="min-w-0 truncate">{hiddenBadgeLabel()}</span>
+        </span>
       </Show>
     </div>
   );

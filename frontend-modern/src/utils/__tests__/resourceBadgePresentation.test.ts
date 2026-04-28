@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   dedupeResourceBadges,
+  getInfrastructurePlatformBadges,
   getPlatformBadge,
   getSourceBadge,
   getTypeBadge,
@@ -26,6 +27,19 @@ describe('resourceBadgePresentation', () => {
   it('deduplicates and normalizes unified source badges', () => {
     const badges = getUnifiedSourceBadges(['TrueNAS', 'PROXMOX', 'truenas']);
     expect(badges.map((badge) => badge.label)).toEqual(['TrueNAS', 'PVE']);
+  });
+
+  it('keeps agent as telemetry detail when another infrastructure platform is present', () => {
+    expect(getUnifiedSourceBadges(['agent', 'proxmox']).map((badge) => badge.label)).toEqual([
+      'Agent',
+      'PVE',
+    ]);
+    expect(
+      getInfrastructurePlatformBadges(['agent', 'proxmox']).map((badge) => badge.label),
+    ).toEqual(['PVE']);
+    expect(getInfrastructurePlatformBadges(['agent']).map((badge) => badge.label)).toEqual([
+      'Agent',
+    ]);
   });
 
   it('deduplicates repeated header badge labels', () => {

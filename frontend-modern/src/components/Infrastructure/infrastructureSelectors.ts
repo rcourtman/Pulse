@@ -1,6 +1,9 @@
 import type { Resource } from '@/types/resource';
 import { getCpuPercent, getDiskPercent, getMemoryPercent } from '@/types/resource';
-import { getPreferredInfrastructureDisplayName, getPreferredResourceDisplayName } from '@/utils/resourceIdentity';
+import {
+  getPreferredInfrastructureDisplayName,
+  getPreferredResourceDisplayName,
+} from '@/utils/resourceIdentity';
 import { normalizeSourcePlatformKey, type KnownSourcePlatform } from '@/utils/sourcePlatforms';
 import { getCanonicalStatusLabel, STATUS_SORT_ORDER } from '@/utils/status';
 import type { SummarySeriesGroupScope } from '@/components/shared/summaryCardInteraction';
@@ -86,7 +89,7 @@ const getSortValue = (resource: Resource, key: string): number | string | null =
     case 'diskio':
       return resource.diskIO ? resource.diskIO.readRate + resource.diskIO.writeRate : null;
     case 'source':
-      return `${resource.platformType ?? ''}-${resource.sourceType ?? ''}`;
+      return resource.platformType ?? '';
     case 'temp':
       return resource.temperature ?? null;
     default:
@@ -291,9 +294,7 @@ export const groupResources = (
   return entries;
 };
 
-export const buildInfrastructureSummaryGroupId = (
-  cluster: string | null | undefined,
-): string => {
+export const buildInfrastructureSummaryGroupId = (cluster: string | null | undefined): string => {
   const normalizedCluster = (cluster ?? '').trim();
   return normalizedCluster
     ? `cluster:${normalizedCluster}`
@@ -315,7 +316,9 @@ export const buildInfrastructureSummaryGroupScope = (
 
   return {
     id: buildInfrastructureSummaryGroupId(group.cluster),
-    label: clusterLabel ? `${clusterLabel} (${resourceCountLabel})` : `Standalone (${resourceCountLabel})`,
+    label: clusterLabel
+      ? `${clusterLabel} (${resourceCountLabel})`
+      : `Standalone (${resourceCountLabel})`,
     seriesIds,
   };
 };
@@ -327,7 +330,9 @@ export const infrastructureHasVisibleSummaryGroupScope = (
   if (!scope) {
     return false;
   }
-  const visibleResourceIds = new Set(resources.map((resource) => resource.id?.trim() || '').filter(Boolean));
+  const visibleResourceIds = new Set(
+    resources.map((resource) => resource.id?.trim() || '').filter(Boolean),
+  );
   return scope.seriesIds.some((seriesId) => visibleResourceIds.has(seriesId.trim()));
 };
 

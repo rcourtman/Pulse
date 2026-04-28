@@ -229,6 +229,33 @@ describe('infrastructureSelectors', () => {
       ]);
     });
 
+    it('sorts the visible platform column by infrastructure platform, not telemetry method', () => {
+      const resources = [
+        makeResource(1, {
+          displayName: 'PVE hybrid',
+          platformType: 'proxmox-pve',
+          sourceType: 'hybrid',
+        }),
+        makeResource(2, {
+          displayName: 'Agent only',
+          platformType: 'agent',
+          sourceType: 'agent',
+        }),
+        makeResource(3, {
+          displayName: 'Kubernetes',
+          platformType: 'kubernetes',
+          sourceType: 'hybrid',
+        }),
+      ];
+
+      const sorted = sortResources(resources, 'source', 'asc');
+      expect(sorted.map((resource) => resource.id)).toEqual([
+        'resource-2',
+        'resource-3',
+        'resource-1',
+      ]);
+    });
+
     it('sorts cpu with direction toggle and keeps default tie-breaker', () => {
       const resources = [
         makeResource(1, { displayName: 'Bravo', cpu: { current: 80 } }),

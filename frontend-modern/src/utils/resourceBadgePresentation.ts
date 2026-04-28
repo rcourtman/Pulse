@@ -18,6 +18,24 @@ const baseBadge =
 
 const typeClasses = 'bg-surface-alt text-base-content';
 
+const normalizeUnifiedSourceKeys = (sources?: string[] | null): KnownSourcePlatform[] => {
+  if (!sources || sources.length === 0) return [];
+  const normalized = sources
+    .map((source) => normalizeSourcePlatformKey(source))
+    .filter((source): source is KnownSourcePlatform => Boolean(source));
+  return Array.from(new Set(normalized));
+};
+
+const buildUnifiedSourceBadges = (sources: KnownSourcePlatform[]): ResourceBadge[] =>
+  sources.map((source) => {
+    const sharedBadge = getSourcePlatformBadge(source);
+    return {
+      label: sharedBadge?.label ?? source,
+      classes: sharedBadge?.classes ?? `${baseBadge} ${typeClasses}`,
+      title: sharedBadge?.title ?? source,
+    };
+  });
+
 export function getPlatformBadge(platformType?: PlatformType): ResourceBadge | null {
   if (!platformType) return null;
   const sharedBadge = getSourcePlatformBadge(platformType);
@@ -52,19 +70,17 @@ export function getTypeBadge(resourceType?: ResourceType | string): ResourceBadg
 }
 
 export function getUnifiedSourceBadges(sources?: string[] | null): ResourceBadge[] {
-  if (!sources || sources.length === 0) return [];
-  const normalized = sources
-    .map((source) => normalizeSourcePlatformKey(source))
-    .filter((source): source is KnownSourcePlatform => Boolean(source));
-  const unique = Array.from(new Set(normalized));
-  return unique.map((source) => {
-    const sharedBadge = getSourcePlatformBadge(source);
-    return {
-      label: sharedBadge?.label ?? source,
-      classes: sharedBadge?.classes ?? `${baseBadge} ${typeClasses}`,
-      title: sharedBadge?.title ?? source,
-    };
-  });
+  return buildUnifiedSourceBadges(normalizeUnifiedSourceKeys(sources));
+}
+
+export function getInfrastructurePlatformBadges(sources?: string[] | null): ResourceBadge[] {
+  const normalized = normalizeUnifiedSourceKeys(sources);
+  if (normalized.length <= 1) {
+    return buildUnifiedSourceBadges(normalized);
+  }
+
+  const platformSources = normalized.filter((source) => source !== 'agent');
+  return buildUnifiedSourceBadges(platformSources.length > 0 ? platformSources : normalized);
 }
 
 export function dedupeResourceBadges(

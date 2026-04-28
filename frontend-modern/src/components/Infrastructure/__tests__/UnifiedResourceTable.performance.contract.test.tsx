@@ -210,7 +210,7 @@ describe('UnifiedResourceTable performance contract', () => {
 
       await waitFor(() => {
         expect(getByText('Net').closest('th')).not.toHaveClass('hidden');
-        expect(getByText('Src').closest('th')).not.toHaveClass('hidden');
+        expect(getByText('Plat').closest('th')).not.toHaveClass('hidden');
         expect(getByText('I/O').closest('th')).toHaveClass('hidden');
         expect(getByText('Up').closest('th')).toHaveClass('hidden');
       });
@@ -223,7 +223,7 @@ describe('UnifiedResourceTable performance contract', () => {
       await waitFor(() => {
         expect(getByText('Net').closest('th')).not.toHaveClass('hidden');
         expect(getByText('I/O').closest('th')).not.toHaveClass('hidden');
-        expect(getByText('Src').closest('th')).not.toHaveClass('hidden');
+        expect(getByText('Plat').closest('th')).not.toHaveClass('hidden');
         expect(getByText('Up').closest('th')).toHaveClass('hidden');
       });
 
@@ -232,7 +232,7 @@ describe('UnifiedResourceTable performance contract', () => {
       await waitFor(() => {
         expect(getByText('Net I/O').closest('th')).not.toHaveClass('hidden');
         expect(getByText('Disk I/O').closest('th')).not.toHaveClass('hidden');
-        expect(getByText('Src').closest('th')).not.toHaveClass('hidden');
+        expect(getByText('Platform').closest('th')).not.toHaveClass('hidden');
         expect(getByText('Up').closest('th')).not.toHaveClass('hidden');
         expect(getByText('Temp').closest('th')).not.toHaveClass('hidden');
       });
@@ -241,7 +241,7 @@ describe('UnifiedResourceTable performance contract', () => {
 
       await waitFor(() => {
         expect(getByText('Memory')).toBeInTheDocument();
-        expect(getByText('Source').closest('th')).not.toHaveClass('hidden');
+        expect(getByText('Platform').closest('th')).not.toHaveClass('hidden');
         expect(getByText('Uptime').closest('th')).not.toHaveClass('hidden');
       });
     });
@@ -258,7 +258,7 @@ describe('UnifiedResourceTable performance contract', () => {
           uptime: 86400,
         }),
       ];
-      const { getByText, queryByText } = render(() => (
+      const { container, getByText, queryByText } = render(() => (
         <UnifiedResourceTable
           resources={resources}
           expandedResourceId={null}
@@ -276,13 +276,16 @@ describe('UnifiedResourceTable performance contract', () => {
       await waitFor(() => {
         expect(getByText('Store').closest('th')).not.toHaveClass('hidden');
         expect(getByText('Jobs').closest('th')).not.toHaveClass('hidden');
-        expect(getByText('Src').closest('th')).not.toHaveClass('hidden');
+        expect(getByText('Plat').closest('th')).not.toHaveClass('hidden');
         expect(getByText('Up').closest('th')).toHaveClass('hidden');
       });
       expect(getByText('PBS')).toBeInTheDocument();
-      expect(getByText('Agent')).toBeInTheDocument();
+      expect(queryByText('Agent')).toBeNull();
       expect(queryByText('PBS+Agent')).toBeNull();
       expect(queryByText('+1')).toBeNull();
+      expect(
+        container.querySelectorAll('[aria-label^="Platform:"] .h-1\\.5.w-1\\.5.rounded-full'),
+      ).toHaveLength(0);
 
       emitResizeObserverWidth(660);
 
