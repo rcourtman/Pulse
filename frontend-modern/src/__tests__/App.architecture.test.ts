@@ -122,7 +122,6 @@ describe('App architecture', () => {
     );
     expect(appStylesSource).toContain('tr.grouped-table-row > td');
     expect(appStylesSource).toContain('--color-grouped-table-row-bg');
-    expect(appStylesSource).toContain('--color-grouped-table-row-accent');
     expect(appStylesSource).not.toContain('@keyframes pulse-brand-wordmark');
     expect(appStylesSource).not.toContain('text-shadow');
     expect(appLayoutSource).toContain("props.versionInfo()?.channel === 'rc'");

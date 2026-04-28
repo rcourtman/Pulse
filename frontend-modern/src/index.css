@@ -88,7 +88,6 @@
     --color-grouped-table-row-bg: theme('colors.slate.200');
     --color-grouped-table-row-bg-hover: theme('colors.slate.300');
     --color-grouped-table-row-border: theme('colors.slate.300');
-    --color-grouped-table-row-accent: theme('colors.slate.400');
   }
 
   .dark {
@@ -114,7 +113,6 @@
     --color-grouped-table-row-bg: theme('colors.slate.900');
     --color-grouped-table-row-bg-hover: theme('colors.slate.800');
     --color-grouped-table-row-border: theme('colors.slate.700');
-    --color-grouped-table-row-accent: theme('colors.slate.500');
   }
 
   body {
@@ -226,31 +224,6 @@
   tr.grouped-table-row:hover > td,
   tr.grouped-table-row:hover > th {
     background-color: var(--color-grouped-table-row-bg-hover);
-  }
-
-  tr.grouped-table-row > td:first-child,
-  tr.grouped-table-row > th:first-child {
-    box-shadow:
-      inset 3px 0 0 var(--color-grouped-table-row-accent),
-      inset 0 1px 0 var(--color-grouped-table-row-border),
-      inset 0 -1px 0 var(--color-grouped-table-row-border);
-  }
-
-  tr.grouped-table-row > td:last-child,
-  tr.grouped-table-row > th:last-child {
-    box-shadow:
-      inset -1px 0 0 var(--color-grouped-table-row-border),
-      inset 0 1px 0 var(--color-grouped-table-row-border),
-      inset 0 -1px 0 var(--color-grouped-table-row-border);
-  }
-
-  tr.grouped-table-row > td:first-child:last-child,
-  tr.grouped-table-row > th:first-child:last-child {
-    box-shadow:
-      inset 3px 0 0 var(--color-grouped-table-row-accent),
-      inset -1px 0 0 var(--color-grouped-table-row-border),
-      inset 0 1px 0 var(--color-grouped-table-row-border),
-      inset 0 -1px 0 var(--color-grouped-table-row-border);
   }
 
   tr[data-summary-group-member-active='preview'] > td,

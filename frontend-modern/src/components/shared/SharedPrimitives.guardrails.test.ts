@@ -388,6 +388,7 @@ describe('shared primitive guardrails', () => {
     expect(frontendIndexCssSource).toContain('tr.grouped-table-row > td');
     expect(frontendIndexCssSource).toContain('--color-grouped-table-row-bg');
     expect(groupedTableRowPresentationSource).toContain('GROUPED_TABLE_ROW_CLASS');
+    expect(groupedTableRowPresentationSource).not.toContain('GROUPED_TABLE_ROW_DIVIDER_CLASS');
 
     expect(guestRowSource).toContain('data-summary-row-active');
     expect(guestRowSource).toContain('data-summary-group-member-active');

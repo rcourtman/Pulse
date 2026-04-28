@@ -651,7 +651,8 @@ querying, and the operator-facing storage health presentation layer.
     day headers must also route through
     `frontend-modern/src/components/shared/groupedTableRowPresentation.ts` and
     the shared `.grouped-table-row` CSS contract in `frontend-modern/src/index.css`,
-    rather than storage- or recovery-local background classes.
+    rather than storage- or recovery-local background classes or left-accent
+    marker variants.
     Storage pool rows must also keep sizing and alert accents on canonical
     class/data-attribute presentation rather than row-local inline style maps,
     so the public storage page stays CSP-safe under both normal and
